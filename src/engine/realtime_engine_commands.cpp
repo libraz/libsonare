@@ -613,7 +613,9 @@ void RealtimeEngine::enqueue_error(TelemetryErrorCode code, int64_t render_frame
 }
 
 void RealtimeEngine::on_clip_page_miss(const ClipPageRequest& request) noexcept {
-  (void)clip_page_requests_.push(request);
+  if (!clip_page_requests_.push(request)) {
+    clip_page_request_overflow_count_.fetch_add(1, std::memory_order_relaxed);
+  }
   if (!clip_page_underrun_reported_this_block_) {
     clip_page_underrun_reported_this_block_ = true;
     enqueue_error(TelemetryErrorCode::kClipPageUnderrun, transport_.render_frame(),

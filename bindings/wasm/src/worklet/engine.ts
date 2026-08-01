@@ -1,3 +1,8 @@
+import {
+  ClipPageStreamer,
+  type ClipPageStreamerRequest,
+  type OpfsClipStreamOptions,
+} from '../clip_page_streamer';
 import type {
   EngineAutomationPoint,
   EngineBus,
@@ -17,6 +22,8 @@ import type {
   PanMode,
 } from '../index';
 import { RealtimeEngine } from '../index';
+import { createOpfsClipPageProvider, type OpfsClipPageProviderBinding } from '../opfs_clip_pages';
+import type { ClipPageProvider } from '../realtime_engine';
 import type { EngineAutomationContext } from './engine-automation';
 import * as automation from './engine-automation';
 import type { EngineCaptureContext } from './engine-capture-facade';
@@ -56,6 +63,24 @@ import {
   type SonareWorkletScopeSnapshot,
 } from './protocol';
 
+const MAX_PENDING_WORKLET_CLIP_PAGE_REQUESTS = 256;
+
+function transferableAudioBuffers(channels: readonly Float32Array[]): Transferable[] {
+  const transfers: ArrayBuffer[] = [];
+  const seen = new Set<ArrayBuffer>();
+  for (const channel of channels) {
+    const buffer = channel.buffer;
+    // SharedArrayBuffer is cloneable but cannot appear in a transfer list. A
+    // worker may intentionally return SAB-backed pages, so transfer only plain,
+    // distinct ArrayBuffers and let structured clone share SABs by reference.
+    if (buffer instanceof ArrayBuffer && !seen.has(buffer)) {
+      seen.add(buffer);
+      transfers.push(buffer);
+    }
+  }
+  return transfers;
+}
+
 export class SonareEngine {
   readonly node: AudioWorkletNode;
   readonly capabilities: SonareRealtimeEngineNodeCapabilities;
@@ -93,6 +118,15 @@ export class SonareEngine {
   private nextMarkerId = 1;
   private transportPlaying = false;
   private readonly pendingInstrumentSync: SonareEngineInstrumentSyncMessage[] = [];
+  // One latest frontier per clip is sufficient: ClipPageStreamer expands it to
+  // the bounded read window. A Map both coalesces repeated page misses and
+  // places a hard cap on work queued while OPFS I/O is stalled.
+  private readonly workletClipPageRequests = new Map<number, ClipPageStreamerRequest>();
+  private readonly workletPageProviderClipIds = new Map<number, number>();
+  private workletClipStreamer: ClipPageStreamer | undefined;
+  private workletClipPump: Promise<void> | undefined;
+  private workletClipPagePollTimer: ReturnType<typeof setInterval> | undefined;
+  private unsubscribeWorkletClipRequests: (() => void) | undefined;
   private destroyed = false;
 
   private constructor(
@@ -111,6 +145,12 @@ export class SonareEngine {
     this.sampleRate = sampleRate;
     this.offlineBlockSize = offlineBlockSize;
     this.offlineChannelCount = offlineChannelCount;
+    this.unsubscribeWorkletClipRequests = this.realtimeNode.onClipPageRequests((message) => {
+      for (const request of message.requests) {
+        this.enqueueWorkletClipPageRequest(request);
+      }
+      this.pumpWorkletClipPages();
+    });
     this.transport = buildTransportFacade({
       sampleRate: this.sampleRate,
       realtimeNode: this.realtimeNode,
@@ -136,6 +176,15 @@ export class SonareEngine {
       Math.floor(options.offlineChannelCount ?? options.channelCount ?? 2),
     );
     const realtimeNode = await SonareRealtimeEngineNode.create(context, options);
+    try {
+      // Do not expose the facade while the registered processor is still
+      // buffering messages. Long clip sync must either begin after the bridge
+      // is ready or fail explicitly; it may never be silently truncated.
+      await realtimeNode.ready;
+    } catch (error) {
+      realtimeNode.destroy();
+      throw error;
+    }
     const offlineEngine = options.offlineEngine ?? new RealtimeEngine(sampleRate, blockSize);
     return new SonareEngine(
       context,
@@ -516,11 +565,86 @@ export class SonareEngine {
     this.setMasterStripJson(sceneJson);
   }
 
+  /**
+   * Creates and primes an OPFS-backed page provider for this live worklet
+   * engine. Pass the returned `provider` to {@link addClip} in place of a
+   * `Float32Array[]`; the `clipId` in `options` must equal that clip's explicit
+   * `opts.id`. Subsequent cache misses are fetched on the main thread and
+   * supplied back to the worklet through its bounded pull protocol.
+   */
+  async attachOpfsClipStream(
+    options: OpfsClipStreamOptions,
+  ): Promise<{ binding: OpfsClipPageProviderBinding; provider: ClipPageProvider }> {
+    if (this.destroyed) {
+      throw new Error('SonareEngine is destroyed.');
+    }
+    if (!this.capabilities.clipPageRequestsRealtimeSafe) {
+      throw new Error(
+        'OPFS clip streaming requires SharedArrayBuffer clip-page requests; the postMessage fallback is not realtime-safe.',
+      );
+    }
+    const { clipId, primePages = 1, ...providerOptions } = options;
+    if ([...this.workletPageProviderClipIds.values()].includes(clipId)) {
+      throw new Error(`An OPFS stream is already attached for clip ${clipId}.`);
+    }
+    const streamer = this.ensureWorkletClipStreamer();
+    // Allocate the worklet-owned provider before priming: port message order
+    // ensures every prime page is adopted before addClip commits its schedule.
+    this.postSync({
+      type: 'syncClipPageProvider',
+      clipId,
+      numChannels: providerOptions.numChannels,
+      numSamples: providerOptions.numSamples,
+      pageFrames: providerOptions.pageFrames,
+    });
+    let binding: OpfsClipPageProviderBinding;
+    binding = createOpfsClipPageProvider(this.offlineEngine, {
+      ...providerOptions,
+      onPageSupplied: (pageIndex, channels) => {
+        this.postSync(
+          { type: 'syncClipPage', clipId, pageIndex, channels },
+          transferableAudioBuffers(channels),
+        );
+      },
+      onPageCleared: (pageIndex) => {
+        this.postSync({ type: 'syncClipPageClear', clipId, pageIndex });
+      },
+      onClose: () => {
+        this.workletPageProviderClipIds.delete(binding.provider.id);
+        this.postSync({ type: 'syncClipPageDestroy', clipId });
+      },
+    });
+    this.workletPageProviderClipIds.set(binding.provider.id, clipId);
+    const lastPage = Math.ceil(providerOptions.numSamples / providerOptions.pageFrames) - 1;
+    const primed: number[] = [];
+    try {
+      for (let page = 0; page < primePages && page <= lastPage; ++page) {
+        if (await binding.supplyPage(page)) {
+          primed.push(page);
+        }
+      }
+      streamer.addSource(
+        {
+          clipId,
+          binding,
+          pageFrames: providerOptions.pageFrames,
+          numSamples: providerOptions.numSamples,
+        },
+        primed,
+      );
+      this.startWorkletClipPagePolling();
+    } catch (error) {
+      binding.close();
+      throw error;
+    }
+    return { binding, provider: binding.provider };
+  }
+
   addClip(
     trackId: string | number,
-    buffer: Float32Array[],
+    buffer: Float32Array[] | ClipPageProvider,
     startPpq: number,
-    opts: Partial<Omit<EngineClip, 'channels' | 'startPpq'>> = {},
+    opts: Partial<Omit<EngineClip, 'channels' | 'pageProvider' | 'startPpq'>> = {},
   ): number {
     return clips.addClip(this.clipContext, trackId, buffer, startPpq, opts);
   }
@@ -550,7 +674,12 @@ export class SonareEngine {
 
   setSf2Instrument(
     trackId: string | number,
-    config: { destinationId?: number; gain?: number; polyphony?: number } = {},
+    config: {
+      destinationId?: number;
+      gain?: number;
+      polyphony?: number;
+      preferModelForModeledFamilies?: boolean;
+    } = {},
   ): void {
     strips.setSf2Instrument(this.stripContext, trackId, config);
   }
@@ -752,11 +881,121 @@ export class SonareEngine {
     if (this.destroyed) {
       return;
     }
+    this.unsubscribeWorkletClipRequests?.();
+    this.unsubscribeWorkletClipRequests = undefined;
+    this.workletClipStreamer?.close();
+    this.workletClipStreamer = undefined;
+    if (this.workletClipPagePollTimer !== undefined) {
+      clearInterval(this.workletClipPagePollTimer);
+      this.workletClipPagePollTimer = undefined;
+    }
+    this.workletClipPageRequests.clear();
     this.destroyed = true;
     this.transport.stop();
     this.realtimeNode.pollTelemetry();
     this.realtimeNode.destroy();
     this.offlineEngine.destroy();
+  }
+
+  private ensureWorkletClipStreamer(): ClipPageStreamer {
+    if (!this.workletClipStreamer) {
+      this.workletClipStreamer = new ClipPageStreamer({
+        popClipPageRequest: () => this.popWorkletClipPageRequest(),
+      });
+    }
+    return this.workletClipStreamer;
+  }
+
+  /**
+   * SAB requests have no postMessage wake-up by design. Polling on the main
+   * thread is therefore intentionally outside the audio callback; 8 ms keeps
+   * the bounded OPFS prefetch frontier responsive without adding worklet GC.
+   */
+  private startWorkletClipPagePolling(): void {
+    if (this.workletClipPagePollTimer !== undefined) {
+      return;
+    }
+    const poll = () => {
+      if (!this.destroyed) {
+        this.realtimeNode.pollClipPageRequests();
+      }
+    };
+    poll();
+    this.workletClipPagePollTimer = setInterval(poll, 8);
+  }
+
+  private pumpWorkletClipPages(): void {
+    const streamer = this.workletClipStreamer;
+    if (!streamer || this.workletClipPump) {
+      return;
+    }
+    this.workletClipPump = streamer
+      .pump()
+      .catch((error: unknown) => {
+        // The worklet keeps rendering silence for an unavailable page. Surface
+        // I/O failures without converting them into an AudioWorklet exception.
+        // biome-ignore lint/suspicious/noConsole: asynchronous OPFS diagnostic.
+        console.error('Sonare OPFS clip-page supply failed:', error);
+      })
+      .finally(() => {
+        this.workletClipPump = undefined;
+        if (this.workletClipPageRequests.size > 0) {
+          this.pumpWorkletClipPages();
+        }
+      });
+  }
+
+  private enqueueWorkletClipPageRequest(request: ClipPageStreamerRequest): void {
+    if (
+      !Number.isInteger(request.clipId) ||
+      request.clipId < 0 ||
+      !Number.isInteger(request.pageIndex) ||
+      (request.pageIndex ?? -1) < 0
+    ) {
+      return;
+    }
+    // Reinsert an existing id so iteration order represents newest frontiers.
+    this.workletClipPageRequests.delete(request.clipId);
+    if (this.workletClipPageRequests.size >= MAX_PENDING_WORKLET_CLIP_PAGE_REQUESTS) {
+      const oldest = this.workletClipPageRequests.keys().next().value;
+      if (oldest !== undefined) {
+        this.workletClipPageRequests.delete(oldest);
+      }
+    }
+    this.workletClipPageRequests.set(request.clipId, request);
+  }
+
+  private popWorkletClipPageRequest(): ClipPageStreamerRequest | null {
+    const entry = this.workletClipPageRequests.entries().next().value;
+    if (!entry) {
+      return null;
+    }
+    const [clipId, request] = entry;
+    this.workletClipPageRequests.delete(clipId);
+    return request;
+  }
+
+  private commitWorkletClipPageProvider(clip: EngineClip): boolean {
+    const providerId =
+      typeof clip.pageProvider === 'object' && clip.pageProvider !== null
+        ? clip.pageProvider.id
+        : clip.pageProvider;
+    if (providerId === undefined) {
+      return false;
+    }
+    const clipId = this.workletPageProviderClipIds.get(providerId);
+    if (clipId === undefined) {
+      return false;
+    }
+    if (clip.id !== clipId) {
+      throw new Error(`OPFS stream clipId ${clipId} must match addClip(..., { id: ${clipId} }).`);
+    }
+    this.postSync({
+      type: 'syncClipPageCommit',
+      clipId,
+      clip: { ...clip, channels: undefined, pageProvider: undefined },
+    });
+    return true;
   }
 
   private mixerLanes(): EngineTrackLane[] {
@@ -927,6 +1166,7 @@ export class SonareEngine {
       postSync: (message, transfer) => this.postSync(message, transfer),
       ensureTrackLane: (target) => this.ensureTrackLane(target),
       resolveTargetId: (target) => this.resolveTargetId(target),
+      commitWorkletClipPageProvider: (clip) => this.commitWorkletClipPageProvider(clip),
     };
   }
 

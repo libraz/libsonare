@@ -256,7 +256,12 @@ export class RealtimeEngine {
    * synthesizer GM fallback bank (the data-free floor).
    */
   setSf2Instrument(
-    config: { destinationId?: number; gain?: number; polyphony?: number } = {},
+    config: {
+      destinationId?: number;
+      gain?: number;
+      polyphony?: number;
+      preferModelForModeledFamilies?: boolean;
+    } = {},
     destinationId = config.destinationId ?? 0,
   ): void {
     this.native.setSf2Instrument(destinationId, config);
@@ -827,6 +832,27 @@ export class RealtimeEngine {
 
   popClipPageRequest(): ClipPageRequest | null {
     return this.native.popClipPageRequest();
+  }
+
+  /**
+   * Moves one native request into the binding's persistent scalar scratch.
+   * This avoids creating an embind JS object in AudioWorklet process().
+   */
+  popClipPageRequestToScratch(): boolean {
+    return this.native.popClipPageRequestToScratch();
+  }
+
+  clipPageRequestScratchClipId(): number {
+    return this.native.clipPageRequestScratchClipId();
+  }
+
+  clipPageRequestScratchSample(): number {
+    return this.native.clipPageRequestScratchSample();
+  }
+
+  /** Cumulative page misses dropped because the native bounded request queue was full. */
+  clipPageRequestOverflowCount(): number {
+    return this.native.clipPageRequestOverflowCount();
   }
 
   setCaptureBuffer(numChannels: number, capacityFrames: number): void {

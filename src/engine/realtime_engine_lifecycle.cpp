@@ -29,12 +29,28 @@ void RealtimeEngine::prepare(double sample_rate, int max_block_size, size_t comm
   // Pre-size the host-instrument render scratch (channel-planar) so the audio
   // path never allocates when an instrument is registered. Re-prepare an
   // already-registered instrument so it matches the new block size.
-  midi_instrument_storage_.assign(
-      static_cast<size_t>(max_block_size_) * midi_instrument_channels_.size(), 0.0f);
+  size_t instrument_source_outputs = 1;
+#if defined(SONARE_WITH_MIXING)
+  instrument_source_outputs = kMaxInstrumentSourceOutputs;
+#endif
+  midi_instrument_storage_.assign(static_cast<size_t>(max_block_size_) *
+                                      midi_instrument_channels_.size() * instrument_source_outputs,
+                                  0.0f);
   for (size_t ch = 0; ch < midi_instrument_channels_.size(); ++ch) {
     midi_instrument_channels_[ch] =
         midi_instrument_storage_.data() + ch * static_cast<size_t>(max_block_size_);
   }
+#if defined(SONARE_WITH_MIXING)
+  const size_t source_stride =
+      midi_instrument_channels_.size() * static_cast<size_t>(max_block_size_);
+  for (size_t source = 0; source < kMaxInstrumentSourceOutputs; ++source) {
+    for (size_t ch = 0; ch < midi_instrument_channels_.size(); ++ch) {
+      midi_instrument_source_channels_[source][ch] = midi_instrument_storage_.data() +
+                                                     source * source_stride +
+                                                     ch * static_cast<size_t>(max_block_size_);
+    }
+  }
+#endif
   // PDC clip-bus scratch: the clip player renders here first when an instrument
   // reports latency, so the clip bus can be delayed (phase-aligned with the
   // instruments) before being summed into the source layer.
@@ -107,6 +123,7 @@ void RealtimeEngine::prepare(double sample_rate, int max_block_size, size_t comm
   // unreserved (capacity 0) queue and silently drop records.
   telemetry_.reserve(next_power_of_2(std::max<size_t>(telemetry_capacity, 2)));
   clip_page_requests_.reserve(next_power_of_2(std::max<size_t>(telemetry_capacity, 2)));
+  clip_page_request_overflow_count_.store(0, std::memory_order_relaxed);
   pending_active_.fill(false);
   // Pre-size the engine-level smoothers so kSetParamSmoothed never allocates on
   // the audio thread; mark all slots inactive.

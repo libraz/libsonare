@@ -181,6 +181,13 @@ class RealtimeEngineWasm {
   void clearClipPage(int provider_id, int64_t page_index);
   void destroyClipPageProvider(int provider_id);
   emscripten::val popClipPageRequest();
+  // Allocation-free scalar variant for the AudioWorklet SAB request ring.
+  // popClipPageRequest() remains for public/control-plane callers that need an
+  // embind object; process() must use this scratch-backed API instead.
+  bool popClipPageRequestToScratch();
+  uint32_t clipPageRequestScratchClipId() const;
+  double clipPageRequestScratchSample() const;
+  uint32_t clipPageRequestOverflowCount() const;
 
   // ---- Capture / recording (realtime_engine_capture.cpp) ---------------
   void setCaptureBuffer(int num_channels, int capacity_frames);
@@ -253,6 +260,7 @@ class RealtimeEngineWasm {
   std::deque<std::string> parameter_strings_;
   std::deque<std::string> marker_strings_;
   std::vector<std::shared_ptr<WasmClipPageProvider>> clip_page_providers_;
+  sonare::engine::ClipPageRequest clip_page_request_scratch_{};
   std::vector<std::vector<std::vector<float>>> clip_storage_;
   std::vector<std::vector<const float*>> clip_ptrs_;
   std::vector<uint32_t> clip_ids_;

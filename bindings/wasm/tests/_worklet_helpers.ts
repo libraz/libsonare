@@ -1,6 +1,7 @@
 import { beforeAll, describe, expect, it } from 'vitest';
 import { init, Mixer, mixingScenePresetJson } from '../dist/index.js';
 import {
+  createSonareClipPageRequestRingBuffer,
   createSonareEngineCommandRingBuffer,
   createSonareEngineTelemetryRingBuffer,
   createSonareMeterRingBuffer,
@@ -8,7 +9,9 @@ import {
   createSonareSpectrumRingBuffer,
   init as initWorklet,
   popSonareEngineCommandRingBuffer,
+  pushSonareClipPageRequestRingBuffer,
   pushSonareEngineCommandRingBuffer,
+  readSonareClipPageRequestRingBuffer,
   readSonareEngineTelemetryRingBuffer,
   readSonareMeterRingBuffer,
   readSonareScopeRingBuffer,
@@ -16,6 +19,8 @@ import {
   registerSonareRealtimeEngineWorkletProcessor,
   registerSonareRealtimeVoiceChangerWorkletProcessor,
   registerSonareWorkletProcessor,
+  SONARE_CLIP_PAGE_REQUEST_RING_HEADER_INTS,
+  SONARE_CLIP_PAGE_REQUEST_RING_RECORD_UINT32S,
   SONARE_ENGINE_COMMAND_RECORD_BYTES,
   SONARE_ENGINE_RING_HEADER_INTS,
   SONARE_ENGINE_TELEMETRY_RECORD_BYTES,
@@ -29,6 +34,7 @@ import {
   SonareRealtimeEngineWorkletProcessor,
   SonareRealtimeVoiceChangerWorkletProcessor,
   SonareWorkletProcessor,
+  sonareClipPageRequestRingBufferByteLength,
   sonareEngineCommandRingBufferByteLength,
   sonareEngineTelemetryRingBufferByteLength,
   sonareMeterRingBufferByteLength,
@@ -36,6 +42,7 @@ import {
 } from '../dist/worklet.js';
 
 export {
+  createSonareClipPageRequestRingBuffer,
   createSonareEngineCommandRingBuffer,
   createSonareEngineTelemetryRingBuffer,
   createSonareMeterRingBuffer,
@@ -47,7 +54,9 @@ export {
   Mixer,
   mixingScenePresetJson,
   popSonareEngineCommandRingBuffer,
+  pushSonareClipPageRequestRingBuffer,
   pushSonareEngineCommandRingBuffer,
+  readSonareClipPageRequestRingBuffer,
   readSonareEngineTelemetryRingBuffer,
   readSonareMeterRingBuffer,
   readSonareScopeRingBuffer,
@@ -55,6 +64,8 @@ export {
   registerSonareRealtimeEngineWorkletProcessor,
   registerSonareRealtimeVoiceChangerWorkletProcessor,
   registerSonareWorkletProcessor,
+  SONARE_CLIP_PAGE_REQUEST_RING_HEADER_INTS,
+  SONARE_CLIP_PAGE_REQUEST_RING_RECORD_UINT32S,
   SONARE_ENGINE_COMMAND_RECORD_BYTES,
   SONARE_ENGINE_RING_HEADER_INTS,
   SONARE_ENGINE_TELEMETRY_RECORD_BYTES,
@@ -68,6 +79,7 @@ export {
   SonareRealtimeEngineWorkletProcessor,
   SonareRealtimeVoiceChangerWorkletProcessor,
   SonareWorkletProcessor,
+  sonareClipPageRequestRingBufferByteLength,
   sonareEngineCommandRingBufferByteLength,
   sonareEngineTelemetryRingBufferByteLength,
   sonareMeterRingBufferByteLength,

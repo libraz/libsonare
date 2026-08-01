@@ -403,6 +403,14 @@ export interface WasmPitchResult {
   meanF0: number;
 }
 
+export interface WasmNoteSegment {
+  frameStart: number;
+  frameEnd: number;
+  startSeconds: number;
+  endSeconds: number;
+  medianCents: number;
+}
+
 export interface WasmTrimResult {
   audio: Float32Array;
   startSample: number;
@@ -958,6 +966,10 @@ export interface WasmRealtimeEngine {
   clearClipPage: (providerId: number, pageIndex: number) => void;
   destroyClipPageProvider: (providerId: number) => void;
   popClipPageRequest: () => WasmClipPageRequest | null;
+  popClipPageRequestToScratch: () => boolean;
+  clipPageRequestScratchClipId: () => number;
+  clipPageRequestScratchSample: () => number;
+  clipPageRequestOverflowCount: () => number;
   setCaptureBuffer: (numChannels: number, capacityFrames: number) => void;
   armCapture: (armed: boolean) => void;
   setCapturePunch: (startSample: number, endSample: number, enabled: boolean) => void;
@@ -1861,6 +1873,16 @@ export interface SonareModule {
     threshold: number,
     fillNa: boolean,
   ) => WasmPitchResult;
+  noteSegments: (
+    f0Hz: Float32Array,
+    voicedProb: Float32Array,
+    frameRate: number,
+    options: {
+      segmentationThresholdCents?: number;
+      minNoteMs?: number;
+      referenceHz?: number;
+    },
+  ) => WasmNoteSegment[];
 
   // Core - Conversion
   hzToMel: (hz: number) => number;

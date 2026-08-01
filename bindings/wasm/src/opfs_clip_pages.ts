@@ -8,12 +8,20 @@ export interface OpfsClipPageProviderOptions {
   dataOffsetBytes?: number;
   worker?: Worker;
   terminateWorkerOnClose?: boolean;
+  /** Internal bridge hook used to mirror a supplied page into an AudioWorklet. */
+  onPageSupplied?: (pageIndex: number, channels: Float32Array[]) => void;
+  /** Internal bridge hook used to mirror an eviction into an AudioWorklet. */
+  onPageCleared?: (pageIndex: number) => void;
+  /** Internal bridge hook called after the local provider is destroyed. */
+  onClose?: () => void;
 }
 
 export interface OpfsClipPageProviderBinding {
   provider: ClipPageProvider;
   supplyPage(pageIndex: number): Promise<boolean>;
   supplyRequest(request: ClipPageRequest): Promise<boolean>;
+  /** Evict one resident page from every configured consumer. */
+  clearPage?(pageIndex: number): void;
   close(): void;
 }
 
@@ -116,7 +124,15 @@ self.onmessage = async (event) => {
 
 export function createOpfsClipPageWorker(): Worker {
   const blob = new Blob([opfsClipPageWorkerSource], { type: 'text/javascript' });
-  return new Worker(URL.createObjectURL(blob));
+  const url = URL.createObjectURL(blob);
+  try {
+    return new Worker(url);
+  } finally {
+    // Worker construction retains the script URL internally; keeping this
+    // object URL alive after construction leaks one browser registration per
+    // attach/close cycle.
+    URL.revokeObjectURL(url);
+  }
 }
 
 export function createOpfsClipPageProvider(
@@ -166,6 +182,7 @@ export function createOpfsClipPageProvider(
     }
     try {
       provider.supply(response.pageIndex, channels);
+      options.onPageSupplied?.(response.pageIndex, channels);
     } catch {
       entry.resolve(false);
       return;
@@ -218,6 +235,13 @@ export function createOpfsClipPageProvider(
     supplyRequest(request: ClipPageRequest) {
       return supplyPage(Math.floor(request.sample / options.pageFrames));
     },
+    clearPage(pageIndex: number) {
+      if (closed) {
+        return;
+      }
+      provider.clear(pageIndex);
+      options.onPageCleared?.(pageIndex);
+    },
     close() {
       if (closed) {
         return;
@@ -229,6 +253,7 @@ export function createOpfsClipPageProvider(
       }
       pending.clear();
       provider.destroy();
+      options.onClose?.();
       if (ownsWorker) {
         worker.terminate();
       }

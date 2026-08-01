@@ -75,6 +75,11 @@ describe('ClipPageStreamer', () => {
     // playback has advanced.
     expect([...binding.cleared].sort((a, b) => a - b)).toEqual([0, 1]);
     expect([...binding.supplied].sort((a, b) => a - b)).toEqual([0, 1, 9, 10, 11]);
+    const resident = new Set(binding.supplied);
+    for (const page of binding.cleared) {
+      resident.delete(page);
+    }
+    expect(resident.size).toBeLessThanOrEqual(1 + 1 + 1); // behind + frontier + ahead
   });
 
   it('collapses a forward run of misses across channels to the latest frontier', async () => {

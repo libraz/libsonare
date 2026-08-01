@@ -14,12 +14,15 @@ import {
   type WorkletTransport,
 } from './messages';
 import {
+  clipPageRequestRingFromSharedBuffer,
   encodeFrameHi,
   encodeFrameLo,
   engineRingFromSharedBuffer,
   meterFromEngine,
   meterRingFromSharedBuffer,
   popSonareEngineCommandRingBuffer,
+  pushSonareClipPageRequestRingBuffer,
+  type SharedClipPageRequestRingWriter,
   type SharedMeterRingWriter,
   type SharedScopeRingWriter,
   SONARE_ENGINE_COMMAND_RECORD_BYTES,
@@ -55,6 +58,7 @@ export class SonareRealtimeEngineWorkletProcessor {
   private telemetryRing?: SonareEngineTelemetryRingBuffer;
   private meterRing?: SharedMeterRingWriter;
   private scopeRing?: SharedScopeRingWriter;
+  private clipPageRequestRing?: SharedClipPageRequestRingWriter;
   private transport?: WorkletTransport;
   private meterIntervalFrames: number;
   private lastMeterFrame = Number.NEGATIVE_INFINITY;
@@ -71,7 +75,15 @@ export class SonareRealtimeEngineWorkletProcessor {
   private channelBuffers: Float32Array[];
   private readonly liveClips = new Map<number, EngineClip>();
   private readonly pagedClipProviders = new Map<number, number>();
+  private readonly pagedClipPageFrames = new Map<number, number>();
   private readonly pendingPagedClips = new Map<number, EngineClip>();
+  // The worklet drains at most this many distinct page misses per render
+  // quantum. The fixed scalar buffers avoid retaining an unbounded queue on
+  // the audio thread; any remaining native requests stay queued for the next
+  // quantum and render silence meanwhile.
+  private readonly clipPageRequestClipIds = new Float64Array(64);
+  private readonly clipPageRequestPageIndices = new Float64Array(64);
+  private clipPageRequestOverflowReported = 0;
 
   constructor(
     options: SonareRealtimeEngineWorkletProcessorOptions = {},
@@ -99,6 +111,12 @@ export class SonareRealtimeEngineWorkletProcessor {
           options.scopeSharedBuffer,
           options.scopeRingCapacity,
           options.scopeBands,
+        )
+      : undefined;
+    this.clipPageRequestRing = options.clipPageRequestSharedBuffer
+      ? clipPageRequestRingFromSharedBuffer(
+          options.clipPageRequestSharedBuffer,
+          options.clipPageRequestRingCapacity,
         )
       : undefined;
     this.engine = new RealtimeEngine(this.sampleRate, this.blockSize);
@@ -191,6 +209,7 @@ export class SonareRealtimeEngineWorkletProcessor {
         target.fill(0);
       }
     }
+    this.publishClipPageRequests();
     this.publishTelemetry();
     this.publishMeters();
     this.publishScope();
@@ -220,6 +239,7 @@ export class SonareRealtimeEngineWorkletProcessor {
     }
     switch (message.type) {
       case 'syncClips':
+        this.clearPagedClipProviders();
         this.liveClips.clear();
         for (const clip of message.clips) {
           if (clip.id !== undefined) {
@@ -231,6 +251,7 @@ export class SonareRealtimeEngineWorkletProcessor {
       case 'syncClipsDelta':
         for (const clipId of message.removeIds) {
           this.liveClips.delete(clipId);
+          this.removePagedClipProvider(clipId);
         }
         for (const clip of message.upserts) {
           if (clip.id !== undefined) {
@@ -240,13 +261,17 @@ export class SonareRealtimeEngineWorkletProcessor {
         this.engine.setClips(Array.from(this.liveClips.values()));
         break;
       case 'syncClipPageProvider': {
+        this.removePagedClipProvider(message.clipId);
         const provider = this.engine.createClipPageProvider(
           message.numChannels,
           message.numSamples,
           message.pageFrames,
         );
         this.pagedClipProviders.set(message.clipId, provider.id);
-        this.pendingPagedClips.set(message.clipId, message.clip);
+        this.pagedClipPageFrames.set(message.clipId, message.pageFrames);
+        if (message.clip) {
+          this.pendingPagedClips.set(message.clipId, message.clip);
+        }
         break;
       }
       case 'syncClipPage': {
@@ -256,9 +281,16 @@ export class SonareRealtimeEngineWorkletProcessor {
         }
         break;
       }
+      case 'syncClipPageClear': {
+        const providerId = this.pagedClipProviders.get(message.clipId);
+        if (providerId !== undefined) {
+          this.engine.clearClipPage(providerId, message.pageIndex);
+        }
+        break;
+      }
       case 'syncClipPageCommit': {
         const providerId = this.pagedClipProviders.get(message.clipId);
-        const clip = this.pendingPagedClips.get(message.clipId);
+        const clip = message.clip ?? this.pendingPagedClips.get(message.clipId);
         if (providerId !== undefined && clip) {
           this.liveClips.set(message.clipId, { ...clip, pageProvider: providerId });
           this.pendingPagedClips.delete(message.clipId);
@@ -266,6 +298,11 @@ export class SonareRealtimeEngineWorkletProcessor {
         }
         break;
       }
+      case 'syncClipPageDestroy':
+        this.liveClips.delete(message.clipId);
+        this.removePagedClipProvider(message.clipId);
+        this.engine.setClips(Array.from(this.liveClips.values()));
+        break;
       case 'syncMidiClips':
         this.engine.setMidiClips(message.clips);
         break;
@@ -523,6 +560,7 @@ export class SonareRealtimeEngineWorkletProcessor {
 
   destroy(): void {
     if (!this.closed) {
+      this.clearPagedClipProviders();
       this.engine.destroy();
       this.closed = true;
     }
@@ -741,6 +779,122 @@ export class SonareRealtimeEngineWorkletProcessor {
       return;
     }
     this.transport.postMessage({ type: 'externalMidi', events });
+  }
+
+  /**
+   * Forward a bounded batch of native page misses to the main thread. This
+   * deliberately runs after audio rendering: a cache miss is silence for this
+   * block, and OPFS I/O must never delay `process()`.
+   */
+  private publishClipPageRequests(): void {
+    const ring = this.clipPageRequestRing;
+    const transport = this.transport;
+    if (!ring && !transport?.postMessage) {
+      return;
+    }
+    let count = 0;
+    let drained = 0;
+    while (drained < this.clipPageRequestClipIds.length) {
+      drained += 1;
+      let clipId: number;
+      let sample: number;
+      if (ring) {
+        // This scalar scratch API is intentionally used only on the SAB path:
+        // it avoids embind materialising one JS object for every page miss in
+        // AudioWorklet process().
+        if (!this.engine.popClipPageRequestToScratch()) {
+          break;
+        }
+        clipId = this.engine.clipPageRequestScratchClipId();
+        sample = this.engine.clipPageRequestScratchSample();
+      } else {
+        // postMessage fallback is explicitly non-RT-safe; retain the public
+        // object-returning API only for that degraded control-plane path.
+        const request = this.engine.popClipPageRequest();
+        if (!request) {
+          break;
+        }
+        clipId = request.clipId;
+        sample = request.sample;
+      }
+      const pageFrames = this.pagedClipPageFrames.get(clipId);
+      if (!pageFrames) {
+        continue;
+      }
+      const pageIndex = Math.floor(sample / pageFrames);
+      let duplicate = false;
+      for (let i = 0; i < count; ++i) {
+        if (
+          this.clipPageRequestClipIds[i] === clipId &&
+          this.clipPageRequestPageIndices[i] === pageIndex
+        ) {
+          duplicate = true;
+          break;
+        }
+      }
+      if (!duplicate) {
+        this.clipPageRequestClipIds[count] = clipId;
+        this.clipPageRequestPageIndices[count] = pageIndex;
+        count += 1;
+      }
+    }
+    const overflowCount = this.engine.clipPageRequestOverflowCount();
+    // The native counter is uint32_t; preserve a correct delta across its
+    // defined unsigned wraparound instead of emitting a negative count.
+    const dropped = (overflowCount - this.clipPageRequestOverflowReported) >>> 0;
+    this.clipPageRequestOverflowReported = overflowCount;
+    if (ring) {
+      // Preserve native-queue loss in the same cumulative counter used for a
+      // full SAB request ring. No object, structured clone, or postMessage is
+      // created on this path.
+      if (dropped > 0) {
+        Atomics.add(ring.header, 4, dropped);
+      }
+      for (let i = 0; i < count; ++i) {
+        pushSonareClipPageRequestRingBuffer(
+          ring,
+          this.clipPageRequestClipIds[i],
+          this.clipPageRequestPageIndices[i],
+        );
+      }
+      return;
+    }
+    if (count === 0 && dropped === 0) {
+      return;
+    }
+    if (!transport?.postMessage) {
+      return;
+    }
+    // A message is necessarily allocated by postMessage; the hot path's
+    // resident queue remains fixed-size and no message is built without a miss.
+    const requests = new Array<{ clipId: number; pageIndex: number }>(count);
+    for (let i = 0; i < count; ++i) {
+      requests[i] = {
+        clipId: this.clipPageRequestClipIds[i],
+        pageIndex: this.clipPageRequestPageIndices[i],
+      };
+    }
+    transport.postMessage({
+      type: 'clipPageRequest',
+      requests,
+      ...(dropped > 0 ? { dropped } : {}),
+    });
+  }
+
+  private removePagedClipProvider(clipId: number): void {
+    const providerId = this.pagedClipProviders.get(clipId);
+    if (providerId !== undefined) {
+      this.engine.destroyClipPageProvider(providerId);
+    }
+    this.pagedClipProviders.delete(clipId);
+    this.pagedClipPageFrames.delete(clipId);
+    this.pendingPagedClips.delete(clipId);
+  }
+
+  private clearPagedClipProviders(): void {
+    for (const clipId of this.pagedClipProviders.keys()) {
+      this.removePagedClipProvider(clipId);
+    }
   }
 
   private writeScopeRing(ring: SharedScopeRingWriter, record: EngineScopeTelemetry): void {

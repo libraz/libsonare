@@ -1,5 +1,6 @@
 import { vi } from 'vitest';
 import {
+  createSonareClipPageRequestRingBuffer,
   createSonareEngineCommandRingBuffer,
   createSonareEngineTelemetryRingBuffer,
   createSonareScopeRingBuffer,
@@ -7,6 +8,7 @@ import {
   expect,
   it,
   pushSonareEngineCommandRingBuffer,
+  readSonareClipPageRequestRingBuffer,
   readSonareEngineTelemetryRingBuffer,
   readSonareScopeRingBuffer,
   registerSonareRealtimeEngineWorkletProcessor,
@@ -92,6 +94,31 @@ describe('SonareRealtimeEngineWorkletProcessor', () => {
           error: SonareEngineTelemetryError.None,
           timelineSample: 128,
         });
+      } finally {
+        processor.destroy();
+      }
+    });
+
+    it('reports native clip-page request queue overflow once without a request batch', () => {
+      const posted: unknown[] = [];
+      const processor = new SonareRealtimeEngineWorkletProcessor(
+        { sampleRate: 48000, blockSize: 128, channelCount: 1 },
+        { postMessage: (message) => posted.push(message) },
+      );
+      try {
+        const engine = (
+          processor as unknown as {
+            engine: { clipPageRequestOverflowCount: () => number };
+          }
+        ).engine;
+        engine.clipPageRequestOverflowCount = () => 3;
+
+        expect(processor.process([[]], [[new Float32Array(128)]])).toBe(true);
+        expect(posted).toContainEqual({ type: 'clipPageRequest', requests: [], dropped: 3 });
+
+        posted.length = 0;
+        expect(processor.process([[]], [[new Float32Array(128)]])).toBe(true);
+        expect(posted).not.toContainEqual({ type: 'clipPageRequest', requests: [], dropped: 3 });
       } finally {
         processor.destroy();
       }
@@ -208,6 +235,121 @@ describe('SonareRealtimeEngineWorkletProcessor', () => {
         const output = new Float32Array(blockSize);
         expect(processor.process([[]], [[output]])).toBe(true);
         expect(output[0]).toBeCloseTo(0.25, 4);
+      } finally {
+        processor.destroy();
+      }
+    });
+
+    it('reports a missing worklet clip page as one bounded pull request', () => {
+      const blockSize = 4;
+      const posted: unknown[] = [];
+      const processor = new SonareRealtimeEngineWorkletProcessor(
+        { sampleRate: 48000, blockSize, channelCount: 1 },
+        { postMessage: (message) => posted.push(message) },
+      );
+      try {
+        processor.receiveSync({ type: 'syncMixer', lanes: [{ trackId: 10 }] });
+        // The OPFS path creates and primes the provider before it has the
+        // finished clip schedule, then commits the schedule independently.
+        processor.receiveSync({
+          type: 'syncClipPageProvider',
+          clipId: 89,
+          numChannels: 1,
+          numSamples: 8,
+          pageFrames: 4,
+        });
+        processor.receiveSync({
+          type: 'syncClipPage',
+          clipId: 89,
+          pageIndex: 0,
+          channels: [new Float32Array(4).fill(0.25)],
+        });
+        processor.receiveSync({
+          type: 'syncClipPageCommit',
+          clipId: 89,
+          clip: { id: 89, trackId: 10, startPpq: 0, lengthSamples: 8, warpMode: 'off' },
+        });
+        processor.receiveCommand({ type: SonareEngineCommandType.TransportPlay, sampleTime: -1 });
+
+        const first = new Float32Array(blockSize);
+        expect(processor.process([[]], [[first]])).toBe(true);
+        expect(Array.from(first)).toEqual([0.25, 0.25, 0.25, 0.25]);
+
+        const missing = new Float32Array(blockSize);
+        expect(processor.process([[]], [[missing]])).toBe(true);
+        expect(Array.from(missing)).toEqual([0, 0, 0, 0]);
+        expect(posted).toContainEqual({
+          type: 'clipPageRequest',
+          requests: [{ clipId: 89, pageIndex: 1 }],
+        });
+
+        processor.receiveSync({
+          type: 'syncClipPage',
+          clipId: 89,
+          pageIndex: 1,
+          channels: [new Float32Array(4).fill(0.5)],
+        });
+        processor.receiveCommand({
+          type: SonareEngineCommandType.TransportSeekSample,
+          sampleTime: -1,
+          argInt: 0,
+        });
+        const replayedFirst = new Float32Array(blockSize);
+        const replayedSecond = new Float32Array(blockSize);
+        expect(processor.process([[]], [[replayedFirst]])).toBe(true);
+        expect(processor.process([[]], [[replayedSecond]])).toBe(true);
+        expect(Array.from(replayedFirst)).toEqual([0.25, 0.25, 0.25, 0.25]);
+        expect(Array.from(replayedSecond)).toEqual([0.5, 0.5, 0.5, 0.5]);
+      } finally {
+        processor.destroy();
+      }
+    });
+
+    it('publishes a missing worklet clip page through the SAB ring without postMessage', () => {
+      const blockSize = 4;
+      const posted: unknown[] = [];
+      const clipPageRequestRing = createSonareClipPageRequestRingBuffer(4);
+      const processor = new SonareRealtimeEngineWorkletProcessor(
+        {
+          sampleRate: 48000,
+          blockSize,
+          channelCount: 1,
+          clipPageRequestSharedBuffer: clipPageRequestRing.sharedBuffer,
+        },
+        { postMessage: (message) => posted.push(message) },
+      );
+      try {
+        processor.receiveSync({ type: 'syncMixer', lanes: [{ trackId: 10 }] });
+        processor.receiveSync({
+          type: 'syncClipPageProvider',
+          clipId: 90,
+          numChannels: 1,
+          numSamples: 8,
+          pageFrames: 4,
+        });
+        processor.receiveSync({
+          type: 'syncClipPage',
+          clipId: 90,
+          pageIndex: 0,
+          channels: [new Float32Array(4).fill(0.25)],
+        });
+        processor.receiveSync({
+          type: 'syncClipPageCommit',
+          clipId: 90,
+          clip: { id: 90, trackId: 10, startPpq: 0, lengthSamples: 8, warpMode: 'off' },
+        });
+        processor.receiveCommand({ type: SonareEngineCommandType.TransportPlay, sampleTime: -1 });
+
+        expect(processor.process([[]], [[new Float32Array(blockSize)]])).toBe(true);
+        expect(processor.process([[]], [[new Float32Array(blockSize)]])).toBe(true);
+        expect(readSonareClipPageRequestRingBuffer(clipPageRequestRing)).toEqual({
+          requests: [{ clipId: 90, pageIndex: 1 }],
+          dropped: 0,
+        });
+        expect(posted).not.toContainEqual({
+          type: 'clipPageRequest',
+          requests: [{ clipId: 90, pageIndex: 1 }],
+        });
       } finally {
         processor.destroy();
       }

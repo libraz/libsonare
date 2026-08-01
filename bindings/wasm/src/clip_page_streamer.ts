@@ -11,7 +11,17 @@ import type { ClipPageProvider, ClipPageRequest, RealtimeEngine } from './realti
  */
 export interface ClipPageStreamerEngine {
   /** Drain one pending audio-thread page-miss request, or `null` when empty. */
-  popClipPageRequest(): ClipPageRequest | null;
+  popClipPageRequest(): ClipPageStreamerRequest | null;
+}
+
+/**
+ * A page miss reported by either a direct engine (`sample`) or the worklet
+ * bridge (`pageIndex`). Exactly one position form is required.
+ */
+export interface ClipPageStreamerRequest {
+  clipId: number;
+  sample?: number;
+  pageIndex?: number;
 }
 
 /** A paged clip the streamer keeps fed from its backing store. */
@@ -153,7 +163,13 @@ export class ClipPageStreamer {
       if (!state) {
         continue;
       }
-      const page = Math.floor(request.sample / state.source.pageFrames);
+      const page =
+        request.pageIndex !== undefined
+          ? request.pageIndex
+          : Math.floor((request.sample ?? Number.NaN) / state.source.pageFrames);
+      if (!Number.isInteger(page) || page < 0 || page > state.lastPage) {
+        continue;
+      }
       frontiers.set(request.clipId, page);
     }
 
@@ -197,7 +213,7 @@ export class ClipPageStreamer {
     // the bound by transiently holding old pages alongside new ones.
     for (const page of state.resident.keys()) {
       if (page < low || page > high) {
-        state.source.binding.provider.clear(page);
+        this.clearPage(state, page);
         state.resident.delete(page);
       }
     }
@@ -217,7 +233,7 @@ export class ClipPageStreamer {
             if (state.generation !== generation) {
               // The fetch crossed a seek/reset boundary. supplyPage may have
               // installed it after resetState's clear pass, so clear it again.
-              state.source.binding.provider.clear(pageIndex);
+              this.clearPage(state, pageIndex);
             } else if (!ok && state.resident.get(pageIndex) === generation) {
               state.resident.delete(pageIndex);
             }
@@ -239,9 +255,19 @@ export class ClipPageStreamer {
     state.generation += 1;
     state.lastFrontier = null;
     for (const page of state.resident.keys()) {
-      state.source.binding.provider.clear(page);
+      this.clearPage(state, page);
     }
     state.resident.clear();
+  }
+
+  private clearPage(state: SourceState, pageIndex: number): void {
+    // `clearPage` mirrors eviction into the AudioWorklet. Keep the older
+    // provider-only form working for direct-engine callers and test doubles.
+    if (state.source.binding.clearPage) {
+      state.source.binding.clearPage(pageIndex);
+    } else {
+      state.source.binding.provider.clear(pageIndex);
+    }
   }
 }
 
@@ -261,6 +287,11 @@ export interface OpfsClipStream {
   provider: ClipPageProvider;
 }
 
+/** Structural seam implemented by the AudioWorklet-backed `SonareEngine`. */
+export interface WorkletOpfsClipStreamHost {
+  attachOpfsClipStream(options: OpfsClipStreamOptions): Promise<OpfsClipStream>;
+}
+
 /**
  * One-call wiring of an OPFS-backed streaming clip: creates the page provider,
  * primes the leading pages, and registers it with `streamer` so later misses are
@@ -271,11 +302,34 @@ export interface OpfsClipStream {
  * @param engine Engine the provider is created on (the same one `streamer` drives).
  * @param options Provider options plus `clipId` and optional `primePages`.
  */
-export async function attachOpfsClipStream(
+export function attachOpfsClipStream(
   streamer: ClipPageStreamer,
   engine: RealtimeEngine,
   options: OpfsClipStreamOptions,
+): Promise<OpfsClipStream>;
+/**
+ * Worklet overload: delegates to `SonareEngine.attachOpfsClipStream`, which
+ * creates the remote provider and drives this same sliding-window policy from
+ * worklet page-miss messages.
+ */
+export function attachOpfsClipStream(
+  engine: WorkletOpfsClipStreamHost,
+  options: OpfsClipStreamOptions,
+): Promise<OpfsClipStream>;
+export async function attachOpfsClipStream(
+  streamerOrEngine: ClipPageStreamer | WorkletOpfsClipStreamHost,
+  engineOrOptions: RealtimeEngine | OpfsClipStreamOptions,
+  maybeOptions?: OpfsClipStreamOptions,
 ): Promise<OpfsClipStream> {
+  if (!(streamerOrEngine instanceof ClipPageStreamer)) {
+    return streamerOrEngine.attachOpfsClipStream(engineOrOptions as OpfsClipStreamOptions);
+  }
+  const streamer = streamerOrEngine;
+  const engine = engineOrOptions as RealtimeEngine;
+  const options = maybeOptions;
+  if (!options) {
+    throw new Error('attachOpfsClipStream requires options.');
+  }
   const { clipId, primePages = 1, ...providerOptions } = options;
   const binding = createOpfsClipPageProvider(engine, providerOptions);
   const lastPage = Math.ceil(providerOptions.numSamples / providerOptions.pageFrames) - 1;

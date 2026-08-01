@@ -1373,6 +1373,49 @@ TEST_CASE("RealtimeEngine drains paged clip requests and underrun telemetry",
   REQUIRE(left[3] == 0.0f);
 }
 
+TEST_CASE("RealtimeEngine counts paged clip requests dropped by its bounded queue",
+          "[engine][realtime][clip_pages]") {
+  class AlwaysMissingPagedProvider final : public sonare::engine::ClipPagedAudioProvider {
+   public:
+    int num_channels() const noexcept override { return 1; }
+    int64_t num_samples() const noexcept override { return 4; }
+    int64_t page_frames() const noexcept override { return 1; }
+    bool sample_at(int, int64_t, float*) const noexcept override { return false; }
+  };
+
+  sonare::engine::RealtimeEngine engine;
+  // The page-request queue is deliberately only two records deep. Four distinct
+  // one-sample pages miss in a single block, so two requests must be observable
+  // through the counter rather than disappearing silently.
+  engine.prepare(48000.0, 4, 16, 2);
+
+  auto provider = std::make_shared<AlwaysMissingPagedProvider>();
+  sonare::engine::ClipSchedule clip{45, {}, 0.0, 0, 0, 4, false, 1.0f, 0, 0};
+  clip.page_provider = provider;
+  engine.set_clips({clip});
+
+  sonare::rt::Command play{};
+  play.type = sonare::rt::CommandType::kTransportPlay;
+  play.sample_time = -1;
+  REQUIRE(engine.push_command(play));
+
+  std::array<float, 4> left{};
+  float* io[] = {left.data()};
+  engine.process(io, 1, 4);
+
+  sonare::engine::ClipPageRequest request{};
+  int retained = 0;
+  while (engine.pop_clip_page_request(request)) {
+    ++retained;
+  }
+  REQUIRE(retained == 2);
+  REQUIRE(engine.clip_page_request_overflow_count() == 2);
+
+  // Re-prepare is a lifecycle reset, including the visible drop counter.
+  engine.prepare(48000.0, 4, 16, 2);
+  REQUIRE(engine.clip_page_request_overflow_count() == 0);
+}
+
 TEST_CASE("RealtimeEngine offline render matches block process", "[engine][realtime][offline]") {
   constexpr int kFrames = 512;
   constexpr int kBlock = 128;

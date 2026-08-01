@@ -1,6 +1,7 @@
 import type { EngineCaptureStatus, EngineTransportState } from '../index';
 import { engineCapabilities } from '../index';
 import {
+  isClipPageRequestMessage,
   isEngineCaptureResponseMessage,
   isEngineTelemetryRecord,
   isEngineTransportResponseMessage,
@@ -10,6 +11,7 @@ import {
 import type {
   SonareEngineCaptureRequestMessage,
   SonareEngineCaptureResponseMessage,
+  SonareEngineClipPageRequestMessage,
   SonareEngineTransportResponseMessage,
   SonareRealtimeEngineNodeCapabilities,
   SonareRealtimeEngineNodeOptions,
@@ -17,15 +19,18 @@ import type {
   SonareWorkletExternalMidiEvent,
 } from './messages';
 import {
+  createSonareClipPageRequestRingBuffer,
   createSonareEngineCommandRingBuffer,
   createSonareEngineTelemetryRingBuffer,
   createSonareMeterRingBuffer,
   createSonareScopeRingBuffer,
   isRecord,
   pushSonareEngineCommandRingBuffer,
+  readSonareClipPageRequestRingBuffer,
   readSonareEngineTelemetryRingBuffer,
   readSonareMeterRingBuffer,
   readSonareScopeRingBuffer,
+  type SonareClipPageRequestRingBuffer,
   type SonareEngineCommandRecord,
   type SonareEngineCommandRingBuffer,
   SonareEngineCommandType,
@@ -44,14 +49,19 @@ export class SonareRealtimeEngineNode {
   readonly telemetryRing?: SonareEngineTelemetryRingBuffer;
   readonly meterRing?: SonareMeterRingBuffer;
   readonly scopeRing?: SonareScopeRingBuffer;
+  readonly clipPageRequestRing?: SonareClipPageRequestRingBuffer;
   readonly ready: Promise<void>;
   private telemetryReadIndex = 0;
   private meterReadIndex = 0;
   private scopeReadIndex = 0;
+  private clipPageRequestDroppedRead = 0;
   private telemetryListeners = new Set<(telemetry: SonareEngineTelemetryRecord) => void>();
   private meterListeners = new Set<(meter: SonareWorkletMeterSnapshot) => void>();
   private scopeListeners = new Set<(scope: SonareWorkletScopeSnapshot) => void>();
   private midiOutListeners = new Set<(events: SonareWorkletExternalMidiEvent[]) => void>();
+  private clipPageRequestListeners = new Set<
+    (message: SonareEngineClipPageRequestMessage) => void
+  >();
   private captureRequestId = 1;
   private readonly captureRequests = new Map<
     number,
@@ -79,6 +89,7 @@ export class SonareRealtimeEngineNode {
     telemetryRing?: SonareEngineTelemetryRingBuffer,
     meterRing?: SonareMeterRingBuffer,
     scopeRing?: SonareScopeRingBuffer,
+    clipPageRequestRing?: SonareClipPageRequestRingBuffer,
   ) {
     this.node = node;
     this.capabilities = capabilities;
@@ -86,6 +97,7 @@ export class SonareRealtimeEngineNode {
     this.telemetryRing = telemetryRing;
     this.meterRing = meterRing;
     this.scopeRing = scopeRing;
+    this.clipPageRequestRing = clipPageRequestRing;
     this.ready = new Promise((resolve, reject) => {
       this.resolveReady = resolve;
       this.rejectReady = reject;
@@ -120,6 +132,8 @@ export class SonareRealtimeEngineNode {
         this.emitMeter(event.data);
       } else if (isExternalMidiBatchMessage(event.data)) {
         this.emitMidiOut(event.data.events);
+      } else if (isClipPageRequestMessage(event.data)) {
+        this.emitClipPageRequests(event.data);
       } else if (isRecord(event.data) && event.data.type === 'ready') {
         this.resolveReady();
       } else if (isRecord(event.data) && event.data.type === 'error') {
@@ -188,6 +202,13 @@ export class SonareRealtimeEngineNode {
       mode === 'sab' && scopeIntervalFrames > 0
         ? createSonareScopeRingBuffer(options.scopeRingCapacity ?? 64, options.scopeBands ?? 48)
         : undefined;
+    // Paged-clip cache misses are a worklet-to-main-thread control signal. A
+    // dedicated SPSC SAB ring keeps process() free of both embind request
+    // objects and postMessage structured cloning.
+    const clipPageRequestRing =
+      mode === 'sab'
+        ? createSonareClipPageRequestRingBuffer(options.clipPageRequestRingCapacity ?? 128)
+        : undefined;
     const channelCount = Math.max(1, Math.floor(options.channelCount ?? 2));
     const processorOptions: SonareRealtimeEngineWorkletProcessorOptions = {
       sampleRate: options.sampleRate ?? context.sampleRate,
@@ -203,6 +224,8 @@ export class SonareRealtimeEngineNode {
       scopeRingCapacity: scopeRing?.capacity,
       scopeBands: scopeRing?.bands,
       scopeIntervalFrames: scopeRing ? scopeIntervalFrames : undefined,
+      clipPageRequestSharedBuffer: clipPageRequestRing?.sharedBuffer,
+      clipPageRequestRingCapacity: clipPageRequestRing?.capacity,
       wasmBinary: options.wasmBinary,
       initialSyncMessages: options.initialSyncMessages,
       initialCommands: options.initialCommands,
@@ -225,16 +248,18 @@ export class SonareRealtimeEngineNode {
         sharedArrayBuffer,
         atomics,
         audioWorklet,
+        clipPageRequestsRealtimeSafe: mode === 'sab',
         engineAbiVersion: detectedCapabilities?.engineAbiVersion,
         expectedEngineAbiVersion: detectedCapabilities?.expectedEngineAbiVersion,
         abiCompatible: detectedCapabilities?.abiCompatible,
         degradedReason,
-        readyMessage: moduleUrl !== undefined && !options.nodeFactory,
+        readyMessage: moduleUrl !== undefined,
       },
       commandRing,
       telemetryRing,
       meterRing,
       scopeRing,
+      clipPageRequestRing,
     );
   }
 
@@ -345,6 +370,30 @@ export class SonareRealtimeEngineNode {
     return read.scopes;
   }
 
+  /**
+   * Drains bounded paged-clip misses from the SAB ring and forwards one batch
+   * to subscribers. In postMessage mode the legacy handler remains available,
+   * but that degraded path is not realtime-safe for OPFS streaming.
+   */
+  pollClipPageRequests(): SonareEngineClipPageRequestMessage | undefined {
+    if (!this.clipPageRequestRing) {
+      return undefined;
+    }
+    const read = readSonareClipPageRequestRingBuffer(this.clipPageRequestRing);
+    const dropped = (read.dropped - this.clipPageRequestDroppedRead) >>> 0;
+    this.clipPageRequestDroppedRead = read.dropped;
+    if (read.requests.length === 0 && dropped === 0) {
+      return undefined;
+    }
+    const message: SonareEngineClipPageRequestMessage = {
+      type: 'clipPageRequest',
+      requests: read.requests,
+      ...(dropped > 0 ? { dropped } : {}),
+    };
+    this.emitClipPageRequests(message);
+    return message;
+  }
+
   onTelemetry(callback: (telemetry: SonareEngineTelemetryRecord) => void): () => void {
     this.telemetryListeners.add(callback);
     return () => {
@@ -378,6 +427,17 @@ export class SonareRealtimeEngineNode {
     };
   }
 
+  /**
+   * Subscribe to bounded batches of paged-clip misses from the worklet. The
+   * callback runs on the main thread and may initiate asynchronous OPFS I/O.
+   */
+  onClipPageRequests(callback: (message: SonareEngineClipPageRequestMessage) => void): () => void {
+    this.clipPageRequestListeners.add(callback);
+    return () => {
+      this.clipPageRequestListeners.delete(callback);
+    };
+  }
+
   destroy(): void {
     if (this.destroyed) {
       return;
@@ -397,6 +457,7 @@ export class SonareRealtimeEngineNode {
     this.meterListeners.clear();
     this.scopeListeners.clear();
     this.midiOutListeners.clear();
+    this.clipPageRequestListeners.clear();
   }
 
   private emitTelemetry(telemetry: SonareEngineTelemetryRecord): void {
@@ -414,6 +475,12 @@ export class SonareRealtimeEngineNode {
   private emitMidiOut(events: SonareWorkletExternalMidiEvent[]): void {
     for (const listener of this.midiOutListeners) {
       listener(events);
+    }
+  }
+
+  private emitClipPageRequests(message: SonareEngineClipPageRequestMessage): void {
+    for (const listener of this.clipPageRequestListeners) {
+      listener(message);
     }
   }
 

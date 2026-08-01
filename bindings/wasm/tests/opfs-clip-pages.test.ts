@@ -6,6 +6,12 @@ import {
   init,
   RealtimeEngine,
 } from '../dist/index.js';
+import {
+  init as initWorklet,
+  SonareEngine,
+  SonareEngineCommandType,
+  SonareRealtimeEngineWorkletProcessor,
+} from '../dist/worklet.js';
 
 class FakeClipPageWorker {
   listener: ((event: MessageEvent) => void) | null = null;
@@ -70,6 +76,7 @@ class FakeClipPageWorker {
 describe('createOpfsClipPageProvider', () => {
   beforeAll(async () => {
     await init();
+    await initWorklet();
   });
 
   it('feeds page requests through a worker-backed provider', async () => {
@@ -143,6 +150,156 @@ describe('createOpfsClipPageProvider', () => {
 
     binding.close();
     engine.destroy();
+  });
+});
+
+describe('worklet attachOpfsClipStream', () => {
+  it('primes, pulls, and bounds pages through the realtime-safe SAB AudioWorklet bridge', async () => {
+    const blockSize = 4;
+    const worker = new FakeClipPageWorker();
+    let processor: SonareRealtimeEngineWorkletProcessor | undefined;
+    const port = {
+      postMessage: (message: unknown, transfer?: Transferable[]) => {
+        // The worker deliberately returns SharedArrayBuffer-backed pages. A
+        // browser rejects SABs in a transfer list, so this bridge must send
+        // them clone-only instead of silently leaving the page unavailable.
+        expect(
+          transfer?.some(
+            (entry) =>
+              typeof SharedArrayBuffer === 'function' && entry instanceof SharedArrayBuffer,
+          ) ?? false,
+        ).toBe(false);
+        const type =
+          typeof message === 'object' && message !== null
+            ? (message as { type?: unknown }).type
+            : undefined;
+        if (typeof type === 'number') {
+          processor?.receiveCommand(
+            message as Parameters<SonareRealtimeEngineWorkletProcessor['receiveCommand']>[0],
+          );
+        } else {
+          processor?.receiveSync(
+            message as Parameters<SonareRealtimeEngineWorkletProcessor['receiveSync']>[0],
+          );
+        }
+      },
+      onmessage: undefined as ((event: MessageEvent<unknown>) => void) | undefined,
+    };
+    const context = { sampleRate: 48000 } as BaseAudioContext;
+    const engine = await SonareEngine.create(context, {
+      mode: 'sab',
+      offlineChannelCount: 1,
+      blockSize,
+      channelCount: 1,
+      nodeFactory: (_context, _name, options) => {
+        processor = new SonareRealtimeEngineWorkletProcessor(
+          options.processorOptions as ConstructorParameters<
+            typeof SonareRealtimeEngineWorkletProcessor
+          >[0],
+          {
+            postMessage: (message) => port.onmessage?.({ data: message } as MessageEvent<unknown>),
+          },
+        );
+        return { port, disconnect: () => undefined } as unknown as AudioWorkletNode;
+      },
+    });
+    try {
+      if (!processor) {
+        throw new Error('expected a worklet processor');
+      }
+      engine.setTrackLanes([10]);
+      const { provider } = await attachOpfsClipStream(engine, {
+        path: 'clips/clip.f32',
+        clipId: 701,
+        numChannels: 1,
+        numSamples: 8,
+        pageFrames: 4,
+        worker: worker as unknown as Worker,
+      });
+      engine.addClip(10, provider, 0, { id: 701 });
+      engine.transport.play();
+
+      const first = new Float32Array(blockSize);
+      const missing = new Float32Array(blockSize);
+      expect(processor.process([[]], [[first]])).toBe(true);
+      expect(processor.process([[]], [[missing]])).toBe(true);
+      expect(Array.from(first)).toEqual([1, 2, 3, 4]);
+      expect(Array.from(missing)).toEqual([0, 0, 0, 0]);
+
+      // The main thread polls the SAB ring, pumps the same streamer used by
+      // direct engines, and the fake OPFS worker supplies only page 1.
+      await new Promise((resolve) => setTimeout(resolve, 16));
+      expect(
+        worker.messages.map((message) => (message as { pageIndex: number }).pageIndex),
+      ).toEqual([0, 1]);
+
+      processor.receiveCommand({
+        type: SonareEngineCommandType.TransportSeekSample,
+        sampleTime: -1,
+        argInt: 0,
+      });
+      const replayedFirst = new Float32Array(blockSize);
+      const replayedSecond = new Float32Array(blockSize);
+      expect(processor.process([[]], [[replayedFirst]])).toBe(true);
+      expect(processor.process([[]], [[replayedSecond]])).toBe(true);
+      expect(Array.from(replayedFirst)).toEqual([1, 2, 3, 4]);
+      expect(Array.from(replayedSecond)).toEqual([5, 6, 7, 8]);
+    } finally {
+      engine.destroy();
+      processor?.destroy();
+    }
+  });
+
+  it('rejects OPFS streaming on the explicitly non-realtime-safe postMessage fallback', async () => {
+    const port = {
+      postMessage: () => undefined,
+      onmessage: undefined as ((event: MessageEvent<unknown>) => void) | undefined,
+    };
+    const engine = await SonareEngine.create({ sampleRate: 48000 } as BaseAudioContext, {
+      mode: 'postMessage',
+      nodeFactory: () => ({ port, disconnect: () => undefined }) as unknown as AudioWorkletNode,
+    });
+    try {
+      await expect(
+        attachOpfsClipStream(engine, {
+          path: 'clips/clip.f32',
+          clipId: 702,
+          numChannels: 1,
+          numSamples: 8,
+          pageFrames: 4,
+          worker: new FakeClipPageWorker() as unknown as Worker,
+        }),
+      ).rejects.toThrow(/postMessage fallback is not realtime-safe/);
+    } finally {
+      engine.destroy();
+    }
+  });
+
+  it('bounds pending worklet page misses while OPFS service is stalled', async () => {
+    const port = {
+      postMessage: () => undefined,
+      onmessage: undefined as ((event: MessageEvent<unknown>) => void) | undefined,
+    };
+    const context = { sampleRate: 48000 } as BaseAudioContext;
+    const engine = await SonareEngine.create(context, {
+      mode: 'postMessage',
+      nodeFactory: () => ({ port, disconnect: () => undefined }) as unknown as AudioWorkletNode,
+    });
+    try {
+      for (let clipId = 0; clipId < 1024; ++clipId) {
+        port.onmessage?.({
+          data: { type: 'clipPageRequest', requests: [{ clipId, pageIndex: clipId }] },
+        } as MessageEvent<unknown>);
+      }
+      const pending = (
+        engine as unknown as { workletClipPageRequests: Map<number, { pageIndex: number }> }
+      ).workletClipPageRequests;
+      expect(pending.size).toBeLessThanOrEqual(256);
+      expect(pending.get(1023)).toEqual({ clipId: 1023, pageIndex: 1023 });
+      expect(pending.has(0)).toBe(false);
+    } finally {
+      engine.destroy();
+    }
   });
 });
 

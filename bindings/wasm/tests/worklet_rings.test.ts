@@ -1,4 +1,5 @@
 import {
+  createSonareClipPageRequestRingBuffer,
   createSonareEngineCommandRingBuffer,
   createSonareEngineTelemetryRingBuffer,
   createSonareMeterRingBuffer,
@@ -8,9 +9,13 @@ import {
   Mixer,
   mixingScenePresetJson,
   popSonareEngineCommandRingBuffer,
+  pushSonareClipPageRequestRingBuffer,
   pushSonareEngineCommandRingBuffer,
+  readSonareClipPageRequestRingBuffer,
   readSonareEngineTelemetryRingBuffer,
   readSonareMeterRingBuffer,
+  SONARE_CLIP_PAGE_REQUEST_RING_HEADER_INTS,
+  SONARE_CLIP_PAGE_REQUEST_RING_RECORD_UINT32S,
   SONARE_ENGINE_COMMAND_RECORD_BYTES,
   SONARE_ENGINE_RING_HEADER_INTS,
   SONARE_ENGINE_TELEMETRY_RECORD_BYTES,
@@ -21,6 +26,7 @@ import {
   SonareEngineTelemetryType,
   SonareWorkletProcessor,
   setupWorklet,
+  sonareClipPageRequestRingBufferByteLength,
   sonareEngineCommandRingBufferByteLength,
   sonareEngineTelemetryRingBufferByteLength,
   sonareMeterRingBufferByteLength,
@@ -29,6 +35,47 @@ import {
 
 describe('Sonare worklet ring buffers', () => {
   setupWorklet();
+
+  describe('clip-page request ring-buffer (SPSC)', () => {
+    it('drains in FIFO order and reports bounded overflow without overwriting requests', () => {
+      const ring = createSonareClipPageRequestRingBuffer(2);
+      expect(pushSonareClipPageRequestRingBuffer(ring, 10, 3)).toBe(true);
+      expect(pushSonareClipPageRequestRingBuffer(ring, 11, 4)).toBe(true);
+      expect(pushSonareClipPageRequestRingBuffer(ring, 12, 5)).toBe(false);
+
+      const read = readSonareClipPageRequestRingBuffer(ring);
+      expect(read.requests).toEqual([
+        { clipId: 10, pageIndex: 3 },
+        { clipId: 11, pageIndex: 4 },
+      ]);
+      expect(read.dropped).toBe(1);
+      expect(readSonareClipPageRequestRingBuffer(ring)).toEqual({ requests: [], dropped: 1 });
+
+      expect(pushSonareClipPageRequestRingBuffer(ring, -1, 0)).toBe(false);
+      expect(readSonareClipPageRequestRingBuffer(ring).dropped).toBe(2);
+    });
+
+    it('accepts a manually constructed buffer with the documented header layout', () => {
+      const capacity = 2;
+      const sab = new SharedArrayBuffer(sonareClipPageRequestRingBufferByteLength(capacity));
+      const header = new Int32Array(sab, 0, SONARE_CLIP_PAGE_REQUEST_RING_HEADER_INTS);
+      const records = new Uint32Array(
+        sab,
+        SONARE_CLIP_PAGE_REQUEST_RING_HEADER_INTS * Int32Array.BYTES_PER_ELEMENT,
+        capacity * SONARE_CLIP_PAGE_REQUEST_RING_RECORD_UINT32S,
+      );
+      // Header layout: [writeIndex, readIndex, capacity, recordUint32s, dropped].
+      header[0] = 1;
+      header[2] = capacity;
+      header[3] = SONARE_CLIP_PAGE_REQUEST_RING_RECORD_UINT32S;
+      records[0] = 42;
+      records[1] = 7;
+      expect(
+        readSonareClipPageRequestRingBuffer({ sharedBuffer: sab, header, records, capacity }),
+      ).toEqual({ requests: [{ clipId: 42, pageIndex: 7 }], dropped: 0 });
+      expect(header[1]).toBe(1);
+    });
+  });
 
   describe('meter ring-buffer round-trip (pure, no audio thread)', () => {
     const sampleRate = 48000;

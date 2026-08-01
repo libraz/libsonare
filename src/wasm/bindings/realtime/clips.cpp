@@ -455,6 +455,22 @@ val RealtimeEngineWasm::popClipPageRequest() {
   return out;
 }
 
+bool RealtimeEngineWasm::popClipPageRequestToScratch() {
+  return engine_.pop_clip_page_request(clip_page_request_scratch_);
+}
+
+uint32_t RealtimeEngineWasm::clipPageRequestScratchClipId() const {
+  return clip_page_request_scratch_.clip_id;
+}
+
+double RealtimeEngineWasm::clipPageRequestScratchSample() const {
+  return static_cast<double>(clip_page_request_scratch_.sample);
+}
+
+uint32_t RealtimeEngineWasm::clipPageRequestOverflowCount() const {
+  return engine_.clip_page_request_overflow_count();
+}
+
 void registerRealtimeEngineClips(class_<RealtimeEngineWasm>& cls) {
   cls.function("setClips", &RealtimeEngineWasm::setClips)
       .function("prebakedClipChannels", &RealtimeEngineWasm::prebakedClipChannels)
@@ -463,7 +479,11 @@ void registerRealtimeEngineClips(class_<RealtimeEngineWasm>& cls) {
       .function("supplyClipPage", &RealtimeEngineWasm::supplyClipPage)
       .function("clearClipPage", &RealtimeEngineWasm::clearClipPage)
       .function("destroyClipPageProvider", &RealtimeEngineWasm::destroyClipPageProvider)
-      .function("popClipPageRequest", &RealtimeEngineWasm::popClipPageRequest);
+      .function("popClipPageRequest", &RealtimeEngineWasm::popClipPageRequest)
+      .function("popClipPageRequestToScratch", &RealtimeEngineWasm::popClipPageRequestToScratch)
+      .function("clipPageRequestScratchClipId", &RealtimeEngineWasm::clipPageRequestScratchClipId)
+      .function("clipPageRequestScratchSample", &RealtimeEngineWasm::clipPageRequestScratchSample)
+      .function("clipPageRequestOverflowCount", &RealtimeEngineWasm::clipPageRequestOverflowCount);
 }
 
 #endif  // __EMSCRIPTEN__

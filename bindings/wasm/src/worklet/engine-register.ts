@@ -24,6 +24,7 @@ export function registerSonareRealtimeEngineWorkletProcessor(
   class RegisteredSonareRealtimeEngineWorkletProcessor extends Base {
     private bridge?: SonareRealtimeEngineWorkletProcessor;
     private readonly pendingMessages: unknown[] = [];
+    private pendingMessagesOverflowed = false;
     readonly port?: WorkletPort;
 
     constructor(options?: { processorOptions?: SonareRealtimeEngineWorkletProcessorOptions }) {
@@ -35,6 +36,10 @@ export function registerSonareRealtimeEngineWorkletProcessor(
         if (!this.bridge) {
           if (this.pendingMessages.length < 1024) {
             this.pendingMessages.push(event.data);
+          } else {
+            // A long sync before embind initialization must fail visibly rather
+            // than drop a provider/page/commit message and leave silent audio.
+            this.pendingMessagesOverflowed = true;
           }
           return;
         }
@@ -111,6 +116,9 @@ export function registerSonareRealtimeEngineWorkletProcessor(
             wasmBinary: options.wasmBinary,
             moduleFactory,
           });
+        }
+        if (this.pendingMessagesOverflowed) {
+          throw new Error('AudioWorklet initialization message buffer overflowed.');
         }
         this.bridge = new SonareRealtimeEngineWorkletProcessor(options, {
           postMessage: (message) => port?.postMessage?.(message),

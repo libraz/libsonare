@@ -1,6 +1,7 @@
 import type {
   SonareEngineCaptureRequestMessage,
   SonareEngineCaptureResponseMessage,
+  SonareEngineClipPageRequestMessage,
   SonareEngineSyncMessage,
   SonareEngineTransportRequestMessage,
   SonareEngineTransportResponseMessage,
@@ -39,7 +40,9 @@ export function isEngineSyncMessage(value: unknown): value is SonareEngineSyncMe
     value.type === 'syncClipsDelta' ||
     value.type === 'syncClipPageProvider' ||
     value.type === 'syncClipPage' ||
+    value.type === 'syncClipPageClear' ||
     value.type === 'syncClipPageCommit' ||
+    value.type === 'syncClipPageDestroy' ||
     value.type === 'syncMidiClips' ||
     value.type === 'syncMarkers' ||
     value.type === 'syncMetronome' ||
@@ -146,6 +149,22 @@ export function isExternalMidiBatchMessage(
   value: unknown,
 ): value is SonareWorkletExternalMidiMessage {
   return isRecord(value) && value.type === 'externalMidi' && Array.isArray(value.events);
+}
+
+export function isClipPageRequestMessage(
+  value: unknown,
+): value is SonareEngineClipPageRequestMessage {
+  return (
+    isRecord(value) &&
+    value.type === 'clipPageRequest' &&
+    Array.isArray(value.requests) &&
+    value.requests.every(
+      (request) =>
+        isRecord(request) &&
+        typeof request.clipId === 'number' &&
+        typeof request.pageIndex === 'number',
+    )
+  );
 }
 
 export function isMeterSnapshot(value: unknown): value is SonareWorkletMeterSnapshot {

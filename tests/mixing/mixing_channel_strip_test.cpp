@@ -82,8 +82,8 @@ TEST_CASE("surround bus linked dynamics exclude only the LFE plane from detectio
   // 5.1 and 7.1 use the same canonical LFE index. Raising that plane must not
   // change their shared gain envelope, while the LFE itself still receives the
   // shared gain calculated from the program channels.
-  for (const auto [layout, channels] : {std::pair{sonare::ChannelLayout::FivePointOne, 6},
-                                        std::pair{sonare::ChannelLayout::SevenPointOne, 8}}) {
+  for (const auto& [layout, channels] : {std::pair{sonare::ChannelLayout::FivePointOne, 6},
+                                         std::pair{sonare::ChannelLayout::SevenPointOne, 8}}) {
     const auto quiet_lfe = render(layout, channels, 0.0f);
     const auto loud_lfe = render(layout, channels, 0.95f);
     for (int ch = 0; ch < channels; ++ch) {

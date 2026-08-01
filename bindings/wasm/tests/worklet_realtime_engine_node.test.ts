@@ -3,6 +3,7 @@ import {
   expect,
   it,
   popSonareEngineCommandRingBuffer,
+  pushSonareClipPageRequestRingBuffer,
   SonareEngine,
   SonareEngineCommandType,
   SonareEngineTelemetryError,
@@ -59,6 +60,8 @@ describe('SonareRealtimeEngineNode', () => {
       expect(node.capabilities.runtimeTarget).toBe('embind');
       expect(node.commandRing).toBeDefined();
       expect(node.telemetryRing).toBeDefined();
+      expect(node.clipPageRequestRing).toBeDefined();
+      expect(node.capabilities.clipPageRequestsRealtimeSafe).toBe(true);
       expect(capturedOptions?.processorOptions).toMatchObject({
         sampleRate: 48000,
         blockSize: 128,
@@ -90,6 +93,59 @@ describe('SonareRealtimeEngineNode', () => {
       node.destroy();
       expect(disconnected).toEqual([true]);
       expect(posted.at(-1)).toMatchObject({ type: SonareEngineCommandType.TransportStop });
+    });
+
+    it('drains clip-page requests from the SAB ring and reports bounded drops', async () => {
+      const node = await SonareRealtimeEngineNode.create(fakeContext(), {
+        clipPageRequestRingCapacity: 1,
+        nodeFactory: () =>
+          ({
+            port: { postMessage: () => undefined, onmessage: undefined },
+            disconnect: () => undefined,
+          }) as unknown as AudioWorkletNode,
+      });
+      try {
+        const ring = node.clipPageRequestRing;
+        if (!ring) {
+          throw new Error('expected clip-page request ring');
+        }
+        expect(pushSonareClipPageRequestRingBuffer(ring, 77, 2)).toBe(true);
+        expect(pushSonareClipPageRequestRingBuffer(ring, 78, 3)).toBe(false);
+        const seen: unknown[] = [];
+        node.onClipPageRequests((message) => seen.push(message));
+        expect(node.pollClipPageRequests()).toEqual({
+          type: 'clipPageRequest',
+          requests: [{ clipId: 77, pageIndex: 2 }],
+          dropped: 1,
+        });
+        expect(seen).toHaveLength(1);
+        expect(node.pollClipPageRequests()).toBeUndefined();
+      } finally {
+        node.destroy();
+      }
+    });
+
+    it('waits for the worklet ready acknowledgement before exposing SonareEngine', async () => {
+      const port = {
+        postMessage: () => undefined,
+        onmessage: undefined as ((event: MessageEvent<unknown>) => void) | undefined,
+      };
+      const enginePromise = SonareEngine.create(fakeContext(), {
+        moduleUrl: 'sonare-worklet.js',
+        mode: 'postMessage',
+        nodeFactory: () => ({ port, disconnect: () => undefined }) as unknown as AudioWorkletNode,
+      });
+      let settled = false;
+      void enginePromise.then(() => {
+        settled = true;
+      });
+      await Promise.resolve();
+      expect(settled).toBe(false);
+      port.onmessage?.({
+        data: { type: 'ready', runtimeTarget: 'embind' },
+      } as MessageEvent<unknown>);
+      const engine = await enginePromise;
+      engine.destroy();
     });
 
     it('creates the scope ring only when scope telemetry is requested', async () => {
@@ -143,6 +199,7 @@ describe('SonareRealtimeEngineNode', () => {
           }) as unknown as AudioWorkletNode,
       });
       expect(node.capabilities.mode).toBe('postMessage');
+      expect(node.capabilities.clipPageRequestsRealtimeSafe).toBe(false);
       expect(node.commandRing).toBeUndefined();
       expect(node.seekSample(48000)).toBe(true);
       expect(posted[0]).toMatchObject({

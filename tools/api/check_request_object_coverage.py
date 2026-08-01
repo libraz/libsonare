@@ -94,6 +94,10 @@ METADATA_HELPERS = {
 # These two functions were already object-shaped before this migration.  They
 # have semantic options types rather than a newly named *Request interface.
 OBJECT_SHAPED = {"synthesizeRir"}
+# This attach helper coordinates pre-existing engine/streamer instances.  Its
+# final argument is already the semantic options object; wrapping those opaque
+# stateful handles in a one-shot request would only add a second API shape.
+STATEFUL_ATTACH_HELPERS = {"attachOpfsClipStream"}
 FUNCTION = re.compile(r"export function (\w+)\s*\(")
 
 
@@ -129,6 +133,8 @@ def exemption(path: Path, name: str) -> str | None:
         return "catalog, capability, or version metadata"
     if name in OBJECT_SHAPED:
         return "pre-existing object-shaped API"
+    if name in STATEFUL_ATTACH_HELPERS:
+        return "stateful attach helper with an existing options object"
     return None
 
 

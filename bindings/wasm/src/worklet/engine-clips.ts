@@ -1,4 +1,5 @@
 import type { EngineClip, EngineMidiClipSchedule, RealtimeEngine } from '../index';
+import type { ClipPageProvider } from '../realtime_engine';
 import type { SonareEngineSyncMessage } from './messages';
 
 /**
@@ -14,6 +15,8 @@ export interface EngineClipContext {
   postSync(message: SonareEngineSyncMessage, transfer?: Transferable[]): void;
   resolveTargetId(target: string | number): number;
   ensureTrackLane(target: string | number): number;
+  /** Commits a provider already primed through the worklet's OPFS pull bridge. */
+  commitWorkletClipPageProvider(clip: EngineClip): boolean;
 }
 
 // Keep control-message work bounded even for long tempo-synced clips. The
@@ -25,15 +28,15 @@ const PREBAKED_CLIP_PAGE_FRAMES = 4_096;
 export function addClip(
   ctx: EngineClipContext,
   trackId: string | number,
-  buffer: Float32Array[],
+  buffer: Float32Array[] | ClipPageProvider,
   startPpq: number,
-  opts: Partial<Omit<EngineClip, 'channels' | 'startPpq'>> = {},
+  opts: Partial<Omit<EngineClip, 'channels' | 'pageProvider' | 'startPpq'>> = {},
 ): number {
   const id = opts.id ?? ctx.allocateClipId();
   const clip: EngineClip = {
     ...opts,
     id,
-    channels: buffer,
+    ...(Array.isArray(buffer) ? { channels: buffer } : { pageProvider: buffer }),
     startPpq,
     trackId: ctx.resolveTargetId(trackId),
   };
@@ -88,6 +91,12 @@ function syncClipsDelta(ctx: EngineClipContext, upserts: EngineClip[], removeIds
   for (const clip of upserts) {
     const prepared = clip.id === undefined ? clip : (preparedById.get(clip.id) ?? clip);
     const channels = prepared.channels;
+    if (!channels && prepared.pageProvider !== undefined) {
+      if (ctx.commitWorkletClipPageProvider(prepared)) {
+        continue;
+      }
+      throw new Error('A pageProvider on SonareEngine must be created by attachOpfsClipStream().');
+    }
     if (
       prepared.id === undefined ||
       prepared.warpMode !== 'off' ||

@@ -271,7 +271,12 @@ export function loadSoundFont(ctx: EngineStripContext, data: Uint8Array): void {
 export function setSf2Instrument(
   ctx: EngineStripContext,
   trackId: string | number,
-  config: { destinationId?: number; gain?: number; polyphony?: number },
+  config: {
+    destinationId?: number;
+    gain?: number;
+    polyphony?: number;
+    preferModelForModeledFamilies?: boolean;
+  },
 ): void {
   const destinationId = ctx.resolveTargetId(trackId);
   ctx.offlineEngine.setSf2Instrument(config, destinationId);

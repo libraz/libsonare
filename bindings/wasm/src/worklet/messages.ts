@@ -55,6 +55,13 @@ export interface SonareRealtimeEngineWorkletProcessorOptions {
   scopeBands?: number;
   scopeSharedBuffer?: SharedArrayBuffer;
   scopeRingCapacity?: number;
+  /**
+   * Lock-free SPSC queue for clip-page cache misses. Supplying this is required
+   * for realtime-safe OPFS streaming: it avoids both embind object creation and
+   * postMessage structured cloning from AudioWorklet process().
+   */
+  clipPageRequestSharedBuffer?: SharedArrayBuffer;
+  clipPageRequestRingCapacity?: number;
 }
 
 export interface SonareRealtimeVoiceChangerWorkletProcessorOptions {
@@ -88,6 +95,8 @@ export interface SonareRealtimeEngineNodeCapabilities {
   sharedArrayBuffer: boolean;
   atomics: boolean;
   audioWorklet: boolean;
+  /** True only when clip-page misses use the bounded SAB ring. */
+  clipPageRequestsRealtimeSafe: boolean;
   engineAbiVersion?: number;
   expectedEngineAbiVersion?: number;
   abiCompatible?: boolean;
@@ -165,6 +174,7 @@ export type SonareWorkletTransportMessage =
   | SonareWorkletMeterSnapshot
   | SonareWorkletSpectrumSnapshot
   | SonareWorkletExternalMidiMessage
+  | SonareEngineClipPageRequestMessage
   | SonareEngineTelemetryRecord;
 
 export interface WorkletTransport {
@@ -237,7 +247,8 @@ export interface SonareEngineSyncClipsDeltaMessage {
 export interface SonareEngineSyncClipPageProviderMessage {
   type: 'syncClipPageProvider';
   clipId: number;
-  clip: EngineClip;
+  /** Omitted when an OPFS stream is primed before its clip is scheduled. */
+  clip?: EngineClip;
   numChannels: number;
   numSamples: number;
   pageFrames: number;
@@ -251,10 +262,41 @@ export interface SonareEngineSyncClipPageMessage {
   channels: Float32Array[];
 }
 
+/** Evicts one page after the main-thread sliding window advances. */
+export interface SonareEngineSyncClipPageClearMessage {
+  type: 'syncClipPageClear';
+  clipId: number;
+  pageIndex: number;
+}
+
+/** Releases a provider whose clip was removed or whose stream was closed. */
+export interface SonareEngineSyncClipPageDestroyMessage {
+  type: 'syncClipPageDestroy';
+  clipId: number;
+}
+
 /** Makes a fully supplied paged clip visible to the audio engine. */
 export interface SonareEngineSyncClipPageCommitMessage {
   type: 'syncClipPageCommit';
   clipId: number;
+  /**
+   * Clip schedule to publish with a provider that was primed before its
+   * schedule was known. The original pre-baked push path supplies it on the
+   * provider message instead.
+   */
+  clip?: EngineClip;
+}
+
+/**
+ * A bounded batch of page misses emitted by the AudioWorklet. The main thread
+ * resolves these from OPFS and responds with `syncClipPage`; a missing page is
+ * silent until that response arrives.
+ */
+export interface SonareEngineClipPageRequestMessage {
+  type: 'clipPageRequest';
+  requests: Array<{ clipId: number; pageIndex: number }>;
+  /** Number of misses dropped because a bounded native or SAB request queue was full. */
+  dropped?: number;
 }
 
 export interface SonareEngineSyncMidiClipsMessage {
@@ -403,7 +445,12 @@ export interface SonareEngineSyncSynthInstrumentMessage {
 export interface SonareEngineSyncSf2InstrumentMessage {
   type: 'syncSf2Instrument';
   destinationId: number;
-  config: { destinationId?: number; gain?: number; polyphony?: number };
+  config: {
+    destinationId?: number;
+    gain?: number;
+    polyphony?: number;
+    preferModelForModeledFamilies?: boolean;
+  };
 }
 
 export interface SonareEngineSyncLoadSoundFontMessage {
@@ -480,7 +527,9 @@ export type SonareEngineSyncMessage =
   | SonareEngineSyncClipsDeltaMessage
   | SonareEngineSyncClipPageProviderMessage
   | SonareEngineSyncClipPageMessage
+  | SonareEngineSyncClipPageClearMessage
   | SonareEngineSyncClipPageCommitMessage
+  | SonareEngineSyncClipPageDestroyMessage
   | SonareEngineSyncMidiClipsMessage
   | SonareEngineSyncMarkersMessage
   | SonareEngineSyncMetronomeMessage

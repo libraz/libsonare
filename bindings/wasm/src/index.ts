@@ -37,9 +37,11 @@ export { Audio } from './audio';
 export type {
   ClipPageStreamerEngine,
   ClipPageStreamerOptions,
+  ClipPageStreamerRequest,
   ClipPageStreamSource,
   OpfsClipStream,
   OpfsClipStreamOptions,
+  WorkletOpfsClipStreamHost,
 } from './clip_page_streamer';
 export { attachOpfsClipStream, ClipPageStreamer } from './clip_page_streamer';
 export type {
@@ -186,7 +188,7 @@ export type {
   VqtRequest,
   VqtToAudioRequest,
 } from './feature_music';
-export type { PitchPyinRequest, PitchYinRequest } from './feature_pitch';
+export type { NoteSegmentsRequest, PitchPyinRequest, PitchYinRequest } from './feature_pitch';
 export type { ResampleRequest } from './feature_resample';
 export type {
   DecomposeRequest,
@@ -259,6 +261,7 @@ export {
   momentaryLufs,
   nnFilter,
   nnlsChroma,
+  noteSegments,
   noteToHz,
   onsetEnvelope,
   onsetStrengthMulti,
@@ -366,6 +369,9 @@ export type {
   BuiltinSynthBinding,
   BuiltinSynthConfig,
   BuiltinSynthWaveform,
+  ExternalSeparatedStem,
+  ExternalSeparatedStemImportRequest,
+  ExternalSeparatedStemImportResult,
   MidiCcLearnOptions,
   ProjectAssistSidecar,
   ProjectAutomationCurve,
@@ -474,6 +480,7 @@ export type {
   MixMeterSnapshot,
   MixOptions,
   MixResult,
+  NoteSegment,
   NoteStretchOptions,
   PairAnalysis,
   PairProcessor,
@@ -591,7 +598,12 @@ export type {
   ExternalMidiEvent,
   MidiCcBindOptions,
 } from './realtime_engine';
-export { EXPECTED_ENGINE_ABI_VERSION, engineCapabilities, RealtimeEngine } from './realtime_engine';
+export {
+  ClipPageProvider,
+  EXPECTED_ENGINE_ABI_VERSION,
+  engineCapabilities,
+  RealtimeEngine,
+} from './realtime_engine';
 export { scaleCorrectionSemitones, scalePitchClassEnabled, scaleQuantizeMidi } from './scale';
 export type { ProgressCallback } from './sonare.js';
 export { StreamAnalyzer, streamAnalyzerConfigDefaults } from './stream_analyzer';

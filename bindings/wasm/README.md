@@ -151,6 +151,38 @@ From a CDN, `import { init } from 'https://esm.sh/@libraz/libsonare'` resolves t
 [getting-started guide](https://libsonare.libraz.net/docs/getting-started) for
 per-bundler setup and the AudioWorklet bridge.
 
+### Bounded-memory OPFS clip streaming
+
+For long raw float32 clips stored in OPFS, `attachOpfsClipStream` supplies only
+the current playback window to WASM. It primes the first page, then fetches page
+misses on the main thread and evicts pages outside the configured read-ahead /
+retain-behind window. The AudioWorklet path uses the same helper: the worklet
+posts a bounded batch of misses, and it outputs silence until a page arrives.
+
+```typescript
+import { attachOpfsClipStream } from '@libraz/libsonare';
+import { SonareEngine } from '@libraz/libsonare/worklet';
+
+const engine = await SonareEngine.create(audioContext);
+const stream = await attachOpfsClipStream(engine, {
+  path: 'takes/lead.f32',
+  clipId: 42,
+  numChannels: 2,
+  numSamples: 48_000 * 600,
+  pageFrames: 16_384,
+});
+
+// `clipId` must equal the explicit id supplied here.
+engine.addClip(trackId, stream.provider, 0, { id: 42 });
+
+// Close the returned binding after removing the clip (or when the host closes).
+stream.binding.close();
+```
+
+The bounded-memory guarantee applies only to an OPFS/page-provider source.
+Passing a `Float32Array[]` to `addClip` keeps that full array in the JavaScript
+heap, so it is appropriate for short clips but does not make long clips bounded.
+
 ## Capabilities
 
 Every area below has runnable examples and the full API in the
