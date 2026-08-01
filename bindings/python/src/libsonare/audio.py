@@ -656,28 +656,34 @@ class Audio:
     def mastering_chain(
         self,
         config: dict | None = None,
-        on_progress: Callable[[float, str], None] | None = None,
+        on_progress: Callable[[float, str], object] | None = None,
+        *,
+        cancel: Callable[[], bool] | None = None,
     ) -> MasteringChainResult:
         """Apply a configurable mastering chain (EQ, dynamics, saturation, etc.).
 
         See :func:`libsonare.mastering_chain` for the ``config`` schema and
-        ``on_progress`` semantics.
+        ``on_progress`` / ``cancel`` semantics.
         """
-        return _mastering_chain(self.data, self.sample_rate, config, on_progress=on_progress)
+        return _mastering_chain(
+            self.data, self.sample_rate, config, on_progress=on_progress, cancel=cancel
+        )
 
     def master_audio(
         self,
         preset: str = "pop",
         overrides: dict | None = None,
-        on_progress: Callable[[float, str], None] | None = None,
+        on_progress: Callable[[float, str], object] | None = None,
+        *,
+        cancel: Callable[[], bool] | None = None,
     ) -> MasteringChainResult:
         """Apply a named mastering preset chain to this audio.
 
         See :func:`libsonare.master_audio` for the ``preset``, ``overrides``,
-        and ``on_progress`` semantics.
+        ``on_progress``, and ``cancel`` semantics.
         """
         return _master_audio(
-            self.data, self.sample_rate, preset, overrides, on_progress=on_progress
+            self.data, self.sample_rate, preset, overrides, on_progress=on_progress, cancel=cancel
         )
 
     def trim(self, threshold_db: float = -60.0) -> list[float]:

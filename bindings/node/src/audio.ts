@@ -44,6 +44,7 @@ import type {
   MfccResult,
   NoteStretchOptions,
   PitchResult,
+  ProgressCallback,
   RhythmResult,
   SoloProcessor,
   StftDbResult,
@@ -243,7 +244,7 @@ export class Audio {
 
   masteringChain(
     config: MasteringChainConfig = {},
-    onProgress?: (progress: number, stage: string) => void,
+    onProgress?: ProgressCallback,
   ): MasteringChainResult {
     return masteringChainFn(this.getData(), this.getSampleRate(), config, onProgress);
   }
@@ -251,7 +252,7 @@ export class Audio {
   masterAudio(
     preset: MasteringPreset = 'pop',
     overrides: MasteringChainConfig = {},
-    onProgress?: (progress: number, stage: string) => void,
+    onProgress?: ProgressCallback,
   ): MasteringChainResult {
     return masterAudioFn(this.getData(), this.getSampleRate(), preset, overrides, onProgress);
   }

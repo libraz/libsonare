@@ -307,25 +307,32 @@ val js_mastering_chain_with_progress(val samples, int sample_rate, val config,
   std::vector<float> data = float32ArrayToVector(samples);
   validate_offline_audio_input(data.data(), data.size(), sample_rate);
   mastering::api::MasteringChain chain(masteringChainConfigFromVal(config));
+  bool cancellation_requested = false;
   if (!progress_callback.isNull() && !progress_callback.isUndefined()) {
-    chain.set_progress_callback([progress_callback](float progress, const char* stage) {
-      progress_callback(progress, std::string(stage ? stage : ""));
+    chain.set_progress_callback([progress_callback, &cancellation_requested](float progress,
+                                                                             const char* stage) {
+      cancellation_requested = cancellation_requested || progressCallbackRequestedCancellation(
+                                                             progress_callback, progress, stage);
     });
+    chain.set_cancel_callback([&cancellation_requested] { return cancellation_requested; });
   }
-  auto result = chain.process_mono(data.data(), data.size(), sample_rate);
+  const auto result = chain.process_mono_cancellable(data.data(), data.size(), sample_rate);
+  if (!result) {
+    throw SonareException(ErrorCode::Cancelled, "mastering cancelled");
+  }
 
   val out = val::object();
-  out.set("samples", vectorToFloat32Array(result.samples));
-  out.set("sampleRate", result.sample_rate);
-  out.set("inputLufs", result.input_lufs);
-  out.set("outputLufs", result.output_lufs);
-  out.set("appliedGainDb", result.applied_gain_db);
+  out.set("samples", vectorToFloat32Array(result->samples));
+  out.set("sampleRate", result->sample_rate);
+  out.set("inputLufs", result->input_lufs);
+  out.set("outputLufs", result->output_lufs);
+  out.set("appliedGainDb", result->applied_gain_db);
   val stages = val::array();
-  for (const auto& s : result.stages) {
+  for (const auto& s : result->stages) {
     stages.call<void>("push", s);
   }
   out.set("stages", stages);
-  setChainMetrics(out, result);
+  setChainMetrics(out, *result);
   return out;
 }
 
@@ -340,26 +347,34 @@ val js_mastering_chain_stereo_with_progress(val left_samples, val right_samples,
   validate_offline_audio_input(right.data(), right.size(), sample_rate);
 
   mastering::api::MasteringChain chain(masteringChainConfigFromVal(config));
+  bool cancellation_requested = false;
   if (!progress_callback.isNull() && !progress_callback.isUndefined()) {
-    chain.set_progress_callback([progress_callback](float progress, const char* stage) {
-      progress_callback(progress, std::string(stage ? stage : ""));
+    chain.set_progress_callback([progress_callback, &cancellation_requested](float progress,
+                                                                             const char* stage) {
+      cancellation_requested = cancellation_requested || progressCallbackRequestedCancellation(
+                                                             progress_callback, progress, stage);
     });
+    chain.set_cancel_callback([&cancellation_requested] { return cancellation_requested; });
   }
-  auto result = chain.process_stereo(left.data(), right.data(), left.size(), sample_rate);
+  const auto result =
+      chain.process_stereo_cancellable(left.data(), right.data(), left.size(), sample_rate);
+  if (!result) {
+    throw SonareException(ErrorCode::Cancelled, "mastering cancelled");
+  }
 
   val out = val::object();
-  out.set("left", vectorToFloat32Array(result.left));
-  out.set("right", vectorToFloat32Array(result.right));
-  out.set("sampleRate", result.sample_rate);
-  out.set("inputLufs", result.input_lufs);
-  out.set("outputLufs", result.output_lufs);
-  out.set("appliedGainDb", result.applied_gain_db);
+  out.set("left", vectorToFloat32Array(result->left));
+  out.set("right", vectorToFloat32Array(result->right));
+  out.set("sampleRate", result->sample_rate);
+  out.set("inputLufs", result->input_lufs);
+  out.set("outputLufs", result->output_lufs);
+  out.set("appliedGainDb", result->applied_gain_db);
   val stages = val::array();
-  for (const auto& s : result.stages) {
+  for (const auto& s : result->stages) {
     stages.call<void>("push", s);
   }
   out.set("stages", stages);
-  setChainMetrics(out, result);
+  setChainMetrics(out, *result);
   return out;
 }
 

@@ -281,6 +281,11 @@ std::optional<bool> optionalBool(const val& v) {
   return v.as<bool>();
 }
 
+bool progressCallbackRequestedCancellation(const val& callback, float progress, const char* stage) {
+  const val outcome = callback(progress, std::string(stage ? stage : ""));
+  return outcome.typeOf().as<std::string>() == "boolean" && !outcome.as<bool>();
+}
+
 int requireMatchedLength(const val& a, const val& b, const char* subject) {
   const int n = a["length"].as<int>();
   if (n < 0 || b["length"].as<int>() != n) {

@@ -10,6 +10,7 @@ import type {
   MasteringStereoResult,
   PairAnalysis,
   PairProcessor,
+  ProgressCallback,
   SoloProcessor,
   StereoAnalysis,
   StreamingPlatform,
@@ -62,7 +63,7 @@ export interface MasteringChainRequest {
   samples: Float32Array;
   sampleRate?: number;
   config?: MasteringChainConfig;
-  onProgress?: (progress: number, stage: string) => void;
+  onProgress?: ProgressCallback;
 }
 
 export interface MasteringChainStereoRequest {
@@ -70,7 +71,7 @@ export interface MasteringChainStereoRequest {
   right: Float32Array;
   sampleRate?: number;
   config?: MasteringChainConfig;
-  onProgress?: (progress: number, stage: string) => void;
+  onProgress?: ProgressCallback;
 }
 
 export interface MasteringPairProcessRequest {
@@ -200,13 +201,13 @@ export function masteringChain(
   samples: Float32Array,
   sampleRate?: number,
   config?: MasteringChainConfig,
-  onProgress?: (progress: number, stage: string) => void,
+  onProgress?: ProgressCallback,
 ): MasteringChainResult;
 export function masteringChain(
   samples: Float32Array | MasteringChainRequest,
   sampleRate = 22050,
   config: MasteringChainConfig = {},
-  onProgress?: (progress: number, stage: string) => void,
+  onProgress?: ProgressCallback,
 ): MasteringChainResult {
   const request =
     samples instanceof Float32Array ? { samples, sampleRate, config, onProgress } : samples;
@@ -230,14 +231,14 @@ export function masteringChainStereo(
   right: Float32Array,
   sampleRate?: number,
   config?: MasteringChainConfig,
-  onProgress?: (progress: number, stage: string) => void,
+  onProgress?: ProgressCallback,
 ): MasteringChainStereoResult;
 export function masteringChainStereo(
   left: Float32Array | MasteringChainStereoRequest,
   right?: Float32Array,
   sampleRate = 22050,
   config: MasteringChainConfig = {},
-  onProgress?: (progress: number, stage: string) => void,
+  onProgress?: ProgressCallback,
 ): MasteringChainStereoResult {
   const request =
     left instanceof Float32Array
@@ -266,7 +267,7 @@ export interface MasterAudioRequest {
   sampleRate?: number;
   preset?: MasteringPreset;
   overrides?: MasteringChainConfig;
-  onProgress?: (progress: number, stage: string) => void;
+  onProgress?: ProgressCallback;
 }
 
 /** Canonical request form for one-shot stereo preset mastering. */
@@ -276,7 +277,7 @@ export interface MasterAudioStereoRequest {
   sampleRate?: number;
   preset?: MasteringPreset;
   overrides?: MasteringChainConfig;
-  onProgress?: (progress: number, stage: string) => void;
+  onProgress?: ProgressCallback;
 }
 
 function masterAudioRequest(
@@ -284,7 +285,7 @@ function masterAudioRequest(
   sampleRate: number,
   preset: MasteringPreset,
   overrides: MasteringChainConfig,
-  onProgress?: (progress: number, stage: string) => void,
+  onProgress?: ProgressCallback,
 ): Required<Pick<MasterAudioRequest, 'samples'>> & Omit<MasterAudioRequest, 'samples'> {
   if (requestOrSamples instanceof Float32Array) {
     return { samples: requestOrSamples, sampleRate, preset, overrides, onProgress };
@@ -298,7 +299,7 @@ function masterAudioStereoRequest(
   sampleRate: number,
   preset: MasteringPreset,
   overrides: MasteringChainConfig,
-  onProgress?: (progress: number, stage: string) => void,
+  onProgress?: ProgressCallback,
 ): MasterAudioStereoRequest {
   if (requestOrLeft instanceof Float32Array) {
     return {
@@ -319,14 +320,14 @@ export function masterAudio(
   sampleRate?: number,
   presetName?: MasteringPreset,
   overrides?: MasteringChainConfig,
-  onProgress?: (progress: number, stage: string) => void,
+  onProgress?: ProgressCallback,
 ): MasteringChainResult;
 export function masterAudio(
   samples: MasterAudioRequest | Float32Array,
   sampleRate = 22050,
   presetName: MasteringPreset = 'pop',
   overrides: MasteringChainConfig = {},
-  onProgress?: (progress: number, stage: string) => void,
+  onProgress?: ProgressCallback,
 ): MasteringChainResult {
   const request = masterAudioRequest(samples, sampleRate, presetName, overrides, onProgress);
   const flat = flattenChainConfig(request.overrides ?? {});
@@ -385,7 +386,7 @@ export function masterAudioStereo(
   sampleRate?: number,
   presetName?: MasteringPreset,
   overrides?: MasteringChainConfig,
-  onProgress?: (progress: number, stage: string) => void,
+  onProgress?: ProgressCallback,
 ): MasteringChainStereoResult;
 export function masterAudioStereo(
   left: MasterAudioStereoRequest | Float32Array,
@@ -393,7 +394,7 @@ export function masterAudioStereo(
   sampleRate = 22050,
   presetName: MasteringPreset = 'pop',
   overrides: MasteringChainConfig = {},
-  onProgress?: (progress: number, stage: string) => void,
+  onProgress?: ProgressCallback,
 ): MasteringChainStereoResult {
   const request = masterAudioStereoRequest(
     left,

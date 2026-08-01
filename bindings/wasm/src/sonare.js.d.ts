@@ -2,7 +2,12 @@
  * Type declarations for the Emscripten-generated WASM module with embind
  */
 
-import type { SonareCapabilities, SpectralRegionOp, SurroundPan } from './public_types';
+import type {
+  ProgressCallback,
+  SonareCapabilities,
+  SpectralRegionOp,
+  SurroundPan,
+} from './public_types';
 
 export interface SonareModuleOptions {
   locateFile?: (path: string, prefix: string) => string;
@@ -1026,7 +1031,7 @@ export interface WasmRealtimeEngine {
   delete: () => void;
 }
 
-export type ProgressCallback = (progress: number, stage: string) => void;
+export type { ProgressCallback } from './public_types';
 export type TempogramMode = 'autocorrelation' | 'auto' | 'ac' | 'cosine' | 0 | 1;
 
 export interface WasmSynthEnumTables {

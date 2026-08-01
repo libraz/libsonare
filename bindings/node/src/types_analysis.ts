@@ -179,8 +179,11 @@ export interface AnalysisResult {
   form: string;
 }
 
-/** Progress callback for {@link analyzeWithProgress}. */
-export type AnalysisProgressCallback = (progress: number, stage: string) => void;
+/**
+ * Progress callback for {@link analyzeWithProgress}. Return exactly `false` to
+ * request cooperative cancellation; returning `undefined` continues normally.
+ */
+export type AnalysisProgressCallback = import('./types.js').ProgressCallback;
 
 /** Options for {@link analyzeMelody}. All fields are optional. */
 export interface MelodyOptions {

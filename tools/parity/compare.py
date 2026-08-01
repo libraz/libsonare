@@ -203,6 +203,13 @@ _ALIAS_COVERAGE = {
     # Progress-callback mastering variants -> base fn with an optional callback.
     "master_audio_with_progress": ("master_audio",),
     "master_audio_stereo_with_progress": ("master_audio_stereo",),
+    # C cancellation is additive in `_ex` variants; every facade folds it into
+    # the same progress-capable method rather than exposing a second spelling.
+    "analyze_json_with_progress_ex": ("analyze_with_progress",),
+    "mastering_chain_with_progress_ex": ("mastering_chain",),
+    "mastering_chain_stereo_with_progress_ex": ("mastering_chain_stereo",),
+    "master_audio_with_progress_ex": ("master_audio",),
+    "master_audio_stereo_with_progress_ex": ("master_audio_stereo",),
     # Sidechain EQ -> the mono/stereo-specific setters the facades expose.
     "eq_set_sidechain": ("set_sidechain_mono", "set_sidechain_stereo"),
     # Plural builtin-instrument bounce -> singular facade method (one or many).
@@ -517,18 +524,19 @@ def _config_names(sig: FunctionSig, roles: set[str]) -> list[str]:
     ``master_audio_stereo``, which sit AFTER ``preset_name`` in the C signature)
     is still an input the facades surface positionally, so it carries no
     config-order signal. Progress-callback params the facades add for streaming
-    reporting (``on_progress``; Node already types it as a function and skips it)
-    are dropped too.
+    reporting (``on_progress``) and cancellation (``cancel``) are facade-only
+    control hooks. C supplies those through separate `_with_progress` / `_ex`
+    entry points, so they carry no config-order signal.
     """
     names = [p.name for p in sig.core_params()]
     names = _strip_leading_input(names, roles)
     return [n for n in names if n not in roles and n not in _CALLBACK_NAMES]
 
 
-# Progress / streaming callback params the facades add for ergonomic reporting.
-# They have no C config counterpart (C uses a separate ``_with_progress`` entry)
-# and carry no config-order signal.
-_CALLBACK_NAMES = {"on_progress", "onprogress"}
+# Progress / streaming and cancellation callback params the facades add for
+# ergonomic control. They have no C config counterpart (C uses separate
+# ``_with_progress`` / ``_ex`` entries) and carry no config-order signal.
+_CALLBACK_NAMES = {"on_progress", "onprogress", "cancel"}
 
 
 def _default_drift(indexed, allow, rep: Report, roles: set[str]) -> None:

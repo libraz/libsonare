@@ -4,6 +4,10 @@ from __future__ import annotations
 
 import ctypes
 
+# Cancellation callback: int(void* user_data), nonzero requests cancellation.
+# Maps to SonareCancelCallback in sonare_c.h.
+SonareCancelCallback = ctypes.CFUNCTYPE(ctypes.c_int, ctypes.c_void_p)
+
 # --- C structures ---
 
 # SonarePitchCorrectionConfig.target_mode values.

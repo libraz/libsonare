@@ -8,6 +8,7 @@ describe('SonareError', () => {
     expect(ErrorCode.InvalidParameter).toBe(4);
     expect(ErrorCode.NotSupported).toBe(6);
     expect(ErrorCode.InvalidState).toBe(7);
+    expect(ErrorCode.Cancelled).toBe(8);
     expect(ErrorCode.Unknown).toBe(99);
   });
 

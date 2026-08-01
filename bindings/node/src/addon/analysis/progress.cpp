@@ -53,17 +53,22 @@ Napi::Value SonareWrap::AnalyzeWithProgress(const Napi::CallbackInfo& info) {
   struct ProgressCtx {
     Napi::Env env;
     Napi::Function cb;
+    bool cancel_requested = false;
   } ctx{env, js_cb};
 
   auto c_progress = [](float progress, const char* stage, void* user_data) {
     auto* c = static_cast<ProgressCtx*>(user_data);
-    c->cb.Call({Napi::Number::New(c->env, static_cast<double>(progress)),
-                Napi::String::New(c->env, stage != nullptr ? stage : "")});
+    Napi::Value result = c->cb.Call({Napi::Number::New(c->env, static_cast<double>(progress)),
+                                     Napi::String::New(c->env, stage != nullptr ? stage : "")});
+    c->cancel_requested = result.IsBoolean() && !result.As<Napi::Boolean>().Value();
+  };
+  auto c_cancel = [](void* user_data) {
+    return static_cast<ProgressCtx*>(user_data)->cancel_requested ? 1 : 0;
   };
 
   char* json_str = nullptr;
-  SonareError err =
-      sonare_analyze_json_with_progress(data, length, sample_rate, c_progress, &ctx, &json_str);
+  SonareError err = sonare_analyze_json_with_progress_ex(data, length, sample_rate, c_progress,
+                                                         &ctx, &json_str, c_cancel, &ctx);
   if (err != SONARE_OK) {
     sonare_node::ThrowSonareError(env, err);
     return env.Undefined();

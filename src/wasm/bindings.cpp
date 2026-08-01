@@ -166,6 +166,10 @@ val js_sonare_exception_info(std::uintptr_t exception_ptr) {
           code = 7;
           code_name = "InvalidState";
           break;
+        case sonare::ErrorCode::Cancelled:
+          code = 8;
+          code_name = "Cancelled";
+          break;
       }
     }
   }

@@ -133,10 +133,10 @@ void MasteringChain::set_cancel_callback(CancelCallback should_cancel) {
   cancel_callback_ = std::move(should_cancel);
 }
 
+template <bool CheckCancel>
 std::optional<MonoChainResult> MasteringChain::process_mono_impl(const float* samples,
                                                                  std::size_t length,
-                                                                 int sample_rate,
-                                                                 bool check_cancel) {
+                                                                 int sample_rate) {
   // Centralized offline-input validation so every surface (C ABI, Node, WASM,
   // Python) rejects empty / out-of-range-rate / non-finite input identically.
   // The realtime block path (process_block) intentionally does not funnel here.
@@ -157,7 +157,10 @@ std::optional<MonoChainResult> MasteringChain::process_mono_impl(const float* sa
     if (progress_callback_ && total > 0) {
       progress_callback_(static_cast<float>(done) / static_cast<float>(total), stage_name);
     }
-    return !check_cancel || !cancel_callback_ || !cancel_callback_();
+    if constexpr (CheckCancel) {
+      return !cancel_callback_ || !cancel_callback_();
+    }
+    return true;
   };
 
   // 1. repair.declick
@@ -319,11 +322,11 @@ std::optional<MonoChainResult> MasteringChain::process_mono_impl(const float* sa
   return result;
 }
 
+template <bool CheckCancel>
 std::optional<StereoChainResult> MasteringChain::process_stereo_impl(const float* left_in,
                                                                      const float* right_in,
                                                                      std::size_t length,
-                                                                     int sample_rate,
-                                                                     bool check_cancel) {
+                                                                     int sample_rate) {
   // Centralized offline-input validation for both channels (see process_mono).
   validate_offline_audio_input(left_in, length, sample_rate);
   validate_offline_audio_input(right_in, length, sample_rate);
@@ -345,7 +348,10 @@ std::optional<StereoChainResult> MasteringChain::process_stereo_impl(const float
     if (progress_callback_ && total > 0) {
       progress_callback_(static_cast<float>(done) / static_cast<float>(total), stage_name);
     }
-    return !check_cancel || !cancel_callback_ || !cancel_callback_();
+    if constexpr (CheckCancel) {
+      return !cancel_callback_ || !cancel_callback_();
+    }
+    return true;
   };
 
   // 1. repair.declick (per-channel)
@@ -531,24 +537,24 @@ std::optional<StereoChainResult> MasteringChain::process_stereo_impl(const float
 
 MonoChainResult MasteringChain::process_mono(const float* samples, std::size_t length,
                                              int sample_rate) {
-  return *process_mono_impl(samples, length, sample_rate, false);
+  return *process_mono_impl<false>(samples, length, sample_rate);
 }
 
 StereoChainResult MasteringChain::process_stereo(const float* left, const float* right,
                                                  std::size_t length, int sample_rate) {
-  return *process_stereo_impl(left, right, length, sample_rate, false);
+  return *process_stereo_impl<false>(left, right, length, sample_rate);
 }
 
 std::optional<MonoChainResult> MasteringChain::process_mono_cancellable(const float* samples,
                                                                         std::size_t length,
                                                                         int sample_rate) {
-  return process_mono_impl(samples, length, sample_rate, true);
+  return process_mono_impl<true>(samples, length, sample_rate);
 }
 
 std::optional<StereoChainResult> MasteringChain::process_stereo_cancellable(const float* left,
                                                                             const float* right,
                                                                             std::size_t length,
                                                                             int sample_rate) {
-  return process_stereo_impl(left, right, length, sample_rate, true);
+  return process_stereo_impl<true>(left, right, length, sample_rate);
 }
 }  // namespace sonare::mastering::api

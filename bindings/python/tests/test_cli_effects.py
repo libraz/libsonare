@@ -457,6 +457,12 @@ def test_memory_error_maps_to_out_of_memory_exit() -> None:
     assert cli._exit_code_for(MemoryError()) == cli.EXIT_OUT_OF_MEMORY
 
 
+def test_cancelled_error_maps_to_cancelled_exit() -> None:
+    from libsonare import SonareError, cli
+
+    assert cli._exit_code_for(SonareError(8, "cancelled")) == cli.EXIT_CANCELLED
+
+
 def test_resample_uses_native_antialiased_resampler(monkeypatch) -> None:
     """cmd_resample routes through the native resampler, not linear interpolation."""
     from libsonare import cli

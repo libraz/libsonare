@@ -186,6 +186,10 @@ std::optional<float> optionalNumber(const val& v);
 /// @brief Boolean sibling of optionalNumber: returns the value only when @p v is
 /// present and a JS boolean, otherwise std::nullopt.
 std::optional<bool> optionalBool(const val& v);
+/// Invokes a JS progress callback and returns true only when it returns the
+/// literal boolean false. Undefined (the legacy callback return) and all other
+/// values leave the operation running.
+bool progressCallbackRequestedCancellation(const val& callback, float progress, const char* stage);
 /// @brief Reads the JS `.length` of @p a and @p b and requires they match and are
 /// non-zero, mirroring the interleaved channel-array guard. @p subject names the
 /// arrays in the error message (e.g. "leftChannels and rightChannels"). Returns

@@ -2,8 +2,10 @@ import { describe, expect, it } from 'vitest';
 import {
   Audio,
   deemphasis,
+  ErrorCode,
   ebur128LoudnessRange,
   fourierTempogram,
+  isSonareError,
   lufs,
   masteringChain,
   meteringSilenceRatio,
@@ -51,6 +53,40 @@ describe('progress callback', () => {
     expect(stages).toContain('eq.tilt');
     expect(stages).toContain('dynamics.compressor');
     expect(progresses[progresses.length - 1]).toBeCloseTo(1.0, 5);
+  });
+
+  it('masteringChain cancels when onProgress returns false', () => {
+    let result: unknown;
+    let caught: unknown;
+    const progress: number[] = [];
+
+    try {
+      result = masteringChain(
+        new Float32Array(22050).fill(0.1),
+        22050,
+        {
+          eq: { tilt: { tiltDb: 1.0 } },
+          dynamics: { compressor: { thresholdDb: -24 } },
+        },
+        (value) => {
+          progress.push(value);
+          if (value > 0.5) {
+            return false;
+          }
+        },
+      );
+    } catch (error) {
+      caught = error;
+    }
+
+    expect(progress.some((value) => value > 0.5)).toBe(true);
+    expect(result).toBeUndefined();
+    expect(isSonareError(caught)).toBe(true);
+    if (!isSonareError(caught)) {
+      throw new Error('expected cancellation SonareError');
+    }
+    expect(caught.code).toBe(ErrorCode.Cancelled);
+    expect(caught.codeName).toBe('Cancelled');
   });
 });
 

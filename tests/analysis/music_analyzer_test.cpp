@@ -202,6 +202,21 @@ TEST_CASE("MusicAnalyzer analyze", "[.][slow][music_analyzer]") {
   REQUIRE(!result.form.empty());
 }
 
+TEST_CASE("MusicAnalyzer regular analysis skips the cancellation callback",
+          "[.][slow][music_analyzer]") {
+  MusicAnalyzer analyzer(create_test_audio());
+  int cancel_queries = 0;
+  analyzer.set_cancel_callback([&] {
+    ++cancel_queries;
+    return true;
+  });
+
+  const AnalysisResult result = analyzer.analyze();
+
+  REQUIRE(result.bpm > 0.0f);
+  REQUIRE(cancel_queries == 0);
+}
+
 TEST_CASE("MusicAnalyzer lazy initialization", "[music_analyzer]") {
   Audio audio = create_test_audio();
 

@@ -101,6 +101,7 @@ export type {
   PanMode,
   PitchCorrectOptions,
   PitchResult,
+  ProgressCallback,
   ProjectAutomationPoint,
   ProjectBounceOptions,
   ProjectClipDesc,

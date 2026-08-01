@@ -809,16 +809,24 @@ val js_room_morph(val samples, int sample_rate, val opts) {
 val js_analyze_with_progress(val samples, int sample_rate, val progress_callback) {
   Audio audio = loadValidatedAudio(samples, sample_rate);
   MusicAnalyzer analyzer(audio);
+  bool cancellation_requested = false;
 
-  // Set progress callback if provided
+  // A literal false from JS requests cooperative cancellation. Undefined keeps
+  // the pre-existing void callback behavior.
   if (!progress_callback.isNull() && !progress_callback.isUndefined()) {
-    analyzer.set_progress_callback([progress_callback](float progress, const char* stage) {
-      progress_callback(progress, std::string(stage ? stage : ""));
+    analyzer.set_progress_callback([progress_callback, &cancellation_requested](float progress,
+                                                                                const char* stage) {
+      cancellation_requested = cancellation_requested || progressCallbackRequestedCancellation(
+                                                             progress_callback, progress, stage);
     });
+    analyzer.set_cancel_callback([&cancellation_requested] { return cancellation_requested; });
   }
 
-  AnalysisResult result = analyzer.analyze();
-  return analysisResultToVal(result);
+  const auto result = analyzer.analyze_cancellable();
+  if (!result) {
+    throw SonareException(ErrorCode::Cancelled, "analysis cancelled");
+  }
+  return analysisResultToVal(*result);
 }
 
 void registerQuickAnalysisBindings() {

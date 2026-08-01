@@ -40,6 +40,15 @@ def _has_analyze_json_progress() -> bool:
         return False
 
 
+def _has_analyze_json_progress_ex() -> bool:
+    try:
+        from libsonare._runtime import _get_lib
+
+        return hasattr(_get_lib(), "sonare_analyze_json_with_progress_ex")
+    except Exception:
+        return False
+
+
 def _has_analyze_melody_ex() -> bool:
     try:
         from libsonare._runtime import _get_lib
@@ -56,6 +65,10 @@ requires_json = pytest.mark.skipif(
 requires_json_progress = pytest.mark.skipif(
     not _has_analyze_json_progress(),
     reason="libsonare built without sonare_analyze_json_with_progress",
+)
+requires_json_progress_ex = pytest.mark.skipif(
+    not _has_analyze_json_progress_ex(),
+    reason="libsonare built without sonare_analyze_json_with_progress_ex",
 )
 requires_melody_ex = pytest.mark.skipif(
     not _has_analyze_melody_ex(),
@@ -257,7 +270,7 @@ def test_analyze_melody_center_flag_runs() -> None:
 
 @requires_json_progress
 def test_analyze_with_progress_invokes_callback(progress_result) -> None:
-    """analyze_with_progress fires the callback and returns a rich result."""
+    """A void progress callback remains compatible and returns a rich result."""
     from libsonare import AnalysisResult
 
     result, calls = progress_result
@@ -267,6 +280,40 @@ def test_analyze_with_progress_invokes_callback(progress_result) -> None:
     for progress, stage in calls:
         assert isinstance(progress, float)
         assert isinstance(stage, str)
+
+
+@requires_json_progress_ex
+def test_analyze_with_progress_false_cancels_without_a_result() -> None:
+    """Returning the exact False sentinel cancels after a deterministic progress point."""
+    calls: list[float] = []
+    result = None
+
+    def on_progress(progress: float, _stage: str) -> object:
+        calls.append(progress)
+        return False if progress > 0.5 else None
+
+    with pytest.raises(libsonare.SonareError) as exc:
+        result = libsonare.analyze_with_progress(
+            _generate_test_signal(duration=1.0), sample_rate=22050, on_progress=on_progress
+        )
+
+    assert exc.value.code == 8
+    assert any(progress > 0.5 for progress in calls)
+    assert result is None
+
+
+@requires_json_progress_ex
+def test_analyze_with_progress_cancel_callable_cancels_without_a_result() -> None:
+    """The keyword-only cancel callable maps to the native cancellation callback."""
+    result = None
+
+    with pytest.raises(libsonare.SonareError) as exc:
+        result = libsonare.analyze_with_progress(
+            _generate_test_signal(duration=1.0), sample_rate=22050, cancel=lambda: True
+        )
+
+    assert exc.value.code == 8
+    assert result is None
 
 
 @requires_json_progress

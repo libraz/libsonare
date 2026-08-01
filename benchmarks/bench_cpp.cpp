@@ -13,6 +13,7 @@
 #include <vector>
 
 #include "analysis/beat_analyzer.h"
+#include "analysis/music_analyzer.h"
 #include "core/audio.h"
 #include "core/resample.h"
 #include "core/spectrum.h"
@@ -82,6 +83,17 @@ int main(int argc, char** argv) {
   const double full_ms = bench(
       [&] { (void)sonare::quick::analyze(resampled.data(), resampled.size(), kResampledSr); });
   print_row("Full analyze", full_ms);
+
+  // The standard API must not poll cancellation, even when a callback was
+  // configured for a later cancellable call. This compares the same regular
+  // analysis path with and without that stored callback; the implementation is
+  // template-specialized so its cancellation branch is compiled out.
+  const double full_with_cancel_callback_ms = bench([&] {
+    sonare::MusicAnalyzer analyzer(resampled);
+    analyzer.set_cancel_callback([] { return false; });
+    (void)analyzer.analyze();
+  });
+  print_row("Full analyze (cancel set)", full_with_cancel_callback_ms);
 
   std::fprintf(stderr, "\n-- Standalone (from raw audio) --\n");
 
@@ -187,6 +199,8 @@ int main(int argc, char** argv) {
     std::fprintf(fp, "  \"runs_per_case\": %d,\n", kRuns);
     std::fprintf(fp, "  \"timing_source\": \"chrono::steady_clock (C++ internal)\",\n");
     std::fprintf(fp, "  \"full_analysis_ms\": %.2f,\n", full_ms);
+    std::fprintf(fp, "  \"full_analysis_with_cancel_callback_ms\": %.2f,\n",
+                 full_with_cancel_callback_ms);
     std::fprintf(fp, "  \"per_feature_standalone\": [\n");
     auto emit = [&](const char* name, double ms, bool last) {
       std::fprintf(fp, "    {\"feature\": \"%s\", \"libsonare_ms\": %.2f}%s\n", name, ms,

@@ -8,6 +8,7 @@ from collections.abc import Callable, Sequence
 from typing import Any
 
 from ._analysis_detection import _parse_analysis_json
+from ._cancellation import CancellationState, make_cancel_trampoline
 from ._ffi import (
     SonareAcousticResult,
     SonareAnalysisResult,
@@ -160,7 +161,7 @@ def analyze(
 
 
 def _make_analyze_progress_trampoline(
-    on_progress: Callable[[float, str], None],
+    on_progress: Callable[[float, str], object], state: CancellationState
 ) -> Any:
     """Wrap a Python callback for use as a C SonareAnalyzeProgressCallback.
 
@@ -171,7 +172,7 @@ def _make_analyze_progress_trampoline(
     def _trampoline(progress: float, stage_cstr: bytes | None, _user_data: int) -> None:
         try:
             stage = stage_cstr.decode("utf-8") if stage_cstr else ""
-            on_progress(float(progress), stage)
+            state.observe_progress_result(on_progress(float(progress), stage))
         except Exception:  # noqa: BLE001 — never propagate Python exceptions into C
             pass
 
@@ -181,22 +182,28 @@ def _make_analyze_progress_trampoline(
 def analyze_with_progress(
     samples: Sequence[float] | list[float],
     sample_rate: int = 22050,
-    on_progress: Callable[[float, str], None] | None = None,
+    on_progress: Callable[[float, str], object] | None = None,
+    *,
+    cancel: Callable[[], bool] | None = None,
 ) -> AnalysisResult:
     """Run full audio analysis with optional progress callbacks.
 
-    Calls ``sonare_analyze_json_with_progress``. The ``on_progress`` callable
+    Calls ``sonare_analyze_json_with_progress_ex``. The ``on_progress`` callable
     is invoked periodically during analysis with a progress fraction ``[0, 1]``
-    and a stage name string. Falls back to :func:`analyze` if the extended
-    symbol is absent in the loaded library.
+    and a stage name string. Calls the cancellation-capable ABI whenever a
+    progress or cancellation callback is supplied; falls back to
+    :func:`analyze` if neither progress entry point exists in the loaded library.
 
     Args:
         samples: Mono audio samples (1D float). See :func:`detect_bpm` for
             accepted types.
         sample_rate: Sample rate in Hz (default 22050).
-        on_progress: Optional callable ``(progress: float, stage: str) -> None``
-            invoked during analysis. Progress is in ``[0, 1]``. If ``None``,
-            no callback is registered.
+        on_progress: Optional callable ``(progress: float, stage: str) -> object``
+            invoked during analysis. Progress is in ``[0, 1]``. Returning
+            exactly ``False`` requests cancellation; ``None`` and every other
+            return value continue. If ``None``, no callback is registered.
+        cancel: Optional zero-argument callable polled by the native operation.
+            A true return value requests cancellation.
 
     Returns:
         Same rich :class:`libsonare.AnalysisResult` as :func:`analyze`.
@@ -205,27 +212,49 @@ def analyze_with_progress(
         RuntimeError: If analysis fails.
     """
     lib = _get_lib()
-    if not hasattr(lib, "sonare_analyze_json_with_progress"):
+    has_progress = hasattr(lib, "sonare_analyze_json_with_progress")
+    has_progress_ex = hasattr(lib, "sonare_analyze_json_with_progress_ex")
+    if not has_progress and not has_progress_ex:
+        if cancel is not None:
+            raise RuntimeError("loaded libsonare does not support analysis cancellation")
         return analyze(samples, sample_rate=sample_rate)
 
     c_array, length = _to_c_float_array(samples)
-
-    if on_progress is not None:
-        # The trampoline must stay alive across the C call so the ctypes
-        # closure is not garbage-collected mid-analysis.
-        c_cb = _make_analyze_progress_trampoline(on_progress)
-    else:
-        c_cb = SonareAnalyzeProgressCallback(0)  # null callback
-
     out_json = ctypes.c_char_p()
-    rc = lib.sonare_analyze_json_with_progress(
-        c_array,
-        ctypes.c_size_t(length),
-        ctypes.c_int(sample_rate),
-        c_cb,
-        None,
-        ctypes.byref(out_json),
-    )
+    if has_progress_ex and (on_progress is not None or cancel is not None or not has_progress):
+        state = CancellationState(cancel)
+        c_cb = (
+            _make_analyze_progress_trampoline(on_progress, state)
+            if on_progress is not None
+            else SonareAnalyzeProgressCallback(0)
+        )
+        cancel_cb = make_cancel_trampoline(state)
+        rc = lib.sonare_analyze_json_with_progress_ex(
+            c_array,
+            ctypes.c_size_t(length),
+            ctypes.c_int(sample_rate),
+            c_cb,
+            None,
+            ctypes.byref(out_json),
+            cancel_cb,
+            None,
+        )
+    else:
+        if cancel is not None:
+            raise RuntimeError("loaded libsonare does not support analysis cancellation")
+        c_cb = (
+            _make_analyze_progress_trampoline(on_progress, CancellationState(None))
+            if on_progress is not None
+            else SonareAnalyzeProgressCallback(0)
+        )
+        rc = lib.sonare_analyze_json_with_progress(
+            c_array,
+            ctypes.c_size_t(length),
+            ctypes.c_int(sample_rate),
+            c_cb,
+            None,
+            ctypes.byref(out_json),
+        )
     _check(rc)
     try:
         raw = out_json.value

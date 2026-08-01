@@ -26,3 +26,7 @@ export interface SonareCapabilities {
   simd: string;
   hardwareConcurrency: number;
 }
+
+/** Return `false` to cancel at the next native progress boundary. */
+// biome-ignore lint/suspicious/noConfusingVoidType: preserves legacy void callbacks while allowing false.
+export type ProgressCallback = (progress: number, stage: string) => void | boolean;

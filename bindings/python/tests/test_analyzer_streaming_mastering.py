@@ -214,7 +214,7 @@ def test_stft_result_types() -> None:
 
 
 def test_mastering_chain_invokes_progress_callback() -> None:
-    """mastering_chain forwards per-stage progress to on_progress callback."""
+    """mastering_chain preserves void progress callback compatibility."""
     from libsonare import mastering_chain
 
     calls: list[tuple[float, str]] = []
@@ -238,6 +238,100 @@ def test_mastering_chain_invokes_progress_callback() -> None:
     assert "dynamics.compressor" in stages
     # Final progress reaches 1.0.
     assert calls[-1][0] == pytest.approx(1.0, abs=1e-5)
+
+
+def test_mastering_chain_false_progress_result_cancels_without_a_result() -> None:
+    """Returning False after progress exceeds .5 cancels the native chain."""
+    from libsonare import SonareError, mastering_chain
+    from libsonare._runtime import _get_lib
+
+    if not hasattr(_get_lib(), "sonare_mastering_chain_with_progress_ex"):
+        pytest.skip("libsonare built without cancellation-capable mastering progress")
+
+    calls: list[float] = []
+    result = None
+
+    def on_progress(progress: float, _stage: str) -> object:
+        calls.append(progress)
+        return False if progress > 0.5 else None
+
+    with pytest.raises(SonareError) as exc:
+        result = mastering_chain(
+            samples=[0.1] * 22050,
+            sample_rate=22050,
+            config={
+                "eq": {"tilt": {"tiltDb": 1.0}},
+                "dynamics": {"compressor": {"thresholdDb": -24.0}},
+            },
+            on_progress=on_progress,
+        )
+
+    assert exc.value.code == 8
+    assert any(progress > 0.5 for progress in calls)
+    assert result is None
+
+
+def test_mastering_chain_cancel_callable_cancels_without_a_result() -> None:
+    """The keyword-only cancellation callback is forwarded to the C ABI."""
+    from libsonare import SonareError, mastering_chain
+    from libsonare._runtime import _get_lib
+
+    if not hasattr(_get_lib(), "sonare_mastering_chain_with_progress_ex"):
+        pytest.skip("libsonare built without cancellation-capable mastering progress")
+
+    result = None
+    with pytest.raises(SonareError) as exc:
+        result = mastering_chain(
+            samples=[0.1] * 22050,
+            sample_rate=22050,
+            config={"eq": {"tilt": {"tiltDb": 1.0}}},
+            cancel=lambda: True,
+        )
+
+    assert exc.value.code == 8
+    assert result is None
+
+
+@pytest.mark.parametrize(
+    "operation",
+    ["chain-stereo", "preset-mono", "preset-stereo"],
+)
+def test_remaining_mastering_progress_variants_forward_cancellation(operation: str) -> None:
+    """Every chain/preset mono/stereo progress variant uses its matching _ex ABI."""
+    from libsonare import (
+        SonareError,
+        master_audio,
+        master_audio_stereo,
+        mastering_chain_stereo,
+    )
+    from libsonare._runtime import _get_lib
+
+    symbols = {
+        "chain-stereo": "sonare_mastering_chain_stereo_with_progress_ex",
+        "preset-mono": "sonare_master_audio_with_progress_ex",
+        "preset-stereo": "sonare_master_audio_stereo_with_progress_ex",
+    }
+    if not hasattr(_get_lib(), symbols[operation]):
+        pytest.skip("libsonare built without cancellation-capable mastering progress")
+
+    samples = [0.1] * 22050
+    result = None
+    with pytest.raises(SonareError) as exc:
+        if operation == "chain-stereo":
+            result = mastering_chain_stereo(
+                samples,
+                samples,
+                sample_rate=22050,
+                config={"eq": {"tilt": {"tiltDb": 1.0}}},
+                cancel=lambda: True,
+            )
+        elif operation == "preset-mono":
+            result = master_audio(samples, sample_rate=22050, cancel=lambda: True)
+        else:
+            result = master_audio_stereo(samples, samples, sample_rate=22050, cancel=lambda: True)
+
+    assert exc.value.code == 8
+    assert result is None
 
 
 def test_mastering_chain_nested_and_flat_config_equivalent() -> None:

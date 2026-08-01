@@ -12,6 +12,9 @@ from ._cli_common import (
     _SONARE_CODE_TO_EXIT as _SONARE_CODE_TO_EXIT,
 )
 from ._cli_common import (
+    EXIT_CANCELLED as EXIT_CANCELLED,
+)
+from ._cli_common import (
     EXIT_DECODE_FAILED as EXIT_DECODE_FAILED,
 )
 from ._cli_common import (

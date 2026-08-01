@@ -169,7 +169,9 @@ class MusicAnalyzer {
   void report_progress(float progress, const char* stage);
 
   /// @brief Performs the analysis, optionally checking cooperative cancellation.
-  std::optional<AnalysisResult> analyze_impl(bool check_cancel);
+  /// @tparam CheckCancel Keeps the regular path free of cancellation branches.
+  template <bool CheckCancel>
+  std::optional<AnalysisResult> analyze_impl();
 
   /// @brief Eagerly precomputes feature caches in parallel on native builds.
   void precompute_features();

@@ -72,7 +72,8 @@ AutomationCurveArg: TypeAlias = AutomationCurve | str | int
 IntSamples: TypeAlias = Sequence[int] | list[int]
 MasteringParamValue: TypeAlias = float | int | bool
 MasteringParams: TypeAlias = dict[str, MasteringParamValue]
-ProgressCallback: TypeAlias = Callable[[float, str], None]
+ProgressCallback: TypeAlias = Callable[[float, str], object]
+CancelCallback: TypeAlias = Callable[[], bool]
 
 MasteringPreset: TypeAlias = Literal[
     "pop",
@@ -236,6 +237,8 @@ def analyze_with_progress(
     samples: FloatSamples,
     sample_rate: int = 22050,
     on_progress: ProgressCallback | None = None,
+    *,
+    cancel: CancelCallback | None = None,
 ) -> AnalysisResult: ...
 def analyze_bpm(
     samples: FloatSamples,
@@ -642,6 +645,8 @@ def mastering_chain(
     sample_rate: int = 22050,
     config: dict[str, Any] | None = None,
     on_progress: ProgressCallback | None = None,
+    *,
+    cancel: CancelCallback | None = None,
 ) -> MasteringChainResult: ...
 def mastering_chain_stereo(
     left: FloatSamples,
@@ -649,6 +654,8 @@ def mastering_chain_stereo(
     sample_rate: int = 22050,
     config: dict[str, Any] | None = None,
     on_progress: ProgressCallback | None = None,
+    *,
+    cancel: CancelCallback | None = None,
 ) -> MasteringChainStereoResult: ...
 def mastering_preset_names() -> list[MasteringPreset]: ...
 def mastering_insert_names() -> list[str]: ...
@@ -786,6 +793,8 @@ def master_audio(
     preset_name: MasteringPreset = "pop",
     overrides: MasteringParams | None = None,
     on_progress: ProgressCallback | None = None,
+    *,
+    cancel: CancelCallback | None = None,
 ) -> MasteringChainResult: ...
 def master_audio_stereo(
     left: FloatSamples,
@@ -794,6 +803,8 @@ def master_audio_stereo(
     preset_name: MasteringPreset = "pop",
     overrides: MasteringParams | None = None,
     on_progress: ProgressCallback | None = None,
+    *,
+    cancel: CancelCallback | None = None,
 ) -> MasteringChainStereoResult: ...
 
 class StreamingMasteringChain:

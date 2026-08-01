@@ -12,6 +12,7 @@ export enum ErrorCode {
   OutOfMemory = 5,
   NotSupported = 6,
   InvalidState = 7,
+  Cancelled = 8,
   Unknown = 99,
 }
 

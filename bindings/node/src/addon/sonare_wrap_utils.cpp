@@ -31,6 +31,8 @@ const char* ErrorCodeName(SonareError err) {
       return "NotSupported";
     case SONARE_ERROR_INVALID_STATE:
       return "InvalidState";
+    case SONARE_ERROR_CANCELLED:
+      return "Cancelled";
     case SONARE_ERROR_UNKNOWN:
     default:
       return "Unknown";

@@ -59,6 +59,97 @@ void SetChainMetrics(Napi::Env env, Napi::Object out,
   out.Set("stageGainReductions", reductions);
 }
 
+struct ProgressContext {
+  Napi::Env env;
+  Napi::Function callback;
+  bool cancel_requested = false;
+};
+
+void ReportProgress(float progress, const char* stage, void* user_data) {
+  auto* context = static_cast<ProgressContext*>(user_data);
+  Napi::Value result =
+      context->callback.Call({Napi::Number::New(context->env, progress),
+                              Napi::String::New(context->env, stage != nullptr ? stage : "")});
+  context->cancel_requested = result.IsBoolean() && !result.As<Napi::Boolean>().Value();
+}
+
+int CancellationRequested(void* user_data) {
+  return static_cast<ProgressContext*>(user_data)->cancel_requested ? 1 : 0;
+}
+
+std::vector<SonareMasteringParam> CParamsFromNode(
+    const std::vector<sonare::mastering::api::Param>& params) {
+  std::vector<SonareMasteringParam> out;
+  out.reserve(params.size());
+  for (const auto& param : params) {
+    out.push_back({param.key.c_str(), param.value});
+  }
+  return out;
+}
+
+template <typename Result>
+void SetCChainMetrics(Napi::Env env, Napi::Object out, const Result& result) {
+  out.Set("outputTruePeakDbtp", Napi::Number::New(env, result.output_true_peak_dbtp));
+  out.Set("outputLra", Napi::Number::New(env, result.output_lra));
+  out.Set("loudnessTargetLimited", Napi::Boolean::New(env, result.loudness_target_limited != 0));
+  Napi::Array reductions = Napi::Array::New(env, result.stage_gain_reductions_count);
+  for (size_t index = 0; index < result.stage_gain_reductions_count; ++index) {
+    Napi::Object entry = Napi::Object::New(env);
+    entry.Set("stage", Napi::String::New(env, result.stage_gain_reduction_stages[index] != nullptr
+                                                  ? result.stage_gain_reduction_stages[index]
+                                                  : ""));
+    entry.Set("gainReductionDb", Napi::Number::New(env, result.stage_gain_reduction_values[index]));
+    reductions.Set(static_cast<uint32_t>(index), entry);
+  }
+  out.Set("stageGainReductions", reductions);
+}
+
+Napi::Object CMonoChainResultToObject(Napi::Env env, const SonareMasteringChainResult& result) {
+  Napi::Object out = Napi::Object::New(env);
+  Napi::Float32Array samples = Napi::Float32Array::New(env, result.length);
+  if (result.length > 0 && result.samples != nullptr) {
+    std::memcpy(samples.Data(), result.samples, result.length * sizeof(float));
+  }
+  out.Set("samples", samples);
+  out.Set("sampleRate", Napi::Number::New(env, result.sample_rate));
+  out.Set("inputLufs", Napi::Number::New(env, result.input_lufs));
+  out.Set("outputLufs", Napi::Number::New(env, result.output_lufs));
+  out.Set("appliedGainDb", Napi::Number::New(env, result.applied_gain_db));
+  Napi::Array stages = Napi::Array::New(env, result.stages_count);
+  for (size_t index = 0; index < result.stages_count; ++index) {
+    stages.Set(static_cast<uint32_t>(index),
+               Napi::String::New(env, result.stages[index] != nullptr ? result.stages[index] : ""));
+  }
+  out.Set("stages", stages);
+  SetCChainMetrics(env, out, result);
+  return out;
+}
+
+Napi::Object CStereoChainResultToObject(Napi::Env env,
+                                        const SonareMasteringChainStereoResult& result) {
+  Napi::Object out = Napi::Object::New(env);
+  Napi::Float32Array left = Napi::Float32Array::New(env, result.length);
+  Napi::Float32Array right = Napi::Float32Array::New(env, result.length);
+  if (result.length > 0 && result.left != nullptr && result.right != nullptr) {
+    std::memcpy(left.Data(), result.left, result.length * sizeof(float));
+    std::memcpy(right.Data(), result.right, result.length * sizeof(float));
+  }
+  out.Set("left", left);
+  out.Set("right", right);
+  out.Set("sampleRate", Napi::Number::New(env, result.sample_rate));
+  out.Set("inputLufs", Napi::Number::New(env, result.input_lufs));
+  out.Set("outputLufs", Napi::Number::New(env, result.output_lufs));
+  out.Set("appliedGainDb", Napi::Number::New(env, result.applied_gain_db));
+  Napi::Array stages = Napi::Array::New(env, result.stages_count);
+  for (size_t index = 0; index < result.stages_count; ++index) {
+    stages.Set(static_cast<uint32_t>(index),
+               Napi::String::New(env, result.stages[index] != nullptr ? result.stages[index] : ""));
+  }
+  out.Set("stages", stages);
+  SetCChainMetrics(env, out, result);
+  return out;
+}
+
 }  // namespace
 
 Napi::Value SonareWrap::Mastering(const Napi::CallbackInfo& info) {
@@ -560,31 +651,27 @@ Napi::Value SonareWrap::MasteringChainWithProgress(const Napi::CallbackInfo& inf
   }
   SONARE_NODE_TRY
   auto typed = info[0].As<Napi::Float32Array>();
-  // Re-apply the C-ABI input validation this direct core call would otherwise bypass.
-  sonare::validate_offline_audio_input(typed.Data(), typed.ElementLength(),
-                                       info[1].As<Napi::Number>().Int32Value());
   auto params = ParamsFromObject(info[2].As<Napi::Object>());
+  if (env.IsExceptionPending()) return env.Undefined();
+  const auto c_params = CParamsFromNode(params);
   Napi::Function js_cb = info[3].As<Napi::Function>();
-  auto config = sonare::mastering::api::parse_chain_config_params(params.data(), params.size());
-  sonare::mastering::api::MasteringChain chain(std::move(config));
-  // process_mono is synchronous, so js_cb (referenced by info[3]) outlives the call.
-  chain.set_progress_callback([&js_cb, &env](float progress, const char* stage) {
-    js_cb.Call({Napi::Number::New(env, progress), Napi::String::New(env, stage ? stage : "")});
-  });
-  auto result = chain.process_mono(typed.Data(), typed.ElementLength(),
-                                   info[1].As<Napi::Number>().Int32Value());
-  Napi::Object out = Napi::Object::New(env);
-  out.Set("samples", VecToFloat32(env, result.samples));
-  out.Set("sampleRate", Napi::Number::New(env, result.sample_rate));
-  out.Set("inputLufs", Napi::Number::New(env, result.input_lufs));
-  out.Set("outputLufs", Napi::Number::New(env, result.output_lufs));
-  out.Set("appliedGainDb", Napi::Number::New(env, result.applied_gain_db));
-  Napi::Array stages = Napi::Array::New(env, result.stages.size());
-  for (size_t i = 0; i < result.stages.size(); ++i) {
-    stages.Set(static_cast<uint32_t>(i), Napi::String::New(env, result.stages[i]));
+  ProgressContext progress{env, js_cb};
+  SonareMasteringChainResult result{};
+  const SonareError err = sonare_mastering_chain_with_progress_ex(
+      typed.Data(), typed.ElementLength(), info[1].As<Napi::Number>().Int32Value(),
+      c_params.empty() ? nullptr : c_params.data(), c_params.size(), ReportProgress, &progress,
+      &result, CancellationRequested, &progress);
+  if (err != SONARE_OK) {
+    sonare_free_mastering_chain_result(&result);
+    ThrowSonareError(env, err);
+    return env.Undefined();
   }
-  out.Set("stages", stages);
-  SetChainMetrics(env, out, result);
+  if (env.IsExceptionPending()) {
+    sonare_free_mastering_chain_result(&result);
+    return env.Undefined();
+  }
+  Napi::Object out = CMonoChainResultToObject(env, result);
+  sonare_free_mastering_chain_result(&result);
   return out;
   SONARE_NODE_CATCH(env)
 }
@@ -605,31 +692,28 @@ Napi::Value SonareWrap::MasteringChainStereoWithProgress(const Napi::CallbackInf
         .ThrowAsJavaScriptException();
     return env.Undefined();
   }
-  // Re-apply the C-ABI input validation this direct core call would otherwise bypass.
   const int sr = info[2].As<Napi::Number>().Int32Value();
-  sonare::validate_offline_audio_input(left.Data(), left.ElementLength(), sr);
-  sonare::validate_offline_audio_input(right.Data(), right.ElementLength(), sr);
   auto params = ParamsFromObject(info[3].As<Napi::Object>());
+  if (env.IsExceptionPending()) return env.Undefined();
+  const auto c_params = CParamsFromNode(params);
   Napi::Function js_cb = info[4].As<Napi::Function>();
-  auto config = sonare::mastering::api::parse_chain_config_params(params.data(), params.size());
-  sonare::mastering::api::MasteringChain chain(std::move(config));
-  chain.set_progress_callback([&js_cb, &env](float progress, const char* stage) {
-    js_cb.Call({Napi::Number::New(env, progress), Napi::String::New(env, stage ? stage : "")});
-  });
-  auto result = chain.process_stereo(left.Data(), right.Data(), left.ElementLength(), sr);
-  Napi::Object out = Napi::Object::New(env);
-  out.Set("left", VecToFloat32(env, result.left));
-  out.Set("right", VecToFloat32(env, result.right));
-  out.Set("sampleRate", Napi::Number::New(env, result.sample_rate));
-  out.Set("inputLufs", Napi::Number::New(env, result.input_lufs));
-  out.Set("outputLufs", Napi::Number::New(env, result.output_lufs));
-  out.Set("appliedGainDb", Napi::Number::New(env, result.applied_gain_db));
-  Napi::Array stages = Napi::Array::New(env, result.stages.size());
-  for (size_t i = 0; i < result.stages.size(); ++i) {
-    stages.Set(static_cast<uint32_t>(i), Napi::String::New(env, result.stages[i]));
+  ProgressContext progress{env, js_cb};
+  SonareMasteringChainStereoResult result{};
+  const SonareError err = sonare_mastering_chain_stereo_with_progress_ex(
+      left.Data(), right.Data(), left.ElementLength(), sr,
+      c_params.empty() ? nullptr : c_params.data(), c_params.size(), ReportProgress, &progress,
+      &result, CancellationRequested, &progress);
+  if (err != SONARE_OK) {
+    sonare_free_mastering_chain_stereo_result(&result);
+    ThrowSonareError(env, err);
+    return env.Undefined();
   }
-  out.Set("stages", stages);
-  SetChainMetrics(env, out, result);
+  if (env.IsExceptionPending()) {
+    sonare_free_mastering_chain_stereo_result(&result);
+    return env.Undefined();
+  }
+  Napi::Object out = CStereoChainResultToObject(env, result);
+  sonare_free_mastering_chain_stereo_result(&result);
   return out;
   SONARE_NODE_CATCH(env)
 }
@@ -646,35 +730,27 @@ Napi::Value SonareWrap::MasterAudioWithProgress(const Napi::CallbackInfo& info) 
   SONARE_NODE_TRY
   std::string preset_name = info[0].As<Napi::String>().Utf8Value();
   auto typed = info[1].As<Napi::Float32Array>();
-  // Re-apply the C-ABI input validation this direct core call would otherwise bypass.
-  sonare::validate_offline_audio_input(typed.Data(), typed.ElementLength(),
-                                       info[2].As<Napi::Number>().Int32Value());
   auto overrides = ParamsFromObject(info[3].As<Napi::Object>());
+  if (env.IsExceptionPending()) return env.Undefined();
+  const auto c_overrides = CParamsFromNode(overrides);
   Napi::Function js_cb = info[4].As<Napi::Function>();
-  auto preset = sonare::mastering::api::preset_from_string(preset_name);
-  auto config = sonare::mastering::api::preset_config(preset);
-  if (!overrides.empty()) {
-    sonare::mastering::api::apply_chain_config_overrides(config, overrides.data(),
-                                                         overrides.size());
+  ProgressContext progress{env, js_cb};
+  SonareMasteringChainResult result{};
+  const SonareError err = sonare_master_audio_with_progress_ex(
+      preset_name.c_str(), typed.Data(), typed.ElementLength(),
+      info[2].As<Napi::Number>().Int32Value(), c_overrides.empty() ? nullptr : c_overrides.data(),
+      c_overrides.size(), ReportProgress, &progress, &result, CancellationRequested, &progress);
+  if (err != SONARE_OK) {
+    sonare_free_mastering_chain_result(&result);
+    ThrowSonareError(env, err);
+    return env.Undefined();
   }
-  sonare::mastering::api::MasteringChain chain(std::move(config));
-  chain.set_progress_callback([&js_cb, &env](float progress, const char* stage) {
-    js_cb.Call({Napi::Number::New(env, progress), Napi::String::New(env, stage ? stage : "")});
-  });
-  auto result = chain.process_mono(typed.Data(), typed.ElementLength(),
-                                   info[2].As<Napi::Number>().Int32Value());
-  Napi::Object out = Napi::Object::New(env);
-  out.Set("samples", VecToFloat32(env, result.samples));
-  out.Set("sampleRate", Napi::Number::New(env, result.sample_rate));
-  out.Set("inputLufs", Napi::Number::New(env, result.input_lufs));
-  out.Set("outputLufs", Napi::Number::New(env, result.output_lufs));
-  out.Set("appliedGainDb", Napi::Number::New(env, result.applied_gain_db));
-  Napi::Array stages = Napi::Array::New(env, result.stages.size());
-  for (size_t i = 0; i < result.stages.size(); ++i) {
-    stages.Set(static_cast<uint32_t>(i), Napi::String::New(env, result.stages[i]));
+  if (env.IsExceptionPending()) {
+    sonare_free_mastering_chain_result(&result);
+    return env.Undefined();
   }
-  out.Set("stages", stages);
-  SetChainMetrics(env, out, result);
+  Napi::Object out = CMonoChainResultToObject(env, result);
+  sonare_free_mastering_chain_result(&result);
   return out;
   SONARE_NODE_CATCH(env)
 }
@@ -698,36 +774,28 @@ Napi::Value SonareWrap::MasterAudioStereoWithProgress(const Napi::CallbackInfo& 
         .ThrowAsJavaScriptException();
     return env.Undefined();
   }
-  // Re-apply the C-ABI input validation this direct core call would otherwise bypass.
   const int sr = info[3].As<Napi::Number>().Int32Value();
-  sonare::validate_offline_audio_input(left.Data(), left.ElementLength(), sr);
-  sonare::validate_offline_audio_input(right.Data(), right.ElementLength(), sr);
   auto overrides = ParamsFromObject(info[4].As<Napi::Object>());
+  if (env.IsExceptionPending()) return env.Undefined();
+  const auto c_overrides = CParamsFromNode(overrides);
   Napi::Function js_cb = info[5].As<Napi::Function>();
-  auto preset = sonare::mastering::api::preset_from_string(preset_name);
-  auto config = sonare::mastering::api::preset_config(preset);
-  if (!overrides.empty()) {
-    sonare::mastering::api::apply_chain_config_overrides(config, overrides.data(),
-                                                         overrides.size());
+  ProgressContext progress{env, js_cb};
+  SonareMasteringChainStereoResult result{};
+  const SonareError err = sonare_master_audio_stereo_with_progress_ex(
+      preset_name.c_str(), left.Data(), right.Data(), left.ElementLength(), sr,
+      c_overrides.empty() ? nullptr : c_overrides.data(), c_overrides.size(), ReportProgress,
+      &progress, &result, CancellationRequested, &progress);
+  if (err != SONARE_OK) {
+    sonare_free_mastering_chain_stereo_result(&result);
+    ThrowSonareError(env, err);
+    return env.Undefined();
   }
-  sonare::mastering::api::MasteringChain chain(std::move(config));
-  chain.set_progress_callback([&js_cb, &env](float progress, const char* stage) {
-    js_cb.Call({Napi::Number::New(env, progress), Napi::String::New(env, stage ? stage : "")});
-  });
-  auto result = chain.process_stereo(left.Data(), right.Data(), left.ElementLength(), sr);
-  Napi::Object out = Napi::Object::New(env);
-  out.Set("left", VecToFloat32(env, result.left));
-  out.Set("right", VecToFloat32(env, result.right));
-  out.Set("sampleRate", Napi::Number::New(env, result.sample_rate));
-  out.Set("inputLufs", Napi::Number::New(env, result.input_lufs));
-  out.Set("outputLufs", Napi::Number::New(env, result.output_lufs));
-  out.Set("appliedGainDb", Napi::Number::New(env, result.applied_gain_db));
-  Napi::Array stages = Napi::Array::New(env, result.stages.size());
-  for (size_t i = 0; i < result.stages.size(); ++i) {
-    stages.Set(static_cast<uint32_t>(i), Napi::String::New(env, result.stages[i]));
+  if (env.IsExceptionPending()) {
+    sonare_free_mastering_chain_stereo_result(&result);
+    return env.Undefined();
   }
-  out.Set("stages", stages);
-  SetChainMetrics(env, out, result);
+  Napi::Object out = CStereoChainResultToObject(env, result);
+  sonare_free_mastering_chain_stereo_result(&result);
   return out;
   SONARE_NODE_CATCH(env)
 }

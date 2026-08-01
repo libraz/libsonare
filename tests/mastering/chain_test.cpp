@@ -67,6 +67,24 @@ TEST_CASE("MasteringChain reports enabled stage names in result", "[mastering][c
   REQUIRE(result.stages.front() == "eq.tilt");
 }
 
+TEST_CASE("MasteringChain regular processing skips the cancellation callback",
+          "[mastering][chain]") {
+  std::vector<float> samples(44100, 0.1f);
+  MasteringChainConfig config;
+  config.eq.tilt.enabled = true;
+  MasteringChain chain(config);
+  int cancel_queries = 0;
+  chain.set_cancel_callback([&] {
+    ++cancel_queries;
+    return true;
+  });
+
+  const auto result = chain.process_mono(samples.data(), samples.size(), 44100);
+
+  REQUIRE(result.samples.size() == samples.size());
+  REQUIRE(cancel_queries == 0);
+}
+
 TEST_CASE("MasteringChain stereo LRA uses channel summing, not a phase-cancelling mono downmix",
           "[mastering][chain]") {
   // Anti-phase stereo (R = -L) with a real quiet->loud loudness range. A

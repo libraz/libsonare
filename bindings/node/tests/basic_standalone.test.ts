@@ -20,12 +20,14 @@ import {
   detectChords,
   detectKey,
   detectOnsets,
+  ErrorCode,
   fixFrames,
   fixLength,
   frameSignal,
   framesToSamples,
   hasFfmpegSupport,
   hybridCqt,
+  isSonareError,
   masteringAssistantSuggest,
   masteringAudioProfile,
   masteringPairAnalysisNames,
@@ -147,6 +149,32 @@ describe('standalone functions', () => {
       expect(p).toBeGreaterThanOrEqual(0);
       expect(p).toBeLessThanOrEqual(1);
     }
+  });
+
+  it('analyzeWithProgress cancels when its callback returns false', () => {
+    let result: unknown;
+    let caught: unknown;
+    const progress: number[] = [];
+
+    try {
+      result = analyzeWithProgress(generateSine(220, SR, 2), SR, (value) => {
+        progress.push(value);
+        if (value > 0.5) {
+          return false;
+        }
+      });
+    } catch (error) {
+      caught = error;
+    }
+
+    expect(progress.some((value) => value > 0.5)).toBe(true);
+    expect(result).toBeUndefined();
+    expect(isSonareError(caught)).toBe(true);
+    if (!isSonareError(caught)) {
+      throw new Error('expected cancellation SonareError');
+    }
+    expect(caught.code).toBe(ErrorCode.Cancelled);
+    expect(caught.codeName).toBe('Cancelled');
   });
 
   it('analyzeSections returns an array of sections', () => {

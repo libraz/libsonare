@@ -10,6 +10,7 @@ import {
   analyzeWithProgress,
   chroma,
   detectOnsets,
+  ErrorCode,
   framesToTime,
   harmonic,
   hpss,
@@ -17,6 +18,7 @@ import {
   hzToMidi,
   hzToNote,
   init,
+  isSonareError,
   melSpectrogram,
   melToHz,
   mfcc,
@@ -493,6 +495,23 @@ describe('Feature API precision (reference compatibility)', () => {
         expect(p).toBeGreaterThanOrEqual(0);
         expect(p).toBeLessThanOrEqual(1);
       }
+    });
+
+    it('cancels when the progress callback returns false', () => {
+      const tone = generateSine(440, SR, DURATION);
+      let result: ReturnType<typeof analyzeWithProgress> | undefined;
+
+      try {
+        result = analyzeWithProgress(tone, SR, (progress) => (progress > 0.5 ? false : undefined));
+      } catch (error) {
+        expect(isSonareError(error)).toBe(true);
+        if (!isSonareError(error)) {
+          throw error;
+        }
+        expect(error.code).toBe(ErrorCode.Cancelled);
+      }
+
+      expect(result).toBeUndefined();
     });
   });
 
