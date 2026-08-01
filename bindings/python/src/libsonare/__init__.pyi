@@ -353,6 +353,9 @@ from .analyzer import (
     note_move as note_move,
 )
 from .analyzer import (
+    note_segments as note_segments,
+)
+from .analyzer import (
     note_stretch as note_stretch,
 )
 from .analyzer import (
@@ -729,6 +732,9 @@ from .types import (
 )
 from .types import (
     Mode as Mode,
+)
+from .types import (
+    NoteSegment as NoteSegment,
 )
 from .types import PanLaw as PanLaw
 from .types import (

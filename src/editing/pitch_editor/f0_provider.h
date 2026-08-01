@@ -21,6 +21,9 @@ struct F0Track {
   std::vector<bool> voiced;
   int hop_length = 512;
   int sample_rate = 48000;
+  /// Optional direct frame cadence for host-supplied F0 tracks. Zero keeps the
+  /// legacy sample_rate / hop_length derivation used by internal providers.
+  float frame_rate_hz = 0.0f;
 
   int n_frames() const noexcept { return static_cast<int>(f0_hz.size()); }
 };

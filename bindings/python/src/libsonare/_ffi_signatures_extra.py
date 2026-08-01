@@ -26,6 +26,9 @@ def configure_extra_signatures(lib: ctypes.CDLL) -> None:
     lib.sonare_free_pitch_result.restype = None
     lib.sonare_free_pitch_result.argtypes = [ctypes.POINTER(SonarePitchResult)]
 
+    lib.sonare_free_note_segments.restype = None
+    lib.sonare_free_note_segments.argtypes = [ctypes.POINTER(SonareNoteSegmentsResult)]
+
     lib.sonare_free_hpss_result.restype = None
     lib.sonare_free_hpss_result.argtypes = [ctypes.POINTER(SonareHpssResult)]
 

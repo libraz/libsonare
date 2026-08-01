@@ -8,6 +8,7 @@
 #include <catch2/catch_test_macros.hpp>
 #include <cmath>
 #include <cstdint>
+#include <limits>
 #include <vector>
 
 #include "support/audio_fixtures.h"
@@ -22,6 +23,44 @@ float* non_null_floats() { return reinterpret_cast<float*>(static_cast<std::uint
 int* non_null_ints() { return reinterpret_cast<int*>(static_cast<std::uintptr_t>(0x1)); }
 
 }  // namespace
+
+TEST_CASE("sonare_note_segments validates and returns frame-accurate regions",
+          "[c_api][features]") {
+  const std::vector<float> f0 = {440.0f, 445.0f, 435.0f, 444.0f, 436.0f, 0.0f, 0.0f,
+                                 660.0f, 666.0f, 654.0f, 665.0f, 655.0f, 0.0f};
+  const std::vector<float> voiced = {1.0f, 1.0f, 1.0f, 1.0f, 1.0f, 0.0f, 0.0f,
+                                     1.0f, 1.0f, 1.0f, 1.0f, 1.0f, 0.0f};
+  SonareNoteSegmentsResult out{};
+  SonareNoteSegmenterConfig config{};
+  config.struct_version = 1;
+
+  REQUIRE(sonare_note_segments(f0.data(), f0.size(), voiced.data(), voiced.size(), 100.0f, &config,
+                               &out) == SONARE_OK);
+  REQUIRE(out.count == 2);
+  REQUIRE(out.segments != nullptr);
+  REQUIRE(out.segments[0].frame_start == 0);
+  REQUIRE(out.segments[0].frame_end == 5);
+  REQUIRE(out.segments[0].start_seconds == Catch::Approx(0.0f));
+  REQUIRE(out.segments[0].end_seconds == Catch::Approx(0.05f));
+  REQUIRE(out.segments[1].frame_start == 7);
+  REQUIRE(out.segments[1].frame_end == 12);
+  REQUIRE(out.segments[1].start_seconds == Catch::Approx(0.07f));
+  REQUIRE(out.segments[1].end_seconds == Catch::Approx(0.12f));
+  sonare_free_note_segments(&out);
+  REQUIRE(out.segments == nullptr);
+  REQUIRE(out.count == 0);
+
+  out.segments = reinterpret_cast<SonareNoteSegment*>(static_cast<std::uintptr_t>(0x1));
+  out.count = 7;
+  REQUIRE(sonare_note_segments(f0.data(), f0.size(), voiced.data(), voiced.size() - 1, 100.0f,
+                               &config, &out) == SONARE_ERROR_INVALID_PARAMETER);
+  REQUIRE(out.segments == nullptr);
+  REQUIRE(out.count == 0);
+
+  const float non_finite = std::numeric_limits<float>::quiet_NaN();
+  REQUIRE(sonare_note_segments(&non_finite, 1, voiced.data(), 1, 100.0f, &config, &out) ==
+          SONARE_ERROR_INVALID_PARAMETER);
+}
 
 TEST_CASE("sonare_spectral_contrast", "[c_api][features]") {
   auto samples = sonare::test::generate_sine_samples(

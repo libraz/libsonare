@@ -264,6 +264,18 @@ def configure_features_signatures(lib: ctypes.CDLL) -> None:
         ctypes.POINTER(SonarePitchResult),
     ]
 
+    # sonare_note_segments
+    lib.sonare_note_segments.restype = ctypes.c_int32
+    lib.sonare_note_segments.argtypes = [
+        ctypes.POINTER(ctypes.c_float),
+        ctypes.c_size_t,
+        ctypes.POINTER(ctypes.c_float),
+        ctypes.c_size_t,
+        ctypes.c_float,
+        ctypes.POINTER(SonareNoteSegmenterConfig),
+        ctypes.POINTER(SonareNoteSegmentsResult),
+    ]
+
     # --- Core - Conversion ---
 
     lib.sonare_hz_to_mel.restype = ctypes.c_float

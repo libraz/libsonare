@@ -8,6 +8,7 @@ import type {
   Matrix2D,
   MelSpectrogramResult,
   MfccResult,
+  NoteSegment,
   PitchResult,
   StftDbResult,
   StftResult,
@@ -111,6 +112,16 @@ export interface PitchRequest extends FeatureSamplesRequest {
   threshold?: number;
   /** pYIN: fill unvoiced f0 with zero. Retained but ignored by YIN, which always estimates f0. */
   fillNa?: boolean;
+}
+export interface NoteSegmentsRequest {
+  f0Hz: Float32Array;
+  voicedProb: Float32Array;
+  frameRate: number;
+  config?: {
+    segmentationThresholdCents?: number;
+    minNoteMs?: number;
+    referenceHz?: number;
+  };
 }
 export interface DecomposeRequest {
   s: Float32Array;
@@ -1110,6 +1121,11 @@ export function pitchPyin(
     request.threshold ?? 0.1,
     request.fillNa ?? false,
   );
+}
+
+/** Segment a host-supplied monophonic F0 track into stable note regions. */
+export function noteSegments(request: NoteSegmentsRequest): NoteSegment[] {
+  return addon.noteSegments(request);
 }
 
 // -- Core --

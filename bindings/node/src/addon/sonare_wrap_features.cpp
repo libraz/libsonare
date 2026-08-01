@@ -562,6 +562,65 @@ Napi::Value SonareWrap::PitchPyin(const Napi::CallbackInfo& info) {
   SONARE_NODE_CATCH(env)
 }
 
+Napi::Value SonareWrap::NoteSegments(const Napi::CallbackInfo& info) {
+  Napi::Env env = info.Env();
+  if (info.Length() != 1 || !info[0].IsObject() || info[0].IsArray()) {
+    Napi::TypeError::New(env, "noteSegments expects one request object")
+        .ThrowAsJavaScriptException();
+    return env.Undefined();
+  }
+  Napi::Object request = info[0].As<Napi::Object>();
+  const Napi::Value f0_value = request.Get("f0Hz");
+  const Napi::Value voiced_value = request.Get("voicedProb");
+  const Napi::Value rate_value = request.Get("frameRate");
+  if (!sonare_node::IsFloat32Array(f0_value) || !sonare_node::IsFloat32Array(voiced_value) ||
+      !rate_value.IsNumber()) {
+    Napi::TypeError::New(env, "noteSegments requires f0Hz, voicedProb, and frameRate")
+        .ThrowAsJavaScriptException();
+    return env.Undefined();
+  }
+
+  const Napi::Float32Array f0 = f0_value.As<Napi::Float32Array>();
+  const Napi::Float32Array voiced = voiced_value.As<Napi::Float32Array>();
+  SonareNoteSegmenterConfig config{};
+  const Napi::Value config_value = request.Get("config");
+  if (!config_value.IsUndefined() && !config_value.IsNull()) {
+    if (!config_value.IsObject() || config_value.IsArray()) {
+      Napi::TypeError::New(env, "noteSegments config must be an object")
+          .ThrowAsJavaScriptException();
+      return env.Undefined();
+    }
+    const Napi::Object options = config_value.As<Napi::Object>();
+    config.struct_version = 1;
+    config.segmentation_threshold_cents =
+        FloatProperty(options, "segmentationThresholdCents", 0.0f);
+    config.min_note_ms = FloatProperty(options, "minNoteMs", 0.0f);
+    config.reference_hz = FloatProperty(options, "referenceHz", 0.0f);
+  }
+
+  SonareNoteSegmentsResult result{};
+  const SonareError error =
+      sonare_note_segments(f0.Data(), f0.ElementLength(), voiced.Data(), voiced.ElementLength(),
+                           rate_value.As<Napi::Number>().FloatValue(), &config, &result);
+  if (error != SONARE_OK) {
+    ThrowIfError(env, error);
+    return env.Undefined();
+  }
+  Napi::Array segments = Napi::Array::New(env, result.count);
+  for (size_t i = 0; i < result.count; ++i) {
+    const SonareNoteSegment& segment = result.segments[i];
+    Napi::Object row = Napi::Object::New(env);
+    row.Set("frameStart", Napi::Number::New(env, segment.frame_start));
+    row.Set("frameEnd", Napi::Number::New(env, segment.frame_end));
+    row.Set("startSeconds", Napi::Number::New(env, segment.start_seconds));
+    row.Set("endSeconds", Napi::Number::New(env, segment.end_seconds));
+    row.Set("medianCents", Napi::Number::New(env, segment.median_cents));
+    segments.Set(static_cast<uint32_t>(i), row);
+  }
+  sonare_free_note_segments(&result);
+  return segments;
+}
+
 // ============================================================================
 // Core - Conversion
 // ============================================================================

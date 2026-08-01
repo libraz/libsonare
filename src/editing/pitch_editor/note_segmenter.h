@@ -3,10 +3,9 @@
 /// @file note_segmenter.h
 /// @brief Monophonic note segmentation from F0 tracks.
 ///
-/// Core-internal: this is a building block for the pitch-editing pipeline and is
-/// not exposed on any public surface (C ABI / Node / Python / WASM). Callers use
-/// the higher-level pitch-correction entry points; segment boundaries are an
-/// implementation detail, not part of the public contract.
+/// This is a building block for the pitch-editing pipeline. Public facades use
+/// it to turn a caller-supplied monophonic F0 track into stable note regions;
+/// the internal pitch-correction pipeline also retains its direct use.
 
 #include <vector>
 

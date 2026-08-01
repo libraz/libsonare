@@ -204,6 +204,7 @@ class SonareWrap : public Napi::ObjectWrap<SonareWrap> {
   // Features - Pitch
   static Napi::Value PitchYin(const Napi::CallbackInfo& info);
   static Napi::Value PitchPyin(const Napi::CallbackInfo& info);
+  static Napi::Value NoteSegments(const Napi::CallbackInfo& info);
 
   // Core - Conversion
   static Napi::Value HzToMel(const Napi::CallbackInfo& info);

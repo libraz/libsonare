@@ -166,6 +166,18 @@ def test_pitch_pyin_fill_na_controls_unvoiced_value() -> None:
     assert all(math.isfinite(v) for v in filled.f0)
 
 
+def test_note_segments_preserves_vibrato_and_separates_unvoiced_intervals() -> None:
+    segments = libsonare.note_segments(
+        [440.0, 445.0, 435.0, 444.0, 436.0, 0.0, 0.0, 660.0, 666.0, 654.0, 665.0, 655.0, 0.0],
+        [1.0, 1.0, 1.0, 1.0, 1.0, 0.0, 0.0, 1.0, 1.0, 1.0, 1.0, 1.0, 0.0],
+        100.0,
+    )
+    assert [(segment.frame_start, segment.frame_end) for segment in segments] == [(0, 5), (7, 12)]
+    assert [
+        value for segment in segments for value in (segment.start_seconds, segment.end_seconds)
+    ] == pytest.approx([0.0, 0.05, 0.07, 0.12])
+
+
 def test_analyze_timbre_exposes_timbre_over_time() -> None:
     result = libsonare.analyze_timbre(_tone(seconds=2.0), SR)
     assert len(result.timbre_over_time) > 0

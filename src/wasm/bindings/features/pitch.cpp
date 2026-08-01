@@ -76,6 +76,37 @@ val js_pitch_pyin(val samples, int sample_rate, int frame_length, int hop_length
   return out;
 }
 
+val js_note_segments(val f0_hz, val voiced_prob, float frame_rate, val options) {
+  std::vector<float> f0 = float32ArrayToVector(f0_hz);
+  std::vector<float> probabilities = float32ArrayToVector(voiced_prob);
+  SonareNoteSegmenterConfig config{};
+  config.struct_version = 1;
+  config.segmentation_threshold_cents = floatProperty(options, "segmentationThresholdCents", 0.0f);
+  config.min_note_ms = floatProperty(options, "minNoteMs", 0.0f);
+  config.reference_hz = floatProperty(options, "referenceHz", 0.0f);
+  SonareNoteSegmentsResult result{};
+  const SonareError error =
+      sonare_note_segments(f0.data(), f0.size(), probabilities.data(), probabilities.size(),
+                           frame_rate, &config, &result);
+  if (error != SONARE_OK) {
+    throw SonareException(static_cast<ErrorCode>(error), sonare_last_error_message());
+  }
+
+  val out = val::array();
+  for (size_t i = 0; i < result.count; ++i) {
+    const SonareNoteSegment& segment = result.segments[i];
+    val row = val::object();
+    row.set("frameStart", segment.frame_start);
+    row.set("frameEnd", segment.frame_end);
+    row.set("startSeconds", segment.start_seconds);
+    row.set("endSeconds", segment.end_seconds);
+    row.set("medianCents", segment.median_cents);
+    out.call<void>("push", row);
+  }
+  sonare_free_note_segments(&result);
+  return out;
+}
+
 // Per-octave tuning offset from a list of detected pitches. Mirrors the C ABI
 // sonare_pitch_tuning / librosa.pitch_tuning.
 float js_pitch_tuning(val frequencies, float resolution, int bins_per_octave) {
@@ -94,6 +125,7 @@ float js_estimate_tuning(val samples, int sample_rate, int n_fft, int hop_length
 void registerFeaturePitchBindings() {
   function("pitchYin", &js_pitch_yin);
   function("pitchPyin", &js_pitch_pyin);
+  function("noteSegments", &js_note_segments);
   function("pitchTuning", &js_pitch_tuning);
   function("estimateTuning", &js_estimate_tuning);
 }

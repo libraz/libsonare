@@ -182,6 +182,15 @@ export interface PitchResult {
   meanF0: number;
 }
 
+/** One stable monophonic note region segmented from an F0 track. */
+export interface NoteSegment {
+  frameStart: number;
+  frameEnd: number;
+  startSeconds: number;
+  endSeconds: number;
+  medianCents: number;
+}
+
 /**
  * Loudness measurement result (EBU R128 / ITU-R BS.1770)
  */

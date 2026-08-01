@@ -34,10 +34,11 @@ std::vector<NoteRegion> NoteSegmenter::segment(const F0Track& track) const {
     return regions;
   }
 
+  const float frame_rate = track.frame_rate_hz > 0.0f ? track.frame_rate_hz
+                                                      : static_cast<float>(track.sample_rate) /
+                                                            static_cast<float>(track.hop_length);
   const int min_frames =
-      std::max(1, static_cast<int>(std::ceil(config_.min_note_ms * 0.001f *
-                                             static_cast<float>(track.sample_rate) /
-                                             static_cast<float>(track.hop_length))));
+      std::max(1, static_cast<int>(std::ceil(config_.min_note_ms * 0.001f * frame_rate)));
 
   int start = -1;
   float reference_cents = 0.0f;

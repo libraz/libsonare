@@ -12,6 +12,7 @@
 #include "core/convert.h"
 #include "core/resample.h"
 #include "core/spectrum.h"
+#include "editing/pitch_editor/note_segmenter.h"
 #include "feature/chroma.h"
 #include "feature/cqt.h"
 #include "feature/inverse.h"

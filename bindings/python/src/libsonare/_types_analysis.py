@@ -1025,6 +1025,17 @@ class PitchResult:
 
 
 @dataclass(frozen=True, slots=True)
+class NoteSegment:
+    """One stable monophonic note region segmented from an F0 track."""
+
+    frame_start: int
+    frame_end: int
+    start_seconds: float
+    end_seconds: float
+    median_cents: float
+
+
+@dataclass(frozen=True, slots=True)
 class HpssResult:
     """Harmonic-percussive source separation result."""
 

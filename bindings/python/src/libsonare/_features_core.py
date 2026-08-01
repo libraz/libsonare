@@ -11,6 +11,8 @@ from ._ffi import (
     SonareChromaResult,
     SonareMelResult,
     SonareMfccResult,
+    SonareNoteSegmenterConfig,
+    SonareNoteSegmentsResult,
     SonarePitchResult,
     SonareStftResult,
 )
@@ -30,6 +32,7 @@ from .types import (
     ChromaResult,
     MelSpectrogramResult,
     MfccResult,
+    NoteSegment,
     PitchResult,
     StftResult,
 )
@@ -858,3 +861,52 @@ def pitch_pyin(
         )
     finally:
         lib.sonare_free_pitch_result(ctypes.byref(out))
+
+
+def note_segments(
+    f0_hz: Sequence[float] | list[float],
+    voiced_prob: Sequence[float] | list[float],
+    frame_rate: float,
+    *,
+    segmentation_threshold_cents: float | None = None,
+    min_note_ms: float | None = None,
+    reference_hz: float | None = None,
+) -> list[NoteSegment]:
+    """Segment a monophonic F0 track into stable note regions.
+
+    Zero-Hz F0 frames and voiced probabilities below 0.5 delimit note regions.
+    The F0 and probability arrays must have equal non-zero length.
+    """
+    lib = _get_lib()
+    f0_array, f0_count = _to_c_float_array(f0_hz)
+    probability_array, probability_count = _to_c_float_array(voiced_prob)
+    config = SonareNoteSegmenterConfig(
+        1,
+        0.0 if segmentation_threshold_cents is None else segmentation_threshold_cents,
+        0.0 if min_note_ms is None else min_note_ms,
+        0.0 if reference_hz is None else reference_hz,
+    )
+    out = SonareNoteSegmentsResult()
+    rc = lib.sonare_note_segments(
+        f0_array,
+        ctypes.c_size_t(f0_count),
+        probability_array,
+        ctypes.c_size_t(probability_count),
+        ctypes.c_float(frame_rate),
+        ctypes.byref(config),
+        ctypes.byref(out),
+    )
+    _check(rc)
+    try:
+        return [
+            NoteSegment(
+                frame_start=int(out.segments[i].frame_start),
+                frame_end=int(out.segments[i].frame_end),
+                start_seconds=float(out.segments[i].start_seconds),
+                end_seconds=float(out.segments[i].end_seconds),
+                median_cents=float(out.segments[i].median_cents),
+            )
+            for i in range(out.count)
+        ]
+    finally:
+        lib.sonare_free_note_segments(ctypes.byref(out))

@@ -471,6 +471,50 @@ SonareError sonare_pitch_pyin(const float* samples, size_t length, int sample_ra
                               int frame_length, int hop_length, float fmin, float fmax,
                               float threshold, int fill_na, SonarePitchResult* out);
 
+/// @brief Versioned configuration for @ref sonare_note_segments.
+/// @details Zero-initialize for the defaults (50 cents, 30 ms, A4 = 440 Hz).
+///          @c struct_version 0 and 1 select the current layout.
+typedef struct {
+  int struct_version;
+  float segmentation_threshold_cents;
+  float min_note_ms;
+  float reference_hz;
+} SonareNoteSegmenterConfig;
+
+/// One monophonic note region detected from an F0 track. Frame bounds are
+/// half-open (@c [frame_start, frame_end)); seconds use the supplied frame rate.
+typedef struct {
+  int frame_start;
+  int frame_end;
+  float start_seconds;
+  float end_seconds;
+  float median_cents;
+} SonareNoteSegment;
+
+/// Heap-owned note-segmentation output. Release with
+/// @ref sonare_free_note_segments.
+typedef struct {
+  SonareNoteSegment* segments;
+  size_t count;
+} SonareNoteSegmentsResult;
+
+/// @brief Segment a monophonic F0 track into stable note regions.
+/// @param f0_hz F0 values in Hz. Every value must be finite and non-negative;
+///        zero denotes an unvoiced frame.
+/// @param f0_count Number of F0 frames; must be non-zero.
+/// @param voiced_prob Per-frame voiced probabilities in [0, 1]. A value below
+///        0.5 is treated as unvoiced; @p voiced_prob_count must equal
+///        @p f0_count.
+/// @param frame_rate Number of F0 frames per second; must be finite and > 0.
+/// @param config Optional versioned configuration; NULL selects defaults.
+/// @param out Receives a heap-owned result, cleared before validation. Empty
+///        segmentation is returned as (@c NULL, 0).
+SonareError sonare_note_segments(const float* f0_hz, size_t f0_count, const float* voiced_prob,
+                                 size_t voiced_prob_count, float frame_rate,
+                                 const SonareNoteSegmenterConfig* config,
+                                 SonareNoteSegmentsResult* out);
+void sonare_free_note_segments(SonareNoteSegmentsResult* result);
+
 // ============================================================================
 // Core - Conversion
 // ============================================================================

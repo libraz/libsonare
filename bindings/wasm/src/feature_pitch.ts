@@ -1,5 +1,5 @@
 import { getSonareModule } from './module_state';
-import type { PitchResult } from './public_types';
+import type { NoteSegment, PitchResult } from './public_types';
 
 function requireModule() {
   return getSonareModule();
@@ -138,4 +138,28 @@ export function pitchPyin(
     threshold,
     fillNa,
   );
+}
+
+/** Parameters for segmenting an F0 track into stable monophonic notes. */
+export interface NoteSegmentsRequest {
+  f0Hz: Float32Array;
+  voicedProb: Float32Array;
+  frameRate: number;
+  segmentationThresholdCents?: number;
+  minNoteMs?: number;
+  referenceHz?: number;
+}
+
+/**
+ * Segment a caller-supplied monophonic F0 track into stable note regions.
+ *
+ * `f0Hz` and `voicedProb` must have the same non-zero length. Zero-Hz frames
+ * and probabilities below 0.5 are treated as unvoiced.
+ */
+export function noteSegments(request: NoteSegmentsRequest): NoteSegment[] {
+  return requireModule().noteSegments(request.f0Hz, request.voicedProb, request.frameRate, {
+    segmentationThresholdCents: request.segmentationThresholdCents,
+    minNoteMs: request.minNoteMs,
+    referenceHz: request.referenceHz,
+  });
 }

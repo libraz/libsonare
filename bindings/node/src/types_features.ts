@@ -252,6 +252,15 @@ export interface PitchResult {
   meanF0: number;
 }
 
+/** One stable monophonic note region segmented from an F0 track. */
+export interface NoteSegment {
+  frameStart: number;
+  frameEnd: number;
+  startSeconds: number;
+  endSeconds: number;
+  medianCents: number;
+}
+
 /** Phase processing mode for the streaming equalizer. */
 export type EqPhaseMode = 'zero' | 'natural' | 'linear';
 

@@ -39,6 +39,7 @@ from .types import (
     MixMeterSnapshot,
     MixResult,
     Mode,
+    NoteSegment,
     PanLaw,
     PhaseScopeReport,
     PitchClass,
@@ -977,6 +978,15 @@ def pitch_pyin(
     threshold: float = 0.1,
     fill_na: bool = False,
 ) -> PitchResult: ...
+def note_segments(
+    f0_hz: FloatSamples,
+    voiced_prob: FloatSamples,
+    frame_rate: float,
+    *,
+    segmentation_threshold_cents: float | None = None,
+    min_note_ms: float | None = None,
+    reference_hz: float | None = None,
+) -> list[NoteSegment]: ...
 def spectral_contrast(
     samples: FloatSamples,
     sample_rate: int = 22050,

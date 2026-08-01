@@ -676,6 +676,16 @@ def _order_drift(
             # subset bag (all names are struct/bag names) carries no order signal.
             if all(n in _STRUCT_BAG_NAMES for n in s_cfg):
                 continue
+            # A trailing versioned C config struct is commonly flattened into
+            # facade keyword/request fields.  The positional prefix still has
+            # to match exactly; the struct's interior has no C-level parameter
+            # order to compare here.  This is distinct from an arbitrary tail
+            # because the canonical final parameter is explicitly an opaque bag.
+            if (
+                c_cfg[-1] in _STRUCT_BAG_NAMES
+                and s_cfg[: len(c_cfg) - 1] == c_cfg[:-1]
+            ):
+                continue
             # Facades fold variadic C scalar tails into an options bag, so a
             # facade exposing a STRICT PREFIX of the C config order is fine.
             if s_cfg == c_cfg[: len(s_cfg)]:

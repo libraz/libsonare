@@ -1,3 +1,5 @@
+#include <limits>
+
 #include "c_api/features_internal.h"
 
 // Features - Spectral
@@ -301,6 +303,80 @@ SonareError sonare_pitch_pyin(const float* samples, size_t length, int sample_ra
     PitchResult result = pyin(audio, config);
     return fill_pitch_result(result, out);
   });
+}
+
+SonareError sonare_note_segments(const float* f0_hz, size_t f0_count, const float* voiced_prob,
+                                 size_t voiced_prob_count, float frame_rate,
+                                 const SonareNoteSegmenterConfig* config,
+                                 SonareNoteSegmentsResult* out) {
+  SONARE_C_API_ENTRY;
+  if (out == nullptr) return SONARE_ERROR_INVALID_PARAMETER;
+  out->segments = nullptr;
+  out->count = 0;
+  if (f0_hz == nullptr || voiced_prob == nullptr || f0_count == 0 ||
+      f0_count != voiced_prob_count ||
+      f0_count > static_cast<size_t>(std::numeric_limits<int>::max()) || !(frame_rate > 0.0f) ||
+      !std::isfinite(frame_rate)) {
+    return SONARE_ERROR_INVALID_PARAMETER;
+  }
+  if (config != nullptr && (config->struct_version < 0 || config->struct_version > 1)) {
+    return SONARE_ERROR_INVALID_PARAMETER;
+  }
+
+  sonare::editing::pitch_editor::NoteSegmenterConfig segmenter_config;
+  if (config != nullptr) {
+    if (!std::isfinite(config->segmentation_threshold_cents) ||
+        !std::isfinite(config->min_note_ms) || !std::isfinite(config->reference_hz) ||
+        config->segmentation_threshold_cents < 0.0f || config->min_note_ms < 0.0f ||
+        config->reference_hz < 0.0f) {
+      return SONARE_ERROR_INVALID_PARAMETER;
+    }
+    if (config->segmentation_threshold_cents > 0.0f) {
+      segmenter_config.segmentation_threshold_cents = config->segmentation_threshold_cents;
+    }
+    if (config->min_note_ms > 0.0f) segmenter_config.min_note_ms = config->min_note_ms;
+    if (config->reference_hz > 0.0f) segmenter_config.reference_hz = config->reference_hz;
+  }
+
+  SONARE_C_TRY
+  sonare::editing::pitch_editor::F0Track track;
+  track.f0_hz.reserve(f0_count);
+  track.voiced_prob.reserve(f0_count);
+  track.voiced.reserve(f0_count);
+  track.frame_rate_hz = frame_rate;
+  for (size_t i = 0; i < f0_count; ++i) {
+    const float f0 = f0_hz[i];
+    const float probability = voiced_prob[i];
+    if (!std::isfinite(f0) || f0 < 0.0f || !std::isfinite(probability) || probability < 0.0f ||
+        probability > 1.0f) {
+      return SONARE_ERROR_INVALID_PARAMETER;
+    }
+    track.f0_hz.push_back(f0);
+    track.voiced_prob.push_back(probability);
+    track.voiced.push_back(probability >= 0.5f);
+  }
+
+  const auto regions =
+      sonare::editing::pitch_editor::NoteSegmenter(segmenter_config).segment(track);
+  if (regions.empty()) return SONARE_OK;
+  auto segments = std::make_unique<SonareNoteSegment[]>(regions.size());
+  for (size_t i = 0; i < regions.size(); ++i) {
+    const auto& region = regions[i];
+    segments[i] = {region.frame_start, region.frame_end,
+                   static_cast<float>(region.frame_start) / frame_rate,
+                   static_cast<float>(region.frame_end) / frame_rate, region.median_cents};
+  }
+  out->count = regions.size();
+  out->segments = segments.release();
+  return SONARE_OK;
+  SONARE_C_CATCH
+}
+
+void sonare_free_note_segments(SonareNoteSegmentsResult* result) {
+  if (result == nullptr) return;
+  delete[] result->segments;
+  result->segments = nullptr;
+  result->count = 0;
 }
 
 float sonare_hz_to_mel(float hz) { return hz_to_mel(hz); }

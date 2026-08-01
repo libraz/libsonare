@@ -812,6 +812,21 @@ class PitchResult:
         mean_f0: float,
     ) -> None: ...
 
+class NoteSegment:
+    frame_start: int
+    frame_end: int
+    start_seconds: float
+    end_seconds: float
+    median_cents: float
+    def __init__(
+        self,
+        frame_start: int,
+        frame_end: int,
+        start_seconds: float,
+        end_seconds: float,
+        median_cents: float,
+    ) -> None: ...
+
 class HpssResult:
     harmonic: list[float]
     percussive: list[float]

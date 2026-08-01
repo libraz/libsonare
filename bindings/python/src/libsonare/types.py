@@ -151,6 +151,9 @@ from ._types_analysis import (
     Mode as Mode,
 )
 from ._types_analysis import (
+    NoteSegment as NoteSegment,
+)
+from ._types_analysis import (
     PanLaw as PanLaw,
 )
 from ._types_analysis import (

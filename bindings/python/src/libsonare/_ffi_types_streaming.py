@@ -432,6 +432,38 @@ class SonarePitchResult(ctypes.Structure):
     ]
 
 
+class SonareNoteSegmenterConfig(ctypes.Structure):
+    """Maps to SonareNoteSegmenterConfig in sonare_c_features.h."""
+
+    _fields_ = [
+        ("struct_version", ctypes.c_int),
+        ("segmentation_threshold_cents", ctypes.c_float),
+        ("min_note_ms", ctypes.c_float),
+        ("reference_hz", ctypes.c_float),
+    ]
+
+
+class SonareNoteSegment(ctypes.Structure):
+    """Maps to SonareNoteSegment in sonare_c_features.h."""
+
+    _fields_ = [
+        ("frame_start", ctypes.c_int),
+        ("frame_end", ctypes.c_int),
+        ("start_seconds", ctypes.c_float),
+        ("end_seconds", ctypes.c_float),
+        ("median_cents", ctypes.c_float),
+    ]
+
+
+class SonareNoteSegmentsResult(ctypes.Structure):
+    """Maps to SonareNoteSegmentsResult in sonare_c_features.h."""
+
+    _fields_ = [
+        ("segments", ctypes.POINTER(SonareNoteSegment)),
+        ("count", ctypes.c_size_t),
+    ]
+
+
 class SonareHpssResult(ctypes.Structure):
     """Maps to SonareHpssResult in sonare_c.h."""
 

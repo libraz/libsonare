@@ -24,6 +24,7 @@ import {
   mfcc,
   midiToHz,
   normalize,
+  noteSegments,
   noteToHz,
   percussive,
   pitchPyin,
@@ -104,6 +105,20 @@ const DURATION = 1.0;
 describe('Feature API precision (reference compatibility)', () => {
   beforeAll(async () => {
     await init();
+  });
+
+  it('preserves vibrato and separates unvoiced intervals', () => {
+    const segments = noteSegments({
+      f0Hz: new Float32Array([440, 445, 435, 444, 436, 0, 0, 660, 666, 654, 665, 655, 0]),
+      voicedProb: new Float32Array([1, 1, 1, 1, 1, 0, 0, 1, 1, 1, 1, 1, 0]),
+      frameRate: 100,
+    });
+    expect(segments).toHaveLength(2);
+    expect(segments[0]).toMatchObject({ frameStart: 0, frameEnd: 5, startSeconds: 0 });
+    expect(segments[1]).toMatchObject({ frameStart: 7, frameEnd: 12 });
+    expect(segments[0].endSeconds).toBeCloseTo(0.05);
+    expect(segments[1].startSeconds).toBeCloseTo(0.07);
+    expect(segments[1].endSeconds).toBeCloseTo(0.12);
   });
 
   describe('unit conversions', () => {

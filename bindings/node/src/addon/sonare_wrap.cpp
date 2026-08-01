@@ -363,6 +363,7 @@ Napi::Object SonareWrap::Init(Napi::Env env, Napi::Object exports) {
   // Features - Pitch
   exports.Set("pitchYin", Napi::Function::New(env, &SonareWrap::PitchYin, "pitchYin"));
   exports.Set("pitchPyin", Napi::Function::New(env, &SonareWrap::PitchPyin, "pitchPyin"));
+  exports.Set("noteSegments", Napi::Function::New(env, &SonareWrap::NoteSegments, "noteSegments"));
 
   // Core - Conversion
   exports.Set("hzToMel", Napi::Function::New(env, &SonareWrap::HzToMel, "hzToMel"));
