@@ -1002,6 +1002,7 @@ export interface WasmRealtimeEngine {
     value: number,
     renderFrame: number,
   ) => void;
+  pushMidiUmp: (destinationId: number, word0: number, renderFrame: number) => void;
   pushMidiSysex: (destinationId: number, data: Uint8Array, renderFrame: number) => void;
   pushMidiPanic: (renderFrame: number) => void;
   setMidiDestinationExternal: (destinationId: number, external: boolean) => void;

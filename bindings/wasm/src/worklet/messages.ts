@@ -438,6 +438,13 @@ export interface SonareEngineSyncMidiCcMessage {
   renderFrame: number;
 }
 
+export interface SonareEngineSyncMidiUmpMessage {
+  type: 'syncMidiUmp';
+  destinationId: number;
+  word0: number;
+  renderFrame: number;
+}
+
 export interface SonareEngineSyncMidiSysexMessage {
   type: 'syncMidiSysex';
   destinationId: number;
@@ -500,6 +507,7 @@ export type SonareEngineSyncMessage =
   | SonareEngineSyncMidiFxMessage
   | SonareEngineSyncMidiNoteMessage
   | SonareEngineSyncMidiCcMessage
+  | SonareEngineSyncMidiUmpMessage
   | SonareEngineSyncMidiSysexMessage
   | SonareEngineSyncMidiPanicMessage
   | SonareEngineSyncMidiDestinationExternalMessage

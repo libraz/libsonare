@@ -232,6 +232,17 @@ export function pushMidiCc(
   });
 }
 
+export function pushMidiUmp(
+  ctx: EngineStripContext,
+  trackId: string | number,
+  word0: number,
+  renderFrame: number,
+): void {
+  const destinationId = ctx.resolveTargetId(trackId);
+  ctx.offlineEngine.pushMidiUmp(destinationId, word0, renderFrame);
+  ctx.postSync({ type: 'syncMidiUmp', destinationId, word0, renderFrame });
+}
+
 export function setBuiltinInstrument(
   ctx: EngineStripContext,
   trackId: string | number,

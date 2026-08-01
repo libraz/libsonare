@@ -316,6 +316,16 @@ void RealtimeEngine::apply_command(const rt::Command& command) noexcept {
 #endif
       break;
     }
+    case rt::CommandType::kMidiUmpImmediate: {
+#if defined(SONARE_WITH_ARRANGEMENT)
+      midi::Ump ump{};
+      ump.words[0] = static_cast<uint32_t>(command.arg.i);
+      ump.word_count = 1;
+      ump.group = static_cast<uint8_t>((ump.words[0] >> 24) & 0x0Fu);
+      midi_sequencer_.inject_event(command.target_id, command.sample_time, ump);
+#endif
+      break;
+    }
     case rt::CommandType::kMidiAllNotesOff:
       // MIDI panic: release every sounding note tracked by the sequencer at this
       // command's render frame. RT-safe, no allocation.

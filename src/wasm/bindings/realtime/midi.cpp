@@ -553,6 +553,24 @@ void RealtimeEngineWasm::pushMidiCc(uint32_t destination_id, int group, int chan
   }
 }
 
+void RealtimeEngineWasm::pushMidiUmp(uint32_t destination_id, uint32_t word0,
+                                     int64_t render_frame) {
+  if (((word0 >> 28) & 0x0Fu) != 0x2u) {
+    throw sonare::SonareException(
+        sonare::ErrorCode::InvalidParameter,
+        "pushMidiUmp: only single-word MIDI 1.0 channel-voice UMP messages are supported");
+  }
+  sonare::rt::Command command{};
+  command.type = sonare::rt::CommandType::kMidiUmpImmediate;
+  command.target_id = destination_id;
+  command.sample_time = render_frame;
+  command.arg.i = static_cast<int64_t>(word0);
+  if (!engine_.push_command(command)) {
+    throw sonare::SonareException(sonare::ErrorCode::InvalidState,
+                                  "failed to queue MIDI UMP command");
+  }
+}
+
 // Queues an immediate (live) MIDI SysEx frame to a MIDI destination. @p data is
 // the full message including the leading 0xF0 and trailing 0xF7 (1..512 bytes);
 // its bytes are copied out of the Uint8Array before the call returns. Reaches
@@ -666,6 +684,7 @@ void registerRealtimeEngineMidi(class_<RealtimeEngineWasm>& cls) {
       .function("pushMidiNoteOn", &RealtimeEngineWasm::pushMidiNoteOn)
       .function("pushMidiNoteOff", &RealtimeEngineWasm::pushMidiNoteOff)
       .function("pushMidiCc", &RealtimeEngineWasm::pushMidiCc)
+      .function("pushMidiUmp", &RealtimeEngineWasm::pushMidiUmp)
       .function("pushMidiSysex", &RealtimeEngineWasm::pushMidiSysex)
       .function("pushMidiPanic", &RealtimeEngineWasm::pushMidiPanic)
       .function("setMidiDestinationExternal", &RealtimeEngineWasm::setMidiDestinationExternal)

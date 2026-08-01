@@ -137,6 +137,7 @@ class RealtimeEngineWasm {
                        int64_t render_frame);
   void pushMidiCc(uint32_t destination_id, int group, int channel, int controller, int value,
                   int64_t render_frame);
+  void pushMidiUmp(uint32_t destination_id, uint32_t word0, int64_t render_frame);
   void pushMidiSysex(uint32_t destination_id, emscripten::val data, int64_t render_frame);
   void pushMidiPanic(int64_t render_frame);
 

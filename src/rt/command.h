@@ -116,6 +116,11 @@ enum class CommandType : uint16_t {
   //                 keep kEngineAbiVersion and the SharedArrayBuffer command
   //                 record layout stable.
   kMidiSysExImmediate,
+  // Immediate single-word UMP MIDI 1.0 channel-voice event. This restores
+  // program, pitch bend and pressure state on transport seek, which cannot be
+  // represented by the note/CC convenience commands. arg.i contains word0.
+  // Appended to preserve existing command numeric values.
+  kMidiUmpImmediate,
 };
 
 union CommandArg {

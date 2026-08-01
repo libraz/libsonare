@@ -427,6 +427,11 @@ export class RealtimeEngine {
     this.native.pushMidiCc(destinationId, group, channel, controller, value, renderFrame);
   }
 
+  /** Queue one immediate MIDI 1.0 channel-voice UMP word for a destination. */
+  pushMidiUmp(destinationId: number, word0: number, renderFrame = -1): void {
+    this.native.pushMidiUmp(destinationId, word0, renderFrame);
+  }
+
   /**
    * Queue an immediate (live) MIDI SysEx frame to a MIDI destination. `data` is
    * the full message including the leading 0xF0 and trailing 0xF7 (1..512

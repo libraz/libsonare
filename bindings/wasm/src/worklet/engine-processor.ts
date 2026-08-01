@@ -425,6 +425,9 @@ export class SonareRealtimeEngineWorkletProcessor {
           message.renderFrame,
         );
         break;
+      case 'syncMidiUmp':
+        this.engine.pushMidiUmp(message.destinationId, message.word0, message.renderFrame);
+        break;
       case 'syncMidiSysex':
         this.engine.pushMidiSysex(message.destinationId, message.data, message.renderFrame);
         break;
