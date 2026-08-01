@@ -19,7 +19,11 @@
  */
 
 import { setSonareModule } from './module_state';
-import type { RealtimeVoiceChangerPodConfig, VoicePresetId } from './public_types';
+import type {
+  RealtimeVoiceChangerPodConfig,
+  SonareCapabilities,
+  VoicePresetId,
+} from './public_types';
 import type {
   SonareModule,
   WasmDecomposeResult,
@@ -485,6 +489,7 @@ export type {
   Section,
   SendTiming,
   SoloProcessor,
+  SonareCapabilities,
   SpectralEditMode,
   SpectralEditOptions,
   SpectralEditWindow,
@@ -694,6 +699,18 @@ export function version(): string {
     throw new Error('Module not initialized. Call init() first.');
   }
   return module.version();
+}
+
+/**
+ * Return the capabilities of the loaded WASM build.
+ *
+ * This is synchronous and only describes the already-initialized module.
+ */
+export function capabilities(): SonareCapabilities {
+  if (!module) {
+    throw new Error('Module not initialized. Call init() first.');
+  }
+  return module.capabilities();
 }
 
 /**

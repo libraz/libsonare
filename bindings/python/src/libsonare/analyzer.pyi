@@ -10,6 +10,7 @@ from .types import (
     AnalysisResult,
     AutomationCurve,
     BpmAnalysisResult,
+    Capabilities,
     ChordAnalysisResult,
     ChromaResult,
     ClippingReport,
@@ -421,6 +422,7 @@ def vqt(
     gamma: float = -1.0,
 ) -> CqtResult: ...
 def version() -> str: ...
+def capabilities() -> Capabilities: ...
 def has_ffmpeg_support() -> bool: ...
 def hpss(
     samples: FloatSamples,

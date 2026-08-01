@@ -22,6 +22,41 @@ MasteringProcessorKind = Literal["realtime", "offline", "pair"]
 MasteringChannelPolicy = Literal["multichannel", "stereoPairOnly", "perChannel", "passthrough"]
 
 
+class CapabilitiesAbi(TypedDict):
+    """ABI versions reported by :func:`libsonare.capabilities`."""
+
+    project: int
+    engine: int
+
+
+class CapabilitiesFeatures(TypedDict):
+    """Feature-family switches reported by :func:`libsonare.capabilities`."""
+
+    mastering: bool
+    mixing: bool
+    fx: bool
+    ffmpeg: bool
+
+
+class CapabilitiesDecode(TypedDict):
+    """Built-in and FFmpeg-backed decoder lists for the loaded library."""
+
+    builtin: list[str]
+    ffmpeg: list[str]
+
+
+class Capabilities(TypedDict):
+    """Build and runtime descriptor returned by :func:`libsonare.capabilities`."""
+
+    version: str
+    abi: CapabilitiesAbi
+    platform: str
+    features: CapabilitiesFeatures
+    decode: CapabilitiesDecode
+    simd: str
+    hardwareConcurrency: int
+
+
 class MasteringInsertParamInfo(TypedDict):
     """Metadata for one automatable mastering-insert parameter."""
 

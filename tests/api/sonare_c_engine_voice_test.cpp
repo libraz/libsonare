@@ -9,6 +9,7 @@
 
 #include "c_api/sonare_c_engine_internal.h"
 #include "sonare_c_test_helpers.h"
+#include "util/json.h"
 #include "util/resource_limits.h"
 
 namespace {
@@ -70,6 +71,20 @@ TEST_CASE("sonare_version", "[c_api]") {
   }
 
   SECTION("returns engine ABI version") { REQUIRE(sonare_engine_abi_version() > 0); }
+}
+
+TEST_CASE("sonare_capabilities_json", "[c_api]") {
+  const char* json = sonare_capabilities_json();
+  REQUIRE(json != nullptr);
+
+  const auto capabilities = sonare::util::json::parse_strict(json);
+  REQUIRE(capabilities["version"].as_string() == sonare_version());
+  REQUIRE(capabilities["abi"]["project"].as_number() == SONARE_PROJECT_ABI_VERSION);
+  REQUIRE(capabilities["abi"]["engine"].as_number() == sonare_engine_abi_version());
+  REQUIRE(capabilities["features"]["ffmpeg"].as_bool() == (sonare_has_ffmpeg_support() != 0));
+  REQUIRE(capabilities["decode"]["builtin"][static_cast<std::size_t>(0)].as_string() == "wav");
+  REQUIRE(capabilities["decode"]["builtin"][static_cast<std::size_t>(1)].as_string() == "mp3");
+  REQUIRE(capabilities["hardwareConcurrency"].as_number() >= 1);
 }
 
 TEST_CASE("sonare_engine MIDI scalar commands respect arrangement feature flag", "[c_api]") {

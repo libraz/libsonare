@@ -798,6 +798,13 @@ def configure_core_signatures(lib: ctypes.CDLL) -> None:
     lib.sonare_version.restype = ctypes.c_char_p
     lib.sonare_version.argtypes = []
 
+    # sonare_capabilities_json: build and platform descriptor owned by the
+    # library. The result remains valid until the next C API call on this
+    # thread, so callers decode it before making another native call.
+    if hasattr(lib, "sonare_capabilities_json"):
+        lib.sonare_capabilities_json.restype = ctypes.c_char_p
+        lib.sonare_capabilities_json.argtypes = []
+
     # sonare_abi_version: aggregate ABI version folding every subsystem ABI macro
     # into one 32-bit value (see sonare_c.h).
     if hasattr(lib, "sonare_abi_version"):

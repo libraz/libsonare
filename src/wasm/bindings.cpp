@@ -3,6 +3,8 @@
 
 #ifdef __EMSCRIPTEN__
 
+#include <emscripten/emscripten.h>
+
 #include "bindings/common/common.h"
 
 // Pulled in for the compile-time SONARE_ABI_VERSION macro only. The macro packs
@@ -18,6 +20,100 @@ using namespace sonare;
 // ============================================================================
 
 std::string js_version() { return SONARE_VERSION_STRING; }
+
+namespace {
+
+constexpr bool capability_mastering_enabled() {
+#if defined(SONARE_BUILD_MASTERING) && SONARE_BUILD_MASTERING
+  return true;
+#else
+  return false;
+#endif
+}
+
+constexpr bool capability_mixing_enabled() {
+#if defined(SONARE_BUILD_MIXING) && SONARE_BUILD_MIXING
+  return true;
+#else
+  return false;
+#endif
+}
+
+constexpr bool capability_fx_enabled() {
+#if defined(SONARE_BUILD_FX) && SONARE_BUILD_FX
+  return true;
+#else
+  return false;
+#endif
+}
+
+constexpr bool capability_ffmpeg_enabled() {
+#if defined(SONARE_WITH_FFMPEG)
+  return true;
+#else
+  return false;
+#endif
+}
+
+constexpr const char* capability_simd() {
+#if defined(__wasm_simd128__)
+  return "wasm-simd128";
+#else
+  return "none";
+#endif
+}
+
+int capability_hardware_concurrency() {
+  // Query the browser at call time rather than baking in the build machine's
+  // value. A worker may not expose navigator, in which case one is the safe
+  // synchronous fallback.
+  return EM_ASM_INT({
+    if (!globalThis.navigator || !Number.isFinite(globalThis.navigator.hardwareConcurrency)) {
+      return 1;
+    }
+    return Math.max(1, Math.floor(globalThis.navigator.hardwareConcurrency));
+  });
+}
+
+val string_array(std::initializer_list<const char*> values) {
+  val result = val::array();
+  for (const char* value : values) {
+    result.call<void>("push", std::string(value));
+  }
+  return result;
+}
+
+}  // namespace
+
+val js_capabilities() {
+  val result = val::object();
+  result.set("version", std::string(SONARE_VERSION_STRING));
+
+  val abi = val::object();
+  abi.set("project", SONARE_PROJECT_ABI_VERSION);
+  abi.set("engine", sonare::rt::kEngineAbiVersion);
+  result.set("abi", abi);
+  result.set("platform", std::string("wasm32"));
+
+  val features = val::object();
+  features.set("mastering", capability_mastering_enabled());
+  features.set("mixing", capability_mixing_enabled());
+  features.set("fx", capability_fx_enabled());
+  features.set("ffmpeg", capability_ffmpeg_enabled());
+  result.set("features", features);
+
+  val decode = val::object();
+  decode.set("builtin", string_array({"wav", "mp3"}));
+#if defined(SONARE_WITH_FFMPEG)
+  decode.set("ffmpeg", string_array({"m4a", "aac", "flac", "ogg", "opus", "wma"}));
+#else
+  decode.set("ffmpeg", string_array({}));
+#endif
+  result.set("decode", decode);
+  result.set("simd", std::string(capability_simd()));
+  result.set("hardwareConcurrency", capability_hardware_concurrency());
+  return result;
+}
 
 // ----------------------------------------------------------------------------
 // Error introspection
@@ -236,6 +332,7 @@ EMSCRIPTEN_BINDINGS(sonare) {
       .value("Unknown", SectionType::Unknown);
 
   function("version", &js_version);
+  function("capabilities", &js_capabilities);
   function("sonareExceptionInfo", &js_sonare_exception_info);
   function("abiVersion", &js_abi_version);
   function("engineAbiVersion", &js_engine_abi_version);

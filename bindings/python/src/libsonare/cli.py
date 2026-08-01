@@ -131,6 +131,9 @@ from ._cli_common import (
 from ._cli_common import (
     _write_wav_stereo as _write_wav_stereo,
 )
+from ._cli_common import (
+    cmd_doctor as cmd_doctor,
+)
 from ._cli_effects import *  # noqa: F403
 from ._cli_mastering import *  # noqa: F403
 from ._cli_project import *  # noqa: F403
@@ -170,6 +173,7 @@ def main() -> None:
     sub = parser.add_subparsers(dest="command")
 
     sub.add_parser("version", parents=[common], help="Show version")
+    sub.add_parser("doctor", parents=[common], help="Show build and runtime diagnostics")
     sub.add_parser("info", parents=[common], help="Show audio file information")
     sub.add_parser("bpm", parents=[common], help="Detect BPM")
     key_p = sub.add_parser("key", parents=[common], help="Detect musical key")
@@ -764,6 +768,7 @@ def main() -> None:
 
     commands = {
         "version": cmd_version,
+        "doctor": cmd_doctor,
         "info": cmd_info,
         "bpm": cmd_bpm,
         "key": cmd_key,

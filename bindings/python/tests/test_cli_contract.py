@@ -52,6 +52,7 @@ def _truncated_smf() -> bytes:
 
 TOP_LEVEL_ROUTES = (
     "version",
+    "doctor",
     "info",
     "bpm",
     "key",

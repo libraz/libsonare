@@ -158,6 +158,8 @@ def _is_lifecycle_key(key: str) -> bool:
 # so one alias serves Python (``data``), Node (``getData``->``get_data``) and
 # WASM (``setConfig``->``set_config``) alike.
 _ALIAS_COVERAGE = {
+    # C ABI returns a JSON document; facades parse it into the public descriptor.
+    "capabilities_json": ("capabilities",),
     # Accessors exposed as bare properties or get-prefixed getters.
     "audio_data": ("data", "get_data"),
     "audio_length": ("length", "get_length"),

@@ -30,6 +30,7 @@ export type {
   BpmCandidate,
   BuiltinInstrumentConfig,
   BuiltinSynthConfig,
+  Capabilities,
   ChannelLayout,
   Chord,
   ChordAnalysisResult,

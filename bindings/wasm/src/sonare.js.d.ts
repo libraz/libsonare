@@ -2,7 +2,7 @@
  * Type declarations for the Emscripten-generated WASM module with embind
  */
 
-import type { SpectralRegionOp, SurroundPan } from './public_types';
+import type { SonareCapabilities, SpectralRegionOp, SurroundPan } from './public_types';
 
 export interface SonareModuleOptions {
   locateFile?: (path: string, prefix: string) => string;
@@ -1182,6 +1182,7 @@ export interface SonareModule {
   detectKeyCandidates: (samples: Float32Array, sampleRate: number) => WasmKeyCandidateResult[];
   hasFfmpegSupport: () => boolean;
   version: () => string;
+  capabilities: () => SonareCapabilities;
   abiVersion: () => number;
   engineAbiVersion: () => number;
   voiceChangerAbiVersion: () => number;

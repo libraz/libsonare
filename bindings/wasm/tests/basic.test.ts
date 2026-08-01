@@ -7,6 +7,7 @@ import {
   abiVersion,
   amplitudeToDb,
   analyze,
+  capabilities,
   dbToAmplitude,
   dbToPower,
   deemphasis,
@@ -86,6 +87,31 @@ describe('Sonare WASM Module', () => {
     it('should return version string', () => {
       const v = version();
       expect(v).toMatch(/^\d+\.\d+\.\d+$/);
+    });
+
+    it('reports the loaded build capabilities', () => {
+      expect(capabilities()).toMatchObject({
+        version: version(),
+        abi: {
+          project: expect.any(Number),
+          engine: engineAbiVersion(),
+        },
+        platform: 'wasm32',
+        features: {
+          mastering: expect.any(Boolean),
+          mixing: expect.any(Boolean),
+          fx: expect.any(Boolean),
+          ffmpeg: false,
+        },
+        decode: {
+          builtin: ['wav', 'mp3'],
+          ffmpeg: [],
+        },
+        simd: expect.any(String),
+        hardwareConcurrency: expect.any(Number),
+      });
+      expect(capabilities().abi.project).toBeGreaterThan(0);
+      expect(capabilities().hardwareConcurrency).toBeGreaterThanOrEqual(1);
     });
 
     it('should return engine ABI version', () => {

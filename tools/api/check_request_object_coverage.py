@@ -38,7 +38,7 @@ SCALAR_HELPERS = {
     "scaleQuantizeMidi", "scaleCorrectionSemitones", "scalePitchClassEnabled",
 }
 METADATA_HELPERS = {
-    "version", "abiVersion", "engineAbiVersion", "voiceChangerAbiVersion",
+    "version", "capabilities", "abiVersion", "engineAbiVersion", "voiceChangerAbiVersion",
     "projectAbiVersion", "hasFfmpegSupport", "isInitialized", "engineCapabilities",
     "masteringPresetNames", "masteringProcessorNames", "masteringPairProcessorNames",
     "masteringPairAnalysisNames", "masteringStereoAnalysisNames", "masteringInsertNames",

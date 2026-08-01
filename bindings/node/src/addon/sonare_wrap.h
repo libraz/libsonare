@@ -91,6 +91,7 @@ class SonareWrap : public Napi::ObjectWrap<SonareWrap> {
   static Napi::Value ScalePitchClassEnabled(const Napi::CallbackInfo& info);
   static Napi::Value Version(const Napi::CallbackInfo& info);
   static Napi::Value AbiVersion(const Napi::CallbackInfo& info);
+  static Napi::Value Capabilities(const Napi::CallbackInfo& info);
   static Napi::Value HasFfmpegSupport(const Napi::CallbackInfo& info);
 
   // Effects

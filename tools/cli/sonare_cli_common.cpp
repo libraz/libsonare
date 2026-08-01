@@ -289,6 +289,34 @@ int cmd_version(const CliArgs& args) {
   return 0;
 }
 
+int cmd_doctor(const CliArgs& args) {
+  const char* capabilities_json = sonare_capabilities_json();
+  if (args.json_output) {
+    std::cout << capabilities_json << "\n";
+    return 0;
+  }
+
+  const auto capabilities = sonare::util::json::parse_strict(capabilities_json);
+  const auto& abi = capabilities["abi"];
+  const auto& features = capabilities["features"];
+  const auto& decode = capabilities["decode"];
+
+  std::cout << color::cyan << color::bold << "libsonare Doctor" << color::reset << "\n";
+  std::cout << "  Version: " << capabilities["version"].as_string() << "\n";
+  std::cout << "  Platform: " << capabilities["platform"].as_string() << "\n";
+  std::cout << "  ABI: project " << abi["project"].as_number() << ", engine "
+            << abi["engine"].as_number() << "\n";
+  std::cout << "  Features: mastering=" << (features["mastering"].as_bool() ? "yes" : "no")
+            << ", mixing=" << (features["mixing"].as_bool() ? "yes" : "no")
+            << ", fx=" << (features["fx"].as_bool() ? "yes" : "no")
+            << ", ffmpeg=" << (features["ffmpeg"].as_bool() ? "yes" : "no") << "\n";
+  std::cout << "  Built-in decode: " << decode["builtin"].size() << " formats\n";
+  std::cout << "  SIMD: " << capabilities["simd"].as_string() << "\n";
+  std::cout << "  Hardware concurrency: " << capabilities["hardwareConcurrency"].as_number()
+            << "\n";
+  return 0;
+}
+
 int cmd_system_info(const CliArgs& args) {
   if (args.json_output) {
     JsonBuilder json;

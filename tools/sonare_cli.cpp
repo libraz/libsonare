@@ -145,6 +145,7 @@ void print_usage(const char* prog) {
     fprintf(stderr, "  %-14s %s\n", cmd.name.c_str(), cmd.description.c_str());
   }
   std::cerr << "  version        Show library version\n";
+  std::cerr << "  doctor         Show compiled capabilities\n";
   std::cerr << "  system-info    Show system and parallel configuration\n";
 
   std::cerr << "\nGLOBAL OPTIONS:\n"
@@ -239,7 +240,8 @@ int main(int argc, char* argv[]) {
 
     // Find command
     const CommandInfo* cmd = find_command(args.command);
-    const bool built_in_command = args.command == "version" || args.command == "system-info";
+    const bool built_in_command =
+        args.command == "version" || args.command == "doctor" || args.command == "system-info";
     if (!cmd && !built_in_command) {
       std::cerr << color::red << "Error: Unknown command '" << args.command << "'" << color::reset
                 << "\n\n";
@@ -255,9 +257,10 @@ int main(int argc, char* argv[]) {
       return kExitUsage;
     }
 
-    // Version/system-info have no audio and are dispatched only after their
+    // Version/doctor/system-info have no audio and are dispatched only after their
     // empty command schemas and positional arity have been validated.
     if (args.command == "version") return cmd_version(args);
+    if (args.command == "doctor") return cmd_doctor(args);
     if (args.command == "system-info") return cmd_system_info(args);
 
     // Check for audio file

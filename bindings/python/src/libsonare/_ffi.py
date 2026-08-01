@@ -61,6 +61,13 @@ def _find_library() -> str:
     )
 
 
+def resolved_library_path() -> str:
+    """Return the resolved filesystem path of the shared libsonare library."""
+    path = _find_library()
+    candidate = Path(path)
+    return str(candidate.resolve()) if candidate.exists() else path
+
+
 def load_library(lib_path: str | None = None) -> ctypes.CDLL:
     """Load libsonare and configure function signatures.
 
@@ -101,4 +108,4 @@ def load_library(lib_path: str | None = None) -> ctypes.CDLL:
     return lib
 
 
-__all__ = [*_type_exports, "EXPECTED_ABI_VERSION", "load_library"]
+__all__ = [*_type_exports, "EXPECTED_ABI_VERSION", "load_library", "resolved_library_path"]

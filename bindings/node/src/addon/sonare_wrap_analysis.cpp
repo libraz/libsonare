@@ -838,6 +838,27 @@ Napi::Value SonareWrap::AbiVersion(const Napi::CallbackInfo& info) {
   return Napi::Number::New(env, sonare_abi_version());
 }
 
+Napi::Value SonareWrap::Capabilities(const Napi::CallbackInfo& info) {
+  Napi::Env env = info.Env();
+  const char* json = sonare_capabilities_json();
+  if (json == nullptr) {
+    Napi::Error::New(env, "Native capabilities JSON is unavailable").ThrowAsJavaScriptException();
+    return env.Undefined();
+  }
+
+  Napi::Object json_global = env.Global().Get("JSON").As<Napi::Object>();
+  Napi::Function json_parse = json_global.Get("parse").As<Napi::Function>();
+  Napi::Value parsed = json_parse.Call(json_global, {Napi::String::New(env, json)});
+  if (env.IsExceptionPending() || !parsed.IsObject()) {
+    if (!env.IsExceptionPending()) {
+      Napi::Error::New(env, "Failed to parse native capabilities JSON")
+          .ThrowAsJavaScriptException();
+    }
+    return env.Undefined();
+  }
+  return parsed;
+}
+
 Napi::Value SonareWrap::HasFfmpegSupport(const Napi::CallbackInfo& info) {
   Napi::Env env = info.Env();
   return Napi::Boolean::New(env, sonare_has_ffmpeg_support() != 0);

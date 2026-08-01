@@ -68,6 +68,11 @@ if(BUILD_ARRANGEMENT)
   endif()
 endif()
 target_compile_options(sonare PRIVATE ${SONARE_WARNING_FLAGS})
+target_compile_definitions(sonare PRIVATE
+  SONARE_BUILD_MASTERING=$<IF:$<BOOL:${BUILD_MASTERING}>,1,0>
+  SONARE_BUILD_MIXING=$<IF:$<BOOL:${BUILD_MIXING}>,1,0>
+  SONARE_BUILD_FX=$<IF:$<BOOL:${BUILD_FX}>,1,0>
+)
 set_target_properties(sonare PROPERTIES OUTPUT_NAME sonare-cli)
 
 target_include_directories(sonare PRIVATE

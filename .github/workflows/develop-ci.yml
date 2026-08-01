@@ -77,6 +77,57 @@ jobs:
       - name: Test
         run: ctest --test-dir build --output-on-failure --parallel
 
+  examples:
+    name: Examples (Python and C++)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.13'
+      - name: Install Linux dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y cmake build-essential libeigen3-dev
+          python -m pip install numpy
+      - name: Generate a short WAV fixture
+        run: |
+          python - <<'PY'
+          import math
+          import struct
+          import wave
+
+          with wave.open('example-input.wav', 'wb') as output:
+              output.setnchannels(1)
+              output.setsampwidth(2)
+              output.setframerate(48000)
+              output.writeframes(b''.join(
+                  struct.pack('<h', round(0.4 * 32767 * math.sin(2 * math.pi * 440 * i / 48000)))
+                  for i in range(48000 * 3)
+              ))
+          PY
+      - name: Build the Python shared library
+        run: |
+          cmake -B build-examples -DCMAKE_BUILD_TYPE=Release -DBUILD_SHARED=ON \
+                -DBUILD_TESTING=OFF -DBUILD_CLI=OFF -DSONARE_WITH_FFMPEG=OFF
+          cmake --build build-examples --target sonare_shared --parallel 2
+          cp build-examples/lib/libsonare.so bindings/python/src/libsonare/
+      - name: Run Python examples
+        env:
+          PYTHONPATH: bindings/python/src
+        run: |
+          python examples/python/analyze.py example-input.wav
+          python examples/python/master.py example-input.wav example-mastered.wav
+          python examples/python/midi_to_wav.py example-midi.wav
+          test -s example-mastered.wav
+          test -s example-midi.wav
+      - name: Build and run the C++ example
+        run: |
+          cmake -S examples/cpp -B build-examples-cpp -DBUILD_CLI=OFF -DBUILD_TESTING=OFF \
+                -DSONARE_WITH_FFMPEG=OFF
+          cmake --build build-examples-cpp --parallel 2
+          build-examples-cpp/analyze example-input.wav
+
   python-wheel:
     name: Python wheel (manylinux x86_64)
     runs-on: ubuntu-latest

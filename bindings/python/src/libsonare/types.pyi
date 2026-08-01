@@ -9,6 +9,29 @@ from numpy.typing import NDArray
 MasteringProcessorKind = Literal["realtime", "offline", "pair"]
 MasteringChannelPolicy = Literal["multichannel", "stereoPairOnly", "perChannel", "passthrough"]
 
+class CapabilitiesAbi(TypedDict):
+    project: int
+    engine: int
+
+class CapabilitiesFeatures(TypedDict):
+    mastering: bool
+    mixing: bool
+    fx: bool
+    ffmpeg: bool
+
+class CapabilitiesDecode(TypedDict):
+    builtin: list[str]
+    ffmpeg: list[str]
+
+class Capabilities(TypedDict):
+    version: str
+    abi: CapabilitiesAbi
+    platform: str
+    features: CapabilitiesFeatures
+    decode: CapabilitiesDecode
+    simd: str
+    hardwareConcurrency: int
+
 class MasteringInsertParamInfo(TypedDict):
     name: str
     id: int

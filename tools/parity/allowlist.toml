@@ -28,6 +28,7 @@ any = [
   "assert_finite_samples",
   "assert_finite_scalar",
   "assert_non_empty_samples",
+  "capabilities",          # parsed facade form of C sonare_capabilities_json
   "mastering",
   "mastering_pair_analyze",
   "mastering_pair_process",

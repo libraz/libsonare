@@ -3,7 +3,9 @@
 from __future__ import annotations
 
 import ctypes
+import json
 from collections.abc import Sequence
+from typing import cast
 
 from ._ffi import (
     SonareChordAnalysisResult,
@@ -18,6 +20,7 @@ from ._runtime import (
     _to_c_float_array,
 )
 from .types import (
+    Capabilities,
     Chord,
     ChordAnalysisResult,
     MelodyPoint,
@@ -353,6 +356,28 @@ def version() -> str:
     lib = _get_lib()
     v = lib.sonare_version()
     return v.decode("utf-8") if v else ""
+
+
+def capabilities() -> Capabilities:
+    """Return the native library's build, platform, and decoder capabilities.
+
+    The returned dictionary is parsed directly from the canonical C ABI JSON
+    descriptor. Its contents describe the loaded native library, rather than
+    the Python package that happens to call it.
+    """
+    lib = _get_lib()
+    if not hasattr(lib, "sonare_capabilities_json"):
+        raise RuntimeError(
+            "loaded libsonare does not expose sonare_capabilities_json; "
+            "rebuild or install a newer native library"
+        )
+    payload = lib.sonare_capabilities_json()
+    if not payload:
+        raise RuntimeError("libsonare returned an empty capabilities descriptor")
+    descriptor = json.loads(payload.decode("utf-8"))
+    if not isinstance(descriptor, dict):
+        raise RuntimeError("libsonare returned a non-object capabilities descriptor")
+    return cast(Capabilities, descriptor)
 
 
 def abi_version() -> int:

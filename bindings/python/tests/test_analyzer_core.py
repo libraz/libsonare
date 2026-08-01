@@ -24,6 +24,23 @@ def test_has_ffmpeg_support_returns_bool() -> None:
     assert isinstance(libsonare.has_ffmpeg_support(), bool)
 
 
+def test_capabilities_returns_native_build_descriptor() -> None:
+    """capabilities returns the canonical C ABI build descriptor as a dict."""
+    import libsonare
+
+    descriptor = libsonare.capabilities()
+
+    assert isinstance(descriptor, dict)
+    assert descriptor["version"] == libsonare.version()
+    assert descriptor["abi"]["project"] == 1
+    assert descriptor["abi"]["engine"] == libsonare.engine_abi_version()
+    assert descriptor["features"]["ffmpeg"] is libsonare.has_ffmpeg_support()
+    assert descriptor["decode"]["builtin"] == ["wav", "mp3"]
+    assert isinstance(descriptor["platform"], str)
+    assert isinstance(descriptor["simd"], str)
+    assert descriptor["hardwareConcurrency"] >= 1
+
+
 @pytest.mark.skipif(
     not _has_ffmpeg_build_support() or _ffmpeg_cli() is None,
     reason="requires libsonare built with FFmpeg and ffmpeg CLI on PATH",

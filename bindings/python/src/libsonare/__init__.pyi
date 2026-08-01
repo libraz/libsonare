@@ -75,6 +75,9 @@ from .analyzer import (
     bass_chroma as bass_chroma,
 )
 from .analyzer import (
+    capabilities as capabilities,
+)
+from .analyzer import (
     chord_functional_analysis as chord_functional_analysis,
 )
 from .analyzer import (
@@ -559,6 +562,10 @@ from .types import (
 from .types import (
     BpmCandidate as BpmCandidate,
 )
+from .types import Capabilities as Capabilities
+from .types import CapabilitiesAbi as CapabilitiesAbi
+from .types import CapabilitiesDecode as CapabilitiesDecode
+from .types import CapabilitiesFeatures as CapabilitiesFeatures
 from .types import (
     ChannelLayout as ChannelLayout,
 )

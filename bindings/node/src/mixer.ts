@@ -1,6 +1,7 @@
 import { addon } from './native.js';
 import type {
   AutomationCurve,
+  Capabilities,
   GoniometerPoint,
   MeterTap,
   MixerProcessResult,
@@ -33,6 +34,16 @@ export function version(): string {
  */
 export function abiVersion(): number {
   return addon.abiVersion();
+}
+
+/**
+ * Returns the build and runtime capabilities of the loaded native library.
+ *
+ * The native binding parses the canonical C ABI JSON before returning this
+ * object, so callers receive a synchronous typed value rather than JSON text.
+ */
+export function capabilities(): Capabilities {
+  return addon.capabilities() as Capabilities;
 }
 
 /**

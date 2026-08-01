@@ -20,6 +20,7 @@
 #include "core/audio_io.h"
 #include "sonare.h"
 #include "util/constants.h"
+#include "util/json.h"
 
 using namespace sonare;
 using Catch::Matchers::ContainsSubstring;
@@ -139,6 +140,25 @@ TEST_CASE("CLI version command", "[cli]") {
   }
 }
 
+TEST_CASE("CLI doctor command", "[cli]") {
+  SECTION("text output") {
+    auto [code, output] = exec_command(CLI + " doctor");
+    REQUIRE(code == 0);
+    REQUIRE_THAT(output, ContainsSubstring("libsonare Doctor"));
+    REQUIRE_THAT(output, ContainsSubstring("Platform"));
+  }
+
+  SECTION("json output matches the C API schema") {
+    auto [code, output] = exec_command(CLI + " doctor --json");
+    REQUIRE(code == 0);
+    const auto capabilities = sonare::util::json::parse_strict(output);
+    REQUIRE(capabilities["version"].as_string() == version());
+    REQUIRE(capabilities["abi"]["project"].as_number() == SONARE_PROJECT_ABI_VERSION);
+    REQUIRE(capabilities["abi"]["engine"].as_number() == sonare_engine_abi_version());
+    REQUIRE(capabilities["features"]["ffmpeg"].as_bool() == (sonare_has_ffmpeg_support() != 0));
+  }
+}
+
 TEST_CASE("CLI system-info command", "[cli]") {
   SECTION("text output") {
     auto [code, output] = exec_command(CLI + " system-info");
@@ -239,6 +259,7 @@ TEST_CASE("CLI rejects option typos and terminal required options before dispatc
                                        "pcen",
                                        "info",
                                        "version",
+                                       "doctor",
                                        "system-info"};
 #ifdef SONARE_WITH_ACOUSTIC_SIM
   commands.insert(commands.end(), {"estimate-room", "synthesize-rir", "room-morph"});

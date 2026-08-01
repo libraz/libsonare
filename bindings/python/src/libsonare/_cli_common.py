@@ -20,6 +20,7 @@ from ._ffi import (
     SONARE_ERROR_INVALID_STATE,
     SONARE_ERROR_NOT_SUPPORTED,
     SONARE_ERROR_OUT_OF_MEMORY,
+    resolved_library_path,
 )
 from ._runtime import SonareError
 from .types import KeyProfile, Mode, PitchClass
@@ -74,6 +75,36 @@ def _sanitize_json_value(value: object) -> object:
 def _strict_json_dumps(value: object, **kwargs: Any) -> str:
     """Serialize a CLI payload as standards-compliant JSON."""
     return json.dumps(_sanitize_json_value(value), allow_nan=False, **kwargs)
+
+
+def cmd_doctor(args: argparse.Namespace) -> int:
+    """Print a concise diagnostic report for the loaded libsonare build."""
+    from ._analysis_music import capabilities
+
+    descriptor = capabilities()
+    payload = dict(descriptor)
+    payload["libraryPath"] = resolved_library_path()
+    if args.json:
+        print(_strict_json_dumps(payload))
+        return EXIT_SUCCESS
+
+    abi = descriptor["abi"]
+    features = descriptor["features"]
+    decode = descriptor["decode"]
+    print(f"libsonare {descriptor['version']}")
+    print(f"  Library:              {payload['libraryPath']}")
+    print(f"  Platform:             {descriptor['platform']}")
+    print(f"  ABI:                  project={abi['project']}, engine={abi['engine']}")
+    print(
+        "  Features:             "
+        f"mastering={features['mastering']}, mixing={features['mixing']}, "
+        f"fx={features['fx']}, ffmpeg={features['ffmpeg']}"
+    )
+    print(f"  Decode (built-in):    {', '.join(decode['builtin'])}")
+    print(f"  Decode (FFmpeg):      {', '.join(decode['ffmpeg']) or 'none'}")
+    print(f"  SIMD:                 {descriptor['simd']}")
+    print(f"  Hardware concurrency: {descriptor['hardwareConcurrency']}")
+    return EXIT_SUCCESS
 
 
 def _legacy_exit_codes() -> bool:

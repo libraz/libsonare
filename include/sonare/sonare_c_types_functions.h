@@ -175,6 +175,15 @@ const char* sonare_last_warning_message(void);
 const char* sonare_version(void);
 uint32_t sonare_engine_abi_version(void);
 
+/// @brief Returns a JSON document describing the capabilities of this build.
+/// @details The document contains the library version, project and engine ABI
+///   versions, platform, enabled feature families, available decode backends,
+///   SIMD mode, and reported hardware concurrency. The pointer is owned by
+///   libsonare and must not be freed. Copy the JSON before making another C API
+///   call on the same thread.
+/// @return A non-NULL, NUL-terminated JSON document.
+const char* sonare_capabilities_json(void);
+
 /// @brief Returns 1 if libsonare was compiled with FFmpeg-backed decoding for
 ///        M4A/AAC/FLAC/OGG, 0 otherwise.
 /// @details This reflects the value of the @c SONARE_WITH_FFMPEG CMake option at

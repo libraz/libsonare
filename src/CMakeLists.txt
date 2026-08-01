@@ -213,6 +213,11 @@ target_include_directories(sonare_core_objects SYSTEM PUBLIC
 )
 target_link_libraries(sonare_core_objects PUBLIC Eigen3::Eigen)
 target_compile_options(sonare_core_objects PRIVATE ${SONARE_WARNING_FLAGS})
+target_compile_definitions(sonare_core_objects PRIVATE
+  SONARE_BUILD_MASTERING=$<IF:$<BOOL:${BUILD_MASTERING}>,1,0>
+  SONARE_BUILD_MIXING=$<IF:$<BOOL:${BUILD_MIXING}>,1,0>
+  SONARE_BUILD_FX=$<IF:$<BOOL:${BUILD_FX}>,1,0>
+)
 
 add_library(sonare_core STATIC $<TARGET_OBJECTS:sonare_core_objects>)
 
@@ -1018,6 +1023,11 @@ if(BUILD_WASM)
 
   add_executable(sonare ${SONARE_WASM_BINDING_SOURCES})
   target_link_libraries(sonare PRIVATE sonare_core sonare_engine)
+  target_compile_definitions(sonare PRIVATE
+    SONARE_BUILD_MASTERING=$<IF:$<BOOL:${BUILD_MASTERING}>,1,0>
+    SONARE_BUILD_MIXING=$<IF:$<BOOL:${BUILD_MIXING}>,1,0>
+    SONARE_BUILD_FX=$<IF:$<BOOL:${BUILD_FX}>,1,0>
+  )
   if(BUILD_PITCH_EDITOR)
     target_link_libraries(sonare PRIVATE sonare_pitch_editor)
   endif()

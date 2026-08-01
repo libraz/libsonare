@@ -37,6 +37,18 @@ from ._types_analysis import (
     BpmCandidate as BpmCandidate,
 )
 from ._types_analysis import (
+    Capabilities as Capabilities,
+)
+from ._types_analysis import (
+    CapabilitiesAbi as CapabilitiesAbi,
+)
+from ._types_analysis import (
+    CapabilitiesDecode as CapabilitiesDecode,
+)
+from ._types_analysis import (
+    CapabilitiesFeatures as CapabilitiesFeatures,
+)
+from ._types_analysis import (
     ChannelLayout as ChannelLayout,
 )
 from ._types_analysis import (

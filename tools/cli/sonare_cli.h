@@ -1,5 +1,7 @@
 #pragma once
 
+#include <sonare/sonare_c.h>
+
 #include <algorithm>
 #include <cmath>
 #include <cstdio>
@@ -80,7 +82,6 @@
 #endif
 #ifdef SONARE_WITH_ARRANGEMENT
 #include <sonare/sonare_c_project.h>
-#include <sonare/sonare_c_types.h>
 #endif
 #include "cli_support.h"
 #include "quick.h"
@@ -129,6 +130,7 @@ Audio load_reference_audio(const CliArgs& args, int expected_sample_rate, size_t
 Audio load_reference_audio_any_length(const CliArgs& args, int expected_sample_rate);
 
 int cmd_version(const CliArgs& args);
+int cmd_doctor(const CliArgs& args);
 int cmd_system_info(const CliArgs& args);
 int cmd_frames_to_samples(const CliArgs& args, const Audio& audio);
 int cmd_samples_to_frames(const CliArgs& args, const Audio& audio);

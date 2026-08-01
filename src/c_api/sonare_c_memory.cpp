@@ -1,10 +1,71 @@
 #include <sonare/sonare_c.h>
 
+#include <string>
+#include <thread>
+
 #include "rt/command.h"
 #include "sonare.h"
 #include "sonare_c_internal.h"
 
 using namespace sonare_c_detail;
+
+namespace {
+
+const char* capability_platform() {
+#if defined(__EMSCRIPTEN__)
+  return "wasm32";
+#elif defined(__APPLE__) && (defined(__aarch64__) || defined(__arm64__))
+  return "darwin-arm64";
+#elif defined(__APPLE__) && defined(__x86_64__)
+  return "darwin-x86_64";
+#elif defined(__linux__) && defined(__aarch64__)
+  return "linux-arm64";
+#elif defined(__linux__) && defined(__x86_64__)
+  return "linux-x86_64";
+#else
+  return "unknown";
+#endif
+}
+
+const char* capability_simd() {
+#if defined(__wasm_simd128__)
+  return "wasm-simd128";
+#elif defined(__ARM_NEON) || defined(__ARM_NEON__)
+  return "neon";
+#elif defined(__SSE2__)
+  return "sse2";
+#else
+  return "none";
+#endif
+}
+
+constexpr const char* json_bool(bool value) { return value ? "true" : "false"; }
+
+constexpr bool capability_mastering_enabled() {
+#if defined(SONARE_BUILD_MASTERING) && SONARE_BUILD_MASTERING
+  return true;
+#else
+  return false;
+#endif
+}
+
+constexpr bool capability_mixing_enabled() {
+#if defined(SONARE_BUILD_MIXING) && SONARE_BUILD_MIXING
+  return true;
+#else
+  return false;
+#endif
+}
+
+constexpr bool capability_fx_enabled() {
+#if defined(SONARE_BUILD_FX) && SONARE_BUILD_FX
+  return true;
+#else
+  return false;
+#endif
+}
+
+}  // namespace
 
 void sonare_free_floats(float* ptr) { delete[] ptr; }
 
@@ -56,6 +117,29 @@ const char* sonare_last_warning_message(void) { return last_warning_storage().c_
 const char* sonare_version(void) { return SONARE_VERSION_STRING; }
 
 uint32_t sonare_engine_abi_version(void) { return sonare::rt::kEngineAbiVersion; }
+
+const char* sonare_capabilities_json(void) {
+  thread_local std::string capabilities;
+  capabilities = "{\"version\":\"" SONARE_VERSION_STRING "\",\"abi\":{\"project\":" +
+                 std::to_string(SONARE_PROJECT_ABI_VERSION) +
+                 ",\"engine\":" + std::to_string(sonare::rt::kEngineAbiVersion) +
+                 "},\"platform\":\"" + capability_platform() +
+                 "\",\"features\":{\"mastering\":" + json_bool(capability_mastering_enabled()) +
+                 ",\"mixing\":" + json_bool(capability_mixing_enabled()) +
+                 ",\"fx\":" + json_bool(capability_fx_enabled()) +
+                 ",\"ffmpeg\":" + json_bool(sonare_has_ffmpeg_support() != 0) +
+                 "},\"decode\":{\"builtin\":[\"wav\",\"mp3\"],\"ffmpeg\":[";
+#ifdef SONARE_WITH_FFMPEG
+  capabilities += "\"m4a\",\"aac\",\"flac\",\"ogg\",\"opus\",\"wma\"";
+#endif
+  capabilities += "]},\"simd\":\"";
+  capabilities += capability_simd();
+  capabilities += "\",\"hardwareConcurrency\":";
+  const unsigned int concurrency = std::thread::hardware_concurrency();
+  capabilities += std::to_string(concurrency == 0 ? 1 : concurrency);
+  capabilities += '}';
+  return capabilities.c_str();
+}
 
 uint32_t sonare_abi_version(void) { return SONARE_ABI_VERSION; }
 

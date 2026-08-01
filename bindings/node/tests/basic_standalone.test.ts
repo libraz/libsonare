@@ -9,6 +9,7 @@ import {
   analyzeSections,
   analyzeTimbre,
   analyzeWithProgress,
+  capabilities,
   chordFunctionalAnalysis,
   cqt,
   dbToAmplitude,
@@ -23,6 +24,7 @@ import {
   fixLength,
   frameSignal,
   framesToSamples,
+  hasFfmpegSupport,
   hybridCqt,
   masteringAssistantSuggest,
   masteringAudioProfile,
@@ -68,6 +70,32 @@ describe('standalone functions', () => {
     const v = version();
     expect(typeof v).toBe('string');
     expect(v.length).toBeGreaterThan(0);
+  });
+
+  it('capabilities returns the parsed native capability report', () => {
+    const report = capabilities();
+    expect(Object.keys(report)).toEqual([
+      'version',
+      'abi',
+      'platform',
+      'features',
+      'decode',
+      'simd',
+      'hardwareConcurrency',
+    ]);
+    expect(report.version).toBe(version());
+    expect(report.abi).toEqual({ project: 1, engine: expect.any(Number) });
+    expect(report.platform).toEqual(expect.any(String));
+    expect(report.features).toEqual({
+      mastering: expect.any(Boolean),
+      mixing: expect.any(Boolean),
+      fx: expect.any(Boolean),
+      ffmpeg: hasFfmpegSupport(),
+    });
+    expect(report.decode.builtin).toEqual(['wav', 'mp3']);
+    expect(Array.isArray(report.decode.ffmpeg)).toBe(true);
+    expect(report.simd).toEqual(expect.any(String));
+    expect(report.hardwareConcurrency).toBeGreaterThan(0);
   });
 
   it('detectBpm returns a number', () => {
