@@ -346,17 +346,20 @@ class Sf2InstrumentConfig:
     :meth:`Project.bounce_with_sf2_instrument`).
 
     Every field uses "0 (or non-positive) => sensible default" (gain 0.5,
-    polyphony 48); override only what you need.
+    polyphony 48). ``prefer_model_for_modeled_families`` defaults to false,
+    retaining the established SoundFont-first behavior.
     """
 
     gain: float = 0.0
     polyphony: int = 0
+    prefer_model_for_modeled_families: bool = False
 
     def _to_c(self) -> SonareSf2InstrumentConfig:
         return SonareSf2InstrumentConfig(
-            struct_version=0,
+            struct_version=2,
             gain=float(self.gain),
             polyphony=int(self.polyphony),
+            prefer_model_for_modeled_families=int(self.prefer_model_for_modeled_families),
         )
 
 

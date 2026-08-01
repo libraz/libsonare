@@ -394,7 +394,11 @@ TEST_CASE("MidiFx arpeggiator expands a held note into gated steps", "[midi]") {
   a.gate_frames = 50;
   fx.set_arpeggiator(a);
 
-  std::vector<MidiEvent> in = {note_on(0, 60, 100), note_off(400, 60)};
+  MidiEvent on = note_on(0, 60, 100);
+  on.source_track_id = 4242;
+  MidiEvent off = note_off(400, 60);
+  off.source_track_id = 4242;
+  std::vector<MidiEvent> in = {on, off};
   MidiFxBuffer out;
   fx.process(in.data(), in.size(), &out);
 
@@ -409,6 +413,9 @@ TEST_CASE("MidiFx arpeggiator expands a held note into gated steps", "[midi]") {
   REQUIRE(out.events[2].ump.note_number() == 64);
   REQUIRE(out.events[4].render_frame == 200);
   REQUIRE(out.events[4].ump.note_number() == 67);
+  for (size_t i = 0; i < out.size; ++i) {
+    REQUIRE(out.events[i].source_track_id == 4242);
+  }
 }
 
 TEST_CASE("MidiFx humanize keeps each arpeggiated gate's note-on before its note-off", "[midi]") {

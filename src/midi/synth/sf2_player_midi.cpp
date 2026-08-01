@@ -14,14 +14,20 @@
 
 namespace sonare::midi::synth {
 
-void Sf2Player::note_on(uint8_t channel, uint8_t note, uint8_t velocity) noexcept {
+void Sf2Player::note_on(uint8_t channel, uint8_t note, uint8_t velocity,
+                        uint32_t source_track_id) noexcept {
   if (!prepared_) return;
   const ChannelState& ch = channels_[channel & 0x0Fu];
+  if (config_.prefer_model_for_modeled_families && !ch.drums &&
+      gm_program_has_dedicated_model(effective_bank(channel), ch.program)) {
+    fallback_note_on(channel, note, velocity, source_track_id);
+    return;
+  }
   // No SoundFont / uncovered program -> the data-free synth floor.
   const int preset_idx =
       soundfont_ != nullptr ? resolve_preset(effective_bank(channel), ch.program) : -1;
   if (preset_idx < 0) {
-    if (config_.synth_fallback) fallback_note_on(channel, note, velocity);
+    if (config_.synth_fallback) fallback_note_on(channel, note, velocity, source_track_id);
     return;
   }
   const Sf2Preset& preset = soundfont_->presets()[static_cast<size_t>(preset_idx)];
@@ -83,15 +89,18 @@ void Sf2Player::note_on(uint8_t channel, uint8_t note, uint8_t velocity) noexcep
         }
       }
 
-      Sf2Voice* voice = pool_.allocate(channel & 0x0Fu, note);
+      Sf2Voice* voice = pool_.allocate(channel & 0x0Fu, note, source_track_id);
       if (voice == nullptr) continue;
       voice->start(pool_data, params, sample_rate_, vel_gain);
     }
   }
-  if (!has_renderable_zone && config_.synth_fallback) fallback_note_on(channel, note, velocity);
+  if (!has_renderable_zone && config_.synth_fallback) {
+    fallback_note_on(channel, note, velocity, source_track_id);
+  }
 }
 
-void Sf2Player::fallback_note_on(uint8_t channel, uint8_t note, uint8_t velocity) noexcept {
+void Sf2Player::fallback_note_on(uint8_t channel, uint8_t note, uint8_t velocity,
+                                 uint32_t source_track_id) noexcept {
   const ChannelState& ch = channels_[channel & 0x0Fu];
   const NativeSynthPatch& patch = ch.drums ? gm_fallback_drum_patch(note)
                                            : gm_fallback_patch(effective_bank(channel), ch.program);
@@ -107,7 +116,7 @@ void Sf2Player::fallback_note_on(uint8_t channel, uint8_t note, uint8_t velocity
       }
     }
   }
-  NativeSynthVoice* voice = fallback_pool_.allocate(channel & 0x0Fu, note);
+  NativeSynthVoice* voice = fallback_pool_.allocate(channel & 0x0Fu, note, source_track_id);
   if (voice == nullptr) return;
   const uint32_t voice_index = static_cast<uint32_t>(voice - fallback_pool_.data());
   // KS patches get their delay span before start() (pointer wiring only).
@@ -220,12 +229,13 @@ void Sf2Player::fallback_note_on(uint8_t channel, uint8_t note, uint8_t velocity
   }
 }
 
-void Sf2Player::note_off(uint8_t channel, uint8_t note) noexcept {
+void Sf2Player::note_off(uint8_t channel, uint8_t note, uint32_t source_track_id) noexcept {
   if (!prepared_) return;
   const uint8_t ch = channel & 0x0Fu;
   const ChannelState& st = channels_[ch];
   for (Sf2Voice& v : pool_) {
-    if (v.active && v.note == note && v.channel == ch && v.key_down) {
+    if (v.active && v.note == note && v.channel == ch && v.source_track_id == source_track_id &&
+        v.key_down) {
       v.key_down = false;
       // A sostenuto capture holds the note regardless of the sustain pedal.
       if (v.sostenuto) continue;
@@ -233,7 +243,8 @@ void Sf2Player::note_off(uint8_t channel, uint8_t note) noexcept {
     }
   }
   for (NativeSynthVoice& v : fallback_pool_) {
-    if (v.active && v.note == note && v.channel == ch && v.key_down) {
+    if (v.active && v.note == note && v.channel == ch && v.source_track_id == source_track_id &&
+        v.key_down) {
       v.key_down = false;
       if (v.sostenuto) continue;
       if (!st.sustain) {
@@ -543,9 +554,9 @@ void Sf2Player::on_event(uint32_t /*destination_id*/, const MidiEvent& event) no
       vel7 = static_cast<uint8_t>(((u.words[1] >> 16) & 0xFFFFu) >> 9);
       if (vel7 == 0 && ((u.words[1] >> 16) & 0xFFFFu) != 0) vel7 = 1;
     }
-    note_on(u.channel(), u.note_number(), vel7);
+    note_on(u.channel(), u.note_number(), vel7, event.source_track_id);
   } else if (u.is_note_off()) {
-    note_off(u.channel(), u.note_number());
+    note_off(u.channel(), u.note_number(), event.source_track_id);
   } else if (u.status_nibble() == static_cast<uint8_t>(UmpStatus::kProgramChange)) {
     const uint8_t ch = u.channel() & 0x0Fu;
     if (u.message_type() == UmpMessageType::kMidi2ChannelVoice) {

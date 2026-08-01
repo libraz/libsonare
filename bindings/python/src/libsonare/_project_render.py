@@ -440,7 +440,11 @@ class _ProjectRenderMixin:
 
         Returns a ``(frames, channels)`` float32 ndarray. Deterministic for a
         fixed project + options + instrument behaviour. Raises the first
-        exception raised inside any instrument callback.
+        exception raised inside any instrument callback. A callback instrument
+        shared by tracks routed to distinct channel strips raises
+        :class:`SonareError` with ``NOT_SUPPORTED`` because callback audio has
+        no source-track attribution; the same constraint applies to a
+        latency-bearing source-aware instrument.
         """
         lib = _get_lib()
         if not hasattr(lib, "sonare_project_bounce_with_instruments"):

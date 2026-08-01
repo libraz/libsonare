@@ -3,6 +3,7 @@
 #if defined(SONARE_WITH_ARRANGEMENT)
 #include <cmath>
 #include <functional>
+#include <map>
 #include <memory>
 #include <set>
 
@@ -85,8 +86,11 @@ void render_timeline(const arr::CompiledTimeline& timeline,
                      const std::function<bool(uint32_t)>& keep,
                      const std::vector<HostedInstrument>& instruments, double sample_rate,
                      int block_size, int num_channels, int64_t render_frames,
-                     std::vector<std::vector<float>>* channels) {
+                     std::vector<std::vector<float>>* channels, bool include_audio = true,
+                     bool include_midi = true) {
   arr::CompiledTimeline filtered = timeline;  // copy re-points marker name pointers
+  if (!include_audio) filtered.audio_clips.clear();
+  if (!include_midi) filtered.midi_clips.clear();
   if (keep) {
     filtered.audio_clips.erase(
         std::remove_if(filtered.audio_clips.begin(), filtered.audio_clips.end(),
@@ -140,6 +144,154 @@ void render_timeline(const arr::CompiledTimeline& timeline,
     engine.set_midi_instrument(hosted.destination_id, nullptr);
   }
 }
+
+#if defined(SONARE_WITH_MIXING)
+// Offline-only collector for the engine's source-aware instrument seam. All
+// storage is allocated before rendering; on_instrument_source_audio only sums
+// a block into its already-present source stem.
+class MidiSourceStemSink final : public sonare::engine::InstrumentSourceRenderSink {
+ public:
+  MidiSourceStemSink(const std::set<uint32_t>& track_ids, int num_channels, int64_t frames)
+      : num_channels_(num_channels), frames_(frames) {
+    for (uint32_t track_id : track_ids) allocate(track_id);
+    default_ = make_stem();
+  }
+
+  void on_instrument_source_audio(uint32_t /*destination_id*/, uint32_t source_track_id,
+                                  float* const* channels, int num_channels, int num_frames,
+                                  int64_t render_frame) noexcept override {
+    if (channels == nullptr || num_channels <= 0 || num_frames <= 0 || render_frame < 0 ||
+        render_frame >= frames_) {
+      return;
+    }
+    auto it = stems_.find(source_track_id);
+    std::vector<std::vector<float>>* stem = it != stems_.end() ? &it->second : &default_;
+    const int64_t available = frames_ - render_frame;
+    const int frames = static_cast<int>(std::min<int64_t>(num_frames, available));
+    const int channel_count = std::min(num_channels_, num_channels);
+    for (int ch = 0; ch < channel_count; ++ch) {
+      const float* source = channels[ch];
+      float* destination = (*stem)[static_cast<size_t>(ch)].data() + render_frame;
+      if (source == nullptr) continue;
+      for (int frame = 0; frame < frames; ++frame) destination[frame] += source[frame];
+    }
+  }
+
+  const std::vector<std::vector<float>>* stem(uint32_t track_id) const noexcept {
+    const auto it = stems_.find(track_id);
+    return it == stems_.end() ? nullptr : &it->second;
+  }
+  const std::vector<std::vector<float>>& default_stem() const noexcept { return default_; }
+
+ private:
+  std::vector<std::vector<float>> make_stem() const {
+    return std::vector<std::vector<float>>(static_cast<size_t>(num_channels_),
+                                           std::vector<float>(static_cast<size_t>(frames_), 0.0f));
+  }
+  void allocate(uint32_t track_id) { stems_.emplace(track_id, make_stem()); }
+
+  int num_channels_ = 0;
+  int64_t frames_ = 0;
+  std::map<uint32_t, std::vector<std::vector<float>>> stems_;
+  std::vector<std::vector<float>> default_;
+};
+
+bool render_midi_source_stems(const arr::CompiledTimeline& timeline,
+                              const std::vector<HostedInstrument>& instruments, double sample_rate,
+                              int block_size, int64_t render_frames, MidiSourceStemSink* sink) {
+  if (sink == nullptr) return false;
+  std::set<uint32_t> track_ids;
+  for (const sonare::midi::MidiClipSchedule& clip : timeline.midi_clips) {
+    if (clip.track_id != 0) track_ids.insert(clip.track_id);
+  }
+  if (track_ids.size() > sonare::engine::TrackMixerRuntime::kMaxTrackLanes) return false;
+
+  arr::CompiledTimeline midi_only = timeline;
+  midi_only.audio_clips.clear();
+  sonare::engine::RealtimeEngine engine;
+  engine.prepare(sample_rate, block_size);
+  arr::apply_to_engine(midi_only, engine);
+
+  std::vector<sonare::engine::TrackLaneConfig> lanes;
+  lanes.reserve(track_ids.size());
+  for (uint32_t track_id : track_ids) lanes.emplace_back(track_id);
+  if (!engine.set_track_lanes(std::move(lanes))) return false;
+
+  for (const HostedInstrument& hosted : instruments) {
+    if (hosted.instrument == nullptr || !hosted.instrument->supports_source_track_rendering()) {
+      return false;
+    }
+    hosted.instrument->reset();
+    if (!engine.set_midi_instrument(hosted.destination_id, hosted.instrument)) return false;
+  }
+  // The engine's current source render bank is intentionally selected only for
+  // zero-latency instruments. A per-source PDC bank would otherwise be needed
+  // to retain independent delay history.
+  if (engine.midi_instrument_latency_samples() != 0) return false;
+
+  // Match render_timeline's offline pre-roll: publish lane state and snap its
+  // smoothers before the first audible MIDI block, so the source stems do not
+  // fade in relative to the live engine / external scene mixer.
+  {
+    std::vector<float> prime_l(static_cast<size_t>(block_size), 0.0f);
+    std::vector<float> prime_r(static_cast<size_t>(block_size), 0.0f);
+    float* prime[] = {prime_l.data(), prime_r.data()};
+    engine.process(prime, 2, block_size);
+    engine.settle_parameters();
+  }
+  engine.set_instrument_source_render_sink(sink);
+  std::vector<std::vector<float>> discard(
+      2, std::vector<float>(static_cast<size_t>(render_frames), 0.0f));
+  float* channels[] = {discard[0].data(), discard[1].data()};
+  sonare::rt::Command play{};
+  play.type = sonare::rt::CommandType::kTransportPlay;
+  play.sample_time = -1;
+  engine.push_command(play);
+  engine.render_offline(channels, 2, render_frames, block_size);
+  engine.set_instrument_source_render_sink(nullptr);
+  for (const HostedInstrument& hosted : instruments) {
+    engine.set_midi_instrument(hosted.destination_id, nullptr);
+  }
+  return true;
+}
+
+bool has_shared_hosted_midi_destination(const arr::CompiledTimeline& timeline,
+                                        const std::vector<HostedInstrument>& instruments,
+                                        bool* all_hosts_source_aware) {
+  if (all_hosts_source_aware != nullptr) *all_hosts_source_aware = true;
+  std::map<uint32_t, std::set<uint32_t>> tracks_by_destination;
+  for (const sonare::midi::MidiClipSchedule& clip : timeline.midi_clips) {
+    tracks_by_destination[clip.destination_id].insert(clip.track_id);
+  }
+  bool shared = false;
+  for (const auto& [destination_id, tracks] : tracks_by_destination) {
+    if (tracks.size() < 2) continue;
+    shared = true;
+  }
+  // The source-stem pass renders the project once, so every bound destination
+  // participates even when only one destination is shared by several strips.
+  // An opaque callback cannot be silently dropped from that pass or rendered
+  // separately without recreating the very duplicated-pool bug this path fixes.
+  if (shared) {
+    for (const HostedInstrument& hosted : instruments) {
+      if (hosted.instrument == nullptr || !hosted.instrument->supports_source_track_rendering()) {
+        if (all_hosts_source_aware != nullptr) *all_hosts_source_aware = false;
+      }
+    }
+  }
+  return shared;
+}
+
+void add_stem(std::vector<std::vector<float>>* destination,
+              const std::vector<std::vector<float>>& source) {
+  if (destination == nullptr) return;
+  const size_t channels = std::min(destination->size(), source.size());
+  for (size_t ch = 0; ch < channels; ++ch) {
+    const size_t frames = std::min((*destination)[ch].size(), source[ch].size());
+    for (size_t frame = 0; frame < frames; ++frame) (*destination)[ch][frame] += source[ch][frame];
+  }
+}
+#endif
 
 #if defined(SONARE_WITH_MIXING)
 sonare::mixing::AutomationCurveType to_mixing_curve(sonare::automation::CurveType curve) noexcept {
@@ -345,7 +497,14 @@ SonareError bounce_through_mixer(const arr::CompiledTimeline& timeline,
                                  size_t* out_len, SonareMixer* prebuilt_mixer = nullptr) {
   MixerPtr mixer_owner(prebuilt_mixer);
   MixerRouting effective_routing = routing;
-  const bool route_direct = timeline_has_unbound_tracks(timeline, routing);
+  bool shared_hosts_source_aware = true;
+  const bool shared_midi_destination =
+      has_shared_hosted_midi_destination(timeline, instruments, &shared_hosts_source_aware);
+  // A shared-destination render has a destination-scoped residual target
+  // (SF2 effects / native bodies). Reserve the direct identity strip for it
+  // even when every authored track is bound to a scene strip.
+  const bool route_direct =
+      timeline_has_unbound_tracks(timeline, routing) || shared_midi_destination;
   const std::string direct_strip_id =
       route_direct ? unique_direct_strip_id(timeline.mixer.scene) : std::string();
   if (route_direct) {
@@ -371,10 +530,30 @@ SonareError bounce_through_mixer(const arr::CompiledTimeline& timeline,
   if (stem_floats > kMaxBufferSize) return SONARE_ERROR_INVALID_PARAMETER;
 
   const int64_t render_frames = mixer_render_frames + pdc;
+  std::unique_ptr<MidiSourceStemSink> midi_source_stems;
+  if (shared_midi_destination) {
+    if (!shared_hosts_source_aware || pdc != 0) {
+      set_last_error(
+          "a MIDI destination shared by channel strips requires source-aware, zero-latency "
+          "instruments for project bounce");
+      return SONARE_ERROR_NOT_SUPPORTED;
+    }
+    std::set<uint32_t> midi_tracks;
+    for (const sonare::midi::MidiClipSchedule& clip : timeline.midi_clips) {
+      if (clip.track_id != 0) midi_tracks.insert(clip.track_id);
+    }
+    midi_source_stems = std::make_unique<MidiSourceStemSink>(midi_tracks, 2, render_frames);
+    if (!render_midi_source_stems(timeline, instruments, sample_rate, block_size, render_frames,
+                                  midi_source_stems.get())) {
+      set_last_error("could not render source-track MIDI stems for shared channel strips");
+      return SONARE_ERROR_NOT_SUPPORTED;
+    }
+  }
   auto stem_aligned = [&](const std::function<bool(uint32_t)>& keep) {
     std::vector<std::vector<float>> ch;
     render_timeline(timeline, keep, instruments, sample_rate, block_size, /*num_channels=*/2,
-                    render_frames, &ch);
+                    render_frames, &ch, /*include_audio=*/true,
+                    /*include_midi=*/midi_source_stems == nullptr);
     for (auto& c : ch) {
       if (pdc > 0) c.erase(c.begin(), c.begin() + pdc);
       c.resize(static_cast<size_t>(mixer_render_frames));
@@ -392,6 +571,11 @@ SonareError bounce_through_mixer(const arr::CompiledTimeline& timeline,
       continue;
     }
     stems.push_back(stem_aligned([&tracks](uint32_t t) { return tracks.count(t) != 0; }));
+    if (midi_source_stems) {
+      for (uint32_t track_id : tracks) {
+        if (const auto* stem = midi_source_stems->stem(track_id)) add_stem(&stems.back(), *stem);
+      }
+    }
   }
 
   // Direct stem: every track NOT bound to a scene strip (dry to master).
@@ -399,6 +583,16 @@ SonareError bounce_through_mixer(const arr::CompiledTimeline& timeline,
     const std::set<uint32_t>& bound = routing.bound_tracks;
     std::vector<std::vector<float>> direct =
         stem_aligned([&bound](uint32_t t) { return bound.count(t) == 0; });
+    if (midi_source_stems) {
+      std::set<uint32_t> direct_midi_tracks;
+      for (const sonare::midi::MidiClipSchedule& clip : timeline.midi_clips) {
+        if (bound.count(clip.track_id) == 0) direct_midi_tracks.insert(clip.track_id);
+      }
+      for (uint32_t track_id : direct_midi_tracks) {
+        if (const auto* stem = midi_source_stems->stem(track_id)) add_stem(&direct, *stem);
+      }
+      add_stem(&direct, midi_source_stems->default_stem());
+    }
     stems.back() = std::move(direct);
   }
 
@@ -631,13 +825,17 @@ sonare::midi::BuiltinSynthConfig synth_config_from_c(const SonareBuiltinSynthCon
 }
 
 // Maps the public versioned SF2 patch to the player config ("0 => default";
-// struct_version 0/1 are the current layout, anything newer is rejected by the
+// struct_version 0/1 preserve the original layout; version 2 enables the
+// model-first field. Anything newer is rejected by the
 // caller). The player clamps polyphony itself.
 sonare::midi::synth::Sf2PlayerConfig sf2_config_from_c(
     const SonareSf2InstrumentConfig& c) noexcept {
   sonare::midi::synth::Sf2PlayerConfig cfg;
   if (c.gain > 0.0f) cfg.gain = c.gain;
   if (c.polyphony > 0) cfg.polyphony = c.polyphony;
+  if (c.struct_version >= 2) {
+    cfg.prefer_model_for_modeled_families = c.prefer_model_for_modeled_families != 0;
+  }
   // Wire the GS insertion-effect (EFX) path: the SF2 player never depends on the
   // mastering factory itself, so the host injects it. An EFX SysEx on the
   // compiled timeline then installs its inserts and rings through the per-part
@@ -845,7 +1043,7 @@ SonareError sonare_project_bounce_with_sf2_instruments(
   // the data-free floor (every program still sounds; the manifest reports the
   // synth backend honestly).
   for (size_t i = 0; i < instrument_count; ++i) {
-    if (instruments[i].config.struct_version > 1) return SONARE_ERROR_INVALID_PARAMETER;
+    if (instruments[i].config.struct_version > 2) return SONARE_ERROR_INVALID_PARAMETER;
   }
   std::vector<std::unique_ptr<sonare::midi::synth::Sf2Player>> owned;
   std::vector<HostedInstrument> hosted;

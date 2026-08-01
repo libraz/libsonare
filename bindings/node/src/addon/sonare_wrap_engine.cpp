@@ -772,6 +772,11 @@ Napi::Value RealtimeEngineWrap::SetSf2Instrument(const Napi::CallbackInfo& info)
     if (obj.Has("gain")) config.gain = obj.Get("gain").As<Napi::Number>().FloatValue();
     if (obj.Has("polyphony"))
       config.polyphony = obj.Get("polyphony").As<Napi::Number>().Int32Value();
+    if (obj.Has("preferModelForModeledFamilies")) {
+      config.struct_version = 2;
+      config.prefer_model_for_modeled_families =
+          obj.Get("preferModelForModeledFamilies").ToBoolean().Value() ? 1 : 0;
+    }
   }
   ThrowIfError(env, sonare_engine_set_sf2_instrument(engine_, destination_id, &config));
   return env.Undefined();

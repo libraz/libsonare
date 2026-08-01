@@ -53,6 +53,16 @@ enum class CaptureSource {
   kInput = 1,
 };
 
+/// Internal/offline seam for collecting source-track-aware instrument output
+/// before it enters the engine lane mixer. This is deliberately not a C ABI.
+class InstrumentSourceRenderSink {
+ public:
+  virtual ~InstrumentSourceRenderSink() = default;
+  virtual void on_instrument_source_audio(uint32_t destination_id, uint32_t source_track_id,
+                                          float* const* channels, int num_channels, int num_frames,
+                                          int64_t render_frame) noexcept = 0;
+};
+
 /// @brief Realtime audio engine.
 ///
 /// @par Thread-safety contract
@@ -136,6 +146,11 @@ class RealtimeEngine : private ClipPageRequestSink {
   bool push_command(const rt::Command& command) noexcept;
   bool pop_telemetry(Telemetry& out) noexcept;
   bool pop_clip_page_request(ClipPageRequest& out) noexcept { return clip_page_requests_.pop(out); }
+  /// Cumulative number of page-miss requests the bounded SPSC queue could not retain.
+  /// Reset by prepare(). The audio thread increments this without allocating or blocking.
+  uint32_t clip_page_request_overflow_count() const noexcept {
+    return clip_page_request_overflow_count_.load(std::memory_order_relaxed);
+  }
 #if defined(SONARE_WITH_MIXING)
   bool pop_meter_telemetry(MeterTelemetryRecord& out) noexcept { return meter_tap_.pop(out); }
   bool pop_scope_telemetry(ScopeTelemetryRecord& out) noexcept { return scope_tap_.pop(out); }
@@ -277,6 +292,11 @@ class RealtimeEngine : private ClipPageRequestSink {
     return instrument_rack_.get(destination_id);
   }
   size_t midi_instrument_count() const noexcept { return instrument_rack_.size(); }
+  /// CONTROL thread / offline only: directs source-aware instrument buffers to
+  /// @p sink instead of the live lane mixer.
+  void set_instrument_source_render_sink(InstrumentSourceRenderSink* sink) noexcept {
+    instrument_source_render_sink_ = sink;
+  }
   // Highest instrument latency (samples) across all registered instruments (0
   // when none). Fed into the arrangement compiler's CompiledTimeline PDC /
   // latency summary.
@@ -703,8 +723,19 @@ class RealtimeEngine : private ClipPageRequestSink {
   // Per-block instrument render scratch, allocated in prepare() (channel-planar:
   // kMaxAudioChannels rows of max_block_size_). The audio thread only points
   // into it, never allocates.
+#if defined(SONARE_WITH_MIXING)
+  static constexpr size_t kMaxInstrumentSourceOutputs = TrackMixerRuntime::kMaxTrackLanes + 1;
+#endif
   std::vector<float> midi_instrument_storage_{};
   std::array<float*, 64> midi_instrument_channels_{};
+#if defined(SONARE_WITH_MIXING)
+  // Source-track-aware instrument render targets. Slot 0 is the default / live
+  // fallback; slots 1..N correspond to the current track-mixer lanes. Storage
+  // is fully prepared off the audio thread and reused for each rack entry.
+  std::array<std::array<float*, 64>, kMaxInstrumentSourceOutputs>
+      midi_instrument_source_channels_{};
+#endif
+  InstrumentSourceRenderSink* instrument_source_render_sink_ = nullptr;
 #endif
   CaptureSink capture_sink_{};
   std::atomic<CaptureSource> capture_source_{CaptureSource::kOutput};
@@ -740,6 +771,7 @@ class RealtimeEngine : private ClipPageRequestSink {
   rt::SpscQueue<rt::Command> commands_{};
   rt::SpscQueue<Telemetry> telemetry_{};
   rt::SpscQueue<ClipPageRequest> clip_page_requests_{};
+  std::atomic<uint32_t> clip_page_request_overflow_count_{0};
   BoundarySplitter boundary_splitter_{};
   std::array<rt::Command, kMaxPendingCommands> pending_{};
   std::array<bool, kMaxPendingCommands> pending_active_{};

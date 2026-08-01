@@ -72,6 +72,9 @@ class BuiltinSynth final : public MidiInstrument {
 
   void prepare(double sample_rate, int max_block_size) override;
   void process(float* const* channels, int num_channels, int num_samples) override;
+  bool process_source_tracks(const MidiInstrumentSourceOutput* outputs, size_t output_count,
+                             int num_channels, int num_samples) noexcept override;
+  bool supports_source_track_rendering() const noexcept override { return true; }
   void reset() override;
   int tail_samples() const noexcept override { return static_cast<int>(tail_samples_); }
   void on_event(uint32_t destination_id, const MidiEvent& event) noexcept override;
@@ -83,6 +86,7 @@ class BuiltinSynth final : public MidiInstrument {
     bool active = false;
     uint8_t note = 0;
     uint8_t channel = 0;
+    uint32_t source_track_id = 0;
     double phase = 0.0;           // [0,1)
     double base_phase_inc = 0.0;  // cycles per sample at the note pitch (no bend)
     double phase_inc = 0.0;       // effective increment incl. channel pitch bend
@@ -94,8 +98,8 @@ class BuiltinSynth final : public MidiInstrument {
     uint64_t age = 0;  // start order, for deterministic voice stealing
   };
 
-  void note_on(uint8_t channel, uint8_t note, float velocity) noexcept;
-  void note_off(uint8_t channel, uint8_t note) noexcept;
+  void note_on(uint8_t channel, uint8_t note, float velocity, uint32_t source_track_id) noexcept;
+  void note_off(uint8_t channel, uint8_t note, uint32_t source_track_id) noexcept;
   void sustain_pedal(uint8_t channel, bool down) noexcept;
   // MPE-style expression. Pitch bend is a per-channel 14-bit value (center 8192)
   // mapped through a fixed +/-2 semitone range; channel pressure applies to every

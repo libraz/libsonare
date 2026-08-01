@@ -103,7 +103,8 @@ void BuiltinSynth::reset() {
   next_age_ = 1;
 }
 
-void BuiltinSynth::note_on(uint8_t channel, uint8_t note, float velocity) noexcept {
+void BuiltinSynth::note_on(uint8_t channel, uint8_t note, float velocity,
+                           uint32_t source_track_id) noexcept {
   if (!prepared_) return;
   if (voices_.empty()) return;
   // Pick a free voice; else steal the oldest (smallest age) voice deterministically.
@@ -123,6 +124,7 @@ void BuiltinSynth::note_on(uint8_t channel, uint8_t note, float velocity) noexce
   target->active = true;
   target->note = note;
   target->channel = channel;
+  target->source_track_id = source_track_id;
   target->phase = 0.0;
   target->base_phase_inc = note_to_hz(note) / sample_rate_;
   target->phase_inc = target->base_phase_inc * bend_ratio(channel_bend_semitones_[channel & 0x0Fu]);
@@ -134,10 +136,11 @@ void BuiltinSynth::note_on(uint8_t channel, uint8_t note, float velocity) noexce
   target->age = next_age_++;
 }
 
-void BuiltinSynth::note_off(uint8_t channel, uint8_t note) noexcept {
+void BuiltinSynth::note_off(uint8_t channel, uint8_t note, uint32_t source_track_id) noexcept {
   if (!prepared_) return;
   for (auto& v : voices_) {
-    if (v.active && v.note == note && v.channel == channel && v.stage != Stage::kRelease) {
+    if (v.active && v.note == note && v.channel == channel &&
+        v.source_track_id == source_track_id && v.stage != Stage::kRelease) {
       v.key_down = false;
       if (!sustain_down_[channel & 0x0Fu]) {
         v.stage = Stage::kRelease;
@@ -241,9 +244,9 @@ void BuiltinSynth::on_event(uint32_t /*destination_id*/, const MidiEvent& event)
     } else {
       vel = static_cast<float>((u.words[1] >> 16) & 0xFFFFu) / 65535.0f;
     }
-    note_on(u.channel(), u.note_number(), vel);
+    note_on(u.channel(), u.note_number(), vel, event.source_track_id);
   } else if (u.is_note_off()) {
-    note_off(u.channel(), u.note_number());
+    note_off(u.channel(), u.note_number(), event.source_track_id);
   } else if (u.status_nibble() == static_cast<uint8_t>(UmpStatus::kPitchBend)) {
     // MIDI 1.0 splits the 14-bit value across data1 (LSB) / data2 (MSB); MIDI 2.0
     // carries a 32-bit value in word[1] that scales down to the same 14-bit form.
@@ -366,6 +369,38 @@ void BuiltinSynth::process(float* const* channels, int num_channels, int num_sam
       if (channels[ch] != nullptr) channels[ch][i] += mix;
     }
   }
+}
+
+bool BuiltinSynth::process_source_tracks(const MidiInstrumentSourceOutput* outputs,
+                                         size_t output_count, int num_channels,
+                                         int num_samples) noexcept {
+  if (!prepared_ || outputs == nullptr || output_count == 0 || num_channels <= 0 ||
+      num_samples <= 0) {
+    return false;
+  }
+  // The first (source id 0) target is the required deterministic fallback.
+  if (outputs[0].source_track_id != 0 || outputs[0].channels == nullptr) return false;
+
+  const auto output_for = [&](uint32_t source_track_id) noexcept -> float* const* {
+    for (size_t index = 1; index < output_count; ++index) {
+      if (outputs[index].source_track_id == source_track_id && outputs[index].channels != nullptr) {
+        return outputs[index].channels;
+      }
+    }
+    return outputs[0].channels;
+  };
+
+  for (int i = 0; i < num_samples; ++i) {
+    for (auto& voice : voices_) {
+      if (!voice.active) continue;
+      const float sample = render_voice_sample(voice) * config_.gain;
+      float* const* target = output_for(voice.source_track_id);
+      for (int ch = 0; ch < num_channels; ++ch) {
+        if (target[ch] != nullptr) target[ch][i] += sample;
+      }
+    }
+  }
+  return true;
 }
 
 }  // namespace sonare::midi

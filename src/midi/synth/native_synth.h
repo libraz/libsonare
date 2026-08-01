@@ -332,6 +332,9 @@ class NativeSynth final : public MidiInstrument {
 
   void prepare(double sample_rate, int max_block_size) override;
   void process(float* const* channels, int num_channels, int num_samples) override;
+  bool process_source_tracks(const MidiInstrumentSourceOutput* outputs, size_t output_count,
+                             int num_channels, int num_samples) noexcept override;
+  bool supports_source_track_rendering() const noexcept override { return true; }
   void reset() override;
   int tail_samples() const noexcept override { return static_cast<int>(tail_samples_); }
   void on_event(uint32_t destination_id, const MidiEvent& event) noexcept override;
@@ -383,8 +386,10 @@ class NativeSynth final : public MidiInstrument {
     float last_freq_hz = 0.0f;
   };
 
-  void note_on(uint8_t channel, uint8_t note, uint8_t velocity) noexcept;
-  void note_off(uint8_t channel, uint8_t note) noexcept;
+  void note_on(uint8_t channel, uint8_t note, uint8_t velocity, uint32_t source_track_id) noexcept;
+  void note_off(uint8_t channel, uint8_t note, uint32_t source_track_id) noexcept;
+  void process_impl(float* const* channels, const MidiInstrumentSourceOutput* source_outputs,
+                    size_t source_output_count, int num_channels, int num_samples) noexcept;
   void control_change(uint8_t channel, uint8_t controller, uint8_t value) noexcept;
   void sustain_cc(uint8_t channel, uint8_t value) noexcept;
   void sostenuto_pedal(uint8_t channel, bool down) noexcept;

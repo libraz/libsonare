@@ -173,7 +173,8 @@ void NativeSynth::refresh_channel_mod(uint8_t channel) noexcept {
   mod.pan_units = (static_cast<float>(st.pan) - 64.0f) / 63.0f * 500.0f;
 }
 
-void NativeSynth::note_on(uint8_t channel, uint8_t note, uint8_t velocity) noexcept {
+void NativeSynth::note_on(uint8_t channel, uint8_t note, uint8_t velocity,
+                          uint32_t source_track_id) noexcept {
   if (!prepared_) return;
   const uint8_t ch = channel & 0x0Fu;
   // GM kit exclusive/mute groups: a new hi-hat / triangle / whistle / surdo
@@ -190,7 +191,7 @@ void NativeSynth::note_on(uint8_t channel, uint8_t note, uint8_t velocity) noexc
       }
     }
   }
-  NativeSynthVoice* voice = pool_.allocate(ch, note);
+  NativeSynthVoice* voice = pool_.allocate(ch, note, source_track_id);
   if (voice == nullptr) return;
   const uint32_t voice_index = static_cast<uint32_t>(voice - pool_.data());
   // KS patches get their delay span before start() (pointer wiring only).
@@ -299,12 +300,13 @@ void NativeSynth::note_on(uint8_t channel, uint8_t note, uint8_t velocity) noexc
   channels_[ch].last_freq_hz = voice->base_freq_hz;
 }
 
-void NativeSynth::note_off(uint8_t channel, uint8_t note) noexcept {
+void NativeSynth::note_off(uint8_t channel, uint8_t note, uint32_t source_track_id) noexcept {
   if (!prepared_) return;
   const uint8_t ch = channel & 0x0Fu;
   const ChannelState& st = channels_[ch];
   for (NativeSynthVoice& v : pool_) {
-    if (v.active && v.note == note && v.channel == ch && v.key_down) {
+    if (v.active && v.note == note && v.channel == ch && v.source_track_id == source_track_id &&
+        v.key_down) {
       v.key_down = false;
       // A sostenuto capture holds the note regardless of the sustain pedal.
       if (v.sostenuto) continue;
@@ -530,9 +532,9 @@ void NativeSynth::on_event(uint32_t /*destination_id*/, const MidiEvent& event) 
       vel7 = static_cast<uint8_t>(((u.words[1] >> 16) & 0xFFFFu) >> 9);
       if (vel7 == 0 && ((u.words[1] >> 16) & 0xFFFFu) != 0) vel7 = 1;
     }
-    note_on(u.channel(), u.note_number(), vel7);
+    note_on(u.channel(), u.note_number(), vel7, event.source_track_id);
   } else if (u.is_note_off()) {
-    note_off(u.channel(), u.note_number());
+    note_off(u.channel(), u.note_number(), event.source_track_id);
   } else if (u.status_nibble() == static_cast<uint8_t>(UmpStatus::kPitchBend)) {
     const uint8_t ch = u.channel() & 0x0Fu;
     if (u.message_type() == UmpMessageType::kMidi1ChannelVoice) {
@@ -557,10 +559,55 @@ void NativeSynth::on_event(uint32_t /*destination_id*/, const MidiEvent& event) 
 }
 
 void NativeSynth::process(float* const* channels, int num_channels, int num_samples) {
-  if (!prepared_ || channels == nullptr || num_channels <= 0 || num_samples <= 0) return;
-  float* left = channels[0];
-  float* right = num_channels > 1 ? channels[1] : nullptr;
+  process_impl(channels, nullptr, 0, num_channels, num_samples);
+}
+
+bool NativeSynth::process_source_tracks(const MidiInstrumentSourceOutput* outputs,
+                                        size_t output_count, int num_channels,
+                                        int num_samples) noexcept {
+  if (outputs == nullptr || output_count == 0 || outputs[0].source_track_id != 0 ||
+      outputs[0].channels == nullptr) {
+    return false;
+  }
+  process_impl(nullptr, outputs, output_count, num_channels, num_samples);
+  return true;
+}
+
+void NativeSynth::process_impl(float* const* channels,
+                               const MidiInstrumentSourceOutput* source_outputs,
+                               size_t source_output_count, int num_channels,
+                               int num_samples) noexcept {
+  const bool source_render = source_outputs != nullptr;
+  if (!prepared_ || num_channels <= 0 || num_samples <= 0 ||
+      (!source_render && channels == nullptr)) {
+    return;
+  }
+  float* left = source_render ? nullptr : channels[0];
+  float* right = !source_render && num_channels > 1 ? channels[1] : nullptr;
   const bool mono = right == nullptr;
+
+  const auto target_for = [&](uint32_t source_track_id) noexcept -> float* const* {
+    if (source_render) {
+      for (size_t index = 1; index < source_output_count; ++index) {
+        if (source_outputs[index].source_track_id == source_track_id &&
+            source_outputs[index].channels != nullptr) {
+          return source_outputs[index].channels;
+        }
+      }
+      return source_outputs[0].channels;
+    }
+    return nullptr;
+  };
+  const auto add_output = [&](float* const* target, int sample, float l, float r) noexcept {
+    if (target == nullptr) return;
+    if (target[0] != nullptr) {
+      target[0][sample] += num_channels == 1 ? constants::kInvSqrt2 * (l + r) : l;
+    }
+    if (num_channels > 1 && target[1] != nullptr) target[1][sample] += r;
+    for (int ch = 2; ch < num_channels; ++ch) {
+      if (target[ch] != nullptr) target[ch][sample] += constants::kInvSqrt2 * (l + r);
+    }
+  };
 
   // Sympathetic resonance is gated by the dampers being lifted on any channel
   // (sustain pedal down). Sustain state is fixed for the block (events are
@@ -608,11 +655,19 @@ void NativeSynth::process(float* const* channels, int num_channels, int num_samp
       if (!v.active) continue;
       const Sf2ChannelMod& mod = channel_mods_[v.channel & 0x0Fu];
       const float s = v.render(mod, wind.pitch_ratio, wind.gain);
-      mix_l += s * v.gain_left;
-      mix_r += s * v.gain_right;
+      const float voice_l = s * v.gain_left;
+      const float voice_r = s * v.gain_right;
+      mix_l += voice_l;
+      mix_r += voice_r;
+      if (source_render) {
+        add_output(target_for(v.source_track_id), i, voice_l * config_.gain,
+                   voice_r * config_.gain);
+      }
     }
     mix_l *= config_.gain;
     mix_r *= config_.gain;
+    const float dry_l = mix_l;
+    const float dry_r = mix_r;
     // Swell box shutter: a one-pole lowpass on the bus as the louvres close.
     if (swell_active) {
       swell_lp_l_ += swell_coeff_ * (mix_l - swell_lp_l_);
@@ -662,7 +717,12 @@ void NativeSynth::process(float* const* channels, int num_channels, int num_samp
       dc_y1_[1] = r;
       mix_r = r;
     }
-    if (left != nullptr) {
+    if (source_render) {
+      // Shared bodies, bus drive and DC filtering are destination-scoped DSP.
+      // Keep their residual on the default target so the sum of all source
+      // targets remains exactly the legacy destination render.
+      add_output(source_outputs[0].channels, i, mix_l - dry_l, mix_r - dry_r);
+    } else if (left != nullptr) {
       // Mono host: fold both pan legs so centre-panned voices keep level.
       left[i] += mono ? constants::kInvSqrt2 * (mix_l + mix_r) : mix_l;
     }

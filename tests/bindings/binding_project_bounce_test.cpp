@@ -69,6 +69,154 @@ TEST_CASE("bounce_with_instruments drives a callback instrument for routed MIDI"
   sonare_project_destroy(project);
 }
 
+TEST_CASE("channel-strip project bounce shares the live destination voice pool", "[project]") {
+#if !defined(SONARE_WITH_MIXING)
+  SUCCEED("channel-strip bounce requires the mixing build");
+#else
+  constexpr int kSampleRate = 48000;
+  constexpr int kBlockSize = 128;
+  constexpr int kFrames = kBlockSize * 32;
+  constexpr uint32_t kDestination = 17;
+
+  // Two tracks address one polyphony-limited destination, but their distinct
+  // scene strips force the project bounce through its per-strip stem path.
+  SonareProject* project = nullptr;
+  REQUIRE(sonare_project_create(&project) == SONARE_OK);
+  REQUIRE(sonare_project_set_sample_rate(project, kSampleRate) == SONARE_OK);
+  const char* scene =
+      R"({"version":1,"buses":[{"id":"master","role":"master"}],"strips":[{"id":"strip-a"},{"id":"strip-b"}]})";
+  REQUIRE(sonare_project_set_mixer_scene_json(project, scene) == SONARE_OK);
+
+  std::array<uint32_t, 2> tracks{};
+  for (size_t i = 0; i < tracks.size(); ++i) {
+    const char* route = i == 0 ? "strip-a" : "strip-b";
+    uint32_t track = 0;
+    uint32_t clip = 0;
+    REQUIRE(sonare_project_add_midi_clip(project, 0.0, 1.0, &track, &clip) == SONARE_OK);
+    tracks[i] = track;
+    const SonareMidiEventPod events[] = {{0.0, 0x20903C7Fu, 0u}};
+    REQUIRE(sonare_project_set_midi_events(project, clip, events, 1) == SONARE_OK);
+    REQUIRE(sonare_project_set_track_midi_destination(project, track, kDestination) == SONARE_OK);
+    REQUIRE(sonare_project_set_track_route(project, track, route, "") == SONARE_OK);
+  }
+
+  SonareProjectBounceOptions bounce_options{};
+  bounce_options.total_frames = kFrames;
+  bounce_options.block_size = kBlockSize;
+  bounce_options.num_channels = 2;
+  bounce_options.sample_rate = kSampleRate;
+  SonareBuiltinInstrumentBinding bounce_binding{};
+  bounce_binding.destination_id = kDestination;
+  bounce_binding.config.polyphony = 1;
+  bounce_binding.config.gain = 1.0f;
+  float* bounced = nullptr;
+  size_t bounced_length = 0;
+  REQUIRE(sonare_project_bounce_with_builtin_instruments(project, &bounce_options, &bounce_binding,
+                                                         1, &bounced,
+                                                         &bounced_length) == SONARE_OK);
+  float bounce_peak = 0.0f;
+  for (size_t i = 0; i < bounced_length; ++i) {
+    bounce_peak = std::max(bounce_peak, std::abs(bounced[i]));
+  }
+
+  SonareRealtimeEngine* engine = nullptr;
+  REQUIRE(sonare_engine_create(&engine) == SONARE_OK);
+  REQUIRE(sonare_engine_prepare(engine, kSampleRate, kBlockSize, 64, 16) == SONARE_OK);
+  SonareEngineBuiltinSynthConfig live_config{};
+  live_config.polyphony = 1;
+  live_config.gain = 1.0f;
+  REQUIRE(sonare_engine_set_builtin_instrument(engine, kDestination, &live_config) == SONARE_OK);
+  const SonareEngineTrackLane lanes[] = {{tracks[0], nullptr, 0, 0, 1},
+                                         {tracks[1], nullptr, 0, 0, 1}};
+  REQUIRE(sonare_engine_set_track_lanes(engine, lanes, std::size(lanes)) == SONARE_OK);
+  const char* live_strip =
+      R"({"version":1,"buses":[{"id":"master","role":"master"}],"strips":[{"id":"live"}]})";
+  REQUIRE(sonare_engine_set_track_strip_json(engine, tracks[0], live_strip) == SONARE_OK);
+  REQUIRE(sonare_engine_set_track_strip_json(engine, tracks[1], live_strip) == SONARE_OK);
+  // Mirror project bounce's offline pre-roll, which settles static lane
+  // controls before the first audible frame. The stopped render does not
+  // advance the MIDI timeline.
+  std::array<float, kBlockSize> prime_left{};
+  std::array<float, kBlockSize> prime_right{};
+  float* prime_channels[] = {prime_left.data(), prime_right.data()};
+  REQUIRE(sonare_engine_process(engine, prime_channels, 2, kBlockSize) == SONARE_OK);
+  const SonareEngineMidiEvent events[] = {
+      {0, 0x20903C7Fu, 0u, 0u, 0u, 1u, 0u, 0u, 0u},
+  };
+  const SonareEngineMidiClipSchedule clips[] = {
+      {1, tracks[0], 0, 0.0, kFrames, 0, 0, kDestination, events, std::size(events)},
+      {2, tracks[1], 0, 0.0, kFrames, 0, 0, kDestination, events, std::size(events)},
+  };
+  REQUIRE(sonare_engine_set_midi_clips(engine, clips, std::size(clips)) == SONARE_OK);
+  REQUIRE(sonare_engine_play(engine, -1) == SONARE_OK);
+
+  std::array<float, kBlockSize> left{};
+  std::array<float, kBlockSize> right{};
+  float* channels[] = {left.data(), right.data()};
+  float live_peak = 0.0f;
+  for (int block = 0; block < kFrames / kBlockSize; ++block) {
+    left.fill(0.0f);
+    right.fill(0.0f);
+    REQUIRE(sonare_engine_process(engine, channels, 2, kBlockSize) == SONARE_OK);
+    for (float sample : left) {
+      live_peak = std::max(live_peak, std::abs(sample));
+    }
+  }
+  sonare_engine_destroy(engine);
+  sonare_free_floats(bounced);
+  sonare_project_destroy(project);
+
+  REQUIRE(live_peak > 0.01f);
+  // The live lane runtime and standalone scene mixer own distinct control
+  // smoothers, but the shared destination's one-voice steal decision is common
+  // to both paths. Its peak is therefore the stable observable for this fixture.
+  REQUIRE(std::abs(bounce_peak - live_peak) < 1.0e-5f);
+#endif
+}
+
+TEST_CASE("channel-strip bounce rejects a shared opaque callback destination", "[project]") {
+#if !defined(SONARE_WITH_MIXING)
+  SUCCEED("channel-strip bounce requires the mixing build");
+#else
+  SonareProject* project = nullptr;
+  REQUIRE(sonare_project_create(&project) == SONARE_OK);
+  REQUIRE(sonare_project_set_sample_rate(project, 48000.0) == SONARE_OK);
+  const char* scene =
+      R"({"version":1,"buses":[{"id":"master","role":"master"}],"strips":[{"id":"a"},{"id":"b"}]})";
+  REQUIRE(sonare_project_set_mixer_scene_json(project, scene) == SONARE_OK);
+
+  constexpr uint32_t kDestination = 23;
+  for (const char* route : {"a", "b"}) {
+    uint32_t track = 0;
+    uint32_t clip = 0;
+    REQUIRE(sonare_project_add_midi_clip(project, 0.0, 1.0, &track, &clip) == SONARE_OK);
+    const SonareMidiEventPod events[] = {{0.0, 0x20903C7Fu, 0u}};
+    REQUIRE(sonare_project_set_midi_events(project, clip, events, std::size(events)) == SONARE_OK);
+    REQUIRE(sonare_project_set_track_midi_destination(project, track, kDestination) == SONARE_OK);
+    REQUIRE(sonare_project_set_track_route(project, track, route, "") == SONARE_OK);
+  }
+
+  SonareProjectBounceOptions options{};
+  options.total_frames = 512;
+  options.block_size = 128;
+  options.num_channels = 2;
+  options.sample_rate = 48000;
+  CallbackInstrumentState state;
+  SonareInstrumentBinding binding{};
+  binding.destination_id = kDestination;
+  binding.callbacks.user_data = &state;
+  binding.callbacks.on_event = &cb_on_event;
+  binding.callbacks.render = &cb_render;
+  float* out = reinterpret_cast<float*>(static_cast<uintptr_t>(0x1));
+  size_t out_len = 1;
+  REQUIRE(sonare_project_bounce_with_instruments(project, &options, &binding, 1, &out, &out_len) ==
+          SONARE_ERROR_NOT_SUPPORTED);
+  REQUIRE(out == nullptr);
+  REQUIRE(out_len == 0);
+  sonare_project_destroy(project);
+#endif
+}
+
 TEST_CASE("bounce_with_instruments auto length includes callback instrument tail", "[project]") {
   SonareProject* project = nullptr;
   REQUIRE(sonare_project_create(&project) == SONARE_OK);

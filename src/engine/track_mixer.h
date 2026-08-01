@@ -80,6 +80,9 @@ class TrackMixerRuntime final : public rt::ProcessorBase {
   void acquire_lanes() noexcept { lanes_.acquire(); }
   bool active() const noexcept;
   size_t lane_count() const noexcept;
+  /// AUDIO thread: copies unique non-zero lane track ids into @p out. Call
+  /// after begin_source_mix(), which acquires the current lane snapshot.
+  size_t copy_lane_track_ids(uint32_t* out, size_t capacity) const noexcept;
 
   bool set_lane_parameter(size_t lane_index, unsigned int param_id, float value) noexcept;
   bool set_lane_solo_mute(size_t lane_index, bool solo, bool mute) noexcept;

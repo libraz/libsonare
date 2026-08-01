@@ -375,9 +375,10 @@ TEST_CASE("sonare_engine SF2 instrument renders live MIDI input", "[c_api][sf2]"
               engine, &sentinel, sonare::resource::kDefaultSf2ResourceLimits.max_file_bytes + 1) ==
           SONARE_ERROR_INVALID_FORMAT);
 
-  config.struct_version = 99;
+  config.struct_version = 3;
   REQUIRE(sonare_engine_set_sf2_instrument(engine, 7, &config) == SONARE_ERROR_INVALID_PARAMETER);
-  config.struct_version = 0;
+  config.struct_version = 2;
+  config.prefer_model_for_modeled_families = 1;
   REQUIRE(sonare_engine_set_sf2_instrument(engine, 7, &config) == SONARE_OK);
   size_t count = 0;
   REQUIRE(sonare_engine_midi_instrument_count(engine, &count) == SONARE_OK);

@@ -160,6 +160,21 @@ size_t TrackMixerRuntime::lane_count() const noexcept {
   return lanes ? lanes->size() : 0;
 }
 
+size_t TrackMixerRuntime::copy_lane_track_ids(uint32_t* out, size_t capacity) const noexcept {
+  if (out == nullptr || capacity == 0) return 0;
+  const std::vector<TrackLaneConfig>* lanes = lanes_.current();
+  if (lanes == nullptr) return 0;
+  size_t count = 0;
+  for (const TrackLaneConfig& lane : *lanes) {
+    if (lane.track_id == 0) continue;
+    bool seen = false;
+    for (size_t i = 0; i < count; ++i) seen = seen || out[i] == lane.track_id;
+    if (seen || count >= capacity) continue;
+    out[count++] = lane.track_id;
+  }
+  return count;
+}
+
 bool TrackMixerRuntime::bind_track_strip(uint32_t track_id, mixing::ChannelStrip* strip) {
   if (track_id == 0) return false;
   acquire_lanes();

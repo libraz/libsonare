@@ -116,6 +116,18 @@ def test_bounce_with_sf2_instrument_produces_deterministic_audio() -> None:
         )
         assert np.array_equal(audio, again)
 
+        # Program 0 is a dedicated piano model. The opt-in bypasses the
+        # loaded Piano 1 preset, while the default remains SF2-first.
+        modeled = project.bounce_with_sf2_instrument(
+            Sf2InstrumentConfig(gain=1.0, prefer_model_for_modeled_families=True),
+            total_frames=4096,
+            block_size=128,
+            num_channels=2,
+            sample_rate=48000,
+        )
+        assert float(np.max(np.abs(modeled))) > 0.01
+        assert not np.array_equal(modeled, audio)
+
         # An explicitly empty bindings list renders silence.
         silent = project.bounce_with_sf2_instrument(
             instruments=[],

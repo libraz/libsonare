@@ -92,6 +92,15 @@ describe('Project SoundFont (SF2) binding', () => {
     );
     expect(again).toEqual(audio);
 
+    // Program 0 is a dedicated piano model. The opt-in must bypass the
+    // loaded Piano 1 preset, while the default above remains SF2-first.
+    const modeled = project.bounceWithSf2Instrument(
+      { destinationId: 0, gain: 1, preferModelForModeledFamilies: true },
+      { totalFrames: 4096, numChannels: 2, sampleRate: 48000 },
+    );
+    expect(peak(modeled)).toBeGreaterThan(0.01);
+    expect(modeled).not.toEqual(audio);
+
     // An explicitly empty bindings array renders silence.
     const silent = project.bounceWithSf2Instruments([], {
       totalFrames: 2048,

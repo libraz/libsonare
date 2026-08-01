@@ -22,9 +22,34 @@ constexpr float kCcSendDepth = 0.35f;
 
 }  // namespace
 
-void Sf2Player::render_chunk(int n) noexcept {
+void Sf2Player::render_chunk(int n, const MidiInstrumentSourceOutput* source_outputs,
+                             size_t source_output_count, int output_offset,
+                             int num_channels) noexcept {
   std::memset(mix_l_.data(), 0, sizeof(float) * static_cast<size_t>(n));
   std::memset(mix_r_.data(), 0, sizeof(float) * static_cast<size_t>(n));
+  const bool source_render = source_outputs != nullptr;
+  float attributed_l[kChunkFrames] = {};
+  float attributed_r[kChunkFrames] = {};
+  const auto target_for = [&](uint32_t source_track_id) noexcept -> float* const* {
+    if (!source_render) return nullptr;
+    for (size_t index = 1; index < source_output_count; ++index) {
+      if (source_outputs[index].source_track_id == source_track_id &&
+          source_outputs[index].channels != nullptr) {
+        return source_outputs[index].channels;
+      }
+    }
+    return source_outputs[0].channels;
+  };
+  const auto add_output = [&](float* const* target, int sample, float l, float r) noexcept {
+    if (target == nullptr) return;
+    if (target[0] != nullptr) {
+      target[0][sample] += num_channels == 1 ? 0.70710678f * (l + r) : l;
+    }
+    if (num_channels > 1 && target[1] != nullptr) target[1][sample] += r;
+    for (int ch = 2; ch < num_channels; ++ch) {
+      if (target[ch] != nullptr) target[ch][sample] += 0.70710678f * (l + r);
+    }
+  };
   // Read the realised-EFX routing for this block from the snapshot the control
   // thread published (adopted in process() via acquire()). A null snapshot (none
   // published yet) or an all-dry one routes everything straight to the dry mix.
@@ -127,6 +152,12 @@ void Sf2Player::render_chunk(int n) noexcept {
       } else {
         mix_l_[static_cast<size_t>(i)] += l;
         mix_r_[static_cast<size_t>(i)] += r;
+        if (source_render) {
+          add_output(target_for(v.source_track_id), output_offset + i, l * config_.gain,
+                     r * config_.gain);
+          attributed_l[i] += l;
+          attributed_r[i] += r;
+        }
       }
 #if defined(SONARE_MIDI_WITH_FX)
       // Suppressed for GS-EFX-routed parts: their send is taken post-effect.
@@ -173,6 +204,12 @@ void Sf2Player::render_chunk(int n) noexcept {
       } else {
         mix_l_[static_cast<size_t>(i)] += l;
         mix_r_[static_cast<size_t>(i)] += r;
+        if (source_render) {
+          add_output(target_for(v.source_track_id), output_offset + i, l * config_.gain,
+                     r * config_.gain);
+          attributed_l[i] += l;
+          attributed_r[i] += r;
+        }
       }
 #if defined(SONARE_MIDI_WITH_FX)
       // Suppressed for GS-EFX-routed parts: their send is taken post-effect.
@@ -294,10 +331,42 @@ void Sf2Player::render_chunk(int n) noexcept {
 #if defined(SONARE_MIDI_WITH_FX)
   if (effects_ != nullptr) effects_->render_returns(mix_l_.data(), mix_r_.data(), n);
 #endif
+  if (source_render) {
+    // Part inserts, body resonators and system effect returns are
+    // destination-scoped. Attribute their residual to target zero while keeping
+    // the sum of all targets equal to the ordinary player render.
+    for (int i = 0; i < n; ++i) {
+      add_output(source_outputs[0].channels, output_offset + i,
+                 (mix_l_[static_cast<size_t>(i)] - attributed_l[i]) * config_.gain,
+                 (mix_r_[static_cast<size_t>(i)] - attributed_r[i]) * config_.gain);
+    }
+  }
 }
 
 void Sf2Player::process(float* const* channels, int num_channels, int num_samples) {
-  if (!prepared_ || channels == nullptr || num_channels <= 0 || num_samples <= 0) return;
+  process_impl(channels, nullptr, 0, num_channels, num_samples);
+}
+
+bool Sf2Player::process_source_tracks(const MidiInstrumentSourceOutput* outputs,
+                                      size_t output_count, int num_channels,
+                                      int num_samples) noexcept {
+  if (outputs == nullptr || output_count == 0 || outputs[0].source_track_id != 0 ||
+      outputs[0].channels == nullptr) {
+    return false;
+  }
+  process_impl(nullptr, outputs, output_count, num_channels, num_samples);
+  return true;
+}
+
+void Sf2Player::process_impl(float* const* channels,
+                             const MidiInstrumentSourceOutput* source_outputs,
+                             size_t source_output_count, int num_channels,
+                             int num_samples) noexcept {
+  const bool source_render = source_outputs != nullptr;
+  if (!prepared_ || num_channels <= 0 || num_samples <= 0 ||
+      (!source_render && channels == nullptr)) {
+    return;
+  }
   // Offline hosts realise a pending EFX change inline (an EFX SysEx dispatched
   // for this block installs its inserts before the block renders). This
   // allocates, so it is gated to single-threaded/offline use; the live engine
@@ -312,25 +381,27 @@ void Sf2Player::process(float* const* channels, int num_channels, int num_sample
   // apply-on-audio path. A no-op cost (two atomic loads) when the queue is empty.
   drain_efx_param_updates();
   if (mix_l_.size() < static_cast<size_t>(kChunkFrames)) return;
-  float* left = channels[0];
-  float* right = num_channels > 1 ? channels[1] : nullptr;
+  float* left = source_render ? nullptr : channels[0];
+  float* right = !source_render && num_channels > 1 ? channels[1] : nullptr;
   const bool mono = right == nullptr;
 
   int offset = 0;
   while (offset < num_samples) {
     const int n = std::min(kChunkFrames, num_samples - offset);
-    render_chunk(n);
-    for (int i = 0; i < n; ++i) {
-      const float mix_l = mix_l_[static_cast<size_t>(i)] * config_.gain;
-      const float mix_r = mix_r_[static_cast<size_t>(i)] * config_.gain;
-      if (left != nullptr) {
-        // Mono host: fold both pan legs so centre-panned voices keep level.
-        left[offset + i] += mono ? 0.70710678f * (mix_l + mix_r) : mix_l;
-      }
-      if (right != nullptr) right[offset + i] += mix_r;
-      // Fan a mono fold-down to any additional channels.
-      for (int ch = 2; ch < num_channels; ++ch) {
-        if (channels[ch] != nullptr) channels[ch][offset + i] += 0.70710678f * (mix_l + mix_r);
+    render_chunk(n, source_outputs, source_output_count, offset, num_channels);
+    if (!source_render) {
+      for (int i = 0; i < n; ++i) {
+        const float mix_l = mix_l_[static_cast<size_t>(i)] * config_.gain;
+        const float mix_r = mix_r_[static_cast<size_t>(i)] * config_.gain;
+        if (left != nullptr) {
+          // Mono host: fold both pan legs so centre-panned voices keep level.
+          left[offset + i] += mono ? 0.70710678f * (mix_l + mix_r) : mix_l;
+        }
+        if (right != nullptr) right[offset + i] += mix_r;
+        // Fan a mono fold-down to any additional channels.
+        for (int ch = 2; ch < num_channels; ++ch) {
+          if (channels[ch] != nullptr) channels[ch][offset + i] += 0.70710678f * (mix_l + mix_r);
+        }
       }
     }
     offset += n;

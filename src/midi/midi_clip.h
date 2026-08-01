@@ -119,9 +119,10 @@ enum class MidiLoopMode : uint8_t {
 struct MidiClipSchedule {
   /// Stable clip id (mirrors the EditClip id).
   uint32_t id = 0;
-  /// Source-track id (mirrors the EditClip's track_id). Control-plane only; the
-  /// sequencer never reads it. The offline bounce groups clips into per-track
-  /// stems for channel-strip mixing. 0 = unset.
+  /// Source-track id (mirrors the EditClip's track_id). The sequencer stamps it
+  /// onto dispatched events, including MIDI-FX output and synthetic clip-end
+  /// note-offs. This preserves lane identity while the destination continues to
+  /// select the shared instrument / voice pool. 0 = unset.
   uint32_t track_id = 0;
   /// Clip start on the render timeline (samples), baked from PPQ.
   int64_t start_sample = 0;
@@ -141,10 +142,10 @@ struct MidiClipSchedule {
   std::vector<MidiEvent> events;
 
   bool operator==(const MidiClipSchedule& o) const noexcept {
-    return id == o.id && start_sample == o.start_sample && start_ppq == o.start_ppq &&
-           length_samples == o.length_samples && loop_mode == o.loop_mode &&
-           loop_length_samples == o.loop_length_samples && destination_id == o.destination_id &&
-           events == o.events;
+    return id == o.id && track_id == o.track_id && start_sample == o.start_sample &&
+           start_ppq == o.start_ppq && length_samples == o.length_samples &&
+           loop_mode == o.loop_mode && loop_length_samples == o.loop_length_samples &&
+           destination_id == o.destination_id && events == o.events;
   }
 };
 

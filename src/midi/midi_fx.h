@@ -52,7 +52,7 @@ inline constexpr int64_t kMidiFxPpqScale = 960000;
 /// kMaxArpSteps (16) gated note-on/off pairs per source note. A dense control
 /// block carries on the order of a few dozen input events. 512 output slots give
 /// comfortable headroom for that fan-out within one audio block while staying
-/// small enough (each MidiEvent is <= 40 bytes, so < 20 KiB) to live inline on
+/// small enough (the complete buffer remains below 32 KiB) to live inline on
 /// the audio thread; overflow beyond it is surfaced via telemetry, never growth.
 struct MidiFxBuffer {
   static constexpr size_t kCapacity = 512;

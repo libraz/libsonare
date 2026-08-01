@@ -25,11 +25,23 @@
 ///    instrument's reported latency in samples; the arrangement compiler folds
 ///    this into the CompiledTimeline PDC / latency summary.
 
+#include <cstddef>
+#include <cstdint>
+
 #include "midi/sequencer.h"
 #include "rt/processor_base.h"
 #include "transport/transport_state.h"
 
 namespace sonare::midi {
+
+/// One caller-owned render target for source-track-aware instruments. A target
+/// with source_track_id == 0 is the deterministic fallback for direct/live
+/// events and scheduled tracks that do not have a configured lane. The engine
+/// clears every target before calling process_source_tracks().
+struct MidiInstrumentSourceOutput {
+  uint32_t source_track_id = 0;
+  float* const* channels = nullptr;
+};
 
 /// A host instrument node usable at the engine clip/source-merge stage.
 ///
@@ -67,6 +79,28 @@ class MidiInstrument : public rt::ProcessorBase, public MidiEventSink {
     (void)data;
     (void)size;
   }
+
+  /// AUDIO thread: render one block into source-track-specific output targets.
+  /// Implementations must advance every voice and shared DSP state exactly once,
+  /// then add each attributable contribution to its matching target. Events for
+  /// a track absent from @p outputs go to its source_track_id == 0 fallback.
+  ///
+  /// Returning false requests the legacy destination-level process() path. This
+  /// preserves compatibility for opaque host callback instruments which cannot
+  /// expose per-voice provenance. Builtin and native instruments override this;
+  /// callers must still accept false without allocating on the audio thread.
+  virtual bool process_source_tracks(const MidiInstrumentSourceOutput* outputs, size_t output_count,
+                                     int num_channels, int num_samples) noexcept {
+    (void)outputs;
+    (void)output_count;
+    (void)num_channels;
+    (void)num_samples;
+    return false;
+  }
+
+  /// True when process_source_tracks() is implemented without changing this
+  /// instrument's destination-level voice-pool semantics.
+  virtual bool supports_source_track_rendering() const noexcept { return false; }
 };
 
 }  // namespace sonare::midi

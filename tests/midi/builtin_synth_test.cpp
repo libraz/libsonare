@@ -5,6 +5,7 @@
 
 #include "midi/builtin_synth.h"
 
+#include <array>
 #include <catch2/catch_approx.hpp>
 #include <catch2/catch_test_macros.hpp>
 #include <cmath>
@@ -18,6 +19,7 @@ namespace {
 using sonare::midi::BuiltinSynth;
 using sonare::midi::BuiltinSynthConfig;
 using sonare::midi::MidiEvent;
+using sonare::midi::MidiInstrumentSourceOutput;
 
 MidiEvent event(const sonare::midi::Ump& ump) {
   MidiEvent e;
@@ -246,4 +248,48 @@ TEST_CASE("BuiltinSynth All Notes Off only affects the addressed channel", "[mid
   // All Sound Off on channel 0 must leave channel 1's note sounding.
   synth.on_event(0, event(sonare::midi::make_midi1_control_change(0, 0, 120, 0)));
   REQUIRE(render_peak(&synth, 256) > 0.0f);
+}
+
+TEST_CASE("BuiltinSynth renders shared-pool voices into their source tracks", "[midi][synth]") {
+  BuiltinSynthConfig config;
+  config.polyphony = 2;
+  BuiltinSynth split(config);
+  BuiltinSynth reference(config);
+  split.prepare(48000.0, 256);
+  reference.prepare(48000.0, 256);
+
+  MidiEvent first = event(sonare::midi::make_midi1_note_on(0, 0, 60, 100));
+  first.source_track_id = 101;
+  MidiEvent second = event(sonare::midi::make_midi1_note_on(0, 0, 67, 100));
+  second.source_track_id = 202;
+  split.on_event(7, first);
+  split.on_event(7, second);
+  first.source_track_id = 0;
+  second.source_track_id = 0;
+  reference.on_event(7, first);
+  reference.on_event(7, second);
+
+  std::array<float, 256> fallback{};
+  std::array<float, 256> first_track{};
+  std::array<float, 256> second_track{};
+  std::array<float, 256> combined{};
+  float* fallback_channels[] = {fallback.data()};
+  float* first_channels[] = {first_track.data()};
+  float* second_channels[] = {second_track.data()};
+  float* combined_channels[] = {combined.data()};
+  const MidiInstrumentSourceOutput outputs[] = {
+      {0, fallback_channels}, {101, first_channels}, {202, second_channels}};
+
+  REQUIRE(split.process_source_tracks(outputs, std::size(outputs), 1, 256));
+  reference.process(combined_channels, 1, 256);
+  float first_peak = 0.0f;
+  float second_peak = 0.0f;
+  for (size_t i = 0; i < combined.size(); ++i) {
+    first_peak = std::max(first_peak, std::abs(first_track[i]));
+    second_peak = std::max(second_peak, std::abs(second_track[i]));
+    REQUIRE(fallback[i] == 0.0f);
+    REQUIRE(first_track[i] + second_track[i] == Catch::Approx(combined[i]).margin(1.0e-6f));
+  }
+  REQUIRE(first_peak > 0.0f);
+  REQUIRE(second_peak > 0.0f);
 }

@@ -31,6 +31,9 @@ struct VoiceState {
   bool releasing = false;
   uint8_t note = 0;
   uint8_t channel = 0;
+  /// Arrangement track that produced this voice (0 = direct/live input). This
+  /// is independent of the MIDI destination, which selects the shared pool.
+  uint32_t source_track_id = 0;
   /// Allocation order; smaller = older. Used for deterministic stealing.
   uint64_t age = 0;
 };
@@ -57,7 +60,7 @@ class VoicePool {
   /// steal policy. Returns nullptr only when the pool was never prepared.
   /// The returned voice has its VoiceState fields initialised; the caller
   /// fills in the synth-specific state (phase, envelope, ...).
-  Voice* allocate(uint8_t channel, uint8_t note) noexcept {
+  Voice* allocate(uint8_t channel, uint8_t note, uint32_t source_track_id = 0) noexcept {
     if (voices_.empty()) return nullptr;
     Voice* target = nullptr;
     // 1. Free slot.
@@ -84,6 +87,7 @@ class VoicePool {
     target->releasing = false;
     target->note = note;
     target->channel = channel;
+    target->source_track_id = source_track_id;
     target->age = next_age_++;
     return target;
   }

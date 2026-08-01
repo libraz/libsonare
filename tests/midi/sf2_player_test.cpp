@@ -106,10 +106,12 @@ std::shared_ptr<Sf2File> make_fixture() {
   return sf2;
 }
 
-Sf2Player make_player(std::shared_ptr<Sf2File> sf2, int polyphony = 48) {
+Sf2Player make_player(std::shared_ptr<Sf2File> sf2, int polyphony = 48,
+                      bool prefer_model_for_modeled_families = false) {
   Sf2PlayerConfig cfg;
   cfg.gain = 1.0f;
   cfg.polyphony = polyphony;
+  cfg.prefer_model_for_modeled_families = prefer_model_for_modeled_families;
   // These cases assert voice routing invariants (exact silence after tails,
   // hard-pan isolation) that the always-on default room would smear; the GS
   // effect bus has its own coverage in sf2_effects_test.cpp.
@@ -150,6 +152,49 @@ Sf2Player make_fallback_player() {
   Sf2Player player(cfg);
   player.prepare(kOutRate, 256);  // no set_soundfont -> synth fallback
   return player;
+}
+
+TEST_CASE("Sf2Player model-first preference bypasses covered melodic presets but not drums",
+          "[midi][sf2][synth]") {
+  const auto sf2 = make_fixture();
+  Sf2Player sampled = make_player(sf2);
+  Sf2Player modeled = make_player(sf2, 48, true);
+
+  sampled.on_event(0, event(sonare::midi::make_midi1_note_on(0, 0, 60, 100)));
+  modeled.on_event(0, event(sonare::midi::make_midi1_note_on(0, 0, 60, 100)));
+  const StereoRender sampled_melodic = render(sampled, 512);
+  const StereoRender modeled_melodic = render(modeled, 512);
+  REQUIRE(peak(sampled_melodic.left) > 1.0e-4f);
+  REQUIRE(peak(modeled_melodic.left) > 1.0e-4f);
+  // The fixture's sampled preset is a looped sine, while program 0's fallback
+  // is the dedicated physical piano model. Exact equality would mean the
+  // model-first branch failed to bypass the covered SoundFont preset.
+  REQUIRE(sampled_melodic.left != modeled_melodic.left);
+
+  sampled.reset();
+  modeled.reset();
+  sampled.on_event(0, event(sonare::midi::make_midi1_note_on(0, 9, 36, 100)));
+  modeled.on_event(0, event(sonare::midi::make_midi1_note_on(0, 9, 36, 100)));
+  const StereoRender sampled_drum = render(sampled, 512);
+  const StereoRender modeled_drum = render(modeled, 512);
+  REQUIRE(peak(sampled_drum.left) > 1.0e-4f);
+  REQUIRE(sampled_drum.left == modeled_drum.left);
+  REQUIRE(sampled_drum.right == modeled_drum.right);
+}
+
+TEST_CASE("Sf2Player model-first preference has no effect without a SoundFont",
+          "[midi][sf2][synth]") {
+  Sf2Player default_player = make_player(nullptr);
+  Sf2Player preferred_player = make_player(nullptr, 48, true);
+  const auto note_on = event(sonare::midi::make_midi1_note_on(0, 0, 60, 100));
+  default_player.on_event(0, note_on);
+  preferred_player.on_event(0, note_on);
+
+  const StereoRender default_audio = render(default_player, 512);
+  const StereoRender preferred_audio = render(preferred_player, 512);
+  REQUIRE(peak(default_audio.left) > 1.0e-4f);
+  REQUIRE(default_audio.left == preferred_audio.left);
+  REQUIRE(default_audio.right == preferred_audio.right);
 }
 
 /// Single-frequency magnitude (Goertzel) of a buffer at @p freq_hz.

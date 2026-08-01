@@ -30,25 +30,27 @@ void MidiSequencer::set_midi_clips(std::vector<MidiClipSchedule> clips) {
 }
 
 bool MidiSequencer::track_note_on(uint8_t group, uint8_t channel, uint8_t note,
-                                  uint32_t destination_id, bool from_clip,
+                                  uint32_t destination_id, uint32_t source_track_id, bool from_clip,
                                   uint32_t clip_id) noexcept {
   if (active_count_ >= kMaxActiveNotes) {
     active_note_overflow_count_.fetch_add(1, std::memory_order_relaxed);
     return false;
   }
-  active_[active_count_] = ActiveNote{group, channel, note, destination_id, clip_id, from_clip};
+  active_[active_count_] =
+      ActiveNote{group, channel, note, destination_id, source_track_id, clip_id, from_clip};
   ++active_count_;
   return true;
 }
 
 void MidiSequencer::track_note_off(uint8_t group, uint8_t channel, uint8_t note,
-                                   uint32_t destination_id, bool from_clip,
-                                   uint32_t clip_id) noexcept {
+                                   uint32_t destination_id, uint32_t source_track_id,
+                                   bool from_clip, uint32_t clip_id) noexcept {
   size_t fallback = kMaxActiveNotes;
   for (size_t i = 0; i < active_count_; ++i) {
     if (active_[i].group == group && active_[i].channel == channel && active_[i].note == note &&
         active_[i].destination_id == destination_id) {
-      if (active_[i].from_clip == from_clip && active_[i].clip_id == clip_id) {
+      if (active_[i].source_track_id == source_track_id && active_[i].from_clip == from_clip &&
+          active_[i].clip_id == clip_id) {
         // Swap-remove (order of sounding notes is not significant).
         active_[i] = active_[active_count_ - 1];
         --active_count_;
@@ -200,12 +202,12 @@ void MidiSequencer::dispatch_transformed(uint32_t destination_id, const MidiEven
                                          bool from_clip, uint32_t clip_id) noexcept {
   if (event.ump.is_note_on()) {
     if (!track_note_on(event.ump.group, event.ump.channel(), event.ump.note_number(),
-                       destination_id, from_clip, clip_id)) {
+                       destination_id, event.source_track_id, from_clip, clip_id)) {
       return;
     }
   } else if (event.ump.is_note_off()) {
     track_note_off(event.ump.group, event.ump.channel(), event.ump.note_number(), destination_id,
-                   from_clip, clip_id);
+                   event.source_track_id, from_clip, clip_id);
   }
   dispatch(destination_id, event);
 }
@@ -284,6 +286,7 @@ void MidiSequencer::release_notes_for_clip(uint32_t clip_id, int64_t render_fram
     MidiEvent off;
     off.render_frame = render_frame;
     off.ump = make_midi1_note_off(note.group, note.channel, note.note, 0);
+    off.source_track_id = note.source_track_id;
     active_[i] = active_[active_count_ - 1];
     --active_count_;
     dispatch(note.destination_id, off);
@@ -312,6 +315,7 @@ void MidiSequencer::release_notes_for_absent_clips(const std::vector<MidiClipSch
     MidiEvent off;
     off.render_frame = render_frame;
     off.ump = make_midi1_note_off(note.group, note.channel, note.note, 0);
+    off.source_track_id = note.source_track_id;
     active_[i] = active_[active_count_ - 1];
     --active_count_;
     dispatch(note.destination_id, off);
@@ -441,6 +445,7 @@ void MidiSequencer::process_block(int64_t block_start_frame, int num_frames) noe
       if (event != nullptr) {
         MidiEvent scheduled = *event;
         scheduled.render_frame = frame;
+        scheduled.source_track_id = clip.track_id;
         process_event(clip.destination_id, scheduled, block_end_frame, /*from_clip=*/true, clip.id);
       } else {
         release_notes_for_clip(clip.id, frame, clear_pending);
@@ -523,6 +528,7 @@ void MidiSequencer::all_notes_off(int64_t render_frame) noexcept {
     MidiEvent off;
     off.render_frame = render_frame;
     off.ump = make_midi1_note_off(note.group, note.channel, note.note, 0);
+    off.source_track_id = note.source_track_id;
     dispatch(note.destination_id, off);
   }
   // Controller reset AFTER the note-offs (so a note under a held damper is first
@@ -551,6 +557,7 @@ void MidiSequencer::all_notes_off_for_destination(uint32_t destination_id,
     MidiEvent off;
     off.render_frame = render_frame;
     off.ump = make_midi1_note_off(note.group, note.channel, note.note, 0);
+    off.source_track_id = note.source_track_id;
     // Drop the entry first so dispatch (and any re-entrant query) sees a
     // consistent table, then emit the note-off.
     active_[i] = active_[active_count_ - 1];

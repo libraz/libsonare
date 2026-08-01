@@ -402,6 +402,7 @@ void MidiFxChain::process_chunk(const MidiEvent* in, size_t count, size_t input_
 
           MidiEvent on_ev;
           on_ev.render_frame = onset;
+          on_ev.source_track_id = ev.source_track_id;
           // Preserve the source velocity at its native resolution (full 16-bit
           // for MIDI 2.0) instead of round-tripping through 7 bits.
           on_ev.ump = make_note_preserving_velocity(ev.ump, true, static_cast<uint8_t>(arp_note));
@@ -414,6 +415,7 @@ void MidiFxChain::process_chunk(const MidiEvent* in, size_t count, size_t input_
 
           MidiEvent off_ev;
           off_ev.render_frame = onset + gate;
+          off_ev.source_track_id = ev.source_track_id;
           off_ev.ump = make_note(ev.ump, false, static_cast<uint8_t>(arp_note), 0);
           shape_and_push(off_ev, note_ordinal);
         }

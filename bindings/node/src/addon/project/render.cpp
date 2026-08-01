@@ -298,6 +298,11 @@ Napi::Value ProjectWrap::BounceWithSf2Instruments(const Napi::CallbackInfo& info
                                    : obj.Get("destinationId").As<Napi::Number>().Uint32Value();
       binding.config.gain = FloatProperty(obj, "gain", 0.0f);
       binding.config.polyphony = IntProperty(obj, "polyphony", 0);
+      if (obj.Has("preferModelForModeledFamilies")) {
+        binding.config.struct_version = 2;
+        binding.config.prefer_model_for_modeled_families =
+            obj.Get("preferModelForModeledFamilies").ToBoolean().Value() ? 1 : 0;
+      }
       bindings.push_back(binding);
     }
   }

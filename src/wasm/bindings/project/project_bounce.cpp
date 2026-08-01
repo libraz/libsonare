@@ -250,6 +250,11 @@ SonareSf2InstrumentBinding ProjectWasm::sf2BindingFromVal(val desc) {
   if (hasProperty(desc, "polyphony")) {
     binding.config.polyphony = desc["polyphony"].as<int>();
   }
+  if (hasProperty(desc, "preferModelForModeledFamilies")) {
+    binding.config.struct_version = 2;
+    binding.config.prefer_model_for_modeled_families =
+        desc["preferModelForModeledFamilies"].as<bool>() ? 1 : 0;
+  }
   return binding;
 }
 

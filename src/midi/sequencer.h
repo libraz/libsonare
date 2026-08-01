@@ -156,6 +156,7 @@ class MidiSequencer {
     uint8_t channel = 0;
     uint8_t note = 0;
     uint32_t destination_id = 0;
+    uint32_t source_track_id = 0;
     uint32_t clip_id = 0;
     bool from_clip = false;
   };
@@ -190,12 +191,12 @@ class MidiSequencer {
 
   // Records a sounding note; returns false on capacity overflow (bumps counter).
   bool track_note_on(uint8_t group, uint8_t channel, uint8_t note, uint32_t destination_id,
-                     bool from_clip, uint32_t clip_id) noexcept;
+                     uint32_t source_track_id, bool from_clip, uint32_t clip_id) noexcept;
   // Removes a sounding note if present. Keyed by destination_id too, so a
   // note-off on one destination never releases an identically-pitched note
   // sounding on a different destination/instrument.
   void track_note_off(uint8_t group, uint8_t channel, uint8_t note, uint32_t destination_id,
-                      bool from_clip, uint32_t clip_id) noexcept;
+                      uint32_t source_track_id, bool from_clip, uint32_t clip_id) noexcept;
   void dispatch(uint32_t destination_id, const MidiEvent& event) noexcept;
   // Emit the standard reset sequence (damper off, reset-all-controllers,
   // all-notes-off, pitch-bend center) for one channel at render_frame. Used on a

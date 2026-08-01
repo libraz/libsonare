@@ -364,6 +364,15 @@ SonareError sonare_project_remove_warp_map(SonareProject* project, uint32_t warp
 ///        MIDI clip on the track with this id so the engine dispatches its events
 ///        to the instrument registered for that destination. Routes through an
 ///        undoable edit command. @p track_id must reference an existing track.
+///
+/// @note BuiltinSynth, NativeSynth and the SF2 player preserve the source-track
+///       identity while sharing a destination voice pool. When every bound
+///       instrument has zero host latency, their live output enters the matching
+///       track lane and a channel-strip project bounce renders that shared pool
+///       only once. Configure a live lane for each source track that needs strip
+///       processing. Opaque callback or latency-bearing instruments cannot be
+///       decomposed through the current source-PDC path: a shared-strip bounce
+///       returns @ref SONARE_ERROR_NOT_SUPPORTED rather than duplicating voices.
 SonareError sonare_project_set_track_midi_destination(SonareProject* project, uint32_t track_id,
                                                       uint32_t destination_id);
 

@@ -339,6 +339,40 @@ TEST_CASE("MidiSequencer dispatches in-block events in order and frame", "[midi]
   REQUIRE(seq.active_note_count() == 0);  // every note-on was released.
 }
 
+TEST_CASE("MidiSequencer preserves source track through MIDI FX and a synthetic clip-end note-off",
+          "[midi]") {
+  MidiSequencer seq;
+  CapturingSink sink;
+  seq.prepare(48000.0);
+  seq.set_sink(&sink);
+
+  MidiFxChain fx;
+  sonare::midi::TransposeConfig transpose;
+  transpose.enabled = true;
+  transpose.semitones = 12;
+  fx.set_transpose(transpose);
+  REQUIRE(seq.set_midi_fx(7, fx));
+  seq.acquire_midi_fx(0);
+
+  MidiClipSchedule clip;
+  clip.id = 99;
+  clip.track_id = 4242;
+  clip.destination_id = 7;
+  clip.start_sample = 0;
+  clip.length_samples = 80;
+  clip.events = {{0, sonare::midi::make_midi1_note_on(0, 0, 60, 100)}};
+  seq.set_midi_clips({clip});
+  seq.acquire_midi_clips();
+  seq.process_block(0, 128);
+
+  REQUIRE(sink.events.size() == 2);
+  REQUIRE(sink.events[0].event.ump.is_note_on());
+  REQUIRE(sink.events[0].event.ump.note_number() == 72);
+  REQUIRE(sink.events[0].event.source_track_id == clip.track_id);
+  REQUIRE(sink.events[1].event.ump.is_note_off());
+  REQUIRE(sink.events[1].event.source_track_id == clip.track_id);
+}
+
 TEST_CASE("MidiSequencer dispatches pre-resolved SysEx payload views", "[midi]") {
   MidiSequencer seq;
   CapturingSink sink;

@@ -106,6 +106,11 @@ struct Sf2PlayerConfig {
   /// no SoundFont loaded at all) play through the NativeSynth GM fallback
   /// bank instead of dropping silent.
   bool synth_fallback = true;
+  /// When true, melodic GM programs backed by a dedicated physical model use
+  /// that model even if the loaded SoundFont contains a matching preset. The
+  /// default keeps the established SoundFont-first behavior; drums always
+  /// keep their SoundFont kit routing.
+  bool prefer_model_for_modeled_families = false;
   /// Per-part (MIDI channel) insert slot.
   std::array<Sf2PartInsert, 16> part_inserts{};
   /// Injected insert-factory: builds a streaming ProcessorBase from a name +
@@ -144,6 +149,9 @@ class Sf2Player final : public MidiInstrument {
 
   void prepare(double sample_rate, int max_block_size) override;
   void process(float* const* channels, int num_channels, int num_samples) override;
+  bool process_source_tracks(const MidiInstrumentSourceOutput* outputs, size_t output_count,
+                             int num_channels, int num_samples) noexcept override;
+  bool supports_source_track_rendering() const noexcept override { return true; }
   void reset() override;
   int tail_samples() const noexcept override { return static_cast<int>(tail_samples_); }
   void on_event(uint32_t destination_id, const MidiEvent& event) noexcept override;
@@ -222,10 +230,11 @@ class Sf2Player final : public MidiInstrument {
     GsPartParams gs;
   };
 
-  void note_on(uint8_t channel, uint8_t note, uint8_t velocity) noexcept;
+  void note_on(uint8_t channel, uint8_t note, uint8_t velocity, uint32_t source_track_id) noexcept;
   /// Data-free floor: plays the note through the GM fallback synth bank.
-  void fallback_note_on(uint8_t channel, uint8_t note, uint8_t velocity) noexcept;
-  void note_off(uint8_t channel, uint8_t note) noexcept;
+  void fallback_note_on(uint8_t channel, uint8_t note, uint8_t velocity,
+                        uint32_t source_track_id) noexcept;
+  void note_off(uint8_t channel, uint8_t note, uint32_t source_track_id) noexcept;
   void control_change(uint8_t channel, uint8_t controller, uint8_t value) noexcept;
   /// CC64 with half-pedal semantics: 0 releases held notes, 127 holds them
   /// freely, 1..126 rests the partially raised damper on ringing piano
@@ -261,8 +270,13 @@ class Sf2Player final : public MidiInstrument {
   int32_t max_release_timecents_ = -12000;
 
   /// Renders one chunk (n <= kChunkFrames) of the 16-part bus graph into the
-  /// internal mix scratch.
-  void render_chunk(int n) noexcept;
+  /// internal mix scratch. In source-track mode, attributable dry voice audio
+  /// is added directly to its target while destination-scoped part/effect
+  /// residuals are added to target zero.
+  void render_chunk(int n, const MidiInstrumentSourceOutput* source_outputs,
+                    size_t source_output_count, int output_offset, int num_channels) noexcept;
+  void process_impl(float* const* channels, const MidiInstrumentSourceOutput* source_outputs,
+                    size_t source_output_count, int num_channels, int num_samples) noexcept;
 
   /// Internal bus-graph chunk size (matches the effect bus block).
   static constexpr int kChunkFrames = 256;

@@ -8,6 +8,7 @@
 
 #include "midi/synth/native_synth.h"
 
+#include <array>
 #include <catch2/catch_test_macros.hpp>
 #include <cmath>
 #include <complex>
@@ -30,6 +31,7 @@
 namespace {
 
 using sonare::midi::MidiEvent;
+using sonare::midi::MidiInstrumentSourceOutput;
 using sonare::midi::synth::NativeSynth;
 using sonare::midi::synth::NativeSynthConfig;
 using sonare::midi::synth::Sf2File;
@@ -605,4 +607,50 @@ TEST_CASE("Sf2Player fallback audio path is allocation-free", "[midi][sf2][synth
     player.process(chans, 2, 256);
     REQUIRE(guard.count() == 0);
   }
+}
+
+TEST_CASE("Native and SF2 synths preserve source-track voice attribution", "[midi][synth]") {
+  const auto exercise = [](auto& synth) {
+    MidiEvent first = event(sonare::midi::make_midi1_note_on(0, 0, 60, 100));
+    first.source_track_id = 101;
+    MidiEvent second = event(sonare::midi::make_midi1_note_on(0, 0, 67, 100));
+    second.source_track_id = 202;
+    synth.on_event(0, first);
+    synth.on_event(0, second);
+
+    std::array<float, 256> fallback_l{};
+    std::array<float, 256> fallback_r{};
+    std::array<float, 256> first_l{};
+    std::array<float, 256> first_r{};
+    std::array<float, 256> second_l{};
+    std::array<float, 256> second_r{};
+    float* fallback[] = {fallback_l.data(), fallback_r.data()};
+    float* first_track[] = {first_l.data(), first_r.data()};
+    float* second_track[] = {second_l.data(), second_r.data()};
+    const MidiInstrumentSourceOutput outputs[] = {
+        {0, fallback}, {101, first_track}, {202, second_track}};
+
+    {
+      AllocationGuard guard;
+      REQUIRE(synth.process_source_tracks(outputs, std::size(outputs), 2, 256));
+      REQUIRE(guard.count() == 0);
+    }
+    float first_peak = 0.0f;
+    float second_peak = 0.0f;
+    for (size_t i = 0; i < first_l.size(); ++i) {
+      first_peak = std::max(first_peak, std::abs(first_l[i]) + std::abs(first_r[i]));
+      second_peak = std::max(second_peak, std::abs(second_l[i]) + std::abs(second_r[i]));
+    }
+    REQUIRE(first_peak > 0.0f);
+    REQUIRE(second_peak > 0.0f);
+  };
+
+  NativeSynthConfig native_config;
+  native_config.dc_block = false;
+  NativeSynth native(native_config);
+  native.prepare(kOutRate, 256);
+  exercise(native);
+
+  Sf2Player sf2 = make_fallback_player();
+  exercise(sf2);
 }
