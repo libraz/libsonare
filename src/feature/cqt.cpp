@@ -137,40 +137,14 @@ MatrixView<std::complex<float>> CqtResult::complex_view() const {
 
 const std::vector<float>& CqtResult::magnitude() const {
   if (magnitude_cache_.empty() && !data_.empty()) {
-    magnitude_cache_.resize(data_.size());
-    if (!power_cache_.empty()) {
-      // Derive magnitude from cached power via sqrt — cheaper than recomputing
-      // |z| from the complex spectrum.
-      for (size_t i = 0; i < power_cache_.size(); ++i) {
-        magnitude_cache_[i] = std::sqrt(power_cache_[i]);
-      }
-    } else {
-      for (size_t i = 0; i < data_.size(); ++i) {
-        magnitude_cache_[i] = std::abs(data_[i]);
-      }
-    }
+    detail::fill_magnitude_cache(data_, power_cache_, magnitude_cache_);
   }
   return magnitude_cache_;
 }
 
 const std::vector<float>& CqtResult::power() const {
   if (power_cache_.empty() && !data_.empty()) {
-    power_cache_.resize(data_.size());
-    if (!magnitude_cache_.empty()) {
-      // Magnitude already computed — squaring is cheaper than recomputing
-      // re²+im² from the complex spectrum.
-      for (size_t i = 0; i < magnitude_cache_.size(); ++i) {
-        const float m = magnitude_cache_[i];
-        power_cache_[i] = m * m;
-      }
-    } else {
-      // re² + im² without sqrt (auto-vectorized by the compiler, on par with Eigen).
-      for (size_t i = 0; i < data_.size(); ++i) {
-        const float re = data_[i].real();
-        const float im = data_[i].imag();
-        power_cache_[i] = re * re + im * im;
-      }
-    }
+    detail::fill_power_cache(data_, magnitude_cache_, power_cache_);
   }
   return power_cache_;
 }

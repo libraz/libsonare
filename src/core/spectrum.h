@@ -18,6 +18,25 @@ namespace sonare {
 /// @param progress Progress value (0.0 to 1.0)
 using SpectrogramProgressCallback = std::function<void(float progress)>;
 
+namespace detail {
+
+/// @brief Fills @p magnitude for the complex spectrum @p data, deriving it from
+///        @p power by sqrt when that cache is already populated (cheaper than
+///        recomputing |z|) and from @p data otherwise.
+/// @details Shared by the complex-spectrum holders that cache magnitude and
+///   power side by side (Spectrogram, CqtResult). @p magnitude is resized to
+///   @p data's length; callers own the "already cached" check.
+void fill_magnitude_cache(const std::vector<std::complex<float>>& data,
+                          const std::vector<float>& power, std::vector<float>& magnitude);
+
+/// @brief Fills @p power for the complex spectrum @p data, deriving it from
+///        @p magnitude by squaring when that cache is already populated and
+///        from re² + im² otherwise.
+void fill_power_cache(const std::vector<std::complex<float>>& data,
+                      const std::vector<float>& magnitude, std::vector<float>& power);
+
+}  // namespace detail
+
 /// @brief STFT output format.
 enum class StftFormat {
   Complex,    ///< Complex spectrum (default)

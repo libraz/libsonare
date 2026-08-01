@@ -18,6 +18,46 @@ namespace sonare {
 
 using sonare::constants::kTwoPi;
 
+namespace detail {
+
+void fill_magnitude_cache(const std::vector<std::complex<float>>& data,
+                          const std::vector<float>& power, std::vector<float>& magnitude) {
+  magnitude.resize(data.size());
+  if (!power.empty()) {
+    // Derive magnitude from cached power via sqrt — cheaper than recomputing
+    // re²+im² + sqrt from the complex spectrum.
+    for (size_t i = 0; i < power.size(); ++i) {
+      magnitude[i] = std::sqrt(power[i]);
+    }
+    return;
+  }
+  for (size_t i = 0; i < data.size(); ++i) {
+    magnitude[i] = std::abs(data[i]);
+  }
+}
+
+void fill_power_cache(const std::vector<std::complex<float>>& data,
+                      const std::vector<float>& magnitude, std::vector<float>& power) {
+  power.resize(data.size());
+  if (!magnitude.empty()) {
+    // Magnitude already computed — squaring is cheaper than recomputing
+    // re²+im² from the complex spectrum.
+    for (size_t i = 0; i < magnitude.size(); ++i) {
+      const float m = magnitude[i];
+      power[i] = m * m;
+    }
+    return;
+  }
+  // re² + im² without sqrt (auto-vectorized by the compiler, on par with Eigen).
+  for (size_t i = 0; i < data.size(); ++i) {
+    const float re = data[i].real();
+    const float im = data[i].imag();
+    power[i] = re * re + im * im;
+  }
+}
+
+}  // namespace detail
+
 namespace {
 
 std::vector<float> pad_center(const float* data, size_t size, int pad_length, PadMode pad_mode) {
@@ -203,40 +243,14 @@ const std::complex<float>* Spectrogram::complex_data() const { return data_.data
 
 const std::vector<float>& Spectrogram::magnitude() const {
   if (magnitude_cache_.empty() && !data_.empty()) {
-    magnitude_cache_.resize(data_.size());
-    if (!power_cache_.empty()) {
-      // Derive magnitude from cached power via sqrt — cheaper than recomputing
-      // re²+im² + sqrt from the complex spectrum.
-      for (size_t i = 0; i < power_cache_.size(); ++i) {
-        magnitude_cache_[i] = std::sqrt(power_cache_[i]);
-      }
-    } else {
-      for (size_t i = 0; i < data_.size(); ++i) {
-        magnitude_cache_[i] = std::abs(data_[i]);
-      }
-    }
+    detail::fill_magnitude_cache(data_, power_cache_, magnitude_cache_);
   }
   return magnitude_cache_;
 }
 
 const std::vector<float>& Spectrogram::power() const {
   if (power_cache_.empty() && !data_.empty()) {
-    power_cache_.resize(data_.size());
-    if (!magnitude_cache_.empty()) {
-      // Magnitude already computed — squaring is cheaper than recomputing
-      // re²+im² from the complex spectrum.
-      for (size_t i = 0; i < magnitude_cache_.size(); ++i) {
-        const float m = magnitude_cache_[i];
-        power_cache_[i] = m * m;
-      }
-    } else {
-      // re² + im² without sqrt (auto-vectorized by the compiler, on par with Eigen).
-      for (size_t i = 0; i < data_.size(); ++i) {
-        const float re = data_[i].real();
-        const float im = data_[i].imag();
-        power_cache_[i] = re * re + im * im;
-      }
-    }
+    detail::fill_power_cache(data_, magnitude_cache_, power_cache_);
   }
   return power_cache_;
 }
