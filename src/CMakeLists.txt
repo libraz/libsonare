@@ -976,74 +976,102 @@ if(BUILD_WASM)
     target_compile_options(sonare_voice_changer PUBLIC -matomics -mbulk-memory)
   endif()
 
-  set(SONARE_WASM_BINDING_SOURCES
-    wasm/bindings.cpp
-    wasm/bindings/common/common.cpp
-    wasm/bindings/effects/audio.cpp
-    c_api/sonare_c_voice_changer.cpp
-    wasm/bindings/features/core.cpp
-    wasm/bindings/features/music.cpp
-    wasm/bindings/features/pitch.cpp
-    wasm/bindings/features/spectral.cpp
-    wasm/bindings/features/spectrogram.cpp
-    wasm/bindings/metering/metering.cpp
-    wasm/bindings/mixing/mixing.cpp
-    wasm/bindings/mixing/mixing_strip.cpp
-    wasm/bindings/mixing/mixing_automation.cpp
-    wasm/bindings/mixing/mixing_processing.cpp
-    wasm/bindings/mixing/mixing_topology.cpp
-    wasm/bindings/mastering/api.cpp
-    wasm/bindings/mastering/chain.cpp
-    wasm/bindings/offline.cpp
-    wasm/bindings/effects/offline_dynamics_editing.cpp
-    wasm/bindings/project/project.cpp
-    wasm/bindings/project/project_arrange.cpp
-    wasm/bindings/project/project_edit.cpp
-    wasm/bindings/project/project_midi.cpp
-    wasm/bindings/project/project_bounce.cpp
-    wasm/bindings/project/project_meta.cpp
-    wasm/bindings/analysis/quick.cpp
-    wasm/bindings/analysis/quick_detailed.cpp
-    wasm/bindings/effects/repair.cpp
-    wasm/bindings/effects/realtime_voice_changer.cpp
-    wasm/bindings/realtime/engine.cpp
-    wasm/bindings/realtime/transport.cpp
-    wasm/bindings/realtime/params.cpp
-    wasm/bindings/realtime/midi.cpp
-    wasm/bindings/realtime/mixer.cpp
-    wasm/bindings/realtime/clips.cpp
-    wasm/bindings/realtime/capture.cpp
-    wasm/bindings/realtime/processing.cpp
-    wasm/bindings/realtime/telemetry.cpp
-    wasm/bindings/analysis/stream_analyzer.cpp
-    wasm/bindings/mastering/streaming_equalizer.cpp
-    wasm/bindings/mastering/streaming_chain.cpp
-    wasm/bindings/streaming/retune.cpp
-  )
+  if(SONARE_WASM_ANALYSIS_ONLY)
+    if(BUILD_MASTERING OR BUILD_MIXING)
+      message(FATAL_ERROR
+        "SONARE_WASM_ANALYSIS_ONLY requires BUILD_MASTERING=OFF and BUILD_MIXING=OFF")
+    endif()
+    set(SONARE_WASM_BINDING_SOURCES
+      wasm/bindings.cpp
+      wasm/bindings/common/common.cpp
+      wasm/bindings/analysis/features.cpp
+      wasm/bindings/analysis/quick.cpp
+      wasm/bindings/analysis/quick_detailed.cpp
+      wasm/bindings/features/core.cpp
+      wasm/bindings/features/music.cpp
+      wasm/bindings/features/pitch.cpp
+      wasm/bindings/features/spectral.cpp
+      wasm/bindings/features/spectrogram.cpp
+      wasm/bindings/metering/metering.cpp
+    )
+  else()
+    set(SONARE_WASM_BINDING_SOURCES
+      wasm/bindings.cpp
+      wasm/bindings/common/common.cpp
+      wasm/bindings/effects/audio.cpp
+      c_api/sonare_c_voice_changer.cpp
+      wasm/bindings/features/core.cpp
+      wasm/bindings/features/music.cpp
+      wasm/bindings/features/pitch.cpp
+      wasm/bindings/features/spectral.cpp
+      wasm/bindings/features/spectrogram.cpp
+      wasm/bindings/metering/metering.cpp
+      wasm/bindings/mixing/mixing.cpp
+      wasm/bindings/mixing/mixing_strip.cpp
+      wasm/bindings/mixing/mixing_automation.cpp
+      wasm/bindings/mixing/mixing_processing.cpp
+      wasm/bindings/mixing/mixing_topology.cpp
+      wasm/bindings/mastering/api.cpp
+      wasm/bindings/mastering/chain.cpp
+      wasm/bindings/offline.cpp
+      wasm/bindings/effects/offline_dynamics_editing.cpp
+      wasm/bindings/project/project.cpp
+      wasm/bindings/project/project_arrange.cpp
+      wasm/bindings/project/project_edit.cpp
+      wasm/bindings/project/project_midi.cpp
+      wasm/bindings/project/project_bounce.cpp
+      wasm/bindings/project/project_meta.cpp
+      wasm/bindings/analysis/quick.cpp
+      wasm/bindings/analysis/quick_detailed.cpp
+      wasm/bindings/effects/repair.cpp
+      wasm/bindings/effects/realtime_voice_changer.cpp
+      wasm/bindings/realtime/engine.cpp
+      wasm/bindings/realtime/transport.cpp
+      wasm/bindings/realtime/params.cpp
+      wasm/bindings/realtime/midi.cpp
+      wasm/bindings/realtime/mixer.cpp
+      wasm/bindings/realtime/clips.cpp
+      wasm/bindings/realtime/capture.cpp
+      wasm/bindings/realtime/processing.cpp
+      wasm/bindings/realtime/telemetry.cpp
+      wasm/bindings/analysis/stream_analyzer.cpp
+      wasm/bindings/mastering/streaming_equalizer.cpp
+      wasm/bindings/mastering/streaming_chain.cpp
+      wasm/bindings/streaming/retune.cpp
+    )
+  endif()
 
   add_executable(sonare ${SONARE_WASM_BINDING_SOURCES})
-  target_link_libraries(sonare PRIVATE sonare_core sonare_engine)
+  set_target_properties(sonare PROPERTIES OUTPUT_NAME ${SONARE_WASM_OUTPUT_NAME})
+  # Core analysis and metering share the canonical K-weighting / RBJ filter
+  # coefficient helpers from sonare_rt. The analysis entry deliberately stops
+  # here: it does not link the realtime engine, mixer, or arrangement layers.
+  target_link_libraries(sonare PRIVATE sonare_core sonare_rt)
   target_compile_definitions(sonare PRIVATE
     SONARE_BUILD_MASTERING=$<IF:$<BOOL:${BUILD_MASTERING}>,1,0>
     SONARE_BUILD_MIXING=$<IF:$<BOOL:${BUILD_MIXING}>,1,0>
     SONARE_BUILD_FX=$<IF:$<BOOL:${BUILD_FX}>,1,0>
+    $<$<BOOL:${SONARE_WASM_ANALYSIS_ONLY}>:SONARE_WASM_ANALYSIS_ONLY=1>
   )
-  if(BUILD_PITCH_EDITOR)
+  if(NOT SONARE_WASM_ANALYSIS_ONLY)
+    target_link_libraries(sonare PRIVATE sonare_engine)
+  endif()
+  if(BUILD_PITCH_EDITOR AND NOT SONARE_WASM_ANALYSIS_ONLY)
     target_link_libraries(sonare PRIVATE sonare_pitch_editor)
   endif()
-  if(BUILD_VOICE_CHANGER)
+  if(BUILD_VOICE_CHANGER AND NOT SONARE_WASM_ANALYSIS_ONLY)
     target_link_libraries(sonare PRIVATE sonare_voice_changer)
     target_compile_definitions(sonare PRIVATE SONARE_WITH_VOICE_CHANGER=1)
   endif()
-  if(BUILD_MASTERING)
+  if(BUILD_MASTERING AND NOT SONARE_WASM_ANALYSIS_ONLY)
     target_link_libraries(sonare PRIVATE sonare_mastering)
     target_compile_definitions(sonare PRIVATE SONARE_WITH_MASTERING=1)
-  else()
+  elseif(NOT SONARE_WASM_ANALYSIS_ONLY)
     target_sources(sonare PRIVATE
       mastering/common/loudness_measure.cpp
       mastering/maximizer/loudness_optimize.cpp)
   endif()
-  if(BUILD_MIXING)
+  if(BUILD_MIXING AND NOT SONARE_WASM_ANALYSIS_ONLY)
     target_link_libraries(sonare PRIVATE sonare_mixing)
     target_compile_definitions(sonare PRIVATE SONARE_WITH_MIXING=1)
     if(BUILD_GRAPH)
@@ -1055,12 +1083,12 @@ if(BUILD_WASM)
       target_sources(sonare PRIVATE ${SONARE_C_MIXING_SOURCES})
     endif()
   endif()
-  if(BUILD_ACOUSTIC_SIM AND BUILD_FX)
+  if(BUILD_ACOUSTIC_SIM AND BUILD_FX AND NOT SONARE_WASM_ANALYSIS_ONLY)
     # RIR synthesis + room estimation (acoustic) and the offline morph (fx).
     target_link_libraries(sonare PRIVATE sonare_acoustic sonare_fx)
     target_compile_definitions(sonare PRIVATE SONARE_WITH_ACOUSTIC_SIM=1)
   endif()
-  if(BUILD_ARRANGEMENT)
+  if(BUILD_ARRANGEMENT AND NOT SONARE_WASM_ANALYSIS_ONLY)
     # Headless DAW project. The WASM Project binding wraps the C-ABI project
     # sources, so compile them into the target and link the arrangement
     # control-plane libraries (serializer / MIR / MIDI / project model).
@@ -1095,7 +1123,7 @@ if(BUILD_WASM)
   add_custom_command(TARGET sonare POST_BUILD
     COMMAND ${CMAKE_COMMAND} -E make_directory ${PROJECT_SOURCE_DIR}/bindings/wasm/dist
     COMMAND ${CMAKE_COMMAND} -E copy $<TARGET_FILE:sonare> ${PROJECT_SOURCE_DIR}/bindings/wasm/dist/
-    COMMAND ${CMAKE_COMMAND} -E copy ${CMAKE_BINARY_DIR}/bin/sonare.wasm ${PROJECT_SOURCE_DIR}/bindings/wasm/dist/
+    COMMAND ${CMAKE_COMMAND} -E copy ${CMAKE_BINARY_DIR}/bin/${SONARE_WASM_OUTPUT_NAME}.wasm ${PROJECT_SOURCE_DIR}/bindings/wasm/dist/
     COMMENT "Copying WASM files to bindings/wasm/dist/"
   )
 

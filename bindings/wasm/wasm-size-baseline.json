@@ -1,0 +1,22 @@
+{
+  "artifacts": {
+    "sonare-analysis.wasm": {
+      "code": 831731,
+      "data": 64087,
+      "gzip": 355163,
+      "raw": 900843,
+      "sha256": "b9c8eefe2dc8eee0bc8e92cfafce8e51754eea25e3c406afe04ec4989019669b"
+    },
+    "sonare.wasm": {
+      "code": 3748075,
+      "data": 185552,
+      "gzip": 1321528,
+      "raw": 3947101,
+      "sha256": "de655d46fdb0a2d3dc620b82197bbfc0fbf6aa31baf47dc518e4d01bfe769c6c"
+    }
+  },
+  "format": 1,
+  "toolchain": {
+    "emsdk": "5.0.2"
+  }
+}

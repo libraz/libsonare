@@ -220,5 +220,6 @@ void registerMasteringChainBindings();
 void registerMasteringApiBindings();
 void registerQuickAnalysisBindings();
 void registerQuickDetailedAnalysisBindings();
+void registerAnalysisFeatureBindings();
 
 #endif  // __EMSCRIPTEN__

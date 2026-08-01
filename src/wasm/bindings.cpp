@@ -187,8 +187,9 @@ uint32_t js_abi_version() { return SONARE_ABI_VERSION; }
 
 uint32_t js_engine_abi_version() { return sonare::rt::kEngineAbiVersion; }
 
-uint32_t js_voice_changer_abi_version() { return editing::voice_changer::kVoiceChangerAbiVersion; }
+uint32_t js_voice_changer_abi_version() { return SONARE_VOICE_CHANGER_ABI_VERSION; }
 
+#if !defined(SONARE_WASM_ANALYSIS_ONLY)
 // POD-flat ↔ nested C++ field bridge for the realtime voice-changer config.
 // X(cpp_path, js_key) — cpp_path is the dotted member on the C++
 // RealtimeVoiceChangerConfig; js_key is the camelCase key exposed to JS,
@@ -266,6 +267,7 @@ val js_realtime_voice_changer_preset_config(int preset) {
   return out;
 }
 #undef SONARE_WASM_VC_FIELDS
+#endif
 
 val js_audio_from_memory(val bytes) {
   std::vector<uint8_t> data = uint8ArrayToVector(bytes);
@@ -341,11 +343,16 @@ EMSCRIPTEN_BINDINGS(sonare) {
   function("abiVersion", &js_abi_version);
   function("engineAbiVersion", &js_engine_abi_version);
   function("voiceChangerAbiVersion", &js_voice_changer_abi_version);
+#if !defined(SONARE_WASM_ANALYSIS_ONLY)
   function("voiceCharacterPresetId", &js_voice_character_preset_id);
   function("realtimeVoiceChangerPresetConfig", &js_realtime_voice_changer_preset_config);
+#endif
   function("audioFromMemory", &js_audio_from_memory);
 
   registerQuickAnalysisBindings();
+#if defined(SONARE_WASM_ANALYSIS_ONLY)
+  registerAnalysisFeatureBindings();
+#else
   registerEffectsAudioBindings();
   registerMasteringChainBindings();
   registerMasteringApiBindings();
@@ -363,6 +370,7 @@ EMSCRIPTEN_BINDINGS(sonare) {
   registerRealtimeVoiceChangerStreamingBindings();
 
   registerStreamAnalyzerBindings();
+#endif
 }
 
 #endif  // __EMSCRIPTEN__

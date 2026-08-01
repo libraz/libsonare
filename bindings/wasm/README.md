@@ -31,6 +31,17 @@ Everything runs client-side — no server, nothing uploaded.
 npm install @libraz/libsonare
 ```
 
+For BPM/key/chord detection, feature extraction, and metering without the
+mastering, mixing, or realtime-engine APIs, import the smaller analysis entry:
+
+```typescript
+import { detectBpm, init } from '@libraz/libsonare/analysis';
+```
+
+With emsdk 5.0.2, the analysis binary is 0.86 MiB raw / 347 KiB gzip; the full
+entry is 3.76 MiB raw / 1.26 MiB gzip. The analysis entry deliberately has no
+`masterAudio`, `mixStereo`, `Project`, `Mixer`, or `RealtimeEngine` export.
+
 ## Quick Start
 
 `init()` loads the WASM module once; every API is available afterwards. Top-level

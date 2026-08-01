@@ -42,6 +42,7 @@ EXEMPT_FILES = {
     "scale.ts",
     "stream_analyzer.ts",
     "web_midi.ts",
+    "worker.ts",
 }
 SCALAR_HELPERS = {
     "hzToMel",

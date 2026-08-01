@@ -22,6 +22,10 @@ add_compile_definitions(
 
 option(BUILD_TESTING "Build tests" ON)
 option(BUILD_WASM "Build for WebAssembly" OFF)
+option(SONARE_WASM_ANALYSIS_ONLY
+       "Build only analysis and feature APIs into the WebAssembly entry" OFF)
+set(SONARE_WASM_OUTPUT_NAME "sonare" CACHE STRING
+    "Output basename for the WebAssembly JavaScript and binary files")
 option(BUILD_SHARED "Build shared library" OFF)
 option(BUILD_CLI "Build CLI tool" ON)
 option(BUILD_BENCH "Build C++ benchmark binary" OFF)

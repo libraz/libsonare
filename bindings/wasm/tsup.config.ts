@@ -15,6 +15,7 @@ const common = {
 // the types shared between index and worklet into a content-hashed chunk
 // (e.g. `index-<hash>.d.ts`) whose name churns on every change.
 export default defineConfig([
+  { ...common, entry: ['src/analysis.ts'], external: [] },
   { ...common, entry: ['src/index.ts'] },
   { ...common, entry: ['src/worklet.ts'] },
   { ...common, entry: ['src/worker.ts'] },

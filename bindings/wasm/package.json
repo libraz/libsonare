@@ -11,6 +11,10 @@
       "types": "./dist/index.d.ts",
       "import": "./dist/index.js"
     },
+    "./analysis": {
+      "types": "./dist/analysis.d.ts",
+      "import": "./dist/analysis.js"
+    },
     "./worklet": {
       "types": "./dist/worklet.d.ts",
       "import": "./dist/worklet.js"
@@ -29,20 +33,24 @@
   "sideEffects": false,
   "scripts": {
     "build": "yarn build:wasm && yarn build:js",
-    "build:wasm": "mkdir -p build-wasm/em-cache && EM_CACHE=$PWD/build-wasm/em-cache emcmake cmake -S ../.. -B build-wasm -DBUILD_WASM=ON -DBUILD_MASTERING=ON -DCMAKE_BUILD_TYPE=Release && EM_CACHE=$PWD/build-wasm/em-cache cmake --build build-wasm",
+    "build:wasm": "yarn build:wasm:full && yarn build:wasm:analysis",
+    "build:wasm:full": "mkdir -p build-wasm/em-cache && EM_CACHE=$PWD/build-wasm/em-cache emcmake cmake -S ../.. -B build-wasm -DBUILD_WASM=ON -DSONARE_WASM_ANALYSIS_ONLY=OFF -DSONARE_WASM_OUTPUT_NAME=sonare -DBUILD_MASTERING=ON -DBUILD_MIXING=ON -DBUILD_GRAPH=ON -DBUILD_FX=ON -DBUILD_ACOUSTIC_SIM=ON -DBUILD_PITCH_EDITOR=ON -DBUILD_VOICE_CHANGER=ON -DBUILD_ARRANGEMENT=ON -DBUILD_ASSIST=ON -DCMAKE_BUILD_TYPE=Release && EM_CACHE=$PWD/build-wasm/em-cache cmake --build build-wasm",
+    "build:wasm:analysis": "mkdir -p build-wasm-analysis/em-cache && EM_CACHE=$PWD/build-wasm-analysis/em-cache emcmake cmake -S ../.. -B build-wasm-analysis -DBUILD_WASM=ON -DSONARE_WASM_ANALYSIS_ONLY=ON -DSONARE_WASM_OUTPUT_NAME=sonare-analysis -DBUILD_MASTERING=OFF -DBUILD_MIXING=OFF -DBUILD_GRAPH=OFF -DBUILD_FX=OFF -DBUILD_ACOUSTIC_SIM=OFF -DBUILD_VOICE_CHANGER=OFF -DBUILD_ARRANGEMENT=OFF -DBUILD_ASSIST=OFF -DCMAKE_BUILD_TYPE=Release && EM_CACHE=$PWD/build-wasm-analysis/em-cache cmake --build build-wasm-analysis --target sonare",
+    "check:wasm-size": "python3 ../../tools/check_wasm_size.py --baseline wasm-size-baseline.json --artifact sonare.wasm=dist/sonare.wasm --artifact sonare-analysis.wasm=dist/sonare-analysis.wasm",
     "bench:wasm:isp": "mkdir -p build-wasm-bench/em-cache /tmp/libsonare-wasm-bench && EM_CACHE=$PWD/build-wasm-bench/em-cache emcmake cmake -S ../.. -B build-wasm-bench -DBUILD_WASM=ON -DBUILD_MASTERING=ON -DBUILD_BENCH=ON -DBUILD_TESTING=OFF -DBUILD_CLI=OFF -DCMAKE_BUILD_TYPE=Release && EM_CACHE=$PWD/build-wasm-bench/em-cache cmake --build build-wasm-bench --target sonare_mastering_isp_bench && cp build-wasm-bench/bin/sonare_mastering_isp_bench.js /tmp/libsonare-wasm-bench/sonare_mastering_isp_bench.cjs && cp build-wasm-bench/bin/sonare_mastering_isp_bench.wasm /tmp/libsonare-wasm-bench/sonare_mastering_isp_bench.wasm && node /tmp/libsonare-wasm-bench/sonare_mastering_isp_bench.cjs",
     "bench:wasm:phase-vocoder": "mkdir -p build-wasm-bench/em-cache /tmp/libsonare-wasm-bench && EM_CACHE=$PWD/build-wasm-bench/em-cache emcmake cmake -S ../.. -B build-wasm-bench -DBUILD_WASM=ON -DBUILD_BENCH=ON -DBUILD_TESTING=OFF -DBUILD_CLI=OFF -DCMAKE_BUILD_TYPE=Release && EM_CACHE=$PWD/build-wasm-bench/em-cache cmake --build build-wasm-bench --target sonare_phase_vocoder_streaming_bench && cp build-wasm-bench/bin/sonare_phase_vocoder_streaming_bench.js /tmp/libsonare-wasm-bench/sonare_phase_vocoder_streaming_bench.cjs && cp build-wasm-bench/bin/sonare_phase_vocoder_streaming_bench.wasm /tmp/libsonare-wasm-bench/sonare_phase_vocoder_streaming_bench.wasm && node /tmp/libsonare-wasm-bench/sonare_phase_vocoder_streaming_bench.cjs",
     "build:js": "tsup",
-    "clean": "rm -rf dist build-wasm LICENSE",
+    "clean": "rm -rf dist build-wasm build-wasm-analysis LICENSE",
     "lint": "biome check src/ tests/",
     "lint:fix": "biome check --write src/ tests/",
     "format": "biome format --write src/ tests/",
     "test": "vitest run",
+    "test:types": "tsc --noEmit --ignoreConfig --strict --module ESNext --moduleResolution bundler --target ES2020 tests/typing/analysis-entry.ts",
     "test:browser": "node scripts/audio-worklet-smoke.mjs",
     "test:browser:worker": "node scripts/offline-worker-smoke.mjs",
     "test:browser:audit": "node scripts/audit-boundary-smoke.mjs",
     "test:watch": "vitest",
-    "prepublishOnly": "yarn clean && cp ../../LICENSE LICENSE && yarn build && yarn lint && yarn test"
+    "prepublishOnly": "yarn clean && cp ../../LICENSE LICENSE && yarn build && yarn lint && yarn test && yarn test:types"
   },
   "keywords": [
     "audio",

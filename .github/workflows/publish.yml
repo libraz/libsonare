@@ -59,7 +59,10 @@ jobs:
         run: yarn lint
       - name: Test WASM binding
         working-directory: bindings/wasm
-        run: yarn test
+        run: yarn test && yarn test:types
+      - name: Enforce WASM size budgets
+        working-directory: bindings/wasm
+        run: yarn check:wasm-size
 
       - name: Create GitHub Release
         uses: softprops/action-gh-release@v3
