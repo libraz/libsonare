@@ -1,0 +1,25 @@
+<!doctype html>
+<html lang="en">
+  <meta charset="utf-8">
+  <title>libsonare browser analysis</title>
+  <input id="file" type="file" accept="audio/*">
+  <pre id="result">Choose an audio file.</pre>
+  <script type="module">
+    import { Audio, init } from '../../bindings/wasm/dist/index.js';
+
+    await init();
+    const input = document.querySelector('#file');
+    const result = document.querySelector('#result');
+    input.addEventListener('change', async () => {
+      const file = input.files?.[0];
+      if (!file) return;
+      result.textContent = 'Analyzing…';
+      try {
+        const audio = await Audio.fromMemoryWithBrowserFallback(new Uint8Array(await file.arrayBuffer()));
+        result.textContent = JSON.stringify(audio.analyze(), null, 2);
+      } catch (error) {
+        result.textContent = error instanceof Error ? error.message : String(error);
+      }
+    });
+  </script>
+</html>

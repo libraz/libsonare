@@ -1,0 +1,8 @@
+{
+  "name": "libsonare-node-native-example",
+  "private": true,
+  "type": "module",
+  "dependencies": {
+    "@libraz/libsonare-native": "file:../../bindings/node"
+  }
+}
