@@ -864,6 +864,38 @@ class StageGainReduction:
     gain_reduction_db: float
     def __init__(self, stage: str, gain_reduction_db: float) -> None: ...
 
+class MasteringLoudnessSummary:
+    integrated_lufs: float
+    max_momentary_lufs: float
+    max_short_term_lufs: float
+    true_peak_dbtp: float
+    loudness_range: float
+    def __init__(
+        self,
+        integrated_lufs: float,
+        max_momentary_lufs: float,
+        max_short_term_lufs: float,
+        true_peak_dbtp: float,
+        loudness_range: float,
+    ) -> None: ...
+
+class MasteringReport:
+    before: MasteringLoudnessSummary
+    after: MasteringLoudnessSummary
+    applied_gain_db: float
+    max_gain_reduction_db: float
+    loudness_target_limited: bool
+    band_energy_delta_db: list[float]
+    def __init__(
+        self,
+        before: MasteringLoudnessSummary,
+        after: MasteringLoudnessSummary,
+        applied_gain_db: float,
+        max_gain_reduction_db: float,
+        loudness_target_limited: bool,
+        band_energy_delta_db: list[float] = ...,
+    ) -> None: ...
+
 class MasteringChainResult:
     samples: list[float]
     sample_rate: int
@@ -875,6 +907,7 @@ class MasteringChainResult:
     output_lra: float
     loudness_target_limited: bool
     stage_gain_reductions: list[StageGainReduction]
+    report: MasteringReport | None
     def __init__(
         self,
         samples: list[float],
@@ -887,6 +920,7 @@ class MasteringChainResult:
         output_lra: float = ...,
         loudness_target_limited: bool = ...,
         stage_gain_reductions: list[StageGainReduction] = ...,
+        report: MasteringReport | None = ...,
     ) -> None: ...
 
 class MasteringChainStereoResult:
@@ -901,6 +935,7 @@ class MasteringChainStereoResult:
     output_lra: float
     loudness_target_limited: bool
     stage_gain_reductions: list[StageGainReduction]
+    report: MasteringReport | None
     def __init__(
         self,
         left: list[float],
@@ -914,6 +949,7 @@ class MasteringChainStereoResult:
         output_lra: float = ...,
         loudness_target_limited: bool = ...,
         stage_gain_reductions: list[StageGainReduction] = ...,
+        report: MasteringReport | None = ...,
     ) -> None: ...
 
 class MixMeterSnapshot:

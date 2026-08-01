@@ -39,6 +39,34 @@ using namespace sonare_node;
 
 namespace {
 
+template <typename Summary>
+Napi::Object MasteringLoudnessSummaryToObject(Napi::Env env, const Summary& summary) {
+  Napi::Object out = Napi::Object::New(env);
+  out.Set("integratedLufs", Napi::Number::New(env, summary.integrated_lufs));
+  out.Set("maxMomentaryLufs", Napi::Number::New(env, summary.max_momentary_lufs));
+  out.Set("maxShortTermLufs", Napi::Number::New(env, summary.max_short_term_lufs));
+  out.Set("truePeakDbtp", Napi::Number::New(env, summary.true_peak_dbtp));
+  out.Set("loudnessRange", Napi::Number::New(env, summary.loudness_range));
+  return out;
+}
+
+template <typename Report>
+void SetMasteringReport(Napi::Env env, Napi::Object out, const Report& report) {
+  Napi::Object report_object = Napi::Object::New(env);
+  report_object.Set("before", MasteringLoudnessSummaryToObject(env, report.before));
+  report_object.Set("after", MasteringLoudnessSummaryToObject(env, report.after));
+  report_object.Set("appliedGainDb", Napi::Number::New(env, report.applied_gain_db));
+  report_object.Set("maxGainReductionDb", Napi::Number::New(env, report.max_gain_reduction_db));
+  report_object.Set("loudnessTargetLimited",
+                    Napi::Boolean::New(env, report.loudness_target_limited != 0));
+  Napi::Float32Array band_energy = Napi::Float32Array::New(env, SONARE_MASTERING_REPORT_BAND_COUNT);
+  for (size_t index = 0; index < SONARE_MASTERING_REPORT_BAND_COUNT; ++index) {
+    band_energy[index] = report.band_energy_delta_db[index];
+  }
+  report_object.Set("bandEnergyDeltaDb", band_energy);
+  out.Set("report", report_object);
+}
+
 // Append the chain-metric fields (output true peak, LRA, per-stage gain
 // reductions) shared by every mastering-chain result object. MonoChainResult
 // and StereoChainResult both derive ChainMetrics, so the same builder serves
@@ -57,6 +85,7 @@ void SetChainMetrics(Napi::Env env, Napi::Object out,
     reductions.Set(static_cast<uint32_t>(i), entry);
   }
   out.Set("stageGainReductions", reductions);
+  SetMasteringReport(env, out, metrics.report);
 }
 
 struct ProgressContext {
@@ -102,6 +131,7 @@ void SetCChainMetrics(Napi::Env env, Napi::Object out, const Result& result) {
     reductions.Set(static_cast<uint32_t>(index), entry);
   }
   out.Set("stageGainReductions", reductions);
+  SetMasteringReport(env, out, result.report);
 }
 
 Napi::Object CMonoChainResultToObject(Napi::Env env, const SonareMasteringChainResult& result) {

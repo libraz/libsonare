@@ -32,6 +32,18 @@ struct LufsAndTruePeak {
   float true_peak_dbtp = 0.0f;
 };
 
+/// @brief Full loudness summary used by the mastering-chain report.
+///
+/// This is intentionally a thin view of the existing offline EBU R128 meter;
+/// it adds no DSP algorithm or state of its own.
+struct LoudnessSummary {
+  float integrated_lufs = 0.0f;
+  float max_momentary_lufs = 0.0f;
+  float max_short_term_lufs = 0.0f;
+  float true_peak_dbtp = 0.0f;
+  float loudness_range = 0.0f;
+};
+
 /// @brief Integrated LUFS of @p audio (BS.1770-4 / EBU R128).
 /// @details Forwards to `metering::lufs(audio).integrated_lufs`. Returns a
 ///          non-finite value when the input is below the absolute gate.
@@ -78,5 +90,14 @@ float measure_true_peak_dbtp(const Audio& audio,
 ///        result-struct population paths that report both numbers.
 LufsAndTruePeak measure_lufs_and_true_peak(const Audio& audio,
                                            int true_peak_oversample = kDefaultTruePeakOversample);
+
+/// @brief Return the existing LUFS, LRA, and true-peak measurements together.
+LoudnessSummary measure_loudness_summary(const Audio& audio,
+                                         int true_peak_oversample = kDefaultTruePeakOversample);
+
+/// @brief Multi-channel counterpart preserving BS.1770 channel summing.
+LoudnessSummary measure_loudness_summary_interleaved(
+    const float* samples, std::size_t frames, int channels, int sample_rate,
+    int true_peak_oversample = kDefaultTruePeakOversample);
 
 }  // namespace sonare::mastering::common

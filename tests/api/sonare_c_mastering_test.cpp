@@ -675,6 +675,27 @@ TEST_CASE("sonare_mastering pair _ex accepts differing reference length", "[c_ap
   sonare_free_string(json);
 }
 
+TEST_CASE("mastering chain C result includes the before and after report", "[c_api][mastering]") {
+  constexpr int sample_rate = 22050;
+  auto samples = generate_sine(440.0f, sample_rate, 4.0f);
+  for (auto& sample : samples) sample *= 0.2f;
+  const SonareMasteringParam params[] = {{"loudness.targetLufs", -14.0},
+                                         {"loudness.ceilingDb", -1.0}};
+  SonareMasteringChainResult result{};
+  REQUIRE(sonare_mastering_chain(samples.data(), samples.size(), sample_rate, params, 2, &result) ==
+          SONARE_OK);
+  REQUIRE(result.report.before.integrated_lufs == result.input_lufs);
+  REQUIRE(result.report.after.integrated_lufs == result.output_lufs);
+  REQUIRE(result.report.after.true_peak_dbtp == result.output_true_peak_dbtp);
+  REQUIRE(std::isfinite(result.report.before.max_momentary_lufs));
+  REQUIRE(std::isfinite(result.report.after.max_short_term_lufs));
+  REQUIRE(SONARE_MASTERING_REPORT_BAND_COUNT == 32);
+  REQUIRE(result.report.max_gain_reduction_db <= 0.0f);
+  sonare_free_mastering_chain_result(&result);
+  REQUIRE(result.samples == nullptr);
+  REQUIRE(result.report.band_energy_delta_db[0] == 0.0f);
+}
+
 TEST_CASE("cancellation-capable mastering C APIs leave outputs empty", "[c_api][mastering]") {
   auto samples = generate_sine(440.0f, 22050, 1.0f);
   struct CancelState {

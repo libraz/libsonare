@@ -58,6 +58,31 @@ class SonareMasteringStereoResult(ctypes.Structure):
     ]
 
 
+class SonareMasteringLoudnessSummary(ctypes.Structure):
+    """Maps to SonareMasteringLoudnessSummary in sonare_c.h."""
+
+    _fields_ = [
+        ("integrated_lufs", ctypes.c_float),
+        ("max_momentary_lufs", ctypes.c_float),
+        ("max_short_term_lufs", ctypes.c_float),
+        ("true_peak_dbtp", ctypes.c_float),
+        ("loudness_range", ctypes.c_float),
+    ]
+
+
+class SonareMasteringReport(ctypes.Structure):
+    """Maps to SonareMasteringReport in sonare_c.h."""
+
+    _fields_ = [
+        ("before", SonareMasteringLoudnessSummary),
+        ("after", SonareMasteringLoudnessSummary),
+        ("applied_gain_db", ctypes.c_float),
+        ("max_gain_reduction_db", ctypes.c_float),
+        ("loudness_target_limited", ctypes.c_int),
+        ("band_energy_delta_db", ctypes.c_float * 32),
+    ]
+
+
 class SonareMasteringChainResult(ctypes.Structure):
     """Maps to SonareMasteringChainResult in sonare_c.h."""
 
@@ -76,6 +101,7 @@ class SonareMasteringChainResult(ctypes.Structure):
         ("stage_gain_reduction_stages", ctypes.POINTER(ctypes.c_char_p)),
         ("stage_gain_reduction_values", ctypes.POINTER(ctypes.c_float)),
         ("stage_gain_reductions_count", ctypes.c_size_t),
+        ("report", SonareMasteringReport),
     ]
 
 
@@ -98,6 +124,7 @@ class SonareMasteringChainStereoResult(ctypes.Structure):
         ("stage_gain_reduction_stages", ctypes.POINTER(ctypes.c_char_p)),
         ("stage_gain_reduction_values", ctypes.POINTER(ctypes.c_float)),
         ("stage_gain_reductions_count", ctypes.c_size_t),
+        ("report", SonareMasteringReport),
     ]
 
 

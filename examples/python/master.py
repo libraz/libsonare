@@ -1,11 +1,13 @@
 #!/usr/bin/env python3
-"""Master an input file to -14 LUFS and write a PCM WAV file."""
+"""Master an input file to -14 LUFS, write a PCM WAV, and print its report."""
 
 from __future__ import annotations
 
 import struct
 import sys
 import wave
+from dataclasses import asdict
+import json
 
 import libsonare
 
@@ -26,9 +28,12 @@ def main() -> int:
         return 2
 
     with libsonare.Audio.from_file(sys.argv[1]) as audio:
-        result = audio.mastering(target_lufs=-14.0)
+        result = audio.mastering_chain(
+            {"loudness": {"enabled": True, "targetLufs": -14.0, "ceilingDb": -1.0}}
+        )
     write_wav(sys.argv[2], result.samples, result.sample_rate)
     print(f"LUFS: {result.input_lufs:.1f} -> {result.output_lufs:.1f}")
+    print(json.dumps(asdict(result.report), indent=2, allow_nan=False))
     return 0
 
 

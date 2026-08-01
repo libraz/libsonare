@@ -511,6 +511,27 @@ export interface StageGainReduction {
   gainReductionDb: number;
 }
 
+/** Existing EBU R128 measurements captured before or after mastering. */
+export interface MasteringLoudnessSummary {
+  integratedLufs: number;
+  maxMomentaryLufs: number;
+  maxShortTermLufs: number;
+  truePeakDbtp: number;
+  loudnessRange: number;
+}
+
+/** Compact explanation of how an offline mastering chain changed a program. */
+export interface MasteringReport {
+  before: MasteringLoudnessSummary;
+  after: MasteringLoudnessSummary;
+  appliedGainDb: number;
+  /** Most-negative final dynamics/limiter gain reduction, or zero when none ran. */
+  maxGainReductionDb: number;
+  loudnessTargetLimited: boolean;
+  /** 32 logarithmically-spaced after-minus-before spectral energy deltas (dB). */
+  bandEnergyDeltaDb: Float32Array;
+}
+
 export interface MasteringChainResult {
   /** Latency-compensated offline output; no separate latency field is reported. */
   samples: Float32Array;
@@ -531,6 +552,7 @@ export interface MasteringChainResult {
   loudnessTargetLimited: boolean;
   /** Per-stage gain reductions for the dynamics/maximizer stages (a subset of `stages`). */
   stageGainReductions: StageGainReduction[];
+  report: MasteringReport;
 }
 
 export interface MasteringChainStereoResult {
@@ -546,6 +568,7 @@ export interface MasteringChainStereoResult {
   outputLra: number;
   loudnessTargetLimited: boolean;
   stageGainReductions: StageGainReduction[];
+  report: MasteringReport;
 }
 
 export type PanMode = 'balance' | 'stereoPan' | 'stereo-pan' | 'dualPan' | 'dual-pan' | number;

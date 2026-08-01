@@ -73,6 +73,29 @@ typedef struct {
 /// @param user_data Opaque pointer passed at registration.
 typedef void (*SonareMasteringProgressCallback)(float progress, const char* stage, void* user_data);
 
+/// Number of compact logarithmic spectral-energy bins in a mastering report.
+#define SONARE_MASTERING_REPORT_BAND_COUNT 32
+
+/// Whole-program loudness values used by @ref SonareMasteringReport.
+typedef struct {
+  float integrated_lufs;
+  float max_momentary_lufs;
+  float max_short_term_lufs;
+  float true_peak_dbtp;
+  float loudness_range;
+} SonareMasteringLoudnessSummary;
+
+/// Explanation-oriented before/after measurements for an offline mastering run.
+/// @c band_energy_delta_db is after-minus-before, from 20 Hz to Nyquist.
+typedef struct {
+  SonareMasteringLoudnessSummary before;
+  SonareMasteringLoudnessSummary after;
+  float applied_gain_db;
+  float max_gain_reduction_db;
+  int loudness_target_limited;
+  float band_energy_delta_db[SONARE_MASTERING_REPORT_BAND_COUNT];
+} SonareMasteringReport;
+
 // Result of running the MasteringChain on a mono buffer. Offline chain/master_audio
 // outputs are latency-compensated, so this frozen result layout intentionally
 // reports no separate latency_samples field.
@@ -105,6 +128,8 @@ typedef struct {
   char** stage_gain_reduction_stages;
   float* stage_gain_reduction_values;
   size_t stage_gain_reductions_count;
+  /// Aggregated before/after measurements for UI and artifact reporting.
+  SonareMasteringReport report;
 } SonareMasteringChainResult;
 
 // Result of running the MasteringChain on stereo buffers. Offline chain/master_audio
@@ -129,6 +154,7 @@ typedef struct {
   char** stage_gain_reduction_stages;
   float* stage_gain_reduction_values;
   size_t stage_gain_reductions_count;
+  SonareMasteringReport report;
 } SonareMasteringChainStereoResult;
 
 SonareError sonare_mastering_process(const float* samples, size_t length, int sample_rate,

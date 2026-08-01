@@ -373,6 +373,12 @@ def test_mastering_chain_reports_output_metrics() -> None:
     assert math.isfinite(result.output_lra)
     assert result.output_lra >= 0.0
     assert isinstance(result.loudness_target_limited, bool)
+    assert result.report is not None
+    assert result.report.before.integrated_lufs == result.input_lufs
+    assert result.report.after.integrated_lufs == result.output_lufs
+    assert result.report.after.true_peak_dbtp == result.output_true_peak_dbtp
+    assert len(result.report.band_energy_delta_db) == 32
+    assert result.report.max_gain_reduction_db <= 0.0
 
     # A compressor stage ran, so at least one gain-reduction entry is reported.
     gr_stages = [r.stage for r in result.stage_gain_reductions]
@@ -386,3 +392,4 @@ def test_mastering_chain_reports_output_metrics() -> None:
     assert math.isfinite(preset_result.output_true_peak_dbtp)
     assert math.isfinite(preset_result.output_lra)
     assert isinstance(preset_result.stage_gain_reductions, list)
+    assert preset_result.report is not None

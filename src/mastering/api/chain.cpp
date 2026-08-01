@@ -4,6 +4,7 @@
 #include "mastering/api/chain.h"
 
 #include <algorithm>
+#include <array>
 #include <cmath>
 #include <stdexcept>
 #include <utility>
@@ -17,6 +18,7 @@
 #include "mastering/dynamics/deesser.h"
 #include "mastering/dynamics/transient_shaper.h"
 #include "mastering/eq/tilt.h"
+#include "mastering/match/reference_spectrum.h"
 #include "mastering/maximizer/true_peak_limiter.h"
 #include "mastering/multiband/multiband_compressor.h"
 #include "mastering/repair/declick.h"
@@ -56,6 +58,86 @@ float max_abs_gain_reduction(const std::vector<float>& gain_reductions_db) {
 
 float integrated_lufs(const std::vector<float>& samples, int sample_rate) {
   return common::measure_lufs(samples.data(), samples.size(), sample_rate);
+}
+
+MasteringLoudnessSummary to_report_summary(const common::LoudnessSummary& summary) {
+  return {summary.integrated_lufs, summary.max_momentary_lufs, summary.max_short_term_lufs,
+          summary.true_peak_dbtp, summary.loudness_range};
+}
+
+// `reference_spectrum()` is the existing long-term spectrum implementation
+// used by the reference-match processors. The report only resamples its output
+// into a compact fixed shape; it does not estimate any new musical property.
+float interpolated_spectrum_db(const mastering::match::ReferenceSpectrum& spectrum,
+                               float frequency_hz) {
+  const auto upper =
+      std::lower_bound(spectrum.frequencies.begin(), spectrum.frequencies.end(), frequency_hz);
+  if (upper == spectrum.frequencies.begin()) return spectrum.db.front();
+  if (upper == spectrum.frequencies.end()) return spectrum.db.back();
+  const size_t high = static_cast<size_t>(upper - spectrum.frequencies.begin());
+  const size_t low = high - 1;
+  const float low_frequency = spectrum.frequencies[low];
+  const float high_frequency = spectrum.frequencies[high];
+  const float ratio = (frequency_hz - low_frequency) / (high_frequency - low_frequency);
+  return spectrum.db[low] + ratio * (spectrum.db[high] - spectrum.db[low]);
+}
+
+std::array<float, kMasteringReportBandCount> spectrum_delta(
+    const mastering::match::ReferenceSpectrum& before,
+    const mastering::match::ReferenceSpectrum& after, int sample_rate) {
+  std::array<float, kMasteringReportBandCount> delta{};
+  const float low_hz = std::min(20.0f, static_cast<float>(sample_rate) * 0.5f);
+  const float high_hz = static_cast<float>(sample_rate) * 0.5f;
+  for (size_t index = 0; index < delta.size(); ++index) {
+    const float position =
+        (static_cast<float>(index) + 0.5f) / static_cast<float>(kMasteringReportBandCount);
+    const float frequency_hz = low_hz * std::pow(high_hz / low_hz, position);
+    delta[index] = interpolated_spectrum_db(after, frequency_hz) -
+                   interpolated_spectrum_db(before, frequency_hz);
+  }
+  return delta;
+}
+
+std::array<float, kMasteringReportBandCount> mono_spectrum_delta(const Audio& before,
+                                                                 const Audio& after) {
+  return spectrum_delta(mastering::match::reference_spectrum(before),
+                        mastering::match::reference_spectrum(after), before.sample_rate());
+}
+
+float stereo_spectrum_db(const mastering::match::ReferenceSpectrum& left,
+                         const mastering::match::ReferenceSpectrum& right, float frequency_hz) {
+  const float left_power = std::pow(10.0f, interpolated_spectrum_db(left, frequency_hz) / 10.0f);
+  const float right_power = std::pow(10.0f, interpolated_spectrum_db(right, frequency_hz) / 10.0f);
+  return 10.0f * std::log10(0.5f * (left_power + right_power));
+}
+
+std::array<float, kMasteringReportBandCount> stereo_spectrum_delta(const Audio& before_left,
+                                                                   const Audio& before_right,
+                                                                   const Audio& after_left,
+                                                                   const Audio& after_right) {
+  const auto before_left_spectrum = mastering::match::reference_spectrum(before_left);
+  const auto before_right_spectrum = mastering::match::reference_spectrum(before_right);
+  const auto after_left_spectrum = mastering::match::reference_spectrum(after_left);
+  const auto after_right_spectrum = mastering::match::reference_spectrum(after_right);
+  std::array<float, kMasteringReportBandCount> delta{};
+  const float low_hz = std::min(20.0f, static_cast<float>(before_left.sample_rate()) * 0.5f);
+  const float high_hz = static_cast<float>(before_left.sample_rate()) * 0.5f;
+  for (size_t index = 0; index < delta.size(); ++index) {
+    const float position =
+        (static_cast<float>(index) + 0.5f) / static_cast<float>(kMasteringReportBandCount);
+    const float frequency_hz = low_hz * std::pow(high_hz / low_hz, position);
+    delta[index] = stereo_spectrum_db(after_left_spectrum, after_right_spectrum, frequency_hz) -
+                   stereo_spectrum_db(before_left_spectrum, before_right_spectrum, frequency_hz);
+  }
+  return delta;
+}
+
+float max_gain_reduction_db(const std::vector<StageGainReduction>& reductions) {
+  float max_reduction = 0.0f;
+  for (const auto& reduction : reductions) {
+    max_reduction = std::min(max_reduction, reduction.gain_reduction_db);
+  }
+  return max_reduction;
 }
 
 // Oversample factor at which the chain's reported output true peak is measured.
@@ -146,7 +228,11 @@ std::optional<MonoChainResult> MasteringChain::process_mono_impl(const float* sa
   result.sample_rate = sample_rate;
 
   std::vector<float> data(samples, samples + length);
-  result.input_lufs = integrated_lufs(data, sample_rate);
+  const int true_peak_oversample = reported_true_peak_oversample(config_);
+  const Audio before_audio = Audio::from_buffer(data.data(), data.size(), sample_rate);
+  result.report.before =
+      to_report_summary(common::measure_loudness_summary(before_audio, true_peak_oversample));
+  result.input_lufs = result.report.before.integrated_lufs;
   float applied_gain_db = 0.0f;
 
   const int total = count_enabled_mono_stages(config_);
@@ -310,14 +396,17 @@ std::optional<MonoChainResult> MasteringChain::process_mono_impl(const float* sa
     if (!report("loudness.optimize")) return std::nullopt;
   }
 
-  result.output_lufs = integrated_lufs(data, sample_rate);
+  const Audio after_audio = Audio::from_buffer(data.data(), data.size(), sample_rate);
+  result.report.after =
+      to_report_summary(common::measure_loudness_summary(after_audio, true_peak_oversample));
+  result.output_lufs = result.report.after.integrated_lufs;
   result.applied_gain_db = applied_gain_db;
-  {
-    Audio audio = Audio::from_buffer(data.data(), data.size(), sample_rate);
-    result.output_true_peak_dbtp =
-        common::measure_true_peak_dbtp(audio, reported_true_peak_oversample(config_));
-    result.output_lra = common::measure_lra(audio);
-  }
+  result.output_true_peak_dbtp = result.report.after.true_peak_dbtp;
+  result.output_lra = result.report.after.loudness_range;
+  result.report.applied_gain_db = applied_gain_db;
+  result.report.max_gain_reduction_db = max_gain_reduction_db(result.stage_gain_reductions);
+  result.report.loudness_target_limited = result.loudness_target_limited;
+  result.report.band_energy_delta_db = mono_spectrum_delta(before_audio, after_audio);
   result.samples = std::move(data);
   return result;
 }
@@ -337,7 +426,13 @@ std::optional<StereoChainResult> MasteringChain::process_stereo_impl(const float
   std::vector<float> left(left_in, left_in + length);
   std::vector<float> right(right_in, right_in + length);
 
-  result.input_lufs = detail::stereo_integrated_lufs(left, right, sample_rate);
+  const int true_peak_oversample = reported_true_peak_oversample(config_);
+  const Audio before_left_audio = Audio::from_buffer(left.data(), left.size(), sample_rate);
+  const Audio before_right_audio = Audio::from_buffer(right.data(), right.size(), sample_rate);
+  const std::vector<float> before_interleaved = detail::interleave_stereo(left, right);
+  result.report.before = to_report_summary(common::measure_loudness_summary_interleaved(
+      before_interleaved.data(), left.size(), 2, sample_rate, true_peak_oversample));
+  result.input_lufs = result.report.before.integrated_lufs;
   float applied_gain_db = 0.0f;
 
   const int total = count_enabled_stereo_stages(config_);
@@ -515,21 +610,20 @@ std::optional<StereoChainResult> MasteringChain::process_stereo_impl(const float
     if (!report("loudness.optimize")) return std::nullopt;
   }
 
-  result.output_lufs = detail::stereo_integrated_lufs(left, right, sample_rate);
+  const Audio after_left_audio = Audio::from_buffer(left.data(), left.size(), sample_rate);
+  const Audio after_right_audio = Audio::from_buffer(right.data(), right.size(), sample_rate);
+  const std::vector<float> after_interleaved = detail::interleave_stereo(left, right);
+  result.report.after = to_report_summary(common::measure_loudness_summary_interleaved(
+      after_interleaved.data(), left.size(), 2, sample_rate, true_peak_oversample));
+  result.output_lufs = result.report.after.integrated_lufs;
   result.applied_gain_db = applied_gain_db;
-  {
-    Audio left_audio = Audio::from_buffer(left.data(), left.size(), sample_rate);
-    Audio right_audio = Audio::from_buffer(right.data(), right.size(), sample_rate);
-    const int tp_oversample = reported_true_peak_oversample(config_);
-    result.output_true_peak_dbtp =
-        std::max(common::measure_true_peak_dbtp(left_audio, tp_oversample),
-                 common::measure_true_peak_dbtp(right_audio, tp_oversample));
-    // LRA is measured with BS.1770 channel summing (matching output_lufs), not a
-    // 0.5*(L+R) mono downmix, which would phase-cancel wide / out-of-phase stereo.
-    const std::vector<float> interleaved = detail::interleave_stereo(left, right);
-    result.output_lra =
-        common::measure_lra_interleaved(interleaved.data(), left.size(), 2, sample_rate);
-  }
+  result.output_true_peak_dbtp = result.report.after.true_peak_dbtp;
+  result.output_lra = result.report.after.loudness_range;
+  result.report.applied_gain_db = applied_gain_db;
+  result.report.max_gain_reduction_db = max_gain_reduction_db(result.stage_gain_reductions);
+  result.report.loudness_target_limited = result.loudness_target_limited;
+  result.report.band_energy_delta_db = stereo_spectrum_delta(before_left_audio, before_right_audio,
+                                                             after_left_audio, after_right_audio);
   result.left = std::move(left);
   result.right = std::move(right);
   return result;

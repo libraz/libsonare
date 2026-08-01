@@ -1074,6 +1074,29 @@ class StageGainReduction:
 
 
 @dataclass(frozen=True, slots=True)
+class MasteringLoudnessSummary:
+    """Existing EBU R128 measurements captured before or after mastering."""
+
+    integrated_lufs: float
+    max_momentary_lufs: float
+    max_short_term_lufs: float
+    true_peak_dbtp: float
+    loudness_range: float
+
+
+@dataclass(frozen=True, slots=True)
+class MasteringReport:
+    """Compact explanation of how an offline mastering chain changed a program."""
+
+    before: MasteringLoudnessSummary
+    after: MasteringLoudnessSummary
+    applied_gain_db: float
+    max_gain_reduction_db: float
+    loudness_target_limited: bool
+    band_energy_delta_db: list[float] = field(default_factory=list)
+
+
+@dataclass(frozen=True, slots=True)
 class MasteringChainResult:
     """Result of running a configurable mastering chain on mono audio."""
 
@@ -1093,6 +1116,7 @@ class MasteringChainResult:
     #: Per-stage gain reductions for the dynamics/maximizer stages (a subset of
     #: :attr:`stages`).
     stage_gain_reductions: list[StageGainReduction] = field(default_factory=list)
+    report: MasteringReport | None = None
 
 
 @dataclass(frozen=True, slots=True)
@@ -1111,3 +1135,4 @@ class MasteringChainStereoResult:
     output_lra: float = 0.0
     loudness_target_limited: bool = False
     stage_gain_reductions: list[StageGainReduction] = field(default_factory=list)
+    report: MasteringReport | None = None

@@ -28,6 +28,32 @@ TEST_CASE("MasteringChain passes through with empty config (mono)", "[mastering]
   REQUIRE(result.stages.empty());
 }
 
+TEST_CASE("MasteringChain aggregates a compact before and after report", "[mastering][chain]") {
+  constexpr int sample_rate = 44100;
+  std::vector<float> samples(static_cast<size_t>(sample_rate) * 4);
+  for (size_t index = 0; index < samples.size(); ++index) {
+    samples[index] = 0.2f * std::sin(static_cast<float>(index) * 440.0f *
+                                     sonare::constants::kTwoPi / sample_rate);
+  }
+  MasteringChainConfig config;
+  config.dynamics.compressor.enabled = true;
+  config.dynamics.compressor.config.threshold_db = -30.0f;
+  config.loudness.enabled = true;
+  config.loudness.target_lufs = -14.0f;
+
+  const auto result =
+      MasteringChain(config).process_mono(samples.data(), samples.size(), sample_rate);
+  REQUIRE(result.report.before.integrated_lufs == result.input_lufs);
+  REQUIRE(result.report.after.integrated_lufs == result.output_lufs);
+  REQUIRE(result.report.after.true_peak_dbtp == result.output_true_peak_dbtp);
+  REQUIRE(result.report.after.loudness_range == result.output_lra);
+  REQUIRE(std::isfinite(result.report.before.max_momentary_lufs));
+  REQUIRE(std::isfinite(result.report.after.max_short_term_lufs));
+  REQUIRE(result.report.band_energy_delta_db.size() == kMasteringReportBandCount);
+  REQUIRE(result.report.max_gain_reduction_db <= 0.0f);
+  REQUIRE(result.report.loudness_target_limited == result.loudness_target_limited);
+}
+
 TEST_CASE("MasteringChain validates offline input at the core (all surfaces inherit)",
           "[mastering][chain]") {
   // Centralized validation in process_mono/process_stereo so every binding

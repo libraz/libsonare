@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import argparse
 import sys
+from typing import Any
 
 from ._cli_common import (
     _atomic_wav_writer,
@@ -21,16 +22,69 @@ from ._cli_common import (
 )
 
 
-def cmd_mastering(args: argparse.Namespace) -> int:
-    from .audio import Audio
+def _mastering_report_payload(report: Any) -> dict[str, object]:
+    """Serialize the shared chain report without depending on dataclass internals."""
 
+    if report is None:
+        raise RuntimeError("loaded libsonare did not return a mastering report")
+    before = report.before
+    after = report.after
+    return {
+        "before": {
+            "integrated_lufs": before.integrated_lufs,
+            "max_momentary_lufs": before.max_momentary_lufs,
+            "max_short_term_lufs": before.max_short_term_lufs,
+            "true_peak_dbtp": before.true_peak_dbtp,
+            "loudness_range": before.loudness_range,
+        },
+        "after": {
+            "integrated_lufs": after.integrated_lufs,
+            "max_momentary_lufs": after.max_momentary_lufs,
+            "max_short_term_lufs": after.max_short_term_lufs,
+            "true_peak_dbtp": after.true_peak_dbtp,
+            "loudness_range": after.loudness_range,
+        },
+        "applied_gain_db": report.applied_gain_db,
+        "max_gain_reduction_db": report.max_gain_reduction_db,
+        "loudness_target_limited": report.loudness_target_limited,
+        "band_energy_delta_db": report.band_energy_delta_db,
+    }
+
+
+def _write_mastering_report(path: str, report: Any) -> None:
+    with open(path, "w", encoding="utf-8") as output:
+        output.write(_strict_json_dumps(_mastering_report_payload(report)))
+        output.write("\n")
+
+
+def cmd_mastering(args: argparse.Namespace) -> int:
     samples, sr = _load_audio(args.file)
-    result = Audio.from_buffer(samples, sr).mastering(
-        target_lufs=args.target_lufs, ceiling_db=args.ceiling_db
-    )
+    report_path = getattr(args, "report", "")
+    if report_path:
+        from . import mastering_chain
+
+        result = mastering_chain(
+            samples,
+            sample_rate=sr,
+            config={
+                "loudness": {
+                    "enabled": True,
+                    "targetLufs": args.target_lufs,
+                    "ceilingDb": args.ceiling_db,
+                }
+            },
+        )
+    else:
+        from .audio import Audio
+
+        result = Audio.from_buffer(samples, sr).mastering(
+            target_lufs=args.target_lufs, ceiling_db=args.ceiling_db
+        )
 
     if args.output:
         _write_wav(args.output, result.samples, result.sample_rate)
+    if report_path:
+        _write_mastering_report(report_path, result.report)
 
     if args.json:
         payload = {
@@ -40,7 +94,7 @@ def cmd_mastering(args: argparse.Namespace) -> int:
             "target_lufs": args.target_lufs,
             "ceiling_db": args.ceiling_db,
             "true_peak_oversample": 4,
-            "latency_samples": result.latency_samples,
+            "latency_samples": getattr(result, "latency_samples", 0),
             "sample_rate": result.sample_rate,
             "output": args.output or "",
         }
@@ -229,9 +283,12 @@ def cmd_mastering_chain(args: argparse.Namespace) -> int:
     if args.params:
         config.update(_parse_kv_params(args.params))
     result = mastering_chain(samples, sample_rate=sr, config=config)
+    report_path = getattr(args, "report", "")
 
     if args.output:
         _write_wav(args.output, result.samples, result.sample_rate)
+    if report_path:
+        _write_mastering_report(report_path, result.report)
 
     if args.json:
         payload: dict[str, object] = {
@@ -262,9 +319,12 @@ def cmd_master(args: argparse.Namespace) -> int:
     if args.params:
         overrides.update(_parse_kv_params(args.params))
     result = master_audio(samples, sample_rate=sr, preset_name=args.preset, overrides=overrides)
+    report_path = getattr(args, "report", "")
 
     if args.output:
         _write_wav(args.output, result.samples, result.sample_rate)
+    if report_path:
+        _write_mastering_report(report_path, result.report)
 
     if args.json:
         payload: dict[str, object] = {

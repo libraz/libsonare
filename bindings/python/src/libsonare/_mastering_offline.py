@@ -23,7 +23,9 @@ from .types import (
     MasteringChainResult,
     MasteringChainStereoResult,
     MasteringInsertParamInfo,
+    MasteringLoudnessSummary,
     MasteringProcessorCatalogEntry,
+    MasteringReport,
     MasteringResult,
     MasteringStereoResult,
     StageGainReduction,
@@ -385,6 +387,29 @@ def _extract_stage_gain_reductions(
     return result
 
 
+def _extract_mastering_loudness_summary(raw: object) -> MasteringLoudnessSummary:
+    summary = cast(Any, raw)
+    return MasteringLoudnessSummary(
+        integrated_lufs=float(summary.integrated_lufs),
+        max_momentary_lufs=float(summary.max_momentary_lufs),
+        max_short_term_lufs=float(summary.max_short_term_lufs),
+        true_peak_dbtp=float(summary.true_peak_dbtp),
+        loudness_range=float(summary.loudness_range),
+    )
+
+
+def _extract_mastering_report(raw: object) -> MasteringReport:
+    report = cast(Any, raw)
+    return MasteringReport(
+        before=_extract_mastering_loudness_summary(report.before),
+        after=_extract_mastering_loudness_summary(report.after),
+        applied_gain_db=float(report.applied_gain_db),
+        max_gain_reduction_db=float(report.max_gain_reduction_db),
+        loudness_target_limited=bool(report.loudness_target_limited),
+        band_energy_delta_db=[float(value) for value in report.band_energy_delta_db],
+    )
+
+
 def _make_progress_trampoline(
     on_progress: Callable[[float, str], object], state: CancellationState
 ) -> Any:
@@ -509,6 +534,7 @@ def mastering_chain(
                 out.stage_gain_reduction_values,
                 int(out.stage_gain_reductions_count),
             ),
+            report=_extract_mastering_report(out.report),
         )
     finally:
         lib.sonare_free_mastering_chain_result(ctypes.byref(out))
@@ -604,6 +630,7 @@ def mastering_chain_stereo(
                 out.stage_gain_reduction_values,
                 int(out.stage_gain_reductions_count),
             ),
+            report=_extract_mastering_report(out.report),
         )
     finally:
         lib.sonare_free_mastering_chain_stereo_result(ctypes.byref(out))
@@ -721,6 +748,7 @@ def master_audio(
                 out.stage_gain_reduction_values,
                 int(out.stage_gain_reductions_count),
             ),
+            report=_extract_mastering_report(out.report),
         )
     finally:
         lib.sonare_free_mastering_chain_result(ctypes.byref(out))
@@ -819,6 +847,7 @@ def master_audio_stereo(
                 out.stage_gain_reduction_values,
                 int(out.stage_gain_reductions_count),
             ),
+            report=_extract_mastering_report(out.report),
         )
     finally:
         lib.sonare_free_mastering_chain_stereo_result(ctypes.byref(out))

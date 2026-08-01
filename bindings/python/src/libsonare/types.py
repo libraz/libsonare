@@ -112,6 +112,9 @@ from ._types_analysis import (
     MasteringChainStereoResult as MasteringChainStereoResult,
 )
 from ._types_analysis import (
+    MasteringLoudnessSummary as MasteringLoudnessSummary,
+)
+from ._types_analysis import (
     MasteringChannelPolicy as MasteringChannelPolicy,
 )
 from ._types_analysis import (
@@ -125,6 +128,9 @@ from ._types_analysis import (
 )
 from ._types_analysis import (
     MasteringProcessorKind as MasteringProcessorKind,
+)
+from ._types_analysis import (
+    MasteringReport as MasteringReport,
 )
 from ._types_analysis import (
     MasteringResult as MasteringResult,

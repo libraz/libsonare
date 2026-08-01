@@ -108,6 +108,32 @@ inline void zero_chain_metrics(ChainResultT* out) {
   out->stage_gain_reduction_stages = nullptr;
   out->stage_gain_reduction_values = nullptr;
   out->stage_gain_reductions_count = 0;
+  std::memset(&out->report, 0, sizeof(out->report));
+}
+
+inline void set_mastering_loudness_summary(
+    const sonare::mastering::api::MasteringLoudnessSummary& summary,
+    SonareMasteringLoudnessSummary* out) {
+  out->integrated_lufs = summary.integrated_lufs;
+  out->max_momentary_lufs = summary.max_momentary_lufs;
+  out->max_short_term_lufs = summary.max_short_term_lufs;
+  out->true_peak_dbtp = summary.true_peak_dbtp;
+  out->loudness_range = summary.loudness_range;
+}
+
+template <typename ChainResultT>
+inline void set_mastering_report(const sonare::mastering::api::MasteringReport& report,
+                                 ChainResultT* out) {
+  set_mastering_loudness_summary(report.before, &out->report.before);
+  set_mastering_loudness_summary(report.after, &out->report.after);
+  out->report.applied_gain_db = report.applied_gain_db;
+  out->report.max_gain_reduction_db = report.max_gain_reduction_db;
+  out->report.loudness_target_limited = report.loudness_target_limited ? 1 : 0;
+  static_assert(
+      sonare::mastering::api::kMasteringReportBandCount == SONARE_MASTERING_REPORT_BAND_COUNT,
+      "C report band count must match the C++ report");
+  std::memcpy(out->report.band_energy_delta_db, report.band_energy_delta_db.data(),
+              sizeof(out->report.band_energy_delta_db));
 }
 
 // Copy the chain-metric fields from the C++ result into the C struct. The
@@ -119,6 +145,7 @@ inline void set_chain_metrics(const sonare::mastering::api::ChainMetrics& metric
   out->output_true_peak_dbtp = metrics.output_true_peak_dbtp;
   out->output_lra = metrics.output_lra;
   out->loudness_target_limited = metrics.loudness_target_limited ? 1 : 0;
+  set_mastering_report(metrics.report, out);
   const auto& reductions = metrics.stage_gain_reductions;
   out->stage_gain_reductions_count = reductions.size();
   if (reductions.empty()) {
@@ -153,6 +180,7 @@ inline void free_chain_metrics(ChainResultT* out) {
   out->stage_gain_reduction_stages = nullptr;
   out->stage_gain_reduction_values = nullptr;
   out->stage_gain_reductions_count = 0;
+  std::memset(&out->report, 0, sizeof(out->report));
 }
 
 inline void fill_mono_chain_result(const sonare::mastering::api::MonoChainResult& result,

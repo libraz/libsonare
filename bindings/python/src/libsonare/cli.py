@@ -489,6 +489,7 @@ def main() -> None:
     )
     mastering_p.add_argument("--target-lufs", type=float, default=-14.0)
     mastering_p.add_argument("--ceiling-db", type=float, default=-1.0)
+    mastering_p.add_argument("--report", default="", help="Write a mastering report JSON file")
     mproc_p = sub.add_parser(
         "mastering-processor", parents=[common], help="Apply a named mastering processor"
     )
@@ -561,11 +562,13 @@ def main() -> None:
     mchain_p.add_argument("--config", default="", help="Chain config as a JSON object")
     mchain_p.add_argument("--config-file", default="", help="Chain config JSON file")
     mchain_p.add_argument("--params", default="", help="Flat params as k=v,k=v (floats)")
+    mchain_p.add_argument("--report", default="", help="Write a mastering report JSON file")
     master_p = sub.add_parser("master", parents=[common], help="Apply a named mastering preset")
     master_p.add_argument("--preset", default="pop", help="Mastering preset name")
     master_p.add_argument("--config", default="", help="Preset overrides as a JSON object")
     master_p.add_argument("--config-file", default="", help="Preset override JSON file")
     master_p.add_argument("--params", default="", help="Flat overrides as k=v,k=v (floats)")
+    master_p.add_argument("--report", default="", help="Write a mastering report JSON file")
     mstream_p = sub.add_parser(
         "mastering-streaming",
         parents=[common],

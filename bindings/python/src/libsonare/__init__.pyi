@@ -685,11 +685,15 @@ from .types import (
 from .types import (
     MasteringChainStereoResult as MasteringChainStereoResult,
 )
+from .types import (
+    MasteringLoudnessSummary as MasteringLoudnessSummary,
+)
 from .types import MasteringChannelPolicy as MasteringChannelPolicy
 from .types import MasteringInsertParamInfo as MasteringInsertParamInfo
 from .types import MasteringProcessorCatalogEntry as MasteringProcessorCatalogEntry
 from .types import MasteringProcessorCategory as MasteringProcessorCategory
 from .types import MasteringProcessorKind as MasteringProcessorKind
+from .types import MasteringReport as MasteringReport
 from .types import (
     MasteringResult as MasteringResult,
 )

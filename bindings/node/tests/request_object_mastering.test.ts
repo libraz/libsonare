@@ -82,6 +82,18 @@ describe('mastering request-object compatibility', () => {
     );
   });
 
+  it('exposes the before and after mastering report', () => {
+    const result = masteringChain(signal(), sampleRate, {
+      loudness: { targetLufs: -14, ceilingDb: -1 },
+    });
+    expect(result.report.before.integratedLufs).toBe(result.inputLufs);
+    expect(result.report.after.integratedLufs).toBe(result.outputLufs);
+    expect(result.report.after.truePeakDbtp).toBe(result.outputTruePeakDbtp);
+    expect(result.report.bandEnergyDeltaDb).toBeInstanceOf(Float32Array);
+    expect(result.report.bandEnergyDeltaDb).toHaveLength(32);
+    expect(result.report.maxGainReductionDb).toBeLessThanOrEqual(0);
+  });
+
   it('masterAudio preserves the positional result', () => {
     const samples = signal();
     const positional = masterAudio(samples, sampleRate, 'pop');

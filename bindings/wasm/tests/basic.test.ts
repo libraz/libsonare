@@ -1513,6 +1513,11 @@ describe('Sonare WASM Module', () => {
       expect(result.stages).toContain('loudness.optimize');
       expect(Number.isFinite(result.inputLufs)).toBe(true);
       expect(Number.isFinite(result.outputLufs)).toBe(true);
+      expect(result.report.before.integratedLufs).toBe(result.inputLufs);
+      expect(result.report.after.integratedLufs).toBe(result.outputLufs);
+      expect(result.report.after.truePeakDbtp).toBe(result.outputTruePeakDbtp);
+      expect(result.report.bandEnergyDeltaDb).toBeInstanceOf(Float32Array);
+      expect(result.report.bandEnergyDeltaDb).toHaveLength(32);
     });
 
     describe('color saturation stages engage only when meaningful', () => {

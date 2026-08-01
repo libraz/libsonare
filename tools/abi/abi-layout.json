@@ -2425,9 +2425,15 @@
         "name": "stage_gain_reductions_count",
         "offset": 80,
         "size": 8
+      },
+      {
+        "kind": "aggregate",
+        "name": "report",
+        "offset": 88,
+        "size": 180
       }
     ],
-    "size": 88
+    "size": 272
   },
   "SonareMasteringChainStereoResult": {
     "align": 8,
@@ -2521,9 +2527,15 @@
         "name": "stage_gain_reductions_count",
         "offset": 88,
         "size": 8
+      },
+      {
+        "kind": "aggregate",
+        "name": "report",
+        "offset": 96,
+        "size": 180
       }
     ],
-    "size": 96
+    "size": 280
   },
   "SonareMasteringConfig": {
     "align": 4,
@@ -2561,6 +2573,42 @@
     ],
     "size": 20
   },
+  "SonareMasteringLoudnessSummary": {
+    "align": 4,
+    "fields": [
+      {
+        "kind": "float",
+        "name": "integrated_lufs",
+        "offset": 0,
+        "size": 4
+      },
+      {
+        "kind": "float",
+        "name": "max_momentary_lufs",
+        "offset": 4,
+        "size": 4
+      },
+      {
+        "kind": "float",
+        "name": "max_short_term_lufs",
+        "offset": 8,
+        "size": 4
+      },
+      {
+        "kind": "float",
+        "name": "true_peak_dbtp",
+        "offset": 12,
+        "size": 4
+      },
+      {
+        "kind": "float",
+        "name": "loudness_range",
+        "offset": 16,
+        "size": 4
+      }
+    ],
+    "size": 20
+  },
   "SonareMasteringParam": {
     "align": 8,
     "fields": [
@@ -2578,6 +2626,48 @@
       }
     ],
     "size": 16
+  },
+  "SonareMasteringReport": {
+    "align": 4,
+    "fields": [
+      {
+        "kind": "aggregate",
+        "name": "before",
+        "offset": 0,
+        "size": 20
+      },
+      {
+        "kind": "aggregate",
+        "name": "after",
+        "offset": 20,
+        "size": 20
+      },
+      {
+        "kind": "float",
+        "name": "applied_gain_db",
+        "offset": 40,
+        "size": 4
+      },
+      {
+        "kind": "float",
+        "name": "max_gain_reduction_db",
+        "offset": 44,
+        "size": 4
+      },
+      {
+        "kind": "signed",
+        "name": "loudness_target_limited",
+        "offset": 48,
+        "size": 4
+      },
+      {
+        "kind": "aggregate",
+        "name": "band_energy_delta_db",
+        "offset": 52,
+        "size": 128
+      }
+    ],
+    "size": 180
   },
   "SonareMasteringResult": {
     "align": 8,

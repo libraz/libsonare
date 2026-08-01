@@ -15,6 +15,7 @@
 /// flat field layout for ABI stability and are intentionally not derived from
 /// these C++ bases.
 
+#include <array>
 #include <cstddef>
 #include <string>
 #include <vector>
@@ -57,6 +58,38 @@ struct StageGainReduction {
   float gain_reduction_db = 0.0f;
 };
 
+/// @brief Whole-program loudness values used by a mastering report.
+///
+/// These fields use the same EBU R128 meter as the existing chain loudness
+/// fields. Max-M and Max-S are the maximum 400 ms and 3 s windows,
+/// respectively; they are deliberately not the final momentary / short-term
+/// window values.
+struct MasteringLoudnessSummary {
+  float integrated_lufs = 0.0f;
+  float max_momentary_lufs = 0.0f;
+  float max_short_term_lufs = 0.0f;
+  float true_peak_dbtp = 0.0f;
+  float loudness_range = 0.0f;
+};
+
+/// @brief Explanation-oriented measurements for a complete mastering run.
+///
+/// @c band_energy_delta_db contains 32 logarithmically-spaced long-term
+/// spectral-energy deltas (after minus before) from 20 Hz to Nyquist. The
+/// values are intended for compact host visualizations, not corrective-EQ
+/// decisions. @c max_gain_reduction_db is the most-negative final gain
+/// reduction reported by a dynamics / limiter stage, or zero when none ran.
+inline constexpr std::size_t kMasteringReportBandCount = 32;
+
+struct MasteringReport {
+  MasteringLoudnessSummary before;
+  MasteringLoudnessSummary after;
+  float applied_gain_db = 0.0f;
+  float max_gain_reduction_db = 0.0f;
+  bool loudness_target_limited = false;
+  std::array<float, kMasteringReportBandCount> band_energy_delta_db{};
+};
+
 /// @brief Additional measurements / annotations produced by the full
 /// mastering chain on top of the common @ref MonoAudioResult /
 /// @ref StereoAudioResult fields.
@@ -73,6 +106,9 @@ struct ChainMetrics {
   std::vector<std::string> stages;
   /// Per-stage gain reductions for the dynamics / maximizer stages.
   std::vector<StageGainReduction> stage_gain_reductions;
+  /// Complete before/after explanation payload. The scalar fields above remain
+  /// available for source compatibility and mirror the matching report values.
+  MasteringReport report;
 };
 
 }  // namespace sonare::mastering::api

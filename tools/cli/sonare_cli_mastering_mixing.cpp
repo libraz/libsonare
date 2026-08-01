@@ -38,6 +38,45 @@ std::string read_text_file(const std::string& path) {
   return buffer.str();
 }
 
+void append_mastering_loudness_summary_json(
+    JsonBuilder& json, const mastering::api::MasteringLoudnessSummary& summary) {
+  json.begin_object()
+      .kv("integrated_lufs", summary.integrated_lufs)
+      .kv("max_momentary_lufs", summary.max_momentary_lufs)
+      .kv("max_short_term_lufs", summary.max_short_term_lufs)
+      .kv("true_peak_dbtp", summary.true_peak_dbtp)
+      .kv("loudness_range", summary.loudness_range)
+      .end_object();
+}
+
+std::string mastering_report_json(const mastering::api::MasteringReport& report) {
+  JsonBuilder json;
+  json.begin_object().key("before");
+  append_mastering_loudness_summary_json(json, report.before);
+  json.key("after");
+  append_mastering_loudness_summary_json(json, report.after);
+  json.kv("applied_gain_db", report.applied_gain_db)
+      .kv("max_gain_reduction_db", report.max_gain_reduction_db)
+      .kv("loudness_target_limited", report.loudness_target_limited)
+      .key("band_energy_delta_db")
+      .begin_array();
+  for (float value : report.band_energy_delta_db) json.value(value);
+  json.end_array().end_object();
+  return json.build();
+}
+
+void write_mastering_report(const std::string& path,
+                            const mastering::api::MasteringReport& report) {
+  std::ofstream file(path, std::ios::binary | std::ios::trunc);
+  if (!file.is_open()) {
+    throw std::invalid_argument("cannot write mastering report: " + path);
+  }
+  file << mastering_report_json(report) << '\n';
+  if (!file) {
+    throw std::invalid_argument("cannot write mastering report: " + path);
+  }
+}
+
 void print_chain_result_json(const mastering::api::MonoChainResult& result, const std::string& mode,
                              const std::string& output, const std::string& preset,
                              const std::vector<std::string>& explanation = {}) {
@@ -112,6 +151,9 @@ int cmd_mastering(const CliArgs& args, const Audio& audio) {
       save_wav(args.output_file, result.samples.data(), result.samples.size(), result.sample_rate,
                args.get_int("bits", 16));
     }
+    if (args.has("report")) {
+      write_mastering_report(args.get_string("report"), result.report);
+    }
 
     if (args.json_output) {
       print_chain_result_json(result, mode, args.output_file, preset_name,
@@ -140,6 +182,49 @@ int cmd_mastering(const CliArgs& args, const Audio& audio) {
   config.target_lufs = args.get_float("target-lufs", -14.0f);
   config.ceiling_db = args.get_float("ceiling-db", -1.0f);
   config.true_peak_oversample = args.get_int("true-peak-oversample", 4);
+
+  // The standalone loudness facade predates the chain report. Preserve its
+  // output path by default; only the explicit --report request uses the chain
+  // composition that owns the before/after report payload.
+  if (args.has("report")) {
+    mastering::api::MasteringChainConfig chain_config;
+    chain_config.loudness.enabled = true;
+    chain_config.loudness.target_lufs = config.target_lufs;
+    chain_config.loudness.ceiling_db = config.ceiling_db;
+    chain_config.loudness.true_peak_oversample = config.true_peak_oversample;
+    mastering::api::MasteringChain chain(std::move(chain_config));
+    const auto result = chain.process_mono(audio.data(), audio.size(), audio.sample_rate());
+    if (!args.output_file.empty()) {
+      save_wav(args.output_file, result.samples.data(), result.samples.size(), result.sample_rate,
+               args.get_int("bits", 16));
+    }
+    write_mastering_report(args.get_string("report"), result.report);
+    if (args.json_output) {
+      JsonBuilder()
+          .begin_object()
+          .kv("input_lufs", result.input_lufs)
+          .kv("output_lufs", result.output_lufs)
+          .kv("applied_gain_db", result.applied_gain_db)
+          .kv("target_lufs", config.target_lufs)
+          .kv("ceiling_db", config.ceiling_db)
+          .kv("true_peak_oversample", config.true_peak_oversample)
+          .kv("sample_rate", result.sample_rate)
+          .kv("output", args.output_file)
+          .end_object()
+          .print();
+    } else {
+      std::cout << "\n"
+                << color::cyan << color::bold << "Mastering" << color::reset << "\n"
+                << "  Input LUFS:      " << std::fixed << std::setprecision(2) << result.input_lufs
+                << "\n"
+                << "  Output LUFS:     " << result.output_lufs << "\n"
+                << "  Applied Gain:    " << result.applied_gain_db << " dB\n"
+                << "  Report:          " << args.get_string("report") << "\n";
+      if (!args.output_file.empty()) std::cout << "  Output:          " << args.output_file << "\n";
+      std::cout << "\n";
+    }
+    return 0;
+  }
 
   const auto result = mastering::maximizer::loudness_optimize(audio, config);
   if (!args.output_file.empty()) {

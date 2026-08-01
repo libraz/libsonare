@@ -491,12 +491,30 @@ export interface WasmStageGainReduction {
   gainReductionDb: number;
 }
 
+export interface WasmMasteringLoudnessSummary {
+  integratedLufs: number;
+  maxMomentaryLufs: number;
+  maxShortTermLufs: number;
+  truePeakDbtp: number;
+  loudnessRange: number;
+}
+
+export interface WasmMasteringReport {
+  before: WasmMasteringLoudnessSummary;
+  after: WasmMasteringLoudnessSummary;
+  appliedGainDb: number;
+  maxGainReductionDb: number;
+  loudnessTargetLimited: boolean;
+  bandEnergyDeltaDb: Float32Array;
+}
+
 export interface WasmMasteringChainResult extends WasmMasteringResult {
   stages: string[];
   outputTruePeakDbtp: number;
   outputLra: number;
   loudnessTargetLimited: boolean;
   stageGainReductions: WasmStageGainReduction[];
+  report: WasmMasteringReport;
 }
 
 export interface WasmMasteringStereoChainResult {
@@ -511,6 +529,7 @@ export interface WasmMasteringStereoChainResult {
   outputLra: number;
   loudnessTargetLimited: boolean;
   stageGainReductions: WasmStageGainReduction[];
+  report: WasmMasteringReport;
 }
 
 export interface WasmMasteringStereoResult {
