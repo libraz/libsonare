@@ -229,6 +229,16 @@ def configure_core_signatures(lib: ctypes.CDLL) -> None:
         ctypes.POINTER(ctypes.POINTER(ctypes.c_float)),
         ctypes.POINTER(ctypes.c_size_t),
     ]
+    if hasattr(lib, "sonare_detect_onsets_ex"):
+        lib.sonare_detect_onsets_ex.restype = ctypes.c_int32
+        lib.sonare_detect_onsets_ex.argtypes = [
+            ctypes.POINTER(ctypes.c_float),
+            ctypes.c_size_t,
+            ctypes.c_int,
+            ctypes.POINTER(SonareOnsetDetectConfig),
+            ctypes.POINTER(ctypes.POINTER(ctypes.c_float)),
+            ctypes.POINTER(ctypes.c_size_t),
+        ]
 
     # --- Full analysis ---
 
@@ -527,6 +537,20 @@ def configure_core_signatures(lib: ctypes.CDLL) -> None:
             ctypes.c_float,
             ctypes.c_float,
             ctypes.c_int,
+            ctypes.POINTER(ctypes.POINTER(ctypes.c_float)),
+            ctypes.POINTER(ctypes.c_size_t),
+        ]
+        lib.sonare_griffin_lim.restype = ctypes.c_int32
+        lib.sonare_griffin_lim.argtypes = [
+            ctypes.POINTER(ctypes.c_float),
+            ctypes.c_size_t,
+            ctypes.c_int,
+            ctypes.c_int,
+            ctypes.c_int,
+            ctypes.c_int,
+            ctypes.c_int,
+            ctypes.c_int,
+            ctypes.c_float,
             ctypes.POINTER(ctypes.POINTER(ctypes.c_float)),
             ctypes.POINTER(ctypes.c_size_t),
         ]

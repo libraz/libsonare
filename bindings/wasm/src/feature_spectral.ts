@@ -1,4 +1,5 @@
 import { getSonareModule } from './module_state';
+import type { SegmentMatrix } from './public_types';
 import type {
   WasmDecomposeResult,
   WasmHpssWithResidualResult,
@@ -6,7 +7,13 @@ import type {
   WasmMatrix2dResult,
 } from './sonare.js';
 import type { ValidateOptions } from './validation';
-import { assertInterleavedSamples, assertSampleRate } from './validation';
+import {
+  assertInterleavedSamples,
+  assertNonNegativeInteger,
+  assertPositiveInteger,
+  assertSampleRate,
+  assertSamples,
+} from './validation';
 
 function requireModule() {
   return getSonareModule();
@@ -75,6 +82,75 @@ export interface NnFilterRequest {
   aggregate?: string;
   k?: number;
   width?: number;
+}
+export interface SegmentCrossSimilarityRequest {
+  x: Float32Array;
+  xRows: number;
+  xCols: number;
+  y: Float32Array;
+  yRows: number;
+  yCols: number;
+  k?: number;
+  metric?: 'cosine' | 'euclidean';
+  mode?: 'connectivity' | 'affinity';
+}
+export interface SegmentRecurrenceMatrixRequest {
+  data: Float32Array;
+  rows: number;
+  cols: number;
+  k?: number;
+  width?: number;
+  sym?: boolean;
+  metric?: 'cosine' | 'euclidean';
+  mode?: 'connectivity' | 'affinity';
+}
+export interface SegmentRecurrenceToLagRequest {
+  recurrence: Float32Array;
+  n: number;
+  pad?: boolean;
+}
+export interface SegmentLagToRecurrenceRequest {
+  lag: Float32Array;
+  rows: number;
+  lags: number;
+}
+export interface SegmentSubsegmentRequest {
+  data: Float32Array;
+  rows: number;
+  cols: number;
+  boundaries: Int32Array;
+  nSegments?: number;
+}
+export interface SegmentAgglomerativeRequest {
+  data: Float32Array;
+  rows: number;
+  cols: number;
+  k: number;
+  linkage?: 'average' | 'single' | 'complete' | 'ward';
+}
+export interface SegmentPathEnhanceRequest {
+  recurrence: Float32Array;
+  n: number;
+  win: number;
+  maxRatio?: number;
+  minRatio?: number;
+  nFilters?: number;
+}
+
+function validateSegmentMatrix(
+  fnName: string,
+  data: Float32Array,
+  rows: number,
+  cols: number,
+  dataName: string,
+): void {
+  assertPositiveInteger(fnName, rows, 'rows');
+  assertPositiveInteger(fnName, cols, 'cols');
+  assertSamples(fnName, data, true, dataName);
+  const expected = rows * cols;
+  if (!Number.isSafeInteger(expected) || data.length !== expected) {
+    throw new RangeError(`${fnName}: ${dataName} length must equal rows * cols`);
+  }
 }
 export interface RemixRequest {
   samples: Float32Array;
@@ -537,23 +613,31 @@ export function ebur128LoudnessRange(
  * @param hopLength - Hop length (default: 512)
  * @returns Spectral bandwidth in Hz for each frame
  */
-export function spectralBandwidth(request: SpectralFrameRequest): Float32Array;
+export function spectralBandwidth(request: SpectralFrameRequest & { p?: number }): Float32Array;
 export function spectralBandwidth(
   samples: Float32Array,
   sampleRate?: number,
   nFft?: number,
   hopLength?: number,
+  p?: number,
 ): Float32Array;
 export function spectralBandwidth(
-  samples: Float32Array | SpectralFrameRequest,
+  samples: Float32Array | (SpectralFrameRequest & { p?: number }),
   sampleRate = 22050,
   nFft = 2048,
   hopLength = 512,
+  p = 2,
 ): Float32Array {
   if (!(samples instanceof Float32Array)) {
-    return spectralBandwidth(samples.samples, samples.sampleRate, samples.nFft, samples.hopLength);
+    return spectralBandwidth(
+      samples.samples,
+      samples.sampleRate,
+      samples.nFft,
+      samples.hopLength,
+      samples.p,
+    );
   }
-  return requireModule().spectralBandwidth(samples, sampleRate, nFft, hopLength);
+  return requireModule().spectralBandwidth(samples, sampleRate, nFft, hopLength, p);
 }
 
 /**
@@ -621,6 +705,33 @@ export function spectralFlatness(
   return requireModule().spectralFlatness(samples, sampleRate, nFft, hopLength);
 }
 
+export function spectralFlux(request: SpectralFrameRequest & { lag?: number }): Float32Array;
+export function spectralFlux(
+  samples: Float32Array,
+  sampleRate?: number,
+  nFft?: number,
+  hopLength?: number,
+  lag?: number,
+): Float32Array;
+export function spectralFlux(
+  samples: Float32Array | (SpectralFrameRequest & { lag?: number }),
+  sampleRate = 22050,
+  nFft = 2048,
+  hopLength = 512,
+  lag = 1,
+): Float32Array {
+  if (!(samples instanceof Float32Array)) {
+    return spectralFlux(
+      samples.samples,
+      samples.sampleRate,
+      samples.nFft,
+      samples.hopLength,
+      samples.lag,
+    );
+  }
+  return requireModule().spectralFlux(samples, sampleRate, nFft, hopLength, lag);
+}
+
 /**
  * Compute zero crossing rate.
  *
@@ -680,4 +791,119 @@ export function rmsEnergy(
     return rmsEnergy(samples.samples, samples.sampleRate, samples.frameLength, samples.hopLength);
   }
   return requireModule().rmsEnergy(samples, sampleRate, frameLength, hopLength);
+}
+
+/** Column-wise cross-similarity (librosa.segment.cross_similarity). */
+export function segmentCrossSimilarity(request: SegmentCrossSimilarityRequest): SegmentMatrix {
+  validateSegmentMatrix('segmentCrossSimilarity', request.x, request.xRows, request.xCols, 'x');
+  validateSegmentMatrix('segmentCrossSimilarity', request.y, request.yRows, request.yCols, 'y');
+  if (request.xRows !== request.yRows) {
+    throw new RangeError('segmentCrossSimilarity: feature dimensions must match');
+  }
+  assertNonNegativeInteger('segmentCrossSimilarity', request.k ?? 0, 'k');
+  return requireModule().segmentCrossSimilarity(
+    request.x,
+    request.xRows,
+    request.xCols,
+    request.y,
+    request.yRows,
+    request.yCols,
+    request.k ?? 0,
+    request.metric ?? 'cosine',
+    request.mode ?? 'connectivity',
+  );
+}
+
+/** Self-similarity recurrence matrix (librosa.segment.recurrence_matrix). */
+export function segmentRecurrenceMatrix(request: SegmentRecurrenceMatrixRequest): SegmentMatrix {
+  validateSegmentMatrix(
+    'segmentRecurrenceMatrix',
+    request.data,
+    request.rows,
+    request.cols,
+    'data',
+  );
+  assertNonNegativeInteger('segmentRecurrenceMatrix', request.k ?? 0, 'k');
+  assertNonNegativeInteger('segmentRecurrenceMatrix', request.width ?? 1, 'width');
+  return requireModule().segmentRecurrenceMatrix(
+    request.data,
+    request.rows,
+    request.cols,
+    request.k ?? 0,
+    request.width ?? 1,
+    request.sym ?? false,
+    request.metric ?? 'euclidean',
+    request.mode ?? 'connectivity',
+  );
+}
+
+/** Convert an `n × n` recurrence matrix to a lag matrix. */
+export function segmentRecurrenceToLag(request: SegmentRecurrenceToLagRequest): SegmentMatrix {
+  validateSegmentMatrix(
+    'segmentRecurrenceToLag',
+    request.recurrence,
+    request.n,
+    request.n,
+    'recurrence',
+  );
+  return requireModule().segmentRecurrenceToLag(
+    request.recurrence,
+    request.n,
+    request.pad ?? false,
+  );
+}
+
+/** Convert a lag matrix back to an `n × n` recurrence matrix. */
+export function segmentLagToRecurrence(request: SegmentLagToRecurrenceRequest): SegmentMatrix {
+  validateSegmentMatrix('segmentLagToRecurrence', request.lag, request.rows, request.lags, 'lag');
+  return requireModule().segmentLagToRecurrence(request.lag, request.rows, request.lags);
+}
+
+/** Refine frame boundaries by clustering within each parent segment. */
+export function segmentSubsegment(request: SegmentSubsegmentRequest): Int32Array {
+  validateSegmentMatrix('segmentSubsegment', request.data, request.rows, request.cols, 'data');
+  assertPositiveInteger('segmentSubsegment', request.nSegments ?? 4, 'nSegments');
+  return requireModule().segmentSubsegment(
+    request.data,
+    request.rows,
+    request.cols,
+    request.boundaries,
+    request.nSegments ?? 4,
+  );
+}
+
+/** Cluster feature columns and return one label per column. */
+export function segmentAgglomerative(request: SegmentAgglomerativeRequest): Int32Array {
+  validateSegmentMatrix('segmentAgglomerative', request.data, request.rows, request.cols, 'data');
+  assertPositiveInteger('segmentAgglomerative', request.k, 'k');
+  return requireModule().segmentAgglomerative(
+    request.data,
+    request.rows,
+    request.cols,
+    request.k,
+    request.linkage ?? 'average',
+  );
+}
+
+/** Enhance diagonal paths in an `n × n` recurrence matrix. */
+export function segmentPathEnhance(request: SegmentPathEnhanceRequest): SegmentMatrix {
+  validateSegmentMatrix(
+    'segmentPathEnhance',
+    request.recurrence,
+    request.n,
+    request.n,
+    'recurrence',
+  );
+  assertPositiveInteger('segmentPathEnhance', request.win, 'win');
+  assertPositiveInteger('segmentPathEnhance', request.maxRatio ?? 2, 'maxRatio');
+  assertNonNegativeInteger('segmentPathEnhance', request.minRatio ?? 0, 'minRatio');
+  assertPositiveInteger('segmentPathEnhance', request.nFilters ?? 7, 'nFilters');
+  return requireModule().segmentPathEnhance(
+    request.recurrence,
+    request.n,
+    request.win,
+    request.maxRatio ?? 2,
+    request.minRatio ?? 0,
+    request.nFilters ?? 7,
+  );
 }

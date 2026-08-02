@@ -3,6 +3,7 @@
 
 #ifdef __EMSCRIPTEN__
 
+#include "core/synthesis.h"
 #include "wasm/bindings/common/common.h"
 
 namespace {
@@ -148,6 +149,23 @@ val js_frame_signal(val samples, int frame_length, int hop_length) {
   return out;
 }
 
+val js_tone(float frequency, int sample_rate, float duration, float phase, float amplitude) {
+  const Audio audio = tone(frequency, sample_rate, duration, phase, amplitude);
+  return vectorToFloat32Array(std::vector<float>(audio.data(), audio.data() + audio.size()));
+}
+
+val js_chirp(float fmin, float fmax, int sample_rate, float duration, bool linear) {
+  const Audio audio = chirp(fmin, fmax, sample_rate, duration, linear);
+  return vectorToFloat32Array(std::vector<float>(audio.data(), audio.data() + audio.size()));
+}
+
+val js_clicks(val times, int sample_rate, int length, float frequency, float click_duration) {
+  std::vector<float> values = float32ArrayToVector(times);
+  validateFiniteVector(values, "clicks");
+  const Audio audio = clicks(values, sample_rate, length, frequency, click_duration);
+  return vectorToFloat32Array(std::vector<float>(audio.data(), audio.data() + audio.size()));
+}
+
 val js_pad_center(val values, int size, float pad_value) {
   std::vector<float> data = float32ArrayToVector(values);
   validateFiniteVector(data, "padCenter");
@@ -177,6 +195,12 @@ std::vector<int> intArrayToVector(val arr) {
 
 val js_fix_frames(val frames, int x_min, int x_max, bool pad) {
   return vectorToInt32Array(fix_frames(intArrayToVector(frames), x_min, x_max, pad));
+}
+
+val js_onset_backtrack(val events, val energy) {
+  std::vector<float> energy_values = float32ArrayToVector(energy);
+  validateFiniteVector(energy_values, "onsetBacktrack");
+  return vectorToInt32Array(onset_backtrack(intArrayToVector(events), energy_values));
 }
 
 val js_peak_pick(val values, int pre_max, int post_max, int pre_avg, int post_avg, float delta,
@@ -236,7 +260,8 @@ TempogramMode tempogramModeFromValue(val mode) {
                                 "tempogram mode must be 'autocorrelation' or 'cosine'");
 }
 
-val js_tempogram(val onset_envelope, int sample_rate, int hop_length, int win_length, val mode) {
+val js_tempogram(val onset_envelope, int sample_rate, int hop_length, int win_length, val mode,
+                 bool center, bool norm) {
   std::vector<float> data = float32ArrayToVector(onset_envelope);
   validateFiniteVector(data, "tempogram");
   validatePositiveSampleRate("tempogram", sample_rate);
@@ -244,6 +269,8 @@ val js_tempogram(val onset_envelope, int sample_rate, int hop_length, int win_le
   config.hop_length = hop_length;
   config.win_length = win_length;
   config.mode = tempogramModeFromValue(mode);
+  config.center = center;
+  config.norm = norm;
   auto result = tempogram(data, sample_rate, config);
   val out = val::object();
   out.set("nFrames", static_cast<int>(data.size()));
@@ -310,13 +337,16 @@ val js_onset_strength_multi(val samples, int sample_rate, int n_fft, int hop_len
   return out;
 }
 
-val js_fourier_tempogram(val onset_envelope, int sample_rate, int hop_length, int win_length) {
+val js_fourier_tempogram(val onset_envelope, int sample_rate, int hop_length, int win_length,
+                         bool center, bool norm) {
   std::vector<float> data = float32ArrayToVector(onset_envelope);
   validateFiniteVector(data, "fourierTempogram");
   validatePositiveSampleRate("fourierTempogram", sample_rate);
   TempogramConfig config;
   config.hop_length = hop_length;
   config.win_length = win_length;
+  config.center = center;
+  config.norm = norm;
   auto result = fourier_tempogram(data, sample_rate, config);
   val out = val::object();
   out.set("nBins", win_length / 2 + 1);
@@ -368,9 +398,13 @@ void registerFeatureCoreBindings() {
   function("trimSilence", &js_trim_silence);
   function("splitSilence", &js_split_silence);
   function("frameSignal", &js_frame_signal);
+  function("tone", &js_tone);
+  function("chirp", &js_chirp);
+  function("clicks", &js_clicks);
   function("padCenter", &js_pad_center);
   function("fixLength", &js_fix_length);
   function("fixFrames", &js_fix_frames);
+  function("onsetBacktrack", &js_onset_backtrack);
   function("peakPick", &js_peak_pick);
   function("vectorNormalize", &js_vector_normalize);
   function("pcen", &js_pcen);

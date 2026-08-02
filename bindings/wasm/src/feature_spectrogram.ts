@@ -4,6 +4,7 @@ import type {
   MelPowerResult,
   MelSpectrogramResult,
   MfccResult,
+  ReassignedSpectrogramResult,
   StftPowerResult,
   StftResult,
 } from './public_types';
@@ -49,6 +50,17 @@ export interface MfccRequest extends MelSpectrogramRequest {
   lifter?: number;
 }
 
+export interface MelDeltaRequest extends GuardedOptions {
+  features: Float32Array;
+  nFeatures: number;
+  nFrames: number;
+  width?: number;
+}
+export interface ReassignedSpectrogramRequest extends SpectrogramRequest {
+  refPower?: number;
+  fillNan?: boolean;
+}
+
 export interface MfccToMelRequest extends GuardedOptions {
   mfccCoefficients: Float32Array;
   nMfcc: number;
@@ -74,6 +86,16 @@ export interface MelToStftRequest extends GuardedOptions {
 export interface MelToAudioRequest extends MelToStftRequest {
   hopLength?: number;
   nIter?: number;
+}
+export interface GriffinLimRequest extends GuardedOptions {
+  magnitude: Float32Array;
+  nBins: number;
+  nFrames: number;
+  sampleRate?: number;
+  nFft?: number;
+  hopLength?: number;
+  nIter?: number;
+  momentum?: number;
 }
 
 /** Canonical request form for Griffin-Lim reconstruction from MFCCs. */
@@ -524,6 +546,90 @@ export function mfcc(
   );
 }
 
+/** First-order regression delta of a row-major feature matrix. */
+export function melDelta(request: MelDeltaRequest): Float32Array;
+export function melDelta(
+  features: Float32Array,
+  nFeatures: number,
+  nFrames: number,
+  width?: number,
+): Float32Array;
+export function melDelta(
+  features: Float32Array | MelDeltaRequest,
+  nFeatures?: number,
+  nFrames?: number,
+  width = 9,
+): Float32Array {
+  const request: MelDeltaRequest =
+    features instanceof Float32Array
+      ? { features, nFeatures: nFeatures ?? 0, nFrames: nFrames ?? 0, width }
+      : features;
+  assertPositiveInteger('melDelta', request.nFeatures, 'nFeatures');
+  assertPositiveInteger('melDelta', request.nFrames, 'nFrames');
+  assertPositiveInteger('melDelta', request.width ?? 9, 'width');
+  if ((request.width ?? 9) < 3 || (request.width ?? 9) % 2 === 0) {
+    throw new RangeError('melDelta: width must be an odd integer of at least 3');
+  }
+  if (request.features.length !== request.nFeatures * request.nFrames) {
+    throw new RangeError('melDelta: feature matrix length must equal nFeatures * nFrames');
+  }
+  return requireModule().melDelta(
+    request.features,
+    request.nFeatures,
+    request.nFrames,
+    request.width ?? 9,
+  );
+}
+
+/** Auger-Flandrin reassigned spectrogram (row-major [nBins x nFrames] arrays). */
+export function reassignedSpectrogram(
+  request: ReassignedSpectrogramRequest,
+): ReassignedSpectrogramResult;
+export function reassignedSpectrogram(
+  samples: Float32Array,
+  sampleRate?: number,
+  nFft?: number,
+  hopLength?: number,
+  refPower?: number,
+  fillNan?: boolean,
+): ReassignedSpectrogramResult;
+export function reassignedSpectrogram(
+  samples: Float32Array | ReassignedSpectrogramRequest,
+  sampleRate = 22050,
+  nFft = 2048,
+  hopLength = 512,
+  refPower = 1e-6,
+  fillNan = false,
+): ReassignedSpectrogramResult {
+  if (!(samples instanceof Float32Array)) {
+    const request = samples;
+    return reassignedSpectrogram(
+      request.samples,
+      request.sampleRate,
+      request.nFft,
+      request.hopLength,
+      request.refPower,
+      request.fillNan,
+    );
+  }
+  assertSamples('reassignedSpectrogram', samples, true);
+  assertSampleRate('reassignedSpectrogram', sampleRate);
+  assertPositiveInteger('reassignedSpectrogram', nFft, 'nFft');
+  assertPositiveInteger('reassignedSpectrogram', hopLength, 'hopLength');
+  assertFiniteScalar('reassignedSpectrogram', refPower, 'refPower');
+  if (refPower < 0) {
+    throw new RangeError('reassignedSpectrogram: refPower must be non-negative');
+  }
+  return requireModule().reassignedSpectrogram(
+    samples,
+    sampleRate,
+    nFft,
+    hopLength,
+    refPower,
+    fillNan,
+  );
+}
+
 // ============================================================================
 // Features - Inverse reconstruction
 // ============================================================================
@@ -660,6 +766,59 @@ export function melToAudio(
     fmax,
     nIter,
     htk,
+  );
+}
+
+/** Reconstruct audio from an STFT magnitude matrix via Griffin-Lim. */
+export function griffinLim(request: GriffinLimRequest): Float32Array;
+export function griffinLim(
+  magnitude: Float32Array,
+  nBins: number,
+  nFrames: number,
+  sampleRate?: number,
+  nFft?: number,
+  hopLength?: number,
+  nIter?: number,
+  momentum?: number,
+  options?: GuardedOptions,
+): Float32Array;
+export function griffinLim(
+  magnitude: Float32Array | GriffinLimRequest,
+  nBins = 0,
+  nFrames = 0,
+  sampleRate = 22050,
+  nFft = 2048,
+  hopLength = 512,
+  nIter = 32,
+  momentum = 0.99,
+  options: GuardedOptions = {},
+): Float32Array {
+  if (!(magnitude instanceof Float32Array)) {
+    const request = magnitude;
+    return griffinLim(
+      request.magnitude,
+      request.nBins,
+      request.nFrames,
+      request.sampleRate,
+      request.nFft,
+      request.hopLength,
+      request.nIter,
+      request.momentum,
+      request,
+    );
+  }
+  assertSampleRate('griffinLim', sampleRate);
+  validateMatrix('griffinLim', magnitude, nBins, nFrames, 'magnitude', 'nBins', options);
+  validatePositiveIntegers('griffinLim', { nFft, hopLength, nIter });
+  return requireModule().griffinLim(
+    magnitude,
+    nBins,
+    nFrames,
+    sampleRate,
+    nFft,
+    hopLength,
+    nIter,
+    momentum,
   );
 }
 

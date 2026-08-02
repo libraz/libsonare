@@ -195,7 +195,12 @@ class AutomationCurve(IntEnum):
 
 
 class PanLaw(IntEnum):
-    """Pan law applied to a mixer strip's pan position."""
+    """Pan law for a mixer strip.
+
+    On mono strips it changes centre gain. On stereo strips using Balance,
+    centre remains unity and the selected law changes only the far-channel
+    taper.
+    """
 
     CONST_3DB = 0
     CONST_4_5DB = 1
@@ -577,11 +582,16 @@ class AcousticResult:
 
 @dataclass(frozen=True, slots=True)
 class RirResult:
-    """Room impulse response synthesized from shoebox geometry."""
+    """Room impulse response synthesized from shoebox geometry.
+
+    ``error_message`` contains the stable acoustic diagnostic code and detail
+    when geometry validation makes the result unusable.
+    """
 
     rir: list[float]
     sample_rate: int
     has_error: bool
+    error_message: str = ""
 
     @property
     def sampleRate(self) -> int:  # noqa: N802
@@ -1022,6 +1032,36 @@ class PitchResult:
     voiced_flag: list[bool]
     median_f0: float
     mean_f0: float
+
+
+@dataclass(frozen=True, slots=True)
+class PiptrackResult:
+    """Per-bin pitch candidates and peak magnitudes from spectral piptrack."""
+
+    n_bins: int
+    n_frames: int
+    pitches: list[float]
+    magnitudes: list[float]
+
+
+@dataclass(frozen=True, slots=True)
+class ReassignedSpectrogramResult:
+    """Magnitude and reassigned coordinates for a row-major STFT matrix."""
+
+    n_bins: int
+    n_frames: int
+    magnitude: list[float]
+    times: list[float]
+    frequencies: list[float]
+
+
+@dataclass(frozen=True, slots=True)
+class SegmentMatrix:
+    """A row-major matrix returned by a ``librosa.segment``-compatible API."""
+
+    rows: int
+    cols: int
+    values: list[float]
 
 
 @dataclass(frozen=True, slots=True)

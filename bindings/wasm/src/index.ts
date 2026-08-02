@@ -68,6 +68,7 @@ export type {
   MasteringProcessorCatalogEntry,
   MasteringProcessRequest,
   MasteringProcessStereoRequest,
+  MasteringRealtimeCost,
   MasteringRepairDeclickRequest,
   MasteringRepairDeclipRequest,
   MasteringRepairDecrackleRequest,
@@ -158,18 +159,22 @@ export type {
 } from './effects_transform';
 export { ErrorCode, isSonareError, SonareError } from './errors';
 export type {
+  ChirpRequest,
+  ClicksRequest,
   CyclicTempogramRequest,
   DbConversionRequest,
   EmphasisRequest,
   FixFramesRequest,
   FixLengthRequest,
   FrameSignalRequest,
+  OnsetBacktrackRequest,
   PadCenterRequest,
   PcenRequest,
   PeakPickRequest,
   PlpRequest,
   SilenceRequest,
   TempogramRequest,
+  ToneRequest,
   TonnetzRequest,
   VectorNormalizeRequest,
 } from './feature_core';
@@ -188,7 +193,12 @@ export type {
   VqtRequest,
   VqtToAudioRequest,
 } from './feature_music';
-export type { NoteSegmentsRequest, PitchPyinRequest, PitchYinRequest } from './feature_pitch';
+export type {
+  NoteSegmentsRequest,
+  PiptrackRequest,
+  PitchPyinRequest,
+  PitchYinRequest,
+} from './feature_pitch';
 export type { ResampleRequest } from './feature_resample';
 export type {
   DecomposeRequest,
@@ -202,6 +212,13 @@ export type {
   PitchTuningRequest,
   PolyFeaturesRequest,
   RemixRequest,
+  SegmentAgglomerativeRequest,
+  SegmentCrossSimilarityRequest,
+  SegmentLagToRecurrenceRequest,
+  SegmentPathEnhanceRequest,
+  SegmentRecurrenceMatrixRequest,
+  SegmentRecurrenceToLagRequest,
+  SegmentSubsegmentRequest,
   SpectralContrastRequest,
   SpectralFrameRequest,
   SpectralRolloffRequest,
@@ -210,12 +227,15 @@ export type {
 } from './feature_spectral';
 export type {
   ChromaSpectrogramRequest,
+  GriffinLimRequest,
+  MelDeltaRequest,
   MelSpectrogramRequest,
   MelToAudioRequest,
   MelToStftRequest,
   MfccRequest,
   MfccToAudioRequest,
   MfccToMelRequest,
+  ReassignedSpectrogramRequest,
   SpectrogramRequest,
   TrimRequest,
 } from './feature_spectrogram';
@@ -224,9 +244,11 @@ export {
   analyzeMelody,
   analyzeSections,
   bassChroma,
+  chirp,
   chroma,
   chromaCens,
   chromaCqt,
+  clicks,
   cqt,
   cqtToAudio,
   cyclicTempogram,
@@ -243,6 +265,7 @@ export {
   frameSignal,
   framesToSamples,
   framesToTime,
+  griffinLim,
   hpssWithResidual,
   hybridCqt,
   hzToMel,
@@ -250,6 +273,7 @@ export {
   hzToNote,
   lufs,
   lufsInterleaved,
+  melDelta,
   melSpectrogram,
   melToAudio,
   melToHz,
@@ -263,12 +287,14 @@ export {
   nnlsChroma,
   noteSegments,
   noteToHz,
+  onsetBacktrack,
   onsetEnvelope,
   onsetStrengthMulti,
   padCenter,
   pcen,
   peakPick,
   phaseVocoder,
+  piptrack,
   pitchPyin,
   pitchTuning,
   pitchYin,
@@ -277,15 +303,24 @@ export {
   powerToDb,
   preemphasis,
   pseudoCqt,
+  reassignedSpectrogram,
   remix,
   resample,
   rmsEnergy,
   samplesToFrames,
+  segmentAgglomerative,
+  segmentCrossSimilarity,
+  segmentLagToRecurrence,
+  segmentPathEnhance,
+  segmentRecurrenceMatrix,
+  segmentRecurrenceToLag,
+  segmentSubsegment,
   shortTermLufs,
   spectralBandwidth,
   spectralCentroid,
   spectralContrast,
   spectralFlatness,
+  spectralFlux,
   spectralRolloff,
   splitSilence,
   stft,
@@ -293,6 +328,7 @@ export {
   tempogram,
   tempogramRatio,
   timeToFrames,
+  tone,
   tonnetz,
   trim,
   trimSilence,
@@ -379,6 +415,7 @@ export type {
   ProjectAutomationPoint,
   ProjectBounceOptions,
   ProjectChordSymbol,
+  ProjectClip,
   ProjectClipCompSegment,
   ProjectClipDesc,
   ProjectClipFade,
@@ -393,6 +430,8 @@ export type {
   ProjectMidiClipResult,
   ProjectMidiEvent,
   ProjectNotePairValidation,
+  ProjectSource,
+  ProjectTrack,
   ProjectTrackDesc,
   ProjectTrackKind,
   ProjectWarpAnchor,
@@ -412,6 +451,7 @@ export type {
   SynthPatch,
 } from './project';
 export {
+  BUILTIN_SYNTH_WAVEFORMS,
   EXPECTED_PROJECT_ABI_VERSION,
   MarkerKind,
   Project,
@@ -498,6 +538,7 @@ export type {
   RoomGeometryOptions,
   RoomMorphOptions,
   Section,
+  SegmentMatrix,
   SendTiming,
   SoloProcessor,
   SonareCapabilities,
@@ -538,6 +579,7 @@ export type {
   DetectAcousticRequest,
   DetectChordsRequest,
   DetectKeyRequest,
+  DetectOnsetsRequest,
   DynamicsAnalysisResult,
   EstimateRoomRequest,
   MusicAnalyzeRequest,
@@ -576,6 +618,7 @@ export type {
   EngineBounceResult,
   EngineBus,
   EngineCapabilities,
+  EngineCaptureSource,
   EngineCaptureStatus,
   EngineClip,
   EngineFreezeOptions,
@@ -783,6 +826,9 @@ const VOICE_PRESET_ORDINALS: readonly VoicePresetId[] = [
 
 function resolveVoicePresetOrdinal(preset: VoicePresetId | number): number {
   if (typeof preset === 'number') {
+    if (!Number.isSafeInteger(preset) || preset < 0 || preset >= VOICE_PRESET_ORDINALS.length) {
+      throw new RangeError(`Unknown voice-character preset ordinal: ${String(preset)}`);
+    }
     return preset;
   }
   const ordinal = VOICE_PRESET_ORDINALS.indexOf(preset);
@@ -794,9 +840,9 @@ function resolveVoicePresetOrdinal(preset: VoicePresetId | number): number {
 
 /**
  * Map a voice-character preset ordinal (or canonical id) to its canonical id
- * string (e.g. `'bright-idol'`). Returns `null` for an out-of-range ordinal.
+ * string (e.g. `'bright-idol'`). Invalid ordinals throw.
  */
-export function voiceCharacterPresetId(preset: VoicePresetId | number): string | null {
+export function voiceCharacterPresetId(preset: VoicePresetId | number): string {
   if (!module) {
     throw new Error('Module not initialized. Call init() first.');
   }
@@ -806,11 +852,11 @@ export function voiceCharacterPresetId(preset: VoicePresetId | number): string |
 /**
  * Return the canonical (normalized) flat POD config for a built-in voice
  * preset, skipping the JSON round-trip. Accepts a canonical preset id or its
- * integer ordinal. Returns `null` for an out-of-range ordinal.
+ * integer ordinal. Invalid ordinals throw.
  */
 export function realtimeVoiceChangerPresetConfig(
   preset: VoicePresetId | number,
-): RealtimeVoiceChangerPodConfig | null {
+): RealtimeVoiceChangerPodConfig {
   if (!module) {
     throw new Error('Module not initialized. Call init() first.');
   }

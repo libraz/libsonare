@@ -11,6 +11,85 @@ function requireModule() {
   return getSonareModule();
 }
 
+export function tone(request?: ToneRequest): Float32Array;
+export function tone(
+  frequency?: number,
+  sampleRate?: number,
+  duration?: number,
+  phase?: number,
+  amplitude?: number,
+): Float32Array;
+export function tone(
+  frequency: number | ToneRequest = 440,
+  sampleRate = 22050,
+  duration = 1,
+  phase = 0,
+  amplitude = 1,
+): Float32Array {
+  const request =
+    typeof frequency === 'number'
+      ? { frequency, sampleRate, duration, phase, amplitude }
+      : frequency;
+  return requireModule().tone(
+    request.frequency ?? 440,
+    request.sampleRate ?? 22050,
+    request.duration ?? 1,
+    request.phase ?? 0,
+    request.amplitude ?? 1,
+  );
+}
+
+export function chirp(request?: ChirpRequest): Float32Array;
+export function chirp(
+  fmin?: number,
+  fmax?: number,
+  sampleRate?: number,
+  duration?: number,
+  linear?: boolean,
+): Float32Array;
+export function chirp(
+  fmin: number | ChirpRequest = 440,
+  fmax = 880,
+  sampleRate = 22050,
+  duration = 1,
+  linear = true,
+): Float32Array {
+  const request = typeof fmin === 'number' ? { fmin, fmax, sampleRate, duration, linear } : fmin;
+  return requireModule().chirp(
+    request.fmin ?? 440,
+    request.fmax ?? 880,
+    request.sampleRate ?? 22050,
+    request.duration ?? 1,
+    request.linear ?? true,
+  );
+}
+
+export function clicks(request: ClicksRequest): Float32Array;
+export function clicks(
+  times: Float32Array,
+  sampleRate?: number,
+  length?: number,
+  frequency?: number,
+  clickDuration?: number,
+): Float32Array;
+export function clicks(
+  times: Float32Array | ClicksRequest,
+  sampleRate = 22050,
+  length = 0,
+  frequency = 1000,
+  clickDuration = 0.1,
+): Float32Array {
+  const request =
+    times instanceof Float32Array ? { times, sampleRate, length, frequency, clickDuration } : times;
+  return requireModule().clicks(
+    request.times,
+    request.sampleRate ?? 22050,
+    request.length ?? 0,
+    request.frequency ?? 1000,
+    request.clickDuration ?? 0.1,
+  );
+}
+
 export interface DbConversionRequest {
   values: Float32Array;
   ref?: number;
@@ -29,6 +108,27 @@ export interface FrameSignalRequest {
   samples: Float32Array;
   frameLength: number;
   hopLength: number;
+}
+export interface ToneRequest {
+  frequency?: number;
+  sampleRate?: number;
+  duration?: number;
+  phase?: number;
+  amplitude?: number;
+}
+export interface ChirpRequest {
+  fmin?: number;
+  fmax?: number;
+  sampleRate?: number;
+  duration?: number;
+  linear?: boolean;
+}
+export interface ClicksRequest {
+  times: Float32Array;
+  sampleRate?: number;
+  length?: number;
+  frequency?: number;
+  clickDuration?: number;
 }
 /** Canonical request form for pre/de-emphasis filters. */
 export interface EmphasisRequest {
@@ -54,6 +154,10 @@ export interface FixFramesRequest {
   xMin?: number;
   xMax?: number;
   pad?: boolean;
+}
+export interface OnsetBacktrackRequest {
+  events: Int32Array;
+  energy: Float32Array;
 }
 /** Canonical request form for peak selection. */
 export interface PeakPickRequest {
@@ -97,6 +201,8 @@ export interface TempogramRequest {
   hopLength?: number;
   winLength?: number;
   mode?: TempogramMode;
+  center?: boolean;
+  norm?: boolean;
 }
 export interface CyclicTempogramRequest {
   onsetEnvelope: Float32Array;
@@ -391,6 +497,18 @@ export function fixFrames(
   return requireModule().fixFrames(frames, xMin, xMax, pad);
 }
 
+export function onsetBacktrack(request: OnsetBacktrackRequest): Int32Array;
+export function onsetBacktrack(events: Int32Array, energy: Float32Array): Int32Array;
+export function onsetBacktrack(
+  events: Int32Array | OnsetBacktrackRequest,
+  energy?: Float32Array,
+): Int32Array {
+  if (!(events instanceof Int32Array)) {
+    return onsetBacktrack(events.events, events.energy);
+  }
+  return requireModule().onsetBacktrack(events, energy as Float32Array);
+}
+
 export function peakPick(request: PeakPickRequest): Int32Array;
 export function peakPick(
   values: Float32Array,
@@ -492,6 +610,8 @@ export function tempogram(
   hopLength?: number,
   winLength?: number,
   mode?: TempogramMode,
+  center?: boolean,
+  norm?: boolean,
 ): WasmTempogramResult;
 export function tempogram(
   onsetEnvelope: Float32Array | TempogramRequest,
@@ -499,12 +619,30 @@ export function tempogram(
   hopLength = 512,
   winLength = 384,
   mode: TempogramMode = 'autocorrelation',
+  center = true,
+  norm = true,
 ): WasmTempogramResult {
   if (!(onsetEnvelope instanceof Float32Array)) {
     const r = onsetEnvelope;
-    return tempogram(r.onsetEnvelope, r.sampleRate, r.hopLength, r.winLength, r.mode);
+    return tempogram(
+      r.onsetEnvelope,
+      r.sampleRate,
+      r.hopLength,
+      r.winLength,
+      r.mode,
+      r.center,
+      r.norm,
+    );
   }
-  return requireModule().tempogram(onsetEnvelope, sampleRate, hopLength, winLength, mode);
+  return requireModule().tempogram(
+    onsetEnvelope,
+    sampleRate,
+    hopLength,
+    winLength,
+    mode,
+    center,
+    norm,
+  );
 }
 
 export function cyclicTempogram(request: CyclicTempogramRequest): WasmCyclicTempogramResult;

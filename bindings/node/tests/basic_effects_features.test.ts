@@ -7,15 +7,18 @@ import {
   cqt,
   cqtToAudio,
   framesToTime,
+  griffinLim,
   harmonic,
   hpss,
   hzToMel,
   hzToMidi,
   hzToNote,
   mastering,
+  masteringPresetNames,
   masteringProcess,
   masteringProcessorNames,
   masteringProcessStereo,
+  melDelta,
   melSpectrogram,
   melToAudio,
   melToHz,
@@ -27,16 +30,27 @@ import {
   normalize,
   noteSegments,
   noteToHz,
+  onsetBacktrack,
   percussive,
+  piptrack,
   pitchPyin,
   pitchShift,
   pitchYin,
   powerToDb,
+  reassignedSpectrogram,
   resample,
   rmsEnergy,
+  segmentAgglomerative,
+  segmentCrossSimilarity,
+  segmentLagToRecurrence,
+  segmentPathEnhance,
+  segmentRecurrenceMatrix,
+  segmentRecurrenceToLag,
+  segmentSubsegment,
   spectralBandwidth,
   spectralCentroid,
   spectralFlatness,
+  spectralFlux,
   spectralRolloff,
   stft,
   stftDb,
@@ -62,6 +76,58 @@ function generateSine(freq: number, sr: number, duration: number, amp = 1): Floa
 
 describe('effects', () => {
   const tone = generateSine(440, SR, 1.0);
+
+  it('melDelta returns the slope of a linear feature row', () => {
+    const result = melDelta(new Float32Array([0, 1, 2, 3, 4, 5, 6, 7, 8, 9]), 2, 5, 5);
+    expect([...result]).toEqual(Array(10).fill(1));
+  });
+
+  it('piptrack returns equally shaped pitch and magnitude matrices', () => {
+    const result = piptrack(tone, SR, 1024, 256, 100, 1000);
+    expect(result.nBins).toBe(513);
+    expect(result.pitches.length).toBe(result.nBins * result.nFrames);
+    expect(result.magnitudes.length).toBe(result.pitches.length);
+  });
+
+  it('reassignedSpectrogram returns equally shaped coordinate matrices', () => {
+    const result = reassignedSpectrogram(tone, SR, 1024, 256);
+    expect(result.nBins).toBe(513);
+    expect(result.nFrames).toBeGreaterThan(0);
+    expect(result.times.length).toBe(result.nBins * result.nFrames);
+    expect(result.frequencies.length).toBe(result.times.length);
+    expect(result.magnitude.length).toBe(result.times.length);
+  });
+
+  it('segmentCrossSimilarity returns a matrix with the requested column shape', () => {
+    const result = segmentCrossSimilarity({
+      x: new Float32Array([1, 0, 1, 0, 1, 1]),
+      xRows: 2,
+      xCols: 3,
+      y: new Float32Array([1, 1, 0, 0, 1, 1]),
+      yRows: 2,
+      yCols: 3,
+    });
+    expect(result.rows).toBe(3);
+    expect(result.cols).toBe(3);
+    expect(result.values).toHaveLength(9);
+  });
+
+  it('exposes the remaining librosa.segment operations', () => {
+    const data = new Float32Array([1, 0, 1, 0, 1, 1]);
+    const recurrence = segmentRecurrenceMatrix({ data, rows: 2, cols: 3 });
+    expect(recurrence.values).toHaveLength(9);
+    const lag = segmentRecurrenceToLag({ recurrence: recurrence.values, n: 3, pad: true });
+    expect(lag.rows).toBe(3);
+    expect(lag.cols).toBe(5);
+    expect(segmentLagToRecurrence({ lag: lag.values, rows: 3, lags: 5 }).values).toHaveLength(9);
+    expect(
+      segmentSubsegment({ data, rows: 2, cols: 3, boundaries: new Int32Array([0, 3]) })[0],
+    ).toBe(0);
+    expect(segmentAgglomerative({ data, rows: 2, cols: 3, k: 2 })).toHaveLength(3);
+    expect(segmentPathEnhance({ recurrence: recurrence.values, n: 3, win: 1 }).values).toHaveLength(
+      9,
+    );
+  });
 
   it('hpss returns harmonic and percussive', () => {
     const result = hpss(tone, SR);
@@ -340,6 +406,7 @@ describe('features', () => {
     for (let i = 0; i < result.db.length; i++) {
       expect(Number.isFinite(result.db[i])).toBe(true);
     }
+    expect(stftDb({ samples: tone, sampleRate: SR, nFft: 2048, hopLength: 512 })).toEqual(result);
   });
 
   it('melSpectrogram returns power and dB', () => {
@@ -479,6 +546,7 @@ describe('features', () => {
     const result = spectralBandwidth(tone, SR);
     expect(result).toBeInstanceOf(Float32Array);
     expect(result.length).toBeGreaterThan(0);
+    expect(spectralBandwidth(tone, SR, 2048, 512, 1)).not.toEqual(result);
   });
 
   it('spectralRolloff returns Float32Array', () => {
@@ -489,6 +557,44 @@ describe('features', () => {
 
   it('spectralFlatness returns Float32Array', () => {
     const result = spectralFlatness(tone, SR);
+    expect(result).toBeInstanceOf(Float32Array);
+    expect(result.length).toBeGreaterThan(0);
+  });
+
+  it('spectralFlux returns Float32Array and accepts a lag', () => {
+    const result = spectralFlux(tone, SR);
+    expect(result).toBeInstanceOf(Float32Array);
+    expect(result.length).toBeGreaterThan(0);
+    expect(spectralFlux(tone, SR, 2048, 512, 2)).not.toEqual(result);
+    expect(
+      spectralFlux({ samples: tone, sampleRate: SR, nFft: 2048, hopLength: 512, lag: 1 }),
+    ).toEqual(result);
+  });
+
+  it('masteringPresetNames exposes the native preset catalog', () => {
+    const presets = masteringPresetNames();
+    expect(presets).toContain('pop');
+    expect(presets).toContain('aiMusic');
+  });
+
+  it('onsetBacktrack returns preceding energy minima', () => {
+    expect(
+      Array.from(onsetBacktrack([6], new Float32Array([1, 0.8, 0.5, 0.2, 0.6, 0.9, 1.2]))),
+    ).toEqual([3]);
+  });
+
+  it('griffinLim reconstructs STFT magnitude', () => {
+    const spectrum = stft(tone, SR, 1024, 256);
+    const result = griffinLim(
+      spectrum.magnitude,
+      spectrum.nBins,
+      spectrum.nFrames,
+      SR,
+      1024,
+      256,
+      1,
+      0,
+    );
     expect(result).toBeInstanceOf(Float32Array);
     expect(result.length).toBeGreaterThan(0);
   });

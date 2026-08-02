@@ -8,11 +8,20 @@
 #include <cmath>
 #include <vector>
 
+#include "c_api/sonare_c_error_mapping.h"
+
 TEST_CASE("sonare_abi_version mirrors the compile-time aggregate", "[c_api][abi]") {
   REQUIRE(sonare_abi_version() == SONARE_ABI_VERSION);
   REQUIRE(sonare_abi_version() != 0u);
   // The low byte encodes the feature-struct ABI version.
   REQUIRE((sonare_abi_version() & 0xFFu) == SONARE_FEATURE_ABI_VERSION);
+}
+
+TEST_CASE("C error mapping preserves cancellation", "[c_api][abi]") {
+  REQUIRE(sonare_c_detail::error_code_from_c_error(SONARE_ERROR_CANCELLED) ==
+          sonare::ErrorCode::Cancelled);
+  REQUIRE(sonare_c_detail::error_code_from_c_error(SONARE_ERROR_INVALID_PARAMETER) ==
+          sonare::ErrorCode::InvalidParameter);
 }
 
 TEST_CASE("length-checked inverse transforms reject a short input buffer", "[c_api][abi]") {

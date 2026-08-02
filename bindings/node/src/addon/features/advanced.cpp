@@ -324,6 +324,42 @@ Napi::Value SonareWrap::MelToAudio(const Napi::CallbackInfo& info) {
   SONARE_NODE_CATCH(env)
 }
 
+Napi::Value SonareWrap::GriffinLim(const Napi::CallbackInfo& info) {
+  Napi::Env env = info.Env();
+  if (info.Length() < 3 || !IsFloat32Array(info[0]) || !info[1].IsNumber() || !info[2].IsNumber()) {
+    Napi::TypeError::New(
+        env,
+        "Expected (magnitude, nBins, nFrames, sampleRate?, nFft?, hopLength?, nIter?, momentum?)")
+        .ThrowAsJavaScriptException();
+    return env.Undefined();
+  }
+  SONARE_NODE_TRY
+  const auto magnitude = info[0].As<Napi::Float32Array>();
+  const int n_bins = info[1].As<Napi::Number>().Int32Value();
+  const int n_frames = info[2].As<Napi::Number>().Int32Value();
+  if (!ValidateMatrixDims(env, "griffinLim", n_bins, n_frames, magnitude.ElementLength()) ||
+      !ValidateFiniteMatrix(env, "griffinLim", magnitude))
+    return env.Undefined();
+  const int sample_rate =
+      info.Length() >= 4 && info[3].IsNumber() ? info[3].As<Napi::Number>().Int32Value() : 22050;
+  const int n_fft =
+      info.Length() >= 5 && info[4].IsNumber() ? info[4].As<Napi::Number>().Int32Value() : 2048;
+  const int hop_length =
+      info.Length() >= 6 && info[5].IsNumber() ? info[5].As<Napi::Number>().Int32Value() : 512;
+  const int n_iter =
+      info.Length() >= 7 && info[6].IsNumber() ? info[6].As<Napi::Number>().Int32Value() : 32;
+  const float momentum =
+      info.Length() >= 8 && info[7].IsNumber() ? info[7].As<Napi::Number>().FloatValue() : 0.99f;
+  float* out = nullptr;
+  size_t out_length = 0;
+  const SonareError err =
+      sonare_griffin_lim(magnitude.Data(), magnitude.ElementLength(), n_bins, n_frames, n_fft,
+                         hop_length, sample_rate, n_iter, momentum, &out, &out_length);
+  if (err != SONARE_OK) return CheckCResult(env, err);
+  return FloatResult(env, out, out_length);
+  SONARE_NODE_CATCH(env)
+}
+
 // mfccToMel(mfcc, nMfcc, nFrames, nMels?)
 // -> { nMels, nFrames, power: Float32Array } (Mel power)
 Napi::Value SonareWrap::MfccToMel(const Napi::CallbackInfo& info) {

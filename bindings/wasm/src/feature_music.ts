@@ -58,6 +58,8 @@ export interface FourierTempogramRequest extends GuardedOptions {
   sampleRate?: number;
   hopLength?: number;
   winLength?: number;
+  center?: boolean;
+  norm?: boolean;
 }
 
 export interface TempogramRatioRequest extends GuardedOptions {
@@ -584,7 +586,7 @@ export interface MelodyOptions {
    */
   usePyin?: boolean;
   /**
-   * When {@link usePyin} is `true`, reflect-pad by `frameLength / 2` so frame
+   * When {@link usePyin} is `true`, zero-pad by `frameLength / 2` so frame
    * `i` is centered at `i * hopLength` (matches `librosa.pyin(center=True)`).
    * Ignored by the plain-YIN path. Defaults to `true`.
    */
@@ -760,6 +762,8 @@ export function fourierTempogram(
   sampleRate?: number,
   hopLength?: number,
   winLength?: number,
+  center?: boolean,
+  norm?: boolean,
   options?: GuardedOptions,
 ): WasmFourierTempogramResult;
 export function fourierTempogram(
@@ -767,6 +771,8 @@ export function fourierTempogram(
   sampleRate = 22050,
   hopLength = 512,
   winLength = 384,
+  center = true,
+  norm = true,
   options: GuardedOptions = {},
 ): WasmFourierTempogramResult {
   if (!(onsetEnvelope instanceof Float32Array)) {
@@ -776,13 +782,22 @@ export function fourierTempogram(
       request.sampleRate,
       request.hopLength,
       request.winLength,
+      request.center,
+      request.norm,
       request,
     );
   }
   assertSampleRate('fourierTempogram', sampleRate);
   assertSamples('fourierTempogram', onsetEnvelope, options.validate !== false, 'onsetEnvelope');
   validatePositiveIntegers('fourierTempogram', { hopLength, winLength });
-  return requireModule().fourierTempogram(onsetEnvelope, sampleRate, hopLength, winLength);
+  return requireModule().fourierTempogram(
+    onsetEnvelope,
+    sampleRate,
+    hopLength,
+    winLength,
+    center,
+    norm,
+  );
 }
 
 /**

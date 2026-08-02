@@ -2,6 +2,7 @@
 /// @brief librosa parity test for pitch_tuning / estimate_tuning.
 /// @details Reference: tests/librosa/reference/pitch_utilities.json
 
+#include <algorithm>
 #include <catch2/catch_test_macros.hpp>
 #include <cmath>
 #include <vector>
@@ -55,4 +56,25 @@ TEST_CASE("estimate_tuning matches librosa within loose tolerance", "[librosa][p
   // estimate_tuning uses median-magnitude filtering which differs from librosa;
   // accept ±0.1 (10 cents) deviation.
   REQUIRE(std::abs(got - expected) < 0.1f);
+}
+
+TEST_CASE("piptrack peak count matches librosa", "[librosa][pitch_utilities]") {
+  auto json = JsonReader::parse_file("tests/librosa/reference/pitch_utilities.json");
+  const auto& d = json["data"];
+  const int sr = d["sr"].as_int();
+  const int n_fft = d["n_fft"].as_int();
+  const int hop_length = d["hop_length"].as_int();
+
+  std::vector<float> y(static_cast<size_t>(sr));
+  const double tp = static_cast<double>(constants::kTwoPi);
+  for (size_t i = 0; i < y.size(); ++i) {
+    const double t = static_cast<double>(i) / static_cast<double>(sr);
+    y[i] = static_cast<float>(
+        (std::sin(tp * 440.0 * t) + std::sin(tp * 660.0 * t) + std::sin(tp * 880.0 * t)) / 3.0);
+  }
+  const PiptrackResult result =
+      piptrack(Audio::from_vector(std::move(y), sr), n_fft, hop_length, 150.0f, 4000.0f, 0.1f);
+  const int nonzero = static_cast<int>(std::count_if(result.pitches.begin(), result.pitches.end(),
+                                                     [](float pitch) { return pitch > 0.0f; }));
+  REQUIRE(nonzero == d["piptrack_nonzero_count"].as_int());
 }

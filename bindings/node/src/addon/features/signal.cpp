@@ -13,11 +13,61 @@
 #include "feature/spectral.h"
 #include "features/common.h"
 #include "sonare_wrap.h"
+#include "sonare_wrap_options.h"
 #include "sonare_wrap_utils.h"
 #include "util/constants.h"
 
 using namespace sonare_node;
 using namespace sonare_node::features;
+
+Napi::Value SonareWrap::Tone(const Napi::CallbackInfo& info) {
+  Napi::Env env = info.Env();
+  const float frequency = node_arg_float(info, 0, 440.0f);
+  const int sample_rate = node_arg_int(info, 1, 22050);
+  const float duration = node_arg_float(info, 2, 1.0f);
+  const float phase = node_arg_float(info, 3, 0.0f);
+  const float amplitude = node_arg_float(info, 4, 1.0f);
+  float* out = nullptr;
+  size_t out_length = 0;
+  const SonareError error =
+      sonare_tone(frequency, sample_rate, duration, phase, amplitude, &out, &out_length);
+  if (error != SONARE_OK) return CheckCResult(env, error);
+  return FloatResult(env, out, out_length);
+}
+
+Napi::Value SonareWrap::Chirp(const Napi::CallbackInfo& info) {
+  Napi::Env env = info.Env();
+  const float fmin = node_arg_float(info, 0, 440.0f);
+  const float fmax = node_arg_float(info, 1, 880.0f);
+  const int sample_rate = node_arg_int(info, 2, 22050);
+  const float duration = node_arg_float(info, 3, 1.0f);
+  const bool linear = node_arg_bool(info, 4, true);
+  float* out = nullptr;
+  size_t out_length = 0;
+  const SonareError error =
+      sonare_chirp(fmin, fmax, sample_rate, duration, linear ? 1 : 0, &out, &out_length);
+  if (error != SONARE_OK) return CheckCResult(env, error);
+  return FloatResult(env, out, out_length);
+}
+
+Napi::Value SonareWrap::Clicks(const Napi::CallbackInfo& info) {
+  Napi::Env env = info.Env();
+  if (info.Length() < 1 || !IsFloat32Array(info[0])) {
+    Napi::TypeError::New(env, "Expected click times Float32Array").ThrowAsJavaScriptException();
+    return env.Undefined();
+  }
+  const auto times = info[0].As<Napi::Float32Array>();
+  const int sample_rate = node_arg_int(info, 1, 22050);
+  const int length = node_arg_int(info, 2, 0);
+  const float frequency = node_arg_float(info, 3, 1000.0f);
+  const float duration = node_arg_float(info, 4, 0.1f);
+  float* out = nullptr;
+  size_t out_length = 0;
+  const SonareError error = sonare_clicks(times.Data(), times.ElementLength(), sample_rate, length,
+                                          frequency, duration, &out, &out_length);
+  if (error != SONARE_OK) return CheckCResult(env, error);
+  return FloatResult(env, out, out_length);
+}
 
 Napi::Value SonareWrap::TrimSilence(const Napi::CallbackInfo& info) {
   Napi::Env env = info.Env();
@@ -149,6 +199,24 @@ Napi::Value SonareWrap::FixFrames(const Napi::CallbackInfo& info) {
   size_t count = 0;
   SonareError err =
       sonare_fix_frames(frames.data(), frames.size(), x_min, x_max, pad ? 1 : 0, &out, &count);
+  if (err != SONARE_OK) return CheckCResult(env, err);
+  return IntResult(env, out, count);
+  SONARE_NODE_CATCH(env)
+}
+
+Napi::Value SonareWrap::OnsetBacktrack(const Napi::CallbackInfo& info) {
+  Napi::Env env = info.Env();
+  if (info.Length() < 2 || !IsFloat32Array(info[1])) {
+    Napi::TypeError::New(env, "Expected (events, energy)").ThrowAsJavaScriptException();
+    return env.Undefined();
+  }
+  SONARE_NODE_TRY
+  const std::vector<int> events = IntVectorFromValue(info[0]);
+  const auto energy = info[1].As<Napi::Float32Array>();
+  int* out = nullptr;
+  size_t count = 0;
+  const SonareError err = sonare_onset_backtrack(events.data(), events.size(), energy.Data(),
+                                                 energy.ElementLength(), &out, &count);
   if (err != SONARE_OK) return CheckCResult(env, err);
   return IntResult(env, out, count);
   SONARE_NODE_CATCH(env)

@@ -9,6 +9,7 @@
 #include "feature/chroma.h"
 #include "feature/inverse.h"
 #include "feature/mel_spectrogram.h"
+#include "feature/onset.h"
 #include "feature/pitch.h"
 #include "feature/spectral.h"
 #include "features/common.h"
@@ -19,6 +20,42 @@
 
 using namespace sonare_node;
 using namespace sonare_node::features;
+
+namespace {
+
+Napi::Object SegmentMatrixResult(Napi::Env env, SonareSegmentMatrix* result) {
+  Napi::Object out = Napi::Object::New(env);
+  out.Set("rows", Napi::Number::New(env, result->rows));
+  out.Set("cols", Napi::Number::New(env, result->cols));
+  auto values = Napi::Float32Array::New(env, static_cast<size_t>(result->rows) * result->cols);
+  if (result->values != nullptr) {
+    std::memcpy(values.Data(), result->values, values.ElementLength() * sizeof(float));
+  }
+  out.Set("values", values);
+  sonare_free_segment_matrix(result);
+  return out;
+}
+
+Napi::Int32Array SegmentIndicesResult(Napi::Env env, SonareSegmentIndices* result) {
+  auto values = Napi::Int32Array::New(env, result->count);
+  if (result->values != nullptr) {
+    std::memcpy(values.Data(), result->values, result->count * sizeof(int));
+  }
+  sonare_free_segment_indices(result);
+  return values;
+}
+
+bool SegmentMatrixInput(Napi::Env env, const char* name, const Napi::Float32Array& values, int rows,
+                        int cols) {
+  if (rows <= 0 || cols <= 0) {
+    Napi::RangeError::New(env, std::string(name) + ": matrix dimensions must be positive")
+        .ThrowAsJavaScriptException();
+    return false;
+  }
+  return ValidateMatrixDims(env, name, rows, cols, values.ElementLength());
+}
+
+}  // namespace
 
 Napi::Value SonareWrap::Stft(const Napi::CallbackInfo& info) {
   Napi::Env env = info.Env();
@@ -183,6 +220,221 @@ Napi::Value SonareWrap::Mfcc(const Napi::CallbackInfo& info) {
   SONARE_NODE_CATCH(env)
 }
 
+Napi::Value SonareWrap::MelDelta(const Napi::CallbackInfo& info) {
+  Napi::Env env = info.Env();
+  if (!RequireFloat32Array(info, 0, "Expected Float32Array feature matrix")) {
+    return env.Undefined();
+  }
+
+  SONARE_NODE_TRY
+  const auto typed = info[0].As<Napi::Float32Array>();
+  const int n_features = node_arg_int(info, 1, 0);
+  const int n_frames = node_arg_int(info, 2, 0);
+  const int width = node_arg_int(info, 3, 9);
+  if (n_features <= 0 || n_frames <= 0 ||
+      static_cast<size_t>(n_features) * static_cast<size_t>(n_frames) != typed.ElementLength()) {
+    Napi::TypeError::New(env, "feature matrix length must equal nFeatures * nFrames")
+        .ThrowAsJavaScriptException();
+    return env.Undefined();
+  }
+  return VecToFloat32(env,
+                      sonare::MelSpectrogram::delta(typed.Data(), n_features, n_frames, width));
+  SONARE_NODE_CATCH(env)
+}
+
+Napi::Value SonareWrap::Piptrack(const Napi::CallbackInfo& info) {
+  Napi::Env env = info.Env();
+  if (!RequireFloat32Array(info, 0, "Expected Float32Array argument")) return env.Undefined();
+  SONARE_NODE_TRY
+  const auto typed = info[0].As<Napi::Float32Array>();
+  const int sample_rate = node_arg_int(info, 1, 22050);
+  const int n_fft = node_arg_int(info, 2, 2048);
+  const int hop_length = node_arg_int(info, 3, 512);
+  const float fmin = node_arg_float(info, 4, 150.0f);
+  const float fmax = node_arg_float(info, 5, 4000.0f);
+  const float threshold = node_arg_float(info, 6, 0.1f);
+  sonare::validate_offline_audio_input(typed.Data(), typed.ElementLength(), sample_rate);
+  const sonare::PiptrackResult result =
+      sonare::piptrack(sonare::Audio::from_buffer(typed.Data(), typed.ElementLength(), sample_rate),
+                       n_fft, hop_length, fmin, fmax, threshold);
+  Napi::Object out = Napi::Object::New(env);
+  out.Set("nBins", Napi::Number::New(env, result.n_bins));
+  out.Set("nFrames", Napi::Number::New(env, result.n_frames));
+  out.Set("pitches", VecToFloat32(env, result.pitches));
+  out.Set("magnitudes", VecToFloat32(env, result.magnitudes));
+  return out;
+  SONARE_NODE_CATCH(env)
+}
+
+Napi::Value SonareWrap::ReassignedSpectrogram(const Napi::CallbackInfo& info) {
+  Napi::Env env = info.Env();
+  if (!RequireFloat32Array(info, 0, "Expected Float32Array argument")) return env.Undefined();
+  SONARE_NODE_TRY
+  const auto typed = info[0].As<Napi::Float32Array>();
+  const int sample_rate = node_arg_int(info, 1, 22050);
+  const int n_fft = node_arg_int(info, 2, 2048);
+  const int hop_length = node_arg_int(info, 3, 512);
+  const float ref_power = node_arg_float(info, 4, 1e-6f);
+  const bool fill_nan =
+      info.Length() >= 6 && info[5].IsBoolean() && info[5].As<Napi::Boolean>().Value();
+  sonare::validate_offline_audio_input(typed.Data(), typed.ElementLength(), sample_rate);
+  if (!std::isfinite(ref_power) || ref_power < 0.0f) {
+    Napi::RangeError::New(env, "refPower must be finite and non-negative")
+        .ThrowAsJavaScriptException();
+    return env.Undefined();
+  }
+  sonare::StftConfig config;
+  config.n_fft = n_fft;
+  config.hop_length = hop_length;
+  const sonare::ReassignedSpectrogram result = sonare::reassigned_spectrogram(
+      sonare::Audio::from_buffer(typed.Data(), typed.ElementLength(), sample_rate), config,
+      ref_power, fill_nan);
+  const int n_bins = n_fft / 2 + 1;
+  const int n_frames = n_bins > 0 ? static_cast<int>(result.magnitude.size() / n_bins) : 0;
+  Napi::Object out = Napi::Object::New(env);
+  out.Set("nBins", Napi::Number::New(env, n_bins));
+  out.Set("nFrames", Napi::Number::New(env, n_frames));
+  out.Set("magnitude", VecToFloat32(env, result.magnitude));
+  out.Set("times", VecToFloat32(env, result.times));
+  out.Set("frequencies", VecToFloat32(env, result.frequencies));
+  return out;
+  SONARE_NODE_CATCH(env)
+}
+
+Napi::Value SonareWrap::SegmentCrossSimilarity(const Napi::CallbackInfo& info) {
+  Napi::Env env = info.Env();
+  if (!RequireFloat32Array(info, 0, "Expected X Float32Array") ||
+      !RequireFloat32Array(info, 3, "Expected Y Float32Array"))
+    return env.Undefined();
+  const auto x = info[0].As<Napi::Float32Array>();
+  const int x_rows = node_arg_int(info, 1, 0);
+  const int x_cols = node_arg_int(info, 2, 0);
+  const auto y = info[3].As<Napi::Float32Array>();
+  const int y_rows = node_arg_int(info, 4, 0);
+  const int y_cols = node_arg_int(info, 5, 0);
+  const int k = node_arg_int(info, 6, 0);
+  const std::string metric =
+      info.Length() > 7 && info[7].IsString() ? info[7].As<Napi::String>().Utf8Value() : "cosine";
+  const std::string mode = info.Length() > 8 && info[8].IsString()
+                               ? info[8].As<Napi::String>().Utf8Value()
+                               : "connectivity";
+  if (x_rows <= 0 || x_cols <= 0 || y_rows != x_rows || y_cols <= 0 || k < 0 ||
+      x.ElementLength() != static_cast<size_t>(x_rows) * x_cols ||
+      y.ElementLength() != static_cast<size_t>(y_rows) * y_cols) {
+    Napi::TypeError::New(env, "segmentCrossSimilarity: invalid matrix dimensions")
+        .ThrowAsJavaScriptException();
+    return env.Undefined();
+  }
+  SonareSegmentMatrix result{};
+  const SonareError err = sonare_segment_cross_similarity(
+      x.Data(), x_rows, x_cols, y.Data(), y_rows, y_cols, k, metric.c_str(), mode.c_str(), &result);
+  if (err != SONARE_OK) return CheckCResult(env, err);
+  return SegmentMatrixResult(env, &result);
+}
+
+Napi::Value SonareWrap::SegmentRecurrenceMatrix(const Napi::CallbackInfo& info) {
+  Napi::Env env = info.Env();
+  if (!RequireFloat32Array(info, 0, "Expected data Float32Array")) return env.Undefined();
+  const auto data = info[0].As<Napi::Float32Array>();
+  const int rows = node_arg_int(info, 1, 0);
+  const int cols = node_arg_int(info, 2, 0);
+  if (!SegmentMatrixInput(env, "segmentRecurrenceMatrix", data, rows, cols)) return env.Undefined();
+  const int k = node_arg_int(info, 3, 0);
+  const int width = node_arg_int(info, 4, 1);
+  const bool sym = node_arg_bool(info, 5, false);
+  const std::string metric = info.Length() > 6 && info[6].IsString()
+                                 ? info[6].As<Napi::String>().Utf8Value()
+                                 : "euclidean";
+  const std::string mode = info.Length() > 7 && info[7].IsString()
+                               ? info[7].As<Napi::String>().Utf8Value()
+                               : "connectivity";
+  SonareSegmentMatrix result{};
+  const SonareError err = sonare_segment_recurrence_matrix(
+      data.Data(), rows, cols, k, width, sym ? 1 : 0, metric.c_str(), mode.c_str(), &result);
+  if (err != SONARE_OK) return CheckCResult(env, err);
+  return SegmentMatrixResult(env, &result);
+}
+
+Napi::Value SonareWrap::SegmentRecurrenceToLag(const Napi::CallbackInfo& info) {
+  Napi::Env env = info.Env();
+  if (!RequireFloat32Array(info, 0, "Expected recurrence Float32Array")) return env.Undefined();
+  const auto recurrence = info[0].As<Napi::Float32Array>();
+  const int n = node_arg_int(info, 1, 0);
+  if (!SegmentMatrixInput(env, "segmentRecurrenceToLag", recurrence, n, n)) return env.Undefined();
+  SonareSegmentMatrix result{};
+  const SonareError err = sonare_segment_recurrence_to_lag(
+      recurrence.Data(), n, node_arg_bool(info, 2, false) ? 1 : 0, &result);
+  if (err != SONARE_OK) return CheckCResult(env, err);
+  return SegmentMatrixResult(env, &result);
+}
+
+Napi::Value SonareWrap::SegmentLagToRecurrence(const Napi::CallbackInfo& info) {
+  Napi::Env env = info.Env();
+  if (!RequireFloat32Array(info, 0, "Expected lag Float32Array")) return env.Undefined();
+  const auto lag = info[0].As<Napi::Float32Array>();
+  const int rows = node_arg_int(info, 1, 0);
+  const int lags = node_arg_int(info, 2, 0);
+  if (!SegmentMatrixInput(env, "segmentLagToRecurrence", lag, rows, lags)) return env.Undefined();
+  SonareSegmentMatrix result{};
+  const SonareError err = sonare_segment_lag_to_recurrence(lag.Data(), rows, lags, &result);
+  if (err != SONARE_OK) return CheckCResult(env, err);
+  return SegmentMatrixResult(env, &result);
+}
+
+Napi::Value SonareWrap::SegmentSubsegment(const Napi::CallbackInfo& info) {
+  Napi::Env env = info.Env();
+  if (!RequireFloat32Array(info, 0, "Expected data Float32Array") || info.Length() < 4) {
+    return env.Undefined();
+  }
+  SONARE_NODE_TRY
+  const auto data = info[0].As<Napi::Float32Array>();
+  const int rows = node_arg_int(info, 1, 0);
+  const int cols = node_arg_int(info, 2, 0);
+  if (!SegmentMatrixInput(env, "segmentSubsegment", data, rows, cols)) return env.Undefined();
+  const std::vector<int> boundaries = IntVectorFromValue(info[3]);
+  const int n_segments = node_arg_int(info, 4, 4);
+  SonareSegmentIndices result{};
+  const SonareError err = sonare_segment_subsegment(data.Data(), rows, cols, boundaries.data(),
+                                                    boundaries.size(), n_segments, &result);
+  if (err != SONARE_OK) return CheckCResult(env, err);
+  return SegmentIndicesResult(env, &result);
+  SONARE_NODE_CATCH(env)
+}
+
+Napi::Value SonareWrap::SegmentAgglomerative(const Napi::CallbackInfo& info) {
+  Napi::Env env = info.Env();
+  if (!RequireFloat32Array(info, 0, "Expected data Float32Array")) return env.Undefined();
+  const auto data = info[0].As<Napi::Float32Array>();
+  const int rows = node_arg_int(info, 1, 0);
+  const int cols = node_arg_int(info, 2, 0);
+  if (!SegmentMatrixInput(env, "segmentAgglomerative", data, rows, cols)) return env.Undefined();
+  const int k = node_arg_int(info, 3, 0);
+  const std::string linkage =
+      info.Length() > 4 && info[4].IsString() ? info[4].As<Napi::String>().Utf8Value() : "average";
+  SonareSegmentIndices result{};
+  const SonareError err =
+      sonare_segment_agglomerative(data.Data(), rows, cols, k, linkage.c_str(), &result);
+  if (err != SONARE_OK) return CheckCResult(env, err);
+  return SegmentIndicesResult(env, &result);
+}
+
+Napi::Value SonareWrap::SegmentPathEnhance(const Napi::CallbackInfo& info) {
+  Napi::Env env = info.Env();
+  if (!RequireFloat32Array(info, 0, "Expected recurrence Float32Array")) return env.Undefined();
+  const auto recurrence = info[0].As<Napi::Float32Array>();
+  const int n = node_arg_int(info, 1, 0);
+  if (!SegmentMatrixInput(env, "segmentPathEnhance", recurrence, n, n)) return env.Undefined();
+  const int win = node_arg_int(info, 2, 0);
+  const int max_ratio = node_arg_int(info, 3, 2);
+  const int min_ratio = node_arg_int(info, 4, 0);
+  const int n_filters = node_arg_int(info, 5, 7);
+  SonareSegmentMatrix result{};
+  const SonareError err = sonare_segment_path_enhance(recurrence.Data(), n, win, max_ratio,
+                                                      min_ratio, n_filters, &result);
+  if (err != SONARE_OK) return CheckCResult(env, err);
+  return SegmentMatrixResult(env, &result);
+}
+
 // ============================================================================
 // Features - Chroma
 // ============================================================================
@@ -339,6 +591,7 @@ Napi::Value SonareWrap::SpectralBandwidth(const Napi::CallbackInfo& info) {
   int sr = node_arg_int(info, 1, 22050);
   int n_fft = node_arg_int(info, 2, 2048);
   int hop_length = node_arg_int(info, 3, 512);
+  float p = node_arg_float(info, 4, 2.0f);
 
   sonare::validate_offline_audio_input(data, length, sr);
   sonare::Audio audio = sonare::Audio::from_buffer(data, length, sr);
@@ -347,7 +600,7 @@ Napi::Value SonareWrap::SpectralBandwidth(const Napi::CallbackInfo& info) {
   config.hop_length = hop_length;
 
   sonare::Spectrogram spec = sonare::Spectrogram::compute(audio, config);
-  std::vector<float> bandwidth = sonare::spectral_bandwidth(spec, sr);
+  std::vector<float> bandwidth = sonare::spectral_bandwidth(spec, sr, p);
 
   return VecToFloat32(env, bandwidth);
   SONARE_NODE_CATCH(env)
@@ -407,6 +660,28 @@ Napi::Value SonareWrap::SpectralFlatness(const Napi::CallbackInfo& info) {
   std::vector<float> flatness = sonare::spectral_flatness(spec);
 
   return VecToFloat32(env, flatness);
+  SONARE_NODE_CATCH(env)
+}
+
+Napi::Value SonareWrap::SpectralFlux(const Napi::CallbackInfo& info) {
+  Napi::Env env = info.Env();
+  if (!RequireFloat32Array(info, 0, "Expected Float32Array argument")) return env.Undefined();
+  SONARE_NODE_TRY
+  const auto typed = info[0].As<Napi::Float32Array>();
+  const int sample_rate = node_arg_int(info, 1, 22050);
+  const int n_fft = node_arg_int(info, 2, 2048);
+  const int hop_length = node_arg_int(info, 3, 512);
+  const int lag = node_arg_int(info, 4, 1);
+  sonare::validate_offline_audio_input(typed.Data(), typed.ElementLength(), sample_rate);
+  sonare::StftConfig config;
+  config.n_fft = n_fft;
+  config.hop_length = hop_length;
+  return VecToFloat32(
+      env,
+      sonare::spectral_flux(
+          sonare::Spectrogram::compute(
+              sonare::Audio::from_buffer(typed.Data(), typed.ElementLength(), sample_rate), config),
+          lag));
   SONARE_NODE_CATCH(env)
 }
 

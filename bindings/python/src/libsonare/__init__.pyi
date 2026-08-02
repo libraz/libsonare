@@ -16,6 +16,7 @@ from ._project import project_abi_version as project_abi_version
 from ._project import synth_enum_tables as synth_enum_tables
 from ._project import synth_preset_names as synth_preset_names
 from ._project import synth_preset_patch as synth_preset_patch
+from ._runtime import ErrorCode as ErrorCode
 from ._runtime import SonareError as SonareError
 from .analyzer import (
     Mixer as Mixer,
@@ -40,6 +41,9 @@ from .analyzer import (
 )
 from .analyzer import (
     abi_version as abi_version,
+)
+from .analyzer import (
+    agglomerative as agglomerative,
 )
 from .analyzer import (
     amplitude_to_db as amplitude_to_db,
@@ -80,6 +84,7 @@ from .analyzer import (
 from .analyzer import (
     capability_catalog as capability_catalog,
 )
+from .analyzer import chirp as chirp
 from .analyzer import (
     chord_functional_analysis as chord_functional_analysis,
 )
@@ -92,10 +97,14 @@ from .analyzer import (
 from .analyzer import (
     chroma_cqt as chroma_cqt,
 )
+from .analyzer import clicks as clicks
 from .analyzer import (
     cqt as cqt,
 )
 from .analyzer import cqt_to_audio as cqt_to_audio
+from .analyzer import (
+    cross_similarity as cross_similarity,
+)
 from .analyzer import (
     cyclic_tempogram as cyclic_tempogram,
 )
@@ -166,6 +175,7 @@ from .analyzer import (
 from .analyzer import (
     frames_to_time as frames_to_time,
 )
+from .analyzer import griffin_lim as griffin_lim
 from .analyzer import (
     harmonic as harmonic,
 )
@@ -189,6 +199,9 @@ from .analyzer import (
 )
 from .analyzer import (
     hz_to_note as hz_to_note,
+)
+from .analyzer import (
+    lag_to_recurrence as lag_to_recurrence,
 )
 from .analyzer import lufs as lufs
 from .analyzer import (
@@ -284,6 +297,7 @@ from .analyzer import (
 from .analyzer import (
     mastering_streaming_preview as mastering_streaming_preview,
 )
+from .analyzer import mel_delta as mel_delta
 from .analyzer import (
     mel_spectrogram as mel_spectrogram,
 )
@@ -361,12 +375,18 @@ from .analyzer import (
 from .analyzer import (
     note_to_hz as note_to_hz,
 )
+from .analyzer import (
+    onset_backtrack as onset_backtrack,
+)
 from .analyzer import onset_envelope as onset_envelope
 from .analyzer import (
     onset_strength_multi as onset_strength_multi,
 )
 from .analyzer import (
     pad_center as pad_center,
+)
+from .analyzer import (
+    path_enhance as path_enhance,
 )
 from .analyzer import (
     pcen as pcen,
@@ -380,6 +400,7 @@ from .analyzer import (
 from .analyzer import (
     phase_vocoder as phase_vocoder,
 )
+from .analyzer import piptrack as piptrack
 from .analyzer import (
     pitch_correct_timevarying as pitch_correct_timevarying,
 )
@@ -429,6 +450,15 @@ from .analyzer import (
     realtime_voice_changer_preset_pod as realtime_voice_changer_preset_pod,
 )
 from .analyzer import (
+    reassigned_spectrogram as reassigned_spectrogram,
+)
+from .analyzer import (
+    recurrence_matrix as recurrence_matrix,
+)
+from .analyzer import (
+    recurrence_to_lag as recurrence_to_lag,
+)
+from .analyzer import (
     remix as remix,
 )
 from .analyzer import (
@@ -463,6 +493,9 @@ from .analyzer import (
     spectral_flatness as spectral_flatness,
 )
 from .analyzer import (
+    spectral_flux as spectral_flux,
+)
+from .analyzer import (
     spectral_rolloff as spectral_rolloff,
 )
 from .analyzer import (
@@ -473,6 +506,9 @@ from .analyzer import (
 )
 from .analyzer import (
     stft_db as stft_db,
+)
+from .analyzer import (
+    subsegment as subsegment,
 )
 from .analyzer import (
     synthesize_rir as synthesize_rir,
@@ -487,6 +523,7 @@ from .analyzer import (
 from .analyzer import (
     time_to_frames as time_to_frames,
 )
+from .analyzer import tone as tone
 from .analyzer import (
     tonnetz as tonnetz,
 )
@@ -750,7 +787,16 @@ from .types import (
     PitchResult as PitchResult,
 )
 from .types import (
+    ProjectClip as ProjectClip,
+)
+from .types import (
     ProjectMarker as ProjectMarker,
+)
+from .types import (
+    ProjectSource as ProjectSource,
+)
+from .types import (
+    ProjectTrack as ProjectTrack,
 )
 from .types import (
     QuantizeConfig as QuantizeConfig,

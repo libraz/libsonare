@@ -160,10 +160,16 @@ from ._types_analysis import (
     PhaseScopeReport as PhaseScopeReport,
 )
 from ._types_analysis import (
+    PiptrackResult as PiptrackResult,
+)
+from ._types_analysis import (
     PitchClass as PitchClass,
 )
 from ._types_analysis import (
     PitchResult as PitchResult,
+)
+from ._types_analysis import (
+    ReassignedSpectrogramResult as ReassignedSpectrogramResult,
 )
 from ._types_analysis import (
     RhythmResult as RhythmResult,
@@ -176,6 +182,9 @@ from ._types_analysis import (
 )
 from ._types_analysis import (
     SectionType as SectionType,
+)
+from ._types_analysis import (
+    SegmentMatrix as SegmentMatrix,
 )
 from ._types_analysis import (
     SendTiming as SendTiming,
@@ -292,7 +301,16 @@ from ._types_engine import (
     ParameterInfo as ParameterInfo,
 )
 from ._types_engine import (
+    ProjectClip as ProjectClip,
+)
+from ._types_engine import (
     ProjectMarker as ProjectMarker,
+)
+from ._types_engine import (
+    ProjectSource as ProjectSource,
+)
+from ._types_engine import (
+    ProjectTrack as ProjectTrack,
 )
 from ._types_engine import (
     ScopeTelemetryRecord as ScopeTelemetryRecord,

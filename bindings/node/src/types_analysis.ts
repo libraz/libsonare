@@ -209,7 +209,7 @@ export interface MelodyOptions {
   /** Select the Viterbi-smoothed pYIN tracker instead of plain YIN. Default false. */
   usePyin?: boolean;
   /**
-   * When pYIN is active, reflect-pad by `frameLength / 2` so frame `i` is
+   * When pYIN is active, zero-pad by `frameLength / 2` so frame `i` is
    * centered at `i * hopLength` (matches `librosa.pyin(center=True)`). Ignored
    * for plain YIN. Default true.
    */

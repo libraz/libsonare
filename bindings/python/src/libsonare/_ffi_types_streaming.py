@@ -432,6 +432,37 @@ class SonarePitchResult(ctypes.Structure):
     ]
 
 
+class SonareReassignedSpectrogramResult(ctypes.Structure):
+    """Maps to SonareReassignedSpectrogramResult in sonare_c_features.h."""
+
+    _fields_ = [
+        ("n_bins", ctypes.c_int32),
+        ("n_frames", ctypes.c_int32),
+        ("magnitude", ctypes.POINTER(ctypes.c_float)),
+        ("times", ctypes.POINTER(ctypes.c_float)),
+        ("frequencies", ctypes.POINTER(ctypes.c_float)),
+    ]
+
+
+class SonareSegmentMatrix(ctypes.Structure):
+    """Maps to SonareSegmentMatrix in sonare_c_features.h."""
+
+    _fields_ = [
+        ("rows", ctypes.c_int32),
+        ("cols", ctypes.c_int32),
+        ("values", ctypes.POINTER(ctypes.c_float)),
+    ]
+
+
+class SonareSegmentIndices(ctypes.Structure):
+    """Maps to SonareSegmentIndices in sonare_c_features.h."""
+
+    _fields_ = [
+        ("values", ctypes.POINTER(ctypes.c_int32)),
+        ("count", ctypes.c_size_t),
+    ]
+
+
 class SonareNoteSegmenterConfig(ctypes.Structure):
     """Maps to SonareNoteSegmenterConfig in sonare_c_features.h."""
 
@@ -473,6 +504,3 @@ class SonareHpssResult(ctypes.Structure):
         ("length", ctypes.c_size_t),
         ("sample_rate", ctypes.c_int32),
     ]
-
-
-__all__ = [name for name in globals() if name.startswith(("Sonare", "SONARE_"))]

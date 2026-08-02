@@ -167,6 +167,7 @@ class SonareWrap : public Napi::ObjectWrap<SonareWrap> {
   // Features - Mel
   static Napi::Value MelSpectrogramFn(const Napi::CallbackInfo& info);
   static Napi::Value Mfcc(const Napi::CallbackInfo& info);
+  static Napi::Value MelDelta(const Napi::CallbackInfo& info);
 
   // Features - Chroma
   static Napi::Value ChromaFn(const Napi::CallbackInfo& info);
@@ -185,6 +186,7 @@ class SonareWrap : public Napi::ObjectWrap<SonareWrap> {
   // Features - Inverse reconstruction (Mel/MFCC -> spectrogram -> audio)
   static Napi::Value MelToStft(const Napi::CallbackInfo& info);
   static Napi::Value MelToAudio(const Napi::CallbackInfo& info);
+  static Napi::Value GriffinLim(const Napi::CallbackInfo& info);
   static Napi::Value MfccToMel(const Napi::CallbackInfo& info);
   static Napi::Value MfccToAudio(const Napi::CallbackInfo& info);
 
@@ -193,6 +195,7 @@ class SonareWrap : public Napi::ObjectWrap<SonareWrap> {
   static Napi::Value SpectralBandwidth(const Napi::CallbackInfo& info);
   static Napi::Value SpectralRolloff(const Napi::CallbackInfo& info);
   static Napi::Value SpectralFlatness(const Napi::CallbackInfo& info);
+  static Napi::Value SpectralFlux(const Napi::CallbackInfo& info);
   static Napi::Value ZeroCrossingRate(const Napi::CallbackInfo& info);
   static Napi::Value RmsEnergy(const Napi::CallbackInfo& info);
   static Napi::Value SpectralContrast(const Napi::CallbackInfo& info);
@@ -200,6 +203,15 @@ class SonareWrap : public Napi::ObjectWrap<SonareWrap> {
   static Napi::Value ZeroCrossings(const Napi::CallbackInfo& info);
   static Napi::Value PitchTuning(const Napi::CallbackInfo& info);
   static Napi::Value EstimateTuning(const Napi::CallbackInfo& info);
+  static Napi::Value Piptrack(const Napi::CallbackInfo& info);
+  static Napi::Value ReassignedSpectrogram(const Napi::CallbackInfo& info);
+  static Napi::Value SegmentCrossSimilarity(const Napi::CallbackInfo& info);
+  static Napi::Value SegmentRecurrenceMatrix(const Napi::CallbackInfo& info);
+  static Napi::Value SegmentRecurrenceToLag(const Napi::CallbackInfo& info);
+  static Napi::Value SegmentLagToRecurrence(const Napi::CallbackInfo& info);
+  static Napi::Value SegmentSubsegment(const Napi::CallbackInfo& info);
+  static Napi::Value SegmentAgglomerative(const Napi::CallbackInfo& info);
+  static Napi::Value SegmentPathEnhance(const Napi::CallbackInfo& info);
 
   // Features - Pitch
   static Napi::Value PitchYin(const Napi::CallbackInfo& info);
@@ -224,11 +236,15 @@ class SonareWrap : public Napi::ObjectWrap<SonareWrap> {
   static Napi::Value Preemphasis(const Napi::CallbackInfo& info);
   static Napi::Value Deemphasis(const Napi::CallbackInfo& info);
   static Napi::Value TrimSilence(const Napi::CallbackInfo& info);
+  static Napi::Value Tone(const Napi::CallbackInfo& info);
+  static Napi::Value Chirp(const Napi::CallbackInfo& info);
+  static Napi::Value Clicks(const Napi::CallbackInfo& info);
   static Napi::Value SplitSilence(const Napi::CallbackInfo& info);
   static Napi::Value FrameSignal(const Napi::CallbackInfo& info);
   static Napi::Value PadCenter(const Napi::CallbackInfo& info);
   static Napi::Value FixLength(const Napi::CallbackInfo& info);
   static Napi::Value FixFrames(const Napi::CallbackInfo& info);
+  static Napi::Value OnsetBacktrack(const Napi::CallbackInfo& info);
   static Napi::Value PeakPick(const Napi::CallbackInfo& info);
   static Napi::Value VectorNormalize(const Napi::CallbackInfo& info);
   static Napi::Value Pcen(const Napi::CallbackInfo& info);
@@ -253,9 +269,6 @@ class SonareWrap : public Napi::ObjectWrap<SonareWrap> {
   static Napi::Float32Array VecToFloat32(Napi::Env env, const std::vector<float>& vec);
 
   SonareAudio* audio_;
-
-  // Reference to the constructor function for creating instances from static methods
-  static Napi::FunctionReference constructor_;
 };
 
 #endif  // SONARE_NODE_SONARE_WRAP_H_

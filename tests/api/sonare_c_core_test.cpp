@@ -27,6 +27,40 @@ void collect_schema_paths(const sonare::util::json::Value& value, const std::str
   }
 }
 
+TEST_CASE("sonare_detect_onsets_ex", "[c_api]") {
+  const auto samples = generate_clicks(120.0f, 22050, 2.0f);
+  SonareOnsetDetectConfig config{};
+  config.n_fft = 256;
+  config.hop_length = 64;
+  config.threshold = 0.0f;
+  config.pre_max = 1;
+  config.post_max = 1;
+  config.pre_avg = 3;
+  config.post_avg = 4;
+  config.delta = 0.02f;
+  config.wait = 1;
+  config.backtrack = 1;
+  config.backtrack_range = 10;
+  float* times = nullptr;
+  size_t count = 0;
+  REQUIRE(sonare_detect_onsets_ex(samples.data(), samples.size(), 22050, &config, &times, &count) ==
+          SONARE_OK);
+  REQUIRE((count == 0 || times != nullptr));
+  sonare_free_floats(times);
+
+  config.hop_length = 0;
+  REQUIRE(sonare_detect_onsets_ex(samples.data(), samples.size(), 22050, &config, &times, &count) ==
+          SONARE_ERROR_INVALID_PARAMETER);
+}
+
+TEST_CASE("sonare_resample returns the standard empty C-array result", "[c_api]") {
+  float* output = reinterpret_cast<float*>(static_cast<uintptr_t>(0x1));
+  size_t output_length = 99;
+  REQUIRE(sonare_resample(nullptr, 0, 22050, 44100, &output, &output_length) == SONARE_OK);
+  REQUIRE(output == nullptr);
+  REQUIRE(output_length == 0);
+}
+
 sonare::AnalysisResult make_analysis_schema_fixture() {
   sonare::AnalysisResult result;
   result.bpm = 120.0f;

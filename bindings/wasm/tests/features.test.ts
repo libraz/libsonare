@@ -12,6 +12,7 @@ import {
   detectOnsets,
   ErrorCode,
   framesToTime,
+  griffinLim,
   harmonic,
   hpss,
   hzToMel,
@@ -19,6 +20,7 @@ import {
   hzToNote,
   init,
   isSonareError,
+  melDelta,
   melSpectrogram,
   melToHz,
   mfcc,
@@ -26,15 +28,26 @@ import {
   normalize,
   noteSegments,
   noteToHz,
+  onsetBacktrack,
   percussive,
+  piptrack,
   pitchPyin,
   pitchShift,
   pitchYin,
+  reassignedSpectrogram,
   resample,
   rmsEnergy,
+  segmentAgglomerative,
+  segmentCrossSimilarity,
+  segmentLagToRecurrence,
+  segmentPathEnhance,
+  segmentRecurrenceMatrix,
+  segmentRecurrenceToLag,
+  segmentSubsegment,
   spectralBandwidth,
   spectralCentroid,
   spectralFlatness,
+  spectralFlux,
   spectralRolloff,
   stft,
   stftDb,
@@ -103,6 +116,53 @@ const SR = 22050;
 const DURATION = 1.0;
 
 describe('Feature API precision (reference compatibility)', () => {
+  it('melDelta returns the slope of a linear feature row', () => {
+    const result = melDelta(new Float32Array([0, 1, 2, 3, 4, 5, 6, 7, 8, 9]), 2, 5, 5);
+    expect([...result]).toEqual(Array(10).fill(1));
+  });
+
+  it('piptrack returns equally shaped pitch and magnitude matrices', () => {
+    const tone = generateSine(440, SR, 1);
+    const result = piptrack(tone, SR, 1024, 256, 100, 1000);
+    expect(result.nBins).toBe(513);
+    expect(result.pitches.length).toBe(result.nBins * result.nFrames);
+    expect(result.magnitudes.length).toBe(result.pitches.length);
+  });
+
+  it('reassignedSpectrogram returns equally shaped coordinate matrices', () => {
+    const result = reassignedSpectrogram(generateSine(440, SR, 1), SR, 1024, 256);
+    expect(result.nBins).toBe(513);
+    expect(result.nFrames).toBeGreaterThan(0);
+    expect(result.magnitude.length).toBe(result.nBins * result.nFrames);
+    expect(result.times.length).toBe(result.magnitude.length);
+    expect(result.frequencies.length).toBe(result.magnitude.length);
+  });
+
+  it('exposes every librosa.segment-compatible operation', () => {
+    const data = new Float32Array([1, 0, 1, 0, 1, 1]);
+    expect(
+      segmentCrossSimilarity({
+        x: data,
+        xRows: 2,
+        xCols: 3,
+        y: data,
+        yRows: 2,
+        yCols: 3,
+      }).values,
+    ).toHaveLength(9);
+    const recurrence = segmentRecurrenceMatrix({ data, rows: 2, cols: 3 });
+    expect(recurrence.values).toHaveLength(9);
+    const lag = segmentRecurrenceToLag({ recurrence: recurrence.values, n: 3, pad: true });
+    expect(lag.values).toHaveLength(15);
+    expect(segmentLagToRecurrence({ lag: lag.values, rows: 3, lags: 5 }).values).toHaveLength(9);
+    expect(
+      segmentSubsegment({ data, rows: 2, cols: 3, boundaries: new Int32Array([0, 3]) })[0],
+    ).toBe(0);
+    expect(segmentAgglomerative({ data, rows: 2, cols: 3, k: 2 })).toHaveLength(3);
+    expect(segmentPathEnhance({ recurrence: recurrence.values, n: 3, win: 1 }).values).toHaveLength(
+      9,
+    );
+  });
   beforeAll(async () => {
     await init();
   });
@@ -376,6 +436,7 @@ describe('Feature API precision (reference compatibility)', () => {
     it('should match spectral bandwidth within tolerance', () => {
       const signal = generateTwoTone(440, 880, SR, DURATION);
       const bandwidth = spectralBandwidth(signal, SR, 2048, 512);
+      expect(spectralBandwidth(signal, SR, 2048, 512, 1)).not.toEqual(bandwidth);
       const refBandwidth = refData.bandwidth as number[];
 
       for (let i = 2; i < bandwidth.length - 2 && i < refBandwidth.length - 2; i++) {
@@ -414,6 +475,38 @@ describe('Feature API precision (reference compatibility)', () => {
           `flatness[${i}]: got ${flatness[i]}, expected ${refFlatness[i]}`,
         ).toBe(true);
       }
+    });
+
+    it('should return spectral flux with a configurable lag', () => {
+      const signal = generateTwoTone(440, 880, SR, DURATION);
+      const flux = spectralFlux(signal, SR, 2048, 512);
+      expect(flux).toBeInstanceOf(Float32Array);
+      expect(flux.length).toBeGreaterThan(0);
+      expect(spectralFlux(signal, SR, 2048, 512, 2)).not.toEqual(flux);
+    });
+
+    it('should backtrack onset indices to energy minima', () => {
+      expect(
+        Array.from(
+          onsetBacktrack(new Int32Array([6]), new Float32Array([1, 0.8, 0.5, 0.2, 0.6, 0.9, 1.2])),
+        ),
+      ).toEqual([3]);
+    });
+
+    it('should reconstruct STFT magnitude with Griffin-Lim', () => {
+      const spectrum = stft(generateTwoTone(440, 880, SR, DURATION), SR, 1024, 256);
+      const result = griffinLim(
+        spectrum.magnitude,
+        spectrum.nBins,
+        spectrum.nFrames,
+        SR,
+        1024,
+        256,
+        1,
+        0,
+      );
+      expect(result).toBeInstanceOf(Float32Array);
+      expect(result.length).toBeGreaterThan(0);
     });
   });
 

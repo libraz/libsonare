@@ -122,12 +122,25 @@ float js_estimate_tuning(val samples, int sample_rate, int n_fft, int hop_length
   return estimate_tuning(audio, n_fft, hop_length, resolution, bins_per_octave);
 }
 
+val js_piptrack(val samples, int sample_rate, int n_fft, int hop_length, float fmin, float fmax,
+                float threshold) {
+  const Audio audio = loadValidatedAudio(samples, sample_rate);
+  const PiptrackResult result = piptrack(audio, n_fft, hop_length, fmin, fmax, threshold);
+  val out = val::object();
+  out.set("nBins", result.n_bins);
+  out.set("nFrames", result.n_frames);
+  out.set("pitches", vectorToFloat32Array(result.pitches));
+  out.set("magnitudes", vectorToFloat32Array(result.magnitudes));
+  return out;
+}
+
 void registerFeaturePitchBindings() {
   function("pitchYin", &js_pitch_yin);
   function("pitchPyin", &js_pitch_pyin);
   function("noteSegments", &js_note_segments);
   function("pitchTuning", &js_pitch_tuning);
   function("estimateTuning", &js_estimate_tuning);
+  function("piptrack", &js_piptrack);
 }
 
 #endif  // __EMSCRIPTEN__

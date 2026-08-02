@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import builtins
 from enum import IntEnum
 from typing import Literal, TypedDict
 
@@ -8,6 +9,20 @@ from numpy.typing import NDArray
 
 MasteringProcessorKind = Literal["realtime", "offline", "pair"]
 MasteringChannelPolicy = Literal["multichannel", "stereoPairOnly", "perChannel", "passthrough"]
+MasteringProcessorCategory = Literal[
+    "dynamics",
+    "effects",
+    "eq",
+    "final",
+    "maximizer",
+    "multiband",
+    "other",
+    "reference",
+    "repair",
+    "saturation",
+    "spectral",
+    "stereo",
+]
 
 class CapabilitiesAbi(TypedDict):
     project: int
@@ -56,7 +71,7 @@ class MasteringProcessorCatalogEntry(TypedDict):
     latencySamples: int
     tailSamples: int
     channelPolicy: MasteringChannelPolicy
-    category: str
+    category: MasteringProcessorCategory
     params: list[MasteringInsertParamInfo]
 
 class CapabilityCatalog(TypedDict):
@@ -104,6 +119,8 @@ class AutomationCurve(IntEnum):
     S_CURVE = 3
 
 class PanLaw(IntEnum):
+    """Mono centre-gain law; stereo Balance keeps centre unity and tapers only the far channel."""
+
     CONST_3DB = 0
     CONST_4_5DB = 1
     CONST_6DB = 2
@@ -397,7 +414,10 @@ class RirResult:
     rir: list[float]
     sample_rate: int
     has_error: bool
-    def __init__(self, rir: list[float], sample_rate: int, has_error: bool) -> None: ...
+    error_message: str
+    def __init__(
+        self, rir: list[float], sample_rate: int, has_error: bool, error_message: str = ""
+    ) -> None: ...
     @property
     def sampleRate(self) -> int: ...
     @property
@@ -812,6 +832,36 @@ class PitchResult:
         mean_f0: float,
     ) -> None: ...
 
+class PiptrackResult:
+    n_bins: int
+    n_frames: int
+    pitches: list[float]
+    magnitudes: list[float]
+    def __init__(
+        self, n_bins: int, n_frames: int, pitches: list[float], magnitudes: list[float]
+    ) -> None: ...
+
+class ReassignedSpectrogramResult:
+    n_bins: int
+    n_frames: int
+    magnitude: list[float]
+    times: list[float]
+    frequencies: list[float]
+    def __init__(
+        self,
+        n_bins: int,
+        n_frames: int,
+        magnitude: list[float],
+        times: list[float],
+        frequencies: list[float],
+    ) -> None: ...
+
+class SegmentMatrix:
+    rows: int
+    cols: int
+    values: list[float]
+    def __init__(self, rows: int, cols: int, values: list[float]) -> None: ...
+
 class NoteSegment:
     frame_start: int
     frame_end: int
@@ -1130,6 +1180,69 @@ class ProjectMarker:
         kind: int = 0,
         key_fifths: int = 0,
         key_minor: bool = False,
+    ) -> None: ...
+
+class ProjectTrack:
+    id: int
+    kind: int
+    midi_destination_id: int
+    gain: float
+    pan: float
+    mute: bool
+    solo: bool
+    name: str
+    def __init__(
+        self,
+        id: int,
+        kind: int,
+        midi_destination_id: int,
+        gain: float,
+        pan: float,
+        mute: bool,
+        solo: bool,
+        name: str,
+    ) -> None: ...
+
+class ProjectClip:
+    id: int
+    track_id: int
+    source_id: int
+    source_kind: int
+    start_ppq: float
+    length_ppq: float
+    source_offset_ppq: float
+    gain: float
+    loop_mode: int
+    loop_length_ppq: float
+    def __init__(
+        self,
+        id: int,
+        track_id: int,
+        source_id: int,
+        source_kind: int,
+        start_ppq: float,
+        length_ppq: float,
+        source_offset_ppq: float,
+        gain: float,
+        loop_mode: int,
+        loop_length_ppq: float,
+    ) -> None: ...
+
+class ProjectSource:
+    id: int
+    kind: int
+    channel_count: int
+    storage_handle_id: int
+    sample_rate_hint: float
+    name_or_uri: str
+    def __init__(
+        self,
+        id: int,
+        kind: int,
+        channel_count: int,
+        storage_handle_id: int,
+        sample_rate_hint: float,
+        name_or_uri: str,
     ) -> None: ...
 
 class EngineMetronomeConfig:
@@ -1469,12 +1582,12 @@ class ScopeTelemetryRecord:
 class ExternalMidiEvent:
     destination_id: int
     render_frame: int
-    bytes: bytes
+    bytes: builtins.bytes
     def __init__(
         self,
         destination_id: int,
         render_frame: int,
-        bytes: bytes,
+        bytes: builtins.bytes,
     ) -> None: ...
 
 class TransportState:
@@ -1691,7 +1804,32 @@ class StreamFramesU8:
         spectral_flatness: list[int],
     ) -> None: ...
 
-class StreamFramesI16(StreamFramesU8): ...
+class StreamFramesI16:
+    n_frames: int
+    n_mels: int
+    n_chroma: int
+    feature_flags: int
+    timestamps: list[float]
+    mel: list[int]
+    chroma: list[int]
+    onset_strength: list[int]
+    rms_energy: list[int]
+    spectral_centroid: list[int]
+    spectral_flatness: list[int]
+    def __init__(
+        self,
+        n_frames: int,
+        n_mels: int,
+        n_chroma: int,
+        feature_flags: int,
+        timestamps: list[float],
+        mel: list[int],
+        chroma: list[int],
+        onset_strength: list[int],
+        rms_energy: list[int],
+        spectral_centroid: list[int],
+        spectral_flatness: list[int],
+    ) -> None: ...
 
 class StreamChordChange:
     root: int

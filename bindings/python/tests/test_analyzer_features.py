@@ -275,7 +275,66 @@ def test_mel_spectrogram() -> None:
     tone = _generate_sine(440, 22050, 1.0)
     result = mel_spectrogram(tone, sample_rate=22050)
     assert result.n_mels == 128
+
+
+def test_mel_delta_returns_linear_slope() -> None:
+    """mel_delta preserves the unit slope of a linear feature row."""
+    from libsonare import mel_delta
+
+    result = mel_delta([float(i) for i in range(10)], n_features=2, n_frames=5, width=5)
+    assert result == pytest.approx([1.0] * 10)
+
+
+def test_piptrack_returns_equally_shaped_matrices() -> None:
+    """piptrack exposes the per-bin pitch and magnitude matrices."""
+    from libsonare import piptrack
+
+    result = piptrack(
+        _generate_sine(440.0, 22050, 1.0), sample_rate=22050, n_fft=1024, hop_length=256
+    )
+    assert result.n_bins == 513
+    assert len(result.pitches) == result.n_bins * result.n_frames
+    assert len(result.magnitudes) == len(result.pitches)
+
+
+def test_reassigned_spectrogram_returns_equally_shaped_coordinate_matrices() -> None:
+    """reassigned_spectrogram exposes the row-major coordinate matrices."""
+    from libsonare import reassigned_spectrogram
+
+    result = reassigned_spectrogram(
+        _generate_sine(440.0, 22050, 1.0), sample_rate=22050, n_fft=1024, hop_length=256
+    )
+    assert result.n_bins == 513
     assert result.n_frames > 0
+    assert len(result.magnitude) == result.n_bins * result.n_frames
+    assert len(result.times) == len(result.magnitude)
+    assert len(result.frequencies) == len(result.magnitude)
+    assert result.n_frames > 0
+
+
+def test_librosa_segment_operations_are_public() -> None:
+    """All seven librosa.segment-compatible functions cross the Python C ABI."""
+    from libsonare import (
+        agglomerative,
+        cross_similarity,
+        lag_to_recurrence,
+        path_enhance,
+        recurrence_matrix,
+        recurrence_to_lag,
+        subsegment,
+    )
+
+    data = [1.0, 0.0, 1.0, 0.0, 1.0, 1.0]
+    cross = cross_similarity(data, 2, 3, data, 2, 3)
+    assert (cross.rows, cross.cols, len(cross.values)) == (3, 3, 9)
+    recurrence = recurrence_matrix(data, 2, 3)
+    assert (recurrence.rows, recurrence.cols, len(recurrence.values)) == (3, 3, 9)
+    lag = recurrence_to_lag(recurrence.values, 3, pad=True)
+    assert (lag.rows, lag.cols, len(lag.values)) == (3, 5, 15)
+    assert len(lag_to_recurrence(lag.values, 3, 5).values) == 9
+    assert subsegment(data, 2, 3, [0, 3])[0] == 0
+    assert len(agglomerative(data, 2, 3, 2)) == 3
+    assert len(path_enhance(recurrence.values, 3, 1).values) == 9
 
 
 def test_mel_spectrogram_explicit_range() -> None:
@@ -360,6 +419,37 @@ def test_spectral_bandwidth() -> None:
 
     tone = _generate_sine(440, 22050, 1.0)
     result = spectral_bandwidth(tone, sample_rate=22050)
+    assert len(result) > 0
+    assert spectral_bandwidth(tone, sample_rate=22050, p=1.0) != result
+
+
+def test_spectral_flux() -> None:
+    """spectral_flux returns non-empty frames and accepts a lag."""
+    from libsonare import spectral_flux
+
+    tone = _generate_sine(440, 22050, 1.0)
+    result = spectral_flux(tone, sample_rate=22050)
+    assert len(result) > 0
+    assert spectral_flux(tone, sample_rate=22050, lag=2) != result
+
+
+def test_onset_backtrack() -> None:
+    """onset_backtrack returns the preceding energy minimum."""
+    from libsonare import onset_backtrack
+
+    result = onset_backtrack([6], [1.0, 0.8, 0.5, 0.2, 0.6, 0.9, 1.2])
+    assert result.tolist() == [3]
+
+
+def test_griffin_lim() -> None:
+    """griffin_lim reconstructs an STFT magnitude matrix."""
+    from libsonare import griffin_lim, stft
+
+    samples = _generate_sine(440, 22050, 1.0)
+    spec = stft(samples, sample_rate=22050, n_fft=1024, hop_length=256)
+    result = griffin_lim(
+        spec.magnitude, spec.n_bins, spec.n_frames, n_fft=1024, hop_length=256, n_iter=1
+    )
     assert len(result) > 0
 
 

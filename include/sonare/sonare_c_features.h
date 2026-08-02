@@ -68,7 +68,7 @@ SonareError sonare_analyze_melody(const float* samples, size_t length, int sampl
 /// @brief Extracts the melody contour with selectable tracker.
 /// @param use_pyin Non-zero selects the pYIN tracker (Viterbi-smoothed, less
 ///   octave-jumpy) instead of plain per-frame YIN.
-/// @param center When use_pyin is set, non-zero reflect-pads by frame_length/2
+/// @param center When use_pyin is set, non-zero zero-pads by frame_length/2
 ///   so frame i is centered at i*hop_length (matches librosa.pyin(center=True));
 ///   zero left-aligns. Ignored when use_pyin is 0 (plain YIN is always
 ///   left-aligned).
@@ -85,6 +85,20 @@ void sonare_free_chord_analysis_result(SonareChordAnalysisResult* result);
 void sonare_free_string_array(SonareStringArray* result);
 void sonare_free_section_result(SonareSectionResult* result);
 void sonare_free_melody_result(SonareMelodyResult* result);
+
+// ============================================================================
+// Core - Synthetic audio generation
+// ============================================================================
+
+/// @brief Generates a sine tone. Free @p out with sonare_free_floats.
+SonareError sonare_tone(float frequency, int sample_rate, float duration, float phase,
+                        float amplitude, float** out, size_t* out_length);
+/// @brief Generates a linear or exponential chirp. Free @p out with sonare_free_floats.
+SonareError sonare_chirp(float fmin, float fmax, int sample_rate, float duration, int linear,
+                         float** out, size_t* out_length);
+/// @brief Generates decaying sine clicks at times in seconds. Free @p out with sonare_free_floats.
+SonareError sonare_clicks(const float* times, size_t time_count, int sample_rate, int length,
+                          float frequency, float click_duration, float** out, size_t* out_length);
 
 // ============================================================================
 // Features - Constant-Q / Variable-Q transforms
@@ -183,6 +197,14 @@ SonareError sonare_mfcc_ex(const float* samples, size_t length, int sample_rate,
                            int hop_length, int n_mels, int n_mfcc, float fmin, float fmax, int htk,
                            float lifter, SonareMfccResult* out);
 
+/// @brief Computes first-order delta features from a row-major feature matrix.
+/// @details Mirrors @c MelSpectrogram::delta and librosa.feature.delta with a
+///          first-order regression. @p features is [n_features x n_frames].
+///          @p width must be odd and at least 3. The returned matrix has the
+///          same shape and is released with @ref sonare_free_floats.
+SonareError sonare_mel_delta(const float* features, int n_features, int n_frames, int width,
+                             float** out);
+
 // ============================================================================
 // Features - Inverse reconstruction (Mel/MFCC -> spectrogram -> audio)
 // ============================================================================
@@ -244,6 +266,12 @@ SonareError sonare_mel_to_stft_ex(const float* mel, int n_mels, int n_frames, in
 SonareError sonare_mel_to_audio(const float* mel, int n_mels, int n_frames, int sample_rate,
                                 int n_fft, int hop_length, float fmin, float fmax, int n_iter,
                                 float** out, size_t* out_length);
+/// @brief Reconstruct mono audio from an STFT magnitude matrix with Griffin-Lim.
+/// @details @p magnitude is row-major [n_bins x n_frames]; @p input_length must
+///   equal n_bins * n_frames, n_bins must equal n_fft / 2 + 1, and momentum is in [0, 1).
+SonareError sonare_griffin_lim(const float* magnitude, size_t input_length, int n_bins,
+                               int n_frames, int n_fft, int hop_length, int sample_rate, int n_iter,
+                               float momentum, float** out, size_t* out_length);
 /// @brief HTK-aware sonare_mel_to_audio variant.
 /// @param htk Non-zero to rebuild the inverse Mel filterbank with HTK Mel
 ///        spacing. Zero preserves the Slaney-compatible legacy contract.
@@ -389,11 +417,19 @@ SonareError sonare_spectral_centroid(const float* samples, size_t length, int sa
                                      int n_fft, int hop_length, float** out, size_t* out_count);
 SonareError sonare_spectral_bandwidth(const float* samples, size_t length, int sample_rate,
                                       int n_fft, int hop_length, float** out, size_t* out_count);
+/// @brief Spectral bandwidth with a configurable Minkowski exponent.
+/// @details @p p must be finite and positive; 2.0 reproduces the legacy API.
+SonareError sonare_spectral_bandwidth_ex(const float* samples, size_t length, int sample_rate,
+                                         int n_fft, int hop_length, float p, float** out,
+                                         size_t* out_count);
 SonareError sonare_spectral_rolloff(const float* samples, size_t length, int sample_rate, int n_fft,
                                     int hop_length, float roll_percent, float** out,
                                     size_t* out_count);
 SonareError sonare_spectral_flatness(const float* samples, size_t length, int sample_rate,
                                      int n_fft, int hop_length, float** out, size_t* out_count);
+/// @brief Unsigned L1 spectral flux envelope with a positive frame lag.
+SonareError sonare_spectral_flux(const float* samples, size_t length, int sample_rate, int n_fft,
+                                 int hop_length, int lag, float** out, size_t* out_count);
 SonareError sonare_zero_crossing_rate(const float* samples, size_t length, int sample_rate,
                                       int frame_length, int hop_length, float** out,
                                       size_t* out_count);
@@ -436,6 +472,11 @@ SonareError sonare_zero_crossings(const float* samples, size_t length, float thr
                                   int ref_magnitude, int pad, int zero_pos, int** out,
                                   size_t* out_count);
 
+/// @brief Backtrack onset event indices to local minima in an energy curve.
+/// @details Mirrors librosa.onset.onset_backtrack. Free @p out with sonare_free_ints.
+SonareError sonare_onset_backtrack(const int* events, size_t event_count, const float* energy,
+                                   size_t energy_count, int** out, size_t* out_count);
+
 /// @brief Per-octave tuning offset estimated from a list of detected pitches.
 /// @details Mirrors librosa.pitch_tuning. Non-positive frequencies are ignored.
 /// @param frequencies Detected pitch frequencies in Hz.
@@ -454,6 +495,73 @@ SonareError sonare_pitch_tuning(const float* frequencies, size_t length, float r
 SonareError sonare_estimate_tuning(const float* samples, size_t length, int sample_rate, int n_fft,
                                    int hop_length, float resolution, int bins_per_octave,
                                    float* out_tuning);
+
+/// @brief Detects per-frame spectral pitch peaks (librosa.piptrack).
+/// @details @p pitches and @p magnitudes are row-major [n_bins x n_frames]
+///          matrices and must each be released with @ref sonare_free_floats.
+SonareError sonare_piptrack(const float* samples, size_t length, int sample_rate, int n_fft,
+                            int hop_length, float fmin, float fmax, float threshold,
+                            int* out_n_bins, int* out_n_frames, float** out_pitches,
+                            float** out_magnitudes);
+
+/// @brief Owned result of @ref sonare_reassigned_spectrogram.
+/// @details All three arrays are row-major [n_bins x n_frames] and are released
+///          together with @ref sonare_free_reassigned_spectrogram_result.
+typedef struct SonareReassignedSpectrogramResult {
+  int n_bins;
+  int n_frames;
+  float* magnitude;
+  float* times;
+  float* frequencies;
+} SonareReassignedSpectrogramResult;
+
+/// @brief Computes an Auger-Flandrin reassigned spectrogram.
+/// @param ref_power Bins with lower power use ordinary bin coordinates, or NaN
+///        when @p fill_nan is non-zero.
+SonareError sonare_reassigned_spectrogram(const float* samples, size_t length, int sample_rate,
+                                          int n_fft, int hop_length, float ref_power, int fill_nan,
+                                          SonareReassignedSpectrogramResult* out);
+/// @brief Releases all arrays in a reassigned-spectrogram result and clears it.
+void sonare_free_reassigned_spectrogram_result(SonareReassignedSpectrogramResult* result);
+
+// ============================================================================
+// Features - Segmentation
+// ============================================================================
+
+/// @brief Heap-owned row-major float matrix returned by segmentation APIs.
+typedef struct SonareSegmentMatrix {
+  int rows;
+  int cols;
+  float* values;
+} SonareSegmentMatrix;
+
+/// @brief Heap-owned integer vector returned by segmentation APIs.
+typedef struct SonareSegmentIndices {
+  int* values;
+  size_t count;
+} SonareSegmentIndices;
+
+/// @brief Cross-similarity of column-feature matrices. `metric` is `cosine` or
+/// `euclidean`; `mode` is `connectivity` or `affinity`.
+SonareError sonare_segment_cross_similarity(const float* x, int x_rows, int x_cols, const float* y,
+                                            int y_rows, int y_cols, int k, const char* metric,
+                                            const char* mode, SonareSegmentMatrix* out);
+SonareError sonare_segment_recurrence_matrix(const float* data, int rows, int cols, int k,
+                                             int width, int sym, const char* metric,
+                                             const char* mode, SonareSegmentMatrix* out);
+SonareError sonare_segment_recurrence_to_lag(const float* recurrence, int n, int pad,
+                                             SonareSegmentMatrix* out);
+SonareError sonare_segment_lag_to_recurrence(const float* lag, int n_rows, int n_lags,
+                                             SonareSegmentMatrix* out);
+SonareError sonare_segment_subsegment(const float* data, int rows, int cols, const int* boundaries,
+                                      size_t boundary_count, int n_segments,
+                                      SonareSegmentIndices* out);
+SonareError sonare_segment_agglomerative(const float* data, int rows, int cols, int k,
+                                         const char* linkage, SonareSegmentIndices* out);
+SonareError sonare_segment_path_enhance(const float* recurrence, int n, int win, int max_ratio,
+                                        int min_ratio, int n_filters, SonareSegmentMatrix* out);
+void sonare_free_segment_matrix(SonareSegmentMatrix* result);
+void sonare_free_segment_indices(SonareSegmentIndices* result);
 
 // ============================================================================
 // Features - Pitch

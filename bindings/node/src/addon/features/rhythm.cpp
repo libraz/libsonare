@@ -59,11 +59,15 @@ Napi::Value SonareWrap::Tempogram(const Napi::CallbackInfo& info) {
     err.ThrowAsJavaScriptException();
     return env.Undefined();
   }
+  const int center =
+      info.Length() >= 6 && info[5].IsBoolean() ? (info[5].As<Napi::Boolean>().Value() ? 1 : 0) : 1;
+  const int norm =
+      info.Length() >= 7 && info[6].IsBoolean() ? (info[6].As<Napi::Boolean>().Value() ? 1 : 0) : 1;
   float* out = nullptr;
   size_t count = 0;
   int n_frames = 0;
-  SonareError err = sonare_tempogram_with_mode(arr.Data(), arr.ElementLength(), sr, hop, win, 1, 1,
-                                               mode, &out, &count, &n_frames);
+  SonareError err = sonare_tempogram_with_mode(arr.Data(), arr.ElementLength(), sr, hop, win,
+                                               center, norm, mode, &out, &count, &n_frames);
   if (err != SONARE_OK) return CheckCResult(env, err);
   Napi::Object result = Napi::Object::New(env);
   result.Set("nFrames", n_frames);
@@ -193,11 +197,15 @@ Napi::Value SonareWrap::FourierTempogram(const Napi::CallbackInfo& info) {
       info.Length() >= 3 && info[2].IsNumber() ? info[2].As<Napi::Number>().Int32Value() : 512;
   int win =
       info.Length() >= 4 && info[3].IsNumber() ? info[3].As<Napi::Number>().Int32Value() : 384;
+  const int center =
+      info.Length() >= 5 && info[4].IsBoolean() ? (info[4].As<Napi::Boolean>().Value() ? 1 : 0) : 1;
+  const int norm =
+      info.Length() >= 6 && info[5].IsBoolean() ? (info[5].As<Napi::Boolean>().Value() ? 1 : 0) : 1;
   float* out = nullptr;
   size_t count = 0;
   int n_frames = 0;
-  SonareError err = sonare_fourier_tempogram(arr.Data(), arr.ElementLength(), sr, hop, win, 1, 1,
-                                             &out, &count, &n_frames);
+  SonareError err = sonare_fourier_tempogram(arr.Data(), arr.ElementLength(), sr, hop, win, center,
+                                             norm, &out, &count, &n_frames);
   if (err != SONARE_OK) return CheckCResult(env, err);
   int n_bins = n_frames > 0 ? static_cast<int>(count / static_cast<size_t>(n_frames)) : 0;
   Napi::Object result = Napi::Object::New(env);
@@ -209,6 +217,7 @@ Napi::Value SonareWrap::FourierTempogram(const Napi::CallbackInfo& info) {
 
 Napi::Value SonareWrap::TempogramRatio(const Napi::CallbackInfo& info) {
   Napi::Env env = info.Env();
+  SONARE_NODE_TRY
   if (info.Length() < 1 || !IsFloat32Array(info[0])) {
     Napi::TypeError::New(env, "Expected tempogram Float32Array").ThrowAsJavaScriptException();
     return env.Undefined();
@@ -232,6 +241,7 @@ Napi::Value SonareWrap::TempogramRatio(const Napi::CallbackInfo& info) {
                                            factors_ptr, n_factors, &out, &count);
   if (err != SONARE_OK) return CheckCResult(env, err);
   return FloatResult(env, out, count);
+  SONARE_NODE_CATCH(env)
 }
 
 Napi::Value SonareWrap::NnlsChroma(const Napi::CallbackInfo& info) {

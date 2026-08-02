@@ -9,7 +9,9 @@ import type {
   MelSpectrogramResult,
   MfccResult,
   NoteSegment,
+  PiptrackResult,
   PitchResult,
+  ReassignedSpectrogramResult,
   StftDbResult,
   StftResult,
   TempogramMode,
@@ -36,6 +38,79 @@ export interface MelSpectrogramRequest extends StftRequest {
 export interface MfccRequest extends MelSpectrogramRequest {
   nMfcc?: number;
   lifter?: number;
+}
+export interface MelDeltaRequest {
+  features: Float32Array;
+  nFeatures: number;
+  nFrames: number;
+  width?: number;
+}
+export interface OnsetBacktrackRequest {
+  events: Int32Array | number[];
+  energy: Float32Array;
+}
+/** Row-major matrix returned by segmentation APIs. */
+export interface SegmentMatrix {
+  rows: number;
+  cols: number;
+  values: Float32Array;
+}
+export interface SegmentCrossSimilarityRequest {
+  x: Float32Array;
+  xRows: number;
+  xCols: number;
+  y: Float32Array;
+  yRows: number;
+  yCols: number;
+  k?: number;
+  metric?: 'cosine' | 'euclidean';
+  mode?: 'connectivity' | 'affinity';
+}
+export interface SegmentRecurrenceMatrixRequest {
+  data: Float32Array;
+  rows: number;
+  cols: number;
+  k?: number;
+  width?: number;
+  sym?: boolean;
+  metric?: 'cosine' | 'euclidean';
+  mode?: 'connectivity' | 'affinity';
+}
+export interface SegmentRecurrenceToLagRequest {
+  recurrence: Float32Array;
+  n: number;
+  pad?: boolean;
+}
+export interface SegmentLagToRecurrenceRequest {
+  lag: Float32Array;
+  rows: number;
+  lags: number;
+}
+export interface SegmentSubsegmentRequest {
+  data: Float32Array;
+  rows: number;
+  cols: number;
+  boundaries: Int32Array | number[];
+  nSegments?: number;
+}
+export interface SegmentAgglomerativeRequest {
+  data: Float32Array;
+  rows: number;
+  cols: number;
+  k: number;
+  linkage?: 'average' | 'single' | 'complete' | 'ward';
+}
+export interface SegmentPathEnhanceRequest {
+  recurrence: Float32Array;
+  n: number;
+  win: number;
+  maxRatio?: number;
+  minRatio?: number;
+  nFilters?: number;
+}
+export interface ReassignedSpectrogramRequest extends StftRequest {
+  refPower?: number;
+  fillNan?: boolean;
 }
 export interface ChromaRequest extends StftRequest {
   nChroma?: number;
@@ -75,6 +150,16 @@ export interface MelToAudioRequest extends MelToStftRequest {
   hopLength?: number;
   nIter?: number;
 }
+export interface GriffinLimRequest {
+  magnitude: Float32Array;
+  nBins: number;
+  nFrames: number;
+  sampleRate?: number;
+  nFft?: number;
+  hopLength?: number;
+  nIter?: number;
+  momentum?: number;
+}
 export interface MfccToMelRequest {
   mfcc: Float32Array;
   nMfcc: number;
@@ -112,6 +197,11 @@ export interface PitchRequest extends FeatureSamplesRequest {
   threshold?: number;
   /** pYIN: fill unvoiced f0 with zero. Retained but ignored by YIN, which always estimates f0. */
   fillNa?: boolean;
+}
+export interface PiptrackRequest extends StftRequest {
+  fmin?: number;
+  fmax?: number;
+  threshold?: number;
 }
 export interface NoteSegmentsRequest {
   f0Hz: Float32Array;
@@ -155,6 +245,8 @@ export interface TempogramRequest {
   hopLength?: number;
   winLength?: number;
   mode?: TempogramMode;
+  center?: boolean;
+  norm?: boolean;
 }
 export interface CyclicTempogramRequest extends TempogramRequest {
   bpmMin?: number;
@@ -205,6 +297,27 @@ export interface FrameSignalRequest {
 export interface ValuesRequest {
   values: Float32Array;
 }
+export interface ToneRequest {
+  frequency?: number;
+  sampleRate?: number;
+  duration?: number;
+  phase?: number;
+  amplitude?: number;
+}
+export interface ChirpRequest {
+  fmin?: number;
+  fmax?: number;
+  sampleRate?: number;
+  duration?: number;
+  linear?: boolean;
+}
+export interface ClicksRequest {
+  times: Float32Array;
+  sampleRate?: number;
+  length?: number;
+  frequency?: number;
+  clickDuration?: number;
+}
 /** Input for pre/de-emphasis filters. `zi` is the initial delay value. */
 export interface EmphasisRequest {
   samples: Float32Array;
@@ -239,6 +352,12 @@ export function trim(
 
 export function stft(request: StftRequest): StftResult;
 export function stft(
+  samples: Float32Array,
+  sampleRate?: number,
+  nFft?: number,
+  hopLength?: number,
+): StftResult;
+export function stft(
   samples: Float32Array | StftRequest,
   sampleRate = 22050,
   nFft = 2048,
@@ -256,6 +375,12 @@ export function stft(
 
 export function stftDb(request: StftRequest): StftDbResult;
 export function stftDb(
+  samples: Float32Array,
+  sampleRate?: number,
+  nFft?: number,
+  hopLength?: number,
+): StftDbResult;
+export function stftDb(
   samples: Float32Array | StftRequest,
   sampleRate = 22050,
   nFft = 2048,
@@ -272,6 +397,16 @@ export function stftDb(
 }
 
 export function melSpectrogram(request: MelSpectrogramRequest): MelSpectrogramResult;
+export function melSpectrogram(
+  samples: Float32Array,
+  sampleRate?: number,
+  nFft?: number,
+  hopLength?: number,
+  nMels?: number,
+  fmin?: number,
+  fmax?: number,
+  htk?: boolean,
+): MelSpectrogramResult;
 export function melSpectrogram(
   samples: Float32Array | MelSpectrogramRequest,
   sampleRate = 22050,
@@ -299,6 +434,18 @@ export function melSpectrogram(
 }
 
 export function mfcc(request: MfccRequest): MfccResult;
+export function mfcc(
+  samples: Float32Array,
+  sampleRate?: number,
+  nFft?: number,
+  hopLength?: number,
+  nMels?: number,
+  nMfcc?: number,
+  fmin?: number,
+  fmax?: number,
+  htk?: boolean,
+  lifter?: number,
+): MfccResult;
 export function mfcc(
   samples: Float32Array | MfccRequest,
   sampleRate = 22050,
@@ -329,6 +476,169 @@ export function mfcc(
   );
 }
 
+/** First-order regression delta of a row-major feature matrix. */
+export function melDelta(request: MelDeltaRequest): Float32Array;
+export function melDelta(
+  features: Float32Array,
+  nFeatures: number,
+  nFrames: number,
+  width?: number,
+): Float32Array;
+export function melDelta(
+  features: Float32Array | MelDeltaRequest,
+  nFeatures?: number,
+  nFrames?: number,
+  width = 9,
+): Float32Array {
+  const request: MelDeltaRequest =
+    features instanceof Float32Array
+      ? { features, nFeatures: nFeatures ?? 0, nFrames: nFrames ?? 0, width }
+      : features;
+  if (
+    !Number.isInteger(request.nFeatures) ||
+    !Number.isInteger(request.nFrames) ||
+    request.nFeatures <= 0 ||
+    request.nFrames <= 0 ||
+    request.features.length !== request.nFeatures * request.nFrames
+  ) {
+    throw new TypeError('melDelta: feature matrix length must equal nFeatures * nFrames');
+  }
+  return addon.melDelta(request.features, request.nFeatures, request.nFrames, request.width ?? 9);
+}
+
+/** Auger-Flandrin reassigned spectrogram (row-major [nBins x nFrames] arrays). */
+export function reassignedSpectrogram(
+  request: ReassignedSpectrogramRequest,
+): ReassignedSpectrogramResult;
+export function reassignedSpectrogram(
+  samples: Float32Array,
+  sampleRate?: number,
+  nFft?: number,
+  hopLength?: number,
+  refPower?: number,
+  fillNan?: boolean,
+): ReassignedSpectrogramResult;
+export function reassignedSpectrogram(
+  samples: Float32Array | ReassignedSpectrogramRequest,
+  sampleRate = 22050,
+  nFft = 2048,
+  hopLength = 512,
+  refPower = 1e-6,
+  fillNan = false,
+): ReassignedSpectrogramResult {
+  const request =
+    samples instanceof Float32Array
+      ? { samples, sampleRate, nFft, hopLength, refPower, fillNan }
+      : samples;
+  assertSamples('reassignedSpectrogram', request.samples, true);
+  if (!Number.isFinite(request.refPower ?? 1e-6) || (request.refPower ?? 1e-6) < 0) {
+    throw new RangeError('reassignedSpectrogram: refPower must be finite and non-negative');
+  }
+  return addon.reassignedSpectrogram(
+    request.samples,
+    request.sampleRate ?? 22050,
+    request.nFft ?? 2048,
+    request.hopLength ?? 512,
+    request.refPower ?? 1e-6,
+    request.fillNan ?? false,
+  );
+}
+
+/** Column-wise cross-similarity matrix (librosa.segment.cross_similarity). */
+export function segmentCrossSimilarity(request: SegmentCrossSimilarityRequest): SegmentMatrix {
+  const { x, xRows, xCols, y, yRows, yCols } = request;
+  if (x.length !== xRows * xCols || y.length !== yRows * yCols || xRows !== yRows) {
+    throw new RangeError('segmentCrossSimilarity: invalid matrix dimensions');
+  }
+  return addon.segmentCrossSimilarity(
+    x,
+    xRows,
+    xCols,
+    y,
+    yRows,
+    yCols,
+    request.k ?? 0,
+    request.metric ?? 'cosine',
+    request.mode ?? 'connectivity',
+  );
+}
+
+/** Self-similarity recurrence matrix (librosa.segment.recurrence_matrix). */
+export function segmentRecurrenceMatrix(request: SegmentRecurrenceMatrixRequest): SegmentMatrix {
+  if (request.data.length !== request.rows * request.cols) {
+    throw new RangeError('segmentRecurrenceMatrix: invalid matrix dimensions');
+  }
+  return addon.segmentRecurrenceMatrix(
+    request.data,
+    request.rows,
+    request.cols,
+    request.k ?? 0,
+    request.width ?? 1,
+    request.sym ?? false,
+    request.metric ?? 'euclidean',
+    request.mode ?? 'connectivity',
+  );
+}
+
+/** Convert an `n × n` recurrence matrix to its lag representation. */
+export function segmentRecurrenceToLag(request: SegmentRecurrenceToLagRequest): SegmentMatrix {
+  if (request.recurrence.length !== request.n * request.n) {
+    throw new RangeError('segmentRecurrenceToLag: invalid matrix dimensions');
+  }
+  return addon.segmentRecurrenceToLag(request.recurrence, request.n, request.pad ?? false);
+}
+
+/** Convert a lag matrix back to an `n × n` recurrence matrix. */
+export function segmentLagToRecurrence(request: SegmentLagToRecurrenceRequest): SegmentMatrix {
+  if (request.lag.length !== request.rows * request.lags) {
+    throw new RangeError('segmentLagToRecurrence: invalid matrix dimensions');
+  }
+  return addon.segmentLagToRecurrence(request.lag, request.rows, request.lags);
+}
+
+/** Refine frame boundaries by clustering within each parent segment. */
+export function segmentSubsegment(request: SegmentSubsegmentRequest): Int32Array {
+  if (request.data.length !== request.rows * request.cols) {
+    throw new RangeError('segmentSubsegment: invalid matrix dimensions');
+  }
+  return addon.segmentSubsegment(
+    request.data,
+    request.rows,
+    request.cols,
+    request.boundaries,
+    request.nSegments ?? 4,
+  );
+}
+
+/** Cluster feature columns and return one label per column. */
+export function segmentAgglomerative(request: SegmentAgglomerativeRequest): Int32Array {
+  if (request.data.length !== request.rows * request.cols) {
+    throw new RangeError('segmentAgglomerative: invalid matrix dimensions');
+  }
+  return addon.segmentAgglomerative(
+    request.data,
+    request.rows,
+    request.cols,
+    request.k,
+    request.linkage ?? 'average',
+  );
+}
+
+/** Enhance diagonal paths in an `n × n` recurrence matrix. */
+export function segmentPathEnhance(request: SegmentPathEnhanceRequest): SegmentMatrix {
+  if (request.recurrence.length !== request.n * request.n) {
+    throw new RangeError('segmentPathEnhance: invalid matrix dimensions');
+  }
+  return addon.segmentPathEnhance(
+    request.recurrence,
+    request.n,
+    request.win,
+    request.maxRatio ?? 2,
+    request.minRatio ?? 0,
+    request.nFilters ?? 7,
+  );
+}
+
 /**
  * STFT chromagram (librosa.feature.chroma_stft).
  *
@@ -339,6 +649,12 @@ export function mfcc(
  * separately via {@link estimateTuning} if a non-A440 reference matters.
  */
 export function chroma(request: StftRequest): ChromaResult;
+export function chroma(
+  samples: Float32Array,
+  sampleRate?: number,
+  nFft?: number,
+  hopLength?: number,
+): ChromaResult;
 export function chroma(
   samples: Float32Array | StftRequest,
   sampleRate = 22050,
@@ -356,6 +672,13 @@ export function chroma(
 }
 
 export function chromaCens(request: ChromaRequest): ChromaResult;
+export function chromaCens(
+  samples: Float32Array,
+  sampleRate?: number,
+  hopLength?: number,
+  nChroma?: number,
+  binsPerOctave?: number,
+): ChromaResult;
 export function chromaCens(
   samples: Float32Array | ChromaRequest,
   sampleRate = 22050,
@@ -378,6 +701,13 @@ export function chromaCens(
 
 export function chromaCqt(request: ChromaRequest): ChromaResult;
 export function chromaCqt(
+  samples: Float32Array,
+  sampleRate?: number,
+  hopLength?: number,
+  nChroma?: number,
+  binsPerOctave?: number,
+): ChromaResult;
+export function chromaCqt(
   samples: Float32Array | ChromaRequest,
   sampleRate = 22050,
   hopLength = 512,
@@ -399,6 +729,12 @@ export function chromaCqt(
 
 export function bassChroma(request: ChromaRequest): ChromaResult;
 export function bassChroma(
+  samples: Float32Array,
+  sampleRate?: number,
+  hopLength?: number,
+  nChroma?: number,
+): ChromaResult;
+export function bassChroma(
   samples: Float32Array | ChromaRequest,
   sampleRate = 22050,
   hopLength = 512,
@@ -416,6 +752,14 @@ export function bassChroma(
 
 /** Compute the Constant-Q Transform magnitude. */
 export function cqt(request: CqtRequest): CqtResult;
+export function cqt(
+  samples: Float32Array,
+  sampleRate?: number,
+  hopLength?: number,
+  fmin?: number,
+  nBins?: number,
+  binsPerOctave?: number,
+): CqtResult;
 export function cqt(
   samples: Float32Array | CqtRequest,
   sampleRate = 22050,
@@ -441,6 +785,14 @@ export function cqt(
 /** Compute a faster pseudo-CQT magnitude approximation. */
 export function pseudoCqt(request: CqtRequest): CqtResult;
 export function pseudoCqt(
+  samples: Float32Array,
+  sampleRate?: number,
+  hopLength?: number,
+  fmin?: number,
+  nBins?: number,
+  binsPerOctave?: number,
+): CqtResult;
+export function pseudoCqt(
   samples: Float32Array | CqtRequest,
   sampleRate = 22050,
   hopLength = 512,
@@ -465,6 +817,14 @@ export function pseudoCqt(
 /** Compute the hybrid CQT magnitude. */
 export function hybridCqt(request: CqtRequest): CqtResult;
 export function hybridCqt(
+  samples: Float32Array,
+  sampleRate?: number,
+  hopLength?: number,
+  fmin?: number,
+  nBins?: number,
+  binsPerOctave?: number,
+): CqtResult;
+export function hybridCqt(
   samples: Float32Array | CqtRequest,
   sampleRate = 22050,
   hopLength = 512,
@@ -488,6 +848,15 @@ export function hybridCqt(
 
 /** Compute VQT magnitude (`gamma < 0` selects the automatic ERB-derived value). */
 export function vqt(request: CqtRequest): CqtResult;
+export function vqt(
+  samples: Float32Array,
+  sampleRate?: number,
+  hopLength?: number,
+  fmin?: number,
+  nBins?: number,
+  binsPerOctave?: number,
+  gamma?: number,
+): CqtResult;
 export function vqt(
   samples: Float32Array | CqtRequest,
   sampleRate = 22050,
@@ -514,6 +883,16 @@ export function vqt(
 
 /** Reconstruct mono audio from a row-major CQT magnitude via Griffin-Lim. */
 export function cqtToAudio(request: CqtToAudioRequest): Float32Array;
+export function cqtToAudio(
+  magnitude: Float32Array,
+  nBins?: number,
+  nFrames?: number,
+  sampleRate?: number,
+  hopLength?: number,
+  fmin?: number,
+  binsPerOctave?: number,
+  nIter?: number,
+): Float32Array;
 export function cqtToAudio(
   magnitude: Float32Array | CqtToAudioRequest,
   nBins = 0,
@@ -542,6 +921,17 @@ export function cqtToAudio(
 
 /** Reconstruct mono audio from a row-major VQT magnitude via Griffin-Lim. */
 export function vqtToAudio(request: VqtToAudioRequest): Float32Array;
+export function vqtToAudio(
+  magnitude: Float32Array,
+  nBins?: number,
+  nFrames?: number,
+  sampleRate?: number,
+  hopLength?: number,
+  fmin?: number,
+  binsPerOctave?: number,
+  gamma?: number,
+  nIter?: number,
+): Float32Array;
 export function vqtToAudio(
   magnitude: Float32Array | VqtToAudioRequest,
   nBins = 0,
@@ -573,6 +963,16 @@ export function vqtToAudio(
 /** Reconstruct STFT power from a mel spectrogram. */
 export function melToStft(request: MelToStftRequest): InverseStftResult;
 export function melToStft(
+  mel: Float32Array,
+  nMels?: number,
+  nFrames?: number,
+  sampleRate?: number,
+  nFft?: number,
+  fmin?: number,
+  fmax?: number,
+  htk?: boolean,
+): InverseStftResult;
+export function melToStft(
   mel: Float32Array | MelToStftRequest,
   nMels = 0,
   nFrames = 0,
@@ -598,6 +998,18 @@ export function melToStft(
 
 /** Reconstruct audio from a mel spectrogram via Griffin-Lim. */
 export function melToAudio(request: MelToAudioRequest): Float32Array;
+export function melToAudio(
+  mel: Float32Array,
+  nMels?: number,
+  nFrames?: number,
+  sampleRate?: number,
+  nFft?: number,
+  hopLength?: number,
+  fmin?: number,
+  fmax?: number,
+  nIter?: number,
+  htk?: boolean,
+): Float32Array;
 export function melToAudio(
   mel: Float32Array | MelToAudioRequest,
   nMels = 0,
@@ -628,8 +1040,53 @@ export function melToAudio(
   );
 }
 
+/** Reconstruct audio from an STFT magnitude matrix via Griffin-Lim. */
+export function griffinLim(request: GriffinLimRequest): Float32Array;
+export function griffinLim(
+  magnitude: Float32Array,
+  nBins: number,
+  nFrames: number,
+  sampleRate?: number,
+  nFft?: number,
+  hopLength?: number,
+  nIter?: number,
+  momentum?: number,
+): Float32Array;
+export function griffinLim(
+  magnitude: Float32Array | GriffinLimRequest,
+  nBins = 0,
+  nFrames = 0,
+  sampleRate = 22050,
+  nFft = 2048,
+  hopLength = 512,
+  nIter = 32,
+  momentum = 0.99,
+): Float32Array {
+  const request =
+    magnitude instanceof Float32Array
+      ? { magnitude, nBins, nFrames, sampleRate, nFft, hopLength, nIter, momentum }
+      : magnitude;
+  return addon.griffinLim(
+    request.magnitude,
+    request.nBins,
+    request.nFrames,
+    request.sampleRate ?? 22050,
+    request.nFft ?? 2048,
+    request.hopLength ?? 512,
+    request.nIter ?? 32,
+    request.momentum ?? 0.99,
+  );
+}
+
 /** Reconstruct a mel power spectrogram from MFCCs (`nMels` mel bands). */
 export function mfccToMel(request: MfccToMelRequest): InverseMelResult;
+export function mfccToMel(
+  mfcc: Float32Array,
+  nMfcc?: number,
+  nFrames?: number,
+  nMels?: number,
+  lifter?: number,
+): InverseMelResult;
 export function mfccToMel(
   mfcc: Float32Array | MfccToMelRequest,
   nMfcc = 0,
@@ -649,6 +1106,20 @@ export function mfccToMel(
 
 /** Reconstruct audio from MFCCs via Griffin-Lim. */
 export function mfccToAudio(request: MfccToAudioRequest): Float32Array;
+export function mfccToAudio(
+  mfcc: Float32Array,
+  nMfcc?: number,
+  nFrames?: number,
+  nMels?: number,
+  sampleRate?: number,
+  nFft?: number,
+  hopLength?: number,
+  fmin?: number,
+  fmax?: number,
+  nIter?: number,
+  htk?: boolean,
+  lifter?: number,
+): Float32Array;
 export function mfccToAudio(
   mfcc: Float32Array | MfccToAudioRequest,
   nMfcc = 0,
@@ -685,6 +1156,12 @@ export function mfccToAudio(
 
 export function spectralCentroid(request: StftRequest): Float32Array;
 export function spectralCentroid(
+  samples: Float32Array,
+  sampleRate?: number,
+  nFft?: number,
+  hopLength?: number,
+): Float32Array;
+export function spectralCentroid(
   samples: Float32Array | StftRequest,
   sampleRate = 22050,
   nFft = 2048,
@@ -702,6 +1179,15 @@ export function spectralCentroid(
 
 /** Spectral contrast (librosa.feature.spectral_contrast); (nBands+1) x nFrames. */
 export function spectralContrast(request: SpectralContrastRequest): Matrix2D;
+export function spectralContrast(
+  samples: Float32Array,
+  sampleRate?: number,
+  nFft?: number,
+  hopLength?: number,
+  nBands?: number,
+  fmin?: number,
+  quantile?: number,
+): Matrix2D;
 export function spectralContrast(
   samples: Float32Array | SpectralContrastRequest,
   sampleRate = 22050,
@@ -729,6 +1215,13 @@ export function spectralContrast(
 /** Per-frame polynomial coefficients (librosa.feature.poly_features); (order+1) x nFrames. */
 export function polyFeatures(request: PolyFeaturesRequest): Matrix2D;
 export function polyFeatures(
+  samples: Float32Array,
+  sampleRate?: number,
+  nFft?: number,
+  hopLength?: number,
+  order?: number,
+): Matrix2D;
+export function polyFeatures(
   samples: Float32Array | PolyFeaturesRequest,
   sampleRate = 22050,
   nFft = 2048,
@@ -748,6 +1241,13 @@ export function polyFeatures(
 
 /** Zero-crossing indices of a signal (librosa.zero_crossings). */
 export function zeroCrossings(request: ZeroCrossingsRequest): Int32Array;
+export function zeroCrossings(
+  samples: Float32Array,
+  threshold?: number,
+  refMagnitude?: boolean,
+  pad?: boolean,
+  zeroPos?: boolean,
+): Int32Array;
 export function zeroCrossings(
   samples: Float32Array | ZeroCrossingsRequest,
   threshold = 1e-10,
@@ -769,6 +1269,11 @@ export function zeroCrossings(
 /** Global tuning offset from a set of frequencies (librosa.pitch_tuning). */
 export function pitchTuning(request: PitchTuningRequest): number;
 export function pitchTuning(
+  frequencies: Float32Array,
+  resolution?: number,
+  binsPerOctave?: number,
+): number;
+export function pitchTuning(
   frequencies: Float32Array | PitchTuningRequest,
   resolution = 0.01,
   binsPerOctave = 12,
@@ -784,6 +1289,14 @@ export function pitchTuning(
 
 /** Tuning offset of an audio signal (librosa.estimate_tuning). */
 export function estimateTuning(request: EstimateTuningRequest): number;
+export function estimateTuning(
+  samples: Float32Array,
+  sampleRate?: number,
+  nFft?: number,
+  hopLength?: number,
+  resolution?: number,
+  binsPerOctave?: number,
+): number;
 export function estimateTuning(
   samples: Float32Array | EstimateTuningRequest,
   sampleRate = 22050,
@@ -806,6 +1319,42 @@ export function estimateTuning(
   );
 }
 
+/** Per-bin spectral pitch candidates and their peak magnitudes (librosa.piptrack). */
+export function piptrack(request: PiptrackRequest): PiptrackResult;
+export function piptrack(
+  samples: Float32Array,
+  sampleRate?: number,
+  nFft?: number,
+  hopLength?: number,
+  fmin?: number,
+  fmax?: number,
+  threshold?: number,
+): PiptrackResult;
+export function piptrack(
+  samples: Float32Array | PiptrackRequest,
+  sampleRate = 22050,
+  nFft = 2048,
+  hopLength = 512,
+  fmin = 150,
+  fmax = 4000,
+  threshold = 0.1,
+): PiptrackResult {
+  const request =
+    samples instanceof Float32Array
+      ? { samples, sampleRate, nFft, hopLength, fmin, fmax, threshold }
+      : samples;
+  assertSamples('piptrack', request.samples, true);
+  return addon.piptrack(
+    request.samples,
+    request.sampleRate ?? 22050,
+    request.nFft ?? 2048,
+    request.hopLength ?? 512,
+    request.fmin ?? 150,
+    request.fmax ?? 4000,
+    request.threshold ?? 0.1,
+  );
+}
+
 /**
  * NMF of a flattened [nFeatures x nFrames] spectrogram (librosa.decompose.decompose).
  *
@@ -813,6 +1362,15 @@ export function estimateTuning(
  * `'nndsvd'` (SVD-based warm start, which tends to converge in fewer iterations).
  */
 export function decompose(request: DecomposeRequest): { w: Matrix2D; h: Matrix2D };
+export function decompose(
+  s: Float32Array,
+  nFeatures?: number,
+  nFrames?: number,
+  nComponents?: number,
+  nIter?: number,
+  beta?: number,
+  init?: 'random' | 'nndsvd',
+): { w: Matrix2D; h: Matrix2D };
 export function decompose(
   s: Float32Array | DecomposeRequest,
   nFeatures = 0,
@@ -838,6 +1396,14 @@ export function decompose(
 /** Nearest-neighbour filtering of a flattened [nFeatures x nFrames] spectrogram. */
 export function nnFilter(request: NnFilterRequest): Matrix2D;
 export function nnFilter(
+  s: Float32Array,
+  nFeatures?: number,
+  nFrames?: number,
+  aggregate?: string,
+  k?: number,
+  width?: number,
+): Matrix2D;
+export function nnFilter(
   s: Float32Array | NnFilterRequest,
   nFeatures = 0,
   nFrames = 0,
@@ -861,8 +1427,14 @@ export function remix(
   request: FeatureSamplesRequest & { intervals: Int32Array; alignZeros?: boolean },
 ): Float32Array;
 export function remix(
+  samples: Float32Array,
+  intervals: Int32Array,
+  sampleRate?: number,
+  alignZeros?: boolean,
+): Float32Array;
+export function remix(
   samples: Float32Array | (FeatureSamplesRequest & { intervals: Int32Array; alignZeros?: boolean }),
-  intervals = new Int32Array(),
+  intervals: Int32Array = new Int32Array(),
   sampleRate = 22050,
   alignZeros = false,
 ): Float32Array {
@@ -908,6 +1480,17 @@ export function phaseVocoder(
 
 /** HPSS into harmonic / percussive / residual signals. */
 export function hpssWithResidual(request: HpssWithResidualRequest): {
+  harmonic: Float32Array;
+  percussive: Float32Array;
+  residual: Float32Array;
+  sampleRate: number;
+};
+export function hpssWithResidual(
+  samples: Float32Array,
+  sampleRate?: number,
+  kernelHarmonic?: number,
+  kernelPercussive?: number,
+): {
   harmonic: Float32Array;
   percussive: Float32Array;
   residual: Float32Array;
@@ -975,24 +1558,40 @@ export function ebur128LoudnessRange(
   return addon.ebur128LoudnessRange(request.samples, request.sampleRate ?? 22050);
 }
 
-export function spectralBandwidth(request: StftRequest): Float32Array;
+export function spectralBandwidth(request: StftRequest & { p?: number }): Float32Array;
 export function spectralBandwidth(
-  samples: Float32Array | StftRequest,
+  samples: Float32Array,
+  sampleRate?: number,
+  nFft?: number,
+  hopLength?: number,
+  p?: number,
+): Float32Array;
+export function spectralBandwidth(
+  samples: Float32Array | (StftRequest & { p?: number }),
   sampleRate = 22050,
   nFft = 2048,
   hopLength = 512,
+  p = 2,
 ): Float32Array {
   const request =
-    samples instanceof Float32Array ? { samples, sampleRate, nFft, hopLength } : samples;
+    samples instanceof Float32Array ? { samples, sampleRate, nFft, hopLength, p } : samples;
   return addon.spectralBandwidth(
     request.samples,
     request.sampleRate ?? 22050,
     request.nFft ?? 2048,
     request.hopLength ?? 512,
+    request.p ?? 2,
   );
 }
 
 export function spectralRolloff(request: StftRequest & { rollPercent?: number }): Float32Array;
+export function spectralRolloff(
+  samples: Float32Array,
+  sampleRate?: number,
+  nFft?: number,
+  hopLength?: number,
+  rollPercent?: number,
+): Float32Array;
 export function spectralRolloff(
   samples: Float32Array | (StftRequest & { rollPercent?: number }),
   sampleRate = 22050,
@@ -1015,6 +1614,12 @@ export function spectralRolloff(
 
 export function spectralFlatness(request: StftRequest): Float32Array;
 export function spectralFlatness(
+  samples: Float32Array,
+  sampleRate?: number,
+  nFft?: number,
+  hopLength?: number,
+): Float32Array;
+export function spectralFlatness(
   samples: Float32Array | StftRequest,
   sampleRate = 22050,
   nFft = 2048,
@@ -1030,8 +1635,40 @@ export function spectralFlatness(
   );
 }
 
+export function spectralFlux(request: StftRequest & { lag?: number }): Float32Array;
+export function spectralFlux(
+  samples: Float32Array,
+  sampleRate?: number,
+  nFft?: number,
+  hopLength?: number,
+  lag?: number,
+): Float32Array;
+export function spectralFlux(
+  samples: Float32Array | (StftRequest & { lag?: number }),
+  sampleRate = 22050,
+  nFft = 2048,
+  hopLength = 512,
+  lag = 1,
+): Float32Array {
+  const request =
+    samples instanceof Float32Array ? { samples, sampleRate, nFft, hopLength, lag } : samples;
+  return addon.spectralFlux(
+    request.samples,
+    request.sampleRate ?? 22050,
+    request.nFft ?? 2048,
+    request.hopLength ?? 512,
+    request.lag ?? 1,
+  );
+}
+
 export function zeroCrossingRate(
   request: FeatureSamplesRequest & { frameLength?: number; hopLength?: number },
+): Float32Array;
+export function zeroCrossingRate(
+  samples: Float32Array,
+  sampleRate?: number,
+  frameLength?: number,
+  hopLength?: number,
 ): Float32Array;
 export function zeroCrossingRate(
   samples: Float32Array | (FeatureSamplesRequest & { frameLength?: number; hopLength?: number }),
@@ -1053,6 +1690,12 @@ export function rmsEnergy(
   request: FeatureSamplesRequest & { frameLength?: number; hopLength?: number },
 ): Float32Array;
 export function rmsEnergy(
+  samples: Float32Array,
+  sampleRate?: number,
+  frameLength?: number,
+  hopLength?: number,
+): Float32Array;
+export function rmsEnergy(
   samples: Float32Array | (FeatureSamplesRequest & { frameLength?: number; hopLength?: number }),
   sampleRate = 22050,
   frameLength = 2048,
@@ -1069,6 +1712,16 @@ export function rmsEnergy(
 }
 
 export function pitchYin(request: PitchRequest): PitchResult;
+export function pitchYin(
+  samples: Float32Array,
+  sampleRate?: number,
+  frameLength?: number,
+  hopLength?: number,
+  fmin?: number,
+  fmax?: number,
+  threshold?: number,
+  fillNa?: boolean,
+): PitchResult;
 export function pitchYin(
   samples: Float32Array | PitchRequest,
   sampleRate = 22050,
@@ -1097,6 +1750,16 @@ export function pitchYin(
 }
 
 export function pitchPyin(request: PitchRequest): PitchResult;
+export function pitchPyin(
+  samples: Float32Array,
+  sampleRate?: number,
+  frameLength?: number,
+  hopLength?: number,
+  fmin?: number,
+  fmax?: number,
+  threshold?: number,
+  fillNa?: boolean,
+): PitchResult;
 export function pitchPyin(
   samples: Float32Array | PitchRequest,
   sampleRate = 22050,
@@ -1338,6 +2001,88 @@ export function splitSilence(
   );
 }
 
+/** Generate a sine tone. */
+export function tone(request?: ToneRequest): Float32Array;
+export function tone(
+  frequency?: number,
+  sampleRate?: number,
+  duration?: number,
+  phase?: number,
+  amplitude?: number,
+): Float32Array;
+export function tone(
+  frequency: number | ToneRequest = 440,
+  sampleRate = 22050,
+  duration = 1,
+  phase = 0,
+  amplitude = 1,
+): Float32Array {
+  const request =
+    typeof frequency === 'number'
+      ? { frequency, sampleRate, duration, phase, amplitude }
+      : frequency;
+  return addon.tone(
+    request.frequency ?? 440,
+    request.sampleRate ?? 22050,
+    request.duration ?? 1,
+    request.phase ?? 0,
+    request.amplitude ?? 1,
+  );
+}
+
+/** Generate a linear or exponential chirp. */
+export function chirp(request?: ChirpRequest): Float32Array;
+export function chirp(
+  fmin?: number,
+  fmax?: number,
+  sampleRate?: number,
+  duration?: number,
+  linear?: boolean,
+): Float32Array;
+export function chirp(
+  fmin: number | ChirpRequest = 440,
+  fmax = 880,
+  sampleRate = 22050,
+  duration = 1,
+  linear = true,
+): Float32Array {
+  const request = typeof fmin === 'number' ? { fmin, fmax, sampleRate, duration, linear } : fmin;
+  return addon.chirp(
+    request.fmin ?? 440,
+    request.fmax ?? 880,
+    request.sampleRate ?? 22050,
+    request.duration ?? 1,
+    request.linear ?? true,
+  );
+}
+
+/** Generate a decaying sine click track at times in seconds. */
+export function clicks(request: ClicksRequest): Float32Array;
+export function clicks(
+  times: Float32Array,
+  sampleRate?: number,
+  length?: number,
+  frequency?: number,
+  clickDuration?: number,
+): Float32Array;
+export function clicks(
+  times: Float32Array | ClicksRequest,
+  sampleRate = 22050,
+  length = 0,
+  frequency = 1000,
+  clickDuration = 0.1,
+): Float32Array {
+  const request =
+    times instanceof Float32Array ? { times, sampleRate, length, frequency, clickDuration } : times;
+  return addon.clicks(
+    request.times,
+    request.sampleRate ?? 22050,
+    request.length ?? 0,
+    request.frequency ?? 1000,
+    request.clickDuration ?? 0.1,
+  );
+}
+
 export function frameSignal(request: FrameSignalRequest): { nFrames: number; frames: Float32Array };
 export function frameSignal(
   samples: Float32Array,
@@ -1416,6 +2161,17 @@ export function fixFrames(
     request.xMax ?? -1,
     request.pad ?? true,
   );
+}
+
+export function onsetBacktrack(request: OnsetBacktrackRequest): Int32Array;
+export function onsetBacktrack(events: Int32Array | number[], energy: Float32Array): Int32Array;
+export function onsetBacktrack(
+  events: Int32Array | number[] | OnsetBacktrackRequest,
+  energy?: Float32Array,
+): Int32Array {
+  const request =
+    events instanceof Int32Array || Array.isArray(events) ? { events, energy } : events;
+  return addon.onsetBacktrack(request.events, request.energy);
 }
 
 export function peakPick(
@@ -1560,6 +2316,8 @@ export function tempogram(
   hopLength?: number,
   winLength?: number,
   mode?: TempogramMode,
+  center?: boolean,
+  norm?: boolean,
 ): { nFrames: number; winLength: number; data: Float32Array };
 export function tempogram(
   onsetEnvelope: Float32Array | TempogramRequest,
@@ -1567,10 +2325,12 @@ export function tempogram(
   hopLength = 512,
   winLength = 384,
   mode: TempogramMode = 'autocorrelation',
+  center = true,
+  norm = true,
 ): { nFrames: number; winLength: number; data: Float32Array } {
   const request =
     onsetEnvelope instanceof Float32Array
-      ? { onsetEnvelope, sampleRate, hopLength, winLength, mode }
+      ? { onsetEnvelope, sampleRate, hopLength, winLength, mode, center, norm }
       : onsetEnvelope;
   return addon.tempogram(
     request.onsetEnvelope,
@@ -1578,6 +2338,8 @@ export function tempogram(
     request.hopLength ?? 512,
     request.winLength ?? 384,
     request.mode ?? 'autocorrelation',
+    request.center ?? true,
+    request.norm ?? true,
   );
 }
 
@@ -1591,6 +2353,8 @@ export function cyclicTempogram(
   sampleRate?: number,
   hopLength?: number,
   winLength?: number,
+  center?: boolean,
+  norm?: boolean,
   bpmMin?: number,
   nBins?: number,
 ): { nFrames: number; nBins: number; data: Float32Array };
@@ -1599,12 +2363,14 @@ export function cyclicTempogram(
   sampleRate = 22050,
   hopLength = 512,
   winLength = 384,
+  center = true,
+  norm = true,
   bpmMin = 60.0,
   nBins = 60,
 ): { nFrames: number; nBins: number; data: Float32Array } {
   const request =
     onsetEnvelope instanceof Float32Array
-      ? { onsetEnvelope, sampleRate, hopLength, winLength, bpmMin, nBins }
+      ? { onsetEnvelope, sampleRate, hopLength, winLength, center, norm, bpmMin, nBins }
       : onsetEnvelope;
   return addon.cyclicTempogram(
     request.onsetEnvelope,
@@ -1649,6 +2415,13 @@ export function plp(
 
 export function onsetEnvelope(request: OnsetEnvelopeRequest): Float32Array;
 export function onsetEnvelope(
+  samples: Float32Array,
+  sampleRate?: number,
+  nFft?: number,
+  hopLength?: number,
+  nMels?: number,
+): Float32Array;
+export function onsetEnvelope(
   samples: Float32Array | OnsetEnvelopeRequest,
   sampleRate = 22050,
   nFft = 2048,
@@ -1671,6 +2444,14 @@ export function onsetStrengthMulti(request: OnsetStrengthMultiRequest): {
   nFrames: number;
   data: Float32Array;
 };
+export function onsetStrengthMulti(
+  samples: Float32Array,
+  sampleRate?: number,
+  nFft?: number,
+  hopLength?: number,
+  nMels?: number,
+  nBands?: number,
+): { nBands: number; nFrames: number; data: Float32Array };
 export function onsetStrengthMulti(
   samples: Float32Array | OnsetStrengthMultiRequest,
   sampleRate = 22050,
@@ -1699,24 +2480,43 @@ export function fourierTempogram(request: TempogramRequest): {
   data: Float32Array;
 };
 export function fourierTempogram(
+  onsetEnvelope: Float32Array,
+  sampleRate?: number,
+  hopLength?: number,
+  winLength?: number,
+  center?: boolean,
+  norm?: boolean,
+): { nBins: number; nFrames: number; data: Float32Array };
+export function fourierTempogram(
   onsetEnvelope: Float32Array | TempogramRequest,
   sampleRate = 22050,
   hopLength = 512,
   winLength = 384,
+  center = true,
+  norm = true,
 ): { nBins: number; nFrames: number; data: Float32Array } {
   const request =
     onsetEnvelope instanceof Float32Array
-      ? { onsetEnvelope, sampleRate, hopLength, winLength }
+      ? { onsetEnvelope, sampleRate, hopLength, winLength, center, norm }
       : onsetEnvelope;
   return addon.fourierTempogram(
     request.onsetEnvelope,
     request.sampleRate ?? 22050,
     request.hopLength ?? 512,
     request.winLength ?? 384,
+    request.center ?? true,
+    request.norm ?? true,
   );
 }
 
 export function tempogramRatio(request: TempogramRatioRequest): Float32Array;
+export function tempogramRatio(
+  tempogramData: Float32Array,
+  winLength?: number,
+  sampleRate?: number,
+  hopLength?: number,
+  factors?: Float32Array,
+): Float32Array;
 export function tempogramRatio(
   tempogramData: Float32Array | TempogramRatioRequest,
   winLength = 384,

@@ -178,3 +178,172 @@ TEST_CASE("sonare_mel_spectrogram_ex exposes a custom Mel range from pure C", "[
                            0, 0.0f, nullptr) == SONARE_ERROR_INVALID_PARAMETER);
   }
 }
+
+TEST_CASE("sonare_mel_delta returns the slope of a linear feature row", "[c_api][features]") {
+  const std::vector<float> features = {0.0f, 1.0f, 2.0f, 3.0f, 4.0f, 5.0f, 6.0f, 7.0f, 8.0f, 9.0f};
+  float* delta = nullptr;
+  REQUIRE(sonare_mel_delta(features.data(), 2, 5, 5, &delta) == SONARE_OK);
+  REQUIRE(delta != nullptr);
+  for (size_t i = 0; i < features.size(); ++i) REQUIRE(delta[i] == Catch::Approx(1.0f));
+  sonare_free_floats(delta);
+  REQUIRE(sonare_mel_delta(features.data(), 2, 5, 4, &delta) == SONARE_ERROR_INVALID_PARAMETER);
+}
+
+TEST_CASE("sonare_piptrack returns equally shaped pitch and magnitude matrices",
+          "[c_api][features]") {
+  constexpr int sr = 22050;
+  auto samples = generate_sine(440.0f, sr, 1.0f);
+  int n_bins = 0;
+  int n_frames = 0;
+  float* pitches = nullptr;
+  float* magnitudes = nullptr;
+  REQUIRE(sonare_piptrack(samples.data(), samples.size(), sr, 1024, 256, 100.0f, 1000.0f, 0.1f,
+                          &n_bins, &n_frames, &pitches, &magnitudes) == SONARE_OK);
+  REQUIRE(n_bins == 513);
+  REQUIRE(n_frames > 0);
+  REQUIRE(pitches != nullptr);
+  REQUIRE(magnitudes != nullptr);
+  sonare_free_floats(pitches);
+  sonare_free_floats(magnitudes);
+}
+
+TEST_CASE("sonare_reassigned_spectrogram returns equally shaped coordinate matrices",
+          "[c_api][features]") {
+  const auto samples = generate_sine(440.0f, 22050, 1.0f);
+  SonareReassignedSpectrogramResult result{};
+  REQUIRE(sonare_reassigned_spectrogram(samples.data(), samples.size(), 22050, 1024, 256, 1e-6f, 0,
+                                        &result) == SONARE_OK);
+  REQUIRE(result.n_bins == 513);
+  REQUIRE(result.n_frames > 0);
+  REQUIRE(result.magnitude != nullptr);
+  REQUIRE(result.times != nullptr);
+  REQUIRE(result.frequencies != nullptr);
+  sonare_free_reassigned_spectrogram_result(&result);
+  REQUIRE(result.magnitude == nullptr);
+}
+
+TEST_CASE("segment C APIs return owned matrices and index vectors", "[c_api][features]") {
+  const std::vector<float> features = {
+      1.0f, 0.0f, 1.0f,  // feature row 0, three columns
+      0.0f, 1.0f, 1.0f,  // feature row 1
+  };
+  SonareSegmentMatrix recurrence{};
+  SonareSegmentMatrix cross{};
+  REQUIRE(sonare_segment_cross_similarity(features.data(), 2, 3, features.data(), 2, 3, 0, "cosine",
+                                          "connectivity", &cross) == SONARE_OK);
+  REQUIRE(cross.rows == 3);
+  REQUIRE(cross.cols == 3);
+  sonare_free_segment_matrix(&cross);
+
+  REQUIRE(sonare_segment_recurrence_matrix(features.data(), 2, 3, 0, 1, 1, "euclidean",
+                                           "connectivity", &recurrence) == SONARE_OK);
+  REQUIRE(recurrence.rows == 3);
+  REQUIRE(recurrence.cols == 3);
+  REQUIRE(recurrence.values != nullptr);
+
+  SonareSegmentMatrix lag{};
+  REQUIRE(sonare_segment_recurrence_to_lag(recurrence.values, recurrence.rows, 1, &lag) ==
+          SONARE_OK);
+  REQUIRE(lag.rows == 3);
+  REQUIRE(lag.cols == 5);
+
+  SonareSegmentMatrix restored{};
+  REQUIRE(sonare_segment_lag_to_recurrence(lag.values, lag.rows, lag.cols, &restored) == SONARE_OK);
+  REQUIRE(restored.rows == 3);
+  REQUIRE(restored.cols == 3);
+  sonare_free_segment_matrix(&restored);
+  sonare_free_segment_matrix(&lag);
+
+  SonareSegmentIndices boundaries{};
+  const std::vector<int> parent_boundaries = {0, 3};
+  REQUIRE(sonare_segment_subsegment(features.data(), 2, 3, parent_boundaries.data(),
+                                    parent_boundaries.size(), 2, &boundaries) == SONARE_OK);
+  REQUIRE(boundaries.count >= 2);
+  REQUIRE(boundaries.values[0] == 0);
+  sonare_free_segment_indices(&boundaries);
+
+  SonareSegmentIndices clusters{};
+  REQUIRE(sonare_segment_agglomerative(features.data(), 2, 3, 2, "average", &clusters) ==
+          SONARE_OK);
+  REQUIRE(clusters.count == 3);
+  sonare_free_segment_indices(&clusters);
+
+  SonareSegmentMatrix enhanced{};
+  REQUIRE(sonare_segment_path_enhance(recurrence.values, recurrence.rows, 1, 2, 0, 7, &enhanced) ==
+          SONARE_OK);
+  REQUIRE(enhanced.rows == 3);
+  REQUIRE(enhanced.cols == 3);
+  sonare_free_segment_matrix(&enhanced);
+  sonare_free_segment_matrix(&recurrence);
+}
+
+TEST_CASE("sonare_spectral_bandwidth_ex accepts the Minkowski exponent", "[c_api][features]") {
+  const auto samples = generate_sine(440.0f, 22050, 1.0f);
+  float* p1 = nullptr;
+  float* p2 = nullptr;
+  size_t count1 = 0;
+  size_t count2 = 0;
+  REQUIRE(sonare_spectral_bandwidth_ex(samples.data(), samples.size(), 22050, 1024, 256, 1.0f, &p1,
+                                       &count1) == SONARE_OK);
+  REQUIRE(sonare_spectral_bandwidth(samples.data(), samples.size(), 22050, 1024, 256, &p2,
+                                    &count2) == SONARE_OK);
+  REQUIRE(count1 == count2);
+  REQUIRE(count1 > 0);
+  bool differs = false;
+  for (size_t i = 0; i < count1 && !differs; ++i) differs = std::abs(p1[i] - p2[i]) > 1e-5f;
+  REQUIRE(differs);
+  sonare_free_floats(p1);
+  sonare_free_floats(p2);
+}
+
+TEST_CASE("sonare_spectral_flux accepts a positive frame lag", "[c_api][features]") {
+  const auto samples = generate_sine(440.0f, 22050, 1.0f);
+  float* flux = nullptr;
+  size_t count = 0;
+  REQUIRE(sonare_spectral_flux(samples.data(), samples.size(), 22050, 1024, 256, 2, &flux,
+                               &count) == SONARE_OK);
+  REQUIRE(flux != nullptr);
+  REQUIRE(count > 0);
+  sonare_free_floats(flux);
+  REQUIRE(sonare_spectral_flux(samples.data(), samples.size(), 22050, 1024, 256, 0, &flux,
+                               &count) == SONARE_ERROR_INVALID_PARAMETER);
+}
+
+TEST_CASE("sonare_onset_backtrack returns the preceding energy minimum", "[c_api][features]") {
+  const std::vector<int> events = {6};
+  const std::vector<float> energy = {1.0f, 0.8f, 0.5f, 0.2f, 0.6f, 0.9f, 1.2f};
+  int* result = nullptr;
+  size_t count = 0;
+  REQUIRE(sonare_onset_backtrack(events.data(), events.size(), energy.data(), energy.size(),
+                                 &result, &count) == SONARE_OK);
+  REQUIRE(count == 1);
+  REQUIRE(result[0] == 3);
+  sonare_free_ints(result);
+}
+
+TEST_CASE("sonare_griffin_lim reconstructs STFT magnitude", "[c_api][features]") {
+  const std::vector<float> magnitude(15, 1.0f);  // 3 bins x 5 frames for n_fft=4.
+  float* result = nullptr;
+  size_t length = 0;
+  REQUIRE(sonare_griffin_lim(magnitude.data(), magnitude.size(), 3, 5, 4, 1, 22050, 1, 0.0f,
+                             &result, &length) == SONARE_OK);
+  REQUIRE(result != nullptr);
+  REQUIRE(length > 0);
+  sonare_free_floats(result);
+}
+
+TEST_CASE("synthetic audio generators are available from the C API", "[c_api][features]") {
+  float* out = nullptr;
+  size_t out_length = 0;
+  REQUIRE(sonare_tone(440.0f, 22050, 0.01f, 0.0f, 1.0f, &out, &out_length) == SONARE_OK);
+  REQUIRE(out_length == 220);
+  sonare_free_floats(out);
+  REQUIRE(sonare_chirp(200.0f, 800.0f, 22050, 0.01f, 1, &out, &out_length) == SONARE_OK);
+  REQUIRE(out_length == 220);
+  sonare_free_floats(out);
+  const std::vector<float> times = {0.0f};
+  REQUIRE(sonare_clicks(times.data(), times.size(), 22050, 32, 1000.0f, 0.01f, &out, &out_length) ==
+          SONARE_OK);
+  REQUIRE(out_length == 32);
+  sonare_free_floats(out);
+}

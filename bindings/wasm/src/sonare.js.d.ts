@@ -337,6 +337,12 @@ export interface WasmMatrix2dResult {
   cols: number;
 }
 
+export interface WasmSegmentMatrixResult {
+  rows: number;
+  cols: number;
+  values: Float32Array;
+}
+
 export interface WasmDecomposeResult {
   w: Float32Array;
   h: Float32Array;
@@ -664,6 +670,36 @@ export interface WasmProjectMarker {
   keyFifths?: number;
   keyMinor?: boolean;
 }
+export interface WasmProjectTrack {
+  id: number;
+  kind: number;
+  midiDestinationId: number;
+  gain: number;
+  pan: number;
+  mute: boolean;
+  solo: boolean;
+  name: string;
+}
+export interface WasmProjectClip {
+  id: number;
+  trackId: number;
+  sourceId: number;
+  sourceKind: number;
+  startPpq: number;
+  lengthPpq: number;
+  sourceOffsetPpq: number;
+  gain: number;
+  loopMode: number;
+  loopLengthPpq: number;
+}
+export interface WasmProjectSource {
+  id: number;
+  kind: number;
+  channelCount: number;
+  storageHandleId: number;
+  sampleRateHint: number;
+  nameOrUri: string;
+}
 
 export interface WasmEngineMetronomeConfig {
   enabled: boolean;
@@ -883,6 +919,7 @@ export interface WasmRealtimeEngine {
   stop: (renderFrame: number) => void;
   seekSample: (timelineSample: number, renderFrame: number) => void;
   settleParameters: () => void;
+  flushControlCommands: () => void;
   seekPpq: (ppq: number, renderFrame: number) => void;
   setTempo: (bpm: number) => void;
   setTempoSegments: (segments: WasmEngineTempoSegment[]) => void;
@@ -973,7 +1010,7 @@ export interface WasmRealtimeEngine {
   setCaptureBuffer: (numChannels: number, capacityFrames: number) => void;
   armCapture: (armed: boolean) => void;
   setCapturePunch: (startSample: number, endSample: number, enabled: boolean) => void;
-  setCaptureSource: (source: WasmEngineCaptureStatus['source']) => void;
+  setCaptureSource: (source: WasmEngineCaptureStatus['source'] | number) => void;
   setRecordOffsetSamples: (offsetSamples: number) => void;
   setInputMonitor: (enabled: boolean, gain: number) => void;
   resetCapture: () => void;
@@ -1052,9 +1089,23 @@ export interface WasmRealtimeEngine {
   setMidiDestinationExternal: (destinationId: number, external: boolean) => void;
   setExternalMidiClockEnabled: (enabled: boolean) => void;
   externalMidiDroppedCount: () => number;
+  externalMidiPendingCount: () => number;
   drainExternalMidi: (maxRecords: number) => WasmExternalMidiEvent[];
+  popExternalMidiToScratch: () => boolean;
+  externalMidiScratchDestinationId: () => number;
+  externalMidiScratchRenderFrame: () => number;
+  externalMidiScratchByteWord: () => number;
+  externalMidiScratchByteCount: () => number;
+  consumeExternalMidiScratch: () => void;
   clearParameters: () => void;
   process: (channels: Float32Array[]) => Float32Array[];
+  prepareWithChannels: (
+    sampleRate: number,
+    maxBlockSize: number,
+    commandCapacity: number,
+    telemetryCapacity: number,
+    maxChannels: number,
+  ) => void;
   prepareChannels: (numChannels: number, maxFrames: number) => void;
   getChannelBuffer: (channel: number, numFrames: number) => Float32Array;
   processPrepared: (numFrames: number) => void;
@@ -1063,10 +1114,30 @@ export interface WasmRealtimeEngine {
   bounceOffline: (options: WasmEngineBounceOptions) => WasmEngineBounceResult;
   freezeOffline: (options: WasmEngineFreezeOptions) => WasmEngineFreezeResult;
   drainTelemetry: (maxRecords: number) => WasmEngineTelemetry[];
+  popTelemetryToScratch: () => boolean;
+  telemetryScratchType: () => number;
+  telemetryScratchError: () => number;
+  telemetryScratchRenderFrame: () => number;
+  telemetryScratchTimelineSample: () => number;
+  telemetryScratchAudibleTimelineSample: () => number;
+  telemetryScratchGraphLatencySamplesQ8: () => number;
+  telemetryScratchValue: () => number;
+  popMeterTelemetryToScratch: () => boolean;
+  meterScratchTargetId: () => number;
+  meterScratchRenderFrame: () => number;
+  meterScratchValue: (field: number) => number;
   drainMeterTelemetry: (maxRecords: number) => WasmEngineMeterTelemetry[];
   drainMeterTelemetryWide: (maxRecords: number) => WasmEngineMeterTelemetryWide[];
   configureScopeTelemetry: (intervalFrames: number, bandCount: number) => number;
   drainScopeTelemetry: (maxRecords: number) => WasmEngineScopeTelemetry[];
+  popScopeTelemetryToScratch: () => boolean;
+  scopeScratchTargetId: () => number;
+  scopeScratchRenderFrame: () => number;
+  scopeScratchBandCount: () => number;
+  scopeScratchBand: (index: number) => number;
+  scopeScratchPointCount: () => number;
+  scopeScratchPointLeft: (index: number) => number;
+  scopeScratchPointRight: (index: number) => number;
   delete: () => void;
 }
 
@@ -1076,6 +1147,7 @@ export type TempogramMode = 'autocorrelation' | 'auto' | 'ac' | 'cosine' | 0 | 1
 export interface WasmSynthEnumTables {
   engineModes: string[];
   waveforms: string[];
+  builtinWaveforms: string[];
   filterModels: string[];
   filterOutputs: string[];
   bodyTypes: string[];
@@ -1113,7 +1185,7 @@ export interface SonareModule {
     profileType: number,
     genreHint: string,
   ) => WasmKeyCandidateResult[];
-  detectOnsets: (samples: Float32Array, sampleRate: number) => Float32Array;
+  detectOnsets: (samples: Float32Array, sampleRate: number, options: object) => Float32Array;
   detectBeats: (samples: Float32Array, sampleRate: number) => Float32Array;
   detectDownbeats: (samples: Float32Array, sampleRate: number) => Float32Array;
   detectChords: (
@@ -1231,8 +1303,8 @@ export interface SonareModule {
   abiVersion: () => number;
   engineAbiVersion: () => number;
   voiceChangerAbiVersion: () => number;
-  voiceCharacterPresetId: (preset: number) => string | null;
-  realtimeVoiceChangerPresetConfig: (preset: number) => WasmRealtimeVoiceChangerPodConfig | null;
+  voiceCharacterPresetId: (preset: number) => string;
+  realtimeVoiceChangerPresetConfig: (preset: number) => WasmRealtimeVoiceChangerPodConfig;
 
   meteringPeakDb: (samples: Float32Array, sampleRate: number) => number;
   meteringRmsDb: (samples: Float32Array, sampleRate: number) => number;
@@ -1727,6 +1799,79 @@ export interface SonareModule {
     htk: boolean,
     lifter: number,
   ) => WasmMfccResult;
+  melDelta: (
+    features: Float32Array,
+    nFeatures: number,
+    nFrames: number,
+    width: number,
+  ) => Float32Array;
+  reassignedSpectrogram: (
+    samples: Float32Array,
+    sampleRate: number,
+    nFft: number,
+    hopLength: number,
+    refPower: number,
+    fillNan: boolean,
+  ) => {
+    nBins: number;
+    nFrames: number;
+    magnitude: Float32Array;
+    times: Float32Array;
+    frequencies: Float32Array;
+  };
+  segmentCrossSimilarity: (
+    x: Float32Array,
+    xRows: number,
+    xCols: number,
+    y: Float32Array,
+    yRows: number,
+    yCols: number,
+    k: number,
+    metric: string,
+    mode: string,
+  ) => WasmSegmentMatrixResult;
+  segmentRecurrenceMatrix: (
+    data: Float32Array,
+    rows: number,
+    cols: number,
+    k: number,
+    width: number,
+    sym: boolean,
+    metric: string,
+    mode: string,
+  ) => WasmSegmentMatrixResult;
+  segmentRecurrenceToLag: (
+    recurrence: Float32Array,
+    n: number,
+    pad: boolean,
+  ) => WasmSegmentMatrixResult;
+  segmentLagToRecurrence: (
+    lag: Float32Array,
+    rows: number,
+    lags: number,
+  ) => WasmSegmentMatrixResult;
+  segmentSubsegment: (
+    data: Float32Array,
+    rows: number,
+    cols: number,
+    boundaries: Int32Array,
+    nSegments: number,
+  ) => Int32Array;
+  segmentAgglomerative: (
+    data: Float32Array,
+    rows: number,
+    cols: number,
+    k: number,
+    linkage: string,
+  ) => Int32Array;
+  segmentPathEnhance: (
+    recurrence: Float32Array,
+    n: number,
+    win: number,
+    maxRatio: number,
+    minRatio: number,
+    nFilters: number,
+  ) => WasmSegmentMatrixResult;
 
   // Features - Inverse reconstruction
   melToStft: (
@@ -1750,6 +1895,16 @@ export interface SonareModule {
     fmax: number,
     nIter: number,
     htk: boolean,
+  ) => Float32Array;
+  griffinLim: (
+    magnitude: Float32Array,
+    nBins: number,
+    nFrames: number,
+    sampleRate: number,
+    nFft: number,
+    hopLength: number,
+    nIter: number,
+    momentum: number,
   ) => Float32Array;
   mfccToMel: (
     mfcc: Float32Array,
@@ -1793,6 +1948,7 @@ export interface SonareModule {
     sampleRate: number,
     nFft: number,
     hopLength: number,
+    p: number,
   ) => Float32Array;
   spectralRolloff: (
     samples: Float32Array,
@@ -1806,6 +1962,13 @@ export interface SonareModule {
     sampleRate: number,
     nFft: number,
     hopLength: number,
+  ) => Float32Array;
+  spectralFlux: (
+    samples: Float32Array,
+    sampleRate: number,
+    nFft: number,
+    hopLength: number,
+    lag: number,
   ) => Float32Array;
   zeroCrossingRate: (
     samples: Float32Array,
@@ -1873,6 +2036,20 @@ export interface SonareModule {
     threshold: number,
     fillNa: boolean,
   ) => WasmPitchResult;
+  piptrack: (
+    samples: Float32Array,
+    sampleRate: number,
+    nFft: number,
+    hopLength: number,
+    fmin: number,
+    fmax: number,
+    threshold: number,
+  ) => {
+    nBins: number;
+    nFrames: number;
+    pitches: Float32Array;
+    magnitudes: Float32Array;
+  };
   noteSegments: (
     f0Hz: Float32Array,
     voicedProb: Float32Array,
@@ -1914,9 +2091,31 @@ export interface SonareModule {
     hopLength: number,
   ) => Int32Array;
   frameSignal: (samples: Float32Array, frameLength: number, hopLength: number) => WasmFrameResult;
+  tone: (
+    frequency: number,
+    sampleRate: number,
+    duration: number,
+    phase: number,
+    amplitude: number,
+  ) => Float32Array;
+  chirp: (
+    fmin: number,
+    fmax: number,
+    sampleRate: number,
+    duration: number,
+    linear: boolean,
+  ) => Float32Array;
+  clicks: (
+    times: Float32Array,
+    sampleRate: number,
+    length: number,
+    frequency: number,
+    clickDuration: number,
+  ) => Float32Array;
   padCenter: (values: Float32Array, size: number, padValue: number) => Float32Array;
   fixLength: (values: Float32Array, size: number, padValue: number) => Float32Array;
   fixFrames: (frames: Int32Array, xMin: number, xMax: number, pad: boolean) => Int32Array;
+  onsetBacktrack: (events: Int32Array, energy: Float32Array) => Int32Array;
   peakPick: (
     values: Float32Array,
     preMax: number,
@@ -1940,6 +2139,8 @@ export interface SonareModule {
     hopLength: number,
     winLength: number,
     mode: TempogramMode,
+    center: boolean,
+    norm: boolean,
   ) => WasmTempogramResult;
   cyclicTempogram: (
     onsetEnvelope: Float32Array,
@@ -2076,6 +2277,8 @@ export interface SonareModule {
     sampleRate: number,
     hopLength: number,
     winLength: number,
+    center: boolean,
+    norm: boolean,
   ) => WasmFourierTempogramResult;
   tempogramRatio: (
     tempogramData: Float32Array,
@@ -2172,6 +2375,7 @@ export interface SonareModule {
     maxBlockSize: number,
     commandCapacity: number,
     telemetryCapacity: number,
+    maxChannels?: number,
   ) => WasmRealtimeEngine;
 
   // Streaming - StreamingMasteringChain
@@ -2209,6 +2413,8 @@ export interface WasmStreamingMasteringChain {
     left: Float32Array,
     right: Float32Array,
   ) => { left: Float32Array; right: Float32Array };
+  flushMono: () => Float32Array;
+  flushStereo: () => { left: Float32Array; right: Float32Array };
   reset: () => void;
   latencySamples: () => number;
   stageNames: () => string[];
@@ -2263,8 +2469,10 @@ export interface WasmRealtimeVoiceChanger {
   prepare: (sampleRate: number, maxBlockSize: number, channels: number) => void;
   reset: () => void;
   setConfig: (config: Record<string, unknown> | string) => void;
+  setPodConfig: (config: WasmRealtimeVoiceChangerPodConfig) => void;
   configJson: () => string;
   latencySamples: () => number;
+  bufferGeneration: () => number;
   processMono: (samples: Float32Array) => Float32Array;
   processMonoInto: (samples: Float32Array, output: Float32Array) => void;
   processInterleaved: (samples: Float32Array, channels: number) => Float32Array;

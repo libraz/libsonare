@@ -182,6 +182,30 @@ export interface PitchResult {
   meanF0: number;
 }
 
+/** Per-bin pitch candidates and peak magnitudes from spectral piptrack. */
+export interface PiptrackResult {
+  nBins: number;
+  nFrames: number;
+  pitches: Float32Array;
+  magnitudes: Float32Array;
+}
+
+/** Magnitude and reassigned time/frequency coordinates for every STFT bin. */
+export interface ReassignedSpectrogramResult {
+  nBins: number;
+  nFrames: number;
+  magnitude: Float32Array;
+  times: Float32Array;
+  frequencies: Float32Array;
+}
+
+/** Row-major matrix returned by librosa.segment-compatible APIs. */
+export interface SegmentMatrix {
+  rows: number;
+  cols: number;
+  values: Float32Array;
+}
+
 /** One stable monophonic note region segmented from an F0 track. */
 export interface NoteSegment {
   frameStart: number;

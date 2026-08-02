@@ -169,6 +169,39 @@ val js_mfcc(val samples, int sample_rate, int n_fft, int hop_length, int n_mels,
   return out;
 }
 
+val js_mel_delta(val features, int n_features, int n_frames, int width) {
+  std::vector<float> data =
+      load_validated_matrix("melDelta", features, n_features, n_frames, "features", "n_features");
+  if (width < 3 || width % 2 == 0) {
+    throw SonareException(ErrorCode::InvalidParameter,
+                          "melDelta: width must be an odd integer of at least 3");
+  }
+  return vectorToFloat32Array(MelSpectrogram::delta(data.data(), n_features, n_frames, width));
+}
+
+val js_reassigned_spectrogram(val samples, int sample_rate, int n_fft, int hop_length,
+                              float ref_power, bool fill_nan) {
+  const Audio audio = loadValidatedAudio(samples, sample_rate);
+  validate_positive("reassignedSpectrogram", n_fft, "n_fft");
+  validate_positive("reassignedSpectrogram", hop_length, "hop_length");
+  if (!std::isfinite(ref_power) || ref_power < 0.0f) {
+    throw SonareException(ErrorCode::InvalidParameter,
+                          "reassignedSpectrogram: ref_power must be finite and non-negative");
+  }
+  StftConfig config;
+  config.n_fft = n_fft;
+  config.hop_length = hop_length;
+  const ReassignedSpectrogram result = reassigned_spectrogram(audio, config, ref_power, fill_nan);
+  const int n_bins = n_fft / 2 + 1;
+  val out = val::object();
+  out.set("nBins", n_bins);
+  out.set("nFrames", static_cast<int>(result.magnitude.size() / static_cast<size_t>(n_bins)));
+  out.set("magnitude", vectorToFloat32Array(result.magnitude));
+  out.set("times", vectorToFloat32Array(result.times));
+  out.set("frequencies", vectorToFloat32Array(result.frequencies));
+  return out;
+}
+
 // Inverse: Mel power spectrogram [n_mels x n_frames] -> STFT power spectrogram
 // [(n_fft/2 + 1) x n_frames]. Mirrors feature::mel_to_stft.
 //
@@ -220,6 +253,26 @@ val js_mel_to_audio(val mel_power, int n_mels, int n_frames, int sample_rate, in
   Audio result = mel_to_audio(data.data(), n_mels, n_frames, config, n_iter, sample_rate);
   std::vector<float> out_vec(result.data(), result.data() + result.size());
   return vectorToFloat32Array(out_vec);
+}
+
+val js_griffin_lim(val magnitude, int n_bins, int n_frames, int sample_rate, int n_fft,
+                   int hop_length, int n_iter, float momentum) {
+  validate_sample_rate("griffinLim", sample_rate);
+  std::vector<float> data =
+      load_validated_matrix("griffinLim", magnitude, n_bins, n_frames, "magnitude", "n_bins");
+  validate_positive("griffinLim", n_fft, "n_fft");
+  validate_positive("griffinLim", hop_length, "hop_length");
+  validate_positive("griffinLim", n_iter, "n_iter");
+  if (n_bins != n_fft / 2 + 1 || n_iter > sonare::resource::kMaxGriffinLimIterations ||
+      !std::isfinite(momentum) || momentum < 0.0f || momentum >= 1.0f) {
+    throw SonareException(ErrorCode::InvalidParameter, "griffinLim: invalid shape or options");
+  }
+  GriffinLimConfig config;
+  config.n_iter = n_iter;
+  config.momentum = momentum;
+  const Audio result =
+      griffin_lim(data.data(), n_bins, n_frames, n_fft, hop_length, sample_rate, config);
+  return vectorToFloat32Array(std::vector<float>(result.data(), result.data() + result.size()));
 }
 
 // Inverse: MFCC matrix [n_mfcc x n_frames] -> Mel power spectrogram.
@@ -311,8 +364,11 @@ void registerFeatureSpectrogramBindings() {
   function("stftDb", &js_stft_db);
   function("melSpectrogram", &js_mel_spectrogram);
   function("mfcc", &js_mfcc);
+  function("melDelta", &js_mel_delta);
+  function("reassignedSpectrogram", &js_reassigned_spectrogram);
   function("melToStft", &js_mel_to_stft);
   function("melToAudio", &js_mel_to_audio);
+  function("griffinLim", &js_griffin_lim);
   function("mfccToMel", &js_mfcc_to_mel);
   function("mfccToAudio", &js_mfcc_to_audio);
   function("cqtToAudio", &js_cqt_to_audio);

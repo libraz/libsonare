@@ -181,6 +181,30 @@ SonareError sonare_mel_to_audio(const float* mel, int n_mels, int n_frames, int 
                                 0, n_iter, out, out_length);
 }
 
+SonareError sonare_griffin_lim(const float* magnitude, size_t input_length, int n_bins,
+                               int n_frames, int n_fft, int hop_length, int sample_rate, int n_iter,
+                               float momentum, float** out, size_t* out_length) {
+  SONARE_C_API_ENTRY;
+  if (!out || !out_length || !magnitude || n_bins <= 0 || n_frames <= 0 || n_fft <= 0 ||
+      hop_length <= 0 || sample_rate < kMinSampleRate || sample_rate > kMaxSampleRate ||
+      n_iter <= 0 || n_iter > resource::kMaxGriffinLimIterations || !std::isfinite(momentum) ||
+      momentum < 0.0f || momentum >= 1.0f || n_bins != n_fft / 2 + 1 ||
+      check_inverse_input_length(input_length, n_bins, n_frames) != SONARE_OK ||
+      !all_finite(magnitude, n_bins, n_frames)) {
+    return SONARE_ERROR_INVALID_PARAMETER;
+  }
+  *out = nullptr;
+  *out_length = 0;
+  SONARE_C_TRY
+  GriffinLimConfig config;
+  config.n_iter = n_iter;
+  config.momentum = momentum;
+  return fill_audio_samples(
+      griffin_lim(magnitude, n_bins, n_frames, n_fft, hop_length, sample_rate, config), out,
+      out_length);
+  SONARE_C_CATCH
+}
+
 SonareError sonare_mfcc_to_mel_ex(const float* mfcc, int n_mfcc, int n_frames, int n_mels,
                                   float lifter, SonareInverseResult* out) {
   SONARE_C_API_ENTRY;

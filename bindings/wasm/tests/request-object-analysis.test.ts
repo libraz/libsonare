@@ -46,6 +46,7 @@ import {
   spectralRolloff,
   stft,
   stftDb,
+  tempogram,
   tempogramRatio,
   vqt,
   vqtToAudio,
@@ -77,6 +78,13 @@ describe('WASM basic analysis request objects', () => {
     );
     expect(Array.from(detectOnsets({ samples, sampleRate }))).toEqual(
       Array.from(detectOnsets(samples, sampleRate)),
+    );
+  });
+
+  it('keeps onset peak-picking options equivalent', () => {
+    const options = { nFft: 256, hopLength: 64, delta: 0.02, backtrack: true };
+    expect(Array.from(detectOnsets({ samples, sampleRate, ...options }))).toEqual(
+      Array.from(detectOnsets(samples, sampleRate, options)),
     );
   });
 
@@ -309,22 +317,41 @@ describe('WASM basic analysis request objects', () => {
         2,
       ),
     );
-    const tempogramOptions = { sampleRate, hopLength: 256, winLength: 64 };
-    const tempogram = fourierTempogram({ onsetEnvelope: onset, ...tempogramOptions });
-    expect(tempogram).toEqual(
+    const tempogramOptions = {
+      sampleRate,
+      hopLength: 256,
+      winLength: 64,
+      center: false,
+      norm: false,
+    };
+    const fourier = fourierTempogram({ onsetEnvelope: onset, ...tempogramOptions });
+    expect(fourier).toEqual(
       fourierTempogram(
         onset,
         tempogramOptions.sampleRate,
         tempogramOptions.hopLength,
         tempogramOptions.winLength,
+        tempogramOptions.center,
+        tempogramOptions.norm,
+      ),
+    );
+    expect(tempogram({ onsetEnvelope: onset, ...tempogramOptions })).toEqual(
+      tempogram(
+        onset,
+        tempogramOptions.sampleRate,
+        tempogramOptions.hopLength,
+        tempogramOptions.winLength,
+        'autocorrelation',
+        tempogramOptions.center,
+        tempogramOptions.norm,
       ),
     );
     expect(
-      Array.from(tempogramRatio({ tempogramData: tempogram.data, ...tempogramOptions })),
+      Array.from(tempogramRatio({ tempogramData: fourier.data, ...tempogramOptions })),
     ).toEqual(
       Array.from(
         tempogramRatio(
-          tempogram.data,
+          fourier.data,
           tempogramOptions.winLength,
           tempogramOptions.sampleRate,
           tempogramOptions.hopLength,

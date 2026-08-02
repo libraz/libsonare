@@ -45,6 +45,11 @@ export interface MasteringRepairDenoiseClassicalRequest
 /** Offline LPC-based declicker. */
 export function masteringRepairDeclick(request: MasteringRepairDeclickRequest): Float32Array;
 export function masteringRepairDeclick(
+  samples: Float32Array,
+  sampleRate?: number,
+  options?: DeclickOptions,
+): Float32Array;
+export function masteringRepairDeclick(
   samples: Float32Array | MasteringRepairDeclickRequest,
   sampleRate = 22050,
   options: DeclickOptions = {},
@@ -56,6 +61,11 @@ export function masteringRepairDeclick(
 /** Offline STFT-domain classical denoiser (LogMMSE / MMSE-STSA / SpectralSubtraction). */
 export function masteringRepairDenoiseClassical(
   request: MasteringRepairDenoiseClassicalRequest,
+): Float32Array;
+export function masteringRepairDenoiseClassical(
+  samples: Float32Array,
+  sampleRate?: number,
+  options?: DenoiseClassicalOptions,
 ): Float32Array;
 export function masteringRepairDenoiseClassical(
   samples: Float32Array | MasteringRepairDenoiseClassicalRequest,
@@ -144,6 +154,11 @@ export interface MasteringRepairTrimSilenceRequest
 /** Offline LPC-based declipper. */
 export function masteringRepairDeclip(request: MasteringRepairDeclipRequest): Float32Array;
 export function masteringRepairDeclip(
+  samples: Float32Array,
+  sampleRate?: number,
+  options?: DeclipOptions,
+): Float32Array;
+export function masteringRepairDeclip(
   samples: Float32Array | MasteringRepairDeclipRequest,
   sampleRate = 22050,
   options: DeclipOptions = {},
@@ -154,6 +169,11 @@ export function masteringRepairDeclip(
 
 /** Offline crackle suppressor (median or wavelet-shrinkage). */
 export function masteringRepairDecrackle(request: MasteringRepairDecrackleRequest): Float32Array;
+export function masteringRepairDecrackle(
+  samples: Float32Array,
+  sampleRate?: number,
+  options?: DecrackleOptions,
+): Float32Array;
 export function masteringRepairDecrackle(
   samples: Float32Array | MasteringRepairDecrackleRequest,
   sampleRate = 22050,
@@ -166,6 +186,11 @@ export function masteringRepairDecrackle(
 /** Offline mains-hum remover. */
 export function masteringRepairDehum(request: MasteringRepairDehumRequest): Float32Array;
 export function masteringRepairDehum(
+  samples: Float32Array,
+  sampleRate?: number,
+  options?: DehumOptions,
+): Float32Array;
+export function masteringRepairDehum(
   samples: Float32Array | MasteringRepairDehumRequest,
   sampleRate = 22050,
   options: DehumOptions = {},
@@ -177,6 +202,11 @@ export function masteringRepairDehum(
 /** Offline classical dereverberator (spectral subtraction + optional WPE). */
 export function masteringRepairDereverbClassical(
   request: MasteringRepairDereverbClassicalRequest,
+): Float32Array;
+export function masteringRepairDereverbClassical(
+  samples: Float32Array,
+  sampleRate?: number,
+  options?: DereverbClassicalOptions,
 ): Float32Array;
 export function masteringRepairDereverbClassical(
   samples: Float32Array | MasteringRepairDereverbClassicalRequest,
@@ -194,6 +224,11 @@ export function masteringRepairDereverbClassical(
 /** Offline silence trimmer (peak threshold or LUFS-gated). */
 export function masteringRepairTrimSilence(
   request: MasteringRepairTrimSilenceRequest,
+): Float32Array;
+export function masteringRepairTrimSilence(
+  samples: Float32Array,
+  sampleRate?: number,
+  options?: TrimSilenceOptions,
 ): Float32Array;
 export function masteringRepairTrimSilence(
   samples: Float32Array | MasteringRepairTrimSilenceRequest,

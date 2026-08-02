@@ -9,6 +9,7 @@ from typing import Any, Literal, cast
 from ._ffi_types_core import (
     SonareKey,
     SonareKeyCandidate,
+    SonareOnsetDetectConfig,
 )
 from ._runtime import (
     _check,
@@ -240,6 +241,18 @@ def detect_downbeats(
 def detect_onsets(
     samples: Sequence[float] | list[float],
     sample_rate: int = 22050,
+    *,
+    n_fft: int = 2048,
+    hop_length: int = 512,
+    threshold: float = 0.0,
+    pre_max: int = 1,
+    post_max: int = 1,
+    pre_avg: int = 3,
+    post_avg: int = 4,
+    delta: float = 0.06,
+    wait: int = 1,
+    backtrack: bool = False,
+    backtrack_range: int = 10,
 ) -> list[float]:
     """Detect onset positions in audio samples.
 
@@ -256,10 +269,24 @@ def detect_onsets(
     lib = _get_lib()
     c_array, length = _to_c_float_array(samples)
     with _out_float_array(lib) as (out_times, out_count):
-        rc = lib.sonare_detect_onsets(
+        config = SonareOnsetDetectConfig(
+            n_fft=int(n_fft),
+            hop_length=int(hop_length),
+            threshold=float(threshold),
+            pre_max=int(pre_max),
+            post_max=int(post_max),
+            pre_avg=int(pre_avg),
+            post_avg=int(post_avg),
+            delta=float(delta),
+            wait=int(wait),
+            backtrack=int(backtrack),
+            backtrack_range=int(backtrack_range),
+        )
+        rc = lib.sonare_detect_onsets_ex(
             c_array,
             ctypes.c_size_t(length),
             ctypes.c_int(sample_rate),
+            ctypes.byref(config),
             ctypes.byref(out_times),
             ctypes.byref(out_count),
         )

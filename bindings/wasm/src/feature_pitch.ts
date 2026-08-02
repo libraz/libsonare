@@ -1,5 +1,5 @@
 import { getSonareModule } from './module_state';
-import type { NoteSegment, PitchResult } from './public_types';
+import type { NoteSegment, PiptrackResult, PitchResult } from './public_types';
 
 function requireModule() {
   return getSonareModule();
@@ -31,6 +31,51 @@ export interface PitchYinRequest {
   fmax?: number;
   threshold?: number;
   fillNa?: boolean;
+}
+
+export interface PiptrackRequest {
+  samples: Float32Array;
+  sampleRate?: number;
+  nFft?: number;
+  hopLength?: number;
+  fmin?: number;
+  fmax?: number;
+  threshold?: number;
+}
+
+/** Per-bin spectral pitch candidates and peak magnitudes (librosa.piptrack). */
+export function piptrack(request: PiptrackRequest): PiptrackResult;
+export function piptrack(
+  samples: Float32Array,
+  sampleRate?: number,
+  nFft?: number,
+  hopLength?: number,
+  fmin?: number,
+  fmax?: number,
+  threshold?: number,
+): PiptrackResult;
+export function piptrack(
+  samples: Float32Array | PiptrackRequest,
+  sampleRate = 22050,
+  nFft = 2048,
+  hopLength = 512,
+  fmin = 150,
+  fmax = 4000,
+  threshold = 0.1,
+): PiptrackResult {
+  if (!(samples instanceof Float32Array)) {
+    const request = samples;
+    return piptrack(
+      request.samples,
+      request.sampleRate,
+      request.nFft,
+      request.hopLength,
+      request.fmin,
+      request.fmax,
+      request.threshold,
+    );
+  }
+  return requireModule().piptrack(samples, sampleRate, nFft, hopLength, fmin, fmax, threshold);
 }
 
 export function pitchYin(request: PitchYinRequest): PitchResult;

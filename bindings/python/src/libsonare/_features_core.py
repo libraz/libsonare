@@ -14,6 +14,9 @@ from ._ffi import (
     SonareNoteSegmenterConfig,
     SonareNoteSegmentsResult,
     SonarePitchResult,
+    SonareReassignedSpectrogramResult,
+    SonareSegmentIndices,
+    SonareSegmentMatrix,
     SonareStftResult,
 )
 from ._runtime import (
@@ -26,6 +29,7 @@ from ._runtime import (
     _out_float_array,
     _out_int_array,
     _to_c_float_array,
+    _to_c_int_array,
     _validate_samples,
 )
 from .types import (
@@ -33,9 +37,86 @@ from .types import (
     MelSpectrogramResult,
     MfccResult,
     NoteSegment,
+    PiptrackResult,
     PitchResult,
+    ReassignedSpectrogramResult,
+    SegmentMatrix,
     StftResult,
 )
+
+
+def tone(
+    frequency: float = 440.0,
+    sample_rate: int = 22050,
+    duration: float = 1.0,
+    phase: float = 0.0,
+    amplitude: float = 1.0,
+) -> list[float]:
+    """Generate a sine tone."""
+    lib = _get_lib()
+    with _out_float_array(lib) as (out, out_length):
+        _check(
+            lib.sonare_tone(
+                frequency,
+                sample_rate,
+                duration,
+                phase,
+                amplitude,
+                ctypes.byref(out),
+                ctypes.byref(out_length),
+            )
+        )
+        return _float_array_result(out, out_length.value)
+
+
+def chirp(
+    fmin: float = 440.0,
+    fmax: float = 880.0,
+    sample_rate: int = 22050,
+    duration: float = 1.0,
+    linear: bool = True,
+) -> list[float]:
+    """Generate a linear or exponential chirp."""
+    lib = _get_lib()
+    with _out_float_array(lib) as (out, out_length):
+        _check(
+            lib.sonare_chirp(
+                fmin,
+                fmax,
+                sample_rate,
+                duration,
+                int(linear),
+                ctypes.byref(out),
+                ctypes.byref(out_length),
+            )
+        )
+        return _float_array_result(out, out_length.value)
+
+
+def clicks(
+    times: Sequence[float] | list[float],
+    sample_rate: int = 22050,
+    length: int = 0,
+    frequency: float = 1000.0,
+    click_duration: float = 0.1,
+) -> list[float]:
+    """Generate decaying sine clicks at times in seconds."""
+    lib = _get_lib()
+    data, count = _to_c_float_array(times)
+    with _out_float_array(lib) as (out, out_length):
+        _check(
+            lib.sonare_clicks(
+                data,
+                count,
+                sample_rate,
+                length,
+                frequency,
+                click_duration,
+                ctypes.byref(out),
+                ctypes.byref(out_length),
+            )
+        )
+        return _float_array_result(out, out_length.value)
 
 
 def stft(
@@ -245,6 +326,35 @@ def mfcc(
         lib.sonare_free_mfcc_result(ctypes.byref(out))
 
 
+def mel_delta(
+    features: Sequence[float] | list[float],
+    n_features: int,
+    n_frames: int,
+    width: int = 9,
+) -> list[float]:
+    """Compute first-order regression deltas of a row-major feature matrix."""
+    if n_features <= 0 or n_frames <= 0 or len(features) != n_features * n_frames:
+        raise ValueError("mel_delta: feature matrix length must equal n_features * n_frames")
+    if width < 3 or width % 2 == 0:
+        raise ValueError("mel_delta: width must be an odd integer of at least 3")
+    lib = _get_lib()
+    c_array, _ = _to_c_float_array(features)
+    out = ctypes.POINTER(ctypes.c_float)()
+    rc = lib.sonare_mel_delta(
+        c_array,
+        ctypes.c_int(n_features),
+        ctypes.c_int(n_frames),
+        ctypes.c_int(width),
+        ctypes.byref(out),
+    )
+    _check(rc)
+    try:
+        return _float_array_result(out, n_features * n_frames)
+    finally:
+        if out:
+            lib.sonare_free_floats(out)
+
+
 # ============================================================================
 # Features - Chroma
 # ============================================================================
@@ -310,7 +420,7 @@ def _chroma_variant(
     lib = _get_lib()
     c_array, length = _to_c_float_array(samples)
     out = SonareChromaResult()
-    args = [
+    args: list[object] = [
         c_array,
         ctypes.c_size_t(length),
         ctypes.c_int(sample_rate),
@@ -418,6 +528,7 @@ def spectral_bandwidth(
     sample_rate: int = 22050,
     n_fft: int = 2048,
     hop_length: int = 512,
+    p: float = 2.0,
 ) -> list[float]:
     """Compute the spectral bandwidth per frame.
 
@@ -426,17 +537,58 @@ def spectral_bandwidth(
         sample_rate: Sample rate in Hz (default 22050).
         n_fft: FFT window size (default 2048).
         hop_length: Hop length in samples (default 512).
+        p: Positive Minkowski exponent (default 2.0).
 
     Returns:
         List of spectral bandwidth values per frame.
     """
     return _call_float_transform(
-        "sonare_spectral_bandwidth",
+        "sonare_spectral_bandwidth_ex",
         samples,
         ctypes.c_int(sample_rate),
         ctypes.c_int(n_fft),
         ctypes.c_int(hop_length),
+        ctypes.c_float(p),
     )
+
+
+def spectral_flux(
+    samples: Sequence[float] | list[float],
+    sample_rate: int = 22050,
+    n_fft: int = 2048,
+    hop_length: int = 512,
+    lag: int = 1,
+) -> list[float]:
+    """Compute the unsigned L1 spectral-flux envelope."""
+    return _call_float_transform(
+        "sonare_spectral_flux",
+        samples,
+        ctypes.c_int(sample_rate),
+        ctypes.c_int(n_fft),
+        ctypes.c_int(hop_length),
+        ctypes.c_int(lag),
+    )
+
+
+def onset_backtrack(
+    events: Sequence[int] | list[int], energy: Sequence[float] | list[float]
+) -> np.ndarray:
+    """Backtrack onset event indices to local energy minima."""
+    lib = _get_lib()
+    event_array, event_count = _to_c_int_array(events)
+    energy_array, energy_count = _to_c_float_array(energy)
+    with _out_int_array(lib) as (out, out_count):
+        _check(
+            lib.sonare_onset_backtrack(
+                event_array,
+                ctypes.c_size_t(event_count),
+                energy_array,
+                ctypes.c_size_t(energy_count),
+                ctypes.byref(out),
+                ctypes.byref(out_count),
+            )
+        )
+        return _from_c_int_array(out, out_count.value)
 
 
 def spectral_rolloff(
@@ -742,6 +894,279 @@ def estimate_tuning(
     )
     _check(rc)
     return float(out.value)
+
+
+def piptrack(
+    samples: Sequence[float] | list[float],
+    sample_rate: int = 22050,
+    n_fft: int = 2048,
+    hop_length: int = 512,
+    fmin: float = 150.0,
+    fmax: float = 4000.0,
+    threshold: float = 0.1,
+) -> PiptrackResult:
+    """Return per-bin spectral pitch candidates and their peak magnitudes."""
+    lib = _get_lib()
+    c_array, length = _to_c_float_array(samples)
+    n_bins = ctypes.c_int()
+    n_frames = ctypes.c_int()
+    pitches = ctypes.POINTER(ctypes.c_float)()
+    magnitudes = ctypes.POINTER(ctypes.c_float)()
+    rc = lib.sonare_piptrack(
+        c_array,
+        ctypes.c_size_t(length),
+        ctypes.c_int(sample_rate),
+        ctypes.c_int(n_fft),
+        ctypes.c_int(hop_length),
+        ctypes.c_float(fmin),
+        ctypes.c_float(fmax),
+        ctypes.c_float(threshold),
+        ctypes.byref(n_bins),
+        ctypes.byref(n_frames),
+        ctypes.byref(pitches),
+        ctypes.byref(magnitudes),
+    )
+    _check(rc)
+    try:
+        total = n_bins.value * n_frames.value
+        return PiptrackResult(
+            n_bins.value,
+            n_frames.value,
+            _float_array_result(pitches, total),
+            _float_array_result(magnitudes, total),
+        )
+    finally:
+        if pitches:
+            lib.sonare_free_floats(pitches)
+        if magnitudes:
+            lib.sonare_free_floats(magnitudes)
+
+
+def reassigned_spectrogram(
+    samples: Sequence[float] | list[float],
+    sample_rate: int = 22050,
+    n_fft: int = 2048,
+    hop_length: int = 512,
+    ref_power: float = 1e-6,
+    fill_nan: bool = False,
+) -> ReassignedSpectrogramResult:
+    """Return magnitude, reassigned times, and reassigned frequencies per STFT bin."""
+    if ref_power < 0.0 or not np.isfinite(ref_power):
+        raise ValueError("reassigned_spectrogram: ref_power must be finite and non-negative")
+    lib = _get_lib()
+    c_array, length = _to_c_float_array(samples)
+    out = SonareReassignedSpectrogramResult()
+    rc = lib.sonare_reassigned_spectrogram(
+        c_array,
+        ctypes.c_size_t(length),
+        ctypes.c_int(sample_rate),
+        ctypes.c_int(n_fft),
+        ctypes.c_int(hop_length),
+        ctypes.c_float(ref_power),
+        ctypes.c_int(bool(fill_nan)),
+        ctypes.byref(out),
+    )
+    _check(rc)
+    try:
+        total = out.n_bins * out.n_frames
+        return ReassignedSpectrogramResult(
+            out.n_bins,
+            out.n_frames,
+            _float_array_result(out.magnitude, total),
+            _float_array_result(out.times, total),
+            _float_array_result(out.frequencies, total),
+        )
+    finally:
+        lib.sonare_free_reassigned_spectrogram_result(ctypes.byref(out))
+
+
+# ============================================================================
+# Features - Segmentation
+# ============================================================================
+
+
+def _segment_input(
+    name: str,
+    data: Sequence[float] | list[float],
+    rows: int,
+    cols: int,
+) -> tuple[ctypes.Array[ctypes.c_float], int]:
+    if rows <= 0 or cols <= 0:
+        raise ValueError(f"{name}: rows and cols must be positive")
+    values = _validate_samples(name, data, arg_name="data")
+    if len(values) != rows * cols:
+        raise ValueError(f"{name}: data length must equal rows * cols")
+    return _to_c_float_array(values)
+
+
+def _segment_matrix_result(lib: ctypes.CDLL, out: SonareSegmentMatrix) -> SegmentMatrix:
+    try:
+        values = _float_array_result(out.values, out.rows * out.cols)
+        return SegmentMatrix(out.rows, out.cols, values)
+    finally:
+        lib.sonare_free_segment_matrix(ctypes.byref(out))
+
+
+def _segment_indices_result(lib: ctypes.CDLL, out: SonareSegmentIndices) -> list[int]:
+    try:
+        return [int(v) for v in _from_c_int_array(out.values, out.count)]
+    finally:
+        lib.sonare_free_segment_indices(ctypes.byref(out))
+
+
+def cross_similarity(
+    x: Sequence[float] | list[float],
+    x_rows: int,
+    x_cols: int,
+    y: Sequence[float] | list[float],
+    y_rows: int,
+    y_cols: int,
+    k: int = 0,
+    metric: str = "cosine",
+    mode: str = "connectivity",
+) -> SegmentMatrix:
+    """Return column-wise cross-similarity (``librosa.segment.cross_similarity``)."""
+    x_array, _ = _segment_input("cross_similarity", x, x_rows, x_cols)
+    y_array, _ = _segment_input("cross_similarity", y, y_rows, y_cols)
+    out = SonareSegmentMatrix()
+    rc = _get_lib().sonare_segment_cross_similarity(
+        x_array,
+        x_rows,
+        x_cols,
+        y_array,
+        y_rows,
+        y_cols,
+        k,
+        metric.encode(),
+        mode.encode(),
+        ctypes.byref(out),
+    )
+    _check(rc)
+    return _segment_matrix_result(_get_lib(), out)
+
+
+def recurrence_matrix(
+    data: Sequence[float] | list[float],
+    rows: int,
+    cols: int,
+    k: int = 0,
+    width: int = 1,
+    sym: bool = False,
+    metric: str = "euclidean",
+    mode: str = "connectivity",
+) -> SegmentMatrix:
+    """Return a self-similarity recurrence matrix (``librosa.segment.recurrence_matrix``)."""
+    c_data, _ = _segment_input("recurrence_matrix", data, rows, cols)
+    lib = _get_lib()
+    out = SonareSegmentMatrix()
+    rc = lib.sonare_segment_recurrence_matrix(
+        c_data,
+        rows,
+        cols,
+        k,
+        width,
+        int(sym),
+        metric.encode(),
+        mode.encode(),
+        ctypes.byref(out),
+    )
+    _check(rc)
+    return _segment_matrix_result(lib, out)
+
+
+def recurrence_to_lag(
+    recurrence: Sequence[float] | list[float],
+    n: int,
+    pad: bool = False,
+) -> SegmentMatrix:
+    """Convert an ``n × n`` recurrence matrix to a lag matrix."""
+    c_recurrence, _ = _segment_input("recurrence_to_lag", recurrence, n, n)
+    lib = _get_lib()
+    out = SonareSegmentMatrix()
+    _check(lib.sonare_segment_recurrence_to_lag(c_recurrence, n, int(pad), ctypes.byref(out)))
+    return _segment_matrix_result(lib, out)
+
+
+def lag_to_recurrence(
+    lag: Sequence[float] | list[float],
+    n_rows: int,
+    n_lags: int,
+) -> SegmentMatrix:
+    """Convert a lag matrix back to an ``n_rows × n_rows`` recurrence matrix."""
+    c_lag, _ = _segment_input("lag_to_recurrence", lag, n_rows, n_lags)
+    lib = _get_lib()
+    out = SonareSegmentMatrix()
+    _check(lib.sonare_segment_lag_to_recurrence(c_lag, n_rows, n_lags, ctypes.byref(out)))
+    return _segment_matrix_result(lib, out)
+
+
+def subsegment(
+    data: Sequence[float] | list[float],
+    rows: int,
+    cols: int,
+    boundaries: Sequence[int] | list[int],
+    n_segments: int = 4,
+) -> list[int]:
+    """Refine frame boundaries by clustering each parent segment."""
+    c_data, _ = _segment_input("subsegment", data, rows, cols)
+    c_boundaries, count = _to_c_int_array(boundaries)
+    lib = _get_lib()
+    out = SonareSegmentIndices()
+    _check(
+        lib.sonare_segment_subsegment(
+            c_data,
+            rows,
+            cols,
+            c_boundaries,
+            count,
+            n_segments,
+            ctypes.byref(out),
+        )
+    )
+    return _segment_indices_result(lib, out)
+
+
+def agglomerative(
+    data: Sequence[float] | list[float],
+    rows: int,
+    cols: int,
+    k: int,
+    linkage: str = "average",
+) -> list[int]:
+    """Cluster feature columns and return one label per column."""
+    c_data, _ = _segment_input("agglomerative", data, rows, cols)
+    lib = _get_lib()
+    out = SonareSegmentIndices()
+    _check(
+        lib.sonare_segment_agglomerative(c_data, rows, cols, k, linkage.encode(), ctypes.byref(out))
+    )
+    return _segment_indices_result(lib, out)
+
+
+def path_enhance(
+    recurrence: Sequence[float] | list[float],
+    n: int,
+    win: int,
+    max_ratio: int = 2,
+    min_ratio: int = 0,
+    n_filters: int = 7,
+) -> SegmentMatrix:
+    """Enhance diagonal paths in a recurrence matrix."""
+    c_recurrence, _ = _segment_input("path_enhance", recurrence, n, n)
+    lib = _get_lib()
+    out = SonareSegmentMatrix()
+    _check(
+        lib.sonare_segment_path_enhance(
+            c_recurrence,
+            n,
+            win,
+            max_ratio,
+            min_ratio,
+            n_filters,
+            ctypes.byref(out),
+        )
+    )
+    return _segment_matrix_result(lib, out)
 
 
 # ============================================================================

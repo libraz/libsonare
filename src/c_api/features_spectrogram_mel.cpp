@@ -1,3 +1,5 @@
+#include <limits>
+
 #include "c_api/features_internal.h"
 
 // Features - Spectrogram
@@ -143,4 +145,24 @@ SonareError sonare_mfcc(const float* samples, size_t length, int sample_rate, in
   SONARE_C_API_ENTRY;
   return sonare_mfcc_ex(samples, length, sample_rate, n_fft, hop_length, n_mels, n_mfcc, 0.0f, 0.0f,
                         0, 0.0f, out);
+}
+
+SonareError sonare_mel_delta(const float* features, int n_features, int n_frames, int width,
+                             float** out) {
+  SONARE_C_API_ENTRY;
+  if (!out) return SONARE_ERROR_INVALID_PARAMETER;
+  *out = nullptr;
+  if (!features || n_features <= 0 || n_frames <= 0 || width < 3 || width % 2 == 0 ||
+      n_features > std::numeric_limits<int>::max() / n_frames) {
+    return SONARE_ERROR_INVALID_PARAMETER;
+  }
+
+  SONARE_C_TRY
+  const std::vector<float> result = MelSpectrogram::delta(features, n_features, n_frames, width);
+  if (result.empty()) return SONARE_OK;
+  std::unique_ptr<float[]> buffer(new float[result.size()]);
+  std::memcpy(buffer.get(), result.data(), result.size() * sizeof(float));
+  *out = release_array(buffer);
+  return SONARE_OK;
+  SONARE_C_CATCH
 }

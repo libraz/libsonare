@@ -94,6 +94,146 @@ def configure_features_signatures(lib: ctypes.CDLL) -> None:
         ctypes.POINTER(SonareMfccResult),
     ]
 
+    # sonare_mel_delta
+    lib.sonare_mel_delta.restype = ctypes.c_int32
+    lib.sonare_mel_delta.argtypes = [
+        ctypes.POINTER(ctypes.c_float),
+        ctypes.c_int,
+        ctypes.c_int,
+        ctypes.c_int,
+        ctypes.POINTER(ctypes.POINTER(ctypes.c_float)),
+    ]
+
+    lib.sonare_spectral_bandwidth_ex.restype = ctypes.c_int32
+    lib.sonare_spectral_bandwidth_ex.argtypes = [
+        ctypes.POINTER(ctypes.c_float),
+        ctypes.c_size_t,
+        ctypes.c_int,
+        ctypes.c_int,
+        ctypes.c_int,
+        ctypes.c_float,
+        ctypes.POINTER(ctypes.POINTER(ctypes.c_float)),
+        ctypes.POINTER(ctypes.c_size_t),
+    ]
+    lib.sonare_spectral_flux.restype = ctypes.c_int32
+    lib.sonare_spectral_flux.argtypes = [
+        ctypes.POINTER(ctypes.c_float),
+        ctypes.c_size_t,
+        ctypes.c_int,
+        ctypes.c_int,
+        ctypes.c_int,
+        ctypes.c_int,
+        ctypes.POINTER(ctypes.POINTER(ctypes.c_float)),
+        ctypes.POINTER(ctypes.c_size_t),
+    ]
+
+    lib.sonare_piptrack.restype = ctypes.c_int32
+    lib.sonare_piptrack.argtypes = [
+        ctypes.POINTER(ctypes.c_float),
+        ctypes.c_size_t,
+        ctypes.c_int,
+        ctypes.c_int,
+        ctypes.c_int,
+        ctypes.c_float,
+        ctypes.c_float,
+        ctypes.c_float,
+        ctypes.POINTER(ctypes.c_int),
+        ctypes.POINTER(ctypes.c_int),
+        ctypes.POINTER(ctypes.POINTER(ctypes.c_float)),
+        ctypes.POINTER(ctypes.POINTER(ctypes.c_float)),
+    ]
+
+    lib.sonare_reassigned_spectrogram.restype = ctypes.c_int32
+    lib.sonare_reassigned_spectrogram.argtypes = [
+        ctypes.POINTER(ctypes.c_float),
+        ctypes.c_size_t,
+        ctypes.c_int,
+        ctypes.c_int,
+        ctypes.c_int,
+        ctypes.c_float,
+        ctypes.c_int,
+        ctypes.POINTER(SonareReassignedSpectrogramResult),
+    ]
+    lib.sonare_free_reassigned_spectrogram_result.restype = None
+    lib.sonare_free_reassigned_spectrogram_result.argtypes = [
+        ctypes.POINTER(SonareReassignedSpectrogramResult),
+    ]
+
+    # --- Features - Segmentation ---
+
+    lib.sonare_segment_cross_similarity.restype = ctypes.c_int32
+    lib.sonare_segment_cross_similarity.argtypes = [
+        ctypes.POINTER(ctypes.c_float),
+        ctypes.c_int,
+        ctypes.c_int,
+        ctypes.POINTER(ctypes.c_float),
+        ctypes.c_int,
+        ctypes.c_int,
+        ctypes.c_int,
+        ctypes.c_char_p,
+        ctypes.c_char_p,
+        ctypes.POINTER(SonareSegmentMatrix),
+    ]
+    lib.sonare_segment_recurrence_matrix.restype = ctypes.c_int32
+    lib.sonare_segment_recurrence_matrix.argtypes = [
+        ctypes.POINTER(ctypes.c_float),
+        ctypes.c_int,
+        ctypes.c_int,
+        ctypes.c_int,
+        ctypes.c_int,
+        ctypes.c_int,
+        ctypes.c_char_p,
+        ctypes.c_char_p,
+        ctypes.POINTER(SonareSegmentMatrix),
+    ]
+    lib.sonare_segment_recurrence_to_lag.restype = ctypes.c_int32
+    lib.sonare_segment_recurrence_to_lag.argtypes = [
+        ctypes.POINTER(ctypes.c_float),
+        ctypes.c_int,
+        ctypes.c_int,
+        ctypes.POINTER(SonareSegmentMatrix),
+    ]
+    lib.sonare_segment_lag_to_recurrence.restype = ctypes.c_int32
+    lib.sonare_segment_lag_to_recurrence.argtypes = [
+        ctypes.POINTER(ctypes.c_float),
+        ctypes.c_int,
+        ctypes.c_int,
+        ctypes.POINTER(SonareSegmentMatrix),
+    ]
+    lib.sonare_segment_subsegment.restype = ctypes.c_int32
+    lib.sonare_segment_subsegment.argtypes = [
+        ctypes.POINTER(ctypes.c_float),
+        ctypes.c_int,
+        ctypes.c_int,
+        ctypes.POINTER(ctypes.c_int32),
+        ctypes.c_size_t,
+        ctypes.c_int,
+        ctypes.POINTER(SonareSegmentIndices),
+    ]
+    lib.sonare_segment_agglomerative.restype = ctypes.c_int32
+    lib.sonare_segment_agglomerative.argtypes = [
+        ctypes.POINTER(ctypes.c_float),
+        ctypes.c_int,
+        ctypes.c_int,
+        ctypes.c_int,
+        ctypes.c_char_p,
+        ctypes.POINTER(SonareSegmentIndices),
+    ]
+    lib.sonare_segment_path_enhance.restype = ctypes.c_int32
+    lib.sonare_segment_path_enhance.argtypes = [
+        ctypes.POINTER(ctypes.c_float),
+        ctypes.c_int,
+        ctypes.c_int,
+        ctypes.c_int,
+        ctypes.c_int,
+        ctypes.c_int,
+        ctypes.POINTER(SonareSegmentMatrix),
+    ]
+    lib.sonare_free_segment_matrix.restype = None
+    lib.sonare_free_segment_matrix.argtypes = [ctypes.POINTER(SonareSegmentMatrix)]
+    lib.sonare_free_segment_indices.restype = None
+    lib.sonare_free_segment_indices.argtypes = [ctypes.POINTER(SonareSegmentIndices)]
+
     # --- Features - Chroma ---
 
     # sonare_chroma
@@ -386,6 +526,38 @@ def configure_features_signatures(lib: ctypes.CDLL) -> None:
         ctypes.POINTER(ctypes.c_int),
     ]
 
+    lib.sonare_tone.restype = ctypes.c_int32
+    lib.sonare_tone.argtypes = [
+        ctypes.c_float,
+        ctypes.c_int,
+        ctypes.c_float,
+        ctypes.c_float,
+        ctypes.c_float,
+        ctypes.POINTER(ctypes.POINTER(ctypes.c_float)),
+        ctypes.POINTER(ctypes.c_size_t),
+    ]
+    lib.sonare_chirp.restype = ctypes.c_int32
+    lib.sonare_chirp.argtypes = [
+        ctypes.c_float,
+        ctypes.c_float,
+        ctypes.c_int,
+        ctypes.c_float,
+        ctypes.c_int,
+        ctypes.POINTER(ctypes.POINTER(ctypes.c_float)),
+        ctypes.POINTER(ctypes.c_size_t),
+    ]
+    lib.sonare_clicks.restype = ctypes.c_int32
+    lib.sonare_clicks.argtypes = [
+        ctypes.POINTER(ctypes.c_float),
+        ctypes.c_size_t,
+        ctypes.c_int,
+        ctypes.c_int,
+        ctypes.c_float,
+        ctypes.c_float,
+        ctypes.POINTER(ctypes.POINTER(ctypes.c_float)),
+        ctypes.POINTER(ctypes.c_size_t),
+    ]
+
     for name in ("sonare_pad_center", "sonare_fix_length"):
         fn = getattr(lib, name)
         fn.restype = ctypes.c_int32
@@ -405,6 +577,16 @@ def configure_features_signatures(lib: ctypes.CDLL) -> None:
         ctypes.c_int,
         ctypes.c_int,
         ctypes.c_int,
+        ctypes.POINTER(ctypes.POINTER(ctypes.c_int)),
+        ctypes.POINTER(ctypes.c_size_t),
+    ]
+
+    lib.sonare_onset_backtrack.restype = ctypes.c_int32
+    lib.sonare_onset_backtrack.argtypes = [
+        ctypes.POINTER(ctypes.c_int),
+        ctypes.c_size_t,
+        ctypes.POINTER(ctypes.c_float),
+        ctypes.c_size_t,
         ctypes.POINTER(ctypes.POINTER(ctypes.c_int)),
         ctypes.POINTER(ctypes.c_size_t),
     ]

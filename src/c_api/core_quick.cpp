@@ -1,6 +1,7 @@
 #include <cmath>
 
 #include "analysis/analysis_json.h"
+#include "analysis/onset_analyzer.h"
 #include "c_api/core_internal.h"
 
 // Quick detection functions
@@ -190,6 +191,37 @@ SonareError sonare_detect_onsets(const float* samples, size_t length, int sample
   });
 }
 
+SonareError sonare_detect_onsets_ex(const float* samples, size_t length, int sample_rate,
+                                    const SonareOnsetDetectConfig* config, float** out_times,
+                                    size_t* out_count) {
+  SONARE_C_API_ENTRY;
+  if (config == nullptr || out_times == nullptr || out_count == nullptr) {
+    return SONARE_ERROR_INVALID_PARAMETER;
+  }
+  if (config->n_fft <= 0 || config->hop_length <= 0 || config->pre_max < 0 ||
+      config->post_max < 0 || config->pre_avg < 0 || config->post_avg < 0 || config->wait < 0 ||
+      config->backtrack_range < 0 || config->backtrack > 1 || !std::isfinite(config->threshold) ||
+      !std::isfinite(config->delta) || config->delta < 0.0f) {
+    return SONARE_ERROR_INVALID_PARAMETER;
+  }
+
+  sonare::OnsetDetectConfig native;
+  native.n_fft = config->n_fft;
+  native.hop_length = config->hop_length;
+  native.threshold = config->threshold;
+  native.pre_max = config->pre_max;
+  native.post_max = config->post_max;
+  native.pre_avg = config->pre_avg;
+  native.post_avg = config->post_avg;
+  native.delta = config->delta;
+  native.wait = config->wait;
+  native.backtrack = config->backtrack != 0;
+  native.backtrack_range = config->backtrack_range;
+  return run_offline(samples, length, sample_rate, [&](const Audio& audio) -> SonareError {
+    return copy_vector(sonare::detect_onsets(audio, native), out_times, out_count);
+  });
+}
+
 // Full quick analysis. Although SonareAnalysisResult is a flat C struct, it
 // still exposes meter/beat data, so this intentionally pays the full quick
 // analysis cost. Use sonare_detect_bpm/key/beats for cheaper single-purpose
@@ -208,48 +240,7 @@ SonareError sonare_analyze(const float* samples, size_t length, int sample_rate,
   return run_offline(samples, length, sample_rate, [&](const Audio& audio) -> SonareError {
     AnalysisResult result = quick::analyze(audio.data(), audio.size(), audio.sample_rate());
 
-    out->bpm = result.bpm;
-    out->bpm_confidence = result.bpm_confidence;
-    out->key.root = static_cast<SonarePitchClass>(result.key.root);
-    out->key.mode = static_cast<SonareMode>(result.key.mode);
-    out->key.confidence = result.key.confidence;
-    out->time_signature.numerator = result.time_signature.numerator;
-    out->time_signature.denominator = result.time_signature.denominator;
-    out->time_signature.confidence = result.time_signature.confidence;
-
-    // Copy beat times
-    out->beat_count = result.beats.size();
-    if (result.beats.empty()) {
-      out->beat_times = nullptr;
-    } else {
-      out->beat_times = new float[result.beats.size()];
-      for (size_t i = 0; i < result.beats.size(); ++i) {
-        out->beat_times[i] = result.beats[i].time;
-      }
-    }
-
-    out->bpm_candidate_count = result.bpm_candidates.size();
-    if (!result.bpm_candidates.empty()) {
-      out->bpm_candidates = new SonareAnalysisBpmCandidate[result.bpm_candidates.size()];
-      for (size_t i = 0; i < result.bpm_candidates.size(); ++i) {
-        const auto& candidate = result.bpm_candidates[i];
-        out->bpm_candidates[i] = {candidate.value, candidate.confidence,
-                                  static_cast<SonareBpmCandidateRelation>(candidate.relation)};
-      }
-    }
-
-    out->time_signature_candidate_count = result.time_signature_candidates.size();
-    if (!result.time_signature_candidates.empty()) {
-      out->time_signature_candidates =
-          new SonareTimeSignature[result.time_signature_candidates.size()];
-      for (size_t i = 0; i < result.time_signature_candidates.size(); ++i) {
-        const auto& candidate = result.time_signature_candidates[i];
-        out->time_signature_candidates[i] = {candidate.numerator, candidate.denominator,
-                                             candidate.confidence};
-      }
-    }
-
-    return SONARE_OK;
+    return fill_analysis_result(result, out);
   });
 }
 

@@ -186,13 +186,13 @@ TEST_CASE("compute_onset_strength large-hop frame offset follows librosa floor",
   OnsetConfig onset_config;  // center defaults to true
   onset_config.detrend = false;
 
-  // Unshifted envelope from the Mel overload (no centered-frame offset applied).
+  // The raw Mel overload remains unshifted because it has no FFT-size metadata.
   MelConfig aligned = mel_config;
   aligned.center = onset_config.center;
   MelSpectrogram mel = MelSpectrogram::compute(audio, aligned);
   std::vector<float> unshifted = compute_onset_strength(mel, onset_config);
 
-  // Envelope from the Audio overload, which applies the centered-frame shift.
+  // The Audio overload supplies that metadata to the shared centering helper.
   std::vector<float> shifted = compute_onset_strength(audio, mel_config, onset_config);
 
   REQUIRE(shifted.size() == unshifted.size());
@@ -229,6 +229,9 @@ TEST_CASE("compute_onset_strength default-config frame offset unchanged", "[onse
   for (size_t i = 2; i < shifted.size(); ++i) {
     REQUIRE(shifted[i] == unshifted[i - 2]);
   }
+
+  REQUIRE(center_onset_strength(unshifted, mel_config.n_fft, mel_config.hop_length,
+                                onset_config.center) == shifted);
 }
 
 TEST_CASE("onset_strength_multi basic", "[onset]") {

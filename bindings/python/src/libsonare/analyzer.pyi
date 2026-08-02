@@ -42,12 +42,15 @@ from .types import (
     NoteSegment,
     PanLaw,
     PhaseScopeReport,
+    PiptrackResult,
     PitchClass,
     PitchResult,
+    ReassignedSpectrogramResult,
     RhythmResult,
     RirResult,
     RoomEstimate,
     SectionResult,
+    SegmentMatrix,
     SendTiming,
     SpectrumReport,
     StftResult,
@@ -215,7 +218,22 @@ def detect_key_candidates(
 ) -> list[KeyCandidate]: ...
 def detect_beats(samples: FloatSamples, sample_rate: int = 22050) -> list[float]: ...
 def detect_downbeats(samples: FloatSamples, sample_rate: int = 22050) -> list[float]: ...
-def detect_onsets(samples: FloatSamples, sample_rate: int = 22050) -> list[float]: ...
+def detect_onsets(
+    samples: FloatSamples,
+    sample_rate: int = 22050,
+    *,
+    n_fft: int = 2048,
+    hop_length: int = 512,
+    threshold: float = 0.0,
+    pre_max: int = 1,
+    post_max: int = 1,
+    pre_avg: int = 3,
+    post_avg: int = 4,
+    delta: float = 0.06,
+    wait: int = 1,
+    backtrack: bool = False,
+    backtrack_range: int = 10,
+) -> list[float]: ...
 def analyze(
     samples: FloatSamples,
     sample_rate: int = 22050,
@@ -291,6 +309,9 @@ def estimate_room(
     reference_absorption: float = 0.15,
     prefer_eyring: bool = True,
     n_octave_bands: int = 0,
+    mode: int = 0,
+    min_decay_db: float = 0.0,
+    noise_floor_margin_db: float = 0.0,
 ) -> RoomEstimate: ...
 def room_morph(
     samples: FloatSamples,
@@ -435,13 +456,21 @@ def hpss(
     kernel_harmonic: int = 31,
     kernel_percussive: int = 31,
 ) -> HpssResult: ...
-def harmonic(samples: FloatSamples, sample_rate: int = 22050) -> list[float]: ...
-def percussive(samples: FloatSamples, sample_rate: int = 22050) -> list[float]: ...
+def harmonic(
+    samples: FloatSamples, sample_rate: int = 22050, *, validate: bool = True
+) -> list[float]: ...
+def percussive(
+    samples: FloatSamples, sample_rate: int = 22050, *, validate: bool = True
+) -> list[float]: ...
 def time_stretch(
-    samples: FloatSamples, sample_rate: int = 22050, rate: float = 1.0
+    samples: FloatSamples, sample_rate: int = 22050, rate: float = 1.0, *, validate: bool = True
 ) -> list[float]: ...
 def pitch_shift(
-    samples: FloatSamples, sample_rate: int = 22050, semitones: float = 0.0
+    samples: FloatSamples,
+    sample_rate: int = 22050,
+    semitones: float = 0.0,
+    *,
+    validate: bool = True,
 ) -> list[float]: ...
 def pitch_correct_to_midi(
     samples: FloatSamples,
@@ -563,6 +592,9 @@ class RealtimeVoiceChangerConfig:
     limiter_enable_isp_limiter: int
     limiter_isp_ceiling_dbtp: float
     def __init__(self, **kwargs: object) -> None: ...
+    @classmethod
+    def from_pod(cls, pod: object) -> RealtimeVoiceChangerConfig: ...
+    def to_pod(self) -> object: ...
 
 class RealtimeVoiceChanger:
     def __init__(
@@ -604,7 +636,11 @@ def realtime_voice_changer_preset_json(name: str) -> str: ...
 def realtime_voice_changer_preset_pod(preset: str | int) -> RealtimeVoiceChangerConfig: ...
 def validate_realtime_voice_changer_preset_json(json_text: str) -> dict[str, object]: ...
 def normalize(
-    samples: FloatSamples, sample_rate: int = 22050, target_db: float = 0.0
+    samples: FloatSamples,
+    sample_rate: int = 22050,
+    target_db: float = 0.0,
+    *,
+    validate: bool = True,
 ) -> list[float]: ...
 def mastering(
     samples: FloatSamples,
@@ -669,7 +705,13 @@ def mixing_scene_preset_names() -> list[str]: ...
 def mixing_scene_preset_json(preset_name: str) -> str: ...
 
 class Mixer:
-    def __init__(self, handle: int, sample_rate: int, block_size: int) -> None: ...
+    def __init__(
+        self,
+        handle: int,
+        sample_rate: int,
+        block_size: int,
+        scene_warnings: list[str] | None = None,
+    ) -> None: ...
     @classmethod
     def from_scene_json(
         cls, json: str, sample_rate: int = 48000, block_size: int = 512
@@ -729,6 +771,8 @@ class Mixer:
     def meter_tap(
         self, strip: StripRef, tap: MeterTap | str | int = MeterTap.POST_FADER
     ) -> MixMeterSnapshot: ...
+    def bus_meter(self, bus_id: str) -> MixMeterSnapshot: ...
+    def scene_warnings(self) -> list[str]: ...
     def read_goniometer_latest(self, strip: StripRef, max_points: int) -> list[GoniometerPoint]: ...
     def schedule_fader_automation(
         self,
@@ -823,6 +867,8 @@ class StreamingMasteringChain:
     def process_stereo(
         self, left: FloatSamples, right: FloatSamples
     ) -> tuple[list[float], list[float]]: ...
+    def flush_mono(self) -> list[float]: ...
+    def flush_stereo(self) -> tuple[list[float], list[float]]: ...
     def reset(self) -> None: ...
     @property
     def latency_samples(self) -> int: ...
@@ -904,6 +950,9 @@ def mel_spectrogram(
     fmax: float = 0.0,
     htk: bool = False,
 ) -> MelSpectrogramResult: ...
+def mel_delta(
+    features: FloatSamples, n_features: int, n_frames: int, width: int = 9
+) -> list[float]: ...
 def mfcc(
     samples: FloatSamples,
     sample_rate: int = 22050,
@@ -939,9 +988,42 @@ def bass_chroma(
 def spectral_centroid(
     samples: FloatSamples, sample_rate: int = 22050, n_fft: int = 2048, hop_length: int = 512
 ) -> list[float]: ...
-def spectral_bandwidth(
-    samples: FloatSamples, sample_rate: int = 22050, n_fft: int = 2048, hop_length: int = 512
+def tone(
+    frequency: float = 440.0,
+    sample_rate: int = 22050,
+    duration: float = 1.0,
+    phase: float = 0.0,
+    amplitude: float = 1.0,
 ) -> list[float]: ...
+def chirp(
+    fmin: float = 440.0,
+    fmax: float = 880.0,
+    sample_rate: int = 22050,
+    duration: float = 1.0,
+    linear: bool = True,
+) -> list[float]: ...
+def clicks(
+    times: FloatSamples,
+    sample_rate: int = 22050,
+    length: int = 0,
+    frequency: float = 1000.0,
+    click_duration: float = 0.1,
+) -> list[float]: ...
+def spectral_bandwidth(
+    samples: FloatSamples,
+    sample_rate: int = 22050,
+    n_fft: int = 2048,
+    hop_length: int = 512,
+    p: float = 2.0,
+) -> list[float]: ...
+def spectral_flux(
+    samples: FloatSamples,
+    sample_rate: int = 22050,
+    n_fft: int = 2048,
+    hop_length: int = 512,
+    lag: int = 1,
+) -> list[float]: ...
+def onset_backtrack(events: IntSamples, energy: FloatSamples) -> np.ndarray[Any, Any]: ...
 def spectral_rolloff(
     samples: FloatSamples,
     sample_rate: int = 22050,
@@ -978,6 +1060,68 @@ def pitch_pyin(
     threshold: float = 0.1,
     fill_na: bool = False,
 ) -> PitchResult: ...
+def piptrack(
+    samples: FloatSamples,
+    sample_rate: int = 22050,
+    n_fft: int = 2048,
+    hop_length: int = 512,
+    fmin: float = 150.0,
+    fmax: float = 4000.0,
+    threshold: float = 0.1,
+) -> PiptrackResult: ...
+def reassigned_spectrogram(
+    samples: FloatSamples,
+    sample_rate: int = 22050,
+    n_fft: int = 2048,
+    hop_length: int = 512,
+    ref_power: float = 1e-6,
+    fill_nan: bool = False,
+) -> ReassignedSpectrogramResult: ...
+def cross_similarity(
+    x: FloatSamples,
+    x_rows: int,
+    x_cols: int,
+    y: FloatSamples,
+    y_rows: int,
+    y_cols: int,
+    k: int = 0,
+    metric: str = "cosine",
+    mode: str = "connectivity",
+) -> SegmentMatrix: ...
+def recurrence_matrix(
+    data: FloatSamples,
+    rows: int,
+    cols: int,
+    k: int = 0,
+    width: int = 1,
+    sym: bool = False,
+    metric: str = "euclidean",
+    mode: str = "connectivity",
+) -> SegmentMatrix: ...
+def recurrence_to_lag(recurrence: FloatSamples, n: int, pad: bool = False) -> SegmentMatrix: ...
+def lag_to_recurrence(lag: FloatSamples, n_rows: int, n_lags: int) -> SegmentMatrix: ...
+def subsegment(
+    data: FloatSamples,
+    rows: int,
+    cols: int,
+    boundaries: Sequence[int],
+    n_segments: int = 4,
+) -> list[int]: ...
+def agglomerative(
+    data: FloatSamples,
+    rows: int,
+    cols: int,
+    k: int,
+    linkage: str = "average",
+) -> list[int]: ...
+def path_enhance(
+    recurrence: FloatSamples,
+    n: int,
+    win: int,
+    max_ratio: int = 2,
+    min_ratio: int = 0,
+    n_filters: int = 7,
+) -> SegmentMatrix: ...
 def note_segments(
     f0_hz: FloatSamples,
     voiced_prob: FloatSamples,
@@ -1079,6 +1223,8 @@ def phase_vocoder(
     rate: float = 1.0,
     n_fft: int = 2048,
     hop_length: int = 512,
+    *,
+    validate: bool = True,
 ) -> np.ndarray[Any, Any]: ...
 def hz_to_mel(hz: float) -> float: ...
 def mel_to_hz(mel: float) -> float: ...
@@ -1289,14 +1435,20 @@ def mastering_repair_trim_silence(
     gate_lufs: float = -60.0,
     window_ms: float = 400.0,
 ) -> np.ndarray[Any, Any]: ...
-def lufs(samples: FloatSamples, sample_rate: int = 22050) -> LufsResult: ...
-def momentary_lufs(samples: FloatSamples, sample_rate: int = 22050) -> list[float]: ...
-def short_term_lufs(samples: FloatSamples, sample_rate: int = 22050) -> list[float]: ...
+def lufs(
+    samples: FloatSamples, sample_rate: int = 22050, *, validate: bool = True
+) -> LufsResult: ...
+def momentary_lufs(
+    samples: FloatSamples, sample_rate: int = 22050, *, validate: bool = True
+) -> list[float]: ...
+def short_term_lufs(
+    samples: FloatSamples, sample_rate: int = 22050, *, validate: bool = True
+) -> list[float]: ...
 def metering_stereo_correlation(
-    left: FloatSamples, right: FloatSamples, sample_rate: int = 22050
+    left: FloatSamples, right: FloatSamples, sample_rate: int = 22050, *, validate: bool = True
 ) -> float: ...
 def metering_stereo_width(
-    left: FloatSamples, right: FloatSamples, sample_rate: int = 22050
+    left: FloatSamples, right: FloatSamples, sample_rate: int = 22050, *, validate: bool = True
 ) -> float: ...
 def metering_vectorscope(
     left: FloatSamples,
@@ -1338,6 +1490,8 @@ def metering_spectrum(
     octave_fraction: int = 0,
     db_ref: float = 0.0,
     db_amin: float = 0.0,
+    *,
+    validate: bool = True,
 ) -> SpectrumReport: ...
 def metering_spectrum_frame(
     samples: FloatSamples,
@@ -1460,6 +1614,16 @@ def mel_to_audio(
     fmax: float = 0.0,
     n_iter: int = 32,
     htk: bool = False,
+) -> list[float]: ...
+def griffin_lim(
+    magnitude: FloatSamples,
+    n_bins: int,
+    n_frames: int,
+    sample_rate: int = 22050,
+    n_fft: int = 2048,
+    hop_length: int = 512,
+    n_iter: int = 32,
+    momentum: float = 0.99,
 ) -> list[float]: ...
 def mfcc_to_mel(
     mfcc_coeffs: FloatSamples,

@@ -75,6 +75,11 @@ export function masteringDynamicsCompressor(
   request: MasteringDynamicsCompressorRequest,
 ): DynamicsProcessorResult;
 export function masteringDynamicsCompressor(
+  samples: Float32Array,
+  sampleRate?: number,
+  options?: CompressorOptions,
+): DynamicsProcessorResult;
+export function masteringDynamicsCompressor(
   samples: Float32Array | MasteringDynamicsCompressorRequest,
   sampleRate = 22050,
   options: CompressorOptions = {},
@@ -89,6 +94,11 @@ export function masteringDynamicsGate(
   request: MasteringDynamicsGateRequest,
 ): DynamicsProcessorResult;
 export function masteringDynamicsGate(
+  samples: Float32Array,
+  sampleRate?: number,
+  options?: GateOptions,
+): DynamicsProcessorResult;
+export function masteringDynamicsGate(
   samples: Float32Array | MasteringDynamicsGateRequest,
   sampleRate = 22050,
   options: GateOptions = {},
@@ -101,6 +111,11 @@ export function masteringDynamicsGate(
 /** Offline transient shaper (envelope-difference attack/sustain control). */
 export function masteringDynamicsTransientShaper(
   request: MasteringDynamicsTransientShaperRequest,
+): DynamicsProcessorResult;
+export function masteringDynamicsTransientShaper(
+  samples: Float32Array,
+  sampleRate?: number,
+  options?: TransientShaperOptions,
 ): DynamicsProcessorResult;
 export function masteringDynamicsTransientShaper(
   samples: Float32Array | MasteringDynamicsTransientShaperRequest,

@@ -774,9 +774,10 @@ class Audio:
         self,
         n_fft: int = 2048,
         hop_length: int = 512,
+        p: float = 2.0,
     ) -> list[float]:
         """Compute the spectral bandwidth per frame."""
-        return _spectral_bandwidth(self.data, self.sample_rate, n_fft, hop_length)
+        return _spectral_bandwidth(self.data, self.sample_rate, n_fft, hop_length, p)
 
     def spectral_rolloff(
         self,

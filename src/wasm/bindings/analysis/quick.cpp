@@ -7,6 +7,7 @@
 
 #include "analysis/analysis_json.h"
 #include "analysis/music_analyzer.h"
+#include "analysis/onset_analyzer.h"
 #include "wasm/bindings/common/common.h"
 
 std::vector<Mode> modesFromVal(val modes) {
@@ -333,9 +334,29 @@ val js_detect_key_candidates(val samples, int sample_rate, int n_fft, int hop_le
   return out;
 }
 
-val js_detect_onsets(val samples, int sample_rate) {
+val js_detect_onsets(val samples, int sample_rate, val options) {
   Audio audio = loadValidatedAudio(samples, sample_rate);
-  std::vector<float> onsets = quick::detect_onsets(audio.data(), audio.size(), sample_rate);
+  OnsetDetectConfig config;
+  const auto integer = [&](const char* name, int fallback) {
+    const val value = options[name];
+    return value.isUndefined() ? fallback : value.as<int>();
+  };
+  const auto number = [&](const char* name, float fallback) {
+    const val value = options[name];
+    return value.isUndefined() ? fallback : value.as<float>();
+  };
+  config.n_fft = integer("nFft", config.n_fft);
+  config.hop_length = integer("hopLength", config.hop_length);
+  config.threshold = number("threshold", config.threshold);
+  config.pre_max = integer("preMax", config.pre_max);
+  config.post_max = integer("postMax", config.post_max);
+  config.pre_avg = integer("preAvg", config.pre_avg);
+  config.post_avg = integer("postAvg", config.post_avg);
+  config.delta = number("delta", config.delta);
+  config.wait = integer("wait", config.wait);
+  config.backtrack = !options["backtrack"].isUndefined() && options["backtrack"].as<bool>();
+  config.backtrack_range = integer("backtrackRange", config.backtrack_range);
+  std::vector<float> onsets = detect_onsets(audio, config);
   return vectorToFloat32Array(onsets);
 }
 
@@ -546,7 +567,6 @@ val js_detect_acoustic(val samples, int sample_rate, int n_octave_bands,
 // bandAbsorption/bandScattering array cannot drive an unbounded per-wall
 // allocation. The C ABI is bypassed here (synthesize_rir is called directly), so
 // this binding must re-apply the same guard.
-constexpr size_t kMaxMaterialBands = 64;
 
 // Finite [0, 1] test matching the C ABI's `unit` predicate for absorption /
 // scattering coefficients. Out-of-range values are rejected (not silently
@@ -607,7 +627,8 @@ sonare::acoustic::ShoeboxRoom roomFromVal(val opts, float def_absorption) {
       const std::vector<float> scattering_bands = hasProperty(opts, "bandScattering")
                                                       ? float32ArrayToVector(opts["bandScattering"])
                                                       : std::vector<float>{};
-      if (bands.size() > kMaxMaterialBands || scattering_bands.size() > kMaxMaterialBands) {
+      if (bands.size() > sonare::acoustic::kMaxMaterialBands ||
+          scattering_bands.size() > sonare::acoustic::kMaxMaterialBands) {
         throw sonare::SonareException(sonare::ErrorCode::InvalidParameter,
                                       "material band count exceeds the maximum of 64");
       }

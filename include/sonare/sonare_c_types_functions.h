@@ -72,6 +72,37 @@ SonareError sonare_detect_downbeats(const float* samples, size_t length, int sam
 SonareError sonare_detect_onsets(const float* samples, size_t length, int sample_rate,
                                  float** out_times, size_t* out_count);
 
+/// @brief Controls peak-picking for @ref sonare_detect_onsets_ex.
+/// @details Zero-initialize this POD, then set every field explicitly; the
+///          legacy @ref sonare_detect_onsets function retains its defaults.
+typedef struct {
+  int32_t n_fft;
+  int32_t hop_length;
+  float threshold;
+  int32_t pre_max;
+  int32_t post_max;
+  int32_t pre_avg;
+  int32_t post_avg;
+  float delta;
+  int32_t wait;
+  uint8_t backtrack;
+  uint8_t reserved[3];
+  int32_t backtrack_range;
+} SonareOnsetDetectConfig;
+
+#ifdef __cplusplus
+static_assert(sizeof(SonareOnsetDetectConfig) == 44u, "SonareOnsetDetectConfig layout drift");
+static_assert(offsetof(SonareOnsetDetectConfig, hop_length) == 4u,
+              "SonareOnsetDetectConfig hop_length offset");
+static_assert(offsetof(SonareOnsetDetectConfig, backtrack_range) == 40u,
+              "SonareOnsetDetectConfig backtrack_range offset");
+#endif
+
+/// @brief Detect onsets with explicit FFT, peak-picking, and backtracking settings.
+SonareError sonare_detect_onsets_ex(const float* samples, size_t length, int sample_rate,
+                                    const SonareOnsetDetectConfig* config, float** out_times,
+                                    size_t* out_count);
+
 // Runs the full quick analysis pipeline and fills the flat C result. Use the
 // single-purpose sonare_detect_* helpers for cheaper queries.
 SonareError sonare_analyze(const float* samples, size_t length, int sample_rate,
@@ -161,6 +192,9 @@ const char* sonare_error_message(SonareError error);
 ///     to the master (its audio is silently dropped). Check this after a
 ///     successful mixer compile to surface such warnings. The message is still
 ///     cleared on the next API call on the thread.
+///   - RIR synthesis is another deliberate SUCCESS-return diagnostic path: when
+///     @ref sonare_synthesize_rir sets SonareRirSynthResult::has_error, this
+///     returns its first Error as ``acoustic.code: explanation``.
 /// @return Pointer to a NUL-terminated thread-local message string.
 const char* sonare_last_error_message(void);
 
@@ -168,12 +202,12 @@ const char* sonare_last_error_message(void);
 ///        thread, or "" when none.
 /// @details A SEPARATE channel from sonare_last_error_message so a warning on a
 ///   SUCCESS return never has to share storage with (or be mistaken for) an
-///   error. Currently recorded by sonare_mixer_from_scene_json: when a scene
-///   loads successfully but a channel-strip insert was handed param keys it does
-///   not read (a likely typo or a key meant for a different processor), those
-///   ignored keys are reported here as a human-readable message and the load
-///   still succeeds. Use sonare_mastering_insert_param_names() to discover the
-///   keys a given insert accepts.
+///   error. It is recorded by sonare_mixer_from_scene_json when a scene loads
+///   successfully but a channel-strip insert was handed param keys it does not
+///   read, and by @ref sonare_synthesize_rir for its first recoverable acoustic
+///   diagnostic (such as a clamped RIR tail). Use
+///   sonare_mastering_insert_param_names() to discover the keys a given insert
+///   accepts.
 ///   - The pointer is owned by libsonare, never NULL, and valid until the next
 ///     API call that records or clears a warning on the same thread.
 ///   - Cleared at the entry of sonare_mixer_from_scene_json, so a stale warning

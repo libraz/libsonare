@@ -334,6 +334,38 @@ def mel_to_audio(
     )
 
 
+def griffin_lim(
+    magnitude: Sequence[float] | list[float],
+    n_bins: int,
+    n_frames: int,
+    sample_rate: int = 22050,
+    n_fft: int = 2048,
+    hop_length: int = 512,
+    n_iter: int = 32,
+    momentum: float = 0.99,
+) -> list[float]:
+    """Reconstruct audio from a row-major STFT magnitude matrix."""
+    lib = _get_lib()
+    data, length = _to_c_float_array(magnitude)
+    with _out_float_array(lib) as (out, out_length):
+        _check(
+            lib.sonare_griffin_lim(
+                data,
+                ctypes.c_size_t(length),
+                ctypes.c_int(n_bins),
+                ctypes.c_int(n_frames),
+                ctypes.c_int(n_fft),
+                ctypes.c_int(hop_length),
+                ctypes.c_int(sample_rate),
+                ctypes.c_int(n_iter),
+                ctypes.c_float(momentum),
+                ctypes.byref(out),
+                ctypes.byref(out_length),
+            )
+        )
+        return _float_array_result(out, out_length.value)
+
+
 def mfcc_to_mel(
     mfcc_coeffs: Sequence[float] | list[float],
     n_mfcc: int,
