@@ -4,11 +4,13 @@
 
 #include <catch2/catch_test_macros.hpp>
 #include <cstdint>
+#include <map>
 #include <memory>
 #include <utility>
 #include <vector>
 
 #include "arrangement/edit_command.h"
+#include "arrangement/edit_compiler.h"
 #include "arrangement/edit_history.h"
 #include "arrangement/edit_model.h"
 #include "arrangement/edit_source.h"
@@ -16,6 +18,41 @@
 using namespace sonare::arrangement;
 
 namespace {
+
+// Models the AudioContentStore ownership transfer used by the C project API.
+// It intentionally lives outside EditHistory's value-owned Project/MIDI state,
+// so a later transaction failure exercises the external-sidecar rollback path.
+class InstallAudioContentForRollbackTest final : public EditCommand {
+ public:
+  InstallAudioContentForRollbackTest(AudioContentStore* store, SourceId id,
+                                     AudioSourceSamples samples, bool install)
+      : store_(store), id_(id), samples_(std::move(samples)), install_(install) {}
+
+  bool apply(Project&, MidiContentStore&) override {
+    if (store_ == nullptr) return false;
+    if (install_) return store_->sources.emplace(id_, samples_).second;
+    return store_->sources.erase(id_) == 1;
+  }
+
+  EditCommandPtr invert(const Project&, const MidiContentStore&) const override {
+    return std::make_unique<InstallAudioContentForRollbackTest>(store_, id_, samples_, !install_);
+  }
+
+  const char* type_name() const noexcept override { return "InstallAudioContentForRollbackTest"; }
+
+ private:
+  AudioContentStore* store_ = nullptr;
+  SourceId id_ = 0;
+  AudioSourceSamples samples_;
+  bool install_ = false;
+};
+
+class FailingRollbackTestCommand final : public EditCommand {
+ public:
+  bool apply(Project&, MidiContentStore&) override { return false; }
+  EditCommandPtr invert(const Project&, const MidiContentStore&) const override { return nullptr; }
+  const char* type_name() const noexcept override { return "FailingRollbackTestCommand"; }
+};
 
 // ---------------------------------------------------------------------------
 // Deep-equality helpers over the affected model fields. The project model structs do
@@ -961,12 +998,14 @@ TEST_CASE("Automation command round-trips", "[arrangement]") {
 
     // Seed a lane then remove it.
     f.project.find_track_mutable(f.audio_track)->automation_lanes.push_back(make_lane(11));
-    check_round_trip(f.project, store, std::make_unique<RemoveAutomationLane>(f.audio_track, 0));
+    check_round_trip(f.project, store, std::make_unique<RemoveAutomationLane>(f.audio_track, 11));
   }
   SECTION("EditAutomationLane") {
     f.project.find_track_mutable(f.audio_track)->automation_lanes.push_back(make_lane(20));
+    auto edited = make_lane(20);
+    edited.set_points({{0.0, 0.25f, sonare::automation::CurveType::Hold}});
     check_round_trip(f.project, store,
-                     std::make_unique<EditAutomationLane>(f.audio_track, 0, make_lane(21)));
+                     std::make_unique<EditAutomationLane>(f.audio_track, 20, std::move(edited)));
   }
 }
 
@@ -1226,6 +1265,25 @@ TEST_CASE("EditHistory honors a configured maximum undo depth", "[arrangement]")
   REQUIRE_FALSE(h.can_undo());
   REQUIRE_FALSE(h.can_redo());
   REQUIRE(h.project().find_track(f.audio_track)->name == name_before);
+}
+
+TEST_CASE("EditHistory transaction rolls back decoded audio sidecars", "[arrangement]") {
+  Fixture f;
+  EditHistory h{f.project};
+  AudioContentStore audio;
+  AudioSourceSamples samples;
+  samples.sample_rate = 48000.0;
+  samples.channels = {{0.25f, -0.25f}};
+
+  std::vector<EditCommandPtr> commands;
+  commands.push_back(
+      std::make_unique<InstallAudioContentForRollbackTest>(&audio, 91, samples, true));
+  commands.push_back(std::make_unique<FailingRollbackTestCommand>());
+
+  REQUIRE_FALSE(h.apply_transaction(std::move(commands)));
+  CHECK(audio.sources.empty());
+  CHECK(h.undo_depth() == 0);
+  CHECK_FALSE(h.can_undo());
 }
 
 TEST_CASE("Full undo of a seeded sequence returns to the initial state", "[arrangement]") {

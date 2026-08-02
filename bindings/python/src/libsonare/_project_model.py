@@ -136,6 +136,12 @@ _LOOP_MODE_NAMES = {
 
 
 def _fade_curve_value(curve: str | int) -> int:
+    if isinstance(curve, str):
+        out = ctypes.c_uint32()
+        _check(
+            _get_lib().sonare_project_fade_curve_from_name(curve.encode("utf-8"), ctypes.byref(out))
+        )
+        return int(out.value)
     return _resolve_enum(curve, _FADE_CURVE_NAMES, "fade curve")
 
 
@@ -154,14 +160,14 @@ def _automation_lane_desc(
     """
     rows = list(points) if points is not None else []
     count = len(rows)
-    c_points = (SonareAutomationPoint * count)() if count else None
+    c_points = (SonareAutomationPoint * count)()
     for i, pt in enumerate(rows):
         seq = tuple(pt)
         if len(seq) < 2:
             raise ValueError(f"points[{i}] must contain at least (ppq, value)")
         ppq = float(seq[0])
         value = float(seq[1])
-        curve = _curve_value(seq[2]) if len(seq) >= 3 else 0
+        curve = _curve_value(cast(int | str, seq[2])) if len(seq) >= 3 else 0
         if not math.isfinite(ppq):
             raise ValueError(f"points[{i}].ppq must be a finite number")
         if not math.isfinite(value):
@@ -390,6 +396,13 @@ def _marker_name_bytes(name: str | None) -> bytes:
 
 
 def _synth_waveform_value(waveform: str | int) -> int:
+    if isinstance(waveform, str):
+        resolver = getattr(_get_lib(), "sonare_synth_builtin_waveform_from_name", None)
+        if resolver is not None:
+            value = int(resolver(waveform.encode("utf-8")))
+            if value >= 0:
+                return value
+            raise ValueError(f"unknown synth waveform: {waveform!r}")
     return _resolve_enum(waveform, _SYNTH_WAVEFORM_NAMES, "synth waveform")
 
 

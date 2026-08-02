@@ -20,6 +20,7 @@ export type {
   ProjectAutomationPoint,
   ProjectBounceOptions,
   ProjectChordSymbol,
+  ProjectClip,
   ProjectClipCompSegment,
   ProjectClipDesc,
   ProjectClipFade,
@@ -40,8 +41,10 @@ export type {
   ProjectMidiRouteConfig,
   ProjectMidiRouteResult,
   ProjectNotePairValidation,
+  ProjectSource,
   ProjectTempoSegment,
   ProjectTimeSignatureSegment,
+  ProjectTrack,
   ProjectTrackDesc,
   ProjectTrackKind,
   ProjectWarpAnchor,
@@ -62,6 +65,7 @@ export type {
   SynthPatch,
 } from './project_types';
 export {
+  BUILTIN_SYNTH_WAVEFORMS,
   EXPECTED_PROJECT_ABI_VERSION,
   MarkerKind,
   SYNTH_BODY_TYPES,

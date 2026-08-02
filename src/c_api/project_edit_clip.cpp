@@ -1,5 +1,32 @@
+#include <optional>
+#include <set>
+#include <string>
+
 #include "c_api/project_internal.h"
 #include "util/constants.h"
+
+SonareError sonare_project_fade_curve_from_name(const char* name, uint32_t* out_curve) {
+  SONARE_C_API_ENTRY;
+  if (name == nullptr || out_curve == nullptr) return SONARE_ERROR_INVALID_PARAMETER;
+
+  std::string normalized;
+  for (const unsigned char* p = reinterpret_cast<const unsigned char*>(name); *p != '\0'; ++p) {
+    if (*p == '-' || *p == '_') continue;
+    normalized.push_back(static_cast<char>(*p >= 'A' && *p <= 'Z' ? *p + ('a' - 'A') : *p));
+  }
+  if (normalized == "linear") {
+    *out_curve = SONARE_FADE_CURVE_LINEAR;
+  } else if (normalized == "equalpower") {
+    *out_curve = SONARE_FADE_CURVE_EQUAL_POWER;
+  } else if (normalized == "exponential" || normalized == "exp") {
+    *out_curve = SONARE_FADE_CURVE_EXPONENTIAL;
+  } else if (normalized == "logarithmic" || normalized == "log") {
+    *out_curve = SONARE_FADE_CURVE_LOGARITHMIC;
+  } else {
+    return SONARE_ERROR_INVALID_PARAMETER;
+  }
+  return SONARE_OK;
+}
 
 #if defined(SONARE_WITH_ARRANGEMENT)
 
@@ -104,6 +131,164 @@ arr::EditCommandPtr make_store_audio_content_command(
                                                 AudioContentTransferDirection::kStore);
 }
 
+// Moves decoded PCM out of AudioContentStore and into the command history.
+// This is the removal counterpart to make_store_audio_content_command(): the
+// inverse restores the exact map nodes before the source metadata is restored.
+arr::EditCommandPtr make_remove_audio_content_command(arr::AudioContentStore* store,
+                                                      std::vector<arr::SourceId> source_ids) {
+  if (store == nullptr || source_ids.empty()) return nullptr;
+  auto state = std::make_shared<AudioContentTransferState>();
+  state->store = store;
+  state->source_ids = std::move(source_ids);
+  return std::make_unique<TransferAudioContent>(std::move(state),
+                                                AudioContentTransferDirection::kHistory);
+}
+
+arr::SourceId resolved_take_source(const arr::EditClip& clip, const arr::ClipTake& take) {
+  return take.source_id != 0 ? take.source_id : clip.source_id;
+}
+
+bool clip_references_source(const arr::EditClip& clip, arr::SourceId source_id) {
+  if (clip.source_id == source_id) return true;
+  for (const arr::ClipTake& take : clip.takes) {
+    if (resolved_take_source(clip, take) == source_id) return true;
+  }
+  return false;
+}
+
+// Returns only source ids that become unreferenced when `removed_clip` goes
+// away. This deliberately includes take sources as well as the clip's base
+// source; a source shared by any other clip remains intact.
+std::vector<arr::SourceId> collect_orphaned_sources(const arr::Project& project,
+                                                    const arr::EditClip& removed_clip) {
+  std::set<arr::SourceId> candidates;
+  if (removed_clip.source_id != 0) candidates.insert(removed_clip.source_id);
+  for (const arr::ClipTake& take : removed_clip.takes) {
+    const arr::SourceId source_id = resolved_take_source(removed_clip, take);
+    if (source_id != 0) candidates.insert(source_id);
+  }
+
+  std::vector<arr::SourceId> orphaned;
+  for (const arr::SourceId source_id : candidates) {
+    bool referenced_elsewhere = false;
+    for (const arr::EditClip& clip : project.clips()) {
+      if (clip.id != removed_clip.id && clip_references_source(clip, source_id)) {
+        referenced_elsewhere = true;
+        break;
+      }
+    }
+    if (!referenced_elsewhere && project.find_source(source_id) != nullptr) {
+      orphaned.push_back(source_id);
+    }
+  }
+  return orphaned;
+}
+
+std::vector<arr::SourceId> collect_orphaned_sources_for_track(const arr::Project& project,
+                                                              arr::TrackId removed_track_id) {
+  std::set<arr::SourceId> candidates;
+  for (const arr::EditClip& clip : project.clips()) {
+    if (clip.track_id != removed_track_id) continue;
+    if (clip.source_id != 0) candidates.insert(clip.source_id);
+    for (const arr::ClipTake& take : clip.takes) {
+      const arr::SourceId source_id = resolved_take_source(clip, take);
+      if (source_id != 0) candidates.insert(source_id);
+    }
+  }
+
+  std::vector<arr::SourceId> orphaned;
+  for (const arr::SourceId source_id : candidates) {
+    bool referenced_elsewhere = false;
+    for (const arr::EditClip& clip : project.clips()) {
+      if (clip.track_id != removed_track_id && clip_references_source(clip, source_id)) {
+        referenced_elsewhere = true;
+        break;
+      }
+    }
+    if (!referenced_elsewhere && project.find_source(source_id) != nullptr) {
+      orphaned.push_back(source_id);
+    }
+  }
+  return orphaned;
+}
+
+enum class AudioContentReplaceDirection { kSet, kRestore };
+
+struct AudioContentReplaceState {
+  arr::AudioContentStore* store = nullptr;
+  arr::SourceId source_id = 0;
+  std::optional<arr::AudioSourceSamples> contents;
+  bool had_existing = false;
+  bool initialized = false;
+};
+
+class ReplaceAudioContent final : public arr::EditCommand {
+ public:
+  ReplaceAudioContent(std::shared_ptr<AudioContentReplaceState> state,
+                      AudioContentReplaceDirection direction)
+      : state_(std::move(state)), direction_(direction) {}
+
+  bool apply(arr::Project& /*project*/, arr::MidiContentStore& /*midi*/) override {
+    if (state_ == nullptr || state_->store == nullptr || state_->source_id == 0) {
+      return false;
+    }
+    auto& sources = state_->store->sources;
+    auto it = sources.find(state_->source_id);
+    if (direction_ == AudioContentReplaceDirection::kSet) {
+      if (!state_->contents.has_value()) return false;
+      if (!state_->initialized) {
+        state_->had_existing = it != sources.end();
+        state_->initialized = true;
+      }
+      if (state_->had_existing) {
+        if (it == sources.end()) return false;
+        std::swap(it->second, *state_->contents);
+      } else {
+        if (it != sources.end()) return false;
+        sources.emplace(state_->source_id, std::move(*state_->contents));
+        state_->contents.reset();
+      }
+      return true;
+    }
+
+    if (it == sources.end()) return false;
+    if (state_->had_existing) {
+      if (!state_->contents.has_value()) return false;
+      std::swap(it->second, *state_->contents);
+    } else {
+      state_->contents.emplace(std::move(it->second));
+      sources.erase(it);
+    }
+    return true;
+  }
+
+  arr::EditCommandPtr invert(const arr::Project& /*before*/,
+                             const arr::MidiContentStore& /*midi_before*/) const override {
+    const auto inverse = direction_ == AudioContentReplaceDirection::kSet
+                             ? AudioContentReplaceDirection::kRestore
+                             : AudioContentReplaceDirection::kSet;
+    return std::make_unique<ReplaceAudioContent>(state_, inverse);
+  }
+
+  const char* type_name() const noexcept override { return "ReplaceAudioContent"; }
+
+ private:
+  std::shared_ptr<AudioContentReplaceState> state_;
+  AudioContentReplaceDirection direction_;
+};
+
+arr::EditCommandPtr make_replace_audio_content_command(arr::AudioContentStore* store,
+                                                       arr::SourceId source_id,
+                                                       arr::AudioSourceSamples contents) {
+  if (store == nullptr || source_id == 0) return nullptr;
+  auto state = std::make_shared<AudioContentReplaceState>();
+  state->store = store;
+  state->source_id = source_id;
+  state->contents.emplace(std::move(contents));
+  return std::make_unique<ReplaceAudioContent>(std::move(state),
+                                               AudioContentReplaceDirection::kSet);
+}
+
 bool valid_next_id(uint32_t id) noexcept {
   return id != 0 && id != std::numeric_limits<uint32_t>::max();
 }
@@ -164,6 +349,16 @@ SonareError clip_comp_segments_from_desc(const SonareProjectClipCompSegment* seg
 }
 
 }  // namespace
+
+arr::EditCommandPtr sonare_project_make_remove_audio_content_command(
+    arr::AudioContentStore* store, std::vector<arr::SourceId> source_ids) {
+  return make_remove_audio_content_command(store, std::move(source_ids));
+}
+
+std::vector<arr::SourceId> sonare_project_collect_orphaned_sources_for_track(
+    const arr::Project& project, arr::TrackId removed_track_id) {
+  return collect_orphaned_sources_for_track(project, removed_track_id);
+}
 
 #endif  // SONARE_WITH_ARRANGEMENT
 
@@ -246,6 +441,38 @@ SonareError sonare_project_add_clip(SonareProject* project, const SonareProjectC
   SONARE_C_CATCH
 #else
   SONARE_C_STUB_NOT_SUPPORTED(project, desc, out_clip_id);
+#endif
+}
+
+SonareError sonare_project_set_source_audio(SonareProject* project, uint32_t source_id,
+                                            const float* interleaved, int64_t frames, int channels,
+                                            int sample_rate) {
+  SONARE_C_API_ENTRY;
+#if defined(SONARE_WITH_ARRANGEMENT)
+  if (!project || source_id == 0) return SONARE_ERROR_INVALID_PARAMETER;
+  SonareProjectClipDesc desc{};
+  desc.audio_interleaved = interleaved;
+  desc.audio_frames = frames;
+  desc.audio_channels = channels;
+  desc.audio_sample_rate = sample_rate;
+  if (validate_audio_clip_payload(&desc, nullptr) != SONARE_OK) {
+    return SONARE_ERROR_INVALID_PARAMETER;
+  }
+  const arr::ClipSource* source = project->history.project().find_source(source_id);
+  if (source == nullptr || !std::holds_alternative<arr::AudioSourceRef>(*source)) {
+    return SONARE_ERROR_INVALID_PARAMETER;
+  }
+  SONARE_C_TRY
+  arr::AudioSourceSamples contents;
+  contents.sample_rate = static_cast<double>(sample_rate);
+  contents.channels = deinterleave(interleaved, frames, channels);
+  auto command =
+      make_replace_audio_content_command(&project->audio, source_id, std::move(contents));
+  if (!command || !project->history.apply(std::move(command))) return SONARE_ERROR_INVALID_STATE;
+  return SONARE_OK;
+  SONARE_C_CATCH
+#else
+  SONARE_C_STUB_NOT_SUPPORTED(project, source_id, interleaved, frames, channels, sample_rate);
 #endif
 }
 
@@ -581,12 +808,28 @@ SonareError sonare_project_remove_clip(SonareProject* project, uint32_t clip_id)
   SONARE_C_API_ENTRY;
 #if defined(SONARE_WITH_ARRANGEMENT)
   if (!project || clip_id == 0) return SONARE_ERROR_INVALID_PARAMETER;
-  if (project->history.project().find_clip(clip_id) == nullptr) {
+  const arr::Project& edit_project = project->history.project();
+  const arr::EditClip* clip = edit_project.find_clip(clip_id);
+  if (clip == nullptr) {
     return SONARE_ERROR_INVALID_PARAMETER;
   }
   SONARE_C_TRY
-  auto command = std::make_unique<arr::RemoveClip>(clip_id);
-  if (!project->history.apply(std::move(command))) return SONARE_ERROR_INVALID_STATE;
+  const std::vector<arr::SourceId> orphaned_sources = collect_orphaned_sources(edit_project, *clip);
+  std::vector<arr::SourceId> orphaned_audio_contents;
+  std::vector<arr::EditCommandPtr> commands;
+  commands.reserve(1 + orphaned_sources.size() + 1);
+  commands.push_back(std::make_unique<arr::RemoveClip>(clip_id));
+  for (const arr::SourceId source_id : orphaned_sources) {
+    commands.push_back(std::make_unique<arr::RemoveSourceInternal>(source_id));
+    if (project->audio.sources.find(source_id) != project->audio.sources.end()) {
+      orphaned_audio_contents.push_back(source_id);
+    }
+  }
+  if (!orphaned_audio_contents.empty()) {
+    commands.push_back(
+        make_remove_audio_content_command(&project->audio, std::move(orphaned_audio_contents)));
+  }
+  if (!project->history.apply_transaction(std::move(commands))) return SONARE_ERROR_INVALID_STATE;
   return SONARE_OK;
   SONARE_C_CATCH
 #else

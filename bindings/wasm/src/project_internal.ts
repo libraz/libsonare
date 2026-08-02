@@ -1,3 +1,4 @@
+import { resolveEnumOrdinal } from './codes';
 import { getSonareModule } from './module_state';
 import type {
   BuiltinSynthBinding,
@@ -5,6 +6,7 @@ import type {
   ProjectAutomationPoint,
   ProjectBounceOptions,
   ProjectChordSymbol,
+  ProjectClip,
   ProjectClipCompSegment,
   ProjectClipDesc,
   ProjectClipFade,
@@ -21,9 +23,11 @@ import type {
   ProjectMidiRouteConfig,
   ProjectMidiRouteResult,
   ProjectNotePairValidation,
+  ProjectSource,
   ProjectTempoCandidate,
   ProjectTempoSegment,
   ProjectTimeSignatureSegment,
+  ProjectTrack,
   ProjectTrackKind,
   ProjectWarpMapDesc,
   ProjectWarpMode,
@@ -109,6 +113,13 @@ export interface WasmProject {
   removeClip: (clipId: number) => void;
   setClipGain: (clipId: number, gain: number) => void;
   setClipFade: (clipId: number, fadeIn: ProjectClipFade, fadeOut: ProjectClipFade) => void;
+  unresolvedAudioSourceIds: () => number[];
+  setSourceAudio: (
+    sourceId: number,
+    audio: Float32Array,
+    channels: number,
+    sampleRate: number,
+  ) => void;
   setClipTakes: (
     clipId: number,
     takes: ReadonlyArray<ProjectClipTake>,
@@ -132,10 +143,10 @@ export interface WasmProject {
   ) => number;
   editAutomationLane: (
     trackId: number,
-    laneIndex: number,
+    targetParamId: number,
     desc: { targetParamId: number; points: ReadonlyArray<ProjectAutomationPoint> },
   ) => void;
-  removeAutomationLane: (trackId: number, laneIndex: number) => void;
+  removeAutomationLane: (trackId: number, targetParamId: number) => void;
   annotateKeys: (keys: ReadonlyArray<ProjectKeySegment>) => void;
   annotateChords: (chords: ReadonlyArray<ProjectChordSymbol>) => void;
   setAssistSidecar: (
@@ -155,6 +166,9 @@ export interface WasmProject {
   setMarker: (markerId: number, ppq: number, name: string) => number;
   setMarkerEx: (marker: ProjectMarker) => number;
   markerByIndex: (index: number) => ProjectMarker;
+  trackByIndex: (index: number) => ProjectTrack;
+  clipByIndex: (index: number) => ProjectClip;
+  sourceByIndex: (index: number) => ProjectSource;
   markerCount: () => number;
   trackCount: () => number;
   clipCount: () => number;
@@ -308,37 +322,17 @@ export function assertProjectMidiEvents(
 }
 
 export function projectTrackKindValue(kind: ProjectTrackKind | undefined): number {
-  if (kind === undefined || kind === 'audio') {
-    return 0;
-  }
-  if (kind === 'midi') {
-    return 1;
-  }
-  if (kind === 'aux') {
-    return 2;
-  }
-  return kind;
+  return resolveEnumOrdinal(kind ?? 'audio', { audio: 0, midi: 1, aux: 2 }, 'project track kind');
 }
 
 export function projectWarpModeValue(mode: ProjectWarpMode | undefined): number {
-  if (mode === undefined || mode === 'off') {
-    return 0;
-  }
-  if (mode === 'repitch') {
-    return 1;
-  }
-  if (mode === 'tempo-sync') {
-    return 2;
-  }
-  return mode;
+  return resolveEnumOrdinal(
+    mode ?? 'off',
+    { off: 0, repitch: 1, 'tempo-sync': 2 },
+    'project warp mode',
+  );
 }
 
 export function projectLoopModeValue(mode: ProjectLoopMode | undefined): number {
-  if (mode === undefined || mode === 'off') {
-    return 0;
-  }
-  if (mode === 'loop') {
-    return 1;
-  }
-  return mode;
+  return resolveEnumOrdinal(mode ?? 'off', { off: 0, loop: 1 }, 'project loop mode');
 }

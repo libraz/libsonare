@@ -19,6 +19,7 @@
 #include <string>
 #include <vector>
 
+#include "c_api/sonare_c_error_mapping.h"
 #include "wasm/bindings/common/common.h"
 #include "wasm/bindings/common/synth_patch_val.h"
 
@@ -61,26 +62,7 @@ inline val projectCompileResultToVal(const SonareProjectCompileResult& result) {
 }
 
 inline sonare::ErrorCode codeFromCError(SonareError err) {
-  switch (err) {
-    case SONARE_ERROR_FILE_NOT_FOUND:
-      return sonare::ErrorCode::FileNotFound;
-    case SONARE_ERROR_INVALID_FORMAT:
-      return sonare::ErrorCode::InvalidFormat;
-    case SONARE_ERROR_DECODE_FAILED:
-      return sonare::ErrorCode::DecodeFailed;
-    case SONARE_ERROR_INVALID_PARAMETER:
-      return sonare::ErrorCode::InvalidParameter;
-    case SONARE_ERROR_OUT_OF_MEMORY:
-      return sonare::ErrorCode::OutOfMemory;
-    case SONARE_ERROR_NOT_SUPPORTED:
-      return sonare::ErrorCode::NotImplemented;
-    case SONARE_ERROR_INVALID_STATE:
-      return sonare::ErrorCode::InvalidState;
-    case SONARE_OK:
-    case SONARE_ERROR_UNKNOWN:
-    default:
-      return sonare::ErrorCode::InvalidState;
-  }
+  return sonare_c_detail::error_code_from_c_error(err);
 }
 
 [[noreturn]] inline void throwCError(SonareError err, const char* context) {
@@ -168,11 +150,6 @@ struct ProjectWasm {
   // project sample rate, 2 channels, block 128, and auto-derived length).
   static SonareProjectBounceOptions bounceOptionsFromVal(val options);
 
-  // Maps a waveform name to its SonareSynthWaveform ordinal, or -1 if unknown.
-  // Mirrors the Node/Python accepted set: "sine", "saw"/"sawtooth", "square",
-  // "triangle".
-  static int waveformFromName(const std::string& name);
-
   // Reads a single { destinationId?, waveform?, gain?, attack?, decay?,
   // sustain?, release?, polyphony? } object into a built-in synth binding. Every
   // numeric synth field is "0 => default" per the C ABI, so unset fields stay 0.
@@ -258,6 +235,8 @@ struct ProjectWasm {
   static SonareProjectClipFade clipFadeFromVal(val desc);
 
   void setClipFade(uint32_t clip_id, val fade_in, val fade_out);
+  val unresolvedAudioSourceIds() const;
+  void setSourceAudio(uint32_t source_id, val audio, int channels, int sample_rate);
   void setClipTakes(uint32_t clip_id, val takes_val, uint32_t active_take_id);
   void setClipCompSegments(uint32_t clip_id, val segments_val);
   void setClipLoop(uint32_t clip_id, int loop_mode, double loop_length_ppq,
@@ -278,8 +257,8 @@ struct ProjectWasm {
       val desc, std::vector<SonareAutomationPoint>* storage);
 
   double addAutomationLane(uint32_t track_id, val desc);
-  void editAutomationLane(uint32_t track_id, double lane_index, val desc);
-  void removeAutomationLane(uint32_t track_id, double lane_index);
+  void editAutomationLane(uint32_t track_id, double target_param_id, val desc);
+  void removeAutomationLane(uint32_t track_id, double target_param_id);
 
   // --------------------------------------------------------------------------
   // MIR annotation streams (undoable)
@@ -309,6 +288,9 @@ struct ProjectWasm {
   uint32_t setMarker(uint32_t marker_id, double ppq, const std::string& name);
   uint32_t setMarkerEx(val marker);
   val markerByIndex(int index) const;
+  val trackByIndex(int index) const;
+  val clipByIndex(int index) const;
+  val sourceByIndex(int index) const;
   double markerCount() const;
   double trackCount() const;
   double clipCount() const;

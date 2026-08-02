@@ -68,6 +68,14 @@ struct SonareProject {
   std::shared_ptr<const sonare::midi::synth::Sf2File> soundfont;
 };
 
+// Compound public removals keep decoded PCM outside the arrangement model.
+// These helpers pair source-registry GC with AudioContentStore ownership so
+// RemoveClip and RemoveTrack can use one undoable transaction.
+arr::EditCommandPtr sonare_project_make_remove_audio_content_command(
+    arr::AudioContentStore* store, std::vector<arr::SourceId> source_ids);
+std::vector<arr::SourceId> sonare_project_collect_orphaned_sources_for_track(
+    const arr::Project& project, arr::TrackId removed_track_id);
+
 #if defined(__clang__)
 #pragma clang diagnostic push
 #pragma clang diagnostic ignored "-Wunused-function"
@@ -101,8 +109,7 @@ bool valid_nibble(uint8_t value) noexcept { return value <= 15; }
 
 SonareError validate_audio_clip_payload(const SonareProjectClipDesc* desc, size_t* out_samples) {
   if (out_samples) *out_samples = 0;
-  if (!desc->audio_interleaved && desc->audio_frames == 0 && desc->audio_channels == 0 &&
-      desc->audio_sample_rate == 0) {
+  if (!desc->audio_interleaved && desc->audio_frames == 0) {
     return SONARE_OK;
   }
   if (!desc->audio_interleaved || desc->audio_frames <= 0 || desc->audio_channels <= 0 ||

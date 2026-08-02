@@ -722,6 +722,21 @@ CompileResult compile(const Project& project, const MidiContentStore& midi,
 #if !defined(SONARE_WITH_MIXING)
       sched.pan = effective_track_pan(project.find_track(clip.track_id));
 #endif
+      if (loop_crossfade_samples > 0) {
+        if (sched.warp_mode != engine::WarpMode::kOff) {
+          add_diag(&result, Diagnostic::Code::kLoopCrossfadeUnavailable,
+                   Diagnostic::Severity::kWarning, clip.id,
+                   "loop seam crossfade is disabled for runtime-warped audio");
+        } else if (clip_offset_samples <= 0) {
+          add_diag(&result, Diagnostic::Code::kLoopCrossfadeUnavailable,
+                   Diagnostic::Severity::kWarning, clip.id,
+                   "loop seam crossfade requires source pre-roll; set a positive source offset");
+        } else if (loop_length_samples < 2) {
+          add_diag(&result, Diagnostic::Code::kLoopCrossfadeUnavailable,
+                   Diagnostic::Severity::kWarning, clip.id,
+                   "loop seam crossfade requires a loop body of at least two samples");
+        }
+      }
       sched.storage = std::move(storage);
       timeline.audio_clips.push_back(std::move(sched));
     }

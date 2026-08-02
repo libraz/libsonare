@@ -98,7 +98,7 @@ TEST_CASE("project tempo analysis exposes ranked candidates and applies detected
     audio[beat] = 1.0f;
   }
 
-  SonareProjectTempoCandidate candidates[3]{};
+  SonareProjectTempoCandidate candidates[SONARE_PROJECT_MAX_TEMPO_CANDIDATES]{};
   size_t count = 0;
   REQUIRE(sonare_project_analyze_tempo(project, audio.data(), audio.size(), kSampleRate, candidates,
                                        std::size(candidates), &count) == SONARE_OK);
@@ -152,6 +152,23 @@ TEST_CASE("project C surface composite edits roll back on failure", "[project]")
   REQUIRE(failed_track == 0);
   REQUIRE(failed_clip == 0);
   REQUIRE(serialize(project) == before_midi);
+
+  size_t unresolved = 0;
+  REQUIRE(sonare_project_unresolved_audio_source_count(project, &unresolved) == SONARE_OK);
+  REQUIRE(unresolved == 1);
+  uint32_t source_id = 0;
+  REQUIRE(sonare_project_unresolved_audio_source_id_by_index(project, 0, &source_id) == SONARE_OK);
+  const std::vector<float> samples(16, 0.25f);
+  REQUIRE(sonare_project_set_source_audio(project, source_id, samples.data(), samples.size(), 1,
+                                          48000) == SONARE_OK);
+  REQUIRE(sonare_project_unresolved_audio_source_count(project, &unresolved) == SONARE_OK);
+  REQUIRE(unresolved == 0);
+  REQUIRE(sonare_project_undo(project) == SONARE_OK);
+  REQUIRE(sonare_project_unresolved_audio_source_count(project, &unresolved) == SONARE_OK);
+  REQUIRE(unresolved == 1);
+  REQUIRE(sonare_project_redo(project) == SONARE_OK);
+  REQUIRE(sonare_project_unresolved_audio_source_count(project, &unresolved) == SONARE_OK);
+  REQUIRE(unresolved == 0);
 
   sonare_project_destroy(project);
 }

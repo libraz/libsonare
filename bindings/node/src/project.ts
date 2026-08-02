@@ -10,6 +10,7 @@ import type {
   ProjectAutomationPoint,
   ProjectBounceOptions,
   ProjectChordSymbol,
+  ProjectClip,
   ProjectClipCompSegment,
   ProjectClipDesc,
   ProjectClipFade,
@@ -25,9 +26,11 @@ import type {
   ProjectMidiEvent,
   ProjectMidiRouteConfig,
   ProjectMidiRouteResult,
+  ProjectSource,
   ProjectTempoCandidate,
   ProjectTempoSegment,
   ProjectTimeSignatureSegment,
+  ProjectTrack,
   ProjectTrackDesc,
   Sf2InstrumentConfig,
   Sf2ProgramStatus,
@@ -380,6 +383,16 @@ export class Project {
     return this.native.markerByIndex(index);
   }
 
+  trackByIndex(index: number): ProjectTrack {
+    return this.native.trackByIndex(index);
+  }
+  clipByIndex(index: number): ProjectClip {
+    return this.native.clipByIndex(index);
+  }
+  sourceByIndex(index: number): ProjectSource {
+    return this.native.sourceByIndex(index);
+  }
+
   /** Number of markers in the project value model. */
   markerCount(): number {
     return this.native.markerCount();
@@ -408,6 +421,21 @@ export class Project {
   /** Number of sources in the project value model. */
   sourceCount(): number {
     return this.native.sourceCount();
+  }
+
+  /** Audio source ids that need decoded PCM after deserialization. */
+  unresolvedAudioSourceIds(): number[] {
+    return this.native.unresolvedAudioSourceIds();
+  }
+
+  /** Register decoded interleaved PCM for an existing audio source (undoable). */
+  setSourceAudio(
+    sourceId: number,
+    audio: Float32Array,
+    channels: number,
+    sampleRate: number,
+  ): void {
+    this.native.setSourceAudio(sourceId, audio, channels, sampleRate);
   }
 
   /** Number of tempo segments in the project value model. */
@@ -618,20 +646,24 @@ export class Project {
 
   /**
    * Append an automation lane to a track via an undoable edit; returns the
-   * appended lane's index within the track.
+   * lane's stable target parameter id.
    */
   addAutomationLane(trackId: number, desc: ProjectAutomationLaneDesc): number {
     return this.native.addAutomationLane(trackId, projectAutomationLaneValue(desc));
   }
 
-  /** Replace an existing automation lane in place via an undoable edit. */
-  editAutomationLane(trackId: number, laneIndex: number, desc: ProjectAutomationLaneDesc): void {
-    this.native.editAutomationLane(trackId, laneIndex, projectAutomationLaneValue(desc));
+  /** Replace the lane identified by its stable target parameter id. */
+  editAutomationLane(
+    trackId: number,
+    targetParamId: number,
+    desc: ProjectAutomationLaneDesc,
+  ): void {
+    this.native.editAutomationLane(trackId, targetParamId, projectAutomationLaneValue(desc));
   }
 
-  /** Remove an automation lane from a track via an undoable edit. */
-  removeAutomationLane(trackId: number, laneIndex: number): void {
-    this.native.removeAutomationLane(trackId, laneIndex);
+  /** Remove the lane identified by its stable target parameter id. */
+  removeAutomationLane(trackId: number, targetParamId: number): void {
+    this.native.removeAutomationLane(trackId, targetParamId);
   }
 
   /** Undo the most recent edit (throws when the undo stack is empty). */

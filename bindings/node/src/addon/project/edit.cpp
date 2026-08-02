@@ -11,12 +11,25 @@ using namespace sonare_node::project;
 
 namespace {
 
-SonareProjectClipFade ClipFadeFromObject(const Napi::Object& obj) {
+bool ClipFadeFromObject(Napi::Env env, const Napi::Object& obj, SonareProjectClipFade* out) {
+  if (out == nullptr) return false;
   SonareProjectClipFade fade{};
   const Napi::Value length = obj.Get("lengthPpq");
   fade.length_ppq = length.IsNumber() ? length.As<Napi::Number>().DoubleValue() : 0.0;
-  fade.curve = static_cast<uint32_t>(IntProperty(obj, "curve", SONARE_FADE_CURVE_LINEAR));
-  return fade;
+  const Napi::Value curve = obj.Get("curve");
+  if (curve.IsString()) {
+    const std::string name = curve.As<Napi::String>().Utf8Value();
+    const SonareError err = sonare_project_fade_curve_from_name(name.c_str(), &fade.curve);
+    if (err != SONARE_OK) {
+      sonare_node::ThrowSonareError(env, err, "Invalid project fade curve: ");
+      return false;
+    }
+  } else {
+    fade.curve = static_cast<uint32_t>(IntProperty(obj, "curve", SONARE_FADE_CURVE_LINEAR));
+  }
+  if (env.IsExceptionPending()) return false;
+  *out = fade;
+  return true;
 }
 
 bool RequiredUint32Property(Napi::Env env, const Napi::Object& obj, const char* name,
@@ -229,13 +242,14 @@ Napi::Value ProjectWrap::AddClip(const Napi::CallbackInfo& info) {
                                : obj.Get("sourceOffsetPpq").As<Napi::Number>().DoubleValue();
   desc.gain =
       obj.Get("gain").IsUndefined() ? 1.0f : obj.Get("gain").As<Napi::Number>().FloatValue();
-  desc.audio_channels = IntProperty(obj, "audioChannels", 1);
+  desc.audio_channels = IntProperty(obj, "audioChannels", 0);
   desc.audio_sample_rate = IntProperty(obj, "audioSampleRate", 0);
 
   // Keep the interleaved samples alive (as a copy) for the duration of the call.
   std::vector<float> audio;
   Napi::Value audio_value = obj.Get("audio");
   if (sonare_node::IsFloat32Array(audio_value)) {
+    if (desc.audio_channels == 0) desc.audio_channels = 1;
     Napi::Float32Array array = audio_value.As<Napi::Float32Array>();
     if (desc.audio_channels <= 0 ||
         array.ElementLength() % static_cast<size_t>(desc.audio_channels) != 0) {
@@ -445,10 +459,10 @@ Napi::Value ProjectWrap::SetClipFade(const Napi::CallbackInfo& info) {
   SonareProjectClipFade fade_in{};
   SonareProjectClipFade fade_out{};
   if (info.Length() > 1 && info[1].IsObject()) {
-    fade_in = ClipFadeFromObject(info[1].As<Napi::Object>());
+    if (!ClipFadeFromObject(env, info[1].As<Napi::Object>(), &fade_in)) return env.Undefined();
   }
   if (info.Length() > 2 && info[2].IsObject()) {
-    fade_out = ClipFadeFromObject(info[2].As<Napi::Object>());
+    if (!ClipFadeFromObject(env, info[2].As<Napi::Object>(), &fade_out)) return env.Undefined();
   }
   ThrowIfError(env, sonare_project_set_clip_fade(project_, clip_id, &fade_in, &fade_out));
   return env.Undefined();
@@ -556,16 +570,17 @@ Napi::Value ProjectWrap::AddAutomationLane(const Napi::CallbackInfo& info) {
   if (!FillAutomationLaneDesc(env, info[1].As<Napi::Object>(), &points, &desc)) {
     return env.Undefined();  // exception already pending
   }
-  size_t out_index = 0;
-  ThrowIfError(env, sonare_project_add_automation_lane(project_, track_id, &desc, &out_index));
+  uint32_t out_target_param_id = 0;
+  ThrowIfError(env,
+               sonare_project_add_automation_lane(project_, track_id, &desc, &out_target_param_id));
   if (env.IsExceptionPending()) return env.Undefined();
-  return Napi::Number::New(env, static_cast<double>(out_index));
+  return Napi::Number::New(env, static_cast<double>(out_target_param_id));
 }
 
 Napi::Value ProjectWrap::EditAutomationLane(const Napi::CallbackInfo& info) {
   Napi::Env env = info.Env();
   const uint32_t track_id = Uint32Arg(info, 0, 0);
-  const size_t lane_index = static_cast<size_t>(NumberArg(info, 1, 0.0));
+  const uint32_t target_param_id = Uint32Arg(info, 1, 0);
   if (info.Length() < 3 || !info[2].IsObject()) {
     Napi::TypeError::New(env, "editAutomationLane expects a lane descriptor object")
         .ThrowAsJavaScriptException();
@@ -576,15 +591,15 @@ Napi::Value ProjectWrap::EditAutomationLane(const Napi::CallbackInfo& info) {
   if (!FillAutomationLaneDesc(env, info[2].As<Napi::Object>(), &points, &desc)) {
     return env.Undefined();  // exception already pending
   }
-  ThrowIfError(env, sonare_project_edit_automation_lane(project_, track_id, lane_index, &desc));
+  ThrowIfError(env,
+               sonare_project_edit_automation_lane(project_, track_id, target_param_id, &desc));
   return env.Undefined();
 }
 
 Napi::Value ProjectWrap::RemoveAutomationLane(const Napi::CallbackInfo& info) {
   Napi::Env env = info.Env();
-  ThrowIfError(env,
-               sonare_project_remove_automation_lane(project_, Uint32Arg(info, 0, 0),
-                                                     static_cast<size_t>(NumberArg(info, 1, 0.0))));
+  ThrowIfError(env, sonare_project_remove_automation_lane(project_, Uint32Arg(info, 0, 0),
+                                                          Uint32Arg(info, 1, 0)));
   return env.Undefined();
 }
 

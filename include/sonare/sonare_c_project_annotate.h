@@ -186,6 +186,12 @@ typedef struct {
   SonareProjectTimeSignatureSegment first_time_signature;
 } SonareProjectTempoCandidate;
 
+/// Maximum number of ranked tempo candidates emitted by
+/// @ref sonare_project_analyze_tempo (primary, half, and double tempo).
+/// Callers can allocate this fixed-size array and complete analysis in one
+/// call; it is not necessary to make a capacity-0 count query first.
+#define SONARE_PROJECT_MAX_TEMPO_CANDIDATES 3u
+
 /// @brief Detects tempo from a mono audio buffer and installs the primary
 ///        tempo-segment estimate via an edit command (undoable). Uses the
 ///        beat analysis -> tempo bridge. @p out_bpm (optional) receives the
@@ -196,8 +202,11 @@ SonareError sonare_project_auto_tempo(SonareProject* project, const float* audio
                                       int sample_rate, float* out_bpm);
 
 /// @brief Returns ranked primary/half/double tempo candidates without mutating
-///        the project. Set @p candidates to NULL with @p capacity 0 to query
-///        @p out_count. At most three candidates are emitted.
+///        the project. At most @ref SONARE_PROJECT_MAX_TEMPO_CANDIDATES
+///        candidates are emitted, so normal callers should pass an array of
+///        that size and avoid a capacity-0 count query followed by a second,
+///        identical analysis. A NULL @p candidates with @p capacity 0 remains
+///        available when a caller only needs the count.
 SonareError sonare_project_analyze_tempo(const SonareProject* project, const float* audio,
                                          size_t len, int sample_rate,
                                          SonareProjectTempoCandidate* candidates, size_t capacity,

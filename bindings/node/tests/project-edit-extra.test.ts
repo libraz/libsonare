@@ -24,12 +24,12 @@ function buildProject(): { project: Project; track: number; clip: number } {
 
 describe('Project edit ops (new bindings)', () => {
   it('removeClip removes a clip and undo restores it', () => {
-    const project = Project.create();
-    const track = project.addTrack({ kind: 'audio', name: 'a' });
-    const clip = project.addClip({ trackId: track, startPpq: 0, lengthPpq: 4, audioChannels: 0 });
+    const { project, clip } = buildProject();
     const before = project.toJson();
     project.removeClip(clip);
-    expect(project.toJson()).not.toBe(before);
+    // removeClip reclaims the now-unreferenced source registry entry as well
+    // as decoded PCM, rather than leaving a serialized source orphan behind.
+    expect(project.toJson()).toContain('"sources":[]');
     project.undo();
     expect(project.toJson()).toBe(before);
     project.destroy();
@@ -63,9 +63,9 @@ describe('Project edit ops (new bindings)', () => {
     const project = Project.create();
     const track = project.addTrack({ kind: 'audio' });
     const clip = project.addClip({ trackId: track, startPpq: 0, lengthPpq: 4, audioChannels: 0 });
-    project.setClipFade(clip, { lengthPpq: 0.5, curve: 'equal-power' }, { curve: 'equal_power' });
+    project.setClipFade(clip, { lengthPpq: 0.5, curve: 'EXP' as never }, { curve: 'equal_power' });
     const json = project.toJson();
-    expect(json).toContain('"fade_in":{"curve":1,"length_ppq":0.5}');
+    expect(json).toContain('"fade_in":{"curve":2,"length_ppq":0.5}');
     expect(json).toContain('"fade_out":{"curve":1,"length_ppq":0}');
     project.destroy();
   });
@@ -311,20 +311,20 @@ describe('Project edit ops (new bindings)', () => {
     project.destroy();
   });
 
-  it('addAutomationLane returns an index; edit + remove undo cleanly', () => {
+  it('addAutomationLane returns its stable target id; edit + remove undo cleanly', () => {
     const project = Project.create();
     const track = project.addTrack({ kind: 'audio' });
-    const index = project.addAutomationLane(track, {
+    const targetParamId = project.addAutomationLane(track, {
       targetParamId: 1,
       points: [
         { ppq: 0, value: 0, curve: 0 },
         { ppq: 4, value: 1, curveToNext: 'exponential' },
       ],
     });
-    expect(index).toBe(0);
+    expect(targetParamId).toBe(1);
 
     const afterAdd = project.toJson();
-    project.editAutomationLane(track, index, {
+    project.editAutomationLane(track, targetParamId, {
       targetParamId: 1,
       points: [{ ppq: 0, value: 0.5 }],
     });
@@ -332,7 +332,7 @@ describe('Project edit ops (new bindings)', () => {
     project.undo();
     expect(project.toJson()).toBe(afterAdd);
 
-    project.removeAutomationLane(track, index);
+    project.removeAutomationLane(track, targetParamId);
     expect(project.toJson()).not.toBe(afterAdd);
     project.undo();
     expect(project.toJson()).toBe(afterAdd);
@@ -438,6 +438,14 @@ describe('RealtimeEngine MIDI / parameter bindings', () => {
     expect(() => engine.pushMidiCc(0, 0, 0, 7, 100, -1)).not.toThrow();
     expect(() => engine.pushMidiPanic()).not.toThrow();
     expect(() => engine.pushMidiPanic(-1)).not.toThrow();
+    engine.destroy();
+  });
+
+  it('pushMidiCc rejects MIDI bytes that would otherwise be truncated', () => {
+    const engine = preparedEngine();
+    expect(() => engine.pushMidiCc(0, 0, 0, 256, 100)).toThrow(RangeError);
+    expect(() => engine.pushMidiCc(0, 0, 0, 7, 300)).toThrow(RangeError);
+    expect(() => engine.pushMidiCc(0, 0, 0, 7.5, 100)).toThrow(RangeError);
     engine.destroy();
   });
 

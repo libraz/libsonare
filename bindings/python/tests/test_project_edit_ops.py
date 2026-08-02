@@ -24,7 +24,8 @@ def test_remove_clip_is_undoable() -> None:
     p, _track, clip = _audio_project()
     before = p.to_json()
     p.remove_clip(clip)
-    assert p.to_json() != before
+    # The clip's source metadata is reclaimed along with its decoded PCM.
+    assert '"sources":[]' in p.to_json()
     p.undo()
     assert p.to_json() == before
 
@@ -46,7 +47,7 @@ def test_set_clip_gain_accepts_zero_mute_and_undoes() -> None:
 def test_set_clip_fade_and_loop_round_trip() -> None:
     p, _track, clip = _audio_project()
     before = p.to_json()
-    p.set_clip_fade(clip, 24.0, 48.0, fade_in_curve="equalPower", fade_out_curve="equal_power")
+    p.set_clip_fade(clip, 24.0, 48.0, fade_in_curve="EXP", fade_out_curve="equal_power")
     assert p.to_json() != before
     p.undo()
     assert p.to_json() == before
@@ -142,15 +143,17 @@ def test_clear_history_discards_undo_stack() -> None:
 def test_automation_lane_add_edit_remove() -> None:
     p, track, _clip = _audio_project()
     before = p.to_json()
-    idx = p.add_automation_lane(track, 1, [(0.0, 0.0, "linear"), (480.0, 1.0, "linear")])
-    assert idx == 0
+    target_param_id = p.add_automation_lane(
+        track, 1, [(0.0, 0.0, "linear"), (480.0, 1.0, "linear")]
+    )
+    assert target_param_id == 1
     after_add = p.to_json()
     assert after_add != before
-    p.edit_automation_lane(track, idx, 1, [(0.0, 0.5, "hold")])
+    p.edit_automation_lane(track, target_param_id, [(0.0, 0.5, "hold")])
     assert p.to_json() != after_add
     p.undo()  # undo edit
     assert p.to_json() == after_add
-    p.remove_automation_lane(track, idx)
+    p.remove_automation_lane(track, target_param_id)
     assert p.to_json() != after_add
     p.undo()  # undo remove restores the lane
     assert p.to_json() == after_add

@@ -801,18 +801,20 @@ TEST_CASE("invalid project sample rate is rejected with a diagnostic", "[seriali
 }
 
 TEST_CASE("malformed warp map is dropped with a diagnostic instead of silently", "[serialize]") {
-  // Anchors that are not strictly increasing violate the warp mapping contract;
-  // set_warp_map rejects them. The loader must surface that as a diagnostic
-  // rather than discarding the map silently.
-  auto result = project_from_json(
-      "{\"version\": 1, \"warp_maps\": [{\"id\": 7, \"anchors\": ["
-      "{\"warp_sample\": 100.0, \"source_sample\": 0.0}, "
-      "{\"warp_sample\": 50.0, \"source_sample\": 100.0}]}]}");
-  bool found = false;
-  for (const auto& d : result.diagnostics) {
-    if (d.code == "invalid_warp_map") found = true;
+  // The public edit API requires two or more strictly-increasing anchors.
+  // Loader input follows that same contract and must retain a diagnostic.
+  for (const char* json : {"{\"version\": 1, \"warp_maps\": [{\"id\": 7, \"anchors\": ["
+                           "{\"warp_sample\": 0.0, \"source_sample\": 0.0}]}]}",
+                           "{\"version\": 1, \"warp_maps\": [{\"id\": 7, \"anchors\": ["
+                           "{\"warp_sample\": 100.0, \"source_sample\": 0.0}, "
+                           "{\"warp_sample\": 50.0, \"source_sample\": 100.0}]}]}"}) {
+    auto result = project_from_json(json);
+    bool found = false;
+    for (const auto& d : result.diagnostics) {
+      if (d.code == "invalid_warp_map") found = true;
+    }
+    CHECK(found);
   }
-  CHECK(found);
 }
 
 TEST_CASE("clip referencing a missing warp map reports a dangling diagnostic", "[serialize]") {

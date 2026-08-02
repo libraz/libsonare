@@ -177,6 +177,12 @@ typedef enum {
   SONARE_FADE_CURVE_LOGARITHMIC = 3,
 } SonareProjectFadeCurve;
 
+/// @brief Resolves a clip fade-curve name to a @ref SonareProjectFadeCurve
+/// ordinal. Names are ASCII case-insensitive; `-` and `_` are interchangeable.
+/// Accepted names are linear, equal-power/equalpower, exponential/exp, and
+/// logarithmic/log.
+SonareError sonare_project_fade_curve_from_name(const char* name, uint32_t* out_curve);
+
 /// @brief Clip loop-mode ordinals; mirror sonare::arrangement::LoopMode.
 ///        Pinned by a static_assert in the .cpp.
 typedef enum {
@@ -466,24 +472,26 @@ SonareError sonare_project_set_track_route(SonareProject* project, uint32_t trac
 /// @brief Appends an automation lane to a track via an undoable edit command.
 ///        @p track_id must reference an existing track; @p desc describes the
 ///        target parameter id and breakpoints (see @ref SonareAutomationLaneDesc).
-///        @p out_lane_index receives the appended lane's index within the track
-///        (may be NULL).
+///        @p out_target_param_id receives the lane's stable target parameter id
+///        (may be NULL). A track may contain at most one lane per target.
 SonareError sonare_project_add_automation_lane(SonareProject* project, uint32_t track_id,
                                                const SonareAutomationLaneDesc* desc,
-                                               size_t* out_lane_index);
+                                               uint32_t* out_target_param_id);
 
 /// @brief Replaces an existing automation lane in place via an undoable edit
 ///        command. @p track_id must reference an existing track and
-///        @p lane_index an existing lane on it.
+///        @p target_param_id identifies an existing lane on it. The descriptor
+///        must retain the same target id; changing a lane's identity requires
+///        remove then add.
 SonareError sonare_project_edit_automation_lane(SonareProject* project, uint32_t track_id,
-                                                size_t lane_index,
+                                                uint32_t target_param_id,
                                                 const SonareAutomationLaneDesc* desc);
 
 /// @brief Removes an automation lane from a track via an undoable edit command.
-///        @p track_id must reference an existing track and @p lane_index an
-///        existing lane on it.
+///        @p track_id must reference an existing track and @p target_param_id
+///        an existing lane on it.
 SonareError sonare_project_remove_automation_lane(SonareProject* project, uint32_t track_id,
-                                                  size_t lane_index);
+                                                  uint32_t target_param_id);
 
 /// @brief Undoes the most recent edit. Returns SONARE_ERROR_INVALID_STATE when
 ///        the undo stack is empty.

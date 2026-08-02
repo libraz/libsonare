@@ -44,6 +44,19 @@ class EditCommandGroup final : public EditCommand {
   std::vector<EditCommandPtr> commands_;
 };
 
+// Revert commands that have already succeeded in a transaction before restoring
+// the value-owned Project/MIDI snapshots.  Most EditCommands change only those
+// two stores, but a command may also own a tightly coupled sidecar (for example
+// decoded PCM in AudioContentStore).  Restoring just the snapshots would leave
+// such a sidecar ahead of the history after a later command fails.
+bool rollback_applied_commands(std::vector<EditCommandPtr>& inverses, Project& project,
+                               MidiContentStore& store) {
+  for (auto it = inverses.rbegin(); it != inverses.rend(); ++it) {
+    if (*it == nullptr || !(*it)->apply(project, store)) return false;
+  }
+  return true;
+}
+
 }  // namespace
 
 void EditHistory::push_undo(Entry entry) {
@@ -123,17 +136,24 @@ bool EditHistory::apply_transaction(std::vector<EditCommandPtr> commands) {
   if (batch_mutates_store) {
     transaction_store_before = midi_content_;
   }
-  const auto rollback = [&]() {
-    project_ = transaction_before;
-    if (batch_mutates_store) {
-      midi_content_ = transaction_store_before;
-    }
-  };
 
   std::vector<EditCommandPtr> forward;
   std::vector<EditCommandPtr> inverse;
   forward.reserve(commands.size());
   inverse.reserve(commands.size());
+
+  const auto rollback = [&]() {
+    // Apply captured inverses first so commands which maintain external
+    // control-thread state (such as AudioContentStore transfers) return that
+    // state to its pre-transaction ownership before the value snapshots below
+    // are restored.  The snapshots remain the authoritative fallback for the
+    // Project and MIDI stores even if a malformed inverse reports failure.
+    (void)rollback_applied_commands(inverse, project_, midi_content_);
+    project_ = transaction_before;
+    if (batch_mutates_store) {
+      midi_content_ = transaction_store_before;
+    }
+  };
 
   for (auto& command : commands) {
     if (command == nullptr) {

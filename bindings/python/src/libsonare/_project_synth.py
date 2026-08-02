@@ -42,6 +42,13 @@ _SYNTH_OSC_WAVEFORMS = {
     "triangle": 4,
     "noise": 5,
 }
+_BUILTIN_SYNTH_WAVEFORMS = {
+    "sine": 0,
+    "saw": 1,
+    "sawtooth": 1,
+    "square": 2,
+    "triangle": 3,
+}
 _SYNTH_FILTER_MODELS = {
     "default": 0,
     "svf": 1,
@@ -85,6 +92,7 @@ _SYNTH_MOD_DESTINATIONS = {
 SYNTH_ENUM_TABLES = {
     "engine_modes": tuple(_SYNTH_ENGINE_MODES),
     "waveforms": tuple(_SYNTH_OSC_WAVEFORMS),
+    "builtin_waveforms": tuple(_BUILTIN_SYNTH_WAVEFORMS),
     "filter_models": tuple(_SYNTH_FILTER_MODELS),
     "filter_outputs": tuple(_SYNTH_FILTER_OUTPUTS),
     "body_types": tuple(_SYNTH_BODY_TYPES),
@@ -94,6 +102,7 @@ SYNTH_ENUM_TABLES = {
 _SYNTH_ENUM_KINDS = {
     "engine_modes": 0,
     "waveforms": 1,
+    "builtin_waveforms": 7,
     "filter_models": 2,
     "filter_outputs": 3,
     "body_types": 4,

@@ -5,12 +5,11 @@ from __future__ import annotations
 
 import ctypes
 from collections.abc import Mapping, Sequence
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, cast
 
 import numpy as np
 
 from ._project_model import *  # noqa: F403
-from ._project_model import _marker_name_bytes
 from ._project_synth import (
     SYNTH_ENUM_TABLES as SYNTH_ENUM_TABLES,
 )
@@ -20,17 +19,20 @@ from ._project_synth import (
 from ._runtime import (
     SonareProjectAssistSidecar,
     SonareProjectChordSymbol,
+    SonareProjectClip,
     SonareProjectCompileResult,
     SonareProjectKeySegment,
     SonareProjectMarker,
+    SonareProjectSource,
     SonareProjectTempoCandidate,
     SonareProjectTempoSegment,
     SonareProjectTimeSignatureSegment,
+    SonareProjectTrack,
     _check,
     _get_lib,
     _to_c_float_array,
 )
-from .types import ProjectMarker
+from .types import ProjectClip, ProjectMarker, ProjectSource, ProjectTrack
 
 
 class _ProjectInspectionMixin:
@@ -129,15 +131,16 @@ class _ProjectInspectionMixin:
         """
         rows = list(keys)
         count = len(rows)
-        c_keys = (SonareProjectKeySegment * count)() if count else None
-        for i, k in enumerate(rows):
-            seq = tuple(k)
-            if len(seq) < 4:
-                raise ValueError(f"keys[{i}] must contain (start_ppq, end_ppq, tonic_pc, mode)")
-            c_keys[i].start_ppq = float(seq[0])
-            c_keys[i].end_ppq = float(seq[1])
-            c_keys[i].tonic_pc = int(seq[2])
-            c_keys[i].mode = int(seq[3])
+        c_keys = (SonareProjectKeySegment * count)()
+        if c_keys is not None:
+            for i, k in enumerate(rows):
+                seq = tuple(k)
+                if len(seq) < 4:
+                    raise ValueError(f"keys[{i}] must contain (start_ppq, end_ppq, tonic_pc, mode)")
+                c_keys[i].start_ppq = float(seq[0])
+                c_keys[i].end_ppq = float(seq[1])
+                c_keys[i].tonic_pc = int(seq[2])
+                c_keys[i].mode = int(seq[3])
         _check(
             _get_lib().sonare_project_annotate_keys(
                 self._require_handle(), c_keys, ctypes.c_size_t(count)
@@ -155,28 +158,34 @@ class _ProjectInspectionMixin:
         """
         rows = list(chords)
         count = len(rows)
-        c_chords = (SonareProjectChordSymbol * count)() if count else None
+        c_chords = (SonareProjectChordSymbol * count)()
         # Keep extension arrays and roman-numeral byte strings alive for the call.
         backing: list[object] = []
-        for i, c in enumerate(rows):
-            ext = list(c.get("extensions", []) or [])
-            ext_count = len(ext)
-            c_ext = (
-                (ctypes.c_uint8 * ext_count)(*[int(e) & 0xFF for e in ext]) if ext_count else None
-            )
-            backing.append(c_ext)
-            roman = c.get("roman_numeral")
-            roman_bytes = roman.encode("utf-8") if isinstance(roman, str) and roman else None
-            backing.append(roman_bytes)
-            c_chords[i].start_ppq = float(c["start_ppq"])
-            c_chords[i].end_ppq = float(c["end_ppq"])
-            c_chords[i].root_pc = int(c.get("root_pc", 255))
-            c_chords[i].quality = int(c.get("quality", 0))
-            c_chords[i].extensions = c_ext
-            c_chords[i].extension_count = ctypes.c_size_t(ext_count)
-            c_chords[i].slash_bass_pc = int(c.get("slash_bass_pc", 255))
-            c_chords[i].roman_numeral = roman_bytes
-            c_chords[i].modulation_boundary = 1 if c.get("modulation_boundary") else 0
+        if c_chords is not None:
+            for i, c in enumerate(rows):
+                extension_values = c.get("extensions", []) or []
+                if not isinstance(extension_values, Sequence) or isinstance(extension_values, str):
+                    raise TypeError("chord extensions must be a sequence")
+                ext = [int(cast(int, value)) for value in extension_values]
+                ext_count = len(ext)
+                c_ext = (
+                    (ctypes.c_uint8 * ext_count)(*[int(e) & 0xFF for e in ext])
+                    if ext_count
+                    else None
+                )
+                backing.append(c_ext)
+                roman = c.get("roman_numeral")
+                roman_bytes = roman.encode("utf-8") if isinstance(roman, str) and roman else None
+                backing.append(roman_bytes)
+                c_chords[i].start_ppq = float(cast(float, c["start_ppq"]))
+                c_chords[i].end_ppq = float(cast(float, c["end_ppq"]))
+                c_chords[i].root_pc = int(cast(int, c.get("root_pc", 255)))
+                c_chords[i].quality = int(cast(int, c.get("quality", 0)))
+                c_chords[i].extensions = c_ext
+                c_chords[i].extension_count = ctypes.c_size_t(ext_count)
+                c_chords[i].slash_bass_pc = int(cast(int, c.get("slash_bass_pc", 255)))
+                c_chords[i].roman_numeral = roman_bytes
+                c_chords[i].modulation_boundary = 1 if c.get("modulation_boundary") else 0
         _check(
             _get_lib().sonare_project_annotate_chords(
                 self._require_handle(), c_chords, ctypes.c_size_t(count)
@@ -303,11 +312,13 @@ class _ProjectInspectionMixin:
         raw.key_fifths = int(marker.key_fifths)
         raw.key_minor = 1 if marker.key_minor else 0
         raw.ppq = float(marker.ppq)
-        raw.name = _marker_name_bytes(marker.name)
         out_id = ctypes.c_uint32()
         _check(
-            _get_lib().sonare_project_set_marker_ex(
-                self._require_handle(), ctypes.byref(raw), ctypes.byref(out_id)
+            _get_lib().sonare_project_set_marker_ex_name(
+                self._require_handle(),
+                ctypes.byref(raw),
+                (marker.name or "").encode("utf-8"),
+                ctypes.byref(out_id),
             )
         )
         return int(out_id.value)
@@ -320,13 +331,81 @@ class _ProjectInspectionMixin:
                 self._require_handle(), ctypes.c_size_t(int(index)), ctypes.byref(raw)
             )
         )
+        full_name = ctypes.c_char_p()
+        lib = _get_lib()
+        _check(
+            lib.sonare_project_marker_name_by_index(
+                self._require_handle(), ctypes.c_size_t(int(index)), ctypes.byref(full_name)
+            )
+        )
+        try:
+            name = full_name.value.decode("utf-8") if full_name.value else ""
+        finally:
+            lib.sonare_free_string(full_name)
         return ProjectMarker(
             id=int(raw.id),
             ppq=float(raw.ppq),
-            name=bytes(raw.name).split(b"\x00", 1)[0].decode("utf-8", "replace"),
+            name=name,
             kind=int(raw.kind),
             key_fifths=int(raw.key_fifths),
             key_minor=bool(raw.key_minor),
+        )
+
+    def track_by_index(self, index: int) -> ProjectTrack:
+        """Read a stored project track by 0-based index."""
+        raw = SonareProjectTrack()
+        _check(
+            _get_lib().sonare_project_track_by_index(
+                self._require_handle(), int(index), ctypes.byref(raw)
+            )
+        )
+        return ProjectTrack(
+            id=int(raw.id),
+            kind=int(raw.kind),
+            midi_destination_id=int(raw.midi_destination_id),
+            gain=float(raw.gain),
+            pan=float(raw.pan),
+            mute=bool(raw.mute),
+            solo=bool(raw.solo),
+            name=raw.name.split(b"\0", 1)[0].decode(),
+        )
+
+    def clip_by_index(self, index: int) -> ProjectClip:
+        """Read a stored project clip by 0-based index."""
+        raw = SonareProjectClip()
+        _check(
+            _get_lib().sonare_project_clip_by_index(
+                self._require_handle(), int(index), ctypes.byref(raw)
+            )
+        )
+        return ProjectClip(
+            id=int(raw.id),
+            track_id=int(raw.track_id),
+            source_id=int(raw.source_id),
+            source_kind=int(raw.source_kind),
+            start_ppq=float(raw.start_ppq),
+            length_ppq=float(raw.length_ppq),
+            source_offset_ppq=float(raw.source_offset_ppq),
+            gain=float(raw.gain),
+            loop_mode=int(raw.loop_mode),
+            loop_length_ppq=float(raw.loop_length_ppq),
+        )
+
+    def source_by_index(self, index: int) -> ProjectSource:
+        """Read a stored project source by 0-based index."""
+        raw = SonareProjectSource()
+        _check(
+            _get_lib().sonare_project_source_by_index(
+                self._require_handle(), int(index), ctypes.byref(raw)
+            )
+        )
+        return ProjectSource(
+            id=int(raw.id),
+            kind=int(raw.kind),
+            channel_count=int(raw.channel_count),
+            storage_handle_id=int(raw.storage_handle_id),
+            sample_rate_hint=float(raw.sample_rate_hint),
+            name_or_uri=raw.name_or_uri.split(b"\0", 1)[0].decode(),
         )
 
     def set_mixer_scene_json(self, scene_json: str) -> None:
@@ -353,7 +432,7 @@ class _ProjectInspectionMixin:
         """
         rows = list(segments)
         count = len(rows)
-        c_segments = (SonareProjectTempoSegment * count)() if count else None
+        c_segments = (SonareProjectTempoSegment * count)()
         for i, seg in enumerate(rows):
             if isinstance(seg, Mapping):
                 start_ppq = float(seg["start_ppq"])
@@ -387,7 +466,7 @@ class _ProjectInspectionMixin:
         """
         rows = list(segments)
         count = len(rows)
-        c_segments = (SonareProjectTimeSignatureSegment * count)() if count else None
+        c_segments = (SonareProjectTimeSignatureSegment * count)()
         for i, seg in enumerate(rows):
             if isinstance(seg, Mapping):
                 start_ppq = float(seg["start_ppq"])

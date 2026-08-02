@@ -56,6 +56,25 @@ TEST_CASE("C ABI imports externally separated planar stems atomically",
   REQUIRE(tracks == 2);
   REQUIRE(clips == 2);
 
+  // Import is one EditHistory transaction: both project structure and the
+  // owned PCM registry must disappear/reappear together across undo/redo.
+  REQUIRE(sonare_project_undo(project) == SONARE_OK);
+  REQUIRE(sonare_project_track_count(project, &tracks) == SONARE_OK);
+  REQUIRE(sonare_project_clip_count(project, &clips) == SONARE_OK);
+  REQUIRE(tracks == 0);
+  REQUIRE(clips == 0);
+  REQUIRE(sonare_project_redo(project) == SONARE_OK);
+  REQUIRE(sonare_project_track_count(project, &tracks) == SONARE_OK);
+  REQUIRE(sonare_project_clip_count(project, &clips) == SONARE_OK);
+  REQUIRE(tracks == 2);
+  REQUIRE(clips == 2);
+
+  // A new import after undo is a fresh edit and must clear the old redo branch.
+  REQUIRE(sonare_project_undo(project) == SONARE_OK);
+  REQUIRE(sonare_project_import_external_stems(project, &request, &result) == SONARE_OK);
+  sonare_free_external_stem_import_result(&result);
+  REQUIRE(sonare_project_redo(project) == SONARE_ERROR_INVALID_STATE);
+
   const SonareExternalStemDesc invalid[] = {
       {"duplicate", nullptr, SONARE_EXTERNAL_STEM_STEREO, vocals.planes.data(), 31, 0},
       {"duplicate", nullptr, SONARE_EXTERNAL_STEM_STEREO, drums.planes.data(), 31, 0},

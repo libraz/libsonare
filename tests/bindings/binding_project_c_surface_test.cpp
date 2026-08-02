@@ -138,6 +138,8 @@ TEST_CASE("NativeSynth enum names are supplied by the C project ABI", "[project]
                                  "reed", "brass", "flute", "plucked-string", "vocal", "free-reed"});
   CHECK(split(sonare_synth_enum_names(SONARE_SYNTH_ENUM_OSC_WAVEFORM)) ==
         std::vector<std::string>{"default", "sine", "saw", "square", "triangle", "noise"});
+  CHECK(split(sonare_synth_enum_names(SONARE_SYNTH_ENUM_BUILTIN_WAVEFORM)) ==
+        std::vector<std::string>{"sine", "saw", "sawtooth", "square", "triangle"});
   CHECK(split(sonare_synth_enum_names(SONARE_SYNTH_ENUM_FILTER_MODEL)) ==
         std::vector<std::string>{"default", "svf", "moog-ladder", "diode-ladder", "sallen-key"});
   CHECK(split(sonare_synth_enum_names(SONARE_SYNTH_ENUM_FILTER_OUTPUT)) ==
@@ -150,6 +152,13 @@ TEST_CASE("NativeSynth enum names are supplied by the C project ABI", "[project]
                                  "key-track", "mod-wheel", "random"});
   CHECK(split(sonare_synth_enum_names(SONARE_SYNTH_ENUM_MOD_DESTINATION)) ==
         std::vector<std::string>{"none", "pitch-cents", "cutoff-cents", "amp-gain", "pan-units"});
+  CHECK(sonare_synth_builtin_waveform_from_name("sine") == SONARE_SYNTH_WAVEFORM_SINE);
+  CHECK(sonare_synth_builtin_waveform_from_name("saw") == SONARE_SYNTH_WAVEFORM_SAW);
+  CHECK(sonare_synth_builtin_waveform_from_name("sawtooth") == SONARE_SYNTH_WAVEFORM_SAW);
+  CHECK(sonare_synth_builtin_waveform_from_name("square") == SONARE_SYNTH_WAVEFORM_SQUARE);
+  CHECK(sonare_synth_builtin_waveform_from_name("triangle") == SONARE_SYNTH_WAVEFORM_TRIANGLE);
+  CHECK(sonare_synth_builtin_waveform_from_name("noise") == -1);
+  CHECK(sonare_synth_builtin_waveform_from_name(nullptr) == -1);
   CHECK(std::string(sonare_synth_enum_names(999)) == "");
 }
 
@@ -318,6 +327,40 @@ TEST_CASE("project C surface sets a clip warp reference", "[project]") {
   sonare_project_destroy(project);
 }
 
+TEST_CASE("project C surface reads stored tracks clips and sources by index", "[project]") {
+  SonareProject* project = nullptr;
+  REQUIRE(sonare_project_create(&project) == SONARE_OK);
+  SonareProjectTrackDesc track_desc{};
+  track_desc.kind = SONARE_TRACK_AUDIO;
+  track_desc.name = "Readback";
+  uint32_t track_id = 0;
+  REQUIRE(sonare_project_add_track(project, &track_desc, &track_id) == SONARE_OK);
+  SonareProjectClipDesc clip_desc{};
+  clip_desc.track_id = track_id;
+  clip_desc.start_ppq = 2.0;
+  clip_desc.length_ppq = 4.0;
+  clip_desc.source_uri = "memory://readback.wav";
+  uint32_t clip_id = 0;
+  REQUIRE(sonare_project_add_clip(project, &clip_desc, &clip_id) == SONARE_OK);
+
+  SonareProjectTrack track{};
+  REQUIRE(sonare_project_track_by_index(project, 0, &track) == SONARE_OK);
+  CHECK(track.id == track_id);
+  CHECK(std::string(track.name) == "Readback");
+  SonareProjectClip clip{};
+  REQUIRE(sonare_project_clip_by_index(project, 0, &clip) == SONARE_OK);
+  CHECK(clip.id == clip_id);
+  CHECK(clip.track_id == track_id);
+  CHECK(clip.start_ppq == Catch::Approx(2.0));
+  SonareProjectSource source{};
+  REQUIRE(sonare_project_source_by_index(project, 0, &source) == SONARE_OK);
+  CHECK(source.id == clip.source_id);
+  CHECK(source.kind == 0);
+  CHECK(std::string(source.name_or_uri) == "memory://readback.wav");
+  CHECK(sonare_project_clip_by_index(project, 1, &clip) == SONARE_ERROR_INVALID_PARAMETER);
+  sonare_project_destroy(project);
+}
+
 TEST_CASE("serialize round-trips byte-identically through the C surface", "[project]") {
   const std::vector<float> audio = make_stereo_sine(48000);
   BuiltProject built = build_project(audio);
@@ -334,6 +377,60 @@ TEST_CASE("serialize round-trips byte-identically through the C surface", "[proj
 
   sonare_project_destroy(second);
   sonare_project_destroy(built.project);
+}
+
+TEST_CASE("deserialized audio sources can be rebound before bouncing through the C surface",
+          "[project]") {
+  SonareProject* project = nullptr;
+  REQUIRE(sonare_project_create(&project) == SONARE_OK);
+
+  SonareProjectTrackDesc track_desc{};
+  track_desc.kind = SONARE_TRACK_AUDIO;
+  track_desc.name = "audio";
+  uint32_t track_id = 0;
+  REQUIRE(sonare_project_add_track(project, &track_desc, &track_id) == SONARE_OK);
+
+  SonareProjectClipDesc clip_desc{};
+  clip_desc.track_id = track_id;
+  clip_desc.start_ppq = 0.0;
+  clip_desc.length_ppq = 1.0;
+  clip_desc.gain = 1.0f;
+  clip_desc.source_uri = "asset://lead.wav";
+  uint32_t clip_id = 0;
+  REQUIRE(sonare_project_add_clip(project, &clip_desc, &clip_id) == SONARE_OK);
+
+  const std::string json = serialize(project);
+  sonare_project_destroy(project);
+
+  SonareProject* restored = nullptr;
+  REQUIRE(sonare_project_deserialize(json.data(), json.size(), &restored, nullptr) == SONARE_OK);
+
+  size_t unresolved = 0;
+  REQUIRE(sonare_project_unresolved_audio_source_count(restored, &unresolved) == SONARE_OK);
+  REQUIRE(unresolved == 1);
+  uint32_t source_id = 0;
+  REQUIRE(sonare_project_unresolved_audio_source_id_by_index(restored, 0, &source_id) == SONARE_OK);
+
+  constexpr int kFrames = 480;
+  const std::vector<float> samples(kFrames, 0.25f);
+  REQUIRE(sonare_project_set_source_audio(restored, source_id, samples.data(), kFrames, 1, 48000) ==
+          SONARE_OK);
+  REQUIRE(sonare_project_unresolved_audio_source_count(restored, &unresolved) == SONARE_OK);
+  REQUIRE(unresolved == 0);
+
+  SonareProjectBounceOptions options{};
+  options.total_frames = kFrames;
+  options.block_size = 64;
+  options.num_channels = 1;
+  options.sample_rate = 48000;
+  float* output = nullptr;
+  size_t output_len = 0;
+  REQUIRE(sonare_project_bounce(restored, &options, &output, &output_len) == SONARE_OK);
+  REQUIRE(output != nullptr);
+  REQUIRE(output_len == kFrames);
+  CHECK(output[0] == Catch::Approx(0.25f));
+  sonare_free_floats(output);
+  sonare_project_destroy(restored);
 }
 
 TEST_CASE("bounce is bit-exact across two renders through the C surface", "[project]") {

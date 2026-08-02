@@ -209,7 +209,7 @@ Napi::Value ProjectWrap::AnalyzeTempo(const Napi::CallbackInfo& info) {
     return env.Undefined();
   }
   Napi::Float32Array audio = info[0].As<Napi::Float32Array>();
-  SonareProjectTempoCandidate candidates[3]{};
+  SonareProjectTempoCandidate candidates[SONARE_PROJECT_MAX_TEMPO_CANDIDATES]{};
   size_t count = 0;
   ThrowIfError(env, sonare_project_analyze_tempo(project_, audio.Data(), audio.ElementLength(),
                                                  static_cast<int>(NumberArg(info, 1, 0.0)),

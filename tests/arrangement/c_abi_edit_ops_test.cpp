@@ -147,6 +147,102 @@ TEST_CASE("C-ABI add_clip owns decoded audio in one undo transaction", "[project
   sonare_project_destroy(project);
 }
 
+TEST_CASE("C-ABI remove_clip collects orphaned source metadata and PCM", "[project][c-abi-edit]") {
+  SonareProject* project = nullptr;
+  REQUIRE(sonare_project_create(&project) == SONARE_OK);
+
+  SonareProjectTrackDesc track_desc{};
+  track_desc.kind = SONARE_TRACK_AUDIO;
+  track_desc.name = "audio";
+  uint32_t track_id = 0;
+  REQUIRE(sonare_project_add_track(project, &track_desc, &track_id) == SONARE_OK);
+  const std::string empty = serialize(project);
+
+  const std::vector<float> audio = {0.25f, -0.25f, 0.5f, -0.5f};
+  SonareProjectClipDesc clip_desc{};
+  clip_desc.track_id = track_id;
+  clip_desc.length_ppq = 1.0;
+  clip_desc.gain = 1.0f;
+  clip_desc.audio_interleaved = audio.data();
+  clip_desc.audio_frames = 2;
+  clip_desc.audio_channels = 2;
+  clip_desc.audio_sample_rate = 48000;
+
+  uint32_t clip_id = 0;
+  REQUIRE(sonare_project_add_clip(project, &clip_desc, &clip_id) == SONARE_OK);
+  const std::string added = serialize(project);
+  const arr::SourceId source_id = project->audio.sources.begin()->first;
+
+  REQUIRE(sonare_project_remove_clip(project, clip_id) == SONARE_OK);
+  size_t source_count = 0;
+  REQUIRE(sonare_project_source_count(project, &source_count) == SONARE_OK);
+  REQUIRE(source_count == 0);
+  REQUIRE(project->audio.sources.empty());
+  REQUIRE(serialize(project) == empty);
+
+  // Undo restores both the source registry and the exact PCM map node; redo
+  // removes both again as a single user-visible edit.
+  REQUIRE(sonare_project_undo(project) == SONARE_OK);
+  REQUIRE(serialize(project) == added);
+  REQUIRE(project->audio.sources.size() == 1);
+  REQUIRE(project->audio.sources.at(source_id).channels[0] == std::vector<float>{0.25f, 0.5f});
+  REQUIRE(sonare_project_redo(project) == SONARE_OK);
+  REQUIRE(serialize(project) == empty);
+  REQUIRE(project->audio.sources.empty());
+
+  // Bound history to one entry, then repeat the public add/remove path. This
+  // exercises release of discarded history-owned PCM and verifies that the
+  // serialized project and live AudioContentStore remain steady.
+  REQUIRE(sonare_project_set_max_undo_depth(project, 1) == SONARE_OK);
+  for (int i = 0; i < 100; ++i) {
+    clip_id = 0;
+    REQUIRE(sonare_project_add_clip(project, &clip_desc, &clip_id) == SONARE_OK);
+    REQUIRE(sonare_project_remove_clip(project, clip_id) == SONARE_OK);
+    REQUIRE(sonare_project_source_count(project, &source_count) == SONARE_OK);
+    REQUIRE(source_count == 0);
+    REQUIRE(project->audio.sources.empty());
+    REQUIRE(serialize(project) == empty);
+  }
+
+  sonare_project_destroy(project);
+}
+
+TEST_CASE("C-ABI remove_clip retains sources shared by another clip", "[project][c-abi-edit]") {
+  SonareProject* project = nullptr;
+  REQUIRE(sonare_project_create(&project) == SONARE_OK);
+  const AudioFixture first = add_audio_track_clip(project, 0.0, 1.0);
+  REQUIRE(project->audio.sources.size() == 1);
+  const arr::SourceId shared_source = project->audio.sources.begin()->first;
+
+  // A second placement can reference the same source. It is deliberately
+  // created at the model layer here because the public add API imports a new
+  // source by design; public removal must nevertheless preserve shared data.
+  arr::EditClip second;
+  second.track_id = first.track;
+  second.source_id = shared_source;
+  second.start_ppq = 2.0;
+  second.length_ppq = 1.0;
+  second.gain = 1.0f;
+  auto add_second = std::make_unique<arr::AddClip>(second);
+  arr::AddClip* raw_second = add_second.get();
+  REQUIRE(project->history.apply(std::move(add_second)));
+  const uint32_t second_clip = raw_second->allocated_id();
+  REQUIRE(second_clip != 0);
+
+  REQUIRE(sonare_project_remove_clip(project, first.clip) == SONARE_OK);
+  size_t source_count = 0;
+  REQUIRE(sonare_project_source_count(project, &source_count) == SONARE_OK);
+  REQUIRE(source_count == 1);
+  REQUIRE(project->audio.sources.size() == 1);
+  REQUIRE(project->audio.sources.find(shared_source) != project->audio.sources.end());
+
+  REQUIRE(sonare_project_remove_clip(project, second_clip) == SONARE_OK);
+  REQUIRE(sonare_project_source_count(project, &source_count) == SONARE_OK);
+  REQUIRE(source_count == 0);
+  REQUIRE(project->audio.sources.empty());
+  sonare_project_destroy(project);
+}
+
 TEST_CASE("C-ABI add_midi_clip creates track source and clip as one transaction",
           "[project][c-abi-edit]") {
   SonareProject* project = nullptr;
@@ -315,6 +411,17 @@ TEST_CASE("C-ABI set_clip_fade applies and undo restores", "[project][c-abi-edit
           SONARE_ERROR_INVALID_PARAMETER);
 
   sonare_project_destroy(project);
+}
+
+TEST_CASE("C-ABI resolves canonical clip fade curve names", "[project][c-abi-edit]") {
+  uint32_t curve = 99;
+  REQUIRE(sonare_project_fade_curve_from_name("Equal_Power", &curve) == SONARE_OK);
+  REQUIRE(curve == SONARE_FADE_CURVE_EQUAL_POWER);
+  REQUIRE(sonare_project_fade_curve_from_name("EXP", &curve) == SONARE_OK);
+  REQUIRE(curve == SONARE_FADE_CURVE_EXPONENTIAL);
+  REQUIRE(sonare_project_fade_curve_from_name("log", &curve) == SONARE_OK);
+  REQUIRE(curve == SONARE_FADE_CURVE_LOGARITHMIC);
+  REQUIRE(sonare_project_fade_curve_from_name("unknown", &curve) == SONARE_ERROR_INVALID_PARAMETER);
 }
 
 TEST_CASE("C-ABI set_clip_loop applies and undo restores", "[project][c-abi-edit]") {
@@ -620,8 +727,13 @@ TEST_CASE("C-ABI rename_track / remove_track with undo", "[project][c-abi-edit]"
   // remove_track removes track (and its clips); undo restores everything.
   REQUIRE(sonare_project_remove_track(project, fx.track) == SONARE_OK);
   REQUIRE(serialize(project) != before);
+  size_t source_count = 0;
+  REQUIRE(sonare_project_source_count(project, &source_count) == SONARE_OK);
+  REQUIRE(source_count == 0);
+  REQUIRE(project->audio.sources.empty());
   REQUIRE(sonare_project_undo(project) == SONARE_OK);
   REQUIRE(serialize(project) == before);
+  REQUIRE(project->audio.sources.size() == 1);
 
   // Invalid params.
   REQUIRE(sonare_project_rename_track(project, 0, "x") == SONARE_ERROR_INVALID_PARAMETER);
@@ -767,10 +879,24 @@ TEST_CASE("C-ABI set_warp_map/remove_warp_map with clip reference and undo",
   REQUIRE(sonare_project_redo(project) == SONARE_OK);
   REQUIRE(serialize(project) == mapped);
 
+  uint32_t split_id = 0;
+  CHECK(sonare_project_split_clip(project, fx.clip, 2.0, &split_id) == SONARE_ERROR_INVALID_STATE);
+  CHECK(sonare_project_trim_clip(project, fx.clip, 0.5, 3.0) == SONARE_ERROR_INVALID_STATE);
+
   REQUIRE(sonare_project_remove_warp_map(project, 77) == SONARE_OK);
   const std::string removed = serialize(project);
   REQUIRE(removed.find("\"name\":\"manual warp\"") == std::string::npos);
-  REQUIRE(removed.find("\"warp_ref_id\":77") != std::string::npos);
+  REQUIRE(removed.find("\"warp_ref_id\":0") != std::string::npos);
+  SonareProjectBounceOptions options{};
+  options.total_frames = 480;
+  options.block_size = 64;
+  options.num_channels = 2;
+  options.sample_rate = 48000;
+  float* bounced = nullptr;
+  size_t bounced_len = 0;
+  REQUIRE(sonare_project_bounce(project, &options, &bounced, &bounced_len) == SONARE_OK);
+  REQUIRE(bounced_len == 960);
+  sonare_free_floats(bounced);
   REQUIRE(sonare_project_undo(project) == SONARE_OK);
   REQUIRE(serialize(project) == mapped);
   REQUIRE(sonare_project_set_clip_warp_mode(project, fx.clip,
@@ -816,13 +942,14 @@ TEST_CASE("C-ABI automation lane add / edit / remove with undo", "[project][c-ab
   desc.points = points;
   desc.point_count = 3;
 
-  size_t lane_index = 999;
-  REQUIRE(sonare_project_add_automation_lane(project, fx.track, &desc, &lane_index) == SONARE_OK);
-  REQUIRE(lane_index == 0);
+  uint32_t target_param_id = 999;
+  REQUIRE(sonare_project_add_automation_lane(project, fx.track, &desc, &target_param_id) ==
+          SONARE_OK);
+  REQUIRE(target_param_id == 42);
   const std::string with_lane = serialize(project);
   REQUIRE(with_lane != empty);
 
-  // Edit the lane in place (different target + points).
+  // Edit the lane in place without changing its stable target id.
   SonareAutomationPoint edited[2];
   edited[0].ppq = 0.0;
   edited[0].value = 0.25f;
@@ -831,30 +958,46 @@ TEST_CASE("C-ABI automation lane add / edit / remove with undo", "[project][c-ab
   edited[1].value = 0.75f;
   edited[1].curve_to_next = SONARE_CURVE_LINEAR;
   SonareAutomationLaneDesc edit_desc{};
-  edit_desc.target_param_id = 7;
+  edit_desc.target_param_id = 42;
   edit_desc.points = edited;
   edit_desc.point_count = 2;
-  REQUIRE(sonare_project_edit_automation_lane(project, fx.track, 0, &edit_desc) == SONARE_OK);
+  REQUIRE(sonare_project_edit_automation_lane(project, fx.track, 42, &edit_desc) == SONARE_OK);
   REQUIRE(serialize(project) != with_lane);
   REQUIRE(sonare_project_undo(project) == SONARE_OK);
   REQUIRE(serialize(project) == with_lane);
 
   // Remove the lane; undo restores it.
-  REQUIRE(sonare_project_remove_automation_lane(project, fx.track, 0) == SONARE_OK);
+  REQUIRE(sonare_project_remove_automation_lane(project, fx.track, 42) == SONARE_OK);
   REQUIRE(serialize(project) == empty);
   REQUIRE(sonare_project_undo(project) == SONARE_OK);
   REQUIRE(serialize(project) == with_lane);
 
+  // Target ids remain valid after a preceding lane is removed; array position
+  // must not redirect this edit to a different parameter.
+  SonareAutomationLaneDesc second_lane{};
+  second_lane.target_param_id = 7;
+  uint32_t second_target = 0;
+  REQUIRE(sonare_project_add_automation_lane(project, fx.track, &second_lane, &second_target) ==
+          SONARE_OK);
+  REQUIRE(second_target == 7);
+  REQUIRE(sonare_project_remove_automation_lane(project, fx.track, 42) == SONARE_OK);
+  SonareAutomationPoint second_points[1] = {{0.0, 0.75f, SONARE_CURVE_HOLD}};
+  SonareAutomationLaneDesc second_edit{};
+  second_edit.target_param_id = 7;
+  second_edit.points = second_points;
+  second_edit.point_count = 1;
+  REQUIRE(sonare_project_edit_automation_lane(project, fx.track, 7, &second_edit) == SONARE_OK);
+
   // A lane with zero breakpoints is valid (empty desc.points / count 0).
   SonareAutomationLaneDesc empty_lane{};
   empty_lane.target_param_id = 1;
-  size_t empty_index = 999;
-  REQUIRE(sonare_project_add_automation_lane(project, fx.track, &empty_lane, &empty_index) ==
+  uint32_t empty_target = 999;
+  REQUIRE(sonare_project_add_automation_lane(project, fx.track, &empty_lane, &empty_target) ==
           SONARE_OK);
-  REQUIRE(empty_index == 1);
+  REQUIRE(empty_target == 1);
   REQUIRE(sonare_project_undo(project) == SONARE_OK);
 
-  // Invalid: bad track, bad lane index, null desc, bad point fields.
+  // Invalid: bad track, missing target id, null desc, bad point fields.
   REQUIRE(sonare_project_add_automation_lane(project, 999999, &desc, nullptr) ==
           SONARE_ERROR_INVALID_PARAMETER);
   REQUIRE(sonare_project_add_automation_lane(project, fx.track, nullptr, nullptr) ==

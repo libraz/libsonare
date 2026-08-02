@@ -122,7 +122,7 @@ val ProjectWasm::validateMidiNotes(uint32_t clip_id) {
 
 val ProjectWasm::analyzeTempo(val audio, int sample_rate) {
   std::vector<float> samples = float32ArrayToVector(audio);
-  SonareProjectTempoCandidate candidates[3]{};
+  SonareProjectTempoCandidate candidates[SONARE_PROJECT_MAX_TEMPO_CANDIDATES]{};
   size_t count = 0;
   const SonareError err =
       sonare_project_analyze_tempo(project_.get(), samples.data(), samples.size(), sample_rate,

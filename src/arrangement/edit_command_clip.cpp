@@ -71,6 +71,9 @@ bool SplitClip::apply(Project& project, MidiContentStore& store) {
   if (c == nullptr) {
     return false;
   }
+  if (c->warp_ref_id != 0) {
+    return false;
+  }
   if (!(split_ppq_ > c->start_ppq) || !(split_ppq_ < c->end_ppq())) {
     return false;
   }
@@ -96,11 +99,18 @@ bool SplitClip::apply(Project& project, MidiContentStore& store) {
       project.clip_overlaps(right.track_id, right.start_ppq, right.length_ppq, id_)) {
     return false;
   }
-  // Left keeps fade_in, drops fade_out at the cut.
-  c->length_ppq = left_len;
-  c->comp_segments = detail::shifted_clamped_comp_segments(c->comp_segments, 0.0, left_len);
-  c->fade_out = ClipFade{};
-
+  // Project::add_clip performs its own overlap check.  Shorten the left half
+  // before using that allocating path so its original extent does not overlap
+  // the right half.  Retain a complete snapshot to make an allocation failure
+  // atomic for direct callers too.
+  const EditClip original = *c;
+  const auto shorten_left = [&] {
+    c->length_ppq = left_len;
+    c->comp_segments = detail::shifted_clamped_comp_segments(c->comp_segments, 0.0, left_len);
+    c->fade_out = ClipFade{};
+  };
+  const bool allocate_new_id = new_clip_id_ == 0;
+  if (allocate_new_id) shorten_left();
   if (new_clip_id_ != 0) {
     right.id = new_clip_id_;
     if (!detail::clip_can_be_inserted(project, right, id_) || !project.insert_clip_raw(right)) {
@@ -110,9 +120,17 @@ bool SplitClip::apply(Project& project, MidiContentStore& store) {
   } else {
     new_clip_id_ = project.add_clip(right);
     if (new_clip_id_ == 0) {
+      *c = original;
       return false;
     }
   }
+  // The only remaining fallible project operation was inserting the right
+  // clip.  Mutate the left half only after that has succeeded, so direct users
+  // of SplitClip (outside EditHistory's snapshot rollback) also get atomic
+  // failure semantics.
+  c = project.find_clip_mutable(id_);
+  if (c == nullptr) return false;  // Defensive: insertion must preserve it.
+  if (!allocate_new_id) shorten_left();
   // Split MIDI content by source PPQ so the two clips do not carry duplicate
   // event lists after editing / serialization. Note cutting at the boundary is a
   // later MIDI-editor concern; this preserves event ownership deterministically.
@@ -156,6 +174,9 @@ EditCommandPtr SplitClip::invert(const Project& before,
 bool TrimClip::apply(Project& project, MidiContentStore& /*store*/) {
   EditClip* c = project.find_clip_mutable(id_);
   if (c == nullptr) {
+    return false;
+  }
+  if (c->warp_ref_id != 0) {
     return false;
   }
   if (!(new_length_ppq_ > 0.0) || new_start_ppq_ < 0.0) {
@@ -444,7 +465,13 @@ EditCommandPtr SetWarpMap::invert(const Project& before,
 }
 
 bool RemoveWarpMap::apply(Project& project, MidiContentStore& /*store*/) {
-  return project.remove_warp_map(id_).second;
+  if (!project.remove_warp_map(id_).second) return false;
+  for (const EditClip& clip : project.clips()) {
+    if (clip.warp_ref_id != id_) continue;
+    EditClip* mutable_clip = project.find_clip_mutable(clip.id);
+    if (mutable_clip != nullptr) mutable_clip->warp_ref_id = 0;
+  }
+  return true;
 }
 
 EditCommandPtr RemoveWarpMap::invert(const Project& before,
@@ -453,7 +480,26 @@ EditCommandPtr RemoveWarpMap::invert(const Project& before,
   if (prior == nullptr) {
     return nullptr;
   }
-  return std::make_unique<SetWarpMap>(*prior);
+  std::vector<ClipId> clip_ids;
+  for (const EditClip& clip : before.clips()) {
+    if (clip.warp_ref_id == id_) clip_ids.push_back(clip.id);
+  }
+  return std::make_unique<RestoreWarpMap>(*prior, std::move(clip_ids));
+}
+
+bool RestoreWarpMap::apply(Project& project, MidiContentStore& /*store*/) {
+  if (!project.set_warp_map(map_)) return false;
+  for (const ClipId id : clip_ids_) {
+    EditClip* clip = project.find_clip_mutable(id);
+    if (clip == nullptr) return false;
+    clip->warp_ref_id = map_.id;
+  }
+  return true;
+}
+
+EditCommandPtr RestoreWarpMap::invert(const Project& /*before*/,
+                                      const MidiContentStore& /*store_before*/) const {
+  return std::make_unique<RemoveWarpMap>(map_.id);
 }
 
 bool SetClipSource::apply(Project& project, MidiContentStore& /*store*/) {

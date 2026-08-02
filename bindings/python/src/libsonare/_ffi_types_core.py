@@ -50,6 +50,25 @@ class SonareKeyCandidate(ctypes.Structure):
     ]
 
 
+class SonareOnsetDetectConfig(ctypes.Structure):
+    """Maps to SonareOnsetDetectConfig in sonare_c_types_functions.h."""
+
+    _fields_ = [
+        ("n_fft", ctypes.c_int32),
+        ("hop_length", ctypes.c_int32),
+        ("threshold", ctypes.c_float),
+        ("pre_max", ctypes.c_int32),
+        ("post_max", ctypes.c_int32),
+        ("pre_avg", ctypes.c_int32),
+        ("post_avg", ctypes.c_int32),
+        ("delta", ctypes.c_float),
+        ("wait", ctypes.c_int32),
+        ("backtrack", ctypes.c_uint8),
+        ("reserved", ctypes.c_uint8 * 3),
+        ("backtrack_range", ctypes.c_int32),
+    ]
+
+
 class SonareTimeSignature(ctypes.Structure):
     """Maps to SonareTimeSignature in sonare_c.h."""
 
@@ -276,6 +295,46 @@ class SonareProjectMarker(ctypes.Structure):
     ]
 
 
+class SonareProjectTrack(ctypes.Structure):
+    _fields_ = [
+        ("id", ctypes.c_uint32),
+        ("kind", ctypes.c_uint32),
+        ("midi_destination_id", ctypes.c_uint32),
+        ("gain", ctypes.c_float),
+        ("pan", ctypes.c_float),
+        ("mute", ctypes.c_uint8),
+        ("solo", ctypes.c_uint8),
+        ("reserved", ctypes.c_uint8 * 2),
+        ("name", ctypes.c_char * 64),
+    ]
+
+
+class SonareProjectClip(ctypes.Structure):
+    _fields_ = [
+        ("id", ctypes.c_uint32),
+        ("track_id", ctypes.c_uint32),
+        ("source_id", ctypes.c_uint32),
+        ("source_kind", ctypes.c_uint32),
+        ("start_ppq", ctypes.c_double),
+        ("length_ppq", ctypes.c_double),
+        ("source_offset_ppq", ctypes.c_double),
+        ("gain", ctypes.c_float),
+        ("loop_mode", ctypes.c_uint32),
+        ("loop_length_ppq", ctypes.c_double),
+    ]
+
+
+class SonareProjectSource(ctypes.Structure):
+    _fields_ = [
+        ("id", ctypes.c_uint32),
+        ("kind", ctypes.c_uint32),
+        ("channel_count", ctypes.c_uint32),
+        ("storage_handle_id", ctypes.c_uint32),
+        ("sample_rate_hint", ctypes.c_double),
+        ("name_or_uri", ctypes.c_char * 128),
+    ]
+
+
 class SonareEngineMetronomeConfig(ctypes.Structure):
     """Maps to SonareEngineMetronomeConfig in sonare_c.h."""
 
@@ -475,6 +534,3 @@ class SonareEngineGraphSpec(ctypes.Structure):
         ("output_node", ctypes.c_char * 64),
         ("num_channels", ctypes.c_int),
     ]
-
-
-__all__ = [name for name in globals() if name.startswith(("Sonare", "SONARE_"))]

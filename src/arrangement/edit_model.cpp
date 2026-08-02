@@ -180,7 +180,7 @@ WarpMapRef* Project::find_warp_map_mutable(WarpRefId id) noexcept {
 }
 
 bool Project::set_warp_map(WarpMapRef map) {
-  if (map.id == 0) {
+  if (map.id == 0 || map.anchors.size() < 2) {
     return false;
   }
   // Anchors must define a well-formed forward mapping: each offset finite and

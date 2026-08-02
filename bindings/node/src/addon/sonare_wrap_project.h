@@ -29,6 +29,9 @@ class ProjectWrap : public Napi::ObjectWrap<ProjectWrap> {
   Napi::Value SetMarker(const Napi::CallbackInfo& info);
   Napi::Value SetMarkerEx(const Napi::CallbackInfo& info);
   Napi::Value MarkerByIndex(const Napi::CallbackInfo& info);
+  Napi::Value TrackByIndex(const Napi::CallbackInfo& info);
+  Napi::Value ClipByIndex(const Napi::CallbackInfo& info);
+  Napi::Value SourceByIndex(const Napi::CallbackInfo& info);
   Napi::Value SetTempoSegments(const Napi::CallbackInfo& info);
   Napi::Value SetTimeSignatures(const Napi::CallbackInfo& info);
 
@@ -36,6 +39,8 @@ class ProjectWrap : public Napi::ObjectWrap<ProjectWrap> {
   Napi::Value TrackCount(const Napi::CallbackInfo& info);
   Napi::Value ClipCount(const Napi::CallbackInfo& info);
   Napi::Value SourceCount(const Napi::CallbackInfo& info);
+  Napi::Value UnresolvedAudioSourceIds(const Napi::CallbackInfo& info);
+  Napi::Value SetSourceAudio(const Napi::CallbackInfo& info);
   Napi::Value TempoSegmentCount(const Napi::CallbackInfo& info);
   Napi::Value TimeSignatureCount(const Napi::CallbackInfo& info);
   Napi::Value MarkerCount(const Napi::CallbackInfo& info);
@@ -122,9 +127,7 @@ class ProjectWrap : public Napi::ObjectWrap<ProjectWrap> {
   SonareProject* project_ = nullptr;
 
   // Builds a ProjectWrap JS instance that adopts `handle` (used by fromJson()).
-  static Napi::Object Wrap(Napi::Env env, SonareProject* handle);
-  // Stored constructor reference so static factories can instantiate the class.
-  static Napi::FunctionReference constructor;
+  static Napi::Object Wrap(const Napi::CallbackInfo& info, SonareProject* handle);
 };
 
 #endif  // SONARE_NODE_SONARE_WRAP_PROJECT_H_

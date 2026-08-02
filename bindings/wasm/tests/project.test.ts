@@ -44,6 +44,25 @@ describe('Sonare WASM Project', () => {
     return project;
   }
 
+  it('rejects unknown track kinds at both the facade and embind boundaries', () => {
+    const project = new Project();
+    try {
+      expect(() => project.addTrack({ kind: 'bus' as never })).toThrow(
+        /Invalid project track kind/,
+      );
+      expect(() => project.addTrack({ kind: 3 as never })).toThrow(/Invalid project track kind/);
+      expect(() => project.addTrack({ kind: 1.5 as never })).toThrow(/Invalid project track kind/);
+
+      const native = (project as unknown as { native: { addTrack: (desc: object) => number } })
+        .native;
+      expect(() => native.addTrack({ kind: 'bus' })).toThrow(/unknown project track kind/);
+      expect(() => native.addTrack({ kind: 3 })).toThrow(/unknown project track kind/);
+      expect(() => native.addTrack({ kind: 1.5 })).toThrow(/unknown project track kind/);
+    } finally {
+      project.delete();
+    }
+  });
+
   function makeSysexSmf(): Uint8Array {
     const payload = [0x7e, 0x7f, 0x09, 0x01, 0xf7];
     const body = new Uint8Array([
@@ -244,6 +263,33 @@ describe('Sonare WASM Project', () => {
       expect(project.toJson()).toContain('"warp_mode":2');
       expect(() => project.setClipWarpMode(clipId, 'typo' as 'repitch')).toThrow();
       expect(() => project.setClipWarpMode(clipId, 99 as 1)).toThrow();
+    } finally {
+      project.delete();
+    }
+  });
+
+  it('clears clip warp references when removing a warp map and restores them on undo', () => {
+    const project = new Project();
+    try {
+      const trackId = project.addTrack({ kind: 'audio', name: 'audio' });
+      const clipId = project.addClip({ trackId, startPpq: 0, lengthPpq: 4, audioChannels: 0 });
+      project.setWarpMap({
+        id: 123,
+        anchors: [
+          { warpSample: 0, sourceSample: 0 },
+          { warpSample: 4, sourceSample: 4 },
+        ],
+      });
+      project.setClipWarpRef(clipId, 123);
+      const mapped = project.toJson();
+
+      project.removeWarpMap(123);
+      expect(project.toJson()).toContain('"warp_ref_id":0');
+      project.undo();
+      expect(project.toJson()).toBe(mapped);
+      expect(() =>
+        project.setWarpMap({ id: 124, anchors: [{ warpSample: 0, sourceSample: 0 }] }),
+      ).toThrow();
     } finally {
       project.delete();
     }
@@ -534,10 +580,10 @@ describe('Sonare WASM Project', () => {
     }
   });
 
-  it('rejects a salvaged truncated SMF with its native diagnostic', () => {
+  it('imports the valid prefix of a truncated SMF', () => {
     const project = new Project();
     try {
-      expect(() => project.importSmf(makeTruncatedSmf())).toThrow(/truncated/);
+      expect(project.importSmf(makeTruncatedSmf())).toBeGreaterThan(0);
     } finally {
       project.delete();
     }

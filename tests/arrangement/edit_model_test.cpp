@@ -81,6 +81,11 @@ TEST_CASE("Project rejects malformed warp-map anchors", "[arrangement]") {
   valid.anchors = {{0.0, 0.0}, {48000.0, 44100.0}};
   CHECK(p.set_warp_map(valid));
 
+  WarpMapRef too_few;
+  too_few.id = 6;
+  too_few.anchors = {{0.0, 0.0}};
+  CHECK_FALSE(p.set_warp_map(too_few));
+
   // A negative offset in either axis is rejected.
   WarpMapRef negative;
   negative.id = 2;

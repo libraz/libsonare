@@ -26,6 +26,42 @@ export interface ProjectTrackDesc {
   name?: string;
 }
 
+/** Read-only stored track descriptor. */
+export interface ProjectTrack {
+  id: number;
+  kind: number;
+  midiDestinationId: number;
+  gain: number;
+  pan: number;
+  mute: boolean;
+  solo: boolean;
+  name: string;
+}
+
+/** Read-only stored clip descriptor. */
+export interface ProjectClip {
+  id: number;
+  trackId: number;
+  sourceId: number;
+  sourceKind: number;
+  startPpq: number;
+  lengthPpq: number;
+  sourceOffsetPpq: number;
+  gain: number;
+  loopMode: number;
+  loopLengthPpq: number;
+}
+
+/** Read-only stored audio or MIDI source descriptor. */
+export interface ProjectSource {
+  id: number;
+  kind: number;
+  channelCount: number;
+  storageHandleId: number;
+  sampleRateHint: number;
+  nameOrUri: string;
+}
+
 /** One first-class warp-map anchor. Sample positions must be finite and monotonic. */
 export interface ProjectWarpAnchor {
   warpSample: number;
@@ -244,8 +280,11 @@ export interface ProjectBounceOptions {
   instrumentLatencySamples?: number;
 }
 
+/** Names accepted by the minimal built-in oscillator synth. */
+export const BUILTIN_SYNTH_WAVEFORMS = ['sine', 'saw', 'sawtooth', 'square', 'triangle'] as const;
+
 /** Oscillator waveform for the {@link BuiltinInstrumentConfig built-in synth}. */
-export type SynthWaveform = 'sine' | 'saw' | 'sawtooth' | 'square' | 'triangle';
+export type SynthWaveform = (typeof BUILTIN_SYNTH_WAVEFORMS)[number];
 
 /**
  * Patch for the built-in minimal polyphonic oscillator synth used by
@@ -375,6 +414,7 @@ export const SYNTH_MOD_DESTINATIONS = [
 export interface SynthEnumTables {
   engineModes: string[];
   waveforms: string[];
+  builtinWaveforms: string[];
   filterModels: string[];
   filterOutputs: string[];
   bodyTypes: string[];
@@ -520,8 +560,11 @@ export type ProjectFadeCurve =
   | 'equal-power'
   | 'equal_power'
   | 'equalPower'
+  | 'equalpower'
   | 'exponential'
-  | 'logarithmic';
+  | 'exp'
+  | 'logarithmic'
+  | 'log';
 
 export const PROJECT_FADE_CURVE_LINEAR = 0;
 

@@ -167,10 +167,9 @@ uint32_t ProjectWasm::setMarkerEx(val marker) {
   desc.key_minor = static_cast<uint8_t>(boolProperty(marker, "keyMinor", false) ? 1 : 0);
   desc.ppq = objectProperty(marker, "ppq").as<double>();
   const std::string name = stringProperty(marker, "name", "");
-  std::strncpy(desc.name, name.c_str(), sizeof(desc.name) - 1);
-  desc.name[sizeof(desc.name) - 1] = '\0';
   uint32_t out_id = 0;
-  const SonareError err = sonare_project_set_marker_ex(project_.get(), &desc, &out_id);
+  const SonareError err =
+      sonare_project_set_marker_ex_name(project_.get(), &desc, name.c_str(), &out_id);
   if (err != SONARE_OK) {
     throwCError(err, "failed to set marker");
   }
@@ -184,13 +183,69 @@ val ProjectWasm::markerByIndex(int index) const {
   if (err != SONARE_OK) {
     throwCError(err, "marker index out of range");
   }
+  char* full_name = nullptr;
+  const SonareError name_err =
+      sonare_project_marker_name_by_index(project_.get(), static_cast<size_t>(index), &full_name);
+  if (name_err != SONARE_OK) throwCError(name_err, "failed to read marker name");
   val out = val::object();
   out.set("id", desc.id);
   out.set("ppq", desc.ppq);
-  out.set("name", std::string(desc.name));
+  out.set("name", std::string(full_name));
+  sonare_free_string(full_name);
   out.set("kind", static_cast<int>(desc.kind));
   out.set("keyFifths", static_cast<int>(desc.key_fifths));
   out.set("keyMinor", desc.key_minor != 0);
+  return out;
+}
+
+val ProjectWasm::trackByIndex(int index) const {
+  SonareProjectTrack d{};
+  const SonareError err =
+      sonare_project_track_by_index(project_.get(), static_cast<size_t>(index), &d);
+  if (err != SONARE_OK) throwCError(err, "track index out of range");
+  val out = val::object();
+  out.set("id", d.id);
+  out.set("kind", d.kind);
+  out.set("midiDestinationId", d.midi_destination_id);
+  out.set("gain", d.gain);
+  out.set("pan", d.pan);
+  out.set("mute", d.mute != 0);
+  out.set("solo", d.solo != 0);
+  out.set("name", std::string(d.name));
+  return out;
+}
+
+val ProjectWasm::clipByIndex(int index) const {
+  SonareProjectClip d{};
+  const SonareError err =
+      sonare_project_clip_by_index(project_.get(), static_cast<size_t>(index), &d);
+  if (err != SONARE_OK) throwCError(err, "clip index out of range");
+  val out = val::object();
+  out.set("id", d.id);
+  out.set("trackId", d.track_id);
+  out.set("sourceId", d.source_id);
+  out.set("sourceKind", d.source_kind);
+  out.set("startPpq", d.start_ppq);
+  out.set("lengthPpq", d.length_ppq);
+  out.set("sourceOffsetPpq", d.source_offset_ppq);
+  out.set("gain", d.gain);
+  out.set("loopMode", d.loop_mode);
+  out.set("loopLengthPpq", d.loop_length_ppq);
+  return out;
+}
+
+val ProjectWasm::sourceByIndex(int index) const {
+  SonareProjectSource d{};
+  const SonareError err =
+      sonare_project_source_by_index(project_.get(), static_cast<size_t>(index), &d);
+  if (err != SONARE_OK) throwCError(err, "source index out of range");
+  val out = val::object();
+  out.set("id", d.id);
+  out.set("kind", d.kind);
+  out.set("channelCount", d.channel_count);
+  out.set("storageHandleId", d.storage_handle_id);
+  out.set("sampleRateHint", d.sample_rate_hint);
+  out.set("nameOrUri", std::string(d.name_or_uri));
   return out;
 }
 
@@ -315,6 +370,9 @@ void registerProjectMeta(class_<ProjectWasm>& cls) {
       .function("setMarker", &ProjectWasm::setMarker)
       .function("setMarkerEx", &ProjectWasm::setMarkerEx)
       .function("markerByIndex", &ProjectWasm::markerByIndex)
+      .function("trackByIndex", &ProjectWasm::trackByIndex)
+      .function("clipByIndex", &ProjectWasm::clipByIndex)
+      .function("sourceByIndex", &ProjectWasm::sourceByIndex)
       .function("markerCount", &ProjectWasm::markerCount)
       .function("trackCount", &ProjectWasm::trackCount)
       .function("clipCount", &ProjectWasm::clipCount)

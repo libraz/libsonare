@@ -36,6 +36,84 @@ function buildProject(): Project {
   return project;
 }
 
+it('accepts a metadata-only audio clip with a source URI', () => {
+  const project = Project.create();
+  const trackId = project.addTrack({ kind: 'audio' });
+  expect(() =>
+    project.addClip({ trackId, startPpq: 0, lengthPpq: 4, sourceUri: 'asset://lead.wav' }),
+  ).not.toThrow();
+  expect(project.toJson()).toContain('asset://lead.wav');
+  project.destroy();
+});
+
+it('reads stored tracks, clips, and sources by index', () => {
+  const project = Project.create();
+  const trackId = project.addTrack({ kind: 'audio', name: 'readback' });
+  const clipId = project.addClip({
+    trackId,
+    startPpq: 2,
+    lengthPpq: 4,
+    sourceOffsetPpq: 1,
+    gain: 0.75,
+    sourceUri: 'asset://readback.wav',
+  });
+  try {
+    expect(project.trackByIndex(0)).toMatchObject({
+      id: trackId,
+      kind: 0,
+      name: 'readback',
+      gain: 1,
+      pan: 0,
+      mute: false,
+      solo: false,
+    });
+    expect(project.clipByIndex(0)).toMatchObject({
+      id: clipId,
+      trackId,
+      sourceKind: 0,
+      startPpq: 2,
+      lengthPpq: 4,
+      sourceOffsetPpq: 1,
+      gain: 0.75,
+      loopMode: 0,
+      loopLengthPpq: 0,
+    });
+    expect(project.sourceByIndex(0)).toMatchObject({
+      id: project.clipByIndex(0).sourceId,
+      kind: 0,
+      nameOrUri: 'asset://readback.wav',
+    });
+    expect(() => project.trackByIndex(1)).toThrow();
+    expect(() => project.clipByIndex(1)).toThrow();
+    expect(() => project.sourceByIndex(1)).toThrow();
+  } finally {
+    project.destroy();
+  }
+});
+
+it('rebinds deserialized source audio before bouncing', () => {
+  const project = Project.create();
+  const trackId = project.addTrack({ kind: 'audio' });
+  const audio = new Float32Array(480).fill(0.25);
+  project.addClip({
+    trackId,
+    startPpq: 0,
+    lengthPpq: 1,
+    audio,
+    audioChannels: 1,
+    audioSampleRate: 48000,
+    sourceUri: 'asset://lead.wav',
+  });
+  const restored = Project.fromJson(project.toJson());
+  const sourceIds = restored.unresolvedAudioSourceIds();
+  expect(sourceIds).toHaveLength(1);
+  restored.setSourceAudio(sourceIds[0], audio, 1, 48000);
+  expect(restored.unresolvedAudioSourceIds()).toEqual([]);
+  expect(restored.bounce({ totalFrames: 480, numChannels: 1 })).toHaveLength(480);
+  restored.destroy();
+  project.destroy();
+});
+
 function makeSysexSmf(): Buffer {
   const payload = Buffer.from([0x7e, 0x7f, 0x09, 0x01, 0xf7]);
   const body = Buffer.from([
@@ -317,6 +395,30 @@ describe('Project native binding', () => {
     project.destroy();
   });
 
+  it('clears clip warp references when removing a warp map and restores them on undo', () => {
+    const project = Project.create();
+    const trackId = project.addTrack({ kind: 'audio', name: 'audio' });
+    const clipId = project.addClip({ trackId, startPpq: 0, lengthPpq: 4, audioChannels: 0 });
+    project.setWarpMap({
+      id: 123,
+      anchors: [
+        { warpSample: 0, sourceSample: 0 },
+        { warpSample: 4, sourceSample: 4 },
+      ],
+    });
+    project.setClipWarpRef(clipId, 123);
+    const mapped = project.toJson();
+
+    project.removeWarpMap(123);
+    expect(project.toJson()).toContain('"warp_ref_id":0');
+    project.undo();
+    expect(project.toJson()).toBe(mapped);
+    expect(() =>
+      project.setWarpMap({ id: 124, anchors: [{ warpSample: 0, sourceSample: 0 }] }),
+    ).toThrow();
+    project.destroy();
+  });
+
   it('rejects routing an unknown track', () => {
     const project = Project.create();
     expect(() => project.setTrackMidiDestination(9999, 1)).toThrow();
@@ -424,9 +526,9 @@ describe('Project native binding', () => {
     project.destroy();
   });
 
-  it('rejects a salvaged truncated SMF with its native diagnostic', () => {
+  it('imports the valid prefix of a truncated SMF', () => {
     const project = Project.create();
-    expect(() => project.importSmf(makeTruncatedSmf())).toThrow(/truncated/);
+    expect(project.importSmf(makeTruncatedSmf())).toBeGreaterThan(0);
     project.destroy();
   });
 
@@ -568,7 +670,7 @@ describe('Project native binding', () => {
       project.bounceWithBuiltinInstrument({
         waveform: 'noise' as unknown as 'sine',
       }),
-    ).toThrow(/waveform/);
+    ).toThrow(/sawtooth/);
     project.destroy();
   });
 });
@@ -678,6 +780,16 @@ describe('Project value-model accessors', () => {
     expect(plain.kind).toBe(MarkerKind.Marker);
     expect(plain.keyFifths).toBe(0);
     expect(plain.keyMinor).toBe(false);
+    project.destroy();
+  });
+
+  it('round-trips a long UTF-8 marker name without splitting or truncating it', () => {
+    const project = Project.create();
+    const name = 'あいうえお'.repeat(7);
+    expect(Array.from(name).length).toBeGreaterThan(30);
+    project.setMarkerEx({ ppq: 3, name });
+    expect(project.markerByIndex(0).name).toBe(name);
+    expect(JSON.parse(project.toJson()).markers[0].name).toBe(name);
     project.destroy();
   });
 

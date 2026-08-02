@@ -172,6 +172,26 @@ SonareError sonare_project_serialize(const SonareProject* project, char** out_js
 SonareError sonare_project_deserialize(const char* json, size_t len, SonareProject** out,
                                        char** out_diag);
 
+/// @brief Returns how many audio sources have no decoded PCM registered.
+///
+/// After deserializing project JSON, URI-backed audio sources are intentionally
+/// unresolved until their host supplies PCM through @ref sonare_project_set_source_audio.
+SonareError sonare_project_unresolved_audio_source_count(const SonareProject* project,
+                                                         size_t* out_count);
+
+/// @brief Returns an unresolved audio source id by zero-based index.
+SonareError sonare_project_unresolved_audio_source_id_by_index(const SonareProject* project,
+                                                               size_t index,
+                                                               uint32_t* out_source_id);
+
+/// @brief Registers decoded interleaved PCM for an existing audio source.
+///
+/// The edit is undoable. @p frames must be positive, @p channels positive, and
+/// @p sample_rate within the supported project audio range.
+SonareError sonare_project_set_source_audio(SonareProject* project, uint32_t source_id,
+                                            const float* interleaved, int64_t frames, int channels,
+                                            int sample_rate);
+
 /// @brief Sets the project sample rate (Hz). Must be > 0.
 SonareError sonare_project_set_sample_rate(SonareProject* project, double sample_rate);
 
@@ -222,10 +242,83 @@ SonareError sonare_project_set_marker(SonareProject* project, uint32_t marker_id
 SonareError sonare_project_set_marker_ex(SonareProject* project, const SonareProjectMarker* marker,
                                          uint32_t* out_marker_id);
 
+/// @brief Adds or replaces a full marker while accepting an unbounded UTF-8 name.
+/// @details @p marker supplies the non-name fields. @p name is copied verbatim;
+///          use this API when the fixed 64-byte compatibility field is too small.
+SonareError sonare_project_set_marker_ex_name(SonareProject* project,
+                                              const SonareProjectMarker* marker, const char* name,
+                                              uint32_t* out_marker_id);
+
 /// @brief Reads a project marker by index (0-based, in stored order). An index
 ///        out of range yields SONARE_ERROR_INVALID_PARAMETER.
 SonareError sonare_project_marker_by_index(const SonareProject* project, size_t index,
                                            SonareProjectMarker* out);
+
+/// @brief Returns the complete UTF-8 marker name by index.
+/// @details Free @p out_name with sonare_free_string.
+SonareError sonare_project_marker_name_by_index(const SonareProject* project, size_t index,
+                                                char** out_name);
+
+/// @brief Flat, read-only track descriptor returned by @ref sonare_project_track_by_index.
+typedef struct {
+  uint32_t id;
+  uint32_t kind; /* SonareProjectTrackKind */
+  uint32_t midi_destination_id;
+  float gain;
+  float pan;
+  uint8_t mute;
+  uint8_t solo;
+  uint8_t reserved[2];
+  char name[64];
+} SonareProjectTrack;
+
+/// @brief Flat, read-only clip descriptor returned by @ref sonare_project_clip_by_index.
+typedef struct {
+  uint32_t id;
+  uint32_t track_id;
+  uint32_t source_id;
+  uint32_t source_kind; /* 0 audio, 1 MIDI */
+  double start_ppq;
+  double length_ppq;
+  double source_offset_ppq;
+  float gain;
+  uint32_t loop_mode;
+  double loop_length_ppq;
+} SonareProjectClip;
+
+/// @brief Flat, read-only source descriptor returned by @ref sonare_project_source_by_index.
+typedef struct {
+  uint32_t id;
+  uint32_t kind; /* 0 audio, 1 MIDI */
+  uint32_t channel_count;
+  uint32_t storage_handle_id;
+  double sample_rate_hint;
+  char name_or_uri[128];
+} SonareProjectSource;
+
+#ifdef __cplusplus
+static_assert(sizeof(SonareProjectTrack) == 88u, "SonareProjectTrack layout drift");
+static_assert(offsetof(SonareProjectTrack, name) == 24u, "SonareProjectTrack name offset");
+static_assert(sizeof(SonareProjectClip) == 56u, "SonareProjectClip layout drift");
+static_assert(offsetof(SonareProjectClip, start_ppq) == 16u, "SonareProjectClip start_ppq offset");
+static_assert(offsetof(SonareProjectClip, loop_length_ppq) == 48u,
+              "SonareProjectClip loop_length_ppq offset");
+static_assert(sizeof(SonareProjectSource) == 152u, "SonareProjectSource layout drift");
+static_assert(offsetof(SonareProjectSource, sample_rate_hint) == 16u,
+              "SonareProjectSource sample_rate_hint offset");
+static_assert(offsetof(SonareProjectSource, name_or_uri) == 24u,
+              "SonareProjectSource name_or_uri offset");
+#endif
+
+/// @brief Reads a project track by 0-based stored index.
+SonareError sonare_project_track_by_index(const SonareProject* project, size_t index,
+                                          SonareProjectTrack* out);
+/// @brief Reads a project clip by 0-based stored index.
+SonareError sonare_project_clip_by_index(const SonareProject* project, size_t index,
+                                         SonareProjectClip* out);
+/// @brief Reads a project source by 0-based stored index.
+SonareError sonare_project_source_by_index(const SonareProject* project, size_t index,
+                                           SonareProjectSource* out);
 
 /// @brief Replaces the project's mixer scene from scene JSON.
 SonareError sonare_project_set_mixer_scene_json(SonareProject* project, const char* scene_json);

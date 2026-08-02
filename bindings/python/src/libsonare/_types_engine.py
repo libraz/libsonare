@@ -162,6 +162,48 @@ class ProjectMarker:
 
 
 @dataclass(frozen=True, slots=True)
+class ProjectTrack:
+    """Read-only, stored-order project track descriptor."""
+
+    id: int
+    kind: int
+    midi_destination_id: int
+    gain: float
+    pan: float
+    mute: bool
+    solo: bool
+    name: str
+
+
+@dataclass(frozen=True, slots=True)
+class ProjectClip:
+    """Read-only, stored-order project clip descriptor."""
+
+    id: int
+    track_id: int
+    source_id: int
+    source_kind: int
+    start_ppq: float
+    length_ppq: float
+    source_offset_ppq: float
+    gain: float
+    loop_mode: int
+    loop_length_ppq: float
+
+
+@dataclass(frozen=True, slots=True)
+class ProjectSource:
+    """Read-only, stored-order project source descriptor."""
+
+    id: int
+    kind: int
+    channel_count: int
+    storage_handle_id: int
+    sample_rate_hint: float
+    name_or_uri: str
+
+
+@dataclass(frozen=True, slots=True)
 class EngineMetronomeConfig:
     """Realtime engine metronome click configuration."""
 

@@ -648,6 +648,28 @@ TEST_CASE("compiler passes audio loop length to ClipSchedule", "[arrangement]") 
   REQUIRE(r.timeline->audio_clips.front().loop_length_samples == 12000);
 }
 
+TEST_CASE("compiler warns when a requested audio loop crossfade has no source pre-roll",
+          "[arrangement]") {
+  Fixture f = make_fixture();
+  arr::EditClip* clip = f.project.find_clip_mutable(f.clip_id);
+  REQUIRE(clip != nullptr);
+  clip->loop_mode = arr::LoopMode::kLoop;
+  clip->loop_length_ppq = 0.5;
+  clip->loop_crossfade_ppq = 0.125;
+  // The default source offset is zero, so the player has no source material
+  // before the loop start to blend at the seam.
+
+  const arr::CompileResult result = arr::compile(f.project, f.midi, f.audio);
+  REQUIRE_FALSE(result.has_errors());
+  REQUIRE(result.timeline.has_value());
+  REQUIRE(std::any_of(
+      result.diagnostics.begin(), result.diagnostics.end(), [&f](const auto& diagnostic) {
+        return diagnostic.code == arr::Diagnostic::Code::kLoopCrossfadeUnavailable &&
+               diagnostic.severity == arr::Diagnostic::Severity::kWarning &&
+               diagnostic.target_id == f.clip_id;
+      }));
+}
+
 TEST_CASE("compiler loops the whole clip when loop length is zero", "[arrangement]") {
   Fixture f = make_fixture();
 

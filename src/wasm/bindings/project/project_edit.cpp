@@ -34,11 +34,10 @@ SonareProjectClipFade ProjectWasm::clipFadeFromVal(val desc) {
     val curve = desc["curve"];
     if (curve.typeOf().as<std::string>() == "string") {
       const std::string s = curve.as<std::string>();
-      fade.curve = (s == "equalPower" || s == "equal-power" || s == "equal_power")
-                       ? SONARE_FADE_CURVE_EQUAL_POWER
-                   : s == "exponential" ? SONARE_FADE_CURVE_EXPONENTIAL
-                   : s == "logarithmic" ? SONARE_FADE_CURVE_LOGARITHMIC
-                                        : SONARE_FADE_CURVE_LINEAR;
+      if (sonare_project_fade_curve_from_name(s.c_str(), &fade.curve) != SONARE_OK) {
+        throw sonare::SonareException(sonare::ErrorCode::InvalidParameter,
+                                      "unknown fade curve: " + s);
+      }
     } else {
       fade.curve = curve.as<uint32_t>();
     }
@@ -53,6 +52,33 @@ void ProjectWasm::setClipFade(uint32_t clip_id, val fade_in, val fade_out) {
   if (err != SONARE_OK) {
     throwCError(err, "failed to set clip fade");
   }
+}
+
+val ProjectWasm::unresolvedAudioSourceIds() const {
+  size_t count = 0;
+  const SonareError err = sonare_project_unresolved_audio_source_count(project_.get(), &count);
+  if (err != SONARE_OK) throwCError(err, "failed to enumerate unresolved audio sources");
+  val ids = val::array();
+  for (size_t i = 0; i < count; ++i) {
+    uint32_t source_id = 0;
+    const SonareError id_err =
+        sonare_project_unresolved_audio_source_id_by_index(project_.get(), i, &source_id);
+    if (id_err != SONARE_OK) throwCError(id_err, "failed to read unresolved audio source");
+    ids.set(static_cast<unsigned>(i), source_id);
+  }
+  return ids;
+}
+
+void ProjectWasm::setSourceAudio(uint32_t source_id, val audio, int channels, int sample_rate) {
+  const std::vector<float> samples = float32ArrayToVector(audio);
+  if (channels <= 0 || samples.size() % static_cast<size_t>(channels) != 0) {
+    throw sonare::SonareException(sonare::ErrorCode::InvalidParameter,
+                                  "audio length must be a multiple of channels");
+  }
+  const SonareError err = sonare_project_set_source_audio(
+      project_.get(), source_id, samples.data(), static_cast<int64_t>(samples.size() / channels),
+      channels, sample_rate);
+  if (err != SONARE_OK) throwCError(err, "failed to set source audio");
 }
 
 void ProjectWasm::setClipTakes(uint32_t clip_id, val takes_val, uint32_t active_take_id) {
@@ -228,7 +254,7 @@ SonareAutomationLaneDesc ProjectWasm::automationLaneDescFromVal(
 double ProjectWasm::addAutomationLane(uint32_t track_id, val desc) {
   std::vector<SonareAutomationPoint> storage;
   SonareAutomationLaneDesc d = automationLaneDescFromVal(desc, &storage);
-  size_t out = 0;
+  uint32_t out = 0;
   const SonareError err = sonare_project_add_automation_lane(project_.get(), track_id, &d, &out);
   if (err != SONARE_OK) {
     throwCError(err, "failed to add automation lane");
@@ -236,19 +262,19 @@ double ProjectWasm::addAutomationLane(uint32_t track_id, val desc) {
   return static_cast<double>(out);
 }
 
-void ProjectWasm::editAutomationLane(uint32_t track_id, double lane_index, val desc) {
+void ProjectWasm::editAutomationLane(uint32_t track_id, double target_param_id, val desc) {
   std::vector<SonareAutomationPoint> storage;
   SonareAutomationLaneDesc d = automationLaneDescFromVal(desc, &storage);
-  const SonareError err = sonare_project_edit_automation_lane(project_.get(), track_id,
-                                                              static_cast<size_t>(lane_index), &d);
+  const SonareError err = sonare_project_edit_automation_lane(
+      project_.get(), track_id, static_cast<uint32_t>(target_param_id), &d);
   if (err != SONARE_OK) {
     throwCError(err, "failed to edit automation lane");
   }
 }
 
-void ProjectWasm::removeAutomationLane(uint32_t track_id, double lane_index) {
-  const SonareError err = sonare_project_remove_automation_lane(project_.get(), track_id,
-                                                                static_cast<size_t>(lane_index));
+void ProjectWasm::removeAutomationLane(uint32_t track_id, double target_param_id) {
+  const SonareError err = sonare_project_remove_automation_lane(
+      project_.get(), track_id, static_cast<uint32_t>(target_param_id));
   if (err != SONARE_OK) {
     throwCError(err, "failed to remove automation lane");
   }
@@ -258,6 +284,8 @@ void registerProjectEdit(class_<ProjectWasm>& cls) {
   cls.function("removeClip", &ProjectWasm::removeClip)
       .function("setClipGain", &ProjectWasm::setClipGain)
       .function("setClipFade", &ProjectWasm::setClipFade)
+      .function("unresolvedAudioSourceIds", &ProjectWasm::unresolvedAudioSourceIds)
+      .function("setSourceAudio", &ProjectWasm::setSourceAudio)
       .function("setClipTakes", &ProjectWasm::setClipTakes)
       .function("setClipCompSegments", &ProjectWasm::setClipCompSegments)
       .function("setClipLoop", &ProjectWasm::setClipLoop)

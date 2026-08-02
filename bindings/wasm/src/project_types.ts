@@ -76,17 +76,47 @@ export interface ProjectMarker {
   keyMinor?: boolean;
 }
 
+/** Read-only stored project track returned by {@link Project.trackByIndex}. */
+export interface ProjectTrack {
+  id: number;
+  kind: number;
+  midiDestinationId: number;
+  gain: number;
+  pan: number;
+  mute: boolean;
+  solo: boolean;
+  name: string;
+}
+
+/** Read-only stored project clip returned by {@link Project.clipByIndex}. */
+export interface ProjectClip {
+  id: number;
+  trackId: number;
+  sourceId: number;
+  sourceKind: number;
+  startPpq: number;
+  lengthPpq: number;
+  sourceOffsetPpq: number;
+  gain: number;
+  loopMode: number;
+  loopLengthPpq: number;
+}
+
+/** Read-only stored project source returned by {@link Project.sourceByIndex}. */
+export interface ProjectSource {
+  id: number;
+  kind: number;
+  channelCount: number;
+  storageHandleId: number;
+  sampleRateHint: number;
+  nameOrUri: string;
+}
+
+/** Names accepted by the minimal built-in oscillator synth. */
+export const BUILTIN_SYNTH_WAVEFORMS = ['sine', 'saw', 'sawtooth', 'square', 'triangle'] as const;
+
 /** Oscillator waveform for the built-in synth. */
-export type BuiltinSynthWaveform =
-  | 'sine'
-  | 'saw'
-  | 'sawtooth'
-  | 'square'
-  | 'triangle'
-  | 0
-  | 1
-  | 2
-  | 3;
+export type BuiltinSynthWaveform = (typeof BUILTIN_SYNTH_WAVEFORMS)[number] | 0 | 1 | 2 | 3;
 
 /**
  * Built-in synth patch + MIDI routing for
@@ -223,6 +253,7 @@ export const SYNTH_MOD_DESTINATIONS = [
 export interface SynthEnumTables {
   engineModes: string[];
   waveforms: string[];
+  builtinWaveforms: string[];
   filterModels: string[];
   filterOutputs: string[];
   bodyTypes: string[];
@@ -337,8 +368,11 @@ export type ProjectFadeCurve =
   | 'equal-power'
   | 'equal_power'
   | 'equalPower'
+  | 'equalpower'
   | 'exponential'
+  | 'exp'
   | 'logarithmic'
+  | 'log'
   | 0
   | 1
   | 2

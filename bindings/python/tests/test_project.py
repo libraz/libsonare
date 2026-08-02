@@ -156,6 +156,54 @@ def test_project_abi_version_matches_expected() -> None:
     assert project_abi_version() > 0
 
 
+def test_reads_stored_tracks_clips_and_sources_by_index() -> None:
+    project = Project()
+    try:
+        track_id = project.add_track("audio", "readback")
+        clip_id = project.add_clip(
+            track_id,
+            start_ppq=2.0,
+            length_ppq=4.0,
+            source_offset_ppq=1.0,
+            gain=0.75,
+            source_uri="asset://readback.wav",
+        )
+
+        track = project.track_by_index(0)
+        assert track.id == track_id
+        assert track.kind == 0
+        assert track.name == "readback"
+        assert track.gain == 1.0
+        assert track.pan == 0.0
+        assert not track.mute
+        assert not track.solo
+
+        clip = project.clip_by_index(0)
+        assert clip.id == clip_id
+        assert clip.track_id == track_id
+        assert clip.source_kind == 0
+        assert clip.start_ppq == 2.0
+        assert clip.length_ppq == 4.0
+        assert clip.source_offset_ppq == 1.0
+        assert clip.gain == 0.75
+        assert clip.loop_mode == 0
+        assert clip.loop_length_ppq == 0.0
+
+        source = project.source_by_index(0)
+        assert source.id == clip.source_id
+        assert source.kind == 0
+        assert source.name_or_uri == "asset://readback.wav"
+
+        with pytest.raises(SonareError):
+            project.track_by_index(1)
+        with pytest.raises(SonareError):
+            project.clip_by_index(1)
+        with pytest.raises(SonareError):
+            project.source_by_index(1)
+    finally:
+        project.close()
+
+
 def test_import_external_stems_creates_normal_audio_tracks() -> None:
     project = Project()
     try:
@@ -230,6 +278,44 @@ def test_to_json_is_utf8_decoded() -> None:
         text = project.to_json()
         assert isinstance(text, str)
         assert text.encode("utf-8") == project.to_json_bytes()
+    finally:
+        project.close()
+
+
+def test_metadata_only_audio_clip_accepts_source_uri() -> None:
+    project = Project()
+    try:
+        track_id = project.add_track("audio", "lead")
+        clip_id = project.add_clip(track_id, 0.0, 4.0, source_uri="asset://lead.wav")
+        assert clip_id > 0
+        assert "asset://lead.wav" in project.to_json()
+    finally:
+        project.close()
+
+
+def test_deserialized_audio_source_can_be_rebound_before_bounce() -> None:
+    project = Project()
+    audio = np.full(480, 0.25, dtype=np.float32)
+    try:
+        track_id = project.add_track("audio", "lead")
+        project.add_clip(
+            track_id,
+            0.0,
+            1.0,
+            audio=audio,
+            audio_channels=1,
+            audio_sample_rate=48000,
+            source_uri="asset://lead.wav",
+        )
+        restored = Project.from_json(project.to_json())
+        try:
+            ids = restored.unresolved_audio_source_ids()
+            assert len(ids) == 1
+            restored.set_source_audio(ids[0], audio, 1, 48000)
+            assert restored.unresolved_audio_source_ids() == []
+            assert restored.bounce(total_frames=480, num_channels=1).shape == (480, 1)
+        finally:
+            restored.close()
     finally:
         project.close()
 
@@ -599,6 +685,27 @@ def test_set_clip_warp_ref_round_trips_and_undoes() -> None:
 
         project.set_clip_warp_mode(clip_id, "tempo-sync")
         assert b'"warp_mode":2' in project.to_json_bytes()
+    finally:
+        project.close()
+
+
+def test_removing_warp_map_clears_clip_references_and_undo_restores_them() -> None:
+    project = Project()
+    try:
+        track_id = project.add_track("audio", "audio")
+        clip_id = project.add_clip(
+            track_id=track_id, start_ppq=0.0, length_ppq=4.0, audio_channels=0
+        )
+        project.set_warp_map(123, [(0.0, 0.0), (4.0, 4.0)])
+        project.set_clip_warp_ref(clip_id, 123)
+        mapped = project.to_json_bytes()
+
+        project.remove_warp_map(123)
+        assert b'"warp_ref_id":0' in project.to_json_bytes()
+        project.undo()
+        assert project.to_json_bytes() == mapped
+        with pytest.raises(SonareError):
+            project.set_warp_map(124, [(0.0, 0.0)])
     finally:
         project.close()
 
@@ -1077,6 +1184,19 @@ def test_project_marker_ex_round_trips_kind_and_key() -> None:
         project.close()
 
 
+def test_project_marker_ex_round_trips_long_utf8_name() -> None:
+    project = Project()
+    try:
+        name = "あいうえお" * 7
+        assert len(name) == 35
+        marker_id = project.set_marker_ex(ProjectMarker(0, 1.0, name))
+        assert marker_id > 0
+        assert project.marker_by_index(0).name == name
+        assert json.loads(project.to_json())["markers"][0]["name"] == name
+    finally:
+        project.close()
+
+
 def test_project_import_smf_surfaces_key_signature_marker() -> None:
     project = Project()
     try:
@@ -1182,10 +1302,9 @@ def test_bake_midi_fx_preserves_more_than_512_events() -> None:
         project.close()
 
 
-def test_project_import_smf_rejects_salvaged_truncation_with_diagnostic() -> None:
+def test_project_import_smf_preserves_salvaged_truncation() -> None:
     project = Project()
     try:
-        with pytest.raises(SonareError, match="truncated"):
-            project.import_smf(_make_truncated_smf())
+        assert project.import_smf(_make_truncated_smf()) > 0
     finally:
         project.close()

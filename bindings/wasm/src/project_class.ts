@@ -17,6 +17,7 @@ import type {
   ProjectAutomationPoint,
   ProjectBounceOptions,
   ProjectChordSymbol,
+  ProjectClip,
   ProjectClipCompSegment,
   ProjectClipDesc,
   ProjectClipFade,
@@ -34,9 +35,11 @@ import type {
   ProjectMidiRouteConfig,
   ProjectMidiRouteResult,
   ProjectNotePairValidation,
+  ProjectSource,
   ProjectTempoCandidate,
   ProjectTempoSegment,
   ProjectTimeSignatureSegment,
+  ProjectTrack,
   ProjectTrackDesc,
   ProjectTrackKind,
   ProjectWarpMapDesc,
@@ -704,6 +707,21 @@ export class Project {
     this.native.setClipFade(clipId, fadeIn, fadeOut);
   }
 
+  /** Audio source ids that need decoded PCM after deserialization. */
+  unresolvedAudioSourceIds(): number[] {
+    return this.native.unresolvedAudioSourceIds();
+  }
+
+  /** Register decoded interleaved PCM for an existing audio source (undoable). */
+  setSourceAudio(
+    sourceId: number,
+    audio: Float32Array,
+    channels: number,
+    sampleRate: number,
+  ): void {
+    this.native.setSourceAudio(sourceId, audio, channels, sampleRate);
+  }
+
   /** Replace a clip's take list and active take id (undoable). */
   setClipTakes(clipId: number, takes: ReadonlyArray<ProjectClipTake>, activeTakeId = 0): void {
     this.native.setClipTakes(clipId, takes, activeTakeId);
@@ -758,7 +776,7 @@ export class Project {
     this.native.setTrackRoute(trackId, channelStripRef ?? '', outputTarget ?? '');
   }
 
-  /** Append an automation lane to a track; returns the lane index (undoable). */
+  /** Append an automation lane; returns its stable target parameter id (undoable). */
   addAutomationLane(trackId: number, desc: ProjectAutomationLaneDesc): number {
     return this.native.addAutomationLane(trackId, {
       targetParamId: desc.targetParamId,
@@ -766,17 +784,21 @@ export class Project {
     });
   }
 
-  /** Replace an existing automation lane in place (undoable). */
-  editAutomationLane(trackId: number, laneIndex: number, desc: ProjectAutomationLaneDesc): void {
-    this.native.editAutomationLane(trackId, laneIndex, {
+  /** Replace the lane identified by its stable target parameter id (undoable). */
+  editAutomationLane(
+    trackId: number,
+    targetParamId: number,
+    desc: ProjectAutomationLaneDesc,
+  ): void {
+    this.native.editAutomationLane(trackId, targetParamId, {
       targetParamId: desc.targetParamId,
       points: desc.points,
     });
   }
 
-  /** Remove an automation lane from a track (undoable). */
-  removeAutomationLane(trackId: number, laneIndex: number): void {
-    this.native.removeAutomationLane(trackId, laneIndex);
+  /** Remove the lane identified by its stable target parameter id (undoable). */
+  removeAutomationLane(trackId: number, targetParamId: number): void {
+    this.native.removeAutomationLane(trackId, targetParamId);
   }
 
   /** Replace the project's key annotation stream (undoable). */
@@ -858,6 +880,19 @@ export class Project {
   /** Read a project marker by index (0-based, in stored order). */
   markerByIndex(index: number): ProjectMarker {
     return this.native.markerByIndex(index);
+  }
+
+  /** Read a stored project track by 0-based index. */
+  trackByIndex(index: number): ProjectTrack {
+    return this.native.trackByIndex(index);
+  }
+  /** Read a stored project clip by 0-based index. */
+  clipByIndex(index: number): ProjectClip {
+    return this.native.clipByIndex(index);
+  }
+  /** Read a stored project source by 0-based index. */
+  sourceByIndex(index: number): ProjectSource {
+    return this.native.sourceByIndex(index);
   }
 
   /** Number of markers in the project. */

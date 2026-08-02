@@ -6,7 +6,7 @@ from __future__ import annotations
 import ctypes
 import math
 from collections.abc import Mapping, Sequence
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, cast
 
 import numpy as np
 
@@ -52,6 +52,44 @@ class _ProjectEditMixin:
         """Set the project sample rate in Hz (must be > 0)."""
         _check(
             _get_lib().sonare_project_set_sample_rate(self._require_handle(), float(sample_rate))
+        )
+
+    def unresolved_audio_source_ids(self) -> list[int]:
+        """Return audio source ids that need PCM after deserialization."""
+        count = ctypes.c_size_t()
+        lib = _get_lib()
+        _check(
+            lib.sonare_project_unresolved_audio_source_count(
+                self._require_handle(), ctypes.byref(count)
+            )
+        )
+        ids: list[int] = []
+        for index in range(count.value):
+            source_id = ctypes.c_uint32()
+            _check(
+                lib.sonare_project_unresolved_audio_source_id_by_index(
+                    self._require_handle(), index, ctypes.byref(source_id)
+                )
+            )
+            ids.append(int(source_id.value))
+        return ids
+
+    def set_source_audio(
+        self, source_id: int, audio: Sequence[float] | np.ndarray, channels: int, sample_rate: int
+    ) -> None:
+        """Register decoded interleaved PCM for an existing audio source (undoable)."""
+        backing, total = _to_c_float_array(audio)
+        if channels <= 0 or total % channels != 0:
+            raise ValueError("audio length must be a multiple of channels")
+        _check(
+            _get_lib().sonare_project_set_source_audio(
+                self._require_handle(),
+                int(source_id),
+                backing,
+                total // channels,
+                int(channels),
+                int(sample_rate),
+            )
         )
 
     # -- edit ---------------------------------------------------------------
@@ -115,8 +153,8 @@ class _ProjectEditMixin:
             gain=float(gain),
             audio_interleaved=c_audio,
             audio_frames=int(audio_frames),
-            audio_channels=int(audio_channels),
-            audio_sample_rate=int(audio_sample_rate),
+            audio_channels=int(audio_channels) if audio is not None else 0,
+            audio_sample_rate=int(audio_sample_rate) if audio is not None else 0,
             source_uri=source_uri.encode("utf-8") if source_uri is not None else None,
         )
         out_id = ctypes.c_uint32()
@@ -145,14 +183,14 @@ class _ProjectEditMixin:
         names: list[bytes] = []
         roles: list[bytes | None] = []
         sample_arrays: list[list[np.ndarray]] = []
-        plane_arrays: list[ctypes.Array[ctypes.POINTER(ctypes.c_float)]] = []
+        plane_arrays: list[ctypes.Array[ctypes._Pointer[ctypes.c_float]]] = []
         for stem in stems:
             name = stem.get("name")
             layout = stem.get("layout")
             planes = stem.get("planar_samples")
             if not isinstance(name, str) or not isinstance(planes, Sequence):
                 raise TypeError("each stem needs string name and planar_samples")
-            layout_value = {"mono": 1, "stereo": 2}.get(layout, layout)
+            layout_value: object = 1 if layout == "mono" else 2 if layout == "stereo" else layout
             if layout_value not in (1, 2) or len(planes) != layout_value:
                 raise ValueError("planar_samples must match mono or stereo layout")
             arrays = [_as_float32_buffer(plane) for plane in planes]
@@ -164,7 +202,7 @@ class _ProjectEditMixin:
                 raise TypeError("stem role must be a string when supplied")
             roles.append(None if role is None else role.encode("utf-8"))
             sample_arrays.append(arrays)
-            c_planes = (ctypes.POINTER(ctypes.c_float) * int(layout_value))(
+            c_planes = (ctypes.POINTER(ctypes.c_float) * int(cast(int, layout_value)))(
                 *(array.ctypes.data_as(ctypes.POINTER(ctypes.c_float)) for array in arrays)
             )
             plane_arrays.append(c_planes)
@@ -172,10 +210,10 @@ class _ProjectEditMixin:
                 SonareExternalStemDesc(
                     name=names[-1],
                     role=roles[-1],
-                    layout=int(layout_value),
+                    layout=int(cast(int, layout_value)),
                     planar_samples=c_planes,
                     frame_count=int(arrays[0].size),
-                    start_frame=int(stem.get("start_frame", 0)),
+                    start_frame=int(cast(int, stem.get("start_frame", 0))),
                 )
             )
         c_descs = (SonareExternalStemDesc * len(descs))(*descs)
@@ -343,7 +381,7 @@ class _ProjectEditMixin:
                 )
                 name = item.get("name", "")
             else:
-                take_id, source_id, source_offset, name = item
+                take_id, source_id, source_offset, name = cast(tuple[int, int, float, str], item)
             c_takes[i].id = int(take_id)
             c_takes[i].source_id = int(source_id)
             c_takes[i].source_offset_ppq = float(source_offset)
@@ -376,7 +414,7 @@ class _ProjectEditMixin:
                 end_ppq = float(item.get("end_ppq", item.get("endPpq", 0.0)))
                 take_id = int(item.get("take_id", item.get("takeId", 0)))
             else:
-                start_ppq, end_ppq, take_id = item
+                start_ppq, end_ppq, take_id = cast(tuple[float, float, int], item)
             c_segments[i].start_ppq = float(start_ppq)
             c_segments[i].end_ppq = float(end_ppq)
             c_segments[i].take_id = int(take_id)
@@ -611,50 +649,49 @@ class _ProjectEditMixin:
         target_param_id: int,
         points: Sequence[tuple[float, float, int | str]] | Sequence[Sequence[float]] | None = None,
     ) -> int:
-        """Append an automation lane to a track; return its index within the track.
+        """Append an automation lane and return its stable target parameter id.
 
         ``points`` is an optional list of ``(ppq, value, curve)`` breakpoints
         (``curve`` is an :class:`AutomationCurve` ordinal / name; default linear).
         """
         desc, _backing = _automation_lane_desc(target_param_id, points)
-        out_index = ctypes.c_size_t()
+        out_target_param_id = ctypes.c_uint32()
         _check(
             _get_lib().sonare_project_add_automation_lane(
                 self._require_handle(),
                 int(track_id),
                 ctypes.byref(desc),
-                ctypes.byref(out_index),
+                ctypes.byref(out_target_param_id),
             )
         )
         del _backing
-        return int(out_index.value)
+        return int(out_target_param_id.value)
 
     def edit_automation_lane(
         self,
         track_id: int,
-        lane_index: int,
         target_param_id: int,
         points: Sequence[tuple[float, float, int | str]] | Sequence[Sequence[float]] | None = None,
     ) -> None:
-        """Replace an existing automation lane in place via an undoable edit."""
+        """Replace the lane identified by ``target_param_id`` via an undoable edit."""
         desc, _backing = _automation_lane_desc(target_param_id, points)
         _check(
             _get_lib().sonare_project_edit_automation_lane(
                 self._require_handle(),
                 int(track_id),
-                ctypes.c_size_t(int(lane_index)),
+                ctypes.c_uint32(int(target_param_id)),
                 ctypes.byref(desc),
             )
         )
         del _backing
 
-    def remove_automation_lane(self, track_id: int, lane_index: int) -> None:
-        """Remove an automation lane from a track via an undoable edit command."""
+    def remove_automation_lane(self, track_id: int, target_param_id: int) -> None:
+        """Remove the lane identified by ``target_param_id`` via an undoable edit."""
         _check(
             _get_lib().sonare_project_remove_automation_lane(
                 self._require_handle(),
                 int(track_id),
-                ctypes.c_size_t(int(lane_index)),
+                ctypes.c_uint32(int(target_param_id)),
             )
         )
 

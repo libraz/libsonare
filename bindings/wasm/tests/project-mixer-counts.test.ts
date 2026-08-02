@@ -27,6 +27,51 @@ describe('Project counts and timeline metadata (WASM)', () => {
     }
   });
 
+  it('reads stored tracks, clips, and sources by index', () => {
+    const project = new Project();
+    try {
+      const trackId = project.addTrack({ kind: 'audio', name: 'readback' });
+      const clipId = project.addClip({
+        trackId,
+        startPpq: 2,
+        lengthPpq: 4,
+        sourceOffsetPpq: 1,
+        gain: 0.75,
+        sourceUri: 'asset://readback.wav',
+      });
+      expect(project.trackByIndex(0)).toMatchObject({
+        id: trackId,
+        kind: 0,
+        name: 'readback',
+        gain: 1,
+        pan: 0,
+        mute: false,
+        solo: false,
+      });
+      expect(project.clipByIndex(0)).toMatchObject({
+        id: clipId,
+        trackId,
+        sourceKind: 0,
+        startPpq: 2,
+        lengthPpq: 4,
+        sourceOffsetPpq: 1,
+        gain: 0.75,
+        loopMode: 0,
+        loopLengthPpq: 0,
+      });
+      expect(project.sourceByIndex(0)).toMatchObject({
+        id: project.clipByIndex(0).sourceId,
+        kind: 0,
+        nameOrUri: 'asset://readback.wav',
+      });
+      expect(() => project.trackByIndex(1)).toThrow();
+      expect(() => project.clipByIndex(1)).toThrow();
+      expect(() => project.sourceByIndex(1)).toThrow();
+    } finally {
+      project.delete();
+    }
+  });
+
   it('sets and counts tempo segments', () => {
     const project = new Project();
     try {
@@ -102,6 +147,19 @@ describe('Project counts and timeline metadata (WASM)', () => {
       expect(cue?.keyMinor).toBe(false);
 
       expect(() => project.markerByIndex(count)).toThrow();
+    } finally {
+      project.delete();
+    }
+  });
+
+  it('round-trips a long UTF-8 marker name without splitting or truncating it', () => {
+    const project = new Project();
+    try {
+      const name = 'あいうえお'.repeat(7);
+      expect(Array.from(name)).toHaveLength(35);
+      project.setMarkerEx({ id: 0, ppq: 960, name });
+      expect(project.markerByIndex(0).name).toBe(name);
+      expect(JSON.parse(project.toJson()).markers[0].name).toBe(name);
     } finally {
       project.delete();
     }

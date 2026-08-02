@@ -562,6 +562,21 @@ class RemoveWarpMap final : public EditCommand {
   WarpRefId id_;
 };
 
+class RestoreWarpMap final : public EditCommand {
+ public:
+  RestoreWarpMap(WarpMapRef map, std::vector<ClipId> clip_ids)
+      : map_(std::move(map)), clip_ids_(std::move(clip_ids)) {}
+
+  bool apply(Project& project, MidiContentStore& store) override;
+  EditCommandPtr invert(const Project& before, const MidiContentStore& store_before) const override;
+  const char* type_name() const noexcept override { return "RestoreWarpMap"; }
+  bool mutates_midi_store() const noexcept override { return false; }
+
+ private:
+  WarpMapRef map_;
+  std::vector<ClipId> clip_ids_;
+};
+
 class SetClipSource final : public EditCommand {
  public:
   SetClipSource(ClipId id, SourceId source_id) : id_(id), source_id_(source_id) {}
@@ -796,18 +811,17 @@ class AddAutomationLane final : public EditCommand {
   bool mutates_midi_store() const noexcept override { return false; }
 
   /// Index of the appended lane within the track (valid after apply).
-  size_t lane_index() const noexcept { return lane_index_; }
+  uint32_t target_param_id() const noexcept { return lane_.target_param_id(); }
 
  private:
   TrackId track_id_;
   automation::AutomationLane lane_;
-  size_t lane_index_ = 0;
 };
 
 class RemoveAutomationLane final : public EditCommand {
  public:
-  RemoveAutomationLane(TrackId track_id, size_t lane_index)
-      : track_id_(track_id), lane_index_(lane_index) {}
+  RemoveAutomationLane(TrackId track_id, uint32_t target_param_id)
+      : track_id_(track_id), target_param_id_(target_param_id) {}
 
   bool apply(Project& project, MidiContentStore& store) override;
   EditCommandPtr invert(const Project& before, const MidiContentStore& store_before) const override;
@@ -816,14 +830,14 @@ class RemoveAutomationLane final : public EditCommand {
 
  private:
   TrackId track_id_;
-  size_t lane_index_;
+  uint32_t target_param_id_;
 };
 
 /// Replaces an existing automation lane (target param id + breakpoints) in place.
 class EditAutomationLane final : public EditCommand {
  public:
-  EditAutomationLane(TrackId track_id, size_t lane_index, automation::AutomationLane lane)
-      : track_id_(track_id), lane_index_(lane_index), lane_(std::move(lane)) {}
+  EditAutomationLane(TrackId track_id, uint32_t target_param_id, automation::AutomationLane lane)
+      : track_id_(track_id), target_param_id_(target_param_id), lane_(std::move(lane)) {}
 
   bool apply(Project& project, MidiContentStore& store) override;
   EditCommandPtr invert(const Project& before, const MidiContentStore& store_before) const override;
@@ -832,7 +846,7 @@ class EditAutomationLane final : public EditCommand {
 
  private:
   TrackId track_id_;
-  size_t lane_index_;
+  uint32_t target_param_id_;
   automation::AutomationLane lane_;
 };
 

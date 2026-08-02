@@ -11,8 +11,6 @@
 
 using namespace sonare_node::project;
 
-Napi::FunctionReference ProjectWrap::constructor;
-
 Napi::Object ProjectWrap::Init(Napi::Env env, Napi::Object exports) {
   Napi::Function func = DefineClass(
       env, "Project",
@@ -92,11 +90,16 @@ Napi::Object ProjectWrap::Init(Napi::Env env, Napi::Object exports) {
           InstanceMethod<&ProjectWrap::SetMarker>("setMarker"),
           InstanceMethod<&ProjectWrap::SetMarkerEx>("setMarkerEx"),
           InstanceMethod<&ProjectWrap::MarkerByIndex>("markerByIndex"),
+          InstanceMethod<&ProjectWrap::TrackByIndex>("trackByIndex"),
+          InstanceMethod<&ProjectWrap::ClipByIndex>("clipByIndex"),
+          InstanceMethod<&ProjectWrap::SourceByIndex>("sourceByIndex"),
           InstanceMethod<&ProjectWrap::SetTempoSegments>("setTempoSegments"),
           InstanceMethod<&ProjectWrap::SetTimeSignatures>("setTimeSignatures"),
           InstanceMethod<&ProjectWrap::TrackCount>("trackCount"),
           InstanceMethod<&ProjectWrap::ClipCount>("clipCount"),
           InstanceMethod<&ProjectWrap::SourceCount>("sourceCount"),
+          InstanceMethod<&ProjectWrap::UnresolvedAudioSourceIds>("unresolvedAudioSourceIds"),
+          InstanceMethod<&ProjectWrap::SetSourceAudio>("setSourceAudio"),
           InstanceMethod<&ProjectWrap::TempoSegmentCount>("tempoSegmentCount"),
           InstanceMethod<&ProjectWrap::TimeSignatureCount>("timeSignatureCount"),
           InstanceMethod<&ProjectWrap::MarkerCount>("markerCount"),
@@ -104,17 +107,16 @@ Napi::Object ProjectWrap::Init(Napi::Env env, Napi::Object exports) {
           StaticMethod<&ProjectWrap::FromJson>("fromJson"),
           StaticMethod<&ProjectWrap::FromJsonWithDiagnostics>("fromJsonWithDiagnostics"),
       });
-  constructor = Napi::Persistent(func);
-  constructor.SuppressDestruct();
   exports.Set("Project", func);
   return exports;
 }
 
-Napi::Object ProjectWrap::Wrap(Napi::Env env, SonareProject* handle) {
+Napi::Object ProjectWrap::Wrap(const Napi::CallbackInfo& info, SonareProject* handle) {
   // Inject the already-created native handle through an External so the
   // constructor adopts it instead of allocating a fresh empty project.
+  Napi::Env env = info.Env();
   Napi::External<SonareProject> external = Napi::External<SonareProject>::New(env, handle);
-  return constructor.New({external});
+  return info.This().As<Napi::Function>().New({external});
 }
 
 ProjectWrap::ProjectWrap(const Napi::CallbackInfo& info) : Napi::ObjectWrap<ProjectWrap>(info) {
@@ -189,7 +191,7 @@ Napi::Value ProjectWrap::FromJson(const Napi::CallbackInfo& info) {
     return env.Undefined();
   }
   if (diag != nullptr) sonare_free_string(diag);
-  return ProjectWrap::Wrap(env, handle);
+  return ProjectWrap::Wrap(info, handle);
 }
 
 Napi::Value ProjectWrap::FromJsonWithDiagnostics(const Napi::CallbackInfo& info) {
@@ -222,7 +224,7 @@ Napi::Value ProjectWrap::FromJsonWithDiagnostics(const Napi::CallbackInfo& info)
   }
 
   Napi::Object out = Napi::Object::New(env);
-  out.Set("project", ProjectWrap::Wrap(env, handle));
+  out.Set("project", ProjectWrap::Wrap(info, handle));
   out.Set("diagnostics", diagnostics);
   return out;
 }
@@ -293,10 +295,8 @@ Napi::Value ProjectWrap::SetMarkerEx(const Napi::CallbackInfo& info) {
   const std::string name = obj.Has("name") && !obj.Get("name").IsUndefined()
                                ? obj.Get("name").As<Napi::String>().Utf8Value()
                                : std::string();
-  std::strncpy(marker.name, name.c_str(), sizeof(marker.name) - 1);
-  marker.name[sizeof(marker.name) - 1] = '\0';
   uint32_t out_id = 0;
-  ThrowIfError(env, sonare_project_set_marker_ex(project_, &marker, &out_id));
+  ThrowIfError(env, sonare_project_set_marker_ex_name(project_, &marker, name.c_str(), &out_id));
   if (env.IsExceptionPending()) return env.Undefined();
   return Napi::Number::New(env, out_id);
 }
@@ -307,13 +307,71 @@ Napi::Value ProjectWrap::MarkerByIndex(const Napi::CallbackInfo& info) {
   SonareProjectMarker marker{};
   ThrowIfError(env, sonare_project_marker_by_index(project_, index, &marker));
   if (env.IsExceptionPending()) return env.Undefined();
+  char* full_name = nullptr;
+  ThrowIfError(env, sonare_project_marker_name_by_index(project_, index, &full_name));
+  if (env.IsExceptionPending()) return env.Undefined();
   Napi::Object out = Napi::Object::New(env);
   out.Set("id", Napi::Number::New(env, marker.id));
   out.Set("ppq", Napi::Number::New(env, marker.ppq));
-  out.Set("name", Napi::String::New(env, marker.name));
+  out.Set("name", Napi::String::New(env, full_name));
+  sonare_free_string(full_name);
   out.Set("kind", Napi::Number::New(env, marker.kind));
   out.Set("keyFifths", Napi::Number::New(env, marker.key_fifths));
   out.Set("keyMinor", Napi::Boolean::New(env, marker.key_minor != 0));
+  return out;
+}
+
+Napi::Value ProjectWrap::TrackByIndex(const Napi::CallbackInfo& info) {
+  Napi::Env env = info.Env();
+  SonareProjectTrack track{};
+  ThrowIfError(env, sonare_project_track_by_index(
+                        project_, static_cast<size_t>(NumberArg(info, 0, 0.0)), &track));
+  if (env.IsExceptionPending()) return env.Undefined();
+  Napi::Object out = Napi::Object::New(env);
+  out.Set("id", track.id);
+  out.Set("kind", track.kind);
+  out.Set("midiDestinationId", track.midi_destination_id);
+  out.Set("gain", track.gain);
+  out.Set("pan", track.pan);
+  out.Set("mute", track.mute != 0);
+  out.Set("solo", track.solo != 0);
+  out.Set("name", track.name);
+  return out;
+}
+
+Napi::Value ProjectWrap::ClipByIndex(const Napi::CallbackInfo& info) {
+  Napi::Env env = info.Env();
+  SonareProjectClip clip{};
+  ThrowIfError(env, sonare_project_clip_by_index(
+                        project_, static_cast<size_t>(NumberArg(info, 0, 0.0)), &clip));
+  if (env.IsExceptionPending()) return env.Undefined();
+  Napi::Object out = Napi::Object::New(env);
+  out.Set("id", clip.id);
+  out.Set("trackId", clip.track_id);
+  out.Set("sourceId", clip.source_id);
+  out.Set("sourceKind", clip.source_kind);
+  out.Set("startPpq", clip.start_ppq);
+  out.Set("lengthPpq", clip.length_ppq);
+  out.Set("sourceOffsetPpq", clip.source_offset_ppq);
+  out.Set("gain", clip.gain);
+  out.Set("loopMode", clip.loop_mode);
+  out.Set("loopLengthPpq", clip.loop_length_ppq);
+  return out;
+}
+
+Napi::Value ProjectWrap::SourceByIndex(const Napi::CallbackInfo& info) {
+  Napi::Env env = info.Env();
+  SonareProjectSource source{};
+  ThrowIfError(env, sonare_project_source_by_index(
+                        project_, static_cast<size_t>(NumberArg(info, 0, 0.0)), &source));
+  if (env.IsExceptionPending()) return env.Undefined();
+  Napi::Object out = Napi::Object::New(env);
+  out.Set("id", source.id);
+  out.Set("kind", source.kind);
+  out.Set("channelCount", source.channel_count);
+  out.Set("storageHandleId", source.storage_handle_id);
+  out.Set("sampleRateHint", source.sample_rate_hint);
+  out.Set("nameOrUri", source.name_or_uri);
   return out;
 }
 
@@ -397,6 +455,45 @@ Napi::Value ProjectWrap::SourceCount(const Napi::CallbackInfo& info) {
   ThrowIfError(env, sonare_project_source_count(project_, &out));
   if (env.IsExceptionPending()) return env.Undefined();
   return Napi::Number::New(env, static_cast<double>(out));
+}
+
+Napi::Value ProjectWrap::UnresolvedAudioSourceIds(const Napi::CallbackInfo& info) {
+  Napi::Env env = info.Env();
+  size_t count = 0;
+  ThrowIfError(env, sonare_project_unresolved_audio_source_count(project_, &count));
+  if (env.IsExceptionPending()) return env.Undefined();
+  Napi::Array ids = Napi::Array::New(env, count);
+  for (size_t i = 0; i < count; ++i) {
+    uint32_t source_id = 0;
+    ThrowIfError(env, sonare_project_unresolved_audio_source_id_by_index(project_, i, &source_id));
+    if (env.IsExceptionPending()) return env.Undefined();
+    ids.Set(static_cast<uint32_t>(i), Napi::Number::New(env, source_id));
+  }
+  return ids;
+}
+
+Napi::Value ProjectWrap::SetSourceAudio(const Napi::CallbackInfo& info) {
+  Napi::Env env = info.Env();
+  if (info.Length() < 4 || !sonare_node::IsFloat32Array(info[1])) {
+    Napi::TypeError::New(env,
+                         "setSourceAudio expects (sourceId, Float32Array, channels, sampleRate)")
+        .ThrowAsJavaScriptException();
+    return env.Undefined();
+  }
+  const uint32_t source_id = static_cast<uint32_t>(NumberArg(info, 0, 0.0));
+  Napi::Float32Array audio = info[1].As<Napi::Float32Array>();
+  const int channels = static_cast<int>(NumberArg(info, 2, 0.0));
+  const int sample_rate = static_cast<int>(NumberArg(info, 3, 0.0));
+  if (channels <= 0 || audio.ElementLength() % static_cast<size_t>(channels) != 0) {
+    Napi::TypeError::New(env, "audio length must be a multiple of channels")
+        .ThrowAsJavaScriptException();
+    return env.Undefined();
+  }
+  ThrowIfError(env, sonare_project_set_source_audio(
+                        project_, source_id, audio.Data(),
+                        static_cast<int64_t>(audio.ElementLength() / static_cast<size_t>(channels)),
+                        channels, sample_rate));
+  return env.Undefined();
 }
 
 Napi::Value ProjectWrap::TempoSegmentCount(const Napi::CallbackInfo& info) {

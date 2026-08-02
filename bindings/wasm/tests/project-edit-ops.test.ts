@@ -39,10 +39,55 @@ describe('Sonare WASM Project edit ops', () => {
     return { project, trackId, clipId };
   }
 
+  it('accepts a metadata-only audio clip with a source URI', () => {
+    const project = new Project();
+    try {
+      const trackId = project.addTrack({ kind: 'audio' });
+      expect(() =>
+        project.addClip({ trackId, startPpq: 0, lengthPpq: 4, sourceUri: 'asset://lead.wav' }),
+      ).not.toThrow();
+      expect(project.toJson()).toContain('asset://lead.wav');
+    } finally {
+      project.delete();
+    }
+  });
+
+  it('rebinds deserialized source audio before bouncing', () => {
+    const project = new Project();
+    const audio = new Float32Array(480).fill(0.25);
+    try {
+      const trackId = project.addTrack({ kind: 'audio' });
+      project.addClip({
+        trackId,
+        startPpq: 0,
+        lengthPpq: 1,
+        audio,
+        audioChannels: 1,
+        audioSampleRate: 48000,
+        sourceUri: 'asset://lead.wav',
+      });
+      const restored = Project.fromJson(project.toJson());
+      try {
+        const ids = restored.unresolvedAudioSourceIds();
+        expect(ids).toHaveLength(1);
+        restored.setSourceAudio(ids[0], audio, 1, 48000);
+        expect(restored.unresolvedAudioSourceIds()).toEqual([]);
+        expect(restored.bounce({ totalFrames: 480, numChannels: 1 })).toHaveLength(480);
+      } finally {
+        restored.delete();
+      }
+    } finally {
+      project.delete();
+    }
+  });
+
   it('removeClip + undo round-trips through the edit history', () => {
     const { project, clipId } = buildAudioProject();
     try {
       expect(() => project.removeClip(clipId)).not.toThrow();
+      // The public removal also releases its unreferenced source registry
+      // entry, so serialization cannot retain an orphan source.
+      expect(project.toJson()).toContain('"sources":[]');
       // The clip is gone; operating on it again fails.
       expect(() => project.setClipGain(clipId, 0.5)).toThrow();
       // Undo restores it so the gain edit then succeeds.
@@ -105,6 +150,10 @@ describe('Sonare WASM Project edit ops', () => {
       expect(() => project.setClipLoop(clipId, 'loop', 2, 0.5)).not.toThrow();
       expect(project.toJson()).toContain('loop_crossfade_ppq');
       expect(() => project.setClipLoop(clipId, 'loop', 2, -1)).toThrow();
+      expect(() =>
+        project.setClipFade(clipId, { lengthPpq: 0.5, curve: 'equalpower' }, undefined),
+      ).not.toThrow();
+      expect(() => project.setClipFade(clipId, { curve: 'LOG' as never }, undefined)).not.toThrow();
     } finally {
       project.delete();
     }
@@ -285,16 +334,16 @@ describe('Sonare WASM Project edit ops', () => {
   it('automation lane add / edit / remove round-trips', () => {
     const { project, trackId } = buildAudioProject();
     try {
-      const laneIndex = project.addAutomationLane(trackId, {
+      const targetParamId = project.addAutomationLane(trackId, {
         targetParamId: 1,
         points: [
           { ppq: 0, value: 0.0, curve: 'linear' },
           { ppq: 4, value: 1.0, curve: 'exponential' },
         ],
       });
-      expect(laneIndex).toBeGreaterThanOrEqual(0);
+      expect(targetParamId).toBe(1);
       expect(() =>
-        project.editAutomationLane(trackId, laneIndex, {
+        project.editAutomationLane(trackId, targetParamId, {
           targetParamId: 1,
           points: [
             { ppq: 0, value: 0.5 },
@@ -302,7 +351,7 @@ describe('Sonare WASM Project edit ops', () => {
           ],
         }),
       ).not.toThrow();
-      expect(() => project.removeAutomationLane(trackId, laneIndex)).not.toThrow();
+      expect(() => project.removeAutomationLane(trackId, targetParamId)).not.toThrow();
     } finally {
       project.delete();
     }
