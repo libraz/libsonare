@@ -49,17 +49,6 @@ float float_or(const Value& value, const char* key, float fallback, const char* 
   return converted;
 }
 
-float float_or_any(const Value& value, const char* primary, const char* legacy, float fallback,
-                   const char* field_path) {
-  float converted = 0.0f;
-  if (!numeric::checked_float_cast(num_or_any(value, primary, legacy, fallback), &converted)) {
-    throw SonareException(
-        ErrorCode::InvalidFormat,
-        std::string("floating-point field is non-finite or out of float range: ") + field_path);
-  }
-  return converted;
-}
-
 }  // namespace
 
 // ===========================================================================
@@ -289,148 +278,15 @@ bool sidecar_from_json(const Value& v, arrangement::AssistSidecar* out, size_t m
   return base64_decode(b64, &out->payload, max_payload_bytes);
 }
 
-mixing::api::Insert insert_from_json(const Value& v) {
-  mixing::api::Insert ins;
-  ins.slot = str_or(v, "slot", "pre") == "post" ? mixing::api::InsertSlot::PostFader
-                                                : mixing::api::InsertSlot::PreFader;
-  ins.processor_name = str_or_any(v, "processor", "processor_name", "");
-  ins.params_json = str_or_any(v, "params", "params_json", "");
-  ins.sidechain_key = str_or_any(v, "sidechainKey", "sidechain_key", "");
-  return ins;
-}
-
 mixing::api::Scene scene_from_value(const Value& v) {
-  mixing::api::Scene scene;
-  scene.version = int_or(v, "version", 1);
-  // Reject an embedded mixer scene whose version exceeds what this build
-  // understands instead of silently mis-reading a future schema. Version 1 is
-  // the only supported value today. Use InvalidFormat (not InvalidParameter) so
-  // the deserialize diagnostic surfaces as a distinct "invalid_format" rather
-  // than the generic "deserialize_failed", staying symmetric with the top-level
-  // unsupported_schema_version handling.
-  if (scene.version != 1) {
-    throw SonareException(ErrorCode::InvalidFormat, "unsupported embedded mixer scene version");
+  try {
+    return mixing::api::scene_from_json(json::dump(v));
+  } catch (const SonareException& error) {
+    // A scene nested in a project is malformed persisted input, while the
+    // standalone control-thread API reports InvalidParameter. Keep the project
+    // serializer's stable InvalidFormat diagnostic channel at this boundary.
+    throw SonareException(ErrorCode::InvalidFormat, error.what());
   }
-  if (const auto* arr = array_at(v, "strips")) {
-    for (const auto& sv : *arr) {
-      if (!sv.is_object()) continue;
-      mixing::api::Strip s;
-      s.id = str_or(sv, "id", "");
-      s.input_trim_db =
-          float_or_any(sv, "inputTrimDb", "input_trim_db", 0.0f, "scene.strips[].inputTrimDb");
-      s.fader_db = float_or_any(sv, "faderDb", "fader_db", 0.0f, "scene.strips[].faderDb");
-      s.vca_offset_db =
-          float_or_any(sv, "vcaOffsetDb", "vca_offset_db", 0.0f, "scene.strips[].vcaOffsetDb");
-      s.pan = float_or(sv, "pan", 0.0f, "scene.strips[].pan");
-      s.width = float_or(sv, "width", 1.0f, "scene.strips[].width");
-      s.muted = bool_or(sv, "muted", false);
-      s.soloed = bool_or(sv, "soloed", false);
-      s.solo_safe = bool_or_any(sv, "soloSafe", "solo_safe", false);
-      s.pan_mode = int_or_any(sv, "panMode", "pan_mode", 0);
-      if (s.pan_mode < 0 || s.pan_mode > 2) {
-        throw SonareException(ErrorCode::InvalidFormat, "panMode enum is out of range");
-      }
-      s.dual_pan_left =
-          float_or_any(sv, "dualPanLeft", "dual_pan_left", -1.0f, "scene.strips[].dualPanLeft");
-      s.dual_pan_right =
-          float_or_any(sv, "dualPanRight", "dual_pan_right", 1.0f, "scene.strips[].dualPanRight");
-      s.polarity_invert_left = bool_or_any(sv, "polarityInvertLeft", "polarity_invert_left", false);
-      s.polarity_invert_right =
-          bool_or_any(sv, "polarityInvertRight", "polarity_invert_right", false);
-      s.pan_law = int_or_any(sv, "panLaw", "pan_law", 0);
-      if (s.pan_law < 0 || s.pan_law > 3) {
-        throw SonareException(ErrorCode::InvalidFormat, "panLaw enum is out of range");
-      }
-      s.channel_delay_samples = int_or_any(sv, "channelDelaySamples", "channel_delay_samples", 0);
-      if (s.channel_delay_samples < 0) {
-        throw SonareException(ErrorCode::InvalidFormat, "channelDelaySamples must be non-negative");
-      }
-      if (const std::string layout = str_or(sv, "sourceLayout", ""); !layout.empty()) {
-        ChannelLayout parsed = ChannelLayout::Stereo;
-        if (channel_layout_from_string(layout, parsed)) s.source_layout = parsed;
-      }
-      if (const auto* sp = object_at(sv, "surroundPan")) {
-        const Value spv(*sp);
-        s.surround_pan.azimuth =
-            float_or(spv, "azimuth", 0.0f, "scene.strips[].surroundPan.azimuth");
-        s.surround_pan.elevation =
-            float_or(spv, "elevation", 0.0f, "scene.strips[].surroundPan.elevation");
-        s.surround_pan.divergence =
-            float_or(spv, "divergence", 0.0f, "scene.strips[].surroundPan.divergence");
-        s.surround_pan.lfe = float_or(spv, "lfe", 0.0f, "scene.strips[].surroundPan.lfe");
-        s.surround_pan.distance =
-            float_or(spv, "distance", 1.0f, "scene.strips[].surroundPan.distance");
-      }
-      if (const auto* iarr = array_at(sv, "inserts")) {
-        for (const auto& iv : *iarr) {
-          if (iv.is_object()) s.inserts.push_back(insert_from_json(iv));
-        }
-      }
-      if (const auto* sarr = array_at(sv, "sends")) {
-        for (const auto& dv : *sarr) {
-          if (!dv.is_object()) continue;
-          mixing::api::Send sd;
-          sd.id = str_or(dv, "id", "");
-          sd.destination_bus_id = str_or_any(dv, "destinationBusId", "destination_bus_id", "");
-          sd.send_db = float_or_any(dv, "sendDb", "send_db", 0.0f, "scene.strips[].sends[].sendDb");
-          sd.timing = str_or(dv, "timing", "post") == "pre" ? mixing::api::SendTiming::PreFader
-                                                            : mixing::api::SendTiming::PostFader;
-          s.sends.push_back(std::move(sd));
-        }
-      }
-      scene.strips.push_back(std::move(s));
-    }
-  }
-  if (const auto* arr = array_at(v, "buses")) {
-    for (const auto& bv : *arr) {
-      if (!bv.is_object()) continue;
-      mixing::api::Bus b;
-      b.id = str_or(bv, "id", "");
-      b.role = str_or(bv, "role", "aux");
-      if (const std::string layout = str_or(bv, "layout", ""); !layout.empty()) {
-        ChannelLayout parsed = ChannelLayout::Stereo;
-        if (channel_layout_from_string(layout, parsed)) b.layout = parsed;
-      }
-      b.input_trim_db =
-          float_or_any(bv, "inputTrimDb", "input_trim_db", 0.0f, "scene.buses[].inputTrimDb");
-      b.width = float_or(bv, "width", 1.0f, "scene.buses[].width");
-      b.polarity_invert_left = bool_or_any(bv, "polarityInvertLeft", "polarity_invert_left", false);
-      b.polarity_invert_right =
-          bool_or_any(bv, "polarityInvertRight", "polarity_invert_right", false);
-      if (const auto* iarr = array_at(bv, "inserts")) {
-        for (const auto& iv : *iarr) {
-          if (iv.is_object()) b.inserts.push_back(insert_from_json(iv));
-        }
-      }
-      scene.buses.push_back(std::move(b));
-    }
-  }
-  const Array* vca_groups = array_at(v, "vcaGroups");
-  if (vca_groups == nullptr) vca_groups = array_at(v, "vca_groups");
-  if (vca_groups != nullptr) {
-    for (const auto& vv : *vca_groups) {
-      if (!vv.is_object()) continue;
-      mixing::api::VcaGroup g;
-      g.id = str_or(vv, "id", "");
-      g.gain_db = float_or_any(vv, "gainDb", "gain_db", 0.0f, "scene.vcaGroups[].gainDb");
-      if (const auto* marr = array_at(vv, "members")) {
-        for (const auto& mv : *marr) {
-          if (mv.is_string()) g.members.push_back(mv.as_string());
-        }
-      }
-      scene.vca_groups.push_back(std::move(g));
-    }
-  }
-  if (const auto* arr = array_at(v, "connections")) {
-    for (const auto& cv : *arr) {
-      if (!cv.is_object()) continue;
-      mixing::api::Connection c;
-      c.source = str_or(cv, "source", "");
-      c.destination = str_or(cv, "destination", "");
-      scene.connections.push_back(std::move(c));
-    }
-  }
-  return scene;
 }
 
 }  // namespace detail

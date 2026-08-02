@@ -180,39 +180,6 @@ const Object* object_at(const Value& obj, const char* key) {
   return (v && v->is_object()) ? &v->as_object() : nullptr;
 }
 
-double num_or_any(const Value& obj, const char* primary, const char* legacy, double fallback) {
-  const auto* v = obj.find(primary);
-  if (v && v->is_number()) return v->as_number();
-  return num_or(obj, legacy, fallback);
-}
-
-int int_or_any(const Value& obj, const char* primary, const char* legacy, int fallback) {
-  // Match the num_or_any / str_or_any / bool_or_any contract: a present-but-
-  // wrong-typed value falls back rather than aborting the whole load. The old
-  // form called the strict int_or on `primary` unconditionally, so a non-numeric
-  // panMode/panLaw/channelDelaySamples threw and rejected an otherwise-valid
-  // project (while faderDb/soloSafe only fell back). A numeric-but-fractional /
-  // out-of-range value still throws via int_or -- that is a genuine value error.
-  const auto* v = obj.find(primary);
-  if (v && v->is_number()) return int_or(obj, primary, fallback);
-  const auto* legacy_v = obj.find(legacy);
-  if (legacy_v && legacy_v->is_number()) return int_or(obj, legacy, fallback);
-  return fallback;
-}
-
-std::string str_or_any(const Value& obj, const char* primary, const char* legacy,
-                       const std::string& fallback) {
-  const auto* v = obj.find(primary);
-  if (v && v->is_string()) return v->as_string();
-  return str_or(obj, legacy, fallback);
-}
-
-bool bool_or_any(const Value& obj, const char* primary, const char* legacy, bool fallback) {
-  const auto* v = obj.find(primary);
-  if (v && v->is_bool()) return v->as_bool();
-  return bool_or(obj, legacy, fallback);
-}
-
 // ===========================================================================
 // Migration hook. The current serializer knows schema version 1. A document with the same
 // MAJOR version is accepted (forward-compatible field handling above); an

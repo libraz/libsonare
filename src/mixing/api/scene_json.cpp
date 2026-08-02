@@ -1,9 +1,11 @@
 #include <string>
 #include <utility>
 
+#include "mixing/alignment_delay.h"
 #include "mixing/api/scene.h"
 #include "util/exception.h"
 #include "util/json.h"
+#include "util/numeric_validation.h"
 
 namespace sonare::mixing::api {
 namespace {
@@ -51,16 +53,66 @@ ChannelLayout channel_layout_or(const JsonValue& object, const char* key, Channe
 // matching the previous streaming parser's permissive behavior.
 // ---------------------------------------------------------------------------
 
-float number_or(const JsonValue& object, const char* key, float fallback) {
+float number_or(const JsonValue& object, const char* key, float fallback,
+                const char* field_path = nullptr) {
   const auto* value = object.find(key);
   if (!value || !value->is_number()) return fallback;
-  return value->as_float();
+  float converted = 0.0f;
+  if (!numeric::checked_float_cast(value->as_number(), &converted)) {
+    throw SonareException(
+        ErrorCode::InvalidFormat,
+        std::string("floating-point field is non-finite or out of float range: ") +
+            (field_path != nullptr ? field_path : key));
+  }
+  return converted;
+}
+
+const JsonValue* value_or_legacy(const JsonValue& object, const char* key, const char* legacy_key) {
+  if (const auto* value = object.find(key)) return value;
+  return object.find(legacy_key);
+}
+
+float number_or_legacy(const JsonValue& object, const char* key, const char* legacy_key,
+                       float fallback, const char* field_path = nullptr) {
+  const auto* value = value_or_legacy(object, key, legacy_key);
+  if (!value || !value->is_number()) return fallback;
+  float converted = 0.0f;
+  if (!numeric::checked_float_cast(value->as_number(), &converted)) {
+    throw SonareException(
+        ErrorCode::InvalidFormat,
+        std::string("floating-point field is non-finite or out of float range: ") +
+            (field_path != nullptr ? field_path : key));
+  }
+  return converted;
+}
+
+int int_or_legacy(const JsonValue& object, const char* key, const char* legacy_key, int fallback) {
+  const auto* value = value_or_legacy(object, key, legacy_key);
+  if (!value || !value->is_number()) return fallback;
+  int converted = 0;
+  if (!numeric::checked_integral_cast(value->as_number(), &converted)) {
+    throw SonareException(ErrorCode::InvalidFormat,
+                          std::string("integer field is fractional or out of range: ") + key);
+  }
+  return converted;
+}
+
+bool bool_or_legacy(const JsonValue& object, const char* key, const char* legacy_key,
+                    bool fallback) {
+  const auto* value = value_or_legacy(object, key, legacy_key);
+  if (!value || !value->is_bool()) return fallback;
+  return value->as_bool();
 }
 
 int int_or(const JsonValue& object, const char* key, int fallback) {
   const auto* value = object.find(key);
   if (!value || !value->is_number()) return fallback;
-  return value->as_int();
+  int converted = 0;
+  if (!numeric::checked_integral_cast(value->as_number(), &converted)) {
+    throw SonareException(ErrorCode::InvalidFormat,
+                          std::string("integer field is fractional or out of range: ") + key);
+  }
+  return converted;
 }
 
 bool bool_or(const JsonValue& object, const char* key, bool fallback) {
@@ -75,6 +127,13 @@ std::string string_or(const JsonValue& object, const char* key, const std::strin
   return value->as_string();
 }
 
+std::string string_or_legacy(const JsonValue& object, const char* key, const char* legacy_key,
+                             const std::string& fallback) {
+  const auto* value = value_or_legacy(object, key, legacy_key);
+  if (!value || !value->is_string()) return fallback;
+  return value->as_string();
+}
+
 Insert insert_from_value(const JsonValue& object) {
   Insert insert;
   if (const auto* slot = object.find("slot")) {
@@ -84,9 +143,11 @@ Insert insert_from_value(const JsonValue& object) {
     }
     insert.slot = insert_slot_from_string(slot->as_string());
   }
-  insert.processor_name = string_or(object, "processor", insert.processor_name);
-  insert.params_json = string_or(object, "params", insert.params_json);
-  insert.sidechain_key = string_or(object, "sidechainKey", insert.sidechain_key);
+  insert.processor_name =
+      string_or_legacy(object, "processor", "processor_name", insert.processor_name);
+  insert.params_json = string_or_legacy(object, "params", "params_json", insert.params_json);
+  insert.sidechain_key =
+      string_or_legacy(object, "sidechainKey", "sidechain_key", insert.sidechain_key);
   return insert;
 }
 
@@ -103,8 +164,10 @@ std::vector<Insert> inserts_from_value(const JsonValue& array) {
 Send send_from_value(const JsonValue& object) {
   Send send;
   send.id = string_or(object, "id", send.id);
-  send.destination_bus_id = string_or(object, "destinationBusId", send.destination_bus_id);
-  send.send_db = number_or(object, "sendDb", send.send_db);
+  send.destination_bus_id =
+      string_or_legacy(object, "destinationBusId", "destination_bus_id", send.destination_bus_id);
+  send.send_db =
+      number_or_legacy(object, "sendDb", "send_db", send.send_db, "scene.strips[].sends[].sendDb");
   if (const auto* timing = object.find("timing")) {
     if (!timing->is_string()) {
       throw SonareException(ErrorCode::InvalidParameter,
@@ -128,41 +191,52 @@ std::vector<Send> sends_from_value(const JsonValue& array) {
 Strip strip_from_value(const JsonValue& object) {
   Strip strip;
   strip.id = string_or(object, "id", strip.id);
-  strip.input_trim_db = number_or(object, "inputTrimDb", strip.input_trim_db);
-  strip.fader_db = number_or(object, "faderDb", strip.fader_db);
-  strip.vca_offset_db = number_or(object, "vcaOffsetDb", strip.vca_offset_db);
-  strip.pan = number_or(object, "pan", strip.pan);
-  strip.width = number_or(object, "width", strip.width);
+  strip.input_trim_db = number_or_legacy(object, "inputTrimDb", "input_trim_db",
+                                         strip.input_trim_db, "scene.strips[].inputTrimDb");
+  strip.fader_db =
+      number_or_legacy(object, "faderDb", "fader_db", strip.fader_db, "scene.strips[].faderDb");
+  strip.vca_offset_db = number_or_legacy(object, "vcaOffsetDb", "vca_offset_db",
+                                         strip.vca_offset_db, "scene.strips[].vcaOffsetDb");
+  strip.pan = number_or(object, "pan", strip.pan, "scene.strips[].pan");
+  strip.width = number_or(object, "width", strip.width, "scene.strips[].width");
   strip.muted = bool_or(object, "muted", strip.muted);
   strip.soloed = bool_or(object, "soloed", strip.soloed);
-  strip.solo_safe = bool_or(object, "soloSafe", strip.solo_safe);
-  strip.pan_mode = int_or(object, "panMode", strip.pan_mode);
-  // Reject out-of-range enum/count values so this canonical loader matches the
-  // project-embedded scene walker (project_serializer_decode.cpp), which already
-  // validates these. Previously an out-of-range value was accepted here but
-  // rejected there, so the same JSON loaded through one path and failed the other.
+  strip.solo_safe = bool_or_legacy(object, "soloSafe", "solo_safe", strip.solo_safe);
+  strip.pan_mode = int_or_legacy(object, "panMode", "pan_mode", strip.pan_mode);
+  // Reject out-of-range enum/count values in the one canonical scene walker,
+  // so standalone mixer JSON and project-embedded scene JSON stay identical.
   if (strip.pan_mode < 0 || strip.pan_mode > 2) {
     throw SonareException(ErrorCode::InvalidFormat, "panMode enum is out of range");
   }
-  strip.dual_pan_left = number_or(object, "dualPanLeft", strip.dual_pan_left);
-  strip.dual_pan_right = number_or(object, "dualPanRight", strip.dual_pan_right);
-  strip.polarity_invert_left = bool_or(object, "polarityInvertLeft", strip.polarity_invert_left);
-  strip.polarity_invert_right = bool_or(object, "polarityInvertRight", strip.polarity_invert_right);
-  strip.pan_law = int_or(object, "panLaw", strip.pan_law);
+  strip.dual_pan_left = number_or_legacy(object, "dualPanLeft", "dual_pan_left",
+                                         strip.dual_pan_left, "scene.strips[].dualPanLeft");
+  strip.dual_pan_right = number_or_legacy(object, "dualPanRight", "dual_pan_right",
+                                          strip.dual_pan_right, "scene.strips[].dualPanRight");
+  strip.polarity_invert_left = bool_or_legacy(object, "polarityInvertLeft", "polarity_invert_left",
+                                              strip.polarity_invert_left);
+  strip.polarity_invert_right = bool_or_legacy(
+      object, "polarityInvertRight", "polarity_invert_right", strip.polarity_invert_right);
+  strip.pan_law = int_or_legacy(object, "panLaw", "pan_law", strip.pan_law);
   if (strip.pan_law < 0 || strip.pan_law > 3) {
     throw SonareException(ErrorCode::InvalidFormat, "panLaw enum is out of range");
   }
-  strip.channel_delay_samples = int_or(object, "channelDelaySamples", strip.channel_delay_samples);
-  if (strip.channel_delay_samples < 0) {
-    throw SonareException(ErrorCode::InvalidFormat, "channelDelaySamples must be non-negative");
+  strip.channel_delay_samples = int_or_legacy(object, "channelDelaySamples",
+                                              "channel_delay_samples", strip.channel_delay_samples);
+  if (strip.channel_delay_samples < 0 || strip.channel_delay_samples > kMaxAlignmentDelaySamples) {
+    throw SonareException(ErrorCode::InvalidFormat, "channelDelaySamples must be in [0, 192000]");
   }
   strip.source_layout = channel_layout_or(object, "sourceLayout", strip.source_layout);
   if (const auto* sp = object.find("surroundPan"); sp && sp->is_object()) {
-    strip.surround_pan.azimuth = number_or(*sp, "azimuth", strip.surround_pan.azimuth);
-    strip.surround_pan.elevation = number_or(*sp, "elevation", strip.surround_pan.elevation);
-    strip.surround_pan.divergence = number_or(*sp, "divergence", strip.surround_pan.divergence);
-    strip.surround_pan.lfe = number_or(*sp, "lfe", strip.surround_pan.lfe);
-    strip.surround_pan.distance = number_or(*sp, "distance", strip.surround_pan.distance);
+    strip.surround_pan.azimuth =
+        number_or(*sp, "azimuth", strip.surround_pan.azimuth, "scene.strips[].surroundPan.azimuth");
+    strip.surround_pan.elevation = number_or(*sp, "elevation", strip.surround_pan.elevation,
+                                             "scene.strips[].surroundPan.elevation");
+    strip.surround_pan.divergence = number_or(*sp, "divergence", strip.surround_pan.divergence,
+                                              "scene.strips[].surroundPan.divergence");
+    strip.surround_pan.lfe =
+        number_or(*sp, "lfe", strip.surround_pan.lfe, "scene.strips[].surroundPan.lfe");
+    strip.surround_pan.distance = number_or(*sp, "distance", strip.surround_pan.distance,
+                                            "scene.strips[].surroundPan.distance");
   }
   if (const auto* inserts = object.find("inserts")) strip.inserts = inserts_from_value(*inserts);
   if (const auto* sends = object.find("sends")) strip.sends = sends_from_value(*sends);
@@ -184,10 +258,13 @@ Bus bus_from_value(const JsonValue& object) {
   bus.id = string_or(object, "id", bus.id);
   bus.role = string_or(object, "role", bus.role);
   bus.layout = channel_layout_or(object, "layout", bus.layout);
-  bus.input_trim_db = number_or(object, "inputTrimDb", bus.input_trim_db);
-  bus.width = number_or(object, "width", bus.width);
-  bus.polarity_invert_left = bool_or(object, "polarityInvertLeft", bus.polarity_invert_left);
-  bus.polarity_invert_right = bool_or(object, "polarityInvertRight", bus.polarity_invert_right);
+  bus.input_trim_db = number_or_legacy(object, "inputTrimDb", "input_trim_db", bus.input_trim_db,
+                                       "scene.buses[].inputTrimDb");
+  bus.width = number_or(object, "width", bus.width, "scene.buses[].width");
+  bus.polarity_invert_left = bool_or_legacy(object, "polarityInvertLeft", "polarity_invert_left",
+                                            bus.polarity_invert_left);
+  bus.polarity_invert_right = bool_or_legacy(object, "polarityInvertRight", "polarity_invert_right",
+                                             bus.polarity_invert_right);
   if (const auto* inserts = object.find("inserts")) bus.inserts = inserts_from_value(*inserts);
   return bus;
 }
@@ -205,7 +282,8 @@ std::vector<Bus> buses_from_value(const JsonValue& array) {
 VcaGroup vca_group_from_value(const JsonValue& object) {
   VcaGroup group;
   group.id = string_or(object, "id", group.id);
-  group.gain_db = number_or(object, "gainDb", group.gain_db);
+  group.gain_db =
+      number_or_legacy(object, "gainDb", "gain_db", group.gain_db, "scene.vcaGroups[].gainDb");
   if (const auto* members = object.find("members"); members && members->is_array()) {
     group.members.reserve(members->as_array().size());
     for (const auto& entry : members->as_array()) {
@@ -414,7 +492,7 @@ Scene scene_from_json(const std::string& json) {
   }
   if (const auto* strips = root.find("strips")) scene.strips = strips_from_value(*strips);
   if (const auto* buses = root.find("buses")) scene.buses = buses_from_value(*buses);
-  if (const auto* groups = root.find("vcaGroups"))
+  if (const auto* groups = value_or_legacy(root, "vcaGroups", "vca_groups"))
     scene.vca_groups = vca_groups_from_value(*groups);
   if (const auto* connections = root.find("connections"))
     scene.connections = connections_from_value(*connections);

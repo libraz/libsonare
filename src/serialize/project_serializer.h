@@ -30,11 +30,10 @@
 ///
 /// Mixer topology
 /// --------------
-/// The mixer @ref sonare::mixing::api::Scene is embedded via scene_to_json /
-/// scene_from_json under SONARE_WITH_MIXING (the tested mixer serializer is the
-/// single source of truth). In a mixing-OFF build the Scene struct fields are
-/// serialized directly with util::json (same stable key order in both paths) so
-/// round-trip still works without the mixing JSON helpers.
+/// The mixer @ref sonare::mixing::api::Scene is embedded through the canonical
+/// @c scene_to_json / @c scene_from_json helpers. They are control-plane-only
+/// utilities and are available in mixing-OFF builds as well, so every project
+/// build uses one scene schema walker and one stable key order.
 ///
 /// Error handling
 /// --------------

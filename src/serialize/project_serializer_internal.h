@@ -110,12 +110,6 @@ uint32_t midi_word_or_warn(const Value& obj, const char* key, uint32_t clip_id,
                            BoundedDiagnostics* diagnostics);
 const Array* array_at(const Value& obj, const char* key);
 const Object* object_at(const Value& obj, const char* key);
-double num_or_any(const Value& obj, const char* primary, const char* legacy, double fallback);
-int int_or_any(const Value& obj, const char* primary, const char* legacy, int fallback);
-std::string str_or_any(const Value& obj, const char* primary, const char* legacy,
-                       const std::string& fallback);
-bool bool_or_any(const Value& obj, const char* primary, const char* legacy, bool fallback);
-
 bool schema_version_supported(uint32_t version);
 
 // ===========================================================================
@@ -138,7 +132,6 @@ Value key_segment_to_json(const arrangement::KeySegment& k);
 Value annotation_to_json(const arrangement::ProjectAnnotation& a);
 Value sidecar_to_json(const arrangement::AssistSidecar& s);
 Value midi_content_to_json(const arrangement::MidiContentStore& midi);
-Value insert_to_json(const mixing::api::Insert& ins);
 Value scene_to_value(const mixing::api::Scene& scene);
 
 // ===========================================================================
@@ -160,7 +153,6 @@ arrangement::KeySegment key_segment_from_json(const Value& v);
 void annotation_from_json(const Value& v, arrangement::ProjectAnnotation* a);
 bool sidecar_from_json(const Value& v, arrangement::AssistSidecar* out,
                        size_t max_payload_bytes = std::numeric_limits<size_t>::max());
-mixing::api::Insert insert_from_json(const Value& v);
 mixing::api::Scene scene_from_value(const Value& v);
 
 }  // namespace detail

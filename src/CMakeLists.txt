@@ -76,6 +76,7 @@ set(SONARE_SOURCES
   metering/stereo.cpp
   metering/true_peak.cpp
   metering/waveform.cpp
+  mixing/api/scene_json.cpp
   analysis/key_profiles.cpp
   analysis/chord_templates.cpp
   analysis/progression_patterns.cpp
@@ -122,6 +123,7 @@ set(SONARE_SOURCES
   c_api/features_music.cpp
   c_api/features_spectrogram_mel.cpp
   c_api/features_spectral_pitch.cpp
+  c_api/features_segment.cpp
   c_api/features_streaming.cpp
   c_api/sonare_c_compat.cpp
   c_api/sonare_c_editing.cpp
@@ -255,6 +257,7 @@ add_library(sonare_rt STATIC
   rt/oversampler.cpp
   rt/param_smoother.cpp
   rt/partitioned_convolver.cpp
+  rt/true_peak_fir.cpp
   rt/true_peak_filter.cpp
   transport/marker.cpp
   transport/musical_time.cpp
@@ -420,7 +423,6 @@ if(BUILD_MIXING)
   add_library(sonare_mixing STATIC
     mixing/alignment_delay.cpp
     mixing/api/presets.cpp
-    mixing/api/scene_json.cpp
     mixing/automation_lane.cpp
     mixing/bus.cpp
     mixing/channel_strip.cpp
@@ -778,9 +780,8 @@ if(BUILD_ARRANGEMENT)
   # arrangement/ + midi/ + mir/ (and core for util::json). NOTHING in
   # rt/engine/midi/arrangement/mir depends on serialize; the RT-critical CI guard
   # forbids rt/ and engine/ from including serialize/. The mixer Scene is embedded
-  # via scene_to_json/scene_from_json (sonare_mixing) when BUILD_MIXING is ON; in
-  # a mixing-OFF build the Scene struct fields are serialized directly so the
-  # round-trip still works without the mixer JSON helpers.
+  # through the canonical scene_to_json/scene_from_json helpers in sonare_core,
+  # so mixing-ON and mixing-OFF builds use the same schema walker.
   add_library(sonare_serialize STATIC
     serialize/project_serializer.cpp
     serialize/project_serializer_encode.cpp
@@ -791,8 +792,6 @@ if(BUILD_ARRANGEMENT)
   target_link_libraries(sonare_serialize PUBLIC
     sonare_arrangement sonare_midi sonare_mir sonare_core)
   if(BUILD_MIXING)
-    # scene_to_json / scene_from_json live in sonare_mixing; link it and switch on
-    # SONARE_WITH_MIXING so the serializer embeds the tested mixer JSON.
     target_link_libraries(sonare_serialize PUBLIC sonare_mixing)
     target_compile_definitions(sonare_serialize PUBLIC SONARE_WITH_MIXING=1)
   endif()
