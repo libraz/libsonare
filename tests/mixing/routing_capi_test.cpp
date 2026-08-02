@@ -139,6 +139,8 @@ TEST_CASE("C-API strip runtime setters validate NULL and bad enums", "[mixing][c
   REQUIRE(sonare_strip_set_polarity_invert(strip, 1, 0) == SONARE_OK);
   REQUIRE(sonare_strip_set_pan_law(strip, 1) == SONARE_OK);
   REQUIRE(sonare_strip_set_channel_delay_samples(strip, 3) == SONARE_OK);
+  REQUIRE(sonare_strip_set_channel_delay_samples(strip, sonare::mixing::kMaxAlignmentDelaySamples +
+                                                            1) == SONARE_ERROR_INVALID_PARAMETER);
   REQUIRE(sonare_strip_set_vca_offset_db(strip, -2.0f) == SONARE_OK);
 
   // NULL out-pointer for meter tap is rejected even with a valid strip.

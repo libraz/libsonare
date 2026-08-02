@@ -126,6 +126,7 @@ ChannelStrip::ChannelStrip(ChannelStripConfig config)
       fader_({config.fader_db, config.smoothing_ms}),
       panner_({config.pan, config.pan_law, config.smoothing_ms}),
       width_(1.0f, config.smoothing_ms),
+      metering_enabled_(config.enable_metering),
       eq_position_(config.eq_position) {
   // Pre-reserve the vectors that the audio thread iterates while the control
   // thread may concurrently push_back into. The audio thread iterates
@@ -157,8 +158,14 @@ void ChannelStrip::prepare(double sample_rate, int max_block_size) {
   alignment_delay_.set_prepared_channels(kMaxStackChannels);
   alignment_delay_.prepare(sample_rate, max_block_size);
   eq_.prepare(sample_rate, max_block_size);
-  pre_meter_.prepare(sample_rate, max_block_size);
-  post_meter_.prepare(sample_rate, max_block_size);
+  pre_meter_.reset();
+  post_meter_.reset();
+  if (metering_enabled_) {
+    pre_meter_.emplace(MeterConfig{true, true, 4});
+    post_meter_.emplace(MeterConfig{true, true, 4});
+    pre_meter_->prepare(sample_rate, max_block_size);
+    post_meter_->prepare(sample_rate, max_block_size);
+  }
   for (auto& insert : pre_inserts_) {
     insert->prepare(sample_rate_, max_block_size_);
   }
@@ -326,16 +333,18 @@ void ChannelStrip::process_at(float* const* channels, int num_channels, int num_
   for (int ch = 0; ch < meter_rows; ++ch) {
     pre_meter_channels[ch] = pre_tap_[static_cast<size_t>(ch)].data();
   }
-  pre_meter_.set_gain_reduction_db(pre_gain_reduction_db);
-  pre_meter_.process(pre_meter_channels, meter_rows, clamped_samples);
-  post_meter_.set_gain_reduction_db(post_gain_reduction_db);
+  if (pre_meter_) {
+    pre_meter_->set_gain_reduction_db(pre_gain_reduction_db);
+    pre_meter_->process(pre_meter_channels, meter_rows, clamped_samples);
+  }
+  if (post_meter_) post_meter_->set_gain_reduction_db(post_gain_reduction_db);
   // Drive the post-fader meter over the SAME window length as the pre-fader
   // meter. The pre-fader meter reads pre_tap_, which is only max_block_size_
   // wide, so it can integrate at most clamped_samples. Feeding the post meter
   // the full num_samples when num_samples > max_block_size_ would make the two
   // meters integrate different lengths, so their RMS/LUFS readings would
   // disagree for the same block. Clamp the post meter to match.
-  post_meter_.process(channels, num_channels, clamped_samples);
+  if (post_meter_) post_meter_->process(channels, num_channels, clamped_samples);
 }
 
 void ChannelStrip::process_unsegmented(float* const* channels, int num_channels, int num_samples) {
@@ -353,10 +362,14 @@ void ChannelStrip::process_unsegmented(float* const* channels, int num_channels,
     }
     zero_taps(pre_tap_, num_channels, clamped_samples);
     zero_taps(post_tap_, num_channels, clamped_samples);
-    pre_meter_.set_gain_reduction_db(0.0f);
-    post_meter_.set_gain_reduction_db(0.0f);
-    pre_meter_.process(channels, num_channels, num_samples);
-    post_meter_.process(channels, num_channels, num_samples);
+    if (pre_meter_) {
+      pre_meter_->set_gain_reduction_db(0.0f);
+      pre_meter_->process(channels, num_channels, num_samples);
+    }
+    if (post_meter_) {
+      post_meter_->set_gain_reduction_db(0.0f);
+      post_meter_->process(channels, num_channels, num_samples);
+    }
     return;
   }
 
@@ -385,8 +398,10 @@ void ChannelStrip::process_unsegmented(float* const* channels, int num_channels,
 
   // Pre-fader tap (after trim, polarity, delay, EQ-if-pre, and pre inserts) feeds pre-fader aux.
   copy_to_taps(channels, pre_tap_, num_channels, clamped_samples);
-  pre_meter_.set_gain_reduction_db(pre_gain_reduction_db);
-  pre_meter_.process(channels, num_channels, num_samples);
+  if (pre_meter_) {
+    pre_meter_->set_gain_reduction_db(pre_gain_reduction_db);
+    pre_meter_->process(channels, num_channels, num_samples);
+  }
 
   fader_.process(channels, num_channels, num_samples);
   panner_.process(channels, num_channels, num_samples);
@@ -398,7 +413,7 @@ void ChannelStrip::process_unsegmented(float* const* channels, int num_channels,
                        pre_inserts_.size(), 0);
   const float post_gain_reduction_db =
       std::min(pre_gain_reduction_db, aggregate_gain_reduction_db(post_inserts_));
-  post_meter_.set_gain_reduction_db(post_gain_reduction_db);
+  if (post_meter_) post_meter_->set_gain_reduction_db(post_gain_reduction_db);
   width_.process(channels, num_channels, num_samples);
 
   if (num_channels >= 2 && channels[0] != nullptr && channels[1] != nullptr) {
@@ -410,7 +425,7 @@ void ChannelStrip::process_unsegmented(float* const* channels, int num_channels,
   // Post-fader tap is the final output, used by post-fader sends and the output meter.
   copy_to_taps(channels, post_tap_, num_channels, clamped_samples);
 
-  post_meter_.process(channels, num_channels, num_samples);
+  if (post_meter_) post_meter_->process(channels, num_channels, num_samples);
 }
 
 void ChannelStrip::process_segment(float* const* channels, int num_channels, int start,
@@ -482,8 +497,8 @@ void ChannelStrip::reset() {
   panner_.reset();
   width_.reset();
   eq_.reset();
-  pre_meter_.reset();
-  post_meter_.reset();
+  if (pre_meter_) pre_meter_->reset();
+  if (post_meter_) post_meter_->reset();
   for (auto& insert : pre_inserts_) {
     insert->reset();
   }
@@ -779,7 +794,8 @@ int ChannelStrip::insert_parameter_id_for_key(unsigned int insert_index,
 }
 
 MeterSnapshot ChannelStrip::meter_snapshot(TapPoint tap) const noexcept {
-  return tap == TapPoint::PreFader ? pre_meter_.snapshot() : post_meter_.snapshot();
+  const std::optional<MeterProcessor>& meter = tap == TapPoint::PreFader ? pre_meter_ : post_meter_;
+  return meter ? meter->snapshot() : MeterSnapshot{};
 }
 
 size_t ChannelStrip::read_goniometer_latest(GoniometerPoint* dest,

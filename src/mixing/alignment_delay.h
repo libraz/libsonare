@@ -11,6 +11,10 @@
 
 namespace sonare::mixing {
 
+// Bounds per-strip delay storage even for malformed scenes. At 48 kHz this is
+// four seconds, while retaining headroom for practical manual alignment.
+inline constexpr int kMaxAlignmentDelaySamples = 192000;
+
 enum class FractionalDelayMode {
   None,
   // Default fractional-delay mode for alignment/PDC. The implementation is a

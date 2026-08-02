@@ -1,9 +1,12 @@
 #include "c_api/mixing_internal.h"
+#include "mixing/alignment_delay.h"
 
 using namespace sonare_c_mixing_detail;
 
 SonareMixer* sonare_mixer_create(int sample_rate, int max_block_size) {
+  SONARE_C_API_ENTRY;
   if (sample_rate <= 0 || max_block_size <= 0) {
+    sonare_c_detail::set_last_error("mixer: sample_rate and max_block_size must be positive");
     return nullptr;
   }
   try {
@@ -15,13 +18,16 @@ SonareMixer* sonare_mixer_create(int sample_rate, int max_block_size) {
   }
 
   SonareStrip* sonare_mixer_add_strip(SonareMixer * mixer, const char* id) {
+    SONARE_C_API_ENTRY;
     if (!mixer || !id) {
+      sonare_c_detail::set_last_error("mixer: handle and strip id are required");
       return nullptr;
     }
     try {
       const std::string strip_id = id;
       for (const auto& existing : mixer->strips) {
         if (existing->id == strip_id) {
+          sonare_c_detail::set_last_error("mixer: duplicate strip id");
           return nullptr;
         }
       }
@@ -228,7 +234,8 @@ SonareMixer* sonare_mixer_create(int sample_rate, int max_block_size) {
 
     SonareError sonare_strip_set_channel_delay_samples(SonareStrip * strip, int delay_samples) {
       SONARE_C_API_ENTRY;
-      if (!strip) {
+      if (!strip || delay_samples < 0 ||
+          delay_samples > sonare::mixing::kMaxAlignmentDelaySamples) {
         return SONARE_ERROR_INVALID_PARAMETER;
       }
       SONARE_C_TRY

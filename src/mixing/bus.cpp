@@ -21,8 +21,9 @@ BusProcessor::BusProcessor(BusRole role, int max_inputs) : role_(role), max_inpu
 void BusProcessor::prepare(double sample_rate, int max_block_size) {
   sample_rate_ = sample_rate > 0.0 ? sample_rate : 48000.0;
   max_block_size_ = max_block_size;
-  for (auto& insert : inserts_) {
-    insert->prepare(sample_rate_, max_block_size_);
+  for (size_t index = 0; index < inserts_.size(); ++index) {
+    inserts_[index]->prepare(sample_rate_, max_block_size_);
+    prepare_stereo_pair_alignment_delay(index);
   }
   meter_.prepare(sample_rate_, max_block_size_);
 }
@@ -37,13 +38,16 @@ void BusProcessor::process(float* const* channels, int num_channels, int num_sam
   std::array<const float*, kMaxSidechainChannels> shifted{};
   run_insert_chain(inserts_, insert_spo_, insert_sidechains_, channels, num_channels, num_samples,
                    /*first_insert_index=*/0, /*sidechain_offset=*/0, shifted.data(),
-                   kMaxSidechainChannels, lfe_index(layout_));
+                   kMaxSidechainChannels, lfe_index(layout_), stereo_pair_alignment_delays_.data());
   meter_.process(channels, num_channels, num_samples);
 }
 
 void BusProcessor::reset() {
   for (auto& insert : inserts_) {
     insert->reset();
+  }
+  for (auto& delay : stereo_pair_alignment_delays_) {
+    delay.reset();
   }
   meter_.reset();
 }
@@ -73,6 +77,24 @@ void BusProcessor::add_insert(std::unique_ptr<rt::ProcessorBase> processor, bool
   inserts_.push_back(std::move(processor));
   insert_spo_.push_back(stereo_pair_only ? 1 : 0);
   insert_sidechains_.resize(inserts_.size());
+  if (max_block_size_ > 0) {
+    prepare_stereo_pair_alignment_delay(inserts_.size() - 1);
+  }
+}
+
+void BusProcessor::prepare_stereo_pair_alignment_delay(size_t insert_index) {
+  if (insert_index >= inserts_.size() || insert_index >= stereo_pair_alignment_delays_.size()) {
+    return;
+  }
+
+  AlignmentDelay& delay = stereo_pair_alignment_delays_[insert_index];
+  // Phase-1 layouts top out at 7.1, so the six planes after L/R cover every
+  // possible untouched surround plane. This is deliberately independent from
+  // the sidechain width: it is program-audio state, not detector state.
+  delay.set_prepared_channels(6);
+  const bool stereo_pair_only = insert_index < insert_spo_.size() && insert_spo_[insert_index] != 0;
+  delay.set_delay_samples_q8(stereo_pair_only ? inserts_[insert_index]->latency_samples_q8() : 0);
+  delay.prepare(sample_rate_, max_block_size_);
 }
 
 bool BusProcessor::apply_insert_parameter(unsigned int insert_index, unsigned int param_id,

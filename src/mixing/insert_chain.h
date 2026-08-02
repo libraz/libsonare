@@ -9,6 +9,7 @@
 #include <memory>
 #include <vector>
 
+#include "mixing/alignment_delay.h"
 #include "rt/processor_base.h"
 
 namespace sonare::mixing {
@@ -44,12 +45,17 @@ struct InsertSidechain {
 ///                            segmented processing).
 /// @param max_forward_rows    Upper bound on sidechain rows forwarded to an
 ///                            insert (also the required @p shifted_scratch size).
+/// @param stereo_pair_alignment_delays Optional index-parallel state used by a
+///                            surround bus to delay untouched planes after a
+///                            latent StereoPairOnly insert. Each state must be
+///                            prepared for planes 2..N-1 by the caller.
 inline void run_insert_chain(std::vector<std::unique_ptr<rt::ProcessorBase>>& inserts,
                              const std::vector<uint8_t>& stereo_pair_only,
                              const std::vector<InsertSidechain>& sidechains, float* const* channels,
                              int num_channels, int num_samples, size_t first_insert_index,
                              int sidechain_offset, const float** shifted_scratch,
-                             int max_forward_rows, int detector_excluded_channel = -1) {
+                             int max_forward_rows, int detector_excluded_channel = -1,
+                             AlignmentDelay* stereo_pair_alignment_delays = nullptr) {
   for (size_t local = 0; local < inserts.size(); ++local) {
     const size_t index = first_insert_index + local;
     const InsertSidechain* key = index < sidechains.size() ? &sidechains[index] : nullptr;
@@ -85,6 +91,17 @@ inline void run_insert_chain(std::vector<std::unique_ptr<rt::ProcessorBase>>& in
     // disabled by ProcessorBase's range check.
     inserts[local]->set_detector_excluded_channel(detector_excluded_channel);
     inserts[local]->process(channels, insert_channels, num_samples);
+
+    // The insert has just delayed its L/R output, while planes 2..N-1 were not
+    // presented to it. Delay those untouched planes by the same reported Q8
+    // latency so a surround bed remains phase/time aligned. The state is owned
+    // by BusProcessor and preallocated during prepare(), keeping this path RT
+    // safe. A bypassed insert leaves every plane dry and therefore bypasses
+    // this compensation too (the early continue above).
+    if (spo && num_channels > 2 && stereo_pair_alignment_delays != nullptr &&
+        inserts[local]->latency_samples_q8() > 0) {
+      stereo_pair_alignment_delays[local].process(channels + 2, num_channels - 2, num_samples);
+    }
   }
 }
 

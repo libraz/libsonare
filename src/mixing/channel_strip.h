@@ -8,6 +8,7 @@
 #include <atomic>
 #include <cstddef>
 #include <memory>
+#include <optional>
 #include <vector>
 
 #include "mastering/eq/parametric.h"
@@ -43,6 +44,11 @@ struct ChannelStripConfig {
   float smoothing_ms = 5.0f;
   EqPosition eq_position = EqPosition::PreFader;
   float input_trim_db = 0.0f;
+  /// When false, omit the pre/post true-peak and LUFS meters entirely. This
+  /// avoids their long loudness rings and oversampled scratch for strips whose
+  /// internal snapshots are never displayed. Engine-level telemetry remains
+  /// available independently.
+  bool enable_metering = true;
 };
 
 enum class InsertAutomationScheduleResult {
@@ -192,6 +198,7 @@ class ChannelStrip : public rt::ProcessorBase {
   // Embedded meters. The no-arg overload is kept as the post-chain/output meter.
   MeterSnapshot meter_snapshot() const noexcept { return meter_snapshot(TapPoint::PostFader); }
   MeterSnapshot meter_snapshot(TapPoint tap) const noexcept;
+  bool metering_enabled() const noexcept { return metering_enabled_; }
 
   // Inserts are control-thread mutators and must not run concurrently with process().
   // @p stereo_pair_only marks an inherently-stereo insert (mastering ChannelPolicy
@@ -315,10 +322,13 @@ class ChannelStrip : public rt::ProcessorBase {
   std::atomic<float> surround_lfe_{0.0f};
   std::atomic<float> surround_distance_{1.0f};
   sonare::mastering::eq::ParametricEq eq_;
-  // Both taps measure true-peak so a metering UI sees real inter-sample peaks
-  // pre- and post-fader rather than a floor reading on the pre-fader tap.
-  MeterProcessor pre_meter_{{true, true, 4}};
-  MeterProcessor post_meter_{{true, true, 4}};
+  // Both optional taps measure true-peak so a metering UI sees real
+  // inter-sample peaks pre- and post-fader rather than a floor reading on the
+  // pre-fader tap. They remain disengaged for strips configured without
+  // internal metering, avoiding their long LUFS rings and TP scratch.
+  bool metering_enabled_ = true;
+  std::optional<MeterProcessor> pre_meter_;
+  std::optional<MeterProcessor> post_meter_;
   GoniometerBuffer<kGoniometerCapacity> goniometer_;
   std::vector<std::unique_ptr<rt::ProcessorBase>> pre_inserts_;
   std::vector<std::unique_ptr<rt::ProcessorBase>> post_inserts_;

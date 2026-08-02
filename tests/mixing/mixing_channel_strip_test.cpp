@@ -7,6 +7,7 @@
 #include "mastering/api/insert_factory.h"
 #include "mastering/dynamics/compressor.h"
 #include "mixing_test_helpers.h"
+#include "rt/delay_line.h"
 #include "util/exception.h"
 
 namespace {
@@ -33,6 +34,33 @@ class HardClipProcessor final : public sonare::rt::ProcessorBase {
   float limit_ = 1.0f;
 };
 
+// Models a latent StereoPairOnly insert: it delays the two planes it receives,
+// while BusProcessor is responsible for aligning the untouched surround planes.
+class FixedLatencyStereoProcessor final : public sonare::rt::ProcessorBase {
+ public:
+  explicit FixedLatencyStereoProcessor(int latency) : latency_(latency) {}
+
+  void prepare(double, int) override {
+    for (auto& delay : delays_) delay.prepare(static_cast<size_t>(latency_));
+  }
+  void process(float* const* channels, int num_channels, int num_samples) override {
+    for (int ch = 0; ch < std::min(num_channels, 2); ++ch) {
+      if (channels[ch] == nullptr) continue;
+      for (int sample = 0; sample < num_samples; ++sample) {
+        channels[ch][sample] = delays_[static_cast<size_t>(ch)].process(channels[ch][sample]);
+      }
+    }
+  }
+  void reset() override {
+    for (auto& delay : delays_) delay.reset();
+  }
+  int latency_samples() const noexcept override { return latency_; }
+
+ private:
+  int latency_ = 0;
+  std::array<sonare::rt::DelayLine, 2> delays_{};
+};
+
 }  // namespace
 
 TEST_CASE("BusProcessor publishes post-insert meter snapshot", "[mixing]") {
@@ -50,6 +78,28 @@ TEST_CASE("BusProcessor publishes post-insert meter snapshot", "[mixing]") {
   REQUIRE(snapshot.seq == 1);
   REQUIRE_THAT(snapshot.correlation, WithinAbs(1.0f, 0.0001f));
   REQUIRE(snapshot.peak_db[0] > sonare::constants::kFloorDb);
+}
+
+TEST_CASE("ChannelStrip can omit internal meter state", "[mixing]") {
+  sonare::mixing::ChannelStripConfig config;
+  config.enable_metering = false;
+  sonare::mixing::ChannelStrip strip(config);
+  strip.prepare(48000.0, 512);
+
+  std::array<float, 512> left{};
+  std::array<float, 512> right{};
+  left.fill(0.5f);
+  right.fill(0.5f);
+  float* channels[] = {left.data(), right.data()};
+  strip.process(channels, 2, static_cast<int>(left.size()));
+
+  REQUIRE_FALSE(strip.metering_enabled());
+  const auto pre = strip.meter_snapshot(sonare::mixing::TapPoint::PreFader);
+  const auto post = strip.meter_snapshot(sonare::mixing::TapPoint::PostFader);
+  REQUIRE(pre.seq == 0);
+  REQUIRE(post.seq == 0);
+  REQUIRE(pre.peak_db[0] == sonare::constants::kFloorDb);
+  REQUIRE(post.true_peak_db[0] == sonare::constants::kFloorDb);
 }
 
 TEST_CASE("surround bus linked dynamics exclude only the LFE plane from detection",
@@ -98,6 +148,35 @@ TEST_CASE("surround bus linked dynamics exclude only the LFE plane from detectio
   const auto surround = render(sonare::ChannelLayout::FivePointOne, 6, 0.95f);
   const auto legacy = render(sonare::ChannelLayout::Stereo, 6, 0.95f);
   REQUIRE(surround[0].back() > legacy[0].back() * 2.0f);
+}
+
+TEST_CASE("surround bus aligns untouched planes after a latent StereoPairOnly insert",
+          "[mixing][surround]") {
+  constexpr int kChannels = 6;
+  constexpr int kFrames = 12;
+  constexpr int kLatency = 4;
+  std::array<std::array<float, kFrames>, kChannels> planes{};
+  std::array<float*, kChannels> pointers{};
+  for (int ch = 0; ch < kChannels; ++ch) {
+    planes[static_cast<size_t>(ch)][0] = static_cast<float>(ch + 1);
+    pointers[static_cast<size_t>(ch)] = planes[static_cast<size_t>(ch)].data();
+  }
+
+  sonare::mixing::BusProcessor bus(sonare::mixing::BusRole::Subgroup);
+  bus.set_channel_layout(sonare::ChannelLayout::FivePointOne);
+  bus.add_insert(std::make_unique<FixedLatencyStereoProcessor>(kLatency), true);
+  bus.prepare(48000.0, kFrames);
+  bus.process(pointers.data(), kChannels, kFrames);
+
+  REQUIRE(bus.latency_samples() == kLatency);
+  for (int ch = 0; ch < kChannels; ++ch) {
+    for (int sample = 0; sample < kLatency; ++sample) {
+      REQUIRE_THAT(planes[static_cast<size_t>(ch)][static_cast<size_t>(sample)],
+                   WithinAbs(0.0f, 0.0001f));
+    }
+    REQUIRE_THAT(planes[static_cast<size_t>(ch)][kLatency],
+                 WithinAbs(static_cast<float>(ch + 1), 0.0001f));
+  }
 }
 
 TEST_CASE("GainProcessor applies fader and VCA offset", "[mixing]") {

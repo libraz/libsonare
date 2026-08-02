@@ -10,6 +10,7 @@
 #include <vector>
 
 #include "core/channel_layout.h"
+#include "mixing/alignment_delay.h"
 #include "mixing/insert_chain.h"
 #include "mixing/meter.h"
 #include "rt/processor_base.h"
@@ -81,6 +82,8 @@ class BusProcessor : public rt::ProcessorBase {
   static constexpr size_t kMaxInserts = 64;
 
  private:
+  void prepare_stereo_pair_alignment_delay(size_t insert_index);
+
   BusRole role_ = BusRole::Subgroup;
   int max_inputs_ = 0;
   ChannelLayout layout_ = ChannelLayout::Stereo;
@@ -90,6 +93,10 @@ class BusProcessor : public rt::ProcessorBase {
   // never reallocates it while process() iterates.
   std::vector<uint8_t> insert_spo_;
   std::vector<InsertSidechain> insert_sidechains_;
+  // One preallocated delay bank per insert. A latent StereoPairOnly insert
+  // processes only L/R on a surround bus, so its corresponding bank delays the
+  // otherwise untouched planes (C/LFE/surrounds) by exactly the same Q8 amount.
+  std::array<AlignmentDelay, kMaxInserts> stereo_pair_alignment_delays_;
   MeterProcessor meter_{};
   double sample_rate_ = 48000.0;
   int max_block_size_ = 0;

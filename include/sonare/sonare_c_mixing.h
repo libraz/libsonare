@@ -116,8 +116,10 @@ SonareError sonare_strip_set_solo_safe(SonareStrip* strip, int solo_safe);
 // latency or topology.
 SonareError sonare_strip_set_polarity_invert(SonareStrip* strip, int invert_left, int invert_right);
 // Sets the far-channel taper used by the strip's pan law. @c pan_law:
-// 0 = -3 dB, 1 = -4.5 dB, 2 = -6 dB, 3 = linear (0 dB). Center gain depends
-// on pan mode (Balance keeps the center at unity). Returns
+// 0 = -3 dB, 1 = -4.5 dB, 2 = -6 dB, 3 = linear (0 dB). For mono strips the
+// selected law changes the center gain; for two-channel strips in Balance mode,
+// the center remains unity and only the far channel is tapered. StereoPan and
+// DualPan use their direct left/right gain mapping. Returns
 // @c SONARE_ERROR_INVALID_PARAMETER if strip is NULL or pan_law is unknown.
 SonareError sonare_strip_set_pan_law(SonareStrip* strip, int pan_law);
 // Sets a per-strip channel delay in samples. This changes the strip's reported
