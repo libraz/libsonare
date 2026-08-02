@@ -70,8 +70,10 @@ std::vector<std::vector<float>> stretch_segment_channels(const std::vector<const
   const int output_frames = std::max(1, static_cast<int>(output_frame_count));
 
   FFT fft(n_fft);
-  const std::vector<float>& analysis_win_short = get_window_cached(WindowType::Hann, n_fft, true);
-  const std::vector<float>& synthesis_win = get_window_cached(WindowType::Hann, n_fft, false);
+  const auto analysis_window_handle = get_window_cached(WindowType::Hann, n_fft, true);
+  const auto synthesis_window_handle = get_window_cached(WindowType::Hann, n_fft, false);
+  const std::vector<float>& analysis_win_short = *analysis_window_handle;
+  const std::vector<float>& synthesis_win = *synthesis_window_handle;
   std::vector<float> window_product(static_cast<size_t>(n_fft));
   for (int i = 0; i < n_fft; ++i) {
     window_product[static_cast<size_t>(i)] =

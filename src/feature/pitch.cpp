@@ -676,7 +676,9 @@ PiptrackResult piptrack(const Audio& audio, int n_fft, int hop_length, float fmi
       float a = mag[(k - 1) * n_frames + t];
       float b = mag[k * n_frames + t];
       float c = mag[(k + 1) * n_frames + t];
-      if (b <= a || b <= c || b < gate) continue;
+      // librosa.util.localmax uses a strict rising edge and an inclusive falling
+      // edge, selecting the first bin of a flat-topped spectral peak.
+      if (b <= a || b < c || b < gate) continue;
       float shift = parabolic_interp(a, b, c);
       float freq =
           (static_cast<float>(k) + shift) * static_cast<float>(sr) / static_cast<float>(n_fft);

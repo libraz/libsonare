@@ -26,6 +26,13 @@ struct OnsetConfig {
 std::vector<float> compute_onset_strength(const MelSpectrogram& mel_spec,
                                           const OnsetConfig& config = OnsetConfig());
 
+/// @brief Aligns an onset envelope with centered STFT frame times.
+/// @details Keeps the envelope length fixed by dropping trailing frames shifted
+///          past the end. Callers that compute a Mel spectrogram outside the
+///          Audio overload must use the same @p n_fft and @p hop_length.
+std::vector<float> center_onset_strength(std::vector<float> onset_env, int n_fft, int hop_length,
+                                         bool center);
+
 /// @brief Computes onset strength envelope from audio.
 /// @param audio Input audio
 /// @param mel_config Mel spectrogram configuration

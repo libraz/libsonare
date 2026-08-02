@@ -8,6 +8,7 @@
 #include <cmath>
 #include <vector>
 
+#include "util/constants.h"
 #include "util/exception.h"
 
 using namespace sonare;
@@ -53,4 +54,12 @@ TEST_CASE("min_db floor is honored", "[util][weighting]") {
   auto w = A_weighting({10.0f}, /*min_db=*/-20.0f);
   REQUIRE(w.size() == 1);
   REQUIRE(w[0] >= -20.0f - 1e-6f);
+}
+
+TEST_CASE("weighting uses the shared silence floor by default", "[util][weighting]") {
+  const auto default_weight = A_weighting({0.0f});
+  const auto explicit_weight = A_weighting({0.0f}, constants::kSilenceDb);
+
+  REQUIRE(default_weight == explicit_weight);
+  REQUIRE_THAT(default_weight[0], WithinAbs(constants::kSilenceDb, 1e-5f));
 }

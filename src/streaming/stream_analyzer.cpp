@@ -161,7 +161,7 @@ StreamAnalyzer::StreamAnalyzer(const StreamConfig& config) : config_(config) {
   fft_ = std::make_unique<FFT>(config_.n_fft);
 
   /// Cache window function
-  window_ = get_window_cached(config_.window, config_.n_fft);
+  window_ = *get_window_cached(config_.window, config_.n_fft);
 
   /// Pre-compute mel filterbank (use internal sample rate)
   if (needs_mel_analysis_) {

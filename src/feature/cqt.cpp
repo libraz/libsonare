@@ -173,6 +173,9 @@ std::unique_ptr<CqtKernel> CqtKernel::create(int sr, const CqtConfig& config) {
 
   // Center frequencies for all bins.
   kernel->frequencies_ = cqt_frequencies(config.fmin, config.n_bins, config.bins_per_octave);
+  SONARE_CHECK(
+      !kernel->frequencies_.empty() && kernel->frequencies_.back() < static_cast<float>(sr) * 0.5f,
+      ErrorCode::InvalidParameter);
   kernel->n_bins_ = config.n_bins;
 
   // Raw fractional lengths from librosa's wavelet_lengths (bpo-based).

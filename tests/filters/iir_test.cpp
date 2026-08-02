@@ -206,6 +206,27 @@ TEST_CASE("apply_biquad_filtfilt zero phase", "[iir]") {
   REQUIRE(std::abs(peak_filtfilt - samples / 2) < 5);
 }
 
+TEST_CASE("cascaded biquad exposes distinct causal and zero-phase paths", "[iir]") {
+  constexpr int sr = 22050;
+  constexpr int samples = 4096;
+  std::vector<float> impulse(samples, 0.0f);
+  impulse[samples / 2] = 1.0f;
+  const CascadedBiquad cascade = lowpass_coeffs_4th(1000.0f, sr);
+
+  const auto causal = apply_cascade(impulse.data(), impulse.size(), cascade);
+  const auto zero_phase = apply_cascade_filtfilt(impulse.data(), impulse.size(), cascade);
+  const auto peak_index = [](const std::vector<float>& signal) {
+    size_t index = 0;
+    for (size_t i = 1; i < signal.size(); ++i) {
+      if (std::abs(signal[i]) > std::abs(signal[index])) index = i;
+    }
+    return index;
+  };
+
+  REQUIRE(peak_index(causal) > samples / 2);
+  REQUIRE(std::abs(static_cast<int>(peak_index(zero_phase)) - samples / 2) < 5);
+}
+
 TEST_CASE("apply_biquad_filtfilt reduced edge transient", "[iir]") {
   // A lowpass filtfilt of a DC (constant) signal should pass it through almost
   // unchanged everywhere. With zero initial conditions the steady-state seeding

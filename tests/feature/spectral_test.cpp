@@ -7,6 +7,7 @@
 #include <catch2/matchers/catch_matchers_floating_point.hpp>
 #include <cmath>
 #include <complex>
+#include <limits>
 #include <vector>
 
 #include "support/audio_fixtures.h"
@@ -334,6 +335,19 @@ TEST_CASE("spectral_contrast uses librosa band quantile means", "[spectral]") {
   REQUIRE_THAT(contrast[0], WithinAbs(0.0f, 1e-6f));
   REQUIRE_THAT(contrast[1], WithinAbs(0.0f, 1e-6f));
   REQUIRE_THAT(contrast[2], WithinAbs(2.6884532f, 1e-6f));
+}
+
+TEST_CASE("spectral_contrast sanitizes NaN magnitudes before sorting", "[spectral]") {
+  const float nan = std::numeric_limits<float>::quiet_NaN();
+  std::vector<std::complex<float>> data = {
+      {1.0f, 0.0f}, {nan, 0.0f},  {3.0f, 0.0f}, {4.0f, 0.0f},
+      {5.0f, 0.0f}, {6.0f, 0.0f}, {7.0f, 0.0f}, {8.0f, 0.0f},
+  };
+  Spectrogram spec = Spectrogram::from_complex(data.data(), 8, 1, 14, 1, 14);
+
+  const std::vector<float> contrast = spectral_contrast(spec, 14, 2, 1.0f, 0.5f);
+  REQUIRE(contrast.size() == 3);
+  for (float value : contrast) REQUIRE(std::isfinite(value));
 }
 
 TEST_CASE("poly_features stays numerically stable at high order", "[spectral][poly_features]") {

@@ -259,6 +259,7 @@ TEST_CASE("KeyAnalyzer candidates", "[key_analyzer]") {
   auto candidates = analyzer.candidates(5);
 
   REQUIRE(candidates.size() == 5);
+  REQUIRE(analyzer.candidates(-1).empty());
 
   // First candidate should have highest correlation
   for (size_t i = 1; i < candidates.size(); ++i) {

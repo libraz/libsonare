@@ -11,6 +11,15 @@ namespace sonare {
 
 namespace {
 
+enum class DtwMetric { Euclidean, Cosine, Manhattan, Chebyshev };
+
+DtwMetric parse_dtw_metric(const std::string& metric) {
+  if (metric == "cosine") return DtwMetric::Cosine;
+  if (metric == "manhattan") return DtwMetric::Manhattan;
+  if (metric == "chebyshev") return DtwMetric::Chebyshev;
+  return DtwMetric::Euclidean;
+}
+
 float column_dot(const float* X, int rows, int cols, int i, const float* Y, int Y_cols, int j) {
   float s = 0.0f;
   for (int r = 0; r < rows; ++r) {
@@ -29,28 +38,31 @@ float column_norm(const float* X, int rows, int cols, int i) {
 }
 
 float pairwise_cost(const float* X, int rows, int X_cols, int i, const float* Y, int Y_cols, int j,
-                    const std::string& metric) {
-  if (metric == "cosine") {
-    float nx = column_norm(X, rows, X_cols, i);
-    float ny = column_norm(Y, rows, Y_cols, j);
-    if (nx == 0.0f || ny == 0.0f) return 1.0f;
-    return 1.0f - column_dot(X, rows, X_cols, i, Y, Y_cols, j) / (nx * ny);
-  }
-  if (metric == "manhattan") {
-    float s = 0.0f;
-    for (int r = 0; r < rows; ++r) {
-      s += std::fabs(X[r * X_cols + i] - Y[r * Y_cols + j]);
+                    DtwMetric metric) {
+  switch (metric) {
+    case DtwMetric::Cosine: {
+      float nx = column_norm(X, rows, X_cols, i);
+      float ny = column_norm(Y, rows, Y_cols, j);
+      if (nx == 0.0f || ny == 0.0f) return 1.0f;
+      return 1.0f - column_dot(X, rows, X_cols, i, Y, Y_cols, j) / (nx * ny);
     }
-    return s;
-  }
-  if (metric == "chebyshev") {
-    float m = 0.0f;
-    for (int r = 0; r < rows; ++r) {
-      m = std::max(m, std::fabs(X[r * X_cols + i] - Y[r * Y_cols + j]));
+    case DtwMetric::Manhattan: {
+      float s = 0.0f;
+      for (int r = 0; r < rows; ++r) {
+        s += std::fabs(X[r * X_cols + i] - Y[r * Y_cols + j]);
+      }
+      return s;
     }
-    return m;
+    case DtwMetric::Chebyshev: {
+      float m = 0.0f;
+      for (int r = 0; r < rows; ++r) {
+        m = std::max(m, std::fabs(X[r * X_cols + i] - Y[r * Y_cols + j]));
+      }
+      return m;
+    }
+    case DtwMetric::Euclidean:
+      break;
   }
-  // Default: euclidean.
   float s = 0.0f;
   for (int r = 0; r < rows; ++r) {
     float d = X[r * X_cols + i] - Y[r * Y_cols + j];
@@ -104,10 +116,11 @@ DtwResult dtw(const float* X, int X_rows, int X_cols, const float* Y, int Y_rows
 
   // Local-cost cache: re-using the metric for each (i, j) lookup is the hot
   // path of the recursion, so we materialise it once.
+  const DtwMetric resolved_metric = parse_dtw_metric(metric);
   std::vector<float> C(static_cast<size_t>(X_cols) * Y_cols, 0.0f);
   for (int i = 0; i < X_cols; ++i) {
     for (int j = 0; j < Y_cols; ++j) {
-      C[i * Y_cols + j] = pairwise_cost(X, X_rows, X_cols, i, Y, Y_cols, j, metric);
+      C[i * Y_cols + j] = pairwise_cost(X, X_rows, X_cols, i, Y, Y_cols, j, resolved_metric);
     }
   }
 

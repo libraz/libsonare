@@ -18,23 +18,25 @@ namespace sonare {
 /// @param n Length of S
 /// @param ref Reference value. If <= 0, the maximum of |S| is used.
 /// @param amin Floor value to avoid log(0) (default constants::kEpsilon)
-/// @param top_db Threshold below max(dB) to clamp (default 80.0).
+/// @param top_db Threshold below max(dB) to clamp (default constants::kDefaultTopDb).
 ///        Pass a negative value to disable clamping.
 /// @return dB values, 10 * log10(max(S, amin)) - 10 * log10(max(ref, amin)).
 /// @throw sonare::SonareException if amin <= 0, or n > 0 with null S.
 std::vector<float> power_to_db(const float* S, std::size_t n, float ref = 1.0f,
-                               float amin = constants::kEpsilon, float top_db = 80.0f);
+                               float amin = constants::kEpsilon,
+                               float top_db = constants::kDefaultTopDb);
 std::vector<float> power_to_db(const std::vector<float>& S, float ref = 1.0f,
-                               float amin = constants::kEpsilon, float top_db = 80.0f);
+                               float amin = constants::kEpsilon,
+                               float top_db = constants::kDefaultTopDb);
 
 /// @brief Convert amplitude (magnitude) values to dB.
 /// @details Internally squares the input and forwards to power_to_db with
 ///          amin squared, exactly matching librosa.amplitude_to_db.
 /// @param amin Amplitude-domain floor (default 1e-5).
 std::vector<float> amplitude_to_db(const float* S, std::size_t n, float ref = 1.0f,
-                                   float amin = 1e-5f, float top_db = 80.0f);
+                                   float amin = 1e-5f, float top_db = constants::kDefaultTopDb);
 std::vector<float> amplitude_to_db(const std::vector<float>& S, float ref = 1.0f,
-                                   float amin = 1e-5f, float top_db = 80.0f);
+                                   float amin = 1e-5f, float top_db = constants::kDefaultTopDb);
 
 /// @brief Inverse of power_to_db. ref * 10^(S_db / 10).
 std::vector<float> db_to_power(const float* S_db, std::size_t n, float ref = 1.0f);

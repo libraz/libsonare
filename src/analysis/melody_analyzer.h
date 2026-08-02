@@ -37,7 +37,7 @@ struct MelodyConfig {
   ///        YIN. Defaults to false to preserve the historical contour; set to
   ///        true for a less octave-jumpy contour aligned with sonare::pyin.
   bool use_pyin = false;
-  /// @brief When @ref use_pyin is true, reflect-pad by frame_length/2 before
+  /// @brief When @ref use_pyin is true, zero-pad by frame_length/2 before
   ///        framing so frame i is centered at i*hop_length (matches
   ///        librosa.pyin(center=True)). Ignored by the plain-YIN path, whose
   ///        frame i covers [i*hop_length, i*hop_length+frame_length) (left

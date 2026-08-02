@@ -5,13 +5,29 @@
 
 #include <algorithm>
 #include <cmath>
+#include <limits>
 
 #include "util/constants.h"
 #include "util/exception.h"
+#include "util/resource_limits.h"
 
 namespace sonare {
 
 using constants::kTwoPiD;
+
+namespace {
+
+size_t checked_sample_count(float duration, int sample_rate, const char* name) {
+  const double samples = static_cast<double>(duration) * sample_rate;
+  if (!std::isfinite(duration) || duration < 0.0f || samples < 0.0 ||
+      samples > static_cast<double>(resource::kMaxOfflineAudioSamples)) {
+    throw SonareException(ErrorCode::InvalidParameter,
+                          std::string(name) + ": duration exceeds the offline audio limit");
+  }
+  return static_cast<size_t>(samples);
+}
+
+}  // namespace
 
 Audio tone(float frequency, int sr, float duration, float phi, float amplitude) {
   if (sr <= 0) throw SonareException(ErrorCode::InvalidParameter, "tone: sr must be positive");
@@ -22,7 +38,7 @@ Audio tone(float frequency, int sr, float duration, float phi, float amplitude) 
     throw SonareException(ErrorCode::InvalidParameter,
                           "tone: duration must be finite and non-negative");
 
-  const size_t n = static_cast<size_t>(duration * static_cast<float>(sr));
+  const size_t n = checked_sample_count(duration, sr, "tone");
   std::vector<float> y(n);
   const double inv_sr = 1.0 / static_cast<double>(sr);
   const double w = kTwoPiD * static_cast<double>(frequency);
@@ -40,7 +56,7 @@ Audio chirp(float fmin, float fmax, int sr, float duration, bool linear) {
     throw SonareException(ErrorCode::InvalidParameter,
                           "chirp: duration must be finite and non-negative");
 
-  const size_t n = static_cast<size_t>(duration * static_cast<float>(sr));
+  const size_t n = checked_sample_count(duration, sr, "chirp");
   std::vector<float> y(n);
   if (n == 0) return Audio::from_vector(std::move(y), sr);
 
@@ -89,17 +105,21 @@ Audio chirp(float fmin, float fmax, int sr, float duration, bool linear) {
 Audio clicks(const std::vector<float>& times, int sr, int length, float frequency,
              float click_duration) {
   if (sr <= 0) throw SonareException(ErrorCode::InvalidParameter, "clicks: sr must be positive");
-  if (!(click_duration > 0.0f)) {
+  if (!std::isfinite(click_duration) || !(click_duration > 0.0f)) {
     throw SonareException(ErrorCode::InvalidParameter, "clicks: click_duration must be > 0");
   }
-  if (!(frequency > 0.0f)) {
+  if (!std::isfinite(frequency) || !(frequency > 0.0f)) {
     throw SonareException(ErrorCode::InvalidParameter, "clicks: frequency must be > 0");
   }
-  if (length < 0)
+  if (length < 0 || static_cast<size_t>(length) > resource::kMaxOfflineAudioSamples)
     throw SonareException(ErrorCode::InvalidParameter, "clicks: length must be non-negative");
 
   // Build the click waveform: 2**(0 .. -10) * sin(2*pi*f*n/sr)
-  const int click_n = static_cast<int>(static_cast<float>(sr) * click_duration);
+  const size_t click_count = checked_sample_count(click_duration, sr, "clicks");
+  if (click_count > static_cast<size_t>(std::numeric_limits<int>::max())) {
+    throw SonareException(ErrorCode::InvalidParameter, "clicks: click duration is too long");
+  }
+  const int click_n = static_cast<int>(click_count);
   if (click_n <= 0) {
     throw SonareException(ErrorCode::InvalidParameter,
                           "clicks: click_duration too short for sr (rounds to 0 samples)");
@@ -126,9 +146,17 @@ Audio clicks(const std::vector<float>& times, int sr, int length, float frequenc
   std::vector<int> positions;
   positions.reserve(times.size());
   for (float t : times) {
-    int pos = static_cast<int>(std::round(static_cast<double>(t) * static_cast<double>(sr)));
-    if (pos < 0) continue;
-    positions.push_back(pos);
+    if (!std::isfinite(t)) {
+      throw SonareException(ErrorCode::InvalidParameter, "clicks: times must be finite");
+    }
+    if (t < 0.0f) continue;
+    const double rounded = std::round(static_cast<double>(t) * sr);
+    if (rounded > static_cast<double>(resource::kMaxOfflineAudioSamples) ||
+        rounded > static_cast<double>(std::numeric_limits<int>::max())) {
+      throw SonareException(ErrorCode::InvalidParameter,
+                            "clicks: time exceeds the offline audio limit");
+    }
+    positions.push_back(static_cast<int>(rounded));
   }
 
   // Determine output length.
@@ -138,7 +166,11 @@ Audio clicks(const std::vector<float>& times, int sr, int length, float frequenc
     for (int p : positions) {
       if (p > max_pos) max_pos = p;
     }
-    out_len = max_pos + click_n;
+    if (static_cast<size_t>(max_pos) > resource::kMaxOfflineAudioSamples - click_count) {
+      throw SonareException(ErrorCode::InvalidParameter,
+                            "clicks: output exceeds the offline audio limit");
+    }
+    out_len = static_cast<int>(static_cast<size_t>(max_pos) + click_count);
   } else {
     // Filter positions past the boundary (librosa keeps positions < length).
     std::vector<int> filtered;

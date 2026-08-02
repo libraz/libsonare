@@ -195,7 +195,8 @@ Spectrogram Spectrogram::compute(const Audio& audio, const StftConfig& config,
   SONARE_CHECK(win_length <= n_fft, ErrorCode::InvalidParameter);
 
   // Get cached window (periodic for STFT, matching librosa/scipy fftbins=True).
-  const std::vector<float>& window = get_window_cached(config.window, win_length, true);
+  const auto window_handle = get_window_cached(config.window, win_length, true);
+  const std::vector<float>& window = *window_handle;
 
   /// Pad window to n_fft if necessary
   std::vector<float> padded_window(n_fft, 0.0f);
@@ -278,8 +279,10 @@ Audio Spectrogram::to_audio(int length, WindowType window_type) const {
   // STFT analysis uses a periodic window (fftbins=True). iSTFT uses a symmetric
   // synthesis window and normalizes by analysis*synthesis overlap to preserve
   // reconstruction gain when the two window shapes differ.
-  const std::vector<float> analysis_win_short = get_window_cached(window_type, win_length_, true);
-  const std::vector<float> synthesis_win_short = get_window_cached(window_type, win_length_, false);
+  const auto analysis_window_handle = get_window_cached(window_type, win_length_, true);
+  const auto synthesis_window_handle = get_window_cached(window_type, win_length_, false);
+  const std::vector<float>& analysis_win_short = *analysis_window_handle;
+  const std::vector<float>& synthesis_win_short = *synthesis_window_handle;
 
   // Zero-pad window to n_fft if win_length < n_fft (matches analysis padding)
   std::vector<float> analysis_window(n_fft_, 0.0f);
@@ -511,7 +514,8 @@ void build_reassignment_windows(const StftConfig& config, std::vector<float>& pa
                                 double& half_n) {
   const int n_fft = config.n_fft;
   const int win_length = config.actual_win_length();
-  const std::vector<float>& window = get_window_cached(config.window, win_length, true);
+  const auto window_handle = get_window_cached(config.window, win_length, true);
+  const std::vector<float>& window = *window_handle;
   const int win_offset = (n_fft - win_length) / 2;
   padded_window.assign(n_fft, 0.0f);
   t_window.assign(n_fft, 0.0f);

@@ -585,6 +585,30 @@ TEST_CASE("fractional octave smoothing spreads isolated bins", "[meter]") {
   REQUIRE_THAT(smoothed[4], WithinAbs(0.0f, 0.001f));
 }
 
+TEST_CASE("fractional octave smoothing matches its reference window definition", "[meter]") {
+  std::vector<float> frequencies(4097);
+  std::vector<float> values(4097);
+  for (size_t i = 0; i < frequencies.size(); ++i) {
+    frequencies[i] = static_cast<float>(i) * 0.5f;
+    values[i] = static_cast<float>((i * 17u) % 31u) - 15.0f;
+  }
+  const auto actual = metering::smooth_fractional_octave(values, frequencies, 3);
+  const float ratio = std::pow(2.0f, 1.0f / 6.0f);
+  REQUIRE(actual[0] == values[0]);
+  for (size_t i = 1; i < values.size(); ++i) {
+    float sum = 0.0f;
+    size_t count = 0;
+    for (size_t j = 1; j < values.size(); ++j) {
+      if (frequencies[j] >= frequencies[i] / ratio && frequencies[j] <= frequencies[i] * ratio) {
+        sum += values[j];
+        ++count;
+      }
+    }
+    const float expected = count == 0 ? values[i] : sum / static_cast<float>(count);
+    REQUIRE_THAT(actual[i], WithinAbs(expected, 1e-4f));
+  }
+}
+
 // ============================================================================
 // P1 regression tests: BS.1770 surround weight named constant + LUFS precision
 // ============================================================================

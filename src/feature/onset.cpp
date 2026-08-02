@@ -71,6 +71,26 @@ std::vector<float> compute_onset_strength(const MelSpectrogram& mel_spec,
   return onset_env;
 }
 
+std::vector<float> center_onset_strength(std::vector<float> onset_env, int n_fft, int hop_length,
+                                         bool center) {
+  if (!center || onset_env.empty() || hop_length <= 0) return onset_env;
+
+  // Frames to right-shift so onset spikes line up with centered STFT frame
+  // times. Integer division deliberately matches librosa's floor division.
+  const int frame_offset = n_fft / (2 * hop_length);
+  if (frame_offset <= 0) return onset_env;
+
+  // Keep the envelope length equal to the Mel frame count: downstream
+  // beat/tempo/meter analyzers rely on that fixed size, so terminal frames
+  // shifted past the end are intentionally discarded.
+  std::vector<float> shifted(onset_env.size(), 0.0f);
+  for (size_t i = 0; i < onset_env.size(); ++i) {
+    const size_t shifted_index = i + static_cast<size_t>(frame_offset);
+    if (shifted_index < shifted.size()) shifted[shifted_index] = onset_env[i];
+  }
+  return shifted;
+}
+
 std::vector<float> compute_onset_strength(const Audio& audio, const MelConfig& mel_config,
                                           const OnsetConfig& onset_config) {
   MelConfig aligned_mel_config = mel_config;
@@ -78,35 +98,8 @@ std::vector<float> compute_onset_strength(const Audio& audio, const MelConfig& m
   MelSpectrogram mel_spec = MelSpectrogram::compute(audio, aligned_mel_config);
   std::vector<float> onset_env = compute_onset_strength(mel_spec, onset_config);
 
-  if (onset_config.center && !onset_env.empty() && aligned_mel_config.hop_length > 0) {
-    // Frames to right-shift so onset spikes line up with the centered STFT
-    // frame times. Computed in floating point and rounded to the nearest whole
-    // frame. librosa uses floor division here; rounding shifts non-integral
-    // n_fft/(2*hop) configurations one frame too far to the right.
-    int frame_offset = aligned_mel_config.n_fft / (2 * aligned_mel_config.hop_length);
-    if (frame_offset > 0) {
-      // Intended contract: the output length is held equal to the mel frame
-      // count (librosa parity — downstream beat/tempo/meter analyzers rely on
-      // this fixed length), so the right-shift pushes the last `frame_offset`
-      // frames off the end. A real onset falling within the final
-      // n_fft/(2*hop) frames of the signal is therefore not reported. This
-      // trailing-frame drop is deliberate: it touches only the last few frames,
-      // is negligible for typical clip lengths, and only loses terminal
-      // transients on very short inputs. The fixed output length must be kept —
-      // growing it to preserve those frames would break the frame-count
-      // assumption shared with the rhythm stack.
-      std::vector<float> shifted(onset_env.size(), 0.0f);
-      for (size_t i = 0; i < onset_env.size(); ++i) {
-        size_t shifted_index = i + static_cast<size_t>(frame_offset);
-        if (shifted_index < shifted.size()) {
-          shifted[shifted_index] = onset_env[i];
-        }
-      }
-      return shifted;
-    }
-  }
-
-  return onset_env;
+  return center_onset_strength(std::move(onset_env), aligned_mel_config.n_fft,
+                               aligned_mel_config.hop_length, onset_config.center);
 }
 
 std::vector<float> onset_strength_multi(const MelSpectrogram& mel_spec, int n_bands,

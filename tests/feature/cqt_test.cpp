@@ -413,6 +413,15 @@ TEST_CASE("cqt empty audio throws", "[cqt]") {
   REQUIRE_THROWS(cqt(empty_audio, CqtConfig()));
 }
 
+TEST_CASE("cqt rejects center frequencies at or above Nyquist", "[cqt][validation]") {
+  const Audio audio = generate_sine(440.0f, 0.1f, 22050);
+  CqtConfig config;
+  config.fmin = 6000.0f;
+  config.n_bins = 12;
+  config.bins_per_octave = 12;
+  REQUIRE_THROWS(cqt(audio, config));
+}
+
 TEST_CASE("CqtResult at accessor", "[cqt]") {
   Audio audio = generate_sine(440.0f, 0.5f, 22050);
   CqtResult result = cqt(audio, CqtConfig());

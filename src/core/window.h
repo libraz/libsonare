@@ -3,6 +3,7 @@
 /// @file window.h
 /// @brief Window function generators.
 
+#include <memory>
 #include <vector>
 
 #include "util/types.h"
@@ -28,10 +29,11 @@ std::vector<float> create_window(WindowType type, int length, bool periodic = tr
 /// @param type Window type
 /// @param length Window length in samples
 /// @param periodic True for periodic (STFT) windows, false for symmetric (FIR design)
-/// @return Const reference to cached window coefficients
-/// @details Returns a reference to a cached window. More efficient for repeated calls
-///          with the same parameters (common in STFT/iSTFT). Thread-local for safety.
-const std::vector<float>& get_window_cached(WindowType type, int length, bool periodic = true);
+/// @return Shared handle to immutable cached window coefficients
+/// @details The handle keeps the coefficients alive if bounded-cache eviction occurs while a
+///          caller is using the window. Thread-local storage keeps cache lookup contention-free.
+std::shared_ptr<const std::vector<float>> get_window_cached(WindowType type, int length,
+                                                            bool periodic = true);
 
 /// @brief Creates a Hann (raised cosine) window.
 /// @param length Window length in samples

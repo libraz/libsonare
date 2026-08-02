@@ -8,6 +8,7 @@
 #include <cmath>
 #include <vector>
 
+#include "util/constants.h"
 #include "util/exception.h"
 #include "util/json_reader.h"
 
@@ -99,4 +100,18 @@ TEST_CASE("dB conversions reject invalid input", "[db_convert][edge]") {
   REQUIRE_THROWS_AS(power_to_db(nullptr, 5), SonareException);
   std::vector<float> v{0.5f};
   REQUIRE_THROWS_AS(power_to_db(v, 1.0f, 0.0f, 80.0f), SonareException);
+}
+
+TEST_CASE("dB conversions use the shared default top dB", "[db_convert]") {
+  const std::vector<float> input{1.0f, 1e-20f};
+
+  const auto default_power = power_to_db(input);
+  const auto explicit_power =
+      power_to_db(input, 1.0f, constants::kEpsilon, constants::kDefaultTopDb);
+  const auto default_amplitude = amplitude_to_db(input);
+  const auto explicit_amplitude = amplitude_to_db(input, 1.0f, 1e-5f, constants::kDefaultTopDb);
+
+  REQUIRE(default_power == explicit_power);
+  REQUIRE(default_amplitude == explicit_amplitude);
+  REQUIRE_THAT(default_power[1], WithinAbs(-constants::kDefaultTopDb, 1e-5f));
 }

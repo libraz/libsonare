@@ -20,19 +20,26 @@ std::vector<float> smooth_fractional_octave(const std::vector<float>& values,
 
   smoothed[0] = values[0];
   const float ratio = std::pow(2.0f, 1.0f / (2.0f * static_cast<float>(octave_fraction)));
+  // frequencies is monotonic by contract, so both band edges only advance. A
+  // prefix sum makes each window average O(1) instead of re-scanning all bins.
+  std::vector<double> prefix(values.size() + 1, 0.0);
+  for (size_t i = 0; i < values.size(); ++i) {
+    prefix[i + 1] = prefix[i] + static_cast<double>(values[i]);
+  }
+
+  size_t begin = 1;
+  size_t end = 1;
   for (size_t i = 1; i < values.size(); ++i) {
     const float center = frequencies[i];
     const float low = center / ratio;
     const float high = center * ratio;
-    float sum = 0.0f;
-    size_t count = 0;
-    for (size_t j = 1; j < values.size(); ++j) {
-      if (frequencies[j] >= low && frequencies[j] <= high) {
-        sum += values[j];
-        ++count;
-      }
-    }
-    smoothed[i] = count == 0 ? values[i] : sum / static_cast<float>(count);
+    while (begin < values.size() && frequencies[begin] < low) ++begin;
+    if (end < begin) end = begin;
+    while (end < values.size() && frequencies[end] <= high) ++end;
+    const size_t count = end - begin;
+    smoothed[i] =
+        count == 0 ? values[i]
+                   : static_cast<float>((prefix[end] - prefix[begin]) / static_cast<double>(count));
   }
   return smoothed;
 }

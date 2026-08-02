@@ -345,7 +345,7 @@ void KeyAnalyzer::analyze() {
 }
 
 std::vector<KeyCandidate> KeyAnalyzer::candidates(int top_n) const {
-  int n = std::min(top_n, static_cast<int>(candidates_.size()));
+  const int n = std::clamp(top_n, 0, static_cast<int>(candidates_.size()));
   return std::vector<KeyCandidate>(candidates_.begin(), candidates_.begin() + n);
 }
 
@@ -422,14 +422,9 @@ Key estimate_key_from_chords(const std::vector<Chord>& chords) {
     return Key{PitchClass::C, Mode::Major, 0.0f};
   }
 
-  // Count weighted occurrences of each root
-  std::array<float, 12> root_weights = {};
   float total_duration = 0.0f;
-
   for (const auto& chord : chords) {
-    float duration = std::max(0.0f, chord.duration());
-    root_weights[static_cast<int>(chord.root)] += duration;
-    total_duration += duration;
+    total_duration += std::max(0.0f, chord.duration());
   }
 
   // Detect common cadences (V-I resolution at the end)

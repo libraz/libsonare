@@ -39,6 +39,7 @@ float audio_rms_db(const Audio& audio) {
 }  // namespace
 
 Audio apply_gain(const Audio& audio, float gain_db, bool clip) {
+  SONARE_CHECK(std::isfinite(gain_db), ErrorCode::InvalidParameter);
   if (audio.empty()) return audio;
 
   float gain_linear = db_to_linear(gain_db);
@@ -73,6 +74,8 @@ Audio normalize(const Audio& audio, float target_db, bool clip) {
 }
 
 Audio normalize_rms(const Audio& audio, float target_db, bool clip) {
+  SONARE_CHECK(std::isfinite(target_db) && (!clip || target_db <= 0.0f),
+               ErrorCode::InvalidParameter);
   if (audio.empty()) return audio;
 
   float current_rms = audio_rms_db(audio);
@@ -160,9 +163,13 @@ namespace {
 /// @param duration_sec Fade duration in seconds
 /// @param is_fade_in If true, fade in; if false, fade out
 Audio apply_fade(const Audio& audio, float duration_sec, bool is_fade_in) {
+  const double requested_samples = static_cast<double>(duration_sec) * audio.sample_rate();
+  SONARE_CHECK(std::isfinite(duration_sec) && duration_sec >= 0.0f &&
+                   requested_samples <= static_cast<double>(std::numeric_limits<size_t>::max()),
+               ErrorCode::InvalidParameter);
   if (audio.empty()) return audio;
 
-  size_t fade_samples = static_cast<size_t>(duration_sec * audio.sample_rate());
+  size_t fade_samples = static_cast<size_t>(requested_samples);
   fade_samples = std::min(fade_samples, audio.size());
 
   std::vector<float> samples(audio.size());

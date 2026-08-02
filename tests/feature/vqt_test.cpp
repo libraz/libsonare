@@ -92,6 +92,16 @@ TEST_CASE("vqt accepts NaN as automatic gamma and rejects other non-finite confi
   for (const float value : recovered.magnitude()) REQUIRE(std::isfinite(value));
 }
 
+TEST_CASE("vqt rejects center frequencies at or above Nyquist", "[vqt][validation]") {
+  const Audio audio = generate_sine(440.0f, 0.1f);
+  VqtConfig config;
+  config.fmin = 6000.0f;
+  config.n_bins = 12;
+  config.bins_per_octave = 12;
+  config.gamma = 1.0f;  // Exercise the dedicated VQT kernel rather than CQT delegation.
+  REQUIRE_THROWS(vqt(audio, config));
+}
+
 TEST_CASE("vqt_bandwidths with gamma=0", "[vqt]") {
   std::vector<float> freqs = {100.0f, 200.0f, 400.0f};
   int bins_per_octave = 12;

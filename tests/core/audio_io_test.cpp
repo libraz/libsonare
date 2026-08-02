@@ -503,6 +503,13 @@ TEST_CASE("save_wav_multichannel writes the 7.1 mask and validates arguments", "
   REQUIRE_THROWS_AS(save_wav_multichannel(path, interleaved.data(), frames, 6,
                                           ChannelLayout::SevenPointOne, 48000, 16),
                     sonare::SonareException);
+
+  // The RIFF data-size field is uint32. This must fail before dereferencing the
+  // tiny sentinel buffer or creating a multi-gigabyte temporary file.
+  const float sentinel = 0.0f;
+  REQUIRE_THROWS_AS(save_wav_multichannel(path, &sentinel, static_cast<size_t>(1) << 30, 8,
+                                          ChannelLayout::SevenPointOne, 48000, 24),
+                    sonare::SonareException);
 }
 
 TEST_CASE("save_wav quantizes 16-bit PCM by rounding to nearest, not truncating", "[audio_io]") {

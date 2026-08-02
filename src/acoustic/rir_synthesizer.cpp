@@ -180,7 +180,7 @@ RirSynthResult synthesize_rir(const ShoeboxRoom& room, const SourceListener& pla
   const float nyquist = sr * 0.5f;
   float longest = 0.0f;
   for (size_t b = 0; b < rt.rt60_bands.size(); ++b) {
-    const float center = 125.0f * std::pow(2.0f, static_cast<float>(b));  // octave_center_hz
+    const float center = octave_center_hz(static_cast<int>(b));
     if (center * sonare::constants::kSqrt2 >= nyquist) continue;
     // Keep this diagnostic estimate aligned with synthesize_late_tail(), which
     // caps each rendered RT60 at 60 seconds before deriving its storage size.

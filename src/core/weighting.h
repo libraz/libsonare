@@ -11,6 +11,8 @@
 #include <string>
 #include <vector>
 
+#include "util/constants.h"
+
 namespace sonare {
 
 /// @brief A-weighting (IEC 61672) for one or more frequencies in Hz.
@@ -18,21 +20,26 @@ namespace sonare {
 /// @param min_db Clip weights below this value in dB (default -80 dB). Pass a
 ///        large negative value (e.g. -1e9) to effectively disable clipping.
 /// @return Weights in dB, one per input frequency.
-std::vector<float> A_weighting(const std::vector<float>& freqs, float min_db = -80.0f);
+std::vector<float> A_weighting(const std::vector<float>& freqs,
+                               float min_db = constants::kSilenceDb);
 
 /// @brief B-weighting (IEC 61672) for one or more frequencies in Hz.
-std::vector<float> B_weighting(const std::vector<float>& freqs, float min_db = -80.0f);
+std::vector<float> B_weighting(const std::vector<float>& freqs,
+                               float min_db = constants::kSilenceDb);
 
 /// @brief C-weighting (IEC 61672) for one or more frequencies in Hz.
-std::vector<float> C_weighting(const std::vector<float>& freqs, float min_db = -80.0f);
+std::vector<float> C_weighting(const std::vector<float>& freqs,
+                               float min_db = constants::kSilenceDb);
 
 /// @brief D-weighting (IEC 61672) for one or more frequencies in Hz.
-std::vector<float> D_weighting(const std::vector<float>& freqs, float min_db = -80.0f);
+std::vector<float> D_weighting(const std::vector<float>& freqs,
+                               float min_db = constants::kSilenceDb);
 
 /// @brief Selects a weighting curve by kind string ("A", "B", "C", "D", or "Z").
 /// @details "Z" returns zero weights (flat response).
 std::vector<float> frequency_weighting(const std::vector<float>& freqs,
-                                       const std::string& kind = "A", float min_db = -80.0f);
+                                       const std::string& kind = "A",
+                                       float min_db = constants::kSilenceDb);
 
 /// @brief Applies perceptual weighting to a power spectrogram.
 /// @details Returns `frequency_weighting(freqs, kind) + power_to_db(S)` per

@@ -6,6 +6,7 @@
 #include <catch2/catch_test_macros.hpp>
 #include <catch2/matchers/catch_matchers_floating_point.hpp>
 #include <cmath>
+#include <limits>
 #include <vector>
 
 #include "metering/basic.h"
@@ -102,6 +103,27 @@ TEST_CASE("apply_gain negative", "[normalize]") {
   float gained_peak = peak_db(gained);
 
   REQUIRE_THAT(gained_peak, WithinAbs(-6.0f, 0.5f));
+}
+
+TEST_CASE("gain and RMS normalization reject non-finite targets", "[normalize]") {
+  Audio audio = create_audio_with_amplitude(0.5f);
+  const float nan = std::numeric_limits<float>::quiet_NaN();
+  const float infinity = std::numeric_limits<float>::infinity();
+
+  REQUIRE_THROWS_AS(apply_gain(audio, nan), SonareException);
+  REQUIRE_THROWS_AS(apply_gain(audio, infinity), SonareException);
+  REQUIRE_THROWS_AS(normalize_rms(audio, nan), SonareException);
+  REQUIRE_THROWS_AS(normalize_rms(audio, infinity), SonareException);
+}
+
+TEST_CASE("fades reject negative and non-finite durations", "[normalize]") {
+  Audio audio = create_audio_with_amplitude(0.5f);
+  const float nan = std::numeric_limits<float>::quiet_NaN();
+  const float infinity = std::numeric_limits<float>::infinity();
+
+  REQUIRE_THROWS_AS(fade_in(audio, -0.5f), SonareException);
+  REQUIRE_THROWS_AS(fade_out(audio, nan), SonareException);
+  REQUIRE_THROWS_AS(fade_in(audio, infinity), SonareException);
 }
 
 TEST_CASE("normalize to 0 dB", "[normalize]") {

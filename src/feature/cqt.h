@@ -86,9 +86,10 @@ class CqtResult {
   /// @brief Returns magnitude in decibels.
   /// @param ref Reference value (default 1.0)
   /// @param amin Minimum amplitude to avoid log(0) (default constants::kEpsilon)
-  /// @param top_db Threshold below max dB to clamp (default 80.0, negative to disable)
+  /// @param top_db Threshold below max dB to clamp (default constants::kDefaultTopDb, negative to
+  /// disable)
   std::vector<float> to_db(float ref = 1.0f, float amin = constants::kEpsilon,
-                           float top_db = 80.0f) const;
+                           float top_db = constants::kDefaultTopDb) const;
 
   /// @brief Returns center frequencies for each bin.
   const std::vector<float>& frequencies() const { return frequencies_; }

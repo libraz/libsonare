@@ -342,7 +342,8 @@ const std::vector<float>& MusicAnalyzer::onset_strength() {
     // Internal analysis pipeline opts into detrend explicitly (the public
     // OnsetConfig default is detrend=false to match librosa).
     onset_config.detrend = true;
-    onset_strength_ = compute_onset_strength(mel_spectrogram(), onset_config);
+    onset_strength_ = center_onset_strength(compute_onset_strength(mel_spectrogram(), onset_config),
+                                            config_.n_fft, config_.hop_length, onset_config.center);
     onset_strength_computed_ = true;
   });
   return onset_strength_;

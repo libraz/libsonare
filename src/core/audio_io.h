@@ -24,6 +24,11 @@ enum class AudioFormat {
 /// @brief Result of audio loading: samples and sample rate.
 using AudioLoadResult = std::tuple<std::vector<float>, int>;
 
+/// @brief Result of an interleaved audio load: samples, sample rate, and channels.
+/// @details Unlike @ref AudioLoadResult, samples retain their source channel
+///          layout in frame-interleaved order.
+using InterleavedAudioLoadResult = std::tuple<std::vector<float>, int, int>;
+
 /// @brief Options for audio loading.
 struct AudioLoadOptions {
   /// @brief Maximum file size in bytes (0 = no limit).
@@ -73,6 +78,12 @@ AudioLoadResult load_buffer_mp3(const uint8_t* data, size_t size);
 /// @throws SonareException on file not found, unknown format, file too large, or decode error
 AudioLoadResult load_audio(const std::string& path,
                            const AudioLoadOptions& options = kDefaultLoadOptions);
+
+/// @brief Loads WAV or MP3 audio without downmixing its channels.
+/// @return Frame-interleaved normalized samples, sample rate, and source channel count.
+/// @throws SonareException on file not found, unsupported format, or decode error.
+InterleavedAudioLoadResult load_audio_interleaved(
+    const std::string& path, const AudioLoadOptions& options = kDefaultLoadOptions);
 
 /// @brief Returns the source channel count without converting the signal to mono.
 /// @return A positive channel count for built-in WAV/MP3 decoders, or 0 when

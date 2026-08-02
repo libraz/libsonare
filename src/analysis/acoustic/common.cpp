@@ -148,7 +148,8 @@ std::vector<float> suppress_stationary_noise_spectral(const float* samples, size
   }
 
   FFT fft(n_fft);
-  const auto& window = get_window_cached(WindowType::Hann, n_fft);
+  const auto window_handle = get_window_cached(WindowType::Hann, n_fft);
+  const auto& window = *window_handle;
   const size_t n_frames = 1 + (size - static_cast<size_t>(n_fft)) / static_cast<size_t>(hop);
   const int n_bins = fft.n_bins();
   // Flat [n_bins x n_frames] matrix in bin-major (row-major) layout so each

@@ -117,6 +117,12 @@ TEST_CASE("frequency_to_w0 clamps frequency to a safe range", "[rt][biquad]") {
   const float nyq_safe = static_cast<float>(sample_rate * 0.45);
   REQUIRE(sonare::rt::frequency_to_w0(static_cast<float>(sample_rate), sample_rate) ==
           sonare::rt::frequency_to_w0(nyq_safe, sample_rate));
+  // The helper is also safe when an unchecked realtime caller supplies a
+  // sample rate below the 20 Hz frequency floor. Its clamp bounds must remain
+  // ordered rather than invoking std::clamp with lo > hi.
+  const float low_rate_w0 = sonare::rt::frequency_to_w0(1000.0f, 1.0);
+  REQUIRE(std::isfinite(low_rate_w0));
+  REQUIRE_THAT(low_rate_w0, WithinAbs(20.0f * sonare::constants::kTwoPi, 1.0e-6f));
   // Non-positive sample rate is degenerate; report 0.
   REQUIRE(sonare::rt::frequency_to_w0(1000.0f, -1.0) == 0.0f);
 }

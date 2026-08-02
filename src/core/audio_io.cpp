@@ -165,6 +165,102 @@ AudioFormat detect_format(const uint8_t* data, size_t size) {
   return AudioFormat::Unknown;
 }
 
+namespace {
+
+InterleavedAudioLoadResult load_buffer_wav_interleaved(const uint8_t* data, size_t size) {
+  drwav wav;
+  const drwav_bool32 ok = drwav_init_memory(&wav, data, size, nullptr);
+  SONARE_CHECK_MSG(ok, ErrorCode::DecodeFailed, "Failed to parse WAV data");
+
+  const int sample_rate = static_cast<int>(wav.sampleRate);
+  const int channels = static_cast<int>(wav.channels);
+  SONARE_CHECK_MSG(sample_rate > 0, ErrorCode::DecodeFailed, "Invalid WAV sample rate");
+  SONARE_CHECK_MSG(channels >= kMinSupportedChannels, ErrorCode::DecodeFailed,
+                   "Invalid WAV channel count");
+
+  size_t total_samples = 0;
+  SONARE_CHECK_MSG(numeric::checked_size_product(static_cast<size_t>(wav.totalPCMFrameCount),
+                                                 static_cast<size_t>(wav.channels),
+                                                 resource::kMaxOfflineAudioSamples, &total_samples),
+                   ErrorCode::DecodeFailed,
+                   "WAV declares more samples than the offline decode limit");
+  std::vector<float> interleaved(total_samples);
+  constexpr size_t kDecodeChunkFrames = 16 * 1024;
+  drwav_uint64 total_frames_read = 0;
+  while (total_frames_read < wav.totalPCMFrameCount) {
+    const drwav_uint64 request =
+        std::min<drwav_uint64>(kDecodeChunkFrames, wav.totalPCMFrameCount - total_frames_read);
+    const size_t offset = static_cast<size_t>(total_frames_read) * static_cast<size_t>(channels);
+    const drwav_uint64 frames_read =
+        drwav_read_pcm_frames_f32(&wav, request, interleaved.data() + offset);
+    if (frames_read == 0) break;
+    total_frames_read += frames_read;
+  }
+  drwav_uninit(&wav);
+
+  SONARE_CHECK_MSG(total_frames_read > 0, ErrorCode::DecodeFailed, "No audio frames in WAV data");
+  interleaved.resize(static_cast<size_t>(total_frames_read) * static_cast<size_t>(channels));
+  return {std::move(interleaved), sample_rate, channels};
+}
+
+InterleavedAudioLoadResult load_buffer_mp3_interleaved(const uint8_t* data, size_t size) {
+  Mp3DecoderGuard decoder_guard;
+  const int result = mp3dec_ex_open_buf(&decoder_guard.decoder, data, size, 0);
+  SONARE_CHECK_MSG(result == 0, ErrorCode::DecodeFailed, "Failed to decode MP3 data");
+  decoder_guard.opened = true;
+
+  SONARE_CHECK_MSG(decoder_guard.decoder.samples > 0, ErrorCode::DecodeFailed,
+                   "No audio samples in MP3 data");
+  const int sample_rate = decoder_guard.decoder.info.hz;
+  const int channels = decoder_guard.decoder.info.channels;
+  SONARE_CHECK_MSG(sample_rate > 0, ErrorCode::DecodeFailed, "Invalid MP3 sample rate");
+  SONARE_CHECK_MSG(channels >= kMinSupportedChannels, ErrorCode::DecodeFailed,
+                   "Invalid MP3 channel count");
+  const uint64_t declared_samples = decoder_guard.decoder.samples;
+  SONARE_CHECK_MSG(declared_samples <= resource::kMaxOfflineAudioSamples, ErrorCode::DecodeFailed,
+                   "MP3 declares more samples than the offline decode limit");
+
+  constexpr size_t kMp3DecodeChunkSamples = 16 * 1024;
+  std::array<mp3d_sample_t, kMp3DecodeChunkSamples> chunk{};
+  std::vector<float> interleaved;
+  interleaved.reserve(static_cast<size_t>(declared_samples));
+  while (true) {
+    const size_t read_samples = mp3dec_ex_read(&decoder_guard.decoder, chunk.data(), chunk.size());
+    if (read_samples == 0) break;
+    size_t next_total = 0;
+    SONARE_CHECK_MSG(numeric::checked_add(interleaved.size(), read_samples, &next_total) &&
+                         next_total <= resource::kMaxOfflineAudioSamples,
+                     ErrorCode::DecodeFailed,
+                     "MP3 decoded more samples than the offline decode limit");
+    SONARE_CHECK_MSG(read_samples % static_cast<size_t>(channels) == 0, ErrorCode::DecodeFailed,
+                     "MP3 decoder returned an incomplete audio frame");
+    interleaved.reserve(next_total);
+    for (size_t i = 0; i < read_samples; ++i) {
+      interleaved.push_back(static_cast<float>(chunk[i]) / 32768.0f);
+    }
+  }
+  SONARE_CHECK_MSG(!interleaved.empty(), ErrorCode::DecodeFailed, "No audio samples in MP3 data");
+  return {std::move(interleaved), sample_rate, channels};
+}
+
+[[maybe_unused]] InterleavedAudioLoadResult load_buffer_interleaved(const uint8_t* data,
+                                                                    size_t size) {
+  SONARE_CHECK_MSG(size <= resource::kMaxAudioFileBytes, ErrorCode::InvalidParameter,
+                   "Audio buffer too large: " + std::to_string(size) +
+                       " bytes (max: " + std::to_string(resource::kMaxAudioFileBytes) + ")");
+  switch (detect_format(data, size)) {
+    case AudioFormat::WAV:
+      return load_buffer_wav_interleaved(data, size);
+    case AudioFormat::MP3:
+      return load_buffer_mp3_interleaved(data, size);
+    default:
+      SONARE_CHECK_MSG(false, ErrorCode::InvalidFormat,
+                       "Interleaved audio loading supports WAV and MP3 only");
+  }
+}
+
+}  // namespace
+
 AudioLoadResult load_buffer_wav(const uint8_t* data, size_t size) {
   drwav wav;
   drwav_bool32 ok = drwav_init_memory(&wav, data, size, nullptr);
@@ -275,6 +371,12 @@ AudioLoadResult load_buffer_mp3(const uint8_t* data, size_t size) {
 }
 
 #ifndef __EMSCRIPTEN__
+InterleavedAudioLoadResult load_audio_interleaved(const std::string& path,
+                                                  const AudioLoadOptions& options) {
+  const std::vector<uint8_t> data = read_file(path, options.max_file_size);
+  return load_buffer_interleaved(data.data(), data.size());
+}
+
 AudioLoadResult load_wav(const std::string& path) {
   std::vector<uint8_t> data = read_file(path, kDefaultLoadOptions.max_file_size);
   return load_buffer_wav(data.data(), data.size());
@@ -579,6 +681,18 @@ void save_wav_multichannel(const std::string& path, const float* interleaved, si
                    "bits_per_sample must be 16 or 24");
   SONARE_CHECK_MSG(channel_count == sonare::channel_count(layout), ErrorCode::InvalidParameter,
                    "channel_count does not match the layout");
+
+  // RIFF stores both the data chunk and the enclosing file size in uint32.
+  // Reject before packing/allocating: otherwise a >4 GiB surround render writes
+  // a truncated header that many readers interpret as a corrupt short file.
+  const size_t bytes_per_frame =
+      static_cast<size_t>(channel_count) * static_cast<size_t>(bits_per_sample / 8);
+  constexpr size_t kExtensibleHeaderBytes = 68;
+  const size_t max_data_bytes =
+      static_cast<size_t>(std::numeric_limits<uint32_t>::max()) - (kExtensibleHeaderBytes - 8);
+  SONARE_CHECK_MSG(bytes_per_frame > 0 && n_frames <= max_data_bytes / bytes_per_frame,
+                   ErrorCode::InvalidParameter,
+                   "WAV data exceeds RIFF 32-bit size limit; use a chunked container");
 
   if (channel_count <= 2) {
     // Plain WAVE_FORMAT_PCM for mono/stereo (maximum compatibility, and

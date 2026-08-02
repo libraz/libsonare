@@ -276,7 +276,10 @@ std::vector<float> spectral_contrast(const Spectrogram& spec, int sr, int n_band
       std::vector<float> band_mags;
       band_mags.reserve(band_indices.size());
       for (int k : band_indices) {
-        band_mags.push_back(magnitude[k * n_frames + t]);
+        // std::sort requires a strict weak ordering. NaN violates that contract,
+        // so treat malformed/non-finite magnitudes as zero just as the other
+        // spectral descriptors do before they enter an ordering operation.
+        band_mags.push_back(sanitized_magnitude(magnitude[k * n_frames + t]));
       }
 
       std::sort(band_mags.begin(), band_mags.end());

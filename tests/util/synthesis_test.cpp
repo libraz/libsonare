@@ -115,6 +115,10 @@ TEST_CASE("tone/chirp reject non-finite duration", "[util][synthesis][edge]") {
   // trigger a runaway allocation. The validators must reject these.
   REQUIRE_THROWS_AS(tone(440.0f, 22050, nan, 0.0f, 1.0f), SonareException);
   REQUIRE_THROWS_AS(tone(440.0f, 22050, inf, 0.0f, 1.0f), SonareException);
+  REQUIRE_THROWS_AS(tone(440.0f, 22050, 1.0e9f, 0.0f, 1.0f), SonareException);
+  REQUIRE_THROWS_AS(clicks({nan}, 22050), SonareException);
+  REQUIRE_THROWS_AS(clicks({1.0e9f}, 22050), SonareException);
+  REQUIRE_THROWS_AS(clicks({}, 22050, 0, 1000.0f, inf), SonareException);
   REQUIRE_THROWS_AS(chirp(100.0f, 1000.0f, 22050, nan, /*linear=*/true), SonareException);
   REQUIRE_THROWS_AS(chirp(100.0f, 1000.0f, 22050, inf, /*linear=*/true), SonareException);
 }

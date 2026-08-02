@@ -4,11 +4,13 @@
 #include "analysis/music_analyzer.h"
 
 #include <atomic>
+#include <catch2/catch_approx.hpp>
 #include <catch2/catch_test_macros.hpp>
 #include <catch2/matchers/catch_matchers_floating_point.hpp>
 #include <cmath>
 #include <vector>
 
+#include "analysis/beat_analyzer.h"
 #include "util/constants.h"
 
 using namespace sonare;
@@ -90,6 +92,26 @@ TEST_CASE("MusicAnalyzer beat_times", "[music_analyzer]") {
   // Times should be sorted
   for (size_t i = 1; i < times.size(); ++i) {
     REQUIRE(times[i] > times[i - 1]);
+  }
+}
+
+TEST_CASE("MusicAnalyzer analyze aligns beats with the direct beat detector", "[music_analyzer]") {
+  Audio audio = create_test_audio();
+  MusicAnalyzerConfig config;
+  MusicAnalyzer analyzer(audio, config);
+  const AnalysisResult analysis = analyzer.analyze();
+
+  BeatConfig direct_config;
+  direct_config.bpm_min = config.bpm_min;
+  direct_config.bpm_max = config.bpm_max;
+  direct_config.start_bpm = config.start_bpm;
+  direct_config.n_fft = config.n_fft;
+  direct_config.hop_length = config.hop_length;
+  const std::vector<float> direct_beats = detect_beats(audio, direct_config);
+
+  REQUIRE(analysis.beats.size() == direct_beats.size());
+  for (size_t i = 0; i < direct_beats.size(); ++i) {
+    REQUIRE(analysis.beats[i].time == Catch::Approx(direct_beats[i]).margin(1e-6));
   }
 }
 

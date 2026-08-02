@@ -5,6 +5,7 @@
 
 #include <cmath>
 #include <map>
+#include <memory>
 #include <tuple>
 
 #include "util/constants.h"
@@ -22,7 +23,8 @@ constexpr size_t kMaxWindowCacheSize = 16;
 /// @brief Thread-local cache for window functions.
 /// @details Key includes the periodic flag so symmetric and periodic windows of
 ///          the same (type, length) do not collide.
-thread_local std::map<std::tuple<WindowType, int, bool>, std::vector<float>> g_window_cache;
+thread_local std::map<std::tuple<WindowType, int, bool>, std::shared_ptr<const std::vector<float>>>
+    g_window_cache;
 
 /// @brief Cosine-window divisor: `length` for periodic, `length - 1` for symmetric.
 inline float window_divisor(int length, bool periodic) {
@@ -44,10 +46,12 @@ std::vector<float> create_window(WindowType type, int length, bool periodic) {
   return hann_window(length, periodic);  // default
 }
 
-const std::vector<float>& get_window_cached(WindowType type, int length, bool periodic) {
+std::shared_ptr<const std::vector<float>> get_window_cached(WindowType type, int length,
+                                                            bool periodic) {
   auto key = std::make_tuple(type, length, periodic);
-  return get_or_create_bounded_cache_entry(g_window_cache, key, kMaxWindowCacheSize,
-                                           [&] { return create_window(type, length, periodic); });
+  return get_or_create_bounded_cache_entry(g_window_cache, key, kMaxWindowCacheSize, [&] {
+    return std::make_shared<const std::vector<float>>(create_window(type, length, periodic));
+  });
 }
 
 std::vector<float> hann_window(int length, bool periodic) {

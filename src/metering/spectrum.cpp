@@ -89,7 +89,8 @@ SpectrumResult spectrum(const Audio& audio, const SpectrumConfig& config) {
   // FFTing only the first n_fft samples with an implicit rectangular window
   // (which leaks energy and ignores most of the input).
   const size_t n_fft = static_cast<size_t>(config.n_fft);
-  const std::vector<float>& window = get_window_cached(WindowType::Hann, config.n_fft, true);
+  const auto window_handle = get_window_cached(WindowType::Hann, config.n_fft, true);
+  const std::vector<float>& window = *window_handle;
   const float window_norm = window_coherent_norm(window);
 
   const size_t hop = std::max<size_t>(1, n_fft / 2);
@@ -142,7 +143,8 @@ SpectrumResult spectrum_frame(const Audio& audio, size_t frame_offset,
   // Single-frame: one Hann-windowed n_fft FFT at frame_offset, zero-padded past
   // the end of the buffer. No averaging, so transients are preserved.
   const size_t n_fft = static_cast<size_t>(config.n_fft);
-  const std::vector<float>& window = get_window_cached(WindowType::Hann, config.n_fft, true);
+  const auto window_handle = get_window_cached(WindowType::Hann, config.n_fft, true);
+  const std::vector<float>& window = *window_handle;
   const float window_norm = window_coherent_norm(window);
 
   std::vector<float> frame(n_fft, 0.0f);

@@ -179,6 +179,9 @@ std::unique_ptr<VqtKernel> VqtKernel::create(int sr, const VqtConfig& config) {
 
   // Compute center frequencies
   kernel->frequencies_ = vqt_frequencies(config.fmin, config.n_bins, config.bins_per_octave);
+  SONARE_CHECK(
+      !kernel->frequencies_.empty() && kernel->frequencies_.back() < static_cast<float>(sr) * 0.5f,
+      ErrorCode::InvalidParameter);
   kernel->n_bins_ = config.n_bins;
 
   // Compute bandwidths

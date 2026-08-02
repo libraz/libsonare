@@ -141,10 +141,11 @@ void StreamingPhaseVocoder::ensure_stream_state() {
   if (fft_ != nullptr) return;
 
   fft_ = std::make_unique<FFT>(config_.n_fft);
-  const std::vector<float>& analysis_win_short =
-      get_window_cached(WindowType::Hann, config_.win_length, true);
-  const std::vector<float>& synthesis_win_short =
+  const auto analysis_window_handle = get_window_cached(WindowType::Hann, config_.win_length, true);
+  const auto synthesis_window_handle =
       get_window_cached(WindowType::Hann, config_.win_length, false);
+  const std::vector<float>& analysis_win_short = *analysis_window_handle;
+  const std::vector<float>& synthesis_win_short = *synthesis_window_handle;
 
   analysis_window_.assign(static_cast<size_t>(config_.n_fft), 0.0f);
   synthesis_window_.assign(static_cast<size_t>(config_.n_fft), 0.0f);
