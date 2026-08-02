@@ -151,6 +151,11 @@ print(f"{result.input_lufs:.1f} LUFS → {result.output_lufs:.1f} LUFS")
 別配布の native CLI は `sonare-cli` なので、両者を `PATH` 上で共存させても挙動が
 変わりません。
 
+CLI のコマンド名は、動作モデルが異なるところをあえて分けています。`sonare mix` は
+ミキサーシーンを読み込んで 1 つ以上の入力をレンダリングし、`sonare-cli mix-strip` は
+1 つの入力にチャンネルストリップを適用します。native の `mix` は `mix-strip` の互換
+エイリアスとして残しています。
+
 ### C++
 
 ```cpp

@@ -1,6 +1,6 @@
 {
   "name": "@libraz/libsonare",
-  "version": "1.5.5",
+  "version": "1.6.0",
   "type": "module",
   "packageManager": "yarn@4.18.0",
   "description": "Audio analysis, mastering, mixing, and MIDI synthesis in WebAssembly",

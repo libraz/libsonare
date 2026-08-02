@@ -1,5 +1,104 @@
 # Changelog
 
+## v1.6.0 (2026-08-03)
+
+**This release contains source-incompatible changes.** Two of them change behaviour without raising an error, so existing code keeps running with a different meaning — read Behavioural changes before upgrading:
+
+- Project automation lanes are identified by their target parameter id instead of a positional index. The add, edit and remove calls keep the same arity and argument types on every surface, so an existing index-based call still runs and edits a different lane.
+- `Audio#getData()` on Node and WASM returns a copy. Code that wrote into the returned `Float32Array` to edit the audio in place no longer has any effect.
+
+This release adds a machine-readable capability catalog, cooperative cancellation for long-running offline calls, a dedicated WebAssembly analysis bundle and Worker entry point, project-level stem import and flat model read-back, GM program following in the built-in synth, and before/after mastering reports. It also corrects oversampled mastering continuity across block boundaries, the voice changer's latency and limiting, and a set of analysis, mixing and MIDI defects.
+
+### New surfaces
+
+- A machine-readable capability catalog describes every processor, its parameters with bounds and defaults, and the built-in preset lists. It is published as canonical JSON through the C ABI and mirrored as `capabilityCatalog` (Node, WASM) and `capability_catalog` (Python), validated against `schemas/capability-catalog.schema.json`, and attached to the release. Unknown parameter bounds are reported as explicit nulls rather than invented ranges. A companion build-diagnostics report is exposed as `capabilities` on every surface and as a `doctor` command on both CLIs.
+- Long-running offline analysis and mastering calls accept cooperative cancellation at their existing progress boundaries. The C ABI adds `SonareCancelCallback` and cancellable entry points; the facades take a `cancel` callback (`cancel?: () => boolean` on Node and WASM, `cancel=` on Python) and report `SONARE_ERROR_CANCELLED` / error code 8. A cancelled call leaves its outputs unallocated.
+- The mastering chain reports before and after loudness, peak, range, gain-reduction and 32-band energy summaries, mirrored across the C ABI, ctypes, Node, Python, WASM and both CLI report files.
+- `StreamingMasteringChain::flush()` emits the chain latency plus finite processor tails after the final input block, exposed as `sonare_streaming_mastering_chain_flush_mono` / `_stereo` and as `flushMono` / `flushStereo` on Node, Python and WASM.
+- Monophonic note segmentation from F0 tracks is available as `sonare_note_segments` with a versioned `SonareNoteSegmenterConfig`, mirrored on all three bindings. `F0Track` gained an explicit `frame_rate_hz` cadence for host-supplied tracks.
+- Ranked tempo and meter hypotheses are retained on the analysis result across the C ABI, Node, Python and WASM.
+- The synthesis, segmentation and pitch families reached the C ABI: tone, chirp and click generation, Griffin-Lim, mel delta, piptrack, the reassigned spectrogram, spectral bandwidth with a configurable Minkowski exponent, spectral flux, onset backtracking, cross-similarity, recurrence matrices, recurrence/lag conversion, subsegmentation, agglomerative clustering and path enhancement. Onset detection takes an explicit config struct covering FFT size, peak-picking window, delta, wait and backtracking. All of it is mirrored as request objects on JS and keyword arguments on Python.
+- Projects can import host-separated PCM stems through `sonare_project_import_external_stems`, turning already-separated stems into one audio track and clip each. The import is all-or-nothing and performs no resampling, retiming or gain compensation. An optional per-source `external_stem_role` round-trips through the serializer.
+- Projects expose read-only `SonareProjectTrack` / `SonareProjectClip` / `SonareProjectSource` descriptors with by-index readers, a full UTF-8 marker name accessor, and `sonare_project_set_source_audio` so a host can rebind decoded PCM to a loaded project before bounce.
+- The realtime engine gained `sonare_engine_prepare_with_channels`, so prepare reserves capture, instrument, PDC and monitor planes for the host's real channel count instead of always 64, plus `flush_control_commands` for control-only hosts.
+- The mixer compensates untouched planes for a latent stereo-pair-only insert, and `ChannelStripConfig::enable_metering` lets strips whose snapshots are never read drop their meters entirely.
+- Voice changer presets accept a `macros` shorthand covering pitch, formant, brightness, space, intensity, noise control and sibilance. Macros are an input-only convenience expanded into the ordinary DSP config by the shared parser on the control thread; an explicit `dsp` section always wins, and macros never appear in normalized output.
+
+### Analysis
+
+- Onset-envelope centering was extracted into a shared helper and applied in the music analyzer, whose beats now match the direct beat detector.
+- `piptrack` matches librosa's local-maximum edge behaviour, `spectral_contrast` sanitizes non-finite magnitudes before sorting, CQT and VQT kernels whose top centre frequency reaches Nyquist are rejected, and a negative `top_n` is clamped in the key analyzer.
+- `get_window_cached()` returns a shared handle, so bounded-cache eviction cannot dangle a window still in use.
+- Multichannel PCM can be loaded without downmix through `load_audio_interleaved()`. WAV writes past the RIFF 32-bit size limit are rejected, and the synthesis generators, gain/RMS normalization and fades validate non-finite or oversized arguments.
+
+### Mastering and mixing
+
+- Oversampled processing is continuous across block boundaries. A shared Kaiser polyphase FIR design replaces three separate copies, the oversampler carries per-channel FIR history between blocks and reports its round-trip latency, and the true-peak limiter, tape, tube and air band moved onto that stateful path. The air band smooths its harmonic normalization per sample, making its output block-size independent.
+- Velvet reverb is split into a direct early partition and an FFT-partitioned tail with bounded reverb time and tap count.
+- Declick detection and interpolation share one Burg LPC model, the declip solver runs on a bounded local context, denoise input shorter than `n_fft` is rejected, and short dereverb input is zero-padded instead of silently switching algorithm.
+- Surround buses exclude the LFE plane from linked compressor, gate, limiter and sidechain detectors while still applying linked gain to every output plane.
+- The offline true-peak limiter stages report minimum gain reduction, so a zero-tail drain block no longer zeroes the reported program gain reduction. Stereo loudness is measured once and reused for both the requested and ceiling-clamped gain.
+- The processor catalog carries a coarse `realtimeCost` tier, required to be non-null exactly for realtime-insertable ids.
+- Out-of-range denoise mode and noise-estimator values are rejected rather than cast into the enum, and a chain with no enabled stages reports progress completion.
+
+### Realtime engine, project and MIDI
+
+- Automation lanes are identified by their target parameter id rather than a positional index that silently retargeted after an insert or removal; a track holds at most one lane per target.
+- Clip and track removal is an undoable transaction that also drops the sources they orphan together with the decoded PCM those sources own. Clip split and trim are atomic on failure, warped clips are rejected, and warp maps require at least two strictly increasing anchors.
+- Meter and scope records are staged at most once per target per host block, track-mixer sources accumulate into cleared lanes, and routing-graph latency folds into reported PDC and refreshes on graph swap.
+- A malformed control command or sync message is contained as telemetry or a `syncError` message so it cannot escape `process()` and stop the audio thread. Node engine capture buffers are copied into addon-owned storage instead of retaining pointers into detachable JS ArrayBuffers.
+- The built-in synth follows GM programs: melodic channels resolve their voice from the tracked bank and program change, and channel 10 routes through the GM drum-kit map. The configured patch remains the fallback, and fixed-patch behaviour is unchanged when the mode is off. SF2 player config version 2 adds `prefer_model_for_modeled_families`, routing covered melodic programs to the dedicated physical model while keeping drums SoundFont-first.
+- One shared destination voice pool can render into per-source-track lanes instead of duplicating voices, used by the channel-strip project bounce.
+- SMF import skips non-MTrk chunks instead of failing, drops set-tempo values outside the public BPM range, and marks a truncated file that still carries valid content so import installs the recovered prefix.
+- Project scene JSON is encoded and decoded by one canonical schema walker regardless of the mixing build flag, with one stable key order and one set of accepted key spellings.
+
+### WebAssembly
+
+- A dedicated analysis-only module is published as the `@libraz/libsonare/analysis` entry, built without mastering, mixing, realtime or project bindings, with a size budget enforced in CI.
+- One-shot analysis and mastering calls can run in a dedicated Worker through `OfflineWorkerClient`, published as the `@libraz/libsonare/worker` entry. `Float32Array` inputs are transferred by default with an explicit copy option, and tasks are cancellable.
+- The AudioWorklet reports clip-page misses through a lock-free SPSC request ring instead of embind calls or postMessage traffic from `process()`, with `attachOpfsClipStream` wiring the OPFS path end to end.
+- Telemetry, meter, scope and external MIDI drain through scalar scratch accessors, 64-bit ring fields are stored as word pairs instead of BigInt, and a worklet-to-main external MIDI ring was added.
+- `pushMidiUmp` accepts a single-word MIDI 1.0 channel-voice UMP, dispatched immediately to restore program, pitch bend and pressure state on transport seek.
+- Both voice-changer preset JSON Schemas ship in the published package.
+
+### Command-line tools
+
+- The native executable is published as `sonare-cli` in FFmpeg-free Linux and macOS release archives with SHA-256 checksums, so it can coexist with the Python `sonare` command.
+- Every command has its own help listing the options it accepts, and the global DSP options are accepted only by the commands that consume them. ANSI colour is configured once at startup, so `NO_COLOR` and any redirected stream disable it.
+- `mix` is renamed `mix-strip` with the old name kept as an alias, and it now loads and writes true stereo so `--width` is no longer a no-op. The fourth-order filter path runs through filtfilt only under `--zero-phase`.
+- Project bounce writes the requested channel count, and `project validate --strict` and `project synth-presets` were added. The bare `--synth` flag follows GM programs with channel-10 drums.
+- The two CLIs emit the same JSON for the same command, with snake_case keys throughout.
+- Room-impulse-response errors and warnings are published through the C ABI as stable diagnostic codes, surfaced by the Python result object and the native CLI.
+
+### Bug fixes
+
+- Every C-ABI getter that builds a `thread_local` string, and the EQ and scene-JSON factories, return null with a diagnostic on allocation failure instead of escaping the ABI boundary; the two audio-thread process entries stay free of `thread_local` diagnostics. Quick-analysis output arrays are staged in temporary owners so a later allocation failure cannot leak the arrays already built.
+- One shared error-code table backs the C ABI, Node and WASM instead of per-binding copies, including the previously missing cancellation mapping.
+- The voice changer moves every live control onto per-sample smoothers, so adopting a config snapshot no longer steps values at a block boundary. The retune and whole-chain dry paths align to the overlap-add latency, so reported latency is fixed instead of scaling with the wet and retune mixes. The inter-sample-peak limiter gained a delayed detector with attack-lead gain compensation and no longer hard-clips base-rate samples, which recreated the peaks it was meant to prevent. Only the formant frequency displacement scales with the formant amount, so body, brightness and nasal still apply at amount zero.
+- Preset ids, complete schema documents and the flat camelCase POD route through one shared parser used by the C ABI, Node and WASM, rejecting partial documents that previously fell back to unrelated defaults.
+- The CoreAudio render callback zeroes the active output scratch before each block; a callback that only called the engine replayed the previous block's samples. The CoreMIDI SysEx staging ring uses release/acquire single-producer single-consumer cursors instead of a mutex, so the MIDI callback performs only bounded copies and can never block behind the control thread.
+- Alignment delay is bounded by a named maximum applied to both the integer and Q8 setters, and out-of-range requests are rejected at the C-API channel-delay setter instead of silently clamped.
+- The wah and auto-wah sweep is clamped below the SVF stability limit, and `frequency_to_w0` no longer inverts its clamp at low sample rates.
+- Engine SysEx payloads are bounded at 512 bytes on both the C ABI and the WASM path.
+
+### Behavioural changes
+
+- Project automation lanes are addressed by target parameter id: `sonare_project_add_automation_lane` reports the id through `out_target_param_id`, and the edit and remove calls take `target_param_id` where they previously took `lane_index`. Node, WASM and Python changed with them. The argument count and type are unchanged, so an existing index-based call still runs and operates on a different lane; changing a lane's identity now requires remove then add.
+- `Audio#getData()` on Node and WASM returns a copy, so the internal snapshot the facade methods read cannot be mutated through the returned array. In-place edits to the returned `Float32Array` no longer affect later calls, and each call allocates.
+- Node and WASM reject inputs they previously coerced: wrong-typed repair and dynamics options, an unknown track kind, capture source or pitch-correction mode, a negative spectrum setting, enum spellings and ordinals that are not declared, and override values that are neither number nor boolean. Instance methods reject after `destroy()`.
+- Voice-changer preset documents must be complete; a partial document is rejected instead of falling back to unrelated defaults, and `deesser.ratio` is required. The `macros` shorthand maps its 0–1 inputs onto each target's valid range, so `macros.space` reaches the reverb mix ceiling of 0.45 at 1.0 rather than writing an out-of-range value.
+- Project and scene JSON reject a non-finite or out-of-range number with its field path instead of silently truncating it, and `channelDelaySamples` is bounded by the alignment-delay maximum rather than only rejecting negatives.
+- Both CLIs turn silent no-ops into errors: `--semitones` and `--rate` are required where they had inert defaults, an unknown pitch algorithm or pitch-correction mode is rejected, a reference sample-rate mismatch is an error instead of a quiet resample, and a global DSP option passed to a command that does not consume it exits with the invalid-parameter code. CLI JSON values are no longer rounded before serialization.
+- Mastering, mixing and voice-changer output changed with the fixes above: oversampled stages are continuous across blocks, surround beds are latency-compensated, the LFE plane is excluded from linked detectors, and the voice changer's reported latency is fixed rather than mix-dependent. The mastering preset golden hashes were regenerated for the new output.
+- Analysis results shift where they were wrong: music-analyzer beats now match the direct beat detector, and `piptrack`, `spectral_contrast` and the CQT/VQT kernels changed as described above.
+- Windows CMake configurations are rejected with a pointer to WSL2.
+
+### Platform support
+
+- Linux, macOS, WebAssembly and WSL2 are the declared supported platforms.
+- Linux wheels are built inside matching manylinux 2.28 images, repaired with auditwheel, and checked against glibc 2.31; macOS targets 11.0.
+- The native Node binding is marked private and is installed as a local dependency only. The published artifacts are the WebAssembly npm package, the Python wheel and the native CLI release archives.
+
 ## v1.5.5 (2026-07-27)
 
 This release corrects a set of DSP and analysis defects across the surround, decode, mastering, metering and realtime paths, brings the pitch, constant-Q and rhythm transforms back in line with librosa, and exposes the core capabilities that had no binding entry point. Several analysis defaults and one JavaScript positional signature change with it — see Behavioural changes before upgrading.

@@ -8005,7 +8005,7 @@
       "channelPolicy": "multichannel",
       "id": "maximizer.adaptiveRelease",
       "kind": "realtime",
-      "latencySamples": 0,
+      "latencySamples": 60,
       "params": [
         {
           "default": null,
@@ -8196,7 +8196,7 @@
       "channelPolicy": "multichannel",
       "id": "maximizer.truePeakLimiter",
       "kind": "realtime",
-      "latencySamples": 48,
+      "latencySamples": 60,
       "params": [
         {
           "default": null,
@@ -11541,7 +11541,7 @@
       "channelPolicy": "multichannel",
       "id": "saturation.ampSim",
       "kind": "realtime",
-      "latencySamples": 0,
+      "latencySamples": 12,
       "params": [
         {
           "default": null,
@@ -12005,7 +12005,7 @@
       "channelPolicy": "multichannel",
       "id": "saturation.tube",
       "kind": "realtime",
-      "latencySamples": 0,
+      "latencySamples": 12,
       "params": [
         {
           "default": null,
@@ -12157,7 +12157,7 @@
       "realtimeCost": "low",
       "realtimeInsertable": true,
       "stereoOnly": false,
-      "tailSamples": 0
+      "tailSamples": 24
     },
     {
       "category": "spectral",
@@ -12547,5 +12547,5 @@
       "tailSamples": 0
     }
   ],
-  "version": "1.5.5"
+  "version": "1.6.0"
 }
