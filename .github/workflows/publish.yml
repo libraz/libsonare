@@ -47,7 +47,6 @@ jobs:
           cmake --build build --parallel 2
           python3 tools/scripts/k_weighting_reference.py
           ctest --test-dir build --output-on-failure --parallel
-          make test-golden
 
       - name: Install Node deps (WASM binding)
         working-directory: bindings/wasm

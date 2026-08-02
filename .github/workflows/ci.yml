@@ -77,8 +77,11 @@ jobs:
         run: python3 tools/scripts/k_weighting_reference.py
       - name: Test
         run: ctest --test-dir build --output-on-failure --parallel
-      - name: Test golden regressions
-        run: make test-golden
+      # `make test-golden` is deliberately not run here. The golden hashes
+      # quantize samples at 1e-6 before folding them into FNV-1a, which is
+      # finer than the float reproducibility across architectures and libm
+      # implementations, so a hash generated on one host cannot match another.
+      # They stay a same-environment regression check, run locally.
       - name: Verify live librosa references
         if: runner.os == 'Linux'
         run: |
