@@ -100,7 +100,10 @@ typedef struct {
   float* rir; /* length samples; NULL on error */
   size_t length;
   int sample_rate;
-  int has_error; /* 1 when geometry validation failed (rir is empty) */
+  /* 1 when geometry validation failed (rir is empty). On this successful C
+   * call, sonare_last_error_message() contains the first Error diagnostic as
+   * "code: message" (for example acoustic.source_outside_room). */
+  int has_error;
 } SonareRirSynthResult;
 
 /// @brief Priors + analysis settings for blind room estimation.

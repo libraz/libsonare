@@ -309,6 +309,8 @@ def pitch_correct_timevarying(
     Returns:
         List of pitch-corrected samples.
     """
+    if mode not in ("midi", "scale"):
+        raise ValueError("mode must be 'midi' or 'scale'")
     lib = _get_lib()
     if not hasattr(lib, "sonare_pitch_correct_timevarying"):
         raise RuntimeError("libsonare was built without pitch-editor support")

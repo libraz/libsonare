@@ -51,6 +51,14 @@ void create_test_stereo_wav(const std::string& path, int sample_rate = 22050) {
   save_wav_multichannel(path, samples.data(), 2, 2, ChannelLayout::Stereo, sample_rate);
 }
 
+/// @brief Reads the PCM WAV channel-count field from a RIFF header.
+unsigned int wav_header_channel_count(const std::string& path) {
+  std::ifstream file(path, std::ios::binary);
+  std::array<unsigned char, 24> header{};
+  if (!file.read(reinterpret_cast<char*>(header.data()), header.size())) return 0;
+  return static_cast<unsigned int>(header[22]) | (static_cast<unsigned int>(header[23]) << 8U);
+}
+
 /// @brief Custom deleter for FILE* using pclose.
 struct PipeDeleter {
   void operator()(FILE* fp) const {
@@ -183,6 +191,9 @@ TEST_CASE("CLI help command", "[cli]") {
   REQUIRE_THAT(output, ContainsSubstring("PROCESSING COMMANDS"));
   REQUIRE_THAT(output, ContainsSubstring("FEATURE COMMANDS"));
   REQUIRE_THAT(output, ContainsSubstring("UTILITY COMMANDS"));
+  REQUIRE(output.find("FEATURE COMMANDS") < output.find("\n  mel            "));
+  REQUIRE(output.find("  mfcc-to-audio") < output.find("UTILITY COMMANDS"));
+  REQUIRE(output.find("UTILITY COMMANDS") < output.find("\n  frames-to-samples"));
 }
 
 TEST_CASE("CLI rejects option typos and terminal required options before dispatch",
@@ -272,7 +283,7 @@ TEST_CASE("CLI rejects option typos and terminal required options before dispatc
        "mastering-pair-processors", "mastering-pair-analyses", "mastering-stereo-analyses"});
 #endif
 #ifdef SONARE_WITH_MIXING
-  commands.insert(commands.end(), {"mix", "mixing-presets", "mixing-preset"});
+  commands.insert(commands.end(), {"mix", "mix-strip", "mixing-presets", "mixing-preset"});
 #endif
 #ifdef SONARE_WITH_ARRANGEMENT
   commands.push_back("project");
@@ -359,6 +370,34 @@ TEST_CASE("CLI applies every repeated --set assignment, not just the last",
   // discriminator: before the fix it was dropped and semitones kept its default.
   REQUIRE_THAT(output, ContainsSubstring("-9.375"));
   REQUIRE_THAT(output, ContainsSubstring("1.5"));
+}
+
+TEST_CASE("CLI voice-preset-validate rejects an invalid preset document",
+          "[cli][argument-contract]") {
+  const std::string preset_path = unique_temp_path("_invalid_preset.json");
+  auto [generate_code, generate_output] = exec_command(CLI + " voice-preset > " + preset_path);
+  REQUIRE(generate_code == 0);
+  (void)generate_output;
+
+  std::ifstream input(preset_path);
+  REQUIRE(input.good());
+  const std::string baseline((std::istreambuf_iterator<char>(input)),
+                             std::istreambuf_iterator<char>());
+  const std::string needle = "\"schemaVersion\":1";
+  const auto version = baseline.find(needle);
+  REQUIRE(version != std::string::npos);
+  {
+    std::ofstream preset(preset_path);
+    REQUIRE(preset.good());
+    std::string invalid = baseline;
+    invalid.replace(version, needle.size(), "\"schemaVersion\":9");
+    preset << invalid;
+  }
+
+  auto [code, output] = exec_command(CLI + " voice-preset-validate " + preset_path);
+  std::remove(preset_path.c_str());
+  REQUIRE(code != 0);
+  REQUIRE_THAT(output, ContainsSubstring("schemaVersion"));
 }
 
 TEST_CASE("CLI rejects -o for commands that produce no file output", "[cli][argument-contract]") {
@@ -745,6 +784,105 @@ TEST_CASE("CLI lufs --json stays valid JSON on a silent input", "[cli]") {
   REQUIRE_THAT(output, !ContainsSubstring("nan"));
 }
 
+TEST_CASE("CLI rejects non-finite gain and RMS normalization targets", "[cli]") {
+  create_test_wav(TEST_WAV);
+  const std::string gain_output = unique_temp_path("_gain.wav");
+  const std::string normalize_output = unique_temp_path("_normalize.wav");
+
+  auto [gain_code, gain_message] =
+      exec_command(CLI + " gain " + TEST_WAV + " -o " + gain_output + " --gain-db nan -q");
+  REQUIRE(gain_code == 3);
+  REQUIRE_THAT(gain_message, ContainsSubstring("must be finite"));
+
+  auto [normalize_code, normalize_message] =
+      exec_command(CLI + " normalize " + TEST_WAV + " -o " + normalize_output +
+                   " --mode rms --target-db inf -q");
+  REQUIRE(normalize_code == 3);
+  REQUIRE_THAT(normalize_message, ContainsSubstring("must be finite"));
+
+  REQUIRE_FALSE(std::ifstream(gain_output).good());
+  REQUIRE_FALSE(std::ifstream(normalize_output).good());
+}
+
+TEST_CASE("CLI mix preserves stereo input so --width changes the output", "[cli]") {
+  const std::string input = unique_temp_path("_stereo.wav");
+  const std::string narrow = unique_temp_path("_narrow.wav");
+  const std::string wide = unique_temp_path("_wide.wav");
+  std::vector<float> input_samples(256 * 2);
+  for (size_t frame = 0; frame < 256; ++frame) {
+    input_samples[2 * frame] = 0.5f;
+    input_samples[2 * frame + 1] = -0.25f;
+  }
+  save_wav_multichannel(input, input_samples.data(), 256, 2, ChannelLayout::Stereo, 22050);
+
+  auto [narrow_code, narrow_message] =
+      exec_command(CLI + " mix-strip " + input + " -o " + narrow + " --width 0 -q");
+  REQUIRE(narrow_code == 0);
+  auto [compatibility_code, compatibility_message] =
+      exec_command(CLI + " mix " + input + " -o " + narrow + " --width 0 -q");
+  REQUIRE(compatibility_code == 0);
+  auto [wide_code, wide_message] =
+      exec_command(CLI + " mix " + input + " -o " + wide + " --width 2 -q");
+  REQUIRE(wide_code == 0);
+
+  auto [narrow_samples, narrow_rate, narrow_channels] = load_audio_interleaved(narrow);
+  auto [wide_samples, wide_rate, wide_channels] = load_audio_interleaved(wide);
+  REQUIRE(narrow_rate == 22050);
+  REQUIRE(narrow_channels == 2);
+  REQUIRE(wide_rate == 22050);
+  REQUIRE(wide_channels == 2);
+  REQUIRE(narrow_samples != wide_samples);
+
+  const std::string mono = unique_temp_path("_mono.wav");
+  const std::string rejected = unique_temp_path("_rejected.wav");
+  create_test_wav(mono);
+  auto [mono_code, mono_message] =
+      exec_command(CLI + " mix " + mono + " -o " + rejected + " --width 0.5 -q");
+  REQUIRE(mono_code == 3);
+  REQUIRE_THAT(mono_message, ContainsSubstring("requires a stereo input"));
+  REQUIRE_FALSE(std::ifstream(rejected).good());
+
+  std::remove(input.c_str());
+  std::remove(narrow.c_str());
+  std::remove(wide.c_str());
+  std::remove(mono.c_str());
+}
+
+TEST_CASE("CLI filter applies zero phase to fourth-order filters only when requested", "[cli]") {
+  const std::string input = unique_temp_path("_impulse.wav");
+  const std::string causal_output = unique_temp_path("_causal.wav");
+  const std::string zero_phase_output = unique_temp_path("_zero_phase.wav");
+  std::vector<float> impulse(4096, 0.0f);
+  impulse[2048] = 1.0f;
+  save_wav(input, impulse, 22050);
+
+  auto [causal_code, causal_message] = exec_command(
+      CLI + " filter " + input + " -o " + causal_output + " --type lp --cutoff 1000 --order 4 -q");
+  REQUIRE(causal_code == 0);
+  auto [zero_phase_code, zero_phase_message] =
+      exec_command(CLI + " filter " + input + " -o " + zero_phase_output +
+                   " --type lp --cutoff 1000 --order 4 --zero-phase -q");
+  REQUIRE(zero_phase_code == 0);
+
+  auto [causal, causal_rate] = load_wav(causal_output);
+  auto [zero_phase, zero_phase_rate] = load_wav(zero_phase_output);
+  REQUIRE(causal_rate == 22050);
+  REQUIRE(zero_phase_rate == 22050);
+  const auto peak_index = [](const std::vector<float>& signal) {
+    size_t index = 0;
+    for (size_t i = 1; i < signal.size(); ++i) {
+      if (std::abs(signal[i]) > std::abs(signal[index])) index = i;
+    }
+    return index;
+  };
+  REQUIRE(peak_index(causal) > 2048);
+  REQUIRE(std::abs(static_cast<int>(peak_index(zero_phase)) - 2048) < 5);
+
+  std::remove(input.c_str());
+  std::remove(causal_output.c_str());
+  std::remove(zero_phase_output.c_str());
+}
+
 TEST_CASE("CLI presence flags do not swallow the audio file argument", "[cli]") {
   // Documented order is `<command> [options] <audio_file>`; a presence-only flag
   // like --ir must not consume the following path as its value and leave the
@@ -807,7 +945,7 @@ TEST_CASE("CLI pitch command", "[cli]") {
 
   SECTION("rejects unknown algorithm") {
     auto [code, output] = exec_command(CLI + " pitch " + TEST_WAV + " --algorithm typo -q");
-    REQUIRE(code != 0);
+    REQUIRE(code == 3);
     REQUIRE_THAT(output, ContainsSubstring("--algorithm must be 'yin' or 'pyin'"));
   }
 }
@@ -849,7 +987,8 @@ TEST_CASE("CLI cqt command", "[.][slow][cli]") {
     // Regression: cqt (like pitch/melody) read the global --fmin/--fmax through
     // args.options, which never receives them, so the flag was silently ignored
     // and the hardcoded default (32.7 Hz) was used regardless.
-    auto [code, output] = exec_command(CLI + " cqt " + TEST_WAV + " --fmin 100 --json -q");
+    auto [code, output] =
+        exec_command(CLI + " cqt " + TEST_WAV + " --fmin 100 --n-bins 72 --json -q");
     REQUIRE(code == 0);
     REQUIRE_THAT(output, ContainsSubstring("\"fmin\": 100"));
     // The default still applies when the flag is absent.
@@ -872,9 +1011,10 @@ TEST_CASE("CLI analyze command", "[.][slow][cli]") {
   SECTION("json output") {
     auto [code, output] = exec_command(CLI + " analyze " + TEST_WAV + " --json -q");
     REQUIRE(code == 0);
-    REQUIRE_THAT(output, ContainsSubstring("\"bpm\""));
-    REQUIRE_THAT(output, ContainsSubstring("\"key\""));
-    REQUIRE_THAT(output, ContainsSubstring("\"timbre\""));
+    for (const char* key : {"bpm", "bpmConfidence", "key", "timeSignature", "beats", "chords",
+                            "sections", "timbre", "dynamics", "rhythm", "form"}) {
+      REQUIRE_THAT(output, ContainsSubstring(std::string("\"") + key + "\""));
+    }
   }
 }
 
@@ -983,6 +1123,35 @@ TEST_CASE("CLI DAW editing commands", "[cli]") {
     REQUIRE_THAT(output, ContainsSubstring("\"formant_factor\""));
     std::ifstream f(TEST_OUT);
     REQUIRE(f.good());
+  }
+
+  SECTION("voice-change preset warns about ignored simple knobs") {
+    auto [code, output] = exec_command(
+        CLI + " voice-change --preset neutral-monitor --pitch-semitones 5 --formant-factor 1.1 " +
+        TEST_WAV + " -o " + TEST_OUT + " -q");
+    REQUIRE(code == 0);
+    REQUIRE_THAT(output, ContainsSubstring("warning: --pitch-semitones is ignored"));
+    REQUIRE_THAT(output, ContainsSubstring("warning: --formant-factor is ignored"));
+  }
+
+  SECTION("voice-change resolves a preset-pack entry and applies overrides") {
+    const std::string pack = "schemas/realtime-voice-changer-presets.example.json";
+    auto [code, output] = exec_command(CLI + " voice-change --preset-pack " + pack +
+                                       " --preset neutral-monitor --set dsp.outputGainDb=-2 " +
+                                       TEST_WAV + " -o " + TEST_OUT + " --json -q");
+    REQUIRE(code == 0);
+    REQUIRE_THAT(output, ContainsSubstring("\"presetId\": \"neutral-monitor\""));
+    std::ifstream f(TEST_OUT);
+    REQUIRE(f.good());
+  }
+
+  SECTION("voice-preset-validate resolves a preset-pack entry and applies overrides") {
+    const std::string pack = "schemas/realtime-voice-changer-presets.example.json";
+    auto [code, output] =
+        exec_command(CLI + " voice-preset-validate " + pack +
+                     " --preset neutral-monitor --set dsp.outputGainDb=-2 --json -q");
+    REQUIRE(code == 0);
+    REQUIRE_THAT(output, ContainsSubstring("\"outputGainDb\":-2"));
   }
 }
 
@@ -1143,6 +1312,14 @@ TEST_CASE("CLI mastering command", "[cli][mastering]") {
                      " --threshold-db -36 --ratio 2 --range-db -3 --json -q");
     REQUIRE(dynamic_code == 0);
     REQUIRE_THAT(dynamic_output, ContainsSubstring("\"processor\": \"eq.equalizer\""));
+
+    auto [params_code, params_output] = exec_command(
+        CLI + " eq " + TEST_WAV +
+        " --params band0.enabled=1 --auto-threshold --sidechain-freq-hz 1000 --sidechain-q 0.7 -q");
+    REQUIRE(params_code == 0);
+    REQUIRE_THAT(params_output, ContainsSubstring("--auto-threshold is ignored when --params"));
+    REQUIRE_THAT(params_output, ContainsSubstring("--sidechain-freq-hz is ignored when --params"));
+    REQUIRE_THAT(params_output, ContainsSubstring("--sidechain-q is ignored when --params"));
   }
 
   SECTION("runs pair processor and analysis") {
@@ -1291,6 +1468,15 @@ TEST_CASE("CLI global options", "[cli]") {
     REQUIRE_THAT(global_output, ContainsSubstring("--n-mels"));
   }
 
+  SECTION("rejects global DSP options outside their command schema") {
+    for (const char* option :
+         {"--n-fft 4096", "--hop-length 256", "--n-mels 64", "--fmin 20", "--fmax 20000"}) {
+      auto [code, output] = exec_command(CLI + " version " + option + " -q");
+      REQUIRE(code == 3);
+      REQUIRE_THAT(output, ContainsSubstring("Unknown option"));
+    }
+  }
+
   SECTION("global n-fft and hop-length reach frame conversion handlers") {
     auto [code, output] = exec_command(
         CLI + " frames-to-samples --frames 10 --n-fft 2048 --hop-length 512 --json -q");
@@ -1306,15 +1492,54 @@ TEST_CASE("CLI global options", "[cli]") {
   }
 }
 
+TEST_CASE("CLI command help", "[cli]") {
+  auto [code, output] = exec_command(CLI + " mel --help");
+  REQUIRE(code == 0);
+  REQUIRE_THAT(output, ContainsSubstring("Usage:"));
+  REQUIRE_THAT(output, ContainsSubstring("mel [options] <audio_file>"));
+  REQUIRE_THAT(output, ContainsSubstring("--n-mels <value>"));
+  REQUIRE_THAT(output, ContainsSubstring("--fmin <value>"));
+
+  auto [global_code, global_output] = exec_command(CLI + " --help");
+  REQUIRE(global_code == 0);
+  REQUIRE_THAT(global_output, ContainsSubstring("--n-mels <int>"));
+  REQUIRE_THAT(global_output, ContainsSubstring("--fmin <hz>"));
+  REQUIRE_THAT(global_output, ContainsSubstring("--fmax <hz>"));
+}
+
 #if defined(SONARE_WITH_ARRANGEMENT)
 // project CLI parity: the `project` command group wraps the sonare_project_* C ABI
 // (headless arrangement). These shell out to the same binary as the other CLI
 // tests via get_cli_path().
 TEST_CASE("CLI project command group", "[cli]") {
+  SECTION("unknown subcommand is a usage error") {
+    auto [code, output] = exec_command(CLI + " project not-a-subcommand -q");
+    REQUIRE(code == 2);
+    REQUIRE_THAT(output, ContainsSubstring("unknown project subcommand"));
+  }
+
   SECTION("abi prints the project ABI version") {
     auto [code, output] = exec_command(CLI + " project abi");
     REQUIRE(code == 0);
     REQUIRE_THAT(output, ContainsSubstring(std::to_string(SONARE_PROJECT_ABI_VERSION)));
+  }
+
+  SECTION("synth-presets lists the full NativeSynth catalog") {
+    auto [code, output] = exec_command(CLI + " project synth-presets --json -q");
+    REQUIRE(code == 0);
+    REQUIRE_THAT(output, ContainsSubstring("\"presets\""));
+    REQUIRE_THAT(output, ContainsSubstring("\"e-piano\""));
+  }
+
+  SECTION("stdout-only subcommands reject an output path") {
+    const std::string out = unique_temp_path("_project_output.json");
+    for (const char* subcommand : {"abi", "compile", "synth-presets"}) {
+      auto [code, output] = exec_command(CLI + " project " + subcommand + " -o " + out + " -q");
+      REQUIRE(code == 3);
+      REQUIRE_THAT(output, ContainsSubstring("does not produce a file output"));
+      std::ifstream file(out);
+      REQUIRE_FALSE(file.good());
+    }
   }
 
   SECTION("new -> validate -> compile round-trips through the C ABI") {
@@ -1365,6 +1590,31 @@ TEST_CASE("CLI project command group", "[cli]") {
     std::remove(bad.c_str());
   }
 
+  SECTION("validate reports loader diagnostics and --strict rejects them") {
+    const std::string project = unique_temp_path("_warning.json");
+    {
+      std::ofstream file(project);
+      file << R"({"version":1,"clips":[{"id":1,"track_id":99,"source_id":99,)"
+              R"("length_ppq":1.0}]})";
+    }
+
+    auto [normal_code, normal_output] =
+        exec_command(CLI + " project validate --in " + project + " --json");
+    REQUIRE(normal_code == 0);
+    REQUIRE_THAT(normal_output, ContainsSubstring("\"valid\": false"));
+    REQUIRE_THAT(normal_output, ContainsSubstring("dangling_clip_source"));
+    REQUIRE_THAT(normal_output, ContainsSubstring("dangling_clip_track"));
+
+    auto [strict_code, strict_output] =
+        exec_command(CLI + " project validate --in " + project + " --strict --json");
+    REQUIRE(strict_code == 9);
+    REQUIRE_THAT(strict_output, ContainsSubstring("\"valid\": false"));
+    REQUIRE_THAT(strict_output, ContainsSubstring("dangling_clip_source"));
+    REQUIRE_THAT(strict_output, ContainsSubstring("dangling_clip_track"));
+
+    std::remove(project.c_str());
+  }
+
   SECTION("bounce WAV header sample rate equals the render rate (default 48000)") {
     // Regression: the bounce used to tag the WAV with 44100 while the engine
     // rendered at the project rate (~2x pitch error). The reported sample_rate
@@ -1379,6 +1629,22 @@ TEST_CASE("CLI project command group", "[cli]") {
         exec_command(CLI + " project bounce --in " + proj + " -o " + wav + " --frames 256 --json");
     REQUIRE(bc == 0);
     REQUIRE_THAT(bo, ContainsSubstring("\"sample_rate\": 48000"));
+
+    std::remove(proj.c_str());
+    std::remove(wav.c_str());
+  }
+
+  SECTION("bounce preserves the requested stereo channel count in the WAV header") {
+    const std::string proj = unique_temp_path("_proj.json");
+    const std::string wav = unique_temp_path("_bounce.wav");
+    auto [nc, no] = exec_command(CLI + " project new -o " + proj);
+    REQUIRE(nc == 0);
+
+    auto [bc, bo] = exec_command(CLI + " project bounce --in " + proj + " -o " + wav +
+                                 " --frames 256 --channels 2 --json");
+    REQUIRE(bc == 0);
+    REQUIRE_THAT(bo, ContainsSubstring("\"channels\": 2"));
+    REQUIRE(wav_header_channel_count(wav) == 2);
 
     std::remove(proj.c_str());
     std::remove(wav.c_str());

@@ -372,11 +372,11 @@ int cmd_eq(const CliArgs& args, const Audio& audio) {
     // --params fully specifies the EQ, so the individual band shortcut flags are
     // ignored. Warn instead of silently dropping them.
     for (const char* shortcut :
-         {"type",         "frequency-hz", "gain-db",        "q",          "coeff-mode",
-          "slope-db-oct", "placement",    "proportional-q", "dynamic",    "threshold-db",
-          "ratio",        "range-db",     "attack-ms",      "release-ms", "lookahead-ms",
-          "phase-mode",   "resolution",   "auto-gain",      "gain-scale", "output-gain-db",
-          "output-pan"}) {
+         {"type",         "frequency-hz",   "gain-db",           "q",          "coeff-mode",
+          "slope-db-oct", "placement",      "proportional-q",    "dynamic",    "threshold-db",
+          "ratio",        "range-db",       "attack-ms",         "release-ms", "lookahead-ms",
+          "phase-mode",   "resolution",     "auto-gain",         "gain-scale", "output-gain-db",
+          "output-pan",   "auto-threshold", "sidechain-freq-hz", "sidechain-q"}) {
       if (args.has(shortcut)) {
         std::cerr << "warning: --" << shortcut << " is ignored when --params is given\n";
       }
@@ -596,25 +596,42 @@ int cmd_mixing_preset(const CliArgs& args, const Audio&) {
 }
 
 int cmd_mix(const CliArgs& args, const Audio& audio) {
+  const float width = args.get_float("width", 1.0f);
   mixing::ChannelStrip strip;
   strip.set_input_trim_db(args.get_float("input-trim-db", 0.0f));
   strip.set_fader_db(args.get_float("fader-db", 0.0f));
   strip.set_pan(args.get_float("pan", 0.0f));
   strip.set_pan_mode(parse_pan_mode_option(args.get_string("pan-mode", "balance")));
-  strip.set_width(args.get_float("width", 1.0f));
+  strip.set_width(width);
   strip.prepare(static_cast<double>(audio.sample_rate()), static_cast<int>(audio.size()));
 
   std::vector<float> left(audio.begin(), audio.end());
   std::vector<float> right(audio.begin(), audio.end());
+  const int source_channels = audio_channel_count(args.input_file);
+  if (source_channels == 2) {
+    auto [interleaved, sample_rate, channels] = load_audio_interleaved(args.input_file);
+    SONARE_CHECK(sample_rate == audio.sample_rate() && channels == 2, ErrorCode::DecodeFailed);
+    left.resize(interleaved.size() / 2);
+    right.resize(interleaved.size() / 2);
+    for (size_t frame = 0; frame < left.size(); ++frame) {
+      left[frame] = interleaved[2 * frame];
+      right[frame] = interleaved[2 * frame + 1];
+    }
+  } else if (width != 1.0f) {
+    std::cerr << color::red << "Error: --width requires a stereo input" << color::reset << "\n";
+    return 1;
+  }
   float* channels[] = {left.data(), right.data()};
   strip.process(channels, 2, static_cast<int>(audio.size()));
 
-  std::vector<float> mono(audio.size(), 0.0f);
-  for (size_t i = 0; i < mono.size(); ++i) {
-    mono[i] = 0.5f * (left[i] + right[i]);
-  }
   if (!args.output_file.empty()) {
-    save_wav(args.output_file, mono, audio.sample_rate());
+    std::vector<float> interleaved(2 * left.size());
+    for (size_t frame = 0; frame < left.size(); ++frame) {
+      interleaved[2 * frame] = left[frame];
+      interleaved[2 * frame + 1] = right[frame];
+    }
+    save_wav_multichannel(args.output_file, interleaved.data(), left.size(), 2,
+                          ChannelLayout::Stereo, audio.sample_rate());
   }
 
   const auto meter = strip.meter_snapshot();

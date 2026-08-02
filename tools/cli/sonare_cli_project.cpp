@@ -99,7 +99,8 @@ bool write_binary_file(const std::string& path, const uint8_t* data, size_t len)
 // Loads a project JSON file from --in (or the second positional) into a fresh
 // handle. Returns true on success. On failure prints an error and leaves the
 // handle empty.
-bool load_project_from_args(const CliArgs& args, ProjectHandle* handle) {
+bool load_project_from_args(const CliArgs& args, ProjectHandle* handle,
+                            std::string* diagnostics = nullptr) {
   const std::string in_path =
       args.has("in") ? args.get_string("in") : args.get_string("project", args.input_file);
   if (in_path.empty()) {
@@ -123,8 +124,29 @@ bool load_project_from_args(const CliArgs& args, ProjectHandle* handle) {
     sonare_free_string(diag);
     return false;
   }
+  if (diagnostics != nullptr && diag != nullptr) *diagnostics = diag;
   sonare_free_string(diag);
   return true;
+}
+
+size_t project_diagnostic_count(const std::string& diagnostics) {
+  if (diagnostics.empty()) return 0;
+  return 1 + static_cast<size_t>(std::count(diagnostics.begin(), diagnostics.end(), '\n'));
+}
+
+void print_project_validation_json(bool valid, size_t bytes, const std::string& diagnostics) {
+  JsonBuilder json;
+  json.begin_object()
+      .kv("valid", valid)
+      .kv("bytes", bytes)
+      .kv("diagnostic_count", project_diagnostic_count(diagnostics));
+  json.key("diagnostics").begin_array();
+  std::istringstream stream(diagnostics);
+  std::string line;
+  while (std::getline(stream, line)) {
+    if (!line.empty()) json.value(line);
+  }
+  json.end_array().end_object().print();
 }
 
 // `project abi` — print the runtime project ABI version (0 when the arrangement
@@ -135,6 +157,24 @@ int cmd_project_abi(const CliArgs& args) {
     JsonBuilder().begin_object().kv("abi_version", static_cast<int>(version)).end_object().print();
   } else {
     std::cout << version << "\n";
+  }
+  return 0;
+}
+
+// `project synth-presets` — expose the full NativeSynth catalog accepted by
+// `project bounce --synth`, rather than documenting a small waveform subset.
+int cmd_project_synth_presets(const CliArgs& args) {
+  const char* joined = sonare_synth_preset_names();
+  const std::vector<std::string> names = joined != nullptr && joined[0] != '\0'
+                                             ? split_string(joined, '\n')
+                                             : std::vector<std::string>{};
+  if (args.json_output) {
+    JsonBuilder json;
+    json.begin_object().key("presets").begin_array();
+    for (const auto& name : names) json.value(name);
+    json.end_array().end_object().print();
+  } else {
+    for (const auto& name : names) std::cout << name << "\n";
   }
   return 0;
 }
@@ -191,7 +231,19 @@ int cmd_project_new(const CliArgs& args) {
 // deserializer + serializer; with -o, writes the canonical JSON back out.
 int cmd_project_validate(const CliArgs& args) {
   ProjectHandle handle;
-  if (!load_project_from_args(args, &handle)) return 1;
+  std::string diagnostics;
+  if (!load_project_from_args(args, &handle, &diagnostics)) return 1;
+  const bool valid = diagnostics.empty();
+  if (args.has("strict") && !valid) {
+    if (args.json_output) {
+      print_project_validation_json(false, 0, diagnostics);
+    } else {
+      std::cerr << color::red << "Error: project has " << project_diagnostic_count(diagnostics)
+                << " load diagnostic(s):\n"
+                << diagnostics << color::reset << "\n";
+    }
+    return 1;
+  }
   char* json = nullptr;
   size_t len = 0;
   SonareError err = sonare_project_serialize(handle.ptr, &json, &len);
@@ -210,7 +262,11 @@ int cmd_project_validate(const CliArgs& args) {
   }
   sonare_free_string(json);
   if (args.json_output) {
-    JsonBuilder().begin_object().kv("valid", true).kv("bytes", len).end_object().print();
+    print_project_validation_json(valid, len, diagnostics);
+  } else if (!valid && !args.quiet) {
+    std::cerr << color::yellow << "Project JSON loaded with "
+              << project_diagnostic_count(diagnostics) << " diagnostic(s):\n"
+              << diagnostics << color::reset << "\n";
   } else if (!args.quiet) {
     std::cerr << color::green << "Project JSON is valid (" << len << " bytes canonical)"
               << color::reset << "\n";
@@ -262,8 +318,9 @@ int cmd_project_compile(const CliArgs& args) {
 
 // `project bounce --in in.json -o out.wav` — compile + render the project
 // offline to an interleaved WAV file. With `--synth [preset]` MIDI tracks are
-// rendered through the same NativeSynth preset catalog used by Python; without
-// it MIDI tracks render silently (the default). The bare flag selects `sine`.
+// rendered through the NativeSynth catalog. A named preset is a fixed patch;
+// the bare flag follows GM bank/program changes and routes channel 10 through
+// the GM drum-kit map. Without --synth MIDI tracks render silently.
 int cmd_project_bounce(const CliArgs& args) {
   if (args.output_file.empty()) {
     std::cerr << color::red << "Error: project bounce requires output file (-o out.wav)"
@@ -274,7 +331,8 @@ int cmd_project_bounce(const CliArgs& args) {
   SonareSynthInstrumentBinding synth_binding{};
   if (use_synth) {
     const std::string requested = args.get_string("synth");
-    const std::string preset = (requested.empty() || requested == "true") ? "sine" : requested;
+    const bool auto_select_gm = requested.empty() || requested == "true";
+    const std::string preset = auto_select_gm ? "sine" : requested;
     const SonareError patch_error = sonare_synth_preset_patch(preset.c_str(), &synth_binding.patch);
     if (patch_error != SONARE_OK) {
       std::cerr << color::red << "Error: unknown synth preset '" << preset << "'" << color::reset
@@ -282,6 +340,7 @@ int cmd_project_bounce(const CliArgs& args) {
       return 1;
     }
     synth_binding.destination_id = 0;
+    synth_binding.use_gm_programs = auto_select_gm ? 1 : 0;
   }
 
   ProjectHandle handle;
@@ -314,19 +373,10 @@ int cmd_project_bounce(const CliArgs& args) {
   // The WAV header sample rate equals the render rate the engine used (see above).
   const int sample_rate = render_sample_rate;
   const size_t frames = channels > 0 ? total / static_cast<size_t>(channels) : total;
-  // The CLI WAV writer is mono; downmix the interleaved render to mono (matching
-  // the rest of the CLI, which is mono-centric). The full multichannel buffer is
-  // available via the C ABI / Node / Python bindings for callers that need it.
-  std::vector<float> mono(frames, 0.0f);
-  for (size_t f = 0; f < frames; ++f) {
-    float sum = 0.0f;
-    for (int ch = 0; ch < channels; ++ch) {
-      sum += interleaved[f * static_cast<size_t>(channels) + static_cast<size_t>(ch)];
-    }
-    mono[f] = channels > 0 ? sum / static_cast<float>(channels) : 0.0f;
-  }
+  std::vector<float> rendered(interleaved, interleaved + total);
   sonare_free_floats(interleaved);
-  save_wav(args.output_file, mono, sample_rate);
+  const auto layout = channels == 1 ? ChannelLayout::Mono : ChannelLayout::Stereo;
+  save_wav_multichannel(args.output_file, rendered.data(), frames, channels, layout, sample_rate);
 
   if (args.json_output) {
     JsonBuilder()
@@ -544,11 +594,14 @@ void print_project_usage(std::ostream& out) {
   out << "Usage: sonare project <subcommand> [options]\n\n"
       << "PROJECT SUBCOMMANDS (headless arrangement / DAW):\n"
       << "  abi                  Print the project C ABI version\n"
+      << "  synth-presets        List NativeSynth preset names accepted by --synth\n"
       << "  new                  Create an empty project (-o out.json)\n"
-      << "  validate             Round-trip / validate a project (--in in.json [-o out.json])\n"
+      << "  validate             Round-trip / validate a project (--in in.json [--strict] [-o "
+         "out.json])\n"
       << "  compile              Compile a project + report diagnostics (--in in.json)\n"
       << "  bounce               Render a project offline to WAV (--in in.json -o out.wav)\n"
-      << "                       Use --synth [saw|square|triangle|sine] to make MIDI audible\n"
+      << "                       Use bare --synth for GM program/channel routing and drums;\n"
+      << "                       --synth <preset> selects one fixed NativeSynth patch\n"
       << "                       SF2 and per-destination synth JSON are not exposed here; use the\n"
       << "                       project C/Node/Python/WASM APIs for SoundFont-backed bounces\n"
       << "  export-smf           Export tempo map + MIDI clips to SMF (--in in.json -o out.mid)\n"
@@ -565,8 +618,9 @@ void print_project_usage(std::ostream& out) {
       << "  --sample-rate <hz>   Sample rate (new / bounce; bounce default 48000)\n"
       << "  --frames <n>         Bounce length in frames\n"
       << "  --channels <n>       Bounce channel count (default 2)\n"
-      << "  --synth [waveform]   Bounce MIDI through the built-in synth "
-         "(sine|saw|square|triangle)\n"
+      << "  --strict             Treat project load diagnostics as validation failures\n"
+      << "  --synth [preset]     Bare flag: GM program/channel routing + channel-10 drums\n"
+      << "                       Value: fixed NativeSynth preset (see synth-presets)\n"
       << "                       No --sf2/--synth-json CLI wiring in this command\n"
       << "  --json               Emit JSON results\n";
 }
@@ -580,6 +634,7 @@ int cmd_project(const CliArgs& args, const Audio&) {
     return (sub.empty() && !args.help) ? kExitUsage : 0;
   }
   if (sub == "abi") return cmd_project_abi(args);
+  if (sub == "synth-presets") return cmd_project_synth_presets(args);
   if (sub == "new") return cmd_project_new(args);
   if (sub == "validate") return cmd_project_validate(args);
   if (sub == "compile") return cmd_project_compile(args);
@@ -591,6 +646,6 @@ int cmd_project(const CliArgs& args, const Audio&) {
   std::cerr << color::red << "Error: unknown project subcommand '" << sub << "'" << color::reset
             << "\n\n";
   print_project_usage(std::cerr);
-  return 1;
+  return kExitUsage;
 }
 #endif  // SONARE_WITH_ARRANGEMENT

@@ -122,9 +122,9 @@ def cmd_lufs(args: argparse.Namespace) -> int:
     r = lufs(samples, sample_rate=sr)
 
     payload: dict[str, object] = {
-        "integrated": round(r.integrated_lufs, 4),
-        "momentary": round(r.momentary_lufs, 4),
-        "short_term": round(r.short_term_lufs, 4),
+        "integrated_lufs": round(r.integrated_lufs, 4),
+        "momentary_lufs": round(r.momentary_lufs, 4),
+        "short_term_lufs": round(r.short_term_lufs, 4),
         "loudness_range": round(r.loudness_range, 4),
     }
     momentary_series: list[float] = []

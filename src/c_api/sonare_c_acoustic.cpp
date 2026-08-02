@@ -106,6 +106,26 @@ float* copy_bands(const std::vector<float>& values, size_t* count) {
   *count = values.size();
   return sonare_c_detail::copy_vector(values);
 }
+
+// RIR synthesis reports geometry and synthesis limits as non-fatal core
+// diagnostics so a caller can inspect the result. Preserve their first Error
+// and Warning in the matching C-ABI channels as well: a C caller (and the
+// high-level CLIs) otherwise only sees `has_error` and has no truthful
+// explanation of a failed or clamped request.
+void publish_rir_diagnostics(const std::vector<sonare::Diagnostic>& diagnostics) {
+  for (const sonare::Diagnostic& diagnostic : diagnostics) {
+    if (diagnostic.severity != sonare::Diagnostic::Severity::Error) continue;
+    const std::string detail = diagnostic.code + ": " + diagnostic.message;
+    sonare_c_detail::set_last_error(detail.c_str());
+    break;
+  }
+  for (const sonare::Diagnostic& diagnostic : diagnostics) {
+    if (diagnostic.severity != sonare::Diagnostic::Severity::Warning) continue;
+    const std::string detail = diagnostic.code + ": " + diagnostic.message;
+    sonare_c_detail::set_last_warning(detail.c_str());
+    break;
+  }
+}
 #endif
 
 }  // namespace
@@ -114,6 +134,7 @@ SonareError sonare_synthesize_rir(const SonareRirSynthConfig* config, int sample
                                   SonareRirSynthResult* out) {
   SONARE_C_API_ENTRY;
 #if defined(SONARE_WITH_ACOUSTIC_SIM)
+  sonare_c_detail::clear_last_warning();
   if (!config || !out) return SONARE_ERROR_INVALID_PARAMETER;
   if (sample_rate < sonare_c_detail::kMinSampleRate ||
       sample_rate > sonare_c_detail::kMaxSampleRate) {
@@ -121,7 +142,6 @@ SonareError sonare_synthesize_rir(const SonareRirSynthConfig* config, int sample
   }
   const auto finite = [](float value) { return std::isfinite(value); };
   const auto unit = [&](float value) { return finite(value) && value >= 0.0f && value <= 1.0f; };
-  constexpr size_t kMaxMaterialBands = 64;
   if (!finite(config->length_m) || !finite(config->width_m) || !finite(config->height_m) ||
       !finite(config->source_x) || !finite(config->source_y) || !finite(config->source_z) ||
       !finite(config->listener_x) || !finite(config->listener_y) || !finite(config->listener_z) ||
@@ -131,8 +151,8 @@ SonareError sonare_synthesize_rir(const SonareRirSynthConfig* config, int sample
       config->mixing_time_ms > sonare::acoustic::kMaxRirMixingTimeMs ||
       !std::isfinite(config->crossfade_ms) || config->crossfade_ms < 0.0f ||
       config->crossfade_ms > sonare::acoustic::kMaxRirCrossfadeMs ||
-      config->absorption_band_count > kMaxMaterialBands ||
-      config->scattering_band_count > kMaxMaterialBands ||
+      config->absorption_band_count > sonare::acoustic::kMaxMaterialBands ||
+      config->scattering_band_count > sonare::acoustic::kMaxMaterialBands ||
       (config->absorption_band_count > 0 && config->absorption_bands == nullptr) ||
       (config->scattering_band_count > 0 && config->scattering_bands == nullptr)) {
     return SONARE_ERROR_INVALID_PARAMETER;
@@ -171,6 +191,7 @@ SonareError sonare_synthesize_rir(const SonareRirSynthConfig* config, int sample
 
   const RirSynthResult res = synthesize_rir(room, placement, sample_rate, rc);
   out->has_error = has_error(res.diagnostics) ? 1 : 0;
+  publish_rir_diagnostics(res.diagnostics);
   out->length = res.rir.size();
   if (!res.rir.empty()) {
     out->rir = new float[res.rir.size()];
@@ -261,10 +282,9 @@ SonareError sonare_room_morph(const float* samples, size_t length, int sample_ra
   const auto unit = [](float value) {
     return std::isfinite(value) && value >= 0.0f && value <= 1.0f;
   };
-  constexpr size_t kMaxMaterialBands = 64;
   if (!unit(config->absorption) || !unit(config->source_tail_suppression) || !unit(config->wet) ||
-      config->absorption_band_count > kMaxMaterialBands ||
-      config->scattering_band_count > kMaxMaterialBands ||
+      config->absorption_band_count > sonare::acoustic::kMaxMaterialBands ||
+      config->scattering_band_count > sonare::acoustic::kMaxMaterialBands ||
       (config->absorption_band_count > 0 && config->absorption_bands == nullptr) ||
       (config->scattering_band_count > 0 && config->scattering_bands == nullptr)) {
     return SONARE_ERROR_INVALID_PARAMETER;

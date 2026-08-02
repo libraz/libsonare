@@ -3,7 +3,9 @@
 from __future__ import annotations
 
 import argparse
+import math
 import sys
+import wave
 
 from ._cli_common import (
     MODE_NAMES,
@@ -33,20 +35,29 @@ def cmd_version(args: argparse.Namespace) -> int:
 
 
 def cmd_info(args: argparse.Namespace) -> int:
-    from .audio import Audio
-
-    with Audio.from_file(args.file) as audio:
-        sr = audio.sample_rate
-        n = audio.length
-        dur = audio.duration
+    samples, sr = _load_audio(args.file)
+    n = len(samples)
+    dur = n / sr if sr else 0.0
+    channels = 0
+    try:
+        with wave.open(args.file, "rb") as wav:
+            channels = wav.getnchannels()
+    except (wave.Error, OSError):
+        pass
+    peak = max((abs(float(sample)) for sample in samples), default=0.0)
+    rms = math.sqrt(sum(float(sample) ** 2 for sample in samples) / n) if n else 0.0
 
     if args.json:
         print(
             _strict_json_dumps(
                 {
-                    "duration": round(dur, 3),
+                    "path": args.file,
+                    "duration": dur,
                     "sample_rate": sr,
+                    "channels": channels,
                     "samples": n,
+                    "peak_db": 20.0 * math.log10(max(peak, 1e-10)),
+                    "rms_db": 20.0 * math.log10(max(rms, 1e-10)),
                 }
             )
         )
@@ -252,22 +263,68 @@ def cmd_analyze(args: argparse.Namespace) -> int:
     key_name = f"{PITCH_NAMES[r.key.root.value]} {MODE_NAMES[r.key.mode.value]}"
 
     if args.json:
+        beats = [
+            {"time": beat.time, "strength": beat.strength if beat.strength is not None else 0.0}
+            for beat in r.beats
+        ]
+        chords = [
+            {
+                "name": chord.name,
+                "start": chord.start,
+                "end": chord.end,
+                "confidence": chord.confidence,
+            }
+            for chord in r.chords
+        ]
+        sections = [
+            {
+                "type": section.type.name.lower().replace("_", "-"),
+                "start": section.start,
+                "end": section.end,
+            }
+            for section in r.sections
+        ]
+        timbre = r.timbre
+        dynamics = r.dynamics
+        rhythm = r.rhythm
         print(
             _strict_json_dumps(
                 {
-                    "bpm": round(r.bpm, 2),
-                    "bpm_confidence": round(r.bpm_confidence, 4),
+                    "bpm": r.bpm,
+                    "bpmConfidence": r.bpm_confidence,
                     "key": {
                         "root": r.key.root.value,
                         "mode": r.key.mode.value,
-                        "confidence": round(r.key.confidence, 4),
+                        "confidence": r.key.confidence,
                         "name": key_name,
                     },
-                    "time_signature": {
+                    "timeSignature": {
                         "numerator": r.time_signature.numerator,
                         "denominator": r.time_signature.denominator,
+                        "confidence": r.time_signature.confidence,
                     },
-                    "beats": len(r.beat_times),
+                    "beats": beats,
+                    "chords": chords,
+                    "sections": sections,
+                    "timbre": {
+                        "brightness": timbre.brightness if timbre else 0.0,
+                        "warmth": timbre.warmth if timbre else 0.0,
+                        "density": timbre.density if timbre else 0.0,
+                        "roughness": timbre.roughness if timbre else 0.0,
+                        "complexity": timbre.complexity if timbre else 0.0,
+                    },
+                    "dynamics": {
+                        "dynamicRangeDb": dynamics.dynamic_range_db if dynamics else 0.0,
+                        "loudnessRangeDb": dynamics.loudness_range_db if dynamics else 0.0,
+                        "crestFactor": dynamics.crest_factor if dynamics else 0.0,
+                        "isCompressed": dynamics.is_compressed if dynamics else False,
+                    },
+                    "rhythm": {
+                        "syncopation": rhythm.syncopation if rhythm else 0.0,
+                        "grooveType": rhythm.groove_type if rhythm else "",
+                        "patternRegularity": rhythm.pattern_regularity if rhythm else 0.0,
+                    },
+                    "form": r.form,
                 }
             )
         )
@@ -392,6 +449,8 @@ def cmd_pitch(args: argparse.Namespace) -> int:
 
     samples, sr = _load_audio(args.file)
     algo = getattr(args, "algorithm", "pyin")
+    if algo not in {"yin", "pyin"}:
+        raise ValueError("--algorithm must be 'yin' or 'pyin'")
     if algo == "yin":
         result = pitch_yin(samples, sample_rate=sr)
     else:

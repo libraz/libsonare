@@ -3,6 +3,7 @@
 #include <catch2/catch_test_macros.hpp>
 #include <cmath>
 #include <limits>
+#include <string>
 #include <vector>
 
 namespace {
@@ -89,6 +90,37 @@ TEST_CASE("sonare acoustic C API rejects non-finite and out-of-range RIR inputs"
   cfg = valid_rir_config();
   cfg.mixing_time_ms = 10001.0f;
   REQUIRE(sonare_synthesize_rir(&cfg, 48000, &result) == SONARE_ERROR_INVALID_PARAMETER);
+}
+
+TEST_CASE("sonare acoustic C API publishes RIR geometry diagnostics", "[c_api][acoustic]") {
+  SonareRirSynthConfig cfg = valid_rir_config();
+  cfg.length_m = -1.0f;  // Finite ABI input; the acoustic validator diagnoses it.
+  SonareRirSynthResult result{};
+
+  REQUIRE(sonare_synthesize_rir(&cfg, 48000, &result) == SONARE_OK);
+  REQUIRE(result.has_error == 1);
+  REQUIRE(result.rir == nullptr);
+  REQUIRE(result.length == 0);
+  const std::string detail = sonare_last_error_message();
+  REQUIRE(detail.find("acoustic.invalid_dimensions") != std::string::npos);
+  REQUIRE(detail.find("shoebox dimensions") != std::string::npos);
+
+  sonare_free_rir_synth_result(&result);
+}
+
+TEST_CASE("sonare acoustic C API publishes recoverable RIR diagnostics", "[c_api][acoustic]") {
+  SonareRirSynthConfig cfg = valid_rir_config();
+  cfg.max_seconds = 0.001f;
+  SonareRirSynthResult result{};
+
+  REQUIRE(sonare_synthesize_rir(&cfg, 48000, &result) == SONARE_OK);
+  REQUIRE(result.has_error == 0);
+  REQUIRE(result.rir != nullptr);
+  REQUIRE(std::string(sonare_last_error_message()).empty());
+  REQUIRE(std::string(sonare_last_warning_message()).find("acoustic.rir_length_clamped") !=
+          std::string::npos);
+
+  sonare_free_rir_synth_result(&result);
 }
 
 TEST_CASE("sonare acoustic C API honors the late-tail model selector", "[c_api][acoustic]") {

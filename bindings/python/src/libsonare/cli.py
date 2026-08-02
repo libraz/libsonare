@@ -51,9 +51,6 @@ from ._cli_common import (
     PITCH_NAMES as PITCH_NAMES,
 )
 from ._cli_common import (
-    _apply_voice_macro_override as _apply_voice_macro_override,
-)
-from ._cli_common import (
     _apply_voice_sets as _apply_voice_sets,
 )
 from ._cli_common import (
@@ -273,7 +270,7 @@ def main() -> None:
     sub.add_parser("chroma", parents=[fft_options], help="Compute chromagram")
     sub.add_parser("spectral", parents=[fft_options], help="Compute spectral features")
     pitch_p = sub.add_parser("pitch", parents=[common], help="Track pitch")
-    pitch_p.add_argument("--algorithm", choices=["yin", "pyin"], default="pyin")
+    pitch_p.add_argument("--algorithm", default="pyin")
     sub.add_parser("hpss", parents=[common], help="Harmonic-percussive separation")
 
     # Editing commands
@@ -326,14 +323,12 @@ def main() -> None:
     pitch_shift_p = sub.add_parser(
         "pitch-shift", parents=[common], help="Shift pitch by a number of semitones"
     )
-    pitch_shift_p.add_argument(
-        "--semitones", type=float, default=0.0, help="Semitones to shift (positive = up)"
-    )
+    pitch_shift_p.add_argument("--semitones", type=float, help="Semitones to shift (positive = up)")
     time_stretch_p = sub.add_parser(
         "time-stretch", parents=[common], help="Time-stretch without changing pitch"
     )
     time_stretch_p.add_argument(
-        "--rate", type=float, default=1.0, help="Stretch factor (>1 speeds up, <1 slows down)"
+        "--rate", type=float, help="Stretch factor (>1 speeds up, <1 slows down)"
     )
     normalize_p = sub.add_parser(
         "normalize", parents=[common], help="Peak-normalize audio to a target dB level"
@@ -361,11 +356,9 @@ def main() -> None:
     voice_change_p = sub.add_parser(
         "voice-change", parents=[common], help="Apply a voice-change effect"
     )
+    voice_change_p.add_argument("--pitch-semitones", type=float, help="Pitch shift in semitones")
     voice_change_p.add_argument(
-        "--pitch-semitones", type=float, default=0.0, help="Pitch shift in semitones"
-    )
-    voice_change_p.add_argument(
-        "--formant-factor", type=float, default=1.0, help="Formant scaling factor (1.0 = unchanged)"
+        "--formant-factor", type=float, help="Formant scaling factor (1.0 = unchanged)"
     )
     voice_change_p.add_argument("--preset", default="", help="Realtime voice changer preset id")
     voice_change_p.add_argument("--preset-json", help="Realtime voice changer preset JSON file")
@@ -394,7 +387,11 @@ def main() -> None:
     voice_preset_validate_p = sub.add_parser(
         "voice-preset-validate", help="Validate and normalize voice preset JSON"
     )
-    voice_preset_validate_p.add_argument("file", help="Voice preset JSON file")
+    voice_preset_validate_p.add_argument("file", nargs="?", help="Voice preset JSON file")
+    voice_preset_validate_p.add_argument(
+        "--preset-json",
+        help="Voice preset JSON file (takes precedence over the positional path)",
+    )
     voice_preset_validate_p.add_argument("--json", action="store_true", help="Output JSON")
     voice_preset_validate_p.add_argument(
         "--preset", default="", help="Preset id when validating a pack"
@@ -489,6 +486,9 @@ def main() -> None:
     )
     mastering_p.add_argument("--target-lufs", type=float, default=-14.0)
     mastering_p.add_argument("--ceiling-db", type=float, default=-1.0)
+    mastering_p.add_argument(
+        "--true-peak-oversample", type=int, choices=(1, 2, 4, 8, 16), default=4
+    )
     mastering_p.add_argument("--report", default="", help="Write a mastering report JSON file")
     mproc_p = sub.add_parser(
         "mastering-processor", parents=[common], help="Apply a named mastering processor"
@@ -642,7 +642,8 @@ def main() -> None:
         const="",
         default=None,
         help=(
-            "Render MIDI via NativeSynth preset (default patch when value is omitted); "
+            "Bare flag uses GM program/channel routing and channel-10 drums; a value selects "
+            "a fixed NativeSynth preset; "
             "no --sf2 or --synth-json CLI wiring"
         ),
     )
@@ -675,7 +676,12 @@ def main() -> None:
     midi_render_p.add_argument("--channels", type=int, default=2, help="Render channel count")
     midi_render_p.add_argument("--instrument-latency", type=int, default=0)
     midi_render_p.add_argument(
-        "--synth", default="", help="NativeSynth preset; no --sf2 or --synth-json CLI wiring"
+        "--synth",
+        default="",
+        help=(
+            "NativeSynth preset (default: GM program/channel routing); "
+            "no --sf2 or --synth-json CLI wiring"
+        ),
     )
 
     # Mixing commands

@@ -100,8 +100,9 @@ def synthesize_rir(
 
     Returns:
         A :class:`RirResult`; ``has_error`` is True when the geometry is invalid
-        (the listener/source falls outside the room), in which case ``rir`` is
-        empty.
+        (for example invalid room dimensions or a source/listener outside the
+        room), in which case ``rir`` is empty and ``error_message`` identifies
+        the first acoustic diagnostic.
     """
     lib = _get_lib()
     if not hasattr(lib, "sonare_synthesize_rir"):
@@ -141,10 +142,13 @@ def synthesize_rir(
     )
     _check(rc)
     try:
+        detail = lib.sonare_last_error_message() if out.has_error else None
+        error_message = detail.decode("utf-8") if detail else ""
         return RirResult(
             rir=_float_array_result(out.rir, out.length),
             sample_rate=int(out.sample_rate),
             has_error=bool(out.has_error),
+            error_message=error_message,
         )
     finally:
         lib.sonare_free_rir_synth_result(ctypes.byref(out))

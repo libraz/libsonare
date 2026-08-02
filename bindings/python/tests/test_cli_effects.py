@@ -73,6 +73,68 @@ def test_pitch_shift_cli_reports_semitones_end_to_end() -> None:
         assert payload["length"] > 0
 
 
+def test_voice_change_preset_warns_about_ignored_simple_knobs() -> None:
+    """A realtime preset takes precedence over offline pitch/formant controls."""
+    with tempfile.TemporaryDirectory() as tmpdir:
+        wav_path = os.path.join(tmpdir, "tone.wav")
+        out_path = os.path.join(tmpdir, "changed.wav")
+        _write_test_wav(wav_path, _generate_sine(440, 22050, 0.1), 22050)
+
+        result = _run_cli(
+            [
+                "voice-change",
+                wav_path,
+                "-o",
+                out_path,
+                "--preset",
+                "neutral-monitor",
+                "--pitch-semitones",
+                "5",
+                "--formant-factor",
+                "1.1",
+            ]
+        )
+
+        assert result.returncode == 0, result.stderr
+        assert "warning: --pitch-semitones is ignored" in result.stderr
+        assert "warning: --formant-factor is ignored" in result.stderr
+
+
+def test_voice_change_preset_pack_applies_overrides_end_to_end() -> None:
+    """A preset-pack entry and repeated override syntax render an output WAV."""
+    pack_path = (
+        Path(__file__).parents[3] / "schemas" / "realtime-voice-changer-presets.example.json"
+    )
+    with tempfile.TemporaryDirectory() as tmpdir:
+        wav_path = os.path.join(tmpdir, "tone.wav")
+        out_path = os.path.join(tmpdir, "changed.wav")
+        _write_test_wav(wav_path, _generate_sine(440, 22050, 0.1), 22050)
+
+        result = _run_cli(
+            [
+                "voice-change",
+                wav_path,
+                "-o",
+                out_path,
+                "--preset-pack",
+                str(pack_path),
+                "--preset",
+                "neutral-monitor",
+                "--set",
+                "dsp.outputGainDb=-2",
+                "--set",
+                "dsp.reverb.mix=0.2",
+                "--json",
+            ]
+        )
+
+        assert result.returncode == 0, result.stderr
+        payload = json.loads(result.stdout)
+        assert payload["length"] > 0
+        assert payload["output"] == out_path
+        assert os.path.exists(out_path)
+
+
 def test_normalize_cli_reports_target_db_end_to_end() -> None:
     """normalize emits the requested target level and a non-empty result."""
     with tempfile.TemporaryDirectory() as tmpdir:
@@ -129,7 +191,7 @@ def test_lufs_cli_emits_strict_json_for_silence() -> None:
         assert "Infinity" not in result.stdout
         assert "NaN" not in result.stdout
         payload = json.loads(result.stdout)
-        assert payload["integrated"] is None
+        assert payload["integrated_lufs"] is None
 
 
 def test_project_cli_preserves_common_options_before_subcommand() -> None:
@@ -618,7 +680,7 @@ def test_synthesize_rir_invalid_geometry_exit_code_end_to_end() -> None:
         # A source far outside a 7x5x3 m room forces an invalid-geometry result.
         result = _run_cli(["synthesize-rir", "--output", out_path, "--source-x", "999"])
         assert result.returncode == EXIT_INVALID_PARAMETER, result.stderr
-        assert "invalid room geometry" in result.stderr
+        assert "acoustic.source_outside_room" in result.stderr
 
 
 def _run_cli_env(args: list[str], extra_env: dict[str, str]) -> subprocess.CompletedProcess:
@@ -658,44 +720,15 @@ def test_pcm16_clamps_and_stays_byte_identical() -> None:
     assert cli._pcm16(-2.0) == struct.pack("<h", -32767)
 
 
-def test_voice_macro_override_table_maps_expected_dsp_paths() -> None:
-    """Pin the CLI macro->dsp override table so drift from the C++ copy is caught (L-18)."""
+def test_voice_set_preserves_removed_macro_for_core_validation() -> None:
+    """`macros.*` is no longer CLI sugar and reaches the core as an unknown field."""
     from libsonare import cli
 
-    direct = {
-        "macros.pitch": ("dsp", "retune", "semitones"),
-        "macros.formant": ("dsp", "formant", "factor"),
-        "macros.space": ("dsp", "reverb", "mix"),
-        "macros.output": ("dsp", "outputGainDb"),
-    }
-    for macro, dsp_path in direct.items():
-        root: dict = {}
-        cli._apply_voice_macro_override(root, macro, 0.5)
-        cursor: object = root
-        for part in dsp_path:
-            cursor = cursor[part]  # type: ignore[index]
-        assert cursor == 0.5
-
-    # macros.intensity applies the ratio = 1 + value * 4 transform.
-    root = {}
-    cli._apply_voice_macro_override(root, "macros.intensity", 0.5)
-    assert root["dsp"]["compressor"]["ratio"] == 1.0 + 0.5 * 4.0
-
-    # Exactly the five documented macros are recognised.
-    recognised = []
-    for name in ("pitch", "formant", "space", "intensity", "output"):
-        probe: dict = {}
-        cli._apply_voice_macro_override(probe, f"macros.{name}", 1.0)
-        recognised.append(bool(probe))
-    assert recognised == [True] * 5
-
-    # Unknown macros and non-numeric values are no-ops.
-    probe = {}
-    cli._apply_voice_macro_override(probe, "macros.unknown", 1.0)
-    assert probe == {}
-    probe = {}
-    cli._apply_voice_macro_override(probe, "macros.pitch", "not-a-number")
-    assert probe == {}
+    preset: dict[str, object] = {"dsp": {"retune": {"semitones": 0}}}
+    resolved = cli._apply_voice_sets(preset, ["macros.pitch=12"])
+    assert isinstance(resolved, dict)
+    assert resolved["macros"] == {"pitch": 12}
+    assert resolved["dsp"] == {"retune": {"semitones": 0}}
 
 
 def test_voice_preset_validate_help_describes_a_preset_file() -> None:
@@ -722,6 +755,20 @@ def test_voice_preset_validate_normalizes_a_preset_file() -> None:
         assert result.returncode == 0, result.stderr
         payload = json.loads(result.stdout)
         assert isinstance(payload, dict)
+
+
+def test_voice_preset_validate_accepts_native_preset_json_alias() -> None:
+    """The native CLI's ``--preset-json`` spelling remains cross-CLI compatible."""
+    preset = _run_cli(["voice-preset", "--preset", "neutral-monitor", "--json"])
+    assert preset.returncode == 0, preset.stderr
+    with tempfile.TemporaryDirectory() as tmpdir:
+        preset_path = os.path.join(tmpdir, "preset.json")
+        with open(preset_path, "w", encoding="utf-8") as fh:
+            fh.write(preset.stdout)
+        result = _run_cli(["voice-preset-validate", "--preset-json", preset_path, "--json"])
+        assert result.returncode == 0, result.stderr
+        payload = json.loads(result.stdout)
+        assert payload["ok"] is True
 
 
 def test_voice_preset_validate_rejects_an_invalid_preset_file() -> None:

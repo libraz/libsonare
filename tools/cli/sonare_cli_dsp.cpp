@@ -133,7 +133,8 @@ int cmd_filter(const CliArgs& args, const Audio& audio) {
     if (order == 4) {
       CascadedBiquad cascade =
           is_hp ? highpass_coeffs_4th(cutoff, sr) : lowpass_coeffs_4th(cutoff, sr);
-      result = apply_cascade_filtfilt(audio.data(), audio.size(), cascade);
+      result = zero_phase ? apply_cascade_filtfilt(audio.data(), audio.size(), cascade)
+                          : apply_cascade(audio.data(), audio.size(), cascade);
     } else {
       BiquadCoeffs coeffs = is_hp ? highpass_coeffs(cutoff, sr) : lowpass_coeffs(cutoff, sr);
       result = zero_phase ? apply_biquad_filtfilt(audio.data(), audio.size(), coeffs)

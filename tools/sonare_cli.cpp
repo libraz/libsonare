@@ -79,7 +79,8 @@ const std::vector<CommandInfo>& get_commands() {
        false},
 #endif
 #ifdef SONARE_WITH_MIXING
-      {"mix", "Apply mixer strip processing", cmd_mix, true},
+      {"mix-strip", "Apply a single-input channel strip", cmd_mix, true},
+      {"mix", "Deprecated alias for mix-strip", cmd_mix, true},
       {"mixing-presets", "List built-in mixer scene presets", cmd_mixing_presets, false},
       {"mixing-preset", "Print a built-in mixer scene preset JSON", cmd_mixing_preset, false},
 #endif
@@ -141,7 +142,7 @@ void print_usage(const char* prog) {
   for (const auto& cmd : get_commands()) {
     if (cmd.name == "pitch-shift") std::cerr << "\nPROCESSING COMMANDS:\n";
     if (cmd.name == "mel") std::cerr << "\nFEATURE COMMANDS:\n";
-    if (cmd.name == "info") std::cerr << "\nUTILITY COMMANDS:\n";
+    if (cmd.name == "frames-to-samples") std::cerr << "\nUTILITY COMMANDS:\n";
     fprintf(stderr, "  %-14s %s\n", cmd.name.c_str(), cmd.description.c_str());
   }
   std::cerr << "  version        Show library version\n";
@@ -155,10 +156,25 @@ void print_usage(const char* prog) {
             << "  -o, --output       Output file path\n"
             << "  --n-fft <int>      FFT size (default: 2048)\n"
             << "  --hop-length <int> Hop length (default: 512)\n"
+            << "  --n-mels <int>     Mel bands (default: 128; mel/timbre/inversion commands)\n"
+            << "  --fmin <hz>        Minimum analysis/synthesis frequency (where supported)\n"
+            << "  --fmax <hz>        Maximum analysis/synthesis frequency (where supported)\n"
             << "\nExamples:\n"
             << "  " << prog << " analyze music.mp3\n"
             << "  " << prog << " bpm music.wav --json\n"
             << "  " << prog << " pitch-shift --semitones 3 input.wav -o output.wav\n";
+}
+
+void print_command_usage(const char* prog, const CommandInfo& command) {
+  std::cerr << "Usage: " << prog << " " << command.name << " [options]";
+  if (command.requires_audio) std::cerr << " <audio_file>";
+  std::cerr << "\n\n" << command.description << "\n";
+  const auto options = cli_options_for_command(command.name);
+  if (!options.empty()) {
+    std::cerr << "\nOPTIONS:\n";
+    for (const auto& option : options) std::cerr << "  " << option << "\n";
+  }
+  std::cerr << "\nUse '" << prog << " --help' for shared output options.\n";
 }
 
 // ============================================================================
@@ -219,6 +235,7 @@ int exit_code_for(const sonare::SonareException& error) noexcept {
 }  // namespace
 
 int main(int argc, char* argv[]) {
+  color::configure();
   if (argc < 2) {
     print_usage(argv[0]);
     return kExitUsage;
@@ -227,7 +244,7 @@ int main(int argc, char* argv[]) {
   try {
     CliArgs args = ArgParser::parse(argc, argv);
 
-    if (args.help) {
+    if (args.help && args.command.empty()) {
       print_usage(argv[0]);
       return 0;
     }
@@ -249,12 +266,21 @@ int main(int argc, char* argv[]) {
       return kExitUsage;
     }
 
+    if (args.help) {
+      if (cmd) {
+        print_command_usage(argv[0], *cmd);
+      } else {
+        print_usage(argv[0]);
+      }
+      return 0;
+    }
+
     const std::string argument_error =
         validate_cli_arguments(args, cmd ? cmd->requires_audio : false);
     if (!argument_error.empty()) {
       std::cerr << color::red << "Error: " << argument_error << color::reset << "\n\n";
       print_usage(argv[0]);
-      return kExitUsage;
+      return kExitInvalidParameter;
     }
 
     // Version/doctor/system-info have no audio and are dispatched only after their
@@ -298,7 +324,8 @@ int main(int argc, char* argv[]) {
     // load_audio, so any multi-channel input silently loses its channels
     // (metering skews, and an audio-producing command like `eq` writes a mono
     // file). Warn uniformly instead of only for a hand-picked few commands.
-    if (source_channels > 1) {
+    if (source_channels > 1 &&
+        ((args.command != "mix" && args.command != "mix-strip") || source_channels != 2)) {
       std::cerr << "warning: " << source_channels
                 << "-channel input is downmixed to mono by this CLI command; use the stereo "
                    "library API for channel-preserving processing\n";

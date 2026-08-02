@@ -13,6 +13,12 @@
 #include <stdexcept>
 #include <thread>
 
+#if defined(_WIN32)
+#include <io.h>
+#else
+#include <unistd.h>
+#endif
+
 #ifdef __APPLE__
 #include <mach/mach.h>
 #include <sys/sysctl.h>
@@ -182,6 +188,9 @@ float parse_float_strict(const std::string& option, const std::string& value) {
   if (consumed != value.size()) {
     throw std::invalid_argument("invalid numeric value for --" + option + ": " + value);
   }
+  if (!std::isfinite(parsed)) {
+    throw std::invalid_argument("numeric value for --" + option + " must be finite: " + value);
+  }
   return parsed;
 }
 
@@ -286,6 +295,7 @@ bool ArgParser::try_parse_global_option(CliArgs& args, const std::string& arg, c
     } catch (const std::out_of_range&) {
       throw std::invalid_argument("value out of range for " + option + ": " + value);
     }
+    if (option != "-o" && option != "--output") args.global_options.push_back(option.substr(2));
     // A parse failure (std::invalid_argument, already naming the option)
     // propagates to main and maps to the structured invalid-parameter exit,
     // matching the command-level option path.
@@ -313,6 +323,7 @@ bool ArgParser::try_parse_global_option(CliArgs& args, const std::string& arg, c
     } catch (const std::out_of_range&) {
       throw std::invalid_argument("value out of range for " + option + ": " + value);
     }
+    if (option != "-o" && option != "--output") args.global_options.push_back(option.substr(2));
     return true;
   }
 }
@@ -363,10 +374,10 @@ void ArgParser::parse_option(CliArgs& args, const std::string& key, char* argv[]
       {"no-pad", Arity::Flag},         {"percussive-only", Arity::Flag},
       {"proportional-q", Arity::Flag}, {"sabine", Arity::Flag},
       {"series", Arity::Flag},         {"stereo", Arity::Flag},
-      {"triads-only", Arity::Flag},    {"use-hmm", Arity::Flag},
-      {"use-hpss", Arity::Flag},       {"with-residual", Arity::Flag},
-      {"with-seventh", Arity::Flag},   {"zero-phase", Arity::Flag},
-      {"synth", Arity::OptionalValue},
+      {"strict", Arity::Flag},         {"triads-only", Arity::Flag},
+      {"use-hmm", Arity::Flag},        {"use-hpss", Arity::Flag},
+      {"with-residual", Arity::Flag},  {"with-seventh", Arity::Flag},
+      {"zero-phase", Arity::Flag},     {"synth", Arity::OptionalValue},
   };
   const auto found = arities.find(key);
   const Arity arity = found == arities.end() ? Arity::RequiredValue : found->second;
@@ -484,6 +495,7 @@ const std::map<std::string, CommandOptionSchema>& command_option_schemas() {
       {"mastering-stereo-analyze", {{"analysis", "reference", "params"}, {}, {}}},
       {"mixing-preset", {{"preset"}, {}, {}}},
       {"mix", {{"input-trim-db", "fader-db", "pan", "pan-mode", "width"}, {}, {}}},
+      {"mix-strip", {{"input-trim-db", "fader-db", "pan", "pan-mode", "width"}, {}, {}}},
       {"pitch", {{"threshold", "algorithm"}, {}, {}}},
       {"tempogram", {{"win-length"}, {}, {}}},
       {"fourier-tempogram", {{"win-length"}, {}, {}}},
@@ -537,7 +549,7 @@ const std::map<std::string, CommandOptionSchema>& command_option_schemas() {
       {"project",
        {{"in", "project", "sample-rate", "frames", "block-size", "channels", "instrument-latency",
          "smf", "midi2"},
-        {},
+        {"strict"},
         {"synth"}}},
   };
   return schemas;
@@ -545,6 +557,80 @@ const std::map<std::string, CommandOptionSchema>& command_option_schemas() {
 
 bool contains(const std::vector<std::string>& values, const std::string& value) {
   return std::find(values.begin(), values.end(), value) != values.end();
+}
+
+// These options are parsed before command options because they populate common
+// DSP configuration fields. Keep their acceptance command-scoped: accepting a
+// global option that a handler cannot consume is indistinguishable from silently
+// ignoring a misspelled or misplaced option.
+bool command_accepts_global_option(const std::string& command, const std::string& option) {
+  static const std::map<std::string, std::vector<std::string>> accepted = {
+      {"n-fft",
+       {"key",
+        "chords",
+        "sections",
+        "timbre",
+        "pitch-shift",
+        "time-stretch",
+        "pitch-correct",
+        "note-stretch",
+        "hpss",
+        "trim-silence",
+        "split-silence",
+        "mel",
+        "chroma",
+        "tonnetz",
+        "spectral",
+        "onset-env",
+        "onset-envelope",
+        "tempogram",
+        "fourier-tempogram",
+        "tempogram-ratio",
+        "mel-to-audio",
+        "mfcc-to-audio",
+        "frames-to-samples",
+        "samples-to-frames",
+        "frame-signal"}},
+      {"hop-length",
+       {"key",
+        "beats",
+        "downbeats",
+        "onsets",
+        "chords",
+        "sections",
+        "timbre",
+        "pitch-shift",
+        "time-stretch",
+        "pitch-correct",
+        "note-stretch",
+        "hpss",
+        "trim-silence",
+        "split-silence",
+        "mel",
+        "chroma",
+        "tonnetz",
+        "spectral",
+        "pitch",
+        "onset-env",
+        "onset-envelope",
+        "tempogram",
+        "fourier-tempogram",
+        "tempogram-ratio",
+        "plp",
+        "nnls-chroma",
+        "cqt",
+        "vqt",
+        "mel-to-audio",
+        "mfcc-to-audio",
+        "frames-to-samples",
+        "samples-to-frames",
+        "frame-signal"}},
+      {"n-mels", {"timbre", "mel", "mel-to-audio", "mfcc-to-audio"}},
+      {"fmin", {"mel", "pitch", "cqt", "vqt", "mel-to-audio", "mfcc-to-audio", "chirp"}},
+      {"fmax", {"mel", "pitch", "mel-to-audio", "mfcc-to-audio", "chirp"}},
+  };
+  const auto it = accepted.find(option);
+  return it != accepted.end() && contains(it->second, command);
 }
 
 // Commands that render a file artifact and therefore legitimately consume the
@@ -585,6 +671,7 @@ bool command_produces_output(const std::string& command) {
       "mastering-pair-processor",
       "eq",
       "mix",
+      "mix-strip",
       // Headless project: new/validate/bounce/import/export write files.
       "project",
   };
@@ -593,11 +680,33 @@ bool command_produces_output(const std::string& command) {
 
 }  // namespace
 
+std::vector<std::string> cli_options_for_command(const std::string& command) {
+  std::vector<std::string> options;
+  const auto schema_it = command_option_schemas().find(command);
+  if (schema_it != command_option_schemas().end()) {
+    for (const auto& value : schema_it->second.values) options.push_back("--" + value + " <value>");
+    for (const auto& flag : schema_it->second.flags) options.push_back("--" + flag);
+    for (const auto& value : schema_it->second.optional_values)
+      options.push_back("--" + value + " [value]");
+  }
+  for (const char* global : {"n-fft", "hop-length", "n-mels", "fmin", "fmax"}) {
+    if (command_accepts_global_option(command, global))
+      options.push_back(std::string("--") + global + " <value>");
+  }
+  return options;
+}
+
 std::string validate_cli_arguments(const CliArgs& args, bool requires_audio) {
   const auto schema_it = command_option_schemas().find(args.command);
   const CommandOptionSchema empty;
   const CommandOptionSchema& schema =
       schema_it == command_option_schemas().end() ? empty : schema_it->second;
+
+  for (const auto& key : args.global_options) {
+    if (!command_accepts_global_option(args.command, key)) {
+      return "Unknown option '--" + key + "' for command '" + args.command + "'";
+    }
+  }
 
   for (const auto& option : args.options) {
     const std::string& key = option.first;
@@ -617,6 +726,11 @@ std::string validate_cli_arguments(const CliArgs& args, bool requires_audio) {
   // no file). Output-capable commands consume it in their handlers.
   if (!args.output_file.empty() && !command_produces_output(args.command)) {
     return "Command '" + args.command + "' does not produce a file output; remove -o/--output";
+  }
+  if (args.command == "project" && !args.output_file.empty() &&
+      (args.input_file == "abi" || args.input_file == "compile" ||
+       args.input_file == "synth-presets")) {
+    return "project " + args.input_file + " does not produce a file output; remove -o/--output";
   }
 
   size_t max_positionals = requires_audio ? 1u : 0u;
@@ -644,14 +758,31 @@ Stats Stats::compute(const std::vector<float>& v) {
 }
 
 namespace color {
-const char* reset = "\033[0m";
-const char* bold = "\033[1m";
-const char* cyan = "\033[36m";
-const char* green = "\033[32m";
-const char* magenta = "\033[35m";
-const char* yellow = "\033[33m";
-const char* blue = "\033[34m";
-const char* red = "\033[31m";
+const char* reset = "";
+const char* bold = "";
+const char* cyan = "";
+const char* green = "";
+const char* magenta = "";
+const char* yellow = "";
+const char* blue = "";
+const char* red = "";
+
+void configure() {
+#if defined(_WIN32)
+  const bool interactive = _isatty(_fileno(stdout)) && _isatty(_fileno(stderr));
+#else
+  const bool interactive = isatty(STDOUT_FILENO) && isatty(STDERR_FILENO);
+#endif
+  const bool enabled = std::getenv("NO_COLOR") == nullptr && interactive;
+  reset = enabled ? "\033[0m" : "";
+  bold = enabled ? "\033[1m" : "";
+  cyan = enabled ? "\033[36m" : "";
+  green = enabled ? "\033[32m" : "";
+  magenta = enabled ? "\033[35m" : "";
+  yellow = enabled ? "\033[33m" : "";
+  blue = enabled ? "\033[34m" : "";
+  red = enabled ? "\033[31m" : "";
+}
 }  // namespace color
 
 namespace system_info {

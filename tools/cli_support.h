@@ -56,6 +56,9 @@ struct CliArgs {
   float fmax = 0.0f;
 
   std::map<std::string, std::string> options;
+  // Global DSP options are parsed into dedicated fields above, but their
+  // spelling must still be validated against the selected command.
+  std::vector<std::string> global_options;
   std::vector<std::string> positionals;
   std::vector<std::string> missing_value_options;
 
@@ -68,6 +71,7 @@ struct CliArgs {
 /// Validates command-specific option names, required option values, and
 /// positional arity. Returns an empty string when the invocation is valid.
 std::string validate_cli_arguments(const CliArgs& args, bool requires_audio);
+std::vector<std::string> cli_options_for_command(const std::string& command);
 
 class ArgParser {
  public:
@@ -90,6 +94,10 @@ struct Stats {
 };
 
 namespace color {
+/// Configure ANSI escape sequences for interactive terminals. `NO_COLOR` and
+/// either redirected standard stream disable them, keeping CLI output safe for
+/// pipes, files, and machine parsers.
+void configure();
 extern const char* reset;
 extern const char* bold;
 extern const char* cyan;

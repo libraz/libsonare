@@ -70,6 +70,7 @@ def test_synthesize_rir_flags_invalid_geometry() -> None:
     result = libsonare.synthesize_rir(7.0, 5.0, 3.0, source=(99.0, 1.0, 1.2))
     assert result.has_error is True
     assert len(result.rir) == 0
+    assert "acoustic.source_outside_room" in result.error_message
 
 
 @acoustic

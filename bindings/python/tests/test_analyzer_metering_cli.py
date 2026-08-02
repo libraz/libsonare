@@ -207,9 +207,9 @@ def test_cli_lufs_silence_series_emits_strict_json() -> None:
         assert result.returncode == 0, result.stderr
         payload = json.loads(result.stdout, parse_constant=reject_nonfinite)
 
-    assert payload["integrated"] is None
-    assert payload["momentary"] is None
-    assert payload["short_term"] is None
+    assert payload["integrated_lufs"] is None
+    assert payload["momentary_lufs"] is None
+    assert payload["short_term_lufs"] is None
     assert payload["momentary_series"]
     assert payload["short_term_series"]
     assert all(value is None for value in payload["momentary_series"])
@@ -288,16 +288,14 @@ def test_cli_legacy_exit_code_folds_failures_to_one() -> None:
     assert result.returncode == 1
 
 
-def test_mastering_pair_analyze_cli_resamples_reference_rate(monkeypatch, capsys) -> None:
-    """The pair-analysis CLI resamples reference audio to the master sample rate."""
+def test_mastering_pair_analyze_cli_rejects_reference_rate_mismatch(monkeypatch) -> None:
+    """Pair analysis requires source and reference audio to use the same rate."""
     import argparse
 
-    import libsonare
     from libsonare import cli
 
     source_samples = _generate_sine(440, 48000, 0.01)
     reference_samples = _generate_sine(440, 44100, 0.01)
-    calls: dict[str, object] = {}
 
     def fake_load_audio(path: str) -> tuple[list[float], int]:
         if path == "master.wav":
@@ -306,40 +304,15 @@ def test_mastering_pair_analyze_cli_resamples_reference_rate(monkeypatch, capsys
             return reference_samples, 44100
         raise AssertionError(path)
 
-    def fake_mastering_pair_analyze(
-        analysis: str,
-        source: list[float],
-        reference: list[float],
-        *,
-        sample_rate: int,
-    ) -> str:
-        calls["analysis"] = analysis
-        calls["source"] = source
-        calls["reference"] = reference
-        calls["sample_rate"] = sample_rate
-        return '{"ok":true}'
-
     monkeypatch.setattr(cli, "_load_audio", fake_load_audio)
-    monkeypatch.setattr(libsonare, "mastering_pair_analyze", fake_mastering_pair_analyze)
 
     args = argparse.Namespace(
         analysis="match.referenceLoudness",
         file="master.wav",
         reference="reference.wav",
     )
-    assert cli.cmd_mastering_pair_analyze(args) == 0
-
-    assert calls["analysis"] == "match.referenceLoudness"
-    assert calls["source"] == source_samples
-    assert calls["sample_rate"] == 48000
-    # The reference is resampled 44.1 -> 48 kHz through the native resampler,
-    # which differs numerically from the linear-interpolation fallback.
-    reference = calls["reference"]
-    expected_len = round(len(reference_samples) * 48000 / 44100)
-    assert len(reference) == expected_len
-    linear = cli._resample_linear(reference_samples, 44100, 48000)
-    assert reference != pytest.approx(linear)
-    assert capsys.readouterr().out.strip() == '{"ok":true}'
+    with pytest.raises(ValueError, match="reference sample rate must match input sample rate"):
+        cli.cmd_mastering_pair_analyze(args)
 
 
 def test_project_cli_exports_smf_and_midi_render_smoke() -> None:

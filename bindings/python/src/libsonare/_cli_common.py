@@ -308,7 +308,7 @@ def _write_wav_stereo(path: str, left: list[float], right: list[float], sample_r
 def _write_project_bounce_wav(path: str, audio: object, sample_rate: int) -> tuple[int, int]:
     """Write a Project.bounce ndarray to WAV and return (frames, written channels)."""
     frames = len(cast(Any, audio))
-    shape = getattr(audio, "shape", ())
+    shape = cast(tuple[int, ...], getattr(audio, "shape", ()))
     if len(shape) >= 2:
         channels = max(1, int(shape[1]))
     else:
@@ -531,27 +531,6 @@ def _set_nested_value(root: dict[str, Any], path: str, value: object) -> None:
     cursor[parts[-1]] = value
 
 
-def _apply_voice_macro_override(root: dict[str, Any], path: str, value: object) -> None:
-    # Maps the UI macro names (pitch/formant/space/intensity/output) to
-    # concrete dsp.* paths so `--set macros.X=...` from the CLI is convenient.
-    # CLI-only sugar; the core loader treats `dsp` as authoritative and never
-    # derives dsp from macros.
-    # Keep the mapping in sync with `apply_voice_macro_override` in
-    # tools/sonare_cli.cpp.
-    if not isinstance(value, (int, float)):
-        return
-    if path == "macros.pitch":
-        _set_nested_value(root, "dsp.retune.semitones", value)
-    elif path == "macros.formant":
-        _set_nested_value(root, "dsp.formant.factor", value)
-    elif path == "macros.space":
-        _set_nested_value(root, "dsp.reverb.mix", value)
-    elif path == "macros.intensity":
-        _set_nested_value(root, "dsp.compressor.ratio", 1.0 + value * 4.0)
-    elif path == "macros.output":
-        _set_nested_value(root, "dsp.outputGainDb", value)
-
-
 def _apply_voice_sets(
     preset: str | dict[str, Any], assignments: list[str] | None
 ) -> str | dict[str, Any]:
@@ -568,7 +547,6 @@ def _apply_voice_sets(
             path, raw = assignment.split("=", 1)
             value = _parse_voice_set_value(raw)
             _set_nested_value(root, path, value)
-            _apply_voice_macro_override(root, path, value)
     return root
 
 
@@ -657,6 +635,7 @@ def _parse_key_profile(value: str) -> KeyProfile:
         "edmm": KeyProfile.FARALDO_EDMM,
         "bellman-budge": KeyProfile.BELLMAN_BUDGE,
         "bellman": KeyProfile.BELLMAN_BUDGE,
+        "budge": KeyProfile.BELLMAN_BUDGE,
     }
     key = value.lower()
     if key not in names:

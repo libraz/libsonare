@@ -554,8 +554,13 @@ int cmd_synthesize_rir(const CliArgs& args, const Audio&) {
   const auto result =
       sonare::acoustic::synthesize_rir(cli_room(args, 0.2f), cli_placement(args), sample_rate, cfg);
   if (sonare::has_error(result.diagnostics)) {
-    std::cerr << color::red << "Error: invalid room geometry (source/listener outside the room)"
-              << color::reset << "\n";
+    for (const sonare::Diagnostic& diagnostic : result.diagnostics) {
+      if (diagnostic.severity == sonare::Diagnostic::Severity::Error) {
+        std::cerr << color::red << "Error: " << diagnostic.code << ": " << diagnostic.message
+                  << color::reset << "\n";
+        return 1;
+      }
+    }
     return 1;
   }
   save_wav(args.output_file, result.rir.data(), result.rir.size(), result.rir.sample_rate());

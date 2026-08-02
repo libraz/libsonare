@@ -145,6 +145,8 @@ def cmd_note_stretch(args: argparse.Namespace) -> int:
 def cmd_pitch_shift(args: argparse.Namespace) -> int:
     from . import pitch_shift
 
+    if args.semitones is None:
+        raise ValueError("--semitones required")
     samples, sr = _load_audio(args.file)
     result = pitch_shift(samples, sample_rate=sr, semitones=args.semitones)
 
@@ -160,6 +162,8 @@ def cmd_pitch_shift(args: argparse.Namespace) -> int:
 def cmd_time_stretch(args: argparse.Namespace) -> int:
     from . import time_stretch
 
+    if args.rate is None:
+        raise ValueError("--rate required")
     samples, sr = _load_audio(args.file)
     result = time_stretch(samples, sample_rate=sr, rate=args.rate)
 
@@ -236,7 +240,17 @@ def cmd_voice_change(args: argparse.Namespace) -> int:
     from . import realtime_voice_changer_preset_json, voice_change, voice_change_realtime
 
     samples, sr = _load_audio(args.file)
-    if args.preset or args.preset_json or args.preset_pack or args.set:
+    uses_realtime_preset = bool(args.preset or args.preset_json or args.preset_pack or args.set)
+    if uses_realtime_preset:
+        for flag, value in (
+            ("--pitch-semitones", args.pitch_semitones),
+            ("--formant-factor", args.formant_factor),
+        ):
+            if value is not None:
+                print(
+                    f"warning: {flag} is ignored when a realtime voice preset is selected",
+                    file=sys.stderr,
+                )
         preset: str | dict[str, Any]
         if args.preset_json:
             with open(args.preset_json, encoding="utf-8") as fh:
@@ -258,8 +272,8 @@ def cmd_voice_change(args: argparse.Namespace) -> int:
         result = voice_change(
             samples,
             sample_rate=sr,
-            pitch_semitones=args.pitch_semitones,
-            formant_factor=args.formant_factor,
+            pitch_semitones=args.pitch_semitones if args.pitch_semitones is not None else 0.0,
+            formant_factor=args.formant_factor if args.formant_factor is not None else 1.0,
         )
 
     return _emit_effect_result(args, result, sr, label="Voice change")
@@ -288,12 +302,15 @@ def cmd_voice_preset(args: argparse.Namespace) -> int:
 def cmd_voice_preset_validate(args: argparse.Namespace) -> int:
     from . import validate_realtime_voice_changer_preset_json
 
+    path = args.preset_json or args.file
+    if not path:
+        raise ValueError("voice-preset-validate requires a JSON file")
     if args.preset:
-        preset = _load_voice_preset_pack(args.file, args.preset)
+        preset = _load_voice_preset_pack(path, args.preset)
         updated_preset = _apply_voice_sets(preset, args.set)
         text = json.dumps(updated_preset)
     else:
-        with open(args.file, encoding="utf-8") as fh:
+        with open(path, encoding="utf-8") as fh:
             text = fh.read()
         text_or_preset = _apply_voice_sets(text, args.set)
         text = json.dumps(text_or_preset) if isinstance(text_or_preset, dict) else text_or_preset
@@ -407,7 +424,8 @@ def cmd_synthesize_rir(args: argparse.Namespace) -> int:
         prefer_eyring=not args.sabine,
     )
     if result.has_error:
-        print("Error: invalid room geometry (source/listener outside the room)", file=sys.stderr)
+        detail = getattr(result, "error_message", "")
+        print(f"Error: {detail or 'invalid room geometry'}", file=sys.stderr)
         return 1 if _legacy_exit_codes() else EXIT_INVALID_PARAMETER
     _write_wav(args.output, result.rir, result.sample_rate)
     if args.json:

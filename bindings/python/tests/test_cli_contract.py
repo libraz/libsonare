@@ -113,6 +113,15 @@ TOP_LEVEL_ROUTES = (
     "mix",
 )
 
+
+def test_key_profile_aliases_match_native_cli() -> None:
+    """Every documented native key-profile alias is accepted by Python too."""
+    from libsonare._cli_common import _parse_key_profile
+    from libsonare.types import KeyProfile
+
+    assert _parse_key_profile("budge") is KeyProfile.BELLMAN_BUDGE
+
+
 PROJECT_ROUTES = (
     "abi",
     "new",
@@ -266,8 +275,15 @@ def test_fft_consumer_commands_run_end_to_end(tmp_path, command) -> None:
     json.loads(result.stdout)
 
 
-@pytest.mark.parametrize("command", ["pitch-shift", "time-stretch", "hpss"])
-def test_effect_commands_require_output(tmp_path, command) -> None:
+@pytest.mark.parametrize(
+    ("command", "effect_args"),
+    [
+        ("pitch-shift", ("--semitones", "0")),
+        ("time-stretch", ("--rate", "1")),
+        ("hpss", ()),
+    ],
+)
+def test_effect_commands_require_output(tmp_path, command, effect_args) -> None:
     """Audio-rendering effect commands require -o, matching the native CLI.
 
     Running one without an output destination is a parameter error (exit 3), not
@@ -276,11 +292,44 @@ def test_effect_commands_require_output(tmp_path, command) -> None:
     """
     source = tmp_path / "tone.wav"
     _write_tone_wav(source)
-    missing = _run_console(command, str(source))
+    missing = _run_console(command, str(source), *effect_args)
     assert missing.returncode == 3, missing.stderr
     out = tmp_path / "out.wav"
-    ok = _run_console(command, str(source), "-o", str(out))
+    ok = _run_console(command, str(source), "-o", str(out), *effect_args)
     assert ok.returncode == 0, ok.stderr
+
+
+@pytest.mark.parametrize(
+    ("command", "required_flag"),
+    [("pitch-shift", "--semitones required"), ("time-stretch", "--rate required")],
+)
+def test_transform_commands_require_their_primary_parameter(
+    tmp_path, command, required_flag
+) -> None:
+    """Primary transform parameters cannot silently select their no-op defaults."""
+    source = tmp_path / "tone.wav"
+    output = tmp_path / "out.wav"
+    _write_tone_wav(source)
+
+    result = _run_console(command, str(source), "-o", str(output))
+    assert result.returncode == 3
+    assert required_flag in result.stderr
+
+
+def test_cli_invalid_parameter_exit_code_matches_native_pitch_command(tmp_path) -> None:
+    """Semantic validation happens after parsing and uses exit 3 on both CLIs."""
+    source = tmp_path / "tone.wav"
+    _write_tone_wav(source)
+
+    result = _run_console("pitch", str(source), "--algorithm", "typo")
+    assert result.returncode == 3
+    assert "--algorithm must be 'yin' or 'pyin'" in result.stderr
+
+
+def test_cli_unknown_project_subcommand_is_a_usage_error(tmp_path) -> None:
+    """An unknown project route stays an argparse-style usage error (exit 2)."""
+    result = _run_console("project", "not-a-subcommand")
+    assert result.returncode == 2
 
 
 def test_pitch_correct_cli_reaches_requested_pitch(tmp_path) -> None:
@@ -316,14 +365,13 @@ def test_pitch_correct_cli_reaches_requested_pitch(tmp_path) -> None:
     assert abs(cents_error) < 5.0
 
 
-def test_project_import_smf_cli_rejects_salvaged_truncation(tmp_path) -> None:
+def test_project_import_smf_cli_preserves_salvaged_truncation(tmp_path) -> None:
     source = tmp_path / "truncated.mid"
     output = tmp_path / "project.json"
     source.write_bytes(_truncated_smf())
     result = _run_console("project", "import-smf", "--smf", str(source), "--output", str(output))
-    assert result.returncode != 0
-    assert "truncated" in result.stderr
-    assert not output.exists()
+    assert result.returncode == 0, result.stderr
+    assert output.exists()
 
 
 def test_trim_silence_output_is_optional(tmp_path) -> None:
@@ -405,6 +453,61 @@ def test_project_synth_presets_route_is_installed_smoke() -> None:
     payload = json.loads(result.stdout)
     assert isinstance(payload["presets"], list)
     assert payload["presets"]
+
+
+def test_info_and_lufs_json_match_the_native_cli_schema(tmp_path) -> None:
+    """The shared CLI commands expose the native canonical JSON field names."""
+    source = tmp_path / "tone.wav"
+    _write_tone_wav(source)
+
+    info_result = _run_console("info", "--json", str(source))
+    assert info_result.returncode == 0, info_result.stderr
+    info = json.loads(info_result.stdout)
+    assert set(info) == {
+        "path",
+        "duration",
+        "sample_rate",
+        "channels",
+        "samples",
+        "peak_db",
+        "rms_db",
+    }
+    assert info["path"] == str(source)
+    assert info["channels"] == 1
+
+    lufs_result = _run_console("lufs", "--json", str(source))
+    assert lufs_result.returncode == 0, lufs_result.stderr
+    lufs = json.loads(lufs_result.stdout)
+    assert set(lufs) == {"integrated_lufs", "momentary_lufs", "short_term_lufs", "loudness_range"}
+
+    analyze_result = _run_console("analyze", "--json", str(source))
+    assert analyze_result.returncode == 0, analyze_result.stderr
+    analyze = json.loads(analyze_result.stdout)
+    assert set(analyze) == {
+        "bpm",
+        "bpmConfidence",
+        "key",
+        "timeSignature",
+        "beats",
+        "chords",
+        "sections",
+        "timbre",
+        "dynamics",
+        "rhythm",
+        "form",
+    }
+    assert isinstance(analyze["beats"], list)
+
+
+def test_mastering_cli_uses_requested_true_peak_oversample(tmp_path) -> None:
+    """Mastering forwards the CLI oversampling factor and reports the applied value."""
+    source = tmp_path / "tone.wav"
+    _write_tone_wav(source)
+
+    result = _run_console("mastering", "--json", "--true-peak-oversample", "8", str(source))
+
+    assert result.returncode == 0, result.stderr
+    assert json.loads(result.stdout)["true_peak_oversample"] == 8
 
 
 @pytest.mark.parametrize(

@@ -121,6 +121,10 @@ def test_pitch_correct_timevarying_scale_and_knobs() -> None:
         libsonare.pitch_correct_timevarying(
             samples, f0, sample_rate=sr, hop_length=hop, target_midi=200.0
         )
+    with pytest.raises(ValueError, match="mode must be"):
+        libsonare.pitch_correct_timevarying(
+            samples, f0, sample_rate=sr, hop_length=hop, mode="Scale"
+        )
 
 
 def test_note_stretch_function() -> None:

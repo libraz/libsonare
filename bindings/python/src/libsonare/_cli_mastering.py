@@ -60,6 +60,7 @@ def _write_mastering_report(path: str, report: Any) -> None:
 def cmd_mastering(args: argparse.Namespace) -> int:
     samples, sr = _load_audio(args.file)
     report_path = getattr(args, "report", "")
+    result: Any
     if report_path:
         from . import mastering_chain
 
@@ -71,6 +72,7 @@ def cmd_mastering(args: argparse.Namespace) -> int:
                     "enabled": True,
                     "targetLufs": args.target_lufs,
                     "ceilingDb": args.ceiling_db,
+                    "truePeakOversample": args.true_peak_oversample,
                 }
             },
         )
@@ -78,7 +80,9 @@ def cmd_mastering(args: argparse.Namespace) -> int:
         from .audio import Audio
 
         result = Audio.from_buffer(samples, sr).mastering(
-            target_lufs=args.target_lufs, ceiling_db=args.ceiling_db
+            target_lufs=args.target_lufs,
+            ceiling_db=args.ceiling_db,
+            true_peak_oversample=args.true_peak_oversample,
         )
 
     if args.output:
@@ -93,7 +97,7 @@ def cmd_mastering(args: argparse.Namespace) -> int:
             "applied_gain_db": round(result.applied_gain_db, 4),
             "target_lufs": args.target_lufs,
             "ceiling_db": args.ceiling_db,
-            "true_peak_oversample": 4,
+            "true_peak_oversample": args.true_peak_oversample,
             "latency_samples": getattr(result, "latency_samples", 0),
             "sample_rate": result.sample_rate,
             "output": args.output or "",
@@ -115,6 +119,7 @@ def cmd_mastering_processor(args: argparse.Namespace) -> int:
     samples, sr = _load_audio(args.file)
     params = _parse_kv_params(args.params) if args.params else {}
     stereo_only = {entry["id"] for entry in mastering_processor_catalog() if entry["stereoOnly"]}
+    result: Any
     if args.processor in stereo_only:
         print(
             "warning: stereo-only processor preview duplicates the mono input on left/right; "
@@ -268,7 +273,7 @@ def cmd_mastering_pair_analyze(args: argparse.Namespace) -> int:
     source, sr = _load_audio(args.file)
     reference, ref_sr = _load_audio(args.reference)
     if ref_sr != sr:
-        reference = _resample(reference, ref_sr, sr)
+        raise ValueError("reference sample rate must match input sample rate")
     result_json = mastering_pair_analyze(args.analysis, source, reference, sample_rate=sr)
     # The library returns a JSON string regardless of --json; print it as-is.
     print(result_json)
