@@ -3,23 +3,45 @@
 
 from __future__ import annotations
 
-import struct
 import sys
 import wave
+from array import array
 from dataclasses import asdict
 import json
+import math
+from typing import Sequence
 
 import libsonare
 
 
-def write_wav(path: str, samples: list[float], sample_rate: int) -> None:
-    pcm = [max(-1.0, min(1.0, sample)) for sample in samples]
-    frames = struct.pack(f"<{len(pcm)}h", *(round(sample * 32767) for sample in pcm))
+def write_wav(path: str, samples: Sequence[float], sample_rate: int) -> None:
+    """Write PCM in bounded chunks instead of materializing a full second copy."""
     with wave.open(path, "wb") as output:
         output.setnchannels(1)
         output.setsampwidth(2)
         output.setframerate(sample_rate)
-        output.writeframes(frames)
+        for offset in range(0, len(samples), 8192):
+            pcm = array(
+                "h",
+                (
+                    round(max(-1.0, min(1.0, sample)) * 32767)
+                    for sample in samples[offset : offset + 8192]
+                ),
+            )
+            output.writeframes(pcm.tobytes())
+
+
+def json_safe(value: object) -> object:
+    """Map unavailable short-window metrics (±inf/NaN) to JSON null."""
+    if isinstance(value, float):
+        return value if math.isfinite(value) else None
+    if isinstance(value, dict):
+        return {key: json_safe(item) for key, item in value.items()}
+    if isinstance(value, list):
+        return [json_safe(item) for item in value]
+    if isinstance(value, tuple):
+        return [json_safe(item) for item in value]
+    return value
 
 
 def main() -> int:
@@ -33,7 +55,7 @@ def main() -> int:
         )
     write_wav(sys.argv[2], result.samples, result.sample_rate)
     print(f"LUFS: {result.input_lufs:.1f} -> {result.output_lufs:.1f}")
-    print(json.dumps(asdict(result.report), indent=2, allow_nan=False))
+    print(json.dumps(json_safe(asdict(result.report)), indent=2, allow_nan=False))
     return 0
 
 

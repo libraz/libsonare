@@ -14,16 +14,21 @@
     const result = document.querySelector('#result');
     const offline = new OfflineWorkerClient();
     let currentTask;
+    const promptCancel = crossOriginIsolated && typeof SharedArrayBuffer !== 'undefined';
+    if (!promptCancel) {
+      cancel.title = 'Prompt cancellation requires cross-origin isolation (COOP/COEP).';
+    }
 
     cancel.addEventListener('click', () => currentTask?.cancel());
     input.addEventListener('change', async () => {
       const file = input.files?.[0];
       if (!file) return;
       result.textContent = 'Analyzing…';
-      cancel.disabled = false;
+      input.disabled = true;
+      let task;
       try {
         const audio = await Audio.fromMemoryWithBrowserFallback(new Uint8Array(await file.arrayBuffer()));
-        currentTask = offline.analyze(
+        task = offline.analyze(
           { samples: audio.data, sampleRate: audio.sampleRate },
           {
             onProgress: ({ progress, stage }) => {
@@ -31,12 +36,20 @@
             },
           },
         );
-        result.textContent = JSON.stringify(await currentTask, null, 2);
+        currentTask = task;
+        cancel.disabled = !promptCancel;
+        if (!promptCancel) {
+          result.textContent = 'Analyzing… (prompt cancellation requires COOP/COEP)';
+        }
+        result.textContent = JSON.stringify(await task, null, 2);
       } catch (error) {
         result.textContent = error instanceof Error ? error.message : String(error);
       } finally {
-        currentTask = undefined;
-        cancel.disabled = true;
+        if (currentTask === task) {
+          currentTask = undefined;
+          cancel.disabled = true;
+          input.disabled = false;
+        }
       }
     });
   </script>

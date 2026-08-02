@@ -3,21 +3,28 @@
 
 from __future__ import annotations
 
-import struct
 import sys
 import wave
+from array import array
 
 import libsonare
 
 
 def write_wav(path: str, samples: object, sample_rate: int) -> None:
-    interleaved = [float(value) for value in samples.reshape(-1)]
-    frames = struct.pack(f"<{len(interleaved)}h", *(round(max(-1.0, min(1.0, sample)) * 32767) for sample in interleaved))
+    interleaved = samples.reshape(-1)
     with wave.open(path, "wb") as output:
         output.setnchannels(2)
         output.setsampwidth(2)
         output.setframerate(sample_rate)
-        output.writeframes(frames)
+        for offset in range(0, len(interleaved), 8192):
+            pcm = array(
+                "h",
+                (
+                    round(max(-1.0, min(1.0, float(sample))) * 32767)
+                    for sample in interleaved[offset : offset + 8192]
+                ),
+            )
+            output.writeframes(pcm.tobytes())
 
 
 def main() -> int:

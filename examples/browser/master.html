@@ -1,0 +1,34 @@
+<!doctype html>
+<html lang="en">
+  <meta charset="utf-8">
+  <title>libsonare browser mastering</title>
+  <input id="file" type="file" accept="audio/*">
+  <button id="master" type="button" disabled>Master and download WAV</button>
+  <pre id="result">Choose an audio file.</pre>
+  <script type="module">
+    import { Audio, init } from '../../bindings/wasm/dist/index.js';
+    import { downloadPcm16Wav } from './wav-download.js';
+
+    await init();
+    const file = document.querySelector('#file');
+    const master = document.querySelector('#master');
+    const result = document.querySelector('#result');
+    file.addEventListener('change', () => { master.disabled = !file.files?.[0]; });
+    master.addEventListener('click', async () => {
+      const input = file.files?.[0];
+      if (!input) return;
+      master.disabled = true;
+      result.textContent = 'Mastering…';
+      try {
+        const audio = await Audio.fromMemoryWithBrowserFallback(new Uint8Array(await input.arrayBuffer()));
+        const mastered = audio.masteringChain({ loudness: { enabled: true, targetLufs: -14, ceilingDb: -1 } });
+        downloadPcm16Wav('mastered.wav', mastered.samples, mastered.sampleRate);
+        result.textContent = JSON.stringify(mastered.report, null, 2);
+      } catch (error) {
+        result.textContent = error instanceof Error ? error.message : String(error);
+      } finally {
+        master.disabled = !file.files?.[0];
+      }
+    });
+  </script>
+</html>

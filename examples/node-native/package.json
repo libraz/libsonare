@@ -3,6 +3,6 @@
   "private": true,
   "type": "module",
   "dependencies": {
-    "@libraz/libsonare-native": "file:../../bindings/node"
+    "@libraz/libsonare-native": "portal:../../bindings/node"
   }
 }

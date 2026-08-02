@@ -9,8 +9,13 @@ int main(int argc, char** argv) {
     return EXIT_FAILURE;
   }
 
-  const auto audio = sonare::Audio::from_file(argv[1]);
-  const auto result = sonare::MusicAnalyzer(audio).analyze();
-  std::cout << "BPM: " << result.bpm << "\nKey: " << result.key.to_string() << "\n";
-  return EXIT_SUCCESS;
+  try {
+    const auto audio = sonare::Audio::from_file(argv[1]);
+    const auto result = sonare::MusicAnalyzer(audio).analyze();
+    std::cout << "BPM: " << result.bpm << "\nKey: " << result.key.to_string() << "\n";
+    return EXIT_SUCCESS;
+  } catch (const std::exception& error) {
+    std::cerr << "failed to analyze '" << argv[1] << "': " << error.what() << "\n";
+    return EXIT_FAILURE;
+  }
 }

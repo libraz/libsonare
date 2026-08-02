@@ -12,7 +12,8 @@
 **libsonare turns audio into data and data back into audio.** Load a song and get
 its BPM, key, chords, and structure; master and mix it to broadcast loudness; turn
 MIDI into sound with built-in instruments; or build a whole DAW on top — the same
-engine in C++, Python, Node.js, and the browser, with zero runtime dependencies,
+engine in C++, Python, Node.js, and the browser. The C++ core has zero runtime dependencies;
+the Python package depends on NumPy, with no Python required by the native engine,
 no Python at runtime, and no GPL/AGPL or model weights.
 
 **Reach for it when you need to:**
@@ -44,7 +45,7 @@ the browser to see what libsonare can power.
   IR-based RT60/EDT/C50/C80/D50). Where it overlaps librosa, defaults match and
   are validated against librosa reference values in CI — so results port over
   without surprises.
-- **Mastering** — 88 distinct named DSP processors (EQ, dynamics, multiband,
+- **Mastering** — 87 distinct named DSP processors (EQ, dynamics, multiband,
   stereo, saturation, repair, maximizer, reference matching), or 71 with
   `BUILD_FX=OFF` (the creative streaming effects are omitted), built against
   published
@@ -62,7 +63,7 @@ the browser to see what libsonare can power.
   blindly estimate an equivalent room from a recording, or morph a recording's
   reverberation toward a target room. Dependency-free and deterministic.
 - **Built-in instruments** — a patch-driven NativeSynth with 15 synthesis engines
-  (subtractive, FM, additive plus physically-modeled piano, bowed strings, reeds,
+  (subtractive, FM, additive, Karplus-Strong, and modal resonators, plus physically-modeled piano, bowed strings, reeds,
   brass, flute, pipe organ, plucked strings, voice, free reed, and percussion), a
   mod matrix, and named presets,
   backed by a data-free GM fallback covering all 128 programs + drums, so MIDI
@@ -154,6 +155,11 @@ The `sonare` command-line tool ships with the Python package
 (`sonare analyze song.mp3`, `sonare mastering …`, `sonare project …`).
 The separately released native CLI is named `sonare-cli`, so both commands can
 coexist on `PATH` without changing their behavior.
+
+CLI command names are intentionally distinct where their operating models differ:
+`sonare mix` loads a mixer scene and renders one or more inputs, while
+`sonare-cli mix-strip` applies a channel strip to one input. Native `mix` remains
+as a compatibility alias for `mix-strip`.
 
 ### C++
 

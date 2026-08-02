@@ -1,0 +1,38 @@
+<!doctype html>
+<html lang="en">
+  <meta charset="utf-8">
+  <title>libsonare browser MIDI render</title>
+  <button id="render" type="button">Render MIDI phrase and download WAV</button>
+  <pre id="result">Render a two-note NativeSynth phrase.</pre>
+  <script type="module">
+    import { Project, init } from '../../bindings/wasm/dist/index.js';
+    import { downloadPcm16Wav } from './wav-download.js';
+
+    await init();
+    const render = document.querySelector('#render');
+    const result = document.querySelector('#result');
+    render.addEventListener('click', () => {
+      render.disabled = true;
+      try {
+        const project = new Project();
+        try {
+          project.setSampleRate(48000);
+          const { clipId } = project.addMidiClip(0, 4);
+          project.setMidiEvents(clipId, [
+            Project.midiNoteOn(0, 0, 0, 60, 100), Project.midiNoteOff(1, 0, 0, 60),
+            Project.midiNoteOn(1, 0, 0, 64, 100), Project.midiNoteOff(2, 0, 0, 64),
+          ]);
+          const samples = project.bounceWithSynthInstrument('saw-lead', { numChannels: 2 });
+          downloadPcm16Wav('midi-phrase.wav', samples, 48000, 2);
+          result.textContent = 'Downloaded midi-phrase.wav';
+        } finally {
+          project.delete();
+        }
+      } catch (error) {
+        result.textContent = error instanceof Error ? error.message : String(error);
+      } finally {
+        render.disabled = false;
+      }
+    });
+  </script>
+</html>
