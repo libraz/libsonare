@@ -10,7 +10,6 @@
 #include <array>
 #include <atomic>
 #include <limits>
-#include <mutex>
 #include <vector>
 
 #include "host/backends/coremidi/coremidi_output_state.h"
@@ -123,14 +122,14 @@ struct CoreMidiInput::Impl {
   // reach it through sysex_stage, committed by commit_staged_sysex().
   midi::SysExStore sysex_store;
   std::array<SysExAssembly, 16> sysex_assemblies{};
-  // Bounded producer/consumer staging ring between the MIDI callback and the
-  // control thread, guarded by sysex_mutex. Each critical section is a single
-  // bounded byte copy; neither thread holds the lock across an allocation or a
-  // blocking call.
+  // Bounded single-producer (CoreMIDI callback) / single-consumer (control
+  // thread) staging ring. Every slot reserves its payload capacity at
+  // construction, so the callback only performs bounded copies and never waits
+  // on the control thread. Release/acquire publication keeps the payload write
+  // visible before the consumer reads the corresponding slot.
   std::array<StagedSysEx, kSysExStageDepth> sysex_stage{};
-  std::mutex sysex_mutex;
-  size_t sysex_stage_write = 0;
-  size_t sysex_stage_read = 0;
+  std::atomic<size_t> sysex_stage_write{0};
+  std::atomic<size_t> sysex_stage_read{0};
   // Callback-side handle allocator so a staged payload carries a stable handle
   // before the control thread commits its bytes to the store.
   std::atomic<midi::SysExHandle> next_input_handle{1};
@@ -187,19 +186,19 @@ struct CoreMidiInput::Impl {
     return handle;
   }
 
-  // MIDI callback thread: copy a completed payload into the staging ring under a
-  // brief lock (a bounded memcpy into a pre-reserved slot, no allocation) and
-  // return its handle, or 0 when the ring is full.
+  // MIDI callback thread: copy a completed payload into the pre-reserved SPSC
+  // staging ring and return its handle, or 0 when the ring is full.
   midi::SysExHandle stage_completed_sysex(const std::vector<uint8_t>& payload) noexcept {
     const midi::SysExHandle handle = allocate_input_handle();
-    std::lock_guard<std::mutex> guard(sysex_mutex);
-    if (sysex_stage_write - sysex_stage_read >= kSysExStageDepth) {
+    const size_t write = sysex_stage_write.load(std::memory_order_relaxed);
+    const size_t read = sysex_stage_read.load(std::memory_order_acquire);
+    if (write - read >= kSysExStageDepth) {
       return 0;  // staging ring full; the caller drops the payload and counts it
     }
-    StagedSysEx& slot = sysex_stage[sysex_stage_write % kSysExStageDepth];
+    StagedSysEx& slot = sysex_stage[write % kSysExStageDepth];
     slot.handle = handle;
     slot.bytes.assign(payload.begin(), payload.end());  // within reserved capacity: no alloc
-    ++sysex_stage_write;
+    sysex_stage_write.store(write + 1, std::memory_order_release);
     return handle;
   }
 
@@ -217,26 +216,21 @@ struct CoreMidiInput::Impl {
   }
 
   // CONTROL thread: drain staged payloads into the store. Each payload is copied
-  // out under the lock (a bounded memcpy) and committed to the store outside the
-  // lock, so the store — and its allocation — stays entirely on this thread and
-  // the callback never waits on a store operation.
+  // from an SPSC-published slot then committed outside the ring, so the store —
+  // and its allocation — stays entirely on this thread and the callback never
+  // waits on a store operation.
   void commit_staged_sysex() noexcept {
-    // Reserve the drain scratch up front, off the lock, so the per-payload copy
-    // under sysex_mutex stays within capacity and never allocates. Holding the
-    // lock across a heap allocation would let the MIDI callback's
-    // stage_completed_sysex() block behind this thread's malloc.
+    // Reserve drain scratch before the loop so copies remain allocation-free.
     std::vector<uint8_t> bytes;
     bytes.reserve(kMaxInputSysExBytes);
     for (;;) {
-      midi::SysExHandle handle = 0;
-      {
-        std::lock_guard<std::mutex> guard(sysex_mutex);
-        if (sysex_stage_read == sysex_stage_write) return;
-        StagedSysEx& slot = sysex_stage[sysex_stage_read % kSysExStageDepth];
-        handle = slot.handle;
-        bytes.assign(slot.bytes.begin(), slot.bytes.end());  // within reserved capacity: no alloc
-        ++sysex_stage_read;
-      }
+      const size_t read = sysex_stage_read.load(std::memory_order_relaxed);
+      const size_t write = sysex_stage_write.load(std::memory_order_acquire);
+      if (read == write) return;
+      StagedSysEx& slot = sysex_stage[read % kSysExStageDepth];
+      const midi::SysExHandle handle = slot.handle;
+      bytes.assign(slot.bytes.begin(), slot.bytes.end());  // within reserved capacity: no alloc
+      sysex_stage_read.store(read + 1, std::memory_order_release);
       bool stored = false;
       try {
         stored = sysex_store.add_with_handle(handle, bytes.data(), bytes.size());
@@ -373,14 +367,13 @@ void CoreMidiInput::close() noexcept {
   impl_->client = 0;
   impl_->source = 0;
   impl_->buffer.clear();
-  {
-    std::lock_guard<std::mutex> guard(impl_->sysex_mutex);
-    impl_->sysex_stage_read = 0;
-    impl_->sysex_stage_write = 0;
-    for (auto& staged : impl_->sysex_stage) {
-      staged.handle = 0;
-      staged.bytes.clear();  // keep reserved capacity for reuse
-    }
+  // Disposing the port/client above stops the CoreMIDI callback before this
+  // control-thread reset. Reset both SPSC cursors before reusing slot storage.
+  impl_->sysex_stage_read.store(0, std::memory_order_relaxed);
+  impl_->sysex_stage_write.store(0, std::memory_order_relaxed);
+  for (auto& staged : impl_->sysex_stage) {
+    staged.handle = 0;
+    staged.bytes.clear();  // keep reserved capacity for reuse
   }
   impl_->sysex_store.clear();
   for (auto& assembly : impl_->sysex_assemblies) {

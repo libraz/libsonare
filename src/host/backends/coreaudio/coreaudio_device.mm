@@ -137,6 +137,13 @@ struct CoreAudioDevice::Impl {
                                  : 0.0;
     view.time.input_xruns = callback_xruns;
 
+    // Engine rendering mixes into its output planes. Clear the active scratch
+    // span first so a callback that only calls engine.process() never carries
+    // samples from the previous CoreAudio callback into this block.
+    for (int channel = 0; channel < num_out; ++channel) {
+      std::fill(output_ptrs[static_cast<size_t>(channel)],
+                output_ptrs[static_cast<size_t>(channel)] + frame_plan.render_frames, 0.0f);
+    }
     callback->render(view);
 
     // Interleave the planar engine output back into CoreAudio's buffers.
