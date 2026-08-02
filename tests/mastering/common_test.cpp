@@ -314,6 +314,46 @@ TEST_CASE("Oversampler downsample uses FIR decimation", "[mastering]") {
   REQUIRE(rms(rejected, 16) < 0.05f);
 }
 
+TEST_CASE("Oversampler streaming round trip is invariant to block partitioning", "[mastering]") {
+  constexpr size_t kFrames = 16384;
+  Oversampler oversampler(4);
+  std::vector<float> input(
+      kFrames + static_cast<size_t>(oversampler.streaming_round_trip_latency_samples()), 0.0f);
+  for (size_t i = 0; i < kFrames; ++i) {
+    input[i] = 0.7f * static_cast<float>(std::sin(sonare::constants::kTwoPiD * 753.0 *
+                                                  static_cast<double>(i) / 48000.0));
+  }
+
+  const auto process_in_blocks = [&](size_t block_size) {
+    Oversampler::StreamingState state;
+    oversampler.prepare_streaming(&state, block_size);
+    std::vector<float> output;
+    output.reserve(input.size());
+    std::vector<float> up(block_size * static_cast<size_t>(oversampler.factor()));
+    std::vector<float> down(block_size);
+    for (size_t offset = 0; offset < input.size(); offset += block_size) {
+      const size_t count = std::min(block_size, input.size() - offset);
+      oversampler.upsample_to_streaming(input.data() + offset, count, up.data(), up.size(), &state);
+      for (size_t i = 0; i < count * static_cast<size_t>(oversampler.factor()); ++i) {
+        up[i] = std::tanh(up[i] * 1.3f);
+      }
+      oversampler.downsample_to_streaming(up.data(),
+                                          count * static_cast<size_t>(oversampler.factor()),
+                                          down.data(), down.size(), &state);
+      output.insert(output.end(), down.begin(), down.begin() + static_cast<std::ptrdiff_t>(count));
+    }
+    return output;
+  };
+
+  const auto one_block = process_in_blocks(input.size());
+  CAPTURE(rms(one_block, 128), rms(input, 128));
+  REQUIRE(rms(one_block, 128) > rms(input, 128) * 0.5f);
+  for (const size_t block_size : {size_t{128}, size_t{1024}, size_t{4096}}) {
+    const auto partitioned = process_in_blocks(block_size);
+    REQUIRE(partitioned == one_block);
+  }
+}
+
 TEST_CASE("Oversampler supports only power of two mastering factors", "[mastering]") {
   Oversampler oversampler(2);
 

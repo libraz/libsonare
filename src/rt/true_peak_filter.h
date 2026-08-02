@@ -55,8 +55,17 @@ class TruePeakFilter {
                              int num_channels, int num_samples,
                              std::vector<std::vector<float>>& history,
                              std::vector<std::vector<float>>& scratch) const;
+  /// Delayed continuous variant for a signal path (rather than measurement).
+  /// Each output block is delayed by one FIR group delay so every interpolated
+  /// value has its complete forward stencil across a block boundary.
+  void upsample_with_history_delayed(const float* const* input, float* const* output_oversampled,
+                                     int num_channels, int num_samples,
+                                     std::vector<std::vector<float>>& history,
+                                     std::vector<std::vector<float>>& scratch) const;
 
   int factor() const noexcept { return factor_; }
+  /// Number of base-rate samples retained for cross-block interpolation.
+  int history_samples() const noexcept { return fir_.taps_per_phase; }
   int latency_samples() const noexcept { return fir_.taps_per_phase / 2; }
 
  private:

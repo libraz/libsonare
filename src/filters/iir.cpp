@@ -185,6 +185,17 @@ CascadedBiquad lowpass_coeffs_4th(float cutoff_hz, int sr) {
   return cascade;
 }
 
+std::vector<float> apply_cascade(const float* input, size_t size, const CascadedBiquad& cascade) {
+  SONARE_CHECK(input != nullptr && size > 0, ErrorCode::InvalidParameter);
+  SONARE_CHECK(!cascade.sections.empty(), ErrorCode::InvalidParameter);
+
+  std::vector<float> result(input, input + size);
+  for (const auto& section : cascade.sections) {
+    result = apply_biquad(result.data(), result.size(), section);
+  }
+  return result;
+}
+
 std::vector<float> apply_cascade_filtfilt(const float* input, size_t size,
                                           const CascadedBiquad& cascade) {
   SONARE_CHECK(input != nullptr && size > 0, ErrorCode::InvalidParameter);

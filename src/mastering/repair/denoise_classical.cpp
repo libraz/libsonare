@@ -317,7 +317,8 @@ Audio denoise_classical(const Audio& audio, const DenoiseClassicalConfig& config
   validate(config);
 
   if (static_cast<int>(audio.size()) < config.n_fft) {
-    return audio;
+    throw SonareException(ErrorCode::InvalidParameter,
+                          "denoise input must contain at least n_fft samples");
   }
 
   StftConfig stft_config;

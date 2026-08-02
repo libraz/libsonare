@@ -4,7 +4,7 @@
 #include <cmath>
 #include <cstddef>
 
-#include "rt/polyphase_fir.h"
+#include "rt/true_peak_fir.h"
 #include "util/constants.h"
 #include "util/db.h"
 #include "util/dsp_primitives.h"
@@ -17,30 +17,8 @@ using sonare::constants::kFloorDb;
 
 namespace {
 
-// Oversample factors that have a dedicated polyphase design. Any other factor is
-// rejected by true_peak() rather than silently resolved to a different filter,
-// which would report a mislabeled (lower) oversample resolution.
-bool is_supported_oversample(int oversample_factor) {
-  return oversample_factor == 1 || oversample_factor == 2 || oversample_factor == 4 ||
-         oversample_factor == 8 || oversample_factor == 16;
-}
-
-const ::sonare::rt::PolyphaseFir& filter_for(int oversample_factor) {
-  static const auto kFilter4x = ::sonare::rt::design_polyphase_lowpass(4, 48, 9.5, true);
-  static const auto kFilter8x = ::sonare::rt::design_polyphase_lowpass(8, 96, 9.5, true);
-  static const auto kFilter2x = ::sonare::rt::design_polyphase_lowpass(2, 24, 7.85726, true);
-  // 16x branch keeps the same 12-taps-per-phase Kaiser design density as the
-  // 4x/8x filters (192 = 16 * 12) so the higher request is genuinely resolved
-  // instead of silently falling back to the 4x default.
-  static const auto kFilter16x = ::sonare::rt::design_polyphase_lowpass(16, 192, 9.5, true);
-  if (oversample_factor == 16) return kFilter16x;
-  if (oversample_factor == 8) return kFilter8x;
-  if (oversample_factor == 2) return kFilter2x;
-  return kFilter4x;
-}
-
 float upsampled_peak(const float* data, size_t length, int oversample_factor) {
-  const auto& pf = filter_for(oversample_factor);
+  const auto& pf = ::sonare::rt::true_peak_fir_for(oversample_factor);
   float peak = peak_abs(data, length);
   for (int phase = 0; phase < pf.phases; ++phase) {
     for (size_t i = 0; i < length; ++i) {
@@ -58,7 +36,8 @@ float true_peak(const float* data, size_t length, int oversample_factor) {
   // Reject factors without a dedicated polyphase design instead of silently
   // falling back to 4x and reporting a result mislabeled with the requested
   // factor. Supported factors: 1, 2, 4, 8, 16.
-  SONARE_CHECK_MSG(is_supported_oversample(oversample_factor), ErrorCode::InvalidParameter,
+  SONARE_CHECK_MSG(::sonare::rt::is_supported_polyphase_oversample_factor(oversample_factor),
+                   ErrorCode::InvalidParameter,
                    "true_peak oversample_factor must be one of 1, 2, 4, 8, 16");
   SONARE_CHECK(data != nullptr || length == 0, ErrorCode::InvalidParameter);
   if (length == 0) return 0.0f;

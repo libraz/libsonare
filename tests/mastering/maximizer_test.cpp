@@ -93,6 +93,25 @@ TEST_CASE("TruePeakLimiter supports bounded offline mono and stereo scratch capa
   REQUIRE_THROWS_AS(limiter.process(too_many_channels, 3, 1), SonareException);
 }
 
+TEST_CASE("TruePeakLimiter retains program gain reduction across a silent drain block",
+          "[mastering][maximizer]") {
+  TruePeakLimiter limiter({-12.0f, 1.0f, 20.0f, 4});
+  limiter.prepare(48000.0, 64, 1);
+  std::vector<float> hot(64, 2.0f);
+  float* channels[] = {hot.data()};
+  limiter.process(channels, 1, 64);
+  const float program_reduction = limiter.minimum_gain_reduction_db();
+  REQUIRE(program_reduction < -1.0f);
+
+  std::vector<float> silence(64, 0.0f);
+  channels[0] = silence.data();
+  limiter.process(channels, 1, 64);
+  REQUIRE(limiter.minimum_gain_reduction_db() <= program_reduction);
+
+  limiter.prepare(48000.0, 64, 1);
+  REQUIRE(limiter.minimum_gain_reduction_db() == 0.0f);
+}
+
 TEST_CASE("TruePeakLimiter processes a three-minute stereo master within bounded work buffers",
           "[.][slow][memory][mastering][maximizer]") {
   constexpr int kSampleRate = 44100;
@@ -127,7 +146,7 @@ TEST_CASE("TruePeakLimiter enforces interpolated ceiling", "[mastering][maximize
   TruePeakLimiter limiter({-6.0f, 0.0f, 0.0f, 4});
   limiter.prepare(48000.0, 64);
 
-  std::vector<float> signal = {0.0f, 1.0f, 0.0f, -1.0f};
+  std::vector<float> signal(64, 1.0f);
   process(limiter, signal);
 
   REQUIRE(peak_abs(signal) <= 0.502f);
@@ -161,13 +180,12 @@ TEST_CASE("TruePeakLimiter reports effective polyphase latency", "[mastering][ma
   TruePeakLimiter limiter({-1.0f, 1.0f, 10.0f, 4});
   limiter.prepare(48000.0, 64);
 
-  // Signal-path latency equals lookahead_samples_ only (1ms @ 48kHz = 48).
-  // The centered upsampler/downsampler FIRs add zero group delay, so the
-  // true-peak filter latency is NOT part of the reported signal-path delay.
-  REQUIRE(limiter.latency_samples() == 48);
+  // The delayed continuous polyphase path adds one FIR group delay while
+  // upsampling and another while decimating (6 + 6 at factor 4).
+  REQUIRE(limiter.latency_samples() == 60);
 
   limiter.set_config({-1.0f, 1.0f, 10.0f, 2});
-  REQUIRE(limiter.latency_samples() == 48);
+  REQUIRE(limiter.latency_samples() == 60);
   REQUIRE_THROWS(TruePeakLimiter({-1.0f, 1.0f, 10.0f, 3}));
 }
 
@@ -215,7 +233,7 @@ TEST_CASE("TruePeakLimiter set_config applies scalar changes without wiping runn
   // lookahead is reflected in the reported latency.
   limiter.set_config({-3.0f, 2.0f, 50.0f, 4});
   REQUIRE(limiter.last_gain_reduction_db() == 0.0f);
-  REQUIRE(limiter.latency_samples() == 96);
+  REQUIRE(limiter.latency_samples() == 108);
 
   // The updated -3 dB ceiling (0.708) is in effect on subsequent processing:
   // the 0.95 sine is limited near the NEW ceiling — clearly above the stale
@@ -407,11 +425,15 @@ TEST_CASE("AdaptiveRelease preserves lookahead state across release updates",
   process(limiter, first);
   REQUIRE_THAT(first[0], WithinAbs(0.0f, 0.0001f));
 
-  std::vector<float> second = {0.0f};
-  process(limiter, second);
+  float released_sample = 0.0f;
+  for (int i = 0; i < limiter.latency_samples(); ++i) {
+    std::vector<float> block = {0.0f};
+    process(limiter, block);
+    released_sample = std::max(released_sample, block[0]);
+  }
 
-  REQUIRE(second[0] > 0.2f);
-  REQUIRE(second[0] <= 0.502f);
+  REQUIRE(released_sample > 0.2f);
+  REQUIRE(released_sample <= 0.502f);
 }
 
 TEST_CASE("LoudnessOptimize moves loudness toward target without exceeding ceiling",

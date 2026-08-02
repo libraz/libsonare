@@ -262,6 +262,41 @@ TEST_CASE("Declip preserves all unclipped samples exactly", "[mastering][repair]
   }
 }
 
+TEST_CASE("Declip and Declick repair a three-minute recording with many short defects",
+          "[.][slow][mastering][repair]") {
+  constexpr int kSampleRate = 48000;
+  constexpr size_t kFrames = static_cast<size_t>(3 * 60 * kSampleRate);
+  constexpr size_t kDefectCount = 1000;
+  std::vector<float> damaged(kFrames);
+  for (size_t i = 0; i < damaged.size(); ++i) {
+    damaged[i] = 0.2f * static_cast<float>(
+                            std::sin(sonare::constants::kTwoPiD * 440.0 * static_cast<double>(i) /
+                                     static_cast<double>(kSampleRate)));
+  }
+
+  std::vector<size_t> defects;
+  defects.reserve(kDefectCount);
+  const size_t stride = (kFrames - 2) / kDefectCount;
+  for (size_t i = 0; i < kDefectCount; ++i) {
+    const size_t index = 1 + i * stride;
+    damaged[index] = 1.0f;
+    defects.push_back(index);
+  }
+
+  const Audio input = Audio::from_buffer(damaged.data(), damaged.size(), kSampleRate);
+  const Audio declipped = declip(input, {0.9f, 8, 2, 1.0f});
+  const Audio declicked = declick(input, {0.8f, 2.0f, 1, 8, 8.0f});
+
+  REQUIRE(declipped.size() == damaged.size());
+  REQUIRE(declicked.size() == damaged.size());
+  for (const size_t index : defects) {
+    REQUIRE(std::isfinite(declipped[index]));
+    REQUIRE(std::isfinite(declicked[index]));
+    CHECK(std::abs(declipped[index]) < 0.8f);
+    CHECK(std::abs(declicked[index]) < 0.8f);
+  }
+}
+
 TEST_CASE("Dehum notch filter reduces fundamental tone", "[mastering][repair]") {
   std::vector<float> samples(4800);
   for (size_t i = 0; i < samples.size(); ++i) {
@@ -358,19 +393,15 @@ TEST_CASE("DenoiseClassical can use IMCRA frame-adaptive noise tracking", "[mast
   REQUIRE(mcra_output.size() == input.size());
 }
 
-TEST_CASE("DenoiseClassical returns short inputs unchanged", "[mastering][repair]") {
-  const auto result = denoise_classical(make_audio({0.03f, 0.05f}));
-  REQUIRE(result.size() == 2);
-  REQUIRE_THAT(result[0], WithinAbs(0.03f, 0.001f));
-  REQUIRE_THAT(result[1], WithinAbs(0.05f, 0.001f));
+TEST_CASE("DenoiseClassical rejects inputs shorter than n_fft", "[mastering][repair]") {
+  REQUIRE_THROWS_AS(denoise_classical(make_audio({0.03f, 0.05f})), SonareException);
 }
 
-TEST_CASE("DereverbClassical attenuates low-level tails", "[mastering][repair]") {
-  const auto result = dereverb_classical(make_audio({0.5f, 0.04f, 0.02f}), {0.05f, 0.25f});
-
-  REQUIRE_THAT(result[0], WithinAbs(0.5f, 0.001f));
-  REQUIRE_THAT(result[1], WithinAbs(0.01f, 0.001f));
-  REQUIRE_THAT(result[2], WithinAbs(0.005f, 0.001f));
+TEST_CASE("DereverbClassical zero-pads inputs shorter than n_fft", "[mastering][repair]") {
+  const Audio input = make_audio({0.5f, 0.04f, 0.02f});
+  const Audio result = dereverb_classical(input, {0.05f, 0.25f});
+  REQUIRE(result.size() == input.size());
+  for (float sample : result) REQUIRE(std::isfinite(sample));
 }
 
 TEST_CASE("DereverbClassical spectral subtraction reduces late decay", "[mastering][repair]") {

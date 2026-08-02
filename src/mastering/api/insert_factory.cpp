@@ -501,10 +501,13 @@ std::unique_ptr<Processor> build_effects(const std::string& name, const ParamMap
       // mean approximately the same RT60 as FDN (decaySec == ~T60), set
       // reverb_time_s = decaySec / (0.5 + decay) so the product lands on decaySec.
       const float decay_factor = 0.5f + std::clamp(config.decay, 0.0f, 1.0f);
-      config.reverb_time_s = std::max(0.0f, f(params, "decaySec", config.reverb_time_s)) /
-                             std::max(0.01f, decay_factor);
+      config.reverb_time_s =
+          std::clamp(std::max(0.0f, f(params, "decaySec", config.reverb_time_s)) /
+                         std::max(0.01f, decay_factor),
+                     0.05f, VelvetReverbConfig::kMaxReverbTimeSeconds);
     } else {
-      config.reverb_time_s = f(params, "reverbTimeS", config.reverb_time_s);
+      config.reverb_time_s = std::clamp(f(params, "reverbTimeS", config.reverb_time_s), 0.05f,
+                                        VelvetReverbConfig::kMaxReverbTimeSeconds);
     }
     config.density_hz = f(params, "densityHz", config.density_hz);
     config.enable_shelf = b(params, "enableShelf", config.enable_shelf);

@@ -68,7 +68,12 @@ class TruePeakLimiter : public rt::ProcessorBase {
   ///          are clamped to zero rather than throwing.
   void set_release_ms_in_place(float release_ms) noexcept;
   const TruePeakLimiterConfig& config() const { return config_; }
+  /// Instantaneous (most recently processed block) gain reduction for streaming
+  /// meters. Offline hosts should use @ref minimum_gain_reduction_db instead.
   float last_gain_reduction_db() const override { return last_gain_reduction_db_; }
+  /// Most-negative gain reduction since the last prepare/reset. Offline hosts
+  /// process a zero tail to drain latency, so this retains the program value.
+  float minimum_gain_reduction_db() const noexcept { return minimum_gain_reduction_db_; }
   int latency_samples() const noexcept override;
 
   // Parameters:
@@ -108,6 +113,7 @@ class TruePeakLimiter : public rt::ProcessorBase {
   std::vector<std::vector<float>> oversampled_buffers_;
   std::vector<std::vector<float>> limited_oversampled_buffers_;
   std::vector<std::vector<float>> true_peak_scratch_;
+  std::vector<sonare::rt::Oversampler::StreamingState> downsampler_states_;
   std::vector<float> linked_abs_;
   std::vector<float> input_rate_gain_;
   std::vector<float> downsampled_;
@@ -129,6 +135,7 @@ class TruePeakLimiter : public rt::ProcessorBase {
   unsigned int adaptive_release_counter_ = 0;
   static constexpr unsigned int kReleaseControlInterval = 8;
   float last_gain_reduction_db_ = 0.0f;
+  float minimum_gain_reduction_db_ = 0.0f;
 };
 
 }  // namespace sonare::mastering::maximizer

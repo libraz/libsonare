@@ -55,10 +55,20 @@ void AirBand::prepare(double sample_rate, int max_block_size) {
   const size_t n = dynamics::kRealtimePreparedChannels;
   envelope_.assign(n, 0.0f);
   shelf_gain_db_.assign(n, 0.0f);
+  band_rms_sq_.assign(n, 0.0f);
+  harmonic_rms_sq_.assign(n, 0.0f);
+  harmonic_gain_.assign(n, 0.0f);
+  shelf_control_samples_.assign(n, 0);
+  normalization_rms_alpha_ = static_cast<float>(1.0 - std::exp(-1.0 / (0.030 * sample_rate_)));
+  harmonic_gain_alpha_ = static_cast<float>(1.0 - std::exp(-1.0 / (0.005 * sample_rate_)));
   band_scratch_.assign(static_cast<size_t>(max_block_size_), 0.0f);
   oversampled_scratch_.assign(static_cast<size_t>(max_block_size_) * kHarmonicOversampleFactor,
                               0.0f);
   harmonic_scratch_.assign(static_cast<size_t>(max_block_size_), 0.0f);
+  harmonic_oversampler_states_.resize(n);
+  for (auto& state : harmonic_oversampler_states_) {
+    harmonic_oversampler_.prepare_streaming(&state, static_cast<size_t>(max_block_size_));
+  }
   rebuild_filters(static_cast<int>(n));
   reset();
 }
@@ -76,9 +86,10 @@ void AirBand::process(float* const* channels, int num_channels, int num_samples)
                           "num_samples exceeds prepared AirBand oversampling scratch");
   }
   ensure_state(num_channels);
-  // Frequency terms of the shelf depend only on config/sample rate, so compute
-  // them once per block; only the gain-dependent coefficients are refreshed per
-  // sample (the envelope-driven gain still tracks per sample, but without trig).
+  // Frequency terms of the shelf depend only on config/sample rate. Coefficients
+  // update at a fixed stream-wide control cadence; keeping that cadence in
+  // per-channel state (rather than restarting it at every block) makes output
+  // independent of the host's callback size.
   const double shelf_frequency =
       std::clamp(config_.shelf_frequency_hz, 20.0f, static_cast<float>(sample_rate_ * 0.49));
   const auto shelf_design = rt::rbj_high_shelf_design_d(shelf_frequency, sample_rate_, kInvSqrt2D);
@@ -86,43 +97,31 @@ void AirBand::process(float* const* channels, int num_channels, int num_samples)
     if (channels[ch] == nullptr)
       throw SonareException(ErrorCode::InvalidParameter, "channel buffer must not be null");
     float envelope = envelope_[static_cast<size_t>(ch)];
+    float current_gain_db = shelf_gain_db_[static_cast<size_t>(ch)];
+    int shelf_control_samples = shelf_control_samples_[static_cast<size_t>(ch)];
     Biquad& shelf = shelf_[static_cast<size_t>(ch)];
     for (int i = 0; i < num_samples; ++i) {
       const float band = detector_[static_cast<size_t>(ch)].process(channels[ch][i]);
       band_scratch_[static_cast<size_t>(i)] = band;
       envelope = 0.995f * envelope + 0.005f * std::abs(band);
       const float over_db = std::max(0.0f, linear_to_db(envelope) - config_.dynamic_threshold_db);
-      harmonic_scratch_[static_cast<size_t>(i)] =
-          std::min(config_.dynamic_range_db, over_db * 0.25f) * config_.amount;
-    }
-
-    float current_gain_db = shelf_gain_db_[static_cast<size_t>(ch)];
-    for (int start = 0; start < num_samples; start += kShelfControlInterval) {
-      const int count = std::min(kShelfControlInterval, num_samples - start);
-      const float target_gain_db = harmonic_scratch_[static_cast<size_t>(start + count - 1)];
-      Biquad start_filter;
-      Biquad target_filter;
-      assign_biquad(start_filter, rt::rbj_high_shelf_from_design_d(shelf_design, current_gain_db));
-      assign_biquad(target_filter, rt::rbj_high_shelf_from_design_d(shelf_design, target_gain_db));
-      const float inv_count = 1.0f / static_cast<float>(count);
-      for (int offset = 0; offset < count; ++offset) {
-        const float mix = static_cast<float>(offset + 1) * inv_count;
-        shelf.c.b0 = start_filter.c.b0 + mix * (target_filter.c.b0 - start_filter.c.b0);
-        shelf.c.b1 = start_filter.c.b1 + mix * (target_filter.c.b1 - start_filter.c.b1);
-        shelf.c.b2 = start_filter.c.b2 + mix * (target_filter.c.b2 - start_filter.c.b2);
-        shelf.c.a1 = start_filter.c.a1 + mix * (target_filter.c.a1 - start_filter.c.a1);
-        shelf.c.a2 = start_filter.c.a2 + mix * (target_filter.c.a2 - start_filter.c.a2);
-        const int sample = start + offset;
-        channels[ch][sample] = shelf.process(channels[ch][sample]);
+      if (shelf_control_samples == 0) {
+        current_gain_db = std::min(config_.dynamic_range_db, over_db * 0.25f) * config_.amount;
+        assign_biquad(shelf, rt::rbj_high_shelf_from_design_d(shelf_design, current_gain_db));
+        shelf_control_samples = kShelfControlInterval;
       }
-      current_gain_db = target_gain_db;
+      --shelf_control_samples;
+      channels[ch][i] = shelf.process(channels[ch][i]);
     }
     shelf_gain_db_[static_cast<size_t>(ch)] = current_gain_db;
+    shelf_control_samples_[static_cast<size_t>(ch)] = shelf_control_samples;
 
     const size_t sample_count = static_cast<size_t>(num_samples);
     const size_t oversampled_count = sample_count * kHarmonicOversampleFactor;
-    harmonic_oversampler_.upsample_to(band_scratch_.data(), sample_count,
-                                      oversampled_scratch_.data(), oversampled_scratch_.size());
+    auto& oversampler_state = harmonic_oversampler_states_[static_cast<size_t>(ch)];
+    harmonic_oversampler_.upsample_to_streaming(band_scratch_.data(), sample_count,
+                                                oversampled_scratch_.data(),
+                                                oversampled_scratch_.size(), &oversampler_state);
     // Shape the shelf-frequency high-pass detector output directly. The old
     // first difference had the response 2*sin(pi*f/fs), so even multiplying by
     // fs only normalized its low-frequency slope; near Nyquist the drive still
@@ -132,30 +131,36 @@ void AirBand::process(float* const* channels, int num_channels, int num_samples)
     for (size_t i = 0; i < oversampled_count; ++i) {
       oversampled_scratch_[i] = std::tanh(oversampled_scratch_[i] * harmonic_drive);
     }
-    harmonic_oversampler_.downsample_to(oversampled_scratch_.data(), oversampled_count,
-                                        harmonic_scratch_.data(), harmonic_scratch_.size());
+    harmonic_oversampler_.downsample_to_streaming(oversampled_scratch_.data(), oversampled_count,
+                                                  harmonic_scratch_.data(),
+                                                  harmonic_scratch_.size(), &oversampler_state);
 
-    double band_energy = 0.0;
-    double harmonic_energy = 0.0;
+    float band_rms_sq = band_rms_sq_[static_cast<size_t>(ch)];
+    float harmonic_rms_sq = harmonic_rms_sq_[static_cast<size_t>(ch)];
+    float harmonic_gain = harmonic_gain_[static_cast<size_t>(ch)];
     for (size_t i = 0; i < sample_count; ++i) {
       harmonic_scratch_[i] =
           harmonic_filter_[static_cast<size_t>(ch)].process(harmonic_scratch_[i]);
-      band_energy += static_cast<double>(band_scratch_[i]) * band_scratch_[i];
-      harmonic_energy += static_cast<double>(harmonic_scratch_[i]) * harmonic_scratch_[i];
-    }
-    // Keep the synthesized component at most -6 dB RMS relative to the
-    // detector band. This prevents the waveshaper from dominating quiet or
-    // narrow high-band material regardless of drive.
-    constexpr double kMaxHarmonicToBandRms = 0.5;
-    const double energy_scale =
-        harmonic_energy > 1.0e-20 && band_energy > 0.0
-            ? std::min(1.0, kMaxHarmonicToBandRms * std::sqrt(band_energy / harmonic_energy))
-            : 0.0;
-    const float harmonic_gain = config_.amount * static_cast<float>(energy_scale);
-    for (size_t i = 0; i < sample_count; ++i) {
+      band_rms_sq += normalization_rms_alpha_ * (band_scratch_[i] * band_scratch_[i] - band_rms_sq);
+      harmonic_rms_sq += normalization_rms_alpha_ *
+                         (harmonic_scratch_[i] * harmonic_scratch_[i] - harmonic_rms_sq);
+      // Keep the synthesized component at most -6 dB RMS relative to the
+      // detector band. The smoothed ratio and a short gain ramp are updated
+      // per sample so splitting the same stream into different blocks cannot
+      // change its normalization or introduce a block-edge step.
+      constexpr float kMaxHarmonicToBandRms = 0.5f;
+      const float target_gain =
+          harmonic_rms_sq > 1.0e-20f && band_rms_sq > 0.0f
+              ? config_.amount *
+                    std::min(1.0f, kMaxHarmonicToBandRms * std::sqrt(band_rms_sq / harmonic_rms_sq))
+              : 0.0f;
+      harmonic_gain += harmonic_gain_alpha_ * (target_gain - harmonic_gain);
       channels[ch][i] += harmonic_scratch_[i] * harmonic_gain;
     }
     envelope_[static_cast<size_t>(ch)] = envelope;
+    band_rms_sq_[static_cast<size_t>(ch)] = band_rms_sq;
+    harmonic_rms_sq_[static_cast<size_t>(ch)] = harmonic_rms_sq;
+    harmonic_gain_[static_cast<size_t>(ch)] = harmonic_gain;
   }
 }
 
@@ -165,6 +170,13 @@ void AirBand::reset() {
   std::fill(harmonic_scratch_.begin(), harmonic_scratch_.end(), 0.0f);
   std::fill(envelope_.begin(), envelope_.end(), 0.0f);
   std::fill(shelf_gain_db_.begin(), shelf_gain_db_.end(), 0.0f);
+  std::fill(band_rms_sq_.begin(), band_rms_sq_.end(), 0.0f);
+  std::fill(harmonic_rms_sq_.begin(), harmonic_rms_sq_.end(), 0.0f);
+  std::fill(harmonic_gain_.begin(), harmonic_gain_.end(), 0.0f);
+  std::fill(shelf_control_samples_.begin(), shelf_control_samples_.end(), 0);
+  for (auto& state : harmonic_oversampler_states_) {
+    harmonic_oversampler_.reset_streaming(&state);
+  }
   for (auto& f : shelf_) f.reset();
   for (auto& f : detector_) f.reset();
   for (auto& f : harmonic_filter_) f.reset();
@@ -230,24 +242,40 @@ void AirBand::ensure_state(int num_channels) {
   // and seeds the new ones; a narrower block is left untouched (no churn).
   const auto target_size = static_cast<size_t>(num_channels);
   if (envelope_.size() < target_size || shelf_gain_db_.size() < target_size ||
+      band_rms_sq_.size() < target_size || harmonic_rms_sq_.size() < target_size ||
+      harmonic_gain_.size() < target_size || shelf_control_samples_.size() < target_size ||
       shelf_.size() < target_size || detector_.size() < target_size ||
-      harmonic_filter_.size() < target_size) {
+      harmonic_filter_.size() < target_size || harmonic_oversampler_states_.size() < target_size) {
     const size_t old_envelope_size = envelope_.size();
     const size_t old_shelf_gain_size = shelf_gain_db_.size();
+    const size_t old_band_rms_size = band_rms_sq_.size();
+    const size_t old_harmonic_rms_size = harmonic_rms_sq_.size();
+    const size_t old_harmonic_gain_size = harmonic_gain_.size();
+    const size_t old_shelf_control_size = shelf_control_samples_.size();
     const size_t old_shelf_size = shelf_.size();
     const size_t old_detector_size = detector_.size();
     const size_t old_harmonic_filter_size = harmonic_filter_.size();
+    const size_t old_oversampler_state_size = harmonic_oversampler_states_.size();
     envelope_.resize(target_size, 0.0f);
     shelf_gain_db_.resize(target_size, 0.0f);
+    band_rms_sq_.resize(target_size, 0.0f);
+    harmonic_rms_sq_.resize(target_size, 0.0f);
+    harmonic_gain_.resize(target_size, 0.0f);
+    shelf_control_samples_.resize(target_size, 0);
     shelf_.resize(target_size);
     detector_.resize(target_size);
     harmonic_filter_.resize(target_size);
+    harmonic_oversampler_states_.resize(target_size);
     for (size_t i = old_envelope_size; i < target_size; ++i) {
       envelope_[i] = 0.0f;
     }
     for (size_t i = old_shelf_gain_size; i < target_size; ++i) {
       shelf_gain_db_[i] = 0.0f;
     }
+    for (size_t i = old_band_rms_size; i < target_size; ++i) band_rms_sq_[i] = 0.0f;
+    for (size_t i = old_harmonic_rms_size; i < target_size; ++i) harmonic_rms_sq_[i] = 0.0f;
+    for (size_t i = old_harmonic_gain_size; i < target_size; ++i) harmonic_gain_[i] = 0.0f;
+    for (size_t i = old_shelf_control_size; i < target_size; ++i) shelf_control_samples_[i] = 0;
     for (size_t i = old_shelf_size; i < target_size; ++i) {
       shelf_[i] = make_high_shelf(config_.shelf_frequency_hz, sample_rate_, 0.0f);
     }
@@ -258,6 +286,10 @@ void AirBand::ensure_state(int num_channels) {
     for (size_t i = old_harmonic_filter_size; i < target_size; ++i) {
       harmonic_filter_[i] = make_highpass(config_.shelf_frequency_hz, sample_rate_,
                                           sonare::constants::kButterworthQD);
+    }
+    for (size_t i = old_oversampler_state_size; i < target_size; ++i) {
+      harmonic_oversampler_.prepare_streaming(&harmonic_oversampler_states_[i],
+                                              static_cast<size_t>(max_block_size_));
     }
   }
 }

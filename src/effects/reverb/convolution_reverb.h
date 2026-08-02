@@ -80,7 +80,8 @@ class ConvolutionReverb : public rt::ProcessorBase {
   }
   int ir_size() const noexcept { return static_cast<int>(ir_.size()); }
 
- protected:
+  /// Skips implicit noise-IR construction in prepare() when a caller will
+  /// synchronously provide an explicit IR with load_ir().
   void suppress_default_ir_synthesis() noexcept { explicit_ir_ = true; }
 
  private:

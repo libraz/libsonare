@@ -7,21 +7,30 @@
 #include <vector>
 
 #include "effects/common/dc_blocker.h"
+#include "rt/partitioned_convolver.h"
 #include "rt/processor_base.h"
 
 namespace sonare::effects::reverb {
 
 struct VelvetReverbConfig {
+  /// Maximum accepted base reverb time. Keeps ring-buffer allocation bounded.
+  static constexpr float kMaxReverbTimeSeconds = 12.0f;
+  /// Maximum taps per channel. Bounds the per-sample sparse-FIR work.
+  static constexpr int kMaxTapCount = 8192;
+
   /// @brief Scales reverb_time_s: effective T60 = reverb_time_s * (0.5 + decay).
   float decay = 0.45f;
   float dry_wet = 0.3f;
-  float reverb_time_s = 1.5f;  ///< Base T60 in seconds.
+  float reverb_time_s = 1.5f;  ///< Base T60 in seconds, clamped to kMaxReverbTimeSeconds.
   float density_hz = 2000.0f;  ///< Velvet pulse density, clamped to [1000, 3000].
   bool enable_shelf = true;    ///< Post one-pole high-shelf HF damping at 6 kHz.
 };
 
 class VelvetReverb : public rt::ProcessorBase {
  public:
+  /// The initial segment stays direct so the hybrid reconstruction preserves
+  /// zero algorithmic latency. All later taps are evaluated by FFT partitions.
+  static constexpr int kEarlyPartitionSamples = 256;
   explicit VelvetReverb(VelvetReverbConfig config = {});
 
   void prepare(double sample_rate, int max_block_size) override;
@@ -70,6 +79,14 @@ class VelvetReverb : public rt::ProcessorBase {
   Ring ring_r_;
   std::vector<Tap> taps_l_;
   std::vector<Tap> taps_r_;
+  std::vector<Tap> early_taps_l_;
+  std::vector<Tap> early_taps_r_;
+  rt::PartitionedConvolver late_l_{rt::PartitionedConvolverConfig{kEarlyPartitionSamples}};
+  rt::PartitionedConvolver late_r_{rt::PartitionedConvolverConfig{kEarlyPartitionSamples}};
+  std::vector<float> late_input_;
+  std::vector<float> late_output_l_;
+  std::vector<float> late_output_r_;
+  int late_fill_count_ = 0;
 
   // Post high-shelf damping state. The one-pole state tracks the low band;
   // process() recombines it with an attenuated high band.

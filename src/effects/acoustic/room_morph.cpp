@@ -67,6 +67,9 @@ void RoomMorphProcessor::prepare(double sample_rate, int max_block_size) {
   rc.crossfade_ms = config_.crossfade_ms;
   const RirSynthResult res = synthesize_rir(config_.target, config_.placement, sr, rc);
 
+  // prepare() otherwise synthesizes a default noise IR which load_ir() below
+  // immediately discards. This processor always supplies its own target RIR.
+  reverb_.suppress_default_ir_synthesis();
   reverb_.prepare(sample_rate, max_block_size);
   reverb_.load_ir(res.rir.data(), static_cast<int>(res.rir.size()));
   reverb_.set_parameter(0, config_.wet);  // dry/wet = target-room mix

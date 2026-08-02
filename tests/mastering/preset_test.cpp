@@ -110,6 +110,9 @@ TEST_CASE("chain config JSON rejects malformed input", "[mastering][preset][json
                     sonare::SonareException);
   REQUIRE_THROWS_AS(chain_config_from_json("{\"version\":1,\"params\":{\"eq.tilt.enabled\":}}"),
                     sonare::SonareException);
+  REQUIRE_THROWS_AS(
+      chain_config_from_json("{\"version\":1,\"params\":{\"repair.denoise.noiseEstimator\":99}}"),
+      sonare::SonareException);
 }
 
 TEST_CASE("chain config JSON rejects unknown top-level keys", "[mastering][preset][json]") {

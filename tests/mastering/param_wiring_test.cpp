@@ -377,6 +377,7 @@ TEST_CASE("maximizer.loudnessOptimize standalone paths pass every loudness param
     const auto dispatched = sonare::mastering::api::apply_named_processor(
         "maximizer.loudnessOptimize", left.data(), n, sr, params);
     REQUIRE(dispatched.samples == expected);
+    REQUIRE(dispatched.latency_samples == 0);
   }
 
   SECTION("stereo path matches the identical in-chain loudness stage") {
@@ -396,5 +397,6 @@ TEST_CASE("maximizer.loudnessOptimize standalone paths pass every loudness param
     REQUIRE(standalone.left.size() == chained.left.size());
     REQUIRE(standalone.left == chained.left);
     REQUIRE(standalone.right == chained.right);
+    REQUIRE(standalone.latency_samples == 0);
   }
 }

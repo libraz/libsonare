@@ -11,6 +11,7 @@
 
 #include "metering/true_peak.h"
 #include "rt/polyphase_fir.h"
+#include "rt/true_peak_fir.h"
 #include "util/constants.h"
 
 using Catch::Matchers::WithinAbs;
@@ -40,6 +41,26 @@ TEST_CASE("Polyphase interpolation matches centered convolution for every phase"
                WithinAbs(22.0f, 1.0e-6f));
   REQUIRE_THAT(sonare::rt::interpolate_polyphase_sample(data.data(), data.size(), 3, 1, fir),
                WithinAbs(58.0f, 1.0e-6f));
+}
+
+TEST_CASE("true-peak FIR factory owns every supported design", "[rt][truepeak]") {
+  const auto& unity = sonare::rt::true_peak_fir_for(1);
+  REQUIRE(unity.phases == 1);
+  REQUIRE(unity.taps_per_phase == 1);
+  REQUIRE(TruePeakFilter(1, 1).history_samples() == 1);
+
+  for (const int factor : {2, 4, 8, 16}) {
+    CAPTURE(factor);
+    REQUIRE(sonare::rt::is_supported_polyphase_oversample_factor(factor));
+    const auto& fir = sonare::rt::true_peak_fir_for(factor);
+    REQUIRE(fir.phases == factor);
+    REQUIRE(fir.taps_per_phase == 12);
+    REQUIRE(fir.phase_taps.size() == static_cast<size_t>(factor));
+    REQUIRE(TruePeakFilter(1, factor).history_samples() == fir.taps_per_phase);
+  }
+
+  REQUIRE_FALSE(sonare::rt::is_supported_polyphase_oversample_factor(3));
+  REQUIRE_THROWS(sonare::rt::true_peak_fir_for(3));
 }
 
 TEST_CASE("TruePeakFilter resolves inter-sample peaks of a 997 Hz tone", "[rt][truepeak]") {

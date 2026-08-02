@@ -342,6 +342,36 @@ TEST_CASE("sonare_mastering_process", "[c_api][mastering]") {
     sonare_streaming_mastering_chain_destroy(stereo_chain);
   }
 
+  SECTION("streaming mastering chain flush drains delayed samples once") {
+    constexpr int kSampleRate = 48000;
+    constexpr int kBlockSize = 64;
+    const SonareMasteringParam params[] = {{"maximizer.truePeakLimiter.enabled", 1.0}};
+    SonareStreamingMasteringChain* chain = sonare_streaming_mastering_chain_create(params, 1);
+    REQUIRE(chain != nullptr);
+    REQUIRE(sonare_streaming_mastering_chain_prepare(chain, kSampleRate, kBlockSize, 1) ==
+            SONARE_OK);
+    REQUIRE(sonare_streaming_mastering_chain_latency_samples(chain) > 0);
+
+    std::vector<float> block(kBlockSize, 0.0f);
+    block[0] = 0.5f;
+    REQUIRE(sonare_streaming_mastering_chain_process_mono(chain, block.data(), block.size()) ==
+            SONARE_OK);
+
+    size_t written = 0;
+    size_t total = 0;
+    do {
+      std::fill(block.begin(), block.end(), -1.0f);
+      REQUIRE(sonare_streaming_mastering_chain_flush_mono(chain, block.data(), block.size(),
+                                                          &written) == SONARE_OK);
+      total += written;
+    } while (written > 0);
+    REQUIRE(total >= static_cast<size_t>(sonare_streaming_mastering_chain_latency_samples(chain)));
+    REQUIRE(sonare_streaming_mastering_chain_flush_mono(chain, block.data(), block.size(),
+                                                        &written) == SONARE_OK);
+    REQUIRE(written == 0);
+    sonare_streaming_mastering_chain_destroy(chain);
+  }
+
   SECTION("named processor validation includes processor and parameter name") {
     auto samples = generate_sine(440.0f, 22050, 0.5f);
     SonareMasteringParam params[] = {{"width", 3.5}};
@@ -561,6 +591,7 @@ TEST_CASE("sonare_mastering name getters return a stable pointer across calls",
   REQUIRE(catalog != nullptr);
   REQUIRE(std::strstr(catalog, "\"latencySamples\":") != nullptr);
   REQUIRE(std::strstr(catalog, "\"tailSamples\":") != nullptr);
+  REQUIRE(std::strstr(catalog, "\"realtimeCost\":") != nullptr);
 }
 
 TEST_CASE("sonare_capability_catalog_json aggregates processors and presets",
@@ -633,6 +664,29 @@ TEST_CASE("sonare_mastering named-processor rejects out-of-range repair modes",
   REQUIRE(sonare_mastering_apply_processor("repair.denoiseClassical", samples.data(),
                                            samples.size(), 44100, good_mode, 1, &out) == SONARE_OK);
   sonare_free_mastering_result(&out);
+}
+
+TEST_CASE("sonare_mastering trimSilence measures an all-silent empty result safely",
+          "[c_api][mastering][trim_silence][empty]") {
+  constexpr int sample_rate = 48000;
+  std::vector<float> silence(2048, 0.0f);
+
+  SonareMasteringResult mono{};
+  REQUIRE(sonare_mastering_apply_processor("repair.trimSilence", silence.data(), silence.size(),
+                                           sample_rate, nullptr, 0, &mono) == SONARE_OK);
+  REQUIRE(mono.length == 0);
+  REQUIRE(std::isinf(mono.output_lufs));
+  REQUIRE(mono.output_lufs < 0.0f);
+  sonare_free_mastering_result(&mono);
+
+  SonareMasteringStereoResult stereo{};
+  REQUIRE(sonare_mastering_apply_processor_stereo("repair.trimSilence", silence.data(),
+                                                  silence.data(), silence.size(), sample_rate,
+                                                  nullptr, 0, &stereo) == SONARE_OK);
+  REQUIRE(stereo.length == 0);
+  REQUIRE(std::isinf(stereo.output_lufs));
+  REQUIRE(stereo.output_lufs < 0.0f);
+  sonare_free_mastering_stereo_result(&stereo);
 }
 
 TEST_CASE("sonare_mastering pair processors reject invalid enums consistently",

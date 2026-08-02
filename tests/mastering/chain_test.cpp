@@ -18,6 +18,19 @@ using Catch::Matchers::WithinAbs;
 
 namespace sonare::mastering::api {
 
+namespace {
+
+float max_abs_difference(const std::vector<float>& left, const std::vector<float>& right) {
+  if (left.size() != right.size()) return std::numeric_limits<float>::infinity();
+  float maximum = 0.0f;
+  for (size_t i = 0; i < left.size(); ++i) {
+    maximum = std::max(maximum, std::abs(left[i] - right[i]));
+  }
+  return maximum;
+}
+
+}  // namespace
+
 TEST_CASE("MasteringChain passes through with empty config (mono)", "[mastering][chain]") {
   std::vector<float> samples(44100, 0.1f);
   MasteringChainConfig config;
@@ -259,6 +272,30 @@ TEST_CASE("MasteringChain reports when peak headroom limits the LUFS target",
   REQUIRE(result.output_lufs < config.loudness.target_lufs - 0.5f);
 }
 
+TEST_CASE("Stereo chain uses channel-summed LUFS when limiting a loudness target",
+          "[mastering][chain][loudness]") {
+  constexpr int sample_rate = 48000;
+  std::vector<float> left(static_cast<size_t>(sample_rate));
+  std::vector<float> right(left.size());
+  for (size_t i = 0; i < left.size(); ++i) {
+    const float sample = 0.8f * std::sin(2.0f * sonare::constants::kPi * 440.0f *
+                                         static_cast<float>(i) / sample_rate);
+    left[i] = sample;
+    right[i] = -sample;
+  }
+
+  MasteringChainConfig config;
+  config.loudness.enabled = true;
+  config.loudness.target_lufs = 0.0f;
+  config.loudness.ceiling_db = -1.0f;
+  const auto result =
+      MasteringChain(config).process_stereo(left.data(), right.data(), left.size(), sample_rate);
+
+  REQUIRE(std::isfinite(result.input_lufs));
+  REQUIRE(result.loudness_target_limited);
+  REQUIRE(result.output_lufs < config.loudness.target_lufs - 0.5f);
+}
+
 TEST_CASE("Named stereo fallback processes mono processors per channel", "[mastering][chain]") {
   std::vector<float> left = {0.1f, 0.2f, 0.3f, 0.4f};
   std::vector<float> right = {0.9f, 0.8f, 0.7f, 0.6f};
@@ -467,6 +504,53 @@ TEST_CASE("StreamingMasteringChain processes mono blocks", "[mastering][chain][s
   float* channels[] = {block.data()};
   chain.process_block(channels, 1, 512);
   REQUIRE(block[0] != 0.1f);
+}
+
+TEST_CASE("StreamingMasteringChain flushes AirBand and true-peak latency",
+          "[mastering][chain][streaming]") {
+  constexpr int kSampleRate = 48000;
+  constexpr int kBlockSize = 128;
+  std::vector<float> input(2048, 0.0f);
+  for (size_t i = 0; i < input.size(); ++i) {
+    input[i] = 0.25f *
+               std::sin(static_cast<float>(i) * sonare::constants::kTwoPi * 14000.0f / kSampleRate);
+  }
+
+  MasteringChainConfig config;
+  config.spectral.air_band.enabled = true;
+  config.spectral.air_band.config = {0.7f, 10000.0f, -60.0f, 6.0f};
+  config.maximizer.true_peak_limiter.enabled = true;
+
+  const auto offline = MasteringChain(config).process_mono(input.data(), input.size(), kSampleRate);
+  StreamingMasteringChain streaming(config);
+  streaming.prepare(kSampleRate, kBlockSize, 1);
+  REQUIRE(streaming.latency_samples() > 0);
+
+  std::vector<float> streamed;
+  for (size_t offset = 0; offset < input.size(); offset += kBlockSize) {
+    std::vector<float> block(input.begin() + static_cast<std::ptrdiff_t>(offset),
+                             input.begin() + static_cast<std::ptrdiff_t>(offset + kBlockSize));
+    float* channels[] = {block.data()};
+    streaming.process_block(channels, 1, static_cast<int>(block.size()));
+    streamed.insert(streamed.end(), block.begin(), block.end());
+  }
+  for (;;) {
+    std::vector<float> tail(kBlockSize);
+    float* channels[] = {tail.data()};
+    const int written = streaming.flush(channels, 1, kBlockSize);
+    if (written == 0) break;
+    streamed.insert(streamed.end(), tail.begin(), tail.begin() + written);
+  }
+
+  REQUIRE(streamed.size() > input.size() + static_cast<size_t>(streaming.latency_samples()));
+  REQUIRE(streamed.size() >= input.size() + static_cast<size_t>(streaming.latency_samples()));
+  const auto aligned_begin = streamed.begin() + streaming.latency_samples();
+  std::vector<float> aligned(aligned_begin, aligned_begin + offline.samples.size());
+  // TruePeakLimiter applies a bounded per-block reconstruction correction, so
+  // its streaming and offline chunking can differ slightly while staying well
+  // below an audible level. AirBand's block-size invariance is asserted in its
+  // dedicated exact-state test above.
+  REQUIRE(max_abs_difference(aligned, offline.samples) < 1.0e-3f);
 }
 
 TEST_CASE("StreamingMasteringChain stage_names lists enabled stages",

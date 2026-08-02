@@ -2,6 +2,7 @@
 
 #include <algorithm>
 #include <cmath>
+#include <optional>
 #include <utility>
 #include <vector>
 
@@ -15,20 +16,15 @@ bool can_use_lpc(size_t size, int order) {
   return order > 0 && size > static_cast<size_t>(order + 2);
 }
 
-std::vector<bool> detect_clicks(const std::vector<float>& samples, const DeclickConfig& config) {
+std::vector<bool> detect_clicks(const std::vector<float>& samples, const DeclickConfig& config,
+                                const LpcResult* lpc_model) {
   std::vector<bool> mask(samples.size(), false);
   for (size_t i = 1; i + 1 < samples.size(); ++i) {
     mask[i] = std::abs(samples[i]) >= config.threshold;
   }
 
-  if (!can_use_lpc(samples.size(), config.lpc_order)) return mask;
-
-  const int order =
-      std::min(config.lpc_order, static_cast<int>(std::max<size_t>(1, samples.size() / 4)));
-  if (!can_use_lpc(samples.size(), order)) return mask;
-
-  const auto model = sonare::lpc_burg(samples.data(), samples.size(), order);
-  const auto residual = sonare::lpc_residual(samples.data(), samples.size(), model);
+  if (!lpc_model) return mask;
+  const auto residual = sonare::lpc_residual(samples.data(), samples.size(), *lpc_model);
   constexpr size_t kRadius = 8;
   for (size_t i = 1; i + 1 < samples.size(); ++i) {
     const size_t begin = i > kRadius ? i - kRadius : 0;
@@ -55,7 +51,7 @@ std::vector<bool> detect_clicks(const std::vector<float>& samples, const Declick
 }
 
 void interpolate_region(std::vector<float>& output, const std::vector<float>& samples, size_t start,
-                        size_t end, int lpc_order) {
+                        size_t end, const LpcResult* lpc_model) {
   const size_t length = end - start;
   const float left = output[start - 1];
   const float right = samples[end];
@@ -66,11 +62,7 @@ void interpolate_region(std::vector<float>& output, const std::vector<float>& sa
     output[j] = left + (right - left) * t;
   }
 
-  if (!can_use_lpc(output.size(), lpc_order)) return;
-  const int order = std::min(lpc_order, static_cast<int>(std::max<size_t>(1, output.size() / 4)));
-  if (!can_use_lpc(output.size(), order)) return;
-
-  const auto model = sonare::lpc_burg(output.data(), output.size(), order);
+  if (!lpc_model) return;
 
   // Forward AR extrapolation from the left context restores the click's spectral
   // detail but, on its own, drifts away from the right boundary. Crossfade the
@@ -81,9 +73,9 @@ void interpolate_region(std::vector<float>& output, const std::vector<float>& sa
   std::vector<float> ar_fill(length, 0.0f);
   for (size_t j = start; j < end; ++j) {
     double predicted = 0.0;
-    const size_t max_k = std::min(model.ar.size() - 1, j);
+    const size_t max_k = std::min(lpc_model->ar.size() - 1, j);
     for (size_t k = 1; k <= max_k; ++k) {
-      predicted -= static_cast<double>(model.ar[k]) * output[j - k];
+      predicted -= static_cast<double>(lpc_model->ar[k]) * output[j - k];
     }
     const float linear = output[j];
     // w: 1 at the first filled sample, decreasing to ~0 near the right anchor.
@@ -103,7 +95,14 @@ Audio declick(const Audio& audio, const DeclickConfig& config) {
   }
   std::vector<float> samples(audio.data(), audio.data() + audio.size());
   std::vector<float> output = samples;
-  const std::vector<bool> click_mask = detect_clicks(samples, config);
+  std::optional<LpcResult> lpc_model;
+  if (can_use_lpc(samples.size(), config.lpc_order)) {
+    const int lpc_order =
+        std::min(config.lpc_order, static_cast<int>(std::max<size_t>(1, samples.size() / 4)));
+    lpc_model = sonare::lpc_burg(samples.data(), samples.size(), lpc_order);
+  }
+  const std::vector<bool> click_mask =
+      detect_clicks(samples, config, lpc_model ? &*lpc_model : nullptr);
   size_t i = 1;
   while (i + 1 < samples.size()) {
     if (!click_mask[i]) {
@@ -121,7 +120,7 @@ Audio declick(const Audio& audio, const DeclickConfig& config) {
     const size_t length = end - start;
     const float local = std::max({std::abs(samples[start - 1]), std::abs(samples[end]), 1e-6f});
     if (length <= config.max_click_samples && peak > local * config.neighbor_ratio) {
-      interpolate_region(output, samples, start, end, config.lpc_order);
+      interpolate_region(output, samples, start, end, lpc_model ? &*lpc_model : nullptr);
     }
   }
   return Audio::from_vector(std::move(output), audio.sample_rate());

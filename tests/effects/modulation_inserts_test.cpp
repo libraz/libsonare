@@ -141,6 +141,17 @@ TEST_CASE("the auto-wah opens the filter further for louder input",
   REQUIRE(high_fraction(0.6f) > 1.2 * high_fraction(0.02f));
 }
 
+TEST_CASE("wah inserts clamp an over-Nyquist sweep to the filter's stable range",
+          "[effects][modulation][wah]") {
+  Wah wah({/*rate_hz=*/1.0f, /*min_hz=*/1.0e9f, /*max_hz=*/1.0e9f,
+           /*resonance=*/4.0f, /*dry_wet=*/1.0f});
+  AutoWah auto_wah({/*sensitivity=*/2.0f, /*min_hz=*/1.0e9f, /*max_hz=*/1.0e9f,
+                    /*resonance=*/4.0f, /*attack_ms=*/5.0f, /*release_ms=*/50.0f,
+                    /*dry_wet=*/1.0f});
+  REQUIRE(all_finite(run_mono(wah, sine(440.0, 0.3f, kNumSamples))));
+  REQUIRE(all_finite(run_mono(auto_wah, sine(440.0, 0.3f, kNumSamples))));
+}
+
 TEST_CASE("the rotary speaker decorrelates a mono input into a swirling stereo",
           "[effects][modulation][rotary]") {
   Rotary fx({/*rate_hz=*/6.0f, /*depth_ms=*/1.5f, /*tremolo=*/0.6f, /*stereo_spread=*/1.0f,

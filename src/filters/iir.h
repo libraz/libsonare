@@ -82,6 +82,13 @@ CascadedBiquad highpass_coeffs_4th(float cutoff_hz, int sr);
 /// @return Cascaded biquad sections (2 sections for 4th order)
 CascadedBiquad lowpass_coeffs_4th(float cutoff_hz, int sr);
 
+/// @brief Applies cascaded biquad sections in the forward (causal) direction.
+/// @param input Input signal
+/// @param size Signal length
+/// @param cascade Cascaded biquad sections
+/// @return Filtered signal with the cascade's causal phase response
+std::vector<float> apply_cascade(const float* input, size_t size, const CascadedBiquad& cascade);
+
 /// @brief Applies cascaded biquad filter forward and backward (zero-phase filtering).
 /// @param input Input signal
 /// @param size Signal length

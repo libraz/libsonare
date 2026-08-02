@@ -2,6 +2,7 @@
 
 #include <vector>
 
+#include "rt/delay_line.h"
 #include "rt/oversampler.h"
 #include "rt/processor_base.h"
 
@@ -22,6 +23,10 @@ class Tube : public rt::ProcessorBase {
   void prepare(double sample_rate, int max_block_size) override;
   void process(float* const* channels, int num_channels, int num_samples) override;
   void reset() override;
+  int latency_samples() const noexcept override {
+    return tube_config_.oversample_factor > 1 ? oversampler_.streaming_round_trip_latency_samples()
+                                              : 0;
+  }
   void set_config(const TubeConfig& config);
   const TubeConfig& tube_config() const { return tube_config_; }
 
@@ -51,6 +56,8 @@ class Tube : public rt::ProcessorBase {
   double sample_rate_ = 48000.0;
   int max_block_size_ = 0;
   sonare::rt::Oversampler oversampler_{4};
+  std::vector<sonare::rt::Oversampler::StreamingState> oversampler_states_;
+  std::vector<sonare::rt::DelayLine> dry_delays_;
   // Preallocated oversampling scratch (sized max_block_size_*oversample_factor
   // in prepare()) so the audio-thread process() path never allocates.
   std::vector<float> up_scratch_;

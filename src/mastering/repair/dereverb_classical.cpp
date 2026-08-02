@@ -57,20 +57,6 @@ std::vector<std::complex<float>> solve_linear_system(
   return solution;
 }
 
-Audio legacy_tail_attenuate(const Audio& audio, const DereverbClassicalConfig& config) {
-  std::vector<float> samples(audio.data(), audio.data() + audio.size());
-  bool in_tail = false;
-  for (auto& sample : samples) {
-    if (std::abs(sample) >= config.threshold) {
-      in_tail = false;
-    } else if (in_tail || std::abs(sample) > 0.0f) {
-      in_tail = true;
-      sample *= config.attenuation;
-    }
-  }
-  return Audio::from_vector(std::move(samples), audio.sample_rate());
-}
-
 }  // namespace
 
 Audio dereverb_classical(const Audio& audio, const DereverbClassicalConfig& config) {
@@ -84,8 +70,16 @@ Audio dereverb_classical(const Audio& audio, const DereverbClassicalConfig& conf
     throw SonareException(ErrorCode::InvalidParameter, "invalid dereverb configuration");
   }
 
+  // A short block must use the same STFT dereverberation path as a full clip.
+  // Pad only the analysis input and trim reconstruction back to the caller's
+  // original length; do not silently switch to the former tail-attenuation DSP.
+  Audio padded;
+  const Audio* analysis_audio = &audio;
   if (static_cast<int>(audio.size()) < config.n_fft) {
-    return legacy_tail_attenuate(audio, config);
+    std::vector<float> samples(audio.data(), audio.data() + audio.size());
+    samples.resize(static_cast<size_t>(config.n_fft), 0.0f);
+    padded = Audio::from_vector(std::move(samples), audio.sample_rate());
+    analysis_audio = &padded;
   }
 
   StftConfig stft_config;
@@ -93,7 +87,7 @@ Audio dereverb_classical(const Audio& audio, const DereverbClassicalConfig& conf
   stft_config.hop_length = config.hop_length;
   stft_config.window = WindowType::Hann;
   stft_config.center = true;
-  const Spectrogram spec = Spectrogram::compute(audio, stft_config);
+  const Spectrogram spec = Spectrogram::compute(*analysis_audio, stft_config);
   if (spec.empty()) return audio;
 
   const int bins = spec.n_bins();
@@ -101,7 +95,6 @@ Audio dereverb_classical(const Audio& audio, const DereverbClassicalConfig& conf
   const auto* complex_data = spec.complex_data();
   const auto& power = spec.power();
   std::vector<std::complex<float>> dereverbed(static_cast<size_t>(bins * frames));
-  std::vector<std::complex<float>> working(complex_data, complex_data + bins * frames);
 
   const int delay_frames =
       std::max(1, static_cast<int>(std::round(config.late_delay_ms * 0.001f *
@@ -115,7 +108,7 @@ Audio dereverb_classical(const Audio& audio, const DereverbClassicalConfig& conf
   for (int b = 0; b < bins; ++b) {
     for (int t = 0; t < frames; ++t) {
       const size_t idx = static_cast<size_t>(b * frames + t);
-      const std::complex<float>& bin = working[idx];
+      const std::complex<float>& bin = complex_data[idx];
       const double current_power = std::max(static_cast<double>(power[idx]), 1e-18);
       const int late_frame = t - delay_frames;
       const double late_psd =

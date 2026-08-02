@@ -1,7 +1,7 @@
-// Targeted coverage for audit fixes around the insert factory, JSON
+// Targeted regression coverage around the insert factory, JSON
 // round-tripping, and presets. The data-driven set_parameter_test.cpp already
 // exercises the set_parameter contract for every name in insert_factory_names();
-// these cases pin the specific behaviors changed by the audit pass:
+// these cases pin the corresponding public behaviors:
 //   * the modulation/delay effects are now registered and buildable,
 //   * "maximizer.loudnessOptimize" is intentionally NOT a streaming insert,
 //   * chain JSON round-trips the full repair.denoise field set,
@@ -488,6 +488,7 @@ TEST_CASE("processor_catalog_json classifies every id consistently with the sour
     REQUIRE(entry.contains("realtimeInsertable"));
     REQUIRE(entry.contains("latencySamples"));
     REQUIRE(entry.contains("tailSamples"));
+    REQUIRE(entry.contains("realtimeCost"));
     REQUIRE(entry.contains("category"));
     REQUIRE(entry["category"].is_string());
     REQUIRE(entry.contains("params"));
@@ -506,12 +507,16 @@ TEST_CASE("processor_catalog_json classifies every id consistently with the sour
     REQUIRE(tail >= 0);
 
     if (entry["realtimeInsertable"].as_bool()) {
+      REQUIRE(entry["realtimeCost"].is_string());
+      const std::string cost = entry["realtimeCost"].as_string();
+      REQUIRE((cost == "low" || cost == "moderate" || cost == "high"));
       auto processor = make_insert(entry["id"].as_string(), "{}");
       REQUIRE(processor != nullptr);
       processor->prepare(48000.0, 512);
       REQUIRE(latency == std::max(0, processor->latency_samples()));
       REQUIRE(tail == std::max(0, processor->tail_samples()));
     } else {
+      REQUIRE(entry["realtimeCost"].is_null());
       REQUIRE(latency == 0);
       REQUIRE(tail == 0);
     }
@@ -543,20 +548,36 @@ TEST_CASE("processor_catalog_json classifies every id consistently with the sour
   // stereoOnly is surfaced independently of kind: eq.midSide is realtime-insertable
   // yet has no mono implementation, so it is realtime + stereoOnly. It is also an
   // inherently-stereo processor, so its channelPolicy is "stereoPairOnly".
-  REQUIRE(json.find("{\"id\":\"eq.midSide\",\"kind\":\"realtime\",\"realtimeInsertable\":true,"
-                    "\"stereoOnly\":true,\"latencySamples\":0,\"tailSamples\":0,"
-                    "\"channelPolicy\":\"stereoPairOnly\",\"category\":\"eq\",\"params\":") !=
-          std::string::npos);
+  REQUIRE(
+      json.find("{\"id\":\"eq.midSide\",\"kind\":\"realtime\",\"realtimeInsertable\":true,"
+                "\"stereoOnly\":true,\"latencySamples\":0,\"tailSamples\":0,"
+                "\"realtimeCost\":\"low\",\"channelPolicy\":\"stereoPairOnly\",\"category\":\"eq\","
+                "\"params\":") != std::string::npos);
 
   // Delay-like stereo tools publish their prepared audible tail through the
   // same probe used for latency. Default Haas is 12 ms at 48 kHz; default
   // PhaseAlign has no delay.
   REQUIRE(json.find("{\"id\":\"stereo.haasEnhancer\",\"kind\":\"realtime\","
                     "\"realtimeInsertable\":true,\"stereoOnly\":true,"
-                    "\"latencySamples\":0,\"tailSamples\":576,") != std::string::npos);
+                    "\"latencySamples\":0,\"tailSamples\":576,\"realtimeCost\":\"low\",") !=
+          std::string::npos);
   REQUIRE(json.find("{\"id\":\"stereo.phaseAlign\",\"kind\":\"realtime\","
                     "\"realtimeInsertable\":true,\"stereoOnly\":true,"
-                    "\"latencySamples\":0,\"tailSamples\":0,") != std::string::npos);
+                    "\"latencySamples\":0,\"tailSamples\":0,\"realtimeCost\":\"low\",") !=
+          std::string::npos);
+
+  // Velvet's bounded multi-tap work is explicitly distinguishable from a
+  // conventional FDN reverb, so hosts can budget a live processor chain.
+  const auto velvet = std::find_if(
+      catalog.as_array().begin(), catalog.as_array().end(),
+      [](const auto& entry) { return entry["id"].as_string() == "effects.reverb.velvet"; });
+  REQUIRE(velvet != catalog.as_array().end());
+  REQUIRE((*velvet)["realtimeCost"].as_string() == "high");
+  const auto fdn = std::find_if(
+      catalog.as_array().begin(), catalog.as_array().end(),
+      [](const auto& entry) { return entry["id"].as_string() == "effects.reverb.fdn"; });
+  REQUIRE(fdn != catalog.as_array().end());
+  REQUIRE((*fdn)["realtimeCost"].as_string() == "moderate");
 
   // Realtime-only ids that are absent from processor_names() are still reported.
   if (ListContains(sonare::mastering::api::insert_factory_names(), "effects.reverb.room")) {
@@ -564,6 +585,15 @@ TEST_CASE("processor_catalog_json classifies every id consistently with the sour
         json.find("{\"id\":\"effects.reverb.room\",\"kind\":\"realtime\",\"realtimeInsertable\":"
                   "true") != std::string::npos);
   }
+}
+
+TEST_CASE("velvet insert factory bounds excessive reverb time",
+          "[mastering][insert_factory][reverb]") {
+  auto processor =
+      make_insert("effects.reverb.velvet", R"({"reverbTimeS":40,"densityHz":3000,"decay":1})");
+  REQUIRE(processor != nullptr);
+  processor->prepare(48000.0, 512);
+  REQUIRE(processor->tail_samples() <= 18 * 48000);
 }
 
 TEST_CASE(

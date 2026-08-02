@@ -2,6 +2,7 @@
 /// @brief Reverb/delay decay-tail reporting so offline bounces are not
 ///        truncated, plus the convolution empty-IR latency contract.
 
+#include <catch2/catch_approx.hpp>
 #include <catch2/catch_test_macros.hpp>
 
 #include "effects/delay/stereo_delay.h"
@@ -38,6 +39,55 @@ TEST_CASE("VelvetReverb reports a non-zero decay tail", "[effects][reverb][velve
   reverb.prepare(48000.0, 512);
   // rt60 = 1.5 * (0.5 + 0.45) ~= 1.425 s -> ~68400 samples.
   REQUIRE(reverb.tail_samples() > 48000);
+}
+
+TEST_CASE("VelvetReverb bounds excessive reverb time and tap work", "[effects][reverb][velvet]") {
+  VelvetReverbConfig config;
+  config.reverb_time_s = 40.0f;
+  config.decay = 1.0f;
+  config.density_hz = 3000.0f;
+  VelvetReverb reverb(config);
+  reverb.prepare(48000.0, 512);
+
+  // 12 s base time × the maximum 1.5 decay factor, rather than the requested 40 s.
+  REQUIRE(reverb.tail_samples() <= 18 * 48000);
+
+  std::vector<float> samples(512, 0.0f);
+  samples[0] = 1.0f;
+  float* channels[] = {samples.data()};
+  reverb.process(channels, 1, static_cast<int>(samples.size()));
+  for (const float sample : samples) REQUIRE(std::isfinite(sample));
+}
+
+TEST_CASE("VelvetReverb hybrid tap reconstruction is independent of host block boundaries",
+          "[effects][reverb][velvet]") {
+  constexpr int kSamples = 4096;
+  VelvetReverbConfig config;
+  config.dry_wet = 1.0f;
+  config.enable_shelf = false;
+  std::vector<float> whole(kSamples, 0.0f);
+  std::vector<float> split(kSamples, 0.0f);
+  whole[0] = 1.0f;
+  split[0] = 1.0f;
+
+  VelvetReverb whole_fx(config);
+  whole_fx.prepare(48000.0, kSamples);
+  float* whole_channels[] = {whole.data()};
+  whole_fx.process(whole_channels, 1, kSamples);
+
+  VelvetReverb split_fx(config);
+  split_fx.prepare(48000.0, 257);
+  for (int offset = 0; offset < kSamples;) {
+    const int count = std::min(37 + (offset % 211), kSamples - offset);
+    float* split_channels[] = {split.data() + offset};
+    split_fx.process(split_channels, 1, count);
+    offset += count;
+  }
+
+  for (int i = 0; i < kSamples; ++i) {
+    REQUIRE(whole[static_cast<size_t>(i)] ==
+            Catch::Approx(split[static_cast<size_t>(i)]).margin(1e-5));
+  }
 }
 
 TEST_CASE("ConvolutionReverb reports the IR length as its tail", "[effects][reverb][convolution]") {

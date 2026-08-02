@@ -153,6 +153,7 @@ BlockEnergyAccumulator make_block_accumulator(size_t frames, int sample_rate, fl
 
 void accumulate_channel_blocks(const std::vector<double>& weighted, double channel_weight,
                                BlockEnergyAccumulator* accumulator) {
+  if (accumulator->window == 0 || accumulator->energies.empty()) return;
   size_t block = 0;
   for (size_t start = 0; start + accumulator->window <= weighted.size();
        start += accumulator->hop, ++block) {

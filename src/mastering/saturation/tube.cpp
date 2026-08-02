@@ -67,17 +67,13 @@ float plate_current_ma(float vg, float va) {
 
 Tube::Tube(TubeConfig config) : tube_config_(config) {
   validate_config(tube_config_);
-  if (tube_config_.oversample_factor != 1) {
-    oversampler_.set_factor(tube_config_.oversample_factor);
-  }
+  oversampler_.set_factor(tube_config_.oversample_factor);
 }
 
 void Tube::set_config(const TubeConfig& config) {
   validate_config(config);
   tube_config_ = config;
-  if (tube_config_.oversample_factor != 1) {
-    oversampler_.set_factor(tube_config_.oversample_factor);
-  }
+  oversampler_.set_factor(tube_config_.oversample_factor);
   if (prepared_) {
     // oversample_factor may have changed; resize the scratch on this
     // control-thread path (allocation here is acceptable, never on the audio
@@ -95,6 +91,12 @@ void Tube::allocate_scratch() {
   const size_t scratch = base * static_cast<size_t>(std::max(1, tube_config_.oversample_factor));
   up_scratch_.assign(scratch, 0.0f);
   down_scratch_.assign(base, 0.0f);
+  for (auto& state : oversampler_states_) {
+    oversampler_.prepare_streaming(&state, base);
+  }
+  for (auto& delay : dry_delays_) {
+    delay.prepare(static_cast<size_t>(latency_samples()));
+  }
 }
 
 void Tube::prepare(double sample_rate, int max_block_size) {
@@ -104,10 +106,12 @@ void Tube::prepare(double sample_rate, int max_block_size) {
     throw SonareException(ErrorCode::InvalidParameter, "max_block_size must be non-negative");
   sample_rate_ = sample_rate;
   max_block_size_ = max_block_size;
-  allocate_scratch();
   // Preallocate per-channel Miller-filter state so process() never resizes on
   // the audio thread for any channel count up to the realtime limit.
   miller_state_.assign(dynamics::kRealtimePreparedChannels, 0.0f);
+  oversampler_states_.resize(dynamics::kRealtimePreparedChannels);
+  dry_delays_.resize(dynamics::kRealtimePreparedChannels);
+  allocate_scratch();
   prepared_ = true;
   reset();
 }
@@ -147,16 +151,19 @@ void Tube::process(float* const* channels, int num_channels, int num_samples) {
                           "num_samples exceeds prepared Tube oversampling scratch");
   }
   for (int ch = 0; ch < num_channels; ++ch) {
-    oversampler_.upsample_to(channels[ch], static_cast<size_t>(num_samples), up_scratch_.data(),
-                             up_scratch_.size());
+    const float* input = channels[ch];
+    auto& oversampler_state = oversampler_states_[static_cast<size_t>(ch)];
+    oversampler_.upsample_to_streaming(input, static_cast<size_t>(num_samples), up_scratch_.data(),
+                                       up_scratch_.size(), &oversampler_state);
     for (size_t i = 0; i < os_samples; ++i) {
       up_scratch_[i] = process_model(up_scratch_[i], tube_config_);
     }
-    oversampler_.downsample_to(up_scratch_.data(), os_samples, down_scratch_.data(),
-                               down_scratch_.size());
+    oversampler_.downsample_to_streaming(up_scratch_.data(), os_samples, down_scratch_.data(),
+                                         down_scratch_.size(), &oversampler_state);
     for (int i = 0; i < num_samples; ++i) {
       const float wet = apply_miller_filter(ch, down_scratch_[static_cast<size_t>(i)]);
-      channels[ch][i] = channels[ch][i] * (1.0f - tube_config_.mix) + wet * tube_config_.mix;
+      const float dry = dry_delays_[static_cast<size_t>(ch)].process(input[i]);
+      channels[ch][i] = dry * (1.0f - tube_config_.mix) + wet * tube_config_.mix;
     }
   }
 }
@@ -165,6 +172,12 @@ void Tube::reset() {
   std::fill(up_scratch_.begin(), up_scratch_.end(), 0.0f);
   std::fill(down_scratch_.begin(), down_scratch_.end(), 0.0f);
   std::fill(miller_state_.begin(), miller_state_.end(), 0.0f);
+  for (auto& state : oversampler_states_) {
+    oversampler_.reset_streaming(&state);
+  }
+  for (auto& delay : dry_delays_) {
+    delay.reset();
+  }
 }
 
 float Tube::process_model(float sample, const TubeConfig& config) {
@@ -221,9 +234,11 @@ void Tube::validate_config(const TubeConfig& config) {
 
 void Tube::ensure_state(int num_channels) {
   // prepare() preallocates kRealtimePreparedChannels states so the common audio
-  // path never resizes. Only grow (control thread) if a caller exceeds it.
-  if (miller_state_.size() < static_cast<size_t>(num_channels)) {
-    miller_state_.assign(static_cast<size_t>(num_channels), 0.0f);
+  // path never resizes. A wider stream must be prepared before audio processing.
+  if (miller_state_.size() < static_cast<size_t>(num_channels) ||
+      oversampler_states_.size() < static_cast<size_t>(num_channels) ||
+      dry_delays_.size() < static_cast<size_t>(num_channels)) {
+    throw SonareException(ErrorCode::InvalidParameter, "num_channels exceeds prepared Tube state");
   }
 }
 

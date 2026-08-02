@@ -30,6 +30,14 @@ void run_tape(int oversample_factor, std::vector<float>& mono) {
   tape.process(channels, 1, static_cast<int>(mono.size()));
 }
 
+void process_tape_blocks(Tape& tape, std::vector<float>& mono, size_t block_size) {
+  for (size_t offset = 0; offset < mono.size(); offset += block_size) {
+    const size_t count = std::min(block_size, mono.size() - offset);
+    float* channels[] = {mono.data() + offset};
+    tape.process(channels, 1, static_cast<int>(count));
+  }
+}
+
 // Sum spectral energy in bins that are NOT close to a harmonic of the fundamental.
 double alias_energy(const std::vector<float>& signal, float fundamental_hz) {
   std::vector<float> windowed(signal.size());
@@ -93,6 +101,30 @@ TEST_CASE("Tape oversample_factor=1 is deterministic and matches default path",
   for (size_t i = 0; i < a.size(); ++i) {
     REQUIRE(std::abs(a[i] - b[i]) < 1e-6f);
   }
+}
+
+TEST_CASE("Tape oversampling is invariant to process block partitioning",
+          "[mastering][saturation]") {
+  TapeConfig config{};
+  config.drive_db = 18.0f;
+  config.oversample_factor = 4;
+  constexpr size_t kFrames = 2048;
+
+  auto input = generate_sine_samples(3500.0f, kSampleRate, static_cast<int>(kFrames), 0.9f);
+  Tape one_shot(config);
+  Tape partitioned(config);
+  one_shot.prepare(kSampleRate, static_cast<int>(input.size() + one_shot.latency_samples()));
+  partitioned.prepare(kSampleRate, 128);
+  REQUIRE(one_shot.latency_samples() == 12);
+  REQUIRE(partitioned.latency_samples() == one_shot.latency_samples());
+
+  input.resize(input.size() + static_cast<size_t>(one_shot.latency_samples()), 0.0f);
+  auto expected = input;
+  auto actual = input;
+  process_tape_blocks(one_shot, expected, expected.size());
+  process_tape_blocks(partitioned, actual, 128);
+
+  REQUIRE(actual == expected);
 }
 
 TEST_CASE("Tape rejects invalid oversample_factor", "[mastering][saturation]") {

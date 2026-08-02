@@ -388,7 +388,8 @@ float one_pole_alpha_from_time_ms(float time_ms, double sample_rate) {
 
 float frequency_to_w0(float frequency_hz, double sample_rate) {
   if (!(sample_rate > 0.0)) return 0.0f;
-  const float clamped = std::clamp(frequency_hz, 20.0f, static_cast<float>(sample_rate * 0.45));
+  const float maximum_frequency = std::max(20.0f, static_cast<float>(sample_rate * 0.45));
+  const float clamped = std::clamp(frequency_hz, 20.0f, maximum_frequency);
   return sonare::constants::kTwoPi * clamped / static_cast<float>(sample_rate);
 }
 

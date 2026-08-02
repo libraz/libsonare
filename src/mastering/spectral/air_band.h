@@ -21,6 +21,12 @@ class AirBand : public rt::ProcessorBase {
   void prepare(double sample_rate, int max_block_size) override;
   void process(float* const* channels, int num_channels, int num_samples) override;
   void reset() override;
+  // The harmonic oversampling path is additive, so it adds no latency to the
+  // dry shelf path. Its delayed contribution must nevertheless be drained at
+  // end of stream.
+  int tail_samples() const noexcept override {
+    return harmonic_oversampler_.streaming_round_trip_latency_samples();
+  }
   void set_config(const AirBandConfig& config);
 
   // Automatable parameters (RT-safe: updates config in place; the shelf gain is
@@ -50,11 +56,18 @@ class AirBand : public rt::ProcessorBase {
   static constexpr int kHarmonicTapsPerPhase = 24;
   static constexpr int kShelfControlInterval = 8;
   sonare::rt::Oversampler harmonic_oversampler_{kHarmonicOversampleFactor, kHarmonicTapsPerPhase};
+  std::vector<sonare::rt::Oversampler::StreamingState> harmonic_oversampler_states_;
   std::vector<float> band_scratch_;
   std::vector<float> oversampled_scratch_;
   std::vector<float> harmonic_scratch_;
   std::vector<float> envelope_;
   std::vector<float> shelf_gain_db_;
+  std::vector<float> band_rms_sq_;
+  std::vector<float> harmonic_rms_sq_;
+  std::vector<float> harmonic_gain_;
+  std::vector<int> shelf_control_samples_;
+  float normalization_rms_alpha_ = 0.0f;
+  float harmonic_gain_alpha_ = 0.0f;
   std::vector<Biquad> shelf_;
   std::vector<Biquad> detector_;
   std::vector<Biquad> harmonic_filter_;

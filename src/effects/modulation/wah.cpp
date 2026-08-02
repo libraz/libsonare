@@ -29,8 +29,11 @@ void Wah::process(float* const* channels, int num_channels, int num_samples) {
   const float wet = std::clamp(config_.dry_wet, 0.0f, 1.0f);
   const float dry = 1.0f - wet;
   const float nyquist = static_cast<float>(0.5 * sample_rate_);
-  const float lo = std::clamp(std::min(config_.min_hz, config_.max_hz), 10.0f, nyquist);
-  const float hi = std::clamp(std::max(config_.min_hz, config_.max_hz), lo, nyquist);
+  // Must match SvfBandpass's stable TPT cutoff limit. Keeping this at Nyquist
+  // made the public sweep range claim frequencies the filter silently reduced.
+  const float max_cutoff = 0.49f * nyquist;
+  const float lo = std::clamp(std::min(config_.min_hz, config_.max_hz), 10.0f, max_cutoff);
+  const float hi = std::clamp(std::max(config_.min_hz, config_.max_hz), lo, max_cutoff);
   const float q = std::max(0.5f, config_.resonance);
   // Stereo-pair processor: one bandpass filter per plane is allocated for two
   // planes only, so planes beyond the pair pass through dry (see the registry's

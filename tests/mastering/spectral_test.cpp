@@ -219,9 +219,9 @@ TEST_CASE("LowEndFocus applies dry and wet contracts to mono stereo 5.1 and 7.1"
 
 TEST_CASE("AirBand adds high-frequency detail", "[mastering][spectral]") {
   AirBand air({0.5f});
-  air.prepare(48000.0, 16);
+  air.prepare(48000.0, 128);
 
-  std::vector<float> signal = {0.0f, 0.4f, -0.4f, 0.4f, -0.4f};
+  auto signal = generate_sine_samples(14000.0f, 48000, 128, 0.4f);
   const float before = peak_abs(signal);
   process(air, signal);
 
@@ -247,28 +247,33 @@ TEST_CASE("AirBand emphasizes high band more than low band", "[mastering][spectr
   REQUIRE(high_gain > low_gain);
 }
 
-TEST_CASE("AirBand preserves nonlinear state across process blocks", "[mastering][spectral]") {
-  auto full = generate_sine_samples(14000.0f, 48000, 256, 0.3f);
-  std::vector<float> first(full.begin(), full.begin() + 128);
-  std::vector<float> second(full.begin() + 128, full.end());
-
-  AirBand one_shot({0.4f});
-  AirBand split({0.4f});
-  one_shot.prepare(48000.0, 256);
-  split.prepare(48000.0, 128);
-
-  process(one_shot, full);
-  process(split, first);
-  process(split, second);
-
-  // The centered oversampling FIR is zero-padded at each call boundary, so
-  // compare outside its short boundary stencil. Detector/envelope state must
-  // otherwise make split processing match one-shot processing.
-  for (size_t i = 16; i < 112; ++i) {
-    REQUIRE(std::abs(first[i] - full[i]) < 1.0e-3f);
+TEST_CASE("AirBand output is invariant to streaming block size", "[mastering][spectral]") {
+  constexpr int kSampleRate = 48000;
+  constexpr size_t kSamples = 8192;
+  auto input = generate_sine_samples(14000.0f, kSampleRate, kSamples, 0.3f);
+  for (size_t i = 0; i < input.size(); ++i) {
+    input[i] +=
+        0.08f * std::sin(static_cast<float>(i) * sonare::constants::kTwoPi * 1800.0f / kSampleRate);
   }
-  for (size_t i = 16; i < 112; ++i) {
-    REQUIRE(std::abs(second[i] - full[i + 128]) < 1.0e-3f);
+
+  const auto process_in_blocks = [&](int block_size) {
+    auto output = input;
+    AirBand air({0.7f, 10000.0f, -60.0f, 6.0f});
+    air.prepare(kSampleRate, block_size);
+    for (size_t offset = 0; offset < output.size(); offset += static_cast<size_t>(block_size)) {
+      const int count =
+          static_cast<int>(std::min(static_cast<size_t>(block_size), output.size() - offset));
+      float* channels[] = {output.data() + offset};
+      air.process(channels, 1, count);
+    }
+    return output;
+  };
+
+  const auto reference = process_in_blocks(4096);
+  for (const int block_size : {128, 1024, 4096}) {
+    const auto output = process_in_blocks(block_size);
+    CAPTURE(block_size, max_abs_difference(output, reference));
+    REQUIRE(max_abs_difference(output, reference) < 1.0e-6f);
   }
 }
 

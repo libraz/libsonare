@@ -3,35 +3,11 @@
 #include <algorithm>
 #include <cmath>
 
+#include "rt/true_peak_fir.h"
 #include "util/exception.h"
 
 namespace sonare::rt {
 namespace {
-
-// Self-designed Kaiser-windowed-sinc polyphase low-pass filters for true-peak
-// interpolation. ITU-R BS.1770 frames its coefficient table as merely an
-// example and invites deriving equivalent coefficients matching the target
-// frequency response, so no copyrighted literal table is shipped here.
-//
-// Each factor keeps 12 taps per phase (total = factor * 12). The factor-2 path
-// retains its original Kaiser beta; the higher oversampling factors use a
-// slightly larger beta (9.5) which trades a marginally wider transition band
-// for deeper stop-band attenuation, preventing aliased images from inflating
-// the reconstructed inter-sample peaks at 4x/8x.
-PolyphaseFir make_true_peak_fir(int factor) {
-  constexpr double kKaiserBeta = 9.5;
-  // factor=1 is the input-rate path used for API parity with the meter.
-  if (factor == 1) return {};
-  // factor=2 is below ITU-R BS.1770's 4x minimum, so its result is a
-  // non-compliant approximation of the true-peak level; use 4x or 8x for
-  // standards-compliant measurement.
-  if (factor == 2) return design_polyphase_lowpass(2, 24, 7.85726, true);
-  if (factor == 4) return design_polyphase_lowpass(4, 48, kKaiserBeta, true);
-  if (factor == 8) return design_polyphase_lowpass(8, 96, kKaiserBeta, true);
-  if (factor == 16) return design_polyphase_lowpass(16, 192, kKaiserBeta, true);
-  throw SonareException(ErrorCode::InvalidParameter,
-                        "TruePeakFilter factor must be 1, 2, 4, 8, or 16");
-}
 
 void validate_buffers(const float* const* input, int num_channels, int num_samples) {
   if (num_channels < 0 || num_samples < 0) {
@@ -53,7 +29,7 @@ void validate_buffers(const float* const* input, int num_channels, int num_sampl
 }  // namespace
 
 TruePeakFilter::TruePeakFilter(int num_channels, int factor)
-    : factor_(factor), fir_(make_true_peak_fir(factor)) {
+    : factor_(factor), fir_(true_peak_fir_for(factor)) {
   if (num_channels < 0) {
     throw SonareException(ErrorCode::InvalidParameter, "num_channels must be non-negative");
   }
@@ -176,6 +152,54 @@ void TruePeakFilter::upsample_with_history(const float* const* input,
       }
     }
 
+    const size_t keep = std::min(history_size, extended_size);
+    std::copy(extended.begin() + static_cast<std::ptrdiff_t>(extended_size - keep),
+              extended.begin() + static_cast<std::ptrdiff_t>(extended_size),
+              channel_history.end() - static_cast<std::ptrdiff_t>(keep));
+    if (keep < history_size) {
+      std::fill(channel_history.begin(), channel_history.end() - static_cast<std::ptrdiff_t>(keep),
+                0.0f);
+    }
+  }
+}
+
+void TruePeakFilter::upsample_with_history_delayed(const float* const* input,
+                                                   float* const* output_oversampled,
+                                                   int num_channels, int num_samples,
+                                                   std::vector<std::vector<float>>& history,
+                                                   std::vector<std::vector<float>>& scratch) const {
+  validate_buffers(input, num_channels, num_samples);
+  if (num_channels == 0 || num_samples == 0) return;
+  if (output_oversampled == nullptr) {
+    throw SonareException(ErrorCode::InvalidParameter, "output must not be null");
+  }
+  const size_t history_size = static_cast<size_t>(std::max(0, fir_.taps_per_phase));
+  const size_t requested_channels = static_cast<size_t>(num_channels);
+  if (history.size() < requested_channels) {
+    history.resize(requested_channels, std::vector<float>(history_size, 0.0f));
+  }
+  if (scratch.size() < requested_channels) scratch.resize(requested_channels);
+
+  const size_t delay = static_cast<size_t>(latency_samples());
+  for (int ch = 0; ch < num_channels; ++ch) {
+    if (output_oversampled[ch] == nullptr) {
+      throw SonareException(ErrorCode::InvalidParameter, "output channel must not be null");
+    }
+    auto& channel_history = history[static_cast<size_t>(ch)];
+    if (channel_history.size() != history_size) channel_history.assign(history_size, 0.0f);
+    auto& extended = scratch[static_cast<size_t>(ch)];
+    const size_t extended_size = history_size + static_cast<size_t>(num_samples);
+    if (extended.size() < extended_size) extended.resize(extended_size, 0.0f);
+    std::copy(channel_history.begin(), channel_history.end(), extended.begin());
+    std::copy(input[ch], input[ch] + num_samples,
+              extended.begin() + static_cast<std::ptrdiff_t>(history_size));
+    for (int i = 0; i < num_samples; ++i) {
+      const size_t index = history_size + static_cast<size_t>(i) - delay;
+      for (int phase = 0; phase < factor_; ++phase) {
+        output_oversampled[ch][i * factor_ + phase] =
+            interpolate_polyphase_sample(extended.data(), extended_size, index, phase, fir_);
+      }
+    }
     const size_t keep = std::min(history_size, extended_size);
     std::copy(extended.begin() + static_cast<std::ptrdiff_t>(extended_size - keep),
               extended.begin() + static_cast<std::ptrdiff_t>(extended_size),

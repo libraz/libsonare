@@ -51,7 +51,8 @@ float interpolate_fallback(const std::vector<float>& samples, size_t start, size
 /// Algorithm outline (cf. Janssen 1986, Section III):
 ///   1. Initialise unknown samples x_u with cubic / linear interpolation.
 ///   2. Alternate for `iterations` outer rounds:
-///      a. Estimate AR(p) coefficients a from the full signal (known + current x_u)
+///      a. Estimate AR(p) coefficients a from a bounded window around the gap
+///         (known + current x_u)
 ///         using Burg's method, which gives a minimum-phase, stable model.
 ///      b. Build the (N-p) x N prediction-error filter matrix A whose rows are
 ///         AR filter convolutions: (A x)[n] = x[n] + a[1]*x[n-1] + ... + a[p]*x[n-p].
@@ -72,16 +73,30 @@ float interpolate_fallback(const std::vector<float>& samples, size_t start, size
 /// be smoothly interpolated, not anchored at the threshold.
 void reconstruct_region_janssen(std::vector<float>& samples, size_t start, size_t end,
                                 const DeclipConfig& config) {
+  const size_t gap = end - start;
+  const size_t requested_order = static_cast<size_t>(std::max(config.lpc_order, 0));
+  const size_t context_radius =
+      std::min(samples.size(), std::max<size_t>(4 * requested_order, 8 * gap));
+  const size_t context_start = start > context_radius ? start - context_radius : 0;
+  const size_t context_end = std::min(samples.size(), end + context_radius);
+  std::vector<float> context(samples.begin() + static_cast<std::ptrdiff_t>(context_start),
+                             samples.begin() + static_cast<std::ptrdiff_t>(context_end));
+  const size_t local_start = start - context_start;
+  const size_t local_end = end - context_start;
+
   // Step 1 – cubic / linear initialisation of the unknown region. Keep a copy of
   // the interpolated baseline so the final LPC estimate can be blended against it
   // (config.lpc_blend); the fallback gets weight (1 - lpc_blend).
-  std::vector<float> baseline(end - start);
-  for (size_t j = start; j < end; ++j) {
-    samples[j] = interpolate_fallback(samples, start, end, j);
-    baseline[j - start] = samples[j];
+  std::vector<float> baseline(gap);
+  for (size_t j = local_start; j < local_end; ++j) {
+    context[j] = interpolate_fallback(context, local_start, local_end, j);
+    baseline[j - local_start] = context[j];
   }
+  std::copy(context.begin() + static_cast<std::ptrdiff_t>(local_start),
+            context.begin() + static_cast<std::ptrdiff_t>(local_end),
+            samples.begin() + static_cast<std::ptrdiff_t>(start));
 
-  const size_t n = samples.size();
+  const size_t n = context.size();
   const int max_order = std::min(config.lpc_order, static_cast<int>(std::max<size_t>(1, n / 4)));
   // Skip LPC refinement when there isn't enough context or model order for it to
   // outperform the cubic / linear baseline. Short signals (n < 32) or very low
@@ -92,13 +107,7 @@ void reconstruct_region_janssen(std::vector<float>& samples, size_t start, size_
   if (n < kMinLpcSignalLength || max_order < kMinLpcOrder) return;
   if (!can_use_lpc(n, max_order)) return;
 
-  // Indices of unknown (clipped) samples in the full signal.
-  const size_t gap = end - start;
-  std::vector<int> unknown_idx;
-  unknown_idx.reserve(gap);
-  for (size_t j = start; j < end; ++j) unknown_idx.push_back(static_cast<int>(j));
-
-  const int nu = static_cast<int>(unknown_idx.size());
+  const int nu = static_cast<int>(gap);
   const int nrows = static_cast<int>(n) - max_order;  // number of filter-output rows
   if (nrows <= 0) return;
 
@@ -107,10 +116,14 @@ void reconstruct_region_janssen(std::vector<float>& samples, size_t start, size_
   // clamped to [0, 1]. blend == 1 reproduces the pure-LPC behaviour; blend == 0
   // leaves the cubic / linear interpolation untouched.
   const float blend = std::clamp(config.lpc_blend, 0.0f, 1.0f);
+  Eigen::MatrixXf au(nrows, nu);
+  Eigen::VectorXf rhs(nrows);
+  Eigen::MatrixXf ata(nu, nu);
+  Eigen::VectorXf at_rhs(nu);
 
   for (int outer = 0; outer < iters; ++outer) {
-    // Step 2a – AR estimation from the full signal (known + current estimate).
-    const auto model = sonare::lpc_burg(samples.data(), n, max_order);
+    // Step 2a – AR estimation from the bounded local context.
+    const auto model = sonare::lpc_burg(context.data(), n, max_order);
     const int p = max_order;
 
     // Step 2b – build A_u and A_k vectors for the normal equations.
@@ -118,17 +131,11 @@ void reconstruct_region_janssen(std::vector<float>& samples, size_t start, size_
     //   (A x)[r] = x[r+p] + a[1]*x[r+p-1] + ... + a[p]*x[r]
     // We only need A_u (nrows x nu) and the product A_k * y_k.
 
-    // Build set for O(1) membership test.
-    std::vector<bool> is_unknown(n, false);
-    for (int idx : unknown_idx) is_unknown[static_cast<size_t>(idx)] = true;
-
-    // A_u: each column j corresponds to unknown_idx[j].
-    Eigen::MatrixXf Au(nrows, nu);
-    Au.setZero();
+    // A_u: each column j corresponds to the contiguous local gap sample.
+    au.setZero();
 
     // rhs = -A_k y_k, initialised as -A * samples (all columns),
     // then we subtract A_u * x_u to isolate A_k * y_k.
-    Eigen::VectorXf rhs(nrows);
     rhs.setZero();
 
     for (int r = 0; r < nrows; ++r) {
@@ -136,21 +143,21 @@ void reconstruct_region_janssen(std::vector<float>& samples, size_t start, size_
       double Ax_r = 0.0;
       for (int k = 0; k <= p; ++k) {
         Ax_r += static_cast<double>(model.ar[static_cast<size_t>(k)]) *
-                samples[static_cast<size_t>(r + p - k)];
+                context[static_cast<size_t>(r + p - k)];
       }
       rhs[r] = -static_cast<float>(Ax_r);  // start with -A*samples
 
       // Now fill A_u columns for this row and adjust rhs to isolate A_k*y_k.
       for (int j = 0; j < nu; ++j) {
-        const int col = unknown_idx[static_cast<size_t>(j)];
+        const int col = static_cast<int>(local_start) + j;
         // A[r, col] is the coefficient for position col in row r.
         // Row r acts at time r+p; A[r, col] = a[r+p - col] if 0 <= r+p-col <= p, else 0.
         const int lag = (r + p) - col;
         if (lag >= 0 && lag <= p) {
           const float a_lag = model.ar[static_cast<size_t>(lag)];
-          Au(r, j) = a_lag;
+          au(r, j) = a_lag;
           // rhs = -A_k*y_k = -(A*x)[r] + A_u*x_u → we need to add back A_u[r,j]*x_u[j]
-          rhs[r] += a_lag * samples[static_cast<size_t>(col)];
+          rhs[r] += a_lag * context[static_cast<size_t>(col)];
         }
       }
     }
@@ -159,13 +166,14 @@ void reconstruct_region_janssen(std::vector<float>& samples, size_t start, size_
     // Step 2d – solve (A_u^T A_u + lambda I) x_u = A_u^T rhs
     // Tikhonov regularization lambda guards rank-deficient systems (gap > model rank).
     const float lambda = static_cast<float>(nrows) * kEpsilon;
-    const Eigen::MatrixXf AtA = Au.transpose() * Au + lambda * Eigen::MatrixXf::Identity(nu, nu);
-    const Eigen::VectorXf Atrhs = Au.transpose() * rhs;
+    ata.noalias() = au.transpose() * au;
+    ata.diagonal().array() += lambda;
+    at_rhs.noalias() = au.transpose() * rhs;
 
-    Eigen::LDLT<Eigen::MatrixXf> solver(AtA);
+    Eigen::LDLT<Eigen::MatrixXf> solver(ata);
     if (solver.info() != Eigen::Success) break;  // numerical failure: keep current estimate
 
-    const Eigen::VectorXf x_u = solver.solve(Atrhs);
+    const Eigen::VectorXf x_u = solver.solve(at_rhs);
     if (!x_u.allFinite()) break;
 
     // Step 2e – write the LDLT estimate back into the unknown positions, blended
@@ -174,10 +182,14 @@ void reconstruct_region_janssen(std::vector<float>& samples, size_t start, size_
     // as a general gap-filler rather than a strict clipping-consistency
     // reconstructor.
     for (int j = 0; j < nu; ++j) {
-      const size_t idx = static_cast<size_t>(unknown_idx[static_cast<size_t>(j)]);
-      samples[idx] = blend * x_u[j] + (1.0f - blend) * baseline[idx - start];
+      const size_t idx = local_start + static_cast<size_t>(j);
+      context[idx] = blend * x_u[j] + (1.0f - blend) * baseline[idx - local_start];
     }
   }
+
+  std::copy(context.begin() + static_cast<std::ptrdiff_t>(local_start),
+            context.begin() + static_cast<std::ptrdiff_t>(local_end),
+            samples.begin() + static_cast<std::ptrdiff_t>(start));
 }
 
 }  // namespace

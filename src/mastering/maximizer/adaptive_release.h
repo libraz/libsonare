@@ -34,6 +34,7 @@ class AdaptiveRelease : public rt::ProcessorBase {
   float current_release_ms() const { return current_release_ms_; }
   float current_crest_factor() const { return current_crest_factor_; }
   float last_gain_reduction_db() const override { return limiter_.last_gain_reduction_db(); }
+  int latency_samples() const noexcept override { return limiter_.latency_samples(); }
 
   // Automatable parameters (RT-safe, no allocation). All but ceiling are read
   // directly each block by the adaptive-release mapping, so writing config_ is

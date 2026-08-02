@@ -211,7 +211,11 @@ TEST_CASE("Tube uses Dempwolf 12AX7 model with configurable oversampling",
   tube.prepare(48000.0, 128);
 
   std::vector<float> signal = {-0.75f, -0.25f, 0.0f, 0.25f, 0.75f};
+  signal.resize(signal.size() + static_cast<size_t>(tube.latency_samples()), 0.0f);
   process(tube, signal);
+
+  REQUIRE(tube.latency_samples() == 12);
+  signal.erase(signal.begin(), signal.begin() + tube.latency_samples());
 
   for (float sample : signal) REQUIRE(std::isfinite(sample));
   REQUIRE(std::abs(signal.front()) < 1.0f);
@@ -266,6 +270,31 @@ TEST_CASE("Tube Miller capacitance path keeps block state", "[mastering][saturat
   std::vector<float> reset_probe = {0.0f};
   process(tube, reset_probe);
   REQUIRE(std::abs(reset_probe[0]) < std::abs(second[0]));
+}
+
+TEST_CASE("Tube oversampling is invariant to process block partitioning",
+          "[mastering][saturation]") {
+  TubeConfig config{18.0f, 0.25f, 0.6f, 4};
+  constexpr int kFrames = 2048;
+  auto input = generate_sine_samples(1300.0f, 48000, kFrames, 0.7f);
+  Tube one_shot(config);
+  Tube partitioned(config);
+  one_shot.prepare(48000.0, kFrames + one_shot.latency_samples());
+  partitioned.prepare(48000.0, 128);
+  REQUIRE(one_shot.latency_samples() == 12);
+  REQUIRE(partitioned.latency_samples() == one_shot.latency_samples());
+
+  input.resize(input.size() + static_cast<size_t>(one_shot.latency_samples()), 0.0f);
+  auto expected = input;
+  auto actual = input;
+  process(one_shot, expected);
+  for (size_t offset = 0; offset < actual.size(); offset += 128) {
+    const int count = static_cast<int>(std::min<size_t>(128, actual.size() - offset));
+    float* channels[] = {actual.data() + offset};
+    partitioned.process(channels, 1, count);
+  }
+
+  REQUIRE(actual == expected);
 }
 
 TEST_CASE("Tube exposes voltage-domain bias control", "[mastering][saturation]") {

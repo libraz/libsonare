@@ -31,9 +31,8 @@ struct TapeConfig {
   float bias = 0.0f;
   float gap_loss = 0.2f;
   /// J-A core oversampling: 1 (default, no oversampling), 2, or 4. >1 reduces
-  /// aliasing at high drive; intended for offline/whole-buffer rendering (the
-  /// offline oversampler is stateless, so values >1 may produce minor
-  /// block-edge artifacts in per-block streaming use).
+  /// aliasing at high drive. The processor retains FIR history across blocks
+  /// and reports the resulting streaming group delay.
   int oversample_factor = 1;
 };
 
@@ -52,6 +51,9 @@ class Tape : public rt::ProcessorBase {
   void prepare(double sample_rate, int max_block_size) override;
   void process(float* const* channels, int num_channels, int num_samples) override;
   void reset() override;
+  int latency_samples() const noexcept override {
+    return config_.oversample_factor > 1 ? oversampler_.streaming_round_trip_latency_samples() : 0;
+  }
   void set_config(const TapeConfig& config);
   const TapeConfig& config() const { return config_; }
 
@@ -92,6 +94,7 @@ class Tape : public rt::ProcessorBase {
   std::vector<Biquad> head_bump_;
   std::vector<float> gap_state_;
   sonare::rt::Oversampler oversampler_;
+  std::vector<sonare::rt::Oversampler::StreamingState> oversampler_states_;
   // Preallocated oversampling scratch (sized max_block_size_*oversample_factor
   // in prepare()) so the oversampled process() path never allocates on the
   // audio thread. up_scratch_ holds the upsampled J-A input/output; down_scratch_

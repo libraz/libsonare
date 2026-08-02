@@ -133,6 +133,7 @@ class AmpSim : public rt::ProcessorBase {
   void prepare(double sample_rate, int max_block_size) override;
   void process(float* const* channels, int num_channels, int num_samples) override;
   void reset() override;
+  int latency_samples() const noexcept override { return tube_.latency_samples(); }
   const AmpSimConfig& amp_config() const { return config_; }
 
   // Automatable parameters (RT-safe scalar redesigns, no allocation):

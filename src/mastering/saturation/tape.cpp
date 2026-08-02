@@ -25,6 +25,7 @@ constexpr int kPreparedChannels = 2;
 
 Tape::Tape(TapeConfig config) : config_(config), hysteresis_(make_ja_config(config_)) {
   validate_config(config_);
+  oversampler_.set_factor(config_.oversample_factor);
 }
 
 void Tape::prepare(double sample_rate, int max_block_size) {
@@ -35,9 +36,7 @@ void Tape::prepare(double sample_rate, int max_block_size) {
   sample_rate_ = sample_rate;
   max_block_size_ = max_block_size;
   update_filters(sample_rate_);
-  if (config_.oversample_factor > 1) {
-    oversampler_.set_factor(config_.oversample_factor);
-  }
+  oversampler_.set_factor(config_.oversample_factor);
   // Preallocate the oversampling scratch up front so the audio-thread process()
   // path never allocates. Sized to the worst case (max block * factor); the
   // factor==1 path leaves these empty. Blocks wider than max_block_size_ throw
@@ -49,6 +48,10 @@ void Tape::prepare(double sample_rate, int max_block_size) {
   states_.assign(static_cast<size_t>(kPreparedChannels), common::JilesAthertonState{});
   head_bump_.assign(static_cast<size_t>(kPreparedChannels), head_bump_coeffs_);
   gap_state_.assign(static_cast<size_t>(kPreparedChannels), 0.0f);
+  oversampler_states_.resize(static_cast<size_t>(kPreparedChannels));
+  for (auto& state : oversampler_states_) {
+    oversampler_.prepare_streaming(&state, static_cast<size_t>(std::max(0, max_block_size_)));
+  }
   prepared_ = true;
   reset();
 }
@@ -94,13 +97,14 @@ void Tape::process(float* const* channels, int num_channels, int num_samples) {
   }
   for (int ch = 0; ch < num_channels; ++ch) {
     auto& state = states_[static_cast<size_t>(ch)];
-    oversampler_.upsample_to(channels[ch], static_cast<size_t>(num_samples), up_scratch_.data(),
-                             up_scratch_.size());
+    auto& oversampler_state = oversampler_states_[static_cast<size_t>(ch)];
+    oversampler_.upsample_to_streaming(channels[ch], static_cast<size_t>(num_samples),
+                                       up_scratch_.data(), up_scratch_.size(), &oversampler_state);
     for (size_t i = 0; i < os_samples; ++i) {
       up_scratch_[i] = process_sample(state, up_scratch_[i]);
     }
-    oversampler_.downsample_to(up_scratch_.data(), os_samples, down_scratch_.data(),
-                               down_scratch_.size());
+    oversampler_.downsample_to_streaming(up_scratch_.data(), os_samples, down_scratch_.data(),
+                                         down_scratch_.size(), &oversampler_state);
     for (int i = 0; i < num_samples; ++i) {
       float y = down_scratch_[static_cast<size_t>(i)];
       y += head_bump_[static_cast<size_t>(ch)].process(y);
@@ -117,15 +121,16 @@ void Tape::reset() {
   }
   for (auto& filter : head_bump_) filter.reset();
   std::fill(gap_state_.begin(), gap_state_.end(), 0.0f);
+  for (auto& state : oversampler_states_) {
+    oversampler_.reset_streaming(&state);
+  }
 }
 
 void Tape::set_config(const TapeConfig& config) {
   validate_config(config);
   config_ = config;
   hysteresis_.set_config(make_ja_config(config_));
-  if (config_.oversample_factor > 1) {
-    oversampler_.set_factor(config_.oversample_factor);
-  }
+  oversampler_.set_factor(config_.oversample_factor);
   if (prepared_) {
     update_filters(sample_rate_);
     // oversample_factor may have changed; resize the scratch on this
@@ -135,6 +140,9 @@ void Tape::set_config(const TapeConfig& config) {
                            static_cast<size_t>(std::max(1, config_.oversample_factor));
     up_scratch_.assign(scratch, 0.0f);
     down_scratch_.assign(static_cast<size_t>(std::max(0, max_block_size_)), 0.0f);
+    for (auto& state : oversampler_states_) {
+      oversampler_.prepare_streaming(&state, static_cast<size_t>(std::max(0, max_block_size_)));
+    }
   }
 }
 
@@ -206,7 +214,8 @@ float Tape::process_sample(common::JilesAthertonState& state, float input) const
 }
 
 void Tape::ensure_state(int num_channels) {
-  if (static_cast<size_t>(num_channels) > states_.size()) {
+  if (static_cast<size_t>(num_channels) > states_.size() ||
+      static_cast<size_t>(num_channels) > oversampler_states_.size()) {
     throw SonareException(ErrorCode::InvalidParameter, "num_channels exceeds prepared Tape state");
   }
 }

@@ -14,6 +14,7 @@
 
 #include "core/audio.h"
 #include "core/spectrum.h"
+#include "core/window.h"
 #include "support/alloc_guard.h"
 #include "util/constants.h"
 #include "util/exception.h"
@@ -214,6 +215,30 @@ TEST_CASE("StreamingPhaseVocoder prototype is chunk-invariant and matches offlin
     REQUIRE(std::isfinite(one_shot[i]));
     REQUIRE(std::abs(one_shot[i] - offline[i]) <= 1.0e-4f);
     REQUIRE(std::abs(chunked_out[i] - offline[i]) <= 1.0e-4f);
+  }
+}
+
+TEST_CASE("StreamingPhaseVocoder retains both windows across bounded cache eviction",
+          "[phase_vocoder][streaming][cache]") {
+  for (int i = 0; i < 15; ++i) {
+    (void)get_window_cached(WindowType::Hann, 64 + i, true);
+  }
+
+  constexpr int sample_rate = 22050;
+  const Audio audio = make_sine(330.0f, sample_rate, 0.25f);
+  StreamingPhaseVocoderConfig config;
+  config.sample_rate = sample_rate;
+  config.n_fft = 512;
+  config.win_length = 384;
+  config.hop_length = 128;
+
+  StreamingPhaseVocoder streamer(config);
+  streamer.push(audio);
+  const Audio output = streamer.finish(1.0f);
+
+  REQUIRE(!output.empty());
+  for (const float sample : output) {
+    REQUIRE(std::isfinite(sample));
   }
 }
 
