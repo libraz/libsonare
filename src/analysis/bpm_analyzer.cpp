@@ -287,8 +287,14 @@ std::vector<BpmCandidate> find_tempo_peaks(const std::vector<float>& autocorr, i
   /// Find local maxima. lag_min >= 1 and lag_max <= size-2, so accessing both
   /// autocorr[lag-1] and autocorr[lag+1] over the full [lag_min, lag_max] range
   /// stays in bounds while still admitting peaks near the bpm_min/bpm_max extremes.
+  /// A peak is only a tempo candidate when the correlation itself is positive:
+  /// the value doubles as the candidate's confidence, and a signal with no
+  /// periodic onset structure has local maxima inside a wholly negative
+  /// correlation whose values would otherwise surface as negative confidence.
+  /// The weighted-histogram pass below applies the same non-negative gate.
   for (int lag = lag_min; lag <= lag_max; ++lag) {
-    if (autocorr[lag] > autocorr[lag - 1] && autocorr[lag] > autocorr[lag + 1]) {
+    if (autocorr[lag] > 0.0f && autocorr[lag] > autocorr[lag - 1] &&
+        autocorr[lag] > autocorr[lag + 1]) {
       float bpm = lag_to_bpm(refine_peak_lag(autocorr, lag), sr, hop_length);
       if (bpm >= bpm_min && bpm <= bpm_max) {
         candidates.push_back({bpm, autocorr[lag]});

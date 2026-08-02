@@ -52,6 +52,19 @@ Audio create_modulated_sine(float bpm, int sr = 22050, float duration = 4.0f) {
   return Audio::from_vector(std::move(samples), sr);
 }
 
+/// @brief Creates a steady tone, which carries no periodic onset structure.
+Audio create_steady_sine(float freq = 440.0f, int sr = 22050, float duration = 4.0f) {
+  int n_samples = static_cast<int>(sr * duration);
+  std::vector<float> samples(n_samples);
+
+  for (int i = 0; i < n_samples; ++i) {
+    float t = static_cast<float>(i) / static_cast<float>(sr);
+    samples[i] = std::sin(2.0f * sonare::constants::kPiD * freq * t);
+  }
+
+  return Audio::from_vector(std::move(samples), sr);
+}
+
 }  // namespace
 
 TEST_CASE("BpmAnalyzer basic", "[bpm_analyzer]") {
@@ -364,4 +377,22 @@ TEST_CASE("BpmAnalyzer modulated signal", "[bpm_analyzer]") {
   // Should detect tempo related to modulation rate
   REQUIRE(analyzer.bpm() >= 50.0f);
   REQUIRE(analyzer.bpm() <= 200.0f);
+}
+
+TEST_CASE("BpmAnalyzer keeps confidence in range without onset structure", "[bpm_analyzer]") {
+  // A steady tone produces an onset autocorrelation that can be wholly negative.
+  // Local maxima inside that negative region must not become tempo candidates:
+  // the correlation value doubles as a candidate's confidence, so admitting them
+  // publishes a negative confidence on both the analyzer and the candidate list,
+  // breaking the documented [0, 1] range.
+  Audio audio = create_steady_sine();
+
+  BpmAnalyzer analyzer(audio);
+
+  REQUIRE(analyzer.confidence() >= 0.0f);
+  REQUIRE(analyzer.confidence() <= 1.0f);
+  for (const BpmCandidate& candidate : analyzer.candidates()) {
+    REQUIRE(candidate.confidence >= 0.0f);
+    REQUIRE(candidate.confidence <= 1.0f);
+  }
 }
