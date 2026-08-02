@@ -17,23 +17,15 @@ using namespace sonare_node::engine;
 
 namespace {
 
-int WaveformFromName(const std::string& name) {
-  if (name == "sine") return SONARE_SYNTH_WAVEFORM_SINE;
-  if (name == "saw" || name == "sawtooth") return SONARE_SYNTH_WAVEFORM_SAW;
-  if (name == "square") return SONARE_SYNTH_WAVEFORM_SQUARE;
-  if (name == "triangle") return SONARE_SYNTH_WAVEFORM_TRIANGLE;
-  return -1;
-}
-
 bool ReadEngineBuiltinSynthConfig(Napi::Env env, const Napi::Object& obj,
                                   SonareEngineBuiltinSynthConfig* config) {
   Napi::Value waveform = obj.Get("waveform");
   if (waveform.IsString()) {
     const std::string name = waveform.As<Napi::String>().Utf8Value();
-    const int mapped = WaveformFromName(name);
+    const int mapped = sonare_synth_builtin_waveform_from_name(name.c_str());
     if (mapped < 0) {
       Napi::TypeError::New(env, "Unknown synth waveform name: '" + name +
-                                    "' (expected sine, saw, square, or triangle)")
+                                    "' (expected sine, saw, sawtooth, square, or triangle)")
           .ThrowAsJavaScriptException();
       return false;
     }
@@ -70,6 +62,21 @@ bool ReadPositiveUint32(Napi::Env env, const Napi::Value& value, const char* lab
     return false;
   }
   *out = static_cast<uint32_t>(number);
+  return true;
+}
+
+bool ReadEngineSampleRate(Napi::Env env, const Napi::Value& value, double* out) {
+  if (out == nullptr || !value.IsNumber()) {
+    Napi::TypeError::New(env, "sampleRate must be a number").ThrowAsJavaScriptException();
+    return false;
+  }
+  const double sample_rate = value.As<Napi::Number>().DoubleValue();
+  if (!std::isfinite(sample_rate) || sample_rate < 8000.0 || sample_rate > 384000.0) {
+    Napi::RangeError::New(env, "sampleRate must be finite and within 8000..384000 Hz")
+        .ThrowAsJavaScriptException();
+    return false;
+  }
+  *out = sample_rate;
   return true;
 }
 
@@ -277,9 +284,11 @@ RealtimeEngineWrap::RealtimeEngineWrap(const Napi::CallbackInfo& info)
         .ThrowAsJavaScriptException();
     return;
   }
-  const double sample_rate = info.Length() > 0 && !info[0].IsUndefined()
-                                 ? info[0].As<Napi::Number>().DoubleValue()
-                                 : 48000.0;
+  double sample_rate = 48000.0;
+  if (info.Length() > 0 && !info[0].IsUndefined() &&
+      !ReadEngineSampleRate(env, info[0], &sample_rate)) {
+    return;
+  }
   const int max_block_size =
       info.Length() > 1 && !info[1].IsUndefined() ? info[1].As<Napi::Number>().Int32Value() : 128;
   const size_t command_capacity = info.Length() > 2 && !info[2].IsUndefined()
@@ -289,12 +298,14 @@ RealtimeEngineWrap::RealtimeEngineWrap(const Napi::CallbackInfo& info)
       info.Length() > 3 && !info[3].IsUndefined()
           ? static_cast<size_t>(info[3].As<Napi::Number>().Int64Value())
           : 1024;
+  const int max_channels =
+      info.Length() > 4 && !info[4].IsUndefined() ? info[4].As<Napi::Number>().Int32Value() : 64;
 
   SonareError err = sonare_engine_create(&engine_);
   ThrowIfError(env, err);
   if (env.IsExceptionPending()) return;
-  err = sonare_engine_prepare(engine_, sample_rate, max_block_size, command_capacity,
-                              telemetry_capacity);
+  err = sonare_engine_prepare_with_channels(engine_, sample_rate, max_block_size, command_capacity,
+                                            telemetry_capacity, max_channels);
   ThrowIfError(env, err);
 }
 
@@ -315,14 +326,19 @@ Napi::Value RealtimeEngineWrap::Prepare(const Napi::CallbackInfo& info) {
     Napi::Error::New(env, "RealtimeEngine is destroyed").ThrowAsJavaScriptException();
     return env.Undefined();
   }
-  const double sample_rate = info[0].As<Napi::Number>().DoubleValue();
+  double sample_rate = 0.0;
+  if (info.Length() < 2 || !ReadEngineSampleRate(env, info[0], &sample_rate)) {
+    return env.Undefined();
+  }
   const int max_block_size = info[1].As<Napi::Number>().Int32Value();
   const size_t command_capacity =
       info.Length() > 2 ? static_cast<size_t>(info[2].As<Napi::Number>().Int64Value()) : 1024;
   const size_t telemetry_capacity =
       info.Length() > 3 ? static_cast<size_t>(info[3].As<Napi::Number>().Int64Value()) : 1024;
-  ThrowIfError(env, sonare_engine_prepare(engine_, sample_rate, max_block_size, command_capacity,
-                                          telemetry_capacity));
+  const int max_channels = info.Length() > 4 ? info[4].As<Napi::Number>().Int32Value() : 64;
+  ThrowIfError(
+      env, sonare_engine_prepare_with_channels(engine_, sample_rate, max_block_size,
+                                               command_capacity, telemetry_capacity, max_channels));
   return env.Undefined();
 }
 
@@ -953,14 +969,11 @@ Napi::Value RealtimeEngineWrap::PushMidiNoteOff(const Napi::CallbackInfo& info) 
 Napi::Value RealtimeEngineWrap::PushMidiCc(const Napi::CallbackInfo& info) {
   Napi::Env env = info.Env();
   const uint32_t destination_id = info.Length() > 0 ? info[0].As<Napi::Number>().Uint32Value() : 0;
-  const uint8_t group =
-      info.Length() > 1 ? static_cast<uint8_t>(info[1].As<Napi::Number>().Uint32Value()) : 0;
-  const uint8_t channel =
-      info.Length() > 2 ? static_cast<uint8_t>(info[2].As<Napi::Number>().Uint32Value()) : 0;
-  const uint8_t controller =
-      info.Length() > 3 ? static_cast<uint8_t>(info[3].As<Napi::Number>().Uint32Value()) : 0;
-  const uint8_t value =
-      info.Length() > 4 ? static_cast<uint8_t>(info[4].As<Napi::Number>().Uint32Value()) : 0;
+  const uint8_t group = MidiByteArg(env, info, 1, 0);
+  const uint8_t channel = MidiByteArg(env, info, 2, 0);
+  const uint8_t controller = MidiByteArg(env, info, 3, 0);
+  const uint8_t value = MidiByteArg(env, info, 4, 0);
+  if (env.IsExceptionPending()) return env.Undefined();
   ThrowIfError(env, sonare_engine_push_midi_cc(engine_, destination_id, group, channel, controller,
                                                value, OptionalInt64(info, 5, -1)));
   return env.Undefined();

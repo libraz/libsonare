@@ -65,11 +65,7 @@ export function resolveTargetId(target: string | number): number {
   return Number.isFinite(parsed) ? parsed : 0;
 }
 
-/**
- * Resolves a parameter id from a name or numeric id. Numeric params pass
- * through; named params are matched against the parameter list, then fall back
- * to a target-id resolution of the name (or the node id).
- */
+/** Resolves a registered parameter name or passes through a numeric id. */
 export function resolveParamId(
   parameters: readonly EngineParameterInfo[],
   nodeId: string,
@@ -82,7 +78,7 @@ export function resolveParamId(
   if (byName) {
     return byName.id;
   }
-  return resolveTargetId(param || nodeId);
+  throw new RangeError(`Unknown engine parameter ${JSON.stringify(param)} for node ${nodeId}`);
 }
 
 /** Encodes an automation curve descriptor to the engine's numeric curve code. */

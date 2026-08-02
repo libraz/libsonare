@@ -31,6 +31,22 @@ class GainProcessor final : public sonare::rt::ProcessorBase {
   float gain_ = 1.0f;
 };
 
+class ProcessCountingGain final : public sonare::rt::ProcessorBase {
+ public:
+  void prepare(double, int) override {}
+  void process(float* const* channels, int num_channels, int num_samples) override {
+    ++process_calls;
+    for (int ch = 0; ch < num_channels; ++ch) {
+      for (int i = 0; i < num_samples; ++i) {
+        channels[ch][i] *= 0.5f;
+      }
+    }
+  }
+  void reset() override { process_calls = 0; }
+
+  int process_calls = 0;
+};
+
 class AutomatableGainProcessor final : public sonare::rt::ProcessorBase {
  public:
   void prepare(double, int) override {}
@@ -68,6 +84,43 @@ sonare::engine::ClipSchedule clip_for_track(uint32_t clip_id, uint32_t track_id,
 }
 
 }  // namespace
+
+TEST_CASE("TrackMixerRuntime stages multiple sources before processing a lane once",
+          "[engine][track_mixer]") {
+  constexpr int kFrames = 16;
+  sonare::engine::TrackMixerRuntime mixer;
+  mixer.prepare(48000.0, kFrames);
+  REQUIRE(mixer.set_track_lanes({{10}}));
+
+  sonare::mixing::ChannelStrip strip;
+  auto counter = std::make_unique<ProcessCountingGain>();
+  ProcessCountingGain* raw_counter = counter.get();
+  strip.add_pre_insert(std::move(counter));
+  REQUIRE(mixer.bind_track_strip(10, &strip));
+
+  std::array<float, kFrames> first{};
+  std::array<float, kFrames> second{};
+  first.fill(0.25f);
+  second.fill(0.75f);
+  float* first_channels[] = {first.data()};
+  float* second_channels[] = {second.data()};
+  std::array<float, kFrames> out{};
+  float* out_channels[] = {out.data()};
+
+  REQUIRE(mixer.begin_source_mix(1, kFrames));
+  bool first_routed = false;
+  bool second_routed = false;
+  REQUIRE(mixer.mix_source_into_lane(10, first_channels, out_channels, 1, kFrames, first_routed));
+  REQUIRE(mixer.mix_source_into_lane(10, second_channels, out_channels, 1, kFrames, second_routed));
+  REQUIRE(first_routed);
+  REQUIRE(second_routed);
+  mixer.finish_source_mix(out_channels, 1, kFrames);
+
+  REQUIRE(raw_counter->process_calls == 1);
+  for (float sample : out) {
+    REQUIRE(sample == Catch::Approx(0.5f));
+  }
+}
 
 TEST_CASE("TrackMixerRuntime clears lane insert automation slots when lanes change",
           "[engine][track_mixer]") {

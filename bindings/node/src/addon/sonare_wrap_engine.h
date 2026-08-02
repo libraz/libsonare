@@ -129,7 +129,10 @@ class RealtimeEngineWrap : public Napi::ObjectWrap<RealtimeEngineWrap> {
 
   SonareRealtimeEngine* engine_ = nullptr;
   std::vector<SonareClipPageProvider*> clip_page_providers_;
-  std::vector<Napi::Reference<Napi::Float32Array>> capture_refs_;
+  // Capture storage is owned by the addon, not borrowed from a JS TypedArray:
+  // ArrayBuffers may detach after setCaptureBuffer() (e.g. transfer to a worker).
+  std::vector<std::vector<float>> capture_buffers_;
+  // The C capture API retains the channel-pointer table as well as the samples.
   std::vector<float*> capture_ptrs_;
   int64_t capture_capacity_frames_ = 0;
 };

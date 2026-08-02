@@ -26,7 +26,7 @@ std::unique_ptr<rt::ProcessorBase> makeWasmGraphProcessor(val node) {
 }  // namespace
 
 RealtimeEngineWasm::ChannelBlock RealtimeEngineWasm::readChannels(val channels_val) {
-  const int count = channels_val["length"].as<int>();
+  const int count = static_cast<int>(wasmArrayLikeLength(channels_val, "channels"));
   if (count <= 0) {
     throw sonare::SonareException(sonare::ErrorCode::InvalidParameter,
                                   "channels must not be empty");
@@ -190,9 +190,10 @@ val RealtimeEngineWasm::process(val channels_val) {
 // thread (mirrors RealtimeVoiceChanger's prepared API). Call
 // prepareChannels(numChannels, maxFrames) once on the main thread first.
 void RealtimeEngineWasm::prepareChannels(int num_channels, int max_frames) {
-  if (num_channels <= 0 || max_frames <= 0) {
+  if (num_channels <= 0 || num_channels > 64 || max_frames <= 0) {
     throw sonare::SonareException(sonare::ErrorCode::InvalidParameter,
-                                  "RealtimeEngine.prepareChannels: dimensions must be positive");
+                                  "RealtimeEngine.prepareChannels: channels must be within 1..64; "
+                                  "max_frames must be positive");
   }
   prepared_channels_ = num_channels;
   prepared_capacity_ = max_frames;

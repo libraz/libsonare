@@ -6,11 +6,13 @@ import type {
   EngineMarker,
   EngineMetronomeConfig,
   EngineMidiClipSchedule,
+  EngineParameterInfo,
   EngineTempoSegment,
   EngineTimeSignatureSegment,
   EngineTrackLane,
   EngineTransportState,
   RealtimeVoiceChangerConfigInput,
+  RealtimeVoiceChangerPodConfig,
 } from '../index';
 import type { AutomationCurve } from '../public_types';
 import type {
@@ -62,6 +64,9 @@ export interface SonareRealtimeEngineWorkletProcessorOptions {
    */
   clipPageRequestSharedBuffer?: SharedArrayBuffer;
   clipPageRequestRingCapacity?: number;
+  /** Lock-free worklet-to-main-thread MIDI-1 output ring. */
+  externalMidiSharedBuffer?: SharedArrayBuffer;
+  externalMidiRingCapacity?: number;
 }
 
 export interface SonareRealtimeVoiceChangerWorkletProcessorOptions {
@@ -73,7 +78,8 @@ export interface SonareRealtimeVoiceChangerWorkletProcessorOptions {
 
 export interface SonareRealtimeVoiceChangerSetConfigMessage {
   type: 'setConfig';
-  preset: RealtimeVoiceChangerConfigInput;
+  /** Pre-normalized by the main thread; never JSON parsed in the worklet. */
+  config: RealtimeVoiceChangerPodConfig;
 }
 
 export interface SonareRealtimeVoiceChangerResetMessage {
@@ -97,6 +103,8 @@ export interface SonareRealtimeEngineNodeCapabilities {
   audioWorklet: boolean;
   /** True only when clip-page misses use the bounded SAB ring. */
   clipPageRequestsRealtimeSafe: boolean;
+  /** True when external MIDI uses the SAB output ring rather than postMessage. */
+  externalMidiRealtimeSafe: boolean;
   engineAbiVersion?: number;
   expectedEngineAbiVersion?: number;
   abiCompatible?: boolean;
@@ -170,6 +178,13 @@ export interface SonareWorkletExternalMidiMessage {
   events: SonareWorkletExternalMidiEvent[];
 }
 
+/** A control-plane sync message that the worklet rejected without crashing. */
+export interface SonareEngineSyncErrorMessage {
+  type: 'syncError';
+  syncType: SonareEngineSyncMessage['type'];
+  message: string;
+}
+
 export type SonareWorkletTransportMessage =
   | SonareWorkletMeterSnapshot
   | SonareWorkletSpectrumSnapshot
@@ -182,7 +197,8 @@ export interface WorkletTransport {
     message:
       | SonareWorkletTransportMessage
       | SonareEngineCaptureResponseMessage
-      | SonareEngineTransportResponseMessage,
+      | SonareEngineTransportResponseMessage
+      | SonareEngineSyncErrorMessage,
     transfer?: Transferable[],
   ) => void;
   onMeter?: (meter: SonareWorkletMeterSnapshot) => void;
@@ -193,6 +209,7 @@ export interface ResolvedMetronomeConfig {
   beatGain: number;
   accentGain: number;
   clickSamples: number;
+  clickSeconds: number;
 }
 
 // Fallback metronome gains/click length used by the worklet consumer until the
@@ -202,6 +219,7 @@ export const DEFAULT_METRONOME_CONFIG: ResolvedMetronomeConfig = {
   beatGain: 0.35,
   accentGain: 0.7,
   clickSamples: 0,
+  clickSeconds: 0,
 };
 
 export function resolveMetronomeConfig(config: EngineMetronomeConfig): ResolvedMetronomeConfig {
@@ -209,6 +227,7 @@ export function resolveMetronomeConfig(config: EngineMetronomeConfig): ResolvedM
     beatGain: config.beatGain ?? DEFAULT_METRONOME_CONFIG.beatGain,
     accentGain: config.accentGain ?? DEFAULT_METRONOME_CONFIG.accentGain,
     clickSamples: config.clickSamples ?? DEFAULT_METRONOME_CONFIG.clickSamples,
+    clickSeconds: config.clickSeconds ?? DEFAULT_METRONOME_CONFIG.clickSeconds,
   };
   if (
     !Number.isFinite(resolved.beatGain) ||
@@ -217,6 +236,8 @@ export function resolveMetronomeConfig(config: EngineMetronomeConfig): ResolvedM
     resolved.accentGain < 0 ||
     !Number.isInteger(resolved.clickSamples) ||
     resolved.clickSamples < 0 ||
+    !Number.isFinite(resolved.clickSeconds) ||
+    resolved.clickSeconds < 0 ||
     resolved.clickSamples > 384000 ||
     (config.clickSeconds !== undefined &&
       (!Number.isFinite(config.clickSeconds) || config.clickSeconds < 0 || config.clickSeconds > 1))
@@ -230,8 +251,9 @@ export function resolveMetronomeConfig(config: EngineMetronomeConfig): ResolvedM
 // to the worklet engine processor over node.port. Unlike SonareEngineCommandRecord
 // (a small POD POSTed/ringed every block) these carry bulk/structured payloads
 // (clip audio buffers, marker lists, metronome config) that cannot fit the
-// fixed-size SAB command record, so they are applied OUTSIDE process() — the
-// audio-thread equivalent of the engine's control-thread RtPublisher setters.
+// fixed-size SAB command record. Their port handlers still execute on the
+// AudioWorklet rendering thread, so consumers must validate them without
+// allocation and publish bounded snapshots for process() to consume.
 export interface SonareEngineSyncClipsMessage {
   type: 'syncClips';
   clips: EngineClip[];
@@ -318,6 +340,12 @@ export interface SonareEngineSyncAutomationMessage {
   type: 'syncAutomation';
   paramId: number;
   points: EngineAutomationPoint[];
+}
+
+/** Replaces the live engine's registered custom-parameter set. */
+export interface SonareEngineSyncParametersMessage {
+  type: 'syncParameters';
+  parameters: EngineParameterInfo[];
 }
 
 export interface SonareEngineSyncTempoMessage {
@@ -515,6 +543,34 @@ export interface SonareEngineSyncExternalMidiClockMessage {
   enabled: boolean;
 }
 
+export interface SonareEngineSyncMidiInputSourceMessage {
+  type: 'syncMidiInputSource' | 'syncClearMidiInputSource';
+  destinationId?: number;
+}
+
+export interface SonareEngineSyncMidiCcBindingMessage {
+  type: 'syncMidiCcBinding';
+  channel: number;
+  controller: number;
+  paramId: number;
+  minValue: number;
+  maxValue: number;
+}
+
+export interface SonareEngineSyncMidiInputEventMessage {
+  type: 'syncMidiInputNoteOn' | 'syncMidiInputNoteOff' | 'syncMidiInputCc';
+  group: number;
+  channel: number;
+  data0: number;
+  data1: number;
+  portTimeSamples: number;
+}
+
+/** Releases the realtime engine and all worklet-owned clip buffers. */
+export interface SonareEngineDestroyMessage {
+  type: 'destroy';
+}
+
 export type SonareEngineInstrumentSyncMessage =
   | SonareEngineSyncBuiltinInstrumentMessage
   | SonareEngineSyncSynthInstrumentMessage
@@ -534,6 +590,7 @@ export type SonareEngineSyncMessage =
   | SonareEngineSyncMarkersMessage
   | SonareEngineSyncMetronomeMessage
   | SonareEngineSyncAutomationMessage
+  | SonareEngineSyncParametersMessage
   | SonareEngineSyncTempoMessage
   | SonareEngineSyncMixerMessage
   | SonareEngineSyncCaptureMessage
@@ -560,7 +617,11 @@ export type SonareEngineSyncMessage =
   | SonareEngineSyncMidiSysexMessage
   | SonareEngineSyncMidiPanicMessage
   | SonareEngineSyncMidiDestinationExternalMessage
-  | SonareEngineSyncExternalMidiClockMessage;
+  | SonareEngineSyncExternalMidiClockMessage
+  | SonareEngineSyncMidiInputSourceMessage
+  | SonareEngineSyncMidiCcBindingMessage
+  | SonareEngineSyncMidiInputEventMessage
+  | SonareEngineDestroyMessage;
 
 export interface WorkletPort {
   postMessage?: (message: unknown, transfer?: Transferable[]) => void;

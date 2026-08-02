@@ -48,6 +48,16 @@
 
 namespace sonare::engine {
 
+/// Result of resolving and enqueueing an insert-parameter change.
+///
+/// An unknown strip/insert/key is a permanent caller error, while a full
+/// realtime command queue is temporary back-pressure that callers can retry.
+enum class InsertParamSetResult : uint8_t {
+  kQueued,
+  kInvalidTarget,
+  kQueueFull,
+};
+
 enum class CaptureSource {
   kOutput = 0,
   kInput = 1,
@@ -98,9 +108,11 @@ class InstrumentSourceRenderSink {
 ///   @c prepare, @c render_offline (offline use), @c set_tempo,
 ///   @c set_tempo_segments, @c set_time_signature,
 ///   @c set_time_signature_segments, @c set_markers, @c set_clips,
+///   @c set_track_lanes, @c set_track_buses, @c set_lane_sidechain,
 ///   @c bind_mixing_strip, @c set_master_strip, @c set_track_strip,
 ///   @c set_bus_strip, @c bind_track_strip, @c add_monitor_strip,
-///   @c remove_monitor_strip, @c swap_graph, @c bind_graph_parameter. These must
+///   @c remove_monitor_strip, @c configure_scope_telemetry, @c swap_graph,
+///   @c bind_graph_parameter. These must
 ///   be called from the thread that owns engine lifecycle, between blocks; do
 ///   NOT call them from the audio callback AND do NOT call them concurrently with
 ///   @c process / @c process_with_monitor / @c render_offline. The strip binders
@@ -127,9 +139,27 @@ class RealtimeEngine : private ClipPageRequestSink {
   };
 #endif
 
+  /// @param max_channels Maximum simultaneous audio planes. Supplying the real
+  /// channel count avoids reserving 64-channel capture/instrument/PDC scratch;
+  /// callers must not later process more planes without preparing again.
   void prepare(double sample_rate, int max_block_size, size_t command_capacity = 1024,
-               size_t telemetry_capacity = 1024);
+               size_t telemetry_capacity = 1024, int max_channels = 64);
   double sample_rate() const noexcept { return sample_rate_; }
+  int prepared_channels() const noexcept { return prepared_channels_; }
+  /// Bytes in the channel-planar scratch buffers allocated by prepare(). This
+  /// intentionally excludes fixed engine state and queue capacity, so hosts can
+  /// account for the memory saved by declaring their actual channel count.
+  size_t prepared_scratch_bytes() const noexcept {
+    size_t samples = input_capture_storage_.size();
+#if defined(SONARE_WITH_ARRANGEMENT)
+    samples += midi_instrument_storage_.size();
+    samples += clip_scratch_storage_.size();
+#endif
+#if defined(SONARE_WITH_MIXING)
+    samples += monitor_bus_storage_.size();
+#endif
+    return samples * sizeof(float);
+  }
 
   void process(float* const* io, int num_channels, int num_frames) noexcept;
   void process_with_monitor(float* const* io, float* const* monitor_out, int num_channels,
@@ -258,6 +288,9 @@ class RealtimeEngine : private ClipPageRequestSink {
   uint32_t external_midi_dropped_count() const noexcept {
     return external_midi_queue_.dropped_count();
   }
+  size_t external_midi_pending_count() const noexcept {
+    return external_midi_queue_.pending_count();
+  }
   midi::MidiSequencer& midi_sequencer() noexcept { return midi_sequencer_; }
   const midi::MidiSequencer& midi_sequencer() const noexcept { return midi_sequencer_; }
 
@@ -376,18 +409,24 @@ class RealtimeEngine : private ClipPageRequestSink {
   // Realtime change of one channel-strip insert parameter, addressed by the
   // processor's JSON-key parameter name (the same key used in scene JSON). The
   // name is resolved to the integer param_id on the control thread, then applied
-  // at the next block head via the command queue. Returns false if the track,
-  // insert, or key is unknown, the param is not realtime-safe, or the queue is
-  // full. lane/insert/param indices must each fit in 8 bits.
+  // at the next block head via the command queue. The detailed variants
+  // distinguish an unknown/non-RT-safe target from queue back-pressure.
+  // lane/insert/param indices must each fit in 8 bits.
+  InsertParamSetResult set_track_insert_param_detailed(uint32_t track_id, unsigned int insert_index,
+                                                       const std::string& key,
+                                                       float value) noexcept;
   bool set_track_insert_param(uint32_t track_id, unsigned int insert_index, const std::string& key,
                               float value) noexcept;
+  InsertParamSetResult set_master_insert_param_detailed(unsigned int insert_index,
+                                                        const std::string& key,
+                                                        float value) noexcept;
   bool set_master_insert_param(unsigned int insert_index, const std::string& key,
                                float value) noexcept;
   // Realtime change of one BUS insert parameter, addressed by JSON-key name. The
   // name is resolved to the integer param_id on the control thread, then applied
-  // at the next block head. Returns false if the bus, insert, or key is unknown,
-  // the param is not realtime-safe, or the queue is full. insert/param must fit
-  // in 8 bits.
+  // at the next block head. insert/param must fit in 8 bits.
+  InsertParamSetResult set_bus_insert_param_detailed(uint32_t bus_id, unsigned int insert_index,
+                                                     const std::string& key, float value) noexcept;
   bool set_bus_insert_param(uint32_t bus_id, unsigned int insert_index, const std::string& key,
                             float value) noexcept;
   // Resolves a track-lane / master / bus insert parameter (JSON-key name) to the
@@ -441,6 +480,11 @@ class RealtimeEngine : private ClipPageRequestSink {
   /// audible block renders at the settled values instead of ramping in from
   /// defaults. Not safe concurrently with a running audio thread.
   void settle_parameters() noexcept;
+  /// Applies commands queued on an offline/control-only engine immediately.
+  /// @warning Not safe concurrently with @ref process. This exists for hosts
+  ///          that maintain a non-audio-thread mirror and must not let its
+  ///          bounded realtime command ring accumulate between offline renders.
+  void flush_control_commands() noexcept;
   float param_smoothing_ms() const noexcept {
     return param_smoothing_ms_.load(std::memory_order_relaxed);
   }
@@ -796,6 +840,7 @@ class RealtimeEngine : private ClipPageRequestSink {
   // per-block loop performs no heap allocation.
   std::vector<float*> render_block_channels_{};
   static constexpr size_t kMaxAudioChannels = 64;
+  int prepared_channels_ = static_cast<int>(kMaxAudioChannels);
   std::vector<float> input_capture_storage_{};
   std::array<float*, kMaxAudioChannels> input_capture_channels_{};
 #if defined(SONARE_WITH_ARRANGEMENT)

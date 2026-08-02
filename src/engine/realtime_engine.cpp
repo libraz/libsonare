@@ -41,12 +41,22 @@ void RealtimeEngine::process_impl(float* const* io, float* const* monitor_out, i
                   static_cast<uint32_t>(frames));
     return;
   }
+  if (num_channels > prepared_channels_) {
+    const auto state = transport_.snapshot();
+    silence(io, num_channels, frames);
+    silence(monitor_out, num_channels, frames);
+    transport_.advance(frames);
+    enqueue_error(TelemetryErrorCode::kMaxBlockExceeded, state.render_frame, state.sample_position,
+                  static_cast<uint32_t>(num_channels));
+    return;
+  }
 
   adopt_tempo_map_snapshot();
   const transport::TempoMap& tempo_map = *(active_tempo_map_ ? active_tempo_map_ : &tempo_map_);
   const auto state = transport_.snapshot();
   clip_page_underrun_reported_this_block_ = false;
 #if defined(SONARE_WITH_MIXING)
+  meter_tap_.begin_block();
   // Gate scope capture once for the host block. Automation may split this block
   // into many sub-blocks, but those splits must not accelerate the interval
   // counter or change whether the block is due.
@@ -284,6 +294,8 @@ void RealtimeEngine::process_impl(float* const* io, float* const* monitor_out, i
   // boundaries may have split rendering into 64-sample chunks, but spectrum
   // resolution must remain tied to the host block, not those control splits.
   scope_tap_.process(io, num_channels, frames, state.render_frame, 0);
+  meter_tap_.end_block();
+  scope_tap_.end_block();
 #endif
 
   const auto end_state = transport_.snapshot();
@@ -352,8 +364,8 @@ void RealtimeEngine::process_subblock(float* const* io, float* const* monitor_ou
   std::array<float*, kMaxAudioChannels> sub_channels{};
   int channels = 0;
   const bool capture_input = capture_source() == CaptureSource::kInput;
-  const int scratch_channels =
-      std::min<int>(std::max(num_channels, 0), static_cast<int>(sub_channels.size()));
+  const int scratch_channels = std::min(
+      {std::max(num_channels, 0), prepared_channels_, static_cast<int>(sub_channels.size())});
   if (monitor_out && num_frames > 0 && offset >= 0) {
     for (int ch = 0; ch < scratch_channels; ++ch) {
       if (monitor_out[ch]) {

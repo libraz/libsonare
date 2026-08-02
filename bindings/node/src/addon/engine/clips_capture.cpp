@@ -637,10 +637,8 @@ Napi::Value RealtimeEngineWrap::SetCaptureBuffer(const Napi::CallbackInfo& info)
     return env.Undefined();
   }
 
-  std::vector<Napi::Reference<Napi::Float32Array>> refs;
-  std::vector<float*> ptrs;
-  refs.reserve(channels.Length());
-  ptrs.reserve(channels.Length());
+  std::vector<std::vector<float>> buffers;
+  buffers.reserve(channels.Length());
   int64_t frames = 0;
   for (uint32_t ch = 0; ch < channels.Length(); ++ch) {
     Napi::Value value = channels.Get(ch);
@@ -650,6 +648,11 @@ Napi::Value RealtimeEngineWrap::SetCaptureBuffer(const Napi::CallbackInfo& info)
       return env.Undefined();
     }
     Napi::Float32Array channel = value.As<Napi::Float32Array>();
+    if (channel.Data() == nullptr) {
+      Napi::TypeError::New(env, "capture channel must not be detached")
+          .ThrowAsJavaScriptException();
+      return env.Undefined();
+    }
     if (ch == 0) {
       frames = static_cast<int64_t>(channel.ElementLength());
       if (frames <= 0) {
@@ -662,18 +665,23 @@ Napi::Value RealtimeEngineWrap::SetCaptureBuffer(const Napi::CallbackInfo& info)
           .ThrowAsJavaScriptException();
       return env.Undefined();
     }
-    refs.push_back(Napi::Persistent(channel));
-    ptrs.push_back(channel.Data());
+    buffers.emplace_back(channel.Data(), channel.Data() + channel.ElementLength());
   }
 
+  // Move storage into its final owner before sharing pointers with the C engine.
+  // A pointer into the local vector would become invalid if the move assignment
+  // cannot steal its allocation.
+  capture_buffers_ = std::move(buffers);
+  capture_ptrs_.clear();
+  capture_ptrs_.reserve(capture_buffers_.size());
+  for (auto& buffer : capture_buffers_) capture_ptrs_.push_back(buffer.data());
+
   SonareEngineCaptureBuffer buffer{};
-  buffer.channels = ptrs.data();
-  buffer.num_channels = static_cast<int>(ptrs.size());
+  buffer.channels = capture_ptrs_.data();
+  buffer.num_channels = static_cast<int>(capture_ptrs_.size());
   buffer.capacity_frames = frames;
   ThrowIfError(env, sonare_engine_set_capture_buffer(engine_, &buffer));
   if (env.IsExceptionPending()) return env.Undefined();
-  capture_refs_ = std::move(refs);
-  capture_ptrs_ = std::move(ptrs);
   capture_capacity_frames_ = frames;
   return env.Undefined();
 }
@@ -765,13 +773,13 @@ Napi::Value RealtimeEngineWrap::CapturedAudio(const Napi::CallbackInfo& info) {
   if (frames < 0) frames = 0;
   if (frames > capture_capacity_frames_) frames = capture_capacity_frames_;
 
-  Napi::Array out = Napi::Array::New(env, capture_refs_.size());
-  for (size_t ch = 0; ch < capture_refs_.size(); ++ch) {
-    Napi::Float32Array source = capture_refs_[ch].Value();
+  Napi::Array out = Napi::Array::New(env, capture_buffers_.size());
+  for (size_t ch = 0; ch < capture_buffers_.size(); ++ch) {
+    const std::vector<float>& source = capture_buffers_[ch];
     const size_t count = static_cast<size_t>(frames);
     auto channel = Napi::Float32Array::New(env, count);
     if (count > 0) {
-      std::memcpy(channel.Data(), source.Data(), count * sizeof(float));
+      std::memcpy(channel.Data(), source.data(), count * sizeof(float));
     }
     out.Set(static_cast<uint32_t>(ch), channel);
   }

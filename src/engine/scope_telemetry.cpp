@@ -27,6 +27,7 @@ void ScopeTelemetryTap::prepare(double sample_rate, int max_block_size, size_t t
   frame_accum_ = 0;
   seq_ = 0;
   dropped_records_ = 0;
+  staged_count_ = 0;
   telemetry_.reserve(next_power_of_2(std::max<size_t>(telemetry_capacity, 1)));
   goniometer_.reset();
 }
@@ -35,12 +36,14 @@ void ScopeTelemetryTap::reset() noexcept {
   capture_due_ = false;
   frame_accum_ = 0;
   dropped_records_ = 0;
+  staged_count_ = 0;
   goniometer_.reset();
 }
 
 bool ScopeTelemetryTap::begin_block(int interval_frames, int num_frames) noexcept {
   if (interval_frames <= 0 || num_frames <= 0) {
     capture_due_ = false;
+    staged_count_ = 0;
     return false;
   }
   frame_accum_ += num_frames;
@@ -51,6 +54,14 @@ bool ScopeTelemetryTap::begin_block(int interval_frames, int num_frames) noexcep
     capture_due_ = false;
   }
   return capture_due_;
+}
+
+void ScopeTelemetryTap::end_block() noexcept {
+  if (!capture_due_) return;
+  for (size_t i = 0; i < staged_count_; ++i) {
+    publish(staged_records_[i]);
+  }
+  staged_count_ = 0;
 }
 
 void ScopeTelemetryTap::process(float* const* channels, int num_channels, int num_frames,
@@ -132,7 +143,7 @@ void ScopeTelemetryTap::process(float* const* channels, int num_channels, int nu
         static_cast<uint32_t>(goniometer_.read_latest(record.points.data(), pushed));
   }
 
-  publish(record);
+  stage(record);
 }
 
 void ScopeTelemetryTap::publish(ScopeTelemetryRecord record) noexcept {
@@ -143,6 +154,22 @@ void ScopeTelemetryTap::publish(ScopeTelemetryRecord record) noexcept {
   // Queue full: account for the drop. The producer (audio thread) never pops;
   // the running count rides along on the next record that pushes successfully.
   ++dropped_records_;
+}
+
+void ScopeTelemetryTap::stage(ScopeTelemetryRecord record) noexcept {
+  for (size_t i = 0; i < staged_count_; ++i) {
+    if (staged_records_[i].target_id == record.target_id) {
+      // A target's earliest sub-block represents its block-start scope; retain
+      // it rather than overwriting it with later automation fragments. The
+      // master target is emitted once, after the complete block renders.
+      return;
+    }
+  }
+  if (staged_count_ < staged_records_.size()) {
+    staged_records_[staged_count_++] = record;
+  } else {
+    ++dropped_records_;
+  }
 }
 
 }  // namespace sonare::engine

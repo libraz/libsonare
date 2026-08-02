@@ -25,6 +25,18 @@ class GainProcessor final : public sonare::rt::ProcessorBase {
   float gain_ = 1.0f;
 };
 
+class LatencyProcessor final : public sonare::rt::ProcessorBase {
+ public:
+  explicit LatencyProcessor(int latency_q8) : latency_q8_(latency_q8) {}
+  void prepare(double, int) override {}
+  void process(float* const*, int, int) override {}
+  void reset() override {}
+  int latency_samples_q8() const noexcept override { return latency_q8_; }
+
+ private:
+  int latency_q8_ = 0;
+};
+
 class SidechainProcessor final : public sonare::rt::ProcessorBase {
  public:
   void prepare(double, int) override {}
@@ -105,6 +117,23 @@ TEST_CASE("GraphRuntime bypasses processor nodes as dry pass-through", "[engine]
   REQUIRE(buffer[0] == 1.0f);
   REQUIRE(buffer[1] == 2.0f);
   REQUIRE(buffer[3] == 4.0f);
+}
+
+TEST_CASE("GraphRuntime reports the selected output path's Q8 latency", "[engine][graph_runtime]") {
+  sonare::graph::Graph graph;
+  REQUIRE(graph.add_node("in", std::make_unique<GainProcessor>(1.0f), 1));
+  REQUIRE(graph.add_node("latent", std::make_unique<LatencyProcessor>(7 << 8), 1));
+  REQUIRE(graph.add_node("out", std::make_unique<LatencyProcessor>(5 << 8), 1));
+  REQUIRE(graph.connect({"in", 0, "latent", 0, sonare::graph::Connection::Mix::Add}));
+  REQUIRE(graph.connect({"latent", 0, "out", 0, sonare::graph::Connection::Mix::Add}));
+  REQUIRE(graph.compile());
+  graph.prepare(48000.0, 8);
+
+  sonare::engine::GraphRuntime runtime;
+  REQUIRE(runtime.bind(&graph, "in", "out", 1));
+  // Graph stores the 7-sample delay at out's input; GraphRuntime must include
+  // out's own 5-sample processor delay when reporting the rendered path.
+  REQUIRE(runtime.latency_samples_q8() == (12 << 8));
 }
 
 TEST_CASE("Graph node maps configured sidechain ports to ProcessorBase sidechain",

@@ -122,16 +122,18 @@ bool RealtimeEngine::set_bus_insert_bypassed(uint32_t bus_id, unsigned int inser
                                                       reset_on_bypass);
 }
 
-bool RealtimeEngine::set_track_insert_param(uint32_t track_id, unsigned int insert_index,
-                                            const std::string& key, float value) noexcept {
+InsertParamSetResult RealtimeEngine::set_track_insert_param_detailed(uint32_t track_id,
+                                                                     unsigned int insert_index,
+                                                                     const std::string& key,
+                                                                     float value) noexcept {
   size_t lane_index = 0;
   unsigned int param_id = 0;
   if (!track_mixer_runtime_.resolve_track_insert_param(track_id, insert_index, key, &lane_index,
                                                        &param_id)) {
-    return false;
+    return InsertParamSetResult::kInvalidTarget;
   }
   if (lane_index > 0xFFu || insert_index > 0xFFu || param_id > 0xFFu) {
-    return false;
+    return InsertParamSetResult::kInvalidTarget;
   }
   rt::Command command;
   command.type = rt::CommandType::kSetTrackInsertParam;
@@ -139,40 +141,55 @@ bool RealtimeEngine::set_track_insert_param(uint32_t track_id, unsigned int inse
                       (param_id & 0xFFu);
   command.sample_time = -1;  // block head / immediate
   command.arg.f = value;
-  return push_command(command);
+  return push_command(command) ? InsertParamSetResult::kQueued : InsertParamSetResult::kQueueFull;
 }
 
-bool RealtimeEngine::set_master_insert_param(unsigned int insert_index, const std::string& key,
-                                             float value) noexcept {
+bool RealtimeEngine::set_track_insert_param(uint32_t track_id, unsigned int insert_index,
+                                            const std::string& key, float value) noexcept {
+  return set_track_insert_param_detailed(track_id, insert_index, key, value) ==
+         InsertParamSetResult::kQueued;
+}
+
+InsertParamSetResult RealtimeEngine::set_master_insert_param_detailed(unsigned int insert_index,
+                                                                      const std::string& key,
+                                                                      float value) noexcept {
   if (owned_master_strip_ == nullptr) {
-    return false;
+    return InsertParamSetResult::kInvalidTarget;
   }
   const int id = owned_master_strip_->insert_parameter_id_for_key(insert_index, key);
   if (id < 0) {
-    return false;
+    return InsertParamSetResult::kInvalidTarget;
   }
   const unsigned int param_id = static_cast<unsigned int>(id);
   if (insert_index > 0xFFu || param_id > 0xFFu) {
-    return false;
+    return InsertParamSetResult::kInvalidTarget;
   }
   rt::Command command;
   command.type = rt::CommandType::kSetMasterInsertParam;
   command.target_id = ((insert_index & 0xFFu) << 8) | (param_id & 0xFFu);
   command.sample_time = -1;  // block head / immediate
   command.arg.f = value;
-  return push_command(command);
+  return push_command(command) ? InsertParamSetResult::kQueued : InsertParamSetResult::kQueueFull;
 }
 
-bool RealtimeEngine::set_bus_insert_param(uint32_t bus_id, unsigned int insert_index,
-                                          const std::string& key, float value) noexcept {
+bool RealtimeEngine::set_master_insert_param(unsigned int insert_index, const std::string& key,
+                                             float value) noexcept {
+  return set_master_insert_param_detailed(insert_index, key, value) ==
+         InsertParamSetResult::kQueued;
+}
+
+InsertParamSetResult RealtimeEngine::set_bus_insert_param_detailed(uint32_t bus_id,
+                                                                   unsigned int insert_index,
+                                                                   const std::string& key,
+                                                                   float value) noexcept {
   size_t bus_index = 0;
   unsigned int param_id = 0;
   if (!track_mixer_runtime_.resolve_bus_insert_param(bus_id, insert_index, key, &bus_index,
                                                      &param_id)) {
-    return false;
+    return InsertParamSetResult::kInvalidTarget;
   }
   if (bus_index >= TrackMixerRuntime::kMaxBusLanes || insert_index > 0xFFu || param_id > 0xFFu) {
-    return false;
+    return InsertParamSetResult::kInvalidTarget;
   }
   // Route through the reserved insert-automation id over the generic kSetParam
   // command: apply_command already forwards reserved ids to the smoothed insert
@@ -184,7 +201,13 @@ bool RealtimeEngine::set_bus_insert_param(uint32_t bus_id, unsigned int insert_i
   command.target_id = make_insert_param_id(selector, insert_index, param_id);
   command.sample_time = -1;  // block head / immediate
   command.arg.f = value;
-  return push_command(command);
+  return push_command(command) ? InsertParamSetResult::kQueued : InsertParamSetResult::kQueueFull;
+}
+
+bool RealtimeEngine::set_bus_insert_param(uint32_t bus_id, unsigned int insert_index,
+                                          const std::string& key, float value) noexcept {
+  return set_bus_insert_param_detailed(bus_id, insert_index, key, value) ==
+         InsertParamSetResult::kQueued;
 }
 
 int64_t RealtimeEngine::resolve_track_insert_automation_id(uint32_t track_id,

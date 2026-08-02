@@ -277,6 +277,16 @@ def configure_effects_engine_signatures(lib: ctypes.CDLL) -> None:
         ctypes.c_size_t,
         ctypes.c_size_t,
     ]
+    if hasattr(lib, "sonare_engine_prepare_with_channels"):
+        lib.sonare_engine_prepare_with_channels.restype = ctypes.c_int32
+        lib.sonare_engine_prepare_with_channels.argtypes = [
+            ctypes.c_void_p,
+            ctypes.c_double,
+            ctypes.c_int,
+            ctypes.c_size_t,
+            ctypes.c_size_t,
+            ctypes.c_int,
+        ]
     lib.sonare_engine_play.restype = ctypes.c_int32
     lib.sonare_engine_play.argtypes = [ctypes.c_void_p, ctypes.c_int64]
     lib.sonare_engine_stop.restype = ctypes.c_int32

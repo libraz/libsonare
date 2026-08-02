@@ -26,6 +26,22 @@ void MeterTelemetryTap::reset() noexcept {
   }
   goniometer_.reset();
   dropped_records_ = 0;
+  block_active_ = false;
+  staged_count_ = 0;
+}
+
+void MeterTelemetryTap::begin_block() noexcept {
+  block_active_ = true;
+  staged_count_ = 0;
+}
+
+void MeterTelemetryTap::end_block() noexcept {
+  if (!block_active_) return;
+  for (size_t i = 0; i < staged_count_; ++i) {
+    publish(staged_records_[i]);
+  }
+  staged_count_ = 0;
+  block_active_ = false;
 }
 
 void MeterTelemetryTap::process(float* const* channels, int num_channels, int num_frames,
@@ -98,7 +114,7 @@ void MeterTelemetryTap::process_lightweight(float* const* channels, int num_chan
     record.mono_compat_width = mixing::mono_compat_width_from_energy(mid_energy, side_energy);
   }
 
-  publish(record);
+  stage(record);
 }
 
 size_t MeterTelemetryTap::read_goniometer(mixing::GoniometerPoint* out,
@@ -125,7 +141,7 @@ void MeterTelemetryTap::publish(const mixing::MeterSnapshot& snapshot,
   record.gain_reduction_db = snapshot.gain_reduction_db;
   record.dropped_records = dropped_records_;
 
-  publish(record);
+  stage(record);
 }
 
 void MeterTelemetryTap::publish(MeterTelemetryRecord record) noexcept {
@@ -140,6 +156,24 @@ void MeterTelemetryTap::publish(MeterTelemetryRecord record) noexcept {
   // the queue tail. The running dropped_records_ count is propagated to the
   // host on the next record that pushes successfully.
   ++dropped_records_;
+}
+
+void MeterTelemetryTap::stage(MeterTelemetryRecord record) noexcept {
+  if (!block_active_) {
+    publish(record);
+    return;
+  }
+  for (size_t i = 0; i < staged_count_; ++i) {
+    if (staged_records_[i].target_id == record.target_id) {
+      staged_records_[i] = record;
+      return;
+    }
+  }
+  if (staged_count_ < staged_records_.size()) {
+    staged_records_[staged_count_++] = record;
+  } else {
+    ++dropped_records_;
+  }
 }
 
 void MeterTelemetryTap::push_goniometer(float* const* channels, int num_channels,

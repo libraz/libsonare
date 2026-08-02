@@ -11,8 +11,9 @@
 namespace sonare::engine {
 
 void RealtimeEngine::prepare(double sample_rate, int max_block_size, size_t command_capacity,
-                             size_t telemetry_capacity) {
+                             size_t telemetry_capacity, int max_channels) {
   max_block_size_ = std::max(max_block_size, 1);
+  prepared_channels_ = std::clamp(max_channels, 1, static_cast<int>(kMaxAudioChannels));
   sample_rate_ = sample_rate > 0.0 ? sample_rate : 48000.0;
   tempo_map_.prepare(sample_rate);
   publish_tempo_map_snapshot();
@@ -34,17 +35,18 @@ void RealtimeEngine::prepare(double sample_rate, int max_block_size, size_t comm
   instrument_source_outputs = kMaxInstrumentSourceOutputs;
 #endif
   midi_instrument_storage_.assign(static_cast<size_t>(max_block_size_) *
-                                      midi_instrument_channels_.size() * instrument_source_outputs,
+                                      static_cast<size_t>(prepared_channels_) *
+                                      instrument_source_outputs,
                                   0.0f);
-  for (size_t ch = 0; ch < midi_instrument_channels_.size(); ++ch) {
+  for (int ch = 0; ch < prepared_channels_; ++ch) {
     midi_instrument_channels_[ch] =
         midi_instrument_storage_.data() + ch * static_cast<size_t>(max_block_size_);
   }
 #if defined(SONARE_WITH_MIXING)
   const size_t source_stride =
-      midi_instrument_channels_.size() * static_cast<size_t>(max_block_size_);
+      static_cast<size_t>(prepared_channels_) * static_cast<size_t>(max_block_size_);
   for (size_t source = 0; source < kMaxInstrumentSourceOutputs; ++source) {
-    for (size_t ch = 0; ch < midi_instrument_channels_.size(); ++ch) {
+    for (int ch = 0; ch < prepared_channels_; ++ch) {
       midi_instrument_source_channels_[source][ch] = midi_instrument_storage_.data() +
                                                      source * source_stride +
                                                      ch * static_cast<size_t>(max_block_size_);
@@ -54,9 +56,9 @@ void RealtimeEngine::prepare(double sample_rate, int max_block_size, size_t comm
   // PDC clip-bus scratch: the clip player renders here first when an instrument
   // reports latency, so the clip bus can be delayed (phase-aligned with the
   // instruments) before being summed into the source layer.
-  clip_scratch_storage_.assign(static_cast<size_t>(max_block_size_) * clip_scratch_channels_.size(),
-                               0.0f);
-  for (size_t ch = 0; ch < clip_scratch_channels_.size(); ++ch) {
+  clip_scratch_storage_.assign(
+      static_cast<size_t>(max_block_size_) * static_cast<size_t>(prepared_channels_), 0.0f);
+  for (int ch = 0; ch < prepared_channels_; ++ch) {
     clip_scratch_channels_[ch] =
         clip_scratch_storage_.data() + ch * static_cast<size_t>(max_block_size_);
   }
@@ -100,8 +102,8 @@ void RealtimeEngine::prepare(double sample_rate, int max_block_size, size_t comm
   automation_.set_engine_param_gate(&RealtimeEngine::parameter_target_reserved);
 #endif
   input_capture_storage_.assign(
-      static_cast<size_t>(max_block_size_) * input_capture_channels_.size(), 0.0f);
-  for (size_t ch = 0; ch < input_capture_channels_.size(); ++ch) {
+      static_cast<size_t>(max_block_size_) * static_cast<size_t>(prepared_channels_), 0.0f);
+  for (int ch = 0; ch < prepared_channels_; ++ch) {
     input_capture_channels_[ch] =
         input_capture_storage_.data() + ch * static_cast<size_t>(max_block_size_);
   }
@@ -110,9 +112,9 @@ void RealtimeEngine::prepare(double sample_rate, int max_block_size, size_t comm
   monitor_runtime_.prepare(sample_rate_, max_block_size_);
   track_mixer_runtime_.prepare(sample_rate_, max_block_size_);
   update_reported_graph_latency();
-  monitor_bus_storage_.assign(static_cast<size_t>(max_block_size_) * monitor_bus_channels_.size(),
-                              0.0f);
-  for (size_t ch = 0; ch < monitor_bus_channels_.size(); ++ch) {
+  monitor_bus_storage_.assign(
+      static_cast<size_t>(max_block_size_) * static_cast<size_t>(prepared_channels_), 0.0f);
+  for (int ch = 0; ch < prepared_channels_; ++ch) {
     monitor_bus_channels_[ch] =
         monitor_bus_storage_.data() + ch * static_cast<size_t>(max_block_size_);
   }
@@ -312,6 +314,9 @@ void RealtimeEngine::set_graph_latency_samples_q8(int latency_q8) noexcept {
 
 void RealtimeEngine::update_reported_graph_latency() noexcept {
   int latency_q8 = 0;
+#if defined(SONARE_WITH_GRAPH)
+  latency_q8 += graph_runtime_.latency_samples_q8();
+#endif
 #if defined(SONARE_WITH_ARRANGEMENT)
   latency_q8 += pdc_total_q8_;
 #endif

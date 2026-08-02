@@ -3,6 +3,7 @@ import {
   createSonareClipPageRequestRingBuffer,
   createSonareEngineCommandRingBuffer,
   createSonareEngineTelemetryRingBuffer,
+  createSonareExternalMidiRingBuffer,
   createSonareScopeRingBuffer,
   describe,
   expect,
@@ -10,6 +11,7 @@ import {
   pushSonareEngineCommandRingBuffer,
   readSonareClipPageRequestRingBuffer,
   readSonareEngineTelemetryRingBuffer,
+  readSonareExternalMidiRingBuffer,
   readSonareScopeRingBuffer,
   registerSonareRealtimeEngineWorkletProcessor,
   SonareEngineCommandType,
@@ -25,6 +27,61 @@ describe('SonareRealtimeEngineWorkletProcessor', () => {
   describe('SonareRealtimeEngineWorkletProcessor', () => {
     const midi1Word = (status: number, channel: number, data0: number, data1: number): number =>
       (0x2 << 28) | ((status & 0xf) << 20) | ((channel & 0xf) << 16) | (data0 << 8) | data1;
+
+    it('drains external MIDI into the SAB ring without postMessage', () => {
+      const blockSize = 128;
+      const externalMidiRing = createSonareExternalMidiRingBuffer(8);
+      const posted: unknown[] = [];
+      const processor = new SonareRealtimeEngineWorkletProcessor(
+        {
+          sampleRate: 48000,
+          blockSize,
+          channelCount: 2,
+          externalMidiSharedBuffer: externalMidiRing.sharedBuffer,
+          externalMidiRingCapacity: externalMidiRing.capacity,
+        },
+        { postMessage: (message) => posted.push(message) },
+      );
+      try {
+        const engine = (
+          processor as unknown as {
+            engine: {
+              setMidiDestinationExternal: (destinationId: number, external: boolean) => void;
+              setMidiClips: (clips: unknown[]) => void;
+              play: (sampleTime?: number) => void;
+            };
+          }
+        ).engine;
+        engine.setMidiDestinationExternal(5, true);
+        engine.setMidiClips([
+          {
+            id: 1,
+            trackId: 5,
+            destinationId: 5,
+            lengthSamples: 8192,
+            events: [
+              { renderFrame: 0, word0: midi1Word(0x9, 0, 60, 100), wordCount: 1 },
+              { renderFrame: 64, word0: midi1Word(0x8, 0, 60, 0), wordCount: 1 },
+            ],
+          },
+        ]);
+        engine.play();
+        expect(
+          processor.process([[]], [[new Float32Array(blockSize), new Float32Array(blockSize)]]),
+        ).toBe(true);
+
+        expect(readSonareExternalMidiRingBuffer(externalMidiRing)).toEqual({
+          events: [
+            { destinationId: 5, renderFrame: 0, byteWord: 0x00643c90, byteCount: 3 },
+            { destinationId: 5, renderFrame: 64, byteWord: 0x00003c80, byteCount: 3 },
+          ],
+          dropped: 0,
+        });
+        expect(posted).not.toContainEqual(expect.objectContaining({ type: 'externalMidi' }));
+      } finally {
+        processor.destroy();
+      }
+    });
 
     it('applies SAB transport commands within the next processed block', () => {
       const blockSize = 128;
@@ -70,6 +127,139 @@ describe('SonareRealtimeEngineWorkletProcessor', () => {
       } finally {
         processor.destroy();
       }
+    });
+
+    it('replaces custom parameters from sync messages', () => {
+      const processor = new SonareRealtimeEngineWorkletProcessor({
+        sampleRate: 48000,
+        blockSize: 128,
+        channelCount: 1,
+      });
+      try {
+        processor.receiveSync({
+          type: 'syncParameters',
+          parameters: [
+            {
+              id: 7,
+              name: 'gain',
+              unit: 'dB',
+              minValue: -60,
+              maxValue: 12,
+              defaultValue: 0,
+              rtSafe: true,
+              defaultCurve: 2,
+            },
+          ],
+        });
+        const engine = (processor as unknown as { engine: { parameterCount: () => number } })
+          .engine;
+        expect(engine.parameterCount()).toBe(1);
+
+        processor.receiveSync({ type: 'syncParameters', parameters: [] });
+        expect(engine.parameterCount()).toBe(0);
+      } finally {
+        processor.destroy();
+      }
+    });
+
+    it('applies live MIDI input sync messages', () => {
+      const processor = new SonareRealtimeEngineWorkletProcessor({
+        sampleRate: 48000,
+        blockSize: 128,
+        channelCount: 1,
+      });
+      try {
+        processor.receiveSync({ type: 'syncMidiInputSource', destinationId: 3 });
+        processor.receiveSync({
+          type: 'syncMidiInputNoteOn',
+          group: 0,
+          channel: 0,
+          data0: 60,
+          data1: 100,
+          portTimeSamples: 128,
+        });
+        const engine = (processor as unknown as { engine: { midiInputPendingCount: () => number } })
+          .engine;
+        expect(engine.midiInputPendingCount()).toBe(1);
+        processor.receiveSync({ type: 'syncClearMidiInputSource' });
+      } finally {
+        processor.destroy();
+      }
+    });
+
+    it('contains an invalid SAB command and continues rendering later blocks', () => {
+      const blockSize = 128;
+      const commandRing = createSonareEngineCommandRingBuffer(8);
+      const telemetryRing = createSonareEngineTelemetryRingBuffer(8);
+      const processor = new SonareRealtimeEngineWorkletProcessor({
+        sampleRate: 48000,
+        blockSize,
+        channelCount: 1,
+        commandSharedBuffer: commandRing.sharedBuffer,
+        telemetrySharedBuffer: telemetryRing.sharedBuffer,
+      });
+      try {
+        // Bypass the main-thread producer validation to emulate a malformed
+        // SAB record from an older or hostile producer.
+        expect(
+          pushSonareEngineCommandRingBuffer(commandRing, {
+            type: SonareEngineCommandType.TransportSeekPpq,
+            sampleTime: -1,
+            argFloat: Number.NaN,
+          }),
+        ).toBe(true);
+        const first = new Float32Array(blockSize);
+        expect(processor.process([[]], [[first]])).toBe(true);
+        expect(Array.from(first).every(Number.isFinite)).toBe(true);
+
+        const telemetry = readSonareEngineTelemetryRingBuffer(telemetryRing);
+        expect(telemetry.telemetry).toContainEqual(
+          expect.objectContaining({
+            type: SonareEngineTelemetryType.Error,
+            error: SonareEngineTelemetryError.InvalidCommand,
+            value: SonareEngineCommandType.TransportSeekPpq,
+          }),
+        );
+
+        const later = new Float32Array(blockSize);
+        expect(processor.process([[]], [[later]])).toBe(true);
+        expect(Array.from(later).every(Number.isFinite)).toBe(true);
+      } finally {
+        processor.destroy();
+      }
+    });
+
+    it('reports a rejected sync without stopping subsequent processing', () => {
+      const posted: unknown[] = [];
+      const processor = new SonareRealtimeEngineWorkletProcessor(
+        { sampleRate: 48000, blockSize: 128, channelCount: 1 },
+        { postMessage: (message) => posted.push(message) },
+      );
+      try {
+        expect(() =>
+          processor.receiveSync({
+            type: 'syncTempo',
+            bpm: Number.NaN,
+            timeSignature: { numerator: 4, denominator: 4 },
+          }),
+        ).not.toThrow();
+        expect(posted.at(-1)).toMatchObject({ type: 'syncError', syncType: 'syncTempo' });
+        expect(processor.process([[]], [[new Float32Array(128)]])).toBe(true);
+      } finally {
+        processor.destroy();
+      }
+    });
+
+    it('releases its engine when it receives a destroy sync message', () => {
+      const processor = new SonareRealtimeEngineWorkletProcessor({
+        sampleRate: 48000,
+        blockSize: 128,
+        channelCount: 1,
+      });
+      processor.receiveSync({ type: 'destroy' });
+      expect(processor.process([[]], [[new Float32Array(128)]])).toBe(false);
+      // Idempotent after the sync has already released native state.
+      processor.destroy();
     });
 
     it('publishes telemetry through postMessage fallback when SAB telemetry is absent', () => {
@@ -742,10 +932,10 @@ describe('SonareRealtimeEngineWorkletProcessor', () => {
     });
 
     it('applies tempo and time-signature segment sync to metronome accents', () => {
-      const blockSize = 9600;
+      const blockSize = 16000;
       const output = new Float32Array(blockSize);
       const processor = new SonareRealtimeEngineWorkletProcessor({
-        sampleRate: 4800,
+        sampleRate: 8000,
         blockSize,
         channelCount: 1,
       });
@@ -759,14 +949,23 @@ describe('SonareRealtimeEngineWorkletProcessor', () => {
         });
         processor.receiveSync({
           type: 'syncMetronome',
-          config: { enabled: true, beatGain: 0.1, accentGain: 0.8, clickSamples: 8 },
+          config: {
+            enabled: true,
+            beatGain: 0.1,
+            accentGain: 0.8,
+            clickSamples: 0,
+            clickSeconds: 0.01,
+          },
         });
         processor.receiveCommand({ type: SonareEngineCommandType.TransportPlay, sampleTime: -1 });
         expect(processor.process([[]], [[output]])).toBe(true);
-        expect(output[2400]).toBeGreaterThan(0);
-        expect(output[4800]).toBeGreaterThan(0);
-        expect(output[0]).toBeGreaterThan(output[2400] * 2);
-        expect(output[7200]).toBeGreaterThan(output[2400] * 2);
+        expect(output[4000]).toBeGreaterThan(0);
+        expect(output[8000]).toBeGreaterThan(0);
+        expect(output[0]).toBeGreaterThan(output[4000] * 2);
+        // 10 ms at 8 kHz survives the command's enabled-state handoff; the
+        // previous reconstruction dropped clickSeconds and ended after 16 samples.
+        expect(output[70]).toBeGreaterThan(0);
+        expect(output[12000]).toBeGreaterThan(output[4000] * 2);
       } finally {
         processor.destroy();
       }

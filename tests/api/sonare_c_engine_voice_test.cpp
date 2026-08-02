@@ -106,6 +106,47 @@ TEST_CASE("sonare_engine MIDI scalar commands respect arrangement feature flag",
   sonare_engine_destroy(engine);
 }
 
+TEST_CASE("sonare_engine validates realtime queue error classes", "[c_api][engine]") {
+  SonareRealtimeEngine* engine = nullptr;
+  REQUIRE(sonare_engine_create(&engine) == SONARE_OK);
+  REQUIRE(engine != nullptr);
+  REQUIRE(sonare_engine_prepare(engine, 48000.0, 128, 1, 1) == SONARE_OK);
+
+  const uint8_t sysex[513]{};
+  REQUIRE(sonare_engine_push_midi_sysex(engine, 0, sysex, sizeof(sysex), -1) ==
+          SONARE_ERROR_INVALID_PARAMETER);
+  REQUIRE(sonare_engine_prepare(engine, std::numeric_limits<double>::quiet_NaN(), 128, 1, 1) ==
+          SONARE_ERROR_INVALID_PARAMETER);
+  REQUIRE(sonare_engine_prepare(engine, 7999.0, 128, 1, 1) == SONARE_ERROR_INVALID_PARAMETER);
+  REQUIRE(sonare_engine_prepare(engine, 384001.0, 128, 1, 1) == SONARE_ERROR_INVALID_PARAMETER);
+  REQUIRE(sonare_engine_prepare_with_channels(engine, 48000.0, 128, 1, 1, 2) == SONARE_OK);
+  REQUIRE(sonare_engine_prepare_with_channels(engine, 48000.0, 128, 1, 1, 0) ==
+          SONARE_ERROR_INVALID_PARAMETER);
+  REQUIRE(sonare_engine_prepare_with_channels(engine, 48000.0, 128, 1, 1, 65) ==
+          SONARE_ERROR_INVALID_PARAMETER);
+
+#if defined(SONARE_WITH_MIXING)
+  SonareEngineTrackLane lanes[] = {{10, nullptr, 0, 0, 1}};
+  REQUIRE(sonare_engine_set_track_lanes(engine, lanes, 1) == SONARE_OK);
+  const char* scene_json =
+      R"({"version":1,"strips":[{"id":"track-10","inserts":[{"slot":"pre","processor":"eq.parametric","params":"{\"band0.type\":1,\"band0.frequencyHz\":1000,\"band0.gainDb\":0,\"band0.enabled\":1}"}]}],"buses":[],"connections":[]})";
+  REQUIRE(sonare_engine_set_track_strip_json(engine, 10, scene_json) == SONARE_OK);
+  REQUIRE(sonare_engine_set_track_strip_insert_param_by_name(
+              engine, 10, 0, "band0.gainDb", std::numeric_limits<float>::quiet_NaN()) ==
+          SONARE_ERROR_INVALID_PARAMETER);
+  REQUIRE(sonare_engine_set_track_strip_insert_param_by_name(engine, 10, 0, "unknown", 1.0f) ==
+          SONARE_ERROR_INVALID_PARAMETER);
+  REQUIRE(sonare_engine_set_track_strip_insert_param_by_name(engine, 10, 0, "band0.gainDb", 1.0f) ==
+          SONARE_OK);
+  REQUIRE(sonare_engine_set_track_strip_insert_param_by_name(engine, 10, 0, "band0.gainDb", 2.0f) ==
+          SONARE_OK);
+  REQUIRE(sonare_engine_set_track_strip_insert_param_by_name(engine, 10, 0, "band0.gainDb", 3.0f) ==
+          SONARE_ERROR_OUT_OF_MEMORY);
+#endif
+
+  sonare_engine_destroy(engine);
+}
+
 TEST_CASE("sonare_engine rejects registered non realtime-safe automation targets",
           "[c_api][engine]") {
   SonareRealtimeEngine* engine = nullptr;
@@ -2962,6 +3003,17 @@ TEST_CASE("sonare_last_error_message", "[c_api]") {
     REQUIRE(sonare_project_create(nullptr) == SONARE_ERROR_INVALID_PARAMETER);
     REQUIRE(std::string(sonare_last_error_message()).empty());
   }
+
+  SECTION("pointer-returning constructors replace stale diagnostics") {
+    REQUIRE(sonare_mixer_create(0, 128) == nullptr);
+    REQUIRE(std::string(sonare_last_error_message()).find("sample_rate") != std::string::npos);
+    REQUIRE(sonare_mixer_from_scene_json(nullptr, 48000, 128) == nullptr);
+    REQUIRE(std::string(sonare_last_error_message()).find("scene JSON") != std::string::npos);
+    REQUIRE(sonare_eq_create(0.0, 128) == nullptr);
+    REQUIRE(std::string(sonare_last_error_message()).find("sample_rate") != std::string::npos);
+    REQUIRE(sonare_streaming_mastering_chain_create(nullptr, 1) == nullptr);
+    REQUIRE(std::string(sonare_last_error_message()).find("params") != std::string::npos);
+  }
 }
 
 TEST_CASE("sonare_mastering_insert_param_info reports realtime param descriptors",
@@ -3095,6 +3147,9 @@ TEST_CASE("sonare_engine track strip pan setters reflect in realtime", "[c_api][
   REQUIRE(sonare_engine_set_track_strip_pan_law(engine, 10, 99) == SONARE_ERROR_INVALID_PARAMETER);
   REQUIRE(sonare_engine_set_track_strip_pan_mode(engine, 10, 99) == SONARE_ERROR_INVALID_PARAMETER);
   REQUIRE(sonare_engine_set_track_strip_channel_delay_samples(engine, 10, -1) ==
+          SONARE_ERROR_INVALID_PARAMETER);
+  REQUIRE(sonare_engine_set_track_strip_channel_delay_samples(
+              engine, 10, sonare::mixing::kMaxAlignmentDelaySamples + 1) ==
           SONARE_ERROR_INVALID_PARAMETER);
 
   // Valid granular updates all succeed on the bound lane strip.

@@ -47,11 +47,18 @@ static_assert(std::is_trivially_copyable_v<MeterTelemetryRecord>,
 class MeterTelemetryTap {
  public:
   static constexpr size_t kGoniometerCapacity = 512;
+  static constexpr size_t kMaxTargetsPerBlock = 64;
 
   void prepare(double sample_rate, int max_block_size, uint32_t target_id,
                size_t telemetry_capacity = 64,
                const mixing::MeterConfig& config = mixing::MeterConfig{});
   void reset() noexcept;
+
+  /// Starts a host render block. Calls to process()/process_lightweight() retain
+  /// only the latest record per target until end_block(), so automation-driven
+  /// sub-block splitting cannot multiply telemetry publication rate.
+  void begin_block() noexcept;
+  void end_block() noexcept;
 
   void process(float* const* channels, int num_channels, int num_frames,
                int64_t render_frame) noexcept;
@@ -68,6 +75,7 @@ class MeterTelemetryTap {
  private:
   void publish(const mixing::MeterSnapshot& snapshot, int64_t render_frame) noexcept;
   void publish(MeterTelemetryRecord record) noexcept;
+  void stage(MeterTelemetryRecord record) noexcept;
   void push_goniometer(float* const* channels, int num_channels, int num_frames) noexcept;
 
   std::optional<mixing::MeterProcessor> meter_{};
@@ -80,6 +88,9 @@ class MeterTelemetryTap {
   // own counter or every lightweight record would reuse a stale/zero seq and
   // break host-side change/drop detection.
   uint64_t lightweight_seq_ = 0;
+  bool block_active_ = false;
+  size_t staged_count_ = 0;
+  std::array<MeterTelemetryRecord, kMaxTargetsPerBlock> staged_records_{};
 };
 
 }  // namespace sonare::engine

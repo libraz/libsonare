@@ -1,4 +1,36 @@
-import type { MidiCcBindOptions, RealtimeEngine } from './realtime_engine';
+import type { MidiCcBindOptions } from './realtime_engine';
+
+export interface WebMidiEngine {
+  bindMidiCc(
+    channel: number,
+    controller: number,
+    paramId: number,
+    options?: MidiCcBindOptions,
+  ): void;
+  setMidiInputSource(destinationId?: number): void;
+  clearMidiInputSource(): void;
+  pushMidiInputNoteOn(
+    group: number,
+    channel: number,
+    note: number,
+    velocity: number,
+    time?: number,
+  ): void;
+  pushMidiInputNoteOff(
+    group: number,
+    channel: number,
+    note: number,
+    velocity?: number,
+    time?: number,
+  ): void;
+  pushMidiInputCc(
+    group: number,
+    channel: number,
+    controller: number,
+    value: number,
+    time?: number,
+  ): void;
+}
 
 type MidiInputState = 'connected' | 'disconnected';
 
@@ -103,7 +135,7 @@ export function isWebMidiAvailable(): boolean {
 }
 
 export async function bindWebMidi(
-  engine: RealtimeEngine,
+  engine: WebMidiEngine,
   options: BindWebMidiOptions = {},
 ): Promise<WebMidiBinding> {
   const navigatorWithMidi = globalThis.navigator as NavigatorWithMidi | undefined;
@@ -237,7 +269,7 @@ export async function bindWebMidi(
 }
 
 function dispatchMidiMessage(
-  engine: RealtimeEngine,
+  engine: WebMidiEngine,
   event: MidiMessageEventLike,
   group: number,
   runningStatus: number,
@@ -300,7 +332,7 @@ function dispatchMidiMessage(
 }
 
 function dispatchUmpMessage(
-  engine: RealtimeEngine,
+  engine: WebMidiEngine,
   words: ArrayLike<number>,
   portTimeSamples: number,
 ): void {

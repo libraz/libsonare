@@ -1,8 +1,10 @@
 import { mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
+import { Worker } from 'node:worker_threads';
 import { describe, expect, it } from 'vitest';
 import {
+  Audio,
   ErrorCode,
   engineAbiVersion,
   isSonareError,
@@ -33,6 +35,51 @@ describe('RealtimeEngine native binding', () => {
     const v = voiceChangerAbiVersion();
     expect(Number.isFinite(v)).toBe(true);
     expect(v).toBeGreaterThan(0);
+  });
+
+  it('rejects nonfinite and out-of-range engine sample rates', () => {
+    for (const sampleRate of [Number.NaN, 7999, 384001]) {
+      expect(() => new RealtimeEngine(sampleRate, 128)).toThrow();
+    }
+    const engine = new RealtimeEngine(48000, 128);
+    try {
+      for (const sampleRate of [Number.NaN, 7999, 384001]) {
+        expect(() => engine.prepare(sampleRate, 128)).toThrow();
+      }
+    } finally {
+      engine.destroy();
+    }
+  });
+
+  it('accepts a declared channel capacity and rejects invalid capacities', () => {
+    const engine = new RealtimeEngine(48000, 128, 1024, 1024, 2);
+    try {
+      expect(() => engine.prepare(48000, 128, 1024, 1024, 2)).not.toThrow();
+      expect(() => engine.prepare(48000, 128, 1024, 1024, 0)).toThrow();
+      expect(() => engine.prepare(48000, 128, 1024, 1024, 65)).toThrow();
+    } finally {
+      engine.destroy();
+    }
+    expect(() => new RealtimeEngine(48000, 128, 1024, 1024, 0)).toThrow();
+  });
+
+  it('keeps Audio factories usable after a worker loads and exits the addon', async () => {
+    const addonPath = join(process.cwd(), 'build', 'Release', 'sonare-node.node');
+    await new Promise<void>((resolve, reject) => {
+      const worker = new Worker(`require(${JSON.stringify(addonPath)});`, { eval: true });
+      worker.once('error', reject);
+      worker.once('exit', (code) => {
+        if (code === 0) {
+          resolve();
+        } else {
+          reject(new Error(`worker exited with code ${code}`));
+        }
+      });
+    });
+
+    const audio = Audio.fromBuffer(new Float32Array([0.25, -0.25]), 48000);
+    expect(audio.getLength()).toBe(2);
+    audio.destroy();
   });
 
   it('installs tempo and time-signature segments and validates them', () => {
@@ -214,8 +261,11 @@ describe('RealtimeEngine native binding', () => {
     expect(captureStatus.armed).toBe(true);
     expect(captureStatus.source).toBe('output');
     expect(captureStatus.recordOffsetSamples).toBe(0);
-    expect(captureLeft[0]).toBeCloseTo(0.75, 4);
-    expect(captureRight[0]).toBeCloseTo(-0.75, 4);
+    const captured = engine.capturedAudio();
+    expect(captureLeft[0]).toBe(0);
+    expect(captureRight[0]).toBe(0);
+    expect(captured[0][0]).toBeCloseTo(0.75, 4);
+    expect(captured[1][0]).toBeCloseTo(-0.75, 4);
     engine.resetCapture();
     expect(engine.captureStatus().capturedFrames).toBe(0);
 
@@ -234,12 +284,14 @@ describe('RealtimeEngine native binding', () => {
     const inputCaptureStatus = engine.captureStatus();
     expect(inputCaptureStatus.source).toBe('input');
     expect(inputCaptureStatus.recordOffsetSamples).toBe(-37);
-    expect(captureLeft[0]).toBeCloseTo(0.25, 4);
+    expect(captureLeft[0]).toBe(0);
+    expect(engine.capturedAudio()[0][0]).toBeCloseTo(0.25, 4);
     expect(engine.drainMeterTelemetry().some((record) => record.targetId === 0xffff)).toBe(true);
 
     engine.setCaptureSource(0);
     expect(engine.captureStatus().source).toBe('output');
-    expect(captureRight[0]).toBeCloseTo(-0.25, 4);
+    expect(captureRight[0]).toBe(0);
+    expect(engine.capturedAudio()[1][0]).toBeCloseTo(-0.25, 4);
 
     engine.setInputMonitor(false);
     engine.resetCapture();
@@ -251,7 +303,8 @@ describe('RealtimeEngine native binding', () => {
     ]);
     expect(monitored[0][0]).toBeCloseTo(0.25, 4);
     expect(monitored[1][0]).toBeCloseTo(-0.25, 4);
-    expect(captureLeft[0]).toBeCloseTo(0.25, 4);
+    expect(captureLeft[0]).toBe(0);
+    expect(engine.capturedAudio()[0][0]).toBeCloseTo(0.25, 4);
 
     engine.setInputMonitor(true, 0.5);
     engine.seekMarker(11);
@@ -1188,6 +1241,26 @@ describe('RealtimeEngine native binding', () => {
     engine.destroy();
   });
 
+  it('keeps capture storage valid when the source ArrayBuffers are transferred', () => {
+    const engine = new RealtimeEngine(48000, 128);
+    const captureLeft = new Float32Array(128);
+    const captureRight = new Float32Array(128);
+    engine.setCaptureBuffer([captureLeft, captureRight]);
+
+    structuredClone(captureLeft, { transfer: [captureLeft.buffer] });
+    structuredClone(captureRight, { transfer: [captureRight.buffer] });
+    expect(captureLeft.byteLength).toBe(0);
+    expect(captureRight.byteLength).toBe(0);
+
+    engine.armCapture();
+    engine.play();
+    engine.process([new Float32Array(128).fill(0.25), new Float32Array(128).fill(-0.25)]);
+    const captured = engine.capturedAudio();
+    expect(captured[0][0]).toBeCloseTo(0.25, 4);
+    expect(captured[1][0]).toBeCloseTo(-0.25, 4);
+    engine.destroy();
+  });
+
   it('exposes transport state and live parameter injection', () => {
     const engine = new RealtimeEngine(48000, 128);
     engine.setTempo(60);
@@ -1339,6 +1412,7 @@ describe('RealtimeEngine native binding', () => {
     expect(compressor?.realtimeInsertable).toBe(true);
     expect(typeof compressor?.latencySamples).toBe('number');
     expect(typeof compressor?.tailSamples).toBe('number');
+    expect(compressor?.realtimeCost).toBe('low');
     // Per-channel/linked processors process every plane in one call.
     expect(compressor?.channelPolicy).toBe('multichannel');
 
@@ -1362,6 +1436,8 @@ describe('RealtimeEngine native binding', () => {
 
     expect(byId('stereo.haasEnhancer')?.tailSamples).toBe(576);
     expect(byId('stereo.phaseAlign')?.tailSamples).toBe(0);
+    expect(byId('effects.reverb.velvet')?.realtimeCost).toBe('high');
+    expect(byId('effects.reverb.fdn')?.realtimeCost).toBe('moderate');
   });
 
   it('reports realtime insert param descriptors and changes them live', () => {

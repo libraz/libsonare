@@ -51,6 +51,10 @@ class GraphRuntime {
 
   graph::Graph* active_graph() const noexcept;
   int num_channels() const noexcept;
+  /// Aggregate latency from the bound graph input to its selected output. This
+  /// is a control-thread query over the last published immutable binding; it
+  /// preserves the graph's Q8 fractional latency for engine PDC/telemetry.
+  int latency_samples_q8() const noexcept;
 
  private:
   struct Binding {

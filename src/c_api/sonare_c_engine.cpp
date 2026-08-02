@@ -99,11 +99,28 @@ SonareError sonare_engine_prepare(SonareRealtimeEngine* engine, double sample_ra
                                   int max_block_size, size_t command_capacity,
                                   size_t telemetry_capacity) {
   SONARE_C_API_ENTRY;
-  if (!engine || sample_rate <= 0.0 || max_block_size <= 0) {
+  if (!engine || !std::isfinite(sample_rate) || sample_rate < kMinSampleRate ||
+      sample_rate > kMaxSampleRate || max_block_size <= 0) {
     return SONARE_ERROR_INVALID_PARAMETER;
   }
   SONARE_C_TRY
   engine->engine.prepare(sample_rate, max_block_size, command_capacity, telemetry_capacity);
+  return SONARE_OK;
+  SONARE_C_CATCH
+}
+
+SonareError sonare_engine_prepare_with_channels(SonareRealtimeEngine* engine, double sample_rate,
+                                                int max_block_size, size_t command_capacity,
+                                                size_t telemetry_capacity, int max_channels) {
+  SONARE_C_API_ENTRY;
+  if (!engine || !std::isfinite(sample_rate) || sample_rate < kMinSampleRate ||
+      sample_rate > kMaxSampleRate || max_block_size <= 0 || max_channels <= 0 ||
+      max_channels > 64) {
+    return SONARE_ERROR_INVALID_PARAMETER;
+  }
+  SONARE_C_TRY
+  engine->engine.prepare(sample_rate, max_block_size, command_capacity, telemetry_capacity,
+                         max_channels);
   return SONARE_OK;
   SONARE_C_CATCH
 }

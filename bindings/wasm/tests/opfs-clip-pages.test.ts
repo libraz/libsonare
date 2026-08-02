@@ -155,7 +155,7 @@ describe('createOpfsClipPageProvider', () => {
 
 describe('worklet attachOpfsClipStream', () => {
   it('primes, pulls, and bounds pages through the realtime-safe SAB AudioWorklet bridge', async () => {
-    const blockSize = 4;
+    const blockSize = 128;
     const worker = new FakeClipPageWorker();
     let processor: SonareRealtimeEngineWorkletProcessor | undefined;
     const port = {
@@ -200,6 +200,9 @@ describe('worklet attachOpfsClipStream', () => {
             postMessage: (message) => port.onmessage?.({ data: message } as MessageEvent<unknown>),
           },
         );
+        // A browser worklet initializes asynchronously. Mirror that timing so
+        // the node has installed its port handler before the ready signal.
+        queueMicrotask(() => port.onmessage?.({ data: { type: 'ready' } } as MessageEvent));
         return { port, disconnect: () => undefined } as unknown as AudioWorkletNode;
       },
     });
@@ -223,8 +226,9 @@ describe('worklet attachOpfsClipStream', () => {
       const missing = new Float32Array(blockSize);
       expect(processor.process([[]], [[first]])).toBe(true);
       expect(processor.process([[]], [[missing]])).toBe(true);
-      expect(Array.from(first)).toEqual([1, 2, 3, 4]);
-      expect(Array.from(missing)).toEqual([0, 0, 0, 0]);
+      expect(Array.from(first.slice(0, 4))).toEqual([1, 2, 3, 4]);
+      expect(first.slice(4).every((sample) => sample === 0)).toBe(true);
+      expect(missing.every((sample) => sample === 0)).toBe(true);
 
       // The main thread polls the SAB ring, pumps the same streamer used by
       // direct engines, and the fake OPFS worker supplies only page 1.
@@ -239,11 +243,9 @@ describe('worklet attachOpfsClipStream', () => {
         argInt: 0,
       });
       const replayedFirst = new Float32Array(blockSize);
-      const replayedSecond = new Float32Array(blockSize);
       expect(processor.process([[]], [[replayedFirst]])).toBe(true);
-      expect(processor.process([[]], [[replayedSecond]])).toBe(true);
-      expect(Array.from(replayedFirst)).toEqual([1, 2, 3, 4]);
-      expect(Array.from(replayedSecond)).toEqual([5, 6, 7, 8]);
+      expect(Array.from(replayedFirst.slice(0, 8))).toEqual([1, 2, 3, 4, 5, 6, 7, 8]);
+      expect(replayedFirst.slice(8).every((sample) => sample === 0)).toBe(true);
     } finally {
       engine.destroy();
       processor?.destroy();
@@ -257,7 +259,10 @@ describe('worklet attachOpfsClipStream', () => {
     };
     const engine = await SonareEngine.create({ sampleRate: 48000 } as BaseAudioContext, {
       mode: 'postMessage',
-      nodeFactory: () => ({ port, disconnect: () => undefined }) as unknown as AudioWorkletNode,
+      nodeFactory: () => {
+        queueMicrotask(() => port.onmessage?.({ data: { type: 'ready' } } as MessageEvent));
+        return { port, disconnect: () => undefined } as unknown as AudioWorkletNode;
+      },
     });
     try {
       await expect(
@@ -283,7 +288,10 @@ describe('worklet attachOpfsClipStream', () => {
     const context = { sampleRate: 48000 } as BaseAudioContext;
     const engine = await SonareEngine.create(context, {
       mode: 'postMessage',
-      nodeFactory: () => ({ port, disconnect: () => undefined }) as unknown as AudioWorkletNode,
+      nodeFactory: () => {
+        queueMicrotask(() => port.onmessage?.({ data: { type: 'ready' } } as MessageEvent));
+        return { port, disconnect: () => undefined } as unknown as AudioWorkletNode;
+      },
     });
     try {
       for (let clipId = 0; clipId < 1024; ++clipId) {

@@ -12,6 +12,7 @@ import type {
   SonareEngineCaptureRequestMessage,
   SonareEngineCaptureResponseMessage,
   SonareEngineClipPageRequestMessage,
+  SonareEngineSyncErrorMessage,
   SonareEngineTransportResponseMessage,
   SonareRealtimeEngineNodeCapabilities,
   SonareRealtimeEngineNodeOptions,
@@ -22,12 +23,14 @@ import {
   createSonareClipPageRequestRingBuffer,
   createSonareEngineCommandRingBuffer,
   createSonareEngineTelemetryRingBuffer,
+  createSonareExternalMidiRingBuffer,
   createSonareMeterRingBuffer,
   createSonareScopeRingBuffer,
   isRecord,
   pushSonareEngineCommandRingBuffer,
   readSonareClipPageRequestRingBuffer,
   readSonareEngineTelemetryRingBuffer,
+  readSonareExternalMidiRingBuffer,
   readSonareMeterRingBuffer,
   readSonareScopeRingBuffer,
   type SonareClipPageRequestRingBuffer,
@@ -36,11 +39,48 @@ import {
   SonareEngineCommandType,
   type SonareEngineTelemetryRecord,
   type SonareEngineTelemetryRingBuffer,
+  type SonareExternalMidiRingBuffer,
   type SonareMeterRingBuffer,
   type SonareScopeRingBuffer,
   type SonareWorkletMeterSnapshot,
   type SonareWorkletScopeSnapshot,
 } from './protocol';
+
+function isFiniteInteger(value: number | bigint | undefined): boolean {
+  if (value === undefined) {
+    return true;
+  }
+  return typeof value === 'bigint' || (Number.isFinite(value) && Number.isSafeInteger(value));
+}
+
+function isValidCommandRecord(command: SonareEngineCommandRecord): boolean {
+  const type = Number(command.type);
+  if (
+    !Number.isSafeInteger(type) ||
+    type < SonareEngineCommandType.SetParam ||
+    type > SonareEngineCommandType.SeekMarker
+  ) {
+    return false;
+  }
+  return (
+    (command.targetId === undefined || Number.isSafeInteger(command.targetId)) &&
+    (command.argFloat === undefined || Number.isFinite(command.argFloat)) &&
+    isFiniteInteger(command.argInt) &&
+    isFiniteInteger(command.sampleTime)
+  );
+}
+
+const AUDIO_WORKLET_RENDER_QUANTUM = 128;
+
+function workletBlockSize(blockSize: number | undefined): number {
+  const resolved = blockSize ?? AUDIO_WORKLET_RENDER_QUANTUM;
+  if (!Number.isSafeInteger(resolved) || resolved < AUDIO_WORKLET_RENDER_QUANTUM) {
+    throw new RangeError(
+      `blockSize must be an integer of at least ${AUDIO_WORKLET_RENDER_QUANTUM} frames`,
+    );
+  }
+  return resolved;
+}
 
 export class SonareRealtimeEngineNode {
   readonly node: AudioWorkletNode;
@@ -50,11 +90,13 @@ export class SonareRealtimeEngineNode {
   readonly meterRing?: SonareMeterRingBuffer;
   readonly scopeRing?: SonareScopeRingBuffer;
   readonly clipPageRequestRing?: SonareClipPageRequestRingBuffer;
+  readonly externalMidiRing?: SonareExternalMidiRingBuffer;
   readonly ready: Promise<void>;
   private telemetryReadIndex = 0;
   private meterReadIndex = 0;
   private scopeReadIndex = 0;
   private clipPageRequestDroppedRead = 0;
+  private ringPollTimer: ReturnType<typeof setInterval> | undefined;
   private telemetryListeners = new Set<(telemetry: SonareEngineTelemetryRecord) => void>();
   private meterListeners = new Set<(meter: SonareWorkletMeterSnapshot) => void>();
   private scopeListeners = new Set<(scope: SonareWorkletScopeSnapshot) => void>();
@@ -62,6 +104,7 @@ export class SonareRealtimeEngineNode {
   private clipPageRequestListeners = new Set<
     (message: SonareEngineClipPageRequestMessage) => void
   >();
+  private syncErrorListeners = new Set<(message: SonareEngineSyncErrorMessage) => void>();
   private captureRequestId = 1;
   private readonly captureRequests = new Map<
     number,
@@ -90,6 +133,7 @@ export class SonareRealtimeEngineNode {
     meterRing?: SonareMeterRingBuffer,
     scopeRing?: SonareScopeRingBuffer,
     clipPageRequestRing?: SonareClipPageRequestRingBuffer,
+    externalMidiRing?: SonareExternalMidiRingBuffer,
   ) {
     this.node = node;
     this.capabilities = capabilities;
@@ -98,6 +142,7 @@ export class SonareRealtimeEngineNode {
     this.meterRing = meterRing;
     this.scopeRing = scopeRing;
     this.clipPageRequestRing = clipPageRequestRing;
+    this.externalMidiRing = externalMidiRing;
     this.ready = new Promise((resolve, reject) => {
       this.resolveReady = resolve;
       this.rejectReady = reject;
@@ -134,6 +179,15 @@ export class SonareRealtimeEngineNode {
         this.emitMidiOut(event.data.events);
       } else if (isClipPageRequestMessage(event.data)) {
         this.emitClipPageRequests(event.data);
+      } else if (isRecord(event.data) && event.data.type === 'syncError') {
+        const syncError: SonareEngineSyncErrorMessage = {
+          type: 'syncError',
+          syncType: String(event.data.syncType) as SonareEngineSyncErrorMessage['syncType'],
+          message: String(event.data.message ?? 'AudioWorklet sync failed'),
+        };
+        for (const listener of this.syncErrorListeners) {
+          listener(syncError);
+        }
       } else if (isRecord(event.data) && event.data.type === 'ready') {
         this.resolveReady();
       } else if (isRecord(event.data) && event.data.type === 'error') {
@@ -142,10 +196,17 @@ export class SonareRealtimeEngineNode {
     };
   }
 
+  /** Subscribes to control-plane sync rejections reported by the worklet. */
+  onSyncError(listener: (message: SonareEngineSyncErrorMessage) => void): () => void {
+    this.syncErrorListeners.add(listener);
+    return () => this.syncErrorListeners.delete(listener);
+  }
+
   static async create(
     context: BaseAudioContext,
     options: SonareRealtimeEngineNodeOptions = {},
   ): Promise<SonareRealtimeEngineNode> {
+    const blockSize = workletBlockSize(options.blockSize);
     const processorName = options.processorName ?? 'sonare-realtime-engine-processor';
     const moduleUrl = options.moduleUrl;
     if (moduleUrl && context.audioWorklet?.addModule) {
@@ -209,10 +270,14 @@ export class SonareRealtimeEngineNode {
       mode === 'sab'
         ? createSonareClipPageRequestRingBuffer(options.clipPageRequestRingCapacity ?? 128)
         : undefined;
+    const externalMidiRing =
+      mode === 'sab'
+        ? createSonareExternalMidiRingBuffer(options.externalMidiRingCapacity ?? 256)
+        : undefined;
     const channelCount = Math.max(1, Math.floor(options.channelCount ?? 2));
     const processorOptions: SonareRealtimeEngineWorkletProcessorOptions = {
       sampleRate: options.sampleRate ?? context.sampleRate,
-      blockSize: options.blockSize,
+      blockSize,
       channelCount,
       commandSharedBuffer: commandRing?.sharedBuffer,
       commandRingCapacity: commandRing?.capacity,
@@ -226,6 +291,8 @@ export class SonareRealtimeEngineNode {
       scopeIntervalFrames: scopeRing ? scopeIntervalFrames : undefined,
       clipPageRequestSharedBuffer: clipPageRequestRing?.sharedBuffer,
       clipPageRequestRingCapacity: clipPageRequestRing?.capacity,
+      externalMidiSharedBuffer: externalMidiRing?.sharedBuffer,
+      externalMidiRingCapacity: externalMidiRing?.capacity,
       wasmBinary: options.wasmBinary,
       initialSyncMessages: options.initialSyncMessages,
       initialCommands: options.initialCommands,
@@ -249,17 +316,22 @@ export class SonareRealtimeEngineNode {
         atomics,
         audioWorklet,
         clipPageRequestsRealtimeSafe: mode === 'sab',
+        externalMidiRealtimeSafe: mode === 'sab',
         engineAbiVersion: detectedCapabilities?.engineAbiVersion,
         expectedEngineAbiVersion: detectedCapabilities?.expectedEngineAbiVersion,
         abiCompatible: detectedCapabilities?.abiCompatible,
         degradedReason,
-        readyMessage: moduleUrl !== undefined,
+        // A processor posts ready/error irrespective of whether its module was
+        // loaded here or registered by the host beforehand. Waiting in both
+        // cases is the only way to surface a failed worklet-side WASM init.
+        readyMessage: true,
       },
       commandRing,
       telemetryRing,
       meterRing,
       scopeRing,
       clipPageRequestRing,
+      externalMidiRing,
     );
   }
 
@@ -280,6 +352,9 @@ export class SonareRealtimeEngineNode {
   }
 
   seekPpq(ppq: number, sampleTime = -1): boolean {
+    if (!Number.isFinite(ppq) || !Number.isSafeInteger(sampleTime)) {
+      return false;
+    }
     return this.sendCommand({
       type: SonareEngineCommandType.TransportSeekPpq,
       sampleTime,
@@ -288,7 +363,7 @@ export class SonareRealtimeEngineNode {
   }
 
   sendCommand(command: SonareEngineCommandRecord): boolean {
-    if (this.destroyed) {
+    if (this.destroyed || !isValidCommandRecord(command)) {
       return false;
     }
     if (this.commandRing) {
@@ -370,6 +445,29 @@ export class SonareRealtimeEngineNode {
     return read.scopes;
   }
 
+  /** Drain lowered MIDI-1 records from the SAB ring on the main thread. */
+  pollMidiOut(): SonareWorkletExternalMidiEvent[] {
+    if (!this.externalMidiRing) {
+      return [];
+    }
+    const read = readSonareExternalMidiRingBuffer(this.externalMidiRing);
+    const events = read.events.map((event) => {
+      const bytes: number[] = [];
+      for (let index = 0; index < event.byteCount; index++) {
+        bytes.push((event.byteWord >>> (8 * index)) & 0xff);
+      }
+      return {
+        destinationId: event.destinationId,
+        renderFrame: event.renderFrame,
+        bytes,
+      };
+    });
+    if (events.length > 0) {
+      this.emitMidiOut(events);
+    }
+    return events;
+  }
+
   /**
    * Drains bounded paged-clip misses from the SAB ring and forwards one batch
    * to subscribers. In postMessage mode the legacy handler remains available,
@@ -396,22 +494,28 @@ export class SonareRealtimeEngineNode {
 
   onTelemetry(callback: (telemetry: SonareEngineTelemetryRecord) => void): () => void {
     this.telemetryListeners.add(callback);
+    this.startRingPolling();
     return () => {
       this.telemetryListeners.delete(callback);
+      this.stopRingPollingIfUnused();
     };
   }
 
   onMeter(callback: (meter: SonareWorkletMeterSnapshot) => void): () => void {
     this.meterListeners.add(callback);
+    this.startRingPolling();
     return () => {
       this.meterListeners.delete(callback);
+      this.stopRingPollingIfUnused();
     };
   }
 
   onScope(callback: (scope: SonareWorkletScopeSnapshot) => void): () => void {
     this.scopeListeners.add(callback);
+    this.startRingPolling();
     return () => {
       this.scopeListeners.delete(callback);
+      this.stopRingPollingIfUnused();
     };
   }
 
@@ -422,6 +526,7 @@ export class SonareRealtimeEngineNode {
    */
   onMidiOut(callback: (events: SonareWorkletExternalMidiEvent[]) => void): () => void {
     this.midiOutListeners.add(callback);
+    this.startRingPolling();
     return () => {
       this.midiOutListeners.delete(callback);
     };
@@ -443,7 +548,11 @@ export class SonareRealtimeEngineNode {
       return;
     }
     this.destroyed = true;
-    this.node.port.postMessage({ type: SonareEngineCommandType.TransportStop, sampleTime: -1 });
+    if (this.ringPollTimer !== undefined) {
+      clearInterval(this.ringPollTimer);
+      this.ringPollTimer = undefined;
+    }
+    this.node.port.postMessage({ type: 'destroy' });
     this.node.disconnect();
     for (const pending of this.captureRequests.values()) {
       pending.reject(new Error('Realtime engine node is destroyed.'));
@@ -463,6 +572,38 @@ export class SonareRealtimeEngineNode {
   private emitTelemetry(telemetry: SonareEngineTelemetryRecord): void {
     for (const listener of this.telemetryListeners) {
       listener(telemetry);
+    }
+  }
+
+  private startRingPolling(): void {
+    if (
+      this.ringPollTimer !== undefined ||
+      (!this.telemetryRing && !this.meterRing && !this.scopeRing && !this.externalMidiRing)
+    ) {
+      return;
+    }
+    const poll = () => {
+      if (!this.destroyed) {
+        this.pollTelemetry();
+        this.pollMeters();
+        this.pollScope();
+        this.pollMidiOut();
+      }
+    };
+    poll();
+    this.ringPollTimer = setInterval(poll, 16);
+  }
+
+  private stopRingPollingIfUnused(): void {
+    if (
+      this.ringPollTimer !== undefined &&
+      this.telemetryListeners.size === 0 &&
+      this.meterListeners.size === 0 &&
+      this.scopeListeners.size === 0 &&
+      this.midiOutListeners.size === 0
+    ) {
+      clearInterval(this.ringPollTimer);
+      this.ringPollTimer = undefined;
     }
   }
 

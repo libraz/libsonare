@@ -31,7 +31,8 @@ export function scheduleParam(
   // Mirror the lane to the live worklet engine so scheduled automation plays
   // back in real time, not just in renderOffline(). Lanes can exceed the
   // fixed-size SAB command record, so they ride an out-of-band 'syncAutomation'
-  // message applied outside process() (like syncClips/syncMarkers).
+  // message whose port handler publishes the bounded snapshot consumed by
+  // process() (like syncClips/syncMarkers).
   ctx.postSync({ type: 'syncAutomation', paramId, points: lane });
 }
 

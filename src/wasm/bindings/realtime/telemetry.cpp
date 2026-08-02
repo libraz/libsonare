@@ -24,6 +24,36 @@ val RealtimeEngineWasm::drainTelemetry(int max_records) {
   return out;
 }
 
+bool RealtimeEngineWasm::popTelemetryToScratch() {
+  return engine_.pop_telemetry(telemetry_scratch_);
+}
+
+uint32_t RealtimeEngineWasm::telemetryScratchType() const {
+  return static_cast<uint32_t>(telemetry_scratch_.type);
+}
+
+uint32_t RealtimeEngineWasm::telemetryScratchError() const {
+  return static_cast<uint32_t>(telemetry_scratch_.error);
+}
+
+int64_t RealtimeEngineWasm::telemetryScratchRenderFrame() const {
+  return telemetry_scratch_.render_frame;
+}
+
+int64_t RealtimeEngineWasm::telemetryScratchTimelineSample() const {
+  return telemetry_scratch_.timeline_sample;
+}
+
+int64_t RealtimeEngineWasm::telemetryScratchAudibleTimelineSample() const {
+  return telemetry_scratch_.audible_timeline_sample;
+}
+
+int32_t RealtimeEngineWasm::telemetryScratchGraphLatencySamplesQ8() const {
+  return telemetry_scratch_.graph_latency_samples_q8;
+}
+
+uint32_t RealtimeEngineWasm::telemetryScratchValue() const { return telemetry_scratch_.value; }
+
 val RealtimeEngineWasm::drainMeterTelemetry(int max_records) {
   val out = val::array();
   if (max_records <= 0) return out;
@@ -55,6 +85,51 @@ val RealtimeEngineWasm::drainMeterTelemetry(int max_records) {
   (void)max_records;
 #endif
   return out;
+}
+
+bool RealtimeEngineWasm::popMeterTelemetryToScratch() {
+#if defined(SONARE_WITH_MIXING)
+  return engine_.pop_meter_telemetry(meter_telemetry_scratch_);
+#else
+  return false;
+#endif
+}
+
+uint32_t RealtimeEngineWasm::meterScratchTargetId() const {
+  return meter_telemetry_scratch_.target_id;
+}
+
+int64_t RealtimeEngineWasm::meterScratchRenderFrame() const {
+  return meter_telemetry_scratch_.render_frame;
+}
+
+float RealtimeEngineWasm::meterScratchValue(int field) const {
+  switch (field) {
+    case 0:
+      return meter_telemetry_scratch_.peak_db[0];
+    case 1:
+      return meter_telemetry_scratch_.peak_db[1];
+    case 2:
+      return meter_telemetry_scratch_.rms_db[0];
+    case 3:
+      return meter_telemetry_scratch_.rms_db[1];
+    case 4:
+      return meter_telemetry_scratch_.correlation;
+    case 5:
+      return meter_telemetry_scratch_.true_peak_db[0];
+    case 6:
+      return meter_telemetry_scratch_.true_peak_db[1];
+    case 7:
+      return meter_telemetry_scratch_.momentary_lufs;
+    case 8:
+      return meter_telemetry_scratch_.short_term_lufs;
+    case 9:
+      return meter_telemetry_scratch_.integrated_lufs;
+    case 10:
+      return meter_telemetry_scratch_.gain_reduction_db;
+    default:
+      return 0.0f;
+  }
 }
 
 // Per-plane meter drain for surround targets. peakDb/rmsDb/truePeakDb are JS
@@ -146,12 +221,70 @@ val RealtimeEngineWasm::drainScopeTelemetry(int max_records) {
   return out;
 }
 
+bool RealtimeEngineWasm::popScopeTelemetryToScratch() {
+#if defined(SONARE_WITH_MIXING)
+  return engine_.pop_scope_telemetry(scope_telemetry_scratch_);
+#else
+  return false;
+#endif
+}
+
+uint32_t RealtimeEngineWasm::scopeScratchTargetId() const {
+  return scope_telemetry_scratch_.target_id;
+}
+int64_t RealtimeEngineWasm::scopeScratchRenderFrame() const {
+  return scope_telemetry_scratch_.render_frame;
+}
+uint32_t RealtimeEngineWasm::scopeScratchBandCount() const {
+  return scope_telemetry_scratch_.band_count;
+}
+float RealtimeEngineWasm::scopeScratchBand(uint32_t index) const {
+  return index < scope_telemetry_scratch_.bands.size() ? scope_telemetry_scratch_.bands[index]
+                                                       : 0.0f;
+}
+uint32_t RealtimeEngineWasm::scopeScratchPointCount() const {
+  return scope_telemetry_scratch_.point_count;
+}
+float RealtimeEngineWasm::scopeScratchPointLeft(uint32_t index) const {
+  return index < scope_telemetry_scratch_.points.size()
+             ? scope_telemetry_scratch_.points[index].left
+             : 0.0f;
+}
+float RealtimeEngineWasm::scopeScratchPointRight(uint32_t index) const {
+  return index < scope_telemetry_scratch_.points.size()
+             ? scope_telemetry_scratch_.points[index].right
+             : 0.0f;
+}
+
 void registerRealtimeEngineTelemetry(class_<RealtimeEngineWasm>& cls) {
   cls.function("drainTelemetry", &RealtimeEngineWasm::drainTelemetry)
+      .function("popTelemetryToScratch", &RealtimeEngineWasm::popTelemetryToScratch)
+      .function("telemetryScratchType", &RealtimeEngineWasm::telemetryScratchType)
+      .function("telemetryScratchError", &RealtimeEngineWasm::telemetryScratchError)
+      .function("telemetryScratchRenderFrame", &RealtimeEngineWasm::telemetryScratchRenderFrame)
+      .function("telemetryScratchTimelineSample",
+                &RealtimeEngineWasm::telemetryScratchTimelineSample)
+      .function("telemetryScratchAudibleTimelineSample",
+                &RealtimeEngineWasm::telemetryScratchAudibleTimelineSample)
+      .function("telemetryScratchGraphLatencySamplesQ8",
+                &RealtimeEngineWasm::telemetryScratchGraphLatencySamplesQ8)
+      .function("telemetryScratchValue", &RealtimeEngineWasm::telemetryScratchValue)
       .function("drainMeterTelemetry", &RealtimeEngineWasm::drainMeterTelemetry)
+      .function("popMeterTelemetryToScratch", &RealtimeEngineWasm::popMeterTelemetryToScratch)
+      .function("meterScratchTargetId", &RealtimeEngineWasm::meterScratchTargetId)
+      .function("meterScratchRenderFrame", &RealtimeEngineWasm::meterScratchRenderFrame)
+      .function("meterScratchValue", &RealtimeEngineWasm::meterScratchValue)
       .function("drainMeterTelemetryWide", &RealtimeEngineWasm::drainMeterTelemetryWide)
       .function("configureScopeTelemetry", &RealtimeEngineWasm::configureScopeTelemetry)
-      .function("drainScopeTelemetry", &RealtimeEngineWasm::drainScopeTelemetry);
+      .function("drainScopeTelemetry", &RealtimeEngineWasm::drainScopeTelemetry)
+      .function("popScopeTelemetryToScratch", &RealtimeEngineWasm::popScopeTelemetryToScratch)
+      .function("scopeScratchTargetId", &RealtimeEngineWasm::scopeScratchTargetId)
+      .function("scopeScratchRenderFrame", &RealtimeEngineWasm::scopeScratchRenderFrame)
+      .function("scopeScratchBandCount", &RealtimeEngineWasm::scopeScratchBandCount)
+      .function("scopeScratchBand", &RealtimeEngineWasm::scopeScratchBand)
+      .function("scopeScratchPointCount", &RealtimeEngineWasm::scopeScratchPointCount)
+      .function("scopeScratchPointLeft", &RealtimeEngineWasm::scopeScratchPointLeft)
+      .function("scopeScratchPointRight", &RealtimeEngineWasm::scopeScratchPointRight);
 }
 
 #endif  // __EMSCRIPTEN__

@@ -15,11 +15,17 @@ type CaptureConfig = Omit<SonareEngineSyncCaptureMessage, 'type'>;
 export interface EngineCaptureContext {
   readonly offlineEngine: RealtimeEngine;
   readonly realtimeNode: SonareRealtimeEngineNode;
+  sendCommand(command: {
+    type: SonareEngineCommandType;
+    targetId?: number;
+    sampleTime?: number;
+    argFloat?: number;
+    argInt?: number;
+  }): boolean;
   readonly offlineChannelCount: number;
   postSync(message: SonareEngineSyncMessage): void;
   getCaptureConfig(): CaptureConfig | undefined;
   setCaptureConfig(config: CaptureConfig): void;
-  resolveTargetId(target: string | number): number;
 }
 
 export function configureCapture(ctx: EngineCaptureContext, options: CaptureOptions): void {
@@ -37,13 +43,16 @@ export function armRecord(
   trackId: string | number,
   enabled: boolean,
 ): boolean {
+  if (trackId !== 0) {
+    throw new RangeError('Capture is global; armRecord only accepts trackId 0');
+  }
   if (enabled && !ctx.getCaptureConfig()) {
     throw new Error('Capture buffer is not configured');
   }
   ctx.offlineEngine.armCapture(enabled);
-  return ctx.realtimeNode.sendCommand({
+  return ctx.sendCommand({
     type: SonareEngineCommandType.ArmRecord,
-    targetId: ctx.resolveTargetId(trackId),
+    targetId: 0,
     sampleTime: -1,
     argInt: enabled ? 1 : 0,
   });
@@ -58,7 +67,7 @@ export function punch(ctx: EngineCaptureContext, inPpq: number, outPpq: number):
   // point and let the consumer multiply by sampleRate (treating PPQ as
   // seconds), which ignored tempo and produced a punch-out ~2x too large at
   // 120 BPM. argInt = in sample, argFloat = out sample (full-precision double).
-  return ctx.realtimeNode.sendCommand({
+  return ctx.sendCommand({
     type: SonareEngineCommandType.Punch,
     sampleTime: -1,
     argInt: inSample,

@@ -1,4 +1,4 @@
-import type { EngineClip, EngineScopeTelemetry } from '../index';
+import type { EngineClip } from '../index';
 import { RealtimeEngine } from '../index';
 import type { WorkletInput, WorkletOutput } from './audio_types';
 import {
@@ -18,11 +18,14 @@ import {
   encodeFrameHi,
   encodeFrameLo,
   engineRingFromSharedBuffer,
+  externalMidiRingFromSharedBuffer,
   meterFromEngine,
   meterRingFromSharedBuffer,
   popSonareEngineCommandRingBuffer,
   pushSonareClipPageRequestRingBuffer,
+  pushSonareExternalMidiRingBuffer,
   type SharedClipPageRequestRingWriter,
+  type SharedExternalMidiRingWriter,
   type SharedMeterRingWriter,
   type SharedScopeRingWriter,
   SONARE_ENGINE_COMMAND_RECORD_BYTES,
@@ -39,6 +42,7 @@ import {
   type SonareWorkletMeterSnapshot,
   scopeRingFromSharedBuffer,
   telemetryFromEngine,
+  writeInt64Words,
   writeSonareEngineTelemetryRingBuffer,
 } from './protocol';
 
@@ -59,6 +63,7 @@ export class SonareRealtimeEngineWorkletProcessor {
   private meterRing?: SharedMeterRingWriter;
   private scopeRing?: SharedScopeRingWriter;
   private clipPageRequestRing?: SharedClipPageRequestRingWriter;
+  private externalMidiRing?: SharedExternalMidiRingWriter;
   private transport?: WorkletTransport;
   private meterIntervalFrames: number;
   private lastMeterFrame = Number.NEGATIVE_INFINITY;
@@ -119,7 +124,19 @@ export class SonareRealtimeEngineWorkletProcessor {
           options.clipPageRequestRingCapacity,
         )
       : undefined;
-    this.engine = new RealtimeEngine(this.sampleRate, this.blockSize);
+    this.externalMidiRing = options.externalMidiSharedBuffer
+      ? externalMidiRingFromSharedBuffer(
+          options.externalMidiSharedBuffer,
+          options.externalMidiRingCapacity,
+        )
+      : undefined;
+    this.engine = new RealtimeEngine(
+      this.sampleRate,
+      this.blockSize,
+      1024,
+      1024,
+      this.channelCount,
+    );
     // Allocate persistent WASM-heap scratch (worst case: channelCount channels x
     // blockSize frames) and acquire the per-channel heap views once.
     this.engine.prepareChannels(this.channelCount, this.blockSize);
@@ -225,7 +242,7 @@ export class SonareRealtimeEngineWorkletProcessor {
 
   receiveCommand(command: SonareEngineCommandRecord): void {
     if (!this.closed) {
-      this.applyCommand(command);
+      this.safeApplyCommand(command);
     }
   }
 
@@ -237,8 +254,27 @@ export class SonareRealtimeEngineWorkletProcessor {
     if (this.closed) {
       return;
     }
+    try {
+      this.applySync(message);
+    } catch (error) {
+      this.transport?.postMessage?.({
+        type: 'syncError',
+        syncType: message.type,
+        message: error instanceof Error ? error.message : String(error),
+      });
+    }
+  }
+
+  private applySync(message: SonareEngineSyncMessage): void {
     switch (message.type) {
-      case 'syncClips':
+      case 'destroy':
+        this.destroy();
+        return;
+      case 'syncClips': {
+        // Commit native state before touching the worklet-side mirrors. A
+        // rejected embind call must leave a later delta based on the previous
+        // clip set, not on a half-applied replacement.
+        this.engine.setClips(message.clips);
         this.clearPagedClipProviders();
         this.liveClips.clear();
         for (const clip of message.clips) {
@@ -246,27 +282,35 @@ export class SonareRealtimeEngineWorkletProcessor {
             this.liveClips.set(clip.id, clip);
           }
         }
-        this.engine.setClips(message.clips);
         break;
-      case 'syncClipsDelta':
+      }
+      case 'syncClipsDelta': {
+        const nextClips = new Map(this.liveClips);
         for (const clipId of message.removeIds) {
-          this.liveClips.delete(clipId);
-          this.removePagedClipProvider(clipId);
+          nextClips.delete(clipId);
         }
         for (const clip of message.upserts) {
           if (clip.id !== undefined) {
-            this.liveClips.set(clip.id, clip);
+            nextClips.set(clip.id, clip);
           }
         }
-        this.engine.setClips(Array.from(this.liveClips.values()));
+        this.engine.setClips(Array.from(nextClips.values()));
+        for (const clipId of message.removeIds) {
+          this.removePagedClipProvider(clipId);
+        }
+        this.liveClips.clear();
+        for (const [clipId, clip] of nextClips) {
+          this.liveClips.set(clipId, clip);
+        }
         break;
+      }
       case 'syncClipPageProvider': {
-        this.removePagedClipProvider(message.clipId);
         const provider = this.engine.createClipPageProvider(
           message.numChannels,
           message.numSamples,
           message.pageFrames,
         );
+        this.removePagedClipProvider(message.clipId);
         this.pagedClipProviders.set(message.clipId, provider.id);
         this.pagedClipPageFrames.set(message.clipId, message.pageFrames);
         if (message.clip) {
@@ -292,17 +336,23 @@ export class SonareRealtimeEngineWorkletProcessor {
         const providerId = this.pagedClipProviders.get(message.clipId);
         const clip = message.clip ?? this.pendingPagedClips.get(message.clipId);
         if (providerId !== undefined && clip) {
-          this.liveClips.set(message.clipId, { ...clip, pageProvider: providerId });
+          const nextClip = { ...clip, pageProvider: providerId };
+          const nextClips = new Map(this.liveClips);
+          nextClips.set(message.clipId, nextClip);
+          this.engine.setClips(Array.from(nextClips.values()));
+          this.liveClips.set(message.clipId, nextClip);
           this.pendingPagedClips.delete(message.clipId);
-          this.engine.setClips(Array.from(this.liveClips.values()));
         }
         break;
       }
-      case 'syncClipPageDestroy':
+      case 'syncClipPageDestroy': {
+        const nextClips = new Map(this.liveClips);
+        nextClips.delete(message.clipId);
+        this.engine.setClips(Array.from(nextClips.values()));
         this.liveClips.delete(message.clipId);
         this.removePagedClipProvider(message.clipId);
-        this.engine.setClips(Array.from(this.liveClips.values()));
         break;
+      }
       case 'syncMidiClips':
         this.engine.setMidiClips(message.clips);
         break;
@@ -310,11 +360,22 @@ export class SonareRealtimeEngineWorkletProcessor {
         this.engine.setMarkers(message.markers);
         break;
       case 'syncMetronome':
-        this.metronomeConfig = resolveMetronomeConfig(message.config);
-        this.engine.setMetronome(message.config);
+        // Do not publish the cached config until the native engine accepted it.
+        // Otherwise a rejected sync would corrupt the command-side fallback.
+        {
+          const config = resolveMetronomeConfig(message.config);
+          this.engine.setMetronome(message.config);
+          this.metronomeConfig = config;
+        }
         break;
       case 'syncAutomation':
         this.engine.setAutomationLane(message.paramId, message.points);
+        break;
+      case 'syncParameters':
+        this.engine.clearParameters();
+        for (const info of message.parameters) {
+          this.engine.addParameter(info);
+        }
         break;
       case 'syncTempo':
         if (message.tempoSegments) {
@@ -477,6 +538,45 @@ export class SonareRealtimeEngineWorkletProcessor {
       case 'syncExternalMidiClock':
         this.engine.setExternalMidiClockEnabled(message.enabled);
         break;
+      case 'syncMidiInputSource':
+        this.engine.setMidiInputSource(message.destinationId ?? 0);
+        break;
+      case 'syncClearMidiInputSource':
+        this.engine.clearMidiInputSource();
+        break;
+      case 'syncMidiCcBinding':
+        this.engine.bindMidiCc(message.channel, message.controller, message.paramId, {
+          minValue: message.minValue,
+          maxValue: message.maxValue,
+        });
+        break;
+      case 'syncMidiInputNoteOn':
+        this.engine.pushMidiInputNoteOn(
+          message.group,
+          message.channel,
+          message.data0,
+          message.data1,
+          message.portTimeSamples,
+        );
+        break;
+      case 'syncMidiInputNoteOff':
+        this.engine.pushMidiInputNoteOff(
+          message.group,
+          message.channel,
+          message.data0,
+          message.data1,
+          message.portTimeSamples,
+        );
+        break;
+      case 'syncMidiInputCc':
+        this.engine.pushMidiInputCc(
+          message.group,
+          message.channel,
+          message.data0,
+          message.data1,
+          message.portTimeSamples,
+        );
+        break;
     }
   }
 
@@ -575,7 +675,25 @@ export class SonareRealtimeEngineWorkletProcessor {
       if (!command) {
         return;
       }
+      this.safeApplyCommand(command);
+    }
+  }
+
+  private safeApplyCommand(command: SonareEngineCommandRecord): void {
+    try {
       this.applyCommand(command);
+    } catch {
+      // A malformed control command must never escape AudioWorklet.process():
+      // Web Audio permanently stops invoking a processor that throws there.
+      this.publishTelemetryRecord({
+        type: SonareEngineTelemetryType.Error,
+        error: SonareEngineTelemetryError.InvalidCommand,
+        renderFrame: 0,
+        timelineSample: 0,
+        audibleTimelineSample: 0,
+        graphLatencySamplesQ8: 0,
+        value: Number(command.type),
+      });
     }
   }
 
@@ -610,9 +728,6 @@ export class SonareRealtimeEngineWorkletProcessor {
       case SonareEngineCommandType.TransportSeekPpq:
         this.engine.seekPpq(Number(command.argFloat ?? 0), sampleTime);
         break;
-      case SonareEngineCommandType.SetTempoMap:
-        this.engine.setTempo(Number(command.argFloat ?? 120));
-        break;
       case SonareEngineCommandType.SetLoop:
         this.engine.setLoop(
           Number(command.argFloat ?? 0),
@@ -642,6 +757,7 @@ export class SonareRealtimeEngineWorkletProcessor {
           beatGain: this.metronomeConfig.beatGain,
           accentGain: this.metronomeConfig.accentGain,
           clickSamples: this.metronomeConfig.clickSamples,
+          clickSeconds: this.metronomeConfig.clickSeconds,
         });
         break;
       case SonareEngineCommandType.SeekMarker:
@@ -672,8 +788,33 @@ export class SonareRealtimeEngineWorkletProcessor {
   }
 
   private publishTelemetry(): void {
+    const ring = this.telemetryRing;
+    if (ring) {
+      for (let count = 0; count < 64 && this.engine.popTelemetryToScratch(); count++) {
+        this.writeTelemetryScratch(ring);
+      }
+      return;
+    }
     for (const item of this.engine.drainTelemetry(64)) {
       this.publishTelemetryRecord(telemetryFromEngine(item));
+    }
+  }
+
+  private writeTelemetryScratch(ring: SonareEngineTelemetryRingBuffer): void {
+    const writeIndex = Atomics.load(ring.header, 0);
+    const offset = (writeIndex % ring.capacity) * SONARE_ENGINE_TELEMETRY_RECORD_BYTES;
+    ring.view.setUint32(offset, this.engine.telemetryScratchType(), true);
+    ring.view.setUint32(offset + 4, this.engine.telemetryScratchError(), true);
+    writeInt64Words(ring.view, offset + 8, this.engine.telemetryScratchRenderFrame());
+    writeInt64Words(ring.view, offset + 16, this.engine.telemetryScratchTimelineSample());
+    writeInt64Words(ring.view, offset + 24, this.engine.telemetryScratchAudibleTimelineSample());
+    ring.view.setInt32(offset + 32, this.engine.telemetryScratchGraphLatencySamplesQ8(), true);
+    ring.view.setUint32(offset + 36, this.engine.telemetryScratchValue(), true);
+    ring.view.setUint32(offset + 40, 0, true);
+    ring.view.setUint32(offset + 44, 0, true);
+    Atomics.store(ring.header, 0, writeIndex + 1);
+    if (writeIndex + 1 > ring.capacity) {
+      Atomics.store(ring.header, 4, writeIndex + 1 - ring.capacity);
     }
   }
 
@@ -700,6 +841,22 @@ export class SonareRealtimeEngineWorkletProcessor {
     if (this.meterIntervalFrames <= 0 || (!this.transport && !this.meterRing)) {
       return;
     }
+    if (this.meterRing) {
+      for (let count = 0; count < 64 && this.engine.popMeterTelemetryToScratch(); count++) {
+        const frame = this.engine.meterScratchRenderFrame();
+        if (
+          frame !== this.lastMeterFrame &&
+          frame - this.lastMeterFrame < this.meterIntervalFrames
+        ) {
+          continue;
+        }
+        if (frame !== this.lastMeterFrame) {
+          this.lastMeterFrame = frame;
+        }
+        this.writeMeterScratch(this.meterRing);
+      }
+      return;
+    }
     for (const item of this.engine.drainMeterTelemetry(64)) {
       const meter = meterFromEngine(item);
       if (
@@ -722,6 +879,19 @@ export class SonareRealtimeEngineWorkletProcessor {
         this.transport?.postMessage?.(meter);
       }
     }
+  }
+
+  private writeMeterScratch(ring: SharedMeterRingWriter): void {
+    const writeIndex = Atomics.load(ring.header, 0);
+    const offset = (writeIndex % ring.capacity) * SONARE_METER_RING_RECORD_FLOATS;
+    const frame = Number(this.engine.meterScratchRenderFrame());
+    ring.records[offset] = encodeFrameLo(frame);
+    ring.records[offset + 1] = encodeFrameHi(frame);
+    ring.records[offset + 2] = this.engine.meterScratchTargetId();
+    for (let field = 0; field < 11; field++) {
+      ring.records[offset + 3 + field] = this.engine.meterScratchValue(field);
+    }
+    Atomics.store(ring.header, 0, writeIndex + 1);
   }
 
   private writeMeterRing(meter: SonareWorkletMeterSnapshot): void {
@@ -761,9 +931,32 @@ export class SonareRealtimeEngineWorkletProcessor {
     if (!ring) {
       return;
     }
-    for (const item of this.engine.drainScopeTelemetry(64)) {
-      this.writeScopeRing(ring, item);
+    for (let count = 0; count < 64 && this.engine.popScopeTelemetryToScratch(); count++) {
+      this.writeScopeScratch(ring);
     }
+  }
+
+  private writeScopeScratch(ring: SharedScopeRingWriter): void {
+    const writeIndex = Atomics.load(ring.header, 0);
+    const base = (writeIndex % ring.capacity) * ring.recordFloats;
+    const frame = Number(this.engine.scopeScratchRenderFrame());
+    ring.records[base] = encodeFrameLo(frame);
+    ring.records[base + 1] = encodeFrameHi(frame);
+    ring.records[base + 2] = this.engine.scopeScratchTargetId();
+    const bandCount = Math.min(ring.bands, this.engine.scopeScratchBandCount());
+    ring.records[base + 3] = bandCount;
+    const pointCount = Math.min(ring.maxPoints, this.engine.scopeScratchPointCount());
+    ring.records[base + 4] = pointCount;
+    const bandsBase = base + SONARE_SCOPE_RING_RECORD_PREFIX_FLOATS;
+    for (let i = 0; i < bandCount; i++) {
+      ring.records[bandsBase + i] = this.engine.scopeScratchBand(i);
+    }
+    const pointsBase = bandsBase + ring.bands;
+    for (let i = 0; i < pointCount; i++) {
+      ring.records[pointsBase + 2 * i] = this.engine.scopeScratchPointLeft(i);
+      ring.records[pointsBase + 2 * i + 1] = this.engine.scopeScratchPointRight(i);
+    }
+    Atomics.store(ring.header, 0, writeIndex + 1);
   }
 
   // Drains queued external-MIDI events (already lowered to MIDI 1.0 bytes) and
@@ -771,7 +964,24 @@ export class SonareRealtimeEngineWorkletProcessor {
   // One batch per render block; skipped entirely when nothing is queued, so an
   // all-internal project never allocates or posts here.
   private publishExternalMidi(): void {
+    const ring = this.externalMidiRing;
+    if (ring) {
+      for (let count = 0; count < 256 && this.engine.popExternalMidiToScratch(); count++) {
+        pushSonareExternalMidiRingBuffer(
+          ring,
+          this.engine.externalMidiScratchDestinationId(),
+          this.engine.externalMidiScratchRenderFrame(),
+          this.engine.externalMidiScratchByteWord(),
+          this.engine.externalMidiScratchByteCount(),
+        );
+        this.engine.consumeExternalMidiScratch();
+      }
+      return;
+    }
     if (!this.transport?.postMessage) {
+      return;
+    }
+    if (this.engine.externalMidiPendingCount() === 0) {
       return;
     }
     const events = this.engine.drainExternalMidi(256);
@@ -895,32 +1105,6 @@ export class SonareRealtimeEngineWorkletProcessor {
     for (const clipId of this.pagedClipProviders.keys()) {
       this.removePagedClipProvider(clipId);
     }
-  }
-
-  private writeScopeRing(ring: SharedScopeRingWriter, record: EngineScopeTelemetry): void {
-    const writeIndex = Atomics.load(ring.header, 0);
-    const base = (writeIndex % ring.capacity) * ring.recordFloats;
-    ring.records[base] = encodeFrameLo(record.renderFrame);
-    ring.records[base + 1] = encodeFrameHi(record.renderFrame);
-    ring.records[base + 2] = record.targetId;
-    const bandCount = Math.min(ring.bands, record.bands.length);
-    ring.records[base + 3] = bandCount;
-    const pointCount = Math.min(ring.maxPoints, record.points.length);
-    ring.records[base + 4] = pointCount;
-    const bandsBase = base + SONARE_SCOPE_RING_RECORD_PREFIX_FLOATS;
-    for (let i = 0; i < bandCount; i++) {
-      ring.records[bandsBase + i] = record.bands[i];
-    }
-    const pointsBase = bandsBase + ring.bands;
-    for (let i = 0; i < pointCount; i++) {
-      const point = record.points[i];
-      ring.records[pointsBase + 2 * i] = point.left;
-      ring.records[pointsBase + 2 * i + 1] = point.right;
-    }
-    Atomics.store(ring.header, 0, writeIndex + 1);
-    // Like writeMeterRing, writeIndex is a free-running monotonic counter; the
-    // reader detects silent overrun via firstReadable, so the overflow slot
-    // (header[5]) stays at its initial 0.
   }
 
   private commandRingFromSharedBuffer(

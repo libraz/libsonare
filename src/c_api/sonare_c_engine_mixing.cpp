@@ -5,6 +5,7 @@
 
 #include "core/channel_layout.h"
 #include "engine/realtime_engine.h"
+#include "mixing/alignment_delay.h"
 #include "sonare_c_internal.h"
 #if defined(SONARE_WITH_MIXING)
 #include <exception>
@@ -32,6 +33,18 @@ SonareError parse_scene_json(const char* json, mixing::api::Scene* out) {
     return SONARE_ERROR_INVALID_FORMAT;
   }
   return SONARE_OK;
+}
+
+SonareError insert_param_result_to_error(engine::InsertParamSetResult result) {
+  switch (result) {
+    case engine::InsertParamSetResult::kQueued:
+      return SONARE_OK;
+    case engine::InsertParamSetResult::kInvalidTarget:
+      return SONARE_ERROR_INVALID_PARAMETER;
+    case engine::InsertParamSetResult::kQueueFull:
+      return SONARE_ERROR_OUT_OF_MEMORY;
+  }
+  return SONARE_ERROR_INVALID_STATE;
 }
 
 }  // namespace
@@ -286,7 +299,7 @@ SonareError sonare_engine_set_track_strip_insert_param_by_name(SonareRealtimeEng
                                                                const char* param_name,
                                                                float value) {
   SONARE_C_API_ENTRY;
-  if (!engine || track_id == 0 || !param_name || param_name[0] == '\0') {
+  if (!engine || track_id == 0 || !param_name || param_name[0] == '\0' || !std::isfinite(value)) {
     return SONARE_ERROR_INVALID_PARAMETER;
   }
 #if !defined(SONARE_WITH_MIXING)
@@ -296,9 +309,8 @@ SonareError sonare_engine_set_track_strip_insert_param_by_name(SonareRealtimeEng
   return SONARE_ERROR_NOT_SUPPORTED;
 #else
   SONARE_C_TRY
-  return engine->engine.set_track_insert_param(track_id, insert_index, param_name, value)
-             ? SONARE_OK
-             : SONARE_ERROR_INVALID_PARAMETER;
+  return insert_param_result_to_error(
+      engine->engine.set_track_insert_param_detailed(track_id, insert_index, param_name, value));
   SONARE_C_CATCH
 #endif
 }
@@ -308,16 +320,17 @@ SonareError sonare_engine_set_master_strip_insert_param_by_name(SonareRealtimeEn
                                                                 const char* param_name,
                                                                 float value) {
   SONARE_C_API_ENTRY;
-  if (!engine || !param_name || param_name[0] == '\0') return SONARE_ERROR_INVALID_PARAMETER;
+  if (!engine || !param_name || param_name[0] == '\0' || !std::isfinite(value)) {
+    return SONARE_ERROR_INVALID_PARAMETER;
+  }
 #if !defined(SONARE_WITH_MIXING)
   (void)insert_index;
   (void)value;
   return SONARE_ERROR_NOT_SUPPORTED;
 #else
   SONARE_C_TRY
-  return engine->engine.set_master_insert_param(insert_index, param_name, value)
-             ? SONARE_OK
-             : SONARE_ERROR_INVALID_PARAMETER;
+  return insert_param_result_to_error(
+      engine->engine.set_master_insert_param_detailed(insert_index, param_name, value));
   SONARE_C_CATCH
 #endif
 }
@@ -327,7 +340,7 @@ SonareError sonare_engine_set_bus_strip_insert_param_by_name(SonareRealtimeEngin
                                                              unsigned int insert_index,
                                                              const char* param_name, float value) {
   SONARE_C_API_ENTRY;
-  if (!engine || bus_id == 0 || !param_name || param_name[0] == '\0') {
+  if (!engine || bus_id == 0 || !param_name || param_name[0] == '\0' || !std::isfinite(value)) {
     return SONARE_ERROR_INVALID_PARAMETER;
   }
 #if !defined(SONARE_WITH_MIXING)
@@ -337,9 +350,8 @@ SonareError sonare_engine_set_bus_strip_insert_param_by_name(SonareRealtimeEngin
   return SONARE_ERROR_NOT_SUPPORTED;
 #else
   SONARE_C_TRY
-  return engine->engine.set_bus_insert_param(bus_id, insert_index, param_name, value)
-             ? SONARE_OK
-             : SONARE_ERROR_INVALID_PARAMETER;
+  return insert_param_result_to_error(
+      engine->engine.set_bus_insert_param_detailed(bus_id, insert_index, param_name, value));
   SONARE_C_CATCH
 #endif
 }
@@ -484,7 +496,10 @@ SonareError sonare_engine_set_track_strip_channel_delay_samples(SonareRealtimeEn
                                                                 uint32_t track_id,
                                                                 int delay_samples) {
   SONARE_C_API_ENTRY;
-  if (!engine || track_id == 0) return SONARE_ERROR_INVALID_PARAMETER;
+  if (!engine || track_id == 0 || delay_samples < 0 ||
+      delay_samples > sonare::mixing::kMaxAlignmentDelaySamples) {
+    return SONARE_ERROR_INVALID_PARAMETER;
+  }
 #if !defined(SONARE_WITH_MIXING)
   (void)track_id;
   (void)delay_samples;

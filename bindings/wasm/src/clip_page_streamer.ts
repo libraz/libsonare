@@ -283,7 +283,7 @@ export interface OpfsClipStreamOptions extends OpfsClipPageProviderOptions {
 
 export interface OpfsClipStream {
   binding: OpfsClipPageProviderBinding;
-  /** Pass to `setClips({ pageProvider })` to schedule the streaming clip. */
+  /** Pass as `addClip`'s buffer argument to schedule the streaming clip. */
   provider: ClipPageProvider;
 }
 
@@ -296,7 +296,7 @@ export interface WorkletOpfsClipStreamHost {
  * One-call wiring of an OPFS-backed streaming clip: creates the page provider,
  * primes the leading pages, and registers it with `streamer` so later misses are
  * serviced within the bounded window. Returns the binding (for `close`) and the
- * provider to schedule via `setClips({ pageProvider })`.
+ * provider to schedule via `addClip(trackId, provider, startPpq, { id: clipId })`.
  *
  * @param streamer Shared streamer pumped on the control thread.
  * @param engine Engine the provider is created on (the same one `streamer` drives).

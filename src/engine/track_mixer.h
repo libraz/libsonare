@@ -197,10 +197,11 @@ class TrackMixerRuntime final : public rt::ProcessorBase {
   // (reverb tails, compressor envelopes) and must advance exactly once per block:
   // calling mix_source() per source would clear and re-process every bus once per
   // source, advancing reverb N times and summing N bus passes into the master.
-  // Instead: begin_source_mix() once (clears all buses), mix_source_into_lane()
-  // per source (accumulates each lane's dry signal and sends without touching the
-  // bus chain), then finish_source_mix() once (runs the bus chains and sums them
-  // into the master). A single source through this trio is bit-identical to
+  // Instead: begin_source_mix() once (clears buses and lane accumulators),
+  // mix_source_into_lane() per source (accumulates each lane before its strip /
+  // PDC / sends run), then finish_source_mix() once (processes every active lane
+  // and bus exactly once before summing into the master). A single source through
+  // this trio is bit-identical to
   // mix_source(). Note: a track carrying BOTH clips (rendered via render_clips)
   // and rack instruments still routes its bus twice in a block -- keep a track
   // clip-only or instrument-only when it feeds a shared bus.
@@ -393,6 +394,7 @@ class TrackMixerRuntime final : public rt::ProcessorBase {
   std::array<uint32_t, kMaxTrackLanes> active_track_ids_{};
   std::array<LaneState, kMaxTrackLanes> lane_states_{};
   std::array<mixing::AlignmentDelay, kMaxTrackLanes> lane_pdc_delays_;
+  std::array<bool, kMaxTrackLanes> source_mix_lane_active_{};
   std::array<BusState, kMaxBusLanes> bus_states_{};
   std::vector<TrackBusConfig> bus_configs_;
   std::array<SidechainBinding, kMaxSidechainBindings> sidechain_bindings_{};

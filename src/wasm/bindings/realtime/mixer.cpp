@@ -44,7 +44,12 @@ void RealtimeEngineWasm::setTrackLanes(val lanes) {
         // defaults to post-fader, matching the historical lane-send behavior
         // and the scene-JSON default. Post is value 0, so an omitted or zeroed
         // value resolves to post-fader.
-        const sonare::mixing::SendTiming timing = intProperty(send, "sendTiming", 0) == 1
+        const int timing_value = intProperty(send, "sendTiming", 0);
+        if (timing_value != 0 && timing_value != 1) {
+          throw sonare::SonareException(sonare::ErrorCode::InvalidParameter,
+                                        "unknown mixing send timing");
+        }
+        const sonare::mixing::SendTiming timing = timing_value == 1
                                                       ? sonare::mixing::SendTiming::PreFader
                                                       : sonare::mixing::SendTiming::PostFader;
         config.sends.push_back({static_cast<uint32_t>(intProperty(send, "busId", 0)),
@@ -249,9 +254,15 @@ void RealtimeEngineWasm::setTrackStripInsertParamByName(uint32_t track_id,
                                                         const std::string& param_name,
                                                         float value) {
 #if defined(SONARE_WITH_MIXING)
-  if (!engine_.set_track_insert_param(track_id, insert_index, param_name, value)) {
+  const auto result =
+      engine_.set_track_insert_param_detailed(track_id, insert_index, param_name, value);
+  if (result == sonare::engine::InsertParamSetResult::kInvalidTarget) {
     throw sonare::SonareException(sonare::ErrorCode::InvalidParameter,
                                   "invalid track strip insert parameter target");
+  }
+  if (result == sonare::engine::InsertParamSetResult::kQueueFull) {
+    throw sonare::SonareException(sonare::ErrorCode::OutOfMemory,
+                                  "failed to queue track strip insert parameter");
   }
 #else
   (void)track_id;
@@ -266,9 +277,14 @@ void RealtimeEngineWasm::setMasterStripInsertParamByName(unsigned int insert_ind
                                                          const std::string& param_name,
                                                          float value) {
 #if defined(SONARE_WITH_MIXING)
-  if (!engine_.set_master_insert_param(insert_index, param_name, value)) {
+  const auto result = engine_.set_master_insert_param_detailed(insert_index, param_name, value);
+  if (result == sonare::engine::InsertParamSetResult::kInvalidTarget) {
     throw sonare::SonareException(sonare::ErrorCode::InvalidParameter,
                                   "invalid master strip insert parameter target");
+  }
+  if (result == sonare::engine::InsertParamSetResult::kQueueFull) {
+    throw sonare::SonareException(sonare::ErrorCode::OutOfMemory,
+                                  "failed to queue master strip insert parameter");
   }
 #else
   (void)insert_index;
@@ -281,9 +297,15 @@ void RealtimeEngineWasm::setMasterStripInsertParamByName(unsigned int insert_ind
 void RealtimeEngineWasm::setBusStripInsertParamByName(uint32_t bus_id, unsigned int insert_index,
                                                       const std::string& param_name, float value) {
 #if defined(SONARE_WITH_MIXING)
-  if (!engine_.set_bus_insert_param(bus_id, insert_index, param_name, value)) {
+  const auto result =
+      engine_.set_bus_insert_param_detailed(bus_id, insert_index, param_name, value);
+  if (result == sonare::engine::InsertParamSetResult::kInvalidTarget) {
     throw sonare::SonareException(sonare::ErrorCode::InvalidParameter,
                                   "invalid bus strip insert parameter target");
+  }
+  if (result == sonare::engine::InsertParamSetResult::kQueueFull) {
+    throw sonare::SonareException(sonare::ErrorCode::OutOfMemory,
+                                  "failed to queue bus strip insert parameter");
   }
 #else
   (void)bus_id;

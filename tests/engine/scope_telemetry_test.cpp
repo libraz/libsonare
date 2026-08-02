@@ -31,6 +31,7 @@ std::pair<uint32_t, float> peak_band(int block, double freq) {
   float* channels[2] = {buf.data(), buf.data()};
   tap.begin_block(block, block);  // interval == block -> capture this block
   tap.process(channels, 2, block, 0, 7);
+  tap.end_block();
 
   sonare::engine::ScopeTelemetryRecord rec{};
   REQUIRE(tap.pop(rec));
@@ -63,4 +64,28 @@ TEST_CASE("ScopeTelemetryTap band level is correctly calibrated for a full-scale
   const auto short_block = peak_band(512, kFreq);
   REQUIRE(short_block.first == full.first);
   REQUIRE(short_block.second > -18.0f);
+}
+
+TEST_CASE("ScopeTelemetryTap publishes one record per target per host block",
+          "[engine][scope_telemetry]") {
+  sonare::engine::ScopeTelemetryTap tap;
+  tap.prepare(kSampleRate, 128, 8, 128, kBands);
+  std::array<float, 64> first{};
+  std::array<float, 64> second{};
+  second.fill(0.5f);
+  float* first_channels[] = {first.data()};
+  float* second_channels[] = {second.data()};
+
+  REQUIRE(tap.begin_block(128, 128));
+  tap.process(first_channels, 1, 64, 0, 7);
+  tap.process(second_channels, 1, 64, 64, 7);
+  tap.process(second_channels, 1, 64, 64, 8);
+  tap.end_block();
+
+  sonare::engine::ScopeTelemetryRecord record{};
+  REQUIRE(tap.pop(record));
+  REQUIRE(record.target_id == 7);
+  REQUIRE(tap.pop(record));
+  REQUIRE(record.target_id == 8);
+  REQUIRE_FALSE(tap.pop(record));
 }

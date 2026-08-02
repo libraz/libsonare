@@ -24,6 +24,13 @@ interface TimeSignature {
 export interface EngineTempoContext {
   readonly offlineEngine: RealtimeEngine;
   readonly realtimeNode: SonareRealtimeEngineNode;
+  sendCommand(command: {
+    type: SonareEngineCommandType;
+    targetId?: number;
+    sampleTime?: number;
+    argFloat?: number;
+    argInt?: number;
+  }): boolean;
   postSync(message: SonareEngineSyncMessage): void;
   getTempoBpm(): number;
   setTempoBpm(bpm: number): void;
@@ -54,11 +61,6 @@ export function setTempo(ctx: EngineTempoContext, bpm: number): void {
   ctx.setTempoSegments([{ startPpq: 0, bpm }]);
   ctx.offlineEngine.setTempo(bpm);
   postTempoSync(ctx);
-  ctx.realtimeNode.sendCommand({
-    type: SonareEngineCommandType.SetTempoMap,
-    sampleTime: -1,
-    argFloat: bpm,
-  });
 }
 
 export function setTempoSegments(
@@ -113,7 +115,7 @@ export function setLoop(
   // while loop STARTS and the offline path stay exact. This is intentional:
   // the record has no second free Float64 lane, and a micro-PPQ grid on the
   // loop end is well below audible/sample-accurate resolution at any tempo.
-  return ctx.realtimeNode.sendCommand({
+  return ctx.sendCommand({
     type: SonareEngineCommandType.SetLoop,
     targetId: enabled ? 1 : 0,
     sampleTime: -1,

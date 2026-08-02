@@ -20,9 +20,13 @@ extern "C" {
 /// given engine handle has exactly one of each; do not call from more than one
 /// control thread without external serialization.
 ///
-/// AUDIO-thread functions (realtime-safe: no allocation, no lock, no throw —
-/// call only from the render callback):
+/// AUDIO-thread functions (realtime-safe after control-thread setup: no
+/// allocation, no lock, no throw — call only from the render callback):
 /// - `sonare_engine_process`, `sonare_engine_process_with_monitor`.
+///   These functions intentionally do not access or clear the thread-local
+///   `sonare_last_error_message()` / `sonare_last_warning_message()` channels:
+///   first-touch TLS setup is not realtime-safe. Validate arguments and inspect
+///   diagnostics on the control thread before entering the render callback.
 ///
 /// CONTROL-thread, realtime-safe hand-off (lock-free, non-allocating; safe to
 /// call concurrently with `sonare_engine_process` on the same handle, adopted
@@ -78,6 +82,15 @@ void sonare_engine_destroy(SonareRealtimeEngine* engine);
 SonareError sonare_engine_prepare(SonareRealtimeEngine* engine, double sample_rate,
                                   int max_block_size, size_t command_capacity,
                                   size_t telemetry_capacity);
+/// @brief Prepares an engine while bounding internal channel-planar scratch.
+/// @details Unlike @ref sonare_engine_prepare, this entry point reserves only
+///          @p max_channels (1..64) for capture, instrument, PDC, and monitor
+///          scratch. The host must not pass more channels to process/render
+///          until it prepares again with a larger bound. Use the legacy prepare
+///          function when the maximum channel count is not known.
+SonareError sonare_engine_prepare_with_channels(SonareRealtimeEngine* engine, double sample_rate,
+                                                int max_block_size, size_t command_capacity,
+                                                size_t telemetry_capacity, int max_channels);
 SonareError sonare_engine_play(SonareRealtimeEngine* engine, int64_t render_frame);
 SonareError sonare_engine_stop(SonareRealtimeEngine* engine, int64_t render_frame);
 SonareError sonare_engine_seek_sample(SonareRealtimeEngine* engine, int64_t timeline_sample,
@@ -238,8 +251,9 @@ SonareError sonare_engine_set_bus_strip_insert_bypassed(SonareRealtimeEngine* en
 ///   via the realtime command queue, so this is safe to call during playback
 ///   without rebuilding the strip. @p insert_index addresses the combined pre/post
 ///   insert sequence. Returns SONARE_ERROR_INVALID_PARAMETER if the track, insert,
-///   or name is unknown, the param is not realtime-safe, or the command queue is
-///   full; track/insert/param indices must each fit in 8 bits.
+///   or name is unknown, or the param is not realtime-safe. Returns
+///   SONARE_ERROR_OUT_OF_MEMORY when the command queue is full (temporary
+///   back-pressure); track/insert/param indices must each fit in 8 bits.
 SonareError sonare_engine_set_track_strip_insert_param_by_name(SonareRealtimeEngine* engine,
                                                                uint32_t track_id,
                                                                unsigned int insert_index,
@@ -254,7 +268,8 @@ SonareError sonare_engine_set_master_strip_insert_param_by_name(SonareRealtimeEn
 /// @details Bus-strip counterpart of @ref sonare_engine_set_track_strip_insert_param_by_name.
 ///   @p bus_id must already exist via sonare_engine_set_track_buses and carry a
 ///   strip configured by sonare_engine_set_bus_strip_json. Returns
-///   SONARE_ERROR_INVALID_PARAMETER if the bus, insert, or name is unknown.
+///   SONARE_ERROR_INVALID_PARAMETER if the bus, insert, or name is unknown;
+///   SONARE_ERROR_OUT_OF_MEMORY if the command queue is full.
 SonareError sonare_engine_set_bus_strip_insert_param_by_name(SonareRealtimeEngine* engine,
                                                              uint32_t bus_id,
                                                              unsigned int insert_index,
@@ -350,6 +365,11 @@ SonareError sonare_engine_set_graph(SonareRealtimeEngine* engine,
                                     const SonareEngineGraphSpec* spec);
 SonareError sonare_engine_graph_node_count(SonareRealtimeEngine* engine, size_t* out_count);
 SonareError sonare_engine_graph_connection_count(SonareRealtimeEngine* engine, size_t* out_count);
+/// @brief Renders one block in place, adding engine audio to @p channels.
+/// @details The input contents are preserved and engine sources are mixed with
+/// @c +=. Zero every output plane before this call when no upstream audio is
+/// intended. Audio-thread only; @p num_frames must not exceed the prepared
+/// block size.
 SonareError sonare_engine_process(SonareRealtimeEngine* engine, float* const* channels,
                                   int num_channels, int num_frames);
 SonareError sonare_engine_process_with_monitor(SonareRealtimeEngine* engine, float* const* channels,
@@ -539,7 +559,8 @@ typedef struct {
 ///        Control-thread API; the engine owns the player. Live MIDI input
 ///        (`sonare_engine_push_midi_input_*` / `sonare_engine_push_midi_note_*`)
 ///        and scheduled MIDI clips routed to @p destination_id render through
-///        the player (16 MIDI channels, channel 10 drums, GS NRPN part edits,
+///        the player (16 MIDI channels; channel 10 and GM2 CC0=120 rhythm
+///        parts as drums; GS NRPN part edits,
 ///        GS/GM SysEx resets). This is a control-thread structural mutation;
 ///        do not call concurrently with @ref sonare_engine_process.
 SonareError sonare_engine_set_sf2_instrument(SonareRealtimeEngine* engine, uint32_t destination_id,

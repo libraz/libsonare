@@ -61,13 +61,18 @@ class RealtimeEngineWasm {
 
   RealtimeEngineWasm(double sample_rate, int max_block_size, int command_capacity,
                      int telemetry_capacity);
+  RealtimeEngineWasm(double sample_rate, int max_block_size, int command_capacity,
+                     int telemetry_capacity, int max_channels);
   void prepare(double sample_rate, int max_block_size, int command_capacity,
                int telemetry_capacity);
+  void prepareWithChannels(double sample_rate, int max_block_size, int command_capacity,
+                           int telemetry_capacity, int max_channels);
 
   // ---- Transport & timing (realtime_engine_transport.cpp) --------------
   void play(int64_t render_frame);
   void stop(int64_t render_frame);
   void settleParameters();
+  void flushControlCommands();
   void seekSample(int64_t timeline_sample, int64_t render_frame);
   void seekPpq(double ppq, int64_t render_frame);
   void setTempo(double bpm);
@@ -124,7 +129,16 @@ class RealtimeEngineWasm {
   void setMidiDestinationExternal(uint32_t destination_id, bool external);
   void setExternalMidiClockEnabled(bool enabled);
   uint32_t externalMidiDroppedCount() const;
+  size_t externalMidiPendingCount() const;
   emscripten::val drainExternalMidi(int max_records);
+  // Scalar scratch drain for the AudioWorklet external-MIDI SAB path. This
+  // avoids embind materialising JS arrays/objects in the render callback.
+  bool popExternalMidiToScratch();
+  uint32_t externalMidiScratchDestinationId() const;
+  int64_t externalMidiScratchRenderFrame() const;
+  uint32_t externalMidiScratchByteWord() const;
+  uint32_t externalMidiScratchByteCount() const;
+  void consumeExternalMidiScratch();
   void pushMidiInputNoteOn(int group, int channel, int note, int velocity,
                            int64_t port_time_samples);
   void pushMidiInputNoteOff(int group, int channel, int note, int velocity,
@@ -193,7 +207,7 @@ class RealtimeEngineWasm {
   void setCaptureBuffer(int num_channels, int capacity_frames);
   void armCapture(bool armed);
   void setCapturePunch(int64_t start_sample, int64_t end_sample, bool enabled);
-  void setCaptureSource(std::string source);
+  void setCaptureSource(emscripten::val source);
   void setRecordOffsetSamples(int64_t offset_samples);
   void setInputMonitor(bool enabled, float gain);
   void resetCapture();
@@ -215,10 +229,32 @@ class RealtimeEngineWasm {
 
   // ---- Telemetry & metering (realtime_engine_telemetry.cpp) ------------
   emscripten::val drainTelemetry(int max_records);
+  // Scalar scratch drain for the AudioWorklet SAB path. Unlike drainTelemetry,
+  // this never materializes JS arrays or objects per render quantum.
+  bool popTelemetryToScratch();
+  uint32_t telemetryScratchType() const;
+  uint32_t telemetryScratchError() const;
+  int64_t telemetryScratchRenderFrame() const;
+  int64_t telemetryScratchTimelineSample() const;
+  int64_t telemetryScratchAudibleTimelineSample() const;
+  int32_t telemetryScratchGraphLatencySamplesQ8() const;
+  uint32_t telemetryScratchValue() const;
   emscripten::val drainMeterTelemetry(int max_records);
+  bool popMeterTelemetryToScratch();
+  uint32_t meterScratchTargetId() const;
+  int64_t meterScratchRenderFrame() const;
+  float meterScratchValue(int field) const;
   emscripten::val drainMeterTelemetryWide(int max_records);
   unsigned int configureScopeTelemetry(int interval_frames, unsigned int band_count);
   emscripten::val drainScopeTelemetry(int max_records);
+  bool popScopeTelemetryToScratch();
+  uint32_t scopeScratchTargetId() const;
+  int64_t scopeScratchRenderFrame() const;
+  uint32_t scopeScratchBandCount() const;
+  float scopeScratchBand(uint32_t index) const;
+  uint32_t scopeScratchPointCount() const;
+  float scopeScratchPointLeft(uint32_t index) const;
+  float scopeScratchPointRight(uint32_t index) const;
 
  private:
   // Maps a JS-supplied queue depth to the engine's size_t capacity. A value <= 0
@@ -261,6 +297,12 @@ class RealtimeEngineWasm {
   std::deque<std::string> marker_strings_;
   std::vector<std::shared_ptr<WasmClipPageProvider>> clip_page_providers_;
   sonare::engine::ClipPageRequest clip_page_request_scratch_{};
+  sonare::engine::Telemetry telemetry_scratch_{};
+  sonare::engine::MeterTelemetryRecord meter_telemetry_scratch_{};
+  sonare::engine::ScopeTelemetryRecord scope_telemetry_scratch_{};
+  sonare::host::ExternalMidiRecord external_midi_record_scratch_{};
+  sonare::host::ExternalMidi1Lowered external_midi_lowered_scratch_{};
+  uint8_t external_midi_lowered_index_ = 0;
   std::vector<std::vector<std::vector<float>>> clip_storage_;
   std::vector<std::vector<const float*>> clip_ptrs_;
   std::vector<uint32_t> clip_ids_;

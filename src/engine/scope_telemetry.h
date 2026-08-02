@@ -46,6 +46,7 @@ static_assert(std::is_trivially_copyable_v<ScopeTelemetryRecord>,
 
 class ScopeTelemetryTap {
  public:
+  static constexpr size_t kMaxTargetsPerBlock = 64;
   /// Prepares the FFT scratch + ring. @p band_count is clamped to
   /// [1, kMaxBands]; @p n_fft is rounded up to a power of two and bounds the
   /// frequency resolution. @p telemetry_capacity is the per-process ring depth.
@@ -60,6 +61,9 @@ class ScopeTelemetryTap {
   /// pass; returns true on the blocks where process() should publish. interval
   /// 0 disables capture entirely. begin_block must run on the audio thread.
   bool begin_block(int interval_frames, int num_frames) noexcept;
+  /// Publishes the target snapshots staged by process() for the current host
+  /// block. Has no effect when begin_block() disabled capture.
+  void end_block() noexcept;
 
   /// Publishes one target's spectrum + goniometer snapshot, but only when the
   /// current block is "due" (see begin_block). Allocation-free; audio-thread
@@ -72,6 +76,7 @@ class ScopeTelemetryTap {
 
  private:
   void publish(ScopeTelemetryRecord record) noexcept;
+  void stage(ScopeTelemetryRecord record) noexcept;
 
   double sample_rate_ = 48000.0;
   int n_fft_ = 2048;
@@ -80,6 +85,8 @@ class ScopeTelemetryTap {
   int frame_accum_ = 0;
   uint64_t seq_ = 0;
   uint32_t dropped_records_ = 0;
+  size_t staged_count_ = 0;
+  std::array<ScopeTelemetryRecord, kMaxTargetsPerBlock> staged_records_{};
 
   std::vector<float> window_;                  // Hann window, length n_fft_
   std::vector<float> fft_input_;               // windowed + zero-padded mono frame

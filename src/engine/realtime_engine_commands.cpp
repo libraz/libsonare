@@ -71,8 +71,13 @@ bool RealtimeEngine::swap_graph(std::unique_ptr<graph::Graph> graph, const char*
   for (const GraphRuntime::ParameterBinding& binding : parameter_bindings) {
     if (parameter_target_reserved(binding.param_id)) return false;
   }
-  return graph_runtime_.swap(std::shared_ptr<graph::Graph>(std::move(graph)), input_node_id,
-                             output_node_id, num_channels, std::move(parameter_bindings));
+  const bool swapped =
+      graph_runtime_.swap(std::shared_ptr<graph::Graph>(std::move(graph)), input_node_id,
+                          output_node_id, num_channels, std::move(parameter_bindings));
+  if (swapped) {
+    update_reported_graph_latency();
+  }
+  return swapped;
 }
 
 size_t RealtimeEngine::graph_node_count() const noexcept {
@@ -472,6 +477,17 @@ void RealtimeEngine::settle_parameters() noexcept {
   // bounce that starts muted/soloed opens at the steady-state gain.
   monitor_runtime_.settle();
 #endif
+}
+
+void RealtimeEngine::flush_control_commands() noexcept {
+  const int64_t render_frame = transport_.render_frame();
+  while (!commands_.empty()) {
+    drain_commands(render_frame, 1);
+    apply_due_commands(render_frame);
+  }
+  // A previous drain may have populated due commands even if the queue was
+  // already empty when this method was entered.
+  apply_due_commands(render_frame);
 }
 
 void RealtimeEngine::start_smoothed_param(uint32_t target_id, float value) noexcept {

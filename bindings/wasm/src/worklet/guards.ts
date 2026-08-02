@@ -75,7 +75,8 @@ export function isEngineSyncMessage(value: unknown): value is SonareEngineSyncMe
     value.type === 'syncMidiSysex' ||
     value.type === 'syncMidiPanic' ||
     value.type === 'syncMidiDestinationExternal' ||
-    value.type === 'syncExternalMidiClock'
+    value.type === 'syncExternalMidiClock' ||
+    value.type === 'destroy'
   );
 }
 

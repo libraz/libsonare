@@ -70,6 +70,11 @@ bool TrackMixerRuntime::mix_source(uint32_t track_id, float* const* source, floa
   // one source (kept bit-identical to the historical inline implementation).
   if (lanes != applied_lane_snapshot_) prepare_lanes_from_snapshot(*lanes);
   advance_insert_automations(num_samples);
+  const int render_channels = std::min(num_channels, kMaxLaneChannels);
+  for (size_t lane_index = 0; lane_index < lanes->size(); ++lane_index) {
+    clear_lane(lane_index, render_channels, num_samples);
+    source_mix_lane_active_[lane_index] = false;
+  }
   const int master_channels = std::min(num_channels, kMaxBusChannels);
   for (size_t bus_index = 0; bus_index < bus_configs_.size(); ++bus_index) {
     clear_bus(bus_index, bus_render_channels(bus_index, master_channels), num_samples);
@@ -78,7 +83,7 @@ bool TrackMixerRuntime::mix_source(uint32_t track_id, float* const* source, floa
   mix_source_into_lane(track_id, source, channels, num_channels, num_samples, routed_through_lane,
                        meter_tap, render_frame, scope_tap);
   if (routed_through_lane) {
-    process_buses(channels, master_channels, num_samples, meter_tap, render_frame, scope_tap);
+    finish_source_mix(channels, num_channels, num_samples, meter_tap, render_frame, scope_tap);
   }
   return true;
 }
@@ -93,6 +98,11 @@ bool TrackMixerRuntime::begin_source_mix(int num_channels, int num_samples) noex
   }
   if (lanes != applied_lane_snapshot_) prepare_lanes_from_snapshot(*lanes);
   advance_insert_automations(num_samples);
+  const int render_channels = std::min(num_channels, kMaxLaneChannels);
+  for (size_t lane_index = 0; lane_index < lanes->size(); ++lane_index) {
+    clear_lane(lane_index, render_channels, num_samples);
+    source_mix_lane_active_[lane_index] = false;
+  }
   const int master_channels = std::min(num_channels, kMaxBusChannels);
   for (size_t bus_index = 0; bus_index < bus_configs_.size(); ++bus_index) {
     clear_bus(bus_index, bus_render_channels(bus_index, master_channels), num_samples);
@@ -113,24 +123,22 @@ bool TrackMixerRuntime::mix_source_into_lane(uint32_t track_id, float* const* so
     return false;
   }
 
+  (void)meter_tap;
+  (void)render_frame;
+  (void)scope_tap;
   const int render_channels = std::min(num_channels, kMaxLaneChannels);
-  const int master_channels = std::min(num_channels, kMaxBusChannels);
   for (size_t lane_index = 0; lane_index < lanes->size(); ++lane_index) {
     if ((*lanes)[lane_index].track_id != track_id) continue;
-    clear_lane(lane_index, render_channels, num_samples);
     for (int ch = 0; ch < render_channels; ++ch) {
       const float* src = source[static_cast<size_t>(ch)];
       float* lane = lane_channel(lane_index, ch);
       if (src) {
-        std::copy(src, src + num_samples, lane);
-      } else {
-        std::fill(lane, lane + num_samples, 0.0f);
+        for (int i = 0; i < num_samples; ++i) {
+          lane[i] += src[i];
+        }
       }
     }
-    process_lane_strip(lane_index, render_channels, num_samples, 0);
-    mix_lane_sends(lane_index, render_channels, num_samples, 0);
-    apply_lane_to_mix(lane_index, channels, render_channels, num_samples, any_lane_solo(*lanes),
-                      meter_tap, render_frame, scope_tap, master_channels);
+    source_mix_lane_active_[lane_index] = true;
     routed_through_lane = true;
     return true;
   }
@@ -145,7 +153,18 @@ void TrackMixerRuntime::finish_source_mix(float* const* channels, int num_channe
                                           ScopeTelemetryTap* scope_tap) noexcept {
   if (!channels || num_channels <= 0 || num_samples <= 0) return;
   if (num_channels > kMaxBusChannels || num_samples > max_block_size_ || scratch_.empty()) return;
+  const std::vector<TrackLaneConfig>* lanes = lanes_.current();
+  if (!lanes) return;
+  const int render_channels = std::min(num_channels, kMaxLaneChannels);
   const int master_channels = std::min(num_channels, kMaxBusChannels);
+  const bool any_solo = any_lane_solo(*lanes);
+  for (size_t lane_index = 0; lane_index < lanes->size(); ++lane_index) {
+    if (!source_mix_lane_active_[lane_index]) continue;
+    process_lane_strip(lane_index, render_channels, num_samples, 0);
+    mix_lane_sends(lane_index, render_channels, num_samples, 0);
+    apply_lane_to_mix(lane_index, channels, render_channels, num_samples, any_solo, meter_tap,
+                      render_frame, scope_tap, master_channels);
+  }
   process_buses(channels, master_channels, num_samples, meter_tap, render_frame, scope_tap);
 }
 

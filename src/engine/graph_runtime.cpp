@@ -159,4 +159,22 @@ int GraphRuntime::num_channels() const noexcept {
   return binding ? binding->num_channels : 0;
 }
 
+int GraphRuntime::latency_samples_q8() const noexcept {
+  const Binding* binding = binding_.control_current().get();
+  if (!binding || !binding->graph || !binding->output || binding->num_channels <= 0) {
+    return 0;
+  }
+
+  // Graph records the accumulated latency at a node input. Add the latency of
+  // the selected output node itself, taking the largest program output port so
+  // the engine's single PDC value covers every plane it renders.
+  int latency_q8 = binding->graph->node_latency_samples_q8(binding->output->id());
+  for (int port = 0; port < binding->num_channels; ++port) {
+    latency_q8 =
+        std::max(latency_q8, binding->graph->node_latency_samples_q8(binding->output->id()) +
+                                 binding->output->processor().output_latency_samples_q8(port));
+  }
+  return std::max(0, latency_q8);
+}
+
 }  // namespace sonare::engine

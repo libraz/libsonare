@@ -84,6 +84,10 @@ export const SONARE_ENGINE_TELEMETRY_RECORD_BYTES = 48;
 // the producer increments `dropped` when the fixed queue is full.
 export const SONARE_CLIP_PAGE_REQUEST_RING_HEADER_INTS = 5;
 export const SONARE_CLIP_PAGE_REQUEST_RING_RECORD_UINT32S = 2;
+// External MIDI records: destination ID, render-frame offset, packed MIDI-1
+// bytes (little-endian), and byte count. SPSC worklet -> main-thread ring.
+export const SONARE_EXTERNAL_MIDI_RING_HEADER_INTS = 5;
+export const SONARE_EXTERNAL_MIDI_RING_RECORD_UINT32S = 4;
 
 export enum SonareEngineCommandType {
   SetParam = 0,
@@ -131,6 +135,7 @@ export enum SonareEngineTelemetryError {
   InsertAutomationOverflow = 16,
   MidiClockOverflow = 17,
   MetronomeOverflow = 18,
+  InvalidCommand = 19,
 }
 
 export interface SonareMeterRingBuffer {
@@ -187,6 +192,31 @@ export interface SonareScopeRingBuffer {
 export interface SonareScopeRingReadResult {
   nextReadIndex: number;
   scopes: SonareWorkletScopeSnapshot[];
+}
+
+export interface SonareExternalMidiRingEvent {
+  destinationId: number;
+  renderFrame: number;
+  byteWord: number;
+  byteCount: number;
+}
+
+export interface SonareExternalMidiRingBuffer {
+  sharedBuffer: SharedArrayBuffer;
+  header: Int32Array;
+  records: Uint32Array;
+  capacity: number;
+}
+
+export interface SharedExternalMidiRingWriter {
+  header: Int32Array;
+  records: Uint32Array;
+  capacity: number;
+}
+
+export interface SonareExternalMidiRingReadResult {
+  events: SonareExternalMidiRingEvent[];
+  dropped: number;
 }
 
 export interface SharedScopeRingWriter {
@@ -536,6 +566,113 @@ export function sonareClipPageRequestRingBufferByteLength(capacity: number): num
   );
 }
 
+export function sonareExternalMidiRingBufferByteLength(capacity: number): number {
+  const clampedCapacity = Math.max(1, Math.floor(capacity));
+  return (
+    SONARE_EXTERNAL_MIDI_RING_HEADER_INTS * Int32Array.BYTES_PER_ELEMENT +
+    clampedCapacity * SONARE_EXTERNAL_MIDI_RING_RECORD_UINT32S * Uint32Array.BYTES_PER_ELEMENT
+  );
+}
+
+export function externalMidiRingFromSharedBuffer(
+  sharedBuffer: SharedArrayBuffer,
+  fallbackCapacity?: number,
+): SharedExternalMidiRingWriter {
+  const headerBytes = SONARE_EXTERNAL_MIDI_RING_HEADER_INTS * Int32Array.BYTES_PER_ELEMENT;
+  const header = new Int32Array(sharedBuffer, 0, SONARE_EXTERNAL_MIDI_RING_HEADER_INTS);
+  const existingCapacity = Atomics.load(header, 2);
+  const capacity = Math.max(1, Math.floor(existingCapacity || fallbackCapacity || 1));
+  if (sharedBuffer.byteLength < sonareExternalMidiRingBufferByteLength(capacity)) {
+    throw new Error('externalMidiSharedBuffer is too small for the requested ring capacity.');
+  }
+  Atomics.store(header, 2, capacity);
+  Atomics.store(header, 3, SONARE_EXTERNAL_MIDI_RING_RECORD_UINT32S);
+  return {
+    header,
+    records: new Uint32Array(
+      sharedBuffer,
+      headerBytes,
+      capacity * SONARE_EXTERNAL_MIDI_RING_RECORD_UINT32S,
+    ),
+    capacity,
+  };
+}
+
+export function createSonareExternalMidiRingBuffer(capacity = 256): SonareExternalMidiRingBuffer {
+  const clampedCapacity = Math.max(1, Math.floor(capacity));
+  const sharedBuffer = new SharedArrayBuffer(
+    sonareExternalMidiRingBufferByteLength(clampedCapacity),
+  );
+  const ring = externalMidiRingFromSharedBuffer(sharedBuffer, clampedCapacity);
+  Atomics.store(ring.header, 0, 0);
+  Atomics.store(ring.header, 1, 0);
+  Atomics.store(ring.header, 4, 0);
+  return { sharedBuffer, header: ring.header, records: ring.records, capacity: ring.capacity };
+}
+
+/** Write one lowered MIDI-1 event without allocations from the audio worklet. */
+export function pushSonareExternalMidiRingBuffer(
+  ring: SharedExternalMidiRingWriter,
+  destinationId: number,
+  renderFrame: number,
+  byteWord: number,
+  byteCount: number,
+): boolean {
+  // Emscripten can expose an int64 render-frame scalar as bigint when the
+  // host enables WASM_BIGINT. Normalize at this fixed-record boundary.
+  const destination = Number(destinationId);
+  const frame = Number(renderFrame);
+  const packedBytes = Number(byteWord);
+  const count = Number(byteCount);
+  if (
+    !Number.isSafeInteger(destination) ||
+    !Number.isSafeInteger(frame) ||
+    frame < 0 ||
+    !Number.isSafeInteger(packedBytes) ||
+    packedBytes < 0 ||
+    packedBytes > 0xff_ffff ||
+    !Number.isSafeInteger(count) ||
+    count < 1 ||
+    count > 3
+  ) {
+    Atomics.add(ring.header, 4, 1);
+    return false;
+  }
+  const writeIndex = Atomics.load(ring.header, 0);
+  const readIndex = Atomics.load(ring.header, 1);
+  if (writeIndex - readIndex >= ring.capacity) {
+    Atomics.add(ring.header, 4, 1);
+    return false;
+  }
+  const offset = (writeIndex % ring.capacity) * SONARE_EXTERNAL_MIDI_RING_RECORD_UINT32S;
+  Atomics.store(ring.records, offset, destination);
+  Atomics.store(ring.records, offset + 1, frame);
+  Atomics.store(ring.records, offset + 2, packedBytes);
+  Atomics.store(ring.records, offset + 3, count);
+  Atomics.store(ring.header, 0, writeIndex + 1);
+  return true;
+}
+
+/** Main-thread drain. It is intentionally the only place MIDI byte arrays are built. */
+export function readSonareExternalMidiRingBuffer(
+  ring: SonareExternalMidiRingBuffer,
+): SonareExternalMidiRingReadResult {
+  const readIndex = Atomics.load(ring.header, 1);
+  const writeIndex = Atomics.load(ring.header, 0);
+  const events: SonareExternalMidiRingEvent[] = [];
+  for (let index = readIndex; index < writeIndex; index++) {
+    const offset = (index % ring.capacity) * SONARE_EXTERNAL_MIDI_RING_RECORD_UINT32S;
+    events.push({
+      destinationId: Atomics.load(ring.records, offset) >>> 0,
+      renderFrame: Atomics.load(ring.records, offset + 1) >>> 0,
+      byteWord: Atomics.load(ring.records, offset + 2) >>> 0,
+      byteCount: Atomics.load(ring.records, offset + 3) >>> 0,
+    });
+  }
+  Atomics.store(ring.header, 1, writeIndex);
+  return { events, dropped: Atomics.load(ring.header, 4) >>> 0 };
+}
+
 export function createSonareClipPageRequestRingBuffer(
   capacity = 128,
 ): SonareClipPageRequestRingBuffer {
@@ -807,14 +944,27 @@ function recordOffset(index: number, capacity: number, recordBytes: number): num
   return (index % capacity) * recordBytes;
 }
 
-export function toBigInt64(value: number | bigint | undefined, fallback: bigint): bigint {
-  if (typeof value === 'bigint') {
-    return value;
+function toSafeInteger(value: number | bigint | undefined, fallback: number): number {
+  const resolved = typeof value === 'bigint' ? Number(value) : value;
+  if (resolved === undefined) {
+    return fallback;
   }
-  if (typeof value === 'number') {
-    return BigInt(Math.trunc(value));
+  if (!Number.isSafeInteger(resolved)) {
+    throw new RangeError('64-bit ring values must be safe integers');
   }
-  return fallback;
+  return resolved;
+}
+
+/** Store a signed 64-bit safe integer as two 32-bit words without BigInt. */
+export function writeInt64Words(view: DataView, offset: number, value: number): void {
+  const integer = toSafeInteger(value, 0);
+  view.setUint32(offset, integer >>> 0, true);
+  view.setInt32(offset + 4, Math.floor(integer / 0x100000000), true);
+}
+
+/** Reconstruct a signed 64-bit safe integer stored by {@link writeInt64Words}. */
+export function readInt64Words(view: DataView, offset: number): number {
+  return view.getInt32(offset + 4, true) * 0x100000000 + view.getUint32(offset, true);
 }
 
 function writeEngineCommandRecord(
@@ -824,21 +974,21 @@ function writeEngineCommandRecord(
 ): void {
   view.setUint32(offset, command.type, true);
   view.setUint32(offset + 4, command.targetId ?? 0, true);
-  view.setBigInt64(offset + 8, toBigInt64(command.sampleTime, -1n), true);
+  writeInt64Words(view, offset + 8, toSafeInteger(command.sampleTime, -1));
   // argFloat occupies a full 8-byte Float64 slot (replacing the old Float32 +
   // 4-byte pad) so PPQ scalars carried here keep full double precision over the
   // SAB transport, matching the engine's double-precision seek/loop contract.
   view.setFloat64(offset + 16, command.argFloat ?? 0, true);
-  view.setBigInt64(offset + 24, toBigInt64(command.argInt, 0n), true);
+  writeInt64Words(view, offset + 24, toSafeInteger(command.argInt, 0));
 }
 
 function readEngineCommandRecord(view: DataView, offset: number): SonareEngineCommandRecord {
   return {
     type: view.getUint32(offset, true),
     targetId: view.getUint32(offset + 4, true),
-    sampleTime: Number(view.getBigInt64(offset + 8, true)),
+    sampleTime: readInt64Words(view, offset + 8),
     argFloat: view.getFloat64(offset + 16, true),
-    argInt: Number(view.getBigInt64(offset + 24, true)),
+    argInt: readInt64Words(view, offset + 24),
   };
 }
 
@@ -849,21 +999,22 @@ function writeEngineTelemetryRecord(
 ): void {
   view.setUint32(offset, telemetry.type, true);
   view.setUint32(offset + 4, telemetry.error, true);
-  view.setBigInt64(offset + 8, BigInt(Math.trunc(telemetry.renderFrame)), true);
-  view.setBigInt64(offset + 16, BigInt(Math.trunc(telemetry.timelineSample)), true);
-  view.setBigInt64(offset + 24, BigInt(Math.trunc(telemetry.audibleTimelineSample)), true);
+  writeInt64Words(view, offset + 8, telemetry.renderFrame);
+  writeInt64Words(view, offset + 16, telemetry.timelineSample);
+  writeInt64Words(view, offset + 24, telemetry.audibleTimelineSample);
   view.setInt32(offset + 32, telemetry.graphLatencySamplesQ8, true);
   view.setUint32(offset + 36, telemetry.value, true);
-  view.setBigInt64(offset + 40, 0n, true);
+  view.setUint32(offset + 40, 0, true);
+  view.setUint32(offset + 44, 0, true);
 }
 
 function readEngineTelemetryRecord(view: DataView, offset: number): SonareEngineTelemetryRecord {
   return {
     type: view.getUint32(offset, true),
     error: view.getUint32(offset + 4, true),
-    renderFrame: Number(view.getBigInt64(offset + 8, true)),
-    timelineSample: Number(view.getBigInt64(offset + 16, true)),
-    audibleTimelineSample: Number(view.getBigInt64(offset + 24, true)),
+    renderFrame: readInt64Words(view, offset + 8),
+    timelineSample: readInt64Words(view, offset + 16),
+    audibleTimelineSample: readInt64Words(view, offset + 24),
     graphLatencySamplesQ8: view.getInt32(offset + 32, true),
     value: view.getUint32(offset + 36, true),
   };

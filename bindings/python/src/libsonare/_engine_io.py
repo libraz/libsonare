@@ -177,6 +177,10 @@ class _EngineIoMixin:
         return int(out.value)
 
     def process(self, channels: Sequence[Sequence[float]]) -> list[list[float]]:
+        """Render in place, adding engine output to each supplied channel plane.
+
+        Pass zero-filled planes when the engine is the only audio source.
+        """
         arrays, ptrs, frame_count = self._channel_arrays(channels)
         _check(
             _get_lib().sonare_engine_process(

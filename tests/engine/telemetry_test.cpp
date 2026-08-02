@@ -2,6 +2,7 @@
 #include <catch2/catch_test_macros.hpp>
 #include <vector>
 
+#include "engine/meter_telemetry.h"
 #include "engine/realtime_engine.h"
 
 namespace {
@@ -22,6 +23,31 @@ class TelemetryCaptureProcessor final : public sonare::rt::ProcessorBase {
 };
 
 }  // namespace
+
+TEST_CASE("MeterTelemetryTap publishes one record per target per host block",
+          "[engine][telemetry]") {
+  sonare::engine::MeterTelemetryTap tap;
+  tap.prepare(48000.0, 128, 0, 8);
+  std::array<float, 64> first{};
+  std::array<float, 64> latest{};
+  latest.fill(0.5f);
+  float* first_channels[] = {first.data()};
+  float* latest_channels[] = {latest.data()};
+
+  tap.begin_block();
+  tap.process_lightweight(first_channels, 1, 64, 0, 7);
+  tap.process_lightweight(latest_channels, 1, 64, 64, 7);
+  tap.process_lightweight(latest_channels, 1, 64, 64, 8);
+  tap.end_block();
+
+  sonare::engine::MeterTelemetryRecord record{};
+  REQUIRE(tap.pop(record));
+  REQUIRE(record.target_id == 7);
+  REQUIRE(record.render_frame == 64);
+  REQUIRE(tap.pop(record));
+  REQUIRE(record.target_id == 8);
+  REQUIRE_FALSE(tap.pop(record));
+}
 
 TEST_CASE("RealtimeEngine telemetry reports graph latency and audible timeline",
           "[engine][telemetry]") {

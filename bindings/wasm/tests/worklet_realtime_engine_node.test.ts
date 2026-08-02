@@ -33,6 +33,19 @@ describe('SonareRealtimeEngineNode', () => {
       } as unknown as BaseAudioContext;
     }
 
+    function readyWorkletNode<
+      T extends {
+        onmessage?: ((event: MessageEvent<unknown>) => void) | null;
+      },
+    >(port: T): AudioWorkletNode {
+      queueMicrotask(() => {
+        port.onmessage?.({
+          data: { type: 'ready', runtimeTarget: 'embind' },
+        } as MessageEvent<unknown>);
+      });
+      return { port, disconnect: () => undefined } as unknown as AudioWorkletNode;
+    }
+
     it('creates a SAB-backed AudioWorkletNode facade and queues transport commands', async () => {
       let capturedOptions: AudioWorkletNodeOptions | undefined;
       const posted: unknown[] = [];
@@ -88,21 +101,19 @@ describe('SonareRealtimeEngineNode', () => {
       });
       const seen: unknown[] = [];
       node.onTelemetry((telemetry) => seen.push(telemetry));
-      expect(node.pollTelemetry()).toHaveLength(1);
+      // Listener registration immediately drains SAB records, without asking
+      // the host to call pollTelemetry() itself.
+      expect(node.pollTelemetry()).toHaveLength(0);
       expect(seen[0]).toMatchObject({ timelineSample: 128 });
       node.destroy();
       expect(disconnected).toEqual([true]);
-      expect(posted.at(-1)).toMatchObject({ type: SonareEngineCommandType.TransportStop });
+      expect(posted.at(-1)).toMatchObject({ type: 'destroy' });
     });
 
     it('drains clip-page requests from the SAB ring and reports bounded drops', async () => {
       const node = await SonareRealtimeEngineNode.create(fakeContext(), {
         clipPageRequestRingCapacity: 1,
-        nodeFactory: () =>
-          ({
-            port: { postMessage: () => undefined, onmessage: undefined },
-            disconnect: () => undefined,
-          }) as unknown as AudioWorkletNode,
+        nodeFactory: () => readyWorkletNode({ postMessage: () => undefined, onmessage: undefined }),
       });
       try {
         const ring = node.clipPageRequestRing;
@@ -125,13 +136,12 @@ describe('SonareRealtimeEngineNode', () => {
       }
     });
 
-    it('waits for the worklet ready acknowledgement before exposing SonareEngine', async () => {
+    it('waits for ready even when the host registered the worklet module', async () => {
       const port = {
         postMessage: () => undefined,
         onmessage: undefined as ((event: MessageEvent<unknown>) => void) | undefined,
       };
       const enginePromise = SonareEngine.create(fakeContext(), {
-        moduleUrl: 'sonare-worklet.js',
         mode: 'postMessage',
         nodeFactory: () => ({ port, disconnect: () => undefined }) as unknown as AudioWorkletNode,
       });
@@ -146,6 +156,151 @@ describe('SonareRealtimeEngineNode', () => {
       } as MessageEvent<unknown>);
       const engine = await enginePromise;
       engine.destroy();
+    });
+
+    it('rejects a block size smaller than the AudioWorklet render quantum', async () => {
+      await expect(
+        SonareRealtimeEngineNode.create(fakeContext(), {
+          blockSize: 64,
+          nodeFactory: () =>
+            readyWorkletNode({ postMessage: () => undefined, onmessage: undefined }),
+        }),
+      ).rejects.toThrow(/blockSize.*128/);
+    });
+
+    it('surfaces worklet sync rejections after ready', async () => {
+      const port = {
+        postMessage: () => undefined,
+        onmessage: undefined as ((event: MessageEvent<unknown>) => void) | undefined,
+      };
+      const node = await SonareRealtimeEngineNode.create(fakeContext(), {
+        mode: 'postMessage',
+        nodeFactory: () => ({ port, disconnect: () => undefined }) as unknown as AudioWorkletNode,
+      });
+      const seen: unknown[] = [];
+      node.onSyncError((message) => seen.push(message));
+      port.onmessage?.({
+        data: { type: 'syncError', syncType: 'syncTempo', message: 'invalid tempo' },
+      } as MessageEvent<unknown>);
+      expect(seen).toEqual([
+        { type: 'syncError', syncType: 'syncTempo', message: 'invalid tempo' },
+      ]);
+    });
+
+    it('propagates a pre-registered worklet initialization error', async () => {
+      const port = {
+        postMessage: () => undefined,
+        onmessage: undefined as ((event: MessageEvent<unknown>) => void) | undefined,
+      };
+      const enginePromise = SonareEngine.create(fakeContext(), {
+        mode: 'postMessage',
+        nodeFactory: () => ({ port, disconnect: () => undefined }) as unknown as AudioWorkletNode,
+      });
+      await Promise.resolve();
+      port.onmessage?.({
+        data: { type: 'error', message: 'WASM initialization failed' },
+      } as MessageEvent<unknown>);
+      await expect(enginePromise).rejects.toThrow('WASM initialization failed');
+    });
+
+    it('drains the offline mirror after more commands than its realtime ring capacity', async () => {
+      const offline = new (await import('../dist/index.js')).RealtimeEngine(48000, 128);
+      offline.prepare(48000, 128, 4, 4);
+      offline.addParameter({
+        id: 7,
+        name: 'gain',
+        unit: 'dB',
+        minValue: -60,
+        maxValue: 12,
+        defaultValue: 0,
+        rtSafe: true,
+        defaultCurve: 2,
+      });
+      const originalFlush = offline.flushControlCommands.bind(offline);
+      let flushCount = 0;
+      offline.flushControlCommands = () => {
+        flushCount += 1;
+        originalFlush();
+      };
+      const engine = await SonareEngine.create(fakeContext(), {
+        mode: 'postMessage',
+        offlineEngine: offline,
+        nodeFactory: () => readyWorkletNode({ postMessage: () => undefined, onmessage: undefined }),
+      });
+      try {
+        // Engine creation synchronizes the pre-registered parameter set once;
+        // this assertion measures only the subsequent command-side flushes.
+        flushCount = 0;
+        for (let index = 0; index < 32; index++) {
+          expect(engine.setParam('gain-node', 'gain', index - 60)).toBe(true);
+        }
+        expect(flushCount).toBe(32);
+      } finally {
+        engine.destroy();
+      }
+    });
+
+    it('syncs registered parameters and rejects unresolved parameter names', async () => {
+      const posted: unknown[] = [];
+      const engine = await SonareEngine.create(fakeContext(), {
+        mode: 'postMessage',
+        nodeFactory: () =>
+          readyWorkletNode({
+            postMessage: (message: unknown) => posted.push(message),
+            onmessage: undefined,
+          }),
+      });
+      try {
+        engine.addParameter({
+          id: 7,
+          name: 'gain',
+          unit: 'dB',
+          minValue: -60,
+          maxValue: 12,
+          defaultValue: 0,
+          rtSafe: true,
+          defaultCurve: 2,
+        });
+        expect(engine.setParam('gain-node', 'gain', -6)).toBe(true);
+        expect(() => engine.setParam('gain-node', 'missing', -6)).toThrow(
+          /Unknown engine parameter/,
+        );
+        engine.setMidiInputSource(3);
+        engine.bindMidiCc(0, 74, 7, { minValue: -60, maxValue: 12 });
+        engine.pushMidiInputNoteOn(0, 0, 60, 100, 128);
+        engine.pushMidiInputCc(0, 0, 74, 96, 128);
+        engine.clearMidiInputSource();
+        engine.clearParameters();
+        expect(engine.listParameters()).toHaveLength(0);
+        expect(posted).toEqual(
+          expect.arrayContaining([
+            expect.objectContaining({
+              type: 'syncParameters',
+              parameters: [expect.objectContaining({ id: 7, name: 'gain' })],
+            }),
+            expect.objectContaining({ type: 'syncParameters', parameters: [] }),
+            expect.objectContaining({ type: 'syncMidiInputSource', destinationId: 3 }),
+            expect.objectContaining({
+              type: 'syncMidiCcBinding',
+              channel: 0,
+              controller: 74,
+              paramId: 7,
+              minValue: -60,
+              maxValue: 12,
+            }),
+            expect.objectContaining({
+              type: 'syncMidiInputNoteOn',
+              data0: 60,
+              data1: 100,
+              portTimeSamples: 128,
+            }),
+            expect.objectContaining({ type: 'syncMidiInputCc', data0: 74, data1: 96 }),
+            expect.objectContaining({ type: 'syncClearMidiInputSource' }),
+          ]),
+        );
+      } finally {
+        engine.destroy();
+      }
     });
 
     it('creates the scope ring only when scope telemetry is requested', async () => {
@@ -190,13 +345,10 @@ describe('SonareRealtimeEngineNode', () => {
       const node = await SonareRealtimeEngineNode.create(fakeContext(), {
         mode: 'postMessage',
         nodeFactory: () =>
-          ({
-            port: {
-              postMessage: (message: unknown) => posted.push(message),
-              onmessage: undefined,
-            },
-            disconnect: () => undefined,
-          }) as unknown as AudioWorkletNode,
+          readyWorkletNode({
+            postMessage: (message: unknown) => posted.push(message),
+            onmessage: undefined,
+          }),
       });
       expect(node.capabilities.mode).toBe('postMessage');
       expect(node.capabilities.clipPageRequestsRealtimeSafe).toBe(false);
@@ -276,17 +428,22 @@ describe('SonareRealtimeEngineNode', () => {
         offlineEngine: offline,
         offlineChannelCount: 2,
         nodeFactory: () =>
-          ({
-            port: {
-              postMessage: (message: unknown) => posted.push(message),
-              onmessage: undefined,
-            },
-            disconnect: () => undefined,
-          }) as unknown as AudioWorkletNode,
+          readyWorkletNode({
+            postMessage: (message: unknown) => posted.push(message),
+            onmessage: undefined,
+          }),
       });
       try {
         expect(engine.capabilities.mode).toBe('postMessage');
         expect(engine.listParameters()).toHaveLength(1);
+        expect(posted).toEqual(
+          expect.arrayContaining([
+            expect.objectContaining({
+              type: 'syncParameters',
+              parameters: [expect.objectContaining({ id: 7, name: 'gain' })],
+            }),
+          ]),
+        );
         expect(engine.transport.play()).toBe(true);
         expect(engine.transport.seekSeconds(1)).toBe(true);
         engine.transport.setTempo(90);
@@ -387,6 +544,7 @@ describe('SonareRealtimeEngineNode', () => {
         });
         engine.setTempo(60);
         expect(engine.countInEndSample(0, 2)).toBe(384000);
+        expect(() => engine.armRecord(3, true)).toThrow(/Capture is global/);
         expect(engine.armRecord(0, true)).toBe(true);
         expect(engine.punch(1, 1.5)).toBe(true);
         engine.setMetronome({ enabled: true, clickSamples: 16 });
@@ -412,7 +570,6 @@ describe('SonareRealtimeEngineNode', () => {
           expect.arrayContaining([
             expect.objectContaining({ type: SonareEngineCommandType.TransportPlay }),
             expect.objectContaining({ type: SonareEngineCommandType.TransportSeekSample }),
-            expect.objectContaining({ type: SonareEngineCommandType.SetTempoMap }),
             expect.objectContaining({ type: SonareEngineCommandType.SetLoop }),
             expect.objectContaining({ type: SonareEngineCommandType.ArmRecord }),
             expect.objectContaining({
@@ -555,6 +712,11 @@ describe('SonareRealtimeEngineNode', () => {
             expect.objectContaining({ type: 'syncMidiPanic' }),
           ]),
         );
+        expect(posted).not.toEqual(
+          expect.arrayContaining([
+            expect.objectContaining({ type: SonareEngineCommandType.SetTempoMap }),
+          ]),
+        );
         // scheduleParam/addAutomationPoint mirror the lane to the live engine via
         // an out-of-band 'syncAutomation' message (previously offline-only).
         expect(posted).toEqual(
@@ -573,13 +735,10 @@ describe('SonareRealtimeEngineNode', () => {
         offlineEngine: offline,
         offlineChannelCount: 1,
         nodeFactory: () =>
-          ({
-            port: {
-              postMessage: (message: unknown) => posted.push(message),
-              onmessage: undefined,
-            },
-            disconnect: () => undefined,
-          }) as unknown as AudioWorkletNode,
+          readyWorkletNode({
+            postMessage: (message: unknown) => posted.push(message),
+            onmessage: undefined,
+          }),
       });
       try {
         engine.setTrackLanes([1]);
@@ -630,10 +789,10 @@ describe('SonareRealtimeEngineNode', () => {
         mode: 'postMessage',
         offlineChannelCount: 1,
         nodeFactory: () =>
-          ({
-            port: { postMessage: (message: unknown) => posted.push(message), onmessage: undefined },
-            disconnect: () => undefined,
-          }) as unknown as AudioWorkletNode,
+          readyWorkletNode({
+            postMessage: (message: unknown) => posted.push(message),
+            onmessage: undefined,
+          }),
       });
       try {
         engine.setTrackLanes([1]);
@@ -686,13 +845,10 @@ describe('SonareRealtimeEngineNode', () => {
       const engine = await SonareEngine.create(fakeContext(), {
         mode: 'postMessage',
         nodeFactory: () =>
-          ({
-            port: {
-              postMessage: (message: unknown) => posted.push(message),
-              onmessage: undefined,
-            },
-            disconnect: () => undefined,
-          }) as unknown as AudioWorkletNode,
+          readyWorkletNode({
+            postMessage: (message: unknown) => posted.push(message),
+            onmessage: undefined,
+          }),
       });
       try {
         engine.setTrackBuses([{ busId: 7 }]);
@@ -786,11 +942,7 @@ describe('SonareRealtimeEngineNode', () => {
       };
       const engine = await SonareEngine.create(fakeContext(), {
         mode: 'postMessage',
-        nodeFactory: () =>
-          ({
-            port,
-            disconnect: () => undefined,
-          }) as unknown as AudioWorkletNode,
+        nodeFactory: () => readyWorkletNode(port),
       });
 
       await expect(engine.captureStatus()).resolves.toMatchObject({
@@ -849,11 +1001,7 @@ describe('SonareRealtimeEngineNode', () => {
       };
       const engine = await SonareEngine.create(fakeContext(), {
         mode: 'postMessage',
-        nodeFactory: () =>
-          ({
-            port,
-            disconnect: () => undefined,
-          }) as unknown as AudioWorkletNode,
+        nodeFactory: () => readyWorkletNode(port),
       });
 
       engine.setTempo(90);
@@ -909,15 +1057,12 @@ describe('SonareRealtimeEngineNode', () => {
       const engine = await SonareEngine.create(fakeContext(), {
         mode: 'postMessage',
         nodeFactory: () =>
-          ({
-            port: {
-              postMessage: (message: unknown) => posted.push(message),
-              addEventListener: () => undefined,
-              removeEventListener: () => undefined,
-              start: () => undefined,
-            },
-            disconnect: () => undefined,
-          }) as unknown as AudioWorkletNode,
+          readyWorkletNode({
+            postMessage: (message: unknown) => posted.push(message),
+            addEventListener: () => undefined,
+            removeEventListener: () => undefined,
+            start: () => undefined,
+          }),
       });
 
       const stale = engine.addMarker(9, 'stale');
@@ -960,15 +1105,12 @@ describe('SonareRealtimeEngineNode', () => {
       const engine = await SonareEngine.create(fakeContext(), {
         mode: 'postMessage',
         nodeFactory: () =>
-          ({
-            port: {
-              postMessage: (message: unknown) => posted.push(message),
-              addEventListener: () => undefined,
-              removeEventListener: () => undefined,
-              start: () => undefined,
-            },
-            disconnect: () => undefined,
-          }) as unknown as AudioWorkletNode,
+          readyWorkletNode({
+            postMessage: (message: unknown) => posted.push(message),
+            addEventListener: () => undefined,
+            removeEventListener: () => undefined,
+            start: () => undefined,
+          }),
       });
 
       // Reserved mixer namespace encodings: master = lane 0xff, first track
@@ -1032,14 +1174,14 @@ describe('SonareRealtimeEngineNode', () => {
       } as BaseAudioContext & { suspend: () => Promise<void>; resume: () => Promise<void> };
       const engine = await SonareEngine.create(context, {
         mode: 'postMessage',
-        nodeFactory: () =>
-          ({
-            port: {
-              postMessage: (message: unknown) => posted.push(message),
-              onmessage: undefined,
-            },
-            disconnect: () => disconnected.push(true),
-          }) as unknown as AudioWorkletNode,
+        nodeFactory: () => {
+          const node = readyWorkletNode({
+            postMessage: (message: unknown) => posted.push(message),
+            onmessage: undefined,
+          });
+          node.disconnect = () => disconnected.push(true);
+          return node;
+        },
       });
 
       await engine.suspend();
@@ -1048,7 +1190,7 @@ describe('SonareRealtimeEngineNode', () => {
       expect(engine.transport.play()).toBe(true);
       engine.destroy();
       expect(disconnected).toEqual([true]);
-      expect(posted.at(-1)).toMatchObject({ type: SonareEngineCommandType.TransportStop });
+      expect(posted.at(-1)).toMatchObject({ type: 'destroy' });
       expect(engine.transport.play()).toBe(false);
       await engine.suspend();
       await engine.resume();

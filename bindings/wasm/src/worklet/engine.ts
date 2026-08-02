@@ -18,6 +18,7 @@ import type {
   EngineTrackSend,
   EngineTransportState,
   EqBand,
+  MidiCcBindOptions,
   PanLaw,
   PanMode,
 } from '../index';
@@ -155,6 +156,7 @@ export class SonareEngine {
       sampleRate: this.sampleRate,
       realtimeNode: this.realtimeNode,
       offlineEngine: this.offlineEngine,
+      flushOfflineMirror: () => this.flushOfflineMirror(),
       setTransportPlaying: (playing) => {
         this.transportPlaying = playing;
       },
@@ -186,7 +188,7 @@ export class SonareEngine {
       throw error;
     }
     const offlineEngine = options.offlineEngine ?? new RealtimeEngine(sampleRate, blockSize);
-    return new SonareEngine(
+    const engine = new SonareEngine(
       context,
       realtimeNode,
       offlineEngine,
@@ -194,6 +196,8 @@ export class SonareEngine {
       blockSize,
       channelCount,
     );
+    engine.syncParameters();
+    return engine;
   }
 
   async suspend(): Promise<void> {
@@ -366,6 +370,16 @@ export class SonareEngine {
 
   listParameters(): EngineParameterInfo[] {
     return parameter.listParameters(this.parameterContext);
+  }
+
+  /** Registers a custom parameter on the offline mirror and worklet engine. */
+  addParameter(info: EngineParameterInfo): void {
+    parameter.addParameter(this.parameterContext, info);
+  }
+
+  /** Clears custom parameters and their automation lanes on both engines. */
+  clearParameters(): void {
+    parameter.clearParameters(this.parameterContext);
   }
 
   setSoloMute(target: string | number, solo: boolean, mute: boolean): boolean {
@@ -760,6 +774,82 @@ export class SonareEngine {
     strips.pushMidiSysex(this.stripContext, trackId, data, renderFrame);
   }
 
+  bindMidiCc(
+    channel: number,
+    controller: number,
+    paramId: number,
+    options: MidiCcBindOptions = {},
+  ): void {
+    const minValue = options.minValue ?? 0;
+    const maxValue = options.maxValue ?? 1;
+    this.offlineEngine.bindMidiCc(channel, controller, paramId, { minValue, maxValue });
+    this.postSync({ type: 'syncMidiCcBinding', channel, controller, paramId, minValue, maxValue });
+  }
+
+  setMidiInputSource(destinationId = 0): void {
+    this.offlineEngine.setMidiInputSource(destinationId);
+    this.postSync({ type: 'syncMidiInputSource', destinationId });
+  }
+
+  clearMidiInputSource(): void {
+    this.offlineEngine.clearMidiInputSource();
+    this.postSync({ type: 'syncClearMidiInputSource' });
+  }
+
+  pushMidiInputNoteOn(
+    group: number,
+    channel: number,
+    note: number,
+    velocity: number,
+    portTimeSamples = 0,
+  ): void {
+    this.offlineEngine.pushMidiInputNoteOn(group, channel, note, velocity, portTimeSamples);
+    this.postSync({
+      type: 'syncMidiInputNoteOn',
+      group,
+      channel,
+      data0: note,
+      data1: velocity,
+      portTimeSamples,
+    });
+  }
+
+  pushMidiInputNoteOff(
+    group: number,
+    channel: number,
+    note: number,
+    velocity = 0,
+    portTimeSamples = 0,
+  ): void {
+    this.offlineEngine.pushMidiInputNoteOff(group, channel, note, velocity, portTimeSamples);
+    this.postSync({
+      type: 'syncMidiInputNoteOff',
+      group,
+      channel,
+      data0: note,
+      data1: velocity,
+      portTimeSamples,
+    });
+  }
+
+  pushMidiInputCc(
+    group: number,
+    channel: number,
+    controller: number,
+    value: number,
+    portTimeSamples = 0,
+  ): void {
+    this.offlineEngine.pushMidiInputCc(group, channel, controller, value, portTimeSamples);
+    this.postSync({
+      type: 'syncMidiInputCc',
+      group,
+      channel,
+      data0: controller,
+      data1: value,
+      portTimeSamples,
+    });
+  }
+
   pushMidiPanic(renderFrame = -1): void {
     this.offlineEngine.pushMidiPanic(renderFrame);
     this.postSync({ type: 'syncMidiPanic', renderFrame });
@@ -769,6 +859,10 @@ export class SonareEngine {
     capture.configureCapture(this.captureContext, options);
   }
 
+  /**
+   * Arms the engine-global capture path. `trackId` is retained for source
+   * compatibility and must be `0`; per-track capture is not implemented.
+   */
   armRecord(trackId: string | number, enabled: boolean): boolean {
     return capture.armRecord(this.captureContext, trackId, enabled);
   }
@@ -795,7 +889,7 @@ export class SonareEngine {
     // the fixed-size SAB command record, so it is delivered out-of-band; the
     // SetMetronome command then toggles enabled state on the audio thread.
     this.postSync({ type: 'syncMetronome', config: opts });
-    this.realtimeNode.sendCommand({
+    this.sendMirroredCommand({
       type: SonareEngineCommandType.SetMetronome,
       sampleTime: -1,
       argInt: opts.enabled ? 1 : 0,
@@ -1034,11 +1128,30 @@ export class SonareEngine {
     if (this.destroyed) {
       return;
     }
-    if (transfer && transfer.length > 0) {
-      this.realtimeNode.node.port.postMessage(message, transfer);
-    } else {
-      this.realtimeNode.node.port.postMessage(message);
+    try {
+      if (transfer && transfer.length > 0) {
+        this.realtimeNode.node.port.postMessage(message, transfer);
+      } else {
+        this.realtimeNode.node.port.postMessage(message);
+      }
+    } finally {
+      this.flushOfflineMirror();
     }
+  }
+
+  // The offline engine is a control-thread mirror. It has no render loop to
+  // drain its command ring, so drain it after each control operation. Never
+  // call this from the worklet/audio path: it is intentionally control-only.
+  private flushOfflineMirror(): void {
+    this.offlineEngine.flushControlCommands();
+  }
+
+  private sendMirroredCommand(
+    command: Parameters<SonareRealtimeEngineNode['sendCommand']>[0],
+  ): boolean {
+    const accepted = this.realtimeNode.sendCommand(command);
+    this.flushOfflineMirror();
+    return accepted;
   }
 
   // Collaborator surface handed to the mixer/routing free functions so they can
@@ -1098,13 +1211,13 @@ export class SonareEngine {
     return {
       offlineEngine: this.offlineEngine,
       realtimeNode: this.realtimeNode,
+      sendCommand: (command) => this.sendMirroredCommand(command),
       offlineChannelCount: this.offlineChannelCount,
       postSync: (message) => this.postSync(message),
       getCaptureConfig: () => this.captureConfig,
       setCaptureConfig: (config) => {
         this.captureConfig = config;
       },
-      resolveTargetId: (target) => this.resolveTargetId(target),
     };
   }
 
@@ -1115,7 +1228,9 @@ export class SonareEngine {
   private get parameterContext(): EngineParameterContext {
     return {
       offlineEngine: this.offlineEngine,
-      realtimeNode: this.realtimeNode,
+      sendCommand: (command) => this.sendMirroredCommand(command),
+      postSync: (message) => this.postSync(message),
+      automationLanes: this.automationLanes,
       trackLaneIds: this.trackLaneIds,
       resolveParamId: (nodeId, param) => this.resolveParamId(nodeId, param),
       ensureTrackLane: (target) => this.ensureTrackLane(target),
@@ -1130,6 +1245,7 @@ export class SonareEngine {
     return {
       offlineEngine: this.offlineEngine,
       realtimeNode: this.realtimeNode,
+      sendCommand: (command) => this.sendMirroredCommand(command),
       postSync: (message) => this.postSync(message),
       getTempoBpm: () => this.tempoBpm,
       setTempoBpm: (bpm) => {
@@ -1182,7 +1298,7 @@ export class SonareEngine {
         this.nextMarkerId = value;
       },
       postSync: (message) => this.postSync(message),
-      sendCommand: (command) => this.realtimeNode.sendCommand(command),
+      sendCommand: (command) => this.sendMirroredCommand(command),
       setLoop: (startPpq, endPpq, enabled) => this.setLoop(startPpq, endPpq, enabled),
     };
   }
@@ -1200,7 +1316,7 @@ export class SonareEngine {
   // sample-accurate smoothed-param command to the realtime runtime.
   private sendSmoothedParam(paramId: number, value: number): boolean {
     this.offlineEngine.setParameter(paramId, value);
-    return this.realtimeNode.sendCommand({
+    return this.sendMirroredCommand({
       type: SonareEngineCommandType.SetParamSmoothed,
       targetId: paramId,
       sampleTime: -1,
@@ -1210,6 +1326,13 @@ export class SonareEngine {
 
   private resolveParamId(nodeId: string, param: string | number): number {
     return resolveParamId(this.listParameters(), nodeId, param);
+  }
+
+  private syncParameters(): void {
+    const parameters = this.listParameters();
+    if (parameters.length > 0) {
+      this.postSync({ type: 'syncParameters', parameters });
+    }
   }
 
   private resolveTargetId(target: string | number): number {

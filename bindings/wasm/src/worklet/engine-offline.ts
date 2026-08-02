@@ -47,6 +47,7 @@ export interface EngineTransportContext {
     seekSample(timelineSample: number, sampleTime?: number): boolean;
   };
   offlineEngine: RealtimeEngine;
+  flushOfflineMirror(): void;
   setTransportPlaying(playing: boolean): void;
   flushPendingInstrumentSync(): void;
   setTempo(bpm: number): void;
@@ -74,12 +75,16 @@ export function buildTransportFacade(ctx: EngineTransportContext): SonareEngineT
     },
     seekPpq: (ppq, sampleTime = -1) => {
       ctx.offlineEngine.seekPpq(ppq, sampleTime);
-      return ctx.realtimeNode.seekPpq(ppq, sampleTime);
+      const ok = ctx.realtimeNode.seekPpq(ppq, sampleTime);
+      ctx.flushOfflineMirror();
+      return ok;
     },
     seekSeconds: (seconds, sampleTime = -1) => {
       const timelineSample = Math.max(0, Math.round(seconds * ctx.sampleRate));
       ctx.offlineEngine.seekSample(timelineSample, sampleTime);
-      return ctx.realtimeNode.seekSample(timelineSample, sampleTime);
+      const ok = ctx.realtimeNode.seekSample(timelineSample, sampleTime);
+      ctx.flushOfflineMirror();
+      return ok;
     },
     setTempo: (bpm) => ctx.setTempo(bpm),
     setTempoSegments: (segments) => ctx.setTempoSegments(segments),

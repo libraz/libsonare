@@ -26,6 +26,30 @@ constexpr uint32_t engine_master_param_target(uint32_t param_kind) {
 }
 #endif
 
+TEST_CASE("RealtimeEngine prepares scratch for the declared channel count", "[engine]") {
+  sonare::engine::RealtimeEngine engine;
+  engine.prepare(48000.0, 64, 16, 16, 64);
+  const size_t full_channel_scratch_bytes = engine.prepared_scratch_bytes();
+  engine.prepare(48000.0, 64, 16, 16, 2);
+  REQUIRE(engine.prepared_channels() == 2);
+  REQUIRE(engine.prepared_scratch_bytes() == full_channel_scratch_bytes / 32);
+
+  std::array<float, 64> left{};
+  std::array<float, 64> right{};
+  left.fill(0.25f);
+  right.fill(-0.25f);
+  float* stereo[] = {left.data(), right.data()};
+  engine.process(stereo, 2, 64);
+  REQUIRE(left[0] == Catch::Approx(0.25f));
+  REQUIRE(right[0] == Catch::Approx(-0.25f));
+
+  std::array<float, 64> extra{};
+  extra.fill(1.0f);
+  float* over_prepared[] = {left.data(), right.data(), extra.data()};
+  engine.process(over_prepared, 3, 64);
+  REQUIRE(extra[0] == Catch::Approx(0.0f));
+}
+
 template <size_t N>
 void fill_signal(std::array<float, N>& left, std::array<float, N>& right) {
   for (size_t i = 0; i < N; ++i) {
@@ -50,6 +74,20 @@ class CaptureProcessor final : public sonare::rt::ProcessorBase {
   std::array<float, 8> values{};
   int count = 0;
 };
+
+#if defined(SONARE_WITH_GRAPH)
+class GraphLatencyProcessor final : public sonare::rt::ProcessorBase {
+ public:
+  explicit GraphLatencyProcessor(int latency_q8) : latency_q8_(latency_q8) {}
+  void prepare(double, int) override {}
+  void process(float* const*, int, int) override {}
+  void reset() override {}
+  int latency_samples_q8() const noexcept override { return latency_q8_; }
+
+ private:
+  int latency_q8_ = 0;
+};
+#endif
 
 }  // namespace
 
@@ -82,6 +120,23 @@ TEST_CASE("RealtimeEngine pass-through output is deterministic", "[engine][realt
   REQUIRE(a_r == b_r);
   REQUIRE(a.transport().render_frame() == kFrames);
   REQUIRE(a.transport().sample_position() == kFrames);
+}
+
+TEST_CASE("RealtimeEngine control flush prevents an offline mirror command ring from filling",
+          "[engine][realtime]") {
+  sonare::engine::RealtimeEngine engine;
+  engine.prepare(48000.0, 64, /*command_capacity=*/4, /*telemetry_capacity=*/4);
+
+  sonare::rt::Command seek{};
+  seek.type = sonare::rt::CommandType::kTransportSeekSample;
+  seek.sample_time = -1;
+  for (int64_t sample = 0; sample < 1024; ++sample) {
+    seek.arg.i = sample;
+    REQUIRE(engine.push_command(seek));
+    engine.flush_control_commands();
+  }
+
+  REQUIRE(engine.transport().sample_position() == 1023);
 }
 
 TEST_CASE("RealtimeEngine rejects registering one strip in mixing and monitor runtimes",
@@ -119,6 +174,24 @@ TEST_CASE("RealtimeEngine reports track and master strip latency", "[engine][rea
   engine.set_mixing_enabled(false);
   REQUIRE(engine.graph_latency_samples_q8() == (4 << 8));
 }
+
+#if defined(SONARE_WITH_GRAPH)
+TEST_CASE("RealtimeEngine includes a swapped routing graph in reported PDC", "[engine][realtime]") {
+  auto graph = std::make_unique<sonare::graph::Graph>();
+  REQUIRE(graph->add_node("in", std::make_unique<GraphLatencyProcessor>(0), 1));
+  REQUIRE(graph->add_node("latent", std::make_unique<GraphLatencyProcessor>(9 << 8), 1));
+  REQUIRE(graph->add_node("out", std::make_unique<GraphLatencyProcessor>(3 << 8), 1));
+  REQUIRE(graph->connect({"in", 0, "latent", 0, sonare::graph::Connection::Mix::Add}));
+  REQUIRE(graph->connect({"latent", 0, "out", 0, sonare::graph::Connection::Mix::Add}));
+  REQUIRE(graph->compile());
+  graph->prepare(48000.0, 64);
+
+  sonare::engine::RealtimeEngine engine;
+  engine.prepare(48000.0, 64);
+  REQUIRE(engine.swap_graph(std::move(graph), "in", "out", 1));
+  REQUIRE(engine.graph_latency_samples_q8() == (12 << 8));
+}
+#endif
 
 TEST_CASE("RealtimeEngine publishes lane bus input and master meter targets",
           "[engine][realtime]") {

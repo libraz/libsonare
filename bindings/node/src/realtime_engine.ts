@@ -51,12 +51,14 @@ export class RealtimeEngine {
     maxBlockSize = 128,
     commandCapacity = 1024,
     telemetryCapacity = 1024,
+    maxChannels = 64,
   ) {
     this.native = new addon.RealtimeEngine(
       sampleRate,
       maxBlockSize,
       commandCapacity,
       telemetryCapacity,
+      maxChannels,
     );
   }
 
@@ -65,8 +67,9 @@ export class RealtimeEngine {
     maxBlockSize: number,
     commandCapacity = 1024,
     telemetryCapacity = 1024,
+    maxChannels = 64,
   ): void {
-    this.native.prepare(sampleRate, maxBlockSize, commandCapacity, telemetryCapacity);
+    this.native.prepare(sampleRate, maxBlockSize, commandCapacity, telemetryCapacity, maxChannels);
   }
 
   play(renderFrame = -1): void {
@@ -498,12 +501,13 @@ export class RealtimeEngine {
   }
 
   /**
-   * Read the recorded samples out of the capture buffer.
+   * Read the recorded samples from the addon-owned capture buffer.
    *
    * Returns one `Float32Array` per capture channel, each sliced to the number
    * of frames recorded so far (see {@link captureStatus}). Call after capture
-   * to retrieve the audio written into the buffers passed to
-   * {@link setCaptureBuffer}.
+   * to retrieve the audio written after {@link setCaptureBuffer}. The addon
+   * copies that method's inputs, so transferring or detaching the original
+   * ArrayBuffers cannot invalidate an active capture.
    */
   capturedAudio(): Float32Array[] {
     return this.native.capturedAudio();
@@ -521,6 +525,10 @@ export class RealtimeEngine {
     return this.native.graphConnectionCount();
   }
 
+  /**
+   * Renders in place, adding engine output to `channels`. Zero each plane first
+   * when it contains no upstream input.
+   */
   process(channels: Float32Array[]): Float32Array[] {
     return this.native.process(channels);
   }

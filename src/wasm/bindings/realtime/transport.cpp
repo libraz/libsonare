@@ -33,6 +33,7 @@ void RealtimeEngineWasm::stop(int64_t render_frame) {
 /// at settled values instead of ramping in from defaults. Matches
 /// sonare_engine_settle_parameters.
 void RealtimeEngineWasm::settleParameters() { engine_.settle_parameters(); }
+void RealtimeEngineWasm::flushControlCommands() { engine_.flush_control_commands(); }
 
 void RealtimeEngineWasm::seekSample(int64_t timeline_sample, int64_t render_frame) {
   sonare::rt::Command command{};
@@ -152,7 +153,7 @@ void RealtimeEngineWasm::setMarkers(val markers) {
   static_assert(noexcept(marker_strings_.swap(staged_strings)),
                 "marker backing-store commit must not throw");
   std::vector<sonare::transport::Marker> prepared;
-  const int count = markers["length"].as<int>();
+  const int count = static_cast<int>(wasmArrayLikeLength(markers, "markers"));
   // Bound the list before reserving, matching the shared kMaxBufferSize cap the
   // C-ABI segment setters enforce, so a crafted length cannot drive an unbounded
   // allocation.
@@ -326,6 +327,7 @@ void registerRealtimeEngineTransport(class_<RealtimeEngineWasm>& cls) {
       .function("stop", &RealtimeEngineWasm::stop)
       .function("seekSample", &RealtimeEngineWasm::seekSample)
       .function("settleParameters", &RealtimeEngineWasm::settleParameters)
+      .function("flushControlCommands", &RealtimeEngineWasm::flushControlCommands)
       .function("seekPpq", &RealtimeEngineWasm::seekPpq)
       .function("setTempo", &RealtimeEngineWasm::setTempo)
       .function("setTempoSegments", &RealtimeEngineWasm::setTempoSegments)

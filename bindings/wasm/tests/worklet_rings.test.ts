@@ -2,6 +2,7 @@ import {
   createSonareClipPageRequestRingBuffer,
   createSonareEngineCommandRingBuffer,
   createSonareEngineTelemetryRingBuffer,
+  createSonareExternalMidiRingBuffer,
   createSonareMeterRingBuffer,
   describe,
   expect,
@@ -11,14 +12,18 @@ import {
   popSonareEngineCommandRingBuffer,
   pushSonareClipPageRequestRingBuffer,
   pushSonareEngineCommandRingBuffer,
+  pushSonareExternalMidiRingBuffer,
   readSonareClipPageRequestRingBuffer,
   readSonareEngineTelemetryRingBuffer,
+  readSonareExternalMidiRingBuffer,
   readSonareMeterRingBuffer,
   SONARE_CLIP_PAGE_REQUEST_RING_HEADER_INTS,
   SONARE_CLIP_PAGE_REQUEST_RING_RECORD_UINT32S,
   SONARE_ENGINE_COMMAND_RECORD_BYTES,
   SONARE_ENGINE_RING_HEADER_INTS,
   SONARE_ENGINE_TELEMETRY_RECORD_BYTES,
+  SONARE_EXTERNAL_MIDI_RING_HEADER_INTS,
+  SONARE_EXTERNAL_MIDI_RING_RECORD_UINT32S,
   SONARE_METER_RING_HEADER_INTS,
   SONARE_METER_RING_RECORD_FLOATS,
   SonareEngineCommandType,
@@ -29,6 +34,7 @@ import {
   sonareClipPageRequestRingBufferByteLength,
   sonareEngineCommandRingBufferByteLength,
   sonareEngineTelemetryRingBufferByteLength,
+  sonareExternalMidiRingBufferByteLength,
   sonareMeterRingBufferByteLength,
   writeSonareEngineTelemetryRingBuffer,
 } from './_worklet_helpers';
@@ -74,6 +80,28 @@ describe('Sonare worklet ring buffers', () => {
         readSonareClipPageRequestRingBuffer({ sharedBuffer: sab, header, records, capacity }),
       ).toEqual({ requests: [{ clipId: 42, pageIndex: 7 }], dropped: 0 });
       expect(header[1]).toBe(1);
+    });
+  });
+
+  describe('external-MIDI ring-buffer (SPSC)', () => {
+    it('preserves lowered MIDI bytes and drops only new records when full', () => {
+      const ring = createSonareExternalMidiRingBuffer(2);
+      expect(ring.header).toHaveLength(SONARE_EXTERNAL_MIDI_RING_HEADER_INTS);
+      expect(ring.header[3]).toBe(SONARE_EXTERNAL_MIDI_RING_RECORD_UINT32S);
+      expect(ring.sharedBuffer.byteLength).toBe(sonareExternalMidiRingBufferByteLength(2));
+      expect(pushSonareExternalMidiRingBuffer(ring, 7, 127, 0x00643c90, 3)).toBe(true);
+      // Transport clock retains the uint32 destination sentinel.
+      expect(pushSonareExternalMidiRingBuffer(ring, 0xffffffff, 0, 0x000000f8, 1)).toBe(true);
+      expect(pushSonareExternalMidiRingBuffer(ring, 8, 0, 0x00403c90, 3)).toBe(false);
+
+      expect(readSonareExternalMidiRingBuffer(ring)).toEqual({
+        events: [
+          { destinationId: 7, renderFrame: 127, byteWord: 0x00643c90, byteCount: 3 },
+          { destinationId: 0xffffffff, renderFrame: 0, byteWord: 0x000000f8, byteCount: 1 },
+        ],
+        dropped: 1,
+      });
+      expect(readSonareExternalMidiRingBuffer(ring)).toEqual({ events: [], dropped: 1 });
     });
   });
 

@@ -38,6 +38,7 @@ export type EngineMarker = WasmEngineMarker;
 export type EngineMetronomeConfig = WasmEngineMetronomeConfig;
 export type EngineGraphSpec = WasmEngineGraphSpec;
 export type EngineCaptureStatus = WasmEngineCaptureStatus;
+export type EngineCaptureSource = EngineCaptureStatus['source'] | number;
 export type EngineBounceOptions = WasmEngineBounceOptions;
 export type EngineBounceResult = WasmEngineBounceResult;
 export type EngineFreezeOptions = WasmEngineFreezeOptions;
@@ -161,6 +162,7 @@ export class RealtimeEngine {
     maxBlockSize = 128,
     commandCapacity = 1024,
     telemetryCapacity = 1024,
+    maxChannels = 64,
   ) {
     const module = getSonareModule();
     const capabilities = engineCapabilities();
@@ -174,6 +176,7 @@ export class RealtimeEngine {
       maxBlockSize,
       commandCapacity,
       telemetryCapacity,
+      maxChannels,
     );
   }
 
@@ -182,8 +185,15 @@ export class RealtimeEngine {
     maxBlockSize: number,
     commandCapacity = 1024,
     telemetryCapacity = 1024,
+    maxChannels = 64,
   ): void {
-    this.native.prepare(sampleRate, maxBlockSize, commandCapacity, telemetryCapacity);
+    this.native.prepareWithChannels(
+      sampleRate,
+      maxBlockSize,
+      commandCapacity,
+      telemetryCapacity,
+      maxChannels,
+    );
   }
 
   /** Queue a sample-accurate parameter change (engine kSetParam). */
@@ -352,6 +362,10 @@ export class RealtimeEngine {
     return this.native.externalMidiDroppedCount();
   }
 
+  externalMidiPendingCount(): number {
+    return this.native.externalMidiPendingCount();
+  }
+
   /**
    * Drain queued external-MIDI events, already lowered to MIDI 1.0 byte
    * messages ready to write to a Web MIDI output port. Call once per audio
@@ -361,6 +375,31 @@ export class RealtimeEngine {
    */
   drainExternalMidi(maxRecords = 1024): WasmExternalMidiEvent[] {
     return this.native.drainExternalMidi(maxRecords);
+  }
+
+  /** Scalar, allocation-free external-MIDI drain for AudioWorklet SAB output. */
+  popExternalMidiToScratch(): boolean {
+    return this.native.popExternalMidiToScratch();
+  }
+
+  externalMidiScratchDestinationId(): number {
+    return this.native.externalMidiScratchDestinationId();
+  }
+
+  externalMidiScratchRenderFrame(): number {
+    return this.native.externalMidiScratchRenderFrame();
+  }
+
+  externalMidiScratchByteWord(): number {
+    return this.native.externalMidiScratchByteWord();
+  }
+
+  externalMidiScratchByteCount(): number {
+    return this.native.externalMidiScratchByteCount();
+  }
+
+  consumeExternalMidiScratch(): void {
+    this.native.consumeExternalMidiScratch();
   }
 
   pushMidiInputNoteOn(
@@ -488,6 +527,11 @@ export class RealtimeEngine {
    */
   settleParameters(): void {
     this.native.settleParameters();
+  }
+
+  /** Drains queued commands on an offline/control-only engine immediately. */
+  flushControlCommands(): void {
+    this.native.flushControlCommands();
   }
 
   seekPpq(ppq: number, renderFrame = -1): void {
@@ -867,7 +911,7 @@ export class RealtimeEngine {
     this.native.setCapturePunch(startSample, endSample, enabled);
   }
 
-  setCaptureSource(source: EngineCaptureStatus['source']): void {
+  setCaptureSource(source: EngineCaptureSource): void {
     this.native.setCaptureSource(source);
   }
 
@@ -892,6 +936,10 @@ export class RealtimeEngine {
     return this.native.capturedAudio();
   }
 
+  /**
+   * Renders in place, adding engine output to `channels`. Zero each plane first
+   * when it contains no upstream input.
+   */
   process(channels: Float32Array[]): Float32Array[] {
     return this.native.process(channels);
   }
@@ -917,6 +965,7 @@ export class RealtimeEngine {
 
   /**
    * Runs the engine in place over the prepared per-channel scratch buffers.
+   * Zero each active span first when it contains no upstream input.
    * Allocation-free: safe to call on the AudioWorklet render thread after
    * `prepareChannels`.
    */
@@ -942,6 +991,51 @@ export class RealtimeEngine {
 
   drainTelemetry(maxRecords = 1024): EngineTelemetry[] {
     return this.native.drainTelemetry(maxRecords);
+  }
+
+  popTelemetryToScratch(): boolean {
+    return this.native.popTelemetryToScratch();
+  }
+
+  telemetryScratchType(): number {
+    return this.native.telemetryScratchType();
+  }
+
+  telemetryScratchError(): number {
+    return this.native.telemetryScratchError();
+  }
+
+  telemetryScratchRenderFrame(): number {
+    return Number(this.native.telemetryScratchRenderFrame());
+  }
+
+  telemetryScratchTimelineSample(): number {
+    return Number(this.native.telemetryScratchTimelineSample());
+  }
+
+  telemetryScratchAudibleTimelineSample(): number {
+    return Number(this.native.telemetryScratchAudibleTimelineSample());
+  }
+
+  telemetryScratchGraphLatencySamplesQ8(): number {
+    return this.native.telemetryScratchGraphLatencySamplesQ8();
+  }
+
+  telemetryScratchValue(): number {
+    return this.native.telemetryScratchValue();
+  }
+
+  popMeterTelemetryToScratch(): boolean {
+    return this.native.popMeterTelemetryToScratch();
+  }
+  meterScratchTargetId(): number {
+    return this.native.meterScratchTargetId();
+  }
+  meterScratchRenderFrame(): number {
+    return Number(this.native.meterScratchRenderFrame());
+  }
+  meterScratchValue(field: number): number {
+    return this.native.meterScratchValue(field);
   }
 
   drainMeterTelemetry(maxRecords = 1024): EngineMeterTelemetry[] {
@@ -973,6 +1067,31 @@ export class RealtimeEngine {
   /** Drains pending spectrum + vectorscope snapshots (per mix target). */
   drainScopeTelemetry(maxRecords = 1024): EngineScopeTelemetry[] {
     return this.native.drainScopeTelemetry(maxRecords);
+  }
+
+  popScopeTelemetryToScratch(): boolean {
+    return this.native.popScopeTelemetryToScratch();
+  }
+  scopeScratchTargetId(): number {
+    return this.native.scopeScratchTargetId();
+  }
+  scopeScratchRenderFrame(): number {
+    return Number(this.native.scopeScratchRenderFrame());
+  }
+  scopeScratchBandCount(): number {
+    return this.native.scopeScratchBandCount();
+  }
+  scopeScratchBand(index: number): number {
+    return this.native.scopeScratchBand(index);
+  }
+  scopeScratchPointCount(): number {
+    return this.native.scopeScratchPointCount();
+  }
+  scopeScratchPointLeft(index: number): number {
+    return this.native.scopeScratchPointLeft(index);
+  }
+  scopeScratchPointRight(index: number): number {
+    return this.native.scopeScratchPointRight(index);
   }
 
   destroy(): void {

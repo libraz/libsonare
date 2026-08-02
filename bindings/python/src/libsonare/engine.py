@@ -104,6 +104,7 @@ class RealtimeEngine(_EngineMidiMixin, _EngineMixingMixin, _EngineIoMixin):
         *,
         command_capacity: int = 1024,
         telemetry_capacity: int = 1024,
+        max_channels: int = 64,
     ) -> None:
         lib = _get_lib()
         abi_version = int(lib.sonare_engine_abi_version())
@@ -119,7 +120,9 @@ class RealtimeEngine(_EngineMidiMixin, _EngineMixingMixin, _EngineIoMixin):
         self._capture_arrays: list[ctypes.Array[ctypes.c_float]] = []
         self._capture_ptrs: ctypes.Array[Any] | None = None
         self._clip_page_providers: list[ClipPageProvider] = []
-        self.prepare(sample_rate, max_block_size, command_capacity, telemetry_capacity)
+        self.prepare(
+            sample_rate, max_block_size, command_capacity, telemetry_capacity, max_channels
+        )
 
     def close(self) -> None:
         if self._handle is not None:
@@ -155,15 +158,26 @@ class RealtimeEngine(_EngineMidiMixin, _EngineMixingMixin, _EngineIoMixin):
         max_block_size: int,
         command_capacity: int = 1024,
         telemetry_capacity: int = 1024,
+        max_channels: int = 64,
     ) -> None:
         lib = _get_lib()
+        prepare_with_channels = getattr(lib, "sonare_engine_prepare_with_channels", None)
+        supports_max_channels = prepare_with_channels is not None
+        if not supports_max_channels:
+            if max_channels != 64:
+                raise RuntimeError(
+                    "The loaded libsonare does not support max_channels; "
+                    "rebuild the native library."
+                )
+            prepare_with_channels = lib.sonare_engine_prepare
         _check(
-            lib.sonare_engine_prepare(
+            prepare_with_channels(
                 self._require_handle(),
                 float(sample_rate),
                 int(max_block_size),
                 int(command_capacity),
                 int(telemetry_capacity),
+                *(() if not supports_max_channels else (int(max_channels),)),
             )
         )
 
