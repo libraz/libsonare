@@ -71,6 +71,29 @@ class StreamingMasteringChainWrapper {
     return out;
   }
 
+  val flushMono() {
+    ensurePreparedForFlush();
+    std::vector<float> block(static_cast<std::size_t>(max_block_size_));
+    float* channels[] = {block.data()};
+    const int written = chain_.flush(channels, 1, max_block_size_);
+    block.resize(static_cast<std::size_t>(written));
+    return vectorToFloat32Array(block);
+  }
+
+  val flushStereo() {
+    ensurePreparedForFlush();
+    std::vector<float> left(static_cast<std::size_t>(max_block_size_));
+    std::vector<float> right(static_cast<std::size_t>(max_block_size_));
+    float* channels[] = {left.data(), right.data()};
+    const int written = chain_.flush(channels, 2, max_block_size_);
+    left.resize(static_cast<std::size_t>(written));
+    right.resize(static_cast<std::size_t>(written));
+    val out = val::object();
+    out.set("left", vectorToFloat32Array(left));
+    out.set("right", vectorToFloat32Array(right));
+    return out;
+  }
+
   void reset() { chain_.reset(); }
 
   int latencySamples() const { return chain_.latency_samples(); }
@@ -84,6 +107,13 @@ class StreamingMasteringChainWrapper {
   }
 
  private:
+  void ensurePreparedForFlush() const {
+    if (max_block_size_ <= 0) {
+      throw sonare::SonareException(sonare::ErrorCode::InvalidState,
+                                    "StreamingMasteringChain must be prepared before flush");
+    }
+  }
+
   void validateBlockLength(std::size_t length) const {
     if (max_block_size_ > 0 && length > static_cast<std::size_t>(max_block_size_)) {
       throw sonare::SonareException(sonare::ErrorCode::InvalidParameter,
@@ -104,6 +134,8 @@ void registerStreamingMasteringChainBindings() {
       .function("prepare", &StreamingMasteringChainWrapper::prepare)
       .function("processMono", &StreamingMasteringChainWrapper::processMono)
       .function("processStereo", &StreamingMasteringChainWrapper::processStereo)
+      .function("flushMono", &StreamingMasteringChainWrapper::flushMono)
+      .function("flushStereo", &StreamingMasteringChainWrapper::flushStereo)
       .function("reset", &StreamingMasteringChainWrapper::reset)
       .function("latencySamples", &StreamingMasteringChainWrapper::latencySamples)
       .function("stageNames", &StreamingMasteringChainWrapper::stageNames);

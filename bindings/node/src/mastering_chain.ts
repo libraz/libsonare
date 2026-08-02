@@ -534,6 +534,9 @@ export type MasteringChannelPolicy =
   | 'perChannel'
   | 'passthrough';
 
+/** Coarse algorithmic work estimate for a realtime insert; not a benchmark. */
+export type MasteringRealtimeCost = 'low' | 'moderate' | 'high';
+
 /** One mastering processor's role in the catalog. */
 export interface MasteringProcessorCatalogEntry {
   /** Stable processor id (e.g. `dynamics.compressor`, `match.abCrossfade`). */
@@ -562,6 +565,8 @@ export interface MasteringProcessorCatalogEntry {
    * offline, dry-only, and no-tail processors.
    */
   tailSamples: number;
+  /** Coarse realtime work estimate, or null when the processor is not an insert. */
+  realtimeCost: MasteringRealtimeCost | null;
   /**
    * How the mixer wraps the processor on a >2-channel (surround) bus insert:
    * `multichannel` (one full-buffer call) or `stereoPairOnly` (front L/R pair,

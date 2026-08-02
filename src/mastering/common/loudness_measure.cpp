@@ -17,13 +17,7 @@ namespace sonare::mastering::common {
 float measure_lufs(const Audio& audio) { return metering::lufs(audio).integrated_lufs; }
 
 float measure_lufs(const float* samples, std::size_t length, int sample_rate) {
-  if (length == 0) {
-    // Build a zero-length Audio so callers get the same gating behaviour as
-    // the Audio overload for empty inputs.
-    Audio audio = Audio::from_buffer(nullptr, 0, sample_rate);
-    return metering::lufs(audio).integrated_lufs;
-  }
-  if (samples == nullptr) {
+  if (samples == nullptr && length != 0) {
     throw SonareException(ErrorCode::InvalidParameter,
                           "measure_lufs: samples pointer is null with non-zero length");
   }
@@ -33,10 +27,7 @@ float measure_lufs(const float* samples, std::size_t length, int sample_rate) {
 
 float measure_lufs_interleaved(const float* samples, std::size_t frames, int channels,
                                int sample_rate) {
-  if (frames == 0) {
-    return metering::lufs_interleaved(nullptr, 0, channels, sample_rate).integrated_lufs;
-  }
-  if (samples == nullptr) {
+  if (samples == nullptr && frames != 0) {
     throw SonareException(
         ErrorCode::InvalidParameter,
         "measure_lufs_interleaved: samples pointer is null with non-zero frame count");

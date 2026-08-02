@@ -234,6 +234,8 @@ describe('Sonare WASM Module', () => {
       expect(engine.clipCount()).toBe(1);
       engine.setCaptureBuffer(2, 128);
       engine.setCapturePunch(48000, 48128);
+      expect(() => engine.setCapturePunch(-1, 128)).toThrow();
+      expect(() => engine.setCapturePunch(128, 127)).toThrow();
       engine.seekMarker(11);
       engine.play();
 
@@ -483,6 +485,9 @@ describe('Sonare WASM Module', () => {
       expect(() => pagedEngine.clearClipPage(999, 0)).toThrow();
       provider.destroy();
       expect(() => pagedEngine.clearClipPage(provider.id, 0)).toThrow();
+      const recycledProvider = pagedEngine.createClipPageProvider(1, 8, 4);
+      expect(recycledProvider.id).toBe(provider.id);
+      recycledProvider.destroy();
       pagedEngine.destroy();
 
       engine.armCapture();
@@ -515,6 +520,12 @@ describe('Sonare WASM Module', () => {
       expect(inputCaptureStatus.recordOffsetSamples).toBe(-37);
       expect(engine.capturedAudio()[0][0]).toBeCloseTo(0.25, 4);
       expect(engine.drainMeterTelemetry().some((record) => record.targetId === 0xffff)).toBe(true);
+
+      engine.setCaptureSource(0);
+      expect(engine.captureStatus().source).toBe('output');
+      engine.setCaptureSource(1);
+      expect(engine.captureStatus().source).toBe('input');
+      expect(() => engine.setCaptureSource(2)).toThrow(/capture source/);
 
       engine.setInputMonitor(false);
       engine.resetCapture();
@@ -1939,6 +1950,29 @@ describe('Sonare WASM Module', () => {
         // tilt EQ should modify the constant signal at least somewhere
         const stages = chain.stageNames();
         expect(stages).toContain('eq.tilt');
+      } finally {
+        chain.delete();
+      }
+    });
+
+    it('flushes delayed StreamingMasteringChain output once', () => {
+      const chain = new StreamingMasteringChain({
+        maximizer: { truePeakLimiter: { enabled: true } },
+      });
+      try {
+        chain.prepare(48000, 64, 1);
+        expect(chain.latencySamples()).toBeGreaterThan(0);
+        chain.processMono(new Float32Array(64).fill(0.5));
+        const tail: number[] = [];
+        for (;;) {
+          const block = chain.flushMono();
+          if (block.length === 0) {
+            break;
+          }
+          tail.push(...block);
+        }
+        expect(tail.length).toBeGreaterThanOrEqual(chain.latencySamples());
+        expect(chain.flushMono()).toHaveLength(0);
       } finally {
         chain.delete();
       }

@@ -213,6 +213,19 @@ InsertTiming insert_timing(const std::string& id) {
   }
 }
 
+// A deliberately coarse host-facing indication of the per-sample algorithmic
+// work for realtime inserts. This is not a machine-specific benchmark: it lets
+// a host avoid treating a bounded, multi-tap Velvet reverb as equivalent to a
+// lightweight zero-latency insert when assembling a live strip.
+const char* realtime_cost(const std::string& id) noexcept {
+  if (id == "effects.reverb.velvet") return "high";
+  if (id == "effects.reverb.fdn" || id == "effects.reverb.convolution" ||
+      id == "effects.acoustic.roomMorph") {
+    return "moderate";
+  }
+  return "low";
+}
+
 // Stable UI group for the first segment of a named processor id. `match.*`
 // processors are reference-analysis/application tools, so their public group
 // spells that role rather than leaking the implementation namespace.
@@ -275,6 +288,14 @@ std::string processor_catalog_json() {
     out += std::to_string(timing.latency_samples);
     out += ",\"tailSamples\":";
     out += std::to_string(timing.tail_samples);
+    out += ",\"realtimeCost\":";
+    if (realtime_insertable) {
+      out += '"';
+      out += realtime_cost(id);
+      out += '"';
+    } else {
+      out += "null";
+    }
     out += ",\"channelPolicy\":\"";
     out += channel_policy_to_string(channel_policy(id));
     out += '"';

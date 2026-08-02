@@ -319,6 +319,16 @@ class StreamingMasteringChain {
   /// passed to prepare(). @p num_samples must be <= max_block_size from prepare().
   void process_block(float* const* channels, int num_channels, int num_samples);
 
+  /// @brief Emit delayed audio and finite processor tails after the final input
+  /// block.
+  /// @return Number of samples written to each channel; call repeatedly until
+  ///         this returns zero. @p max_samples must be <= max_block_size passed
+  ///         to prepare().
+  /// @details Output includes the chain's reported latency at its start. Hosts
+  /// that need time-aligned audio should concatenate normal output and flush
+  /// output, then discard @ref latency_samples leading samples.
+  int flush(float* const* channels, int num_channels, int max_samples);
+
   /// @brief Reset all processor state without rebuilding.
   void reset();
 
@@ -333,12 +343,17 @@ class StreamingMasteringChain {
   const std::vector<std::string>& stage_names() const noexcept { return stage_names_; }
 
  private:
+  void process_prevalidated(float* const* channels, int num_channels, int num_samples);
+  int tail_samples() const noexcept;
+
   struct Impl;
   std::unique_ptr<Impl> impl_;
   MasteringChainConfig config_;
   std::vector<std::string> stage_names_;
   int prepared_channels_ = 0;
   int max_block_size_ = 0;
+  int flush_samples_remaining_ = 0;
+  bool flush_started_ = false;
   // Precomputed loudness normalization gain (linear). 1.0 when the loudness
   // stage is disabled or no static gain was supplied. Applied per block before
   // the true-peak limiter so a preset's streaming preview can match its

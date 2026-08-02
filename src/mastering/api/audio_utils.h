@@ -96,18 +96,23 @@ inline float loudness_gain_db_with_ceiling(const std::vector<float>& samples, in
   return loudness_gain_db_with_ceiling(current_lufs, target_lufs, ceiling_db, peak_db);
 }
 
-// Stereo convenience wrapper: measures LUFS with BS.1770 channel summing and the
-// true peak as the max across the two channels.
+// Measures the stereo true peak as the maximum across the two independent channels.
+inline float stereo_true_peak_dbtp(const std::vector<float>& left, const std::vector<float>& right,
+                                   int sample_rate, int true_peak_oversample) {
+  Audio left_audio = Audio::from_buffer(left.data(), left.size(), sample_rate);
+  Audio right_audio = Audio::from_buffer(right.data(), right.size(), sample_rate);
+  return std::max(
+      sonare::mastering::common::measure_true_peak_dbtp(left_audio, true_peak_oversample),
+      sonare::mastering::common::measure_true_peak_dbtp(right_audio, true_peak_oversample));
+}
+
+// Stereo convenience wrapper: measures LUFS with BS.1770 channel summing and the true peak.
 inline float loudness_gain_db_with_ceiling(const std::vector<float>& left,
                                            const std::vector<float>& right, int sample_rate,
                                            float target_lufs, float ceiling_db,
                                            int true_peak_oversample) {
   const float current_lufs = stereo_integrated_lufs(left, right, sample_rate);
-  Audio left_audio = Audio::from_buffer(left.data(), left.size(), sample_rate);
-  Audio right_audio = Audio::from_buffer(right.data(), right.size(), sample_rate);
-  const float peak_db = std::max(
-      sonare::mastering::common::measure_true_peak_dbtp(left_audio, true_peak_oversample),
-      sonare::mastering::common::measure_true_peak_dbtp(right_audio, true_peak_oversample));
+  const float peak_db = stereo_true_peak_dbtp(left, right, sample_rate, true_peak_oversample);
   return loudness_gain_db_with_ceiling(current_lufs, target_lufs, ceiling_db, peak_db);
 }
 

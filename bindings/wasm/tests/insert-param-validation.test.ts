@@ -59,6 +59,7 @@ describe('insert param validation (WASM)', () => {
     });
     expect(typeof byId.get('dynamics.compressor')?.latencySamples).toBe('number');
     expect(typeof byId.get('dynamics.compressor')?.tailSamples).toBe('number');
+    expect(byId.get('dynamics.compressor')?.realtimeCost).toBe('low');
     // Pair (two-input match.*) id.
     expect(byId.get('match.abCrossfade')?.kind).toBe('pair');
     // Whole-file-only id.
@@ -73,6 +74,8 @@ describe('insert param validation (WASM)', () => {
     expect(byId.get('stereo.imager')?.channelPolicy).toBe('stereoPairOnly');
     expect(byId.get('stereo.haasEnhancer')?.tailSamples).toBe(576);
     expect(byId.get('stereo.phaseAlign')?.tailSamples).toBe(0);
+    expect(byId.get('effects.reverb.velvet')?.realtimeCost).toBe('high');
+    expect(byId.get('effects.reverb.fdn')?.realtimeCost).toBe('moderate');
     // realtimeInsertable entries form the always-succeeds scene-insert set.
     const insertable = catalog.filter((entry) => entry.realtimeInsertable).map((entry) => entry.id);
     expect(insertable).toContain('dynamics.compressor');

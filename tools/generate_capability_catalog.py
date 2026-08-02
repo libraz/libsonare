@@ -82,6 +82,7 @@ def validate_catalog(catalog: Any) -> dict[str, Any]:
                 "stereoOnly",
                 "latencySamples",
                 "tailSamples",
+                "realtimeCost",
                 "channelPolicy",
                 "category",
                 "params",
@@ -89,6 +90,15 @@ def validate_catalog(catalog: Any) -> dict[str, Any]:
         )
         if not isinstance(processor["params"], list):
             raise ValueError(f"catalog.processors[{index}].params must be an array")
+        realtime_cost = processor["realtimeCost"]
+        if realtime_cost is not None and realtime_cost not in {"low", "moderate", "high"}:
+            raise ValueError(
+                f"catalog.processors[{index}].realtimeCost must be low, moderate, high, or null"
+            )
+        if processor["realtimeInsertable"] != (realtime_cost is not None):
+            raise ValueError(
+                f"catalog.processors[{index}].realtimeCost must be non-null exactly for realtime inserts"
+            )
         for parameter_index, parameter_value in enumerate(processor["params"]):
             parameter = require_object(
                 parameter_value,

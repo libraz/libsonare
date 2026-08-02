@@ -105,7 +105,12 @@ bool all_finite(const float* samples, size_t num_samples) noexcept {
 SonareStreamingMasteringChain* sonare_streaming_mastering_chain_create_ex(
     const SonareMasteringParam* params, size_t param_count, float loudness_static_gain_db,
     float loudness_static_gain_peak_db) {
-  if (!params && param_count > 0) return nullptr;
+  SONARE_C_API_ENTRY;
+  if (!params && param_count > 0) {
+    set_last_error(
+        "streaming mastering chain: params must not be null when param_count is non-zero");
+    return nullptr;
+  }
   try {
     auto cpp_params = to_params(params, param_count);
     auto config =
@@ -174,6 +179,41 @@ SonareStreamingMasteringChain* sonare_streaming_mastering_chain_create_ex(
     SONARE_C_TRY
     float* channels[] = {left, right};
     handle->chain->process_block(channels, 2, static_cast<int>(num_samples));
+    return SONARE_OK;
+    SONARE_C_CATCH
+  }
+
+  SonareError sonare_streaming_mastering_chain_flush_mono(SonareStreamingMasteringChain * handle,
+                                                          float* samples, size_t capacity,
+                                                          size_t* samples_written) {
+    SONARE_C_API_ENTRY;
+    if (!handle || !handle->chain || !samples_written || (!samples && capacity > 0) ||
+        capacity > static_cast<size_t>(std::numeric_limits<int>::max())) {
+      return SONARE_ERROR_INVALID_PARAMETER;
+    }
+    *samples_written = 0;
+    SONARE_C_TRY
+    float* channels[] = {samples};
+    const int written = handle->chain->flush(channels, 1, static_cast<int>(capacity));
+    *samples_written = static_cast<size_t>(written);
+    return SONARE_OK;
+    SONARE_C_CATCH
+  }
+
+  SonareError sonare_streaming_mastering_chain_flush_stereo(
+      SonareStreamingMasteringChain * handle, float* left, float* right, size_t capacity,
+      size_t* samples_written) {
+    SONARE_C_API_ENTRY;
+    if (!handle || !handle->chain || !samples_written || (!left && capacity > 0) ||
+        (!right && capacity > 0) ||
+        capacity > static_cast<size_t>(std::numeric_limits<int>::max())) {
+      return SONARE_ERROR_INVALID_PARAMETER;
+    }
+    *samples_written = 0;
+    SONARE_C_TRY
+    float* channels[] = {left, right};
+    const int written = handle->chain->flush(channels, 2, static_cast<int>(capacity));
+    *samples_written = static_cast<size_t>(written);
     return SONARE_OK;
     SONARE_C_CATCH
   }

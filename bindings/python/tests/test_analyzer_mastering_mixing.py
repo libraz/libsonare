@@ -137,6 +137,7 @@ def test_mastering_processor_catalog_reports_kind_and_flags() -> None:
     assert compressor["realtimeInsertable"] is True
     assert isinstance(compressor["latencySamples"], int)
     assert isinstance(compressor["tailSamples"], int)
+    assert compressor["realtimeCost"] == "low"
     # Per-channel/linked processors process every plane in one call.
     assert compressor["channelPolicy"] == "multichannel"
 
@@ -152,6 +153,8 @@ def test_mastering_processor_catalog_reports_kind_and_flags() -> None:
     assert by_id["stereo.imager"]["channelPolicy"] == "stereoPairOnly"
     assert by_id["stereo.haasEnhancer"]["tailSamples"] == 576
     assert by_id["stereo.phaseAlign"]["tailSamples"] == 0
+    assert by_id["effects.reverb.velvet"]["realtimeCost"] == "high"
+    assert by_id["effects.reverb.fdn"]["realtimeCost"] == "moderate"
 
 
 def test_capability_catalog_aggregates_processors_and_presets() -> None:

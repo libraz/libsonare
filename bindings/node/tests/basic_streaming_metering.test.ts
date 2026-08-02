@@ -34,6 +34,14 @@ function generateSine(freq: number, sr: number, duration: number): Float32Array 
 }
 
 describe('progress callback', () => {
+  it('masteringChain invokes onProgress for an empty config', () => {
+    const progress: Array<[number, string]> = [];
+    masteringChain(new Float32Array(22050).fill(0.1), 22050, {}, (value, stage) => {
+      progress.push([value, stage]);
+    });
+    expect(progress).toEqual([[1, 'complete']]);
+  });
+
   it('masteringChain invokes onProgress for each enabled stage', () => {
     const samples = new Float32Array(22050).fill(0.1);
     const stages: string[] = [];
@@ -184,6 +192,23 @@ describe('StreamingMasteringChain', () => {
     chain.reset();
   });
 
+  it('flushes delayed mono output exactly once', () => {
+    const chain = new StreamingMasteringChain({ 'maximizer.truePeakLimiter.enabled': true });
+    chain.prepare(48000, 64, 1);
+    expect(chain.latencySamples()).toBeGreaterThan(0);
+    chain.processMono(new Float32Array(64).fill(0.5));
+    const tail: number[] = [];
+    for (;;) {
+      const block = chain.flushMono();
+      if (block.length === 0) {
+        break;
+      }
+      tail.push(...block);
+    }
+    expect(tail.length).toBeGreaterThanOrEqual(chain.latencySamples());
+    expect(chain.flushMono()).toHaveLength(0);
+  });
+
   it('rejects denoise and loudness stages', () => {
     expect(() => new StreamingMasteringChain({ 'repair.denoise.enabled': true })).toThrow();
     expect(() => new StreamingMasteringChain({ 'loudness.targetLufs': -14 })).toThrow();
@@ -227,6 +252,8 @@ describe('StreamingEqualizer', () => {
     const eq = new StreamingEqualizer({ sampleRate: 48000, maxBlockSize: 512 });
     eq.setBand(0, { type: 'Peak', frequencyHz: 1000, gainDb: 3, q: 1, enabled: true });
     eq.setPhaseMode('linear');
+    expect(eq.latencySamples()).toBeGreaterThan(0);
+    eq.setPhaseMode('linear-phase');
     expect(eq.latencySamples()).toBeGreaterThan(0);
     eq.setPhaseMode('zero');
     expect(eq.latencySamples()).toBe(0);
@@ -326,6 +353,30 @@ describe('onset, tempogram, NNLS chroma, and LUFS', () => {
       expect(value).toBeGreaterThanOrEqual(-1.000001);
       expect(value).toBeLessThanOrEqual(1.000001);
     }
+  });
+
+  it('tempogram and Fourier tempogram forward center and norm', () => {
+    const onset = new Float32Array([0.2, 1.0, 0.4, 0.0, 0.8, 0.1, 0.5, 0.3]);
+    expect(
+      tempogram({
+        onsetEnvelope: onset,
+        sampleRate: SR,
+        hopLength: 1,
+        winLength: 4,
+        center: false,
+        norm: false,
+      }),
+    ).toEqual(tempogram(onset, SR, 1, 4, 'autocorrelation', false, false));
+    expect(
+      fourierTempogram({
+        onsetEnvelope: onset,
+        sampleRate: SR,
+        hopLength: 1,
+        winLength: 4,
+        center: false,
+        norm: false,
+      }),
+    ).toEqual(fourierTempogram(onset, SR, 1, 4, false, false));
   });
 
   it('nnlsChroma returns a 12 x nFrames matrix', () => {

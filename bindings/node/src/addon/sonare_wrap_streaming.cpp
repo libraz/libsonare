@@ -151,8 +151,6 @@ sonare::mastering::eq::EqBand EqBandFromObject(const Napi::Object& object) {
 
 }  // namespace
 
-Napi::FunctionReference StreamingMasteringChainWrap::constructor_;
-
 Napi::Object StreamingMasteringChainWrap::Init(Napi::Env env, Napi::Object exports) {
   Napi::Function func = DefineClass(
       env, "StreamingMasteringChain",
@@ -160,13 +158,13 @@ Napi::Object StreamingMasteringChainWrap::Init(Napi::Env env, Napi::Object expor
           InstanceMethod<&StreamingMasteringChainWrap::Prepare>("prepare"),
           InstanceMethod<&StreamingMasteringChainWrap::ProcessMono>("processMono"),
           InstanceMethod<&StreamingMasteringChainWrap::ProcessStereo>("processStereo"),
+          InstanceMethod<&StreamingMasteringChainWrap::FlushMono>("flushMono"),
+          InstanceMethod<&StreamingMasteringChainWrap::FlushStereo>("flushStereo"),
           InstanceMethod<&StreamingMasteringChainWrap::Reset>("reset"),
           InstanceMethod<&StreamingMasteringChainWrap::LatencySamples>("latencySamples"),
           InstanceMethod<&StreamingMasteringChainWrap::StageNames>("stageNames"),
       });
 
-  constructor_ = Napi::Persistent(func);
-  constructor_.SuppressDestruct();
   exports.Set("StreamingMasteringChain", func);
   return exports;
 }
@@ -217,6 +215,7 @@ Napi::Value StreamingMasteringChainWrap::Prepare(const Napi::CallbackInfo& info)
   SONARE_NODE_TRY
   chain_->prepare(info[0].As<Napi::Number>().DoubleValue(), info[1].As<Napi::Number>().Int32Value(),
                   info[2].As<Napi::Number>().Int32Value());
+  max_block_size_ = info[1].As<Napi::Number>().Int32Value();
   return env.Undefined();
   SONARE_NODE_CATCH(env)
 }
@@ -281,6 +280,51 @@ Napi::Value StreamingMasteringChainWrap::ProcessStereo(const Napi::CallbackInfo&
   SONARE_NODE_CATCH(env)
 }
 
+Napi::Value StreamingMasteringChainWrap::FlushMono(const Napi::CallbackInfo& info) {
+  Napi::Env env = info.Env();
+  if (!chain_ || max_block_size_ <= 0) {
+    Napi::Error::New(env, "StreamingMasteringChain must be prepared before flushMono()")
+        .ThrowAsJavaScriptException();
+    return env.Undefined();
+  }
+  SONARE_NODE_TRY
+  std::vector<float> scratch(static_cast<size_t>(max_block_size_));
+  float* channels[] = {scratch.data()};
+  const int written = chain_->flush(channels, 1, max_block_size_);
+  Napi::Float32Array out = Napi::Float32Array::New(env, static_cast<size_t>(written));
+  if (written > 0) {
+    std::memcpy(out.Data(), scratch.data(), static_cast<size_t>(written) * sizeof(float));
+  }
+  return out;
+  SONARE_NODE_CATCH(env)
+}
+
+Napi::Value StreamingMasteringChainWrap::FlushStereo(const Napi::CallbackInfo& info) {
+  Napi::Env env = info.Env();
+  if (!chain_ || max_block_size_ <= 0) {
+    Napi::Error::New(env, "StreamingMasteringChain must be prepared before flushStereo()")
+        .ThrowAsJavaScriptException();
+    return env.Undefined();
+  }
+  SONARE_NODE_TRY
+  std::vector<float> left_scratch(static_cast<size_t>(max_block_size_));
+  std::vector<float> right_scratch(static_cast<size_t>(max_block_size_));
+  float* channels[] = {left_scratch.data(), right_scratch.data()};
+  const int written = chain_->flush(channels, 2, max_block_size_);
+  Napi::Float32Array left = Napi::Float32Array::New(env, static_cast<size_t>(written));
+  Napi::Float32Array right = Napi::Float32Array::New(env, static_cast<size_t>(written));
+  if (written > 0) {
+    const size_t byte_count = static_cast<size_t>(written) * sizeof(float);
+    std::memcpy(left.Data(), left_scratch.data(), byte_count);
+    std::memcpy(right.Data(), right_scratch.data(), byte_count);
+  }
+  Napi::Object out = Napi::Object::New(env);
+  out.Set("left", left);
+  out.Set("right", right);
+  return out;
+  SONARE_NODE_CATCH(env)
+}
+
 Napi::Value StreamingMasteringChainWrap::Reset(const Napi::CallbackInfo& info) {
   Napi::Env env = info.Env();
   if (!chain_) {
@@ -315,8 +359,6 @@ Napi::Value StreamingMasteringChainWrap::StageNames(const Napi::CallbackInfo& in
   return out;
 }
 
-Napi::FunctionReference StreamingEqualizerWrap::constructor_;
-
 Napi::Object StreamingEqualizerWrap::Init(Napi::Env env, Napi::Object exports) {
   Napi::Function func = DefineClass(
       env, "StreamingEqualizer",
@@ -339,8 +381,6 @@ Napi::Object StreamingEqualizerWrap::Init(Napi::Env env, Napi::Object exports) {
           InstanceMethod<&StreamingEqualizerWrap::Match>("match"),
       });
 
-  constructor_ = Napi::Persistent(func);
-  constructor_.SuppressDestruct();
   exports.Set("StreamingEqualizer", func);
   return exports;
 }

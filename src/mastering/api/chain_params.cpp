@@ -302,12 +302,23 @@ bool apply_repair_param(MasteringChainConfig& cfg, const std::string& key, doubl
     return true;
   }
   if (key == "repair.denoise.mode") {
-    cfg.repair.denoise.config.mode = static_cast<repair::DenoiseMode>(vi());
+    const int mode = vi();
+    if (mode < static_cast<int>(repair::DenoiseMode::LogMmse) ||
+        mode > static_cast<int>(repair::DenoiseMode::SpectralSubtraction)) {
+      throw SonareException(ErrorCode::InvalidParameter, "unknown denoise mode");
+    }
+    cfg.repair.denoise.config.mode = static_cast<repair::DenoiseMode>(mode);
     mark_field(flags.denoise);
     return true;
   }
   if (key == "repair.denoise.noiseEstimator") {
-    cfg.repair.denoise.config.noise_estimator = static_cast<repair::DenoiseNoiseEstimator>(vi());
+    const int estimator = vi();
+    if (estimator < static_cast<int>(repair::DenoiseNoiseEstimator::Quantile) ||
+        estimator > static_cast<int>(repair::DenoiseNoiseEstimator::Imcra)) {
+      throw SonareException(ErrorCode::InvalidParameter, "unknown denoise noise estimator");
+    }
+    cfg.repair.denoise.config.noise_estimator =
+        static_cast<repair::DenoiseNoiseEstimator>(estimator);
     mark_field(flags.denoise);
     return true;
   }

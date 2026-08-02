@@ -50,9 +50,10 @@ struct StereoAudioResult {
 };
 
 /// @brief Gain reduction reported by a single dynamics / maximizer stage.
-/// `gain_reduction_db` is the most recent (typically last-block) gain
-/// reduction in dB (negative or zero); for multiband stages it is the
-/// most-reduced band.
+/// `gain_reduction_db` is the gain reduction in dB (negative or zero) reported
+/// by the stage; for multiband stages it is the most-reduced band. Offline
+/// true-peak limiter stages retain their most-negative program value across
+/// latency-drain blocks.
 struct StageGainReduction {
   std::string stage;  // e.g. "dynamics.compressor"
   float gain_reduction_db = 0.0f;
@@ -77,8 +78,8 @@ struct MasteringLoudnessSummary {
 /// @c band_energy_delta_db contains 32 logarithmically-spaced long-term
 /// spectral-energy deltas (after minus before) from 20 Hz to Nyquist. The
 /// values are intended for compact host visualizations, not corrective-EQ
-/// decisions. @c max_gain_reduction_db is the most-negative final gain
-/// reduction reported by a dynamics / limiter stage, or zero when none ran.
+/// decisions. @c max_gain_reduction_db is the most-negative stage-reported
+/// gain reduction, or zero when none ran.
 inline constexpr std::size_t kMasteringReportBandCount = 32;
 
 struct MasteringReport {

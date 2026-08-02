@@ -282,9 +282,13 @@ const char* sonare_mastering_stereo_analysis_names(void);
 /// @brief Machine-readable classification catalog for every named processor id.
 /// @return A JSON array string whose entries contain `id`, `kind`,
 ///   `realtimeInsertable`, `stereoOnly`, `latencySamples`, `tailSamples`,
+///   `realtimeCost`,
 ///   `channelPolicy`, `category`, and `params` (UTF-8). `kind` is one of
 ///   "realtime" / "offline" / "pair"
 ///   (pair > realtime > offline precedence); `realtimeInsertable` is true exactly
+///   for ids usable as live inserts. `realtimeCost` is `"low"`, `"moderate"`,
+///   or `"high"` for those ids and JSON null otherwise; it is a coarse
+///   algorithmic estimate, not a hardware benchmark.
 ///   for the ids in @ref sonare_mastering_insert_names. Timing values come from
 ///   one prepared default 48 kHz / 512-sample probe and are representative for
 ///   configuration-dependent inserts; offline entries report zero. The id
@@ -424,24 +428,63 @@ typedef struct {
   uint64_t seq;
 } SonareEqSnapshot;
 
+/// @brief Creates a prepared equalizer handle.
+/// @param sample_rate Processing sample rate; must be positive.
+/// @param max_block_size Maximum number of frames accepted by @ref sonare_eq_process.
+/// @return A handle, or NULL when the arguments are invalid or allocation fails.
 SonareEq* sonare_eq_create(double sample_rate, int max_block_size);
+/// @brief Destroys an equalizer handle. Accepts NULL.
 void sonare_eq_destroy(SonareEq* eq);
+/// @brief Sets one of the @c SONARE_EQ_MAX_BANDS equalizer bands from JSON.
+/// @details @p index is in [0, SONARE_EQ_MAX_BANDS). Accepted fields are
+/// @c type (Peak, LowShelf, HighShelf, LowPass, HighPass, BandPass, Notch,
+/// TiltShelf, or FlatTilt), @c frequencyHz, @c gainDb, @c q, @c enabled,
+/// @c coeffMode (Rbj or Vicanek), @c slopeDbOct, @c placement (Stereo, Left,
+/// Right, Mid, or Side), @c phase (Inherit, ZeroLatency, NaturalPhase, or
+/// LinearPhase), @c soloed, @c bypassed, @c proportionalQ, and
+/// @c proportionalQStrength. Dynamic-band fields are @c dynamic / @c dynEnabled,
+/// @c thresholdDb, @c autoThreshold, @c ratio, @c rangeDb, @c attackMs,
+/// @c releaseMs, @c lookaheadMs, @c sidechainFreqHz, @c sidechainQ, and
+/// @c externalSidechain. The corresponding snake_case spellings are also
+/// accepted where applicable. Omitted fields use the default @c EqBand values.
 SonareError sonare_eq_set_band(SonareEq* eq, int index, const char* band_json);
+/// @brief Removes all configured bands and restores zero-latency processing.
 void sonare_eq_clear(SonareEq* eq);
+/// @brief Sets the global phase mode.
+/// @param mode One of @c SONARE_EQ_PHASE_ZERO_LATENCY,
+/// @c SONARE_EQ_PHASE_NATURAL, or @c SONARE_EQ_PHASE_LINEAR.
 SonareError sonare_eq_set_phase_mode(SonareEq* eq, int mode);
+/// @brief Configures bands that match @p source to @p reference.
+/// @details Both mono buffers contain @p length samples at @p sample_rate;
+/// @p max_bands must be in [1, SONARE_EQ_MAX_BANDS].
 SonareError sonare_eq_match(SonareEq* eq, const float* source, const float* reference,
                             size_t length, int sample_rate, int max_bands);
+/// @brief Enables or disables automatic output-gain compensation. Accepts NULL.
 void sonare_eq_set_auto_gain(SonareEq* eq, int enabled);
+/// @brief Returns the automatic gain applied by the latest process call, or zero for NULL.
 float sonare_eq_last_auto_gain_db(const SonareEq* eq);
+/// @brief Sets a non-negative multiplier for all configured band gains.
 SonareError sonare_eq_set_gain_scale(SonareEq* eq, float scale);
+/// @brief Sets the final output gain in dB.
 SonareError sonare_eq_set_output_gain_db(SonareEq* eq, float gain_db);
+/// @brief Sets final output pan in [-1, 1].
 SonareError sonare_eq_set_output_pan(SonareEq* eq, float pan);
+/// @brief Returns processing latency in samples, or zero for NULL.
 int sonare_eq_latency_samples(const SonareEq* eq);
+/// @brief Sets an external detector sidechain for dynamic bands.
+/// @details The supplied planar block must have the same @p num_samples as the
+/// next @ref sonare_eq_process call. It is used only by bands with
+/// @c externalSidechain enabled.
 SonareError sonare_eq_set_sidechain(SonareEq* eq, const float* const* channels, int num_channels,
                                     int num_samples);
+/// @brief Clears the external sidechain. Accepts NULL.
 void sonare_eq_clear_sidechain(SonareEq* eq);
+/// @brief Processes one in-place planar audio block.
+/// @details @p num_samples must not exceed the @p max_block_size supplied to
+/// @ref sonare_eq_create; all @p channels must contain @p num_samples frames.
 SonareError sonare_eq_process(SonareEq* eq, float* const* channels, int num_channels,
                               int num_samples);
+/// @brief Copies the latest spectrum, per-band gain, and meter snapshot to @p out.
 SonareError sonare_eq_spectrum(const SonareEq* eq, SonareEqSnapshot* out);
 
 void sonare_free_mastering_result(SonareMasteringResult* result);
@@ -493,6 +536,25 @@ SonareError sonare_streaming_mastering_chain_process_mono(SonareStreamingMasteri
 SonareError sonare_streaming_mastering_chain_process_stereo(SonareStreamingMasteringChain* handle,
                                                             float* left, float* right,
                                                             size_t num_samples);
+
+/// @brief Emit delayed audio and finite processor tails after the final mono
+/// input block.
+/// @param capacity Maximum samples available in @p samples (must not exceed the
+///        max block size supplied to prepare).
+/// @param samples_written Receives the number of samples written. Call again
+///        until it receives zero.
+/// @details The first emitted samples include @ref
+/// sonare_streaming_mastering_chain_latency_samples leading delayed samples.
+/// Concatenate process and flush output, then discard that many leading samples
+/// when a time-aligned result is required.
+SonareError sonare_streaming_mastering_chain_flush_mono(SonareStreamingMasteringChain* handle,
+                                                        float* samples, size_t capacity,
+                                                        size_t* samples_written);
+
+/// @brief Stereo counterpart of @ref sonare_streaming_mastering_chain_flush_mono.
+SonareError sonare_streaming_mastering_chain_flush_stereo(SonareStreamingMasteringChain* handle,
+                                                          float* left, float* right,
+                                                          size_t capacity, size_t* samples_written);
 
 /// @brief Reset processor state without rebuilding.
 SonareError sonare_streaming_mastering_chain_reset(SonareStreamingMasteringChain* handle);

@@ -103,6 +103,7 @@ class StreamingMasteringChain:
         self._lib = lib
         self._handle = ctypes.c_void_p(handle)
         self._prepared_channels = 0
+        self._max_block_size = 0
 
     def prepare(self, sample_rate: int, max_block_size: int, num_channels: int) -> None:
         """Initialize processors for the given sample rate and block layout.
@@ -123,6 +124,7 @@ class StreamingMasteringChain:
         )
         _check(rc)
         self._prepared_channels = int(num_channels)
+        self._max_block_size = int(max_block_size)
 
     def process_mono(self, samples: Sequence[float] | list[float]) -> list[float]:
         """Process one mono block, returning the processed samples (length unchanged).
@@ -160,6 +162,41 @@ class StreamingMasteringChain:
         return (
             [float(left_array[i]) for i in range(left_length)],
             [float(right_array[i]) for i in range(right_length)],
+        )
+
+    def flush_mono(self) -> list[float]:
+        """Emit delayed audio and finite processor tails after the final mono block.
+
+        Call until an empty list is returned. The initial ``latency_samples`` of
+        the concatenated process/flush output are delayed; discard them when a
+        time-aligned result is required.
+        """
+        self._ensure_flush_ready()
+        block = (ctypes.c_float * self._max_block_size)()
+        written = ctypes.c_size_t()
+        rc = self._lib.sonare_streaming_mastering_chain_flush_mono(
+            self._handle, block, ctypes.c_size_t(self._max_block_size), ctypes.byref(written)
+        )
+        _check(rc)
+        return [float(block[i]) for i in range(written.value)]
+
+    def flush_stereo(self) -> tuple[list[float], list[float]]:
+        """Stereo counterpart of :meth:`flush_mono`."""
+        self._ensure_flush_ready()
+        left = (ctypes.c_float * self._max_block_size)()
+        right = (ctypes.c_float * self._max_block_size)()
+        written = ctypes.c_size_t()
+        rc = self._lib.sonare_streaming_mastering_chain_flush_stereo(
+            self._handle,
+            left,
+            right,
+            ctypes.c_size_t(self._max_block_size),
+            ctypes.byref(written),
+        )
+        _check(rc)
+        return (
+            [float(left[i]) for i in range(written.value)],
+            [float(right[i]) for i in range(written.value)],
         )
 
     def reset(self) -> None:
@@ -210,6 +247,13 @@ class StreamingMasteringChain:
     def _ensure_open(self) -> None:
         if self._handle is None or not self._handle:
             raise RuntimeError("StreamingMasteringChain is closed")
+
+    def _ensure_flush_ready(self) -> None:
+        self._ensure_open()
+        if self._max_block_size <= 0:
+            raise RuntimeError("StreamingMasteringChain must be prepared before flush")
+        if not hasattr(self._lib, "sonare_streaming_mastering_chain_flush_mono"):
+            raise RuntimeError("libsonare was built without streaming mastering flush support")
 
 
 class StreamingEqualizer:

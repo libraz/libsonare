@@ -38,6 +38,7 @@ export type {
   MasteringProcessorCatalogEntry,
   MasteringProcessRequest,
   MasteringProcessStereoRequest,
+  MasteringRealtimeCost,
   MasteringSamplesParamsRequest,
   MasteringStereoAnalyzeRequest,
   MasteringStreamingPreviewRequest,

@@ -66,6 +66,24 @@ def test_streaming_mastering_chain_processes_mono_block() -> None:
     chain.reset()
 
 
+def test_streaming_mastering_chain_flushes_delayed_output() -> None:
+    """flush_mono drains latency once and then reports completion."""
+    from libsonare import StreamingMasteringChain
+
+    with StreamingMasteringChain({"maximizer.truePeakLimiter.enabled": 1}) as chain:
+        chain.prepare(sample_rate=48000, max_block_size=64, num_channels=1)
+        assert chain.latency_samples > 0
+        chain.process_mono([0.5] + [0.0] * 63)
+        tail: list[float] = []
+        while True:
+            block = chain.flush_mono()
+            if not block:
+                break
+            tail.extend(block)
+        assert len(tail) >= chain.latency_samples
+        assert chain.flush_mono() == []
+
+
 def test_streaming_mastering_chain_preserves_ndarray_input() -> None:
     """process_* must not overwrite a float32 ndarray input (non-destructive)."""
     import numpy as np

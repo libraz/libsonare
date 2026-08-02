@@ -85,6 +85,20 @@ export class StreamingMasteringChain {
     return this.native.processStereo(left, right);
   }
 
+  /**
+   * Emit delayed audio and finite processor tails after the final mono block.
+   * Call until an empty array is returned. The first samples are delayed by
+   * {@link latencySamples}; discard that many after concatenation for aligned output.
+   */
+  flushMono(): Float32Array {
+    return this.native.flushMono();
+  }
+
+  /** Stereo counterpart of {@link flushMono}. */
+  flushStereo(): { left: Float32Array; right: Float32Array } {
+    return this.native.flushStereo();
+  }
+
   /** Reset all processor state without rebuilding. */
   reset(): void {
     this.native.reset();
@@ -249,6 +263,18 @@ const EQ_PHASE_MODES: Record<string, number> = {
   linear_phase: 3,
 };
 
+export type StreamingEqualizerPhaseMode =
+  | 'zero'
+  | 'zero-latency'
+  | 'zero_latency'
+  | 'natural'
+  | 'natural-phase'
+  | 'natural_phase'
+  | 'linear'
+  | 'linear-phase'
+  | 'linear_phase'
+  | number;
+
 /**
  * Block-by-block unified equalizer (zero-latency / natural / linear phase).
  *
@@ -279,8 +305,8 @@ export class StreamingEqualizer {
     this.native.clear();
   }
 
-  /** Set the global phase mode: ``'zero'`` | ``'natural'`` | ``'linear'`` or 1/2/3. */
-  setPhaseMode(mode: 'zero' | 'natural' | 'linear' | number): void {
+  /** Set the global phase mode, accepting the documented phase-name aliases or 1/2/3. */
+  setPhaseMode(mode: StreamingEqualizerPhaseMode): void {
     const value = typeof mode === 'number' ? mode : EQ_PHASE_MODES[mode.toLowerCase()];
     if (value === undefined) {
       throw new Error(`unknown EQ phase mode: ${mode}`);

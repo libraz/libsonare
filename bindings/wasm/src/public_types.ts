@@ -47,6 +47,8 @@ export interface CapabilityCatalogProcessor {
   stereoOnly: boolean;
   latencySamples: number;
   tailSamples: number;
+  /** Coarse realtime work estimate, or null when the processor is not an insert. */
+  realtimeCost: 'low' | 'moderate' | 'high' | null;
   channelPolicy: 'multichannel' | 'stereoPairOnly' | 'perChannel' | 'passthrough';
   category: string;
   params: CapabilityCatalogParameter[];

@@ -82,7 +82,8 @@ const char* channel_policy_to_string(ChannelPolicy policy) noexcept;
 // single JSON array. Each entry is
 //   {"id":string,"kind":"realtime"|"offline"|"pair",
 //    "realtimeInsertable":bool,"stereoOnly":bool,"latencySamples":int,
-//    "tailSamples":int,"channelPolicy":string,"category":string,
+//    "tailSamples":int,"realtimeCost":"low"|"moderate"|"high"|null,
+//    "channelPolicy":string,"category":string,
 //    "params":array}
 // where kind is pair > realtime > offline by precedence, realtimeInsertable is
 // membership in insert_factory_names(), stereoOnly is membership in
@@ -90,7 +91,9 @@ const char* channel_policy_to_string(ChannelPolicy policy) noexcept;
 // processing latency for its default configuration (0 for offline ids and for
 // config-dependent processors this is representative, not exact), tailSamples
 // is its corresponding audible decay length under the same prepared default
-// probe (0 for offline/dry-only/no-tail ids), `category` is the stable UI group
+// probe (0 for offline/dry-only/no-tail ids), realtimeCost is a coarse
+// algorithmic estimate for choosing between realtime inserts (null for
+// non-insert ids, not a hardware benchmark), `category` is the stable UI group
 // derived from the id namespace (with match.* reported as `reference`), `params`
 // contains the existing realtime-insert parameter descriptors (empty for
 // non-insert processors), and

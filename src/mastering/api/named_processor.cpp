@@ -608,6 +608,10 @@ StereoResult apply_named_processor_stereo(const std::string& name, const float* 
     }
     maximizer::TruePeakLimiter p(config);
     run_processor_stereo(p, result.left, result.right, sample_rate, result.latency_samples);
+    // The shared runner has already drained and trimmed the limiter's internal
+    // delay, exactly like loudness_optimize() on the mono path. Do not make the
+    // caller compensate an output that is already time-aligned.
+    result.latency_samples = 0;
   } else if (name == "repair.trimSilence") {
     // Stereo-native trim: detect the active range on the mono mix and slice both
     // channels by that single (union) range so they stay equal length. Trimming

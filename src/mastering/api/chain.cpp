@@ -237,6 +237,12 @@ std::optional<MonoChainResult> MasteringChain::process_mono_impl(const float* sa
 
   const int total = count_enabled_mono_stages(config_);
   int done = 0;
+  if (progress_callback_ && total == 0) {
+    progress_callback_(1.0f, "complete");
+    if constexpr (CheckCancel) {
+      if (cancel_callback_ && cancel_callback_()) return std::nullopt;
+    }
+  }
   auto report = [&](const char* stage_name) {
     result.stages.emplace_back(stage_name);
     ++done;
@@ -366,7 +372,7 @@ std::optional<MonoChainResult> MasteringChain::process_mono_impl(const float* sa
     mastering::maximizer::TruePeakLimiter processor(config_.maximizer.true_peak_limiter.config);
     run_processor_mono(processor, data, sample_rate);
     result.stage_gain_reductions.push_back(
-        {"maximizer.truePeakLimiter", processor.last_gain_reduction_db()});
+        {"maximizer.truePeakLimiter", processor.minimum_gain_reduction_db()});
     if (!report("maximizer.truePeakLimiter")) return std::nullopt;
   }
 
@@ -392,7 +398,7 @@ std::optional<MonoChainResult> MasteringChain::process_mono_impl(const float* sa
     mastering::maximizer::TruePeakLimiter processor(limiter_config);
     run_processor_mono(processor, data, sample_rate);
     result.stage_gain_reductions.push_back(
-        {"loudness.optimize", processor.last_gain_reduction_db()});
+        {"loudness.optimize", processor.minimum_gain_reduction_db()});
     if (!report("loudness.optimize")) return std::nullopt;
   }
 
@@ -437,6 +443,12 @@ std::optional<StereoChainResult> MasteringChain::process_stereo_impl(const float
 
   const int total = count_enabled_stereo_stages(config_);
   int done = 0;
+  if (progress_callback_ && total == 0) {
+    progress_callback_(1.0f, "complete");
+    if constexpr (CheckCancel) {
+      if (cancel_callback_ && cancel_callback_()) return std::nullopt;
+    }
+  }
   auto report = [&](const char* stage_name) {
     result.stages.emplace_back(stage_name);
     ++done;
@@ -580,19 +592,20 @@ std::optional<StereoChainResult> MasteringChain::process_stereo_impl(const float
     mastering::maximizer::TruePeakLimiter processor(config_.maximizer.true_peak_limiter.config);
     run_processor_stereo(processor, left, right, sample_rate);
     result.stage_gain_reductions.push_back(
-        {"maximizer.truePeakLimiter", processor.last_gain_reduction_db()});
+        {"maximizer.truePeakLimiter", processor.minimum_gain_reduction_db()});
     if (!report("maximizer.truePeakLimiter")) return std::nullopt;
   }
 
   // 18. loudness (stereo path: manual gain + TruePeakLimiter pass)
   if (config_.loudness.enabled) {
-    // Clamp the static normalization gain to the ceiling headroom (mirrors the
-    // mono loudness_optimize() helper) so the limiter is not overdriven.
+    // One BS.1770 measurement drives both the requested gain and the ceiling-clamped gain.
+    // In particular, avoid a second interleaved stereo allocation for the target-limited flag.
+    const float current_lufs = detail::stereo_integrated_lufs(left, right, sample_rate);
+    const float peak_db = detail::stereo_true_peak_dbtp(left, right, sample_rate,
+                                                        config_.loudness.true_peak_oversample);
     const float gain_db = detail::loudness_gain_db_with_ceiling(
-        left, right, sample_rate, config_.loudness.target_lufs, config_.loudness.ceiling_db,
-        config_.loudness.true_peak_oversample);
-    const float requested_gain_db =
-        config_.loudness.target_lufs - detail::stereo_integrated_lufs(left, right, sample_rate);
+        current_lufs, config_.loudness.target_lufs, config_.loudness.ceiling_db, peak_db);
+    const float requested_gain_db = config_.loudness.target_lufs - current_lufs;
     result.loudness_target_limited =
         std::isfinite(requested_gain_db) && gain_db < requested_gain_db - 1e-4f;
     if (gain_db != 0.0f) {
@@ -606,7 +619,7 @@ std::optional<StereoChainResult> MasteringChain::process_stereo_impl(const float
     mastering::maximizer::TruePeakLimiter processor(limiter_config);
     run_processor_stereo(processor, left, right, sample_rate);
     result.stage_gain_reductions.push_back(
-        {"loudness.optimize", processor.last_gain_reduction_db()});
+        {"loudness.optimize", processor.minimum_gain_reduction_db()});
     if (!report("loudness.optimize")) return std::nullopt;
   }
 

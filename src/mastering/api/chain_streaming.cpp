@@ -131,7 +131,10 @@ void StreamingMasteringChain::prepare(double sample_rate, int max_block_size, in
   stage_names_.clear();
 
   auto add_stage = [&](std::unique_ptr<rt::ProcessorBase> proc, const char* name) {
-    proc->prepare(sample_rate, max_block_size);
+    // The streaming contract has already limited this chain to mono or stereo.
+    // Preserve that bound so channel-aware stages do not allocate scratch for
+    // every realtime-supported channel.
+    proc->prepare(sample_rate, max_block_size, num_channels);
     impl_->processors.push_back(std::move(proc));
     stage_names_.emplace_back(name);
   };
@@ -220,13 +223,15 @@ void StreamingMasteringChain::prepare(double sample_rate, int max_block_size, in
             config_.loudness.ceiling_db, config_.loudness.true_peak_oversample,
             config_.loudness.release_ms, config_.loudness.apply_gain_at_input_rate);
     auto limiter = std::make_unique<mastering::maximizer::TruePeakLimiter>(limiter_config);
-    limiter->prepare(sample_rate, max_block_size);
+    limiter->prepare(sample_rate, max_block_size, num_channels);
     impl_->loudness_limiter = std::move(limiter);
     stage_names_.emplace_back("loudness.optimize");
   }
 
   prepared_channels_ = num_channels;
   max_block_size_ = max_block_size;
+  flush_samples_remaining_ = 0;
+  flush_started_ = false;
 }
 
 void StreamingMasteringChain::process_block(float* const* channels, int num_channels,
@@ -248,6 +253,8 @@ void StreamingMasteringChain::process_block(float* const* channels, int num_chan
   if (num_samples == 0) {
     return;
   }
+  flush_samples_remaining_ = 0;
+  flush_started_ = false;
   // Reject non-finite input before touching any processor so a stray NaN/Inf
   // cannot permanently pollute the filter state (recoverable only via reset()).
   // The C ABI performs this guard too; lifting it into the core keeps the
@@ -263,6 +270,11 @@ void StreamingMasteringChain::process_block(float* const* channels, int num_chan
       }
     }
   }
+  process_prevalidated(channels, num_channels, num_samples);
+}
+
+void StreamingMasteringChain::process_prevalidated(float* const* channels, int num_channels,
+                                                   int num_samples) {
   for (auto& proc : impl_->processors) {
     proc->process(channels, num_channels, num_samples);
   }
@@ -281,6 +293,36 @@ void StreamingMasteringChain::process_block(float* const* channels, int num_chan
   }
 }
 
+int StreamingMasteringChain::flush(float* const* channels, int num_channels, int max_samples) {
+  if (prepared_channels_ == 0) {
+    throw SonareException(ErrorCode::InvalidState,
+                          "StreamingMasteringChain::flush called before prepare()");
+  }
+  if (num_channels != prepared_channels_) {
+    throw SonareException(ErrorCode::InvalidParameter,
+                          "StreamingMasteringChain::flush num_channels mismatch with prepare()");
+  }
+  if (max_samples < 0 || max_samples > max_block_size_) {
+    throw SonareException(
+        ErrorCode::InvalidParameter,
+        "StreamingMasteringChain::flush max_samples exceeds max_block_size from prepare()");
+  }
+  if (max_samples == 0) return 0;
+  rt::ProcessorBase::validate_channel_buffers(channels, num_channels);
+  if (!flush_started_) {
+    flush_samples_remaining_ = latency_samples() + tail_samples();
+    flush_started_ = true;
+  }
+  if (flush_samples_remaining_ == 0) return 0;
+  const int num_samples = std::min(max_samples, flush_samples_remaining_);
+  for (int ch = 0; ch < num_channels; ++ch) {
+    std::fill(channels[ch], channels[ch] + num_samples, 0.0f);
+  }
+  process_prevalidated(channels, num_channels, num_samples);
+  flush_samples_remaining_ -= num_samples;
+  return num_samples;
+}
+
 void StreamingMasteringChain::reset() {
   for (auto& proc : impl_->processors) {
     proc->reset();
@@ -288,6 +330,8 @@ void StreamingMasteringChain::reset() {
   if (impl_->loudness_limiter) {
     impl_->loudness_limiter->reset();
   }
+  flush_samples_remaining_ = 0;
+  flush_started_ = false;
 }
 
 int StreamingMasteringChain::latency_samples() const noexcept {
@@ -297,6 +341,17 @@ int StreamingMasteringChain::latency_samples() const noexcept {
   }
   if (impl_->loudness_limiter) {
     total += impl_->loudness_limiter->latency_samples();
+  }
+  return total;
+}
+
+int StreamingMasteringChain::tail_samples() const noexcept {
+  int total = 0;
+  for (const auto& proc : impl_->processors) {
+    total += std::max(0, proc->tail_samples());
+  }
+  if (impl_->loudness_limiter) {
+    total += std::max(0, impl_->loudness_limiter->tail_samples());
   }
   return total;
 }

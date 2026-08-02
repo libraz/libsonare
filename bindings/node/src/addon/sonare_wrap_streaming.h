@@ -23,6 +23,7 @@ namespace sonare_node {
 ///   chain.prepare(sampleRate, maxBlockSize, numChannels);
 ///   const out = chain.processMono(samples);              // mono
 ///   const { left, right } = chain.processStereo(l, r);   // stereo
+///   const tail = chain.flushMono();                      // until empty
 ///   chain.reset();
 ///   chain.latencySamples();  // number
 ///   chain.stageNames();      // string[]
@@ -41,13 +42,14 @@ class StreamingMasteringChainWrap : public Napi::ObjectWrap<StreamingMasteringCh
   Napi::Value Prepare(const Napi::CallbackInfo& info);
   Napi::Value ProcessMono(const Napi::CallbackInfo& info);
   Napi::Value ProcessStereo(const Napi::CallbackInfo& info);
+  Napi::Value FlushMono(const Napi::CallbackInfo& info);
+  Napi::Value FlushStereo(const Napi::CallbackInfo& info);
   Napi::Value Reset(const Napi::CallbackInfo& info);
   Napi::Value LatencySamples(const Napi::CallbackInfo& info);
   Napi::Value StageNames(const Napi::CallbackInfo& info);
 
   std::unique_ptr<sonare::mastering::api::StreamingMasteringChain> chain_;
-
-  static Napi::FunctionReference constructor_;
+  int max_block_size_ = 0;
 };
 
 /// @brief N-API wrapper around sonare::mastering::eq::EqualizerProcessor.
@@ -93,8 +95,6 @@ class StreamingEqualizerWrap : public Napi::ObjectWrap<StreamingEqualizerWrap> {
   Napi::Reference<Napi::Float32Array> sidechain_left_;
   Napi::Reference<Napi::Float32Array> sidechain_right_;
   std::array<const float*, 2> sidechain_channels_{};
-
-  static Napi::FunctionReference constructor_;
 };
 
 class RealtimeVoiceChangerWrap : public Napi::ObjectWrap<RealtimeVoiceChangerWrap> {
@@ -132,8 +132,6 @@ class RealtimeVoiceChangerWrap : public Napi::ObjectWrap<RealtimeVoiceChangerWra
   // table into it for the planar process_block API.
   std::vector<float> planar_scratch_;
   std::vector<float*> planar_ptrs_;
-
-  static Napi::FunctionReference constructor_;
 };
 
 Napi::Value RealtimeVoiceChangerPresetNames(const Napi::CallbackInfo& info);
@@ -189,8 +187,6 @@ class StreamAnalyzerWrap : public Napi::ObjectWrap<StreamAnalyzerWrap> {
 
   sonare::StreamConfig config_;
   std::unique_ptr<sonare::StreamAnalyzer> analyzer_;
-
-  static Napi::FunctionReference constructor_;
 };
 
 }  // namespace sonare_node

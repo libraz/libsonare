@@ -104,6 +104,21 @@ export class StreamingMasteringChain {
     return this.chain.processStereo(left, right);
   }
 
+  /**
+   * Emit delayed audio and finite processor tails after the final mono block.
+   * Call until this returns an empty array. The initial `latencySamples()`
+   * samples of the concatenated stream are delayed and should be discarded for
+   * time-aligned output.
+   */
+  flushMono(): Float32Array {
+    return this.chain.flushMono();
+  }
+
+  /** Stereo counterpart of {@link flushMono}. */
+  flushStereo(): { left: Float32Array; right: Float32Array } {
+    return this.chain.flushStereo();
+  }
+
   /** Reset all processor state without rebuilding. */
   reset(): void {
     this.chain.reset();
