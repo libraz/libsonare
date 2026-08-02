@@ -3,6 +3,7 @@
 
 #ifdef __EMSCRIPTEN__
 
+#include <algorithm>
 #include <type_traits>
 
 #include "analysis/analysis_json.h"

@@ -3,6 +3,8 @@
 
 #ifdef __EMSCRIPTEN__
 
+#include <algorithm>
+
 #include "wasm/bindings/common/common.h"
 
 namespace {

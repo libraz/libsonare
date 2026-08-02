@@ -3,6 +3,8 @@
 
 #ifdef __EMSCRIPTEN__
 
+#include <algorithm>
+
 #include "c_api/midi_fx_json.h"
 #include "c_api/synth_patch_common.h"
 #include "mastering/api/insert_factory.h"

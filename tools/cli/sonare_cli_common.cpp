@@ -1,3 +1,5 @@
+#include <algorithm>
+
 #include "sonare_cli.h"
 
 std::vector<float> parse_float_list(const std::string& text) {

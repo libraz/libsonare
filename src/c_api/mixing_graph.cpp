@@ -1,3 +1,5 @@
+#include <algorithm>
+
 #include "c_api/mixing_internal.h"
 #include "mixing/gain.h"
 #include "mixing/solo_mute.h"

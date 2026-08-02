@@ -1,6 +1,7 @@
 /// @file edit_command_source_timeline.cpp
 /// @brief Source, timeline, and automation edit-command apply/invert definitions.
 
+#include <algorithm>
 #include <cmath>
 #include <utility>
 

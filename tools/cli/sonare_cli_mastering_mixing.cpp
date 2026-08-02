@@ -1,3 +1,5 @@
+#include <algorithm>
+
 #include "sonare_cli.h"
 
 #ifdef SONARE_WITH_MASTERING

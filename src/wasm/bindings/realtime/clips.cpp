@@ -3,6 +3,7 @@
 
 #ifdef __EMSCRIPTEN__
 
+#include <algorithm>
 #include <array>
 #include <atomic>
 #include <thread>

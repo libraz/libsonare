@@ -1,3 +1,5 @@
+#include <algorithm>
+
 #include "c_api/mixing_internal.h"
 #include "mixing/alignment_delay.h"
 

@@ -1,3 +1,5 @@
+#include <algorithm>
+
 #include "c_api/core_internal.h"
 
 void fill_acoustic_result(const AcousticParameters& params, SonareAcousticResult* out) {

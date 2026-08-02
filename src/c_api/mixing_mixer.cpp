@@ -1,3 +1,5 @@
+#include <algorithm>
+
 #include "c_api/mixing_internal.h"
 #include "mastering/api/named_processor.h"
 

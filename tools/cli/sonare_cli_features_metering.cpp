@@ -1,3 +1,6 @@
+#include <algorithm>
+#include <numeric>
+
 #include "sonare_cli.h"
 
 int cmd_mel(const CliArgs& args, const Audio& audio) {

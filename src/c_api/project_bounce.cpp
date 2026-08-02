@@ -1,3 +1,4 @@
+#include <algorithm>
 #include <cstring>
 
 #include "c_api/project_internal.h"
