@@ -311,7 +311,7 @@ TEST_CASE("pipe organ audio path is allocation-free", "[midi][synth][organ]") {
   }
 }
 
-// --- Phase 2: registration (multi-rank) + shared wind supply ---
+// --- Registration (multi-rank) and shared wind supply ---
 
 TEST_CASE("a footage rank shifts the sounding pitch", "[midi][synth][organ]") {
   // A single 4' rank (footage 2) sounds an octave above the played note: A3
@@ -413,7 +413,7 @@ TEST_CASE("wind sag drops pressure under load", "[midi][synth][organ]") {
   REQUIRE(loaded.pitch_ratio < 1.0f);
 }
 
-// --- Phase 3: reed (lingual) pipes ---
+// --- Reed (lingual) pipes ---
 
 /// Harmonic-to-noise ratio: power at the exact harmonic bins (1..16) versus
 /// power at the half-integer bins between them. A periodic, self-oscillating
@@ -501,7 +501,7 @@ TEST_CASE("GM reed organ fallback voices the free-reed core", "[midi][synth][org
   REQUIRE(std::fabs(estimated / 261.6256 - 1.0) < 0.03);
 }
 
-// --- Phase 3: swell box (expression shutter) ---
+// --- Swell box (expression shutter) ---
 
 /// Spectral centroid (Hz) over a window — a level-independent brightness proxy.
 double swell_centroid(const std::vector<float>& buf, size_t from) {
@@ -548,7 +548,7 @@ TEST_CASE("the swell box darkens the organ as the pedal closes", "[midi][synth][
   REQUIRE(hf_fraction(shut) < 0.5 * hf_fraction(open));
 }
 
-// --- Phase 4: mouth/radiation correction + room coupling ---
+// --- Mouth/radiation correction and room coupling ---
 
 TEST_CASE("mouth radiation brightens the pipe without moving the pitch", "[midi][synth][organ]") {
   // The radiation correction is a post-loop high-shelf: it lifts the partials

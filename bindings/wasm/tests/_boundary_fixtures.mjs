@@ -1,7 +1,7 @@
 /**
- * Shared boundary-check fixtures for the WASM audit suite. Both the Vitest
- * regression test (`audit-boundary-regressions.test.ts`) and the headless-browser
- * smoke (`scripts/audit-boundary-smoke.mjs`) import this single module — the
+ * Shared boundary-check fixtures for the WASM boundary suite. Both the Vitest
+ * regression test (`boundary-regressions.test.ts`) and the headless-browser
+ * smoke (`scripts/boundary-smoke.mjs`) import this single module — the
  * browser harness serves it verbatim over HTTP — so the invalid-input vectors and
  * signal helpers cannot drift between the two runners.
  *
@@ -67,7 +67,7 @@ export function rms(samples) {
 
 /**
  * Configure band 0 of an equalizer as a dynamic, externally-side-chained peak,
- * matching the shape both audit runners exercise.
+ * matching the shape both boundary runners exercise.
  * @param {{ setBand: (index: number, band: object) => void }} eq
  */
 export function configureDynamicEq(eq) {

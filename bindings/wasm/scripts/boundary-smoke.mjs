@@ -69,7 +69,7 @@ function expectThrow(fn, label) {
   throw new Error(label + ' did not throw');
 }
 
-window.runAuditBoundarySmoke = async () => {
+window.runBoundarySmoke = async () => {
   const wasmBinary = await fetch('/dist/sonare.wasm').then((response) => {
     if (!response.ok) throw new Error('failed to fetch sonare.wasm: ' + response.status);
     return response.arrayBuffer();
@@ -181,7 +181,7 @@ function startServer() {
   const server = http.createServer(async (req, res) => {
     try {
       const url = new URL(req.url ?? '/', 'http://localhost');
-      if (url.pathname === '/audit.html') {
+      if (url.pathname === '/boundary.html') {
         res.writeHead(200, headers('text/html'));
         res.end(browserHarness());
         return;
@@ -303,7 +303,7 @@ async function main() {
   const chromePath = await findChrome();
   const server = await startServer();
   const port = server.address().port;
-  const userDataDir = await mkdtemp(path.join(os.tmpdir(), 'sonare-audit-chrome-'));
+  const userDataDir = await mkdtemp(path.join(os.tmpdir(), 'sonare-boundary-chrome-'));
   const macArgs =
     process.platform === 'darwin'
       ? [
@@ -325,7 +325,7 @@ async function main() {
       : []),
     '--remote-debugging-port=0',
     `--user-data-dir=${userDataDir}`,
-    `http://127.0.0.1:${port}/audit.html`,
+    `http://127.0.0.1:${port}/boundary.html`,
   ]);
 
   try {
@@ -333,7 +333,7 @@ async function main() {
     const browser = new Cdp(browserWs);
     await browser.open();
     const { targetId } = await browser.send('Target.createTarget', {
-      url: `http://127.0.0.1:${port}/audit.html`,
+      url: `http://127.0.0.1:${port}/boundary.html`,
     });
     const targets = await fetch(`http://127.0.0.1:${new URL(browserWs).port}/json`).then((res) =>
       res.json(),
@@ -343,19 +343,19 @@ async function main() {
     const page = new Cdp(target.webSocketDebuggerUrl);
     await page.open();
     await page.send('Runtime.enable');
-    await waitForFunction(page, 'typeof window.runAuditBoundarySmoke === "function"');
+    await waitForFunction(page, 'typeof window.runBoundarySmoke === "function"');
     const result = await withTimeout(
       page.send('Runtime.evaluate', {
-        expression: 'window.runAuditBoundarySmoke()',
+        expression: 'window.runBoundarySmoke()',
         awaitPromise: true,
         returnByValue: true,
       }),
       30000,
-      'audit boundary browser smoke',
+      'boundary browser smoke',
     );
     if (result.exceptionDetails) throw new Error(JSON.stringify(result.exceptionDetails));
     const value = result.result.value;
-    if (!value?.ok) throw new Error('browser audit smoke failed: ' + JSON.stringify(value));
+    if (!value?.ok) throw new Error('boundary browser smoke failed: ' + JSON.stringify(value));
     if (!value.crossOriginIsolated) throw new Error('page is not cross-origin isolated');
     if (value.checks?.length !== 4)
       throw new Error('not all boundary checks ran: ' + JSON.stringify(value));

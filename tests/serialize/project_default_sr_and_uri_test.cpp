@@ -3,7 +3,7 @@
 ///        and audio-source URI preservation across a serialize -> deserialize
 ///        round-trip.
 ///
-/// These cover two audit fixes:
+/// These pin two serialization invariants:
 ///   1. The default project sample rate was raised from the lo-fi 22.05 kHz
 ///      analysis default to the conventional 48 kHz DAW render rate. Both the
 ///      in-memory Project constructor and the serializer's "sample_rate"

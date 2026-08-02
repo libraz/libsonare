@@ -17,7 +17,7 @@ import {
   sine,
 } from './_boundary_fixtures.mjs';
 
-describe('audit boundary regressions (WASM)', () => {
+describe('boundary regressions (WASM)', () => {
   beforeAll(async () => {
     await init();
   });

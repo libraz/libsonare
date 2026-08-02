@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Evaluate optional fixture report observations against Phase 3-style targets."""
+"""Evaluate optional fixture report observations against quality targets."""
 
 from __future__ import annotations
 

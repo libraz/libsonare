@@ -248,8 +248,7 @@ TEST_CASE("bow position shapes the spectrum", "[midi][synth][bowed]") {
   REQUIRE(swell_centroid(pont_tone, 8000) > swell_centroid(tasto_tone, 8000));
 }
 
-// --- Phase 2: live continuous control (CC11 speed / CC2 force / CC74 position)
-//     and vibrato ---
+// --- Live continuous control (CC11 speed / CC2 force / CC74 position) and vibrato ---
 
 /// Plays a note, renders @p pre samples, sends @p cc = @p value, then renders
 /// @p post more (a controller moved WHILE the note sounds).
@@ -308,7 +307,7 @@ TEST_CASE("bow position (CC74) shapes the tone", "[midi][synth][bowed]") {
   // single-scattering-junction model — the standing wave forms around the bow
   // point, so the note is seeded at the controller position before it speaks
   // (a mid-note move is intentionally subtle; a richer friction model would
-  // strengthen the continuous response — a Phase 4 refinement).
+  // strengthen the continuous response — an optional future refinement).
   NativeSynthPatch patch = bowed_base_patch();
   const std::vector<float> pont = render_with_initial_cc(patch, 57, 110, 24000, 74, 6);  // bright
   const std::vector<float> tasto = render_with_initial_cc(patch, 57, 110, 24000, 74, 120);  // dark
@@ -423,7 +422,7 @@ TEST_CASE("the violin-family presets are voiced bowed strings", "[midi][synth][b
   REQUIRE(violin > cello);
 }
 
-// --- Phase 4: off-by-default elasto-plastic friction ------------------------
+// --- Off-by-default elasto-plastic friction ---------------------------------
 
 TEST_CASE("elasto-plastic friction is stable and tuned across the keyboard",
           "[midi][synth][bowed]") {

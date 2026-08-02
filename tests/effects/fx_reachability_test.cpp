@@ -1,4 +1,4 @@
-// Coverage for the mastering + creative-FX audit fixes:
+// Regression coverage for mastering and creative-FX reachability:
 //   * effects.reverb.convolution now synthesizes a default IR from scene params
 //     and produces an actual wet tail (previously a dead passthrough);
 //   * the creative effects (reverbs / modulation / delay) are reachable from the
@@ -60,7 +60,7 @@ bool all_finite(const std::vector<float>& x) {
 #ifdef SONARE_WITH_FX
 
 TEST_CASE("effects.reverb.convolution produces a real wet tail from scene params",
-          "[effects][reverb][convolution][audit]") {
+          "[effects][reverb][convolution]") {
   constexpr int kSampleRate = 48000;
   constexpr std::size_t kLength = 24000;  // 0.5 s
   constexpr int kBlock = 512;
@@ -87,7 +87,7 @@ TEST_CASE("effects.reverb.convolution produces a real wet tail from scene params
 }
 
 TEST_CASE("effects.reverb.convolution default decaySec differs from a near-dry mix",
-          "[effects][reverb][convolution][audit]") {
+          "[effects][reverb][convolution]") {
   constexpr int kSampleRate = 48000;
   constexpr std::size_t kLength = 12000;
   constexpr int kBlock = 512;
@@ -114,7 +114,7 @@ TEST_CASE("effects.reverb.convolution default decaySec differs from a near-dry m
 }
 
 TEST_CASE("effects.reverb.fdn is reachable from the one-shot named-processor path",
-          "[mastering][named_processor][effects][audit]") {
+          "[mastering][named_processor][effects]") {
   constexpr int kSampleRate = 48000;
   constexpr std::size_t kLength = 24000;
 
@@ -131,7 +131,7 @@ TEST_CASE("effects.reverb.fdn is reachable from the one-shot named-processor pat
 }
 
 TEST_CASE("effects.modulation.phaser is reachable from the one-shot named-processor path",
-          "[mastering][named_processor][effects][audit]") {
+          "[mastering][named_processor][effects]") {
   constexpr int kSampleRate = 48000;
   constexpr std::size_t kLength = 12000;
 
@@ -158,7 +158,7 @@ TEST_CASE("effects.modulation.phaser is reachable from the one-shot named-proces
 }
 
 TEST_CASE("FX names are registered in insert_factory_names()",
-          "[mastering][insert_factory][effects][audit]") {
+          "[mastering][insert_factory][effects]") {
   const auto names = insert_factory_names();
   for (const char* name :
        {"effects.reverb.convolution", "effects.reverb.fdn", "effects.reverb.velvet",
@@ -168,7 +168,7 @@ TEST_CASE("FX names are registered in insert_factory_names()",
 }
 
 TEST_CASE("FX names are registered in the named-processor registry",
-          "[mastering][named_processor][effects][audit]") {
+          "[mastering][named_processor][effects]") {
   const auto names = sonare::mastering::api::processor_names();
   REQUIRE(ListContains(names, "effects.reverb.fdn"));
   REQUIRE(ListContains(names, "effects.modulation.phaser"));
@@ -177,7 +177,7 @@ TEST_CASE("FX names are registered in the named-processor registry",
 #endif  // SONARE_WITH_FX
 
 TEST_CASE("multiband.imager accepts a custom crossover with per-band settings",
-          "[mastering][multiband][imager][audit]") {
+          "[mastering][multiband][imager]") {
   constexpr int kSampleRate = 48000;
   constexpr std::size_t kLength = 8192;
 
@@ -215,7 +215,7 @@ TEST_CASE("multiband.imager accepts a custom crossover with per-band settings",
 }
 
 TEST_CASE("multiband.imager custom crossover builds as an insert without throwing",
-          "[mastering][multiband][imager][insert_factory][audit]") {
+          "[mastering][multiband][imager][insert_factory]") {
   auto processor = make_insert(
       "multiband.imager",
       R"({"cutoff0Hz":250,"cutoff1Hz":2500,"cutoff2Hz":8000,"band0.width":0.5,"band3.width":1.6})");
@@ -224,7 +224,7 @@ TEST_CASE("multiband.imager custom crossover builds as an insert without throwin
 }
 
 TEST_CASE("multiband.dynamicEq accepts a custom crossover with per-band dynamic settings",
-          "[mastering][multiband][dynamicEq][audit]") {
+          "[mastering][multiband][dynamicEq]") {
   constexpr int kSampleRate = 48000;
   constexpr std::size_t kLength = 8192;
 

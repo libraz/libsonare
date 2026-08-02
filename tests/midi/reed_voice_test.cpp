@@ -403,7 +403,7 @@ TEST_CASE("the reed-family presets are voiced reed woodwinds", "[midi][synth][re
   REQUIRE(oboe > bassoon);
 }
 
-// --- Phase 4: off-by-default advanced physics --------------------------------
+// --- Off-by-default advanced physics -----------------------------------------
 
 TEST_CASE("dynamic reed adds a resonance and stays stable", "[midi][synth][reed]") {
   // The mass-spring reed rings at its natural frequency, biasing the table and
