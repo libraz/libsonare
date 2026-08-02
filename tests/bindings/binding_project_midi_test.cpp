@@ -532,6 +532,37 @@ TEST_CASE("project C surface set_marker_ex stores kind and key signature", "[pro
   sonare_project_destroy(project);
 }
 
+TEST_CASE("project C surface preserves long UTF-8 marker names", "[project]") {
+  SonareProject* project = nullptr;
+  REQUIRE(sonare_project_create(&project) == SONARE_OK);
+
+  const std::string name =
+      u8"あいうえおあいうえおあいうえおあいうえおあいうえおあいうえおあいうえお";
+  REQUIRE(name.size() > 63u);
+  SonareProjectMarker marker{};
+  marker.ppq = 4.0;
+  uint32_t id = 0;
+  REQUIRE(sonare_project_set_marker_ex_name(project, &marker, name.c_str(), &id) == SONARE_OK);
+  REQUIRE(id != 0);
+
+  char* full_name = nullptr;
+  REQUIRE(sonare_project_marker_name_by_index(project, 0, &full_name) == SONARE_OK);
+  REQUIRE(full_name != nullptr);
+  REQUIRE(std::string(full_name) == name);
+  sonare_free_string(full_name);
+
+  char* json = nullptr;
+  size_t json_len = 0;
+  REQUIRE(sonare_project_serialize(project, &json, &json_len) == SONARE_OK);
+  REQUIRE(std::string(json, json_len).find(name) != std::string::npos);
+  sonare_free_string(json);
+
+  SonareProjectMarker legacy{};
+  REQUIRE(sonare_project_marker_by_index(project, 0, &legacy) == SONARE_OK);
+  REQUIRE(legacy.name[63] == '\0');
+  sonare_project_destroy(project);
+}
+
 TEST_CASE("project C surface preserves SMF SysEx through project serialization", "[project]") {
   const std::vector<uint8_t> smf = make_project_sysex_smf();
   const std::vector<uint8_t> payload = {0x7E, 0x7F, 0x09, 0x01, 0xF7};
@@ -872,7 +903,7 @@ TEST_CASE("project MIDI-FX quantize bake keeps short notes paired through SMF ex
   sonare_project_destroy(project);
 }
 
-TEST_CASE("project C surface rejects a salvaged truncated SMF with a diagnostic", "[project]") {
+TEST_CASE("project C surface imports a recoverable truncated SMF", "[project]") {
   std::vector<uint8_t> body = {
       0x00, 0x90, 0x3C, 0x64,  // valid note-on
       0x00, 0xFF, 0x01, 0x7F,  // text meta claims 127 missing payload bytes
@@ -889,9 +920,20 @@ TEST_CASE("project C surface rejects a salvaged truncated SMF with a diagnostic"
 
   SonareProject* project = nullptr;
   REQUIRE(sonare_project_create(&project) == SONARE_OK);
-  REQUIRE(sonare_project_import_smf(project, smf.data(), smf.size(), nullptr) ==
-          SONARE_ERROR_INVALID_FORMAT);
-  REQUIRE(std::string(sonare_last_error_message()).find("truncated") != std::string::npos);
+  uint32_t first_clip = 0;
+  REQUIRE(sonare_project_import_smf(project, smf.data(), smf.size(), &first_clip) == SONARE_OK);
+  REQUIRE(first_clip != 0);
+
+  // Exporting through the project confirms the recovered note is installed,
+  // rather than merely retained in an unreachable importer result.
+  uint8_t* exported = nullptr;
+  size_t exported_len = 0;
+  REQUIRE(sonare_project_export_smf(project, &exported, &exported_len) == SONARE_OK);
+  const auto recovered = sonare::midi::import_smf(exported, exported_len);
+  sonare_free_bytes(exported);
+  REQUIRE(recovered.ok());
+  REQUIRE(recovered.clips.size() == 1);
+  REQUIRE(recovered.clips[0].events().size() == 1);
   sonare_project_destroy(project);
 }
 

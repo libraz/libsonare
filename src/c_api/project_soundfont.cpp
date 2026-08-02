@@ -3,7 +3,7 @@
 #if defined(SONARE_WITH_ARRANGEMENT)
 #include <algorithm>
 #include <cstring>
-#include <set>
+#include <map>
 #include <tuple>
 
 #include "midi/synth/sf2_player.h"
@@ -40,10 +40,47 @@ uint16_t effective_scan_bank(const ScanChannelState& state) noexcept {
   return state.bank_msb;
 }
 
+/// Returns whether @p preset_index has at least one playable sample zone for
+/// this note. This is the same preset/instrument zone traversal as
+/// Sf2Player::note_on, without allocating a voice: a preset can exist while a
+/// key- or velocity-limited zone leaves a particular note to the synth fallback.
+bool has_renderable_zone(const synth::Sf2File& soundfont, int preset_index, uint8_t note,
+                         uint8_t velocity) noexcept {
+  if (preset_index < 0 || static_cast<size_t>(preset_index) >= soundfont.presets().size()) {
+    return false;
+  }
+  const synth::Sf2Preset& preset = soundfont.presets()[static_cast<size_t>(preset_index)];
+  const auto& instruments = soundfont.instruments();
+  const auto& samples = soundfont.samples();
+  const size_t pool_size = soundfont.sample_pool().size();
+  for (const synth::Sf2Zone& preset_zone : preset.zones) {
+    if (preset_zone.is_global() || !preset_zone.matches(note, velocity) ||
+        preset_zone.instrument < 0 ||
+        static_cast<size_t>(preset_zone.instrument) >= instruments.size()) {
+      continue;
+    }
+    const synth::Sf2Instrument& instrument =
+        instruments[static_cast<size_t>(preset_zone.instrument)];
+    for (const synth::Sf2Zone& instrument_zone : instrument.zones) {
+      if (instrument_zone.is_global() || !instrument_zone.matches(note, velocity) ||
+          instrument_zone.sample < 0 ||
+          static_cast<size_t>(instrument_zone.sample) >= samples.size()) {
+        continue;
+      }
+      const synth::Sf2Sample& sample = samples[static_cast<size_t>(instrument_zone.sample)];
+      if (!sample.is_rom() && synth::valid_sf2_sample_rate(sample.sample_rate) &&
+          sample.end > sample.start && sample.end <= pool_size) {
+        return true;
+      }
+    }
+  }
+  return false;
+}
+
 /// Builds the bounce manifest from the compiled timeline: every
 /// (channel, effective bank, program) combination a note-on actually plays
 /// through, in first-use order, resolved against the loaded SoundFont with the
-/// same GS fallback rule the player uses.
+/// same GS fallback rule and note/velocity zone checks the player uses.
 std::vector<SonareSf2ProgramStatus> build_manifest(const arr::CompiledTimeline& timeline,
                                                    const synth::Sf2File* soundfont) {
   // Merge all clip events into one (render_frame, destination, ump) stream.
@@ -73,7 +110,7 @@ std::vector<SonareSf2ProgramStatus> build_manifest(const arr::CompiledTimeline& 
   };
 
   std::vector<SonareSf2ProgramStatus> manifest;
-  std::set<std::tuple<uint8_t, uint16_t, uint8_t>> seen;
+  std::map<std::tuple<uint8_t, uint16_t, uint8_t>, size_t> manifest_index;
   using sonare::midi::UmpMessageType;
   using sonare::midi::UmpStatus;
 
@@ -128,20 +165,45 @@ std::vector<SonareSf2ProgramStatus> build_manifest(const arr::CompiledTimeline& 
       }
     } else if (u.is_note_on()) {
       const uint16_t bank = effective_scan_bank(state);
-      if (!seen.insert({channel, bank, state.program}).second) continue;
+      const auto key = std::make_tuple(channel, bank, state.program);
+      const uint16_t velocity16 = static_cast<uint16_t>(u.words[1] >> 16);
+      uint8_t velocity = u.message_type() == UmpMessageType::kMidi2ChannelVoice
+                             ? sonare::midi::scale_velocity_16_to_7(velocity16)
+                             : u.data2_7bit();
+      // Match Sf2Player's MIDI 2.0 conversion: a nonzero 16-bit note-on must
+      // not become a MIDI 1 velocity-zero note-off solely through downscaling.
+      if (u.message_type() == UmpMessageType::kMidi2ChannelVoice && velocity == 0 &&
+          velocity16 != 0) {
+        velocity = 1;
+      }
+      int preset = -1;
+      bool sf2_renders_note = false;
+      if (soundfont != nullptr) {
+        preset = synth::resolve_gs_preset(*soundfont, bank, state.program);
+        sf2_renders_note = has_renderable_zone(*soundfont, preset, u.note_number(), velocity);
+      }
+      const auto existing = manifest_index.find(key);
+      if (existing != manifest_index.end()) {
+        // One ABI entry represents all note-ons for this channel/bank/program.
+        // Be conservative: if any played note escapes the SF2's zones, callers
+        // must not be told the complete program is SF2-covered.
+        if (!sf2_renders_note) {
+          SonareSf2ProgramStatus& entry = manifest[existing->second];
+          entry.backend = SONARE_SOURCE_BACKEND_SYNTH;
+          entry.preset_name[0] = '\0';
+        }
+        continue;
+      }
       SonareSf2ProgramStatus entry{};
       entry.channel = channel;
       entry.program = state.program;
       entry.bank = bank;
       entry.backend = SONARE_SOURCE_BACKEND_SYNTH;
-      if (soundfont != nullptr) {
-        const int preset = synth::resolve_gs_preset(*soundfont, bank, state.program);
-        if (preset >= 0) {
-          entry.backend = SONARE_SOURCE_BACKEND_SF2;
-          copy_preset_name(entry.preset_name,
-                           soundfont->presets()[static_cast<size_t>(preset)].name);
-        }
+      if (sf2_renders_note) {
+        entry.backend = SONARE_SOURCE_BACKEND_SF2;
+        copy_preset_name(entry.preset_name, soundfont->presets()[static_cast<size_t>(preset)].name);
       }
+      manifest_index.emplace(key, manifest.size());
       manifest.push_back(entry);
     }
   }

@@ -135,6 +135,20 @@ struct SmfImportResult {
   uint32_t skipped_events = 0;
 
   bool ok() const noexcept { return status == SmfStatus::kOk; }
+
+  /// True when the importer recovered meaningful SMF content despite a
+  /// truncated track. Project-level import APIs may install these results,
+  /// while a completely unreadable truncated file remains an error.
+  bool recoverable() const noexcept {
+    return ok() || (status == SmfStatus::kTruncated && has_recovered_content);
+  }
+
+ private:
+  // Kept internal to the importer contract; callers should use recoverable().
+  bool has_recovered_content = false;
+
+  friend SmfImportResult import_smf(const uint8_t* data, size_t size,
+                                    const resource::MidiImportResourceLimits& limits);
 };
 
 /// Imports an in-memory SMF byte buffer. Never crashes / reads out of bounds on

@@ -344,6 +344,52 @@ TEST_CASE("SMF import parses tempo, time-signature, names, markers and notes", "
   REQUIRE(cc_count == 2);
 }
 
+TEST_CASE("SMF import preserves a valid track prefix without End-of-Track", "[midi]") {
+  std::vector<uint8_t> smf = make_known_smf();
+  // Remove the final delta + FF 2F 00 and make the chunk length match the
+  // remaining body. This models a track that is otherwise complete but lacks
+  // its terminating End-of-Track event.
+  smf.resize(smf.size() - 4);
+  const uint32_t body_size = static_cast<uint32_t>(smf.size() - 22);
+  smf[18] = static_cast<uint8_t>((body_size >> 24) & 0xFFu);
+  smf[19] = static_cast<uint8_t>((body_size >> 16) & 0xFFu);
+  smf[20] = static_cast<uint8_t>((body_size >> 8) & 0xFFu);
+  smf[21] = static_cast<uint8_t>(body_size & 0xFFu);
+
+  const SmfImportResult result = import_smf(smf);
+
+  REQUIRE_FALSE(result.ok());
+  REQUIRE(result.status == SmfStatus::kTruncated);
+  REQUIRE(result.clips.size() == 1);
+  REQUIRE(result.clips[0].events().size() == 4);
+  REQUIRE(result.tempo_segments.size() == 1);
+  REQUIRE(result.markers.size() == 1);
+}
+
+TEST_CASE("SMF import skips a set-tempo event outside the public BPM range", "[midi]") {
+  std::vector<uint8_t> smf = make_known_smf();
+  // Header (14) + MTrk chunk header (8) + delta/status/type/length (4).
+  // One microsecond per quarter is 60,000,000 BPM, above the public 100,000 cap.
+  smf[26] = 0x00;
+  smf[27] = 0x00;
+  smf[28] = 0x01;
+  const SmfImportResult result = import_smf(smf);
+  REQUIRE(result.ok());
+  REQUIRE(result.skipped_events == 1);
+  REQUIRE(result.tempo_segments.size() == 1);
+  REQUIRE(result.tempo_segments.front().bpm == Catch::Approx(120.0));
+}
+
+TEST_CASE("SMF import skips non-MTrk chunks before a declared track", "[midi]") {
+  std::vector<uint8_t> smf = make_known_smf();
+  const std::vector<uint8_t> vendor = {'J', 'U', 'N', 'K', 0, 0, 0, 1, 0x42, 0};
+  smf.insert(smf.begin() + 14, vendor.begin(), vendor.end());
+  const SmfImportResult result = import_smf(smf);
+  REQUIRE(result.ok());
+  REQUIRE(result.clips.size() == 1);
+  REQUIRE(result.skipped_events == 1);
+}
+
 TEST_CASE("SMF import normalizes invalid UTF-8 text metadata", "[midi]") {
   std::vector<uint8_t> smf = make_known_smf();
   const auto track_name = std::find(smf.begin(), smf.end(), static_cast<uint8_t>('l'));

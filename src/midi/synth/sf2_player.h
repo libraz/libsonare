@@ -9,7 +9,8 @@
 ///        (reverb / chorus / delay send-returns + per-part insert slot).
 ///
 /// One Sf2Player instance receives all 16 MIDI channels (GS multitimbral
-/// convention); channel 10 (index 9) resolves percussion via bank 128.
+/// convention); channel 10 (index 9), and any GM2 channel selected with
+/// CC0=120, resolve percussion via bank 128.
 /// Programs no SoundFont preset covers — including the no-SoundFont case —
 /// fall back to the NativeSynth GM bank (the data-free floor), so an
 /// arrangement never bounces silent because of missing data.
@@ -253,7 +254,7 @@ class Sf2Player final : public MidiInstrument {
   void reset_all_state(uint8_t reverb_send_default, uint8_t chorus_send_default) noexcept;
   /// Recompute the cached Sf2ChannelMod for @p channel after a CC/bend change.
   void refresh_channel_mod(uint8_t channel) noexcept;
-  /// Effective SF2 bank for a channel (drum channel -> 128).
+  /// Effective SF2 bank for a channel (GS rhythm parts and GM2 CC0=120 -> 128).
   uint16_t effective_bank(uint8_t channel) const noexcept;
   /// Preset index for (bank, program) with GS-style fallbacks, or -1.
   int resolve_preset(uint16_t bank, uint8_t program) const noexcept;

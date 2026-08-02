@@ -558,6 +558,7 @@ class SonareSynthInstrumentBinding(ctypes.Structure):
     _fields_ = [
         ("destination_id", ctypes.c_uint32),
         ("patch", SonareSynthPatch),
+        ("use_gm_programs", ctypes.c_uint8),
     ]
 
 
@@ -734,6 +735,3 @@ SONARE_ERROR_NOT_SUPPORTED = 6
 SONARE_ERROR_INVALID_STATE = 7
 SONARE_ERROR_CANCELLED = 8
 SONARE_ERROR_UNKNOWN = 99
-
-
-__all__ = [name for name in globals() if name.startswith(("Sonare", "SONARE_"))]

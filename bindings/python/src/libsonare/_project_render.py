@@ -193,6 +193,7 @@ class _ProjectRenderMixin:
         *,
         destination_id: int = 0,
         instruments: Sequence[tuple[int, SynthPatch | str]] | None = None,
+        auto_select_gm: bool = False,
         total_frames: int = 0,
         block_size: int = 0,
         num_channels: int = 0,
@@ -218,6 +219,10 @@ class _ProjectRenderMixin:
                 :class:`SynthPatch` field.
             instruments: Optional explicit list of ``(destination_id, patch)``
                 bindings, overriding ``instrument`` / ``destination_id``.
+            auto_select_gm: Resolve each MIDI channel from its GM bank/program
+                messages and use the GM drum-kit map on channel 10. This is
+                useful for general MIDI files; an explicit preset remains the
+                fixed patch fallback.
             total_frames: Render length in frames; <= 0 auto-derives the length
                 from the arrangement (musical end + the patch's release tail).
             block_size / num_channels / sample_rate / instrument_latency_samples:
@@ -239,6 +244,7 @@ class _ProjectRenderMixin:
         for i, (dst, patch) in enumerate(bindings):
             c_bindings[i].destination_id = dst
             c_bindings[i].patch = patch._to_c()
+            c_bindings[i].use_gm_programs = bool(auto_select_gm)
         options = SonareProjectBounceOptions(
             total_frames=int(total_frames),
             block_size=int(block_size),

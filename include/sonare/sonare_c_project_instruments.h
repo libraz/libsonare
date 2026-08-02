@@ -172,7 +172,9 @@ typedef enum {
   SONARE_SYNTH_ENUM_FILTER_OUTPUT = 3,
   SONARE_SYNTH_ENUM_BODY_TYPE = 4,
   SONARE_SYNTH_ENUM_MOD_SOURCE = 5,
-  SONARE_SYNTH_ENUM_MOD_DESTINATION = 6
+  SONARE_SYNTH_ENUM_MOD_DESTINATION = 6,
+  /// Built-in oscillator synth names, including the ``sawtooth`` alias.
+  SONARE_SYNTH_ENUM_BUILTIN_WAVEFORM = 7
 } SonareSynthEnumKind;
 
 /// @brief Returns the canonical names for a @ref SonareSynthPatch enum
@@ -180,6 +182,13 @@ typedef enum {
 /// @details Pointer is owned by libsonare and remains valid for the program
 ///          lifetime; the caller must NOT free it.
 const char* sonare_synth_enum_names(int kind);
+
+/// @brief Converts a built-in oscillator synth waveform name to its C enum value.
+/// @details Accepts the canonical names returned by
+///          @ref sonare_synth_enum_names with
+///          @ref SONARE_SYNTH_ENUM_BUILTIN_WAVEFORM, including the ``sawtooth``
+///          alias. Returns -1 for NULL or an unknown name.
+int sonare_synth_builtin_waveform_from_name(const char* name);
 
 /// @brief Fills @p out with the named catalog preset: the preset name plus the
 ///        wrapper-section values (oscillator / filter / envelopes / LFO /
@@ -193,6 +202,11 @@ SonareError sonare_synth_preset_patch(const char* name, SonareSynthPatch* out);
 typedef struct {
   uint32_t destination_id;
   SonareSynthPatch patch;
+  /// When non-zero, select melodic voices from incoming GM bank/program
+  /// messages and route MIDI channel 10 through the GM drum-kit map. The patch
+  /// remains the fallback for any unsupported mapping. Zero preserves the
+  /// explicit single-patch behavior.
+  uint8_t use_gm_programs;
 } SonareSynthInstrumentBinding;
 
 /// @brief Like @ref sonare_project_bounce, but renders MIDI tracks routed to
@@ -241,10 +255,14 @@ typedef enum {
 } SonareSourceBackend;
 
 /// @brief One bounce-manifest entry: a (channel, bank, program) combination the
-///        arrangement actually plays, with the backend it resolves to.
+///        arrangement actually plays, with its SF2-first backend coverage.
 ///        `bank` is the effective SF2 bank (drum channels report 128, melodic
 ///        channels the CC0 variation bank). `preset_name` is the resolved SF2
 ///        preset name (GS fallback included), empty for SONARE_SOURCE_BACKEND_SYNTH.
+///        SF2 is reported only when every scanned note-on for the combination
+///        matches a playable SF2 key/velocity zone. This reports default
+///        SF2-first coverage, not the optional model-first override in a
+///        SonareSf2InstrumentConfig supplied to a bounce call.
 typedef struct {
   uint8_t channel; /* MIDI channel 0-15 */
   uint8_t program; /* program number 0-127 */
@@ -258,8 +276,9 @@ typedef struct {
 ///        whether each resolves in the loaded SoundFont (GS variation/drum
 ///        fallbacks included) or would fall back to the built-in synth.
 ///        Bank select (CC0) and program-change events are tracked per
-///        (destination, channel) in event order; channel 10 resolves drums via
-///        bank 128. @p out may be NULL when @p max_entries is 0 to query the
+///        (destination, channel) in event order; channel 10 and GM2 CC0=120
+///        rhythm parts resolve drums via bank 128. @p out may be NULL when
+///        @p max_entries is 0 to query the
 ///        count: @p out_count always receives the TOTAL entry count and at most
 ///        @p max_entries entries are written.
 SonareError sonare_project_soundfont_manifest(SonareProject* project, SonareSf2ProgramStatus* out,
@@ -288,13 +307,15 @@ typedef struct {
 ///        the given destinations through a GS-compatible SoundFont player fed
 ///        by the project's loaded SoundFont (@ref
 ///        sonare_project_load_soundfont). Each bound player is multitimbral
-///        (16 MIDI channels, channel 10 drums via bank 128, GS NRPN part
+///        (16 MIDI channels; channel 10 and GM2 CC0=120 rhythm parts as drums
+///        via bank 128; GS NRPN part
 ///        edits and GS/GM SysEx resets honored); programs the SoundFont does
 ///        not cover — including bouncing with no SoundFont loaded at all —
 ///        play through the built-in synthesizer GM fallback bank (the
-///        data-free floor; see @ref sonare_project_soundfont_manifest for the
-///        per-program backend). Deterministic for a fixed project + options +
-///        SoundFont + patch.
+///        data-free floor. @ref sonare_project_soundfont_manifest reports
+///        default SF2-first coverage; model-first bindings deliberately override
+///        that report for their dedicated melodic families. Deterministic for a fixed project +
+///        options + SoundFont + patch.
 SonareError sonare_project_bounce_with_sf2_instruments(
     SonareProject* project, const SonareProjectBounceOptions* options,
     const SonareSf2InstrumentBinding* instruments, size_t instrument_count, float** out_interleaved,

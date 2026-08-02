@@ -523,7 +523,11 @@ SonareError sonare_project_import_smf(SonareProject* project, const uint8_t* byt
   }
   SONARE_C_TRY
   sonare::midi::SmfImportResult result = sonare::midi::import_smf(bytes, len);
-  if (!result.ok()) {
+  // A track that ends after a valid prefix (for example, without its optional
+  // End-of-Track meta event) is recoverable. Keep the importer's truncated
+  // status available to direct C++ callers, while installing that recovered
+  // prefix for every public project binding.
+  if (!result.recoverable()) {
     sonare_c_detail::set_last_error(result.diagnostic.c_str());
     return SONARE_ERROR_INVALID_FORMAT;
   }

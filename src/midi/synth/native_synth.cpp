@@ -232,13 +232,21 @@ void NativeSynth::note_on(uint8_t channel, uint8_t note, uint8_t velocity,
                                      static_cast<size_t>(voice_index) * plucked_string_capacity_,
                                  plucked_string_capacity_);
   }
-  // GM kit mode: resolve the struck note through the drum map instead of
-  // playing the single configured piece (static patches — safe to keep in the
-  // voice for its whole life; every kit piece is kPercussion, so the KS/piano
-  // slabs are never needed).
+  // Generic MIDI rendering resolves melodic channels from their program/bank
+  // state and channel 10 from the GM drum-kit map. Explicit percussion patches
+  // retain their existing GM-kit behavior when this mode is disabled.
   const NativeSynthPatch* patch = &config_.patch;
   uint8_t drum_kit = 0;
-  if (patch->mode == SynthEngineMode::kPercussion && patch->percussion.gm_kit) {
+  if (config_.use_gm_programs) {
+    if (ch == 9) {
+      patch = &gm_fallback_drum_patch(note);
+      drum_kit = gm_fallback_drum_kit(channels_[ch].program);
+    } else {
+      const uint16_t bank = static_cast<uint16_t>(channels_[ch].bank_msb) << 7u |
+                            static_cast<uint16_t>(channels_[ch].bank_lsb);
+      patch = &gm_fallback_patch(bank, channels_[ch].program);
+    }
+  } else if (patch->mode == SynthEngineMode::kPercussion && patch->percussion.gm_kit) {
     patch = &gm_fallback_drum_patch(note);
     drum_kit = gm_fallback_drum_kit(channels_[ch].program);
   }
@@ -427,6 +435,9 @@ void NativeSynth::control_change(uint8_t channel, uint8_t controller, uint8_t va
   const uint8_t ch = channel & 0x0Fu;
   ChannelState& st = channels_[ch];
   switch (controller) {
+    case 0:
+      st.bank_msb = value;
+      break;
     case 1:
       st.mod_wheel = value;
       refresh_channel_mod(ch);
@@ -454,6 +465,9 @@ void NativeSynth::control_change(uint8_t channel, uint8_t controller, uint8_t va
       refresh_channel_mod(ch);
       push_bow_control(ch);  // expression scales bowed-string bow speed (reed /
                              // brass loudness rides the shared expression VCA)
+      break;
+    case 32:
+      st.bank_lsb = value;
       break;
     case 74:
       st.bow_position = value;  // brightness/SC5 -> bowed-string bow position

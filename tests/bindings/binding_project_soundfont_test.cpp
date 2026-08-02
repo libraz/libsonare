@@ -36,6 +36,16 @@ std::vector<uint8_t> make_sf2_bytes() {
   pz1.target = melodic;
   b.add_preset("Piano 2", 0, 1, {pz1});
 
+  // Program 3 exists but only covers the lower keyboard. The manifest must
+  // report synth fallback when the arrangement actually plays a higher key.
+  sonare::test::Sf2Builder::ZoneSpec low_only = looped;
+  low_only.key_hi = 48;
+  low_only.target = sine_id;
+  const int low_only_instrument = b.add_instrument("low-only", {low_only});
+  sonare::test::Sf2Builder::ZoneSpec low_only_preset;
+  low_only_preset.target = low_only_instrument;
+  b.add_preset("Low Only", 0, 3, {low_only_preset});
+
   sonare::test::Sf2Builder::ZoneSpec gm2_lsb;
   gm2_lsb.target = melodic;
   b.add_preset("Piano GM2 LSB", 5, 0, {gm2_lsb});
@@ -100,7 +110,7 @@ TEST_CASE("sonare_project_load_soundfont parses, replaces and clears", "[project
 
   REQUIRE(sonare_project_load_soundfont(project, sf2.data(), sf2.size()) == SONARE_OK);
   REQUIRE(sonare_project_soundfont_preset_count(project, &count) == SONARE_OK);
-  REQUIRE(count == 4);
+  REQUIRE(count == 5);
 
   // Size-only preflight rejects before reading the one-byte pointer and keeps
   // the previously loaded SoundFont intact.
@@ -109,13 +119,13 @@ TEST_CASE("sonare_project_load_soundfont parses, replaces and clears", "[project
               project, &sentinel, sonare::resource::kDefaultSf2ResourceLimits.max_file_bytes + 1) ==
           SONARE_ERROR_INVALID_PARAMETER);
   REQUIRE(sonare_project_soundfont_preset_count(project, &count) == SONARE_OK);
-  REQUIRE(count == 4);
+  REQUIRE(count == 5);
 
   // A malformed re-load keeps the loaded soundfont.
   REQUIRE(sonare_project_load_soundfont(project, garbage, sizeof(garbage)) ==
           SONARE_ERROR_INVALID_PARAMETER);
   REQUIRE(sonare_project_soundfont_preset_count(project, &count) == SONARE_OK);
-  REQUIRE(count == 4);
+  REQUIRE(count == 5);
 
   REQUIRE(sonare_project_clear_soundfont(project) == SONARE_OK);
   REQUIRE(sonare_project_soundfont_preset_count(project, &count) == SONARE_OK);
@@ -197,6 +207,35 @@ TEST_CASE("sonare_project_soundfont_manifest reports per-program backends", "[pr
   REQUIRE(total == 4);
   REQUIRE(first.bank == 0);
   REQUIRE(first.backend == SONARE_SOURCE_BACKEND_SF2);
+
+  sonare_project_destroy(project);
+}
+
+TEST_CASE("sonare_project_soundfont_manifest rejects preset zones that miss played notes",
+          "[project][sf2]") {
+  SonareProject* project = nullptr;
+  REQUIRE(sonare_project_create(&project) == SONARE_OK);
+  REQUIRE(sonare_project_set_sample_rate(project, 48000.0) == SONARE_OK);
+
+  uint32_t track = 0;
+  uint32_t clip = 0;
+  REQUIRE(sonare_project_add_midi_clip(project, 0.0, 2.0, &track, &clip) == SONARE_OK);
+  const std::vector<SonareMidiEventPod> events = {
+      pod(0.0, midi1_word(0xC, 0, 3, 0)),    // Program 3 has a C0..C3-only SF2 zone.
+      pod(0.1, midi1_word(0x9, 0, 84, 96)),  // C6 misses it and uses the synth fallback.
+      pod(0.5, midi1_word(0x8, 0, 84, 0)),
+  };
+  REQUIRE(sonare_project_set_midi_events(project, clip, events.data(), events.size()) == SONARE_OK);
+  const std::vector<uint8_t> sf2 = make_sf2_bytes();
+  REQUIRE(sonare_project_load_soundfont(project, sf2.data(), sf2.size()) == SONARE_OK);
+
+  size_t total = 0;
+  SonareSf2ProgramStatus manifest{};
+  REQUIRE(sonare_project_soundfont_manifest(project, &manifest, 1, &total) == SONARE_OK);
+  REQUIRE(total == 1);
+  REQUIRE(manifest.program == 3);
+  REQUIRE(manifest.backend == SONARE_SOURCE_BACKEND_SYNTH);
+  REQUIRE(std::string(manifest.preset_name).empty());
 
   sonare_project_destroy(project);
 }

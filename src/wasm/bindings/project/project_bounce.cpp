@@ -50,14 +50,6 @@ SonareProjectBounceOptions ProjectWasm::bounceOptionsFromVal(val options) {
   return opts;
 }
 
-int ProjectWasm::waveformFromName(const std::string& name) {
-  if (name == "sine") return SONARE_SYNTH_WAVEFORM_SINE;
-  if (name == "saw" || name == "sawtooth") return SONARE_SYNTH_WAVEFORM_SAW;
-  if (name == "square") return SONARE_SYNTH_WAVEFORM_SQUARE;
-  if (name == "triangle") return SONARE_SYNTH_WAVEFORM_TRIANGLE;
-  return -1;
-}
-
 SonareBuiltinInstrumentBinding ProjectWasm::builtinBindingFromVal(val desc) {
   SonareBuiltinInstrumentBinding binding{};
   if (desc.isUndefined() || desc.isNull()) {
@@ -70,7 +62,7 @@ SonareBuiltinInstrumentBinding ProjectWasm::builtinBindingFromVal(val desc) {
     val wf = desc["waveform"];
     if (wf.typeOf().as<std::string>() == "string") {
       const std::string s = wf.as<std::string>();
-      const int mapped = waveformFromName(s);
+      const int mapped = sonare_synth_builtin_waveform_from_name(s.c_str());
       if (mapped < 0) {
         throw sonare::SonareException(sonare::ErrorCode::InvalidParameter,
                                       "Unknown synth waveform name: '" + s +

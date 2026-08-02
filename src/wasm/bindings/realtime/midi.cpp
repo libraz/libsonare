@@ -12,14 +12,6 @@
 
 namespace {
 
-int waveformFromName(const std::string& name) {
-  if (name == "sine") return SONARE_SYNTH_WAVEFORM_SINE;
-  if (name == "saw" || name == "sawtooth") return SONARE_SYNTH_WAVEFORM_SAW;
-  if (name == "square") return SONARE_SYNTH_WAVEFORM_SQUARE;
-  if (name == "triangle") return SONARE_SYNTH_WAVEFORM_TRIANGLE;
-  return -1;
-}
-
 void wasmMidiFxChainFromJson(const std::string& config_json, sonare::midi::MidiFxChain* chain) {
   const SonareError error = sonare_c_detail::midi_fx_chain_from_json(config_json.c_str(), chain);
   if (error == SONARE_ERROR_INVALID_FORMAT) {
@@ -41,7 +33,7 @@ void RealtimeEngineWasm::setBuiltinInstrument(uint32_t destination_id, val confi
       val wf = config["waveform"];
       if (wf.typeOf().as<std::string>() == "string") {
         const std::string name = wf.as<std::string>();
-        const int mapped = waveformFromName(name);
+        const int mapped = sonare_synth_builtin_waveform_from_name(name.c_str());
         if (mapped < 0) {
           throw sonare::SonareException(
               sonare::ErrorCode::InvalidParameter,
@@ -72,7 +64,7 @@ void RealtimeEngineWasm::setBuiltinInstrument(uint32_t destination_id, val confi
 
 void RealtimeEngineWasm::setMidiClips(val clips_val) {
 #if defined(SONARE_WITH_ARRANGEMENT)
-  const uint32_t count = clips_val["length"].as<uint32_t>();
+  const uint32_t count = static_cast<uint32_t>(wasmArrayLikeLength(clips_val, "MIDI clips"));
   std::vector<sonare::midi::MidiClipSchedule> clips;
   clips.reserve(count);
   for (uint32_t i = 0; i < count; ++i) {
@@ -431,6 +423,14 @@ uint32_t RealtimeEngineWasm::externalMidiDroppedCount() const {
 #endif
 }
 
+size_t RealtimeEngineWasm::externalMidiPendingCount() const {
+#if defined(SONARE_WITH_ARRANGEMENT)
+  return engine_.external_midi_pending_count();
+#else
+  return 0;
+#endif
+}
+
 // Drain queued external-MIDI events, already lowered to MIDI 1.0 byte
 // messages so the host can write them straight to a Web MIDI output port.
 // Each returned item is { destinationId, renderFrame, bytes: number[] };
@@ -452,7 +452,7 @@ uint32_t RealtimeEngineWasm::externalMidiDroppedCount() const {
 val RealtimeEngineWasm::drainExternalMidi(int max_records) {
   val out = val::array();
 #if defined(SONARE_WITH_ARRANGEMENT)
-  if (max_records <= 0) return out;
+  if (max_records <= 0 || engine_.external_midi_pending_count() == 0) return out;
   sonare::host::ExternalMidiRecord record{};
   int out_count = 0;
   while (out_count + 3 <= max_records) {
@@ -476,6 +476,46 @@ val RealtimeEngineWasm::drainExternalMidi(int max_records) {
   (void)max_records;
 #endif
   return out;
+}
+
+bool RealtimeEngineWasm::popExternalMidiToScratch() {
+#if defined(SONARE_WITH_ARRANGEMENT)
+  while (external_midi_lowered_index_ >= external_midi_lowered_scratch_.count) {
+    if (engine_.drain_external_midi(&external_midi_record_scratch_, 1) == 0) return false;
+    external_midi_lowered_scratch_ =
+        sonare::host::lower_external_midi_record(external_midi_record_scratch_);
+    external_midi_lowered_index_ = 0;
+  }
+  return true;
+#else
+  return false;
+#endif
+}
+
+uint32_t RealtimeEngineWasm::externalMidiScratchDestinationId() const {
+  return external_midi_record_scratch_.destination_id;
+}
+
+int64_t RealtimeEngineWasm::externalMidiScratchRenderFrame() const {
+  return external_midi_record_scratch_.event.render_frame;
+}
+
+uint32_t RealtimeEngineWasm::externalMidiScratchByteWord() const {
+  if (external_midi_lowered_index_ >= external_midi_lowered_scratch_.count) return 0;
+  const auto& message = external_midi_lowered_scratch_.messages[external_midi_lowered_index_];
+  return static_cast<uint32_t>(message.bytes[0]) | (static_cast<uint32_t>(message.bytes[1]) << 8u) |
+         (static_cast<uint32_t>(message.bytes[2]) << 16u);
+}
+
+uint32_t RealtimeEngineWasm::externalMidiScratchByteCount() const {
+  if (external_midi_lowered_index_ >= external_midi_lowered_scratch_.count) return 0;
+  return external_midi_lowered_scratch_.messages[external_midi_lowered_index_].byte_count;
+}
+
+void RealtimeEngineWasm::consumeExternalMidiScratch() {
+  if (external_midi_lowered_index_ < external_midi_lowered_scratch_.count) {
+    ++external_midi_lowered_index_;
+  }
 }
 
 void RealtimeEngineWasm::pushMidiInputNoteOn(int group, int channel, int note, int velocity,
@@ -581,12 +621,12 @@ void RealtimeEngineWasm::pushMidiUmp(uint32_t destination_id, uint32_t word0,
 void RealtimeEngineWasm::pushMidiSysex(uint32_t destination_id, val data, int64_t render_frame) {
   std::vector<uint8_t> bytes = uint8ArrayToVector(data);
   // Distinguish the two rejection classes the C ABI reports (it bypasses the
-  // C-ABI translation unit here, so the mapping is reproduced): a malformed
-  // request (empty frame) is InvalidParameter, while an oversized payload or a
-  // full command queue is OutOfMemory (transient back-pressure vs bad input).
-  if (bytes.empty()) {
+  // C-ABI translation unit here, so the mapping is reproduced): malformed or
+  // oversized requests are InvalidParameter, while a full command queue is
+  // transient OutOfMemory back-pressure.
+  if (bytes.empty() || bytes.size() > 512) {
     throw sonare::SonareException(sonare::ErrorCode::InvalidParameter,
-                                  "pushMidiSysex: data must be a non-empty SysEx frame");
+                                  "pushMidiSysex: data must contain 1..512 bytes");
   }
   if (!engine_.push_midi_sysex(destination_id, bytes.data(), bytes.size(), render_frame)) {
     throw sonare::SonareException(sonare::ErrorCode::OutOfMemory,
@@ -692,7 +732,16 @@ void registerRealtimeEngineMidi(class_<RealtimeEngineWasm>& cls) {
       .function("setMidiDestinationExternal", &RealtimeEngineWasm::setMidiDestinationExternal)
       .function("setExternalMidiClockEnabled", &RealtimeEngineWasm::setExternalMidiClockEnabled)
       .function("drainExternalMidi", &RealtimeEngineWasm::drainExternalMidi)
-      .function("externalMidiDroppedCount", &RealtimeEngineWasm::externalMidiDroppedCount);
+      .function("popExternalMidiToScratch", &RealtimeEngineWasm::popExternalMidiToScratch)
+      .function("externalMidiScratchDestinationId",
+                &RealtimeEngineWasm::externalMidiScratchDestinationId)
+      .function("externalMidiScratchRenderFrame",
+                &RealtimeEngineWasm::externalMidiScratchRenderFrame)
+      .function("externalMidiScratchByteWord", &RealtimeEngineWasm::externalMidiScratchByteWord)
+      .function("externalMidiScratchByteCount", &RealtimeEngineWasm::externalMidiScratchByteCount)
+      .function("consumeExternalMidiScratch", &RealtimeEngineWasm::consumeExternalMidiScratch)
+      .function("externalMidiDroppedCount", &RealtimeEngineWasm::externalMidiDroppedCount)
+      .function("externalMidiPendingCount", &RealtimeEngineWasm::externalMidiPendingCount);
 }
 
 #endif  // __EMSCRIPTEN__

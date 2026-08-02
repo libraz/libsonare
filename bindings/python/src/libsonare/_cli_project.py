@@ -58,7 +58,9 @@ def _project_bounce(
         }
         use_synth = force_synth or args.synth is not None
         if use_synth:
-            audio = cast(Any, project).bounce_with_synth_instrument(args.synth or None, **kwargs)
+            audio = cast(Any, project).bounce_with_synth_instrument(
+                args.synth or None, auto_select_gm=not bool(args.synth), **kwargs
+            )
         else:
             audio = cast(Any, project).bounce(**kwargs)
         frames, channels = _write_project_bounce_wav(args.output, audio, args.sample_rate)
@@ -135,7 +137,7 @@ def cmd_project(args: argparse.Namespace) -> int:
             return 1 if _legacy_exit_codes() else EXIT_INVALID_STATE
         return 0
     if subcommand == "compile":
-        project = _load_project(args.input)
+        project = cast(Project, _load_project(args.input))
         try:
             result = cast(Any, project).compile()
             if args.json:
@@ -173,7 +175,7 @@ def cmd_project(args: argparse.Namespace) -> int:
     if subcommand == "export-smf":
         if not args.output:
             raise ValueError("project export-smf requires --output")
-        project = _load_project(args.input)
+        project = cast(Project, _load_project(args.input))
         try:
             data = cast(Any, project).export_smf()
         finally:
@@ -207,7 +209,7 @@ def cmd_project(args: argparse.Namespace) -> int:
     if subcommand == "export-midi2":
         if not args.output:
             raise ValueError("project export-midi2 requires --output")
-        project = _load_project(args.input)
+        project = cast(Project, _load_project(args.input))
         try:
             data = cast(Any, project).export_clip_file()
         finally:

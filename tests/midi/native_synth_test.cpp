@@ -249,6 +249,35 @@ TEST_CASE("NativeSynth renders deterministically", "[midi][synth]") {
   REQUIRE(first.right == second.right);
 }
 
+TEST_CASE("NativeSynth GM mode follows program changes and routes channel 10 to drums",
+          "[midi][synth]") {
+  NativeSynthConfig fixed_config;
+  NativeSynth fixed(fixed_config);
+  fixed.prepare(kOutRate, 256);
+  fixed.on_event(0, event(sonare::midi::make_midi1_program_change(0, 0, 4)));  // e-piano
+  fixed.on_event(0, event(sonare::midi::make_midi1_note_on(0, 0, 60, 100)));
+  const StereoRender fixed_render = render(fixed, 2048);
+
+  NativeSynthConfig gm_config;
+  gm_config.use_gm_programs = true;
+  NativeSynth gm(gm_config);
+  gm.prepare(kOutRate, 256);
+  gm.on_event(0, event(sonare::midi::make_midi1_program_change(0, 0, 4)));  // e-piano
+  gm.on_event(0, event(sonare::midi::make_midi1_note_on(0, 0, 60, 100)));
+  const StereoRender melodic = render(gm, 2048);
+
+  REQUIRE(peak(melodic.left) > 0.001f);
+  REQUIRE(melodic.left != fixed_render.left);
+
+  NativeSynth drums(gm_config);
+  drums.prepare(kOutRate, 256);
+  drums.on_event(0, event(sonare::midi::make_midi1_program_change(0, 9, 8)));  // room kit
+  drums.on_event(0, event(sonare::midi::make_midi1_note_on(0, 9, 36, 110)));   // kick
+  const StereoRender drum_render = render(drums, 2048);
+  REQUIRE(peak(drum_render.left) > 0.001f);
+  REQUIRE(drum_render.left != melodic.left);
+}
+
 TEST_CASE("NativeSynth channel semantics: sustain, volume, all sound off", "[midi][synth]") {
   NativeSynth synth(NativeSynthConfig{});
   synth.prepare(kOutRate, 256);
@@ -515,6 +544,18 @@ TEST_CASE("Sf2Player prefers SF2 presets and falls back only when uncovered",
     player.on_event(0, event(sonare::midi::make_midi1_note_on(0, 0, 60, 110)));
     REQUIRE(peak(render(player, 2048).left) == 0.0f);
     REQUIRE(player.active_voice_count() == 0);
+  }
+  SECTION("synth_fallback=false also disables the model-first override") {
+    cfg.synth_fallback = false;
+    cfg.prefer_model_for_modeled_families = true;
+    Sf2Player player(cfg);
+    player.set_soundfont(make_single_preset_fixture());
+    player.prepare(kOutRate, 256);
+    // Program 0 is covered by the fixture and has a dedicated physical model.
+    // With fallback disabled, model-first must not bypass the SF2 preset.
+    player.on_event(0, event(sonare::midi::make_midi1_program_change(0, 0, 0)));
+    player.on_event(0, event(sonare::midi::make_midi1_note_on(0, 0, 60, 110)));
+    REQUIRE(peak(render(player, 2048).left) > 1.0e-4f);
   }
 }
 

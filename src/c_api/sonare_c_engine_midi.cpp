@@ -575,16 +575,15 @@ SonareError sonare_engine_push_midi_panic(SonareRealtimeEngine* engine, int64_t 
 SonareError sonare_engine_push_midi_sysex(SonareRealtimeEngine* engine, uint32_t destination_id,
                                           const uint8_t* data, size_t size, int64_t render_frame) {
   SONARE_C_API_ENTRY;
-  if (!engine || !data || size == 0) return SONARE_ERROR_INVALID_PARAMETER;
+  if (!engine || !data || size == 0 || size > 512) return SONARE_ERROR_INVALID_PARAMETER;
 #if !defined(SONARE_WITH_ARRANGEMENT)
   (void)destination_id;
   (void)render_frame;
   return SONARE_ERROR_NOT_SUPPORTED;
 #else
   // Copies the bytes into the engine's bounded SysEx store and enqueues a
-  // scalar-only kMidiSysExImmediate command. An oversized payload or a full
-  // command queue is reported distinctly so a host can tell a rejected message
-  // (too large) from transient back-pressure (queue full).
+  // scalar-only kMidiSysExImmediate command. The C-ABI guard above rejects an
+  // oversized payload; a failure here is transient queue back-pressure.
   if (!engine->engine.push_midi_sysex(destination_id, data, size, render_frame)) {
     return SONARE_ERROR_OUT_OF_MEMORY;
   }

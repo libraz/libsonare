@@ -320,6 +320,10 @@ struct NativeSynthConfig {
   /// DC blocker on the mix bus (the physical-model voices can carry a small
   /// DC component).
   bool dc_block = true;
+  /// Resolve each melodic channel from its GM bank/program state and route
+  /// channel 10 through the GM drum-kit map. This is intended for generic MIDI
+  /// file playback; false keeps a deliberately selected patch fixed.
+  bool use_gm_programs = false;
 };
 
 /// Standalone patch-driven MidiInstrument: all 16 channels play the same
@@ -353,7 +357,9 @@ class NativeSynth final : public MidiInstrument {
     uint8_t expression = 127;   // CC11
     uint8_t pan = 64;           // CC10
     uint8_t mod_wheel = 0;      // CC1
-    uint8_t program = 0;        // last program change (GS drum-kit select in gm_kit mode)
+    uint8_t program = 0;        // last program change (or GM melodic program)
+    uint8_t bank_msb = 0;
+    uint8_t bank_lsb = 0;
     uint16_t pitch_bend = 8192;
     /// Bowed-string continuous controllers (255 = untouched, so the preset's
     /// own bow force / position stands until the host sends the CC): CC2 breath

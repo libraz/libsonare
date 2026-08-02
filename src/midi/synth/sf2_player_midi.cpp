@@ -14,18 +14,25 @@
 
 namespace sonare::midi::synth {
 
+namespace {
+
+constexpr uint16_t kDrumBank = 128;
+
+}  // namespace
+
 void Sf2Player::note_on(uint8_t channel, uint8_t note, uint8_t velocity,
                         uint32_t source_track_id) noexcept {
   if (!prepared_) return;
   const ChannelState& ch = channels_[channel & 0x0Fu];
-  if (config_.prefer_model_for_modeled_families && !ch.drums &&
-      gm_program_has_dedicated_model(effective_bank(channel), ch.program)) {
+  const uint16_t bank = effective_bank(channel);
+  const bool is_drum = bank == kDrumBank;
+  if (config_.synth_fallback && config_.prefer_model_for_modeled_families && !is_drum &&
+      gm_program_has_dedicated_model(bank, ch.program)) {
     fallback_note_on(channel, note, velocity, source_track_id);
     return;
   }
   // No SoundFont / uncovered program -> the data-free synth floor.
-  const int preset_idx =
-      soundfont_ != nullptr ? resolve_preset(effective_bank(channel), ch.program) : -1;
+  const int preset_idx = soundfont_ != nullptr ? resolve_preset(bank, ch.program) : -1;
   if (preset_idx < 0) {
     if (config_.synth_fallback) fallback_note_on(channel, note, velocity, source_track_id);
     return;
@@ -75,7 +82,7 @@ void Sf2Player::note_on(uint8_t channel, uint8_t note, uint8_t velocity,
 
       // GS layer: NRPN part edits + per-note drum-kit overrides.
       apply_gs_part_params(params, ch.gs);
-      if (ch.drums) {
+      if (is_drum) {
         apply_gs_drum_params(params, drum_params_[channel & 0x0Fu][note & 0x7Fu]);
       }
 
@@ -102,11 +109,13 @@ void Sf2Player::note_on(uint8_t channel, uint8_t note, uint8_t velocity,
 void Sf2Player::fallback_note_on(uint8_t channel, uint8_t note, uint8_t velocity,
                                  uint32_t source_track_id) noexcept {
   const ChannelState& ch = channels_[channel & 0x0Fu];
-  const NativeSynthPatch& patch = ch.drums ? gm_fallback_drum_patch(note)
-                                           : gm_fallback_patch(effective_bank(channel), ch.program);
+  const uint16_t bank = effective_bank(channel);
+  const bool is_drum = bank == kDrumBank;
+  const NativeSynthPatch& patch =
+      is_drum ? gm_fallback_drum_patch(note) : gm_fallback_patch(bank, ch.program);
   // GM kit exclusive/mute groups (hi-hats etc.): choke the ringing group voice
   // on this channel before allocating the new strike.
-  if (ch.drums && patch.percussion.exclusive_class != 0) {
+  if (is_drum && patch.percussion.exclusive_class != 0) {
     const uint8_t excl = patch.percussion.exclusive_class;
     for (NativeSynthVoice& v : fallback_pool_) {
       if (v.active && v.channel == (channel & 0x0Fu) && v.patch != nullptr &&
@@ -168,12 +177,12 @@ void Sf2Player::fallback_note_on(uint8_t channel, uint8_t note, uint8_t velocity
   }
   // GS drum-kit variation: the drum channel's program picks the kit (Room /
   // Power / TR-808 / ...); melodic fallback voices pass 0 (no kit).
-  const uint8_t drum_kit = ch.drums ? gm_fallback_drum_kit(ch.program) : 0;
+  const uint8_t drum_kit = is_drum ? gm_fallback_drum_kit(ch.program) : 0;
   // GS per-note drum NRPN edits (pitch coarse / TVA level / absolute pan),
   // mirroring apply_gs_drum_params for the model floor (reverb/chorus sends stay
   // on the SF2 path).
   DrumVoiceMod drum_mod;
-  if (ch.drums) {
+  if (is_drum) {
     const GsDrumNoteParams& gd = drum_params_[channel & 0x0Fu][note & 0x7Fu];
     if ((gd.flags & GsDrumNoteParams::kPitch) != 0 && gd.pitch_coarse != 0) {
       drum_mod.pitch_ratio = std::exp2(static_cast<float>(gd.pitch_coarse) / 12.0f);
@@ -221,7 +230,7 @@ void Sf2Player::fallback_note_on(uint8_t channel, uint8_t note, uint8_t velocity
       body.soundboard_mix = -1.0f;
       fallback_reso_[part].prepare_guitar_sympathetic(sample_rate_);
     }
-  } else if (body.kind != FallbackBodyKind::kNone && !ch.drums) {
+  } else if (body.kind != FallbackBodyKind::kNone && !is_drum) {
     // The part moved to a program with no body resonator.
     body.kind = FallbackBodyKind::kNone;
     body.soundboard_mix = -1.0f;
@@ -395,7 +404,8 @@ void Sf2Player::apply_nrpn(uint8_t channel, uint8_t value) noexcept {
     }
     return;
   }
-  if (!st.drums) return;
+  const bool is_drum = effective_bank(ch) == kDrumBank;
+  if (!is_drum) return;
   // GS drum-kit NRPNs: msb selects the parameter, lsb is the drum note.
   GsDrumNoteParams& d = drum_params_[ch][st.params.nrpn_lsb & 0x7Fu];
   switch (st.params.nrpn_msb) {

@@ -1,3 +1,5 @@
+#include <cstring>
+
 #include "c_api/project_internal.h"
 
 #if defined(SONARE_WITH_ARRANGEMENT)
@@ -944,6 +946,7 @@ const char* sonare_synth_enum_names(int kind) {
       "default\nsubtractive\nfm\nkarplus-strong\nmodal\nadditive\npercussion\npiano\npipe-organ\n"
       "bowed-string\nreed\nbrass\nflute\nplucked-string\nvocal\nfree-reed";
   static const std::string kWaveforms = "default\nsine\nsaw\nsquare\ntriangle\nnoise";
+  static const std::string kBuiltinWaveforms = "sine\nsaw\nsawtooth\nsquare\ntriangle";
   static const std::string kFilterModels = "default\nsvf\nmoog-ladder\ndiode-ladder\nsallen-key";
   static const std::string kFilterOutputs = "default\nlowpass\nbandpass\nhighpass";
   static const std::string kBodyTypes =
@@ -968,6 +971,8 @@ const char* sonare_synth_enum_names(int kind) {
       return kModSources.c_str();
     case SONARE_SYNTH_ENUM_MOD_DESTINATION:
       return kModDestinations.c_str();
+    case SONARE_SYNTH_ENUM_BUILTIN_WAVEFORM:
+      return kBuiltinWaveforms.c_str();
     default:
       return "";
   }
@@ -975,6 +980,17 @@ const char* sonare_synth_enum_names(int kind) {
   (void)kind;
   return "";
 #endif
+}
+
+int sonare_synth_builtin_waveform_from_name(const char* name) {
+  if (name == nullptr) return -1;
+  if (std::strcmp(name, "sine") == 0) return SONARE_SYNTH_WAVEFORM_SINE;
+  if (std::strcmp(name, "saw") == 0 || std::strcmp(name, "sawtooth") == 0) {
+    return SONARE_SYNTH_WAVEFORM_SAW;
+  }
+  if (std::strcmp(name, "square") == 0) return SONARE_SYNTH_WAVEFORM_SQUARE;
+  if (std::strcmp(name, "triangle") == 0) return SONARE_SYNTH_WAVEFORM_TRIANGLE;
+  return -1;
 }
 
 SonareError sonare_synth_preset_patch(const char* name, SonareSynthPatch* out) {
@@ -1017,6 +1033,7 @@ SonareError sonare_project_bounce_with_synth_instruments(
       set_last_error(error != nullptr ? error : "invalid synth patch");
       return SONARE_ERROR_INVALID_PARAMETER;
     }
+    cfg.use_gm_programs = instruments[i].use_gm_programs != 0;
     owned.push_back(std::make_unique<sonare::midi::synth::NativeSynth>(cfg));
     hosted.push_back({instruments[i].destination_id, owned.back().get()});
   }

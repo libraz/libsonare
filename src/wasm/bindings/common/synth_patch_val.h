@@ -73,6 +73,8 @@ inline emscripten::val synthEnumTablesToVal() {
   val out = val::object();
   out.set("engineModes", array_from(sonare_synth_enum_names(SONARE_SYNTH_ENUM_ENGINE_MODE)));
   out.set("waveforms", array_from(sonare_synth_enum_names(SONARE_SYNTH_ENUM_OSC_WAVEFORM)));
+  out.set("builtinWaveforms",
+          array_from(sonare_synth_enum_names(SONARE_SYNTH_ENUM_BUILTIN_WAVEFORM)));
   out.set("filterModels", array_from(sonare_synth_enum_names(SONARE_SYNTH_ENUM_FILTER_MODEL)));
   out.set("filterOutputs", array_from(sonare_synth_enum_names(SONARE_SYNTH_ENUM_FILTER_OUTPUT)));
   out.set("bodyTypes", array_from(sonare_synth_enum_names(SONARE_SYNTH_ENUM_BODY_TYPE)));
@@ -125,6 +127,10 @@ inline SonareSynthPatch synthPatchFromVal(emscripten::val desc) {
   if (desc.typeOf().as<std::string>() == "string") {
     setPresetName(&patch, desc.as<std::string>());
     return patch;
+  }
+  if (desc.typeOf().as<std::string>() != "object") {
+    throw sonare::SonareException(sonare::ErrorCode::InvalidParameter,
+                                  "synth patch must be a preset-name string or an object");
   }
   if (hasProperty(desc, "preset")) {
     emscripten::val preset = desc["preset"];

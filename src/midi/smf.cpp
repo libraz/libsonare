@@ -353,13 +353,16 @@ bool parse_track(Reader* reader, size_t length, uint16_t ppqn, TrackParseState* 
             const uint32_t us_per_quarter = (static_cast<uint32_t>(payload[0]) << 16) |
                                             (static_cast<uint32_t>(payload[1]) << 8) |
                                             static_cast<uint32_t>(payload[2]);
-            const double bpm = us_per_quarter > 0
-                                   ? kMicrosPerMinute / static_cast<double>(us_per_quarter)
-                                   : kDefaultBpm;
-            transport::TempoSegment seg;
-            seg.start_ppq = ppq;
-            seg.bpm = bpm;
-            tempos->push_back(seg);
+            const double bpm =
+                us_per_quarter > 0 ? kMicrosPerMinute / static_cast<double>(us_per_quarter) : 0.0;
+            if (transport::valid_public_tempo(bpm)) {
+              transport::TempoSegment seg;
+              seg.start_ppq = ppq;
+              seg.bpm = bpm;
+              tempos->push_back(seg);
+            } else {
+              ++(*skipped);
+            }
           } else {
             ++(*skipped);
           }
@@ -680,28 +683,42 @@ SmfImportResult import_smf(const uint8_t* data, size_t size,
   size_t metadata_bytes = 0;
   size_t sysex_bytes = 0;
   bool any_track_truncated = false;
-  for (uint16_t t = 0; t < num_tracks; ++t) {
+  uint16_t tracks_read = 0;
+  while (tracks_read < num_tracks) {
     if (reader.remaining() == 0) {
       // Fewer track chunks than the header claimed: stop gracefully.
       break;
     }
-    if (!reader.match_tag(kMTrk)) {
-      result.status = SmfStatus::kBadTrack;
-      result.diagnostic = "missing MTrk chunk header";
+    const uint8_t* chunk_tag = reader.take(4);
+    if (chunk_tag == nullptr) {
+      result.status = SmfStatus::kTruncated;
+      result.diagnostic = "truncated SMF chunk header";
       return result;
     }
-    const uint32_t track_len = reader.u32();
+    const uint32_t chunk_len = reader.u32();
     if (reader.overflow()) {
       result.status = SmfStatus::kTruncated;
-      result.diagnostic = "truncated MTrk length";
+      result.diagnostic = "truncated SMF chunk length";
       return result;
+    }
+    const bool is_track = chunk_tag[0] == kMTrk[0] && chunk_tag[1] == kMTrk[1] &&
+                          chunk_tag[2] == kMTrk[2] && chunk_tag[3] == kMTrk[3];
+    if (!is_track) {
+      const size_t skip_length = static_cast<size_t>(chunk_len) + (chunk_len & 1u);
+      if (reader.take(skip_length) == nullptr) {
+        result.status = SmfStatus::kTruncated;
+        result.diagnostic = "truncated non-MTrk chunk";
+        return result;
+      }
+      ++result.skipped_events;
+      continue;
     }
 
     TrackParseState track;
     bool timing_overflow = false;
     bool resource_exceeded = false;
     bool track_truncated = false;
-    if (!parse_track(&reader, track_len, division, &track, &result.tempo_segments,
+    if (!parse_track(&reader, chunk_len, division, &track, &result.tempo_segments,
                      &result.time_signatures, &result.markers, &result.sysex_store,
                      &result.skipped_events, &timing_overflow, limits, &event_count,
                      &metadata_bytes, &sysex_bytes, &resource_exceeded, &track_truncated)) {
@@ -716,6 +733,7 @@ SmfImportResult import_smf(const uint8_t* data, size_t size,
       return result;
     }
     any_track_truncated = any_track_truncated || track_truncated;
+    ++tracks_read;
 
     if (track.has_midi_events) {
       track.clip.sort_stable();
@@ -728,6 +746,10 @@ SmfImportResult import_smf(const uint8_t* data, size_t size,
       result.sequence_name = std::move(track.name);
     }
   }
+
+  result.has_recovered_content = !result.clips.empty() || !result.tempo_segments.empty() ||
+                                 !result.time_signatures.empty() || !result.markers.empty() ||
+                                 !result.sequence_name.empty();
 
   // Provide sane defaults so the consumer can hand the segment vectors straight
   // to TempoMap::set_segments without an empty-vector crash.

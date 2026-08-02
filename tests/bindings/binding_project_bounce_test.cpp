@@ -343,6 +343,53 @@ TEST_CASE("bounce_with_synth_instruments validates null handles before patch con
   sonare_project_destroy(project);
 }
 
+TEST_CASE("synth bounce GM mode follows program changes through the C API", "[project]") {
+  SonareProject* project = nullptr;
+  REQUIRE(sonare_project_create(&project) == SONARE_OK);
+  REQUIRE(sonare_project_set_sample_rate(project, 48000.0) == SONARE_OK);
+
+  uint32_t track = 0;
+  uint32_t clip = 0;
+  REQUIRE(sonare_project_add_midi_clip(project, 0.0, 1.0, &track, &clip) == SONARE_OK);
+  SonareMidiEventPod events[3]{};
+  events[0] = {0.0, 0x20C00400u, 0u};  // ch. 1 program 4 (electric piano)
+  events[1] = {0.0, 0x20903C64u, 0u};  // ch. 1 note-on C4
+  events[2] = {0.5, 0x20803C00u, 0u};
+  REQUIRE(sonare_project_set_midi_events(project, clip, events, 3) == SONARE_OK);
+
+  SonareProjectBounceOptions options{};
+  options.total_frames = 12000;
+  options.block_size = 128;
+  options.num_channels = 1;
+  options.sample_rate = 48000;
+  SonareSynthInstrumentBinding fixed{};
+  fixed.destination_id = 0;
+  REQUIRE(sonare_synth_preset_patch("sine", &fixed.patch) == SONARE_OK);
+  SonareSynthInstrumentBinding gm = fixed;
+  gm.use_gm_programs = 1;
+
+  float* fixed_audio = nullptr;
+  size_t fixed_len = 0;
+  REQUIRE(sonare_project_bounce_with_synth_instruments(project, &options, &fixed, 1, &fixed_audio,
+                                                       &fixed_len) == SONARE_OK);
+  float* gm_audio = nullptr;
+  size_t gm_len = 0;
+  REQUIRE(sonare_project_bounce_with_synth_instruments(project, &options, &gm, 1, &gm_audio,
+                                                       &gm_len) == SONARE_OK);
+  REQUIRE(fixed_len == gm_len);
+  bool differs = false;
+  for (size_t i = 0; i < gm_len; ++i) {
+    if (gm_audio[i] != fixed_audio[i]) {
+      differs = true;
+      break;
+    }
+  }
+  REQUIRE(differs);
+  sonare_free_floats(fixed_audio);
+  sonare_free_floats(gm_audio);
+  sonare_project_destroy(project);
+}
+
 TEST_CASE("bounce auto-derives total_frames from the arrangement", "[project]") {
   SonareProject* project = nullptr;
   REQUIRE(sonare_project_create(&project) == SONARE_OK);
@@ -570,8 +617,9 @@ TEST_CASE("bounce renders per-track channel-strip effects", "[project]") {
   fader_lane.target_param_id = 1;  // engine::MixingRuntime::kFaderDb
   fader_lane.points = &fader_point;
   fader_lane.point_count = 1;
-  size_t lane_index = 0;
-  REQUIRE(sonare_project_add_automation_lane(base, track, &fader_lane, &lane_index) == SONARE_OK);
+  uint32_t target_param_id = 0;
+  REQUIRE(sonare_project_add_automation_lane(base, track, &fader_lane, &target_param_id) ==
+          SONARE_OK);
   const std::string json_plain = serialize(base);
   sonare_project_destroy(base);
 

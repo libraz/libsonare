@@ -343,6 +343,20 @@ TEST_CASE("Sf2Player drum channel resolves bank 128", "[midi][sf2]") {
   REQUIRE(peak(after.left) == 0.0f);  // one-shot kit sample ended
 }
 
+TEST_CASE("Sf2Player GM2 percussion bank uses drum fallback semantics", "[midi][sf2][synth]") {
+  // GM2 selects a rhythm part on any channel through CC0=120, not only the
+  // conventional channel 10. Its fallback output must therefore match the
+  // standard drum channel and honor per-note drum NRPNs.
+  Sf2Player panned = make_fallback_player();
+  panned.on_event(0, event(sonare::midi::make_midi1_control_change(0, 1, 0, 0x78)));
+  panned.on_event(0, event(sonare::midi::make_midi1_control_change(0, 1, 99, 0x1C)));
+  panned.on_event(0, event(sonare::midi::make_midi1_control_change(0, 1, 98, 36)));
+  panned.on_event(0, event(sonare::midi::make_midi1_control_change(0, 1, 6, 0)));
+  panned.on_event(0, event(sonare::midi::make_midi1_note_on(0, 1, 36, 110)));
+  const StereoRender pan = render(panned, 4096);
+  REQUIRE(peak(pan.left) > 4.0f * peak(pan.right));
+}
+
 TEST_CASE("Sf2Player unknown variation bank falls back to the capital tone", "[midi][sf2]") {
   Sf2Player player = make_player(make_fixture());
   // GS variation bank 8 is not in the fixture; program 0 must still sound.
