@@ -113,21 +113,48 @@ TEST_CASE("Voice changer normalized config JSON is a valid custom preset",
   REQUIRE(normalized == json);
 }
 
-TEST_CASE("Voice changer preset rejects removed UI macros", "[voice_changer][json]") {
+TEST_CASE("Voice changer preset expands input macros into normalized DSP",
+          "[voice_changer][json]") {
+  const std::string macro_only = R"json({
+    "schemaVersion":1,"id":"macro-voice","name":"Macro Voice",
+    "macros":{"pitch":5,"formant":1.2,"brightness":1,"space":1,
+              "intensity":0.5,"noiseControl":1,"sibilance":1}
+  })json";
+
+  std::string normalized;
+  std::string error;
+  REQUIRE(validate_realtime_voice_changer_preset_json(macro_only, &normalized, &error));
+  REQUIRE(error.empty());
+  REQUIRE(normalized.find("\"macros\"") == std::string::npos);
+
+  const auto config = realtime_voice_changer_config_from_json(normalized);
+  REQUIRE(config.retune.semitones == 5.0f);
+  REQUIRE(config.formant.factor == 1.2f);
+  REQUIRE(config.formant.brightness == 1.0f);
+  REQUIRE(config.eq.presence_db == 6.0f);
+  REQUIRE(config.eq.air_db == 4.0f);
+  REQUIRE(config.reverb.mix == 0.45f);
+  REQUIRE(config.compressor.ratio == 3.0f);
+  REQUIRE(config.gate.threshold_db == -45.0f);
+  REQUIRE(config.gate.range_db == 48.0f);
+  REQUIRE(config.deesser.threshold_db == -36.0f);
+  REQUIRE(config.deesser.range_db == 18.0f);
+}
+
+TEST_CASE("Voice changer preset DSP remains authoritative over macros", "[voice_changer][json]") {
   const auto baseline = realtime_voice_changer_preset_json(VoiceCharacterPreset::NeutralMonitor);
-  const std::string dsp_key = "\"dsp\":";
-  const auto pos = baseline.find(dsp_key);
+  const auto pos = baseline.find("\"dsp\":");
   REQUIRE(pos != std::string::npos);
   std::string with_macro = baseline;
-  with_macro.insert(pos, "\"macros\":{\"pitch\":12},");
+  with_macro.insert(pos, "\"macros\":{\"pitch\":12,\"brightness\":1},");
 
+  std::string normalized;
   std::string error;
-  REQUIRE_FALSE(validate_realtime_voice_changer_preset_json(with_macro, nullptr, &error));
-  REQUIRE(error.find("macros") != std::string::npos);
-
-  RealtimeVoiceChangerConfig config;
-  REQUIRE_FALSE(realtime_voice_changer_config_from_input(with_macro, &config, &error));
-  REQUIRE(error.find("macros") != std::string::npos);
+  REQUIRE(validate_realtime_voice_changer_preset_json(with_macro, &normalized, &error));
+  REQUIRE(normalized.find("\"macros\"") == std::string::npos);
+  const auto config = realtime_voice_changer_config_from_json(normalized);
+  REQUIRE(config.retune.semitones == 0.0f);
+  REQUIRE(config.formant.brightness == 0.1f);
 }
 
 TEST_CASE("Voice changer schemaVersion validator rejects future versions",

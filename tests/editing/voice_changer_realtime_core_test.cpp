@@ -67,6 +67,42 @@ TEST_CASE("RealtimeVoiceChanger preset JSON is tolerant and clamps values", "[vo
   REQUIRE_FALSE(error.empty());
 }
 
+TEST_CASE("RealtimeVoiceChanger macro-only preset changes rendered audio", "[voice_changer]") {
+  const std::string macro_only = R"json({
+    "schemaVersion":1,"id":"macro-render","name":"Macro Render",
+    "macros":{"pitch":4,"formant":1.15,"brightness":1,"space":0.4,
+              "intensity":0.8,"noiseControl":0.7,"sibilance":0.9}
+  })json";
+  RealtimeVoiceChangerConfig macro_config;
+  std::string error;
+  REQUIRE(realtime_voice_changer_config_from_input(macro_only, &macro_config, &error));
+  REQUIRE(error.empty());
+
+  constexpr int sample_rate = 48000;
+  constexpr int block_size = 128;
+  const auto input = sine(220.0f, sample_rate, 4096);
+  std::vector<float> baseline_out(input.size(), 0.0f);
+  std::vector<float> macro_out(input.size(), 0.0f);
+  RealtimeVoiceChanger baseline(
+      realtime_voice_changer_preset(VoiceCharacterPreset::NeutralMonitor));
+  RealtimeVoiceChanger macro(macro_config);
+  baseline.prepare(sample_rate, block_size, 1);
+  macro.prepare(sample_rate, block_size, 1);
+  for (std::size_t offset = 0; offset < input.size(); offset += block_size) {
+    baseline.process_block(input.data() + offset, baseline_out.data() + offset, block_size);
+    macro.process_block(input.data() + offset, macro_out.data() + offset, block_size);
+  }
+
+  bool differs = false;
+  for (std::size_t index = 0; index < input.size(); ++index) {
+    if (std::fabs(baseline_out[index] - macro_out[index]) > 1e-5f) {
+      differs = true;
+      break;
+    }
+  }
+  REQUIRE(differs);
+}
+
 TEST_CASE("RealtimeVoiceChanger parser expands every flat POD field", "[voice_changer]") {
   const std::string flat_pod_json = R"json({
     "inputGainDb": 1, "outputGainDb": -2, "wetMix": 0.75,

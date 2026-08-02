@@ -346,6 +346,56 @@ bool validate_dsp_section(const sonare::util::json::Value& dsp, std::string* err
   return true;
 }
 
+// Macros are a control-thread-only input shorthand. They deliberately expand
+// into the ordinary DSP config before a RealtimeVoiceChanger is constructed;
+// no macro state reaches the audio-thread POD path.
+bool apply_macro_section(const sonare::util::json::Value& macros,
+                         RealtimeVoiceChangerConfig* config, std::string* error) {
+  if (!has_allowed_keys(
+          macros,
+          {"pitch", "formant", "brightness", "space", "intensity", "noiseControl", "sibilance"},
+          "macros", error)) {
+    return false;
+  }
+  auto optional_number = [&](const char* key, double min, double max, float* target) -> bool {
+    if (macros.find(key) == nullptr) return true;
+    if (!require_number(macros, key, min, max, "macros", error)) return false;
+    *target = macros.find(key)->as_float();
+    return true;
+  };
+
+  if (!optional_number("pitch", -24.0, 24.0, &config->retune.semitones) ||
+      !optional_number("formant", 0.55, 1.65, &config->formant.factor)) {
+    return false;
+  }
+  if (const auto* value = macros.find("brightness")) {
+    if (!require_number(macros, "brightness", 0.0, 1.0, "macros", error)) return false;
+    const float centered = value->as_float() * 2.0f - 1.0f;
+    config->formant.brightness = centered;
+    config->eq.presence_db = centered * 6.0f;
+    config->eq.air_db = centered * 4.0f;
+  }
+  if (const auto* value = macros.find("space")) {
+    if (!require_number(macros, "space", 0.0, 1.0, "macros", error)) return false;
+    config->reverb.mix = value->as_float() * 0.45f;
+  }
+  if (const auto* value = macros.find("intensity")) {
+    if (!require_number(macros, "intensity", 0.0, 1.0, "macros", error)) return false;
+    config->compressor.ratio = 1.0f + value->as_float() * 4.0f;
+  }
+  if (const auto* value = macros.find("noiseControl")) {
+    if (!require_number(macros, "noiseControl", 0.0, 1.0, "macros", error)) return false;
+    config->gate.threshold_db = -90.0f + value->as_float() * 45.0f;
+    config->gate.range_db = value->as_float() * 48.0f;
+  }
+  if (const auto* value = macros.find("sibilance")) {
+    if (!require_number(macros, "sibilance", 0.0, 1.0, "macros", error)) return false;
+    config->deesser.threshold_db = -6.0f - value->as_float() * 30.0f;
+    config->deesser.range_db = value->as_float() * 18.0f;
+  }
+  return true;
+}
+
 bool config_is_finite(const RealtimeVoiceChangerConfig& c, std::string* error) {
   auto check = [&](const char* name, float v) -> bool {
     if (std::isfinite(v)) return true;
@@ -584,6 +634,13 @@ RealtimeVoiceChangerConfig realtime_voice_changer_config_from_json(std::string_v
   const auto root = sonare::util::json::parse(input);
   RealtimeVoiceChangerConfig c;
   const auto* dsp = root.find("dsp");
+  // A concrete DSP section is authoritative. This preserves saved presets that
+  // carry both their historical macro inputs and their already-expanded DSP.
+  if ((!dsp || !dsp->is_object()) && root.find("macros") != nullptr) {
+    std::string ignored_error;
+    apply_macro_section(*root.find("macros"), &c, &ignored_error);
+    return normalize_realtime_voice_changer_config(c);
+  }
   const auto& object = (dsp && dsp->is_object()) ? *dsp : root;
   c.input_gain_db = object_number(object, "inputGainDb", c.input_gain_db);
   c.output_gain_db = object_number(object, "outputGainDb", c.output_gain_db);
@@ -725,11 +782,12 @@ bool validate_realtime_voice_changer_preset_json(std::string_view json,
     // path below keeps using `parse` because it doubles as the realtime
     // C-API entry point and must stay maximally tolerant.
     const auto root = sonare::util::json::parse_strict(trim_copy(json));
-    if (!has_allowed_keys(root, {"schemaVersion", "id", "name", "description", "category", "dsp"},
-                          "$", error)) {
+    if (!has_allowed_keys(
+            root, {"schemaVersion", "id", "name", "description", "category", "macros", "dsp"}, "$",
+            error)) {
       return false;
     }
-    for (const char* key : {"schemaVersion", "id", "name", "dsp"}) {
+    for (const char* key : {"schemaVersion", "id", "name"}) {
       if (!require_key(root, key, "$", error)) return false;
     }
     // schemaVersion: JSON-Schema "type: integer, const: 1" demands an
@@ -774,7 +832,14 @@ bool validate_realtime_voice_changer_preset_json(std::string_view json,
       }
     }
     const auto* dsp = root.find("dsp");
-    if (!dsp || !validate_dsp_section(*dsp, error)) return false;
+    const auto* macros = root.find("macros");
+    if (dsp == nullptr && macros == nullptr) {
+      if (error) *error = "preset must contain dsp or macros";
+      return false;
+    }
+    if (dsp != nullptr && !validate_dsp_section(*dsp, error)) return false;
+    RealtimeVoiceChangerConfig macro_config;
+    if (macros != nullptr && !apply_macro_section(*macros, &macro_config, error)) return false;
     const auto config = realtime_voice_changer_config_from_json(trim_copy(json));
     if (normalized_json) *normalized_json = realtime_voice_changer_config_to_json(config);
     return true;

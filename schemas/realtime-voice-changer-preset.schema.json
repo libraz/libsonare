@@ -4,7 +4,8 @@
   "title": "Realtime Voice Changer Preset",
   "type": "object",
   "additionalProperties": false,
-  "required": ["schemaVersion", "id", "name", "dsp"],
+  "required": ["schemaVersion", "id", "name"],
+  "anyOf": [{"required": ["dsp"]}, {"required": ["macros"]}],
   "properties": {
     "schemaVersion": {
       "type": "integer",
@@ -22,6 +23,19 @@
     "category": {
       "type": "string",
       "enum": ["monitor", "bright", "soft", "deep", "robot", "dark", "custom"]
+    },
+    "macros": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "pitch": { "type": "number", "minimum": -24.0, "maximum": 24.0 },
+        "formant": { "type": "number", "minimum": 0.55, "maximum": 1.65 },
+        "brightness": { "type": "number", "minimum": 0.0, "maximum": 1.0 },
+        "space": { "type": "number", "minimum": 0.0, "maximum": 1.0 },
+        "intensity": { "type": "number", "minimum": 0.0, "maximum": 1.0 },
+        "noiseControl": { "type": "number", "minimum": 0.0, "maximum": 1.0 },
+        "sibilance": { "type": "number", "minimum": 0.0, "maximum": 1.0 }
+      }
     },
     "dsp": {
       "type": "object",
