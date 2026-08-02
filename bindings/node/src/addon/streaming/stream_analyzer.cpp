@@ -97,8 +97,6 @@ bool SafeSizeTFromValue(const Napi::Value& value, const char* name, size_t* out)
 
 }  // namespace
 
-Napi::FunctionReference StreamAnalyzerWrap::constructor_;
-
 Napi::Object StreamAnalyzerWrap::Init(Napi::Env env, Napi::Object exports) {
   Napi::Function func = DefineClass(
       env, "StreamAnalyzer",
@@ -120,8 +118,6 @@ Napi::Object StreamAnalyzerWrap::Init(Napi::Env env, Napi::Object exports) {
           InstanceMethod<&StreamAnalyzerWrap::SetTuningRefHz>("setTuningRefHz"),
       });
 
-  constructor_ = Napi::Persistent(func);
-  constructor_.SuppressDestruct();
   exports.Set("StreamAnalyzer", func);
   return exports;
 }
@@ -130,67 +126,79 @@ StreamAnalyzerWrap::StreamAnalyzerWrap(const Napi::CallbackInfo& info)
     : Napi::ObjectWrap<StreamAnalyzerWrap>(info) {
   Napi::Env env = info.Env();
 
-  sonare::StreamConfig config;
-  if (info.Length() >= 1 && info[0].IsObject()) {
-    Napi::Object opts = info[0].As<Napi::Object>();
-    config.sample_rate =
-        static_cast<int>(node_double_option(opts, "sampleRate", config.sample_rate));
-    config.n_fft = static_cast<int>(node_double_option(opts, "nFft", config.n_fft));
-    config.hop_length = static_cast<int>(node_double_option(opts, "hopLength", config.hop_length));
-    config.n_mels = static_cast<int>(node_double_option(opts, "nMels", config.n_mels));
-    config.fmin = static_cast<float>(node_double_option(opts, "fmin", config.fmin));
-    config.fmax = static_cast<float>(node_double_option(opts, "fmax", config.fmax));
-    config.tuning_ref_hz =
-        static_cast<float>(node_double_option(opts, "tuningRefHz", config.tuning_ref_hz));
-    config.compute_magnitude = node_bool_option(opts, "computeMagnitude", config.compute_magnitude);
-    config.compute_mel = node_bool_option(opts, "computeMel", config.compute_mel);
-    config.compute_chroma = node_bool_option(opts, "computeChroma", config.compute_chroma);
-    config.compute_onset = node_bool_option(opts, "computeOnset", config.compute_onset);
-    config.compute_spectral = node_bool_option(opts, "computeSpectral", config.compute_spectral);
-    config.emit_every_n_frames =
-        static_cast<int>(node_double_option(opts, "emitEveryNFrames", config.emit_every_n_frames));
-    config.magnitude_downsample = static_cast<int>(
-        node_double_option(opts, "magnitudeDownsample", config.magnitude_downsample));
-    const double max_pending_frames =
-        node_double_option(opts, "maxPendingFrames", config.max_pending_frames);
-    if (!sonare::numeric::checked_integral_cast(max_pending_frames, &config.max_pending_frames)) {
-      throw sonare::SonareException(sonare::ErrorCode::InvalidParameter,
-                                    "maxPendingFrames must be a non-negative integer");
-    }
-    const double max_progression_entries =
-        node_double_option(opts, "maxProgressionEntries", config.max_progression_entries);
-    if (!sonare::numeric::checked_integral_cast(max_progression_entries,
-                                                &config.max_progression_entries)) {
-      throw sonare::SonareException(sonare::ErrorCode::InvalidParameter,
-                                    "maxProgressionEntries must be a non-negative integer");
-    }
-    config.key_update_interval_sec = static_cast<float>(
-        node_double_option(opts, "keyUpdateIntervalSec", config.key_update_interval_sec));
-    config.bpm_update_interval_sec = static_cast<float>(
-        node_double_option(opts, "bpmUpdateIntervalSec", config.bpm_update_interval_sec));
-    const int window =
-        static_cast<int>(node_double_option(opts, "window", static_cast<int>(config.window)));
-    config.window = window == 1   ? sonare::WindowType::Hamming
-                    : window == 2 ? sonare::WindowType::Blackman
-                    : window == 3 ? sonare::WindowType::Rectangular
-                                  : sonare::WindowType::Hann;
-    const Napi::Value output_format_value = opts.Get("outputFormat");
-    if (!output_format_value.IsUndefined() && !output_format_value.IsNull() &&
-        (!output_format_value.IsNumber() ||
-         !std::isfinite(output_format_value.As<Napi::Number>().DoubleValue()) ||
-         output_format_value.As<Napi::Number>().DoubleValue() != 0.0)) {
-      throw sonare::SonareException(sonare::ErrorCode::InvalidParameter,
-                                    "outputFormat must be the integer 0 (Float32); use an explicit "
-                                    "quantized read method");
-    }
-    config.output_format = sonare::OutputFormat::Float32;
-  }
-
-  config_ = config;
   try {
+    sonare::StreamConfig config;
+    if (info.Length() >= 1 && info[0].IsObject()) {
+      Napi::Object opts = info[0].As<Napi::Object>();
+      config.sample_rate =
+          static_cast<int>(node_double_option(opts, "sampleRate", config.sample_rate));
+      config.n_fft = static_cast<int>(node_double_option(opts, "nFft", config.n_fft));
+      config.hop_length =
+          static_cast<int>(node_double_option(opts, "hopLength", config.hop_length));
+      config.n_mels = static_cast<int>(node_double_option(opts, "nMels", config.n_mels));
+      config.fmin = static_cast<float>(node_double_option(opts, "fmin", config.fmin));
+      config.fmax = static_cast<float>(node_double_option(opts, "fmax", config.fmax));
+      config.tuning_ref_hz =
+          static_cast<float>(node_double_option(opts, "tuningRefHz", config.tuning_ref_hz));
+      config.compute_magnitude =
+          node_bool_option(opts, "computeMagnitude", config.compute_magnitude);
+      config.compute_mel = node_bool_option(opts, "computeMel", config.compute_mel);
+      config.compute_chroma = node_bool_option(opts, "computeChroma", config.compute_chroma);
+      config.compute_onset = node_bool_option(opts, "computeOnset", config.compute_onset);
+      config.compute_spectral = node_bool_option(opts, "computeSpectral", config.compute_spectral);
+      config.emit_every_n_frames = static_cast<int>(
+          node_double_option(opts, "emitEveryNFrames", config.emit_every_n_frames));
+      config.magnitude_downsample = static_cast<int>(
+          node_double_option(opts, "magnitudeDownsample", config.magnitude_downsample));
+      const double max_pending_frames =
+          node_double_option(opts, "maxPendingFrames", config.max_pending_frames);
+      if (!sonare::numeric::checked_integral_cast(max_pending_frames, &config.max_pending_frames)) {
+        throw sonare::SonareException(sonare::ErrorCode::InvalidParameter,
+                                      "maxPendingFrames must be a non-negative integer");
+      }
+      const double max_progression_entries =
+          node_double_option(opts, "maxProgressionEntries", config.max_progression_entries);
+      if (!sonare::numeric::checked_integral_cast(max_progression_entries,
+                                                  &config.max_progression_entries)) {
+        throw sonare::SonareException(sonare::ErrorCode::InvalidParameter,
+                                      "maxProgressionEntries must be a non-negative integer");
+      }
+      config.key_update_interval_sec = static_cast<float>(
+          node_double_option(opts, "keyUpdateIntervalSec", config.key_update_interval_sec));
+      config.bpm_update_interval_sec = static_cast<float>(
+          node_double_option(opts, "bpmUpdateIntervalSec", config.bpm_update_interval_sec));
+      const int window =
+          static_cast<int>(node_double_option(opts, "window", static_cast<int>(config.window)));
+      config.window = window == 1   ? sonare::WindowType::Hamming
+                      : window == 2 ? sonare::WindowType::Blackman
+                      : window == 3 ? sonare::WindowType::Rectangular
+                                    : sonare::WindowType::Hann;
+      const Napi::Value output_format_value = opts.Get("outputFormat");
+      if (!output_format_value.IsUndefined() && !output_format_value.IsNull() &&
+          (!output_format_value.IsNumber() ||
+           !std::isfinite(output_format_value.As<Napi::Number>().DoubleValue()) ||
+           output_format_value.As<Napi::Number>().DoubleValue() != 0.0)) {
+        throw sonare::SonareException(
+            sonare::ErrorCode::InvalidParameter,
+            "outputFormat must be the integer 0 (Float32); use an explicit "
+            "quantized read method");
+      }
+      config.output_format = sonare::OutputFormat::Float32;
+    }
+
+    config_ = config;
     analyzer_ = std::make_unique<sonare::StreamAnalyzer>(config_);
+  } catch (const Napi::Error& e) {
+    e.ThrowAsJavaScriptException();
+    return;
+  } catch (const sonare::SonareException& e) {
+    ThrowSonareErrorMessage(env, CErrorFromException(e), e.what());
+    return;
   } catch (const std::exception& e) {
     Napi::Error::New(env, e.what()).ThrowAsJavaScriptException();
+    return;
+  } catch (...) {
+    Napi::Error::New(env, "Unknown error").ThrowAsJavaScriptException();
     return;
   }
 }

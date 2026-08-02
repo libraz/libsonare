@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import {
+  detectKey,
   lufs,
   masteringDynamicsCompressor,
   masteringDynamicsGate,
@@ -10,7 +11,9 @@ import {
   meteringStereoCorrelation,
   meteringTruePeakDb,
   pitchYin,
+  StreamAnalyzer,
   StreamingEqualizer,
+  tempogramRatio,
   voiceChange,
   voiceChangeRealtime,
 } from '../src/index';
@@ -134,6 +137,19 @@ describe('sample-rate guards (Node)', () => {
   });
   it('meteringDcOffset rejects an out-of-range sample rate', () => {
     expect(() => meteringDcOffset(sine(), 0)).toThrow();
+  });
+});
+
+describe('addon input errors remain catchable (Node)', () => {
+  it('converts option-parser errors into JavaScript exceptions', () => {
+    expect(() => detectKey(sine(), SR, { profile: 'bogus' })).toThrow(/invalid key profile/);
+    expect(() => detectKey(sine(), SR, { modes: ['major', 'nope'] })).toThrow(/invalid key mode/);
+    expect(() => tempogramRatio(sine(), 384, SR, 512, 'nope' as unknown as Float32Array)).toThrow(
+      /Expected Float32Array or number\[\]/,
+    );
+    expect(() => new StreamAnalyzer({ maxPendingFrames: 1.5 })).toThrow(
+      /maxPendingFrames must be a non-negative integer/,
+    );
   });
 });
 

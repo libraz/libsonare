@@ -9,30 +9,57 @@
 // Mastering — offline repair processors (declick / denoise_classical)
 // ============================================================================
 
+namespace {
+
+// Match the Node repair bindings: missing, null, undefined, and values of the
+// wrong primitive type retain the config default.  In particular, do not pass
+// embind's undefined-to-NaN coercion on to integer conversions in DSP configs.
+bool repairOptionValue(const val& options, const char* key, val* value) {
+  if (!hasProperty(options, key)) return false;
+  *value = options[key];
+  return !value->isUndefined() && !value->isNull();
+}
+
+int repairIntOption(const val& options, const char* key, int fallback) {
+  val value = val::undefined();
+  return repairOptionValue(options, key, &value) && value.typeOf().as<std::string>() == "number"
+             ? value.as<int>()
+             : fallback;
+}
+
+float repairFloatOption(const val& options, const char* key, float fallback) {
+  val value = val::undefined();
+  return repairOptionValue(options, key, &value) && value.typeOf().as<std::string>() == "number"
+             ? value.as<float>()
+             : fallback;
+}
+
+bool repairBoolOption(const val& options, const char* key, bool fallback) {
+  val value = val::undefined();
+  return repairOptionValue(options, key, &value) && value.typeOf().as<std::string>() == "boolean"
+             ? value.as<bool>()
+             : fallback;
+}
+
+}  // namespace
+
 val js_mastering_repair_declick(val samples, int sample_rate, val options) {
   Audio audio = loadValidatedAudio(samples, sample_rate);
   mastering::repair::DeclickConfig cfg;
   if (!options.isUndefined() && !options.isNull()) {
-    if (options.hasOwnProperty("threshold")) {
-      cfg.threshold = options["threshold"].as<float>();
-    }
-    if (options.hasOwnProperty("neighborRatio")) {
-      cfg.neighbor_ratio = options["neighborRatio"].as<float>();
-    }
-    if (options.hasOwnProperty("maxClickSamples")) {
-      const int v = options["maxClickSamples"].as<int>();
+    cfg.threshold = repairFloatOption(options, "threshold", cfg.threshold);
+    cfg.neighbor_ratio = repairFloatOption(options, "neighborRatio", cfg.neighbor_ratio);
+    if (hasProperty(options, "maxClickSamples")) {
+      const int v =
+          repairIntOption(options, "maxClickSamples", static_cast<int>(cfg.max_click_samples));
       if (v <= 0) {
         throw sonare::SonareException(sonare::ErrorCode::InvalidParameter,
                                       "masteringRepairDeclick: maxClickSamples must be positive");
       }
       cfg.max_click_samples = static_cast<size_t>(v);
     }
-    if (options.hasOwnProperty("lpcOrder")) {
-      cfg.lpc_order = options["lpcOrder"].as<int>();
-    }
-    if (options.hasOwnProperty("residualRatio")) {
-      cfg.residual_ratio = options["residualRatio"].as<float>();
-    }
+    cfg.lpc_order = repairIntOption(options, "lpcOrder", cfg.lpc_order);
+    cfg.residual_ratio = repairFloatOption(options, "residualRatio", cfg.residual_ratio);
   }
   Audio result = mastering::repair::declick(audio, cfg);
   std::vector<float> out(result.data(), result.data() + result.size());
@@ -77,32 +104,30 @@ val js_mastering_repair_denoise_classical(val samples, int sample_rate, val opti
   Audio audio = loadValidatedAudio(samples, sample_rate);
   mastering::repair::DenoiseClassicalConfig cfg;
   if (!options.isUndefined() && !options.isNull()) {
-    if (options.hasOwnProperty("mode")) {
-      cfg.mode = parseDenoiseMode(options["mode"].as<std::string>(), cfg.mode);
+    if (hasProperty(options, "mode")) {
+      val value = val::undefined();
+      if (repairOptionValue(options, "mode", &value)) {
+        cfg.mode = parseDenoiseMode(value.as<std::string>(), cfg.mode);
+      }
     }
-    if (options.hasOwnProperty("noiseEstimator")) {
-      cfg.noise_estimator = parseDenoiseNoiseEstimator(options["noiseEstimator"].as<std::string>(),
-                                                       cfg.noise_estimator);
+    if (hasProperty(options, "noiseEstimator")) {
+      val value = val::undefined();
+      if (repairOptionValue(options, "noiseEstimator", &value)) {
+        cfg.noise_estimator =
+            parseDenoiseNoiseEstimator(value.as<std::string>(), cfg.noise_estimator);
+      }
     }
-    if (options.hasOwnProperty("nFft")) cfg.n_fft = options["nFft"].as<int>();
-    if (options.hasOwnProperty("hopLength")) cfg.hop_length = options["hopLength"].as<int>();
-    if (options.hasOwnProperty("ddAlpha")) cfg.dd_alpha = options["ddAlpha"].as<float>();
-    if (options.hasOwnProperty("gainFloor")) cfg.gain_floor = options["gainFloor"].as<float>();
-    if (options.hasOwnProperty("overSubtraction")) {
-      cfg.over_subtraction = options["overSubtraction"].as<float>();
-    }
-    if (options.hasOwnProperty("spectralFloor")) {
-      cfg.spectral_floor = options["spectralFloor"].as<float>();
-    }
-    if (options.hasOwnProperty("noiseEstimationQuantile")) {
-      cfg.noise_estimation_quantile = options["noiseEstimationQuantile"].as<float>();
-    }
-    if (options.hasOwnProperty("speechPresenceGain")) {
-      cfg.speech_presence_gain = options["speechPresenceGain"].as<bool>();
-    }
-    if (options.hasOwnProperty("gainSmoothing")) {
-      cfg.gain_smoothing = options["gainSmoothing"].as<bool>();
-    }
+    cfg.n_fft = repairIntOption(options, "nFft", cfg.n_fft);
+    cfg.hop_length = repairIntOption(options, "hopLength", cfg.hop_length);
+    cfg.dd_alpha = repairFloatOption(options, "ddAlpha", cfg.dd_alpha);
+    cfg.gain_floor = repairFloatOption(options, "gainFloor", cfg.gain_floor);
+    cfg.over_subtraction = repairFloatOption(options, "overSubtraction", cfg.over_subtraction);
+    cfg.spectral_floor = repairFloatOption(options, "spectralFloor", cfg.spectral_floor);
+    cfg.noise_estimation_quantile =
+        repairFloatOption(options, "noiseEstimationQuantile", cfg.noise_estimation_quantile);
+    cfg.speech_presence_gain =
+        repairBoolOption(options, "speechPresenceGain", cfg.speech_presence_gain);
+    cfg.gain_smoothing = repairBoolOption(options, "gainSmoothing", cfg.gain_smoothing);
   }
   if (cfg.n_fft <= 0 || (cfg.n_fft & (cfg.n_fft - 1)) != 0) {
     throw sonare::SonareException(
@@ -122,12 +147,10 @@ val js_mastering_repair_declip(val samples, int sample_rate, val options) {
   Audio audio = loadValidatedAudio(samples, sample_rate);
   mastering::repair::DeclipConfig cfg;
   if (!options.isUndefined() && !options.isNull()) {
-    if (options.hasOwnProperty("clipThreshold")) {
-      cfg.clip_threshold = options["clipThreshold"].as<float>();
-    }
-    if (options.hasOwnProperty("lpcOrder")) cfg.lpc_order = options["lpcOrder"].as<int>();
-    if (options.hasOwnProperty("iterations")) cfg.iterations = options["iterations"].as<int>();
-    if (options.hasOwnProperty("lpcBlend")) cfg.lpc_blend = options["lpcBlend"].as<float>();
+    cfg.clip_threshold = repairFloatOption(options, "clipThreshold", cfg.clip_threshold);
+    cfg.lpc_order = repairIntOption(options, "lpcOrder", cfg.lpc_order);
+    cfg.iterations = repairIntOption(options, "iterations", cfg.iterations);
+    cfg.lpc_blend = repairFloatOption(options, "lpcBlend", cfg.lpc_blend);
   }
   Audio result = mastering::repair::declip(audio, cfg);
   std::vector<float> out(result.data(), result.data() + result.size());
@@ -168,11 +191,14 @@ val js_mastering_repair_decrackle(val samples, int sample_rate, val options) {
   Audio audio = loadValidatedAudio(samples, sample_rate);
   mastering::repair::DecrackleConfig cfg;
   if (!options.isUndefined() && !options.isNull()) {
-    if (options.hasOwnProperty("threshold")) cfg.threshold = options["threshold"].as<float>();
-    if (options.hasOwnProperty("mode")) {
-      cfg.mode = parseDecrackleMode(options["mode"].as<std::string>(), cfg.mode);
+    cfg.threshold = repairFloatOption(options, "threshold", cfg.threshold);
+    if (hasProperty(options, "mode")) {
+      val value = val::undefined();
+      if (repairOptionValue(options, "mode", &value)) {
+        cfg.mode = parseDecrackleMode(value.as<std::string>(), cfg.mode);
+      }
     }
-    if (options.hasOwnProperty("levels")) cfg.levels = options["levels"].as<int>();
+    cfg.levels = repairIntOption(options, "levels", cfg.levels);
   }
   Audio result = mastering::repair::decrackle(audio, cfg);
   std::vector<float> out(result.data(), result.data() + result.size());
@@ -183,20 +209,14 @@ val js_mastering_repair_dehum(val samples, int sample_rate, val options) {
   Audio audio = loadValidatedAudio(samples, sample_rate);
   mastering::repair::DehumConfig cfg;
   if (!options.isUndefined() && !options.isNull()) {
-    if (options.hasOwnProperty("fundamentalHz")) {
-      cfg.fundamental_hz = options["fundamentalHz"].as<float>();
-    }
-    if (options.hasOwnProperty("harmonics")) cfg.harmonics = options["harmonics"].as<int>();
-    if (options.hasOwnProperty("q")) cfg.q = options["q"].as<float>();
-    if (options.hasOwnProperty("adaptive")) cfg.adaptive = options["adaptive"].as<bool>();
-    if (options.hasOwnProperty("searchRangeHz")) {
-      cfg.search_range_hz = options["searchRangeHz"].as<float>();
-    }
-    if (options.hasOwnProperty("adaptation")) cfg.adaptation = options["adaptation"].as<float>();
-    if (options.hasOwnProperty("frameSize")) cfg.frame_size = options["frameSize"].as<int>();
-    if (options.hasOwnProperty("pllBandwidth")) {
-      cfg.pll_bandwidth = options["pllBandwidth"].as<float>();
-    }
+    cfg.fundamental_hz = repairFloatOption(options, "fundamentalHz", cfg.fundamental_hz);
+    cfg.harmonics = repairIntOption(options, "harmonics", cfg.harmonics);
+    cfg.q = repairFloatOption(options, "q", cfg.q);
+    cfg.adaptive = repairBoolOption(options, "adaptive", cfg.adaptive);
+    cfg.search_range_hz = repairFloatOption(options, "searchRangeHz", cfg.search_range_hz);
+    cfg.adaptation = repairFloatOption(options, "adaptation", cfg.adaptation);
+    cfg.frame_size = repairIntOption(options, "frameSize", cfg.frame_size);
+    cfg.pll_bandwidth = repairFloatOption(options, "pllBandwidth", cfg.pll_bandwidth);
   }
   Audio result = mastering::repair::dehum(audio, cfg);
   std::vector<float> out(result.data(), result.data() + result.size());
@@ -207,32 +227,18 @@ val js_mastering_repair_dereverb_classical(val samples, int sample_rate, val opt
   Audio audio = loadValidatedAudio(samples, sample_rate);
   mastering::repair::DereverbClassicalConfig cfg;
   if (!options.isUndefined() && !options.isNull()) {
-    if (options.hasOwnProperty("threshold")) cfg.threshold = options["threshold"].as<float>();
-    if (options.hasOwnProperty("attenuation")) {
-      cfg.attenuation = options["attenuation"].as<float>();
-    }
-    if (options.hasOwnProperty("nFft")) cfg.n_fft = options["nFft"].as<int>();
-    if (options.hasOwnProperty("hopLength")) cfg.hop_length = options["hopLength"].as<int>();
-    if (options.hasOwnProperty("t60Sec")) cfg.t60_sec = options["t60Sec"].as<float>();
-    if (options.hasOwnProperty("lateDelayMs")) {
-      cfg.late_delay_ms = options["lateDelayMs"].as<float>();
-    }
-    if (options.hasOwnProperty("overSubtraction")) {
-      cfg.over_subtraction = options["overSubtraction"].as<float>();
-    }
-    if (options.hasOwnProperty("spectralFloor")) {
-      cfg.spectral_floor = options["spectralFloor"].as<float>();
-    }
-    if (options.hasOwnProperty("wpeEnabled")) {
-      cfg.wpe_enabled = options["wpeEnabled"].as<bool>();
-    }
-    if (options.hasOwnProperty("wpeIterations")) {
-      cfg.wpe_iterations = options["wpeIterations"].as<int>();
-    }
-    if (options.hasOwnProperty("wpeTaps")) cfg.wpe_taps = options["wpeTaps"].as<int>();
-    if (options.hasOwnProperty("wpeStrength")) {
-      cfg.wpe_strength = options["wpeStrength"].as<float>();
-    }
+    cfg.threshold = repairFloatOption(options, "threshold", cfg.threshold);
+    cfg.attenuation = repairFloatOption(options, "attenuation", cfg.attenuation);
+    cfg.n_fft = repairIntOption(options, "nFft", cfg.n_fft);
+    cfg.hop_length = repairIntOption(options, "hopLength", cfg.hop_length);
+    cfg.t60_sec = repairFloatOption(options, "t60Sec", cfg.t60_sec);
+    cfg.late_delay_ms = repairFloatOption(options, "lateDelayMs", cfg.late_delay_ms);
+    cfg.over_subtraction = repairFloatOption(options, "overSubtraction", cfg.over_subtraction);
+    cfg.spectral_floor = repairFloatOption(options, "spectralFloor", cfg.spectral_floor);
+    cfg.wpe_enabled = repairBoolOption(options, "wpeEnabled", cfg.wpe_enabled);
+    cfg.wpe_iterations = repairIntOption(options, "wpeIterations", cfg.wpe_iterations);
+    cfg.wpe_taps = repairIntOption(options, "wpeTaps", cfg.wpe_taps);
+    cfg.wpe_strength = repairFloatOption(options, "wpeStrength", cfg.wpe_strength);
   }
   if (cfg.n_fft <= 0 || (cfg.n_fft & (cfg.n_fft - 1)) != 0) {
     throw sonare::SonareException(
@@ -253,9 +259,10 @@ val js_mastering_repair_trim_silence(val samples, int sample_rate, val options) 
   Audio audio = loadValidatedAudio(samples, sample_rate);
   mastering::repair::TrimSilenceConfig cfg;
   if (!options.isUndefined() && !options.isNull()) {
-    if (options.hasOwnProperty("threshold")) cfg.threshold = options["threshold"].as<float>();
-    if (options.hasOwnProperty("paddingSamples")) {
-      const int v = options["paddingSamples"].as<int>();
+    cfg.threshold = repairFloatOption(options, "threshold", cfg.threshold);
+    if (hasProperty(options, "paddingSamples")) {
+      const int v =
+          repairIntOption(options, "paddingSamples", static_cast<int>(cfg.padding_samples));
       if (v < 0) {
         throw sonare::SonareException(
             sonare::ErrorCode::InvalidParameter,
@@ -263,11 +270,14 @@ val js_mastering_repair_trim_silence(val samples, int sample_rate, val options) 
       }
       cfg.padding_samples = static_cast<size_t>(v);
     }
-    if (options.hasOwnProperty("mode")) {
-      cfg.mode = parseTrimSilenceMode(options["mode"].as<std::string>(), cfg.mode);
+    if (hasProperty(options, "mode")) {
+      val value = val::undefined();
+      if (repairOptionValue(options, "mode", &value)) {
+        cfg.mode = parseTrimSilenceMode(value.as<std::string>(), cfg.mode);
+      }
     }
-    if (options.hasOwnProperty("gateLufs")) cfg.gate_lufs = options["gateLufs"].as<float>();
-    if (options.hasOwnProperty("windowMs")) cfg.window_ms = options["windowMs"].as<float>();
+    cfg.gate_lufs = repairFloatOption(options, "gateLufs", cfg.gate_lufs);
+    cfg.window_ms = repairFloatOption(options, "windowMs", cfg.window_ms);
   }
   Audio result = mastering::repair::trim_silence(audio, cfg);
   std::vector<float> out(result.data(), result.data() + result.size());

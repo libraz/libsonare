@@ -1,3 +1,4 @@
+import { ErrorCode, SonareError } from './errors';
 import { getSonareModule } from './module_state';
 import type { ValidateOptions } from './validation';
 import { assertSamples } from './validation';
@@ -17,7 +18,11 @@ function assertOversampleFactor(fnName: string, factor: number): void {
     normalized > 16 ||
     (normalized & (normalized - 1)) !== 0
   ) {
-    throw new RangeError(`${fnName}: oversampleFactor must be 0 or a power of two from 1 to 16`);
+    throw new SonareError(
+      ErrorCode.InvalidParameter,
+      'InvalidParameter',
+      `${fnName}: oversampleFactor must be 0 or a power of two from 1 to 16`,
+    );
   }
 }
 

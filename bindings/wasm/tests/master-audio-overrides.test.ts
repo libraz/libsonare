@@ -10,6 +10,14 @@ const samples = Float32Array.from(
 beforeAll(async () => init());
 
 describe('WASM masterAudio nested overrides (H-1)', () => {
+  it('rejects non-numeric and non-boolean overrides instead of silently dropping them', () => {
+    expect(() =>
+      masterAudio(samples, sampleRate, 'pop', {
+        loudness: { targetLufs: 'not-a-number' },
+      } as unknown as Parameters<typeof masterAudio>[3]),
+    ).toThrow(TypeError);
+  });
+
   it('applies nested MasteringChainConfig overrides instead of silently dropping them', () => {
     const loud = masterAudio(samples, sampleRate, 'pop', { loudness: { targetLufs: -8 } });
     const quiet = masterAudio(samples, sampleRate, 'pop', { loudness: { targetLufs: -24 } });

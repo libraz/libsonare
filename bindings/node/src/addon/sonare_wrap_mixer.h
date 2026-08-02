@@ -104,8 +104,6 @@ class MixerWrap : public Napi::ObjectWrap<MixerWrap> {
   int block_size_ = 0;
   /// Warning message captured at construction (newline-joined; empty if none).
   std::string scene_warning_;
-
-  static Napi::FunctionReference constructor_;
 };
 
 }  // namespace sonare_node

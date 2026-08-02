@@ -406,7 +406,7 @@ class _ProjectMidiMixin:
             remap_channel=int(cfg_map.get("remap_channel", -1)),
             thru=int(cfg_map.get("thru", 1)),
         )
-        out = (SonareMidiEventPod * n)() if n else None
+        out = (SonareMidiEventPod * n)()
         out_count = ctypes.c_size_t()
         overflowed = ctypes.c_int()
         overflow_count = ctypes.c_uint32()

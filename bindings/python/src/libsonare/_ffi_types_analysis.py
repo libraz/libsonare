@@ -385,6 +385,3 @@ class SonareMusicAnalyzeOptions(ctypes.Structure):
         ("chord_hmm_beam_width", ctypes.c_int),
         ("detect_chord_inversions", ctypes.c_int),
     ]
-
-
-__all__ = [name for name in globals() if name.startswith(("Sonare", "SONARE_"))]

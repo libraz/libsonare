@@ -3,15 +3,26 @@
 
 #ifdef __EMSCRIPTEN__
 
+#include <cmath>
+
 #include "realtime_engine_wasm.h"
 
 namespace {
 
-sonare::engine::CaptureSource captureSourceFromName(const std::string& source) {
-  if (source == "output") return sonare::engine::CaptureSource::kOutput;
-  if (source == "input") return sonare::engine::CaptureSource::kInput;
+sonare::engine::CaptureSource captureSourceFromVal(const val& source) {
+  if (source.typeOf().as<std::string>() == "string") {
+    const std::string name = source.as<std::string>();
+    if (name == "output") return sonare::engine::CaptureSource::kOutput;
+    if (name == "input") return sonare::engine::CaptureSource::kInput;
+  } else if (source.typeOf().as<std::string>() == "number") {
+    const double ordinal = source.as<double>();
+    if (std::isfinite(ordinal) && std::floor(ordinal) == ordinal) {
+      if (ordinal == 0) return sonare::engine::CaptureSource::kOutput;
+      if (ordinal == 1) return sonare::engine::CaptureSource::kInput;
+    }
+  }
   throw sonare::SonareException(sonare::ErrorCode::InvalidParameter,
-                                "capture source must be 'output' or 'input'");
+                                "capture source must be 'output' or 'input' (or ordinal 0 or 1)");
 }
 
 const char* captureSourceName(sonare::engine::CaptureSource source) {
@@ -38,10 +49,14 @@ void RealtimeEngineWasm::setCaptureBuffer(int num_channels, int capacity_frames)
 
 void RealtimeEngineWasm::armCapture(bool armed) { engine_.set_capture_armed(armed); }
 void RealtimeEngineWasm::setCapturePunch(int64_t start_sample, int64_t end_sample, bool enabled) {
+  if (start_sample < 0 || end_sample < start_sample) {
+    throw sonare::SonareException(sonare::ErrorCode::InvalidParameter,
+                                  "capture punch range must satisfy 0 <= start <= end");
+  }
   engine_.set_capture_punch(start_sample, end_sample, enabled);
 }
-void RealtimeEngineWasm::setCaptureSource(std::string source) {
-  engine_.set_capture_source(captureSourceFromName(source));
+void RealtimeEngineWasm::setCaptureSource(val source) {
+  engine_.set_capture_source(captureSourceFromVal(source));
 }
 void RealtimeEngineWasm::setRecordOffsetSamples(int64_t offset_samples) {
   engine_.set_record_offset_samples(offset_samples);

@@ -180,8 +180,19 @@ val js_pitch_correct_timevarying(val samples, int sample_rate, val f0_hz, int ho
   std::vector<float> voiced_vec;
   std::vector<float> prob_vec;
   if (!options.isUndefined() && !options.isNull()) {
-    const std::string mode = stringProperty(options, "mode", "midi");
-    scale_mode = mode == "scale";
+    if (hasProperty(options, "mode")) {
+      const val mode_value = options["mode"];
+      if (mode_value.typeOf().as<std::string>() != "string") {
+        throw SonareException(ErrorCode::InvalidParameter,
+                              "pitch correction mode must be 'midi' or 'scale'");
+      }
+      const std::string mode = mode_value.as<std::string>();
+      if (mode == "scale") {
+        scale_mode = true;
+      } else if (mode != "midi") {
+        throw SonareException(ErrorCode::InvalidParameter, "unknown pitch correction mode");
+      }
+    }
     target_midi = floatProperty(options, "targetMidi", target_midi);
     config.scale.root = intProperty(options, "scaleRoot", config.scale.root);
     const int scale_mode_mask =
@@ -503,18 +514,18 @@ val js_spectral_edit(val samples, int sample_rate, val ops, val options) {
     // the core default" rather than forcing an invalid 0 into the core, which
     // requires n_fft/hop_length >= 1 and heal_radius_frames >= 1. Previously the
     // WASM path passed 0 through verbatim and threw where Node/Python succeeded.
-    if (options.hasOwnProperty("nFft")) {
+    if (hasProperty(options, "nFft")) {
       const int n_fft = options["nFft"].as<int>();
       if (n_fft != 0) config.n_fft = n_fft;
     }
-    if (options.hasOwnProperty("hopLength")) {
+    if (hasProperty(options, "hopLength")) {
       const int hop_length = options["hopLength"].as<int>();
       if (hop_length != 0) config.hop_length = hop_length;
     }
-    if (options.hasOwnProperty("window")) {
+    if (hasProperty(options, "window")) {
       config.window = parseSpectralEditWindow(options["window"]);
     }
-    if (options.hasOwnProperty("healRadiusFrames")) {
+    if (hasProperty(options, "healRadiusFrames")) {
       const int heal_radius = options["healRadiusFrames"].as<int>();
       if (heal_radius != 0) config.heal_radius_frames = heal_radius;
     }
@@ -534,17 +545,17 @@ val js_spectral_edit(val samples, int sample_rate, val ops, val options) {
       region.end_sample = static_cast<int64_t>(audio.size());
       // Sample positions arrive as plain JS numbers; read as double and cast to
       // int64 (mirrors project.cpp's totalFrames) so callers need not pass BigInt.
-      if (op.hasOwnProperty("startSample")) {
+      if (hasProperty(op, "startSample")) {
         region.start_sample = static_cast<int64_t>(op["startSample"].as<double>());
       }
-      if (op.hasOwnProperty("endSample")) {
+      if (hasProperty(op, "endSample")) {
         region.end_sample = static_cast<int64_t>(op["endSample"].as<double>());
       }
-      if (op.hasOwnProperty("lowHz")) region.low_hz = op["lowHz"].as<float>();
-      if (op.hasOwnProperty("highHz")) region.high_hz = op["highHz"].as<float>();
-      if (op.hasOwnProperty("gainDb")) region.gain_db = op["gainDb"].as<float>();
+      if (hasProperty(op, "lowHz")) region.low_hz = op["lowHz"].as<float>();
+      if (hasProperty(op, "highHz")) region.high_hz = op["highHz"].as<float>();
+      if (hasProperty(op, "gainDb")) region.gain_db = op["gainDb"].as<float>();
       region.mode =
-          op.hasOwnProperty("mode") ? parseSpectralEditMode(op["mode"]) : SpectralEditMode::Gain;
+          hasProperty(op, "mode") ? parseSpectralEditMode(op["mode"]) : SpectralEditMode::Gain;
       region_ops.push_back(region);
     }
   }

@@ -7,6 +7,7 @@
 import { beforeAll, describe, expect, it } from 'vitest';
 import type { SynthPatch } from '../dist/index.js';
 import {
+  BUILTIN_SYNTH_WAVEFORMS,
   init,
   Project,
   RealtimeEngine,
@@ -85,6 +86,7 @@ describe('Sonare WASM NativeSynth', () => {
     expect(synthEnumTables()).toEqual({
       engineModes: [...SYNTH_ENGINE_MODES],
       waveforms: [...SYNTH_OSC_WAVEFORMS],
+      builtinWaveforms: [...BUILTIN_SYNTH_WAVEFORMS],
       filterModels: [...SYNTH_FILTER_MODELS],
       filterOutputs: [...SYNTH_FILTER_OUTPUTS],
       bodyTypes: [...SYNTH_BODY_TYPES],
@@ -137,6 +139,11 @@ describe('Sonare WASM NativeSynth', () => {
   it('treats explicit empty preset values as absent', () => {
     expect(synthPatchRoundTripForTest({ preset: undefined }).preset).toBe('');
     expect(synthPatchRoundTripForTest({ preset: null } as unknown as SynthPatch).preset).toBe('');
+  });
+
+  it('rejects non-object synth patch descriptors instead of applying defaults', () => {
+    expect(() => synthPatchRoundTripForTest(42 as unknown as SynthPatch)).toThrow(/synth patch/);
+    expect(() => synthPatchRoundTripForTest(true as unknown as SynthPatch)).toThrow(/synth patch/);
   });
 
   it('rejects a non-number, non-string enum field instead of coercing it', () => {

@@ -21,6 +21,7 @@ import {
   Mixer,
   masteringChain,
   meteringDetectClipping,
+  mixStereo,
   padCenter,
   pitchCorrectTimevarying,
   preemphasis,
@@ -35,15 +36,26 @@ beforeAll(async () => {
 });
 
 describe('RealtimeEngine prepare/time-signature/loop guards', () => {
-  it('rejects a non-positive sample rate or block size in the constructor', () => {
+  it('rejects invalid sample rates or block sizes in the constructor', () => {
     expect(() => new RealtimeEngine(0, 128)).toThrow();
+    expect(() => new RealtimeEngine(Number.NaN, 128)).toThrow();
+    expect(() => new RealtimeEngine(7999, 128)).toThrow();
+    expect(() => new RealtimeEngine(384001, 128)).toThrow();
     expect(() => new RealtimeEngine(48000, 0)).toThrow();
+    expect(() => new RealtimeEngine(48000, 128, 1024, 1024, 0)).toThrow();
+    expect(() => new RealtimeEngine(48000, 128, 1024, 1024, 65)).toThrow();
   });
 
-  it('rejects a non-positive sample rate or block size in prepare()', () => {
+  it('rejects invalid sample rates or block sizes in prepare()', () => {
     const engine = new RealtimeEngine(48000, 128);
     expect(() => engine.prepare(0, 0)).toThrow();
+    expect(() => engine.prepare(Number.NaN, 128)).toThrow();
+    expect(() => engine.prepare(7999, 128)).toThrow();
+    expect(() => engine.prepare(384001, 128)).toThrow();
     expect(() => engine.prepare(48000, 0)).toThrow();
+    expect(() => engine.prepare(48000, 128, 1024, 1024, 0)).toThrow();
+    expect(() => engine.prepare(48000, 128, 1024, 1024, 65)).toThrow();
+    expect(() => engine.prepare(48000, 128, 1024, 1024, 2)).not.toThrow();
   });
 
   it('rejects a non-positive time signature', () => {
@@ -68,6 +80,12 @@ describe('RealtimeEngine prepare/time-signature/loop guards', () => {
     expect(() => engine.setLoop(4, 4, true)).toThrow(); // empty
     expect(() => engine.setLoop(8, 4, true)).toThrow(); // inverted
     expect(() => engine.setLoop(0, 4, true)).not.toThrow();
+  });
+});
+
+describe('WASM mixStereo input guards', () => {
+  it('rejects an empty channel list with a specific validation error', () => {
+    expect(() => mixStereo([], [], 48000)).toThrow(/non-zero length/);
   });
 });
 
@@ -102,6 +120,11 @@ describe('RealtimeEngine clip/parameter/metronome guards mirror the C ABI', () =
     const engine = new RealtimeEngine(48000, 128);
     expect(() => engine.setClips([{ ...validClip(), fadeInSamples: -1 }])).toThrow();
     expect(() => engine.setClips([{ ...validClip(), fadeOutSamples: -1 }])).toThrow();
+  });
+
+  it('treats zero clip length as the auto-derived source length', () => {
+    const engine = new RealtimeEngine(48000, 128);
+    expect(() => engine.setClips([{ ...validClip(), lengthSamples: 0 }])).not.toThrow();
   });
 
   it('rejects a non-finite setParameter / setParameterSmoothed value', () => {
@@ -158,6 +181,18 @@ describe('RealtimeEngine clip/parameter/metronome guards mirror the C ABI', () =
     ).toThrow();
   });
 
+  it('rejects null array-like realtime inputs with a binding error', () => {
+    const engine = new RealtimeEngine(48000, 128);
+    engine.setBuiltinInstrument({ gain: 0.5 }, 5);
+
+    // These C++ entry points used to read `.length` before checking for null,
+    // letting an unwrapped JavaScript TypeError escape the binding boundary.
+    expect(() => engine.setClips(null as never)).toThrow();
+    expect(() => engine.process(null as never)).toThrow();
+    expect(() => engine.setMarkers(null as never)).toThrow();
+    expect(() => engine.setMidiClips(null as never)).toThrow();
+  });
+
   it('rejects a non-positive renderOffline block size', () => {
     const engine = new RealtimeEngine(48000, 128);
     expect(() => engine.renderOffline([new Float32Array(128)], 0)).toThrow();
@@ -166,6 +201,19 @@ describe('RealtimeEngine clip/parameter/metronome guards mirror the C ABI', () =
 });
 
 describe('StreamingRetune sanitizes non-finite input', () => {
+  it('requires prepare and rejects blocks above the prepared maximum', async () => {
+    const { StreamingRetune } = await import('../dist/index.js');
+    const retune = new StreamingRetune({ semitones: 2 });
+    try {
+      expect(() => retune.processMono(new Float32Array(64))).toThrow(/prepared/);
+      retune.prepare(48000, 64);
+      expect(() => retune.processMono(new Float32Array(65))).toThrow(/maxBlockSize/);
+      expect(retune.processMono(new Float32Array(64))).toHaveLength(64);
+    } finally {
+      retune.delete();
+    }
+  });
+
   it('does not propagate NaN into the grain history', async () => {
     const { StreamingRetune } = await import('../dist/index.js');
     const retune = new StreamingRetune({ semitones: 2 });
@@ -178,6 +226,27 @@ describe('StreamingRetune sanitizes non-finite input', () => {
     // A subsequent clean block must also stay finite (no poisoned ring state).
     const clean = retune.processMono(new Float32Array(256).fill(0.1));
     expect(Array.from(clean).every((v) => Number.isFinite(v))).toBe(true);
+  });
+
+  it('sanitizes non-finite and out-of-range configuration before it reaches DSP', async () => {
+    const { StreamingRetune } = await import('../dist/index.js');
+    const retune = new StreamingRetune({
+      semitones: Number.NaN,
+      mix: Number.POSITIVE_INFINITY,
+      grainSize: 1_000_000,
+    });
+    try {
+      retune.prepare(48000, 128);
+      const config = retune.config();
+      expect(config.semitones).toBe(0);
+      expect(config.mix).toBe(1);
+      expect(retune.grainSize()).toBeLessThanOrEqual(8192);
+      expect(
+        Array.from(retune.processMono(new Float32Array(128).fill(0.1))).every(Number.isFinite),
+      ).toBe(true);
+    } finally {
+      retune.delete();
+    }
   });
 });
 

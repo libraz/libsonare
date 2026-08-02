@@ -39,6 +39,7 @@ Napi::Value SonareWrap::DetectBpm(const Napi::CallbackInfo& info) {
 
 Napi::Value SonareWrap::DetectKey(const Napi::CallbackInfo& info) {
   Napi::Env env = info.Env();
+  SONARE_NODE_TRY
 
   if (!RequireFloat32Array(info, 0, "Expected Float32Array argument")) {
     return env.Undefined();
@@ -81,10 +82,12 @@ Napi::Value SonareWrap::DetectKey(const Napi::CallbackInfo& info) {
     return env.Undefined();
   }
   return KeyToObject(env, key.root, key.mode, key.confidence);
+  SONARE_NODE_CATCH(env)
 }
 
 Napi::Value SonareWrap::DetectKeyCandidates(const Napi::CallbackInfo& info) {
   Napi::Env env = info.Env();
+  SONARE_NODE_TRY
 
   if (!RequireFloat32Array(info, 0, "Expected Float32Array argument")) {
     return env.Undefined();
@@ -139,6 +142,7 @@ Napi::Value SonareWrap::DetectKeyCandidates(const Napi::CallbackInfo& info) {
   }
   sonare_free_key_candidates(candidates);
   return out;
+  SONARE_NODE_CATCH(env)
 }
 
 Napi::Value SonareWrap::DetectBeats(const Napi::CallbackInfo& info) {
@@ -212,9 +216,36 @@ Napi::Value SonareWrap::DetectOnsets(const Napi::CallbackInfo& info) {
 
   int sample_rate = node_arg_int(info, 1, 22050);
 
+  SonareOnsetDetectConfig config{};
+  config.n_fft = 2048;
+  config.hop_length = 512;
+  config.threshold = 0.0f;
+  config.pre_max = 1;
+  config.post_max = 1;
+  config.pre_avg = 3;
+  config.post_avg = 4;
+  config.delta = 0.06f;
+  config.wait = 1;
+  config.backtrack = 0;
+  config.backtrack_range = 10;
+  if (info.Length() >= 3 && info[2].IsObject()) {
+    Napi::Object options = info[2].As<Napi::Object>();
+    config.n_fft = node_int_option(options, "nFft", config.n_fft);
+    config.hop_length = node_int_option(options, "hopLength", config.hop_length);
+    config.threshold = node_float_option(options, "threshold", config.threshold);
+    config.pre_max = node_int_option(options, "preMax", config.pre_max);
+    config.post_max = node_int_option(options, "postMax", config.post_max);
+    config.pre_avg = node_int_option(options, "preAvg", config.pre_avg);
+    config.post_avg = node_int_option(options, "postAvg", config.post_avg);
+    config.delta = node_float_option(options, "delta", config.delta);
+    config.wait = node_int_option(options, "wait", config.wait);
+    config.backtrack = node_bool_option(options, "backtrack", false) ? 1 : 0;
+    config.backtrack_range = node_int_option(options, "backtrackRange", config.backtrack_range);
+  }
+
   float* times = nullptr;
   size_t count = 0;
-  SonareError err = sonare_detect_onsets(data, length, sample_rate, &times, &count);
+  SonareError err = sonare_detect_onsets_ex(data, length, sample_rate, &config, &times, &count);
   if (err != SONARE_OK) {
     sonare_node::ThrowSonareError(env, err);
     return env.Undefined();
@@ -240,34 +271,8 @@ Napi::Value SonareWrap::Analyze(const Napi::CallbackInfo& info) {
   size_t length = typed.ElementLength();
 
   int sample_rate = node_arg_int(info, 1, 22050);
-  SonareMusicAnalyzeOptions options = sonare_music_analyze_options_default();
-  const bool has_options = info.Length() >= 3 && info[2].IsObject();
-  if (has_options) {
-    const Napi::Object object = info[2].As<Napi::Object>();
-    auto number = [&](const char* key, auto& field) {
-      const Napi::Value value = object.Get(key);
-      if (value.IsNumber())
-        field = static_cast<std::decay_t<decltype(field)>>(value.As<Napi::Number>().DoubleValue());
-    };
-    auto boolean = [&](const char* key, int& field) {
-      const Napi::Value value = object.Get(key);
-      if (value.IsBoolean()) field = value.As<Napi::Boolean>().Value() ? 1 : 0;
-    };
-    number("nFft", options.n_fft);
-    number("hopLength", options.hop_length);
-    number("bpmMin", options.bpm_min);
-    number("bpmMax", options.bpm_max);
-    number("startBpm", options.start_bpm);
-    boolean("useTriadsOnly", options.use_triads_only);
-    boolean("useHpss", options.use_hpss);
-    number("chromaHighpassHz", options.chroma_highpass_hz);
-    boolean("useBassWeighted", options.use_bass_weighted);
-    number("chromaHopMultiplier", options.chroma_hop_multiplier);
-    boolean("useChordHmm", options.use_chord_hmm);
-    boolean("useChordKeyContext", options.use_chord_key_context);
-    number("chordHmmBeamWidth", options.chord_hmm_beam_width);
-    boolean("detectChordInversions", options.detect_chord_inversions);
-  }
+  SonareMusicAnalyzeOptions options{};
+  const bool has_options = info.Length() >= 3 && ReadMusicAnalyzeOptions(info[2], &options);
   return FullAnalysisJsonToObject(env, data, length, sample_rate, has_options ? &options : nullptr);
 }
 
@@ -280,17 +285,23 @@ namespace {
 // JSON.parse touches the V8 heap) and the Promise resolves with the full result.
 class AnalyzeAsyncWorker : public Napi::AsyncWorker {
  public:
-  AnalyzeAsyncWorker(Napi::Env env, std::vector<float> samples, int sample_rate)
+  AnalyzeAsyncWorker(Napi::Env env, std::vector<float> samples, int sample_rate,
+                     SonareMusicAnalyzeOptions options, bool has_options)
       : Napi::AsyncWorker(env),
         deferred_(Napi::Promise::Deferred::New(env)),
         samples_(std::move(samples)),
-        sample_rate_(sample_rate) {}
+        sample_rate_(sample_rate),
+        options_(options),
+        has_options_(has_options) {}
 
   void Execute() override {
     char* json_ptr = nullptr;
-    SonareError err =
-        sonare_analyze_json(samples_.data(), samples_.size(), sample_rate_, &json_ptr);
+    SonareError err = has_options_ ? sonare_analyze_json_ex(samples_.data(), samples_.size(),
+                                                            sample_rate_, &options_, &json_ptr)
+                                   : sonare_analyze_json(samples_.data(), samples_.size(),
+                                                         sample_rate_, &json_ptr);
     if (err != SONARE_OK) {
+      error_code_ = err;
       SetError(ErrorMessageForCode(err));
       return;
     }
@@ -331,6 +342,7 @@ class AnalyzeAsyncWorker : public Napi::AsyncWorker {
 
   void OnError(const Napi::Error& error) override {
     Napi::HandleScope scope(Env());
+    sonare_node::DecorateSonareError(Env(), error.Value(), error_code_);
     deferred_.Reject(error.Value());
   }
 
@@ -340,7 +352,10 @@ class AnalyzeAsyncWorker : public Napi::AsyncWorker {
   Napi::Promise::Deferred deferred_;
   std::vector<float> samples_;
   int sample_rate_;
+  SonareMusicAnalyzeOptions options_{};
+  bool has_options_ = false;
   std::string json_string_;
+  SonareError error_code_ = SONARE_ERROR_UNKNOWN;
 };
 
 }  // namespace
@@ -355,7 +370,9 @@ Napi::Value SonareWrap::AnalyzeAsync(const Napi::CallbackInfo& info) {
   auto typed = info[0].As<Napi::Float32Array>();
   std::vector<float> samples(typed.Data(), typed.Data() + typed.ElementLength());
   int sample_rate = node_arg_int(info, 1, 22050);
-  auto* worker = new AnalyzeAsyncWorker(env, std::move(samples), sample_rate);
+  SonareMusicAnalyzeOptions options{};
+  const bool has_options = info.Length() >= 3 && ReadMusicAnalyzeOptions(info[2], &options);
+  auto* worker = new AnalyzeAsyncWorker(env, std::move(samples), sample_rate, options, has_options);
   Napi::Promise promise = worker->GetPromise();
   worker->Queue();
   return promise;

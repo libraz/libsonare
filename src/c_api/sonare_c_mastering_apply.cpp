@@ -138,6 +138,7 @@ SonareError sonare_mastering_apply_processor_stereo(const char* processor_name, 
 }
 
 const char* sonare_mastering_processor_names(void) {
+  SONARE_C_TRY
   // Gate on a write-once flag, not on names.empty(): the header promises the
   // returned pointer stays valid across later API calls on the thread, so the
   // thread_local must be built exactly once. An empty-string test would recompute
@@ -150,9 +151,11 @@ const char* sonare_mastering_processor_names(void) {
     built = true;
   }
   return names.c_str();
+  SONARE_C_CATCH_RETURN(nullptr)
 }
 
 const char* sonare_mastering_pair_processor_names(void) {
+  SONARE_C_TRY
   static thread_local std::string names;
   static thread_local bool built = false;
   if (!built) {
@@ -160,9 +163,11 @@ const char* sonare_mastering_pair_processor_names(void) {
     built = true;
   }
   return names.c_str();
+  SONARE_C_CATCH_RETURN(nullptr)
 }
 
 const char* sonare_mastering_pair_analysis_names(void) {
+  SONARE_C_TRY
   static thread_local std::string names;
   static thread_local bool built = false;
   if (!built) {
@@ -170,9 +175,11 @@ const char* sonare_mastering_pair_analysis_names(void) {
     built = true;
   }
   return names.c_str();
+  SONARE_C_CATCH_RETURN(nullptr)
 }
 
 const char* sonare_mastering_stereo_analysis_names(void) {
+  SONARE_C_TRY
   static thread_local std::string names;
   static thread_local bool built = false;
   if (!built) {
@@ -180,9 +187,11 @@ const char* sonare_mastering_stereo_analysis_names(void) {
     built = true;
   }
   return names.c_str();
+  SONARE_C_CATCH_RETURN(nullptr)
 }
 
 const char* sonare_mastering_insert_names(void) {
+  SONARE_C_TRY
   static thread_local std::string names;
   static thread_local bool built = false;
   if (!built) {
@@ -190,9 +199,11 @@ const char* sonare_mastering_insert_names(void) {
     built = true;
   }
   return names.c_str();
+  SONARE_C_CATCH_RETURN(nullptr)
 }
 
 const char* sonare_mastering_processor_catalog(void) {
+  SONARE_C_TRY
   static thread_local std::string catalog;
   static thread_local bool built = false;
   if (!built) {
@@ -200,9 +211,11 @@ const char* sonare_mastering_processor_catalog(void) {
     built = true;
   }
   return catalog.c_str();
+  SONARE_C_CATCH_RETURN(nullptr)
 }
 
 const char* sonare_capability_catalog_json(void) {
+  SONARE_C_TRY
   namespace json = sonare::util::json;
 
   json::Object catalog;
@@ -227,9 +240,11 @@ const char* sonare_capability_catalog_json(void) {
   static thread_local std::string serialized;
   serialized = json::dump(json::Value(std::move(catalog)));
   return serialized.c_str();
+  SONARE_C_CATCH_RETURN(nullptr)
 }
 
 const char* sonare_mastering_insert_param_names(const char* name) {
+  SONARE_C_TRY
   // Unlike the no-arg *_names getters this depends on the argument, so it cannot
   // use the program-lifetime cache: recompute into a thread-local each call
   // (valid until the next call on the same thread, like sonare_last_error_message).
@@ -246,9 +261,11 @@ const char* sonare_mastering_insert_param_names(const char* name) {
   }
   names = stream.str();
   return names.c_str();
+  SONARE_C_CATCH_RETURN(nullptr)
 }
 
 const char* sonare_mastering_insert_param_info(const char* name) {
+  SONARE_C_TRY
   // Argument-dependent like sonare_mastering_insert_param_names: recompute into a
   // thread-local each call (valid until the next call on the same thread).
   static thread_local std::string info;
@@ -259,6 +276,7 @@ const char* sonare_mastering_insert_param_info(const char* name) {
   }
   info = sonare::mastering::api::insert_param_info_json(name);
   return info.c_str();
+  SONARE_C_CATCH_RETURN(nullptr)
 }
 
 SonareError sonare_mastering_apply_pair_processor_ex(

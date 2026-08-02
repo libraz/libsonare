@@ -62,7 +62,7 @@ val vectorToUint8Array(const std::vector<uint8_t>& vec) {
 // a freshly-allocated std::vector<float>. The single boundary crossing is
 // `view.set(arr)` inside JS land; the typed_memory_view wraps the destination
 // vector's storage so no intermediate buffer is allocated.
-std::size_t wasmFloat32ArrayLength(const val& arr, const char* subject) {
+std::size_t wasmArrayLikeLength(const val& arr, const char* subject) {
   if (arr.isNull() || arr.isUndefined()) {
     throw SonareException(ErrorCode::InvalidParameter,
                           std::string(subject) + " must be an array-like object");
@@ -84,6 +84,10 @@ std::size_t wasmFloat32ArrayLength(const val& arr, const char* subject) {
                           std::string(subject) + " exceeds the WASM Float32 input budget");
   }
   return static_cast<std::size_t>(length);
+}
+
+std::size_t wasmFloat32ArrayLength(const val& arr, const char* subject) {
+  return wasmArrayLikeLength(arr, subject);
 }
 
 void validateWasmFloat32ElementBudget(std::initializer_list<std::size_t> counts,
@@ -185,7 +189,7 @@ static std::size_t validatedTypedArrayCount(const val& arr, const char* length_k
   }
   if (length > static_cast<double>(kMaxWasmFloat32Elements)) {
     throw SonareException(ErrorCode::InvalidParameter,
-                          std::string(subject) + " exceeds the WASM input element budget");
+                          std::string(subject) + " exceeds the WASM Float32 input budget");
   }
   return static_cast<std::size_t>(length);
 }
@@ -228,6 +232,9 @@ std::vector<mastering::api::Param> masteringParamsFromObject(val object) {
       params.push_back({key, value.as<double>()});
     } else if (value.typeOf().as<std::string>() == "boolean") {
       params.push_back({key, value.as<bool>() ? 1.0 : 0.0});
+    } else {
+      throw SonareException(ErrorCode::InvalidParameter,
+                            "mastering override '" + key + "' must be a number or boolean");
     }
   }
   return params;
@@ -287,12 +294,13 @@ bool progressCallbackRequestedCancellation(const val& callback, float progress, 
 }
 
 int requireMatchedLength(const val& a, const val& b, const char* subject) {
-  const int n = a["length"].as<int>();
-  if (n < 0 || b["length"].as<int>() != n) {
+  const std::size_t a_length = wasmArrayLikeLength(a, subject);
+  const std::size_t b_length = wasmArrayLikeLength(b, subject);
+  if (a_length != b_length) {
     throw SonareException(ErrorCode::InvalidParameter,
                           std::string(subject) + " must have the same length");
   }
-  return n;
+  return static_cast<int>(a_length);
 }
 
 #endif  // __EMSCRIPTEN__

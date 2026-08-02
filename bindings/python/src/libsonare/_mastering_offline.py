@@ -504,6 +504,8 @@ def mastering_chain(
     else:
         if cancel is not None:
             raise RuntimeError("loaded libsonare does not support mastering cancellation")
+        if on_progress is None:
+            raise AssertionError("progress callback is required on this path")
         if not hasattr(lib, "sonare_mastering_chain_with_progress"):
             raise RuntimeError("libsonare was built without mastering progress support")
         cb = _make_progress_trampoline(on_progress, CancellationState(None))
@@ -598,6 +600,8 @@ def mastering_chain_stereo(
     else:
         if cancel is not None:
             raise RuntimeError("loaded libsonare does not support mastering cancellation")
+        if on_progress is None:
+            raise AssertionError("progress callback is required on this path")
         if not hasattr(lib, "sonare_mastering_chain_stereo_with_progress"):
             raise RuntimeError("libsonare was built without mastering progress support")
         cb = _make_progress_trampoline(on_progress, CancellationState(None))
@@ -717,6 +721,8 @@ def master_audio(
     else:
         if cancel is not None:
             raise RuntimeError("loaded libsonare does not support mastering cancellation")
+        if on_progress is None:
+            raise AssertionError("progress callback is required on this path")
         if not hasattr(lib, "sonare_master_audio_with_progress"):
             raise RuntimeError("libsonare was built without mastering progress support")
         cb = _make_progress_trampoline(on_progress, CancellationState(None))
@@ -814,6 +820,8 @@ def master_audio_stereo(
     else:
         if cancel is not None:
             raise RuntimeError("loaded libsonare does not support mastering cancellation")
+        if on_progress is None:
+            raise AssertionError("progress callback is required on this path")
         if not hasattr(lib, "sonare_master_audio_stereo_with_progress"):
             raise RuntimeError("libsonare was built without mastering progress support")
         cb = _make_progress_trampoline(on_progress, CancellationState(None))

@@ -136,7 +136,7 @@ std::shared_ptr<WasmClipPageProvider> liveProviderById(
 }  // namespace
 
 void RealtimeEngineWasm::setClips(val clips) {
-  const int count = clips["length"].as<int>();
+  const int count = static_cast<int>(wasmArrayLikeLength(clips, "clips"));
   std::vector<std::vector<std::vector<float>>> new_storage;
   std::vector<std::vector<const float*>> new_ptrs;
   new_storage.reserve(static_cast<size_t>(count));
@@ -219,9 +219,12 @@ void RealtimeEngineWasm::setClips(val clips) {
                                     "clip offset is outside the source");
     }
     const int64_t default_length = source_samples - schedule.clip_offset_samples;
-    schedule.length_samples = hasProperty(clip_val, "lengthSamples")
-                                  ? objectProperty(clip_val, "lengthSamples").as<int64_t>()
-                                  : default_length;
+    const int64_t requested_length = hasProperty(clip_val, "lengthSamples")
+                                         ? objectProperty(clip_val, "lengthSamples").as<int64_t>()
+                                         : 0;
+    // Match the C ABI / Node / Python convention: zero selects the full
+    // remaining source from clipOffsetSamples rather than an empty clip.
+    schedule.length_samples = requested_length == 0 ? default_length : requested_length;
     if (schedule.length_samples <= 0) {
       throw sonare::SonareException(sonare::ErrorCode::InvalidParameter,
                                     "clip offset or length is outside the source");
@@ -419,8 +422,14 @@ int RealtimeEngineWasm::createClipPageProvider(int num_channels, int64_t num_sam
     throw sonare::SonareException(sonare::ErrorCode::InvalidParameter,
                                   "clip page provider dimensions must be positive");
   }
-  clip_page_providers_.push_back(
-      std::make_shared<WasmClipPageProvider>(num_channels, num_samples, page_frames));
+  auto provider = std::make_shared<WasmClipPageProvider>(num_channels, num_samples, page_frames);
+  for (size_t index = 0; index < clip_page_providers_.size(); ++index) {
+    if (!clip_page_providers_[index]) {
+      clip_page_providers_[index] = std::move(provider);
+      return static_cast<int>(index + 1);
+    }
+  }
+  clip_page_providers_.push_back(std::move(provider));
   return static_cast<int>(clip_page_providers_.size());
 }
 

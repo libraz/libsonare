@@ -311,6 +311,9 @@ describe('v1.2 feature additions (WASM)', () => {
         pitchCorrectTimevarying(signal, f0, SR, hop, { targetMidi: 59, retuneAmount: 2 }),
       ).toThrow();
       expect(() => pitchCorrectTimevarying(signal, f0, SR, hop, { targetMidi: 200 })).toThrow();
+      expect(() =>
+        pitchCorrectTimevarying(signal, f0, SR, hop, { mode: 'Scale' as never }),
+      ).toThrow(/pitch correction mode/);
     });
 
     it('pitchCorrectToMidiTimevarying rejects mismatched companion arrays', () => {

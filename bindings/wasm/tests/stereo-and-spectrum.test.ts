@@ -11,6 +11,7 @@ import {
   init,
   meteringPhaseScope,
   meteringSpectrum,
+  meteringSpectrumFrame,
   meteringStereoCorrelation,
   meteringStereoWidth,
   meteringVectorscope,
@@ -135,5 +136,13 @@ describe('Spectrum meter wrapper (WASM)', () => {
   it('rejects non-power-of-two nFft', () => {
     const samples = sine(440, 0.1);
     expect(() => meteringSpectrum(samples, SR, { nFft: 1500 })).toThrow();
+  });
+
+  it('rejects negative values instead of silently selecting defaults', () => {
+    const samples = sine(440, 0.1);
+    for (const options of [{ nFft: -1 }, { octaveFraction: -1 }, { dbRef: -1 }, { dbAmin: -1 }]) {
+      expect(() => meteringSpectrum(samples, SR, options)).toThrow();
+      expect(() => meteringSpectrumFrame(samples, SR, 0, options)).toThrow();
+    }
   });
 });

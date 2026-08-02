@@ -17,7 +17,8 @@ from ._ffi_signatures_mixing import configure_mixing_signatures
 from ._ffi_signatures_project import configure_project_signatures
 from ._ffi_signatures_repair_dynamics import configure_repair_dynamics_signatures
 from ._ffi_types import *  # noqa: F403
-from ._ffi_types import __all__ as _type_exports
+
+_type_exports = [name for name in globals() if name.startswith(("Sonare", "SONARE_"))]
 
 EXPECTED_ABI_VERSION = 0x03020103
 
@@ -84,6 +85,24 @@ def load_library(lib_path: str | None = None) -> ctypes.CDLL:
     path = lib_path or _find_library()
     lib = ctypes.CDLL(path)
 
+    # Establish the aggregate ABI contract before configuring the hundreds of
+    # individual symbols below. An older dylib may not export newer entry
+    # points, and should produce this actionable mismatch rather than an
+    # unrelated AttributeError while assigning a later ``.restype``.
+    if not hasattr(lib, "sonare_abi_version"):
+        raise RuntimeError(
+            "libsonare ABI mismatch: native binary does not expose sonare_abi_version"
+        )
+    lib.sonare_abi_version.restype = ctypes.c_uint32
+    lib.sonare_abi_version.argtypes = []
+    abi = int(lib.sonare_abi_version())
+    if abi != EXPECTED_ABI_VERSION:
+        raise RuntimeError(
+            f"libsonare ABI mismatch: native binary reports {abi}, "
+            f"expected {EXPECTED_ABI_VERSION}. The installed shared library is "
+            "incompatible with this Python binding."
+        )
+
     configure_core_signatures(lib)
     configure_effects_engine_signatures(lib)
     configure_repair_dynamics_signatures(lib)
@@ -93,19 +112,4 @@ def load_library(lib_path: str | None = None) -> ctypes.CDLL:
     configure_extra_signatures(lib)
     configure_project_signatures(lib)
 
-    if not hasattr(lib, "sonare_abi_version"):
-        raise RuntimeError(
-            "libsonare ABI mismatch: native binary does not expose sonare_abi_version"
-        )
-    abi = int(lib.sonare_abi_version())
-    if abi != EXPECTED_ABI_VERSION:
-        raise RuntimeError(
-            f"libsonare ABI mismatch: native binary reports {abi}, "
-            f"expected {EXPECTED_ABI_VERSION}. The installed shared library is "
-            "incompatible with this Python binding."
-        )
-
     return lib
-
-
-__all__ = [*_type_exports, "EXPECTED_ABI_VERSION", "load_library", "resolved_library_path"]

@@ -5,6 +5,7 @@ from __future__ import annotations
 import contextlib
 import ctypes
 from collections.abc import Iterator, Mapping, Sequence
+from enum import IntEnum
 from typing import Any, cast
 
 import numpy as np
@@ -23,12 +24,47 @@ PAN_MODE_DUAL_PAN = 2
 _lib: ctypes.CDLL | None = None
 
 
+class ErrorCode(IntEnum):
+    """Public C-ABI error codes carried by :class:`SonareError`."""
+
+    OK = 0
+    FILE_NOT_FOUND = 1
+    INVALID_FORMAT = 2
+    DECODE_FAILED = 3
+    INVALID_PARAMETER = 4
+    OUT_OF_MEMORY = 5
+    NOT_SUPPORTED = 6
+    INVALID_STATE = 7
+    CANCELLED = 8
+    UNKNOWN = 99
+
+
 class SonareError(RuntimeError):
     """Exception raised for non-OK Sonare C API return codes."""
 
     def __init__(self, code: int, message: str) -> None:
         self.code = int(code)
         super().__init__(f"[{self.code}] {message}")
+
+    @property
+    def code_name(self) -> str:
+        """Canonical cross-binding name of :attr:`code`."""
+        names = {
+            ErrorCode.OK: "Ok",
+            ErrorCode.FILE_NOT_FOUND: "FileNotFound",
+            ErrorCode.INVALID_FORMAT: "InvalidFormat",
+            ErrorCode.DECODE_FAILED: "DecodeFailed",
+            ErrorCode.INVALID_PARAMETER: "InvalidParameter",
+            ErrorCode.OUT_OF_MEMORY: "OutOfMemory",
+            ErrorCode.NOT_SUPPORTED: "NotSupported",
+            ErrorCode.INVALID_STATE: "InvalidState",
+            ErrorCode.CANCELLED: "Cancelled",
+            ErrorCode.UNKNOWN: "Unknown",
+        }
+        try:
+            return names[ErrorCode(self.code)]
+        except ValueError:
+            return names[ErrorCode.UNKNOWN]
 
 
 def _get_lib() -> ctypes.CDLL:
@@ -141,10 +177,10 @@ def _to_c_float_array(
         # back to a freshly allocated empty array.
         c_array = (ctypes.c_float * 0)()
     else:
-        c_array = (ctypes.c_float * length).from_buffer(buf)  # type: ignore[arg-type]
+        c_array = (ctypes.c_float * length).from_buffer(buf)
     # Defensive: pin the numpy buffer to the ctypes object so callers that
     # only retain ``c_array`` cannot accidentally drop the underlying memory.
-    c_array._np_backing = buf  # type: ignore[attr-defined]
+    setattr(c_array, "_np_backing", buf)  # noqa: B010 -- ctypes arrays allow dynamic pinning.
     return c_array, length
 
 
@@ -164,8 +200,8 @@ def _to_c_float_array_owned(
     if length == 0:  # noqa: SIM108
         c_array = (ctypes.c_float * 0)()
     else:
-        c_array = (ctypes.c_float * length).from_buffer(buf)  # type: ignore[arg-type]
-    c_array._np_backing = buf  # type: ignore[attr-defined]
+        c_array = (ctypes.c_float * length).from_buffer(buf)
+    setattr(c_array, "_np_backing", buf)  # noqa: B010 -- ctypes arrays allow dynamic pinning.
     return c_array, length
 
 
@@ -218,9 +254,9 @@ def _to_c_int_array(values: Sequence[int] | list[int]) -> tuple[ctypes.Array[cty
     if length == 0:  # noqa: SIM108
         c_array = (ctypes.c_int32 * 0)()
     else:
-        c_array = (ctypes.c_int32 * length).from_buffer(buf)  # type: ignore[arg-type]
+        c_array = (ctypes.c_int32 * length).from_buffer(buf)
     # Pin the numpy buffer so the backing memory outlives the C call.
-    c_array._np_backing = buf  # type: ignore[attr-defined]
+    setattr(c_array, "_np_backing", buf)  # noqa: B010 -- ctypes arrays allow dynamic pinning.
     return c_array, length
 
 
@@ -272,7 +308,7 @@ def _resolve_enum(
     set, the sorted accepted names).
     """
     if enum_cls is not None and isinstance(value, enum_cls):
-        return int(value)
+        return cast(int, value)
     if isinstance(value, int):
         if (reject_bool and isinstance(value, bool)) or (
             validate_int and value not in names.values()
@@ -497,7 +533,7 @@ def _int_array_result(out: object, count: int) -> list[int]:
 @contextlib.contextmanager
 def _out_float_array(
     lib: ctypes.CDLL,
-) -> Iterator[tuple[ctypes._Pointer, ctypes.c_size_t]]:
+) -> Iterator[tuple[ctypes._Pointer[ctypes.c_float], ctypes.c_size_t]]:
     """Manage a C ``float*`` out-parameter, freeing it on exit.
 
     Yields ``(out, out_length)`` to pass by reference into a C call. The heap
@@ -517,7 +553,7 @@ def _out_float_array(
 @contextlib.contextmanager
 def _out_int_array(
     lib: ctypes.CDLL,
-) -> Iterator[tuple[ctypes._Pointer, ctypes.c_size_t]]:
+) -> Iterator[tuple[ctypes._Pointer[ctypes.c_int], ctypes.c_size_t]]:
     """Manage a C ``int*`` out-parameter, freeing it on exit.
 
     Integer sibling of :func:`_out_float_array`; releases with

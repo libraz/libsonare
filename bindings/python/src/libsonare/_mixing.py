@@ -321,7 +321,11 @@ class Mixer:
         )
 
     def set_pan_law(self, strip: StripRef, pan_law: PanLaw | str | int) -> None:
-        """Set a strip's pan law (``PanLaw`` enum, name, or int 0..3)."""
+        """Set a strip's pan law (``PanLaw`` enum, name, or int 0..3).
+
+        Mono strips apply the law at centre; stereo Balance strips keep centre
+        unity and use it only for the far-channel taper.
+        """
         handle = self._strip_handle(strip)
         _check(_get_lib().sonare_strip_set_pan_law(handle, ctypes.c_int(_pan_law_value(pan_law))))
 
@@ -711,7 +715,7 @@ class Mixer:
         _check(_get_lib().sonare_mixer_latency_samples(self._handle, ctypes.byref(out)))
         return int(out.value)
 
-    def drain_tail_stereo(self, num_samples: int) -> MixerStereoResult:
+    def drain_tail_stereo(self, num_samples: int | float) -> MixerStereoResult:
         """Drain ``num_samples`` of trailing effect-tail audio with no new input.
 
         Pushes silence through the compiled graph so the stereo master keeps

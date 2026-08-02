@@ -75,6 +75,22 @@ describe('masteringDynamicsCompressor (WASM)', () => {
     expect(peakAbs(r.samples, half)).toBeLessThan(peakAbs(x, half) * 0.95);
   });
 
+  it('honors inherited request options', () => {
+    const x = sine(440, 0.5, 0.9);
+    const request = Object.create({
+      samples: x,
+      sampleRate: SR,
+      thresholdDb: -30,
+      ratio: 10,
+      attackMs: 0.1,
+      releaseMs: 10,
+      makeupGainDb: 0,
+    });
+    const result = masteringDynamicsCompressor(request);
+    const half = Math.floor(x.length / 2);
+    expect(peakAbs(result.samples, half)).toBeLessThan(peakAbs(x, half) * 0.95);
+  });
+
   it('detector accepts both string and number forms', () => {
     const x = sine(440, 0.2, 0.5);
     const a = masteringDynamicsCompressor(x, SR, { detector: 'peak' }).samples;

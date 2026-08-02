@@ -34,6 +34,22 @@ export interface SamplesRequest {
   sampleRate?: number;
 }
 
+/** Peak-picking configuration for {@link detectOnsets}. */
+export interface OnsetDetectOptions {
+  nFft?: number;
+  hopLength?: number;
+  threshold?: number;
+  preMax?: number;
+  postMax?: number;
+  preAvg?: number;
+  postAvg?: number;
+  delta?: number;
+  wait?: number;
+  backtrack?: boolean;
+  backtrackRange?: number;
+}
+export interface DetectOnsetsRequest extends SamplesRequest, OnsetDetectOptions {}
+
 export interface DetectKeyRequest extends KeyDetectionOptions, SamplesRequest {}
 
 export interface RoomEstimateRequest extends RoomEstimateOptions, SamplesRequest {}
@@ -134,14 +150,19 @@ export function detectDownbeats(
   return addon.detectDownbeats(request.samples, request.sampleRate ?? 22050);
 }
 
-export function detectOnsets(request: SamplesRequest): Float32Array;
-export function detectOnsets(samples: Float32Array, sampleRate?: number): Float32Array;
+export function detectOnsets(request: DetectOnsetsRequest): Float32Array;
 export function detectOnsets(
-  samples: Float32Array | SamplesRequest,
+  samples: Float32Array,
+  sampleRate?: number,
+  options?: OnsetDetectOptions,
+): Float32Array;
+export function detectOnsets(
+  samples: Float32Array | DetectOnsetsRequest,
   sampleRate = 22050,
+  options: OnsetDetectOptions = {},
 ): Float32Array {
-  const request = samples instanceof Float32Array ? { samples, sampleRate } : samples;
-  return addon.detectOnsets(request.samples, request.sampleRate ?? 22050);
+  const request = samples instanceof Float32Array ? { samples, sampleRate, ...options } : samples;
+  return addon.detectOnsets(request.samples, request.sampleRate ?? 22050, request);
 }
 
 export function analyze(request: MusicAnalyzeRequest): AnalysisResult;
@@ -212,11 +233,16 @@ export function roomMorph(
  * worker thread so the JS event loop is never blocked. The returned promise
  * resolves with the same shape as the synchronous version.
  */
-export function analyzeAsync(request: SamplesRequest): Promise<AnalysisResult>;
-export function analyzeAsync(samples: Float32Array, sampleRate?: number): Promise<AnalysisResult>;
+export function analyzeAsync(request: MusicAnalyzeRequest): Promise<AnalysisResult>;
 export function analyzeAsync(
-  samples: Float32Array | SamplesRequest,
+  samples: Float32Array,
+  sampleRate?: number,
+  options?: MusicAnalyzeOptions,
+): Promise<AnalysisResult>;
+export function analyzeAsync(
+  samples: Float32Array | MusicAnalyzeRequest,
   sampleRate = 22050,
+  options: MusicAnalyzeOptions = {},
 ): Promise<AnalysisResult> {
   // Preserve the legacy async validation contract: invalid positional input is
   // handed to the addon so it becomes a rejected Promise, not a synchronous
@@ -224,8 +250,8 @@ export function analyzeAsync(
   if (!(samples instanceof Float32Array) && (!samples || typeof samples !== 'object')) {
     return addon.analyzeAsync(samples as Float32Array, sampleRate);
   }
-  const request = samples instanceof Float32Array ? { samples, sampleRate } : samples;
-  return addon.analyzeAsync(request.samples, request.sampleRate ?? 22050);
+  const request = samples instanceof Float32Array ? { samples, sampleRate, ...options } : samples;
+  return addon.analyzeAsync(request.samples, request.sampleRate ?? 22050, request);
 }
 
 /**
@@ -282,7 +308,7 @@ export function analyzeSections(
  * By default this uses plain per-frame YIN. Pass `{ usePyin: true }` for the
  * Viterbi-smoothed pYIN tracker (less prone to octave jumps), or supply
  * `usePyin` / `center` positionally. When pYIN is active, `center` (default
- * `true`) reflect-pads by `frameLength / 2` so frame `i` is centered at
+ * `true`) zero-pads by `frameLength / 2` so frame `i` is centered at
  * `i * hopLength` (matching `librosa.pyin(center=True)`); `center` is ignored
  * for plain YIN.
  */

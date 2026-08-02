@@ -286,23 +286,39 @@ val js_metering_spectrum(val samples, int sample_rate, val options) {
   Audio audio = loadValidatedAudio(samples, sample_rate);
   metering::SpectrumConfig cfg;
   if (!options.isUndefined() && !options.isNull()) {
-    if (options.hasOwnProperty("nFft")) {
+    if (hasProperty(options, "nFft")) {
       const int n = options["nFft"].as<int>();
+      if (n < 0) {
+        throw sonare::SonareException(sonare::ErrorCode::InvalidParameter,
+                                      "meteringSpectrum: nFft must be non-negative");
+      }
       if (n > 0) cfg.n_fft = n;
     }
-    if (options.hasOwnProperty("applyOctaveSmoothing")) {
+    if (hasProperty(options, "applyOctaveSmoothing")) {
       cfg.apply_octave_smoothing = options["applyOctaveSmoothing"].as<bool>();
     }
-    if (options.hasOwnProperty("octaveFraction")) {
+    if (hasProperty(options, "octaveFraction")) {
       const int f = options["octaveFraction"].as<int>();
+      if (f < 0) {
+        throw sonare::SonareException(sonare::ErrorCode::InvalidParameter,
+                                      "meteringSpectrum: octaveFraction must be non-negative");
+      }
       if (f > 0) cfg.octave_fraction = f;
     }
-    if (options.hasOwnProperty("dbRef")) {
+    if (hasProperty(options, "dbRef")) {
       const float ref = options["dbRef"].as<float>();
+      if (ref < 0.0f) {
+        throw sonare::SonareException(sonare::ErrorCode::InvalidParameter,
+                                      "meteringSpectrum: dbRef must be non-negative");
+      }
       if (ref > 0.0f) cfg.db_ref = ref;
     }
-    if (options.hasOwnProperty("dbAmin")) {
+    if (hasProperty(options, "dbAmin")) {
       const float amin = options["dbAmin"].as<float>();
+      if (amin < 0.0f) {
+        throw sonare::SonareException(sonare::ErrorCode::InvalidParameter,
+                                      "meteringSpectrum: dbAmin must be non-negative");
+      }
       if (amin > 0.0f) cfg.db_amin = amin;
     }
   }
@@ -329,23 +345,39 @@ val js_metering_spectrum_frame(val samples, int sample_rate, size_t frame_offset
   Audio audio = loadValidatedAudio(samples, sample_rate);
   metering::SpectrumConfig cfg;
   if (!options.isUndefined() && !options.isNull()) {
-    if (options.hasOwnProperty("nFft")) {
+    if (hasProperty(options, "nFft")) {
       const int n = options["nFft"].as<int>();
+      if (n < 0) {
+        throw sonare::SonareException(sonare::ErrorCode::InvalidParameter,
+                                      "meteringSpectrumFrame: nFft must be non-negative");
+      }
       if (n > 0) cfg.n_fft = n;
     }
-    if (options.hasOwnProperty("applyOctaveSmoothing")) {
+    if (hasProperty(options, "applyOctaveSmoothing")) {
       cfg.apply_octave_smoothing = options["applyOctaveSmoothing"].as<bool>();
     }
-    if (options.hasOwnProperty("octaveFraction")) {
+    if (hasProperty(options, "octaveFraction")) {
       const int f = options["octaveFraction"].as<int>();
+      if (f < 0) {
+        throw sonare::SonareException(sonare::ErrorCode::InvalidParameter,
+                                      "meteringSpectrumFrame: octaveFraction must be non-negative");
+      }
       if (f > 0) cfg.octave_fraction = f;
     }
-    if (options.hasOwnProperty("dbRef")) {
+    if (hasProperty(options, "dbRef")) {
       const float ref = options["dbRef"].as<float>();
+      if (ref < 0.0f) {
+        throw sonare::SonareException(sonare::ErrorCode::InvalidParameter,
+                                      "meteringSpectrumFrame: dbRef must be non-negative");
+      }
       if (ref > 0.0f) cfg.db_ref = ref;
     }
-    if (options.hasOwnProperty("dbAmin")) {
+    if (hasProperty(options, "dbAmin")) {
       const float amin = options["dbAmin"].as<float>();
+      if (amin < 0.0f) {
+        throw sonare::SonareException(sonare::ErrorCode::InvalidParameter,
+                                      "meteringSpectrumFrame: dbAmin must be non-negative");
+      }
       if (amin > 0.0f) cfg.db_amin = amin;
     }
   }

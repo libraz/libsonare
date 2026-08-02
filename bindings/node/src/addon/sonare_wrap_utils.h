@@ -35,6 +35,14 @@ void ThrowSonareError(Napi::Env env, SonareError err, const std::string& prefix 
 ///        caught SonareException's what()).
 void ThrowSonareErrorMessage(Napi::Env env, SonareError err, const std::string& message);
 
+/// @brief Add the public SonareError shape to an existing JavaScript Error.
+/// Used by AsyncWorker completion handlers before rejecting their Promise.
+void DecorateSonareError(Napi::Env env, Napi::Object error, SonareError err);
+
+/// @brief Read the optional JavaScript music-analysis settings into the C ABI
+/// struct. Returns true only when @p value is an object supplied by the caller.
+bool ReadMusicAnalyzeOptions(const Napi::Value& value, SonareMusicAnalyzeOptions* options);
+
 bool IsFloat32Array(const Napi::Value& value);
 bool IsUint8Array(const Napi::Value& value);
 bool IsInt32Array(const Napi::Value& value);
@@ -129,6 +137,10 @@ std::vector<sonare::mastering::api::Param> ParamsFromObject(const Napi::Object& 
 
 #define SONARE_NODE_TRY try {
 #define SONARE_NODE_CATCH(env)                                                                \
+  }                                                                                           \
+  catch (const Napi::Error& e) {                                                              \
+    e.ThrowAsJavaScriptException();                                                           \
+    return env.Undefined();                                                                   \
   }                                                                                           \
   catch (const sonare::SonareException& e) {                                                  \
     sonare_node::ThrowSonareErrorMessage(env, sonare_node::CErrorFromException(e), e.what()); \

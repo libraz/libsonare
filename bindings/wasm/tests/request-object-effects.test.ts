@@ -1,5 +1,6 @@
 import { beforeAll, describe, expect, it } from 'vitest';
 import { meterTapCode, panLawCode, panModeCode, sendTimingCode } from '../src/codes';
+import { ErrorCode } from '../src/errors';
 import {
   analyzeMelody,
   harmonic,
@@ -17,6 +18,12 @@ import {
   voiceChange,
   voiceChangeRealtime,
 } from '../src/index';
+import { meteringTruePeakDb } from '../src/metering';
+import {
+  projectLoopModeValue,
+  projectTrackKindValue,
+  projectWarpModeValue,
+} from '../src/project_internal';
 
 const sampleRate = 22050;
 
@@ -159,6 +166,9 @@ describe('enum-code helpers reject unknown strings instead of silently defaultin
   it('still maps valid strings', () => {
     expect(panLawCode('const6dB')).toBe(2);
     expect(panModeCode('balance')).toBe(0);
+    expect(panModeCode('pan')).toBe(0);
+    expect(panModeCode('stereo-pan')).toBe(1);
+    expect(panModeCode('dual-pan')).toBe(2);
     expect(meterTapCode('postFader')).toBe(1);
   });
 
@@ -167,7 +177,37 @@ describe('enum-code helpers reject unknown strings instead of silently defaultin
     expect(() => sendTimingCode('bogus' as any)).toThrow();
     expect(sendTimingCode('postFader')).toBe(0);
     expect(sendTimingCode('preFader')).toBe(1);
-    expect(sendTimingCode(7)).toBe(7); // raw number passes through
+    expect(() => sendTimingCode(7)).toThrow(/Invalid send timing/);
+  });
+
+  it('rejects unknown raw ordinals across code and project resolvers', () => {
+    // biome-ignore lint/suspicious/noExplicitAny: direct JS callers bypass TypeScript unions.
+    expect(() => panLawCode(99 as any)).toThrow(RangeError);
+    // biome-ignore lint/suspicious/noExplicitAny: direct JS callers bypass TypeScript unions.
+    expect(() => meterTapCode(-1 as any)).toThrow(RangeError);
+    // biome-ignore lint/suspicious/noExplicitAny: direct JS callers bypass TypeScript unions.
+    expect(() => projectTrackKindValue('bus' as any)).toThrow(RangeError);
+    // biome-ignore lint/suspicious/noExplicitAny: direct JS callers bypass TypeScript unions.
+    expect(() => projectWarpModeValue(8 as any)).toThrow(RangeError);
+    // biome-ignore lint/suspicious/noExplicitAny: direct JS callers bypass TypeScript unions.
+    expect(() => projectLoopModeValue(2 as any)).toThrow(RangeError);
+  });
+});
+
+describe('metering true peak validation', () => {
+  it('rejects an invalid oversample factor as SonareError', () => {
+    let caught: unknown;
+    try {
+      meteringTruePeakDb(new Float32Array([0.5]), 22050, 3);
+    } catch (error) {
+      caught = error;
+    }
+    expect(isSonareError(caught)).toBe(true);
+    if (!isSonareError(caught)) {
+      throw new Error('expected SonareError');
+    }
+    expect(caught.code).toBe(ErrorCode.InvalidParameter);
+    expect(caught.codeName).toBe('InvalidParameter');
   });
 });
 

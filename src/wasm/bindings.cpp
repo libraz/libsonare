@@ -246,10 +246,14 @@ bool vc_preset_in_range(int preset) {
 // Maps a voice-character preset ordinal to its canonical id string (e.g.
 // "bright-idol"). Returns null for an out-of-range / unknown ordinal.
 val js_voice_character_preset_id(int preset) {
-  if (!vc_preset_in_range(preset)) return val::null();
+  if (!vc_preset_in_range(preset)) {
+    throw SonareException(ErrorCode::InvalidParameter, "unknown voice-character preset ordinal");
+  }
   const char* id = editing::voice_changer::realtime_voice_changer_preset_id(
       static_cast<editing::voice_changer::VoiceCharacterPreset>(preset));
-  if (id == nullptr || id[0] == '\0') return val::null();
+  if (id == nullptr || id[0] == '\0') {
+    throw SonareException(ErrorCode::InvalidParameter, "unknown voice-character preset ordinal");
+  }
   return val(std::string(id));
 }
 
@@ -257,7 +261,9 @@ val js_voice_character_preset_id(int preset) {
 // are camelCase to match the Node addon getter (the two JS surfaces agree).
 // Null for an out-of-range ordinal.
 val js_realtime_voice_changer_preset_config(int preset) {
-  if (!vc_preset_in_range(preset)) return val::null();
+  if (!vc_preset_in_range(preset)) {
+    throw SonareException(ErrorCode::InvalidParameter, "unknown voice-character preset ordinal");
+  }
   const auto cfg = editing::voice_changer::realtime_voice_changer_preset(
       static_cast<editing::voice_changer::VoiceCharacterPreset>(preset));
   val out = val::object();

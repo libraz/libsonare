@@ -66,7 +66,7 @@ class ClipPageProvider:
         if frames <= 0:
             raise ValueError("channels must not be empty")
         arrays: list[ctypes.Array[ctypes.c_float]] = []
-        ptr_values: list[ctypes.POINTER(ctypes.c_float)] = []
+        ptr_values: list[ctypes._Pointer[ctypes.c_float]] = []
         for channel in channels:
             if len(channel) != frames:
                 raise ValueError("all channels must have the same length")

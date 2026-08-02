@@ -148,16 +148,16 @@ def _clips_to_c(
 ) -> tuple[
     ctypes.Array[SonareEngineClip],
     list[list[ctypes.Array[ctypes.c_float]]],
-    list[ctypes.Array],
-    list[ctypes.Array],
+    list[ctypes.Array[ctypes._Pointer[ctypes.c_float]]],
+    list[ctypes.Array[SonareEngineWarpAnchor]],
 ]:
     # Local import avoids a module cycle: page providers use the shared runtime,
     # while clip conversion validates their concrete host-side wrapper type.
     from ._engine_pages import ClipPageProvider
 
     channel_arrays: list[list[ctypes.Array[ctypes.c_float]]] = []
-    channel_ptrs: list[ctypes.Array] = []
-    warp_arrays: list[ctypes.Array] = []
+    channel_ptrs: list[ctypes.Array[ctypes._Pointer[ctypes.c_float]]] = []
+    warp_arrays: list[ctypes.Array[SonareEngineWarpAnchor]] = []
     raw_items: list[SonareEngineClip] = []
     for clip in clips:
         page_provider = getattr(clip, "page_provider", None)
@@ -196,7 +196,7 @@ def _clips_to_c(
         if num_samples <= 0:
             raise ValueError("clip channels must not be empty")
         arrays: list[ctypes.Array[ctypes.c_float]] = []
-        ptr_values: list[ctypes.POINTER(ctypes.c_float)] = []
+        ptr_values: list[ctypes._Pointer[ctypes.c_float]] = []
         for channel in clip.channels:
             if len(channel) != num_samples:
                 raise ValueError("all clip channels must have the same length")

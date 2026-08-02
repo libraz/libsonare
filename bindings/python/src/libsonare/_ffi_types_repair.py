@@ -208,6 +208,3 @@ class SonareSpectralRegionOp(ctypes.Structure):
         ("gain_db", ctypes.c_float),
         ("mode", ctypes.c_int),
     ]
-
-
-__all__ = [name for name in globals() if name.startswith(("Sonare", "SONARE_"))]

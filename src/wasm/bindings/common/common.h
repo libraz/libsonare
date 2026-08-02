@@ -67,6 +67,7 @@
 #include "feature/onset.h"
 #include "feature/pitch.h"
 #include "feature/rhythm.h"
+#include "feature/segment.h"
 #include "feature/spectral.h"
 #include "feature/tonnetz.h"
 #include "feature/vqt.h"
@@ -137,6 +138,10 @@ val vectorToUint8Array(const std::vector<uint8_t>& vec);
 /// the linear-memory heap. Keeping this below the native offline ceiling leaves
 /// room for the input copy, DSP work buffers, and output arrays.
 inline constexpr std::size_t kMaxWasmFloat32Elements = 64u * 1024u * 1024u;
+/// Reads an array-like object's JS `.length` after rejecting null, undefined,
+/// non-numeric, fractional, unsafe, and over-budget values. Use this before
+/// indexing arbitrary JS arrays so embind never leaks a raw JS TypeError.
+std::size_t wasmArrayLikeLength(const val& arr, const char* subject = "array");
 /// Reads and validates an array-like object's JS `.length` without narrowing a
 /// non-finite, fractional, or unsafe Number to wasm32 size_t.
 std::size_t wasmFloat32ArrayLength(const val& arr, const char* subject = "Float32Array");

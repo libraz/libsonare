@@ -352,6 +352,8 @@ Napi::Value SynthEnumTables(const Napi::CallbackInfo& info) {
           SplitJoinedNames(env, sonare_synth_enum_names(SONARE_SYNTH_ENUM_ENGINE_MODE)));
   out.Set("waveforms",
           SplitJoinedNames(env, sonare_synth_enum_names(SONARE_SYNTH_ENUM_OSC_WAVEFORM)));
+  out.Set("builtinWaveforms",
+          SplitJoinedNames(env, sonare_synth_enum_names(SONARE_SYNTH_ENUM_BUILTIN_WAVEFORM)));
   out.Set("filterModels",
           SplitJoinedNames(env, sonare_synth_enum_names(SONARE_SYNTH_ENUM_FILTER_MODEL)));
   out.Set("filterOutputs",

@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import {
+  BUILTIN_SYNTH_WAVEFORMS,
   Project,
   RealtimeEngine,
   SYNTH_BODY_TYPES,
@@ -80,6 +81,7 @@ describe('NativeSynth preset catalog', () => {
     expect(synthEnumTables()).toEqual({
       engineModes: [...SYNTH_ENGINE_MODES],
       waveforms: [...SYNTH_OSC_WAVEFORMS],
+      builtinWaveforms: [...BUILTIN_SYNTH_WAVEFORMS],
       filterModels: [...SYNTH_FILTER_MODELS],
       filterOutputs: [...SYNTH_FILTER_OUTPUTS],
       bodyTypes: [...SYNTH_BODY_TYPES],

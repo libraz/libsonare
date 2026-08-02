@@ -276,7 +276,9 @@ SonareStrip* sonare_mixer_strip_by_id(SonareMixer* mixer, const char* id) {
 }
 
 SonareMixer* sonare_mixer_from_scene_json(const char* json, int sample_rate, int max_block_size) {
+  SONARE_C_API_ENTRY;
   if (!json) {
+    sonare_c_detail::set_last_error("mixer: scene JSON is required");
     return nullptr;
   }
   // A non-fatal channel, separate from last_error: a scene can load fine while

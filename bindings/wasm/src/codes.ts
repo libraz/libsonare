@@ -1,68 +1,65 @@
 import type { AutomationCurve, MeterTap, PanLaw, PanMode, SendTiming } from './public_types';
 
-export function automationCurveCode(curve: AutomationCurve): number {
-  switch (curve) {
-    case 'linear':
-      return 0;
-    case 'exponential':
-      return 1;
-    case 'hold':
-      return 2;
-    case 's-curve':
-      return 3;
-    default:
-      throw new Error(`Invalid automation curve: ${curve}`);
+/** Resolve a public enum spelling or ordinal without permitting unknown values. */
+export function resolveEnumOrdinal(
+  value: unknown,
+  values: Readonly<Record<string, number>>,
+  enumName: string,
+): number {
+  if (typeof value === 'number') {
+    if (!Number.isSafeInteger(value) || !Object.values(values).includes(value)) {
+      throw new RangeError(`Invalid ${enumName}: ${String(value)}`);
+    }
+    return value;
   }
+  if (typeof value === 'string') {
+    const ordinal = values[value];
+    if (ordinal !== undefined) {
+      return ordinal;
+    }
+  }
+  throw new RangeError(`Invalid ${enumName}: ${String(value)}`);
+}
+
+const AUTOMATION_CURVE_VALUES = {
+  linear: 0,
+  exponential: 1,
+  hold: 2,
+  's-curve': 3,
+} as const;
+const PAN_LAW_VALUES = {
+  const3dB: 0,
+  'const4.5dB': 1,
+  const6dB: 2,
+  linear0dB: 3,
+} as const;
+const PAN_MODE_VALUES = {
+  balance: 0,
+  pan: 0,
+  stereopan: 1,
+  'stereo-pan': 1,
+  dualpan: 2,
+  'dual-pan': 2,
+} as const;
+const METER_TAP_VALUES = { preFader: 0, postFader: 1 } as const;
+const SEND_TIMING_VALUES = { postFader: 0, preFader: 1 } as const;
+
+export function automationCurveCode(curve: AutomationCurve): number {
+  return resolveEnumOrdinal(curve, AUTOMATION_CURVE_VALUES, 'automation curve');
 }
 
 export function panLawCode(panLaw: PanLaw | number): number {
-  if (typeof panLaw === 'number') {
-    return panLaw;
-  }
-  switch (panLaw) {
-    case 'const3dB':
-      return 0;
-    case 'const4.5dB':
-      return 1;
-    case 'const6dB':
-      return 2;
-    case 'linear0dB':
-      return 3;
-    default:
-      throw new Error(`Invalid pan law: ${panLaw}`);
-  }
+  return resolveEnumOrdinal(panLaw, PAN_LAW_VALUES, 'pan law');
 }
 
 export function panModeCode(panMode: PanMode | number): number {
-  if (typeof panMode === 'number') {
-    return panMode;
-  }
-  switch (panMode) {
-    case 'balance':
-      return 0;
-    case 'stereoPan':
-    case 'stereo-pan':
-      return 1;
-    case 'dualPan':
-    case 'dual-pan':
-      return 2;
-    default:
-      throw new Error(`Invalid pan mode: ${panMode}`);
-  }
+  const normalized =
+    typeof panMode === 'string' ? panMode.replace(/_/g, '-').toLowerCase() : panMode;
+  return resolveEnumOrdinal(normalized, PAN_MODE_VALUES, 'pan mode');
 }
 
 export function meterTapCode(tap: MeterTap | number): number {
-  if (typeof tap === 'number') {
-    return tap;
-  }
-  switch (tap) {
-    case 'preFader':
-      return 0;
-    case 'postFader':
-      return 1;
-    default:
-      throw new Error(`Invalid meter tap: ${tap}`);
-  }
+  return resolveEnumOrdinal(tap, METER_TAP_VALUES, 'meter tap');
 }
 
 export function sendTimingCode(timing: SendTiming | number): number {
@@ -70,15 +67,5 @@ export function sendTimingCode(timing: SendTiming | number): number {
   // post-fader), pre-fader is 1. A raw number is passed through as the C ABI int.
   // An unknown string is rejected rather than silently routed to post-fader,
   // matching the sibling enum-code helpers and Node's sendTimingValue.
-  if (typeof timing === 'number') {
-    return timing;
-  }
-  switch (timing) {
-    case 'postFader':
-      return 0;
-    case 'preFader':
-      return 1;
-    default:
-      throw new Error(`Invalid send timing: ${timing}`);
-  }
+  return resolveEnumOrdinal(timing, SEND_TIMING_VALUES, 'send timing');
 }

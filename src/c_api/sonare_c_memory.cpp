@@ -127,6 +127,7 @@ const char* sonare_version(void) { return SONARE_VERSION_STRING; }
 uint32_t sonare_engine_abi_version(void) { return sonare::rt::kEngineAbiVersion; }
 
 const char* sonare_capabilities_json(void) {
+  SONARE_C_TRY
   thread_local std::string capabilities;
   capabilities = "{\"version\":\"" SONARE_VERSION_STRING "\",\"abi\":{\"project\":" +
                  std::to_string(SONARE_PROJECT_ABI_VERSION) +
@@ -147,6 +148,7 @@ const char* sonare_capabilities_json(void) {
   capabilities += std::to_string(concurrency == 0 ? 1 : concurrency);
   capabilities += '}';
   return capabilities.c_str();
+  SONARE_C_CATCH_RETURN(nullptr)
 }
 
 uint32_t sonare_abi_version(void) { return SONARE_ABI_VERSION; }

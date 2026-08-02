@@ -3,6 +3,8 @@
 
 #ifdef __EMSCRIPTEN__
 
+#include <cmath>
+
 #include "project_wasm.h"
 
 #if defined(SONARE_WITH_ARRANGEMENT)
@@ -15,10 +17,27 @@ uint32_t ProjectWasm::addTrack(val desc) {
       val kind = desc["kind"];
       if (kind.typeOf().as<std::string>() == "string") {
         const std::string k = kind.as<std::string>();
-        d.kind =
-            k == "midi" ? SONARE_TRACK_MIDI : (k == "aux" ? SONARE_TRACK_AUX : SONARE_TRACK_AUDIO);
+        if (k == "audio") {
+          d.kind = SONARE_TRACK_AUDIO;
+        } else if (k == "midi") {
+          d.kind = SONARE_TRACK_MIDI;
+        } else if (k == "aux") {
+          d.kind = SONARE_TRACK_AUX;
+        } else {
+          throw sonare::SonareException(sonare::ErrorCode::InvalidParameter,
+                                        "unknown project track kind");
+        }
+      } else if (kind.typeOf().as<std::string>() == "number") {
+        const double numeric_kind = kind.as<double>();
+        if (!std::isfinite(numeric_kind) || std::floor(numeric_kind) != numeric_kind ||
+            numeric_kind < SONARE_TRACK_AUDIO || numeric_kind > SONARE_TRACK_AUX) {
+          throw sonare::SonareException(sonare::ErrorCode::InvalidParameter,
+                                        "unknown project track kind");
+        }
+        d.kind = static_cast<uint32_t>(numeric_kind);
       } else {
-        d.kind = kind.as<int>();
+        throw sonare::SonareException(sonare::ErrorCode::InvalidParameter,
+                                      "project track kind must be a string or number");
       }
     }
     if (hasProperty(desc, "name")) {
@@ -49,10 +68,11 @@ uint32_t ProjectWasm::addClip(val desc) {
   d.source_offset_ppq =
       hasProperty(desc, "sourceOffsetPpq") ? desc["sourceOffsetPpq"].as<double>() : 0.0;
   d.gain = hasProperty(desc, "gain") ? desc["gain"].as<float>() : 1.0f;
-  d.audio_channels = hasProperty(desc, "audioChannels") ? desc["audioChannels"].as<int>() : 1;
+  d.audio_channels = hasProperty(desc, "audioChannels") ? desc["audioChannels"].as<int>() : 0;
   d.audio_sample_rate =
       hasProperty(desc, "audioSampleRate") ? desc["audioSampleRate"].as<int>() : 0;
   if (hasProperty(desc, "audio")) {
+    if (d.audio_channels == 0) d.audio_channels = 1;
     audio = float32ArrayToVector(desc["audio"]);
     if (d.audio_channels <= 0 || audio.size() % static_cast<size_t>(d.audio_channels) != 0) {
       throw sonare::SonareException(sonare::ErrorCode::InvalidParameter,

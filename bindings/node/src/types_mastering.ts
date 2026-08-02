@@ -15,7 +15,10 @@ export interface RealtimeVoiceChangerPreset {
   dsp?: Record<string, unknown>;
 }
 
-export type RealtimeVoiceChangerConfigInput = VoicePresetId | RealtimeVoiceChangerPreset;
+export type RealtimeVoiceChangerConfigInput =
+  | VoicePresetId
+  | RealtimeVoiceChangerPreset
+  | RealtimeVoiceChangerConfig;
 
 export interface RealtimeVoiceChangerOptions {
   sampleRate: number;
@@ -571,7 +574,14 @@ export interface MasteringChainStereoResult {
   report: MasteringReport;
 }
 
-export type PanMode = 'balance' | 'stereoPan' | 'stereo-pan' | 'dualPan' | 'dual-pan' | number;
+export type PanMode =
+  | 'balance'
+  | 'pan'
+  | 'stereoPan'
+  | 'stereo-pan'
+  | 'dualPan'
+  | 'dual-pan'
+  | number;
 
 /**
  * Surround pan position for a strip feeding a >2-channel bus. Phase 1 honors
@@ -649,7 +659,9 @@ export interface MixerProcessResult {
 export type AutomationCurve = 'linear' | 'exponential' | 'hold' | 's-curve';
 
 /**
- * Pan law applied by a strip's panner. Mapped to the C enum ints
+ * Pan law applied by a strip's panner. On mono strips it changes the centre
+ * gain; on stereo strips in Balance mode the centre remains unity and it
+ * changes only the far-channel taper. Mapped to C enum ints
  * `0=const3dB`, `1=const4.5dB`, `2=const6dB`, `3=linear0dB`.
  */
 export type PanLaw = 'const3dB' | 'const4.5dB' | 'const6dB' | 'linear0dB';

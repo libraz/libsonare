@@ -14,30 +14,15 @@ export function flattenChainConfig(config: MasteringChainConfig): Record<string,
         out[path] = value;
       } else if (value !== null && typeof value === 'object') {
         walk(value as MasteringChainSection, path);
+      } else if (value !== undefined) {
+        throw new TypeError(`Mastering override '${path}' must be a number or boolean.`);
       }
     }
   };
   walk(config as MasteringChainSection, '');
 
-  // Compatibility aliases for the original flat shorthand. Normalize at this
-  // boundary so every native entry point receives the core parser's one
-  // canonical vocabulary; kept in sync with the WASM facade so a legacy flat
-  // override produces the identical override map on both surfaces.
-  const aliases: Record<string, string> = {
-    'repair.denoise': 'repair.denoise.enabled',
-    'repair.nFft': 'repair.denoise.nFft',
-    'repair.hopLength': 'repair.denoise.hopLength',
-    'repair.ddAlpha': 'repair.denoise.ddAlpha',
-    'repair.gainFloor': 'repair.denoise.gainFloor',
-    'eq.tiltDb': 'eq.tilt.tiltDb',
-    'eq.pivotHz': 'eq.tilt.pivotHz',
-  };
-  for (const [legacy, canonical] of Object.entries(aliases)) {
-    const value = out[legacy];
-    if (value !== undefined) {
-      out[canonical] = value;
-      delete out[legacy];
-    }
-  }
+  // The core's canonical_chain_param_key() owns legacy flat-key aliases.
+  // Keep this facade as a pure structural flattening step so Node and WASM
+  // cannot drift by maintaining a second alias table.
   return out;
 }

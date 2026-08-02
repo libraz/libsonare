@@ -1,3 +1,4 @@
+import type { MusicAnalyzeOptions } from './analysis.js';
 import {
   analyzeBpm as analyzeBpmFn,
   analyzeDynamics as analyzeDynamicsFn,
@@ -79,24 +80,42 @@ export class Audio {
     return new Audio(addon.Audio.fromMemory(data));
   }
 
-  getData(): Float32Array {
-    // The native Audio handle is immutable. Cache its one JS snapshot so the
-    // feature/effect convenience methods below do not copy the full PCM buffer
-    // across N-API on every call.
-    const data = this.dataCache ?? this.native.getData();
+  private requireAlive(): void {
+    if (this.disposed) {
+      throw new Error('Audio has been destroyed');
+    }
+  }
+
+  private data(): Float32Array {
+    this.requireAlive();
+    const cached = this.dataCache;
+    if (cached !== undefined) {
+      return cached;
+    }
+    const data = this.native.getData();
     this.dataCache = data;
     return data;
   }
 
+  getData(): Float32Array {
+    // Keep an immutable internal snapshot for facade operations, while callers
+    // receive their own mutable copy. Otherwise a natural in-place edit to the
+    // returned Float32Array silently changes every later facade calculation.
+    return this.data().slice();
+  }
+
   getLength(): number {
+    this.requireAlive();
     return this.native.getLength();
   }
 
   getSampleRate(): number {
+    this.requireAlive();
     return this.native.getSampleRate();
   }
 
   getDuration(): number {
+    this.requireAlive();
     return this.native.getDuration();
   }
 
@@ -117,6 +136,7 @@ export class Audio {
   // -- Analysis --
 
   detectBpm(): number {
+    this.requireAlive();
     return this.native.detectBpm();
   }
 
@@ -124,27 +144,33 @@ export class Audio {
     // Native instance method reads the handle's buffer directly (same options
     // and result shape as the standalone addon.detectKey); routing through
     // getData() would copy the whole buffer out of native memory first.
+    this.requireAlive();
     return this.native.detectKey(options);
   }
 
   detectKeyCandidates(options: KeyDetectionOptions = {}): KeyCandidate[] {
+    this.requireAlive();
     return this.native.detectKeyCandidates(options);
   }
 
   detectBeats(): Float32Array {
+    this.requireAlive();
     return this.native.detectBeats();
   }
 
   detectDownbeats(): Float32Array {
+    this.requireAlive();
     return this.native.detectDownbeats();
   }
 
   detectOnsets(): Float32Array {
+    this.requireAlive();
     return this.native.detectOnsets();
   }
 
-  analyze(): AnalysisResult {
-    return this.native.analyze();
+  analyze(options: MusicAnalyzeOptions = {}): AnalysisResult {
+    this.requireAlive();
+    return this.native.analyze(options);
   }
 
   analyzeBpm(options: AnalyzeBpmOptions = {}): BpmAnalysisResult {

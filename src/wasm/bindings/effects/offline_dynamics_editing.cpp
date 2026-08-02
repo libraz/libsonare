@@ -69,28 +69,28 @@ val js_mastering_dynamics_compressor(val samples, int sample_rate, val options) 
   validate_offline_audio_input(data.data(), data.size(), sample_rate);
   mastering::dynamics::CompressorConfig cfg;
   if (!options.isUndefined() && !options.isNull()) {
-    if (options.hasOwnProperty("thresholdDb")) {
+    if (hasProperty(options, "thresholdDb")) {
       cfg.threshold_db = options["thresholdDb"].as<float>();
     }
-    if (options.hasOwnProperty("ratio")) cfg.ratio = options["ratio"].as<float>();
-    if (options.hasOwnProperty("attackMs")) cfg.attack_ms = options["attackMs"].as<float>();
-    if (options.hasOwnProperty("releaseMs")) cfg.release_ms = options["releaseMs"].as<float>();
-    if (options.hasOwnProperty("kneeDb")) cfg.knee_db = options["kneeDb"].as<float>();
-    if (options.hasOwnProperty("makeupGainDb")) {
+    if (hasProperty(options, "ratio")) cfg.ratio = options["ratio"].as<float>();
+    if (hasProperty(options, "attackMs")) cfg.attack_ms = options["attackMs"].as<float>();
+    if (hasProperty(options, "releaseMs")) cfg.release_ms = options["releaseMs"].as<float>();
+    if (hasProperty(options, "kneeDb")) cfg.knee_db = options["kneeDb"].as<float>();
+    if (hasProperty(options, "makeupGainDb")) {
       cfg.makeup_gain_db = options["makeupGainDb"].as<float>();
     }
-    if (options.hasOwnProperty("autoMakeup")) cfg.auto_makeup = options["autoMakeup"].as<bool>();
-    if (options.hasOwnProperty("detector")) {
+    if (hasProperty(options, "autoMakeup")) cfg.auto_makeup = options["autoMakeup"].as<bool>();
+    if (hasProperty(options, "detector")) {
       cfg.detector = parseCompressorDetector(options["detector"], cfg.detector);
     }
-    if (options.hasOwnProperty("sidechainHpfEnabled")) {
+    if (hasProperty(options, "sidechainHpfEnabled")) {
       cfg.sidechain_hpf_enabled = options["sidechainHpfEnabled"].as<bool>();
     }
-    if (options.hasOwnProperty("sidechainHpfHz")) {
+    if (hasProperty(options, "sidechainHpfHz")) {
       cfg.sidechain_hpf_hz = options["sidechainHpfHz"].as<float>();
     }
-    if (options.hasOwnProperty("pdrTimeMs")) cfg.pdr_time_ms = options["pdrTimeMs"].as<float>();
-    if (options.hasOwnProperty("pdrReleaseScale")) {
+    if (hasProperty(options, "pdrTimeMs")) cfg.pdr_time_ms = options["pdrTimeMs"].as<float>();
+    if (hasProperty(options, "pdrReleaseScale")) {
       cfg.pdr_release_scale = options["pdrReleaseScale"].as<float>();
     }
   }
@@ -105,17 +105,17 @@ val js_mastering_dynamics_gate(val samples, int sample_rate, val options) {
   validate_offline_audio_input(data.data(), data.size(), sample_rate);
   mastering::dynamics::GateConfig cfg;
   if (!options.isUndefined() && !options.isNull()) {
-    if (options.hasOwnProperty("thresholdDb")) {
+    if (hasProperty(options, "thresholdDb")) {
       cfg.threshold_db = options["thresholdDb"].as<float>();
     }
-    if (options.hasOwnProperty("attackMs")) cfg.attack_ms = options["attackMs"].as<float>();
-    if (options.hasOwnProperty("releaseMs")) cfg.release_ms = options["releaseMs"].as<float>();
-    if (options.hasOwnProperty("rangeDb")) cfg.range_db = options["rangeDb"].as<float>();
-    if (options.hasOwnProperty("holdMs")) cfg.hold_ms = options["holdMs"].as<float>();
-    if (options.hasOwnProperty("closeThresholdDb")) {
+    if (hasProperty(options, "attackMs")) cfg.attack_ms = options["attackMs"].as<float>();
+    if (hasProperty(options, "releaseMs")) cfg.release_ms = options["releaseMs"].as<float>();
+    if (hasProperty(options, "rangeDb")) cfg.range_db = options["rangeDb"].as<float>();
+    if (hasProperty(options, "holdMs")) cfg.hold_ms = options["holdMs"].as<float>();
+    if (hasProperty(options, "closeThresholdDb")) {
       cfg.close_threshold_db = options["closeThresholdDb"].as<float>();
     }
-    if (options.hasOwnProperty("keyHpfHz")) cfg.key_hpf_hz = options["keyHpfHz"].as<float>();
+    if (hasProperty(options, "keyHpfHz")) cfg.key_hpf_hz = options["keyHpfHz"].as<float>();
   }
   mastering::dynamics::Gate processor(cfg);
   int latency = 0;
@@ -128,32 +128,32 @@ val js_mastering_dynamics_transient_shaper(val samples, int sample_rate, val opt
   validate_offline_audio_input(data.data(), data.size(), sample_rate);
   mastering::dynamics::TransientShaperConfig cfg;
   if (!options.isUndefined() && !options.isNull()) {
-    if (options.hasOwnProperty("attackGainDb")) {
+    if (hasProperty(options, "attackGainDb")) {
       cfg.attack_gain_db = options["attackGainDb"].as<float>();
     }
-    if (options.hasOwnProperty("sustainGainDb")) {
+    if (hasProperty(options, "sustainGainDb")) {
       cfg.sustain_gain_db = options["sustainGainDb"].as<float>();
     }
-    if (options.hasOwnProperty("fastAttackMs")) {
+    if (hasProperty(options, "fastAttackMs")) {
       cfg.fast_attack_ms = options["fastAttackMs"].as<float>();
     }
-    if (options.hasOwnProperty("fastReleaseMs")) {
+    if (hasProperty(options, "fastReleaseMs")) {
       cfg.fast_release_ms = options["fastReleaseMs"].as<float>();
     }
-    if (options.hasOwnProperty("slowAttackMs")) {
+    if (hasProperty(options, "slowAttackMs")) {
       cfg.slow_attack_ms = options["slowAttackMs"].as<float>();
     }
-    if (options.hasOwnProperty("slowReleaseMs")) {
+    if (hasProperty(options, "slowReleaseMs")) {
       cfg.slow_release_ms = options["slowReleaseMs"].as<float>();
     }
-    if (options.hasOwnProperty("sensitivity")) {
+    if (hasProperty(options, "sensitivity")) {
       cfg.sensitivity = options["sensitivity"].as<float>();
     }
-    if (options.hasOwnProperty("maxGainDb")) cfg.max_gain_db = options["maxGainDb"].as<float>();
-    if (options.hasOwnProperty("gainSmoothingMs")) {
+    if (hasProperty(options, "maxGainDb")) cfg.max_gain_db = options["maxGainDb"].as<float>();
+    if (hasProperty(options, "gainSmoothingMs")) {
       cfg.gain_smoothing_ms = options["gainSmoothingMs"].as<float>();
     }
-    if (options.hasOwnProperty("lookaheadMs")) {
+    if (hasProperty(options, "lookaheadMs")) {
       cfg.lookahead_ms = options["lookaheadMs"].as<float>();
     }
   }

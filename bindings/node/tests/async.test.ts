@@ -10,6 +10,8 @@ import { describe, expect, it } from 'vitest';
 import {
   analyze,
   analyzeAsync,
+  ErrorCode,
+  isSonareError,
   masterAudio,
   masterAudioAsync,
   masterAudioStereoAsync,
@@ -52,6 +54,28 @@ describe('Node async API', () => {
       await expect(promise).rejects.toThrow(/Expected \(Float32Array, sampleRate\?\)/);
     });
 
+    it('rejects C-ABI failures as SonareError', async () => {
+      let caught: unknown;
+      try {
+        await analyzeAsync(generateSine(440, 0.1), 0);
+      } catch (error) {
+        caught = error;
+      }
+      expect(isSonareError(caught)).toBe(true);
+      if (!isSonareError(caught)) {
+        throw new Error('expected SonareError');
+      }
+      expect(caught.code).toBe(ErrorCode.InvalidParameter);
+      expect(caught.codeName).toBe('InvalidParameter');
+    });
+
+    it('forwards MusicAnalyzeOptions to the worker', async () => {
+      await expect(analyzeAsync(generateSine(440, 0.1), SR, { nFft: 1 })).rejects.toMatchObject({
+        name: 'SonareError',
+        code: ErrorCode.InvalidParameter,
+      });
+    });
+
     it('does not block the JS event loop while running', async () => {
       const samples = generateSine(440, 5); // a few seconds of input
       let timerFired = false;
@@ -75,6 +99,21 @@ describe('Node async API', () => {
       expect(Number.isFinite(result.outputLufs)).toBe(true);
       expect(Array.isArray(result.stages)).toBe(true);
       expect(result.stages.length).toBeGreaterThan(0);
+    });
+
+    it('rejects worker failures as SonareError', async () => {
+      let caught: unknown;
+      try {
+        await masterAudioAsync(generateSine(220, 0.1), SR, 'not-a-preset' as never);
+      } catch (error) {
+        caught = error;
+      }
+      expect(isSonareError(caught)).toBe(true);
+      if (!isSonareError(caught)) {
+        throw new Error('expected SonareError');
+      }
+      expect(caught.code).toBe(ErrorCode.InvalidParameter);
+      expect(caught.codeName).toBe('InvalidParameter');
     });
 
     it('stereo variant resolves to a mastered StereoChainResult', async () => {

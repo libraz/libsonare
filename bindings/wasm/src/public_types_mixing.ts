@@ -1,4 +1,11 @@
-export type PanMode = 'balance' | 'stereoPan' | 'stereo-pan' | 'dualPan' | 'dual-pan' | number;
+export type PanMode =
+  | 'balance'
+  | 'pan'
+  | 'stereoPan'
+  | 'stereo-pan'
+  | 'dualPan'
+  | 'dual-pan'
+  | number;
 
 /**
  * Surround pan position for a strip feeding a >2-channel bus. Phase 1 honors
@@ -77,7 +84,9 @@ export type AutomationCurve = 'linear' | 'exponential' | 'hold' | 's-curve';
 
 /**
  * Pan law applied when computing left/right gains from a pan position
- * (see {@link Mixer.setPanLaw}). Maps to the underlying integer code.
+ * (see {@link Mixer.setPanLaw}). On mono strips it changes the centre gain;
+ * on stereo Balance strips it changes only the far-channel taper, while centre
+ * remains unity. Maps to the underlying integer code.
  */
 export type PanLaw = 'const3dB' | 'const4.5dB' | 'const6dB' | 'linear0dB';
 

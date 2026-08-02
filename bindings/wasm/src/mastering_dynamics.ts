@@ -107,7 +107,13 @@ export function masteringDynamicsCompressor(
     typeof request.detector === 'string'
       ? COMPRESSOR_DETECTOR_MAP[request.detector]
       : request.detector;
-  const opts: Record<string, unknown> = { ...request };
+  // Preserve inherited option values as well as own properties. The embind
+  // boundary's hasProperty() intentionally follows the prototype chain, so a
+  // spread copy here would otherwise erase values before C++ can read them.
+  const opts: Record<string, unknown> = Object.assign(
+    Object.create(Object.getPrototypeOf(request)) as Record<string, unknown>,
+    request,
+  );
   if (detector !== undefined) {
     opts.detector = detector;
   }

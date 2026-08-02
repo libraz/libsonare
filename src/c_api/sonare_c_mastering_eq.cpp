@@ -34,15 +34,17 @@ sonare::mastering::eq::PhaseMode parse_phase(int mode) {
 }  // namespace
 
 SonareEq* sonare_eq_create(double sample_rate, int max_block_size) {
+  SONARE_C_API_ENTRY;
   if (!(sample_rate > 0.0) || max_block_size < 0) {
+    set_last_error("EQ: sample_rate must be positive and max_block_size non-negative");
     return nullptr;
   }
   try {
-    auto* handle = new SonareEq;
+    auto handle = std::make_unique<SonareEq>();
     handle->sample_rate = sample_rate;
     handle->max_block_size = max_block_size;
     handle->processor.prepare(sample_rate, max_block_size);
-    return handle;
+    return handle.release();
     SONARE_C_CATCH_RETURN(nullptr)
   }
 

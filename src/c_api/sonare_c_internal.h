@@ -318,12 +318,20 @@ SonareError run_offline(const float* samples, size_t length, int sample_rate, Fn
     return SONARE_ERROR_NOT_SUPPORTED;         \
   } while (false)
 
-// Common entry guard for every public SonareError-returning C ABI function.
+// Common entry guard for every public SonareError-returning C ABI function,
+// except the documented audio-thread process entries below.
 // Keep this before all pointer/range validation so a non-throwing early return
 // cannot expose detail from an unrelated previous call. The read-only error and
 // warning accessors are deliberately excluded: reading a diagnostic must not
 // destroy it. SONARE_C_TRY also clears defensively for legacy/helper entry paths.
 #define SONARE_C_API_ENTRY sonare_c_detail::clear_last_error()
+
+// The two realtime engine process functions deliberately do not touch the
+// thread-local diagnostic strings. First use of a thread-local object can
+// allocate TLS storage on some platforms, which would violate their audio-thread
+// no-allocation contract. They do not throw or produce detailed diagnostics;
+// callers must validate/setup on the control thread instead.
+#define SONARE_C_RT_API_ENTRY ((void)0)
 
 // Clears any stale detailed-error message before running the guarded body so a
 // message recorded by an earlier call can never leak. The catch arms below set a

@@ -43,6 +43,22 @@ export interface SamplesRequest extends GuardedOptions {
   sampleRate?: number;
 }
 
+/** Peak-picking configuration for {@link detectOnsets}. */
+export interface OnsetDetectOptions {
+  nFft?: number;
+  hopLength?: number;
+  threshold?: number;
+  preMax?: number;
+  postMax?: number;
+  preAvg?: number;
+  postAvg?: number;
+  delta?: number;
+  wait?: number;
+  backtrack?: boolean;
+  backtrackRange?: number;
+}
+export interface DetectOnsetsRequest extends SamplesRequest, OnsetDetectOptions {}
+
 /** Canonical request form for key detection functions. */
 export interface DetectKeyRequest extends KeyDetectionOptions, SamplesRequest {}
 
@@ -207,20 +223,20 @@ export function detectKeyCandidates(
  * @param sampleRate - Sample rate in Hz (default: 22050)
  * @returns Array of onset times in seconds
  */
-export function detectOnsets(request: SamplesRequest): Float32Array;
+export function detectOnsets(request: DetectOnsetsRequest): Float32Array;
 export function detectOnsets(
   samples: Float32Array,
   sampleRate?: number,
-  options?: GuardedOptions,
+  options?: OnsetDetectOptions & GuardedOptions,
 ): Float32Array;
 export function detectOnsets(
-  samples: Float32Array | SamplesRequest,
+  samples: Float32Array | DetectOnsetsRequest,
   sampleRate = 22050,
-  options: GuardedOptions = {},
+  options: OnsetDetectOptions & GuardedOptions = {},
 ): Float32Array {
   const request = samples instanceof Float32Array ? { samples, sampleRate, ...options } : samples;
   validateAnalysisInput('detectOnsets', request.samples, request.sampleRate ?? 22050, request);
-  return requireModule().detectOnsets(request.samples, request.sampleRate ?? 22050);
+  return requireModule().detectOnsets(request.samples, request.sampleRate ?? 22050, request);
 }
 
 /**

@@ -23,15 +23,6 @@ void FillBounceOptions(const Napi::Object& obj, SonareProjectBounceOptions* opti
   options->instrument_latency_samples = IntProperty(obj, "instrumentLatencySamples", 0);
 }
 
-// Maps a waveform name to its SonareSynthWaveform enum value, or -1 if unknown.
-int WaveformFromName(const std::string& name) {
-  if (name == "sine") return SONARE_SYNTH_WAVEFORM_SINE;
-  if (name == "saw" || name == "sawtooth") return SONARE_SYNTH_WAVEFORM_SAW;
-  if (name == "square") return SONARE_SYNTH_WAVEFORM_SQUARE;
-  if (name == "triangle") return SONARE_SYNTH_WAVEFORM_TRIANGLE;
-  return -1;
-}
-
 // Parses a JS instrument descriptor into a built-in synth binding. Throws a
 // JS exception (and returns false) on an unknown waveform name. A zero-init
 // config is the native default sine patch, so only present fields are set.
@@ -44,10 +35,10 @@ bool ParseBuiltinInstrument(Napi::Env env, const Napi::Object& obj,
   Napi::Value waveform = obj.Get("waveform");
   if (waveform.IsString()) {
     const std::string name = waveform.As<Napi::String>().Utf8Value();
-    const int mapped = WaveformFromName(name);
+    const int mapped = sonare_synth_builtin_waveform_from_name(name.c_str());
     if (mapped < 0) {
       Napi::TypeError::New(env, "Unknown synth waveform name: '" + name +
-                                    "' (expected sine, saw, square, or triangle)")
+                                    "' (expected sine, saw, sawtooth, square, or triangle)")
           .ThrowAsJavaScriptException();
       return false;
     }

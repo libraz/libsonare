@@ -3,6 +3,8 @@
 #include <cstring>
 #include <string>
 
+#include "c_api/sonare_c_error_mapping.h"
+
 namespace sonare_node {
 
 const char* ErrorMessageForCode(SonareError err) {
@@ -55,6 +57,8 @@ SonareError CErrorFromException(const sonare::SonareException& e) {
       return SONARE_ERROR_NOT_SUPPORTED;
     case sonare::ErrorCode::InvalidState:
       return SONARE_ERROR_INVALID_STATE;
+    case sonare::ErrorCode::Cancelled:
+      return SONARE_ERROR_CANCELLED;
     case sonare::ErrorCode::Ok:
     default:
       return SONARE_ERROR_UNKNOWN;
@@ -62,35 +66,20 @@ SonareError CErrorFromException(const sonare::SonareException& e) {
 }
 
 sonare::ErrorCode CodeFromCError(SonareError err) {
-  switch (err) {
-    case SONARE_ERROR_FILE_NOT_FOUND:
-      return sonare::ErrorCode::FileNotFound;
-    case SONARE_ERROR_INVALID_FORMAT:
-      return sonare::ErrorCode::InvalidFormat;
-    case SONARE_ERROR_DECODE_FAILED:
-      return sonare::ErrorCode::DecodeFailed;
-    case SONARE_ERROR_INVALID_PARAMETER:
-      return sonare::ErrorCode::InvalidParameter;
-    case SONARE_ERROR_OUT_OF_MEMORY:
-      return sonare::ErrorCode::OutOfMemory;
-    case SONARE_ERROR_NOT_SUPPORTED:
-      return sonare::ErrorCode::NotImplemented;
-    case SONARE_ERROR_INVALID_STATE:
-      return sonare::ErrorCode::InvalidState;
-    case SONARE_OK:
-    case SONARE_ERROR_UNKNOWN:
-    default:
-      return sonare::ErrorCode::InvalidState;
-  }
+  return sonare_c_detail::error_code_from_c_error(err);
 }
 
 namespace {
 
-void ThrowWithCode(Napi::Env env, SonareError err, const std::string& message) {
-  Napi::Error error = Napi::Error::New(env, message);
+void SetSonareErrorProperties(Napi::Env env, Napi::Object error, SonareError err) {
   error.Set("name", Napi::String::New(env, "SonareError"));
   error.Set("code", Napi::Number::New(env, static_cast<double>(static_cast<int>(err))));
   error.Set("codeName", Napi::String::New(env, ErrorCodeName(err)));
+}
+
+void ThrowWithCode(Napi::Env env, SonareError err, const std::string& message) {
+  Napi::Error error = Napi::Error::New(env, message);
+  SetSonareErrorProperties(env, error.Value(), err);
   error.ThrowAsJavaScriptException();
 }
 
@@ -102,6 +91,45 @@ void ThrowSonareError(Napi::Env env, SonareError err, const std::string& prefix)
 
 void ThrowSonareErrorMessage(Napi::Env env, SonareError err, const std::string& message) {
   ThrowWithCode(env, err, message);
+}
+
+void DecorateSonareError(Napi::Env env, Napi::Object error, SonareError err) {
+  SetSonareErrorProperties(env, error, err);
+}
+
+bool ReadMusicAnalyzeOptions(const Napi::Value& value, SonareMusicAnalyzeOptions* options) {
+  if (options == nullptr) return false;
+  *options = sonare_music_analyze_options_default();
+  if (!value.IsObject()) return false;
+
+  const Napi::Object object = value.As<Napi::Object>();
+  auto integer = [&](const char* key, int* field) {
+    const Napi::Value item = object.Get(key);
+    if (item.IsNumber()) *field = item.As<Napi::Number>().Int32Value();
+  };
+  auto number = [&](const char* key, float* field) {
+    const Napi::Value item = object.Get(key);
+    if (item.IsNumber()) *field = item.As<Napi::Number>().FloatValue();
+  };
+  auto boolean = [&](const char* key, int* field) {
+    const Napi::Value item = object.Get(key);
+    if (item.IsBoolean()) *field = item.As<Napi::Boolean>().Value() ? 1 : 0;
+  };
+  integer("nFft", &options->n_fft);
+  integer("hopLength", &options->hop_length);
+  number("bpmMin", &options->bpm_min);
+  number("bpmMax", &options->bpm_max);
+  number("startBpm", &options->start_bpm);
+  boolean("useTriadsOnly", &options->use_triads_only);
+  boolean("useHpss", &options->use_hpss);
+  number("chromaHighpassHz", &options->chroma_highpass_hz);
+  boolean("useBassWeighted", &options->use_bass_weighted);
+  integer("chromaHopMultiplier", &options->chroma_hop_multiplier);
+  boolean("useChordHmm", &options->use_chord_hmm);
+  boolean("useChordKeyContext", &options->use_chord_key_context);
+  integer("chordHmmBeamWidth", &options->chord_hmm_beam_width);
+  boolean("detectChordInversions", &options->detect_chord_inversions);
+  return true;
 }
 
 bool IsFloat32Array(const Napi::Value& value) {

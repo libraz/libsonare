@@ -35,6 +35,13 @@ describe('analysis request-object compatibility', () => {
     expect(analyze({ samples, sampleRate })).toEqual(analyze(samples, sampleRate));
   });
 
+  it('preserves onset peak-picking options', () => {
+    const options = { nFft: 256, hopLength: 64, delta: 0.02, backtrack: true };
+    expect(Array.from(detectOnsets({ samples, sampleRate, ...options }))).toEqual(
+      Array.from(detectOnsets(samples, sampleRate, options)),
+    );
+  });
+
   it('accepts complete analyzer options', () => {
     const result = analyze({
       samples,

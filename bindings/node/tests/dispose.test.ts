@@ -25,6 +25,18 @@ describe('Symbol.dispose / using', () => {
     expect(() => audio.destroy()).not.toThrow();
   });
 
+  it('does not expose mutable cached PCM and rejects use after destroy', () => {
+    const audio = Audio.fromBuffer(new Float32Array([0.5, -0.25]), 48000);
+    const exposed = audio.getData();
+    exposed[0] = 0;
+    expect(audio.getData()[0]).toBe(0.5);
+
+    audio.destroy();
+    expect(() => audio.getData()).toThrow('Audio has been destroyed');
+    expect(() => audio.getLength()).toThrow('Audio has been destroyed');
+    expect(() => audio.detectBpm()).toThrow('Audio has been destroyed');
+  });
+
   it('Project supports `using`', () => {
     expect(() => {
       using project = Project.create();

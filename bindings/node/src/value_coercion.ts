@@ -22,46 +22,41 @@ import type {
  * part of the public surface (consumed by index.ts, never re-exported).
  */
 
+/** Resolve only declared enum spellings and ordinals at the JS/C ABI boundary. */
+export function resolveEnumOrdinal(
+  value: unknown,
+  values: Readonly<Record<string, number>>,
+  enumName: string,
+): number {
+  if (typeof value === 'number') {
+    if (!Number.isSafeInteger(value) || !Object.values(values).includes(value)) {
+      throw new RangeError(`Invalid ${enumName}: ${String(value)}`);
+    }
+    return value;
+  }
+  if (typeof value === 'string') {
+    const ordinal = values[value];
+    if (ordinal !== undefined) {
+      return ordinal;
+    }
+  }
+  throw new RangeError(`Invalid ${enumName}: ${String(value)}`);
+}
+
 export function trackKindValue(kind: ProjectTrackDesc['kind']): number {
-  if (kind === undefined || kind === 'audio') {
-    return 0;
-  }
-  if (kind === 'midi') {
-    return 1;
-  }
-  if (kind === 'aux') {
-    return 2;
-  }
-  if (typeof kind === 'number') {
-    return kind;
-  }
-  throw new Error(`Invalid track kind: ${kind}`);
+  return resolveEnumOrdinal(kind ?? 'audio', { audio: 0, midi: 1, aux: 2 }, 'track kind');
 }
 
 export function warpModeValue(mode: WarpMode | number | undefined): number {
-  if (mode === undefined || mode === 'off') {
-    return 0;
-  }
-  if (mode === 'repitch') {
-    return 1;
-  }
-  if (mode === 'tempo-sync') {
-    return 2;
-  }
-  if (typeof mode === 'number') {
-    return mode;
-  }
-  throw new Error(`Invalid warp mode: ${mode}`);
+  return resolveEnumOrdinal(mode ?? 'off', { off: 0, repitch: 1, 'tempo-sync': 2 }, 'warp mode');
 }
 
 export function engineAutomationCurveValue(curve: EngineAutomationPointCurve | undefined): number {
-  if (curve === undefined) {
-    return 0;
-  }
-  if (typeof curve === 'number') {
-    return curve;
-  }
-  return automationCurveValue(curve);
+  return resolveEnumOrdinal(
+    curve ?? 'linear',
+    { linear: 0, exponential: 1, hold: 2, 's-curve': 3 },
+    'automation curve',
+  );
 }
 
 export function engineAutomationPointValue(point: EngineAutomationPoint): EngineAutomationPoint {
@@ -77,22 +72,12 @@ export function projectFadeCurveValue(
   if (curve === undefined || curve === null) {
     return undefined;
   }
-  if (typeof curve === 'number') {
-    return curve;
-  }
-  if (curve === 'linear') {
-    return 0;
-  }
-  if (curve === 'equalPower' || curve === 'equal-power' || curve === 'equal_power') {
-    return 1;
-  }
-  if (curve === 'exponential') {
-    return 2;
-  }
-  if (curve === 'logarithmic') {
-    return 3;
-  }
-  throw new Error(`Invalid project fade curve: ${curve}`);
+  const normalized = typeof curve === 'string' ? curve.replace(/[_-]/g, '').toLowerCase() : curve;
+  return resolveEnumOrdinal(
+    normalized,
+    { linear: 0, equalpower: 1, exponential: 2, exp: 2, logarithmic: 3, log: 3 },
+    'project fade curve',
+  );
 }
 
 export function projectClipFadeValue(
@@ -101,21 +86,13 @@ export function projectClipFadeValue(
   if (fade === undefined) {
     return undefined;
   }
-  const curve = projectFadeCurveValue(fade.curve);
-  return curve === undefined ? { ...fade } : { ...fade, curve: curve as ProjectFadeCurve };
+  // Keep names intact so the addon resolves them through the C ABI's shared
+  // fade-curve parser. This prevents the three bindings from drifting.
+  return { ...fade };
 }
 
 export function projectLoopModeValue(mode: ProjectLoopMode): number {
-  if (typeof mode === 'number') {
-    return mode;
-  }
-  if (mode === 'off') {
-    return 0;
-  }
-  if (mode === 'loop') {
-    return 1;
-  }
-  throw new Error(`Invalid project loop mode: ${mode}`);
+  return resolveEnumOrdinal(mode, { off: 0, loop: 1 }, 'project loop mode');
 }
 
 export function projectAutomationPointValue(point: ProjectAutomationPoint): ProjectAutomationPoint {
@@ -153,67 +130,30 @@ const SEND_TIMING_VALUES: Record<SendTiming, number> = {
 };
 
 export function automationCurveValue(curve: AutomationCurve): number {
-  if (curve === 'linear') {
-    return 0;
-  }
-  if (curve === 'exponential') {
-    return 1;
-  }
-  if (curve === 'hold') {
-    return 2;
-  }
-  if (curve === 's-curve') {
-    return 3;
-  }
-  throw new Error(`Invalid automation curve: ${curve}`);
+  return resolveEnumOrdinal(
+    curve,
+    { linear: 0, exponential: 1, hold: 2, 's-curve': 3 },
+    'automation curve',
+  );
 }
 
 export function panLawValue(panLaw: PanLaw | number): number {
-  if (typeof panLaw === 'number') {
-    return panLaw;
-  }
-  const value = PAN_LAW_VALUES[panLaw];
-  if (value === undefined) {
-    throw new Error(`Invalid pan law: ${panLaw}`);
-  }
-  return value;
+  return resolveEnumOrdinal(panLaw, PAN_LAW_VALUES, 'pan law');
 }
 
 export function panModeValue(panMode: PanMode): number {
-  if (typeof panMode === 'number') {
-    return panMode;
-  }
-  const mode = panMode.replace(/_/g, '-').toLowerCase();
-  if (mode === 'stereo-pan' || mode === 'stereopan' || mode === 'pan') {
-    return 1; // SONARE_PAN_MODE_STEREO_PAN
-  }
-  if (mode === 'dual-pan' || mode === 'dualpan') {
-    return 2; // SONARE_PAN_MODE_DUAL_PAN
-  }
-  if (mode === 'balance') {
-    return 0; // SONARE_PAN_MODE_BALANCE
-  }
-  throw new Error(`Invalid pan mode: ${panMode}`);
+  const mode = typeof panMode === 'string' ? panMode.replace(/_/g, '-').toLowerCase() : panMode;
+  return resolveEnumOrdinal(
+    mode,
+    { balance: 0, pan: 1, stereopan: 1, 'stereo-pan': 1, dualpan: 2, 'dual-pan': 2 },
+    'pan mode',
+  );
 }
 
 export function meterTapValue(tap: MeterTap | number): number {
-  if (typeof tap === 'number') {
-    return tap;
-  }
-  const value = METER_TAP_VALUES[tap];
-  if (value === undefined) {
-    throw new Error(`Invalid meter tap: ${tap}`);
-  }
-  return value;
+  return resolveEnumOrdinal(tap, METER_TAP_VALUES, 'meter tap');
 }
 
 export function sendTimingValue(timing: SendTiming | number): number {
-  if (typeof timing === 'number') {
-    return timing;
-  }
-  const value = SEND_TIMING_VALUES[timing];
-  if (value === undefined) {
-    throw new Error(`Invalid send timing: ${timing}`);
-  }
-  return value;
+  return resolveEnumOrdinal(timing, SEND_TIMING_VALUES, 'send timing');
 }

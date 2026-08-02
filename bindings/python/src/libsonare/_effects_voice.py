@@ -206,8 +206,8 @@ class RealtimeVoiceChanger:
             out_block = out_buf[pos : pos + length]
             # `from_buffer` requires C-contiguous memory; slices of a
             # contiguous 1-D float32 array are guaranteed contiguous.
-            c_in = (ctypes.c_float * length).from_buffer(in_block)  # type: ignore[arg-type]
-            c_out = (ctypes.c_float * length).from_buffer(out_block)  # type: ignore[arg-type]
+            c_in = (ctypes.c_float * length).from_buffer(in_block)
+            c_out = (ctypes.c_float * length).from_buffer(out_block)
             rc = self._lib.sonare_realtime_voice_changer_process_mono(
                 self._handle, c_in, c_out, ctypes.c_size_t(length)
             )
@@ -238,12 +238,8 @@ class RealtimeVoiceChanger:
             end = start + block_frames * ch
             in_block = in_buf[start:end]
             out_block = out_buf[start:end]
-            c_in = (ctypes.c_float * (block_frames * ch)).from_buffer(
-                in_block  # type: ignore[arg-type]
-            )
-            c_out = (ctypes.c_float * (block_frames * ch)).from_buffer(
-                out_block  # type: ignore[arg-type]
-            )
+            c_in = (ctypes.c_float * (block_frames * ch)).from_buffer(in_block)
+            c_out = (ctypes.c_float * (block_frames * ch)).from_buffer(out_block)
             rc = self._lib.sonare_realtime_voice_changer_process_interleaved(
                 self._handle,
                 c_in,
@@ -279,8 +275,8 @@ class RealtimeVoiceChanger:
             length = min(step, total - pos)
             l_block = out_left[pos : pos + length]
             r_block = out_right[pos : pos + length]
-            c_left = (ctypes.c_float * length).from_buffer(l_block)  # type: ignore[arg-type]
-            c_right = (ctypes.c_float * length).from_buffer(r_block)  # type: ignore[arg-type]
+            c_left = (ctypes.c_float * length).from_buffer(l_block)
+            c_right = (ctypes.c_float * length).from_buffer(r_block)
             rc = self._lib.sonare_realtime_voice_changer_process_planar_stereo(
                 self._handle, c_left, c_right, ctypes.c_size_t(length)
             )

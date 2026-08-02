@@ -148,42 +148,6 @@ SonareError sonare_audio_analyze(const SonareAudio* audio, SonareAnalysisResult*
   AnalysisResult result =
       quick::analyze(audio->audio.data(), audio->audio.size(), audio->audio.sample_rate());
 
-  out->bpm = result.bpm;
-  out->bpm_confidence = result.bpm_confidence;
-  out->key.root = static_cast<SonarePitchClass>(result.key.root);
-  out->key.mode = static_cast<SonareMode>(result.key.mode);
-  out->key.confidence = result.key.confidence;
-  out->time_signature.numerator = result.time_signature.numerator;
-  out->time_signature.denominator = result.time_signature.denominator;
-  out->time_signature.confidence = result.time_signature.confidence;
-  out->beat_count = result.beats.size();
-  if (result.beats.empty()) {
-    out->beat_times = nullptr;
-  } else {
-    out->beat_times = new float[result.beats.size()];
-    for (size_t i = 0; i < result.beats.size(); ++i) {
-      out->beat_times[i] = result.beats[i].time;
-    }
-  }
-  out->bpm_candidate_count = result.bpm_candidates.size();
-  if (!result.bpm_candidates.empty()) {
-    out->bpm_candidates = new SonareAnalysisBpmCandidate[result.bpm_candidates.size()];
-    for (size_t i = 0; i < result.bpm_candidates.size(); ++i) {
-      const auto& candidate = result.bpm_candidates[i];
-      out->bpm_candidates[i] = {candidate.value, candidate.confidence,
-                                static_cast<SonareBpmCandidateRelation>(candidate.relation)};
-    }
-  }
-  out->time_signature_candidate_count = result.time_signature_candidates.size();
-  if (!result.time_signature_candidates.empty()) {
-    out->time_signature_candidates =
-        new SonareTimeSignature[result.time_signature_candidates.size()];
-    for (size_t i = 0; i < result.time_signature_candidates.size(); ++i) {
-      const auto& candidate = result.time_signature_candidates[i];
-      out->time_signature_candidates[i] = {candidate.numerator, candidate.denominator,
-                                           candidate.confidence};
-    }
-  }
-  return SONARE_OK;
+  return fill_analysis_result(result, out);
   SONARE_C_CATCH
 }

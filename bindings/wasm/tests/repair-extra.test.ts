@@ -138,6 +138,16 @@ describe('masteringRepairDereverbClassical (WASM)', () => {
     expect(out.length).toBe(samples.length);
   });
 
+  it('falls back to defaults for undefined options without passing NaN into DSP config', () => {
+    const out = masteringRepairDereverbClassical(samples, SR, {
+      lateDelayMs: undefined,
+      nFft: undefined,
+      hopLength: undefined,
+    });
+    expect(out.length).toBe(samples.length);
+    expect(out.every(Number.isFinite)).toBe(true);
+  });
+
   it('rejects non-power-of-two nFft', () => {
     expect(() => masteringRepairDereverbClassical(samples, SR, { nFft: 1500 })).toThrow();
   });

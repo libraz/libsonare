@@ -14,12 +14,40 @@ from __future__ import annotations
 import ast
 import inspect
 import re
+import types
 from pathlib import Path
+
+import pytest
 
 
 def test_import_libsonare() -> None:
     """``import libsonare`` must not raise at module load."""
     import libsonare  # noqa: F401  (import is the assertion)
+
+
+def test_error_codes_are_public_and_named() -> None:
+    """Python errors expose the same branchable code contract as JS bindings."""
+    import libsonare
+
+    error = libsonare.SonareError(libsonare.ErrorCode.INVALID_PARAMETER, "bad input")
+    assert error.code == libsonare.ErrorCode.INVALID_PARAMETER
+    assert error.code_name == "InvalidParameter"
+    assert libsonare.SonareError(12345, "unknown").code_name == "Unknown"
+
+
+def test_library_abi_is_checked_before_configuring_symbols(monkeypatch: pytest.MonkeyPatch) -> None:
+    """An old dylib produces the ABI error before any newer symbol is looked up."""
+    import libsonare._ffi as ffi
+
+    fake_library = types.SimpleNamespace(sonare_abi_version=lambda: 0)
+    monkeypatch.setattr(ffi.ctypes, "CDLL", lambda _path: fake_library)
+
+    def unexpected_configuration(_lib: object) -> None:
+        pytest.fail("configured function signatures before checking the ABI")
+
+    monkeypatch.setattr(ffi, "configure_core_signatures", unexpected_configuration)
+    with pytest.raises(RuntimeError, match="ABI mismatch"):
+        ffi.load_library("/tmp/old-libsonare.dylib")
 
 
 def test_realtime_voice_changer_symbols_exposed() -> None:

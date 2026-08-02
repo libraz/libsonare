@@ -5,6 +5,7 @@ import * as path from 'node:path';
 import { describe, expect, it } from 'vitest';
 import {
   Audio,
+  analyze,
   detectBpm,
   detectKey,
   detectKeyCandidates,
@@ -62,6 +63,11 @@ describe('Audio class methods', () => {
     const native = (audio as unknown as { native: Record<string, (opts: unknown) => unknown> })
       .native;
     try {
+      expect(() => native.detectKey({ profile: 'bogus' })).toThrow(/invalid key profile/);
+      expect(() => native.detectKeyCandidates({ modes: ['major', 'nope'] })).toThrow(
+        /invalid key mode/,
+      );
+
       const opts = { modes: 'major-minor', profile: 'temperley', genreHint: 'edm' };
       const instanceKey = native.detectKey(opts) as { root: string; mode: string };
       const standaloneKey = detectKey(samples, SR, opts);
@@ -87,6 +93,17 @@ describe('Audio class methods', () => {
     expect(result.key.name).toContain(result.key.root);
     expect(result.beats.length).toBe(result.beatTimes.length);
     audio.destroy();
+  });
+
+  it('analyze via class forwards MusicAnalyzeOptions', () => {
+    const samples = generateSine(440, SR, 1.0);
+    const audio = Audio.fromBuffer(samples, SR);
+    try {
+      expect(() => analyze(samples, SR, { nFft: 1 })).toThrow();
+      expect(() => audio.analyze({ nFft: 1 })).toThrow();
+    } finally {
+      audio.destroy();
+    }
   });
 
   it('analysis primitives work via class', () => {
@@ -235,15 +252,18 @@ describe('FFmpeg decode (skipped without build support or ffmpeg CLI)', () => {
 
       const audio = Audio.fromFile(m4aPath);
       const samples = audio.getData();
-      expect(audio.getData()).toBe(samples);
+      expect(audio.getData()).not.toBe(samples);
+      samples.fill(0);
+      const retained = audio.getData();
+      expect(retained.some((sample) => sample !== 0)).toBe(true);
       const sr = audio.getSampleRate();
       expect(sr).toBeGreaterThan(0);
-      expect(samples).toBeInstanceOf(Float32Array);
-      expect(samples.length).toBeGreaterThan(1000);
+      expect(retained).toBeInstanceOf(Float32Array);
+      expect(retained.length).toBeGreaterThan(1000);
       // Sanity: sample values should be bounded in [-1, 1] with audible level.
       let peak = 0;
-      for (let i = 0; i < samples.length; i++) {
-        peak = Math.max(peak, Math.abs(samples[i]));
+      for (let i = 0; i < retained.length; i++) {
+        peak = Math.max(peak, Math.abs(retained[i]));
       }
       expect(peak).toBeGreaterThan(0.01);
       expect(peak).toBeLessThanOrEqual(1.0);

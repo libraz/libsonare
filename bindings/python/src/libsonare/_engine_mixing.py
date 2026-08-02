@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import ctypes
 from collections.abc import Mapping, Sequence
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, cast
 
 from ._engine_conversions import _band_json_arg
 from ._runtime import (
@@ -35,25 +35,32 @@ class _EngineMixingMixin:
             # prior stereo behavior.
             raw[i].source_channel_layout = 1
             if isinstance(lane, Mapping):
-                raw[i].track_id = int(lane["track_id"] if "track_id" in lane else lane["trackId"])
-                sends = lane.get("sends", [])
+                raw[i].track_id = int(
+                    cast(int, lane["track_id"] if "track_id" in lane else lane["trackId"])
+                )
+                sends = cast(Sequence[Mapping[str, object]], lane.get("sends", []))
                 if sends:
                     send_array = (SonareEngineTrackSend * len(sends))()
                     for send_index, send in enumerate(sends):
                         if not isinstance(send, Mapping):
                             raise TypeError("track lane send must be a mapping")
                         send_array[send_index].bus_id = int(
-                            send["bus_id"] if "bus_id" in send else send["busId"]
+                            cast(int, send["bus_id"] if "bus_id" in send else send["busId"])
                         )
                         send_array[send_index].level_db = float(
-                            send["level_db"] if "level_db" in send else send.get("levelDb", 0.0)
+                            cast(
+                                float,
+                                send["level_db"]
+                                if "level_db" in send
+                                else send.get("levelDb", 0.0),
+                            )
                         )
                         send_array[send_index].enabled = 1 if bool(send.get("enabled", True)) else 0
                         # Default to post-fader so callers that omit the timing
                         # key keep the prior behavior.
                         timing = send.get("timing", send.get("send_timing", send.get("sendTiming")))
                         send_array[send_index].send_timing = (
-                            _send_timing_value(timing)
+                            _send_timing_value(cast(SendTiming | str | int, timing))
                             if timing is not None
                             else int(SendTiming.POST_FADER)
                         )
@@ -61,13 +68,18 @@ class _EngineMixingMixin:
                     raw[i].send_count = len(sends)
                     send_arrays.append(send_array)
                 raw[i].output_bus_id = int(
-                    lane["output_bus_id"] if "output_bus_id" in lane else lane.get("outputBusId", 0)
+                    cast(
+                        int,
+                        lane["output_bus_id"]
+                        if "output_bus_id" in lane
+                        else lane.get("outputBusId", 0),
+                    )
                 )
                 if "source_channel_layout" in lane or "sourceChannelLayout" in lane:
                     raw[i].source_channel_layout = int(
-                        lane["source_channel_layout"]
+                        cast(int, lane["source_channel_layout"])
                         if "source_channel_layout" in lane
-                        else lane["sourceChannelLayout"]
+                        else cast(int, lane["sourceChannelLayout"])
                     )
             else:
                 raw[i].track_id = int(lane)
@@ -88,13 +100,18 @@ class _EngineMixingMixin:
     def set_track_buses(self, buses: Sequence[Mapping[str, object]]) -> None:
         raw = (SonareEngineBus * len(buses))()
         for i, bus in enumerate(buses):
-            raw[i].bus_id = int(bus["bus_id"] if "bus_id" in bus else bus["busId"])
-            raw[i].gain_db = float(bus["gain_db"] if "gain_db" in bus else bus.get("gainDb", 0.0))
+            raw[i].bus_id = int(cast(int, bus["bus_id"] if "bus_id" in bus else bus["busId"]))
+            raw[i].gain_db = float(
+                cast(float, bus["gain_db"] if "gain_db" in bus else bus.get("gainDb", 0.0))
+            )
             # ctypes zero-inits channel_layout to 0 (mono); default to stereo
             # (ChannelLayout.STEREO) unless the caller specifies it.
             if "channel_layout" in bus or "channelLayout" in bus:
                 raw[i].channel_layout = int(
-                    bus["channel_layout"] if "channel_layout" in bus else bus["channelLayout"]
+                    cast(
+                        int,
+                        bus["channel_layout"] if "channel_layout" in bus else bus["channelLayout"],
+                    )
                 )
             else:
                 raw[i].channel_layout = 1
@@ -177,7 +194,11 @@ class _EngineMixingMixin:
         )
 
     def set_track_strip_pan_law(self, track_id: int, pan_law: PanLaw | str | int) -> None:
-        """Set a track strip's pan law (``PanLaw`` enum, name, or int 0..3)."""
+        """Set a track strip's pan law (``PanLaw`` enum, name, or int 0..3).
+
+        Mono strips apply the law at centre; stereo Balance strips keep centre
+        unity and use it only for the far-channel taper.
+        """
         _check(
             _get_lib().sonare_engine_set_track_strip_pan_law(
                 self._require_handle(),

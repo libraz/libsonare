@@ -9,8 +9,6 @@
 
 namespace sonare_node {
 
-Napi::FunctionReference MixerWrap::constructor_;
-
 Napi::Object MixerWrap::Init(Napi::Env env, Napi::Object exports) {
   Napi::Function func = DefineClass(
       env, "Mixer",
@@ -60,8 +58,6 @@ Napi::Object MixerWrap::Init(Napi::Env env, Napi::Object exports) {
           InstanceMethod<&MixerWrap::ScheduleSendAutomation>("scheduleSendAutomation"),
       });
 
-  constructor_ = Napi::Persistent(func);
-  constructor_.SuppressDestruct();
   exports.Set("Mixer", func);
   return exports;
 }
