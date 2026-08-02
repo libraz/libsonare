@@ -291,14 +291,14 @@ def cmd_analyze(args: argparse.Namespace) -> int:
             _strict_json_dumps(
                 {
                     "bpm": r.bpm,
-                    "bpmConfidence": r.bpm_confidence,
+                    "bpm_confidence": r.bpm_confidence,
                     "key": {
                         "root": r.key.root.value,
                         "mode": r.key.mode.value,
                         "confidence": r.key.confidence,
                         "name": key_name,
                     },
-                    "timeSignature": {
+                    "time_signature": {
                         "numerator": r.time_signature.numerator,
                         "denominator": r.time_signature.denominator,
                         "confidence": r.time_signature.confidence,
@@ -314,15 +314,15 @@ def cmd_analyze(args: argparse.Namespace) -> int:
                         "complexity": timbre.complexity if timbre else 0.0,
                     },
                     "dynamics": {
-                        "dynamicRangeDb": dynamics.dynamic_range_db if dynamics else 0.0,
-                        "loudnessRangeDb": dynamics.loudness_range_db if dynamics else 0.0,
-                        "crestFactor": dynamics.crest_factor if dynamics else 0.0,
-                        "isCompressed": dynamics.is_compressed if dynamics else False,
+                        "dynamic_range_db": dynamics.dynamic_range_db if dynamics else 0.0,
+                        "loudness_range_db": dynamics.loudness_range_db if dynamics else 0.0,
+                        "crest_factor": dynamics.crest_factor if dynamics else 0.0,
+                        "is_compressed": dynamics.is_compressed if dynamics else False,
                     },
                     "rhythm": {
                         "syncopation": rhythm.syncopation if rhythm else 0.0,
-                        "grooveType": rhythm.groove_type if rhythm else "",
-                        "patternRegularity": rhythm.pattern_regularity if rhythm else 0.0,
+                        "groove_type": rhythm.groove_type if rhythm else "",
+                        "pattern_regularity": rhythm.pattern_regularity if rhythm else 0.0,
                     },
                     "form": r.form,
                 }

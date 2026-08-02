@@ -485,9 +485,9 @@ def test_info_and_lufs_json_match_the_native_cli_schema(tmp_path) -> None:
     analyze = json.loads(analyze_result.stdout)
     assert set(analyze) == {
         "bpm",
-        "bpmConfidence",
+        "bpm_confidence",
         "key",
-        "timeSignature",
+        "time_signature",
         "beats",
         "chords",
         "sections",

@@ -1011,7 +1011,7 @@ TEST_CASE("CLI analyze command", "[.][slow][cli]") {
   SECTION("json output") {
     auto [code, output] = exec_command(CLI + " analyze " + TEST_WAV + " --json -q");
     REQUIRE(code == 0);
-    for (const char* key : {"bpm", "bpmConfidence", "key", "timeSignature", "beats", "chords",
+    for (const char* key : {"bpm", "bpm_confidence", "key", "time_signature", "beats", "chords",
                             "sections", "timbre", "dynamics", "rhythm", "form"}) {
       REQUIRE_THAT(output, ContainsSubstring(std::string("\"") + key + "\""));
     }
@@ -1140,7 +1140,7 @@ TEST_CASE("CLI DAW editing commands", "[cli]") {
                                        " --preset neutral-monitor --set dsp.outputGainDb=-2 " +
                                        TEST_WAV + " -o " + TEST_OUT + " --json -q");
     REQUIRE(code == 0);
-    REQUIRE_THAT(output, ContainsSubstring("\"presetId\": \"neutral-monitor\""));
+    REQUIRE_THAT(output, ContainsSubstring("\"preset\": \"neutral-monitor\""));
     std::ifstream f(TEST_OUT);
     REQUIRE(f.good());
   }

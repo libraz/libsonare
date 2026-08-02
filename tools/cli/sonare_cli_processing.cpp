@@ -222,11 +222,11 @@ int cmd_voice_change(const CliArgs& args, const Audio& audio) {
     JsonBuilder json;
     json.begin_object()
         .kv("output", args.output_file)
-        .kv("durationSec", result.duration())
-        .kv("sampleRate", result.sample_rate())
-        .kv("latencySamples", latency_samples);
+        .kv("duration", result.duration())
+        .kv("sample_rate", result.sample_rate())
+        .kv("latency_samples", latency_samples);
     if (!preset_id.empty()) {
-      json.kv("presetId", preset_id);
+      json.kv("preset", preset_id);
     } else {
       // Offline voice-change path: echo the simple pitch/formant knobs the
       // caller supplied so JSON consumers can correlate input args with the
