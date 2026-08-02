@@ -3,6 +3,9 @@
 
 #ifdef __EMSCRIPTEN__
 
+#include <algorithm>
+#include <cmath>
+
 #include "wasm/bindings/common/common.h"
 
 // ---------------------------------------------------------------------------
@@ -15,10 +18,19 @@ editing::voice_changer::StreamingRetuneConfig streamingRetuneConfigFromVal(val c
   if (config.isNull() || config.isUndefined()) {
     return result;
   }
-  result.semitones = floatProperty(config, "semitones", result.semitones);
-  result.mix = floatProperty(config, "mix", result.mix);
-  result.grain_size = intProperty(config, "grainSize", result.grain_size);
-  result.grain_size = intProperty(config, "grain_size", result.grain_size);
+  if (const auto semitones = optionalNumber(objectProperty(config, "semitones"));
+      semitones && std::isfinite(*semitones)) {
+    result.semitones = std::clamp(*semitones, -24.0f, 24.0f);
+  }
+  if (const auto mix = optionalNumber(objectProperty(config, "mix")); mix && std::isfinite(*mix)) {
+    result.mix = std::clamp(*mix, 0.0f, 1.0f);
+  }
+  const auto grain_size = optionalNumber(objectProperty(config, "grainSize"));
+  const auto snake_case_grain_size = optionalNumber(objectProperty(config, "grain_size"));
+  const auto grain = snake_case_grain_size ? snake_case_grain_size : grain_size;
+  if (grain && std::isfinite(*grain)) {
+    result.grain_size = static_cast<int>(std::lround(std::clamp(*grain, 0.0f, 8192.0f)));
+  }
   return result;
 }
 
@@ -36,6 +48,8 @@ class StreamingRetuneWrapper {
 
   void prepare(double sample_rate, int max_block_size) {
     retune_.prepare(sample_rate, max_block_size);
+    max_block_size_ = max_block_size;
+    prepared_ = true;
   }
 
   void reset() { retune_.reset(); }
@@ -47,6 +61,9 @@ class StreamingRetuneWrapper {
   int grainSize() const { return retune_.grain_size(); }
 
   val processMono(val samples) {
+    const std::size_t length = wasmFloat32ArrayLength(samples, "StreamingRetune process block");
+    ensurePrepared();
+    validateBlockLength(length);
     std::vector<float> block = float32ArrayToVector(samples);
     // Sanitize non-finite input before it enters the overlap-add grain history,
     // matching the synthesis realtime path: a NaN/Inf sample would otherwise
@@ -60,7 +77,23 @@ class StreamingRetuneWrapper {
   }
 
  private:
+  void ensurePrepared() const {
+    if (!prepared_) {
+      throw sonare::SonareException(sonare::ErrorCode::InvalidState,
+                                    "StreamingRetune must be prepared before processing");
+    }
+  }
+
+  void validateBlockLength(std::size_t length) const {
+    if (length > static_cast<std::size_t>(max_block_size_)) {
+      throw sonare::SonareException(sonare::ErrorCode::InvalidParameter,
+                                    "process block exceeds prepared maxBlockSize");
+    }
+  }
+
   editing::voice_changer::StreamingRetune retune_;
+  int max_block_size_ = 0;
+  bool prepared_ = false;
 };
 
 StreamingRetuneWrapper* createStreamingRetune(val config) {

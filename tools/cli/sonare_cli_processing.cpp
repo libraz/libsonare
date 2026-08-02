@@ -167,12 +167,23 @@ int cmd_voice_change(const CliArgs& args, const Audio& audio) {
     return 1;
   }
 
+  const bool uses_realtime_preset =
+      args.has("preset") || args.has("preset-json") || args.has("preset-pack") || args.has("set");
+  if (uses_realtime_preset) {
+    for (const char* knob : {"pitch-semitones", "formant-factor"}) {
+      if (args.has(knob)) {
+        std::cerr << "warning: --" << knob
+                  << " is ignored when a realtime voice preset is selected\n";
+      }
+    }
+  }
+
   Audio result;
   std::string preset_id;
   int latency_samples = 0;
   float pitch_semitones = 0.0f;
   float formant_factor = 1.0f;
-  if (args.has("preset") || args.has("preset-json") || args.has("preset-pack") || args.has("set")) {
+  if (uses_realtime_preset) {
     preset_id = args.get_string("preset", "neutral-monitor");
     std::string config_text = preset_id;
     if (args.has("preset-json")) {
@@ -257,8 +268,13 @@ int cmd_voice_preset_validate(const CliArgs& args, const Audio&) {
     config_text = find_voice_preset_in_pack(config_text, args.get_string("preset"));
   }
   if (args.has("set")) config_text = apply_voice_preset_sets(config_text, args.get_string("set"));
-  const auto config = editing::voice_changer::realtime_voice_changer_config_from_json(config_text);
-  std::cout << editing::voice_changer::realtime_voice_changer_config_to_json(config) << "\n";
+  std::string normalized;
+  std::string error;
+  if (!editing::voice_changer::validate_realtime_voice_changer_preset_json(config_text, &normalized,
+                                                                           &error)) {
+    throw std::invalid_argument("invalid voice preset: " + error);
+  }
+  std::cout << normalized << "\n";
   return 0;
 }
 

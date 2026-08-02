@@ -151,6 +151,21 @@ From a CDN, `import { init } from 'https://esm.sh/@libraz/libsonare'` resolves t
 [getting-started guide](https://libsonare.libraz.net/docs/getting-started) for
 per-bundler setup and the AudioWorklet bridge.
 
+### Realtime voice changer preset schemas
+
+The published package includes the JSON Schema documents for third-party voice
+changer presets. Resolve them through the package exports rather than copying a
+schema from the repository:
+
+```text
+@libraz/libsonare/schemas/realtime-voice-changer-preset.schema.json
+@libraz/libsonare/schemas/realtime-voice-changer-preset-pack.schema.json
+```
+
+Validate data against the schema before saving it, then pass the JSON text to
+`validateRealtimeVoiceChangerPresetJson()` before applying it. The runtime check
+is authoritative and also rejects malformed JSON such as duplicate keys.
+
 ### Bounded-memory OPFS clip streaming
 
 For long raw float32 clips stored in OPFS, `attachOpfsClipStream` supplies only
@@ -189,7 +204,7 @@ Every area below has runnable examples and the full API in the
 [documentation](https://libsonare.libraz.net/docs/wasm).
 
 - **Analysis** — BPM, key (+ candidates), chords, downbeats, sections, melody, tuning; pitch (YIN / pYIN), timbre, and the full spectral feature set (STFT, mel, MFCC, chroma, CQT/VQT, spectral contrast); metering (true-peak, LUFS, correlation, vectorscope, waveform peaks). → [API](https://libsonare.libraz.net/docs/wasm)
-- **Mastering** — 88 named DSP processors, the configurable `masteringChain`, 25 named presets via `masterAudio`, and reference-matching. → [Mastering processors](https://libsonare.libraz.net/docs/mastering-processors)
+- **Mastering** — 87 named DSP processors, the configurable `masteringChain`, 25 named presets via `masterAudio`, and reference-matching. → [Mastering processors](https://libsonare.libraz.net/docs/mastering-processors)
 - **Mixing** — offline `mixStereo` and the block-based `Mixer` with scene presets. → [Mixing](https://libsonare.libraz.net/docs/mixing)
 - **Editing DSP** — time-stretch, pitch-shift, HPSS (+ residual), phase vocoder, normalize, trim, remix. → [Editing DSP](https://libsonare.libraz.net/docs/editing-dsp)
 - **Room acoustics** — blind RT60 / EDT, impulse-response clarity metrics, RIR synthesis, room estimation and morphing. → [Room acoustics](https://libsonare.libraz.net/docs/acoustic-analysis)

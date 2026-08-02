@@ -127,23 +127,20 @@ TEST_CASE("RealtimeVoiceChanger set_config snapshot is adopted at next block bou
 
   auto cfg = realtime_voice_changer_preset(VoiceCharacterPreset::BrightIdol);
   cfg.wet_mix = 1.0f;
+  cfg.limiter.enable_isp_limiter = false;  // isolate snapshot adoption from FIR lookahead
   RealtimeVoiceChanger changer(cfg);
   changer.prepare(sample_rate, block, 1);
 
-  std::vector<float> input(block, 0.0f);
+  std::vector<float> input(block, 0.25f);
   std::vector<float> output(block, 0.0f);
-  for (int n = 0; n < block; ++n) {
-    input[static_cast<std::size_t>(n)] =
-        0.25f * std::sin(2.0f * sonare::constants::kPi * 440.0f * static_cast<float>(n) /
-                         static_cast<float>(sample_rate));
-  }
 
   // Warm up: drive the chain for a few blocks under wet_mix=1.0.
   for (int b = 0; b < blocks; ++b) {
     changer.process_block(input.data(), output.data(), block);
   }
 
-  // Publish a new snapshot: wet_mix=0 → next block should bypass the DSP.
+  // Publish a new snapshot: wet_mix=0 is smoothed from the old mix rather
+  // than turning an arbitrary waveform into dry audio at one block boundary.
   auto dry_cfg = cfg;
   dry_cfg.wet_mix = 0.0f;
   changer.set_config(dry_cfg);
@@ -151,10 +148,17 @@ TEST_CASE("RealtimeVoiceChanger set_config snapshot is adopted at next block bou
   std::vector<float> bypassed(block, 0.0f);
   changer.process_block(input.data(), bypassed.data(), block);
 
-  // wet_mix is now 0, so the output should equal the dry input bit-for-bit
-  // (the snapshot was adopted at the start of this block).
+  // A block-edge step used to make this dry path bit-identical immediately;
+  // the blend smoother deliberately retains a wet contribution here.
+  REQUIRE(bypassed[0] != input[0]);
+
+  // After the 10 ms blend ramp has settled, the aligned dry path is recovered.
+  for (int b = 0; b < 48; ++b) {
+    changer.process_block(input.data(), bypassed.data(), block);
+  }
   for (int n = 0; n < block; ++n) {
-    REQUIRE(bypassed[static_cast<std::size_t>(n)] == input[static_cast<std::size_t>(n)]);
+    REQUIRE(std::abs(bypassed[static_cast<std::size_t>(n)] - input[static_cast<std::size_t>(n)]) <
+            1.0e-5f);
   }
 
   // Reading config() back on the configuration thread must reflect the publish.
@@ -257,6 +261,78 @@ TEST_CASE("RealtimeVoiceChanger ISP limiter keeps true peak under the configured
   for (float s : out_on) REQUIRE(std::isfinite(s));
 }
 
+TEST_CASE("ISP limiter true peak is invariant across audio block sizes", "[voice_changer][isp]") {
+  constexpr int sample_rate = 48000;
+  constexpr int total_samples = 8192;
+  constexpr float ceiling_dbtp = -3.0f;
+  std::vector<float> input(static_cast<std::size_t>(total_samples));
+  for (int i = 0; i < total_samples; ++i) {
+    // A near-Nyquist tone has appreciable inter-sample peaks. Its phase stays
+    // continuous across every tested boundary so a block-dependent detector
+    // truncation is directly observable in the final true-peak measurement.
+    input[static_cast<std::size_t>(i)] =
+        1.2f * std::sin(sonare::constants::kTwoPiD * 11737.0 * i / sample_rate);
+  }
+
+  auto render_true_peak_db = [&](int block_size) {
+    IspLimiter limiter;
+    limiter.prepare(sample_rate, block_size);
+    limiter.set_config({ceiling_dbtp, 50.0f});
+    std::vector<float> output = input;
+    for (int offset = 0; offset < total_samples; offset += block_size) {
+      limiter.process_block(output.data() + offset, block_size);
+    }
+    const float peak = sonare::metering::true_peak(output.data(), output.size(), 4);
+    return 20.0f * std::log10(std::max(peak, 1e-9f));
+  };
+
+  const float reference_db = render_true_peak_db(256);
+  for (const int block_size : {32, 64, 128, 256}) {
+    const float peak_db = render_true_peak_db(block_size);
+    INFO("block_size=" << block_size << ", true_peak_db=" << peak_db);
+    // The detect-only base-rate gain stage leaves a small reconstruction
+    // tolerance below the configured dBTP ceiling; the contract here is
+    // block-boundary consistency, not an exact final-sample clamp.
+    REQUIRE(peak_db <= ceiling_dbtp + 0.2f);
+    REQUIRE(std::abs(peak_db - reference_db) < 0.02f);
+  }
+}
+
+TEST_CASE("ISP limiter does not recreate an inter-sample peak during its attack",
+          "[voice_changer][isp][attack]") {
+  constexpr int sample_rate = 48000;
+  constexpr int total_samples = 8192;
+  constexpr int transient_start = 2048;
+  constexpr float ceiling_dbtp = -3.0f;
+
+  std::vector<float> input(static_cast<std::size_t>(total_samples));
+  for (int i = 0; i < total_samples; ++i) {
+    const float amplitude = i < transient_start ? 0.05f : 1.8f;
+    input[static_cast<std::size_t>(i)] =
+        amplitude * std::sin(sonare::constants::kTwoPiD * 11737.0 * i / sample_rate + 0.37);
+  }
+
+  auto render_true_peak_db = [&](int block_size) {
+    IspLimiter limiter;
+    limiter.prepare(sample_rate, block_size);
+    limiter.set_config({ceiling_dbtp, 50.0f});
+    std::vector<float> output = input;
+    for (int offset = 0; offset < total_samples; offset += block_size) {
+      limiter.process_block(output.data() + offset, block_size);
+    }
+    const float true_peak = sonare::metering::true_peak(output.data(), output.size(), 4);
+    return 20.0f * std::log10(std::max(true_peak, 1.0e-9f));
+  };
+
+  const float reference_db = render_true_peak_db(128);
+  for (const int block_size : {32, 64, 128, 256}) {
+    const float true_peak_db = render_true_peak_db(block_size);
+    INFO("block_size=" << block_size << ", true_peak_db=" << true_peak_db);
+    REQUIRE(true_peak_db <= ceiling_dbtp + 0.05f);
+    REQUIRE(std::abs(true_peak_db - reference_db) < 0.02f);
+  }
+}
+
 TEST_CASE("RealtimeVoiceChanger ISP limiter leaves quiet signals untouched",
           "[voice_changer][isp]") {
   constexpr int sample_rate = 48000;
@@ -293,6 +369,49 @@ TEST_CASE("RealtimeVoiceChanger ISP limiter leaves quiet signals untouched",
     peak_out = std::max(peak_out, std::abs(s));
   }
   REQUIRE(peak_out < 0.5f);
+}
+
+TEST_CASE("RealtimeVoiceChanger resets ISP lookahead across a dry interval",
+          "[voice_changer][isp]") {
+  constexpr int sample_rate = 48000;
+  constexpr int block_size = 128;
+  RealtimeVoiceChangerConfig config;
+  config.wet_mix = 1.0f;
+  config.retune = {0.0f, 0.0f, 0};
+  config.formant = {1.0f, 0.0f, 0.0f, 0.0f, 0.0f};
+  config.eq = {20.0f, 0.0f, 0.0f, 0.0f};
+  config.gate = {-120.0f, 1.0f, 1.0f, 0.0f};
+  config.compressor = {0.0f, 1.0f, 1.0f, 1.0f, 0.0f};
+  config.deesser = {7000.0f, 0.0f, 1.0f, 0.0f};
+  config.reverb.mix = 0.0f;
+  config.limiter = {0.0f, 1.0f, true, 0.0f};
+
+  RealtimeVoiceChanger changer(config);
+  changer.prepare(sample_rate, block_size, 1);
+  std::vector<float> hot(static_cast<size_t>(block_size), 0.0f);
+  for (int i = 0; i < block_size; ++i) {
+    hot[static_cast<size_t>(i)] =
+        0.8f * std::sin(sonare::constants::kTwoPi * 440.0f * i / sample_rate);
+  }
+  std::vector<float> output(static_cast<size_t>(block_size), 0.0f);
+  changer.process_block(hot.data(), output.data(), block_size);
+
+  // While fully dry, the final limiter is skipped. Run enough zero blocks to
+  // drain all other DSP state; its old lookahead must still be discarded when
+  // the wet path becomes active again.
+  auto dry = config;
+  dry.wet_mix = 0.0f;
+  changer.set_config(dry);
+  std::vector<float> silence(static_cast<size_t>(block_size), 0.0f);
+  for (int block = 0; block < 64; ++block) {
+    changer.process_block(silence.data(), output.data(), block_size);
+  }
+
+  changer.set_config(config);
+  changer.process_block(silence.data(), output.data(), block_size);
+  for (const float sample : output) {
+    REQUIRE(std::abs(sample) < 1.0e-5f);
+  }
 }
 
 // ============================================================================
@@ -423,34 +542,9 @@ TEST_CASE("FormantWarp does not hard-clip a hot signal", "[voice_changer][forman
   }
   REQUIRE(pinned == 0);
 
-  // Reconstruction stability: a strictly-neutral warp (factor = 1.0) and the
-  // near-neutral warp produce essentially the same output (the warp itself does
-  // not collapse or explode the signal; the only difference is the tiny envelope
-  // shift). NOTE: FormantWarp re-colours the whitened LPC residual, so its
-  // absolute output level is NOT unity-gain relative to the input by design --
-  // we therefore compare against the neutral warp, not the raw input.
-  FormantWarp neutral({1.0f, 12, 1.0f});
-  const sonare::Audio neutral_warped = neutral.process(audio);
-  std::vector<float> ref(neutral_warped.data(), neutral_warped.data() + neutral_warped.size());
-  for (float s : ref) REQUIRE(std::isfinite(s));
-
-  double ref_sq = 0.0;
-  double out_sq = 0.0;
-  for (int i = lo; i < hi; ++i) {
-    ref_sq += static_cast<double>(ref[static_cast<size_t>(i)]) * ref[static_cast<size_t>(i)];
-    out_sq += static_cast<double>(out[static_cast<size_t>(i)]) * out[static_cast<size_t>(i)];
-  }
-  const double ref_rms = std::sqrt(ref_sq / (hi - lo));
-  const double out_rms = std::sqrt(out_sq / (hi - lo));
-  REQUIRE(ref_rms > 0.0);
-  REQUIRE(out_rms > ref_rms * 0.5);
-  REQUIRE(out_rms < ref_rms * 2.0);
-  // The neutral warp also runs hot (peaks > 1.0): proves the no-clamp behaviour
-  // is not specific to a single factor.
-  float ref_peak = 0.0f;
-  for (int i = lo; i < hi; ++i)
-    ref_peak = std::max(ref_peak, std::abs(ref[static_cast<size_t>(i)]));
-  REQUIRE(ref_peak > 1.0f);
+  // Unity identity is asserted independently in the offline voice-changer
+  // suite. This test intentionally covers only the non-unity no-hard-clip
+  // path, so it must not compare against the old LPC reconstruction at 1.0.
 }
 
 TEST_CASE("RealtimeVoiceChanger JSON round-trips the ISP limiter fields", "[voice_changer]") {

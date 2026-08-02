@@ -19,6 +19,7 @@ export class SonareRealtimeVoiceChangerWorkletProcessor {
   // audio-thread process() never crosses an allocation boundary.
   private monoInput: Float32Array;
   private monoOutput: Float32Array;
+  private bufferGeneration: number;
   // Planar heap-backed views (one Float32Array per channel) used by the
   // multi-channel path. AudioWorklet inputs/outputs are already planar
   // Float32Arrays, so this avoids the per-sample interleave/deinterleave
@@ -37,6 +38,7 @@ export class SonareRealtimeVoiceChangerWorkletProcessor {
     // process() than blockSize, we clamp (see ensure*Capacity).
     this.monoInput = this.changer.getMonoInputBuffer(this.blockSize);
     this.monoOutput = this.changer.getMonoOutputBuffer(this.blockSize);
+    this.bufferGeneration = this.changer.bufferGeneration();
     this.planarChannels = [];
     if (this.channelCount > 1) {
       for (let ch = 0; ch < this.channelCount; ch++) {
@@ -46,22 +48,16 @@ export class SonareRealtimeVoiceChangerWorkletProcessor {
   }
 
   /**
-   * Handles a control-plane message from the main thread. Runs on the
-   * AudioWorklet global scope but OUTSIDE of `process()` (i.e. outside the
-   * realtime audio callback), so it is safe to perform JSON parsing and
-   * DSP coefficient recomputation here. `setConfig` MUST NOT be deferred
-   * into `process()` because that would block the audio thread for longer
-   * than one render quantum (e.g. 128 samples / 44.1 kHz = ~2.9 ms).
+   * Handles a control-plane message from the main thread. AudioWorklet port
+   * handlers run on the same audio rendering thread as `process()`: this path
+   * therefore accepts only a pre-normalized POD and never parses JSON.
    */
   receiveMessage(message: SonareRealtimeVoiceChangerMessage): void {
     if (this.destroyed) {
       return;
     }
     if (message.type === 'setConfig') {
-      // Apply synchronously on the message-handler thread. `setConfig` may
-      // allocate and parse JSON internally; doing it here keeps `process()`
-      // realtime-safe.
-      this.changer.setConfig(message.preset);
+      this.changer.setPodConfig(message.config);
     } else if (message.type === 'reset') {
       this.changer.reset();
     } else if (message.type === 'destroy') {
@@ -79,7 +75,10 @@ export class SonareRealtimeVoiceChangerWorkletProcessor {
     // module is built ALLOW_MEMORY_GROWTH). Re-acquire them if detached
     // (byteLength === 0) before touching them; in the common no-growth case this
     // is a cheap branch with no allocation.
-    if (this.monoInput.byteLength === 0) {
+    if (
+      this.bufferGeneration !== this.changer.bufferGeneration() ||
+      this.monoInput.byteLength === 0
+    ) {
       this.reacquireBuffers();
     }
 
@@ -100,10 +99,7 @@ export class SonareRealtimeVoiceChangerWorkletProcessor {
       } else {
         this.monoInput.fill(0, 0, frames);
       }
-      this.changer.processMonoInto(
-        this.monoInput.subarray(0, frames),
-        this.monoOutput.subarray(0, frames),
-      );
+      this.changer.processPreparedMono(frames);
       output[0].set(this.monoOutput.subarray(0, frames));
       return true;
     }
@@ -156,6 +152,7 @@ export class SonareRealtimeVoiceChangerWorkletProcessor {
         this.planarChannels[ch] = this.changer.getPlanarChannelBuffer(ch, this.blockSize);
       }
     }
+    this.bufferGeneration = this.changer.bufferGeneration();
   }
 
   /**

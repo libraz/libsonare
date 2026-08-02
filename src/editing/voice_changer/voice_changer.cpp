@@ -18,6 +18,8 @@ Audio VoiceChanger::process(const Audio& audio) const {
                       ? pitch_shift(audio, config_.pitch_semitones, pitch_config)
                       : audio;
 
+  if (std::abs(config_.formant_factor - 1.0f) < 1.0e-6f) return shifted;
+
   FormantWarpConfig formant_config;
   formant_config.factor = config_.formant_factor;
   FormantWarp warp(formant_config);

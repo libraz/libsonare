@@ -28,6 +28,13 @@ void StreamingReverb::prepare(double sample_rate, int max_block_size) {
 
   std::fill(comb_pos_.begin(), comb_pos_.end(), 0u);
   allpass_pos_ = 0;
+  for (auto& smoother : comb_delay_) smoother.prepare(sample_rate_, 20.0f);
+  for (auto& smoother : comb_fb_) smoother.prepare(sample_rate_, 20.0f);
+  damping_alpha_.prepare(sample_rate_, 20.0f);
+  mix_.prepare(sample_rate_, 10.0f);
+  allpass_g_.prepare(sample_rate_, 20.0f);
+  set_config(config_);
+  reset();
 }
 
 void StreamingReverb::reset() noexcept {
@@ -36,6 +43,11 @@ void StreamingReverb::reset() noexcept {
   std::fill(comb_lp_.begin(), comb_lp_.end(), 0.0f);
   std::fill(allpass_buf_.begin(), allpass_buf_.end(), 0.0f);
   allpass_pos_ = 0;
+  for (auto& smoother : comb_delay_) smoother.reset(smoother.target());
+  for (auto& smoother : comb_fb_) smoother.reset(smoother.target());
+  damping_alpha_.reset(damping_alpha_.target());
+  mix_.reset(mix_.target());
+  allpass_g_.reset(allpass_g_.target());
 }
 
 void StreamingReverb::set_config(const StreamingReverbConfig& config, int channel_index) {
@@ -66,19 +78,20 @@ void StreamingReverb::set_config(const StreamingReverbConfig& config, int channe
     const double tap_seconds = time_sec * ratios[i];
     std::size_t delay_samples = static_cast<std::size_t>(tap_seconds * sample_rate_);
     delay_samples = std::clamp<std::size_t>(delay_samples, 16u, max_delay);
-    comb_delay_[i] = delay_samples;
+    comb_delay_[i].set_target(static_cast<float>(delay_samples));
     // Feedback gain chosen so each comb decays by ~60 dB in roughly time_ms.
     const double db_per_sec = -60.0 / time_sec;
     const double db_per_loop = db_per_sec * (static_cast<double>(delay_samples) / sample_rate_);
-    comb_fb_[i] = static_cast<float>(db_to_linear(db_per_loop));
-    comb_fb_[i] = std::clamp(comb_fb_[i], 0.0f, 0.97f);
+    const float feedback = std::clamp(static_cast<float>(db_to_linear(db_per_loop)), 0.0f, 0.97f);
+    comb_fb_[i].set_target(feedback);
   }
   // Damping: damping=0 -> ~12 kHz LP (bright), damping=1 -> ~1 kHz LP (dark).
   const float damping_hz = 1000.0f + (1.0f - std::clamp(config_.damping, 0.0f, 1.0f)) * 11000.0f;
-  damping_alpha_ = rt::one_pole_lowpass_alpha_matched(damping_hz, sample_rate_);
+  damping_alpha_.set_target(rt::one_pole_lowpass_alpha_matched(damping_hz, sample_rate_));
   // Allpass gain sign is seed-bit-dependent so different seeds yield distinct
   // phase responses on otherwise identical settings.
-  allpass_g_ = (useed & 0x1u) ? 0.7f : -0.7f;
+  allpass_g_.set_target((useed & 0x1u) ? 0.7f : -0.7f);
+  mix_.set_target(std::clamp(config_.mix, 0.0f, 1.0f));
 }
 
 float StreamingReverb::process_sample(float input) noexcept {
@@ -91,15 +104,19 @@ float StreamingReverb::process_sample(float input) noexcept {
   // the damping/feedback states decay. Freezing them while muted would resume
   // from stale pre-mute contents on the next mix>0 block, producing an audible
   // burst of old material. We only skip the wet contribution to the output.
-  const bool muted = config_.mix <= 0.0f;
+  const float mix = mix_.process();
+  const bool muted = mix <= 1.0e-6f;
 
   float comb_sum = 0.0f;
   for (std::size_t i = 0; i < kNumCombs; ++i) {
-    const std::size_t delay = comb_delay_[i];
-    const std::size_t read_pos = (comb_pos_[i] + cap - delay) % cap;
-    const float y = comb_buf_[i][read_pos];
-    comb_lp_[i] += damping_alpha_ * (y - comb_lp_[i]);
-    comb_buf_[i][comb_pos_[i]] = input + comb_fb_[i] * comb_lp_[i];
+    const float delay = std::clamp(comb_delay_[i].process(), 16.0f, static_cast<float>(cap - 2));
+    const std::size_t delay_floor = static_cast<std::size_t>(std::floor(delay));
+    const float fraction = delay - static_cast<float>(delay_floor);
+    const std::size_t read_a = (comb_pos_[i] + cap - delay_floor) % cap;
+    const std::size_t read_b = (read_a + cap - 1) % cap;
+    const float y = comb_buf_[i][read_a] + fraction * (comb_buf_[i][read_b] - comb_buf_[i][read_a]);
+    comb_lp_[i] += damping_alpha_.process() * (y - comb_lp_[i]);
+    comb_buf_[i][comb_pos_[i]] = input + comb_fb_[i].process() * comb_lp_[i];
     comb_pos_[i] = (comb_pos_[i] + 1) % cap;
     comb_sum += y;
   }
@@ -108,13 +125,14 @@ float StreamingReverb::process_sample(float input) noexcept {
   const std::size_t ap_cap = allpass_buf_.size();
   const std::size_t ap_read = (allpass_pos_ + ap_cap - allpass_delay_) % ap_cap;
   const float ap_delayed = allpass_buf_[ap_read];
-  const float ap_in = comb_out + allpass_g_ * ap_delayed;
-  const float ap_out = ap_delayed - allpass_g_ * ap_in;
+  const float allpass_g = allpass_g_.process();
+  const float ap_in = comb_out + allpass_g * ap_delayed;
+  const float ap_out = ap_delayed - allpass_g * ap_in;
   allpass_buf_[allpass_pos_] = ap_in;
   allpass_pos_ = (allpass_pos_ + 1) % ap_cap;
 
   if (muted) return input;
-  return input * (1.0f - config_.mix) + ap_out * config_.mix;
+  return input * (1.0f - mix) + ap_out * mix;
 }
 
 void StreamingReverb::process_block(const float* input, float* output, int num_samples) noexcept {

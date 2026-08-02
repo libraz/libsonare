@@ -94,29 +94,6 @@ void set_json_path(sonare::util::json::Value& root, const std::string& path,
   cursor->as_object()[parts.back()] = std::move(value);
 }
 
-// Maps the UI macro names (pitch/formant/space/intensity/output) to concrete
-// dsp.* paths so `--set macros.X=...` from the CLI is convenient. This is
-// intentionally CLI-only sugar; the core loader treats `dsp` as authoritative
-// and never derives dsp from macros.
-// Keep the mapping in sync with `_apply_voice_macro_override` in
-// bindings/python/src/libsonare/cli.py.
-void apply_voice_macro_override(sonare::util::json::Value& root, const std::string& path,
-                                const sonare::util::json::Value& value) {
-  if (!value.is_number()) return;
-  const double number = value.as_number();
-  if (path == "macros.pitch") {
-    set_json_path(root, "dsp.retune.semitones", number);
-  } else if (path == "macros.formant") {
-    set_json_path(root, "dsp.formant.factor", number);
-  } else if (path == "macros.space") {
-    set_json_path(root, "dsp.reverb.mix", number);
-  } else if (path == "macros.intensity") {
-    set_json_path(root, "dsp.compressor.ratio", 1.0 + number * 4.0);
-  } else if (path == "macros.output") {
-    set_json_path(root, "dsp.outputGainDb", number);
-  }
-}
-
 std::string find_voice_preset_in_pack(const std::string& pack_json, const std::string& preset_id) {
   const auto root = sonare::util::json::parse(pack_json);
   const auto* presets = root.find("presets");
@@ -149,7 +126,6 @@ std::string apply_voice_preset_sets(std::string config_text, const std::string& 
     const std::string path = assignment.substr(0, eq);
     auto value = parse_cli_json_scalar(assignment.substr(eq + 1));
     set_json_path(root, path, value);
-    apply_voice_macro_override(root, path, value);
   }
   return sonare::util::json::dump(root);
 }

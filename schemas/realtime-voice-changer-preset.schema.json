@@ -23,19 +23,6 @@
       "type": "string",
       "enum": ["monitor", "bright", "soft", "deep", "robot", "dark", "custom"]
     },
-    "macros": {
-      "type": "object",
-      "additionalProperties": false,
-      "properties": {
-        "pitch": { "type": "number", "minimum": -24.0, "maximum": 24.0 },
-        "formant": { "type": "number", "minimum": 0.55, "maximum": 1.65 },
-        "brightness": { "type": "number", "minimum": 0.0, "maximum": 1.0 },
-        "space": { "type": "number", "minimum": 0.0, "maximum": 1.0 },
-        "intensity": { "type": "number", "minimum": 0.0, "maximum": 1.0 },
-        "noiseControl": { "type": "number", "minimum": 0.0, "maximum": 1.0 },
-        "sibilance": { "type": "number", "minimum": 0.0, "maximum": 1.0 }
-      }
-    },
     "dsp": {
       "type": "object",
       "additionalProperties": false,
@@ -103,7 +90,7 @@
         "deesser": {
           "type": "object",
           "additionalProperties": false,
-          "required": ["frequencyHz", "thresholdDb", "rangeDb"],
+          "required": ["frequencyHz", "thresholdDb", "ratio", "rangeDb"],
           "properties": {
             "frequencyHz": { "type": "number", "minimum": 3000.0, "maximum": 12000.0 },
             "thresholdDb": { "type": "number", "minimum": -60.0, "maximum": -6.0 },
@@ -137,4 +124,3 @@
     }
   }
 }
-

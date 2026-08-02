@@ -29,9 +29,17 @@ std::string JsonTextFromJs(const Napi::Value& value) {
   return stringify.Call(json, {value}).As<Napi::String>().Utf8Value();
 }
 
-}  // namespace
+sonare::editing::voice_changer::RealtimeVoiceChangerConfig ConfigFromJs(const Napi::Value& value) {
+  sonare::editing::voice_changer::RealtimeVoiceChangerConfig config;
+  std::string error;
+  if (!sonare::editing::voice_changer::realtime_voice_changer_config_from_input(
+          JsonTextFromJs(value), &config, &error)) {
+    throw sonare::SonareException(sonare::ErrorCode::InvalidParameter, error);
+  }
+  return config;
+}
 
-Napi::FunctionReference RealtimeVoiceChangerWrap::constructor_;
+}  // namespace
 
 Napi::Object RealtimeVoiceChangerWrap::Init(Napi::Env env, Napi::Object exports) {
   Napi::Function func = DefineClass(
@@ -51,8 +59,6 @@ Napi::Object RealtimeVoiceChangerWrap::Init(Napi::Env env, Napi::Object exports)
           InstanceMethod<&RealtimeVoiceChangerWrap::Destroy>("destroy"),
       });
 
-  constructor_ = Napi::Persistent(func);
-  constructor_.SuppressDestruct();
   exports.Set("RealtimeVoiceChanger", func);
   return exports;
 }
@@ -62,9 +68,7 @@ RealtimeVoiceChangerWrap::RealtimeVoiceChangerWrap(const Napi::CallbackInfo& inf
   Napi::Env env = info.Env();
   try {
     changer_ = std::make_unique<sonare::editing::voice_changer::RealtimeVoiceChanger>();
-    const auto text = info.Length() >= 1 ? JsonTextFromJs(info[0]) : std::string("neutral-monitor");
-    changer_->set_config(
-        sonare::editing::voice_changer::realtime_voice_changer_config_from_json(text));
+    changer_->set_config(info.Length() >= 1 ? ConfigFromJs(info[0]) : ConfigFromJs(env.Null()));
   } catch (const std::exception& e) {
     Napi::Error::New(env, e.what()).ThrowAsJavaScriptException();
   }
@@ -141,8 +145,7 @@ Napi::Value RealtimeVoiceChangerWrap::SetConfig(const Napi::CallbackInfo& info) 
     return env.Undefined();
   }
   SONARE_NODE_TRY
-  changer_->set_config(sonare::editing::voice_changer::realtime_voice_changer_config_from_json(
-      JsonTextFromJs(info[0])));
+  changer_->set_config(ConfigFromJs(info[0]));
   return env.Undefined();
   SONARE_NODE_CATCH(env)
 }

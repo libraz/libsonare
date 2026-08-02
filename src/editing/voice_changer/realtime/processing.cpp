@@ -26,12 +26,36 @@ inline float smooth_attack_release(float& state, float target, float attack_alph
 
 }  // namespace
 
-float RealtimeVoiceChanger::process_input_stage(ChannelState& state,
-                                                const RealtimeVoiceChangerConfig& config,
-                                                float input) noexcept {
+float RealtimeVoiceChanger::process_input_stage(ChannelState& state, float input) noexcept {
+  // Coefficients change at a fixed 32-sample cadence from the per-sample
+  // smoothers. This is short enough to avoid block-rate zippering while
+  // keeping the RBJ trigonometry out of the hot path for every sample.
+  constexpr int kFilterUpdateInterval = 32;
+  constexpr float kFilterEpsilon = 1.0e-4f;
+  const float highpass_hz = state.eq_highpass_hz.process();
+  const float body_db = state.eq_body_db.process();
+  const float presence_db = state.eq_presence_db.process();
+  const float air_db = state.eq_air_db.process();
+  const float deess_frequency_hz = state.deess_frequency_hz.process();
+  if (--state.filter_update_countdown <= 0) {
+    if (std::abs(highpass_hz - state.filter_highpass_hz) > kFilterEpsilon ||
+        std::abs(body_db - state.filter_body_db) > kFilterEpsilon ||
+        std::abs(presence_db - state.filter_presence_db) > kFilterEpsilon ||
+        std::abs(air_db - state.filter_air_db) > kFilterEpsilon ||
+        std::abs(deess_frequency_hz - state.filter_deess_frequency_hz) > kFilterEpsilon) {
+      state.filter_highpass_hz = highpass_hz;
+      state.filter_body_db = body_db;
+      state.filter_presence_db = presence_db;
+      state.filter_air_db = air_db;
+      state.filter_deess_frequency_hz = deess_frequency_hz;
+      update_channel_filters(state);
+    }
+    state.filter_update_countdown = kFilterUpdateInterval;
+  }
+
   // Apply input gain then a 2nd-order HPF. The HPF (highpass_hz >= 20) already
   // removes DC, so no separate DC blocker is needed.
-  float x = state.hpf.process(input * input_gain_);
+  float x = state.hpf.process(input * state.input_gain.process());
 
   // Noise gate.
   //   1. A fixed fast detector (~0.8 ms) follows |x| so the level estimate
@@ -42,18 +66,21 @@ float RealtimeVoiceChanger::process_input_stage(ChannelState& state,
   //      the zipper noise that a hard threshold-cross produces.
   const float env_in = std::abs(x);
   state.gate_env += fast_det_alpha_ * (env_in - state.gate_env);
-  const float gate_target = amp_to_db(state.gate_env) < config.gate.threshold_db
-                                ? db_to_gain(-config.gate.range_db)
-                                : 1.0f;
-  smooth_attack_release(state.gate_gain, gate_target, gate_attack_, gate_release_,
+  const float gate_threshold_db = state.gate_threshold_db.process();
+  const float gate_range_db = state.gate_range_db.process();
+  const float gate_attack_ms = state.gate_attack_ms.process();
+  const float gate_release_ms = state.gate_release_ms.process();
+  const float gate_target =
+      amp_to_db(state.gate_env) < gate_threshold_db ? db_to_gain(-gate_range_db) : 1.0f;
+  smooth_attack_release(state.gate_gain, gate_target,
+                        rt::one_pole_alpha_from_time_ms(gate_attack_ms, sample_rate_),
+                        rt::one_pole_alpha_from_time_ms(gate_release_ms, sample_rate_),
                         /*attack_when_decreasing=*/false);
   x *= state.gate_gain;
   return x;
 }
 
-float RealtimeVoiceChanger::process_output_stage(ChannelState& state,
-                                                 const RealtimeVoiceChangerConfig& config,
-                                                 float input) noexcept {
+float RealtimeVoiceChanger::process_output_stage(ChannelState& state, float input) noexcept {
   float x = input;
   x = state.body.process(x);
   x = state.presence.process(x);
@@ -67,16 +94,22 @@ float RealtimeVoiceChanger::process_output_stage(ChannelState& state,
   //   the user-set attack feel sluggish.
   const float comp_env_in = std::abs(x);
   state.comp_env += fast_det_alpha_ * (comp_env_in - state.comp_env);
-  const float over = amp_to_db(state.comp_env) - config.compressor.threshold_db;
+  const float comp_threshold_db = state.comp_threshold_db.process();
+  const float comp_ratio = state.comp_ratio.process();
+  const float comp_makeup_db = state.comp_makeup_db.process();
+  const float over = amp_to_db(state.comp_env) - comp_threshold_db;
   float comp_target = 1.0f;
   if (over > 0.0f) {
-    const float reduction_db = over - over / config.compressor.ratio;
-    comp_target = db_to_gain(-reduction_db + config.compressor.makeup_gain_db);
+    const float reduction_db = over - over / comp_ratio;
+    comp_target = db_to_gain(-reduction_db + comp_makeup_db);
   } else {
-    comp_target = db_to_gain(config.compressor.makeup_gain_db);
+    comp_target = db_to_gain(comp_makeup_db);
   }
-  smooth_attack_release(state.comp_gain, comp_target, comp_attack_, comp_release_,
-                        /*attack_when_decreasing=*/true);
+  smooth_attack_release(
+      state.comp_gain, comp_target,
+      rt::one_pole_alpha_from_time_ms(state.comp_attack_ms.process(), sample_rate_),
+      rt::one_pole_alpha_from_time_ms(state.comp_release_ms.process(), sample_rate_),
+      /*attack_when_decreasing=*/true);
   x *= state.comp_gain;
 
   // De-esser: ratio-based broadband reduction triggered by the sibilance
@@ -85,11 +118,13 @@ float RealtimeVoiceChanger::process_output_stage(ChannelState& state,
   // serve distinct purposes — detector tracking vs gain dezippering.
   const float ess = std::abs(state.deess_band.process(x));
   state.deess_env += deess_alpha_ * (ess - state.deess_env);
-  const float ess_over = amp_to_db(state.deess_env) - config.deesser.threshold_db;
+  const float deess_threshold_db = state.deess_threshold_db.process();
+  const float deess_ratio = state.deess_ratio.process();
+  const float deess_range_db = state.deess_range_db.process();
+  const float ess_over = amp_to_db(state.deess_env) - deess_threshold_db;
   float deess_target = 1.0f;
   if (ess_over > 0.0f) {
-    const float reduction_db =
-        std::min(config.deesser.range_db, ess_over - ess_over / config.deesser.ratio);
+    const float reduction_db = std::min(deess_range_db, ess_over - ess_over / deess_ratio);
     deess_target = db_to_gain(-reduction_db);
   }
   state.deess_gain += deess_gain_alpha_ * (deess_target - state.deess_gain);
@@ -105,13 +140,15 @@ float RealtimeVoiceChanger::process_output_stage(ChannelState& state,
   // oversampling. Attack is sub-millisecond (kLimiterAttackMs) so transient
   // bursts taper across ~5 samples instead of a single-sample step (audibly
   // clicks); the final clamp absorbs the residual peak over that taper.
-  x *= output_gain_;
-  const float ceiling = db_to_gain(config.limiter.ceiling_db);
+  x *= state.output_gain.process();
+  const float ceiling = db_to_gain(state.limiter_ceiling_db.process());
   const float abs_x = std::abs(x);
   const float limit_target =
       abs_x > ceiling ? ceiling / std::max(abs_x, sonare::constants::kAmpEpsilon) : 1.0f;
-  smooth_attack_release(state.limiter_gain, limit_target, limiter_attack_, limiter_release_,
-                        /*attack_when_decreasing=*/true);
+  smooth_attack_release(
+      state.limiter_gain, limit_target, limiter_attack_,
+      rt::one_pole_alpha_from_time_ms(state.limiter_release_ms.process(), sample_rate_),
+      /*attack_when_decreasing=*/true);
   return std::clamp(x * state.limiter_gain, -ceiling, ceiling);
 }
 
@@ -185,24 +222,26 @@ void RealtimeVoiceChanger::process_block(float* const* channels, int num_channel
       const float raw = channels[ch][i];
       const float clean = std::isfinite(raw) ? raw : 0.0f;
       channels[ch][i] = clean;
-      scratch_[i] = process_input_stage(channel, config, clean);
+      scratch_[i] = process_input_stage(channel, clean);
     }
     channel.retune.process_block(scratch_.data(), scratch_.data(), num_samples);
     channel.formant.process_block(scratch_.data(), scratch_.data(), num_samples);
     for (int i = 0; i < num_samples; ++i) {
-      const float input = channels[ch][i];
-      const float wet = process_output_stage(channel, config, scratch_[i]);
-      channels[ch][i] = input * (1.0f - wet_mix_) + wet * wet_mix_;
+      float delayed_dry = channels[ch][i];
+      if (!channel.dry_delay.empty()) {
+        delayed_dry = channel.dry_delay[channel.dry_delay_pos];
+        channel.dry_delay[channel.dry_delay_pos] = channels[ch][i];
+        channel.dry_delay_pos = (channel.dry_delay_pos + 1) % channel.dry_delay.size();
+      }
+      const float wet = process_output_stage(channel, scratch_[i]);
+      const float wet_mix = channel.wet_mix.process();
+      channels[ch][i] = delayed_dry * (1.0f - wet_mix) + wet * wet_mix;
     }
-    // Final inter-sample-peak limiter — applied after the dry/wet mix so the
-    // sample-domain limiter inside process_output_stage cannot create new ISP
-    // overshoots by clamping a transient. Skipped when wet_mix_ == 0 because
-    // the output equals the dry input (no DSP modification by the voice
-    // changer, so no new ISP overshoots are possible) and applying the limiter
-    // would introduce its lookahead latency to a signal the caller expects to
-    // pass through unchanged. Any ISP overshoots in the caller's own dry
-    // signal are the caller's responsibility.
-    if (config.limiter.enable_isp_limiter && wet_mix_ > 0.0f) {
+    // Final inter-sample-peak limiter — applied after the aligned dry/wet mix.
+    // It stays active at wet_mix == 0 so toggling the mix cannot introduce a
+    // second latency discontinuity in addition to the deliberately aligned
+    // retune paths.
+    if (config.limiter.enable_isp_limiter) {
       channel.isp_limiter.process_block(channels[ch], num_samples);
     }
   }
@@ -210,27 +249,11 @@ void RealtimeVoiceChanger::process_block(float* const* channels, int num_channel
 
 int RealtimeVoiceChanger::latency_samples() const noexcept {
   if (channels_.empty()) return 0;
-  // The output mixes a zero-latency dry path with the retune-grain-delayed wet
-  // path: out = dry * (1 - wet_mix) + wet * wet_mix. The dry contribution has no
-  // delay, the wet contribution carries the retune grain — but the retune stage
-  // itself cross-fades its grain-delayed output by retune.mix (out = in*(1-mix) +
-  // grain*mix), so at retune.mix == 0 the stage is a zero-delay passthrough even
-  // though grain_size() is non-zero. The effective delay a latency-compensating
-  // host should align to is therefore the amplitude-weighted mean of dry (0) and
-  // wet, and the wet contribution scales with BOTH wet_mix and retune.mix.
-  // Biquad / formant group delays (<= 8 samples combined) are intentionally not
-  // added so this stays a stable, host-compensable integer. See header. The
-  // wet_mix / retune.mix / ISP-enabled scalars are read from atomic mirrors so a
-  // host can poll latency from a different thread than the one calling
-  // set_config() without a torn read of config_ (see update_latency_mirrors()).
-  const float wet_mix = latency_wet_mix_.load(std::memory_order_relaxed);
-  const float retune_mix = latency_retune_mix_.load(std::memory_order_relaxed);
-  const int grain = channels_[0].retune.grain_size();
-  int latency = static_cast<int>(std::lround(wet_mix * retune_mix * static_cast<float>(grain)));
-  // The optional inter-sample-peak limiter runs on the already-mixed output and
-  // only when wet_mix > 0 (see process_block), so it delays the whole signal —
-  // both dry and wet contributions — by its fixed FIR group delay.
-  if (latency_isp_enabled_.load(std::memory_order_relaxed) && wet_mix > 0.0f) {
+  // Both retune and whole-chain dry paths are aligned to the OLA latency, so
+  // hosts see one fixed delay regardless of either mix control. Biquad/formant
+  // group delays are intentionally omitted (<= 8 samples combined).
+  int latency = channels_[0].retune.latency_samples();
+  if (latency_isp_enabled_.load(std::memory_order_relaxed)) {
     latency += channels_[0].isp_limiter.latency_samples();
   }
   return latency;

@@ -50,6 +50,9 @@ Audio FormantWarp::process(const Audio& audio) const {
   const float factor = std::clamp(config_.factor, kFormantFactorMin, kFormantFactorMax);
   const float effective_factor =
       std::clamp(1.0f + (factor - 1.0f) * amount, kFormantFactorMin, kFormantFactorMax);
+  // LPC analysis/re-synthesis is not identity even when its envelope is not
+  // shifted. Bypass it at unity so pitch-only voice changes preserve samples.
+  if (std::abs(effective_factor - 1.0f) < 1.0e-6f) return audio;
 
   // Effective LPC order: explicit config, else sr-based heuristic.
   const int default_order = static_cast<int>(sr / 1000) + 2;

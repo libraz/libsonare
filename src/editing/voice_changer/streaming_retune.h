@@ -7,6 +7,8 @@
 #include <cstdint>
 #include <vector>
 
+#include "rt/param_smoother.h"
+
 namespace sonare::editing::voice_changer {
 
 struct StreamingRetuneConfig {
@@ -33,6 +35,8 @@ class StreamingRetune {
   void reset();
   void set_config(const StreamingRetuneConfig& config);
   const StreamingRetuneConfig& config() const noexcept { return config_; }
+  /// @brief Fixed OLA latency once prepared, independent of @ref config().mix.
+  int latency_samples() const noexcept { return grain_size_ - hop_a_; }
 
   /// @brief Process a block of samples. RT-safe and @c noexcept.
   /// @details Pre-condition violations (not prepared, oversize block, null
@@ -61,16 +65,23 @@ class StreamingRetune {
   std::size_t accum_cap_ = 0;  ///< OLA accumulator capacity (2 * grain_size).
 
   double pitch_ratio_ = 1.0;
+  // Live set_config() updates targets only. Both controls are sampled while
+  // rendering so consecutive snapshot adoptions cannot step the pitch ratio
+  // or dry/wet blend at a block boundary.
+  rt::ParamSmoother semitones_smoother_{0.0f, 12.0f, 48000.0};
+  rt::ParamSmoother mix_smoother_{1.0f, 10.0f, 48000.0};
 
   std::vector<float> window_;     ///< Precomputed Hann window (grain_size).
   std::vector<float> ring_buf_;   ///< History ring buffer (ring_cap).
   std::vector<float> synth_acc_;  ///< Circular OLA signal accumulator.
   std::vector<float> norm_acc_;   ///< Circular OLA window^2 accumulator.
+  std::vector<float> dry_delay_;  ///< Dry path aligned to OLA output latency.
 
   std::uint64_t write_head_ = 0;  ///< Total samples written to ring.
   int input_phase_ = 0;           ///< Counts samples until next grain emit.
   std::size_t drain_pos_ = 0;     ///< Front of OLA accumulator (output tap).
   std::size_t synth_pos_ = 0;     ///< Current grain write position in OLA.
+  std::size_t dry_delay_pos_ = 0;
 };
 
 }  // namespace sonare::editing::voice_changer

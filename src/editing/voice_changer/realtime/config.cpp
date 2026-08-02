@@ -589,6 +589,50 @@ RealtimeVoiceChangerConfig realtime_voice_changer_config_from_json(std::string_v
   c.output_gain_db = object_number(object, "outputGainDb", c.output_gain_db);
   c.wet_mix = object_number(object, "wetMix", c.wet_mix);
 
+  // JS bindings expose preset configs as a flat POD for efficient FFI. Accept
+  // that camelCase shape here, at the one parser shared by C ABI, Node, and
+  // WASM, rather than making every binding hand-expand it into nested JSON.
+  if (object.find("retuneSemitones") != nullptr) {
+    c.retune.semitones = object_number(object, "retuneSemitones", c.retune.semitones);
+    c.retune.mix = object_number(object, "retuneMix", c.retune.mix);
+    c.retune.grain_size = object_int(object, "retuneGrainSize", c.retune.grain_size);
+    c.formant.factor = object_number(object, "formantFactor", c.formant.factor);
+    c.formant.amount = object_number(object, "formantAmount", c.formant.amount);
+    c.formant.body = object_number(object, "formantBody", c.formant.body);
+    c.formant.brightness = object_number(object, "formantBrightness", c.formant.brightness);
+    c.formant.nasal = object_number(object, "formantNasal", c.formant.nasal);
+    c.eq.highpass_hz = object_number(object, "eqHighpassHz", c.eq.highpass_hz);
+    c.eq.body_db = object_number(object, "eqBodyDb", c.eq.body_db);
+    c.eq.presence_db = object_number(object, "eqPresenceDb", c.eq.presence_db);
+    c.eq.air_db = object_number(object, "eqAirDb", c.eq.air_db);
+    c.gate.threshold_db = object_number(object, "gateThresholdDb", c.gate.threshold_db);
+    c.gate.attack_ms = object_number(object, "gateAttackMs", c.gate.attack_ms);
+    c.gate.release_ms = object_number(object, "gateReleaseMs", c.gate.release_ms);
+    c.gate.range_db = object_number(object, "gateRangeDb", c.gate.range_db);
+    c.compressor.threshold_db =
+        object_number(object, "compressorThresholdDb", c.compressor.threshold_db);
+    c.compressor.ratio = object_number(object, "compressorRatio", c.compressor.ratio);
+    c.compressor.attack_ms = object_number(object, "compressorAttackMs", c.compressor.attack_ms);
+    c.compressor.release_ms = object_number(object, "compressorReleaseMs", c.compressor.release_ms);
+    c.compressor.makeup_gain_db =
+        object_number(object, "compressorMakeupGainDb", c.compressor.makeup_gain_db);
+    c.deesser.frequency_hz = object_number(object, "deesserFrequencyHz", c.deesser.frequency_hz);
+    c.deesser.threshold_db = object_number(object, "deesserThresholdDb", c.deesser.threshold_db);
+    c.deesser.ratio = object_number(object, "deesserRatio", c.deesser.ratio);
+    c.deesser.range_db = object_number(object, "deesserRangeDb", c.deesser.range_db);
+    c.reverb.mix = object_number(object, "reverbMix", c.reverb.mix);
+    c.reverb.time_ms = object_number(object, "reverbTimeMs", c.reverb.time_ms);
+    c.reverb.damping = object_number(object, "reverbDamping", c.reverb.damping);
+    c.reverb.seed = object_int(object, "reverbSeed", c.reverb.seed);
+    c.limiter.ceiling_db = object_number(object, "limiterCeilingDb", c.limiter.ceiling_db);
+    c.limiter.release_ms = object_number(object, "limiterReleaseMs", c.limiter.release_ms);
+    c.limiter.enable_isp_limiter =
+        object_bool(object, "limiterEnableIspLimiter", c.limiter.enable_isp_limiter);
+    c.limiter.isp_ceiling_dbtp =
+        object_number(object, "limiterIspCeilingDbtp", c.limiter.isp_ceiling_dbtp);
+    return normalize_realtime_voice_changer_config(c);
+  }
+
   if (const auto* v = object.find("retune")) {
     c.retune.semitones = object_number(*v, "semitones", c.retune.semitones);
     c.retune.mix = object_number(*v, "mix", c.retune.mix);
@@ -646,7 +690,11 @@ std::string realtime_voice_changer_config_to_json(const RealtimeVoiceChangerConf
   const auto c = normalize_realtime_voice_changer_config(config);
   std::ostringstream out;
   out.imbue(std::locale::classic());
-  out << "{\"schemaVersion\":" << kVoiceChangerPresetSchemaVersion << ",";
+  // A normalized config is also a valid, saveable custom preset. Include the
+  // metadata required by the strict preset validator so callers can validate
+  // its output again without reconstructing an envelope around the DSP object.
+  out << "{\"schemaVersion\":" << kVoiceChangerPresetSchemaVersion
+      << ",\"id\":\"custom\",\"name\":\"Custom\",";
   dump_dsp_section(out, c);
   out << "}";
   return out.str();
@@ -677,9 +725,8 @@ bool validate_realtime_voice_changer_preset_json(std::string_view json,
     // path below keeps using `parse` because it doubles as the realtime
     // C-API entry point and must stay maximally tolerant.
     const auto root = sonare::util::json::parse_strict(trim_copy(json));
-    if (!has_allowed_keys(
-            root, {"schemaVersion", "id", "name", "description", "category", "macros", "dsp"}, "$",
-            error)) {
+    if (!has_allowed_keys(root, {"schemaVersion", "id", "name", "description", "category", "dsp"},
+                          "$", error)) {
       return false;
     }
     for (const char* key : {"schemaVersion", "id", "name", "dsp"}) {
@@ -726,31 +773,116 @@ bool validate_realtime_voice_changer_preset_json(std::string_view json,
         return false;
       }
     }
-    if (const auto* macros = root.find("macros")) {
-      if (!has_allowed_keys(
-              *macros,
-              {"pitch", "formant", "brightness", "space", "intensity", "noiseControl", "sibilance"},
-              "$.macros", error)) {
-        return false;
-      }
-      if (macros->find("pitch") &&
-          !require_number(*macros, "pitch", -24.0, 24.0, "$.macros", error)) {
-        return false;
-      }
-      if (macros->find("formant") &&
-          !require_number(*macros, "formant", 0.55, 1.65, "$.macros", error)) {
-        return false;
-      }
-      for (const char* key : {"brightness", "space", "intensity", "noiseControl", "sibilance"}) {
-        if (macros->find(key) && !require_number(*macros, key, 0.0, 1.0, "$.macros", error)) {
-          return false;
-        }
-      }
-    }
     const auto* dsp = root.find("dsp");
     if (!dsp || !validate_dsp_section(*dsp, error)) return false;
     const auto config = realtime_voice_changer_config_from_json(trim_copy(json));
     if (normalized_json) *normalized_json = realtime_voice_changer_config_to_json(config);
+    return true;
+  } catch (const std::exception& ex) {
+    if (error) *error = ex.what();
+    return false;
+  }
+}
+
+bool realtime_voice_changer_config_from_input(std::string_view text,
+                                              RealtimeVoiceChangerConfig* config,
+                                              std::string* error) {
+  if (config) *config = {};
+  if (error) error->clear();
+  if (!config) {
+    if (error) *error = "output config must not be null";
+    return false;
+  }
+
+  try {
+    const std::string input = trim_copy(text);
+    if (input.empty()) {
+      if (error) *error = "voice changer config must not be empty";
+      return false;
+    }
+    if (input.front() != '{') {
+      *config = realtime_voice_changer_preset(realtime_voice_changer_preset_from_id(input));
+      return true;
+    }
+
+    // Public JS bindings also pass the 36-field camelCase POD returned by
+    // realtimeVoiceChangerPresetConfig(). It is intentionally not a preset
+    // document, but must be complete and type-correct so a partial object
+    // cannot silently fall back to unrelated defaults.
+    const auto root = sonare::util::json::parse_strict(input);
+    if (root.is_object() && root.find("retuneSemitones") != nullptr) {
+      static constexpr std::array<const char*, 36> kFlatPodKeys = {
+          "inputGainDb",
+          "outputGainDb",
+          "wetMix",
+          "retuneSemitones",
+          "retuneMix",
+          "retuneGrainSize",
+          "formantFactor",
+          "formantAmount",
+          "formantBody",
+          "formantBrightness",
+          "formantNasal",
+          "eqHighpassHz",
+          "eqBodyDb",
+          "eqPresenceDb",
+          "eqAirDb",
+          "gateThresholdDb",
+          "gateAttackMs",
+          "gateReleaseMs",
+          "gateRangeDb",
+          "compressorThresholdDb",
+          "compressorRatio",
+          "compressorAttackMs",
+          "compressorReleaseMs",
+          "compressorMakeupGainDb",
+          "deesserFrequencyHz",
+          "deesserThresholdDb",
+          "deesserRatio",
+          "deesserRangeDb",
+          "reverbMix",
+          "reverbTimeMs",
+          "reverbDamping",
+          "reverbSeed",
+          "limiterCeilingDb",
+          "limiterReleaseMs",
+          "limiterEnableIspLimiter",
+          "limiterIspCeilingDbtp",
+      };
+      for (const auto& [key, _value] : root.as_object()) {
+        bool allowed = false;
+        for (const char* allowed_key : kFlatPodKeys) {
+          if (key == allowed_key) {
+            allowed = true;
+            break;
+          }
+        }
+        if (!allowed) {
+          if (error) *error = "unknown field: $." + key;
+          return false;
+        }
+      }
+      for (const char* key : kFlatPodKeys) {
+        if (!require_key(root, key, "$", error)) return false;
+        const auto* value = root.find(key);
+        const bool is_isp_enabled = std::string_view(key) == "limiterEnableIspLimiter";
+        if (!value || (is_isp_enabled ? !value->is_bool() : !value->is_number())) {
+          if (error) *error = "flat voice changer POD has an invalid field: $." + std::string(key);
+          return false;
+        }
+      }
+      RealtimeVoiceChangerConfig normalized;
+      if (!validate_realtime_voice_changer_config(realtime_voice_changer_config_from_json(input),
+                                                  &normalized, error)) {
+        return false;
+      }
+      *config = normalized;
+      return true;
+    }
+
+    std::string normalized_json;
+    if (!validate_realtime_voice_changer_preset_json(input, &normalized_json, error)) return false;
+    *config = realtime_voice_changer_config_from_json(normalized_json);
     return true;
   } catch (const std::exception& ex) {
     if (error) *error = ex.what();

@@ -106,6 +106,24 @@ sonare project bounce --in project.json -o out.wav --synth saw-lead
 Run `sonare --help` (or `sonare <command> --help`), or see the
 [CLI reference](https://libsonare.libraz.net/docs/cli) for the full command list.
 
+## Realtime voice changer preset schemas
+
+The wheel includes JSON Schema documents for third-party voice changer presets.
+Use `importlib.resources` to obtain them instead of copying a schema into an
+application:
+
+```python
+from importlib.resources import files
+
+preset_schema = files("libsonare").joinpath(
+    "schemas/realtime-voice-changer-preset.schema.json"
+)
+```
+
+Validate data against this schema before saving it, then call
+`validate_realtime_voice_changer_preset_json()` before applying it. The runtime
+check is authoritative and also rejects malformed JSON such as duplicate keys.
+
 ## Supported audio formats
 
 | Format | Default build | With FFmpeg support |

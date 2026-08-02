@@ -6,11 +6,14 @@
 #include <array>
 
 #include "rt/biquad_design.h"
+#include "rt/param_smoother.h"
 
 namespace sonare::editing::voice_changer {
 
 struct StreamingFormantConfig {
   float factor = 1.0f;
+  /// Strength of the formant-frequency displacement: 0 keeps factor at 1,
+  /// 1 applies @ref factor fully. Does not disable the tonal controls below.
   float amount = 1.0f;
   float body = 0.0f;
   float brightness = 0.0f;
@@ -41,6 +44,14 @@ class StreamingFormant {
   std::array<rt::BiquadState, 4> filters_{};
   float smoothed_factor_ = 1.0f;
   float filter_factor_ = 1.0f;
+  rt::ParamSmoother factor_smoother_{1.0f, 12.0f, 48000.0};
+  rt::ParamSmoother amount_smoother_{1.0f, 12.0f, 48000.0};
+  rt::ParamSmoother body_smoother_{0.0f, 12.0f, 48000.0};
+  rt::ParamSmoother brightness_smoother_{0.0f, 12.0f, 48000.0};
+  rt::ParamSmoother nasal_smoother_{0.0f, 12.0f, 48000.0};
+  float filter_body_ = 0.0f;
+  float filter_brightness_ = 0.0f;
+  float filter_nasal_ = 0.0f;
   float factor_alpha_ = 1.0f;
   /// @brief Counts down to the next coefficient rebuild across blocks. Used to
   ///        be a per-block local variable, which reset the cadence at every

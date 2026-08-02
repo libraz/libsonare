@@ -71,6 +71,7 @@ void RealtimeVoiceChanger::prepare(double sample_rate, int max_block_size, int n
   // via the applied_snapshot_ pointer guard.
   auto fresh = std::make_shared<const RealtimeVoiceChangerConfig>(config_);
   applied_snapshot_ = fresh.get();
+  applied_isp_limiter_active_ = config_.limiter.enable_isp_limiter;
   config_publisher_.publish(std::move(fresh));
   // Force the audio-thread current pointer to match applied_snapshot_ now,
   // so the first process_block() does not redundantly re-apply coefficients.
@@ -99,8 +100,6 @@ void RealtimeVoiceChanger::set_config(const RealtimeVoiceChangerConfig& config) 
 }
 
 void RealtimeVoiceChanger::update_latency_mirrors() noexcept {
-  latency_wet_mix_.store(std::clamp(config_.wet_mix, 0.0f, 1.0f), std::memory_order_relaxed);
-  latency_retune_mix_.store(std::clamp(config_.retune.mix, 0.0f, 1.0f), std::memory_order_relaxed);
   latency_isp_enabled_.store(config_.limiter.enable_isp_limiter, std::memory_order_relaxed);
 }
 
@@ -114,9 +113,6 @@ void RealtimeVoiceChanger::sync_effective_grain_size() noexcept {
 }
 
 void RealtimeVoiceChanger::update_derived(const RealtimeVoiceChangerConfig& config) {
-  input_gain_ = db_to_gain(config.input_gain_db);
-  output_gain_ = db_to_gain(config.output_gain_db);
-  wet_mix_ = std::clamp(config.wet_mix, 0.0f, 1.0f);
   if (sample_rate_ > 0.0) {
     fast_det_alpha_ = rt::one_pole_lowpass_alpha_matched(kFastDetectorHz, sample_rate_);
     gate_attack_ = rt::one_pole_alpha_from_time_ms(config.gate.attack_ms, sample_rate_);
@@ -142,8 +138,32 @@ void RealtimeVoiceChanger::allocate_channel(ChannelState& state) {
   // be silently ignored.
   state.retune.set_config(config_.retune);
   state.retune.prepare(sample_rate_, max_block_size_);
+  state.dry_delay.assign(static_cast<std::size_t>(state.retune.latency_samples()), 0.0f);
+  state.dry_delay_pos = 0;
   state.formant.prepare(sample_rate_, max_block_size_);
   state.reverb.prepare(sample_rate_, max_block_size_);
+  state.input_gain.prepare(sample_rate_, 10.0f);
+  state.output_gain.prepare(sample_rate_, 10.0f);
+  state.wet_mix.prepare(sample_rate_, 10.0f);
+  state.eq_highpass_hz.prepare(sample_rate_, 12.0f);
+  state.eq_body_db.prepare(sample_rate_, 12.0f);
+  state.eq_presence_db.prepare(sample_rate_, 12.0f);
+  state.eq_air_db.prepare(sample_rate_, 12.0f);
+  state.gate_threshold_db.prepare(sample_rate_, 12.0f);
+  state.gate_attack_ms.prepare(sample_rate_, 12.0f);
+  state.gate_release_ms.prepare(sample_rate_, 12.0f);
+  state.gate_range_db.prepare(sample_rate_, 12.0f);
+  state.comp_threshold_db.prepare(sample_rate_, 12.0f);
+  state.comp_ratio.prepare(sample_rate_, 12.0f);
+  state.comp_attack_ms.prepare(sample_rate_, 12.0f);
+  state.comp_release_ms.prepare(sample_rate_, 12.0f);
+  state.comp_makeup_db.prepare(sample_rate_, 12.0f);
+  state.deess_frequency_hz.prepare(sample_rate_, 12.0f);
+  state.deess_threshold_db.prepare(sample_rate_, 12.0f);
+  state.deess_ratio.prepare(sample_rate_, 12.0f);
+  state.deess_range_db.prepare(sample_rate_, 12.0f);
+  state.limiter_ceiling_db.prepare(sample_rate_, 12.0f);
+  state.limiter_release_ms.prepare(sample_rate_, 12.0f);
   // ISP limiter: prepared unconditionally so toggling
   // LimiterConfig::enable_isp_limiter at runtime never triggers an allocation
   // from the audio thread. Cost is small (one TruePeakFilter history vector +
@@ -157,22 +177,46 @@ void RealtimeVoiceChanger::apply_channel_config(ChannelState& state, int channel
   state.retune.set_config(config.retune);
   state.formant.set_config(config.formant);
   state.reverb.set_config(config.reverb, channel_index);
-
-  // Biquad coefficient updates: pure scalar math, RT-safe.
-  state.hpf.set(rt::rbj_highpass(rt::frequency_to_w0(config.eq.highpass_hz, sample_rate_),
-                                 sonare::constants::kButterworthQ));
-  state.body.set(rt::rbj_peak(rt::frequency_to_w0(180.0f, sample_rate_), 0.85f, config.eq.body_db));
-  state.presence.set(
-      rt::rbj_peak(rt::frequency_to_w0(3600.0f, sample_rate_), 0.9f, config.eq.presence_db));
-  state.air.set(
-      rt::rbj_high_shelf(rt::frequency_to_w0(9500.0f, sample_rate_), 0.75f, config.eq.air_db));
-  state.deess_band.set(
-      rt::rbj_bandpass(rt::frequency_to_w0(config.deesser.frequency_hz, sample_rate_), 2.2f));
+  state.input_gain.set_target(db_to_gain(config.input_gain_db));
+  state.output_gain.set_target(db_to_gain(config.output_gain_db));
+  state.wet_mix.set_target(std::clamp(config.wet_mix, 0.0f, 1.0f));
+  state.eq_highpass_hz.set_target(config.eq.highpass_hz);
+  state.eq_body_db.set_target(config.eq.body_db);
+  state.eq_presence_db.set_target(config.eq.presence_db);
+  state.eq_air_db.set_target(config.eq.air_db);
+  state.gate_threshold_db.set_target(config.gate.threshold_db);
+  state.gate_attack_ms.set_target(config.gate.attack_ms);
+  state.gate_release_ms.set_target(config.gate.release_ms);
+  state.gate_range_db.set_target(config.gate.range_db);
+  state.comp_threshold_db.set_target(config.compressor.threshold_db);
+  state.comp_ratio.set_target(config.compressor.ratio);
+  state.comp_attack_ms.set_target(config.compressor.attack_ms);
+  state.comp_release_ms.set_target(config.compressor.release_ms);
+  state.comp_makeup_db.set_target(config.compressor.makeup_gain_db);
+  state.deess_frequency_hz.set_target(config.deesser.frequency_hz);
+  state.deess_threshold_db.set_target(config.deesser.threshold_db);
+  state.deess_ratio.set_target(config.deesser.ratio);
+  state.deess_range_db.set_target(config.deesser.range_db);
+  state.limiter_ceiling_db.set_target(config.limiter.ceiling_db);
+  state.limiter_release_ms.set_target(config.limiter.release_ms);
 
   // ISP limiter config updates are RT-safe (no allocation / no re-prepare).
   // The enable flag is read at block dispatch time in process_block; this only
   // mirrors the time-constant changes.
   state.isp_limiter.set_config({config.limiter.isp_ceiling_dbtp, config.limiter.release_ms});
+}
+
+void RealtimeVoiceChanger::update_channel_filters(ChannelState& state) noexcept {
+  state.hpf.set(rt::rbj_highpass(rt::frequency_to_w0(state.filter_highpass_hz, sample_rate_),
+                                 sonare::constants::kButterworthQ));
+  state.body.set(
+      rt::rbj_peak(rt::frequency_to_w0(180.0f, sample_rate_), 0.85f, state.filter_body_db));
+  state.presence.set(
+      rt::rbj_peak(rt::frequency_to_w0(3600.0f, sample_rate_), 0.9f, state.filter_presence_db));
+  state.air.set(
+      rt::rbj_high_shelf(rt::frequency_to_w0(9500.0f, sample_rate_), 0.75f, state.filter_air_db));
+  state.deess_band.set(
+      rt::rbj_bandpass(rt::frequency_to_w0(state.filter_deess_frequency_hz, sample_rate_), 2.2f));
 }
 
 const RealtimeVoiceChangerConfig& RealtimeVoiceChanger::adopt_snapshot_for_block() noexcept {
@@ -185,10 +229,18 @@ const RealtimeVoiceChangerConfig& RealtimeVoiceChanger::adopt_snapshot_for_block
   config_publisher_.acquire();
   const RealtimeVoiceChangerConfig* current = config_publisher_.current();
   if (current && current != applied_snapshot_) {
+    const bool next_isp_limiter_active = current->limiter.enable_isp_limiter;
     update_derived(*current);
     for (std::size_t ch = 0; ch < channels_.size(); ++ch) {
       apply_channel_config(channels_[ch], static_cast<int>(ch), *current);
+      if (next_isp_limiter_active != applied_isp_limiter_active_) {
+        // A disabled interval skips process_block(), leaving the lookahead
+        // queue frozen. Reset on either enabled-state edge so re-enabling
+        // cannot emit samples from before the interval.
+        channels_[ch].isp_limiter.reset();
+      }
     }
+    applied_isp_limiter_active_ = next_isp_limiter_active;
     applied_snapshot_ = current;
   }
   // Fallback path: only reachable if the constructor's initial publish was
@@ -214,7 +266,40 @@ void RealtimeVoiceChanger::reset_channel(ChannelState& state) {
   state.deess_env = 0.0f;
   state.deess_gain = 1.0f;
   state.limiter_gain = 1.0f;
+  // reset() is an explicit state boundary, unlike set_config(): snap ramps so
+  // a newly prepared/reset processor never inherits an old transition.
+  state.input_gain.reset(state.input_gain.target());
+  state.output_gain.reset(state.output_gain.target());
+  state.wet_mix.reset(state.wet_mix.target());
+  state.eq_highpass_hz.reset(state.eq_highpass_hz.target());
+  state.eq_body_db.reset(state.eq_body_db.target());
+  state.eq_presence_db.reset(state.eq_presence_db.target());
+  state.eq_air_db.reset(state.eq_air_db.target());
+  state.gate_threshold_db.reset(state.gate_threshold_db.target());
+  state.gate_attack_ms.reset(state.gate_attack_ms.target());
+  state.gate_release_ms.reset(state.gate_release_ms.target());
+  state.gate_range_db.reset(state.gate_range_db.target());
+  state.comp_threshold_db.reset(state.comp_threshold_db.target());
+  state.comp_ratio.reset(state.comp_ratio.target());
+  state.comp_attack_ms.reset(state.comp_attack_ms.target());
+  state.comp_release_ms.reset(state.comp_release_ms.target());
+  state.comp_makeup_db.reset(state.comp_makeup_db.target());
+  state.deess_frequency_hz.reset(state.deess_frequency_hz.target());
+  state.deess_threshold_db.reset(state.deess_threshold_db.target());
+  state.deess_ratio.reset(state.deess_ratio.target());
+  state.deess_range_db.reset(state.deess_range_db.target());
+  state.limiter_ceiling_db.reset(state.limiter_ceiling_db.target());
+  state.limiter_release_ms.reset(state.limiter_release_ms.target());
+  state.filter_highpass_hz = state.eq_highpass_hz.current();
+  state.filter_body_db = state.eq_body_db.current();
+  state.filter_presence_db = state.eq_presence_db.current();
+  state.filter_air_db = state.eq_air_db.current();
+  state.filter_deess_frequency_hz = state.deess_frequency_hz.current();
+  state.filter_update_countdown = 0;
+  update_channel_filters(state);
   state.reverb.reset();
+  std::fill(state.dry_delay.begin(), state.dry_delay.end(), 0.0f);
+  state.dry_delay_pos = 0;
   state.isp_limiter.reset();
 }
 

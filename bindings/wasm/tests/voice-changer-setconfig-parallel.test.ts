@@ -25,9 +25,51 @@ import {
   SonareRealtimeVoiceChangerWorkletProcessor,
 } from '../dist/worklet.js';
 import { init, RealtimeVoiceChanger } from '../src/index';
+import type { RealtimeVoiceChangerPodConfig } from '../src/public_types';
 
 const SR = 48000;
 const BLOCK = 128;
+
+function workletPod(semitones = 0): RealtimeVoiceChangerPodConfig {
+  return {
+    inputGainDb: 0,
+    outputGainDb: 0,
+    wetMix: 1,
+    retuneSemitones: semitones,
+    retuneMix: 0,
+    retuneGrainSize: 0,
+    formantFactor: 1,
+    formantAmount: 0,
+    formantBody: 0,
+    formantBrightness: 0,
+    formantNasal: 0,
+    eqHighpassHz: 80,
+    eqBodyDb: 0,
+    eqPresenceDb: 0,
+    eqAirDb: 0,
+    gateThresholdDb: -55,
+    gateAttackMs: 2,
+    gateReleaseMs: 100,
+    gateRangeDb: 18,
+    compressorThresholdDb: -22,
+    compressorRatio: 2,
+    compressorAttackMs: 6,
+    compressorReleaseMs: 90,
+    compressorMakeupGainDb: 0,
+    deesserFrequencyHz: 7200,
+    deesserThresholdDb: -28,
+    deesserRatio: 4,
+    deesserRangeDb: 8,
+    reverbMix: 0,
+    reverbTimeMs: 100,
+    reverbDamping: 0.5,
+    reverbSeed: 1,
+    limiterCeilingDb: -1,
+    limiterReleaseMs: 50,
+    limiterEnableIspLimiter: true,
+    limiterIspCeilingDbtp: -1,
+  };
+}
 
 /** Fill `buf` with a deterministic, bounded sine so blocks are comparable. */
 function fillSine(buf: Float32Array, freqHz: number, sr: number, amp = 0.2): void {
@@ -204,15 +246,6 @@ describe('SonareRealtimeVoiceChangerWorkletProcessor setConfig interleaving (reg
       fillSine(input, 220, SR, 0.2);
       const output = new Float32Array(BLOCK);
 
-      const presets = [
-        'bright-idol',
-        'dark-villain',
-        'soft-whisper',
-        'deep-narrator',
-        'robot-mascot',
-        'neutral-monitor',
-      ] as const;
-
       const totalBlocks = 64;
       for (let block = 0; block < totalBlocks; block++) {
         // Post a setConfig roughly every other block to simulate a host
@@ -221,7 +254,7 @@ describe('SonareRealtimeVoiceChangerWorkletProcessor setConfig interleaving (reg
           expect(() =>
             processor.receiveMessage({
               type: 'setConfig',
-              preset: presets[block % presets.length],
+              config: workletPod(block % 2 === 0 ? -2 : 2),
             }),
           ).not.toThrow();
         }
@@ -248,15 +281,11 @@ describe('SonareRealtimeVoiceChangerWorkletProcessor setConfig interleaving (reg
       const outLeft = new Float32Array(BLOCK);
       const outRight = new Float32Array(BLOCK);
 
-      const presets = [
-        'neutral-monitor',
-        'bright-idol',
-        'dark-villain',
-        'soft-whisper',
-        'deep-narrator',
-      ] as const;
       for (let i = 0; i < 100; i++) {
-        processor.receiveMessage({ type: 'setConfig', preset: presets[i % presets.length] });
+        processor.receiveMessage({
+          type: 'setConfig',
+          config: workletPod(i % 2 === 0 ? -2 : 2),
+        });
         expect(processor.process([[left, right]], [[outLeft, outRight]])).toBe(true);
         expect(isAllFinite(outLeft)).toBe(true);
         expect(isAllFinite(outRight)).toBe(true);

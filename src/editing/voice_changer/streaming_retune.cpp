@@ -17,19 +17,27 @@ using sonare::constants::kTwoPi;
 namespace {
 constexpr double kDefaultGrainSeconds = 2048.0 / 44100.0;
 constexpr float kMaxSemitones = 24.0f;  // Clamp shift range to +/- 2 octaves.
+constexpr int kMaxGrainSize = 8192;
 
-int resolve_grain_size(const StreamingRetuneConfig& config, double sample_rate,
-                       int max_block_size) noexcept {
+StreamingRetuneConfig sanitize_config(StreamingRetuneConfig config) noexcept {
+  config.semitones = std::isfinite(config.semitones)
+                         ? std::clamp(config.semitones, -kMaxSemitones, kMaxSemitones)
+                         : 0.0f;
+  config.mix = std::isfinite(config.mix) ? std::clamp(config.mix, 0.0f, 1.0f) : 1.0f;
+  config.grain_size = std::clamp(config.grain_size, 0, kMaxGrainSize);
+  return config;
+}
+
+int resolve_grain_size(const StreamingRetuneConfig& config, double sample_rate) noexcept {
   const int requested = config.grain_size;
   const int derived =
       requested > 0 ? requested : static_cast<int>(std::lround(sample_rate * kDefaultGrainSeconds));
-  const int minimum = std::max(4, max_block_size);
-  const int grain = std::max(minimum, derived);
+  const int grain = std::max(4, derived);
   return grain + ((4 - grain % 4) % 4);
 }
 }  // namespace
 
-StreamingRetune::StreamingRetune(StreamingRetuneConfig config) : config_(config) {}
+StreamingRetune::StreamingRetune(StreamingRetuneConfig config) { set_config(config); }
 
 void StreamingRetune::update_ratio() noexcept {
   const float semis = std::clamp(config_.semitones, -kMaxSemitones, kMaxSemitones);
@@ -46,7 +54,7 @@ void StreamingRetune::prepare(double sample_rate, int max_block_size) {
   sample_rate_ = sample_rate;
   max_block_size_ = max_block_size;
 
-  grain_size_ = resolve_grain_size(config_, sample_rate_, max_block_size_);
+  grain_size_ = resolve_grain_size(config_, sample_rate_);
   hop_a_ = grain_size_ / 4;
   ring_cap_ = static_cast<std::size_t>(4 * grain_size_);
   accum_cap_ = static_cast<std::size_t>(2 * grain_size_);
@@ -61,7 +69,12 @@ void StreamingRetune::prepare(double sample_rate, int max_block_size) {
   ring_buf_.assign(ring_cap_, 0.0f);
   synth_acc_.assign(accum_cap_, 0.0f);
   norm_acc_.assign(accum_cap_, 0.0f);
+  dry_delay_.assign(static_cast<std::size_t>(latency_samples()), 0.0f);
 
+  semitones_smoother_.prepare(sample_rate_, 12.0f);
+  mix_smoother_.prepare(sample_rate_, 10.0f);
+  semitones_smoother_.set_target(config_.semitones);
+  mix_smoother_.set_target(config_.mix);
   update_ratio();
   reset();
 }
@@ -74,10 +87,16 @@ void StreamingRetune::reset() {
   input_phase_ = 0;
   drain_pos_ = 0;
   synth_pos_ = 0;
+  std::fill(dry_delay_.begin(), dry_delay_.end(), 0.0f);
+  dry_delay_pos_ = 0;
+  // reset is an explicit state boundary, unlike a live set_config update.
+  semitones_smoother_.reset(config_.semitones);
+  mix_smoother_.reset(config_.mix);
+  update_ratio();
 }
 
 void StreamingRetune::set_config(const StreamingRetuneConfig& config) {
-  config_ = config;
+  config_ = sanitize_config(config);
   // grain_size is a structural parameter fixed at prepare() time: changing it
   // would reallocate the grain/ring buffers, which is forbidden here because
   // set_config runs on the audio thread via RealtimeVoiceChanger snapshot
@@ -87,7 +106,12 @@ void StreamingRetune::set_config(const StreamingRetuneConfig& config) {
   if (grain_size_ > 0) {
     config_.grain_size = grain_size_;
   }
-  update_ratio();
+  semitones_smoother_.set_target(config_.semitones);
+  mix_smoother_.set_target(config_.mix);
+  // Before prepare() no audio thread is consuming the values, so preserve the
+  // existing immediate ratio initialization. Once prepared, process_block()
+  // advances the smoother and derives the ratio sample-by-sample.
+  if (sample_rate_ <= 0.0) update_ratio();
 }
 
 float StreamingRetune::read_ring_linear(double position) const noexcept {
@@ -147,9 +171,10 @@ void StreamingRetune::process_block(const float* input, float* output, int num_s
   }
   if (num_samples > max_block_size_) return;
 
-  const float mix = std::clamp(config_.mix, 0.0f, 1.0f);
-
   for (int i = 0; i < num_samples; ++i) {
+    const float semitones = semitones_smoother_.process();
+    pitch_ratio_ = std::pow(2.0, static_cast<double>(semitones) / kSemitonesPerOctave);
+    const float mix = mix_smoother_.process();
     // 1) Write incoming sample into the history ring.
     ring_buf_[write_head_ % ring_cap_] = input[i];
     ++write_head_;
@@ -167,7 +192,16 @@ void StreamingRetune::process_block(const float* input, float* output, int num_s
     norm_acc_[drain_pos_] = 0.0f;
     drain_pos_ = (drain_pos_ + 1) % accum_cap_;
 
-    output[i] = input[i] * (1.0f - mix) + out_sample * mix;
+    // The OLA output trails the input by three analysis hops. Delay the dry
+    // path by that same fixed amount before blending so intermediate mix
+    // values are an actual level blend rather than a slapback echo.
+    float delayed_dry = input[i];
+    if (!dry_delay_.empty()) {
+      delayed_dry = dry_delay_[dry_delay_pos_];
+      dry_delay_[dry_delay_pos_] = input[i];
+      dry_delay_pos_ = (dry_delay_pos_ + 1) % dry_delay_.size();
+    }
+    output[i] = delayed_dry * (1.0f - mix) + out_sample * mix;
   }
 }
 

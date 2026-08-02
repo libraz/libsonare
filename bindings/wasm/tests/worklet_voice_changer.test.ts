@@ -1,3 +1,4 @@
+import type { RealtimeVoiceChangerPodConfig } from '../src/public_types';
 import {
   describe,
   expect,
@@ -6,6 +7,47 @@ import {
   SonareRealtimeVoiceChangerWorkletProcessor,
   setupWorklet,
 } from './_worklet_helpers';
+
+function workletPod(): RealtimeVoiceChangerPodConfig {
+  return {
+    inputGainDb: 0,
+    outputGainDb: 0,
+    wetMix: 1,
+    retuneSemitones: 0,
+    retuneMix: 0,
+    retuneGrainSize: 0,
+    formantFactor: 1,
+    formantAmount: 0,
+    formantBody: 0,
+    formantBrightness: 0,
+    formantNasal: 0,
+    eqHighpassHz: 80,
+    eqBodyDb: 0,
+    eqPresenceDb: 0,
+    eqAirDb: 0,
+    gateThresholdDb: -55,
+    gateAttackMs: 2,
+    gateReleaseMs: 100,
+    gateRangeDb: 18,
+    compressorThresholdDb: -22,
+    compressorRatio: 2,
+    compressorAttackMs: 6,
+    compressorReleaseMs: 90,
+    compressorMakeupGainDb: 0,
+    deesserFrequencyHz: 7200,
+    deesserThresholdDb: -28,
+    deesserRatio: 4,
+    deesserRangeDb: 8,
+    reverbMix: 0,
+    reverbTimeMs: 100,
+    reverbDamping: 0.5,
+    reverbSeed: 1,
+    limiterCeilingDb: -1,
+    limiterReleaseMs: 50,
+    limiterEnableIspLimiter: true,
+    limiterIspCeilingDbtp: -1,
+  };
+}
 
 describe('SonareRealtimeVoiceChangerWorkletProcessor', () => {
   setupWorklet();
@@ -32,7 +74,10 @@ describe('SonareRealtimeVoiceChangerWorkletProcessor', () => {
         }
         expect(output.some((sample) => sample !== 0)).toBe(true);
 
-        processor.receiveMessage({ type: 'setConfig', preset: 'dark-villain' });
+        processor.receiveMessage({
+          type: 'setConfig',
+          config: workletPod(),
+        });
         const nextOutput = new Float32Array(blockSize);
         expect(processor.process([[input]], [[nextOutput]])).toBe(true);
         expect(nextOutput.every((sample) => Number.isFinite(sample))).toBe(true);
@@ -253,18 +298,21 @@ describe('SonareRealtimeVoiceChangerWorkletProcessor', () => {
       });
       try {
         const internal = processor as unknown as {
-          changer: { setConfig: (preset: unknown) => void };
+          changer: { setPodConfig: (config: unknown) => void };
         };
-        const originalSetConfig = internal.changer.setConfig.bind(internal.changer);
+        const originalSetConfig = internal.changer.setPodConfig.bind(internal.changer);
         let setConfigCalls = 0;
-        internal.changer.setConfig = (preset: unknown) => {
+        internal.changer.setPodConfig = (config: unknown) => {
           setConfigCalls++;
-          originalSetConfig(preset);
+          originalSetConfig(config);
         };
 
         // (1) Synchronous application on message receipt.
         const beforeRecv = setConfigCalls;
-        processor.receiveMessage({ type: 'setConfig', preset: 'dark-villain' });
+        processor.receiveMessage({
+          type: 'setConfig',
+          config: workletPod(),
+        });
         expect(setConfigCalls).toBe(beforeRecv + 1);
 
         // (2) process() does not invoke setConfig.
@@ -292,17 +340,20 @@ describe('SonareRealtimeVoiceChangerWorkletProcessor', () => {
         channelCount: 1,
       });
       const internal = processor as unknown as {
-        changer: { setConfig: (preset: unknown) => void };
+        changer: { setPodConfig: (config: unknown) => void };
       };
       let setConfigCalls = 0;
-      const originalSetConfig = internal.changer.setConfig.bind(internal.changer);
-      internal.changer.setConfig = (preset: unknown) => {
+      const originalSetConfig = internal.changer.setPodConfig.bind(internal.changer);
+      internal.changer.setPodConfig = (config: unknown) => {
         setConfigCalls++;
-        originalSetConfig(preset);
+        originalSetConfig(config);
       };
       processor.destroy();
       expect(() =>
-        processor.receiveMessage({ type: 'setConfig', preset: 'bright-idol' }),
+        processor.receiveMessage({
+          type: 'setConfig',
+          config: workletPod(),
+        }),
       ).not.toThrow();
       expect(() => processor.receiveMessage({ type: 'reset' })).not.toThrow();
       expect(setConfigCalls).toBe(0);

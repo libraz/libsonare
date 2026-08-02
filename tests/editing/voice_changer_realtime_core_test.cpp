@@ -67,8 +67,88 @@ TEST_CASE("RealtimeVoiceChanger preset JSON is tolerant and clamps values", "[vo
   REQUIRE_FALSE(error.empty());
 }
 
+TEST_CASE("RealtimeVoiceChanger parser expands every flat POD field", "[voice_changer]") {
+  const std::string flat_pod_json = R"json({
+    "inputGainDb": 1, "outputGainDb": -2, "wetMix": 0.75,
+    "retuneSemitones": 3, "retuneMix": 0.5, "retuneGrainSize": 128,
+    "formantFactor": 1.1, "formantAmount": 0.2, "formantBody": -0.1,
+    "formantBrightness": 0.3, "formantNasal": 0.4,
+    "eqHighpassHz": 100, "eqBodyDb": 1, "eqPresenceDb": 2, "eqAirDb": 3,
+    "gateThresholdDb": -45, "gateAttackMs": 2, "gateReleaseMs": 30, "gateRangeDb": 20,
+    "compressorThresholdDb": -24, "compressorRatio": 3, "compressorAttackMs": 5,
+    "compressorReleaseMs": 80, "compressorMakeupGainDb": 2,
+    "deesserFrequencyHz": 6000, "deesserThresholdDb": -22, "deesserRatio": 2,
+    "deesserRangeDb": 3, "reverbMix": 0.2, "reverbTimeMs": 900, "reverbDamping": 0.6,
+    "reverbSeed": 17, "limiterCeilingDb": -3, "limiterReleaseMs": 90,
+    "limiterEnableIspLimiter": false, "limiterIspCeilingDbtp": -2
+  })json";
+  const auto config = realtime_voice_changer_config_from_json(flat_pod_json);
+
+  REQUIRE(config.input_gain_db == 1.0f);
+  REQUIRE(config.output_gain_db == -2.0f);
+  REQUIRE(config.wet_mix == 0.75f);
+  REQUIRE(config.retune.semitones == 3.0f);
+  REQUIRE(config.retune.mix == 0.5f);
+  REQUIRE(config.retune.grain_size == 128);
+  REQUIRE(config.formant.factor == 1.1f);
+  REQUIRE(config.formant.amount == 0.2f);
+  REQUIRE(config.formant.body == -0.1f);
+  REQUIRE(config.formant.brightness == 0.3f);
+  REQUIRE(config.formant.nasal == 0.4f);
+  REQUIRE(config.eq.highpass_hz == 100.0f);
+  REQUIRE(config.eq.body_db == 1.0f);
+  REQUIRE(config.eq.presence_db == 2.0f);
+  REQUIRE(config.eq.air_db == 3.0f);
+  REQUIRE(config.gate.threshold_db == -45.0f);
+  REQUIRE(config.gate.attack_ms == 2.0f);
+  REQUIRE(config.gate.release_ms == 30.0f);
+  REQUIRE(config.gate.range_db == 20.0f);
+  REQUIRE(config.compressor.threshold_db == -24.0f);
+  REQUIRE(config.compressor.ratio == 3.0f);
+  REQUIRE(config.compressor.attack_ms == 5.0f);
+  REQUIRE(config.compressor.release_ms == 80.0f);
+  REQUIRE(config.compressor.makeup_gain_db == 2.0f);
+  REQUIRE(config.deesser.frequency_hz == 6000.0f);
+  REQUIRE(config.deesser.threshold_db == -22.0f);
+  REQUIRE(config.deesser.ratio == 2.0f);
+  REQUIRE(config.deesser.range_db == 3.0f);
+  REQUIRE(config.reverb.mix == 0.2f);
+  REQUIRE(config.reverb.time_ms == 900.0f);
+  REQUIRE(config.reverb.damping == 0.6f);
+  REQUIRE(config.reverb.seed == 17);
+  REQUIRE(config.limiter.ceiling_db == -3.0f);
+  REQUIRE(config.limiter.release_ms == 90.0f);
+  REQUIRE_FALSE(config.limiter.enable_isp_limiter);
+  REQUIRE(config.limiter.isp_ceiling_dbtp == -2.0f);
+
+  SonareRealtimeVoiceChanger* handle = nullptr;
+  REQUIRE(sonare_realtime_voice_changer_create_json(flat_pod_json.c_str(), 48000, 128, 1,
+                                                    &handle) == SONARE_OK);
+  char* nested_json = nullptr;
+  REQUIRE(sonare_realtime_voice_changer_config_json(handle, &nested_json) == SONARE_OK);
+  REQUIRE(nested_json != nullptr);
+  const std::string json(nested_json);
+  sonare_free_string(nested_json);
+  sonare_realtime_voice_changer_destroy(handle);
+
+  // The C ABI accepts the flat binding POD and returns the canonical nested document.
+  REQUIRE(json.find("\"retune\"") != std::string::npos);
+  REQUIRE(json.find("\"formant\"") != std::string::npos);
+  REQUIRE(json.find("\"eq\"") != std::string::npos);
+  REQUIRE(json.find("\"gate\"") != std::string::npos);
+  REQUIRE(json.find("\"compressor\"") != std::string::npos);
+  REQUIRE(json.find("\"deesser\"") != std::string::npos);
+  REQUIRE(json.find("\"reverb\"") != std::string::npos);
+  REQUIRE(json.find("\"limiter\"") != std::string::npos);
+}
+
 TEST_CASE("RealtimeVoiceChanger C API handle lifecycle works", "[voice_changer]") {
   SonareRealtimeVoiceChanger* handle = nullptr;
+  REQUIRE(
+      sonare_realtime_voice_changer_create_json(
+          R"json({"schemaVersion":1,"id":"partial","name":"Partial","dsp":{"retune":{"semitones":3}}})json",
+          48000, 128, 1, &handle) == SONARE_ERROR_INVALID_PARAMETER);
+  REQUIRE(handle == nullptr);
   REQUIRE(sonare_realtime_voice_changer_create_json("bright-idol", 48000, 128, 1, &handle) ==
           SONARE_OK);
   REQUIRE(handle != nullptr);
@@ -82,6 +162,11 @@ TEST_CASE("RealtimeVoiceChanger C API handle lifecycle works", "[voice_changer]"
   int latency = 0;
   REQUIRE(sonare_realtime_voice_changer_latency_samples(handle, &latency) == SONARE_OK);
   REQUIRE(latency > 0);
+  REQUIRE(
+      sonare_realtime_voice_changer_set_config_json(
+          handle,
+          R"json({"schemaVersion":1,"id":"partial","name":"Partial","dsp":{"retune":{"semitones":3}}})json") ==
+      SONARE_ERROR_INVALID_PARAMETER);
   REQUIRE(sonare_realtime_voice_changer_set_config_json(handle, "deep-narrator") == SONARE_OK);
   REQUIRE(sonare_realtime_voice_changer_reset(handle) == SONARE_OK);
 
@@ -111,6 +196,21 @@ TEST_CASE("RealtimeVoiceChanger C API handle lifecycle works", "[voice_changer]"
   sonare_free_string(error);
 
   sonare_realtime_voice_changer_destroy(handle);
+}
+
+TEST_CASE("RealtimeVoiceChanger C API default POD preserves the ISP limiter",
+          "[voice_changer][c-api]") {
+  SonareRealtimeVoiceChangerConfig defaults{};
+  SonareRealtimeVoiceChangerConfig neutral{};
+  REQUIRE(sonare_realtime_voice_changer_config_default(&defaults) == SONARE_OK);
+  REQUIRE(sonare_realtime_voice_changer_preset_config(SONARE_VC_PRESET_NEUTRAL_MONITOR, &neutral) ==
+          SONARE_OK);
+  REQUIRE(defaults.limiter_enable_isp_limiter == 1);
+  REQUIRE(defaults.limiter_isp_ceiling_dbtp == -1.0f);
+  REQUIRE(defaults.wet_mix == neutral.wet_mix);
+  REQUIRE(defaults.reverb_time_ms == neutral.reverb_time_ms);
+  REQUIRE(defaults.limiter_enable_isp_limiter == neutral.limiter_enable_isp_limiter);
+  REQUIRE(sonare_realtime_voice_changer_config_default(nullptr) == SONARE_ERROR_INVALID_PARAMETER);
 }
 
 TEST_CASE("RealtimeVoiceChanger set_config does not reallocate after prepare", "[voice_changer]") {
@@ -376,22 +476,17 @@ TEST_CASE("RealtimeVoiceChanger reported latency tracks wet_mix and the ISP limi
   const int isp_latency = wet_with_isp - grain;
   REQUIRE(isp_latency > 0);
 
-  // Pure dry is an untouched passthrough: zero effective latency, and because
-  // the ISP limiter is skipped when wet_mix == 0 its delay is not reported.
+  // Pure dry stays aligned to the same fixed retune+ISP latency.
   RealtimeVoiceChangerConfig dry = full;
   dry.wet_mix = 0.0f;
   changer.set_config(dry);
-  REQUIRE(changer.latency_samples() == 0);
+  REQUIRE(changer.latency_samples() == wet_with_isp);
 
-  // Halfway the dry (0) and wet (grain) paths average to ~half the grain, plus
-  // the ISP delay because wet_mix > 0.
+  // Intermediate mix values do not change the host-compensable delay.
   RealtimeVoiceChangerConfig half = full;
   half.wet_mix = 0.5f;
   changer.set_config(half);
-  const int expected_half = static_cast<int>(std::lround(0.5f * static_cast<float>(grain)));
-  REQUIRE(changer.latency_samples() == expected_half + isp_latency);
-  REQUIRE(changer.latency_samples() < wet_with_isp);
-  REQUIRE(changer.latency_samples() > isp_latency);
+  REQUIRE(changer.latency_samples() == wet_with_isp);
 }
 
 TEST_CASE("RealtimeVoiceChanger deesser reduction gain is smooth", "[voice_changer][deesser]") {
@@ -489,20 +584,18 @@ TEST_CASE("RealtimeVoiceChanger preset JSON places schemaVersion before id and d
 }
 
 // ===================================================================
-// Regression: mono process_block with wet_mix=0 must return the dry
-// signal. Previously the mono convenience overload aliased its internal
-// scratch buffer as channels[0], which caused the wet/dry mixer to read
-// the input-stage-processed signal as the "dry" reference instead of
-// the original input. (C-1)
+// Regression: mono process_block with wet_mix=0 must return the dry signal
+// delayed by the fixed retune latency. It remains bit-identical once aligned.
 // ===================================================================
-TEST_CASE("RealtimeVoiceChanger mono wet_mix=0 returns the dry input", "[voice_changer]") {
+TEST_CASE("RealtimeVoiceChanger mono wet_mix=0 returns delayed dry input", "[voice_changer]") {
   constexpr int sample_rate = 48000;
   constexpr int block = 128;
   const auto input = sine(440.0f, sample_rate, 4096);
 
   RealtimeVoiceChangerConfig config =
       realtime_voice_changer_preset(VoiceCharacterPreset::BrightIdol);
-  config.wet_mix = 0.0f;  // full dry — output must equal input
+  config.wet_mix = 0.0f;
+  config.limiter.enable_isp_limiter = false;  // isolate the retune alignment delay
   RealtimeVoiceChanger changer(config);
   changer.prepare(sample_rate, block, 1);
 
@@ -511,8 +604,14 @@ TEST_CASE("RealtimeVoiceChanger mono wet_mix=0 returns the dry input", "[voice_c
     const int n = std::min(block, static_cast<int>(input.size()) - pos);
     changer.process_block(input.data() + pos, output.data() + pos, n);
   }
+  const int latency = changer.latency_samples();
+  REQUIRE(latency > 0);
   for (std::size_t i = 0; i < input.size(); ++i) {
-    REQUIRE(output[i] == input[i]);
+    if (i < static_cast<std::size_t>(latency)) {
+      REQUIRE(output[i] == 0.0f);
+    } else {
+      REQUIRE(output[i] == input[i - static_cast<std::size_t>(latency)]);
+    }
   }
 }
 
@@ -584,11 +683,11 @@ TEST_CASE("RealtimeVoiceChanger gate gain transition is smooth", "[voice_changer
 TEST_CASE("RealtimeVoiceChanger limiter attack tapers across samples", "[voice_changer]") {
   constexpr int sample_rate = 48000;
   constexpr int block = 64;
-  constexpr int total = 1024;
+  constexpr int total = 4096;
   // Quiet pre-roll for ~10 ms so the limiter is in steady state, then a
   // loud sine to drive gain reduction. The limiter attack must NOT collapse
   // gain to its steady-state value in a single sample.
-  constexpr int quiet_samples = 512;
+  constexpr int quiet_samples = 2048;
   std::vector<float> input(total, 0.0f);
   for (int i = 0; i < total; ++i) {
     const float amp = (i < quiet_samples) ? 0.05f : 2.0f;  // 2.0 forces hard limiting
@@ -618,14 +717,16 @@ TEST_CASE("RealtimeVoiceChanger limiter attack tapers across samples", "[voice_c
     REQUIRE(std::isfinite(sample));
     REQUIRE(std::abs(sample) <= ceiling + 1.0e-6f);
   }
-  // Around the loud-onset boundary at quiet_samples, the limiter gain
+  // Around the loud-onset boundary after the aligned retune delay, the limiter gain
   // should ramp down across multiple samples instead of dropping in one.
   // Measure the peak envelope of the output in a small window after the
   // onset: it should DECREASE over a few samples before settling, proving
   // the attack is multi-sample.
   std::vector<float> env;
   env.reserve(20);
-  for (std::size_t i = quiet_samples; i < quiet_samples + 20; ++i) {
+  const std::size_t loud_onset =
+      static_cast<std::size_t>(quiet_samples + changer.latency_samples());
+  for (std::size_t i = loud_onset; i < loud_onset + 20; ++i) {
     env.push_back(std::abs(output[i]));
   }
   // Among the first 20 samples post-onset, at least 3 should be strictly
@@ -639,6 +740,50 @@ TEST_CASE("RealtimeVoiceChanger limiter attack tapers across samples", "[voice_c
   // After a sub-millisecond attack there will be several samples sitting
   // exactly at the ceiling once steady state is reached.
   REQUIRE(near_ceiling > 0);
+}
+
+TEST_CASE("RealtimeVoiceChanger smooths every live snapshot control", "[voice_changer]") {
+  constexpr int sample_rate = 48000;
+  constexpr int block = 128;
+  constexpr int preroll = 4096;
+  constexpr int rendered = 2048;
+  auto source = sine(180.0f, sample_rate, preroll + rendered);
+
+  auto initial = realtime_voice_changer_preset(VoiceCharacterPreset::NeutralMonitor);
+  initial.reverb.mix = 0.0f;
+  initial.limiter.enable_isp_limiter = false;
+  RealtimeVoiceChanger changer(initial);
+  changer.prepare(sample_rate, block, 1);
+
+  std::vector<float> output(source.size(), 0.0f);
+  for (int pos = 0; pos < preroll; pos += block) {
+    changer.process_block(source.data() + pos, output.data() + pos, block);
+  }
+
+  auto updated = realtime_voice_changer_preset(VoiceCharacterPreset::DarkVillain);
+  updated.input_gain_db = -9.0f;
+  updated.output_gain_db = 6.0f;
+  updated.wet_mix = 0.7f;
+  updated.eq = {240.0f, 9.0f, -9.0f, 8.0f};
+  updated.gate = {-30.0f, 35.0f, 350.0f, 45.0f};
+  updated.compressor = {-40.0f, 12.0f, 35.0f, 350.0f, 9.0f};
+  updated.deesser = {3200.0f, -45.0f, 12.0f, 20.0f};
+  updated.limiter = {-9.0f, 400.0f, false, -9.0f};
+  changer.set_config(updated);
+
+  for (int pos = preroll; pos < preroll + rendered; pos += block) {
+    changer.process_block(source.data() + pos, output.data() + pos, block);
+  }
+
+  // The entire snapshot is applied as smoother targets. The first post-update
+  // sample therefore remains continuous with the previous rendered sample;
+  // a direct EQ/dynamics/limiter coefficient replacement produces a much
+  // larger one-sample discontinuity here.
+  const float first_jump = std::abs(output[preroll] - output[preroll - 1]);
+  REQUIRE(first_jump < 0.08f);
+  for (int i = preroll; i < preroll + rendered; ++i) {
+    REQUIRE(std::isfinite(output[static_cast<std::size_t>(i)]));
+  }
 }
 
 // ===================================================================
@@ -834,8 +979,7 @@ TEST_CASE("RealtimeVoiceChanger rejects oversized blocks as a silent no-op", "[v
 // only ship the JSON match what realtime_voice_changer_preset() returns.
 //
 // Asserting field-by-field equality (after normalize on both sides)
-// catches the kind of drift the 2026-05 audit found: 4 silently stale
-// preset values that diverged from code over multiple releases.
+// catches silently stale preset values that diverge from code over releases.
 //
 // Test runs from CMAKE_SOURCE_DIR (see catch_discover_tests
 // WORKING_DIRECTORY), so the schema path is relative to the repo root.

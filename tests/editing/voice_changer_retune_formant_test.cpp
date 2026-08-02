@@ -47,6 +47,16 @@ TEST_CASE("StreamingRetune derives grain size from sample rate unless configured
   configured.prepare(96000.0, 256);
   REQUIRE(configured.grain_size() == 1024);
 
+  // Grain structure is independent of the host callback size. Both a caller's
+  // explicit grain and the automatic sample-rate-derived grain must survive a
+  // block that is larger than either value.
+  StreamingRetune small_grain({0.0f, 1.0f, 64});
+  small_grain.prepare(48000.0, 4096);
+  REQUIRE(small_grain.grain_size() == 64);
+  StreamingRetune large_block_auto;
+  large_block_auto.prepare(48000.0, 4096);
+  REQUIRE(large_block_auto.grain_size() == 2232);
+
   // grain_size is structural and fixed at prepare(): a runtime set_config()
   // (which runs on the audio thread and must not reallocate) keeps the
   // effective grain size and reports it back through config(), rather than
@@ -54,6 +64,74 @@ TEST_CASE("StreamingRetune derives grain size from sample rate unless configured
   configured.set_config({3.0f, 0.5f, 4096});
   REQUIRE(configured.grain_size() == 1024);
   REQUIRE(configured.config().grain_size == 1024);
+}
+
+TEST_CASE("StreamingRetune aligns dry and wet impulse peaks across mix values", "[voice_changer]") {
+  constexpr int sample_rate = 48000;
+  constexpr int block = 128;
+  constexpr int grain = 512;
+  constexpr int total = grain * 4;
+  std::vector<float> input(total, 0.0f);
+  input[0] = 1.0f;
+
+  auto peak_position = [&](float mix) {
+    StreamingRetune retune({0.0f, mix, grain});
+    retune.prepare(sample_rate, block);
+    std::vector<float> output(total, 0.0f);
+    for (int pos = 0; pos < total; pos += block) {
+      retune.process_block(input.data() + pos, output.data() + pos, block);
+    }
+    const auto peak = std::max_element(output.begin(), output.end(),
+                                       [](float a, float b) { return std::abs(a) < std::abs(b); });
+    REQUIRE(std::abs(*peak) > 1.0e-4f);
+    return static_cast<int>(std::distance(output.begin(), peak));
+  };
+
+  const int dry_peak = peak_position(0.0f);
+  const int halfway_peak = peak_position(0.5f);
+  const int wet_peak = peak_position(1.0f);
+  REQUIRE(dry_peak == grain * 3 / 4);
+  REQUIRE(std::abs(halfway_peak - dry_peak) <= 1);
+  REQUIRE(std::abs(wet_peak - dry_peak) <= 1);
+}
+
+TEST_CASE("RealtimeVoiceChanger aligns whole-chain dry and wet impulse peaks", "[voice_changer]") {
+  constexpr int sample_rate = 48000;
+  constexpr int block = 128;
+  constexpr int grain = 512;
+  constexpr int total = grain * 4;
+  std::vector<float> input(total, 0.0f);
+  input[0] = 1.0f;
+
+  auto peak_position = [&](float wet_mix) {
+    RealtimeVoiceChangerConfig config;
+    config.wet_mix = wet_mix;
+    config.retune = {0.0f, 1.0f, grain};
+    config.formant = {1.0f, 0.0f, 0.0f, 0.0f, 0.0f};
+    config.eq = {1.0f, 0.0f, 0.0f, 0.0f};
+    config.gate = {-120.0f, 1.0f, 50.0f, 0.0f};
+    config.compressor = {0.0f, 1.0f, 1.0f, 50.0f, 0.0f};
+    config.deesser = {7000.0f, -6.0f, 1.0f, 0.0f};
+    config.reverb.mix = 0.0f;
+    config.limiter = {0.0f, 50.0f, false, -1.0f};
+    RealtimeVoiceChanger changer(config);
+    changer.prepare(sample_rate, block, 1);
+    std::vector<float> output(total, 0.0f);
+    for (int pos = 0; pos < total; pos += block) {
+      changer.process_block(input.data() + pos, output.data() + pos, block);
+    }
+    const auto peak = std::max_element(output.begin(), output.end(),
+                                       [](float a, float b) { return std::abs(a) < std::abs(b); });
+    REQUIRE(std::abs(*peak) > 1.0e-4f);
+    return static_cast<int>(std::distance(output.begin(), peak));
+  };
+
+  const int dry_peak = peak_position(0.0f);
+  const int halfway_peak = peak_position(0.5f);
+  const int wet_peak = peak_position(1.0f);
+  REQUIRE(dry_peak == grain * 3 / 4);
+  REQUIRE(std::abs(halfway_peak - dry_peak) <= 1);
+  REQUIRE(std::abs(wet_peak - dry_peak) <= 1);
 }
 
 TEST_CASE("StreamingRetune process_block is noexcept on the audio thread",
@@ -173,6 +251,19 @@ TEST_CASE("FormantWarp clamps finite formant factors to realtime bounds", "[voic
   }
 }
 
+TEST_CASE("FormantWarp and VoiceChanger bypass a unity formant factor", "[voice_changer]") {
+  constexpr int sample_rate = 22050;
+  const std::vector<float> samples = sine(220.0f, sample_rate, sample_rate / 3);
+  const sonare::Audio audio = sonare::Audio::from_vector(samples, sample_rate);
+
+  const sonare::Audio warped = FormantWarp({1.0f, 12, 1.0f}).process(audio);
+  VoiceChanger changer({0.0f, 1.0f});
+  const sonare::Audio changed = changer.process(audio);
+
+  REQUIRE(std::vector<float>(warped.begin(), warped.end()) == samples);
+  REQUIRE(std::vector<float>(changed.begin(), changed.end()) == samples);
+}
+
 TEST_CASE("VoiceChanger combines pitch and formant controls", "[voice_changer]") {
   constexpr int sample_rate = 22050;
   auto samples = sine(220.0f, sample_rate, sample_rate / 2);
@@ -210,4 +301,43 @@ TEST_CASE("StreamingFormant changes spectral color without changing duration", "
   for (float sample : output) REQUIRE(std::isfinite(sample));
   REQUIRE(output.size() == input.size());
   REQUIRE(spectral_centroid(output, sample_rate) > spectral_centroid(input, sample_rate));
+}
+
+TEST_CASE("StreamingFormant applies amount once and preserves tonal controls at zero",
+          "[voice_changer]") {
+  constexpr int sample_rate = 48000;
+  constexpr int block = 128;
+  const auto input = sine(440.0f, sample_rate, 1024);
+  std::vector<float> half_shift(input.size(), 0.0f);
+  std::vector<float> full_equivalent(input.size(), 0.0f);
+  std::vector<float> brightness_only(input.size(), 0.0f);
+  std::vector<float> neutral(input.size(), 0.0f);
+
+  // factor 1.5 at amount 0.5 resolves to the same 1.25 effective factor as a
+  // full-strength 1.25 setting. This catches the former amount-squared path.
+  StreamingFormant half({1.5f, 0.5f, 0.0f, 0.0f, 0.0f});
+  StreamingFormant full({1.25f, 1.0f, 0.0f, 0.0f, 0.0f});
+  StreamingFormant bright({1.0f, 0.0f, 0.0f, 0.7f, 0.0f});
+  StreamingFormant plain({1.0f, 0.0f, 0.0f, 0.0f, 0.0f});
+  for (StreamingFormant* formant : {&half, &full, &bright, &plain}) {
+    formant->prepare(sample_rate, block);
+  }
+  for (size_t offset = 0; offset < input.size(); offset += block) {
+    const int count = static_cast<int>(std::min(static_cast<size_t>(block), input.size() - offset));
+    half.process_block(input.data() + offset, half_shift.data() + offset, count);
+    full.process_block(input.data() + offset, full_equivalent.data() + offset, count);
+    bright.process_block(input.data() + offset, brightness_only.data() + offset, count);
+    plain.process_block(input.data() + offset, neutral.data() + offset, count);
+  }
+
+  float max_shift_difference = 0.0f;
+  float max_brightness_difference = 0.0f;
+  for (size_t i = 0; i < input.size(); ++i) {
+    max_shift_difference =
+        std::max(max_shift_difference, std::abs(half_shift[i] - full_equivalent[i]));
+    max_brightness_difference =
+        std::max(max_brightness_difference, std::abs(brightness_only[i] - neutral[i]));
+  }
+  REQUIRE(max_shift_difference < 1.0e-5f);
+  REQUIRE(max_brightness_difference > 1.0e-4f);
 }

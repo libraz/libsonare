@@ -6,74 +6,6 @@ import type {
 } from './public_types';
 
 /**
- * True when `config` is a flat POD (the shape `realtimeVoiceChangerPresetConfig`
- * returns) rather than a preset name or a nested preset. `retuneSemitones` only
- * exists on the flat POD; the nested form spells it `retune.semitones`.
- */
-function isFlatVoiceChangerPod(config: unknown): config is RealtimeVoiceChangerPodConfig {
-  return typeof config === 'object' && config !== null && 'retuneSemitones' in config;
-}
-
-/**
- * Rewrite the flat 36-field POD into the nested shape the native config parser
- * reads. Passing the flat POD straight to `setConfig` would leave every nested
- * field at its default (only the three root fields are read flat), silently
- * discarding retune/EQ/reverb/etc.
- */
-function flatVoiceChangerPodToNested(pod: RealtimeVoiceChangerPodConfig): Record<string, unknown> {
-  return {
-    inputGainDb: pod.inputGainDb,
-    outputGainDb: pod.outputGainDb,
-    wetMix: pod.wetMix,
-    retune: { semitones: pod.retuneSemitones, mix: pod.retuneMix, grainSize: pod.retuneGrainSize },
-    formant: {
-      factor: pod.formantFactor,
-      amount: pod.formantAmount,
-      body: pod.formantBody,
-      brightness: pod.formantBrightness,
-      nasal: pod.formantNasal,
-    },
-    eq: {
-      highpassHz: pod.eqHighpassHz,
-      bodyDb: pod.eqBodyDb,
-      presenceDb: pod.eqPresenceDb,
-      airDb: pod.eqAirDb,
-    },
-    gate: {
-      thresholdDb: pod.gateThresholdDb,
-      attackMs: pod.gateAttackMs,
-      releaseMs: pod.gateReleaseMs,
-      rangeDb: pod.gateRangeDb,
-    },
-    compressor: {
-      thresholdDb: pod.compressorThresholdDb,
-      ratio: pod.compressorRatio,
-      attackMs: pod.compressorAttackMs,
-      releaseMs: pod.compressorReleaseMs,
-      makeupGainDb: pod.compressorMakeupGainDb,
-    },
-    deesser: {
-      frequencyHz: pod.deesserFrequencyHz,
-      thresholdDb: pod.deesserThresholdDb,
-      ratio: pod.deesserRatio,
-      rangeDb: pod.deesserRangeDb,
-    },
-    reverb: {
-      mix: pod.reverbMix,
-      timeMs: pod.reverbTimeMs,
-      damping: pod.reverbDamping,
-      seed: pod.reverbSeed,
-    },
-    limiter: {
-      ceilingDb: pod.limiterCeilingDb,
-      releaseMs: pod.limiterReleaseMs,
-      enableIspLimiter: pod.limiterEnableIspLimiter,
-      ispCeilingDbtp: pod.limiterIspCeilingDbtp,
-    },
-  };
-}
-
-/**
  * Zero-copy realtime buffer pair for {@link RealtimeVoiceChanger} mono
  * processing. The `input` / `output` `Float32Array`s are typed-memory views
  * onto the WASM heap — write samples into `input`, call `process()`, then
@@ -117,9 +49,22 @@ export interface RealtimeVoiceChangerPlanarBuffer {
 export class RealtimeVoiceChanger {
   private changer: import('./sonare.js').WasmRealtimeVoiceChanger;
 
-  constructor(config: RealtimeVoiceChangerConfigInput = 'neutral-monitor') {
+  /**
+   * Creates a voice changer. Supplying `sampleRate` prepares it immediately,
+   * matching the Node and Python constructors; omitting it preserves the
+   * explicit {@link prepare} lifecycle for callers that configure later.
+   */
+  constructor(
+    config: RealtimeVoiceChangerConfigInput | RealtimeVoiceChangerPodConfig = 'neutral-monitor',
+    sampleRate?: number,
+    maxBlockSize = 128,
+    channels = 1,
+  ) {
     const module = getSonareModule();
     this.changer = module.createRealtimeVoiceChanger(config as Record<string, unknown> | string);
+    if (sampleRate !== undefined) {
+      this.changer.prepare(sampleRate, maxBlockSize, channels);
+    }
   }
 
   prepare(sampleRate: number, maxBlockSize = 128, channels = 1): void {
@@ -131,11 +76,18 @@ export class RealtimeVoiceChanger {
   }
 
   setConfig(config: RealtimeVoiceChangerConfigInput | RealtimeVoiceChangerPodConfig): void {
-    // A flat POD (from realtimeVoiceChangerPresetConfig) is rewritten to the
-    // nested shape the native parser reads; a preset name or nested preset is
-    // passed through unchanged.
-    const resolved = isFlatVoiceChangerPod(config) ? flatVoiceChangerPodToNested(config) : config;
-    this.changer.setConfig(resolved as Record<string, unknown> | string);
+    // The shared native parser recognizes the flat POD produced by
+    // realtimeVoiceChangerPresetConfig, so bindings never duplicate its 36-field mapping.
+    this.changer.setConfig(config as Record<string, unknown> | string);
+  }
+
+  /**
+   * Apply a flat, pre-normalized config without JSON serialization. Intended
+   * for AudioWorklet control messages whose sender prepared the POD on the
+   * main thread.
+   */
+  setPodConfig(config: RealtimeVoiceChangerPodConfig): void {
+    this.changer.setPodConfig(config);
   }
 
   configJson(): string {
@@ -144,6 +96,14 @@ export class RealtimeVoiceChanger {
 
   latencySamples(): number {
     return this.changer.latencySamples();
+  }
+
+  /**
+   * Monotonically increases whenever {@link prepare} can replace the native
+   * scratch buffers. Cached WASM heap views must be reacquired after it changes.
+   */
+  bufferGeneration(): number {
+    return this.changer.bufferGeneration();
   }
 
   processMono(samples: Float32Array): Float32Array {
@@ -234,14 +194,20 @@ export class RealtimeVoiceChanger {
   createRealtimeMonoBuffer(numSamples: number): RealtimeVoiceChangerMonoBuffer {
     let input = this.getMonoInputBuffer(numSamples);
     let output = this.getMonoOutputBuffer(numSamples);
+    let generation = this.bufferGeneration();
     // The cached heap views can detach if WASM linear memory grows (the embind
     // module is built ALLOW_MEMORY_GROWTH). Re-acquire them if detached
     // (byteLength === 0) before use, mirroring the worklet RT path. In the
     // common no-growth case this is a cheap branch with no allocation.
     const reacquireIfDetached = (): void => {
-      if (input.byteLength === 0 || output.byteLength === 0) {
+      if (
+        generation !== this.bufferGeneration() ||
+        input.byteLength === 0 ||
+        output.byteLength === 0
+      ) {
         input = this.getMonoInputBuffer(numSamples);
         output = this.getMonoOutputBuffer(numSamples);
+        generation = this.bufferGeneration();
       }
     };
     return {
@@ -267,12 +233,18 @@ export class RealtimeVoiceChanger {
   ): RealtimeVoiceChangerInterleavedBuffer {
     let input = this.getInterleavedInputBuffer(numFrames, numChannels);
     let output = this.getInterleavedOutputBuffer(numFrames, numChannels);
+    let generation = this.bufferGeneration();
     // Re-acquire detached views after WASM memory growth (see
     // createRealtimeMonoBuffer for rationale).
     const reacquireIfDetached = (): void => {
-      if (input.byteLength === 0 || output.byteLength === 0) {
+      if (
+        generation !== this.bufferGeneration() ||
+        input.byteLength === 0 ||
+        output.byteLength === 0
+      ) {
         input = this.getInterleavedInputBuffer(numFrames, numChannels);
         output = this.getInterleavedOutputBuffer(numFrames, numChannels);
+        generation = this.bufferGeneration();
       }
     };
     return {
@@ -303,17 +275,19 @@ export class RealtimeVoiceChanger {
     numChannels: number,
   ): RealtimeVoiceChangerPlanarBuffer {
     let channels: Float32Array[] = [];
+    let generation = this.bufferGeneration();
     const acquire = (): void => {
       channels = [];
       for (let ch = 0; ch < numChannels; ch++) {
         channels.push(this.getPlanarChannelBuffer(ch, numFrames));
       }
+      generation = this.bufferGeneration();
     };
     acquire();
     // Re-acquire detached views after WASM memory growth (see
     // createRealtimeMonoBuffer for rationale).
     const reacquireIfDetached = (): void => {
-      if ((channels[0]?.byteLength ?? 0) === 0) {
+      if (generation !== this.bufferGeneration() || (channels[0]?.byteLength ?? 0) === 0) {
         acquire();
       }
     };

@@ -8,6 +8,7 @@ import {
   pitchCorrectToMidiTimevarying,
   pitchPyin,
   RealtimeVoiceChanger,
+  realtimeVoiceChangerPresetConfig,
   realtimeVoiceChangerPresetJson,
   realtimeVoiceChangerPresetNames,
   validateRealtimeVoiceChangerPresetJson,
@@ -134,6 +135,9 @@ describe('editing effects', () => {
       pitchCorrectTimevarying(tone, f0, SR, hop, { targetMidi: 71, retuneAmount: 2 }),
     ).toThrow();
     expect(() => pitchCorrectTimevarying(tone, f0, SR, hop, { targetMidi: 200 })).toThrow();
+    expect(() => pitchCorrectTimevarying(tone, f0, SR, hop, { mode: 'Scale' as never })).toThrow(
+      /pitch correction mode/,
+    );
     expect(() =>
       pitchCorrectTimevarying(tone, f0, SR, hop, { maxCorrectionSemitones: -1 }),
     ).toThrow();
@@ -296,20 +300,29 @@ describe('editing effects', () => {
     audio.destroy();
   });
 
-  it('mono RealtimeVoiceChanger with wetMix=0 returns the dry input (C-1 regression)', () => {
-    // Tolerant entry point: pass the full DSP override but only set wetMix=0.
-    // The chain must short-circuit to the dry signal.
+  it('mono RealtimeVoiceChanger with wetMix=0 returns aligned dry input (C-1 regression)', () => {
+    // The strict input contract accepts the complete public flat POD. The
+    // chain must short-circuit to the dry signal when only wetMix changes.
+    const preset = realtimeVoiceChangerPresetConfig('neutral-monitor');
+    preset.wetMix = 0;
     const changer = new RealtimeVoiceChanger({
       sampleRate: SR,
       maxBlockSize: 128,
       channels: 1,
-      preset: { schemaVersion: 1, id: 'x', dsp: { wetMix: 0 } },
+      preset,
     });
-    const input = tone.subarray(0, 128).slice();
+    // Stay below the final limiter's -1 dBTP ceiling: this checks the dry
+    // path itself, rather than intentional output protection.
+    const input = tone.subarray(0, 128).map((sample) => sample * 0.1);
+    const latency = changer.latencySamples();
     const output = new Float32Array(input.length);
-    changer.processMonoInto(input, output);
+    const captured = new Float32Array((Math.ceil(latency / input.length) + 1) * input.length);
+    for (let block = 0; block * input.length < captured.length; block++) {
+      changer.processMonoInto(block === 0 ? input : new Float32Array(input.length), output);
+      captured.set(output, block * input.length);
+    }
     for (let i = 0; i < input.length; ++i) {
-      expect(output[i]).toBe(input[i]);
+      expect(captured[latency + i]).toBeCloseTo(input[i], 5);
     }
     changer.destroy();
   });
@@ -435,22 +448,37 @@ describe('editing effects', () => {
       }
     });
 
-    it('with wetMix=0 is the identity on the interleaved buffer (dry passthrough)', () => {
-      // Mirrors the mono C-1 regression: full DSP overridden by wetMix=0 must
-      // pass the dry signal through, sample-exact, including for stereo
-      // interleaved blocks.
+    it('with wetMix=0 preserves an aligned interleaved dry buffer', () => {
+      // Mirrors the mono C-1 regression with a complete public flat POD.
+      const preset = realtimeVoiceChangerPresetConfig('neutral-monitor');
+      preset.wetMix = 0;
       const changer = new RealtimeVoiceChanger({
         sampleRate: 48000,
         maxBlockSize: FRAMES,
         channels: CHANNELS,
-        preset: { schemaVersion: 1, id: 'x', dsp: { wetMix: 0 } },
+        preset,
       });
       try {
         const input = makeStereoInterleaved();
-        const output = new Float32Array(INTERLEAVED);
-        changer.processInterleavedInto(input, CHANNELS, output);
+        // Keep both channels below the final limiter ceiling so equality tests
+        // the aligned dry route rather than expected limiting gain.
         for (let i = 0; i < INTERLEAVED; i++) {
-          expect(output[i]).toBe(input[i]);
+          input[i] *= 0.1;
+        }
+        const output = new Float32Array(INTERLEAVED);
+        const latency = changer.latencySamples();
+        const frames = INTERLEAVED / CHANNELS;
+        const captured = new Float32Array((Math.ceil(latency / frames) + 1) * INTERLEAVED);
+        for (let block = 0; block * INTERLEAVED < captured.length; block++) {
+          changer.processInterleavedInto(
+            block === 0 ? input : new Float32Array(INTERLEAVED),
+            CHANNELS,
+            output,
+          );
+          captured.set(output, block * INTERLEAVED);
+        }
+        for (let i = 0; i < INTERLEAVED; i++) {
+          expect(captured[latency * CHANNELS + i]).toBeCloseTo(input[i], 5);
         }
       } finally {
         changer.destroy();

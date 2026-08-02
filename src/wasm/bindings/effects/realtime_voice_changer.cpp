@@ -11,11 +11,73 @@ std::string realtimeVoiceChangerConfigTextFromVal(val config) {
   return val::global("JSON").call<std::string>("stringify", config);
 }
 
+// Flat POD transport used by the AudioWorklet control plane.  Unlike the
+// general config path, this neither stringifies a JS object nor invokes the
+// nested JSON parser on the audio rendering thread.
+#define SONARE_WASM_VC_POD_FIELDS(X)                   \
+  X(input_gain_db, inputGainDb)                        \
+  X(output_gain_db, outputGainDb)                      \
+  X(wet_mix, wetMix)                                   \
+  X(retune.semitones, retuneSemitones)                 \
+  X(retune.mix, retuneMix)                             \
+  X(retune.grain_size, retuneGrainSize)                \
+  X(formant.factor, formantFactor)                     \
+  X(formant.amount, formantAmount)                     \
+  X(formant.body, formantBody)                         \
+  X(formant.brightness, formantBrightness)             \
+  X(formant.nasal, formantNasal)                       \
+  X(eq.highpass_hz, eqHighpassHz)                      \
+  X(eq.body_db, eqBodyDb)                              \
+  X(eq.presence_db, eqPresenceDb)                      \
+  X(eq.air_db, eqAirDb)                                \
+  X(gate.threshold_db, gateThresholdDb)                \
+  X(gate.attack_ms, gateAttackMs)                      \
+  X(gate.release_ms, gateReleaseMs)                    \
+  X(gate.range_db, gateRangeDb)                        \
+  X(compressor.threshold_db, compressorThresholdDb)    \
+  X(compressor.ratio, compressorRatio)                 \
+  X(compressor.attack_ms, compressorAttackMs)          \
+  X(compressor.release_ms, compressorReleaseMs)        \
+  X(compressor.makeup_gain_db, compressorMakeupGainDb) \
+  X(deesser.frequency_hz, deesserFrequencyHz)          \
+  X(deesser.threshold_db, deesserThresholdDb)          \
+  X(deesser.ratio, deesserRatio)                       \
+  X(deesser.range_db, deesserRangeDb)                  \
+  X(reverb.mix, reverbMix)                             \
+  X(reverb.time_ms, reverbTimeMs)                      \
+  X(reverb.damping, reverbDamping)                     \
+  X(reverb.seed, reverbSeed)                           \
+  X(limiter.ceiling_db, limiterCeilingDb)              \
+  X(limiter.release_ms, limiterReleaseMs)              \
+  X(limiter.isp_ceiling_dbtp, limiterIspCeilingDbtp)
+
+editing::voice_changer::RealtimeVoiceChangerConfig realtimeVoiceChangerConfigFromPodVal(val pod) {
+  if (pod.isNull() || pod.isUndefined() || pod.typeOf().as<std::string>() != "object") {
+    throw sonare::SonareException(sonare::ErrorCode::InvalidParameter,
+                                  "voice changer POD config must be an object");
+  }
+  editing::voice_changer::RealtimeVoiceChangerConfig parsed;
+#define X(cpp_path, js_key) parsed.cpp_path = pod[#js_key].as<decltype(parsed.cpp_path)>();
+  SONARE_WASM_VC_POD_FIELDS(X)
+#undef X
+  parsed.limiter.enable_isp_limiter = pod["limiterEnableIspLimiter"].as<bool>();
+  return parsed;
+}
+
+editing::voice_changer::RealtimeVoiceChangerConfig realtimeVoiceChangerConfigFromVal(val config) {
+  editing::voice_changer::RealtimeVoiceChangerConfig parsed;
+  std::string error;
+  if (!editing::voice_changer::realtime_voice_changer_config_from_input(
+          realtimeVoiceChangerConfigTextFromVal(config), &parsed, &error)) {
+    throw sonare::SonareException(sonare::ErrorCode::InvalidParameter, error);
+  }
+  return parsed;
+}
+
 class RealtimeVoiceChangerWrapper {
  public:
   explicit RealtimeVoiceChangerWrapper(val config)
-      : changer_(editing::voice_changer::realtime_voice_changer_config_from_json(
-            realtimeVoiceChangerConfigTextFromVal(config))) {}
+      : changer_(realtimeVoiceChangerConfigFromVal(config)) {}
 
   void prepare(double sample_rate, int max_block_size, int channels) {
     changer_.prepare(sample_rate, max_block_size, channels);
@@ -27,13 +89,15 @@ class RealtimeVoiceChangerWrapper {
     max_block_size_ = max_block_size;
     prepared_channels_ = channels;
     prepared_ = true;
+    ++buffer_generation_;
   }
 
   void reset() { changer_.reset(); }
 
-  void setConfig(val config) {
-    changer_.set_config(editing::voice_changer::realtime_voice_changer_config_from_json(
-        realtimeVoiceChangerConfigTextFromVal(config)));
+  void setConfig(val config) { changer_.set_config(realtimeVoiceChangerConfigFromVal(config)); }
+
+  void setPodConfig(val config) {
+    changer_.set_config(realtimeVoiceChangerConfigFromPodVal(config));
   }
 
   std::string configJson() const {
@@ -41,6 +105,7 @@ class RealtimeVoiceChangerWrapper {
   }
 
   int latencySamples() const { return changer_.latency_samples(); }
+  uint32_t bufferGeneration() const { return buffer_generation_; }
 
   // Element-wise legacy path. NOT RT-safe for high block rates; AudioWorklet
   // consumers should prefer the prepared API below (getMonoInputBuffer /
@@ -51,7 +116,7 @@ class RealtimeVoiceChangerWrapper {
     const int length = samples["length"].as<int>();
     require_block_within_max(length);
     ensure_mono_capacity(static_cast<size_t>(length));
-    copyFloat32Array(samples, mono_input_, static_cast<size_t>(length));
+    copyFloat32Array(samples, mono_input_.data(), static_cast<size_t>(length));
     changer_.process_block(mono_input_.data(), mono_output_.data(), length);
     val output = val::global("Float32Array").new_(length);
     val view = val(typed_memory_view(static_cast<size_t>(length), mono_output_.data()));
@@ -68,7 +133,7 @@ class RealtimeVoiceChangerWrapper {
                                     "output buffer is too small");
     }
     ensure_mono_capacity(static_cast<size_t>(length));
-    copyFloat32Array(samples, mono_input_, static_cast<size_t>(length));
+    copyFloat32Array(samples, mono_input_.data(), static_cast<size_t>(length));
     changer_.process_block(mono_input_.data(), mono_output_.data(), length);
     val view = val(typed_memory_view(static_cast<size_t>(length), mono_output_.data()));
     output.call<void>("set", view);
@@ -97,21 +162,22 @@ class RealtimeVoiceChangerWrapper {
     const size_t frames = static_cast<size_t>(length / channels);
     require_block_within_max(static_cast<int>(frames));
     ensure_interleaved_capacity(frames, channels);
+    copyFloat32Array(samples, interleaved_input_.data(), static_cast<size_t>(length));
     for (int ch = 0; ch < channels; ++ch) {
       for (size_t i = 0; i < frames; ++i) {
-        const int index =
-            static_cast<int>((i * static_cast<size_t>(channels)) + static_cast<size_t>(ch));
-        planar_[static_cast<size_t>(ch)][i] = samples[index].as<float>();
+        planar_[static_cast<size_t>(ch)][i] =
+            interleaved_input_[i * static_cast<size_t>(channels) + static_cast<size_t>(ch)];
       }
     }
     changer_.process_block(channel_ptrs_.data(), channels, static_cast<int>(frames));
     for (size_t i = 0; i < frames; ++i) {
       for (int ch = 0; ch < channels; ++ch) {
-        const int index =
-            static_cast<int>((i * static_cast<size_t>(channels)) + static_cast<size_t>(ch));
-        output.set(index, planar_[static_cast<size_t>(ch)][i]);
+        interleaved_output_[i * static_cast<size_t>(channels) + static_cast<size_t>(ch)] =
+            planar_[static_cast<size_t>(ch)][i];
       }
     }
+    output.call<void>(
+        "set", val(typed_memory_view(static_cast<size_t>(length), interleaved_output_.data())));
   }
 
   // ---- Zero-copy "prepared" API ----------------------------------------
@@ -285,8 +351,8 @@ class RealtimeVoiceChangerWrapper {
   }
 
  private:
-  static void copyFloat32Array(val source, std::vector<float>& dest, size_t length) {
-    for (size_t i = 0; i < length; ++i) dest[i] = source[static_cast<int>(i)].as<float>();
+  static void copyFloat32Array(val source, float* destination, size_t length) {
+    val(typed_memory_view(length, destination)).call<void>("set", source);
   }
 
   void ensure_mono_capacity(size_t samples) {
@@ -354,6 +420,7 @@ class RealtimeVoiceChangerWrapper {
   std::vector<float> interleaved_output_;
   int max_block_size_ = 0;
   int prepared_channels_ = 0;
+  uint32_t buffer_generation_ = 0;
   bool prepared_ = false;
 };
 
@@ -402,8 +469,10 @@ void registerRealtimeVoiceChangerStreamingBindings() {
       .function("prepare", &RealtimeVoiceChangerWrapper::prepare)
       .function("reset", &RealtimeVoiceChangerWrapper::reset)
       .function("setConfig", &RealtimeVoiceChangerWrapper::setConfig)
+      .function("setPodConfig", &RealtimeVoiceChangerWrapper::setPodConfig)
       .function("configJson", &RealtimeVoiceChangerWrapper::configJson)
       .function("latencySamples", &RealtimeVoiceChangerWrapper::latencySamples)
+      .function("bufferGeneration", &RealtimeVoiceChangerWrapper::bufferGeneration)
       .function("processMono", &RealtimeVoiceChangerWrapper::processMono)
       .function("processMonoInto", &RealtimeVoiceChangerWrapper::processMonoInto)
       .function("processInterleaved", &RealtimeVoiceChangerWrapper::processInterleaved)

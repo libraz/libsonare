@@ -102,6 +102,34 @@ TEST_CASE("Voice changer schemaVersion constant matches emitted JSON", "[voice_c
   REQUIRE(error.empty());
 }
 
+TEST_CASE("Voice changer normalized config JSON is a valid custom preset",
+          "[voice_changer][json]") {
+  const auto config = realtime_voice_changer_preset(VoiceCharacterPreset::BrightIdol);
+  const auto json = realtime_voice_changer_config_to_json(config);
+  std::string normalized;
+  std::string error;
+  REQUIRE(validate_realtime_voice_changer_preset_json(json, &normalized, &error));
+  REQUIRE(error.empty());
+  REQUIRE(normalized == json);
+}
+
+TEST_CASE("Voice changer preset rejects removed UI macros", "[voice_changer][json]") {
+  const auto baseline = realtime_voice_changer_preset_json(VoiceCharacterPreset::NeutralMonitor);
+  const std::string dsp_key = "\"dsp\":";
+  const auto pos = baseline.find(dsp_key);
+  REQUIRE(pos != std::string::npos);
+  std::string with_macro = baseline;
+  with_macro.insert(pos, "\"macros\":{\"pitch\":12},");
+
+  std::string error;
+  REQUIRE_FALSE(validate_realtime_voice_changer_preset_json(with_macro, nullptr, &error));
+  REQUIRE(error.find("macros") != std::string::npos);
+
+  RealtimeVoiceChangerConfig config;
+  REQUIRE_FALSE(realtime_voice_changer_config_from_input(with_macro, &config, &error));
+  REQUIRE(error.find("macros") != std::string::npos);
+}
+
 TEST_CASE("Voice changer schemaVersion validator rejects future versions",
           "[voice_changer][json]") {
   // Replace the schemaVersion in a known-good preset with an unsupported value.
@@ -118,6 +146,22 @@ TEST_CASE("Voice changer schemaVersion validator rejects future versions",
   std::string error;
   REQUIRE_FALSE(validate_realtime_voice_changer_preset_json(bumped, &normalized, &error));
   REQUIRE(error.find("schemaVersion") != std::string::npos);
+}
+
+TEST_CASE("Voice changer preset validator requires deesser ratio", "[voice_changer][json]") {
+  const auto baseline = realtime_voice_changer_preset_json(VoiceCharacterPreset::NeutralMonitor);
+  const auto deesser = baseline.find("\"deesser\":");
+  REQUIRE(deesser != std::string::npos);
+  const auto ratio = baseline.find("\"ratio\":", deesser);
+  REQUIRE(ratio != std::string::npos);
+  const auto trailing_comma = baseline.find(',', ratio);
+  REQUIRE(trailing_comma != std::string::npos);
+
+  std::string missing_ratio = baseline;
+  missing_ratio.erase(ratio, trailing_comma - ratio + 1);
+  std::string error;
+  REQUIRE_FALSE(validate_realtime_voice_changer_preset_json(missing_ratio, nullptr, &error));
+  REQUIRE(error.find("dsp.deesser.ratio") != std::string::npos);
 }
 
 TEST_CASE("preset JSON validator rejects invalid id patterns", "[voice_changer][json]") {
@@ -211,6 +255,9 @@ TEST_CASE("StreamingReverb passes dry input through when mix is zero", "[voice_c
   StreamingReverb reverb;
   reverb.prepare(48000.0, 256);
   reverb.set_config({/*mix=*/0.0f, /*time_ms=*/200.0f, /*damping=*/0.5f, /*seed=*/1});
+  // set_config() intentionally ramps a live tail; reset() is the explicit
+  // discontinuity boundary that snaps all reverb parameter smoothers.
+  reverb.reset();
   for (int i = 0; i < 64; ++i) {
     const float x = std::sin(static_cast<float>(i) * 0.1f);
     REQUIRE(reverb.process_sample(x) == x);
@@ -287,6 +334,7 @@ TEST_CASE("StreamingReverb reset clears delay-line state", "[voice_changer][reve
   StreamingReverb reverb;
   reverb.prepare(48000.0, 1);
   reverb.set_config({0.4f, 250.0f, 0.5f, /*seed=*/2});
+  reverb.reset();
 
   std::vector<float> baseline;
   baseline.reserve(2048);
@@ -299,6 +347,33 @@ TEST_CASE("StreamingReverb reset clears delay-line state", "[voice_changer][reve
     const float y = reverb.process_sample(i == 0 ? 1.0f : 0.0f);
     REQUIRE(y == baseline[i]);
   }
+}
+
+TEST_CASE("StreamingReverb smooths a live delay and allpass-sign change",
+          "[voice_changer][reverb][smoothing]") {
+  StreamingReverb reverb;
+  reverb.prepare(48000.0, 128);
+  reverb.set_config({0.45f, 220.0f, 0.15f, /*seed=*/1});
+  reverb.reset();
+
+  float previous = 0.0f;
+  for (int i = 0; i < 24000; ++i) {
+    previous =
+        reverb.process_sample(0.35f * std::sin(sonare::constants::kTwoPiD * 110.0 * i / 48000.0));
+  }
+
+  // This changes both comb read distances and the seed-controlled allpass
+  // sign. The live state must glide instead of jumping to a different tap.
+  reverb.set_config({0.45f, 900.0f, 0.9f, /*seed=*/2});
+  float largest_jump = 0.0f;
+  for (int i = 24000; i < 28800; ++i) {
+    const float sample =
+        reverb.process_sample(0.35f * std::sin(sonare::constants::kTwoPiD * 110.0 * i / 48000.0));
+    REQUIRE(std::isfinite(sample));
+    largest_jump = std::max(largest_jump, std::abs(sample - previous));
+    previous = sample;
+  }
+  REQUIRE(largest_jump < 0.12f);
 }
 
 TEST_CASE("Voice preset metadata table is consistent across surfaces", "[voice_changer][c-api]") {

@@ -116,6 +116,11 @@ type guard.
 
 ## Documentation
 
+The canonical JSON Schema documents for realtime voice changer presets live in
+the repository's [`schemas/`](../../schemas/) directory. This local-only native
+binding is not published; applications should consume the schema subpaths from
+the published WASM package instead.
+
 Full API reference and guides live at
 **[libsonare.libraz.net](https://libsonare.libraz.net)**
 ([getting started](https://libsonare.libraz.net/docs/getting-started) ·

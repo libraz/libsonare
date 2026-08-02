@@ -29,6 +29,7 @@
 #include <vector>
 
 #include "rt/lookahead_buffer.h"
+#include "rt/param_smoother.h"
 #include "rt/sliding_max.h"
 #include "rt/true_peak_filter.h"
 
@@ -53,9 +54,10 @@ struct IspLimiterConfig {
 ///     point.
 ///
 /// Latency: equal to @ref latency_samples (returns 0 before prepare()).
-/// The latency comes from the upsampler FIR group delay (taps_per_phase / 2 at
-/// base rate, == 6 samples for the 4x BS.1770-style design) and is the same
-/// lookahead used to align the per-sample gain with the delayed signal.
+/// It consists of the upsampler FIR group delay (taps_per_phase / 2 at base
+/// rate, == 6 samples for the 4x BS.1770-style design) plus five attack time
+/// constants. This lets the gain reach the completed true-peak bound without
+/// a base-rate sample clamp, which would recreate inter-sample peaks.
 class IspLimiter {
  public:
   IspLimiter();
@@ -96,8 +98,10 @@ class IspLimiter {
   int oversample_factor_ = 4;
   int lookahead_samples_ = 0;
   bool prepared_ = false;
+  bool has_processed_ = false;
   float attack_alpha_ = 1.0f;
-  float release_alpha_ = 1.0f;
+  rt::ParamSmoother ceiling_dbtp_{-1.0f, 12.0f, 48000.0};
+  rt::ParamSmoother release_ms_{50.0f, 12.0f, 48000.0};
   float gain_ = 1.0f;
 };
 

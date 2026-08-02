@@ -9,6 +9,8 @@
 #include <cstddef>
 #include <vector>
 
+#include "rt/param_smoother.h"
+
 namespace sonare::editing::voice_changer {
 
 /// @brief Configuration for @ref StreamingReverb.
@@ -84,15 +86,21 @@ class StreamingReverb {
 
   std::array<std::vector<float>, kNumCombs> comb_buf_{};
   std::array<std::size_t, kNumCombs> comb_pos_{0u, 0u};
-  std::array<std::size_t, kNumCombs> comb_delay_{1u, 1u};
-  std::array<float, kNumCombs> comb_fb_{0.5f, 0.5f};
+  // Smooth delay taps as fractional read positions. A config snapshot can
+  // otherwise move a live tap by hundreds of samples at one block boundary,
+  // producing an audible discontinuity in the tail.
+  std::array<rt::ParamSmoother, kNumCombs> comb_delay_{};
+  std::array<rt::ParamSmoother, kNumCombs> comb_fb_{};
   std::array<float, kNumCombs> comb_lp_{0.0f, 0.0f};
-  float damping_alpha_ = 1.0f;  // 1 = no damping (bright), 0 = full LP (dark).
+  rt::ParamSmoother damping_alpha_{};  // 1 = no damping (bright), 0 = full LP (dark).
+  rt::ParamSmoother mix_{};
 
   std::vector<float> allpass_buf_;
   std::size_t allpass_pos_ = 0;
   std::size_t allpass_delay_ = 1;  // ~5 ms fixed diffusion.
-  float allpass_g_ = 0.7f;         // Diffusion feedback, sign flipped by seed.
+  // Diffusion feedback, including the seed-driven sign. Smoothing prevents a
+  // live seed change from inverting an active allpass state in one sample.
+  rt::ParamSmoother allpass_g_{};
 };
 
 }  // namespace sonare::editing::voice_changer

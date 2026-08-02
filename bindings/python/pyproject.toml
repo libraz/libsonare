@@ -84,6 +84,10 @@ artifacts = [
     "src/libsonare/py.typed",
 ]
 
+[tool.hatch.build.targets.wheel.force-include]
+"../../schemas/realtime-voice-changer-preset.schema.json" = "libsonare/schemas/realtime-voice-changer-preset.schema.json"
+"../../schemas/realtime-voice-changer-preset-pack.schema.json" = "libsonare/schemas/realtime-voice-changer-preset-pack.schema.json"
+
 [tool.hatch.build.targets.sdist]
 include = [
     "src/",
@@ -91,6 +95,10 @@ include = [
     "README.md",
     "pyproject.toml",
 ]
+
+[tool.hatch.build.targets.sdist.force-include]
+"../../schemas/realtime-voice-changer-preset.schema.json" = "schemas/realtime-voice-changer-preset.schema.json"
+"../../schemas/realtime-voice-changer-preset-pack.schema.json" = "schemas/realtime-voice-changer-preset-pack.schema.json"
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]

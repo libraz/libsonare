@@ -1,5 +1,9 @@
 import { describe, expect, it } from 'vitest';
-import { RealtimeVoiceChanger, realtimeVoiceChangerPresetConfig } from '../src/index.js';
+import {
+  RealtimeVoiceChanger,
+  realtimeVoiceChangerPresetConfig,
+  realtimeVoiceChangerPresetJson,
+} from '../src/index.js';
 
 describe('RealtimeVoiceChanger flat POD setConfig', () => {
   it('applies every field of a flat preset POD, not just the root fields', () => {
@@ -18,11 +22,29 @@ describe('RealtimeVoiceChanger flat POD setConfig', () => {
     vc.destroy();
   });
 
-  it('still applies a nested preset unchanged', () => {
+  it('applies a complete nested preset document', () => {
     const vc = new RealtimeVoiceChanger({ sampleRate: 48000 });
-    vc.setConfig({ schemaVersion: 1, dsp: { retune: { semitones: 3 } } });
+    const preset = JSON.parse(realtimeVoiceChangerPresetJson('neutral-monitor'));
+    preset.dsp.retune.semitones = 3;
+    vc.setConfig(preset);
     const applied = JSON.parse(vc.configJson()).dsp;
     expect(applied.retune.semitones).toBeCloseTo(3, 4);
+    vc.destroy();
+  });
+
+  it('rejects a partial nested preset instead of applying defaults', () => {
+    const vc = new RealtimeVoiceChanger({ sampleRate: 48000 });
+    expect(() => vc.setConfig({ schemaVersion: 1, dsp: { retune: { semitones: 3 } } })).toThrow(
+      /missing field|field must/i,
+    );
+    vc.destroy();
+  });
+
+  it('accepts a flat preset POD in the constructor', () => {
+    const pod = realtimeVoiceChangerPresetConfig('bright-idol');
+    pod.retuneSemitones = -9;
+    const vc = new RealtimeVoiceChanger({ sampleRate: 48000, preset: pod });
+    expect(JSON.parse(vc.configJson()).dsp.retune.semitones).toBeCloseTo(-9, 4);
     vc.destroy();
   });
 });

@@ -275,6 +275,21 @@ SonareError sonare_realtime_voice_changer_preset_config(SonareVoiceCharacterPres
 #endif
 }
 
+SonareError sonare_realtime_voice_changer_config_default(SonareRealtimeVoiceChangerConfig* out) {
+  SONARE_C_API_ENTRY;
+#if defined(SONARE_WITH_VOICE_CHANGER)
+  if (!out) return SONARE_ERROR_INVALID_PARAMETER;
+  SONARE_C_TRY
+  const auto config = editing::voice_changer::realtime_voice_changer_preset(
+      editing::voice_changer::VoiceCharacterPreset::NeutralMonitor);
+  vc_config_to_pod(config, out);
+  return SONARE_OK;
+  SONARE_C_CATCH
+#else
+  SONARE_C_STUB_NOT_SUPPORTED(out);
+#endif
+}
+
 SonareError sonare_realtime_voice_changer_create(const SonareRealtimeVoiceChangerConfig* config,
                                                  int sample_rate, int max_block_size,
                                                  int num_channels,
@@ -364,7 +379,12 @@ SonareError sonare_realtime_voice_changer_create_json(const char* preset_or_conf
   const std::string config_text = preset_or_config_json && preset_or_config_json[0] != '\0'
                                       ? preset_or_config_json
                                       : "neutral-monitor";
-  auto config = editing::voice_changer::realtime_voice_changer_config_from_json(config_text);
+  editing::voice_changer::RealtimeVoiceChangerConfig config;
+  std::string error;
+  if (!editing::voice_changer::realtime_voice_changer_config_from_input(config_text, &config,
+                                                                        &error)) {
+    return SONARE_ERROR_INVALID_PARAMETER;
+  }
   auto handle = std::make_unique<SonareRealtimeVoiceChanger>();
   handle->changer.set_config(config);
   handle->changer.prepare(sample_rate, max_block_size, num_channels);
@@ -407,8 +427,13 @@ SonareError sonare_realtime_voice_changer_set_config_json(SonareRealtimeVoiceCha
 #if defined(SONARE_WITH_VOICE_CHANGER)
   if (!handle || !preset_or_config_json) return SONARE_ERROR_INVALID_PARAMETER;
   SONARE_C_TRY
-  handle->changer.set_config(
-      editing::voice_changer::realtime_voice_changer_config_from_json(preset_or_config_json));
+  editing::voice_changer::RealtimeVoiceChangerConfig config;
+  std::string error;
+  if (!editing::voice_changer::realtime_voice_changer_config_from_input(preset_or_config_json,
+                                                                        &config, &error)) {
+    return SONARE_ERROR_INVALID_PARAMETER;
+  }
+  handle->changer.set_config(config);
   return SONARE_OK;
   SONARE_C_CATCH
 #else

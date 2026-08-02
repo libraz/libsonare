@@ -109,8 +109,6 @@ std::string read_plain_text_file(const std::string& path);
 std::vector<std::string> split_string(const std::string& text, char delimiter);
 void set_json_path(sonare::util::json::Value& root, const std::string& path,
                    sonare::util::json::Value value);
-void apply_voice_macro_override(sonare::util::json::Value& root, const std::string& path,
-                                const sonare::util::json::Value& value);
 std::string find_voice_preset_in_pack(const std::string& pack_json, const std::string& preset_id);
 std::string apply_voice_preset_sets(std::string config_text, const std::string& set_options);
 PitchClass parse_pitch_class_option(const std::string& value);

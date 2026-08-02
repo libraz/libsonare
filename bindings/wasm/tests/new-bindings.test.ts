@@ -172,8 +172,10 @@ describe('newly exposed WASM functions', () => {
     // Ordinal 1 == SONARE_VC_PRESET_BRIGHT_IDOL.
     expect(voiceCharacterPresetId(1)).toBe('bright-idol');
     expect(voiceCharacterPresetId(0)).toBe('neutral-monitor');
-    // Out-of-range ordinal yields null.
-    expect(voiceCharacterPresetId(999)).toBeNull();
+    expect(() => voiceCharacterPresetId(999)).toThrow(/Unknown voice-character preset ordinal/);
+    expect(() => realtimeVoiceChangerPresetConfig(-1)).toThrow(
+      /Unknown voice-character preset ordinal/,
+    );
   });
 
   it('realtimeVoiceChangerPresetConfig returns a POD object with expected fields', () => {

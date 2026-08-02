@@ -38,6 +38,13 @@ extern "C" {
 SonareError sonare_realtime_voice_changer_preset_config(SonareVoiceCharacterPreset preset,
                                                         SonareRealtimeVoiceChangerConfig* out);
 
+/// @brief Populates @p out with the default configuration used by
+///        @ref sonare_realtime_voice_changer_create when its config is NULL.
+/// @details This is the normalized neutral-monitor preset. Do not use a
+///          zero-initialized POD as a default: in particular, zero disables
+///          the ISP limiter whereas the library default enables it.
+SonareError sonare_realtime_voice_changer_config_default(SonareRealtimeVoiceChangerConfig* out);
+
 /// @brief Same as @ref sonare_realtime_voice_changer_create_json but accepts
 ///        a flat POD config. Pass NULL to start from the neutral-monitor preset.
 SonareError sonare_realtime_voice_changer_create(const SonareRealtimeVoiceChangerConfig* config,
@@ -56,8 +63,12 @@ SonareError sonare_realtime_voice_changer_get_config(const SonareRealtimeVoiceCh
 /// @brief Creates a streaming realtime voice changer handle from a preset id or
 ///        a full chain config JSON document.
 /// @details @p preset_or_config_json may be one of the preset ids returned by
-///          @ref sonare_realtime_voice_changer_preset_names, or a JSON object
-///          following the realtime-voice-changer-preset schema. The created
+///          @ref sonare_realtime_voice_changer_preset_names, a JSON object
+///          following the realtime-voice-changer-preset schema, or the flat
+///          @ref SonareRealtimeVoiceChangerConfig field names used by bindings.
+///          JSON schema documents and flat configs must be complete; partial
+///          documents are rejected rather than silently filled with defaults.
+///          The created
 ///          handle pre-allocates all internal buffers (including a planar
 ///          deinterleave scratch) so every subsequent process call is
 ///          realtime-safe.
@@ -69,8 +80,11 @@ SonareError sonare_realtime_voice_changer_create_json(const char* preset_or_conf
 /// @brief Releases a handle created by @ref sonare_realtime_voice_changer_create_json.
 void sonare_realtime_voice_changer_destroy(SonareRealtimeVoiceChanger* handle);
 /// @brief Resets streaming state (envelopes, reverb tails, smoothed gains).
+/// @warning Control-thread operation: do not call concurrently with
+///          sonare_realtime_voice_changer_process. For a live configuration
+///          change, use sonare_realtime_voice_changer_set_config_json instead.
 SonareError sonare_realtime_voice_changer_reset(SonareRealtimeVoiceChanger* handle);
-/// @brief Realtime-safe configuration update; accepts a preset id or a JSON config.
+/// @brief Realtime-safe configuration update; accepts a preset id or a complete JSON config.
 SonareError sonare_realtime_voice_changer_set_config_json(SonareRealtimeVoiceChanger* handle,
                                                           const char* preset_or_config_json);
 /// @brief Processes a single mono block. @p num_samples must be <= max_block_size.

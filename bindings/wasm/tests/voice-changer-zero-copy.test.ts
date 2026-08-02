@@ -18,6 +18,24 @@ describe('RealtimeVoiceChanger prepared (zero-copy) API', () => {
     await init();
   });
 
+  it('can prepare directly from the constructor', () => {
+    const changer = new RealtimeVoiceChanger('neutral-monitor', SR, BLOCK, 1);
+    try {
+      expect(() => changer.processMono(new Float32Array(BLOCK))).not.toThrow();
+    } finally {
+      changer.delete();
+    }
+  });
+
+  it('increments buffer generation when prepare can replace heap views', () => {
+    const changer = new RealtimeVoiceChanger('neutral-monitor');
+    changer.prepare(SR, BLOCK, 1);
+    const initial = changer.bufferGeneration();
+    changer.prepare(SR, BLOCK * 2, 1);
+    expect(changer.bufferGeneration()).toBeGreaterThan(initial);
+    changer.delete();
+  });
+
   it('mono prepared path matches processMonoInto bit-for-bit', () => {
     const changerA = new RealtimeVoiceChanger('bright-idol');
     changerA.prepare(SR, BLOCK, 1);
