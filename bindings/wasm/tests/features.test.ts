@@ -19,7 +19,6 @@ import {
   hzToMidi,
   hzToNote,
   init,
-  isSonareError,
   melDelta,
   melSpectrogram,
   melToHz,
@@ -605,21 +604,16 @@ describe('Feature API precision (reference compatibility)', () => {
       }
     });
 
-    it('cancels when the progress callback returns false', () => {
+    it('ignores a progress callback false result', () => {
       const tone = generateSine(440, SR, DURATION);
-      let result: ReturnType<typeof analyzeWithProgress> | undefined;
+      const result = analyzeWithProgress(tone, SR, () => false);
+      expect(result.beatTimes).toBeInstanceOf(Float32Array);
+    });
 
-      try {
-        result = analyzeWithProgress(tone, SR, (progress) => (progress > 0.5 ? false : undefined));
-      } catch (error) {
-        expect(isSonareError(error)).toBe(true);
-        if (!isSonareError(error)) {
-          throw error;
-        }
-        expect(error.code).toBe(ErrorCode.Cancelled);
-      }
-
-      expect(result).toBeUndefined();
+    it('cancels through the request cancel callback', () => {
+      expect(() =>
+        analyzeWithProgress({ samples: generateSine(440, SR, DURATION), cancel: () => true }),
+      ).toThrow(expect.objectContaining({ code: ErrorCode.Cancelled }));
     });
   });
 

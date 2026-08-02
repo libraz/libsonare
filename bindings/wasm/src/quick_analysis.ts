@@ -64,7 +64,8 @@ export interface DetectKeyRequest extends KeyDetectionOptions, SamplesRequest {}
 
 /** Canonical request form for analysis with synchronous progress reporting. */
 export interface AnalyzeWithProgressRequest extends SamplesRequest {
-  onProgress: ProgressCallback;
+  onProgress?: ProgressCallback;
+  cancel?: () => boolean;
 }
 
 /** Canonical request form for chord detection. */
@@ -575,7 +576,8 @@ export function analyzeWithProgress(
   const result = requireModule().analyzeWithProgress(
     request.samples,
     request.sampleRate ?? 22050,
-    request.onProgress,
+    request.onProgress ?? (() => {}),
+    request.cancel ?? (() => false),
   );
   return convertAnalysisResult(result);
 }

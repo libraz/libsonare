@@ -1,6 +1,7 @@
 #include <algorithm>
 #include <cctype>
 #include <cstring>
+#include <optional>
 #include <stdexcept>
 #include <string>
 #include <utility>
@@ -91,19 +92,20 @@ void SetChainMetrics(Napi::Env env, Napi::Object out,
 struct ProgressContext {
   Napi::Env env;
   Napi::Function callback;
-  bool cancel_requested = false;
+  std::optional<Napi::Function> cancel;
 };
 
 void ReportProgress(float progress, const char* stage, void* user_data) {
   auto* context = static_cast<ProgressContext*>(user_data);
-  Napi::Value result =
-      context->callback.Call({Napi::Number::New(context->env, progress),
-                              Napi::String::New(context->env, stage != nullptr ? stage : "")});
-  context->cancel_requested = result.IsBoolean() && !result.As<Napi::Boolean>().Value();
+  context->callback.Call({Napi::Number::New(context->env, progress),
+                          Napi::String::New(context->env, stage != nullptr ? stage : "")});
 }
 
 int CancellationRequested(void* user_data) {
-  return static_cast<ProgressContext*>(user_data)->cancel_requested ? 1 : 0;
+  auto* context = static_cast<ProgressContext*>(user_data);
+  if (!context->cancel) return 0;
+  const Napi::Value result = context->cancel->Call({});
+  return result.IsBoolean() && result.As<Napi::Boolean>().Value() ? 1 : 0;
 }
 
 std::vector<SonareMasteringParam> CParamsFromNode(
@@ -690,8 +692,8 @@ Napi::Value SonareWrap::MasterAudioStereo(const Napi::CallbackInfo& info) {
 Napi::Value SonareWrap::MasteringChainWithProgress(const Napi::CallbackInfo& info) {
   Napi::Env env = info.Env();
   if (info.Length() < 4 || !IsFloat32Array(info[0]) || !info[1].IsNumber() || !info[2].IsObject() ||
-      !info[3].IsFunction()) {
-    Napi::TypeError::New(env, "Expected (Float32Array, sampleRate, config, onProgress)")
+      !info[3].IsFunction() || (info.Length() > 4 && !info[4].IsFunction())) {
+    Napi::TypeError::New(env, "Expected (Float32Array, sampleRate, config, onProgress, cancel?)")
         .ThrowAsJavaScriptException();
     return env.Undefined();
   }
@@ -701,7 +703,10 @@ Napi::Value SonareWrap::MasteringChainWithProgress(const Napi::CallbackInfo& inf
   if (env.IsExceptionPending()) return env.Undefined();
   const auto c_params = CParamsFromNode(params);
   Napi::Function js_cb = info[3].As<Napi::Function>();
-  ProgressContext progress{env, js_cb};
+  ProgressContext progress{env, js_cb,
+                           info.Length() > 4
+                               ? std::optional<Napi::Function>(info[4].As<Napi::Function>())
+                               : std::nullopt};
   SonareMasteringChainResult result{};
   const SonareError err = sonare_mastering_chain_with_progress_ex(
       typed.Data(), typed.ElementLength(), info[1].As<Napi::Number>().Int32Value(),
@@ -725,8 +730,9 @@ Napi::Value SonareWrap::MasteringChainWithProgress(const Napi::CallbackInfo& inf
 Napi::Value SonareWrap::MasteringChainStereoWithProgress(const Napi::CallbackInfo& info) {
   Napi::Env env = info.Env();
   if (info.Length() < 5 || !IsFloat32Array(info[0]) || !IsFloat32Array(info[1]) ||
-      !info[2].IsNumber() || !info[3].IsObject() || !info[4].IsFunction()) {
-    Napi::TypeError::New(env, "Expected (left, right, sampleRate, config, onProgress)")
+      !info[2].IsNumber() || !info[3].IsObject() || !info[4].IsFunction() ||
+      (info.Length() > 5 && !info[5].IsFunction())) {
+    Napi::TypeError::New(env, "Expected (left, right, sampleRate, config, onProgress, cancel?)")
         .ThrowAsJavaScriptException();
     return env.Undefined();
   }
@@ -743,7 +749,10 @@ Napi::Value SonareWrap::MasteringChainStereoWithProgress(const Napi::CallbackInf
   if (env.IsExceptionPending()) return env.Undefined();
   const auto c_params = CParamsFromNode(params);
   Napi::Function js_cb = info[4].As<Napi::Function>();
-  ProgressContext progress{env, js_cb};
+  ProgressContext progress{env, js_cb,
+                           info.Length() > 5
+                               ? std::optional<Napi::Function>(info[5].As<Napi::Function>())
+                               : std::nullopt};
   SonareMasteringChainStereoResult result{};
   const SonareError err = sonare_mastering_chain_stereo_with_progress_ex(
       left.Data(), right.Data(), left.ElementLength(), sr,
@@ -767,9 +776,10 @@ Napi::Value SonareWrap::MasteringChainStereoWithProgress(const Napi::CallbackInf
 Napi::Value SonareWrap::MasterAudioWithProgress(const Napi::CallbackInfo& info) {
   Napi::Env env = info.Env();
   if (info.Length() < 5 || !info[0].IsString() || !IsFloat32Array(info[1]) || !info[2].IsNumber() ||
-      !info[3].IsObject() || !info[4].IsFunction()) {
-    Napi::TypeError::New(env,
-                         "Expected (presetName, Float32Array, sampleRate, overrides, onProgress)")
+      !info[3].IsObject() || !info[4].IsFunction() ||
+      (info.Length() > 5 && !info[5].IsFunction())) {
+    Napi::TypeError::New(
+        env, "Expected (presetName, Float32Array, sampleRate, overrides, onProgress, cancel?)")
         .ThrowAsJavaScriptException();
     return env.Undefined();
   }
@@ -780,7 +790,10 @@ Napi::Value SonareWrap::MasterAudioWithProgress(const Napi::CallbackInfo& info) 
   if (env.IsExceptionPending()) return env.Undefined();
   const auto c_overrides = CParamsFromNode(overrides);
   Napi::Function js_cb = info[4].As<Napi::Function>();
-  ProgressContext progress{env, js_cb};
+  ProgressContext progress{env, js_cb,
+                           info.Length() > 5
+                               ? std::optional<Napi::Function>(info[5].As<Napi::Function>())
+                               : std::nullopt};
   SonareMasteringChainResult result{};
   const SonareError err = sonare_master_audio_with_progress_ex(
       preset_name.c_str(), typed.Data(), typed.ElementLength(),
@@ -805,9 +818,9 @@ Napi::Value SonareWrap::MasterAudioStereoWithProgress(const Napi::CallbackInfo& 
   Napi::Env env = info.Env();
   if (info.Length() < 6 || !info[0].IsString() || !IsFloat32Array(info[1]) ||
       !IsFloat32Array(info[2]) || !info[3].IsNumber() || !info[4].IsObject() ||
-      !info[5].IsFunction()) {
-    Napi::TypeError::New(env,
-                         "Expected (presetName, left, right, sampleRate, overrides, onProgress)")
+      !info[5].IsFunction() || (info.Length() > 6 && !info[6].IsFunction())) {
+    Napi::TypeError::New(
+        env, "Expected (presetName, left, right, sampleRate, overrides, onProgress, cancel?)")
         .ThrowAsJavaScriptException();
     return env.Undefined();
   }
@@ -825,7 +838,10 @@ Napi::Value SonareWrap::MasterAudioStereoWithProgress(const Napi::CallbackInfo& 
   if (env.IsExceptionPending()) return env.Undefined();
   const auto c_overrides = CParamsFromNode(overrides);
   Napi::Function js_cb = info[5].As<Napi::Function>();
-  ProgressContext progress{env, js_cb};
+  ProgressContext progress{env, js_cb,
+                           info.Length() > 6
+                               ? std::optional<Napi::Function>(info[6].As<Napi::Function>())
+                               : std::nullopt};
   SonareMasteringChainStereoResult result{};
   const SonareError err = sonare_master_audio_stereo_with_progress_ex(
       preset_name.c_str(), left.Data(), right.Data(), left.ElementLength(), sr,

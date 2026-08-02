@@ -166,7 +166,7 @@ class Audio:
     def mastering_chain(
         self,
         config: dict[str, Any] | None = None,
-        on_progress: Callable[[float, str], object] | None = None,
+        on_progress: Callable[[float, str], None] | None = None,
         *,
         cancel: Callable[[], bool] | None = None,
     ) -> MasteringChainResult: ...
@@ -174,7 +174,7 @@ class Audio:
         self,
         preset: MasteringPreset = "pop",
         overrides: dict[str, Any] | None = None,
-        on_progress: Callable[[float, str], object] | None = None,
+        on_progress: Callable[[float, str], None] | None = None,
         *,
         cancel: Callable[[], bool] | None = None,
     ) -> MasteringChainResult: ...

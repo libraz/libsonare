@@ -1,4 +1,5 @@
 #include <cstring>
+#include <optional>
 #include <string>
 
 #include "sonare_wrap.h"
@@ -36,8 +37,8 @@ Napi::Value SonareWrap::AnalyzeWithProgress(const Napi::CallbackInfo& info) {
   Napi::Env env = info.Env();
 
   if (info.Length() < 3 || !IsFloat32Array(info[0]) || !info[1].IsNumber() ||
-      !info[2].IsFunction()) {
-    Napi::TypeError::New(env, "Expected (Float32Array, sampleRate, onProgress)")
+      !info[2].IsFunction() || (info.Length() > 3 && !info[3].IsFunction())) {
+    Napi::TypeError::New(env, "Expected (Float32Array, sampleRate, onProgress, cancel?)")
         .ThrowAsJavaScriptException();
     return env.Undefined();
   }
@@ -53,17 +54,21 @@ Napi::Value SonareWrap::AnalyzeWithProgress(const Napi::CallbackInfo& info) {
   struct ProgressCtx {
     Napi::Env env;
     Napi::Function cb;
-    bool cancel_requested = false;
-  } ctx{env, js_cb};
+    std::optional<Napi::Function> cancel;
+  } ctx{env, js_cb,
+        info.Length() > 3 ? std::optional<Napi::Function>(info[3].As<Napi::Function>())
+                          : std::nullopt};
 
   auto c_progress = [](float progress, const char* stage, void* user_data) {
     auto* c = static_cast<ProgressCtx*>(user_data);
-    Napi::Value result = c->cb.Call({Napi::Number::New(c->env, static_cast<double>(progress)),
-                                     Napi::String::New(c->env, stage != nullptr ? stage : "")});
-    c->cancel_requested = result.IsBoolean() && !result.As<Napi::Boolean>().Value();
+    c->cb.Call({Napi::Number::New(c->env, static_cast<double>(progress)),
+                Napi::String::New(c->env, stage != nullptr ? stage : "")});
   };
   auto c_cancel = [](void* user_data) {
-    return static_cast<ProgressCtx*>(user_data)->cancel_requested ? 1 : 0;
+    auto* c = static_cast<ProgressCtx*>(user_data);
+    if (!c->cancel) return 0;
+    const Napi::Value result = c->cancel->Call({});
+    return result.IsBoolean() && result.As<Napi::Boolean>().Value() ? 1 : 0;
   };
 
   char* json_str = nullptr;

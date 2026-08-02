@@ -1259,6 +1259,7 @@ export interface SonareModule {
     samples: Float32Array,
     sampleRate: number,
     progressCallback: ProgressCallback | null,
+    cancelCallback: (() => boolean) | null,
   ) => WasmAnalysisResult;
   analyzeBpm: (
     samples: Float32Array,
@@ -1709,6 +1710,7 @@ export interface SonareModule {
     sampleRate: number,
     config: Record<string, unknown>,
     progressCallback: ProgressCallback | null,
+    cancelCallback: (() => boolean) | null,
   ) => WasmMasteringChainResult;
   masteringChainStereoWithProgress: (
     left: Float32Array,
@@ -1716,6 +1718,7 @@ export interface SonareModule {
     sampleRate: number,
     config: Record<string, unknown>,
     progressCallback: ProgressCallback | null,
+    cancelCallback: (() => boolean) | null,
   ) => WasmMasteringStereoChainResult;
   masteringPresetNames: () => string[];
   masterAudio: (
@@ -1737,6 +1740,7 @@ export interface SonareModule {
     sampleRate: number,
     overrides: Record<string, number | boolean> | null,
     progressCallback: ProgressCallback | null,
+    cancelCallback: (() => boolean) | null,
   ) => WasmMasteringChainResult;
   masterAudioStereoWithProgress: (
     presetName: string,
@@ -1745,6 +1749,7 @@ export interface SonareModule {
     sampleRate: number,
     overrides: Record<string, number | boolean> | null,
     progressCallback: ProgressCallback | null,
+    cancelCallback: (() => boolean) | null,
   ) => WasmMasteringStereoChainResult;
   mixingScenePresetNames: () => string[];
   mixingScenePresetJson: (presetName: string) => string;

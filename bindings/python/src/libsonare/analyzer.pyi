@@ -77,7 +77,7 @@ AutomationCurveArg: TypeAlias = AutomationCurve | str | int
 IntSamples: TypeAlias = Sequence[int] | list[int]
 MasteringParamValue: TypeAlias = float | int | bool
 MasteringParams: TypeAlias = dict[str, MasteringParamValue]
-ProgressCallback: TypeAlias = Callable[[float, str], object]
+ProgressCallback: TypeAlias = Callable[[float, str], None]
 CancelCallback: TypeAlias = Callable[[], bool]
 
 MasteringPreset: TypeAlias = Literal[

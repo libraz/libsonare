@@ -56,7 +56,8 @@ export interface RoomEstimateRequest extends RoomEstimateOptions, SamplesRequest
 export interface RoomMorphRequest extends RoomMorphOptions, SamplesRequest {}
 
 export interface AnalyzeWithProgressRequest extends SamplesRequest {
-  onProgress: AnalysisProgressCallback;
+  onProgress?: AnalysisProgressCallback;
+  cancel?: () => boolean;
 }
 
 export interface MusicAnalyzeOptions {
@@ -276,7 +277,8 @@ export function analyzeWithProgress(
   return addon.analyzeWithProgress(
     request.samples,
     request.sampleRate ?? 22050,
-    request.onProgress,
+    request.onProgress ?? (() => {}),
+    request.cancel ?? (() => false),
   );
 }
 

@@ -18,7 +18,6 @@ import {
   ErrorCode,
   hasFfmpegSupport,
   init,
-  isSonareError,
   Mode,
   masterAudio,
   masterAudioStereo,
@@ -235,23 +234,11 @@ describe('WASM analyzer coverage parity', () => {
       expect(Number.isFinite(result.outputLufs)).toBe(true);
     });
 
-    it('cancels without returning a partially mastered result', () => {
+    it('cancels through the canonical request callback', () => {
       const samples = makeSine(2, 440);
-      let result: ReturnType<typeof masterAudioWithProgress> | undefined;
-
-      try {
-        result = masterAudioWithProgress(samples, SR, 'pop', {}, (progress) =>
-          progress > 0.5 ? false : undefined,
-        );
-      } catch (error) {
-        expect(isSonareError(error)).toBe(true);
-        if (!isSonareError(error)) {
-          throw error;
-        }
-        expect(error.code).toBe(ErrorCode.Cancelled);
-      }
-
-      expect(result).toBeUndefined();
+      expect(() => masterAudio({ samples, sampleRate: SR, cancel: () => true })).toThrow(
+        expect.objectContaining({ code: ErrorCode.Cancelled }),
+      );
     });
 
     it('uses onProgress from a canonical request object', () => {

@@ -57,7 +57,9 @@ export interface OfflineWorker {
  * It is Promise-like, so `await client.analyze(...)` works. Call `cancel()` to
  * request cancellation at the next native progress boundary. In browsers this
  * uses a `SharedArrayBuffer` flag, which requires cross-origin isolation for
- * prompt cancellation while synchronous WASM is running.
+ * prompt cancellation while synchronous WASM is running. The worker forwards
+ * that flag through the same native cancellation callback used by synchronous
+ * one-shot requests.
  */
 export class OfflineWorkerTask<T> implements PromiseLike<T> {
   constructor(

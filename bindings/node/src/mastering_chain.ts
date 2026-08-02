@@ -64,6 +64,7 @@ export interface MasteringChainRequest {
   sampleRate?: number;
   config?: MasteringChainConfig;
   onProgress?: ProgressCallback;
+  cancel?: () => boolean;
 }
 
 export interface MasteringChainStereoRequest {
@@ -72,6 +73,7 @@ export interface MasteringChainStereoRequest {
   sampleRate?: number;
   config?: MasteringChainConfig;
   onProgress?: ProgressCallback;
+  cancel?: () => boolean;
 }
 
 export interface MasteringPairProcessRequest {
@@ -212,12 +214,13 @@ export function masteringChain(
   const request =
     samples instanceof Float32Array ? { samples, sampleRate, config, onProgress } : samples;
   const flat = flattenChainConfig(request.config ?? {});
-  if (request.onProgress) {
+  if (request.onProgress || request.cancel) {
     return addon.masteringChainWithProgress(
       request.samples,
       request.sampleRate ?? 22050,
       flat,
-      request.onProgress,
+      request.onProgress ?? (() => {}),
+      request.cancel ?? (() => false),
     );
   }
   return addon.masteringChain(request.samples, request.sampleRate ?? 22050, flat);
@@ -245,13 +248,14 @@ export function masteringChainStereo(
       ? { left, right: right as Float32Array, sampleRate, config, onProgress }
       : left;
   const flat = flattenChainConfig(request.config ?? {});
-  if (request.onProgress) {
+  if (request.onProgress || request.cancel) {
     return addon.masteringChainStereoWithProgress(
       request.left,
       request.right,
       request.sampleRate ?? 22050,
       flat,
-      request.onProgress,
+      request.onProgress ?? (() => {}),
+      request.cancel ?? (() => false),
     );
   }
   return addon.masteringChainStereo(request.left, request.right, request.sampleRate ?? 22050, flat);
@@ -268,6 +272,7 @@ export interface MasterAudioRequest {
   preset?: MasteringPreset;
   overrides?: MasteringChainConfig;
   onProgress?: ProgressCallback;
+  cancel?: () => boolean;
 }
 
 /** Canonical request form for one-shot stereo preset mastering. */
@@ -278,6 +283,7 @@ export interface MasterAudioStereoRequest {
   preset?: MasteringPreset;
   overrides?: MasteringChainConfig;
   onProgress?: ProgressCallback;
+  cancel?: () => boolean;
 }
 
 function masterAudioRequest(
@@ -331,13 +337,14 @@ export function masterAudio(
 ): MasteringChainResult {
   const request = masterAudioRequest(samples, sampleRate, presetName, overrides, onProgress);
   const flat = flattenChainConfig(request.overrides ?? {});
-  if (request.onProgress) {
+  if (request.onProgress || request.cancel) {
     return addon.masterAudioWithProgress(
       request.preset ?? 'pop',
       request.samples,
       request.sampleRate ?? 22050,
       flat,
-      request.onProgress,
+      request.onProgress ?? (() => {}),
+      request.cancel ?? (() => false),
     );
   }
   return addon.masterAudio(
@@ -405,14 +412,15 @@ export function masterAudioStereo(
     onProgress,
   );
   const flat = flattenChainConfig(request.overrides ?? {});
-  if (request.onProgress) {
+  if (request.onProgress || request.cancel) {
     return addon.masterAudioStereoWithProgress(
       request.preset ?? 'pop',
       request.left,
       request.right,
       request.sampleRate ?? 22050,
       flat,
-      request.onProgress,
+      request.onProgress ?? (() => {}),
+      request.cancel ?? (() => false),
     );
   }
   return addon.masterAudioStereo(

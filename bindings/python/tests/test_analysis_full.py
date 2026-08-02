@@ -312,23 +312,20 @@ def test_analyze_with_progress_invokes_callback(progress_result) -> None:
 
 
 @requires_json_progress_ex
-def test_analyze_with_progress_false_cancels_without_a_result() -> None:
-    """Returning the exact False sentinel cancels after a deterministic progress point."""
+def test_analyze_with_progress_false_result_does_not_cancel() -> None:
+    """A progress callback's boolean return value is ignored."""
     calls: list[float] = []
-    result = None
 
     def on_progress(progress: float, _stage: str) -> object:
         calls.append(progress)
-        return False if progress > 0.5 else None
+        return False
 
-    with pytest.raises(libsonare.SonareError) as exc:
-        result = libsonare.analyze_with_progress(
-            _generate_test_signal(duration=1.0), sample_rate=22050, on_progress=on_progress
-        )
+    result = libsonare.analyze_with_progress(
+        _generate_test_signal(duration=1.0), sample_rate=22050, on_progress=on_progress
+    )
 
-    assert exc.value.code == 8
     assert any(progress > 0.5 for progress in calls)
-    assert result is None
+    assert isinstance(result, libsonare.AnalysisResult)
 
 
 @requires_json_progress_ex

@@ -189,8 +189,8 @@ export interface AnalysisResult {
 }
 
 /**
- * Progress callback for {@link analyzeWithProgress}. Return exactly `false` to
- * request cooperative cancellation; returning `undefined` continues normally.
+ * Progress callback for {@link analyzeWithProgress}. Its return value is
+ * ignored; use the request object's `cancel` callback to cancel cooperatively.
  */
 export type AnalysisProgressCallback = import('./types.js').ProgressCallback;
 

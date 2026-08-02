@@ -188,7 +188,7 @@ val js_master_audio_stereo(std::string preset_name, val left_samples, val right_
 }
 
 val js_master_audio_with_progress(std::string preset_name, val samples, int sample_rate,
-                                  val overrides, val progress_callback) {
+                                  val overrides, val progress_callback, val cancel_callback) {
   std::vector<float> data = float32ArrayToVector(samples);
   auto preset = mastering::api::preset_from_string(preset_name);
   auto config = mastering::api::preset_config(preset);
@@ -198,14 +198,14 @@ val js_master_audio_with_progress(std::string preset_name, val samples, int samp
                                                  overrides_vec.size());
   }
   mastering::api::MasteringChain chain(std::move(config));
-  bool cancellation_requested = false;
   if (!progress_callback.isNull() && !progress_callback.isUndefined()) {
-    chain.set_progress_callback([progress_callback, &cancellation_requested](float progress,
-                                                                             const char* stage) {
-      cancellation_requested = cancellation_requested || progressCallbackRequestedCancellation(
-                                                             progress_callback, progress, stage);
+    chain.set_progress_callback([progress_callback](float progress, const char* stage) {
+      progress_callback(progress, std::string(stage ? stage : ""));
     });
-    chain.set_cancel_callback([&cancellation_requested] { return cancellation_requested; });
+  }
+  if (!cancel_callback.isNull() && !cancel_callback.isUndefined()) {
+    chain.set_cancel_callback(
+        [cancel_callback] { return cancelCallbackRequested(cancel_callback); });
   }
   const auto result = chain.process_mono_cancellable(data.data(), data.size(), sample_rate);
   if (!result) {
@@ -229,7 +229,7 @@ val js_master_audio_with_progress(std::string preset_name, val samples, int samp
 
 val js_master_audio_stereo_with_progress(std::string preset_name, val left_samples,
                                          val right_samples, int sample_rate, val overrides,
-                                         val progress_callback) {
+                                         val progress_callback, val cancel_callback) {
   validateWasmFloat32ArrayPair(left_samples, "left samples", right_samples, "right samples",
                                "masterAudioStereoWithProgress input", true);
   std::vector<float> left = float32ArrayToVector(left_samples);
@@ -242,14 +242,14 @@ val js_master_audio_stereo_with_progress(std::string preset_name, val left_sampl
                                                  overrides_vec.size());
   }
   mastering::api::MasteringChain chain(std::move(config));
-  bool cancellation_requested = false;
   if (!progress_callback.isNull() && !progress_callback.isUndefined()) {
-    chain.set_progress_callback([progress_callback, &cancellation_requested](float progress,
-                                                                             const char* stage) {
-      cancellation_requested = cancellation_requested || progressCallbackRequestedCancellation(
-                                                             progress_callback, progress, stage);
+    chain.set_progress_callback([progress_callback](float progress, const char* stage) {
+      progress_callback(progress, std::string(stage ? stage : ""));
     });
-    chain.set_cancel_callback([&cancellation_requested] { return cancellation_requested; });
+  }
+  if (!cancel_callback.isNull() && !cancel_callback.isUndefined()) {
+    chain.set_cancel_callback(
+        [cancel_callback] { return cancelCallbackRequested(cancel_callback); });
   }
   const auto result =
       chain.process_stereo_cancellable(left.data(), right.data(), left.size(), sample_rate);

@@ -184,7 +184,7 @@ def analyze(
 
 
 def _make_analyze_progress_trampoline(
-    on_progress: Callable[[float, str], object], state: CancellationState
+    on_progress: Callable[[float, str], None], state: CancellationState
 ) -> Any:
     """Wrap a Python callback for use as a C SonareAnalyzeProgressCallback.
 
@@ -195,7 +195,7 @@ def _make_analyze_progress_trampoline(
     def _trampoline(progress: float, stage_cstr: bytes | None, _user_data: int) -> None:
         try:
             stage = stage_cstr.decode("utf-8") if stage_cstr else ""
-            state.observe_progress_result(on_progress(float(progress), stage))
+            on_progress(float(progress), stage)
         except Exception:  # noqa: BLE001 — never propagate Python exceptions into C
             pass
 
@@ -205,7 +205,7 @@ def _make_analyze_progress_trampoline(
 def analyze_with_progress(
     samples: Sequence[float] | list[float],
     sample_rate: int = 22050,
-    on_progress: Callable[[float, str], object] | None = None,
+    on_progress: Callable[[float, str], None] | None = None,
     *,
     cancel: Callable[[], bool] | None = None,
 ) -> AnalysisResult:
@@ -222,9 +222,8 @@ def analyze_with_progress(
             accepted types.
         sample_rate: Sample rate in Hz (default 22050).
         on_progress: Optional callable ``(progress: float, stage: str) -> object``
-            invoked during analysis. Progress is in ``[0, 1]``. Returning
-            exactly ``False`` requests cancellation; ``None`` and every other
-            return value continue. If ``None``, no callback is registered.
+            invoked during analysis. Progress is in ``[0, 1]``. Its return
+            value is ignored. If ``None``, no callback is registered.
         cancel: Optional zero-argument callable polled by the native operation.
             A true return value requests cancellation.
 

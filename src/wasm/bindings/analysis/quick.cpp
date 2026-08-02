@@ -860,20 +860,18 @@ val js_room_morph(val samples, int sample_rate, val opts) {
 #endif  // SONARE_WITH_ACOUSTIC_SIM
 
 // Analyze with progress callback
-val js_analyze_with_progress(val samples, int sample_rate, val progress_callback) {
+val js_analyze_with_progress(val samples, int sample_rate, val progress_callback,
+                             val cancel_callback) {
   Audio audio = loadValidatedAudio(samples, sample_rate);
   MusicAnalyzer analyzer(audio);
-  bool cancellation_requested = false;
-
-  // A literal false from JS requests cooperative cancellation. Undefined keeps
-  // the pre-existing void callback behavior.
   if (!progress_callback.isNull() && !progress_callback.isUndefined()) {
-    analyzer.set_progress_callback([progress_callback, &cancellation_requested](float progress,
-                                                                                const char* stage) {
-      cancellation_requested = cancellation_requested || progressCallbackRequestedCancellation(
-                                                             progress_callback, progress, stage);
+    analyzer.set_progress_callback([progress_callback](float progress, const char* stage) {
+      progress_callback(progress, std::string(stage ? stage : ""));
     });
-    analyzer.set_cancel_callback([&cancellation_requested] { return cancellation_requested; });
+  }
+  if (!cancel_callback.isNull() && !cancel_callback.isUndefined()) {
+    analyzer.set_cancel_callback(
+        [cancel_callback] { return cancelCallbackRequested(cancel_callback); });
   }
 
   const auto result = analyzer.analyze_cancellable();

@@ -28,7 +28,6 @@ import {
   framesToSamples,
   hasFfmpegSupport,
   hybridCqt,
-  isSonareError,
   masteringAssistantSuggest,
   masteringAudioProfile,
   masteringPairAnalysisNames,
@@ -165,30 +164,25 @@ describe('standalone functions', () => {
     }
   });
 
-  it('analyzeWithProgress cancels when its callback returns false', () => {
-    let result: unknown;
-    let caught: unknown;
+  it('analyzeWithProgress ignores a progress callback false result', () => {
     const progress: number[] = [];
-
-    try {
-      result = analyzeWithProgress(generateSine(220, SR, 2), SR, (value) => {
-        progress.push(value);
-        if (value > 0.5) {
-          return false;
-        }
-      });
-    } catch (error) {
-      caught = error;
-    }
+    const result = analyzeWithProgress(generateSine(220, SR, 2), SR, (value) => {
+      progress.push(value);
+      return false;
+    });
 
     expect(progress.some((value) => value > 0.5)).toBe(true);
-    expect(result).toBeUndefined();
-    expect(isSonareError(caught)).toBe(true);
-    if (!isSonareError(caught)) {
-      throw new Error('expected cancellation SonareError');
-    }
-    expect(caught.code).toBe(ErrorCode.Cancelled);
-    expect(caught.codeName).toBe('Cancelled');
+    expect(result.beatTimes).toBeInstanceOf(Float32Array);
+  });
+
+  it('analyzeWithProgress cancels through the request cancel callback', () => {
+    expect(() =>
+      analyzeWithProgress({
+        samples: generateSine(220, SR, 2),
+        sampleRate: SR,
+        cancel: () => true,
+      }),
+    ).toThrow(expect.objectContaining({ code: ErrorCode.Cancelled, codeName: 'Cancelled' }));
   });
 
   it('analyzeSections returns an array of sections', () => {

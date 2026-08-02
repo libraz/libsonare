@@ -411,7 +411,7 @@ def _extract_mastering_report(raw: object) -> MasteringReport:
 
 
 def _make_progress_trampoline(
-    on_progress: Callable[[float, str], object], state: CancellationState
+    on_progress: Callable[[float, str], None], state: CancellationState
 ) -> Any:
     """Wrap a Python callback for use as a C SonareMasteringProgressCallback.
 
@@ -422,7 +422,7 @@ def _make_progress_trampoline(
     def _trampoline(progress: float, stage_cstr: bytes | None, _user_data: int) -> None:
         try:
             stage = stage_cstr.decode("utf-8") if stage_cstr else ""
-            state.observe_progress_result(on_progress(float(progress), stage))
+            on_progress(float(progress), stage)
         except Exception:  # noqa: BLE001 — never propagate Python exceptions into C
             pass
 
@@ -433,7 +433,7 @@ def mastering_chain(
     samples: Sequence[float] | list[float],
     sample_rate: int = 22050,
     config: dict[str, Any] | None = None,
-    on_progress: Callable[[float, str], object] | None = None,
+    on_progress: Callable[[float, str], None] | None = None,
     *,
     cancel: Callable[[], bool] | None = None,
 ) -> MasteringChainResult:
@@ -456,9 +456,8 @@ def mastering_chain(
         on_progress: Optional callback ``(progress, stage)`` invoked after
             each enabled stage completes. ``progress`` is in ``[0.0, 1.0]``
             and ``stage`` is the stage identifier (e.g.
-            ``"dynamics.compressor"``). Returning exactly ``False`` cancels;
-            ``None`` and other return values continue. Exceptions raised inside
-            the callback are swallowed.
+            ``"dynamics.compressor"``). Its return value is ignored. Exceptions
+            raised inside the callback are swallowed.
         cancel: Optional zero-argument callable. A true return value requests
             cancellation at the next native cancellation point.
 
@@ -547,7 +546,7 @@ def mastering_chain_stereo(
     right: Sequence[float] | list[float],
     sample_rate: int = 22050,
     config: dict[str, Any] | None = None,
-    on_progress: Callable[[float, str], object] | None = None,
+    on_progress: Callable[[float, str], None] | None = None,
     *,
     cancel: Callable[[], bool] | None = None,
 ) -> MasteringChainStereoResult:
@@ -654,7 +653,7 @@ def master_audio(
     sample_rate: int = 22050,
     preset_name: str = "pop",
     overrides: dict[str, Any] | None = None,
-    on_progress: Callable[[float, str], object] | None = None,
+    on_progress: Callable[[float, str], None] | None = None,
     *,
     cancel: Callable[[], bool] | None = None,
 ) -> MasteringChainResult:
@@ -766,7 +765,7 @@ def master_audio_stereo(
     sample_rate: int = 22050,
     preset_name: str = "pop",
     overrides: dict[str, Any] | None = None,
-    on_progress: Callable[[float, str], object] | None = None,
+    on_progress: Callable[[float, str], None] | None = None,
     *,
     cancel: Callable[[], bool] | None = None,
 ) -> MasteringChainStereoResult:

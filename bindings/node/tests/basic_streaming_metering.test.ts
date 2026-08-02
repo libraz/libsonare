@@ -5,7 +5,6 @@ import {
   ErrorCode,
   ebur128LoudnessRange,
   fourierTempogram,
-  isSonareError,
   lufs,
   masteringChain,
   meteringSilenceRatio,
@@ -63,38 +62,34 @@ describe('progress callback', () => {
     expect(progresses[progresses.length - 1]).toBeCloseTo(1.0, 5);
   });
 
-  it('masteringChain cancels when onProgress returns false', () => {
-    let result: unknown;
-    let caught: unknown;
+  it('masteringChain ignores an onProgress false result', () => {
     const progress: number[] = [];
-
-    try {
-      result = masteringChain(
-        new Float32Array(22050).fill(0.1),
-        22050,
-        {
-          eq: { tilt: { tiltDb: 1.0 } },
-          dynamics: { compressor: { thresholdDb: -24 } },
-        },
-        (value) => {
-          progress.push(value);
-          if (value > 0.5) {
-            return false;
-          }
-        },
-      );
-    } catch (error) {
-      caught = error;
-    }
+    const result = masteringChain(
+      new Float32Array(22050).fill(0.1),
+      22050,
+      {
+        eq: { tilt: { tiltDb: 1.0 } },
+        dynamics: { compressor: { thresholdDb: -24 } },
+      },
+      (value) => {
+        progress.push(value);
+        return false;
+      },
+    );
 
     expect(progress.some((value) => value > 0.5)).toBe(true);
-    expect(result).toBeUndefined();
-    expect(isSonareError(caught)).toBe(true);
-    if (!isSonareError(caught)) {
-      throw new Error('expected cancellation SonareError');
-    }
-    expect(caught.code).toBe(ErrorCode.Cancelled);
-    expect(caught.codeName).toBe('Cancelled');
+    expect(result.samples).toBeInstanceOf(Float32Array);
+  });
+
+  it('masteringChain cancels through the request cancel callback', () => {
+    expect(() =>
+      masteringChain({
+        samples: new Float32Array(22050).fill(0.1),
+        sampleRate: 22050,
+        config: { eq: { tilt: { tiltDb: 1.0 } } },
+        cancel: () => true,
+      }),
+    ).toThrow(expect.objectContaining({ code: ErrorCode.Cancelled, codeName: 'Cancelled' }));
   });
 });
 

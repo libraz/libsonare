@@ -258,35 +258,32 @@ def test_mastering_chain_invokes_progress_callback() -> None:
     assert calls[-1][0] == pytest.approx(1.0, abs=1e-5)
 
 
-def test_mastering_chain_false_progress_result_cancels_without_a_result() -> None:
-    """Returning False after progress exceeds .5 cancels the native chain."""
-    from libsonare import SonareError, mastering_chain
+def test_mastering_chain_false_progress_result_does_not_cancel() -> None:
+    """A progress callback's boolean return value is ignored."""
+    from libsonare import mastering_chain
     from libsonare._runtime import _get_lib
 
     if not hasattr(_get_lib(), "sonare_mastering_chain_with_progress_ex"):
         pytest.skip("libsonare built without cancellation-capable mastering progress")
 
     calls: list[float] = []
-    result = None
 
     def on_progress(progress: float, _stage: str) -> object:
         calls.append(progress)
-        return False if progress > 0.5 else None
+        return False
 
-    with pytest.raises(SonareError) as exc:
-        result = mastering_chain(
-            samples=[0.1] * 22050,
-            sample_rate=22050,
-            config={
-                "eq": {"tilt": {"tiltDb": 1.0}},
-                "dynamics": {"compressor": {"thresholdDb": -24.0}},
-            },
-            on_progress=on_progress,
-        )
+    result = mastering_chain(
+        samples=[0.1] * 22050,
+        sample_rate=22050,
+        config={
+            "eq": {"tilt": {"tiltDb": 1.0}},
+            "dynamics": {"compressor": {"thresholdDb": -24.0}},
+        },
+        on_progress=on_progress,
+    )
 
-    assert exc.value.code == 8
     assert any(progress > 0.5 for progress in calls)
-    assert result is None
+    assert result.samples
 
 
 def test_mastering_chain_cancel_callable_cancels_without_a_result() -> None:

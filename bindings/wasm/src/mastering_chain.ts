@@ -22,6 +22,7 @@ export interface MasteringChainRequest {
   sampleRate?: number;
   config?: MasteringChainConfig;
   onProgress?: ProgressCallback;
+  cancel?: () => boolean;
 }
 
 export interface MasteringChainStereoRequest {
@@ -30,6 +31,7 @@ export interface MasteringChainStereoRequest {
   sampleRate?: number;
   config?: MasteringChainConfig;
   onProgress?: ProgressCallback;
+  cancel?: () => boolean;
 }
 
 /** Canonical request form for one-shot preset mastering. */
@@ -39,6 +41,7 @@ export interface MasterAudioRequest {
   preset?: MasteringPreset;
   overrides?: MasteringChainConfig;
   onProgress?: ProgressCallback;
+  cancel?: () => boolean;
 }
 
 /** Canonical request form for one-shot stereo preset mastering. */
@@ -49,6 +52,7 @@ export interface MasterAudioStereoRequest {
   preset?: MasteringPreset;
   overrides?: MasteringChainConfig;
   onProgress?: ProgressCallback;
+  cancel?: () => boolean;
 }
 
 function masterAudioRequest(
@@ -114,12 +118,13 @@ export function masteringChain(
 ): MasteringChainResult {
   const request =
     samples instanceof Float32Array ? { samples, sampleRate, config, onProgress } : samples;
-  if (request.onProgress) {
+  if (request.onProgress || request.cancel) {
     return requireModule().masteringChainWithProgress(
       request.samples,
       request.sampleRate ?? 22050,
       canonicalChainConfig(request.config ?? {}),
-      request.onProgress,
+      request.onProgress ?? (() => {}),
+      request.cancel ?? (() => false),
     );
   }
   return requireModule().masteringChain(
@@ -162,13 +167,14 @@ export function masteringChainStereo(
   if (request.left.length !== request.right.length) {
     throw new Error('Stereo channel lengths must match.');
   }
-  if (request.onProgress) {
+  if (request.onProgress || request.cancel) {
     return requireModule().masteringChainStereoWithProgress(
       request.left,
       request.right,
       request.sampleRate ?? 22050,
       canonicalChainConfig(request.config ?? {}),
-      request.onProgress,
+      request.onProgress ?? (() => {}),
+      request.cancel ?? (() => false),
     );
   }
   return requireModule().masteringChainStereo(
@@ -213,6 +219,7 @@ export function masteringChainWithProgress(
     request.sampleRate ?? 22050,
     canonicalChainConfig(request.config ?? {}),
     request.onProgress,
+    request.cancel ?? (() => false),
   );
 }
 
@@ -259,6 +266,7 @@ export function masteringChainStereoWithProgress(
     request.sampleRate ?? 22050,
     canonicalChainConfig(request.config ?? {}),
     request.onProgress,
+    request.cancel ?? (() => false),
   );
 }
 
@@ -298,13 +306,14 @@ export function masterAudio(
 ): MasteringChainResult {
   const request = masterAudioRequest(samples, sampleRate, presetName, overrides, onProgress);
   const flat = flattenChainConfig(request.overrides ?? {});
-  if (request.onProgress) {
+  if (request.onProgress || request.cancel) {
     return requireModule().masterAudioWithProgress(
       request.preset ?? 'pop',
       request.samples,
       request.sampleRate ?? 22050,
       flat,
-      request.onProgress,
+      request.onProgress ?? (() => {}),
+      request.cancel ?? (() => false),
     );
   }
   return requireModule().masterAudio(
@@ -355,14 +364,15 @@ export function masterAudioStereo(
   if (request.left.length !== request.right.length) {
     throw new Error('Stereo channel lengths must match.');
   }
-  if (request.onProgress) {
+  if (request.onProgress || request.cancel) {
     return requireModule().masterAudioStereoWithProgress(
       request.preset ?? 'pop',
       request.left,
       request.right,
       request.sampleRate ?? 22050,
       flat,
-      request.onProgress,
+      request.onProgress ?? (() => {}),
+      request.cancel ?? (() => false),
     );
   }
   return requireModule().masterAudioStereo(
@@ -405,6 +415,7 @@ export function masterAudioWithProgress(
     request.sampleRate ?? 22050,
     flattenChainConfig(request.overrides ?? {}),
     request.onProgress,
+    request.cancel ?? (() => false),
   );
 }
 
@@ -451,5 +462,6 @@ export function masterAudioStereoWithProgress(
     request.sampleRate ?? 22050,
     flattenChainConfig(request.overrides ?? {}),
     request.onProgress,
+    request.cancel ?? (() => false),
   );
 }

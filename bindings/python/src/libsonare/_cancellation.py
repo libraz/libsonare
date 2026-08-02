@@ -13,17 +13,9 @@ class CancellationState:
 
     def __init__(self, cancel: Callable[[], bool] | None) -> None:
         self._cancel = cancel
-        self._progress_requested = False
-
-    def observe_progress_result(self, result: object) -> None:
-        """Record only the exact ``False`` sentinel as a cancellation request."""
-        if result is False:
-            self._progress_requested = True
 
     def requested(self) -> int:
         """Return the C callback's nonzero cancellation signal."""
-        if self._progress_requested:
-            return 1
         if self._cancel is None:
             return 0
         try:
