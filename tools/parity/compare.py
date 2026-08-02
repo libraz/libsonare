@@ -173,6 +173,9 @@ _ALIAS_COVERAGE = {
     "project_deserialize": ("from_json",),
     # JSON-config setter -> the typed set_config the facades expose.
     "realtime_voice_changer_set_config_json": ("set_config",),
+    # The default config is the public neutral-monitor preset config. Facades
+    # expose the latter rather than a duplicate no-argument default helper.
+    "realtime_voice_changer_config_default": ("realtime_voice_changer_preset_config",),
     # Standalone preset validator (the facade reorders the name to lead with the
     # verb): validate_realtime_voice_changer_preset_json.
     "realtime_voice_changer_validate_preset_json": (
@@ -191,10 +194,13 @@ _ALIAS_COVERAGE = {
     # Extended one-shot variants folded into their base facade functions. Each
     # base function exposes the extended fields and routes to this C entry point.
     "analyze_json_ex": ("analyze",),
+    # Onset facades take the complete extended option set under the base name.
+    "detect_onsets_ex": ("detect_onsets",),
     "chroma_cens_ex": ("chroma_cens",),
     "chroma_cqt_ex": ("chroma_cqt",),
     "mfcc_to_audio_ex2": ("mfcc_to_audio",),
     "mfcc_to_mel_ex": ("mfcc_to_mel",),
+    "spectral_bandwidth_ex": ("spectral_bandwidth",),
     "nnls_chroma_ex": ("nnls_chroma",),
     # NMF warm-start variant -> the base decompose facade, which exposes the
     # `init` initialiser argument and routes to sonare_decompose_with_init.
@@ -219,6 +225,25 @@ _ALIAS_COVERAGE = {
     "project_bounce_with_sf2_instruments": ("bounce_with_sf2_instrument",),
     # Plural NativeSynth-instrument bounce -> singular facade method (one or many).
     "project_bounce_with_synth_instruments": ("bounce_with_synth_instrument",),
+    # The Project facade presents aggregate descriptors rather than the C ABI's
+    # component accessors / name resolver.
+    "project_fade_curve_from_name": ("set_clip_fade",),
+    "project_marker_name_by_index": ("marker_by_index",),
+    "project_set_marker_ex_name": ("set_marker_ex",),
+    "project_unresolved_audio_source_count": ("unresolved_audio_source_ids",),
+    "project_unresolved_audio_source_id_by_index": ("unresolved_audio_source_ids",),
+    # prepare() accepts maxChannels and routes to this C entry point when it is
+    # available, retaining a fallback for older native libraries in Python.
+    "engine_prepare_with_channels": ("prepare",),
+    # Python's segmentation facade uses concise names; the C ABI namespaces
+    # these helpers with `segment_`.
+    "segment_agglomerative": ("agglomerative",),
+    "segment_cross_similarity": ("cross_similarity",),
+    "segment_lag_to_recurrence": ("lag_to_recurrence",),
+    "segment_path_enhance": ("path_enhance",),
+    "segment_recurrence_matrix": ("recurrence_matrix",),
+    "segment_recurrence_to_lag": ("recurrence_to_lag",),
+    "segment_subsegment": ("subsegment",),
     # SoundFont ops: the C symbols spell "soundfont" as one word while the
     # Node/WASM camelCase methods (`loadSoundFont`) fold to `load_sound_font`.
     # An idiomatic spelling difference shared by both JS facades (Python matches
@@ -536,7 +561,11 @@ def _config_names(sig: FunctionSig, roles: set[str]) -> list[str]:
     """
     names = [p.name for p in sig.core_params()]
     names = _strip_leading_input(names, roles)
-    return [n for n in names if n not in roles and n not in _CALLBACK_NAMES]
+    return [
+        n
+        for n in names
+        if n not in roles and n not in _CALLBACK_NAMES and n not in _BUFFER_COMPANION_NAMES
+    ]
 
 
 # Progress / streaming and cancellation callback params the facades add for
@@ -621,7 +650,7 @@ _SAMPLE_RATE_NAMES = {"sample_rate", "sr"}
 # buffer). C carries them as a positional arg; facades derive length from the
 # array, so they have no facade counterpart. Stripped before the audio-input
 # naming check so the buffer names line up.
-_BUFFER_COMPANION_NAMES = {"length", "size", "len"}
+_BUFFER_COMPANION_NAMES = {"length", "size", "len", "input_length"}
 
 # Some facades are exposed in their EXTENDED (``_ex``) form: the facade config is
 # the base C function's order followed by the extra fields the ``_ex`` variant
@@ -651,6 +680,9 @@ _EXTENDED_FIELD_TAILS = {
     "chroma_cqt": ("bins_per_octave",),
     "mfcc_to_mel": ("lifter",),
     "decompose": ("init",),
+    # The facade base name exposes the C `_ex` Minkowski exponent; p=2 is the
+    # legacy C base behavior.
+    "spectral_bandwidth": ("p",),
 }
 
 

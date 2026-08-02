@@ -1,4 +1,4 @@
-.PHONY: all build release test test-slow test-optional-fixtures test-librosa-live clean rebuild format format-check lint wasm coverage \
+.PHONY: all build release test test-slow test-golden test-optional-fixtures test-librosa-live clean rebuild format format-check lint wasm coverage \
        coverage-build coverage-clean build-shared build-node build-wasm-binding \
        test-python test-python-slow test-node test-wasm parity conformance abi-layout abi-layout-check check-abi-version \
        capability-catalog capability-catalog-check ci-local \
@@ -45,6 +45,11 @@ test: build
 # fixtures load by relative path).
 test-slow: build
 	./$(BUILD_DIR)/bin/sonare_tests "[slow]"
+
+# Golden regressions are hidden from the default Catch2 run so they can be
+# invoked explicitly in local development and CI.
+test-golden: build
+	./$(BUILD_DIR)/bin/sonare_tests "[golden]"
 
 test-optional-fixtures:
 	$(CMAKE) -B $(OPTIONAL_FIXTURE_BUILD_DIR) -DCMAKE_BUILD_TYPE=Debug -DSONARE_ENABLE_OPTIONAL_FIXTURE_TESTS=ON

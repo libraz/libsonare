@@ -99,6 +99,25 @@ def test_class_method_in_reexported_module() -> None:
         assert "Audio.resample" in _raw_names(ex), _raw_names(ex)
 
 
+def test_class_getter_in_reexported_module() -> None:
+    """A public TS getter is extracted as a zero-argument class accessor."""
+    with tempfile.TemporaryDirectory() as d:
+        root = Path(d)
+        _write(root, "bindings/x/src/index.ts", "export { Audio } from './audio';\n")
+        _write(
+            root,
+            "bindings/x/src/audio.ts",
+            "export class Audio {\n"
+            "  get length(): number {\n"
+            "    return 0;\n"
+            "  }\n"
+            "}\n",
+        )
+        ex = extract_ts(root, "wasm", "bindings/x/src/index.ts", "bindings/x/src/generated")
+        assert "length" in _keys(ex), _keys(ex)
+        assert "Audio.length" in _raw_names(ex), _raw_names(ex)
+
+
 def test_cycle_safe_and_deduped() -> None:
     """A re-export cycle terminates, and a symbol reached twice is deduped."""
     with tempfile.TemporaryDirectory() as d:

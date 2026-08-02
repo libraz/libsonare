@@ -55,6 +55,11 @@ _FUNC_HEAD = re.compile(r"export\s+(?:async\s+)?function\s+([A-Za-z0-9_]+)\s*\("
 _METHOD_HEAD = re.compile(
     r"^[ \t]{2,4}(?:static\s+)?([A-Za-z_][A-Za-z0-9_]*)\s*\(", re.MULTILINE
 )
+# A public property getter has no argument list to normalize, but represents a
+# callable C-ABI accessor just like a zero-argument class method.
+_GETTER_HEAD = re.compile(
+    r"^[ \t]{2,4}get\s+([A-Za-z_][A-Za-z0-9_]*)\s*\(\s*\)", re.MULTILINE
+)
 # `export class Foo` / `export abstract class Foo` heads.
 _CLASS_HEAD = re.compile(r"export\s+(?:abstract\s+)?class\s+([A-Za-z_][A-Za-z0-9_]*)\b")
 _TYPE_UNION = re.compile(r"export\s+type\s+([A-Za-z0-9_]+)\s*=\s*([^;]+);", re.DOTALL)
@@ -251,6 +256,21 @@ def _parse_text(
                     surface=surface,
                     raw_name=f"{class_name}.{name}",
                     params=params,
+                    file=file,
+                    line=base_line + class_body.count("\n", 0, m.start()),
+                )
+            )
+        for m in _GETTER_HEAD.finditer(class_body):
+            name = m.group(1)
+            if name.startswith("_"):
+                continue
+            key = canonical_key(name, surface)
+            ex.functions.append(
+                FunctionSig(
+                    key=key,
+                    surface=surface,
+                    raw_name=f"{class_name}.{name}",
+                    params=[],
                     file=file,
                     line=base_line + class_body.count("\n", 0, m.start()),
                 )

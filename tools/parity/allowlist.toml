@@ -223,6 +223,10 @@ node = [
   # offline graph overflows V8's shared C++/JS stack. The interactive/native path
   # is served by built-in instruments, not host callbacks. (See _project.py.)
   "project_bounce_with_instruments",
+  # C-only enum parser used internally while resolving typed builtin waveform
+  # names. Facades expose the accepted string union on synth constructors, not
+  # this integer conversion helper.
+  "synth_builtin_waveform_from_name",
 ]
 wasm = [
   "detect_chords_ex",
@@ -279,12 +283,6 @@ wasm = [
   # (sonare_audio_from_file is #ifndef __EMSCRIPTEN__-excluded in core_audio.cpp.)
   "audio_from_file",
   "audio_from_memory",
-  # Audio data/length/duration ARE exposed as WASM `get data/length/duration`
-  # accessors (audio.ts); the WASM TS extractor does not parse get-accessor
-  # syntax, so they read as missing. Capability is present.
-  "audio_data",
-  "audio_length",
-  "audio_duration",
   # External-instrument bounce is Python-only by design (see node note); WASM is
   # additionally single-threaded and cannot host a synchronous render callback.
   "project_bounce_with_instruments",
@@ -292,6 +290,8 @@ wasm = [
   # processPreparedPlanar) suited to AudioWorklet instead of a copy-in
   # process_planar_stereo(left, right); same capability, AudioWorklet-shaped API.
   "realtime_voice_changer_process_planar_stereo",
+  # See the Node note: this C enum parser is internal to typed facade inputs.
+  "synth_builtin_waveform_from_name",
 ]
 python = [
   "detect_chords_ex",
@@ -346,6 +346,8 @@ python = [
   # pitch_correct_timevarying seeds its SonarePitchCorrectionConfig by calling
   # this internally; not re-exposed as a standalone public function.
   "pitch_correction_config_default",
+  # See the JS notes: Python resolves typed waveform strings internally.
+  "synth_builtin_waveform_from_name",
 ]
 
 # ---------------------------------------------------------------------------

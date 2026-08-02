@@ -77,6 +77,13 @@ jobs:
         run: python3 tools/scripts/k_weighting_reference.py
       - name: Test
         run: ctest --test-dir build --output-on-failure --parallel
+      - name: Test golden regressions
+        run: make test-golden
+      - name: Verify live librosa references
+        if: runner.os == 'Linux'
+        run: |
+          python3 -m pip install --disable-pip-version-check librosa==0.11.0
+          python3 tests/librosa/run_live_reference_check.py --build-dir build
 
   sanitizer:
     name: ASan/UBSan (ubuntu-latest)
@@ -215,7 +222,11 @@ jobs:
         working-directory: bindings/python
         run: |
           python -m pip install -e . mypy
-          python -m mypy --strict ../../tests/typing/python_smoke.py
+          python -m mypy --strict src/libsonare ../../tests/typing/python_smoke.py
+          if python -m mypy --strict ../../tests/typing/python_catalog_invalid.py; then
+            echo "python_catalog_invalid.py unexpectedly passed mypy" >&2
+            exit 1
+          fi
       - name: Realtime voice changer quality gate
         # Exercises every built-in preset on synthetic speech-like signals and
         # asserts LUFS / peak / throughput bands. Catches DSP regressions the
