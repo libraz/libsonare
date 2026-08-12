@@ -17,6 +17,7 @@ Usage:
 
 from __future__ import annotations
 
+import importlib.metadata
 import json
 import shutil
 import statistics
@@ -97,9 +98,18 @@ def main() -> None:
     print(f"\nFull analysis (libsonare native C++): {libsonare_full_ms:.0f} ms")
 
     bpm_detector_ms: float | None = None
+    bpm_detector_version: str | None = None
     if shutil.which("bpm-detector"):
         print("found bpm-detector — running --comprehensive for an apples-to-apples "
               "full-pipeline comparison...")
+        # Which build produced the comparison number decides whether anyone can
+        # check it later, so the version goes into results.json rather than
+        # being described in prose on the homepage. The tool has no --version
+        # flag, so this comes from the installed distribution metadata.
+        try:
+            bpm_detector_version = importlib.metadata.version("bpm-detector")
+        except importlib.metadata.PackageNotFoundError:
+            bpm_detector_version = None
         t0 = time.perf_counter()
         subprocess.run(
             ["bpm-detector", "--comprehensive", "--quiet", str(FIXTURE)],
@@ -131,10 +141,15 @@ def main() -> None:
                 round(bpm_detector_ms / libsonare_full_ms, 2)
                 if bpm_detector_ms is not None else None
             ),
+            "bpm_detector_version": bpm_detector_version,
             "note": (
                 "Full pipeline (BPM + key + beats + chords + sections + timbre + dynamics) "
-                "running entirely inside libsonare C++. The closest librosa-based equivalent "
-                "is bpm-detector --comprehensive."
+                "running entirely inside libsonare C++. The comparison target is "
+                "bpm-detector --comprehensive: a pipeline built on librosa, not librosa "
+                "itself. It is the same author's earlier Python project, chosen because it "
+                "computes the same set of features end to end; librosa alone has no "
+                "equivalent one-shot pipeline to time. Ratios against a different "
+                "librosa-based pipeline will differ."
             ),
         },
         "per_feature": per_feature,
