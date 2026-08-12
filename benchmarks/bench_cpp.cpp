@@ -8,8 +8,12 @@
 #include <chrono>
 #include <cstdio>
 #include <cstdlib>
+#include <fstream>
 #include <iostream>
+#include <iterator>
+#include <stdexcept>
 #include <string>
+#include <thread>
 #include <vector>
 
 #include "analysis/beat_analyzer.h"
@@ -55,6 +59,41 @@ void print_row(const char* label, double ms) {
   std::fprintf(stderr, "%-22s %10.2f ms\n", label, ms);
 }
 
+// One-minute run-queue length, or a negative value where the platform does not
+// report it. The threaded paths here take every core they can get, so a
+// machine that was already busy inflates the numbers several-fold without
+// anything in the output looking wrong. Recording the load turns "measured on
+// an idle machine" from a claim into evidence.
+double load_average() {
+#ifdef __EMSCRIPTEN__
+  return -1.0;
+#else
+  double loads[3] = {0.0, 0.0, 0.0};
+  if (getloadavg(loads, 3) < 1) {
+    return -1.0;
+  }
+  return loads[0];
+#endif
+}
+
+// Path-based decoding is compiled out of the WebAssembly build, so the WASM
+// run reads the fixture into memory and decodes from there. Only the ingest
+// differs; nothing here is inside a timed region, and every measured call
+// below sees the same samples as the native build.
+sonare::Audio load_fixture(const std::string& path) {
+#ifdef __EMSCRIPTEN__
+  std::ifstream file(path, std::ios::binary);
+  if (!file) {
+    throw std::runtime_error("cannot open fixture: " + path);
+  }
+  std::vector<uint8_t> bytes((std::istreambuf_iterator<char>(file)),
+                             std::istreambuf_iterator<char>());
+  return sonare::Audio::from_memory(bytes.data(), bytes.size());
+#else
+  return sonare::Audio::from_file(path);
+#endif
+}
+
 }  // namespace
 
 int main(int argc, char** argv) {
@@ -65,13 +104,27 @@ int main(int argc, char** argv) {
   const std::string wav_path = argv[1];
   const std::string out_path = argc >= 3 ? argv[2] : "";
 
-  auto audio = sonare::Audio::from_file(wav_path);
+  auto audio = load_fixture(wav_path);
   auto resampled = sonare::resample(audio, kResampledSr);
 
   std::fprintf(stderr, "fixture: %s (%.2fs @ %d Hz -> resampled %d Hz, %zu samples)\n",
                wav_path.c_str(), audio.duration(), audio.sample_rate(), kResampledSr,
                resampled.size());
-  std::fprintf(stderr, "runs per case: %d\n\n", kRuns);
+  std::fprintf(stderr, "runs per case: %d\n", kRuns);
+
+  const unsigned int hardware_threads = std::thread::hardware_concurrency();
+  const double load_before = load_average();
+  if (load_before >= 0.0) {
+    std::fprintf(stderr, "load average before: %.2f (%u hardware threads)\n", load_before,
+                 hardware_threads);
+    if (hardware_threads > 0 && load_before > hardware_threads * 0.25) {
+      std::fprintf(stderr,
+                   "WARNING: the machine is already busy. The threaded paths (HPSS, pYIN,\n"
+                   "         full analyze) will be several times slower than on an idle\n"
+                   "         machine. Do not publish this run.\n");
+    }
+  }
+  std::fprintf(stderr, "\n");
 
   // Pre-computed intermediates used for "cached" measurements. These mirror
   // the zero-copy architecture inside analyze() where downstream features
@@ -197,6 +250,9 @@ int main(int argc, char** argv) {
     std::fprintf(fp, "  \"source_sample_rate\": %d,\n", audio.sample_rate());
     std::fprintf(fp, "  \"resampled_sample_rate\": %d,\n", kResampledSr);
     std::fprintf(fp, "  \"runs_per_case\": %d,\n", kRuns);
+    std::fprintf(fp, "  \"hardware_threads\": %u,\n", hardware_threads);
+    std::fprintf(fp, "  \"load_average_before\": %.2f,\n", load_before);
+    std::fprintf(fp, "  \"load_average_after\": %.2f,\n", load_average());
     std::fprintf(fp, "  \"timing_source\": \"chrono::steady_clock (C++ internal)\",\n");
     std::fprintf(fp, "  \"full_analysis_ms\": %.2f,\n", full_ms);
     std::fprintf(fp, "  \"full_analysis_with_cancel_callback_ms\": %.2f,\n",

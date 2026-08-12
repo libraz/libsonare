@@ -7,6 +7,20 @@ target_include_directories(sonare_bench PRIVATE
   ${PROJECT_SOURCE_DIR}/src
 )
 
+if(EMSCRIPTEN)
+  # The same benchmark, built for WebAssembly, so the browser cost of the
+  # threaded paths (HPSS, pYIN) can be stated rather than described. NODERAWFS
+  # lets the binary open the fixture WAV by path under Node exactly as the
+  # native build does, keeping the two runs comparable.
+  target_link_options(sonare_bench PRIVATE
+    -sNODERAWFS=1
+    -sALLOW_MEMORY_GROWTH=1
+    -sINITIAL_MEMORY=536870912
+    -sEXIT_RUNTIME=1
+    -sSTACK_SIZE=8388608
+  )
+endif()
+
 if(BUILD_ARRANGEMENT)
   add_executable(sonare_piano_voice_bench piano_voice_bench.cpp)
   target_link_libraries(sonare_piano_voice_bench PRIVATE sonare_midi)
