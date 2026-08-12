@@ -529,7 +529,10 @@ PitchResult pyin(const Audio& audio, const PitchConfig& config) {
                    config.hop_length / sr));
   const int transition_width = max_semitones_per_frame * bins_per_semitone + 1;
   const int transition_half = transition_width / 2;
-  std::vector<std::vector<std::pair<int, double>>> pitch_transitions(
+  // Transition weights are stored as logarithms. The Viterbi update below visits every
+  // (frame, prev_state, voicing, transition) tuple, so taking the log here costs one call per
+  // (prev_bin, curr_bin) pair instead of one per inner-loop iteration.
+  std::vector<std::vector<std::pair<int, double>>> pitch_log_transitions(
       static_cast<size_t>(n_pitch_bins));
   for (int prev_bin = 0; prev_bin < n_pitch_bins; ++prev_bin) {
     double norm = 0.0;
@@ -541,9 +544,13 @@ PitchResult pyin(const Audio& audio, const PitchConfig& config) {
     for (int curr_bin = begin; curr_bin <= end; ++curr_bin) {
       const double weight =
           static_cast<double>(transition_half + 1 - std::abs(curr_bin - prev_bin));
-      pitch_transitions[static_cast<size_t>(prev_bin)].push_back({curr_bin, weight / norm});
+      pitch_log_transitions[static_cast<size_t>(prev_bin)].push_back(
+          {curr_bin, std::log(weight / norm)});
     }
   }
+  // Voicing only ever stays or switches, so the two log probabilities are constants.
+  const double log_stay_prob = std::log(1.0 - kSwitchProb);
+  const double log_switch_prob = std::log(kSwitchProb);
 
   // Flat row-major [n_frames x n_states] for Viterbi log-likelihoods and backpointers.
   // Row-major matches the forward update (sweeps curr_state for fixed i), the per-frame
@@ -568,12 +575,13 @@ PitchResult pyin(const Audio& audio, const PitchConfig& config) {
       const bool prev_voiced = prev_state < n_pitch_bins;
       const int prev_bin = prev_state % n_pitch_bins;
       for (bool curr_voiced : {true, false}) {
-        const double switch_prob = prev_voiced == curr_voiced ? (1.0 - kSwitchProb) : kSwitchProb;
+        const double base =
+            previous + (prev_voiced == curr_voiced ? log_stay_prob : log_switch_prob);
         const int state_offset = curr_voiced ? 0 : n_pitch_bins;
-        for (const auto& [curr_bin, pitch_prob] :
-             pitch_transitions[static_cast<size_t>(prev_bin)]) {
+        for (const auto& [curr_bin, log_pitch_prob] :
+             pitch_log_transitions[static_cast<size_t>(prev_bin)]) {
           const int curr_state = state_offset + curr_bin;
-          const double score = previous + std::log(switch_prob) + std::log(pitch_prob);
+          const double score = base + log_pitch_prob;
           const size_t curr_idx = obs_idx(i, curr_state);
           if (score > viterbi[curr_idx]) {
             viterbi[curr_idx] = score;
