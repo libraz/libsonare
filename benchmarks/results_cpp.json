@@ -4,45 +4,28 @@
   "source_sample_rate": 44100,
   "resampled_sample_rate": 22050,
   "runs_per_case": 3,
+  "hardware_threads": 18,
+  "load_average_before": 3.33,
+  "load_average_after": 5.16,
   "timing_source": "chrono::steady_clock (C++ internal)",
-  "full_analysis_ms": 674.05,
+  "full_analysis_ms": 1247.05,
+  "full_analysis_with_cancel_callback_ms": 1237.67,
   "per_feature_standalone": [
-    {"feature": "STFT", "libsonare_ms": 13.85},
-    {"feature": "Mel Spectrogram", "libsonare_ms": 23.01},
-    {"feature": "HPSS", "libsonare_ms": 89.35},
-    {"feature": "Onset Strength", "libsonare_ms": 23.54},
-    {"feature": "Chroma", "libsonare_ms": 15.36},
-    {"feature": "Beat Track", "libsonare_ms": 23.77},
-    {"feature": "MFCC", "libsonare_ms": 23.82},
-    {"feature": "pYIN", "libsonare_ms": 474.22},
-    {"feature": "Spectral Centroid", "libsonare_ms": 16.54}
+    {"feature": "STFT", "libsonare_ms": 13.93},
+    {"feature": "Mel Spectrogram", "libsonare_ms": 23.31},
+    {"feature": "HPSS", "libsonare_ms": 99.61},
+    {"feature": "Onset Strength", "libsonare_ms": 23.68},
+    {"feature": "Chroma", "libsonare_ms": 15.61},
+    {"feature": "Beat Track", "libsonare_ms": 57.95},
+    {"feature": "MFCC", "libsonare_ms": 24.05},
+    {"feature": "pYIN", "libsonare_ms": 1644.89},
+    {"feature": "Spectral Centroid", "libsonare_ms": 19.24}
   ],
   "per_feature_cached": [
-    {"feature": "Mel Spectrogram", "libsonare_ms": 9.20},
+    {"feature": "Mel Spectrogram", "libsonare_ms": 9.02},
     {"feature": "Onset Strength", "libsonare_ms": 0.48},
-    {"feature": "Chroma", "libsonare_ms": 1.12},
-    {"feature": "MFCC", "libsonare_ms": 0.77},
-    {"feature": "Spectral Centroid", "libsonare_ms": 0.42}
-  ],
-  "eq_processor": {
-    "sample_rate": 48000,
-    "channels": 2,
-    "block_samples": 256,
-    "runs": 7,
-    "iterations_per_run": 2000,
-    "static_24_band_ms": 0.053980,
-    "dynamic_8_band_ms": 0.029739,
-    "linear_phase_4_band_ms": 0.008556,
-    "linear_phase_latency_samples": 256
-  },
-  "mixing_channel_strip": {
-    "sample_rate": 48000,
-    "channels": 2,
-    "block_samples": 256,
-    "runs": 7,
-    "iterations_per_run": 2000,
-    "strip_8_metered_ms": 0.153159,
-    "strip_32_metered_ms": 0.606190,
-    "strip_32_compressor_insert_metered_ms": 0.682666
-  }
+    {"feature": "Chroma", "libsonare_ms": 1.09},
+    {"feature": "MFCC", "libsonare_ms": 0.92},
+    {"feature": "Spectral Centroid", "libsonare_ms": 2.82}
+  ]
 }
