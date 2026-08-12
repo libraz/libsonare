@@ -119,9 +119,9 @@ int main(int argc, char** argv) {
                  hardware_threads);
     if (hardware_threads > 0 && load_before > hardware_threads * 0.25) {
       std::fprintf(stderr,
-                   "WARNING: the machine is already busy. The threaded paths (HPSS, pYIN,\n"
-                   "         full analyze) will be several times slower than on an idle\n"
-                   "         machine. Do not publish this run.\n");
+                   "WARNING: the machine is already busy. HPSS and full analyze run on\n"
+                   "         several threads and lose the most under contention, but every\n"
+                   "         case inflates. Do not publish this run.\n");
     }
   }
   std::fprintf(stderr, "\n");

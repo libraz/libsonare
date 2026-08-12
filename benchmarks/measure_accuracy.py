@@ -27,7 +27,7 @@ not predict accuracy on real recordings, which needs an annotated corpus of
 real music this repository does not ship.
 
 Usage:
-    python3 benchmarks/measure_accuracy.py [--cli build-release/bin/sonare]
+    python3 benchmarks/measure_accuracy.py [--cli build-release/bin/sonare-cli]
 """
 
 from __future__ import annotations
@@ -41,7 +41,7 @@ from pathlib import Path
 from typing import Any
 
 REPOSITORY_ROOT = Path(__file__).resolve().parents[1]
-DEFAULT_CLI = REPOSITORY_ROOT / "build-release" / "bin" / "sonare"
+DEFAULT_CLI = REPOSITORY_ROOT / "build-release" / "bin" / "sonare-cli"
 DEFAULT_FIXTURE = REPOSITORY_ROOT / "benchmarks" / "fixtures" / "bench_73s_44100.wav"
 
 # The window mir_eval uses for beat tracking. A beat is credited when it lands

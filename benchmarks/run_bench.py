@@ -19,6 +19,7 @@ from __future__ import annotations
 
 import importlib.metadata
 import json
+import os
 import shutil
 import statistics
 import subprocess
@@ -34,6 +35,17 @@ MERGED_RESULTS = Path(__file__).parent / "results.json"
 
 RUNS = 3
 RESAMPLED_SR = 22050
+
+# A run is treated as contended past this fraction of the machine's threads.
+# Matches the threshold sonare_bench applies to the C++ half of the table.
+BUSY_LOAD_FRACTION = 0.25
+
+
+def _load_average() -> float:
+    try:
+        return os.getloadavg()[0]
+    except (OSError, AttributeError):
+        return -1.0
 
 
 def _bench(fn: Callable[[], object], runs: int = RUNS) -> float:
@@ -62,7 +74,18 @@ def main() -> None:
 
     y, _ = librosa.load(str(FIXTURE), sr=RESAMPLED_SR, mono=True)
     print(f"fixture: {FIXTURE.name} (resampled to {RESAMPLED_SR} Hz, {len(y)} samples)")
-    print(f"runs per case: {RUNS}\n")
+    print(f"runs per case: {RUNS}")
+
+    hardware_threads = os.cpu_count() or 0
+    load_before = _load_average()
+    print(f"load average before: {load_before:.2f} ({hardware_threads} hardware threads)")
+    if hardware_threads > 0 and load_before > hardware_threads * BUSY_LOAD_FRACTION:
+        print(
+            "WARNING: the machine is already busy. librosa's HPSS and pYIN are the\n"
+            "         cases that inflate most under contention, which quietly changes\n"
+            "         the published speedups. Do not publish this run."
+        )
+    print()
 
     cases: dict[str, Callable[[], object]] = {
         "STFT": lambda: librosa.stft(y, n_fft=2048, hop_length=512),
@@ -132,6 +155,9 @@ def main() -> None:
             "time.perf_counter around the Python call."
         ),
         "librosa_version": librosa.__version__,
+        "hardware_threads": hardware_threads,
+        "load_average_before": round(load_before, 2),
+        "load_average_after": round(_load_average(), 2),
         "full_analysis": {
             "libsonare_ms": round(libsonare_full_ms, 2),
             "bpm_detector_comprehensive_ms": (

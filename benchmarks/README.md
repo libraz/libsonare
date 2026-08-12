@@ -107,17 +107,22 @@ The same benchmark builds for WASM, so the browser cost of the threaded paths
 is a measured number rather than a caveat:
 
 ```bash
-cd bindings/wasm
-emcmake cmake -S ../.. -B build-wasm-bench-full -DBUILD_WASM=ON -DBUILD_BENCH=ON \
+# from libsonare repo root — the build directory must stay outside
+# bindings/wasm, whose package.json sets "type": "module". Emscripten emits
+# CommonJS, so a bench built under that package is parsed as ESM and dies on
+# its first require().
+emcmake cmake -S . -B build-wasm-bench -DBUILD_WASM=ON -DBUILD_BENCH=ON \
               -DBUILD_TESTING=OFF -DBUILD_CLI=OFF -DCMAKE_BUILD_TYPE=Release
-cmake --build build-wasm-bench-full --target sonare_bench
-node build-wasm-bench-full/bin/sonare_bench.js \
-     ../../benchmarks/fixtures/bench_73s_44100.wav
+cmake --build build-wasm-bench --target sonare_bench
+node build-wasm-bench/bin/sonare_bench.js benchmarks/fixtures/bench_73s_44100.wav
 ```
 
 Path-based decoding is compiled out of the WASM build, so that target reads the
 fixture into memory and decodes from there. The ingest is outside every timed
 region and both builds measure the same samples.
+
+The WASM build reports one hardware thread and no load average, so it prints no
+busy-machine warning. Check the load yourself before trusting a WASM run.
 
 ## Micro-benchmarks
 
