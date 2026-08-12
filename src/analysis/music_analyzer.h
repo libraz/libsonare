@@ -236,6 +236,7 @@ class MusicAnalyzer {
   std::unique_ptr<MelSpectrogram> mel_spectrogram_;
   std::vector<float> onset_strength_;
   bool onset_strength_computed_ = false;
+  std::vector<float> beat_low_frequency_energy_;
 
   // One-shot flags guarding each lazy initialization so concurrent first-access
   // from multiple threads cannot race on the unique_ptr writes above.
@@ -255,9 +256,16 @@ class MusicAnalyzer {
   std::once_flag harmonic_chroma_once_;
   std::once_flag mel_spectrogram_once_;
   std::once_flag onset_strength_once_;
+  std::once_flag beat_low_frequency_energy_once_;
 
   /// @brief Returns cached onset strength, computing if needed.
   const std::vector<float>& onset_strength();
+
+  /// @brief Returns beat-local low-frequency energy, computing if needed.
+  /// @details Filtering the whole signal is the dominant cost of downbeat
+  ///          refinement, and both refinement passes see the same beats and the
+  ///          same audio, so the observations are computed once and reused.
+  const std::vector<float>& beat_low_frequency_energy();
 
   /// @brief Returns harmonic-only chroma for chord/key detection.
   const Chroma& harmonic_chroma();

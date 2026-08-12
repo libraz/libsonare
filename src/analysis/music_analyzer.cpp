@@ -99,8 +99,7 @@ BeatAnalyzer& MusicAnalyzer::beat_analyzer() {
     // Use cached onset strength to avoid recomputation
     beat_analyzer_ = std::make_unique<BeatAnalyzer>(onset_strength(), analysis_sr_,
                                                     config_.hop_length, beat_config);
-    beat_analyzer_->refine_downbeats(
-        low_frequency_energy_observations(beat_analyzer_->beats(), analysis_audio_));
+    beat_analyzer_->refine_downbeats(beat_low_frequency_energy());
   });
   return *beat_analyzer_;
 }
@@ -138,8 +137,7 @@ ChordAnalyzer& MusicAnalyzer::chord_analyzer() {
     }
     const auto chord_changes =
         chord_change_observations(beat_analyzer_->beats(), chord_analyzer_->chords());
-    beat_analyzer_->refine_downbeats(
-        low_frequency_energy_observations(beat_analyzer_->beats(), analysis_audio_), chord_changes);
+    beat_analyzer_->refine_downbeats(beat_low_frequency_energy(), chord_changes);
   });
   return *chord_analyzer_;
 }
@@ -347,6 +345,14 @@ const std::vector<float>& MusicAnalyzer::onset_strength() {
     onset_strength_computed_ = true;
   });
   return onset_strength_;
+}
+
+const std::vector<float>& MusicAnalyzer::beat_low_frequency_energy() {
+  std::call_once(beat_low_frequency_energy_once_, [this]() {
+    beat_low_frequency_energy_ =
+        low_frequency_energy_observations(beat_analyzer_->beats(), analysis_audio_);
+  });
+  return beat_low_frequency_energy_;
 }
 
 void MusicAnalyzer::precompute_features() {
