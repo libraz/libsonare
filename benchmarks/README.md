@@ -18,9 +18,10 @@ benchmarks/
 ├── mastering_support_bench.cpp       # shared mastering DSP utilities (BUILD_MASTERING)
 ├── mastering_stereo_bench.cpp        # stereo width / M-S processors (BUILD_MASTERING)
 ├── pyproject.toml                    # rye-managed env (librosa 0.11.0 pinned)
-├── generate_audio.py                 # synthesises fixtures/bench_73s_44100.wav
+├── generate_audio.py                 # synthesises the fixture + its ground truth
 ├── run_bench.py                      # times librosa + merges C++ results into results.json
-├── fixtures/                         # generated audio (gitignored)
+├── measure_accuracy.py               # scores the analyzers against the ground truth
+├── fixtures/                         # generated audio + ground truth (gitignored)
 ├── results_cpp.json                  # C++-side measurements (from sonare_bench)
 └── results.json                      # merged librosa + libsonare numbers used by the homepage
 ```
@@ -68,6 +69,56 @@ rye run --pyproject benchmarks/pyproject.toml python benchmarks/run_bench.py
 on different hardware and the relative gaps stay stable; absolute times scale
 with the machine.
 
+### Do not publish a run from a busy machine
+
+`sonare_bench` records the one-minute load average before and after the run and
+warns when the machine was already busy. The threaded paths take every core
+they can get, so a contended machine inflates HPSS, pYIN and the full pipeline
+several-fold while every other line still looks plausible. The recorded
+`load_average_before` / `load_average_after` in `results_cpp.json` is what makes
+a published number checkable rather than merely asserted.
+
+## Accuracy
+
+Timings say how fast an answer arrives, not whether it is right. The fixture is
+synthesised from an explicit tempo, beat grid, chord progression and key, and
+`generate_audio.py` writes that description to
+`fixtures/bench_73s_44100.groundtruth.json` — derived from the same constants
+that drive the synthesis, so it cannot drift from the audio.
+
+```bash
+# needs a CLI build (BUILD_CLI=ON)
+rye run --pyproject benchmarks/pyproject.toml python benchmarks/generate_audio.py
+python3 benchmarks/measure_accuracy.py --cli build-release/bin/sonare
+```
+
+Scored: tempo error (with the MIREX 4% convention), beat F-measure at the
+standard ±70 ms tolerance, frame-wise chord agreement on root and on
+root+quality, and key with the relative major/minor counted separately.
+
+This is a floor, not a benchmark. Synthetic audio has no performance timing,
+no timbral ambiguity and no production; a good score means the analyzers
+recover a signal built to be recoverable. Accuracy on real recordings needs an
+annotated corpus this repository does not ship.
+
+## WebAssembly
+
+The same benchmark builds for WASM, so the browser cost of the threaded paths
+is a measured number rather than a caveat:
+
+```bash
+cd bindings/wasm
+emcmake cmake -S ../.. -B build-wasm-bench-full -DBUILD_WASM=ON -DBUILD_BENCH=ON \
+              -DBUILD_TESTING=OFF -DBUILD_CLI=OFF -DCMAKE_BUILD_TYPE=Release
+cmake --build build-wasm-bench-full --target sonare_bench
+node build-wasm-bench-full/bin/sonare_bench.js \
+     ../../benchmarks/fixtures/bench_73s_44100.wav
+```
+
+Path-based decoding is compiled out of the WASM build, so that target reads the
+fixture into memory and decodes from there. The ingest is outside every timed
+region and both builds measure the same samples.
+
 ## Micro-benchmarks
 
 The additional `*_bench.cpp` binaries are standalone micro-benchmarks for
@@ -106,5 +157,5 @@ rye run --pyproject benchmarks/pyproject.toml python -m pip install \
 - The synthetic fixture is deterministic but minimal — real music will exercise
   more code paths (e.g. richer chord detection); absolute timings drift a little
   but the relative gaps are robust.
-- WASM is single-threaded, so the HPSS / pYIN speedups shrink there. The
-  full-pipeline win persists.
+- WASM is single-threaded, so the HPSS / pYIN speedups shrink there. Build the
+  WASM bench above rather than guessing at how much.
