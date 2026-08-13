@@ -3,10 +3,12 @@
 
 #include "util/math_utils.h"
 
+#include <algorithm>
 #include <catch2/catch_test_macros.hpp>
 #include <catch2/matchers/catch_matchers_floating_point.hpp>
 #include <cmath>
 #include <cstddef>
+#include <limits>
 #include <vector>
 
 #include "rt/polyphase_fir.h"
@@ -71,6 +73,68 @@ TEST_CASE("percentile clamps out-of-range p to [0, 100]", "[math_utils][edge]") 
   // without reading out of bounds of the sorted buffer.
   REQUIRE_THAT(percentile(data.data(), data.size(), -5.0f), WithinAbs(1.0f, 1e-6f));
   REQUIRE_THAT(percentile(data.data(), data.size(), 150.0f), WithinAbs(5.0f, 1e-6f));
+}
+
+TEST_CASE("percentile_sorted interpolates between bracketing ranks", "[math_utils][percentile]") {
+  // numpy.percentile's default 'linear' interpolation on the fractional rank
+  // percentile * (size - 1).
+  const std::vector<float> data = {10.0f, 20.0f, 30.0f, 40.0f, 50.0f};
+  REQUIRE_THAT(percentile_sorted(data, 0.0), WithinAbs(10.0, 1e-12));
+  REQUIRE_THAT(percentile_sorted(data, 1.0), WithinAbs(50.0, 1e-12));
+  REQUIRE_THAT(percentile_sorted(data, 0.5), WithinAbs(30.0, 1e-12));
+  // rank 0.10 * 4 = 0.4 -> 10 + 0.4 * (20 - 10)
+  REQUIRE_THAT(percentile_sorted(data, 0.10), WithinAbs(14.0, 1e-12));
+  // rank 0.95 * 4 = 3.8 -> 40 + 0.8 * (50 - 40)
+  REQUIRE_THAT(percentile_sorted(data, 0.95), WithinAbs(48.0, 1e-12));
+}
+
+TEST_CASE("percentile_sorted handles degenerate distributions", "[math_utils][percentile][edge]") {
+  REQUIRE_THAT(percentile_sorted({}, 0.5), WithinAbs(0.0, 1e-12));
+  REQUIRE_THAT(percentile_sorted({7.0f}, 0.0), WithinAbs(7.0, 1e-12));
+  REQUIRE_THAT(percentile_sorted({7.0f}, 1.0), WithinAbs(7.0, 1e-12));
+  // Out-of-range fractions clamp instead of indexing past the ends.
+  const std::vector<float> data = {1.0f, 2.0f, 3.0f};
+  REQUIRE_THAT(percentile_sorted(data, -1.0), WithinAbs(1.0, 1e-12));
+  REQUIRE_THAT(percentile_sorted(data, 2.0), WithinAbs(3.0, 1e-12));
+}
+
+TEST_CASE("percentile_sorted returns an exact rank without blending its neighbour",
+          "[math_utils][percentile][edge]") {
+  // These distributions carry dB values and a silent window is -inf. When the
+  // fractional rank lands exactly on an element, that element must be returned
+  // directly: blending it with an infinite neighbour at weight zero yields
+  // inf * 0 == NaN, which is how a range metric silently becomes NaN.
+  const float inf = std::numeric_limits<float>::infinity();
+  const std::vector<float> low_silence = {-inf, -inf, -20.0f, -10.0f};
+  // rank 0.0 * 3 = 0 -> exactly sorted[0], neighbour is also -inf.
+  const double low = percentile_sorted(low_silence, 0.0);
+  CAPTURE(low);
+  REQUIRE(!std::isnan(low));
+  REQUIRE(low == -static_cast<double>(inf));
+
+  const std::vector<float> high_silence = {-10.0f, -20.0f, inf};
+  // rank 1.0 * 2 = 2 -> exactly sorted[2].
+  const double high = percentile_sorted(high_silence, 1.0);
+  CAPTURE(high);
+  REQUIRE(!std::isnan(high));
+}
+
+TEST_CASE("percentile agrees with the shared percentile_sorted kernel",
+          "[math_utils][percentile]") {
+  // percentile() is the [0, 100]-scaled, self-sorting entry point. It must not
+  // carry its own copy of the interpolation: the two are pinned together here so
+  // a divergent reimplementation fails rather than drifting silently.
+  const std::vector<float> unsorted = {5.0f, -3.0f, 12.5f, 0.25f, 7.0f, -1.0f, 9.5f};
+  std::vector<float> sorted = unsorted;
+  std::sort(sorted.begin(), sorted.end());
+
+  for (double fraction : {0.0, 0.05, 0.10, 0.25, 0.5, 0.75, 0.95, 1.0}) {
+    const float via_percentile =
+        percentile(unsorted.data(), unsorted.size(), static_cast<float>(fraction * 100.0));
+    const float via_kernel = static_cast<float>(percentile_sorted(sorted, fraction));
+    CAPTURE(fraction, via_percentile, via_kernel);
+    REQUIRE_THAT(via_percentile, WithinAbs(via_kernel, 1e-6f));
+  }
 }
 
 TEST_CASE("next_power_of_2", "[math_utils]") {

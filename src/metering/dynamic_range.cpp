@@ -25,16 +25,6 @@ float rms_db_for_window(const float* data, size_t start, size_t length, float fl
   return std::max(floor_db, linear_to_db(window_rms));
 }
 
-float percentile_sorted(const std::vector<float>& sorted, float percentile) {
-  if (sorted.empty()) return 0.0f;
-  const float position = std::clamp(percentile, 0.0f, 1.0f) * static_cast<float>(sorted.size() - 1);
-  const size_t low = static_cast<size_t>(std::floor(position));
-  const size_t high = static_cast<size_t>(std::ceil(position));
-  if (low == high) return sorted[low];
-  const float frac = position - static_cast<float>(low);
-  return sorted[low] * (1.0f - frac) + sorted[high] * frac;
-}
-
 }  // namespace
 
 void validate_dynamic_range_config(const DynamicRangeConfig& config) {
@@ -100,8 +90,8 @@ DynamicRangeResult dynamic_range(const Audio& audio, const DynamicRangeConfig& c
 
   std::vector<float> sorted = result.window_rms_db;
   std::sort(sorted.begin(), sorted.end());
-  result.low_percentile_db = percentile_sorted(sorted, config.low_percentile);
-  result.high_percentile_db = percentile_sorted(sorted, config.high_percentile);
+  result.low_percentile_db = static_cast<float>(percentile_sorted(sorted, config.low_percentile));
+  result.high_percentile_db = static_cast<float>(percentile_sorted(sorted, config.high_percentile));
   result.dynamic_range_db = result.high_percentile_db - result.low_percentile_db;
   return result;
 }

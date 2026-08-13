@@ -121,6 +121,16 @@ std::vector<float> unnormalized_autocorrelation(const float* input, size_t n, si
   return out;
 }
 
+double percentile_sorted(const std::vector<float>& sorted, double percentile) {
+  if (sorted.empty()) return 0.0;
+  const double position = std::clamp(percentile, 0.0, 1.0) * static_cast<double>(sorted.size() - 1);
+  const size_t low = static_cast<size_t>(std::floor(position));
+  const size_t high = static_cast<size_t>(std::ceil(position));
+  if (low == high) return static_cast<double>(sorted[low]);
+  const double frac = position - static_cast<double>(low);
+  return static_cast<double>(sorted[low]) * (1.0 - frac) + static_cast<double>(sorted[high]) * frac;
+}
+
 float percentile(const float* data, size_t size, float p) {
   if (size == 0) return 0.0f;
 
@@ -128,14 +138,10 @@ float percentile(const float* data, size_t size, float p) {
   std::sort(sorted.begin(), sorted.end());
 
   // Clamp the requested percentile to [0, 100]. Out-of-range p would scale to a
-  // fractional index outside [0, size-1], reading out of bounds of `sorted`.
-  p = std::clamp(p, 0.0f, 100.0f);
-  float idx = (p / 100.0f) * (size - 1);
-  size_t lo = static_cast<size_t>(idx);
-  size_t hi = std::min(lo + 1, size - 1);
-  float frac = idx - lo;
-
-  return sorted[lo] * (1.0f - frac) + sorted[hi] * frac;
+  // fractional rank outside [0, size-1]; percentile_sorted clamps the fraction,
+  // so the division below cannot produce an out-of-range rank.
+  return static_cast<float>(
+      percentile_sorted(sorted, static_cast<double>(std::clamp(p, 0.0f, 100.0f)) / 100.0));
 }
 
 void power_to_db(const float* power, size_t n, float ref, float amin, float top_db, float* out) {

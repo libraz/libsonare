@@ -246,23 +246,6 @@ float max_or_silence(const std::vector<float>& values) {
                         : *std::max_element(values.begin(), values.end());
 }
 
-// Interpolated percentile on an ascending-sorted vector: linear interpolation
-// between the bracketing ranks, matching dynamic_range.cpp's percentile_sorted
-// so the two windowed-distribution range metrics stay consistent. The previous
-// nearest-rank (floor) selection collapsed the 10th and 95th percentiles onto
-// the same sample for very small block counts -- e.g. exactly 2 gated blocks
-// gave low_index == high_index == 0 and thus LRA 0 LU even when the two
-// short-term values differed by many LU (metering#1).
-double percentile_sorted(const std::vector<float>& sorted, double percentile) {
-  if (sorted.empty()) return 0.0;
-  const double position = std::clamp(percentile, 0.0, 1.0) * static_cast<double>(sorted.size() - 1);
-  const size_t low = static_cast<size_t>(std::floor(position));
-  const size_t high = static_cast<size_t>(std::ceil(position));
-  if (low == high) return static_cast<double>(sorted[low]);
-  const double frac = position - static_cast<double>(low);
-  return static_cast<double>(sorted[low]) * (1.0 - frac) + static_cast<double>(sorted[high]) * frac;
-}
-
 float short_term_overlap_for(int sample_rate, float duration_sec) {
   if (sample_rate <= 0 || duration_sec <= 0.0f) return 0.0f;
   const float block = duration_sec * static_cast<float>(sample_rate);
@@ -373,6 +356,11 @@ float lra_from_short_term_blocks(const std::vector<float>& short_term_lufs) {
   if (gated.size() < 2) return 0.0f;
 
   std::sort(gated.begin(), gated.end());
+  // Interpolated, not nearest-rank: with only a handful of gated blocks a
+  // nearest-rank selection collapses the 10th and 95th percentiles onto the
+  // same sample and reports 0 LU even when the short-term values differ by
+  // many LU. percentile_sorted is shared with the dynamic-range metrics so the
+  // two windowed-distribution ranges cannot drift apart.
   const double low = percentile_sorted(gated, 0.10);
   const double high = percentile_sorted(gated, 0.95);
   return static_cast<float>(high - low);

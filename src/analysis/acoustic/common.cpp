@@ -8,6 +8,7 @@
 #include "core/fft.h"
 #include "core/window.h"
 #include "util/db.h"
+#include "util/math_utils.h"
 
 namespace sonare::acoustic_detail {
 
@@ -95,19 +96,14 @@ FrameEnergy compute_frame_energy(const float* samples, size_t size, int sample_r
 }
 
 float percentile(std::vector<float> values, float q) {
+  // The acoustic estimators treat an empty distribution as "not measurable"
+  // rather than zero, so the empty case is this overload's own; the
+  // interpolation itself is the shared definition.
   if (values.empty()) {
     return nan_value();
   }
-  q = std::clamp(q, 0.0f, 1.0f);
   std::sort(values.begin(), values.end());
-  const float position = q * static_cast<float>(values.size() - 1);
-  const auto lower = static_cast<size_t>(std::floor(position));
-  const auto upper = static_cast<size_t>(std::ceil(position));
-  if (lower == upper) {
-    return values[lower];
-  }
-  const float weight = position - static_cast<float>(lower);
-  return values[lower] * (1.0f - weight) + values[upper] * weight;
+  return static_cast<float>(percentile_sorted(values, static_cast<double>(q)));
 }
 
 // O(n) average percentile using std::nth_element on a mutable buffer.

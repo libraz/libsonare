@@ -10,6 +10,7 @@
 #include <vector>
 
 #include "util/constants.h"
+#include "util/math_utils.h"
 
 using namespace sonare;
 using Catch::Matchers::WithinAbs;
@@ -271,4 +272,34 @@ TEST_CASE("DynamicsAnalyzer accessors", "[dynamics_analyzer]") {
   REQUIRE_THAT(analyzer.crest_factor(), WithinAbs(analyzer.dynamics().crest_factor, 0.001f));
   REQUIRE_THAT(analyzer.dynamic_range_db(),
                WithinAbs(analyzer.dynamics().dynamic_range_db, 0.001f));
+}
+
+TEST_CASE("DynamicsAnalyzer dynamic range comes from the shared percentile kernel",
+          "[dynamics_analyzer][percentile]") {
+  // Same tie as the metering-side check: the analyzer's dynamic range must be
+  // the shared percentile definition applied to the analyzer's own reported
+  // loudness curve, so a private reimplementation of the interpolation fails
+  // here instead of quietly disagreeing with the metering path.
+  const int sr = 22050;
+  const float duration = 2.0f;
+  const auto n_samples = static_cast<size_t>(static_cast<float>(sr) * duration);
+  std::vector<float> samples(n_samples);
+  for (size_t i = 0; i < n_samples; ++i) {
+    const float t = static_cast<float>(i) / static_cast<float>(sr);
+    const float envelope =
+        0.02f + 0.9f * (0.5f + 0.5f * std::sin(sonare::constants::kTwoPi * 0.9f * t));
+    samples[i] = envelope * std::sin(sonare::constants::kTwoPi * 330.0f * t);
+  }
+  const Audio audio = Audio::from_vector(std::move(samples), sr);
+
+  const DynamicsAnalyzer analyzer(audio);
+  const auto& curve = analyzer.loudness_curve();
+  REQUIRE(curve.rms_db.size() >= 4);
+
+  std::vector<float> sorted = curve.rms_db;
+  std::sort(sorted.begin(), sorted.end());
+  const auto expected =
+      static_cast<float>(percentile_sorted(sorted, 0.95) - percentile_sorted(sorted, 0.10));
+  CAPTURE(sorted.size(), analyzer.dynamic_range_db(), expected);
+  REQUIRE_THAT(analyzer.dynamic_range_db(), WithinAbs(expected, 1e-4f));
 }

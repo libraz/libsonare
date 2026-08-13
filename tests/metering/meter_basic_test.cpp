@@ -17,6 +17,7 @@
 #include "metering/waveform.h"
 #include "util/constants.h"
 #include "util/exception.h"
+#include "util/math_utils.h"
 #include "util/resource_limits.h"
 
 using Catch::Matchers::WithinAbs;
@@ -1010,5 +1011,59 @@ TEST_CASE("scope decimation matches a reference inline implementation", "[meter]
   for (size_t i = 0; i < vs.size(); ++i) {
     REQUIRE_THAT(vs[i].mid, WithinAbs(expected[i].mid, 0.0f));
     REQUIRE_THAT(vs[i].side, WithinAbs(expected[i].side, 0.0f));
+  }
+}
+
+TEST_CASE("dynamic_range percentiles come from the shared percentile kernel",
+          "[meter][percentile]") {
+  // The dynamic-range and LUFS loudness-range metrics are required to agree on
+  // what "10th percentile" means. That agreement used to rest on three
+  // hand-synchronized copies of the interpolation; it now rests on one shared
+  // definition, and this pins the metric to it using only public output: the
+  // reported percentiles must equal the shared kernel applied to the metric's
+  // own reported window distribution.
+  const int sr = 8000;
+  const float duration = 4.0f;
+  const auto n_samples = static_cast<size_t>(static_cast<float>(sr) * duration);
+  std::vector<float> samples(n_samples);
+  for (size_t i = 0; i < n_samples; ++i) {
+    const float t = static_cast<float>(i) / static_cast<float>(sr);
+    // Slow amplitude sweep so the window RMS distribution has real spread.
+    const float envelope =
+        0.02f + 0.9f * (0.5f + 0.5f * std::sin(sonare::constants::kTwoPi * 0.37f * t));
+    samples[i] = envelope * std::sin(sonare::constants::kTwoPi * 220.0f * t);
+  }
+  const sonare::Audio audio = sonare::Audio::from_vector(std::move(samples), sr);
+
+  sonare::metering::DynamicRangeConfig config;
+  config.window_sec = 1.0f;
+  config.hop_sec = 0.25f;
+  const auto result = sonare::metering::dynamic_range(audio, config);
+  REQUIRE(result.window_rms_db.size() >= 4);
+
+  std::vector<float> sorted = result.window_rms_db;
+  std::sort(sorted.begin(), sorted.end());
+
+  const auto expected_low =
+      static_cast<float>(sonare::percentile_sorted(sorted, config.low_percentile));
+  const auto expected_high =
+      static_cast<float>(sonare::percentile_sorted(sorted, config.high_percentile));
+  CAPTURE(sorted.size(), result.low_percentile_db, expected_low, result.high_percentile_db,
+          expected_high);
+  REQUIRE_THAT(result.low_percentile_db, WithinAbs(expected_low, 1e-5f));
+  REQUIRE_THAT(result.high_percentile_db, WithinAbs(expected_high, 1e-5f));
+  REQUIRE_THAT(result.dynamic_range_db, WithinAbs(expected_high - expected_low, 1e-5f));
+
+  // ...and the definition must actually interpolate. Where the fractional rank
+  // falls strictly between two distinct samples, a nearest-rank selection would
+  // land on one of them instead of between them.
+  const double rank =
+      static_cast<double>(config.low_percentile) * static_cast<double>(sorted.size() - 1);
+  const auto floor_rank = static_cast<size_t>(std::floor(rank));
+  const auto ceil_rank = static_cast<size_t>(std::ceil(rank));
+  if (floor_rank != ceil_rank && sorted[floor_rank] < sorted[ceil_rank]) {
+    CAPTURE(rank, sorted[floor_rank], sorted[ceil_rank]);
+    REQUIRE(result.low_percentile_db > sorted[floor_rank]);
+    REQUIRE(result.low_percentile_db < sorted[ceil_rank]);
   }
 }

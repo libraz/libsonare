@@ -131,7 +131,33 @@ float median(const float* data, size_t size);
 /// @return Unnormalized autocorrelation values
 std::vector<float> unnormalized_autocorrelation(const float* input, size_t n, size_t max_lag);
 
+/// @brief Linearly interpolated percentile of an ascending-sorted sequence.
+/// @details The single definition of "interpolated percentile" in the codebase.
+///          Every windowed-distribution range metric (LUFS loudness range,
+///          dynamic range, the dynamics analyzer) routes through it, because
+///          those metrics are required to agree on the percentile definition
+///          and separate copies cannot be held to that by review alone.
+///
+///          Matches numpy.percentile's default `linear` interpolation: the
+///          fractional rank `percentile * (size - 1)` is interpolated between
+///          its bracketing ranks. An exact integer rank returns that element
+///          directly instead of blending it with its neighbour at weight zero,
+///          so a neighbouring infinity cannot turn the result into NaN --
+///          relevant here because these distributions carry dB values and a
+///          silent window is -inf.
+///
+///          Accumulation is in double: the float form rounded the two metering
+///          metrics apart in the last ulp even when they were fed the same
+///          distribution.
+/// @param sorted Values in ascending order
+/// @param percentile Fraction in [0, 1]; out-of-range values are clamped
+/// @return Interpolated percentile (0 if empty)
+double percentile_sorted(const std::vector<float>& sorted, double percentile);
+
 /// @brief Computes the p-th percentile.
+/// @details Sorts a copy of @p data and evaluates percentile_sorted(); the
+///          percentile definition itself is shared, only the [0, 100] scale and
+///          the internal sort are this overload's own.
 /// @param data Pointer to data array
 /// @param size Number of elements
 /// @param p Percentile in [0, 100]
