@@ -184,15 +184,7 @@ const char* sonare_error_message(SonareError error);
 ///     sample) record NO message: this returns "" even though the call failed.
 ///     Use sonare_error_message(SonareError) for a human-readable string for ANY
 ///     error code; use this only for the extra detail of exception-path errors.
-///   - EXCEPTION (non-fatal diagnostic): the mixer graph-compile path
-///     (sonare_mixer_compile / sonare_mixer_process_stereo / the lazy compile in
-///     sonare_mixer_from_scene_json) may record a WARNING message on a SUCCESS
-///     return (SONARE_OK) when it detects a likely routing mistake — e.g. an
-///     explicit submix/aux bus that is fed by strips but has no onward connection
-///     to the master (its audio is silently dropped). Check this after a
-///     successful mixer compile to surface such warnings. The message is still
-///     cleared on the next API call on the thread.
-///   - RIR synthesis is another deliberate SUCCESS-return diagnostic path: when
+///   - RIR synthesis is a deliberate SUCCESS-return diagnostic path: when
 ///     @ref sonare_synthesize_rir sets SonareRirSynthResult::has_error, this
 ///     returns its first Error as ``acoustic.code: explanation``.
 /// @return Pointer to a NUL-terminated thread-local message string.
