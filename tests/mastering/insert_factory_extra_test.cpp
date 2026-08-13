@@ -45,6 +45,12 @@ bool ListContains(const std::vector<std::string>& names, const std::string& targ
   return false;
 }
 
+// The base64 helpers exist to feed the convolution reverb an inline IR. Their
+// only call site sits inside the room-simulation block further down, so they
+// carry both of that site's conditions -- ungated they would have no callers
+// whenever either feature is off, which the build rejects as unused functions.
+#if defined(SONARE_WITH_FX) && defined(SONARE_WITH_ACOUSTIC_SIM)
+
 std::string Base64Encode(const std::vector<uint8_t>& bytes) {
   static constexpr char kAlphabet[] =
       "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/";
@@ -92,6 +98,8 @@ std::string F32Base64(std::initializer_list<float> samples) {
   }
   return Base64Encode(bytes);
 }
+
+#endif  // SONARE_WITH_FX && SONARE_WITH_ACOUSTIC_SIM
 
 }  // namespace
 
@@ -566,8 +574,10 @@ TEST_CASE("processor_catalog_json classifies every id consistently with the sour
                     "\"latencySamples\":0,\"tailSamples\":0,\"realtimeCost\":\"low\",") !=
           std::string::npos);
 
+#ifdef SONARE_WITH_FX
   // Velvet's bounded multi-tap work is explicitly distinguishable from a
-  // conventional FDN reverb, so hosts can budget a live processor chain.
+  // conventional FDN reverb, so hosts can budget a live processor chain. Both
+  // are FX-suite processors, so they are only in the catalog when it is built.
   const auto velvet = std::find_if(
       catalog.as_array().begin(), catalog.as_array().end(),
       [](const auto& entry) { return entry["id"].as_string() == "effects.reverb.velvet"; });
@@ -578,6 +588,7 @@ TEST_CASE("processor_catalog_json classifies every id consistently with the sour
       [](const auto& entry) { return entry["id"].as_string() == "effects.reverb.fdn"; });
   REQUIRE(fdn != catalog.as_array().end());
   REQUIRE((*fdn)["realtimeCost"].as_string() == "moderate");
+#endif  // SONARE_WITH_FX
 
   // Realtime-only ids that are absent from processor_names() are still reported.
   if (ListContains(sonare::mastering::api::insert_factory_names(), "effects.reverb.room")) {
@@ -587,6 +598,7 @@ TEST_CASE("processor_catalog_json classifies every id consistently with the sour
   }
 }
 
+#ifdef SONARE_WITH_FX
 TEST_CASE("velvet insert factory bounds excessive reverb time",
           "[mastering][insert_factory][reverb]") {
   auto processor =
@@ -595,6 +607,7 @@ TEST_CASE("velvet insert factory bounds excessive reverb time",
   processor->prepare(48000.0, 512);
   REQUIRE(processor->tail_samples() <= 18 * 48000);
 }
+#endif  // SONARE_WITH_FX
 
 TEST_CASE(
     "channel_policy tags inherently-stereo processors StereoPairOnly and the rest "

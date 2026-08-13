@@ -31,6 +31,11 @@ using sonare::mastering::api::insert_factory_names;
 using sonare::mastering::api::make_insert;
 using sonare::mastering::api::Param;
 
+// Only the creative-FX cases below use these helpers, so they are gated with
+// the same condition. Leaving them ungated makes the -DBUILD_FX=OFF build fail
+// on unused functions; the multiband cases after the guard use neither.
+#if defined(SONARE_WITH_FX) && defined(SONARE_WITH_MASTERING)
+
 bool ListContains(const std::vector<std::string>& names, const std::string& target) {
   return std::find(names.begin(), names.end(), target) != names.end();
 }
@@ -55,9 +60,14 @@ bool all_finite(const std::vector<float>& x) {
   return std::all_of(x.begin(), x.end(), [](float s) { return std::isfinite(s); });
 }
 
+#endif  // SONARE_WITH_FX && SONARE_WITH_MASTERING
+
 }  // namespace
 
-#ifdef SONARE_WITH_FX
+// The creative-FX processors are registered by the FX suite but reached through
+// the mastering insert factory and named-processor registry, so both features
+// must be present for these cases to link.
+#if defined(SONARE_WITH_FX) && defined(SONARE_WITH_MASTERING)
 
 TEST_CASE("effects.reverb.convolution produces a real wet tail from scene params",
           "[effects][reverb][convolution]") {
@@ -174,7 +184,11 @@ TEST_CASE("FX names are registered in the named-processor registry",
   REQUIRE(ListContains(names, "effects.modulation.phaser"));
 }
 
-#endif  // SONARE_WITH_FX
+#endif  // SONARE_WITH_FX && SONARE_WITH_MASTERING
+
+// The multiband processors below are mastering-native rather than FX, so they
+// need only the mastering guard.
+#if defined(SONARE_WITH_MASTERING)
 
 TEST_CASE("multiband.imager accepts a custom crossover with per-band settings",
           "[mastering][multiband][imager]") {
@@ -260,3 +274,5 @@ TEST_CASE("multiband.dynamicEq accepts a custom crossover with per-band dynamic 
   }
   REQUIRE(diff > 1e-4);
 }
+
+#endif  // SONARE_WITH_MASTERING

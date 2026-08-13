@@ -235,13 +235,21 @@ const char* sonare_capability_catalog_json(void) {
 
   json::Object presets;
   presets["mastering"] = newline_name_array(sonare_mastering_preset_names());
+#if defined(SONARE_WITH_ARRANGEMENT)
   presets["synth"] = newline_name_array(sonare_synth_preset_names());
+#else
+  presets["synth"] = json::Array{};
+#endif
 #if defined(SONARE_WITH_MIXING)
   presets["mixingScene"] = newline_name_array(sonare_mixing_scene_preset_names());
 #else
   presets["mixingScene"] = json::Array{};
 #endif
+#if defined(SONARE_WITH_VOICE_CHANGER)
   presets["voiceChanger"] = newline_name_array(sonare_realtime_voice_changer_preset_names());
+#else
+  presets["voiceChanger"] = json::Array{};
+#endif
   catalog["presets"] = std::move(presets);
 
   static thread_local std::string serialized;

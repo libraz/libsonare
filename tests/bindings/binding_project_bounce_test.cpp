@@ -558,6 +558,11 @@ TEST_CASE("deserialize success returns warnings and failed bounce records missin
 
 namespace {
 
+// These helpers serve the channel-strip cases below and nothing else, so they
+// carry the same guard -- ungated they would have no callers under
+// -DBUILD_MIXING=OFF, which the build rejects as unused functions.
+#if defined(SONARE_WITH_MIXING)
+
 // Replaces the first occurrence of `from` in `text` with `to`. REQUIRE-guards
 // that the token was present so a serializer schema change fails loudly here
 // rather than silently skipping the channel-strip wiring.
@@ -585,8 +590,13 @@ SonareProject* deserialize_project(const std::string& json) {
   return project;
 }
 
+#endif  // SONARE_WITH_MIXING
+
 }  // namespace
 
+// Channel-strip rendering only exists when the mixing subsystem is built;
+// without it the bounce has no strip to apply.
+#if defined(SONARE_WITH_MIXING)
 TEST_CASE("bounce renders per-track channel-strip effects", "[project]") {
   // A single MIDI track routed to the built-in synth, bound to a mixer channel
   // strip. Before the fix the bounce dropped the strip entirely; now it renders
@@ -663,8 +673,11 @@ TEST_CASE("bounce renders per-track channel-strip effects", "[project]") {
   REQUIRE(automated_peak > 0.0f);
   REQUIRE(automated_peak < direct_peak * 0.001f);
 }
+#endif  // SONARE_WITH_MIXING
 
-#if defined(SONARE_WITH_MIXING)
+// Both cases below route through effects.delay.stereo / a reverb send preset,
+// so they additionally need the FX suite.
+#if defined(SONARE_WITH_MIXING) && defined(SONARE_WITH_FX)
 TEST_CASE("channel-strip bounce auto-renders mixer insert tails", "[project]") {
   SonareProject* project = nullptr;
   REQUIRE(sonare_project_create(&project) == SONARE_OK);
@@ -786,7 +799,7 @@ TEST_CASE("channel-strip bounce preserves the longest serial send tail", "[proje
   sonare_free_floats(out);
   sonare_project_destroy(project);
 }
-#endif  // defined(SONARE_WITH_MIXING)
+#endif  // defined(SONARE_WITH_MIXING) && defined(SONARE_WITH_FX)
 
 TEST_CASE("channel-strip bounce preserves tail impulse through master latency insert",
           "[project]") {
@@ -918,6 +931,9 @@ TEST_CASE("channel-strip bounce compensates mixer latency for unbound tracks", "
   sonare_project_destroy(project);
 }
 
+// Routes through effects.reverb.plate on the master bus, so it needs the FX
+// suite in addition to the default-on channel-strip mixing path.
+#if defined(SONARE_WITH_MIXING) && defined(SONARE_WITH_FX)
 TEST_CASE("channel-strip bounce routes unbound tracks through master bus effects", "[project]") {
   SonareProject* project = nullptr;
   REQUIRE(sonare_project_create(&project) == SONARE_OK);
@@ -977,7 +993,11 @@ TEST_CASE("channel-strip bounce routes unbound tracks through master bus effects
   sonare_free_floats(out);
   sonare_project_destroy(project);
 }
+#endif  // defined(SONARE_WITH_MIXING) && defined(SONARE_WITH_FX)
 
+// Channel-strip rendering only exists when the mixing subsystem is built;
+// without it the bounce has no strip to apply.
+#if defined(SONARE_WITH_MIXING)
 TEST_CASE("channel-strip bounce solo mutes unbound direct tracks", "[project]") {
   SonareProject* project = nullptr;
   REQUIRE(sonare_project_create(&project) == SONARE_OK);
@@ -1036,6 +1056,7 @@ TEST_CASE("channel-strip bounce solo mutes unbound direct tracks", "[project]") 
   sonare_free_floats(out);
   sonare_project_destroy(project);
 }
+#endif  // SONARE_WITH_MIXING
 
 TEST_CASE("bounce_with_instruments PDC-compensates a latency-bearing instrument", "[project]") {
   SonareProject* project = nullptr;
@@ -1285,6 +1306,9 @@ TEST_CASE("bounce retunes sequential synth notes to each note's pitch, not the f
   sonare_project_destroy(project);
 }
 
+// Channel-strip rendering only exists when the mixing subsystem is built;
+// without it the bounce has no strip to apply.
+#if defined(SONARE_WITH_MIXING)
 TEST_CASE("channel-strip bounce opens at the static fader gain without a first-block ramp",
           "[project]") {
   // Regression for the bounce-settle defect: a strip with a non-default static
@@ -1352,3 +1376,4 @@ TEST_CASE("channel-strip bounce opens at the static fader gain without a first-b
   sonare_free_floats(out);
   sonare_project_destroy(project);
 }
+#endif  // SONARE_WITH_MIXING

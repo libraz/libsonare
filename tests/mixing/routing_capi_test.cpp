@@ -202,6 +202,9 @@ TEST_CASE("C-API mixer reports latency and drains delayed output", "[mixing][cap
   sonare_mixer_destroy(mixer);
 }
 
+// Routes through effects.delay.stereo at every stage, so this case
+// additionally needs the FX suite.
+#if defined(SONARE_WITH_FX)
 TEST_CASE("C-API mixer tail follows the longest audible serial route", "[mixing][capi][tail]") {
   constexpr int kSampleRate = 48000;
   constexpr int kBlock = 64;
@@ -281,6 +284,7 @@ TEST_CASE("C-API mixer tail follows the longest audible serial route", "[mixing]
 
   sonare_mixer_destroy(mixer);
 }
+#endif  // SONARE_WITH_FX
 
 TEST_CASE("C-API mixer drains serial Haas and fractional phase-align tails",
           "[mixing][capi][tail]") {

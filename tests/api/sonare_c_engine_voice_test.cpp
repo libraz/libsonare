@@ -1233,6 +1233,10 @@ TEST_CASE("sonare_engine MIDI CC binding drives engine parameter", "[c_api][engi
   REQUIRE(sonare_engine_push_midi_cc(engine, 0, 0, 0, 33, 0, -1) == SONARE_OK);
   REQUIRE(sonare_engine_process(engine, channels, 1, 64) == SONARE_OK);
   REQUIRE(std::abs(audio[0] - 0.03163f) < 0.002f);
+#elif defined(SONARE_WITH_ARRANGEMENT)
+  // Binding a CC needs only the arrangement subsystem; the block above
+  // additionally needs the graph to observe the bound parameter actually move.
+  REQUIRE(sonare_engine_bind_midi_cc(engine, 0, 74, 7, -60.0f, 0.0f) == SONARE_OK);
 #else
   REQUIRE(sonare_engine_bind_midi_cc(engine, 0, 74, 7, -60.0f, 0.0f) == SONARE_ERROR_NOT_SUPPORTED);
 #endif
@@ -2300,6 +2304,7 @@ TEST_CASE("sonare_realtime_engine_c_api_smoke", "[c_api]") {
   REQUIRE(sonare_engine_automation_lane_count(engine, &lane_count) == SONARE_OK);
   REQUIRE(lane_count == 1);
 
+#if defined(SONARE_WITH_GRAPH)
   SonareEngineGraphNode graph_nodes[3]{};
   std::strncpy(graph_nodes[0].id, "in", sizeof(graph_nodes[0].id) - 1);
   graph_nodes[0].type = 0;
@@ -2356,6 +2361,7 @@ TEST_CASE("sonare_realtime_engine_c_api_smoke", "[c_api]") {
   REQUIRE(sonare_engine_graph_connection_count(engine, &graph_connection_count) == SONARE_OK);
   REQUIRE(graph_node_count == 3);
   REQUIRE(graph_connection_count == 4);
+#endif  // SONARE_WITH_GRAPH
 
   std::array<float, 128> clip_left{};
   std::array<float, 128> clip_right{};
@@ -2394,8 +2400,15 @@ TEST_CASE("sonare_realtime_engine_c_api_smoke", "[c_api]") {
   right.fill(-0.25f);
   float* channels[] = {left.data(), right.data()};
   REQUIRE(sonare_engine_process(engine, channels, 2, 128) == SONARE_OK);
+  // The mixed level depends on whether the routing graph installed above is
+  // part of this build: without it the engine mixes the direct path only.
+#if defined(SONARE_WITH_GRAPH)
   REQUIRE(left[0] == Catch::Approx(0.75f).margin(0.0001f));
   REQUIRE(right[0] == Catch::Approx(-0.75f).margin(0.0001f));
+#else
+  REQUIRE(left[0] == Catch::Approx(0.375f).margin(0.0001f));
+  REQUIRE(right[0] == Catch::Approx(-0.375f).margin(0.0001f));
+#endif
 
   SonareEngineCaptureStatus capture_status{};
   REQUIRE(sonare_engine_capture_status(engine, &capture_status) == SONARE_OK);
@@ -2404,8 +2417,15 @@ TEST_CASE("sonare_realtime_engine_c_api_smoke", "[c_api]") {
   REQUIRE(capture_status.armed == 1);
   REQUIRE(capture_status.source == SONARE_ENGINE_CAPTURE_SOURCE_OUTPUT);
   REQUIRE(capture_status.record_offset_samples == 0);
+  // Capture records the same mixed output asserted above, so it carries the
+  // same build-dependent level.
+#if defined(SONARE_WITH_GRAPH)
   REQUIRE(capture_left[0] == Catch::Approx(0.75f).margin(0.0001f));
   REQUIRE(capture_right[0] == Catch::Approx(-0.75f).margin(0.0001f));
+#else
+  REQUIRE(capture_left[0] == Catch::Approx(0.375f).margin(0.0001f));
+  REQUIRE(capture_right[0] == Catch::Approx(-0.375f).margin(0.0001f));
+#endif
   REQUIRE(sonare_engine_reset_capture(engine) == SONARE_OK);
   REQUIRE(sonare_engine_capture_status(engine, &capture_status) == SONARE_OK);
   REQUIRE(capture_status.captured_frames == 0);
@@ -3115,9 +3135,11 @@ TEST_CASE("sonare_last_error_message", "[c_api]") {
     REQUIRE(sonare_engine_prepare(nullptr, 48000.0, 128, 16, 16) == SONARE_ERROR_INVALID_PARAMETER);
     REQUIRE(std::string(sonare_last_error_message()).empty());
 
+#if defined(SONARE_WITH_ARRANGEMENT)
     record_detailed_error();
     REQUIRE(sonare_project_create(nullptr) == SONARE_ERROR_INVALID_PARAMETER);
     REQUIRE(std::string(sonare_last_error_message()).empty());
+#endif  // defined(SONARE_WITH_ARRANGEMENT)
   }
 
   SECTION("pointer-returning constructors replace stale diagnostics") {
@@ -3127,13 +3149,16 @@ TEST_CASE("sonare_last_error_message", "[c_api]") {
     REQUIRE(sonare_mixer_from_scene_json(nullptr, 48000, 128) == nullptr);
     REQUIRE(std::string(sonare_last_error_message()).find("scene JSON") != std::string::npos);
 #endif  // defined(SONARE_WITH_MIXING)
+#if defined(SONARE_WITH_MASTERING)
     REQUIRE(sonare_eq_create(0.0, 128) == nullptr);
     REQUIRE(std::string(sonare_last_error_message()).find("sample_rate") != std::string::npos);
     REQUIRE(sonare_streaming_mastering_chain_create(nullptr, 1) == nullptr);
     REQUIRE(std::string(sonare_last_error_message()).find("params") != std::string::npos);
+#endif  // defined(SONARE_WITH_MASTERING)
   }
 }
 
+#if defined(SONARE_WITH_MASTERING)
 TEST_CASE("sonare_mastering_insert_param_info reports realtime param descriptors",
           "[c_api][mastering]") {
   // Unknown processor / null name yield an empty JSON array.
@@ -3156,13 +3181,19 @@ TEST_CASE("sonare_mastering_insert_param_info reports realtime param descriptors
   REQUIRE(dat.find("\"unit\":\"referenceSamples@29761Hz\"") != std::string::npos);
   REQUIRE(dat.find("\"rtSafe\":false") != std::string::npos);
 }
+#endif  // defined(SONARE_WITH_MASTERING)
 
 TEST_CASE("sonare_engine_set_track_strip_insert_param_by_name changes reverb mix in realtime",
           "[c_api][engine]") {
+#if defined(SONARE_WITH_MASTERING)
   if (std::string(sonare_mastering_insert_param_info("effects.reverb.fdn")) == "[]") {
     SUCCEED("FX processors not built");
     return;
   }
+#else
+  SUCCEED("mastering support not built");
+  return;
+#endif
   constexpr int kBlock = 256;
   constexpr int kFrames = kBlock * 16;
   constexpr float kPi = 3.14159265358979323846f;

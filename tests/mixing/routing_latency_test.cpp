@@ -5,6 +5,9 @@
 
 #if defined(SONARE_WITH_MIXING) && defined(SONARE_WITH_GRAPH)
 
+// The vocalReverbSend preset routes through a plate reverb return strip, so
+// this case additionally needs the FX suite.
+#if defined(SONARE_WITH_FX)
 TEST_CASE("Routed mixer sends reach the bus and return to master", "[mixing][routing]") {
   // Headline regression: the vocalReverbSend preset routes the vocal strip's
   // post-fader send to the "vocal-verb" aux bus, which feeds the plate-reverb
@@ -60,6 +63,7 @@ TEST_CASE("Routed mixer sends reach the bus and return to master", "[mixing][rou
 
   sonare_mixer_destroy(mixer);
 }
+#endif  // SONARE_WITH_FX
 
 TEST_CASE("Routed mixer compensates plugin latency at the master bus", "[mixing][routing]") {
   // Path taken: C++/graph level (the fallback described in the task).

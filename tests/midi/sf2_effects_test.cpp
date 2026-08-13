@@ -111,6 +111,18 @@ StereoRender render(Sf2Player& player, int num_samples) {
   return out;
 }
 
+float peak(const std::vector<float>& buf, size_t from, size_t to) {
+  float p = 0.0f;
+  to = std::min(to, buf.size());
+  for (size_t i = from; i < to; ++i) p = std::max(p, std::fabs(buf[i]));
+  return p;
+}
+
+// The CC91/93/94 sends below drive the GS effect bus (GsEffectsConfig), which
+// only exists on a build with the FX suite; without it the bus is entirely
+// absent and these sends are no-ops.
+#if defined(SONARE_MIDI_WITH_FX)
+
 float rms(const std::vector<float>& buf, size_t from, size_t to) {
   double acc = 0.0;
   size_t n = 0;
@@ -120,13 +132,6 @@ float rms(const std::vector<float>& buf, size_t from, size_t to) {
     ++n;
   }
   return n > 0 ? static_cast<float>(std::sqrt(acc / static_cast<double>(n))) : 0.0f;
-}
-
-float peak(const std::vector<float>& buf, size_t from, size_t to) {
-  float p = 0.0f;
-  to = std::min(to, buf.size());
-  for (size_t i = from; i < to; ++i) p = std::max(p, std::fabs(buf[i]));
-  return p;
 }
 
 /// Wet-tail energy: play the one-shot burst (program @p prog) with CC91 set
@@ -140,7 +145,11 @@ float reverb_tail_rms(uint8_t cc91, uint8_t prog = 1) {
   return rms(out.left, 4800, 24000) + rms(out.right, 4800, 24000);
 }
 
+#endif  // SONARE_MIDI_WITH_FX
+
 }  // namespace
+
+#if defined(SONARE_MIDI_WITH_FX)
 
 TEST_CASE("GS reverb send is monotonic in CC91", "[midi][sf2][gsfx]") {
   const float dry = reverb_tail_rms(0);
@@ -190,6 +199,8 @@ TEST_CASE("GS chorus send adds wet signal", "[midi][sf2][gsfx]") {
   const float on = early_rms(127);
   REQUIRE(on > off + 1e-4f);
 }
+
+#endif  // SONARE_MIDI_WITH_FX
 
 TEST_CASE("tail_samples covers the effect ring-out", "[midi][sf2][gsfx]") {
   Sf2PlayerConfig with_fx;
@@ -255,6 +266,10 @@ TEST_CASE("per-part insert drive saturates only its part", "[midi][sf2][gsfx]") 
   const StereoRender oth = render(other, 9600);
   REQUIRE(h3(oth.left) < 100.0 * h3(cln.left));
 }
+
+// The kProcessor insert slot routes through mastering::api::make_insert, which
+// only exists on a build with the mastering library.
+#if defined(SONARE_WITH_MASTERING)
 
 TEST_CASE("per-part processor insert runs an injected factory-built effect", "[midi][sf2][gsfx]") {
   auto h3 = [](const std::vector<float>& buf) {
@@ -485,6 +500,8 @@ TEST_CASE("the offline realize_efx_inline path installs EFX without a manual pum
   REQUIRE(h3(efx.left) > 10.0 * h3(cln.left));
 }
 
+#endif  // SONARE_WITH_MASTERING
+
 TEST_CASE("GS effects render bit-identically", "[midi][sf2][gsfx]") {
   auto run = [] {
     Sf2Player player = make_player();
@@ -522,6 +539,8 @@ TEST_CASE("GS effect bus audio path performs no heap allocation", "[midi][sf2][g
   player.process(chans, 2, 512);
   REQUIRE(guard.count() == 0);
 }
+
+#if defined(SONARE_WITH_MASTERING)
 
 TEST_CASE("a live GS EFX swap keeps the audio path allocation-free", "[midi][sf2][gsfx][rt]") {
   // Enable EFX on part 1 (channel 0) and select Overdrive (01 10); Roland DT1
@@ -595,3 +614,5 @@ TEST_CASE("concurrent live GS EFX realises and audio render stay safe",
   control.join();
   SUCCEED();  // reached without a crash / sanitizer diagnostic
 }
+
+#endif  // SONARE_WITH_MASTERING

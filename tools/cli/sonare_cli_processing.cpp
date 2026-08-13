@@ -160,6 +160,13 @@ int cmd_note_stretch(const CliArgs& args, const Audio& audio) {
   return 0;
 }
 
+// The four voice-changer commands below stay registered in the CLI's command
+// table regardless of BUILD_VOICE_CHANGER (see get_commands() in
+// tools/sonare_cli.cpp), so a build without the voice changer must still
+// answer the subcommand -- with a NotImplemented diagnostic mapped to the
+// CLI's not-supported exit code -- instead of failing to link.
+#if defined(SONARE_WITH_VOICE_CHANGER)
+
 int cmd_voice_change(const CliArgs& args, const Audio& audio) {
   if (args.output_file.empty()) {
     std::cerr << color::red << "Error: voice-change requires output file (-o)" << color::reset
@@ -302,6 +309,30 @@ int cmd_voice_preset_validate(const CliArgs& args, const Audio&) {
   std::cout << normalized << "\n";
   return 0;
 }
+
+#else  // !SONARE_WITH_VOICE_CHANGER
+
+int cmd_voice_change(const CliArgs&, const Audio&) {
+  throw sonare::SonareException(sonare::ErrorCode::NotImplemented,
+                                "voice changer support is not compiled in");
+}
+
+int cmd_voice_presets(const CliArgs&, const Audio&) {
+  throw sonare::SonareException(sonare::ErrorCode::NotImplemented,
+                                "voice changer support is not compiled in");
+}
+
+int cmd_voice_preset(const CliArgs&, const Audio&) {
+  throw sonare::SonareException(sonare::ErrorCode::NotImplemented,
+                                "voice changer support is not compiled in");
+}
+
+int cmd_voice_preset_validate(const CliArgs&, const Audio&) {
+  throw sonare::SonareException(sonare::ErrorCode::NotImplemented,
+                                "voice changer support is not compiled in");
+}
+
+#endif  // SONARE_WITH_VOICE_CHANGER
 
 int cmd_hpss(const CliArgs& args, const Audio& audio) {
   if (args.output_file.empty()) {

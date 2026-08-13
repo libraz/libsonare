@@ -210,6 +210,9 @@ TEST_CASE("compile -> offline bounce is deterministic across two renders", "[arr
   REQUIRE(a == c);
 }
 
+// Fader/pan/mute fold into a synthesized channel strip, which only exists when
+// the mixing subsystem is built; without it the compiler emits no bindings.
+#if defined(SONARE_WITH_MIXING)
 TEST_CASE("track gain/pan fold into a synthesized strip, not the clip", "[arrangement]") {
   Fixture f = make_fixture();
   REQUIRE(arr::SetTrackGain(f.track_id, 0.5f).apply(f.project, f.midi));
@@ -252,6 +255,8 @@ TEST_CASE("track mute mutes its strip without dropping the clip", "[arrangement]
   REQUIRE(it != strips.end());
   REQUIRE(it->muted);
 }
+
+#endif  // SONARE_WITH_MIXING
 
 TEST_CASE("a neutral track synthesizes no strip", "[arrangement]") {
   Fixture f = make_fixture();
@@ -1046,6 +1051,10 @@ SharedStripFixture make_shared_strip_fixture() {
   return s;
 }
 
+// Both lookups only serve the shared-strip cases, so they carry that block's
+// guard -- ungated they would have no callers under -DBUILD_MIXING=OFF.
+#if defined(SONARE_WITH_MIXING)
+
 const sonare::mixing::api::Strip& find_strip(const arr::CompiledTimeline& timeline,
                                              const std::string& id) {
   const auto& strips = timeline.mixer.scene.strips;
@@ -1064,8 +1073,13 @@ const sonare::engine::ClipSchedule& find_clip(const arr::CompiledTimeline& timel
   return *it;
 }
 
+#endif  // SONARE_WITH_MIXING
+
 }  // namespace
 
+// Strip sharing is a mixing-graph concept: with mixing off there are no strips
+// to share and no binding for the compiler to fold controls into.
+#if defined(SONARE_WITH_MIXING)
 TEST_CASE("a track's controls never reach a channel strip it shares", "[arrangement]") {
   SECTION("muting one track leaves the other track's contribution untouched") {
     SharedStripFixture s = make_shared_strip_fixture();
@@ -1157,6 +1171,8 @@ TEST_CASE("a track's controls never reach a channel strip it shares", "[arrangem
     }));
   }
 }
+
+#endif  // SONARE_WITH_MIXING
 
 TEST_CASE("the live automation lane set holds one lane per target", "[arrangement]") {
   SharedStripFixture s = make_shared_strip_fixture();

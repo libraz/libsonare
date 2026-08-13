@@ -75,9 +75,14 @@ typedef enum {
   SONARE_MIDI_CC_NRPN = 3
 } SonareMidiCcBindingKind;
 
+/// @brief Wildcard value for SonareMidiCcBinding::channel: match any MIDI
+///        channel. An exact-channel binding takes priority over a wildcard one.
+#define SONARE_MIDI_CC_ANY_CHANNEL 0xFFu
+
 /// @brief MIDI CC <-> automation binding descriptor for pure conversion helpers.
 typedef struct {
   uint8_t cc_number;
+  /// MIDI channel 0-15, or SONARE_MIDI_CC_ANY_CHANNEL to match any channel.
   uint8_t channel;
   uint8_t kind;
   uint8_t cc_lsb_number;

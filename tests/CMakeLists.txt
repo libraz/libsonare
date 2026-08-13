@@ -320,6 +320,21 @@ if(BUILD_PITCH_EDITOR)
   target_compile_definitions(sonare_tests PRIVATE SONARE_WITH_PITCH_EDITOR=1)
 endif()
 
+# The realtime engine C API (api/sonare_c_engine_voice_test.cpp is compiled
+# unconditionally above) has no BUILD_VOICE_CHANGER dependency of its own --
+# each translation unit self-guards its optional features (SONARE_WITH_
+# ARRANGEMENT/MIXING/GRAPH/MASTERING/PITCH_EDITOR) and falls back to a stub
+# otherwise. sonare_engine is already linked unconditionally above, so compile
+# these TUs unconditionally too instead of coupling them to voice-changer.
+target_sources(sonare_tests PRIVATE engine/offline_bounce_golden_test.cpp)
+target_sources(sonare_tests PRIVATE ${PROJECT_SOURCE_DIR}/src/c_api/sonare_c_daw.cpp)
+target_sources(sonare_tests PRIVATE ${PROJECT_SOURCE_DIR}/src/c_api/sonare_c_engine.cpp)
+target_sources(sonare_tests PRIVATE ${PROJECT_SOURCE_DIR}/src/c_api/sonare_c_engine_midi.cpp)
+target_sources(sonare_tests PRIVATE ${PROJECT_SOURCE_DIR}/src/c_api/sonare_c_engine_clips.cpp)
+target_sources(sonare_tests PRIVATE ${PROJECT_SOURCE_DIR}/src/c_api/sonare_c_engine_mixing.cpp)
+target_sources(sonare_tests PRIVATE ${PROJECT_SOURCE_DIR}/src/c_api/sonare_c_engine_capture.cpp)
+target_sources(sonare_tests PRIVATE ${PROJECT_SOURCE_DIR}/src/c_api/sonare_c_engine_render.cpp)
+
 if(BUILD_VOICE_CHANGER)
   target_sources(sonare_tests PRIVATE
     editing/voice_changer_retune_formant_test.cpp
@@ -328,14 +343,6 @@ if(BUILD_VOICE_CHANGER)
     editing/voice_changer_realtime_dsp_test.cpp
     editing/voice_changer_limiter_json_test.cpp
   )
-  target_sources(sonare_tests PRIVATE engine/offline_bounce_golden_test.cpp)
-  target_sources(sonare_tests PRIVATE ${PROJECT_SOURCE_DIR}/src/c_api/sonare_c_daw.cpp)
-  target_sources(sonare_tests PRIVATE ${PROJECT_SOURCE_DIR}/src/c_api/sonare_c_engine.cpp)
-  target_sources(sonare_tests PRIVATE ${PROJECT_SOURCE_DIR}/src/c_api/sonare_c_engine_midi.cpp)
-  target_sources(sonare_tests PRIVATE ${PROJECT_SOURCE_DIR}/src/c_api/sonare_c_engine_clips.cpp)
-  target_sources(sonare_tests PRIVATE ${PROJECT_SOURCE_DIR}/src/c_api/sonare_c_engine_mixing.cpp)
-  target_sources(sonare_tests PRIVATE ${PROJECT_SOURCE_DIR}/src/c_api/sonare_c_engine_capture.cpp)
-  target_sources(sonare_tests PRIVATE ${PROJECT_SOURCE_DIR}/src/c_api/sonare_c_engine_render.cpp)
   target_sources(sonare_tests PRIVATE ${PROJECT_SOURCE_DIR}/src/c_api/sonare_c_voice_changer.cpp)
   target_link_libraries(sonare_tests PRIVATE sonare_voice_changer)
   target_compile_definitions(sonare_tests PRIVATE

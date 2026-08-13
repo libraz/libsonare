@@ -1007,6 +1007,9 @@ TEST_CASE("TrackMixerRuntime surround group bus feeds eq.midSide a 2-plane view"
   REQUIRE(planes[4].back() > 0.9f);
 }
 
+// Requires the FX suite: the shared bus insert is an FDN reverb
+// (effects.reverb.fdn), which make_insert cannot build without it.
+#if defined(SONARE_WITH_FX)
 TEST_CASE("TrackMixerRuntime stages a multi-source rack through a shared bus once per block",
           "[engine][track_mixer]") {
   using Catch::Approx;
@@ -1089,6 +1092,7 @@ TEST_CASE("TrackMixerRuntime stages a multi-source rack through a shared bus onc
   // Sanity: the bus + dry path actually produced signal (not an all-silent match).
   REQUIRE(total_energy > 0.0f);
 }
+#endif  // SONARE_WITH_FX
 
 TEST_CASE("TrackMixerRuntime applies a bus input trim to its output", "[engine][track_mixer]") {
   constexpr int kBlock = 64;

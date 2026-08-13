@@ -32,7 +32,6 @@ using sonare::midi::synth::Sf2PlayerConfig;
 using sonare::test::Sf2Builder;
 
 constexpr double kOutRate = 48000.0;
-constexpr double kTwoPi = 6.28318530717958647692;
 
 // GS SysEx (Roland DT1, framed) shared with tests/midi/sf2_effects_test.cpp:
 // enable EFX on part 1 (channel 0), select Overdrive (01 10), set OD Drive
@@ -45,6 +44,10 @@ constexpr uint8_t kOdDrive[] = {0xF0, 0x41, 0x10, 0x42, 0x12, 0x40, 0x03, 0x04, 
 constexpr uint8_t kChorusType[] = {0xF0, 0x41, 0x10, 0x42, 0x12, 0x40,
                                    0x03, 0x00, 0x01, 0x42, 0x7A, 0xF7};
 
+// Only used by the post-effect reverb-routing test below, which is itself
+// gated on SONARE_MIDI_WITH_FX and SONARE_WITH_MASTERING (it needs the EFX
+// insertion chain, built through mastering::api::make_insert, to build).
+#if defined(SONARE_MIDI_WITH_FX) && defined(SONARE_WITH_MASTERING)
 MidiEvent event(const sonare::midi::Ump& ump) {
   MidiEvent e;
   e.ump = ump;
@@ -64,6 +67,7 @@ std::array<uint8_t, 11> efx_reverb_send(uint8_t value) {
 /// Fixture: program 1 = a short one-shot burst (so the dry signal ends well
 /// before the reverb tail is measured).
 std::shared_ptr<Sf2File> make_fixture() {
+  constexpr double kTwoPi = 6.28318530717958647692;
   Sf2Builder b;
   std::vector<float> burst(256);
   for (size_t i = 0; i < burst.size(); ++i) {
@@ -94,6 +98,7 @@ float rms(const std::vector<float>& buf, size_t from, size_t to) {
   }
   return n > 0 ? static_cast<float>(std::sqrt(acc / static_cast<double>(n))) : 0.0f;
 }
+#endif  // SONARE_MIDI_WITH_FX && SONARE_WITH_MASTERING
 
 /// A minimal insert processor that only counts lifecycle/parameter calls, so a
 /// test can tell an in-place parameter update (set_parameter, no prepare/reset)
@@ -125,7 +130,7 @@ class CountingInsert final : public sonare::rt::ProcessorBase {
 
 }  // namespace
 
-#if defined(SONARE_MIDI_WITH_FX)
+#if defined(SONARE_MIDI_WITH_FX) && defined(SONARE_WITH_MASTERING)
 TEST_CASE("a GS EFX part sends its post-effect signal to reverb", "[midi][sf2][gsefx]") {
   // The insertion-effect (Overdrive) stage must actually build for the part to
   // be bussed; skip if the amp-sim insert is unavailable in this build.
@@ -169,7 +174,7 @@ TEST_CASE("a GS EFX part sends its post-effect signal to reverb", "[midi][sf2][g
   REQUIRE(mid > dry + 1e-6f);
   REQUIRE(full > mid + 1e-6f);
 }
-#endif  // SONARE_MIDI_WITH_FX
+#endif  // SONARE_MIDI_WITH_FX && SONARE_WITH_MASTERING
 
 TEST_CASE("a GS EFX parameter-only change updates the insert in place", "[midi][sf2][gsefx]") {
   auto counters = std::make_shared<EfxCounters>();

@@ -839,6 +839,7 @@ sonare::midi::synth::Sf2PlayerConfig sf2_config_from_c(
   if (c.struct_version >= 2) {
     cfg.prefer_model_for_modeled_families = c.prefer_model_for_modeled_families != 0;
   }
+#if defined(SONARE_WITH_MASTERING)
   // Wire the GS insertion-effect (EFX) path: the SF2 player never depends on the
   // mastering factory itself, so the host injects it. An EFX SysEx on the
   // compiled timeline then installs its inserts and rings through the per-part
@@ -848,6 +849,9 @@ sonare::midi::synth::Sf2PlayerConfig sf2_config_from_c(
                           std::string_view json) -> std::unique_ptr<sonare::rt::ProcessorBase> {
     return sonare::mastering::api::make_insert(std::string(name), std::string(json));
   };
+#endif
+  // Without a factory, kProcessor slots stay silent no-ops (see
+  // Sf2PlayerConfig::insert_factory); harmless to leave set regardless.
   cfg.realize_efx_inline = true;
   return cfg;
 }

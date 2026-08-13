@@ -230,9 +230,11 @@ SonareError sonare_engine_set_sf2_instrument(SonareRealtimeEngine* engine, uint3
   // sonare_engine_push_midi_sysex is realised on the control thread and swapped
   // in wait-free (realize_efx_inline stays false, the live default). An unknown
   // name or an FX-less build yields a null insert that is bypassed.
+#if defined(SONARE_WITH_MASTERING)
   cfg.insert_factory = [](std::string_view name, std::string_view json) {
     return sonare::mastering::api::make_insert(std::string(name), std::string(json));
   };
+#endif
   auto player = std::make_unique<sonare::midi::synth::Sf2Player>(cfg);
   player->set_soundfont(engine->soundfont);
   return bind_engine_instrument(engine, destination_id, std::move(player));
@@ -292,14 +294,29 @@ SonareError sonare_engine_bind_midi_cc(SonareRealtimeEngine* engine, uint8_t cha
 SonareError sonare_engine_bind_midi_cc_binding(SonareRealtimeEngine* engine,
                                                const SonareMidiCcBinding* binding) {
   SONARE_C_API_ENTRY;
+  // Argument validation is expressed purely against the C surface — the public
+  // ordinals and SONARE_MIDI_CC_ANY_CHANNEL, never sonare::midi::CcBinding —
+  // so a caller passing garbage gets INVALID_PARAMETER in every build. The
+  // native types below live in the arrangement library, so touching them here
+  // would make this whole function unbuildable without it and would turn a
+  // rejected argument into NOT_SUPPORTED.
   if (!engine || !binding || binding->cc_number > 127 || binding->param_id == 0 ||
       binding->kind > SONARE_MIDI_CC_NRPN ||
-      (binding->channel != sonare::midi::kCcAnyChannel && binding->channel > 15) ||
+      (binding->channel != SONARE_MIDI_CC_ANY_CHANNEL && binding->channel > 15) ||
       !std::isfinite(binding->min_value) || !std::isfinite(binding->max_value) ||
       binding->max_value < binding->min_value ||
       sonare::engine::RealtimeEngine::parameter_target_reserved(binding->param_id)) {
     return SONARE_ERROR_INVALID_PARAMETER;
   }
+  if (binding->kind == SONARE_MIDI_CC_CONTROL_CHANGE_14 &&
+      (binding->cc_number > 31 || binding->cc_lsb_number != binding->cc_number + 32u)) {
+    return SONARE_ERROR_INVALID_PARAMETER;
+  }
+#if !defined(SONARE_WITH_ARRANGEMENT)
+  return SONARE_ERROR_NOT_SUPPORTED;
+#else
+  static_assert(SONARE_MIDI_CC_ANY_CHANNEL == sonare::midi::kCcAnyChannel,
+                "SonareMidiCcBinding wildcard channel must mirror midi::kCcAnyChannel");
   sonare::midi::CcBinding native{};
   native.cc_number = binding->cc_number;
   native.channel = binding->channel;
@@ -310,13 +327,6 @@ SonareError sonare_engine_bind_midi_cc_binding(SonareRealtimeEngine* engine,
   native.param_id = binding->param_id;
   native.min_value = binding->min_value;
   native.max_value = binding->max_value;
-  if (native.kind == sonare::midi::CcBindingKind::kControlChange14 &&
-      (native.cc_number > 31 || native.cc_lsb_number != native.cc_number + 32u)) {
-    return SONARE_ERROR_INVALID_PARAMETER;
-  }
-#if !defined(SONARE_WITH_ARRANGEMENT)
-  return SONARE_ERROR_NOT_SUPPORTED;
-#else
   return engine->engine.bind_midi_cc(native) ? SONARE_OK : SONARE_ERROR_OUT_OF_MEMORY;
 #endif
 }

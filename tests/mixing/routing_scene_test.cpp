@@ -9,6 +9,9 @@
 
 #include "util/exception.h"
 
+// The vocalReverbSend preset routes through a plate reverb return strip, so
+// this case additionally needs the FX suite.
+#if defined(SONARE_WITH_FX)
 TEST_CASE("Routed mixer scene round-trip preserves topology", "[mixing][routing]") {
   // from_scene_json(vocalReverbSend) -> to_scene_json must preserve buses,
   // strips, sends (with destination_bus_id), and connections, including the
@@ -60,6 +63,7 @@ TEST_CASE("Routed mixer scene round-trip preserves topology", "[mixing][routing]
 
   sonare_mixer_destroy(mixer);
 }
+#endif  // SONARE_WITH_FX
 
 TEST_CASE("Routed mixer applies scene bus inserts", "[mixing][routing]") {
   constexpr int kSr = 48000;
