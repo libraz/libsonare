@@ -943,20 +943,32 @@ export function vqtToAudio(
   gamma = -1,
   nIter = 32,
 ): Float32Array {
-  const request =
-    magnitude instanceof Float32Array
-      ? { magnitude, nBins, nFrames, sampleRate, hopLength, fmin, binsPerOctave, gamma, nIter }
-      : magnitude;
+  // The request form delegates to the positional form so the defaults live in
+  // exactly one place: `gamma` in particular must reach the core as the
+  // automatic-VQT sentinel (-1), not as the constant-Q value (0).
+  if (!(magnitude instanceof Float32Array)) {
+    return vqtToAudio(
+      magnitude.magnitude,
+      magnitude.nBins,
+      magnitude.nFrames,
+      magnitude.sampleRate,
+      magnitude.hopLength,
+      magnitude.fmin,
+      magnitude.binsPerOctave,
+      magnitude.gamma,
+      magnitude.nIter,
+    );
+  }
   return addon.vqtToAudio(
-    request.magnitude,
-    request.nBins,
-    request.nFrames,
-    request.sampleRate ?? 22050,
-    request.hopLength ?? 512,
-    request.fmin ?? 32.70319566257483,
-    request.binsPerOctave ?? 12,
-    request.gamma ?? 0,
-    request.nIter ?? 32,
+    magnitude,
+    nBins,
+    nFrames,
+    sampleRate,
+    hopLength,
+    fmin,
+    binsPerOctave,
+    gamma,
+    nIter,
   );
 }
 
@@ -1774,6 +1786,7 @@ export function pitchPyin(
     samples instanceof Float32Array
       ? { samples, sampleRate, frameLength, hopLength, fmin, fmax, threshold, fillNa }
       : samples;
+  assertSamples('pitchPyin', request.samples, true);
   return addon.pitchPyin(
     request.samples,
     request.sampleRate ?? 22050,

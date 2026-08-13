@@ -10,6 +10,7 @@ import {
   pitchShift,
   spectralEdit,
   timeStretch,
+  vqtToAudio,
 } from '../src/index.js';
 
 const sampleRate = 22050;
@@ -104,6 +105,39 @@ describe('spectralEdit requires an explicit sample rate', () => {
 
   it('accepts an explicit sample rate', () => {
     expect(spectralEdit({ samples, sampleRate, ops })).toBeInstanceOf(Float32Array);
+  });
+});
+
+/**
+ * A request-object form must resolve every omitted field through the same
+ * default table as the positional form; a duplicated table is how the two drift.
+ *
+ * `vqtToAudio.gamma` is the field that drifted (the request form resolved it to
+ * 0, the CQT value, while the positional form and every other surface use the
+ * core's automatic sentinel -1). Note the reconstruction itself cannot observe
+ * gamma today: griffinlim_vqt narrows VqtConfig to a CqtConfig, which has no
+ * gamma field, so the value is dropped before it reaches the DSP. The assertion
+ * here is therefore about the shared default table, which is what the fix
+ * restores — not about a reconstruction difference.
+ */
+describe('request and positional forms share one default table', () => {
+  const nBins = 24;
+  const nFrames = 8;
+  const magnitude = new Float32Array(nBins * nFrames).map((_, i) => 0.5 + 0.5 * Math.sin(i * 0.3));
+
+  it('vqtToAudio reconstructs identically with every optional field omitted', () => {
+    const positional = vqtToAudio(magnitude, nBins, nFrames);
+    const request = vqtToAudio({ magnitude, nBins, nFrames });
+    expect(Array.from(request)).toEqual(Array.from(positional));
+  });
+
+  it('vqtToAudio still forwards the fields the request form carries', () => {
+    // Keeps the equality above from passing for the wrong reason: the request
+    // form must actually reach the transform, so a field the reconstruction can
+    // observe has to change the result.
+    const base = vqtToAudio({ magnitude, nBins, nFrames });
+    const wider = vqtToAudio({ magnitude, nBins, nFrames, binsPerOctave: 24 });
+    expect(Array.from(wider)).not.toEqual(Array.from(base));
   });
 });
 

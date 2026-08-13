@@ -10,6 +10,7 @@ import {
   meteringRmsDb,
   meteringStereoCorrelation,
   meteringTruePeakDb,
+  pitchPyin,
   pitchYin,
   StreamAnalyzer,
   StreamingEqualizer,
@@ -125,6 +126,23 @@ describe('NaN/Inf guards (Node)', () => {
   });
   it('pitchYin rejects NaN', () => {
     expect(() => pitchYin(withNaN(), SR)).toThrow(/samples contains NaN or Inf/);
+  });
+  // pitchPyin is pitchYin's twin and must reject identically — asserting only
+  // the pitchYin side is how the two drifted apart in the first place.
+  it.each([
+    ['pitchYin', pitchYin],
+    ['pitchPyin', pitchPyin],
+  ])('%s rejects NaN with the same error shape', (name, fn) => {
+    let caught: unknown;
+    try {
+      fn(withNaN(), SR);
+    } catch (error) {
+      caught = error;
+    }
+    expect(caught, `${name} should have thrown`).toBeInstanceOf(RangeError);
+    expect((caught as Error).message).toMatch(
+      new RegExp(`^${name}: samples contains NaN or Inf at index 100$`),
+    );
   });
   it('meteringDcOffset rejects Inf', () => {
     expect(() => meteringDcOffset(withInf(), SR)).toThrow(/samples contains NaN or Inf/);
