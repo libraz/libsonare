@@ -631,7 +631,12 @@ def main() -> None:
         description=sf2_cli_note,
     )
     pbounce.add_argument("--in", dest="input", required=True, help="Input project JSON")
-    pbounce.add_argument("--sample-rate", type=int, default=48000, help="Render sample rate")
+    pbounce.add_argument(
+        "--sample-rate",
+        type=int,
+        default=None,
+        help="Render sample rate (default: the project's own sample rate)",
+    )
     pbounce.add_argument("--frames", type=int, default=0, help="Render length in frames")
     pbounce.add_argument("--block-size", type=int, default=0, help="Render block size")
     pbounce.add_argument("--channels", type=int, default=2, help="Render channel count")
@@ -670,7 +675,12 @@ def main() -> None:
         description=sf2_cli_note,
     )
     midi_render_p.add_argument("--in", dest="input", required=True, help="Input project JSON")
-    midi_render_p.add_argument("--sample-rate", type=int, default=48000, help="Render sample rate")
+    midi_render_p.add_argument(
+        "--sample-rate",
+        type=int,
+        default=None,
+        help="Render sample rate (default: the project's own sample rate)",
+    )
     midi_render_p.add_argument("--frames", type=int, default=0, help="Render length in frames")
     midi_render_p.add_argument("--block-size", type=int, default=0, help="Render block size")
     midi_render_p.add_argument("--channels", type=int, default=2, help="Render channel count")

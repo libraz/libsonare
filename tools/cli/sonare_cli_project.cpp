@@ -346,18 +346,35 @@ int cmd_project_bounce(const CliArgs& args) {
   ProjectHandle handle;
   if (!load_project_from_args(args, &handle)) return 1;
 
+  double project_sample_rate = 0.0;
+  SonareError sr_err = sonare_project_get_sample_rate(handle.ptr, &project_sample_rate);
+  if (sr_err != SONARE_OK) {
+    project_report_error("read project sample rate", sr_err);
+    return 1;
+  }
+
   SonareProjectBounceOptions options{};
   options.total_frames = static_cast<int64_t>(args.get_int("frames", 0));
   options.block_size = args.get_int("block-size", 0);
   options.num_channels = args.get_int("channels", 0);
   options.instrument_latency_samples = args.get_int("instrument-latency", 0);
   // CRITICAL: the WAV header MUST be tagged with the SAME sample rate the render
-  // actually used, or the file plays back at the wrong pitch. The C ABI renders
-  // at options.sample_rate when > 0, otherwise at the project's own rate. The
-  // CLI cannot query the project rate through the C surface, so we pin a definite
-  // render rate here: the user's --sample-rate if given, else 48000 (which also
-  // matches the project default), and reuse that SAME value for the WAV header.
-  const int render_sample_rate = args.get_int("sample-rate", 48000);
+  // actually used, or the file plays back at the wrong pitch. Default to the
+  // project's own rate (queried above via sonare_project_get_sample_rate) rather
+  // than a hardcoded value, so a 44.1k/96k project bounces without --sample-rate
+  // at all. An explicit --sample-rate is only accepted when it matches the
+  // project's rate: the C ABI rejects a genuine mismatch with a generic
+  // invalid-parameter error, so the check is duplicated here to name both rates.
+  int render_sample_rate = static_cast<int>(std::lround(project_sample_rate));
+  if (args.has("sample-rate")) {
+    render_sample_rate = args.get_int("sample-rate", render_sample_rate);
+    if (std::abs(static_cast<double>(render_sample_rate) - project_sample_rate) > 1e-6) {
+      std::cerr << color::red << "Error: --sample-rate " << render_sample_rate
+                << " does not match the project's sample rate (" << project_sample_rate
+                << " Hz); project bounce renders at the project's own rate" << color::reset << "\n";
+      return 1;
+    }
+  }
   options.sample_rate = render_sample_rate;
 
   float* interleaved = nullptr;

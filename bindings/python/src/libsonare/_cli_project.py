@@ -49,11 +49,27 @@ def _project_bounce(
         raise ValueError(f"{command_name} requires --output")
     project = _load_project(args.input)
     try:
+        project_sample_rate = cast(Any, project).get_sample_rate()
+        # Render at the project's own sample rate by default (args.sample_rate is
+        # None unless the user passed --sample-rate); an explicit --sample-rate is
+        # only accepted when it matches the project's rate, otherwise report the
+        # mismatch by name instead of letting the C ABI reject it generically.
+        requested_sample_rate = args.sample_rate
+        if requested_sample_rate is not None and requested_sample_rate > 0:
+            if abs(requested_sample_rate - project_sample_rate) > 1e-6:
+                raise ValueError(
+                    f"--sample-rate {requested_sample_rate} does not match the project's "
+                    f"sample rate ({project_sample_rate:g} Hz); {command_name} renders at "
+                    "the project's own rate"
+                )
+            sample_rate = requested_sample_rate
+        else:
+            sample_rate = int(round(project_sample_rate))
         kwargs = {
             "total_frames": args.frames,
             "block_size": args.block_size,
             "num_channels": args.channels,
-            "sample_rate": args.sample_rate,
+            "sample_rate": sample_rate,
             "instrument_latency_samples": args.instrument_latency,
         }
         use_synth = force_synth or args.synth is not None
@@ -63,7 +79,7 @@ def _project_bounce(
             )
         else:
             audio = cast(Any, project).bounce(**kwargs)
-        frames, channels = _write_project_bounce_wav(args.output, audio, args.sample_rate)
+        frames, channels = _write_project_bounce_wav(args.output, audio, sample_rate)
         if args.json:
             print(
                 _strict_json_dumps(
@@ -71,13 +87,13 @@ def _project_bounce(
                         "output": args.output,
                         "frames": frames,
                         "channels": channels,
-                        "sample_rate": args.sample_rate,
+                        "sample_rate": sample_rate,
                         "synth": bool(use_synth),
                     }
                 )
             )
         else:
-            print(f"  Bounced {frames} frames ({channels} ch @ {args.sample_rate} Hz)")
+            print(f"  Bounced {frames} frames ({channels} ch @ {sample_rate} Hz)")
         return 0
     finally:
         cast(Any, project).close()
