@@ -664,6 +664,7 @@ TEST_CASE("bounce renders per-track channel-strip effects", "[project]") {
   REQUIRE(automated_peak < direct_peak * 0.001f);
 }
 
+#if defined(SONARE_WITH_MIXING)
 TEST_CASE("channel-strip bounce auto-renders mixer insert tails", "[project]") {
   SonareProject* project = nullptr;
   REQUIRE(sonare_project_create(&project) == SONARE_OK);
@@ -785,6 +786,7 @@ TEST_CASE("channel-strip bounce preserves the longest serial send tail", "[proje
   sonare_free_floats(out);
   sonare_project_destroy(project);
 }
+#endif  // defined(SONARE_WITH_MIXING)
 
 TEST_CASE("channel-strip bounce preserves tail impulse through master latency insert",
           "[project]") {

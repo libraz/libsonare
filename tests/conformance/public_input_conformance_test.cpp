@@ -42,6 +42,7 @@ double corpus_ppq(const sonare::util::json::Value& value) {
   return std::numeric_limits<double>::infinity();
 }
 
+#if defined(SONARE_WITH_MIXING)
 float corpus_float(const sonare::util::json::Value& value) {
   if (!value.is_string()) return static_cast<float>(value.as_number());
   if (value.as_string() == "nan") return std::numeric_limits<float>::quiet_NaN();
@@ -49,6 +50,7 @@ float corpus_float(const sonare::util::json::Value& value) {
   REQUIRE(value.as_string() == "neg_inf");
   return -std::numeric_limits<float>::infinity();
 }
+#endif  // defined(SONARE_WITH_MIXING)
 
 std::vector<SonareEngineMarker> corpus_markers(const sonare::util::json::Value& value) {
   std::vector<SonareEngineMarker> markers;

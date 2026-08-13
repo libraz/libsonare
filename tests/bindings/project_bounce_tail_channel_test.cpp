@@ -13,6 +13,7 @@
 
 namespace {
 
+#if defined(SONARE_WITH_MIXING)
 // A callback instrument that emits a constant DC level on every render() block,
 // independent of note state, and declares no release tail (tail_samples == 0).
 // This is the minimal shape that reproduces the stem-tail truncation: the
@@ -32,9 +33,11 @@ float region_peak(const float* data, size_t len, size_t start) {
   for (size_t i = std::min(start, len); i < len; ++i) peak = std::max(peak, std::abs(data[i]));
   return peak;
 }
+#endif  // defined(SONARE_WITH_MIXING)
 
 }  // namespace
 
+#if defined(SONARE_WITH_MIXING)
 TEST_CASE("channel-strip bounce keeps a stem tail past the arrangement for explicit total_frames",
           "[project]") {
   SonareProject* project = nullptr;
@@ -102,6 +105,7 @@ TEST_CASE("channel-strip bounce keeps a stem tail past the arrangement for expli
   sonare_free_floats(out);
   sonare_project_destroy(project);
 }
+#endif  // defined(SONARE_WITH_MIXING)
 
 TEST_CASE("project bounce rejects channel counts beyond mono/stereo like engine-bounce",
           "[project]") {

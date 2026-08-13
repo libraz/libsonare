@@ -10,6 +10,8 @@
 #include "rt/command.h"
 
 namespace sonare::engine {
+
+#if defined(SONARE_WITH_MIXING)
 namespace {
 
 constexpr uint32_t kEngineParamLaneMask = 0x0000FF00u;
@@ -20,7 +22,6 @@ constexpr uint32_t kEngineParamLaneBusBase = 0xFEu;
 
 }  // namespace
 
-#if defined(SONARE_WITH_MIXING)
 void RealtimeEngine::set_mixing_enabled(bool enabled) noexcept {
   mixing_enabled_.store(enabled, std::memory_order_relaxed);
   update_reported_graph_latency();

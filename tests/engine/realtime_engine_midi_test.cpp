@@ -190,11 +190,13 @@ std::vector<sonare::midi::MidiClipSchedule> note_on_at_zero() {
   return {clip};
 }
 
+#if defined(SONARE_WITH_MIXING)
 std::vector<sonare::midi::MidiClipSchedule> note_on_at_zero(uint32_t destination_id) {
   auto clips = note_on_at_zero();
   clips[0].destination_id = destination_id;
   return clips;
 }
+#endif  // defined(SONARE_WITH_MIXING)
 
 // A stereo clip carrying a unit impulse at frame 0.
 sonare::engine::ClipSchedule impulse_clip(int64_t length) {

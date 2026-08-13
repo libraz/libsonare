@@ -24,6 +24,7 @@ class TelemetryCaptureProcessor final : public sonare::rt::ProcessorBase {
 
 }  // namespace
 
+#if defined(SONARE_WITH_MIXING)
 TEST_CASE("MeterTelemetryTap publishes one record per target per host block",
           "[engine][telemetry]") {
   sonare::engine::MeterTelemetryTap tap;
@@ -48,6 +49,7 @@ TEST_CASE("MeterTelemetryTap publishes one record per target per host block",
   REQUIRE(record.target_id == 8);
   REQUIRE_FALSE(tap.pop(record));
 }
+#endif  // defined(SONARE_WITH_MIXING)
 
 TEST_CASE("RealtimeEngine telemetry reports graph latency and audible timeline",
           "[engine][telemetry]") {

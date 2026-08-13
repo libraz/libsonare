@@ -139,6 +139,7 @@ TEST_CASE("RealtimeEngine control flush prevents an offline mirror command ring 
   REQUIRE(engine.transport().sample_position() == 1023);
 }
 
+#if defined(SONARE_WITH_MIXING)
 TEST_CASE("RealtimeEngine rejects registering one strip in mixing and monitor runtimes",
           "[engine][realtime]") {
   sonare::engine::RealtimeEngine engine;
@@ -174,6 +175,7 @@ TEST_CASE("RealtimeEngine reports track and master strip latency", "[engine][rea
   engine.set_mixing_enabled(false);
   REQUIRE(engine.graph_latency_samples_q8() == (4 << 8));
 }
+#endif  // defined(SONARE_WITH_MIXING)
 
 #if defined(SONARE_WITH_GRAPH)
 TEST_CASE("RealtimeEngine includes a swapped routing graph in reported PDC", "[engine][realtime]") {
@@ -275,6 +277,7 @@ TEST_CASE("RealtimeEngine publishes lane bus input and master meter targets",
 #endif
 }
 
+#if defined(SONARE_WITH_MIXING)
 TEST_CASE("RealtimeEngine routes monitor PFL bus into output", "[engine][realtime]") {
   constexpr int kFrames = 16;
   sonare::engine::RealtimeEngine engine;
@@ -316,6 +319,7 @@ TEST_CASE("RealtimeEngine can route monitor PFL bus separately from output", "[e
   REQUIRE(left.back() > 0.70f);
   REQUIRE(left.back() < 0.72f);
 }
+#endif  // defined(SONARE_WITH_MIXING)
 
 TEST_CASE("RealtimeEngine applies scheduled transport commands inside a block",
           "[engine][realtime]") {
@@ -1530,6 +1534,7 @@ TEST_CASE("RealtimeEngine offline render matches block process", "[engine][realt
   REQUIRE(realtime.transport().sample_position() == offline.transport().sample_position());
 }
 
+#if defined(SONARE_WITH_MIXING)
 TEST_CASE("RealtimeEngine::bind_mixing_strip is not noexcept and binds successfully",
           "[engine][realtime]") {
   sonare::engine::RealtimeEngine engine;
@@ -1549,3 +1554,4 @@ TEST_CASE("RealtimeEngine::bind_mixing_strip is not noexcept and binds successfu
   REQUIRE(engine.bind_mixing_strip(&strip));
   REQUIRE(engine.mixing().strip() == &strip);
 }
+#endif  // defined(SONARE_WITH_MIXING)

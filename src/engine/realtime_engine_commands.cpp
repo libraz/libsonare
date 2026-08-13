@@ -219,14 +219,18 @@ void RealtimeEngine::apply_command(const rt::Command& command) noexcept {
       start_smoothed_param(command.target_id, command.arg.f);
       break;
     case rt::CommandType::kTransportPlay:
+#if defined(SONARE_WITH_ARRANGEMENT)
       emit_midi_transport_command(
           transport_.sample_position() <= 0 ? midi::kStatusStart : midi::kStatusContinue,
           command.sample_time);
+#endif
       transport_.play();
       break;
     case rt::CommandType::kTransportStop:
       transport_.stop();
+#if defined(SONARE_WITH_ARRANGEMENT)
       emit_midi_transport_command(midi::kStatusStop, command.sample_time);
+#endif
       // Hang-note safety: stopping is a playback discontinuity. Release every
       // sounding note at the stop frame so a sustained note does not hang (the
       // playhead freezes on stop, so a scheduled note-off would never arrive),
