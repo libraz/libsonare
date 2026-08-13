@@ -587,6 +587,13 @@ TEST_CASE("sonare_mastering name getters return a stable pointer across calls",
   REQUIRE(sonare_mastering_stereo_analysis_names() == sonare_mastering_stereo_analysis_names());
   REQUIRE(sonare_mastering_insert_names() == sonare_mastering_insert_names());
   REQUIRE(sonare_mastering_processor_catalog() == sonare_mastering_processor_catalog());
+  // sonare_mastering_preset_names now follows the same SONARE_C_TRY-guarded,
+  // write-once-flag pattern as its siblings above (it previously had neither
+  // the exception guard nor the stable-pointer cache).
+  REQUIRE(sonare_mastering_preset_names() == sonare_mastering_preset_names());
+  const char* presets = sonare_mastering_preset_names();
+  REQUIRE(presets != nullptr);
+  REQUIRE(std::strlen(presets) > 0);
   const char* catalog = sonare_mastering_processor_catalog();
   REQUIRE(catalog != nullptr);
   REQUIRE(std::strstr(catalog, "\"latencySamples\":") != nullptr);

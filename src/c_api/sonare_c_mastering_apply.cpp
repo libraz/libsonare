@@ -224,7 +224,14 @@ const char* sonare_capability_catalog_json(void) {
   abi["project"] = static_cast<int>(SONARE_PROJECT_ABI_VERSION);
   abi["engine"] = static_cast<int>(sonare_engine_abi_version());
   catalog["abi"] = std::move(abi);
-  catalog["processors"] = json::parse_strict(sonare_mastering_processor_catalog());
+  // sonare_mastering_processor_catalog() returns NULL on an allocation
+  // failure (it is itself SONARE_C_TRY-guarded); json::parse_strict takes a
+  // const std::string&, and constructing std::string from a NULL const
+  // char* is undefined behaviour, not a throwable exception this function's
+  // own try/catch could intercept. Fail this call the same way instead.
+  const char* processor_catalog_json = sonare_mastering_processor_catalog();
+  if (!processor_catalog_json) return nullptr;
+  catalog["processors"] = json::parse_strict(processor_catalog_json);
 
   json::Object presets;
   presets["mastering"] = newline_name_array(sonare_mastering_preset_names());
