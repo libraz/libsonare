@@ -232,6 +232,96 @@ TEST_CASE("ChordAnalyzer inversion bass is not C-biased for a high pitch-class b
   REQUIRE(most_common.bass == PitchClass::B);
 }
 
+namespace {
+
+/// @brief Builds a synthetic 12-bin chromagram from a per-time pitch-class set.
+/// @param pitches_before Pitch classes active before @p switch_time
+/// @param pitches_after Pitch classes active from @p switch_time onwards
+Chroma make_two_part_chroma(const std::vector<int>& pitches_before,
+                            const std::vector<int>& pitches_after, float switch_time,
+                            float duration, int sr, int hop) {
+  const int n_frames = static_cast<int>(duration * sr / hop);
+  std::vector<float> features(12 * static_cast<size_t>(n_frames), 0.0f);
+  for (int f = 0; f < n_frames; ++f) {
+    const float time = static_cast<float>(f) * hop / static_cast<float>(sr);
+    const auto& active = time < switch_time ? pitches_before : pitches_after;
+    for (int pitch : active) {
+      features[static_cast<size_t>(pitch) * static_cast<size_t>(n_frames) +
+               static_cast<size_t>(f)] = 1.0f;
+    }
+  }
+  return Chroma(std::move(features), 12, n_frames, sr, hop);
+}
+
+}  // namespace
+
+TEST_CASE("ChordAnalyzer bass chroma is indexed in its own frame space",
+          "[chord_analyzer][inversion]") {
+  // The chord segments are expressed in the harmonic chromagram's frame space.
+  // A bass chromagram computed at a finer hop covers the same seconds in more
+  // frames, so slicing it with harmonic frame numbers reads an earlier part of
+  // the song. The inversion decision must therefore be invariant to the bass
+  // chromagram's hop length: the same bass content at hop 512 and at hop 2048
+  // has to yield the same slash chords.
+  constexpr int kSampleRate = 22050;
+  constexpr int kCoarseHop = 2048;
+  constexpr int kFineHop = 512;
+  constexpr float kDuration = 4.0f;
+  constexpr float kSwitch = 2.0f;
+
+  // C major for the first half, G major for the second.
+  const std::vector<int> c_major = {0, 4, 7};
+  const std::vector<int> g_major = {7, 11, 2};
+  const Chroma harmonic =
+      make_two_part_chroma(c_major, g_major, kSwitch, kDuration, kSampleRate, kCoarseHop);
+
+  // Bass sits on E under the C chord and on D under the G chord, so the
+  // expected reading is C/E followed by G/D.
+  const std::vector<int> bass_first = {4};
+  const std::vector<int> bass_second = {2};
+  const Chroma bass_coarse =
+      make_two_part_chroma(bass_first, bass_second, kSwitch, kDuration, kSampleRate, kCoarseHop);
+  const Chroma bass_fine =
+      make_two_part_chroma(bass_first, bass_second, kSwitch, kDuration, kSampleRate, kFineHop);
+  REQUIRE(bass_fine.n_frames() == 4 * bass_coarse.n_frames());
+
+  std::vector<float> beat_times;
+  for (float t = 0.0f; t < kDuration; t += 0.5f) {
+    beat_times.push_back(t);
+  }
+
+  ChordConfig config;
+  config.use_triads_only = true;
+  config.use_beat_sync = true;
+  config.detect_inversions = true;
+  config.min_duration = 0.0f;
+
+  const ChordAnalyzer coarse(harmonic, beat_times, bass_coarse, config);
+  const ChordAnalyzer fine(harmonic, beat_times, bass_fine, config);
+
+  const auto& coarse_chords = coarse.chords();
+  const auto& fine_chords = fine.chords();
+  REQUIRE(coarse_chords.size() == fine_chords.size());
+  REQUIRE(coarse_chords.size() >= 2);
+
+  for (size_t i = 0; i < coarse_chords.size(); ++i) {
+    CAPTURE(i, coarse_chords[i].to_string(), fine_chords[i].to_string());
+    REQUIRE(coarse_chords[i].root == fine_chords[i].root);
+    REQUIRE(coarse_chords[i].quality == fine_chords[i].quality);
+    REQUIRE(coarse_chords[i].bass == fine_chords[i].bass);
+  }
+
+  // Pin the expected reading so an invariance that holds only because both
+  // paths are wrong cannot pass.
+  const Chord& first = coarse_chords.front();
+  const Chord& last = coarse_chords.back();
+  CAPTURE(first.to_string(), last.to_string());
+  REQUIRE(first.root == PitchClass::C);
+  REQUIRE(first.bass == PitchClass::E);
+  REQUIRE(last.root == PitchClass::G);
+  REQUIRE(last.bass == PitchClass::D);
+}
+
 TEST_CASE("ChordAnalyzer A minor detection", "[chord_analyzer]") {
   Audio audio = create_a_minor(22050, 2.0f);
 

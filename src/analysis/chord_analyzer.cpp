@@ -189,6 +189,20 @@ float extension_threshold(ChordQuality quality) {
   }
 }
 
+/// @brief Frames per second of a chromagram, or 0 when its time base is unknown.
+double chroma_frame_rate(const Chroma& chroma) {
+  if (chroma.hop_length() <= 0 || chroma.sample_rate() <= 0) {
+    return 0.0;
+  }
+  return static_cast<double>(chroma.sample_rate()) / static_cast<double>(chroma.hop_length());
+}
+
+/// @brief Rescales a frame index from one chromagram's time base to another's.
+int rescale_frame(int frame, double from_frame_rate, double to_frame_rate, int max_frame) {
+  const double scaled = static_cast<double>(frame) * to_frame_rate / from_frame_rate;
+  return static_cast<int>(std::clamp(scaled, 0.0, static_cast<double>(max_frame)));
+}
+
 /// @brief Checks whether @p chord's pattern contains @p pitch.
 /// @details Uses the already-selected template directly instead of regenerating
 /// the full 192-entry template set per call, which also avoids a template-set
@@ -264,6 +278,24 @@ PitchClass ChordAnalyzer::estimate_bass_pitch_class(int start_frame, int end_fra
   const Chroma& source = has_bass_source ? bass_chroma_ : chroma_;
   if (!config_.detect_inversions || source.empty()) {
     return PitchClass::C;
+  }
+
+  // start_frame/end_frame are indices in chroma_'s frame space. A supplied bass
+  // chromagram may run at a different hop length or sample rate, so the segment
+  // has to be mapped through absolute time before it indexes the bass source;
+  // indexing it with harmonic frame numbers would read a different part of the
+  // song and turn every inversion decision into noise.
+  if (has_bass_source) {
+    const double chroma_rate = chroma_frame_rate(chroma_);
+    const double bass_rate = chroma_frame_rate(source);
+    if (chroma_rate > 0.0 && bass_rate > 0.0 && chroma_rate != bass_rate) {
+      const int last = source.n_frames();
+      const int mapped_start = rescale_frame(start_frame, chroma_rate, bass_rate, last);
+      const int mapped_end = rescale_frame(end_frame, chroma_rate, bass_rate, last);
+      // Keep a one-frame span for segments shorter than a bass frame.
+      start_frame = mapped_start;
+      end_frame = std::max(mapped_end, mapped_start + 1);
+    }
   }
 
   start_frame = std::max(0, start_frame);

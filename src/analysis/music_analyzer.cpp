@@ -128,7 +128,10 @@ ChordAnalyzer& MusicAnalyzer::chord_analyzer() {
       // uses the bass-band CQT front-end rather than falling back to the
       // harmonic chroma (which lacks the low-frequency emphasis).
       BassChromaConfig bass_config;
-      bass_config.cqt.hop_length = config_.hop_length;
+      // Match harmonic_chroma()'s hop so both chromagrams share one frame
+      // space: the chord segments are expressed in harmonic-chroma frames and
+      // are used directly to slice the bass chromagram.
+      bass_config.cqt.hop_length = config_.hop_length * config_.chroma_hop_multiplier;
       chord_analyzer_ = std::make_unique<ChordAnalyzer>(
           harmonic_chroma(), beat_times, bass_chroma(analysis_audio_, bass_config), chord_config);
     } else {
