@@ -73,9 +73,21 @@ class MeterTelemetryTap {
   size_t read_goniometer(mixing::GoniometerPoint* out, size_t max_points) const noexcept;
 
  private:
-  void publish(const mixing::MeterSnapshot& snapshot, int64_t render_frame) noexcept;
+  // Per-target running energy accumulator for the record staged this host
+  // block. peak_db/true_peak_db merge as an element-wise max in stage(), but
+  // rms_db must be recomputed from accumulated energy (mean-square power
+  // reconstructed from each sub-block's already-computed rms_db, weighted by
+  // its frame count) so a block split into several process() calls reports
+  // the RMS of the whole block rather than just its last fragment.
+  struct StagedEnergy {
+    std::array<double, mixing::kMaxMeterChannels> sum_sq{};
+    int64_t frames = 0;
+  };
+
+  void publish(const mixing::MeterSnapshot& snapshot, int64_t render_frame,
+               int num_frames) noexcept;
   void publish(MeterTelemetryRecord record) noexcept;
-  void stage(MeterTelemetryRecord record) noexcept;
+  void stage(MeterTelemetryRecord record, int num_frames) noexcept;
   void push_goniometer(float* const* channels, int num_channels, int num_frames) noexcept;
 
   std::optional<mixing::MeterProcessor> meter_{};
@@ -91,6 +103,7 @@ class MeterTelemetryTap {
   bool block_active_ = false;
   size_t staged_count_ = 0;
   std::array<MeterTelemetryRecord, kMaxTargetsPerBlock> staged_records_{};
+  std::array<StagedEnergy, kMaxTargetsPerBlock> staged_energy_{};
 };
 
 }  // namespace sonare::engine

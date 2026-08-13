@@ -204,3 +204,41 @@ TEST_CASE("MeterTelemetryTap lightweight mono_compat_width matches the full mete
   REQUIRE(record.mono_compat_width == Approx(snapshot.mono_compat_width).margin(1e-4f));
   REQUIRE(record.mono_compat_width > 0.5f);
 }
+
+TEST_CASE("MeterTelemetryTap merges sub-block peak and RMS across a host block",
+          "[engine][meter_telemetry]") {
+  // A host block that automation splits into several process() calls between
+  // begin_block()/end_block() must publish ONE record describing the WHOLE
+  // block: peak_db is the max over every sub-block, rms_db is the RMS over the
+  // concatenation of all sub-blocks. Put the transient in the FIRST sub-block
+  // and silence in the last one so a "keep only the last fragment" bug (which
+  // would report the floor peak and zero RMS) is caught.
+  constexpr int kSubBlock = 64;
+  sonare::engine::MeterTelemetryTap tap;
+  tap.prepare(kSampleRate, kSubBlock, 99, 8);
+
+  std::array<float, kSubBlock> loud{};
+  loud.fill(1.0f);  // 0 dBFS transient confined to the first sub-block
+  std::array<float, kSubBlock> silent{};
+  silent.fill(0.0f);
+  float* loud_channels[] = {loud.data(), loud.data()};
+  float* silent_channels[] = {silent.data(), silent.data()};
+
+  tap.begin_block();
+  tap.process(loud_channels, 2, kSubBlock, 0);            // sub-block 1: transient
+  tap.process(silent_channels, 2, kSubBlock, kSubBlock);  // sub-block 2: silence
+  tap.end_block();
+
+  sonare::engine::MeterTelemetryRecord record{};
+  REQUIRE(tap.pop(record));
+  REQUIRE_FALSE(tap.pop(record));
+
+  // Without merging, end_block() would publish only the second (silent)
+  // sub-block and this peak would sit at the dB floor.
+  REQUIRE(record.peak_db[0] == Approx(0.0f).margin(0.01f));
+
+  // Half the block is full-scale and half is silent; the combined RMS must
+  // reflect both halves rather than just the last one.
+  const double expected_rms_db = 10.0 * std::log10(0.5);
+  REQUIRE(record.rms_db[0] == Approx(static_cast<float>(expected_rms_db)).margin(0.05f));
+}

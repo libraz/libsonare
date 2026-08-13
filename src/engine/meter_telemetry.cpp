@@ -51,7 +51,7 @@ void MeterTelemetryTap::process(float* const* channels, int num_channels, int nu
   }
   meter_->process(channels, num_channels, num_frames);
   push_goniometer(channels, num_channels, num_frames);
-  publish(meter_->snapshot(), render_frame);
+  publish(meter_->snapshot(), render_frame, num_frames);
 }
 
 void MeterTelemetryTap::process_lightweight(float* const* channels, int num_channels,
@@ -114,7 +114,7 @@ void MeterTelemetryTap::process_lightweight(float* const* channels, int num_chan
     record.mono_compat_width = mixing::mono_compat_width_from_energy(mid_energy, side_energy);
   }
 
-  stage(record);
+  stage(record, num_frames);
 }
 
 size_t MeterTelemetryTap::read_goniometer(mixing::GoniometerPoint* out,
@@ -122,8 +122,8 @@ size_t MeterTelemetryTap::read_goniometer(mixing::GoniometerPoint* out,
   return goniometer_.read_latest(out, max_points);
 }
 
-void MeterTelemetryTap::publish(const mixing::MeterSnapshot& snapshot,
-                                int64_t render_frame) noexcept {
+void MeterTelemetryTap::publish(const mixing::MeterSnapshot& snapshot, int64_t render_frame,
+                                int num_frames) noexcept {
   MeterTelemetryRecord record{};
   record.target_id = target_id_;
   record.render_frame = render_frame;
@@ -141,7 +141,7 @@ void MeterTelemetryTap::publish(const mixing::MeterSnapshot& snapshot,
   record.gain_reduction_db = snapshot.gain_reduction_db;
   record.dropped_records = dropped_records_;
 
-  stage(record);
+  stage(record, num_frames);
 }
 
 void MeterTelemetryTap::publish(MeterTelemetryRecord record) noexcept {
@@ -158,18 +158,65 @@ void MeterTelemetryTap::publish(MeterTelemetryRecord record) noexcept {
   ++dropped_records_;
 }
 
-void MeterTelemetryTap::stage(MeterTelemetryRecord record) noexcept {
+void MeterTelemetryTap::stage(MeterTelemetryRecord record, int num_frames) noexcept {
   if (!block_active_) {
     publish(record);
     return;
   }
+  const int64_t frames = std::max(0, num_frames);
   for (size_t i = 0; i < staged_count_; ++i) {
-    if (staged_records_[i].target_id == record.target_id) {
-      staged_records_[i] = record;
-      return;
+    if (staged_records_[i].target_id != record.target_id) {
+      continue;
     }
+    // A second (or later) sub-block for a target already staged this host
+    // block: the staged record must describe the WHOLE block, not just the
+    // most recent fragment, so peak/true-peak merge as an element-wise max
+    // and RMS is recomputed from accumulated energy rather than overwritten.
+    MeterTelemetryRecord& staged = staged_records_[i];
+    StagedEnergy& energy = staged_energy_[i];
+    const int channel_count = std::clamp(record.channel_count, 0, mixing::kMaxMeterChannels);
+    for (int ch = 0; ch < channel_count; ++ch) {
+      const size_t c = static_cast<size_t>(ch);
+      staged.peak_db[c] = std::max(staged.peak_db[c], record.peak_db[c]);
+      staged.true_peak_db[c] = std::max(staged.true_peak_db[c], record.true_peak_db[c]);
+      const double mean_square = std::pow(10.0, static_cast<double>(record.rms_db[c]) / 10.0);
+      energy.sum_sq[c] += mean_square * static_cast<double>(frames);
+    }
+    energy.frames += frames;
+    if (energy.frames > 0) {
+      for (int ch = 0; ch < channel_count; ++ch) {
+        const size_t c = static_cast<size_t>(ch);
+        const double mean_square = energy.sum_sq[c] / static_cast<double>(energy.frames);
+        staged.rms_db[c] =
+            mean_square > 0.0 ? static_cast<float>(10.0 * std::log10(mean_square)) : kFloorDb;
+      }
+    }
+    staged.max_true_peak_db = std::max(staged.max_true_peak_db, record.max_true_peak_db);
+    // seq/render_frame and the already-integrating fields (LUFS, gain
+    // reduction, correlation, mono-compat width) describe the meter's running
+    // state as of the most recent sub-block, so the latest value is correct
+    // for them (no merge needed).
+    staged.seq = record.seq;
+    staged.render_frame = record.render_frame;
+    staged.channel_count = record.channel_count;
+    staged.correlation = record.correlation;
+    staged.mono_compat_width = record.mono_compat_width;
+    staged.momentary_lufs = record.momentary_lufs;
+    staged.short_term_lufs = record.short_term_lufs;
+    staged.integrated_lufs = record.integrated_lufs;
+    staged.gain_reduction_db = record.gain_reduction_db;
+    return;
   }
   if (staged_count_ < staged_records_.size()) {
+    const int channel_count = std::clamp(record.channel_count, 0, mixing::kMaxMeterChannels);
+    StagedEnergy energy{};
+    for (int ch = 0; ch < channel_count; ++ch) {
+      const size_t c = static_cast<size_t>(ch);
+      energy.sum_sq[c] = std::pow(10.0, static_cast<double>(record.rms_db[c]) / 10.0) *
+                         static_cast<double>(frames);
+    }
+    energy.frames = frames;
+    staged_energy_[staged_count_] = energy;
     staged_records_[staged_count_++] = record;
   } else {
     ++dropped_records_;
