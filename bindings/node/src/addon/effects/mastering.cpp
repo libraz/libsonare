@@ -592,10 +592,14 @@ class MasterAudioStereoAsyncWorker : public Napi::AsyncWorker {
 
 Napi::Value SonareWrap::MasterAudioAsync(const Napi::CallbackInfo& info) {
   Napi::Env env = info.Env();
+  // A Promise-returning entry point must reject rather than throw synchronously,
+  // so invalid input never escapes a caller's `.catch()`.
   if (info.Length() < 3 || !info[0].IsString() || !IsFloat32Array(info[1]) || !info[2].IsNumber()) {
-    Napi::TypeError::New(env, "Expected (presetName, Float32Array, sampleRate, overrides?)")
-        .ThrowAsJavaScriptException();
-    return env.Undefined();
+    auto deferred = Napi::Promise::Deferred::New(env);
+    deferred.Reject(
+        Napi::TypeError::New(env, "Expected (presetName, Float32Array, sampleRate, overrides?)")
+            .Value());
+    return deferred.Promise();
   }
   std::string preset_name = info[0].As<Napi::String>().Utf8Value();
   auto typed = info[1].As<Napi::Float32Array>();
@@ -614,19 +618,23 @@ Napi::Value SonareWrap::MasterAudioAsync(const Napi::CallbackInfo& info) {
 
 Napi::Value SonareWrap::MasterAudioStereoAsync(const Napi::CallbackInfo& info) {
   Napi::Env env = info.Env();
+  // A Promise-returning entry point must reject rather than throw synchronously,
+  // so invalid input never escapes a caller's `.catch()`.
   if (info.Length() < 4 || !info[0].IsString() || !IsFloat32Array(info[1]) ||
       !IsFloat32Array(info[2]) || !info[3].IsNumber()) {
-    Napi::TypeError::New(env, "Expected (presetName, left, right, sampleRate, overrides?)")
-        .ThrowAsJavaScriptException();
-    return env.Undefined();
+    auto deferred = Napi::Promise::Deferred::New(env);
+    deferred.Reject(
+        Napi::TypeError::New(env, "Expected (presetName, left, right, sampleRate, overrides?)")
+            .Value());
+    return deferred.Promise();
   }
   std::string preset_name = info[0].As<Napi::String>().Utf8Value();
   auto left_typed = info[1].As<Napi::Float32Array>();
   auto right_typed = info[2].As<Napi::Float32Array>();
   if (left_typed.ElementLength() != right_typed.ElementLength()) {
-    Napi::TypeError::New(env, "left and right channel lengths must match")
-        .ThrowAsJavaScriptException();
-    return env.Undefined();
+    auto deferred = Napi::Promise::Deferred::New(env);
+    deferred.Reject(Napi::TypeError::New(env, "left and right channel lengths must match").Value());
+    return deferred.Promise();
   }
   std::vector<float> left(left_typed.Data(), left_typed.Data() + left_typed.ElementLength());
   std::vector<float> right(right_typed.Data(), right_typed.Data() + right_typed.ElementLength());

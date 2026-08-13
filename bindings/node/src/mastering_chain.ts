@@ -377,6 +377,12 @@ export function masterAudioAsync(
   presetName: MasteringPreset = 'pop',
   overrides: MasteringChainConfig = {},
 ): Promise<MasteringChainResult> {
+  // Preserve the async validation contract: invalid input is handed to the addon
+  // so it becomes a rejected Promise, not a synchronous property-access error
+  // while normalizing the new request form.
+  if (!(samples instanceof Float32Array) && (!samples || typeof samples !== 'object')) {
+    return addon.masterAudioAsync(presetName, samples as unknown as Float32Array, sampleRate, {});
+  }
   const request = masterAudioRequest(samples, sampleRate, presetName, overrides);
   return addon.masterAudioAsync(
     request.preset ?? 'pop',
@@ -452,6 +458,18 @@ export function masterAudioStereoAsync(
   presetName: MasteringPreset = 'pop',
   overrides: MasteringChainConfig = {},
 ): Promise<MasteringChainStereoResult> {
+  // Preserve the async validation contract: invalid input is handed to the addon
+  // so it becomes a rejected Promise, not a synchronous property-access error
+  // while normalizing the new request form.
+  if (!(left instanceof Float32Array) && (!left || typeof left !== 'object')) {
+    return addon.masterAudioStereoAsync(
+      presetName,
+      left as unknown as Float32Array,
+      right as Float32Array,
+      sampleRate,
+      {},
+    );
+  }
   const request = masterAudioStereoRequest(left, right, sampleRate, presetName, overrides);
   return addon.masterAudioStereoAsync(
     request.preset ?? 'pop',
