@@ -102,3 +102,59 @@ TEST_CASE("segment matrix builders reject overflowing dimensions", "[util][segme
                     SonareException);
   REQUIRE_THROWS_AS(recurrence_to_lag(&dummy, 50000, true), SonareException);
 }
+
+TEST_CASE("subsegment emits at most n_segments boundaries per parent span",
+          "[util][segment][subsegment]") {
+  // librosa cuts each parent span into exactly min(n_segments, len) runs. Under
+  // unconstrained clustering a label can recur after an interruption, so the
+  // count of label transitions -- and therefore the emitted boundary count --
+  // is unbounded by n_segments. This feature pattern alternates between two
+  // values, which is precisely the case that produces a transition at nearly
+  // every column when contiguity is not enforced.
+  const int cols = 24;
+  const int rows = 1;
+  std::vector<float> alternating(static_cast<size_t>(cols));
+  for (int c = 0; c < cols; ++c) {
+    alternating[static_cast<size_t>(c)] = (c % 2 == 0) ? 0.0f : 5.0f;
+  }
+
+  const std::vector<int> parents{0, 12, cols};
+  const int n_segments = 3;
+  const auto out = subsegment(alternating.data(), rows, cols, parents, n_segments);
+
+  // Endpoints plus at most (n_segments - 1) interior cuts per parent span.
+  REQUIRE(out.front() == 0);
+  REQUIRE(out.back() == cols);
+  REQUIRE(std::is_sorted(out.begin(), out.end()));
+  REQUIRE(std::adjacent_find(out.begin(), out.end()) == out.end());
+
+  for (size_t p = 0; p + 1 < parents.size(); ++p) {
+    const int a = parents[p];
+    const int b = parents[p + 1];
+    const auto in_span =
+        std::count_if(out.begin(), out.end(), [&](int f) { return f >= a && f < b; });
+    CAPTURE(a, b, in_span, n_segments, out.size());
+    REQUIRE(in_span <= n_segments);
+    REQUIRE(in_span >= 1);  // the parent boundary itself is always retained
+  }
+}
+
+TEST_CASE("subsegment splits at the true plateau edges", "[util][segment][subsegment]") {
+  // Three plateaus of unequal width inside one parent span: the contiguous Ward
+  // merge must recover exactly their edges rather than equal-width thirds.
+  // (This pins split placement. The bound on how MANY boundaries a span may
+  // emit is the separate case above -- an unconstrained clustering passes this
+  // one, because these plateaus happen to cluster contiguously anyway.)
+  const int cols = 12;
+  std::vector<float> plateaus{0.0f, 0.0f, 0.0f, 9.0f, 9.0f, 9.0f,
+                              9.0f, 9.0f, 0.5f, 0.5f, 0.5f, 0.5f};
+  REQUIRE(plateaus.size() == static_cast<size_t>(cols));
+
+  const std::vector<int> parents{0, cols};
+  const auto out = subsegment(plateaus.data(), 1, cols, parents, 3);
+
+  // Exactly the two interior plateau edges, plus the two endpoints.
+  const std::vector<int> expected{0, 3, 8, cols};
+  CAPTURE(out.size());
+  REQUIRE(out == expected);
+}

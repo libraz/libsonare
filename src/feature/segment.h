@@ -57,9 +57,22 @@ std::vector<float> recurrence_to_lag(const float* rec, int n, bool pad = false);
 /// @brief Inverse of @ref recurrence_to_lag.
 std::vector<float> lag_to_recurrence(const float* lag, int n_rows, int n_lags);
 
-/// @brief Subdivides each segment between consecutive boundary frames into
-///        @p n_segments smaller chunks via clustering of column-feature norms.
-/// @return Sorted vector of refined boundary indices.
+/// @brief Subdivides each segment between consecutive boundary frames into at
+///        most @p n_segments smaller chunks by clustering its column features.
+/// @details Mirrors librosa.segment.subsegment. The parent boundaries are
+///          normalized first (clamped into [0, cols], the 0 and cols endpoints
+///          added, duplicates dropped), then each parent span [a, b) is cut into
+///          exactly `min(n_segments, b - a)` runs under a time-contiguity
+///          constraint, so every emitted boundary opens a contiguous stretch of
+///          frames and no parent span can contribute more than @p n_segments
+///          boundaries.
+/// @param data Feature matrix [rows x cols] row-major.
+/// @param rows Feature dimension.
+/// @param cols Number of frames.
+/// @param boundaries Parent boundary frames.
+/// @param n_segments Maximum sub-segments per parent span.
+/// @return Sorted, de-duplicated vector of refined boundary indices, always
+///         starting at 0 and ending at @p cols.
 std::vector<int> subsegment(const float* data, int rows, int cols,
                             const std::vector<int>& boundaries, int n_segments = 4);
 

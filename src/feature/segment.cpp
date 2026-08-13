@@ -297,6 +297,95 @@ std::vector<float> lag_to_recurrence(const float* lag, int n_rows, int n_lags) {
   return out;
 }
 
+namespace {
+
+/// @brief Ward clustering of consecutive columns under a time-contiguity constraint.
+/// @details librosa.segment.subsegment clusters each parent span with a chain
+///          connectivity graph (sklearn's grid_to_graph), so only temporally
+///          adjacent clusters may merge. Two properties follow, and both are
+///          load-bearing for a boundary detector: the span is cut into exactly
+///          @p k runs, and every run is a contiguous stretch of time.
+///          Unconstrained clustering gives neither -- one label may recur after
+///          an interruption, which produces more than @p k - 1 label
+///          transitions and "segments" that do not describe a span.
+///
+///          Merges the adjacent pair with the smallest Ward cost
+///          `(na * nb / (na + nb)) * ||ca - cb||^2` until @p k runs remain,
+///          tracking the active runs as a linked list so a merge does not have
+///          to shift the remaining centroids.
+/// @param block Column-major-indexed feature block [rows x len] row-major
+/// @param rows Feature dimension
+/// @param len Number of columns in the span
+/// @param k Requested run count; clamped to [1, len]
+/// @return Offsets relative to the span start where each run begins, ascending.
+///         The first entry is always 0 and the result holds min(k, len) entries.
+std::vector<int> contiguous_ward_runs(const float* block, int rows, int len, int k) {
+  if (len <= 0 || rows <= 0) return {};
+  k = std::clamp(k, 1, len);
+
+  std::vector<int> start(len);
+  std::vector<int> count(len, 1);
+  std::vector<int> next(len);
+  std::vector<int> prev(len);
+  std::vector<double> centroid(static_cast<size_t>(len) * static_cast<size_t>(rows));
+  for (int c = 0; c < len; ++c) {
+    start[c] = c;
+    next[c] = (c + 1 < len) ? c + 1 : -1;
+    prev[c] = c - 1;
+    for (int r = 0; r < rows; ++r) {
+      centroid[static_cast<size_t>(c) * rows + r] = block[static_cast<size_t>(r) * len + c];
+    }
+  }
+
+  auto ward_cost = [&](int i, int j) {
+    double squared = 0.0;
+    for (int r = 0; r < rows; ++r) {
+      const double diff =
+          centroid[static_cast<size_t>(i) * rows + r] - centroid[static_cast<size_t>(j) * rows + r];
+      squared += diff * diff;
+    }
+    const auto ni = static_cast<double>(count[i]);
+    const auto nj = static_cast<double>(count[j]);
+    return (ni * nj / (ni + nj)) * squared;
+  };
+
+  int head = 0;
+  int n_runs = len;
+  while (n_runs > k) {
+    int best = -1;
+    double best_cost = 0.0;
+    for (int i = head; i != -1 && next[i] != -1; i = next[i]) {
+      const double cost = ward_cost(i, next[i]);
+      if (best < 0 || cost < best_cost) {
+        best = i;
+        best_cost = cost;
+      }
+    }
+    if (best < 0) break;
+
+    const int victim = next[best];
+    const auto ni = static_cast<double>(count[best]);
+    const auto nj = static_cast<double>(count[victim]);
+    for (int r = 0; r < rows; ++r) {
+      centroid[static_cast<size_t>(best) * rows + r] =
+          (ni * centroid[static_cast<size_t>(best) * rows + r] +
+           nj * centroid[static_cast<size_t>(victim) * rows + r]) /
+          (ni + nj);
+    }
+    count[best] += count[victim];
+    next[best] = next[victim];
+    if (next[victim] != -1) prev[next[victim]] = best;
+    --n_runs;
+  }
+
+  std::vector<int> runs;
+  runs.reserve(static_cast<size_t>(n_runs));
+  for (int i = head; i != -1; i = next[i]) runs.push_back(start[i]);
+  return runs;
+}
+
+}  // namespace
+
 std::vector<int> subsegment(const float* data, int rows, int cols,
                             const std::vector<int>& boundaries, int n_segments) {
   if (data == nullptr || rows <= 0 || cols <= 0 || n_segments <= 0) return boundaries;
@@ -313,12 +402,13 @@ std::vector<int> subsegment(const float* data, int rows, int cols,
   if (sorted.back() != cols) sorted.push_back(cols);
   sorted.erase(std::unique(sorted.begin(), sorted.end()), sorted.end());
 
-  // Refine each parent span by clustering its column feature vectors and
-  // emitting a sub-boundary wherever the cluster label changes between adjacent
-  // columns (mirroring librosa.segment.subsegment, which clusters the columns
-  // within each segment and splits at label transitions). This makes the output
-  // content-driven rather than fixed equal-width chunks. We reuse the
-  // agglomerative clustering helper (Ward linkage) on the extracted block.
+  // Refine each parent span by clustering its column feature vectors under a
+  // time-contiguity constraint and emitting a sub-boundary at each run start,
+  // mirroring librosa.segment.subsegment. The constraint is what bounds the
+  // output: every parent span contributes exactly min(n_segments, len)
+  // boundaries, and each one opens a contiguous stretch of time. The
+  // unconstrained agglomerative helper cannot provide either guarantee, so it
+  // is deliberately not reused here.
   std::vector<int> out;
   std::vector<float> block;
   for (size_t s = 0; s + 1 < sorted.size(); ++s) {
@@ -339,11 +429,10 @@ std::vector<int> subsegment(const float* data, int rows, int cols,
       }
     }
 
-    const std::vector<int> labels = agglomerative(block.data(), rows, len, n_seg, "ward");
-    const int label_count = static_cast<int>(labels.size());
-    for (int c = 1; c < len && c < label_count; ++c) {
-      if (labels[c] != labels[c - 1]) out.push_back(a + c);
-    }
+    const std::vector<int> runs = contiguous_ward_runs(block.data(), rows, len, n_seg);
+    // runs.front() is the span start, which was already emitted as the parent
+    // boundary above.
+    for (size_t i = 1; i < runs.size(); ++i) out.push_back(a + runs[i]);
   }
   out.push_back(cols);
   std::sort(out.begin(), out.end());
