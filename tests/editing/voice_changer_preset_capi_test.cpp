@@ -275,6 +275,63 @@ TEST_CASE("preset JSON validator rejects duplicate top-level keys", "[voice_chan
   REQUIRE(error.find("duplicate") != std::string::npos);
 }
 
+TEST_CASE("preset JSON validator round-trips the caller's full preset identity",
+          "[voice_changer][json]") {
+  // The normalizer used to route through realtime_voice_changer_config_to_json(),
+  // whose "custom"/"Custom" placeholders are only correct for config-only entry
+  // points that never had a preset identity to begin with. Using values that
+  // are visibly distinct from those placeholders makes a regression fail loudly
+  // instead of coincidentally matching.
+  const auto baseline = realtime_voice_changer_preset_json(VoiceCharacterPreset::NeutralMonitor);
+  const auto dsp_pos = baseline.find("\"dsp\":");
+  REQUIRE(dsp_pos != std::string::npos);
+  const std::string dsp_and_tail = baseline.substr(dsp_pos);
+
+  const std::string full_identity_json =
+      "{\"schemaVersion\":1,\"id\":\"my.pack.preset-1\",\"name\":\"Warm Tape\","
+      "\"description\":\"A warm, tape-saturated preset for vocals.\","
+      "\"category\":\"bright\"," +
+      dsp_and_tail;
+
+  std::string normalized;
+  std::string error;
+  REQUIRE(validate_realtime_voice_changer_preset_json(full_identity_json, &normalized, &error));
+  REQUIRE(error.empty());
+
+  const auto root = sonare::util::json::parse(normalized);
+  REQUIRE(root["id"].as_string() == "my.pack.preset-1");
+  REQUIRE(root["name"].as_string() == "Warm Tape");
+  REQUIRE(root["description"].as_string() == "A warm, tape-saturated preset for vocals.");
+  REQUIRE(root["category"].as_string() == "bright");
+}
+
+TEST_CASE(
+    "preset JSON validator keeps only the caller's mandatory fields "
+    "without inventing placeholders",
+    "[voice_changer][json]") {
+  // A preset supplying only the mandatory id/name must keep those two exact
+  // values (not the "custom"/"Custom" placeholders) and must not gain
+  // description/category keys that were never present in the input.
+  const auto baseline = realtime_voice_changer_preset_json(VoiceCharacterPreset::NeutralMonitor);
+  const auto dsp_pos = baseline.find("\"dsp\":");
+  REQUIRE(dsp_pos != std::string::npos);
+  const std::string dsp_and_tail = baseline.substr(dsp_pos);
+
+  const std::string minimal_json =
+      "{\"schemaVersion\":1,\"id\":\"my.pack.preset-1\",\"name\":\"Warm Tape\"," + dsp_and_tail;
+
+  std::string normalized;
+  std::string error;
+  REQUIRE(validate_realtime_voice_changer_preset_json(minimal_json, &normalized, &error));
+  REQUIRE(error.empty());
+
+  const auto root = sonare::util::json::parse(normalized);
+  REQUIRE(root["id"].as_string() == "my.pack.preset-1");
+  REQUIRE(root["name"].as_string() == "Warm Tape");
+  REQUIRE(root.find("description") == nullptr);
+  REQUIRE(root.find("category") == nullptr);
+}
+
 TEST_CASE("StreamingReverb passes dry input through when mix is zero", "[voice_changer][reverb]") {
   // mix == 0 must short-circuit the comb/allpass network so the output is
   // bit-identical to the input. This guards the audio thread against any
@@ -601,6 +658,38 @@ TEST_CASE("sonare_voice_changer_abi_version is non-zero and stable", "[voice_cha
 
   // Repeated calls must yield the same value (no per-call state).
   REQUIRE(sonare_voice_changer_abi_version() == runtime);
+}
+
+TEST_CASE("sonare_realtime_voice_changer_validate_preset_json round-trips preset identity",
+          "[voice_changer][c-api]") {
+  // The C ABI wrapper must expose the same identity round-trip guarantee as
+  // the C++ validator it wraps: id/name/description/category all survive
+  // unchanged in out_normalized_json, not the generic "custom"/"Custom"
+  // placeholders.
+  const auto baseline = realtime_voice_changer_preset_json(VoiceCharacterPreset::NeutralMonitor);
+  const auto dsp_pos = baseline.find("\"dsp\":");
+  REQUIRE(dsp_pos != std::string::npos);
+  const std::string dsp_and_tail = baseline.substr(dsp_pos);
+
+  const std::string full_identity_json =
+      "{\"schemaVersion\":1,\"id\":\"my.pack.preset-1\",\"name\":\"Warm Tape\","
+      "\"description\":\"A warm, tape-saturated preset for vocals.\","
+      "\"category\":\"bright\"," +
+      dsp_and_tail;
+
+  char* normalized = nullptr;
+  char* error = nullptr;
+  REQUIRE(sonare_realtime_voice_changer_validate_preset_json(full_identity_json.c_str(),
+                                                             &normalized, &error) == SONARE_OK);
+  REQUIRE(normalized != nullptr);
+  REQUIRE(error == nullptr);
+
+  const auto root = sonare::util::json::parse(normalized);
+  REQUIRE(root["id"].as_string() == "my.pack.preset-1");
+  REQUIRE(root["name"].as_string() == "Warm Tape");
+  REQUIRE(root["description"].as_string() == "A warm, tape-saturated preset for vocals.");
+  REQUIRE(root["category"].as_string() == "bright");
+  sonare_free_string(normalized);
 }
 
 // ===================================================================
