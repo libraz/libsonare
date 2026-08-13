@@ -5,7 +5,7 @@
 **This release contains source-incompatible changes.** Two of them change behaviour without raising an error, so existing code keeps running with a different meaning — read Behavioural changes before upgrading:
 
 - Project automation lanes are identified by their target parameter id instead of a positional index. The add, edit and remove calls keep the same arity and argument types on every surface, so an existing index-based call still runs and edits a different lane.
-- `Audio#getData()` on Node and WASM returns a copy. Code that wrote into the returned `Float32Array` to edit the audio in place no longer has any effect.
+- `Audio#getData()` on Node and `Audio.data` on WASM return a copy. Code that wrote into the returned `Float32Array` to edit the audio in place no longer has any effect.
 
 This release adds a machine-readable capability catalog, cooperative cancellation for long-running offline calls, a dedicated WebAssembly analysis bundle and Worker entry point, project-level stem import and flat model read-back, GM program following in the built-in synth, and before/after mastering reports. It also corrects oversampled mastering continuity across block boundaries, the voice changer's latency and limiting, and a set of analysis, mixing and MIDI defects.
 
@@ -84,7 +84,7 @@ This release adds a machine-readable capability catalog, cooperative cancellatio
 ### Behavioural changes
 
 - Project automation lanes are addressed by target parameter id: `sonare_project_add_automation_lane` reports the id through `out_target_param_id`, and the edit and remove calls take `target_param_id` where they previously took `lane_index`. Node, WASM and Python changed with them. The argument count and type are unchanged, so an existing index-based call still runs and operates on a different lane; changing a lane's identity now requires remove then add.
-- `Audio#getData()` on Node and WASM returns a copy, so the internal snapshot the facade methods read cannot be mutated through the returned array. In-place edits to the returned `Float32Array` no longer affect later calls, and each call allocates.
+- `Audio#getData()` on Node and `Audio.data` on WASM return a copy, so the internal snapshot the facade methods read cannot be mutated through the returned array. In-place edits to the returned `Float32Array` no longer affect later calls, and each call allocates.
 - Node and WASM reject inputs they previously coerced: wrong-typed repair and dynamics options, an unknown track kind, capture source or pitch-correction mode, a negative spectrum setting, enum spellings and ordinals that are not declared, and override values that are neither number nor boolean. Instance methods reject after `destroy()`.
 - Voice-changer preset documents must be complete; a partial document is rejected instead of falling back to unrelated defaults, and `deesser.ratio` is required. The `macros` shorthand maps its 0–1 inputs onto each target's valid range, so `macros.space` reaches the reverb mix ceiling of 0.45 at 1.0 rather than writing an out-of-range value.
 - Project and scene JSON reject a non-finite or out-of-range number with its field path instead of silently truncating it, and `channelDelaySamples` is bounded by the alignment-delay maximum rather than only rejecting negatives.

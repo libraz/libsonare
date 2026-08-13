@@ -189,6 +189,23 @@ describe('Audio class', () => {
       expect(audio.data).not.toBe(samples);
     });
 
+    it('returns a fresh copy on every access, matching Node getData()', () => {
+      const audio = Audio.fromBuffer(sine(), SR);
+      // Two reads must not alias the same buffer or each other.
+      expect(audio.data).not.toBe(audio.data);
+
+      const bpmBeforeMutation = audio.detectBpm();
+      const snapshot = audio.data;
+      snapshot[0] = snapshot[0] + 1;
+      snapshot.fill(0);
+
+      // Mutating the returned array must not rewrite the Audio's internal
+      // buffer: a later read and a later facade call must see the original,
+      // unaffected samples.
+      expect(audio.data[0]).toBe(sine()[0]);
+      expect(audio.detectBpm()).toBe(bpmBeforeMutation);
+    });
+
     it('should return correct length', () => {
       const samples = sine();
       const audio = Audio.fromBuffer(samples, SR);

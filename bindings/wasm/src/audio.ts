@@ -239,9 +239,14 @@ export class Audio {
     }
   }
 
-  /** The raw audio samples. */
+  /**
+   * A copy of the raw audio samples. Mirrors Node's `getData()` contract: the
+   * returned array is independent of the Audio's internal buffer, so mutating
+   * it (or transferring it to a Worker) does not affect subsequent facade
+   * calls, which all read the internal snapshot directly.
+   */
   get data(): Float32Array {
-    return this._samples;
+    return this._samples.slice();
   }
 
   /** Number of samples. */
