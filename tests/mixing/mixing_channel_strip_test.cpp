@@ -35,7 +35,8 @@ class HardClipProcessor final : public sonare::rt::ProcessorBase {
 };
 
 // Models a latent StereoPairOnly insert: it delays the two planes it receives,
-// while BusProcessor is responsible for aligning the untouched surround planes.
+// while the host chain (BusProcessor or ChannelStrip) is responsible for
+// aligning the untouched surround planes.
 class FixedLatencyStereoProcessor final : public sonare::rt::ProcessorBase {
  public:
   explicit FixedLatencyStereoProcessor(int latency) : latency_(latency) {}
@@ -177,6 +178,95 @@ TEST_CASE("surround bus aligns untouched planes after a latent StereoPairOnly in
     REQUIRE_THAT(planes[static_cast<size_t>(ch)][kLatency],
                  WithinAbs(static_cast<float>(ch + 1), 0.0001f));
   }
+}
+
+TEST_CASE("BusProcessor keeps a bypassed insert's latency in the signal path",
+          "[mixing][surround]") {
+  // Same soft-bypass contract as ChannelStrip: latency_samples_q8() counts a
+  // bypassed insert, so the bus must still deliver that delay -- on every plane,
+  // since a bypassed StereoPairOnly insert leaves the front pair undelayed too.
+  constexpr int kChannels = 6;
+  constexpr int kFrames = 12;
+  constexpr int kLatency = 4;
+  std::array<std::array<float, kFrames>, kChannels> planes{};
+  std::array<float*, kChannels> pointers{};
+  for (int ch = 0; ch < kChannels; ++ch) {
+    planes[static_cast<size_t>(ch)][0] = static_cast<float>(ch + 1);
+    pointers[static_cast<size_t>(ch)] = planes[static_cast<size_t>(ch)].data();
+  }
+
+  sonare::mixing::BusProcessor bus(sonare::mixing::BusRole::Subgroup);
+  bus.set_channel_layout(sonare::ChannelLayout::FivePointOne);
+  bus.add_insert(std::make_unique<FixedLatencyStereoProcessor>(kLatency), true);
+  bus.prepare(48000.0, kFrames);
+  REQUIRE(bus.set_insert_bypassed(0, true));
+  REQUIRE(bus.latency_samples() == kLatency);
+  bus.process(pointers.data(), kChannels, kFrames);
+
+  for (int ch = 0; ch < kChannels; ++ch) {
+    for (int sample = 0; sample < kLatency; ++sample) {
+      REQUIRE_THAT(planes[static_cast<size_t>(ch)][static_cast<size_t>(sample)],
+                   WithinAbs(0.0f, 0.0001f));
+    }
+    REQUIRE_THAT(planes[static_cast<size_t>(ch)][kLatency],
+                 WithinAbs(static_cast<float>(ch + 1), 0.0001f));
+  }
+}
+
+namespace {
+
+// Renders a rising ramp through a chain block by block, engaging bypass partway.
+// The insert is a pure delay, so its output and the bypass substitute's output
+// are the same signal: the rendered stream must be indistinguishable from one
+// continuous delay. A substitute that started cold would punch a
+// latency-length hole at the toggle instead.
+template <typename Chain>
+void require_continuous_bypass_engage(Chain& chain, int block_size, int blocks, int latency,
+                                      int bypass_from_block) {
+  std::vector<float> rendered;
+  rendered.reserve(static_cast<size_t>(block_size * blocks));
+  for (int block = 0; block < blocks; ++block) {
+    REQUIRE(chain.set_insert_bypassed(0, block >= bypass_from_block));
+    std::vector<float> left(static_cast<size_t>(block_size), 0.0f);
+    std::vector<float> right(static_cast<size_t>(block_size), 0.0f);
+    for (int i = 0; i < block_size; ++i) {
+      left[static_cast<size_t>(i)] = static_cast<float>(block * block_size + i + 1);
+      right[static_cast<size_t>(i)] = left[static_cast<size_t>(i)];
+    }
+    float* channels[] = {left.data(), right.data()};
+    chain.process(channels, 2, block_size);
+    rendered.insert(rendered.end(), left.begin(), left.end());
+  }
+
+  for (int n = 0; n < block_size * blocks; ++n) {
+    const float expected = n < latency ? 0.0f : static_cast<float>(n - latency + 1);
+    INFO("sample " << n);
+    REQUIRE_THAT(rendered[static_cast<size_t>(n)], WithinAbs(expected, 0.0001f));
+  }
+}
+
+}  // namespace
+
+TEST_CASE("ChannelStrip bypass engages without a dropout", "[mixing]") {
+  constexpr int kBlock = 16;
+  constexpr int kBlocks = 4;
+  constexpr int kLatency = 5;
+
+  sonare::mixing::ChannelStrip strip({0.0f, 0.0f, sonare::mixing::PanLaw::Linear0dB, 0.0f});
+  strip.add_pre_insert(std::make_unique<FixedLatencyStereoProcessor>(kLatency));
+  strip.prepare(48000.0, kBlock);
+  require_continuous_bypass_engage(strip, kBlock, kBlocks, kLatency, /*bypass_from_block=*/2);
+}
+
+TEST_CASE("BusProcessor bypass engages without a dropout", "[mixing]") {
+  constexpr int kBlock = 16;
+  constexpr int kBlocks = 4;
+  constexpr int kLatency = 5;
+
+  sonare::mixing::BusProcessor bus(sonare::mixing::BusRole::Subgroup);
+  bus.add_insert(std::make_unique<FixedLatencyStereoProcessor>(kLatency));
+  bus.prepare(48000.0, kBlock);
+  require_continuous_bypass_engage(bus, kBlock, kBlocks, kLatency, /*bypass_from_block=*/2);
 }
 
 TEST_CASE("GainProcessor applies fader and VCA offset", "[mixing]") {
@@ -328,6 +418,218 @@ TEST_CASE("ChannelStrip StereoPairOnly insert touches only the front pair on a s
     REQUIRE_THAT(planes[3][static_cast<size_t>(i)], WithinAbs(4.0f, 0.0001f));
     REQUIRE_THAT(planes[4][static_cast<size_t>(i)], WithinAbs(5.0f, 0.0001f));
     REQUIRE_THAT(planes[5][static_cast<size_t>(i)], WithinAbs(6.0f, 0.0001f));
+  }
+}
+
+TEST_CASE("ChannelStrip aligns untouched planes after a latent StereoPairOnly insert",
+          "[mixing][surround]") {
+  // The insert delays only the front pair it is handed, so the strip owes the
+  // centre, LFE and surround planes the same delay. Without it a convolution or
+  // lookahead insert on a 5.1 strip smears the front image against a centre
+  // channel that arrives early.
+  constexpr int kChannels = 6;
+  constexpr int kFrames = 12;
+  constexpr int kLatency = 4;
+  std::array<std::array<float, kFrames>, kChannels> planes{};
+  std::array<float*, kChannels> pointers{};
+  for (int ch = 0; ch < kChannels; ++ch) {
+    planes[static_cast<size_t>(ch)][0] = static_cast<float>(ch + 1);
+    pointers[static_cast<size_t>(ch)] = planes[static_cast<size_t>(ch)].data();
+  }
+
+  sonare::mixing::ChannelStrip strip({0.0f, 0.0f, sonare::mixing::PanLaw::Linear0dB, 0.0f});
+  strip.add_pre_insert(std::make_unique<FixedLatencyStereoProcessor>(kLatency),
+                       /*stereo_pair_only=*/true);
+  strip.prepare(48000.0, kFrames);
+  strip.process(pointers.data(), kChannels, kFrames);
+
+  REQUIRE(strip.latency_samples() == kLatency);
+  for (int ch = 0; ch < kChannels; ++ch) {
+    for (int sample = 0; sample < kLatency; ++sample) {
+      REQUIRE_THAT(planes[static_cast<size_t>(ch)][static_cast<size_t>(sample)],
+                   WithinAbs(0.0f, 0.0001f));
+    }
+    REQUIRE_THAT(planes[static_cast<size_t>(ch)][kLatency],
+                 WithinAbs(static_cast<float>(ch + 1), 0.0001f));
+  }
+}
+
+TEST_CASE("ChannelStrip keeps a bypassed insert's latency in the signal path", "[mixing]") {
+  // A bypass toggle must not move the strip in time relative to the rest of the
+  // mix: the host's PDC is computed from latency_samples_q8() on the control
+  // thread, while bypass flips on the audio thread, so the two only agree if the
+  // reported latency and the delivered latency both stay put.
+  constexpr int kFrames = 16;
+  constexpr int kLatency = 5;
+
+  auto render = [kLatency](bool bypassed) {
+    sonare::mixing::ChannelStrip strip({0.0f, 0.0f, sonare::mixing::PanLaw::Linear0dB, 0.0f});
+    strip.add_pre_insert(std::make_unique<FixedLatencyStereoProcessor>(kLatency));
+    strip.prepare(48000.0, kFrames);
+    REQUIRE(strip.set_insert_bypassed(0, bypassed));
+    REQUIRE(strip.latency_samples() == kLatency);
+
+    std::array<float, kFrames> left{};
+    std::array<float, kFrames> right{};
+    left[0] = 1.0f;
+    right[0] = 1.0f;
+    float* channels[] = {left.data(), right.data()};
+    strip.process(channels, 2, kFrames);
+    return left;
+  };
+
+  const std::array<float, kFrames> active = render(false);
+  const std::array<float, kFrames> bypassed = render(true);
+
+  for (int sample = 0; sample < kLatency; ++sample) {
+    REQUIRE_THAT(active[static_cast<size_t>(sample)], WithinAbs(0.0f, 0.0001f));
+    REQUIRE_THAT(bypassed[static_cast<size_t>(sample)], WithinAbs(0.0f, 0.0001f));
+  }
+  REQUIRE_THAT(active[kLatency], WithinAbs(1.0f, 0.0001f));
+  REQUIRE_THAT(bypassed[kLatency], WithinAbs(1.0f, 0.0001f));
+}
+
+TEST_CASE("ChannelStrip aligns untouched planes across both insert chains", "[mixing][surround]") {
+  // The pre and post chains share one alignment bank addressed by the combined
+  // insert index, so the post chain must pick up its OWN insert's latency rather
+  // than the pre chain's. Distinct latencies make a mis-offset bank visible: the
+  // surround planes would land at 3+3 instead of 3+5.
+  constexpr int kChannels = 6;
+  constexpr int kFrames = 24;
+  constexpr int kPreLatency = 3;
+  constexpr int kPostLatency = 5;
+  constexpr int kTotalLatency = kPreLatency + kPostLatency;
+  std::array<std::array<float, kFrames>, kChannels> planes{};
+  std::array<float*, kChannels> pointers{};
+  for (int ch = 0; ch < kChannels; ++ch) {
+    planes[static_cast<size_t>(ch)][0] = static_cast<float>(ch + 1);
+    pointers[static_cast<size_t>(ch)] = planes[static_cast<size_t>(ch)].data();
+  }
+
+  sonare::mixing::ChannelStrip strip({0.0f, 0.0f, sonare::mixing::PanLaw::Linear0dB, 0.0f});
+  strip.add_pre_insert(std::make_unique<FixedLatencyStereoProcessor>(kPreLatency),
+                       /*stereo_pair_only=*/true);
+  strip.add_post_insert(std::make_unique<FixedLatencyStereoProcessor>(kPostLatency),
+                        /*stereo_pair_only=*/true);
+  strip.prepare(48000.0, kFrames);
+  strip.process(pointers.data(), kChannels, kFrames);
+
+  REQUIRE(strip.latency_samples() == kTotalLatency);
+  for (int ch = 0; ch < kChannels; ++ch) {
+    for (int sample = 0; sample < kTotalLatency; ++sample) {
+      REQUIRE_THAT(planes[static_cast<size_t>(ch)][static_cast<size_t>(sample)],
+                   WithinAbs(0.0f, 0.0001f));
+    }
+    REQUIRE_THAT(planes[static_cast<size_t>(ch)][kTotalLatency],
+                 WithinAbs(static_cast<float>(ch + 1), 0.0001f));
+  }
+}
+
+TEST_CASE("ChannelStrip bypass keeps both insert chains aligned", "[mixing][surround]") {
+  // Same two-chain layout, both inserts bypassed: the bypass bank is addressed
+  // by the same combined index, so a mis-offset bank would drop the post
+  // insert's 5 samples and land everything 5 samples early.
+  constexpr int kChannels = 6;
+  constexpr int kFrames = 24;
+  constexpr int kPreLatency = 3;
+  constexpr int kPostLatency = 5;
+  constexpr int kTotalLatency = kPreLatency + kPostLatency;
+  std::array<std::array<float, kFrames>, kChannels> planes{};
+  std::array<float*, kChannels> pointers{};
+  for (int ch = 0; ch < kChannels; ++ch) {
+    planes[static_cast<size_t>(ch)][0] = static_cast<float>(ch + 1);
+    pointers[static_cast<size_t>(ch)] = planes[static_cast<size_t>(ch)].data();
+  }
+
+  sonare::mixing::ChannelStrip strip({0.0f, 0.0f, sonare::mixing::PanLaw::Linear0dB, 0.0f});
+  strip.add_pre_insert(std::make_unique<FixedLatencyStereoProcessor>(kPreLatency),
+                       /*stereo_pair_only=*/true);
+  strip.add_post_insert(std::make_unique<FixedLatencyStereoProcessor>(kPostLatency),
+                        /*stereo_pair_only=*/true);
+  strip.prepare(48000.0, kFrames);
+  // insert_index addresses the combined [pre ... post ...] sequence.
+  REQUIRE(strip.set_insert_bypassed(0, true));
+  REQUIRE(strip.set_insert_bypassed(1, true));
+  REQUIRE(strip.latency_samples() == kTotalLatency);
+  strip.process(pointers.data(), kChannels, kFrames);
+
+  for (int ch = 0; ch < kChannels; ++ch) {
+    for (int sample = 0; sample < kTotalLatency; ++sample) {
+      REQUIRE_THAT(planes[static_cast<size_t>(ch)][static_cast<size_t>(sample)],
+                   WithinAbs(0.0f, 0.0001f));
+    }
+    REQUIRE_THAT(planes[static_cast<size_t>(ch)][kTotalLatency],
+                 WithinAbs(static_cast<float>(ch + 1), 0.0001f));
+  }
+}
+
+TEST_CASE("ChannelStrip surround alignment survives mid-block segmentation", "[mixing][surround]") {
+  // An automation event splits the block, routing the chain through
+  // process_segment instead of process_unsegmented. The alignment bank has to
+  // carry its delay-line state across the segment boundary, so the boundary is
+  // placed inside the latency window: the impulse enters in the first segment
+  // and must emerge in the second.
+  constexpr int kChannels = 6;
+  constexpr int kFrames = 24;
+  constexpr int kLatency = 8;
+  constexpr int kSplit = 4;
+  static_assert(kSplit < kLatency, "the boundary must fall inside the latency window");
+
+  std::array<std::array<float, kFrames>, kChannels> planes{};
+  std::array<float*, kChannels> pointers{};
+  for (int ch = 0; ch < kChannels; ++ch) {
+    planes[static_cast<size_t>(ch)][0] = static_cast<float>(ch + 1);
+    pointers[static_cast<size_t>(ch)] = planes[static_cast<size_t>(ch)].data();
+  }
+
+  sonare::mixing::ChannelStrip strip({0.0f, 0.0f, sonare::mixing::PanLaw::Linear0dB, 0.0f});
+  strip.add_pre_insert(std::make_unique<FixedLatencyStereoProcessor>(kLatency),
+                       /*stereo_pair_only=*/true);
+  strip.prepare(48000.0, kFrames);
+  // Re-targets the fader at its current 0 dB, so the block splits without any
+  // gain change to disturb the impulse amplitude.
+  REQUIRE(strip.schedule_fader_automation(kSplit, 0.0f, sonare::AutomationCurve::Hold));
+  strip.process_at(pointers.data(), kChannels, kFrames, 0);
+
+  for (int ch = 0; ch < kChannels; ++ch) {
+    for (int sample = 0; sample < kLatency; ++sample) {
+      REQUIRE_THAT(planes[static_cast<size_t>(ch)][static_cast<size_t>(sample)],
+                   WithinAbs(0.0f, 0.0001f));
+    }
+    REQUIRE_THAT(planes[static_cast<size_t>(ch)][kLatency],
+                 WithinAbs(static_cast<float>(ch + 1), 0.0001f));
+  }
+}
+
+TEST_CASE("ChannelStrip bypass keeps every surround plane aligned", "[mixing][surround]") {
+  // Bypassing a latent StereoPairOnly insert takes both the insert's own front
+  // pair delay and the strip's surround compensation out of the chain at once,
+  // so the substitute delay has to cover all six planes uniformly.
+  constexpr int kChannels = 6;
+  constexpr int kFrames = 12;
+  constexpr int kLatency = 4;
+  std::array<std::array<float, kFrames>, kChannels> planes{};
+  std::array<float*, kChannels> pointers{};
+  for (int ch = 0; ch < kChannels; ++ch) {
+    planes[static_cast<size_t>(ch)][0] = static_cast<float>(ch + 1);
+    pointers[static_cast<size_t>(ch)] = planes[static_cast<size_t>(ch)].data();
+  }
+
+  sonare::mixing::ChannelStrip strip({0.0f, 0.0f, sonare::mixing::PanLaw::Linear0dB, 0.0f});
+  strip.add_pre_insert(std::make_unique<FixedLatencyStereoProcessor>(kLatency),
+                       /*stereo_pair_only=*/true);
+  strip.prepare(48000.0, kFrames);
+  REQUIRE(strip.set_insert_bypassed(0, true));
+  REQUIRE(strip.latency_samples() == kLatency);
+  strip.process(pointers.data(), kChannels, kFrames);
+
+  for (int ch = 0; ch < kChannels; ++ch) {
+    for (int sample = 0; sample < kLatency; ++sample) {
+      REQUIRE_THAT(planes[static_cast<size_t>(ch)][static_cast<size_t>(sample)],
+                   WithinAbs(0.0f, 0.0001f));
+    }
+    REQUIRE_THAT(planes[static_cast<size_t>(ch)][kLatency],
+                 WithinAbs(static_cast<float>(ch + 1), 0.0001f));
   }
 }
 

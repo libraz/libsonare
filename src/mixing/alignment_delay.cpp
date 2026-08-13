@@ -50,6 +50,32 @@ void AlignmentDelay::process(float* const* channels, int num_channels, int num_s
   }
 }
 
+void AlignmentDelay::prime(const float* const* channels, int num_channels,
+                           int num_samples) noexcept {
+  if (channels == nullptr || num_channels <= 0 || num_samples <= 0) {
+    return;
+  }
+  // Mirrors process() rather than sharing a per-sample helper on purpose: the
+  // fractional-mode test stays hoisted out of the inner loop in both paths.
+  const int channels_to_process = std::min(num_channels, prepared_channels_);
+  for (int ch = 0; ch < channels_to_process; ++ch) {
+    if (channels[ch] == nullptr) {
+      continue;
+    }
+    if (fractional_mode_ == FractionalDelayMode::None || (delay_samples_q8_ & 0xff) == 0) {
+      rt::DelayLine& delay = delays_[static_cast<size_t>(ch)];
+      for (int i = 0; i < num_samples; ++i) {
+        delay.process(channels[ch][i]);
+      }
+    } else {
+      FractionalState& state = fractional_[static_cast<size_t>(ch)];
+      for (int i = 0; i < num_samples; ++i) {
+        process_fractional(state, channels[ch][i]);
+      }
+    }
+  }
+}
+
 void AlignmentDelay::reset() {
   for (rt::DelayLine& delay : delays_) {
     delay.reset();

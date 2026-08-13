@@ -2,6 +2,39 @@
 /// @brief Engine and mixing no-allocation realtime tests.
 
 #include "no_alloc_test_helpers.h"
+#include "rt/delay_line.h"
+
+namespace {
+
+// A latent StereoPairOnly insert: it delays only the front pair it is handed, so
+// the strip owes the remaining planes the same delay, and owes all of them that
+// delay again once the insert is bypassed.
+class LatentStereoInsert final : public sonare::rt::ProcessorBase {
+ public:
+  explicit LatentStereoInsert(int latency) : latency_(latency) {}
+
+  void prepare(double, int) override {
+    for (auto& delay : delays_) delay.prepare(static_cast<size_t>(latency_));
+  }
+  void process(float* const* channels, int num_channels, int num_samples) override {
+    for (int ch = 0; ch < std::min(num_channels, 2); ++ch) {
+      if (channels[ch] == nullptr) continue;
+      for (int sample = 0; sample < num_samples; ++sample) {
+        channels[ch][sample] = delays_[static_cast<size_t>(ch)].process(channels[ch][sample]);
+      }
+    }
+  }
+  void reset() override {
+    for (auto& delay : delays_) delay.reset();
+  }
+  int latency_samples() const noexcept override { return latency_; }
+
+ private:
+  int latency_ = 0;
+  std::array<sonare::rt::DelayLine, 2> delays_{};
+};
+
+}  // namespace
 
 TEST_CASE("ChannelStrip process performs no heap allocation after prepare", "[mixing][rt]") {
   constexpr int kBlock = 256;
@@ -32,6 +65,47 @@ TEST_CASE("ChannelStrip process performs no heap allocation after prepare", "[mi
   const size_t allocations = guard.count();
 
   REQUIRE(allocations == 0);
+}
+
+TEST_CASE("ChannelStrip insert alignment delays perform no heap allocation after prepare",
+          "[mixing][rt][surround]") {
+  // Both per-insert alignment banks run on the audio thread: one compensates the
+  // planes a StereoPairOnly insert never saw, the other stands in for a bypassed
+  // insert's latency. Both must be fully preallocated by prepare().
+  constexpr int kBlock = 128;
+  constexpr int kChannels = 6;
+  constexpr int kLatency = 32;
+
+  sonare::mixing::ChannelStripConfig config;
+  config.enable_metering = false;
+  sonare::mixing::ChannelStrip strip(config);
+  strip.add_pre_insert(std::make_unique<LatentStereoInsert>(kLatency), /*stereo_pair_only=*/true);
+  strip.prepare(48000.0, kBlock);
+
+  std::array<std::array<float, kBlock>, kChannels> planes{};
+  std::array<float*, kChannels> channels{};
+  for (int ch = 0; ch < kChannels; ++ch) {
+    planes[static_cast<size_t>(ch)].fill(0.05f);
+    channels[static_cast<size_t>(ch)] = planes[static_cast<size_t>(ch)].data();
+  }
+
+  // Warm any lazily sized per-channel state, then measure the steady-state block.
+  strip.process(channels.data(), kChannels, kBlock);
+  strip.reset();
+  {
+    AllocationGuard guard;
+    strip.process(channels.data(), kChannels, kBlock);
+    REQUIRE(guard.count() == 0);
+  }
+
+  REQUIRE(strip.set_insert_bypassed(0, true));
+  strip.process(channels.data(), kChannels, kBlock);
+  strip.reset();
+  {
+    AllocationGuard guard;
+    strip.process(channels.data(), kChannels, kBlock);
+    REQUIRE(guard.count() == 0);
+  }
 }
 
 TEST_CASE("RealtimeEngine process performs no heap allocation after prepare", "[engine][rt]") {

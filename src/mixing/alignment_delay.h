@@ -29,6 +29,17 @@ class AlignmentDelay : public rt::ProcessorBase {
 
   void prepare(double sample_rate, int max_block_size) override;
   void process(float* const* channels, int num_channels, int num_samples) override;
+  /// @brief Advances the delay state over @p num_samples without writing back.
+  /// @details A compensation delay that only carries the signal some of the time
+  ///          (a bypass substitute, a surround-plane aligner behind a bypassable
+  ///          insert) would otherwise sit cold while unused and open with a
+  ///          delay-line's worth of silence the moment it is switched in --
+  ///          audible as a dropout on a bypass toggle. Feeding it the same
+  ///          stream it would have processed keeps its state continuous, so the
+  ///          switch costs only the intended change in processing, not a gap.
+  ///          Read-only on @p channels, allocation-free, and clamped to the
+  ///          prepared channel count exactly like @c process().
+  void prime(const float* const* channels, int num_channels, int num_samples) noexcept;
   void reset() override;
   int latency_samples() const noexcept override { return delay_samples_; }
   // Reports the exact requested Q8 delay. latency_samples() intentionally

@@ -310,6 +310,10 @@ class ChannelStrip : public rt::ProcessorBase {
                             const std::vector<uint8_t>& stereo_pair_only, float* const* channels,
                             int num_channels, int num_samples, size_t first_insert_index,
                             int sidechain_offset);
+  // Re-derives both per-insert alignment banks from the current insert list.
+  // Control-thread only, and re-derived in full rather than per new slot because
+  // adding a pre-insert shifts every post-insert's combined index.
+  void prepare_insert_alignment_delays();
 
   GainProcessor input_trim_;
   AlignmentDelay alignment_delay_;
@@ -337,6 +341,16 @@ class ChannelStrip : public rt::ProcessorBase {
   std::vector<uint8_t> pre_insert_spo_;
   std::vector<uint8_t> post_insert_spo_;
   std::vector<InsertSidechain> insert_sidechains_;
+  // Per-insert alignment banks, addressed by the combined insert index
+  // [pre_inserts_ ... post_inserts_ ...] exactly like insert_sidechains_, and
+  // reserved to kMaxInserts at construction so a control-thread add never
+  // reallocates them while the audio thread is inside process_insert_chain().
+  // stereo_pair_ compensates the surround planes a latent StereoPairOnly insert
+  // never saw; bypass_ substitutes for a bypassed insert's own latency so the
+  // strip's reported PDC stays honest across a bypass toggle. Entries whose
+  // insert reports no latency are left unprepared and are inert.
+  std::vector<AlignmentDelay> stereo_pair_alignment_delays_;
+  std::vector<AlignmentDelay> bypass_alignment_delays_;
   struct InsertAutomationLane {
     AutomationTarget target{};
     std::unique_ptr<AutomationLane> lane;

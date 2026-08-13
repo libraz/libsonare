@@ -136,6 +136,8 @@ ChannelStrip::ChannelStrip(ChannelStripConfig config)
   // automation() and add_pre/post_insert(); see channel_strip.h.
   insert_automation_.reserve(kMaxInsertAutomationLanes);
   insert_sidechains_.reserve(kMaxInserts);
+  stereo_pair_alignment_delays_.reserve(kMaxInserts);
+  bypass_alignment_delays_.reserve(kMaxInserts);
   pre_inserts_.reserve(kMaxInserts);
   post_inserts_.reserve(kMaxInserts);
   pre_insert_spo_.reserve(kMaxInserts);
@@ -172,6 +174,8 @@ void ChannelStrip::prepare(double sample_rate, int max_block_size) {
   for (auto& insert : post_inserts_) {
     insert->prepare(sample_rate_, max_block_size_);
   }
+  // After the inserts: an insert only reports its final latency once prepared.
+  prepare_insert_alignment_delays();
   for (auto& send : sends_) {
     send->prepare(sample_rate, max_block_size);
   }
@@ -485,9 +489,50 @@ void ChannelStrip::process_insert_chain(std::vector<std::unique_ptr<rt::Processo
   // A strip insert sees only the front L/R pair, so it forwards at most
   // kPreparedChannels sidechain rows (the surround planes pass through dry).
   std::array<const float*, kPreparedChannels> shifted_sidechain{};
+  // Both banks are addressed by the combined insert index while run_insert_chain
+  // indexes them by chain-local position, so hand it the segment's base.
+  auto segment_bank = [first_insert_index](std::vector<AlignmentDelay>& bank) -> AlignmentDelay* {
+    return first_insert_index < bank.size()
+               ? bank.data() + static_cast<std::ptrdiff_t>(first_insert_index)
+               : nullptr;
+  };
+  AlignmentDelay* stereo_pair_delays = segment_bank(stereo_pair_alignment_delays_);
+  AlignmentDelay* bypass_delays = segment_bank(bypass_alignment_delays_);
   run_insert_chain(inserts, stereo_pair_only, insert_sidechains_, channels, num_channels,
                    num_samples, first_insert_index, sidechain_offset, shifted_sidechain.data(),
-                   kPreparedChannels);
+                   kPreparedChannels, /*detector_excluded_channel=*/-1, stereo_pair_delays,
+                   bypass_delays);
+}
+
+void ChannelStrip::prepare_insert_alignment_delays() {
+  const size_t total = pre_inserts_.size() + post_inserts_.size();
+  // Capacity is reserved in the constructor and add_pre/post_insert enforce the
+  // cap, so neither resize can reallocate under the audio thread.
+  stereo_pair_alignment_delays_.resize(total);
+  bypass_alignment_delays_.resize(total);
+
+  for (size_t index = 0; index < total; ++index) {
+    const bool is_pre = index < pre_inserts_.size();
+    const size_t local = is_pre ? index : index - pre_inserts_.size();
+    const rt::ProcessorBase* insert =
+        is_pre ? pre_inserts_[local].get() : post_inserts_[local].get();
+    const std::vector<uint8_t>& spo_flags = is_pre ? pre_insert_spo_ : post_insert_spo_;
+    if (insert == nullptr) {
+      continue;
+    }
+    const bool stereo_pair_only = local < spo_flags.size() && spo_flags[local] != 0;
+    const int latency_q8 = insert->latency_samples_q8();
+
+    // The front pair is delayed by the insert itself, so this bank only ever
+    // covers the planes behind it; process_at/process_segment cap a strip at
+    // kMaxStackChannels planes and phase-1 layouts top out at 7.1.
+    configure_insert_alignment_delay(stereo_pair_alignment_delays_[index], kMaxStackChannels - 2,
+                                     stereo_pair_only ? latency_q8 : 0);
+    // The bypass substitute stands in for the whole insert, so it must cover
+    // every plane the strip can hand it.
+    configure_insert_alignment_delay(bypass_alignment_delays_[index], kMaxStackChannels,
+                                     latency_q8);
+  }
 }
 
 void ChannelStrip::reset() {
@@ -504,6 +549,12 @@ void ChannelStrip::reset() {
   }
   for (auto& insert : post_inserts_) {
     insert->reset();
+  }
+  for (auto& delay : stereo_pair_alignment_delays_) {
+    delay.reset();
+  }
+  for (auto& delay : bypass_alignment_delays_) {
+    delay.reset();
   }
   for (auto& send : sends_) {
     send->reset();
@@ -817,6 +868,7 @@ void ChannelStrip::add_pre_insert(std::unique_ptr<rt::ProcessorBase> processor,
   pre_inserts_.push_back(std::move(processor));
   pre_insert_spo_.push_back(stereo_pair_only ? 1u : 0u);
   insert_sidechains_.resize(pre_inserts_.size() + post_inserts_.size());
+  prepare_insert_alignment_delays();
 }
 
 void ChannelStrip::add_post_insert(std::unique_ptr<rt::ProcessorBase> processor,
@@ -833,6 +885,7 @@ void ChannelStrip::add_post_insert(std::unique_ptr<rt::ProcessorBase> processor,
   post_inserts_.push_back(std::move(processor));
   post_insert_spo_.push_back(stereo_pair_only ? 1u : 0u);
   insert_sidechains_.resize(pre_inserts_.size() + post_inserts_.size());
+  prepare_insert_alignment_delays();
 }
 
 void ChannelStrip::set_insert_sidechain(unsigned int insert_index, const float* const* channels,

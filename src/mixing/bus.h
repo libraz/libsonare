@@ -82,7 +82,7 @@ class BusProcessor : public rt::ProcessorBase {
   static constexpr size_t kMaxInserts = 64;
 
  private:
-  void prepare_stereo_pair_alignment_delay(size_t insert_index);
+  void prepare_insert_alignment_delays(size_t insert_index);
 
   BusRole role_ = BusRole::Subgroup;
   int max_inputs_ = 0;
@@ -97,6 +97,13 @@ class BusProcessor : public rt::ProcessorBase {
   // processes only L/R on a surround bus, so its corresponding bank delays the
   // otherwise untouched planes (C/LFE/surrounds) by exactly the same Q8 amount.
   std::array<AlignmentDelay, kMaxInserts> stereo_pair_alignment_delays_;
+  // Second bank, one slot per insert, standing in for a BYPASSED insert's own
+  // latency across every plane. latency_samples_q8() deliberately still counts a
+  // bypassed insert -- host PDC is a control-thread quantity and bypass flips on
+  // the audio thread -- so the chain has to keep delivering what it advertises.
+  // Both banks stay primed while unused so a toggle is continuous. Mirrors
+  // ChannelStrip's soft-bypass contract.
+  std::array<AlignmentDelay, kMaxInserts> bypass_alignment_delays_;
   MeterProcessor meter_{};
   double sample_rate_ = 48000.0;
   int max_block_size_ = 0;
