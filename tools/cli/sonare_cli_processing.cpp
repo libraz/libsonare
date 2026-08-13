@@ -196,16 +196,41 @@ int cmd_voice_change(const CliArgs& args, const Audio& audio) {
       config_text = editing::voice_changer::realtime_voice_changer_preset_json(id);
     }
     if (args.has("set")) config_text = apply_voice_preset_sets(config_text, args.get_string("set"));
-    auto config = editing::voice_changer::realtime_voice_changer_config_from_json(config_text);
-    editing::voice_changer::RealtimeVoiceChanger changer(config);
-    constexpr int kBlock = 512;
-    changer.prepare(audio.sample_rate(), kBlock, 1);
-    std::vector<float> output(audio.size(), 0.0f);
-    for (size_t pos = 0; pos < audio.size(); pos += kBlock) {
-      const int n = static_cast<int>(std::min<size_t>(kBlock, audio.size() - pos));
-      changer.process_block(audio.data() + pos, output.data() + pos, n);
+
+    // Route through the same strict validator as the C ABI / Python entry
+    // points (realtime_voice_changer_config_from_input) instead of the
+    // tolerant realtime_voice_changer_config_from_json: a mistyped section
+    // name, a missing "dsp" wrapper, or a partial hand-written preset must
+    // fail loudly rather than silently render with unrelated defaults.
+    editing::voice_changer::RealtimeVoiceChangerConfig config;
+    std::string config_error;
+    if (!editing::voice_changer::realtime_voice_changer_config_from_input(config_text, &config,
+                                                                          &config_error)) {
+      throw std::invalid_argument("invalid voice preset: " + config_error);
     }
-    latency_samples = changer.latency_samples();
+    editing::voice_changer::RealtimeVoiceChanger changer(config);
+    // Block size and pre-roll/drop latency compensation mirror the C-ABI
+    // oracle (process_realtime_voice_change_compensated in
+    // src/c_api/sonare_c_voice_changer.cpp): pad the input by the chain
+    // latency, process in fixed 128-sample blocks for bit-identical DSP
+    // across surfaces, then drop the leading pre-roll so output sample k
+    // corresponds to input sample k and the output length equals the input
+    // length.
+    constexpr int kBlock = 128;
+    changer.prepare(audio.sample_rate(), kBlock, 1);
+    latency_samples = std::max(changer.latency_samples(), 0);
+    const size_t latency_frames = static_cast<size_t>(latency_samples);
+    const size_t total = audio.size() + latency_frames;
+    std::vector<float> padded_input(total, 0.0f);
+    std::copy(audio.data(), audio.data() + audio.size(), padded_input.begin());
+    std::vector<float> padded_output(total, 0.0f);
+    for (size_t pos = 0; pos < total; pos += kBlock) {
+      const int n = static_cast<int>(std::min<size_t>(kBlock, total - pos));
+      changer.process_block(padded_input.data() + pos, padded_output.data() + pos, n);
+    }
+    std::vector<float> output(
+        padded_output.begin() + static_cast<std::ptrdiff_t>(latency_frames),
+        padded_output.begin() + static_cast<std::ptrdiff_t>(latency_frames + audio.size()));
     result = Audio::from_vector(std::move(output), audio.sample_rate());
   } else {
     pitch_semitones = args.get_float("pitch-semitones", 0.0f);

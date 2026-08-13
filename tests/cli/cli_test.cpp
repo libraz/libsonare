@@ -1155,6 +1155,88 @@ TEST_CASE("CLI DAW editing commands", "[cli]") {
   }
 }
 
+TEST_CASE("CLI voice-change compensates realtime chain latency", "[cli][voice-change]") {
+  // Regression for H-7: the native voice-change realtime branch used to write
+  // process_block() output directly into an audio.size()-length buffer with no
+  // pre-roll/drop compensation, so the tail of the true signal was never
+  // flushed and a file shorter than the chain latency came out entirely
+  // silent. bright-idol has a nonzero retune+ISP-limiter latency (~1700
+  // samples at 48 kHz), so a 20 ms / 960-sample clip is well inside the
+  // previously-lost window.
+  const std::string short_wav = unique_temp_path("_vc_short.wav");
+  const std::string short_out = unique_temp_path("_vc_short_out.wav");
+  create_test_wav(short_wav, 0.02f, 220.0f, 48000);
+
+  auto [code, output] = exec_command(CLI + " voice-change --preset bright-idol " + short_wav +
+                                     " -o " + short_out + " --json -q");
+  REQUIRE(code == 0);
+  REQUIRE_THAT(output, ContainsSubstring("\"latency_samples\""));
+
+  auto [in_samples, in_rate] = load_wav(short_wav);
+  auto [out_samples, out_rate] = load_wav(short_out);
+  std::remove(short_wav.c_str());
+  std::remove(short_out.c_str());
+
+  // Output length equals input length: output sample k corresponds to input
+  // sample k, not to a delayed/truncated window.
+  REQUIRE(out_rate == in_rate);
+  REQUIRE(out_samples.size() == in_samples.size());
+
+  // Before the fix this buffer was all (near-)zero because the whole clip
+  // fell inside the uncompensated chain latency.
+  float peak = 0.0f;
+  for (float sample : out_samples) peak = std::max(peak, std::fabs(sample));
+  REQUIRE(peak > 0.05f);
+}
+
+TEST_CASE("CLI voice-change rejects a realtime preset document with an unknown field",
+          "[cli][voice-change][argument-contract]") {
+  // Regression for H-8: the native voice-change realtime branch parsed the
+  // resolved config through the tolerant realtime_voice_changer_config_from_json
+  // instead of the strict validator, so a mistyped section name silently
+  // rendered with unrelated defaults and exited 0. voice-preset-validate
+  // already used the strict validator, so the two entry points disagreed on
+  // the same malformed document.
+  create_test_wav(TEST_WAV, 0.05f, 220.0f, 48000);
+  std::remove(TEST_OUT.c_str());
+
+  SECTION("typo'd dsp section name") {
+    const std::string preset_path = unique_temp_path("_vc_typo_preset.json");
+    {
+      std::ofstream preset(preset_path);
+      REQUIRE(preset.good());
+      preset << R"json({"schemaVersion":1,"id":"typo-test","name":"Typo Test",
+        "dsp":{"inputGainDb":0,"outputGainDb":0,"wetMix":1,
+          "retune":{"semitones":0,"mix":0,"grainSize":0},
+          "formnt":{"factor":1,"amount":0,"body":0,"brightness":0,"nasal":0},
+          "eq":{"highpassHz":75,"bodyDb":0,"presenceDb":0,"airDb":0},
+          "gate":{"thresholdDb":-55,"attackMs":2,"releaseMs":100,"rangeDb":18},
+          "compressor":{"thresholdDb":-22,"ratio":2.5,"attackMs":6,"releaseMs":90,"makeupGainDb":1},
+          "deesser":{"frequencyHz":7200,"thresholdDb":-28,"ratio":4,"rangeDb":8},
+          "reverb":{"mix":0.04,"timeMs":320,"damping":0.55,"seed":0},
+          "limiter":{"ceilingDb":-1,"releaseMs":50}}})json";
+    }
+
+    auto [code, output] = exec_command(CLI + " voice-change --preset-json " + preset_path + " " +
+                                       TEST_WAV + " -o " + TEST_OUT + " -q");
+    std::remove(preset_path.c_str());
+    REQUIRE(code != 0);
+    REQUIRE_THAT(output, ContainsSubstring("dsp.formnt"));
+    std::ifstream f(TEST_OUT);
+    REQUIRE_FALSE(f.good());
+  }
+
+  SECTION("typo'd --set macro key") {
+    auto [code, output] =
+        exec_command(CLI + " voice-change --preset neutral-monitor --set macros.brighness=0.8 " +
+                     TEST_WAV + " -o " + TEST_OUT + " -q");
+    REQUIRE(code != 0);
+    REQUIRE_THAT(output, ContainsSubstring("macros.brighness"));
+    std::ifstream f(TEST_OUT);
+    REQUIRE_FALSE(f.good());
+  }
+}
+
 TEST_CASE("CLI hpss command", "[cli]") {
   create_test_wav(TEST_WAV);
   std::string out_base = unique_temp_path("_hpss");
