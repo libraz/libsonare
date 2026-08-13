@@ -679,23 +679,35 @@ PiptrackResult piptrack(const Audio& audio, int n_fft, int hop_length, float fmi
     for (int k = 0; k < n_bins; ++k) maxm = std::max(maxm, mag[k * n_frames + t]);
     float gate = threshold * maxm;
 
-    for (int k = 1; k < n_bins - 1; ++k) {
+    // librosa.util.localmax pads the spectrum with its edge value, so the
+    // topmost bin is a local maximum whenever it exceeds its predecessor: the
+    // "greater than or equal to the right neighbour" half of the test compares
+    // it against itself. Bin 0 can never satisfy the "strictly greater than the
+    // left neighbour" half under the same padding, which is why only the top
+    // edge is admitted here.
+    for (int k = 1; k < n_bins; ++k) {
       if (bin_freq[k] < fmin || bin_freq[k] > fmax) continue;
+      const bool at_top_edge = (k == n_bins - 1);
       float a = mag[(k - 1) * n_frames + t];
       float b = mag[k * n_frames + t];
-      float c = mag[(k + 1) * n_frames + t];
+      float c = at_top_edge ? b : mag[(k + 1) * n_frames + t];
       // librosa.util.localmax uses a strict rising edge and an inclusive falling
       // edge, selecting the first bin of a flat-topped spectral peak.
       if (b <= a || b < c || b < gate) continue;
-      float shift = parabolic_interp(a, b, c);
+      // The parabolic shift and skew arrays are zero-padded at both spectrum
+      // edges, so an edge peak is reported at its bin centre with the raw bin
+      // magnitude rather than extrapolated from the fabricated neighbour.
+      float shift = at_top_edge ? 0.0f : parabolic_interp(a, b, c);
       float freq =
           (static_cast<float>(k) + shift) * static_cast<float>(sr) / static_cast<float>(n_fft);
       out.pitches[k * n_frames + t] = freq;
       // Quadratic max value at vertex.
-      float denom = a - 2.0f * b + c;
       float peak_mag = b;
-      if (std::abs(denom) > constants::kEpsilon) {
-        peak_mag = b - 0.25f * (a - c) * shift;
+      if (!at_top_edge) {
+        float denom = a - 2.0f * b + c;
+        if (std::abs(denom) > constants::kEpsilon) {
+          peak_mag = b - 0.25f * (a - c) * shift;
+        }
       }
       out.magnitudes[k * n_frames + t] = peak_mag;
     }

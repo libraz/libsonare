@@ -553,3 +553,62 @@ TEST_CASE("yin_track with fill_na", "[pitch]") {
     REQUIRE_FALSE(result.voiced_flag[i]);
   }
 }
+
+TEST_CASE("piptrack can report a peak in the topmost FFT bin", "[pitch][piptrack][edge]") {
+  // librosa.util.localmax pads the spectrum with its edge value, so the topmost
+  // bin is a local maximum whenever it exceeds its predecessor. Restricting the
+  // scan to [1, n_bins - 2] made a peak at the Nyquist bin unreportable, which
+  // only shows up once fmax reaches the Nyquist frequency -- the shipped
+  // default fmax of 4000 Hz hides it at every common sample rate.
+  const int sr = 8000;
+  const int n_fft = 64;
+  const int hop_length = 32;
+  const auto n_samples = static_cast<size_t>(sr / 4);  // 0.25 s
+  std::vector<float> samples(n_samples);
+  for (size_t i = 0; i < n_samples; ++i) {
+    // Alternating sign is a sinusoid at exactly the Nyquist frequency, so the
+    // energy lands in the last bin.
+    samples[i] = (i % 2 == 0) ? 0.5f : -0.5f;
+  }
+  const Audio audio = Audio::from_vector(std::move(samples), sr);
+
+  const float nyquist = 0.5f * static_cast<float>(sr);
+  const PiptrackResult result = piptrack(audio, n_fft, hop_length, 1.0f, nyquist, 0.1f);
+  REQUIRE(result.n_bins == n_fft / 2 + 1);
+  REQUIRE(result.n_frames > 2);
+
+  const int top = result.n_bins - 1;
+  int reported_frames = 0;
+  for (int t = 0; t < result.n_frames; ++t) {
+    const float pitch = result.pitches[top * result.n_frames + t];
+    if (pitch <= 0.0f) continue;
+    ++reported_frames;
+    // The shift array is zero-padded at the edges, so the peak sits exactly on
+    // the bin centre rather than being extrapolated from a fabricated neighbour.
+    CAPTURE(t, pitch);
+    REQUIRE_THAT(pitch, WithinAbs(nyquist, 1e-3f));
+    REQUIRE(result.magnitudes[top * result.n_frames + t] > 0.0f);
+  }
+  CAPTURE(reported_frames, result.n_frames);
+  REQUIRE(reported_frames > 0);
+}
+
+TEST_CASE("piptrack never reports a peak in bin 0", "[pitch][piptrack][edge]") {
+  // Bin 0 is unreportable twice over: the edge padding makes it compare
+  // against itself on the "strictly greater than the left neighbour" side, and
+  // fmin must be positive so 0 Hz never clears the frequency filter. Pinned so
+  // that widening the scan to the bottom edge fails here rather than silently
+  // diverging from librosa. A DC signal puts all the energy in bin 0.
+  const int sr = 8000;
+  const int n_fft = 64;
+  std::vector<float> samples(static_cast<size_t>(sr / 4), 0.5f);
+  const Audio audio = Audio::from_vector(std::move(samples), sr);
+
+  const PiptrackResult result =
+      piptrack(audio, n_fft, 32, 1.0f, 0.5f * static_cast<float>(sr), 0.1f);
+  REQUIRE(result.n_frames > 2);
+  for (int t = 0; t < result.n_frames; ++t) {
+    CAPTURE(t);
+    REQUIRE(result.pitches[0 * result.n_frames + t] == 0.0f);
+  }
+}
