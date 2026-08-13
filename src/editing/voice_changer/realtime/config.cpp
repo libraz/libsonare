@@ -637,8 +637,10 @@ RealtimeVoiceChangerConfig realtime_voice_changer_config_from_json(std::string_v
   // A concrete DSP section is authoritative. This preserves saved presets that
   // carry both their historical macro inputs and their already-expanded DSP.
   if ((!dsp || !dsp->is_object()) && root.find("macros") != nullptr) {
-    std::string ignored_error;
-    apply_macro_section(*root.find("macros"), &c, &ignored_error);
+    std::string error;
+    if (!apply_macro_section(*root.find("macros"), &c, &error)) {
+      throw SonareException(ErrorCode::InvalidParameter, error);
+    }
     return normalize_realtime_voice_changer_config(c);
   }
   const auto& object = (dsp && dsp->is_object()) ? *dsp : root;
@@ -841,7 +843,31 @@ bool validate_realtime_voice_changer_preset_json(std::string_view json,
     RealtimeVoiceChangerConfig macro_config;
     if (macros != nullptr && !apply_macro_section(*macros, &macro_config, error)) return false;
     const auto config = realtime_voice_changer_config_from_json(trim_copy(json));
-    if (normalized_json) *normalized_json = realtime_voice_changer_config_to_json(config);
+    if (normalized_json) {
+      // Re-attach the caller's own preset identity (id/name/description/category)
+      // instead of routing through realtime_voice_changer_config_to_json, whose
+      // "custom"/"Custom" placeholders are only correct for config-only entry
+      // points that never had a preset identity to begin with. Losing the real
+      // id here breaks find_voice_preset_in_pack lookups and a pack's own
+      // id-uniqueness contract on every round trip through this validator.
+      std::ostringstream out;
+      out.imbue(std::locale::classic());
+      out << "{\"schemaVersion\":" << kVoiceChangerPresetSchemaVersion << ",\"id\":\""
+          << sonare::util::json::escape_string(root.find("id")->as_string()) << "\",\"name\":\""
+          << sonare::util::json::escape_string(root.find("name")->as_string()) << "\"";
+      if (const auto* description = root.find("description")) {
+        out << ",\"description\":\"" << sonare::util::json::escape_string(description->as_string())
+            << "\"";
+      }
+      if (const auto* category = root.find("category")) {
+        out << ",\"category\":\"" << sonare::util::json::escape_string(category->as_string())
+            << "\"";
+      }
+      out << ",";
+      dump_dsp_section(out, config);
+      out << "}";
+      *normalized_json = out.str();
+    }
     return true;
   } catch (const std::exception& ex) {
     if (error) *error = ex.what();
