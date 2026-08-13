@@ -59,21 +59,33 @@ Napi::Value SonareWrap::AnalyzeWithProgress(const Napi::CallbackInfo& info) {
         info.Length() > 3 ? std::optional<Napi::Function>(info[3].As<Napi::Function>())
                           : std::nullopt};
 
+  // A JS callback that throws leaves an exception pending; every further N-API
+  // call must be skipped, and the analysis is cancelled so the throw surfaces
+  // promptly instead of after the whole pipeline has run.
   auto c_progress = [](float progress, const char* stage, void* user_data) {
     auto* c = static_cast<ProgressCtx*>(user_data);
+    if (c->env.IsExceptionPending()) return;
     c->cb.Call({Napi::Number::New(c->env, static_cast<double>(progress)),
                 Napi::String::New(c->env, stage != nullptr ? stage : "")});
   };
   auto c_cancel = [](void* user_data) {
     auto* c = static_cast<ProgressCtx*>(user_data);
+    if (c->env.IsExceptionPending()) return 1;
     if (!c->cancel) return 0;
     const Napi::Value result = c->cancel->Call({});
+    if (c->env.IsExceptionPending()) return 1;
     return result.IsBoolean() && result.As<Napi::Boolean>().Value() ? 1 : 0;
   };
 
   char* json_str = nullptr;
   SonareError err = sonare_analyze_json_with_progress_ex(data, length, sample_rate, c_progress,
                                                          &ctx, &json_str, c_cancel, &ctx);
+  // The pending-exception check comes first: throwing a SonareError on top of a
+  // callback's exception would abort the process under NAPI_DISABLE_CPP_EXCEPTIONS.
+  if (env.IsExceptionPending()) {
+    sonare_free_string(json_str);
+    return env.Undefined();
+  }
   if (err != SONARE_OK) {
     sonare_node::ThrowSonareError(env, err);
     return env.Undefined();

@@ -199,84 +199,90 @@ Napi::Value SonareWrap::MixStereo(const Napi::CallbackInfo& info) {
   SonareMixer* mixer =
       sonare_mixer_create(sample_rate, static_cast<int>(std::max<size_t>(1, length)));
   if (mixer == nullptr) {
-    Napi::Error::New(env, "failed to create mixer").ThrowAsJavaScriptException();
+    // sonare_mixer_create only returns null on a rejected sample_rate /
+    // block size or an allocation failure, so this is a C-ABI failure and must
+    // carry the SonareError code like every other one.
+    sonare_node::ThrowSonareError(env, SONARE_ERROR_INVALID_PARAMETER);
     return env.Undefined();
   }
+
+  // Owns the mixer for the rest of the function so every exit path — including
+  // the SonareException rethrown out of SONARE_NODE_CATCH — destroys it.
+  struct MixerGuard {
+    SonareMixer* mixer;
+    ~MixerGuard() { sonare_mixer_destroy(mixer); }
+  } mixer_guard{mixer};
 
   std::vector<SonareStrip*> strips;
   std::vector<float> out_left(length, 0.0f);
   std::vector<float> out_right(length, 0.0f);
-  try {
-    for (size_t index = 0; index < count; ++index) {
-      SonareStrip* strip = sonare_mixer_add_strip(mixer, ("strip" + std::to_string(index)).c_str());
-      if (strip == nullptr) {
-        throw std::runtime_error("failed to add mixer strip");
-      }
-      strips.push_back(strip);
-      Napi::Value inputTrim = OptionAt(env, options, "inputTrimDb", index);
-      if (inputTrim.IsNumber()) {
-        SonareError err =
-            sonare_strip_set_input_trim_db(strip, inputTrim.As<Napi::Number>().FloatValue());
-        if (err != SONARE_OK)
-          throw sonare::SonareException(sonare_node::CodeFromCError(err), ErrorMessageForCode(err));
-      }
-      Napi::Value fader = OptionAt(env, options, "faderDb", index);
-      if (fader.IsNumber()) {
-        SonareError err = sonare_strip_set_fader_db(strip, fader.As<Napi::Number>().FloatValue());
-        if (err != SONARE_OK)
-          throw sonare::SonareException(sonare_node::CodeFromCError(err), ErrorMessageForCode(err));
-      }
-      Napi::Value pan = OptionAt(env, options, "pan", index);
-      if (pan.IsNumber()) {
-        Napi::Value mode = OptionAt(env, options, "panMode", index);
-        SonareError err =
-            sonare_strip_set_pan(strip, pan.As<Napi::Number>().FloatValue(), PanModeValue(mode));
-        if (err != SONARE_OK)
-          throw sonare::SonareException(sonare_node::CodeFromCError(err), ErrorMessageForCode(err));
-      }
-      Napi::Value width = OptionAt(env, options, "width", index);
-      if (width.IsNumber()) {
-        SonareError err = sonare_strip_set_width(strip, width.As<Napi::Number>().FloatValue());
-        if (err != SONARE_OK)
-          throw sonare::SonareException(sonare_node::CodeFromCError(err), ErrorMessageForCode(err));
-      }
-      Napi::Value muted = OptionAt(env, options, "muted", index);
-      if (muted.IsBoolean()) {
-        SonareError err = sonare_strip_set_muted(strip, muted.As<Napi::Boolean>().Value() ? 1 : 0);
-        if (err != SONARE_OK)
-          throw sonare::SonareException(sonare_node::CodeFromCError(err), ErrorMessageForCode(err));
-      }
+  SONARE_NODE_TRY
+  for (size_t index = 0; index < count; ++index) {
+    SonareStrip* strip = sonare_mixer_add_strip(mixer, ("strip" + std::to_string(index)).c_str());
+    if (strip == nullptr) {
+      throw sonare::SonareException(sonare::ErrorCode::InvalidParameter,
+                                    "failed to add mixer strip");
     }
-
-    SonareError err = sonare_mixer_process_stereo(mixer, left_ptrs.data(), right_ptrs.data(), count,
-                                                  out_left.data(), out_right.data(), length);
-    if (err != SONARE_OK)
-      throw sonare::SonareException(sonare_node::CodeFromCError(err), ErrorMessageForCode(err));
-
-    // Per-strip meter snapshots. NOTE: the integrating fields
-    // (momentaryLufs / shortTermLufs / integratedLufs / truePeakDb*) require
-    // sustained streaming to converge; on a short one-shot mix they have not
-    // accumulated enough signal and read the -120 dB floor sentinel. Use the
-    // streaming Mixer for meaningful loudness/true-peak readings.
-    Napi::Array meters = Napi::Array::New(env, strips.size());
-    for (size_t index = 0; index < strips.size(); ++index) {
-      SonareMixMeterSnapshot snapshot{};
-      err = sonare_strip_meter(strips[index], &snapshot);
+    strips.push_back(strip);
+    Napi::Value inputTrim = OptionAt(env, options, "inputTrimDb", index);
+    if (inputTrim.IsNumber()) {
+      SonareError err =
+          sonare_strip_set_input_trim_db(strip, inputTrim.As<Napi::Number>().FloatValue());
       if (err != SONARE_OK)
         throw sonare::SonareException(sonare_node::CodeFromCError(err), ErrorMessageForCode(err));
-      meters.Set(index, MixMeterToObject(env, snapshot));
     }
-
-    Napi::Object out = Napi::Object::New(env);
-    out.Set("left", VecToFloat32(env, out_left));
-    out.Set("right", VecToFloat32(env, out_right));
-    out.Set("sampleRate", sample_rate);
-    out.Set("meters", meters);
-    sonare_mixer_destroy(mixer);
-    return out;
-  } catch (const std::exception& e) {
-    sonare_mixer_destroy(mixer);
-    Napi::Error::New(env, e.what()).ThrowAsJavaScriptException();
-    return env.Undefined();
+    Napi::Value fader = OptionAt(env, options, "faderDb", index);
+    if (fader.IsNumber()) {
+      SonareError err = sonare_strip_set_fader_db(strip, fader.As<Napi::Number>().FloatValue());
+      if (err != SONARE_OK)
+        throw sonare::SonareException(sonare_node::CodeFromCError(err), ErrorMessageForCode(err));
+    }
+    Napi::Value pan = OptionAt(env, options, "pan", index);
+    if (pan.IsNumber()) {
+      Napi::Value mode = OptionAt(env, options, "panMode", index);
+      SonareError err =
+          sonare_strip_set_pan(strip, pan.As<Napi::Number>().FloatValue(), PanModeValue(mode));
+      if (err != SONARE_OK)
+        throw sonare::SonareException(sonare_node::CodeFromCError(err), ErrorMessageForCode(err));
+    }
+    Napi::Value width = OptionAt(env, options, "width", index);
+    if (width.IsNumber()) {
+      SonareError err = sonare_strip_set_width(strip, width.As<Napi::Number>().FloatValue());
+      if (err != SONARE_OK)
+        throw sonare::SonareException(sonare_node::CodeFromCError(err), ErrorMessageForCode(err));
+    }
+    Napi::Value muted = OptionAt(env, options, "muted", index);
+    if (muted.IsBoolean()) {
+      SonareError err = sonare_strip_set_muted(strip, muted.As<Napi::Boolean>().Value() ? 1 : 0);
+      if (err != SONARE_OK)
+        throw sonare::SonareException(sonare_node::CodeFromCError(err), ErrorMessageForCode(err));
+    }
   }
+
+  SonareError err = sonare_mixer_process_stereo(mixer, left_ptrs.data(), right_ptrs.data(), count,
+                                                out_left.data(), out_right.data(), length);
+  if (err != SONARE_OK)
+    throw sonare::SonareException(sonare_node::CodeFromCError(err), ErrorMessageForCode(err));
+
+  // Per-strip meter snapshots. NOTE: the integrating fields
+  // (momentaryLufs / shortTermLufs / integratedLufs / truePeakDb*) require
+  // sustained streaming to converge; on a short one-shot mix they have not
+  // accumulated enough signal and read the -120 dB floor sentinel. Use the
+  // streaming Mixer for meaningful loudness/true-peak readings.
+  Napi::Array meters = Napi::Array::New(env, strips.size());
+  for (size_t index = 0; index < strips.size(); ++index) {
+    SonareMixMeterSnapshot snapshot{};
+    err = sonare_strip_meter(strips[index], &snapshot);
+    if (err != SONARE_OK)
+      throw sonare::SonareException(sonare_node::CodeFromCError(err), ErrorMessageForCode(err));
+    meters.Set(index, MixMeterToObject(env, snapshot));
+  }
+
+  Napi::Object out = Napi::Object::New(env);
+  out.Set("left", VecToFloat32(env, out_left));
+  out.Set("right", VecToFloat32(env, out_right));
+  out.Set("sampleRate", sample_rate);
+  out.Set("meters", meters);
+  return out;
+  SONARE_NODE_CATCH(env)
 }

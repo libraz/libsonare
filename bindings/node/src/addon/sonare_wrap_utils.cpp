@@ -369,7 +369,9 @@ Napi::Value FullAnalysisJsonToObject(Napi::Env env, const float* data, size_t le
   SonareError err = options ? sonare_analyze_json_ex(data, length, sample_rate, options, &json_str)
                             : sonare_analyze_json(data, length, sample_rate, &json_str);
   if (err != SONARE_OK) {
-    Napi::Error::New(env, ErrorMessageForCode(err)).ThrowAsJavaScriptException();
+    // A C-ABI failure must carry the SonareError code so the synchronous and
+    // async analyze paths classify the same input identically.
+    sonare_node::ThrowSonareError(env, err);
     return env.Undefined();
   }
 
