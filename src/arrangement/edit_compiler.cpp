@@ -3,6 +3,7 @@
 #include <algorithm>
 #include <cmath>
 #include <memory>
+#include <set>
 #include <string>
 #include <utility>
 
@@ -369,9 +370,31 @@ CompileResult compile(const Project& project, const MidiContentStore& midi,
   }
 
   // ---- Automation lanes (flatten per-track lanes) --------------------------
+  // A lane's target_param_id is scoped to its TRACK in the project model (the
+  // edit commands enforce one lane per target per track), but the engine's lane
+  // set is a FLAT, engine-wide id space: AutomationEngine::set_lanes keeps a
+  // single lane per target id. Two tracks automating the same target therefore
+  // cannot both reach the live engine. Resolve that collision here -- the first
+  // track in project order wins, which is what set_lanes would pick anyway --
+  // and report it, so the loss is a compile diagnostic instead of a silent RT
+  // drop. The offline path is unaffected: mixer.automation_bindings carries
+  // every lane tagged with its track and is routed per track by the bounce.
+  std::map<uint32_t, TrackId> live_lane_owner;
   for (const auto& track : project.tracks()) {
     for (const auto& lane : track.automation_lanes) {
-      timeline.automation_lanes.push_back(lane);
+      const uint32_t target = lane.target_param_id();
+      const auto owner = live_lane_owner.find(target);
+      if (owner == live_lane_owner.end()) {
+        live_lane_owner.emplace(target, track.id);
+        timeline.automation_lanes.push_back(lane);
+      } else {
+        add_diag(&result, Diagnostic::Code::kAutomationLaneConflict, Diagnostic::Severity::kWarning,
+                 track.id,
+                 "automation target " + std::to_string(target) + " is already automated by track " +
+                     std::to_string(owner->second) +
+                     "; only that track's lane reaches the live engine, while the offline bounce "
+                     "applies both");
+      }
       timeline.mixer.automation_bindings.push_back(MixerAutomationBinding{track.id, lane});
     }
   }
@@ -383,9 +406,25 @@ CompileResult compile(const Project& project, const MidiContentStore& midi,
   // minimal strip for tracks that carry non-default controls without an explicit
   // binding. Strip defaults are identity, so a neutral track never perturbs an
   // existing strip. The no-mixing fallback keeps folding gain/pan into the per
-  // -clip schedules below.
+  // -clip schedules below, and so does a track bound to a SHARED strip: a strip
+  // several tracks route into processes their sum, so it is not a per-track
+  // stage and must not carry any one of their controls.
   const bool any_solo = any_track_soloed(project);
   timeline.mixer.scene = project.scene();
+#if defined(SONARE_WITH_MIXING)
+  // How many tracks reference each explicit scene strip. A strip referenced by
+  // more than one track is a SHARED strip: it processes the summed contribution
+  // of all of them, so folding one track's gain/pan/mute into it would move the
+  // others too. Those tracks fold their controls into their own clips instead.
+  std::map<std::string, size_t> strip_ref_counts;
+  for (const auto& track : project.tracks()) {
+    if (!track.channel_strip_ref.empty()) ++strip_ref_counts[track.channel_strip_ref];
+  }
+  std::set<std::string> shared_strips_reported;
+  // Tracks whose gain/pan fold into their own ClipSchedules rather than into a
+  // channel strip, because the strip they are bound to is shared.
+  std::set<TrackId> per_clip_control_tracks;
+#endif
   for (const auto& track : project.tracks()) {
 #if defined(SONARE_WITH_MIXING)
     const bool silenced = track_is_silenced(track, any_solo);
@@ -393,6 +432,7 @@ CompileResult compile(const Project& project, const MidiContentStore& midi,
     const bool needs_mix = track.gain != 1.0f || track_pan != 0.0f || silenced;
 
     mixing::api::Strip* strip = nullptr;
+    bool shared_strip = false;
     if (!track.channel_strip_ref.empty()) {
       for (mixing::api::Strip& s : timeline.mixer.scene.strips) {
         if (s.id == track.channel_strip_ref) {
@@ -400,6 +440,7 @@ CompileResult compile(const Project& project, const MidiContentStore& midi,
           break;
         }
       }
+      shared_strip = strip != nullptr && strip_ref_counts[track.channel_strip_ref] > 1;
     }
     std::string strip_id = track.channel_strip_ref;
     if (strip == nullptr && needs_mix) {
@@ -410,9 +451,25 @@ CompileResult compile(const Project& project, const MidiContentStore& midi,
       strip = &timeline.mixer.scene.strips.back();
     }
     if (strip != nullptr) {
-      if (track.gain > 0.0f) strip->fader_db += linear_to_db(track.gain);
-      strip->pan = std::clamp(strip->pan + track_pan, -1.0f, 1.0f);
-      strip->muted = strip->muted || silenced;
+      if (shared_strip) {
+        // Move this track's controls to its own clips: they then apply before
+        // the signal reaches the shared strip, so the strip still processes the
+        // sum of its tracks and the others on it keep their level and image.
+        if (needs_mix) per_clip_control_tracks.insert(track.id);
+        if (shared_strips_reported.insert(track.channel_strip_ref).second) {
+          add_diag(&result, Diagnostic::Code::kSharedChannelStrip, Diagnostic::Severity::kWarning,
+                   track.id,
+                   "channel strip \"" + track.channel_strip_ref + "\" is bound by " +
+                       std::to_string(strip_ref_counts[track.channel_strip_ref]) +
+                       " tracks; each track's gain/pan/mute is applied to its own clips instead of "
+                       "the shared strip, and a MIDI track's continuous gain/pan cannot be applied "
+                       "at all (mute and solo still are)");
+        }
+      } else {
+        if (track.gain > 0.0f) strip->fader_db += linear_to_db(track.gain);
+        strip->pan = std::clamp(strip->pan + track_pan, -1.0f, 1.0f);
+        strip->muted = strip->muted || silenced;
+      }
       timeline.mixer.bindings.push_back(MixerStripBinding{track.id, strip_id});
     }
 #else
@@ -689,13 +746,18 @@ CompileResult compile(const Project& project, const MidiContentStore& midi,
 
       // The track's gain/mute/solo/pan take effect at its channel strip (see the
       // mixer-scene pass above), so the clip schedule carries only the clip's own
-      // gain. Builds without the mixing runtime have no strip stage, so they fall
-      // back to folding the track's contribution straight into the clip here.
+      // gain. Two cases fold the track's contribution straight into the clip
+      // instead: a build without the mixing runtime, which has no strip stage at
+      // all, and a track bound to a strip SHARED with other tracks, whose strip
+      // processes the sum and so cannot carry any one track's controls.
 #if defined(SONARE_WITH_MIXING)
-      const float track_gain = 1.0f;
+      const bool fold_track_into_clip = per_clip_control_tracks.count(clip.track_id) != 0;
 #else
-      const float track_gain = effective_track_gain(project.find_track(clip.track_id), any_solo);
+      constexpr bool fold_track_into_clip = true;
 #endif
+      const float track_gain =
+          fold_track_into_clip ? effective_track_gain(project.find_track(clip.track_id), any_solo)
+                               : 1.0f;
       engine::ClipSchedule sched(clip.id, buffer, clip.start_ppq + part.start_ppq, start_sample,
                                  clip_offset_samples, length_samples, loop, clip.gain * track_gain,
                                  fade_in_samples, fade_out_samples, fade_in_curve, fade_out_curve,
@@ -719,9 +781,9 @@ CompileResult compile(const Project& project, const MidiContentStore& midi,
         sched.warp_anchors = std::move(anchors);
       }
       sched.track_id = clip.track_id;
-#if !defined(SONARE_WITH_MIXING)
-      sched.pan = effective_track_pan(project.find_track(clip.track_id));
-#endif
+      if (fold_track_into_clip) {
+        sched.pan = effective_track_pan(project.find_track(clip.track_id));
+      }
       if (loop_crossfade_samples > 0) {
         if (sched.warp_mode != engine::WarpMode::kOff) {
           add_diag(&result, Diagnostic::Code::kLoopCrossfadeUnavailable,

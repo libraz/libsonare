@@ -1002,3 +1002,217 @@ TEST_CASE("source SR != project SR resamples deterministically", "[arrangement]"
       hash_samples(clip2.storage->channels[0].data(), clip2.storage->channels[0].size());
   REQUIRE(h1 == h2);
 }
+
+// ===========================================================================
+// Shared channel strips: a track's controls must not move its neighbours
+// ===========================================================================
+
+namespace {
+
+// Extends the single-track fixture with a second audio track + clip, both bound
+// to one explicit scene strip (N tracks -> 1 strip, the topology MixerStripBinding
+// documents as supported).
+struct SharedStripFixture {
+  Fixture f;
+  arr::TrackId track_a = 0;
+  arr::TrackId track_b = 0;
+  arr::ClipId clip_b = 0;
+  std::string strip_id = "shared";
+};
+
+SharedStripFixture make_shared_strip_fixture() {
+  SharedStripFixture s;
+  s.f = make_fixture();
+  s.track_a = s.f.track_id;
+
+  arr::Track second;
+  second.name = "audio b";
+  second.kind = arr::Track::Kind::kAudio;
+  s.track_b = s.f.project.add_track(second);
+
+  arr::EditClip clip;
+  clip.track_id = s.track_b;
+  clip.source_id = s.f.source_id;
+  clip.start_ppq = 0.0;
+  clip.length_ppq = 2.0;
+  s.clip_b = s.f.project.add_clip(clip);
+
+  sonare::mixing::api::Strip strip;
+  strip.id = s.strip_id;
+  s.f.project.scene().strips.push_back(strip);
+
+  REQUIRE(arr::SetTrackRoute(s.track_a, s.strip_id, "").apply(s.f.project, s.f.midi));
+  REQUIRE(arr::SetTrackRoute(s.track_b, s.strip_id, "").apply(s.f.project, s.f.midi));
+  return s;
+}
+
+const sonare::mixing::api::Strip& find_strip(const arr::CompiledTimeline& timeline,
+                                             const std::string& id) {
+  const auto& strips = timeline.mixer.scene.strips;
+  const auto it =
+      std::find_if(strips.begin(), strips.end(), [&](const auto& s) { return s.id == id; });
+  REQUIRE(it != strips.end());
+  return *it;
+}
+
+const sonare::engine::ClipSchedule& find_clip(const arr::CompiledTimeline& timeline,
+                                              arr::ClipId id) {
+  const auto& clips = timeline.audio_clips;
+  const auto it =
+      std::find_if(clips.begin(), clips.end(), [&](const auto& c) { return c.id == id; });
+  REQUIRE(it != clips.end());
+  return *it;
+}
+
+}  // namespace
+
+TEST_CASE("a track's controls never reach a channel strip it shares", "[arrangement]") {
+  SECTION("muting one track leaves the other track's contribution untouched") {
+    SharedStripFixture s = make_shared_strip_fixture();
+    REQUIRE(arr::SetTrackMute(s.track_a, true).apply(s.f.project, s.f.midi));
+
+    arr::CompileResult r = arr::compile(s.f.project, s.f.midi, s.f.audio);
+    REQUIRE(r.timeline.has_value());
+    REQUIRE(r.timeline->audio_clips.size() == 2);
+
+    // The shared strip stays neutral: muting it would silence track B as well.
+    const auto& strip = find_strip(*r.timeline, s.strip_id);
+    REQUIRE_FALSE(strip.muted);
+    REQUIRE(strip.fader_db == Catch::Approx(0.0f));
+
+    // A's mute lands on A's own clip; B's clip is untouched.
+    REQUIRE(find_clip(*r.timeline, s.f.clip_id).gain == Catch::Approx(0.0f));
+    REQUIRE(find_clip(*r.timeline, s.clip_b).gain == Catch::Approx(1.0f));
+
+    // Both tracks stay routed through the shared strip.
+    REQUIRE(r.timeline->mixer.bindings.size() == 2);
+    for (const auto& binding : r.timeline->mixer.bindings) {
+      REQUIRE(binding.strip_id == s.strip_id);
+    }
+  }
+
+  SECTION("soloing one track silences the other, not itself") {
+    SharedStripFixture s = make_shared_strip_fixture();
+    REQUIRE(arr::SetTrackSolo(s.track_a, true).apply(s.f.project, s.f.midi));
+
+    arr::CompileResult r = arr::compile(s.f.project, s.f.midi, s.f.audio);
+    REQUIRE(r.timeline.has_value());
+    REQUIRE_FALSE(find_strip(*r.timeline, s.strip_id).muted);
+    REQUIRE(find_clip(*r.timeline, s.f.clip_id).gain == Catch::Approx(1.0f));
+    REQUIRE(find_clip(*r.timeline, s.clip_b).gain == Catch::Approx(0.0f));
+  }
+
+  SECTION("two 0.5 gains do not multiply into a single -12 dB strip fader") {
+    SharedStripFixture s = make_shared_strip_fixture();
+    REQUIRE(arr::SetTrackGain(s.track_a, 0.5f).apply(s.f.project, s.f.midi));
+    REQUIRE(arr::SetTrackGain(s.track_b, 0.5f).apply(s.f.project, s.f.midi));
+
+    arr::CompileResult r = arr::compile(s.f.project, s.f.midi, s.f.audio);
+    REQUIRE(r.timeline.has_value());
+    REQUIRE(find_strip(*r.timeline, s.strip_id).fader_db == Catch::Approx(0.0f));
+    REQUIRE(find_clip(*r.timeline, s.f.clip_id).gain == Catch::Approx(0.5f));
+    REQUIRE(find_clip(*r.timeline, s.clip_b).gain == Catch::Approx(0.5f));
+  }
+
+  SECTION("pans do not sum into the shared strip") {
+    SharedStripFixture s = make_shared_strip_fixture();
+    REQUIRE(arr::SetTrackPan(s.track_a, 0.5f).apply(s.f.project, s.f.midi));
+    REQUIRE(arr::SetTrackPan(s.track_b, 0.75f).apply(s.f.project, s.f.midi));
+
+    arr::CompileResult r = arr::compile(s.f.project, s.f.midi, s.f.audio);
+    REQUIRE(r.timeline.has_value());
+    REQUIRE(find_strip(*r.timeline, s.strip_id).pan == Catch::Approx(0.0f));
+    REQUIRE(find_clip(*r.timeline, s.f.clip_id).pan == Catch::Approx(0.5f));
+    REQUIRE(find_clip(*r.timeline, s.clip_b).pan == Catch::Approx(0.75f));
+  }
+
+  SECTION("the shared binding is reported once as a warning") {
+    SharedStripFixture s = make_shared_strip_fixture();
+    REQUIRE(arr::SetTrackGain(s.track_a, 0.5f).apply(s.f.project, s.f.midi));
+
+    arr::CompileResult r = arr::compile(s.f.project, s.f.midi, s.f.audio);
+    REQUIRE_FALSE(r.has_errors());
+    const auto shared =
+        std::count_if(r.diagnostics.begin(), r.diagnostics.end(), [](const auto& d) {
+          return d.code == arr::Diagnostic::Code::kSharedChannelStrip &&
+                 d.severity == arr::Diagnostic::Severity::kWarning;
+        });
+    REQUIRE(shared == 1);
+  }
+
+  SECTION("a strip owned by a single track still folds that track's controls") {
+    SharedStripFixture s = make_shared_strip_fixture();
+    // Move B off the shared strip: A becomes the sole reference, so the strip
+    // is once again the right place for A's gain.
+    REQUIRE(arr::SetTrackRoute(s.track_b, "", "").apply(s.f.project, s.f.midi));
+    REQUIRE(arr::SetTrackGain(s.track_a, 0.5f).apply(s.f.project, s.f.midi));
+
+    arr::CompileResult r = arr::compile(s.f.project, s.f.midi, s.f.audio);
+    REQUIRE(r.timeline.has_value());
+    REQUIRE(find_strip(*r.timeline, s.strip_id).fader_db ==
+            Catch::Approx(sonare::linear_to_db(0.5f)));
+    REQUIRE(find_clip(*r.timeline, s.f.clip_id).gain == Catch::Approx(1.0f));
+    REQUIRE(std::none_of(r.diagnostics.begin(), r.diagnostics.end(), [](const auto& d) {
+      return d.code == arr::Diagnostic::Code::kSharedChannelStrip;
+    }));
+  }
+}
+
+TEST_CASE("the live automation lane set holds one lane per target", "[arrangement]") {
+  SharedStripFixture s = make_shared_strip_fixture();
+  constexpr uint32_t target = 7;
+  const auto make_lane = [](float value) {
+    sonare::automation::AutomationLane lane(target);
+    lane.set_points({{0.0, value, sonare::automation::CurveType::Linear}});
+    return lane;
+  };
+  REQUIRE(arr::AddAutomationLane(s.track_a, make_lane(0.25f)).apply(s.f.project, s.f.midi));
+  REQUIRE(arr::AddAutomationLane(s.track_b, make_lane(0.75f)).apply(s.f.project, s.f.midi));
+
+  arr::CompileResult r = arr::compile(s.f.project, s.f.midi, s.f.audio);
+  REQUIRE(r.timeline.has_value());
+
+  // AutomationEngine::set_lanes keeps one lane per target, so the compiled set
+  // already holds exactly one -- deterministically the first track's -- and the
+  // collision is reported instead of being dropped silently on the RT side.
+  REQUIRE(r.timeline->automation_lanes.size() == 1);
+  REQUIRE(r.timeline->automation_lanes.front().target_param_id() == target);
+  REQUIRE(r.timeline->automation_lanes.front().value_at(0.0) == Catch::Approx(0.25f));
+  REQUIRE(std::any_of(r.diagnostics.begin(), r.diagnostics.end(), [&](const auto& d) {
+    return d.code == arr::Diagnostic::Code::kAutomationLaneConflict &&
+           d.severity == arr::Diagnostic::Severity::kWarning && d.target_id == s.track_b;
+  }));
+
+  // Playback must not receive more lanes than it can honor: what compile()
+  // published survives set_lanes unchanged.
+  sonare::engine::RealtimeEngine engine;
+  engine.prepare(kProjectSr, kBlock);
+  arr::apply_to_engine(*r.timeline, engine);
+  REQUIRE(engine.automation().lane_count() == 1);
+
+  // The offline path keeps BOTH lanes, tagged with their owning track.
+  REQUIRE(r.timeline->mixer.automation_bindings.size() == 2);
+}
+
+TEST_CASE("distinct automation targets on several tracks all reach playback", "[arrangement]") {
+  SharedStripFixture s = make_shared_strip_fixture();
+  const auto make_lane = [](uint32_t target, float value) {
+    sonare::automation::AutomationLane lane(target);
+    lane.set_points({{0.0, value, sonare::automation::CurveType::Linear}});
+    return lane;
+  };
+  REQUIRE(arr::AddAutomationLane(s.track_a, make_lane(11, 0.25f)).apply(s.f.project, s.f.midi));
+  REQUIRE(arr::AddAutomationLane(s.track_b, make_lane(12, 0.75f)).apply(s.f.project, s.f.midi));
+
+  arr::CompileResult r = arr::compile(s.f.project, s.f.midi, s.f.audio);
+  REQUIRE(r.timeline.has_value());
+  REQUIRE(r.timeline->automation_lanes.size() == 2);
+  REQUIRE(std::none_of(r.diagnostics.begin(), r.diagnostics.end(), [](const auto& d) {
+    return d.code == arr::Diagnostic::Code::kAutomationLaneConflict;
+  }));
+
+  sonare::engine::RealtimeEngine engine;
+  engine.prepare(kProjectSr, kBlock);
+  arr::apply_to_engine(*r.timeline, engine);
+  REQUIRE(engine.automation().lane_count() == 2);
+}

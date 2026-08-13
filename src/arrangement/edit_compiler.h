@@ -137,6 +137,12 @@ struct GraphRequest {
 /// strip inserts -- only by the offline channel-strip bounce; apply_to_engine
 /// does not wire these bindings, and the live TrackMixerRuntime is strictly one
 /// track per strip. See apply_to_engine's reachability note.
+///
+/// Because a shared strip processes the SUM of its tracks, a per-track control
+/// (gain / pan / mute / solo) must NOT be folded into it: that would move every
+/// other track on the strip too. compile() folds a track's controls into the
+/// strip only when that track is the strip's sole reference, and otherwise folds
+/// them into the track's own ClipSchedules, which run before the summing point.
 struct MixerStripBinding {
   TrackId track_id = 0;
   std::string strip_id;  // mixing::api::Strip::id
@@ -268,6 +274,8 @@ struct Diagnostic {
         10,  // project has MIDI clips; bounce is silent unless an instrument is bound
     kRaggedAudioSource = 11,         // decoded channels are empty or have unequal frame counts
     kLoopCrossfadeUnavailable = 12,  // requested audio loop-seam crossfade could not be scheduled
+    kSharedChannelStrip = 13,        // several tracks bind one scene strip; per-track controls move
+    kAutomationLaneConflict = 14,    // two tracks automate one target; the live lane set holds one
   };
   // Severity ordinals are a FROZEN WIRE VALUE: they are exposed numerically as
   // SonareProjectDiagnostic.severity through the C ABI (see
