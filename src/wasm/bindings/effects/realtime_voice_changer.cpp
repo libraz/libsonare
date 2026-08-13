@@ -57,10 +57,18 @@ editing::voice_changer::RealtimeVoiceChangerConfig realtimeVoiceChangerConfigFro
                                   "voice changer POD config must be an object");
   }
   editing::voice_changer::RealtimeVoiceChangerConfig parsed;
-#define X(cpp_path, js_key) parsed.cpp_path = pod[#js_key].as<decltype(parsed.cpp_path)>();
+  static constexpr char kSubject[] = "voice changer POD config";
+  // Every field is REQUIRED: unlike the general JSON path (which normalizes a
+  // partial preset against defaults), the flat POD transport used by the
+  // AudioWorklet control plane must reject a partial object rather than
+  // silently zero-fill it. A missing limiterEnableIspLimiter used to read as
+  // JS `false` here, which can turn the ISP limiter off and let the DAC clip.
+#define X(cpp_path, js_key) \
+  parsed.cpp_path = requireProperty<decltype(parsed.cpp_path)>(pod, #js_key, kSubject);
   SONARE_WASM_VC_POD_FIELDS(X)
 #undef X
-  parsed.limiter.enable_isp_limiter = pod["limiterEnableIspLimiter"].as<bool>();
+  parsed.limiter.enable_isp_limiter =
+      requireProperty<bool>(pod, "limiterEnableIspLimiter", kSubject);
   return parsed;
 }
 

@@ -8,8 +8,12 @@
 #if defined(SONARE_WITH_MIXING) && defined(SONARE_WITH_GRAPH)
 
 val MixerWasm::processStereo(val left_channels, val right_channels) {
-  const int count =
-      requireMatchedLength(left_channels, right_channels, "leftChannels and rightChannels");
+  // require_non_zero=false: unlike the standalone mixStereo utility, this
+  // mixer instance may legitimately be configured with zero strips, and the
+  // `count > 0` guard below already treats that as a no-op rather than an
+  // error.
+  const int count = requireMatchedLength(
+      left_channels, right_channels, "leftChannels and rightChannels", /*require_non_zero=*/false);
 
   std::vector<std::vector<float>> left_inputs;
   std::vector<std::vector<float>> right_inputs;
@@ -82,7 +86,11 @@ void MixerWasm::processStereoInto(val left_channels, val right_channels, val out
                                   "input channel count must match the mixer's strip count");
   }
 
-  const int length_i = requireMatchedLength(out_left, out_right, "output channels");
+  // require_non_zero=false: a zero-sample block is a legitimate no-op here
+  // (mirrors the zero-strip tolerance above; sonare_mixer_process_stereo is
+  // called with length == 0 further down without special-casing it).
+  const int length_i =
+      requireMatchedLength(out_left, out_right, "output channels", /*require_non_zero=*/false);
   const size_t length = static_cast<size_t>(length_i);
   if (length > static_cast<size_t>(block_size_)) {
     throw sonare::SonareException(sonare::ErrorCode::InvalidParameter,

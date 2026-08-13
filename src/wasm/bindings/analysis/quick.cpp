@@ -20,14 +20,16 @@ std::vector<Mode> modesFromVal(val modes) {
   out.reserve(static_cast<size_t>(length));
   for (int i = 0; i < length; ++i) {
     const int mode = modes[i].as<int>();
-    if (mode < static_cast<int>(Mode::Major) || mode > static_cast<int>(Mode::Locrian)) {
-      throw sonare::SonareException(sonare::ErrorCode::InvalidParameter, "invalid key mode");
-    }
+    requireOrdinalInRange(mode, static_cast<int>(Mode::Major), static_cast<int>(Mode::Locrian),
+                          "key mode");
     out.push_back(static_cast<Mode>(mode));
   }
   return out;
 }
 
+// Rejects an out-of-range profile_type, mirroring the C ABI's fill_key_profile
+// (core_common.cpp), which returns false — rejecting — on an unmapped
+// SonareKeyProfileType instead of silently falling back to a default profile.
 KeyProfileType keyProfileFromInt(int profile_type) {
   switch (profile_type) {
     case 0:
@@ -45,7 +47,7 @@ KeyProfileType keyProfileFromInt(int profile_type) {
     case 6:
       return KeyProfileType::BellmanBudge;
     default:
-      return KeyProfileType::KrumhanslSchmuckler;
+      throw sonare::SonareException(sonare::ErrorCode::InvalidParameter, "invalid key profile");
   }
 }
 

@@ -294,14 +294,23 @@ bool cancelCallbackRequested(const val& callback) {
   return outcome.typeOf().as<std::string>() == "boolean" && outcome.as<bool>();
 }
 
-int requireMatchedLength(const val& a, const val& b, const char* subject) {
+int requireMatchedLength(const val& a, const val& b, const char* subject, bool require_non_zero) {
   const std::size_t a_length = wasmArrayLikeLength(a, subject);
   const std::size_t b_length = wasmArrayLikeLength(b, subject);
   if (a_length != b_length) {
     throw SonareException(ErrorCode::InvalidParameter,
                           std::string(subject) + " must have the same length");
   }
+  if (require_non_zero && a_length == 0) {
+    throw SonareException(ErrorCode::InvalidParameter, std::string(subject) + " must not be empty");
+  }
   return static_cast<int>(a_length);
+}
+
+void requireOrdinalInRange(int value, int min, int max, const char* subject) {
+  if (value < min || value > max) {
+    throw SonareException(ErrorCode::InvalidParameter, std::string(subject) + " is out of range");
+  }
 }
 
 #endif  // __EMSCRIPTEN__

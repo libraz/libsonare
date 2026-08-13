@@ -16,6 +16,7 @@
 #include <optional>
 #include <stdexcept>
 #include <string>
+#include <type_traits>
 #include <vector>
 
 #include "acoustic/material.h"
@@ -194,11 +195,62 @@ std::optional<bool> optionalBool(const val& v);
 /// Invokes a JS cancellation callback and returns true only when it returns the
 /// literal boolean true. Undefined and all other values leave the operation running.
 bool cancelCallbackRequested(const val& callback);
-/// @brief Reads the JS `.length` of @p a and @p b and requires they match and are
-/// non-zero, mirroring the interleaved channel-array guard. @p subject names the
-/// arrays in the error message (e.g. "leftChannels and rightChannels"). Returns
-/// the common length. @throws SonareException(InvalidParameter) on mismatch.
-int requireMatchedLength(const val& a, const val& b, const char* subject);
+/// @brief Reads the JS `.length` of @p a and @p b and requires they match.
+/// @p subject names the arrays in the error message (e.g. "leftChannels and
+/// rightChannels"). When @p require_non_zero is true (the default — this is
+/// the historically documented contract), an empty pair is also rejected;
+/// call sites that intentionally tolerate a zero-length pair (e.g. a
+/// zero-strip mixer configuration, which already handles `count == 0` as a
+/// no-op downstream) pass false explicitly with a comment explaining why.
+/// Returns the common length.
+/// @throws SonareException(InvalidParameter) on mismatch, or (when required)
+/// zero length.
+int requireMatchedLength(const val& a, const val& b, const char* subject,
+                         bool require_non_zero = true);
+/// @brief Rejects an out-of-range enum ordinal instead of letting a switch or
+/// ternary's default/else arm silently substitute whichever member it
+/// happens to return. @p subject names the field in the error message.
+/// Mirrors the C ABI's range-checked enum converters (e.g. core_common.cpp's
+/// fill_key_profile / fill_key_modes, features_streaming.cpp's valid_window),
+/// which reject an unmapped ordinal rather than defaulting it.
+/// @throws SonareException(InvalidParameter) when @p value is outside
+/// [@p min, @p max].
+void requireOrdinalInRange(int value, int min, int max, const char* subject);
+/// @brief Reads a REQUIRED field of exactly type T: throws InvalidParameter
+/// naming @p subject and @p key if the field is absent, null, or not the
+/// expected JS type (a non-bool T additionally requires a finite number).
+/// Unlike floatProperty/intProperty/boolProperty (presence-checked with a
+/// silent default), this never substitutes a value for a missing or
+/// malformed field. Use for POD-shaped inputs where every field is mandatory
+/// (e.g. the AudioWorklet's flat voice-changer config), so a partial object
+/// is rejected instead of zero-filled — a missing boolean silently read as
+/// `false` has turned off a safety-critical DSP stage (the ISP limiter) in
+/// the past.
+template <typename T>
+T requireProperty(const val& object, const char* key, const char* subject) {
+  if (!hasProperty(object, key)) {
+    throw SonareException(ErrorCode::InvalidParameter,
+                          std::string(subject) + "." + key + " is required");
+  }
+  const val value = object[key];
+  const std::string type = value.typeOf().as<std::string>();
+  if constexpr (std::is_same_v<T, bool>) {
+    if (type != "boolean") {
+      throw SonareException(ErrorCode::InvalidParameter,
+                            std::string(subject) + "." + key + " must be a boolean");
+    }
+  } else {
+    if (type != "number") {
+      throw SonareException(ErrorCode::InvalidParameter,
+                            std::string(subject) + "." + key + " must be a number");
+    }
+    if (!std::isfinite(value.as<double>())) {
+      throw SonareException(ErrorCode::InvalidParameter,
+                            std::string(subject) + "." + key + " must be finite");
+    }
+  }
+  return value.as<T>();
+}
 std::vector<mastering::api::Param> masteringParamsFromObject(val object);
 mastering::api::MasteringChainConfig masteringChainConfigFromVal(val config);
 

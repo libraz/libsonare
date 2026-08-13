@@ -35,7 +35,7 @@ const PAN_LAW_VALUES = {
 } as const;
 const PAN_MODE_VALUES = {
   balance: 0,
-  pan: 0,
+  pan: 1,
   stereopan: 1,
   'stereo-pan': 1,
   dualpan: 2,

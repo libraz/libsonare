@@ -166,10 +166,22 @@ describe('enum-code helpers reject unknown strings instead of silently defaultin
   it('still maps valid strings', () => {
     expect(panLawCode('const6dB')).toBe(2);
     expect(panModeCode('balance')).toBe(0);
-    expect(panModeCode('pan')).toBe(0);
+    expect(panModeCode('pan')).toBe(1);
     expect(panModeCode('stereo-pan')).toBe(1);
     expect(panModeCode('dual-pan')).toBe(2);
     expect(meterTapCode('postFader')).toBe(1);
+  });
+
+  it('panModeCode resolves every spelling to the SonarePanMode C ABI ordinal', () => {
+    // SonarePanMode (include/sonare/sonare_c_mixing.h): BALANCE=0, STEREO_PAN=1,
+    // DUAL_PAN=2. Must match Node's panModeValue and Python's _PAN_MODE_NAMES so
+    // the same spelling picks the same panning algorithm on every surface.
+    expect(panModeCode('balance')).toBe(0);
+    expect(panModeCode('pan')).toBe(1);
+    expect(panModeCode('stereopan')).toBe(1);
+    expect(panModeCode('stereo-pan')).toBe(1);
+    expect(panModeCode('dualpan')).toBe(2);
+    expect(panModeCode('dual-pan')).toBe(2);
   });
 
   it('sendTimingCode rejects an unknown string instead of defaulting to post-fader', () => {

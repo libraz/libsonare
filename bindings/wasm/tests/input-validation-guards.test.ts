@@ -27,6 +27,7 @@ import {
   preemphasis,
   RealtimeEngine,
   RealtimeVoiceChanger,
+  StreamAnalyzer,
   splitSilence,
   trimSilence,
 } from '../dist/index.js';
@@ -86,6 +87,147 @@ describe('RealtimeEngine prepare/time-signature/loop guards', () => {
 describe('WASM mixStereo input guards', () => {
   it('rejects an empty channel list with a specific validation error', () => {
     expect(() => mixStereo([], [], 48000)).toThrow(/non-zero length/);
+  });
+});
+
+describe('detectKey / detectKeyCandidates reject unknown enum spellings and out-of-range ordinals', () => {
+  // Input-validation consolidation (P2-2): keyProfileValue/keyModeValues used
+  // to resolve an unmapped spelling to `undefined` (silently reaching the
+  // WASM boundary as a mistyped argument, e.g. a typo like "edm" silently
+  // selecting a different profile, and an unknown mode name silently
+  // becoming Major) and passed a raw numeric ordinal through unvalidated.
+  // Both now reject through resolveEnumOrdinal, the same primitive
+  // panModeCode already used (H-18).
+  const samples = new Float32Array(4096).fill(0.05);
+
+  it("rejects a typo'd key profile name instead of silently selecting a different profile", () => {
+    expect(() => detectKey(samples, 22050, { profile: 'edm' as never })).toThrow(RangeError);
+  });
+
+  it('rejects an out-of-range numeric key profile ordinal', () => {
+    expect(() => detectKey(samples, 22050, { profile: 99 as never })).toThrow(RangeError);
+  });
+
+  it("rejects a typo'd key mode name instead of silently becoming Major", () => {
+    expect(() => detectKey(samples, 22050, { modes: ['typo' as never] })).toThrow(RangeError);
+  });
+
+  it('rejects an out-of-range numeric key mode ordinal', () => {
+    expect(() => detectKeyCandidates(samples, 22050, { modes: [99 as never] })).toThrow(RangeError);
+  });
+
+  it('accepts every documented key profile and key mode spelling', () => {
+    for (const profile of [
+      'ks',
+      'krumhansl',
+      'temperley',
+      'shaath',
+      'keyfinder',
+      'faraldo-edmt',
+      'edmt',
+      'faraldo-edma',
+      'edma',
+      'faraldo-edmm',
+      'edmm',
+      'bellman-budge',
+      'bellman',
+    ] as const) {
+      expect(() => detectKey(samples, 22050, { profile })).not.toThrow();
+    }
+    for (const mode of [
+      'major',
+      'minor',
+      'dorian',
+      'phrygian',
+      'lydian',
+      'mixolydian',
+      'locrian',
+    ] as const) {
+      expect(() => detectKey(samples, 22050, { modes: [mode] })).not.toThrow();
+    }
+  });
+});
+
+describe('StreamAnalyzer rejects an out-of-range window ordinal instead of silently defaulting to Hann', () => {
+  it('rejects window ordinals outside [0, 3]', () => {
+    expect(() => new StreamAnalyzer({ window: 99 as never })).toThrow();
+    expect(() => new StreamAnalyzer({ window: -1 as never })).toThrow();
+  });
+
+  it('accepts every valid window ordinal', () => {
+    for (const window of [0, 1, 2, 3] as const) {
+      expect(() => new StreamAnalyzer({ window })).not.toThrow();
+    }
+  });
+});
+
+describe('RealtimeVoiceChanger.setPodConfig rejects a partial POD instead of zero-filling it', () => {
+  // Priority fix: a partial POD used to silently zero-fill missing fields —
+  // a missing limiterEnableIspLimiter read as JS `false`, which can turn the
+  // ISP limiter off and let the DAC clip. Every field is now required.
+  function fullPod() {
+    return {
+      inputGainDb: 0,
+      outputGainDb: 0,
+      wetMix: 1,
+      retuneSemitones: 0,
+      retuneMix: 0,
+      retuneGrainSize: 0,
+      formantFactor: 1,
+      formantAmount: 0,
+      formantBody: 0,
+      formantBrightness: 0,
+      formantNasal: 0,
+      eqHighpassHz: 80,
+      eqBodyDb: 0,
+      eqPresenceDb: 0,
+      eqAirDb: 0,
+      gateThresholdDb: -55,
+      gateAttackMs: 2,
+      gateReleaseMs: 100,
+      gateRangeDb: 18,
+      compressorThresholdDb: -22,
+      compressorRatio: 2,
+      compressorAttackMs: 6,
+      compressorReleaseMs: 90,
+      compressorMakeupGainDb: 0,
+      deesserFrequencyHz: 7200,
+      deesserThresholdDb: -28,
+      deesserRatio: 4,
+      deesserRangeDb: 8,
+      reverbMix: 0,
+      reverbTimeMs: 100,
+      reverbDamping: 0.5,
+      reverbSeed: 1,
+      limiterCeilingDb: -1,
+      limiterReleaseMs: 50,
+      limiterEnableIspLimiter: true,
+      limiterIspCeilingDbtp: -1,
+    };
+  }
+
+  it('rejects a POD missing limiterEnableIspLimiter instead of silently turning the ISP limiter off', () => {
+    const vc = new RealtimeVoiceChanger('neutral-monitor');
+    const { limiterEnableIspLimiter: _omitted, ...partial } = fullPod();
+    expect(() => vc.setPodConfig(partial as never)).toThrow(/limiterEnableIspLimiter/);
+  });
+
+  it('rejects a POD missing any other required numeric field', () => {
+    const vc = new RealtimeVoiceChanger('neutral-monitor');
+    const { wetMix: _omitted, ...partial } = fullPod();
+    expect(() => vc.setPodConfig(partial as never)).toThrow(/wetMix/);
+  });
+
+  it('rejects a POD with a wrong-typed field instead of coercing it', () => {
+    const vc = new RealtimeVoiceChanger('neutral-monitor');
+    expect(() => vc.setPodConfig({ ...fullPod(), wetMix: 'loud' as unknown as number })).toThrow(
+      /wetMix/,
+    );
+  });
+
+  it('accepts a fully specified POD', () => {
+    const vc = new RealtimeVoiceChanger('neutral-monitor');
+    expect(() => vc.setPodConfig(fullPod())).not.toThrow();
   });
 });
 

@@ -305,12 +305,10 @@ void checkOneShotSetter(SonareError err, const char* what) {
 }  // namespace
 
 val js_mix_stereo(val left_channels, val right_channels, int sample_rate, val options) {
+  // require_non_zero defaults to true: mixStereo has no meaning over zero
+  // input channels, so requireMatchedLength rejects that itself now.
   const int count =
       requireMatchedLength(left_channels, right_channels, "leftChannels and rightChannels");
-  if (count == 0) {
-    throw sonare::SonareException(sonare::ErrorCode::InvalidParameter,
-                                  "mixStereo requires at least one input channel");
-  }
 
   std::vector<std::vector<float>> left_inputs;
   std::vector<std::vector<float>> right_inputs;

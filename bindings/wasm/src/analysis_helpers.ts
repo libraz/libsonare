@@ -1,3 +1,4 @@
+import { resolveEnumOrdinal } from './codes';
 import type {
   AnalysisResult,
   ChordAnalysisResult,
@@ -48,6 +49,37 @@ export function convertKeyCandidate(wasm: WasmKeyCandidateResult): KeyCandidate 
   };
 }
 
+// Consolidated spelling -> ordinal tables, resolved through the same
+// resolveEnumOrdinal() primitive as panModeCode/panLawCode/etc. in ./codes.
+// An unmapped string or an out-of-range numeric ordinal throws RangeError
+// instead of silently resolving to `undefined` (which used to reach the WASM
+// layer as a mistyped argument) or passing an unvalidated raw number through.
+const KEY_MODE_VALUES: Readonly<Record<string, number>> = {
+  major: Mode.Major,
+  minor: Mode.Minor,
+  dorian: Mode.Dorian,
+  phrygian: Mode.Phrygian,
+  lydian: Mode.Lydian,
+  mixolydian: Mode.Mixolydian,
+  locrian: Mode.Locrian,
+};
+
+const KEY_PROFILE_VALUES: Readonly<Record<KeyProfileName, number>> = {
+  ks: KeyProfileValues.KrumhanslSchmuckler,
+  krumhansl: KeyProfileValues.KrumhanslSchmuckler,
+  temperley: KeyProfileValues.Temperley,
+  shaath: KeyProfileValues.Shaath,
+  keyfinder: KeyProfileValues.Shaath,
+  'faraldo-edmt': KeyProfileValues.FaraldoEDMT,
+  edmt: KeyProfileValues.FaraldoEDMT,
+  'faraldo-edma': KeyProfileValues.FaraldoEDMA,
+  edma: KeyProfileValues.FaraldoEDMA,
+  'faraldo-edmm': KeyProfileValues.FaraldoEDMM,
+  edmm: KeyProfileValues.FaraldoEDMM,
+  'bellman-budge': KeyProfileValues.BellmanBudge,
+  bellman: KeyProfileValues.BellmanBudge,
+};
+
 export function keyModeValues(modes: KeyDetectionOptions['modes'] | undefined): number[] {
   if (!modes) {
     return [];
@@ -66,41 +98,14 @@ export function keyModeValues(modes: KeyDetectionOptions['modes'] | undefined): 
       Mode.Locrian,
     ];
   }
-  const names = {
-    major: Mode.Major,
-    minor: Mode.Minor,
-    dorian: Mode.Dorian,
-    phrygian: Mode.Phrygian,
-    lydian: Mode.Lydian,
-    mixolydian: Mode.Mixolydian,
-    locrian: Mode.Locrian,
-  } as const;
-  return modes.map((mode) => (typeof mode === 'number' ? mode : names[mode]));
+  return modes.map((mode) => resolveEnumOrdinal(mode, KEY_MODE_VALUES, 'key mode'));
 }
 
 export function keyProfileValue(profile: KeyDetectionOptions['profile'] | undefined): number {
   if (profile === undefined) {
     return -1;
   }
-  if (typeof profile === 'number') {
-    return profile;
-  }
-  const names: Record<KeyProfileName, number> = {
-    ks: KeyProfileValues.KrumhanslSchmuckler,
-    krumhansl: KeyProfileValues.KrumhanslSchmuckler,
-    temperley: KeyProfileValues.Temperley,
-    shaath: KeyProfileValues.Shaath,
-    keyfinder: KeyProfileValues.Shaath,
-    'faraldo-edmt': KeyProfileValues.FaraldoEDMT,
-    edmt: KeyProfileValues.FaraldoEDMT,
-    'faraldo-edma': KeyProfileValues.FaraldoEDMA,
-    edma: KeyProfileValues.FaraldoEDMA,
-    'faraldo-edmm': KeyProfileValues.FaraldoEDMM,
-    edmm: KeyProfileValues.FaraldoEDMM,
-    'bellman-budge': KeyProfileValues.BellmanBudge,
-    bellman: KeyProfileValues.BellmanBudge,
-  };
-  return names[profile];
+  return resolveEnumOrdinal(profile, KEY_PROFILE_VALUES, 'key profile');
 }
 
 export function convertChordAnalysisResult(wasm: WasmChordAnalysisResult): ChordAnalysisResult {

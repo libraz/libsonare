@@ -110,6 +110,10 @@ class StreamAnalyzerWrapper {
                             "computeMagnitude is not supported because magnitude frames are not "
                             "exposed by the StreamAnalyzer read paths");
     }
+    // Rejects an out-of-range window ordinal, mirroring the C ABI's
+    // valid_window (features_streaming.cpp), which rejects it at
+    // sonare_stream_analyzer_create rather than silently defaulting to Hann.
+    requireOrdinalInRange(window, SONARE_WINDOW_HANN, SONARE_WINDOW_RECTANGULAR, "window");
     StreamConfig config;
     config.sample_rate = sample_rate;
     config.n_fft = n_fft;
