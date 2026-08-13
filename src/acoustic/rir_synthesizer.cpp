@@ -77,6 +77,12 @@ Audio color_early_ir(const std::vector<ImageSource>& images, int sample_rate,
   std::vector<float> out(b, b + n);
 
   const float nyquist = static_cast<float>(sample_rate) * 0.5f;
+  // Reused across every band iteration instead of freshly allocated: per band
+  // this function already holds out, broadband, and per_band concurrently
+  // (each a full RIR-length buffer), and re-allocating dev on top of that on
+  // every one of up to ~11 octave-band iterations multiplies allocator churn
+  // well past what a caller sizing to the module's allocation cap expects.
+  std::vector<float> dev(static_cast<size_t>(n), 0.0f);
   for (size_t band = 0; band < bands; ++band) {
     const float center = octave_center_hz(static_cast<int>(band));
     // Skip a band whose octave sits at/above Nyquist, exactly as the late tail
@@ -87,7 +93,7 @@ Audio color_early_ir(const std::vector<ImageSource>& images, int sample_rate,
     const Audio per_band = synthesize_early_ir(images, sample_rate, cfg);
     const float* e = per_band.data();
     const int lim = std::min(n, static_cast<int>(per_band.size()));
-    std::vector<float> dev(static_cast<size_t>(n), 0.0f);
+    std::fill(dev.begin(), dev.end(), 0.0f);
     for (int i = 0; i < lim; ++i) dev[static_cast<size_t>(i)] = e[i] - b[i];
     octave_bandpass_zero_phase(dev, center, sample_rate);
     for (int i = 0; i < n; ++i) out[static_cast<size_t>(i)] += dev[static_cast<size_t>(i)];

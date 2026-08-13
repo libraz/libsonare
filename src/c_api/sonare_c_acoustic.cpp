@@ -4,6 +4,7 @@
 #include <algorithm>
 #include <cmath>
 #include <cstring>
+#include <limits>
 #include <vector>
 
 #include "acoustic/rir_synthesizer.h"
@@ -250,13 +251,24 @@ SonareError sonare_estimate_room(const float* samples, size_t length, int sample
     out->height_m = est.dims.height;
     out->drr_db = est.drr_db;
     out->confidence = est.confidence;
+    // The two band vectors are independent estimates (absorption from the
+    // inverse problem, RT60 from the decay fit) and either can legitimately
+    // fail to converge on its own. band_count is documented as the length of
+    // BOTH arrays, so truncating to the shorter one silently dropped a
+    // fully-computed array whenever its sibling failed — exactly when a
+    // caller most wants the surviving data. Pad the shorter side with NaN
+    // instead so both arrays reach band_count and neither is ever discarded
+    // because the other came back empty.
+    const size_t max_count = std::max(est.absorption_bands.size(), est.rt60_bands.size());
+    auto pad_with_nan = [max_count](std::vector<float> values) {
+      values.resize(max_count, std::numeric_limits<float>::quiet_NaN());
+      return values;
+    };
     size_t a_count = 0;
     size_t r_count = 0;
-    out->absorption_bands = copy_bands(est.absorption_bands, &a_count);
-    out->rt60_bands = copy_bands(est.rt60_bands, &r_count);
-    // The two band vectors share a length; report the shorter so a consumer that
-    // iterates to band_count can never read past the smaller array.
-    out->band_count = a_count < r_count ? a_count : r_count;
+    out->absorption_bands = copy_bands(pad_with_nan(est.absorption_bands), &a_count);
+    out->rt60_bands = copy_bands(pad_with_nan(est.rt60_bands), &r_count);
+    out->band_count = max_count;
     return SONARE_OK;
   });
 #else

@@ -124,11 +124,17 @@ typedef struct {
   float length_m; /* representative dimensions (m) */
   float width_m;
   float height_m;
-  float drr_db;            /* direct-to-reverberant ratio (dB) */
-  float confidence;        /* honest [0,1] support for the estimate */
-  float* absorption_bands; /* per-octave-band mean absorption; NULL if none */
-  float* rt60_bands;       /* per-octave-band RT60 (s); NULL if none */
-  size_t band_count;       /* length of both band arrays */
+  float drr_db;     /* direct-to-reverberant ratio (dB) */
+  float confidence; /* honest [0,1] support for the estimate */
+  /* Per-octave-band mean absorption and RT60 (s) are independent estimates;
+     either can fail to converge without the other failing. Both arrays are
+     always the same length (band_count): if one estimate failed while its
+     sibling succeeded, the failed side is NaN-filled out to band_count
+     rather than truncating band_count to the shorter (possibly empty) side.
+     NULL only when neither estimate produced any bands. */
+  float* absorption_bands;
+  float* rt60_bands;
+  size_t band_count; /* length of both band arrays */
 } SonareRoomEstimate;
 
 /// @brief Target room + placement + morph controls for the offline morph.

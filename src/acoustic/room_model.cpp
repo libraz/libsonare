@@ -373,18 +373,23 @@ std::vector<Diagnostic> validate_shoebox(const ShoeboxRoom& room, const SourceLi
       band_mismatch = true;
       break;
     }
+    // Record and move on rather than returning: an early return here would
+    // abort validation of the remaining walls (each wall's own absorption /
+    // scattering range is independent) and skip the band_mismatch check
+    // below entirely, silently dropping diagnostics for problems unrelated
+    // to this one coefficient.
     for (float coefficient : w.absorption) {
       if (!std::isfinite(coefficient) || coefficient < 0.0f || coefficient > 1.0f) {
         diags.push_back({Diagnostic::Severity::Error, "acoustic.invalid_absorption",
                          "material absorption must be finite and within [0,1]"});
-        return diags;
+        break;
       }
     }
     for (float coefficient : w.scattering) {
       if (!std::isfinite(coefficient) || coefficient < 0.0f || coefficient > 1.0f) {
         diags.push_back({Diagnostic::Severity::Error, "acoustic.invalid_scattering",
                          "material scattering must be finite and within [0,1]"});
-        return diags;
+        break;
       }
     }
   }
