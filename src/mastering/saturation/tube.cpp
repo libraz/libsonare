@@ -100,17 +100,27 @@ void Tube::allocate_scratch() {
 }
 
 void Tube::prepare(double sample_rate, int max_block_size) {
+  // Realtime callers use the two-argument ProcessorBase API and may switch
+  // between any supported channel count without an allocation in process().
+  prepare(sample_rate, max_block_size, static_cast<int>(dynamics::kRealtimePreparedChannels));
+}
+
+void Tube::prepare(double sample_rate, int max_block_size, int max_channels) {
   if (!(sample_rate > 0.0))
     throw SonareException(ErrorCode::InvalidParameter, "sample_rate must be positive");
   if (max_block_size < 0)
     throw SonareException(ErrorCode::InvalidParameter, "max_block_size must be non-negative");
+  if (max_channels < 1 || max_channels > static_cast<int>(dynamics::kRealtimePreparedChannels)) {
+    throw SonareException(ErrorCode::InvalidParameter, "max_channels exceeds Tube capacity");
+  }
   sample_rate_ = sample_rate;
   max_block_size_ = max_block_size;
+  max_working_channels_ = max_channels;
   // Preallocate per-channel Miller-filter state so process() never resizes on
-  // the audio thread for any channel count up to the realtime limit.
-  miller_state_.assign(dynamics::kRealtimePreparedChannels, 0.0f);
-  oversampler_states_.resize(dynamics::kRealtimePreparedChannels);
-  dry_delays_.resize(dynamics::kRealtimePreparedChannels);
+  // the audio thread for any channel count up to max_working_channels_.
+  miller_state_.assign(static_cast<size_t>(max_working_channels_), 0.0f);
+  oversampler_states_.resize(static_cast<size_t>(max_working_channels_));
+  dry_delays_.resize(static_cast<size_t>(max_working_channels_));
   allocate_scratch();
   prepared_ = true;
   reset();
@@ -233,7 +243,7 @@ void Tube::validate_config(const TubeConfig& config) {
 }
 
 void Tube::ensure_state(int num_channels) {
-  // prepare() preallocates kRealtimePreparedChannels states so the common audio
+  // prepare() preallocates max_working_channels_ states so the common audio
   // path never resizes. A wider stream must be prepared before audio processing.
   if (miller_state_.size() < static_cast<size_t>(num_channels) ||
       oversampler_states_.size() < static_cast<size_t>(num_channels) ||

@@ -2,6 +2,7 @@
 /// @brief Mastering EQ no-allocation realtime tests.
 
 #include "mastering/api/insert_factory.h"
+#include "mastering/multiband/multiband_compressor.h"
 #include "mastering/saturation/bitcrusher.h"
 #include "mastering/saturation/exciter.h"
 #include "mastering/saturation/hard_clipper.h"
@@ -176,6 +177,28 @@ TEST_CASE("every realtime insert factory processor is allocation free on its fir
   }
 }
 
+TEST_CASE("TruePeakLimiter mono first block is allocation free after prepare",
+          "[mastering][maximizer][rt]") {
+  // The existing "no heap allocation after prepare" case below always measures
+  // a STEREO block and warms up with one unguarded process() call first, so it
+  // cannot see an allocation that only happens on the very first block, or one
+  // that only happens for a channel count other than 2 -- exactly the scenario
+  // a preset change or a device restart into mono monitoring hits.
+  constexpr int kBlock = 256;
+  sonare::mastering::maximizer::TruePeakLimiter limiter({-1.0f, 1.0f, 20.0f, 4});
+  limiter.prepare(48000.0, kBlock);
+
+  std::array<float, kBlock> mono{};
+  for (int i = 0; i < kBlock; ++i) {
+    mono[static_cast<size_t>(i)] = i == 0 ? 1.2f : 0.25f;
+  }
+  float* channels[] = {mono.data()};
+
+  AllocationGuard guard;
+  limiter.process(channels, 1, kBlock);
+  REQUIRE(guard.count() == 0);
+}
+
 TEST_CASE("TruePeakLimiter process performs no heap allocation after prepare",
           "[mastering][maximizer][rt]") {
   constexpr int kBlock = 256;
@@ -265,6 +288,27 @@ TEST_CASE("PultecEq process performs no heap allocation after prepare", "[master
 
   AllocationGuard guard;
   eq.process(channels, 2, kBlock);
+  REQUIRE(guard.count() == 0);
+}
+
+TEST_CASE("MultibandCompressor mono first block is allocation free after prepare",
+          "[mastering][multiband][rt]") {
+  // prepare() pre-sizes the crossover split scratch assuming stereo
+  // (crossover_.prepare_scratch(scratch_, 2, ...)); a mono FIRST block finds
+  // that scratch's channel count mismatched and grows it inside process(),
+  // on the audio thread.
+  constexpr int kBlock = 256;
+  sonare::mastering::multiband::MultibandCompressor compressor;
+  compressor.prepare(48000.0, kBlock);
+
+  std::array<float, kBlock> mono{};
+  for (int i = 0; i < kBlock; ++i) {
+    mono[static_cast<size_t>(i)] = i == 0 ? 0.8f : 0.05f;
+  }
+  float* channels[] = {mono.data()};
+
+  AllocationGuard guard;
+  compressor.process(channels, 1, kBlock);
   REQUIRE(guard.count() == 0);
 }
 

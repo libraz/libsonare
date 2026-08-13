@@ -4,6 +4,7 @@
 #include <string>
 #include <utility>
 
+#include "mastering/dynamics/channel_limits.h"
 #include "mastering/saturation/exciter.h"
 #include "mastering/saturation/soft_clipper.h"
 #include "mastering/saturation/tape.h"
@@ -59,22 +60,43 @@ MultibandSaturation::MultibandSaturation(MultibandSaturationConfig config)
 MultibandSaturation::~MultibandSaturation() = default;
 
 void MultibandSaturation::prepare(double sample_rate, int max_block_size) {
+  // Realtime callers use the two-argument ProcessorBase API and may switch
+  // between any supported channel count without an allocation in process().
+  prepare(sample_rate, max_block_size, static_cast<int>(dynamics::kRealtimePreparedChannels));
+}
+
+void MultibandSaturation::prepare(double sample_rate, int max_block_size, int max_channels) {
   if (!(sample_rate > 0.0)) {
     throw SonareException(ErrorCode::InvalidParameter, "sample_rate must be positive");
   }
   if (max_block_size < 0) {
     throw SonareException(ErrorCode::InvalidParameter, "max_block_size must be non-negative");
   }
+  if (max_channels < 1 || max_channels > static_cast<int>(dynamics::kRealtimePreparedChannels)) {
+    throw SonareException(ErrorCode::InvalidParameter,
+                          "max_channels exceeds MultibandSaturation capacity");
+  }
 
   sample_rate_ = sample_rate;
   max_block_size_ = max_block_size;
+  max_working_channels_ = max_channels;
   prepared_ = true;
   crossover_.prepare(sample_rate_, max_block_size_);
-  // Pre-size split scratch for stereo so the steady-state audio path is
-  // allocation-free; it is grown on demand only if a wider block arrives.
-  crossover_.prepare_scratch(scratch_, 2, max_block_size_);
+  // Pre-size split scratch for the common (mono/stereo) case so the
+  // steady-state audio path is allocation-free; it is grown on demand only if
+  // a wider block arrives. This is deliberately capped at 2, NOT
+  // max_working_channels_: the realtime two-argument overload above forwards
+  // kRealtimePreparedChannels here, and sizing the crossover scratch to that
+  // would make every ordinary stereo process() call (the overwhelmingly
+  // common realtime case) see a channel-count mismatch against the scratch
+  // and reallocate on the FIRST audio-thread block -- worse than the
+  // over-allocation this fix is meant to remove. Forward the real bound to
+  // each band's saturation processor, though, so an offline mono/stereo
+  // caller does not pay for the per-band Tube/Tape oversampler scratch's
+  // realtime channel capacity.
+  crossover_.prepare_scratch(scratch_, std::min(max_working_channels_, 2), max_block_size_);
   for (auto& processor : processors_) {
-    processor->prepare(sample_rate_, max_block_size_);
+    processor->prepare(sample_rate_, max_block_size_, max_working_channels_);
   }
   reset();
 }
@@ -138,10 +160,11 @@ void MultibandSaturation::set_config(const MultibandSaturationConfig& config) {
   if (prepared_) {
     if (crossover_changed) {
       crossover_.set_config(config_.crossover);
-      crossover_.prepare_scratch(scratch_, 2, max_block_size_);
+      // Capped the same way as prepare() above -- see the comment there.
+      crossover_.prepare_scratch(scratch_, std::min(max_working_channels_, 2), max_block_size_);
     }
     for (auto& processor : processors_) {
-      processor->prepare(sample_rate_, max_block_size_);
+      processor->prepare(sample_rate_, max_block_size_, max_working_channels_);
     }
   }
 }

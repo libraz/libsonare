@@ -155,7 +155,12 @@ void Crossover::prepare_scratch(CrossoverScratch& scratch, int num_channels,
 }
 
 bool Crossover::ensure_scratch(CrossoverScratch& scratch, int num_channels, int num_samples) const {
-  if (scratch.num_bands() == num_bands() && scratch.num_channels() == num_channels &&
+  // "Hold at least" per the header contract: a scratch already sized for MORE
+  // channels than requested (e.g. prepared for stereo, then hit with a mono
+  // first block) must be reused as-is, not reallocated down to the exact
+  // count -- process_block_iir/_fir and every multiband_* caller already only
+  // touch channels [0, num_channels), so the unused trailing slots are inert.
+  if (scratch.num_bands() == num_bands() && scratch.num_channels() >= num_channels &&
       scratch.capacity_samples() >= num_samples) {
     return false;
   }
@@ -169,7 +174,7 @@ void Crossover::split_into(float* const* channels, int num_channels, int num_sam
   if (num_channels == 0 || num_samples == 0) {
     return;
   }
-  if (scratch.num_bands() != num_bands() || scratch.num_channels() != num_channels ||
+  if (scratch.num_bands() != num_bands() || scratch.num_channels() < num_channels ||
       scratch.capacity_samples() < num_samples) {
     throw SonareException(ErrorCode::InvalidState,
                           "CrossoverScratch must be prepared for this channel/band/block size");

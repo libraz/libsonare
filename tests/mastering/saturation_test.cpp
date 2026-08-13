@@ -297,6 +297,27 @@ TEST_CASE("Tube oversampling is invariant to process block partitioning",
   REQUIRE(actual == expected);
 }
 
+TEST_CASE("Tube supports bounded offline mono and stereo scratch capacity",
+          "[mastering][saturation]") {
+  // An offline mastering caller that knows it is mono/stereo must not pay for
+  // the oversampler scratch (up_scratch_/down_scratch_/oversampler_states_)
+  // sized to the realtime channel ceiling. prepare(sr, block, 2) bounds the
+  // Tube's per-channel state to exactly 2 channels; a wider block is rejected
+  // rather than silently falling back to the 64-channel realtime capacity.
+  Tube tube({18.0f, 0.25f, 1.0f, 4});
+  tube.prepare(48000.0, 256, 2);
+
+  std::vector<float> left(256, 0.25f);
+  std::vector<float> right(256, -0.25f);
+  float* stereo[] = {left.data(), right.data()};
+  REQUIRE_NOTHROW(tube.process(stereo, 2, 256));
+
+  float* too_many_channels[] = {left.data(), right.data(), left.data()};
+  REQUIRE_THROWS_AS(tube.process(too_many_channels, 3, 1), sonare::SonareException);
+  REQUIRE_THROWS_AS(tube.prepare(48000.0, 256, 0), sonare::SonareException);
+  REQUIRE_THROWS_AS(tube.prepare(48000.0, 256, 65), sonare::SonareException);
+}
+
 TEST_CASE("Tube exposes voltage-domain bias control", "[mastering][saturation]") {
   Tube cold({18.0f, 0.0f, 1.0f, 1, -2.2f});
   Tube hot({18.0f, 0.0f, 1.0f, 1, -0.9f});

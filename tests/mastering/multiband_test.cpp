@@ -884,6 +884,32 @@ TEST_CASE("MultibandSaturation validates configuration", "[mastering][multiband]
   REQUIRE_THROWS(MultibandSaturation(config));
 }
 
+TEST_CASE("MultibandSaturation forwards the offline channel bound to its Tube band",
+          "[mastering][multiband]") {
+  // MultibandSaturation delegates each band to a real per-band processor (Tube
+  // here); prepare(sr, block, 2) must forward that same channel bound down to
+  // the band processor instead of always preparing it at Tube's realtime
+  // default, or an offline mono/stereo caller still pays for 64 channels of
+  // Tube oversampler scratch per band that it can never use.
+  MultibandSaturationConfig config;
+  config.crossover = {{1000.0f}, CrossoverSlope::LR2, CrossoverMode::LinkwitzRiley};
+  config.bands = {
+      {0.0f, 1.0f, 0.0f, true, SaturationType::Tube},
+      {12.0f, 1.0f, 0.0f, true, SaturationType::Tube},
+  };
+  MultibandSaturation saturation(config);
+  saturation.prepare(48000.0, 256, 2);
+
+  std::vector<float> left(256, 0.25f);
+  std::vector<float> right(256, -0.25f);
+  float* stereo[] = {left.data(), right.data()};
+  REQUIRE_NOTHROW(saturation.process(stereo, 2, 256));
+
+  std::vector<float> extra(256, 0.1f);
+  float* too_many_channels[] = {left.data(), right.data(), extra.data()};
+  REQUIRE_THROWS_AS(saturation.process(too_many_channels, 3, 256), sonare::SonareException);
+}
+
 TEST_CASE("MultibandDynamicEq applies dynamic EQ inside selected band", "[mastering][multiband]") {
   MultibandDynamicEqConfig config;
   config.crossover = {{1000.0f}, CrossoverSlope::LR2, CrossoverMode::LinkwitzRiley};

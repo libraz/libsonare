@@ -298,6 +298,31 @@ TEST_CASE("AirBand preserves existing channel state when channel count grows",
   REQUIRE(max_abs_difference(actual_left, expected_left) < 1.0e-6f);
 }
 
+TEST_CASE("AirBand supports a bounded offline channel capacity and still grows on demand",
+          "[mastering][spectral]") {
+  // An offline mastering caller that knows it is mono/stereo bounds AirBand's
+  // per-channel scratch (envelope_/harmonic_oversampler_states_/etc.) to that
+  // count via the 3-argument prepare() overload instead of always reserving
+  // the 64-channel realtime capacity. A stream wider than the bound must
+  // still work: AirBand grows on demand (matching the pre-existing
+  // ensure_state grow contract exercised above) rather than throwing.
+  REQUIRE_THROWS(AirBand({0.4f}).prepare(48000.0, 256, 0));
+  REQUIRE_THROWS(AirBand({0.4f}).prepare(48000.0, 256, 65));  // one past the 64-channel ceiling
+
+  AirBand air({0.4f});
+  air.prepare(48000.0, 256, 2);
+
+  std::vector<float> left(256, 0.1f);
+  std::vector<float> right(256, -0.1f);
+  float* stereo[] = {left.data(), right.data()};
+  REQUIRE_NOTHROW(air.process(stereo, 2, 256));
+
+  std::vector<float> third(256, 0.1f);
+  float* surround[] = {left.data(), right.data(), third.data()};
+  REQUIRE_NOTHROW(air.process(surround, 3, 256));
+  for (float sample : third) REQUIRE(std::isfinite(sample));
+}
+
 TEST_CASE("AirBand harmonic response is stable across sample rates", "[mastering][spectral]") {
   constexpr float kFrequencyHz = 14000.0f;
   std::vector<float> gains_db;
@@ -309,9 +334,17 @@ TEST_CASE("AirBand harmonic response is stable across sample rates", "[mastering
     AirBand air({0.7f, 10000.0f, -60.0f, 0.0f});
     air.prepare(sample_rate, sample_rate);
     process(air, signal);
-    for (size_t i = 0; i < signal.size(); ++i) {
-      signal[i] -= dry[i];
+    // AirBand delays its dry path by latency_samples() to stay time-aligned
+    // with the harmonic content (see the impulse-response test below), so
+    // isolating the added harmonic energy means subtracting the SAME-DELAYED
+    // dry signal, not dry[i] itself -- otherwise this subtraction leaves a
+    // dry[i - latency] - dry[i] residual at the tone's own frequency that
+    // swamps the harmonic measurement.
+    const auto latency = static_cast<size_t>(air.latency_samples());
+    for (size_t i = signal.size(); i-- > latency;) {
+      signal[i] -= dry[i - latency];
     }
+    std::fill(signal.begin(), signal.begin() + static_cast<std::ptrdiff_t>(latency), 0.0f);
 
     const float output_amplitude = projected_amplitude(signal, kFrequencyHz, sample_rate, 4096);
     gains_db.push_back(20.0f * std::log10(output_amplitude / input_amplitude));
@@ -332,9 +365,15 @@ TEST_CASE("AirBand oversampling suppresses high-tone alias products", "[masterin
   AirBand air({1.0f, 10000.0f, -60.0f, 0.0f});
   air.prepare(kSampleRate, kSamples);
   process(air, wet);
-  for (size_t i = 0; i < wet.size(); ++i) {
-    wet[i] -= dry[i];
+  // Isolate the added harmonic energy against the SAME-DELAYED dry signal
+  // (AirBand's dry path now lags by latency_samples() to stay aligned with
+  // the harmonic content); see the sample-rate-stability test above for why
+  // subtracting dry[i] directly would leave a large residual at kInputHz.
+  const auto latency = static_cast<size_t>(air.latency_samples());
+  for (size_t i = wet.size(); i-- > latency;) {
+    wet[i] -= dry[i - latency];
   }
+  std::fill(wet.begin(), wet.begin() + static_cast<std::ptrdiff_t>(latency), 0.0f);
 
   const float harmonic_fundamental = projected_amplitude(wet, kInputHz, kSampleRate, 4096);
   // tanh's third harmonic at 51 kHz would fold to 3 kHz at 48 kHz without
@@ -348,13 +387,52 @@ TEST_CASE("AirBand oversampling suppresses high-tone alias products", "[masterin
 
 TEST_CASE("AirBand does not hard clip when processing is bypassed", "[mastering][spectral]") {
   AirBand air({0.0f});
-  air.prepare(48000.0, 16);
+  // The dry shelf path is delayed by latency_samples() to stay time-aligned
+  // with the harmonic path (see the impulse-response test below), so the
+  // block must be long enough to let a full-scale impulse re-emerge from that
+  // delay before this test can observe it.
+  const auto latency = static_cast<size_t>(air.latency_samples());
+  air.prepare(48000.0, static_cast<int>(latency) + 2);
 
-  std::vector<float> signal = {2.0f, -2.0f};
+  std::vector<float> signal(latency + 2, 0.0f);
+  signal[0] = 2.0f;
+  signal[1] = -2.0f;
   process(air, signal);
 
-  REQUIRE(signal[0] > 1.9f);
-  REQUIRE(signal[1] < -1.9f);
+  REQUIRE(signal[latency] > 1.9f);
+  REQUIRE(signal[latency + 1] < -1.9f);
+}
+
+TEST_CASE("AirBand dry and harmonic paths emerge together at latency_samples",
+          "[mastering][spectral]") {
+  // The harmonic branch reaches the output through an oversampler round trip,
+  // so it lags the input by latency_samples(). The dry shelf branch is delayed
+  // by the same amount before the two are summed; without that delay the
+  // harmonics an impulse generates would trail the impulse itself, and the
+  // whole processor would report a latency it does not actually introduce.
+  AirBand air({0.7f, 10000.0f, -60.0f, 6.0f});
+  const auto latency = static_cast<size_t>(air.latency_samples());
+  REQUIRE(latency > 0);
+  air.prepare(48000.0, static_cast<int>(latency) + 8);
+
+  std::vector<float> signal(latency + 8, 0.0f);
+  signal[0] = 1.0f;
+  process(air, signal);
+
+  // Nothing but the reconstruction filter's pre-ringing may appear before the
+  // reported latency. An undelayed dry path would put the whole impulse at
+  // index 0 instead.
+  const float before_peak = peak_abs({signal.begin(), signal.begin() + latency});
+  CAPTURE(before_peak, signal[latency]);
+  REQUIRE(before_peak < 0.05f);
+
+  // ...and the impulse itself lands exactly on the reported latency.
+  const auto peak = static_cast<size_t>(
+      std::max_element(signal.begin(), signal.end(),
+                       [](float a, float b) { return std::abs(a) < std::abs(b); }) -
+      signal.begin());
+  REQUIRE(peak == latency);
+  REQUIRE(std::abs(signal[latency]) > 0.9f);
 }
 
 TEST_CASE("PresenceEnhancer increases RMS with harmonic drive", "[mastering][spectral]") {

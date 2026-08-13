@@ -44,15 +44,27 @@ AirBand::Biquad make_high_shelf(double frequency_hz, double sample_rate, float g
 AirBand::AirBand(AirBandConfig config) : config_(config) { validate_config(config_); }
 
 void AirBand::prepare(double sample_rate, int max_block_size) {
+  // Realtime callers use the two-argument ProcessorBase API and may switch
+  // between any supported channel count without an allocation in process().
+  prepare(sample_rate, max_block_size, static_cast<int>(dynamics::kRealtimePreparedChannels));
+}
+
+void AirBand::prepare(double sample_rate, int max_block_size, int max_channels) {
   if (!(sample_rate > 0.0) || max_block_size < 0) {
     throw SonareException(ErrorCode::InvalidParameter, "invalid prepare arguments");
   }
+  if (max_channels < 1 || max_channels > static_cast<int>(dynamics::kRealtimePreparedChannels)) {
+    throw SonareException(ErrorCode::InvalidParameter, "max_channels exceeds AirBand capacity");
+  }
   sample_rate_ = sample_rate;
   max_block_size_ = max_block_size;
+  max_working_channels_ = max_channels;
   prepared_ = true;
   // Preallocate per-channel state so process() never resizes on the audio
-  // thread (matches Tube/AmpSim).
-  const size_t n = dynamics::kRealtimePreparedChannels;
+  // thread (matches Tube/AmpSim). Scratch scales with the caller's channel
+  // bound: offline mastering callers know they are mono/stereo, while the
+  // two-argument overload above keeps the realtime capacity.
+  const size_t n = static_cast<size_t>(max_working_channels_);
   envelope_.assign(n, 0.0f);
   shelf_gain_db_.assign(n, 0.0f);
   band_rms_sq_.assign(n, 0.0f);
@@ -68,6 +80,11 @@ void AirBand::prepare(double sample_rate, int max_block_size) {
   harmonic_oversampler_states_.resize(n);
   for (auto& state : harmonic_oversampler_states_) {
     harmonic_oversampler_.prepare_streaming(&state, static_cast<size_t>(max_block_size_));
+  }
+  dry_delays_.resize(n);
+  for (auto& delay : dry_delays_) {
+    delay.prepare(
+        static_cast<size_t>(harmonic_oversampler_.streaming_round_trip_latency_samples()));
   }
   rebuild_filters(static_cast<int>(n));
   reset();
@@ -155,7 +172,13 @@ void AirBand::process(float* const* channels, int num_channels, int num_samples)
                     std::min(1.0f, kMaxHarmonicToBandRms * std::sqrt(band_rms_sq / harmonic_rms_sq))
               : 0.0f;
       harmonic_gain += harmonic_gain_alpha_ * (target_gain - harmonic_gain);
-      channels[ch][i] += harmonic_scratch_[i] * harmonic_gain;
+      // Delay the dry shelf sample by the same round trip the harmonic
+      // content already went through (via the streaming oversampler's
+      // internal history), so the two being summed here both refer to the
+      // same original input sample instead of the harmonic content lagging
+      // the dry signal by the oversampler's group delay.
+      const float dry = dry_delays_[static_cast<size_t>(ch)].process(channels[ch][i]);
+      channels[ch][i] = dry + harmonic_scratch_[i] * harmonic_gain;
     }
     envelope_[static_cast<size_t>(ch)] = envelope;
     band_rms_sq_[static_cast<size_t>(ch)] = band_rms_sq;
@@ -177,6 +200,7 @@ void AirBand::reset() {
   for (auto& state : harmonic_oversampler_states_) {
     harmonic_oversampler_.reset_streaming(&state);
   }
+  for (auto& delay : dry_delays_) delay.reset();
   for (auto& f : shelf_) f.reset();
   for (auto& f : detector_) f.reset();
   for (auto& f : harmonic_filter_) f.reset();
@@ -237,7 +261,7 @@ void AirBand::validate_config(const AirBandConfig& config) {
 }
 
 void AirBand::ensure_state(int num_channels) {
-  // prepare() preallocates kRealtimePreparedChannels; only grow (control thread)
+  // prepare() preallocates max_working_channels_; only grow (control thread)
   // if a caller exceeds it. Growing preserves existing channels' filter state
   // and seeds the new ones; a narrower block is left untouched (no churn).
   const auto target_size = static_cast<size_t>(num_channels);
@@ -245,7 +269,8 @@ void AirBand::ensure_state(int num_channels) {
       band_rms_sq_.size() < target_size || harmonic_rms_sq_.size() < target_size ||
       harmonic_gain_.size() < target_size || shelf_control_samples_.size() < target_size ||
       shelf_.size() < target_size || detector_.size() < target_size ||
-      harmonic_filter_.size() < target_size || harmonic_oversampler_states_.size() < target_size) {
+      harmonic_filter_.size() < target_size || harmonic_oversampler_states_.size() < target_size ||
+      dry_delays_.size() < target_size) {
     const size_t old_envelope_size = envelope_.size();
     const size_t old_shelf_gain_size = shelf_gain_db_.size();
     const size_t old_band_rms_size = band_rms_sq_.size();
@@ -256,6 +281,7 @@ void AirBand::ensure_state(int num_channels) {
     const size_t old_detector_size = detector_.size();
     const size_t old_harmonic_filter_size = harmonic_filter_.size();
     const size_t old_oversampler_state_size = harmonic_oversampler_states_.size();
+    const size_t old_dry_delay_size = dry_delays_.size();
     envelope_.resize(target_size, 0.0f);
     shelf_gain_db_.resize(target_size, 0.0f);
     band_rms_sq_.resize(target_size, 0.0f);
@@ -266,6 +292,7 @@ void AirBand::ensure_state(int num_channels) {
     detector_.resize(target_size);
     harmonic_filter_.resize(target_size);
     harmonic_oversampler_states_.resize(target_size);
+    dry_delays_.resize(target_size);
     for (size_t i = old_envelope_size; i < target_size; ++i) {
       envelope_[i] = 0.0f;
     }
@@ -290,6 +317,10 @@ void AirBand::ensure_state(int num_channels) {
     for (size_t i = old_oversampler_state_size; i < target_size; ++i) {
       harmonic_oversampler_.prepare_streaming(&harmonic_oversampler_states_[i],
                                               static_cast<size_t>(max_block_size_));
+    }
+    for (size_t i = old_dry_delay_size; i < target_size; ++i) {
+      dry_delays_[i].prepare(
+          static_cast<size_t>(harmonic_oversampler_.streaming_round_trip_latency_samples()));
     }
   }
 }

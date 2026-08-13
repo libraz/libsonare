@@ -542,15 +542,35 @@ TEST_CASE("StreamingMasteringChain flushes AirBand and true-peak latency",
     streamed.insert(streamed.end(), tail.begin(), tail.begin() + written);
   }
 
-  REQUIRE(streamed.size() > input.size() + static_cast<size_t>(streaming.latency_samples()));
-  REQUIRE(streamed.size() >= input.size() + static_cast<size_t>(streaming.latency_samples()));
-  const auto aligned_begin = streamed.begin() + streaming.latency_samples();
+  // flush() drains the chain's reported latency plus any finite stage tail, so
+  // the latency-aligned window always covers the whole offline result.
+  const auto latency = static_cast<size_t>(streaming.latency_samples());
+  CAPTURE(latency, streamed.size(), offline.samples.size());
+  REQUIRE(streamed.size() >= input.size() + latency);
+  const auto aligned_begin = streamed.begin() + static_cast<std::ptrdiff_t>(latency);
   std::vector<float> aligned(aligned_begin, aligned_begin + offline.samples.size());
-  // TruePeakLimiter applies a bounded per-block reconstruction correction, so
-  // its streaming and offline chunking can differ slightly while staying well
-  // below an audible level. AirBand's block-size invariance is asserted in its
-  // dedicated exact-state test above.
-  REQUIRE(max_abs_difference(aligned, offline.samples) < 1.0e-3f);
+
+  // Away from the stream edges the two paths run the same processors over the
+  // same samples, so removing the reported latency must line them up exactly.
+  // Anything else means a stage under-reports its latency or carries block-edge
+  // state, which is what this test exists to catch -- a loose whole-buffer
+  // tolerance would hide both behind the edge effects described below.
+  REQUIRE(aligned.size() > 2 * latency);
+  const auto interior = [latency](const std::vector<float>& v) {
+    return std::vector<float>(v.begin() + static_cast<std::ptrdiff_t>(latency),
+                              v.end() - static_cast<std::ptrdiff_t>(latency));
+  };
+  CAPTURE(max_abs_difference(interior(aligned), interior(offline.samples)));
+  REQUIRE(max_abs_difference(interior(aligned), interior(offline.samples)) < 1.0e-6f);
+
+  // One latency window at each edge is allowed to differ, because the offline
+  // chain compensates latency per stage: AirBand's delayed overhang is trimmed
+  // off before TruePeakLimiter runs, so the limiter's lookahead reads zeros at
+  // the end of the offline stream where the streaming chain feeds it the real
+  // continuation, and its gain ramp starts one AirBand latency earlier. Both
+  // are end-of-stream artifacts, not drift, and stay far below audibility.
+  CAPTURE(max_abs_difference(aligned, offline.samples));
+  REQUIRE(max_abs_difference(aligned, offline.samples) < 1.0e-2f);
 }
 
 TEST_CASE("StreamingMasteringChain stage_names lists enabled stages",

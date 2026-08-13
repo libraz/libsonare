@@ -21,6 +21,7 @@ class Tube : public rt::ProcessorBase {
  public:
   explicit Tube(TubeConfig config = {});
   void prepare(double sample_rate, int max_block_size) override;
+  void prepare(double sample_rate, int max_block_size, int max_channels) override;
   void process(float* const* channels, int num_channels, int num_samples) override;
   void reset() override;
   int latency_samples() const noexcept override {
@@ -55,6 +56,7 @@ class Tube : public rt::ProcessorBase {
   bool prepared_ = false;
   double sample_rate_ = 48000.0;
   int max_block_size_ = 0;
+  int max_working_channels_ = 0;
   sonare::rt::Oversampler oversampler_{4};
   std::vector<sonare::rt::Oversampler::StreamingState> oversampler_states_;
   std::vector<sonare::rt::DelayLine> dry_delays_;
