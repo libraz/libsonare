@@ -703,3 +703,66 @@ TEST_CASE("hybrid_cqt has no amplitude step across the split bin", "[cqt][hybrid
   REQUIRE(ratio < 5.0);
   REQUIRE(ratio > 1.0 / 5.0);
 }
+
+TEST_CASE("chroma fold aggregations share one bin-to-pitch-class mapping", "[cqt][chroma][fold]") {
+  // The summed fold (cqt_to_chroma / the NNLS front-end) and the mean fold
+  // (chroma_cqt / bass_chroma) are two aggregations of ONE mapping. That was
+  // previously two hand-synchronized copies of the centering shift and the fmin
+  // rotation; the mean result must now be exactly the summed result divided by
+  // the per-class bin count, for grids where the two used to be easy to desync:
+  // bins_per_octave > n_chroma, and a first bin that is not pitch class C.
+  const int n_frames = 3;
+  const int n_chroma = 12;
+
+  for (const int bins_per_octave : {12, 24, 36}) {
+    for (const int fmin_pitch_class : {0, 4, 11}) {
+      const int n_bins = bins_per_octave * 3;
+      std::vector<float> magnitude(static_cast<size_t>(n_bins) * n_frames);
+      for (int b = 0; b < n_bins; ++b) {
+        for (int t = 0; t < n_frames; ++t) {
+          // Distinct per (bin, frame) so any index mismatch shows up as a value
+          // mismatch rather than cancelling out.
+          magnitude[static_cast<size_t>(b) * n_frames + t] =
+              static_cast<float>(b + 1) + 0.25f * static_cast<float>(t);
+        }
+      }
+
+      std::vector<int> counts;
+      const auto summed =
+          fold_cqt_bins_to_chroma(magnitude.data(), n_bins, n_frames, bins_per_octave, n_chroma,
+                                  fmin_pitch_class, ChromaFold::kSum, &counts);
+      const auto averaged =
+          fold_cqt_bins_to_chroma(magnitude.data(), n_bins, n_frames, bins_per_octave, n_chroma,
+                                  fmin_pitch_class, ChromaFold::kMean);
+
+      REQUIRE(summed.size() == static_cast<size_t>(n_chroma) * n_frames);
+      REQUIRE(averaged.size() == summed.size());
+      REQUIRE(counts.size() == static_cast<size_t>(n_chroma));
+
+      int total_bins = 0;
+      for (int c = 0; c < n_chroma; ++c) {
+        total_bins += counts[c];
+        for (int t = 0; t < n_frames; ++t) {
+          const size_t idx = static_cast<size_t>(c) * n_frames + t;
+          const float expected =
+              counts[c] > 0 ? summed[idx] / static_cast<float>(counts[c]) : summed[idx];
+          CAPTURE(bins_per_octave, fmin_pitch_class, c, t, counts[c], summed[idx], averaged[idx]);
+          REQUIRE_THAT(averaged[idx], WithinRel(expected, 1e-6f));
+        }
+      }
+      // Every CQT bin must land on exactly one pitch class.
+      CAPTURE(bins_per_octave, fmin_pitch_class);
+      REQUIRE(total_bins == n_bins);
+    }
+  }
+}
+
+TEST_CASE("chroma_class_of_frequency resolves C-relative pitch classes", "[cqt][chroma][fold]") {
+  // The fmin rotation that aligns chroma class 0 with C. C1 is pitch class 0,
+  // E1 is 4; a non-positive frequency has no pitch class and yields 0.
+  REQUIRE(chroma_class_of_frequency(sonare::constants::kC1Hz, 12) == 0);
+  REQUIRE(chroma_class_of_frequency(41.203f, 12) == 4);  // E1
+  REQUIRE(chroma_class_of_frequency(440.0f, 12) == 9);   // A4
+  REQUIRE(chroma_class_of_frequency(0.0f, 12) == 0);
+  REQUIRE(chroma_class_of_frequency(-10.0f, 12) == 0);
+}

@@ -175,7 +175,52 @@ Audio icqt(const CqtResult& cqt_result, int length = 0);
 /// @return Vector of center frequencies
 std::vector<float> cqt_frequencies(float fmin, int n_bins, int bins_per_octave);
 
+/// @brief Aggregation applied to the CQT bins folded onto one pitch class.
+enum class ChromaFold {
+  kSum,   ///< Sum the bins (librosa.filters.cq_to_chroma's unnormalized fold)
+  kMean,  ///< Divide by the number of bins folded onto the class
+};
+
+/// @brief Folds CQT magnitude bins onto pitch classes.
+/// @details The single definition of the CQT-bin to pitch-class mapping. Every
+///          chroma extractor routes through it, so the bins-per-octave centering
+///          shift and the fmin pitch-class rotation cannot drift between the
+///          summed and the mean entry points.
+///
+///          Each pitch class merges `n_merge = bins_per_octave / n_chroma` CQT
+///          bins. The merge window is centered on its target class (shift by
+///          `n_merge / 2`), mirroring librosa.filters.cq_to_chroma's
+///          `np.roll(-(n_merge // 2))`, so a bin sitting at the low edge of a
+///          semitone group folds onto the correct class rather than the one
+///          below it. With `bins_per_octave == n_chroma` the shift is zero, so
+///          the common 12-bin path is unaffected. @p fmin_pitch_class then
+///          rotates class 0 onto C; a plain `bin % n_chroma` is only correct for
+///          the 12-bins-per-octave, C-aligned case.
+/// @param magnitude CQT magnitude [n_bins x n_frames] row-major
+/// @param n_bins Number of CQT bins
+/// @param n_frames Number of time frames
+/// @param bins_per_octave CQT bins per octave
+/// @param n_chroma Number of pitch classes
+/// @param fmin_pitch_class C-relative pitch class of CQT bin 0
+/// @param aggregation Summed or mean aggregation
+/// @param counts Optional out-param receiving the bin count per pitch class
+/// @return Chroma matrix [n_chroma x n_frames] row-major (empty if the grid is
+///         degenerate, i.e. n_chroma or bins_per_octave is not positive)
+std::vector<float> fold_cqt_bins_to_chroma(const float* magnitude, int n_bins, int n_frames,
+                                           int bins_per_octave, int n_chroma, int fmin_pitch_class,
+                                           ChromaFold aggregation,
+                                           std::vector<int>* counts = nullptr);
+
+/// @brief C-relative pitch class of a frequency.
+/// @details hz_to_midi yields MIDI numbers where C is a multiple of 12, so the
+///          rounded MIDI number modulo @p n_chroma is the C-relative class.
+/// @param hz Frequency in Hz (non-positive yields class 0)
+/// @param n_chroma Number of pitch classes
+/// @return Pitch class in [0, n_chroma)
+int chroma_class_of_frequency(float hz, int n_chroma);
+
 /// Internal shared CQT-bin to pitch-class fold used by chroma extractors.
+/// Derives the bin grid from @p frequencies and sums; see fold_cqt_bins_to_chroma.
 std::vector<float> accumulate_cqt_pitch_classes(const std::vector<float>& magnitude, int n_bins,
                                                 int n_frames, int n_chroma,
                                                 const std::vector<float>& frequencies,

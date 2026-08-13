@@ -165,57 +165,18 @@ float Chroma::at(int chroma, int frame) const {
 
 namespace {
 
-/// @brief Wraps CQT magnitude bins onto @p n_chroma pitch classes.
-/// @details CQT bin 0 corresponds to @p fmin, whose pitch class is generally not C.
-///          Each pitch class merges `n_merge = bins_per_octave / n_chroma` CQT bins;
-///          the fold centers that window (shift by `n_merge / 2`) before assigning a
-///          class, then adds the pitch-class offset of @p fmin and takes a positive
-///          modulo to align chroma class 0 with C, matching librosa.feature.chroma_cqt
-///          (librosa.filters.cq_to_chroma). @p fmin is expected to already include the
-///          tuning shift (see chroma_cqt / bass_chroma); tuning is not re-applied here.
+/// @brief Wraps CQT magnitude bins onto @p n_chroma pitch classes, mean-aggregated.
+/// @details librosa.feature.chroma_cqt expects bins_per_octave to be a multiple of
+///          n_chroma and gives each chroma bin the mean of the CQT bins falling onto
+///          that pitch class. The bin -> class mapping itself is
+///          fold_cqt_bins_to_chroma's; this wrapper only supplies the grid, which
+///          arrives here as an explicit (bins_per_octave, fmin) pair rather than as
+///          a frequency axis. @p fmin is expected to already include the tuning
+///          shift (see chroma_cqt / bass_chroma); tuning is not re-applied here.
 std::vector<float> wrap_cqt_to_chroma(const float* mag, int n_bins, int n_frames,
                                       int bins_per_octave, int n_chroma, float fmin) {
-  std::vector<float> chroma(static_cast<size_t>(n_chroma) * n_frames, 0.0f);
-  // Pitch class of fmin relative to C. hz_to_midi yields MIDI numbers where C is a
-  // multiple of 12 (pitch class 0), so (round(midi) mod 12) is the C-relative class.
-  int pitch_class_offset = 0;
-  if (fmin > 0.0f && n_chroma > 0) {
-    const float midi = hz_to_midi(fmin);
-    int pc = static_cast<int>(std::lround(midi)) % n_chroma;
-    if (pc < 0) pc += n_chroma;
-    pitch_class_offset = pc;
-  }
-  // librosa.feature.chroma_cqt expects bins_per_octave to be a multiple of n_chroma.
-  // Each chroma bin gets the mean of all CQT bins falling onto that pitch class.
-  //
-  // Center each merge window on its target bin, mirroring librosa.filters
-  // .cq_to_chroma's np.roll(-(n_merge // 2)): with n_merge = bins_per_octave /
-  // n_chroma CQT bins per pitch class, the fold must shift by half a window so a
-  // bin sitting at the low edge of a semitone group folds onto the correct class
-  // rather than the one below it. With bins_per_octave == n_chroma (n_merge == 1)
-  // the shift is zero, so the common 12-bin path is unchanged.
-  const int n_merge = bins_per_octave / n_chroma;
-  const int merge_half = n_merge / 2;
-  std::vector<int> counts(n_chroma, 0);
-  for (int b = 0; b < n_bins; ++b) {
-    const int shifted = ((b % bins_per_octave) + merge_half) % bins_per_octave;
-    int idx = (shifted * n_chroma) / bins_per_octave;
-    idx = (idx + pitch_class_offset) % n_chroma;
-    if (idx < 0) idx += n_chroma;
-    counts[idx] += 1;
-    for (int t = 0; t < n_frames; ++t) {
-      chroma[idx * n_frames + t] += mag[b * n_frames + t];
-    }
-  }
-  for (int c = 0; c < n_chroma; ++c) {
-    if (counts[c] > 0) {
-      float denom = static_cast<float>(counts[c]);
-      for (int t = 0; t < n_frames; ++t) {
-        chroma[c * n_frames + t] /= denom;
-      }
-    }
-  }
-  return chroma;
+  return fold_cqt_bins_to_chroma(mag, n_bins, n_frames, bins_per_octave, n_chroma,
+                                 chroma_class_of_frequency(fmin, n_chroma), ChromaFold::kMean);
 }
 
 /// @brief Shifts @p fmin by the requested tuning deviation.
