@@ -214,6 +214,10 @@ export async function bindWebMidi(
     bound.delete(input.id);
   };
 
+  // Does not call notify() itself: both call sites below (the initial sync
+  // and stateListener's fallback branch) already notify exactly once after
+  // calling this, so notifying here too would fire onInputsChanged twice per
+  // hotplug event that goes through the fallback branch.
   const refreshInputs = () => {
     for (const [, entry] of bound) {
       if (!shouldBind(entry.input)) {
@@ -223,7 +227,6 @@ export async function bindWebMidi(
     for (const [, input] of iterInputs(access)) {
       bindInput(input);
     }
-    notify();
   };
 
   const stateListener = (event: MidiConnectionEventLike) => {
@@ -244,6 +247,7 @@ export async function bindWebMidi(
   };
 
   refreshInputs();
+  notify();
   if (access.addEventListener) {
     access.addEventListener('statechange', stateListener);
   } else {
@@ -368,7 +372,15 @@ function dispatchUmpMessage(
     if (status === 0x8) {
       engine.pushMidiInputNoteOff(group, channel, data1, (word1 >>> 25) & 0x7f, portTimeSamples);
     } else if (status === 0x9) {
-      const velocity = (word1 >>> 25) & 0x7f;
+      // MIDI 2.0 velocity is 16-bit (word1 bits 31:16); downsampling to the
+      // engine's 7-bit API by taking the top 7 bits rounds any velocity below
+      // 512/65535 (~0.8%) down to 0, which would misread a genuine (if very
+      // soft) note-on as a note-off. Only a truly zero 16-bit velocity is a
+      // real note-off (the standard "note-on velocity 0 == note-off" idiom);
+      // anything else is clamped to the audible floor of 1 instead of being
+      // silently dropped.
+      const velocity16 = (word1 >>> 16) & 0xffff;
+      const velocity = velocity16 === 0 ? 0 : Math.max(1, (word1 >>> 25) & 0x7f);
       if (velocity === 0) {
         engine.pushMidiInputNoteOff(group, channel, data1, 0, portTimeSamples);
       } else {

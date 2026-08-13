@@ -280,6 +280,69 @@ describe('Web MIDI helper', () => {
     binding.close();
   });
 
+  it('MT=4 note-on with a very soft nonzero 16-bit velocity is clamped to velocity 1, not dropped as note-off', async () => {
+    // Regression test: the MT=4 (MIDI 2.0) branch downsamples the 16-bit
+    // velocity (word1 bits 31:16) to 7 bits by taking the top 7 bits
+    // (word1 >>> 25). Any 16-bit velocity below 512 (~0.8% of full scale) —
+    // definitely nonzero, i.e. a genuine (very soft) note-on — used to round
+    // down to 0 and get misread as a note-off. It must now dispatch as a
+    // note-on with the audible floor of velocity 1.
+    const access = new FakeAccess();
+    const input = new FakeInput('ump-soft');
+    access.inputs.set(input.id, input);
+    const engine = new FakeEngine();
+    installMidi(access);
+    const binding = await bindWebMidi(engine as never);
+
+    const softVelocity16 = 300; // < 512; rounds to 0 via the naive top-7-bit shift.
+    input.emit([
+      (0x4 << 28) | (0 << 24) | (0x9 << 20) | (0 << 16) | (60 << 8),
+      softVelocity16 << 16,
+    ]);
+
+    expect(engine.messages).toEqual([{ kind: 'on', group: 0, channel: 0, a: 60, b: 1, time: 0 }]);
+    binding.close();
+  });
+
+  it('MT=4 note-on with a genuinely zero 16-bit velocity is still a note-off', async () => {
+    const access = new FakeAccess();
+    const input = new FakeInput('ump-zero');
+    access.inputs.set(input.id, input);
+    const engine = new FakeEngine();
+    installMidi(access);
+    const binding = await bindWebMidi(engine as never);
+
+    input.emit([(0x4 << 28) | (0 << 24) | (0x9 << 20) | (0 << 16) | (60 << 8), 0]);
+
+    expect(engine.messages).toEqual([{ kind: 'off', group: 0, channel: 0, a: 60, b: 0, time: 0 }]);
+    binding.close();
+  });
+
+  it('calls onInputsChanged exactly once per hotplug event', async () => {
+    // Regression test: refreshInputs() used to call notify() internally, and
+    // the statechange listener called notify() again unconditionally
+    // afterwards, so any event routed through the "no event.port" fallback
+    // branch (refreshInputs()) fired onInputsChanged twice.
+    const access = new FakeAccess();
+    const engine = new FakeEngine();
+    installMidi(access);
+    const notifications: string[][] = [];
+    const binding = await bindWebMidi(engine as never, {
+      onInputsChanged: (inputs) => notifications.push(inputs.map((input) => input.id)),
+    });
+    expect(notifications).toHaveLength(1); // Initial sync.
+
+    const later = new FakeInput('later');
+    access.inputs.set(later.id, later);
+    access.stateChange(later); // event.port set: the per-port `if` branch.
+    expect(notifications).toHaveLength(2);
+
+    access.stateChange(); // No event.port: the refreshInputs() fallback branch.
+    expect(notifications).toHaveLength(3);
+
+    binding.close();
+  });
+
   it('invokes requestMIDIAccess with the navigator as `this` (native methods throw otherwise)', async () => {
     const access = new FakeAccess();
     const navigatorValue = {
