@@ -14,7 +14,15 @@ export class RealtimeVoiceChanger {
 
   constructor(options: RealtimeVoiceChangerOptions) {
     this.native = new addon.RealtimeVoiceChanger(options.preset ?? 'neutral-monitor');
-    this.native.prepare(options.sampleRate, options.maxBlockSize ?? 128, options.channels ?? 1);
+    try {
+      this.native.prepare(options.sampleRate, options.maxBlockSize ?? 128, options.channels ?? 1);
+    } catch (error) {
+      // The handle is already allocated; a throwing constructor leaves `this`
+      // unreachable, so release it here rather than waiting for GC.
+      this.native.destroy();
+      this.disposed = true;
+      throw error;
+    }
   }
 
   reset(): void {
