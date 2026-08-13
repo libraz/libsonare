@@ -34,6 +34,23 @@ UInt32 read_device_uint32(AudioObjectID device, AudioObjectPropertySelector sele
   return value;
 }
 
+/// Read the device's actual nominal sample rate (its own hardware clock rate,
+/// which the AU's stream-format negotiation does not necessarily match).
+/// Returns 0.0 when the property is absent, malformed, or non-finite.
+double read_device_nominal_sample_rate(AudioObjectID device) noexcept {
+  if (device == kAudioObjectUnknown) return 0.0;
+  AudioObjectPropertyAddress address{kAudioDevicePropertyNominalSampleRate,
+                                     kAudioObjectPropertyScopeGlobal,
+                                     kAudioObjectPropertyElementMain};
+  Float64 value = 0.0;
+  UInt32 size = sizeof(value);
+  if (!ok(AudioObjectGetPropertyData(device, &address, 0, nullptr, &size, &value)) ||
+      !std::isfinite(value) || value <= 0.0) {
+    return 0.0;
+  }
+  return static_cast<double>(value);
+}
+
 bool host_ticks_to_ns(uint64_t ticks, const mach_timebase_info_data_t& timebase,
                       uint64_t* out) noexcept {
   if (out == nullptr || timebase.denom == 0) return false;
@@ -273,6 +290,18 @@ bool CoreAudioDevice::open(const AudioStreamConfig& config, AudioDeviceCallback*
     impl_->output_ptrs[c] = impl_->output_scratch.data() + c * block;
   }
 
+  // The device/safety-offset/buffer-frame-size properties queried below are all
+  // counted in the DEVICE's own hardware clock domain, which need not equal the
+  // rate config.sample_rate was requested at (the AU's stream-format converter
+  // bridges the two). Make config.sample_rate authoritative for the device's
+  // actual nominal rate before computing or reporting anything in "samples at
+  // sample_rate" terms, so a caller reading it later (callback->open() below,
+  // or a PDC computation against output_latency_samples()) is not silently
+  // working in the wrong sample-rate domain. Falls back to the originally
+  // requested rate if the property is unavailable.
+  const double nominal_rate = read_device_nominal_sample_rate(impl_->device_id);
+  if (nominal_rate > 0.0) impl_->config.sample_rate = nominal_rate;
+
   // Query the driver's actual latency now that the unit is initialized. Total
   // output latency = device latency + safety offset + the buffer frame size.
   // (The output AudioUnit's own kAudioUnitProperty_Latency is not added here; on
@@ -285,6 +314,13 @@ bool CoreAudioDevice::open(const AudioStreamConfig& config, AudioDeviceCallback*
       impl_->device_id, kAudioDevicePropertyBufferFrameSize, kAudioDevicePropertyScopeOutput);
   impl_->reported_output_latency = static_cast<int>(device_latency + safety_offset + buffer_frames);
   impl_->reported_input_latency = 0;
+  // Populate the config the callback actually receives below — AudioStreamConfig's
+  // own latency fields (audio_device.h), not just the out-of-band
+  // output_latency_samples()/input_latency_samples() getters a caller can only
+  // query after open() returns. A callback that seeds PDC compensation from its
+  // own open(config) argument must see this without a second round trip.
+  impl_->config.output_latency_samples = impl_->reported_output_latency;
+  impl_->config.input_latency_samples = impl_->reported_input_latency;
 
   // Bridge the negotiated format back to the callback's open().
   if (!callback->open(impl_->config)) {

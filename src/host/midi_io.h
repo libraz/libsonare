@@ -199,6 +199,16 @@ class MidiInputSource {
   /// `port_time_samples` the host estimates for it (used to align to render
   /// frames on drain). Returns false if the internal fixed buffer overflowed
   /// (the event is dropped; the host may surface telemetry). MUST NOT allocate.
+  ///
+  /// Single-producer invariant: at most one thread may call push_event() (or
+  /// any other producer-side entry point this implementation exposes) at a
+  /// time. An implementation that also owns an internal callback thread of its
+  /// own (e.g. a live OS MIDI port) MUST NOT let this override run concurrently
+  /// with that thread — either by construction (the implementation is only
+  /// reachable before/after the internal producer is active) or by rejecting
+  /// (returning false) while the internal producer is live. Two concurrent
+  /// producers racing on the same underlying buffer is undefined behavior, not
+  /// merely a lost event.
   virtual bool push_event(const midi::Ump& ump, int64_t port_time_samples) noexcept = 0;
 
   /// AUDIO/RT thread: drain up to `capacity` buffered events into `out` as

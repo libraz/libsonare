@@ -51,21 +51,35 @@ class CoreMidiInput final : public MidiInputSource {
   /// this input while connected.
   void set_time_mapper(const MidiHostTimeMapper* mapper) noexcept;
 
-  /// CONTROL thread: resolves handles emitted for reassembled incoming SysEx.
-  /// The store is owned by this input and is cleared on close(); consumers must
-  /// resolve it off the audio thread before closing the input.
+  /// CONTROL thread: resolves handles emitted for reassembled incoming SysEx,
+  /// from both the live connection and manual injection. The store is owned by
+  /// this input and is cleared on close(); consumers must resolve it off the
+  /// audio thread before closing the input.
   const midi::SysExStore* sysex_store() const noexcept;
 
-  /// HOST callback thread: enqueue a UMP tagged with a monotonic host time in
+  /// INJECTION thread: enqueue a UMP tagged with a monotonic host time in
   /// nanoseconds. When a mapper is attached the event is converted to an
   /// absolute render frame before entering the RT queue; otherwise it falls
   /// back to the next block start.
+  ///
+  /// Remains available while a live CoreMIDI source is connected: injected
+  /// events go to a separate buffer and SysEx reassembler that the live
+  /// connection's callback thread never touches, so the seam's single-producer
+  /// invariant holds per buffer rather than by locking injection out. An
+  /// on-screen keyboard therefore keeps working with a controller plugged in.
+  /// The invariant this method does impose is the seam's own: at most one
+  /// thread may drive push_event_at_host_time()/push_event() at a time.
+  /// drain() merges both buffers in render-frame order.
   bool push_event_at_host_time(const midi::Ump& ump, uint64_t host_time_ns) noexcept;
 
-  /// CONTROL thread: disconnect and tear down the port/client.
+  /// CONTROL thread: disconnect and tear down the port/client. Also discards
+  /// anything still queued on either buffer: close() ends the timeline those
+  /// events were stamped against.
   void close() noexcept;
 
-  // MidiInputSource — delegate to the internal fixed buffer.
+  // MidiInputSource — see push_event_at_host_time() for how injection and a
+  // live connection coexist. push_event() targets the same injection buffer;
+  // drain()/drain_block()/pending_count() cover both buffers.
   bool push_event(const midi::Ump& ump, int64_t port_time_samples) noexcept override;
   size_t drain(midi::MidiEvent* out, size_t capacity, int64_t block_start_frame) noexcept override;
   size_t drain_block(midi::MidiEvent* out, size_t capacity, int64_t block_start_frame,

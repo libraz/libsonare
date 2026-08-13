@@ -168,7 +168,7 @@ void finalize_au_output(float* const* channels, int num_channels, int chans, int
 
 namespace {
 
-class AuMidiInstrument final : public midi::MidiInstrument {
+class AuMidiInstrument final : public midi::MidiInstrument, public AuInstrumentTelemetry {
  public:
   explicit AuMidiInstrument(AudioUnit unit, const AuRuntimeApi* api = &kSystemAuRuntimeApi)
       : unit_(unit), api_(api) {}
@@ -306,7 +306,10 @@ class AuMidiInstrument final : public midi::MidiInstrument {
 
   /// Cumulative count of events dropped because the block-local event buffer was
   /// full when on_event() was called. Mirrors FixedMidiInputSource::dropped_count.
-  uint32_t dropped_count() const noexcept {
+  /// Reachable from a plain midi::MidiInstrument* (what create_instrument()
+  /// actually returns) via dynamic_cast<const AuInstrumentTelemetry*> — see the
+  /// interface's doc comment in au_instrument_provider.h.
+  uint32_t dropped_count() const noexcept override {
     return dropped_events_.load(std::memory_order_relaxed);
   }
 
@@ -393,6 +396,7 @@ class AuEffectProcessor final : public rt::ProcessorBase {
     // negotiated) channels and silences the rest via in_count_.
     in_channels_ = channels;
     in_count_ = chans;
+    in_samples_ = render_samples;
     // Present exactly the AU's negotiated channel count; back any channel the host
     // did not supply with pre-sized scratch (num_samples is bounded by prepare()'s
     // max_block_size, so the scratch rows fit).
@@ -417,6 +421,7 @@ class AuEffectProcessor final : public rt::ProcessorBase {
                        status == noErr);
     position_ += num_samples;
     in_channels_ = nullptr;
+    in_samples_ = 0;
   }
 
   void reset() override {
@@ -432,8 +437,13 @@ class AuEffectProcessor final : public rt::ProcessorBase {
                                    AudioBufferList* data) noexcept {
     auto* self = static_cast<AuEffectProcessor*>(ref);
     if (self->in_channels_ == nullptr || data == nullptr) return noErr;
+    // The caller's planes are only valid for the num_samples passed to this
+    // process() call, which the AU may render in a smaller block than the
+    // prepared maximum. Clamp to in_samples_ (the current call's frame count),
+    // not max_block_ (the prepared upper bound), or a variable-block-size host
+    // reads past the end of the caller's buffer.
     const size_t requested =
-        std::min(static_cast<size_t>(frames), static_cast<size_t>(std::max(self->max_block_, 0)));
+        std::min(static_cast<size_t>(frames), static_cast<size_t>(std::max(self->in_samples_, 0)));
     const int buffers = static_cast<int>(data->mNumberBuffers);
     for (int c = 0; c < buffers; ++c) {
       auto* dst = static_cast<float*>(data->mBuffers[c].mData);
@@ -461,6 +471,7 @@ class AuEffectProcessor final : public rt::ProcessorBase {
   std::vector<float> scratch_{};
   float* const* in_channels_ = nullptr;
   int in_count_ = 0;
+  int in_samples_ = 0;
 };
 
 struct AuCallSpyState {
@@ -468,13 +479,34 @@ struct AuCallSpyState {
   unsigned initialize_calls = 0;
   unsigned uninitialize_calls = 0;
   unsigned render_calls = 0;
+
+  // --- effect input-callback probe (H-24 regression) ---
+  // spy_set_property captures the AURenderCallbackStruct the effect installs on
+  // kAudioUnitScope_Input. When probe_input_frames is non-zero, spy_render then
+  // invokes that captured callback directly, requesting probe_input_frames
+  // frames regardless of the frame count the outer render() call itself was
+  // asked for — reproducing a third-party AU's internal input buffering, which
+  // may pull more frames from the input callback than the current process()
+  // block. The destination buffers below back the callback's own AudioBufferList
+  // (not the caller's planes under test), sized to the largest block a probe
+  // test uses.
+  AURenderCallbackStruct captured_input_cb{};
+  bool has_input_cb = false;
+  UInt32 probe_input_frames = 0;
+  std::array<float, 1024> probe_dst_left{};
+  std::array<float, 1024> probe_dst_right{};
 };
 
 thread_local AuCallSpyState* g_au_call_spy = nullptr;
 
-OSStatus spy_set_property(AudioUnit, AudioUnitPropertyID, AudioUnitScope, AudioUnitElement,
-                          const void*, UInt32) {
+OSStatus spy_set_property(AudioUnit, AudioUnitPropertyID prop_id, AudioUnitScope scope,
+                          AudioUnitElement, const void* value, UInt32 size) {
   ++g_au_call_spy->set_property_calls;
+  if (prop_id == kAudioUnitProperty_SetRenderCallback && scope == kAudioUnitScope_Input &&
+      value != nullptr && size == sizeof(AURenderCallbackStruct)) {
+    g_au_call_spy->captured_input_cb = *static_cast<const AURenderCallbackStruct*>(value);
+    g_au_call_spy->has_input_cb = true;
+  }
   return noErr;
 }
 
@@ -496,9 +528,25 @@ OSStatus spy_uninitialize(AudioUnit) {
   return noErr;
 }
 
-OSStatus spy_render(AudioUnit, AudioUnitRenderActionFlags*, const AudioTimeStamp*, UInt32, UInt32,
-                    AudioBufferList*) {
+OSStatus spy_render(AudioUnit, AudioUnitRenderActionFlags* flags, const AudioTimeStamp* ts,
+                    UInt32 bus, UInt32 /*frames*/, AudioBufferList* /*data*/) {
   ++g_au_call_spy->render_calls;
+  if (g_au_call_spy->probe_input_frames > 0 && g_au_call_spy->has_input_cb) {
+    BufferListStorage storage;
+    AudioBufferList* list = storage.list();
+    list->mNumberBuffers = 2;
+    list->mBuffers[0].mNumberChannels = 1;
+    list->mBuffers[0].mDataByteSize =
+        static_cast<UInt32>(g_au_call_spy->probe_dst_left.size() * sizeof(float));
+    list->mBuffers[0].mData = g_au_call_spy->probe_dst_left.data();
+    list->mBuffers[1].mNumberChannels = 1;
+    list->mBuffers[1].mDataByteSize =
+        static_cast<UInt32>(g_au_call_spy->probe_dst_right.size() * sizeof(float));
+    list->mBuffers[1].mData = g_au_call_spy->probe_dst_right.data();
+    g_au_call_spy->captured_input_cb.inputProc(g_au_call_spy->captured_input_cb.inputProcRefCon,
+                                               flags, ts, bus, g_au_call_spy->probe_input_frames,
+                                               list);
+  }
   return noErr;
 }
 
@@ -530,8 +578,15 @@ AudioUnit instantiate(const PluginDescriptor& descriptor) {
 /// once rather than once per call. The cache owns the instance; callers must NOT
 /// dispose it. The AU is left uninitialised, which is all the parameter-list /
 /// parameter-info queries require.
+///
+/// noexcept: called from AuInstrumentProvider::parameter_count/descriptor,
+/// both noexcept. `*cache_id = descriptor.id` can throw std::bad_alloc (the
+/// encoded id string is long enough to exceed libc++'s SSO buffer); an
+/// exception must not escape into those noexcept callers and reach
+/// std::terminate, so it is caught here and reported as "no cached unit"
+/// instead.
 AudioUnit cached_param_unit(void** cache_unit, std::string* cache_id,
-                            const PluginDescriptor& descriptor) {
+                            const PluginDescriptor& descriptor) noexcept {
   auto current = static_cast<AudioUnit>(*cache_unit);
   if (current != nullptr && *cache_id == descriptor.id) return current;
   if (current != nullptr) {
@@ -541,8 +596,15 @@ AudioUnit cached_param_unit(void** cache_unit, std::string* cache_id,
   }
   AudioUnit unit = instantiate(descriptor);
   if (unit != nullptr) {
-    *cache_unit = unit;
-    *cache_id = descriptor.id;
+    try {
+      *cache_unit = unit;
+      *cache_id = descriptor.id;
+    } catch (...) {
+      AudioComponentInstanceDispose(unit);
+      *cache_unit = nullptr;
+      cache_id->clear();
+      return nullptr;
+    }
   }
   return unit;
 }
@@ -585,6 +647,75 @@ detail::AuProcessCallSpyResult detail::run_au_process_call_spy() {
     result.effect_controls_unchanged = control_calls() == before;
   }
   result.render_calls = state.render_calls;
+  g_au_call_spy = nullptr;
+  return result;
+}
+
+detail::AuUndersizedBlockProbeResult detail::run_au_effect_undersized_block_probe() {
+  AuCallSpyState state;
+  g_au_call_spy = &state;
+  auto fake_unit = reinterpret_cast<AudioUnit>(static_cast<uintptr_t>(1));
+
+  constexpr int kPreparedMaxBlock = 512;
+  constexpr int kActualBlock = 64;  // smaller than the prepared maximum
+
+  detail::AuUndersizedBlockProbeResult result;
+  {
+    // Scoped so ~AuEffectProcessor() (which calls api_->uninitialize via the
+    // spy table) runs before g_au_call_spy is cleared below.
+    AuEffectProcessor effect(fake_unit, &kSpyAuRuntimeApi);
+    effect.prepare(48000.0, kPreparedMaxBlock);
+    // Make the fake render() pull from the input callback at the prepared
+    // maximum, regardless of the block size the outer process() call below
+    // uses, reproducing a third-party AU that internally buffers/looks ahead.
+    state.probe_input_frames = static_cast<UInt32>(kPreparedMaxBlock);
+
+    // Heap-allocate the host planes at exactly kActualBlock samples: any read
+    // past the end is a heap-buffer-overflow under ASan, since num_samples is
+    // the caller's contract for how many frames of each plane are valid.
+    std::vector<float> left(static_cast<size_t>(kActualBlock), 0.25f);
+    std::vector<float> right(static_cast<size_t>(kActualBlock), -0.25f);
+    std::array<float*, 2> channels{left.data(), right.data()};
+    effect.process(channels.data(), 2, kActualBlock);
+
+    result.ran = true;
+    result.block_samples = static_cast<size_t>(kActualBlock);
+    result.probe_frames = static_cast<size_t>(kPreparedMaxBlock);
+  }
+  g_au_call_spy = nullptr;
+  return result;
+}
+
+detail::AuInstrumentDroppedEventProbeResult detail::run_au_instrument_dropped_event_probe() {
+  AuCallSpyState state;
+  g_au_call_spy = &state;
+  auto fake_unit = reinterpret_cast<AudioUnit>(static_cast<uintptr_t>(1));
+
+  detail::AuInstrumentDroppedEventProbeResult result;
+  {
+    // Scoped so ~AuMidiInstrument() (which calls api_->uninitialize/dispose via
+    // the spy table) runs before g_au_call_spy is cleared below.
+    AuMidiInstrument concrete(fake_unit, &kSpyAuRuntimeApi);
+    concrete.prepare(48000.0, 4);
+
+    // Downcast from the SAME interface pointer type create_instrument()
+    // actually hands callers (midi::MidiInstrument*), not from the concrete
+    // class — that is the reachability this probes for.
+    midi::MidiInstrument* base = &concrete;
+    const auto* telemetry = dynamic_cast<const AuInstrumentTelemetry*>(base);
+    result.telemetry_reachable = telemetry != nullptr;
+    if (telemetry != nullptr) {
+      result.dropped_before_overflow = telemetry->dropped_count();
+      // Queue exactly kEventQueueDepth events (fills the block-local buffer
+      // without overflowing it), then one more: that last on_event() must be
+      // counted as dropped, not silently discarded.
+      for (size_t i = 0; i < kEventQueueDepth; ++i) {
+        base->on_event(0, midi::MidiEvent{0, midi::make_midi1_note_on(0, 0, 60, 100)});
+      }
+      base->on_event(0, midi::MidiEvent{0, midi::make_midi1_note_on(0, 0, 61, 100)});
+      result.dropped_after_overflow = telemetry->dropped_count();
+    }
+  }
   g_au_call_spy = nullptr;
   return result;
 }
@@ -674,48 +805,58 @@ bool AuInstrumentProvider::parameter_descriptor(const PluginDescriptor& descript
   if (out == nullptr) return false;
   AudioUnit unit = cached_param_unit(&param_cache_unit_, &param_cache_id_, descriptor);
   if (unit == nullptr) return false;
-  UInt32 size = 0;
-  Boolean writable = false;
-  bool ok = false;
-  if (AudioUnitGetPropertyInfo(unit, kAudioUnitProperty_ParameterList, kAudioUnitScope_Global, 0,
-                               &size, &writable) == noErr &&
-      size > 0) {
-    const size_t count = size / sizeof(AudioUnitParameterID);
-    if (index < count) {
-      std::vector<AudioUnitParameterID> ids(count);
-      if (AudioUnitGetProperty(unit, kAudioUnitProperty_ParameterList, kAudioUnitScope_Global, 0,
-                               ids.data(), &size) == noErr) {
-        AudioUnitParameterInfo info{};
-        UInt32 info_size = sizeof(info);
-        if (AudioUnitGetProperty(unit, kAudioUnitProperty_ParameterInfo, kAudioUnitScope_Global,
-                                 ids[index], &info, &info_size) == noErr) {
-          *out = PluginParameterDescriptor{};
-          out->id = ids[index];
-          out->min_value = info.minValue;
-          out->max_value = info.maxValue;
-          out->default_value = info.defaultValue;
-          // HasCFNameString signals a CF name is PRESENT; CFNameRelease signals
-          // the caller must release it. Gating presence on CFNameRelease (as
-          // before) dropped the CF name for AUs that expose a static, non-owned
-          // CF string, falling back to the deprecated char[] info.name.
-          if ((info.flags & kAudioUnitParameterFlag_HasCFNameString) &&
-              info.cfNameString != nullptr) {
-            char nbuf[128];
-            if (CFStringGetCString(info.cfNameString, nbuf, sizeof(nbuf), kCFStringEncodingUTF8)) {
-              out->name = nbuf;
+  // The body below allocates (the `ids` vector; PluginParameterDescriptor::name
+  // string assignments), which can throw std::bad_alloc. This function is
+  // noexcept, so an escaping exception would reach std::terminate — catch and
+  // report failure instead.
+  try {
+    UInt32 size = 0;
+    Boolean writable = false;
+    bool ok = false;
+    if (AudioUnitGetPropertyInfo(unit, kAudioUnitProperty_ParameterList, kAudioUnitScope_Global, 0,
+                                 &size, &writable) == noErr &&
+        size > 0) {
+      const size_t count = size / sizeof(AudioUnitParameterID);
+      if (index < count) {
+        std::vector<AudioUnitParameterID> ids(count);
+        if (AudioUnitGetProperty(unit, kAudioUnitProperty_ParameterList, kAudioUnitScope_Global, 0,
+                                 ids.data(), &size) == noErr) {
+          AudioUnitParameterInfo info{};
+          UInt32 info_size = sizeof(info);
+          if (AudioUnitGetProperty(unit, kAudioUnitProperty_ParameterInfo, kAudioUnitScope_Global,
+                                   ids[index], &info, &info_size) == noErr) {
+            *out = PluginParameterDescriptor{};
+            out->id = ids[index];
+            out->min_value = info.minValue;
+            out->max_value = info.maxValue;
+            out->default_value = info.defaultValue;
+            // HasCFNameString signals a CF name is PRESENT; CFNameRelease
+            // signals the caller must release it. Gating presence on
+            // CFNameRelease (as before) dropped the CF name for AUs that
+            // expose a static, non-owned CF string, falling back to the
+            // deprecated char[] info.name.
+            if ((info.flags & kAudioUnitParameterFlag_HasCFNameString) &&
+                info.cfNameString != nullptr) {
+              char nbuf[128];
+              if (CFStringGetCString(info.cfNameString, nbuf, sizeof(nbuf),
+                                     kCFStringEncodingUTF8)) {
+                out->name = nbuf;
+              }
+              if (info.flags & kAudioUnitParameterFlag_CFNameRelease) {
+                CFRelease(info.cfNameString);
+              }
+            } else {
+              out->name = info.name;
             }
-            if (info.flags & kAudioUnitParameterFlag_CFNameRelease) {
-              CFRelease(info.cfNameString);
-            }
-          } else {
-            out->name = info.name;
+            ok = true;
           }
-          ok = true;
         }
       }
     }
+    return ok;
+  } catch (...) {
+    return false;
   }
-  return ok;
 }
 
 }  // namespace sonare::host::backends

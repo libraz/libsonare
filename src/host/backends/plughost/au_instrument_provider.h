@@ -23,6 +23,27 @@
 
 namespace sonare::host::backends {
 
+/// Optional telemetry an AuInstrumentProvider::create_instrument() result may
+/// support, alongside the plain midi::MidiInstrument interface it always
+/// returns. midi::MidiInstrument (src/midi/instrument.h) has no telemetry seam
+/// of its own and is not the place to add an AU-specific one (invariant 6:
+/// core stays SDK-free and generic across all instrument providers, not just
+/// this one). A caller that specifically wants to observe this AU-backed
+/// instrument's MIDI-event drop counter downcasts:
+///   auto instrument = provider.create_instrument(descriptor);
+///   if (auto* telemetry =
+///           dynamic_cast<const AuInstrumentTelemetry*>(instrument.get())) {
+///     telemetry->dropped_count();
+///   }
+class AuInstrumentTelemetry {
+ public:
+  virtual ~AuInstrumentTelemetry() = default;
+
+  /// Cumulative count of MIDI events dropped because the block-local event
+  /// queue (bounded, no-allocation) was full when on_event() was called.
+  virtual uint32_t dropped_count() const noexcept = 0;
+};
+
 namespace detail {
 
 /// Deterministic result from the fake-AudioUnit render-path call spy.
@@ -35,6 +56,33 @@ struct AuProcessCallSpyResult {
 /// Exercises the actual instrument/effect process implementations with a fake
 /// AudioUnit call table. No SDK object or installed plugin is required.
 AuProcessCallSpyResult run_au_process_call_spy();
+
+/// Result from probing AuEffectProcessor's input render callback with a block
+/// smaller than the prepared maximum. No SDK object or installed plugin is
+/// required: the fake AudioUnit call table's render() invokes the captured
+/// input callback directly, requesting the prepared maximum frame count
+/// regardless of the block size the outer process() call used, mirroring a
+/// third-party AU's internal input buffering.
+struct AuUndersizedBlockProbeResult {
+  bool ran = false;
+  size_t block_samples = 0;
+  size_t probe_frames = 0;
+};
+
+AuUndersizedBlockProbeResult run_au_effect_undersized_block_probe();
+
+/// Result from probing the MusicDevice adapter's dropped-event counter. No SDK
+/// object or installed plugin is required.
+struct AuInstrumentDroppedEventProbeResult {
+  // Whether AuInstrumentTelemetry was reachable via dynamic_cast from the
+  // plain midi::MidiInstrument* every real caller of create_instrument() gets
+  // back — the actual regression this probes for.
+  bool telemetry_reachable = false;
+  uint32_t dropped_before_overflow = 0;
+  uint32_t dropped_after_overflow = 0;
+};
+
+AuInstrumentDroppedEventProbeResult run_au_instrument_dropped_event_probe();
 
 }  // namespace detail
 

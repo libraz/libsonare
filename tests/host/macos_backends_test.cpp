@@ -63,6 +63,64 @@ TEST_CASE("CoreMIDI input reassembles SysEx7 into a host-store handle", "[host][
   REQUIRE(input.sysex_interleave_count() == 0);
 }
 
+TEST_CASE("CoreMIDI input preserves the caller's timestamp for a SysEx completed via push_event",
+          "[host][coremidi]") {
+  using sonare::host::backends::CoreMidiInput;
+  // consume_sysex7() has no MIDIEventPacket to derive a timestamp from when
+  // reached through the public push_event() API (unlike the live callback
+  // path), so it must fall back to the port_time_samples the caller actually
+  // passed rather than silently stamping the reassembled message at offset 0.
+  CoreMidiInput input;
+  sonare::midi::Ump start{};
+  start.word_count = 2;
+  start.group = 3;
+  start.words[0] = (0x3u << 28u) | (3u << 24u) | (1u << 20u) | (2u << 16u) | (0x01u << 8u) | 0x02u;
+  sonare::midi::Ump end{};
+  end.word_count = 2;
+  end.group = 3;
+  end.words[0] = (0x3u << 28u) | (3u << 24u) | (3u << 20u) | (1u << 16u) | (0x03u << 8u);
+
+  REQUIRE(input.push_event(start, 999));  // Start does not complete the message: ignored
+  REQUIRE(input.push_event(end, 37));     // End completes it at this offset
+  std::array<sonare::midi::MidiEvent, 2> out{};
+  REQUIRE(input.drain(out.data(), out.size(), /*block_start_frame=*/1000) == 1);
+  REQUIRE(out[0].render_frame == 1037);  // block_start_frame + the End event's port_time_samples
+  REQUIRE(out[0].ump.sysex_handle != 0);
+}
+
+TEST_CASE("CoreMIDI input masks an out-of-range UMP group before indexing SysEx state",
+          "[host][coremidi]") {
+  using sonare::host::backends::CoreMidiInput;
+  // group is a 4-bit UMP field (0-15). push_event() is a public entry point
+  // that accepts any caller-constructed Ump — host/midi_io.h documents a full
+  // internal buffer as its ONLY failure mode, nothing about invalid groups —
+  // so a value outside that range must not become an unmasked index into the
+  // 16-slot SysEx reassembly array. The wire-format group nibble embedded in
+  // words[0] is left valid (3); only the separate .group field, the one
+  // actually used to index, is set out of range.
+  CoreMidiInput input;
+  sonare::midi::Ump start{};
+  start.word_count = 2;
+  start.group = 19;  // 19 & 0x0F == 3, but 19 itself is out of the 16-slot range
+  start.words[0] = (0x3u << 28u) | (3u << 24u) | (1u << 20u) | (2u << 16u) | (0x01u << 8u) | 0x02u;
+  sonare::midi::Ump end{};
+  end.word_count = 2;
+  end.group = 19;
+  end.words[0] = (0x3u << 28u) | (3u << 24u) | (3u << 20u) | (1u << 16u) | (0x03u << 8u);
+
+  REQUIRE(input.push_event(start, 0));
+  REQUIRE(input.pending_count() == 0);
+  REQUIRE(input.push_event(end, 0));
+  std::array<sonare::midi::MidiEvent, 2> out{};
+  REQUIRE(input.drain(out.data(), out.size(), 0) == 1);
+  REQUIRE(out[0].ump.sysex_handle != 0);
+  const auto* payload = input.sysex_store()->lookup(out[0].ump.sysex_handle);
+  REQUIRE(payload != nullptr);
+  REQUIRE(*payload == std::vector<uint8_t>{0xF0u, 0x01u, 0x02u, 0x03u, 0xF7u});
+  REQUIRE(input.sysex_overflow_count() == 0);
+  REQUIRE(input.sysex_interleave_count() == 0);
+}
+
 TEST_CASE("CoreMIDI input maps host timestamps onto absolute render frames", "[host][coremidi]") {
   sonare::host::MidiHostTimeMapper mapper;
   mapper.publish_anchor(/*host_time_ns=*/2'000'000'000u, /*render_frame=*/1000,
@@ -134,6 +192,58 @@ TEST_CASE("CoreMIDI live endpoint round-trip", "[host][coremidi][.]") {
   REQUIRE(output.flush_output() == 1);
   output.close();
 }
+
+TEST_CASE("CoreMIDI input orders injected events by their own timestamps", "[host][coremidi]") {
+  using sonare::host::backends::CoreMidiInput;
+  // Manual injection lands in a ring the live OS callback never writes, so
+  // drain() has to order it on its own rather than inheriting the arrival
+  // order the callback path would have imposed. Push out of timestamp order to
+  // prove the drain sorts rather than replaying insertion order.
+  CoreMidiInput input;
+  REQUIRE(input.push_event(sonare::midi::make_midi1_note_on(0, 0, 60, 100), 90));
+  REQUIRE(input.push_event(sonare::midi::make_midi1_note_on(0, 0, 62, 100), 10));
+  REQUIRE(input.push_event(sonare::midi::make_midi1_note_on(0, 0, 64, 100), 50));
+  REQUIRE(input.pending_count() == 3);
+
+  std::array<sonare::midi::MidiEvent, 4> out{};
+  REQUIRE(input.drain_block(out.data(), out.size(), /*block_start_frame=*/1000,
+                            /*num_frames=*/128) == 3);
+  REQUIRE(out[0].render_frame == 1010);
+  REQUIRE(out[1].render_frame == 1050);
+  REQUIRE(out[2].render_frame == 1090);
+  REQUIRE(out[0].ump.note_number() == 62);
+  REQUIRE(out[1].ump.note_number() == 64);
+  REQUIRE(out[2].ump.note_number() == 60);
+  REQUIRE(input.pending_count() == 0);
+}
+
+TEST_CASE("CoreMIDI input keeps manual injection available while a live source is connected",
+          "[host][coremidi][.]") {
+  using sonare::host::backends::CoreMidiInput;
+  // Requires at least one source present on the host.
+  if (CoreMidiInput::source_count() == 0) {
+    SUCCEED("no CoreMIDI sources present; skipping live injection check");
+    return;
+  }
+  CoreMidiInput input;
+  REQUIRE(input.open(0));
+  // An on-screen keyboard driven alongside a plugged-in hardware controller is
+  // an ordinary configuration, so injection must not stop the moment a device
+  // is connected. host/midi_io.h's single-producer invariant is satisfied by
+  // giving each producer its own ring and SysEx reassembly state: the OS
+  // callback owns one pair, these two entry points the other, and neither ring
+  // ever has a second writer.
+  const sonare::midi::Ump note = sonare::midi::make_midi1_note_on(0, 0, 60, 100);
+  REQUIRE(input.push_event(note, 0));
+  REQUIRE(input.push_event_at_host_time(note, 1));
+  input.close();
+  // close() ends the timeline both rings were stamped against, so whatever was
+  // still queued is dropped rather than replayed against the next device's
+  // frame numbering.
+  REQUIRE(input.pending_count() == 0);
+  REQUIRE(input.push_event(note, 0));
+  REQUIRE(input.pending_count() == 1);
+}
 #endif  // SONARE_HOST_TEST_COREMIDI
 
 #if defined(SONARE_HOST_TEST_AU)
@@ -168,6 +278,39 @@ TEST_CASE("AU process paths make render calls without control-plane calls", "[ho
   REQUIRE(result.instrument_controls_unchanged);
   REQUIRE(result.effect_controls_unchanged);
   REQUIRE(result.render_calls == 6);
+}
+
+TEST_CASE("AU effect input callback never reads past the current block's host planes",
+          "[host][au]") {
+  // The AU input render callback (AuEffectProcessor::input_trampoline) must
+  // only read as many frames from the caller's planes as process() was called
+  // with — the caller's contract (rt::ProcessorBase::process) guarantees
+  // exactly num_samples frames are valid, even though the AU was prepared for
+  // a larger maximum block and may internally request more from its input
+  // callback (normal at a render tail or throughout a variable-block-size
+  // host). This probe backs the host planes with heap buffers sized to the
+  // exact rendered block, so a regression back to clamping against the
+  // prepared maximum instead of the current block reads out of bounds under
+  // ASan.
+  const auto result = sonare::host::backends::detail::run_au_effect_undersized_block_probe();
+  REQUIRE(result.ran);
+  REQUIRE(result.block_samples == 64);
+  REQUIRE(result.probe_frames == 512);
+}
+
+TEST_CASE("AU MusicDevice instrument's dropped-event counter is reachable and counts overflow",
+          "[host][au]") {
+  // create_instrument() returns a plain midi::MidiInstrument*; before this fix
+  // AuMidiInstrument::dropped_count() had no seam back to that interface, so
+  // no real caller could ever observe it and a dense MIDI block (more events
+  // in one block than the fixed queue depth) silently lost notes with zero
+  // telemetry. AuInstrumentTelemetry (au_instrument_provider.h) is the fix: a
+  // caller downcasts via dynamic_cast from the same interface pointer type
+  // create_instrument() actually returns.
+  const auto result = sonare::host::backends::detail::run_au_instrument_dropped_event_probe();
+  REQUIRE(result.telemetry_reachable);
+  REQUIRE(result.dropped_before_overflow == 0);
+  REQUIRE(result.dropped_after_overflow == 1);
 }
 
 TEST_CASE("AU host enumerates and renders a system instrument", "[host][au][.]") {
@@ -274,6 +417,8 @@ TEST_CASE("AU host parameter enumeration is consistent across the cached instanc
 #endif  // SONARE_HOST_TEST_AU
 
 #if defined(SONARE_HOST_TEST_COREAUDIO)
+#include <CoreAudio/CoreAudio.h>
+
 #include "host/audio_device.h"
 #include "host/backends/coreaudio/coreaudio_device.h"
 
@@ -344,6 +489,35 @@ TEST_CASE("CoreAudio opens the default output device", "[host][coreaudio][.]") {
                                                               &mapped_host_time));
   REQUIRE(mapped_host_time > 0);
   REQUIRE(xruns <= static_cast<uint32_t>(callbacks) / 4u + 1u);
+
+  // The config the callback's own open() received must carry the SAME latency
+  // figures as the out-of-band output_latency_samples()/input_latency_samples()
+  // getters, not the AudioStreamConfig default of 0 ("unknown / not reported")
+  // — a callback that seeds PDC compensation from its own open(config) argument
+  // has no other way to see this.
+  REQUIRE(callback.config_.output_latency_samples == device.output_latency_samples());
+  REQUIRE(callback.config_.input_latency_samples == device.input_latency_samples());
+
+  // config_.sample_rate must reflect the device's actual nominal rate, cross-
+  // checked against an independent HAL query bypassing the backend entirely —
+  // not just the originally requested config.sample_rate above, since the
+  // latency figures asserted above are counted in the device's own hardware
+  // clock domain and only match "samples at sample_rate" if the two agree.
+  AudioObjectPropertyAddress default_out_addr{kAudioHardwarePropertyDefaultOutputDevice,
+                                              kAudioObjectPropertyScopeGlobal,
+                                              kAudioObjectPropertyElementMain};
+  AudioObjectID default_device = kAudioObjectUnknown;
+  UInt32 device_id_size = sizeof(default_device);
+  REQUIRE(AudioObjectGetPropertyData(kAudioObjectSystemObject, &default_out_addr, 0, nullptr,
+                                     &device_id_size, &default_device) == noErr);
+  AudioObjectPropertyAddress nominal_addr{kAudioDevicePropertyNominalSampleRate,
+                                          kAudioObjectPropertyScopeGlobal,
+                                          kAudioObjectPropertyElementMain};
+  Float64 nominal_rate = 0.0;
+  UInt32 rate_size = sizeof(nominal_rate);
+  REQUIRE(AudioObjectGetPropertyData(default_device, &nominal_addr, 0, nullptr, &rate_size,
+                                     &nominal_rate) == noErr);
+  REQUIRE(callback.config_.sample_rate == static_cast<double>(nominal_rate));
 
   device.close();
   REQUIRE(device.output_latency_samples() >= 0);
