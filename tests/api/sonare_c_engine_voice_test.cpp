@@ -26,13 +26,6 @@ constexpr uint32_t engine_bus_param_target(uint32_t bus_index, uint32_t param_ki
 constexpr uint32_t engine_master_param_target(uint32_t param_kind) {
   return 0x4D580000u | (0xFFu << 8u) | param_kind;
 }
-#endif
-
-float peak_abs(const std::vector<float>& data) {
-  float peak = 0.0f;
-  for (float value : data) peak = std::max(peak, std::abs(value));
-  return peak;
-}
 
 double rms(const std::array<float, 256>& data) {
   double sum = 0.0;
@@ -41,12 +34,21 @@ double rms(const std::array<float, 256>& data) {
   }
   return std::sqrt(sum / static_cast<double>(data.size()));
 }
+#endif  // defined(SONARE_WITH_MIXING)
+
+#if defined(SONARE_WITH_ARRANGEMENT)
+float peak_abs(const std::vector<float>& data) {
+  float peak = 0.0f;
+  for (float value : data) peak = std::max(peak, std::abs(value));
+  return peak;
+}
 
 uint32_t midi1_word(uint8_t status, uint8_t channel, uint8_t data0, uint8_t data1) {
   return (0x2u << 28u) | (static_cast<uint32_t>(status & 0x0f) << 20u) |
          (static_cast<uint32_t>(channel & 0x0f) << 16u) | (static_cast<uint32_t>(data0) << 8u) |
          static_cast<uint32_t>(data1);
 }
+#endif  // defined(SONARE_WITH_ARRANGEMENT)
 
 }  // namespace
 
@@ -106,6 +108,34 @@ TEST_CASE("sonare_engine MIDI scalar commands respect arrangement feature flag",
   sonare_engine_destroy(engine);
 }
 
+TEST_CASE("sonare_engine_graph_node/connection_count report feature availability consistently",
+          "[c_api][engine][graph]") {
+  SonareRealtimeEngine* engine = nullptr;
+  REQUIRE(sonare_engine_create(&engine) == SONARE_OK);
+  REQUIRE(engine != nullptr);
+  REQUIRE(sonare_engine_prepare(engine, 48000.0, 128, 16, 16) == SONARE_OK);
+
+  size_t node_count = 123;
+  size_t connection_count = 456;
+#if defined(SONARE_WITH_GRAPH)
+  REQUIRE(sonare_engine_graph_node_count(engine, &node_count) == SONARE_OK);
+  REQUIRE(sonare_engine_graph_connection_count(engine, &connection_count) == SONARE_OK);
+  REQUIRE(node_count == 0);
+  REQUIRE(connection_count == 0);
+#else
+  // A feature-off build has no graph at all: report NOT_SUPPORTED like
+  // sonare_engine_set_graph does, rather than SONARE_OK with a count of 0,
+  // which a caller cannot distinguish from "compiled in and genuinely empty".
+  REQUIRE(sonare_engine_graph_node_count(engine, &node_count) == SONARE_ERROR_NOT_SUPPORTED);
+  REQUIRE(sonare_engine_graph_connection_count(engine, &connection_count) ==
+          SONARE_ERROR_NOT_SUPPORTED);
+  REQUIRE(node_count == 0);
+  REQUIRE(connection_count == 0);
+#endif
+
+  sonare_engine_destroy(engine);
+}
+
 TEST_CASE("sonare_engine validates realtime queue error classes", "[c_api][engine]") {
   SonareRealtimeEngine* engine = nullptr;
   REQUIRE(sonare_engine_create(&engine) == SONARE_OK);
@@ -143,6 +173,33 @@ TEST_CASE("sonare_engine validates realtime queue error classes", "[c_api][engin
   REQUIRE(sonare_engine_set_track_strip_insert_param_by_name(engine, 10, 0, "band0.gainDb", 3.0f) ==
           SONARE_ERROR_OUT_OF_MEMORY);
 #endif
+
+  sonare_engine_destroy(engine);
+}
+
+TEST_CASE("sonare_engine_flush_control_commands drains the command ring without process()",
+          "[c_api][engine]") {
+  // Mirrors the direct-engine test "RealtimeEngine control flush prevents an
+  // offline mirror command ring from filling" (tests/engine/realtime_engine_test.cpp):
+  // a control-only host that never calls sonare_engine_process must still be
+  // able to drain queued commands through this C-ABI entry, or its bounded
+  // command ring fills and push_command starts failing.
+  SonareRealtimeEngine* engine = nullptr;
+  REQUIRE(sonare_engine_create(&engine) == SONARE_OK);
+  REQUIRE(engine != nullptr);
+  REQUIRE(sonare_engine_prepare(engine, 48000.0, 64, /*command_capacity=*/4,
+                                /*telemetry_capacity=*/4) == SONARE_OK);
+
+  REQUIRE(sonare_engine_flush_control_commands(nullptr) == SONARE_ERROR_INVALID_PARAMETER);
+
+  for (int64_t sample = 0; sample < 1024; ++sample) {
+    REQUIRE(sonare_engine_seek_sample(engine, sample, -1) == SONARE_OK);
+    REQUIRE(sonare_engine_flush_control_commands(engine) == SONARE_OK);
+  }
+
+  SonareTransportState state{};
+  REQUIRE(sonare_engine_get_transport_state(engine, &state) == SONARE_OK);
+  REQUIRE(state.sample_position == 1023);
 
   sonare_engine_destroy(engine);
 }
@@ -382,6 +439,55 @@ TEST_CASE("offline render/bounce/freeze reject a never-prepared engine", "[c_api
   sonare_engine_destroy(engine);
 }
 
+TEST_CASE("offline render/bounce/freeze reject more channels than the prepared bound",
+          "[c_api][engine]") {
+  // sonare_engine_prepare_with_channels bounds capture/instrument/PDC/monitor
+  // scratch to max_channels; rendering/bouncing/freezing more planes than that
+  // must not silently succeed with zeros written past the reserved scratch.
+  SonareRealtimeEngine* engine = nullptr;
+  REQUIRE(sonare_engine_create(&engine) == SONARE_OK);
+  REQUIRE(engine != nullptr);
+  REQUIRE(sonare_engine_prepare_with_channels(engine, 48000.0, 128, 16, 16, /*max_channels=*/2) ==
+          SONARE_OK);
+
+  constexpr int64_t kFrames = 128;
+  std::array<float, kFrames> ch0{};
+  std::array<float, kFrames> ch1{};
+  std::array<float, kFrames> ch2{};
+  std::array<float, kFrames> ch3{};
+  std::array<float, kFrames> ch4{};
+  std::array<float, kFrames> ch5{};
+  std::array<float*, 6> channels{ch0.data(), ch1.data(), ch2.data(),
+                                 ch3.data(), ch4.data(), ch5.data()};
+
+  REQUIRE(sonare_engine_render_offline(engine, channels.data(), 6, kFrames, 128) ==
+          SONARE_ERROR_INVALID_PARAMETER);
+  // Exactly at the prepared bound still succeeds.
+  REQUIRE(sonare_engine_render_offline(engine, channels.data(), 2, kFrames, 128) == SONARE_OK);
+
+  SonareEngineBounceOptions bounce{};
+  REQUIRE(sonare_engine_bounce_options_default(&bounce) == SONARE_OK);
+  bounce.total_frames = kFrames;
+  bounce.num_channels = 6;  // valid 5.1 speaker layout, but above the prepared bound
+  SonareEngineBounceResult bounce_result{};
+  REQUIRE(sonare_engine_bounce_offline(engine, &bounce, &bounce_result) ==
+          SONARE_ERROR_INVALID_PARAMETER);
+  REQUIRE(bounce_result.interleaved == nullptr);
+  sonare_free_bounce_result(&bounce_result);
+
+  SonareEngineFreezeOptions freeze{};
+  freeze.total_frames = kFrames;
+  freeze.block_size = 128;
+  freeze.num_channels = 6;
+  freeze.gain = 1.0f;
+  SonareEngineFreezeResult freeze_result{};
+  REQUIRE(sonare_engine_freeze_offline(engine, &freeze, &freeze_result) ==
+          SONARE_ERROR_INVALID_PARAMETER);
+  REQUIRE(freeze_result.clip_id == 0u);
+
+  sonare_engine_destroy(engine);
+}
+
 #if defined(SONARE_WITH_MIXING)
 TEST_CASE("sonare_engine bounce scatters a strip's surround pan into a 5.1 master end-to-end",
           "[c_api][engine][surround]") {
@@ -609,6 +715,14 @@ TEST_CASE("sonare_engine track buses route lane sends", "[c_api][engine]") {
   REQUIRE(sonare_engine_process(engine, io, 1, kBlock) == SONARE_OK);
   REQUIRE(out.back() > 2.82f);
   REQUIRE(out.back() < 2.84f);
+  // max_records == 0 is documented as a safe no-op, NOT a way to probe the
+  // pending backlog without draining: it must report 0 here even though the
+  // real drain immediately below finds records.
+  size_t probed_meter_count = 123;
+  REQUIRE(sonare_engine_drain_meter_telemetry(engine, nullptr, 0, &probed_meter_count) ==
+          SONARE_OK);
+  REQUIRE(probed_meter_count == 0);
+
   std::array<SonareMeterTelemetryRecord, 8> meters{};
   size_t meter_count = 0;
   REQUIRE(sonare_engine_drain_meter_telemetry(engine, meters.data(), meters.size(), &meter_count) ==
@@ -757,8 +871,8 @@ TEST_CASE("sonare_engine_set_track_strip_json processes lane strip", "[c_api][en
   clips[1].gain = 1.0f;
   REQUIRE(sonare_engine_set_clips(engine, clips, 2) == SONARE_OK);
 
-  SonareEngineTrackLane lanes[] = {{10, nullptr, 0, 0, 1}, {20, nullptr, 0, 0, 1}};
 #if defined(SONARE_WITH_MIXING)
+  SonareEngineTrackLane lanes[] = {{10, nullptr, 0, 0, 1}, {20, nullptr, 0, 0, 1}};
   REQUIRE(sonare_engine_set_track_lanes(engine, lanes, 2) == SONARE_OK);
   const char* scene_json =
       R"({"version":1,"strips":[{"id":"track-10","faderDb":-12,"panLaw":3}],"buses":[],"connections":[]})";
@@ -2370,6 +2484,7 @@ TEST_CASE("sonare engine capture can record live input and record offset metadat
   REQUIRE(sonare_engine_process(engine, channels, 2, 128) == SONARE_OK);
   REQUIRE(left[0] == Catch::Approx(0.75f).margin(0.0001f));
   REQUIRE(right[0] == Catch::Approx(-0.75f).margin(0.0001f));
+#if defined(SONARE_WITH_MIXING)
   std::array<SonareMeterTelemetryRecord, 4> input_meters{};
   size_t input_meter_count = 0;
   REQUIRE(sonare_engine_drain_meter_telemetry(engine, input_meters.data(), input_meters.size(),
@@ -2382,6 +2497,7 @@ TEST_CASE("sonare engine capture can record live input and record offset metadat
     }
   }
   REQUIRE(found_input_meter);
+#endif  // defined(SONARE_WITH_MIXING)
 
   SonareEngineCaptureStatus status{};
   REQUIRE(sonare_engine_capture_status(engine, &status) == SONARE_OK);
@@ -3005,10 +3121,12 @@ TEST_CASE("sonare_last_error_message", "[c_api]") {
   }
 
   SECTION("pointer-returning constructors replace stale diagnostics") {
+#if defined(SONARE_WITH_MIXING)
     REQUIRE(sonare_mixer_create(0, 128) == nullptr);
     REQUIRE(std::string(sonare_last_error_message()).find("sample_rate") != std::string::npos);
     REQUIRE(sonare_mixer_from_scene_json(nullptr, 48000, 128) == nullptr);
     REQUIRE(std::string(sonare_last_error_message()).find("scene JSON") != std::string::npos);
+#endif  // defined(SONARE_WITH_MIXING)
     REQUIRE(sonare_eq_create(0.0, 128) == nullptr);
     REQUIRE(std::string(sonare_last_error_message()).find("sample_rate") != std::string::npos);
     REQUIRE(sonare_streaming_mastering_chain_create(nullptr, 1) == nullptr);
@@ -3286,6 +3404,13 @@ TEST_CASE("sonare_engine scope telemetry reports a tone's spectrum and goniomete
   for (int block = 0; block < 12; ++block) {
     REQUIRE(sonare_engine_process(engine, io, 2, kBlock) == SONARE_OK);
   }
+
+  // max_records == 0 is documented as a safe no-op, NOT a way to learn the
+  // pending backlog: it must report 0 and drain nothing even though records
+  // are genuinely pending, as the very next (real) drain below proves.
+  size_t probed_count = 123;
+  REQUIRE(sonare_engine_drain_scope_telemetry(engine, nullptr, 0, &probed_count) == SONARE_OK);
+  REQUIRE(probed_count == 0);
 
   std::array<SonareScopeTelemetryRecord, 64> records{};
   size_t count = 0;

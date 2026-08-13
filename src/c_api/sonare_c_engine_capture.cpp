@@ -186,10 +186,14 @@ SonareError sonare_engine_graph_node_count(SonareRealtimeEngine* engine, size_t*
   if (!engine || !out_count) return SONARE_ERROR_INVALID_PARAMETER;
 #if defined(SONARE_WITH_GRAPH)
   *out_count = engine->engine.graph_node_count();
-#else
-  *out_count = 0;
-#endif
   return SONARE_OK;
+#else
+  // Match sonare_engine_set_graph: a feature-off build cannot have a graph, so
+  // report NOT_SUPPORTED rather than SONARE_OK with 0, which a caller cannot
+  // distinguish from "the feature is compiled in and the graph has no nodes".
+  *out_count = 0;
+  return SONARE_ERROR_NOT_SUPPORTED;
+#endif
 }
 
 SonareError sonare_engine_graph_connection_count(SonareRealtimeEngine* engine, size_t* out_count) {
@@ -197,8 +201,10 @@ SonareError sonare_engine_graph_connection_count(SonareRealtimeEngine* engine, s
   if (!engine || !out_count) return SONARE_ERROR_INVALID_PARAMETER;
 #if defined(SONARE_WITH_GRAPH)
   *out_count = engine->engine.graph_connection_count();
-#else
-  *out_count = 0;
-#endif
   return SONARE_OK;
+#else
+  // See sonare_engine_graph_node_count.
+  *out_count = 0;
+  return SONARE_ERROR_NOT_SUPPORTED;
+#endif
 }

@@ -103,6 +103,13 @@ SonareError sonare_engine_seek_ppq(SonareRealtimeEngine* engine, double ppq, int
 ///   the first audible block renders at settled values instead of ramping in
 ///   from defaults. Not safe concurrently with a running audio thread.
 SonareError sonare_engine_settle_parameters(SonareRealtimeEngine* engine);
+/// @brief Applies commands queued on an offline/control-only engine immediately.
+/// @details For hosts that never call @ref sonare_engine_process (e.g. a
+///   control-only mirror driving transport/automation state without rendering
+///   audio): the realtime command ring is bounded, so queued commands must be
+///   drained explicitly instead of relying on the next process() call to do it.
+/// @warning Not safe concurrently with a running @ref sonare_engine_process.
+SonareError sonare_engine_flush_control_commands(SonareRealtimeEngine* engine);
 /// @brief Sets a finite tempo in the range (0, 100000] BPM.
 /// @return @ref SONARE_ERROR_INVALID_PARAMETER for a non-finite, non-positive,
 ///         or greater-than-100000 value.
@@ -131,10 +138,12 @@ SonareError sonare_engine_set_loop(SonareRealtimeEngine* engine, double start_pp
 /// @brief Registers a parameter's metadata for automation UIs.
 /// @details Control-thread only (allocates the name/unit string copies). Returns
 ///   @c SONARE_ERROR_INVALID_PARAMETER if @p info is NULL, the value range is
-///   inverted, or a parameter with the same id is already registered (duplicate
-///   ids are rejected, not replaced — clear and re-register to change metadata).
-///   On rejection no backing strings are retained, so repeated re-registration
-///   does not leak.
+///   inverted, @c default_curve is outside [0, 3], @c id falls in the engine's
+///   internally reserved parameter-id namespace (the engine-param and
+///   insert-param automation ids), or a parameter with the same id is already
+///   registered (duplicate ids are rejected, not replaced — clear and
+///   re-register to change metadata). On rejection no backing strings are
+///   retained, so repeated re-registration does not leak.
 SonareError sonare_engine_add_parameter(SonareRealtimeEngine* engine,
                                         const SonareParameterInfo* info);
 /// @brief Removes all registered parameters and releases their backing strings.
@@ -400,7 +409,12 @@ SonareError sonare_engine_drain_telemetry(SonareRealtimeEngine* engine, SonareEn
                                           size_t max_records, size_t* written);
 /// @brief Drains pending meter telemetry records published by the engine.
 /// @param out Caller-owned array receiving up to @p max_records entries.
-/// @param max_records Capacity of @p out. May be 0 to query without copying.
+/// @param max_records Capacity of @p out. May be 0, which is a safe no-op:
+///   nothing is copied or drained and @p out_count is always set to 0. This
+///   does NOT report the number of pending records — draining is destructive
+///   (each returned record is removed from the queue), so there is no way to
+///   learn the backlog size without consuming it; drain into a buffer sized
+///   for the expected batch instead of probing with max_records == 0.
 /// @param out_count Receives the number of records written.
 SonareError sonare_engine_drain_meter_telemetry(SonareRealtimeEngine* engine,
                                                 SonareMeterTelemetryRecord* out, size_t max_records,
@@ -411,7 +425,12 @@ SonareError sonare_engine_drain_meter_telemetry(SonareRealtimeEngine* engine,
 ///   its target's bus layout; do not call both for one target. Each record
 ///   carries channel_count valid planes in peak_db/rms_db/true_peak_db.
 /// @param out Caller-owned array receiving up to @p max_records entries.
-/// @param max_records Capacity of @p out. May be 0 to query without copying.
+/// @param max_records Capacity of @p out. May be 0, which is a safe no-op:
+///   nothing is copied or drained and @p out_count is always set to 0. This
+///   does NOT report the number of pending records — draining is destructive
+///   (each returned record is removed from the queue), so there is no way to
+///   learn the backlog size without consuming it; drain into a buffer sized
+///   for the expected batch instead of probing with max_records == 0.
 /// @param out_count Receives the number of records written.
 SonareError sonare_engine_drain_meter_telemetry_wide(SonareRealtimeEngine* engine,
                                                      SonareMeterTelemetryRecordWide* out,
@@ -427,7 +446,12 @@ SonareError sonare_engine_configure_scope_telemetry(SonareRealtimeEngine* engine
                                                     unsigned int* out_band_count);
 /// @brief Drains pending spectrum + vectorscope telemetry records.
 /// @param out Caller-owned array receiving up to @p max_records entries.
-/// @param max_records Capacity of @p out. May be 0 to query without copying.
+/// @param max_records Capacity of @p out. May be 0, which is a safe no-op:
+///   nothing is copied or drained and @p out_count is always set to 0. This
+///   does NOT report the number of pending records — draining is destructive
+///   (each returned record is removed from the queue), so there is no way to
+///   learn the backlog size without consuming it; drain into a buffer sized
+///   for the expected batch instead of probing with max_records == 0.
 /// @param out_count Receives the number of records written. Each record carries
 ///   band_count FFT bands and point_count interleaved left/right goniometer pairs.
 SonareError sonare_engine_drain_scope_telemetry(SonareRealtimeEngine* engine,

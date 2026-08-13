@@ -94,6 +94,17 @@ export class RealtimeEngine {
     this.native.settleParameters();
   }
 
+  /**
+   * Applies commands queued on an offline/control-only engine immediately.
+   * A host that never calls {@link process} still queues onto a bounded
+   * realtime command ring, so those commands have to be drained explicitly
+   * rather than by the next process() call. Not safe to call concurrently with
+   * a running process().
+   */
+  flushControlCommands(): void {
+    this.native.flushControlCommands();
+  }
+
   seekPpq(ppq: number, renderFrame = -1): void {
     this.native.seekPpq(ppq, renderFrame);
   }

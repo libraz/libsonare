@@ -33,19 +33,15 @@ bool ReadEngineBuiltinSynthConfig(Napi::Env env, const Napi::Object& obj,
   } else if (waveform.IsNumber()) {
     config->waveform = waveform.As<Napi::Number>().Int32Value();
   }
-  if (obj.Has("gain")) config->gain = obj.Get("gain").As<Napi::Number>().FloatValue();
-  if (obj.Has("attackMs")) config->attack_ms = obj.Get("attackMs").As<Napi::Number>().FloatValue();
-  if (obj.Has("decayMs")) config->decay_ms = obj.Get("decayMs").As<Napi::Number>().FloatValue();
-  if (obj.Has("sustain")) config->sustain = obj.Get("sustain").As<Napi::Number>().FloatValue();
-  if (obj.Has("releaseMs"))
-    config->release_ms = obj.Get("releaseMs").As<Napi::Number>().FloatValue();
-  if (obj.Has("polyphony"))
-    config->polyphony = obj.Get("polyphony").As<Napi::Number>().Int32Value();
-  return true;
-}
-
-uint32_t OptionalUint32(const Napi::Object& obj, const char* key, uint32_t fallback) {
-  return obj.Has(key) ? obj.Get(key).As<Napi::Number>().Uint32Value() : fallback;
+  config->gain = FloatProperty(obj, "gain", config->gain);
+  config->attack_ms = FloatProperty(obj, "attackMs", config->attack_ms);
+  config->decay_ms = FloatProperty(obj, "decayMs", config->decay_ms);
+  config->sustain = FloatProperty(obj, "sustain", config->sustain);
+  config->release_ms = FloatProperty(obj, "releaseMs", config->release_ms);
+  config->polyphony = IntProperty(obj, "polyphony", config->polyphony);
+  // A wrong-typed field left a pending JS exception; stop before the caller
+  // reaches the C ABI with it still set.
+  return !env.IsExceptionPending();
 }
 
 bool ReadPositiveUint32(Napi::Env env, const Napi::Value& value, const char* label, uint32_t* out) {
@@ -96,18 +92,6 @@ uint8_t MidiByteArg(Napi::Env env, const Napi::CallbackInfo& info, size_t idx, u
   return static_cast<uint8_t>(v);
 }
 
-int64_t OptionalInt64Property(const Napi::Object& obj, const char* key, int64_t fallback) {
-  return obj.Has(key) ? obj.Get(key).As<Napi::Number>().Int64Value() : fallback;
-}
-
-double OptionalDoubleProperty(const Napi::Object& obj, const char* key, double fallback) {
-  return obj.Has(key) ? obj.Get(key).As<Napi::Number>().DoubleValue() : fallback;
-}
-
-uint32_t MidiWordFromObject(const Napi::Object& obj, const char* key, uint32_t fallback) {
-  return obj.Has(key) ? obj.Get(key).As<Napi::Number>().Uint32Value() : fallback;
-}
-
 std::vector<SonareEngineMidiEvent> ReadEngineMidiEvents(Napi::Env env, Napi::Value value) {
   if (!value.IsArray()) {
     Napi::TypeError::New(env, "MIDI clip events must be an array").ThrowAsJavaScriptException();
@@ -123,14 +107,17 @@ std::vector<SonareEngineMidiEvent> ReadEngineMidiEvents(Napi::Env env, Napi::Val
     }
     Napi::Object obj = item.As<Napi::Object>();
     SonareEngineMidiEvent event{};
-    event.render_frame = OptionalInt64Property(obj, "renderFrame", 0);
-    event.word0 = MidiWordFromObject(obj, "word0", MidiWordFromObject(obj, "data0", 0));
-    event.word1 = MidiWordFromObject(obj, "word1", MidiWordFromObject(obj, "data1", 0));
-    event.word2 = MidiWordFromObject(obj, "word2", 0);
-    event.word3 = MidiWordFromObject(obj, "word3", 0);
-    event.word_count = static_cast<uint8_t>(OptionalUint32(obj, "wordCount", 0));
-    event.group = static_cast<uint8_t>(OptionalUint32(obj, "group", 0));
-    event.sysex_handle = OptionalUint32(obj, "sysexHandle", 0);
+    event.render_frame = Int64Property(obj, "renderFrame", 0);
+    event.word0 = Uint32Property(obj, "word0", Uint32Property(obj, "data0", 0));
+    event.word1 = Uint32Property(obj, "word1", Uint32Property(obj, "data1", 0));
+    event.word2 = Uint32Property(obj, "word2", 0);
+    event.word3 = Uint32Property(obj, "word3", 0);
+    event.word_count = static_cast<uint8_t>(Uint32Property(obj, "wordCount", 0));
+    event.group = static_cast<uint8_t>(Uint32Property(obj, "group", 0));
+    event.sysex_handle = Uint32Property(obj, "sysexHandle", 0);
+    // Bail on the first wrong-typed field so the next iteration's explicit
+    // TypeError is never raised on top of an already-pending exception.
+    if (env.IsExceptionPending()) return {};
     events[i] = event;
   }
   return events;
@@ -147,6 +134,7 @@ Napi::Object RealtimeEngineWrap::Init(Napi::Env env, Napi::Object exports) {
           InstanceMethod<&RealtimeEngineWrap::Stop>("stop"),
           InstanceMethod<&RealtimeEngineWrap::SeekSample>("seekSample"),
           InstanceMethod<&RealtimeEngineWrap::SettleParameters>("settleParameters"),
+          InstanceMethod<&RealtimeEngineWrap::FlushControlCommands>("flushControlCommands"),
           InstanceMethod<&RealtimeEngineWrap::SeekPpq>("seekPpq"),
           InstanceMethod<&RealtimeEngineWrap::SetTempo>("setTempo"),
           InstanceMethod<&RealtimeEngineWrap::SetTimeSignature>("setTimeSignature"),
@@ -335,7 +323,7 @@ Napi::Value RealtimeEngineWrap::Prepare(const Napi::CallbackInfo& info) {
       info.Length() > 2 ? static_cast<size_t>(info[2].As<Napi::Number>().Int64Value()) : 1024;
   const size_t telemetry_capacity =
       info.Length() > 3 ? static_cast<size_t>(info[3].As<Napi::Number>().Int64Value()) : 1024;
-  const int max_channels = info.Length() > 4 ? info[4].As<Napi::Number>().Int32Value() : 64;
+  const int max_channels = node_arg_int(info, 4, 64);
   ThrowIfError(
       env, sonare_engine_prepare_with_channels(engine_, sample_rate, max_block_size,
                                                command_capacity, telemetry_capacity, max_channels));
@@ -367,24 +355,30 @@ Napi::Value RealtimeEngineWrap::SettleParameters(const Napi::CallbackInfo& info)
   return env.Undefined();
 }
 
+Napi::Value RealtimeEngineWrap::FlushControlCommands(const Napi::CallbackInfo& info) {
+  Napi::Env env = info.Env();
+  ThrowIfError(env, sonare_engine_flush_control_commands(engine_));
+  return env.Undefined();
+}
+
 Napi::Value RealtimeEngineWrap::SeekPpq(const Napi::CallbackInfo& info) {
   Napi::Env env = info.Env();
-  const double ppq = info.Length() > 0 ? info[0].As<Napi::Number>().DoubleValue() : 0.0;
+  const double ppq = node_arg_double(info, 0, 0.0);
   ThrowIfError(env, sonare_engine_seek_ppq(engine_, ppq, OptionalInt64(info, 1, -1)));
   return env.Undefined();
 }
 
 Napi::Value RealtimeEngineWrap::SetTempo(const Napi::CallbackInfo& info) {
   Napi::Env env = info.Env();
-  const double bpm = info.Length() > 0 ? info[0].As<Napi::Number>().DoubleValue() : 120.0;
+  const double bpm = node_arg_double(info, 0, 120.0);
   ThrowIfError(env, sonare_engine_set_tempo(engine_, bpm));
   return env.Undefined();
 }
 
 Napi::Value RealtimeEngineWrap::SetTimeSignature(const Napi::CallbackInfo& info) {
   Napi::Env env = info.Env();
-  const int numerator = info.Length() > 0 ? info[0].As<Napi::Number>().Int32Value() : 4;
-  const int denominator = info.Length() > 1 ? info[1].As<Napi::Number>().Int32Value() : 4;
+  const int numerator = node_arg_int(info, 0, 4);
+  const int denominator = node_arg_int(info, 1, 4);
   ThrowIfError(env, sonare_engine_set_time_signature(engine_, numerator, denominator));
   return env.Undefined();
 }
@@ -405,9 +399,8 @@ Napi::Value RealtimeEngineWrap::SetTempoSegments(const Napi::CallbackInfo& info)
       segment.start_ppq = obj.Get("startPpq").As<Napi::Number>().DoubleValue();
       segment.bpm = obj.Get("bpm").As<Napi::Number>().DoubleValue();
       segment.start_sample = 0.0;
-      segment.end_bpm = obj.Has("endBpm") && !obj.Get("endBpm").IsUndefined()
-                            ? obj.Get("endBpm").As<Napi::Number>().DoubleValue()
-                            : 0.0;
+      segment.end_bpm = DoubleProperty(obj, "endBpm", 0.0);
+      if (env.IsExceptionPending()) return env.Undefined();
       segments.push_back(segment);
     }
   }
@@ -442,7 +435,7 @@ Napi::Value RealtimeEngineWrap::SetTimeSignatureSegments(const Napi::CallbackInf
 
 Napi::Value RealtimeEngineWrap::SampleAtPpq(const Napi::CallbackInfo& info) {
   Napi::Env env = info.Env();
-  const double ppq = info.Length() > 0 ? info[0].As<Napi::Number>().DoubleValue() : 0.0;
+  const double ppq = node_arg_double(info, 0, 0.0);
   int64_t sample = 0;
   ThrowIfError(env, sonare_engine_sample_at_ppq(engine_, ppq, &sample));
   return Napi::Number::New(env, static_cast<double>(sample));
@@ -450,8 +443,8 @@ Napi::Value RealtimeEngineWrap::SampleAtPpq(const Napi::CallbackInfo& info) {
 
 Napi::Value RealtimeEngineWrap::SetLoop(const Napi::CallbackInfo& info) {
   Napi::Env env = info.Env();
-  const double start_ppq = info.Length() > 0 ? info[0].As<Napi::Number>().DoubleValue() : 0.0;
-  const double end_ppq = info.Length() > 1 ? info[1].As<Napi::Number>().DoubleValue() : 0.0;
+  const double start_ppq = node_arg_double(info, 0, 0.0);
+  const double end_ppq = node_arg_double(info, 1, 0.0);
   const bool enabled =
       info.Length() <= 2 || info[2].IsUndefined() ? true : info[2].As<Napi::Boolean>().Value();
   ThrowIfError(env, sonare_engine_set_loop(engine_, start_ppq, end_ppq, enabled ? 1 : 0));
@@ -486,7 +479,7 @@ Napi::Value RealtimeEngineWrap::ParameterInfoByIndex(const Napi::CallbackInfo& i
 
 Napi::Value RealtimeEngineWrap::ParameterInfo(const Napi::CallbackInfo& info) {
   Napi::Env env = info.Env();
-  const uint32_t id = info.Length() > 0 ? info[0].As<Napi::Number>().Uint32Value() : 0;
+  const uint32_t id = node_arg_uint32(info, 0, 0);
   SonareParameterInfo parameter{};
   ThrowIfError(env, sonare_engine_parameter_info(engine_, id, &parameter));
   if (env.IsExceptionPending()) return env.Undefined();
@@ -513,9 +506,8 @@ Napi::Value RealtimeEngineWrap::SetAutomationLane(const Napi::CallbackInfo& info
     SonareAutomationPoint point{};
     point.ppq = obj.Get("ppq").As<Napi::Number>().DoubleValue();
     point.value = obj.Get("value").As<Napi::Number>().FloatValue();
-    point.curve_to_next = obj.Has("curveToNext") && !obj.Get("curveToNext").IsUndefined()
-                              ? obj.Get("curveToNext").As<Napi::Number>().Int32Value()
-                              : 0;
+    point.curve_to_next = IntProperty(obj, "curveToNext", 0);
+    if (env.IsExceptionPending()) return env.Undefined();
     points.push_back(point);
   }
   ThrowIfError(env,
@@ -554,10 +546,10 @@ Napi::Value RealtimeEngineWrap::SetMarkers(const Napi::CallbackInfo& info) {
     marker.key_fifths = static_cast<int8_t>(IntProperty(obj, "keyFifths", 0));
     marker.key_minor = BoolProperty(obj, "keyMinor", false) ? 1 : 0;
     marker.ppq = obj.Get("ppq").As<Napi::Number>().DoubleValue();
+    const Napi::Value name = obj.Get("name");
     CopyString(marker.name, sizeof(marker.name),
-               obj.Has("name") && !obj.Get("name").IsUndefined()
-                   ? obj.Get("name").As<Napi::String>().Utf8Value()
-                   : "");
+               name.IsUndefined() || name.IsNull() ? "" : name.As<Napi::String>().Utf8Value());
+    if (env.IsExceptionPending()) return env.Undefined();
     markers.push_back(marker);
   }
   ThrowIfError(env, sonare_engine_set_markers(engine_, markers.data(), markers.size()));
@@ -584,7 +576,7 @@ Napi::Value RealtimeEngineWrap::MarkerByIndex(const Napi::CallbackInfo& info) {
 
 Napi::Value RealtimeEngineWrap::Marker(const Napi::CallbackInfo& info) {
   Napi::Env env = info.Env();
-  const uint32_t id = info.Length() > 0 ? info[0].As<Napi::Number>().Uint32Value() : 0;
+  const uint32_t id = node_arg_uint32(info, 0, 0);
   SonareEngineMarker marker{};
   ThrowIfError(env, sonare_engine_marker(engine_, id, &marker));
   if (env.IsExceptionPending()) return env.Undefined();
@@ -593,15 +585,15 @@ Napi::Value RealtimeEngineWrap::Marker(const Napi::CallbackInfo& info) {
 
 Napi::Value RealtimeEngineWrap::SeekMarker(const Napi::CallbackInfo& info) {
   Napi::Env env = info.Env();
-  const uint32_t id = info.Length() > 0 ? info[0].As<Napi::Number>().Uint32Value() : 0;
+  const uint32_t id = node_arg_uint32(info, 0, 0);
   ThrowIfError(env, sonare_engine_seek_marker(engine_, id, OptionalInt64(info, 1, -1)));
   return env.Undefined();
 }
 
 Napi::Value RealtimeEngineWrap::SetLoopFromMarkers(const Napi::CallbackInfo& info) {
   Napi::Env env = info.Env();
-  const uint32_t start_id = info.Length() > 0 ? info[0].As<Napi::Number>().Uint32Value() : 0;
-  const uint32_t end_id = info.Length() > 1 ? info[1].As<Napi::Number>().Uint32Value() : 0;
+  const uint32_t start_id = node_arg_uint32(info, 0, 0);
+  const uint32_t end_id = node_arg_uint32(info, 1, 0);
   ThrowIfError(env, sonare_engine_set_loop_from_markers(engine_, start_id, end_id));
   return env.Undefined();
 }
@@ -614,19 +606,12 @@ Napi::Value RealtimeEngineWrap::SetMetronome(const Napi::CallbackInfo& info) {
   }
   Napi::Object obj = info[0].As<Napi::Object>();
   SonareEngineMetronomeConfig config{};
-  config.enabled = obj.Get("enabled").As<Napi::Boolean>().Value() ? 1 : 0;
-  config.beat_gain = obj.Has("beatGain") && !obj.Get("beatGain").IsUndefined()
-                         ? obj.Get("beatGain").As<Napi::Number>().FloatValue()
-                         : 0.35f;
-  config.accent_gain = obj.Has("accentGain") && !obj.Get("accentGain").IsUndefined()
-                           ? obj.Get("accentGain").As<Napi::Number>().FloatValue()
-                           : 0.7f;
-  config.click_samples = obj.Has("clickSamples") && !obj.Get("clickSamples").IsUndefined()
-                             ? obj.Get("clickSamples").As<Napi::Number>().Int32Value()
-                             : 0;
-  config.click_seconds = obj.Has("clickSeconds") && !obj.Get("clickSeconds").IsUndefined()
-                             ? obj.Get("clickSeconds").As<Napi::Number>().DoubleValue()
-                             : 0.0;
+  config.enabled = BoolProperty(obj, "enabled", false) ? 1 : 0;
+  config.beat_gain = FloatProperty(obj, "beatGain", 0.35f);
+  config.accent_gain = FloatProperty(obj, "accentGain", 0.7f);
+  config.click_samples = IntProperty(obj, "clickSamples", 0);
+  config.click_seconds = DoubleProperty(obj, "clickSeconds", 0.0);
+  if (env.IsExceptionPending()) return env.Undefined();
   ThrowIfError(env, sonare_engine_set_metronome(engine_, &config));
   return env.Undefined();
 }
@@ -642,7 +627,7 @@ Napi::Value RealtimeEngineWrap::Metronome(const Napi::CallbackInfo& info) {
 Napi::Value RealtimeEngineWrap::CountInEndSample(const Napi::CallbackInfo& info) {
   Napi::Env env = info.Env();
   const int64_t start_sample = OptionalInt64(info, 0, 0);
-  const int bars = info.Length() > 1 ? info[1].As<Napi::Number>().Int32Value() : 1;
+  const int bars = node_arg_int(info, 1, 1);
   int64_t out = 0;
   ThrowIfError(env, sonare_engine_count_in_end_sample(engine_, start_sample, bars, &out));
   if (env.IsExceptionPending()) return env.Undefined();
@@ -651,8 +636,8 @@ Napi::Value RealtimeEngineWrap::CountInEndSample(const Napi::CallbackInfo& info)
 
 Napi::Value RealtimeEngineWrap::SetParameter(const Napi::CallbackInfo& info) {
   Napi::Env env = info.Env();
-  const uint32_t param_id = info.Length() > 0 ? info[0].As<Napi::Number>().Uint32Value() : 0;
-  const float value = info.Length() > 1 ? info[1].As<Napi::Number>().FloatValue() : 0.0f;
+  const uint32_t param_id = node_arg_uint32(info, 0, 0);
+  const float value = node_arg_float(info, 1, 0.0f);
   ThrowIfError(env,
                sonare_engine_set_parameter(engine_, param_id, value, OptionalInt64(info, 2, -1)));
   return env.Undefined();
@@ -660,8 +645,8 @@ Napi::Value RealtimeEngineWrap::SetParameter(const Napi::CallbackInfo& info) {
 
 Napi::Value RealtimeEngineWrap::SetParameterSmoothed(const Napi::CallbackInfo& info) {
   Napi::Env env = info.Env();
-  const uint32_t param_id = info.Length() > 0 ? info[0].As<Napi::Number>().Uint32Value() : 0;
-  const float value = info.Length() > 1 ? info[1].As<Napi::Number>().FloatValue() : 0.0f;
+  const uint32_t param_id = node_arg_uint32(info, 0, 0);
+  const float value = node_arg_float(info, 1, 0.0f);
   ThrowIfError(env, sonare_engine_set_parameter_smoothed(engine_, param_id, value,
                                                          OptionalInt64(info, 2, -1)));
   return env.Undefined();
@@ -669,16 +654,16 @@ Napi::Value RealtimeEngineWrap::SetParameterSmoothed(const Napi::CallbackInfo& i
 
 Napi::Value RealtimeEngineWrap::SetParamSmoothingMs(const Napi::CallbackInfo& info) {
   Napi::Env env = info.Env();
-  const float smoothing_ms = info.Length() > 0 ? info[0].As<Napi::Number>().FloatValue() : 0.0f;
+  const float smoothing_ms = node_arg_float(info, 0, 0.0f);
   ThrowIfError(env, sonare_engine_set_param_smoothing_ms(engine_, smoothing_ms));
   return env.Undefined();
 }
 
 Napi::Value RealtimeEngineWrap::SetSoloMute(const Napi::CallbackInfo& info) {
   Napi::Env env = info.Env();
-  const uint32_t lane_index = info.Length() > 0 ? info[0].As<Napi::Number>().Uint32Value() : 0;
-  const bool solo = info.Length() > 1 && info[1].As<Napi::Boolean>().Value();
-  const bool mute = info.Length() > 2 && info[2].As<Napi::Boolean>().Value();
+  const uint32_t lane_index = node_arg_uint32(info, 0, 0);
+  const bool solo = node_arg_bool(info, 1, false);
+  const bool mute = node_arg_bool(info, 2, false);
   ThrowIfError(env, sonare_engine_set_solo_mute(engine_, lane_index, solo ? 1 : 0, mute ? 1 : 0,
                                                 OptionalInt64(info, 3, -1)));
   return env.Undefined();
@@ -711,14 +696,15 @@ Napi::Value RealtimeEngineWrap::SetMidiClips(const Napi::CallbackInfo& info) {
         ReadEngineMidiEvents(env, obj.Has("events") ? obj.Get("events") : env.Null());
     if (env.IsExceptionPending()) return env.Undefined();
     SonareEngineMidiClipSchedule clip{};
-    clip.id = OptionalUint32(obj, "id", 0);
-    clip.track_id = OptionalUint32(obj, "trackId", 0);
-    clip.start_sample = OptionalInt64Property(obj, "startSample", 0);
-    clip.start_ppq = OptionalDoubleProperty(obj, "startPpq", 0.0);
-    clip.length_samples = OptionalInt64Property(obj, "lengthSamples", 0);
-    clip.loop = obj.Has("loop") && obj.Get("loop").ToBoolean().Value() ? 1 : 0;
-    clip.loop_length_samples = OptionalInt64Property(obj, "loopLengthSamples", 0);
-    clip.destination_id = OptionalUint32(obj, "destinationId", OptionalUint32(obj, "trackId", 0));
+    clip.id = Uint32Property(obj, "id", 0);
+    clip.track_id = Uint32Property(obj, "trackId", 0);
+    clip.start_sample = Int64Property(obj, "startSample", 0);
+    clip.start_ppq = DoubleProperty(obj, "startPpq", 0.0);
+    clip.length_samples = Int64Property(obj, "lengthSamples", 0);
+    clip.loop = obj.Get("loop").ToBoolean().Value() ? 1 : 0;
+    clip.loop_length_samples = Int64Property(obj, "loopLengthSamples", 0);
+    clip.destination_id = Uint32Property(obj, "destinationId", Uint32Property(obj, "trackId", 0));
+    if (env.IsExceptionPending()) return env.Undefined();
     clip.events = event_storage[i].data();
     clip.event_count = event_storage[i].size();
     clips[i] = clip;
@@ -729,7 +715,7 @@ Napi::Value RealtimeEngineWrap::SetMidiClips(const Napi::CallbackInfo& info) {
 
 Napi::Value RealtimeEngineWrap::SetBuiltinInstrument(const Napi::CallbackInfo& info) {
   Napi::Env env = info.Env();
-  const uint32_t destination_id = info.Length() > 0 ? info[0].As<Napi::Number>().Uint32Value() : 0;
+  const uint32_t destination_id = node_arg_uint32(info, 0, 0);
   SonareEngineBuiltinSynthConfig config{};
   if (info.Length() > 1 && info[1].IsObject()) {
     Napi::Object obj = info[1].As<Napi::Object>();
@@ -745,7 +731,7 @@ Napi::Value RealtimeEngineWrap::SetBuiltinInstrument(const Napi::CallbackInfo& i
 // "va:saw-lead"), resolving exactly like Project.bounceWithSynthInstruments.
 Napi::Value RealtimeEngineWrap::SetSynthInstrument(const Napi::CallbackInfo& info) {
   Napi::Env env = info.Env();
-  const uint32_t destination_id = info.Length() > 0 ? info[0].As<Napi::Number>().Uint32Value() : 0;
+  const uint32_t destination_id = node_arg_uint32(info, 0, 0);
   SonareSynthPatch patch{};
   if (info.Length() > 1) {
     if (!sonare_node::ReadSynthPatch(env, info[1], &patch)) {
@@ -781,18 +767,18 @@ Napi::Value RealtimeEngineWrap::LoadSoundFont(const Napi::CallbackInfo& info) {
 
 Napi::Value RealtimeEngineWrap::SetSf2Instrument(const Napi::CallbackInfo& info) {
   Napi::Env env = info.Env();
-  const uint32_t destination_id = info.Length() > 0 ? info[0].As<Napi::Number>().Uint32Value() : 0;
+  const uint32_t destination_id = node_arg_uint32(info, 0, 0);
   SonareEngineSf2InstrumentConfig config{};
   if (info.Length() > 1 && info[1].IsObject()) {
     Napi::Object obj = info[1].As<Napi::Object>();
-    if (obj.Has("gain")) config.gain = obj.Get("gain").As<Napi::Number>().FloatValue();
-    if (obj.Has("polyphony"))
-      config.polyphony = obj.Get("polyphony").As<Napi::Number>().Int32Value();
-    if (obj.Has("preferModelForModeledFamilies")) {
+    config.gain = FloatProperty(obj, "gain", config.gain);
+    config.polyphony = IntProperty(obj, "polyphony", config.polyphony);
+    const Napi::Value prefer_model = obj.Get("preferModelForModeledFamilies");
+    if (!prefer_model.IsUndefined() && !prefer_model.IsNull()) {
       config.struct_version = 2;
-      config.prefer_model_for_modeled_families =
-          obj.Get("preferModelForModeledFamilies").ToBoolean().Value() ? 1 : 0;
+      config.prefer_model_for_modeled_families = prefer_model.ToBoolean().Value() ? 1 : 0;
     }
+    if (env.IsExceptionPending()) return env.Undefined();
   }
   ThrowIfError(env, sonare_engine_set_sf2_instrument(engine_, destination_id, &config));
   return env.Undefined();
@@ -800,7 +786,7 @@ Napi::Value RealtimeEngineWrap::SetSf2Instrument(const Napi::CallbackInfo& info)
 
 Napi::Value RealtimeEngineWrap::ClearMidiInstrument(const Napi::CallbackInfo& info) {
   Napi::Env env = info.Env();
-  const uint32_t destination_id = info.Length() > 0 ? info[0].As<Napi::Number>().Uint32Value() : 0;
+  const uint32_t destination_id = node_arg_uint32(info, 0, 0);
   ThrowIfError(env, sonare_engine_clear_midi_instrument(engine_, destination_id));
   return env.Undefined();
 }
@@ -815,7 +801,7 @@ Napi::Value RealtimeEngineWrap::MidiInstrumentCount(const Napi::CallbackInfo& in
 
 Napi::Value RealtimeEngineWrap::PushMidiNoteOn(const Napi::CallbackInfo& info) {
   Napi::Env env = info.Env();
-  const uint32_t destination_id = info.Length() > 0 ? info[0].As<Napi::Number>().Uint32Value() : 0;
+  const uint32_t destination_id = node_arg_uint32(info, 0, 0);
   const uint8_t group = MidiByteArg(env, info, 1, 0);
   const uint8_t channel = MidiByteArg(env, info, 2, 0);
   const uint8_t note = MidiByteArg(env, info, 3, 0);
@@ -831,9 +817,9 @@ Napi::Value RealtimeEngineWrap::BindMidiCc(const Napi::CallbackInfo& info) {
   const uint8_t channel = MidiByteArg(env, info, 0, 0);
   const uint8_t controller = MidiByteArg(env, info, 1, 0);
   if (env.IsExceptionPending()) return env.Undefined();
-  const uint32_t param_id = info.Length() > 2 ? info[2].As<Napi::Number>().Uint32Value() : 0;
-  const float min_value = info.Length() > 3 ? info[3].As<Napi::Number>().FloatValue() : 0.0f;
-  const float max_value = info.Length() > 4 ? info[4].As<Napi::Number>().FloatValue() : 1.0f;
+  const uint32_t param_id = node_arg_uint32(info, 2, 0);
+  const float min_value = node_arg_float(info, 3, 0.0f);
+  const float max_value = node_arg_float(info, 4, 1.0f);
   ThrowIfError(env, sonare_engine_bind_midi_cc(engine_, channel, controller, param_id, min_value,
                                                max_value));
   return env.Undefined();
@@ -846,23 +832,26 @@ Napi::Value RealtimeEngineWrap::BindMidiCcBinding(const Napi::CallbackInfo& info
     return env.Undefined();
   }
   const Napi::Object object = info[0].As<Napi::Object>();
+  const Napi::Value cc_number = object.Get("ccNumber");
+  const Napi::Value param_id = object.Get("paramId");
+  if (!cc_number.IsNumber() || !param_id.IsNumber()) {
+    Napi::TypeError::New(env, "MIDI CC binding requires numeric ccNumber and paramId")
+        .ThrowAsJavaScriptException();
+    return env.Undefined();
+  }
   SonareMidiCcBinding binding{};
-  binding.cc_number = object.Get("ccNumber").As<Napi::Number>().Uint32Value();
-  binding.channel = object.Has("channel") && !object.Get("channel").IsNull()
-                        ? object.Get("channel").As<Napi::Number>().Uint32Value()
-                        : 0xffu;
-  binding.kind = object.Has("kind") ? object.Get("kind").As<Napi::Number>().Uint32Value() : 0u;
-  binding.cc_lsb_number =
-      object.Has("ccLsbNumber") ? object.Get("ccLsbNumber").As<Napi::Number>().Uint32Value() : 0u;
-  binding.selector_msb =
-      object.Has("selectorMsb") ? object.Get("selectorMsb").As<Napi::Number>().Uint32Value() : 0u;
-  binding.selector_lsb =
-      object.Has("selectorLsb") ? object.Get("selectorLsb").As<Napi::Number>().Uint32Value() : 0u;
-  binding.param_id = object.Get("paramId").As<Napi::Number>().Uint32Value();
-  binding.min_value =
-      object.Has("minValue") ? object.Get("minValue").As<Napi::Number>().FloatValue() : 0.0f;
-  binding.max_value =
-      object.Has("maxValue") ? object.Get("maxValue").As<Napi::Number>().FloatValue() : 1.0f;
+  binding.cc_number = cc_number.As<Napi::Number>().Uint32Value();
+  // `channel` keeps its "any channel" sentinel for an omitted, null, or
+  // undefined value.
+  binding.channel = Uint32Property(object, "channel", 0xffu);
+  binding.kind = Uint32Property(object, "kind", 0u);
+  binding.cc_lsb_number = Uint32Property(object, "ccLsbNumber", 0u);
+  binding.selector_msb = Uint32Property(object, "selectorMsb", 0u);
+  binding.selector_lsb = Uint32Property(object, "selectorLsb", 0u);
+  binding.param_id = param_id.As<Napi::Number>().Uint32Value();
+  binding.min_value = FloatProperty(object, "minValue", 0.0f);
+  binding.max_value = FloatProperty(object, "maxValue", 1.0f);
+  if (env.IsExceptionPending()) return env.Undefined();
   ThrowIfError(env, sonare_engine_bind_midi_cc_binding(engine_, &binding));
   return env.Undefined();
 }
@@ -882,7 +871,7 @@ Napi::Value RealtimeEngineWrap::MidiCcBindingCount(const Napi::CallbackInfo& inf
 
 Napi::Value RealtimeEngineWrap::SetMidiFx(const Napi::CallbackInfo& info) {
   Napi::Env env = info.Env();
-  const uint32_t destination_id = info.Length() > 0 ? info[0].As<Napi::Number>().Uint32Value() : 0;
+  const uint32_t destination_id = node_arg_uint32(info, 0, 0);
   std::string config = info.Length() > 1 && info[1].IsString()
                            ? info[1].As<Napi::String>().Utf8Value()
                            : std::string();
@@ -892,14 +881,14 @@ Napi::Value RealtimeEngineWrap::SetMidiFx(const Napi::CallbackInfo& info) {
 
 Napi::Value RealtimeEngineWrap::ClearMidiFx(const Napi::CallbackInfo& info) {
   Napi::Env env = info.Env();
-  const uint32_t destination_id = info.Length() > 0 ? info[0].As<Napi::Number>().Uint32Value() : 0;
+  const uint32_t destination_id = node_arg_uint32(info, 0, 0);
   ThrowIfError(env, sonare_engine_clear_midi_fx(engine_, destination_id));
   return env.Undefined();
 }
 
 Napi::Value RealtimeEngineWrap::SetMidiInputSource(const Napi::CallbackInfo& info) {
   Napi::Env env = info.Env();
-  const uint32_t destination_id = info.Length() > 0 ? info[0].As<Napi::Number>().Uint32Value() : 0;
+  const uint32_t destination_id = node_arg_uint32(info, 0, 0);
   ThrowIfError(env, sonare_engine_set_midi_input_source(engine_, destination_id));
   return env.Undefined();
 }
@@ -955,7 +944,7 @@ Napi::Value RealtimeEngineWrap::PushMidiInputCc(const Napi::CallbackInfo& info) 
 
 Napi::Value RealtimeEngineWrap::PushMidiNoteOff(const Napi::CallbackInfo& info) {
   Napi::Env env = info.Env();
-  const uint32_t destination_id = info.Length() > 0 ? info[0].As<Napi::Number>().Uint32Value() : 0;
+  const uint32_t destination_id = node_arg_uint32(info, 0, 0);
   const uint8_t group = MidiByteArg(env, info, 1, 0);
   const uint8_t channel = MidiByteArg(env, info, 2, 0);
   const uint8_t note = MidiByteArg(env, info, 3, 0);
@@ -968,7 +957,7 @@ Napi::Value RealtimeEngineWrap::PushMidiNoteOff(const Napi::CallbackInfo& info) 
 
 Napi::Value RealtimeEngineWrap::PushMidiCc(const Napi::CallbackInfo& info) {
   Napi::Env env = info.Env();
-  const uint32_t destination_id = info.Length() > 0 ? info[0].As<Napi::Number>().Uint32Value() : 0;
+  const uint32_t destination_id = node_arg_uint32(info, 0, 0);
   const uint8_t group = MidiByteArg(env, info, 1, 0);
   const uint8_t channel = MidiByteArg(env, info, 2, 0);
   const uint8_t controller = MidiByteArg(env, info, 3, 0);
@@ -987,7 +976,7 @@ Napi::Value RealtimeEngineWrap::PushMidiPanic(const Napi::CallbackInfo& info) {
 
 Napi::Value RealtimeEngineWrap::PushMidiSysex(const Napi::CallbackInfo& info) {
   Napi::Env env = info.Env();
-  const uint32_t destination_id = info.Length() > 0 ? info[0].As<Napi::Number>().Uint32Value() : 0;
+  const uint32_t destination_id = node_arg_uint32(info, 0, 0);
   const uint8_t* bytes = nullptr;
   size_t len = 0;
   if (info.Length() > 1 && info[1].IsBuffer()) {
@@ -1010,8 +999,8 @@ Napi::Value RealtimeEngineWrap::PushMidiSysex(const Napi::CallbackInfo& info) {
 
 Napi::Value RealtimeEngineWrap::SetMidiDestinationExternal(const Napi::CallbackInfo& info) {
   Napi::Env env = info.Env();
-  const uint32_t destination_id = info.Length() > 0 ? info[0].As<Napi::Number>().Uint32Value() : 0;
-  const bool external = info.Length() > 1 && info[1].As<Napi::Boolean>().Value();
+  const uint32_t destination_id = node_arg_uint32(info, 0, 0);
+  const bool external = node_arg_bool(info, 1, false);
   ThrowIfError(
       env, sonare_engine_set_midi_destination_external(engine_, destination_id, external ? 1 : 0));
   return env.Undefined();
@@ -1019,7 +1008,7 @@ Napi::Value RealtimeEngineWrap::SetMidiDestinationExternal(const Napi::CallbackI
 
 Napi::Value RealtimeEngineWrap::SetExternalMidiClockEnabled(const Napi::CallbackInfo& info) {
   Napi::Env env = info.Env();
-  const bool enabled = info.Length() > 0 && info[0].As<Napi::Boolean>().Value();
+  const bool enabled = node_arg_bool(info, 0, false);
   ThrowIfError(env, sonare_engine_set_external_midi_clock_enabled(engine_, enabled ? 1 : 0));
   return env.Undefined();
 }

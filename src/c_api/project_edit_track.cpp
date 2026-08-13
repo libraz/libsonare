@@ -248,7 +248,13 @@ SonareError sonare_project_set_marker_ex_name(SonareProject* project,
 
 SonareError sonare_project_set_mixer_scene_json(SonareProject* project, const char* scene_json) {
   SONARE_C_API_ENTRY;
-#if defined(SONARE_WITH_ARRANGEMENT) && defined(SONARE_WITH_MIXING)
+#if defined(SONARE_WITH_ARRANGEMENT)
+  // mixing::api::Scene / scene_from_json / arr::SetScene are all control-plane
+  // data types available regardless of BUILD_MIXING (arrangement::Project
+  // unconditionally holds a Scene member; see project_serializer.h's "Mixer
+  // topology" section) — this used to require SONARE_WITH_MIXING too, which
+  // made a documented mixing-OFF-available API unreachable in exactly that
+  // build.
   if (!project || !scene_json) return SONARE_ERROR_INVALID_PARAMETER;
   SONARE_C_TRY
   auto scene = sonare::mixing::api::scene_from_json(scene_json);
@@ -256,8 +262,6 @@ SonareError sonare_project_set_mixer_scene_json(SonareProject* project, const ch
   if (!project->history.apply(std::move(command))) return SONARE_ERROR_INVALID_STATE;
   return SONARE_OK;
   SONARE_C_CATCH
-#elif defined(SONARE_WITH_ARRANGEMENT)
-  SONARE_C_STUB_NOT_SUPPORTED(project, scene_json);
 #else
   SONARE_C_STUB_NOT_SUPPORTED(project, scene_json);
 #endif

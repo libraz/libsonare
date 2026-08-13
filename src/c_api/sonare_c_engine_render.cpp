@@ -93,6 +93,14 @@ SonareError sonare_engine_render_offline(SonareRealtimeEngine* engine, float* co
   if (engine->engine.max_block_size() <= 0) {
     return SONARE_ERROR_INVALID_STATE;
   }
+  // sonare_engine_prepare_with_channels bounds capture/instrument/PDC/monitor
+  // scratch to prepared_channels(); rendering more planes than that would
+  // silently write zeros to every plane past the bound instead of erroring, so
+  // the host reads a "successful" render that is actually silence for the
+  // channels it asked for beyond the prepared maximum.
+  if (num_channels > engine->engine.prepared_channels()) {
+    return SONARE_ERROR_INVALID_PARAMETER;
+  }
   SONARE_C_TRY
   engine->engine.render_offline(out, num_channels, total_frames, block_size);
   return SONARE_OK;
@@ -146,6 +154,12 @@ SonareError sonare_engine_bounce_offline(SonareRealtimeEngine* engine,
   // result the caller would read as a valid silent render.
   if (engine->engine.max_block_size() <= 0) {
     return SONARE_ERROR_INVALID_STATE;
+  }
+  // See sonare_engine_render_offline: bouncing more channels than the engine
+  // was prepared for would silently write zeros for every plane past the
+  // bound instead of erroring.
+  if (options->num_channels > engine->engine.prepared_channels()) {
+    return SONARE_ERROR_INVALID_PARAMETER;
   }
   SONARE_C_TRY
   std::vector<std::vector<float>> channels(
@@ -224,6 +238,12 @@ SonareError sonare_engine_freeze_offline(SonareRealtimeEngine* engine,
   // channel (telemetry is unreserved before prepare()); fail closed instead.
   if (engine->engine.max_block_size() <= 0) {
     return SONARE_ERROR_INVALID_STATE;
+  }
+  // See sonare_engine_render_offline: freezing more channels than the engine
+  // was prepared for would silently write zeros for every plane past the
+  // bound instead of erroring.
+  if (options->num_channels > engine->engine.prepared_channels()) {
+    return SONARE_ERROR_INVALID_PARAMETER;
   }
   SONARE_C_TRY
   auto owned = std::make_shared<engine::ClipAudioStorage>();

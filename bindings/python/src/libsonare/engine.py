@@ -204,6 +204,16 @@ class RealtimeEngine(_EngineMidiMixin, _EngineMixingMixin, _EngineIoMixin):
         """
         _check(_get_lib().sonare_engine_settle_parameters(self._require_handle()))
 
+    def flush_control_commands(self) -> None:
+        """Apply commands queued on an offline/control-only engine immediately.
+
+        A host that never calls process() still queues onto a bounded realtime
+        command ring, so those commands have to be drained explicitly rather
+        than by the next process() call. Not safe to call concurrently with a
+        running process().
+        """
+        _check(_get_lib().sonare_engine_flush_control_commands(self._require_handle()))
+
     def seek_ppq(self, ppq: float, render_frame: int = -1) -> None:
         _check(
             _get_lib().sonare_engine_seek_ppq(self._require_handle(), float(ppq), int(render_frame))

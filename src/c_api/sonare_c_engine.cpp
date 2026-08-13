@@ -173,6 +173,13 @@ SonareError sonare_engine_settle_parameters(SonareRealtimeEngine* engine) {
   return SONARE_OK;
 }
 
+SonareError sonare_engine_flush_control_commands(SonareRealtimeEngine* engine) {
+  SONARE_C_API_ENTRY;
+  if (!engine) return SONARE_ERROR_INVALID_PARAMETER;
+  engine->engine.flush_control_commands();
+  return SONARE_OK;
+}
+
 SonareError sonare_engine_set_tempo(SonareRealtimeEngine* engine, double bpm) {
   SONARE_C_API_ENTRY;
   if (!engine || !transport::valid_public_tempo(bpm)) return SONARE_ERROR_INVALID_PARAMETER;
