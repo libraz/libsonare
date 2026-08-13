@@ -3,6 +3,7 @@
 
 #include "sonare_c_test_helpers.h"
 
+#if defined(SONARE_WITH_MIXING)
 TEST_CASE("sonare_strip_schedule_send_automation error mapping", "[c_api][mixing]") {
   SonareMixer* mixer = sonare_mixer_create(48000, 512);
   REQUIRE(mixer != nullptr);
@@ -55,6 +56,7 @@ TEST_CASE("sonare_mixer_compile success leaves last_error empty for unpatched ex
 
   sonare_mixer_destroy(mixer);
 }
+#endif  // defined(SONARE_WITH_MIXING)
 
 TEST_CASE("sonare_metering stereo pair validates both channels", "[c_api][mixing]") {
   const int sr = 48000;
@@ -220,6 +222,45 @@ TEST_CASE("sonare_reassigned_spectrogram returns equally shaped coordinate matri
   REQUIRE(result.frequencies != nullptr);
   sonare_free_reassigned_spectrogram_result(&result);
   REQUIRE(result.magnitude == nullptr);
+}
+
+TEST_CASE(
+    "sonare_reassigned_spectrogram rejects a zero n_fft or hop_length instead of crashing, "
+    "and leaves an uninitialised out safe to free",
+    "[c_api][features]") {
+  const auto samples = generate_sine(440.0f, 22050, 1.0f);
+
+  SonareReassignedSpectrogramResult zero_hop;
+  std::memset(&zero_hop, 0xAA, sizeof(zero_hop));
+  REQUIRE(sonare_reassigned_spectrogram(samples.data(), samples.size(), 22050, 1024, 0, 1e-6f, 0,
+                                        &zero_hop) == SONARE_ERROR_INVALID_PARAMETER);
+  sonare_free_reassigned_spectrogram_result(&zero_hop);
+  REQUIRE(zero_hop.magnitude == nullptr);
+
+  SonareReassignedSpectrogramResult zero_fft;
+  std::memset(&zero_fft, 0xAA, sizeof(zero_fft));
+  REQUIRE(sonare_reassigned_spectrogram(samples.data(), samples.size(), 22050, 0, 256, 1e-6f, 0,
+                                        &zero_fft) == SONARE_ERROR_INVALID_PARAMETER);
+  sonare_free_reassigned_spectrogram_result(&zero_fft);
+  REQUIRE(zero_fft.magnitude == nullptr);
+}
+
+TEST_CASE("sonare_stft_db zeroes every out param before a validate_audio_params rejection",
+          "[c_api][features]") {
+  // out_n_bins / out_n_frames are non-owning scalars (never freed), but they
+  // must still be defined on every exit path rather than left as caller
+  // stack garbage when validate_audio_params rejects the (empty) input before
+  // the STFT body ever runs.
+  int n_bins = -1;
+  int n_frames = -1;
+  float* db = nullptr;
+  const std::vector<float> empty;
+  REQUIRE(sonare_stft_db(empty.data(), 0, 22050, 1024, 256, &n_bins, &n_frames, &db) ==
+          SONARE_ERROR_INVALID_PARAMETER);
+  REQUIRE(n_bins == 0);
+  REQUIRE(n_frames == 0);
+  REQUIRE(db == nullptr);
+  sonare_free_floats(db);
 }
 
 TEST_CASE("segment C APIs return owned matrices and index vectors", "[c_api][features]") {

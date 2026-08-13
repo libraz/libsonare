@@ -543,6 +543,12 @@ ReassignedSpectrogram reassigned_spectrogram(const Audio& audio, const StftConfi
   SONARE_CHECK(!audio.empty(), ErrorCode::InvalidParameter);
   const int n_fft = config.n_fft;
   const int hop_length = config.hop_length;
+  // reassigned_spectrogram bypasses Spectrogram::compute (it drives
+  // stft_with_window directly for the three reassignment windows), so it does
+  // not inherit that path's n_fft/hop_length > 0 guard. Without this check,
+  // hop_length == 0 divides by zero in stft_with_window's frame-count math
+  // (SIGFPE) instead of returning a recoverable error.
+  SONARE_CHECK(n_fft > 0 && hop_length > 0, ErrorCode::InvalidParameter);
   const int win_length = config.actual_win_length();
   SONARE_CHECK(win_length <= n_fft, ErrorCode::InvalidParameter);
 

@@ -8,6 +8,8 @@
 #include <cmath>
 #include <limits>
 
+#include "util/exception.h"
+
 using namespace sonare;
 using Catch::Matchers::WithinAbs;
 using Catch::Matchers::WithinRel;
@@ -85,6 +87,18 @@ TEST_CASE("bin_to_hz does not overflow at high sample rates", "[convert]") {
     // bin 1024 (Nyquist) -> sr / 2 = 11025 Hz.
     REQUIRE_THAT(bin_to_hz(1024, sr, n_fft), WithinRel(11025.0f, 1e-4f));
   }
+}
+
+TEST_CASE("bin_to_hz rejects a non-positive sr or n_fft instead of dividing by zero", "[convert]") {
+  // Unlike the integer division in stft_with_window (H-10), a double division
+  // by zero here does not trap (it produces inf/nan), so the failure mode is a
+  // silently wrong frequency rather than a crash. Guard it the same way its
+  // sibling hz_to_bin already does, for the same reason: n_fft == 0 is never a
+  // valid framing parameter.
+  REQUIRE_THROWS_AS(bin_to_hz(0, 44100, 0), SonareException);
+  REQUIRE_THROWS_AS(bin_to_hz(10, 44100, -2048), SonareException);
+  REQUIRE_THROWS_AS(bin_to_hz(0, 0, 2048), SonareException);
+  REQUIRE_THROWS_AS(bin_to_hz(0, -44100, 2048), SonareException);
 }
 
 TEST_CASE("frames_to_samples saturates instead of overflowing int", "[convert]") {

@@ -221,6 +221,9 @@ std::vector<int> samples_to_frames(const std::vector<int>& samples, int hop_leng
 }
 
 float bin_to_hz(int bin, int sr, int n_fft) {
+  if (sr <= 0 || n_fft <= 0) {
+    throw SonareException(ErrorCode::InvalidParameter, "bin_to_hz: sr and n_fft must be positive");
+  }
   // Promote to double before multiplying so bin * sr cannot overflow int at
   // high sample rates / large FFT bins (e.g. bin=2048, sr=192000 overflows a
   // 32-bit int). Accumulate in double, return float.
