@@ -21,6 +21,13 @@ inline int node_arg_int(const Napi::CallbackInfo& info, size_t index, int fallba
              : fallback;
 }
 
+/// @brief Read a uint32 positional argument, falling back if absent or non-number.
+inline uint32_t node_arg_uint32(const Napi::CallbackInfo& info, size_t index, uint32_t fallback) {
+  return index < info.Length() && info[index].IsNumber()
+             ? info[index].As<Napi::Number>().Uint32Value()
+             : fallback;
+}
+
 /// @brief Read a float positional argument, falling back if absent or non-number.
 inline float node_arg_float(const Napi::CallbackInfo& info, size_t index, float fallback) {
   return index < info.Length() && info[index].IsNumber()
@@ -69,6 +76,12 @@ inline double node_double_option(const Napi::Object& object, const char* key, do
   return value.IsNumber() ? value.As<Napi::Number>().DoubleValue() : fallback;
 }
 
+/// @brief Read an int64 option from a JS object, falling back if missing.
+inline int64_t node_int64_option(const Napi::Object& object, const char* key, int64_t fallback) {
+  Napi::Value value = object.Get(key);
+  return value.IsNumber() ? static_cast<int64_t>(value.As<Napi::Number>().Int64Value()) : fallback;
+}
+
 /// @brief Read a boolean option from a JS object, falling back if missing.
 inline bool node_bool_option(const Napi::Object& object, const char* key, bool fallback) {
   Napi::Value value = object.Get(key);
@@ -80,6 +93,13 @@ inline bool node_bool_option(const Napi::Object& object, const char* key, bool f
 inline int IntProperty(const Napi::Object& obj, const char* key, int fallback) {
   Napi::Value value = obj.Get(key);
   return value.IsUndefined() || value.IsNull() ? fallback : value.As<Napi::Number>().Int32Value();
+}
+
+/// @brief Read a uint32 property: undefined/null returns the fallback, otherwise a
+///        typed read (a non-number raises a pending JS exception).
+inline uint32_t Uint32Property(const Napi::Object& obj, const char* key, uint32_t fallback) {
+  Napi::Value value = obj.Get(key);
+  return value.IsUndefined() || value.IsNull() ? fallback : value.As<Napi::Number>().Uint32Value();
 }
 
 /// @brief Read an int64 property: undefined/null returns the fallback, otherwise a

@@ -263,13 +263,20 @@ inline Napi::Array ChannelsToJs(Napi::Env env, const ChannelBlock& block) {
   return out;
 }
 
-// IntProperty / Int64Property / FloatProperty / BoolProperty come from
-// sonare_wrap_options.h (namespace sonare_node); re-exported here so the
-// engine TUs that `using namespace sonare_node::engine` keep finding them.
+// The shared argument/property readers come from sonare_wrap_options.h
+// (namespace sonare_node); re-exported here so the engine TUs that
+// `using namespace sonare_node::engine` keep finding them.
 using sonare_node::BoolProperty;
+using sonare_node::DoubleProperty;
 using sonare_node::FloatProperty;
 using sonare_node::Int64Property;
 using sonare_node::IntProperty;
+using sonare_node::node_arg_bool;
+using sonare_node::node_arg_double;
+using sonare_node::node_arg_float;
+using sonare_node::node_arg_int;
+using sonare_node::node_arg_uint32;
 using sonare_node::ThrowIfError;
+using sonare_node::Uint32Property;
 
 }  // namespace sonare_node::engine

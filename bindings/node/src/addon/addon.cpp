@@ -6,6 +6,7 @@
 
 #include "sonare_wrap.h"
 #include "sonare_wrap_engine.h"
+#include "sonare_wrap_options.h"
 #include "sonare_wrap_project.h"
 #include "sonare_wrap_synth_patch.h"
 #include "sonare_wrap_utils.h"
@@ -85,6 +86,14 @@ Napi::Value MidiPerNoteControllerName(const Napi::CallbackInfo& info) {
 
 Napi::Value MidiBankProgram(const Napi::CallbackInfo& info) {
   Napi::Env env = info.Env();
+  for (size_t i = 0; i < 6; ++i) {
+    if (info.Length() <= i || !info[i].IsNumber()) {
+      Napi::TypeError::New(env,
+                           "Expected (ppq, group, channel, bankMsb, bankLsb, program) as numbers")
+          .ThrowAsJavaScriptException();
+      return env.Undefined();
+    }
+  }
   SonareMidiEventPod events[3]{};
   size_t count = 0;
   const SonareError err = sonare_midi_bank_program(
@@ -106,12 +115,22 @@ Napi::Value MidiBankProgram(const Napi::CallbackInfo& info) {
   return out;
 }
 
-SonareMidiEventPod MidiEventFromObject(Napi::Object event) {
-  SonareMidiEventPod out{};
-  out.ppq = event.Get("ppq").As<Napi::Number>();
-  out.data0 = event.Get("data0").As<Napi::Number>().Uint32Value();
-  out.data1 = event.Has("data1") ? event.Get("data1").As<Napi::Number>().Uint32Value() : 0;
-  return out;
+// Required fields are validated explicitly so a missing/wrong-typed one raises a
+// single clear TypeError and the caller stops; optional fields go through the
+// shared *Property readers so an explicit `undefined` reads as an omitted field.
+bool MidiEventFromObject(Napi::Env env, Napi::Object event, SonareMidiEventPod* out) {
+  const Napi::Value ppq = event.Get("ppq");
+  const Napi::Value data0 = event.Get("data0");
+  if (!ppq.IsNumber() || !data0.IsNumber()) {
+    Napi::TypeError::New(env, "MIDI event requires numeric ppq and data0")
+        .ThrowAsJavaScriptException();
+    return false;
+  }
+  *out = SonareMidiEventPod{};
+  out->ppq = ppq.As<Napi::Number>().DoubleValue();
+  out->data0 = data0.As<Napi::Number>().Uint32Value();
+  out->data1 = sonare_node::Uint32Property(event, "data1", 0);
+  return !env.IsExceptionPending();
 }
 
 Napi::Object MidiEventToObject(Napi::Env env, const SonareMidiEventPod& event) {
@@ -122,25 +141,27 @@ Napi::Object MidiEventToObject(Napi::Env env, const SonareMidiEventPod& event) {
   return out;
 }
 
-SonareMidiCcBinding CcBindingFromObject(Napi::Object object) {
-  SonareMidiCcBinding out{};
-  out.cc_number = object.Get("ccNumber").As<Napi::Number>().Uint32Value();
-  out.channel = object.Has("channel") && !object.Get("channel").IsNull()
-                    ? object.Get("channel").As<Napi::Number>().Uint32Value()
-                    : 0xffu;
-  out.kind = object.Has("kind") ? object.Get("kind").As<Napi::Number>().Uint32Value() : 0u;
-  out.cc_lsb_number =
-      object.Has("ccLsbNumber") ? object.Get("ccLsbNumber").As<Napi::Number>().Uint32Value() : 0u;
-  out.selector_msb =
-      object.Has("selectorMsb") ? object.Get("selectorMsb").As<Napi::Number>().Uint32Value() : 0u;
-  out.selector_lsb =
-      object.Has("selectorLsb") ? object.Get("selectorLsb").As<Napi::Number>().Uint32Value() : 0u;
-  out.param_id = object.Get("paramId").As<Napi::Number>().Uint32Value();
-  out.min_value =
-      object.Has("minValue") ? object.Get("minValue").As<Napi::Number>().FloatValue() : 0.0f;
-  out.max_value =
-      object.Has("maxValue") ? object.Get("maxValue").As<Napi::Number>().FloatValue() : 1.0f;
-  return out;
+bool CcBindingFromObject(Napi::Env env, Napi::Object object, SonareMidiCcBinding* out) {
+  const Napi::Value cc_number = object.Get("ccNumber");
+  const Napi::Value param_id = object.Get("paramId");
+  if (!cc_number.IsNumber() || !param_id.IsNumber()) {
+    Napi::TypeError::New(env, "MIDI CC binding requires numeric ccNumber and paramId")
+        .ThrowAsJavaScriptException();
+    return false;
+  }
+  *out = SonareMidiCcBinding{};
+  out->cc_number = cc_number.As<Napi::Number>().Uint32Value();
+  // `channel` keeps its "any channel" sentinel for an omitted, null, or
+  // undefined value.
+  out->channel = sonare_node::Uint32Property(object, "channel", 0xffu);
+  out->kind = sonare_node::Uint32Property(object, "kind", 0u);
+  out->cc_lsb_number = sonare_node::Uint32Property(object, "ccLsbNumber", 0u);
+  out->selector_msb = sonare_node::Uint32Property(object, "selectorMsb", 0u);
+  out->selector_lsb = sonare_node::Uint32Property(object, "selectorLsb", 0u);
+  out->param_id = param_id.As<Napi::Number>().Uint32Value();
+  out->min_value = sonare_node::FloatProperty(object, "minValue", 0.0f);
+  out->max_value = sonare_node::FloatProperty(object, "maxValue", 1.0f);
+  return !env.IsExceptionPending();
 }
 
 Napi::Object CcBindingToObject(Napi::Env env, const SonareMidiCcBinding& binding) {
@@ -157,29 +178,43 @@ Napi::Object CcBindingToObject(Napi::Env env, const SonareMidiCcBinding& binding
   return out;
 }
 
-std::vector<SonareMidiCcBinding> CcBindingsFromArray(Napi::Array array) {
-  std::vector<SonareMidiCcBinding> bindings(array.Length());
+bool CcBindingsFromArray(Napi::Env env, Napi::Array array, std::vector<SonareMidiCcBinding>* out) {
+  out->assign(array.Length(), SonareMidiCcBinding{});
   for (uint32_t i = 0; i < array.Length(); ++i) {
-    bindings[i] = CcBindingFromObject(array.Get(i).As<Napi::Object>());
+    const Napi::Value item = array.Get(i);
+    if (!item.IsObject()) {
+      Napi::TypeError::New(env, "MIDI CC bindings must be objects").ThrowAsJavaScriptException();
+      return false;
+    }
+    if (!CcBindingFromObject(env, item.As<Napi::Object>(), &(*out)[i])) return false;
   }
-  return bindings;
+  return true;
 }
 
 Napi::Value MidiCcLearn(const Napi::CallbackInfo& info) {
   Napi::Env env = info.Env();
+  if (info.Length() < 2 || !info[0].IsArray() || !info[1].IsNumber()) {
+    Napi::TypeError::New(env, "Expected (events, paramId, minValue?, maxValue?, minMovement?)")
+        .ThrowAsJavaScriptException();
+    return env.Undefined();
+  }
   Napi::Array array = info[0].As<Napi::Array>();
   std::vector<SonareMidiEventPod> events(array.Length());
   for (uint32_t i = 0; i < array.Length(); ++i) {
-    events[i] = MidiEventFromObject(array.Get(i).As<Napi::Object>());
+    const Napi::Value item = array.Get(i);
+    if (!item.IsObject() || !MidiEventFromObject(env, item.As<Napi::Object>(), &events[i])) {
+      if (!env.IsExceptionPending()) {
+        Napi::TypeError::New(env, "events must contain objects").ThrowAsJavaScriptException();
+      }
+      return env.Undefined();
+    }
   }
   SonareMidiCcBinding learned{};
   const SonareError err = sonare_midi_cc_learn(
       events.empty() ? nullptr : events.data(), events.size(),
-      info[1].As<Napi::Number>().Uint32Value(),
-      info.Length() > 2 ? info[2].As<Napi::Number>().FloatValue() : 0.0f,
-      info.Length() > 3 ? info[3].As<Napi::Number>().FloatValue() : 1.0f,
-      info.Length() > 4 ? static_cast<uint8_t>(info[4].As<Napi::Number>().Uint32Value()) : 0u,
-      &learned);
+      info[1].As<Napi::Number>().Uint32Value(), sonare_node::node_arg_float(info, 2, 0.0f),
+      sonare_node::node_arg_float(info, 3, 1.0f),
+      static_cast<uint8_t>(sonare_node::node_arg_int(info, 4, 0)), &learned);
   if (err == SONARE_ERROR_INVALID_STATE) return env.Null();
   if (err != SONARE_OK) {
     Napi::RangeError::New(env, "invalid MIDI CC learn arguments").ThrowAsJavaScriptException();
@@ -190,8 +225,15 @@ Napi::Value MidiCcLearn(const Napi::CallbackInfo& info) {
 
 Napi::Value MidiCcToBreakpoint(const Napi::CallbackInfo& info) {
   Napi::Env env = info.Env();
-  std::vector<SonareMidiCcBinding> bindings = CcBindingsFromArray(info[0].As<Napi::Array>());
-  SonareMidiEventPod event = MidiEventFromObject(info[1].As<Napi::Object>());
+  if (info.Length() < 2 || !info[0].IsArray() || !info[1].IsObject()) {
+    Napi::TypeError::New(env, "Expected (bindings: object[], event: object)")
+        .ThrowAsJavaScriptException();
+    return env.Undefined();
+  }
+  std::vector<SonareMidiCcBinding> bindings;
+  if (!CcBindingsFromArray(env, info[0].As<Napi::Array>(), &bindings)) return env.Undefined();
+  SonareMidiEventPod event{};
+  if (!MidiEventFromObject(env, info[1].As<Napi::Object>(), &event)) return env.Undefined();
   SonareAutomationPoint point{};
   const SonareError err = sonare_midi_cc_to_breakpoint(bindings.empty() ? nullptr : bindings.data(),
                                                        bindings.size(), &event, &point);
@@ -209,13 +251,20 @@ Napi::Value MidiCcToBreakpoint(const Napi::CallbackInfo& info) {
 
 Napi::Value MidiParamToCc(const Napi::CallbackInfo& info) {
   Napi::Env env = info.Env();
-  std::vector<SonareMidiCcBinding> bindings = CcBindingsFromArray(info[0].As<Napi::Array>());
+  if (info.Length() < 4 || !info[0].IsArray() || !info[1].IsNumber() || !info[2].IsNumber() ||
+      !info[3].IsNumber()) {
+    Napi::TypeError::New(env, "Expected (bindings: object[], paramId, value, channel, ppq?)")
+        .ThrowAsJavaScriptException();
+    return env.Undefined();
+  }
+  std::vector<SonareMidiCcBinding> bindings;
+  if (!CcBindingsFromArray(env, info[0].As<Napi::Array>(), &bindings)) return env.Undefined();
   SonareMidiEventPod event{};
   const SonareError err = sonare_midi_param_to_cc(
       bindings.empty() ? nullptr : bindings.data(), bindings.size(),
       info[1].As<Napi::Number>().Uint32Value(), info[2].As<Napi::Number>().FloatValue(),
       static_cast<uint8_t>(info[3].As<Napi::Number>().Uint32Value()),
-      info.Length() > 4 ? info[4].As<Napi::Number>().DoubleValue() : 0.0, &event);
+      sonare_node::node_arg_double(info, 4, 0.0), &event);
   if (err == SONARE_ERROR_INVALID_STATE) return env.Null();
   if (err != SONARE_OK) {
     Napi::RangeError::New(env, "invalid MIDI param-to-CC arguments").ThrowAsJavaScriptException();
@@ -240,24 +289,19 @@ Napi::Value MidiRouteEvents(const Napi::CallbackInfo& info) {
       return env.Undefined();
     }
     Napi::Object event = value.As<Napi::Object>();
-    input[i] = MidiEventFromObject(event);
+    if (!MidiEventFromObject(env, event, &input[i])) return env.Undefined();
   }
 
+  // `-1` filters mean "any" and `thru` defaults to pass-through; an omitted,
+  // null, or explicitly `undefined` field must land on those same defaults.
   SonareMidiRouteConfig config{-1, -1, -1, 1};
   if (info.Length() > 1 && info[1].IsObject()) {
     Napi::Object object = info[1].As<Napi::Object>();
-    if (object.Has("filterGroup") && !object.Get("filterGroup").IsNull()) {
-      config.filter_group = object.Get("filterGroup").As<Napi::Number>().Int32Value();
-    }
-    if (object.Has("filterChannel") && !object.Get("filterChannel").IsNull()) {
-      config.filter_channel = object.Get("filterChannel").As<Napi::Number>().Int32Value();
-    }
-    if (object.Has("remapChannel") && !object.Get("remapChannel").IsNull()) {
-      config.remap_channel = object.Get("remapChannel").As<Napi::Number>().Int32Value();
-    }
-    if (object.Has("thru")) {
-      config.thru = object.Get("thru").ToBoolean() ? 1 : 0;
-    }
+    config.filter_group = sonare_node::IntProperty(object, "filterGroup", -1);
+    config.filter_channel = sonare_node::IntProperty(object, "filterChannel", -1);
+    config.remap_channel = sonare_node::IntProperty(object, "remapChannel", -1);
+    config.thru = sonare_node::BoolProperty(object, "thru", true) ? 1 : 0;
+    if (env.IsExceptionPending()) return env.Undefined();
   }
 
   std::vector<SonareMidiEventPod> output(input.size());

@@ -295,8 +295,8 @@ Napi::Value SonareWrap::PitchCorrectTimevarying(const Napi::CallbackInfo& info) 
   const float* prob_ptr = nullptr;
   if (info.Length() > 4 && info[4].IsObject()) {
     Napi::Object opts = info[4].As<Napi::Object>();
-    if (opts.Has("mode")) {
-      const Napi::Value mode_value = opts.Get("mode");
+    const Napi::Value mode_value = opts.Get("mode");
+    if (!mode_value.IsUndefined() && !mode_value.IsNull()) {
       if (!mode_value.IsString()) {
         Napi::TypeError::New(env, "pitch correction mode must be 'midi' or 'scale'")
             .ThrowAsJavaScriptException();
@@ -589,11 +589,13 @@ Napi::Value SonareWrap::SpectralEdit(const Napi::CallbackInfo& info) {
       throw std::runtime_error("spectralEdit: each op must be a plain object");
     }
     Napi::Object op = item.As<Napi::Object>();
-    ops[i].start_sample = Int64Property(op, "startSample", 0);
-    ops[i].end_sample = Int64Property(op, "endSample", static_cast<int64_t>(length));
-    ops[i].low_hz = FloatProperty(op, "lowHz", 0.0f);
-    ops[i].high_hz = FloatProperty(op, "highHz", 0.0f);
-    ops[i].gain_db = FloatProperty(op, "gainDb", 0.0f);
+    // Effects options bag: the type-checked reader family, so an explicit
+    // `undefined` (or any non-number) reads as the documented default.
+    ops[i].start_sample = node_int64_option(op, "startSample", 0);
+    ops[i].end_sample = node_int64_option(op, "endSample", static_cast<int64_t>(length));
+    ops[i].low_hz = node_float_option(op, "lowHz", 0.0f);
+    ops[i].high_hz = node_float_option(op, "highHz", 0.0f);
+    ops[i].gain_db = node_float_option(op, "gainDb", 0.0f);
 
     // Resolve mode: required string field.
     Napi::Value mode_val = op.Get("mode");

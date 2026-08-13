@@ -272,14 +272,13 @@ Napi::Value SonareWrap::Pcen(const Napi::CallbackInfo& info) {
   float time_constant = 0.4f, gain = 0.98f, bias = 2.0f, power = 0.5f, eps = 1e-6f;
   if (info.Length() >= 4 && info[3].IsObject()) {
     auto opts = info[3].As<Napi::Object>();
-    if (opts.Has("sampleRate")) sr = opts.Get("sampleRate").As<Napi::Number>().Int32Value();
-    if (opts.Has("hopLength")) hop = opts.Get("hopLength").As<Napi::Number>().Int32Value();
-    if (opts.Has("timeConstant"))
-      time_constant = opts.Get("timeConstant").As<Napi::Number>().FloatValue();
-    if (opts.Has("gain")) gain = opts.Get("gain").As<Napi::Number>().FloatValue();
-    if (opts.Has("bias")) bias = opts.Get("bias").As<Napi::Number>().FloatValue();
-    if (opts.Has("power")) power = opts.Get("power").As<Napi::Number>().FloatValue();
-    if (opts.Has("eps")) eps = opts.Get("eps").As<Napi::Number>().FloatValue();
+    sr = node_int_option(opts, "sampleRate", sr);
+    hop = node_int_option(opts, "hopLength", hop);
+    time_constant = node_float_option(opts, "timeConstant", time_constant);
+    gain = node_float_option(opts, "gain", gain);
+    bias = node_float_option(opts, "bias", bias);
+    power = node_float_option(opts, "power", power);
+    eps = node_float_option(opts, "eps", eps);
   }
   const int n_bins = info[1].As<Napi::Number>().Int32Value();
   const int n_frames = info[2].As<Napi::Number>().Int32Value();

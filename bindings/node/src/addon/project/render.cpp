@@ -182,9 +182,8 @@ Napi::Value ProjectWrap::BounceWithSynthInstruments(const Napi::CallbackInfo& in
       SonareSynthInstrumentBinding binding{};
       if (element.IsObject() && !element.IsArray()) {
         Napi::Object obj = element.As<Napi::Object>();
-        if (obj.Has("destinationId")) {
-          binding.destination_id = obj.Get("destinationId").As<Napi::Number>().Uint32Value();
-        }
+        binding.destination_id = sonare_node::Uint32Property(obj, "destinationId", 0u);
+        if (env.IsExceptionPending()) return env.Undefined();
       }
       if (!sonare_node::ReadSynthPatch(env, element, &binding.patch)) {
         return env.Undefined();  // exception already pending
@@ -289,10 +288,10 @@ Napi::Value ProjectWrap::BounceWithSf2Instruments(const Napi::CallbackInfo& info
                                    : obj.Get("destinationId").As<Napi::Number>().Uint32Value();
       binding.config.gain = FloatProperty(obj, "gain", 0.0f);
       binding.config.polyphony = IntProperty(obj, "polyphony", 0);
-      if (obj.Has("preferModelForModeledFamilies")) {
+      const Napi::Value prefer_model = obj.Get("preferModelForModeledFamilies");
+      if (!prefer_model.IsUndefined() && !prefer_model.IsNull()) {
         binding.config.struct_version = 2;
-        binding.config.prefer_model_for_modeled_families =
-            obj.Get("preferModelForModeledFamilies").ToBoolean().Value() ? 1 : 0;
+        binding.config.prefer_model_for_modeled_families = prefer_model.ToBoolean().Value() ? 1 : 0;
       }
       bindings.push_back(binding);
     }
