@@ -51,6 +51,11 @@ void create_test_stereo_wav(const std::string& path, int sample_rate = 22050) {
   save_wav_multichannel(path, samples.data(), 2, 2, ChannelLayout::Stereo, sample_rate);
 }
 
+// Both header readers exist for the project-bounce cases, which are gated on
+// the arrangement subsystem, so they carry the same guard. Ungated they would
+// have no callers under -DBUILD_ARRANGEMENT=OFF, which the build rejects as
+// unused functions.
+#if defined(SONARE_WITH_ARRANGEMENT)
 /// @brief Reads the PCM WAV channel-count field from a RIFF header.
 unsigned int wav_header_channel_count(const std::string& path) {
   std::ifstream file(path, std::ios::binary);
@@ -58,6 +63,17 @@ unsigned int wav_header_channel_count(const std::string& path) {
   if (!file.read(reinterpret_cast<char*>(header.data()), header.size())) return 0;
   return static_cast<unsigned int>(header[22]) | (static_cast<unsigned int>(header[23]) << 8U);
 }
+
+/// @brief Reads the PCM WAV sample-rate field from a RIFF header.
+unsigned int wav_header_sample_rate(const std::string& path) {
+  std::ifstream file(path, std::ios::binary);
+  std::array<unsigned char, 28> header{};
+  if (!file.read(reinterpret_cast<char*>(header.data()), header.size())) return 0;
+  return static_cast<unsigned int>(header[24]) | (static_cast<unsigned int>(header[25]) << 8U) |
+         (static_cast<unsigned int>(header[26]) << 16U) |
+         (static_cast<unsigned int>(header[27]) << 24U);
+}
+#endif  // SONARE_WITH_ARRANGEMENT
 
 /// @brief Custom deleter for FILE* using pclose.
 struct PipeDeleter {
@@ -1701,7 +1717,8 @@ TEST_CASE("CLI project command group", "[cli]") {
     // Regression: the bounce used to tag the WAV with 44100 while the engine
     // rendered at the project rate (~2x pitch error). The reported sample_rate
     // must equal the rate the render actually used. With no --sample-rate the
-    // CLI pins a definite 48000 render rate and tags the header to match.
+    // CLI defaults to the project's own rate, which for a fresh `project new`
+    // project (no --sample-rate given at creation) is 48000.
     const std::string proj = unique_temp_path("_proj.json");
     const std::string wav = unique_temp_path("_bounce.wav");
     auto [nc, no] = exec_command(CLI + " project new -o " + proj);
@@ -1742,9 +1759,49 @@ TEST_CASE("CLI project command group", "[cli]") {
                                  " --frames 256 --sample-rate 44100 --json");
     REQUIRE(bc == 0);
     REQUIRE_THAT(bo, ContainsSubstring("\"sample_rate\": 44100"));
+    REQUIRE(wav_header_sample_rate(wav) == 44100u);
 
     std::remove(proj.c_str());
     std::remove(wav.c_str());
+  }
+
+  SECTION("bounce renders at the project's own non-48000 sample rate with no --sample-rate flag") {
+    // Regression: project bounce used to unconditionally pass 48000 to the C
+    // ABI, so a non-48000 project failed with a spurious invalid-parameter
+    // error. The default must come from the project's stored rate.
+    for (const int rate : {44100, 96000}) {
+      const std::string proj = unique_temp_path("_proj_rate.json");
+      const std::string wav = unique_temp_path("_bounce_rate.wav");
+      auto [nc, no] =
+          exec_command(CLI + " project new -o " + proj + " --sample-rate " + std::to_string(rate));
+      REQUIRE(nc == 0);
+
+      auto [bc, bo] = exec_command(CLI + " project bounce --in " + proj + " -o " + wav +
+                                   " --frames 256 --json");
+      REQUIRE(bc == 0);
+      REQUIRE_THAT(bo, ContainsSubstring("\"sample_rate\": " + std::to_string(rate)));
+      REQUIRE(wav_header_sample_rate(wav) == static_cast<unsigned int>(rate));
+
+      std::remove(proj.c_str());
+      std::remove(wav.c_str());
+    }
+  }
+
+  SECTION("bounce rejects an explicit --sample-rate that disagrees with the project's own rate") {
+    const std::string proj = unique_temp_path("_proj_mismatch.json");
+    const std::string wav = unique_temp_path("_bounce_mismatch.wav");
+    auto [nc, no] = exec_command(CLI + " project new -o " + proj + " --sample-rate 44100");
+    REQUIRE(nc == 0);
+
+    auto [bc, bo] = exec_command(CLI + " project bounce --in " + proj + " -o " + wav +
+                                 " --frames 256 --sample-rate 48000 --json");
+    REQUIRE(bc == 3);
+    REQUIRE_THAT(bo, ContainsSubstring("44100"));
+    REQUIRE_THAT(bo, ContainsSubstring("48000"));
+    std::ifstream out_file(wav);
+    REQUIRE_FALSE(out_file.good());
+
+    std::remove(proj.c_str());
   }
 
   SECTION("--synth routes MIDI through the built-in instrument bounce") {

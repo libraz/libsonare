@@ -586,3 +586,79 @@ def test_project_validate_surfaces_diagnostics_field(tmp_path) -> None:
     assert payload["diagnostics"] == []
     strict = _run_console("project", "validate", "--in", str(proj), "--strict", "--json")
     assert strict.returncode == 0, strict.stderr
+
+
+@pytest.mark.parametrize("stored_rate", [44100, 96000])
+def test_project_bounce_uses_the_project_own_sample_rate_by_default(tmp_path, stored_rate) -> None:
+    """A non-48000 project bounces without --sample-rate at its own stored rate.
+
+    Regression: `project bounce` used to pass a hardcoded 48000 to the C ABI,
+    so any project stored at a different rate was rejected outright.
+    """
+    proj = tmp_path / "project.sonare"
+    wav = tmp_path / "bounce.wav"
+    created = _run_console("project", "new", "-o", str(proj), "--sample-rate", str(stored_rate))
+    assert created.returncode == 0, created.stderr
+
+    result = _run_console(
+        "project", "bounce", "--in", str(proj), "-o", str(wav), "--frames", "256", "--json"
+    )
+    assert result.returncode == 0, result.stderr
+    assert json.loads(result.stdout)["sample_rate"] == stored_rate
+    with wave.open(str(wav), "rb") as rendered:
+        assert rendered.getframerate() == stored_rate
+
+
+def test_project_bounce_accepts_an_explicit_sample_rate_matching_the_project(tmp_path) -> None:
+    proj = tmp_path / "project.sonare"
+    wav = tmp_path / "bounce.wav"
+    created = _run_console("project", "new", "-o", str(proj), "--sample-rate", "44100")
+    assert created.returncode == 0, created.stderr
+
+    result = _run_console(
+        "project",
+        "bounce",
+        "--in",
+        str(proj),
+        "-o",
+        str(wav),
+        "--frames",
+        "256",
+        "--sample-rate",
+        "44100",
+        "--json",
+    )
+    assert result.returncode == 0, result.stderr
+    assert json.loads(result.stdout)["sample_rate"] == 44100
+    with wave.open(str(wav), "rb") as rendered:
+        assert rendered.getframerate() == 44100
+
+
+def test_project_bounce_rejects_an_explicit_sample_rate_disagreeing_with_the_project(
+    tmp_path,
+) -> None:
+    """An explicit --sample-rate that disagrees with the project's stored rate
+    fails loudly (exit 3, matching the native CLI) and names the mismatch,
+    instead of silently rendering at the wrong rate or writing a partial file."""
+    proj = tmp_path / "project.sonare"
+    wav = tmp_path / "bounce.wav"
+    created = _run_console("project", "new", "-o", str(proj), "--sample-rate", "44100")
+    assert created.returncode == 0, created.stderr
+
+    result = _run_console(
+        "project",
+        "bounce",
+        "--in",
+        str(proj),
+        "-o",
+        str(wav),
+        "--frames",
+        "256",
+        "--sample-rate",
+        "48000",
+        "--json",
+    )
+    assert result.returncode == 3, result.stderr
+    assert "44100" in result.stderr
+    assert "48000" in result.stderr
+    assert not wav.exists()

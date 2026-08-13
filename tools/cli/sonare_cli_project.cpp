@@ -15,6 +15,15 @@
 // `1` would be remapped to the project invalid-state code (9) by main().
 constexpr int kExitUsage = 2;
 
+// Invalid-parameter exit code, mirroring kExitInvalidParameter in
+// tools/sonare_cli.cpp. main() remaps a plain `1` from any `project` handler to
+// the invalid-state code (9), on the assumption that a project-command failure
+// is a compile/load problem. A caller-supplied --sample-rate that disagrees
+// with the project's own rate is a parameter error, not a state one (and the
+// Python CLI reports it as its equivalent EXIT_INVALID_PARAMETER), so this
+// branch returns the code directly to bypass that remap.
+constexpr int kExitInvalidParameter = 3;
+
 // Upper bound on a project JSON / SMF / MIDI 2.0 file loaded into memory, mirrored
 // from the Python CLI's _MAX_PROJECT_OR_MIDI_BYTES. Bounds the allocation so an
 // oversized (or hostile) input is rejected instead of exhausting memory.
@@ -372,7 +381,7 @@ int cmd_project_bounce(const CliArgs& args) {
       std::cerr << color::red << "Error: --sample-rate " << render_sample_rate
                 << " does not match the project's sample rate (" << project_sample_rate
                 << " Hz); project bounce renders at the project's own rate" << color::reset << "\n";
-      return 1;
+      return kExitInvalidParameter;
     }
   }
   options.sample_rate = render_sample_rate;
@@ -632,7 +641,8 @@ void print_project_usage(std::ostream& out) {
       << "  --smf <file>         Input Standard MIDI File (import-smf)\n"
       << "  --midi2 <file>       Input MIDI 2.0 Clip File (import-midi2)\n"
       << "  -o, --output <file>  Output file\n"
-      << "  --sample-rate <hz>   Sample rate (new / bounce; bounce default 48000)\n"
+      << "  --sample-rate <hz>   Sample rate (new / bounce; bounce defaults to the project's own "
+         "rate)\n"
       << "  --frames <n>         Bounce length in frames\n"
       << "  --channels <n>       Bounce channel count (default 2)\n"
       << "  --strict             Treat project load diagnostics as validation failures\n"
