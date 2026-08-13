@@ -92,6 +92,11 @@ class VoicePool {
     return target;
   }
 
+  /// Age the next allocate() will assign. Ages are monotonic, so a caller can
+  /// read this before a burst of allocations and later tell the voices that
+  /// burst created (age >= mark) from the ones that predate it.
+  uint64_t next_age() const noexcept { return next_age_; }
+
   Voice* data() noexcept { return voices_.data(); }
   const Voice* data() const noexcept { return voices_.data(); }
   size_t size() const noexcept { return voices_.size(); }

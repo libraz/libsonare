@@ -167,8 +167,10 @@ class Sf2Player final : public MidiInstrument {
   /// defaults — programs/banks cleared, channel 10 drums, CC91 = 40,
   /// NRPN part edits and drum-note overrides cleared.
   void gs_reset() noexcept;
-  /// GM System On semantics: like GS Reset but with effect sends at zero
-  /// (GM Level 1 mandates no effects).
+  /// GM System On semantics: the same power-on defaults as gs_reset(). GM
+  /// Level 1 specifies no effect controls, but real GM-mode hardware keeps its
+  /// power-on reverb level, so the sends land on the GS defaults rather than at
+  /// zero and a plain GM file still renders in the default room.
   void gm_reset() noexcept;
 
   /// Currently sounding voices, SF2 + synth fallback (test/diagnostic).

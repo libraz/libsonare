@@ -4,6 +4,7 @@
 #include <cstddef>
 
 #include "midi/synth/gm_fallback_data.h"
+#include "midi/synth/gs_layer.h"
 
 namespace sonare::midi::synth {
 
@@ -274,26 +275,8 @@ GmFallbackSends gm_fallback_sends(uint16_t bank, uint8_t program) noexcept {
 }
 
 uint8_t gm_fallback_drum_kit(uint8_t program) noexcept {
-  switch (program & 0x7Fu) {
-    case 8:
-      return 1;  // Room
-    case 16:
-      return 2;  // Power
-    case 24:
-      return 3;  // Electronic
-    case 25:
-      return 4;  // TR-808
-    case 32:
-      return 5;  // Jazz
-    case 40:
-      return 6;  // Brush
-    case 48:
-      return 7;  // Orchestra
-    case 56:
-      return 8;  // SFX
-    default:
-      return 0;  // Standard
-  }
+  const GsDrumKit* kit = gs_drum_kit_entry(program & 0x7Fu);
+  return kit != nullptr ? kit->index : 0;  // unknown program -> Standard
 }
 
 float apply_gs_drum_kit(PercussionPatchParams& perc, DahdsrConfig& amp, uint8_t kit,

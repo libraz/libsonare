@@ -16,9 +16,6 @@ namespace sonare::midi::synth {
 
 namespace {
 
-constexpr uint16_t kDrumBank = 128;
-constexpr uint8_t kGm2MelodicBankMsb = 0x79;
-constexpr uint8_t kGm2PercussionBankMsb = 0x78;
 constexpr float kModWheelVibratoCents = 50.0f;
 constexpr float kCcSendDepth = 0.35f;
 }  // namespace
@@ -34,6 +31,9 @@ bool Sf2Player::handle_sysex(const uint8_t* data, size_t size) noexcept {
       return true;
     case GsSysExKind::kUseForRhythm:
       channels_[msg.channel & 0x0Fu].drums = msg.value != 0;
+      // The part's effective bank just moved between melodic and rhythm, and
+      // the fallback ambience floor is keyed on it.
+      refresh_channel_mod(msg.channel & 0x0Fu);
       return true;
     case GsSysExKind::kEfxPartSwitch:
       // Route/unroute the part through the EFX. Offline (inline) updates the
@@ -272,9 +272,7 @@ void Sf2Player::refresh_channel_mod(uint8_t channel) noexcept {
 
 uint16_t Sf2Player::effective_bank(uint8_t channel) const noexcept {
   const ChannelState& st = channels_[channel & 0x0Fu];
-  if (st.drums || st.bank_msb == kGm2PercussionBankMsb) return kDrumBank;
-  if (st.bank_msb == kGm2MelodicBankMsb) return st.bank_lsb;
-  return st.bank_msb;
+  return gs_effective_bank(st.bank_msb, st.bank_lsb, st.drums);
 }
 
 int resolve_gs_preset(const Sf2File& soundfont, uint16_t bank, uint8_t program) noexcept {

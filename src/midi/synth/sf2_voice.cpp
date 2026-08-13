@@ -225,6 +225,10 @@ void Sf2Voice::start(const float* pool_data, const Sf2VoiceParams& p, double sam
   velocity_gain = velocity_gain_in;
   key_down = true;
   releasing = false;
+  // A slot can be reused while its previous voice was still sostenuto-captured
+  // (the sample ended, or All Sound Off silenced it, with CC66 still down); the
+  // stale capture would make the new note ignore its own note-off.
+  sostenuto = false;
   env.configure(sample_rate, p.volume_env);
   env.note_on();
   mod_env.configure(sample_rate, p.mod_env);

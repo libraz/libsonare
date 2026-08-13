@@ -15,9 +15,25 @@
 
 #include <cstdint>
 
+#include "midi/program_map.h"
 #include "midi/synth/native_synth.h"
 
 namespace sonare::midi::synth {
+
+/// Rhythm-part bank: the SF2 convention for a drum kit, and the bank every
+/// drum channel resolves to.
+constexpr uint16_t kDrumBank = 128;
+
+/// The GM/GS/GM2 bank a channel plays from, given its two bank-select bytes
+/// and whether the part is a rhythm part (channel 10 by default, or assigned
+/// by the GS "use for rhythm part" SysEx). This is the single source of truth
+/// for bank resolution: every instrument resolves programs through it, so the
+/// same MIDI stream selects the same timbre everywhere.
+constexpr uint16_t gs_effective_bank(uint8_t bank_msb, uint8_t bank_lsb, bool drums) noexcept {
+  if (drums || bank_msb == static_cast<uint8_t>(Gm2Bank::kPercussion)) return kDrumBank;
+  if (bank_msb == static_cast<uint8_t>(Gm2Bank::kMelodic)) return bank_lsb;
+  return bank_msb;
+}
 
 /// Fallback patch for a melodic (bank, program). Never fails — unknown
 /// programs resolve through their GM family.

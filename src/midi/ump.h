@@ -310,6 +310,11 @@ Midi1MessageList midi2_to_midi1_messages(const Ump& ump) noexcept;
 uint16_t scale_velocity_7_to_16(uint8_t velocity7) noexcept;
 /// 16-bit -> 7-bit velocity down-scale (top 7 bits). LOSSY.
 uint8_t scale_velocity_16_to_7(uint16_t velocity16) noexcept;
+/// 16-bit -> 7-bit down-scale for a NOTE-ON velocity. As
+/// scale_velocity_16_to_7, except that a nonzero MIDI 2.0 velocity never
+/// down-scales to 0: velocity 0 on a MIDI 1.0 note-on means note-off, so the
+/// quietest audible note-on clamps to 1 instead of being silently dropped.
+uint8_t scale_note_on_velocity_16_to_7(uint16_t velocity16) noexcept;
 /// 7-bit -> 32-bit CC up-scale.
 uint32_t scale_cc_7_to_32(uint8_t value7) noexcept;
 /// 32-bit -> 7-bit CC down-scale (top 7 bits). LOSSY.

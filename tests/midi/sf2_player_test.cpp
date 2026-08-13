@@ -423,6 +423,79 @@ TEST_CASE("Sf2Player channel-mode CCs match BuiltinSynth semantics", "[midi][sf2
   }
 }
 
+TEST_CASE("Sf2Player clears a stale sostenuto capture when a voice slot is reused", "[midi][sf2]") {
+  // A single slot so the second note provably lands in the first note's slot.
+  Sf2Player player = make_player(make_fixture(), /*polyphony=*/1);
+
+  // Capture C4 with the sostenuto pedal, then silence the part with All Sound
+  // Off while CC66 is still down: the slot goes inactive with its capture still
+  // set, and the pedal-up sweep only visits active voices.
+  player.on_event(0, event(sonare::midi::make_midi1_note_on(0, 0, 60, 100)));
+  render(player, 256);
+  player.on_event(0, event(sonare::midi::make_midi1_control_change(0, 0, 66, 127)));
+  player.on_event(0, event(sonare::midi::make_midi1_control_change(0, 0, 120, 0)));
+  player.on_event(0, event(sonare::midi::make_midi1_control_change(0, 0, 66, 0)));
+  REQUIRE(player.active_voice_count() == 0);
+
+  // The next note reuses that slot, and must answer to its own note-off.
+  player.on_event(0, event(sonare::midi::make_midi1_note_on(0, 0, 62, 100)));
+  REQUIRE(peak(render(player, 256).left) > 1.0e-4f);
+  player.on_event(0, event(sonare::midi::make_midi1_note_off(0, 0, 62, 0)));
+  render(player, 9600);  // the fixture's release is far shorter than tail_samples()
+  REQUIRE(player.active_voice_count() == 0);
+  REQUIRE(peak(render(player, 256).left) == 0.0f);
+}
+
+TEST_CASE("Sf2Player exclusive class spares the layers of the same note-on", "[midi][sf2]") {
+  // SoundFont 2.04 section 8.1.2 scopes exclusiveClass to notes already
+  // sounding: two layers sounded by one note-on (a stereo hi-hat's legs) share
+  // a class by design and must both survive.
+  Sf2Builder b;
+  std::vector<float> sine(96);
+  for (size_t i = 0; i < sine.size(); ++i) {
+    sine[i] =
+        0.9f * static_cast<float>(std::sin(2.0 * 3.14159265358979 * static_cast<double>(i) / 32.0));
+  }
+  const int sine_id = b.add_sample("sine1k", sine, 32000, 60, 32, 96);
+
+  Sf2Builder::ZoneSpec left;
+  left.gens.push_back({54 /*sampleModes*/, 1});
+  left.gens.push_back({57 /*exclusiveClass*/, 1});
+  left.gens.push_back({17 /*pan*/, -500});
+  left.target = sine_id;
+  Sf2Builder::ZoneSpec right = left;
+  right.gens[2] = {17, 500};
+  const int stereo_pair = b.add_instrument("stereo-pair", {left, right});
+
+  Sf2Builder::ZoneSpec pz;
+  pz.target = stereo_pair;
+  b.add_preset("Pair", 0, 0, {pz});
+
+  const std::vector<uint8_t> bytes = b.build();
+  auto sf2 = std::make_shared<Sf2File>();
+  REQUIRE(sf2->parse(bytes.data(), bytes.size(), nullptr));
+  Sf2Player player = make_player(std::move(sf2));
+
+  player.on_event(0, event(sonare::midi::make_midi1_note_on(0, 0, 60, 100)));
+  const StereoRender out = render(player, 512);
+  // Both legs must still be sounding well past the ~1 ms default release, so
+  // measure the second half rather than the note-on transient.
+  const auto sustained_peak = [](const std::vector<float>& buf) {
+    float p = 0.0f;
+    for (size_t i = buf.size() / 2; i < buf.size(); ++i) p = std::max(p, std::fabs(buf[i]));
+    return p;
+  };
+  REQUIRE(player.active_voice_count() == 2);
+  REQUIRE(sustained_peak(out.left) > 1.0e-4f);
+  REQUIRE(sustained_peak(out.right) > 1.0e-4f);
+
+  // A later strike of the same class still chokes the pair already sounding,
+  // leaving only the new one once the choked release has run out.
+  player.on_event(0, event(sonare::midi::make_midi1_note_on(0, 0, 60, 100)));
+  render(player, 9600);  // the choked release is far shorter than tail_samples()
+  REQUIRE(player.active_voice_count() == 2);
+}
+
 TEST_CASE("Sf2Player renders bit-identically for identical event streams", "[midi][sf2]") {
   auto run = [] {
     Sf2Player player = make_player(make_fixture(), 8);

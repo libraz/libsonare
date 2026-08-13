@@ -39,17 +39,25 @@ NativeSynth::NativeSynth(const NativeSynthConfig& config) : config_(config) {
 void NativeSynth::prepare(double sample_rate, int /*max_block_size*/) {
   sample_rate_ = sample_rate > 0.0 ? sample_rate : 48000.0;
   pool_.prepare(config_.polyphony);
+  // GM mode resolves the engine per program at note-on, so any engine can be
+  // selected regardless of the configured patch: every per-voice delay slab has
+  // to exist up front or the waveguide engines render silence (their cores
+  // return 0 while unattached). Mirrors Sf2Player::prepare(), which allocates
+  // every fallback slab whenever the fallback floor is reachable.
+  const bool any_engine = config_.use_gm_programs;
   // KS strings need a per-voice delay slab (the only allocation site; voices
   // attach their span at note-on).
   ks_capacity_ = ks_buffer_capacity(sample_rate_);
   sympathetic_active_ = false;
-  if (config_.patch.mode == SynthEngineMode::kKarplusStrong) {
+  if (any_engine || config_.patch.mode == SynthEngineMode::kKarplusStrong) {
     ks_buffers_.assign(pool_.size() * static_cast<size_t>(ks_slab_capacity(sample_rate_)), 0.0f);
     // Sympathetic-string "sound halo": a shared bank tuned to the standard-
     // tuning open strings (E2 A2 D3 G3 B3 E4) plus their low harmonics — the
     // undamped strings ringing behind the played note. Plucked strings have no
     // dampers, so the bank is held open (process() passes damper_open == true).
-    if (config_.patch.ks.sympathetic) {
+    // Bus-level, so it follows the configured patch: a GM render mixes many
+    // programs through one bus and cannot carry one program's halo.
+    if (config_.patch.mode == SynthEngineMode::kKarplusStrong && config_.patch.ks.sympathetic) {
       resonance_.prepare_guitar_sympathetic(sample_rate_);
       sympathetic_active_ = true;
     }
@@ -58,33 +66,42 @@ void NativeSynth::prepare(double sample_rate, int /*max_block_size*/) {
   }
   piano_string_capacity_ = piano_string_capacity(sample_rate_);
   piano_mode_ = config_.patch.mode == SynthEngineMode::kPiano;
-  if (piano_mode_) {
+  if (any_engine || piano_mode_) {
     piano_buffers_.assign(pool_.size() * static_cast<size_t>(piano_slab_capacity(sample_rate_)),
                           0.0f);
-    resonance_.prepare(sample_rate_);
-    soundboard_.prepare(sample_rate_, config_.patch.piano.soundboard);
   } else {
     piano_buffers_.clear();
+  }
+  // The modal soundboard and the pedal-gated sympathetic bank are bus-level, so
+  // they stay tied to the configured patch (see the halo note above).
+  if (piano_mode_) {
+    resonance_.prepare(sample_rate_);
+    soundboard_.prepare(sample_rate_, config_.patch.piano.soundboard);
   }
   // Pipe organ: one delay slab per voice slot (kMaxPipeRanks bore+jet span pairs,
   // so a registration's ranks all have their own self-oscillating jet pipe). The
   // only allocation site; voices attach their slab at note-on.
   pipe_organ_capacity_ = pipe_organ_buffer_capacity(sample_rate_);
   pipe_organ_mode_ = config_.patch.mode == SynthEngineMode::kPipeOrgan;
-  if (pipe_organ_mode_) {
+  if (any_engine || pipe_organ_mode_) {
     pipe_organ_buffers_.assign(
         pool_.size() * static_cast<size_t>(pipe_organ_slab_capacity(sample_rate_)), 0.0f);
+  } else {
+    pipe_organ_buffers_.clear();
+  }
+  // Wind chest and swell box are bus-level (shared by every sounding pipe), so
+  // they stay tied to the configured patch.
+  if (pipe_organ_mode_) {
     wind_.prepare(sample_rate_, config_.patch.pipe_organ.tremulant_rate_hz,
                   config_.patch.pipe_organ.tremulant_depth, config_.patch.pipe_organ.wind_sag);
     swell_depth_ = config_.patch.pipe_organ.swell;
   } else {
-    pipe_organ_buffers_.clear();
     swell_depth_ = 0.0f;
   }
   // Bowed string: one delay slab per voice slot (two delay-line spans, the neck
   // and bridge). The only allocation site; voices attach their slab at note-on.
   bowed_string_capacity_ = bowed_string_buffer_capacity(sample_rate_);
-  bowed_string_mode_ = config_.patch.mode == SynthEngineMode::kBowedString;
+  bowed_string_mode_ = any_engine || config_.patch.mode == SynthEngineMode::kBowedString;
   if (bowed_string_mode_) {
     bowed_string_buffers_.assign(
         pool_.size() * static_cast<size_t>(bowed_string_slab_capacity(sample_rate_)), 0.0f);
@@ -94,7 +111,7 @@ void NativeSynth::prepare(double sample_rate, int /*max_block_size*/) {
   // Reed woodwind: one bore delay span per voice slot. The only allocation site;
   // voices attach their span at note-on.
   reed_capacity_ = reed_buffer_capacity(sample_rate_);
-  reed_mode_ = config_.patch.mode == SynthEngineMode::kReed;
+  reed_mode_ = any_engine || config_.patch.mode == SynthEngineMode::kReed;
   if (reed_mode_) {
     reed_buffers_.assign(pool_.size() * static_cast<size_t>(reed_slab_capacity(sample_rate_)),
                          0.0f);
@@ -103,7 +120,7 @@ void NativeSynth::prepare(double sample_rate, int /*max_block_size*/) {
   }
   // Brass / lip reed: one bore delay span per voice slot (same as the reed).
   brass_capacity_ = brass_buffer_capacity(sample_rate_);
-  brass_mode_ = config_.patch.mode == SynthEngineMode::kBrass;
+  brass_mode_ = any_engine || config_.patch.mode == SynthEngineMode::kBrass;
   if (brass_mode_) {
     brass_buffers_.assign(pool_.size() * static_cast<size_t>(brass_slab_capacity(sample_rate_)),
                           0.0f);
@@ -112,7 +129,7 @@ void NativeSynth::prepare(double sample_rate, int /*max_block_size*/) {
   }
   // Air-jet flute: a bore span plus a jet span per voice slot.
   flute_capacity_ = flute_buffer_capacity(sample_rate_);
-  flute_mode_ = config_.patch.mode == SynthEngineMode::kFlute;
+  flute_mode_ = any_engine || config_.patch.mode == SynthEngineMode::kFlute;
   if (flute_mode_) {
     flute_buffers_.assign(pool_.size() * static_cast<size_t>(flute_slab_capacity(sample_rate_)),
                           0.0f);
@@ -122,7 +139,7 @@ void NativeSynth::prepare(double sample_rate, int /*max_block_size*/) {
   // Plucked string: one string delay span per voice slot. The only allocation
   // site; voices attach their span at note-on.
   plucked_string_capacity_ = plucked_string_buffer_capacity(sample_rate_);
-  plucked_string_mode_ = config_.patch.mode == SynthEngineMode::kPluckedString;
+  plucked_string_mode_ = any_engine || config_.patch.mode == SynthEngineMode::kPluckedString;
   if (plucked_string_mode_) {
     plucked_string_buffers_.assign(
         pool_.size() * static_cast<size_t>(plucked_string_slab_capacity(sample_rate_)), 0.0f);
@@ -132,11 +149,17 @@ void NativeSynth::prepare(double sample_rate, int /*max_block_size*/) {
   swell_lp_l_ = 0.0f;
   swell_lp_r_ = 0.0f;
   channels_ = {};
+  // GM power-on: channel 10 is the rhythm part (no SysEx needed).
+  channels_[kDrumChannelIndex].drums = true;
   for (uint8_t ch = 0; ch < 16; ++ch) refresh_channel_mod(ch);
-  const bool gm_kit =
-      config_.patch.mode == SynthEngineMode::kPercussion && config_.patch.percussion.gm_kit;
+  // GM mode (and the GM drum kit) can voice any fallback patch, so the tail has
+  // to cover the slowest release in the fallback tables rather than the
+  // configured patch's own release.
+  const bool gm_tables =
+      config_.use_gm_programs ||
+      (config_.patch.mode == SynthEngineMode::kPercussion && config_.patch.percussion.gm_kit);
   tail_samples_ = DahdsrEnvelope::release_tail_samples(
-      sample_rate_, gm_kit ? gm_fallback_max_release_ms() : config_.patch.amp_env.release_ms);
+      sample_rate_, gm_tables ? gm_fallback_max_release_ms() : config_.patch.amp_env.release_ms);
   if (sympathetic_active_) {
     // The shared sympathetic bank keeps ringing after the last voice releases;
     // fold its halo t60 into the tail so a bounce does not clip the sound halo.
@@ -160,6 +183,8 @@ void NativeSynth::reset() {
   swell_lp_l_ = 0.0f;
   swell_lp_r_ = 0.0f;
   channels_ = {};
+  // GM power-on: channel 10 is the rhythm part (no SysEx needed).
+  channels_[kDrumChannelIndex].drums = true;
   for (uint8_t ch = 0; ch < 16; ++ch) refresh_channel_mod(ch);
 }
 
@@ -177,17 +202,38 @@ void NativeSynth::note_on(uint8_t channel, uint8_t note, uint8_t velocity,
                           uint32_t source_track_id) noexcept {
   if (!prepared_) return;
   const uint8_t ch = channel & 0x0Fu;
+  // Generic MIDI rendering resolves every channel through the shared GM/GS bank
+  // rule, so a rhythm part (channel 10, a GM2 percussion bank, or a GS-assigned
+  // part) reaches the drum map and a melodic channel its variation bank —
+  // identically to Sf2Player. Explicit percussion patches retain their existing
+  // GM-kit behavior when this mode is disabled. Resolved BEFORE the pool is
+  // touched: the exclusive-group choke below reads the resolved patch, and a
+  // voice allocated first would still carry the previous note's patch pointer.
+  const ChannelState& st = channels_[ch];
+  const NativeSynthPatch* patch = &config_.patch;
+  uint8_t drum_kit = 0;
+  if (config_.use_gm_programs) {
+    const uint16_t bank = gs_effective_bank(st.bank_msb, st.bank_lsb, st.drums);
+    if (bank == kDrumBank) {
+      patch = &gm_fallback_drum_patch(note);
+      drum_kit = gm_fallback_drum_kit(st.program);
+    } else {
+      patch = &gm_fallback_patch(bank, st.program);
+    }
+  } else if (patch->mode == SynthEngineMode::kPercussion && patch->percussion.gm_kit) {
+    patch = &gm_fallback_drum_patch(note);
+    drum_kit = gm_fallback_drum_kit(st.program);
+  }
   // GM kit exclusive/mute groups: a new hi-hat / triangle / whistle / surdo
   // strike chokes the ringing voice in its group before the new one allocates.
-  if (config_.patch.mode == SynthEngineMode::kPercussion && config_.patch.percussion.gm_kit) {
-    const uint8_t excl = gm_fallback_drum_patch(note).percussion.exclusive_class;
-    if (excl != 0) {
-      for (NativeSynthVoice& v : pool_) {
-        if (v.active && v.channel == ch && v.patch != nullptr &&
-            v.patch->mode == SynthEngineMode::kPercussion &&
-            v.patch->percussion.exclusive_class == excl) {
-          v.choke();
-        }
+  // Keyed on the RESOLVED patch's group, so it works in GM mode too.
+  if (patch->mode == SynthEngineMode::kPercussion && patch->percussion.exclusive_class != 0) {
+    const uint8_t excl = patch->percussion.exclusive_class;
+    for (NativeSynthVoice& v : pool_) {
+      if (v.active && v.channel == ch && v.patch != nullptr &&
+          v.patch->mode == SynthEngineMode::kPercussion &&
+          v.patch->percussion.exclusive_class == excl) {
+        v.choke();
       }
     }
   }
@@ -232,33 +278,13 @@ void NativeSynth::note_on(uint8_t channel, uint8_t note, uint8_t velocity,
                                      static_cast<size_t>(voice_index) * plucked_string_capacity_,
                                  plucked_string_capacity_);
   }
-  // Generic MIDI rendering resolves melodic channels from their program/bank
-  // state and channel 10 from the GM drum-kit map. Explicit percussion patches
-  // retain their existing GM-kit behavior when this mode is disabled.
-  const NativeSynthPatch* patch = &config_.patch;
-  uint8_t drum_kit = 0;
-  if (config_.use_gm_programs) {
-    if (ch == 9) {
-      patch = &gm_fallback_drum_patch(note);
-      drum_kit = gm_fallback_drum_kit(channels_[ch].program);
-    } else {
-      const uint16_t bank = static_cast<uint16_t>(channels_[ch].bank_msb) << 7u |
-                            static_cast<uint16_t>(channels_[ch].bank_lsb);
-      patch = &gm_fallback_patch(bank, channels_[ch].program);
-    }
-  } else if (patch->mode == SynthEngineMode::kPercussion && patch->percussion.gm_kit) {
-    patch = &gm_fallback_drum_patch(note);
-    drum_kit = gm_fallback_drum_kit(channels_[ch].program);
-  }
   // Portamento: glide from the channel's previous note when enabled.
-  const float glide_from = patch->glide_ms > 0.0f ? channels_[ch].last_freq_hz : 0.0f;
-  voice->start(*patch, sample_rate_, velocity, voice_index, glide_from, channels_[ch].una_corda,
-               drum_kit);
+  const float glide_from = patch->glide_ms > 0.0f ? st.last_freq_hz : 0.0f;
+  voice->start(*patch, sample_rate_, velocity, voice_index, glide_from, st.una_corda, drum_kit);
   // Seed a bowed voice at the channel's current bow controllers (no glide on the
   // first sample) so a note struck mid-phrase starts at the live bow position /
   // force / expression rather than gliding in from the preset.
   if (patch->mode == SynthEngineMode::kBowedString) {
-    const ChannelState& st = channels_[ch];
     voice->bowed_string.set_bow_speed_scale(static_cast<float>(st.expression) / 127.0f);
     if (st.bow_force != 255) {
       voice->bowed_string.set_bow_force(static_cast<float>(st.bow_force) / 127.0f);
@@ -272,7 +298,6 @@ void NativeSynth::note_on(uint8_t channel, uint8_t note, uint8_t velocity,
   // first sample) so a note struck mid-phrase starts at the live breath /
   // brightness rather than gliding in from the preset.
   if (patch->mode == SynthEngineMode::kReed) {
-    const ChannelState& st = channels_[ch];
     if (st.reed_breath != 255) voice->reed.set_breath(static_cast<float>(st.reed_breath) / 127.0f);
     if (st.reed_bright != 255) {
       voice->reed.set_brightness(static_cast<float>(st.reed_bright) / 127.0f);
@@ -283,7 +308,6 @@ void NativeSynth::note_on(uint8_t channel, uint8_t note, uint8_t velocity,
   // the first sample) so a note struck mid-phrase starts at the live breath /
   // brightness rather than gliding in from the preset.
   if (patch->mode == SynthEngineMode::kBrass) {
-    const ChannelState& st = channels_[ch];
     if (st.brass_breath != 255) {
       voice->brass.set_breath(static_cast<float>(st.brass_breath) / 127.0f);
     }
@@ -296,7 +320,6 @@ void NativeSynth::note_on(uint8_t channel, uint8_t note, uint8_t velocity,
   // the first sample) so a note struck mid-phrase starts at the live breath /
   // brightness rather than gliding in from the preset.
   if (patch->mode == SynthEngineMode::kFlute) {
-    const ChannelState& st = channels_[ch];
     if (st.flute_breath != 255) {
       voice->flute.set_breath(static_cast<float>(st.flute_breath) / 127.0f);
     }
@@ -363,6 +386,9 @@ void NativeSynth::sustain_cc(uint8_t channel, uint8_t value) noexcept {
 void NativeSynth::sostenuto_pedal(uint8_t channel, bool down) noexcept {
   if (!prepared_) return;
   const uint8_t ch = channel & 0x0Fu;
+  // Edge-triggered: only a change of pedal position captures or releases.
+  if (channels_[ch].sostenuto_down == down) return;
+  channels_[ch].sostenuto_down = down;
   for (NativeSynthVoice& v : pool_) {
     if (!v.active || v.channel != ch) continue;
     if (down) {
@@ -539,13 +565,10 @@ void NativeSynth::on_event(uint32_t /*destination_id*/, const MidiEvent& event) 
     return;
   }
   if (u.is_note_on()) {
-    uint8_t vel7 = 0;
-    if (u.message_type() == UmpMessageType::kMidi1ChannelVoice) {
-      vel7 = u.data2_7bit();
-    } else {
-      vel7 = static_cast<uint8_t>(((u.words[1] >> 16) & 0xFFFFu) >> 9);
-      if (vel7 == 0 && ((u.words[1] >> 16) & 0xFFFFu) != 0) vel7 = 1;
-    }
+    const uint8_t vel7 =
+        u.message_type() == UmpMessageType::kMidi1ChannelVoice
+            ? u.data2_7bit()
+            : scale_note_on_velocity_16_to_7(static_cast<uint16_t>(u.words[1] >> 16));
     note_on(u.channel(), u.note_number(), vel7, event.source_track_id);
   } else if (u.is_note_off()) {
     note_off(u.channel(), u.note_number(), event.source_track_id);
@@ -566,9 +589,18 @@ void NativeSynth::on_event(uint32_t /*destination_id*/, const MidiEvent& event) 
   } else if (u.status_nibble() == static_cast<uint8_t>(UmpStatus::kProgramChange)) {
     // GS drum-kit select: in gm_kit mode the drum channel's program picks the
     // kit variation (Room/Power/808/...). Melodic patches ignore it.
-    channels_[u.channel() & 0x0Fu].program = u.message_type() == UmpMessageType::kMidi2ChannelVoice
-                                                 ? static_cast<uint8_t>((u.words[1] >> 24) & 0x7Fu)
-                                                 : u.note_number();
+    const uint8_t ch = u.channel() & 0x0Fu;
+    if (u.message_type() == UmpMessageType::kMidi2ChannelVoice) {
+      channels_[ch].program = static_cast<uint8_t>((u.words[1] >> 24) & 0x7Fu);
+      // Bit 0 of word 0 is the bank-valid flag: the bank bytes carry meaning
+      // only when it is set, and an unset flag leaves the channel's bank alone.
+      if ((u.words[0] & 0x01u) != 0) {
+        channels_[ch].bank_msb = static_cast<uint8_t>((u.words[1] >> 8) & 0x7Fu);
+        channels_[ch].bank_lsb = static_cast<uint8_t>(u.words[1] & 0x7Fu);
+      }
+    } else {
+      channels_[ch].program = u.note_number();
+    }
   }
 }
 

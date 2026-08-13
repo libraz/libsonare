@@ -72,6 +72,15 @@ float peak(const std::vector<float>& buf, size_t from = 0) {
   return p;
 }
 
+float rms(const std::vector<float>& buf, size_t from = 0) {
+  if (from >= buf.size()) return 0.0f;
+  double sum = 0.0;
+  for (size_t i = from; i < buf.size(); ++i) {
+    sum += static_cast<double>(buf[i]) * static_cast<double>(buf[i]);
+  }
+  return static_cast<float>(std::sqrt(sum / static_cast<double>(buf.size() - from)));
+}
+
 double estimate_frequency(const std::vector<float>& buf, double sample_rate, size_t from = 0) {
   std::vector<double> crossings;
   for (size_t i = std::max<size_t>(from, 1); i < buf.size(); ++i) {
@@ -276,6 +285,52 @@ TEST_CASE("NativeSynth GM mode follows program changes and routes channel 10 to 
   const StereoRender drum_render = render(drums, 2048);
   REQUIRE(peak(drum_render.left) > 0.001f);
   REQUIRE(drum_render.left != melodic.left);
+}
+
+TEST_CASE("NativeSynth GM mode sounds every melodic program", "[midi][synth]") {
+  // prepare() sizes the per-voice delay slabs. In GM mode note_on() resolves the
+  // engine from the program, so any engine can be selected regardless of the
+  // configured patch: a slab left unallocated silences whole GM families (the
+  // waveguide cores render 0 while their span is unattached).
+  NativeSynthConfig cfg;
+  cfg.use_gm_programs = true;
+  cfg.gain = 1.0f;
+  cfg.polyphony = 4;
+  NativeSynth synth(cfg);
+  synth.prepare(kOutRate, 256);
+  for (int program = 0; program < 128; ++program) {
+    synth.on_event(
+        0, event(sonare::midi::make_midi1_program_change(0, 0, static_cast<uint8_t>(program))));
+    synth.on_event(0, event(sonare::midi::make_midi1_note_on(0, 0, 60, 110)));
+    const StereoRender out = render(synth, 2048);
+    INFO("GM program " << program);
+    REQUIRE(peak(out.left) + peak(out.right) > 1.0e-4f);
+    REQUIRE(rms(out.left) + rms(out.right) > 1.0e-5f);
+    // Silence the part so the next program starts from a clean pool.
+    synth.on_event(0, event(sonare::midi::make_midi1_control_change(0, 0, 120, 0)));
+  }
+}
+
+TEST_CASE("NativeSynth GM mode tail covers the slowest fallback release", "[midi][synth]") {
+  // Any program can sound in GM mode, so the reported tail has to bound the
+  // fallback tables rather than the configured patch's own release.
+  NativeSynthConfig cfg;
+  cfg.use_gm_programs = true;
+  cfg.gain = 1.0f;
+  NativeSynth synth(cfg);
+  synth.prepare(kOutRate, 256);
+  const int expected = static_cast<int>(sonare::midi::synth::DahdsrEnvelope::release_tail_samples(
+      kOutRate, sonare::midi::synth::gm_fallback_max_release_ms()));
+  REQUIRE(synth.tail_samples() >= expected);
+
+  // Behaviourally: the pad (GM 88) carries the slowest fallback release, and it
+  // has to fade out inside the reported tail.
+  synth.on_event(0, event(sonare::midi::make_midi1_program_change(0, 0, 88)));
+  synth.on_event(0, event(sonare::midi::make_midi1_note_on(0, 0, 60, 110)));
+  render(synth, 4096);
+  synth.on_event(0, event(sonare::midi::make_midi1_note_off(0, 0, 60, 0)));
+  const StereoRender out = render(synth, synth.tail_samples() + 4096);
+  REQUIRE(peak(out.left, out.left.size() - 256) < 1.0e-3f);
 }
 
 TEST_CASE("NativeSynth channel semantics: sustain, volume, all sound off", "[midi][synth]") {

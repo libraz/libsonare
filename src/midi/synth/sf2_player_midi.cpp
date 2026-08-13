@@ -14,12 +14,6 @@
 
 namespace sonare::midi::synth {
 
-namespace {
-
-constexpr uint16_t kDrumBank = 128;
-
-}  // namespace
-
 void Sf2Player::note_on(uint8_t channel, uint8_t note, uint8_t velocity,
                         uint32_t source_track_id) noexcept {
   if (!prepared_) return;
@@ -44,6 +38,13 @@ void Sf2Player::note_on(uint8_t channel, uint8_t note, uint8_t velocity,
 
   const Sf2Zone* preset_global =
       !preset.zones.empty() && preset.zones[0].is_global() ? &preset.zones[0] : nullptr;
+
+  // SoundFont 2.04 section 8.1.2 scopes exclusiveClass to notes that are ALREADY
+  // sounding, so the layers this one note-on allocates must not choke each
+  // other — a stereo hi-hat's two legs, or a layered kit piece, share one class
+  // by design. Voice ages are monotonic, so every voice allocated below carries
+  // an age at or above this mark and is excluded from the choke.
+  const uint64_t age_before_note_on = pool_.next_age();
 
   bool has_renderable_zone = false;
   for (const Sf2Zone& pzone : preset.zones) {
@@ -89,7 +90,7 @@ void Sf2Player::note_on(uint8_t channel, uint8_t note, uint8_t velocity,
       // Exclusive class: choke same-class voices on this channel (hi-hats).
       if (params.exclusive_class != 0) {
         for (Sf2Voice& v : pool_) {
-          if (v.active && v.channel == (channel & 0x0Fu) &&
+          if (v.active && v.age < age_before_note_on && v.channel == (channel & 0x0Fu) &&
               v.params.exclusive_class == params.exclusive_class) {
             v.release();
           }
@@ -454,9 +455,13 @@ void Sf2Player::control_change(uint8_t channel, uint8_t controller, uint8_t valu
   switch (controller) {
     case 0:  // Bank select MSB (GS variation bank)
       st.bank_msb = value;
+      // The fallback ambience floor is keyed on (effective bank, program), so
+      // a bank change moves it just like a program change does.
+      refresh_channel_mod(ch);
       break;
     case 32:  // Bank select LSB
       st.bank_lsb = value;
+      refresh_channel_mod(ch);
       break;
     case 1:
       st.mod_wheel = value;
@@ -557,13 +562,10 @@ void Sf2Player::on_event(uint32_t /*destination_id*/, const MidiEvent& event) no
     return;
   }
   if (u.is_note_on()) {
-    uint8_t vel7 = 0;
-    if (u.message_type() == UmpMessageType::kMidi1ChannelVoice) {
-      vel7 = u.data2_7bit();
-    } else {
-      vel7 = static_cast<uint8_t>(((u.words[1] >> 16) & 0xFFFFu) >> 9);
-      if (vel7 == 0 && ((u.words[1] >> 16) & 0xFFFFu) != 0) vel7 = 1;
-    }
+    const uint8_t vel7 =
+        u.message_type() == UmpMessageType::kMidi1ChannelVoice
+            ? u.data2_7bit()
+            : scale_note_on_velocity_16_to_7(static_cast<uint16_t>(u.words[1] >> 16));
     note_on(u.channel(), u.note_number(), vel7, event.source_track_id);
   } else if (u.is_note_off()) {
     note_off(u.channel(), u.note_number(), event.source_track_id);

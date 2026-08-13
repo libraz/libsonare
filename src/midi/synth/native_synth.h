@@ -352,12 +352,20 @@ class NativeSynth final : public MidiInstrument {
   struct ChannelState {
     bool sustain = false;       // CC64 >= 64 (dampers lifted)
     uint8_t sustain_level = 0;  // raw CC64 (half-pedal damper position)
-    bool una_corda = false;     // CC67 soft pedal
-    uint8_t volume = 100;       // CC7
-    uint8_t expression = 127;   // CC11
-    uint8_t pan = 64;           // CC10
-    uint8_t mod_wheel = 0;      // CC1
-    uint8_t program = 0;        // last program change (or GM melodic program)
+    /// CC66 pedal position. Sostenuto captures exactly the keys held at the
+    /// DOWN EDGE, so the capture sweep must be edge-triggered: a pedal that
+    /// keeps sending values >= 64 would otherwise capture notes struck after
+    /// the press, which is the opposite of what the pedal means.
+    bool sostenuto_down = false;
+    bool una_corda = false;  // CC67 soft pedal
+    /// Rhythm part: resolves through the drum map instead of the melodic
+    /// programs. Channel 10 by default (GM), matching Sf2Player.
+    bool drums = false;
+    uint8_t volume = 100;      // CC7
+    uint8_t expression = 127;  // CC11
+    uint8_t pan = 64;          // CC10
+    uint8_t mod_wheel = 0;     // CC1
+    uint8_t program = 0;       // last program change (or GM melodic program)
     uint8_t bank_msb = 0;
     uint8_t bank_lsb = 0;
     uint16_t pitch_bend = 8192;

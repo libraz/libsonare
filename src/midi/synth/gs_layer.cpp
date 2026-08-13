@@ -462,28 +462,8 @@ std::vector<GsEfxStage> gs_efx_insert_chain(const GsEfx& efx) {
 }
 
 std::string_view gs_drum_kit_name(uint8_t program) noexcept {
-  switch (program) {
-    case 0:
-      return "Standard";
-    case 8:
-      return "Room";
-    case 16:
-      return "Power";
-    case 24:
-      return "Electronic";
-    case 25:
-      return "TR-808";
-    case 32:
-      return "Jazz";
-    case 40:
-      return "Brush";
-    case 48:
-      return "Orchestra";
-    case 56:
-      return "SFX";
-    default:
-      return {};
-  }
+  const GsDrumKit* kit = gs_drum_kit_entry(program);
+  return kit != nullptr ? kit->name : std::string_view{};
 }
 
 }  // namespace sonare::midi::synth

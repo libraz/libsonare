@@ -192,9 +192,41 @@ struct GsSysEx {
 /// malformed messages return kind == kNone (never crash).
 GsSysEx parse_gs_sysex(const uint8_t* data, size_t size) noexcept;
 
-/// GS drum-kit name for a bank-128 program number (SC-55/88 kit numbering:
-/// 0 Standard, 8 Room, 16 Power, 24 Electronic, 25 TR-808, 32 Jazz, 40 Brush,
-/// 48 Orchestra, 56 SFX). Unknown programs return an empty view.
+/// One GS drum-kit variation: the bank-128 program that selects it, its
+/// zero-based kit index and its SC-55/88 name. This table is the single source
+/// of truth for the kit numbering — gs_drum_kit_name() and
+/// gm_fallback_drum_kit() both derive from it, so the name a host reports and
+/// the variation a voice plays cannot disagree.
+struct GsDrumKit {
+  uint8_t program;
+  uint8_t index;
+  std::string_view name;
+};
+
+inline constexpr std::array<GsDrumKit, 9> kGsDrumKits = {{
+    {0, 0, "Standard"},
+    {8, 1, "Room"},
+    {16, 2, "Power"},
+    {24, 3, "Electronic"},
+    {25, 4, "TR-808"},
+    {32, 5, "Jazz"},
+    {40, 6, "Brush"},
+    {48, 7, "Orchestra"},
+    {56, 8, "SFX"},
+}};
+
+/// Table entry for a bank-128 program, or nullptr when the program selects no
+/// kit variation. Callers decide what an unknown program means: a name query
+/// reports "not a kit", a voice query falls back to Standard.
+inline const GsDrumKit* gs_drum_kit_entry(uint8_t program) noexcept {
+  for (const GsDrumKit& kit : kGsDrumKits) {
+    if (kit.program == program) return &kit;
+  }
+  return nullptr;
+}
+
+/// GS drum-kit name for a bank-128 program number (see kGsDrumKits). Unknown
+/// programs return an empty view.
 std::string_view gs_drum_kit_name(uint8_t program) noexcept;
 
 }  // namespace sonare::midi::synth
