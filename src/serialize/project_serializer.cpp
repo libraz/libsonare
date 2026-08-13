@@ -320,6 +320,13 @@ DeserializeResult project_from_json(const std::string& json_text) {
     }
     if (max_source_id > 0) project.ensure_next_source_id(max_source_id);
 
+    // Per-entry decode warnings (malformed clips / MIDI events, duplicate
+    // automation lanes) are bounded by a shared sink so a hostile document
+    // cannot make diagnostic reporting a far larger allocation than the input;
+    // finalized just before the successful return. Fatal errors bypass this and
+    // abort the load directly.
+    BoundedDiagnostics decode_diagnostics(&result.diagnostics);
+
     // Tracks.
     uint32_t max_track_id = 0;
     std::unordered_set<arrangement::TrackId> track_ids;
@@ -341,12 +348,6 @@ DeserializeResult project_from_json(const std::string& json_text) {
       }
     }
     if (max_track_id > 0) project.ensure_next_track_id(max_track_id);
-
-    // Per-entry decode warnings (malformed clips / MIDI events) are bounded by a
-    // shared sink so a hostile document cannot make diagnostic reporting a far
-    // larger allocation than the input; finalized just before the successful
-    // return. Fatal errors bypass this and abort the load directly.
-    BoundedDiagnostics decode_diagnostics(&result.diagnostics);
 
     // Clips (insert verbatim; bypasses overlap validation to preserve the saved
     // arrangement exactly, including comp lanes that intentionally overlap).
@@ -488,11 +489,9 @@ DeserializeResult project_from_json(const std::string& json_text) {
           throw SonareException(ErrorCode::InvalidFormat, "marker kind enum is out of range");
         }
         m.kind = static_cast<uint8_t>(marker_kind);
-        // key_fifths/key_minor are written only for the key-signature kind (4)
-        // but read unconditionally: non-key markers simply default to 0/false
-        // (their correct zero values), so the round-trip is lossless. Benign
-        // today; keep in mind if a non-key marker ever gains meaningful key
-        // fields, in which case the write side must serialize them too.
+        // Read unconditionally, and written by marker_to_json whenever non-zero
+        // regardless of kind, so a marker that carries key fields on a non-key
+        // kind (which the C ABI accepts) survives a save/load unchanged.
         m.key_fifths = int8_or(mv, "key_fifths", 0);
         if (m.key_fifths < -7 || m.key_fifths > 7) {
           throw SonareException(ErrorCode::InvalidFormat, "key_fifths must be within [-7, 7]");
@@ -610,6 +609,15 @@ DeserializeResult project_from_json(const std::string& json_text) {
         }
         result.midi.events[clip_id] = std::move(events);
       }
+    }
+
+    // Last gate before the model escapes: bring it into the state space the C
+    // ABI edit API can produce, so no decoder above can hand back a project the
+    // setters could neither have built nor can now address.
+    if (const auto violation = enforce_edit_api_invariants(&project, &decode_diagnostics)) {
+      result.diagnostics.push_back(
+          {DiagnosticSeverity::kError, violation->code, violation->message});
+      return result;
     }
 
     decode_diagnostics.finalize();

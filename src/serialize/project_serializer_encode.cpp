@@ -197,10 +197,14 @@ Value marker_to_json(const arrangement::ProjectMarker& m) {
   o["ppq"] = m.ppq;
   o["name"] = m.name;
   // `kind` mirrors SonareMarkerKind. Omitted for the default marker kind (0) to
-  // keep existing marker JSON unchanged; key fields are written only for the
-  // key-signature kind (4).
+  // keep existing marker JSON unchanged. The key fields are written for the
+  // key-signature kind (4) and, independently, whenever they carry a non-zero
+  // value: the C ABI range-checks key_fifths only for kind 4 but accepts the
+  // fields on any kind, so keying the write on the kind alone would drop state
+  // the edit API can legitimately produce. A marker with zeroed key fields still
+  // emits nothing, so ordinary marker JSON is byte-identical.
   if (m.kind != 0) o["kind"] = static_cast<double>(m.kind);
-  if (m.kind == 4) {
+  if (m.kind == 4 || m.key_fifths != 0 || m.key_minor) {
     o["key_fifths"] = static_cast<double>(m.key_fifths);
     o["key_minor"] = m.key_minor;
   }

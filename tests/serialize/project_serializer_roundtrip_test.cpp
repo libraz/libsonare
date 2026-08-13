@@ -1220,3 +1220,261 @@ TEST_CASE("serialization is invariant under counter-only state (edit+undo byte e
 
   CHECK(project_to_json(p, f.midi) == before);
 }
+
+// ===========================================================================
+// Load-path enforcement of the edit API's invariants
+// ===========================================================================
+
+TEST_CASE("a loaded track holds at most one automation lane per target", "[serialize]") {
+  // The edit API refuses a second lane for a target (AddAutomationLane) and
+  // remove/edit address a lane by its target id alone, so a document carrying
+  // duplicates must be normalized on load rather than producing a model the
+  // edit commands can neither address nor delete.
+  const std::string json = R"({"version":1,"tracks":[{"id":1,"automation_lanes":[)"
+                           R"({"target_param_id":7,"points":[{"ppq":0.0,"value":0.25}]},)"
+                           R"({"target_param_id":7,"points":[{"ppq":0.0,"value":0.75}]},)"
+                           R"({"target_param_id":8,"points":[{"ppq":0.0,"value":0.5}]}]}]})";
+  const auto result = project_from_json(json);
+  REQUIRE(result.ok());
+  REQUIRE_FALSE(result.has_error());
+
+  const Track* track = result.project->find_track(1);
+  REQUIRE(track != nullptr);
+  REQUIRE(track->automation_lanes.size() == 2);
+
+  // Last writer wins, matching how duplicate tempo segments are normalized.
+  const auto lane =
+      std::find_if(track->automation_lanes.begin(), track->automation_lanes.end(),
+                   [](const automation::AutomationLane& l) { return l.target_param_id() == 7; });
+  REQUIRE(lane != track->automation_lanes.end());
+  REQUIRE(lane->value_at(0.0) == 0.75f);
+
+  // The collapse is visible rather than silent.
+  REQUIRE(std::any_of(result.diagnostics.begin(), result.diagnostics.end(),
+                      [](const serialize::Diagnostic& d) {
+                        return d.code == "duplicate_automation_lane" &&
+                               d.severity == serialize::DiagnosticSeverity::kWarning;
+                      }));
+
+  // A second lane for target 7 is now addressable: adding one is refused, and
+  // removing one leaves none behind.
+  Project reloaded = *result.project;
+  MidiContentStore store;
+  automation::AutomationLane extra(7);
+  REQUIRE_FALSE(AddAutomationLane(1, extra).apply(reloaded, store));
+  REQUIRE(RemoveAutomationLane(1, 7).apply(reloaded, store));
+  REQUIRE(
+      std::none_of(reloaded.find_track(1)->automation_lanes.begin(),
+                   reloaded.find_track(1)->automation_lanes.end(),
+                   [](const automation::AutomationLane& l) { return l.target_param_id() == 7; }));
+}
+
+TEST_CASE("a present-but-wrong-typed scalar is rejected whatever its type", "[serialize]") {
+  // The forward-compatibility contract covers unknown and ABSENT fields. A
+  // present field of the wrong JSON type is malformed input, and the treatment
+  // must not depend on the field's C++ type -- silently defaulting a wrong-typed
+  // sample_rate would render the whole project at the wrong rate.
+  struct Case {
+    const char* what;
+    const char* json;
+  };
+  const Case cases[] = {
+      {"double", R"({"version":1,"sample_rate":"96000"})"},
+      {"integer", R"({"version":1,"overlap_policy":null})"},
+      {"string", R"({"version":1,"tracks":[{"id":1,"name":5}]})"},
+      {"boolean", R"({"version":1,"tracks":[{"id":1,"mute":"true"}]})"},
+      {"float", R"({"version":1,"tracks":[{"id":1,"gain":"0.5"}]})"},
+      {"MIDI data word",
+       R"({"version":1,"midi_content":{"1":[{"ppq":0.0,"data0":"0x20903c40"}]}})"},
+  };
+  for (const Case& c : cases) {
+    INFO(c.what);
+    const auto result = project_from_json(c.json);
+    REQUIRE_FALSE(result.ok());
+    REQUIRE(result.has_error());
+  }
+}
+
+TEST_CASE("an absent scalar still falls back to its default", "[serialize]") {
+  // Only the wrong-type case is rejected: absence stays forward-compatible.
+  const auto result = project_from_json(R"({"version":1,"tracks":[{"id":1}]})");
+  REQUIRE(result.ok());
+  REQUIRE_FALSE(result.has_error());
+  REQUIRE(result.project->sample_rate() == 48000.0);
+  const Track* track = result.project->find_track(1);
+  REQUIRE(track != nullptr);
+  REQUIRE(track->gain == 1.0f);
+  REQUIRE_FALSE(track->mute);
+  REQUIRE(track->name.empty());
+}
+
+TEST_CASE("scene arrays materialize only their object elements", "[serialize]") {
+  // The scene walker is reached both standalone (scene_from_json) and embedded
+  // in a project document; both must count entities the same way.
+  const std::string scene_json =
+      R"({"version":1,"strips":[null,1,"x",{"id":"a","inserts":[null,{"processor":"gain"}],)"
+      R"("sends":[3,{"id":"s","destinationBusId":"bus"}]}],)"
+      R"("buses":[null,{"id":"bus","inserts":["x"]}],)"
+      R"("vcaGroups":[false,{"id":"v"}],"connections":[null,{"source":"a","destination":"bus"}]})";
+
+  const mixing::api::Scene scene = mixing::api::scene_from_json(scene_json);
+  REQUIRE(scene.strips.size() == 1);
+  REQUIRE(scene.strips.front().id == "a");
+  REQUIRE(scene.strips.front().inserts.size() == 1);
+  REQUIRE(scene.strips.front().inserts.front().processor_name == "gain");
+  REQUIRE(scene.strips.front().sends.size() == 1);
+  REQUIRE(scene.strips.front().sends.front().id == "s");
+  REQUIRE(scene.buses.size() == 1);
+  REQUIRE(scene.buses.front().inserts.empty());
+  REQUIRE(scene.vca_groups.size() == 1);
+  REQUIRE(scene.connections.size() == 1);
+
+  // Same document embedded in a project: identical entity counts, and a
+  // save/load cycle does not accumulate ghost entities.
+  const auto loaded = project_from_json(R"({"version":1,"scene":)" + scene_json + "}");
+  REQUIRE(loaded.ok());
+  REQUIRE(loaded.project->scene().strips.size() == 1);
+  REQUIRE(loaded.project->scene().buses.size() == 1);
+  REQUIRE(loaded.project->scene().vca_groups.size() == 1);
+  REQUIRE(loaded.project->scene().connections.size() == 1);
+
+  MidiContentStore empty;
+  const auto reloaded = project_from_json(project_to_json(*loaded.project, empty));
+  REQUIRE(reloaded.ok());
+  REQUIRE(reloaded.project->scene().strips.size() == 1);
+  REQUIRE(reloaded.project->scene().buses.size() == 1);
+}
+
+// ===========================================================================
+// Edit-API invariants enforced on the load path
+// ===========================================================================
+
+TEST_CASE("a loaded position is never one the C ABI setters would reject", "[serialize]") {
+  // `finite_non_negative` gates every position the project edit bridge accepts
+  // (sonare_project_set_tempo_segments / _set_time_signatures / _set_marker), so
+  // a document carrying a negative one describes a project no edit sequence
+  // could have produced. Clamping would silently move musical content, so the
+  // load fails the way the tempo decoder already fails a non-finite start.
+  struct Case {
+    const char* what;
+    const char* json;
+    const char* code;
+  };
+  const Case cases[] = {
+      {"tempo segment", R"({"version":1,"tempo_segments":[{"start_ppq":-1.0,"bpm":120.0}]})",
+       "invalid_tempo_start_ppq"},
+      {"time signature",
+       R"({"version":1,"time_signatures":[{"start_ppq":-1.0,"numerator":4,"denominator":4}]})",
+       "invalid_time_signature_start_ppq"},
+      {"marker", R"({"version":1,"markers":[{"id":1,"ppq":-1.0}]})", "invalid_marker_ppq"},
+  };
+  for (const Case& c : cases) {
+    INFO(c.what);
+    const auto result = project_from_json(c.json);
+    REQUIRE_FALSE(result.ok());
+    REQUIRE(result.has_error());
+    REQUIRE(std::any_of(result.diagnostics.begin(), result.diagnostics.end(),
+                        [&](const serialize::Diagnostic& d) { return d.code == c.code; }));
+  }
+
+  // Zero is a legal position; only negatives are rejected.
+  const auto ok =
+      project_from_json(R"({"version":1,"tempo_segments":[{"start_ppq":0.0,"bpm":120.0}],)"
+                        R"("markers":[{"id":1,"ppq":0.0}]})");
+  REQUIRE(ok.ok());
+  REQUIRE_FALSE(ok.has_error());
+}
+
+TEST_CASE("a loaded assist sidecar set has one entry per identity", "[serialize]") {
+  // SetAssistSidecar overwrites the entry matching
+  // (module_id, target_track_id, region_start_ppq, region_end_ppq) rather than
+  // appending, and the remove command erases the first match. Two entries
+  // sharing that identity make the second unreachable: it can be neither
+  // updated nor deleted, and it keeps shadowing the first on every save.
+  const std::string json = R"({"version":1,"assist_sidecars":[)"
+                           R"({"module_id":"m","schema_version":1,"target_track_id":3,)"
+                           R"("region_start_ppq":0.0,"region_end_ppq":4.0,"payload_b64":"YQ=="},)"
+                           R"({"module_id":"m","schema_version":2,"target_track_id":3,)"
+                           R"("region_start_ppq":0.0,"region_end_ppq":4.0,"payload_b64":"Yg=="},)"
+                           R"({"module_id":"m","schema_version":9,"target_track_id":4,)"
+                           R"("region_start_ppq":0.0,"region_end_ppq":4.0,"payload_b64":"Yw=="}]})";
+  const auto result = project_from_json(json);
+  REQUIRE(result.ok());
+  REQUIRE_FALSE(result.has_error());
+
+  const auto& sidecars = result.project->assist_sidecars();
+  REQUIRE(sidecars.size() == 2);
+  // Last writer wins for the colliding identity; the distinct scope is kept.
+  REQUIRE(sidecars[0].schema_version == 2);
+  REQUIRE(sidecars[0].payload == std::vector<uint8_t>{'b'});
+  REQUIRE(sidecars[1].target_track_id == 4);
+  REQUIRE(std::any_of(result.diagnostics.begin(), result.diagnostics.end(),
+                      [](const serialize::Diagnostic& d) {
+                        return d.code == "duplicate_assist_sidecar" &&
+                               d.severity == serialize::DiagnosticSeverity::kWarning;
+                      }));
+
+  // The survivor is addressable: setting it updates in place rather than
+  // appending, and removing it leaves nothing behind for that identity.
+  Project reloaded = *result.project;
+  MidiContentStore store;
+  AssistSidecar replacement = sidecars[0];
+  replacement.schema_version = 77;
+  REQUIRE(SetAssistSidecar(replacement).apply(reloaded, store));
+  REQUIRE(reloaded.assist_sidecars().size() == 2);
+  REQUIRE(reloaded.assist_sidecars()[0].schema_version == 77);
+}
+
+TEST_CASE("marker key fields survive a save/load on any marker kind", "[serialize]") {
+  // sonare_project_set_marker_ex range-checks key_fifths only for the
+  // key-signature kind but accepts the fields on every kind, so a serializer
+  // that writes them only for kind 4 loses state the edit API can produce.
+  Project p;
+  MidiContentStore midi;
+  REQUIRE(
+      SetMarker(0, 4.0, "cue", /*kind=*/1, /*key_fifths=*/3, /*key_minor=*/true).apply(p, midi));
+
+  const std::string json = project_to_json(p, midi);
+  const auto reloaded = project_from_json(json);
+  REQUIRE(reloaded.ok());
+  REQUIRE(reloaded.project->markers().size() == 1);
+  const ProjectMarker& m = reloaded.project->markers().front();
+  REQUIRE(m.kind == 1);
+  REQUIRE(m.key_fifths == 3);
+  REQUIRE(m.key_minor);
+
+  // Still byte-stable, and a marker with zeroed key fields emits neither field.
+  REQUIRE(project_to_json(*reloaded.project, reloaded.midi) == json);
+  Project plain;
+  MidiContentStore plain_midi;
+  REQUIRE(SetMarker(0, 4.0, "cue").apply(plain, plain_midi));
+  REQUIRE(project_to_json(plain, plain_midi).find("key_fifths") == std::string::npos);
+}
+
+TEST_CASE("an embedded scene is walked in place rather than reparsed", "[serialize]") {
+  // scene_from_value must produce exactly what scene_from_json produces for the
+  // same document, so removing the dump/reparse round trip is behaviour-neutral.
+  const std::string scene_json =
+      R"({"version":1,"strips":[{"id":"a","faderDb":-3.5,"pan":0.25,)"
+      R"("inserts":[{"slot":"post","processor":"gain","params":"{}"}],)"
+      R"("sends":[{"id":"s","destinationBusId":"bus","sendDb":-6.0,"timing":"pre"}]}],)"
+      R"("buses":[{"id":"bus","role":"aux","width":0.5}],)"
+      R"("vcaGroups":[{"id":"v","gainDb":-1.0,"members":["a"]}],)"
+      R"("connections":[{"source":"a","destination":"bus"}]})";
+
+  const mixing::api::Scene via_string = mixing::api::scene_from_json(scene_json);
+  const mixing::api::Scene via_value = mixing::api::scene_from_value(util::json::parse(scene_json));
+  REQUIRE(mixing::api::scene_to_json(via_value) == mixing::api::scene_to_json(via_string));
+
+  // And the project-embedded path still yields the same scene.
+  const auto loaded = project_from_json(R"({"version":1,"scene":)" + scene_json + "}");
+  REQUIRE(loaded.ok());
+  REQUIRE(mixing::api::scene_to_json(loaded.project->scene()) ==
+          mixing::api::scene_to_json(via_string));
+
+  // A malformed embedded scene still reports through the project serializer's
+  // InvalidFormat channel rather than the standalone InvalidParameter one.
+  const auto bad = project_from_json(R"({"version":1,"scene":{"version":99}})");
+  REQUIRE_FALSE(bad.ok());
+  REQUIRE(bad.has_error());
+}

@@ -67,13 +67,22 @@ bool base64_decode(const std::string& text, std::vector<uint8_t>* out, size_t ma
 }
 
 // ===========================================================================
-// Small read helpers (forward-compatible: missing / wrong-typed fields fall back
-// to the default, matching the "unknown fields safely ignored" contract).
+// Small read helpers. Forward compatibility covers UNKNOWN fields and ABSENT
+// known fields: an absent field falls back to the default. A field that is
+// present but carries the wrong JSON type is malformed input and is rejected
+// with InvalidFormat, uniformly for every scalar type -- substituting a default
+// there would let `"sample_rate": "96000"` render the whole project at the
+// default rate with no diagnostic.
 // ===========================================================================
 
 double num_or(const Value& obj, const char* key, double fallback) {
   const auto* v = obj.find(key);
-  return (v && v->is_number()) ? v->as_number() : fallback;
+  if (!v) return fallback;
+  if (!v->is_number()) {
+    throw SonareException(ErrorCode::InvalidFormat,
+                          "numeric field must be a number: " + std::string(key));
+  }
+  return v->as_number();
 }
 
 uint32_t uint_or(const Value& obj, const char* key, uint32_t fallback) {
@@ -136,22 +145,37 @@ bool parse_uint32_key(const std::string& key, uint32_t* out) {
 
 std::string str_or(const Value& obj, const char* key, const std::string& fallback) {
   const auto* v = obj.find(key);
-  return (v && v->is_string()) ? v->as_string() : fallback;
+  if (!v) return fallback;
+  if (!v->is_string()) {
+    throw SonareException(ErrorCode::InvalidFormat,
+                          "string field must be a string: " + std::string(key));
+  }
+  return v->as_string();
 }
 
 bool bool_or(const Value& obj, const char* key, bool fallback) {
   const auto* v = obj.find(key);
-  return (v && v->is_bool()) ? v->as_bool() : fallback;
+  if (!v) return fallback;
+  if (!v->is_bool()) {
+    throw SonareException(ErrorCode::InvalidFormat,
+                          "boolean field must be a boolean: " + std::string(key));
+  }
+  return v->as_bool();
 }
 
 // Reads a UMP data word (full uint32_t range). A present-but-out-of-range value
 // (negative, non-finite, or above the uint32_t maximum) is clamped deterministically
 // to 0 / 0xFFFFFFFF and recorded as a warning, instead of being silently zeroed.
-// Absent / non-numeric (the forward-compatible default) stays a silent 0.
+// An absent field stays a silent 0; a present but non-numeric one is malformed
+// input and is rejected like every other wrong-typed scalar.
 uint32_t midi_word_or_warn(const Value& obj, const char* key, uint32_t clip_id,
                            BoundedDiagnostics* diagnostics) {
   const auto* v = obj.find(key);
-  if (!v || !v->is_number()) return 0;
+  if (!v) return 0;
+  if (!v->is_number()) {
+    throw SonareException(ErrorCode::InvalidFormat,
+                          "MIDI data word must be numeric: " + std::string(key));
+  }
   const double d = v->as_number();
   constexpr double kMaxWord = 4294967295.0;  // 2^32 - 1
   if (!std::isfinite(d) || d < 0.0 || d > kMaxWord) {

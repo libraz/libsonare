@@ -9,6 +9,17 @@
 
 #include "core/channel_layout.h"
 
+// Forward-declared rather than including util/json.h: this header is the
+// pure-data schema and is pulled into the arrangement compile path, which has no
+// business depending on the JSON parser. The macro guard mirrors util/json.h's
+// own so the two namespaces cannot desync.
+#ifndef SONARE_JSON_NAMESPACE
+#define SONARE_JSON_NAMESPACE sonare::util::json
+#endif
+namespace SONARE_JSON_NAMESPACE {
+class Value;
+}  // namespace SONARE_JSON_NAMESPACE
+
 namespace sonare::mixing::api {
 
 enum class InsertSlot {
@@ -130,5 +141,13 @@ struct Scene {
 
 std::string scene_to_json(const Scene& scene);
 Scene scene_from_json(const std::string& json);
+
+/// Walks an ALREADY-PARSED scene document. `scene_from_json` is this plus a
+/// parse. A caller that has parsed a larger document containing a scene should
+/// use this rather than dumping the sub-tree back to text and re-parsing it:
+/// the round trip costs a second parse and puts it under whatever resource
+/// limits that second parse happens to carry, instead of the ones the enclosing
+/// document was admitted under.
+Scene scene_from_value(const SONARE_JSON_NAMESPACE::Value& value);
 
 }  // namespace sonare::mixing::api

@@ -2,7 +2,10 @@
 // SPDX-License-Identifier: Apache-2.0
 
 #include <algorithm>
+#include <cmath>
+#include <optional>
 #include <string>
+#include <tuple>
 #include <utility>
 #include <vector>
 
@@ -102,6 +105,8 @@ arrangement::Track track_from_json(const Value& v) {
   t.output_target = str_or(v, "output_target", "");
   t.midi_destination_id = uint_or(v, "midi_destination_id", 0);
   if (const auto* arr = array_at(v, "automation_lanes")) {
+    // Decoded verbatim; the one-lane-per-target invariant is enforced for the
+    // whole model by enforce_edit_api_invariants().
     for (const auto& lv : *arr) {
       if (lv.is_object()) t.automation_lanes.push_back(automation_lane_from_json(lv));
     }
@@ -280,13 +285,136 @@ bool sidecar_from_json(const Value& v, arrangement::AssistSidecar* out, size_t m
 
 mixing::api::Scene scene_from_value(const Value& v) {
   try {
-    return mixing::api::scene_from_json(json::dump(v));
+    // Walk the already-parsed sub-tree. Dumping it back to text and re-parsing
+    // would cost a second full parse of the scene and would put that parse under
+    // a different (unlimited) resource regime than the one the document as a
+    // whole was admitted under.
+    return mixing::api::scene_from_value(v);
   } catch (const SonareException& error) {
     // A scene nested in a project is malformed persisted input, while the
     // standalone control-thread API reports InvalidParameter. Keep the project
     // serializer's stable InvalidFormat diagnostic channel at this boundary.
     throw SonareException(ErrorCode::InvalidFormat, error.what());
   }
+}
+
+// ===========================================================================
+// Edit-API invariants on the load path
+// ===========================================================================
+//
+// A document can express model states that no sequence of C ABI edit calls can
+// reach. Loading one produces a project the edit API can then neither address
+// nor repair -- an undeletable automation lane, a marker at a negative PPQ that
+// every setter would have rejected. The invariants the setters enforce are
+// therefore enumerated ONCE here and applied to the finished model, so the value
+// set the load path accepts stays a subset of the value set the edit path
+// accepts no matter which decoder produced a field.
+//
+// Two outcomes. A violation with a well-defined normalization (a duplicate that
+// the setter would have overwritten in place) is repaired last-writer-wins and
+// reported as a warning. A violation with no meaningful repair (a negative
+// position -- clamping it would silently move musical content) is fatal, and the
+// caller turns it into an error diagnostic and drops the project, matching how
+// the tempo decoder already rejects a non-finite start.
+
+namespace {
+
+// Positions the C ABI setters admit: finite and non-negative
+// (`finite_non_negative` in the project edit bridge).
+bool valid_position_ppq(double ppq) noexcept { return std::isfinite(ppq) && ppq >= 0.0; }
+
+// Identity a sidecar is addressed by. SetAssistSidecar overwrites an existing
+// entry with this key rather than appending, and RemoveAssistSidecarInternal
+// erases the first match, so two entries sharing it make the second unreachable.
+using SidecarKey = std::tuple<std::string, arrangement::TrackId, double, double>;
+
+SidecarKey sidecar_key(const arrangement::AssistSidecar& s) {
+  return {s.module_id, s.target_track_id, s.region_start_ppq, s.region_end_ppq};
+}
+
+}  // namespace
+
+std::optional<InvariantViolation> enforce_edit_api_invariants(arrangement::Project* project,
+                                                              BoundedDiagnostics* diagnostics) {
+  if (project == nullptr) return std::nullopt;
+
+  // ---- Positions are non-negative ------------------------------------------
+  for (const transport::TempoSegment& s : project->tempo_segments()) {
+    if (!valid_position_ppq(s.start_ppq)) {
+      return InvariantViolation{"invalid_tempo_start_ppq",
+                                "tempo segment start_ppq must be finite and non-negative"};
+    }
+  }
+  for (const transport::TimeSignatureSegment& s : project->time_signatures()) {
+    if (!valid_position_ppq(s.start_ppq)) {
+      return InvariantViolation{"invalid_time_signature_start_ppq",
+                                "time signature segment start_ppq must be finite and non-negative"};
+    }
+  }
+  for (const arrangement::ProjectMarker& m : project->markers()) {
+    if (!valid_position_ppq(m.ppq)) {
+      return InvariantViolation{"invalid_marker_ppq", "marker " + std::to_string(m.id) +
+                                                          " ppq must be finite and non-negative"};
+    }
+  }
+
+  // ---- One automation lane per (track, target) -----------------------------
+  // AddAutomationLane refuses a second lane for a target, and remove/edit
+  // address a lane by its target id alone, so a duplicate is unaddressable.
+  std::vector<arrangement::TrackId> track_ids;
+  track_ids.reserve(project->tracks().size());
+  for (const arrangement::Track& track : project->tracks()) track_ids.push_back(track.id);
+  for (const arrangement::TrackId track_id : track_ids) {
+    arrangement::Track* track = project->find_track_mutable(track_id);
+    if (track == nullptr) continue;
+    std::vector<automation::AutomationLane> kept;
+    kept.reserve(track->automation_lanes.size());
+    for (automation::AutomationLane& lane : track->automation_lanes) {
+      const uint32_t target = lane.target_param_id();
+      const auto existing = std::find_if(kept.begin(), kept.end(),
+                                         [target](const automation::AutomationLane& candidate) {
+                                           return candidate.target_param_id() == target;
+                                         });
+      if (existing != kept.end()) {
+        *existing = std::move(lane);  // Last writer wins, in the first slot.
+        if (diagnostics != nullptr) {
+          diagnostics->warn("duplicate_automation_lane",
+                            "track " + std::to_string(track_id) +
+                                " carries more than one automation lane for target " +
+                                std::to_string(target) + "; kept the last one");
+        }
+        continue;
+      }
+      kept.push_back(std::move(lane));
+    }
+    track->automation_lanes = std::move(kept);
+  }
+
+  // ---- One assist sidecar per identity -------------------------------------
+  std::vector<arrangement::AssistSidecar>& sidecars = project->assist_sidecars_mutable();
+  std::vector<arrangement::AssistSidecar> kept_sidecars;
+  kept_sidecars.reserve(sidecars.size());
+  for (arrangement::AssistSidecar& sidecar : sidecars) {
+    const SidecarKey key = sidecar_key(sidecar);
+    const auto existing = std::find_if(kept_sidecars.begin(), kept_sidecars.end(),
+                                       [&key](const arrangement::AssistSidecar& candidate) {
+                                         return sidecar_key(candidate) == key;
+                                       });
+    if (existing != kept_sidecars.end()) {
+      *existing = std::move(sidecar);
+      if (diagnostics != nullptr) {
+        diagnostics->warn("duplicate_assist_sidecar",
+                          "assist sidecar \"" + std::get<0>(key) +
+                              "\" is present more than once "
+                              "for the same target scope; kept the last one");
+      }
+      continue;
+    }
+    kept_sidecars.push_back(std::move(sidecar));
+  }
+  sidecars = std::move(kept_sidecars);
+
+  return std::nullopt;
 }
 
 }  // namespace detail

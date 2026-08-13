@@ -16,6 +16,7 @@
 #include <cstddef>
 #include <cstdint>
 #include <limits>
+#include <optional>
 #include <string>
 #include <vector>
 
@@ -95,8 +96,11 @@ class BoundedDiagnostics {
 };
 
 // ===========================================================================
-// Small read helpers (forward-compatible: missing / wrong-typed fields fall
-// back to the default).
+// Small read helpers. An ABSENT field falls back to the default (that is the
+// forward-compatibility contract); a field that is PRESENT with the wrong JSON
+// type throws InvalidFormat, uniformly across every scalar type. array_at /
+// object_at keep returning null for a wrong-typed container, so an optional
+// sub-tree stays optional.
 // ===========================================================================
 
 double num_or(const Value& obj, const char* key, double fallback);
@@ -142,6 +146,26 @@ transport::TempoSegment tempo_segment_from_json(const Value& v);
 transport::TimeSignatureSegment time_signature_from_json(const Value& v);
 automation::AutomationLane automation_lane_from_json(const Value& v);
 arrangement::Track track_from_json(const Value& v);
+
+// ===========================================================================
+// Edit-API invariants on the load path
+// ===========================================================================
+
+/// A load-path invariant violation that has no meaningful repair.
+struct InvariantViolation {
+  std::string code;
+  std::string message;
+};
+
+/// Brings a freshly decoded project into the state space the C ABI edit API can
+/// produce, so a loaded model is never one the setters could neither have
+/// created nor can now address. Repairable violations (duplicates the setter
+/// would have overwritten in place) are normalized last-writer-wins and reported
+/// through @p diagnostics; an unrepairable one is returned for the caller to
+/// turn into an error diagnostic. Call once, on the assembled model, before
+/// returning it.
+std::optional<InvariantViolation> enforce_edit_api_invariants(arrangement::Project* project,
+                                                              BoundedDiagnostics* diagnostics);
 arrangement::ClipFade fade_from_json(const Value& v);
 arrangement::ClipTake take_from_json(const Value& v);
 arrangement::ClipCompSegment comp_segment_from_json(const Value& v);

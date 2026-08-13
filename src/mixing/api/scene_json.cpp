@@ -151,11 +151,17 @@ Insert insert_from_value(const JsonValue& object) {
   return insert;
 }
 
+// Every entity array walker below ignores non-object elements. A scalar or null
+// carries no fields, so materializing one would synthesize a default entity with
+// an empty id that the caller never wrote -- and a save/load cycle would then
+// persist it. Skipping keeps the entity count equal to the number of
+// object-typed elements, order preserved, on every scene-decoding path.
 std::vector<Insert> inserts_from_value(const JsonValue& array) {
   std::vector<Insert> out;
   if (!array.is_array()) return out;
   out.reserve(array.as_array().size());
   for (const auto& entry : array.as_array()) {
+    if (!entry.is_object()) continue;
     out.push_back(insert_from_value(entry));
   }
   return out;
@@ -183,6 +189,7 @@ std::vector<Send> sends_from_value(const JsonValue& array) {
   if (!array.is_array()) return out;
   out.reserve(array.as_array().size());
   for (const auto& entry : array.as_array()) {
+    if (!entry.is_object()) continue;
     out.push_back(send_from_value(entry));
   }
   return out;
@@ -248,6 +255,7 @@ std::vector<Strip> strips_from_value(const JsonValue& array) {
   if (!array.is_array()) return out;
   out.reserve(array.as_array().size());
   for (const auto& entry : array.as_array()) {
+    if (!entry.is_object()) continue;
     out.push_back(strip_from_value(entry));
   }
   return out;
@@ -274,6 +282,7 @@ std::vector<Bus> buses_from_value(const JsonValue& array) {
   if (!array.is_array()) return out;
   out.reserve(array.as_array().size());
   for (const auto& entry : array.as_array()) {
+    if (!entry.is_object()) continue;
     out.push_back(bus_from_value(entry));
   }
   return out;
@@ -298,6 +307,7 @@ std::vector<VcaGroup> vca_groups_from_value(const JsonValue& array) {
   if (!array.is_array()) return out;
   out.reserve(array.as_array().size());
   for (const auto& entry : array.as_array()) {
+    if (!entry.is_object()) continue;
     out.push_back(vca_group_from_value(entry));
   }
   return out;
@@ -315,6 +325,7 @@ std::vector<Connection> connections_from_value(const JsonValue& array) {
   if (!array.is_array()) return out;
   out.reserve(array.as_array().size());
   for (const auto& entry : array.as_array()) {
+    if (!entry.is_object()) continue;
     out.push_back(connection_from_value(entry));
   }
   return out;
@@ -480,8 +491,7 @@ std::string scene_to_json(const Scene& scene) {
   return sonare::util::json::dump(JsonValue(std::move(root)));
 }
 
-Scene scene_from_json(const std::string& json) {
-  const auto root = sonare::util::json::parse(json);
+Scene scene_from_value(const JsonValue& root) {
   if (!root.is_object()) {
     throw SonareException(ErrorCode::InvalidParameter, "scene JSON must be an object");
   }
@@ -497,6 +507,10 @@ Scene scene_from_json(const std::string& json) {
   if (const auto* connections = root.find("connections"))
     scene.connections = connections_from_value(*connections);
   return scene;
+}
+
+Scene scene_from_json(const std::string& json) {
+  return scene_from_value(sonare::util::json::parse(json));
 }
 
 }  // namespace sonare::mixing::api
