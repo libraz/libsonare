@@ -4,6 +4,7 @@
 #include <catch2/catch_test_macros.hpp>
 #include <memory>
 
+#include "rt/delay_line.h"
 #include "rt/processor_base.h"
 
 namespace {
@@ -35,6 +36,27 @@ class LatencyProcessor final : public sonare::rt::ProcessorBase {
 
  private:
   int latency_q8_ = 0;
+};
+
+// Reports a latency AND actually produces it, unlike LatencyProcessor above
+// (which only reports one). A node's bypass compensation can only be checked
+// against a processor whose reported and delivered latency agree.
+class DelayLatencyProcessor final : public sonare::rt::ProcessorBase {
+ public:
+  explicit DelayLatencyProcessor(int latency) : latency_(latency) {}
+  void prepare(double, int) override { delay_.prepare(static_cast<size_t>(latency_)); }
+  void process(float* const* channels, int num_channels, int num_samples) override {
+    if (num_channels <= 0 || channels[0] == nullptr) return;
+    for (int i = 0; i < num_samples; ++i) {
+      channels[0][i] = delay_.process(channels[0][i]);
+    }
+  }
+  void reset() override { delay_.reset(); }
+  int latency_samples() const noexcept override { return latency_; }
+
+ private:
+  int latency_ = 0;
+  sonare::rt::DelayLine delay_;
 };
 
 class SidechainProcessor final : public sonare::rt::ProcessorBase {
@@ -117,6 +139,86 @@ TEST_CASE("GraphRuntime bypasses processor nodes as dry pass-through", "[engine]
   REQUIRE(buffer[0] == 1.0f);
   REQUIRE(buffer[1] == 2.0f);
   REQUIRE(buffer[3] == 4.0f);
+}
+
+TEST_CASE("GraphRuntime keeps a bypassed node's latency in the signal path",
+          "[engine][graph_runtime]") {
+  // compile() bakes each node's per-port latency into the downstream connection
+  // delays and never revisits it, so a node that stopped delaying when bypassed
+  // would slide forward against every path it was aligned with. The node is a
+  // pure delay, so bypassing must leave the rendered block untouched.
+  constexpr int kLatency = 3;
+  constexpr int kFrames = 8;
+  auto render = [kLatency](bool bypassed) {
+    sonare::graph::Graph graph;
+    REQUIRE(graph.add_node("in", std::make_unique<GainProcessor>(1.0f), 1));
+    REQUIRE(graph.add_node("latent", std::make_unique<DelayLatencyProcessor>(kLatency), 1));
+    REQUIRE(graph.add_node("out", std::make_unique<GainProcessor>(1.0f), 1));
+    REQUIRE(graph.connect({"in", 0, "latent", 0, sonare::graph::Connection::Mix::Add}));
+    REQUIRE(graph.connect({"latent", 0, "out", 0, sonare::graph::Connection::Mix::Add}));
+    REQUIRE(graph.compile());
+    graph.prepare(48000.0, kFrames);
+    REQUIRE(graph.node("latent") != nullptr);
+    REQUIRE(graph.node("latent")->processor().set_bypassed(bypassed));
+    // The reported latency is the host's PDC input and never consults bypass.
+    REQUIRE(graph.node_latency_samples_q8("out") == (kLatency << 8));
+
+    sonare::engine::GraphRuntime runtime;
+    REQUIRE(runtime.bind(&graph, "in", "out", 1));
+    std::array<float, kFrames> buffer{};
+    buffer[0] = 1.0f;
+    float* io[] = {buffer.data()};
+    runtime.process(io, 1, 0, kFrames);
+    return buffer;
+  };
+
+  const std::array<float, kFrames> active = render(false);
+  const std::array<float, kFrames> bypassed = render(true);
+  for (int i = 0; i < kLatency; ++i) {
+    REQUIRE(active[static_cast<size_t>(i)] == 0.0f);
+    REQUIRE(bypassed[static_cast<size_t>(i)] == 0.0f);
+  }
+  REQUIRE(active[kLatency] == 1.0f);
+  REQUIRE(bypassed[kLatency] == 1.0f);
+}
+
+TEST_CASE("GraphRuntime bypass engages without a dropout", "[engine][graph_runtime]") {
+  // The substitute delay is fed the node's input on every active block, so
+  // engaging bypass mid-stream switches to a warm delay line. A cold one would
+  // punch a latency-length hole into the ramp at the toggle.
+  constexpr int kLatency = 3;
+  constexpr int kBlock = 8;
+  constexpr int kBlocks = 4;
+
+  sonare::graph::Graph graph;
+  REQUIRE(graph.add_node("in", std::make_unique<GainProcessor>(1.0f), 1));
+  REQUIRE(graph.add_node("latent", std::make_unique<DelayLatencyProcessor>(kLatency), 1));
+  REQUIRE(graph.add_node("out", std::make_unique<GainProcessor>(1.0f), 1));
+  REQUIRE(graph.connect({"in", 0, "latent", 0, sonare::graph::Connection::Mix::Add}));
+  REQUIRE(graph.connect({"latent", 0, "out", 0, sonare::graph::Connection::Mix::Add}));
+  REQUIRE(graph.compile());
+  graph.prepare(48000.0, kBlock);
+
+  sonare::engine::GraphRuntime runtime;
+  REQUIRE(runtime.bind(&graph, "in", "out", 1));
+
+  std::vector<float> rendered;
+  for (int block = 0; block < kBlocks; ++block) {
+    REQUIRE(graph.node("latent")->processor().set_bypassed(block >= 2));
+    std::array<float, kBlock> buffer{};
+    for (int i = 0; i < kBlock; ++i) {
+      buffer[static_cast<size_t>(i)] = static_cast<float>(block * kBlock + i + 1);
+    }
+    float* io[] = {buffer.data()};
+    runtime.process(io, 1, 0, kBlock);
+    rendered.insert(rendered.end(), buffer.begin(), buffer.end());
+  }
+
+  for (int n = 0; n < kBlock * kBlocks; ++n) {
+    const float expected = n < kLatency ? 0.0f : static_cast<float>(n - kLatency + 1);
+    INFO("sample " << n);
+    REQUIRE(rendered[static_cast<size_t>(n)] == expected);
+  }
 }
 
 TEST_CASE("GraphRuntime reports the selected output path's Q8 latency", "[engine][graph_runtime]") {
