@@ -41,6 +41,43 @@ std::vector<float> pad_envelope_constant(const std::vector<float>& env, int pad,
   return padded;
 }
 
+/// @brief Complex Fourier tempogram: STFT of the onset envelope at hop 1.
+/// @details Shared front-end for fourier_tempogram() (which keeps only the
+///          magnitude) and plp() (which needs the phase to lock the pulse onto
+///          the onsets). Layout is [n_bins x n_frames] row-major, matching the
+///          magnitude variant.
+std::vector<std::complex<float>> fourier_tempogram_complex(const std::vector<float>& onset_envelope,
+                                                           const TempogramConfig& config) {
+  const int win = config.win_length;
+  const int n_bins = win / 2 + 1;
+  const int half = win / 2;
+  const auto padded = pad_envelope_constant(onset_envelope, half, config.center);
+  const int n_frames = static_cast<int>(onset_envelope.size());
+  const auto window = create_window(config.window, win);
+
+  // Use kissfft via core/fft.h.
+  FFT fft(win);
+  std::vector<std::complex<float>> spec(
+      static_cast<std::size_t>(n_bins) * static_cast<std::size_t>(n_frames),
+      std::complex<float>(0.0f, 0.0f));
+  std::vector<float> buf(win);
+  std::vector<std::complex<float>> out(n_bins);
+  for (int t = 0; t < n_frames; ++t) {
+    const int start = config.center ? t : std::max(0, t - half);
+    for (int i = 0; i < win; ++i) {
+      const int idx = start + i;
+      const float v = (idx >= 0 && idx < static_cast<int>(padded.size())) ? padded[idx] : 0.0f;
+      buf[i] = v * window[i];
+    }
+    fft.forward(buf.data(), out.data());
+    for (int b = 0; b < n_bins; ++b) {
+      spec[static_cast<std::size_t>(b) * static_cast<std::size_t>(n_frames) +
+           static_cast<std::size_t>(t)] = out[b];
+    }
+  }
+  return spec;
+}
+
 }  // namespace
 
 std::vector<float> tempogram(const std::vector<float>& onset_envelope, int sr,
@@ -135,31 +172,10 @@ std::vector<float> fourier_tempogram(const std::vector<float>& onset_envelope, i
   }
   if (onset_envelope.empty()) return {};
 
-  const int win = config.win_length;
-  const int n_bins = win / 2 + 1;
-  const int half = win / 2;
-  const auto padded = pad_envelope_constant(onset_envelope, half, config.center);
-  const int n_frames = static_cast<int>(onset_envelope.size());
-  const auto window = create_window(config.window, win);
-
-  // Use kissfft via core/fft.h.
-  FFT fft(win);
-  std::vector<float> spec_mag(static_cast<std::size_t>(n_bins) * static_cast<std::size_t>(n_frames),
-                              0.0f);
-  std::vector<float> buf(win);
-  std::vector<std::complex<float>> out(n_bins);
-  for (int t = 0; t < n_frames; ++t) {
-    const int start = config.center ? t : std::max(0, t - half);
-    for (int i = 0; i < win; ++i) {
-      const int idx = start + i;
-      const float v = (idx >= 0 && idx < static_cast<int>(padded.size())) ? padded[idx] : 0.0f;
-      buf[i] = v * window[i];
-    }
-    fft.forward(buf.data(), out.data());
-    for (int b = 0; b < n_bins; ++b) {
-      spec_mag[static_cast<std::size_t>(b) * static_cast<std::size_t>(n_frames) +
-               static_cast<std::size_t>(t)] = std::abs(out[b]);
-    }
+  const auto spec = fourier_tempogram_complex(onset_envelope, config);
+  std::vector<float> spec_mag(spec.size(), 0.0f);
+  for (std::size_t i = 0; i < spec.size(); ++i) {
+    spec_mag[i] = std::abs(spec[i]);
   }
   return spec_mag;
 }
@@ -244,7 +260,7 @@ std::vector<float> plp(const std::vector<float>& onset_envelope, const PlpConfig
   tcfg.window = WindowType::Hann;
   tcfg.center = true;
   tcfg.norm = false;
-  const std::vector<float> ft = fourier_tempogram(onset_envelope, config.sr, tcfg);
+  const std::vector<std::complex<float>> ft = fourier_tempogram_complex(onset_envelope, tcfg);
   const int n_bins = config.win_length / 2 + 1;
   const int n_frames = n;
 
@@ -262,7 +278,7 @@ std::vector<float> plp(const std::vector<float>& onset_envelope, const PlpConfig
     for (int b = 1; b < n_bins; ++b) {
       double bpm = bin_to_bpm(b);
       if (bpm < config.tempo_min || bpm > config.tempo_max) continue;
-      float v = ft[b * n_frames + t];
+      float v = std::abs(ft[b * n_frames + t]);
       if (v > best) {
         best = v;
         best_b = b;
@@ -271,27 +287,52 @@ std::vector<float> plp(const std::vector<float>& onset_envelope, const PlpConfig
     argmax[t] = best_b;
   }
 
-  // PLP: place a sinusoid with frame-local tempo and per-frame magnitude back
-  // into the onset envelope time domain (additive overlap-add, no FFT inverse).
-  std::vector<double> pulse(n, 0.0);
-  std::vector<double> window_kernel(config.win_length);
-  for (int i = 0; i < config.win_length; ++i) {
-    window_kernel[i] =
-        0.5 * (1.0 - std::cos(constants::kTwoPiD * i / static_cast<double>(config.win_length)));
-  }
-  const int half = config.win_length / 2;
+  // Inverse STFT of the masked tempogram at hop_length = 1, n_fft = win_length.
+  // Only the peak bin survives the mask and it is renormalized to unit
+  // magnitude, so every frame's inverse real FFT reduces to a single cosine
+  // whose phase is the tempogram phase at that bin. Carrying that phase is what
+  // locks the pulse onto the onsets; using the magnitude alone would place a
+  // cosine peak at every frame centre regardless of where the beats are, and
+  // the overlap-add of those mutually misaligned cosines cancels to noise.
+  const int win = config.win_length;
+  const int half = win / 2;
+  const auto window = create_window(tcfg.window, win);
+  // Accumulate in the centre-padded frame coordinate: frame t writes to
+  // padded positions [t, t + win), and padded position p is envelope index
+  // p - half.
+  const std::size_t padded_len = static_cast<std::size_t>(n) + static_cast<std::size_t>(2 * half);
+  std::vector<double> overlap(padded_len, 0.0);
+  std::vector<double> window_sq_sum(padded_len, 0.0);
   for (int t = 0; t < n_frames; ++t) {
-    int b = argmax[t];
-    if (b == 0) continue;
-    double omega =
-        constants::kTwoPiD * static_cast<double>(b) / static_cast<double>(config.win_length);
-    float mag = ft[b * n_frames + t];
-    for (int i = 0; i < config.win_length; ++i) {
-      int idx = t + i - half;
-      if (idx < 0 || idx >= n) continue;
-      pulse[idx] += mag * window_kernel[i] * std::cos(omega * (i - half));
+    const int b = argmax[t];
+    const std::complex<double> z =
+        b == 0 ? std::complex<double>(0.0, 0.0) : std::complex<double>(ft[b * n_frames + t]);
+    const double magnitude = std::abs(z);
+    // irfft of a spectrum with a single non-zero bin b: the Hermitian mate of b
+    // doubles the contribution for every bin except DC and Nyquist.
+    const double bin_scale = (b == 0 || (win % 2 == 0 && b == n_bins - 1)) ? 1.0 / win : 2.0 / win;
+    const double omega = constants::kTwoPiD * static_cast<double>(b) / static_cast<double>(win);
+    const bool active = b != 0 && magnitude > static_cast<double>(kEpsilon);
+    const double phase = active ? std::atan2(z.imag(), z.real()) : 0.0;
+    for (int i = 0; i < win; ++i) {
+      const std::size_t p = static_cast<std::size_t>(t) + static_cast<std::size_t>(i);
+      if (active) {
+        overlap[p] += window[i] * bin_scale * std::cos(omega * i + phase);
+      }
+      // Every frame contributes to the COLA denominator, including the ones
+      // masked to silence, so the reconstruction stays unbiased across gaps.
+      window_sq_sum[p] += static_cast<double>(window[i]) * static_cast<double>(window[i]);
     }
   }
+
+  // Undo the analysis windowing (COLA) and drop the centre padding.
+  std::vector<double> pulse(n, 0.0);
+  for (int i = 0; i < n; ++i) {
+    const std::size_t p = static_cast<std::size_t>(i) + static_cast<std::size_t>(half);
+    const double denom = window_sq_sum[p];
+    pulse[i] = denom > static_cast<double>(kEpsilon) ? overlap[p] / denom : 0.0;
+  }
+
   // Half-wave rectification + L-inf normalize (mirrors librosa).
   std::vector<float> out(n, 0.0f);
   double maxv = 0.0;
