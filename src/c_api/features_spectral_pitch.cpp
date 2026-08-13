@@ -388,10 +388,16 @@ SonareError sonare_reassigned_spectrogram(const float* samples, size_t length, i
                                           int n_fft, int hop_length, float ref_power, int fill_nan,
                                           SonareReassignedSpectrogramResult* out) {
   SONARE_C_API_ENTRY;
-  if (!out || (fill_nan != 0 && fill_nan != 1) || !std::isfinite(ref_power) || ref_power < 0.0f) {
+  if (!out) return SONARE_ERROR_INVALID_PARAMETER;
+  // Zero the owned out-pointers BEFORE any validating early-return, following
+  // the analysis wrappers' convention, so a rejected input always leaves a
+  // NULL owned pointer and sonare_free_reassigned_spectrogram_result(&r) never
+  // delete[]s an uninitialised pointer.
+  *out = {};
+  if ((fill_nan != 0 && fill_nan != 1) || !std::isfinite(ref_power) || ref_power < 0.0f ||
+      n_fft <= 0 || hop_length <= 0) {
     return SONARE_ERROR_INVALID_PARAMETER;
   }
-  *out = {};
   return run_offline(samples, length, sample_rate, [&](const Audio& audio) -> SonareError {
     StftConfig config;
     config.n_fft = n_fft;

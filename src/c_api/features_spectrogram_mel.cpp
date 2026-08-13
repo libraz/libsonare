@@ -44,6 +44,11 @@ SonareError sonare_stft_db(const float* samples, size_t length, int sample_rate,
   SONARE_C_API_ENTRY;
   if (!out_n_bins || !out_n_frames || !out_db) return SONARE_ERROR_INVALID_PARAMETER;
 
+  // Zero every out param up front, not just the owned out_db pointer, so a
+  // validate_audio_params rejection inside run_offline (which skips the body
+  // below) never leaves *out_n_bins / *out_n_frames as caller stack garbage.
+  *out_n_bins = 0;
+  *out_n_frames = 0;
   *out_db = nullptr;
 
   return run_offline(samples, length, sample_rate, [&](const Audio& audio) -> SonareError {
