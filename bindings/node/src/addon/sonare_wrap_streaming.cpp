@@ -163,6 +163,7 @@ Napi::Object StreamingMasteringChainWrap::Init(Napi::Env env, Napi::Object expor
           InstanceMethod<&StreamingMasteringChainWrap::Reset>("reset"),
           InstanceMethod<&StreamingMasteringChainWrap::LatencySamples>("latencySamples"),
           InstanceMethod<&StreamingMasteringChainWrap::StageNames>("stageNames"),
+          InstanceMethod<&StreamingMasteringChainWrap::Destroy>("destroy"),
       });
 
   exports.Set("StreamingMasteringChain", func);
@@ -199,6 +200,15 @@ StreamingMasteringChainWrap::StreamingMasteringChainWrap(const Napi::CallbackInf
 }
 
 StreamingMasteringChainWrap::~StreamingMasteringChainWrap() = default;
+
+// Releases the native chain up front rather than at GC. Every method already
+// guards on a null chain_, so a call after destroy() throws instead of touching
+// freed state, and a second destroy() is a no-op.
+Napi::Value StreamingMasteringChainWrap::Destroy(const Napi::CallbackInfo& info) {
+  chain_.reset();
+  max_block_size_ = 0;
+  return info.Env().Undefined();
+}
 
 Napi::Value StreamingMasteringChainWrap::Prepare(const Napi::CallbackInfo& info) {
   Napi::Env env = info.Env();
@@ -379,6 +389,7 @@ Napi::Object StreamingEqualizerWrap::Init(Napi::Env env, Napi::Object exports) {
           InstanceMethod<&StreamingEqualizerWrap::ProcessStereo>("processStereo"),
           InstanceMethod<&StreamingEqualizerWrap::Spectrum>("spectrum"),
           InstanceMethod<&StreamingEqualizerWrap::Match>("match"),
+          InstanceMethod<&StreamingEqualizerWrap::Destroy>("destroy"),
       });
 
   exports.Set("StreamingEqualizer", func);
@@ -411,6 +422,16 @@ StreamingEqualizerWrap::StreamingEqualizerWrap(const Napi::CallbackInfo& info)
 }
 
 StreamingEqualizerWrap::~StreamingEqualizerWrap() = default;
+
+// Releases the native processor and the retained sidechain buffers up front
+// rather than at GC; every method already guards on a null eq_.
+Napi::Value StreamingEqualizerWrap::Destroy(const Napi::CallbackInfo& info) {
+  eq_.reset();
+  sidechain_left_.Reset();
+  sidechain_right_.Reset();
+  sidechain_channels_ = {};
+  return info.Env().Undefined();
+}
 
 Napi::Value StreamingEqualizerWrap::SetBand(const Napi::CallbackInfo& info) {
   Napi::Env env = info.Env();

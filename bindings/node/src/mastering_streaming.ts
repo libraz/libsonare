@@ -59,6 +59,7 @@ export interface StreamingMasteringChainConfig extends Record<string, unknown> {
  */
 export class StreamingMasteringChain {
   private native: InstanceType<typeof addon.StreamingMasteringChain>;
+  private disposed = false;
 
   constructor(config: StreamingMasteringChainConfig = {}) {
     this.native = new addon.StreamingMasteringChain(config);
@@ -113,6 +114,24 @@ export class StreamingMasteringChain {
   stageNames(): string[] {
     return this.native.stageNames();
   }
+  /**
+   * Release the native resources now instead of waiting for garbage collection.
+   * Idempotent; any other method called afterwards throws. A long-lived process
+   * that creates a StreamingMasteringChain per request must call this, or native memory
+   * accumulates for as long as the wrapper stays unreachable-but-uncollected.
+   */
+  destroy(): void {
+    if (this.disposed) {
+      return;
+    }
+    this.disposed = true;
+    this.native.destroy();
+  }
+
+  /** Releases native resources; lets `using` (Node 22+) free them automatically. */
+  [Symbol.dispose](): void {
+    this.destroy();
+  }
 }
 
 /**
@@ -141,6 +160,7 @@ export class StreamingMasteringChain {
  */
 export class StreamAnalyzer {
   private native: InstanceType<typeof addon.StreamAnalyzer>;
+  private disposed = false;
 
   constructor(config: StreamAnalyzerConfig = {}) {
     if (
@@ -249,6 +269,24 @@ export class StreamAnalyzer {
   setTuningRefHz(hz: number): void {
     this.native.setTuningRefHz(hz);
   }
+  /**
+   * Release the native resources now instead of waiting for garbage collection.
+   * Idempotent; any other method called afterwards throws. A long-lived process
+   * that creates a StreamAnalyzer per request must call this, or native memory
+   * accumulates for as long as the wrapper stays unreachable-but-uncollected.
+   */
+  destroy(): void {
+    if (this.disposed) {
+      return;
+    }
+    this.disposed = true;
+    this.native.destroy();
+  }
+
+  /** Releases native resources; lets `using` (Node 22+) free them automatically. */
+  [Symbol.dispose](): void {
+    this.destroy();
+  }
 }
 
 const EQ_PHASE_MODES: Record<string, number> = {
@@ -290,6 +328,7 @@ export type StreamingEqualizerPhaseMode =
  */
 export class StreamingEqualizer {
   private native: InstanceType<typeof addon.StreamingEqualizer>;
+  private disposed = false;
 
   constructor(config: { sampleRate?: number; maxBlockSize?: number } = {}) {
     this.native = new addon.StreamingEqualizer(config);
@@ -384,5 +423,23 @@ export class StreamingEqualizer {
     options: { sampleRate?: number; maxBands?: number } = {},
   ): void {
     this.native.match(source, reference, options);
+  }
+  /**
+   * Release the native resources now instead of waiting for garbage collection.
+   * Idempotent; any other method called afterwards throws. A long-lived process
+   * that creates a StreamingEqualizer per request must call this, or native memory
+   * accumulates for as long as the wrapper stays unreachable-but-uncollected.
+   */
+  destroy(): void {
+    if (this.disposed) {
+      return;
+    }
+    this.disposed = true;
+    this.native.destroy();
+  }
+
+  /** Releases native resources; lets `using` (Node 22+) free them automatically. */
+  [Symbol.dispose](): void {
+    this.destroy();
   }
 }

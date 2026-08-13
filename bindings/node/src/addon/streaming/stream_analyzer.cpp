@@ -116,6 +116,7 @@ Napi::Object StreamAnalyzerWrap::Init(Napi::Env env, Napi::Object exports) {
           InstanceMethod<&StreamAnalyzerWrap::SetExpectedDuration>("setExpectedDuration"),
           InstanceMethod<&StreamAnalyzerWrap::SetNormalizationGain>("setNormalizationGain"),
           InstanceMethod<&StreamAnalyzerWrap::SetTuningRefHz>("setTuningRefHz"),
+          InstanceMethod<&StreamAnalyzerWrap::Destroy>("destroy"),
       });
 
   exports.Set("StreamAnalyzer", func);
@@ -204,6 +205,15 @@ StreamAnalyzerWrap::StreamAnalyzerWrap(const Napi::CallbackInfo& info)
 }
 
 StreamAnalyzerWrap::~StreamAnalyzerWrap() = default;
+
+// Releases the native analyzer up front rather than at GC. The class doc
+// already documents destroy() as requiring both the producer and consumer roles
+// to be stopped; every method guards on a null analyzer_, so a call afterwards
+// throws instead of touching freed state.
+Napi::Value StreamAnalyzerWrap::Destroy(const Napi::CallbackInfo& info) {
+  analyzer_.reset();
+  return info.Env().Undefined();
+}
 
 Napi::Value StreamAnalyzerWrap::Process(const Napi::CallbackInfo& info) {
   Napi::Env env = info.Env();

@@ -47,6 +47,7 @@ class StreamingMasteringChainWrap : public Napi::ObjectWrap<StreamingMasteringCh
   Napi::Value Reset(const Napi::CallbackInfo& info);
   Napi::Value LatencySamples(const Napi::CallbackInfo& info);
   Napi::Value StageNames(const Napi::CallbackInfo& info);
+  Napi::Value Destroy(const Napi::CallbackInfo& info);
 
   std::unique_ptr<sonare::mastering::api::StreamingMasteringChain> chain_;
   int max_block_size_ = 0;
@@ -89,6 +90,7 @@ class StreamingEqualizerWrap : public Napi::ObjectWrap<StreamingEqualizerWrap> {
   Napi::Value ProcessStereo(const Napi::CallbackInfo& info);
   Napi::Value Spectrum(const Napi::CallbackInfo& info);
   Napi::Value Match(const Napi::CallbackInfo& info);
+  Napi::Value Destroy(const Napi::CallbackInfo& info);
 
   std::unique_ptr<sonare::mastering::eq::EqualizerProcessor> eq_;
   double sample_rate_ = 48000.0;
@@ -184,6 +186,7 @@ class StreamAnalyzerWrap : public Napi::ObjectWrap<StreamAnalyzerWrap> {
   Napi::Value SetExpectedDuration(const Napi::CallbackInfo& info);
   Napi::Value SetNormalizationGain(const Napi::CallbackInfo& info);
   Napi::Value SetTuningRefHz(const Napi::CallbackInfo& info);
+  Napi::Value Destroy(const Napi::CallbackInfo& info);
 
   sonare::StreamConfig config_;
   std::unique_ptr<sonare::StreamAnalyzer> analyzer_;
