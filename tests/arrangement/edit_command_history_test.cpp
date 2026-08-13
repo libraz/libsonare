@@ -522,6 +522,11 @@ TEST_CASE("Clip command round-trips", "[arrangement]") {
                      std::make_unique<SetClipLoop>(f.audio_clip, LoopMode::kLoop, 480.0));
   }
   SECTION("SetClipWarpRef") {
+    WarpMapRef map;
+    map.id = 77;
+    map.name = "manual warp";
+    map.anchors = {{0.0, 0.0}, {48000.0, 44100.0}};
+    REQUIRE(f.project.set_warp_map(map));
     check_round_trip(f.project, store, std::make_unique<SetClipWarpRef>(f.audio_clip, 77));
   }
   SECTION("SetWarpMap adds a project warp map") {
@@ -587,6 +592,27 @@ TEST_CASE("SetClipSource rejects missing or wrong-kind sources", "[arrangement]"
   REQUIRE_FALSE(SetClipSource(f.audio_clip, 999999u).apply(f.project, store));
   REQUIRE_FALSE(SetClipSource(f.audio_clip, f.midi_source).apply(f.project, store));
   REQUIRE(f.project.find_clip(f.audio_clip)->source_id == f.audio_source);
+}
+
+TEST_CASE("SetClipWarpRef rejects an unregistered warp map id", "[arrangement]") {
+  Fixture f;
+  MidiContentStore store;
+
+  REQUIRE_FALSE(SetClipWarpRef(f.audio_clip, 77).apply(f.project, store));
+  REQUIRE(f.project.find_clip(f.audio_clip)->warp_ref_id == 0);
+
+  WarpMapRef map;
+  map.id = 77;
+  map.name = "manual warp";
+  map.anchors = {{0.0, 0.0}, {48000.0, 44100.0}};
+  REQUIRE(f.project.set_warp_map(map));
+
+  REQUIRE(SetClipWarpRef(f.audio_clip, 77).apply(f.project, store));
+  REQUIRE(f.project.find_clip(f.audio_clip)->warp_ref_id == 77);
+
+  // 0 stays legal and always clears the reference, registered or not.
+  REQUIRE(SetClipWarpRef(f.audio_clip, 0).apply(f.project, store));
+  REQUIRE(f.project.find_clip(f.audio_clip)->warp_ref_id == 0);
 }
 
 TEST_CASE("SplitClip partitions MIDI content instead of duplicating it", "[arrangement]") {

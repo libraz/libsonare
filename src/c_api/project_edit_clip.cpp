@@ -722,6 +722,12 @@ SonareError sonare_project_set_clip_warp_ref(SonareProject* project, uint32_t cl
   if (project->history.project().find_clip(clip_id) == nullptr) {
     return SONARE_ERROR_INVALID_PARAMETER;
   }
+  // A non-zero id must name a warp map already registered on the project;
+  // an unknown id is a caller mistake (like an unknown clip_id), not a state
+  // conflict. 0 stays legal and clears the clip's warp reference.
+  if (warp_ref_id != 0 && !project->history.project().has_warp_map(warp_ref_id)) {
+    return SONARE_ERROR_INVALID_PARAMETER;
+  }
   SONARE_C_TRY
   auto command = std::make_unique<arr::SetClipWarpRef>(clip_id, warp_ref_id);
   if (!project->history.apply(std::move(command))) return SONARE_ERROR_INVALID_STATE;

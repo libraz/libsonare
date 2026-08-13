@@ -374,6 +374,16 @@ describe('Project native binding', () => {
     const clipId = project.addClip({ trackId, startPpq: 0, lengthPpq: 4, audioChannels: 0 });
     const before = project.toJson();
 
+    // A warp ref must name a registered warp map.
+    expect(() => project.setClipWarpRef(clipId, 123)).toThrow();
+
+    project.setWarpMap({
+      id: 123,
+      anchors: [
+        { warpSample: 0, sourceSample: 0 },
+        { warpSample: 4, sourceSample: 4 },
+      ],
+    });
     project.setClipWarpRef(clipId, 123);
     project.setClipWarpMode(clipId, 'repitch');
     const after = project.toJson();
@@ -386,6 +396,8 @@ describe('Project native binding', () => {
 
     project.undo();
     expect(project.toJson()).toContain('"warp_mode":0');
+    project.undo();
+    expect(project.toJson()).toContain('"warp_ref_id":0');
     project.undo();
     expect(project.toJson()).toBe(before);
 

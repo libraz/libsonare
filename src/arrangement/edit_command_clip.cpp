@@ -379,6 +379,11 @@ bool SetClipWarpRef::apply(Project& project, MidiContentStore& /*store*/) {
   if (c == nullptr) {
     return false;
   }
+  // A non-zero id must name a warp map that is actually registered; 0 stays
+  // legal as "no warp map" and always clears the reference.
+  if (warp_ref_id_ != 0 && !project.has_warp_map(warp_ref_id_)) {
+    return false;
+  }
   c->warp_ref_id = warp_ref_id_;
   return true;
 }

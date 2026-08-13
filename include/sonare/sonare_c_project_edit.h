@@ -329,8 +329,10 @@ SonareError sonare_project_set_track_kind(SonareProject* project, uint32_t track
 
 /// @brief Sets a clip's warp reference id via an undoable edit command.
 ///
-/// Use @p warp_ref_id = 0 to clear the reference. Non-zero ids are intended to
-/// reference a map registered with @ref sonare_project_set_warp_map.
+/// @p warp_ref_id = 0 clears the reference. A non-zero value must name a warp
+/// map already registered with @ref sonare_project_set_warp_map; passing an
+/// unregistered id returns ::SONARE_ERROR_INVALID_PARAMETER and leaves the
+/// clip unchanged.
 SonareError sonare_project_set_clip_warp_ref(SonareProject* project, uint32_t clip_id,
                                              uint32_t warp_ref_id);
 

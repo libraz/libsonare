@@ -300,6 +300,17 @@ TEST_CASE("project C surface sets a clip warp reference", "[project]") {
   uint32_t clip_id = 0;
   REQUIRE(sonare_project_add_clip(project, &clip_desc, &clip_id) == SONARE_OK);
 
+  // A warp ref must name a registered warp map; an unregistered id is a caller
+  // mistake and is rejected before any project state is touched.
+  CHECK(sonare_project_set_clip_warp_ref(project, clip_id, 123) == SONARE_ERROR_INVALID_PARAMETER);
+
+  SonareProjectWarpAnchor anchors[] = {{0.0, 0.0}, {48000.0, 44100.0}};
+  SonareProjectWarpMapDesc map{};
+  map.id = 123;
+  map.anchors = anchors;
+  map.anchor_count = 2;
+  REQUIRE(sonare_project_set_warp_map(project, &map) == SONARE_OK);
+
   REQUIRE(sonare_project_set_clip_warp_ref(project, clip_id, 123) == SONARE_OK);
   REQUIRE(sonare_project_set_clip_warp_mode(project, clip_id, SONARE_PROJECT_WARP_MODE_REPITCH) ==
           SONARE_OK);

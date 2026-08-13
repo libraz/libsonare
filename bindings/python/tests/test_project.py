@@ -666,6 +666,11 @@ def test_set_clip_warp_ref_round_trips_and_undoes() -> None:
         )
         before = project.to_json_bytes()
 
+        # A warp ref must name a registered warp map.
+        with pytest.raises(SonareError):
+            project.set_clip_warp_ref(clip_id, 123)
+
+        project.set_warp_map(123, [(0.0, 0.0), (4.0, 4.0)])
         project.set_clip_warp_ref(clip_id, 123)
         project.set_clip_warp_mode(clip_id, "repitch")
         after = project.to_json_bytes()
@@ -680,6 +685,8 @@ def test_set_clip_warp_ref_round_trips_and_undoes() -> None:
 
         project.undo()
         assert b'"warp_mode":0' in project.to_json_bytes()
+        project.undo()
+        assert b'"warp_ref_id":0' in project.to_json_bytes()
         project.undo()
         assert project.to_json_bytes() == before
 
