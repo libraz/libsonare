@@ -31,9 +31,10 @@ RealtimeVoiceChanger::RealtimeVoiceChanger(RealtimeVoiceChangerConfig config)
   // branch inside update_derived() is guarded and will be re-run by prepare().
   update_derived(config_);
   update_latency_mirrors();
-  // Publish the initial snapshot so the audio thread can adopt it on the first
+  // Publish the initial value so the audio thread can adopt it on the first
   // process_block() call even if set_config() is never invoked.
-  config_publisher_.publish(std::make_shared<const RealtimeVoiceChangerConfig>(config_));
+  config_cell_.store(config_);
+  config_version_.fetch_add(1, std::memory_order_release);
 }
 
 void RealtimeVoiceChanger::prepare(double sample_rate, int max_block_size, int num_channels) {
@@ -65,17 +66,15 @@ void RealtimeVoiceChanger::prepare(double sample_rate, int max_block_size, int n
   sync_effective_grain_size();
   update_latency_mirrors();
   reset();
-  // Re-publish so the audio thread sees the same (post-prepare) snapshot and
+  // Re-publish so the audio thread sees the same (post-prepare) config and
   // does NOT re-apply coefficients on its first block (they are already
   // up-to-date from the loop above). adopt_snapshot_for_block() detects this
-  // via the applied_snapshot_ pointer guard.
-  auto fresh = std::make_shared<const RealtimeVoiceChangerConfig>(config_);
-  applied_snapshot_ = fresh.get();
+  // via the applied_config_version_ guard, which we set to match the version
+  // we are about to publish.
+  active_config_ = config_;
   applied_isp_limiter_active_ = config_.limiter.enable_isp_limiter;
-  config_publisher_.publish(std::move(fresh));
-  // Force the audio-thread current pointer to match applied_snapshot_ now,
-  // so the first process_block() does not redundantly re-apply coefficients.
-  config_publisher_.acquire();
+  config_cell_.store(config_);
+  applied_config_version_ = config_version_.fetch_add(1, std::memory_order_release) + 1;
 }
 
 void RealtimeVoiceChanger::reset() {
@@ -83,12 +82,15 @@ void RealtimeVoiceChanger::reset() {
 }
 
 void RealtimeVoiceChanger::set_config(const RealtimeVoiceChangerConfig& config) {
-  // Control-thread side: normalize, update the visible mirror used by config(),
-  // and hand the snapshot off to the audio thread via the lock-free publisher.
+  // Writer side: normalize, update the visible mirror used by config(), and
+  // hand the value off to the audio thread via the lock-free seqlock cell.
   // We deliberately DO NOT touch derived scalars (input_gain_, gate_attack_,
   // ...) or per-channel BiquadState here — those are written by the audio
   // thread inside adopt_snapshot_for_block() so set_config() can race safely
-  // with process_block().
+  // with process_block(). Storing into config_cell_ and bumping
+  // config_version_ never allocates, locks, or throws, so this whole function
+  // is realtime-safe to call from the audio thread itself (see the class doc
+  // comment on set_config for why WASM needs that).
   config_ = normalize_realtime_voice_changer_config(config);
   // Keep config() reporting the effective grain: grain size is structural and
   // cannot change after prepare(), so a newly-requested grain in `config` has
@@ -96,7 +98,8 @@ void RealtimeVoiceChanger::set_config(const RealtimeVoiceChangerConfig& config) 
   // config() never advertises a size that is not actually in use.
   sync_effective_grain_size();
   update_latency_mirrors();
-  config_publisher_.publish(std::make_shared<const RealtimeVoiceChangerConfig>(config_));
+  config_cell_.store(config_);
+  config_version_.fetch_add(1, std::memory_order_release);
 }
 
 void RealtimeVoiceChanger::update_latency_mirrors() noexcept {
@@ -220,35 +223,47 @@ void RealtimeVoiceChanger::update_channel_filters(ChannelState& state) noexcept 
 }
 
 const RealtimeVoiceChangerConfig& RealtimeVoiceChanger::adopt_snapshot_for_block() noexcept {
-  // Audio-thread entry point. acquire() drains the publish ring to the newest
-  // snapshot and retires superseded ones via the wait-free retire ring (no
-  // alloc, no free, no lock on this thread). If a new snapshot was adopted,
-  // re-derive the scalar coefficients and re-apply per-channel DSP coefficients
-  // — both write to members that the per-sample loop reads, but the loop has
-  // not started yet for this block, so no race.
-  config_publisher_.acquire();
-  const RealtimeVoiceChangerConfig* current = config_publisher_.current();
-  if (current && current != applied_snapshot_) {
-    const bool next_isp_limiter_active = current->limiter.enable_isp_limiter;
-    update_derived(*current);
-    for (std::size_t ch = 0; ch < channels_.size(); ++ch) {
-      apply_channel_config(channels_[ch], static_cast<int>(ch), *current);
-      if (next_isp_limiter_active != applied_isp_limiter_active_) {
-        // A disabled interval skips process_block(), leaving the lookahead
-        // queue frozen. Reset on either enabled-state edge so re-enabling
-        // cannot emit samples from before the interval.
-        channels_[ch].isp_limiter.reset();
+  // Audio-thread entry point. config_version_ is bumped (release) strictly
+  // after the corresponding config_cell_.store() completes, so observing a
+  // new version here (acquire) means the cell holds at least that value.
+  // try_load_into() never allocates, locks, blocks, or spins. Unlike
+  // try_load(), it reports a conflict (a concurrent set_config() caught
+  // mid-write, or a torn read) instead of silently substituting a stale
+  // cached value — so on a conflict we deliberately do NOT advance
+  // applied_config_version_. The version we captured above stays unmatched,
+  // so a LATER block's version check will still see a mismatch and retry the
+  // read for real: no update is ever permanently dropped, only delayed by
+  // (at most) one block. If a new value was adopted, re-derive the scalar
+  // coefficients and re-apply per-channel DSP coefficients — both write to
+  // members that the per-sample loop reads, but the loop has not started yet
+  // for this block, so no race.
+  const std::uint32_t version = config_version_.load(std::memory_order_acquire);
+  if (version != applied_config_version_) {
+    RealtimeVoiceChangerConfig candidate;
+    if (config_cell_.try_load_into(&candidate)) {
+      active_config_ = candidate;
+      const bool next_isp_limiter_active = active_config_.limiter.enable_isp_limiter;
+      update_derived(active_config_);
+      for (std::size_t ch = 0; ch < channels_.size(); ++ch) {
+        apply_channel_config(channels_[ch], static_cast<int>(ch), active_config_);
+        if (next_isp_limiter_active != applied_isp_limiter_active_) {
+          // A disabled interval skips process_block(), leaving the lookahead
+          // queue frozen. Reset on either enabled-state edge so re-enabling
+          // cannot emit samples from before the interval.
+          channels_[ch].isp_limiter.reset();
+        }
       }
+      applied_isp_limiter_active_ = next_isp_limiter_active;
+      // version, not config_version_.load(): the value we already validated
+      // against the candidate we just adopted. If a newer publish raced in
+      // since, this block simply re-derives again on the next call — the
+      // "worst case one redundant re-derive" the class doc already accepts.
+      applied_config_version_ = version;
     }
-    applied_isp_limiter_active_ = next_isp_limiter_active;
-    applied_snapshot_ = current;
+    // Conflict: applied_config_version_ is left untouched (stale), so this
+    // whole branch is retried on the next block instead of being skipped.
   }
-  // Fallback path: only reachable if the constructor's initial publish was
-  // dropped (ring full, which cannot happen for a fresh publisher) AND prepare
-  // was never called. In that case use the control-thread mirror; the per-
-  // sample loop is itself guarded by sample_rate_ > 0.0 so this path stays
-  // defined even with default-initialised members.
-  return current ? *current : config_;
+  return active_config_;
 }
 
 void RealtimeVoiceChanger::reset_channel(ChannelState& state) {

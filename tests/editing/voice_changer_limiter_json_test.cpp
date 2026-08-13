@@ -215,6 +215,88 @@ TEST_CASE("RealtimeVoiceChanger concurrent set_config and process_block stays fi
   REQUIRE(publish_count.load() > 0);
 }
 
+TEST_CASE(
+    "RealtimeVoiceChanger race with process_block never permanently drops the final set_config",
+    "[voice_changer][snapshot][concurrency]") {
+  // Regression coverage for a correctness hole the RtPublisher -> SeqlockCell
+  // rewrite (H-9, realtime-safety on the WASM AudioWorklet render thread)
+  // introduced and then had to close: SeqlockCell::try_load() silently falls
+  // back to its last torn-free cached value on a conflicting read, with no
+  // way for the caller to tell that happened. A naive adopt_snapshot_for_block()
+  // that unconditionally marked the observed version as "applied" after such
+  // a read would permanently drop the update — worst case, the LAST
+  // set_config() of a UI slider drag (the value the user actually settles
+  // on), leaving the DSP frozen on the second-to-last value forever, with no
+  // error and no further trigger to retry (a regression against the old
+  // RtPublisher path, which never lost an update). The fix uses
+  // try_load_into() and only advances applied_config_version_ on a
+  // genuinely consistent read, so a conflict on block N is retried on block
+  // N+1 rather than dropped.
+  //
+  // This races set_config() (writer thread, unthrottled) against
+  // process_block() (this thread) for real — not simulated — and asserts
+  // the LAST published value is eventually reflected in the rendered audio.
+  // This assertion holds unconditionally once the fix is in place; it does
+  // not depend on whether a genuine torn read actually occurred during this
+  // particular run (true concurrency gives no such guarantee), which is why
+  // the writer is deliberately unthrottled and the reader loop is long
+  // enough to heavily overlap the writer's entire lifetime.
+  constexpr int sample_rate = 48000;
+  constexpr int block = 128;
+  constexpr int race_blocks = 4000;
+  constexpr int settle_blocks = 64;  // >> the 10 ms output-gain smoother ramp.
+  // Distinctive final value: -36 dB is the normalizer's clamp floor
+  // (realtime/config.cpp: std::clamp(output_gain_db, -36.0f, 12.0f)), well
+  // below the -3/-9 dB values used during the race, so a dropped final
+  // update is unambiguous in the rendered peak level.
+  constexpr float kFinalOutputGainDb = -36.0f;
+
+  auto base = realtime_voice_changer_preset(VoiceCharacterPreset::NeutralMonitor);
+  base.wet_mix = 1.0f;  // output_gain_db only shapes the wet path (see process_output_stage).
+  RealtimeVoiceChanger changer(base);
+  changer.prepare(sample_rate, block, 1);
+
+  std::vector<float> input(static_cast<std::size_t>(block), 0.0f);
+  for (int n = 0; n < block; ++n) {
+    input[static_cast<std::size_t>(n)] =
+        0.4f * std::sin(2.0f * sonare::constants::kPi * 440.0f * static_cast<float>(n) /
+                        static_cast<float>(sample_rate));
+  }
+
+  std::thread config_thread([&]() {
+    auto cfg = base;
+    // Unthrottled burst of racy writes, deliberately overlapping the reader
+    // loop below as densely as possible, ending on the distinctive value.
+    for (int i = 0; i < 400; ++i) {
+      cfg.output_gain_db = (i % 2 == 0) ? -3.0f : -9.0f;
+      changer.set_config(cfg);
+    }
+    cfg.output_gain_db = kFinalOutputGainDb;
+    changer.set_config(cfg);
+  });
+
+  std::vector<float> output(static_cast<std::size_t>(block), 0.0f);
+  for (int b = 0; b < race_blocks; ++b) {
+    changer.process_block(input.data(), output.data(), block);
+    for (float s : output) REQUIRE(std::isfinite(s));
+  }
+  config_thread.join();
+
+  // No further writes from here: keep reading until the output-gain
+  // ParamSmoother settles, then confirm the rendered level actually reflects
+  // kFinalOutputGainDb rather than a value frozen by a dropped update.
+  float peak = 0.0f;
+  for (int b = 0; b < settle_blocks; ++b) {
+    changer.process_block(input.data(), output.data(), block);
+    for (float s : output) peak = std::max(peak, std::abs(s));
+  }
+  // Measured peak at a settled -36 dB output gain is ~0.004 for this input
+  // and preset; -9 dB and -3 dB (the race values) would settle around 0.08
+  // and 0.17 respectively. 0.02 cleanly separates "adopted the final -36 dB
+  // write" from "stuck on an earlier race value".
+  REQUIRE(peak < 0.02f);
+}
+
 TEST_CASE("RealtimeVoiceChanger ISP limiter keeps true peak under the configured ceiling",
           "[voice_changer][isp]") {
   constexpr int sample_rate = 48000;

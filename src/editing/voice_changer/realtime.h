@@ -17,7 +17,7 @@
 #include "editing/voice_changer/streaming_reverb.h"
 #include "rt/biquad_design.h"
 #include "rt/param_smoother.h"
-#include "rt/rt_publisher.h"
+#include "rt/seqlock_cell.h"
 
 namespace sonare::editing::voice_changer {
 
@@ -141,17 +141,22 @@ class RealtimeVoiceChanger {
   void reset();
   /// @brief Publishes a new configuration to the realtime processing chain.
   /// @details Safe to call concurrently with @ref process_block on the same
-  ///          instance: the configuration is normalized and stored in a
-  ///          lock-free snapshot (see @c rt::RtPublisher), and the audio
-  ///          thread atomically adopts it at the start of the next block via
-  ///          @ref process_block. Derived coefficients and per-channel DSP
-  ///          state are re-applied on the audio thread when the snapshot is
-  ///          adopted, so no @c BiquadState / sub-stage member is ever written
-  ///          concurrently with sample processing. May allocate (the snapshot
-  ///          @c shared_ptr) and is therefore NOT realtime-safe itself; call
-  ///          from the configuration thread only. Two threads MUST NOT call
-  ///          @ref set_config concurrently with each other (single-producer
-  ///          hand-off).
+  ///          instance: the configuration is normalized and stored into a
+  ///          lock-free single-writer/single-reader cell (see @c
+  ///          rt::SeqlockCell), and the audio thread atomically adopts it at
+  ///          the start of the next block via @ref process_block. Derived
+  ///          coefficients and per-channel DSP state are re-applied on the
+  ///          audio thread when the new value is adopted, so no @c
+  ///          BiquadState / sub-stage member is ever written concurrently
+  ///          with sample processing. Realtime-safe itself: unlike @c
+  ///          rt::RtPublisher's shared_ptr snapshots, storing into a @c
+  ///          rt::SeqlockCell never allocates, locks, or throws on the writer
+  ///          side either, so this may be called from the audio thread itself
+  ///          — required on WASM, where an AudioWorkletProcessor's port
+  ///          message handler runs on the same single rendering thread as
+  ///          @ref process_block, collapsing the "configuration thread" and
+  ///          the audio thread into one. Still single-producer: two threads
+  ///          MUST NOT call @ref set_config concurrently with each other.
   void set_config(const RealtimeVoiceChangerConfig& config);
   /// @brief Returns the most recently published configuration as observed by
   ///        the configuration thread.
@@ -272,26 +277,37 @@ class RealtimeVoiceChanger {
   float process_input_stage(ChannelState& state, float input) noexcept;
   float process_output_stage(ChannelState& state, float input) noexcept;
   void ensure_scratch(int num_samples) noexcept;
-  /// @brief Audio-thread hand-off: adopts any pending snapshot and, if a new
-  ///        one was adopted, re-runs derived-state and per-channel-coefficient
-  ///        updates. Returns the snapshot the block should use; falls back to
-  ///        the control-thread @c config_ mirror only when no snapshot has been
-  ///        published yet (which is unreachable in normal operation because
-  ///        the constructor always publishes an initial snapshot).
+  /// @brief Audio-thread hand-off: adopts the latest published configuration
+  ///        if it changed since the last block, and if so re-runs
+  ///        derived-state and per-channel-coefficient updates. Returns @c
+  ///        active_config_, valid for the whole block (the constructor always
+  ///        stores an initial value before the instance is usable, so this is
+  ///        never observed uninitialised).
   const RealtimeVoiceChangerConfig& adopt_snapshot_for_block() noexcept;
 
   RealtimeVoiceChangerConfig config_{};
-  /// @brief Lock-free single-producer (config thread) / single-consumer (audio
-  ///        thread) snapshot publisher. The audio thread reads
-  ///        @c config_publisher_.current() through a stable pointer that only
-  ///        changes inside @c acquire(), so the per-sample loop sees a
-  ///        consistent config for the whole block.
-  rt::RtPublisher<RealtimeVoiceChangerConfig> config_publisher_;
-  /// @brief Tracks which snapshot pointer the audio thread last applied to
-  ///        per-channel DSP coefficients. When @c config_publisher_.current()
-  ///        differs from this, the audio thread re-runs
-  ///        @ref update_derived / @ref apply_channel_config before processing.
-  const RealtimeVoiceChangerConfig* applied_snapshot_ = nullptr;
+  /// @brief Realtime-safe single-writer/single-reader hand-off cell (see @c
+  ///        rt::SeqlockCell). Unlike @c rt::RtPublisher's shared_ptr
+  ///        snapshots, storing into this cell never allocates on the writer
+  ///        side either — see @ref set_config for why that matters on WASM.
+  rt::SeqlockCell<RealtimeVoiceChangerConfig> config_cell_;
+  /// @brief Monotonic version bumped (release ordering) every time @c
+  ///        config_cell_ is stored into. The audio thread compares this
+  ///        against @c applied_config_version_ to detect a pending
+  ///        configuration change without re-deriving coefficients when
+  ///        nothing changed. Coalescing is acceptable here: only the latest
+  ///        published value must eventually be observed, matching @c
+  ///        rt::RtPublisher's own "latest wins" semantics under a burst.
+  std::atomic<std::uint32_t> config_version_{0};
+  /// @brief Version the audio thread last applied to per-channel DSP
+  ///        coefficients. Audio-thread only; compared against @c
+  ///        config_version_ inside @ref adopt_snapshot_for_block.
+  std::uint32_t applied_config_version_ = 0;
+  /// @brief Audio thread's adopted working configuration, returned by @ref
+  ///        adopt_snapshot_for_block. Written only on the audio thread, inside
+  ///        @ref adopt_snapshot_for_block (and once, equivalently, by
+  ///        prepare() before any audio thread runs against this instance).
+  RealtimeVoiceChangerConfig active_config_{};
   // Whether the ISP limiter was active for the last adopted snapshot. Its
   // lookahead history must not survive an inactive interval.
   bool applied_isp_limiter_active_ = false;

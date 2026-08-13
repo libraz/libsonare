@@ -75,18 +75,36 @@ class SeqlockCell {
   ///        successful try_load(); RT-safe (no spin, no alloc). The cache is
   ///        touched only on this read path, so no extra synchronization is
   ///        required as long as a single reader thread calls it.
+  /// @details Callers that must distinguish "nothing new" from "conflicted,
+  ///          retry me later" — e.g. a reader driving change detection off a
+  ///          separate version counter, which must not mark a torn read as
+  ///          applied — should use @ref try_load_into instead: silently
+  ///          substituting the cached value here is exactly what makes that
+  ///          distinction impossible.
   T try_load() const noexcept {
-    const uint32_t g1 = guard_.load(std::memory_order_acquire);
-    if ((g1 & 1u) == 0u) {  // not mid-update
-      const T copy = load_words();
-      std::atomic_thread_fence(std::memory_order_acquire);
-      const uint32_t g2 = guard_.load(std::memory_order_acquire);
-      if (g1 == g2) {
-        cached_ = copy;
-        return copy;
-      }
+    T value{};
+    if (try_load_into(&value)) {
+      return value;
     }
     return cached_;
+  }
+
+  /// @brief Single non-spinning attempt that reports whether the read was
+  ///        consistent, instead of silently substituting a stale value on
+  ///        conflict. On success, writes the fresh value into `*out`, updates
+  ///        the @ref try_load cache, and returns true. On a conflict (writer
+  ///        mid-update or a torn read) leaves `*out` untouched and returns
+  ///        false. RT-safe (no spin, no alloc, no exception).
+  bool try_load_into(T* out) const noexcept {
+    const uint32_t g1 = guard_.load(std::memory_order_acquire);
+    if ((g1 & 1u) != 0u) return false;  // writer mid-update
+    const T copy = load_words();
+    std::atomic_thread_fence(std::memory_order_acquire);
+    const uint32_t g2 = guard_.load(std::memory_order_acquire);
+    if (g1 != g2) return false;  // torn read
+    cached_ = copy;
+    *out = copy;
+    return true;
   }
 
  private:

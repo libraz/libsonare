@@ -52,6 +52,45 @@ TEST_CASE("RealtimeVoiceChanger planar process_block performs no heap allocation
   changer.process_block(channels, 2, kBlock);
   REQUIRE(guard.count() == 0);
 }
+
+TEST_CASE("RealtimeVoiceChanger::set_config performs no heap allocation", "[voice_changer][rt]") {
+  // Regression coverage for the AudioWorklet render-thread hazard: on WASM,
+  // an AudioWorkletProcessor's port message handler runs on the SAME single
+  // rendering thread as process_block() (there is no separate "config
+  // thread" there), so a UI control that fires set_config() every frame
+  // while dragging a slider must not allocate — an allocation inside the
+  // ~2.67 ms/128-frame budget risks dropouts. This reproduces that call
+  // pattern directly: set_config() interleaved with process_block() on one
+  // thread, hammered repeatedly, all while the allocation counter is armed.
+  constexpr int kBlock = 128;
+  constexpr int kSampleRate = 48000;
+
+  sonare::editing::voice_changer::RealtimeVoiceChanger changer(
+      sonare::editing::voice_changer::realtime_voice_changer_preset(
+          sonare::editing::voice_changer::VoiceCharacterPreset::NeutralMonitor));
+  changer.prepare(kSampleRate, kBlock, 1);
+
+  std::array<float, kBlock> input{};
+  std::array<float, kBlock> output{};
+  input.fill(0.01f);
+
+  // Warm up: drive one block so any lazy first-block work completes before
+  // we start counting.
+  changer.process_block(input.data(), output.data(), kBlock);
+
+  auto config = changer.config();
+
+  AllocationGuard guard;
+  for (int i = 0; i < 16; ++i) {
+    // Vary several fields per call, as a real UI slider drag would.
+    config.wet_mix = (i % 2 == 0) ? 0.2f : 0.8f;
+    config.eq.presence_db = static_cast<float>(i) * 0.25f;
+    config.retune.semitones = static_cast<float>(i % 5);
+    changer.set_config(config);
+    changer.process_block(input.data(), output.data(), kBlock);
+  }
+  REQUIRE(guard.count() == 0);
+}
 #endif  // SONARE_WITH_VOICE_CHANGER
 
 #if defined(SONARE_WITH_FX) && defined(SONARE_WITH_ACOUSTIC_SIM)

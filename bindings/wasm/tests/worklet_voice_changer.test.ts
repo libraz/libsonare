@@ -359,6 +359,64 @@ describe('SonareRealtimeVoiceChangerWorkletProcessor', () => {
       expect(setConfigCalls).toBe(0);
     });
 
+    it('hammering setConfig via receiveMessage between blocks allocates no Float32Array storage (RT-safety)', () => {
+      // Reproduces the real AudioWorklet hazard directly: dragging a UI
+      // slider fires postMessage -> receiveMessage({type: 'setConfig', ...})
+      // once per animation frame, and on WASM that handler runs on the SAME
+      // single rendering thread as process() (there is no separate "control
+      // thread" inside an AudioWorkletGlobalScope). Interleave setConfig with
+      // process() the way a real drag would and assert no size-based
+      // Float32Array allocation happens on this thread for either call.
+      //
+      // This only observes JS-side typed-array allocation; it cannot see
+      // whether the underlying WASM call heap-allocates internally (e.g. via
+      // malloc for a C++ shared_ptr). That is covered directly, with a real
+      // allocation-counting harness over operator new/delete, by
+      // "RealtimeVoiceChanger::set_config performs no heap allocation" in
+      // tests/mixing/no_alloc_voice_reverb_test.cpp.
+      const original = globalThis.Float32Array;
+      let storageAllocationCount = 0;
+      const proxy = new Proxy(original, {
+        construct(target, args, newTarget) {
+          if (typeof args[0] === 'number') {
+            storageAllocationCount++;
+          }
+          return Reflect.construct(target, args, newTarget);
+        },
+      });
+      const blockSize = 128;
+      const processor = new SonareRealtimeVoiceChangerWorkletProcessor({
+        preset: 'neutral-monitor',
+        sampleRate: 48000,
+        blockSize,
+        channelCount: 1,
+      });
+      try {
+        (globalThis as { Float32Array: typeof Float32Array }).Float32Array =
+          proxy as unknown as typeof Float32Array;
+        const input = new original(blockSize);
+        const output = new original(blockSize);
+        for (let i = 0; i < blockSize; i++) {
+          input[i] = Math.sin((2 * Math.PI * 220 * i) / 48000) * 0.1;
+        }
+        const pods = [
+          workletPod(),
+          { ...workletPod(), wetMix: 0.2 },
+          { ...workletPod(), wetMix: 0.8 },
+        ];
+        storageAllocationCount = 0;
+        for (let i = 0; i < 30; i++) {
+          processor.receiveMessage({ type: 'setConfig', config: pods[i % pods.length] });
+          expect(processor.process([[input]], [[output]])).toBe(true);
+        }
+        expect(storageAllocationCount).toBe(0);
+        expect(output.every((sample) => Number.isFinite(sample))).toBe(true);
+      } finally {
+        (globalThis as { Float32Array: typeof Float32Array }).Float32Array = original;
+        processor.destroy();
+      }
+    });
+
     it.skip('invalid preset at construction throws or falls back gracefully (skipped: WASM embind preset validation path not yet exposed at worklet ctor level)', () => {
       // The SonareRealtimeVoiceChangerWorkletProcessor constructor calls
       //   new RealtimeVoiceChanger(options.preset ?? 'neutral-monitor')
