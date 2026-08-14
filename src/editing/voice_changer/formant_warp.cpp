@@ -116,8 +116,13 @@ Audio FormantWarp::process(const Audio& audio) const {
     std::copy(residual.begin(), residual.end(), padded.begin());
     fft.forward(padded.data(), spec.data());
 
-    // Original all-pole envelope magnitude: |H[k]| = sqrt(gain) / |A(e^{jw_k})|.
-    const float gain = std::sqrt(std::max(model.variance, 0.0f));
+    // Gain-normalized all-pole envelope: |H[k]| / sqrt(variance) = 1 / |A(e^{jw_k})|.
+    // The excitation level is already carried by the residual itself, so the
+    // sqrt(variance) factor of the absolute envelope must NOT appear here — it
+    // would scale every frame by its own residual RMS, collapsing the output by
+    // the LPC prediction gain and making the loss signal-dependent. Warping is
+    // linear in the envelope, so omitting the constant is equivalent to dividing
+    // the recolored spectrum by it.
     for (int k = 0; k < n_bins; ++k) {
       const float w = kTwoPi * static_cast<float>(k) / static_cast<float>(n_fft);
       float re = 1.0f;
@@ -128,7 +133,7 @@ Audio FormantWarp::process(const Audio& audio) const {
         im += model.ar[p] * std::sin(phase);
       }
       const float mag_a = std::sqrt(re * re + im * im);
-      env[static_cast<size_t>(k)] = gain / (mag_a + kSpectrumEpsilon);
+      env[static_cast<size_t>(k)] = 1.0f / (mag_a + kSpectrumEpsilon);
     }
 
     // Warp envelope by resampling along frequency (src = k' / effective_factor).

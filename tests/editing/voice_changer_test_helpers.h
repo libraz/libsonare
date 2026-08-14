@@ -52,6 +52,26 @@ namespace {
   return output;
 }
 
+// Vowel-like source: harmonics of f0 under a resonance-shaped magnitude
+// envelope, giving LPC a real spectral envelope to model and warp.
+[[maybe_unused]] std::vector<float> vowel(float f0, float formant_hz, int sample_rate, int samples,
+                                          float amplitude) {
+  std::vector<float> output(static_cast<size_t>(samples), 0.0f);
+  constexpr float kBandwidthHz = 600.0f;
+  const float nyquist = 0.5f * static_cast<float>(sample_rate);
+  for (int h = 1; static_cast<float>(h) * f0 < nyquist; ++h) {
+    const float harm_hz = static_cast<float>(h) * f0;
+    const float env = 1.0f / (1.0f + std::pow((harm_hz - formant_hz) / kBandwidthHz, 2.0f));
+    for (int i = 0; i < samples; ++i) {
+      output[static_cast<size_t>(i)] +=
+          amplitude * env *
+          static_cast<float>(std::sin(sonare::constants::kTwoPiD * harm_hz *
+                                      static_cast<double>(i) / sample_rate));
+    }
+  }
+  return output;
+}
+
 [[maybe_unused]] int zero_crossings(const std::vector<float>& samples) {
   int crossings = 0;
   for (size_t i = 1; i < samples.size(); ++i) {

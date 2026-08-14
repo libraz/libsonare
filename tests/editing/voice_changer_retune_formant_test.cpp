@@ -228,6 +228,57 @@ TEST_CASE("FormantWarp raises the spectral envelope when factor > 1", "[voice_ch
   REQUIRE(centroid_out > centroid_in);
 }
 
+TEST_CASE("FormantWarp preserves signal level across warp factors", "[voice_changer]") {
+  constexpr int sample_rate = 32000;
+  constexpr int n = sample_rate;  // 1 s, long enough for a steady interior.
+  const std::vector<float> samples = vowel(150.0f, 900.0f, sample_rate, n, 0.2f);
+  const sonare::Audio audio = sonare::Audio::from_vector(samples, sample_rate);
+
+  // Skip the first and last frame's worth of OLA edge so only steady-state
+  // frames are measured.
+  constexpr std::size_t kEdge = 2048;
+  const float in_rms = block_rms(samples, kEdge, samples.size() - kEdge);
+  REQUIRE(in_rms > 0.0f);
+
+  // Warping reshapes the envelope, so the level moves a little; it must not
+  // collapse. A gain error of the LPC prediction gain shows up as tens of dB.
+  for (float factor : {0.8f, 1.2f, 1.5f}) {
+    const sonare::Audio warped = FormantWarp({factor, 12, 1.0f}).process(audio);
+    const std::vector<float> out(warped.begin(), warped.end());
+    const float out_rms = block_rms(out, kEdge, out.size() - kEdge);
+    const float delta_db = 20.0f * std::log10(out_rms / in_rms);
+    INFO("factor " << factor << " level delta " << delta_db << " dB");
+    REQUIRE(std::abs(delta_db) < 4.0f);
+  }
+}
+
+TEST_CASE("FormantWarp gain is independent of input level", "[voice_changer]") {
+  constexpr int sample_rate = 32000;
+  constexpr int n = sample_rate / 2;
+  const std::vector<float> loud = vowel(150.0f, 900.0f, sample_rate, n, 0.2f);
+  std::vector<float> quiet(loud.size());
+  for (std::size_t i = 0; i < loud.size(); ++i) quiet[i] = 0.25f * loud[i];
+
+  auto render = [&](const std::vector<float>& in) {
+    const sonare::Audio out =
+        FormantWarp({1.3f, 12, 1.0f}).process(sonare::Audio::from_vector(in, sample_rate));
+    return std::vector<float>(out.begin(), out.end());
+  };
+
+  const std::vector<float> loud_out = render(loud);
+  const std::vector<float> quiet_out = render(quiet);
+  REQUIRE(loud_out.size() == quiet_out.size());
+
+  // Recolouring the residual with an envelope that still carries the frame's
+  // excitation gain makes the transfer quadratic in input level; the warp must
+  // stay homogeneous instead.
+  constexpr std::size_t kEdge = 2048;
+  const float loud_rms = block_rms(loud_out, kEdge, loud_out.size() - kEdge);
+  const float quiet_rms = block_rms(quiet_out, kEdge, quiet_out.size() - kEdge);
+  REQUIRE(loud_rms > 0.0f);
+  REQUIRE_THAT(quiet_rms, WithinRel(0.25f * loud_rms, 0.02f));
+}
+
 TEST_CASE("FormantWarp clamps finite formant factors to realtime bounds", "[voice_changer]") {
   constexpr int sample_rate = 22050;
   const sonare::Audio audio =
