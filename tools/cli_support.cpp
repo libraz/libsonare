@@ -10,8 +10,10 @@
 #include <iostream>
 #include <limits>
 #include <numeric>
+#include <set>
 #include <stdexcept>
 #include <thread>
+#include <utility>
 
 #if defined(_WIN32)
 #include <io.h>
@@ -23,6 +25,31 @@
 #include <mach/mach.h>
 #include <sys/sysctl.h>
 #endif
+
+int cli_exit_code_for_error(sonare::ErrorCode error, bool legacy_mode) noexcept {
+  if (legacy_mode) return 1;
+  switch (error) {
+    case sonare::ErrorCode::FileNotFound:
+      return 4;
+    case sonare::ErrorCode::InvalidFormat:
+      return 5;
+    case sonare::ErrorCode::DecodeFailed:
+      return 6;
+    case sonare::ErrorCode::InvalidParameter:
+      return 3;
+    case sonare::ErrorCode::OutOfMemory:
+      return 7;
+    case sonare::ErrorCode::NotImplemented:
+      return 8;
+    case sonare::ErrorCode::InvalidState:
+      return 9;
+    case sonare::ErrorCode::Cancelled:
+      return 11;
+    case sonare::ErrorCode::Ok:
+    default:
+      return 10;
+  }
+}
 
 JsonBuilder& JsonBuilder::begin_object() {
   append_separator();
@@ -111,6 +138,13 @@ JsonBuilder& JsonBuilder::value(double v) {
 JsonBuilder& JsonBuilder::value(bool v) {
   append_separator();
   ss_ << (v ? "true" : "false");
+  needs_comma_.back() = true;
+  return *this;
+}
+
+JsonBuilder& JsonBuilder::null_value() {
+  append_separator();
+  ss_ << "null";
   needs_comma_.back() = true;
   return *this;
 }
@@ -205,134 +239,542 @@ int parse_int_strict(const std::string& option, const std::string& value) {
 
 }  // namespace
 
-float CliArgs::get_float(const std::string& k, float def) const {
-  auto it = options.find(k);
-  return it != options.end() ? parse_float_strict(k, it->second) : def;
+namespace {
+
+// ---------------------------------------------------------------------------
+// Immutable native CLI registry
+// ---------------------------------------------------------------------------
+
+CliOptionValue null_default() { return {}; }
+
+CliOptionValue bool_default(bool value = false) {
+  CliOptionValue result;
+  result.kind = CliOptionDefaultKind::Boolean;
+  result.boolean_value = value;
+  return result;
 }
 
-int CliArgs::get_int(const std::string& k, int def) const {
-  auto it = options.find(k);
-  return it != options.end() ? parse_int_strict(k, it->second) : def;
+CliOptionValue int_default(int value) {
+  CliOptionValue result;
+  result.kind = CliOptionDefaultKind::Integer;
+  result.integer_value = value;
+  return result;
 }
 
-bool CliArgs::has(const std::string& k) const { return options.count(k) > 0; }
-
-std::string CliArgs::get_string(const std::string& k, const std::string& def) const {
-  auto it = options.find(k);
-  return it != options.end() ? it->second : def;
+CliOptionValue number_default(double value) {
+  CliOptionValue result;
+  result.kind = CliOptionDefaultKind::Number;
+  result.number_value = value;
+  return result;
 }
 
-CliArgs ArgParser::parse(int argc, char* argv[]) {
-  CliArgs args;
-  bool end_of_options = false;
+CliOptionValue string_default(const std::string& value) {
+  CliOptionValue result;
+  result.kind = CliOptionDefaultKind::String;
+  result.string_value = value;
+  return result;
+}
 
-  for (int i = 1; i < argc; ++i) {
-    std::string arg = argv[i];
+CliOptionValue string_array_default() {
+  CliOptionValue result;
+  result.kind = CliOptionDefaultKind::StringArray;
+  return result;
+}
 
-    if (arg == "--") {
-      end_of_options = true;
-    } else if (!end_of_options && (arg == "--help" || arg == "-h")) {
-      args.help = true;
-    } else if (!end_of_options && arg == "--json") {
-      args.json_output = true;
-    } else if (!end_of_options && (arg == "--quiet" || arg == "-q")) {
-      args.quiet = true;
-    } else if (!end_of_options && try_parse_global_option(args, arg, argv, i, argc)) {
-      // Handled
-    } else if (!end_of_options && arg.size() > 2 && arg.substr(0, 2) == "--") {
-      const size_t equals = arg.find('=');
-      if (equals == std::string::npos) {
-        parse_option(args, arg.substr(2), argv, i, argc);
-      } else {
-        const std::string key = arg.substr(2, equals - 2);
-        const std::string value = arg.substr(equals + 1);
-        parse_option(args, key, argv, i, argc, &value);
+CliOptionSpec make_option(const char* name, CliOptionArity arity, CliOptionScalarType type,
+                          CliOptionValue default_value, std::vector<std::string> aliases = {},
+                          CliOptionValue implicit_optional_default = {}, bool required = false,
+                          bool repeatable = false, bool global_lexical = false,
+                          bool inventory = true) {
+  CliOptionSpec result;
+  result.name = name;
+  result.aliases = std::move(aliases);
+  result.arity = arity;
+  result.scalar_type = type;
+  result.default_value = required ? null_default() : std::move(default_value);
+  result.implicit_optional_default = std::move(implicit_optional_default);
+  result.required = required;
+  result.repeatable = repeatable;
+  result.global_lexical = global_lexical;
+  result.inventory = inventory;
+  return result;
+}
+
+CliOptionSpec flag(const char* name, bool global_lexical = false, bool inventory = true,
+                   std::vector<std::string> aliases = {}) {
+  return make_option(name, CliOptionArity::Flag, CliOptionScalarType::Boolean, bool_default(),
+                     std::move(aliases), {}, false, false, global_lexical, inventory);
+}
+
+CliOptionSpec int_value(const char* name, int value, bool required = false,
+                        bool global_lexical = false, bool inventory = true) {
+  return make_option(name, CliOptionArity::RequiredValue, CliOptionScalarType::Integer,
+                     int_default(value), {}, {}, required, false, global_lexical, inventory);
+}
+
+CliOptionSpec int_value(const char* name, bool required = false, bool global_lexical = false,
+                        bool inventory = true) {
+  return make_option(name, CliOptionArity::RequiredValue, CliOptionScalarType::Integer,
+                     null_default(), {}, {}, required, false, global_lexical, inventory);
+}
+
+CliOptionSpec number_value(const char* name, double value, bool required = false,
+                           bool global_lexical = false, bool inventory = true) {
+  return make_option(name, CliOptionArity::RequiredValue, CliOptionScalarType::Number,
+                     number_default(value), {}, {}, required, false, global_lexical, inventory);
+}
+
+CliOptionSpec number_value(const char* name, bool required = false, bool global_lexical = false,
+                           bool inventory = true) {
+  return make_option(name, CliOptionArity::RequiredValue, CliOptionScalarType::Number,
+                     null_default(), {}, {}, required, false, global_lexical, inventory);
+}
+
+CliOptionSpec string_value(const char* name, const char* value, bool required = false,
+                           bool repeatable = false, bool inventory = true) {
+  return make_option(name, CliOptionArity::RequiredValue, CliOptionScalarType::String,
+                     repeatable ? string_array_default() : string_default(value), {}, {}, required,
+                     repeatable, false, inventory);
+}
+
+CliOptionSpec string_value(const char* name, bool required = false, bool repeatable = false,
+                           bool inventory = true) {
+  return make_option(name, CliOptionArity::RequiredValue, CliOptionScalarType::String,
+                     repeatable ? string_array_default() : string_default(""), {}, {}, required,
+                     repeatable, false, inventory);
+}
+
+CliOptionSpec path_value(const char* name, bool required = false, bool global_lexical = false,
+                         bool inventory = true, std::vector<std::string> aliases = {}) {
+  return make_option(name, CliOptionArity::RequiredValue, CliOptionScalarType::Path, null_default(),
+                     std::move(aliases), {}, required, false, global_lexical, inventory);
+}
+
+CliOptionSpec required_path(const char* name) { return path_value(name, true); }
+
+#ifdef SONARE_WITH_ARRANGEMENT
+CliOptionSpec optional_string(const char* name, const char* implicit = "true",
+                              bool repeatable = false) {
+  return make_option(name, CliOptionArity::OptionalValue, CliOptionScalarType::String,
+                     null_default(), {}, string_default(implicit), false, repeatable);
+}
+#endif
+
+CliOptionSpec output_value(bool required = false) {
+  return path_value("output", required, true, true, {"o"});
+}
+
+CliOptionSpec global_int(const char* name, int value) {
+  return int_value(name, value, false, true);
+}
+
+CliOptionSpec global_number(const char* name, double value) {
+  return number_value(name, value, false, true);
+}
+
+CliOptionSpec required_int(const char* name, std::vector<std::string> aliases = {}) {
+  return make_option(name, CliOptionArity::RequiredValue, CliOptionScalarType::Integer,
+                     int_default(0), std::move(aliases), {}, true);
+}
+
+#ifdef SONARE_WITH_MASTERING
+CliOptionSpec required_string(const char* name) { return string_value(name, "", true); }
+#endif
+
+std::vector<CliOptionSpec> with_json(std::vector<CliOptionSpec> options) {
+  options.insert(options.begin(), flag("json", true));
+  // These parser controls are part of every leaf contract, but remain hidden
+  // from the stable inventory and per-command option list.  Keeping them on
+  // the same records lets lexical parsing and path validation share one
+  // source without making implementation controls part of the public dump.
+  options.push_back(flag("quiet", true, false, {"q"}));
+  options.push_back(flag("help", true, false, {"h"}));
+  return options;
+}
+
+void add_command(std::vector<CliCommandSpec>& registry, const char* path, bool requires_audio,
+                 std::vector<CliOptionSpec> options, std::vector<std::string> aliases = {}) {
+  registry.push_back(
+      {path, std::move(aliases), with_json(std::move(options)), requires_audio, true});
+}
+
+const std::vector<CliCommandSpec>& build_cli_registry() {
+  static const std::vector<CliCommandSpec> registry = [] {
+    std::vector<CliCommandSpec> commands;
+    commands.reserve(110);
+
+    // Analysis leaves.
+    add_command(commands, "analyze", true,
+                {flag("with-seventh"), flag("no-hpss"), number_value("chroma-highpass", 80.0)});
+    for (const char* path : {"bpm", "beats", "downbeats", "onsets"})
+      add_command(commands, path, true, {});
+    add_command(
+        commands, "timbre", true,
+        {global_int("n-fft", 2048), global_int("hop-length", 512), global_int("n-mels", 128)});
+    add_command(commands, "key", true,
+                {global_int("n-fft", 4096), global_int("hop-length", 512), int_value("candidates"),
+                 flag("use-hpss", false, true, {"hpss"}), flag("loudness-weighted"),
+                 number_value("high-pass-hz", 0.0), string_value("modes"), string_value("profile"),
+                 string_value("genre-hint")});
+    add_command(commands, "chords", true,
+                {global_int("n-fft", 2048), global_int("hop-length", 512),
+                 number_value("min-duration", 0.3), number_value("smoothing-window", 2.0),
+                 number_value("threshold", 0.5), flag("triads-only"), flag("nnls"),
+                 flag("no-beat-sync"), flag("use-hmm"), int_value("hmm-beam-width", 24),
+                 flag("key-context"), string_value("key-root", "C"),
+                 string_value("key-mode", "major"), flag("detect-inversions")});
+    add_command(commands, "sections", true,
+                {number_value("min-duration", 4.0), number_value("threshold", 0.3),
+                 global_int("n-fft", 2048), global_int("hop-length", 512)});
+    add_command(commands, "dynamics", true, {number_value("window-sec", 0.4)});
+    add_command(commands, "rhythm", true,
+                {number_value("start-bpm", 120.0), number_value("bpm-min", 60.0),
+                 number_value("bpm-max", 200.0)});
+    add_command(commands, "melody", true, {number_value("threshold", 0.1)});
+    add_command(commands, "boundaries", true,
+                {number_value("threshold", 0.3), int_value("kernel-size", 64),
+                 number_value("min-distance", 2.0)});
+
+    // Processing leaves.
+    add_command(commands, "pitch-shift", true,
+                {number_value("semitones"), output_value(), global_int("n-fft", 2048),
+                 global_int("hop-length", 512)});
+    add_command(commands, "time-stretch", true,
+                {number_value("rate"), output_value(), global_int("n-fft", 2048),
+                 global_int("hop-length", 512)});
+    add_command(
+        commands, "pitch-correct", true,
+        {number_value("current-midi", 69.0), number_value("target-midi", 69.0), output_value()});
+    add_command(commands, "note-stretch", true,
+                {int_value("onset", 0), int_value("offset", 0), number_value("ratio", 1.0),
+                 output_value()});
+    add_command(commands, "voice-change", true,
+                {string_value("preset", ""), path_value("preset-json"), path_value("preset-pack"),
+                 string_value("set", "", false, true), number_value("pitch-semitones"),
+                 number_value("formant-factor"), output_value()});
+    add_command(commands, "voice-presets", false, {});
+    add_command(commands, "voice-preset", false, {string_value("preset", "neutral-monitor")});
+    add_command(
+        commands, "voice-preset-validate", false,
+        {path_value("preset-json"), string_value("preset"), string_value("set", "", false, true)});
+    add_command(
+        commands, "hpss", true,
+        {int_value("kernel-harmonic", 31), int_value("kernel-percussive", 31), output_value(),
+         flag("harmonic-only"), flag("percussive-only"), flag("with-residual"), flag("hard-mask"),
+         global_int("n-fft", 2048), global_int("hop-length", 512)});
+    add_command(commands, "preemphasis", true, {number_value("coef", 0.97), output_value()});
+    add_command(commands, "deemphasis", true, {number_value("coef", 0.97), output_value()});
+    add_command(commands, "trim-silence", true,
+                {number_value("threshold-db"), number_value("top-db"), output_value(),
+                 global_int("n-fft", 2048), global_int("hop-length", 512)});
+    add_command(
+        commands, "split-silence", true,
+        {number_value("top-db", 60.0), global_int("n-fft", 2048), global_int("hop-length", 512)});
+    add_command(commands, "normalize", true,
+                {string_value("mode", "peak"), number_value("target-db"), output_value()});
+    add_command(commands, "gain", true, {number_value("gain-db"), output_value()});
+    add_command(commands, "fade", true,
+                {number_value("fade-in"), number_value("fade-out"), output_value()});
+    add_command(commands, "filter", true,
+                {string_value("type"), int_value("order", 2), number_value("cutoff", 0.0),
+                 number_value("center", 0.0), number_value("bandwidth", 0.0), output_value(),
+                 flag("zero-phase")});
+    add_command(commands, "resample", true,
+                {required_int("target-rate", {"target-sr"}), output_value()});
+    add_command(commands, "tone", false,
+                {number_value("frequency"), int_value("sr", 22050), number_value("duration", 1.0),
+                 number_value("phase", 0.0), number_value("amplitude", 1.0), output_value()});
+    add_command(commands, "chirp", false,
+                {int_value("sr", 22050), number_value("duration", 1.0), output_value(),
+                 flag("exponential"), global_number("fmin", 0.0), global_number("fmax", 0.0)});
+    add_command(
+        commands, "clicks", false,
+        {string_value("times"), int_value("sr", 22050), int_value("length", 0),
+         number_value("frequency", 1000.0), number_value("click-duration", 0.1), output_value()});
+
+#ifdef SONARE_WITH_MASTERING
+    add_command(commands, "mastering", true,
+                {string_value("preset"), path_value("config"), number_value("target-lufs", -14.0),
+                 number_value("ceiling-db", -1.0), string_value("params"), int_value("bits", 16),
+                 int_value("true-peak-oversample", 4), path_value("report"), output_value(),
+                 flag("assistant"), flag("enable-repair"), flag("explain")});
+    add_command(commands, "mastering-processor", true,
+                {required_string("processor"), string_value("params"), int_value("bits", 16),
+                 output_value(), flag("stereo")});
+    add_command(commands, "eq", true,
+                {string_value("params"),
+                 int_value("type", 0),
+                 number_value("frequency-hz", 1000.0),
+                 number_value("gain-db", 0.0),
+                 number_value("q", 1.0),
+                 int_value("coeff-mode", 0),
+                 int_value("slope-db-oct", 12),
+                 int_value("placement", 0),
+                 number_value("threshold-db", -24.0),
+                 number_value("ratio", 2.0),
+                 number_value("range-db", -6.0),
+                 number_value("attack-ms", 5.0),
+                 number_value("release-ms", 50.0),
+                 number_value("lookahead-ms", 0.0),
+                 number_value("sidechain-freq-hz", -1.0),
+                 number_value("sidechain-q", 1.0),
+                 int_value("phase-mode", 1),
+                 int_value("resolution", 0),
+                 number_value("gain-scale", 1.0),
+                 number_value("output-gain-db", 0.0),
+                 number_value("output-pan", 0.0),
+                 int_value("bits", 16),
+                 output_value(),
+                 flag("proportional-q"),
+                 flag("dynamic"),
+                 flag("auto-threshold"),
+                 flag("auto-gain")});
+    add_command(commands, "mastering-pair-processor", true,
+                {required_string("processor"), required_path("reference"), string_value("params"),
+                 int_value("bits", 16), output_value()});
+    add_command(commands, "mastering-pair-analyze", true,
+                {required_string("analysis"), required_path("reference"), string_value("params")});
+    add_command(commands, "mastering-stereo-analyze", true,
+                {required_string("analysis"), required_path("reference"), string_value("params")});
+    add_command(commands, "mastering-processors", false, {});
+    add_command(commands, "mastering-pair-processors", false, {});
+    add_command(commands, "mastering-pair-analyses", false, {});
+    add_command(commands, "mastering-stereo-analyses", false, {});
+#endif
+#ifdef SONARE_WITH_MIXING
+    add_command(commands, "mix-strip", true,
+                {number_value("input-trim-db", 0.0), number_value("fader-db", 0.0),
+                 number_value("pan", 0.0), string_value("pan-mode", "balance"),
+                 number_value("width", 1.0), output_value()},
+                {"mix"});
+    add_command(commands, "mix", true,
+                {number_value("input-trim-db", 0.0), number_value("fader-db", 0.0),
+                 number_value("pan", 0.0), string_value("pan-mode", "balance"),
+                 number_value("width", 1.0), output_value()},
+                {"mix-strip"});
+    add_command(commands, "mixing-presets", false, {});
+    add_command(commands, "mixing-preset", false, {string_value("preset")});
+#endif
+
+    // Feature leaves.
+    add_command(
+        commands, "mel", true,
+        {global_int("n-fft", 2048), global_int("hop-length", 512), global_int("n-mels", 128),
+         global_number("fmin", 0.0), global_number("fmax", 0.0), flag("htk")});
+    add_command(commands, "chroma", true,
+                {global_int("n-fft", 2048), global_int("hop-length", 512)});
+    add_command(commands, "tonnetz", true,
+                {global_int("n-fft", 2048), global_int("hop-length", 512)});
+    add_command(commands, "spectral", true,
+                {global_int("n-fft", 2048), global_int("hop-length", 512)});
+    add_command(commands, "pitch", true,
+                {string_value("algorithm", "pyin"), number_value("threshold", 0.1),
+                 global_int("hop-length", 512), global_number("fmin", 65.0),
+                 global_number("fmax", 2093.0)});
+    add_command(
+        commands, "onset-env", true,
+        {global_int("n-fft", 2048), global_int("hop-length", 512), global_int("n-mels", 128)});
+    add_command(
+        commands, "onset-envelope", true,
+        {global_int("n-fft", 2048), global_int("hop-length", 512), global_int("n-mels", 128)});
+    for (const char* path : {"fourier-tempogram", "tempogram-ratio"})
+      add_command(commands, path, true,
+                  {int_value("win-length", 384), global_int("hop-length", 512)});
+    add_command(commands, "tempogram", true,
+                {global_int("n-fft", 2048), global_int("hop-length", 512),
+                 global_int("n-mels", 128), int_value("win-length", 384)});
+    add_command(commands, "plp", true,
+                {global_int("n-fft", 2048), global_int("hop-length", 512),
+                 global_int("n-mels", 128), number_value("tempo-min", 30.0),
+                 number_value("tempo-max", 300.0), int_value("win-length", 384)});
+    add_command(commands, "nnls-chroma", true, {global_int("hop-length", 512)});
+    add_command(commands, "cqt", true,
+                {int_value("n-bins", 84), int_value("bins-per-octave", 12),
+                 global_int("hop-length", 512), global_number("fmin", 0.0)});
+    add_command(commands, "vqt", true,
+                {int_value("n-bins", 84), int_value("bins-per-octave", 12),
+                 number_value("gamma", 0.0), number_value("filter-scale", 1.0),
+                 global_int("hop-length", 512), global_number("fmin", 0.0)});
+    add_command(commands, "mel-to-audio", true,
+                {int_value("n-iter", 32), output_value(), global_int("n-fft", 2048),
+                 global_int("hop-length", 512), global_int("n-mels", 128),
+                 global_number("fmin", 0.0), global_number("fmax", 0.0)});
+    add_command(
+        commands, "mfcc-to-audio", true,
+        {int_value("n-mfcc", 13), int_value("n-iter", 32), output_value(),
+         global_int("n-fft", 2048), global_int("hop-length", 512), global_int("n-mels", 128),
+         global_number("fmin", 0.0), global_number("fmax", 0.0)});
+    add_command(commands, "acoustic", true,
+                {flag("ir"), int_value("n-bands", 6), number_value("min-decay-db", 30.0),
+                 number_value("noise-floor-margin-db", 10.0)});
+
+#ifdef SONARE_WITH_ACOUSTIC_SIM
+    add_command(commands, "estimate-room", true,
+                {number_value("aspect-lw", 1.0), number_value("aspect-lh", 1.0),
+                 number_value("reference-absorption", 0.15), flag("sabine"),
+                 make_option("n-octave-bands", CliOptionArity::RequiredValue,
+                             CliOptionScalarType::Integer, null_default(), {"n-bands"})});
+    add_command(commands, "synthesize-rir", false,
+                {number_value("length", 7.0), number_value("width", 5.0),
+                 number_value("height", 3.0), number_value("absorption", 0.2),
+                 number_value("source-x", 1.0), number_value("source-y", 1.0),
+                 number_value("source-z", 1.2), number_value("listener-x", 5.0),
+                 number_value("listener-y", 4.0), number_value("listener-z", 1.7),
+                 int_value("sample-rate", 48000), int_value("ism-order", 3), int_value("seed", 1),
+                 number_value("max-seconds", 0.0), output_value(), flag("sabine")});
+    add_command(
+        commands, "room-morph", true,
+        {number_value("length", 7.0), number_value("width", 5.0), number_value("height", 3.0),
+         number_value("absorption", 0.2), number_value("source-x", 1.0),
+         number_value("source-y", 1.0), number_value("source-z", 1.2),
+         number_value("listener-x", 5.0), number_value("listener-y", 4.0),
+         number_value("listener-z", 1.7), number_value("suppression", 0.5),
+         number_value("wet", 0.5), int_value("ism-order", 3), int_value("seed", 1),
+         number_value("max-seconds", 0.0), output_value(), flag("sabine")});
+#endif
+
+    // Metering and scalar utility leaves.
+    add_command(commands, "lufs", true, {flag("series")});
+    add_command(commands, "meter", true,
+                {number_value("clip-threshold", 0.999), int_value("oversample", 4)});
+    add_command(commands, "clipping", true,
+                {number_value("threshold", 0.999), int_value("min-region", 1)});
+    add_command(commands, "dynamic-range", true,
+                {number_value("window-sec", 3.0), number_value("hop-sec", 1.0),
+                 number_value("low-percentile", 0.10), number_value("high-percentile", 0.95)});
+    add_command(commands, "stereo", true, {path_value("reference")});
+    add_command(commands, "phase", true, {path_value("reference")});
+    add_command(commands, "frames-to-samples", false,
+                {int_value("frames"), global_int("n-fft", 2048), global_int("hop-length", 512)});
+    add_command(commands, "samples-to-frames", false,
+                {int_value("samples"), global_int("n-fft", 2048), global_int("hop-length", 512)});
+    add_command(commands, "power-to-db", false,
+                {string_value("values"), number_value("ref", 1.0), number_value("amin", 1e-10),
+                 number_value("top-db", 80.0)});
+    add_command(commands, "amplitude-to-db", false,
+                {string_value("values"), number_value("ref", 1.0), number_value("amin", 1e-5),
+                 number_value("top-db", 80.0)});
+    add_command(commands, "db-to-power", false, {string_value("values"), number_value("ref", 1.0)});
+    add_command(commands, "db-to-amplitude", false,
+                {string_value("values"), number_value("ref", 1.0)});
+    add_command(commands, "frame-signal", false,
+                {string_value("values"), int_value("frame-length"), global_int("n-fft", 2048),
+                 global_int("hop-length", 512)});
+    add_command(commands, "pad-center", false,
+                {string_value("values"), int_value("size"), number_value("pad-value", 0.0)});
+    add_command(commands, "fix-length", false,
+                {string_value("values"), int_value("size"), number_value("pad-value", 0.0)});
+    add_command(
+        commands, "fix-frames", false,
+        {string_value("values"), int_value("x-min", 0), int_value("x-max", -1), flag("no-pad")});
+    add_command(commands, "peak-pick", false,
+                {string_value("values"), int_value("pre-max", 1), int_value("post-max", 1),
+                 int_value("pre-avg", 1), int_value("post-avg", 1), number_value("delta", 0.0),
+                 int_value("wait", 0)});
+    add_command(
+        commands, "vector-normalize", false,
+        {string_value("values"), int_value("norm-type", 0), number_value("threshold", 1e-12)});
+    add_command(commands, "pcen", false,
+                {string_value("values"), int_value("sample-rate", 22050),
+                 number_value("time-constant", 0.4), number_value("gain", 0.98),
+                 number_value("bias", 2.0), number_value("power", 0.5), number_value("eps", 1e-6),
+                 int_value("n-bins"), int_value("n-frames")});
+    add_command(commands, "info", true, {});
+
+    add_command(commands, "version", false, {});
+    add_command(commands, "doctor", false, {});
+    add_command(commands, "system-info", false, {});
+
+#ifdef SONARE_WITH_ARRANGEMENT
+    // Exactly ten project leaves; there is deliberately no broad `project`
+    // option row.
+    add_command(commands, "project.abi", false, {});
+    add_command(commands, "project.synth-presets", false, {});
+    add_command(commands, "project.new", false, {int_value("sample-rate", 0), output_value()});
+    add_command(commands, "project.validate", false,
+                {flag("strict"), required_path("in"), output_value()});
+    add_command(commands, "project.compile", false, {required_path("in")});
+    add_command(commands, "project.bounce", false,
+                {required_path("in"), output_value(), int_value("sample-rate"),
+                 int_value("frames", 0), int_value("block-size", 0), int_value("channels", 2),
+                 int_value("instrument-latency", 0), optional_string("synth")});
+    add_command(commands, "project.export-smf", false, {required_path("in"), output_value()});
+    add_command(commands, "project.import-smf", false, {required_path("smf"), output_value()});
+    add_command(commands, "project.export-midi2", false, {required_path("in"), output_value()});
+    add_command(commands, "project.import-midi2", false, {required_path("midi2"), output_value()});
+#endif
+    return commands;
+  }();
+  return registry;
+}
+
+const CliOptionSpec* option_for_spec(const CliCommandSpec* command, const std::string& option) {
+  if (command == nullptr) return nullptr;
+  for (const auto& item : command->options) {
+    if (item.name == option ||
+        std::find(item.aliases.begin(), item.aliases.end(), option) != item.aliases.end()) {
+      return &item;
+    }
+  }
+  return nullptr;
+}
+
+const CliOptionSpec* lexical_option_for_spelling(const std::string& spelling) {
+  const std::string option = spelling.rfind("--", 0) == 0  ? spelling.substr(2)
+                             : spelling.rfind("-", 0) == 0 ? spelling.substr(1)
+                                                           : spelling;
+  for (const auto& command : cli_command_registry()) {
+    for (const auto& item : command.options) {
+      if (!item.global_lexical) continue;
+      if (item.name == option ||
+          std::find(item.aliases.begin(), item.aliases.end(), option) != item.aliases.end()) {
+        return &item;
       }
-    } else if (!end_of_options && arg.size() > 1 && arg[0] == '-') {
-      args.options[arg] = "true";
-    } else if (args.command.empty()) {
-      args.command = arg;
-    } else {
-      args.positionals.push_back(arg);
-      if (args.input_file.empty()) args.input_file = arg;
     }
   }
-
-  return args;
+  return nullptr;
 }
 
-bool ArgParser::try_parse_global_option(CliArgs& args, const std::string& arg, char* argv[], int& i,
-                                        int argc) {
-  static const std::map<std::string, std::function<void(CliArgs&, const std::string&)>>
-      global_opts = {
-          {"--n-fft",
-           [](CliArgs& a, const std::string& v) {
-             a.n_fft = parse_int_strict("n-fft", v);
-             a.n_fft_explicit = true;
-           }},
-          {"--hop-length",
-           [](CliArgs& a, const std::string& v) {
-             a.hop_length = parse_int_strict("hop-length", v);
-           }},
-          {"--n-mels",
-           [](CliArgs& a, const std::string& v) { a.n_mels = parse_int_strict("n-mels", v); }},
-          {"--fmin",
-           [](CliArgs& a, const std::string& v) { a.fmin = parse_float_strict("fmin", v); }},
-          {"--fmax",
-           [](CliArgs& a, const std::string& v) { a.fmax = parse_float_strict("fmax", v); }},
-          {"-o", [](CliArgs& a, const std::string& v) { a.output_file = v; }},
-          {"--output", [](CliArgs& a, const std::string& v) { a.output_file = v; }},
-      };
+std::string command_path_for_args(const CliArgs& args) {
+  if (args.command == "project" && !args.input_file.empty()) return "project." + args.input_file;
+  return args.command;
+}
 
-  const size_t equals = arg.find('=');
-  const std::string option = equals == std::string::npos ? arg : arg.substr(0, equals);
-  auto it = global_opts.find(option);
-  if (it == global_opts.end()) return false;
-  if (equals != std::string::npos) {
-    const std::string value = arg.substr(equals + 1);
-    try {
-      it->second(args, value);
-    } catch (const std::out_of_range&) {
-      throw std::invalid_argument("value out of range for " + option + ": " + value);
-    }
-    if (option != "-o" && option != "--output") args.global_options.push_back(option.substr(2));
-    // A parse failure (std::invalid_argument, already naming the option)
-    // propagates to main and maps to the structured invalid-parameter exit,
-    // matching the command-level option path.
-    return true;
-  }
-  if (i + 1 >= argc) {
-    args.missing_value_options.push_back(option);
-    return true;
-  }
-  const std::string next = argv[i + 1];
+std::string canonical_option_name(const CliCommandSpec* command, const std::string& option) {
+  const CliOptionSpec* spec = option_for_spec(command, option);
+  return spec == nullptr ? option : spec->name;
+}
+
+bool is_negative_number(const std::string& value) {
+  if (value.size() <= 1 || value[0] != '-') return false;
   char* end = nullptr;
-  std::strtod(next.c_str(), &end);
-  const bool negative_number =
-      next.size() > 1 && next[0] == '-' &&
-      (std::isdigit(static_cast<unsigned char>(next[1])) || next[1] == '.' ||
-       (end != next.c_str() && end != nullptr && *end == '\0'));
-  if (next.size() > 1 && next[0] == '-' && !negative_number) {
-    args.missing_value_options.push_back(option);
-    return true;
+  std::strtod(value.c_str(), &end);
+  return std::isdigit(static_cast<unsigned char>(value[1])) || value[1] == '.' ||
+         (end != value.c_str() && end != nullptr && *end == '\0');
+}
+
+}  // namespace
+
+const std::vector<CliCommandSpec>& cli_command_registry() { return build_cli_registry(); }
+
+const CliCommandSpec* cli_command_spec_for_path(const std::string& path) {
+  for (const auto& command : cli_command_registry()) {
+    if (command.path == path) return &command;
   }
-  {
-    const std::string value = argv[++i];
-    try {
-      it->second(args, value);
-    } catch (const std::out_of_range&) {
-      throw std::invalid_argument("value out of range for " + option + ": " + value);
-    }
-    if (option != "-o" && option != "--output") args.global_options.push_back(option.substr(2));
-    return true;
+  for (const auto& command : cli_command_registry()) {
+    if (std::find(command.aliases.begin(), command.aliases.end(), path) != command.aliases.end())
+      return &command;
   }
+  return nullptr;
+}
+
+const CliOptionSpec* cli_option_spec_for_command(const std::string& command,
+                                                 const std::string& option) {
+  return option_for_spec(cli_command_spec_for_path(command), option);
 }
 
 namespace {
-// True for the falsey inline spellings of a boolean flag (`--flag=false`,
-// `=0`, `=no`, `=off`), case-insensitively. Used so `--triads-only=false`
-// disables the flag instead of enabling it — a presence-only flag would
-// otherwise treat any `=value` as "present" and invert the caller's intent.
+
 bool is_false_flag_literal(const std::string& value) {
   std::string lowered;
   lowered.reserve(value.size());
@@ -341,396 +783,342 @@ bool is_false_flag_literal(const std::string& value) {
   return lowered == "false" || lowered == "0" || lowered == "no" || lowered == "off";
 }
 
-// Options that may be supplied more than once accumulate their values as a
-// comma-joined list instead of overwriting, so the consumer (which splits on
-// ',') applies every occurrence. Mirrors the Python CLI's argparse
-// action="append" for --set; without it a repeated --set silently kept only the
-// last assignment.
 void assign_option_value(CliArgs& args, const std::string& key, const std::string& value) {
-  if (key == "set") {
-    auto it = args.options.find(key);
+  const CliCommandSpec* command = cli_command_spec_for_path(command_path_for_args(args));
+  const std::string canonical = canonical_option_name(command, key);
+  const CliOptionSpec* spec = option_for_spec(command, canonical);
+  if (spec != nullptr && spec->repeatable) {
+    auto it = args.options.find(canonical);
     if (it != args.options.end() && !it->second.empty()) {
       it->second += ',';
       it->second += value;
       return;
     }
   }
-  args.options[key] = value;
+  args.options[canonical] = value;
 }
+
+CliOptionValue static_default_for(const CliArgs& args, const std::string& key) {
+  const CliCommandSpec* command = cli_command_spec_for_path(command_path_for_args(args));
+  const CliOptionSpec* spec = option_for_spec(command, key);
+  return spec == nullptr ? null_default() : spec->default_value;
+}
+
+std::map<std::string, std::string>::const_iterator option_value_for(const CliArgs& args,
+                                                                    const std::string& key) {
+  auto it = args.options.find(key);
+  if (it != args.options.end()) return it;
+  const CliOptionSpec* spec = cli_option_spec_for_command(command_path_for_args(args), key);
+  if (spec == nullptr) return args.options.end();
+  it = args.options.find(spec->name);
+  if (it != args.options.end()) return it;
+  for (const auto& alias : spec->aliases) {
+    it = args.options.find(alias);
+    if (it != args.options.end()) return it;
+  }
+  return args.options.end();
+}
+
 }  // namespace
+
+float CliArgs::get_float(const std::string& k, float def) const {
+  const auto it = option_value_for(*this, k);
+  if (it != options.end()) {
+    const CliOptionSpec* spec = cli_option_spec_for_command(command_path_for_args(*this), k);
+    return parse_float_strict(spec == nullptr ? k : spec->name, it->second);
+  }
+  const CliOptionValue value = static_default_for(*this, k);
+  return value.kind == CliOptionDefaultKind::Number ? static_cast<float>(value.number_value) : def;
+}
+
+int CliArgs::get_int(const std::string& k, int def) const {
+  const auto it = option_value_for(*this, k);
+  if (it != options.end()) {
+    const CliOptionSpec* spec = cli_option_spec_for_command(command_path_for_args(*this), k);
+    return parse_int_strict(spec == nullptr ? k : spec->name, it->second);
+  }
+  const CliOptionValue value = static_default_for(*this, k);
+  return value.kind == CliOptionDefaultKind::Integer ? value.integer_value : def;
+}
+
+bool CliArgs::has(const std::string& k) const {
+  return option_value_for(*this, k) != options.end();
+}
+
+std::string CliArgs::get_string(const std::string& k, const std::string& def) const {
+  const auto it = option_value_for(*this, k);
+  if (it != options.end()) return it->second;
+  const CliOptionValue value = static_default_for(*this, k);
+  return value.kind == CliOptionDefaultKind::String ? value.string_value : def;
+}
+
+CliArgs ArgParser::parse(int argc, char* argv[]) {
+  CliArgs args;
+  bool end_of_options = false;
+
+  try {
+    for (int i = 1; i < argc; ++i) {
+      std::string arg = argv[i];
+      if (arg == "--") {
+        end_of_options = true;
+      } else if (!end_of_options && (arg == "--help" || arg == "-h")) {
+        args.help = true;
+      } else if (!end_of_options && arg == "--json") {
+        args.json_output = true;
+      } else if (!end_of_options && (arg == "--quiet" || arg == "-q")) {
+        args.quiet = true;
+      } else if (!end_of_options && try_parse_global_option(args, arg, argv, i, argc)) {
+        // Handled by the global lexical projection.
+      } else if (!end_of_options && arg.size() > 2 && arg.substr(0, 2) == "--") {
+        const size_t equals = arg.find('=');
+        if (equals == std::string::npos) {
+          parse_option(args, arg.substr(2), argv, i, argc);
+        } else {
+          const std::string key = arg.substr(2, equals - 2);
+          const std::string value = arg.substr(equals + 1);
+          parse_option(args, key, argv, i, argc, &value);
+        }
+      } else if (!end_of_options && arg.size() > 1 && arg[0] == '-') {
+        args.options[arg] = "true";
+      } else if (args.command.empty()) {
+        args.command = arg;
+      } else {
+        args.positionals.push_back(arg);
+        if (args.input_file.empty()) args.input_file = arg;
+      }
+    }
+  } catch (const CliUsageError&) {
+    throw;
+  } catch (const std::invalid_argument& error) {
+    throw CliUsageError(error.what());
+  } catch (const std::out_of_range& error) {
+    throw CliUsageError(error.what());
+  }
+  return args;
+}
+
+bool ArgParser::try_parse_global_option(CliArgs& args, const std::string& arg, char* argv[], int& i,
+                                        int argc) {
+  const size_t equals = arg.find('=');
+  const std::string spelling = equals == std::string::npos ? arg : arg.substr(0, equals);
+  const CliOptionSpec* spec = lexical_option_for_spelling(spelling);
+  if (spec == nullptr) return false;
+  if (spec->arity == CliOptionArity::Flag) {
+    if (equals == std::string::npos) return false;
+    const std::string value = arg.substr(equals + 1);
+    if (spec->name == "json") args.json_output = !is_false_flag_literal(value);
+    if (spec->name == "quiet") args.quiet = !is_false_flag_literal(value);
+    if (spec->name == "help") args.help = !is_false_flag_literal(value);
+    return true;
+  }
+
+  std::string value;
+  if (equals != std::string::npos) {
+    value = arg.substr(equals + 1);
+    if (value.empty() && spec->name == "output") {
+      args.missing_value_options.push_back(spelling);
+      return true;
+    }
+  } else {
+    if (i + 1 >= argc) {
+      args.missing_value_options.push_back(spelling);
+      return true;
+    }
+    const std::string next = argv[i + 1];
+    if (next.size() > 1 && next[0] == '-' && !is_negative_number(next)) {
+      args.missing_value_options.push_back(spelling);
+      return true;
+    }
+    value = argv[++i];
+    if (value.empty() && spec->name == "output") {
+      args.missing_value_options.push_back(spelling);
+      return true;
+    }
+  }
+
+  try {
+    switch (spec->scalar_type) {
+      case CliOptionScalarType::Integer: {
+        const int parsed = parse_int_strict(spec->name, value);
+        if (spec->name == "n-fft") {
+          args.n_fft = parsed;
+          args.n_fft_explicit = true;
+        } else if (spec->name == "hop-length") {
+          args.hop_length = parsed;
+        } else if (spec->name == "n-mels") {
+          args.n_mels = parsed;
+        }
+        break;
+      }
+      case CliOptionScalarType::Number:
+        if (spec->name == "fmin") args.fmin = parse_float_strict(spec->name, value);
+        if (spec->name == "fmax") args.fmax = parse_float_strict(spec->name, value);
+        break;
+      case CliOptionScalarType::Path:
+        args.output_file = value;
+        break;
+      case CliOptionScalarType::Boolean:
+      case CliOptionScalarType::String:
+        break;
+    }
+  } catch (const std::out_of_range&) {
+    throw std::invalid_argument("value out of range for " + spelling + ": " + value);
+  }
+  if (spec->name != "output") args.global_options.push_back(spec->name);
+  return true;
+}
 
 void ArgParser::parse_option(CliArgs& args, const std::string& key, char* argv[], int& i, int argc,
                              const std::string* inline_value) {
-  enum class Arity { Unknown, Flag, RequiredValue, OptionalValue };
-  static const std::map<std::string, Arity> arities = {
-      {"assistant", Arity::Flag},      {"auto-gain", Arity::Flag},
-      {"auto-threshold", Arity::Flag}, {"detect-inversions", Arity::Flag},
-      {"dynamic", Arity::Flag},        {"enable-repair", Arity::Flag},
-      {"explain", Arity::Flag},        {"exponential", Arity::Flag},
-      {"hard-mask", Arity::Flag},      {"harmonic-only", Arity::Flag},
-      {"hpss", Arity::Flag},           {"ir", Arity::Flag},
-      {"key-context", Arity::Flag},    {"loudness-weighted", Arity::Flag},
-      {"nnls", Arity::Flag},           {"no-hpss", Arity::Flag},
-      {"no-pad", Arity::Flag},         {"percussive-only", Arity::Flag},
-      {"proportional-q", Arity::Flag}, {"sabine", Arity::Flag},
-      {"series", Arity::Flag},         {"stereo", Arity::Flag},
-      {"strict", Arity::Flag},         {"triads-only", Arity::Flag},
-      {"use-hmm", Arity::Flag},        {"use-hpss", Arity::Flag},
-      {"with-residual", Arity::Flag},  {"with-seventh", Arity::Flag},
-      {"zero-phase", Arity::Flag},     {"synth", Arity::OptionalValue},
-  };
-  const auto found = arities.find(key);
-  const Arity arity = found == arities.end() ? Arity::RequiredValue : found->second;
-  if (arity == Arity::Flag) {
-    // `--flag=false` (and 0/no/off) disables the flag; any other spelling (or a
-    // bare `--flag`) enables it. `has()` is presence-only, so a disabled flag
-    // must not leave the key in the map.
-    if (inline_value != nullptr && is_false_flag_literal(*inline_value)) {
-      args.options.erase(key);
-    } else {
-      args.options[key] = "true";
-    }
+  const CliCommandSpec* command = cli_command_spec_for_path(command_path_for_args(args));
+  const CliOptionSpec* spec = option_for_spec(command, key);
+  const std::string canonical = spec == nullptr ? key : spec->name;
+  const CliOptionArity arity = spec == nullptr ? CliOptionArity::RequiredValue : spec->arity;
+
+  if (arity == CliOptionArity::Flag) {
+    if (inline_value != nullptr && is_false_flag_literal(*inline_value))
+      args.options.erase(canonical);
+    else
+      args.options[canonical] = "true";
     return;
   }
-
   if (inline_value != nullptr) {
-    if (inline_value->empty() && arity == Arity::RequiredValue) {
-      args.options[key] = "";
+    if (inline_value->empty() && arity == CliOptionArity::RequiredValue) {
+      args.options[canonical] = "";
       args.missing_value_options.push_back("--" + key);
     } else {
-      assign_option_value(args, key, *inline_value);
+      assign_option_value(args, canonical, *inline_value);
     }
     return;
   }
-
   if (i + 1 < argc) {
-    std::string next = argv[i + 1];
-    char* end = nullptr;
-    std::strtod(next.c_str(), &end);
-    const bool is_negative_num =
-        next.size() > 1 && next[0] == '-' &&
-        (std::isdigit(static_cast<unsigned char>(next[1])) || next[1] == '.' ||
-         (end != next.c_str() && end != nullptr && *end == '\0'));
-    const bool is_option = next.size() > 1 && next[0] == '-' && !is_negative_num;
-
+    const std::string next = argv[i + 1];
+    const bool is_option = next.size() > 1 && next[0] == '-' && !is_negative_number(next);
     if (!is_option) {
-      assign_option_value(args, key, argv[++i]);
+      assign_option_value(args, canonical, argv[++i]);
       return;
     }
   }
-  if (arity == Arity::OptionalValue) {
-    args.options[key] = "true";
+  if (arity == CliOptionArity::OptionalValue) {
+    args.options[canonical] =
+        spec != nullptr && spec->implicit_optional_default.kind == CliOptionDefaultKind::String
+            ? spec->implicit_optional_default.string_value
+            : "true";
   } else {
-    args.options[key] = "";
+    args.options[canonical] = "";
     args.missing_value_options.push_back("--" + key);
   }
 }
 
-namespace {
-
-struct CommandOptionSchema {
-  std::vector<std::string> values;
-  std::vector<std::string> flags;
-  std::vector<std::string> optional_values;
-};
-
-const std::map<std::string, CommandOptionSchema>& command_option_schemas() {
-  static const std::map<std::string, CommandOptionSchema> schemas = {
-      {"key",
-       {{"high-pass-hz", "genre-hint", "profile", "modes", "candidates"},
-        {"use-hpss", "hpss", "loudness-weighted"},
-        {}}},
-      {"chords",
-       {{"min-duration", "threshold", "hmm-beam-width", "key-root", "key-mode"},
-        {"triads-only", "nnls", "use-hmm", "detect-inversions", "key-context"},
-        {}}},
-      {"sections", {{"min-duration", "threshold"}, {}, {}}},
-      {"dynamics", {{"window-sec"}, {}, {}}},
-      {"rhythm", {{"start-bpm", "bpm-min", "bpm-max"}, {}, {}}},
-      {"melody", {{"threshold"}, {}, {}}},
-      {"boundaries", {{"threshold", "kernel-size", "min-distance"}, {}, {}}},
-      {"analyze", {{"chroma-highpass"}, {"with-seventh", "no-hpss"}, {}}},
-      {"pitch-shift", {{"semitones"}, {}, {}}},
-      {"time-stretch", {{"rate"}, {}, {}}},
-      {"pitch-correct", {{"current-midi", "target-midi"}, {}, {}}},
-      {"note-stretch", {{"onset", "offset", "ratio"}, {}, {}}},
-      {"voice-change",
-       {{"preset", "preset-json", "preset-pack", "set", "pitch-semitones", "formant-factor"},
-        {},
-        {}}},
-      {"voice-preset", {{"preset"}, {}, {}}},
-      {"voice-preset-validate", {{"preset-json", "preset", "set"}, {}, {}}},
-      {"hpss",
-       {{"kernel-harmonic", "kernel-percussive"},
-        {"harmonic-only", "percussive-only", "with-residual", "hard-mask"},
-        {}}},
-      {"preemphasis", {{"coef"}, {}, {}}},
-      {"deemphasis", {{"coef"}, {}, {}}},
-      {"trim-silence", {{"threshold-db", "top-db"}, {}, {}}},
-      {"split-silence", {{"top-db"}, {}, {}}},
-      {"normalize", {{"mode", "target-db"}, {}, {}}},
-      {"gain", {{"gain-db"}, {}, {}}},
-      {"fade", {{"fade-in", "fade-out"}, {}, {}}},
-      {"filter", {{"type", "order", "cutoff", "center", "bandwidth"}, {"zero-phase"}, {}}},
-      {"resample", {{"target-rate", "target-sr"}, {}, {}}},
-      {"tone", {{"frequency", "sr", "duration", "phase", "amplitude"}, {}, {}}},
-      {"chirp", {{"sr", "duration"}, {"exponential"}, {}}},
-      {"clicks", {{"times", "sr", "length", "frequency", "click-duration"}, {}, {}}},
-      {"mastering",
-       {{"preset", "config", "target-lufs", "ceiling-db", "params", "bits", "true-peak-oversample",
-         "report"},
-        {"assistant", "enable-repair", "explain"},
-        {}}},
-      {"mastering-processor", {{"processor", "params", "bits"}, {"stereo"}, {}}},
-      {"eq",
-       {{"params",      "type",         "frequency-hz", "gain-db",      "q",
-         "coeff-mode",  "slope-db-oct", "placement",    "threshold-db", "ratio",
-         "range-db",    "attack-ms",    "release-ms",   "lookahead-ms", "sidechain-freq-hz",
-         "sidechain-q", "phase-mode",   "resolution",   "gain-scale",   "output-gain-db",
-         "output-pan",  "bits"},
-        {"proportional-q", "dynamic", "auto-threshold", "auto-gain"},
-        {}}},
-      {"mastering-pair-processor", {{"processor", "reference", "params", "bits"}, {}, {}}},
-      {"mastering-pair-analyze", {{"analysis", "reference", "params"}, {}, {}}},
-      {"mastering-stereo-analyze", {{"analysis", "reference", "params"}, {}, {}}},
-      {"mixing-preset", {{"preset"}, {}, {}}},
-      {"mix", {{"input-trim-db", "fader-db", "pan", "pan-mode", "width"}, {}, {}}},
-      {"mix-strip", {{"input-trim-db", "fader-db", "pan", "pan-mode", "width"}, {}, {}}},
-      {"pitch", {{"threshold", "algorithm"}, {}, {}}},
-      {"tempogram", {{"win-length"}, {}, {}}},
-      {"fourier-tempogram", {{"win-length"}, {}, {}}},
-      {"tempogram-ratio", {{"win-length"}, {}, {}}},
-      {"plp", {{"tempo-min", "tempo-max", "win-length"}, {}, {}}},
-      {"cqt", {{"n-bins", "bins-per-octave"}, {}, {}}},
-      {"vqt", {{"n-bins", "bins-per-octave", "gamma", "filter-scale"}, {}, {}}},
-      {"mel-to-audio", {{"n-iter"}, {}, {}}},
-      {"mfcc-to-audio", {{"n-mfcc", "n-iter"}, {}, {}}},
-      {"acoustic", {{"n-bands", "min-decay-db", "noise-floor-margin-db"}, {"ir"}, {}}},
-      {"synthesize-rir",
-       {{"length", "width", "height", "absorption", "source-x", "source-y", "source-z",
-         "listener-x", "listener-y", "listener-z", "sample-rate", "ism-order", "seed",
-         "max-seconds"},
-        {"sabine"},
-        {}}},
-      {"estimate-room",
-       {{"aspect-lw", "aspect-lh", "reference-absorption", "n-bands", "n-octave-bands"},
-        {"sabine"},
-        {}}},
-      {"room-morph",
-       {{"length", "width", "height", "absorption", "source-x", "source-y", "source-z",
-         "listener-x", "listener-y", "listener-z", "suppression", "wet", "ism-order", "seed",
-         "max-seconds"},
-        {"sabine"},
-        {}}},
-      {"lufs", {{}, {"series"}, {}}},
-      {"meter", {{"clip-threshold", "oversample"}, {}, {}}},
-      {"clipping", {{"threshold", "min-region"}, {}, {}}},
-      {"dynamic-range", {{"window-sec", "hop-sec", "low-percentile", "high-percentile"}, {}, {}}},
-      {"stereo", {{"reference"}, {}, {}}},
-      {"phase", {{"reference"}, {}, {}}},
-      {"frames-to-samples", {{"frames"}, {}, {}}},
-      {"samples-to-frames", {{"samples"}, {}, {}}},
-      {"power-to-db", {{"values", "ref", "amin", "top-db"}, {}, {}}},
-      {"amplitude-to-db", {{"values", "ref", "amin", "top-db"}, {}, {}}},
-      {"db-to-power", {{"values", "ref"}, {}, {}}},
-      {"db-to-amplitude", {{"values", "ref"}, {}, {}}},
-      {"frame-signal", {{"values", "frame-length"}, {}, {}}},
-      {"pad-center", {{"values", "size", "pad-value"}, {}, {}}},
-      {"fix-length", {{"values", "size", "pad-value"}, {}, {}}},
-      {"fix-frames", {{"values", "x-min", "x-max"}, {"no-pad"}, {}}},
-      {"peak-pick",
-       {{"values", "pre-max", "post-max", "pre-avg", "post-avg", "delta", "wait"}, {}, {}}},
-      {"vector-normalize", {{"values", "norm-type", "threshold"}, {}, {}}},
-      {"pcen",
-       {{"values", "sample-rate", "time-constant", "gain", "bias", "power", "eps", "n-bins",
-         "n-frames"},
-        {},
-        {}}},
-      {"project",
-       {{"in", "project", "sample-rate", "frames", "block-size", "channels", "instrument-latency",
-         "smf", "midi2"},
-        {"strict"},
-        {"synth"}}},
-  };
-  return schemas;
+std::string validate_numeric_option_values(const CliArgs& args) {
+  const CliCommandSpec* command = cli_command_spec_for_path(command_path_for_args(args));
+  for (const auto& [key, value] : args.options) {
+    const CliOptionSpec* spec = option_for_spec(command, key);
+    if (spec == nullptr) continue;
+    try {
+      if (spec->scalar_type == CliOptionScalarType::Integer) {
+        if (key == "candidates" && value == "true") continue;
+        (void)parse_int_strict(key, value);
+      } else if (spec->scalar_type == CliOptionScalarType::Number) {
+        (void)parse_float_strict(key, value);
+      }
+    } catch (const std::exception& error) {
+      return error.what();
+    }
+  }
+  return {};
 }
 
-bool contains(const std::vector<std::string>& values, const std::string& value) {
-  return std::find(values.begin(), values.end(), value) != values.end();
+std::vector<CliOptionMetadata> cli_option_metadata_for_command(const std::string& command) {
+  std::vector<CliOptionMetadata> result;
+  const CliCommandSpec* spec = cli_command_spec_for_path(command);
+  if (spec == nullptr) return result;
+  for (const auto& option : spec->options) {
+    if (!option.inventory) continue;
+    CliOptionMetadata metadata;
+    metadata.name = option.name;
+    switch (option.scalar_type) {
+      case CliOptionScalarType::Boolean:
+        metadata.type = "boolean";
+        break;
+      case CliOptionScalarType::Integer:
+        metadata.type = "integer";
+        break;
+      case CliOptionScalarType::Number:
+        metadata.type = "number";
+        break;
+      case CliOptionScalarType::Path:
+        metadata.type = "path";
+        break;
+      case CliOptionScalarType::String:
+        metadata.type = "string";
+        break;
+    }
+    metadata.default_kind = option.default_value.kind;
+    metadata.default_boolean = option.default_value.boolean_value;
+    metadata.default_integer = option.default_value.integer_value;
+    metadata.default_number = option.default_value.number_value;
+    metadata.default_string = option.default_value.string_value;
+    metadata.default_string_array = option.default_value.string_array_value;
+    metadata.aliases = option.aliases;
+    metadata.repeatable = option.repeatable;
+    metadata.arity = option.arity;
+    metadata.scalar_type = option.scalar_type;
+    metadata.required = option.required;
+    metadata.global_lexical = option.global_lexical;
+    metadata.inventory = option.inventory;
+    metadata.has_implicit_optional_default =
+        option.implicit_optional_default.kind != CliOptionDefaultKind::Null;
+    metadata.implicit_optional_default = option.implicit_optional_default;
+    result.push_back(std::move(metadata));
+  }
+  return result;
 }
-
-// These options are parsed before command options because they populate common
-// DSP configuration fields. Keep their acceptance command-scoped: accepting a
-// global option that a handler cannot consume is indistinguishable from silently
-// ignoring a misspelled or misplaced option.
-bool command_accepts_global_option(const std::string& command, const std::string& option) {
-  static const std::map<std::string, std::vector<std::string>> accepted = {
-      {"n-fft",
-       {"key",
-        "chords",
-        "sections",
-        "timbre",
-        "pitch-shift",
-        "time-stretch",
-        "pitch-correct",
-        "note-stretch",
-        "hpss",
-        "trim-silence",
-        "split-silence",
-        "mel",
-        "chroma",
-        "tonnetz",
-        "spectral",
-        "onset-env",
-        "onset-envelope",
-        "tempogram",
-        "fourier-tempogram",
-        "tempogram-ratio",
-        "mel-to-audio",
-        "mfcc-to-audio",
-        "frames-to-samples",
-        "samples-to-frames",
-        "frame-signal"}},
-      {"hop-length",
-       {"key",
-        "beats",
-        "downbeats",
-        "onsets",
-        "chords",
-        "sections",
-        "timbre",
-        "pitch-shift",
-        "time-stretch",
-        "pitch-correct",
-        "note-stretch",
-        "hpss",
-        "trim-silence",
-        "split-silence",
-        "mel",
-        "chroma",
-        "tonnetz",
-        "spectral",
-        "pitch",
-        "onset-env",
-        "onset-envelope",
-        "tempogram",
-        "fourier-tempogram",
-        "tempogram-ratio",
-        "plp",
-        "nnls-chroma",
-        "cqt",
-        "vqt",
-        "mel-to-audio",
-        "mfcc-to-audio",
-        "frames-to-samples",
-        "samples-to-frames",
-        "frame-signal"}},
-      {"n-mels", {"timbre", "mel", "mel-to-audio", "mfcc-to-audio"}},
-      {"fmin", {"mel", "pitch", "cqt", "vqt", "mel-to-audio", "mfcc-to-audio", "chirp"}},
-      {"fmax", {"mel", "pitch", "mel-to-audio", "mfcc-to-audio", "chirp"}},
-  };
-  const auto it = accepted.find(option);
-  return it != accepted.end() && contains(it->second, command);
-}
-
-// Commands that render a file artifact and therefore legitimately consume the
-// global -o/--output. Every other command prints its result to stdout, so an
-// -o given to them would be silently discarded. Mirrors the Python CLI's
-// output-capable command set (bindings/python/src/libsonare/cli.py), extended
-// with the native-only file-writing commands (gain/fade/filter/tone/chirp/
-// clicks/pre- & de-emphasis/mel- & mfcc-to-audio/mastering-pair-processor).
-bool command_produces_output(const std::string& command) {
-  static const std::vector<std::string> output_capable = {
-      // Offline effects / DSP renders.
-      "pitch-shift",
-      "time-stretch",
-      "pitch-correct",
-      "note-stretch",
-      "voice-change",
-      "hpss",
-      "preemphasis",
-      "deemphasis",
-      "trim-silence",
-      "normalize",
-      "gain",
-      "fade",
-      "filter",
-      "resample",
-      "tone",
-      "chirp",
-      "clicks",
-      // Feature inversion renders.
-      "mel-to-audio",
-      "mfcc-to-audio",
-      // Acoustic-simulation renders.
-      "synthesize-rir",
-      "room-morph",
-      // Mastering / mixing renders (output optional but supported).
-      "mastering",
-      "mastering-processor",
-      "mastering-pair-processor",
-      "eq",
-      "mix",
-      "mix-strip",
-      // Headless project: new/validate/bounce/import/export write files.
-      "project",
-  };
-  return contains(output_capable, command);
-}
-
-}  // namespace
 
 std::vector<std::string> cli_options_for_command(const std::string& command) {
-  std::vector<std::string> options;
-  const auto schema_it = command_option_schemas().find(command);
-  if (schema_it != command_option_schemas().end()) {
-    for (const auto& value : schema_it->second.values) options.push_back("--" + value + " <value>");
-    for (const auto& flag : schema_it->second.flags) options.push_back("--" + flag);
-    for (const auto& value : schema_it->second.optional_values)
-      options.push_back("--" + value + " [value]");
+  std::vector<std::string> result;
+  const CliCommandSpec* spec = cli_command_spec_for_path(command);
+  if (spec == nullptr) return result;
+  for (const auto& option : spec->options) {
+    if (!option.inventory || option.name == "json") continue;
+    std::string display = "--" + option.name;
+    if (option.arity == CliOptionArity::RequiredValue)
+      display += " <value>";
+    else if (option.arity == CliOptionArity::OptionalValue)
+      display += " [value]";
+    result.push_back(std::move(display));
   }
-  for (const char* global : {"n-fft", "hop-length", "n-mels", "fmin", "fmax"}) {
-    if (command_accepts_global_option(command, global))
-      options.push_back(std::string("--") + global + " <value>");
-  }
-  return options;
+  return result;
 }
 
 std::string validate_cli_arguments(const CliArgs& args, bool requires_audio) {
-  const auto schema_it = command_option_schemas().find(args.command);
-  const CommandOptionSchema empty;
-  const CommandOptionSchema& schema =
-      schema_it == command_option_schemas().end() ? empty : schema_it->second;
-
+  const CliCommandSpec* command = cli_command_spec_for_path(command_path_for_args(args));
+  const auto accepts_option = [&](const std::string& name) {
+    return option_for_spec(command, name) != nullptr;
+  };
   for (const auto& key : args.global_options) {
-    if (!command_accepts_global_option(args.command, key)) {
+    if (!accepts_option(key))
       return "Unknown option '--" + key + "' for command '" + args.command + "'";
-    }
   }
-
   for (const auto& option : args.options) {
     const std::string& key = option.first;
-    if (!contains(schema.values, key) && !contains(schema.flags, key) &&
-        !contains(schema.optional_values, key)) {
+    if (!accepts_option(key)) {
       return "Unknown option '" + (key.rfind("-", 0) == 0 ? key : "--" + key) + "' for command '" +
              args.command + "'";
     }
   }
-  if (!args.missing_value_options.empty()) {
+  if (!args.missing_value_options.empty())
     return "Missing value for option '" + args.missing_value_options.front() + "'";
-  }
-
-  // The global -o/--output is accepted by every command for a uniform CLI shape,
-  // but a pure-analysis command has no artifact to write. Reject it there so a
-  // requested destination is never silently discarded (exit 0 while producing
-  // no file). Output-capable commands consume it in their handlers.
-  if (!args.output_file.empty() && !command_produces_output(args.command)) {
+  if (const std::string numeric_error = validate_numeric_option_values(args);
+      !numeric_error.empty())
+    return numeric_error;
+  if (!args.output_file.empty() && !accepts_option("output"))
     return "Command '" + args.command + "' does not produce a file output; remove -o/--output";
-  }
-  if (args.command == "project" && !args.output_file.empty() &&
-      (args.input_file == "abi" || args.input_file == "compile" ||
-       args.input_file == "synth-presets")) {
-    return "project " + args.input_file + " does not produce a file output; remove -o/--output";
+  if (command != nullptr) {
+    for (const auto& option : command->options) {
+      if (option.required && !args.has(option.name))
+        return "Missing required option '--" + option.name + "'";
+    }
   }
 
   size_t max_positionals = requires_audio ? 1u : 0u;

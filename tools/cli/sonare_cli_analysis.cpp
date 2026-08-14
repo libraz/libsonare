@@ -1,5 +1,31 @@
 #include "sonare_cli.h"
 
+namespace {
+
+const char* canonical_section_type(SectionType type) {
+  switch (type) {
+    case SectionType::Intro:
+      return "intro";
+    case SectionType::Verse:
+      return "verse";
+    case SectionType::PreChorus:
+      return "pre-chorus";
+    case SectionType::Chorus:
+      return "chorus";
+    case SectionType::Bridge:
+      return "bridge";
+    case SectionType::Instrumental:
+      return "instrumental";
+    case SectionType::Outro:
+      return "outro";
+    case SectionType::Unknown:
+      return "unknown";
+  }
+  return "unknown";
+}
+
+}  // namespace
+
 int cmd_bpm(const CliArgs& args, const Audio& audio) {
   float bpm = quick::detect_bpm(audio.data(), audio.size(), audio.sample_rate());
 
@@ -153,10 +179,12 @@ int cmd_onsets(const CliArgs& args, const Audio& audio) {
 int cmd_chords(const CliArgs& args, const Audio& audio) {
   ChordConfig config;
   config.min_duration = args.get_float("min-duration", 0.3f);
+  config.smoothing_window = args.get_float("smoothing-window", 2.0f);
   config.threshold = args.get_float("threshold", 0.5f);
   config.use_triads_only = args.has("triads-only");
   config.n_fft = args.n_fft;
   config.hop_length = args.hop_length;
+  config.use_beat_sync = !args.has("no-beat-sync");
   config.chroma_method = args.has("nnls") ? ChromaMethod::NNLS : ChromaMethod::STFT;
   config.use_hmm = args.has("use-hmm");
   config.hmm_beam_width = args.get_int("hmm-beam-width", config.hmm_beam_width);
@@ -340,6 +368,8 @@ int cmd_rhythm(const CliArgs& args, const Audio& audio) {
 
   RhythmAnalyzer analyzer(audio, config);
   const RhythmFeatures& r = analyzer.features();
+  const std::vector<float>& beat_intervals = analyzer.beat_intervals();
+  const Stats beat_interval_stats = Stats::compute(beat_intervals);
 
   if (args.json_output) {
     JsonBuilder()
@@ -355,6 +385,14 @@ int cmd_rhythm(const CliArgs& args, const Audio& audio) {
         .kv("syncopation", r.syncopation)
         .kv("pattern_regularity", r.pattern_regularity)
         .kv("tempo_stability", r.tempo_stability)
+        .key("beat_intervals")
+        .begin_object()
+        .kv("count", beat_intervals.size())
+        .kv("mean", beat_interval_stats.mean)
+        .kv("std", beat_interval_stats.std)
+        .kv("min", beat_interval_stats.min)
+        .kv("max", beat_interval_stats.max)
+        .end_object()
         .end_object()
         .print();
   } else {
@@ -455,9 +493,7 @@ int cmd_analyze(const CliArgs& args, const Audio& audio) {
   MusicAnalyzerConfig config;
   config.use_triads_only = !args.has("with-seventh");
   config.use_hpss = !args.has("no-hpss");
-  if (args.has("chroma-highpass")) {
-    config.chroma_highpass_hz = args.get_float("chroma-highpass", 200.0f);
-  }
+  config.chroma_highpass_hz = args.get_float("chroma-highpass", config.chroma_highpass_hz);
 
   if (!args.quiet && !args.json_output) {
     int workers = system_info::parallel_workers();
@@ -513,7 +549,7 @@ int cmd_analyze(const CliArgs& args, const Audio& audio) {
     json.end_array().key("sections").begin_array();
     for (const auto& s : r.sections) {
       json.begin_object()
-          .kv("type", s.type_string())
+          .kv("type", canonical_section_type(s.type))
           .kv("start", s.start)
           .kv("end", s.end)
           .end_object();

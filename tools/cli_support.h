@@ -4,8 +4,11 @@
 #include <functional>
 #include <map>
 #include <sstream>
+#include <stdexcept>
 #include <string>
 #include <vector>
+
+#include "util/types.h"
 
 class JsonBuilder {
  public:
@@ -21,6 +24,7 @@ class JsonBuilder {
   JsonBuilder& value(float v);
   JsonBuilder& value(double v);
   JsonBuilder& value(bool v);
+  JsonBuilder& null_value();
   JsonBuilder& kv(const std::string& k, const std::string& v);
   JsonBuilder& kv(const std::string& k, const char* v);
   JsonBuilder& kv(const std::string& k, int v);
@@ -44,6 +48,10 @@ struct CliArgs {
   std::string command;
   std::string input_file;
   std::string output_file;
+  // Populated after the input has been decoded by the native CLI. This is
+  // runtime metadata, not a user-facing option; zero means that no source
+  // channel probe was available.
+  int source_channels = 0;
   bool json_output = false;
   bool quiet = false;
   bool help = false;
@@ -73,6 +81,85 @@ struct CliArgs {
 std::string validate_cli_arguments(const CliArgs& args, bool requires_audio);
 std::vector<std::string> cli_options_for_command(const std::string& command);
 
+enum class CliOptionArity { Flag, RequiredValue, OptionalValue };
+enum class CliOptionScalarType { Boolean, Integer, Number, Path, String };
+enum class CliOptionDefaultKind { Null, Boolean, Integer, Number, String, StringArray };
+
+/// A typed value in the immutable CLI registry.  `Null` means that the option
+/// has no static default; it is also how required values are represented.
+struct CliOptionValue {
+  CliOptionDefaultKind kind = CliOptionDefaultKind::Null;
+  bool boolean_value = false;
+  int integer_value = 0;
+  double number_value = 0.0;
+  std::string string_value;
+  std::vector<std::string> string_array_value;
+};
+
+/// One option contract.  `global_lexical` means the parser may recognize the
+/// spelling before the command/path is known; validation still gates it by the
+/// selected leaf's option list.  `implicit_optional_default` is used for a
+/// bare optional-value occurrence (for example `--synth`).
+struct CliOptionSpec {
+  std::string name;
+  std::vector<std::string> aliases;
+  CliOptionArity arity = CliOptionArity::RequiredValue;
+  CliOptionScalarType scalar_type = CliOptionScalarType::String;
+  CliOptionValue default_value;
+  CliOptionValue implicit_optional_default;
+  bool required = false;
+  bool repeatable = false;
+  bool global_lexical = false;
+  bool inventory = true;
+};
+
+/// A leaf command/path contract.  Project routes are represented as the ten
+/// `project.<subcommand>` leaves rather than one broad project schema.
+struct CliCommandSpec {
+  std::string path;
+  std::vector<std::string> aliases;
+  std::vector<CliOptionSpec> options;
+  bool requires_audio = false;
+  bool inventory = true;
+};
+
+/// The single native CLI option/path registry. The returned vector and all of
+/// its records are immutable after first initialization.
+const std::vector<CliCommandSpec>& cli_command_registry();
+const CliCommandSpec* cli_command_spec_for_path(const std::string& path);
+const CliOptionSpec* cli_option_spec_for_command(const std::string& command,
+                                                 const std::string& option);
+
+// The command parser and hidden contract inventory project this metadata from
+// the same registry. These fields retain the stable JSON-facing projection;
+// the richer arity/required/default-binding fields are available on the
+// registry records above.
+struct CliOptionMetadata {
+  std::string name;
+  std::string type;
+  CliOptionDefaultKind default_kind = CliOptionDefaultKind::String;
+  bool default_boolean = false;
+  int default_integer = 0;
+  double default_number = 0.0;
+  std::string default_string;
+  std::vector<std::string> default_string_array;
+  std::vector<std::string> aliases;
+  bool repeatable = false;
+  CliOptionArity arity = CliOptionArity::RequiredValue;
+  CliOptionScalarType scalar_type = CliOptionScalarType::String;
+  bool required = false;
+  bool global_lexical = false;
+  bool inventory = true;
+  bool has_implicit_optional_default = false;
+  CliOptionValue implicit_optional_default;
+};
+
+std::vector<CliOptionMetadata> cli_option_metadata_for_command(const std::string& command);
+
+/// Maps a core error to the stable native CLI exit-code contract.  The legacy
+/// mode intentionally folds every error to one, matching the Python CLI.
+int cli_exit_code_for_error(sonare::ErrorCode error, bool legacy_mode) noexcept;
+
 class ArgParser {
  public:
   static CliArgs parse(int argc, char* argv[]);
@@ -83,6 +170,19 @@ class ArgParser {
   static void parse_option(CliArgs& args, const std::string& key, char* argv[], int& i, int argc,
                            const std::string* inline_value = nullptr);
 };
+
+/// Parse-time argument errors use the CLI usage exit code (2), rather than the
+/// handler-level invalid-parameter code.  Keep this distinct from
+/// std::invalid_argument because handlers also use that exception for semantic
+/// validation after parsing.
+class CliUsageError final : public std::invalid_argument {
+ public:
+  explicit CliUsageError(const std::string& message) : std::invalid_argument(message) {}
+};
+
+/// Return the hidden machine-readable command/option inventory used by the
+/// cross-surface CLI contract checker.
+std::string dump_cli_contract_json();
 
 struct Stats {
   float mean = 0.0f;

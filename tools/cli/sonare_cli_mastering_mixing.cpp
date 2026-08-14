@@ -81,7 +81,8 @@ void write_mastering_report(const std::string& path,
 
 void print_chain_result_json(const mastering::api::MonoChainResult& result, const std::string& mode,
                              const std::string& output, const std::string& preset,
-                             const std::vector<std::string>& explanation = {}) {
+                             const std::vector<std::string>& explanation = {},
+                             bool include_report_latency = false) {
   JsonBuilder json;
   json.begin_object()
       .kv("mode", mode)
@@ -98,18 +99,36 @@ void print_chain_result_json(const mastering::api::MonoChainResult& result, cons
     for (const auto& item : explanation) json.value(item);
     json.end_array();
   }
+  if (include_report_latency) json.kv("latency_samples", 0);
   json.end_object().print();
 }
 
 int cmd_mastering(const CliArgs& args, const Audio& audio) {
-  const bool use_chain = args.has("preset") || args.has("config") || args.has("assistant");
+  const bool has_preset = args.has("preset");
+  const bool has_config = args.has("config");
+  const bool has_assistant = args.has("assistant");
+  const int selector_count =
+      static_cast<int>(has_preset) + static_cast<int>(has_config) + static_cast<int>(has_assistant);
+  if (selector_count > 1) {
+    throw std::invalid_argument("--preset, --config, and --assistant are mutually exclusive");
+  }
+  const std::string params_text = args.get_string("params");
+  const bool has_params = args.has("params");
+  if (!selector_count && has_params) {
+    throw std::invalid_argument("--params requires --preset, --config, or --assistant");
+  }
+  if ((args.has("enable-repair") || args.has("explain")) && !has_assistant) {
+    throw std::invalid_argument("--enable-repair and --explain require --assistant");
+  }
+
+  const bool use_chain = selector_count != 0;
   if (use_chain) {
     mastering::api::MasteringChainConfig chain_config;
     std::string mode = "config";
     std::string preset_name;
     std::vector<std::string> explanation;
 
-    if (args.has("assistant")) {
+    if (has_assistant) {
       mastering::assistant::AssistantConfig assistant_config;
       assistant_config.target_lufs = args.get_float("target-lufs", -14.0f);
       assistant_config.ceiling_db = args.get_float("ceiling-db", -1.0f);
@@ -118,7 +137,7 @@ int cmd_mastering(const CliArgs& args, const Audio& audio) {
       chain_config = std::move(suggestion.config);
       explanation = std::move(suggestion.explanation);
       mode = "assistant";
-    } else if (args.has("config")) {
+    } else if (has_config) {
       chain_config =
           mastering::api::chain_config_from_json(read_text_file(args.get_string("config")));
       mode = "config";
@@ -129,19 +148,22 @@ int cmd_mastering(const CliArgs& args, const Audio& audio) {
     }
 
     // The preset/config chain is driven entirely by its config (or --params
-    // overrides); the standalone loudness flags only apply to the maximizer
-    // path and the assistant. Warn instead of silently ignoring them here.
+    // overrides); reject standalone loudness flags instead of silently
+    // ignoring them. Use --params to override chain parameters.
     if (mode == "preset" || mode == "config") {
       for (const char* loudness_flag : {"target-lufs", "ceiling-db", "true-peak-oversample"}) {
         if (args.has(loudness_flag)) {
-          std::cerr << "warning: --" << loudness_flag
-                    << " is ignored for a preset/config mastering chain; use --params to override "
-                       "chain parameters\n";
+          throw std::invalid_argument(std::string("--") + loudness_flag +
+                                      " cannot be combined with --" + mode);
         }
       }
     }
 
-    const auto overrides = parse_mastering_params(args.get_string("params"));
+    auto overrides = parse_mastering_params(params_text);
+    if (has_assistant && args.has("true-peak-oversample")) {
+      overrides.push_back({"loudness.truePeakOversample",
+                           static_cast<double>(args.get_int("true-peak-oversample", 4))});
+    }
     if (!overrides.empty()) {
       mastering::api::apply_chain_config_overrides(chain_config, overrides.data(),
                                                    overrides.size());
@@ -159,7 +181,8 @@ int cmd_mastering(const CliArgs& args, const Audio& audio) {
 
     if (args.json_output) {
       print_chain_result_json(result, mode, args.output_file, preset_name,
-                              args.has("explain") ? explanation : std::vector<std::string>{});
+                              args.has("explain") ? explanation : std::vector<std::string>{},
+                              args.has("report"));
     } else {
       std::cout << "\n"
                 << color::cyan << color::bold << "Mastering Chain" << color::reset << "\n"
@@ -210,6 +233,7 @@ int cmd_mastering(const CliArgs& args, const Audio& audio) {
           .kv("target_lufs", config.target_lufs)
           .kv("ceiling_db", config.ceiling_db)
           .kv("true_peak_oversample", config.true_peak_oversample)
+          .kv("latency_samples", 0)
           .kv("sample_rate", result.sample_rate)
           .kv("output", args.output_file)
           .end_object()
@@ -303,6 +327,7 @@ int run_mastering_processor_stereo(const CliArgs& args, const Audio& audio,
         .kv("output_lufs", result.output_lufs)
         .kv("applied_gain_db", result.applied_gain_db)
         .kv("latency_samples", result.latency_samples)
+        .kv("sample_rate", result.sample_rate)
         .kv("output", args.output_file)
         .end_object()
         .print();
@@ -346,10 +371,12 @@ int cmd_mastering_processor(const CliArgs& args, const Audio& audio) {
     JsonBuilder()
         .begin_object()
         .kv("processor", processor)
+        .kv("stereo", false)
         .kv("input_lufs", result.input_lufs)
         .kv("output_lufs", result.output_lufs)
         .kv("applied_gain_db", result.applied_gain_db)
         .kv("latency_samples", result.latency_samples)
+        .kv("sample_rate", result.sample_rate)
         .kv("output", args.output_file)
         .end_object()
         .print();
@@ -369,10 +396,11 @@ int cmd_mastering_processor(const CliArgs& args, const Audio& audio) {
 }
 
 int cmd_eq(const CliArgs& args, const Audio& audio) {
-  std::vector<mastering::api::Param> params = parse_mastering_params(args.get_string("params"));
-  if (!args.get_string("params").empty()) {
-    // --params fully specifies the EQ, so the individual band shortcut flags are
-    // ignored. Warn instead of silently dropping them.
+  const std::string params_text = args.get_string("params");
+  std::vector<mastering::api::Param> params = parse_mastering_params(params_text);
+  if (args.has("params")) {
+    // --params fully specifies the EQ. Reject shortcut combinations rather
+    // than silently dropping an explicitly supplied selector.
     for (const char* shortcut :
          {"type",         "frequency-hz",   "gain-db",           "q",          "coeff-mode",
           "slope-db-oct", "placement",      "proportional-q",    "dynamic",    "threshold-db",
@@ -380,11 +408,12 @@ int cmd_eq(const CliArgs& args, const Audio& audio) {
           "phase-mode",   "resolution",     "auto-gain",         "gain-scale", "output-gain-db",
           "output-pan",   "auto-threshold", "sidechain-freq-hz", "sidechain-q"}) {
       if (args.has(shortcut)) {
-        std::cerr << "warning: --" << shortcut << " is ignored when --params is given\n";
+        throw std::invalid_argument(std::string("--") + shortcut +
+                                    " cannot be combined with --params");
       }
     }
   }
-  if (args.get_string("params").empty()) {
+  if (params_text.empty()) {
     params.push_back({"band0.enabled", 1.0});
     params.push_back({"band0.type", static_cast<double>(args.get_int("type", 0))});
     params.push_back({"band0.frequencyHz", args.get_float("frequency-hz", 1000.0f)});
@@ -426,6 +455,7 @@ int cmd_eq(const CliArgs& args, const Audio& audio) {
         .kv("output_lufs", result.output_lufs)
         .kv("applied_gain_db", result.applied_gain_db)
         .kv("latency_samples", result.latency_samples)
+        .kv("sample_rate", result.sample_rate)
         .kv("output", args.output_file)
         .end_object()
         .print();

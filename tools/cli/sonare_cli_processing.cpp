@@ -89,11 +89,6 @@ int cmd_pitch_correct(const CliArgs& args, const Audio& audio) {
               << "\n";
     return 1;
   }
-  if (!args.has("current-midi") || !args.has("target-midi")) {
-    std::cerr << color::red << "Error: --current-midi and --target-midi required" << color::reset
-              << "\n";
-    return 1;
-  }
 
   const float current_midi = args.get_float("current-midi", 69.0f);
   const float target_midi = args.get_float("target-midi", 69.0f);
@@ -126,11 +121,6 @@ int cmd_pitch_correct(const CliArgs& args, const Audio& audio) {
 int cmd_note_stretch(const CliArgs& args, const Audio& audio) {
   if (args.output_file.empty()) {
     std::cerr << color::red << "Error: note-stretch requires output file (-o)" << color::reset
-              << "\n";
-    return 1;
-  }
-  if (!args.has("onset") || !args.has("offset") || !args.has("ratio")) {
-    std::cerr << color::red << "Error: --onset, --offset and --ratio required" << color::reset
               << "\n";
     return 1;
   }
@@ -174,16 +164,29 @@ int cmd_voice_change(const CliArgs& args, const Audio& audio) {
     return 1;
   }
 
-  const bool uses_realtime_preset =
-      args.has("preset") || args.has("preset-json") || args.has("preset-pack") || args.has("set");
-  if (uses_realtime_preset) {
-    for (const char* knob : {"pitch-semitones", "formant-factor"}) {
-      if (args.has(knob)) {
-        std::cerr << "warning: --" << knob
-                  << " is ignored when a realtime voice preset is selected\n";
-      }
-    }
+  const bool has_preset = args.has("preset");
+  const bool has_preset_json = args.has("preset-json");
+  const bool has_preset_pack = args.has("preset-pack");
+  const int selector_count = static_cast<int>(has_preset) + static_cast<int>(has_preset_json);
+  if (selector_count > 1) {
+    throw std::invalid_argument(
+        "voice-change preset selectors are mutually exclusive: choose one of --preset, "
+        "--preset-json, or --preset-pack");
   }
+  if (has_preset_pack && has_preset_json) {
+    throw std::invalid_argument("--preset-pack and --preset-json are mutually exclusive");
+  }
+  if (selector_count > 0 && (args.has("pitch-semitones") || args.has("formant-factor"))) {
+    throw std::invalid_argument(
+        "--pitch-semitones/--formant-factor cannot be combined with a realtime preset");
+  }
+  if (args.has("set") && selector_count == 0) {
+    throw std::invalid_argument("--set requires --preset, --preset-json, or --preset-pack");
+  }
+  if (has_preset_pack && !has_preset) {
+    throw std::invalid_argument("--preset-pack requires --preset to select an entry");
+  }
+  const bool uses_realtime_preset = selector_count > 0 || args.has("set");
 
   Audio result;
   std::string preset_id;
@@ -191,15 +194,21 @@ int cmd_voice_change(const CliArgs& args, const Audio& audio) {
   float pitch_semitones = 0.0f;
   float formant_factor = 1.0f;
   if (uses_realtime_preset) {
-    preset_id = args.get_string("preset", "neutral-monitor");
-    std::string config_text = preset_id;
+    const std::string requested_preset = args.get_string("preset", "");
+    // Only advertise an ID when it identifies the selected source. A
+    // --preset-json document has its own identity (or may be anonymous), so
+    // falling back to the neutral preset here would be misleading. A
+    // --preset-pack entry remains identified by the explicit --preset value.
+    if (has_preset) preset_id = requested_preset;
+    std::string config_text = requested_preset;
     if (args.has("preset-json")) {
       config_text = read_plain_text_file(args.get_string("preset-json"));
     } else if (args.has("preset-pack")) {
       config_text = find_voice_preset_in_pack(read_plain_text_file(args.get_string("preset-pack")),
-                                              preset_id);
+                                              requested_preset);
     } else if (args.has("set")) {
-      const auto id = editing::voice_changer::realtime_voice_changer_preset_from_id(preset_id);
+      const auto id =
+          editing::voice_changer::realtime_voice_changer_preset_from_id(requested_preset);
       config_text = editing::voice_changer::realtime_voice_changer_preset_json(id);
     }
     if (args.has("set")) config_text = apply_voice_preset_sets(config_text, args.get_string("set"));
@@ -248,18 +257,32 @@ int cmd_voice_change(const CliArgs& args, const Audio& audio) {
     editing::voice_changer::VoiceChanger changer(config);
     result = changer.process(audio);
   }
+
+  // Pitch/formant processing uses spectral transforms whose boundary
+  // convention can produce one extra (or one missing) sample.  The CLI's
+  // voice-change contract is sample-preserving, so normalize both branches
+  // to the input length before writing the artifact or reporting metadata.
+  if (result.size() != audio.size()) {
+    std::vector<float> sized_result(audio.size(), 0.0f);
+    const size_t copy_size = std::min(result.size(), audio.size());
+    if (copy_size > 0) {
+      std::copy(result.data(), result.data() + copy_size, sized_result.begin());
+    }
+    result = Audio::from_vector(std::move(sized_result), audio.sample_rate());
+  }
   save_wav(args.output_file, result.data(), result.size(), result.sample_rate());
 
   if (args.json_output) {
     JsonBuilder json;
     json.begin_object()
         .kv("output", args.output_file)
+        .kv("length", result.size())
         .kv("duration", result.duration())
         .kv("sample_rate", result.sample_rate())
         .kv("latency_samples", latency_samples);
-    if (!preset_id.empty()) {
+    if (uses_realtime_preset && !preset_id.empty()) {
       json.kv("preset", preset_id);
-    } else {
+    } else if (!uses_realtime_preset) {
       // Offline voice-change path: echo the simple pitch/formant knobs the
       // caller supplied so JSON consumers can correlate input args with the
       // result without re-parsing CLI flags.
@@ -294,19 +317,46 @@ int cmd_voice_preset(const CliArgs& args, const Audio&) {
 
 int cmd_voice_preset_validate(const CliArgs& args, const Audio&) {
   const std::string path = args.get_string("preset-json", args.input_file);
-  if (path.empty()) throw std::invalid_argument("voice-preset-validate requires a JSON file");
+  if (path.empty()) {
+    throw sonare::SonareException(sonare::ErrorCode::FileNotFound,
+                                  "voice-preset-validate requires a JSON file");
+  }
+  // read_plain_text_file historically reports open failures as
+  // std::invalid_argument. Classify the pre-validation missing-file case as
+  // FileNotFound so it maps to exit 4 (or legacy exit 1) and never emits a
+  // JSON validation envelope.
+  {
+    std::ifstream input(path);
+    if (!input.is_open()) {
+      throw sonare::SonareException(sonare::ErrorCode::FileNotFound,
+                                    "cannot open text file: " + path);
+    }
+  }
   std::string config_text = read_plain_text_file(path);
   if (args.has("preset")) {
     config_text = find_voice_preset_in_pack(config_text, args.get_string("preset"));
   }
-  if (args.has("set")) config_text = apply_voice_preset_sets(config_text, args.get_string("set"));
+  if (args.has("set")) {
+    config_text = apply_voice_preset_sets(config_text, args.get_string("set"));
+  }
   std::string normalized;
   std::string error;
   if (!editing::voice_changer::validate_realtime_voice_changer_preset_json(config_text, &normalized,
                                                                            &error)) {
-    throw std::invalid_argument("invalid voice preset: " + error);
+    if (error.empty()) error = "invalid voice preset";
+    if (args.json_output) {
+      JsonBuilder().begin_object().kv("ok", false).kv("error", error).end_object().print();
+    } else {
+      std::cerr << error << "\n";
+    }
+    return 3;
   }
-  std::cout << normalized << "\n";
+  if (args.json_output) {
+    JsonBuilder json;
+    json.begin_object().kv("ok", true).kv("normalized_json", normalized).end_object().print();
+  } else {
+    std::cout << normalized << "\n";
+  }
   return 0;
 }
 
@@ -338,6 +388,15 @@ int cmd_hpss(const CliArgs& args, const Audio& audio) {
   if (args.output_file.empty()) {
     std::cerr << color::red << "Error: hpss requires output prefix (-o)" << color::reset << "\n";
     return 1;
+  }
+
+  const int output_mode_count = static_cast<int>(args.has("harmonic-only")) +
+                                static_cast<int>(args.has("percussive-only")) +
+                                static_cast<int>(args.has("with-residual"));
+  if (output_mode_count > 1) {
+    throw std::invalid_argument(
+        "hpss output modes are mutually exclusive: choose one of --harmonic-only, "
+        "--percussive-only, or --with-residual");
   }
 
   HpssConfig config;
@@ -461,6 +520,9 @@ int cmd_deemphasis(const CliArgs& args, const Audio& audio) {
 int cmd_trim_silence(const CliArgs& args, const Audio& audio) {
   // Match Python's public trim() command: an absolute dB threshold. --top-db
   // remains a native compatibility alias for the legacy relative algorithm.
+  if (args.has("threshold-db") && args.has("top-db")) {
+    throw std::invalid_argument("--threshold-db and --top-db are mutually exclusive");
+  }
   const bool use_legacy_top_db = args.has("top-db") && !args.has("threshold-db");
   const float threshold_db = args.get_float("threshold-db", -60.0f);
   Audio result =

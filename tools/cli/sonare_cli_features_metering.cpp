@@ -1,4 +1,5 @@
 #include <algorithm>
+#include <limits>
 #include <numeric>
 
 #include "sonare_cli.h"
@@ -8,6 +9,7 @@ int cmd_mel(const CliArgs& args, const Audio& audio) {
   config.n_mels = args.n_mels;
   config.n_fft = args.n_fft;
   config.hop_length = args.hop_length;
+  config.htk = args.has("htk");
   config.fmin = args.fmin;
   config.fmax = args.fmax > 0 ? args.fmax : static_cast<float>(audio.sample_rate()) / 2.0f;
 
@@ -61,9 +63,9 @@ int cmd_chroma(const CliArgs& args, const Audio& audio) {
         .kv("n_frames", chroma.n_frames())
         .kv("duration", chroma.duration())
         .key("mean_energy")
-        .begin_object();
-    for (int i = 0; i < 12; ++i) json.kv(names[i], mean_energy[i]);
-    json.end_object().end_object().print();
+        .begin_array();
+    for (float value : mean_energy) json.value(value);
+    json.end_array().end_object().print();
   } else {
     std::cout << "Chromagram:\n";
     printf("  Shape:    %d bins x %d frames\n", chroma.n_chroma(), chroma.n_frames());
@@ -141,31 +143,43 @@ int cmd_spectral(const CliArgs& args, const Audio& audio) {
         .begin_object()
         .kv("mean", sc.mean)
         .kv("std", sc.std)
+        .kv("min", sc.min)
+        .kv("max", sc.max)
         .end_object()
         .key("bandwidth")
         .begin_object()
         .kv("mean", sb.mean)
         .kv("std", sb.std)
+        .kv("min", sb.min)
+        .kv("max", sb.max)
         .end_object()
         .key("rolloff")
         .begin_object()
         .kv("mean", sr_s.mean)
         .kv("std", sr_s.std)
+        .kv("min", sr_s.min)
+        .kv("max", sr_s.max)
         .end_object()
         .key("flatness")
         .begin_object()
         .kv("mean", sf.mean)
         .kv("std", sf.std)
+        .kv("min", sf.min)
+        .kv("max", sf.max)
         .end_object()
         .key("zcr")
         .begin_object()
         .kv("mean", sz.mean)
         .kv("std", sz.std)
+        .kv("min", sz.min)
+        .kv("max", sz.max)
         .end_object()
         .key("rms")
         .begin_object()
         .kv("mean", se.mean)
         .kv("std", se.std)
+        .kv("min", se.min)
+        .kv("max", se.max)
         .end_object()
         .end_object()
         .end_object()
@@ -188,7 +202,7 @@ int cmd_pitch(const CliArgs& args, const Audio& audio) {
   PitchConfig config;
   config.fmin = args.fmin > 0.0f ? args.fmin : 65.0f;
   config.fmax = args.fmax > 0.0f ? args.fmax : 2093.0f;
-  config.threshold = args.get_float("threshold", 0.3f);
+  config.threshold = args.get_float("threshold", 0.1f);
   config.hop_length = args.hop_length;
 
   std::string algo = args.get_string("algorithm", "pyin");
@@ -199,13 +213,18 @@ int cmd_pitch(const CliArgs& args, const Audio& audio) {
   PitchResult result = (algo == "yin") ? yin_track(audio, config) : pyin(audio, config);
 
   int voiced = std::count(result.voiced_flag.begin(), result.voiced_flag.end(), true);
-  float ratio = static_cast<float>(voiced) / static_cast<float>(result.n_frames());
+  const int n_frames = result.n_frames();
+  // A zero-frame analysis has no meaningful voiced fraction. JsonBuilder
+  // serializes this non-finite sentinel as JSON null, matching the Python
+  // CLI's nullable contract without performing an invalid 0/0 division.
+  const float ratio = n_frames > 0 ? static_cast<float>(voiced) / static_cast<float>(n_frames)
+                                   : std::numeric_limits<float>::quiet_NaN();
 
   if (args.json_output) {
     JsonBuilder()
         .begin_object()
         .kv("algorithm", algo)
-        .kv("n_frames", result.n_frames())
+        .kv("n_frames", n_frames)
         .kv("voiced_count", voiced)
         .kv("voiced_ratio", ratio)
         .kv("median_f0", result.median_f0())
@@ -214,7 +233,7 @@ int cmd_pitch(const CliArgs& args, const Audio& audio) {
         .print();
   } else {
     std::cout << "Pitch Tracking (" << algo << "):\n";
-    printf("  Frames:    %d\n", result.n_frames());
+    printf("  Frames:    %d\n", n_frames);
     printf("  Voiced:    %d (%.1f%%)\n", voiced, ratio * 100.0f);
     printf("  Median F0: %.1f Hz\n", result.median_f0());
     printf("  Mean F0:   %.1f Hz\n", result.mean_f0());
@@ -260,10 +279,19 @@ int cmd_onset_env(const CliArgs& args, const Audio& audio) {
 }
 
 int cmd_tempogram(const CliArgs& args, const Audio& audio) {
+  MelConfig mel_config;
+  mel_config.n_fft = args.n_fft;
+  mel_config.hop_length = args.hop_length;
+  mel_config.n_mels = args.n_mels;
+
+  OnsetConfig onset_config;
+  onset_config.center = true;
+  const auto envelope = compute_onset_strength(audio, mel_config, onset_config);
+
   TempogramConfig config;
   config.hop_length = args.hop_length;
   config.win_length = args.get_int("win-length", 384);
-  auto values = tempogram(audio, config);
+  auto values = tempogram(envelope, audio.sample_rate(), config);
   const int n_frames =
       config.win_length > 0 ? static_cast<int>(values.size()) / config.win_length : 0;
   Stats stats = Stats::compute(values);
@@ -292,13 +320,22 @@ int cmd_tempogram(const CliArgs& args, const Audio& audio) {
 }
 
 int cmd_plp(const CliArgs& args, const Audio& audio) {
+  MelConfig mel_config;
+  mel_config.n_fft = args.n_fft;
+  mel_config.hop_length = args.hop_length;
+  mel_config.n_mels = args.n_mels;
+
+  OnsetConfig onset_config;
+  onset_config.center = true;
+  const auto envelope = compute_onset_strength(audio, mel_config, onset_config);
+
   PlpConfig config;
   config.sr = audio.sample_rate();
   config.hop_length = args.hop_length;
   config.tempo_min = args.get_float("tempo-min", 30.0f);
   config.tempo_max = args.get_float("tempo-max", 300.0f);
   config.win_length = args.get_int("win-length", 384);
-  auto values = plp(audio, config);
+  auto values = plp(envelope, config);
   Stats stats = Stats::compute(values);
 
   if (args.json_output) {
@@ -547,7 +584,8 @@ int cmd_synthesize_rir(const CliArgs& args, const Audio&) {
   const int sample_rate = args.get_int("sample-rate", 48000);
   sonare::acoustic::RirSynthConfig cfg;
   cfg.ism_order = args.get_int("ism-order", cfg.ism_order);
-  cfg.seed = static_cast<unsigned>(std::max(0, args.get_int("seed", static_cast<int>(cfg.seed))));
+  if (const int seed = args.get_int("seed", static_cast<int>(cfg.seed)); seed > 0)
+    cfg.seed = static_cast<unsigned>(seed);
   cfg.max_seconds = args.get_float("max-seconds", cfg.max_seconds);
   // --sabine selects the Sabine late-reverb model (default Eyring), matching the
   // core/C-ABI/Python-CLI selection so every surface exposes the same choice.
@@ -638,7 +676,8 @@ int cmd_room_morph(const CliArgs& args, const Audio& audio) {
   cfg.source_tail_suppression = args.get_float("suppression", cfg.source_tail_suppression);
   cfg.wet = args.get_float("wet", cfg.wet);
   cfg.ism_order = args.get_int("ism-order", cfg.ism_order);
-  cfg.seed = static_cast<unsigned>(std::max(0, args.get_int("seed", static_cast<int>(cfg.seed))));
+  if (const int seed = args.get_int("seed", static_cast<int>(cfg.seed)); seed > 0)
+    cfg.seed = static_cast<unsigned>(seed);
   cfg.max_seconds = args.get_float("max-seconds", cfg.max_seconds);
   // --sabine selects the Sabine late-reverb model (default Eyring), matching the
   // core/C-ABI/Python-CLI selection so every surface exposes the same choice.

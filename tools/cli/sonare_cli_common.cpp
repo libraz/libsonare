@@ -256,6 +256,7 @@ int cmd_version(const CliArgs& args) {
   if (args.json_output) {
     JsonBuilder()
         .begin_object()
+        .kv("cli", "native")
         .kv("cli_version", version())
         .kv("lib_version", version())
         .end_object()
@@ -269,12 +270,27 @@ int cmd_version(const CliArgs& args) {
 
 int cmd_doctor(const CliArgs& args) {
   const char* capabilities_json = sonare_capabilities_json();
+  const auto native_capabilities = sonare::util::json::parse_strict(capabilities_json);
+  const auto& native_object = native_capabilities.as_object();
+
+  // The C ABI keeps its historical camelCase field name for compatibility.
+  // CLI JSON is the cross-language surface, so normalize and close the
+  // top-level shape here without changing the public capabilities descriptor.
+  sonare::util::json::Object capabilities_object;
+  capabilities_object.emplace("version", native_object.at("version"));
+  capabilities_object.emplace("abi", native_object.at("abi"));
+  capabilities_object.emplace("platform", native_object.at("platform"));
+  capabilities_object.emplace("features", native_object.at("features"));
+  capabilities_object.emplace("decode", native_object.at("decode"));
+  capabilities_object.emplace("simd", native_object.at("simd"));
+  capabilities_object.emplace("hardware_concurrency", native_object.at("hardwareConcurrency"));
+  const auto capabilities = sonare::util::json::Value(std::move(capabilities_object));
+
   if (args.json_output) {
-    std::cout << capabilities_json << "\n";
+    std::cout << sonare::util::json::dump(capabilities) << "\n";
     return 0;
   }
 
-  const auto capabilities = sonare::util::json::parse_strict(capabilities_json);
   const auto& abi = capabilities["abi"];
   const auto& features = capabilities["features"];
   const auto& decode = capabilities["decode"];
@@ -290,7 +306,7 @@ int cmd_doctor(const CliArgs& args) {
             << ", ffmpeg=" << (features["ffmpeg"].as_bool() ? "yes" : "no") << "\n";
   std::cout << "  Built-in decode: " << decode["builtin"].size() << " formats\n";
   std::cout << "  SIMD: " << capabilities["simd"].as_string() << "\n";
-  std::cout << "  Hardware concurrency: " << capabilities["hardwareConcurrency"].as_number()
+  std::cout << "  Hardware concurrency: " << capabilities["hardware_concurrency"].as_number()
             << "\n";
   return 0;
 }
@@ -467,21 +483,22 @@ int cmd_pcen(const CliArgs& args, const Audio&) {
 }
 
 int cmd_info(const CliArgs& args, const Audio& audio) {
-  int channels = 0;
-  try {
-    channels = audio_channel_count(args.input_file);
-  } catch (const sonare::SonareException&) {
-    // `audio` has already decoded successfully; omit unavailable metadata.
+  if (args.source_channels <= 0) {
+    throw std::invalid_argument("invalid audio channel count");
   }
-  float peak = 0.0f, rms_sum = 0.0f;
+
+  const int channels = args.source_channels;
+  float peak = 0.0f;
+  double rms_sum = 0.0;
   for (size_t i = 0; i < audio.size(); ++i) {
-    float val = std::abs(audio.data()[i]);
+    const float val = std::abs(audio.data()[i]);
     peak = std::max(peak, val);
-    rms_sum += audio.data()[i] * audio.data()[i];
+    const double sample = static_cast<double>(audio.data()[i]);
+    rms_sum += sample * sample;
   }
-  float rms = std::sqrt(rms_sum / static_cast<float>(audio.size()));
-  float peak_db = 20.0f * std::log10(std::max(peak, 1e-10f));
-  float rms_db = 20.0f * std::log10(std::max(rms, 1e-10f));
+  const double rms = std::sqrt(rms_sum / static_cast<double>(audio.size()));
+  const float peak_db = 20.0f * std::log10(std::max(peak, 1e-10f));
+  const double rms_db = 20.0 * std::log10(std::max(rms, 1e-10));
 
   if (args.json_output) {
     JsonBuilder()

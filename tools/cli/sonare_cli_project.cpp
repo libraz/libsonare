@@ -24,6 +24,10 @@ constexpr int kExitUsage = 2;
 // branch returns the code directly to bypass that remap.
 constexpr int kExitInvalidParameter = 3;
 
+// Invalid-state exit code used when `project validate --strict` finds loader
+// diagnostics after still writing the canonical artifact and JSON payload.
+constexpr int kExitInvalidState = 9;
+
 // Upper bound on a project JSON / SMF / MIDI 2.0 file loaded into memory, mirrored
 // from the Python CLI's _MAX_PROJECT_OR_MIDI_BYTES. Bounds the allocation so an
 // oversized (or hostile) input is rejected instead of exhausting memory.
@@ -109,16 +113,19 @@ bool write_binary_file(const std::string& path, const uint8_t* data, size_t len)
 // handle. Returns true on success. On failure prints an error and leaves the
 // handle empty.
 bool load_project_from_args(const CliArgs& args, ProjectHandle* handle,
-                            std::string* diagnostics = nullptr) {
+                            std::string* diagnostics = nullptr, SonareError* load_error = nullptr) {
+  if (load_error != nullptr) *load_error = SONARE_OK;
   const std::string in_path =
       args.has("in") ? args.get_string("in") : args.get_string("project", args.input_file);
   if (in_path.empty()) {
+    if (load_error != nullptr) *load_error = SONARE_ERROR_INVALID_PARAMETER;
     std::cerr << color::red << "Error: missing project JSON (use --in <project.json>)"
               << color::reset << "\n";
     return false;
   }
   std::vector<uint8_t> bytes;
   if (!read_binary_file(in_path, &bytes)) {
+    if (load_error != nullptr) *load_error = SONARE_ERROR_FILE_NOT_FOUND;
     std::cerr << color::red << "Error: cannot open project file: " << in_path << color::reset
               << "\n";
     return false;
@@ -127,6 +134,7 @@ bool load_project_from_args(const CliArgs& args, ProjectHandle* handle,
   SonareError err = sonare_project_deserialize(reinterpret_cast<const char*>(bytes.data()),
                                                bytes.size(), &handle->ptr, &diag);
   if (err != SONARE_OK) {
+    if (load_error != nullptr) *load_error = err;
     std::cerr << color::red << "Error: failed to parse project JSON: " << project_error_string(err);
     if (diag != nullptr) std::cerr << " (" << diag << ")";
     std::cerr << color::reset << "\n";
@@ -141,6 +149,15 @@ bool load_project_from_args(const CliArgs& args, ProjectHandle* handle,
 size_t project_diagnostic_count(const std::string& diagnostics) {
   if (diagnostics.empty()) return 0;
   return 1 + static_cast<size_t>(std::count(diagnostics.begin(), diagnostics.end(), '\n'));
+}
+
+std::vector<std::string> project_compile_messages(const char* messages) {
+  std::vector<std::string> lines;
+  if (messages == nullptr || messages[0] == '\0') return lines;
+  std::istringstream stream(messages);
+  std::string line;
+  while (std::getline(stream, line)) lines.push_back(line);
+  return lines;
 }
 
 void print_project_validation_json(bool valid, size_t bytes, const std::string& diagnostics) {
@@ -241,18 +258,21 @@ int cmd_project_new(const CliArgs& args) {
 int cmd_project_validate(const CliArgs& args) {
   ProjectHandle handle;
   std::string diagnostics;
-  if (!load_project_from_args(args, &handle, &diagnostics)) return 1;
-  const bool valid = diagnostics.empty();
-  if (args.has("strict") && !valid) {
-    if (args.json_output) {
-      print_project_validation_json(false, 0, diagnostics);
-    } else {
-      std::cerr << color::red << "Error: project has " << project_diagnostic_count(diagnostics)
-                << " load diagnostic(s):\n"
-                << diagnostics << color::reset << "\n";
+  SonareError load_error = SONARE_OK;
+  if (!load_project_from_args(args, &handle, &diagnostics, &load_error)) {
+    // A syntactically malformed project is a format failure, not a generic
+    // project state failure. Keep stdout empty so machine callers can branch
+    // on the exit code without having to parse an error payload.
+    if (load_error == SONARE_ERROR_INVALID_FORMAT) {
+      throw sonare::SonareException(sonare::ErrorCode::InvalidFormat,
+                                    "failed to parse project JSON");
     }
     return 1;
   }
+  // A successful parse is valid even when the loader emitted repair/warning
+  // diagnostics. `--strict` changes only the exit status; the canonical
+  // artifact and the complete diagnostic payload are always produced first.
+  const bool valid = true;
   char* json = nullptr;
   size_t len = 0;
   SonareError err = sonare_project_serialize(handle.ptr, &json, &len);
@@ -280,6 +300,7 @@ int cmd_project_validate(const CliArgs& args) {
     std::cerr << color::green << "Project JSON is valid (" << len << " bytes canonical)"
               << color::reset << "\n";
   }
+  if (args.has("strict") && !diagnostics.empty()) return kExitInvalidState;
   return 0;
 }
 
@@ -297,6 +318,8 @@ int cmd_project_compile(const CliArgs& args) {
   }
   const bool has_timeline = result.has_timeline != 0;
   if (args.json_output) {
+    const std::string messages = result.messages != nullptr ? result.messages : "";
+    const std::vector<std::string> diagnostic_messages = project_compile_messages(result.messages);
     JsonBuilder builder;
     builder.begin_object()
         .kv("has_timeline", has_timeline)
@@ -308,10 +331,10 @@ int cmd_project_compile(const CliArgs& args) {
           .kv("code", static_cast<int>(result.diagnostics[i].code))
           .kv("severity", static_cast<int>(result.diagnostics[i].severity))
           .kv("target_id", static_cast<int>(result.diagnostics[i].target_id))
+          .kv("message", i < diagnostic_messages.size() ? diagnostic_messages[i] : "")
           .end_object();
     }
-    builder.end_array();
-    if (result.messages != nullptr) builder.kv("messages", std::string(result.messages));
+    builder.end_array().kv("messages", messages);
     builder.end_object().print();
   } else if (!args.quiet) {
     std::cerr << (has_timeline ? color::green : color::yellow)

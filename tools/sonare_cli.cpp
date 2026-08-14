@@ -131,6 +131,60 @@ const CommandInfo* find_command(const std::string& name) {
   return nullptr;
 }
 
+namespace {
+
+void emit_inventory_default(JsonBuilder& json, const CliOptionMetadata& option) {
+  json.key("default");
+  switch (option.default_kind) {
+    case CliOptionDefaultKind::Null:
+      json.null_value();
+      break;
+    case CliOptionDefaultKind::Boolean:
+      json.value(option.default_boolean);
+      break;
+    case CliOptionDefaultKind::Integer:
+      json.value(option.default_integer);
+      break;
+    case CliOptionDefaultKind::Number:
+      json.value(option.default_number);
+      break;
+    case CliOptionDefaultKind::String:
+      json.value(option.default_string);
+      break;
+    case CliOptionDefaultKind::StringArray:
+      json.begin_array();
+      for (const auto& value : option.default_string_array) json.value(value);
+      json.end_array();
+      break;
+  }
+}
+
+void emit_inventory_option(JsonBuilder& json, const CliOptionMetadata& option) {
+  json.begin_object().kv("name", option.name).kv("type", option.type);
+  emit_inventory_default(json, option);
+  json.key("aliases").begin_array();
+  for (const auto& alias : option.aliases) json.value(alias);
+  json.end_array().kv("repeatable", option.repeatable).kv("required", option.required).end_object();
+}
+
+}  // namespace
+
+std::string dump_cli_contract_json() {
+  JsonBuilder json;
+  json.begin_object().kv("schema_version", 2).kv("surface", "native").key("commands").begin_array();
+  for (const auto& command : cli_command_registry()) {
+    if (!command.inventory) continue;
+    json.begin_object().kv("path", command.path).key("aliases").begin_array();
+    for (const auto& alias : command.aliases) json.value(alias);
+    json.end_array().key("options").begin_array();
+    for (const auto& option : cli_option_metadata_for_command(command.path))
+      emit_inventory_option(json, option);
+    json.end_array().end_object();
+  }
+  json.end_array().end_object();
+  return json.build();
+}
+
 // ============================================================================
 // Usage
 // ============================================================================
@@ -165,11 +219,13 @@ void print_usage(const char* prog) {
             << "  " << prog << " pitch-shift --semitones 3 input.wav -o output.wav\n";
 }
 
-void print_command_usage(const char* prog, const CommandInfo& command) {
+void print_command_usage(const char* prog, const CommandInfo& command,
+                         const std::string& option_command = {}) {
   std::cerr << "Usage: " << prog << " " << command.name << " [options]";
   if (command.requires_audio) std::cerr << " <audio_file>";
   std::cerr << "\n\n" << command.description << "\n";
-  const auto options = cli_options_for_command(command.name);
+  const auto options =
+      cli_options_for_command(option_command.empty() ? command.name : option_command);
   if (!options.empty()) {
     std::cerr << "\nOPTIONS:\n";
     for (const auto& option : options) std::cerr << "  " << option << "\n";
@@ -185,11 +241,7 @@ namespace {
 
 constexpr int kExitUsage = 2;
 constexpr int kExitInvalidParameter = 3;
-constexpr int kExitFileNotFound = 4;
 constexpr int kExitInvalidFormat = 5;
-constexpr int kExitDecodeFailed = 6;
-constexpr int kExitOutOfMemory = 7;
-constexpr int kExitNotSupported = 8;
 constexpr int kExitInvalidState = 9;
 constexpr int kExitError = 10;
 
@@ -198,38 +250,24 @@ bool legacy_exit_codes() noexcept {
   return value != nullptr && std::string(value) == "1";
 }
 
+int finalize_exit(int status) noexcept {
+  return status == 0 ? 0 : (legacy_exit_codes() ? 1 : status);
+}
+
 int normalize_handler_exit(const CommandInfo& command, int status) noexcept {
   if (status == 0) return 0;
-  if (legacy_exit_codes()) return 1;
   // Handlers historically used `1` for argument/validation failures. Keep
   // their implementation shape while publishing the same structured contract
   // as the Python CLI. Project operations report a failed compilation/load as
   // an invalid state rather than an invalid DSP parameter.
-  if (status == 1) return command.name == "project" ? kExitInvalidState : kExitInvalidParameter;
-  return status;
+  const int normalized =
+      status == 1 ? (command.name == "project" ? kExitInvalidState : kExitInvalidParameter)
+                  : status;
+  return finalize_exit(normalized);
 }
 
 int exit_code_for(const sonare::SonareException& error) noexcept {
-  if (legacy_exit_codes()) return 1;
-  switch (error.code()) {
-    case sonare::ErrorCode::FileNotFound:
-      return kExitFileNotFound;
-    case sonare::ErrorCode::InvalidFormat:
-      return kExitInvalidFormat;
-    case sonare::ErrorCode::DecodeFailed:
-      return kExitDecodeFailed;
-    case sonare::ErrorCode::InvalidParameter:
-      return kExitInvalidParameter;
-    case sonare::ErrorCode::OutOfMemory:
-      return kExitOutOfMemory;
-    case sonare::ErrorCode::NotImplemented:
-      return kExitNotSupported;
-    case sonare::ErrorCode::InvalidState:
-      return kExitInvalidState;
-    case sonare::ErrorCode::Ok:
-    default:
-      return kExitError;
-  }
+  return cli_exit_code_for_error(error.code(), legacy_exit_codes());
 }
 
 }  // namespace
@@ -238,7 +276,15 @@ int main(int argc, char* argv[]) {
   color::configure();
   if (argc < 2) {
     print_usage(argv[0]);
-    return kExitUsage;
+    return finalize_exit(kExitUsage);
+  }
+
+  // Kept out of the public help and normal command parser intentionally: this
+  // is a machine-readable inventory hook for the cross-surface contract
+  // checker, not a user-facing command.
+  if (argc == 2 && std::string(argv[1]) == "--dump-cli-contract") {
+    std::cout << dump_cli_contract_json() << "\n";
+    return 0;
   }
 
   try {
@@ -252,7 +298,7 @@ int main(int argc, char* argv[]) {
     if (args.command.empty()) {
       std::cerr << color::red << "Error: No command specified" << color::reset << "\n\n";
       print_usage(argv[0]);
-      return kExitUsage;
+      return finalize_exit(kExitUsage);
     }
 
     // Find command
@@ -263,12 +309,15 @@ int main(int argc, char* argv[]) {
       std::cerr << color::red << "Error: Unknown command '" << args.command << "'" << color::reset
                 << "\n\n";
       print_usage(argv[0]);
-      return kExitUsage;
+      return finalize_exit(kExitUsage);
     }
 
     if (args.help) {
       if (cmd) {
-        print_command_usage(argv[0], *cmd);
+        const std::string option_command = args.command == "project" && !args.input_file.empty()
+                                               ? "project." + args.input_file
+                                               : args.command;
+        print_command_usage(argv[0], *cmd, option_command);
       } else {
         print_usage(argv[0]);
       }
@@ -280,20 +329,25 @@ int main(int argc, char* argv[]) {
     if (!argument_error.empty()) {
       std::cerr << color::red << "Error: " << argument_error << color::reset << "\n\n";
       print_usage(argv[0]);
-      return kExitInvalidParameter;
+      // Every error returned by validate_cli_arguments is a parser/schema
+      // failure.  This includes an option such as -o/--output that is known
+      // globally but is absent from the selected command schema.  Handler
+      // and domain failures are reported after this validation step and keep
+      // their existing InvalidParameter/runtime exit codes.
+      return finalize_exit(kExitUsage);
     }
 
     // Version/doctor/system-info have no audio and are dispatched only after their
     // empty command schemas and positional arity have been validated.
-    if (args.command == "version") return cmd_version(args);
-    if (args.command == "doctor") return cmd_doctor(args);
-    if (args.command == "system-info") return cmd_system_info(args);
+    if (args.command == "version") return finalize_exit(cmd_version(args));
+    if (args.command == "doctor") return finalize_exit(cmd_doctor(args));
+    if (args.command == "system-info") return finalize_exit(cmd_system_info(args));
 
     // Check for audio file
     if (cmd->requires_audio && args.input_file.empty()) {
       std::cerr << color::red << "Error: Missing audio file" << color::reset << "\n\n";
       print_usage(argv[0]);
-      return kExitUsage;
+      return finalize_exit(kExitUsage);
     }
 
     if (!cmd->requires_audio) {
@@ -308,7 +362,7 @@ int main(int argc, char* argv[]) {
     auto [samples, sample_rate] = load_audio(args.input_file);
     if (samples.empty()) {
       std::cerr << "\n" << color::red << "Error: Failed to load audio file" << color::reset << "\n";
-      return kExitInvalidFormat;
+      return finalize_exit(kExitInvalidFormat);
     }
 
     Audio audio = Audio::from_vector(std::move(samples), sample_rate);
@@ -317,9 +371,14 @@ int main(int argc, char* argv[]) {
     try {
       source_channels = audio_channel_count(args.input_file);
     } catch (const sonare::SonareException&) {
+      if (args.command == "info") throw;
       // The successful decoder remains authoritative; channel inspection is
       // advisory for containers handled by an optional external decoder.
     }
+    if (args.command == "info" && source_channels <= 0) {
+      throw std::invalid_argument("invalid audio channel count");
+    }
+    args.source_channels = source_channels;
     // Every requires_audio command loads through the mono downmix in
     // load_audio, so any multi-channel input silently loses its channels
     // (metering skews, and an audio-producing command like `eq` writes a mono
@@ -342,6 +401,9 @@ int main(int argc, char* argv[]) {
   } catch (const sonare::SonareException& e) {
     std::cerr << "\n" << color::red << "Error: " << e.what() << color::reset << "\n";
     return exit_code_for(e);
+  } catch (const CliUsageError& e) {
+    std::cerr << "\n" << color::red << "Error: " << e.what() << color::reset << "\n";
+    return legacy_exit_codes() ? 1 : kExitUsage;
   } catch (const std::invalid_argument& e) {
     std::cerr << "\n" << color::red << "Error: " << e.what() << color::reset << "\n";
     return legacy_exit_codes() ? 1 : kExitInvalidParameter;
