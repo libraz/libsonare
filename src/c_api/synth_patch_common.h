@@ -111,8 +111,8 @@ inline bool valid_c_enum(int value, int count) noexcept { return value >= 0 && v
 /// Resolves a versioned C synth patch onto a NativeSynthConfig: the base is
 /// the named preset (or the default subtractive patch when @p c.preset is
 /// empty), then every non-zero struct field overrides the base ("0 => keep").
-/// Struct version 1 has no per-field presence bits, so explicit zero numeric
-/// overrides are intentionally indistinguishable from "keep".
+/// Struct version 2 adds @c present_fields, so a caller can also override with
+/// an explicit zero; version 1 has no presence bits and cannot express one.
 /// Returns false (and sets @p out_error) for an unsupported struct_version or
 /// an unknown preset name. The result still passes through NativeSynth's own
 /// constructor clamping.
@@ -131,10 +131,14 @@ inline bool synth_config_from_patch_c(const SonareSynthPatch& c,
   using sonare::midi::synth::VaWaveform;
 
   if (out_error) *out_error = nullptr;
-  if (c.struct_version > 1) {
+  if (c.struct_version > 2) {
     if (out_error) *out_error = "unsupported SonareSynthPatch struct_version";
     return false;
   }
+  // A version-1 caller's struct predates present_fields, so its bits are not
+  // part of that contract even though the member exists in this build.
+  const uint32_t present = c.struct_version >= 2 ? c.present_fields : 0u;
+  const auto set = [present](uint32_t bit) { return (present & bit) != 0u; };
   if (!valid_c_enum(c.engine_mode, SONARE_SYNTH_ENGINE_MODE_COUNT)) {
     if (out_error) *out_error = "invalid synth engine_mode";
     return false;
@@ -172,38 +176,53 @@ inline bool synth_config_from_patch_c(const SonareSynthPatch& c,
   if (c.engine_mode > 0) p.mode = static_cast<SynthEngineMode>(c.engine_mode - 1);
   // Oscillator section.
   if (c.waveform > 0) p.waveform = static_cast<VaWaveform>(c.waveform - 1);
-  if (c.unison != 0) p.unison = c.unison;
-  if (c.detune_cents != 0.0f) p.detune_cents = c.detune_cents;
-  if (c.drift_cents != 0.0f) p.drift_cents = c.drift_cents;
-  if (c.drive != 0.0f) p.drive = c.drive;
+  if (set(SONARE_SYNTH_FIELD_UNISON) || c.unison != 0) p.unison = c.unison;
+  if (set(SONARE_SYNTH_FIELD_DETUNE_CENTS) || c.detune_cents != 0.0f)
+    p.detune_cents = c.detune_cents;
+  if (set(SONARE_SYNTH_FIELD_DRIFT_CENTS) || c.drift_cents != 0.0f) p.drift_cents = c.drift_cents;
+  if (set(SONARE_SYNTH_FIELD_DRIVE) || c.drive != 0.0f) p.drive = c.drive;
   // Filter section.
   if (c.filter_model > 0) p.filter_model = static_cast<SynthFilterModel>(c.filter_model - 1);
   if (c.filter_output > 0) p.filter_output = static_cast<SynthFilterOutput>(c.filter_output - 1);
-  if (c.cutoff_hz != 0.0f) p.cutoff_hz = c.cutoff_hz;
-  if (c.resonance_q != 0.0f) p.resonance_q = c.resonance_q;
-  if (c.key_track != 0.0f) p.key_track = c.key_track;
-  if (c.env_to_cutoff_cents != 0.0f) p.env_to_cutoff_cents = c.env_to_cutoff_cents;
-  if (c.vel_to_cutoff_cents != 0.0f) p.vel_to_cutoff_cents = c.vel_to_cutoff_cents;
+  if (set(SONARE_SYNTH_FIELD_CUTOFF_HZ) || c.cutoff_hz != 0.0f) p.cutoff_hz = c.cutoff_hz;
+  if (set(SONARE_SYNTH_FIELD_RESONANCE_Q) || c.resonance_q != 0.0f) p.resonance_q = c.resonance_q;
+  if (set(SONARE_SYNTH_FIELD_KEY_TRACK) || c.key_track != 0.0f) p.key_track = c.key_track;
+  if (set(SONARE_SYNTH_FIELD_ENV_TO_CUTOFF_CENTS) || c.env_to_cutoff_cents != 0.0f)
+    p.env_to_cutoff_cents = c.env_to_cutoff_cents;
+  if (set(SONARE_SYNTH_FIELD_VEL_TO_CUTOFF_CENTS) || c.vel_to_cutoff_cents != 0.0f)
+    p.vel_to_cutoff_cents = c.vel_to_cutoff_cents;
   // Envelopes.
-  if (c.amp_attack_ms != 0.0f) p.amp_env.attack_ms = c.amp_attack_ms;
-  if (c.amp_decay_ms != 0.0f) p.amp_env.decay_ms = c.amp_decay_ms;
-  if (c.amp_sustain != 0.0f) p.amp_env.sustain = c.amp_sustain;
-  if (c.amp_release_ms != 0.0f) p.amp_env.release_ms = c.amp_release_ms;
-  if (c.filter_attack_ms != 0.0f) p.filter_env.attack_ms = c.filter_attack_ms;
-  if (c.filter_decay_ms != 0.0f) p.filter_env.decay_ms = c.filter_decay_ms;
-  if (c.filter_sustain != 0.0f) p.filter_env.sustain = c.filter_sustain;
-  if (c.filter_release_ms != 0.0f) p.filter_env.release_ms = c.filter_release_ms;
+  if (set(SONARE_SYNTH_FIELD_AMP_ATTACK_MS) || c.amp_attack_ms != 0.0f)
+    p.amp_env.attack_ms = c.amp_attack_ms;
+  if (set(SONARE_SYNTH_FIELD_AMP_DECAY_MS) || c.amp_decay_ms != 0.0f)
+    p.amp_env.decay_ms = c.amp_decay_ms;
+  if (set(SONARE_SYNTH_FIELD_AMP_SUSTAIN) || c.amp_sustain != 0.0f)
+    p.amp_env.sustain = c.amp_sustain;
+  if (set(SONARE_SYNTH_FIELD_AMP_RELEASE_MS) || c.amp_release_ms != 0.0f)
+    p.amp_env.release_ms = c.amp_release_ms;
+  if (set(SONARE_SYNTH_FIELD_FILTER_ATTACK_MS) || c.filter_attack_ms != 0.0f)
+    p.filter_env.attack_ms = c.filter_attack_ms;
+  if (set(SONARE_SYNTH_FIELD_FILTER_DECAY_MS) || c.filter_decay_ms != 0.0f)
+    p.filter_env.decay_ms = c.filter_decay_ms;
+  if (set(SONARE_SYNTH_FIELD_FILTER_SUSTAIN) || c.filter_sustain != 0.0f)
+    p.filter_env.sustain = c.filter_sustain;
+  if (set(SONARE_SYNTH_FIELD_FILTER_RELEASE_MS) || c.filter_release_ms != 0.0f)
+    p.filter_env.release_ms = c.filter_release_ms;
   // LFOs / glide.
-  if (c.lfo_rate_hz != 0.0f) p.lfo_rate_hz = c.lfo_rate_hz;
-  if (c.lfo_to_pitch_cents != 0.0f) p.lfo_to_pitch_cents = c.lfo_to_pitch_cents;
-  if (c.lfo2_rate_hz != 0.0f) p.lfo2_rate_hz = c.lfo2_rate_hz;
-  if (c.glide_ms != 0.0f) p.glide_ms = c.glide_ms;
+  if (set(SONARE_SYNTH_FIELD_LFO_RATE_HZ) || c.lfo_rate_hz != 0.0f) p.lfo_rate_hz = c.lfo_rate_hz;
+  if (set(SONARE_SYNTH_FIELD_LFO_TO_PITCH_CENTS) || c.lfo_to_pitch_cents != 0.0f)
+    p.lfo_to_pitch_cents = c.lfo_to_pitch_cents;
+  if (set(SONARE_SYNTH_FIELD_LFO2_RATE_HZ) || c.lfo2_rate_hz != 0.0f)
+    p.lfo2_rate_hz = c.lfo2_rate_hz;
+  if (set(SONARE_SYNTH_FIELD_GLIDE_MS) || c.glide_ms != 0.0f) p.glide_ms = c.glide_ms;
   // Realism polish.
   if (c.body > 0) p.body = static_cast<BodyType>(c.body - 1);
-  if (c.body_mix != 0.0f) p.body_mix = c.body_mix;
-  if (c.stereo_spread != 0.0f) p.stereo_spread = c.stereo_spread;
-  // Mod matrix: a non-empty C table replaces the base matrix.
-  if (c.num_mod_routings > 0) {
+  if (set(SONARE_SYNTH_FIELD_BODY_MIX) || c.body_mix != 0.0f) p.body_mix = c.body_mix;
+  if (set(SONARE_SYNTH_FIELD_STEREO_SPREAD) || c.stereo_spread != 0.0f)
+    p.stereo_spread = c.stereo_spread;
+  // Mod matrix: a non-empty C table replaces the base matrix, and the presence
+  // bit lets an empty table clear it instead of keeping the base.
+  if (c.num_mod_routings > 0 || set(SONARE_SYNTH_FIELD_MOD_ROUTINGS)) {
     p.mod_matrix = {};
     const int count = std::min(c.num_mod_routings, kMaxModRoutes);
     for (int i = 0; i < count; ++i) {
@@ -213,13 +232,30 @@ inline bool synth_config_from_patch_c(const SonareSynthPatch& c,
     }
   }
   // Voice pool / bus.
-  if (c.gain != 0.0f) cfg.gain = c.gain;
-  if (c.polyphony != 0) cfg.polyphony = c.polyphony;
-  if (c.bus_drive != 0.0f) cfg.bus_drive = c.bus_drive;
+  if (set(SONARE_SYNTH_FIELD_GAIN) || c.gain != 0.0f) cfg.gain = c.gain;
+  if (set(SONARE_SYNTH_FIELD_POLYPHONY) || c.polyphony != 0) cfg.polyphony = c.polyphony;
+  if (set(SONARE_SYNTH_FIELD_BUS_DRIVE) || c.bus_drive != 0.0f) cfg.bus_drive = c.bus_drive;
 
   *out = cfg;
   return true;
 }
+
+/// Every presence bit SonareSynthPatch defines. The read direction sets them
+/// all: a preset snapshot is fully specified, so a field that happens to be
+/// zero must survive a round-trip instead of decaying into "keep base".
+inline constexpr uint32_t kSynthPatchAllFields =
+    SONARE_SYNTH_FIELD_UNISON | SONARE_SYNTH_FIELD_DETUNE_CENTS | SONARE_SYNTH_FIELD_DRIFT_CENTS |
+    SONARE_SYNTH_FIELD_DRIVE | SONARE_SYNTH_FIELD_CUTOFF_HZ | SONARE_SYNTH_FIELD_RESONANCE_Q |
+    SONARE_SYNTH_FIELD_KEY_TRACK | SONARE_SYNTH_FIELD_ENV_TO_CUTOFF_CENTS |
+    SONARE_SYNTH_FIELD_VEL_TO_CUTOFF_CENTS | SONARE_SYNTH_FIELD_AMP_ATTACK_MS |
+    SONARE_SYNTH_FIELD_AMP_DECAY_MS | SONARE_SYNTH_FIELD_AMP_SUSTAIN |
+    SONARE_SYNTH_FIELD_AMP_RELEASE_MS | SONARE_SYNTH_FIELD_FILTER_ATTACK_MS |
+    SONARE_SYNTH_FIELD_FILTER_DECAY_MS | SONARE_SYNTH_FIELD_FILTER_SUSTAIN |
+    SONARE_SYNTH_FIELD_FILTER_RELEASE_MS | SONARE_SYNTH_FIELD_LFO_RATE_HZ |
+    SONARE_SYNTH_FIELD_LFO_TO_PITCH_CENTS | SONARE_SYNTH_FIELD_LFO2_RATE_HZ |
+    SONARE_SYNTH_FIELD_GLIDE_MS | SONARE_SYNTH_FIELD_BODY_MIX | SONARE_SYNTH_FIELD_STEREO_SPREAD |
+    SONARE_SYNTH_FIELD_GAIN | SONARE_SYNTH_FIELD_POLYPHONY | SONARE_SYNTH_FIELD_BUS_DRIVE |
+    SONARE_SYNTH_FIELD_MOD_ROUTINGS;
 
 /// Fills a versioned C synth patch from a catalog preset (the read direction:
 /// preset name + the wrapper-section values, so hosts can inspect and tweak).
@@ -227,7 +263,8 @@ inline void synth_patch_to_c(const sonare::midi::synth::SynthPreset& preset,
                              SonareSynthPatch* out) {
   const sonare::midi::synth::NativeSynthPatch& p = preset.config.patch;
   *out = SonareSynthPatch{};
-  out->struct_version = 1;
+  out->struct_version = 2;
+  out->present_fields = kSynthPatchAllFields;
   std::strncpy(out->preset, preset.name, SONARE_SYNTH_PRESET_NAME_MAX - 1);
   out->engine_mode = static_cast<int>(p.mode) + 1;
   out->waveform = static_cast<int>(p.waveform) + 1;

@@ -748,7 +748,7 @@ Napi::Value RealtimeEngineWrap::SetSynthInstrument(const Napi::CallbackInfo& inf
       return env.Undefined();  // exception already pending
     }
   } else {
-    patch.struct_version = 1;
+    patch.struct_version = 2;
   }
   ThrowIfError(env, sonare_engine_set_synth_instrument(engine_, destination_id, &patch));
   return env.Undefined();

@@ -6726,16 +6726,16 @@
         "kind": "aggregate",
         "name": "patch",
         "offset": 4,
-        "size": 260
+        "size": 264
       },
       {
         "kind": "unsigned",
         "name": "use_gm_programs",
-        "offset": 264,
+        "offset": 268,
         "size": 1
       }
     ],
-    "size": 268
+    "size": 272
   },
   "SonareSynthModRouting": {
     "align": 4,
@@ -6973,9 +6973,15 @@
         "name": "bus_drive",
         "offset": 256,
         "size": 4
+      },
+      {
+        "kind": "unsigned",
+        "name": "present_fields",
+        "offset": 260,
+        "size": 4
       }
     ],
-    "size": 260
+    "size": 264
   },
   "SonareTimbreFrame": {
     "align": 4,

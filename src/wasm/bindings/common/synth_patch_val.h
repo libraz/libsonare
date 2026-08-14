@@ -117,12 +117,13 @@ inline void setPresetName(SonareSynthPatch* patch, const std::string& name) {
 
 /// Parses a JS SynthPatch descriptor (a preset-name string — a "va:" routing
 /// prefix is accepted — or an object of wrapper-section overrides) into the
-/// versioned C struct. Numeric zero values are the C ABI's "keep base" sentinel,
-/// not explicit zero overrides. Throws on unknown enum names; unknown PRESET
-/// names are validated downstream.
+/// versioned C struct. A key the caller actually supplied also sets its
+/// present_fields bit, so `stereoSpread: 0` reaches the core as an explicit
+/// zero rather than the "keep base" sentinel a bare zero would be. Throws on
+/// unknown enum names; unknown PRESET names are validated downstream.
 inline SonareSynthPatch synthPatchFromVal(emscripten::val desc) {
   SonareSynthPatch patch{};
-  patch.struct_version = 1;
+  patch.struct_version = 2;
   if (desc.isUndefined() || desc.isNull()) return patch;
   if (desc.typeOf().as<std::string>() == "string") {
     setPresetName(&patch, desc.as<std::string>());
@@ -149,32 +150,42 @@ inline SonareSynthPatch synthPatchFromVal(emscripten::val desc) {
   enumProperty(desc, "filterOutput", kFilterOutputs, SONARE_SYNTH_FILTER_OUTPUT_COUNT,
                "filter output", &patch.filter_output);
   enumProperty(desc, "body", kBodyTypes, SONARE_SYNTH_BODY_TYPE_COUNT, "body type", &patch.body);
-  patch.unison = intProperty(desc, "unison", 0);
-  patch.detune_cents = floatProperty(desc, "detuneCents", 0.0f);
-  patch.drift_cents = floatProperty(desc, "driftCents", 0.0f);
-  patch.drive = floatProperty(desc, "drive", 0.0f);
-  patch.cutoff_hz = floatProperty(desc, "cutoffHz", 0.0f);
-  patch.resonance_q = floatProperty(desc, "resonanceQ", 0.0f);
-  patch.key_track = floatProperty(desc, "keyTrack", 0.0f);
-  patch.env_to_cutoff_cents = floatProperty(desc, "envToCutoffCents", 0.0f);
-  patch.vel_to_cutoff_cents = floatProperty(desc, "velToCutoffCents", 0.0f);
-  patch.amp_attack_ms = floatProperty(desc, "ampAttackMs", 0.0f);
-  patch.amp_decay_ms = floatProperty(desc, "ampDecayMs", 0.0f);
-  patch.amp_sustain = floatProperty(desc, "ampSustain", 0.0f);
-  patch.amp_release_ms = floatProperty(desc, "ampReleaseMs", 0.0f);
-  patch.filter_attack_ms = floatProperty(desc, "filterAttackMs", 0.0f);
-  patch.filter_decay_ms = floatProperty(desc, "filterDecayMs", 0.0f);
-  patch.filter_sustain = floatProperty(desc, "filterSustain", 0.0f);
-  patch.filter_release_ms = floatProperty(desc, "filterReleaseMs", 0.0f);
-  patch.lfo_rate_hz = floatProperty(desc, "lfoRateHz", 0.0f);
-  patch.lfo_to_pitch_cents = floatProperty(desc, "lfoToPitchCents", 0.0f);
-  patch.lfo2_rate_hz = floatProperty(desc, "lfo2RateHz", 0.0f);
-  patch.glide_ms = floatProperty(desc, "glideMs", 0.0f);
-  patch.body_mix = floatProperty(desc, "bodyMix", 0.0f);
-  patch.stereo_spread = floatProperty(desc, "stereoSpread", 0.0f);
-  patch.gain = floatProperty(desc, "gain", 0.0f);
-  patch.polyphony = intProperty(desc, "polyphony", 0);
-  patch.bus_drive = floatProperty(desc, "busDrive", 0.0f);
+  auto read_float = [&desc, &patch](const char* key, uint32_t bit, float* out) {
+    *out = floatProperty(desc, key, 0.0f);
+    if (hasProperty(desc, key)) patch.present_fields |= bit;
+  };
+  auto read_int = [&desc, &patch](const char* key, uint32_t bit, int* out) {
+    *out = intProperty(desc, key, 0);
+    if (hasProperty(desc, key)) patch.present_fields |= bit;
+  };
+  read_int("unison", SONARE_SYNTH_FIELD_UNISON, &patch.unison);
+  read_float("detuneCents", SONARE_SYNTH_FIELD_DETUNE_CENTS, &patch.detune_cents);
+  read_float("driftCents", SONARE_SYNTH_FIELD_DRIFT_CENTS, &patch.drift_cents);
+  read_float("drive", SONARE_SYNTH_FIELD_DRIVE, &patch.drive);
+  read_float("cutoffHz", SONARE_SYNTH_FIELD_CUTOFF_HZ, &patch.cutoff_hz);
+  read_float("resonanceQ", SONARE_SYNTH_FIELD_RESONANCE_Q, &patch.resonance_q);
+  read_float("keyTrack", SONARE_SYNTH_FIELD_KEY_TRACK, &patch.key_track);
+  read_float("envToCutoffCents", SONARE_SYNTH_FIELD_ENV_TO_CUTOFF_CENTS,
+             &patch.env_to_cutoff_cents);
+  read_float("velToCutoffCents", SONARE_SYNTH_FIELD_VEL_TO_CUTOFF_CENTS,
+             &patch.vel_to_cutoff_cents);
+  read_float("ampAttackMs", SONARE_SYNTH_FIELD_AMP_ATTACK_MS, &patch.amp_attack_ms);
+  read_float("ampDecayMs", SONARE_SYNTH_FIELD_AMP_DECAY_MS, &patch.amp_decay_ms);
+  read_float("ampSustain", SONARE_SYNTH_FIELD_AMP_SUSTAIN, &patch.amp_sustain);
+  read_float("ampReleaseMs", SONARE_SYNTH_FIELD_AMP_RELEASE_MS, &patch.amp_release_ms);
+  read_float("filterAttackMs", SONARE_SYNTH_FIELD_FILTER_ATTACK_MS, &patch.filter_attack_ms);
+  read_float("filterDecayMs", SONARE_SYNTH_FIELD_FILTER_DECAY_MS, &patch.filter_decay_ms);
+  read_float("filterSustain", SONARE_SYNTH_FIELD_FILTER_SUSTAIN, &patch.filter_sustain);
+  read_float("filterReleaseMs", SONARE_SYNTH_FIELD_FILTER_RELEASE_MS, &patch.filter_release_ms);
+  read_float("lfoRateHz", SONARE_SYNTH_FIELD_LFO_RATE_HZ, &patch.lfo_rate_hz);
+  read_float("lfoToPitchCents", SONARE_SYNTH_FIELD_LFO_TO_PITCH_CENTS, &patch.lfo_to_pitch_cents);
+  read_float("lfo2RateHz", SONARE_SYNTH_FIELD_LFO2_RATE_HZ, &patch.lfo2_rate_hz);
+  read_float("glideMs", SONARE_SYNTH_FIELD_GLIDE_MS, &patch.glide_ms);
+  read_float("bodyMix", SONARE_SYNTH_FIELD_BODY_MIX, &patch.body_mix);
+  read_float("stereoSpread", SONARE_SYNTH_FIELD_STEREO_SPREAD, &patch.stereo_spread);
+  read_float("gain", SONARE_SYNTH_FIELD_GAIN, &patch.gain);
+  read_int("polyphony", SONARE_SYNTH_FIELD_POLYPHONY, &patch.polyphony);
+  read_float("busDrive", SONARE_SYNTH_FIELD_BUS_DRIVE, &patch.bus_drive);
 
   if (hasProperty(desc, "modRoutings")) {
     emscripten::val routings = desc["modRoutings"];
@@ -185,6 +196,9 @@ inline SonareSynthPatch synthPatchFromVal(emscripten::val desc) {
                                       "a synth patch supports at most 8 mod routings");
       }
       patch.num_mod_routings = static_cast<int>(count);
+      // An explicitly supplied array — including an empty one — replaces the
+      // base matrix; omitting the key keeps it.
+      patch.present_fields |= SONARE_SYNTH_FIELD_MOD_ROUTINGS;
       for (size_t i = 0; i < count; ++i) {
         emscripten::val routing = routings[i];
         SonareSynthModRouting& out = patch.mod_routings[i];

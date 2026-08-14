@@ -82,7 +82,7 @@ TEST_CASE("synth preset patches round-trip through the versioned struct",
   SonareSynthPatch patch{};
   // warm-pad: a 7-osc subtractive supersaw.
   REQUIRE(sonare_synth_preset_patch("warm-pad", &patch) == SONARE_OK);
-  REQUIRE(patch.struct_version == 1);
+  REQUIRE(patch.struct_version == 2);
   REQUIRE(std::string(patch.preset) == "warm-pad");
   REQUIRE(patch.engine_mode == SONARE_SYNTH_ENGINE_SUBTRACTIVE);
   REQUIRE(patch.waveform == SONARE_SYNTH_OSC_SAW);
@@ -180,6 +180,48 @@ TEST_CASE("bounce_with_synth_instruments renders preset patches deterministicall
   sonare_project_destroy(project);
 }
 
+TEST_CASE("synth patch presence bits express an explicit zero", "[project][synth_patch]") {
+  SonareProject* project = make_synth_project(3);
+
+  // warm-pad carries a non-zero stereo spread and bus drive, so turning either
+  // off is a real edit that a bare zero cannot express: without a presence bit
+  // the zero reads as the "keep base" sentinel and the render is unchanged.
+  SonareSynthPatch base{};
+  base.struct_version = 2;
+  std::strncpy(base.preset, "warm-pad", SONARE_SYNTH_PRESET_NAME_MAX - 1);
+  const std::vector<float> reference = bounce_synth(project, base);
+  REQUIRE(peak_of(reference) > 0.0f);
+
+  SonareSynthPatch bare_zero = base;
+  bare_zero.stereo_spread = 0.0f;
+  bare_zero.bus_drive = 0.0f;
+  REQUIRE(bounce_synth(project, bare_zero) == reference);
+
+  SonareSynthPatch explicit_zero = bare_zero;
+  explicit_zero.present_fields = SONARE_SYNTH_FIELD_STEREO_SPREAD | SONARE_SYNTH_FIELD_BUS_DRIVE;
+  REQUIRE(bounce_synth(project, explicit_zero) != reference);
+
+  // A version-1 caller predates the mask, so its bits stay inert.
+  SonareSynthPatch version_one = explicit_zero;
+  version_one.struct_version = 1;
+  REQUIRE(bounce_synth(project, version_one) == reference);
+
+  // An empty mod-routing table clears the base matrix only when marked.
+  SonareSynthPatch wobble = base;
+  wobble.num_mod_routings = 1;
+  wobble.mod_routings[0] = {3 /*lfo1*/, 1 /*pitchCents*/, 80.0f};
+  wobble.lfo_rate_hz = 6.0f;
+  const std::vector<float> with_matrix = bounce_synth(project, wobble);
+  REQUIRE(with_matrix != reference);
+
+  SonareSynthPatch cleared = wobble;
+  cleared.num_mod_routings = 0;
+  cleared.present_fields |= SONARE_SYNTH_FIELD_MOD_ROUTINGS;
+  REQUIRE(bounce_synth(project, cleared) != with_matrix);
+
+  sonare_project_destroy(project);
+}
+
 TEST_CASE("synth patch field overrides shape the preset", "[project][synth_patch]") {
   SonareProject* project = make_synth_project(3);
 
@@ -204,7 +246,7 @@ TEST_CASE("synth patch field overrides shape the preset", "[project][synth_patch
 
   // Invalid patches are rejected.
   SonareSynthPatch bad_version{};
-  bad_version.struct_version = 2;
+  bad_version.struct_version = 3;
   SonareProjectBounceOptions options{};
   options.total_frames = 1024;
   SonareSynthInstrumentBinding binding{};

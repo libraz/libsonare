@@ -216,15 +216,43 @@ def test_synth_patch_overrides_and_mod_matrix() -> None:
         project.close()
 
 
-def test_synth_patch_zero_numeric_fields_keep_the_base_preset() -> None:
+def test_synth_patch_zero_is_an_override_not_keep_the_base() -> None:
+    """A field left at None keeps the base; a supplied zero overrides with it."""
     project = _build_midi_only_project()
     try:
         preset = project.bounce_with_synth_instrument("warm-pad", total_frames=24000)
-        explicit_zero = project.bounce_with_synth_instrument(
-            SynthPatch(preset="warm-pad", amp_sustain=0.0, filter_sustain=0.0, gain=0.0),
+
+        # warm-pad carries a non-zero stereo spread and bus drive, so turning
+        # either off is a real edit that the patch can now express.
+        no_spread = project.bounce_with_synth_instrument(
+            SynthPatch(preset="warm-pad", stereo_spread=0.0), total_frames=24000
+        )
+        assert not np.array_equal(no_spread, preset)
+        no_drive = project.bounce_with_synth_instrument(
+            SynthPatch(preset="warm-pad", bus_drive=0.0), total_frames=24000
+        )
+        assert not np.array_equal(no_drive, preset)
+
+        # Leaving the fields out keeps the preset's own values.
+        untouched = project.bounce_with_synth_instrument(
+            SynthPatch(preset="warm-pad"), total_frames=24000
+        )
+        assert np.array_equal(untouched, preset)
+
+        # An empty routing tuple clears the base matrix; None keeps it.
+        wobble = project.bounce_with_synth_instrument(
+            SynthPatch(
+                preset="warm-pad",
+                lfo_rate_hz=6.0,
+                mod_routings=(SynthModRouting("lfo1", "pitch-cents", 80.0),),
+            ),
             total_frames=24000,
         )
-        assert np.array_equal(explicit_zero, preset)
+        cleared = project.bounce_with_synth_instrument(
+            SynthPatch(preset="warm-pad", lfo_rate_hz=6.0, mod_routings=()),
+            total_frames=24000,
+        )
+        assert not np.array_equal(cleared, wobble)
     finally:
         project.close()
 

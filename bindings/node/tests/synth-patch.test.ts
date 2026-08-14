@@ -170,6 +170,54 @@ describe('Project.bounceWithSynthInstrument', () => {
     }
   });
 
+  it('takes an explicit zero as an override, not as "keep the base"', () => {
+    const project = buildMidiOnlyProject();
+    try {
+      // warm-pad carries a non-zero stereo spread and bus drive, so turning
+      // either off is a real edit. Before the patch carried presence bits a
+      // zero was indistinguishable from an omitted key and the render was
+      // unchanged, which made "no spread" impossible to ask for.
+      const reference = project.bounceWithSynthInstrument('warm-pad', { totalFrames: 24000 });
+      expect(peak(reference)).toBeGreaterThan(0);
+
+      const noSpread = project.bounceWithSynthInstrument(
+        { preset: 'warm-pad', stereoSpread: 0 },
+        { totalFrames: 24000 },
+      );
+      expect(noSpread).not.toEqual(reference);
+
+      const noDrive = project.bounceWithSynthInstrument(
+        { preset: 'warm-pad', busDrive: 0 },
+        { totalFrames: 24000 },
+      );
+      expect(noDrive).not.toEqual(reference);
+
+      // Omitting the key still keeps the base value.
+      const untouched = project.bounceWithSynthInstrument(
+        { preset: 'warm-pad' },
+        { totalFrames: 24000 },
+      );
+      expect(untouched).toEqual(reference);
+
+      // An empty routing array clears the base matrix; omitting it keeps it.
+      const wobble = project.bounceWithSynthInstrument(
+        {
+          preset: 'warm-pad',
+          lfoRateHz: 6,
+          modRoutings: [{ source: 'lfo1', destination: 'pitch-cents', depth: 80 }],
+        },
+        { totalFrames: 24000 },
+      );
+      const cleared = project.bounceWithSynthInstrument(
+        { preset: 'warm-pad', lfoRateHz: 6, modRoutings: [] },
+        { totalFrames: 24000 },
+      );
+      expect(cleared).not.toEqual(wobble);
+    } finally {
+      project.destroy();
+    }
+  });
+
   it('applies field overrides and the mod matrix', () => {
     const project = buildMidiOnlyProject();
     try {

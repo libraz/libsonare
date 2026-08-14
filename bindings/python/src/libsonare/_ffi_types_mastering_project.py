@@ -503,14 +503,46 @@ class SonareSynthModRouting(ctypes.Structure):
 SONARE_SYNTH_PATCH_MOD_ROUTINGS = 8
 SONARE_SYNTH_PRESET_NAME_MAX = 32
 
+# Bit positions for SonareSynthPatch.present_fields (sonare_c_types_analysis.h).
+# The enum fields are absent on purpose: their zero is already the reserved
+# "keep base" value, so they have nothing to disambiguate.
+SONARE_SYNTH_FIELD_UNISON = 1 << 0
+SONARE_SYNTH_FIELD_DETUNE_CENTS = 1 << 1
+SONARE_SYNTH_FIELD_DRIFT_CENTS = 1 << 2
+SONARE_SYNTH_FIELD_DRIVE = 1 << 3
+SONARE_SYNTH_FIELD_CUTOFF_HZ = 1 << 4
+SONARE_SYNTH_FIELD_RESONANCE_Q = 1 << 5
+SONARE_SYNTH_FIELD_KEY_TRACK = 1 << 6
+SONARE_SYNTH_FIELD_ENV_TO_CUTOFF_CENTS = 1 << 7
+SONARE_SYNTH_FIELD_VEL_TO_CUTOFF_CENTS = 1 << 8
+SONARE_SYNTH_FIELD_AMP_ATTACK_MS = 1 << 9
+SONARE_SYNTH_FIELD_AMP_DECAY_MS = 1 << 10
+SONARE_SYNTH_FIELD_AMP_SUSTAIN = 1 << 11
+SONARE_SYNTH_FIELD_AMP_RELEASE_MS = 1 << 12
+SONARE_SYNTH_FIELD_FILTER_ATTACK_MS = 1 << 13
+SONARE_SYNTH_FIELD_FILTER_DECAY_MS = 1 << 14
+SONARE_SYNTH_FIELD_FILTER_SUSTAIN = 1 << 15
+SONARE_SYNTH_FIELD_FILTER_RELEASE_MS = 1 << 16
+SONARE_SYNTH_FIELD_LFO_RATE_HZ = 1 << 17
+SONARE_SYNTH_FIELD_LFO_TO_PITCH_CENTS = 1 << 18
+SONARE_SYNTH_FIELD_LFO2_RATE_HZ = 1 << 19
+SONARE_SYNTH_FIELD_GLIDE_MS = 1 << 20
+SONARE_SYNTH_FIELD_BODY_MIX = 1 << 21
+SONARE_SYNTH_FIELD_STEREO_SPREAD = 1 << 22
+SONARE_SYNTH_FIELD_GAIN = 1 << 23
+SONARE_SYNTH_FIELD_POLYPHONY = 1 << 24
+SONARE_SYNTH_FIELD_BUS_DRIVE = 1 << 25
+SONARE_SYNTH_FIELD_MOD_ROUTINGS = 1 << 26
+
 
 class SonareSynthPatch(ctypes.Structure):
-    """Maps to SonareSynthPatch in sonare_c_types.h (struct_version 1).
+    """Maps to SonareSynthPatch in sonare_c_types.h (struct_version 2).
 
     Versioned NativeSynth patch: the base is the named ``preset`` (or the
     default subtractive patch when empty) and every non-zero field overrides
-    the base ("0 => keep"). Explicit zero numeric overrides are not
-    representable in struct_version 1. Enum fields reserve 0 as "keep".
+    the base ("0 => keep"). Enum fields reserve 0 as "keep". ``present_fields``
+    names the fields the caller set on purpose, so an explicit zero override is
+    representable; it is honoured only when ``struct_version`` is 2.
     """
 
     _fields_ = [
@@ -549,6 +581,7 @@ class SonareSynthPatch(ctypes.Structure):
         ("gain", ctypes.c_float),
         ("polyphony", ctypes.c_int),
         ("bus_drive", ctypes.c_float),
+        ("present_fields", ctypes.c_uint32),
     ]
 
 

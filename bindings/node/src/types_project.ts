@@ -462,12 +462,11 @@ export interface SynthModRouting {
  *
  * The patch starts from a BASE — the named `preset` (see
  * {@link synthPresetNames}; a `"va:"` routing prefix is accepted) or, when
- * `preset` is omitted, the default subtractive patch. Every numeric field then
- * uses "0 / omit => keep the base value" (non-zero values override, clamped to
- * their audible ranges) and the enum fields reserve `'default'` as keep. The
- * frozen C ABI has no per-field presence bits, so explicit zero numeric
- * overrides (for example `ampSustain: 0`) cannot be represented; they keep the
- * base value. A non-empty `modRoutings` REPLACES the base mod matrix.
+ * `preset` is omitted, the default subtractive patch. Omitting a numeric field
+ * keeps the base value; supplying one overrides it (clamped to its audible
+ * range), including an explicit `0` such as `stereoSpread: 0`. The enum fields
+ * reserve `'default'` as keep. A `modRoutings` array REPLACES the base mod
+ * matrix, and an empty array clears it, while omitting the key keeps it.
  *
  * Mode-specific deep parameters (FM operator stacks, modal mode tables,
  * drawbar registrations, kit pieces, piano strings) travel inside the named
@@ -511,12 +510,10 @@ export interface SynthPatch {
   // --- envelopes (ms / sustain in [0, 1]) ---
   ampAttackMs?: number;
   ampDecayMs?: number;
-  /** 0 / omit keeps the base value; explicit zero sustain is not representable. */
   ampSustain?: number;
   ampReleaseMs?: number;
   filterAttackMs?: number;
   filterDecayMs?: number;
-  /** 0 / omit keeps the base value; explicit zero sustain is not representable. */
   filterSustain?: number;
   filterReleaseMs?: number;
   // --- LFOs / glide ---

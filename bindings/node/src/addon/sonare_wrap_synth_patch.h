@@ -80,14 +80,25 @@ inline bool SynthEnumProperty(Napi::Env env, const Napi::Object& obj, const char
   return true;
 }
 
+// True when the descriptor carries the key with a usable value. JS absence and
+// an explicit undefined/null are the same thing here, so only a real value
+// marks the field present.
+inline bool SynthFieldPresent(const Napi::Object& obj, const char* key) {
+  if (!obj.Has(key)) return false;
+  const Napi::Value value = obj.Get(key);
+  return !value.IsUndefined() && !value.IsNull();
+}
+
 // Parses a JS SynthPatch descriptor (a preset-name string — a "va:" routing
 // prefix is accepted — or an object of wrapper-section overrides) into the
-// versioned C struct. Numeric zero values are the C ABI's "keep base" sentinel,
-// not explicit zero overrides. Returns false with a pending JS exception on an
-// unknown enum name; unknown PRESET names are validated downstream by the C ABI.
+// versioned C struct. A key the caller actually supplied also sets its
+// present_fields bit, so `stereoSpread: 0` reaches the core as an explicit zero
+// rather than the "keep base" sentinel a bare zero would be. Returns false with
+// a pending JS exception on an unknown enum name; unknown PRESET names are
+// validated downstream by the C ABI.
 inline bool ReadSynthPatch(Napi::Env env, const Napi::Value& desc, SonareSynthPatch* patch) {
   *patch = SonareSynthPatch{};
-  patch->struct_version = 1;
+  patch->struct_version = 2;
   if (desc.IsUndefined() || desc.IsNull()) return true;
 
   auto set_preset = [patch](const std::string& name) {
@@ -128,32 +139,42 @@ inline bool ReadSynthPatch(Napi::Env env, const Napi::Value& desc, SonareSynthPa
                          "body type", &patch->body)) {
     return false;
   }
-  patch->unison = IntProperty(obj, "unison", 0);
-  patch->detune_cents = FloatProperty(obj, "detuneCents", 0.0f);
-  patch->drift_cents = FloatProperty(obj, "driftCents", 0.0f);
-  patch->drive = FloatProperty(obj, "drive", 0.0f);
-  patch->cutoff_hz = FloatProperty(obj, "cutoffHz", 0.0f);
-  patch->resonance_q = FloatProperty(obj, "resonanceQ", 0.0f);
-  patch->key_track = FloatProperty(obj, "keyTrack", 0.0f);
-  patch->env_to_cutoff_cents = FloatProperty(obj, "envToCutoffCents", 0.0f);
-  patch->vel_to_cutoff_cents = FloatProperty(obj, "velToCutoffCents", 0.0f);
-  patch->amp_attack_ms = FloatProperty(obj, "ampAttackMs", 0.0f);
-  patch->amp_decay_ms = FloatProperty(obj, "ampDecayMs", 0.0f);
-  patch->amp_sustain = FloatProperty(obj, "ampSustain", 0.0f);
-  patch->amp_release_ms = FloatProperty(obj, "ampReleaseMs", 0.0f);
-  patch->filter_attack_ms = FloatProperty(obj, "filterAttackMs", 0.0f);
-  patch->filter_decay_ms = FloatProperty(obj, "filterDecayMs", 0.0f);
-  patch->filter_sustain = FloatProperty(obj, "filterSustain", 0.0f);
-  patch->filter_release_ms = FloatProperty(obj, "filterReleaseMs", 0.0f);
-  patch->lfo_rate_hz = FloatProperty(obj, "lfoRateHz", 0.0f);
-  patch->lfo_to_pitch_cents = FloatProperty(obj, "lfoToPitchCents", 0.0f);
-  patch->lfo2_rate_hz = FloatProperty(obj, "lfo2RateHz", 0.0f);
-  patch->glide_ms = FloatProperty(obj, "glideMs", 0.0f);
-  patch->body_mix = FloatProperty(obj, "bodyMix", 0.0f);
-  patch->stereo_spread = FloatProperty(obj, "stereoSpread", 0.0f);
-  patch->gain = FloatProperty(obj, "gain", 0.0f);
-  patch->polyphony = IntProperty(obj, "polyphony", 0);
-  patch->bus_drive = FloatProperty(obj, "busDrive", 0.0f);
+  auto read_float = [&](const char* key, uint32_t bit, float* out) {
+    *out = FloatProperty(obj, key, 0.0f);
+    if (SynthFieldPresent(obj, key)) patch->present_fields |= bit;
+  };
+  auto read_int = [&](const char* key, uint32_t bit, int* out) {
+    *out = IntProperty(obj, key, 0);
+    if (SynthFieldPresent(obj, key)) patch->present_fields |= bit;
+  };
+  read_int("unison", SONARE_SYNTH_FIELD_UNISON, &patch->unison);
+  read_float("detuneCents", SONARE_SYNTH_FIELD_DETUNE_CENTS, &patch->detune_cents);
+  read_float("driftCents", SONARE_SYNTH_FIELD_DRIFT_CENTS, &patch->drift_cents);
+  read_float("drive", SONARE_SYNTH_FIELD_DRIVE, &patch->drive);
+  read_float("cutoffHz", SONARE_SYNTH_FIELD_CUTOFF_HZ, &patch->cutoff_hz);
+  read_float("resonanceQ", SONARE_SYNTH_FIELD_RESONANCE_Q, &patch->resonance_q);
+  read_float("keyTrack", SONARE_SYNTH_FIELD_KEY_TRACK, &patch->key_track);
+  read_float("envToCutoffCents", SONARE_SYNTH_FIELD_ENV_TO_CUTOFF_CENTS,
+             &patch->env_to_cutoff_cents);
+  read_float("velToCutoffCents", SONARE_SYNTH_FIELD_VEL_TO_CUTOFF_CENTS,
+             &patch->vel_to_cutoff_cents);
+  read_float("ampAttackMs", SONARE_SYNTH_FIELD_AMP_ATTACK_MS, &patch->amp_attack_ms);
+  read_float("ampDecayMs", SONARE_SYNTH_FIELD_AMP_DECAY_MS, &patch->amp_decay_ms);
+  read_float("ampSustain", SONARE_SYNTH_FIELD_AMP_SUSTAIN, &patch->amp_sustain);
+  read_float("ampReleaseMs", SONARE_SYNTH_FIELD_AMP_RELEASE_MS, &patch->amp_release_ms);
+  read_float("filterAttackMs", SONARE_SYNTH_FIELD_FILTER_ATTACK_MS, &patch->filter_attack_ms);
+  read_float("filterDecayMs", SONARE_SYNTH_FIELD_FILTER_DECAY_MS, &patch->filter_decay_ms);
+  read_float("filterSustain", SONARE_SYNTH_FIELD_FILTER_SUSTAIN, &patch->filter_sustain);
+  read_float("filterReleaseMs", SONARE_SYNTH_FIELD_FILTER_RELEASE_MS, &patch->filter_release_ms);
+  read_float("lfoRateHz", SONARE_SYNTH_FIELD_LFO_RATE_HZ, &patch->lfo_rate_hz);
+  read_float("lfoToPitchCents", SONARE_SYNTH_FIELD_LFO_TO_PITCH_CENTS, &patch->lfo_to_pitch_cents);
+  read_float("lfo2RateHz", SONARE_SYNTH_FIELD_LFO2_RATE_HZ, &patch->lfo2_rate_hz);
+  read_float("glideMs", SONARE_SYNTH_FIELD_GLIDE_MS, &patch->glide_ms);
+  read_float("bodyMix", SONARE_SYNTH_FIELD_BODY_MIX, &patch->body_mix);
+  read_float("stereoSpread", SONARE_SYNTH_FIELD_STEREO_SPREAD, &patch->stereo_spread);
+  read_float("gain", SONARE_SYNTH_FIELD_GAIN, &patch->gain);
+  read_int("polyphony", SONARE_SYNTH_FIELD_POLYPHONY, &patch->polyphony);
+  read_float("busDrive", SONARE_SYNTH_FIELD_BUS_DRIVE, &patch->bus_drive);
 
   Napi::Value routings = obj.Get("modRoutings");
   if (routings.IsArray()) {
@@ -165,6 +186,9 @@ inline bool ReadSynthPatch(Napi::Env env, const Napi::Value& desc, SonareSynthPa
       return false;
     }
     patch->num_mod_routings = static_cast<int>(count);
+    // An explicitly supplied array — including an empty one — replaces the base
+    // matrix; omitting the key keeps it.
+    patch->present_fields |= SONARE_SYNTH_FIELD_MOD_ROUTINGS;
     for (uint32_t i = 0; i < count; ++i) {
       Napi::Value entry = arr.Get(i);
       if (!entry.IsObject()) {

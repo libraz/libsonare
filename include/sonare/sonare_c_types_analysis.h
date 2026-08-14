@@ -370,7 +370,7 @@ typedef struct {
    engine shares (oscillator / filter / envelopes / LFO / glide / realism /
    mod matrix / bus). */
 typedef struct {
-  int struct_version;                        /* 0 or 1 => version 1 */
+  int struct_version;                        /* 0 or 1 => version 1; 2 => present_fields honoured */
   char preset[SONARE_SYNTH_PRESET_NAME_MAX]; /* base preset name; "" = init patch */
   int engine_mode;                           /* SonareSynthEngineMode; 0 => base */
 
@@ -395,11 +395,11 @@ typedef struct {
   /* --- envelopes (ms / sustain in [0,1]) --- */
   float amp_attack_ms;
   float amp_decay_ms;
-  float amp_sustain; /* 0 => base; explicit zero sustain is not representable */
+  float amp_sustain; /* 0 => base, or an explicit zero with its presence bit */
   float amp_release_ms;
   float filter_attack_ms;
   float filter_decay_ms;
-  float filter_sustain; /* 0 => base; explicit zero sustain is not representable */
+  float filter_sustain; /* 0 => base, or an explicit zero with its presence bit */
   float filter_release_ms;
 
   /* --- LFOs / glide --- */
@@ -421,7 +421,50 @@ typedef struct {
   float gain;      /* master output gain (linear); 0 => base */
   int polyphony;   /* max voices [1,64]; 0 => base */
   float bus_drive; /* gain-neutral bus saturation [0,1]; 0 => base */
+
+  /* --- explicit-value presence (struct_version 2) --- */
+  /* Bitmask of SONARE_SYNTH_FIELD_* naming the fields the caller set on
+     purpose. A set bit overrides the base with the field's value even when that
+     value is zero, which the "0 => base" rule above cannot express; a clear bit
+     keeps the version-1 behaviour, so a caller that only fills the fields it
+     wants to change needs no mask at all. Ignored unless struct_version is 2.
+     32 bits with 27 in use; a further extension appends a second word under a
+     new struct_version rather than widening this one. */
+  uint32_t present_fields;
 } SonareSynthPatch;
+
+/* Bit positions for SonareSynthPatch.present_fields. The enum fields are absent
+   on purpose: their zero is already the reserved "keep base" value and every
+   real value is non-zero, so they have nothing to disambiguate. */
+#define SONARE_SYNTH_FIELD_UNISON (1u << 0)
+#define SONARE_SYNTH_FIELD_DETUNE_CENTS (1u << 1)
+#define SONARE_SYNTH_FIELD_DRIFT_CENTS (1u << 2)
+#define SONARE_SYNTH_FIELD_DRIVE (1u << 3)
+#define SONARE_SYNTH_FIELD_CUTOFF_HZ (1u << 4)
+#define SONARE_SYNTH_FIELD_RESONANCE_Q (1u << 5)
+#define SONARE_SYNTH_FIELD_KEY_TRACK (1u << 6)
+#define SONARE_SYNTH_FIELD_ENV_TO_CUTOFF_CENTS (1u << 7)
+#define SONARE_SYNTH_FIELD_VEL_TO_CUTOFF_CENTS (1u << 8)
+#define SONARE_SYNTH_FIELD_AMP_ATTACK_MS (1u << 9)
+#define SONARE_SYNTH_FIELD_AMP_DECAY_MS (1u << 10)
+#define SONARE_SYNTH_FIELD_AMP_SUSTAIN (1u << 11)
+#define SONARE_SYNTH_FIELD_AMP_RELEASE_MS (1u << 12)
+#define SONARE_SYNTH_FIELD_FILTER_ATTACK_MS (1u << 13)
+#define SONARE_SYNTH_FIELD_FILTER_DECAY_MS (1u << 14)
+#define SONARE_SYNTH_FIELD_FILTER_SUSTAIN (1u << 15)
+#define SONARE_SYNTH_FIELD_FILTER_RELEASE_MS (1u << 16)
+#define SONARE_SYNTH_FIELD_LFO_RATE_HZ (1u << 17)
+#define SONARE_SYNTH_FIELD_LFO_TO_PITCH_CENTS (1u << 18)
+#define SONARE_SYNTH_FIELD_LFO2_RATE_HZ (1u << 19)
+#define SONARE_SYNTH_FIELD_GLIDE_MS (1u << 20)
+#define SONARE_SYNTH_FIELD_BODY_MIX (1u << 21)
+#define SONARE_SYNTH_FIELD_STEREO_SPREAD (1u << 22)
+#define SONARE_SYNTH_FIELD_GAIN (1u << 23)
+#define SONARE_SYNTH_FIELD_POLYPHONY (1u << 24)
+#define SONARE_SYNTH_FIELD_BUS_DRIVE (1u << 25)
+/* Set with num_mod_routings == 0 to clear the base mod matrix rather than keep
+   it; a non-empty table replaces the base matrix with or without the bit. */
+#define SONARE_SYNTH_FIELD_MOD_ROUTINGS (1u << 26)
 
 #ifdef __cplusplus
 // Layout guards for the previously-unversioned analysis / feature PODs. Any
@@ -463,6 +506,12 @@ static_assert(offsetof(SonareSynthPatch, gain) ==
                   offsetof(SonareSynthPatch, mod_routings) +
                       SONARE_SYNTH_PATCH_MOD_ROUTINGS * sizeof(SonareSynthModRouting),
               "SonareSynthPatch gain offset changed");
+static_assert(offsetof(SonareSynthPatch, present_fields) ==
+                  offsetof(SonareSynthPatch, bus_drive) + sizeof(float),
+              "SonareSynthPatch present_fields offset changed");
+static_assert(SONARE_SYNTH_FIELD_MOD_ROUTINGS ==
+                  1u << 26,  // Highest bit in use; widening needs a struct_version bump.
+              "SonareSynthPatch presence bit range changed");
 #endif
 
 #ifdef __cplusplus

@@ -30,6 +30,33 @@ if TYPE_CHECKING:
     from ._project import Project
 
 from ._ffi_types_mastering_project import (
+    SONARE_SYNTH_FIELD_AMP_ATTACK_MS,
+    SONARE_SYNTH_FIELD_AMP_DECAY_MS,
+    SONARE_SYNTH_FIELD_AMP_RELEASE_MS,
+    SONARE_SYNTH_FIELD_AMP_SUSTAIN,
+    SONARE_SYNTH_FIELD_BODY_MIX,
+    SONARE_SYNTH_FIELD_BUS_DRIVE,
+    SONARE_SYNTH_FIELD_CUTOFF_HZ,
+    SONARE_SYNTH_FIELD_DETUNE_CENTS,
+    SONARE_SYNTH_FIELD_DRIFT_CENTS,
+    SONARE_SYNTH_FIELD_DRIVE,
+    SONARE_SYNTH_FIELD_ENV_TO_CUTOFF_CENTS,
+    SONARE_SYNTH_FIELD_FILTER_ATTACK_MS,
+    SONARE_SYNTH_FIELD_FILTER_DECAY_MS,
+    SONARE_SYNTH_FIELD_FILTER_RELEASE_MS,
+    SONARE_SYNTH_FIELD_FILTER_SUSTAIN,
+    SONARE_SYNTH_FIELD_GAIN,
+    SONARE_SYNTH_FIELD_GLIDE_MS,
+    SONARE_SYNTH_FIELD_KEY_TRACK,
+    SONARE_SYNTH_FIELD_LFO2_RATE_HZ,
+    SONARE_SYNTH_FIELD_LFO_RATE_HZ,
+    SONARE_SYNTH_FIELD_LFO_TO_PITCH_CENTS,
+    SONARE_SYNTH_FIELD_MOD_ROUTINGS,
+    SONARE_SYNTH_FIELD_POLYPHONY,
+    SONARE_SYNTH_FIELD_RESONANCE_Q,
+    SONARE_SYNTH_FIELD_STEREO_SPREAD,
+    SONARE_SYNTH_FIELD_UNISON,
+    SONARE_SYNTH_FIELD_VEL_TO_CUTOFF_CENTS,
     SONARE_SYNTH_PATCH_MOD_ROUTINGS,
     SONARE_SYNTH_PRESET_NAME_MAX,
 )
@@ -559,12 +586,11 @@ class SynthPatch:
     The patch starts from a BASE — the named ``preset`` (see
     :func:`synth_preset_names`; a ``"va:"`` routing prefix is accepted) or,
     when ``preset`` is empty, the default subtractive patch. Every numeric
-    field then uses "0 => keep the base value" and non-zero values override
-    (clamped to their audible ranges); enum fields accept the C ordinal or a
-    name with ``"default"`` = keep. The frozen C ABI has no per-field presence
-    bits, so explicit zero numeric overrides such as ``amp_sustain=0`` cannot
-    be represented and keep the base value. A non-empty ``mod_routings``
-    REPLACES the base mod matrix.
+    field defaults to ``None``, meaning "keep the base value"; any value given
+    overrides (clamped to its audible range), including an explicit ``0``. Enum
+    fields accept the C ordinal or a name with ``"default"`` = keep. A
+    ``mod_routings`` tuple REPLACES the base mod matrix, and an empty tuple
+    clears it, while ``None`` keeps it.
 
     Mode-specific deep parameters (FM operator stacks, modal mode tables,
     drawbar registrations, kit pieces, piano strings) travel inside the named
@@ -574,74 +600,103 @@ class SynthPatch:
     preset: str = ""
     engine_mode: str | int = 0
     waveform: str | int = 0
-    unison: int = 0
-    detune_cents: float = 0.0
-    drift_cents: float = 0.0
-    drive: float = 0.0
+    unison: int | None = None
+    detune_cents: float | None = None
+    drift_cents: float | None = None
+    drive: float | None = None
     filter_model: str | int = 0
     filter_output: str | int = 0
-    cutoff_hz: float = 0.0
-    resonance_q: float = 0.0
-    key_track: float = 0.0
-    env_to_cutoff_cents: float = 0.0
-    vel_to_cutoff_cents: float = 0.0
-    amp_attack_ms: float = 0.0
-    amp_decay_ms: float = 0.0
-    amp_sustain: float = 0.0  # 0 keeps the base; explicit zero is not representable.
-    amp_release_ms: float = 0.0
-    filter_attack_ms: float = 0.0
-    filter_decay_ms: float = 0.0
-    filter_sustain: float = 0.0  # 0 keeps the base; explicit zero is not representable.
-    filter_release_ms: float = 0.0
-    lfo_rate_hz: float = 0.0
-    lfo_to_pitch_cents: float = 0.0
-    lfo2_rate_hz: float = 0.0
-    glide_ms: float = 0.0
+    cutoff_hz: float | None = None
+    resonance_q: float | None = None
+    key_track: float | None = None
+    env_to_cutoff_cents: float | None = None
+    vel_to_cutoff_cents: float | None = None
+    amp_attack_ms: float | None = None
+    amp_decay_ms: float | None = None
+    amp_sustain: float | None = None
+    amp_release_ms: float | None = None
+    filter_attack_ms: float | None = None
+    filter_decay_ms: float | None = None
+    filter_sustain: float | None = None
+    filter_release_ms: float | None = None
+    lfo_rate_hz: float | None = None
+    lfo_to_pitch_cents: float | None = None
+    lfo2_rate_hz: float | None = None
+    glide_ms: float | None = None
     body: str | int = 0
-    body_mix: float = 0.0
-    stereo_spread: float = 0.0
-    mod_routings: tuple[SynthModRouting, ...] = ()
-    gain: float = 0.0
-    polyphony: int = 0
-    bus_drive: float = 0.0
+    body_mix: float | None = None
+    stereo_spread: float | None = None
+    mod_routings: tuple[SynthModRouting, ...] | None = None
+    gain: float | None = None
+    polyphony: int | None = None
+    bus_drive: float | None = None
 
     def _to_c(self) -> SonareSynthPatch:
         if not isinstance(self.preset, str):
             raise TypeError("synth patch preset must be a string")
         c = SonareSynthPatch()
-        c.struct_version = 1
+        c.struct_version = 2
+
+        # A field left at None keeps the base; anything supplied — including a
+        # zero — is marked present so the core overrides with it.
+        def _set_float(name: str, bit: int, value: float | None) -> None:
+            if value is None:
+                return
+            setattr(c, name, float(value))
+            c.present_fields |= bit
+
+        def _set_int(name: str, bit: int, value: int | None) -> None:
+            if value is None:
+                return
+            setattr(c, name, int(value))
+            c.present_fields |= bit
+
         c.preset = _strip_va_prefix(self.preset).encode("utf-8")[: SONARE_SYNTH_PRESET_NAME_MAX - 1]
         c.engine_mode = _synth_enum_value(self.engine_mode, _SYNTH_ENGINE_MODES, "engine mode")
         c.waveform = _synth_enum_value(self.waveform, _SYNTH_OSC_WAVEFORMS, "oscillator waveform")
-        c.unison = int(self.unison)
-        c.detune_cents = float(self.detune_cents)
-        c.drift_cents = float(self.drift_cents)
-        c.drive = float(self.drive)
+        _set_int("unison", SONARE_SYNTH_FIELD_UNISON, self.unison)
+        _set_float("detune_cents", SONARE_SYNTH_FIELD_DETUNE_CENTS, self.detune_cents)
+        _set_float("drift_cents", SONARE_SYNTH_FIELD_DRIFT_CENTS, self.drift_cents)
+        _set_float("drive", SONARE_SYNTH_FIELD_DRIVE, self.drive)
         c.filter_model = _synth_enum_value(self.filter_model, _SYNTH_FILTER_MODELS, "filter model")
         c.filter_output = _synth_enum_value(
             self.filter_output, _SYNTH_FILTER_OUTPUTS, "filter output"
         )
-        c.cutoff_hz = float(self.cutoff_hz)
-        c.resonance_q = float(self.resonance_q)
-        c.key_track = float(self.key_track)
-        c.env_to_cutoff_cents = float(self.env_to_cutoff_cents)
-        c.vel_to_cutoff_cents = float(self.vel_to_cutoff_cents)
-        c.amp_attack_ms = float(self.amp_attack_ms)
-        c.amp_decay_ms = float(self.amp_decay_ms)
-        c.amp_sustain = float(self.amp_sustain)
-        c.amp_release_ms = float(self.amp_release_ms)
-        c.filter_attack_ms = float(self.filter_attack_ms)
-        c.filter_decay_ms = float(self.filter_decay_ms)
-        c.filter_sustain = float(self.filter_sustain)
-        c.filter_release_ms = float(self.filter_release_ms)
-        c.lfo_rate_hz = float(self.lfo_rate_hz)
-        c.lfo_to_pitch_cents = float(self.lfo_to_pitch_cents)
-        c.lfo2_rate_hz = float(self.lfo2_rate_hz)
-        c.glide_ms = float(self.glide_ms)
+        _set_float("cutoff_hz", SONARE_SYNTH_FIELD_CUTOFF_HZ, self.cutoff_hz)
+        _set_float("resonance_q", SONARE_SYNTH_FIELD_RESONANCE_Q, self.resonance_q)
+        _set_float("key_track", SONARE_SYNTH_FIELD_KEY_TRACK, self.key_track)
+        _set_float(
+            "env_to_cutoff_cents",
+            SONARE_SYNTH_FIELD_ENV_TO_CUTOFF_CENTS,
+            self.env_to_cutoff_cents,
+        )
+        _set_float(
+            "vel_to_cutoff_cents",
+            SONARE_SYNTH_FIELD_VEL_TO_CUTOFF_CENTS,
+            self.vel_to_cutoff_cents,
+        )
+        _set_float("amp_attack_ms", SONARE_SYNTH_FIELD_AMP_ATTACK_MS, self.amp_attack_ms)
+        _set_float("amp_decay_ms", SONARE_SYNTH_FIELD_AMP_DECAY_MS, self.amp_decay_ms)
+        _set_float("amp_sustain", SONARE_SYNTH_FIELD_AMP_SUSTAIN, self.amp_sustain)
+        _set_float("amp_release_ms", SONARE_SYNTH_FIELD_AMP_RELEASE_MS, self.amp_release_ms)
+        _set_float("filter_attack_ms", SONARE_SYNTH_FIELD_FILTER_ATTACK_MS, self.filter_attack_ms)
+        _set_float("filter_decay_ms", SONARE_SYNTH_FIELD_FILTER_DECAY_MS, self.filter_decay_ms)
+        _set_float("filter_sustain", SONARE_SYNTH_FIELD_FILTER_SUSTAIN, self.filter_sustain)
+        _set_float(
+            "filter_release_ms", SONARE_SYNTH_FIELD_FILTER_RELEASE_MS, self.filter_release_ms
+        )
+        _set_float("lfo_rate_hz", SONARE_SYNTH_FIELD_LFO_RATE_HZ, self.lfo_rate_hz)
+        _set_float(
+            "lfo_to_pitch_cents", SONARE_SYNTH_FIELD_LFO_TO_PITCH_CENTS, self.lfo_to_pitch_cents
+        )
+        _set_float("lfo2_rate_hz", SONARE_SYNTH_FIELD_LFO2_RATE_HZ, self.lfo2_rate_hz)
+        _set_float("glide_ms", SONARE_SYNTH_FIELD_GLIDE_MS, self.glide_ms)
         c.body = _synth_enum_value(self.body, _SYNTH_BODY_TYPES, "body type")
-        c.body_mix = float(self.body_mix)
-        c.stereo_spread = float(self.stereo_spread)
-        routings = list(self.mod_routings)
+        _set_float("body_mix", SONARE_SYNTH_FIELD_BODY_MIX, self.body_mix)
+        _set_float("stereo_spread", SONARE_SYNTH_FIELD_STEREO_SPREAD, self.stereo_spread)
+        routings = list(self.mod_routings or ())
+        if self.mod_routings is not None:
+            c.present_fields |= SONARE_SYNTH_FIELD_MOD_ROUTINGS
         if len(routings) > SONARE_SYNTH_PATCH_MOD_ROUTINGS:
             raise ValueError(
                 f"a synth patch supports at most {SONARE_SYNTH_PATCH_MOD_ROUTINGS} mod routings"
@@ -655,9 +710,9 @@ class SynthPatch:
                 ),
                 depth=float(routing.depth),
             )
-        c.gain = float(self.gain)
-        c.polyphony = int(self.polyphony)
-        c.bus_drive = float(self.bus_drive)
+        _set_float("gain", SONARE_SYNTH_FIELD_GAIN, self.gain)
+        _set_int("polyphony", SONARE_SYNTH_FIELD_POLYPHONY, self.polyphony)
+        _set_float("bus_drive", SONARE_SYNTH_FIELD_BUS_DRIVE, self.bus_drive)
         return c
 
     @classmethod
