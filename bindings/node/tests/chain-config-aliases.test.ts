@@ -34,4 +34,18 @@ describe('flattenChainConfig legacy flat aliases', () => {
     } as unknown as MasteringChainConfig);
     expect(flat['repair.denoise']).toBe(false);
   });
+
+  // The dot-notation spelling is part of the accepted input, not an accident of
+  // the walk: MasteringChainConfig declares it and the Python binding documents
+  // it, so both surfaces must land on the same core parameter.
+  it('carries a caller-supplied dot-notation key through unchanged', () => {
+    const nested = flattenChainConfig({ loudness: { targetLufs: -20 }, eq: { tiltDb: 2 } });
+    const dotted = flattenChainConfig({ 'loudness.targetLufs': -20, 'eq.tiltDb': 2 });
+    expect(dotted).toEqual(nested);
+  });
+
+  it('merges the two spellings in one config', () => {
+    const mixed = flattenChainConfig({ loudness: { targetLufs: -20 }, 'eq.tiltDb': 2 });
+    expect(mixed).toEqual({ 'loudness.targetLufs': -20, 'eq.tiltDb': 2 });
+  });
 });

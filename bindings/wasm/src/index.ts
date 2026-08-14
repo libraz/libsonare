@@ -566,6 +566,7 @@ export type {
   TempogramMode,
   Timbre,
   TimeSignature,
+  VoicedFlags,
   VoicePresetId,
 } from './public_types';
 export {

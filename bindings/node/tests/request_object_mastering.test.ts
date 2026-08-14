@@ -102,6 +102,40 @@ describe('mastering request-object compatibility', () => {
     expect(request).toEqual(positional);
   });
 
+  it('masterAudio accepts either override spelling with the same result', () => {
+    const samples = signal();
+    const nested = masterAudio({
+      samples,
+      sampleRate,
+      preset: 'pop',
+      overrides: { loudness: { targetLufs: -20 } },
+    });
+    const dotted = masterAudio({
+      samples,
+      sampleRate,
+      preset: 'pop',
+      overrides: { 'loudness.targetLufs': -20 },
+    });
+
+    expect(dotted).toEqual(nested);
+    expect(nested.outputLufs).toBeCloseTo(-20, 1);
+  });
+
+  it('rejects an unknown override key in either spelling', () => {
+    const samples = signal();
+    expect(() =>
+      masterAudio({ samples, sampleRate, preset: 'pop', overrides: { 'loudness.nope': 1 } }),
+    ).toThrow(/unknown chain config key/);
+    expect(() =>
+      masterAudio({
+        samples,
+        sampleRate,
+        preset: 'pop',
+        overrides: { loudness: { nope: 1 } } as never,
+      }),
+    ).toThrow(/unknown chain config key/);
+  });
+
   it('masterAudioStereo preserves the positional result', () => {
     const left = signal();
     const right = signal();

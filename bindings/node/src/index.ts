@@ -218,6 +218,7 @@ export type {
   TimbreFrame,
   TimbreResult,
   TimeSignature,
+  VoicedFlags,
   VoicePresetCategory,
   VoicePresetId,
   WarpMode,

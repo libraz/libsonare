@@ -237,6 +237,14 @@ describe('v1.2 feature additions (WASM)', () => {
       return p;
     }
 
+    function rms(arr: Float32Array): number {
+      let acc = 0;
+      for (const v of arr) {
+        acc += v * v;
+      }
+      return Math.sqrt(acc / arr.length);
+    }
+
     it('pitchCorrectToMidi preserves length and stays within audio range', () => {
       const out = pitchCorrectToMidi(signal, SR, 57, 60);
       expect(out).toBeInstanceOf(Float32Array);
@@ -282,6 +290,35 @@ describe('v1.2 feature additions (WASM)', () => {
       voiced[0] = 0;
       const pyinOut = pitchCorrectToMidiTimevarying(signal, f0, 60, SR, hop, voiced, voicedProb);
       expect(allFinite(pyinOut)).toBe(true);
+    });
+
+    it('pitchCorrectToMidiTimevarying takes a PitchResult voicedFlag array directly', () => {
+      const hop = 512;
+      const nFrames = Math.floor(signal.length / hop) + 1;
+      const f0 = new Float32Array(nFrames).fill(220);
+
+      // pitchPyin reports voicing as boolean[]; feeding it straight back in
+      // must behave exactly like the equivalent Int32Array.
+      const flags = Array.from({ length: nFrames }, (_, i) => i % 3 !== 0);
+      const numeric = Int32Array.from(flags, (voiced) => (voiced ? 1 : 0));
+
+      const fromBooleans = pitchCorrectToMidiTimevarying(signal, f0, 60, SR, hop, flags);
+      const fromInt32 = pitchCorrectToMidiTimevarying(signal, f0, 60, SR, hop, numeric);
+      expect(Array.from(fromBooleans)).toEqual(Array.from(fromInt32));
+
+      // The flags must actually reach the core rather than being dropped.
+      const allVoiced = pitchCorrectToMidiTimevarying(signal, f0, 60, SR, hop);
+      expect(fromBooleans.some((x, i) => Math.abs(x - allVoiced[i]) > 1e-6)).toBe(true);
+
+      const optionForm = pitchCorrectTimevarying(signal, f0, SR, hop, {
+        targetMidi: 60,
+        voiced: flags,
+      });
+      const optionNumeric = pitchCorrectTimevarying(signal, f0, SR, hop, {
+        targetMidi: 60,
+        voiced: numeric,
+      });
+      expect(Array.from(optionForm)).toEqual(Array.from(optionNumeric));
     });
 
     it('pitchCorrectTimevarying supports scale mode and retune-strength knobs', () => {
@@ -373,16 +410,22 @@ describe('v1.2 feature additions (WASM)', () => {
       expect(allFinite(out)).toBe(true);
     });
 
-    it('voiceChange preserves length and amplitude range', () => {
+    it('voiceChange preserves length and level', () => {
       const out = voiceChange(signal, SR, { pitchSemitones: 2, formantFactor: 1.1 });
       expect(out).toBeInstanceOf(Float32Array);
       expect(allFinite(out)).toBe(true);
       // Voice changer is duration-preserving; allow a tiny boundary slack.
       expect(out.length).toBeGreaterThanOrEqual(signal.length - 4);
       expect(out.length).toBeLessThanOrEqual(signal.length + 4);
-      const peak = peakAmplitude(out);
-      expect(peak).toBeGreaterThan(0.05);
-      expect(peak).toBeLessThanOrEqual(1.0);
+      // Level is an RMS property here, not a peak one: the formant stage
+      // recolours the residual with a zero-phase envelope, which reshapes the
+      // waveform and raises the crest factor of a tone well above the 1.41 of a
+      // sine, so its peak legitimately passes the input peak. The stage is not a
+      // limiter and does not clamp. What must hold is that the energy tracks the
+      // input rather than collapsing by the LPC prediction gain.
+      expect(peakAmplitude(out)).toBeGreaterThan(0.05);
+      const deltaDb = 20 * Math.log10(rms(out) / rms(signal));
+      expect(Math.abs(deltaDb)).toBeLessThan(1.5);
     });
 
     it('exposes the editing methods on the Audio class with the same shapes', () => {

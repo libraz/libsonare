@@ -352,6 +352,15 @@ export interface MasteringChainConfig {
     releaseMs?: number;
     applyGainAtInputRate?: boolean;
   };
+  /**
+   * Dot-notation spelling of any leaf above, e.g. `'loudness.targetLufs': -20`
+   * beside or instead of `loudness: { targetLufs: -20 }`. It is the form the C
+   * ABI carries parameters in, so a caller assembling overrides dynamically can
+   * emit it directly; the core validates the key and rejects an unknown one.
+   * The nested spelling is canonical — prefer it in hand-written code, where it
+   * is checked field by field while a dotted key is only checked at run time.
+   */
+  [flatKey: `${string}.${string}`]: number | boolean | undefined;
 }
 
 /**

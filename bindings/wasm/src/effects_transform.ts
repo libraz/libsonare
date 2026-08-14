@@ -6,12 +6,25 @@ import type {
   PitchCorrectOptions,
   SpectralEditOptions,
   SpectralRegionOp,
+  VoicedFlags,
 } from './public_types';
 import type { ValidateOptions } from './validation';
 import { assertSampleRate, assertSamples } from './validation';
 
 function requireModule() {
   return getSonareModule();
+}
+
+// The embind layer reads the companion voicing array as Float32Array. A flag is
+// a decision, not a magnitude: collapse to 1/0 on truthiness, which is the same
+// reduction the Node facade applies, so both surfaces agree on every accepted
+// input type.
+function toVoicedFloat32(voiced: VoicedFlags): Float32Array {
+  const out = new Float32Array(voiced.length);
+  for (let index = 0; index < voiced.length; index += 1) {
+    out[index] = voiced[index] ? 1 : 0;
+  }
+  return out;
 }
 
 function resolveEffectFftOptions(
@@ -114,7 +127,7 @@ export interface PitchCorrectToMidiTimevaryingRequest extends ValidateOptions {
   targetMidi: number;
   sampleRate?: number;
   hopLength?: number;
-  voiced?: Int32Array;
+  voiced?: VoicedFlags;
   voicedProb?: Float32Array;
 }
 
@@ -423,16 +436,18 @@ export function pitchCorrectToMidi(
  * Unlike {@link pitchCorrectToMidi} (a single constant transpose), this follows
  * the caller-supplied per-frame `f0Hz` contour and retunes every voiced frame
  * toward `targetMidi`, so vibrato/drift in the source is tracked rather than
- * flattened. `voiced` (non-zero = voiced) and `voicedProb` ([0,1]) are optional;
+ * flattened. `voiced` (truthy = voiced) and `voicedProb` ([0,1]) are optional;
  * omitting them treats every frame as voiced. An `f0Hz` NaN is accepted only
- * when the corresponding `voiced` entry is zero, matching pYIN output.
+ * when the corresponding `voiced` entry is falsy, matching pYIN output. The
+ * `voicedFlag` / `voicedProb` arrays of a {@link PitchResult} can be passed
+ * through directly.
  *
  * @param samples - Audio samples (mono, float32)
  * @param f0Hz - Per-frame measured F0 in Hz (one entry per analysis frame)
  * @param targetMidi - Desired MIDI note number
  * @param sampleRate - Sample rate in Hz
  * @param hopLength - F0 hop in samples (frame i covers sample i*hopLength)
- * @param voiced - Optional per-frame voiced flags (non-zero = voiced)
+ * @param voiced - Optional per-frame voiced flags (truthy = voiced)
  * @param voicedProb - Optional per-frame voicing probability in [0, 1]
  * @returns Pitch-corrected audio
  */
@@ -445,7 +460,7 @@ export function pitchCorrectToMidiTimevarying(
   targetMidi: number,
   sampleRate?: number,
   hopLength?: number,
-  voiced?: Int32Array,
+  voiced?: VoicedFlags,
   voicedProb?: Float32Array,
   options?: ValidateOptions,
 ): Float32Array;
@@ -455,7 +470,7 @@ export function pitchCorrectToMidiTimevarying(
   targetMidi?: number,
   sampleRate = 22050,
   hopLength = 512,
-  voiced?: Int32Array,
+  voiced?: VoicedFlags,
   voicedProb?: Float32Array,
   options: ValidateOptions = {},
 ): Float32Array {
@@ -479,9 +494,7 @@ export function pitchCorrectToMidiTimevarying(
   if (request.voicedProb && request.voicedProb.length !== request.f0Hz.length) {
     throw new RangeError('pitchCorrectToMidiTimevarying: voicedProb length must match f0Hz length');
   }
-  // The embind layer reads the companion arrays as Float32Array (voiced uses
-  // 0.0/1.0); convert here so a single native conversion path suffices.
-  const voicedF32 = request.voiced ? Float32Array.from(request.voiced) : undefined;
+  const voicedF32 = request.voiced ? toVoicedFloat32(request.voiced) : undefined;
   return requireModule().pitchCorrectToMidiTimevarying(
     request.samples,
     request.sampleRate ?? 22050,
@@ -536,11 +549,9 @@ export function pitchCorrectTimevarying(
   if (request.voicedProb && request.voicedProb.length !== request.f0Hz.length) {
     throw new RangeError('pitchCorrectTimevarying: voicedProb length must match f0Hz length');
   }
-  // The embind layer reads the companion arrays as Float32Array (voiced uses
-  // 0.0/1.0); convert here so a single native conversion path suffices.
   const nativeOptions = {
     ...request,
-    voiced: request.voiced ? Float32Array.from(request.voiced) : undefined,
+    voiced: request.voiced ? toVoicedFloat32(request.voiced) : undefined,
   };
   return requireModule().pitchCorrectTimevarying(
     request.samples,

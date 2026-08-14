@@ -1,5 +1,19 @@
 import type { ValidateOptions } from './validation';
 
+/**
+ * Per-frame voicing decision, one entry per `f0Hz` frame. A truthy or non-zero
+ * entry marks the frame voiced. The union covers what the analysis side hands
+ * back — `PitchResult.voicedFlag` is a `boolean[]` — as well as the typed and
+ * plain numeric arrays a caller may build directly, so a pitch track can be fed
+ * straight into pitch correction without a conversion step.
+ */
+export type VoicedFlags =
+  | Int32Array
+  | Uint8Array
+  | Float32Array
+  | readonly number[]
+  | readonly boolean[];
+
 /** Options for `pitchCorrectTimevarying`. All fields are optional. */
 export interface PitchCorrectOptions extends ValidateOptions {
   /** `'midi'` retunes toward `targetMidi`; `'scale'` snaps to the key. Default `'midi'`. */
@@ -20,8 +34,8 @@ export interface PitchCorrectOptions extends ValidateOptions {
   retuneSpeedMs?: number;
   /** Corrections below this are bypassed to preserve vibrato (cents). Default 20. */
   vibratoThresholdCents?: number;
-  /** Per-frame voiced flags (non-zero = voiced); omit to treat all frames as voiced. */
-  voiced?: Int32Array;
+  /** Per-frame voiced flags (truthy = voiced); omit to treat all frames as voiced. */
+  voiced?: VoicedFlags;
   /** Per-frame voicing probability in `[0, 1]`; omit to derive from `voiced`. */
   voicedProb?: Float32Array;
 }

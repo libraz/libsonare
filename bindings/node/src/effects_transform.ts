@@ -6,8 +6,22 @@ import type {
   PitchCorrectOptions,
   SpectralEditOptions,
   SpectralRegionOp,
+  VoicedFlags,
 } from './types.js';
 import { assertSampleRate } from './validation.js';
+
+// The addon reads the companion voicing array as an Int32Array and silently
+// ignores any other type, so normalize here rather than at the N-API boundary.
+// A flag is a decision, not a magnitude: collapse to 1/0 on truthiness, which
+// is the same reduction the WASM facade applies, so both surfaces agree on
+// every accepted input type.
+function toVoicedInt32(voiced: VoicedFlags): Int32Array {
+  const out = new Int32Array(voiced.length);
+  for (let index = 0; index < voiced.length; index += 1) {
+    out[index] = voiced[index] ? 1 : 0;
+  }
+  return out;
+}
 
 function resolveEffectFftOptions(
   fnName: string,
@@ -89,7 +103,7 @@ export interface PitchCorrectToMidiTimevaryingRequest extends EffectSamplesReque
   f0Hz: Float32Array;
   targetMidi: number;
   hopLength?: number;
-  voiced?: Int32Array;
+  voiced?: VoicedFlags;
   voicedProb?: Float32Array;
 }
 
@@ -103,7 +117,7 @@ export interface NoteMoveRequest extends EffectSamplesRequest, NoteMoveOptions {
 
 function assertPitchTrackLengths(
   f0Hz: Float32Array,
-  voiced?: Int32Array,
+  voiced?: VoicedFlags,
   voicedProb?: Float32Array,
 ): void {
   if (voiced !== undefined && voiced.length !== f0Hz.length) {
@@ -326,9 +340,11 @@ export function pitchCorrectToMidi(
  * Unlike {@link pitchCorrectToMidi} (a single constant transpose), this follows
  * the caller-supplied per-frame `f0Hz` contour and retunes every voiced frame
  * toward `targetMidi`, so vibrato/drift in the source is tracked rather than
- * flattened. `voiced` (non-zero = voiced) and `voicedProb` ([0,1]) are optional;
+ * flattened. `voiced` (truthy = voiced) and `voicedProb` ([0,1]) are optional;
  * omitting them treats every frame as voiced. An `f0Hz` NaN is accepted only
- * when the corresponding `voiced` entry is zero, matching pYIN output.
+ * when the corresponding `voiced` entry is falsy, matching pYIN output. The
+ * `voicedFlag` / `voicedProb` arrays of a {@link PitchResult} can be passed
+ * through directly.
  */
 export function pitchCorrectToMidiTimevarying(
   request: PitchCorrectToMidiTimevaryingRequest,
@@ -339,7 +355,7 @@ export function pitchCorrectToMidiTimevarying(
   targetMidi: number,
   sampleRate?: number,
   hopLength?: number,
-  voiced?: Int32Array,
+  voiced?: VoicedFlags,
   voicedProb?: Float32Array,
 ): Float32Array;
 export function pitchCorrectToMidiTimevarying(
@@ -348,7 +364,7 @@ export function pitchCorrectToMidiTimevarying(
   targetMidi?: number,
   sampleRate = 22050,
   hopLength = 512,
-  voiced?: Int32Array,
+  voiced?: VoicedFlags,
   voicedProb?: Float32Array,
 ): Float32Array {
   const request =
@@ -370,7 +386,7 @@ export function pitchCorrectToMidiTimevarying(
     request.f0Hz,
     request.targetMidi,
     request.hopLength ?? 512,
-    request.voiced,
+    request.voiced ? toVoicedInt32(request.voiced) : undefined,
     request.voicedProb,
   );
 }
@@ -418,7 +434,10 @@ export function pitchCorrectTimevarying(
     requestSampleRate ?? 22050,
     requestF0Hz,
     requestHopLength ?? 512,
-    requestOptions,
+    {
+      ...requestOptions,
+      voiced: requestOptions.voiced ? toVoicedInt32(requestOptions.voiced) : undefined,
+    },
   );
 }
 

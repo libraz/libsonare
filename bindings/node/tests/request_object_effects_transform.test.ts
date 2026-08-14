@@ -74,6 +74,49 @@ describe('effects transform request-object compatibility', () => {
     );
   });
 
+  it('accepts a PitchResult voicedFlag array as the voiced input', () => {
+    const hopLength = 512;
+    const f0Hz = new Float32Array(Math.floor(samples.length / hopLength) + 1).fill(440);
+    // pitchPyin reports voicing as boolean[]; feeding it straight back in must
+    // behave exactly like the equivalent Int32Array, and the addon reads only
+    // an Int32Array, so a dropped conversion would silently voice every frame.
+    const flags = Array.from({ length: f0Hz.length }, (_, i) => i % 3 !== 0);
+    const numeric = Int32Array.from(flags, (voiced) => (voiced ? 1 : 0));
+
+    const fromBooleans = pitchCorrectToMidiTimevarying(
+      samples,
+      f0Hz,
+      71,
+      sampleRate,
+      hopLength,
+      flags,
+    );
+    const fromInt32 = pitchCorrectToMidiTimevarying(
+      samples,
+      f0Hz,
+      71,
+      sampleRate,
+      hopLength,
+      numeric,
+    );
+    expect(fromBooleans).toEqual(fromInt32);
+
+    const allVoiced = pitchCorrectToMidiTimevarying(samples, f0Hz, 71, sampleRate, hopLength);
+    expect(fromBooleans.some((x, i) => Math.abs(x - allVoiced[i]) > 1e-6)).toBe(true);
+
+    expect(
+      pitchCorrectTimevarying(samples, f0Hz, sampleRate, hopLength, {
+        targetMidi: 71,
+        voiced: flags,
+      }),
+    ).toEqual(
+      pitchCorrectTimevarying(samples, f0Hz, sampleRate, hopLength, {
+        targetMidi: 71,
+        voiced: numeric,
+      }),
+    );
+  });
+
   // Both call shapes funnel through one private normalizer, so an invalid input
   // must fail identically either way — the positive-path equivalence above does
   // not prove the error path stays in lockstep.
