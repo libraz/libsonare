@@ -518,11 +518,12 @@ SonareError sonare_project_import_smf(SonareProject* project, const uint8_t* byt
   if (!project || len == 0 || !bytes || len > kMaxBufferSize) {
     return SONARE_ERROR_INVALID_PARAMETER;
   }
-  if (len > sonare::resource::kDefaultMidiImportResourceLimits.max_file_bytes) {
+  const auto& import_limits = sonare::resource::kProjectMidiImportResourceLimits;
+  if (len > import_limits.max_file_bytes) {
     return SONARE_ERROR_INVALID_FORMAT;
   }
   SONARE_C_TRY
-  sonare::midi::SmfImportResult result = sonare::midi::import_smf(bytes, len);
+  sonare::midi::SmfImportResult result = sonare::midi::import_smf(bytes, len, import_limits);
   // A track that ends after a valid prefix (for example, without its optional
   // End-of-Track meta event) is recoverable. Keep the importer's truncated
   // status available to direct C++ callers, while installing that recovered
@@ -554,11 +555,12 @@ SonareError sonare_project_import_clip_file(SonareProject* project, const uint8_
   if (!project || len == 0 || !bytes || len > kMaxBufferSize) {
     return SONARE_ERROR_INVALID_PARAMETER;
   }
-  if (len > sonare::resource::kDefaultMidiImportResourceLimits.max_file_bytes) {
+  const auto& import_limits = sonare::resource::kProjectMidiImportResourceLimits;
+  if (len > import_limits.max_file_bytes) {
     return SONARE_ERROR_INVALID_FORMAT;
   }
   SONARE_C_TRY
-  sonare::midi::Smf2ImportResult result = sonare::midi::import_clip_file(bytes, len);
+  sonare::midi::Smf2ImportResult result = sonare::midi::import_clip_file(bytes, len, import_limits);
   if (!result.ok()) return SONARE_ERROR_INVALID_FORMAT;
 
   // MIDI Clip Files carry no SMF "Marker" equivalent.

@@ -61,11 +61,14 @@
 
 namespace sonare::serialize {
 
-/// @brief Project schema version written as the mandatory top-level "version"
-///        integer. Bumped when the serialized JSON shape changes incompatibly.
+/// @brief Latest project schema version understood by this serializer. A
+///        document containing only opaque automation lanes is still emitted as
+///        schema version 1 for byte compatibility; version 2 is selected when
+///        a typed automation lane is present.
 ///        Distinct from the engine RT ABI (rt::kEngineAbiVersion) and from the
 ///        flat project struct ABI; this layer only owns the JSON schema.
-inline constexpr uint32_t SONARE_PROJECT_SCHEMA_VERSION = 1;
+inline constexpr uint32_t SONARE_PROJECT_SCHEMA_VERSION = 2;
+inline constexpr uint32_t SONARE_PROJECT_SCHEMA_VERSION_OPAQUE = 1;
 
 /// @brief Severity of a deserialize diagnostic.
 ///

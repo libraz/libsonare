@@ -103,10 +103,15 @@ SonareError sonare_realtime_voice_changer_process_interleaved(SonareRealtimeVoic
 SonareError sonare_realtime_voice_changer_process_planar_stereo(SonareRealtimeVoiceChanger* handle,
                                                                 float* left, float* right,
                                                                 size_t num_frames);
-/// @brief Reports the chain's processing latency in samples. This is the
-///        amplitude-weighted wet-path delay round(wet_mix * retune.mix * grain)
-///        (+ ISP-limiter group delay when enabled), not a fixed grain: it is 0
-///        when wet_mix or retune.mix is 0 (e.g. the neutral-monitor preset).
+/// @brief Reports the prepared chain's processing latency in samples. The dry
+///        and wet paths are aligned to the retune OLA's fixed three-hop delay,
+///        so the value is independent of `wet_mix` and `retune.mix`. When the
+///        ISP limiter is enabled, it runs after that aligned mix and adds its
+///        signal-path latency: a 6-sample FIR group delay plus
+///        `ceil(5 * 0.1 ms * sample_rate)` attack-settle samples (31 samples at
+///        48 kHz). Other stages add <= 8
+///        samples combined and are intentionally omitted. The value is 0
+///        before the handle has been prepared.
 SonareError sonare_realtime_voice_changer_latency_samples(const SonareRealtimeVoiceChanger* handle,
                                                           int* out_latency_samples);
 /// @brief Returns the live (normalized) configuration of the handle as a JSON

@@ -378,7 +378,13 @@ SonareError sonare_engine_graph_connection_count(SonareRealtimeEngine* engine, s
 /// @details The input contents are preserved and engine sources are mixed with
 /// @c +=. Zero every output plane before this call when no upstream audio is
 /// intended. Audio-thread only; @p num_frames must not exceed the prepared
-/// block size.
+/// block size. If @p num_channels exceeds the channel bound supplied to
+/// sonare_engine_prepare_with_channels, the engine silences and advances the
+/// block, returns @c SONARE_OK, and publishes a telemetry error with
+/// @c error == SONARE_ENGINE_TELEMETRY_ERROR_MAX_CHANNELS_EXCEEDED and
+/// @c value == @p num_channels. A block-size violation takes precedence when
+/// both limits are exceeded and remains
+/// @c SONARE_ENGINE_TELEMETRY_ERROR_MAX_BLOCK_EXCEEDED.
 SonareError sonare_engine_process(SonareRealtimeEngine* engine, float* const* channels,
                                   int num_channels, int num_frames);
 SonareError sonare_engine_process_with_monitor(SonareRealtimeEngine* engine, float* const* channels,
@@ -405,6 +411,10 @@ void sonare_free_bounce_result(SonareEngineBounceResult* result);
 SonareError sonare_engine_freeze_offline(SonareRealtimeEngine* engine,
                                          const SonareEngineFreezeOptions* options,
                                          SonareEngineFreezeResult* out);
+/// @brief Drains process and error telemetry records from the realtime engine.
+/// @details The @c error field uses SonareEngineTelemetryError ordinals; core
+/// reserves ordinal 19 for the WASM worklet and publishes the channel-bound
+/// diagnostic at ordinal 20. The SonareEngineTelemetry POD layout is unchanged.
 SonareError sonare_engine_drain_telemetry(SonareRealtimeEngine* engine, SonareEngineTelemetry* out,
                                           size_t max_records, size_t* written);
 /// @brief Drains pending meter telemetry records published by the engine.
@@ -474,6 +484,19 @@ SonareError sonare_engine_set_parameter_smoothed(SonareRealtimeEngine* engine, u
 SonareError sonare_engine_set_param_smoothing_ms(SonareRealtimeEngine* engine, float smoothing_ms);
 SonareError sonare_engine_set_solo_mute(SonareRealtimeEngine* engine, uint32_t lane_index, int solo,
                                         int mute, int64_t render_frame);
+/// @brief Schedules a per-track-lane PFL/AFL monitor tap.
+/// @details @p lane_index addresses the currently configured track-lane array;
+///          the audio thread applies the mode at @p render_frame (or at the
+///          next block head when negative). PFL taps after the lane strip and
+///          before lane fader/gate/pan; AFL taps after those lane stages. The
+///          monitor bus is folded into @ref sonare_engine_process output and is
+///          returned separately by @ref sonare_engine_process_with_monitor.
+/// @return @c SONARE_ERROR_INVALID_PARAMETER for a NULL engine or unknown mode,
+///         @c SONARE_ERROR_NOT_SUPPORTED when mixing is disabled, and
+///         @c SONARE_ERROR_OUT_OF_MEMORY when the realtime command queue is full.
+SonareError sonare_engine_set_track_monitor_mode(SonareRealtimeEngine* engine, uint32_t lane_index,
+                                                 SonareEngineTrackMonitorMode mode,
+                                                 int64_t render_frame);
 
 /// @brief One render-frame MIDI event for @ref sonare_engine_set_midi_clips.
 /// @details Mirrors midi::MidiEvent with a fixed UMP payload. `render_frame` is

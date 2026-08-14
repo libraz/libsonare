@@ -6,8 +6,10 @@
 #include <memory>
 
 #include "core/fft.h"
+#include "core/spectrum.h"
 #include "core/window.h"
 #include "feature/sparse_kernel.h"
+#include "feature/spectral_projection.h"
 #include "util/exception.h"
 #include "util/lru_cache.h"
 #include "util/math_utils.h"
@@ -79,6 +81,16 @@ struct VqtKernelCacheKeyHash {
 struct CachedVqtKernel {
   std::shared_ptr<VqtKernel> kernel;
 };
+
+/// @brief Resolves the automatic VQT bandwidth sentinel to a concrete gamma.
+float resolve_vqt_gamma(const VqtConfig& config) {
+  if (config.gamma < 0.0f || std::isnan(config.gamma)) {
+    const float step = std::pow(2.0f, 2.0f / static_cast<float>(config.bins_per_octave));
+    const float alpha = (step - 1.0f) / (step + 1.0f);
+    return 24.7f * alpha / 0.108f;
+  }
+  return config.gamma;
+}
 
 /// @brief Maximum number of cached VQT kernels
 constexpr size_t kMaxVqtCacheSize = 2;
@@ -305,11 +317,7 @@ VqtResult vqt(const Audio& audio, const VqtConfig& config, VqtProgressCallback p
   SONARE_CHECK(numeric::finite_positive(config.filter_scale), ErrorCode::InvalidParameter);
 
   VqtConfig resolved = config;
-  if (config.gamma < 0.0f || std::isnan(config.gamma)) {
-    const float step = std::pow(2.0f, 2.0f / static_cast<float>(config.bins_per_octave));
-    const float alpha = (step - 1.0f) / (step + 1.0f);
-    resolved.gamma = 24.7f * alpha / 0.108f;
-  }
+  resolved.gamma = resolve_vqt_gamma(config);
   SONARE_CHECK(numeric::finite_non_negative(resolved.gamma), ErrorCode::InvalidParameter);
 
   // If gamma is 0, use CQT directly
@@ -408,9 +416,41 @@ VqtResult vqt(const Audio& audio, const VqtConfig& config, VqtProgressCallback p
 Audio griffinlim_vqt(const float* magnitude, int n_bins, int n_frames, const VqtConfig& config,
                      int sr, int n_iter) {
   if (magnitude == nullptr || n_bins <= 0 || n_frames <= 0) return Audio();
-  // VQT shares the CQT geometric frequency grid (vqt_frequencies == cqt_frequencies),
-  // so the CQT Griffin-Lim projection applies directly to VQT magnitudes.
-  return griffinlim_cqt(magnitude, n_bins, n_frames, config.to_cqt_config(), sr, n_iter);
+
+  VqtConfig resolved = config;
+  resolved.gamma = resolve_vqt_gamma(config);
+  // Keep the established CQT path bit-compatible when gamma resolves to zero.
+  if (resolved.gamma == 0.0f) {
+    return griffinlim_cqt(magnitude, n_bins, n_frames, resolved.to_cqt_config(), sr, n_iter);
+  }
+
+  // VQT and CQT share the geometric frequency grid, but VQT's bandwidths are
+  // widened by gamma. Use the CQT projection FFT size while supplying the VQT
+  // bandwidth vector so the inverse follows the analysis transform.
+  const std::vector<float> freqs = vqt_frequencies(resolved.fmin, n_bins, resolved.bins_per_octave);
+  const CqtConfig cqt_config = resolved.to_cqt_config();
+  const int n_fft = detail::choose_pseudo_cqt_nfft(cqt_config, sr);
+  const int n_freq = n_fft / 2 + 1;
+  const float bin_to_hz = static_cast<float>(sr) / static_cast<float>(n_fft);
+  const std::vector<float> bandwidths =
+      vqt_bandwidths(freqs, resolved.bins_per_octave, resolved.gamma);
+  const std::vector<float> projection =
+      detail::build_cqt_projection(freqs, bandwidths, n_freq, bin_to_hz);
+
+  std::vector<float> stft_mag(static_cast<size_t>(n_freq) * n_frames, 0.0f);
+  for (int b = 0; b < n_freq; ++b) {
+    for (int t = 0; t < n_frames; ++t) {
+      float acc = 0.0f;
+      for (int k = 0; k < n_bins; ++k) {
+        acc += projection[k * n_freq + b] * magnitude[k * n_frames + t];
+      }
+      stft_mag[b * n_frames + t] = acc;
+    }
+  }
+
+  GriffinLimConfig gcfg;
+  gcfg.n_iter = n_iter;
+  return griffin_lim(stft_mag.data(), n_freq, n_frames, n_fft, resolved.hop_length, sr, gcfg);
 }
 
 Audio griffinlim_vqt(const VqtResult& vqt_result, int sr, int n_iter) {
@@ -420,11 +460,13 @@ Audio griffinlim_vqt(const VqtResult& vqt_result, int sr, int n_iter) {
   const int n_frames = vqt_result.n_frames();
   const std::vector<float>& freqs = vqt_result.frequencies();
 
-  // Recover the VQT configuration from the stored result. The frequency grid is
-  // geometric: f_k = fmin * 2^(k / bins_per_octave).
+  // Recover the frequency-grid configuration from the stored result. CqtResult
+  // intentionally carries no VQT-only metadata, so this legacy overload uses
+  // gamma=0 and preserves its historical CQT-equivalent reconstruction.
   VqtConfig config;
   config.hop_length = vqt_result.hop_length();
   config.n_bins = n_bins;
+  config.gamma = 0.0f;
   if (!freqs.empty()) {
     config.fmin = freqs.front();
   }
@@ -436,6 +478,12 @@ Audio griffinlim_vqt(const VqtResult& vqt_result, int sr, int n_iter) {
   }
 
   return griffinlim_vqt(vqt_result.magnitude().data(), n_bins, n_frames, config, sr, n_iter);
+}
+
+Audio griffinlim_vqt(const VqtResult& vqt_result, const VqtConfig& config, int sr, int n_iter) {
+  if (vqt_result.empty()) return Audio();
+  return griffinlim_vqt(vqt_result.magnitude().data(), vqt_result.n_bins(), vqt_result.n_frames(),
+                        config, sr, n_iter);
 }
 
 Audio ivqt(const VqtResult& vqt_result, int length) {

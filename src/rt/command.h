@@ -22,6 +22,7 @@ inline constexpr uint32_t kEngineAbiVersion = 3;
 //        kTransportSeekSample, kTransportSeekPpq, kSeekMarker,
 //        kMidiNoteOnImmediate, kMidiNoteOffImmediate, kMidiCcImmediate,
 //        kMidiAllNotesOff (a.k.a. MIDI panic), kSetSoloMute,
+//        kSetTrackMonitorMode,
 //        kSetTrackInsertParam, kSetMasterInsertParam.
 //
 //      Live scalar MIDI commands stay strictly POD: they synthesize a UMP from
@@ -121,6 +122,11 @@ enum class CommandType : uint16_t {
   // represented by the note/CC convenience commands. arg.i contains word0.
   // Appended to preserve existing command numeric values.
   kMidiUmpImmediate,
+  // Queueable lane monitor-mode transition. target_id is the lane index,
+  // sample_time is the requested render frame, and arg.i is the mode ordinal
+  // (0=off, 1=PFL, 2=AFL). This is deliberately terminal (ordinal 26) so the
+  // H6 command ids remain unchanged.
+  kSetTrackMonitorMode,
 };
 
 union CommandArg {

@@ -74,6 +74,7 @@ class AirBand : public rt::ProcessorBase {
   std::vector<float> harmonic_rms_sq_;
   std::vector<float> harmonic_gain_;
   std::vector<int> shelf_control_samples_;
+  float envelope_alpha_ = 0.005f;
   float normalization_rms_alpha_ = 0.0f;
   float harmonic_gain_alpha_ = 0.0f;
   std::vector<Biquad> shelf_;

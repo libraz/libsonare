@@ -67,6 +67,11 @@ const float* Audio::data() const {
   if (!buffer_) {
     return nullptr;
   }
+  // std::vector::data() may be null for an empty vector; pointer arithmetic on
+  // that value is not defined even with a zero offset.
+  if (buffer_->empty()) {
+    return nullptr;
+  }
   return buffer_->data() + offset_;
 }
 
@@ -132,6 +137,12 @@ Audio Audio::to_mono() const {
   // Already mono, just return a copy
   if (!buffer_) {
     return Audio();
+  }
+
+  // Keep the sample rate of an explicitly-created empty Audio while avoiding
+  // the [nullptr, nullptr) iterator range in the copying path.
+  if (empty()) {
+    return Audio::from_vector({}, sample_rate_);
   }
 
   // Create a copy with its own buffer

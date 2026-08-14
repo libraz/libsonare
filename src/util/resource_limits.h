@@ -18,6 +18,18 @@ inline constexpr std::size_t kMaxOfflineAudioSamples = 500'000'000;
 /// paths can hold planar, interleaved, and binding-owned copies concurrently;
 /// the helper below accounts for that multiplier before any allocation.
 inline constexpr std::size_t kMaxEngineOfflinePeakBytes = 1024u * 1024u * 1024u;
+
+/// Peak working-set budget for a synthesized acoustic RIR. The RIR path can
+/// retain four full-length float buffers while colouring early reflections;
+/// keep the sample count below this budget before any allocation is attempted.
+inline constexpr std::size_t kMaxAcousticRirPeakBytes = 256u * 1024u * 1024u;
+inline constexpr std::size_t kAcousticRirLiveFloatBuffers = 4u;
+inline constexpr std::size_t kMaxAcousticRirSamples =
+    kMaxAcousticRirPeakBytes / (kAcousticRirLiveFloatBuffers * sizeof(float));
+static_assert(kMaxAcousticRirSamples * kAcousticRirLiveFloatBuffers * sizeof(float) <=
+                  kMaxAcousticRirPeakBytes,
+              "acoustic RIR sample capacity must fit the four-buffer working-set budget");
+
 /// Upper bound for caller-controlled iterative phase reconstruction.
 inline constexpr int kMaxGriffinLimIterations = 256;
 
@@ -61,7 +73,7 @@ inline constexpr ProjectImportResourceLimits kDefaultProjectImportResourceLimits
     64u * 1024u * 1024u,  // encoded document
     2'000'000u,           // objects, arrays, and scalar values
     1'000'000u,           // cumulative array elements decoded as entities
-    32u * 1024u * 1024u,  // cumulative decoded JSON keys and string values
+    64u * 1024u * 1024u,  // cumulative decoded JSON keys and string values
     32u * 1024u * 1024u,  // cumulative sidecar and SysEx payload bytes
 };
 
@@ -80,6 +92,69 @@ inline constexpr MidiImportResourceLimits kDefaultMidiImportResourceLimits{
     16u * 1024u * 1024u,  // copied names / text / lyrics / cue points
     32u * 1024u * 1024u,  // copied SysEx payload bytes
 };
+
+/// A project-installed MIDI event must survive project JSON serialization and
+/// deserialization. This is an explicit product policy, independent of the
+/// raw parser's one-million-event ceiling and deliberately not derived from a
+/// fraction of the JSON node budget.
+inline constexpr std::size_t kMaxProjectMidiImportEvents = 250'000u;
+static_assert(kMaxProjectMidiImportEvents == 250'000u,
+              "project MIDI import cap must remain 250,000 events");
+
+inline constexpr MidiImportResourceLimits kProjectMidiImportResourceLimits{
+    kDefaultMidiImportResourceLimits.max_file_bytes,
+    kDefaultMidiImportResourceLimits.max_tracks,
+    kMaxProjectMidiImportEvents,
+    kDefaultMidiImportResourceLimits.max_metadata_bytes,
+    kDefaultMidiImportResourceLimits.max_sysex_bytes,
+};
+
+/// Returns the exact padded Base64 byte count, or SIZE_MAX when the result
+/// cannot be represented in size_t. The split quotient/remainder arithmetic is
+/// intentional: neither the input nor an intermediate `decoded + 2` can wrap.
+inline constexpr std::size_t base64_encoded_size(std::size_t decoded_bytes) noexcept {
+  constexpr std::size_t kMax = std::numeric_limits<std::size_t>::max();
+  const std::size_t full_groups = decoded_bytes / 3u;
+  const std::size_t remainder = decoded_bytes % 3u;
+  if (full_groups > kMax / 4u) return kMax;
+  const std::size_t encoded_full_groups = full_groups * 4u;
+  if (remainder != 0u && encoded_full_groups > kMax - 4u) return kMax;
+  return encoded_full_groups + (remainder != 0u ? 4u : 0u);
+}
+
+// A raw MIDI SysEx payload and a project sidecar/SysEx payload share the
+// 32-MiB decoded ceiling. Their Base64 representation therefore fits inside
+// both project persistence byte budgets before document overhead is counted;
+// the exact aggregate document check remains the import preflight.
+inline constexpr std::size_t kMaxMidiPayloadBase64Bytes =
+    base64_encoded_size(kDefaultMidiImportResourceLimits.max_sysex_bytes);
+inline constexpr std::size_t kMaxProjectPayloadBase64Bytes =
+    base64_encoded_size(kDefaultProjectImportResourceLimits.max_decoded_payload_bytes);
+static_assert(kMaxMidiPayloadBase64Bytes <= kDefaultProjectImportResourceLimits.max_string_bytes,
+              "raw MIDI SysEx payload must fit the project string-byte budget");
+static_assert(kMaxMidiPayloadBase64Bytes <= kDefaultProjectImportResourceLimits.max_json_bytes,
+              "raw MIDI SysEx payload must fit the project JSON-byte budget");
+static_assert(kMaxProjectPayloadBase64Bytes <= kDefaultProjectImportResourceLimits.max_string_bytes,
+              "project decoded payload must fit the project string-byte budget");
+static_assert(kMaxProjectPayloadBase64Bytes <= kDefaultProjectImportResourceLimits.max_json_bytes,
+              "project decoded payload must fit the project JSON-byte budget");
+
+// Static proof for the current project encoder's worst imported shape. The
+// first line counts the fixed empty-project walk (25 + 9 nodes), one 36-node
+// source/track/clip group per possible imported track, seven conservative
+// nodes per MIDI event, and the enclosing MIDI content node. The second line
+// counts the two fixed arrays, three entities per imported track, and one
+// entity per MIDI event. Keep these assertions next to the policy constants so
+// an encoder-field change must revisit the import budget explicitly.
+inline constexpr std::size_t kProjectImportWorstJsonNodes =
+    25u + 9u + 36u * kDefaultMidiImportResourceLimits.max_tracks +
+    7u * kMaxProjectMidiImportEvents + 1u;
+inline constexpr std::size_t kProjectImportWorstEntities =
+    2u + 3u * kDefaultMidiImportResourceLimits.max_tracks + kMaxProjectMidiImportEvents;
+static_assert(kProjectImportWorstJsonNodes <= kDefaultProjectImportResourceLimits.max_json_nodes,
+              "project MIDI import worst-case JSON nodes exceed the persistence budget");
+static_assert(kProjectImportWorstEntities <= kDefaultProjectImportResourceLimits.max_entities,
+              "project MIDI import worst-case entities exceed the persistence budget");
 
 /// Default file-size ceiling used by the general audio-file loaders.
 inline constexpr std::size_t kMaxAudioFileBytes = 500u * 1024u * 1024u;

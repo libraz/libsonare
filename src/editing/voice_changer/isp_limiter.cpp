@@ -86,8 +86,10 @@ void IspLimiter::reset() noexcept {
   for (auto& s : scratch_holder_) std::fill(s.begin(), s.end(), 0.0f);
   gain_ = 1.0f;
   has_processed_ = false;
+  control_cadence_.reset();
   ceiling_dbtp_.reset(ceiling_dbtp_.target());
   release_ms_.reset(release_ms_.target());
+  update_cached_controls();
 }
 
 void IspLimiter::set_config(const IspLimiterConfig& config) noexcept {
@@ -106,6 +108,16 @@ void IspLimiter::set_config(const IspLimiterConfig& config) noexcept {
 void IspLimiter::update_time_constants() {
   if (!(sample_rate_ > 0.0)) return;
   attack_alpha_ = rt::one_pole_alpha_from_time_ms(kIspAttackMs, sample_rate_);
+  const int attack_lead_samples = std::max(1, lookahead_samples_ - filter_.latency_samples());
+  attack_remaining_ = std::pow(1.0f - attack_alpha_, static_cast<float>(attack_lead_samples));
+  attack_compensation_denominator_ = 1.0f - attack_remaining_;
+}
+
+void IspLimiter::update_cached_controls() noexcept {
+  if (!(sample_rate_ > 0.0)) return;
+  ceiling_linear_ = db_to_linear(ceiling_dbtp_.current() - kCeilingHeadroomDb);
+  release_alpha_ =
+      rt::one_pole_alpha_from_time_ms(std::max(1.0f, release_ms_.current()), sample_rate_);
 }
 
 int IspLimiter::latency_samples() const noexcept { return prepared_ ? lookahead_samples_ : 0; }
@@ -143,8 +155,10 @@ void IspLimiter::process_block(float* buffer, int num_samples) noexcept {
       const float os_sample = oversampled_[static_cast<std::size_t>(i * factor + phase)];
       oversampled_peak_window_.push(std::abs(os_sample));
     }
-    const float ceiling_dbtp = ceiling_dbtp_.process();
-    const float ceiling = db_to_linear(ceiling_dbtp - kCeilingHeadroomDb);
+    ceiling_dbtp_.process();
+    release_ms_.process();
+    if (control_cadence_.advance()) update_cached_controls();
+    const float ceiling = ceiling_linear_;
     const float peak = oversampled_peak_window_.max();
     const float target_gain = (peak > ceiling && peak > 0.0f)
                                   ? ceiling / std::max(peak, sonare::constants::kAmpEpsilon)
@@ -154,8 +168,6 @@ void IspLimiter::process_block(float* buffer, int num_samples) noexcept {
     // two stages compose without one fighting the other.
     // Guard against pathologically short release times producing alpha == 1
     // which would zip the gain back up in a single sample (audible thump).
-    const float release_alpha =
-        rt::one_pole_alpha_from_time_ms(std::max(1.0f, release_ms_.process()), sample_rate_);
     if (target_gain < gain_) {
       // Compensate the finite attack over the audio lookahead horizon. A
       // one-pole ramp toward `target_gain` would still be above that target
@@ -166,12 +178,10 @@ void IspLimiter::process_block(float* buffer, int num_samples) noexcept {
       // `upsample_with_history_delayed` itself consumes one FIR latency before
       // its first completed peak is available. The audio delay is two FIR
       // latencies, leaving one FIR latency of actual gain-ramp lead time.
-      const int attack_lead_samples = std::max(1, lookahead_samples_ - filter_.latency_samples());
-      const float remaining =
-          std::pow(1.0f - attack_alpha_, static_cast<float>(attack_lead_samples));
-      const float denominator = 1.0f - remaining;
       const float compensated_target =
-          denominator > 0.0f ? (target_gain - gain_ * remaining) / denominator : target_gain;
+          attack_compensation_denominator_ > 0.0f
+              ? (target_gain - gain_ * attack_remaining_) / attack_compensation_denominator_
+              : target_gain;
       if (compensated_target > 0.0f) {
         gain_ += attack_alpha_ * (compensated_target - gain_);
       } else {
@@ -182,7 +192,7 @@ void IspLimiter::process_block(float* buffer, int num_samples) noexcept {
         gain_ = target_gain;
       }
     } else {
-      gain_ += release_alpha * (target_gain - gain_);
+      gain_ += release_alpha_ * (target_gain - gain_);
     }
 
     const float delayed = clamp_finite(lookahead_.process(buffer[i]));

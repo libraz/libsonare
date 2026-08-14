@@ -358,6 +358,20 @@ void RealtimeEngine::apply_command(const rt::Command& command) noexcept {
 #endif
       break;
     }
+    case rt::CommandType::kSetTrackMonitorMode: {
+#if defined(SONARE_WITH_MIXING)
+      const auto mode = static_cast<TrackMonitorMode>(command.arg.i);
+      if (!track_mixer_runtime_.set_lane_monitor_mode(static_cast<size_t>(command.target_id),
+                                                      mode)) {
+        enqueue_error(TelemetryErrorCode::kUnknownTarget, transport_.render_frame(),
+                      transport_.sample_position(), command.target_id);
+      }
+#else
+      enqueue_error(TelemetryErrorCode::kUnknownTarget, transport_.render_frame(),
+                    transport_.sample_position(), command.target_id);
+#endif
+      break;
+    }
     case rt::CommandType::kSetTrackInsertParam: {
 #if defined(SONARE_WITH_MIXING)
       // target_id = (lane_index << 16) | (insert_index << 8) | param_id; the

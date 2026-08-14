@@ -158,6 +158,11 @@ class Reader {
     return p;
   }
 
+  const uint8_t* peek(size_t offset, size_t count) const noexcept {
+    if (offset > remaining() || count > remaining() - offset) return nullptr;
+    return data_ + pos_ + offset;
+  }
+
   bool match_tag(const uint8_t (&tag)[4]) noexcept {
     const uint8_t* p = take(4);
     if (p == nullptr) return false;
@@ -379,7 +384,10 @@ bool parse_track(Reader* reader, size_t length, uint16_t ppqn, TrackParseState* 
             // reject any exponent it could not reproduce: this keeps
             // import -> export round-trips symmetric instead of silently
             // re-quantizing an oversized denominator down to 128 on write.
-            if (payload[1] > 7) {
+            // The numerator is required to be positive; do not pass zero into
+            // the transport time-signature map, whose public invariant rejects
+            // non-positive numerators.
+            if (payload[0] == 0 || payload[1] > 7) {
               ++(*skipped);
               break;
             }
@@ -704,8 +712,20 @@ SmfImportResult import_smf(const uint8_t* data, size_t size,
     const bool is_track = chunk_tag[0] == kMTrk[0] && chunk_tag[1] == kMTrk[1] &&
                           chunk_tag[2] == kMTrk[2] && chunk_tag[3] == kMTrk[3];
     if (!is_track) {
-      const size_t skip_length = static_cast<size_t>(chunk_len) + (chunk_len & 1u);
-      if (reader.take(skip_length) == nullptr) {
+      // SMF chunks have no RIFF-style alignment padding. Advance by exactly
+      // the declared length. A few legacy files append one zero byte after an
+      // odd-sized unknown chunk; retain compatibility only when that byte is
+      // immediately followed by an unambiguous MTrk header.
+      const size_t skip_length = static_cast<size_t>(chunk_len);
+      size_t compatibility_padding = 0;
+      if ((chunk_len & 1u) != 0) {
+        const uint8_t* lookahead = reader.peek(skip_length, 5);
+        if (lookahead != nullptr && lookahead[0] == 0x00u && lookahead[1] == kMTrk[0] &&
+            lookahead[2] == kMTrk[1] && lookahead[3] == kMTrk[2] && lookahead[4] == kMTrk[3]) {
+          compatibility_padding = 1;
+        }
+      }
+      if (reader.take(skip_length + compatibility_padding) == nullptr) {
         result.status = SmfStatus::kTruncated;
         result.diagnostic = "truncated non-MTrk chunk";
         return result;

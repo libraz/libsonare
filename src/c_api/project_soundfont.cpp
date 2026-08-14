@@ -166,16 +166,10 @@ std::vector<SonareSf2ProgramStatus> build_manifest(const arr::CompiledTimeline& 
     } else if (u.is_note_on()) {
       const uint16_t bank = effective_scan_bank(state);
       const auto key = std::make_tuple(channel, bank, state.program);
-      const uint16_t velocity16 = static_cast<uint16_t>(u.words[1] >> 16);
-      uint8_t velocity = u.message_type() == UmpMessageType::kMidi2ChannelVoice
-                             ? sonare::midi::scale_velocity_16_to_7(velocity16)
-                             : u.data2_7bit();
-      // Match Sf2Player's MIDI 2.0 conversion: a nonzero 16-bit note-on must
-      // not become a MIDI 1 velocity-zero note-off solely through downscaling.
-      if (u.message_type() == UmpMessageType::kMidi2ChannelVoice && velocity == 0 &&
-          velocity16 != 0) {
-        velocity = 1;
-      }
+      const uint8_t velocity = u.message_type() == UmpMessageType::kMidi2ChannelVoice
+                                   ? sonare::midi::scale_note_on_velocity_16_to_7(
+                                         static_cast<uint16_t>(u.words[1] >> 16))
+                                   : u.data2_7bit();
       int preset = -1;
       bool sf2_renders_note = false;
       if (soundfont != nullptr) {

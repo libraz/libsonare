@@ -8,6 +8,7 @@
 #include "core/fft.h"
 #include "core/spectrum.h"
 #include "feature/sparse_kernel.h"
+#include "feature/spectral_projection.h"
 #include "filters/wavelet.h"
 #include "util/exception.h"
 #include "util/lru_cache.h"
@@ -474,48 +475,6 @@ Audio icqt(const CqtResult& cqt_result, int length) {
   return Audio::from_vector(std::move(output), sr);
 }
 
-namespace {
-
-/// @brief Picks an n_fft consistent with the lowest CQT bin (long-filter regime).
-int choose_pseudo_cqt_nfft(const CqtConfig& config, int sr) {
-  const float Q = compute_q(config.bins_per_octave, config.filter_scale);
-  const int max_filter_len = static_cast<int>(std::ceil(Q * sr / std::max(config.fmin, 1.0f)));
-  int n_fft = next_power_of_2(std::max(max_filter_len, 32));
-  // Cap to avoid huge FFTs at extreme fmin values.
-  n_fft = std::min(n_fft, 16384);
-  return n_fft;
-}
-
-/// @brief Builds a CQT-shaped Gaussian magnitude projection matrix
-///        [n_bins x n_freq] mapping STFT magnitudes to CQT-bin magnitudes.
-///        Each row sums to 1.
-std::vector<float> build_cqt_projection(const std::vector<float>& freqs, int bins_per_octave,
-                                        int n_freq, float bin_to_hz) {
-  const int n_bins = static_cast<int>(freqs.size());
-  std::vector<float> P(static_cast<size_t>(n_bins) * n_freq, 0.0f);
-  const float semitone_ratio =
-      std::pow(2.0f, 1.0f / static_cast<float>(std::max(bins_per_octave, 1)));
-  for (int k = 0; k < n_bins; ++k) {
-    const float f = freqs[k];
-    // Bandwidth ~ one CQT bin in Hz (Gaussian sigma scales with frequency).
-    const float bandwidth = std::max(f * (semitone_ratio - 1.0f), bin_to_hz);
-    float row_sum = 0.0f;
-    for (int b = 0; b < n_freq; ++b) {
-      const float hz = static_cast<float>(b) * bin_to_hz;
-      const float d = (hz - f) / bandwidth;
-      const float v = std::exp(-0.5f * d * d);
-      P[k * n_freq + b] = v;
-      row_sum += v;
-    }
-    if (row_sum > 0.0f) {
-      for (int b = 0; b < n_freq; ++b) P[k * n_freq + b] /= row_sum;
-    }
-  }
-  return P;
-}
-
-}  // namespace
-
 CqtResult pseudo_cqt(const Audio& audio, const CqtConfig& config) {
   SONARE_CHECK(!audio.empty(), ErrorCode::InvalidParameter);
   SONARE_CHECK(config.hop_length > 0, ErrorCode::InvalidParameter);
@@ -527,7 +486,7 @@ CqtResult pseudo_cqt(const Audio& audio, const CqtConfig& config) {
   std::vector<float> freqs = cqt_frequencies(config.fmin, config.n_bins, config.bins_per_octave);
 
   // Single STFT magnitude at an n_fft chosen to capture the lowest bin's Q.
-  const int n_fft = choose_pseudo_cqt_nfft(config, sr);
+  const int n_fft = detail::choose_pseudo_cqt_nfft(config, sr);
   StftConfig stft_cfg;
   stft_cfg.n_fft = n_fft;
   stft_cfg.hop_length = config.hop_length;
@@ -539,7 +498,13 @@ CqtResult pseudo_cqt(const Audio& audio, const CqtConfig& config) {
   const int n_frames = spec.n_frames();
 
   const float bin_to_hz = static_cast<float>(sr) / static_cast<float>(n_fft);
-  std::vector<float> P = build_cqt_projection(freqs, config.bins_per_octave, n_freq, bin_to_hz);
+  const float semitone_ratio =
+      std::pow(2.0f, 1.0f / static_cast<float>(std::max(config.bins_per_octave, 1)));
+  std::vector<float> bandwidths(freqs.size(), 0.0f);
+  for (size_t k = 0; k < freqs.size(); ++k) {
+    bandwidths[k] = freqs[k] * (semitone_ratio - 1.0f);
+  }
+  std::vector<float> P = detail::build_cqt_projection(freqs, bandwidths, n_freq, bin_to_hz);
   const std::vector<float> lengths = wavelet_lengths(freqs, sr, config.filter_scale);
 
   // C = P @ |STFT|. Phase is not estimated (pseudo CQT yields magnitudes only;
@@ -630,14 +595,20 @@ Audio griffinlim_cqt(const float* magnitude, int n_bins, int n_frames, const Cqt
   if (magnitude == nullptr || n_bins <= 0 || n_frames <= 0) return Audio();
 
   std::vector<float> freqs = cqt_frequencies(config.fmin, n_bins, config.bins_per_octave);
-  const int n_fft = choose_pseudo_cqt_nfft(config, sr);
+  const int n_fft = detail::choose_pseudo_cqt_nfft(config, sr);
   const int n_freq = n_fft / 2 + 1;
   const float bin_to_hz = static_cast<float>(sr) / static_cast<float>(n_fft);
 
   // Build the same Gaussian projection as pseudo_cqt and use its transpose to
   // smear CQT magnitudes back onto an STFT magnitude grid. This is a smoother
   // seed for Griffin-Lim than the naive nearest-bin projection.
-  std::vector<float> P = build_cqt_projection(freqs, config.bins_per_octave, n_freq, bin_to_hz);
+  const float semitone_ratio =
+      std::pow(2.0f, 1.0f / static_cast<float>(std::max(config.bins_per_octave, 1)));
+  std::vector<float> bandwidths(freqs.size(), 0.0f);
+  for (size_t k = 0; k < freqs.size(); ++k) {
+    bandwidths[k] = freqs[k] * (semitone_ratio - 1.0f);
+  }
+  std::vector<float> P = detail::build_cqt_projection(freqs, bandwidths, n_freq, bin_to_hz);
 
   std::vector<float> stft_mag(static_cast<size_t>(n_freq) * n_frames, 0.0f);
   for (int b = 0; b < n_freq; ++b) {
@@ -657,7 +628,17 @@ Audio griffinlim_cqt(const float* magnitude, int n_bins, int n_frames, const Cqt
 
 int chroma_class_of_frequency(float hz, int n_chroma) {
   if (hz <= 0.0f || n_chroma <= 0) return 0;
-  return ((static_cast<int>(std::lround(hz_to_midi(hz))) % n_chroma) + n_chroma) % n_chroma;
+
+  // Chroma classes are subdivisions of the twelve pitch classes, not of the
+  // absolute MIDI number. Reduce the MIDI pitch modulo one octave before
+  // scaling and rounding it to the requested chroma resolution, matching
+  // wavelet::cq_to_chroma/librosa.filters.cq_to_chroma at tuning=0.
+  const double midi_pitch_class = std::fmod(static_cast<double>(hz_to_midi(hz)), 12.0);
+  int chroma_class =
+      static_cast<int>(std::lround(midi_pitch_class * (static_cast<double>(n_chroma) / 12.0)));
+  chroma_class %= n_chroma;
+  if (chroma_class < 0) chroma_class += n_chroma;
+  return chroma_class;
 }
 
 std::vector<float> fold_cqt_bins_to_chroma(const float* mag, int n_bins, int n_frames,

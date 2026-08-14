@@ -29,8 +29,12 @@ bool TrackMixerRuntime::set_lane_parameter(size_t lane_index, unsigned int param
       if (!std::isfinite(value)) return false;
       lane.pan.set_target(std::clamp(value, -1.0f, 1.0f));
       return true;
+    // Width is deliberately not part of the arrangement typed-target
+    // contract.  It remains available through the standalone mixer API, but
+    // accepting it here would make an id that the compiler must never emit
+    // look successfully automated while no lane state owns it.
     case kWidth:
-      return std::isfinite(value);
+      return false;
     default:
       return false;
   }
@@ -48,6 +52,36 @@ bool TrackMixerRuntime::set_lane_solo_mute(size_t lane_index, bool solo, bool mu
   lane.solo = solo;
   lane.mute = mute;
   return true;
+}
+
+bool TrackMixerRuntime::set_lane_monitor_mode(size_t lane_index, TrackMonitorMode mode) noexcept {
+  acquire_lanes();
+  if (const std::vector<TrackLaneConfig>* lanes = lanes_.current()) {
+    // The command carries the lane index, while the published snapshot may
+    // have changed since enqueue. Arrange the audio state for that snapshot
+    // before applying the transition; prepare_lanes_from_snapshot preserves
+    // existing modes by track id when lanes reorder.
+    if (lanes != applied_lane_snapshot_) prepare_lanes_from_snapshot(*lanes);
+  }
+  if (lane_index >= lane_count()) return false;
+  switch (mode) {
+    case TrackMonitorMode::kOff:
+    case TrackMonitorMode::kPfl:
+    case TrackMonitorMode::kAfl:
+      lane_states_[lane_index].monitor_mode = mode;
+      return true;
+  }
+  return false;
+}
+
+bool TrackMixerRuntime::monitor_active() const noexcept {
+  const std::vector<TrackLaneConfig>* lanes = lanes_.current();
+  if (lanes == nullptr) return false;
+  const size_t count = std::min(lanes->size(), lane_states_.size());
+  for (size_t lane_index = 0; lane_index < count; ++lane_index) {
+    if (lane_states_[lane_index].monitor_mode != TrackMonitorMode::kOff) return true;
+  }
+  return false;
 }
 
 bool TrackMixerRuntime::set_track_insert_bypassed(uint32_t track_id, unsigned int insert_index,

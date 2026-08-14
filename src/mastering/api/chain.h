@@ -389,8 +389,10 @@ class StreamingMasteringChain {
 //   "loudness.ceilingDb"
 //   "loudness.truePeakOversample"
 // Setting any field under a module also implicitly enables that module unless
-// "<module>.enabled" is explicitly set to 0. Unknown keys throw
-// std::invalid_argument.
+// "<module>.enabled" is explicitly set to 0. The color stages (tape and
+// exciter) are the exception when applying overrides: a parameter-only
+// override preserves a preset's existing enabled state, and only an explicit
+// `enabled` override changes it. Unknown keys throw std::invalid_argument.
 // ---------------------------------------------------------------------------
 
 MasteringChainConfig parse_chain_config_params(const Param* params, std::size_t count);
@@ -398,12 +400,18 @@ MasteringChainConfig parse_chain_config_params(const Param* params, std::size_t 
 /// @brief Apply flat-params on top of an existing config (in-place).
 /// Same key schema as parse_chain_config_params. Setting any field under a
 /// module also implicitly enables that module unless "<module>.enabled" is
-/// also set to 0. Unknown keys throw SonareException(InvalidParameter).
+/// also set to 0. Parameter-only overrides for the tape and exciter color
+/// stages intentionally preserve the existing enabled state; only an explicit
+/// `enabled` override changes it. Unknown keys throw
+/// SonareException(InvalidParameter).
 void apply_chain_config_overrides(MasteringChainConfig& config, const Param* params,
                                   std::size_t count);
 
 /// @brief Serialize a chain configuration as canonical JSON.
-/// Schema: {"version":1,"params":{"dot.notation.key":number_or_bool,...}}.
+/// Schema v1 is {"version":1,"params":{"dot.notation.key":number_or_bool,...}}.
+/// Configurations whose multiband compressor needs fields unavailable to v1 use
+/// v2, where params.dynamics.multibandComp is a structured object containing
+/// enabled, crossover, and full per-band CompressorConfig values.
 std::string chain_config_to_json(const MasteringChainConfig& config);
 
 /// @brief Parse a chain configuration serialized by chain_config_to_json.

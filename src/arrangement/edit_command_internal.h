@@ -167,6 +167,7 @@ class RestoreClip final : public EditCommand {
   }
 
   const char* type_name() const noexcept override { return "RestoreClip"; }
+  std::size_t retained_bytes() const noexcept override;
   bool mutates_midi_store() const noexcept override { return false; }
 
  private:
@@ -217,6 +218,7 @@ class RestoreTrackWithClips final : public EditCommand {
   }
 
   const char* type_name() const noexcept override { return "RestoreTrackWithClips"; }
+  std::size_t retained_bytes() const noexcept override;
 
  private:
   Track track_;

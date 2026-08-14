@@ -21,6 +21,7 @@ class MultibandExciter : public rt::ProcessorBase {
  public:
   explicit MultibandExciter(MultibandExciterConfig config = {});
   void prepare(double sample_rate, int max_block_size) override;
+  void prepare(double sample_rate, int max_block_size, int max_channels) override;
   void process(float* const* channels, int num_channels, int num_samples) override;
   void reset() override;
   void set_config(const MultibandExciterConfig& config);
@@ -50,6 +51,7 @@ class MultibandExciter : public rt::ProcessorBase {
   MultibandExciterConfig config_{};
   double sample_rate_ = 48000.0;
   int max_block_size_ = 0;
+  int max_working_channels_ = 0;
   bool prepared_ = false;
   multiband::Crossover crossover_;
   multiband::CrossoverScratch scratch_;

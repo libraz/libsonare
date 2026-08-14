@@ -56,10 +56,6 @@ float max_abs_gain_reduction(const std::vector<float>& gain_reductions_db) {
   return most_reduced;
 }
 
-float integrated_lufs(const std::vector<float>& samples, int sample_rate) {
-  return common::measure_lufs(samples.data(), samples.size(), sample_rate);
-}
-
 MasteringLoudnessSummary to_report_summary(const common::LoudnessSummary& summary) {
   return {summary.integrated_lufs, summary.max_momentary_lufs, summary.max_short_term_lufs,
           summary.true_peak_dbtp, summary.loudness_range};
@@ -380,11 +376,16 @@ std::optional<MonoChainResult> MasteringChain::process_mono_impl(const float* sa
   if (config_.loudness.enabled) {
     // Clamp the static normalization gain to the ceiling headroom (mirrors the
     // mono loudness_optimize() helper) so the limiter is not overdriven.
+    // Measure the post-processor stage input once. `report.before` describes
+    // the original chain input and must not drive this stage's normalization.
+    const Audio stage_audio = Audio::from_buffer(data.data(), data.size(), sample_rate);
+    const common::LufsAndTruePeak stage_measurement =
+        common::measure_lufs_and_true_peak(stage_audio, config_.loudness.true_peak_oversample);
     const float gain_db = detail::loudness_gain_db_with_ceiling(
-        data, sample_rate, config_.loudness.target_lufs, config_.loudness.ceiling_db,
-        config_.loudness.true_peak_oversample);
+        stage_measurement.integrated_lufs, config_.loudness.target_lufs,
+        config_.loudness.ceiling_db, stage_measurement.true_peak_dbtp);
     const float requested_gain_db =
-        config_.loudness.target_lufs - integrated_lufs(data, sample_rate);
+        config_.loudness.target_lufs - stage_measurement.integrated_lufs;
     result.loudness_target_limited =
         std::isfinite(requested_gain_db) && gain_db < requested_gain_db - 1e-4f;
     if (gain_db != 0.0f) {

@@ -11,6 +11,29 @@
 
 namespace sonare::automation {
 
+/// Persistent target classification for a project automation lane.
+///
+/// Opaque lanes retain the historical host-defined target semantics.  The two
+/// typed targets are the only mixer targets currently part of the arrangement
+/// contract; values outside this set are never valid serialized or C-ABI input.
+enum class AutomationTargetKind : uint32_t {
+  kOpaque = 0,
+  kTrackFaderDb = 1,
+  kTrackPan = 2,
+};
+
+static_assert(static_cast<uint32_t>(AutomationTargetKind::kOpaque) == 0u,
+              "AutomationTargetKind opaque ordinal drift");
+static_assert(static_cast<uint32_t>(AutomationTargetKind::kTrackFaderDb) == 1u,
+              "AutomationTargetKind fader ordinal drift");
+static_assert(static_cast<uint32_t>(AutomationTargetKind::kTrackPan) == 2u,
+              "AutomationTargetKind pan ordinal drift");
+
+constexpr bool valid_automation_target_kind(AutomationTargetKind kind) noexcept {
+  return kind == AutomationTargetKind::kOpaque || kind == AutomationTargetKind::kTrackFaderDb ||
+         kind == AutomationTargetKind::kTrackPan;
+}
+
 struct Breakpoint {
   double ppq = 0.0;
   float value = 0.0f;
@@ -33,10 +56,13 @@ inline bool valid_public_breakpoint(const Breakpoint& point) noexcept {
 class AutomationLane {
  public:
   AutomationLane() = default;
-  explicit AutomationLane(uint32_t target_param_id);
+  explicit AutomationLane(uint32_t target_param_id,
+                          AutomationTargetKind target_kind = AutomationTargetKind::kOpaque);
 
   uint32_t target_param_id() const noexcept { return target_param_id_; }
   void set_target_param_id(uint32_t id) noexcept { target_param_id_ = id; }
+  AutomationTargetKind target_kind() const noexcept { return target_kind_; }
+  void set_target_kind(AutomationTargetKind kind) noexcept { target_kind_ = kind; }
   /// Sorts by ppq (stable) and drops duplicate-ppq points, keeping the FIRST
   /// occurrence in the supplied list. A lane therefore cannot represent an
   /// instantaneous jump as two points at the same ppq — place the second point
@@ -47,8 +73,15 @@ class AutomationLane {
   float value_at(double ppq) const noexcept;
   double next_breakpoint_after(double ppq) const noexcept;
 
+  bool operator==(const AutomationLane& o) const noexcept {
+    return target_param_id_ == o.target_param_id_ && target_kind_ == o.target_kind_ &&
+           points_ == o.points_;
+  }
+  bool operator!=(const AutomationLane& o) const noexcept { return !(*this == o); }
+
  private:
   uint32_t target_param_id_ = 0;
+  AutomationTargetKind target_kind_ = AutomationTargetKind::kOpaque;
   std::vector<Breakpoint> points_;
 };
 

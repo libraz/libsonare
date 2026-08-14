@@ -400,7 +400,10 @@ std::array<SynthPreset, kPresetCount> build_presets() noexcept {
       v.config = from_patch(clamp_synth_patch(patch));
     };
     //       name        buzz   bright decay  pickpos gain
-    plucked("harp", 0.0f, 0.70f, 4.5f, 0.16f, 0.85f);
+    // Keep the established GM-fallback `harp` name above. This separate
+    // physical-model voice is intentionally named for its plucked engine so
+    // every public catalog key resolves to exactly one patch.
+    plucked("harp-plucked", 0.0f, 0.70f, 4.5f, 0.16f, 0.85f);
     plucked("koto", 0.0f, 0.80f, 3.0f, 0.22f, 0.85f);
     plucked("sitar", 0.55f, 0.85f, 3.5f, 0.20f, 0.80f);
     plucked("tanpura", 0.70f, 0.78f, 5.0f, 0.12f, 0.80f);

@@ -15,6 +15,15 @@ static_assert(static_cast<int>(sonare::AutomationCurve::Hold) == SONARE_CURVE_HO
               "SonareProjectAutomationCurve hold ordinal drift");
 static_assert(static_cast<int>(sonare::AutomationCurve::SCurve) == SONARE_CURVE_SCURVE,
               "SonareProjectAutomationCurve scurve ordinal drift");
+static_assert(static_cast<int>(sonare::automation::AutomationTargetKind::kOpaque) ==
+                  SONARE_AUTOMATION_TARGET_OPAQUE,
+              "SonareAutomationTargetKind opaque ordinal drift");
+static_assert(static_cast<int>(sonare::automation::AutomationTargetKind::kTrackFaderDb) ==
+                  SONARE_AUTOMATION_TARGET_TRACK_FADER_DB,
+              "SonareAutomationTargetKind fader ordinal drift");
+static_assert(static_cast<int>(sonare::automation::AutomationTargetKind::kTrackPan) ==
+                  SONARE_AUTOMATION_TARGET_TRACK_PAN,
+              "SonareAutomationTargetKind pan ordinal drift");
 static_assert(static_cast<int>(arr::Track::Kind::kAudio) == SONARE_TRACK_AUDIO,
               "SonareProjectTrackKind audio ordinal drift");
 static_assert(static_cast<int>(arr::Track::Kind::kMidi) == SONARE_TRACK_MIDI,
@@ -24,18 +33,21 @@ static_assert(static_cast<int>(arr::Track::Kind::kAux) == SONARE_TRACK_AUX,
 
 namespace {
 
-// Validates a lane desc and builds an automation::AutomationLane from it. Each
-// breakpoint's ppq must be finite and >= 0, its value finite, and its curve
-// ordinal in range.
-SonareError automation_lane_from_desc(const SonareAutomationLaneDesc* desc,
-                                      sonare::automation::AutomationLane* out) {
-  if (desc == nullptr || out == nullptr) return SONARE_ERROR_INVALID_PARAMETER;
-  if (desc->point_count > 0 && desc->points == nullptr) return SONARE_ERROR_INVALID_PARAMETER;
-  if (desc->point_count > kMaxBufferSize) return SONARE_ERROR_INVALID_PARAMETER;
-  std::vector<sonare::automation::Breakpoint> points;
-  points.reserve(desc->point_count);
-  for (size_t i = 0; i < desc->point_count; ++i) {
-    const SonareAutomationPoint& p = desc->points[i];
+// Validates lane descriptor fields and builds an automation::AutomationLane.
+// The target parameter id must be non-zero; each breakpoint's ppq must be
+// finite and >= 0, its value finite, and its curve ordinal in range.
+SonareError automation_lane_from_values(uint32_t target_param_id, uint32_t target_kind,
+                                        const SonareAutomationPoint* point_data, size_t point_count,
+                                        sonare::automation::AutomationLane* out) {
+  if (out == nullptr || target_param_id == 0 || target_kind > SONARE_AUTOMATION_TARGET_TRACK_PAN) {
+    return SONARE_ERROR_INVALID_PARAMETER;
+  }
+  if (point_count > 0 && point_data == nullptr) return SONARE_ERROR_INVALID_PARAMETER;
+  if (point_count > kMaxBufferSize) return SONARE_ERROR_INVALID_PARAMETER;
+  std::vector<sonare::automation::Breakpoint> breakpoints;
+  breakpoints.reserve(point_count);
+  for (size_t i = 0; i < point_count; ++i) {
+    const SonareAutomationPoint& p = point_data[i];
     if (!finite_non_negative(p.ppq) || !std::isfinite(p.value)) {
       return SONARE_ERROR_INVALID_PARAMETER;
     }
@@ -47,11 +59,27 @@ SonareError automation_lane_from_desc(const SonareAutomationLaneDesc* desc,
     bp.ppq = p.ppq;
     bp.value = p.value;
     bp.curve_to_next = static_cast<sonare::AutomationCurve>(p.curve_to_next);
-    points.push_back(bp);
+    breakpoints.push_back(bp);
   }
-  out->set_target_param_id(desc->target_param_id);
-  out->set_points(std::move(points));
+  out->set_target_param_id(target_param_id);
+  out->set_target_kind(static_cast<sonare::automation::AutomationTargetKind>(target_kind));
+  out->set_points(std::move(breakpoints));
   return SONARE_OK;
+}
+
+SonareError automation_lane_from_desc(const SonareAutomationLaneDesc* desc,
+                                      sonare::automation::AutomationLane* out) {
+  if (desc == nullptr) return SONARE_ERROR_INVALID_PARAMETER;
+  return automation_lane_from_values(desc->target_param_id, SONARE_AUTOMATION_TARGET_OPAQUE,
+                                     desc->points, desc->point_count, out);
+}
+
+SonareError automation_lane_from_desc_ex(const SonareAutomationLaneDescEx* desc,
+                                         sonare::automation::AutomationLane* out) {
+  if (desc == nullptr) return SONARE_ERROR_INVALID_PARAMETER;
+  return automation_lane_from_values(desc->target_param_id,
+                                     static_cast<uint32_t>(desc->target_kind), desc->points,
+                                     desc->point_count, out);
 }
 
 }  // namespace
@@ -76,9 +104,12 @@ SonareError sonare_project_add_track(SonareProject* project, const SonareProject
   track.kind = static_cast<arr::Track::Kind>(desc->kind);
   if (desc->name) track.name = desc->name;
   auto command = std::make_unique<arr::AddTrack>(std::move(track));
-  arr::AddTrack* raw = command.get();
   if (!project->history.apply(std::move(command))) return SONARE_ERROR_INVALID_STATE;
-  *out_track_id = raw->allocated_id();
+  // The command may be evicted immediately when the byte cap is tiny. Read
+  // the committed model instead of dereferencing a command that may already
+  // have been destroyed.
+  if (project->history.project().tracks().empty()) return SONARE_ERROR_INVALID_STATE;
+  *out_track_id = project->history.project().tracks().back().id;
   return SONARE_OK;
   SONARE_C_CATCH
 #else
@@ -179,9 +210,14 @@ SonareError sonare_project_set_marker(SonareProject* project, uint32_t marker_id
   }
   SONARE_C_TRY
   auto command = std::make_unique<arr::SetMarker>(marker_id, ppq, name ? name : "");
-  arr::SetMarker* raw = command.get();
   if (!project->history.apply(std::move(command))) return SONARE_ERROR_INVALID_STATE;
-  *out_marker_id = raw->allocated_id() != 0 ? raw->allocated_id() : marker_id;
+  // Read the committed model, not the command: history can evict the entry that
+  // owned it. An allocating SetMarker always appends, so the tail is the new
+  // marker; guard anyway so a future no-append path cannot read an empty vector.
+  if (marker_id == 0 && project->history.project().markers().empty()) {
+    return SONARE_ERROR_INVALID_STATE;
+  }
+  *out_marker_id = marker_id != 0 ? marker_id : project->history.project().markers().back().id;
   return SONARE_OK;
   SONARE_C_CATCH
 #else
@@ -211,9 +247,11 @@ SonareError sonare_project_set_marker_ex(SonareProject* project, const SonarePro
   auto command =
       std::make_unique<arr::SetMarker>(marker->id, marker->ppq, std::move(name), marker->kind,
                                        marker->key_fifths, marker->key_minor != 0);
-  arr::SetMarker* raw = command.get();
   if (!project->history.apply(std::move(command))) return SONARE_ERROR_INVALID_STATE;
-  *out_marker_id = raw->allocated_id() != 0 ? raw->allocated_id() : marker->id;
+  if (marker->id == 0 && project->history.project().markers().empty()) {
+    return SONARE_ERROR_INVALID_STATE;
+  }
+  *out_marker_id = marker->id != 0 ? marker->id : project->history.project().markers().back().id;
   return SONARE_OK;
   SONARE_C_CATCH
 #else
@@ -236,9 +274,11 @@ SonareError sonare_project_set_marker_ex_name(SonareProject* project,
   SONARE_C_TRY
   auto command = std::make_unique<arr::SetMarker>(marker->id, marker->ppq, name, marker->kind,
                                                   marker->key_fifths, marker->key_minor != 0);
-  arr::SetMarker* raw = command.get();
   if (!project->history.apply(std::move(command))) return SONARE_ERROR_INVALID_STATE;
-  *out_marker_id = raw->allocated_id() != 0 ? raw->allocated_id() : marker->id;
+  if (marker->id == 0 && project->history.project().markers().empty()) {
+    return SONARE_ERROR_INVALID_STATE;
+  }
+  *out_marker_id = marker->id != 0 ? marker->id : project->history.project().markers().back().id;
   return SONARE_OK;
   SONARE_C_CATCH
 #else
@@ -494,9 +534,30 @@ SonareError sonare_project_add_automation_lane(SonareProject* project, uint32_t 
   const SonareError err = automation_lane_from_desc(desc, &lane);
   if (err != SONARE_OK) return err;
   auto command = std::make_unique<arr::AddAutomationLane>(track_id, std::move(lane));
-  arr::AddAutomationLane* raw = command.get();
   if (!project->history.apply(std::move(command))) return SONARE_ERROR_INVALID_STATE;
-  if (out_target_param_id) *out_target_param_id = raw->target_param_id();
+  if (out_target_param_id) *out_target_param_id = desc->target_param_id;
+  return SONARE_OK;
+  SONARE_C_CATCH
+#else
+  SONARE_C_STUB_NOT_SUPPORTED(project, track_id, desc, out_target_param_id);
+#endif
+}
+
+SonareError sonare_project_add_automation_lane_ex(SonareProject* project, uint32_t track_id,
+                                                  const SonareAutomationLaneDescEx* desc,
+                                                  uint32_t* out_target_param_id) {
+  SONARE_C_API_ENTRY;
+#if defined(SONARE_WITH_ARRANGEMENT)
+  if (out_target_param_id) *out_target_param_id = 0;
+  if (!project || track_id == 0 || !desc) return SONARE_ERROR_INVALID_PARAMETER;
+  if (!project->history.project().has_track(track_id)) return SONARE_ERROR_INVALID_PARAMETER;
+  SONARE_C_TRY
+  sonare::automation::AutomationLane lane;
+  const SonareError err = automation_lane_from_desc_ex(desc, &lane);
+  if (err != SONARE_OK) return err;
+  auto command = std::make_unique<arr::AddAutomationLane>(track_id, std::move(lane));
+  if (!project->history.apply(std::move(command))) return SONARE_ERROR_INVALID_STATE;
+  if (out_target_param_id) *out_target_param_id = desc->target_param_id;
   return SONARE_OK;
   SONARE_C_CATCH
 #else
@@ -509,7 +570,9 @@ SonareError sonare_project_edit_automation_lane(SonareProject* project, uint32_t
                                                 const SonareAutomationLaneDesc* desc) {
   SONARE_C_API_ENTRY;
 #if defined(SONARE_WITH_ARRANGEMENT)
-  if (!project || track_id == 0 || !desc) return SONARE_ERROR_INVALID_PARAMETER;
+  if (!project || track_id == 0 || target_param_id == 0 || !desc) {
+    return SONARE_ERROR_INVALID_PARAMETER;
+  }
   const arr::Track* track = project->history.project().find_track(track_id);
   if (track == nullptr) return SONARE_ERROR_INVALID_PARAMETER;
   const auto found = std::find_if(
@@ -521,6 +584,39 @@ SonareError sonare_project_edit_automation_lane(SonareProject* project, uint32_t
   SONARE_C_TRY
   sonare::automation::AutomationLane lane;
   const SonareError err = automation_lane_from_desc(desc, &lane);
+  if (err != SONARE_OK) return err;
+  if (lane.target_param_id() != target_param_id) return SONARE_ERROR_INVALID_PARAMETER;
+  // The legacy descriptor has no target kind. Preserve the lane's existing
+  // classification so editing points cannot silently turn a typed lane into
+  // an opaque lane.
+  lane.set_target_kind(found->target_kind());
+  auto command =
+      std::make_unique<arr::EditAutomationLane>(track_id, target_param_id, std::move(lane));
+  if (!project->history.apply(std::move(command))) return SONARE_ERROR_INVALID_STATE;
+  return SONARE_OK;
+  SONARE_C_CATCH
+#else
+  SONARE_C_STUB_NOT_SUPPORTED(project, track_id, target_param_id, desc);
+#endif
+}
+
+SonareError sonare_project_edit_automation_lane_ex(SonareProject* project, uint32_t track_id,
+                                                   uint32_t target_param_id,
+                                                   const SonareAutomationLaneDescEx* desc) {
+  SONARE_C_API_ENTRY;
+#if defined(SONARE_WITH_ARRANGEMENT)
+  if (!project || track_id == 0 || target_param_id == 0 || !desc) {
+    return SONARE_ERROR_INVALID_PARAMETER;
+  }
+  const arr::Track* track = project->history.project().find_track(track_id);
+  if (track == nullptr) return SONARE_ERROR_INVALID_PARAMETER;
+  const auto found = std::find_if(
+      track->automation_lanes.begin(), track->automation_lanes.end(),
+      [target_param_id](const auto& lane) { return lane.target_param_id() == target_param_id; });
+  if (found == track->automation_lanes.end()) return SONARE_ERROR_INVALID_PARAMETER;
+  SONARE_C_TRY
+  sonare::automation::AutomationLane lane;
+  const SonareError err = automation_lane_from_desc_ex(desc, &lane);
   if (err != SONARE_OK) return err;
   if (lane.target_param_id() != target_param_id) return SONARE_ERROR_INVALID_PARAMETER;
   auto command =
@@ -537,7 +633,7 @@ SonareError sonare_project_remove_automation_lane(SonareProject* project, uint32
                                                   uint32_t target_param_id) {
   SONARE_C_API_ENTRY;
 #if defined(SONARE_WITH_ARRANGEMENT)
-  if (!project || track_id == 0) return SONARE_ERROR_INVALID_PARAMETER;
+  if (!project || track_id == 0 || target_param_id == 0) return SONARE_ERROR_INVALID_PARAMETER;
   const arr::Track* track = project->history.project().find_track(track_id);
   if (track == nullptr) return SONARE_ERROR_INVALID_PARAMETER;
   const auto found = std::find_if(
@@ -603,5 +699,18 @@ SonareError sonare_project_set_max_undo_depth(SonareProject* project, size_t dep
   SONARE_C_CATCH
 #else
   SONARE_C_STUB_NOT_SUPPORTED(project, depth);
+#endif
+}
+
+SonareError sonare_project_set_max_history_bytes(SonareProject* project, size_t bytes) {
+  SONARE_C_API_ENTRY;
+#if defined(SONARE_WITH_ARRANGEMENT)
+  if (!project) return SONARE_ERROR_INVALID_PARAMETER;
+  SONARE_C_TRY
+  project->history.set_max_history_bytes(bytes);
+  return SONARE_OK;
+  SONARE_C_CATCH
+#else
+  SONARE_C_STUB_NOT_SUPPORTED(project, bytes);
 #endif
 }

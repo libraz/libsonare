@@ -40,6 +40,7 @@ int MixingRuntime::latency_samples_q8() const noexcept {
 
 bool MixingRuntime::set_parameter(unsigned int param_id, float value) {
   if (!strip_) return false;
+  if (!is_supported_parameter(param_id)) return false;
   switch (param_id) {
     case kFaderDb:
       strip_->set_fader_db(value);
@@ -56,7 +57,7 @@ bool MixingRuntime::set_parameter(unsigned int param_id, float value) {
 }
 
 bool MixingRuntime::parameter_is_realtime_safe(unsigned int param_id) const noexcept {
-  return param_id == kFaderDb || param_id == kPan || param_id == kWidth;
+  return is_supported_parameter(param_id);
 }
 
 }  // namespace sonare::engine

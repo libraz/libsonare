@@ -67,7 +67,16 @@ std::size_t base64_decoded_upper_bound(const std::string& text) noexcept {
 std::string project_to_json(const arrangement::Project& project,
                             const arrangement::MidiContentStore& midi) {
   Object root;
-  root["version"] = static_cast<double>(SONARE_PROJECT_SCHEMA_VERSION);
+  const bool has_typed_automation_lane = std::any_of(
+      project.tracks().begin(), project.tracks().end(), [](const arrangement::Track& track) {
+        return std::any_of(track.automation_lanes.begin(), track.automation_lanes.end(),
+                           [](const automation::AutomationLane& lane) {
+                             return lane.target_kind() != automation::AutomationTargetKind::kOpaque;
+                           });
+      });
+  root["version"] =
+      static_cast<double>(has_typed_automation_lane ? SONARE_PROJECT_SCHEMA_VERSION
+                                                    : SONARE_PROJECT_SCHEMA_VERSION_OPAQUE);
   root["sample_rate"] = project.sample_rate();
   root["overlap_policy"] = static_cast<int>(project.overlap_policy());
 
@@ -333,7 +342,7 @@ DeserializeResult project_from_json(const std::string& json_text) {
     if (const auto* arr = array_at(root, "tracks")) {
       for (const auto& tv : *arr) {
         if (!tv.is_object()) continue;
-        arrangement::Track t = track_from_json(tv);
+        arrangement::Track t = track_from_json(tv, schema_version);
         if (invalid_entity_id(t.id)) {
           reject_entity_id("track", t.id, false);
           return result;
@@ -491,9 +500,10 @@ DeserializeResult project_from_json(const std::string& json_text) {
         m.kind = static_cast<uint8_t>(marker_kind);
         // Read unconditionally, and written by marker_to_json whenever non-zero
         // regardless of kind, so a marker that carries key fields on a non-key
-        // kind (which the C ABI accepts) survives a save/load unchanged.
+        // kind (which the C ABI accepts) survives a save/load unchanged. Only
+        // key-signature markers carry the SMF fifths range restriction.
         m.key_fifths = int8_or(mv, "key_fifths", 0);
-        if (m.key_fifths < -7 || m.key_fifths > 7) {
+        if (m.kind == 4 && (m.key_fifths < -7 || m.key_fifths > 7)) {
           throw SonareException(ErrorCode::InvalidFormat, "key_fifths must be within [-7, 7]");
         }
         m.key_minor = bool_or(mv, "key_minor", false);
@@ -517,8 +527,8 @@ DeserializeResult project_from_json(const std::string& json_text) {
     }
 
     // Mixer scene.
-    if (const auto* sv = object_at(root, "scene")) {
-      project.scene() = scene_from_value(Value(*sv));
+    if (const auto* sv = root.find("scene"); sv != nullptr && sv->is_object()) {
+      project.scene() = scene_from_value(*sv);
     }
 
     // Assist sidecars (lossless, even for unregistered modules).

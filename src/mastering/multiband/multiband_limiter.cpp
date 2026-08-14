@@ -3,6 +3,7 @@
 #include <algorithm>
 #include <string>
 
+#include "mastering/dynamics/channel_limits.h"
 #include "rt/scoped_no_denormals.h"
 #include "util/exception.h"
 
@@ -15,20 +16,27 @@ MultibandLimiter::MultibandLimiter(MultibandLimiterConfig config)
 }
 
 void MultibandLimiter::prepare(double sample_rate, int max_block_size) {
+  prepare(sample_rate, max_block_size, static_cast<int>(dynamics::kRealtimePreparedChannels));
+}
+
+void MultibandLimiter::prepare(double sample_rate, int max_block_size, int max_channels) {
   if (!(sample_rate > 0.0)) {
     throw SonareException(ErrorCode::InvalidParameter, "sample_rate must be positive");
   }
   if (max_block_size < 0) {
     throw SonareException(ErrorCode::InvalidParameter, "max_block_size must be non-negative");
   }
+  if (max_channels < 1 || max_channels > static_cast<int>(dynamics::kRealtimePreparedChannels)) {
+    throw SonareException(ErrorCode::InvalidParameter,
+                          "max_channels exceeds MultibandLimiter capacity");
+  }
 
   sample_rate_ = sample_rate;
   max_block_size_ = max_block_size;
+  max_working_channels_ = max_channels;
   prepared_ = true;
-  crossover_.prepare(sample_rate_, max_block_size_);
-  // Pre-size split scratch for stereo so the steady-state audio path is
-  // allocation-free; it is grown on demand only if a wider block arrives.
-  crossover_.prepare_scratch(scratch_, 2, max_block_size_);
+  crossover_.prepare(sample_rate_, max_block_size_, max_working_channels_);
+  crossover_.prepare_scratch(scratch_, max_working_channels_, max_block_size_);
   for (auto& limiter : limiters_) {
     limiter.prepare(sample_rate_, max_block_size_);
   }
@@ -38,9 +46,18 @@ void MultibandLimiter::prepare(double sample_rate, int max_block_size) {
 void MultibandLimiter::process(float* const* channels, int num_channels, int num_samples) {
   sonare::rt::ScopedNoDenormals guard;
   ensure_prepared(prepared_, "MultibandLimiter");
-  if (!validate_process_buffers(channels, num_channels, num_samples)) {
+  if (!validate_block_size(num_channels, num_samples)) {
     return;
   }
+  if (num_channels > max_working_channels_) {
+    throw SonareException(ErrorCode::InvalidParameter,
+                          "num_channels exceeds prepared MultibandLimiter capacity");
+  }
+  if (num_samples > max_block_size_) {
+    throw SonareException(ErrorCode::InvalidParameter,
+                          "num_samples exceeds prepared MultibandLimiter block size");
+  }
+  validate_channel_buffers(channels, num_channels);
 
   crossover_.ensure_scratch(scratch_, num_channels, num_samples);
   crossover_.split_into(channels, num_channels, num_samples, scratch_);
@@ -95,7 +112,7 @@ void MultibandLimiter::set_config(const MultibandLimiterConfig& config) {
   if (prepared_) {
     if (crossover_changed) {
       crossover_.set_config(config_.crossover);
-      crossover_.prepare_scratch(scratch_, 2, max_block_size_);
+      crossover_.prepare_scratch(scratch_, max_working_channels_, max_block_size_);
     }
     for (auto& limiter : limiters_) {
       limiter.prepare(sample_rate_, max_block_size_);

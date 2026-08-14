@@ -9,6 +9,36 @@
 extern "C" {
 #endif
 
+/* Mirrors engine::TelemetryErrorCode. These ordinals are part of the
+   cross-binding telemetry contract: core owns 0..18 and 20, while ordinal 19
+   is reserved by the WASM worklet protocol. SonareEngineTelemetry.error stays
+   an int below so this enum does not change the telemetry POD layout. */
+typedef enum {
+  SONARE_ENGINE_TELEMETRY_ERROR_NONE = 0,
+  SONARE_ENGINE_TELEMETRY_ERROR_COMMAND_QUEUE_OVERFLOW = 1,
+  SONARE_ENGINE_TELEMETRY_ERROR_PENDING_COMMAND_OVERFLOW = 2,
+  SONARE_ENGINE_TELEMETRY_ERROR_BOUNDARY_OVERFLOW = 3,
+  SONARE_ENGINE_TELEMETRY_ERROR_TELEMETRY_OVERFLOW = 4,
+  SONARE_ENGINE_TELEMETRY_ERROR_CAPTURE_OVERFLOW = 5,
+  SONARE_ENGINE_TELEMETRY_ERROR_MAX_BLOCK_EXCEEDED = 6,
+  SONARE_ENGINE_TELEMETRY_ERROR_UNKNOWN_TARGET = 7,
+  SONARE_ENGINE_TELEMETRY_ERROR_NON_REALTIME_SAFE_PARAMETER = 8,
+  SONARE_ENGINE_TELEMETRY_ERROR_NOT_PREPARED = 9,
+  SONARE_ENGINE_TELEMETRY_ERROR_NON_QUEUEABLE_COMMAND = 10,
+  SONARE_ENGINE_TELEMETRY_ERROR_AUTOMATION_BIND_TARGET_OVERFLOW = 11,
+  SONARE_ENGINE_TELEMETRY_ERROR_STALE_AUTOMATION_LANES = 12,
+  SONARE_ENGINE_TELEMETRY_ERROR_SMOOTHED_PARAMETER_CAPACITY = 13,
+  SONARE_ENGINE_TELEMETRY_ERROR_COMMAND_BACKLOG_DEFERRED = 14,
+  SONARE_ENGINE_TELEMETRY_ERROR_CLIP_PAGE_UNDERRUN = 15,
+  SONARE_ENGINE_TELEMETRY_ERROR_INSERT_AUTOMATION_OVERFLOW = 16,
+  SONARE_ENGINE_TELEMETRY_ERROR_MIDI_CLOCK_OVERFLOW = 17,
+  SONARE_ENGINE_TELEMETRY_ERROR_METRONOME_OVERFLOW = 18,
+  SONARE_ENGINE_TELEMETRY_ERROR_MAX_CHANNELS_EXCEEDED = 20
+} SonareEngineTelemetryError;
+
+/* Naming-compatible alias for code that mirrors the C++ enum's type name. */
+typedef SonareEngineTelemetryError SonareEngineTelemetryErrorCode;
+
 typedef struct {
   int type;
   int error;
@@ -264,6 +294,19 @@ typedef struct {
   uint8_t source_channel_layout;
 } SonareEngineTrackLane;
 
+/* Per-lane cue/monitor tap. The mode is queued against a lane index and takes
+   effect at the requested render frame; the lane's track-id mapping keeps the
+   state attached to a track when lane order is republished. */
+typedef enum {
+  SONARE_ENGINE_TRACK_MONITOR_MODE_OFF = 0,
+  SONARE_ENGINE_TRACK_MONITOR_MODE_PFL = 1,
+  SONARE_ENGINE_TRACK_MONITOR_MODE_AFL = 2,
+  /* Short aliases retained for callers that use the semantic names directly. */
+  SONARE_ENGINE_TRACK_MONITOR_OFF = SONARE_ENGINE_TRACK_MONITOR_MODE_OFF,
+  SONARE_ENGINE_TRACK_MONITOR_PFL = SONARE_ENGINE_TRACK_MONITOR_MODE_PFL,
+  SONARE_ENGINE_TRACK_MONITOR_AFL = SONARE_ENGINE_TRACK_MONITOR_MODE_AFL,
+} SonareEngineTrackMonitorMode;
+
 typedef struct {
   uint32_t bus_id;
   float gain_db;
@@ -382,6 +425,9 @@ typedef struct {
 #ifdef __cplusplus
 // Engine POD layout guards. These structs are mirrored by ctypes and are used
 // across the C ABI boundary, so layout drift must be caught at compile time.
+static_assert(sizeof(SonareEngineTelemetry) == 40u, "SonareEngineTelemetry layout changed");
+static_assert(offsetof(SonareEngineTelemetry, error) == 4u,
+              "SonareEngineTelemetry error offset changed");
 static_assert(sizeof(SonareMeterTelemetryRecord) == 80u,
               "SonareMeterTelemetryRecord layout changed");
 static_assert(offsetof(SonareMeterTelemetryRecord, render_frame) == 8u,

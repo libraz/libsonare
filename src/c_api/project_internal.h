@@ -417,6 +417,37 @@ void fill_project_tempo_map(const arr::Project& project, sonare::transport::Temp
   map->set_time_signatures(std::move(sigs));
 }
 
+// Replays an import's already-built commands against value copies of the live
+// project and MIDI store, then exercises the complete persistence boundary.
+// Commands are intentionally applied by reference: Add commands and SetMarker
+// retain the ids allocated during this first replay, so the exact same command
+// objects can be moved into the live history transaction after the preflight.
+// project_from_json is the aggregate resource gate for parser nodes, array
+// entities, decoded strings, and decoded sidecar/SysEx payload bytes; the
+// explicit byte check keeps the encoder side bounded as well.
+bool imported_midi_persistence_preflight(const arr::Project& project,
+                                         const arr::MidiContentStore& midi,
+                                         const std::vector<arr::EditCommandPtr>& commands) {
+  arr::Project candidate_project = project;
+  arr::MidiContentStore candidate_midi = midi;
+  for (const auto& command : commands) {
+    if (command == nullptr || !command->apply(candidate_project, candidate_midi)) return false;
+  }
+
+  const std::string serialized =
+      sonare::serialize::project_to_json(candidate_project, candidate_midi);
+  if (serialized.size() > sonare::resource::kDefaultProjectImportResourceLimits.max_json_bytes) {
+    return false;
+  }
+  const sonare::serialize::DeserializeResult decoded =
+      sonare::serialize::project_from_json(serialized);
+  if (!decoded.ok() || !decoded.project.has_value()) return false;
+
+  const std::string reserialized =
+      sonare::serialize::project_to_json(*decoded.project, decoded.midi);
+  return serialized == reserialized;
+}
+
 // Installs a normalized imported MIDI file (tempo / time-signature / markers +
 // one track+clip per imported clip) into the project as a single undoable
 // transaction. Shared by the SMF (MIDI 1.0) and MIDI Clip File (SMF2) importers;
@@ -440,10 +471,15 @@ SonareError install_imported_midi(
 
   if (!tempos.empty()) commands.push_back(std::make_unique<arr::SetTempoSegment>(tempos));
   if (!sigs.empty()) commands.push_back(std::make_unique<arr::SetTimeSignatureSegment>(sigs));
+  uint32_t next_marker_id = project->history.project().next_marker_id();
   for (const auto& marker : markers) {
-    commands.push_back(std::make_unique<arr::SetMarker>(0, marker.ppq, marker.text,
+    if (next_marker_id == std::numeric_limits<uint32_t>::max()) {
+      return SONARE_ERROR_INVALID_STATE;
+    }
+    commands.push_back(std::make_unique<arr::SetMarker>(next_marker_id, marker.ppq, marker.text,
                                                         static_cast<uint8_t>(marker.kind),
                                                         marker.key_fifths, marker.key_minor));
+    ++next_marker_id;
   }
 
   uint32_t first_clip = 0;
@@ -497,10 +533,14 @@ SonareError install_imported_midi(
     // the note left hanging when the clip is bounced through an instrument. Extend
     // the clip just past the last event so a boundary event survives; nextafter
     // keeps the timing numerically indistinguishable from the original tick.
-    if (has_events && max_event_ppq >= length_ppq) {
-      length_ppq = std::nextafter(max_event_ppq, max_event_ppq + 1.0);
-    }
+    // Normalize an empty/tick-0 clip before boundary handling. Otherwise an
+    // EOT at tick 0 would be nudged to the smallest subnormal and serialize as
+    // an effectively zero-length clip. Positive boundary endpoints retain the
+    // closure nudge, directed explicitly toward +infinity.
     if (length_ppq <= 0.0) length_ppq = 1.0;
+    if (has_events && max_event_ppq > 0.0 && max_event_ppq >= length_ppq) {
+      length_ppq = std::nextafter(max_event_ppq, std::numeric_limits<double>::infinity());
+    }
 
     arr::EditClip clip;
     clip.track_id = track_id;
@@ -539,6 +579,10 @@ SonareError install_imported_midi(
     }
     commands.push_back(std::make_unique<arr::ReplaceMidiClipEvents>(
         clip_id, std::move(list), std::move(clip_sysex_payloads)));
+  }
+  if (!imported_midi_persistence_preflight(project->history.project(),
+                                           project->history.midi_content(), commands)) {
+    return SONARE_ERROR_INVALID_FORMAT;
   }
   if (!project->history.apply_transaction(std::move(commands))) {
     rollback_to_depth(project, rollback_depth);

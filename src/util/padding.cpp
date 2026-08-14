@@ -36,6 +36,12 @@ std::vector<float> fix_length(const float* x, std::size_t n, std::size_t size, f
     throw SonareException(ErrorCode::InvalidParameter,
                           "fix_length: null input with non-zero length");
   }
+  // A null pointer with zero length is a valid empty input.  Return the
+  // requested all-padding result directly instead of constructing the
+  // [nullptr, nullptr) iterator range used by the equal-length path.
+  if (n == 0) {
+    return std::vector<float>(size, pad_value);
+  }
   if (n == size) {
     return std::vector<float>(x, x + n);
   }

@@ -9,6 +9,8 @@
 
 #include "core/audio.h"
 #include "core/resample.h"
+#include "engine/mixing_runtime.h"
+#include "engine/realtime_engine_internal.h"
 #include "engine/tempo_sync.h"
 #include "midi/midi_clip.h"
 #include "util/db.h"
@@ -228,6 +230,26 @@ void add_diag(CompileResult* result, Diagnostic::Code code, Diagnostic::Severity
   result->diagnostics.push_back(Diagnostic{code, sev, target_id, std::move(message)});
 }
 
+// A mixer binding is only a resolved route when its strip id is present in the
+// final scene carried by the timeline. In a mixing-off build the value binding
+// is still preserved for round-trip/reporting, but no realtime ChannelStrip is
+// available to consume an opaque lane.
+bool has_resolved_mixer_strip(const CompiledTimeline& timeline, TrackId track_id) noexcept {
+#if defined(SONARE_WITH_MIXING)
+  for (const MixerStripBinding& binding : timeline.mixer.bindings) {
+    if (binding.track_id != track_id) continue;
+    const auto strip = std::find_if(
+        timeline.mixer.scene.strips.begin(), timeline.mixer.scene.strips.end(),
+        [&](const mixing::api::Strip& candidate) { return candidate.id == binding.strip_id; });
+    if (strip != timeline.mixer.scene.strips.end()) return true;
+  }
+#else
+  (void)timeline;
+  (void)track_id;
+#endif
+  return false;
+}
+
 // Validates tempo segments: bpm/end_bpm must be > 0 and start_ppq monotonic and
 // non-negative. Returns false (with diagnostics appended) on any violation.
 bool validate_tempo(const Project& project, CompileResult* result) {
@@ -311,6 +333,7 @@ void CompiledTimeline::copy_from(const CompiledTimeline& other) {
   audio_clips = other.audio_clips;
   midi_clips = other.midi_clips;
   automation_lanes = other.automation_lanes;
+  track_lanes = other.track_lanes;
   graph = other.graph;
   mixer = other.mixer;
   tempo_segments = other.tempo_segments;
@@ -369,32 +392,79 @@ CompileResult compile(const Project& project, const MidiContentStore& midi,
     timeline.markers.push_back(out);
   }
 
-  // ---- Automation lanes (flatten per-track lanes) --------------------------
-  // A lane's target_param_id is scoped to its TRACK in the project model (the
-  // edit commands enforce one lane per target per track), but the engine's lane
-  // set is a FLAT, engine-wide id space: AutomationEngine::set_lanes keeps a
-  // single lane per target id. Two tracks automating the same target therefore
-  // cannot both reach the live engine. Resolve that collision here -- the first
-  // track in project order wins, which is what set_lanes would pick anyway --
-  // and report it, so the loss is a compile diagnostic instead of a silent RT
-  // drop. The offline path is unaffected: mixer.automation_bindings carries
-  // every lane tagged with its track and is routed per track by the bounce.
-  std::map<uint32_t, TrackId> live_lane_owner;
+  // ---- Track lanes + automation lanes -------------------------------------
+  // The track vector is the deterministic lane-index contract.  It is built
+  // before any automation is considered so the control-thread install can
+  // resolve typed lanes without consulting a mutable Project or a map on RT.
+  timeline.track_lanes.reserve(project.tracks().size());
+  for (const auto& track : project.tracks()) {
+    timeline.track_lanes.push_back(CompiledTrackLane{track.id});
+  }
+#if defined(SONARE_WITH_MIXING)
+  if (timeline.track_lanes.size() > engine::TrackMixerRuntime::kMaxTrackLanes) {
+    add_diag(&result, Diagnostic::Code::kAutomationLaneCapacity, Diagnostic::Severity::kError, 0,
+             "project has " + std::to_string(timeline.track_lanes.size()) +
+                 " tracks but the realtime track mixer supports at most " +
+                 std::to_string(engine::TrackMixerRuntime::kMaxTrackLanes));
+  }
+#endif
+
+  // Persistent target ids are editing values.  Opaque lanes retain their exact
+  // ids, but keep the legacy engine-wide first-wins rule: the first occurrence
+  // in deterministic project order is compiled and later occurrences produce
+  // a warning.  Typed lanes are unique by (track, target-kind), then become
+  // distinct reserved ids from the project-order lane index during
+  // apply_to_engine().
+  std::map<uint32_t, TrackId> opaque_lane_owners;
+  std::set<std::pair<TrackId, uint32_t>> typed_lane_keys;
   for (const auto& track : project.tracks()) {
     for (const auto& lane : track.automation_lanes) {
-      const uint32_t target = lane.target_param_id();
-      const auto owner = live_lane_owner.find(target);
-      if (owner == live_lane_owner.end()) {
-        live_lane_owner.emplace(target, track.id);
-        timeline.automation_lanes.push_back(lane);
-      } else {
-        add_diag(&result, Diagnostic::Code::kAutomationLaneConflict, Diagnostic::Severity::kWarning,
-                 track.id,
-                 "automation target " + std::to_string(target) + " is already automated by track " +
-                     std::to_string(owner->second) +
-                     "; only that track's lane reaches the live engine, while the offline bounce "
-                     "applies both");
+      const auto kind = lane.target_kind();
+      if (!automation::valid_automation_target_kind(kind)) {
+        add_diag(&result, Diagnostic::Code::kInvalidAutomationTargetKind,
+                 Diagnostic::Severity::kError, track.id,
+                 "automation lane has an unknown target kind");
+        continue;
       }
+      if (lane.target_param_id() == 0) {
+        add_diag(&result, Diagnostic::Code::kInvalidAutomationTargetKind,
+                 Diagnostic::Severity::kError, track.id,
+                 "automation lane target_param_id must be non-zero");
+        continue;
+      }
+      if (kind != automation::AutomationTargetKind::kOpaque) {
+#if !defined(SONARE_WITH_MIXING)
+        add_diag(&result, Diagnostic::Code::kUnsupportedMixing, Diagnostic::Severity::kError,
+                 track.id, "typed track automation requires SONARE_WITH_MIXING");
+#endif
+        const auto key = std::make_pair(track.id, static_cast<uint32_t>(kind));
+        if (!typed_lane_keys.insert(key).second) {
+          add_diag(&result, Diagnostic::Code::kAutomationLaneConflict, Diagnostic::Severity::kError,
+                   track.id,
+                   "track contains more than one automation lane for target kind " +
+                       std::to_string(static_cast<uint32_t>(kind)));
+        }
+      } else if (engine::RealtimeEngine::parameter_target_reserved(lane.target_param_id())) {
+        // An opaque id in the engine namespace would be reinterpreted as a
+        // mixer/insert route after publication. Reject it instead of silently
+        // moving a user-defined parameter onto a track strip.
+        add_diag(&result, Diagnostic::Code::kReservedAutomationRouteConflict,
+                 Diagnostic::Severity::kError, track.id,
+                 "opaque automation target " + std::to_string(lane.target_param_id()) +
+                     " collides with a reserved realtime engine route");
+        continue;
+      } else {
+        const auto [owner, inserted] = opaque_lane_owners.emplace(lane.target_param_id(), track.id);
+        if (!inserted) {
+          add_diag(&result, Diagnostic::Code::kAutomationLaneConflict,
+                   Diagnostic::Severity::kWarning, track.id,
+                   "opaque automation target " + std::to_string(lane.target_param_id()) +
+                       " is already automated by track " + std::to_string(owner->second) +
+                       "; the first project-order lane wins");
+          continue;
+        }
+      }
+      timeline.automation_lanes.push_back(lane);
       timeline.mixer.automation_bindings.push_back(MixerAutomationBinding{track.id, lane});
     }
   }
@@ -485,6 +555,42 @@ CompileResult compile(const Project& project, const MidiContentStore& midi,
              "mixer strip binding requested but SONARE_WITH_MIXING is disabled in this build");
   }
 #endif
+
+  // Opaque lanes are retained for host-defined targets, but the project
+  // compiler/bounce can only apply the legacy ChannelStrip ids when the lane's
+  // track has a resolved scene strip. Diagnose only lanes that were adopted
+  // into the final track-tagged binding view: an empty lane and a first-wins
+  // loser must preserve their existing no-warning/conflict behavior.
+  for (const MixerAutomationBinding& binding : timeline.mixer.automation_bindings) {
+    const automation::AutomationLane& lane = binding.lane;
+    if (lane.target_kind() != automation::AutomationTargetKind::kOpaque || lane.points().empty()) {
+      continue;
+    }
+    const bool has_strip = has_resolved_mixer_strip(timeline, binding.track_id);
+    const bool is_legacy_builtin =
+        engine::MixingRuntime::is_supported_parameter(lane.target_param_id());
+    if (has_strip && is_legacy_builtin) continue;
+
+    std::string message;
+    if (!has_strip && is_legacy_builtin) {
+      message = "opaque automation target " + std::to_string(lane.target_param_id()) +
+                " is unrouted: no resolved mixer strip for track " +
+                std::to_string(binding.track_id) +
+                "; the lane is retained but cannot be applied by the project bounce";
+    } else if (!has_strip) {
+      message = "opaque automation target " + std::to_string(lane.target_param_id()) +
+                " is host-defined and unrouted: no resolved mixer strip for track " +
+                std::to_string(binding.track_id) +
+                "; the lane is retained for host handling but cannot be applied by the project "
+                "bounce";
+    } else {
+      message = "opaque automation target " + std::to_string(lane.target_param_id()) +
+                " is host-defined and unrouted by the built-in mixer; the resolved mixer strip "
+                "supports built-in targets 1, 2, and 3 only";
+    }
+    add_diag(&result, Diagnostic::Code::kAutomationTargetUnrouted, Diagnostic::Severity::kWarning,
+             binding.track_id, std::move(message));
+  }
 
   // ---- Graph request -------------------------------------------------------
   // Nothing in the Project drives a graph swap yet, so graph.requested is false.
@@ -970,15 +1076,67 @@ void apply_to_engine(const CompiledTimeline& timeline, engine::RealtimeEngine& e
   //    the snapshot (the caller must keep this CompiledTimeline alive).
   engine.set_markers(timeline.markers);
 
-  // 3) Automation lanes.
-  engine.automation().set_lanes(timeline.automation_lanes);
+  // 3) Track lanes.  The control-side lane vector is installed before typed
+  // automation is resolved so the reserved id's lane index and the runtime's
+  // lane state have one deterministic contract.
+#if defined(SONARE_WITH_MIXING)
+  std::vector<engine::TrackLaneConfig> track_lanes;
+  track_lanes.reserve(timeline.track_lanes.size());
+  for (const CompiledTrackLane& lane : timeline.track_lanes) {
+    track_lanes.emplace_back(lane.track_id);
+  }
+  (void)engine.set_track_lanes(std::move(track_lanes));
+#endif
 
-  // 4) Audio clips. The ClipSchedule::storage shared_ptr keeps the baked buffers
+  // 4) Resolve typed lanes to engine-reserved ids, then publish the compiled
+  // lane vector. Opaque ids remain untouched for legacy host targets. The
+  // compiler already applied deterministic project-order first-wins filtering
+  // to opaque lanes; set_lanes() defensively preserves that legacy global
+  // contract if a hand-built snapshot violates the invariant. This lookup is
+  // control-thread work; the audio thread only decodes the already-packed lane
+  // index/kind fields.
+  std::vector<automation::AutomationLane> playback_lanes;
+  playback_lanes.reserve(timeline.mixer.automation_bindings.empty()
+                             ? timeline.automation_lanes.size()
+                             : timeline.mixer.automation_bindings.size());
+  if (timeline.mixer.automation_bindings.empty()) {
+    // Keep hand-built/legacy snapshots usable: before track-tagged bindings
+    // existed, opaque lanes were already engine-ready here. There is no safe
+    // way to resolve a typed lane without an owning track, so leave those out
+    // rather than interpreting their persistent edit id as a playback route.
+    for (const automation::AutomationLane& lane : timeline.automation_lanes) {
+      if (lane.target_kind() == automation::AutomationTargetKind::kOpaque) {
+        playback_lanes.push_back(lane);
+      }
+    }
+  } else {
+    for (const MixerAutomationBinding& binding : timeline.mixer.automation_bindings) {
+      automation::AutomationLane lane = binding.lane;
+      if (lane.target_kind() != automation::AutomationTargetKind::kOpaque) {
+        size_t lane_index = 0;
+        bool found = false;
+        for (size_t i = 0; i < timeline.track_lanes.size(); ++i) {
+          if (timeline.track_lanes[i].track_id == binding.track_id) {
+            lane_index = i;
+            found = true;
+            break;
+          }
+        }
+        if (!found || lane_index > 0xFFu) continue;
+        lane.set_target_param_id(engine::make_track_lane_param_id(
+            lane_index, static_cast<uint32_t>(lane.target_kind())));
+      }
+      playback_lanes.push_back(std::move(lane));
+    }
+  }
+  engine.automation().set_lanes(std::move(playback_lanes));
+
+  // 5) Audio clips. The ClipSchedule::storage shared_ptr keeps the baked buffers
   //    alive across the RtPublisher swap; the engine's set_clips follows the
   //    retire protocol, so old buffers are released back to the control thread.
   engine.set_clips(timeline.audio_clips);
 
-  // 4b) MIDI clips. set_midi_clips is a control-thread direct-setter that
+  // 5b) MIDI clips. set_midi_clips is a control-thread direct-setter that
   //     publishes through the MidiSequencer's RtPublisher (no rt::Command, no
   //     ABI bump). Only present when arrangement (and thus the sequencer member)
   //     is compiled in.
@@ -986,7 +1144,7 @@ void apply_to_engine(const CompiledTimeline& timeline, engine::RealtimeEngine& e
   engine.set_midi_clips(timeline.midi_clips);
 #endif
 
-  // 5) Graph swap: no Project field currently requests a graph replacement, so
+  // 6) Graph swap: no Project field currently requests a graph replacement, so
   //    timeline.graph.requested remains false. The mixer binding is value-only:
   //    the caller turns each MixerStripBinding into a live mixing::ChannelStrip
   //    and calls bind_mixing_strip itself, because the compiler must not own RT

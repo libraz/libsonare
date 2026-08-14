@@ -254,8 +254,12 @@ InterleavedAudioLoadResult load_buffer_mp3_interleaved(const uint8_t* data, size
     case AudioFormat::MP3:
       return load_buffer_mp3_interleaved(data, size);
     default:
+#ifdef SONARE_WITH_FFMPEG
+      return load_buffer_ffmpeg_interleaved(data, size);
+#else
       SONARE_CHECK_MSG(false, ErrorCode::InvalidFormat,
                        "Interleaved audio loading supports WAV and MP3 only");
+#endif
   }
 }
 

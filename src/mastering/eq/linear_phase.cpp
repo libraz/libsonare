@@ -171,21 +171,31 @@ LinearPhaseEq::LinearPhaseEq(LinearPhaseEqConfig config) : config_(resolve_resol
 }
 
 void LinearPhaseEq::prepare(double sample_rate, int max_block_size) {
+  prepare(sample_rate, max_block_size, static_cast<int>(dynamics::kRealtimePreparedChannels));
+}
+
+void LinearPhaseEq::prepare(double sample_rate, int max_block_size, int max_channels) {
   if (!(sample_rate > 0.0)) {
     throw SonareException(ErrorCode::InvalidParameter, "sample_rate must be positive");
   }
   if (max_block_size < 0) {
     throw SonareException(ErrorCode::InvalidParameter, "max_block_size must be non-negative");
   }
+  if (max_channels < 1 || max_channels > static_cast<int>(dynamics::kRealtimePreparedChannels)) {
+    throw SonareException(ErrorCode::InvalidParameter,
+                          "max_channels exceeds LinearPhaseEq capacity");
+  }
 
   sample_rate_ = sample_rate;
   max_block_size_ = max_block_size;
+  // A prepare() call is a control-thread lifecycle boundary. Recreate the
+  // per-channel state at the exact requested capacity so an offline reprepare
+  // can shrink or grow the heavy FIR/convolver state without retaining the
+  // previous allocation.
+  states_.clear();
+  states_.resize(static_cast<size_t>(max_channels));
   prepared_ = true;
   rebuild_kernel();
-  // A raw LinearPhaseEq is also exposed as a realtime factory insert. Reserve
-  // the common realtime channel capacity here so its first process block never
-  // constructs per-channel histories/convolvers on the audio thread.
-  ensure_channel_state(static_cast<int>(dynamics::kRealtimePreparedChannels));
   reset();
 }
 

@@ -3,6 +3,7 @@
 #include <algorithm>
 #include <cmath>
 #include <cstdint>
+#include <limits>
 
 #include "rt/biquad_design.h"
 #include "util/constants.h"
@@ -207,40 +208,21 @@ ReverbTime shoebox_reverb_time(const ShoeboxRoom& room, ReverbModel model,
 }
 
 Audio synthesize_late_tail(const ReverbTime& rt, int sample_rate, const LateReverbConfig& config) {
+  const LateTailResolution resolution = resolve_late_tail(rt, sample_rate, config);
+  if (resolution.samples == 0u) {
+    return Audio::from_vector(std::vector<float>{}, sample_rate);
+  }
+
   const float sr = static_cast<float>(sample_rate);
-  if (sample_rate <= 0) {
-    return Audio::from_vector(std::vector<float>{}, sample_rate);
-  }
-
   const float nyquist = sr * 0.5f;
-  float longest = 0.0f;
-  for (size_t b = 0; b < rt.rt60_bands.size(); ++b) {
-    const float center = octave_center_hz(static_cast<int>(b));
-    if (center * kSqrt2 >= nyquist) continue;
-    longest = std::max(longest, rt.rt60_bands[b]);
-  }
-  if (longest <= 0.0f) {
-    return Audio::from_vector(std::vector<float>{}, sample_rate);
-  }
-  // Clamp the tail-sizing RT60 so a near-rigid room cannot request an enormous
-  // buffer. The per-band decay envelopes below still use the raw RT60 values.
-  longest = std::min(longest, kMaxRt60Seconds);
-
-  const float headroom = std::max(0.0f, config.headroom);
-  // Compute in double and clamp to the safety ceiling so an unbounded RT60 (a
-  // near-rigid room) cannot overflow the int length / request a huge allocation.
-  const double raw =
-      std::ceil(static_cast<double>(longest) * (1.0 + headroom) * static_cast<double>(sample_rate));
-  int length = static_cast<int>(std::min(raw, static_cast<double>(kMaxAutoSamples)));
-  if (config.max_samples > 0) length = std::min(length, config.max_samples);
-  if (length < 1) length = 1;
+  const int length = static_cast<int>(resolution.samples);
 
   std::vector<float> out(static_cast<size_t>(length), 0.0f);
   std::vector<float> band(static_cast<size_t>(length));
 
   for (size_t b = 0; b < rt.rt60_bands.size(); ++b) {
     const float rt60 = rt.rt60_bands[b];
-    if (rt60 <= 0.0f) continue;
+    if (!(rt60 > 0.0f)) continue;
     const float center = octave_center_hz(static_cast<int>(b));
     if (center * kSqrt2 >= nyquist) continue;  // band above the representable range
 
@@ -272,6 +254,57 @@ Audio synthesize_late_tail(const ReverbTime& rt, int sample_rate, const LateReve
   }
 
   return Audio::from_vector(std::move(out), sample_rate);
+}
+
+LateTailResolution resolve_late_tail(const ReverbTime& rt, int sample_rate,
+                                     const LateReverbConfig& config) noexcept {
+  LateTailResolution resolution;
+  if (sample_rate <= 0) return resolution;
+
+  const float sr = static_cast<float>(sample_rate);
+  const float nyquist = sr * 0.5f;
+  float longest = 0.0f;
+  for (size_t b = 0; b < rt.rt60_bands.size(); ++b) {
+    const float center = octave_center_hz(static_cast<int>(b));
+    if (center * kSqrt2 >= nyquist) continue;
+    const float rt60 = rt.rt60_bands[b];
+    // NaN is not a finite decay; positive infinity retains the historical
+    // 60-second sizing clamp without ever entering an unbounded cast.
+    if (!(rt60 > 0.0f)) continue;
+    longest = std::max(longest, std::min(rt60, kMaxRt60Seconds));
+  }
+  if (!(longest > 0.0f)) return resolution;
+
+  constexpr std::size_t kMaxSamples =
+      std::min(static_cast<std::size_t>(kMaxAutoSamples), resource::kMaxAcousticRirSamples);
+  static_assert(kMaxSamples <= static_cast<std::size_t>(std::numeric_limits<int>::max()),
+                "resolved acoustic tail length must fit the synthesis loop index");
+
+  // Keep the historical double expression for ordinary finite values so the
+  // normal <=cap tail length (and therefore its seeded samples) stays
+  // bit-stable. The largest finite float headroom and int sample rate still
+  // fit comfortably in double; positive infinity is handled as saturation.
+  const float non_negative_headroom = config.headroom > 0.0f ? config.headroom : 0.0f;
+  const double raw = std::isinf(non_negative_headroom)
+                         ? std::numeric_limits<double>::infinity()
+                         : std::ceil(static_cast<double>(longest) *
+                                     (1.0 + static_cast<double>(non_negative_headroom)) *
+                                     static_cast<double>(sample_rate));
+  // Clamp before narrowing so even a saturated/non-finite product never reaches
+  // an undefined integral cast.
+  const double bounded = std::min(raw, static_cast<double>(kMaxSamples));
+  resolution.resource_clamped = raw > static_cast<double>(kMaxSamples);
+  std::size_t length = bounded > 0.0 ? static_cast<std::size_t>(bounded) : 0u;
+  if (config.max_samples > 0) {
+    length = std::min(length, static_cast<std::size_t>(config.max_samples));
+  }
+  resolution.samples = std::max<std::size_t>(1u, length);
+  return resolution;
+}
+
+std::size_t resolve_late_tail_samples(const ReverbTime& rt, int sample_rate,
+                                      const LateReverbConfig& config) noexcept {
+  return resolve_late_tail(rt, sample_rate, config).samples;
 }
 
 }  // namespace sonare::acoustic

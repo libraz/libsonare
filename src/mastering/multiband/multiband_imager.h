@@ -32,6 +32,7 @@ class MultibandImager : public rt::ProcessorBase {
   explicit MultibandImager(MultibandImagerConfig config = {});
 
   void prepare(double sample_rate, int max_block_size) override;
+  void prepare(double sample_rate, int max_block_size, int max_channels) override;
   void process(float* const* channels, int num_channels, int num_samples) override;
   void reset() override;
   // Reports the linear-phase FIR crossover delay (0 in the zero-latency IIR
@@ -83,6 +84,7 @@ class MultibandImager : public rt::ProcessorBase {
   MultibandImagerConfig config_{};
   double sample_rate_ = 48000.0;
   int max_block_size_ = 0;
+  int max_working_channels_ = 0;
   bool prepared_ = false;
   Crossover crossover_;
   CrossoverScratch scratch_;

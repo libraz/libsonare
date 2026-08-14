@@ -158,7 +158,7 @@ struct MixerAutomationBinding {
 
   bool operator==(const MixerAutomationBinding& o) const {
     return track_id == o.track_id && lane.target_param_id() == o.lane.target_param_id() &&
-           lane.points() == o.lane.points();
+           lane.target_kind() == o.lane.target_kind() && lane.points() == o.lane.points();
   }
 };
 
@@ -172,6 +172,17 @@ struct MixerRequest {
   std::vector<MixerAutomationBinding> automation_bindings;
   /// True when bindings exist but this build lacks SONARE_WITH_MIXING.
   bool unavailable_in_build = false;
+};
+
+/// Track lane identity carried by a compiled snapshot.  The vector order is
+/// the project track order and is the sole index contract used when typed
+/// automation is resolved to the realtime engine's reserved namespace.
+struct CompiledTrackLane {
+  TrackId track_id = 0;
+
+  bool operator==(const CompiledTrackLane& other) const noexcept {
+    return track_id == other.track_id;
+  }
 };
 
 // ===========================================================================
@@ -208,14 +219,25 @@ struct CompiledTimeline {
   /// Each carries absolute render-frame UMP events.
   std::vector<midi::MidiClipSchedule> midi_clips;
 
-  /// Automation lanes ready for RealtimeEngine::automation().set_lanes.
+  /// Persistent automation lanes in deterministic project/track order. Opaque
+  /// target ids are retained verbatim with the legacy global first-wins
+  /// deduplication; typed ids are resolved only when apply_to_engine() builds
+  /// the playback lane set from mixer bindings.
   std::vector<automation::AutomationLane> automation_lanes;
+
+  /// Deterministic project-order lane identities.  Typed automation is
+  /// resolved against this vector only by apply_to_engine(); persistent target
+  /// ids in the edit model are never used as playback ids.
+  std::vector<CompiledTrackLane> track_lanes;
 
   /// Graph replacement request. Currently false unless a future Project field
   /// requests an engine graph swap.
   GraphRequest graph;
 
-  /// Mixer scene + Track->Strip binding request.
+  /// Mixer scene + Track->Strip binding request. automation_bindings is the
+  /// track-tagged automation view used by the control-thread install and the
+  /// offline renderer; opaque entries follow the legacy first-wins rule while
+  /// typed entries remain track-local.
   MixerRequest mixer;
 
   /// Tempo / time-signature segments (full segment vectors copied from the
@@ -275,7 +297,11 @@ struct Diagnostic {
     kRaggedAudioSource = 11,         // decoded channels are empty or have unequal frame counts
     kLoopCrossfadeUnavailable = 12,  // requested audio loop-seam crossfade could not be scheduled
     kSharedChannelStrip = 13,        // several tracks bind one scene strip; per-track controls move
-    kAutomationLaneConflict = 14,    // two tracks automate one target; the live lane set holds one
+    kAutomationLaneConflict = 14,    // opaque first-wins conflict or typed duplicate
+    kInvalidAutomationTargetKind = 15,
+    kAutomationLaneCapacity = 16,
+    kReservedAutomationRouteConflict = 17,
+    kAutomationTargetUnrouted = 18,  // non-empty opaque lane has no built-in route
   };
   // Severity ordinals are a FROZEN WIRE VALUE: they are exposed numerically as
   // SonareProjectDiagnostic.severity through the C ABI (see
@@ -347,7 +373,8 @@ CompileResult compile(const Project& project, const MidiContentStore& midi,
 
 /// Installs a CompiledTimeline into a RealtimeEngine via the engine's prescribed
 /// CONTROL-THREAD direct-setter order: tempo/time-signature -> markers ->
-/// automation lanes -> clips (-> graph swap / mixer bind under their flags).
+/// project-order track lanes -> typed-id resolution + automation publication ->
+/// clips (-> graph swap / mixer bind under flags).
 /// These are all direct-setter / publisher installs, NOT push_command.
 ///
 /// The graph request has no Project authoring surface yet; the mixer binding is

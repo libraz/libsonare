@@ -735,6 +735,7 @@ if(BUILD_ARRANGEMENT)
     arrangement/edit_command_clip.cpp
     arrangement/edit_command_source_timeline.cpp
     arrangement/edit_command_midi_assist_internal.cpp
+    arrangement/retained_bytes.cpp
     arrangement/edit_history.cpp
     arrangement/edit_compiler.cpp
   )

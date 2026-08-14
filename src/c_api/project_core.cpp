@@ -365,6 +365,40 @@ SonareError sonare_project_source_by_index(const SonareProject* project, size_t 
 #endif
 }
 
+SonareError sonare_project_get_audio_source_metadata(const SonareProject* project,
+                                                     uint32_t source_id,
+                                                     SonareProjectAudioSourceMetadata* out) {
+  SONARE_C_API_ENTRY;
+  // The caller may safely pass an uninitialized output and then call the free
+  // helper regardless of the return code. Keep this invariant on every path,
+  // including builds without the arrangement subsystem.
+  if (out) *out = {};
+#if defined(SONARE_WITH_ARRANGEMENT)
+  if (!project || !out || source_id == 0) return SONARE_ERROR_INVALID_PARAMETER;
+  const arr::ClipSource* source = project->history.project().find_source(source_id);
+  const auto* audio = source ? std::get_if<arr::AudioSourceRef>(source) : nullptr;
+  if (audio == nullptr) return SONARE_ERROR_INVALID_PARAMETER;
+  SONARE_C_TRY
+  std::unique_ptr<char[]> content_hash(copy_string(audio->content_hash));
+  std::unique_ptr<char[]> external_stem_role(copy_string(audio->external_stem_role));
+  out->content_hash = content_hash.release();
+  out->external_stem_role = external_stem_role.release();
+  return SONARE_OK;
+  SONARE_C_CATCH
+#else
+  SONARE_C_STUB_NOT_SUPPORTED(project, source_id, out);
+#endif
+}
+
+void sonare_project_free_audio_source_metadata(SonareProjectAudioSourceMetadata* metadata) {
+  if (!metadata) return;
+#if defined(SONARE_WITH_ARRANGEMENT)
+  delete[] metadata->content_hash;
+  delete[] metadata->external_stem_role;
+#endif
+  *metadata = {};
+}
+
 SonareError sonare_project_marker_name_by_index(const SonareProject* project, size_t index,
                                                 char** out_name) {
   SONARE_C_API_ENTRY;

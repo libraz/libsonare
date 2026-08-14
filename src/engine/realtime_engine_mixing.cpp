@@ -7,6 +7,7 @@
 
 #include "engine/insert_automation_id.h"
 #include "engine/realtime_engine.h"
+#include "engine/realtime_engine_internal.h"
 #include "rt/command.h"
 
 namespace sonare::engine {
@@ -14,9 +15,6 @@ namespace sonare::engine {
 #if defined(SONARE_WITH_MIXING)
 namespace {
 
-constexpr uint32_t kEngineParamLaneMask = 0x0000FF00u;
-constexpr uint32_t kEngineParamKindMask = 0x000000FFu;
-constexpr uint32_t kEngineParamLaneShift = 8u;
 constexpr uint32_t kEngineParamLaneMaster = 0xFFu;
 constexpr uint32_t kEngineParamLaneBusBase = 0xFEu;
 
@@ -306,8 +304,7 @@ bool RealtimeEngine::set_master_eq_band(size_t band_index,
   }
 }
 
-uint32_t RealtimeEngine::configure_scope_telemetry(int interval_frames,
-                                                   uint32_t band_count) noexcept {
+uint32_t RealtimeEngine::configure_scope_telemetry(int interval_frames, uint32_t band_count) {
   scope_interval_frames_.store(std::max(0, interval_frames), std::memory_order_relaxed);
   const uint32_t clamped = std::clamp<uint32_t>(band_count, 1, ScopeTelemetryRecord::kMaxBands);
   if (clamped != scope_band_count_) {
@@ -321,7 +318,10 @@ uint32_t RealtimeEngine::configure_scope_telemetry(int interval_frames,
           scope_band_count_);
     }
   }
-  return scope_tap_.band_count();
+  // Before prepare(), the tap still carries its default band count. Return the
+  // clamped configuration instead; RealtimeEngine::prepare() applies it when
+  // the tap's allocation is made.
+  return scope_band_count_;
 }
 
 bool RealtimeEngine::route_engine_parameter(uint32_t target_id, float value) noexcept {
@@ -357,6 +357,10 @@ bool RealtimeEngine::route_engine_parameter(uint32_t target_id, float value) noe
     const uint32_t bus_index = kEngineParamLaneBusBase - lane;
     return track_mixer_runtime_.set_bus_gain_db_by_index(bus_index, value);
   }
+  // Track lanes own only the typed fader and pan targets. Width remains a
+  // standalone strip/mixer control and is intentionally not generated for a
+  // track lane (set_lane_parameter also rejects it as a defensive boundary).
+  if (kind != TrackMixerRuntime::kFaderDb && kind != TrackMixerRuntime::kPan) return false;
   return track_mixer_runtime_.set_lane_parameter(static_cast<size_t>(lane), kind, value);
 }
 

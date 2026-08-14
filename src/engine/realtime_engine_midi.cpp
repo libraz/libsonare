@@ -218,15 +218,49 @@ void RealtimeEngine::recompute_pdc() {
   // the full total; an instrument that already self-delays by L_i needs only the
   // remaining (total - L_i). After both, all sources coincide at +total. Tracked
   // in Q8.8 so an instrument's sub-sample latency is compensated too.
-  pdc_total_q8_ = instrument_rack_.max_latency_samples_q8();
-  clip_pdc_delay_.set_delay_q8(pdc_total_q8_);
-  pdc_instrument_count_ = 0;
+  const int next_total_q8 = instrument_rack_.max_latency_samples_q8();
+  // Build the complete replacement off to the side. In particular, do not
+  // configure the live clip bank before an instrument bank has succeeded: an
+  // allocation failure must leave the old delay/count pair internally
+  // consistent and still usable.
+  ChannelDelay<kMaxAudioChannels> next_clip_pdc_delay;
+  std::array<ChannelDelay<kMaxAudioChannels>, InstrumentRack::kMaxInstruments>
+      next_instrument_pdc_delays{};
+  std::array<uint32_t, InstrumentRack::kMaxInstruments> next_instrument_pdc_dest{};
+  bool configured = next_clip_pdc_delay.configure(prepared_channels_, next_total_q8);
+  size_t next_count = 0;
   instrument_rack_.for_each([&](uint32_t destination_id, midi::MidiInstrument* instrument) {
-    if (pdc_instrument_count_ >= instrument_pdc_delays_.size()) return;
-    const size_t slot = pdc_instrument_count_++;
-    instrument_pdc_dest_[slot] = destination_id;
-    instrument_pdc_delays_[slot].set_delay_q8(pdc_total_q8_ - instrument->latency_samples_q8());
+    if (!configured || next_count >= instrument_pdc_delays_.size()) return;
+    const size_t slot = next_count;
+    const int delay_q8 = next_total_q8 - instrument->latency_samples_q8();
+    if (!next_instrument_pdc_delays[slot].configure(prepared_channels_, delay_q8)) {
+      configured = false;
+      return;
+    }
+    next_instrument_pdc_dest[slot] = destination_id;
+    ++next_count;
   });
+  if (!configured) {
+    // Fail closed if any replacement allocation failed. configure(0, 0) only
+    // swaps empty vectors, so this reclamation path remains non-allocating even
+    // when the control-thread allocation failure is being deliberately tested.
+    clip_pdc_delay_.configure(0, 0);
+    for (ChannelDelay<kMaxAudioChannels>& delay : instrument_pdc_delays_) {
+      delay.configure(0, 0);
+    }
+    pdc_total_q8_ = 0;
+    pdc_instrument_count_ = 0;
+    instrument_pdc_dest_.fill(0);
+    update_reported_graph_latency();
+    return;
+  }
+  next_clip_pdc_delay.swap(clip_pdc_delay_);
+  for (size_t slot = 0; slot < instrument_pdc_delays_.size(); ++slot) {
+    next_instrument_pdc_delays[slot].swap(instrument_pdc_delays_[slot]);
+  }
+  instrument_pdc_dest_ = next_instrument_pdc_dest;
+  pdc_total_q8_ = next_total_q8;
+  pdc_instrument_count_ = next_count;
   // Surface the applied compensation as the engine's graph latency so transport
   // telemetry (audible_timeline_sample) reflects the real output delay.
   update_reported_graph_latency();

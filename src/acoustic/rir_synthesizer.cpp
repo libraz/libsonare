@@ -9,6 +9,7 @@
 #include "util/constants.h"
 #include "util/dsp_primitives.h"
 #include "util/numeric_validation.h"
+#include "util/resource_limits.h"
 
 namespace sonare::acoustic {
 
@@ -31,11 +32,6 @@ constexpr float kScatterMixingShift = 0.4f;
 // in scattering even when the mixing time is pinned or clamped to the direct
 // arrival.
 constexpr float kScatterLateBoost = 0.5f;
-
-// Safety ceiling for the auto-sized late tail. Consumes synthesize_late_tail's
-// own internal cap so the clamp telemetry below does not false-positive (or the
-// length estimate overflow) when a near-rigid room yields an unbounded RT60.
-constexpr double kLateTailCeiling = static_cast<double>(kMaxAutoSamples);
 
 // RMS over the half-open sample range [lo, hi), clamped to [0, n). Delegates to
 // the shared sonare::rms primitive over the clamped sub-range. Takes a raw
@@ -137,12 +133,14 @@ RirSynthResult synthesize_rir(const ShoeboxRoom& room, const SourceListener& pla
                                   "ism_order exceeded the safe maximum and was clamped"});
   }
 
-  // A max_seconds cap bounds every synthesized buffer. Compute it once here so
-  // the early image-source IR is sized to the cap up front instead of allocating
-  // to the farthest image arrival and discarding the excess after the fact.
-  const int cap = config.max_seconds > 0.0f
-                      ? std::max(1, static_cast<int>(std::ceil(config.max_seconds * sr)))
-                      : 0;  // 0 = no cap
+  // A max_seconds cap bounds every synthesized buffer. The shared acoustic
+  // working-set cap also applies when max_seconds is omitted, so the early,
+  // late, colouring, and final RIR buffers remain bounded together.
+  constexpr int kWorkingSetCap = static_cast<int>(resource::kMaxAcousticRirSamples);
+  const int requested_cap = config.max_seconds > 0.0f
+                                ? std::max(1, static_cast<int>(std::ceil(config.max_seconds * sr)))
+                                : kWorkingSetCap;
+  const int cap = std::min(requested_cap, kWorkingSetCap);
 
   // Early reflections (image-source) and the per-band reverberation time.
   const std::vector<ImageSource> images = shoebox_image_sources(room, placement, ism_order);
@@ -173,36 +171,18 @@ RirSynthResult synthesize_rir(const ShoeboxRoom& room, const SourceListener& pla
   const int early_natural_len =
       std::max(1, static_cast<int>(std::min(early_raw, static_cast<double>(kMaxAutoSamples))));
 
-  // Decide the cap up front so we can both avoid over-allocating the late tail
-  // and report when max_seconds actually truncates the natural tail. The natural
-  // tail length mirrors synthesize_late_tail's default headroom (2x the longest
-  // RT60); if that grows past the cap, we clamp and emit a Warning.
-  //
-  // synthesize_late_tail excludes bands at/above Nyquist from both its length
-  // estimate and its synthesis (a band never rendered cannot drive a real
-  // clamp). Mirror that same octave_center_hz(b) * sqrt(2) >= nyquist exclusion
-  // here so a low-absorption above-Nyquist band cannot make `longest` -- and the
-  // rir_length_clamped diagnostic below -- report a clamp that never happened.
-  const float nyquist = sr * 0.5f;
-  float longest = 0.0f;
-  for (size_t b = 0; b < rt.rt60_bands.size(); ++b) {
-    const float center = octave_center_hz(static_cast<int>(b));
-    if (center * sonare::constants::kSqrt2 >= nyquist) continue;
-    // Keep this diagnostic estimate aligned with synthesize_late_tail(), which
-    // caps each rendered RT60 at 60 seconds before deriving its storage size.
-    longest = std::max(longest, std::min(rt.rt60_bands[b], 60.0f));
-  }
-  // Mirror synthesize_late_tail's ceiling so the estimate cannot overflow int or
-  // claim a clamp that the late tail's own cap (not max_seconds) actually made.
-  const double natural_tail_d =
-      std::min(std::ceil(static_cast<double>(longest) * 2.0 * sr), kLateTailCeiling);
-  const int natural_len = std::max(early_natural_len, static_cast<int>(natural_tail_d));
+  // Keep clamp telemetry aligned with synthesize_late_tail() through the shared
+  // allocation-free resolver: above-Nyquist bands and the 60-second sizing
+  // policy are applied exactly once in the common helper.
+  LateReverbConfig natural_late_cfg;
+  const LateTailResolution late_resolution = resolve_late_tail(rt, sample_rate, natural_late_cfg);
+  const std::size_t natural_tail_samples = late_resolution.samples;
+  const std::size_t natural_len =
+      std::max(static_cast<std::size_t>(early_natural_len), natural_tail_samples);
 
   LateReverbConfig late_cfg;
   late_cfg.seed = config.seed;
-  if (cap > 0) {
-    late_cfg.max_samples = cap;  // avoid synthesizing tail past the cap
-  }
+  late_cfg.max_samples = cap;  // avoid synthesizing tail past the cap
   const Audio late_audio = synthesize_late_tail(rt, sample_rate, late_cfg);
 
   // Read the synthesized buffers in place: a full std::vector copy of each would
@@ -279,13 +259,20 @@ RirSynthResult synthesize_rir(const ShoeboxRoom& room, const SourceListener& pla
   scale *= 1.0f + kScatterLateBoost * mean_scattering;
 
   int length = std::max(early_n, late_n);
-  if (cap > 0) {
-    if (natural_len > cap) {
-      result.diagnostics.push_back({Diagnostic::Severity::Warning, "acoustic.rir_length_clamped",
-                                    "synthesized RIR length exceeded max_seconds and was clamped"});
-    }
-    length = std::min(length, cap);
+  const bool resource_clamped =
+      late_resolution.resource_clamped || early_natural_len > kWorkingSetCap;
+  const bool max_seconds_clamped =
+      config.max_seconds > 0.0f && requested_cap < kWorkingSetCap &&
+      (static_cast<std::size_t>(early_natural_len) > static_cast<std::size_t>(requested_cap) ||
+       natural_tail_samples > static_cast<std::size_t>(requested_cap));
+  if (natural_len > static_cast<std::size_t>(cap) || resource_clamped || max_seconds_clamped) {
+    const char* clamp_message =
+        max_seconds_clamped ? "synthesized RIR length exceeded max_seconds and was clamped"
+                            : "synthesized RIR length exceeded its resource limit and was clamped";
+    result.diagnostics.push_back(
+        {Diagnostic::Severity::Warning, "acoustic.rir_length_clamped", clamp_message});
   }
+  length = std::min(length, cap);
   if (length < 1) length = 1;
 
   // Two cases yield no usable late tail across the crossover: a fully-rigid room

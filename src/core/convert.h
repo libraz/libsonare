@@ -45,12 +45,13 @@ float midi_to_hz(float midi);
 
 /// @brief Converts Hz to note name.
 /// @param hz Frequency in Hz
-/// @return Note name (e.g., "A4", "C#5")
+/// @return Note name (e.g., "A4", "C#5"), or "?" for non-positive,
+///         non-finite, or unrepresentable frequencies.
 std::string hz_to_note(float hz);
 
 /// @brief Converts note name to Hz.
 /// @param note Note name (e.g., "A4", "C#5", "Db4")
-/// @return Frequency in Hz
+/// @return Frequency in Hz, or 0 for malformed or unrepresentable octaves.
 float note_to_hz(const std::string& note);
 
 /// @brief Converts frame index to time in seconds.
@@ -97,7 +98,8 @@ std::vector<int> frames_to_samples(const std::vector<int>& frames, int hop_lengt
 /// @param hop_length Hop length in samples
 /// @param n_fft FFT size. If > 0, n_fft/2 is subtracted before dividing by
 ///        hop_length (mirrors librosa).
-/// @return Frame index.
+/// @return Frame index. The result saturates to the int range; a non-positive
+///         @p hop_length returns 0.
 int samples_to_frames(int samples, int hop_length, int n_fft = 0);
 
 /// @brief Vector variant of samples_to_frames.
@@ -114,7 +116,9 @@ float bin_to_hz(int bin, int sr, int n_fft);
 /// @param hz Frequency in Hz
 /// @param sr Sample rate
 /// @param n_fft FFT size
-/// @return Bin index
+/// @return Bin index. NaN maps to 0; infinities and finite out-of-range
+///         values saturate to the corresponding int boundary.
+/// @throws SonareException if @p sr or @p n_fft is non-positive.
 int hz_to_bin(float hz, int sr, int n_fft);
 
 }  // namespace sonare

@@ -1,4 +1,5 @@
 #include "c_api/core_internal.h"
+#include "core/audio_io.h"
 
 SonareError sonare_audio_from_buffer(const float* data, size_t length, int sample_rate,
                                      SonareAudio** out) {
@@ -34,6 +35,21 @@ SonareError sonare_audio_from_file(const char* path, SonareAudio** out) {
 
   SONARE_C_TRY
   *out = new SonareAudio{Audio::from_file(path)};
+  return SONARE_OK;
+  SONARE_C_CATCH
+}
+
+SonareError sonare_audio_file_channel_count(const char* path, int* out_channels) {
+  SONARE_C_API_ENTRY;
+  if (out_channels != nullptr) *out_channels = 0;
+  if (path == nullptr || out_channels == nullptr) {
+    return SONARE_ERROR_INVALID_PARAMETER;
+  }
+
+  SONARE_C_TRY
+  const int channels = sonare::audio_channel_count(path);
+  if (channels <= 0) return SONARE_ERROR_INVALID_FORMAT;
+  *out_channels = channels;
   return SONARE_OK;
   SONARE_C_CATCH
 }

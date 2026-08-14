@@ -4,6 +4,8 @@
 #include <cstdint>
 #include <vector>
 
+#include "util/exception.h"
+
 namespace sonare {
 
 inline size_t reflect_index(int64_t index, size_t size) {
@@ -18,6 +20,10 @@ inline size_t reflect_index(int64_t index, size_t size) {
 }
 
 inline std::vector<float> reflect_center_pad(const float* data, size_t size, int pad) {
+  if (pad < 0) {
+    throw SonareException(ErrorCode::InvalidParameter,
+                          "reflect_center_pad: pad must be non-negative");
+  }
   std::vector<float> padded(size + 2 * static_cast<size_t>(pad), 0.0f);
   if (data == nullptr || size == 0) return padded;
   for (size_t i = 0; i < padded.size(); ++i) {

@@ -191,6 +191,36 @@
     ],
     "size": 24
   },
+  "SonareAutomationLaneDescEx": {
+    "align": 8,
+    "fields": [
+      {
+        "kind": "unsigned",
+        "name": "target_param_id",
+        "offset": 0,
+        "size": 4
+      },
+      {
+        "kind": "signed",
+        "name": "target_kind",
+        "offset": 4,
+        "size": 4
+      },
+      {
+        "kind": "pointer",
+        "name": "points",
+        "offset": 8,
+        "size": 8
+      },
+      {
+        "kind": "unsigned",
+        "name": "point_count",
+        "offset": 16,
+        "size": 8
+      }
+    ],
+    "size": 24
+  },
   "SonareAutomationPoint": {
     "align": 8,
     "fields": [
@@ -4024,6 +4054,24 @@
       }
     ],
     "size": 48
+  },
+  "SonareProjectAudioSourceMetadata": {
+    "align": 8,
+    "fields": [
+      {
+        "kind": "pointer",
+        "name": "content_hash",
+        "offset": 0,
+        "size": 8
+      },
+      {
+        "kind": "pointer",
+        "name": "external_stem_role",
+        "offset": 8,
+        "size": 8
+      }
+    ],
+    "size": 16
   },
   "SonareProjectBounceOptions": {
     "align": 8,

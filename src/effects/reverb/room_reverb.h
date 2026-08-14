@@ -33,7 +33,9 @@ struct RoomReverbConfig {
 /// The RIR is (re)synthesized in prepare() at the actual processing sample rate
 /// (the convolution runs 1:1 with the IR samples), so the reverberation time is
 /// correct on any host rate. process()/reset()/set_parameter() are inherited
-/// from ConvolutionReverb and stay allocation-free on the audio thread.
+/// from ConvolutionReverb and stay allocation-free on the audio thread. The
+/// constructor rejects invalid room dimensions or source/listener placement with
+/// ErrorCode::InvalidParameter.
 class RoomReverb : public ConvolutionReverb {
  public:
   explicit RoomReverb(RoomReverbConfig config = {});

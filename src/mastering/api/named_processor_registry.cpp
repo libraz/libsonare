@@ -214,10 +214,13 @@ InsertTiming insert_timing(const std::string& id) {
 }
 
 // A deliberately coarse host-facing indication of the per-sample algorithmic
-// work for realtime inserts. This is not a machine-specific benchmark: it lets
-// a host avoid treating a bounded, multi-tap Velvet reverb as equivalent to a
+// work for realtime inserts under the default `{}` configuration. This is a
+// qualitative policy tier, not a machine-specific numeric benchmark: it lets a
+// host avoid treating a bounded, multi-tap Velvet reverb as equivalent to a
 // lightweight zero-latency insert when assembling a live strip.
 const char* realtime_cost(const std::string& id) noexcept {
+  if (id == "saturation.tube") return "high";
+  if (id == "maximizer.truePeakLimiter") return "moderate";
   if (id == "effects.reverb.velvet") return "high";
   if (id == "effects.reverb.fdn" || id == "effects.reverb.convolution" ||
       id == "effects.acoustic.roomMorph") {

@@ -71,6 +71,15 @@ class ScopeTelemetryTap {
   void process(float* const* channels, int num_channels, int num_frames, int64_t render_frame,
                uint32_t target_id) noexcept;
 
+  /// Appends the pre-metronome master output for the current host block. The
+  /// first two planes are copied into the prepared n_fft-sized accumulator;
+  /// missing/null planes are zero-filled. The first fragment's render frame is
+  /// retained for the eventual master record. Allocation-free; audio-thread
+  /// only. If the accumulated range exceeds n_fft, only the master record is
+  /// dropped at end_block(); lane/bus records remain unaffected.
+  void append_master_pre_metronome(float* const* channels, int num_channels, int num_frames,
+                                   int64_t render_frame) noexcept;
+
   bool pop(ScopeTelemetryRecord& out) noexcept { return telemetry_.pop(out); }
   uint32_t dropped_count() const noexcept { return dropped_records_; }
 
@@ -91,6 +100,10 @@ class ScopeTelemetryTap {
   std::vector<float> window_;                  // Hann window, length n_fft_
   std::vector<float> fft_input_;               // windowed + zero-padded mono frame
   std::vector<std::complex<float>> spectrum_;  // n_fft_/2 + 1 bins
+  std::vector<float> master_accumulator_;      // [left n_fft][right n_fft]
+  size_t master_frames_ = 0;
+  int64_t master_render_frame_ = 0;
+  bool master_accumulator_overflowed_ = false;
   std::unique_ptr<FFT> fft_;
 
   rt::SpscQueue<ScopeTelemetryRecord> telemetry_{};

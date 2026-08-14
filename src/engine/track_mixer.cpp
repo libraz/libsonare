@@ -19,7 +19,7 @@ using sonare::constants::kFloorDb;
 std::unique_ptr<mixing::ChannelStrip> make_channel_strip_from_spec(const mixing::api::Strip& spec) {
   auto strip = std::make_unique<mixing::ChannelStrip>(
       mixing::ChannelStripConfig{spec.fader_db, spec.pan, to_pan_law(spec.pan_law), 5.0f,
-                                 mixing::EqPosition::PreFader, spec.input_trim_db});
+                                 mixing::EqPosition::PreFader, spec.input_trim_db, false});
   strip->set_vca_offset_db(spec.vca_offset_db);
   strip->set_width(spec.width);
   strip->set_muted(spec.muted);
@@ -326,6 +326,7 @@ void TrackMixerRuntime::prepare(double sample_rate, int max_block_size) {
     lane.gate.reset(1.0f);
     lane.solo = false;
     lane.mute = false;
+    lane.monitor_mode = TrackMonitorMode::kOff;
     if (lane.strip) {
       lane.strip->prepare(sample_rate_, max_block_size_);
     }
@@ -495,8 +496,8 @@ mixing::ChannelStrip* TrackMixerRuntime::ensure_owned_strip_for(uint32_t track_i
   if (owned_strips_.size() >= kMaxTrackLanes) {
     return nullptr;
   }
-  auto strip = std::make_unique<mixing::ChannelStrip>(
-      mixing::ChannelStripConfig{0.0f, 0.0f, mixing::PanLaw::Linear0dB, 5.0f});
+  auto strip = std::make_unique<mixing::ChannelStrip>(mixing::ChannelStripConfig{
+      0.0f, 0.0f, mixing::PanLaw::Linear0dB, 5.0f, mixing::EqPosition::PreFader, 0.0f, false});
   if (max_block_size_ > 0) {
     strip->prepare(sample_rate_, max_block_size_);
   }
@@ -538,6 +539,7 @@ void TrackMixerRuntime::prepare_lanes_from_snapshot(
     lane.gate.reset(1.0f);
     lane.solo = false;
     lane.mute = false;
+    lane.monitor_mode = TrackMonitorMode::kOff;
     lane.strip = nullptr;
     lane.surround_gain.fill(0.0f);
     lane.surround_primed = false;

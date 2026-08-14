@@ -45,10 +45,13 @@ void EqualizerProcessor::prepare(double sample_rate, int max_block_size) {
   right_iir_.prepare(sample_rate, max_block_size);
   mid_iir_.prepare(sample_rate, max_block_size);
   side_iir_.prepare(sample_rate, max_block_size);
-  left_channel_fir_.prepare(sample_rate, max_block_size);
-  right_channel_fir_.prepare(sample_rate, max_block_size);
-  mid_fir_.prepare(sample_rate, max_block_size);
-  side_fir_.prepare(sample_rate, max_block_size);
+  // Each linear-phase backend is fed one mono stream. Use the bounded prepare
+  // overload so EqualizerProcessor does not reserve the raw FIR's 64-channel
+  // realtime capacity four times for these inherently single-channel paths.
+  left_channel_fir_.prepare(sample_rate, max_block_size, 1);
+  right_channel_fir_.prepare(sample_rate, max_block_size, 1);
+  mid_fir_.prepare(sample_rate, max_block_size, 1);
+  side_fir_.prepare(sample_rate, max_block_size, 1);
   stereo_iir_.prepare_channels(config_.max_channels);
   left_iir_.prepare_channels(1);
   right_iir_.prepare_channels(1);

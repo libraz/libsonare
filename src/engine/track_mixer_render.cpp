@@ -240,7 +240,27 @@ void TrackMixerRuntime::process_lane_strip(size_t lane_index, int num_channels, 
     lane.strip->process_at(lane_channel_ptrs_.data(), num_channels, num_samples, timeline_sample);
   }
   lane_pdc_delays_[lane_index].process(lane_channel_ptrs_.data(), num_channels, num_samples);
+  // PFL is deliberately taken after the lane strip (and its PDC) but before
+  // the lane fader/gate/pan stage in apply_lane_to_mix(). It therefore remains
+  // audible when the lane is muted or solo-gated, matching the cue tap point.
+  add_lane_monitor_pfl(lane_index, num_channels, num_samples);
   snapshot_sidechain_key(lane_index, num_channels, num_samples);
+}
+
+void TrackMixerRuntime::add_lane_monitor_pfl(size_t lane_index, int num_channels,
+                                             int num_samples) noexcept {
+  if (monitor_bus_ == nullptr || lane_states_[lane_index].monitor_mode != TrackMonitorMode::kPfl) {
+    return;
+  }
+  const int channels = std::min({num_channels, kMaxLaneChannels, monitor_bus_channel_count_});
+  for (int ch = 0; ch < channels; ++ch) {
+    float* dst = monitor_bus_[static_cast<size_t>(ch)];
+    const float* src = lane_channel(lane_index, ch);
+    if (dst == nullptr || src == nullptr) continue;
+    for (int i = 0; i < num_samples; ++i) {
+      dst[i] += src[i];
+    }
+  }
 }
 
 void TrackMixerRuntime::mix_lane_sends(size_t lane_index, int num_channels, int num_samples,
@@ -392,6 +412,12 @@ void TrackMixerRuntime::apply_lane_to_mix(size_t lane_index, float* const* chann
     // law, so it keeps the historical Linear0dB balance.
     const mixing::PanLaw lane_pan_law =
         lane.strip ? lane.strip->pan_law() : mixing::PanLaw::Linear0dB;
+    // The AFL tap's eligibility is fixed for the whole block, so resolve the
+    // destination planes once rather than re-testing the mode and the bus
+    // pointers on every sample of the mix loop.
+    const bool afl = lane.monitor_mode == TrackMonitorMode::kAfl && monitor_bus_ != nullptr;
+    float* afl_left = afl && monitor_bus_channel_count_ >= 1 ? monitor_bus_[0] : nullptr;
+    float* afl_right = afl && monitor_bus_channel_count_ >= 2 ? monitor_bus_[1] : nullptr;
     for (int i = 0; i < num_samples; ++i) {
       const float fader = lane.fader_gain.process();
       const float gate = lane.gate.process();
@@ -410,9 +436,11 @@ void TrackMixerRuntime::apply_lane_to_mix(size_t lane_index, float* const* chann
       }
       lane_channel(lane_index, 0)[i] *= left_gain;
       if (dest_left) dest_left[i] += lane_channel(lane_index, 0)[i];
+      if (afl_left) afl_left[i] += lane_channel(lane_index, 0)[i];
       if (num_channels >= 2 && dest_right) {
         lane_channel(lane_index, 1)[i] *= right_gain;
         dest_right[i] += lane_channel(lane_index, 1)[i];
+        if (afl_right) afl_right[i] += lane_channel(lane_index, 1)[i];
       }
     }
   }
@@ -455,6 +483,9 @@ void TrackMixerRuntime::apply_lane_to_mix_surround(size_t lane_index, float* con
     lane.surround_primed = true;
   }
   const float inv_n = num_samples > 0 ? 1.0f / static_cast<float>(num_samples) : 0.0f;
+  // Block-invariant, so it is resolved once instead of per sample per plane.
+  const bool afl = lane.monitor_mode == TrackMonitorMode::kAfl && monitor_bus_ != nullptr;
+  const int afl_planes = afl ? std::min(planes, monitor_bus_channel_count_) : 0;
   for (int i = 0; i < num_samples; ++i) {
     const float fader = lane.fader_gain.process();
     const float gate = lane.gate.process();
@@ -477,7 +508,11 @@ void TrackMixerRuntime::apply_lane_to_mix_surround(size_t lane_index, float* con
     for (int p = 0; p < planes; ++p) {
       const float start = lane.surround_gain[static_cast<size_t>(p)];
       const float g = start + (target.gain[static_cast<size_t>(p)] - start) * t;
-      if (dest[p] != nullptr) dest[p][i] += g * src;
+      const float sample = g * src;
+      if (dest[p] != nullptr) dest[p][i] += sample;
+      if (p < afl_planes && monitor_bus_[p] != nullptr) {
+        monitor_bus_[p][i] += sample;
+      }
     }
   }
   for (int p = 0; p < planes; ++p) {

@@ -81,20 +81,11 @@ void MultibandSaturation::prepare(double sample_rate, int max_block_size, int ma
   max_block_size_ = max_block_size;
   max_working_channels_ = max_channels;
   prepared_ = true;
-  crossover_.prepare(sample_rate_, max_block_size_);
-  // Pre-size split scratch for the common (mono/stereo) case so the
-  // steady-state audio path is allocation-free; it is grown on demand only if
-  // a wider block arrives. This is deliberately capped at 2, NOT
-  // max_working_channels_: the realtime two-argument overload above forwards
-  // kRealtimePreparedChannels here, and sizing the crossover scratch to that
-  // would make every ordinary stereo process() call (the overwhelmingly
-  // common realtime case) see a channel-count mismatch against the scratch
-  // and reallocate on the FIRST audio-thread block -- worse than the
-  // over-allocation this fix is meant to remove. Forward the real bound to
-  // each band's saturation processor, though, so an offline mono/stereo
-  // caller does not pay for the per-band Tube/Tape oversampler scratch's
-  // realtime channel capacity.
-  crossover_.prepare_scratch(scratch_, std::min(max_working_channels_, 2), max_block_size_);
+  crossover_.prepare(sample_rate_, max_block_size_, max_working_channels_);
+  // Size the caller-owned split buffers to the effective bound. Crossover
+  // scratch accepts at least this many channels, so the process path can reject
+  // an oversized block rather than growing scratch on the audio thread.
+  crossover_.prepare_scratch(scratch_, max_working_channels_, max_block_size_);
   for (auto& processor : processors_) {
     processor->prepare(sample_rate_, max_block_size_, max_working_channels_);
   }
@@ -104,10 +95,22 @@ void MultibandSaturation::prepare(double sample_rate, int max_block_size, int ma
 void MultibandSaturation::process(float* const* channels, int num_channels, int num_samples) {
   sonare::rt::ScopedNoDenormals guard;
   ensure_prepared(prepared_, "MultibandSaturation");
-  if (!validate_process_buffers(channels, num_channels, num_samples)) {
+  if (!validate_block_size(num_channels, num_samples)) {
     return;
   }
+  if (num_channels > max_working_channels_) {
+    throw SonareException(ErrorCode::InvalidParameter,
+                          "num_channels exceeds prepared MultibandSaturation capacity");
+  }
+  if (num_samples > max_block_size_) {
+    throw SonareException(ErrorCode::InvalidParameter,
+                          "num_samples exceeds prepared MultibandSaturation block size");
+  }
+  validate_channel_buffers(channels, num_channels);
 
+  // Valid prepared blocks reuse the exact bound-sized scratch without
+  // allocation; oversized blocks fail closed above rather than growing scratch
+  // on the audio thread.
   crossover_.ensure_scratch(scratch_, num_channels, num_samples);
   crossover_.split_into(channels, num_channels, num_samples, scratch_);
   const int num_bands = scratch_.num_bands();
@@ -160,8 +163,7 @@ void MultibandSaturation::set_config(const MultibandSaturationConfig& config) {
   if (prepared_) {
     if (crossover_changed) {
       crossover_.set_config(config_.crossover);
-      // Capped the same way as prepare() above -- see the comment there.
-      crossover_.prepare_scratch(scratch_, std::min(max_working_channels_, 2), max_block_size_);
+      crossover_.prepare_scratch(scratch_, max_working_channels_, max_block_size_);
     }
     for (auto& processor : processors_) {
       processor->prepare(sample_rate_, max_block_size_, max_working_channels_);

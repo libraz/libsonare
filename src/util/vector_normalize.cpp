@@ -53,8 +53,10 @@ std::vector<float> normalize(const float* x, std::size_t n, NormType norm, float
     throw SonareException(ErrorCode::InvalidParameter,
                           "normalize: null input with non-zero length");
   }
+  // A null pointer with zero length is a valid empty transform, but forming
+  // the iterator pair [nullptr, nullptr) is not a defined C++ range.
+  if (n == 0) return {};
   std::vector<float> out(x, x + n);
-  if (n == 0) return out;
   const float norm_val = compute_norm(x, n, norm);
   const float effective_thr = std::max(threshold, constants::kEpsilon);
   if (norm_val < effective_thr) {
@@ -81,8 +83,10 @@ std::vector<float> normalize_matrix(const float* x, int rows, int cols, int axis
   if (axis != 0 && axis != 1) {
     throw SonareException(ErrorCode::InvalidParameter, "normalize_matrix: axis must be 0 or 1");
   }
+  // See normalize(): do not construct an iterator range from a null pointer
+  // when the matrix has no elements.
+  if (total == 0) return {};
   std::vector<float> out(x, x + total);
-  if (total == 0) return out;
   const float effective_thr = std::max(threshold, constants::kEpsilon);
 
   if (axis == 1) {

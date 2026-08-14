@@ -18,6 +18,13 @@ SonareError sonare_analyze_bpm(const float* samples, size_t length, int sample_r
                                int max_candidates, SonareBpmAnalysisResult* out);
 SonareError sonare_analyze_impulse_response(const float* samples, size_t length, int sample_rate,
                                             int n_octave_bands, SonareAcousticResult* out);
+/// @brief Analyzes an impulse response with an explicit decay-fit range.
+/// @details @p min_decay_db must be finite and positive.  The legacy
+///          sonare_analyze_impulse_response entry point delegates here with
+///          the library default of 30 dB.
+SonareError sonare_analyze_impulse_response_ex(const float* samples, size_t length, int sample_rate,
+                                               int n_octave_bands, float min_decay_db,
+                                               SonareAcousticResult* out);
 SonareError sonare_detect_acoustic(const float* samples, size_t length, int sample_rate,
                                    int n_octave_bands, int n_third_octave_subbands,
                                    float min_decay_db, float noise_floor_margin_db,
@@ -741,6 +748,13 @@ SonareError sonare_nnls_chroma_ex(const float* samples, size_t length, int sr,
                                   int enable_stft_blend, float stft_blend_weight,
                                   int stft_blend_n_fft, float** out, size_t* out_length,
                                   int* out_n_frames);
+/// @brief NNLS chroma with an explicit CQT hop length.
+/// @details The legacy @c sonare_nnls_chroma_ex entry point delegates here
+///          with a 512-sample hop.
+SonareError sonare_nnls_chroma_ex2(const float* samples, size_t length, int sr,
+                                   int enable_stft_blend, float stft_blend_weight,
+                                   int stft_blend_n_fft, int hop_length, float** out,
+                                   size_t* out_length, int* out_n_frames);
 
 /// @brief Integrated/momentary/short-term LUFS and loudness range (offline meter).
 SonareError sonare_lufs(const float* samples, size_t length, int sr, SonareLufsResult* out);

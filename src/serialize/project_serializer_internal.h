@@ -144,8 +144,8 @@ Value scene_to_value(const mixing::api::Scene& scene);
 
 transport::TempoSegment tempo_segment_from_json(const Value& v);
 transport::TimeSignatureSegment time_signature_from_json(const Value& v);
-automation::AutomationLane automation_lane_from_json(const Value& v);
-arrangement::Track track_from_json(const Value& v);
+automation::AutomationLane automation_lane_from_json(const Value& v, uint32_t schema_version);
+arrangement::Track track_from_json(const Value& v, uint32_t schema_version);
 
 // ===========================================================================
 // Edit-API invariants on the load path

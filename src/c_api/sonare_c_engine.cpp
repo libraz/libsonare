@@ -587,6 +587,29 @@ SonareError sonare_engine_set_solo_mute(SonareRealtimeEngine* engine, uint32_t l
 #endif
 }
 
+SonareError sonare_engine_set_track_monitor_mode(SonareRealtimeEngine* engine, uint32_t lane_index,
+                                                 SonareEngineTrackMonitorMode mode,
+                                                 int64_t render_frame) {
+  SONARE_C_API_ENTRY;
+  if (!engine || mode < SONARE_ENGINE_TRACK_MONITOR_MODE_OFF ||
+      mode > SONARE_ENGINE_TRACK_MONITOR_MODE_AFL) {
+    return SONARE_ERROR_INVALID_PARAMETER;
+  }
+#if !defined(SONARE_WITH_MIXING)
+  (void)lane_index;
+  (void)mode;
+  (void)render_frame;
+  return SONARE_ERROR_NOT_SUPPORTED;
+#else
+  rt::Command command{};
+  command.type = rt::CommandType::kSetTrackMonitorMode;
+  command.target_id = lane_index;
+  command.sample_time = render_frame;
+  command.arg.i = static_cast<int64_t>(mode);
+  return engine->engine.push_command(command) ? SONARE_OK : SONARE_ERROR_OUT_OF_MEMORY;
+#endif
+}
+
 SonareError sonare_engine_get_transport_state(SonareRealtimeEngine* engine,
                                               SonareTransportState* out) {
   SONARE_C_API_ENTRY;

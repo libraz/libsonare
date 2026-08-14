@@ -26,31 +26,31 @@ inline float smooth_attack_release(float& state, float target, float attack_alph
 
 }  // namespace
 
-float RealtimeVoiceChanger::process_input_stage(ChannelState& state, float input) noexcept {
-  // Coefficients change at a fixed 32-sample cadence from the per-sample
-  // smoothers. This is short enough to avoid block-rate zippering while
-  // keeping the RBJ trigonometry out of the hot path for every sample.
-  constexpr int kFilterUpdateInterval = 32;
+float RealtimeVoiceChanger::process_input_stage(ChannelState& state, float input,
+                                                bool control_update) noexcept {
+  // Coefficients and derived detector controls change at an absolute
+  // 32-sample cadence. The parameter smoothers below still advance every
+  // sample, so a block boundary cannot restart or skip a transition.
   constexpr float kFilterEpsilon = 1.0e-4f;
   const float highpass_hz = state.eq_highpass_hz.process();
-  const float body_db = state.eq_body_db.process();
-  const float presence_db = state.eq_presence_db.process();
-  const float air_db = state.eq_air_db.process();
-  const float deess_frequency_hz = state.deess_frequency_hz.process();
-  if (--state.filter_update_countdown <= 0) {
-    if (std::abs(highpass_hz - state.filter_highpass_hz) > kFilterEpsilon ||
-        std::abs(body_db - state.filter_body_db) > kFilterEpsilon ||
-        std::abs(presence_db - state.filter_presence_db) > kFilterEpsilon ||
-        std::abs(air_db - state.filter_air_db) > kFilterEpsilon ||
-        std::abs(deess_frequency_hz - state.filter_deess_frequency_hz) > kFilterEpsilon) {
+  state.gate_threshold_db.process();
+  state.gate_attack_ms.process();
+  state.gate_release_ms.process();
+  state.gate_range_db.process();
+  if (control_update) {
+    if (std::abs(highpass_hz - state.filter_highpass_hz) > kFilterEpsilon) {
       state.filter_highpass_hz = highpass_hz;
-      state.filter_body_db = body_db;
-      state.filter_presence_db = presence_db;
-      state.filter_air_db = air_db;
-      state.filter_deess_frequency_hz = deess_frequency_hz;
-      update_channel_filters(state);
+      update_input_filter(state);
     }
-    state.filter_update_countdown = kFilterUpdateInterval;
+
+    // Cache the gate's expensive dB-derived controls. The detector and gate
+    // gain continue to run at the audio sample rate below.
+    state.gate_threshold_linear = db_to_gain(state.gate_threshold_db.current());
+    state.gate_range_linear = db_to_gain(-state.gate_range_db.current());
+    state.gate_attack_alpha =
+        rt::one_pole_alpha_from_time_ms(state.gate_attack_ms.current(), sample_rate_);
+    state.gate_release_alpha =
+        rt::one_pole_alpha_from_time_ms(state.gate_release_ms.current(), sample_rate_);
   }
 
   // Apply input gain then a 2nd-order HPF. The HPF (highpass_hz >= 20) already
@@ -66,21 +66,38 @@ float RealtimeVoiceChanger::process_input_stage(ChannelState& state, float input
   //      the zipper noise that a hard threshold-cross produces.
   const float env_in = std::abs(x);
   state.gate_env += fast_det_alpha_ * (env_in - state.gate_env);
-  const float gate_threshold_db = state.gate_threshold_db.process();
-  const float gate_range_db = state.gate_range_db.process();
-  const float gate_attack_ms = state.gate_attack_ms.process();
-  const float gate_release_ms = state.gate_release_ms.process();
   const float gate_target =
-      amp_to_db(state.gate_env) < gate_threshold_db ? db_to_gain(-gate_range_db) : 1.0f;
-  smooth_attack_release(state.gate_gain, gate_target,
-                        rt::one_pole_alpha_from_time_ms(gate_attack_ms, sample_rate_),
-                        rt::one_pole_alpha_from_time_ms(gate_release_ms, sample_rate_),
-                        /*attack_when_decreasing=*/false);
+      state.gate_env < state.gate_threshold_linear ? state.gate_range_linear : 1.0f;
+  smooth_attack_release(state.gate_gain, gate_target, state.gate_attack_alpha,
+                        state.gate_release_alpha, /*attack_when_decreasing=*/false);
   x *= state.gate_gain;
   return x;
 }
 
-float RealtimeVoiceChanger::process_output_stage(ChannelState& state, float input) noexcept {
+float RealtimeVoiceChanger::process_output_stage(ChannelState& state, float input,
+                                                 bool control_update) noexcept {
+  // These controls are consumed by this stage, so advance their smoothers
+  // immediately before the first sample that uses them. Keeping this work out
+  // of process_input_stage prevents a large caller block from making its tail
+  // coefficients affect the block's leading output samples.
+  constexpr float kFilterEpsilon = 1.0e-4f;
+  const float body_db = state.eq_body_db.process();
+  const float presence_db = state.eq_presence_db.process();
+  const float air_db = state.eq_air_db.process();
+  const float deess_frequency_hz = state.deess_frequency_hz.process();
+  if (control_update) {
+    if (std::abs(body_db - state.filter_body_db) > kFilterEpsilon ||
+        std::abs(presence_db - state.filter_presence_db) > kFilterEpsilon ||
+        std::abs(air_db - state.filter_air_db) > kFilterEpsilon ||
+        std::abs(deess_frequency_hz - state.filter_deess_frequency_hz) > kFilterEpsilon) {
+      state.filter_body_db = body_db;
+      state.filter_presence_db = presence_db;
+      state.filter_air_db = air_db;
+      state.filter_deess_frequency_hz = deess_frequency_hz;
+      update_output_filters(state);
+    }
+  }
+
   float x = input;
   x = state.body.process(x);
   x = state.presence.process(x);
@@ -97,6 +114,16 @@ float RealtimeVoiceChanger::process_output_stage(ChannelState& state, float inpu
   const float comp_threshold_db = state.comp_threshold_db.process();
   const float comp_ratio = state.comp_ratio.process();
   const float comp_makeup_db = state.comp_makeup_db.process();
+  const float comp_attack_ms = state.comp_attack_ms.process();
+  const float comp_release_ms = state.comp_release_ms.process();
+  if (control_update) {
+    state.comp_attack_alpha = rt::one_pole_alpha_from_time_ms(comp_attack_ms, sample_rate_);
+    state.comp_release_alpha = rt::one_pole_alpha_from_time_ms(comp_release_ms, sample_rate_);
+  }
+  // The envelope changes at the audio rate. Keep its gain target on that same
+  // path so a static configuration remains numerically identical to the
+  // established compressor recurrence; only config-derived A/R transforms are
+  // refreshed at the bounded control cadence above.
   const float over = amp_to_db(state.comp_env) - comp_threshold_db;
   float comp_target = 1.0f;
   if (over > 0.0f) {
@@ -105,11 +132,8 @@ float RealtimeVoiceChanger::process_output_stage(ChannelState& state, float inpu
   } else {
     comp_target = db_to_gain(comp_makeup_db);
   }
-  smooth_attack_release(
-      state.comp_gain, comp_target,
-      rt::one_pole_alpha_from_time_ms(state.comp_attack_ms.process(), sample_rate_),
-      rt::one_pole_alpha_from_time_ms(state.comp_release_ms.process(), sample_rate_),
-      /*attack_when_decreasing=*/true);
+  smooth_attack_release(state.comp_gain, comp_target, state.comp_attack_alpha,
+                        state.comp_release_alpha, /*attack_when_decreasing=*/true);
   x *= state.comp_gain;
 
   // De-esser: ratio-based broadband reduction triggered by the sibilance
@@ -121,6 +145,9 @@ float RealtimeVoiceChanger::process_output_stage(ChannelState& state, float inpu
   const float deess_threshold_db = state.deess_threshold_db.process();
   const float deess_ratio = state.deess_ratio.process();
   const float deess_range_db = state.deess_range_db.process();
+  // As for compression, detector output is signal-dependent and must not be
+  // held between control ticks. The gain smoother coefficient is already
+  // precomputed once in prepare(), matching the original sample recurrence.
   const float ess_over = amp_to_db(state.deess_env) - deess_threshold_db;
   float deess_target = 1.0f;
   if (ess_over > 0.0f) {
@@ -141,14 +168,19 @@ float RealtimeVoiceChanger::process_output_stage(ChannelState& state, float inpu
   // bursts taper across ~5 samples instead of a single-sample step (audibly
   // clicks); the final clamp absorbs the residual peak over that taper.
   x *= state.output_gain.process();
-  const float ceiling = db_to_gain(state.limiter_ceiling_db.process());
+  const float limiter_ceiling_db = state.limiter_ceiling_db.process();
+  const float limiter_release_ms = state.limiter_release_ms.process();
+  if (control_update) {
+    state.limiter_ceiling_linear = db_to_gain(limiter_ceiling_db);
+    state.limiter_release_alpha = rt::one_pole_alpha_from_time_ms(limiter_release_ms, sample_rate_);
+  }
+  const float ceiling = state.limiter_ceiling_linear;
   const float abs_x = std::abs(x);
   const float limit_target =
       abs_x > ceiling ? ceiling / std::max(abs_x, sonare::constants::kAmpEpsilon) : 1.0f;
-  smooth_attack_release(
-      state.limiter_gain, limit_target, limiter_attack_,
-      rt::one_pole_alpha_from_time_ms(state.limiter_release_ms.process(), sample_rate_),
-      /*attack_when_decreasing=*/true);
+  smooth_attack_release(state.limiter_gain, limit_target, limiter_attack_,
+                        state.limiter_release_alpha,
+                        /*attack_when_decreasing=*/true);
   return std::clamp(x * state.limiter_gain, -ceiling, ceiling);
 }
 
@@ -210,6 +242,7 @@ void RealtimeVoiceChanger::process_block(float* const* channels, int num_channel
     // buffer untouched / undefined.
     if (channels[ch] == nullptr) continue;
     auto& channel = channels_[static_cast<std::size_t>(ch)];
+    const std::uint64_t block_start = channel.control_cadence.sample_position();
     for (int i = 0; i < num_samples; ++i) {
       // Sanitize non-finite (NaN/Inf) input to silence before it can enter any
       // IIR state. A single upstream NaN would otherwise poison the HPF/EQ
@@ -222,7 +255,8 @@ void RealtimeVoiceChanger::process_block(float* const* channels, int num_channel
       const float raw = channels[ch][i];
       const float clean = std::isfinite(raw) ? raw : 0.0f;
       channels[ch][i] = clean;
-      scratch_[i] = process_input_stage(channel, clean);
+      const bool control_update = channel.control_cadence.advance();
+      scratch_[i] = process_input_stage(channel, clean, control_update);
     }
     channel.retune.process_block(scratch_.data(), scratch_.data(), num_samples);
     channel.formant.process_block(scratch_.data(), scratch_.data(), num_samples);
@@ -233,7 +267,9 @@ void RealtimeVoiceChanger::process_block(float* const* channels, int num_channel
         channel.dry_delay[channel.dry_delay_pos] = channels[ch][i];
         channel.dry_delay_pos = (channel.dry_delay_pos + 1) % channel.dry_delay.size();
       }
-      const float wet = process_output_stage(channel, scratch_[i]);
+      const bool control_update =
+          ControlCadence::is_due(block_start + static_cast<std::uint64_t>(i));
+      const float wet = process_output_stage(channel, scratch_[i], control_update);
       const float wet_mix = channel.wet_mix.process();
       channels[ch][i] = delayed_dry * (1.0f - wet_mix) + wet * wet_mix;
     }

@@ -75,8 +75,17 @@ transport::TimeSignatureSegment time_signature_from_json(const Value& v) {
   return s;
 }
 
-automation::AutomationLane automation_lane_from_json(const Value& v) {
-  automation::AutomationLane lane(uint_or(v, "target_param_id", 0));
+automation::AutomationLane automation_lane_from_json(const Value& v, uint32_t schema_version) {
+  automation::AutomationTargetKind target_kind = automation::AutomationTargetKind::kOpaque;
+  if (schema_version >= 2u) {
+    const uint32_t ordinal = uint_or(v, "target_kind", 0);
+    if (ordinal > static_cast<uint32_t>(automation::AutomationTargetKind::kTrackPan)) {
+      throw SonareException(ErrorCode::InvalidFormat,
+                            "automation target kind ordinal is out of range");
+    }
+    target_kind = static_cast<automation::AutomationTargetKind>(ordinal);
+  }
+  automation::AutomationLane lane(uint_or(v, "target_param_id", 0), target_kind);
   std::vector<automation::Breakpoint> points;
   if (const auto* arr = array_at(v, "points")) {
     for (const auto& pv : *arr) {
@@ -92,7 +101,7 @@ automation::AutomationLane automation_lane_from_json(const Value& v) {
   return lane;
 }
 
-arrangement::Track track_from_json(const Value& v) {
+arrangement::Track track_from_json(const Value& v, uint32_t schema_version) {
   arrangement::Track t;
   t.id = uint_or(v, "id", 0);
   t.name = str_or(v, "name", "");
@@ -108,7 +117,9 @@ arrangement::Track track_from_json(const Value& v) {
     // Decoded verbatim; the one-lane-per-target invariant is enforced for the
     // whole model by enforce_edit_api_invariants().
     for (const auto& lv : *arr) {
-      if (lv.is_object()) t.automation_lanes.push_back(automation_lane_from_json(lv));
+      if (lv.is_object()) {
+        t.automation_lanes.push_back(automation_lane_from_json(lv, schema_version));
+      }
     }
   }
   return t;
@@ -358,9 +369,11 @@ std::optional<InvariantViolation> enforce_edit_api_invariants(arrangement::Proje
     }
   }
 
-  // ---- One automation lane per (track, target) -----------------------------
+  // ---- Automation lane identity / target invariants ------------------------
   // AddAutomationLane refuses a second lane for a target, and remove/edit
   // address a lane by its target id alone, so a duplicate is unaddressable.
+  // Typed mixer targets have one slot per kind on a track; opaque lanes do not
+  // participate in that typed-target uniqueness rule.
   std::vector<arrangement::TrackId> track_ids;
   track_ids.reserve(project->tracks().size());
   for (const arrangement::Track& track : project->tracks()) track_ids.push_back(track.id);
@@ -368,15 +381,38 @@ std::optional<InvariantViolation> enforce_edit_api_invariants(arrangement::Proje
     arrangement::Track* track = project->find_track_mutable(track_id);
     if (track == nullptr) continue;
     std::vector<automation::AutomationLane> kept;
+    std::vector<size_t> kept_order;
     kept.reserve(track->automation_lanes.size());
-    for (automation::AutomationLane& lane : track->automation_lanes) {
+    kept_order.reserve(track->automation_lanes.size());
+    for (size_t source_index = 0; source_index < track->automation_lanes.size(); ++source_index) {
+      automation::AutomationLane& lane = track->automation_lanes[source_index];
       const uint32_t target = lane.target_param_id();
+      if (target == 0) {
+        // Target id 0 predates the non-zero requirement, so documents carrying
+        // such a lane exist. It is unaddressable now — edit and remove look a
+        // lane up by target id, and the compiler rejects it — so the lane is
+        // dropped rather than failing the whole document, which would strand
+        // every other edit the project holds.
+        if (diagnostics != nullptr) {
+          diagnostics->warn("dropped_automation_lane_target_id",
+                            "track " + std::to_string(track_id) +
+                                " carried an automation lane with target id 0; lane dropped");
+        }
+        continue;
+      }
+      if (!automation::valid_automation_target_kind(lane.target_kind())) {
+        return InvariantViolation{"invalid_automation_target_kind",
+                                  "track " + std::to_string(track_id) +
+                                      " contains an automation lane with an invalid target kind"};
+      }
       const auto existing = std::find_if(kept.begin(), kept.end(),
                                          [target](const automation::AutomationLane& candidate) {
                                            return candidate.target_param_id() == target;
                                          });
       if (existing != kept.end()) {
+        const size_t existing_index = static_cast<size_t>(std::distance(kept.begin(), existing));
         *existing = std::move(lane);  // Last writer wins, in the first slot.
+        kept_order[existing_index] = source_index;
         if (diagnostics != nullptr) {
           diagnostics->warn("duplicate_automation_lane",
                             "track " + std::to_string(track_id) +
@@ -386,8 +422,67 @@ std::optional<InvariantViolation> enforce_edit_api_invariants(arrangement::Proje
         continue;
       }
       kept.push_back(std::move(lane));
+      kept_order.push_back(source_index);
     }
-    track->automation_lanes = std::move(kept);
+
+    std::vector<automation::AutomationLane> normalized;
+    std::vector<size_t> normalized_order;
+    normalized.reserve(kept.size());
+    normalized_order.reserve(kept.size());
+    for (size_t kept_index = 0; kept_index < kept.size(); ++kept_index) {
+      automation::AutomationLane& lane = kept[kept_index];
+      if (lane.target_kind() == automation::AutomationTargetKind::kOpaque) {
+        normalized.push_back(std::move(lane));
+        normalized_order.push_back(kept_order[kept_index]);
+        continue;
+      }
+      const auto existing = std::find_if(normalized.begin(), normalized.end(),
+                                         [&lane](const automation::AutomationLane& candidate) {
+                                           return candidate.target_kind() == lane.target_kind();
+                                         });
+      if (existing != normalized.end()) {
+        const size_t existing_index =
+            static_cast<size_t>(std::distance(normalized.begin(), existing));
+        if (kept_order[kept_index] > normalized_order[existing_index]) {
+          *existing = std::move(lane);  // Last writer wins, in the first slot.
+          normalized_order[existing_index] = kept_order[kept_index];
+        }
+        if (diagnostics != nullptr) {
+          diagnostics->warn("duplicate_automation_target_kind",
+                            "track " + std::to_string(track_id) +
+                                " carries more than one automation lane for target kind " +
+                                std::to_string(static_cast<uint32_t>(existing->target_kind())) +
+                                "; kept the last one");
+        }
+        continue;
+      }
+      normalized.push_back(std::move(lane));
+      normalized_order.push_back(kept_order[kept_index]);
+    }
+    track->automation_lanes = std::move(normalized);
+  }
+
+  // ---- Assist sidecar field invariants -------------------------------------
+  // SetAssistSidecar requires a namespaced, C-string-safe module id and finite
+  // non-negative PPQ bounds. The model deliberately permits end <= start: the
+  // edit API treats that pair as an unset region, so validation must not turn
+  // that documented representation into a rejection. Validate every entry
+  // before deduplicating so malformed shadowed entries cannot disappear behind
+  // a last-writer-wins survivor.
+  for (const arrangement::AssistSidecar& sidecar : project->assist_sidecars()) {
+    if (sidecar.module_id.empty() || sidecar.module_id.find('\0') != std::string::npos) {
+      return InvariantViolation{
+          "invalid_assist_sidecar_module_id",
+          "assist sidecar module_id must be non-empty and must not contain an embedded NUL"};
+    }
+    if (!valid_position_ppq(sidecar.region_start_ppq)) {
+      return InvariantViolation{"invalid_assist_sidecar_region_start_ppq",
+                                "assist sidecar region_start_ppq must be finite and non-negative"};
+    }
+    if (!valid_position_ppq(sidecar.region_end_ppq)) {
+      return InvariantViolation{"invalid_assist_sidecar_region_end_ppq",
+                                "assist sidecar region_end_ppq must be finite and non-negative"};
+    }
   }
 
   // ---- One assist sidecar per identity -------------------------------------

@@ -146,14 +146,19 @@ class RealtimeEngine : private ClipPageRequestSink {
                size_t telemetry_capacity = 1024, int max_channels = 64);
   double sample_rate() const noexcept { return sample_rate_; }
   int prepared_channels() const noexcept { return prepared_channels_; }
-  /// Bytes in the channel-planar scratch buffers allocated by prepare(). This
-  /// intentionally excludes fixed engine state and queue capacity, so hosts can
-  /// account for the memory saved by declaring their actual channel count.
+  /// Bytes in the channel-planar scratch buffers and active PDC delay storage
+  /// allocated by prepare()/instrument binding. This intentionally excludes
+  /// fixed engine state and queue capacity, so hosts can account for the memory
+  /// saved by declaring their actual channel count.
   size_t prepared_scratch_bytes() const noexcept {
     size_t samples = input_capture_storage_.size();
 #if defined(SONARE_WITH_ARRANGEMENT)
     samples += midi_instrument_storage_.size();
     samples += clip_scratch_storage_.size();
+    samples += clip_pdc_delay_.reserved_samples();
+    for (size_t i = 0; i < pdc_instrument_count_; ++i) {
+      samples += instrument_pdc_delays_[i].reserved_samples();
+    }
 #endif
 #if defined(SONARE_WITH_MIXING)
     samples += monitor_bus_storage_.size();
@@ -188,8 +193,9 @@ class RealtimeEngine : private ClipPageRequestSink {
   // minimum render-frame gap between published snapshots per block (0 disables
   // capture). @p band_count (1..ScopeTelemetryRecord::kMaxBands) is the FFT band
   // resolution; changing it re-prepares the tap, so call from the control thread
-  // while process() is not running. Returns the band count actually applied.
-  uint32_t configure_scope_telemetry(int interval_frames, uint32_t band_count) noexcept;
+  // while process() is not running. Returns the clamped band count; before
+  // prepare(), that value is applied when the tap is prepared.
+  uint32_t configure_scope_telemetry(int interval_frames, uint32_t band_count);
   uint32_t scope_band_count() const noexcept { return scope_tap_.band_count(); }
 #endif
   transport::TransportState transport_state_control() const noexcept;

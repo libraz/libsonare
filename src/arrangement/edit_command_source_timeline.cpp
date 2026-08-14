@@ -9,6 +9,19 @@
 
 namespace sonare::arrangement {
 
+namespace {
+
+bool automation_lane_kind_conflicts(const Track& track, const automation::AutomationLane& candidate,
+                                    const automation::AutomationLane* replaced = nullptr) {
+  if (candidate.target_kind() == automation::AutomationTargetKind::kOpaque) return false;
+  return std::any_of(track.automation_lanes.begin(), track.automation_lanes.end(),
+                     [&candidate, replaced](const automation::AutomationLane& lane) {
+                       return &lane != replaced && lane.target_kind() == candidate.target_kind();
+                     });
+}
+
+}  // namespace
+
 // ===========================================================================
 // Source commands
 // ===========================================================================
@@ -206,10 +219,12 @@ bool AddAutomationLane::apply(Project& project, MidiContentStore& /*store*/) {
     return false;
   }
   const uint32_t target = lane_.target_param_id();
+  if (target == 0 || !automation::valid_automation_target_kind(lane_.target_kind())) return false;
   const auto existing =
       std::find_if(t->automation_lanes.begin(), t->automation_lanes.end(),
                    [target](const auto& lane) { return lane.target_param_id() == target; });
   if (existing != t->automation_lanes.end()) return false;
+  if (automation_lane_kind_conflicts(*t, lane_)) return false;
   t->automation_lanes.push_back(lane_);
   return true;
 }
@@ -221,7 +236,7 @@ EditCommandPtr AddAutomationLane::invert(const Project& /*before*/,
 
 bool RemoveAutomationLane::apply(Project& project, MidiContentStore& /*store*/) {
   Track* t = project.find_track_mutable(track_id_);
-  if (t == nullptr) {
+  if (t == nullptr || target_param_id_ == 0) {
     return false;
   }
   const auto found =
@@ -249,13 +264,15 @@ EditCommandPtr RemoveAutomationLane::invert(const Project& before,
 
 bool EditAutomationLane::apply(Project& project, MidiContentStore& /*store*/) {
   Track* t = project.find_track_mutable(track_id_);
-  if (t == nullptr || lane_.target_param_id() != target_param_id_) {
+  if (t == nullptr || target_param_id_ == 0 || lane_.target_param_id() != target_param_id_ ||
+      !automation::valid_automation_target_kind(lane_.target_kind())) {
     return false;
   }
   const auto found =
       std::find_if(t->automation_lanes.begin(), t->automation_lanes.end(),
                    [this](const auto& item) { return item.target_param_id() == target_param_id_; });
   if (found == t->automation_lanes.end()) return false;
+  if (automation_lane_kind_conflicts(*t, lane_, &*found)) return false;
   *found = lane_;
   return true;
 }

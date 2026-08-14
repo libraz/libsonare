@@ -199,6 +199,16 @@ typedef enum {
   SONARE_CURVE_SCURVE = 3,
 } SonareProjectAutomationCurve;
 
+/// @brief Persistent target classification for an automation lane.
+///
+/// Opaque is the legacy host-defined target. Track fader and track pan are
+/// typed mixer targets; no other ordinal is currently valid.
+typedef enum {
+  SONARE_AUTOMATION_TARGET_OPAQUE = 0,
+  SONARE_AUTOMATION_TARGET_TRACK_FADER_DB = 1,
+  SONARE_AUTOMATION_TARGET_TRACK_PAN = 2,
+} SonareAutomationTargetKind;
+
 /// @brief One clip fade region for @ref sonare_project_set_clip_fade.
 ///        @p length_ppq must be finite and >= 0 (0 = no fade). @p curve is a
 ///        @ref SonareProjectFadeCurve ordinal.
@@ -260,7 +270,8 @@ static_assert(sizeof(SonareProjectClipCompSegment) == 3u * sizeof(double),
 ///        @ref sonare_project_edit_automation_lane.
 ///
 /// @p target_param_id identifies the parameter the lane drives (host-defined,
-/// e.g. a mixer-strip volume parameter id). @p points is an array of
+/// e.g. a mixer-strip volume parameter id) and must be non-zero; zero is
+/// reserved as the invalid / unset id. @p points is an array of
 /// @p point_count breakpoints (the shared @ref SonareAutomationPoint POD whose
 /// @c curve_to_next uses the @ref SonareProjectAutomationCurve ordinals). It may
 /// be NULL only when @p point_count is 0. The breakpoints are copied; the core
@@ -280,6 +291,33 @@ static_assert(offsetof(SonareAutomationLaneDesc, point_count) == 2u * sizeof(voi
               "AutomationLaneDesc.point_count offset");
 static_assert(sizeof(SonareAutomationLaneDesc) == 2u * sizeof(void*) + sizeof(size_t),
               "SonareAutomationLaneDesc layout drift");
+#endif
+
+/// @brief Extended automation lane descriptor carrying a typed target kind.
+///        The target id must be non-zero, and @p target_kind must be one of
+///        @ref SonareAutomationTargetKind. The points contract is identical to
+///        @ref SonareAutomationLaneDesc.
+typedef struct {
+  uint32_t target_param_id;
+  SonareAutomationTargetKind target_kind;
+  const SonareAutomationPoint* points;
+  size_t point_count;
+} SonareAutomationLaneDescEx;
+
+#ifdef __cplusplus
+static_assert(sizeof(SonareAutomationTargetKind) == sizeof(uint32_t),
+              "SonareAutomationTargetKind ABI width drift");
+static_assert(offsetof(SonareAutomationLaneDescEx, target_param_id) == 0,
+              "AutomationLaneDescEx.target_param_id offset");
+static_assert(offsetof(SonareAutomationLaneDescEx, target_kind) == sizeof(uint32_t),
+              "AutomationLaneDescEx.target_kind offset");
+static_assert(offsetof(SonareAutomationLaneDescEx, points) == 2u * sizeof(uint32_t),
+              "AutomationLaneDescEx.points offset");
+static_assert(offsetof(SonareAutomationLaneDescEx, point_count) ==
+                  2u * sizeof(uint32_t) + sizeof(void*),
+              "AutomationLaneDescEx.point_count offset");
+static_assert(sizeof(SonareAutomationLaneDescEx) == 2u * sizeof(uint32_t) + 2u * sizeof(void*),
+              "SonareAutomationLaneDescEx layout drift");
 #endif
 
 // ============================================================================
@@ -480,6 +518,12 @@ SonareError sonare_project_add_automation_lane(SonareProject* project, uint32_t 
                                                const SonareAutomationLaneDesc* desc,
                                                uint32_t* out_target_param_id);
 
+/// @brief Extended form of @ref sonare_project_add_automation_lane carrying a
+/// typed automation target. Legacy add calls create opaque lanes.
+SonareError sonare_project_add_automation_lane_ex(SonareProject* project, uint32_t track_id,
+                                                  const SonareAutomationLaneDescEx* desc,
+                                                  uint32_t* out_target_param_id);
+
 /// @brief Replaces an existing automation lane in place via an undoable edit
 ///        command. @p track_id must reference an existing track and
 ///        @p target_param_id identifies an existing lane on it. The descriptor
@@ -488,6 +532,13 @@ SonareError sonare_project_add_automation_lane(SonareProject* project, uint32_t 
 SonareError sonare_project_edit_automation_lane(SonareProject* project, uint32_t track_id,
                                                 uint32_t target_param_id,
                                                 const SonareAutomationLaneDesc* desc);
+
+/// @brief Extended form of @ref sonare_project_edit_automation_lane. The
+/// descriptor's target kind is applied and typed-target conflicts are rejected
+/// atomically. The legacy edit form retains the existing lane's kind.
+SonareError sonare_project_edit_automation_lane_ex(SonareProject* project, uint32_t track_id,
+                                                   uint32_t target_param_id,
+                                                   const SonareAutomationLaneDescEx* desc);
 
 /// @brief Removes an automation lane from a track via an undoable edit command.
 ///        @p track_id must reference an existing track and @p target_param_id
@@ -510,6 +561,13 @@ SonareError sonare_project_clear_history(SonareProject* project);
 ///        1 (the most recent edit is always retained); if the current history is
 ///        deeper than @p depth the oldest entries are evicted immediately.
 SonareError sonare_project_set_max_undo_depth(SonareProject* project, size_t depth);
+
+/// @brief Sets the combined retained-byte cap for undo and redo history.
+///        @p bytes is a conservative memory budget. Zero is valid and makes
+///        successful edits non-undoable; the project mutation still succeeds.
+///        The cap is applied immediately, evicting redo-oldest before
+///        undo-oldest entries when the current history is too large.
+SonareError sonare_project_set_max_history_bytes(SonareProject* project, size_t bytes);
 
 #ifdef __cplusplus
 }

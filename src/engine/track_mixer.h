@@ -3,6 +3,7 @@
 /// @file track_mixer.h
 /// @brief Realtime per-track lane mixer used by RealtimeEngine.
 
+#include <algorithm>
 #include <array>
 #include <atomic>
 #include <cstdint>
@@ -24,6 +25,15 @@ class MeterTelemetryTap;
 class ScopeTelemetryTap;
 
 std::unique_ptr<mixing::ChannelStrip> make_channel_strip_from_spec(const mixing::api::Strip& spec);
+
+/// Per-lane cue tap. This state belongs to TrackMixerRuntime rather than the
+/// legacy raw-strip MonitorRuntime, so lane reorder/persistence follows the
+/// track-id keyed LaneState mapping.
+enum class TrackMonitorMode : uint8_t {
+  kOff = 0,
+  kPfl = 1,
+  kAfl = 2,
+};
 
 struct TrackLaneConfig {
   struct Send {
@@ -86,6 +96,20 @@ class TrackMixerRuntime final : public rt::ProcessorBase {
 
   bool set_lane_parameter(size_t lane_index, unsigned int param_id, float value) noexcept;
   bool set_lane_solo_mute(size_t lane_index, bool solo, bool mute) noexcept;
+  /// AUDIO thread: applies a queued lane monitor mode. The mode is deliberately
+  /// plain lane state (not a raw ChannelStrip registration) so it survives lane
+  /// reorder by track id and is allocation/lock free in the render path.
+  bool set_lane_monitor_mode(size_t lane_index, TrackMonitorMode mode) noexcept;
+  /// AUDIO thread: true when at least one configured lane has a PFL/AFL tap.
+  bool monitor_active() const noexcept;
+  /// AUDIO thread: points lane monitor taps at the RealtimeEngine's prepared
+  /// monitor-bus planes for the current sub-block. The pointer is borrowed and
+  /// never dereferenced when @p channels is nullptr.
+  void set_monitor_bus(float* const* channels, int num_channels) noexcept {
+    monitor_bus_ = channels;
+    monitor_bus_channel_count_ =
+        channels == nullptr ? 0 : std::clamp(num_channels, 0, kMaxBusChannels);
+  }
   /// Routes another lane's most recent post-strip audio into one insert of a
   /// lane strip as its sidechain key (ducking/sidechainRouter inserts).
   /// Source lanes rendered earlier in the block deliver same-block audio;
@@ -232,6 +256,7 @@ class TrackMixerRuntime final : public rt::ProcessorBase {
     rt::ParamSmoother gate{1.0f, 10.0f, 48000.0};
     bool solo = false;
     bool mute = false;
+    TrackMonitorMode monitor_mode = TrackMonitorMode::kOff;
     mixing::ChannelStrip* strip = nullptr;
     // Per-output-plane scatter gains carried block-to-block so a moving surround
     // pan ramps click-free. Unused on the stereo path.
@@ -351,6 +376,7 @@ class TrackMixerRuntime final : public rt::ProcessorBase {
   void configure_lane_sends(const std::vector<TrackLaneConfig>& lanes);
   void process_lane_strip(size_t lane_index, int num_channels, int num_samples,
                           int64_t timeline_sample) noexcept;
+  void add_lane_monitor_pfl(size_t lane_index, int num_channels, int num_samples) noexcept;
   void deliver_lane_sidechains(size_t lane_index, int num_channels, int num_samples) noexcept;
   void snapshot_sidechain_key(size_t lane_index, int num_channels, int num_samples) noexcept;
   int lane_index_for_track(uint32_t track_id) const noexcept;
@@ -396,6 +422,8 @@ class TrackMixerRuntime final : public rt::ProcessorBase {
   std::array<mixing::AlignmentDelay, kMaxTrackLanes> lane_pdc_delays_;
   std::array<bool, kMaxTrackLanes> source_mix_lane_active_{};
   std::array<BusState, kMaxBusLanes> bus_states_{};
+  float* const* monitor_bus_ = nullptr;
+  int monitor_bus_channel_count_ = 0;
   std::vector<TrackBusConfig> bus_configs_;
   std::array<SidechainBinding, kMaxSidechainBindings> sidechain_bindings_{};
   // Written by the control thread in set_lane_sidechain(), read on the audio

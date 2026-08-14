@@ -18,6 +18,14 @@ class MixingRuntime final : public rt::ProcessorBase {
     kWidth = 3,
   };
 
+  /// True when @p param_id is one of the legacy ChannelStrip parameters that
+  /// the project automation/bounce paths can apply without a host resolver.
+  /// Keep this set next to the enum so the compiler and offline scheduler do
+  /// not grow independent lists of built-in ids.
+  static constexpr bool is_supported_parameter(unsigned int param_id) noexcept {
+    return param_id == kFaderDb || param_id == kPan || param_id == kWidth;
+  }
+
   bool bind(mixing::ChannelStrip* strip) noexcept;
 
   void prepare(double sample_rate, int max_block_size) override;

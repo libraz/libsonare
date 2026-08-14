@@ -7,6 +7,7 @@
 #include <cstddef>
 #include <cstdint>
 #include <limits>
+#include <map>
 #include <string_view>
 #include <unordered_set>
 #include <utility>
@@ -178,6 +179,26 @@ ExternalSeparatedStemImportResult import_into(Project* project, AudioContentStor
   return result;
 }
 
+bool has_audio_source_collision(const AudioContentStore& live_audio,
+                                const AudioContentStore& staged_audio) noexcept {
+  for (const auto& [source_id, samples] : staged_audio.sources) {
+    (void)samples;
+    if (live_audio.sources.find(source_id) != live_audio.sources.end()) return true;
+  }
+  return false;
+}
+
+void transfer_new_audio(AudioContentStore* destination, AudioContentStore* staged) noexcept {
+  if (destination == nullptr || staged == nullptr) return;
+  while (!staged->sources.empty()) {
+    auto node = staged->sources.extract(staged->sources.begin());
+    // All ids are checked for collisions before the first node is extracted.
+    // std::map node insertion does not allocate, and the comparator is the
+    // non-throwing integer ordering used by AudioContentStore.
+    (void)destination->sources.insert(std::move(node));
+  }
+}
+
 }  // namespace
 
 ExternalSeparatedStemImportResult import_external_separated_stems(
@@ -185,9 +206,10 @@ ExternalSeparatedStemImportResult import_external_separated_stems(
   if (project == nullptr || audio == nullptr) {
     return {ExternalSeparatedStemImportError::kInvalidArgument, {}, {}};
   }
-  // Stage both stores so an allocation failure, id exhaustion, or unexpected
-  // model rejection cannot leave a partially imported project behind. Validation
-  // also lives in the exception boundary because checking unique names allocates.
+  // Stage only the Project and the newly imported PCM. Copying the complete
+  // AudioContentStore here needlessly duplicates every already registered
+  // source (and can exceed the WASM heap for long projects). Existing map nodes
+  // remain in place; only the new source nodes are transferred at commit.
   try {
     transport::TempoMap map;
     prepare_tempo_map(*project, &map);
@@ -196,12 +218,20 @@ ExternalSeparatedStemImportResult import_external_separated_stems(
       return {validation, {}, {}};
     }
     Project staged_project = *project;
-    AudioContentStore staged_audio = *audio;
+    AudioContentStore staged_audio;
     ExternalSeparatedStemImportResult result =
         import_into(&staged_project, &staged_audio, input, map);
     if (!result.ok()) return result;
+
+    // An inconsistent caller-owned store may already contain a source id that
+    // the project allocator is about to issue. Reject before touching either
+    // live object rather than allowing a partial node transfer.
+    if (has_audio_source_collision(*audio, staged_audio)) {
+      return {ExternalSeparatedStemImportError::kProjectMutationFailed, {}, {}};
+    }
+
     *project = std::move(staged_project);
-    *audio = std::move(staged_audio);
+    transfer_new_audio(audio, &staged_audio);
     return result;
   } catch (...) {
     return {ExternalSeparatedStemImportError::kProjectMutationFailed, {}, {}};

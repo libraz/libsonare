@@ -1,4 +1,3 @@
-#include <optional>
 #include <set>
 #include <string>
 
@@ -68,13 +67,40 @@ struct AudioContentTransferState {
   std::map<arr::SourceId, arr::AudioSourceSamples> contents;
 };
 
-class TransferAudioContent final : public arr::EditCommand {
+std::size_t retained_audio_samples_bytes(const arr::AudioSourceSamples& samples) noexcept {
+  return arr::retained::dynamic_bytes(samples.channels);
+}
+
+std::size_t retained_audio_map_bytes(
+    const std::map<arr::SourceId, arr::AudioSourceSamples>& contents) noexcept {
+  constexpr std::size_t kNodeOverhead = 4u * sizeof(void*);
+  const std::size_t node_bytes = arr::retained::saturating_add(
+      sizeof(typename std::map<arr::SourceId, arr::AudioSourceSamples>::value_type), kNodeOverhead);
+  std::size_t total = arr::retained::saturating_multiply(contents.size(), node_bytes);
+  for (const auto& [source_id, samples] : contents) {
+    (void)source_id;
+    total = arr::retained::saturating_add(total, retained_audio_samples_bytes(samples));
+  }
+  return total;
+}
+
+std::size_t retained_audio_transfer_state_bytes(const AudioContentTransferState& state) noexcept {
+  std::size_t total = sizeof(state);
+  total = arr::retained::saturating_add(total, arr::retained::dynamic_bytes(state.source_ids));
+  return arr::retained::saturating_add(total, retained_audio_map_bytes(state.contents));
+}
+
+class TransferAudioContent final : public arr::EditCommand, public arr::EditCommandRollback {
  public:
   TransferAudioContent(std::shared_ptr<AudioContentTransferState> state,
                        AudioContentTransferDirection direction)
       : state_(std::move(state)), direction_(direction) {}
 
   bool apply(arr::Project& /*project*/, arr::MidiContentStore& /*midi*/) override {
+    // A command instance is replayed during undo/redo.  Clear the flag before
+    // validation so a failed replay never asks rollback to undo an earlier
+    // successful application of the same command instance.
+    applied_ = false;
     if (state_ == nullptr || state_->store == nullptr || state_->source_ids.empty()) {
       return false;
     }
@@ -85,6 +111,9 @@ class TransferAudioContent final : public arr::EditCommand {
       for (arr::SourceId id : state_->source_ids) {
         if (contents.find(id) == contents.end() || store.find(id) != store.end()) return false;
       }
+      // Mark before the first node move so a hypothetical exception from a
+      // comparator or allocator seam still has an idempotent rollback path.
+      applied_ = true;
       for (arr::SourceId id : state_->source_ids) {
         store.insert(contents.extract(id));
       }
@@ -95,10 +124,33 @@ class TransferAudioContent final : public arr::EditCommand {
     for (arr::SourceId id : state_->source_ids) {
       if (store.find(id) == store.end()) return false;
     }
+    applied_ = true;
     for (arr::SourceId id : state_->source_ids) {
       contents.insert(store.extract(id));
     }
     return true;
+  }
+
+  void rollback_apply(arr::Project& /*project*/,
+                      arr::MidiContentStore& /*midi*/) noexcept override {
+    if (!applied_ || state_ == nullptr || state_->store == nullptr) return;
+
+    auto& store = state_->store->sources;
+    auto& contents = state_->contents;
+    if (direction_ == AudioContentTransferDirection::kStore) {
+      // The forward direction moved nodes from history-owned contents into the
+      // live store.  Node handles keep the PCM allocations intact and do not
+      // allocate while unwinding a failed history operation.
+      for (arr::SourceId id : state_->source_ids) {
+        contents.insert(store.extract(id));
+      }
+    } else {
+      // The history direction is the exact inverse transfer.
+      for (arr::SourceId id : state_->source_ids) {
+        store.insert(contents.extract(id));
+      }
+    }
+    applied_ = false;
   }
 
   arr::EditCommandPtr invert(const arr::Project& /*before*/,
@@ -111,9 +163,18 @@ class TransferAudioContent final : public arr::EditCommand {
 
   const char* type_name() const noexcept override { return "TransferAudioContent"; }
 
+  std::size_t retained_bytes() const noexcept override {
+    std::size_t total = sizeof(*this);
+    if (state_ != nullptr) {
+      total = arr::retained::saturating_add(total, retained_audio_transfer_state_bytes(*state_));
+    }
+    return total;
+  }
+
  private:
   std::shared_ptr<AudioContentTransferState> state_;
   AudioContentTransferDirection direction_;
+  bool applied_ = false;
 };
 
 arr::EditCommandPtr make_store_audio_content_command(
@@ -217,49 +278,95 @@ enum class AudioContentReplaceDirection { kSet, kRestore };
 struct AudioContentReplaceState {
   arr::AudioContentStore* store = nullptr;
   arr::SourceId source_id = 0;
-  std::optional<arr::AudioSourceSamples> contents;
+  // Keep the replacement in a map node so both directions can move it back
+  // into AudioContentStore without allocating during rollback.  For an
+  // existing source this node holds the samples on the opposite side of the
+  // swap; for a new source it is the detached source node itself.
+  std::map<arr::SourceId, arr::AudioSourceSamples> contents;
   bool had_existing = false;
   bool initialized = false;
 };
 
-class ReplaceAudioContent final : public arr::EditCommand {
+std::size_t retained_audio_replace_state_bytes(const AudioContentReplaceState& state) noexcept {
+  return arr::retained::saturating_add(sizeof(state), retained_audio_map_bytes(state.contents));
+}
+
+class ReplaceAudioContent final : public arr::EditCommand, public arr::EditCommandRollback {
  public:
   ReplaceAudioContent(std::shared_ptr<AudioContentReplaceState> state,
                       AudioContentReplaceDirection direction)
       : state_(std::move(state)), direction_(direction) {}
 
   bool apply(arr::Project& /*project*/, arr::MidiContentStore& /*midi*/) override {
+    // Forward and inverse command objects are replayed many times.  The hook
+    // must describe this invocation only, not a previous successful replay.
+    applied_ = false;
     if (state_ == nullptr || state_->store == nullptr || state_->source_id == 0) {
       return false;
     }
     auto& sources = state_->store->sources;
     auto it = sources.find(state_->source_id);
+    auto contents_it = state_->contents.find(state_->source_id);
     if (direction_ == AudioContentReplaceDirection::kSet) {
-      if (!state_->contents.has_value()) return false;
+      if (contents_it == state_->contents.end()) return false;
       if (!state_->initialized) {
         state_->had_existing = it != sources.end();
         state_->initialized = true;
       }
       if (state_->had_existing) {
         if (it == sources.end()) return false;
-        std::swap(it->second, *state_->contents);
+        applied_ = true;
+        std::swap(it->second, contents_it->second);
       } else {
         if (it != sources.end()) return false;
-        sources.emplace(state_->source_id, std::move(*state_->contents));
-        state_->contents.reset();
+        applied_ = true;
+        sources.insert(state_->contents.extract(contents_it));
       }
       return true;
     }
 
     if (it == sources.end()) return false;
     if (state_->had_existing) {
-      if (!state_->contents.has_value()) return false;
-      std::swap(it->second, *state_->contents);
+      if (contents_it == state_->contents.end()) return false;
+      applied_ = true;
+      std::swap(it->second, contents_it->second);
     } else {
-      state_->contents.emplace(std::move(it->second));
-      sources.erase(it);
+      if (contents_it != state_->contents.end()) return false;
+      applied_ = true;
+      state_->contents.insert(sources.extract(it));
     }
     return true;
+  }
+
+  void rollback_apply(arr::Project& /*project*/,
+                      arr::MidiContentStore& /*midi*/) noexcept override {
+    if (!applied_ || state_ == nullptr || state_->store == nullptr) return;
+
+    auto& sources = state_->store->sources;
+    auto it = sources.find(state_->source_id);
+    auto contents_it = state_->contents.find(state_->source_id);
+    if (direction_ == AudioContentReplaceDirection::kSet) {
+      if (state_->had_existing) {
+        if (it != sources.end() && contents_it != state_->contents.end()) {
+          std::swap(it->second, contents_it->second);
+        }
+      } else if (it != sources.end() && contents_it == state_->contents.end()) {
+        // Return the inserted source node to command-owned storage.  Node
+        // handles preserve the PCM allocations and require no map allocation.
+        state_->contents.insert(sources.extract(it));
+      }
+    } else {
+      if (state_->had_existing) {
+        if (it != sources.end() && contents_it != state_->contents.end()) {
+          std::swap(it->second, contents_it->second);
+        }
+      } else if (it == sources.end() && contents_it != state_->contents.end()) {
+        // Restore the node detached by the history direction, again without
+        // allocating on the failure path.
+        sources.insert(state_->contents.extract(contents_it));
+      }
+    }
+    applied_ = false;
   }
 
   arr::EditCommandPtr invert(const arr::Project& /*before*/,
@@ -272,9 +379,18 @@ class ReplaceAudioContent final : public arr::EditCommand {
 
   const char* type_name() const noexcept override { return "ReplaceAudioContent"; }
 
+  std::size_t retained_bytes() const noexcept override {
+    std::size_t total = sizeof(*this);
+    if (state_ != nullptr) {
+      total = arr::retained::saturating_add(total, retained_audio_replace_state_bytes(*state_));
+    }
+    return total;
+  }
+
  private:
   std::shared_ptr<AudioContentReplaceState> state_;
   AudioContentReplaceDirection direction_;
+  bool applied_ = false;
 };
 
 arr::EditCommandPtr make_replace_audio_content_command(arr::AudioContentStore* store,
@@ -284,7 +400,7 @@ arr::EditCommandPtr make_replace_audio_content_command(arr::AudioContentStore* s
   auto state = std::make_shared<AudioContentReplaceState>();
   state->store = store;
   state->source_id = source_id;
-  state->contents.emplace(std::move(contents));
+  state->contents.emplace(source_id, std::move(contents));
   return std::make_unique<ReplaceAudioContent>(std::move(state),
                                                AudioContentReplaceDirection::kSet);
 }
@@ -473,6 +589,33 @@ SonareError sonare_project_set_source_audio(SonareProject* project, uint32_t sou
   SONARE_C_CATCH
 #else
   SONARE_C_STUB_NOT_SUPPORTED(project, source_id, interleaved, frames, channels, sample_rate);
+#endif
+}
+
+SonareError sonare_project_set_audio_source_metadata(SonareProject* project, uint32_t source_id,
+                                                     const char* content_hash,
+                                                     const char* external_stem_role) {
+  SONARE_C_API_ENTRY;
+#if defined(SONARE_WITH_ARRANGEMENT)
+  if (!project || source_id == 0 || !content_hash || !external_stem_role) {
+    return SONARE_ERROR_INVALID_PARAMETER;
+  }
+  const arr::ClipSource* source = project->history.project().find_source(source_id);
+  const auto* audio = source ? std::get_if<arr::AudioSourceRef>(source) : nullptr;
+  if (audio == nullptr) return SONARE_ERROR_INVALID_PARAMETER;
+  SONARE_C_TRY
+  // Copy the complete source first so changing these two metadata fields can
+  // never discard URI, channel/rate hints, storage handles, or future fields.
+  arr::AudioSourceRef replacement = *audio;
+  replacement.content_hash = content_hash;
+  replacement.external_stem_role = external_stem_role;
+  auto command =
+      std::make_unique<arr::ReplaceSource>(source_id, arr::ClipSource{std::move(replacement)});
+  if (!project->history.apply(std::move(command))) return SONARE_ERROR_INVALID_STATE;
+  return SONARE_OK;
+  SONARE_C_CATCH
+#else
+  SONARE_C_STUB_NOT_SUPPORTED(project, source_id, content_hash, external_stem_role);
 #endif
 }
 
@@ -669,9 +812,11 @@ SonareError sonare_project_split_clip(SonareProject* project, uint32_t clip_id, 
   if (!project || clip_id == 0 || !std::isfinite(split_ppq)) return SONARE_ERROR_INVALID_PARAMETER;
   SONARE_C_TRY
   auto command = std::make_unique<arr::SplitClip>(clip_id, split_ppq);
-  arr::SplitClip* raw = command.get();
   if (!project->history.apply(std::move(command))) return SONARE_ERROR_INVALID_STATE;
-  if (out_new_clip_id) *out_new_clip_id = raw->new_clip_id();
+  if (out_new_clip_id) {
+    if (project->history.project().clips().empty()) return SONARE_ERROR_INVALID_STATE;
+    *out_new_clip_id = project->history.project().clips().back().id;
+  }
   return SONARE_OK;
   SONARE_C_CATCH
 #else
@@ -949,9 +1094,11 @@ SonareError sonare_project_duplicate_clip(SonareProject* project, uint32_t clip_
   }
   SONARE_C_TRY
   auto command = std::make_unique<arr::DuplicateClip>(clip_id, new_start_ppq);
-  arr::DuplicateClip* raw = command.get();
   if (!project->history.apply(std::move(command))) return SONARE_ERROR_INVALID_STATE;
-  if (out_new_clip_id) *out_new_clip_id = raw->new_clip_id();
+  if (out_new_clip_id) {
+    if (project->history.project().clips().empty()) return SONARE_ERROR_INVALID_STATE;
+    *out_new_clip_id = project->history.project().clips().back().id;
+  }
   return SONARE_OK;
   SONARE_C_CATCH
 #else

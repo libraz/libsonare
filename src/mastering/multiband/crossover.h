@@ -68,6 +68,9 @@ class Crossover {
   explicit Crossover(CrossoverConfig config = {});
 
   void prepare(double sample_rate, int max_block_size);
+  /// Prepare with an explicit upper bound on the number of input channels.
+  /// The two-argument overload retains the realtime 64-channel capacity.
+  void prepare(double sample_rate, int max_block_size, int max_channels);
 
   /// Allocating convenience path (offline/tests): returns freshly sized bands.
   CrossoverOutput split(float* const* channels, int num_channels, int num_samples);

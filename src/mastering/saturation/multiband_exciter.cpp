@@ -3,6 +3,7 @@
 #include <algorithm>
 #include <utility>
 
+#include "mastering/dynamics/channel_limits.h"
 #include "rt/scoped_no_denormals.h"
 #include "util/exception.h"
 
@@ -15,17 +16,23 @@ MultibandExciter::MultibandExciter(MultibandExciterConfig config)
 }
 
 void MultibandExciter::prepare(double sample_rate, int max_block_size) {
+  prepare(sample_rate, max_block_size, static_cast<int>(dynamics::kRealtimePreparedChannels));
+}
+
+void MultibandExciter::prepare(double sample_rate, int max_block_size, int max_channels) {
   if (!(sample_rate > 0.0))
     throw SonareException(ErrorCode::InvalidParameter, "sample_rate must be positive");
   if (max_block_size < 0)
     throw SonareException(ErrorCode::InvalidParameter, "max_block_size must be non-negative");
+  if (max_channels < 1 || max_channels > static_cast<int>(dynamics::kRealtimePreparedChannels))
+    throw SonareException(ErrorCode::InvalidParameter,
+                          "max_channels exceeds MultibandExciter capacity");
   sample_rate_ = sample_rate;
   max_block_size_ = max_block_size;
+  max_working_channels_ = max_channels;
   prepared_ = true;
-  crossover_.prepare(sample_rate_, max_block_size_);
-  // Pre-size split scratch for stereo so the steady-state audio path is
-  // allocation-free; it is grown on demand only if a wider block arrives.
-  crossover_.prepare_scratch(scratch_, 2, max_block_size_);
+  crossover_.prepare(sample_rate_, max_block_size_, max_working_channels_);
+  crossover_.prepare_scratch(scratch_, max_working_channels_, max_block_size_);
   for (auto& exciter : exciters_) exciter.prepare(sample_rate_, max_block_size_);
   reset();
 }
@@ -33,15 +40,18 @@ void MultibandExciter::prepare(double sample_rate, int max_block_size) {
 void MultibandExciter::process(float* const* channels, int num_channels, int num_samples) {
   sonare::rt::ScopedNoDenormals guard;
   ensure_prepared(prepared_, "MultibandExciter");
-  if (num_channels < 0 || num_samples < 0)
-    throw SonareException(ErrorCode::InvalidParameter, "invalid dimensions");
-  if (num_channels == 0 || num_samples == 0) return;
-  if (channels == nullptr)
-    throw SonareException(ErrorCode::InvalidParameter, "channels must not be null");
-  for (int ch = 0; ch < num_channels; ++ch) {
-    if (channels[ch] == nullptr)
-      throw SonareException(ErrorCode::InvalidParameter, "channel buffer must not be null");
+  if (!validate_block_size(num_channels, num_samples)) {
+    return;
   }
+  if (num_channels > max_working_channels_) {
+    throw SonareException(ErrorCode::InvalidParameter,
+                          "num_channels exceeds prepared MultibandExciter capacity");
+  }
+  if (num_samples > max_block_size_) {
+    throw SonareException(ErrorCode::InvalidParameter,
+                          "num_samples exceeds prepared MultibandExciter block size");
+  }
+  validate_channel_buffers(channels, num_channels);
 
   crossover_.ensure_scratch(scratch_, num_channels, num_samples);
   crossover_.split_into(channels, num_channels, num_samples, scratch_);
@@ -70,7 +80,7 @@ void MultibandExciter::set_config(const MultibandExciterConfig& config) {
   config_ = config;
   crossover_.set_config(config_.crossover);
   rebuild_processors();
-  if (prepared_) prepare(sample_rate_, max_block_size_);
+  if (prepared_) prepare(sample_rate_, max_block_size_, max_working_channels_);
 }
 
 bool MultibandExciter::set_parameter(unsigned int param_id, float value) {

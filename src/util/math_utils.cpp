@@ -158,6 +158,19 @@ void power_to_db(const float* power, size_t n, float ref, float amin, float top_
 }
 
 void compute_autocorrelation(const float* input, int n, int max_lag, float* output) {
+  if (n < 0 || max_lag < 0) {
+    throw SonareException(ErrorCode::InvalidParameter,
+                          "compute_autocorrelation: lengths must be non-negative");
+  }
+  if (n > 0 && input == nullptr) {
+    throw SonareException(ErrorCode::InvalidParameter,
+                          "compute_autocorrelation: null input with non-zero length");
+  }
+  if (max_lag > 0 && output == nullptr) {
+    throw SonareException(ErrorCode::InvalidParameter,
+                          "compute_autocorrelation: null output with non-zero length");
+  }
+
   for (int i = 0; i < max_lag; ++i) {
     output[i] = 0.0f;
   }

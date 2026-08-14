@@ -7,6 +7,8 @@
 #include <complex>
 #include <cstddef>
 #include <cstdint>
+#include <limits>
+#include <stdexcept>
 #include <string>
 
 namespace sonare {
@@ -22,7 +24,11 @@ class MatrixView {
   /// @param data Pointer to row-major data
   /// @param rows Number of rows
   /// @param cols Number of columns
-  MatrixView(const T* data, size_t rows, size_t cols) : data_(data), rows_(rows), cols_(cols) {}
+  MatrixView(const T* data, size_t rows, size_t cols) : data_(data), rows_(rows), cols_(cols) {
+    // Keep the dimension product representable so size() and every valid
+    // row-major offset can be evaluated without wrapping.
+    checked_product(rows_, cols_);
+  }
 
   const T* data() const { return data_; }
   size_t rows() const { return rows_; }
@@ -31,15 +37,41 @@ class MatrixView {
   bool empty() const { return data_ == nullptr || size() == 0; }
 
   /// @brief Access element at (row, col) in row-major order.
-  const T& at(size_t row, size_t col) const { return data_[row * cols_ + col]; }
+  const T& at(size_t row, size_t col) const { return data_[checked_index(row, col)]; }
 
   /// @brief Access element at (row, col) in row-major order.
   const T& operator()(size_t row, size_t col) const { return at(row, col); }
 
   /// @brief Returns pointer to the start of row i.
-  const T* row(size_t i) const { return data_ + i * cols_; }
+  const T* row(size_t i) const { return data_ + checked_row_offset(i); }
 
  private:
+  static size_t checked_product(size_t lhs, size_t rhs) {
+    if (rhs != 0 && lhs > std::numeric_limits<size_t>::max() / rhs) {
+      throw std::overflow_error("MatrixView size or index overflow");
+    }
+    return lhs * rhs;
+  }
+
+  size_t checked_row_offset(size_t row) const {
+    const size_t offset = checked_product(row, cols_);
+    if (row >= rows_) {
+      throw std::out_of_range("MatrixView row index out of range");
+    }
+    return offset;
+  }
+
+  size_t checked_index(size_t row, size_t col) const {
+    const size_t offset = checked_product(row, cols_);
+    if (col > std::numeric_limits<size_t>::max() - offset) {
+      throw std::overflow_error("MatrixView index overflow");
+    }
+    if (row >= rows_ || col >= cols_) {
+      throw std::out_of_range("MatrixView index out of range");
+    }
+    return offset + col;
+  }
+
   const T* data_;
   size_t rows_;
   size_t cols_;

@@ -80,20 +80,37 @@ Crossover::Crossover(CrossoverConfig config) : config_(std::move(config)) {
 }
 
 void Crossover::prepare(double sample_rate, int max_block_size) {
+  prepare(sample_rate, max_block_size,
+          static_cast<int>(sonare::mastering::dynamics::kRealtimePreparedChannels));
+}
+
+void Crossover::prepare(double sample_rate, int max_block_size, int max_channels) {
   if (!(sample_rate > 0.0)) {
     throw SonareException(ErrorCode::InvalidParameter, "sample_rate must be positive");
   }
   if (max_block_size < 0) {
     throw SonareException(ErrorCode::InvalidParameter, "max_block_size must be non-negative");
   }
+  if (max_channels < 1 ||
+      max_channels > static_cast<int>(sonare::mastering::dynamics::kRealtimePreparedChannels)) {
+    throw SonareException(ErrorCode::InvalidParameter, "max_channels exceeds Crossover capacity");
+  }
 
   validate_config(config_, sample_rate);
   sample_rate_ = sample_rate;
   max_block_size_ = max_block_size;
-  prepared_channel_capacity_ =
-      static_cast<int>(sonare::mastering::dynamics::kRealtimePreparedChannels);
+  prepared_channel_capacity_ = max_channels;
   prepared_ = true;
   coeffs_dirty_ = true;
+  // Reprepare is allowed to shrink or grow the channel bound. Discard the
+  // previous channel containers so the new capacity is exact rather than
+  // retaining a larger old allocation.
+  states_.clear();
+  compensation_states_.clear();
+  fir_history_.clear();
+  fir_history_index_.clear();
+  fir_delay_history_.clear();
+  fir_delay_index_.clear();
   if (config_.mode == CrossoverMode::FirLinearPhase) {
     rebuild_fir_kernels();
     rebuild_fir_state(prepared_channel_capacity_);
@@ -136,6 +153,10 @@ void Crossover::prepare_scratch(CrossoverScratch& scratch, int num_channels,
                                 int max_samples) const {
   if (num_channels < 0) {
     throw SonareException(ErrorCode::InvalidParameter, "num_channels must be non-negative");
+  }
+  if (prepared_ && num_channels > prepared_channel_capacity_) {
+    throw SonareException(ErrorCode::InvalidParameter,
+                          "num_channels exceeds prepared Crossover capacity");
   }
   const int sample_capacity = max_samples >= 0 ? max_samples : max_block_size_;
   if (sample_capacity < 0) {
@@ -256,7 +277,10 @@ void Crossover::set_config(const CrossoverConfig& config) {
   config_ = config;
   coeffs_dirty_ = true;
   if (prepared_) {
-    prepare(sample_rate_, max_block_size_);
+    // Keep the caller's explicit channel bound across a control-thread config
+    // rebuild; falling back to the two-argument overload would silently grow a
+    // bounded offline crossover back to the 64-channel realtime capacity.
+    prepare(sample_rate_, max_block_size_, prepared_channel_capacity_);
   }
 }
 
@@ -443,7 +467,6 @@ void Crossover::rebuild_fir_state(int num_channels) {
     throw SonareException(ErrorCode::InvalidParameter,
                           "crossover channel count exceeds prepared capacity");
   }
-  rebuild_fir_kernels();
   const size_t splits = config_.cutoffs_hz.size();
   const size_t kernel_size = static_cast<size_t>(config_.fir_kernel_size);
   const size_t delay_size = static_cast<size_t>(config_.fir_kernel_size / 2 + 1);

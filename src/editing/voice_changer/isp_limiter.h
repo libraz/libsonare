@@ -28,6 +28,7 @@
 #include <cstddef>
 #include <vector>
 
+#include "editing/voice_changer/control_cadence.h"
 #include "rt/lookahead_buffer.h"
 #include "rt/param_smoother.h"
 #include "rt/sliding_max.h"
@@ -77,6 +78,7 @@ class IspLimiter {
 
  private:
   void update_time_constants();
+  void update_cached_controls() noexcept;
 
   rt::TruePeakFilter filter_;
   rt::LookaheadBuffer lookahead_;
@@ -100,8 +102,13 @@ class IspLimiter {
   bool prepared_ = false;
   bool has_processed_ = false;
   float attack_alpha_ = 1.0f;
+  float attack_remaining_ = 0.0f;
+  float attack_compensation_denominator_ = 1.0f;
   rt::ParamSmoother ceiling_dbtp_{-1.0f, 12.0f, 48000.0};
   rt::ParamSmoother release_ms_{50.0f, 12.0f, 48000.0};
+  ControlCadence control_cadence_;
+  float ceiling_linear_ = 1.0f;
+  float release_alpha_ = 1.0f;
   float gain_ = 1.0f;
 };
 

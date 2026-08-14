@@ -217,8 +217,25 @@ Spectrogram Spectrogram::compute(const Audio& audio, const StftConfig& config,
 Spectrogram Spectrogram::from_complex(const std::complex<float>* data, int n_bins, int n_frames,
                                       int n_fft, int hop_length, int sample_rate, bool center,
                                       int win_length) {
-  SONARE_CHECK(data != nullptr, ErrorCode::InvalidParameter);
-  SONARE_CHECK(n_bins > 0 && n_frames > 0, ErrorCode::InvalidParameter);
+  // Validate the caller-supplied STFT metadata before sizing or copying the
+  // external buffer.  Apart from preventing malformed dimensions from being
+  // carried into iSTFT, this keeps the invariant used by FFT::inverse:
+  // n_bins must be the one-sided spectrum for an even FFT.
+  SONARE_CHECK_MSG(n_fft >= 2 && (n_fft % 2) == 0, ErrorCode::InvalidParameter,
+                   "Spectrogram::from_complex: n_fft must be even and >= 2");
+  SONARE_CHECK_MSG(n_bins == n_fft / 2 + 1, ErrorCode::InvalidParameter,
+                   "Spectrogram::from_complex: n_bins must equal n_fft / 2 + 1");
+  SONARE_CHECK_MSG(n_frames > 0, ErrorCode::InvalidParameter,
+                   "Spectrogram::from_complex: n_frames must be positive");
+  SONARE_CHECK_MSG(hop_length > 0, ErrorCode::InvalidParameter,
+                   "Spectrogram::from_complex: hop_length must be positive");
+  SONARE_CHECK_MSG(sample_rate > 0, ErrorCode::InvalidParameter,
+                   "Spectrogram::from_complex: sample_rate must be positive");
+  SONARE_CHECK_MSG(win_length == 0 || (win_length > 0 && win_length <= n_fft),
+                   ErrorCode::InvalidParameter,
+                   "Spectrogram::from_complex: win_length must be 0 or in [1, n_fft]");
+  SONARE_CHECK_MSG(data != nullptr, ErrorCode::InvalidParameter,
+                   "Spectrogram::from_complex: data must not be null");
   // Compute the element count in size_t so the multiply cannot overflow int;
   // reject sizes that would not fit in a vector index.
   const size_t total = static_cast<size_t>(n_bins) * static_cast<size_t>(n_frames);
@@ -612,6 +629,7 @@ std::vector<float> reassign_frequencies(const Audio& audio, const StftConfig& co
   SONARE_CHECK(!audio.empty(), ErrorCode::InvalidParameter);
   const int n_fft = config.n_fft;
   const int hop_length = config.hop_length;
+  SONARE_CHECK(n_fft > 0 && hop_length > 0, ErrorCode::InvalidParameter);
   const int win_length = config.actual_win_length();
   SONARE_CHECK(win_length <= n_fft, ErrorCode::InvalidParameter);
 
@@ -662,6 +680,7 @@ std::vector<float> reassign_times(const Audio& audio, const StftConfig& config, 
   SONARE_CHECK(!audio.empty(), ErrorCode::InvalidParameter);
   const int n_fft = config.n_fft;
   const int hop_length = config.hop_length;
+  SONARE_CHECK(n_fft > 0 && hop_length > 0, ErrorCode::InvalidParameter);
   const int win_length = config.actual_win_length();
   SONARE_CHECK(win_length <= n_fft, ErrorCode::InvalidParameter);
 

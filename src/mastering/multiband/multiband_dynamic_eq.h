@@ -21,6 +21,7 @@ class MultibandDynamicEq : public rt::ProcessorBase {
   explicit MultibandDynamicEq(MultibandDynamicEqConfig config = {});
 
   void prepare(double sample_rate, int max_block_size) override;
+  void prepare(double sample_rate, int max_block_size, int max_channels) override;
   void process(float* const* channels, int num_channels, int num_samples) override;
   void reset() override;
   // Reports the linear-phase FIR crossover delay (0 in the zero-latency IIR
@@ -67,6 +68,7 @@ class MultibandDynamicEq : public rt::ProcessorBase {
   MultibandDynamicEqConfig config_{};
   double sample_rate_ = 48000.0;
   int max_block_size_ = 0;
+  int max_working_channels_ = 0;
   bool prepared_ = false;
   Crossover crossover_;
   CrossoverScratch scratch_;

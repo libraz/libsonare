@@ -79,16 +79,22 @@ AudioLoadResult load_buffer_mp3(const uint8_t* data, size_t size);
 AudioLoadResult load_audio(const std::string& path,
                            const AudioLoadOptions& options = kDefaultLoadOptions);
 
-/// @brief Loads WAV or MP3 audio without downmixing its channels.
+/// @brief Loads audio without downmixing its channels.
+/// @details WAV/MP3 use the built-in decoders. When FFmpeg support is enabled,
+///          containers/codecs handled by FFmpeg (including FLAC and M4A) are
+///          decoded with their source channel order preserved.
 /// @return Frame-interleaved normalized samples, sample rate, and source channel count.
 /// @throws SonareException on file not found, unsupported format, or decode error.
 InterleavedAudioLoadResult load_audio_interleaved(
     const std::string& path, const AudioLoadOptions& options = kDefaultLoadOptions);
 
 /// @brief Returns the source channel count without converting the signal to mono.
-/// @return A positive channel count for built-in WAV/MP3 decoders, or 0 when
-///         the container is not inspectable by the built-in decoder.
-/// @throws SonareException when a recognized built-in container is malformed.
+/// @details WAV/MP3 are inspected by the built-in decoders. When FFmpeg support
+///          is enabled, containers/codecs supported by FFmpeg (including FLAC,
+///          OGG, and M4A/AAC) are inspected through FFmpeg as well.
+/// @return A positive source channel count on success, or 0 for an unrecognized
+///         format when FFmpeg support is disabled.
+/// @throws SonareException when the file cannot be opened or inspected.
 int audio_channel_count(const std::string& path,
                         const AudioLoadOptions& options = kDefaultLoadOptions);
 

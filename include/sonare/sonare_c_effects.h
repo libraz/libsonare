@@ -15,14 +15,30 @@ extern "C" {
 
 SonareError sonare_hpss(const float* samples, size_t length, int sample_rate, int kernel_harmonic,
                         int kernel_percussive, SonareHpssResult* out);
+/// @brief Configurable HPSS wrapper.
+/// @details The two-way form writes harmonic/percussive into @p out. When
+///          @p with_residual is non-zero, @p out_residual is required and
+///          receives the third signal; otherwise it is optional and remains
+///          NULL. All output fields are reset before input/config validation.
+SonareError sonare_hpss_ex(const float* samples, size_t length, int sample_rate,
+                           int kernel_harmonic, int kernel_percussive, int n_fft, int hop_length,
+                           int use_soft_mask, int with_residual, SonareHpssResult* out,
+                           float** out_residual);
 SonareError sonare_harmonic(const float* samples, size_t length, int sample_rate, float** out,
                             size_t* out_length);
 SonareError sonare_percussive(const float* samples, size_t length, int sample_rate, float** out,
                               size_t* out_length);
 SonareError sonare_time_stretch(const float* samples, size_t length, int sample_rate, float rate,
                                 float** out, size_t* out_length);
+/// @brief Native spectral time stretch with explicit FFT/hop configuration.
+SonareError sonare_time_stretch_ex(const float* samples, size_t length, int sample_rate, float rate,
+                                   int n_fft, int hop_length, float** out, size_t* out_length);
 SonareError sonare_pitch_shift(const float* samples, size_t length, int sample_rate,
                                float semitones, float** out, size_t* out_length);
+/// @brief Native spectral pitch shift with explicit FFT/hop configuration.
+SonareError sonare_pitch_shift_ex(const float* samples, size_t length, int sample_rate,
+                                  float semitones, int n_fft, int hop_length, float** out,
+                                  size_t* out_length);
 /// Applies a single CONSTANT transposition: the whole buffer is treated as one
 /// note at @p current_midi and shifted by (target_midi - current_midi). This is
 /// an immediate transpose with no retune glide, and the returned buffer has
@@ -242,6 +258,12 @@ SonareError sonare_normalize(const float* samples, size_t length, int sample_rat
                              float** out, size_t* out_length);
 SonareError sonare_trim(const float* samples, size_t length, int sample_rate, float threshold_db,
                         float** out, size_t* out_length);
+/// @brief RMS-normalize mono audio with hard clipping to [-1, 1].
+SonareError sonare_normalize_rms(const float* samples, size_t length, int sample_rate,
+                                 float target_db, float** out, size_t* out_length);
+/// @brief Trim leading/trailing silence using an absolute RMS dBFS threshold.
+SonareError sonare_trim_ex(const float* samples, size_t length, int sample_rate, float threshold_db,
+                           int frame_length, int hop_length, float** out, size_t* out_length);
 
 /// @brief Non-negative matrix factorisation of a non-negative spectrogram
 ///        (mirror of @c sonare::decompose / librosa.decompose.decompose).

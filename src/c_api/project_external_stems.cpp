@@ -1,4 +1,7 @@
 #include <algorithm>
+#include <map>
+#include <memory>
+#include <utility>
 
 #include "c_api/project_internal.h"
 
@@ -35,77 +38,122 @@ SonareError import_error_to_c(sonare::arrangement::ExternalSeparatedStemImportEr
 }
 
 // PCM lives alongside EditHistory rather than inside Project, so a regular
-// arrangement command alone cannot restore an external-stem import. Keep the
-// project and PCM snapshots together in one history command; apply_transaction
-// then gives the public import one atomic undo/redo entry and clears stale redo.
-class RestoreExternalStemImport final : public arr::EditCommand {
- public:
-  RestoreExternalStemImport(arr::AudioContentStore* audio, arr::Project project_snapshot,
-                            arr::AudioContentStore audio_snapshot)
-      : audio_(audio),
-        project_snapshot_(std::move(project_snapshot)),
-        audio_snapshot_(std::move(audio_snapshot)) {}
+// arrangement command alone cannot restore an external-stem import. Keep one
+// shared state object for the staged Project and only the newly imported PCM.
+// The Project slot swaps between the live and staged values; the PCM map moves
+// through std::map node handles. Undo therefore retains the exact source nodes,
+// while discarding a redo branch destroys detached samples instead of leaving
+// an orphaned AudioContentStore entry.
+struct ExternalStemImportState {
+  arr::AudioContentStore* audio = nullptr;
+  arr::Project staged_project;
+  std::vector<arr::SourceId> source_ids;
+  std::map<arr::SourceId, arr::AudioSourceSamples> detached_audio;
+  bool audio_in_store = false;
 
-  bool apply(arr::Project& project, arr::MidiContentStore&) override {
-    if (audio_ == nullptr) return false;
-    project = project_snapshot_;
-    *audio_ = audio_snapshot_;
+  // All callers preflight the complete id set before the first node move.
+  // Consequently each branch below is a sequence of non-allocating map-node
+  // transfers followed by a value swap, and is safe to use from the history's
+  // noexcept rollback path.
+  bool toggle(arr::Project& project) noexcept {
+    if (audio == nullptr || source_ids.empty()) return false;
+    auto& store = audio->sources;
+    if (!audio_in_store) {
+      if (detached_audio.size() != source_ids.size()) return false;
+      for (arr::SourceId source_id : source_ids) {
+        if (detached_audio.find(source_id) == detached_audio.end() ||
+            store.find(source_id) != store.end()) {
+          return false;
+        }
+      }
+      for (arr::SourceId source_id : source_ids) {
+        const auto inserted = store.insert(detached_audio.extract(source_id));
+        if (!inserted.inserted) return false;
+      }
+      std::swap(project, staged_project);
+      audio_in_store = true;
+      return true;
+    }
+
+    if (!detached_audio.empty()) return false;
+    for (arr::SourceId source_id : source_ids) {
+      if (store.find(source_id) == store.end()) return false;
+    }
+    for (arr::SourceId source_id : source_ids) {
+      const auto inserted = detached_audio.insert(store.extract(source_id));
+      if (!inserted.inserted) return false;
+    }
+    std::swap(project, staged_project);
+    audio_in_store = false;
     return true;
   }
-
-  arr::EditCommandPtr invert(const arr::Project& before,
-                             const arr::MidiContentStore&) const override {
-    // Restore commands are created only as the inverse owned by an import
-    // entry; EditHistory reuses that entry's forward command for redo. Keep a
-    // conservative self-inverse for callers that use this command directly.
-    return std::make_unique<RestoreExternalStemImport>(audio_, before, audio_snapshot_);
-  }
-
-  const char* type_name() const noexcept override { return "RestoreExternalStemImport"; }
-  bool mutates_midi_store() const noexcept override { return false; }
-
- private:
-  arr::AudioContentStore* audio_ = nullptr;
-  arr::Project project_snapshot_;
-  arr::AudioContentStore audio_snapshot_;
 };
 
-class ImportExternalStems final : public arr::EditCommand {
+std::size_t retained_audio_samples_bytes(const arr::AudioSourceSamples& samples) noexcept {
+  return arr::retained::dynamic_bytes(samples.channels);
+}
+
+std::size_t retained_audio_map_bytes(
+    const std::map<arr::SourceId, arr::AudioSourceSamples>& contents) noexcept {
+  constexpr std::size_t kNodeOverhead = 4u * sizeof(void*);
+  const std::size_t node_bytes = arr::retained::saturating_add(
+      sizeof(typename std::map<arr::SourceId, arr::AudioSourceSamples>::value_type), kNodeOverhead);
+  std::size_t total = arr::retained::saturating_multiply(contents.size(), node_bytes);
+  for (const auto& [source_id, samples] : contents) {
+    (void)source_id;
+    total = arr::retained::saturating_add(total, retained_audio_samples_bytes(samples));
+  }
+  return total;
+}
+
+std::size_t retained_external_stem_state_bytes(const ExternalStemImportState& state) noexcept {
+  std::size_t total = sizeof(state);
+  total = arr::retained::saturating_add(total, arr::retained::bytes(state.staged_project));
+  total = arr::retained::saturating_add(total, arr::retained::dynamic_bytes(state.source_ids));
+  return arr::retained::saturating_add(total, retained_audio_map_bytes(state.detached_audio));
+}
+
+class ExternalStemImportCommand final : public arr::EditCommand, public arr::EditCommandRollback {
  public:
-  ImportExternalStems(arr::AudioContentStore* audio, arr::ExternalSeparatedStemSet input)
-      : audio_(audio), input_(std::move(input)) {}
+  explicit ExternalStemImportCommand(std::shared_ptr<ExternalStemImportState> state)
+      : state_(std::move(state)) {}
 
   bool apply(arr::Project& project, arr::MidiContentStore&) override {
-    if (audio_ == nullptr) return false;
-    if (!captured_before_) {
-      project_before_ = project;
-      audio_before_ = *audio_;
-      captured_before_ = true;
+    if (state_ == nullptr || state_->audio == nullptr || state_->source_ids.empty()) {
+      return false;
     }
-    result_ = arr::import_external_separated_stems(&project, audio_, input_);
-    return result_.ok();
+    applied_ = false;
+    applied_ = state_->toggle(project);
+    return applied_;
   }
 
-  arr::EditCommandPtr invert(const arr::Project& before,
-                             const arr::MidiContentStore&) const override {
-    if (!captured_before_) return nullptr;
-    // `before` is EditHistory's authoritative project snapshot; audio_before_
-    // was captured at the same control-thread boundary before the import.
-    return std::make_unique<RestoreExternalStemImport>(audio_, before, audio_before_);
+  void rollback_apply(arr::Project& project, arr::MidiContentStore&) noexcept override {
+    if (!applied_ || state_ == nullptr) return;
+    // The command's preflight guarantees this cannot fail.  Keep the hook
+    // noexcept so it remains usable while unwinding a bad_alloc from invert().
+    (void)state_->toggle(project);
+    applied_ = false;
+  }
+
+  arr::EditCommandPtr invert(const arr::Project&, const arr::MidiContentStore&) const override {
+    if (state_ == nullptr) return nullptr;
+    return std::make_unique<ExternalStemImportCommand>(state_);
   }
 
   const char* type_name() const noexcept override { return "ImportExternalStems"; }
   bool mutates_midi_store() const noexcept override { return false; }
 
-  const arr::ExternalSeparatedStemImportResult& result() const noexcept { return result_; }
+  std::size_t retained_bytes() const noexcept override {
+    std::size_t total = sizeof(*this);
+    if (state_ != nullptr) {
+      total = arr::retained::saturating_add(total, retained_external_stem_state_bytes(*state_));
+    }
+    return total;
+  }
 
  private:
-  arr::AudioContentStore* audio_ = nullptr;
-  arr::ExternalSeparatedStemSet input_;
-  bool captured_before_ = false;
-  arr::Project project_before_;
-  arr::AudioContentStore audio_before_;
-  arr::ExternalSeparatedStemImportResult result_;
+  std::shared_ptr<ExternalStemImportState> state_;
+  bool applied_ = false;
 };
 
 }  // namespace
@@ -157,31 +205,50 @@ SonareError sonare_project_import_external_stems(SonareProject* project,
   }
 
   // Preserve the public import error taxonomy before handing the mutation to
-  // EditHistory: its bool-only transaction API intentionally cannot distinguish
-  // malformed host input from a failed state transition. The staged probe is
-  // control-thread-only and leaves the live project/PCM store untouched.
+  // EditHistory: its bool-only command API cannot distinguish malformed host
+  // input from a failed state transition. Stage the Project and newly-created
+  // PCM only; the live audio map is deliberately never copied.
   arr::Project validation_project = project->history.project();
-  arr::AudioContentStore validation_audio = project->audio;
+  arr::AudioContentStore validation_audio;
   const auto validation =
       arr::import_external_separated_stems(&validation_project, &validation_audio, input);
   const SonareError validation_error = import_error_to_c(validation.error);
   if (validation_error != SONARE_OK) return validation_error;
 
-  auto command = std::make_unique<ImportExternalStems>(&project->audio, std::move(input));
-  ImportExternalStems* import = command.get();
-  std::vector<arr::EditCommandPtr> commands;
-  commands.push_back(std::move(command));
-  if (!project->history.apply_transaction(std::move(commands))) {
+  // The project allocator and the sidecar map normally advance together, but
+  // callers can construct an inconsistent store through the C++ seam. Reject
+  // an id collision before history sees the command so no history entry or
+  // live state is changed.
+  for (const auto& [source_id, samples] : validation_audio.sources) {
+    (void)samples;
+    if (project->audio.sources.find(source_id) != project->audio.sources.end()) {
+      return SONARE_ERROR_INVALID_STATE;
+    }
+  }
+
+  // Marshal the result before committing history. Once apply() succeeds the
+  // C ABI path performs no allocations; a caller therefore cannot observe a
+  // successful structural edit followed by an output-buffer failure.
+  auto track_ids = std::make_unique<uint32_t[]>(validation.track_ids.size());
+  auto clip_ids = std::make_unique<uint32_t[]>(validation.clip_ids.size());
+  std::copy(validation.track_ids.begin(), validation.track_ids.end(), track_ids.get());
+  std::copy(validation.clip_ids.begin(), validation.clip_ids.end(), clip_ids.get());
+
+  auto state = std::make_shared<ExternalStemImportState>();
+  state->audio = &project->audio;
+  state->staged_project = std::move(validation_project);
+  state->detached_audio = std::move(validation_audio.sources);
+  state->source_ids.reserve(state->detached_audio.size());
+  for (const auto& [source_id, samples] : state->detached_audio) {
+    (void)samples;
+    state->source_ids.push_back(source_id);
+  }
+  if (state->source_ids.empty() ||
+      !project->history.apply(std::make_unique<ExternalStemImportCommand>(state))) {
     return SONARE_ERROR_INVALID_STATE;
   }
-  const auto& result = import->result();
-  const SonareError error = import_error_to_c(result.error);
-  if (error != SONARE_OK) return error;
-  auto track_ids = std::make_unique<uint32_t[]>(result.track_ids.size());
-  auto clip_ids = std::make_unique<uint32_t[]>(result.clip_ids.size());
-  std::copy(result.track_ids.begin(), result.track_ids.end(), track_ids.get());
-  std::copy(result.clip_ids.begin(), result.clip_ids.end(), clip_ids.get());
-  out->count = result.track_ids.size();
+
+  out->count = validation.track_ids.size();
   out->track_ids = track_ids.release();
   out->clip_ids = clip_ids.release();
   return SONARE_OK;

@@ -29,7 +29,7 @@ RealtimeVoiceChanger::RealtimeVoiceChanger(RealtimeVoiceChangerConfig config)
   // Derive sample-rate-independent gains/mixes so that config() observers see
   // consistent state even before prepare() is called. The sample-rate-dependent
   // branch inside update_derived() is guarded and will be re-run by prepare().
-  update_derived(config_);
+  update_derived();
   update_latency_mirrors();
   // Publish the initial value so the audio thread can adopt it on the first
   // process_block() call even if set_config() is never invoked.
@@ -52,7 +52,7 @@ void RealtimeVoiceChanger::prepare(double sample_rate, int max_block_size, int n
   scratch_.assign(static_cast<std::size_t>(std::max(1, max_block_size_)), 0.0f);
   // Allocation phase: this is the only place buffers may be (re)sized.
   for (auto& channel : channels_) allocate_channel(channel);
-  update_derived(config_);
+  update_derived();
   // Configuration phase: realtime-safe coefficient/state updates. Safe to do
   // here from the control thread because prepare() is called before any audio
   // thread runs against this instance.
@@ -84,8 +84,8 @@ void RealtimeVoiceChanger::reset() {
 void RealtimeVoiceChanger::set_config(const RealtimeVoiceChangerConfig& config) {
   // Writer side: normalize, update the visible mirror used by config(), and
   // hand the value off to the audio thread via the lock-free seqlock cell.
-  // We deliberately DO NOT touch derived scalars (input_gain_, gate_attack_,
-  // ...) or per-channel BiquadState here — those are written by the audio
+  // We deliberately DO NOT touch derived scalars or per-channel BiquadState
+  // here — those are written by the audio
   // thread inside adopt_snapshot_for_block() so set_config() can race safely
   // with process_block(). Storing into config_cell_ and bumping
   // config_version_ never allocates, locks, or throws, so this whole function
@@ -115,15 +115,10 @@ void RealtimeVoiceChanger::sync_effective_grain_size() noexcept {
   }
 }
 
-void RealtimeVoiceChanger::update_derived(const RealtimeVoiceChangerConfig& config) {
+void RealtimeVoiceChanger::update_derived() {
   if (sample_rate_ > 0.0) {
     fast_det_alpha_ = rt::one_pole_lowpass_alpha_matched(kFastDetectorHz, sample_rate_);
-    gate_attack_ = rt::one_pole_alpha_from_time_ms(config.gate.attack_ms, sample_rate_);
-    gate_release_ = rt::one_pole_alpha_from_time_ms(config.gate.release_ms, sample_rate_);
-    comp_attack_ = rt::one_pole_alpha_from_time_ms(config.compressor.attack_ms, sample_rate_);
-    comp_release_ = rt::one_pole_alpha_from_time_ms(config.compressor.release_ms, sample_rate_);
     limiter_attack_ = rt::one_pole_alpha_from_time_ms(kLimiterAttackMs, sample_rate_);
-    limiter_release_ = rt::one_pole_alpha_from_time_ms(config.limiter.release_ms, sample_rate_);
     deess_alpha_ = rt::one_pole_lowpass_alpha_matched(kDeessEnvelopeHz, sample_rate_);
     deess_gain_alpha_ = rt::one_pole_lowpass_alpha_matched(kDeessGainSmoothingHz, sample_rate_);
   }
@@ -209,9 +204,12 @@ void RealtimeVoiceChanger::apply_channel_config(ChannelState& state, int channel
   state.isp_limiter.set_config({config.limiter.isp_ceiling_dbtp, config.limiter.release_ms});
 }
 
-void RealtimeVoiceChanger::update_channel_filters(ChannelState& state) noexcept {
+void RealtimeVoiceChanger::update_input_filter(ChannelState& state) noexcept {
   state.hpf.set(rt::rbj_highpass(rt::frequency_to_w0(state.filter_highpass_hz, sample_rate_),
                                  sonare::constants::kButterworthQ));
+}
+
+void RealtimeVoiceChanger::update_output_filters(ChannelState& state) noexcept {
   state.body.set(
       rt::rbj_peak(rt::frequency_to_w0(180.0f, sample_rate_), 0.85f, state.filter_body_db));
   state.presence.set(
@@ -243,7 +241,7 @@ const RealtimeVoiceChangerConfig& RealtimeVoiceChanger::adopt_snapshot_for_block
     if (config_cell_.try_load_into(&candidate)) {
       active_config_ = candidate;
       const bool next_isp_limiter_active = active_config_.limiter.enable_isp_limiter;
-      update_derived(active_config_);
+      update_derived();
       for (std::size_t ch = 0; ch < channels_.size(); ++ch) {
         apply_channel_config(channels_[ch], static_cast<int>(ch), active_config_);
         if (next_isp_limiter_active != applied_isp_limiter_active_) {
@@ -281,6 +279,7 @@ void RealtimeVoiceChanger::reset_channel(ChannelState& state) {
   state.deess_env = 0.0f;
   state.deess_gain = 1.0f;
   state.limiter_gain = 1.0f;
+  state.control_cadence.reset();
   // reset() is an explicit state boundary, unlike set_config(): snap ramps so
   // a newly prepared/reset processor never inherits an old transition.
   state.input_gain.reset(state.input_gain.target());
@@ -310,8 +309,21 @@ void RealtimeVoiceChanger::reset_channel(ChannelState& state) {
   state.filter_presence_db = state.eq_presence_db.current();
   state.filter_air_db = state.eq_air_db.current();
   state.filter_deess_frequency_hz = state.deess_frequency_hz.current();
-  state.filter_update_countdown = 0;
-  update_channel_filters(state);
+  state.gate_threshold_linear = db_to_gain(state.gate_threshold_db.current());
+  state.gate_range_linear = db_to_gain(-state.gate_range_db.current());
+  state.gate_attack_alpha =
+      rt::one_pole_alpha_from_time_ms(state.gate_attack_ms.current(), sample_rate_);
+  state.gate_release_alpha =
+      rt::one_pole_alpha_from_time_ms(state.gate_release_ms.current(), sample_rate_);
+  state.comp_attack_alpha =
+      rt::one_pole_alpha_from_time_ms(state.comp_attack_ms.current(), sample_rate_);
+  state.comp_release_alpha =
+      rt::one_pole_alpha_from_time_ms(state.comp_release_ms.current(), sample_rate_);
+  state.limiter_ceiling_linear = db_to_gain(state.limiter_ceiling_db.current());
+  state.limiter_release_alpha =
+      rt::one_pole_alpha_from_time_ms(state.limiter_release_ms.current(), sample_rate_);
+  update_input_filter(state);
+  update_output_filters(state);
   state.reverb.reset();
   std::fill(state.dry_delay.begin(), state.dry_delay.end(), 0.0f);
   state.dry_delay_pos = 0;

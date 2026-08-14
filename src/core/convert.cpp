@@ -6,6 +6,7 @@
 #include <algorithm>
 #include <cctype>
 #include <cmath>
+#include <cstdint>
 #include <limits>
 #include <stdexcept>
 
@@ -63,10 +64,16 @@ float midi_to_hz(float midi) {
 }
 
 std::string hz_to_note(float hz) {
-  if (hz <= 0) return "?";
+  if (!(hz > 0.0f) || !std::isfinite(hz)) return "?";
 
   float midi = hz_to_midi(hz);
-  int midi_int = static_cast<int>(std::round(midi));
+  if (!std::isfinite(midi)) return "?";
+  const double rounded_midi = std::round(static_cast<double>(midi));
+  if (rounded_midi < static_cast<double>(std::numeric_limits<int>::min()) ||
+      rounded_midi > static_cast<double>(std::numeric_limits<int>::max())) {
+    return "?";
+  }
+  const int midi_int = static_cast<int>(rounded_midi);
 
   static const char* note_names[] = {"C",  "C#", "D",  "D#", "E",  "F",
                                      "F#", "G",  "G#", "A",  "A#", "B"};
@@ -111,18 +118,34 @@ float note_to_hz(const std::string& note) {
   if (idx < note.size()) {
     try {
       size_t pos = 0;
-      octave = std::stoi(note.substr(idx), &pos);
+      const long long parsed_octave = std::stoll(note.substr(idx), &pos);
       // Validate entire remaining string was consumed
       if (pos != note.size() - idx) {
         return 0.0f;  // Invalid note format
       }
+      // Keep the historical int-sized octave contract, but perform the range
+      // check before narrowing so an extreme textual octave cannot overflow.
+      if (parsed_octave < std::numeric_limits<int>::min() ||
+          parsed_octave > std::numeric_limits<int>::max()) {
+        return 0.0f;
+      }
+      octave = static_cast<int>(parsed_octave);
     } catch (const std::exception&) {
       return 0.0f;  // Invalid note format
     }
   }
 
-  int midi = (octave + 1) * 12 + offset;
-  return midi_to_hz(static_cast<float>(midi));
+  // Widen before adding the octave offset.  The previous int expression could
+  // overflow for INT_MAX even though the parser had accepted the octave.
+  const std::int64_t semitones_per_octave =
+      static_cast<std::int64_t>(constants::kSemitonesPerOctave);
+  const std::int64_t midi = (static_cast<std::int64_t>(octave) + 1) * semitones_per_octave + offset;
+  if (midi < std::numeric_limits<int>::min() || midi > std::numeric_limits<int>::max()) {
+    return 0.0f;
+  }
+
+  const float hz = midi_to_hz(static_cast<float>(midi));
+  return std::isfinite(hz) ? hz : 0.0f;
 }
 
 float frames_to_time(int frames, int sr, int hop_length) {
@@ -203,14 +226,17 @@ int samples_to_frames(int samples, int hop_length, int n_fft) {
   // saturating, non-throwing convention of the sibling frames_to_samples
   // helpers (the throwing variants are frames_to_time / time_to_frames).
   if (hop_length <= 0) return 0;
-  const int offset = (n_fft > 0) ? (n_fft / 2) : 0;
-  // Use floor for deterministic behavior with negative numerators.
-  const int adjusted = samples - offset;
-  if (adjusted >= 0) {
-    return adjusted / hop_length;
-  }
-  // Mirror Python floor-division on negatives.
-  return -((-adjusted + hop_length - 1) / hop_length);
+  const std::int64_t offset = (n_fft > 0) ? (n_fft / 2) : 0;
+  // Promote before subtracting: samples may be INT_MIN and the centering
+  // offset can make the numerator smaller still.  C++ integer division
+  // truncates toward zero, so adjust a negative remainder to obtain Python's
+  // floor-division semantics without negating INT_MIN.
+  const std::int64_t adjusted = static_cast<std::int64_t>(samples) - offset;
+  const std::int64_t hop = static_cast<std::int64_t>(hop_length);
+  std::int64_t frames = adjusted / hop;
+  if (adjusted < 0 && adjusted % hop != 0) --frames;
+  return static_cast<int>(std::clamp<std::int64_t>(frames, std::numeric_limits<int>::min(),
+                                                   std::numeric_limits<int>::max()));
 }
 
 std::vector<int> samples_to_frames(const std::vector<int>& samples, int hop_length, int n_fft) {
@@ -235,7 +261,30 @@ int hz_to_bin(float hz, int sr, int n_fft) {
   if (sr <= 0 || n_fft <= 0) {
     throw SonareException(ErrorCode::InvalidParameter, "hz_to_bin: sr and n_fft must be positive");
   }
-  return static_cast<int>(std::round(hz * n_fft / sr));
+  // This helper is part of the established non-throwing scalar conversion
+  // family: NaN has no ordered bin and maps to the neutral zero sentinel,
+  // while infinities saturate to the corresponding int boundary.
+  if (std::isnan(hz)) return 0;
+  if (hz == std::numeric_limits<float>::infinity()) return std::numeric_limits<int>::max();
+  if (hz == -std::numeric_limits<float>::infinity()) return std::numeric_limits<int>::min();
+  if (!std::isfinite(hz)) return 0;
+  if (hz > 0.0f) {
+    const double positive_limit = static_cast<double>(std::numeric_limits<int>::max()) *
+                                  static_cast<double>(sr) / static_cast<double>(n_fft);
+    if (static_cast<double>(hz) > positive_limit) return std::numeric_limits<int>::max();
+  } else if (hz < 0.0f) {
+    const double negative_limit = static_cast<double>(std::numeric_limits<int>::min()) *
+                                  static_cast<double>(sr) / static_cast<double>(n_fft);
+    if (static_cast<double>(hz) < negative_limit) return std::numeric_limits<int>::min();
+  }
+  // Use double for the product and clamp before narrowing.  This preserves
+  // ordinary bin rounding while defining behavior for frequencies whose bin
+  // index is outside the int return range.
+  const double rounded_bin =
+      std::round(static_cast<double>(hz) * static_cast<double>(n_fft) / static_cast<double>(sr));
+  return static_cast<int>(std::clamp<double>(rounded_bin,
+                                             static_cast<double>(std::numeric_limits<int>::min()),
+                                             static_cast<double>(std::numeric_limits<int>::max())));
 }
 
 }  // namespace sonare

@@ -397,10 +397,12 @@ SonareError sonare_engine_configure_scope_telemetry(SonareRealtimeEngine* engine
   SONARE_C_API_ENTRY;
   if (!engine) return SONARE_ERROR_INVALID_PARAMETER;
 #if defined(SONARE_WITH_MIXING)
+  SONARE_C_TRY
   const uint32_t applied =
       engine->engine.configure_scope_telemetry(interval_frames, static_cast<uint32_t>(band_count));
   if (out_band_count) *out_band_count = applied;
   return SONARE_OK;
+  SONARE_C_CATCH
 #else
   (void)interval_frames;
   (void)band_count;

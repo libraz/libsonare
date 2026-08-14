@@ -212,8 +212,10 @@ std::vector<float> fold_cqt_bins_to_chroma(const float* magnitude, int n_bins, i
                                            std::vector<int>* counts = nullptr);
 
 /// @brief C-relative pitch class of a frequency.
-/// @details hz_to_midi yields MIDI numbers where C is a multiple of 12, so the
-///          rounded MIDI number modulo @p n_chroma is the C-relative class.
+/// @details hz_to_midi yields MIDI numbers where C is a multiple of 12. The
+///          MIDI pitch class modulo 12 is scaled and rounded to @p n_chroma, so
+///          resolutions other than 12 subdivide the twelve pitch classes rather
+///          than the absolute MIDI numbering.
 /// @param hz Frequency in Hz (non-positive yields class 0)
 /// @param n_chroma Number of pitch classes
 /// @return Pitch class in [0, n_chroma)

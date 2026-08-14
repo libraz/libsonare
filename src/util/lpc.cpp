@@ -178,6 +178,10 @@ std::vector<float> ar_interpolate(const float* x, const bool* mask, size_t n,
     throw SonareException(ErrorCode::InvalidParameter, "invalid LPC model");
   }
 
+  // Preserve a valid empty result without forming an iterator range from two
+  // null pointers.  The model check above remains first so malformed models
+  // still report an error even when no samples are requested.
+  if (n == 0) return {};
   std::vector<float> out(x, x + n);
   const size_t order = model.ar.size() - 1;
   for (size_t i = 0; i < n; ++i) {

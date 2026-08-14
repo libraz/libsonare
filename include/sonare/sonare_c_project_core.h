@@ -192,6 +192,17 @@ SonareError sonare_project_set_source_audio(SonareProject* project, uint32_t sou
                                             const float* interleaved, int64_t frames, int channels,
                                             int sample_rate);
 
+/// @brief Replaces an audio source's owning metadata strings as one undoable
+///        edit.
+///
+/// Both strings must be non-NULL NUL-terminated strings. An empty string clears
+/// the corresponding field. All other source state is preserved. The two
+/// fields are committed and undone together through the existing source
+/// replacement command.
+SonareError sonare_project_set_audio_source_metadata(SonareProject* project, uint32_t source_id,
+                                                     const char* content_hash,
+                                                     const char* external_stem_role);
+
 /// @brief Sets the project sample rate (Hz). Must be > 0.
 SonareError sonare_project_set_sample_rate(SonareProject* project, double sample_rate);
 
@@ -310,6 +321,26 @@ static_assert(offsetof(SonareProjectSource, name_or_uri) == 24u,
               "SonareProjectSource name_or_uri offset");
 #endif
 
+/// @brief Heap-owned metadata for an audio source.
+///
+/// The strings are copied from the source and are owned by the returned
+/// descriptor. Release them with @ref sonare_project_free_audio_source_metadata.
+/// MIDI sources do not have this metadata and are rejected by
+/// @ref sonare_project_get_audio_source_metadata.
+typedef struct {
+  char* content_hash;
+  char* external_stem_role;
+} SonareProjectAudioSourceMetadata;
+
+#ifdef __cplusplus
+static_assert(offsetof(SonareProjectAudioSourceMetadata, content_hash) == 0,
+              "AudioSourceMetadata.content_hash offset");
+static_assert(offsetof(SonareProjectAudioSourceMetadata, external_stem_role) == sizeof(void*),
+              "AudioSourceMetadata.external_stem_role offset");
+static_assert(sizeof(SonareProjectAudioSourceMetadata) == 2u * sizeof(void*),
+              "SonareProjectAudioSourceMetadata layout drift");
+#endif
+
 /// @brief Reads a project track by 0-based stored index.
 SonareError sonare_project_track_by_index(const SonareProject* project, size_t index,
                                           SonareProjectTrack* out);
@@ -319,6 +350,21 @@ SonareError sonare_project_clip_by_index(const SonareProject* project, size_t in
 /// @brief Reads a project source by 0-based stored index.
 SonareError sonare_project_source_by_index(const SonareProject* project, size_t index,
                                            SonareProjectSource* out);
+
+/// @brief Reads the owning metadata strings for an audio source id.
+///
+/// On success both fields are heap-allocated copies, including empty strings,
+/// and must be released with @ref sonare_project_free_audio_source_metadata.
+/// The output is zeroed before validation and remains zeroed on every failure.
+/// Unknown ids and MIDI source ids return @c SONARE_ERROR_INVALID_PARAMETER.
+SonareError sonare_project_get_audio_source_metadata(const SonareProject* project,
+                                                     uint32_t source_id,
+                                                     SonareProjectAudioSourceMetadata* out);
+
+/// @brief Frees strings returned by
+///        @ref sonare_project_get_audio_source_metadata and zeros the struct.
+///        NULL is safe.
+void sonare_project_free_audio_source_metadata(SonareProjectAudioSourceMetadata* metadata);
 
 /// @brief Replaces the project's mixer scene from scene JSON.
 SonareError sonare_project_set_mixer_scene_json(SonareProject* project, const char* scene_json);

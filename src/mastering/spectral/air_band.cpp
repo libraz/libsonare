@@ -16,6 +16,22 @@ namespace {
 using sonare::constants::kInvSqrt2D;
 using sonare::constants::kPiD;
 
+// Keep the detector envelope's existing 48 kHz behavior while expressing its
+// smoothing in seconds. The legacy coefficient was alpha=0.005 per sample;
+// derive its equivalent one-pole time constant once and resample that time
+// constant for each prepared host rate.
+constexpr double kEnvelopeReferenceSampleRate = 48000.0;
+constexpr double kEnvelopeReferenceAlpha = 0.005;
+
+double envelope_time_constant_seconds() {
+  return -1.0 / (kEnvelopeReferenceSampleRate * std::log1p(-kEnvelopeReferenceAlpha));
+}
+
+float envelope_alpha_for_sample_rate(double sample_rate) {
+  const double tau = envelope_time_constant_seconds();
+  return static_cast<float>(1.0 - std::exp(-1.0 / (tau * sample_rate)));
+}
+
 AirBand::Biquad make_highpass(double frequency_hz, double sample_rate, double q) {
   const float w0 = static_cast<float>(
       2.0 * kPiD * std::clamp(frequency_hz, 20.0, sample_rate * 0.49) / sample_rate);
@@ -71,6 +87,7 @@ void AirBand::prepare(double sample_rate, int max_block_size, int max_channels) 
   harmonic_rms_sq_.assign(n, 0.0f);
   harmonic_gain_.assign(n, 0.0f);
   shelf_control_samples_.assign(n, 0);
+  envelope_alpha_ = envelope_alpha_for_sample_rate(sample_rate_);
   normalization_rms_alpha_ = static_cast<float>(1.0 - std::exp(-1.0 / (0.030 * sample_rate_)));
   harmonic_gain_alpha_ = static_cast<float>(1.0 - std::exp(-1.0 / (0.005 * sample_rate_)));
   band_scratch_.assign(static_cast<size_t>(max_block_size_), 0.0f);
@@ -120,7 +137,7 @@ void AirBand::process(float* const* channels, int num_channels, int num_samples)
     for (int i = 0; i < num_samples; ++i) {
       const float band = detector_[static_cast<size_t>(ch)].process(channels[ch][i]);
       band_scratch_[static_cast<size_t>(i)] = band;
-      envelope = 0.995f * envelope + 0.005f * std::abs(band);
+      envelope = (1.0f - envelope_alpha_) * envelope + envelope_alpha_ * std::abs(band);
       const float over_db = std::max(0.0f, linear_to_db(envelope) - config_.dynamic_threshold_db);
       if (shelf_control_samples == 0) {
         current_gain_db = std::min(config_.dynamic_range_db, over_db * 0.25f) * config_.amount;

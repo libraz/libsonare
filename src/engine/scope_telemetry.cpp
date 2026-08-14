@@ -22,12 +22,16 @@ void ScopeTelemetryTap::prepare(double sample_rate, int max_block_size, size_t t
   fft_ = std::make_unique<FFT>(n_fft_);
   fft_input_.assign(static_cast<size_t>(n_fft_), 0.0f);
   spectrum_.assign(static_cast<size_t>(fft_->n_bins()), std::complex<float>{});
+  master_accumulator_.assign(static_cast<size_t>(n_fft_) * 2, 0.0f);
 
   capture_due_ = false;
   frame_accum_ = 0;
   seq_ = 0;
   dropped_records_ = 0;
   staged_count_ = 0;
+  master_frames_ = 0;
+  master_render_frame_ = 0;
+  master_accumulator_overflowed_ = false;
   telemetry_.reserve(next_power_of_2(std::max<size_t>(telemetry_capacity, 1)));
   goniometer_.reset();
 }
@@ -37,13 +41,19 @@ void ScopeTelemetryTap::reset() noexcept {
   frame_accum_ = 0;
   dropped_records_ = 0;
   staged_count_ = 0;
+  master_frames_ = 0;
+  master_render_frame_ = 0;
+  master_accumulator_overflowed_ = false;
   goniometer_.reset();
 }
 
 bool ScopeTelemetryTap::begin_block(int interval_frames, int num_frames) noexcept {
+  staged_count_ = 0;
+  master_frames_ = 0;
+  master_render_frame_ = 0;
+  master_accumulator_overflowed_ = false;
   if (interval_frames <= 0 || num_frames <= 0) {
     capture_due_ = false;
-    staged_count_ = 0;
     return false;
   }
   frame_accum_ += num_frames;
@@ -58,10 +68,18 @@ bool ScopeTelemetryTap::begin_block(int interval_frames, int num_frames) noexcep
 
 void ScopeTelemetryTap::end_block() noexcept {
   if (!capture_due_) return;
+  if (!master_accumulator_overflowed_ && master_frames_ > 0 && !master_accumulator_.empty()) {
+    float* master_channels[] = {master_accumulator_.data(),
+                                master_accumulator_.data() + static_cast<size_t>(n_fft_)};
+    process(master_channels, 2, static_cast<int>(master_frames_), master_render_frame_, 0);
+  }
   for (size_t i = 0; i < staged_count_; ++i) {
     publish(staged_records_[i]);
   }
   staged_count_ = 0;
+  master_frames_ = 0;
+  master_render_frame_ = 0;
+  master_accumulator_overflowed_ = false;
 }
 
 void ScopeTelemetryTap::process(float* const* channels, int num_channels, int num_frames,
@@ -144,6 +162,34 @@ void ScopeTelemetryTap::process(float* const* channels, int num_channels, int nu
   }
 
   stage(record);
+}
+
+void ScopeTelemetryTap::append_master_pre_metronome(float* const* channels, int num_channels,
+                                                    int num_frames, int64_t render_frame) noexcept {
+  if (!capture_due_ || channels == nullptr || num_channels <= 0 || num_frames <= 0 ||
+      master_accumulator_.empty()) {
+    return;
+  }
+  const size_t frames = static_cast<size_t>(num_frames);
+  if (master_accumulator_overflowed_ || frames > static_cast<size_t>(n_fft_) - master_frames_) {
+    if (!master_accumulator_overflowed_) ++dropped_records_;
+    master_accumulator_overflowed_ = true;
+    return;
+  }
+
+  if (master_frames_ == 0) master_render_frame_ = render_frame;
+  const size_t offset = master_frames_;
+  const int planes = std::min(num_channels, 2);
+  for (int ch = 0; ch < 2; ++ch) {
+    float* dst = master_accumulator_.data() + static_cast<size_t>(ch) * n_fft_ + offset;
+    const float* src = (channels != nullptr && ch < planes) ? channels[ch] : nullptr;
+    if (src != nullptr) {
+      std::copy(src, src + num_frames, dst);
+    } else {
+      std::fill(dst, dst + num_frames, 0.0f);
+    }
+  }
+  master_frames_ += frames;
 }
 
 void ScopeTelemetryTap::publish(ScopeTelemetryRecord record) noexcept {

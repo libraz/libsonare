@@ -149,17 +149,6 @@ void StreamingFormant::process_block(const float* input, float* output, int num_
     for (auto& filter : filters_) y = filter.process(y);
     output[i] = y;
   }
-  // Settle: rebuild once more if the tail of the ramp diverged from filter_factor_.
-  if (std::abs(smoothed_factor_ - filter_factor_) > kRebuildEpsilon ||
-      std::abs(body_smoother_.current() - filter_body_) > kRebuildEpsilon ||
-      std::abs(brightness_smoother_.current() - filter_brightness_) > kRebuildEpsilon ||
-      std::abs(nasal_smoother_.current() - filter_nasal_) > kRebuildEpsilon) {
-    filter_factor_ = smoothed_factor_;
-    filter_body_ = body_smoother_.current();
-    filter_brightness_ = brightness_smoother_.current();
-    filter_nasal_ = nasal_smoother_.current();
-    update_filters();
-  }
 }
 
 }  // namespace sonare::editing::voice_changer

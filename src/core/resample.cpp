@@ -11,6 +11,10 @@ namespace sonare {
 
 std::vector<float> resample(const float* samples, size_t size, int src_sr, int target_sr) {
   SONARE_CHECK(src_sr > 0 && target_sr > 0, ErrorCode::InvalidParameter);
+  // Reject null + size>0 before either the copy or resampler path can dereference it.
+  // A null pointer with size==0 is treated as an empty input (valid).
+  SONARE_CHECK_MSG(samples != nullptr || size == 0, ErrorCode::InvalidParameter,
+                   "resample: samples is null but size > 0");
 
   if (size == 0) {
     return {};

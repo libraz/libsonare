@@ -87,6 +87,7 @@
 #include "effects/reverb/fdn_reverb.h"
 #include "effects/reverb/velvet_reverb.h"
 #ifdef SONARE_HAVE_ACOUSTIC
+#include "acoustic/material.h"
 #include "effects/acoustic/room_morph.h"
 #include "effects/reverb/room_reverb.h"
 #endif
@@ -142,7 +143,8 @@ std::vector<float> parse_ir_f32_base64_json(const std::string& json_params) {
 }
 #endif
 
-std::vector<Param> parse_insert_params_json(const std::string& json_params) {
+std::vector<Param> parse_insert_params_json(const std::string& json_params,
+                                            bool allow_acoustic_material_arrays = false) {
   try {
     if (json_params.empty()) return {};
     // Strict parse: insert params are a flat map of `{name: value}` and a
@@ -158,6 +160,13 @@ std::vector<Param> parse_insert_params_json(const std::string& json_params) {
         params.push_back(Param{key, value.as_bool() ? 1.0 : 0.0});
       } else if (value.is_number()) {
         params.push_back(Param{key, value.as_number()});
+      } else if (allow_acoustic_material_arrays &&
+                 (key == "bandAbsorption" || key == "bandScattering") && value.is_array()) {
+        // The flat ParamMap cannot carry an array. Acoustic room-morph consumes
+        // these two options from the original JSON object in build_effects();
+        // accepting them here keeps the generic JSON validation layer from
+        // rejecting an option that the acoustic facade already supports.
+        continue;
       } else if (key == "irF32Base64" && value.is_string()) {
         continue;
       } else {
@@ -431,6 +440,108 @@ std::unique_ptr<Processor> build_multiband(const std::string& name, const ParamM
 }
 
 #ifdef SONARE_HAVE_FX
+#ifdef SONARE_HAVE_ACOUSTIC
+bool acoustic_material_preset_from_int(int selector, sonare::acoustic::MaterialPreset* out) {
+  using sonare::acoustic::MaterialPreset;
+  switch (selector) {
+    case 1:
+      *out = MaterialPreset::Concrete;
+      return true;
+    case 2:
+      *out = MaterialPreset::Wood;
+      return true;
+    case 3:
+      *out = MaterialPreset::Curtain;
+      return true;
+    case 4:
+      *out = MaterialPreset::Carpet;
+      return true;
+    case 5:
+      *out = MaterialPreset::Glass;
+      return true;
+    default:
+      return false;
+  }
+}
+
+std::vector<float> acoustic_material_bands(const sonare::util::json::Value* value,
+                                           const char* key) {
+  if (value == nullptr) return {};
+  if (!value->is_array()) {
+    throw SonareException(ErrorCode::InvalidParameter, std::string(key) + " must be an array");
+  }
+  if (value->size() > sonare::acoustic::kMaxMaterialBands) {
+    throw SonareException(ErrorCode::InvalidParameter,
+                          std::string(key) + " exceeds the maximum of 64 bands");
+  }
+
+  std::vector<float> bands;
+  bands.reserve(value->size());
+  for (const auto& band : value->as_array()) {
+    if (!band.is_number()) {
+      throw SonareException(ErrorCode::InvalidParameter,
+                            std::string(key) + " values must be within [0, 1]");
+    }
+    const float coefficient = band.as_float();
+    if (!std::isfinite(coefficient) || coefficient < 0.0f || coefficient > 1.0f) {
+      throw SonareException(ErrorCode::InvalidParameter,
+                            std::string(key) + " values must be within [0, 1]");
+    }
+    bands.push_back(coefficient);
+  }
+  return bands;
+}
+
+sonare::acoustic::ShoeboxRoom acoustic_room_from_json(const detail::ParamMap& params,
+                                                      const std::string* json_params) {
+  using namespace sonare::acoustic;
+
+  const RoomDimensions dims{f(params, "lengthM", 7.0f), f(params, "widthM", 5.0f),
+                            f(params, "heightM", 3.0f)};
+  MaterialPreset preset{};
+  if (acoustic_material_preset_from_int(detail::i(params, "materialPreset", 0), &preset)) {
+    ShoeboxRoom room;
+    room.dims = dims;
+    const Material wall = make_material(preset);
+    for (Material& w : room.walls) w = wall;
+    return room;
+  }
+  if (json_params == nullptr || json_params->empty()) {
+    return uniform_shoebox(dims, f(params, "absorption", 0.2f));
+  }
+
+  const auto root = sonare::util::json::parse_strict(*json_params);
+  if (!root.is_object()) {
+    throw SonareException(ErrorCode::InvalidParameter, "expected JSON object");
+  }
+
+  const auto* absorption_value = root.find("bandAbsorption");
+  const auto* scattering_value = root.find("bandScattering");
+  const std::vector<float> absorption_bands =
+      acoustic_material_bands(absorption_value, "bandAbsorption");
+  const std::vector<float> scattering_bands =
+      acoustic_material_bands(scattering_value, "bandScattering");
+
+  if (!absorption_bands.empty()) {
+    ShoeboxRoom room;
+    room.dims = dims;
+    Material wall;
+    wall.absorption.reserve(absorption_bands.size());
+    for (const float coefficient : absorption_bands) {
+      wall.absorption.push_back(std::clamp(coefficient, 0.0f, 0.999f));
+    }
+    wall.scattering.reserve(absorption_bands.size());
+    for (size_t i = 0; i < absorption_bands.size(); ++i) {
+      wall.scattering.push_back(i < scattering_bands.size() ? scattering_bands[i] : 0.0f);
+    }
+    for (Material& w : room.walls) w = wall;
+    return room;
+  }
+
+  return uniform_shoebox(dims, f(params, "absorption", 0.2f));
+}
+#endif
+
 std::unique_ptr<Processor> build_effects(const std::string& name, const ParamMap& params,
                                          const std::string* json_params) {
   using namespace sonare::effects::reverb;
@@ -560,11 +671,14 @@ std::unique_ptr<Processor> build_effects(const std::string& name, const ParamMap
   }
   if (name == "effects.acoustic.roomMorph") {
     // Source-reverb tail suppression in front of a target-room convolution. The
-    // target room's RIR is synthesized from its geometry + uniform absorption.
+    // target-room material follows the same precedence as the offline acoustic
+    // facade: materialPreset > bandAbsorption > scalar absorption.
     effects::acoustic::RoomMorphConfig config;
-    config.target = sonare::acoustic::uniform_shoebox(
-        {f(params, "lengthM", 7.0f), f(params, "widthM", 5.0f), f(params, "heightM", 3.0f)},
-        f(params, "absorption", 0.2f));
+    // Probe the array keys so insert_param_names() publishes all construction
+    // options even though the flat ParamMap cannot hold their values.
+    (void)params.find("bandAbsorption");
+    (void)params.find("bandScattering");
+    config.target = acoustic_room_from_json(params, json_params);
     config.placement.source = {f(params, "sourceX", 1.0f), f(params, "sourceY", 1.0f),
                                f(params, "sourceZ", 1.2f)};
     config.placement.listener = {f(params, "listenerX", 5.0f), f(params, "listenerY", 4.0f),
@@ -576,6 +690,15 @@ std::unique_ptr<Processor> build_effects(const std::string& name, const ParamMap
     config.seed = static_cast<unsigned>(
         std::max(0, detail::i(params, "seed", static_cast<int>(config.seed))));
     config.max_seconds = f(params, "maxSeconds", config.max_seconds);
+    config.late_model = b(params, "preferEyring", true) ? sonare::acoustic::ReverbModel::Eyring
+                                                        : sonare::acoustic::ReverbModel::Sabine;
+    config.mixing_time_ms = f(params, "mixingTimeMs", config.mixing_time_ms);
+    // A zero crossfade means "use the library default" on the offline acoustic
+    // facade; preserve that normalization for the streaming insert as well.
+    if (params.find("crossfadeMs") != params.end()) {
+      const float crossfade_ms = f(params, "crossfadeMs", 0.0f);
+      if (crossfade_ms != 0.0f) config.crossfade_ms = crossfade_ms;
+    }
     return make<effects::acoustic::RoomMorphProcessor>(config);
   }
 #endif
@@ -699,7 +822,9 @@ std::unique_ptr<Processor> build_insert(const std::string& name, const ParamMap&
 std::unique_ptr<sonare::rt::ProcessorBase> make_insert(const std::string& name,
                                                        const std::string& json_params,
                                                        std::vector<std::string>* out_unknown_keys) {
-  const std::vector<Param> param_list = parse_insert_params_json(json_params);
+  const bool allow_acoustic_material_arrays = name == "effects.acoustic.roomMorph";
+  const std::vector<Param> param_list =
+      parse_insert_params_json(json_params, allow_acoustic_material_arrays);
   const ParamMap params = detail::make_map(param_list);
   auto processor = build_insert(name, params, &json_params);
   // Only report ignored keys for a recognized processor: build_insert() probes

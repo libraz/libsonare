@@ -29,6 +29,24 @@ std::vector<float> pcen(const float* S, int n_bins, int n_frames, const PcenConf
   if (S == nullptr) {
     throw SonareException(ErrorCode::InvalidParameter, "pcen: S is null");
   }
+  if (!std::isfinite(config.time_constant) || !std::isfinite(config.gain) ||
+      !std::isfinite(config.bias) || !std::isfinite(config.power) || !std::isfinite(config.eps)) {
+    throw SonareException(ErrorCode::InvalidParameter,
+                          "pcen: scalar configuration values must be finite");
+  }
+  if (config.b.size() > 1) {
+    throw SonareException(ErrorCode::InvalidParameter, "pcen: b must have length 0 or 1");
+  }
+  for (float value : config.b) {
+    if (!std::isfinite(value)) {
+      throw SonareException(ErrorCode::InvalidParameter, "pcen: b values must be finite");
+    }
+  }
+  for (float value : config.zi) {
+    if (!std::isfinite(value)) {
+      throw SonareException(ErrorCode::InvalidParameter, "pcen: zi values must be finite");
+    }
+  }
   if (n_bins <= 0 || n_frames <= 0) {
     return {};
   }
@@ -47,7 +65,7 @@ std::vector<float> pcen(const float* S, int n_bins, int n_frames, const PcenConf
 
   float b =
       config.b.empty() ? derive_b(config.time_constant, config.sr, config.hop_length) : config.b[0];
-  if (b <= 0.0f || b > 1.0f) {
+  if (!std::isfinite(b) || b <= 0.0f || b > 1.0f) {
     throw SonareException(ErrorCode::InvalidParameter,
                           "pcen: derived/explicit smoothing coefficient out of range (0,1]");
   }

@@ -25,6 +25,7 @@ class MultibandLimiter : public rt::ProcessorBase {
   explicit MultibandLimiter(MultibandLimiterConfig config = {});
 
   void prepare(double sample_rate, int max_block_size) override;
+  void prepare(double sample_rate, int max_block_size, int max_channels) override;
   void process(float* const* channels, int num_channels, int num_samples) override;
   void reset() override;
   int latency_samples() const noexcept override;
@@ -54,6 +55,7 @@ class MultibandLimiter : public rt::ProcessorBase {
   MultibandLimiterConfig config_{};
   double sample_rate_ = 48000.0;
   int max_block_size_ = 0;
+  int max_working_channels_ = 0;
   bool prepared_ = false;
   Crossover crossover_;
   CrossoverScratch scratch_;

@@ -46,8 +46,8 @@ void RealtimeEngine::process_impl(float* const* io, float* const* monitor_out, i
     silence(io, num_channels, frames);
     silence(monitor_out, num_channels, frames);
     transport_.advance(frames);
-    enqueue_error(TelemetryErrorCode::kMaxBlockExceeded, state.render_frame, state.sample_position,
-                  static_cast<uint32_t>(num_channels));
+    enqueue_error(TelemetryErrorCode::kMaxChannelsExceeded, state.render_frame,
+                  state.sample_position, static_cast<uint32_t>(num_channels));
     return;
   }
 
@@ -290,10 +290,6 @@ void RealtimeEngine::process_impl(float* const* io, float* const* monitor_out, i
   }
   clip_player_.end_page_miss_block();
 #if defined(SONARE_WITH_MIXING)
-  // Publish the master scope from the complete host block. Automation and clip
-  // boundaries may have split rendering into 64-sample chunks, but spectrum
-  // resolution must remain tied to the host block, not those control splits.
-  scope_tap_.process(io, num_channels, frames, state.render_frame, 0);
   meter_tap_.end_block();
   scope_tap_.end_block();
 #endif
@@ -408,6 +404,23 @@ void RealtimeEngine::process_subblock(float* const* io, float* const* monitor_ou
         }
       }
     }
+#if defined(SONARE_WITH_MIXING)
+    // Lane-owned PFL/AFL taps and the legacy raw-strip monitor path share the
+    // one prepared monitor bus. Clear it before source/lane rendering so the
+    // TrackMixer can accumulate PFL (post-strip) and AFL (post lane fader/gate/
+    // pan/scatter) samples without a second per-block buffer or allocation.
+    const bool lane_monitor_active = track_mixer_runtime_.monitor_active();
+    const bool legacy_monitor_active = monitoring_enabled_.load(std::memory_order_relaxed);
+    const bool monitor_active = lane_monitor_active || legacy_monitor_active;
+    if (monitor_active) {
+      for (int ch = 0; ch < channels; ++ch) {
+        std::fill(monitor_bus_channels_[static_cast<size_t>(ch)],
+                  monitor_bus_channels_[static_cast<size_t>(ch)] + num_frames, 0.0f);
+      }
+    }
+    track_mixer_runtime_.set_monitor_bus(
+        lane_monitor_active ? monitor_bus_channels_.data() : nullptr, channels);
+#endif
     // Clip audio and sequenced MIDI are both gated on the transport rolling.
     // While stopped, advance() freezes sample_position, so rendering clips
     // would replay the same clip window every block as a sustained buzz.
@@ -643,19 +656,22 @@ void RealtimeEngine::process_subblock(float* const* io, float* const* monitor_ou
       mixing_runtime_.process_at(sub_channels.data(), channels, num_frames,
                                  transport_.sample_position());
     }
-    // Solo/mute + PFL/AFL monitoring stage for any registered strips. Existing
-    // process() callers keep foldback compatibility; process_with_monitor()
-    // receives the cue bus separately without contaminating the main output.
-    if (monitoring_enabled_.load(std::memory_order_relaxed)) {
-      for (int ch = 0; ch < channels; ++ch) {
-        std::fill(monitor_bus_channels_[static_cast<size_t>(ch)],
-                  monitor_bus_channels_[static_cast<size_t>(ch)] + num_frames, 0.0f);
-      }
+    // Legacy raw-strip solo/mute + PFL/AFL remains an independent producer of
+    // the same monitor bus. Lane-owned monitor modes were accumulated above;
+    // neither path is registered in the other, so each source is summed once.
+    if (legacy_monitor_active) {
       const size_t strip_count = monitor_runtime_.size();
       for (size_t s = 0; s < strip_count; ++s) {
         monitor_runtime_.process_strip(s, sub_channels.data(), channels, num_frames,
                                        transport_.sample_position(), monitor_bus_channels_.data());
       }
+    }
+    // process() folds the complete cue bus into the main output for historical
+    // compatibility. process_with_monitor() copies it only to monitor_out, so
+    // the program output stays unchanged while the host receives a separate cue
+    // signal. Lane mode itself enables this stage even when the legacy
+    // monitoring flag is off.
+    if (monitor_active) {
       for (int ch = 0; ch < channels; ++ch) {
         float* out = sub_channels[static_cast<size_t>(ch)];
         const float* monitor = monitor_bus_channels_[static_cast<size_t>(ch)];
@@ -689,6 +705,10 @@ void RealtimeEngine::process_subblock(float* const* io, float* const* monitor_ou
       capture_sink_.process(capture_channels, channels, num_frames,
                             numeric::saturating_sub(transport_.sample_position(), record_offset));
     }
+#if defined(SONARE_WITH_MIXING)
+    scope_tap_.append_master_pre_metronome(sub_channels.data(), channels, num_frames,
+                                           transport_.render_frame());
+#endif
     // The metronome is a monitor/cue signal: render it after master metering,
     // scope capture, graph processing, and output capture so it remains audible
     // to the player without being committed to recorded program audio.

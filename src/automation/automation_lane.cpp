@@ -17,7 +17,11 @@ float interpolate(const Breakpoint& a, const Breakpoint& b, double ppq) noexcept
 
 }  // namespace
 
-AutomationLane::AutomationLane(uint32_t target_param_id) : target_param_id_(target_param_id) {}
+AutomationLane::AutomationLane(uint32_t target_param_id, AutomationTargetKind target_kind)
+    : target_param_id_(target_param_id), target_kind_(target_kind) {
+  SONARE_CHECK_MSG(valid_automation_target_kind(target_kind), ErrorCode::InvalidParameter,
+                   "automation target kind is invalid");
+}
 
 void AutomationLane::set_points(std::vector<Breakpoint> points) {
   for (const Breakpoint& point : points) {

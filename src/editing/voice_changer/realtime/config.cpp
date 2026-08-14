@@ -161,15 +161,16 @@ struct PresetMetadata {
   VoiceCharacterPreset preset;
   std::string_view id;            ///< Stable identifier exposed across all bindings.
   std::string_view display_name;  ///< Human-readable label used in UI surfaces.
+  std::string_view category;      ///< Schema category emitted with the preset document.
 };
 
 constexpr std::array<PresetMetadata, 6> kPresetMetadata = {{
-    {VoiceCharacterPreset::NeutralMonitor, "neutral-monitor", "Neutral Monitor"},
-    {VoiceCharacterPreset::BrightIdol, "bright-idol", "Bright Idol"},
-    {VoiceCharacterPreset::SoftWhisper, "soft-whisper", "Soft Whisper"},
-    {VoiceCharacterPreset::DeepNarrator, "deep-narrator", "Deep Narrator"},
-    {VoiceCharacterPreset::RobotMascot, "robot-mascot", "Robot Mascot"},
-    {VoiceCharacterPreset::DarkVillain, "dark-villain", "Dark Villain"},
+    {VoiceCharacterPreset::NeutralMonitor, "neutral-monitor", "Neutral Monitor", "monitor"},
+    {VoiceCharacterPreset::BrightIdol, "bright-idol", "Bright Idol", "bright"},
+    {VoiceCharacterPreset::SoftWhisper, "soft-whisper", "Soft Whisper", "soft"},
+    {VoiceCharacterPreset::DeepNarrator, "deep-narrator", "Deep Narrator", "deep"},
+    {VoiceCharacterPreset::RobotMascot, "robot-mascot", "Robot Mascot", "robot"},
+    {VoiceCharacterPreset::DarkVillain, "dark-villain", "Dark Villain", "dark"},
 }};
 
 // Compile-time check that every enumerator gets a metadata row. Adding a new
@@ -634,11 +635,14 @@ RealtimeVoiceChangerConfig realtime_voice_changer_config_from_json(std::string_v
   const auto root = sonare::util::json::parse(input);
   RealtimeVoiceChangerConfig c;
   const auto* dsp = root.find("dsp");
-  // A concrete DSP section is authoritative. This preserves saved presets that
-  // carry both their historical macro inputs and their already-expanded DSP.
-  if ((!dsp || !dsp->is_object()) && root.find("macros") != nullptr) {
+  const auto* macros = root.find("macros");
+  if (dsp != nullptr && macros != nullptr) {
+    throw SonareException(ErrorCode::InvalidParameter,
+                          "preset must contain exactly one of dsp or macros");
+  }
+  if (macros != nullptr) {
     std::string error;
-    if (!apply_macro_section(*root.find("macros"), &c, &error)) {
+    if (!apply_macro_section(*macros, &c, &error)) {
       throw SonareException(ErrorCode::InvalidParameter, error);
     }
     return normalize_realtime_voice_changer_config(c);
@@ -753,7 +757,7 @@ std::string realtime_voice_changer_config_to_json(const RealtimeVoiceChangerConf
   // metadata required by the strict preset validator so callers can validate
   // its output again without reconstructing an envelope around the DSP object.
   out << "{\"schemaVersion\":" << kVoiceChangerPresetSchemaVersion
-      << ",\"id\":\"custom\",\"name\":\"Custom\",";
+      << ",\"id\":\"custom\",\"name\":\"Custom\",\"category\":\"custom\",";
   dump_dsp_section(out, c);
   out << "}";
   return out.str();
@@ -767,7 +771,8 @@ std::string realtime_voice_changer_preset_json(VoiceCharacterPreset preset) {
       << sonare::util::json::escape_string(realtime_voice_changer_preset_id(preset))
       << "\",\"name\":\""
       << sonare::util::json::escape_string(realtime_voice_changer_preset_display_name(preset))
-      << "\",";
+      << "\",\"category\":\""
+      << sonare::util::json::escape_string(std::string(preset_metadata(preset).category)) << "\",";
   dump_dsp_section(out, c);
   out << "}";
   return out.str();
@@ -789,7 +794,7 @@ bool validate_realtime_voice_changer_preset_json(std::string_view json,
             error)) {
       return false;
     }
-    for (const char* key : {"schemaVersion", "id", "name"}) {
+    for (const char* key : {"schemaVersion", "id", "name", "category"}) {
       if (!require_key(root, key, "$", error)) return false;
     }
     // schemaVersion: JSON-Schema "type: integer, const: 1" demands an
@@ -824,19 +829,20 @@ bool validate_realtime_voice_changer_preset_json(std::string_view json,
     if (root.find("description") && !require_string(root, "description", 0, 512, "$", error)) {
       return false;
     }
-    if (const auto* category = root.find("category")) {
+    if (!require_string(root, "category", 1, 16, "$", error)) return false;
+    {
       static constexpr std::array<std::string_view, 7> kCategories = {
           "monitor", "bright", "soft", "deep", "robot", "dark", "custom"};
-      if (!category->is_string() || std::find(kCategories.begin(), kCategories.end(),
-                                              category->as_string()) == kCategories.end()) {
+      const auto& category = root.find("category")->as_string();
+      if (std::find(kCategories.begin(), kCategories.end(), category) == kCategories.end()) {
         if (error) *error = "preset category is invalid";
         return false;
       }
     }
     const auto* dsp = root.find("dsp");
     const auto* macros = root.find("macros");
-    if (dsp == nullptr && macros == nullptr) {
-      if (error) *error = "preset must contain dsp or macros";
+    if ((dsp == nullptr) == (macros == nullptr)) {
+      if (error) *error = "preset must contain exactly one of dsp or macros";
       return false;
     }
     if (dsp != nullptr && !validate_dsp_section(*dsp, error)) return false;

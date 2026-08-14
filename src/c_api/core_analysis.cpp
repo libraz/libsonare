@@ -50,6 +50,14 @@ SonareError sonare_analyze_bpm(const float* samples, size_t length, int sample_r
 SonareError sonare_analyze_impulse_response(const float* samples, size_t length, int sample_rate,
                                             int n_octave_bands, SonareAcousticResult* out) {
   SONARE_C_API_ENTRY;
+  return sonare_analyze_impulse_response_ex(samples, length, sample_rate, n_octave_bands, 30.0f,
+                                            out);
+}
+
+SonareError sonare_analyze_impulse_response_ex(const float* samples, size_t length, int sample_rate,
+                                               int n_octave_bands, float min_decay_db,
+                                               SonareAcousticResult* out) {
+  SONARE_C_API_ENTRY;
   if (!out) return SONARE_ERROR_INVALID_PARAMETER;
 
   // Zero the whole struct up front, BEFORE any validating early-return (this
@@ -60,11 +68,14 @@ SonareError sonare_analyze_impulse_response(const float* samples, size_t length,
   // garbage. Otherwise sonare_free_acoustic_result(&r) would delete[] an
   // uninitialised pointer.
   *out = {};
-  if (n_octave_bands < 0) return SONARE_ERROR_INVALID_PARAMETER;
+  if (n_octave_bands < 0 || !std::isfinite(min_decay_db) || min_decay_db <= 0.0f) {
+    return SONARE_ERROR_INVALID_PARAMETER;
+  }
 
   return run_offline(samples, length, sample_rate, [&](const Audio& audio) -> SonareError {
     AcousticConfig config;
     config.n_octave_bands = n_octave_bands;
+    config.min_decay_db = min_decay_db;
     fill_acoustic_result(sonare::analyze_impulse_response(audio, config), out);
     return SONARE_OK;
   });

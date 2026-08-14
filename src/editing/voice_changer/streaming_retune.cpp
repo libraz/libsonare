@@ -40,7 +40,7 @@ int resolve_grain_size(const StreamingRetuneConfig& config, double sample_rate) 
 StreamingRetune::StreamingRetune(StreamingRetuneConfig config) { set_config(config); }
 
 void StreamingRetune::update_ratio() noexcept {
-  const float semis = std::clamp(config_.semitones, -kMaxSemitones, kMaxSemitones);
+  const float semis = std::clamp(semitones_smoother_.current(), -kMaxSemitones, kMaxSemitones);
   pitch_ratio_ = std::pow(2.0, static_cast<double>(semis) / kSemitonesPerOctave);
 }
 
@@ -110,7 +110,8 @@ void StreamingRetune::set_config(const StreamingRetuneConfig& config) {
   mix_smoother_.set_target(config_.mix);
   // Before prepare() no audio thread is consuming the values, so preserve the
   // existing immediate ratio initialization. Once prepared, process_block()
-  // advances the smoother and derives the ratio sample-by-sample.
+  // advances the smoother sample-by-sample; emit_grain() derives the ratio
+  // only when it starts a new grain.
   if (sample_rate_ <= 0.0) update_ratio();
 }
 
@@ -128,6 +129,11 @@ float StreamingRetune::read_ring_linear(double position) const noexcept {
 }
 
 void StreamingRetune::emit_grain() noexcept {
+  // The semitone smoother still advances at every sample, but the expensive
+  // exponential is only needed when a new grain captures its ratio. Keeping
+  // the ratio fixed for the complete grain also makes the cost independent of
+  // the caller's block partition.
+  update_ratio();
   // Grain-resampling pitch shift: a grain of grain_size output samples is
   // sourced from grain_size * pitch_ratio input samples via linear
   // interpolation. The source window ends at the current write head (most
@@ -172,8 +178,7 @@ void StreamingRetune::process_block(const float* input, float* output, int num_s
   if (num_samples > max_block_size_) return;
 
   for (int i = 0; i < num_samples; ++i) {
-    const float semitones = semitones_smoother_.process();
-    pitch_ratio_ = std::pow(2.0, static_cast<double>(semitones) / kSemitonesPerOctave);
+    semitones_smoother_.process();
     const float mix = mix_smoother_.process();
     // 1) Write incoming sample into the history ring.
     ring_buf_[write_head_ % ring_cap_] = input[i];

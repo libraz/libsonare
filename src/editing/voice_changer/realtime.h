@@ -11,6 +11,7 @@
 #include <string_view>
 #include <vector>
 
+#include "editing/voice_changer/control_cadence.h"
 #include "editing/voice_changer/isp_limiter.h"
 #include "editing/voice_changer/streaming_formant.h"
 #include "editing/voice_changer/streaming_retune.h"
@@ -96,9 +97,11 @@ struct LimiterConfig {
   ///          inter-sample peaks at or below @ref isp_ceiling_dbtp dBTP. This
   ///          prevents downstream DAC oversampling from clipping even when the
   ///          sample-domain limiter has kept every audible sample under
-  ///          @ref ceiling_db. Adds @c IspLimiter::latency_samples (the
-  ///          6-sample FIR group delay plus five 0.1-ms attack time constants;
-  ///          30 samples at 48 kHz) to the chain latency.
+  ///          @ref ceiling_db. Adds the sample-rate-dependent latency reported
+  ///          by @c IspLimiter::latency_samples (the 6-sample FIR group delay
+  ///          plus @c ceil(5 * 0.1 ms * sample_rate) attack-settle samples;
+  ///          31 samples at 48 kHz)
+  ///          to the chain latency.
   bool enable_isp_limiter = true;
   /// @brief True-peak ceiling in dBTP. Defaults to -1.0 dBTP per the EBU R128
   ///        / AES streaming recommendation. Ignored when
@@ -179,11 +182,14 @@ class RealtimeVoiceChanger {
   ///          silent no-op rather than throwing. Caller-owned buffers are left
   ///          untouched in that case.
   void process_block(float* const* channels, int num_channels, int num_samples) noexcept;
-  /// @brief Reports the fixed processing latency in samples.
-  /// @details Dry and wet paths are both aligned to the retune OLA's three-hop
-  ///          delay, so this value never changes when @c wet_mix or
-  ///          @c retune.mix changes. When enabled, the final ISP limiter adds
-  ///          its fixed 6-sample group delay to the whole aligned signal.
+  /// @brief Reports the prepared chain's processing latency in samples.
+  /// @details Dry and wet paths are both aligned to the retune OLA's fixed
+  ///          three-hop delay, so this value never changes when @c wet_mix or
+  ///          @c retune.mix changes. When @ref LimiterConfig::enable_isp_limiter
+  ///          is @c true, the final ISP limiter runs after the aligned mix and
+  ///          adds @c IspLimiter::latency_samples: a 6-sample FIR group delay
+  ///          plus @c ceil(5 * 0.1 ms * sample_rate) attack-settle samples
+  ///          (31 samples at 48 kHz).
   ///          Other stages add <= 8 samples combined and are intentionally
   ///          omitted. Returns 0 before prepare() has been called.
   int latency_samples() const noexcept;
@@ -204,6 +210,17 @@ class RealtimeVoiceChanger {
     float deess_env = 0.0f;
     float deess_gain = 1.0f;  // Smoothed deesser reduction gain.
     float limiter_gain = 1.0f;
+    // Derived controls are refreshed at absolute sample positions 0, 32, ...
+    // while every parameter smoother continues to advance for every sample.
+    ControlCadence control_cadence;
+    float gate_threshold_linear = 0.0f;
+    float gate_range_linear = 1.0f;
+    float gate_attack_alpha = 1.0f;
+    float gate_release_alpha = 1.0f;
+    float comp_attack_alpha = 1.0f;
+    float comp_release_alpha = 1.0f;
+    float limiter_ceiling_linear = 1.0f;
+    float limiter_release_alpha = 1.0f;
     // Snapshot updates arrive between blocks, but level changes must remain
     // sample-continuous. Keep one equal smoother per channel for stereo.
     rt::ParamSmoother input_gain{1.0f, 10.0f, 48000.0};
@@ -235,7 +252,6 @@ class RealtimeVoiceChanger {
     float filter_presence_db = 1.0f;
     float filter_air_db = 0.0f;
     float filter_deess_frequency_hz = 7200.0f;
-    int filter_update_countdown = 0;
     StreamingReverb reverb;
     /// Outer dry path aligned with the retune stage before the whole-chain
     /// wet/dry blend. Allocated only by prepare().
@@ -247,13 +263,12 @@ class RealtimeVoiceChanger {
     IspLimiter isp_limiter;
   };
 
-  /// @brief Recomputes scalar derived state (filter/envelope alphas) from @p config.
-  /// @details Writes to non-snapshot member fields (@c gate_attack_, ...). Called from prepare()
-  /// and — via
+  /// @brief Recomputes sample-rate-derived detector state.
+  /// @details Called from prepare() and — via
   ///          @ref maybe_adopt_snapshot — from the audio thread when a new
   ///          configuration snapshot is adopted between blocks. Never called
   ///          from @ref set_config directly.
-  void update_derived(const RealtimeVoiceChangerConfig& config);
+  void update_derived();
   /// @brief Allocates per-channel buffers. MUST only be called from prepare().
   void allocate_channel(ChannelState& state);
   /// @brief Applies @p config to per-channel DSP coefficients / sub-stage
@@ -263,9 +278,12 @@ class RealtimeVoiceChanger {
   ///        seeds (notably for the reverb) so stereo channels are decorrelated.
   void apply_channel_config(ChannelState& state, int channel_index,
                             const RealtimeVoiceChangerConfig& config);
-  /// @brief Rebuilds EQ/de-esser coefficients from a channel's current
-  /// smoothed values. Called at a bounded cadence from the audio thread.
-  void update_channel_filters(ChannelState& state) noexcept;
+  /// @brief Rebuilds the input high-pass coefficient from its smoothed value.
+  ///        Called at a bounded cadence from the audio thread.
+  void update_input_filter(ChannelState& state) noexcept;
+  /// @brief Rebuilds output EQ and de-esser coefficients from their smoothed
+  ///        values. Called at a bounded cadence from the audio thread.
+  void update_output_filters(ChannelState& state) noexcept;
   void reset_channel(ChannelState& state);
   /// @brief Mirrors the resolved retune grain size into @c config_ so config()
   ///        reports the effective (prepared) grain rather than the requested
@@ -274,8 +292,8 @@ class RealtimeVoiceChanger {
   /// @brief Publishes the latency-report atomic mirrors from @c config_.
   ///        Control-thread only (constructor / prepare / set_config).
   void update_latency_mirrors() noexcept;
-  float process_input_stage(ChannelState& state, float input) noexcept;
-  float process_output_stage(ChannelState& state, float input) noexcept;
+  float process_input_stage(ChannelState& state, float input, bool control_update) noexcept;
+  float process_output_stage(ChannelState& state, float input, bool control_update) noexcept;
   void ensure_scratch(int num_samples) noexcept;
   /// @brief Audio-thread hand-off: adopts the latest published configuration
   ///        if it changed since the last block, and if so re-runs
@@ -327,14 +345,9 @@ class RealtimeVoiceChanger {
   /// not the detector. This avoids the double-LP smearing that obscured
   /// user-configured A/R in earlier versions.
   float fast_det_alpha_ = 1.0f;
-  float gate_attack_ = 1.0f;
-  float gate_release_ = 1.0f;
-  float comp_attack_ = 1.0f;
-  float comp_release_ = 1.0f;
   /// Sub-millisecond limiter attack so transient bursts taper across a few
   /// samples instead of a single-sample step (which audibly clicks).
   float limiter_attack_ = 1.0f;
-  float limiter_release_ = 1.0f;
   float deess_alpha_ = 1.0f;
   float deess_gain_alpha_ = 1.0f;  // Smoothing of the deesser reduction gain.
 };

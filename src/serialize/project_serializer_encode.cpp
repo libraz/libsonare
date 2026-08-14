@@ -41,6 +41,9 @@ Value time_signature_to_json(const transport::TimeSignatureSegment& s) {
 Value automation_lane_to_json(const automation::AutomationLane& lane) {
   Object o;
   o["target_param_id"] = static_cast<double>(lane.target_param_id());
+  if (lane.target_kind() != automation::AutomationTargetKind::kOpaque) {
+    o["target_kind"] = static_cast<int>(lane.target_kind());
+  }
   Array points;
   for (const auto& p : lane.points()) {
     Object po;

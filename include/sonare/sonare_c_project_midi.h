@@ -221,9 +221,12 @@ SonareError sonare_midi_pitch_bend(double ppq, uint8_t group, uint8_t channel, u
 
 /// @brief Imports an in-memory SMF byte buffer, adding one MIDI track + clip per
 ///        imported channel-voice track. @p out_first_clip_id (optional) receives
-///        the id of the first added clip. Malformed or partially truncated
-///        tracks return SONARE_ERROR_INVALID_FORMAT without mutating the project;
-///        @ref sonare_last_error_message describes the rejected truncation.
+///        the id of the first added clip. Unrecoverable malformed tracks return
+///        SONARE_ERROR_INVALID_FORMAT without mutating the project; a recoverable
+///        truncated prefix is installed and reported through the normal success
+///        path. @ref sonare_last_error_message describes rejected truncation.
+///        A valid raw MIDI file can still be rejected when the projected
+///        persistent Project JSON would exceed its aggregate resource budgets.
 SonareError sonare_project_import_smf(SonareProject* project, const uint8_t* bytes, size_t len,
                                       uint32_t* out_first_clip_id);
 
@@ -243,6 +246,8 @@ SonareError sonare_project_export_smf(const SonareProject* project, uint8_t** ou
 ///        registered controllers, bank-valid Program Change) without loss.
 ///        Adds one MIDI track + clip. @p out_first_clip_id (optional) receives
 ///        the added clip id. Malformed input returns an error without crashing.
+///        A valid MIDI Clip File can still be rejected when the projected
+///        persistent Project JSON would exceed its aggregate resource budgets.
 SonareError sonare_project_import_clip_file(SonareProject* project, const uint8_t* bytes,
                                             size_t len, uint32_t* out_first_clip_id);
 

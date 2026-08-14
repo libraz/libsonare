@@ -19,6 +19,7 @@
 #include "effects/spectral_edit.h"
 #include "effects/time_stretch.h"
 #include "sonare_c_internal.h"
+#include "util/constants.h"
 
 using namespace sonare;
 using namespace sonare_c_detail;
@@ -26,25 +27,69 @@ using namespace sonare_c_detail;
 SonareError sonare_hpss(const float* samples, size_t length, int sample_rate, int kernel_harmonic,
                         int kernel_percussive, SonareHpssResult* out) {
   SONARE_C_API_ENTRY;
-  if (!out) return SONARE_ERROR_INVALID_PARAMETER;
+  return sonare_hpss_ex(samples, length, sample_rate, kernel_harmonic, kernel_percussive,
+                        constants::kDefaultNFft, constants::kDefaultHopLength, 1, 0, out, nullptr);
+}
 
-  out->harmonic = nullptr;
-  out->percussive = nullptr;
+SonareError sonare_hpss_ex(const float* samples, size_t length, int sample_rate,
+                           int kernel_harmonic, int kernel_percussive, int n_fft, int hop_length,
+                           int use_soft_mask, int with_residual, SonareHpssResult* out,
+                           float** out_residual) {
+  SONARE_C_API_ENTRY;
+  if (out != nullptr) {
+    out->harmonic = nullptr;
+    out->percussive = nullptr;
+    out->length = 0;
+    out->sample_rate = 0;
+  }
+  if (out_residual != nullptr) *out_residual = nullptr;
+  if (out == nullptr || (with_residual != 0 && out_residual == nullptr)) {
+    return SONARE_ERROR_INVALID_PARAMETER;
+  }
+  // Validate the transform shape at the boundary rather than relying on the
+  // core's precondition throw, so every _ex entry point rejects it identically
+  // and before any input is decoded.
+  if (n_fft <= 0 || hop_length <= 0) return SONARE_ERROR_INVALID_PARAMETER;
 
   return run_offline(samples, length, sample_rate, [&](const Audio& audio) -> SonareError {
     HpssConfig config;
     config.kernel_size_harmonic = kernel_harmonic;
     config.kernel_size_percussive = kernel_percussive;
-    HpssAudioResult result = hpss(audio, config);
+    config.use_soft_mask = use_soft_mask != 0;
 
-    out->length = result.harmonic.size();
+    StftConfig stft_config;
+    stft_config.n_fft = n_fft;
+    stft_config.hop_length = hop_length;
+
+    if (with_residual == 0) {
+      HpssAudioResult result = hpss(audio, config, stft_config);
+      const size_t n = result.harmonic.size();
+      std::unique_ptr<float[]> harmonic(new float[n]);
+      std::unique_ptr<float[]> percussive(new float[n]);
+      std::memcpy(harmonic.get(), result.harmonic.data(), n * sizeof(float));
+      std::memcpy(percussive.get(), result.percussive.data(), n * sizeof(float));
+
+      out->length = n;
+      out->sample_rate = result.harmonic.sample_rate();
+      out->harmonic = release_array(harmonic);
+      out->percussive = release_array(percussive);
+      return SONARE_OK;
+    }
+
+    HpssAudioResultWithResidual result = hpss_with_residual(audio, config, stft_config);
+    const size_t n = result.harmonic.size();
+    std::unique_ptr<float[]> harmonic(new float[n]);
+    std::unique_ptr<float[]> percussive(new float[n]);
+    std::unique_ptr<float[]> residual(new float[n]);
+    std::memcpy(harmonic.get(), result.harmonic.data(), n * sizeof(float));
+    std::memcpy(percussive.get(), result.percussive.data(), n * sizeof(float));
+    std::memcpy(residual.get(), result.residual.data(), n * sizeof(float));
+
+    out->length = n;
     out->sample_rate = result.harmonic.sample_rate();
-    std::unique_ptr<float[]> harmonic(new float[out->length]);
-    std::unique_ptr<float[]> percussive(new float[out->length]);
-    std::memcpy(harmonic.get(), result.harmonic.data(), out->length * sizeof(float));
-    std::memcpy(percussive.get(), result.percussive.data(), out->length * sizeof(float));
     out->harmonic = release_array(harmonic);
     out->percussive = release_array(percussive);
+    *out_residual = release_array(residual);
     return SONARE_OK;
   });
 }
@@ -66,22 +111,54 @@ SonareError sonare_percussive(const float* samples, size_t length, int sample_ra
 SonareError sonare_time_stretch(const float* samples, size_t length, int sample_rate, float rate,
                                 float** out, size_t* out_length) {
   SONARE_C_API_ENTRY;
+  return sonare_time_stretch_ex(samples, length, sample_rate, rate, constants::kDefaultNFft,
+                                constants::kDefaultHopLength, out, out_length);
+}
+
+SonareError sonare_time_stretch_ex(const float* samples, size_t length, int sample_rate, float rate,
+                                   int n_fft, int hop_length, float** out, size_t* out_length) {
+  SONARE_C_API_ENTRY;
+  if (out != nullptr) *out = nullptr;
+  if (out_length != nullptr) *out_length = 0;
+  if (out == nullptr || out_length == nullptr) return SONARE_ERROR_INVALID_PARAMETER;
+  if (n_fft <= 0 || hop_length <= 0) return SONARE_ERROR_INVALID_PARAMETER;
+
+  TimeStretchConfig config;
+  config.n_fft = n_fft;
+  config.hop_length = hop_length;
+  config.backend = StretchBackend::NativeSpectral;
   return run_mono_offline(samples, length, sample_rate, out, out_length,
-                          [rate](const Audio& a) { return time_stretch(a, rate); });
+                          [rate, config](const Audio& a) { return time_stretch(a, rate, config); });
 }
 
 SonareError sonare_pitch_shift(const float* samples, size_t length, int sample_rate,
                                float semitones, float** out, size_t* out_length) {
   SONARE_C_API_ENTRY;
-  if (!out || !out_length) return SONARE_ERROR_INVALID_PARAMETER;
+  return sonare_pitch_shift_ex(samples, length, sample_rate, semitones, constants::kDefaultNFft,
+                               constants::kDefaultHopLength, out, out_length);
+}
+
+SonareError sonare_pitch_shift_ex(const float* samples, size_t length, int sample_rate,
+                                  float semitones, int n_fft, int hop_length, float** out,
+                                  size_t* out_length) {
+  SONARE_C_API_ENTRY;
+  if (out != nullptr) *out = nullptr;
+  if (out_length != nullptr) *out_length = 0;
+  if (out == nullptr || out_length == nullptr) return SONARE_ERROR_INVALID_PARAMETER;
+  if (n_fft <= 0 || hop_length <= 0) return SONARE_ERROR_INVALID_PARAMETER;
+
   PitchShiftPlan plan;
   if (!make_pitch_shift_plan(length, sample_rate, semitones, &plan)) {
     return SONARE_ERROR_INVALID_PARAMETER;
   }
-  SonareError err = validate_audio_params(samples, length, sample_rate);
-  if (err != SONARE_OK) return err;
-  return run_mono_offline(samples, length, sample_rate, out, out_length,
-                          [semitones](const Audio& a) { return pitch_shift(a, semitones); });
+
+  PitchShiftConfig config;
+  config.n_fft = n_fft;
+  config.hop_length = hop_length;
+  config.backend = StretchBackend::NativeSpectral;
+  return run_mono_offline(
+      samples, length, sample_rate, out, out_length,
+      [semitones, config](const Audio& a) { return pitch_shift(a, semitones, config); });
 }
 
 SonareError sonare_normalize(const float* samples, size_t length, int sample_rate, float target_db,
@@ -94,9 +171,32 @@ SonareError sonare_normalize(const float* samples, size_t length, int sample_rat
 SonareError sonare_trim(const float* samples, size_t length, int sample_rate, float threshold_db,
                         float** out, size_t* out_length) {
   SONARE_C_API_ENTRY;
+  return sonare_trim_ex(samples, length, sample_rate, threshold_db, constants::kDefaultNFft,
+                        constants::kDefaultHopLength, out, out_length);
+}
+
+SonareError sonare_normalize_rms(const float* samples, size_t length, int sample_rate,
+                                 float target_db, float** out, size_t* out_length) {
+  SONARE_C_API_ENTRY;
+  if (out != nullptr) *out = nullptr;
+  if (out_length != nullptr) *out_length = 0;
+  if (out == nullptr || out_length == nullptr) return SONARE_ERROR_INVALID_PARAMETER;
   return run_mono_offline(
       samples, length, sample_rate, out, out_length,
-      [threshold_db](const Audio& a) { return trim_absolute(a, threshold_db); });
+      [target_db](const Audio& a) { return normalize_rms(a, target_db, true); });
+}
+
+SonareError sonare_trim_ex(const float* samples, size_t length, int sample_rate, float threshold_db,
+                           int frame_length, int hop_length, float** out, size_t* out_length) {
+  SONARE_C_API_ENTRY;
+  if (out != nullptr) *out = nullptr;
+  if (out_length != nullptr) *out_length = 0;
+  if (out == nullptr || out_length == nullptr) return SONARE_ERROR_INVALID_PARAMETER;
+  if (frame_length <= 0 || hop_length <= 0) return SONARE_ERROR_INVALID_PARAMETER;
+  return run_mono_offline(samples, length, sample_rate, out, out_length,
+                          [threshold_db, frame_length, hop_length](const Audio& a) {
+                            return trim_absolute(a, threshold_db, frame_length, hop_length);
+                          });
 }
 
 SonareError sonare_decompose_with_init(const float* s, int n_features, int n_frames,
@@ -199,27 +299,19 @@ SonareError sonare_hpss_with_residual(const float* samples, size_t length, int s
   *out_length = 0;
   *out_sample_rate = 0;
 
-  return run_offline(samples, length, sample_rate, [&](const Audio& audio) -> SonareError {
-    HpssConfig config;
-    config.kernel_size_harmonic = kernel_harmonic;
-    config.kernel_size_percussive = kernel_percussive;
-    HpssAudioResultWithResidual result = hpss_with_residual(audio, config);
+  SonareHpssResult result{};
+  float* residual = nullptr;
+  SonareError err = sonare_hpss_ex(samples, length, sample_rate, kernel_harmonic, kernel_percussive,
+                                   constants::kDefaultNFft, constants::kDefaultHopLength, 1, 1,
+                                   &result, &residual);
+  if (err != SONARE_OK) return err;
 
-    size_t n = result.harmonic.size();
-    std::unique_ptr<float[]> harmonic(new float[n]);
-    std::unique_ptr<float[]> percussive(new float[n]);
-    std::unique_ptr<float[]> residual(new float[n]);
-    std::memcpy(harmonic.get(), result.harmonic.data(), n * sizeof(float));
-    std::memcpy(percussive.get(), result.percussive.data(), n * sizeof(float));
-    std::memcpy(residual.get(), result.residual.data(), n * sizeof(float));
-
-    *out_length = n;
-    *out_sample_rate = result.harmonic.sample_rate();
-    *out_harmonic = release_array(harmonic);
-    *out_percussive = release_array(percussive);
-    *out_residual = release_array(residual);
-    return SONARE_OK;
-  });
+  *out_harmonic = result.harmonic;
+  *out_percussive = result.percussive;
+  *out_residual = residual;
+  *out_length = result.length;
+  *out_sample_rate = result.sample_rate;
+  return SONARE_OK;
 }
 
 SonareError sonare_phase_vocoder(const float* samples, size_t length, int sample_rate, float rate,

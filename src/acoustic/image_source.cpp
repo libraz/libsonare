@@ -1,9 +1,13 @@
 #include "acoustic/image_source.h"
 
 #include <algorithm>
+#include <atomic>
 #include <cmath>
 #include <cstddef>
+#include <cstdint>
+#include <set>
 
+#include "acoustic/image_source_test_support.h"
 #include "acoustic/late_reverb.h"
 #include "util/constants.h"
 
@@ -11,6 +15,16 @@ namespace sonare::acoustic {
 
 namespace {
 using sonare::constants::kPi;
+
+std::atomic<test::PolyhedralFrontierObserver> g_polyhedral_frontier_observer{nullptr};
+
+void observe_polyhedral_frontier(std::size_t size) noexcept {
+  if (const test::PolyhedralFrontierObserver observer =
+          g_polyhedral_frontier_observer.load(std::memory_order_relaxed);
+      observer != nullptr) {
+    observer(size);
+  }
+}
 
 float beta_from_alpha(float alpha) noexcept { return std::sqrt(std::max(0.0f, 1.0f - alpha)); }
 
@@ -48,6 +62,10 @@ bool segment_plane(const Vec3& a, const Vec3& b, const Plane& plane, float& out_
   return true;
 }
 }  // namespace
+
+void test::set_polyhedral_frontier_observer(PolyhedralFrontierObserver observer) noexcept {
+  g_polyhedral_frontier_observer.store(observer, std::memory_order_relaxed);
+}
 
 std::vector<ImageSource> shoebox_image_sources(const ShoeboxRoom& room,
                                                const SourceListener& placement, int max_order) {
@@ -119,6 +137,7 @@ struct PendingImage {
   int order = 0;
   std::vector<float> reflection;
   std::vector<int> chain;
+  std::uint64_t sequence = 0;
 };
 
 // True if the open segment A->B is blocked by some mesh face strictly before B.
@@ -136,21 +155,57 @@ bool occluded(const VoxelGrid& grid, const Vec3& a, const Vec3& b, int ignore_fa
   return hit.t < 1.0f - 1e-4f;
 }
 
-// Prune @p v to its @p keep highest-reflection-energy candidates (the
-// perceptually dominant paths), dropping the rest. Cheap no-op when already at
-// or below @p keep, so it never touches a frontier that has not yet grown past
-// the cap.
-void prune_frontier_by_energy(std::vector<PendingImage>& v, size_t keep) {
+float pending_energy(const PendingImage& p) {
+  float sum = 0.0f;
+  for (float b : p.reflection) sum += b;
+  return sum;
+}
+
+// Ranking entry for the bounded frontier. Lower energy is worse; sequence is
+// the deterministic tie-break, so a later child is worse when reflection
+// energies are equal and the earlier child remains in the frontier.
+struct FrontierEntry {
+  float energy = 0.0f;
+  std::uint64_t sequence = 0;
+  size_t slot = 0;
+};
+
+struct FrontierEntryLess {
+  bool operator()(const FrontierEntry& a, const FrontierEntry& b) const noexcept {
+    // Keep NaN energies at the bottom of the ranking without violating the
+    // strict-weak-ordering requirement of std::set.
+    const bool a_nan = std::isnan(a.energy);
+    const bool b_nan = std::isnan(b.energy);
+    if (a_nan != b_nan) return a_nan;
+    if (!a_nan && a.energy != b.energy) return a.energy < b.energy;
+    if (a.sequence != b.sequence) return a.sequence > b.sequence;
+    return a.slot > b.slot;
+  }
+};
+
+// Append one child, then prune @p v to its @p keep highest-reflection-energy
+// candidates (the perceptually dominant paths). A ranking set keeps each
+// append O(log keep) instead of scanning or partitioning the whole frontier,
+// while the vector and ranking both stay bounded independently of face count.
+void prune_frontier_by_energy(std::vector<PendingImage>& v,
+                              std::set<FrontierEntry, FrontierEntryLess>& ranking, size_t keep) {
+  const size_t slot = v.size() - 1;
+  const FrontierEntry inserted{pending_energy(v.back()), v.back().sequence, slot};
+  ranking.insert(inserted);
   if (v.size() <= keep) return;
-  const auto energy = [](const PendingImage& p) {
-    float sum = 0.0f;
-    for (float b : p.reflection) sum += b;
-    return sum;
-  };
-  std::nth_element(
-      v.begin(), v.begin() + static_cast<std::ptrdiff_t>(keep), v.end(),
-      [&](const PendingImage& a, const PendingImage& b) { return energy(a) > energy(b); });
-  v.resize(keep);
+
+  const FrontierEntry worst = *ranking.begin();
+  if (worst.slot == slot) {
+    ranking.erase(worst);
+    v.pop_back();
+    return;
+  }
+
+  ranking.erase(worst);
+  v[worst.slot] = std::move(v.back());
+  v.pop_back();
+  ranking.erase(inserted);
+  ranking.insert({pending_energy(v[worst.slot]), v[worst.slot].sequence, worst.slot});
 }
 
 // Validate a candidate image by walking listener -> reflection points -> source,
@@ -221,6 +276,12 @@ std::vector<ImageSource> polyhedral_image_sources(const PolyhedralRoom& room,
 
   for (int order = 1; order <= max_order; ++order) {
     std::vector<PendingImage> next;
+    std::set<FrontierEntry, FrontierEntryLess> ranking;
+    std::uint64_t next_sequence = 0;
+    // Leave room for one child beyond the cap so pruning can happen
+    // immediately after every append without allowing vector growth to track
+    // the number of faces.
+    next.reserve(kMaxPolyhedralFrontier + 1);
     for (const auto& parent : frontier) {
       for (size_t f = 0; f < room.faces.size(); ++f) {
         if (!parent.chain.empty() && parent.chain.back() == static_cast<int>(f)) {
@@ -233,6 +294,7 @@ std::vector<ImageSource> polyhedral_image_sources(const PolyhedralRoom& room,
         PendingImage cand;
         cand.pos = img;
         cand.order = order;
+        cand.sequence = next_sequence++;
         cand.chain = parent.chain;
         cand.chain.push_back(static_cast<int>(f));
         const std::vector<float>& fb = face_betas[f];
@@ -265,17 +327,12 @@ std::vector<ImageSource> polyhedral_image_sources(const PolyhedralRoom& room,
           }
         }
         next.push_back(std::move(cand));  // keep exploring even if this order was invalid
-      }
-      // Prune incrementally so a dense mesh cannot grow the frontier as
-      // faces^order and exhaust memory before a single end-of-level pass: bound
-      // the peak at ~2x the cap by pruning back to the cap whenever it is
-      // exceeded, rather than materializing every parent x face candidate first.
-      if (next.size() > 2 * kMaxPolyhedralFrontier) {
-        prune_frontier_by_energy(next, kMaxPolyhedralFrontier);
+        // Prune after every child append so a dense mesh cannot grow the
+        // frontier with the number of faces before an end-of-parent pass.
+        observe_polyhedral_frontier(next.size());
+        prune_frontier_by_energy(next, ranking, kMaxPolyhedralFrontier);
       }
     }
-    // Final cap: a partial parent pass may leave the frontier above the cap.
-    prune_frontier_by_energy(next, kMaxPolyhedralFrontier);
     frontier.swap(next);
   }
   return out;

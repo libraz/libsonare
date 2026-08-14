@@ -13,10 +13,12 @@
 /// Schroeder integral is monotonically non-increasing by construction and its
 /// per-band decay is set directly by the design reverberation times.
 
+#include <cstddef>
 #include <vector>
 
 #include "acoustic/room_model.h"
 #include "core/audio.h"
+#include "util/resource_limits.h"
 
 namespace sonare::acoustic {
 
@@ -26,12 +28,11 @@ namespace sonare::acoustic {
 ///        inversion so the estimate inverts the synthesis exactly.
 inline constexpr float kSabineCoeff = 0.161f;
 
-/// @brief Safety ceiling for the auto-sized late-tail length in samples
-///        (~22 min at 48 kHz). A near-rigid room yields an unbounded RT60,
-///        which would otherwise overflow the length computation; the auto
-///        length is clamped here so the result stays allocatable. Callers
-///        needing a precise (possibly larger) length set
-///        `LateReverbConfig::max_samples`.
+/// @brief Historical upper bound for auto-sized acoustic buffers.
+///
+/// The effective RIR/late-tail cap is lower and is derived from the shared
+/// four-buffer working-set budget in `resource_limits.h`. Keep this ceiling as
+/// an upper bound for compatibility with the early image-source path.
 inline constexpr int kMaxAutoSamples = 1 << 26;  // 67,108,864
 
 /// @brief Sabine reverberation time (s): 0.161 * V / A.
@@ -125,6 +126,33 @@ struct LateReverbConfig {
   int max_samples = 0;    ///< hard length cap in samples; 0 = size from the longest band
   float headroom = 1.0f;  ///< extra tail length as a multiple of the longest RT60 past -60 dB
 };
+
+/// @brief Allocation-free result of late-tail length resolution.
+struct LateTailResolution {
+  std::size_t samples = 0;
+  bool resource_clamped = false;  ///< auto length exceeded the shared RIR budget
+};
+
+/// @brief Resolve a late-tail length and report resource-budget clipping.
+///
+/// `resource_clamped` describes the auto-sized length before an explicit
+/// `max_samples` cap is applied. It remains true when an explicit cap makes the
+/// returned sample count smaller, allowing RIR diagnostics to distinguish the
+/// shared resource budget from a caller-requested upper bound.
+LateTailResolution resolve_late_tail(const ReverbTime& rt, int sample_rate,
+                                     const LateReverbConfig& config = {}) noexcept;
+
+/// @brief Resolve the storage length for a late-reverberation tail.
+///
+/// The result is allocation-free and applies the same policy used by
+/// `synthesize_late_tail`: invalid sample rates and rooms with no representable
+/// positive-decay band return zero; bands at/above Nyquist do not affect the
+/// length; RT60 is capped at 60 seconds for sizing; and a positive explicit
+/// `max_samples` is an upper bound. The shared acoustic working-set limit is
+/// applied after the historical `kMaxAutoSamples` ceiling, so even hostile
+/// sample-rate/RT60/headroom combinations remain representable as `int`.
+std::size_t resolve_late_tail_samples(const ReverbTime& rt, int sample_rate,
+                                      const LateReverbConfig& config = {}) noexcept;
 
 /// @brief Synthesize the mono statistical late-reverberation tail.
 ///

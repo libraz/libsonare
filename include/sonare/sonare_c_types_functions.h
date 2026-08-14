@@ -16,6 +16,18 @@ SonareError sonare_audio_from_memory(const uint8_t* data, size_t length, SonareA
 
 #ifndef __EMSCRIPTEN__
 SonareError sonare_audio_from_file(const char* path, SonareAudio** out);
+/// @brief Returns the positive source channel count reported by an audio file.
+/// @details @p out_channels is set to 0 immediately when it is non-NULL, before
+///          argument validation or file inspection. On @c SONARE_OK it receives
+///          a positive channel count and is left at 0 on every failure. Both
+///          @p path and @p out_channels must be non-NULL; either NULL argument
+///          returns @c SONARE_ERROR_INVALID_PARAMETER. A missing/unreadable file
+///          returns @c SONARE_ERROR_FILE_NOT_FOUND. A malformed recognized file
+///          or decoder/probe failure returns @c SONARE_ERROR_DECODE_FAILED.
+///          An unknown or unsupported format returns @c SONARE_ERROR_INVALID_FORMAT
+///          when no FFmpeg decoder is enabled; with FFmpeg enabled, failures
+///          while probing that format return @c SONARE_ERROR_DECODE_FAILED.
+SonareError sonare_audio_file_channel_count(const char* path, int* out_channels);
 #endif
 
 void sonare_audio_free(SonareAudio* audio);

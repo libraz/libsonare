@@ -1,6 +1,7 @@
 #include <limits>
 
 #include "c_api/features_internal.h"
+#include "util/constants.h"
 
 namespace {
 
@@ -173,16 +174,27 @@ SonareError sonare_nnls_chroma_ex(const float* samples, size_t length, int sr,
                                   int stft_blend_n_fft, float** out, size_t* out_length,
                                   int* out_n_frames) {
   SONARE_C_API_ENTRY;
+  return sonare_nnls_chroma_ex2(samples, length, sr, enable_stft_blend, stft_blend_weight,
+                                stft_blend_n_fft, constants::kDefaultHopLength, out, out_length,
+                                out_n_frames);
+}
+
+SonareError sonare_nnls_chroma_ex2(const float* samples, size_t length, int sr,
+                                   int enable_stft_blend, float stft_blend_weight,
+                                   int stft_blend_n_fft, int hop_length, float** out,
+                                   size_t* out_length, int* out_n_frames) {
+  SONARE_C_API_ENTRY;
+  if (out != nullptr) *out = nullptr;
+  if (out_length != nullptr) *out_length = 0;
+  if (out_n_frames != nullptr) *out_n_frames = 0;
   if (!out || !out_length || !out_n_frames || !std::isfinite(stft_blend_weight) ||
       stft_blend_weight < 0.0f || stft_blend_weight > 1.0f || stft_blend_n_fft < 2 ||
-      (stft_blend_n_fft & 1) != 0) {
+      (stft_blend_n_fft & 1) != 0 || hop_length <= 0) {
     return SONARE_ERROR_INVALID_PARAMETER;
   }
 
-  *out = nullptr;
-
   return run_offline(samples, length, sr, [&](const Audio& audio) -> SonareError {
-    NnlsChromaConfig config = make_fast_nnls_chroma_config();
+    NnlsChromaConfig config = make_fast_nnls_chroma_config(hop_length);
     config.enable_stft_blend = enable_stft_blend != 0;
     config.stft_blend_weight = stft_blend_weight;
     config.stft_blend_n_fft = stft_blend_n_fft;
