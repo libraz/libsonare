@@ -202,6 +202,16 @@ _ALIAS_COVERAGE = {
     "mfcc_to_mel_ex": ("mfcc_to_mel",),
     "spectral_bandwidth_ex": ("spectral_bandwidth",),
     "nnls_chroma_ex": ("nnls_chroma",),
+    # Additive DSP-option variants remain the same public operation on every
+    # facade.  The facade method owns the options bag and routes non-default
+    # values to the extended C entry point.
+    "hpss_ex": ("hpss",),
+    "time_stretch_ex": ("time_stretch",),
+    "pitch_shift_ex": ("pitch_shift",),
+    "normalize_rms": ("normalize",),
+    "trim_ex": ("trim",),
+    "nnls_chroma_ex2": ("nnls_chroma",),
+    "analyze_impulse_response_ex": ("analyze_impulse_response",),
     # NMF warm-start variant -> the base decompose facade, which exposes the
     # `init` initialiser argument and routes to sonare_decompose_with_init.
     # (Python / WASM expose decompose_with_init by name, matched directly before
@@ -232,6 +242,15 @@ _ALIAS_COVERAGE = {
     "project_set_marker_ex_name": ("set_marker_ex",),
     "project_unresolved_audio_source_count": ("unresolved_audio_source_ids",),
     "project_unresolved_audio_source_id_by_index": ("unresolved_audio_source_ids",),
+    # Typed automation is an additive C descriptor overload. Each facade keeps
+    # one add/edit method and dispatches to `_ex` only when targetKind is
+    # supplied, so coverage belongs to that canonical public method rather than
+    # a redundant second spelling.
+    "project_add_automation_lane_ex": ("add_automation_lane",),
+    "project_edit_automation_lane_ex": ("edit_automation_lane",),
+    # ProjectSource is the facade's aggregate read model; its source-by-index
+    # projection includes the owning audio metadata strings for audio sources.
+    "project_get_audio_source_metadata": ("source_by_index",),
     # prepare() accepts maxChannels and routes to this C entry point when it is
     # available, retaining a fallback for older native libraries in Python.
     "engine_prepare_with_channels": ("prepare",),
@@ -564,7 +583,9 @@ def _config_names(sig: FunctionSig, roles: set[str]) -> list[str]:
     return [
         n
         for n in names
-        if n not in roles and n not in _CALLBACK_NAMES and n not in _BUFFER_COMPANION_NAMES
+        if n not in roles
+        and n not in _CALLBACK_NAMES
+        and n not in _BUFFER_COMPANION_NAMES
     ]
 
 
@@ -680,6 +701,15 @@ _EXTENDED_FIELD_TAILS = {
     "chroma_cqt": ("bins_per_octave",),
     "mfcc_to_mel": ("lifter",),
     "decompose": ("init",),
+    # These facade base names expose the corresponding additive C `_ex`
+    # variants.  Their trailing request fields intentionally extend the base
+    # C order rather than indicate an argument-order mismatch.
+    "analyze_impulse_response": ("min_decay_db",),
+    "hpss": ("n_fft", "hop_length", "hard_mask"),
+    "hpss_with_residual": ("n_fft", "hop_length", "hard_mask"),
+    "pitch_shift": ("n_fft", "hop_length"),
+    "time_stretch": ("n_fft", "hop_length"),
+    "trim": ("frame_length", "hop_length"),
     # The facade base name exposes the C `_ex` Minkowski exponent; p=2 is the
     # legacy C base behavior.
     "spectral_bandwidth": ("p",),
@@ -713,10 +743,7 @@ def _order_drift(
             # to match exactly; the struct's interior has no C-level parameter
             # order to compare here.  This is distinct from an arbitrary tail
             # because the canonical final parameter is explicitly an opaque bag.
-            if (
-                c_cfg[-1] in _STRUCT_BAG_NAMES
-                and s_cfg[: len(c_cfg) - 1] == c_cfg[:-1]
-            ):
+            if c_cfg[-1] in _STRUCT_BAG_NAMES and s_cfg[: len(c_cfg) - 1] == c_cfg[:-1]:
                 continue
             # Facades fold variadic C scalar tails into an options bag, so a
             # facade exposing a STRICT PREFIX of the C config order is fine.

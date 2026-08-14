@@ -95,7 +95,7 @@
       "tin-whistle",
       "ocarina",
       "blown-bottle",
-      "harp",
+      "harp-plucked",
       "koto",
       "sitar",
       "tanpura",
@@ -8219,7 +8219,7 @@
           "unit": "ms"
         }
       ],
-      "realtimeCost": "low",
+      "realtimeCost": "moderate",
       "realtimeInsertable": true,
       "stereoOnly": false,
       "tailSamples": 0
@@ -12058,7 +12058,7 @@
           "unit": null
         }
       ],
-      "realtimeCost": "low",
+      "realtimeCost": "high",
       "realtimeInsertable": true,
       "stereoOnly": false,
       "tailSamples": 0
@@ -12111,7 +12111,7 @@
       "channelPolicy": "multichannel",
       "id": "spectral.airBand",
       "kind": "realtime",
-      "latencySamples": 0,
+      "latencySamples": 24,
       "params": [
         {
           "default": null,
@@ -12157,7 +12157,7 @@
       "realtimeCost": "low",
       "realtimeInsertable": true,
       "stereoOnly": false,
-      "tailSamples": 24
+      "tailSamples": 0
     },
     {
       "category": "spectral",

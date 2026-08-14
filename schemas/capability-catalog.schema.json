@@ -28,6 +28,7 @@
           "stereoOnly",
           "latencySamples",
           "tailSamples",
+          "realtimeCost",
           "channelPolicy",
           "category",
           "params"
@@ -39,6 +40,7 @@
           "stereoOnly": { "type": "boolean" },
           "latencySamples": { "type": "integer", "minimum": 0 },
           "tailSamples": { "type": "integer", "minimum": 0 },
+          "realtimeCost": { "enum": ["low", "moderate", "high", null] },
           "channelPolicy": {
             "enum": ["multichannel", "stereoPairOnly", "perChannel", "passthrough"]
           },

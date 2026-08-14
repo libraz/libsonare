@@ -1,0 +1,39 @@
+{
+  "schema_version": 1,
+  "accepted": [
+    { "value": "const3dB", "ordinal": 0 },
+    { "value": "const-3db", "ordinal": 0 },
+    { "value": "-3db", "ordinal": 0 },
+    { "value": "const4.5dB", "ordinal": 1 },
+    { "value": "const-4.5db", "ordinal": 1 },
+    { "value": "-4.5db", "ordinal": 1 },
+    { "value": "const6dB", "ordinal": 2 },
+    { "value": "const-6db", "ordinal": 2 },
+    { "value": "-6db", "ordinal": 2 },
+    { "value": "linear0dB", "ordinal": 3 },
+    { "value": "linear-0db", "ordinal": 3 },
+    { "value": "linear", "ordinal": 3 },
+    { "value": "0db", "ordinal": 3 }
+  ],
+  "normalization": [
+    { "value": "CONST3DB", "ordinal": 0 },
+    { "value": "const_3dB", "ordinal": 0 },
+    { "value": "CONST_4.5DB", "ordinal": 1 },
+    { "value": "const_4.5dB", "ordinal": 1 },
+    { "value": "CONST6DB", "ordinal": 2 },
+    { "value": "const_6dB", "ordinal": 2 },
+    { "value": "LINEAR0DB", "ordinal": 3 },
+    { "value": "linear_0dB", "ordinal": 3 }
+  ],
+  "numeric": [0, 1, 2, 3],
+  "rejected": [
+    " const3dB",
+    "const3dB ",
+    "const--3db",
+    "const--4.5db",
+    "const--6db",
+    "linear--0db",
+    "const_4_5db",
+    "bogus"
+  ]
+}

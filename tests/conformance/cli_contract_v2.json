@@ -1,0 +1,5032 @@
+{
+  "schema_version": 2,
+  "contract": "cli-json-v2",
+  "surfaces": [
+    "native",
+    "python"
+  ],
+  "exit_codes": {
+    "success": 0,
+    "usage": 2,
+    "invalid_parameter": 3,
+    "file_not_found": 4,
+    "invalid_format": 5,
+    "invalid_state": 9,
+    "legacy": 1
+  },
+  "comparison": {
+    "absolute": 1e-06,
+    "relative": 1e-05
+  },
+  "inventory": {
+    "schema_version": 2,
+    "command_fields": [
+      "path",
+      "aliases",
+      "options"
+    ],
+    "option_fields": [
+      "name",
+      "type",
+      "default",
+      "aliases",
+      "repeatable",
+      "required"
+    ],
+    "expected_options": {
+      "acoustic": [
+        {
+          "name": "ir",
+          "type": "boolean",
+          "default": false,
+          "aliases": [],
+          "repeatable": false,
+          "required": false
+        },
+        {
+          "name": "json",
+          "type": "boolean",
+          "default": false,
+          "aliases": [],
+          "repeatable": false,
+          "required": false
+        },
+        {
+          "name": "min-decay-db",
+          "type": "number",
+          "default": 30,
+          "aliases": [],
+          "repeatable": false,
+          "required": false
+        },
+        {
+          "name": "n-bands",
+          "type": "integer",
+          "default": 6,
+          "aliases": [],
+          "repeatable": false,
+          "required": false
+        },
+        {
+          "name": "noise-floor-margin-db",
+          "type": "number",
+          "default": 10,
+          "aliases": [],
+          "repeatable": false,
+          "required": false
+        }
+      ],
+      "analyze": [
+        {
+          "name": "chroma-highpass",
+          "type": "number",
+          "default": 80,
+          "aliases": [],
+          "repeatable": false,
+          "required": false
+        },
+        {
+          "name": "json",
+          "type": "boolean",
+          "default": false,
+          "aliases": [],
+          "repeatable": false,
+          "required": false
+        },
+        {
+          "name": "no-hpss",
+          "type": "boolean",
+          "default": false,
+          "aliases": [],
+          "repeatable": false,
+          "required": false
+        },
+        {
+          "name": "with-seventh",
+          "type": "boolean",
+          "default": false,
+          "aliases": [],
+          "repeatable": false,
+          "required": false
+        }
+      ],
+      "beats": [
+        {
+          "name": "json",
+          "type": "boolean",
+          "default": false,
+          "aliases": [],
+          "repeatable": false,
+          "required": false
+        }
+      ],
+      "bpm": [
+        {
+          "name": "json",
+          "type": "boolean",
+          "default": false,
+          "aliases": [],
+          "repeatable": false,
+          "required": false
+        }
+      ],
+      "chords": [
+        {
+          "name": "detect-inversions",
+          "type": "boolean",
+          "default": false,
+          "aliases": [],
+          "repeatable": false,
+          "required": false
+        },
+        {
+          "name": "hmm-beam-width",
+          "type": "integer",
+          "default": 24,
+          "aliases": [],
+          "repeatable": false,
+          "required": false
+        },
+        {
+          "name": "hop-length",
+          "type": "integer",
+          "default": 512,
+          "aliases": [],
+          "repeatable": false,
+          "required": false
+        },
+        {
+          "name": "json",
+          "type": "boolean",
+          "default": false,
+          "aliases": [],
+          "repeatable": false,
+          "required": false
+        },
+        {
+          "name": "key-context",
+          "type": "boolean",
+          "default": false,
+          "aliases": [],
+          "repeatable": false,
+          "required": false
+        },
+        {
+          "name": "key-mode",
+          "type": "string",
+          "default": "major",
+          "aliases": [],
+          "repeatable": false,
+          "required": false
+        },
+        {
+          "name": "key-root",
+          "type": "string",
+          "default": "C",
+          "aliases": [],
+          "repeatable": false,
+          "required": false
+        },
+        {
+          "name": "min-duration",
+          "type": "number",
+          "default": 0.3,
+          "aliases": [],
+          "repeatable": false,
+          "required": false
+        },
+        {
+          "name": "n-fft",
+          "type": "integer",
+          "default": 2048,
+          "aliases": [],
+          "repeatable": false,
+          "required": false
+        },
+        {
+          "name": "nnls",
+          "type": "boolean",
+          "default": false,
+          "aliases": [],
+          "repeatable": false,
+          "required": false
+        },
+        {
+          "name": "no-beat-sync",
+          "type": "boolean",
+          "default": false,
+          "aliases": [],
+          "repeatable": false,
+          "required": false
+        },
+        {
+          "name": "smoothing-window",
+          "type": "number",
+          "default": 2,
+          "aliases": [],
+          "repeatable": false,
+          "required": false
+        },
+        {
+          "name": "threshold",
+          "type": "number",
+          "default": 0.5,
+          "aliases": [],
+          "repeatable": false,
+          "required": false
+        },
+        {
+          "name": "triads-only",
+          "type": "boolean",
+          "default": false,
+          "aliases": [],
+          "repeatable": false,
+          "required": false
+        },
+        {
+          "name": "use-hmm",
+          "type": "boolean",
+          "default": false,
+          "aliases": [],
+          "repeatable": false,
+          "required": false
+        }
+      ],
+      "chroma": [
+        {
+          "name": "hop-length",
+          "type": "integer",
+          "default": 512,
+          "aliases": [],
+          "repeatable": false,
+          "required": false
+        },
+        {
+          "name": "json",
+          "type": "boolean",
+          "default": false,
+          "aliases": [],
+          "repeatable": false,
+          "required": false
+        },
+        {
+          "name": "n-fft",
+          "type": "integer",
+          "default": 2048,
+          "aliases": [],
+          "repeatable": false,
+          "required": false
+        }
+      ],
+      "doctor": [
+        {
+          "name": "json",
+          "type": "boolean",
+          "default": false,
+          "aliases": [],
+          "repeatable": false,
+          "required": false
+        }
+      ],
+      "downbeats": [
+        {
+          "name": "json",
+          "type": "boolean",
+          "default": false,
+          "aliases": [],
+          "repeatable": false,
+          "required": false
+        }
+      ],
+      "dynamics": [
+        {
+          "name": "json",
+          "type": "boolean",
+          "default": false,
+          "aliases": [],
+          "repeatable": false,
+          "required": false
+        },
+        {
+          "name": "window-sec",
+          "type": "number",
+          "default": 0.4,
+          "aliases": [],
+          "repeatable": false,
+          "required": false
+        }
+      ],
+      "eq": [
+        {
+          "name": "attack-ms",
+          "type": "number",
+          "default": 5,
+          "aliases": [],
+          "repeatable": false,
+          "required": false
+        },
+        {
+          "name": "auto-gain",
+          "type": "boolean",
+          "default": false,
+          "aliases": [],
+          "repeatable": false,
+          "required": false
+        },
+        {
+          "name": "auto-threshold",
+          "type": "boolean",
+          "default": false,
+          "aliases": [],
+          "repeatable": false,
+          "required": false
+        },
+        {
+          "name": "bits",
+          "type": "integer",
+          "default": 16,
+          "aliases": [],
+          "repeatable": false,
+          "required": false
+        },
+        {
+          "name": "coeff-mode",
+          "type": "integer",
+          "default": 0,
+          "aliases": [],
+          "repeatable": false,
+          "required": false
+        },
+        {
+          "name": "dynamic",
+          "type": "boolean",
+          "default": false,
+          "aliases": [],
+          "repeatable": false,
+          "required": false
+        },
+        {
+          "name": "frequency-hz",
+          "type": "number",
+          "default": 1000,
+          "aliases": [],
+          "repeatable": false,
+          "required": false
+        },
+        {
+          "name": "gain-db",
+          "type": "number",
+          "default": 0,
+          "aliases": [],
+          "repeatable": false,
+          "required": false
+        },
+        {
+          "name": "gain-scale",
+          "type": "number",
+          "default": 1,
+          "aliases": [],
+          "repeatable": false,
+          "required": false
+        },
+        {
+          "name": "json",
+          "type": "boolean",
+          "default": false,
+          "aliases": [],
+          "repeatable": false,
+          "required": false
+        },
+        {
+          "name": "lookahead-ms",
+          "type": "number",
+          "default": 0,
+          "aliases": [],
+          "repeatable": false,
+          "required": false
+        },
+        {
+          "name": "output",
+          "type": "path",
+          "default": null,
+          "aliases": [
+            "o"
+          ],
+          "repeatable": false,
+          "required": false
+        },
+        {
+          "name": "output-gain-db",
+          "type": "number",
+          "default": 0,
+          "aliases": [],
+          "repeatable": false,
+          "required": false
+        },
+        {
+          "name": "output-pan",
+          "type": "number",
+          "default": 0,
+          "aliases": [],
+          "repeatable": false,
+          "required": false
+        },
+        {
+          "name": "params",
+          "type": "string",
+          "default": "",
+          "aliases": [],
+          "repeatable": false,
+          "required": false
+        },
+        {
+          "name": "phase-mode",
+          "type": "integer",
+          "default": 1,
+          "aliases": [],
+          "repeatable": false,
+          "required": false
+        },
+        {
+          "name": "placement",
+          "type": "integer",
+          "default": 0,
+          "aliases": [],
+          "repeatable": false,
+          "required": false
+        },
+        {
+          "name": "proportional-q",
+          "type": "boolean",
+          "default": false,
+          "aliases": [],
+          "repeatable": false,
+          "required": false
+        },
+        {
+          "name": "q",
+          "type": "number",
+          "default": 1,
+          "aliases": [],
+          "repeatable": false,
+          "required": false
+        },
+        {
+          "name": "range-db",
+          "type": "number",
+          "default": -6,
+          "aliases": [],
+          "repeatable": false,
+          "required": false
+        },
+        {
+          "name": "ratio",
+          "type": "number",
+          "default": 2,
+          "aliases": [],
+          "repeatable": false,
+          "required": false
+        },
+        {
+          "name": "release-ms",
+          "type": "number",
+          "default": 50,
+          "aliases": [],
+          "repeatable": false,
+          "required": false
+        },
+        {
+          "name": "resolution",
+          "type": "integer",
+          "default": 0,
+          "aliases": [],
+          "repeatable": false,
+          "required": false
+        },
+        {
+          "name": "sidechain-freq-hz",
+          "type": "number",
+          "default": -1,
+          "aliases": [],
+          "repeatable": false,
+          "required": false
+        },
+        {
+          "name": "sidechain-q",
+          "type": "number",
+          "default": 1,
+          "aliases": [],
+          "repeatable": false,
+          "required": false
+        },
+        {
+          "name": "slope-db-oct",
+          "type": "integer",
+          "default": 12,
+          "aliases": [],
+          "repeatable": false,
+          "required": false
+        },
+        {
+          "name": "threshold-db",
+          "type": "number",
+          "default": -24,
+          "aliases": [],
+          "repeatable": false,
+          "required": false
+        },
+        {
+          "name": "type",
+          "type": "integer",
+          "default": 0,
+          "aliases": [],
+          "repeatable": false,
+          "required": false
+        }
+      ],
+      "estimate-room": [
+        {
+          "name": "aspect-lh",
+          "type": "number",
+          "default": 1,
+          "aliases": [],
+          "repeatable": false,
+          "required": false
+        },
+        {
+          "name": "aspect-lw",
+          "type": "number",
+          "default": 1,
+          "aliases": [],
+          "repeatable": false,
+          "required": false
+        },
+        {
+          "name": "json",
+          "type": "boolean",
+          "default": false,
+          "aliases": [],
+          "repeatable": false,
+          "required": false
+        },
+        {
+          "name": "n-octave-bands",
+          "type": "integer",
+          "default": null,
+          "aliases": [
+            "n-bands"
+          ],
+          "repeatable": false,
+          "required": false
+        },
+        {
+          "name": "reference-absorption",
+          "type": "number",
+          "default": 0.15,
+          "aliases": [],
+          "repeatable": false,
+          "required": false
+        },
+        {
+          "name": "sabine",
+          "type": "boolean",
+          "default": false,
+          "aliases": [],
+          "repeatable": false,
+          "required": false
+        }
+      ],
+      "hpss": [
+        {
+          "name": "hard-mask",
+          "type": "boolean",
+          "default": false,
+          "aliases": [],
+          "repeatable": false,
+          "required": false
+        },
+        {
+          "name": "harmonic-only",
+          "type": "boolean",
+          "default": false,
+          "aliases": [],
+          "repeatable": false,
+          "required": false
+        },
+        {
+          "name": "hop-length",
+          "type": "integer",
+          "default": 512,
+          "aliases": [],
+          "repeatable": false,
+          "required": false
+        },
+        {
+          "name": "json",
+          "type": "boolean",
+          "default": false,
+          "aliases": [],
+          "repeatable": false,
+          "required": false
+        },
+        {
+          "name": "kernel-harmonic",
+          "type": "integer",
+          "default": 31,
+          "aliases": [],
+          "repeatable": false,
+          "required": false
+        },
+        {
+          "name": "kernel-percussive",
+          "type": "integer",
+          "default": 31,
+          "aliases": [],
+          "repeatable": false,
+          "required": false
+        },
+        {
+          "name": "n-fft",
+          "type": "integer",
+          "default": 2048,
+          "aliases": [],
+          "repeatable": false,
+          "required": false
+        },
+        {
+          "name": "output",
+          "type": "path",
+          "default": null,
+          "aliases": [
+            "o"
+          ],
+          "repeatable": false,
+          "required": false
+        },
+        {
+          "name": "percussive-only",
+          "type": "boolean",
+          "default": false,
+          "aliases": [],
+          "repeatable": false,
+          "required": false
+        },
+        {
+          "name": "with-residual",
+          "type": "boolean",
+          "default": false,
+          "aliases": [],
+          "repeatable": false,
+          "required": false
+        }
+      ],
+      "info": [
+        {
+          "name": "json",
+          "type": "boolean",
+          "default": false,
+          "aliases": [],
+          "repeatable": false,
+          "required": false
+        }
+      ],
+      "key": [
+        {
+          "name": "candidates",
+          "type": "integer",
+          "default": null,
+          "aliases": [],
+          "repeatable": false,
+          "required": false
+        },
+        {
+          "name": "genre-hint",
+          "type": "string",
+          "default": "",
+          "aliases": [],
+          "repeatable": false,
+          "required": false
+        },
+        {
+          "name": "high-pass-hz",
+          "type": "number",
+          "default": 0,
+          "aliases": [],
+          "repeatable": false,
+          "required": false
+        },
+        {
+          "name": "hop-length",
+          "type": "integer",
+          "default": 512,
+          "aliases": [],
+          "repeatable": false,
+          "required": false
+        },
+        {
+          "name": "json",
+          "type": "boolean",
+          "default": false,
+          "aliases": [],
+          "repeatable": false,
+          "required": false
+        },
+        {
+          "name": "loudness-weighted",
+          "type": "boolean",
+          "default": false,
+          "aliases": [],
+          "repeatable": false,
+          "required": false
+        },
+        {
+          "name": "modes",
+          "type": "string",
+          "default": "",
+          "aliases": [],
+          "repeatable": false,
+          "required": false
+        },
+        {
+          "name": "n-fft",
+          "type": "integer",
+          "default": 4096,
+          "aliases": [],
+          "repeatable": false,
+          "required": false
+        },
+        {
+          "name": "profile",
+          "type": "string",
+          "default": "",
+          "aliases": [],
+          "repeatable": false,
+          "required": false
+        },
+        {
+          "name": "use-hpss",
+          "type": "boolean",
+          "default": false,
+          "aliases": [
+            "hpss"
+          ],
+          "repeatable": false,
+          "required": false
+        }
+      ],
+      "lufs": [
+        {
+          "name": "json",
+          "type": "boolean",
+          "default": false,
+          "aliases": [],
+          "repeatable": false,
+          "required": false
+        },
+        {
+          "name": "series",
+          "type": "boolean",
+          "default": false,
+          "aliases": [],
+          "repeatable": false,
+          "required": false
+        }
+      ],
+      "mastering": [
+        {
+          "name": "assistant",
+          "type": "boolean",
+          "default": false,
+          "aliases": [],
+          "repeatable": false,
+          "required": false
+        },
+        {
+          "name": "bits",
+          "type": "integer",
+          "default": 16,
+          "aliases": [],
+          "repeatable": false,
+          "required": false
+        },
+        {
+          "name": "ceiling-db",
+          "type": "number",
+          "default": -1,
+          "aliases": [],
+          "repeatable": false,
+          "required": false
+        },
+        {
+          "name": "config",
+          "type": "path",
+          "default": null,
+          "aliases": [],
+          "repeatable": false,
+          "required": false
+        },
+        {
+          "name": "enable-repair",
+          "type": "boolean",
+          "default": false,
+          "aliases": [],
+          "repeatable": false,
+          "required": false
+        },
+        {
+          "name": "explain",
+          "type": "boolean",
+          "default": false,
+          "aliases": [],
+          "repeatable": false,
+          "required": false
+        },
+        {
+          "name": "json",
+          "type": "boolean",
+          "default": false,
+          "aliases": [],
+          "repeatable": false,
+          "required": false
+        },
+        {
+          "name": "output",
+          "type": "path",
+          "default": null,
+          "aliases": [
+            "o"
+          ],
+          "repeatable": false,
+          "required": false
+        },
+        {
+          "name": "params",
+          "type": "string",
+          "default": "",
+          "aliases": [],
+          "repeatable": false,
+          "required": false
+        },
+        {
+          "name": "preset",
+          "type": "string",
+          "default": "",
+          "aliases": [],
+          "repeatable": false,
+          "required": false
+        },
+        {
+          "name": "report",
+          "type": "path",
+          "default": null,
+          "aliases": [],
+          "repeatable": false,
+          "required": false
+        },
+        {
+          "name": "target-lufs",
+          "type": "number",
+          "default": -14,
+          "aliases": [],
+          "repeatable": false,
+          "required": false
+        },
+        {
+          "name": "true-peak-oversample",
+          "type": "integer",
+          "default": 4,
+          "aliases": [],
+          "repeatable": false,
+          "required": false
+        }
+      ],
+      "mastering-pair-analyses": [
+        {
+          "name": "json",
+          "type": "boolean",
+          "default": false,
+          "aliases": [],
+          "repeatable": false,
+          "required": false
+        }
+      ],
+      "mastering-pair-analyze": [
+        {
+          "name": "analysis",
+          "type": "string",
+          "default": null,
+          "aliases": [],
+          "repeatable": false,
+          "required": true
+        },
+        {
+          "name": "json",
+          "type": "boolean",
+          "default": false,
+          "aliases": [],
+          "repeatable": false,
+          "required": false
+        },
+        {
+          "name": "params",
+          "type": "string",
+          "default": "",
+          "aliases": [],
+          "repeatable": false,
+          "required": false
+        },
+        {
+          "name": "reference",
+          "type": "path",
+          "default": null,
+          "aliases": [],
+          "repeatable": false,
+          "required": true
+        }
+      ],
+      "mastering-pair-processors": [
+        {
+          "name": "json",
+          "type": "boolean",
+          "default": false,
+          "aliases": [],
+          "repeatable": false,
+          "required": false
+        }
+      ],
+      "mastering-processor": [
+        {
+          "name": "bits",
+          "type": "integer",
+          "default": 16,
+          "aliases": [],
+          "repeatable": false,
+          "required": false
+        },
+        {
+          "name": "json",
+          "type": "boolean",
+          "default": false,
+          "aliases": [],
+          "repeatable": false,
+          "required": false
+        },
+        {
+          "name": "output",
+          "type": "path",
+          "default": null,
+          "aliases": [
+            "o"
+          ],
+          "repeatable": false,
+          "required": false
+        },
+        {
+          "name": "params",
+          "type": "string",
+          "default": "",
+          "aliases": [],
+          "repeatable": false,
+          "required": false
+        },
+        {
+          "name": "processor",
+          "type": "string",
+          "default": null,
+          "aliases": [],
+          "repeatable": false,
+          "required": true
+        },
+        {
+          "name": "stereo",
+          "type": "boolean",
+          "default": false,
+          "aliases": [],
+          "repeatable": false,
+          "required": false
+        }
+      ],
+      "mastering-processors": [
+        {
+          "name": "json",
+          "type": "boolean",
+          "default": false,
+          "aliases": [],
+          "repeatable": false,
+          "required": false
+        }
+      ],
+      "mel": [
+        {
+          "name": "fmax",
+          "type": "number",
+          "default": 0,
+          "aliases": [],
+          "repeatable": false,
+          "required": false
+        },
+        {
+          "name": "fmin",
+          "type": "number",
+          "default": 0,
+          "aliases": [],
+          "repeatable": false,
+          "required": false
+        },
+        {
+          "name": "hop-length",
+          "type": "integer",
+          "default": 512,
+          "aliases": [],
+          "repeatable": false,
+          "required": false
+        },
+        {
+          "name": "htk",
+          "type": "boolean",
+          "default": false,
+          "aliases": [],
+          "repeatable": false,
+          "required": false
+        },
+        {
+          "name": "json",
+          "type": "boolean",
+          "default": false,
+          "aliases": [],
+          "repeatable": false,
+          "required": false
+        },
+        {
+          "name": "n-fft",
+          "type": "integer",
+          "default": 2048,
+          "aliases": [],
+          "repeatable": false,
+          "required": false
+        },
+        {
+          "name": "n-mels",
+          "type": "integer",
+          "default": 128,
+          "aliases": [],
+          "repeatable": false,
+          "required": false
+        }
+      ],
+      "mixing-preset": [
+        {
+          "name": "json",
+          "type": "boolean",
+          "default": false,
+          "aliases": [],
+          "repeatable": false,
+          "required": false
+        },
+        {
+          "name": "preset",
+          "type": "string",
+          "default": "",
+          "aliases": [],
+          "repeatable": false,
+          "required": false
+        }
+      ],
+      "mixing-presets": [
+        {
+          "name": "json",
+          "type": "boolean",
+          "default": false,
+          "aliases": [],
+          "repeatable": false,
+          "required": false
+        }
+      ],
+      "nnls-chroma": [
+        {
+          "name": "hop-length",
+          "type": "integer",
+          "default": 512,
+          "aliases": [],
+          "repeatable": false,
+          "required": false
+        },
+        {
+          "name": "json",
+          "type": "boolean",
+          "default": false,
+          "aliases": [],
+          "repeatable": false,
+          "required": false
+        }
+      ],
+      "normalize": [
+        {
+          "name": "json",
+          "type": "boolean",
+          "default": false,
+          "aliases": [],
+          "repeatable": false,
+          "required": false
+        },
+        {
+          "name": "mode",
+          "type": "string",
+          "default": "peak",
+          "aliases": [],
+          "repeatable": false,
+          "required": false
+        },
+        {
+          "name": "output",
+          "type": "path",
+          "default": null,
+          "aliases": [
+            "o"
+          ],
+          "repeatable": false,
+          "required": false
+        },
+        {
+          "name": "target-db",
+          "type": "number",
+          "default": null,
+          "aliases": [],
+          "repeatable": false,
+          "required": false
+        }
+      ],
+      "note-stretch": [
+        {
+          "name": "json",
+          "type": "boolean",
+          "default": false,
+          "aliases": [],
+          "repeatable": false,
+          "required": false
+        },
+        {
+          "name": "offset",
+          "type": "integer",
+          "default": 0,
+          "aliases": [],
+          "repeatable": false,
+          "required": false
+        },
+        {
+          "name": "onset",
+          "type": "integer",
+          "default": 0,
+          "aliases": [],
+          "repeatable": false,
+          "required": false
+        },
+        {
+          "name": "output",
+          "type": "path",
+          "default": null,
+          "aliases": [
+            "o"
+          ],
+          "repeatable": false,
+          "required": false
+        },
+        {
+          "name": "ratio",
+          "type": "number",
+          "default": 1,
+          "aliases": [],
+          "repeatable": false,
+          "required": false
+        }
+      ],
+      "onset-envelope": [
+        {
+          "name": "hop-length",
+          "type": "integer",
+          "default": 512,
+          "aliases": [],
+          "repeatable": false,
+          "required": false
+        },
+        {
+          "name": "json",
+          "type": "boolean",
+          "default": false,
+          "aliases": [],
+          "repeatable": false,
+          "required": false
+        },
+        {
+          "name": "n-fft",
+          "type": "integer",
+          "default": 2048,
+          "aliases": [],
+          "repeatable": false,
+          "required": false
+        },
+        {
+          "name": "n-mels",
+          "type": "integer",
+          "default": 128,
+          "aliases": [],
+          "repeatable": false,
+          "required": false
+        }
+      ],
+      "onsets": [
+        {
+          "name": "json",
+          "type": "boolean",
+          "default": false,
+          "aliases": [],
+          "repeatable": false,
+          "required": false
+        }
+      ],
+      "pitch": [
+        {
+          "name": "algorithm",
+          "type": "string",
+          "default": "pyin",
+          "aliases": [],
+          "repeatable": false,
+          "required": false
+        },
+        {
+          "name": "fmax",
+          "type": "number",
+          "default": 2093,
+          "aliases": [],
+          "repeatable": false,
+          "required": false
+        },
+        {
+          "name": "fmin",
+          "type": "number",
+          "default": 65,
+          "aliases": [],
+          "repeatable": false,
+          "required": false
+        },
+        {
+          "name": "hop-length",
+          "type": "integer",
+          "default": 512,
+          "aliases": [],
+          "repeatable": false,
+          "required": false
+        },
+        {
+          "name": "json",
+          "type": "boolean",
+          "default": false,
+          "aliases": [],
+          "repeatable": false,
+          "required": false
+        },
+        {
+          "name": "threshold",
+          "type": "number",
+          "default": 0.1,
+          "aliases": [],
+          "repeatable": false,
+          "required": false
+        }
+      ],
+      "pitch-correct": [
+        {
+          "name": "current-midi",
+          "type": "number",
+          "default": 69,
+          "aliases": [],
+          "repeatable": false,
+          "required": false
+        },
+        {
+          "name": "json",
+          "type": "boolean",
+          "default": false,
+          "aliases": [],
+          "repeatable": false,
+          "required": false
+        },
+        {
+          "name": "output",
+          "type": "path",
+          "default": null,
+          "aliases": [
+            "o"
+          ],
+          "repeatable": false,
+          "required": false
+        },
+        {
+          "name": "target-midi",
+          "type": "number",
+          "default": 69,
+          "aliases": [],
+          "repeatable": false,
+          "required": false
+        }
+      ],
+      "pitch-shift": [
+        {
+          "name": "hop-length",
+          "type": "integer",
+          "default": 512,
+          "aliases": [],
+          "repeatable": false,
+          "required": false
+        },
+        {
+          "name": "json",
+          "type": "boolean",
+          "default": false,
+          "aliases": [],
+          "repeatable": false,
+          "required": false
+        },
+        {
+          "name": "n-fft",
+          "type": "integer",
+          "default": 2048,
+          "aliases": [],
+          "repeatable": false,
+          "required": false
+        },
+        {
+          "name": "output",
+          "type": "path",
+          "default": null,
+          "aliases": [
+            "o"
+          ],
+          "repeatable": false,
+          "required": false
+        },
+        {
+          "name": "semitones",
+          "type": "number",
+          "default": null,
+          "aliases": [],
+          "repeatable": false,
+          "required": false
+        }
+      ],
+      "plp": [
+        {
+          "name": "hop-length",
+          "type": "integer",
+          "default": 512,
+          "aliases": [],
+          "repeatable": false,
+          "required": false
+        },
+        {
+          "name": "json",
+          "type": "boolean",
+          "default": false,
+          "aliases": [],
+          "repeatable": false,
+          "required": false
+        },
+        {
+          "name": "n-fft",
+          "type": "integer",
+          "default": 2048,
+          "aliases": [],
+          "repeatable": false,
+          "required": false
+        },
+        {
+          "name": "n-mels",
+          "type": "integer",
+          "default": 128,
+          "aliases": [],
+          "repeatable": false,
+          "required": false
+        },
+        {
+          "name": "tempo-max",
+          "type": "number",
+          "default": 300,
+          "aliases": [],
+          "repeatable": false,
+          "required": false
+        },
+        {
+          "name": "tempo-min",
+          "type": "number",
+          "default": 30,
+          "aliases": [],
+          "repeatable": false,
+          "required": false
+        },
+        {
+          "name": "win-length",
+          "type": "integer",
+          "default": 384,
+          "aliases": [],
+          "repeatable": false,
+          "required": false
+        }
+      ],
+      "project.abi": [
+        {
+          "name": "json",
+          "type": "boolean",
+          "default": false,
+          "aliases": [],
+          "repeatable": false,
+          "required": false
+        }
+      ],
+      "project.bounce": [
+        {
+          "name": "block-size",
+          "type": "integer",
+          "default": 0,
+          "aliases": [],
+          "repeatable": false,
+          "required": false
+        },
+        {
+          "name": "channels",
+          "type": "integer",
+          "default": 2,
+          "aliases": [],
+          "repeatable": false,
+          "required": false
+        },
+        {
+          "name": "frames",
+          "type": "integer",
+          "default": 0,
+          "aliases": [],
+          "repeatable": false,
+          "required": false
+        },
+        {
+          "name": "in",
+          "type": "path",
+          "default": null,
+          "aliases": [],
+          "repeatable": false,
+          "required": true
+        },
+        {
+          "name": "instrument-latency",
+          "type": "integer",
+          "default": 0,
+          "aliases": [],
+          "repeatable": false,
+          "required": false
+        },
+        {
+          "name": "json",
+          "type": "boolean",
+          "default": false,
+          "aliases": [],
+          "repeatable": false,
+          "required": false
+        },
+        {
+          "name": "output",
+          "type": "path",
+          "default": null,
+          "aliases": [
+            "o"
+          ],
+          "repeatable": false,
+          "required": false
+        },
+        {
+          "name": "sample-rate",
+          "type": "integer",
+          "default": null,
+          "aliases": [],
+          "repeatable": false,
+          "required": false
+        },
+        {
+          "name": "synth",
+          "type": "string",
+          "default": null,
+          "aliases": [],
+          "repeatable": false,
+          "required": false
+        }
+      ],
+      "project.compile": [
+        {
+          "name": "in",
+          "type": "path",
+          "default": null,
+          "aliases": [],
+          "repeatable": false,
+          "required": true
+        },
+        {
+          "name": "json",
+          "type": "boolean",
+          "default": false,
+          "aliases": [],
+          "repeatable": false,
+          "required": false
+        }
+      ],
+      "project.export-midi2": [
+        {
+          "name": "in",
+          "type": "path",
+          "default": null,
+          "aliases": [],
+          "repeatable": false,
+          "required": true
+        },
+        {
+          "name": "json",
+          "type": "boolean",
+          "default": false,
+          "aliases": [],
+          "repeatable": false,
+          "required": false
+        },
+        {
+          "name": "output",
+          "type": "path",
+          "default": null,
+          "aliases": [
+            "o"
+          ],
+          "repeatable": false,
+          "required": false
+        }
+      ],
+      "project.export-smf": [
+        {
+          "name": "in",
+          "type": "path",
+          "default": null,
+          "aliases": [],
+          "repeatable": false,
+          "required": true
+        },
+        {
+          "name": "json",
+          "type": "boolean",
+          "default": false,
+          "aliases": [],
+          "repeatable": false,
+          "required": false
+        },
+        {
+          "name": "output",
+          "type": "path",
+          "default": null,
+          "aliases": [
+            "o"
+          ],
+          "repeatable": false,
+          "required": false
+        }
+      ],
+      "project.import-midi2": [
+        {
+          "name": "json",
+          "type": "boolean",
+          "default": false,
+          "aliases": [],
+          "repeatable": false,
+          "required": false
+        },
+        {
+          "name": "midi2",
+          "type": "path",
+          "default": null,
+          "aliases": [],
+          "repeatable": false,
+          "required": true
+        },
+        {
+          "name": "output",
+          "type": "path",
+          "default": null,
+          "aliases": [
+            "o"
+          ],
+          "repeatable": false,
+          "required": false
+        }
+      ],
+      "project.import-smf": [
+        {
+          "name": "json",
+          "type": "boolean",
+          "default": false,
+          "aliases": [],
+          "repeatable": false,
+          "required": false
+        },
+        {
+          "name": "output",
+          "type": "path",
+          "default": null,
+          "aliases": [
+            "o"
+          ],
+          "repeatable": false,
+          "required": false
+        },
+        {
+          "name": "smf",
+          "type": "path",
+          "default": null,
+          "aliases": [],
+          "repeatable": false,
+          "required": true
+        }
+      ],
+      "project.new": [
+        {
+          "name": "json",
+          "type": "boolean",
+          "default": false,
+          "aliases": [],
+          "repeatable": false,
+          "required": false
+        },
+        {
+          "name": "output",
+          "type": "path",
+          "default": null,
+          "aliases": [
+            "o"
+          ],
+          "repeatable": false,
+          "required": false
+        },
+        {
+          "name": "sample-rate",
+          "type": "integer",
+          "default": 0,
+          "aliases": [],
+          "repeatable": false,
+          "required": false
+        }
+      ],
+      "project.synth-presets": [
+        {
+          "name": "json",
+          "type": "boolean",
+          "default": false,
+          "aliases": [],
+          "repeatable": false,
+          "required": false
+        }
+      ],
+      "project.validate": [
+        {
+          "name": "in",
+          "type": "path",
+          "default": null,
+          "aliases": [],
+          "repeatable": false,
+          "required": true
+        },
+        {
+          "name": "json",
+          "type": "boolean",
+          "default": false,
+          "aliases": [],
+          "repeatable": false,
+          "required": false
+        },
+        {
+          "name": "output",
+          "type": "path",
+          "default": null,
+          "aliases": [
+            "o"
+          ],
+          "repeatable": false,
+          "required": false
+        },
+        {
+          "name": "strict",
+          "type": "boolean",
+          "default": false,
+          "aliases": [],
+          "repeatable": false,
+          "required": false
+        }
+      ],
+      "resample": [
+        {
+          "name": "json",
+          "type": "boolean",
+          "default": false,
+          "aliases": [],
+          "repeatable": false,
+          "required": false
+        },
+        {
+          "name": "output",
+          "type": "path",
+          "default": null,
+          "aliases": [
+            "o"
+          ],
+          "repeatable": false,
+          "required": false
+        },
+        {
+          "name": "target-rate",
+          "type": "integer",
+          "default": null,
+          "aliases": [
+            "target-sr"
+          ],
+          "repeatable": false,
+          "required": true
+        }
+      ],
+      "rhythm": [
+        {
+          "name": "bpm-max",
+          "type": "number",
+          "default": 200,
+          "aliases": [],
+          "repeatable": false,
+          "required": false
+        },
+        {
+          "name": "bpm-min",
+          "type": "number",
+          "default": 60,
+          "aliases": [],
+          "repeatable": false,
+          "required": false
+        },
+        {
+          "name": "json",
+          "type": "boolean",
+          "default": false,
+          "aliases": [],
+          "repeatable": false,
+          "required": false
+        },
+        {
+          "name": "start-bpm",
+          "type": "number",
+          "default": 120,
+          "aliases": [],
+          "repeatable": false,
+          "required": false
+        }
+      ],
+      "room-morph": [
+        {
+          "name": "absorption",
+          "type": "number",
+          "default": 0.2,
+          "aliases": [],
+          "repeatable": false,
+          "required": false
+        },
+        {
+          "name": "height",
+          "type": "number",
+          "default": 3,
+          "aliases": [],
+          "repeatable": false,
+          "required": false
+        },
+        {
+          "name": "ism-order",
+          "type": "integer",
+          "default": 3,
+          "aliases": [],
+          "repeatable": false,
+          "required": false
+        },
+        {
+          "name": "json",
+          "type": "boolean",
+          "default": false,
+          "aliases": [],
+          "repeatable": false,
+          "required": false
+        },
+        {
+          "name": "length",
+          "type": "number",
+          "default": 7,
+          "aliases": [],
+          "repeatable": false,
+          "required": false
+        },
+        {
+          "name": "listener-x",
+          "type": "number",
+          "default": 5,
+          "aliases": [],
+          "repeatable": false,
+          "required": false
+        },
+        {
+          "name": "listener-y",
+          "type": "number",
+          "default": 4,
+          "aliases": [],
+          "repeatable": false,
+          "required": false
+        },
+        {
+          "name": "listener-z",
+          "type": "number",
+          "default": 1.7,
+          "aliases": [],
+          "repeatable": false,
+          "required": false
+        },
+        {
+          "name": "max-seconds",
+          "type": "number",
+          "default": 0,
+          "aliases": [],
+          "repeatable": false,
+          "required": false
+        },
+        {
+          "name": "output",
+          "type": "path",
+          "default": null,
+          "aliases": [
+            "o"
+          ],
+          "repeatable": false,
+          "required": false
+        },
+        {
+          "name": "sabine",
+          "type": "boolean",
+          "default": false,
+          "aliases": [],
+          "repeatable": false,
+          "required": false
+        },
+        {
+          "name": "seed",
+          "type": "integer",
+          "default": 1,
+          "aliases": [],
+          "repeatable": false,
+          "required": false
+        },
+        {
+          "name": "source-x",
+          "type": "number",
+          "default": 1,
+          "aliases": [],
+          "repeatable": false,
+          "required": false
+        },
+        {
+          "name": "source-y",
+          "type": "number",
+          "default": 1,
+          "aliases": [],
+          "repeatable": false,
+          "required": false
+        },
+        {
+          "name": "source-z",
+          "type": "number",
+          "default": 1.2,
+          "aliases": [],
+          "repeatable": false,
+          "required": false
+        },
+        {
+          "name": "suppression",
+          "type": "number",
+          "default": 0.5,
+          "aliases": [],
+          "repeatable": false,
+          "required": false
+        },
+        {
+          "name": "wet",
+          "type": "number",
+          "default": 0.5,
+          "aliases": [],
+          "repeatable": false,
+          "required": false
+        },
+        {
+          "name": "width",
+          "type": "number",
+          "default": 5,
+          "aliases": [],
+          "repeatable": false,
+          "required": false
+        }
+      ],
+      "spectral": [
+        {
+          "name": "hop-length",
+          "type": "integer",
+          "default": 512,
+          "aliases": [],
+          "repeatable": false,
+          "required": false
+        },
+        {
+          "name": "json",
+          "type": "boolean",
+          "default": false,
+          "aliases": [],
+          "repeatable": false,
+          "required": false
+        },
+        {
+          "name": "n-fft",
+          "type": "integer",
+          "default": 2048,
+          "aliases": [],
+          "repeatable": false,
+          "required": false
+        }
+      ],
+      "synthesize-rir": [
+        {
+          "name": "absorption",
+          "type": "number",
+          "default": 0.2,
+          "aliases": [],
+          "repeatable": false,
+          "required": false
+        },
+        {
+          "name": "height",
+          "type": "number",
+          "default": 3,
+          "aliases": [],
+          "repeatable": false,
+          "required": false
+        },
+        {
+          "name": "ism-order",
+          "type": "integer",
+          "default": 3,
+          "aliases": [],
+          "repeatable": false,
+          "required": false
+        },
+        {
+          "name": "json",
+          "type": "boolean",
+          "default": false,
+          "aliases": [],
+          "repeatable": false,
+          "required": false
+        },
+        {
+          "name": "length",
+          "type": "number",
+          "default": 7,
+          "aliases": [],
+          "repeatable": false,
+          "required": false
+        },
+        {
+          "name": "listener-x",
+          "type": "number",
+          "default": 5,
+          "aliases": [],
+          "repeatable": false,
+          "required": false
+        },
+        {
+          "name": "listener-y",
+          "type": "number",
+          "default": 4,
+          "aliases": [],
+          "repeatable": false,
+          "required": false
+        },
+        {
+          "name": "listener-z",
+          "type": "number",
+          "default": 1.7,
+          "aliases": [],
+          "repeatable": false,
+          "required": false
+        },
+        {
+          "name": "max-seconds",
+          "type": "number",
+          "default": 0,
+          "aliases": [],
+          "repeatable": false,
+          "required": false
+        },
+        {
+          "name": "output",
+          "type": "path",
+          "default": null,
+          "aliases": [
+            "o"
+          ],
+          "repeatable": false,
+          "required": false
+        },
+        {
+          "name": "sabine",
+          "type": "boolean",
+          "default": false,
+          "aliases": [],
+          "repeatable": false,
+          "required": false
+        },
+        {
+          "name": "sample-rate",
+          "type": "integer",
+          "default": 48000,
+          "aliases": [],
+          "repeatable": false,
+          "required": false
+        },
+        {
+          "name": "seed",
+          "type": "integer",
+          "default": 1,
+          "aliases": [],
+          "repeatable": false,
+          "required": false
+        },
+        {
+          "name": "source-x",
+          "type": "number",
+          "default": 1,
+          "aliases": [],
+          "repeatable": false,
+          "required": false
+        },
+        {
+          "name": "source-y",
+          "type": "number",
+          "default": 1,
+          "aliases": [],
+          "repeatable": false,
+          "required": false
+        },
+        {
+          "name": "source-z",
+          "type": "number",
+          "default": 1.2,
+          "aliases": [],
+          "repeatable": false,
+          "required": false
+        },
+        {
+          "name": "width",
+          "type": "number",
+          "default": 5,
+          "aliases": [],
+          "repeatable": false,
+          "required": false
+        }
+      ],
+      "tempogram": [
+        {
+          "name": "hop-length",
+          "type": "integer",
+          "default": 512,
+          "aliases": [],
+          "repeatable": false,
+          "required": false
+        },
+        {
+          "name": "json",
+          "type": "boolean",
+          "default": false,
+          "aliases": [],
+          "repeatable": false,
+          "required": false
+        },
+        {
+          "name": "n-fft",
+          "type": "integer",
+          "default": 2048,
+          "aliases": [],
+          "repeatable": false,
+          "required": false
+        },
+        {
+          "name": "n-mels",
+          "type": "integer",
+          "default": 128,
+          "aliases": [],
+          "repeatable": false,
+          "required": false
+        },
+        {
+          "name": "win-length",
+          "type": "integer",
+          "default": 384,
+          "aliases": [],
+          "repeatable": false,
+          "required": false
+        }
+      ],
+      "timbre": [
+        {
+          "name": "hop-length",
+          "type": "integer",
+          "default": 512,
+          "aliases": [],
+          "repeatable": false,
+          "required": false
+        },
+        {
+          "name": "json",
+          "type": "boolean",
+          "default": false,
+          "aliases": [],
+          "repeatable": false,
+          "required": false
+        },
+        {
+          "name": "n-fft",
+          "type": "integer",
+          "default": 2048,
+          "aliases": [],
+          "repeatable": false,
+          "required": false
+        },
+        {
+          "name": "n-mels",
+          "type": "integer",
+          "default": 128,
+          "aliases": [],
+          "repeatable": false,
+          "required": false
+        }
+      ],
+      "time-stretch": [
+        {
+          "name": "hop-length",
+          "type": "integer",
+          "default": 512,
+          "aliases": [],
+          "repeatable": false,
+          "required": false
+        },
+        {
+          "name": "json",
+          "type": "boolean",
+          "default": false,
+          "aliases": [],
+          "repeatable": false,
+          "required": false
+        },
+        {
+          "name": "n-fft",
+          "type": "integer",
+          "default": 2048,
+          "aliases": [],
+          "repeatable": false,
+          "required": false
+        },
+        {
+          "name": "output",
+          "type": "path",
+          "default": null,
+          "aliases": [
+            "o"
+          ],
+          "repeatable": false,
+          "required": false
+        },
+        {
+          "name": "rate",
+          "type": "number",
+          "default": null,
+          "aliases": [],
+          "repeatable": false,
+          "required": false
+        }
+      ],
+      "trim-silence": [
+        {
+          "name": "hop-length",
+          "type": "integer",
+          "default": 512,
+          "aliases": [],
+          "repeatable": false,
+          "required": false
+        },
+        {
+          "name": "json",
+          "type": "boolean",
+          "default": false,
+          "aliases": [],
+          "repeatable": false,
+          "required": false
+        },
+        {
+          "name": "n-fft",
+          "type": "integer",
+          "default": 2048,
+          "aliases": [],
+          "repeatable": false,
+          "required": false
+        },
+        {
+          "name": "output",
+          "type": "path",
+          "default": null,
+          "aliases": [
+            "o"
+          ],
+          "repeatable": false,
+          "required": false
+        },
+        {
+          "name": "threshold-db",
+          "type": "number",
+          "default": null,
+          "aliases": [],
+          "repeatable": false,
+          "required": false
+        },
+        {
+          "name": "top-db",
+          "type": "number",
+          "default": null,
+          "aliases": [],
+          "repeatable": false,
+          "required": false
+        }
+      ],
+      "version": [
+        {
+          "name": "json",
+          "type": "boolean",
+          "default": false,
+          "aliases": [],
+          "repeatable": false,
+          "required": false
+        }
+      ],
+      "voice-change": [
+        {
+          "name": "formant-factor",
+          "type": "number",
+          "default": null,
+          "aliases": [],
+          "repeatable": false,
+          "required": false
+        },
+        {
+          "name": "json",
+          "type": "boolean",
+          "default": false,
+          "aliases": [],
+          "repeatable": false,
+          "required": false
+        },
+        {
+          "name": "output",
+          "type": "path",
+          "default": null,
+          "aliases": [
+            "o"
+          ],
+          "repeatable": false,
+          "required": false
+        },
+        {
+          "name": "pitch-semitones",
+          "type": "number",
+          "default": null,
+          "aliases": [],
+          "repeatable": false,
+          "required": false
+        },
+        {
+          "name": "preset",
+          "type": "string",
+          "default": "",
+          "aliases": [],
+          "repeatable": false,
+          "required": false
+        },
+        {
+          "name": "preset-json",
+          "type": "path",
+          "default": null,
+          "aliases": [],
+          "repeatable": false,
+          "required": false
+        },
+        {
+          "name": "preset-pack",
+          "type": "path",
+          "default": null,
+          "aliases": [],
+          "repeatable": false,
+          "required": false
+        },
+        {
+          "name": "set",
+          "type": "string",
+          "default": [],
+          "aliases": [],
+          "repeatable": true,
+          "required": false
+        }
+      ],
+      "voice-preset": [
+        {
+          "name": "json",
+          "type": "boolean",
+          "default": false,
+          "aliases": [],
+          "repeatable": false,
+          "required": false
+        },
+        {
+          "name": "preset",
+          "type": "string",
+          "default": "neutral-monitor",
+          "aliases": [],
+          "repeatable": false,
+          "required": false
+        }
+      ],
+      "voice-preset-validate": [
+        {
+          "name": "json",
+          "type": "boolean",
+          "default": false,
+          "aliases": [],
+          "repeatable": false,
+          "required": false
+        },
+        {
+          "name": "preset",
+          "type": "string",
+          "default": "",
+          "aliases": [],
+          "repeatable": false,
+          "required": false
+        },
+        {
+          "name": "preset-json",
+          "type": "path",
+          "default": null,
+          "aliases": [],
+          "repeatable": false,
+          "required": false
+        },
+        {
+          "name": "set",
+          "type": "string",
+          "default": [],
+          "aliases": [],
+          "repeatable": true,
+          "required": false
+        }
+      ],
+      "voice-presets": [
+        {
+          "name": "json",
+          "type": "boolean",
+          "default": false,
+          "aliases": [],
+          "repeatable": false,
+          "required": false
+        }
+      ]
+    }
+  },
+  "commands": {
+    "version": {
+      "classification": "shared",
+      "status": "active",
+      "option_status": "active"
+    },
+    "chroma": {
+      "classification": "shared",
+      "status": "active",
+      "option_status": "active"
+    },
+    "project.validate": {
+      "classification": "shared",
+      "status": "active",
+      "option_status": "active"
+    },
+    "voice-preset-validate": {
+      "classification": "shared",
+      "status": "active",
+      "option_status": "active"
+    },
+    "analyze": {
+      "classification": "shared",
+      "status": "active",
+      "option_status": "active"
+    },
+    "bpm": {
+      "classification": "shared",
+      "status": "pending",
+      "option_status": "active"
+    },
+    "key": {
+      "classification": "shared",
+      "status": "pending",
+      "option_status": "active"
+    },
+    "beats": {
+      "classification": "shared",
+      "status": "pending",
+      "option_status": "active"
+    },
+    "downbeats": {
+      "classification": "shared",
+      "status": "pending",
+      "option_status": "active"
+    },
+    "onsets": {
+      "classification": "shared",
+      "status": "pending",
+      "option_status": "active"
+    },
+    "chords": {
+      "classification": "shared",
+      "status": "pending",
+      "option_status": "active"
+    },
+    "timbre": {
+      "classification": "shared",
+      "status": "pending",
+      "option_status": "active"
+    },
+    "dynamics": {
+      "classification": "shared",
+      "status": "pending",
+      "option_status": "active"
+    },
+    "rhythm": {
+      "classification": "shared",
+      "status": "active",
+      "option_status": "active"
+    },
+    "acoustic": {
+      "classification": "shared",
+      "status": "pending",
+      "option_status": "active"
+    },
+    "estimate-room": {
+      "classification": "shared",
+      "status": "pending",
+      "option_status": "active"
+    },
+    "synthesize-rir": {
+      "classification": "shared",
+      "status": "active",
+      "option_status": "active"
+    },
+    "room-morph": {
+      "classification": "shared",
+      "status": "pending",
+      "option_status": "active"
+    },
+    "lufs": {
+      "classification": "shared",
+      "status": "pending",
+      "option_status": "active"
+    },
+    "pitch-shift": {
+      "classification": "shared",
+      "status": "pending",
+      "option_status": "active"
+    },
+    "time-stretch": {
+      "classification": "shared",
+      "status": "pending",
+      "option_status": "active"
+    },
+    "pitch-correct": {
+      "classification": "shared",
+      "status": "pending",
+      "option_status": "active"
+    },
+    "note-stretch": {
+      "classification": "shared",
+      "status": "pending",
+      "option_status": "active"
+    },
+    "voice-change": {
+      "classification": "shared",
+      "status": "active",
+      "option_status": "active"
+    },
+    "voice-presets": {
+      "classification": "shared",
+      "status": "active",
+      "option_status": "active"
+    },
+    "voice-preset": {
+      "classification": "shared",
+      "status": "pending",
+      "option_status": "active"
+    },
+    "hpss": {
+      "classification": "shared",
+      "status": "pending",
+      "option_status": "active"
+    },
+    "trim-silence": {
+      "classification": "shared",
+      "status": "pending",
+      "option_status": "active"
+    },
+    "normalize": {
+      "classification": "shared",
+      "status": "pending",
+      "option_status": "active"
+    },
+    "resample": {
+      "classification": "shared",
+      "status": "pending",
+      "option_status": "active"
+    },
+    "mel": {
+      "classification": "shared",
+      "status": "pending",
+      "option_status": "active"
+    },
+    "spectral": {
+      "classification": "shared",
+      "status": "active",
+      "option_status": "active"
+    },
+    "pitch": {
+      "classification": "shared",
+      "status": "active",
+      "option_status": "active"
+    },
+    "onset-envelope": {
+      "classification": "shared",
+      "status": "pending",
+      "option_status": "active"
+    },
+    "nnls-chroma": {
+      "classification": "shared",
+      "status": "pending",
+      "option_status": "active"
+    },
+    "tempogram": {
+      "classification": "shared",
+      "status": "pending",
+      "option_status": "active"
+    },
+    "plp": {
+      "classification": "shared",
+      "status": "pending",
+      "option_status": "active"
+    },
+    "mastering": {
+      "classification": "shared",
+      "status": "active",
+      "option_status": "active"
+    },
+    "eq": {
+      "classification": "shared",
+      "status": "active",
+      "option_status": "active"
+    },
+    "mastering-processor": {
+      "classification": "shared",
+      "status": "active",
+      "option_status": "active"
+    },
+    "mastering-processors": {
+      "classification": "shared",
+      "status": "pending",
+      "option_status": "active"
+    },
+    "mastering-pair-processors": {
+      "classification": "shared",
+      "status": "pending",
+      "option_status": "active"
+    },
+    "mastering-pair-analyses": {
+      "classification": "shared",
+      "status": "pending",
+      "option_status": "active"
+    },
+    "mastering-pair-analyze": {
+      "classification": "shared",
+      "status": "pending",
+      "option_status": "active"
+    },
+    "mixing-presets": {
+      "classification": "shared",
+      "status": "pending",
+      "option_status": "active"
+    },
+    "mixing-preset": {
+      "classification": "shared",
+      "status": "pending",
+      "option_status": "active"
+    },
+    "info": {
+      "classification": "shared",
+      "status": "pending",
+      "option_status": "active"
+    },
+    "doctor": {
+      "classification": "shared",
+      "status": "pending",
+      "option_status": "active"
+    },
+    "project.abi": {
+      "classification": "shared",
+      "status": "pending",
+      "option_status": "active"
+    },
+    "project.synth-presets": {
+      "classification": "shared",
+      "status": "pending",
+      "option_status": "active"
+    },
+    "project.new": {
+      "classification": "shared",
+      "status": "pending",
+      "option_status": "active"
+    },
+    "project.compile": {
+      "classification": "shared",
+      "status": "active",
+      "option_status": "active"
+    },
+    "project.bounce": {
+      "classification": "shared",
+      "status": "pending",
+      "option_status": "active"
+    },
+    "project.export-smf": {
+      "classification": "shared",
+      "status": "pending",
+      "option_status": "active"
+    },
+    "project.import-smf": {
+      "classification": "shared",
+      "status": "pending",
+      "option_status": "active"
+    },
+    "project.export-midi2": {
+      "classification": "shared",
+      "status": "pending",
+      "option_status": "active"
+    },
+    "project.import-midi2": {
+      "classification": "shared",
+      "status": "pending",
+      "option_status": "active"
+    },
+    "sections": {
+      "classification": "native_only",
+      "status": "native_only",
+      "option_status": "pending"
+    },
+    "melody": {
+      "classification": "native_only",
+      "status": "native_only",
+      "option_status": "pending"
+    },
+    "boundaries": {
+      "classification": "native_only",
+      "status": "native_only",
+      "option_status": "pending"
+    },
+    "meter": {
+      "classification": "native_only",
+      "status": "native_only",
+      "option_status": "pending"
+    },
+    "clipping": {
+      "classification": "native_only",
+      "status": "native_only",
+      "option_status": "pending"
+    },
+    "dynamic-range": {
+      "classification": "native_only",
+      "status": "native_only",
+      "option_status": "pending"
+    },
+    "stereo": {
+      "classification": "native_only",
+      "status": "native_only",
+      "option_status": "pending"
+    },
+    "phase": {
+      "classification": "native_only",
+      "status": "native_only",
+      "option_status": "pending"
+    },
+    "preemphasis": {
+      "classification": "native_only",
+      "status": "native_only",
+      "option_status": "pending"
+    },
+    "deemphasis": {
+      "classification": "native_only",
+      "status": "native_only",
+      "option_status": "pending"
+    },
+    "split-silence": {
+      "classification": "native_only",
+      "status": "native_only",
+      "option_status": "pending"
+    },
+    "gain": {
+      "classification": "native_only",
+      "status": "native_only",
+      "option_status": "pending"
+    },
+    "fade": {
+      "classification": "native_only",
+      "status": "native_only",
+      "option_status": "pending"
+    },
+    "filter": {
+      "classification": "native_only",
+      "status": "native_only",
+      "option_status": "pending"
+    },
+    "tone": {
+      "classification": "native_only",
+      "status": "native_only",
+      "option_status": "pending"
+    },
+    "chirp": {
+      "classification": "native_only",
+      "status": "native_only",
+      "option_status": "pending"
+    },
+    "clicks": {
+      "classification": "native_only",
+      "status": "native_only",
+      "option_status": "pending"
+    },
+    "mastering-pair-processor": {
+      "classification": "native_only",
+      "status": "native_only",
+      "option_status": "pending"
+    },
+    "mastering-stereo-analyze": {
+      "classification": "native_only",
+      "status": "native_only",
+      "option_status": "pending"
+    },
+    "mastering-stereo-analyses": {
+      "classification": "native_only",
+      "status": "native_only",
+      "option_status": "pending"
+    },
+    "onset-env": {
+      "classification": "native_only",
+      "status": "native_only",
+      "option_status": "pending"
+    },
+    "fourier-tempogram": {
+      "classification": "native_only",
+      "status": "native_only",
+      "option_status": "pending"
+    },
+    "tempogram-ratio": {
+      "classification": "native_only",
+      "status": "native_only",
+      "option_status": "pending"
+    },
+    "tonnetz": {
+      "classification": "native_only",
+      "status": "native_only",
+      "option_status": "pending"
+    },
+    "cqt": {
+      "classification": "native_only",
+      "status": "native_only",
+      "option_status": "pending"
+    },
+    "vqt": {
+      "classification": "native_only",
+      "status": "native_only",
+      "option_status": "pending"
+    },
+    "mel-to-audio": {
+      "classification": "native_only",
+      "status": "native_only",
+      "option_status": "pending"
+    },
+    "mfcc-to-audio": {
+      "classification": "native_only",
+      "status": "native_only",
+      "option_status": "pending"
+    },
+    "frames-to-samples": {
+      "classification": "native_only",
+      "status": "native_only",
+      "option_status": "pending"
+    },
+    "samples-to-frames": {
+      "classification": "native_only",
+      "status": "native_only",
+      "option_status": "pending"
+    },
+    "power-to-db": {
+      "classification": "native_only",
+      "status": "native_only",
+      "option_status": "pending"
+    },
+    "amplitude-to-db": {
+      "classification": "native_only",
+      "status": "native_only",
+      "option_status": "pending"
+    },
+    "db-to-power": {
+      "classification": "native_only",
+      "status": "native_only",
+      "option_status": "pending"
+    },
+    "db-to-amplitude": {
+      "classification": "native_only",
+      "status": "native_only",
+      "option_status": "pending"
+    },
+    "frame-signal": {
+      "classification": "native_only",
+      "status": "native_only",
+      "option_status": "pending"
+    },
+    "pad-center": {
+      "classification": "native_only",
+      "status": "native_only",
+      "option_status": "pending"
+    },
+    "fix-length": {
+      "classification": "native_only",
+      "status": "native_only",
+      "option_status": "pending"
+    },
+    "fix-frames": {
+      "classification": "native_only",
+      "status": "native_only",
+      "option_status": "pending"
+    },
+    "peak-pick": {
+      "classification": "native_only",
+      "status": "native_only",
+      "option_status": "pending"
+    },
+    "vector-normalize": {
+      "classification": "native_only",
+      "status": "native_only",
+      "option_status": "pending"
+    },
+    "pcen": {
+      "classification": "native_only",
+      "status": "native_only",
+      "option_status": "pending"
+    },
+    "system-info": {
+      "classification": "native_only",
+      "status": "native_only",
+      "option_status": "pending"
+    },
+    "mix-strip": {
+      "classification": "native_only",
+      "status": "native_only",
+      "option_status": "pending"
+    },
+    "pitch-correct-timevarying": {
+      "classification": "python_only",
+      "status": "python_only",
+      "option_status": "pending"
+    },
+    "note-move": {
+      "classification": "python_only",
+      "status": "python_only",
+      "option_status": "pending"
+    },
+    "scale-quantize": {
+      "classification": "python_only",
+      "status": "python_only",
+      "option_status": "pending"
+    },
+    "mastering-chain": {
+      "classification": "python_only",
+      "status": "python_only",
+      "option_status": "pending"
+    },
+    "master": {
+      "classification": "python_only",
+      "status": "python_only",
+      "option_status": "pending"
+    },
+    "mastering-streaming": {
+      "classification": "python_only",
+      "status": "python_only",
+      "option_status": "pending"
+    },
+    "declip": {
+      "classification": "python_only",
+      "status": "python_only",
+      "option_status": "pending"
+    },
+    "mastering-presets": {
+      "classification": "python_only",
+      "status": "python_only",
+      "option_status": "pending"
+    },
+    "mastering-suggest": {
+      "classification": "python_only",
+      "status": "python_only",
+      "option_status": "pending"
+    },
+    "mastering-profile": {
+      "classification": "python_only",
+      "status": "python_only",
+      "option_status": "pending"
+    },
+    "midi-render": {
+      "classification": "python_only",
+      "status": "python_only",
+      "option_status": "pending"
+    },
+    "mix": {
+      "classification": "intentional_variant",
+      "status": "intentional_variant",
+      "option_status": "pending"
+    }
+  },
+  "active_paths": [
+    {
+      "path": "version",
+      "options": [
+        {
+          "name": "json",
+          "type": "boolean",
+          "default": false,
+          "aliases": [],
+          "repeatable": false,
+          "required": false
+        }
+      ],
+      "positionals": [],
+      "payloads": {
+        "success": {
+          "keys": {
+            "cli": "string",
+            "cli_version": "string",
+            "lib_version": "string"
+          }
+        }
+      },
+      "cases": [
+        {
+          "id": "success",
+          "argv": [
+            "version",
+            "--json"
+          ],
+          "exit": 0,
+          "legacy_exit": 0,
+          "payload": "success",
+          "artifact": "none",
+          "stdout": "json"
+        }
+      ],
+      "artifacts": {}
+    },
+    {
+      "path": "chroma",
+      "options": [
+        {
+          "name": "hop-length",
+          "type": "integer",
+          "default": 512,
+          "aliases": [],
+          "repeatable": false,
+          "required": false
+        },
+        {
+          "name": "json",
+          "type": "boolean",
+          "default": false,
+          "aliases": [],
+          "repeatable": false,
+          "required": false
+        },
+        {
+          "name": "n-fft",
+          "type": "integer",
+          "default": 2048,
+          "aliases": [],
+          "repeatable": false,
+          "required": false
+        }
+      ],
+      "positionals": [
+        {
+          "name": "file",
+          "type": "path",
+          "required": true
+        }
+      ],
+      "payloads": {
+        "success": {
+          "keys": {
+            "n_chroma": "integer",
+            "n_frames": "integer",
+            "duration": "number",
+            "mean_energy": "array:number:12"
+          }
+        }
+      },
+      "cases": [
+        {
+          "id": "success",
+          "argv": [
+            "chroma",
+            "{audio}",
+            "--json"
+          ],
+          "exit": 0,
+          "legacy_exit": 0,
+          "payload": "success",
+          "artifact": "none",
+          "stdout": "json"
+        }
+      ],
+      "artifacts": {}
+    },
+    {
+      "path": "analyze",
+      "options": [
+        {
+          "name": "chroma-highpass",
+          "type": "number",
+          "default": 80,
+          "aliases": [],
+          "repeatable": false,
+          "required": false
+        },
+        {
+          "name": "json",
+          "type": "boolean",
+          "default": false,
+          "aliases": [],
+          "repeatable": false,
+          "required": false
+        },
+        {
+          "name": "no-hpss",
+          "type": "boolean",
+          "default": false,
+          "aliases": [],
+          "repeatable": false,
+          "required": false
+        },
+        {
+          "name": "with-seventh",
+          "type": "boolean",
+          "default": false,
+          "aliases": [],
+          "repeatable": false,
+          "required": false
+        }
+      ],
+      "positionals": [
+        {
+          "name": "file",
+          "type": "path",
+          "required": true
+        }
+      ],
+      "payloads": {
+        "success": {
+          "keys": {
+            "bpm": "number",
+            "bpm_confidence": "number",
+            "key": {
+              "keys": {
+                "root": "integer",
+                "mode": "integer",
+                "confidence": "number",
+                "name": "string"
+              }
+            },
+            "time_signature": {
+              "keys": {
+                "numerator": "integer",
+                "denominator": "integer",
+                "confidence": "number"
+              }
+            },
+            "beats": {
+              "type": "array",
+              "items": {
+                "keys": {
+                  "time": "number",
+                  "strength": "number"
+                }
+              }
+            },
+            "chords": {
+              "type": "array",
+              "items": {
+                "keys": {
+                  "name": "string",
+                  "start": "number",
+                  "end": "number",
+                  "confidence": "number"
+                }
+              }
+            },
+            "sections": {
+              "type": "array",
+              "items": {
+                "keys": {
+                  "type": "string",
+                  "start": "number",
+                  "end": "number"
+                }
+              }
+            },
+            "timbre": {
+              "keys": {
+                "brightness": "number",
+                "warmth": "number",
+                "density": "number",
+                "roughness": "number",
+                "complexity": "number"
+              }
+            },
+            "dynamics": {
+              "keys": {
+                "dynamic_range_db": "number",
+                "loudness_range_db": "number",
+                "crest_factor": "number",
+                "is_compressed": "boolean"
+              }
+            },
+            "rhythm": {
+              "keys": {
+                "syncopation": "number",
+                "groove_type": "string",
+                "pattern_regularity": "number"
+              }
+            },
+            "form": "string"
+          }
+        }
+      },
+      "cases": [
+        {
+          "id": "default",
+          "argv": [
+            "analyze",
+            "{audio}",
+            "--json"
+          ],
+          "exit": 0,
+          "legacy_exit": 0,
+          "payload": "success",
+          "artifact": "none",
+          "stdout": "json"
+        },
+        {
+          "id": "with_seventh",
+          "argv": [
+            "analyze",
+            "{audio}",
+            "--with-seventh",
+            "--json"
+          ],
+          "exit": 0,
+          "legacy_exit": 0,
+          "payload": "success",
+          "artifact": "none",
+          "stdout": "json"
+        },
+        {
+          "id": "no_hpss",
+          "argv": [
+            "analyze",
+            "{audio}",
+            "--no-hpss",
+            "--json"
+          ],
+          "exit": 0,
+          "legacy_exit": 0,
+          "payload": "success",
+          "artifact": "none",
+          "stdout": "json"
+        },
+        {
+          "id": "chroma_highpass_explicit",
+          "argv": [
+            "analyze",
+            "{audio}",
+            "--chroma-highpass",
+            "80",
+            "--json"
+          ],
+          "exit": 0,
+          "legacy_exit": 0,
+          "payload": "success",
+          "artifact": "none",
+          "stdout": "json"
+        }
+      ],
+      "artifacts": {}
+    },
+    {
+      "path": "spectral",
+      "options": [
+        {
+          "name": "hop-length",
+          "type": "integer",
+          "default": 512,
+          "aliases": [],
+          "repeatable": false,
+          "required": false
+        },
+        {
+          "name": "json",
+          "type": "boolean",
+          "default": false,
+          "aliases": [],
+          "repeatable": false,
+          "required": false
+        },
+        {
+          "name": "n-fft",
+          "type": "integer",
+          "default": 2048,
+          "aliases": [],
+          "repeatable": false,
+          "required": false
+        }
+      ],
+      "positionals": [
+        {
+          "name": "file",
+          "type": "path",
+          "required": true
+        }
+      ],
+      "payloads": {
+        "success": {
+          "keys": {
+            "n_frames": "integer",
+            "features": {
+              "keys": {
+                "centroid": {
+                  "keys": {
+                    "mean": "number",
+                    "std": "number",
+                    "min": "number",
+                    "max": "number"
+                  }
+                },
+                "bandwidth": {
+                  "keys": {
+                    "mean": "number",
+                    "std": "number",
+                    "min": "number",
+                    "max": "number"
+                  }
+                },
+                "rolloff": {
+                  "keys": {
+                    "mean": "number",
+                    "std": "number",
+                    "min": "number",
+                    "max": "number"
+                  }
+                },
+                "flatness": {
+                  "keys": {
+                    "mean": "number",
+                    "std": "number",
+                    "min": "number",
+                    "max": "number"
+                  }
+                },
+                "zcr": {
+                  "keys": {
+                    "mean": "number",
+                    "std": "number",
+                    "min": "number",
+                    "max": "number"
+                  }
+                },
+                "rms": {
+                  "keys": {
+                    "mean": "number",
+                    "std": "number",
+                    "min": "number",
+                    "max": "number"
+                  }
+                }
+              }
+            }
+          }
+        }
+      },
+      "cases": [
+        {
+          "id": "success",
+          "argv": [
+            "spectral",
+            "{audio}",
+            "--json"
+          ],
+          "exit": 0,
+          "legacy_exit": 0,
+          "payload": "success",
+          "artifact": "none",
+          "stdout": "json"
+        }
+      ],
+      "artifacts": {}
+    },
+    {
+      "path": "project.validate",
+      "options": [
+        {
+          "name": "in",
+          "type": "path",
+          "default": null,
+          "aliases": [],
+          "repeatable": false,
+          "required": true
+        },
+        {
+          "name": "json",
+          "type": "boolean",
+          "default": false,
+          "aliases": [],
+          "repeatable": false,
+          "required": false
+        },
+        {
+          "name": "output",
+          "type": "path",
+          "default": null,
+          "aliases": [
+            "o"
+          ],
+          "repeatable": false,
+          "required": false
+        },
+        {
+          "name": "strict",
+          "type": "boolean",
+          "default": false,
+          "aliases": [],
+          "repeatable": false,
+          "required": false
+        }
+      ],
+      "positionals": [],
+      "payloads": {
+        "success": {
+          "keys": {
+            "valid": "boolean",
+            "bytes": "integer",
+            "diagnostic_count": "integer",
+            "diagnostics": "array:string"
+          }
+        }
+      },
+      "cases": [
+        {
+          "id": "clean",
+          "argv": [
+            "project",
+            "validate",
+            "--in",
+            "{project_clean}",
+            "--json"
+          ],
+          "exit": 0,
+          "legacy_exit": 0,
+          "payload": "success",
+          "artifact": "none",
+          "stdout": "json"
+        },
+        {
+          "id": "warning",
+          "argv": [
+            "project",
+            "validate",
+            "--in",
+            "{project_warning}",
+            "--json"
+          ],
+          "exit": 0,
+          "legacy_exit": 0,
+          "payload": "success",
+          "artifact": "none",
+          "stdout": "json"
+        },
+        {
+          "id": "warning_strict_artifact",
+          "argv": [
+            "project",
+            "validate",
+            "--in",
+            "{project_warning}",
+            "--strict",
+            "-o",
+            "{project_warning_output}",
+            "--json"
+          ],
+          "exit": 9,
+          "legacy_exit": 1,
+          "payload": "success",
+          "artifact": "canonical_project",
+          "stdout": "json"
+        },
+        {
+          "id": "malformed",
+          "argv": [
+            "project",
+            "validate",
+            "--in",
+            "{project_malformed}",
+            "--json"
+          ],
+          "exit": 5,
+          "legacy_exit": 1,
+          "payload": "none",
+          "artifact": "none",
+          "stdout": "empty"
+        },
+        {
+          "id": "reject_unlisted_frames",
+          "argv": [
+            "project",
+            "validate",
+            "--in",
+            "{project_clean}",
+            "--frames",
+            "1",
+            "--json"
+          ],
+          "exit": 2,
+          "legacy_exit": 1,
+          "payload": "none",
+          "artifact": "none",
+          "stdout": "empty"
+        }
+      ],
+      "artifacts": {
+        "canonical_project": {
+          "placeholder": "project_warning_output",
+          "encoding": "utf-8",
+          "bytes_key": "bytes",
+          "sha256": "966ed012755915ef361ca575413ed568dc4d4d7038590bacdf52b2e22f9a066c"
+        }
+      }
+    },
+    {
+      "path": "voice-preset-validate",
+      "options": [
+        {
+          "name": "json",
+          "type": "boolean",
+          "default": false,
+          "aliases": [],
+          "repeatable": false,
+          "required": false
+        },
+        {
+          "name": "preset",
+          "type": "string",
+          "default": "",
+          "aliases": [],
+          "repeatable": false,
+          "required": false
+        },
+        {
+          "name": "preset-json",
+          "type": "path",
+          "default": null,
+          "aliases": [],
+          "repeatable": false,
+          "required": false
+        },
+        {
+          "name": "set",
+          "type": "string",
+          "default": [],
+          "aliases": [],
+          "repeatable": true,
+          "required": false
+        }
+      ],
+      "positionals": [
+        {
+          "name": "file",
+          "type": "path",
+          "required": false
+        }
+      ],
+      "payloads": {
+        "success": {
+          "keys": {
+            "ok": "boolean",
+            "normalized_json": "string"
+          }
+        },
+        "failure": {
+          "keys": {
+            "ok": "boolean",
+            "error": "string"
+          }
+        }
+      },
+      "cases": [
+        {
+          "id": "success",
+          "argv": [
+            "voice-preset-validate",
+            "{preset_valid}",
+            "--json"
+          ],
+          "exit": 0,
+          "legacy_exit": 0,
+          "payload": "success",
+          "artifact": "none",
+          "stdout": "json"
+        },
+        {
+          "id": "failure",
+          "argv": [
+            "voice-preset-validate",
+            "{preset_invalid}",
+            "--json"
+          ],
+          "exit": 3,
+          "legacy_exit": 1,
+          "payload": "failure",
+          "artifact": "none",
+          "stdout": "json"
+        },
+        {
+          "id": "malformed_set",
+          "argv": [
+            "voice-preset-validate",
+            "{preset_valid}",
+            "--set",
+            "malformed",
+            "--json"
+          ],
+          "exit": 3,
+          "legacy_exit": 1,
+          "payload": "none",
+          "artifact": "none",
+          "stdout": "empty",
+          "stderr": "nonempty"
+        },
+        {
+          "id": "missing_file",
+          "argv": [
+            "voice-preset-validate",
+            "{preset_missing}",
+            "--json"
+          ],
+          "exit": 4,
+          "legacy_exit": 1,
+          "payload": "none",
+          "artifact": "none",
+          "stdout": "empty",
+          "stderr": "nonempty"
+        },
+        {
+          "id": "missing_argument",
+          "argv": [
+            "voice-preset-validate",
+            "--json"
+          ],
+          "exit": 4,
+          "legacy_exit": 1,
+          "payload": "none",
+          "artifact": "none",
+          "stdout": "empty",
+          "stderr": "nonempty"
+        }
+      ],
+      "artifacts": {}
+    },
+    {
+      "path": "voice-change",
+      "options": [
+        {
+          "name": "formant-factor",
+          "type": "number",
+          "default": null,
+          "aliases": [],
+          "repeatable": false,
+          "required": false
+        },
+        {
+          "name": "json",
+          "type": "boolean",
+          "default": false,
+          "aliases": [],
+          "repeatable": false,
+          "required": false
+        },
+        {
+          "name": "output",
+          "type": "path",
+          "default": null,
+          "aliases": [
+            "o"
+          ],
+          "repeatable": false,
+          "required": false
+        },
+        {
+          "name": "pitch-semitones",
+          "type": "number",
+          "default": null,
+          "aliases": [],
+          "repeatable": false,
+          "required": false
+        },
+        {
+          "name": "preset",
+          "type": "string",
+          "default": "",
+          "aliases": [],
+          "repeatable": false,
+          "required": false
+        },
+        {
+          "name": "preset-json",
+          "type": "path",
+          "default": null,
+          "aliases": [],
+          "repeatable": false,
+          "required": false
+        },
+        {
+          "name": "preset-pack",
+          "type": "path",
+          "default": null,
+          "aliases": [],
+          "repeatable": false,
+          "required": false
+        },
+        {
+          "name": "set",
+          "type": "string",
+          "default": [],
+          "aliases": [],
+          "repeatable": true,
+          "required": false
+        }
+      ],
+      "positionals": [
+        {
+          "name": "file",
+          "type": "path",
+          "required": true
+        }
+      ],
+      "payloads": {
+        "simple": {
+          "keys": {
+            "output": "path",
+            "length": "integer",
+            "duration": "number",
+            "sample_rate": "integer",
+            "latency_samples": "integer",
+            "pitch_semitones": "number",
+            "formant_factor": "number"
+          }
+        },
+        "preset": {
+          "keys": {
+            "output": "path",
+            "length": "integer",
+            "duration": "number",
+            "sample_rate": "integer",
+            "latency_samples": "integer",
+            "preset": "string"
+          }
+        },
+        "custom": {
+          "keys": {
+            "output": "path",
+            "length": "integer",
+            "duration": "number",
+            "sample_rate": "integer",
+            "latency_samples": "integer"
+          }
+        }
+      },
+      "cases": [
+        {
+          "id": "simple",
+          "argv": [
+            "voice-change",
+            "{audio}",
+            "-o",
+            "{output}",
+            "--pitch-semitones",
+            "5",
+            "--formant-factor",
+            "1.1",
+            "--json"
+          ],
+          "exit": 0,
+          "legacy_exit": 0,
+          "payload": "simple",
+          "artifact": "none",
+          "stdout": "json"
+        },
+        {
+          "id": "preset",
+          "argv": [
+            "voice-change",
+            "{audio}",
+            "-o",
+            "{output}",
+            "--preset",
+            "bright-idol",
+            "--json"
+          ],
+          "exit": 0,
+          "legacy_exit": 0,
+          "payload": "preset",
+          "artifact": "none",
+          "stdout": "json"
+        },
+        {
+          "id": "custom",
+          "argv": [
+            "voice-change",
+            "{audio}",
+            "-o",
+            "{output}",
+            "--preset-json",
+            "{preset_custom}",
+            "--json"
+          ],
+          "exit": 0,
+          "legacy_exit": 0,
+          "payload": "custom",
+          "artifact": "none",
+          "stdout": "json"
+        }
+      ],
+      "artifacts": {}
+    },
+    {
+      "path": "voice-presets",
+      "options": [
+        {
+          "name": "json",
+          "type": "boolean",
+          "default": false,
+          "aliases": [],
+          "repeatable": false,
+          "required": false
+        }
+      ],
+      "positionals": [],
+      "payloads": {
+        "success": {
+          "keys": {
+            "presets": {
+              "type": "array",
+              "items": "string",
+              "min_items": 1
+            }
+          }
+        }
+      },
+      "cases": [
+        {
+          "id": "success",
+          "argv": [
+            "voice-presets",
+            "--json"
+          ],
+          "exit": 0,
+          "legacy_exit": 0,
+          "payload": "success",
+          "artifact": "none",
+          "stdout": "json"
+        }
+      ],
+      "artifacts": {}
+    },
+    {
+      "path": "project.compile",
+      "options": [
+        {
+          "name": "in",
+          "type": "path",
+          "default": null,
+          "aliases": [],
+          "repeatable": false,
+          "required": true
+        },
+        {
+          "name": "json",
+          "type": "boolean",
+          "default": false,
+          "aliases": [],
+          "repeatable": false,
+          "required": false
+        }
+      ],
+      "positionals": [],
+      "payloads": {
+        "success": {
+          "keys": {
+            "has_timeline": "boolean",
+            "diagnostic_count": "integer",
+            "diagnostics": {
+              "type": "array",
+              "items": {
+                "keys": {
+                  "code": "integer",
+                  "severity": "integer",
+                  "target_id": "integer",
+                  "message": "string"
+                }
+              }
+            },
+            "messages": "string"
+          }
+        }
+      },
+      "cases": [
+        {
+          "id": "clean",
+          "argv": [
+            "project",
+            "compile",
+            "--in",
+            "{project_clean}",
+            "--json"
+          ],
+          "exit": 0,
+          "legacy_exit": 0,
+          "payload": "success",
+          "artifact": "none",
+          "stdout": "json"
+        }
+      ],
+      "artifacts": {}
+    },
+    {
+      "path": "mastering",
+      "options": [
+        {
+          "name": "assistant",
+          "type": "boolean",
+          "default": false,
+          "aliases": [],
+          "repeatable": false,
+          "required": false
+        },
+        {
+          "name": "bits",
+          "type": "integer",
+          "default": 16,
+          "aliases": [],
+          "repeatable": false,
+          "required": false
+        },
+        {
+          "name": "ceiling-db",
+          "type": "number",
+          "default": -1,
+          "aliases": [],
+          "repeatable": false,
+          "required": false
+        },
+        {
+          "name": "config",
+          "type": "path",
+          "default": null,
+          "aliases": [],
+          "repeatable": false,
+          "required": false
+        },
+        {
+          "name": "enable-repair",
+          "type": "boolean",
+          "default": false,
+          "aliases": [],
+          "repeatable": false,
+          "required": false
+        },
+        {
+          "name": "explain",
+          "type": "boolean",
+          "default": false,
+          "aliases": [],
+          "repeatable": false,
+          "required": false
+        },
+        {
+          "name": "json",
+          "type": "boolean",
+          "default": false,
+          "aliases": [],
+          "repeatable": false,
+          "required": false
+        },
+        {
+          "name": "output",
+          "type": "path",
+          "default": null,
+          "aliases": [
+            "o"
+          ],
+          "repeatable": false,
+          "required": false
+        },
+        {
+          "name": "params",
+          "type": "string",
+          "default": "",
+          "aliases": [],
+          "repeatable": false,
+          "required": false
+        },
+        {
+          "name": "preset",
+          "type": "string",
+          "default": "",
+          "aliases": [],
+          "repeatable": false,
+          "required": false
+        },
+        {
+          "name": "report",
+          "type": "path",
+          "default": null,
+          "aliases": [],
+          "repeatable": false,
+          "required": false
+        },
+        {
+          "name": "target-lufs",
+          "type": "number",
+          "default": -14,
+          "aliases": [],
+          "repeatable": false,
+          "required": false
+        },
+        {
+          "name": "true-peak-oversample",
+          "type": "integer",
+          "default": 4,
+          "aliases": [],
+          "repeatable": false,
+          "required": false
+        }
+      ],
+      "positionals": [
+        {
+          "name": "file",
+          "type": "path",
+          "required": true
+        }
+      ],
+      "payloads": {
+        "success": {
+          "keys": {
+            "input_lufs": "number",
+            "output_lufs": "number",
+            "applied_gain_db": "number",
+            "target_lufs": "number",
+            "ceiling_db": "number",
+            "true_peak_oversample": "integer",
+            "latency_samples": "integer",
+            "sample_rate": "integer",
+            "output": "path"
+          }
+        }
+      },
+      "cases": [
+        {
+          "id": "report",
+          "argv": [
+            "mastering",
+            "{audio}",
+            "--report",
+            "{mastering_report}",
+            "--json"
+          ],
+          "exit": 0,
+          "legacy_exit": 0,
+          "payload": "success",
+          "artifact": "none",
+          "stdout": "json"
+        }
+      ],
+      "artifacts": {}
+    },
+    {
+      "path": "synthesize-rir",
+      "options": [
+        {
+          "name": "absorption",
+          "type": "number",
+          "default": 0.2,
+          "aliases": [],
+          "repeatable": false,
+          "required": false
+        },
+        {
+          "name": "height",
+          "type": "number",
+          "default": 3,
+          "aliases": [],
+          "repeatable": false,
+          "required": false
+        },
+        {
+          "name": "ism-order",
+          "type": "integer",
+          "default": 3,
+          "aliases": [],
+          "repeatable": false,
+          "required": false
+        },
+        {
+          "name": "json",
+          "type": "boolean",
+          "default": false,
+          "aliases": [],
+          "repeatable": false,
+          "required": false
+        },
+        {
+          "name": "length",
+          "type": "number",
+          "default": 7,
+          "aliases": [],
+          "repeatable": false,
+          "required": false
+        },
+        {
+          "name": "listener-x",
+          "type": "number",
+          "default": 5,
+          "aliases": [],
+          "repeatable": false,
+          "required": false
+        },
+        {
+          "name": "listener-y",
+          "type": "number",
+          "default": 4,
+          "aliases": [],
+          "repeatable": false,
+          "required": false
+        },
+        {
+          "name": "listener-z",
+          "type": "number",
+          "default": 1.7,
+          "aliases": [],
+          "repeatable": false,
+          "required": false
+        },
+        {
+          "name": "max-seconds",
+          "type": "number",
+          "default": 0,
+          "aliases": [],
+          "repeatable": false,
+          "required": false
+        },
+        {
+          "name": "output",
+          "type": "path",
+          "default": null,
+          "aliases": [
+            "o"
+          ],
+          "repeatable": false,
+          "required": false
+        },
+        {
+          "name": "sabine",
+          "type": "boolean",
+          "default": false,
+          "aliases": [],
+          "repeatable": false,
+          "required": false
+        },
+        {
+          "name": "sample-rate",
+          "type": "integer",
+          "default": 48000,
+          "aliases": [],
+          "repeatable": false,
+          "required": false
+        },
+        {
+          "name": "seed",
+          "type": "integer",
+          "default": 1,
+          "aliases": [],
+          "repeatable": false,
+          "required": false
+        },
+        {
+          "name": "source-x",
+          "type": "number",
+          "default": 1,
+          "aliases": [],
+          "repeatable": false,
+          "required": false
+        },
+        {
+          "name": "source-y",
+          "type": "number",
+          "default": 1,
+          "aliases": [],
+          "repeatable": false,
+          "required": false
+        },
+        {
+          "name": "source-z",
+          "type": "number",
+          "default": 1.2,
+          "aliases": [],
+          "repeatable": false,
+          "required": false
+        },
+        {
+          "name": "width",
+          "type": "number",
+          "default": 5,
+          "aliases": [],
+          "repeatable": false,
+          "required": false
+        }
+      ],
+      "positionals": [],
+      "payloads": {
+        "success": {
+          "keys": {
+            "output": "path",
+            "sample_rate": "integer",
+            "samples": "integer"
+          }
+        }
+      },
+      "cases": [
+        {
+          "id": "success",
+          "argv": [
+            "synthesize-rir",
+            "--length",
+            "7",
+            "--width",
+            "5",
+            "--height",
+            "3",
+            "--absorption",
+            "0.2",
+            "--ism-order",
+            "0",
+            "--max-seconds",
+            "0.03",
+            "--sample-rate",
+            "22050",
+            "-o",
+            "{rir_output}",
+            "--json"
+          ],
+          "exit": 0,
+          "legacy_exit": 0,
+          "payload": "success",
+          "artifact": "output_wav",
+          "stdout": "json"
+        }
+      ],
+      "artifacts": {
+        "output_wav": {
+          "placeholder": "rir_output",
+          "kind": "wav",
+          "sample_rate_key": "sample_rate",
+          "sha256": "133a68b245a5d16af53b54d380d7bb4d26a8809763e02c1d577c0b9c0e6b6b84"
+        }
+      }
+    },
+    {
+      "path": "rhythm",
+      "options": [
+        {
+          "name": "bpm-max",
+          "type": "number",
+          "default": 200,
+          "aliases": [],
+          "repeatable": false,
+          "required": false
+        },
+        {
+          "name": "bpm-min",
+          "type": "number",
+          "default": 60,
+          "aliases": [],
+          "repeatable": false,
+          "required": false
+        },
+        {
+          "name": "json",
+          "type": "boolean",
+          "default": false,
+          "aliases": [],
+          "repeatable": false,
+          "required": false
+        },
+        {
+          "name": "start-bpm",
+          "type": "number",
+          "default": 120,
+          "aliases": [],
+          "repeatable": false,
+          "required": false
+        }
+      ],
+      "positionals": [
+        {
+          "name": "file",
+          "type": "path",
+          "required": true
+        }
+      ],
+      "payloads": {
+        "success": {
+          "keys": {
+            "bpm": "number",
+            "time_signature": {
+              "keys": {
+                "numerator": "integer",
+                "denominator": "integer",
+                "confidence": "number"
+              }
+            },
+            "groove_type": "string",
+            "syncopation": "number",
+            "pattern_regularity": "number",
+            "tempo_stability": "number",
+            "beat_intervals": {
+              "keys": {
+                "count": "integer",
+                "mean": "number",
+                "std": "number",
+                "min": "number",
+                "max": "number"
+              }
+            }
+          }
+        }
+      },
+      "cases": [
+        {
+          "id": "success",
+          "argv": [
+            "rhythm",
+            "{audio}",
+            "--json"
+          ],
+          "exit": 0,
+          "legacy_exit": 0,
+          "payload": "success",
+          "artifact": "none",
+          "stdout": "json"
+        }
+      ],
+      "artifacts": {}
+    },
+    {
+      "path": "pitch",
+      "options": [
+        {
+          "name": "algorithm",
+          "type": "string",
+          "default": "pyin",
+          "aliases": [],
+          "repeatable": false,
+          "required": false
+        },
+        {
+          "name": "fmax",
+          "type": "number",
+          "default": 2093,
+          "aliases": [],
+          "repeatable": false,
+          "required": false
+        },
+        {
+          "name": "fmin",
+          "type": "number",
+          "default": 65,
+          "aliases": [],
+          "repeatable": false,
+          "required": false
+        },
+        {
+          "name": "hop-length",
+          "type": "integer",
+          "default": 512,
+          "aliases": [],
+          "repeatable": false,
+          "required": false
+        },
+        {
+          "name": "json",
+          "type": "boolean",
+          "default": false,
+          "aliases": [],
+          "repeatable": false,
+          "required": false
+        },
+        {
+          "name": "threshold",
+          "type": "number",
+          "default": 0.1,
+          "aliases": [],
+          "repeatable": false,
+          "required": false
+        }
+      ],
+      "positionals": [
+        {
+          "name": "file",
+          "type": "path",
+          "required": true
+        }
+      ],
+      "payloads": {
+        "success": {
+          "keys": {
+            "algorithm": "string",
+            "n_frames": "integer",
+            "voiced_count": "integer",
+            "voiced_ratio": "number|null",
+            "median_f0": "number|null",
+            "mean_f0": "number|null"
+          }
+        }
+      },
+      "cases": [
+        {
+          "id": "success",
+          "argv": [
+            "pitch",
+            "{audio}",
+            "--json"
+          ],
+          "exit": 0,
+          "legacy_exit": 0,
+          "payload": "success",
+          "artifact": "none",
+          "stdout": "json"
+        }
+      ],
+      "artifacts": {}
+    },
+    {
+      "path": "eq",
+      "options": [
+        {
+          "name": "attack-ms",
+          "type": "number",
+          "default": 5,
+          "aliases": [],
+          "repeatable": false,
+          "required": false
+        },
+        {
+          "name": "auto-gain",
+          "type": "boolean",
+          "default": false,
+          "aliases": [],
+          "repeatable": false,
+          "required": false
+        },
+        {
+          "name": "auto-threshold",
+          "type": "boolean",
+          "default": false,
+          "aliases": [],
+          "repeatable": false,
+          "required": false
+        },
+        {
+          "name": "bits",
+          "type": "integer",
+          "default": 16,
+          "aliases": [],
+          "repeatable": false,
+          "required": false
+        },
+        {
+          "name": "coeff-mode",
+          "type": "integer",
+          "default": 0,
+          "aliases": [],
+          "repeatable": false,
+          "required": false
+        },
+        {
+          "name": "dynamic",
+          "type": "boolean",
+          "default": false,
+          "aliases": [],
+          "repeatable": false,
+          "required": false
+        },
+        {
+          "name": "frequency-hz",
+          "type": "number",
+          "default": 1000,
+          "aliases": [],
+          "repeatable": false,
+          "required": false
+        },
+        {
+          "name": "gain-db",
+          "type": "number",
+          "default": 0,
+          "aliases": [],
+          "repeatable": false,
+          "required": false
+        },
+        {
+          "name": "gain-scale",
+          "type": "number",
+          "default": 1,
+          "aliases": [],
+          "repeatable": false,
+          "required": false
+        },
+        {
+          "name": "json",
+          "type": "boolean",
+          "default": false,
+          "aliases": [],
+          "repeatable": false,
+          "required": false
+        },
+        {
+          "name": "lookahead-ms",
+          "type": "number",
+          "default": 0,
+          "aliases": [],
+          "repeatable": false,
+          "required": false
+        },
+        {
+          "name": "output",
+          "type": "path",
+          "default": null,
+          "aliases": [
+            "o"
+          ],
+          "repeatable": false,
+          "required": false
+        },
+        {
+          "name": "output-gain-db",
+          "type": "number",
+          "default": 0,
+          "aliases": [],
+          "repeatable": false,
+          "required": false
+        },
+        {
+          "name": "output-pan",
+          "type": "number",
+          "default": 0,
+          "aliases": [],
+          "repeatable": false,
+          "required": false
+        },
+        {
+          "name": "params",
+          "type": "string",
+          "default": "",
+          "aliases": [],
+          "repeatable": false,
+          "required": false
+        },
+        {
+          "name": "phase-mode",
+          "type": "integer",
+          "default": 1,
+          "aliases": [],
+          "repeatable": false,
+          "required": false
+        },
+        {
+          "name": "placement",
+          "type": "integer",
+          "default": 0,
+          "aliases": [],
+          "repeatable": false,
+          "required": false
+        },
+        {
+          "name": "proportional-q",
+          "type": "boolean",
+          "default": false,
+          "aliases": [],
+          "repeatable": false,
+          "required": false
+        },
+        {
+          "name": "q",
+          "type": "number",
+          "default": 1,
+          "aliases": [],
+          "repeatable": false,
+          "required": false
+        },
+        {
+          "name": "range-db",
+          "type": "number",
+          "default": -6,
+          "aliases": [],
+          "repeatable": false,
+          "required": false
+        },
+        {
+          "name": "ratio",
+          "type": "number",
+          "default": 2,
+          "aliases": [],
+          "repeatable": false,
+          "required": false
+        },
+        {
+          "name": "release-ms",
+          "type": "number",
+          "default": 50,
+          "aliases": [],
+          "repeatable": false,
+          "required": false
+        },
+        {
+          "name": "resolution",
+          "type": "integer",
+          "default": 0,
+          "aliases": [],
+          "repeatable": false,
+          "required": false
+        },
+        {
+          "name": "sidechain-freq-hz",
+          "type": "number",
+          "default": -1,
+          "aliases": [],
+          "repeatable": false,
+          "required": false
+        },
+        {
+          "name": "sidechain-q",
+          "type": "number",
+          "default": 1,
+          "aliases": [],
+          "repeatable": false,
+          "required": false
+        },
+        {
+          "name": "slope-db-oct",
+          "type": "integer",
+          "default": 12,
+          "aliases": [],
+          "repeatable": false,
+          "required": false
+        },
+        {
+          "name": "threshold-db",
+          "type": "number",
+          "default": -24,
+          "aliases": [],
+          "repeatable": false,
+          "required": false
+        },
+        {
+          "name": "type",
+          "type": "integer",
+          "default": 0,
+          "aliases": [],
+          "repeatable": false,
+          "required": false
+        }
+      ],
+      "positionals": [
+        {
+          "name": "file",
+          "type": "path",
+          "required": true
+        }
+      ],
+      "payloads": {
+        "success": {
+          "keys": {
+            "processor": "string",
+            "input_lufs": "number",
+            "output_lufs": "number",
+            "applied_gain_db": "number",
+            "latency_samples": "integer",
+            "sample_rate": "integer",
+            "output": "path"
+          }
+        }
+      },
+      "cases": [
+        {
+          "id": "default",
+          "argv": [
+            "eq",
+            "{audio}",
+            "--json"
+          ],
+          "exit": 0,
+          "legacy_exit": 0,
+          "payload": "success",
+          "artifact": "none",
+          "stdout": "json"
+        },
+        {
+          "id": "explicit_output",
+          "argv": [
+            "eq",
+            "{audio}",
+            "--output",
+            "{output}",
+            "--json"
+          ],
+          "exit": 0,
+          "legacy_exit": 0,
+          "payload": "success",
+          "artifact": "none",
+          "stdout": "json"
+        }
+      ],
+      "artifacts": {}
+    },
+    {
+      "path": "mastering-processor",
+      "options": [
+        {
+          "name": "bits",
+          "type": "integer",
+          "default": 16,
+          "aliases": [],
+          "repeatable": false,
+          "required": false
+        },
+        {
+          "name": "json",
+          "type": "boolean",
+          "default": false,
+          "aliases": [],
+          "repeatable": false,
+          "required": false
+        },
+        {
+          "name": "output",
+          "type": "path",
+          "default": null,
+          "aliases": [
+            "o"
+          ],
+          "repeatable": false,
+          "required": false
+        },
+        {
+          "name": "params",
+          "type": "string",
+          "default": "",
+          "aliases": [],
+          "repeatable": false,
+          "required": false
+        },
+        {
+          "name": "processor",
+          "type": "string",
+          "default": null,
+          "aliases": [],
+          "repeatable": false,
+          "required": true
+        },
+        {
+          "name": "stereo",
+          "type": "boolean",
+          "default": false,
+          "aliases": [],
+          "repeatable": false,
+          "required": false
+        }
+      ],
+      "positionals": [
+        {
+          "name": "file",
+          "type": "path",
+          "required": true
+        }
+      ],
+      "payloads": {
+        "success": {
+          "keys": {
+            "processor": "string",
+            "stereo": "boolean",
+            "input_lufs": "number",
+            "output_lufs": "number",
+            "applied_gain_db": "number",
+            "latency_samples": "integer",
+            "sample_rate": "integer",
+            "output": "path"
+          }
+        }
+      },
+      "cases": [
+        {
+          "id": "mono",
+          "argv": [
+            "mastering-processor",
+            "{audio}",
+            "--processor",
+            "eq.equalizer",
+            "--json"
+          ],
+          "exit": 0,
+          "legacy_exit": 0,
+          "payload": "success",
+          "artifact": "none",
+          "stdout": "json"
+        },
+        {
+          "id": "stereo",
+          "argv": [
+            "mastering-processor",
+            "{audio}",
+            "--processor",
+            "stereo.imager",
+            "--json"
+          ],
+          "exit": 0,
+          "legacy_exit": 0,
+          "payload": "success",
+          "artifact": "none",
+          "stdout": "json"
+        }
+      ],
+      "artifacts": {}
+    }
+  ],
+  "parser_cases": [
+    {
+      "id": "no_command",
+      "argv": [],
+      "exit": 2,
+      "legacy_exit": 1,
+      "stdout": "empty",
+      "payload": "none"
+    },
+    {
+      "id": "unknown_command",
+      "argv": [
+        "not-a-command"
+      ],
+      "exit": 2,
+      "legacy_exit": 1,
+      "stdout": "empty",
+      "payload": "none"
+    },
+    {
+      "id": "missing_audio",
+      "argv": [
+        "chroma",
+        "--json"
+      ],
+      "exit": 2,
+      "legacy_exit": 1,
+      "stdout": "empty",
+      "payload": "none"
+    },
+    {
+      "id": "unknown_option",
+      "argv": [
+        "chroma",
+        "{audio}",
+        "--no-such-option"
+      ],
+      "exit": 2,
+      "legacy_exit": 1,
+      "stdout": "empty",
+      "payload": "none"
+    },
+    {
+      "id": "missing_option_value",
+      "argv": [
+        "chroma",
+        "{audio}",
+        "--n-fft"
+      ],
+      "exit": 2,
+      "legacy_exit": 1,
+      "stdout": "empty",
+      "payload": "none"
+    },
+    {
+      "id": "invalid_numeric",
+      "argv": [
+        "chroma",
+        "{audio}",
+        "--n-fft",
+        "not-a-number"
+      ],
+      "exit": 2,
+      "legacy_exit": 1,
+      "stdout": "empty",
+      "payload": "none"
+    },
+    {
+      "id": "analyze_reject_output",
+      "argv": [
+        "analyze",
+        "{audio}",
+        "--output",
+        "{output}"
+      ],
+      "exit": 2,
+      "legacy_exit": 1,
+      "stdout": "empty",
+      "payload": "none"
+    },
+    {
+      "id": "analyze_reject_output_alias",
+      "argv": [
+        "analyze",
+        "{audio}",
+        "-o",
+        "{output}"
+      ],
+      "exit": 2,
+      "legacy_exit": 1,
+      "stdout": "empty",
+      "payload": "none"
+    },
+    {
+      "id": "spectral_reject_output",
+      "argv": [
+        "spectral",
+        "{audio}",
+        "--output",
+        "{output}"
+      ],
+      "exit": 2,
+      "legacy_exit": 1,
+      "stdout": "empty",
+      "payload": "none"
+    },
+    {
+      "id": "spectral_reject_output_alias",
+      "argv": [
+        "spectral",
+        "{audio}",
+        "-o",
+        "{output}"
+      ],
+      "exit": 2,
+      "legacy_exit": 1,
+      "stdout": "empty",
+      "payload": "none"
+    }
+  ],
+  "fixtures": {
+    "audio": {
+      "sample_rate": 22050,
+      "frames": 13230,
+      "frequency_hz": 220.0,
+      "amplitude": 0.5
+    },
+    "projects": {
+      "clean": "{\"version\":1,\"sample_rate\":48000,\"tracks\":[],\"clips\":[]}",
+      "warning": "{\"version\":1,\"sample_rate\":48000,\"tracks\":[{\"id\":1,\"name\":\"audio\",\"kind\":0,\"channel_strip_ref\":\"\",\"output_target\":\"\",\"midi_destination_id\":0,\"automation_lanes\":[]}],\"clips\":[{\"id\":1,\"track_id\":1,\"source_id\":99,\"start_ppq\":0,\"length_ppq\":1,\"source_offset_ppq\":0,\"gain\":1,\"fade_in\":{\"length_ppq\":0,\"curve\":0},\"fade_out\":{\"length_ppq\":0,\"curve\":0},\"loop_mode\":0,\"loop_length_ppq\":0,\"warp_ref_id\":0,\"warp_mode\":0}]}",
+      "malformed": "{ this is not valid json "
+    },
+    "presets": {
+      "valid": {
+        "schemaVersion": 1,
+        "id": "contract-fixture",
+        "name": "Contract Fixture",
+        "category": "custom",
+        "macros": {
+          "pitch": 0,
+          "formant": 1,
+          "brightness": 0,
+          "space": 0,
+          "intensity": 0.5,
+          "noiseControl": 0,
+          "sibilance": 0
+        }
+      },
+      "invalid": {
+        "schemaVersion": 1,
+        "id": "contract-invalid",
+        "name": "Invalid",
+        "category": "custom",
+        "dsp": {}
+      },
+      "custom": {
+        "dsp": {
+          "compressor": {
+            "attackMs": 8,
+            "makeupGainDb": 0.5,
+            "ratio": 1.8,
+            "releaseMs": 120,
+            "thresholdDb": -24
+          },
+          "deesser": {
+            "frequencyHz": 7200,
+            "rangeDb": 8,
+            "ratio": 4,
+            "thresholdDb": -28
+          },
+          "eq": {
+            "airDb": 0.5,
+            "bodyDb": 0,
+            "highpassHz": 75,
+            "presenceDb": 1.2
+          },
+          "formant": {
+            "amount": 0,
+            "body": 0,
+            "brightness": 0.1,
+            "factor": 1,
+            "nasal": 0
+          },
+          "gate": {
+            "attackMs": 2,
+            "rangeDb": 18,
+            "releaseMs": 100,
+            "thresholdDb": -55
+          },
+          "inputGainDb": 0,
+          "limiter": {
+            "ceilingDb": -1,
+            "releaseMs": 50
+          },
+          "outputGainDb": 0,
+          "retune": {
+            "grainSize": 64,
+            "mix": 0,
+            "semitones": 0
+          },
+          "reverb": {
+            "damping": 0.55,
+            "mix": 0,
+            "seed": 1,
+            "timeMs": 320
+          },
+          "wetMix": 1
+        },
+        "id": "contract-custom",
+        "name": "Contract Custom",
+        "category": "custom",
+        "schemaVersion": 1
+      }
+    }
+  }
+}

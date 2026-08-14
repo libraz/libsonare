@@ -57,6 +57,7 @@
       },
       "id": "neutral-monitor",
       "name": "Neutral Monitor",
+      "category": "monitor",
       "schemaVersion": 1
     },
     {
@@ -114,6 +115,7 @@
       },
       "id": "bright-idol",
       "name": "Bright Idol",
+      "category": "bright",
       "schemaVersion": 1
     },
     {
@@ -171,6 +173,7 @@
       },
       "id": "soft-whisper",
       "name": "Soft Whisper",
+      "category": "soft",
       "schemaVersion": 1
     },
     {
@@ -228,6 +231,7 @@
       },
       "id": "deep-narrator",
       "name": "Deep Narrator",
+      "category": "deep",
       "schemaVersion": 1
     },
     {
@@ -285,6 +289,7 @@
       },
       "id": "robot-mascot",
       "name": "Robot Mascot",
+      "category": "robot",
       "schemaVersion": 1
     },
     {
@@ -342,6 +347,7 @@
       },
       "id": "dark-villain",
       "name": "Dark Villain",
+      "category": "dark",
       "schemaVersion": 1
     }
   ],

@@ -1,6 +1,6 @@
 .PHONY: all build release test test-slow test-golden test-optional-fixtures test-librosa-live clean rebuild format format-check lint wasm coverage \
        coverage-build coverage-clean build-shared build-node build-wasm-binding \
-       test-python test-python-slow test-node test-wasm parity conformance abi-layout abi-layout-check check-abi-version \
+       test-python test-python-slow test-node test-wasm parity conformance test-gm-cross-surface abi-layout abi-layout-check check-abi-version \
        capability-catalog capability-catalog-check ci-local \
        test-hardening test-hardening-asan test-hardening-tsan test-hardening-host test-hardening-wasm
 
@@ -173,6 +173,41 @@ parity: conformance
 conformance:
 	python3 tools/conformance/check_public_contracts.py
 	python3 tools/api/check_request_object_coverage.py
+	python3 tools/conformance/check_cli_contract.py --schema
+	python3 -m unittest tests/conformance/test_cli_contract.py
+	@if test -x "$(BUILD_DIR)/bin/sonare-cli" && test -x "bindings/python/.venv/bin/python"; then \
+		python3 tools/conformance/check_cli_contract.py \
+			--native "$(BUILD_DIR)/bin/sonare-cli" \
+			--python "bindings/python/.venv/bin/python"; \
+	else \
+		echo "conformance: live CLI check skipped (build/bin/sonare-cli or bindings/python/.venv/bin/python is unavailable)"; \
+	fi
+
+# Opt-in GM-program project bounce acceptance across the C, Python, Node, and
+# WASM public surfaces. The check deliberately does not build the bindings: it
+# is an acceptance run over already-built artifacts, with an explicit preflight
+# so a clean tree fails with the exact build targets to run first.
+test-gm-cross-surface:
+	@command -v "$(RYE)" >/dev/null 2>&1 || { \
+		echo "test-gm-cross-surface: required command not found: $(RYE)" >&2; \
+		exit 1; \
+	}
+	@set -eu; \
+	for artifact in \
+		"$(PYTHON_SHARED_LIB)" \
+		"bindings/node/dist/index.js" \
+		"bindings/node/build/Release/sonare-node.node" \
+		"bindings/wasm/dist/index.js" \
+		"bindings/wasm/dist/sonare.js" \
+		"bindings/wasm/dist/sonare.wasm"; do \
+		if test ! -f "$$artifact"; then \
+			echo "test-gm-cross-surface: missing required artifact: $$artifact" >&2; \
+			echo "test-gm-cross-surface: run 'make build-shared build-node build-wasm-binding' first" >&2; \
+			exit 1; \
+		fi; \
+	done
+	SONARE_LIB_PATH=$(PYTHON_SHARED_LIB) PYTHONPATH=$(CURDIR)/bindings/python/src \
+	$(RYE) run --pyproject bindings/python/pyproject.toml python tests/conformance/check_gm_project_surfaces.py
 
 # Regenerate the authoritative C-ABI struct layout snapshot. Compiles a tiny
 # probe (needs a C++ compiler, not a full build) that reports sizeof/alignof/

@@ -100,6 +100,38 @@ def test_handle_op_covered_by_alias_is_silent() -> None:
     assert ("project_serialize", "python") not in _active(rep), _active(rep)
 
 
+_ADDITIVE_DSP_ALIASES = (
+    ("hpss_ex", "hpss"),
+    ("time_stretch_ex", "time_stretch"),
+    ("pitch_shift_ex", "pitch_shift"),
+    ("normalize_rms", "normalize"),
+    ("trim_ex", "trim"),
+    ("nnls_chroma_ex2", "nnls_chroma"),
+    ("analyze_impulse_response_ex", "analyze_impulse_response"),
+)
+
+
+def test_additive_dsp_aliases_are_explicit_and_required() -> None:
+    """Each extended C op is credited only by its declared public base name."""
+    for c_key, facade_key in _ADDITIVE_DSP_ALIASES:
+        covered = _report(_c(c_key), _py(frees=[facade_key]))
+        assert (c_key, "python") not in _active(covered), _active(covered)
+
+        missing = _report(_c(c_key), _py())
+        assert (c_key, "python") in _active(missing), _active(missing)
+
+
+def test_typed_project_automation_overload_is_covered_by_base_method() -> None:
+    """An optional typed descriptor does not require a second facade spelling."""
+    rep = _report(
+        _c("project_add_automation_lane_ex"),
+        _py(methods={"add_automation_lane": "Project"}),
+    )
+    assert ("project_add_automation_lane_ex", "python") not in _active(rep), _active(
+        rep
+    )
+
+
 def test_alias_does_not_match_unrelated_member() -> None:
     """An alias only credits its declared target, not a same-prefix neighbour.
 

@@ -4,8 +4,8 @@
   "title": "Realtime Voice Changer Preset",
   "type": "object",
   "additionalProperties": false,
-  "required": ["schemaVersion", "id", "name"],
-  "anyOf": [{"required": ["dsp"]}, {"required": ["macros"]}],
+  "required": ["schemaVersion", "id", "name", "category"],
+  "oneOf": [{"required": ["dsp"]}, {"required": ["macros"]}],
   "properties": {
     "schemaVersion": {
       "type": "integer",

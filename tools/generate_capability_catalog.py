@@ -25,6 +25,7 @@ README_FX_OFF_COUNT_PATTERNS = {
     Path("README.md"): r"or (\d+) with\s+`BUILD_FX=OFF`",
     Path("README_ja.md"): r"外れて (\d+) 個になります",
 }
+PRESET_GROUPS = ("mastering", "synth", "mixingScene", "voiceChanger")
 
 
 def parse_args() -> argparse.Namespace:
@@ -113,10 +114,25 @@ def validate_catalog(catalog: Any) -> dict[str, Any]:
     require_keys(
         presets,
         "catalog.presets",
-        {"mastering", "synth", "mixingScene", "voiceChanger"},
+        set(PRESET_GROUPS),
     )
+    unexpected_groups = set(presets) - set(PRESET_GROUPS)
+    if unexpected_groups:
+        raise ValueError(
+            "catalog.presets has unexpected groups: "
+            + ", ".join(sorted(unexpected_groups))
+        )
     if not all(isinstance(presets[name], list) for name in presets):
         raise ValueError("catalog preset groups must be arrays")
+    for name in PRESET_GROUPS:
+        preset_names = presets[name]
+        if any(
+            not isinstance(preset_name, str) or not preset_name
+            for preset_name in preset_names
+        ):
+            raise ValueError(f"catalog.presets.{name} must contain non-empty strings")
+        if len(preset_names) != len(set(preset_names)):
+            raise ValueError(f"catalog.presets.{name} must contain unique names")
     return root
 
 

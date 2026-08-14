@@ -282,6 +282,9 @@ wasm = [
   # WASM Audio class is a pure-JS sample wrapper constructed via Audio.fromBuffer.
   # (sonare_audio_from_file is #ifndef __EMSCRIPTEN__-excluded in core_audio.cpp.)
   "audio_from_file",
+  # Source-file channel probing also requires host filesystem access and the
+  # native decoder stack; WASM intentionally has no Audio.fileChannelCount.
+  "audio_file_channel_count",
   "audio_from_memory",
   # External-instrument bounce is Python-only by design (see node note); WASM is
   # additionally single-threaded and cannot host a synchronous render callback.
