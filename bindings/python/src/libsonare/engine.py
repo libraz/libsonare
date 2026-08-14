@@ -51,6 +51,9 @@ from ._engine_conversions import (
 from ._engine_conversions import (
     _telemetry_from_c as _telemetry_from_c,
 )
+from ._engine_conversions import (
+    _track_monitor_mode_value as _track_monitor_mode_value,
+)
 from ._engine_io import _EngineIoMixin
 from ._engine_midi import _EngineMidiMixin
 from ._engine_mixing import _EngineMixingMixin
@@ -82,6 +85,7 @@ from .types import (
     EngineMarker,
     EngineMetronomeConfig,
     EngineMidiClipSchedule,
+    EngineTrackMonitorMode,
     ExternalMidiEvent,
     ParameterInfo,
     TimeSignature,
@@ -519,6 +523,32 @@ class RealtimeEngine(_EngineMidiMixin, _EngineMixingMixin, _EngineIoMixin):
                 1 if solo else 0,
                 1 if mute else 0,
                 int(render_frame),
+            )
+        )
+
+    def set_track_monitor_mode(
+        self,
+        lane_index: int,
+        mode: EngineTrackMonitorMode | str | int,
+        render_frame: int = -1,
+    ) -> None:
+        """Schedule a PFL/AFL monitor tap for a configured track lane.
+
+        ``mode`` accepts :class:`EngineTrackMonitorMode`, its integer ordinal,
+        or the case-insensitive ASCII names ``"off"``, ``"pfl"``, and
+        ``"afl"``. Unknown lane indices are reported asynchronously by engine
+        telemetry, matching the native command contract.
+        """
+        mode_value = _track_monitor_mode_value(mode)
+        lib = _get_lib()
+        if not hasattr(lib, "sonare_engine_set_track_monitor_mode"):
+            raise RuntimeError(
+                "loaded libsonare does not expose sonare_engine_set_track_monitor_mode; "
+                "rebuild or upgrade the native library"
+            )
+        _check(
+            lib.sonare_engine_set_track_monitor_mode(
+                self._require_handle(), int(lane_index), mode_value, int(render_frame)
             )
         )
 

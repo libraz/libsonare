@@ -86,9 +86,10 @@ is preferred when doing more than one computation on the same signal.
 - **Headless DAW** — `Project` arrangement model: audio / MIDI tracks and clips, undo/redo, SMF / MIDI 2.0 Clip File I/O, deterministic JSON, offline `bounce`. → [Python API](https://libsonare.libraz.net/docs/python-api)
 - **Conversions** — Hz / mel / MIDI / note, frames / time, resample.
 
-Native return-code failures raise `libsonare.SonareError` (a `RuntimeError`
-subclass carrying a numeric `.code`); input-validation failures (empty / NaN / Inf
-buffers, bad shapes) raise `ValueError`.
+Native return-code failures, including native input/parameter validation, raise
+`libsonare.SonareError` (a `RuntimeError` subclass carrying a numeric `.code`).
+Python-side preflight validation of empty / NaN / Inf buffers and bad shapes
+raises `ValueError`.
 
 ## CLI
 

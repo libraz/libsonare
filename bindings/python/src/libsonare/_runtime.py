@@ -17,6 +17,13 @@ import numpy as np
 from ._ffi import *  # noqa: F403
 from .types import *  # noqa: F403
 
+# Pan-law aliases are normalized case-insensitively and with underscores folded
+# to hyphens. A finite Literal would incorrectly reject valid spellings such as
+# ``CONST_4.5DB`` before the runtime resolver can apply that contract; malformed
+# strings still fail in _pan_law_value below.
+PanLawName = str
+PanLawInput = PanLawName | PanLaw | int
+
 PAN_MODE_BALANCE = 0
 PAN_MODE_STEREO_PAN = 1
 PAN_MODE_DUAL_PAN = 2
@@ -365,19 +372,23 @@ def _curve_value(value: AutomationCurve | str | int) -> int:
 
 
 _PAN_LAW_NAMES = {
+    "const3db": int(PanLaw.CONST_3DB),
     "const-3db": int(PanLaw.CONST_3DB),
     "-3db": int(PanLaw.CONST_3DB),
+    "const4.5db": int(PanLaw.CONST_4_5DB),
     "const-4.5db": int(PanLaw.CONST_4_5DB),
     "-4.5db": int(PanLaw.CONST_4_5DB),
+    "const6db": int(PanLaw.CONST_6DB),
     "const-6db": int(PanLaw.CONST_6DB),
     "-6db": int(PanLaw.CONST_6DB),
+    "linear0db": int(PanLaw.LINEAR_0DB),
     "linear": int(PanLaw.LINEAR_0DB),
     "linear-0db": int(PanLaw.LINEAR_0DB),
     "0db": int(PanLaw.LINEAR_0DB),
 }
 
 
-def _pan_law_value(value: PanLaw | str | int) -> int:
+def _pan_law_value(value: PanLawInput) -> int:
     """Resolve a pan law to its C enum value (0=-3dB, 1=-4.5dB, 2=-6dB, 3=linear)."""
     return _resolve_enum(value, _PAN_LAW_NAMES, "pan law", enum_cls=PanLaw, dash=True)
 

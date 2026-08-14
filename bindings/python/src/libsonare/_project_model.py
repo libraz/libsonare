@@ -22,7 +22,7 @@ import math
 import numbers
 from collections.abc import Iterator, Mapping, Sequence
 from dataclasses import dataclass
-from typing import TYPE_CHECKING, Any, Protocol, SupportsFloat, cast
+from typing import TYPE_CHECKING, Any, Literal, Protocol, SupportsFloat, TypeAlias, cast
 
 import numpy as np
 
@@ -134,6 +134,121 @@ _LOOP_MODE_NAMES = {
     "on": LOOP_MODE_LOOP,
 }
 
+# Automation target-kind ordinals (mirror SonareAutomationTargetKind).  The
+# optional Python value is deliberately kept separate from the legacy C
+# descriptor: omission selects the legacy ABI call, while an explicit opaque
+# value (0) selects the extended call and is therefore observable by callers
+# that instrument the FFI boundary.
+AUTOMATION_TARGET_OPAQUE = 0
+AUTOMATION_TARGET_TRACK_FADER_DB = 1
+AUTOMATION_TARGET_TRACK_PAN = 2
+
+PROJECT_AUTOMATION_TARGET_OPAQUE = AUTOMATION_TARGET_OPAQUE
+PROJECT_AUTOMATION_TARGET_TRACK_FADER_DB = AUTOMATION_TARGET_TRACK_FADER_DB
+PROJECT_AUTOMATION_TARGET_TRACK_PAN = AUTOMATION_TARGET_TRACK_PAN
+
+ProjectAutomationTargetKind: TypeAlias = Literal["opaque", "track-fader-db", "track-pan", 0, 1, 2]
+
+_AUTOMATION_TARGET_KIND_NAMES = {
+    "opaque": AUTOMATION_TARGET_OPAQUE,
+    "track-fader-db": AUTOMATION_TARGET_TRACK_FADER_DB,
+    "track_fader_db": AUTOMATION_TARGET_TRACK_FADER_DB,
+    "track-pan": AUTOMATION_TARGET_TRACK_PAN,
+    "track_pan": AUTOMATION_TARGET_TRACK_PAN,
+}
+
+# A private sentinel lets the facade distinguish an omitted optional kind from
+# an explicit ``None`` (which is not a valid target-kind value).
+_AUTOMATION_TARGET_KIND_UNSET = cast(ProjectAutomationTargetKind | None, object())
+
+
+def _automation_target_kind_value(value: object) -> int:
+    """Resolve and validate one optional automation target-kind value."""
+    if isinstance(value, str):
+        key = value.lower()
+        if key in _AUTOMATION_TARGET_KIND_NAMES:
+            return _AUTOMATION_TARGET_KIND_NAMES[key]
+        raise ValueError(
+            "unknown automation target kind; expected opaque, track-fader-db, or track-pan"
+        )
+    if isinstance(value, bool) or not isinstance(value, numbers.Real):
+        raise ValueError("automation target kind must be an integer in [0, 2]")
+    ordinal = float(cast(SupportsFloat, value))
+    if not math.isfinite(ordinal) or not ordinal.is_integer() or ordinal < 0.0 or ordinal > 2.0:
+        raise ValueError("automation target kind must be an integer in [0, 2]")
+    return int(ordinal)
+
+
+def _automation_target_param_id_value(value: object) -> int:
+    """Validate a non-zero uint32 automation target parameter id."""
+    if isinstance(value, bool) or not isinstance(value, numbers.Real):
+        raise ValueError("target_param_id must be a finite integer in [1, 4294967295]")
+    target = float(cast(SupportsFloat, value))
+    if not math.isfinite(target) or not target.is_integer() or target < 1.0 or target > 0xFFFFFFFF:
+        if math.isfinite(target) and target == 0.0:
+            raise ValueError("target_param_id must be non-zero")
+        raise ValueError("target_param_id must be a finite integer in [1, 4294967295]")
+    return int(target)
+
+
+def _automation_lane_args(
+    target_param_id: object,
+    points: (
+        Sequence[tuple[float, float, int | str]]
+        | Sequence[Sequence[float]]
+        | Sequence[Mapping[str, object]]
+        | Mapping[str, object]
+        | None
+    ),
+    target_kind: object,
+) -> tuple[
+    object,
+    Sequence[tuple[float, float, int | str]]
+    | Sequence[Sequence[float]]
+    | Sequence[Mapping[str, object]]
+    | None,
+    object,
+]:
+    """Accept the historical positional form and a descriptor mapping.
+
+    The mapping form mirrors the Node/WASM descriptor keys while preserving
+    the existing Python ``(target_param_id, points)`` call shape.
+    """
+    if isinstance(target_param_id, Mapping):
+        descriptor = target_param_id
+        resolved_target = (
+            descriptor["target_param_id"]
+            if "target_param_id" in descriptor
+            else descriptor.get("targetParamId")
+        )
+    elif isinstance(points, Mapping):
+        descriptor = points
+        resolved_target = target_param_id
+    else:
+        return target_param_id, points, target_kind
+    if "target_param_id" in descriptor:
+        resolved_target = descriptor["target_param_id"]
+    elif "targetParamId" in descriptor:
+        resolved_target = descriptor["targetParamId"]
+    resolved_points = descriptor.get("points", None if isinstance(points, Mapping) else points)
+    resolved_kind = target_kind
+    if target_kind is _AUTOMATION_TARGET_KIND_UNSET:
+        if "target_kind" in descriptor:
+            resolved_kind = descriptor["target_kind"]
+        elif "targetKind" in descriptor:
+            resolved_kind = descriptor["targetKind"]
+    return (
+        resolved_target,
+        cast(
+            Sequence[tuple[float, float, int | str]]
+            | Sequence[Sequence[float]]
+            | Sequence[Mapping[str, object]]
+            | None,
+            resolved_points,
+        ),
+        resolved_kind,
+    )
+
 
 def _fade_curve_value(curve: str | int) -> int:
     if isinstance(curve, str):
@@ -150,23 +265,36 @@ def _loop_mode_value(mode: str | int) -> int:
 
 
 def _automation_lane_desc(
-    target_param_id: int,
-    points: Sequence[tuple[float, float, int | str]] | Sequence[Sequence[float]] | None,
+    target_param_id: object,
+    points: (
+        Sequence[tuple[float, float, int | str]]
+        | Sequence[Sequence[float]]
+        | Sequence[Mapping[str, object]]
+        | None
+    ),
 ) -> tuple[SonareAutomationLaneDesc, object]:
     """Marshal ``(ppq, value, curve)`` breakpoints into a SonareAutomationLaneDesc.
 
     Returns ``(desc, backing)``; the caller must keep ``backing`` (the C point
     array) alive for the duration of the native call.
     """
+    target_id = _automation_target_param_id_value(target_param_id)
     rows = list(points) if points is not None else []
     count = len(rows)
     c_points = (SonareAutomationPoint * count)()
     for i, pt in enumerate(rows):
-        seq = tuple(pt)
+        seq: tuple[object, ...]
+        if isinstance(pt, Mapping):
+            ppq_value = pt.get("ppq")
+            value_value = pt.get("value")
+            curve_value = pt.get("curve", pt.get("curve_to_next", pt.get("curveToNext", 0)))
+            seq = (ppq_value, value_value, curve_value)
+        else:
+            seq = tuple(pt)
         if len(seq) < 2:
             raise ValueError(f"points[{i}] must contain at least (ppq, value)")
-        ppq = float(seq[0])
-        value = float(seq[1])
+        ppq = float(cast(SupportsFloat, seq[0]))
+        value = float(cast(SupportsFloat, seq[1]))
         curve = _curve_value(cast(int | str, seq[2])) if len(seq) >= 3 else 0
         if not math.isfinite(ppq):
             raise ValueError(f"points[{i}].ppq must be a finite number")
@@ -176,7 +304,7 @@ def _automation_lane_desc(
         c_points[i].value = value
         c_points[i].curve_to_next = int(curve)
     desc = SonareAutomationLaneDesc(
-        target_param_id=int(target_param_id),
+        target_param_id=target_id,
         points=c_points,
         point_count=ctypes.c_size_t(count),
     )

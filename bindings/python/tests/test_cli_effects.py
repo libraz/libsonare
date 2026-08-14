@@ -73,8 +73,8 @@ def test_pitch_shift_cli_reports_semitones_end_to_end() -> None:
         assert payload["length"] > 0
 
 
-def test_voice_change_preset_warns_about_ignored_simple_knobs() -> None:
-    """A realtime preset takes precedence over offline pitch/formant controls."""
+def test_voice_change_preset_rejects_simple_knob_conflict() -> None:
+    """A realtime preset cannot be combined with offline pitch/formant controls."""
     with tempfile.TemporaryDirectory() as tmpdir:
         wav_path = os.path.join(tmpdir, "tone.wav")
         out_path = os.path.join(tmpdir, "changed.wav")
@@ -95,9 +95,8 @@ def test_voice_change_preset_warns_about_ignored_simple_knobs() -> None:
             ]
         )
 
-        assert result.returncode == 0, result.stderr
-        assert "warning: --pitch-semitones is ignored" in result.stderr
-        assert "warning: --formant-factor is ignored" in result.stderr
+        assert result.returncode == 3
+        assert "cannot be combined with a realtime preset" in result.stderr
 
 
 def test_voice_change_preset_pack_applies_overrides_end_to_end() -> None:
@@ -404,34 +403,36 @@ def test_mix_cli_real_mixer_handles_multiple_blocks_and_stems(tmp_path) -> None:
 
 
 @pytest.mark.parametrize(
-    ("command", "accepted"),
+    ("command", "expects_n_fft", "expects_hop"),
     [
-        ("key", True),
-        ("mel", True),
-        ("chroma", True),
-        ("spectral", True),
-        ("hpss", False),
-        ("onset-envelope", True),
-        ("nnls-chroma", False),
-        ("tempogram", True),
-        ("plp", True),
-        ("bpm", False),
-        ("beats", False),
-        ("analyze", False),
-        ("pitch", False),
-        ("mastering", False),
+        ("key", True, True),
+        ("mel", True, True),
+        ("chroma", True, True),
+        ("spectral", True, True),
+        ("hpss", True, True),
+        ("onset-envelope", True, True),
+        ("nnls-chroma", False, True),
+        ("tempogram", True, True),
+        ("plp", True, True),
+        ("bpm", False, False),
+        ("beats", False, False),
+        ("analyze", False, False),
+        ("pitch", False, True),
+        ("pitch-correct", False, False),
+        ("mastering", False, False),
     ],
 )
-def test_fft_options_are_only_advertised_by_consuming_commands(command, accepted) -> None:
+def test_fft_options_are_only_advertised_by_consuming_commands(
+    command, expects_n_fft, expects_hop
+) -> None:
     """A visible FFT option always belongs to a handler that consumes it."""
     result = _run_cli([command, "--help"])
     assert result.returncode == 0
-    assert ("--n-fft" in result.stdout) is accepted
-    assert ("--hop-length" in result.stdout) is accepted
-    expects_mels = accepted and command in {
+    assert ("--n-fft" in result.stdout) is expects_n_fft
+    assert ("--hop-length" in result.stdout) is expects_hop
+    expects_mels = command in {
         "mel",
         "onset-envelope",
-        "nnls-chroma",
         "tempogram",
         "plp",
     }
@@ -778,6 +779,6 @@ def test_voice_preset_validate_rejects_an_invalid_preset_file() -> None:
         with open(preset_path, "w", encoding="utf-8") as fh:
             fh.write('{"not": "a voice changer preset"}')
         result = _run_cli(["voice-preset-validate", preset_path, "--json"])
-        assert result.returncode == 5, result.stderr
+        assert result.returncode == 3, result.stderr
         payload = json.loads(result.stdout)
         assert payload["ok"] is False

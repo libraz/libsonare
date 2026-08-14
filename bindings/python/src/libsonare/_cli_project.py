@@ -14,6 +14,7 @@ from ._cli_common import (
     _strict_json_dumps,
     _write_project_bounce_wav,
 )
+from ._runtime import ErrorCode, SonareError
 
 _MAX_PROJECT_OR_MIDI_BYTES = 64 * 1024 * 1024
 
@@ -33,7 +34,14 @@ def _load_project_with_diagnostics(path: str) -> object:
     from . import Project
 
     data = _read_bounded(path, _MAX_PROJECT_OR_MIDI_BYTES)
-    return Project.from_json_with_diagnostics(data)
+    try:
+        return Project.from_json_with_diagnostics(data)
+    except ValueError as exc:
+        # ``Project.from_json*`` intentionally keeps its public ValueError
+        # contract.  The CLI, however, publishes the C-ABI InvalidFormat
+        # class for malformed project documents, so translate only at this
+        # private command boundary.
+        raise SonareError(int(ErrorCode.INVALID_FORMAT), str(exc)) from exc
 
 
 def _write_project_json(project: object, path: str) -> int:
@@ -138,18 +146,27 @@ def cmd_project(args: argparse.Namespace) -> int:
         finally:
             cast(Any, project).close()
         strict = getattr(args, "strict", False)
-        valid = not (strict and diagnostics)
+        # A successful parse is valid even when the loader repaired dangling
+        # references and emitted diagnostics.  Strict mode changes the exit
+        # status only; it must preserve the successful payload and canonical
+        # artifact so callers can inspect or persist the repair.
+        valid = True
         if args.json:
             print(
                 _strict_json_dumps(
-                    {"valid": valid, "bytes": bytes_written, "diagnostics": diagnostics}
+                    {
+                        "valid": valid,
+                        "bytes": bytes_written,
+                        "diagnostic_count": len(diagnostics),
+                        "diagnostics": diagnostics,
+                    }
                 )
             )
         else:
             print(f"  Project JSON is valid ({bytes_written} bytes canonical)")
             for entry in diagnostics:
                 print(f"  warning: {entry}", file=sys.stderr)
-        if not valid:
+        if strict and diagnostics:
             return 1 if _legacy_exit_codes() else EXIT_INVALID_STATE
         return 0
     if subcommand == "compile":

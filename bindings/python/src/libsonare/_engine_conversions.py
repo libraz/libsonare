@@ -38,12 +38,42 @@ from ._runtime import (
     SonareScopeTelemetryRecord,
     _warp_mode_value,
 )
+from ._types_engine import EngineTrackMonitorMode
 
 # Must match sonare::rt::kEngineAbiVersion (src/rt/command.h) and the WASM
 # binding's EXPECTED_ENGINE_ABI_VERSION. A mismatch means the loaded native
 # binary lays out engine structs differently than this wrapper expects.
 EXPECTED_ENGINE_ABI_VERSION = 3
 _CAPTURE_SOURCE_VALUES = {"output": 0, "input": 1}
+_TRACK_MONITOR_MODE_VALUES = {
+    "off": int(EngineTrackMonitorMode.OFF),
+    "pfl": int(EngineTrackMonitorMode.PFL),
+    "afl": int(EngineTrackMonitorMode.AFL),
+}
+
+
+def _track_monitor_mode_value(mode: EngineTrackMonitorMode | str | int) -> int:
+    """Resolve a track monitor mode to its C enum ordinal.
+
+    Only the three public ordinals and their case-insensitive ASCII names are
+    accepted; booleans and fractional values are rejected before the native call.
+    """
+    if isinstance(mode, str):
+        if mode.isascii():
+            try:
+                return _TRACK_MONITOR_MODE_VALUES[mode.lower()]
+            except KeyError:
+                pass
+        raise ValueError("track monitor mode must be OFF/PFL/AFL or an integer 0, 1, or 2")
+    if isinstance(mode, bool):
+        raise ValueError("track monitor mode must be OFF/PFL/AFL or an integer 0, 1, or 2")
+    try:
+        value = operator.index(mode)
+    except (TypeError, ValueError, OverflowError) as exc:
+        raise ValueError("track monitor mode must be OFF/PFL/AFL or an integer 0, 1, or 2") from exc
+    if value not in _TRACK_MONITOR_MODE_VALUES.values():
+        raise ValueError("track monitor mode must be OFF/PFL/AFL or an integer 0, 1, or 2")
+    return int(value)
 
 
 def _capture_source_value(source: str | int) -> int:

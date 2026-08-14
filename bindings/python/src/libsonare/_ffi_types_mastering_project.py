@@ -682,6 +682,25 @@ class SonareAutomationLaneDesc(ctypes.Structure):
     ]
 
 
+SONARE_AUTOMATION_TARGET_OPAQUE = 0
+SONARE_AUTOMATION_TARGET_TRACK_FADER_DB = 1
+SONARE_AUTOMATION_TARGET_TRACK_PAN = 2
+
+
+class SonareAutomationLaneDescEx(ctypes.Structure):
+    """Maps to SonareAutomationLaneDescEx in sonare_c_project.h."""
+
+    _fields_ = [
+        ("target_param_id", ctypes.c_uint32),
+        # C enums use the implementation's signed-int representation; retaining
+        # that signedness lets the ABI-layout guard catch an enum-width/sign
+        # drift even though all currently valid ordinals are non-negative.
+        ("target_kind", ctypes.c_int32),
+        ("points", ctypes.POINTER(SonareAutomationPoint)),
+        ("point_count", ctypes.c_size_t),
+    ]
+
+
 class SonareProjectKeySegment(ctypes.Structure):
     """Maps to SonareProjectKeySegment in sonare_c_project.h."""
 

@@ -271,6 +271,9 @@ from ._types_engine import (
     EngineTelemetry as EngineTelemetry,
 )
 from ._types_engine import (
+    EngineTrackMonitorMode as EngineTrackMonitorMode,
+)
+from ._types_engine import (
     ExternalMidiEvent as ExternalMidiEvent,
 )
 from ._types_engine import (

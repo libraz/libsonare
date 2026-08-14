@@ -25,6 +25,18 @@ def test_import_libsonare() -> None:
     import libsonare  # noqa: F401  (import is the assertion)
 
 
+def test_track_monitor_mode_is_public_enum() -> None:
+    from enum import IntEnum
+
+    import libsonare
+
+    assert issubclass(libsonare.EngineTrackMonitorMode, IntEnum)
+    assert libsonare.EngineTrackMonitorMode.OFF.value == 0
+    assert libsonare.EngineTrackMonitorMode.PFL.value == 1
+    assert libsonare.EngineTrackMonitorMode.AFL.value == 2
+    assert "EngineTrackMonitorMode" in libsonare.__all__
+
+
 def test_error_codes_are_public_and_named() -> None:
     """Python errors expose the same branchable code contract as JS bindings."""
     import libsonare

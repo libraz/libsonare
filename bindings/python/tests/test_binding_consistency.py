@@ -98,6 +98,44 @@ def test_audio_stub_signatures_match_runtime() -> None:
     assert checked >= 50
 
 
+def test_synthesize_rir_stub_signature_matches_runtime() -> None:
+    """Keep the analyzer RIR stub's callable contract aligned with runtime."""
+    from libsonare import synthesize_rir
+
+    stub_path = Path(__file__).parents[1] / "src" / "libsonare" / "analyzer.pyi"
+    module = ast.parse(stub_path.read_text(encoding="utf-8"), filename=str(stub_path))
+    stub = next(
+        node
+        for node in module.body
+        if isinstance(node, ast.FunctionDef) and node.name == "synthesize_rir"
+    )
+    positional = [*stub.args.posonlyargs, *stub.args.args]
+    runtime_parameters = list(inspect.signature(synthesize_rir).parameters.values())
+    stub_names = [argument.arg for argument in positional] + [
+        argument.arg for argument in stub.args.kwonlyargs
+    ]
+    assert [parameter.name for parameter in runtime_parameters] == stub_names
+    expected_kinds = [
+        *([inspect.Parameter.POSITIONAL_ONLY] * len(stub.args.posonlyargs)),
+        *([inspect.Parameter.POSITIONAL_OR_KEYWORD] * len(stub.args.args)),
+        *([inspect.Parameter.KEYWORD_ONLY] * len(stub.args.kwonlyargs)),
+    ]
+    assert [parameter.kind for parameter in runtime_parameters] == expected_kinds
+
+    defaults = [inspect.Parameter.empty] * (len(positional) - len(stub.args.defaults)) + [
+        _literal_default(default) for default in stub.args.defaults
+    ]
+    defaults.extend(
+        inspect.Parameter.empty if default is None else _literal_default(default)
+        for default in stub.args.kw_defaults
+    )
+    for parameter, expected in zip(runtime_parameters, defaults, strict=True):
+        assert parameter.default == expected, (
+            f"synthesize_rir.{parameter.name} default drifted: "
+            f"{parameter.default!r} != {expected!r}"
+        )
+
+
 def _first_preset_json() -> str:
     """Return the JSON scene of the first built-in mixing preset."""
     from libsonare._mixing import mixing_scene_preset_json, mixing_scene_preset_names

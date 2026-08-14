@@ -8,7 +8,7 @@ from typing import TYPE_CHECKING, cast
 
 from ._engine_conversions import _band_json_arg
 from ._runtime import (
-    PanLaw,
+    PanLawInput,
     SendTiming,
     SonareEngineBus,
     SonareEngineTrackLane,
@@ -193,8 +193,8 @@ class _EngineMixingMixin:
             )
         )
 
-    def set_track_strip_pan_law(self, track_id: int, pan_law: PanLaw | str | int) -> None:
-        """Set a track strip's pan law (``PanLaw`` enum, name, or int 0..3).
+    def set_track_strip_pan_law(self, track_id: int, pan_law: PanLawInput) -> None:
+        """Set a track strip's pan law (a ``PanLawName`` alias, enum, or int 0..3).
 
         Mono strips apply the law at centre; stereo Balance strips keep centre
         unity and use it only for the far-channel taper.

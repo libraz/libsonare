@@ -95,6 +95,7 @@ class MasteringProcessorCatalogEntry(TypedDict):
     stereoOnly: bool
     latencySamples: int
     tailSamples: int
+    realtimeCost: Literal["low", "moderate", "high"] | None
     channelPolicy: MasteringChannelPolicy
     category: MasteringProcessorCategory
     params: list[MasteringInsertParamInfo]
@@ -282,6 +283,8 @@ class EngineTelemetryError(IntEnum):
     INSERT_AUTOMATION_OVERFLOW = 16
     MIDI_CLOCK_OVERFLOW = 17
     METRONOME_OVERFLOW = 18
+    # Ordinal 19 is reserved by the WASM worklet protocol.
+    MAX_CHANNELS_EXCEEDED = 20
 
 
 class KeyProfile(IntEnum):

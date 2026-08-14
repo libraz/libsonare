@@ -4,6 +4,7 @@
 from __future__ import annotations
 
 import ctypes
+from typing import Self
 
 from ._facade import rebind_facade_exports as _rebind_facade_exports
 from ._project_edit import _ProjectEditMixin
@@ -84,6 +85,11 @@ class Project(
         handle = ctypes.c_void_p()
         _check(lib.sonare_project_create(ctypes.byref(handle)))
         self._handle: ctypes.c_void_p | None = handle
+
+    @classmethod
+    def create(cls) -> Self:
+        """Create a new empty project."""
+        return cls()
 
     # -- lifecycle ----------------------------------------------------------
 

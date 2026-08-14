@@ -3,7 +3,9 @@
 from __future__ import annotations
 
 import gc
+import json
 import math
+from pathlib import Path
 
 import numpy as np
 import pytest
@@ -28,6 +30,7 @@ from libsonare import (
     EngineMidiEvent,
     EngineTelemetryError,
     EngineTelemetryType,
+    EngineTrackMonitorMode,
     ExternalMidiEvent,
     FileClipPageProvider,
     MarkerKind,
@@ -39,10 +42,90 @@ from libsonare import (
     engine_abi_version,
     voice_changer_abi_version,
 )
+from libsonare._engine_conversions import _track_monitor_mode_value
+
+_PAN_LAW_CORPUS = json.loads(
+    (Path(__file__).resolve().parents[3] / "tests/conformance/pan_law_names.json").read_text(
+        encoding="utf-8"
+    )
+)
 
 
 def test_engine_abi_version() -> None:
     assert engine_abi_version() > 0
+
+
+@pytest.mark.parametrize(
+    ("value", "expected"),
+    [
+        (EngineTrackMonitorMode.OFF, 0),
+        (EngineTrackMonitorMode.PFL, 1),
+        (EngineTrackMonitorMode.AFL, 2),
+        (0, 0),
+        (1, 1),
+        (2, 2),
+        ("OFF", 0),
+        ("pfl", 1),
+        ("AfL", 2),
+    ],
+)
+def test_track_monitor_mode_conversion(value: object, expected: int) -> None:
+    assert _track_monitor_mode_value(value) == expected  # type: ignore[arg-type]
+
+
+@pytest.mark.parametrize(
+    "value",
+    [True, False, 1.0, 1.5, math.nan, math.inf, -1, 3, "cue", "pfl\N{SNOWMAN}"],
+)
+def test_track_monitor_mode_conversion_rejects_invalid_values(value: object) -> None:
+    with pytest.raises(ValueError):
+        _track_monitor_mode_value(value)  # type: ignore[arg-type]
+
+
+def test_engine_track_monitor_mode_pfl_and_afl() -> None:
+    from libsonare._runtime import _get_lib
+
+    lib = _get_lib()
+    if not hasattr(lib, "sonare_engine_set_track_monitor_mode"):
+        pytest.skip("loaded native library predates track monitor mode")
+
+    block = 64
+    frames = block * 16
+    with RealtimeEngine(sample_rate=48000.0, max_block_size=block) as engine:
+        engine.set_clips(
+            [
+                EngineClip(
+                    id=1,
+                    track_id=10,
+                    channels=[[1.0] * frames],
+                    start_ppq=0.0,
+                    length_samples=frames,
+                )
+            ]
+        )
+        engine.set_track_lanes([{"track_id": 10, "source_channel_layout": ChannelLayout.MONO}])
+        engine.set_track_strip_json(
+            10,
+            '{"version":1,"strips":[{"id":"track-10"}],"buses":[],"connections":[]}',
+        )
+        engine.play()
+        engine.set_track_monitor_mode(0, "PFL", render_frame=block // 2)
+        main, monitor = engine.process_with_monitor([[0.0] * block])
+        assert main[0][-1] == pytest.approx(1.0, abs=0.01)
+        assert monitor[0][0] == pytest.approx(0.0, abs=0.01)
+        assert monitor[0][block // 2] == pytest.approx(1.0, abs=0.01)
+        assert monitor[0][-1] == pytest.approx(1.0, abs=0.01)
+
+        engine.set_parameter(0x4D580001, -6.0)
+        for _ in range(9):
+            main, monitor = engine.process_with_monitor([[0.0] * block])
+        assert 0.4 < main[0][-1] < 0.7
+        assert monitor[0][-1] == pytest.approx(1.0, abs=0.01)
+
+        engine.set_track_monitor_mode(0, EngineTrackMonitorMode.AFL)
+        main, monitor = engine.process_with_monitor([[0.0] * block])
+        assert monitor[0][-1] == pytest.approx(main[0][-1], abs=0.01)
+        assert 0.4 < monitor[0][-1] < 0.7
 
 
 def test_voice_changer_abi_version() -> None:
@@ -716,6 +799,24 @@ def test_realtime_engine_process_and_telemetry() -> None:
         assert bad_monitor_gain_error.value.code == 4
 
 
+def test_realtime_engine_reports_oversized_channel_telemetry() -> None:
+    assert EngineTelemetryError.MAX_CHANNELS_EXCEEDED.value == 20
+    assert 19 not in {error.value for error in EngineTelemetryError}
+
+    with RealtimeEngine(sample_rate=48000.0, max_block_size=128, max_channels=2) as engine:
+        output = engine.process([[0.0] * 8, [0.0] * 8, [0.0] * 8])
+        assert output == [[0.0] * 8, [0.0] * 8, [0.0] * 8]
+
+        oversized = [
+            record
+            for record in engine.drain_telemetry()
+            if record.type == EngineTelemetryType.ERROR
+            and record.error == EngineTelemetryError.MAX_CHANNELS_EXCEEDED
+        ]
+        assert oversized
+        assert oversized[-1].value == 3
+
+
 def test_engine_marker_kind_and_key_signature_round_trip() -> None:
     with RealtimeEngine(sample_rate=48000.0, max_block_size=128) as engine:
         engine.set_markers(
@@ -938,26 +1039,41 @@ def test_realtime_engine_process_zero_copy_matches_list_input() -> None:
     """The zero-copy ``_channel_arrays`` marshalling preserves process() output.
 
     A numpy float32 input and the equivalent Python-list input must yield the
-    same result, and the caller's input array must not be mutated in-place.
+    same processed result, and caller input buffers must not be mutated in-place.
     """
     left = [math.sin(i * 0.013) for i in range(128)]
     right = [-sample for sample in left]
+    list_channels = [left, right]
+    list_channels_before = [channel.copy() for channel in list_channels]
     np_left = np.asarray(left, dtype=np.float32)
     np_right = np.asarray(right, dtype=np.float32)
     np_left_before = np_left.copy()
+    clip = EngineClip(
+        id=1,
+        channels=[[0.5] * 128, [0.5] * 128],
+        start_ppq=0.0,
+        length_samples=128,
+    )
 
     with RealtimeEngine(sample_rate=48000.0, max_block_size=128) as list_engine:
+        list_engine.set_clips([clip])
         list_engine.play()
-        list_out = list_engine.process([left, right])
+        list_out = list_engine.process(list_channels)
 
     with RealtimeEngine(sample_rate=48000.0, max_block_size=128) as np_engine:
+        np_engine.set_clips([clip])
         np_engine.play()
         np_out = np_engine.process([np_left, np_right])
 
     assert np_out[0] == pytest.approx(list_out[0])
     assert np_out[1] == pytest.approx(list_out[1])
-    # The input buffer is copied, never aliased: the engine writes its output
-    # into an internal buffer, leaving the caller's array untouched.
+    assert list_out[0][0] == pytest.approx(0.5)
+    assert list_out[1][0] == pytest.approx(0.5)
+    # The input buffers are copied, never aliased: the engine writes its output
+    # into private buffers and returns new processed channel lists.
+    assert list_channels == list_channels_before
+    assert list_out is not list_channels
+    assert all(out is not channel for out, channel in zip(list_out, list_channels, strict=True))
     assert np.array_equal(np_left, np_left_before)
 
 
@@ -1229,6 +1345,13 @@ def test_engine_track_strip_pan_and_send_setters() -> None:
 
         # Pan law / mode accept enum names and ints; the helpers coerce them.
         engine.set_track_strip_pan_law(10, "linear")
+        for case in _PAN_LAW_CORPUS["accepted"] + _PAN_LAW_CORPUS["normalization"]:
+            engine.set_track_strip_pan_law(10, case["value"])
+        for ordinal in _PAN_LAW_CORPUS["numeric"]:
+            engine.set_track_strip_pan_law(10, ordinal)
+        for value in _PAN_LAW_CORPUS["rejected"]:
+            with pytest.raises(ValueError):
+                engine.set_track_strip_pan_law(10, value)
         engine.set_track_strip_pan_mode(10, "stereo-pan")
         engine.set_track_strip_channel_delay_samples(10, 0)
         engine.set_track_strip_dual_pan(10, 0.0, 0.0)
@@ -1240,6 +1363,46 @@ def test_engine_track_strip_pan_and_send_setters() -> None:
         left_rms = math.sqrt(sum(s * s for s in left) / len(left))
         right_rms = math.sqrt(sum(s * s for s in right) / len(right))
         assert left_rms > right_rms
+
+
+def test_realtime_engine_dual_pan_routes_left_input_to_expected_output() -> None:
+    block = 128
+    frames = block * 4
+    clip = EngineClip(
+        id=1,
+        track_id=10,
+        channels=[[1.0] * frames, [0.0] * frames],
+        start_ppq=0.0,
+        length_samples=frames,
+    )
+
+    def energy(channel: list[float]) -> float:
+        return sum(sample * sample for sample in channel)
+
+    with RealtimeEngine(sample_rate=48000.0, max_block_size=block) as engine:
+        engine.set_clips([clip])
+        engine.set_track_lanes([10])
+        engine.set_track_strip_json(
+            10,
+            '{"version":1,"strips":[{"id":"track-10"}],"buses":[],"connections":[]}',
+        )
+        engine.set_track_strip_pan_mode(10, "dual-pan")
+
+        # A +1 left-input pan routes that input to the right output. Settling
+        # removes the panner's normal smoothing ramp from this routing check.
+        engine.set_track_strip_dual_pan(10, 1.0, -1.0)
+        engine.settle_parameters()
+        engine.play()
+        right_routed = engine.process([[0.0] * block, [0.0] * block])
+        assert energy(right_routed[0]) < 1e-6
+        assert energy(right_routed[1]) > 1.0
+
+        # Swapping the dual-pan positions reverses the same left-only source.
+        engine.set_track_strip_dual_pan(10, -1.0, 1.0)
+        engine.settle_parameters()
+        left_routed = engine.process([[0.0] * block, [0.0] * block])
+        assert energy(left_routed[0]) > 1.0
+        assert energy(left_routed[1]) < 1e-6
 
 
 def test_engine_track_lane_accepts_send_timing_aliases() -> None:

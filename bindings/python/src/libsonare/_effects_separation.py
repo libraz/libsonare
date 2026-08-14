@@ -4,10 +4,14 @@ from __future__ import annotations
 
 import ctypes
 from collections.abc import Sequence
+from numbers import Integral
 
 import numpy as np
 
+from ._ffi import SonareHpssResult
 from ._runtime import (
+    ErrorCode,
+    SonareError,
     _check,
     _from_c_float_array,
     _get_lib,
@@ -16,6 +20,41 @@ from ._runtime import (
     _to_c_int_array,
     _validate_samples,
 )
+
+_DEFAULT_EFFECT_N_FFT = 2048
+_DEFAULT_EFFECT_HOP_LENGTH = 512
+_C_INT_MAX = 2**31 - 1
+
+
+def _validate_effect_fft_options(fn_name: str, n_fft: int, hop_length: int) -> tuple[int, int]:
+    if isinstance(n_fft, bool) or not isinstance(n_fft, Integral):
+        raise ValueError(f"{fn_name}: n_fft must be an integer")
+    if isinstance(hop_length, bool) or not isinstance(hop_length, Integral):
+        raise ValueError(f"{fn_name}: hop_length must be an integer")
+    n_fft = int(n_fft)
+    hop_length = int(hop_length)
+    if n_fft <= 0 or n_fft > _C_INT_MAX or (n_fft & (n_fft - 1)) != 0:
+        raise ValueError(f"{fn_name}: n_fft must be a positive signed 32-bit power of two")
+    if hop_length <= 0 or hop_length > _C_INT_MAX:
+        raise ValueError(f"{fn_name}: hop_length must fit in a positive signed 32-bit integer")
+    return n_fft, hop_length
+
+
+def _unsupported_effect_symbol(symbol: str) -> SonareError:
+    return SonareError(
+        int(ErrorCode.NOT_SUPPORTED),
+        f"libsonare does not export {symbol}; install a matching native library",
+    )
+
+
+def _validate_hpss_kernel(fn_name: str, value: int, arg_name: str) -> int:
+    if isinstance(value, bool) or not isinstance(value, Integral):
+        raise ValueError(f"{fn_name}: {arg_name} must be an integer")
+    value = int(value)
+    if value <= 0 or value > _C_INT_MAX or value % 2 == 0:
+        raise ValueError(f"{fn_name}: {arg_name} must be a positive odd signed 32-bit integer")
+    return value
+
 
 # ============================================================================
 # Effects - decomposition / separation
@@ -206,20 +245,89 @@ def hpss_with_residual(
     sample_rate: int = 22050,
     kernel_harmonic: int = 31,
     kernel_percussive: int = 31,
+    n_fft: int = _DEFAULT_EFFECT_N_FFT,
+    hop_length: int = _DEFAULT_EFFECT_HOP_LENGTH,
+    hard_mask: bool = False,
+    *,
+    validate: bool = True,
 ) -> dict[str, object]:
     """HPSS into harmonic / percussive / residual signals.
 
     Args:
         samples: Input audio.
         sample_rate: Sample rate in Hz (default 22050).
-        kernel_harmonic: Horizontal median filter size (odd, >= 3).
-        kernel_percussive: Vertical median filter size (odd, >= 3).
+        kernel_harmonic: Horizontal median filter size (positive odd integer).
+        kernel_percussive: Vertical median filter size (positive odd integer).
+        n_fft: FFT size used for analysis/synthesis (default 2048).
+        hop_length: Hop size used for analysis/synthesis (default 512).
+        hard_mask: Use binary harmonic/percussive masks (default ``False``).
+        validate: Reject empty / NaN / Inf input (default ``True``).
 
     Returns:
         A dict with ``harmonic`` / ``percussive`` / ``residual`` float32 arrays
         (all the same length) plus ``sampleRate``.
     """
+    _validate_samples("hpss_with_residual", samples, validate=validate)
+    n_fft, hop_length = _validate_effect_fft_options("hpss_with_residual", n_fft, hop_length)
+    kernel_harmonic = _validate_hpss_kernel(
+        "hpss_with_residual", kernel_harmonic, "kernel_harmonic"
+    )
+    kernel_percussive = _validate_hpss_kernel(
+        "hpss_with_residual", kernel_percussive, "kernel_percussive"
+    )
+    if not isinstance(hard_mask, bool):
+        raise ValueError("hpss_with_residual: hard_mask must be a bool")
+
     lib = _get_lib()
+    use_soft_mask = 0 if hard_mask else 1
+    if not hasattr(lib, "sonare_hpss_ex"):
+        if n_fft != _DEFAULT_EFFECT_N_FFT or hop_length != _DEFAULT_EFFECT_HOP_LENGTH or hard_mask:
+            raise _unsupported_effect_symbol("sonare_hpss_ex")
+        if not hasattr(lib, "sonare_hpss_with_residual"):
+            raise _unsupported_effect_symbol("sonare_hpss_with_residual")
+        return _hpss_with_residual_legacy(
+            lib, samples, sample_rate, kernel_harmonic, kernel_percussive
+        )
+
+    c_array, length = _to_c_float_array(samples)
+    out = SonareHpssResult()
+    residual = ctypes.POINTER(ctypes.c_float)()
+    rc = lib.sonare_hpss_ex(
+        c_array,
+        ctypes.c_size_t(length),
+        ctypes.c_int(sample_rate),
+        ctypes.c_int(kernel_harmonic),
+        ctypes.c_int(kernel_percussive),
+        ctypes.c_int(n_fft),
+        ctypes.c_int(hop_length),
+        ctypes.c_int(use_soft_mask),
+        ctypes.c_int(1),
+        ctypes.byref(out),
+        ctypes.byref(residual),
+    )
+    try:
+        _check(rc)
+        n = int(out.length)
+        return {
+            "harmonic": _from_c_float_array(out.harmonic, n),
+            "percussive": _from_c_float_array(out.percussive, n),
+            "residual": _from_c_float_array(residual, n),
+            "sampleRate": int(out.sample_rate),
+        }
+    finally:
+        lib.sonare_free_hpss_result(ctypes.byref(out))
+        if residual:
+            lib.sonare_free_floats(residual)
+
+
+def _hpss_with_residual_legacy(
+    lib: ctypes.CDLL,
+    samples: Sequence[float] | list[float],
+    sample_rate: int,
+    kernel_harmonic: int,
+    kernel_percussive: int,
+) -> dict[str, object]:
+    """Call the pre-extended three-way HPSS entry point."""
     c_array, length = _to_c_float_array(samples)
     with (
         _out_float_array(lib) as (out_harmonic, out_length),

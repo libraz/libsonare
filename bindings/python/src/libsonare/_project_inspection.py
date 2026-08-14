@@ -5,7 +5,7 @@ from __future__ import annotations
 
 import ctypes
 from collections.abc import Mapping, Sequence
-from typing import TYPE_CHECKING, cast
+from typing import TYPE_CHECKING, cast, overload
 
 import numpy as np
 
@@ -18,6 +18,7 @@ from ._project_synth import (
 )
 from ._runtime import (
     SonareProjectAssistSidecar,
+    SonareProjectAudioSourceMetadata,
     SonareProjectChordSymbol,
     SonareProjectClip,
     SonareProjectCompileResult,
@@ -195,10 +196,25 @@ class _ProjectInspectionMixin:
 
     # -- assist sidecars ----------------------------------------------------
 
+    @overload
     def set_assist_sidecar(
         self,
         module_id: str,
-        payload: bytes,
+        payload: bytes = b"",
+        *,
+        schema_version: int = 0,
+        target_track_id: int = 0,
+        region_start_ppq: float = 0.0,
+        region_end_ppq: float = 0.0,
+    ) -> None: ...
+
+    @overload
+    def set_assist_sidecar(self, module_id: Mapping[str, object]) -> None: ...
+
+    def set_assist_sidecar(
+        self,
+        module_id: str | Mapping[str, object],
+        payload: bytes = b"",
         *,
         schema_version: int = 0,
         target_track_id: int = 0,
@@ -209,8 +225,34 @@ class _ProjectInspectionMixin:
 
         Sidecars sharing ``module_id`` + ``target_track_id`` + region scope are
         replaced; otherwise a new one is appended. ``module_id`` must be
-        non-empty and ``payload`` is copied opaque bytes.
+        non-empty and ``payload`` is copied opaque bytes. The first argument
+        may alternatively be a descriptor mapping with camelCase keys:
+        ``moduleId`` (required), ``payload``, ``schemaVersion``,
+        ``targetTrackId``, ``regionStartPpq`` and ``regionEndPpq``. Unknown
+        descriptor keys are ignored.
         """
+        if isinstance(module_id, Mapping):
+            if (
+                payload != b""
+                or schema_version != 0
+                or target_track_id != 0
+                or region_start_ppq != 0.0
+                or region_end_ppq != 0.0
+            ):
+                raise TypeError("descriptor form cannot be mixed with legacy arguments")
+            descriptor = module_id
+            resolved_module_id = descriptor.get("moduleId")
+            if not isinstance(resolved_module_id, str):
+                raise TypeError("moduleId must be a string")
+            module_id = resolved_module_id
+            payload = cast(bytes, descriptor.get("payload", b""))
+            schema_version = cast(int, descriptor.get("schemaVersion", 0))
+            target_track_id = cast(int, descriptor.get("targetTrackId", 0))
+            region_start_ppq = cast(float, descriptor.get("regionStartPpq", 0.0))
+            region_end_ppq = cast(float, descriptor.get("regionEndPpq", 0.0))
+        elif not isinstance(module_id, str):
+            raise TypeError("module_id must be a string")
+
         if not module_id:
             raise ValueError("module_id must be a non-empty string")
         raw = bytes(payload)
@@ -399,6 +441,31 @@ class _ProjectInspectionMixin:
                 self._require_handle(), int(index), ctypes.byref(raw)
             )
         )
+        content_hash = ""
+        external_stem_role = ""
+        if int(raw.kind) == 0:  # SONARE_SOURCE_AUDIO; MIDI has no such metadata.
+            lib = _get_lib()
+            # Metadata is an additive C API.  Keep source inspection usable
+            # with an older shared library, where the new fields simply read
+            # as their documented empty defaults.
+            if hasattr(lib, "sonare_project_get_audio_source_metadata") and hasattr(
+                lib, "sonare_project_free_audio_source_metadata"
+            ):
+                metadata = SonareProjectAudioSourceMetadata()
+                try:
+                    _check(
+                        lib.sonare_project_get_audio_source_metadata(
+                            self._require_handle(), int(raw.id), ctypes.byref(metadata)
+                        )
+                    )
+                    content_hash = metadata.content_hash.decode() if metadata.content_hash else ""
+                    external_stem_role = (
+                        metadata.external_stem_role.decode() if metadata.external_stem_role else ""
+                    )
+                finally:
+                    # The native getter owns both strings even when it reports
+                    # a failure after partially filling the descriptor.
+                    lib.sonare_project_free_audio_source_metadata(ctypes.byref(metadata))
         return ProjectSource(
             id=int(raw.id),
             kind=int(raw.kind),
@@ -406,6 +473,8 @@ class _ProjectInspectionMixin:
             storage_handle_id=int(raw.storage_handle_id),
             sample_rate_hint=float(raw.sample_rate_hint),
             name_or_uri=raw.name_or_uri.split(b"\0", 1)[0].decode(),
+            content_hash=content_hash,
+            external_stem_role=external_stem_role,
         )
 
     def set_mixer_scene_json(self, scene_json: str) -> None:

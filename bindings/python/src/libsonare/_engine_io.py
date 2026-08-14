@@ -177,8 +177,10 @@ class _EngineIoMixin:
         return int(out.value)
 
     def process(self, channels: Sequence[Sequence[float]]) -> list[list[float]]:
-        """Render in place, adding engine output to each supplied channel plane.
+        """Render one block and return the processed channel copies.
 
+        Input channel buffers are never modified: the engine renders over
+        private copies, adding its output to each corresponding input plane.
         Pass zero-filled planes when the engine is the only audio source.
         """
         arrays, ptrs, frame_count = self._channel_arrays(channels)

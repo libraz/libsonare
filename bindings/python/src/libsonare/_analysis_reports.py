@@ -4,6 +4,8 @@ from __future__ import annotations
 
 import ctypes
 import json
+import math
+import operator
 from collections.abc import Callable, Sequence
 from typing import Any, Literal, cast
 
@@ -20,6 +22,8 @@ from ._ffi import (
     SonareTimbreResult,
 )
 from ._runtime import (
+    ErrorCode,
+    SonareError,
     _check,
     _get_lib,
     _optional_float_array_result,
@@ -40,6 +44,13 @@ from .types import (
     TimbreResult,
     TimeSignature,
 )
+
+
+def _unsupported_feature_symbol(symbol: str) -> SonareError:
+    return SonareError(
+        int(ErrorCode.NOT_SUPPORTED),
+        f"libsonare does not export {symbol}; install a matching native library",
+    )
 
 
 def analyze(
@@ -346,18 +357,55 @@ def analyze_impulse_response(
     samples: Sequence[float] | list[float],
     sample_rate: int = 48000,
     n_octave_bands: int = 6,
+    min_decay_db: float = 30.0,
 ) -> AcousticResult:
-    """Analyze RT60, EDT, and clarity metrics from an impulse response."""
+    """Analyze RT60, EDT, and clarity metrics from an impulse response.
+
+    ``min_decay_db`` selects the minimum decay range used by the native
+    regression and defaults to the legacy 30 dB range.
+    """
+    if isinstance(n_octave_bands, bool):
+        raise ValueError("analyze_impulse_response: n_octave_bands must be a non-negative integer")
+    try:
+        n_octave_bands_value = operator.index(n_octave_bands)
+    except TypeError as exc:
+        raise ValueError(
+            "analyze_impulse_response: n_octave_bands must be a non-negative integer"
+        ) from exc
+    if n_octave_bands_value < 0 or n_octave_bands_value > 2**31 - 1:
+        raise ValueError("analyze_impulse_response: n_octave_bands must be a non-negative integer")
+    try:
+        decay_db = float(min_decay_db)
+        decay_db_c = ctypes.c_float(decay_db).value
+    except (TypeError, ValueError, OverflowError) as exc:
+        raise ValueError(
+            "analyze_impulse_response: min_decay_db must be finite and positive"
+        ) from exc
+    if not math.isfinite(decay_db_c) or decay_db_c <= 0.0:
+        raise ValueError("analyze_impulse_response: min_decay_db must be finite and positive")
+
     lib = _get_lib()
     c_array, length = _to_c_float_array(samples)
     out = SonareAcousticResult()
-    rc = lib.sonare_analyze_impulse_response(
-        c_array,
-        ctypes.c_size_t(length),
-        ctypes.c_int(sample_rate),
-        ctypes.c_int(n_octave_bands),
-        ctypes.byref(out),
-    )
+    if hasattr(lib, "sonare_analyze_impulse_response_ex"):
+        rc = lib.sonare_analyze_impulse_response_ex(
+            c_array,
+            ctypes.c_size_t(length),
+            ctypes.c_int(sample_rate),
+            ctypes.c_int(n_octave_bands_value),
+            ctypes.c_float(decay_db_c),
+            ctypes.byref(out),
+        )
+    elif decay_db_c != 30.0:
+        raise _unsupported_feature_symbol("sonare_analyze_impulse_response_ex")
+    else:
+        rc = lib.sonare_analyze_impulse_response(
+            c_array,
+            ctypes.c_size_t(length),
+            ctypes.c_int(sample_rate),
+            ctypes.c_int(n_octave_bands_value),
+            ctypes.byref(out),
+        )
     _check(rc)
     try:
         count = out.band_count

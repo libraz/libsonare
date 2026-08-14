@@ -35,6 +35,18 @@ def configure_core_signatures(lib: ctypes.CDLL) -> None:
         ctypes.POINTER(ctypes.c_void_p),
     ]
 
+    # sonare_audio_file_channel_count
+    # This is additive to the audio-file ABI. Keep the signature optional so
+    # callers that deliberately load an older feature-gated library still get
+    # the usual runtime "missing capability" error instead of a load-time
+    # AttributeError while configuring unrelated symbols.
+    if hasattr(lib, "sonare_audio_file_channel_count"):
+        lib.sonare_audio_file_channel_count.restype = ctypes.c_int32
+        lib.sonare_audio_file_channel_count.argtypes = [
+            ctypes.c_char_p,
+            ctypes.POINTER(ctypes.c_int),
+        ]
+
     # sonare_audio_free
     lib.sonare_audio_free.restype = None
     lib.sonare_audio_free.argtypes = [ctypes.c_void_p]
@@ -273,6 +285,16 @@ def configure_core_signatures(lib: ctypes.CDLL) -> None:
         ctypes.c_int,
         ctypes.POINTER(SonareAcousticResult),
     ]
+    if hasattr(lib, "sonare_analyze_impulse_response_ex"):
+        lib.sonare_analyze_impulse_response_ex.restype = ctypes.c_int32
+        lib.sonare_analyze_impulse_response_ex.argtypes = [
+            ctypes.POINTER(ctypes.c_float),
+            ctypes.c_size_t,
+            ctypes.c_int,
+            ctypes.c_int,
+            ctypes.c_float,
+            ctypes.POINTER(SonareAcousticResult),
+        ]
 
     lib.sonare_detect_acoustic.restype = ctypes.c_int32
     lib.sonare_detect_acoustic.argtypes = [

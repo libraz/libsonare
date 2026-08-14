@@ -94,6 +94,14 @@ class EngineTelemetry:
         return self.graph_latency_samples_q8
 
 
+class EngineTrackMonitorMode(IntEnum):
+    """Per-track-lane monitor tap mode for the realtime engine."""
+
+    OFF = 0
+    PFL = 1
+    AFL = 2
+
+
 @dataclass(frozen=True, slots=True)
 class ParameterInfo:
     """DAW parameter metadata for automation/introspection UIs."""
@@ -201,6 +209,8 @@ class ProjectSource:
     storage_handle_id: int
     sample_rate_hint: float
     name_or_uri: str
+    content_hash: str = ""
+    external_stem_role: str = ""
 
 
 @dataclass(frozen=True, slots=True)

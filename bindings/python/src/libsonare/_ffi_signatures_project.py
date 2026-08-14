@@ -389,6 +389,15 @@ def configure_project_signatures(lib: ctypes.CDLL) -> None:
             ctypes.POINTER(ctypes.c_uint32),
         ]
 
+        if hasattr(lib, "sonare_project_add_automation_lane_ex"):
+            lib.sonare_project_add_automation_lane_ex.restype = ctypes.c_int32
+            lib.sonare_project_add_automation_lane_ex.argtypes = [
+                ctypes.c_void_p,
+                ctypes.c_uint32,
+                ctypes.POINTER(SonareAutomationLaneDescEx),
+                ctypes.POINTER(ctypes.c_uint32),
+            ]
+
         lib.sonare_project_edit_automation_lane.restype = ctypes.c_int32
         lib.sonare_project_edit_automation_lane.argtypes = [
             ctypes.c_void_p,
@@ -396,6 +405,15 @@ def configure_project_signatures(lib: ctypes.CDLL) -> None:
             ctypes.c_uint32,
             ctypes.POINTER(SonareAutomationLaneDesc),
         ]
+
+        if hasattr(lib, "sonare_project_edit_automation_lane_ex"):
+            lib.sonare_project_edit_automation_lane_ex.restype = ctypes.c_int32
+            lib.sonare_project_edit_automation_lane_ex.argtypes = [
+                ctypes.c_void_p,
+                ctypes.c_uint32,
+                ctypes.c_uint32,
+                ctypes.POINTER(SonareAutomationLaneDescEx),
+            ]
 
         lib.sonare_project_remove_automation_lane.restype = ctypes.c_int32
         lib.sonare_project_remove_automation_lane.argtypes = [
@@ -417,6 +435,13 @@ def configure_project_signatures(lib: ctypes.CDLL) -> None:
         if hasattr(lib, "sonare_project_set_max_undo_depth"):
             lib.sonare_project_set_max_undo_depth.restype = ctypes.c_int32
             lib.sonare_project_set_max_undo_depth.argtypes = [
+                ctypes.c_void_p,
+                ctypes.c_size_t,
+            ]
+
+        if hasattr(lib, "sonare_project_set_max_history_bytes"):
+            lib.sonare_project_set_max_history_bytes.restype = ctypes.c_int32
+            lib.sonare_project_set_max_history_bytes.argtypes = [
                 ctypes.c_void_p,
                 ctypes.c_size_t,
             ]
@@ -820,6 +845,29 @@ def _configure_project_extra_signatures(lib: ctypes.CDLL) -> None:
             ctypes.c_void_p,
             ctypes.c_size_t,
             ctypes.POINTER(ctypes.c_char_p),
+        ]
+
+    if hasattr(lib, "sonare_project_get_audio_source_metadata"):
+        lib.sonare_project_get_audio_source_metadata.restype = ctypes.c_int32
+        lib.sonare_project_get_audio_source_metadata.argtypes = [
+            ctypes.c_void_p,
+            ctypes.c_uint32,
+            ctypes.POINTER(SonareProjectAudioSourceMetadata),
+        ]
+
+    if hasattr(lib, "sonare_project_free_audio_source_metadata"):
+        lib.sonare_project_free_audio_source_metadata.restype = None
+        lib.sonare_project_free_audio_source_metadata.argtypes = [
+            ctypes.POINTER(SonareProjectAudioSourceMetadata),
+        ]
+
+    if hasattr(lib, "sonare_project_set_audio_source_metadata"):
+        lib.sonare_project_set_audio_source_metadata.restype = ctypes.c_int32
+        lib.sonare_project_set_audio_source_metadata.argtypes = [
+            ctypes.c_void_p,
+            ctypes.c_uint32,
+            ctypes.c_char_p,
+            ctypes.c_char_p,
         ]
 
     for _name, _struct in (

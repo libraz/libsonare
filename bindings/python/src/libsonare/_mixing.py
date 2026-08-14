@@ -12,7 +12,7 @@ from ._runtime import (
     MeterTap,
     MixMeterSnapshot,
     MixResult,
-    PanLaw,
+    PanLawInput,
     SendTiming,
     SonareMixMeterSnapshot,
     _check,
@@ -320,8 +320,8 @@ class Mixer:
             )
         )
 
-    def set_pan_law(self, strip: StripRef, pan_law: PanLaw | str | int) -> None:
-        """Set a strip's pan law (``PanLaw`` enum, name, or int 0..3).
+    def set_pan_law(self, strip: StripRef, pan_law: PanLawInput) -> None:
+        """Set a strip's pan law (a ``PanLawName`` alias, enum, or int 0..3).
 
         Mono strips apply the law at centre; stereo Balance strips keep centre
         unity and use it only for the far-channel taper.

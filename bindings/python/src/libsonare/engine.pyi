@@ -18,6 +18,7 @@ from .types import (
     EngineMetronomeConfig,
     EngineMidiClipSchedule,
     EngineTelemetry,
+    EngineTrackMonitorMode,
     ExternalMidiEvent,
     MeterTelemetryRecord,
     MeterTelemetryRecordWide,
@@ -200,6 +201,12 @@ class RealtimeEngine:
     def set_param_smoothing_ms(self, smoothing_ms: float) -> None: ...
     def set_solo_mute(
         self, lane_index: int, solo: bool, mute: bool, render_frame: int = -1
+    ) -> None: ...
+    def set_track_monitor_mode(
+        self,
+        lane_index: int,
+        mode: EngineTrackMonitorMode | str | int,
+        render_frame: int = -1,
     ) -> None: ...
     def set_midi_clips(self, clips: Sequence[EngineMidiClipSchedule]) -> None: ...
     def set_midi_destination_external(self, destination_id: int, external: bool) -> None: ...

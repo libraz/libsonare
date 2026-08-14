@@ -33,6 +33,7 @@ from libsonare import (
     normalize,
     percussive,
     phase_vocoder,
+    pitch_pyin,
     pitch_shift,
     pitch_yin,
     short_term_lufs,
@@ -69,6 +70,7 @@ _SAMPLE_WRAPPERS = {
     "time_stretch": lambda buf: time_stretch(buf, SR),
     "pitch_shift": lambda buf: pitch_shift(buf, SR),
     "phase_vocoder": lambda buf: phase_vocoder(buf, SR),
+    "pitch_pyin": lambda buf: pitch_pyin(buf, SR),
     "pitch_yin": lambda buf: pitch_yin(buf, SR),
     "voice_change": lambda buf: voice_change(buf),
     "voice_change_realtime": lambda buf: voice_change_realtime(buf),
@@ -92,6 +94,12 @@ def _with_nan(n: int = 1024, index: int = 100) -> np.ndarray:
 def _with_inf(n: int = 1024, index: int = 200) -> np.ndarray:
     buf = _sine(n)
     buf[index] = math.inf
+    return buf
+
+
+def _with_neg_inf(n: int = 1024, index: int = 321) -> np.ndarray:
+    buf = _sine(n)
+    buf[index] = -math.inf
     return buf
 
 
@@ -180,12 +188,40 @@ class TestValidateFalseStillHasCAbiBackstop:
     def test_lufs_validate_false(self):
         # validate=False skips only the Python preflight; C-ABI validation is
         # mandatory and must still reject NaN input.
-        with pytest.raises((ValueError, SonareError)):
+        with pytest.raises(SonareError) as exc_info:
             lufs(_with_nan(), SR, validate=False)
+        assert exc_info.value.code == 4
 
     def test_mastering_dynamics_compressor_validate_false(self):
-        with pytest.raises((ValueError, SonareError)):
+        with pytest.raises(SonareError) as exc_info:
             mastering_dynamics_compressor(_with_nan(), SR, validate=False)
+        assert exc_info.value.code == 4
+
+
+class TestPitchCAbiValidation:
+    @pytest.mark.parametrize(
+        "pitch_name, pitch", [("pitch_yin", pitch_yin), ("pitch_pyin", pitch_pyin)]
+    )
+    def test_rejects_negative_inf_with_index(self, pitch_name, pitch):
+        with pytest.raises(
+            ValueError,
+            match=rf"{pitch_name}: samples contains NaN or Inf at index 321",
+        ):
+            pitch(_with_neg_inf(), sample_rate=SR)
+
+    @pytest.mark.parametrize("pitch", [pitch_yin, pitch_pyin], ids=["yin", "pyin"])
+    def test_invalid_sample_rate_keeps_sonare_error_code(self, pitch):
+        with pytest.raises(SonareError) as exc_info:
+            pitch(_sine(SR), sample_rate=0)
+        assert exc_info.value.code == 4
+
+    @pytest.mark.parametrize("pitch", [pitch_yin, pitch_pyin], ids=["yin", "pyin"])
+    def test_normal_audio_returns_pitch_result(self, pitch):
+        result = pitch(_sine(SR), sample_rate=SR)
+        assert result.n_frames > 0
+        assert len(result.f0) == result.n_frames
+        assert len(result.voiced_prob) == result.n_frames
+        assert len(result.voiced_flag) == result.n_frames
 
 
 class TestSampleWrapperGuardCoverage:

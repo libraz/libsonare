@@ -4,12 +4,19 @@ from __future__ import annotations
 
 import json
 import math
+from pathlib import Path
 
 import pytest
 
 from ._helpers import LIB_AVAILABLE
 
 pytestmark = pytest.mark.skipif(not LIB_AVAILABLE, reason="libsonare shared library not found")
+
+_PAN_LAW_CORPUS = json.loads(
+    (Path(__file__).resolve().parents[3] / "tests/conformance/pan_law_names.json").read_text(
+        encoding="utf-8"
+    )
+)
 
 
 def _first_preset_json() -> str:
@@ -163,12 +170,36 @@ def test_set_pan_law_accepts_enum_int_and_name(mixer) -> None:
         mixer.set_pan_law(0, "not-a-pan-law")
 
 
+def test_set_pan_law_matches_shared_name_corpus(mixer) -> None:
+    """Every canonical alias and conservative normalization maps cross-binding identically."""
+    for case in _PAN_LAW_CORPUS["accepted"] + _PAN_LAW_CORPUS["normalization"]:
+        mixer.set_pan_law(0, case["value"])
+    for ordinal in _PAN_LAW_CORPUS["numeric"]:
+        mixer.set_pan_law(0, ordinal)
+    for value in _PAN_LAW_CORPUS["rejected"]:
+        with pytest.raises(ValueError):
+            mixer.set_pan_law(0, value)
+
+
 def test_simple_strip_setters_do_not_raise(mixer) -> None:
     """The simple per-strip setters accept valid values without raising."""
     mixer.set_polarity_invert("vocal", True, False)
     mixer.set_channel_delay_samples("vocal", 8)
     mixer.set_vca_offset_db("vocal", -2.0)
     mixer.set_dual_pan("vocal", -0.3, 0.4)
+
+
+def test_asymmetric_strip_controls_round_trip_in_scene_json(mixer) -> None:
+    """Asymmetric polarity and dual-pan controls survive public scene serialization."""
+    mixer.set_polarity_invert("vocal", True, False)
+    mixer.set_dual_pan("vocal", 0.75, -0.25)
+
+    scene = json.loads(mixer.to_scene_json())
+    vocal = next(strip for strip in scene["strips"] if strip["id"] == "vocal")
+    assert vocal["polarityInvertLeft"] is True
+    assert vocal["polarityInvertRight"] is False
+    assert vocal["dualPanLeft"] == pytest.approx(0.75)
+    assert vocal["dualPanRight"] == pytest.approx(-0.25)
 
 
 def test_set_surround_pan_reflected_in_scene(mixer) -> None:

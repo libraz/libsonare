@@ -774,6 +774,20 @@ def configure_features_signatures(lib: ctypes.CDLL) -> None:
             ctypes.POINTER(ctypes.c_size_t),
             ctypes.POINTER(ctypes.c_int),
         ]
+    if hasattr(lib, "sonare_nnls_chroma_ex2"):
+        lib.sonare_nnls_chroma_ex2.restype = ctypes.c_int32
+        lib.sonare_nnls_chroma_ex2.argtypes = [
+            ctypes.POINTER(ctypes.c_float),
+            ctypes.c_size_t,
+            ctypes.c_int,
+            ctypes.c_int,
+            ctypes.c_float,
+            ctypes.c_int,
+            ctypes.c_int,
+            ctypes.POINTER(ctypes.POINTER(ctypes.c_float)),
+            ctypes.POINTER(ctypes.c_size_t),
+            ctypes.POINTER(ctypes.c_int),
+        ]
 
     # sonare_lufs
     lib.sonare_lufs.restype = ctypes.c_int32

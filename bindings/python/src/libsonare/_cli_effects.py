@@ -5,10 +5,10 @@ from __future__ import annotations
 import argparse
 import json
 import sys
-from typing import Any
+from collections.abc import Iterable
+from typing import Any, cast
 
 from ._cli_common import (
-    EXIT_INVALID_FORMAT,
     EXIT_INVALID_PARAMETER,
     _apply_voice_sets,
     _emit_effect_result,
@@ -24,44 +24,108 @@ from ._cli_common import (
 
 
 def cmd_hpss(args: argparse.Namespace) -> int:
-    from . import hpss
+    from . import hpss, hpss_with_residual
 
     if not args.output:
         print("Error: hpss requires an output file (-o/--output)", file=sys.stderr)
         return 1 if _legacy_exit_codes() else EXIT_INVALID_PARAMETER
 
-    samples, sr = _load_audio(args.file)
-    result = hpss(samples, sample_rate=sr)
+    modes = [
+        name
+        for name in ("harmonic_only", "percussive_only", "with_residual")
+        if bool(getattr(args, name, False))
+    ]
+    if len(modes) > 1:
+        raise ValueError("hpss output modes are mutually exclusive: " + ", ".join(modes))
 
-    h_energy = sum(abs(x) for x in result.harmonic) / len(result.harmonic)
-    p_energy = sum(abs(x) for x in result.percussive) / len(result.percussive)
+    kernel_harmonic = getattr(args, "kernel_harmonic", 31)
+    kernel_percussive = getattr(args, "kernel_percussive", 31)
+    n_fft = getattr(args, "n_fft", 2048)
+    hop_length = getattr(args, "hop_length", 512)
+    hard_mask = bool(getattr(args, "hard_mask", False))
+
+    samples, sr = _load_audio(args.file)
+
+    if modes == ["with_residual"]:
+        separated = hpss_with_residual(
+            samples,
+            sample_rate=sr,
+            kernel_harmonic=kernel_harmonic,
+            kernel_percussive=kernel_percussive,
+            n_fft=n_fft,
+            hop_length=hop_length,
+            hard_mask=hard_mask,
+        )
+        harmonic = [float(value) for value in cast(Iterable[float], separated["harmonic"])]
+        percussive = [float(value) for value in cast(Iterable[float], separated["percussive"])]
+        residual = [float(value) for value in cast(Iterable[float], separated["residual"])]
+        output_sr = int(cast(int, separated.get("sampleRate", sr)))
+    else:
+        result = hpss(
+            samples,
+            sample_rate=sr,
+            kernel_harmonic=kernel_harmonic,
+            kernel_percussive=kernel_percussive,
+            n_fft=n_fft,
+            hop_length=hop_length,
+            hard_mask=hard_mask,
+        )
+        harmonic = [float(value) for value in result.harmonic]
+        percussive = [float(value) for value in result.percussive]
+        residual = []
+        output_sr = int(result.sample_rate)
+
+    def _mean_abs(values: list[float]) -> float:
+        return sum(abs(value) for value in values) / len(values) if values else 0.0
+
+    h_energy = _mean_abs(harmonic)
+    p_energy = _mean_abs(percussive)
 
     harmonic_path = ""
     percussive_path = ""
+    residual_path = ""
     if args.output:
         base = args.output[:-4] if args.output.lower().endswith(".wav") else args.output
-        harmonic_path = f"{base}_harmonic.wav"
-        percussive_path = f"{base}_percussive.wav"
-        _write_wav(harmonic_path, result.harmonic, result.sample_rate)
-        _write_wav(percussive_path, result.percussive, result.sample_rate)
+        if modes == ["harmonic_only"]:
+            harmonic_path = f"{base}.wav"
+            _write_wav(harmonic_path, harmonic, output_sr)
+        elif modes == ["percussive_only"]:
+            percussive_path = f"{base}.wav"
+            _write_wav(percussive_path, percussive, output_sr)
+        else:
+            harmonic_path = f"{base}_harmonic.wav"
+            percussive_path = f"{base}_percussive.wav"
+            _write_wav(harmonic_path, harmonic, output_sr)
+            _write_wav(percussive_path, percussive, output_sr)
+            if modes == ["with_residual"]:
+                residual_path = f"{base}_residual.wav"
+                _write_wav(residual_path, residual, output_sr)
 
     if args.json:
         payload: dict[str, object] = {
-            "length": result.length,
-            "sample_rate": result.sample_rate,
+            "length": len(harmonic),
+            "sample_rate": output_sr,
             "harmonic_energy": round(h_energy, 6),
             "percussive_energy": round(p_energy, 6),
         }
+        if residual:
+            payload["residual_energy"] = round(_mean_abs(residual), 6)
         if harmonic_path:
             payload["harmonic"] = harmonic_path
+        if percussive_path:
             payload["percussive"] = percussive_path
+        if residual_path:
+            payload["residual"] = residual_path
         print(_strict_json_dumps(payload))
     else:
-        print(f"  HPSS: {result.length} samples")
+        print(f"  HPSS: {len(harmonic)} samples")
         print(f"  Harmonic energy:   {h_energy:.6f}")
         print(f"  Percussive energy: {p_energy:.6f}")
-        if harmonic_path:
-            print(f"  Wrote: {harmonic_path}, {percussive_path}")
+        if residual:
+            print(f"  Residual energy:   {_mean_abs(residual):.6f}")
+        paths = [path for path in (harmonic_path, percussive_path, residual_path) if path]
+        if paths:
+            print(f"  Wrote: {', '.join(paths)}")
     return 0
 
 
@@ -69,14 +133,26 @@ def cmd_pitch_correct(args: argparse.Namespace) -> int:
     from . import pitch_correct_to_midi
 
     samples, sr = _load_audio(args.file)
+    current_midi = getattr(args, "current_midi", 69.0)
+    target_midi = getattr(args, "target_midi", 69.0)
+    # The constant-pitch facade is the API that preserves the command's
+    # requested-pitch behavior.  It has no hop-length control; the parser and
+    # native registry must not advertise --hop-length until a matching facade
+    # exists.
     result = pitch_correct_to_midi(
         samples,
         sample_rate=sr,
-        current_midi=args.current_midi,
-        target_midi=args.target_midi,
+        current_midi=current_midi,
+        target_midi=target_midi,
     )
 
-    return _emit_effect_result(args, result, sr, label="Pitch correct")
+    return _emit_effect_result(
+        args,
+        result,
+        sr,
+        extra={"current_midi": current_midi, "target_midi": target_midi},
+        label="Pitch correct",
+    )
 
 
 def cmd_pitch_correct_timevarying(args: argparse.Namespace) -> int:
@@ -98,6 +174,28 @@ def cmd_pitch_correct_timevarying(args: argparse.Namespace) -> int:
         voiced_prob=track.voiced_prob,
     )
     return _emit_effect_result(args, result, sr, label="Time-varying pitch correct")
+
+
+def _load_first_voice_preset(path: str) -> dict[str, Any]:
+    """Load the first entry of a preset pack when no entry selector is given.
+
+    Pack files do not define a universal built-in default.  Selecting their
+    first entry keeps the historical pack-only invocation working while
+    avoiding a hard-coded preset id that could conflict with the pack's own
+    contents.  An explicit ``--preset`` continues to use the common loader's
+    duplicate/missing-id validation.
+    """
+    with open(path, encoding="utf-8") as fh:
+        pack = json.load(fh)
+    if not isinstance(pack, dict):
+        raise ValueError("preset pack must be a JSON object")
+    presets = pack.get("presets")
+    if not isinstance(presets, list) or not presets:
+        raise ValueError("preset pack must contain a non-empty presets array")
+    first = presets[0]
+    if not isinstance(first, dict):
+        raise ValueError("preset pack entries must be JSON objects")
+    return cast(dict[str, Any], first)
 
 
 def cmd_note_move(args: argparse.Namespace) -> int:
@@ -148,7 +246,13 @@ def cmd_pitch_shift(args: argparse.Namespace) -> int:
     if args.semitones is None:
         raise ValueError("--semitones required")
     samples, sr = _load_audio(args.file)
-    result = pitch_shift(samples, sample_rate=sr, semitones=args.semitones)
+    result = pitch_shift(
+        samples,
+        sample_rate=sr,
+        semitones=args.semitones,
+        n_fft=getattr(args, "n_fft", 2048),
+        hop_length=getattr(args, "hop_length", 512),
+    )
 
     return _emit_effect_result(
         args,
@@ -165,7 +269,13 @@ def cmd_time_stretch(args: argparse.Namespace) -> int:
     if args.rate is None:
         raise ValueError("--rate required")
     samples, sr = _load_audio(args.file)
-    result = time_stretch(samples, sample_rate=sr, rate=args.rate)
+    result = time_stretch(
+        samples,
+        sample_rate=sr,
+        rate=args.rate,
+        n_fft=getattr(args, "n_fft", 2048),
+        hop_length=getattr(args, "hop_length", 512),
+    )
 
     return _emit_effect_result(
         args,
@@ -177,32 +287,67 @@ def cmd_time_stretch(args: argparse.Namespace) -> int:
 
 
 def cmd_normalize(args: argparse.Namespace) -> int:
-    from . import normalize
+    from . import normalize, normalize_rms
 
     samples, sr = _load_audio(args.file)
-    result = normalize(samples, sample_rate=sr, target_db=args.target_db)
+    mode = getattr(args, "mode", "peak")
+    target_db = getattr(args, "target_db", None)
+    if target_db is None:
+        target_db = -20.0 if mode == "rms" else 0.0
+    if mode == "peak":
+        result = normalize(samples, sample_rate=sr, target_db=target_db)
+    elif mode == "rms":
+        result = normalize_rms(samples, sample_rate=sr, target_db=target_db)
+    else:
+        raise ValueError("--mode must be 'peak' or 'rms'")
 
     return _emit_effect_result(
         args,
         result,
         sr,
-        extra={"target_db": args.target_db},
-        label=f"Normalize (target {args.target_db:.2f} dB)",
+        extra={"mode": mode, "target_db": target_db},
+        label=f"Normalize ({mode}, target {target_db:.2f} dB)",
     )
 
 
 def cmd_trim_silence(args: argparse.Namespace) -> int:
-    from . import trim
+    from . import trim, trim_silence
 
     samples, sr = _load_audio(args.file)
-    result = trim(samples, sample_rate=sr, threshold_db=args.threshold_db)
+    threshold_db = getattr(args, "threshold_db", None)
+    top_db = getattr(args, "top_db", None)
+    if threshold_db is not None and top_db is not None:
+        raise ValueError("--threshold-db and --top-db are mutually exclusive")
+    n_fft = getattr(args, "n_fft", 2048)
+    hop_length = getattr(args, "hop_length", 512)
+    if top_db is not None:
+        result, _, _ = trim_silence(
+            samples,
+            top_db=top_db,
+            frame_length=n_fft,
+            hop_length=hop_length,
+        )
+        extra = {"top_db": top_db, "n_fft": n_fft, "hop_length": hop_length}
+        label = f"Trim silence (top {top_db:.1f} dB)"
+    else:
+        if threshold_db is None:
+            threshold_db = -60.0
+        result = trim(
+            samples,
+            sample_rate=sr,
+            threshold_db=threshold_db,
+            frame_length=n_fft,
+            hop_length=hop_length,
+        )
+        extra = {"threshold_db": threshold_db, "n_fft": n_fft, "hop_length": hop_length}
+        label = f"Trim silence (threshold {threshold_db:.1f} dB)"
 
     return _emit_effect_result(
         args,
         result,
         sr,
-        extra={"threshold_db": args.threshold_db},
-        label=f"Trim silence (threshold {args.threshold_db:.1f} dB)",
+        extra=extra,
+        label=label,
         # trim-silence doubles as analysis (it reports the trimmed length), so an
         # output file is optional here, matching the native CLI.
         requires_output=False,
@@ -214,69 +359,131 @@ def cmd_resample(args: argparse.Namespace) -> int:
         print("Error: resample requires an output file (-o/--output)", file=sys.stderr)
         return 1 if _legacy_exit_codes() else EXIT_INVALID_PARAMETER
 
+    target_rate = getattr(args, "target_rate", None)
+    if target_rate is None:
+        target_rate = getattr(args, "target_sr", None)
+    if target_rate is None:
+        raise ValueError("--target-rate required")
     samples, sr = _load_audio(args.file)
-    result = _resample(samples, sr, args.target_rate)
+    result = _resample(samples, sr, target_rate)
 
     if args.output:
-        _write_wav(args.output, result, args.target_rate)
+        _write_wav(args.output, result, target_rate)
 
     if args.json:
         payload: dict[str, object] = {
             "length": len(result),
             "source_rate": sr,
-            "sample_rate": args.target_rate,
+            "sample_rate": target_rate,
         }
         if args.output:
             payload["output"] = args.output
         print(_strict_json_dumps(payload))
     else:
-        print(f"  Resample ({sr} -> {args.target_rate} Hz): {len(result)} samples")
+        print(f"  Resample ({sr} -> {target_rate} Hz): {len(result)} samples")
         if args.output:
             print(f"    Wrote: {args.output}")
     return 0
 
 
 def cmd_voice_change(args: argparse.Namespace) -> int:
-    from . import realtime_voice_changer_preset_json, voice_change, voice_change_realtime
+    from . import (
+        RealtimeVoiceChanger,
+        realtime_voice_changer_preset_json,
+        voice_change,
+        voice_change_realtime,
+    )
+
+    raw_preset_id: object = getattr(args, "preset", "")
+    raw_preset_json: object = getattr(args, "preset_json", None)
+    raw_preset_pack: object = getattr(args, "preset_pack", None)
+    preset_id = raw_preset_id if isinstance(raw_preset_id, str) else ""
+    preset_json = raw_preset_json if isinstance(raw_preset_json, str) and raw_preset_json else None
+    preset_pack = raw_preset_pack if isinstance(raw_preset_pack, str) and raw_preset_pack else None
+    assignments = list(getattr(args, "set", None) or [])
+    selectors = [
+        (name, value)
+        for name, value in (
+            ("--preset", preset_id),
+            ("--preset-json", preset_json),
+        )
+        if value
+    ]
+    if len(selectors) > 1:
+        raise ValueError(
+            "voice-change preset selectors are mutually exclusive: "
+            + ", ".join(name for name, _ in selectors)
+        )
+    if preset_pack and preset_json:
+        raise ValueError("--preset-pack and --preset-json are mutually exclusive")
+    pitch_semitones = getattr(args, "pitch_semitones", None)
+    formant_factor = getattr(args, "formant_factor", None)
+    preset_source = bool(selectors or preset_pack)
+    if preset_source and (pitch_semitones is not None or formant_factor is not None):
+        raise ValueError(
+            "--pitch-semitones/--formant-factor cannot be combined with a realtime preset"
+        )
+    if assignments and not preset_source:
+        raise ValueError("--set requires --preset, --preset-json, or --preset-pack")
 
     samples, sr = _load_audio(args.file)
-    uses_realtime_preset = bool(args.preset or args.preset_json or args.preset_pack or args.set)
+    input_length = len(samples)
+    uses_realtime_preset = bool(preset_source or assignments)
+    latency_samples = 0
     if uses_realtime_preset:
-        for flag, value in (
-            ("--pitch-semitones", args.pitch_semitones),
-            ("--formant-factor", args.formant_factor),
-        ):
-            if value is not None:
-                print(
-                    f"warning: {flag} is ignored when a realtime voice preset is selected",
-                    file=sys.stderr,
-                )
         preset: str | dict[str, Any]
-        if args.preset_json:
-            with open(args.preset_json, encoding="utf-8") as fh:
+        if preset_json:
+            with open(preset_json, encoding="utf-8") as fh:
                 preset = json.load(fh)
-        elif args.preset_pack:
-            preset = _load_voice_preset_pack(args.preset_pack, args.preset or "neutral-monitor")
-        elif args.set:
-            preset = json.loads(
-                realtime_voice_changer_preset_json(args.preset or "neutral-monitor")
+        elif preset_pack:
+            preset = (
+                _load_voice_preset_pack(preset_pack, preset_id)
+                if preset_id
+                else _load_first_voice_preset(preset_pack)
             )
+        elif assignments:
+            preset = json.loads(realtime_voice_changer_preset_json(preset_id))
         else:
-            preset = args.preset
-        preset = _apply_voice_sets(preset, args.set)
+            preset = preset_id
+        preset = _apply_voice_sets(preset, assignments)
+        # Probe the same prepared C-ABI configuration used by the one-shot
+        # realtime entry point.  Latency depends on the resolved config and
+        # sample rate, so it must not be a hard-coded preset constant.
+        with RealtimeVoiceChanger(sr, preset, max_block_size=128, channels=1) as changer:
+            latency_samples = max(int(changer.latency_samples()), 0)
         result = [
             float(sample)
             for sample in voice_change_realtime(samples, sample_rate=sr, preset=preset)
         ]
+        mode_metadata: dict[str, object] = {}
+        if preset_id and not preset_json and not preset_pack:
+            mode_metadata["preset"] = preset_id
     else:
         result = voice_change(
             samples,
             sample_rate=sr,
-            pitch_semitones=args.pitch_semitones if args.pitch_semitones is not None else 0.0,
-            formant_factor=args.formant_factor if args.formant_factor is not None else 1.0,
+            pitch_semitones=pitch_semitones if pitch_semitones is not None else 0.0,
+            formant_factor=formant_factor if formant_factor is not None else 1.0,
         )
+        mode_metadata = {
+            "pitch_semitones": pitch_semitones if pitch_semitones is not None else 0.0,
+            "formant_factor": formant_factor if formant_factor is not None else 1.0,
+        }
 
-    return _emit_effect_result(args, result, sr, label="Voice change")
+    # Spectral pitch/formant processing can differ by one sample at a frame
+    # boundary.  The CLI contract is sample-preserving for both modes; trim a
+    # longer result and zero-pad a shorter one before writing/serializing.
+    result = [float(sample) for sample in result[:input_length]]
+    if len(result) < input_length:
+        result.extend([0.0] * (input_length - len(result)))
+
+    return _emit_effect_result(
+        args,
+        result,
+        sr,
+        extra={"duration": len(result) / sr, "latency_samples": latency_samples, **mode_metadata},
+        label="Voice change",
+    )
 
 
 def cmd_voice_presets(args: argparse.Namespace) -> int:
@@ -304,7 +511,7 @@ def cmd_voice_preset_validate(args: argparse.Namespace) -> int:
 
     path = args.preset_json or args.file
     if not path:
-        raise ValueError("voice-preset-validate requires a JSON file")
+        raise FileNotFoundError("voice-preset-validate requires a JSON file")
     if args.preset:
         preset = _load_voice_preset_pack(path, args.preset)
         updated_preset = _apply_voice_sets(preset, args.set)
@@ -315,16 +522,14 @@ def cmd_voice_preset_validate(args: argparse.Namespace) -> int:
         text_or_preset = _apply_voice_sets(text, args.set)
         text = json.dumps(text_or_preset) if isinstance(text_or_preset, dict) else text_or_preset
     result = validate_realtime_voice_changer_preset_json(text)
-    if not result.get("ok") or not result.get("normalizedJson"):
-        print(
-            _strict_json_dumps(result) if args.json else result.get("error", "invalid voice preset")
-        )
-        return 1 if _legacy_exit_codes() else EXIT_INVALID_FORMAT
-    print(
-        _strict_json_dumps(result)
-        if args.json
-        else result.get("normalizedJson", result.get("error", ""))
-    )
+    normalized = result.get("normalizedJson")
+    if not result.get("ok") or not normalized:
+        error = str(result.get("error", "invalid voice preset"))
+        payload = {"ok": False, "error": error}
+        print(_strict_json_dumps(payload) if args.json else error)
+        return 1 if _legacy_exit_codes() else EXIT_INVALID_PARAMETER
+    payload = {"ok": True, "normalized_json": str(normalized)}
+    print(_strict_json_dumps(payload) if args.json else str(normalized))
     return 0
 
 
@@ -332,10 +537,26 @@ def cmd_acoustic(args: argparse.Namespace) -> int:
     from . import analyze_impulse_response, detect_acoustic
 
     samples, sr = _load_audio(args.file)
+    n_bands = cast(int | None, getattr(args, "n_bands", None))
+    if n_bands is None:
+        n_bands = cast(int, getattr(args, "n_octave_bands", 6))
+    min_decay_db = getattr(args, "min_decay_db", 30.0)
+    noise_floor_margin_db = getattr(args, "noise_floor_margin_db", 10.0)
     if args.ir:
-        result = analyze_impulse_response(samples, sample_rate=sr)
+        result = analyze_impulse_response(
+            samples,
+            sample_rate=sr,
+            n_octave_bands=n_bands,
+            min_decay_db=min_decay_db,
+        )
     else:
-        result = detect_acoustic(samples, sample_rate=sr)
+        result = detect_acoustic(
+            samples,
+            sample_rate=sr,
+            n_octave_bands=n_bands,
+            min_decay_db=min_decay_db,
+            noise_floor_margin_db=noise_floor_margin_db,
+        )
 
     if args.json:
         print(
@@ -372,6 +593,11 @@ def cmd_estimate_room(args: argparse.Namespace) -> int:
     from . import estimate_room
 
     samples, sr = _load_audio(args.file)
+    n_bands = cast(int | None, getattr(args, "n_bands", None))
+    if n_bands is None:
+        n_bands = cast(int | None, getattr(args, "n_octave_bands", None))
+    if n_bands is None:
+        n_bands = 0
     est = estimate_room(
         samples,
         sample_rate=sr,
@@ -379,7 +605,9 @@ def cmd_estimate_room(args: argparse.Namespace) -> int:
         aspect_hint_lh=args.aspect_lh,
         reference_absorption=args.reference_absorption,
         prefer_eyring=not args.sabine,
-        n_octave_bands=args.n_octave_bands,
+        n_octave_bands=n_bands,
+        min_decay_db=getattr(args, "min_decay_db", 0.0),
+        noise_floor_margin_db=getattr(args, "noise_floor_margin_db", 0.0),
     )
     if args.json:
         print(
@@ -429,7 +657,15 @@ def cmd_synthesize_rir(args: argparse.Namespace) -> int:
         return 1 if _legacy_exit_codes() else EXIT_INVALID_PARAMETER
     _write_wav(args.output, result.rir, result.sample_rate)
     if args.json:
-        print(_strict_json_dumps({"output": args.output, "samples": len(result.rir)}))
+        print(
+            _strict_json_dumps(
+                {
+                    "output": args.output,
+                    "samples": len(result.rir),
+                    "sample_rate": result.sample_rate,
+                }
+            )
+        )
     else:
         print(f"  Saved RIR ({len(result.rir)} samples) to {args.output}")
     return 0

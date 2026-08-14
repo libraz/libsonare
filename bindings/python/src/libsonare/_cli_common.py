@@ -80,22 +80,35 @@ def _strict_json_dumps(value: object, **kwargs: Any) -> str:
     return json.dumps(_sanitize_json_value(value), allow_nan=False, **kwargs)
 
 
+def _color_enabled() -> bool:
+    """Whether human-readable CLI output may include ANSI color sequences."""
+    return "NO_COLOR" not in os.environ and sys.stdout.isatty() and sys.stderr.isatty()
+
+
 def cmd_doctor(args: argparse.Namespace) -> int:
     """Print a concise diagnostic report for the loaded libsonare build."""
     from ._analysis_music import capabilities
 
     descriptor = capabilities()
-    payload = dict(descriptor)
-    payload["libraryPath"] = resolved_library_path()
+    payload = {
+        "version": descriptor["version"],
+        "abi": descriptor["abi"],
+        "platform": descriptor["platform"],
+        "features": descriptor["features"],
+        "decode": descriptor["decode"],
+        "simd": descriptor["simd"],
+        "hardware_concurrency": descriptor["hardwareConcurrency"],
+    }
     if args.json:
         print(_strict_json_dumps(payload))
         return EXIT_SUCCESS
 
+    library_path = resolved_library_path()
     abi = descriptor["abi"]
     features = descriptor["features"]
     decode = descriptor["decode"]
     print(f"libsonare {descriptor['version']}")
-    print(f"  Library:              {payload['libraryPath']}")
+    print(f"  Library:              {library_path}")
     print(f"  Platform:             {descriptor['platform']}")
     print(f"  ABI:                  project={abi['project']}, engine={abi['engine']}")
     print(
@@ -106,7 +119,7 @@ def cmd_doctor(args: argparse.Namespace) -> int:
     print(f"  Decode (built-in):    {', '.join(decode['builtin'])}")
     print(f"  Decode (FFmpeg):      {', '.join(decode['ffmpeg']) or 'none'}")
     print(f"  SIMD:                 {descriptor['simd']}")
-    print(f"  Hardware concurrency: {descriptor['hardwareConcurrency']}")
+    print(f"  Hardware concurrency: {payload['hardware_concurrency']}")
     return EXIT_SUCCESS
 
 
@@ -224,14 +237,33 @@ def _pcm16(sample: float) -> bytes:
     return struct.pack("<h", int(round(clamped * 32767.0)))
 
 
+def _pcm24(sample: float) -> bytes:
+    """Clamp a float and pack it as little-endian 24-bit PCM."""
+    clamped = -1.0 if sample < -1.0 else (1.0 if sample > 1.0 else sample)
+    value = int(round(clamped * 8388607.0))
+    return value.to_bytes(3, byteorder="little", signed=True)
+
+
+def _pcm(sample: float, bits_per_sample: int) -> bytes:
+    if bits_per_sample == 16:
+        return _pcm16(sample)
+    if bits_per_sample == 24:
+        return _pcm24(sample)
+    raise ValueError("WAV bits must be 16 or 24")
+
+
 _WAV_CHUNK_FRAMES = 8192
 
 
 @contextmanager
-def _atomic_wav_writer(path: str, channels: int, sample_rate: int) -> Iterator[Any]:
+def _atomic_wav_writer(
+    path: str, channels: int, sample_rate: int, bits_per_sample: int = 16
+) -> Iterator[Any]:
     """Yield a WAV writer whose completed file atomically replaces ``path``."""
     import wave
 
+    if bits_per_sample not in (16, 24):
+        raise ValueError("WAV bits must be 16 or 24")
     target = os.path.abspath(path)
     directory = os.path.dirname(target)
     raw = tempfile.NamedTemporaryFile(  # noqa: SIM115 - lifetime spans the yielded writer
@@ -246,7 +278,7 @@ def _atomic_wav_writer(path: str, channels: int, sample_rate: int) -> Iterator[A
     try:
         wav = wave.open(raw, "wb")  # noqa: SIM115 - closed before the atomic replace
         wav.setnchannels(channels)
-        wav.setsampwidth(2)
+        wav.setsampwidth(bits_per_sample // 8)
         wav.setframerate(int(sample_rate))
         yield wav
         wav.close()
@@ -265,32 +297,45 @@ def _atomic_wav_writer(path: str, channels: int, sample_rate: int) -> Iterator[A
         raise
 
 
-def _write_wav_mono_frames(wav: Any, samples: Sequence[float]) -> None:
-    """Append one bounded mono PCM16 chunk to an open WAV writer."""
+def _write_wav_mono_frames(wav: Any, samples: Sequence[float], bits_per_sample: int = 16) -> None:
+    """Append one bounded mono PCM chunk to an open WAV writer."""
     frames = bytearray()
     for sample in samples:
-        frames.extend(_pcm16(float(sample)))
+        frames.extend(_pcm(float(sample), bits_per_sample))
     wav.writeframesraw(frames)
 
 
-def _write_wav_stereo_frames(wav: Any, left: Sequence[float], right: Sequence[float]) -> None:
-    """Append one bounded stereo PCM16 chunk to an open WAV writer."""
+def _write_wav_stereo_frames(
+    wav: Any,
+    left: Sequence[float],
+    right: Sequence[float],
+    bits_per_sample: int = 16,
+) -> None:
+    """Append one bounded stereo PCM chunk to an open WAV writer."""
     count = min(len(left), len(right))
     frames = bytearray()
     for index in range(count):
-        frames.extend(_pcm16(float(left[index])))
-        frames.extend(_pcm16(float(right[index])))
+        frames.extend(_pcm(float(left[index]), bits_per_sample))
+        frames.extend(_pcm(float(right[index]), bits_per_sample))
     wav.writeframesraw(frames)
 
 
-def _write_wav(path: str, samples: list[float], sample_rate: int) -> None:
-    """Write mono 16-bit PCM WAV using only the Python standard library.
+def _write_wav(
+    path: str, samples: list[float], sample_rate: int, bits_per_sample: int = 16
+) -> None:
+    """Write mono 16- or 24-bit PCM WAV using only the Python standard library.
 
-    Floats are clamped to ``[-1.0, 1.0]`` and scaled by 32767.
+    Floats are clamped to ``[-1.0, 1.0]`` and scaled to the selected PCM range.
     """
-    with _atomic_wav_writer(path, 1, sample_rate) as wav:
+    with _atomic_wav_writer(path, 1, sample_rate, bits_per_sample) as wav:
         for offset in range(0, len(samples), _WAV_CHUNK_FRAMES):
-            _write_wav_mono_frames(wav, samples[offset : offset + _WAV_CHUNK_FRAMES])
+            chunk = samples[offset : offset + _WAV_CHUNK_FRAMES]
+            if bits_per_sample == 16:
+                # Keep the historical two-argument call shape for callers that
+                # instrument this helper; 24-bit output opts into the width.
+                _write_wav_mono_frames(wav, chunk)
+            else:
+                _write_wav_mono_frames(wav, chunk, bits_per_sample)
 
 
 def _write_wav_stereo(path: str, left: list[float], right: list[float], sample_rate: int) -> None:
@@ -433,7 +478,7 @@ def _array_stats(
         return stats
     stats = {
         "mean": round(statistics.mean(vals), digits),
-        "std": round(statistics.stdev(vals), digits) if len(vals) > 1 else 0.0,
+        "std": round(statistics.pstdev(vals), digits) if len(vals) > 1 else 0.0,
         "min": round(min(vals), digits),
         "max": round(max(vals), digits),
     }

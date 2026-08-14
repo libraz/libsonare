@@ -1259,7 +1259,8 @@ def pitch_pyin(
         PitchResult with f0, voiced probabilities, and statistics.
     """
     lib = _get_lib()
-    c_array, length = _to_c_float_array(samples)
+    sample_buf = _validate_samples("pitch_pyin", samples)
+    c_array, length = _to_c_float_array(sample_buf)
     out = SonarePitchResult()
     rc = lib.sonare_pitch_pyin(
         c_array,

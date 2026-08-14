@@ -4,7 +4,10 @@
 from __future__ import annotations
 
 import argparse
+import math
 import sys
+from collections.abc import Iterable
+from typing import Any, NoReturn
 
 from ._cli_advanced import *  # noqa: F403
 from ._cli_analysis import *  # noqa: F403
@@ -135,6 +138,15 @@ from ._cli_common import (
     cmd_doctor as cmd_doctor,
 )
 from ._cli_effects import *  # noqa: F403
+from ._cli_inventory import (
+    _inventory_option as _inventory_option,
+)
+from ._cli_inventory import (
+    _inventory_subparsers as _inventory_subparsers,
+)
+from ._cli_inventory import (
+    dump_cli_contract as _dump_cli_contract_for_parser,
+)
 from ._cli_mastering import *  # noqa: F403
 from ._cli_project import *  # noqa: F403
 from ._cli_project import (
@@ -149,34 +161,232 @@ from ._cli_project import (
 from ._facade import rebind_facade_exports as _rebind_facade_exports
 
 
-def main() -> None:
-    """CLI entry point."""
-    # Common arguments shared by all subcommands
-    common = argparse.ArgumentParser(add_help=False)
-    common.add_argument("--json", action="store_true", help="Output JSON")
-    common.add_argument("-o", "--output", type=str, default="", help="Output file path")
+class _ContractArgumentParser(argparse.ArgumentParser):
+    """Argument parser with the cross-surface usage exit contract.
 
-    fft_options = argparse.ArgumentParser(add_help=False, parents=[common])
+    ``argparse`` normally exits with status 2 directly from ``error``.  The
+    native CLI has a compatibility switch that folds every non-zero status to
+    1, so parser errors need to go through the same switch as dispatch errors.
+    Keeping this behavior in the parser class also covers errors raised by
+    nested subparsers and typed options before command dispatch begins.
+    """
+
+    def error(self, message: str) -> NoReturn:
+        self.print_usage(sys.stderr)
+        self._print_message(f"{self.prog}: error: {message}\n", sys.stderr)
+        raise SystemExit(1 if _legacy_exit_codes() else EXIT_USAGE)
+
+    def parse_known_args(
+        self,
+        args: Iterable[str] | None = None,
+        namespace: Any = None,
+    ) -> tuple[Any, list[str]]:
+        parsed, extras = super().parse_known_args(args, namespace)
+        _restore_parser_compat_defaults(parsed)
+        _reject_stdout_output(parsed, self)
+        if self.prog.endswith(" pitch") or getattr(parsed, "command", None) == "pitch":
+            _validate_pitch_namespace(parsed, self)
+        return parsed, extras
+
+
+def _finite_float(value: str) -> float:
+    try:
+        parsed = float(value)
+    except (TypeError, ValueError) as exc:
+        raise argparse.ArgumentTypeError("must be a finite number") from exc
+    if not math.isfinite(parsed):
+        raise argparse.ArgumentTypeError("must be a finite number")
+    return parsed
+
+
+def _nonnegative_finite_float(value: str) -> float:
+    parsed = _finite_float(value)
+    if parsed < 0.0:
+        raise argparse.ArgumentTypeError("must be greater than or equal to 0")
+    return parsed
+
+
+def _positive_pitch_frequency(value: str) -> float:
+    parsed = _finite_float(value)
+    if parsed <= 0.0:
+        raise argparse.ArgumentTypeError("must be greater than 0")
+    return parsed
+
+
+def _pitch_threshold(value: str) -> float:
+    parsed = _finite_float(value)
+    if parsed <= 0.0 or parsed > 1.0:
+        raise argparse.ArgumentTypeError("must be greater than 0 and at most 1")
+    return parsed
+
+
+def _positive_int(value: str) -> int:
+    try:
+        parsed = int(value)
+    except (TypeError, ValueError) as exc:
+        raise argparse.ArgumentTypeError("must be a positive integer") from exc
+    if parsed <= 0:
+        raise argparse.ArgumentTypeError("must be a positive integer")
+    return parsed
+
+
+def _validate_pitch_namespace(args: argparse.Namespace, parser: argparse.ArgumentParser) -> None:
+    fmin = getattr(args, "fmin", None)
+    fmax = getattr(args, "fmax", None)
+    if fmin is not None and fmax is not None and fmax <= fmin:
+        parser.error("--fmax must be greater than --fmin")
+
+
+def _restore_parser_compat_defaults(args: argparse.Namespace) -> None:
+    """Keep handler-facing defaults while inventory actions expose nulls.
+
+    A few long-standing handlers use a concrete sentinel (``0`` or ``""``)
+    to mean "not supplied", while the public schema deliberately reports that
+    state as JSON ``null``.  Their argparse actions use ``None`` so the
+    inventory is derived from the real parser; restore the historical runtime
+    sentinel only after parsing and before dispatch.
+    """
+    command = getattr(args, "command", "")
+    if command == "key" and getattr(args, "candidates", None) is None:
+        args.candidates = 0
+    elif command == "normalize" and getattr(args, "target_db", None) is None:
+        # Preserve the historical peak default while honoring the RMS
+        # normalizer's distinct -20 dB reference level.
+        args.target_db = -20.0 if getattr(args, "mode", "peak") == "rms" else 0.0
+    elif command == "estimate-room" and getattr(args, "n_octave_bands", None) is None:
+        args.n_octave_bands = 0
+    elif (
+        command == "trim-silence"
+        and getattr(args, "threshold_db", None) is None
+        and getattr(args, "top_db", None) is None
+    ):
+        # ``--threshold-db`` and ``--top-db`` select different handler paths.
+        # Keep the threshold action dynamic so an explicit top-db does not
+        # appear to conflict with an implicit threshold; only the no-selector
+        # path receives the historical -60 dB fallback.
+        args.threshold_db = -60.0
+
+
+_STDOUT_ONLY_COMMANDS = frozenset(
+    {
+        "version",
+        "doctor",
+        "info",
+        "bpm",
+        "key",
+        "beats",
+        "downbeats",
+        "onsets",
+        "chords",
+        "analyze",
+        "mel",
+        "chroma",
+        "spectral",
+        "pitch",
+        "scale-quantize",
+        "voice-presets",
+        "voice-preset",
+        "voice-preset-validate",
+        "acoustic",
+        "estimate-room",
+        "rhythm",
+        "dynamics",
+        "timbre",
+        "lufs",
+        "onset-envelope",
+        "nnls-chroma",
+        "tempogram",
+        "plp",
+        "mastering-processors",
+        "mastering-pair-processors",
+        "mastering-pair-analyses",
+        "mastering-presets",
+        "mastering-pair-analyze",
+        "mastering-streaming",
+        "mastering-suggest",
+        "mastering-profile",
+        "mixing-presets",
+        "mixing-preset",
+    }
+)
+
+
+def _reject_stdout_output(args: argparse.Namespace, parser: argparse.ArgumentParser) -> None:
+    """Reject output destinations before a stdout-only handler can run."""
+    command = getattr(args, "command", "")
+    if command in _STDOUT_ONLY_COMMANDS and getattr(args, "output", None) is not None:
+        parser.error(f"{command} does not produce an audio file; remove --output")
+
+    # The project parser intentionally accepts project-wide flags before the
+    # leaf subcommand so ``project --json validate ...`` remains valid.  A
+    # parent ``--output`` must nevertheless be rejected for stdout-only leaves
+    # such as ``abi`` and ``compile`` at the same parser boundary.
+    if (
+        command == "project"
+        and getattr(args, "project_command", "")
+        in {
+            "abi",
+            "compile",
+            "synth-presets",
+        }
+        and getattr(args, "output", None) is not None
+    ):
+        parser.error(
+            f"project {args.project_command} does not produce an output file; remove --output"
+        )
+
+
+def _build_parser() -> _ContractArgumentParser:
+    """Build the public CLI parser without parsing argv.
+
+    Keeping construction separate lets ``--dump-cli-contract`` inspect the
+    same parser that handles normal invocations, so inventory drift cannot be
+    hidden behind a second hand-written parser definition.
+    """
+    # Keep stdout-only and artifact-producing leaves on separate parents. A
+    # shared output option would make ``--output`` look valid on analysis
+    # commands and defer the usage error until handler dispatch.
+    json_options = _ContractArgumentParser(add_help=False)
+    json_options.add_argument("--json", action="store_true", help="Output JSON")
+    common = _ContractArgumentParser(add_help=False, parents=[json_options])
+    common.add_argument("-o", "--output", type=str, default=None, help="Output file path")
+
+    # Accept the spelling solely long enough to issue the established
+    # stdout-only diagnostic below.  It is deliberately hidden from the
+    # public inventory: these commands do not produce audio artifacts.
+    stdout_options = _ContractArgumentParser(add_help=False, parents=[json_options])
+    stdout_options.add_argument(
+        "-o", "--output", type=str, default=argparse.SUPPRESS, help=argparse.SUPPRESS
+    )
+
+    fft_options = _ContractArgumentParser(add_help=False, parents=[common])
     fft_options.add_argument("--n-fft", type=int, default=2048, help="FFT size (default: 2048)")
     fft_options.add_argument(
         "--hop-length", type=int, default=512, help="Hop length (default: 512)"
     )
-    mel_options = argparse.ArgumentParser(add_help=False, parents=[fft_options])
+    fft_stdout_options = _ContractArgumentParser(add_help=False, parents=[stdout_options])
+    fft_stdout_options.add_argument(
+        "--n-fft", type=int, default=2048, help="FFT size (default: 2048)"
+    )
+    fft_stdout_options.add_argument(
+        "--hop-length", type=int, default=512, help="Hop length (default: 512)"
+    )
+    mel_options = _ContractArgumentParser(add_help=False, parents=[fft_stdout_options])
     mel_options.add_argument(
         "--n-mels", type=int, default=128, help="Number of mel bands (default: 128)"
     )
 
-    parser = argparse.ArgumentParser(
+    parser = _ContractArgumentParser(
         prog="sonare",
         description="libsonare - Fast audio analysis (Python CLI)",
     )
-    sub = parser.add_subparsers(dest="command")
+    sub = parser.add_subparsers(dest="command", required=True)
 
-    sub.add_parser("version", parents=[common], help="Show version")
-    sub.add_parser("doctor", parents=[common], help="Show build and runtime diagnostics")
-    sub.add_parser("info", parents=[common], help="Show audio file information")
-    sub.add_parser("bpm", parents=[common], help="Detect BPM")
-    key_p = sub.add_parser("key", parents=[common], help="Detect musical key")
+    sub.add_parser("version", parents=[stdout_options], help="Show version")
+    sub.add_parser("doctor", parents=[stdout_options], help="Show build and runtime diagnostics")
+    sub.add_parser("info", parents=[stdout_options], help="Show audio file information")
+    sub.add_parser("bpm", parents=[stdout_options], help="Detect BPM")
+    key_p = sub.add_parser("key", parents=[stdout_options], help="Detect musical key")
     # Key detection keeps a 4096-sample analysis default (better low-frequency
     # resolution) rather than the shared 2048. A None sentinel distinguishes
     # "left at the default" from an explicit value, matching the native CLI and
@@ -185,17 +395,23 @@ def main() -> None:
     # objects, so a set_defaults override would mutate the shared --n-fft used by
     # the other analysis commands.
     key_p.add_argument(
-        "--n-fft", type=int, default=None, help="FFT size (default: 4096 for key analysis)"
+        "--n-fft", type=int, default=4096, help="FFT size (default: 4096 for key analysis)"
     )
     key_p.add_argument("--hop-length", type=int, default=512, help="Hop length (default: 512)")
     key_p.add_argument(
         "--candidates",
         type=int,
-        default=0,
+        default=None,
         metavar="N",
         help="Also show the top N key candidates",
     )
-    key_p.add_argument("--use-hpss", action="store_true", help="Use harmonic audio for key chroma")
+    key_p.add_argument(
+        "--use-hpss",
+        "--hpss",
+        dest="use_hpss",
+        action="store_true",
+        help="Use harmonic audio for key chroma",
+    )
     key_p.add_argument(
         "--loudness-weighted", action="store_true", help="Weight key chroma frames by RMS"
     )
@@ -220,10 +436,12 @@ def main() -> None:
         default="",
         help="Genre hint for key profile selection, e.g. auto, edm, pop, classical, jazz",
     )
-    sub.add_parser("beats", parents=[common], help="Detect beat times")
-    sub.add_parser("downbeats", parents=[common], help="Detect downbeat times")
-    sub.add_parser("onsets", parents=[common], help="Detect onset times")
-    chords_p = sub.add_parser("chords", parents=[fft_options], help="Detect chord progression")
+    sub.add_parser("beats", parents=[stdout_options], help="Detect beat times")
+    sub.add_parser("downbeats", parents=[stdout_options], help="Detect downbeat times")
+    sub.add_parser("onsets", parents=[stdout_options], help="Detect onset times")
+    chords_p = sub.add_parser(
+        "chords", parents=[fft_stdout_options], help="Detect chord progression"
+    )
     chords_p.add_argument(
         "--min-duration", type=float, default=0.3, help="Minimum chord duration in seconds"
     )
@@ -258,7 +476,19 @@ def main() -> None:
     chords_p.add_argument(
         "--detect-inversions", action="store_true", help="Report chord inversions (bass note)"
     )
-    sub.add_parser("analyze", parents=[common], help="Full music analysis")
+    analyze_p = sub.add_parser("analyze", parents=[stdout_options], help="Full music analysis")
+    analyze_p.add_argument(
+        "--with-seventh", action="store_true", help="Include seventh chords in the analysis"
+    )
+    analyze_p.add_argument(
+        "--no-hpss", action="store_true", help="Disable harmonic-percussive separation"
+    )
+    analyze_p.add_argument(
+        "--chroma-highpass",
+        type=_nonnegative_finite_float,
+        default=80.0,
+        help="High-pass cutoff for chroma analysis in Hz (default: 80.0)",
+    )
     mel_p = sub.add_parser("mel", parents=[mel_options], help="Compute mel spectrogram")
     mel_p.add_argument("--fmin", type=float, default=0.0, help="Lowest mel band frequency in Hz")
     mel_p.add_argument(
@@ -267,11 +497,47 @@ def main() -> None:
     mel_p.add_argument(
         "--htk", action="store_true", help="Use the HTK mel formula instead of Slaney"
     )
-    sub.add_parser("chroma", parents=[fft_options], help="Compute chromagram")
-    sub.add_parser("spectral", parents=[fft_options], help="Compute spectral features")
-    pitch_p = sub.add_parser("pitch", parents=[common], help="Track pitch")
+    sub.add_parser("chroma", parents=[fft_stdout_options], help="Compute chromagram")
+    sub.add_parser("spectral", parents=[fft_stdout_options], help="Compute spectral features")
+    # Pitch is a stdout-only analysis command. Its frequency/threshold domains
+    # mirror the PitchConfig checks in the core API.
+    pitch_p = sub.add_parser("pitch", parents=[stdout_options], help="Track pitch")
     pitch_p.add_argument("--algorithm", default="pyin")
-    sub.add_parser("hpss", parents=[common], help="Harmonic-percussive separation")
+    pitch_p.add_argument(
+        "--threshold",
+        type=_pitch_threshold,
+        default=0.1,
+        help="YIN threshold (> 0 and <= 1; default: 0.1)",
+    )
+    pitch_p.add_argument(
+        "--hop-length",
+        type=_positive_int,
+        default=512,
+        help="Hop length in samples (default: 512)",
+    )
+    pitch_p.add_argument(
+        "--fmin",
+        type=_positive_pitch_frequency,
+        default=65.0,
+        help="Minimum frequency in Hz (default: 65.0)",
+    )
+    pitch_p.add_argument(
+        "--fmax",
+        type=_positive_pitch_frequency,
+        default=2093.0,
+        help="Maximum frequency in Hz (default: 2093.0)",
+    )
+    hpss_p = sub.add_parser("hpss", parents=[fft_options], help="Harmonic-percussive separation")
+    hpss_p.add_argument(
+        "--kernel-harmonic", type=int, default=31, help="Harmonic median-filter kernel"
+    )
+    hpss_p.add_argument(
+        "--kernel-percussive", type=int, default=31, help="Percussive median-filter kernel"
+    )
+    hpss_p.add_argument("--harmonic-only", action="store_true")
+    hpss_p.add_argument("--percussive-only", action="store_true")
+    hpss_p.add_argument("--with-residual", action="store_true")
+    hpss_p.add_argument("--hard-mask", action="store_true")
 
     # Editing commands
     pitch_correct_p = sub.add_parser(
@@ -297,9 +563,9 @@ def main() -> None:
     note_move_p = sub.add_parser("note-move", parents=[common], help="Move one note region")
     note_move_p.add_argument("--onset", type=int, default=0)
     note_move_p.add_argument("--offset", type=int, default=None)
-    note_move_p.add_argument("--target-onset", type=int, required=True)
+    note_move_p.add_argument("--target-onset", type=int, default=None)
     scale_quantize_p = sub.add_parser(
-        "scale-quantize", parents=[common], help="Quantize one MIDI value to a scale"
+        "scale-quantize", parents=[stdout_options], help="Quantize one MIDI value to a scale"
     )
     scale_quantize_p.add_argument("midi", type=float)
     scale_quantize_p.add_argument("--root", type=int, default=0)
@@ -324,24 +590,35 @@ def main() -> None:
         "pitch-shift", parents=[common], help="Shift pitch by a number of semitones"
     )
     pitch_shift_p.add_argument("--semitones", type=float, help="Semitones to shift (positive = up)")
+    pitch_shift_p.add_argument("--n-fft", type=int, default=2048)
+    pitch_shift_p.add_argument("--hop-length", type=int, default=512)
     time_stretch_p = sub.add_parser(
         "time-stretch", parents=[common], help="Time-stretch without changing pitch"
     )
     time_stretch_p.add_argument(
         "--rate", type=float, help="Stretch factor (>1 speeds up, <1 slows down)"
     )
+    time_stretch_p.add_argument("--n-fft", type=int, default=2048)
+    time_stretch_p.add_argument("--hop-length", type=int, default=512)
     normalize_p = sub.add_parser(
         "normalize", parents=[common], help="Peak-normalize audio to a target dB level"
     )
+    normalize_p.add_argument("--mode", default="peak", help="Normalization mode (default: peak)")
     normalize_p.add_argument(
-        "--target-db", type=float, default=0.0, help="Target peak level in dB (default: 0.0)"
+        "--target-db", type=float, default=None, help="Target peak level in dB"
     )
     trim_silence_p = sub.add_parser(
         "trim-silence", parents=[common], help="Trim leading/trailing silence"
     )
     trim_silence_p.add_argument(
-        "--threshold-db", type=float, default=-60.0, help="Silence threshold in dB (default: -60)"
+        "--threshold-db", type=float, default=None, help="Silence threshold in dB (default: -60)"
     )
+    # ``--threshold-db`` and ``--top-db`` select two handler paths. Leave the
+    # alternate selector absent by default so the handler can distinguish the
+    # default threshold mode from an explicit top-dB request.
+    trim_silence_p.add_argument("--top-db", type=float, default=None)
+    trim_silence_p.add_argument("--n-fft", type=int, default=2048)
+    trim_silence_p.add_argument("--hop-length", type=int, default=512)
     resample_p = sub.add_parser(
         "resample", parents=[common], help="Resample audio to a target sample rate"
     )
@@ -358,7 +635,9 @@ def main() -> None:
     )
     voice_change_p.add_argument("--pitch-semitones", type=float, help="Pitch shift in semitones")
     voice_change_p.add_argument(
-        "--formant-factor", type=float, help="Formant scaling factor (1.0 = unchanged)"
+        "--formant-factor",
+        type=float,
+        help="Formant scaling factor (1.0 = unchanged)",
     )
     voice_change_p.add_argument("--preset", default="", help="Realtime voice changer preset id")
     voice_change_p.add_argument("--preset-json", help="Realtime voice changer preset JSON file")
@@ -372,8 +651,9 @@ def main() -> None:
         metavar="PATH=VALUE",
         help="Override preset JSON fields, e.g. dsp.outputGainDb=-2",
     )
-    voice_presets_p = sub.add_parser("voice-presets", help="List realtime voice changer presets")
-    voice_presets_p.add_argument("--json", action="store_true", help="Emit JSON")
+    sub.add_parser(
+        "voice-presets", parents=[stdout_options], help="List realtime voice changer presets"
+    )
     voice_preset_p = sub.add_parser(
         "voice-preset", help="Print a realtime voice changer preset (always JSON)"
     )
@@ -387,12 +667,11 @@ def main() -> None:
     voice_preset_validate_p = sub.add_parser(
         "voice-preset-validate", help="Validate and normalize voice preset JSON"
     )
-    voice_preset_validate_p.add_argument("file", nargs="?", help="Voice preset JSON file")
+    voice_preset_validate_p.add_argument("--json", action="store_true", help="Output JSON")
     voice_preset_validate_p.add_argument(
         "--preset-json",
         help="Voice preset JSON file (takes precedence over the positional path)",
     )
-    voice_preset_validate_p.add_argument("--json", action="store_true", help="Output JSON")
     voice_preset_validate_p.add_argument(
         "--preset", default="", help="Preset id when validating a pack"
     )
@@ -403,10 +682,16 @@ def main() -> None:
         metavar="PATH=VALUE",
         help="Override preset JSON fields before validation",
     )
+    voice_preset_validate_p.add_argument("file", nargs="?", help="Voice preset JSON file")
 
     # Analysis commands
-    acoustic_p = sub.add_parser("acoustic", parents=[common], help="Estimate acoustic parameters")
+    acoustic_p = sub.add_parser(
+        "acoustic", parents=[stdout_options], help="Estimate acoustic parameters"
+    )
     acoustic_p.add_argument("--ir", action="store_true", help="Treat input as an impulse response")
+    acoustic_p.add_argument("--n-bands", type=int, default=6)
+    acoustic_p.add_argument("--min-decay-db", type=float, default=30.0)
+    acoustic_p.add_argument("--noise-floor-margin-db", type=float, default=10.0)
 
     def _add_room_geometry(p: argparse.ArgumentParser) -> None:
         p.add_argument("--length", type=float, default=7.0, help="Room length (m)")
@@ -434,7 +719,7 @@ def main() -> None:
         )
 
     estimate_room_p = sub.add_parser(
-        "estimate-room", parents=[common], help="Estimate equivalent room from a recording"
+        "estimate-room", parents=[stdout_options], help="Estimate equivalent room from a recording"
     )
     estimate_room_p.add_argument("--aspect-lw", type=float, default=1.0, help="length/width prior")
     estimate_room_p.add_argument("--aspect-lh", type=float, default=1.0, help="length/height prior")
@@ -446,8 +731,11 @@ def main() -> None:
     )
     estimate_room_p.add_argument(
         "--n-octave-bands",
+        "--n-bands",
         type=int,
-        default=0,
+        default=None,
+        dest="n_octave_bands",
+        metavar="N",
         help="Analyzer octave-band count (0 = library default)",
     )
 
@@ -466,35 +754,57 @@ def main() -> None:
         "--suppression", type=float, default=0.5, help="Source-tail suppression [0,1]"
     )
 
-    sub.add_parser("rhythm", parents=[common], help="Analyze rhythm primitives")
-    sub.add_parser("dynamics", parents=[common], help="Analyze dynamics/loudness")
+    rhythm_p = sub.add_parser("rhythm", parents=[stdout_options], help="Analyze rhythm primitives")
+    rhythm_p.add_argument("--start-bpm", type=float, default=120.0)
+    rhythm_p.add_argument("--bpm-min", type=float, default=60.0)
+    rhythm_p.add_argument("--bpm-max", type=float, default=200.0)
+    dynamics_p = sub.add_parser(
+        "dynamics", parents=[stdout_options], help="Analyze dynamics/loudness"
+    )
+    dynamics_p.add_argument("--window-sec", type=float, default=0.4)
     sub.add_parser("timbre", parents=[mel_options], help="Analyze timbre/spectral shape")
-    lufs_p = sub.add_parser("lufs", parents=[common], help="Compute LUFS loudness")
+    lufs_p = sub.add_parser("lufs", parents=[stdout_options], help="Compute LUFS loudness")
     lufs_p.add_argument(
         "--series", action="store_true", help="Also emit momentary/short-term LUFS series"
     )
     sub.add_parser(
         "onset-envelope", parents=[mel_options], help="Compute the onset strength envelope"
     )
-    sub.add_parser("nnls-chroma", parents=[common], help="Compute NNLS chroma")
-    sub.add_parser("tempogram", parents=[mel_options], help="Compute autocorrelation tempogram")
-    sub.add_parser("plp", parents=[mel_options], help="Compute predominant local pulse")
+    nnls_p = sub.add_parser("nnls-chroma", parents=[stdout_options], help="Compute NNLS chroma")
+    nnls_p.add_argument("--hop-length", type=int, default=512)
+    tempogram_p = sub.add_parser(
+        "tempogram", parents=[mel_options], help="Compute autocorrelation tempogram"
+    )
+    tempogram_p.add_argument("--win-length", type=int, default=384)
+    plp_p = sub.add_parser("plp", parents=[mel_options], help="Compute predominant local pulse")
+    plp_p.add_argument("--tempo-min", type=float, default=30.0)
+    plp_p.add_argument("--tempo-max", type=float, default=300.0)
+    plp_p.add_argument("--win-length", type=int, default=384)
 
     # Mastering commands
     mastering_p = sub.add_parser(
         "mastering", parents=[common], help="Loudness-normalize with a true-peak ceiling"
     )
+    mastering_p.add_argument("--preset", default="")
+    mastering_p.add_argument("--config", default=None)
     mastering_p.add_argument("--target-lufs", type=float, default=-14.0)
     mastering_p.add_argument("--ceiling-db", type=float, default=-1.0)
+    mastering_p.add_argument("--params", default="")
+    mastering_p.add_argument("--bits", type=int, default=16)
     mastering_p.add_argument(
         "--true-peak-oversample", type=int, choices=(1, 2, 4, 8, 16), default=4
     )
-    mastering_p.add_argument("--report", default="", help="Write a mastering report JSON file")
+    mastering_p.add_argument("--report", default=None, help="Write a mastering report JSON file")
+    mastering_p.add_argument("--assistant", action="store_true")
+    mastering_p.add_argument("--enable-repair", action="store_true")
+    mastering_p.add_argument("--explain", action="store_true")
     mproc_p = sub.add_parser(
         "mastering-processor", parents=[common], help="Apply a named mastering processor"
     )
     mproc_p.add_argument("--processor", required=True, help="Processor name")
     mproc_p.add_argument("--params", default="", help="Params as k=v,k=v (floats)")
+    mproc_p.add_argument("--bits", type=int, default=16)
+    mproc_p.add_argument("--stereo", action="store_true")
     eq_p = sub.add_parser("eq", parents=[common], help="Apply the unified equalizer")
     eq_p.add_argument("--params", default="", help="Params as k=v,k=v (overrides band shortcuts)")
     eq_p.add_argument(
@@ -538,60 +848,68 @@ def main() -> None:
     eq_p.add_argument("--lookahead-ms", type=float, default=0.0)
     eq_p.add_argument("--sidechain-freq-hz", type=float, default=-1.0)
     eq_p.add_argument("--sidechain-q", type=float, default=1.0)
-    sub.add_parser("mastering-processors", parents=[common], help="List mastering processor names")
+    eq_p.add_argument("--bits", type=int, default=16)
+    sub.add_parser(
+        "mastering-processors", parents=[stdout_options], help="List mastering processor names"
+    )
     sub.add_parser(
         "mastering-pair-processors",
-        parents=[common],
+        parents=[stdout_options],
         help="List two-input mastering processor names",
     )
     sub.add_parser(
         "mastering-pair-analyses",
-        parents=[common],
+        parents=[stdout_options],
         help="List two-input mastering analysis names",
     )
     mpa_p = sub.add_parser(
         "mastering-pair-analyze",
-        parents=[common],
+        parents=[stdout_options],
         help="Run a two-input mastering analysis (always JSON output)",
     )
     mpa_p.add_argument("--reference", required=True, help="Reference audio file")
     mpa_p.add_argument("--analysis", required=True, help="Analysis name")
+    mpa_p.add_argument("--params", default="")
     mchain_p = sub.add_parser(
         "mastering-chain", parents=[common], help="Run a configurable mastering chain"
     )
-    mchain_p.add_argument("--config", default="", help="Chain config as a JSON object")
-    mchain_p.add_argument("--config-file", default="", help="Chain config JSON file")
+    mchain_p.add_argument("--config", default=None, help="Chain config as a JSON object")
+    mchain_p.add_argument("--config-file", default=None, help="Chain config JSON file")
     mchain_p.add_argument("--params", default="", help="Flat params as k=v,k=v (floats)")
-    mchain_p.add_argument("--report", default="", help="Write a mastering report JSON file")
+    mchain_p.add_argument("--report", default=None, help="Write a mastering report JSON file")
     master_p = sub.add_parser("master", parents=[common], help="Apply a named mastering preset")
     master_p.add_argument("--preset", default="pop", help="Mastering preset name")
-    master_p.add_argument("--config", default="", help="Preset overrides as a JSON object")
-    master_p.add_argument("--config-file", default="", help="Preset override JSON file")
+    master_p.add_argument("--config", default=None, help="Preset overrides as a JSON object")
+    master_p.add_argument("--config-file", default=None, help="Preset override JSON file")
     master_p.add_argument("--params", default="", help="Flat overrides as k=v,k=v (floats)")
-    master_p.add_argument("--report", default="", help="Write a mastering report JSON file")
+    master_p.add_argument("--report", default=None, help="Write a mastering report JSON file")
     mstream_p = sub.add_parser(
         "mastering-streaming",
-        parents=[common],
+        parents=[stdout_options],
         help="Preview streaming-platform normalization as JSON",
     )
     mstream_p.add_argument(
         "--platforms",
-        default="",
+        default=None,
         help="Platform targets as JSON array of {name,targetLufs,ceilingDb}",
     )
-    mstream_p.add_argument("--platforms-file", default="", help="Platform targets JSON file")
+    mstream_p.add_argument("--platforms-file", default=None, help="Platform targets JSON file")
     declip_p = sub.add_parser("declip", parents=[common], help="Repair clipped audio")
     declip_p.add_argument("--clip-threshold", type=float, default=0.98)
     declip_p.add_argument("--lpc-order", type=int, default=36)
     declip_p.add_argument("--iterations", type=int, default=2)
     declip_p.add_argument("--lpc-blend", type=float, default=0.65)
-    sub.add_parser("mastering-presets", parents=[common], help="List mastering preset names")
+    sub.add_parser(
+        "mastering-presets", parents=[stdout_options], help="List mastering preset names"
+    )
     msuggest_p = sub.add_parser(
-        "mastering-suggest", parents=[common], help="Suggest a mastering chain as JSON"
+        "mastering-suggest", parents=[stdout_options], help="Suggest a mastering chain as JSON"
     )
     msuggest_p.add_argument("--params", default="", help="Assistant params as k=v,k=v")
     mprofile_p = sub.add_parser(
-        "mastering-profile", parents=[common], help="Analyze a mastering audio profile as JSON"
+        "mastering-profile",
+        parents=[stdout_options],
+        help="Analyze a mastering audio profile as JSON",
     )
     mprofile_p.add_argument("--params", default="", help="Profile params as k=v,k=v")
 
@@ -602,24 +920,41 @@ def main() -> None:
     # accept the same flags without installing their own defaults, otherwise a
     # value before the project subcommand (for example `project --json abi`)
     # is overwritten by the child parser's false/empty default.
-    project_common = argparse.ArgumentParser(add_help=False, argument_default=argparse.SUPPRESS)
+    project_common = _ContractArgumentParser(add_help=False, argument_default=argparse.SUPPRESS)
     project_common.add_argument("--json", action="store_true")
     project_common.add_argument("-o", "--output", type=str)
+    project_stdout_common = _ContractArgumentParser(
+        add_help=False, argument_default=argparse.SUPPRESS
+    )
+    project_stdout_common.add_argument("--json", action="store_true")
 
-    project_sub.add_parser("abi", parents=[project_common], help="Print the project ABI version")
+    project_sub.add_parser(
+        "abi", parents=[project_stdout_common], help="Print the project ABI version"
+    )
     pnew = project_sub.add_parser(
         "new", parents=[project_common], help="Create an empty project JSON"
     )
     pnew.add_argument("--sample-rate", type=int, default=0, help="Project sample rate")
     for pname in ("validate", "compile"):
-        pp = project_sub.add_parser(pname, parents=[project_common], help=f"Project {pname}")
-        pp.add_argument("--in", dest="input", required=True, help="Input project JSON")
         if pname == "validate":
+            # Keep the active validation route's action order aligned with the
+            # public contract. Child defaults remain suppressed so flags
+            # supplied before the project subcommand are not overwritten by
+            # child-parser defaults.
+            pp = project_sub.add_parser(pname, help="Project validate")
+            pp.add_argument("--json", action="store_true", default=argparse.SUPPRESS)
             pp.add_argument(
                 "--strict",
                 action="store_true",
                 help="Fail (non-zero exit) when the project loads with diagnostics",
             )
+            pp.add_argument("--in", dest="input", required=True, help="Input project JSON")
+            pp.add_argument("-o", "--output", type=str, default=argparse.SUPPRESS)
+        else:
+            pp = project_sub.add_parser(
+                pname, parents=[project_stdout_common], help="Project compile"
+            )
+            pp.add_argument("--in", dest="input", required=True, help="Input project JSON")
     sf2_cli_note = (
         "SF2 / SoundFont and per-destination synth JSON are not wired through this CLI command; "
         "use the Project API for SoundFont-backed bounces."
@@ -665,7 +1000,7 @@ def main() -> None:
     )
     pimport_midi2.add_argument("--midi2", required=True, help="Input MIDI 2.0 Clip File")
     project_sub.add_parser(
-        "synth-presets", parents=[project_common], help="List NativeSynth presets"
+        "synth-presets", parents=[project_stdout_common], help="List NativeSynth presets"
     )
 
     midi_render_p = sub.add_parser(
@@ -695,13 +1030,13 @@ def main() -> None:
     )
 
     # Mixing commands
-    sub.add_parser("mixing-presets", parents=[common], help="List built-in mixer scene presets")
+    sub.add_parser(
+        "mixing-presets", parents=[stdout_options], help="List built-in mixer scene presets"
+    )
     mixing_preset_p = sub.add_parser(
-        "mixing-preset", parents=[common], help="Print a built-in mixer scene preset"
+        "mixing-preset", parents=[stdout_options], help="Print a built-in mixer scene preset"
     )
-    mixing_preset_p.add_argument(
-        "--preset", default="vocalReverbSend", help="Built-in scene preset name"
-    )
+    mixing_preset_p.add_argument("--preset", default="", help="Built-in scene preset name")
 
     mix_p = sub.add_parser(
         "mix",
@@ -782,11 +1117,28 @@ def main() -> None:
     ]:
         sub.choices[name].add_argument("file", help="Audio file path")
 
+    return parser
+
+
+def _dump_cli_contract() -> None:
+    """Emit the parser inventory consumed by the cross-surface checker."""
+    _dump_cli_contract_for_parser(_build_parser())
+
+
+def main() -> None:
+    """CLI entry point."""
+    if len(sys.argv) == 2 and sys.argv[1] == "--dump-cli-contract":
+        _dump_cli_contract()
+        return
+
+    parser = _build_parser()
     args = parser.parse_args()
 
     if not args.command:
-        parser.print_help()
-        sys.exit(1 if _legacy_exit_codes() else EXIT_USAGE)
+        # Defensive fallback for callers that supply a custom namespace or
+        # parser implementation.  Normal parsing enforces this through the
+        # required subparser and reaches the same usage-error path.
+        parser.error("the following arguments are required: command")
 
     commands = {
         "version": cmd_version,

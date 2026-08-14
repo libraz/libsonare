@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import ctypes
 from collections.abc import Sequence
+from numbers import Integral
 from typing import Any
 
 import numpy as np
@@ -34,6 +35,8 @@ from ._ffi import (
     SonareTrimSilenceConfig,
 )
 from ._runtime import (
+    ErrorCode,
+    SonareError,
     _as_float32_buffer,
     _check,
     _float_array_result,
@@ -44,7 +47,33 @@ from ._runtime import (
     _resolve_enum,
     _to_c_float_array,
     _validate_samples,
+    _validate_scalar,
 )
+
+_DEFAULT_EFFECT_FRAME_LENGTH = 2048
+_DEFAULT_EFFECT_HOP_LENGTH = 512
+_C_INT_MAX = 2**31 - 1
+
+
+def _unsupported_effect_symbol(symbol: str) -> SonareError:
+    return SonareError(
+        int(ErrorCode.NOT_SUPPORTED),
+        f"libsonare does not export {symbol}; install a matching native library",
+    )
+
+
+def _validate_trim_options(frame_length: int, hop_length: int) -> tuple[int, int]:
+    if isinstance(frame_length, bool) or not isinstance(frame_length, Integral):
+        raise ValueError("trim: frame_length must be an integer")
+    if isinstance(hop_length, bool) or not isinstance(hop_length, Integral):
+        raise ValueError("trim: hop_length must be an integer")
+    frame_length = int(frame_length)
+    hop_length = int(hop_length)
+    if frame_length <= 0 or frame_length > _C_INT_MAX:
+        raise ValueError("trim: frame_length must fit in a positive signed 32-bit integer")
+    if hop_length <= 0 or hop_length > _C_INT_MAX:
+        raise ValueError("trim: hop_length must fit in a positive signed 32-bit integer")
+    return frame_length, hop_length
 
 
 def normalize(
@@ -79,6 +108,52 @@ def normalize(
             ctypes.byref(out_length),
         )
         _check(rc)
+        return _float_array_result(out, out_length.value)
+
+
+def normalize_rms(
+    samples: Sequence[float] | list[float],
+    sample_rate: int = 22050,
+    target_db: float = -20.0,
+    *,
+    validate: bool = True,
+) -> list[float]:
+    """Normalize audio by RMS level to a target dBFS value.
+
+    This is the RMS counterpart to :func:`normalize`, using the native
+    ``sonare_normalize_rms`` entry point and hard-clipping the result to
+    ``[-1, 1]``.  A legacy library that lacks this symbol cannot provide the
+    same operation, so it raises ``SonareError(NotSupported)``.
+
+    Args:
+        samples: Audio samples.
+        sample_rate: Sample rate in Hz (default 22050).
+        target_db: Finite RMS target at or below 0 dBFS (default -20.0).
+        validate: Reject empty / NaN / Inf input (default True). Pass
+            ``validate=False`` to skip the scan on hot paths.
+    """
+    _validate_samples("normalize_rms", samples, validate=validate)
+    target_db = _validate_scalar("normalize_rms", target_db, "target_db")
+    target_db_c = ctypes.c_float(target_db).value
+    if not np.isfinite(target_db_c):
+        raise ValueError("normalize_rms: target_db must fit in a finite float32 value")
+    if target_db_c > 0.0:
+        raise ValueError("normalize_rms: target_db must be at or below 0 dBFS")
+    lib = _get_lib()
+    if not hasattr(lib, "sonare_normalize_rms"):
+        raise _unsupported_effect_symbol("sonare_normalize_rms")
+    c_array, length = _to_c_float_array(samples)
+    with _out_float_array(lib) as (out, out_length):
+        _check(
+            lib.sonare_normalize_rms(
+                c_array,
+                ctypes.c_size_t(length),
+                ctypes.c_int(sample_rate),
+                ctypes.c_float(target_db_c),
+                ctypes.byref(out),
+                ctypes.byref(out_length),
+            )
+        )
         return _float_array_result(out, out_length.value)
 
 
@@ -445,6 +520,10 @@ def trim(
     samples: Sequence[float] | list[float],
     sample_rate: int = 22050,
     threshold_db: float = -60.0,
+    frame_length: int = _DEFAULT_EFFECT_FRAME_LENGTH,
+    hop_length: int = _DEFAULT_EFFECT_HOP_LENGTH,
+    *,
+    validate: bool = True,
 ) -> list[float]:
     """Trim silence from the beginning and end of audio.
 
@@ -452,21 +531,46 @@ def trim(
         samples: Audio samples.
         sample_rate: Sample rate in Hz (default 22050).
         threshold_db: Silence threshold in dB (default -60.0).
+        frame_length: RMS analysis frame length in samples (default 2048).
+        hop_length: RMS analysis hop length in samples (default 512).
+        validate: Reject empty / NaN / Inf input (default ``True``).
 
     Returns:
         List of trimmed samples.
     """
+    _validate_samples("trim", samples, validate=validate)
+    frame_length, hop_length = _validate_trim_options(frame_length, hop_length)
     lib = _get_lib()
+    if not hasattr(lib, "sonare_trim_ex"):
+        if frame_length != _DEFAULT_EFFECT_FRAME_LENGTH or hop_length != _DEFAULT_EFFECT_HOP_LENGTH:
+            raise _unsupported_effect_symbol("sonare_trim_ex")
+        if not hasattr(lib, "sonare_trim"):
+            raise _unsupported_effect_symbol("sonare_trim")
+        fn_name = "sonare_trim"
+    else:
+        fn_name = "sonare_trim_ex"
     c_array, length = _to_c_float_array(samples)
     with _out_float_array(lib) as (out, out_length):
-        rc = lib.sonare_trim(
-            c_array,
-            ctypes.c_size_t(length),
-            ctypes.c_int(sample_rate),
-            ctypes.c_float(threshold_db),
-            ctypes.byref(out),
-            ctypes.byref(out_length),
-        )
+        if fn_name == "sonare_trim_ex":
+            rc = lib.sonare_trim_ex(
+                c_array,
+                ctypes.c_size_t(length),
+                ctypes.c_int(sample_rate),
+                ctypes.c_float(threshold_db),
+                ctypes.c_int(frame_length),
+                ctypes.c_int(hop_length),
+                ctypes.byref(out),
+                ctypes.byref(out_length),
+            )
+        else:
+            rc = lib.sonare_trim(
+                c_array,
+                ctypes.c_size_t(length),
+                ctypes.c_int(sample_rate),
+                ctypes.c_float(threshold_db),
+                ctypes.byref(out),
+                ctypes.byref(out_length),
+            )
         _check(rc)
         return _float_array_result(out, out_length.value)
 

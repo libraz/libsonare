@@ -70,6 +70,7 @@ class MasteringProcessorCatalogEntry(TypedDict):
     stereoOnly: bool
     latencySamples: int
     tailSamples: int
+    realtimeCost: Literal["low", "moderate", "high"] | None
     channelPolicy: MasteringChannelPolicy
     category: MasteringProcessorCategory
     params: list[MasteringInsertParamInfo]
@@ -174,6 +175,8 @@ class EngineTelemetryError(IntEnum):
     INSERT_AUTOMATION_OVERFLOW = 16
     MIDI_CLOCK_OVERFLOW = 17
     METRONOME_OVERFLOW = 18
+    # Ordinal 19 is reserved by the WASM worklet protocol.
+    MAX_CHANNELS_EXCEEDED = 20
 
 class Key:
     root: PitchClass
@@ -1109,6 +1112,11 @@ class EngineTelemetry:
     @property
     def graphLatencySamplesQ8(self) -> int: ...
 
+class EngineTrackMonitorMode(IntEnum):
+    OFF = 0
+    PFL = 1
+    AFL = 2
+
 class ParameterInfo:
     id: int
     name: str
@@ -1235,6 +1243,8 @@ class ProjectSource:
     storage_handle_id: int
     sample_rate_hint: float
     name_or_uri: str
+    content_hash: str
+    external_stem_role: str
     def __init__(
         self,
         id: int,
@@ -1243,6 +1253,8 @@ class ProjectSource:
         storage_handle_id: int,
         sample_rate_hint: float,
         name_or_uri: str,
+        content_hash: str = "",
+        external_stem_role: str = "",
     ) -> None: ...
 
 class EngineMetronomeConfig:

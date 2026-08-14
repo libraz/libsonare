@@ -156,6 +156,22 @@ def test_project_abi_version_matches_expected() -> None:
     assert project_abi_version() > 0
 
 
+def test_create_factory_matches_constructor() -> None:
+    """The cross-binding factory creates an empty project usable like ``Project()``."""
+    created = Project.create()
+    constructed = Project()
+    try:
+        assert isinstance(created, Project)
+        assert created.to_json_bytes() == constructed.to_json_bytes()
+        created.set_sample_rate(48000.0)
+        track_id = created.add_track("audio", "factory")
+        assert track_id > 0
+        assert created.track_by_index(0).id == track_id
+    finally:
+        created.close()
+        constructed.close()
+
+
 def test_reads_stored_tracks_clips_and_sources_by_index() -> None:
     project = Project()
     try:
@@ -193,6 +209,8 @@ def test_reads_stored_tracks_clips_and_sources_by_index() -> None:
         assert source.id == clip.source_id
         assert source.kind == 0
         assert source.name_or_uri == "asset://readback.wav"
+        assert source.content_hash == ""
+        assert source.external_stem_role == ""
 
         with pytest.raises(SonareError):
             project.track_by_index(1)
@@ -200,6 +218,75 @@ def test_reads_stored_tracks_clips_and_sources_by_index() -> None:
             project.clip_by_index(1)
         with pytest.raises(SonareError):
             project.source_by_index(1)
+    finally:
+        project.close()
+
+
+def test_audio_source_metadata_roundtrips_clears_and_undoes() -> None:
+    project = Project()
+    try:
+        track_id = project.add_track("audio", "metadata")
+        clip_id = project.add_clip(track_id, 0.0, 1.0, source_uri="asset://metadata.wav")
+        source_id = project.clip_by_index(0).source_id
+        assert clip_id != 0
+
+        project.set_audio_source_metadata(source_id, "sha256:deadbeef", "lead")
+        source = project.source_by_index(0)
+        assert source.content_hash == "sha256:deadbeef"
+        assert source.external_stem_role == "lead"
+
+        # Empty values clear each field while preserving the source itself.
+        project.set_audio_source_metadata(source_id, "", "")
+        source = project.source_by_index(0)
+        assert source.id == source_id
+        assert source.name_or_uri == "asset://metadata.wav"
+        assert source.content_hash == ""
+        assert source.external_stem_role == ""
+
+        project.undo()
+        source = project.source_by_index(0)
+        assert source.content_hash == "sha256:deadbeef"
+        assert source.external_stem_role == "lead"
+        project.redo()
+        source = project.source_by_index(0)
+        assert source.content_hash == ""
+        assert source.external_stem_role == ""
+
+        project.set_audio_source_metadata(source_id, "sha256:roundtrip", "vocals")
+        restored = Project.from_json(project.to_json())
+        try:
+            source = restored.source_by_index(0)
+            assert source.content_hash == "sha256:roundtrip"
+            assert source.external_stem_role == "vocals"
+        finally:
+            restored.close()
+    finally:
+        project.close()
+
+
+def test_audio_source_metadata_rejects_midi_and_unknown_sources() -> None:
+    project = Project()
+    try:
+        audio_track = project.add_track("audio", "audio")
+        project.add_clip(audio_track, 0.0, 1.0, source_uri="asset://audio.wav")
+        _, midi_clip = project.add_midi_clip(0.0, 1.0)
+        midi_source_id = project.clip_by_index(1).source_id
+
+        with pytest.raises(SonareError):
+            project.set_audio_source_metadata(midi_source_id, "sha256:bad", "lead")
+        with pytest.raises(SonareError):
+            project.set_audio_source_metadata(999999, "sha256:bad", "lead")
+
+        # The invalid edits do not alter the valid audio source or MIDI model.
+        assert midi_clip != 0
+        assert project.source_by_index(0).content_hash == ""
+        assert project.source_by_index(1).content_hash == ""
+        with pytest.raises(TypeError):
+            project.set_audio_source_metadata(
+                project.source_by_index(0).id,
+                None,
+                "lead",  # type: ignore[arg-type]
+            )
     finally:
         project.close()
 

@@ -5,6 +5,7 @@ from __future__ import annotations
 import ctypes
 import dataclasses
 from collections.abc import Sequence
+from numbers import Integral
 
 from ._ffi import (
     SONARE_PITCH_TARGET_FIXED_MIDI,
@@ -19,6 +20,8 @@ from ._ffi import (
     SonareSpectralRegionOp,
 )
 from ._runtime import (
+    ErrorCode,
+    SonareError,
     _call_float_transform,
     _check,
     _float_array_result,
@@ -31,25 +34,121 @@ from ._runtime import (
 )
 from .types import HpssResult
 
+_DEFAULT_EFFECT_N_FFT = 2048
+_DEFAULT_EFFECT_HOP_LENGTH = 512
+_C_INT_MAX = 2**31 - 1
+
+
+def _validate_effect_fft_options(fn_name: str, n_fft: int, hop_length: int) -> tuple[int, int]:
+    """Validate and normalize the FFT options shared by spectral effects."""
+    if isinstance(n_fft, bool) or not isinstance(n_fft, Integral):
+        raise ValueError(f"{fn_name}: n_fft must be an integer")
+    if isinstance(hop_length, bool) or not isinstance(hop_length, Integral):
+        raise ValueError(f"{fn_name}: hop_length must be an integer")
+    n_fft = int(n_fft)
+    hop_length = int(hop_length)
+    if n_fft <= 0 or n_fft > _C_INT_MAX:
+        raise ValueError(f"{fn_name}: n_fft must fit in a signed 32-bit integer")
+    _require_power_of_two(n_fft, "n_fft")
+    if hop_length <= 0 or hop_length > _C_INT_MAX:
+        raise ValueError(f"{fn_name}: hop_length must fit in a positive signed 32-bit integer")
+    return n_fft, hop_length
+
+
+def _unsupported_effect_symbol(symbol: str) -> SonareError:
+    return SonareError(
+        int(ErrorCode.NOT_SUPPORTED),
+        f"libsonare does not export {symbol}; install a matching native library",
+    )
+
+
+def _validate_hpss_kernel(fn_name: str, value: int, arg_name: str) -> int:
+    if isinstance(value, bool) or not isinstance(value, Integral):
+        raise ValueError(f"{fn_name}: {arg_name} must be an integer")
+    value = int(value)
+    if value <= 0 or value > _C_INT_MAX or value % 2 == 0:
+        raise ValueError(f"{fn_name}: {arg_name} must be a positive odd signed 32-bit integer")
+    return value
+
 
 def hpss(
     samples: Sequence[float] | list[float],
     sample_rate: int = 22050,
     kernel_harmonic: int = 31,
     kernel_percussive: int = 31,
+    n_fft: int = _DEFAULT_EFFECT_N_FFT,
+    hop_length: int = _DEFAULT_EFFECT_HOP_LENGTH,
+    hard_mask: bool = False,
+    *,
+    validate: bool = True,
 ) -> HpssResult:
     """Perform harmonic-percussive source separation.
 
     Args:
         samples: Audio samples.
         sample_rate: Sample rate in Hz (default 22050).
-        kernel_harmonic: Harmonic median filter kernel size.
-        kernel_percussive: Percussive median filter kernel size.
+        kernel_harmonic: Harmonic median filter kernel size (positive odd integer).
+        kernel_percussive: Percussive median filter kernel size (positive odd integer).
+        n_fft: FFT size used for analysis/synthesis (default 2048).
+        hop_length: Hop size used for analysis/synthesis (default 512).
+        hard_mask: Use binary harmonic/percussive masks (default ``False``).
+        validate: Reject empty / NaN / Inf input (default ``True``).
 
     Returns:
         HpssResult with harmonic and percussive components.
     """
+    _validate_samples("hpss", samples, validate=validate)
+    n_fft, hop_length = _validate_effect_fft_options("hpss", n_fft, hop_length)
+    kernel_harmonic = _validate_hpss_kernel("hpss", kernel_harmonic, "kernel_harmonic")
+    kernel_percussive = _validate_hpss_kernel("hpss", kernel_percussive, "kernel_percussive")
+    if not isinstance(hard_mask, bool):
+        raise ValueError("hpss: hard_mask must be a bool")
+
     lib = _get_lib()
+    use_soft_mask = 0 if hard_mask else 1
+    if not hasattr(lib, "sonare_hpss_ex"):
+        if n_fft != _DEFAULT_EFFECT_N_FFT or hop_length != _DEFAULT_EFFECT_HOP_LENGTH or hard_mask:
+            raise _unsupported_effect_symbol("sonare_hpss_ex")
+        if not hasattr(lib, "sonare_hpss"):
+            raise _unsupported_effect_symbol("sonare_hpss")
+        return _hpss_legacy(lib, samples, sample_rate, kernel_harmonic, kernel_percussive)
+
+    c_array, length = _to_c_float_array(samples)
+    out = SonareHpssResult()
+    rc = lib.sonare_hpss_ex(
+        c_array,
+        ctypes.c_size_t(length),
+        ctypes.c_int(sample_rate),
+        ctypes.c_int(kernel_harmonic),
+        ctypes.c_int(kernel_percussive),
+        ctypes.c_int(n_fft),
+        ctypes.c_int(hop_length),
+        ctypes.c_int(use_soft_mask),
+        ctypes.c_int(0),
+        ctypes.byref(out),
+        None,
+    )
+    _check(rc)
+    try:
+        n = out.length
+        return HpssResult(
+            harmonic=[float(out.harmonic[i]) for i in range(n)],
+            percussive=[float(out.percussive[i]) for i in range(n)],
+            length=int(n),
+            sample_rate=int(out.sample_rate),
+        )
+    finally:
+        lib.sonare_free_hpss_result(ctypes.byref(out))
+
+
+def _hpss_legacy(
+    lib: ctypes.CDLL,
+    samples: Sequence[float] | list[float],
+    sample_rate: int,
+    kernel_harmonic: int,
+    kernel_percussive: int,
+) -> HpssResult:
+    """Call the pre-extended HPSS entry point for legacy-default requests."""
     c_array, length = _to_c_float_array(samples)
     out = SonareHpssResult()
     rc = lib.sonare_hpss(
@@ -119,6 +218,8 @@ def time_stretch(
     samples: Sequence[float] | list[float],
     sample_rate: int = 22050,
     rate: float = 1.0,
+    n_fft: int = _DEFAULT_EFFECT_N_FFT,
+    hop_length: int = _DEFAULT_EFFECT_HOP_LENGTH,
     *,
     validate: bool = True,
 ) -> list[float]:
@@ -128,6 +229,8 @@ def time_stretch(
         samples: Audio samples.
         sample_rate: Sample rate in Hz (default 22050).
         rate: Stretch factor (>1 speeds up, <1 slows down).
+        n_fft: FFT size used for analysis/synthesis (default 2048).
+        hop_length: Hop size used for analysis/synthesis (default 512).
         validate: Reject empty / NaN / Inf input (default True). Pass
             ``validate=False`` to skip the scan on hot paths.
 
@@ -135,8 +238,23 @@ def time_stretch(
         List of time-stretched samples.
     """
     _validate_samples("time_stretch", samples, validate=validate)
+    n_fft, hop_length = _validate_effect_fft_options("time_stretch", n_fft, hop_length)
+    lib = _get_lib()
+    if not hasattr(lib, "sonare_time_stretch_ex"):
+        if n_fft != _DEFAULT_EFFECT_N_FFT or hop_length != _DEFAULT_EFFECT_HOP_LENGTH:
+            raise _unsupported_effect_symbol("sonare_time_stretch_ex")
+        if not hasattr(lib, "sonare_time_stretch"):
+            raise _unsupported_effect_symbol("sonare_time_stretch")
+        return _call_float_transform(
+            "sonare_time_stretch", samples, ctypes.c_int(sample_rate), ctypes.c_float(rate)
+        )
     return _call_float_transform(
-        "sonare_time_stretch", samples, ctypes.c_int(sample_rate), ctypes.c_float(rate)
+        "sonare_time_stretch_ex",
+        samples,
+        ctypes.c_int(sample_rate),
+        ctypes.c_float(rate),
+        ctypes.c_int(n_fft),
+        ctypes.c_int(hop_length),
     )
 
 
@@ -144,6 +262,8 @@ def pitch_shift(
     samples: Sequence[float] | list[float],
     sample_rate: int = 22050,
     semitones: float = 0.0,
+    n_fft: int = _DEFAULT_EFFECT_N_FFT,
+    hop_length: int = _DEFAULT_EFFECT_HOP_LENGTH,
     *,
     validate: bool = True,
 ) -> list[float]:
@@ -153,6 +273,8 @@ def pitch_shift(
         samples: Audio samples.
         sample_rate: Sample rate in Hz (default 22050).
         semitones: Number of semitones to shift (positive = up, negative = down).
+        n_fft: FFT size used for analysis/synthesis (default 2048).
+        hop_length: Hop size used for analysis/synthesis (default 512).
         validate: Reject empty / NaN / Inf input (default True). Pass
             ``validate=False`` to skip the scan on hot paths.
 
@@ -160,8 +282,23 @@ def pitch_shift(
         List of pitch-shifted samples.
     """
     _validate_samples("pitch_shift", samples, validate=validate)
+    n_fft, hop_length = _validate_effect_fft_options("pitch_shift", n_fft, hop_length)
+    lib = _get_lib()
+    if not hasattr(lib, "sonare_pitch_shift_ex"):
+        if n_fft != _DEFAULT_EFFECT_N_FFT or hop_length != _DEFAULT_EFFECT_HOP_LENGTH:
+            raise _unsupported_effect_symbol("sonare_pitch_shift_ex")
+        if not hasattr(lib, "sonare_pitch_shift"):
+            raise _unsupported_effect_symbol("sonare_pitch_shift")
+        return _call_float_transform(
+            "sonare_pitch_shift", samples, ctypes.c_int(sample_rate), ctypes.c_float(semitones)
+        )
     return _call_float_transform(
-        "sonare_pitch_shift", samples, ctypes.c_int(sample_rate), ctypes.c_float(semitones)
+        "sonare_pitch_shift_ex",
+        samples,
+        ctypes.c_int(sample_rate),
+        ctypes.c_float(semitones),
+        ctypes.c_int(n_fft),
+        ctypes.c_int(hop_length),
     )
 
 

@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import argparse
+import statistics
 
 from ._cli_common import (
     PITCH_NAMES,
@@ -18,22 +19,28 @@ def cmd_rhythm(args: argparse.Namespace) -> int:
     from . import analyze_rhythm
 
     samples, sr = _load_audio(args.file)
-    r = analyze_rhythm(samples, sample_rate=sr)
+    rhythm_options = {
+        name: getattr(args, name)
+        for name in ("start_bpm", "bpm_min", "bpm_max", "n_fft", "hop_length")
+        if hasattr(args, name)
+    }
+    r = analyze_rhythm(samples, sample_rate=sr, **rhythm_options)
 
     if args.json:
         print(
             _strict_json_dumps(
                 {
-                    "bpm": round(r.bpm, 2),
+                    "bpm": r.bpm,
                     "time_signature": {
                         "numerator": r.time_signature.numerator,
                         "denominator": r.time_signature.denominator,
+                        "confidence": r.time_signature.confidence,
                     },
                     "groove_type": r.groove_type,
-                    "syncopation": round(r.syncopation, 4),
-                    "pattern_regularity": round(r.pattern_regularity, 4),
-                    "tempo_stability": round(r.tempo_stability, 4),
-                    "beat_intervals": _array_stats(r.beat_intervals),
+                    "syncopation": r.syncopation,
+                    "pattern_regularity": r.pattern_regularity,
+                    "tempo_stability": r.tempo_stability,
+                    "beat_intervals": _native_array_stats(r.beat_intervals),
                 }
             )
         )
@@ -51,11 +58,28 @@ def cmd_rhythm(args: argparse.Namespace) -> int:
     return 0
 
 
+def _native_array_stats(values: list[float]) -> dict[str, float | int]:
+    """Return the unrounded population statistics used by native CLI JSON."""
+    if not values:
+        return {"count": 0, "mean": 0.0, "std": 0.0, "min": 0.0, "max": 0.0}
+    mean = statistics.mean(values)
+    return {
+        "count": len(values),
+        "mean": mean,
+        "std": statistics.pstdev(values) if len(values) > 1 else 0.0,
+        "min": min(values),
+        "max": max(values),
+    }
+
+
 def cmd_dynamics(args: argparse.Namespace) -> int:
     from . import analyze_dynamics
 
     samples, sr = _load_audio(args.file)
-    r = analyze_dynamics(samples, sample_rate=sr)
+    dynamics_options = {}
+    if hasattr(args, "window_sec"):
+        dynamics_options["window_sec"] = args.window_sec
+    r = analyze_dynamics(samples, sample_rate=sr, **dynamics_options)
 
     if args.json:
         print(
@@ -175,7 +199,10 @@ def cmd_nnls_chroma(args: argparse.Namespace) -> int:
     from ._conversions import nnls_chroma
 
     samples, sr = _load_audio(args.file)
-    n_frames, data = nnls_chroma(samples, sample_rate=sr)
+    nnls_options = {}
+    if hasattr(args, "hop_length"):
+        nnls_options["hop_length"] = args.hop_length
+    n_frames, data = nnls_chroma(samples, sample_rate=sr, **nnls_options)
     n_chroma = 12
     # data is row-major [12 x n_frames]; mean energy per bin.
     mean_energy = []
@@ -211,8 +238,15 @@ def cmd_tempogram(args: argparse.Namespace) -> int:
     env = onset_envelope(
         samples, sample_rate=sr, n_fft=args.n_fft, hop_length=args.hop_length, n_mels=args.n_mels
     )
-    n_frames, data = tempogram(env, sample_rate=sr, hop_length=args.hop_length)
-    win_length = (len(data) // n_frames) if n_frames else 0
+    tempogram_options = {}
+    if hasattr(args, "win_length"):
+        tempogram_options["win_length"] = args.win_length
+    n_frames, data = tempogram(env, sample_rate=sr, hop_length=args.hop_length, **tempogram_options)
+    win_length = (
+        args.win_length
+        if hasattr(args, "win_length")
+        else (len(data) // n_frames if n_frames else 0)
+    )
 
     if args.json:
         print(
@@ -241,7 +275,12 @@ def cmd_plp(args: argparse.Namespace) -> int:
     env = onset_envelope(
         samples, sample_rate=sr, n_fft=args.n_fft, hop_length=args.hop_length, n_mels=args.n_mels
     )
-    pulse = plp(env, sample_rate=sr, hop_length=args.hop_length)
+    plp_options = {
+        name: getattr(args, name)
+        for name in ("tempo_min", "tempo_max", "win_length")
+        if hasattr(args, name)
+    }
+    pulse = plp(env, sample_rate=sr, hop_length=args.hop_length, **plp_options)
 
     if args.json:
         print(_strict_json_dumps({"stats": _array_stats(pulse)}))

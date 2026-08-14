@@ -335,6 +335,15 @@ class SonareProjectSource(ctypes.Structure):
     ]
 
 
+class SonareProjectAudioSourceMetadata(ctypes.Structure):
+    """Maps to the heap-owned audio-source metadata descriptor."""
+
+    _fields_ = [
+        ("content_hash", ctypes.c_char_p),
+        ("external_stem_role", ctypes.c_char_p),
+    ]
+
+
 class SonareEngineMetronomeConfig(ctypes.Structure):
     """Maps to SonareEngineMetronomeConfig in sonare_c.h."""
 

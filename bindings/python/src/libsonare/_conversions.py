@@ -3,9 +3,13 @@
 from __future__ import annotations
 
 import ctypes
+import math
+import operator
 from collections.abc import Sequence
 
 from ._runtime import (
+    ErrorCode,
+    SonareError,
     _call_float_transform,
     _check,
     _float_array_result,
@@ -16,6 +20,13 @@ from ._runtime import (
     _to_c_float_array,
     _to_c_int_array,
 )
+
+
+def _unsupported_feature_symbol(symbol: str) -> SonareError:
+    return SonareError(
+        int(ErrorCode.NOT_SUPPORTED),
+        f"libsonare does not export {symbol}; install a matching native library",
+    )
 
 
 def hz_to_mel(hz: float) -> float:
@@ -584,24 +595,79 @@ def nnls_chroma(
     enable_stft_blend: bool = True,
     stft_blend_weight: float = 0.55,
     stft_blend_n_fft: int = 4096,
+    hop_length: int = 512,
 ) -> tuple[int, list[float]]:
-    """Compute NNLS chroma. Returns (n_frames, row-major 12 x n_frames matrix)."""
+    """Compute NNLS chroma.
+
+    Returns ``(n_frames, row-major 12 x n_frames matrix)``.  ``hop_length``
+    controls the CQT hop used by the NNLS analysis and defaults to the legacy
+    512-sample hop.
+    """
+    if isinstance(hop_length, bool):
+        raise ValueError("nnls_chroma: hop_length must be a positive integer")
+    try:
+        hop_length_value = operator.index(hop_length)
+    except TypeError as exc:
+        raise ValueError("nnls_chroma: hop_length must be a positive integer") from exc
+    if hop_length_value <= 0 or hop_length_value > 2**31 - 1:
+        raise ValueError("nnls_chroma: hop_length must be a positive integer")
+    if isinstance(stft_blend_n_fft, bool):
+        raise ValueError("nnls_chroma: stft_blend_n_fft must be an even integer >= 2")
+    try:
+        stft_blend_n_fft_value = operator.index(stft_blend_n_fft)
+    except TypeError as exc:
+        raise ValueError("nnls_chroma: stft_blend_n_fft must be an even integer >= 2") from exc
+    if (
+        stft_blend_n_fft_value < 2
+        or stft_blend_n_fft_value > 2**31 - 1
+        or (stft_blend_n_fft_value & 1) != 0
+    ):
+        raise ValueError("nnls_chroma: stft_blend_n_fft must be an even integer >= 2")
+    try:
+        blend_weight = float(stft_blend_weight)
+        blend_weight_c = ctypes.c_float(blend_weight).value
+    except (TypeError, ValueError, OverflowError) as exc:
+        raise ValueError("nnls_chroma: stft_blend_weight must be finite in [0, 1]") from exc
+    if not math.isfinite(blend_weight_c) or not 0.0 <= blend_weight_c <= 1.0:
+        raise ValueError("nnls_chroma: stft_blend_weight must be finite in [0, 1]")
+
     lib = _get_lib()
     c_array, length = _to_c_float_array(samples)
     n_frames = ctypes.c_int()
     with _out_float_array(lib) as (out, out_length):
-        if hasattr(lib, "sonare_nnls_chroma_ex"):
+        if hasattr(lib, "sonare_nnls_chroma_ex2"):
+            rc = lib.sonare_nnls_chroma_ex2(
+                c_array,
+                ctypes.c_size_t(length),
+                ctypes.c_int(sample_rate),
+                ctypes.c_int(int(enable_stft_blend)),
+                ctypes.c_float(blend_weight_c),
+                ctypes.c_int(stft_blend_n_fft_value),
+                ctypes.c_int(hop_length_value),
+                ctypes.byref(out),
+                ctypes.byref(out_length),
+                ctypes.byref(n_frames),
+            )
+        elif hop_length_value != 512:
+            raise _unsupported_feature_symbol("sonare_nnls_chroma_ex2")
+        elif hasattr(lib, "sonare_nnls_chroma_ex"):
             rc = lib.sonare_nnls_chroma_ex(
                 c_array,
                 ctypes.c_size_t(length),
                 ctypes.c_int(sample_rate),
                 ctypes.c_int(int(enable_stft_blend)),
-                ctypes.c_float(stft_blend_weight),
-                ctypes.c_int(stft_blend_n_fft),
+                ctypes.c_float(blend_weight_c),
+                ctypes.c_int(stft_blend_n_fft_value),
                 ctypes.byref(out),
                 ctypes.byref(out_length),
                 ctypes.byref(n_frames),
             )
+        elif (
+            not bool(enable_stft_blend)
+            or blend_weight_c != ctypes.c_float(0.55).value
+            or stft_blend_n_fft_value != 4096
+        ):
+            raise _unsupported_feature_symbol("sonare_nnls_chroma_ex")
         else:
             rc = lib.sonare_nnls_chroma(
                 c_array,

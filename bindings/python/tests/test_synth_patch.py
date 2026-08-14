@@ -72,6 +72,22 @@ def _build_midi_only_project(note: int = 60) -> Project:
     return project
 
 
+def _build_gm_program_project(program: int) -> Project:
+    project = Project()
+    project.set_sample_rate(48000.0)
+    track, clip = project.add_midi_clip(0.0, 1.0)
+    project.set_track_midi_destination(track, 0)
+    project.set_midi_events(
+        clip,
+        [
+            Project.midi_program(0.0, 0, 0, program),
+            Project.midi_note_on(0.0, 0, 0, 60, 100),
+            Project.midi_note_off(0.5, 0, 0, 60, 0),
+        ],
+    )
+    return project
+
+
 def test_synth_preset_names_lists_the_catalog() -> None:
     names = synth_preset_names()
     for expected in (
@@ -211,6 +227,32 @@ def test_synth_patch_zero_numeric_fields_keep_the_base_preset() -> None:
         assert np.array_equal(explicit_zero, preset)
     finally:
         project.close()
+
+
+def test_synth_bounce_gm_programs_4_and_40_are_finite_audible_and_distinct() -> None:
+    def render(program: int, auto_select_gm: bool) -> np.ndarray:
+        project = _build_gm_program_project(program)
+        try:
+            audio = project.bounce_with_synth_instrument(
+                "sine",
+                auto_select_gm=auto_select_gm,
+                total_frames=12000,
+                block_size=128,
+                num_channels=1,
+                sample_rate=48000,
+            )
+            assert audio.shape == (12000, 1)
+            assert np.isfinite(audio).all()
+            assert float(np.max(np.abs(audio))) > 0.0
+            return audio.copy()
+        finally:
+            project.close()
+
+    disabled = render(4, False)
+    gm4 = render(4, True)
+    gm40 = render(40, True)
+    assert float(np.max(np.abs(disabled - gm4))) > 1.0e-6
+    assert float(np.max(np.abs(gm4 - gm40))) > 1.0e-6
 
 
 def test_drum_kit_preset_plays_the_gm_map() -> None:

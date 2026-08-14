@@ -25,15 +25,20 @@ def _descriptor() -> dict[str, object]:
     }
 
 
-def test_doctor_json_includes_canonical_capabilities_and_library_path(monkeypatch, capsys) -> None:
+def test_doctor_json_uses_the_canonical_shared_capability_shape(monkeypatch, capsys) -> None:
     monkeypatch.setattr(analysis_music, "capabilities", _descriptor)
     monkeypatch.setattr(cli_common, "resolved_library_path", lambda: "/tmp/libsonare.dylib")
 
     assert cli_common.cmd_doctor(argparse.Namespace(json=True)) == 0
 
     assert json.loads(capsys.readouterr().out) == {
-        **_descriptor(),
-        "libraryPath": "/tmp/libsonare.dylib",
+        "version": "1.5.5",
+        "abi": {"project": 1, "engine": 3},
+        "platform": "darwin-arm64",
+        "features": {"mastering": True, "mixing": True, "fx": True, "ffmpeg": False},
+        "decode": {"builtin": ["wav", "mp3"], "ffmpeg": []},
+        "simd": "neon",
+        "hardware_concurrency": 10,
     }
 
 

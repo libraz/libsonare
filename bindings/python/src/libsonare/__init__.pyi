@@ -364,6 +364,9 @@ from .analyzer import (
     normalize as normalize,
 )
 from .analyzer import (
+    normalize_rms as normalize_rms,
+)
+from .analyzer import (
     note_move as note_move,
 )
 from .analyzer import (
@@ -692,6 +695,9 @@ from .types import (
 )
 from .types import (
     EngineTelemetryType as EngineTelemetryType,
+)
+from .types import (
+    EngineTrackMonitorMode as EngineTrackMonitorMode,
 )
 from .types import (
     EqSpectrumSnapshot as EqSpectrumSnapshot,

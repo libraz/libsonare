@@ -5,6 +5,7 @@ from __future__ import annotations
 
 import ctypes
 import math
+import operator
 from collections.abc import Mapping, Sequence
 from typing import TYPE_CHECKING, cast
 
@@ -12,7 +13,11 @@ import numpy as np
 
 from ._project_model import *  # noqa: F403
 from ._project_model import (
+    _AUTOMATION_TARGET_KIND_UNSET,
+    _automation_lane_args,
     _automation_lane_desc,
+    _automation_target_kind_value,
+    _automation_target_param_id_value,
     _fade_curve_value,
     _loop_mode_value,
     _track_kind_value,
@@ -24,6 +29,7 @@ from ._project_synth import (
     synth_enum_tables as synth_enum_tables,
 )
 from ._runtime import (
+    SonareAutomationLaneDescEx,
     SonareExternalStemDesc,
     SonareExternalStemImportRequest,
     SonareExternalStemImportResult,
@@ -41,6 +47,8 @@ from ._runtime import (
     _to_c_float_array,
     _warp_mode_value,
 )
+
+_SIZE_T_MAX = (1 << (ctypes.sizeof(ctypes.c_size_t) * 8)) - 1
 
 
 class _ProjectEditMixin:
@@ -89,6 +97,28 @@ class _ProjectEditMixin:
                 total // channels,
                 int(channels),
                 int(sample_rate),
+            )
+        )
+
+    def set_audio_source_metadata(
+        self, source_id: int, content_hash: str, external_stem_role: str
+    ) -> None:
+        """Replace an audio source's metadata strings as one undoable edit.
+
+        Both values are required strings. Passing an empty string clears that
+        field; the source URI, audio content, and other source state are kept.
+        """
+        if not isinstance(content_hash, str) or not isinstance(external_stem_role, str):
+            raise TypeError("content_hash and external_stem_role must be strings")
+        lib = _get_lib()
+        if not hasattr(lib, "sonare_project_set_audio_source_metadata"):
+            raise RuntimeError("loaded libsonare does not support audio-source metadata")
+        _check(
+            lib.sonare_project_set_audio_source_metadata(
+                self._require_handle(),
+                int(source_id),
+                content_hash.encode("utf-8"),
+                external_stem_role.encode("utf-8"),
             )
         )
 
@@ -646,52 +676,140 @@ class _ProjectEditMixin:
     def add_automation_lane(
         self,
         track_id: int,
-        target_param_id: int,
-        points: Sequence[tuple[float, float, int | str]] | Sequence[Sequence[float]] | None = None,
+        target_param_id: int | Mapping[str, object],
+        points: (
+            Sequence[tuple[float, float, int | str]]
+            | Sequence[Sequence[float]]
+            | Sequence[Mapping[str, object]]
+            | Mapping[str, object]
+            | None
+        ) = None,
+        target_kind: ProjectAutomationTargetKind | None = _AUTOMATION_TARGET_KIND_UNSET,
     ) -> int:
         """Append an automation lane and return its stable target parameter id.
 
         ``points`` is an optional list of ``(ppq, value, curve)`` breakpoints
         (``curve`` is an :class:`AutomationCurve` ordinal / name; default linear).
+        ``target_param_id`` must be non-zero; zero is reserved as the unset id.
+        Omit ``target_kind`` to use the legacy opaque-lane ABI. Supplying
+        ``"opaque"``/``0``, ``"track-fader-db"``/``1``, or
+        ``"track-pan"``/``2`` uses the typed extended ABI.
+        A mapping descriptor with ``target_param_id``/``targetParamId``,
+        ``points``, and optional ``target_kind``/``targetKind`` is also
+        accepted for cross-binding parity.
         """
-        desc, _backing = _automation_lane_desc(target_param_id, points)
-        out_target_param_id = ctypes.c_uint32()
-        _check(
-            _get_lib().sonare_project_add_automation_lane(
-                self._require_handle(),
-                int(track_id),
-                ctypes.byref(desc),
-                ctypes.byref(out_target_param_id),
-            )
+        lane_target, lane_points, lane_kind = _automation_lane_args(
+            target_param_id, points, target_kind
         )
+        desc, _backing = _automation_lane_desc(lane_target, lane_points)
+        kind = (
+            None
+            if lane_kind is _AUTOMATION_TARGET_KIND_UNSET
+            else _automation_target_kind_value(lane_kind)
+        )
+        lib = _get_lib()
+        out_target_param_id = ctypes.c_uint32()
+        if kind is None:
+            # Keep the legacy call shape and symbol selection exact when the
+            # optional kind is absent. Native legacy edits preserve an
+            # existing lane's typed kind by contract.
+            _check(
+                lib.sonare_project_add_automation_lane(
+                    self._require_handle(),
+                    int(track_id),
+                    ctypes.byref(desc),
+                    ctypes.byref(out_target_param_id),
+                )
+            )
+        else:
+            if not hasattr(lib, "sonare_project_add_automation_lane_ex"):
+                raise RuntimeError("loaded libsonare does not support typed automation lanes")
+            desc_ex = SonareAutomationLaneDescEx(
+                target_param_id=desc.target_param_id,
+                target_kind=kind,
+                points=desc.points,
+                point_count=desc.point_count,
+            )
+            _check(
+                lib.sonare_project_add_automation_lane_ex(
+                    self._require_handle(),
+                    int(track_id),
+                    ctypes.byref(desc_ex),
+                    ctypes.byref(out_target_param_id),
+                )
+            )
         del _backing
         return int(out_target_param_id.value)
 
     def edit_automation_lane(
         self,
         track_id: int,
-        target_param_id: int,
-        points: Sequence[tuple[float, float, int | str]] | Sequence[Sequence[float]] | None = None,
+        target_param_id: int | Mapping[str, object],
+        points: (
+            Sequence[tuple[float, float, int | str]]
+            | Sequence[Sequence[float]]
+            | Sequence[Mapping[str, object]]
+            | Mapping[str, object]
+            | None
+        ) = None,
+        target_kind: ProjectAutomationTargetKind | None = _AUTOMATION_TARGET_KIND_UNSET,
     ) -> None:
-        """Replace the lane identified by ``target_param_id`` via an undoable edit."""
-        desc, _backing = _automation_lane_desc(target_param_id, points)
-        _check(
-            _get_lib().sonare_project_edit_automation_lane(
-                self._require_handle(),
-                int(track_id),
-                ctypes.c_uint32(int(target_param_id)),
-                ctypes.byref(desc),
-            )
+        """Replace an automation lane via an undoable edit.
+
+        Omit ``target_kind`` to use the legacy edit ABI, which preserves the
+        existing lane kind. Supplying a kind applies it through the typed
+        extended ABI and rejects same-track typed-target conflicts atomically.
+        A mapping descriptor is accepted in the same form as
+        :meth:`add_automation_lane`; the edit target id remains the second
+        positional argument when using the historical form.
+        """
+        lane_target, lane_points, lane_kind = _automation_lane_args(
+            target_param_id, points, target_kind
         )
+        desc, _backing = _automation_lane_desc(lane_target, lane_points)
+        target_id = _automation_target_param_id_value(lane_target)
+        kind = (
+            None
+            if lane_kind is _AUTOMATION_TARGET_KIND_UNSET
+            else _automation_target_kind_value(lane_kind)
+        )
+        lib = _get_lib()
+        if kind is None:
+            _check(
+                lib.sonare_project_edit_automation_lane(
+                    self._require_handle(),
+                    int(track_id),
+                    ctypes.c_uint32(target_id),
+                    ctypes.byref(desc),
+                )
+            )
+        else:
+            if not hasattr(lib, "sonare_project_edit_automation_lane_ex"):
+                raise RuntimeError("loaded libsonare does not support typed automation lanes")
+            desc_ex = SonareAutomationLaneDescEx(
+                target_param_id=desc.target_param_id,
+                target_kind=kind,
+                points=desc.points,
+                point_count=desc.point_count,
+            )
+            _check(
+                lib.sonare_project_edit_automation_lane_ex(
+                    self._require_handle(),
+                    int(track_id),
+                    ctypes.c_uint32(target_id),
+                    ctypes.byref(desc_ex),
+                )
+            )
         del _backing
 
     def remove_automation_lane(self, track_id: int, target_param_id: int) -> None:
         """Remove the lane identified by ``target_param_id`` via an undoable edit."""
+        target_id = _automation_target_param_id_value(target_param_id)
         _check(
             _get_lib().sonare_project_remove_automation_lane(
                 self._require_handle(),
                 int(track_id),
-                ctypes.c_uint32(int(target_param_id)),
+                ctypes.c_uint32(target_id),
             )
         )
 
@@ -714,6 +832,33 @@ class _ProjectEditMixin:
                 self._require_handle(),
                 ctypes.c_size_t(int(depth)),
             )
+        )
+
+    def set_max_history_bytes(self, bytes: int) -> None:
+        """Set the combined retained undo/redo history byte cap.
+
+        ``0`` is valid and makes successful edits non-undoable. The value is
+        checked against the platform's ``size_t`` range before calling the
+        optional additive C ABI symbol.
+        """
+        if isinstance(bytes, bool):
+            raise ValueError("bytes must be a non-negative integer within size_t range")
+        try:
+            value = operator.index(bytes)
+        except TypeError:
+            raise ValueError("bytes must be a non-negative integer within size_t range") from None
+        if value < 0 or value > _SIZE_T_MAX:
+            raise ValueError("bytes must be a non-negative integer within size_t range")
+
+        lib = _get_lib()
+        if not hasattr(lib, "sonare_project_set_max_history_bytes"):
+            raise RuntimeError(
+                "loaded libsonare does not export sonare_project_set_max_history_bytes; "
+                "rebuild or upgrade the shared library before calling "
+                "Project.set_max_history_bytes"
+            )
+        _check(
+            lib.sonare_project_set_max_history_bytes(self._require_handle(), ctypes.c_size_t(value))
         )
 
     # -- MIDI ---------------------------------------------------------------

@@ -271,7 +271,10 @@ def analyze_bpm(
     max_candidates: int = 5,
 ) -> BpmAnalysisResult: ...
 def analyze_impulse_response(
-    samples: FloatSamples, sample_rate: int = 48000, n_octave_bands: int = 6
+    samples: FloatSamples,
+    sample_rate: int = 48000,
+    n_octave_bands: int = 6,
+    min_decay_db: float = 30.0,
 ) -> AcousticResult: ...
 def detect_acoustic(
     samples: FloatSamples,
@@ -282,12 +285,12 @@ def detect_acoustic(
     noise_floor_margin_db: float = 10.0,
 ) -> AcousticResult: ...
 def synthesize_rir(
-    length_m: float,
-    width_m: float,
-    height_m: float,
+    length_m: float = 7.0,
+    width_m: float = 5.0,
+    height_m: float = 3.0,
     *,
-    source: tuple[float, float, float] = ...,
-    listener: tuple[float, float, float] = ...,
+    source: tuple[float, float, float] = (1.0, 1.0, 1.2),
+    listener: tuple[float, float, float] = (5.0, 4.0, 1.7),
     absorption: float = 0.2,
     absorption_bands: Sequence[float] | None = None,
     scattering_bands: Sequence[float] | None = None,
@@ -455,6 +458,11 @@ def hpss(
     sample_rate: int = 22050,
     kernel_harmonic: int = 31,
     kernel_percussive: int = 31,
+    n_fft: int = 2048,
+    hop_length: int = 512,
+    hard_mask: bool = False,
+    *,
+    validate: bool = True,
 ) -> HpssResult: ...
 def harmonic(
     samples: FloatSamples, sample_rate: int = 22050, *, validate: bool = True
@@ -463,12 +471,20 @@ def percussive(
     samples: FloatSamples, sample_rate: int = 22050, *, validate: bool = True
 ) -> list[float]: ...
 def time_stretch(
-    samples: FloatSamples, sample_rate: int = 22050, rate: float = 1.0, *, validate: bool = True
+    samples: FloatSamples,
+    sample_rate: int = 22050,
+    rate: float = 1.0,
+    n_fft: int = 2048,
+    hop_length: int = 512,
+    *,
+    validate: bool = True,
 ) -> list[float]: ...
 def pitch_shift(
     samples: FloatSamples,
     sample_rate: int = 22050,
     semitones: float = 0.0,
+    n_fft: int = 2048,
+    hop_length: int = 512,
     *,
     validate: bool = True,
 ) -> list[float]: ...
@@ -639,6 +655,13 @@ def normalize(
     samples: FloatSamples,
     sample_rate: int = 22050,
     target_db: float = 0.0,
+    *,
+    validate: bool = True,
+) -> list[float]: ...
+def normalize_rms(
+    samples: FloatSamples,
+    sample_rate: int = 22050,
+    target_db: float = -20.0,
     *,
     validate: bool = True,
 ) -> list[float]: ...
@@ -932,7 +955,13 @@ def mastering_streaming_preview(
     platforms: Sequence[dict[str, float | str]] | None = None,
 ) -> str: ...
 def trim(
-    samples: FloatSamples, sample_rate: int = 22050, threshold_db: float = -60.0
+    samples: FloatSamples,
+    sample_rate: int = 22050,
+    threshold_db: float = -60.0,
+    frame_length: int = 2048,
+    hop_length: int = 512,
+    *,
+    validate: bool = True,
 ) -> list[float]: ...
 def stft(
     samples: FloatSamples, sample_rate: int = 22050, n_fft: int = 2048, hop_length: int = 512
@@ -1216,6 +1245,11 @@ def hpss_with_residual(
     sample_rate: int = 22050,
     kernel_harmonic: int = 31,
     kernel_percussive: int = 31,
+    n_fft: int = 2048,
+    hop_length: int = 512,
+    hard_mask: bool = False,
+    *,
+    validate: bool = True,
 ) -> dict[str, object]: ...
 def phase_vocoder(
     samples: FloatSamples,
@@ -1343,6 +1377,7 @@ def nnls_chroma(
     enable_stft_blend: bool = True,
     stft_blend_weight: float = 0.55,
     stft_blend_n_fft: int = 4096,
+    hop_length: int = 512,
 ) -> tuple[int, list[float]]: ...
 def onset_strength_multi(
     samples: FloatSamples,

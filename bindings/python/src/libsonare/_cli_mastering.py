@@ -3,8 +3,10 @@
 from __future__ import annotations
 
 import argparse
+import json
+import os
 import sys
-from typing import Any
+from typing import TYPE_CHECKING, Any, cast
 
 from ._cli_common import (
     _atomic_wav_writer,
@@ -20,6 +22,9 @@ from ._cli_common import (
 from ._cli_common import (
     _load_audio_from_facade as _load_audio,
 )
+
+if TYPE_CHECKING:
+    from .analyzer import MasteringPreset, SoloProcessor
 
 
 def _mastering_report_payload(report: Any) -> dict[str, object]:
@@ -57,11 +62,218 @@ def _write_mastering_report(path: str, report: Any) -> None:
         output.write("\n")
 
 
+def _wav_bits(args: argparse.Namespace) -> int:
+    """Return the requested PCM width, keeping the CLI contract intentionally small."""
+    bits = int(getattr(args, "bits", 16))
+    if bits not in (16, 24):
+        raise ValueError("bits must be 16 or 24")
+    return bits
+
+
+def _option_supplied(args: argparse.Namespace, name: str, default: object) -> bool:
+    """Detect a non-default option without changing argparse's public Namespace.
+
+    The Python parser currently does not retain whether an option equal to its
+    default was spelled on the command line.  A future parser may expose that
+    information as ``_supplied_options`` or ``supplied_options``; when it does,
+    this helper consumes it.  Until then, values differing from the documented
+    default are sufficient to reject semantic no-op combinations.
+    """
+    explicit = getattr(args, "_supplied_options", None)
+    if explicit is None:
+        explicit = getattr(args, "supplied_options", None)
+    if isinstance(explicit, dict):
+        values = list(explicit.values())
+        explicit = (
+            [item for item, supplied in explicit.items() if supplied]
+            if values and all(isinstance(value, bool) for value in values)
+            else explicit.keys()
+        )
+    if explicit is not None:
+        normalized = name.replace("_", "-")
+        for item in explicit:
+            candidate = str(item).lstrip("-").replace("_", "-")
+            if candidate == normalized:
+                return True
+    value = getattr(args, name.replace("-", "_"), default)
+    return value != default
+
+
+def _mastering_config(raw: str | None) -> dict[str, Any]:
+    """Load a mastering chain config from JSON text or a JSON file path."""
+    if not raw:
+        return {}
+    if os.path.isfile(raw):
+        return _parse_json_config("", raw)
+    try:
+        loaded = json.loads(raw)
+    except (TypeError, json.JSONDecodeError) as exc:
+        raise ValueError("--config must be a JSON object or an existing JSON file") from exc
+    if not isinstance(loaded, dict):
+        raise ValueError("--config must be a JSON object")
+    return loaded
+
+
+def _chain_params_config(config: dict[str, Any]) -> dict[str, Any]:
+    """Unwrap the native ``{version, params}`` chain-config representation."""
+    params = config.get("params")
+    if isinstance(params, dict):
+        return dict(params)
+    return dict(config)
+
+
+def _mastering_chain_payload(
+    result: Any,
+    *,
+    mode: str,
+    output: str,
+    preset: str = "",
+    explanation: list[str] | None = None,
+    include_report_latency: bool = False,
+) -> dict[str, object]:
+    payload: dict[str, object] = {
+        "mode": mode,
+        "input_lufs": result.input_lufs,
+        "output_lufs": result.output_lufs,
+        "applied_gain_db": result.applied_gain_db,
+        "output": output,
+    }
+    if preset:
+        payload["preset"] = preset
+    payload["stages"] = list(getattr(result, "stages", []))
+    if explanation:
+        payload["explanation"] = explanation
+    if include_report_latency:
+        payload["latency_samples"] = 0
+    return payload
+
+
+def _eq_shortcut_names(args: argparse.Namespace) -> list[str]:
+    defaults: dict[str, object] = {
+        "type": 0,
+        "frequency-hz": 1000.0,
+        "gain-db": 0.0,
+        "q": 1.0,
+        "coeff-mode": 0,
+        "slope-db-oct": 12,
+        "placement": 0,
+        "proportional-q": False,
+        "dynamic": False,
+        "threshold-db": -24.0,
+        "auto-threshold": False,
+        "ratio": 2.0,
+        "range-db": -6.0,
+        "attack-ms": 5.0,
+        "release-ms": 50.0,
+        "lookahead-ms": 0.0,
+        "sidechain-freq-hz": -1.0,
+        "sidechain-q": 1.0,
+        "phase-mode": 1,
+        "resolution": 0,
+        "auto-gain": False,
+        "gain-scale": 1.0,
+        "output-gain-db": 0.0,
+        "output-pan": 0.0,
+    }
+    return [name for name, default in defaults.items() if _option_supplied(args, name, default)]
+
+
 def cmd_mastering(args: argparse.Namespace) -> int:
     samples, sr = _load_audio(args.file)
-    report_path = getattr(args, "report", "")
+    report_path = getattr(args, "report", "") or ""
+    preset = getattr(args, "preset", None) or ""
+    config_raw = getattr(args, "config", None) or ""
+    assistant = bool(getattr(args, "assistant", False))
+    enable_repair = bool(getattr(args, "enable_repair", False))
+    explain = bool(getattr(args, "explain", False))
+    params_raw = getattr(args, "params", "") or ""
+    bits = _wav_bits(args)
+
+    selectors = [
+        name
+        for name, selected in (
+            ("preset", bool(preset)),
+            ("config", bool(config_raw)),
+            ("assistant", assistant),
+        )
+        if selected
+    ]
+    if len(selectors) > 1:
+        raise ValueError("--preset, --config, and --assistant are mutually exclusive")
+    if params_raw and not selectors:
+        raise ValueError("--params requires --preset, --config, or --assistant")
+    if enable_repair and not assistant:
+        raise ValueError("--enable-repair requires --assistant")
+    if explain and not assistant:
+        raise ValueError("--explain requires --assistant")
+
+    # Native CliArgs can distinguish an explicitly supplied default-valued
+    # option.  Python argparse cannot yet do so; non-default values are still
+    # rejected here rather than silently discarded by a preset/config chain.
+    if selectors and not assistant:
+        ignored_loudness = [
+            name
+            for name, default in (
+                ("target-lufs", -14.0),
+                ("ceiling-db", -1.0),
+                ("true-peak-oversample", 4),
+            )
+            if _option_supplied(args, name, default)
+        ]
+        if ignored_loudness:
+            joined = ", ".join(f"--{name}" for name in ignored_loudness)
+            raise ValueError(f"{joined} cannot be combined with --{selectors[0]}")
+
+    params = _parse_kv_params(params_raw) if params_raw else {}
     result: Any
-    if report_path:
+    mode = "loudness"
+    explanation: list[str] = []
+    if preset:
+        from . import master_audio
+
+        result = master_audio(
+            samples,
+            sample_rate=sr,
+            preset_name=cast("MasteringPreset", preset),
+            overrides=params or None,
+        )
+        mode = "preset"
+    elif config_raw:
+        from . import mastering_chain
+
+        config = _chain_params_config(_mastering_config(config_raw))
+        config.update(params)
+        result = mastering_chain(samples, sample_rate=sr, config=config)
+        mode = "config"
+    elif assistant:
+        from . import mastering_assistant_suggest, mastering_chain
+
+        suggestion_params: dict[str, float | int | bool] = {
+            "targetLufs": float(getattr(args, "target_lufs", -14.0)),
+            "ceilingDb": float(getattr(args, "ceiling_db", -1.0)),
+            "enableRepair": enable_repair,
+        }
+        suggestion = json.loads(
+            mastering_assistant_suggest(samples, sample_rate=sr, params=suggestion_params)
+        )
+        if not isinstance(suggestion, dict) or not isinstance(suggestion.get("chainConfig"), dict):
+            raise ValueError("mastering assistant returned an invalid chain config")
+        config = _chain_params_config(suggestion["chainConfig"])
+        config.update(params)
+        # Match the native assistant route: an explicitly supplied shortcut
+        # wins over a flat --params override; an omitted shortcut leaves the
+        # assistant's suggested/default chain value intact.
+        if _option_supplied(args, "true-peak-oversample", 4):
+            config["loudness.truePeakOversample"] = float(getattr(args, "true_peak_oversample", 4))
+        result = mastering_chain(samples, sample_rate=sr, config=config)
+        explanation_value = suggestion.get("explanation", [])
+        if not isinstance(explanation_value, list) or not all(
+            isinstance(item, str) for item in explanation_value
+        ):
+            raise ValueError("mastering assistant returned invalid explanation data")
+        explanation = list(explanation_value)
+        mode = "assistant"
+    elif report_path:
         from . import mastering_chain
 
         result = mastering_chain(
@@ -70,9 +282,9 @@ def cmd_mastering(args: argparse.Namespace) -> int:
             config={
                 "loudness": {
                     "enabled": True,
-                    "targetLufs": args.target_lufs,
-                    "ceilingDb": args.ceiling_db,
-                    "truePeakOversample": args.true_peak_oversample,
+                    "targetLufs": getattr(args, "target_lufs", -14.0),
+                    "ceilingDb": getattr(args, "ceiling_db", -1.0),
+                    "truePeakOversample": getattr(args, "true_peak_oversample", 4),
                 }
             },
         )
@@ -80,36 +292,52 @@ def cmd_mastering(args: argparse.Namespace) -> int:
         from .audio import Audio
 
         result = Audio.from_buffer(samples, sr).mastering(
-            target_lufs=args.target_lufs,
-            ceiling_db=args.ceiling_db,
-            true_peak_oversample=args.true_peak_oversample,
+            target_lufs=getattr(args, "target_lufs", -14.0),
+            ceiling_db=getattr(args, "ceiling_db", -1.0),
+            true_peak_oversample=getattr(args, "true_peak_oversample", 4),
         )
 
-    if args.output:
-        _write_wav(args.output, result.samples, result.sample_rate)
+    output = getattr(args, "output", "") or ""
+    if output:
+        _write_wav(output, result.samples, result.sample_rate, bits)
     if report_path:
         _write_mastering_report(report_path, result.report)
 
-    if args.json:
-        payload = {
-            "input_lufs": round(result.input_lufs, 4),
-            "output_lufs": round(result.output_lufs, 4),
-            "applied_gain_db": round(result.applied_gain_db, 4),
-            "target_lufs": args.target_lufs,
-            "ceiling_db": args.ceiling_db,
-            "true_peak_oversample": args.true_peak_oversample,
-            "latency_samples": getattr(result, "latency_samples", 0),
-            "sample_rate": result.sample_rate,
-            "output": args.output or "",
-        }
+    if getattr(args, "json", False):
+        if mode != "loudness":
+            payload = _mastering_chain_payload(
+                result,
+                mode=mode,
+                output=output,
+                preset=preset,
+                explanation=explanation if explain else None,
+                include_report_latency=bool(report_path),
+            )
+        else:
+            payload = {
+                "input_lufs": result.input_lufs,
+                "output_lufs": result.output_lufs,
+                "applied_gain_db": result.applied_gain_db,
+                "target_lufs": getattr(args, "target_lufs", -14.0),
+                "ceiling_db": getattr(args, "ceiling_db", -1.0),
+                "true_peak_oversample": getattr(args, "true_peak_oversample", 4),
+                "latency_samples": getattr(result, "latency_samples", 0),
+                "sample_rate": result.sample_rate,
+                "output": output,
+            }
         print(_strict_json_dumps(payload))
     else:
-        print("  Mastering:")
+        print("  Mastering:" if mode == "loudness" else f"  Mastering {mode}:")
+        if preset:
+            print(f"    Preset:       {preset}")
+        if mode != "loudness":
+            stages = list(getattr(result, "stages", []))
+            print(f"    Stages:       {', '.join(stages) if stages else '(none)'}")
         print(f"    Input LUFS:  {result.input_lufs:.2f}")
         print(f"    Output LUFS: {result.output_lufs:.2f}")
         print(f"    Applied gain: {result.applied_gain_db:.2f} dB")
-        if args.output:
-            print(f"    Wrote: {args.output}")
+        if output:
+            print(f"    Wrote: {output}")
     return 0
 
 
@@ -117,17 +345,26 @@ def cmd_mastering_processor(args: argparse.Namespace) -> int:
     from . import mastering_process, mastering_process_stereo, mastering_processor_catalog
 
     samples, sr = _load_audio(args.file)
-    params = _parse_kv_params(args.params) if args.params else {}
-    stereo_only = {entry["id"] for entry in mastering_processor_catalog() if entry["stereoOnly"]}
+    params_raw = getattr(args, "params", "") or ""
+    params = _parse_kv_params(params_raw) if params_raw else {}
+    bits = _wav_bits(args)
+    processor = getattr(args, "processor", None) or ""
+    processor_name = cast("SoloProcessor", processor)
+    stereo_only = {
+        entry["id"] for entry in mastering_processor_catalog() if entry.get("stereoOnly", False)
+    }
+    explicit_stereo = bool(getattr(args, "stereo", False))
+    use_stereo = explicit_stereo or processor in stereo_only
     result: Any
-    if args.processor in stereo_only:
-        print(
-            "warning: stereo-only processor preview duplicates the mono input on left/right; "
-            "inspect stereo results through the Python API for production decisions",
-            file=sys.stderr,
-        )
+    if use_stereo:
+        if processor in stereo_only and not explicit_stereo:
+            print(
+                "warning: stereo-only processor preview duplicates the mono input on left/right; "
+                "inspect stereo results through the Python API for production decisions",
+                file=sys.stderr,
+            )
         stereo = mastering_process_stereo(
-            args.processor, samples, samples, sample_rate=sr, params=params
+            processor_name, samples, samples, sample_rate=sr, params=params
         )
         result = argparse.Namespace(
             samples=[
@@ -140,30 +377,31 @@ def cmd_mastering_processor(args: argparse.Namespace) -> int:
             latency_samples=stereo.latency_samples,
         )
     else:
-        result = mastering_process(args.processor, samples, sample_rate=sr, params=params)
+        result = mastering_process(processor_name, samples, sample_rate=sr, params=params)
 
-    if args.output:
-        _write_wav(args.output, result.samples, result.sample_rate)
+    output = getattr(args, "output", "") or ""
+    if output:
+        _write_wav(output, result.samples, result.sample_rate, bits)
 
-    if args.json:
+    if getattr(args, "json", False):
         payload = {
-            "processor": args.processor,
-            "input_lufs": round(result.input_lufs, 4),
-            "output_lufs": round(result.output_lufs, 4),
-            "applied_gain_db": round(result.applied_gain_db, 4),
+            "processor": processor,
+            "input_lufs": result.input_lufs,
+            "output_lufs": result.output_lufs,
+            "applied_gain_db": result.applied_gain_db,
             "latency_samples": result.latency_samples,
             "sample_rate": result.sample_rate,
+            "output": output,
+            "stereo": use_stereo,
         }
-        if args.output:
-            payload["output"] = args.output
         print(_strict_json_dumps(payload))
     else:
-        print(f"  Mastering processor: {args.processor}")
+        print(f"  Mastering processor: {processor}")
         print(f"    Input LUFS:   {result.input_lufs:.2f}")
         print(f"    Output LUFS:  {result.output_lufs:.2f}")
         print(f"    Applied gain: {result.applied_gain_db:.2f} dB")
-        if args.output:
-            print(f"    Wrote: {args.output}")
+        if output:
+            print(f"    Wrote: {output}")
     return 0
 
 
@@ -171,60 +409,66 @@ def cmd_eq(args: argparse.Namespace) -> int:
     from . import mastering_process
 
     samples, sr = _load_audio(args.file)
-    if args.params:
-        params = _parse_kv_params(args.params)
+    params_raw = getattr(args, "params", "") or ""
+    bits = _wav_bits(args)
+    if params_raw:
+        conflicts = _eq_shortcut_names(args)
+        if conflicts:
+            joined = ", ".join(f"--{name}" for name in conflicts)
+            raise ValueError(f"{joined} cannot be combined with --params")
+        params = _parse_kv_params(params_raw)
     else:
         params = {
             "band0.enabled": 1.0,
-            "band0.type": float(args.type),
-            "band0.frequencyHz": float(args.frequency_hz),
-            "band0.gainDb": float(args.gain_db),
-            "band0.q": float(args.q),
-            "band0.coeffMode": float(args.coeff_mode),
-            "band0.slopeDbOct": float(args.slope_db_oct),
-            "band0.placement": float(args.placement),
-            "band0.proportionalQ": 1.0 if args.proportional_q else 0.0,
-            "band0.dynamic": 1.0 if args.dynamic else 0.0,
-            "band0.thresholdDb": float(args.threshold_db),
-            "band0.autoThreshold": 1.0 if args.auto_threshold else 0.0,
-            "band0.ratio": float(args.ratio),
-            "band0.rangeDb": float(args.range_db),
-            "band0.attackMs": float(args.attack_ms),
-            "band0.releaseMs": float(args.release_ms),
-            "band0.lookaheadMs": float(args.lookahead_ms),
-            "band0.sidechainFreqHz": float(args.sidechain_freq_hz),
-            "band0.sidechainQ": float(args.sidechain_q),
-            "phaseMode": float(args.phase_mode),
-            "resolution": float(args.resolution),
-            "autoGain": 1.0 if args.auto_gain else 0.0,
-            "gainScale": float(args.gain_scale),
-            "outputGainDb": float(args.output_gain_db),
-            "outputPan": float(args.output_pan),
+            "band0.type": float(getattr(args, "type", 0)),
+            "band0.frequencyHz": float(getattr(args, "frequency_hz", 1000.0)),
+            "band0.gainDb": float(getattr(args, "gain_db", 0.0)),
+            "band0.q": float(getattr(args, "q", 1.0)),
+            "band0.coeffMode": float(getattr(args, "coeff_mode", 0)),
+            "band0.slopeDbOct": float(getattr(args, "slope_db_oct", 12)),
+            "band0.placement": float(getattr(args, "placement", 0)),
+            "band0.proportionalQ": 1.0 if getattr(args, "proportional_q", False) else 0.0,
+            "band0.dynamic": 1.0 if getattr(args, "dynamic", False) else 0.0,
+            "band0.thresholdDb": float(getattr(args, "threshold_db", -24.0)),
+            "band0.autoThreshold": 1.0 if getattr(args, "auto_threshold", False) else 0.0,
+            "band0.ratio": float(getattr(args, "ratio", 2.0)),
+            "band0.rangeDb": float(getattr(args, "range_db", -6.0)),
+            "band0.attackMs": float(getattr(args, "attack_ms", 5.0)),
+            "band0.releaseMs": float(getattr(args, "release_ms", 50.0)),
+            "band0.lookaheadMs": float(getattr(args, "lookahead_ms", 0.0)),
+            "band0.sidechainFreqHz": float(getattr(args, "sidechain_freq_hz", -1.0)),
+            "band0.sidechainQ": float(getattr(args, "sidechain_q", 1.0)),
+            "phaseMode": float(getattr(args, "phase_mode", 1)),
+            "resolution": float(getattr(args, "resolution", 0)),
+            "autoGain": 1.0 if getattr(args, "auto_gain", False) else 0.0,
+            "gainScale": float(getattr(args, "gain_scale", 1.0)),
+            "outputGainDb": float(getattr(args, "output_gain_db", 0.0)),
+            "outputPan": float(getattr(args, "output_pan", 0.0)),
         }
     result = mastering_process("eq.equalizer", samples, sample_rate=sr, params=params)
 
-    if args.output:
-        _write_wav(args.output, result.samples, result.sample_rate)
+    output = getattr(args, "output", "") or ""
+    if output:
+        _write_wav(output, result.samples, result.sample_rate, bits)
 
-    if args.json:
+    if getattr(args, "json", False):
         payload = {
             "processor": "eq.equalizer",
-            "input_lufs": round(result.input_lufs, 4),
-            "output_lufs": round(result.output_lufs, 4),
-            "applied_gain_db": round(result.applied_gain_db, 4),
+            "input_lufs": result.input_lufs,
+            "output_lufs": result.output_lufs,
+            "applied_gain_db": result.applied_gain_db,
             "latency_samples": result.latency_samples,
             "sample_rate": result.sample_rate,
+            "output": output,
         }
-        if args.output:
-            payload["output"] = args.output
         print(_strict_json_dumps(payload))
     else:
         print("  Equalizer")
         print(f"    Input LUFS:   {result.input_lufs:.2f}")
         print(f"    Output LUFS:  {result.output_lufs:.2f}")
         print(f"    Applied gain: {result.applied_gain_db:.2f} dB")
-        if args.output:
-            print(f"    Wrote: {args.output}")
+        if output:
+            print(f"    Wrote: {output}")
     return 0
 
 
@@ -274,7 +518,11 @@ def cmd_mastering_pair_analyze(args: argparse.Namespace) -> int:
     reference, ref_sr = _load_audio(args.reference)
     if ref_sr != sr:
         raise ValueError("reference sample rate must match input sample rate")
-    result_json = mastering_pair_analyze(args.analysis, source, reference, sample_rate=sr)
+    params_raw = getattr(args, "params", "") or ""
+    params = _parse_kv_params(params_raw) if params_raw else {}
+    result_json = mastering_pair_analyze(
+        args.analysis, source, reference, sample_rate=sr, params=params or None
+    )
     # The library returns a JSON string regardless of --json; print it as-is.
     print(result_json)
     return 0
@@ -437,7 +685,7 @@ def cmd_mixing_presets(args: argparse.Namespace) -> int:
 def cmd_mixing_preset(args: argparse.Namespace) -> int:
     from . import mixing_scene_preset_json
 
-    print(mixing_scene_preset_json(args.preset))
+    print(mixing_scene_preset_json(getattr(args, "preset", None) or "vocalReverbSend"))
     return 0
 
 

@@ -4,13 +4,16 @@ from __future__ import annotations
 
 import argparse
 import math
+import statistics
 import sys
 import wave
+
+import numpy as np
 
 from ._cli_common import (
     MODE_NAMES,
     PITCH_NAMES,
-    _array_stats,
+    _color_enabled,
     _format_time,
     _parse_key_profile,
     _parse_mode,
@@ -28,24 +31,37 @@ def cmd_version(args: argparse.Namespace) -> int:
 
     v = version()
     if args.json:
-        print(_strict_json_dumps({"lib_version": v, "cli": "python"}))
+        print(_strict_json_dumps({"cli": "python", "cli_version": v, "lib_version": v}))
     else:
         print(f"libsonare {v} (Python CLI)")
     return 0
 
 
 def cmd_info(args: argparse.Namespace) -> int:
+    from .audio import Audio
+
     samples, sr = _load_audio(args.file)
-    n = len(samples)
+    values = np.asarray(samples, dtype=np.float64)
+    n = int(values.size)
     dur = n / sr if sr else 0.0
-    channels = 0
     try:
-        with wave.open(args.file, "rb") as wav:
-            channels = wav.getnchannels()
-    except (wave.Error, OSError):
-        pass
-    peak = max((abs(float(sample)) for sample in samples), default=0.0)
-    rms = math.sqrt(sum(float(sample) ** 2 for sample in samples) / n) if n else 0.0
+        channels = Audio.file_channel_count(args.file)
+    except RuntimeError as exc:
+        # ``sonare_audio_file_channel_count`` is additive. Preserve the
+        # historical stdlib WAV metadata path when a same-ABI older library
+        # lacks that optional symbol; encoded formats still fail rather than
+        # reporting a successful but meaningless channels=0.
+        if "does not expose sonare_audio_file_channel_count" not in str(exc):
+            raise
+        try:
+            with wave.open(args.file, "rb") as wav:
+                channels = wav.getnchannels()
+        except (wave.Error, OSError) as wave_exc:
+            raise exc from wave_exc
+    if channels <= 0:
+        raise RuntimeError("libsonare returned an invalid audio channel count")
+    peak = float(np.max(np.abs(values))) if n else 0.0
+    rms = float(np.sqrt(np.sum(np.square(values), dtype=np.float64) / n)) if n else 0.0
 
     if args.json:
         print(
@@ -96,11 +112,17 @@ def cmd_key(args: argparse.Namespace) -> int:
             "Warning: key detection prefers --n-fft >= 4096 for better resolution",
             file=sys.stderr,
         )
+    # ``--hpss`` was the historical spelling.  Keep accepting it in handler
+    # namespaces while the parser exposes the canonical ``--use-hpss`` flag.
+    # A parser alias may bind both spellings to ``use_hpss``; reading both
+    # attributes also keeps direct handler callers and older integrations
+    # compatible.
+    use_hpss = bool(getattr(args, "use_hpss", False) or getattr(args, "hpss", False))
     key_options = {
         "sample_rate": sr,
         "n_fft": n_fft,
         "hop_length": args.hop_length,
-        "use_hpss": args.use_hpss,
+        "use_hpss": use_hpss,
         "loudness_weighted": args.loudness_weighted,
         "high_pass_hz": args.high_pass_hz,
         "modes": _parse_modes(args.modes) if args.modes else None,
@@ -109,7 +131,17 @@ def cmd_key(args: argparse.Namespace) -> int:
     }
     key = detect_key(samples, **key_options)
     name = f"{PITCH_NAMES[key.root.value]} {MODE_NAMES[key.mode.value]}"
-    candidate_count = max(0, args.candidates)
+    raw_candidate_count = getattr(args, "candidates", 0)
+    # Native accepts a bare ``--candidates`` as the historical shorthand for
+    # the top five candidates.  The Python parser normally supplies an int,
+    # but normalize bool/string namespaces here so both parser generations
+    # have the same handler behavior.
+    if isinstance(raw_candidate_count, bool):
+        candidate_count = 5 if raw_candidate_count else 0
+    elif isinstance(raw_candidate_count, str) and raw_candidate_count == "true":
+        candidate_count = 5
+    else:
+        candidate_count = max(0, int(raw_candidate_count))
     candidates = (
         detect_key_candidates(samples, **key_options)[:candidate_count] if candidate_count else []
     )
@@ -259,7 +291,13 @@ def cmd_analyze(args: argparse.Namespace) -> int:
     from . import analyze
 
     samples, sr = _load_audio(args.file)
-    r = analyze(samples, sample_rate=sr)
+    r = analyze(
+        samples,
+        sample_rate=sr,
+        use_triads_only=not args.with_seventh,
+        use_hpss=not args.no_hpss,
+        chroma_highpass_hz=args.chroma_highpass,
+    )
     key_name = f"{PITCH_NAMES[r.key.root.value]} {MODE_NAMES[r.key.mode.value]}"
 
     if args.json:
@@ -278,7 +316,7 @@ def cmd_analyze(args: argparse.Namespace) -> int:
         ]
         sections = [
             {
-                "type": section.type.name.lower().replace("_", "-"),
+                "type": section.type.name.casefold().replace("_", "-"),
                 "start": section.start,
                 "end": section.end,
             }
@@ -329,9 +367,9 @@ def cmd_analyze(args: argparse.Namespace) -> int:
             )
         )
     else:
-        # Only emit ANSI color when writing to a terminal; piping or redirecting
-        # the human-readable output must stay free of control bytes.
-        use_color = sys.stdout.isatty()
+        # Match the native CLI: both output streams must be terminals, and
+        # NO_COLOR must be absent, before human output gets ANSI sequences.
+        use_color = _color_enabled()
         bpm_style = "\033[32m\033[1m" if use_color else ""
         key_style = "\033[35m\033[1m" if use_color else ""
         reset = "\033[0m" if use_color else ""
@@ -390,6 +428,9 @@ def cmd_chroma(args: argparse.Namespace) -> int:
                 {
                     "n_chroma": result.n_chroma,
                     "n_frames": result.n_frames,
+                    "duration": result.n_frames * result.hop_length / result.sample_rate
+                    if result.sample_rate > 0
+                    else 0.0,
                     "mean_energy": [round(e, 6) for e in result.mean_energy],
                 }
             )
@@ -418,20 +459,33 @@ def cmd_spectral(args: argparse.Namespace) -> int:
     nf = args.n_fft
     hl = args.hop_length
 
-    def _stats(vals: list[float]) -> dict[str, float | int]:
-        return _array_stats(vals, digits=4, with_count=False)
+    def _stats(vals: list[float]) -> dict[str, float]:
+        if not vals:
+            return {"mean": 0.0, "std": 0.0, "min": 0.0, "max": 0.0}
+        return {
+            "mean": float(statistics.mean(vals)),
+            "std": float(statistics.pstdev(vals)) if len(vals) > 1 else 0.0,
+            "min": float(min(vals)),
+            "max": float(max(vals)),
+        }
 
+    centroid = spectral_centroid(samples, sr, nf, hl)
+    bandwidth = spectral_bandwidth(samples, sr, nf, hl)
+    rolloff = spectral_rolloff(samples, sr, nf, hl)
+    flatness = spectral_flatness(samples, sr, nf, hl)
+    zcr = zero_crossing_rate(samples, sr, nf, hl)
+    rms = rms_energy(samples, sr, nf, hl)
     features = {
-        "centroid": _stats(spectral_centroid(samples, sr, nf, hl)),
-        "bandwidth": _stats(spectral_bandwidth(samples, sr, nf, hl)),
-        "rolloff": _stats(spectral_rolloff(samples, sr, nf, hl)),
-        "flatness": _stats(spectral_flatness(samples, sr, nf, hl)),
-        "zcr": _stats(zero_crossing_rate(samples, sr, nf, hl)),
-        "rms": _stats(rms_energy(samples, sr, nf, hl)),
+        "centroid": _stats(centroid),
+        "bandwidth": _stats(bandwidth),
+        "rolloff": _stats(rolloff),
+        "flatness": _stats(flatness),
+        "zcr": _stats(zcr),
+        "rms": _stats(rms),
     }
 
     if args.json:
-        print(_strict_json_dumps({"features": features}))
+        print(_strict_json_dumps({"n_frames": len(centroid), "features": features}))
     else:
         print("  Spectral Features:")
         print(f"  {'Feature':<15s} {'Mean':>10s} {'Std':>10s} {'Min':>10s} {'Max':>10s}")
@@ -451,19 +505,53 @@ def cmd_pitch(args: argparse.Namespace) -> int:
     algo = getattr(args, "algorithm", "pyin")
     if algo not in {"yin", "pyin"}:
         raise ValueError("--algorithm must be 'yin' or 'pyin'")
+    # Keep direct callers that construct the historical three-field Namespace
+    # on the old call shape; parser-built pitch invocations always carry the
+    # four explicit analysis fields and therefore forward them to the core.
+    use_pitch_options = any(
+        hasattr(args, name) for name in ("hop_length", "fmin", "fmax", "threshold")
+    )
+    hop_length = int(getattr(args, "hop_length", 512))
+    fmin = float(getattr(args, "fmin", 65.0))
+    fmax = float(getattr(args, "fmax", 2093.0))
+    threshold = float(getattr(args, "threshold", 0.1))
     if algo == "yin":
-        result = pitch_yin(samples, sample_rate=sr)
+        if use_pitch_options:
+            result = pitch_yin(
+                samples,
+                sample_rate=sr,
+                hop_length=hop_length,
+                fmin=fmin,
+                fmax=fmax,
+                threshold=threshold,
+            )
+        else:
+            result = pitch_yin(samples, sample_rate=sr)
     else:
-        result = pitch_pyin(samples, sample_rate=sr)
+        if use_pitch_options:
+            result = pitch_pyin(
+                samples,
+                sample_rate=sr,
+                hop_length=hop_length,
+                fmin=fmin,
+                fmax=fmax,
+                threshold=threshold,
+            )
+        else:
+            result = pitch_pyin(samples, sample_rate=sr)
 
     if args.json:
+        voiced_count = sum(1 for flag in result.voiced_flag if flag)
+        voiced_ratio = voiced_count / result.n_frames if result.n_frames else math.nan
         print(
             _strict_json_dumps(
                 {
                     "algorithm": algo,
                     "n_frames": result.n_frames,
-                    "median_f0": round(result.median_f0, 2),
-                    "mean_f0": round(result.mean_f0, 2),
+                    "voiced_count": voiced_count,
+                    "voiced_ratio": voiced_ratio,
+                    "median_f0": result.median_f0,
+                    "mean_f0": result.mean_f0,
                 }
             )
         )

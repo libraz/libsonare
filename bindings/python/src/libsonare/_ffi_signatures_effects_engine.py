@@ -21,6 +21,21 @@ def configure_effects_engine_signatures(lib: ctypes.CDLL) -> None:
         ctypes.c_int,
         ctypes.POINTER(SonareHpssResult),
     ]
+    if hasattr(lib, "sonare_hpss_ex"):
+        lib.sonare_hpss_ex.restype = ctypes.c_int32
+        lib.sonare_hpss_ex.argtypes = [
+            ctypes.POINTER(ctypes.c_float),
+            ctypes.c_size_t,
+            ctypes.c_int,
+            ctypes.c_int,
+            ctypes.c_int,
+            ctypes.c_int,
+            ctypes.c_int,
+            ctypes.c_int,
+            ctypes.c_int,
+            ctypes.POINTER(SonareHpssResult),
+            ctypes.POINTER(ctypes.POINTER(ctypes.c_float)),
+        ]
 
     # sonare_harmonic
     lib.sonare_harmonic.restype = ctypes.c_int32
@@ -52,6 +67,18 @@ def configure_effects_engine_signatures(lib: ctypes.CDLL) -> None:
         ctypes.POINTER(ctypes.POINTER(ctypes.c_float)),
         ctypes.POINTER(ctypes.c_size_t),
     ]
+    if hasattr(lib, "sonare_time_stretch_ex"):
+        lib.sonare_time_stretch_ex.restype = ctypes.c_int32
+        lib.sonare_time_stretch_ex.argtypes = [
+            ctypes.POINTER(ctypes.c_float),
+            ctypes.c_size_t,
+            ctypes.c_int,
+            ctypes.c_float,
+            ctypes.c_int,
+            ctypes.c_int,
+            ctypes.POINTER(ctypes.POINTER(ctypes.c_float)),
+            ctypes.POINTER(ctypes.c_size_t),
+        ]
 
     # sonare_spectral_edit
     lib.sonare_spectral_edit.restype = ctypes.c_int32
@@ -76,6 +103,18 @@ def configure_effects_engine_signatures(lib: ctypes.CDLL) -> None:
         ctypes.POINTER(ctypes.POINTER(ctypes.c_float)),
         ctypes.POINTER(ctypes.c_size_t),
     ]
+    if hasattr(lib, "sonare_pitch_shift_ex"):
+        lib.sonare_pitch_shift_ex.restype = ctypes.c_int32
+        lib.sonare_pitch_shift_ex.argtypes = [
+            ctypes.POINTER(ctypes.c_float),
+            ctypes.c_size_t,
+            ctypes.c_int,
+            ctypes.c_float,
+            ctypes.c_int,
+            ctypes.c_int,
+            ctypes.POINTER(ctypes.POINTER(ctypes.c_float)),
+            ctypes.POINTER(ctypes.c_size_t),
+        ]
 
     # sonare_pitch_correct_to_midi
     lib.sonare_pitch_correct_to_midi.restype = ctypes.c_int32
@@ -815,6 +854,14 @@ def configure_effects_engine_signatures(lib: ctypes.CDLL) -> None:
             ctypes.c_int,
             ctypes.c_int64,
         ]
+    if hasattr(lib, "sonare_engine_set_track_monitor_mode"):
+        lib.sonare_engine_set_track_monitor_mode.restype = ctypes.c_int32
+        lib.sonare_engine_set_track_monitor_mode.argtypes = [
+            ctypes.c_void_p,
+            ctypes.c_uint32,
+            ctypes.c_int,
+            ctypes.c_int64,
+        ]
     if hasattr(lib, "sonare_engine_set_midi_clips"):
         lib.sonare_engine_set_midi_clips.restype = ctypes.c_int32
         lib.sonare_engine_set_midi_clips.argtypes = [
@@ -990,6 +1037,16 @@ def configure_effects_engine_signatures(lib: ctypes.CDLL) -> None:
         ctypes.POINTER(ctypes.POINTER(ctypes.c_float)),
         ctypes.POINTER(ctypes.c_size_t),
     ]
+    if hasattr(lib, "sonare_normalize_rms"):
+        lib.sonare_normalize_rms.restype = ctypes.c_int32
+        lib.sonare_normalize_rms.argtypes = [
+            ctypes.POINTER(ctypes.c_float),
+            ctypes.c_size_t,
+            ctypes.c_int,
+            ctypes.c_float,
+            ctypes.POINTER(ctypes.POINTER(ctypes.c_float)),
+            ctypes.POINTER(ctypes.c_size_t),
+        ]
 
     # sonare_trim
     lib.sonare_trim.restype = ctypes.c_int32
@@ -1001,3 +1058,15 @@ def configure_effects_engine_signatures(lib: ctypes.CDLL) -> None:
         ctypes.POINTER(ctypes.POINTER(ctypes.c_float)),
         ctypes.POINTER(ctypes.c_size_t),
     ]
+    if hasattr(lib, "sonare_trim_ex"):
+        lib.sonare_trim_ex.restype = ctypes.c_int32
+        lib.sonare_trim_ex.argtypes = [
+            ctypes.POINTER(ctypes.c_float),
+            ctypes.c_size_t,
+            ctypes.c_int,
+            ctypes.c_float,
+            ctypes.c_int,
+            ctypes.c_int,
+            ctypes.POINTER(ctypes.POINTER(ctypes.c_float)),
+            ctypes.POINTER(ctypes.c_size_t),
+        ]

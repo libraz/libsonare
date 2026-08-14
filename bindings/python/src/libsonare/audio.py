@@ -226,6 +226,39 @@ class Audio:
         return cls(handle, lib)
 
     @classmethod
+    def file_channel_count(cls, path: str) -> int:
+        """Return the source channel count encoded in an audio file.
+
+        Unlike :meth:`from_file`, this probe does not expose or alter the
+        decoded mono :class:`Audio` representation. It is intended for file
+        metadata such as the CLI ``info`` report, where the original source
+        channel count must remain visible after the native decoder downmixes
+        audio for the public mono API.
+
+        Raises:
+            RuntimeError: If the loaded native library predates this additive
+                probe entry point.
+            SonareError: If the file cannot be opened, parsed, or probed.
+        """
+        lib = _get_lib()
+        probe = getattr(lib, "sonare_audio_file_channel_count", None)
+        if probe is None:
+            raise RuntimeError(
+                "loaded libsonare does not expose sonare_audio_file_channel_count; "
+                "rebuild or install a newer native library"
+            )
+        out_channels = ctypes.c_int()
+        rc = probe(path.encode("utf-8"), ctypes.byref(out_channels))
+        _check(rc)
+        channels = int(out_channels.value)
+        if channels <= 0:
+            # The C API promises a positive count on success. Treat a broken
+            # or incompatible implementation as an error rather than letting
+            # callers report a successful but meaningless ``channels=0``.
+            raise RuntimeError("libsonare returned an invalid audio channel count")
+        return channels
+
+    @classmethod
     def from_buffer(
         cls,
         data: Sequence[float] | list[float],

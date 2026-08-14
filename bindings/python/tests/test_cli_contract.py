@@ -11,6 +11,7 @@ import subprocess
 import sys
 import wave
 from pathlib import Path
+from types import SimpleNamespace
 
 import pytest
 
@@ -223,7 +224,32 @@ def test_installed_console_script_executes_entry_point() -> None:
     """Exercise the generated wheel-style shim, not ``python -m``."""
     result = _run_console("version", "--json")
     assert result.returncode == 0, result.stderr
-    assert isinstance(json.loads(result.stdout)["lib_version"], str)
+    payload = json.loads(result.stdout)
+    assert set(payload) == {"cli", "cli_version", "lib_version"}
+    assert payload["cli"] == "python"
+    assert payload["cli_version"] == payload["lib_version"]
+
+
+def test_cli_contract_inventory_reads_argparse_action_defaults(monkeypatch, capsys) -> None:
+    """Inventory output follows a mutated action, not a shadow option table."""
+    from libsonare import cli
+
+    parser = cli._build_parser()
+    chroma = cli._inventory_subparsers(parser)["chroma"]
+    n_fft = next(action for action in chroma._actions if action.dest == "n_fft")
+    n_fft.default = 4096
+    monkeypatch.setattr(cli, "_build_parser", lambda: parser)
+
+    cli._dump_cli_contract()
+    payload = json.loads(capsys.readouterr().out)
+    command = next(command for command in payload["commands"] if command["path"] == "chroma")
+    assert [option["name"] for option in command["options"]] == [
+        "json",
+        "n-fft",
+        "hop-length",
+    ]
+    option = next(option for option in command["options"] if option["name"] == "n-fft")
+    assert option["default"] == 4096
 
 
 def test_route_manifest_matches_parsers_and_dispatch_tables() -> None:
@@ -499,6 +525,144 @@ def test_info_and_lufs_json_match_the_native_cli_schema(tmp_path) -> None:
     assert isinstance(analyze["beats"], list)
 
 
+def _minimal_analysis_result(*, sections: list[object] | None = None) -> SimpleNamespace:
+    """Build the smallest analysis result accepted by the JSON CLI formatter."""
+    return SimpleNamespace(
+        bpm=120.0,
+        bpm_confidence=0.5,
+        key=SimpleNamespace(
+            root=SimpleNamespace(value=0),
+            mode=SimpleNamespace(value=0),
+            confidence=0.5,
+        ),
+        time_signature=SimpleNamespace(numerator=4, denominator=4, confidence=0.5),
+        beats=[],
+        chords=[],
+        sections=[] if sections is None else sections,
+        timbre=None,
+        dynamics=None,
+        rhythm=None,
+        form="A",
+    )
+
+
+def test_analyze_flags_are_accepted_and_forwarded(monkeypatch, capsys) -> None:
+    """The analyze parser's options reach the existing analysis API unchanged."""
+    import libsonare
+    from libsonare import _cli_analysis, cli
+
+    parser = cli._build_parser()
+    defaults = parser.parse_args(["analyze", "input.wav"])
+    assert defaults.with_seventh is False
+    assert defaults.no_hpss is False
+    assert defaults.chroma_highpass == 80.0
+
+    captured: dict[str, object] = {}
+
+    def fake_analyze(samples, **kwargs):
+        captured.update(kwargs)
+        return _minimal_analysis_result()
+
+    monkeypatch.setattr(libsonare, "analyze", fake_analyze)
+    monkeypatch.setattr(_cli_analysis, "_load_audio", lambda path: ([0.0], 22050))
+
+    args = parser.parse_args(
+        [
+            "analyze",
+            "--with-seventh",
+            "--no-hpss",
+            "--chroma-highpass",
+            "123.5",
+            "--json",
+            "input.wav",
+        ]
+    )
+    assert cli.cmd_analyze(args) == 0
+    json.loads(capsys.readouterr().out)
+    assert captured == {
+        "sample_rate": 22050,
+        "use_triads_only": False,
+        "use_hpss": False,
+        "chroma_highpass_hz": 123.5,
+    }
+
+
+@pytest.mark.parametrize("command", ["analyze", "spectral"])
+@pytest.mark.parametrize("option", ["-o", "--output"])
+def test_analysis_commands_reject_ignored_output_option(tmp_path, command, option) -> None:
+    """Analysis commands reject destinations instead of silently discarding them."""
+    source = tmp_path / "tone.wav"
+    output = tmp_path / "ignored.wav"
+    _write_tone_wav(source)
+
+    result = _run_console(command, "--json", str(source), option, str(output))
+    assert result.returncode == 2, result.stderr
+    assert not output.exists()
+
+
+def test_analyze_json_section_type_is_lowercase_kebab(monkeypatch, capsys) -> None:
+    """Section types use the Python semantic enum spelling in JSON."""
+    import libsonare
+    from libsonare import SectionType, _cli_analysis, cli
+
+    section = SimpleNamespace(type=SectionType.PRE_CHORUS, start=0.0, end=1.0)
+    monkeypatch.setattr(
+        libsonare, "analyze", lambda samples, **kwargs: _minimal_analysis_result(sections=[section])
+    )
+    monkeypatch.setattr(_cli_analysis, "_load_audio", lambda path: ([0.0], 22050))
+
+    args = cli._build_parser().parse_args(["analyze", "--json", "input.wav"])
+    assert cli.cmd_analyze(args) == 0
+    payload = json.loads(capsys.readouterr().out)
+    assert payload["sections"] == [{"type": "pre-chorus", "start": 0.0, "end": 1.0}]
+
+
+def test_spectral_json_has_closed_unrounded_feature_stats(monkeypatch, capsys) -> None:
+    """Spectral JSON reports every native statistic plus the shared frame count."""
+    import statistics
+
+    import libsonare
+    from libsonare import _cli_analysis, cli
+
+    values = {
+        "centroid": [0.1234567, 0.7654321],
+        "bandwidth": [1.234567, 2.345678],
+        "rolloff": [3.456789, 4.567891],
+        "flatness": [0.1111111, 0.2222222],
+        "zcr": [0.3333333, 0.4444444],
+        "rms": [0.5555555, 0.6666666],
+    }
+    for name, feature_values in values.items():
+        monkeypatch.setattr(
+            libsonare,
+            {
+                "centroid": "spectral_centroid",
+                "bandwidth": "spectral_bandwidth",
+                "rolloff": "spectral_rolloff",
+                "flatness": "spectral_flatness",
+                "zcr": "zero_crossing_rate",
+                "rms": "rms_energy",
+            }[name],
+            lambda *args, _values=feature_values, **kwargs: _values,
+        )
+    monkeypatch.setattr(_cli_analysis, "_load_audio", lambda path: ([0.0], 22050))
+
+    args = cli._build_parser().parse_args(["spectral", "--json", "input.wav"])
+    assert cli.cmd_spectral(args) == 0
+    payload = json.loads(capsys.readouterr().out)
+
+    assert set(payload) == {"n_frames", "features"}
+    assert payload["n_frames"] == 2
+    assert set(payload["features"]) == set(values)
+    for name, feature_values in values.items():
+        stats = payload["features"][name]
+        assert set(stats) == {"mean", "std", "min", "max"}
+        assert stats["mean"] == statistics.mean(feature_values)
+        assert stats["std"] == statistics.pstdev(feature_values)
+        assert stats["min"] == min(feature_values)
+        assert stats["max"] == max(feature_values)
+
+
 def test_mastering_cli_uses_requested_true_peak_oversample(tmp_path) -> None:
     """Mastering forwards the CLI oversampling factor and reports the applied value."""
     source = tmp_path / "tone.wav"
@@ -551,6 +715,71 @@ def test_analyze_human_output_has_no_ansi_when_not_a_tty(tmp_path) -> None:
     assert "\x1b" not in result.stdout
 
 
+def test_array_stats_uses_population_standard_deviation() -> None:
+    """Spectral summary ``std`` matches the native population statistic."""
+    from libsonare._cli_common import _array_stats
+
+    assert _array_stats([1.0, 2.0, 3.0, 4.0], with_count=False)["std"] == 1.118034
+
+
+@pytest.mark.parametrize(
+    ("stdout_tty", "stderr_tty", "no_color", "expected"),
+    [
+        (True, True, False, True),
+        (True, False, False, False),
+        (False, True, False, False),
+        (True, True, True, False),
+    ],
+)
+def test_cli_color_requires_both_ttys_and_no_color_absent(
+    monkeypatch, stdout_tty, stderr_tty, no_color, expected
+) -> None:
+    """ANSI output follows the native both-stream TTY and ``NO_COLOR`` contract."""
+    from types import SimpleNamespace
+
+    from libsonare import _cli_common
+
+    class _Stream:
+        def __init__(self, is_tty: bool) -> None:
+            self._is_tty = is_tty
+
+        def isatty(self) -> bool:
+            return self._is_tty
+
+    monkeypatch.setattr(
+        _cli_common,
+        "sys",
+        SimpleNamespace(stdout=_Stream(stdout_tty), stderr=_Stream(stderr_tty)),
+    )
+    if no_color:
+        monkeypatch.setenv("NO_COLOR", "")
+    else:
+        monkeypatch.delenv("NO_COLOR", raising=False)
+
+    assert _cli_common._color_enabled() is expected
+
+
+def test_synthesize_rir_json_reports_sample_rate(tmp_path) -> None:
+    """RIR JSON includes the generated WAV's sample rate like the native CLI."""
+    output = tmp_path / "rir.wav"
+    result = _run_console(
+        "synthesize-rir",
+        "--sample-rate",
+        "44100",
+        "--max-seconds",
+        "0.05",
+        "--output",
+        str(output),
+        "--json",
+    )
+
+    assert result.returncode == 0, result.stderr
+    payload = json.loads(result.stdout)
+    assert payload["sample_rate"] == 44100
+    with wave.open(str(output), "rb") as rendered:
+        assert rendered.getframerate() == 44100
+
+
 @pytest.mark.parametrize("command", ["abi", "synth-presets"])
 def test_project_stdout_only_subcommands_reject_output(tmp_path, command) -> None:
     """project abi / synth-presets / compile write their result to stdout only.
@@ -584,8 +813,75 @@ def test_project_validate_surfaces_diagnostics_field(tmp_path) -> None:
     payload = json.loads(result.stdout)
     assert payload["valid"] is True
     assert payload["diagnostics"] == []
+    assert payload["diagnostic_count"] == 0
     strict = _run_console("project", "validate", "--in", str(proj), "--strict", "--json")
     assert strict.returncode == 0, strict.stderr
+
+
+def test_project_validate_strict_writes_canonical_artifact_before_exit(tmp_path) -> None:
+    """Strict mode preserves a parsed payload and writes its canonical JSON."""
+    warning = {
+        "version": 1,
+        "sample_rate": 48000,
+        "tracks": [
+            {
+                "id": 1,
+                "name": "audio",
+                "kind": 0,
+                "channel_strip_ref": "",
+                "output_target": "",
+                "midi_destination_id": 0,
+                "automation_lanes": [],
+            }
+        ],
+        "clips": [
+            {
+                "id": 1,
+                "track_id": 1,
+                "source_id": 99,
+                "start_ppq": 0,
+                "length_ppq": 1,
+                "source_offset_ppq": 0,
+                "gain": 1,
+                "fade_in": {"length_ppq": 0, "curve": 0},
+                "fade_out": {"length_ppq": 0, "curve": 0},
+                "loop_mode": 0,
+                "loop_length_ppq": 0,
+                "warp_ref_id": 0,
+                "warp_mode": 0,
+            }
+        ],
+    }
+    source = tmp_path / "warning.json"
+    output = tmp_path / "canonical.json"
+    source.write_text(json.dumps(warning), encoding="utf-8")
+
+    result = _run_console(
+        "project",
+        "validate",
+        "--in",
+        str(source),
+        "--strict",
+        "--output",
+        str(output),
+        "--json",
+    )
+
+    assert result.returncode == 9, result.stderr
+    payload = json.loads(result.stdout)
+    assert payload["valid"] is True
+    assert payload["diagnostic_count"] == len(payload["diagnostics"]) > 0
+    canonical = json.loads(output.read_text(encoding="utf-8"))
+    assert isinstance(canonical["clips"], list)
+
+
+def test_project_validate_malformed_document_uses_invalid_format_exit(tmp_path) -> None:
+    """CLI malformed-project errors use C-ABI InvalidFormat (exit 5)."""
+    source = tmp_path / "malformed.json"
+    source.write_text("{ this is not valid json ", encoding="utf-8")
+    result = _run_console("project", "validate", "--in", str(source), "--json")
+    assert result.returncode == 5
+    assert result.stdout == ""
 
 
 @pytest.mark.parametrize("stored_rate", [44100, 96000])
