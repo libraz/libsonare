@@ -3,6 +3,7 @@
 
 #include <sonare/sonare_c_mixing.h>
 
+#include <algorithm>
 #include <array>
 
 #include "binding_project_parity_test_helpers.h"
