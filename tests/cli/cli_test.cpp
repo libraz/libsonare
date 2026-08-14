@@ -328,8 +328,8 @@ TEST_CASE("CLI contract inventory follows path-scoped parser metadata", "[cli][c
   REQUIRE(has_option(command("project.bounce"), "output"));
 
   SECTION("the parser rejects options absent from each path") {
-    for (const std::string& invocation : {"project abi --frames 1", "project validate --frames 1",
-                                          "project compile -o ignored.wav"}) {
+    for (const std::string invocation : {"project abi --frames 1", "project validate --frames 1",
+                                         "project compile -o ignored.wav"}) {
       auto [code, output] = exec_command(CLI + " " + invocation);
       REQUIRE(code == 2);
       REQUIRE_THAT(output, ContainsSubstring("option"));
@@ -398,14 +398,14 @@ TEST_CASE("CLI registry exposes immutable leaf contracts", "[cli][registry]") {
   REQUIRE(no_beat_sync->default_value.kind == CliOptionDefaultKind::Boolean);
   REQUIRE_FALSE(no_beat_sync->default_value.boolean_value);
 
-  for (const std::string& command : {"onset-env", "onset-envelope", "tempogram", "plp"}) {
+  for (const std::string command : {"onset-env", "onset-envelope", "tempogram", "plp"}) {
     const auto* n_mels = cli_option_spec_for_command(command, "n-mels");
     REQUIRE(n_mels != nullptr);
     REQUIRE(n_mels->scalar_type == CliOptionScalarType::Integer);
     REQUIRE(n_mels->default_value.kind == CliOptionDefaultKind::Integer);
     REQUIRE(n_mels->default_value.integer_value == 128);
   }
-  for (const std::string& command : {"fourier-tempogram", "tempogram-ratio"})
+  for (const std::string command : {"fourier-tempogram", "tempogram-ratio"})
     REQUIRE(cli_option_spec_for_command(command, "n-fft") == nullptr);
 
   const auto* pitch_threshold = cli_option_spec_for_command("pitch", "threshold");
@@ -942,7 +942,7 @@ TEST_CASE("CLI rejects -o for commands that produce no file output", "[cli][argu
   // Promoted analysis paths must reject both spellings at the parser/schema
   // boundary, before loading the audio file.  Their contract exit is usage=2
   // (and the compatibility mode still folds it to legacy=1).
-  for (const std::string& command : {"analyze", "spectral"}) {
+  for (const std::string command : {"analyze", "spectral"}) {
     auto [long_analysis_code, long_analysis_output] =
         exec_command(CLI + " " + command + " " + TEST_WAV + " --output " + out + " -q");
     REQUIRE(long_analysis_code == 2);
