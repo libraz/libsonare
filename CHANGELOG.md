@@ -91,6 +91,7 @@ This release completes the option coverage of the analysis and effects entry poi
 - Project bounce and MIDI render default the sample rate to the project's own stored rate for both the render and the WAV header; an explicit rate is accepted only when it matches.
 - `voice-change` pads its input by the chain latency, processes fixed blocks and drops the pre-roll, so output sample k corresponds to input sample k, and preset resolution routes through the strict validator so a mistyped section or macro key fails loudly.
 - Ambiguous combinations that previously only warned are rejected: mastering preset with configuration or assistant, EQ shortcuts alongside explicit parameters, competing voice-changer preset selectors, HPSS output modes and the trim-silence thresholds.
+- Both CLIs treat `--preset-pack` and `--preset` as one selector naming a file and an entry inside it, so a pack without an entry is reported as the missing `--preset` rather than as a rule that reads as if no selector had been given.
 
 ### Platform and host backends
 
@@ -142,6 +143,7 @@ This release completes the option coverage of the analysis and effects entry poi
 - `plp`, `subsegment`, `piptrack`, chord inversion and the VQT inversion path produce different output where the fixes above apply, and the loudness range, dynamic range and acoustic percentile metrics now share one double-precision definition.
 - A bypassed insert or graph node stays latency-compensated, so bypass toggling and steady-state alignment differ from the previous behaviour.
 - CLI `voice-change` output is latency-compensated so sample k maps to input sample k, and a preset with a mistyped section or macro key is rejected rather than rendered.
+- The Python CLI's `voice-change --preset-pack` requires `--preset`, matching the native CLI. It previously fell back to the pack's first entry, so which preset a pack-only invocation rendered depended on the file's ordering; that invocation is now rejected with the invalid-parameter code.
 
 ## v1.6.0 (2026-08-03)
 

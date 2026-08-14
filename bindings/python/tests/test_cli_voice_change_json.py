@@ -205,7 +205,7 @@ def test_voice_change_custom_preset_json_omits_inferred_preset_id(tmp_path: Path
     assert "preset" not in payload
 
 
-def test_voice_change_preset_pack_without_id_omits_default_preset(tmp_path: Path) -> None:
+def test_voice_change_preset_pack_requires_an_entry_selector(tmp_path: Path) -> None:
     sample_rate = 22_050
     input_length = 2_205
     source = tmp_path / "input.wav"
@@ -222,20 +222,30 @@ def test_voice_change_preset_pack_without_id_omits_default_preset(tmp_path: Path
         "--json",
     )
 
-    assert result.returncode == 0, result.stderr
-    payload = json.loads(result.stdout)
-    assert set(payload) == {
-        "output",
-        "length",
-        "duration",
-        "sample_rate",
-        "latency_samples",
-    }
-    assert payload["length"] == input_length
-    assert payload["duration"] == input_length / sample_rate
-    assert payload["sample_rate"] == sample_rate
-    assert payload["latency_samples"] > 0
-    assert "preset" not in payload
+    assert result.returncode == 3
+    assert "--preset-pack requires --preset" in result.stderr
+    assert not output.exists()
+
+
+def test_voice_change_preset_pack_entry_selector_precedes_the_set_rule(tmp_path: Path) -> None:
+    source = tmp_path / "input.wav"
+    output = tmp_path / "pack.wav"
+    _write_tone(source, sample_rate=22_050, length=2_205)
+
+    result = _run_cli(
+        "voice-change",
+        str(source),
+        "--output",
+        str(output),
+        "--preset-pack",
+        str(ROOT / "schemas" / "realtime-voice-changer-presets.example.json"),
+        "--set",
+        "dsp.outputGainDb=-2",
+        "--json",
+    )
+
+    assert result.returncode == 3
+    assert "--preset-pack requires --preset" in result.stderr
 
 
 @pytest.mark.parametrize("legacy, expected_code", [(False, 3), (True, 1)])

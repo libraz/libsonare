@@ -1857,6 +1857,15 @@ TEST_CASE("CLI DAW editing commands", "[cli]") {
     REQUIRE(f.good());
   }
 
+  SECTION("voice-change reports a pack without an entry ahead of the --set rule") {
+    const std::string pack = "schemas/realtime-voice-changer-presets.example.json";
+    auto [code, output] =
+        exec_command(CLI + " voice-change --preset-pack " + pack + " --set dsp.outputGainDb=-2 " +
+                     TEST_WAV + " -o " + TEST_OUT + " -q");
+    REQUIRE(code == 3);
+    REQUIRE_THAT(output, ContainsSubstring("--preset-pack requires --preset"));
+  }
+
   SECTION("voice-preset-validate resolves a preset-pack entry and applies overrides") {
     const std::string pack = "schemas/realtime-voice-changer-presets.example.json";
     auto [code, output] =

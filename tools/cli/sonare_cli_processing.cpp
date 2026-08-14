@@ -176,15 +176,19 @@ int cmd_voice_change(const CliArgs& args, const Audio& audio) {
   if (has_preset_pack && has_preset_json) {
     throw std::invalid_argument("--preset-pack and --preset-json are mutually exclusive");
   }
+  // A pack names the file, --preset names the entry inside it, so the pair is
+  // one selector. This check precedes the ones below so that a pack without an
+  // entry reports the missing --preset rather than a downstream rule that reads
+  // as if no selector had been given at all.
+  if (has_preset_pack && !has_preset) {
+    throw std::invalid_argument("--preset-pack requires --preset to select an entry");
+  }
   if (selector_count > 0 && (args.has("pitch-semitones") || args.has("formant-factor"))) {
     throw std::invalid_argument(
         "--pitch-semitones/--formant-factor cannot be combined with a realtime preset");
   }
   if (args.has("set") && selector_count == 0) {
     throw std::invalid_argument("--set requires --preset, --preset-json, or --preset-pack");
-  }
-  if (has_preset_pack && !has_preset) {
-    throw std::invalid_argument("--preset-pack requires --preset to select an entry");
   }
   const bool uses_realtime_preset = selector_count > 0 || args.has("set");
 

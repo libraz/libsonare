@@ -176,28 +176,6 @@ def cmd_pitch_correct_timevarying(args: argparse.Namespace) -> int:
     return _emit_effect_result(args, result, sr, label="Time-varying pitch correct")
 
 
-def _load_first_voice_preset(path: str) -> dict[str, Any]:
-    """Load the first entry of a preset pack when no entry selector is given.
-
-    Pack files do not define a universal built-in default.  Selecting their
-    first entry keeps the historical pack-only invocation working while
-    avoiding a hard-coded preset id that could conflict with the pack's own
-    contents.  An explicit ``--preset`` continues to use the common loader's
-    duplicate/missing-id validation.
-    """
-    with open(path, encoding="utf-8") as fh:
-        pack = json.load(fh)
-    if not isinstance(pack, dict):
-        raise ValueError("preset pack must be a JSON object")
-    presets = pack.get("presets")
-    if not isinstance(presets, list) or not presets:
-        raise ValueError("preset pack must contain a non-empty presets array")
-    first = presets[0]
-    if not isinstance(first, dict):
-        raise ValueError("preset pack entries must be JSON objects")
-    return cast(dict[str, Any], first)
-
-
 def cmd_note_move(args: argparse.Namespace) -> int:
     from . import note_move
 
@@ -416,6 +394,12 @@ def cmd_voice_change(args: argparse.Namespace) -> int:
         )
     if preset_pack and preset_json:
         raise ValueError("--preset-pack and --preset-json are mutually exclusive")
+    # A pack names the file, --preset names the entry inside it, so the pair is
+    # one selector. This check precedes the ones below so that a pack without an
+    # entry reports the missing --preset rather than a downstream rule that
+    # reads as if no selector had been given at all.
+    if preset_pack and not preset_id:
+        raise ValueError("--preset-pack requires --preset to select an entry")
     pitch_semitones = getattr(args, "pitch_semitones", None)
     formant_factor = getattr(args, "formant_factor", None)
     preset_source = bool(selectors or preset_pack)
@@ -436,11 +420,7 @@ def cmd_voice_change(args: argparse.Namespace) -> int:
             with open(preset_json, encoding="utf-8") as fh:
                 preset = json.load(fh)
         elif preset_pack:
-            preset = (
-                _load_voice_preset_pack(preset_pack, preset_id)
-                if preset_id
-                else _load_first_voice_preset(preset_pack)
-            )
+            preset = _load_voice_preset_pack(preset_pack, preset_id)
         elif assignments:
             preset = json.loads(realtime_voice_changer_preset_json(preset_id))
         else:
