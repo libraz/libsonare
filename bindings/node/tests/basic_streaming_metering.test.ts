@@ -520,6 +520,42 @@ describe('StreamAnalyzer quantize-config override', () => {
     expect(() => new StreamAnalyzer({ sampleRate: SR, maxProgressionEntries: 0 })).toThrow();
   });
 
+  it('accepts only valid window ordinals at the native boundary', () => {
+    for (const window of [0, 1, 2, 3]) {
+      const analyzer = new StreamAnalyzer({
+        sampleRate: 8000,
+        nFft: 32,
+        hopLength: 32,
+        nMels: 8,
+        window,
+      });
+      expect(analyzer.sampleRate()).toBe(8000);
+      analyzer.destroy();
+    }
+
+    const explicitUndefined = new StreamAnalyzer({ window: undefined });
+    explicitUndefined.destroy();
+
+    const invalidWindows: unknown[] = [
+      -1,
+      4,
+      99,
+      0.5,
+      Number.NaN,
+      Number.POSITIVE_INFINITY,
+      Number.NEGATIVE_INFINITY,
+      '0',
+      true,
+      null,
+      {},
+      [],
+      new Number(1),
+    ];
+    for (const window of invalidWindows) {
+      expect(() => new StreamAnalyzer({ window: window as number })).toThrow(RangeError);
+    }
+  });
+
   it('bounds unread frames and reports drop-newest telemetry', () => {
     const analyzer = new StreamAnalyzer({
       sampleRate: 8000,

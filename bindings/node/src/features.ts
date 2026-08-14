@@ -19,6 +19,57 @@ import type {
 import type { ValidateOptions } from './validation.js';
 import { assertSamples } from './validation.js';
 
+function resolveFeatureFftOptions(
+  fnName: string,
+  nFft: unknown,
+  hopLength: unknown,
+): { nFft: number; hopLength: number } {
+  const resolvedNFft = nFft === undefined ? 2048 : nFft;
+  const resolvedHopLength = hopLength === undefined ? 512 : hopLength;
+  if (typeof resolvedNFft !== 'number' || !Number.isInteger(resolvedNFft)) {
+    throw new TypeError(`${fnName}: nFft must be an integer`);
+  }
+  if (resolvedNFft < 2 || resolvedNFft > 2 ** 30) {
+    throw new RangeError(`${fnName}: nFft must be an even power of two >= 2`);
+  }
+  if ((resolvedNFft & (resolvedNFft - 1)) !== 0) {
+    throw new RangeError(`${fnName}: nFft must be an even power of two >= 2`);
+  }
+  if (typeof resolvedHopLength !== 'number' || !Number.isInteger(resolvedHopLength)) {
+    throw new TypeError(`${fnName}: hopLength must be an integer`);
+  }
+  if (resolvedHopLength <= 0 || resolvedHopLength > 2 ** 31 - 1) {
+    throw new RangeError(`${fnName}: hopLength must be a positive integer`);
+  }
+  return { nFft: resolvedNFft, hopLength: resolvedHopLength };
+}
+
+function resolvePositiveIntegerOption(
+  fnName: string,
+  name: string,
+  value: unknown,
+  fallback: number,
+): number {
+  const resolved = value === undefined ? fallback : value;
+  if (typeof resolved !== 'number' || !Number.isInteger(resolved)) {
+    throw new TypeError(`${fnName}: ${name} must be an integer`);
+  }
+  if (resolved <= 0 || resolved > 2 ** 31 - 1) {
+    throw new RangeError(`${fnName}: ${name} must be a positive integer`);
+  }
+  return resolved;
+}
+
+function resolveHardMaskOption(fnName: string, value: unknown): boolean {
+  if (value === undefined) {
+    return false;
+  }
+  if (typeof value !== 'boolean') {
+    throw new TypeError(`${fnName}: hardMask must be a boolean`);
+  }
+  return value;
+}
+
 /** Common input for one-shot feature extraction requests. */
 export interface FeatureSamplesRequest {
   samples: Float32Array;
@@ -121,6 +172,8 @@ export interface CqtRequest extends FeatureSamplesRequest {
   fmin?: number;
   nBins?: number;
   binsPerOctave?: number;
+}
+export interface VqtRequest extends CqtRequest {
   gamma?: number;
 }
 export interface CqtToAudioRequest {
@@ -203,15 +256,17 @@ export interface PiptrackRequest extends StftRequest {
   fmax?: number;
   threshold?: number;
 }
-export interface NoteSegmentsRequest {
+export interface NoteSegmentsConfig {
+  segmentationThresholdCents?: number;
+  minNoteMs?: number;
+  referenceHz?: number;
+}
+export interface NoteSegmentsRequest extends NoteSegmentsConfig {
   f0Hz: Float32Array;
   voicedProb: Float32Array;
   frameRate: number;
-  config?: {
-    segmentationThresholdCents?: number;
-    minNoteMs?: number;
-    referenceHz?: number;
-  };
+  /** @deprecated Use the flat tuning fields on this request instead. */
+  config?: NoteSegmentsConfig;
 }
 export interface DecomposeRequest {
   s: Float32Array;
@@ -238,6 +293,9 @@ export interface PhaseVocoderRequest extends FeatureSamplesRequest {
 export interface HpssWithResidualRequest extends FeatureSamplesRequest {
   kernelHarmonic?: number;
   kernelPercussive?: number;
+  nFft?: number;
+  hopLength?: number;
+  hardMask?: boolean;
 }
 export interface TempogramRequest {
   onsetEnvelope: Float32Array;
@@ -329,23 +387,61 @@ export interface NnlsChromaRequest extends FeatureSamplesRequest {
   enableStftBlend?: boolean;
   stftBlendWeight?: number;
   stftBlendNFft?: number;
+  hopLength?: number;
 }
 /** Input for LUFS feature functions, including optional input validation control. */
 export interface LufsRequest extends FeatureSamplesRequest, ValidateOptions {}
 
-export function trim(request: FeatureSamplesRequest & { thresholdDb?: number }): Float32Array;
+export function trim(
+  request: FeatureSamplesRequest & {
+    thresholdDb?: number;
+    frameLength?: number;
+    hopLength?: number;
+  },
+): Float32Array;
 export function trim(
   samples: Float32Array,
   sampleRate?: number,
   thresholdDb?: number,
+  frameLength?: number,
+  hopLength?: number,
 ): Float32Array;
 export function trim(
-  samples: Float32Array | (FeatureSamplesRequest & { thresholdDb?: number }),
+  samples:
+    | Float32Array
+    | (FeatureSamplesRequest & {
+        thresholdDb?: number;
+        frameLength?: number;
+        hopLength?: number;
+      }),
   sampleRate = 22050,
   thresholdDb = -60.0,
+  frameLength?: number,
+  hopLength?: number,
 ): Float32Array {
-  const request = samples instanceof Float32Array ? { samples, sampleRate, thresholdDb } : samples;
-  return addon.trim(request.samples, request.sampleRate ?? 22050, request.thresholdDb ?? -60.0);
+  const request =
+    samples instanceof Float32Array
+      ? { samples, sampleRate, thresholdDb, frameLength, hopLength }
+      : samples;
+  const resolvedFrameLength = resolvePositiveIntegerOption(
+    'trim',
+    'frameLength',
+    request.frameLength,
+    2048,
+  );
+  const resolvedHopLength = resolvePositiveIntegerOption(
+    'trim',
+    'hopLength',
+    request.hopLength,
+    512,
+  );
+  return addon.trim(
+    request.samples,
+    request.sampleRate ?? 22050,
+    request.thresholdDb ?? -60.0,
+    resolvedFrameLength,
+    resolvedHopLength,
+  );
 }
 
 // -- Features --
@@ -847,7 +943,7 @@ export function hybridCqt(
 }
 
 /** Compute VQT magnitude (`gamma < 0` selects the automatic ERB-derived value). */
-export function vqt(request: CqtRequest): CqtResult;
+export function vqt(request: VqtRequest): CqtResult;
 export function vqt(
   samples: Float32Array,
   sampleRate?: number,
@@ -858,7 +954,7 @@ export function vqt(
   gamma?: number,
 ): CqtResult;
 export function vqt(
-  samples: Float32Array | CqtRequest,
+  samples: Float32Array | VqtRequest,
   sampleRate = 22050,
   hopLength = 512,
   fmin = 32.70319566257483,
@@ -1502,6 +1598,9 @@ export function hpssWithResidual(
   sampleRate?: number,
   kernelHarmonic?: number,
   kernelPercussive?: number,
+  nFft?: number,
+  hopLength?: number,
+  hardMask?: boolean,
 ): {
   harmonic: Float32Array;
   percussive: Float32Array;
@@ -1513,6 +1612,9 @@ export function hpssWithResidual(
   sampleRate = 22050,
   kernelHarmonic = 31,
   kernelPercussive = 31,
+  nFft?: number,
+  hopLength?: number,
+  hardMask?: boolean,
 ): {
   harmonic: Float32Array;
   percussive: Float32Array;
@@ -1521,13 +1623,18 @@ export function hpssWithResidual(
 } {
   const request =
     samples instanceof Float32Array
-      ? { samples, sampleRate, kernelHarmonic, kernelPercussive }
+      ? { samples, sampleRate, kernelHarmonic, kernelPercussive, nFft, hopLength, hardMask }
       : samples;
+  const fftOptions = resolveFeatureFftOptions('hpssWithResidual', request.nFft, request.hopLength);
+  const resolvedHardMask = resolveHardMaskOption('hpssWithResidual', request.hardMask);
   return addon.hpssWithResidual(
     request.samples,
     request.sampleRate ?? 22050,
     request.kernelHarmonic ?? 31,
     request.kernelPercussive ?? 31,
+    fftOptions.nFft,
+    fftOptions.hopLength,
+    resolvedHardMask,
   );
 }
 
@@ -1801,7 +1908,32 @@ export function pitchPyin(
 
 /** Segment a host-supplied monophonic F0 track into stable note regions. */
 export function noteSegments(request: NoteSegmentsRequest): NoteSegment[] {
-  return addon.noteSegments(request);
+  const { config, segmentationThresholdCents, minNoteMs, referenceHz } = request;
+  const hasFlatTuningOptions =
+    segmentationThresholdCents !== undefined ||
+    minNoteMs !== undefined ||
+    referenceHz !== undefined;
+  if (config !== undefined && hasFlatTuningOptions) {
+    throw new RangeError(
+      'noteSegments: specify tuning options either flat or in the deprecated config object, not both',
+    );
+  }
+
+  const baseRequest = {
+    f0Hz: request.f0Hz,
+    voicedProb: request.voicedProb,
+    frameRate: request.frameRate,
+  };
+  if (config !== undefined) {
+    return addon.noteSegments({ ...baseRequest, config });
+  }
+  if (!hasFlatTuningOptions) {
+    return addon.noteSegments(baseRequest);
+  }
+  return addon.noteSegments({
+    ...baseRequest,
+    config: { segmentationThresholdCents, minNoteMs, referenceHz },
+  });
 }
 
 // -- Core --
@@ -2572,6 +2704,7 @@ export function nnlsChroma(
     request.enableStftBlend ?? true,
     request.stftBlendWeight ?? 0.55,
     request.stftBlendNFft ?? 4096,
+    resolvePositiveIntegerOption('nnlsChroma', 'hopLength', request.hopLength, 512),
   );
 }
 

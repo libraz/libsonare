@@ -1,6 +1,8 @@
 #include <algorithm>
 #include <cctype>
+#include <cmath>
 #include <cstring>
+#include <limits>
 #include <stdexcept>
 #include <string>
 #include <utility>
@@ -34,6 +36,7 @@
 #include "sonare_wrap.h"
 #include "sonare_wrap_options.h"
 #include "sonare_wrap_utils.h"
+#include "util/constants.h"
 
 using namespace sonare_node;
 
@@ -551,11 +554,41 @@ Napi::Value SonareWrap::Trim(const Napi::CallbackInfo& info) {
   int sr = info[1].As<Napi::Number>().Int32Value();
   float threshold_db =
       info.Length() >= 3 && info[2].IsNumber() ? info[2].As<Napi::Number>().FloatValue() : -60.0f;
+  auto parse_frame_option = [&](size_t index, const char* name, int fallback, int* output) {
+    if (info.Length() <= index || info[index].IsUndefined()) {
+      *output = fallback;
+      return true;
+    }
+    if (!info[index].IsNumber()) {
+      Napi::TypeError::New(env, std::string("trim: ") + name + " must be an integer")
+          .ThrowAsJavaScriptException();
+      return false;
+    }
+    const double value = info[index].As<Napi::Number>().DoubleValue();
+    if (!std::isfinite(value) || std::floor(value) != value) {
+      Napi::TypeError::New(env, std::string("trim: ") + name + " must be an integer")
+          .ThrowAsJavaScriptException();
+      return false;
+    }
+    if (value <= 0 || value > std::numeric_limits<int>::max()) {
+      Napi::RangeError::New(env, std::string("trim: ") + name + " must be a positive integer")
+          .ThrowAsJavaScriptException();
+      return false;
+    }
+    *output = static_cast<int>(value);
+    return true;
+  };
+  int frame_length = sonare::constants::kDefaultNFft;
+  int hop_length = sonare::constants::kDefaultHopLength;
+  if (!parse_frame_option(3, "frameLength", sonare::constants::kDefaultNFft, &frame_length) ||
+      !parse_frame_option(4, "hopLength", sonare::constants::kDefaultHopLength, &hop_length)) {
+    return env.Undefined();
+  }
 
   // Re-apply the C-ABI input validation this direct core call would otherwise bypass.
   sonare::validate_offline_audio_input(data, length, sr);
   sonare::Audio audio = sonare::Audio::from_buffer(data, length, sr);
-  sonare::Audio result = sonare::trim_absolute(audio, threshold_db);
+  sonare::Audio result = sonare::trim_absolute(audio, threshold_db, frame_length, hop_length);
   std::vector<float> out_vec(result.data(), result.data() + result.size());
   return VecToFloat32(env, out_vec);
   SONARE_NODE_CATCH(env)

@@ -4,6 +4,9 @@ import type { ProjectWarpAnchor, WarpMode } from './types_project.js';
 
 export type EngineTelemetryType = 0 | 1;
 
+/** Per-track cue/monitor tap mode: off, pre-fader listen, or after-fader listen. */
+export type EngineTrackMonitorMode = 'off' | 'pfl' | 'afl' | 0 | 1 | 2;
+
 export type EngineTelemetryError =
   | 0
   | 1
@@ -23,7 +26,8 @@ export type EngineTelemetryError =
   | 15
   | 16
   | 17
-  | 18;
+  | 18
+  | 20;
 
 export interface EngineTelemetry {
   type: EngineTelemetryType;

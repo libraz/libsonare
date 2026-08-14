@@ -68,6 +68,10 @@ export class Audio {
     return new Audio(addon.Audio.fromFile(path));
   }
 
+  static fileChannelCount(path: string): number {
+    return addon.Audio.fileChannelCount(path);
+  }
+
   /**
    * Wrap raw mono float samples as an {@link Audio}. `sampleRate` defaults to
    * `48000` (the project default) when omitted.

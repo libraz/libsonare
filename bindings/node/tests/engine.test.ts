@@ -52,7 +52,7 @@ describe('RealtimeEngine native binding', () => {
   });
 
   it('accepts a declared channel capacity and rejects invalid capacities', () => {
-    const engine = new RealtimeEngine(48000, 128, 1024, 1024, 2);
+    const engine = new RealtimeEngine(48000, 128);
     try {
       expect(() => engine.prepare(48000, 128, 1024, 1024, 2)).not.toThrow();
       expect(() => engine.prepare(48000, 128, 1024, 1024, 0)).toThrow();
@@ -61,6 +61,20 @@ describe('RealtimeEngine native binding', () => {
       engine.destroy();
     }
     expect(() => new RealtimeEngine(48000, 128, 1024, 1024, 0)).toThrow();
+  });
+
+  it('reports oversized process channels after prepare as max-channel telemetry', () => {
+    const engine = new RealtimeEngine(48000, 128);
+    try {
+      engine.prepare(48000, 128, 1024, 1024, 2);
+      engine.process([new Float32Array(128), new Float32Array(128), new Float32Array(128)]);
+
+      expect(engine.drainTelemetry()).toContainEqual(
+        expect.objectContaining({ error: 20, value: 3 }),
+      );
+    } finally {
+      engine.destroy();
+    }
   });
 
   it('keeps Audio factories usable after a worker loads and exits the addon', async () => {
@@ -253,8 +267,12 @@ describe('RealtimeEngine native binding', () => {
     const processed = engine.process([left, right]);
 
     expect(processed).toHaveLength(2);
+    expect(processed[0]).not.toBe(left);
+    expect(processed[1]).not.toBe(right);
     expect(processed[0][0]).toBeCloseTo(0.75, 4);
     expect(processed[1][0]).toBeCloseTo(-0.75, 4);
+    expect(left[0]).toBeCloseTo(0.25, 4);
+    expect(right[0]).toBeCloseTo(-0.25, 4);
     const captureStatus = engine.captureStatus();
     expect(captureStatus.capturedFrames).toBe(128);
     expect(captureStatus.overflowCount).toBe(0);
@@ -737,6 +755,49 @@ describe('RealtimeEngine native binding', () => {
     const rightLevel = Math.abs(panned[1].at(-1) ?? 0);
     expect(leftLevel).toBeGreaterThan(rightLevel);
     engine.destroy();
+  });
+
+  it('routes a stereo clip through realtime dual-pan directions', () => {
+    const renderDualPan = (leftPan: number, rightPan: number): [number, number] => {
+      const engine = new RealtimeEngine(48000, 256);
+      const frames = 256 * 4;
+      try {
+        engine.setClips([
+          {
+            id: 1,
+            trackId: 10,
+            channels: [new Float32Array(frames).fill(1), new Float32Array(frames)],
+            startPpq: 0,
+            lengthSamples: frames,
+          },
+        ]);
+        engine.setTrackLanes([10]);
+        engine.setTrackStripJson(
+          10,
+          '{"version":1,"strips":[{"id":"track-10","panLaw":3}],"buses":[],"connections":[]}',
+        );
+        engine.setTrackStripPanMode(10, 'dualPan');
+        engine.setTrackStripDualPan(10, leftPan, rightPan);
+        engine.settleParameters();
+        engine.play();
+
+        let output: Float32Array[] = [];
+        for (let block = 0; block < 4; block += 1) {
+          output = engine.process([new Float32Array(256), new Float32Array(256)]);
+        }
+        return [rms(output[0]), rms(output[1])];
+      } finally {
+        engine.destroy();
+      }
+    };
+
+    const leftInputPannedRight = renderDualPan(1, -1);
+    expect(leftInputPannedRight[1]).toBeGreaterThan(0.9);
+    expect(leftInputPannedRight[0]).toBeLessThan(1e-5);
+
+    const leftInputPannedLeft = renderDualPan(-1, 1);
+    expect(leftInputPannedLeft[0]).toBeGreaterThan(0.9);
+    expect(leftInputPannedLeft[1]).toBeLessThan(1e-5);
   });
 
   it('toggles track strip insert bypass', () => {
@@ -1238,6 +1299,24 @@ describe('RealtimeEngine native binding', () => {
     expect(captured[1].length).toBe(128);
     expect(captured[0][0]).toBeCloseTo(0.5, 4);
     expect(captured[1][0]).toBeCloseTo(-0.5, 4);
+    engine.destroy();
+  });
+
+  it('allocates capture storage from the canonical channel/count form', () => {
+    const engine = new RealtimeEngine(48000, 128);
+    engine.setCaptureBuffer(2, 128);
+    engine.armCapture();
+    engine.play();
+
+    engine.process([new Float32Array(128).fill(0.25), new Float32Array(128).fill(-0.25)]);
+    const captured = engine.capturedAudio();
+    expect(captured).toHaveLength(2);
+    expect(captured[0].length).toBe(128);
+    expect(captured[1].length).toBe(128);
+    expect(captured[0][0]).toBeCloseTo(0.25, 4);
+    expect(captured[1][0]).toBeCloseTo(-0.25, 4);
+    expect(() => engine.setCaptureBuffer(0, 128)).toThrow(RangeError);
+    expect(() => engine.setCaptureBuffer(2, 0)).toThrow(RangeError);
     engine.destroy();
   });
 

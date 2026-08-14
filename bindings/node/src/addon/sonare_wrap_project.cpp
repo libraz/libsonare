@@ -11,6 +11,16 @@
 
 using namespace sonare_node::project;
 
+namespace {
+
+struct AudioSourceMetadataGuard {
+  SonareProjectAudioSourceMetadata value{};
+
+  ~AudioSourceMetadataGuard() { sonare_project_free_audio_source_metadata(&value); }
+};
+
+}  // namespace
+
 Napi::Object ProjectWrap::Init(Napi::Env env, Napi::Object exports) {
   Napi::Function func = DefineClass(
       env, "Project",
@@ -53,6 +63,7 @@ Napi::Object ProjectWrap::Init(Napi::Env env, Napi::Object exports) {
           InstanceMethod<&ProjectWrap::Redo>("redo"),
           InstanceMethod<&ProjectWrap::ClearHistory>("clearHistory"),
           InstanceMethod<&ProjectWrap::SetMaxUndoDepth>("setMaxUndoDepth"),
+          InstanceMethod<&ProjectWrap::SetMaxHistoryBytes>("setMaxHistoryBytes"),
           InstanceMethod<&ProjectWrap::SetMidiEvents>("setMidiEvents"),
           InstanceMethod<&ProjectWrap::ImportSmf>("importSmf"),
           InstanceMethod<&ProjectWrap::ExportSmf>("exportSmf"),
@@ -100,6 +111,7 @@ Napi::Object ProjectWrap::Init(Napi::Env env, Napi::Object exports) {
           InstanceMethod<&ProjectWrap::SourceCount>("sourceCount"),
           InstanceMethod<&ProjectWrap::UnresolvedAudioSourceIds>("unresolvedAudioSourceIds"),
           InstanceMethod<&ProjectWrap::SetSourceAudio>("setSourceAudio"),
+          InstanceMethod<&ProjectWrap::SetAudioSourceMetadata>("setAudioSourceMetadata"),
           InstanceMethod<&ProjectWrap::TempoSegmentCount>("tempoSegmentCount"),
           InstanceMethod<&ProjectWrap::TimeSignatureCount>("timeSignatureCount"),
           InstanceMethod<&ProjectWrap::MarkerCount>("markerCount"),
@@ -365,6 +377,17 @@ Napi::Value ProjectWrap::SourceByIndex(const Napi::CallbackInfo& info) {
   ThrowIfError(env, sonare_project_source_by_index(
                         project_, static_cast<size_t>(NumberArg(info, 0, 0.0)), &source));
   if (env.IsExceptionPending()) return env.Undefined();
+
+  AudioSourceMetadataGuard metadata;
+  if (source.kind == 0) {
+    const SonareError metadata_error =
+        sonare_project_get_audio_source_metadata(project_, source.id, &metadata.value);
+    if (metadata_error != SONARE_OK) {
+      ThrowIfError(env, metadata_error);
+      return env.Undefined();
+    }
+  }
+
   Napi::Object out = Napi::Object::New(env);
   out.Set("id", source.id);
   out.Set("kind", source.kind);
@@ -372,6 +395,9 @@ Napi::Value ProjectWrap::SourceByIndex(const Napi::CallbackInfo& info) {
   out.Set("storageHandleId", source.storage_handle_id);
   out.Set("sampleRateHint", source.sample_rate_hint);
   out.Set("nameOrUri", source.name_or_uri);
+  out.Set("contentHash", metadata.value.content_hash != nullptr ? metadata.value.content_hash : "");
+  out.Set("externalStemRole",
+          metadata.value.external_stem_role != nullptr ? metadata.value.external_stem_role : "");
   return out;
 }
 

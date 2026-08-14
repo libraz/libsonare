@@ -60,6 +60,10 @@ export interface ProjectSource {
   storageHandleId: number;
   sampleRateHint: number;
   nameOrUri: string;
+  /** Owning content hash for audio sources; empty for MIDI sources. */
+  contentHash: string;
+  /** External source-separation role for audio sources; empty for MIDI sources. */
+  externalStemRole: string;
 }
 
 /** One first-class warp-map anchor. Sample positions must be finite and monotonic. */
@@ -476,6 +480,13 @@ export interface SynthPatch {
    * `(destination_id, patch)` bindings instead. Defaults to `0`.
    */
   destinationId?: number;
+  /**
+   * Follow incoming GM bank/program changes for offline project bounces and
+   * route channel 10 through the GM drum map. Defaults to `false`, preserving
+   * the fixed-patch behavior. This is a project-bounce binding option, not a
+   * NativeSynth patch field.
+   */
+  useGmPrograms?: boolean;
   /** Base preset name (see {@link synthPresetNames}); omit for the init patch. */
   preset?: string;
   engineMode?: SynthEngineMode | number;
@@ -581,6 +592,16 @@ export const PROJECT_LOOP_MODE_OFF = 0;
 
 export const PROJECT_LOOP_MODE_LOOP = 1;
 
+/** Persistent target classification for a project automation lane. */
+export type ProjectAutomationTargetKind = 'opaque' | 'track-fader-db' | 'track-pan' | 0 | 1 | 2;
+
+/** Automation target-kind ordinals (mirror SonareAutomationTargetKind). */
+export const PROJECT_AUTOMATION_TARGET_OPAQUE = 0;
+
+export const PROJECT_AUTOMATION_TARGET_TRACK_FADER_DB = 1;
+
+export const PROJECT_AUTOMATION_TARGET_TRACK_PAN = 2;
+
 /** One clip fade region for {@link Project.setClipFade}. */
 export interface ProjectClipFade {
   /** Fade length in PPQ; finite and >= 0 (0 = no fade). */
@@ -627,8 +648,13 @@ export interface ProjectAutomationPoint {
  * {@link Project.editAutomationLane}.
  */
 export interface ProjectAutomationLaneDesc {
-  /** Host-defined target parameter id the lane drives. */
+  /** Host-defined, non-zero target parameter id the lane drives (zero is reserved). */
   targetParamId: number;
+  /**
+   * Optional persistent target classification. Omit for the legacy opaque lane
+   * form; typed values are serialized in project schema version 2.
+   */
+  targetKind?: ProjectAutomationTargetKind;
   /** Breakpoints (stored verbatim; need not be pre-sorted). */
   points: ProjectAutomationPoint[];
 }

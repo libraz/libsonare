@@ -48,6 +48,13 @@ import {
   warpModeValue,
 } from './value_coercion.js';
 
+export type { ProjectAutomationTargetKind } from './types.js';
+export {
+  PROJECT_AUTOMATION_TARGET_OPAQUE,
+  PROJECT_AUTOMATION_TARGET_TRACK_FADER_DB,
+  PROJECT_AUTOMATION_TARGET_TRACK_PAN,
+} from './types.js';
+
 /**
  * Returns the runtime project ABI version of the loaded native binding.
  *
@@ -438,6 +445,33 @@ export class Project {
     this.native.setSourceAudio(sourceId, audio, channels, sampleRate);
   }
 
+  /** Replace an audio source's metadata strings as one undoable edit. */
+  setAudioSourceMetadata(
+    sourceId: number,
+    metadata: { contentHash: string; externalStemRole: string },
+  ): void;
+  setAudioSourceMetadata(sourceId: number, contentHash: string, externalStemRole: string): void;
+  setAudioSourceMetadata(
+    sourceId: number,
+    contentHashOrMetadata: string | { contentHash: string; externalStemRole: string },
+    externalStemRole?: string,
+  ): void {
+    if (typeof contentHashOrMetadata === 'string') {
+      if (typeof externalStemRole !== 'string') {
+        throw new TypeError(
+          'setAudioSourceMetadata expects (sourceId, contentHash, externalStemRole)',
+        );
+      }
+      this.native.setAudioSourceMetadata(sourceId, contentHashOrMetadata, externalStemRole);
+      return;
+    }
+    this.native.setAudioSourceMetadata(
+      sourceId,
+      contentHashOrMetadata.contentHash,
+      contentHashOrMetadata.externalStemRole,
+    );
+  }
+
   /** Number of tempo segments in the project value model. */
   tempoSegmentCount(): number {
     return this.native.tempoSegmentCount();
@@ -646,13 +680,18 @@ export class Project {
 
   /**
    * Append an automation lane to a track via an undoable edit; returns the
-   * lane's stable target parameter id.
+   * lane's stable target parameter id. Omit `desc.targetKind` for the legacy
+   * opaque target; supply it to persist a typed fader or pan target.
    */
   addAutomationLane(trackId: number, desc: ProjectAutomationLaneDesc): number {
     return this.native.addAutomationLane(trackId, projectAutomationLaneValue(desc));
   }
 
-  /** Replace the lane identified by its stable target parameter id. */
+  /**
+   * Replace the lane identified by its stable target parameter id. Omitting
+   * `desc.targetKind` preserves the existing lane kind through the legacy C
+   * edit path; supplying it applies the typed target through the extended path.
+   */
   editAutomationLane(
     trackId: number,
     targetParamId: number,
@@ -687,6 +726,14 @@ export class Project {
    */
   setMaxUndoDepth(depth: number): void {
     this.native.setMaxUndoDepth(depth);
+  }
+
+  /**
+   * Set the combined retained-byte cap for undo and redo history. Zero is
+   * valid and makes subsequent successful edits non-undoable.
+   */
+  setMaxHistoryBytes(bytes: number): void {
+    this.native.setMaxHistoryBytes(bytes);
   }
 
   // -- MIDI --
@@ -922,10 +969,13 @@ export class Project {
    * extended-waveguide-piano engines plus the realism layer). Each entry of
    * `instruments` binds a {@link SynthPatch} (or a preset-name string such as
    * `'saw-lead'` / `'va:saw-lead'`; see {@link synthPresetNames}) to a
-   * `destinationId` (default `0`). `destinationId` is a JS binding convenience,
-   * not part of the NativeSynth patch itself. An empty array renders silence.
-   * Unknown preset names throw. Deterministic for a fixed project + options +
-   * patch.
+   * `destinationId` (default `0`). An object descriptor may also set
+   * `useGmPrograms: true` to follow incoming GM bank/program changes (and use
+   * the GM drum map on channel 10); it defaults to `false`, preserving the
+   * fixed-patch behavior. `destinationId` and `useGmPrograms` are JS binding
+   * conveniences, not part of the NativeSynth patch itself. An empty array
+   * renders silence. Unknown preset names throw. Deterministic for a fixed
+   * project + options + patch.
    *
    * Argument order is instrument-first to match the WASM and Python bindings.
    */
@@ -939,7 +989,8 @@ export class Project {
   /**
    * Convenience wrapper over {@link bounceWithSynthInstruments} for the common
    * single-instrument case. Pass a {@link SynthPatch} or a bare preset name
-   * (`'saw-lead'` / `'va:saw-lead'`).
+   * (`'saw-lead'` / `'va:saw-lead'`). Set `useGmPrograms: true` on an object
+   * descriptor to follow incoming GM bank/program changes.
    */
   bounceWithSynthInstrument(
     instrument: SynthPatch | string = {},

@@ -91,6 +91,63 @@ it('reads stored tracks, clips, and sources by index', () => {
   }
 });
 
+it('reads and edits audio source metadata without mutating input', () => {
+  const project = Project.create();
+  const trackId = project.addTrack({ kind: 'audio' });
+  project.addClip({ trackId, lengthPpq: 4, sourceUri: 'asset://metadata.wav' });
+  const sourceId = project.clipByIndex(0).sourceId;
+  const { clipId: midiClipId } = project.addMidiClip(0, 1);
+  const midiSourceId = project.clipByIndex(1).sourceId;
+  const metadata = { contentHash: 'sha256:deadbeef', externalStemRole: 'lead' };
+
+  try {
+    expect(project.sourceByIndex(0)).toMatchObject({
+      id: sourceId,
+      kind: 0,
+      nameOrUri: 'asset://metadata.wav',
+      contentHash: '',
+      externalStemRole: '',
+    });
+
+    project.setAudioSourceMetadata(sourceId, metadata);
+    expect(metadata).toEqual({ contentHash: 'sha256:deadbeef', externalStemRole: 'lead' });
+    expect(project.sourceByIndex(0)).toMatchObject(metadata);
+
+    project.setAudioSourceMetadata(sourceId, '', '');
+    expect(project.sourceByIndex(0)).toMatchObject({
+      id: sourceId,
+      nameOrUri: 'asset://metadata.wav',
+      contentHash: '',
+      externalStemRole: '',
+    });
+    project.undo();
+    expect(project.sourceByIndex(0)).toMatchObject(metadata);
+    project.redo();
+    expect(project.sourceByIndex(0)).toMatchObject({ contentHash: '', externalStemRole: '' });
+
+    project.setAudioSourceMetadata(sourceId, metadata);
+    const restored = Project.fromJson(project.toJson());
+    try {
+      expect(restored.sourceByIndex(0)).toMatchObject(metadata);
+    } finally {
+      restored.destroy();
+    }
+
+    expect(() => project.setAudioSourceMetadata(999999, metadata)).toThrow();
+    expect(() => project.setAudioSourceMetadata(midiSourceId, metadata)).toThrow();
+    expect(project.clipByIndex(1).id).toBe(midiClipId);
+    expect(project.sourceByIndex(0)).toMatchObject(metadata);
+    expect(project.sourceByIndex(1)).toMatchObject({
+      id: midiSourceId,
+      kind: 1,
+      contentHash: '',
+      externalStemRole: '',
+    });
+  } finally {
+    project.destroy();
+  }
+});
+
 it('rebinds deserialized source audio before bouncing', () => {
   const project = Project.create();
   const trackId = project.addTrack({ kind: 'audio' });
@@ -286,6 +343,49 @@ describe('Project native binding', () => {
     expect(project.trackCount()).toBe(3);
     // The third undo has no surviving history entry to rewind.
     expect(() => project.undo()).toThrow();
+
+    project.destroy();
+  });
+
+  it('setMaxHistoryBytes validates input and supports zero retention', () => {
+    const project = Project.create();
+    project.addTrack({ kind: 'midi', name: 'before-validation' });
+
+    const invalidValues: unknown[] = [
+      undefined,
+      null,
+      '64',
+      Number.NaN,
+      Number.POSITIVE_INFINITY,
+      Number.NEGATIVE_INFINITY,
+      1.5,
+      -1,
+      Number.MAX_SAFE_INTEGER + 1,
+      Number.MAX_VALUE,
+    ];
+    for (const value of invalidValues) {
+      expect(() =>
+        (project.setMaxHistoryBytes as unknown as (input?: unknown) => void)(value),
+      ).toThrow();
+    }
+
+    // Validation must not disturb an existing undo entry.
+    project.undo();
+    expect(project.trackCount()).toBe(0);
+
+    // A regular edit remains undoable under a positive byte cap.
+    project.setMaxHistoryBytes(Number.MAX_SAFE_INTEGER);
+    project.addTrack({ kind: 'midi', name: 'undoable' });
+    expect(project.trackCount()).toBe(1);
+    project.undo();
+    expect(project.trackCount()).toBe(0);
+
+    // Zero is a valid no-retention policy: mutation succeeds, but has no undo.
+    project.setMaxHistoryBytes(0);
+    project.addTrack({ kind: 'midi', name: 'not-undoable' });
+    expect(project.trackCount()).toBe(1);
+    expect(() => project.undo()).toThrow();
+    expect(project.trackCount()).toBe(1);
 
     project.destroy();
   });

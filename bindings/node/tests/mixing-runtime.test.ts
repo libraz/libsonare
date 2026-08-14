@@ -83,6 +83,18 @@ describe('Mixer runtime methods', () => {
     expect(() => mixer.setDualPan('host', -0.5, 0.5)).not.toThrow();
   });
 
+  it('forwards asymmetric polarity and dual-pan values in scene JSON', () => {
+    mixer.setPolarityInvert('host', true, false);
+    mixer.setDualPan('host', 0.75, -0.25);
+
+    const scene = JSON.parse(mixer.toSceneJson());
+    const host = scene.strips.find((strip: { id: string }) => strip.id === 'host');
+    expect(host.polarityInvertLeft).toBe(true);
+    expect(host.polarityInvertRight).toBe(false);
+    expect(host.dualPanLeft).toBe(0.75);
+    expect(host.dualPanRight).toBe(-0.25);
+  });
+
   it('stores surround pan on the strip scene', () => {
     expect(() =>
       mixer.setSurroundPan('host', { azimuth: -45, divergence: 0.25, lfe: 0.5 }),

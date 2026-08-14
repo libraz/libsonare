@@ -73,7 +73,11 @@ const CASES: readonly ReleasableCase[] = [
       return eq;
     },
     useAfterDestroy: (instance) => (instance as StreamingEqualizer).processMono(block(512)),
-    retainCount: 20,
+    // A StreamingEqualizer instance is far smaller than the other cases, so a
+    // short retain loop lands in RSS-quantization noise and the measurement
+    // floor below trips at random. Retain enough instances that the live cost
+    // is unambiguous.
+    retainCount: 400,
   },
   {
     name: 'RealtimeVoiceChanger',

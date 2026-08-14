@@ -32,6 +32,35 @@ function generateSine(freq: number, sr: number, duration: number): Float32Array 
   return samples;
 }
 
+function writePcm16Wav(filePath: string, channels: number): number {
+  const sampleRate = 22050;
+  const frameCount = 32;
+  const bytesPerSample = 2;
+  const dataSize = frameCount * channels * bytesPerSample;
+  const wav = Buffer.alloc(44 + dataSize);
+  wav.write('RIFF', 0, 4, 'ascii');
+  wav.writeUInt32LE(36 + dataSize, 4);
+  wav.write('WAVE', 8, 4, 'ascii');
+  wav.write('fmt ', 12, 4, 'ascii');
+  wav.writeUInt32LE(16, 16);
+  wav.writeUInt16LE(1, 20);
+  wav.writeUInt16LE(channels, 22);
+  wav.writeUInt32LE(sampleRate, 24);
+  wav.writeUInt32LE(sampleRate * channels * bytesPerSample, 28);
+  wav.writeUInt16LE(channels * bytesPerSample, 32);
+  wav.writeUInt16LE(16, 34);
+  wav.write('data', 36, 4, 'ascii');
+  wav.writeUInt32LE(dataSize, 40);
+  for (let frame = 0; frame < frameCount; frame++) {
+    for (let channel = 0; channel < channels; channel++) {
+      const offset = 44 + (frame * channels + channel) * bytesPerSample;
+      wav.writeInt16LE(channel === 0 ? 4096 : -4096, offset);
+    }
+  }
+  fs.writeFileSync(filePath, wav);
+  return frameCount;
+}
+
 describe('Audio class methods', () => {
   it('detectBpm matches standalone', () => {
     const samples = generateSine(440, SR, 1.0);
@@ -174,6 +203,57 @@ describe('Audio class methods', () => {
   });
 });
 
+describe('Audio.fileChannelCount', () => {
+  it('reports mono and stereo WAV source channels without changing Audio mono semantics', () => {
+    const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'sonare-channel-count-wav-'));
+    const monoPath = path.join(tmpDir, 'mono.wav');
+    const stereoPath = path.join(tmpDir, 'stereo.wav');
+    const frameCount = writePcm16Wav(monoPath, 1);
+    writePcm16Wav(stereoPath, 2);
+    try {
+      expect(Audio.fileChannelCount(monoPath)).toBe(1);
+      expect(Audio.fileChannelCount(stereoPath)).toBe(2);
+
+      const audio = Audio.fromFile(stereoPath);
+      try {
+        expect(audio.getLength()).toBe(frameCount);
+        expect(audio.getData()).toHaveLength(frameCount);
+      } finally {
+        audio.destroy();
+      }
+    } finally {
+      fs.rmSync(tmpDir, { recursive: true, force: true });
+    }
+  });
+
+  it('requires a string path like Audio.fromFile', () => {
+    expect(() => Audio.fileChannelCount(123 as unknown as string)).toThrow(TypeError);
+    expect(() => Audio.fileChannelCount(Buffer.from('mono.wav') as unknown as string)).toThrow(
+      TypeError,
+    );
+  });
+
+  it('translates missing and malformed source-file errors', () => {
+    const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'sonare-channel-count-errors-'));
+    const missingPath = path.join(tmpDir, 'missing.wav');
+    const malformedPath = path.join(tmpDir, 'malformed.wav');
+    fs.writeFileSync(malformedPath, Buffer.from('not a WAV file'));
+    try {
+      expect(() => Audio.fileChannelCount(missingPath)).toThrow(
+        expect.objectContaining({ name: 'SonareError', codeName: 'FileNotFound' }),
+      );
+      expect(() => Audio.fileChannelCount(malformedPath)).toThrow(
+        expect.objectContaining({
+          name: 'SonareError',
+          codeName: hasFfmpegSupport() ? 'DecodeFailed' : 'InvalidFormat',
+        }),
+      );
+    } finally {
+      fs.rmSync(tmpDir, { recursive: true, force: true });
+    }
+  });
+});
+
 describe('error message propagation', () => {
   it('hasFfmpegSupport returns a boolean', () => {
     expect(typeof hasFfmpegSupport()).toBe('boolean');
@@ -251,6 +331,7 @@ describe('FFmpeg decode (skipped without build support or ffmpeg CLI)', () => {
       );
 
       const audio = Audio.fromFile(m4aPath);
+      expect(Audio.fileChannelCount(m4aPath)).toBe(1);
       const samples = audio.getData();
       expect(audio.getData()).not.toBe(samples);
       samples.fill(0);
@@ -268,6 +349,42 @@ describe('FFmpeg decode (skipped without build support or ffmpeg CLI)', () => {
       expect(peak).toBeGreaterThan(0.01);
       expect(peak).toBeLessThanOrEqual(1.0);
       audio.destroy();
+    } finally {
+      fs.rmSync(tmpDir, { recursive: true, force: true });
+    }
+  });
+
+  it.skipIf(!canRun)('Audio.fileChannelCount probes real M4A and FLAC source channels', () => {
+    const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'sonare-channel-count-ffmpeg-'));
+    const wavPath = path.join(tmpDir, 'stereo.wav');
+    const m4aPath = path.join(tmpDir, 'stereo.m4a');
+    const flacPath = path.join(tmpDir, 'stereo.flac');
+    try {
+      execFileSync(
+        ffmpegCli as string,
+        [
+          '-f',
+          'lavfi',
+          '-i',
+          'sine=frequency=440:duration=0.5:sample_rate=22050',
+          '-ac',
+          '2',
+          '-y',
+          wavPath,
+        ],
+        { stdio: 'pipe' },
+      );
+      execFileSync(
+        ffmpegCli as string,
+        ['-i', wavPath, '-c:a', 'aac', '-b:a', '64k', '-y', m4aPath],
+        { stdio: 'pipe' },
+      );
+      execFileSync(ffmpegCli as string, ['-i', wavPath, '-c:a', 'flac', '-y', flacPath], {
+        stdio: 'pipe',
+      });
+
+      expect(Audio.fileChannelCount(m4aPath)).toBe(2);
+      expect(Audio.fileChannelCount(flacPath)).toBe(2);
     } finally {
       fs.rmSync(tmpDir, { recursive: true, force: true });
     }

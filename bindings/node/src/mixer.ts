@@ -9,7 +9,7 @@ import type {
   MixMeterSnapshot,
   MixOptions,
   MixResult,
-  PanLaw,
+  PanLawInput,
   PanMode,
   SendTiming,
   StripRef,
@@ -331,8 +331,8 @@ export class Mixer {
     this.native.setPolarityInvert(strip, invertLeft, invertRight);
   }
 
-  /** Set a strip's pan law (`'const3dB'` | `'const4.5dB'` | `'const6dB'` | `'linear0dB'`). */
-  setPanLaw(strip: StripRef, panLaw: PanLaw | number): void {
+  /** Set a strip's pan law (a {@link PanLawName} alias or raw C ABI ordinal). */
+  setPanLaw(strip: StripRef, panLaw: PanLawInput): void {
     this.native.setPanLaw(strip, panLawValue(panLaw));
   }
 
@@ -490,16 +490,15 @@ export class Mixer {
 }
 
 /**
- * One-shot stereo mix of multiple input strips down to a single stereo bus.
+ * Inputs for the one-shot {@link mixStereo} facade, which mixes multiple
+ * stereo strips down to one stereo bus.
  *
  * The returned `meters` array carries a per-strip {@link MixMeterSnapshot}.
- * Note that the integrating fields (`momentaryLufs`, `shortTermLufs`,
- * `integratedLufs`, `truePeakDbL`/`truePeakDbR`) require sustained streaming to
- * converge; on a short one-shot mix they have not accumulated enough signal and
- * read the -120 dB floor sentinel. Use the streaming {@link Mixer} for
- * meaningful loudness/true-peak readings.
+ * Its integrating fields (`momentaryLufs`, `shortTermLufs`, `integratedLufs`,
+ * `truePeakDbL`, `truePeakDbR`) need sustained streaming to converge; a short
+ * one-shot mix can report the -120 dB floor sentinel. Use {@link Mixer} for
+ * meaningful loudness or true-peak readings.
  */
-/** Inputs for the one-shot {@link mixStereo} facade. */
 export interface MixStereoRequest extends MixOptions {
   leftChannels: Float32Array[];
   rightChannels: Float32Array[];

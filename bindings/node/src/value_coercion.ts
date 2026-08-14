@@ -2,11 +2,13 @@ import type {
   AutomationCurve,
   EngineAutomationPoint,
   EngineAutomationPointCurve,
+  EngineTrackMonitorMode,
   MeterTap,
-  PanLaw,
+  PanLawInput,
   PanMode,
   ProjectAutomationLaneDesc,
   ProjectAutomationPoint,
+  ProjectAutomationTargetKind,
   ProjectClipFade,
   ProjectFadeCurve,
   ProjectLoopMode,
@@ -41,6 +43,20 @@ export function resolveEnumOrdinal(
     }
   }
   throw new RangeError(`Invalid ${enumName}: ${String(value)}`);
+}
+
+/** Resolve the public per-track monitor mode to its C ABI ordinal. */
+export function trackMonitorModeValue(mode: EngineTrackMonitorMode): 0 | 1 | 2 {
+  if (mode === 'off' || mode === 0) {
+    return 0;
+  }
+  if (mode === 'pfl' || mode === 1) {
+    return 1;
+  }
+  if (mode === 'afl' || mode === 2) {
+    return 2;
+  }
+  throw new RangeError(`Invalid track monitor mode: ${String(mode)}`);
 }
 
 export function trackKindValue(kind: ProjectTrackDesc['kind']): number {
@@ -104,17 +120,48 @@ export function projectAutomationPointValue(point: ProjectAutomationPoint): Proj
   };
 }
 
+/** Resolve the public project automation target kind to its C ABI ordinal. */
+export function projectAutomationTargetKindValue(
+  targetKind: ProjectAutomationTargetKind,
+): 0 | 1 | 2 {
+  return resolveEnumOrdinal(
+    targetKind,
+    { opaque: 0, 'track-fader-db': 1, 'track-pan': 2 },
+    'automation target kind',
+  ) as 0 | 1 | 2;
+}
+
 export function projectAutomationLaneValue(
   desc: ProjectAutomationLaneDesc,
 ): ProjectAutomationLaneDesc {
-  return { ...desc, points: desc.points.map(projectAutomationPointValue) };
+  if (desc.targetParamId === 0) {
+    throw new RangeError('project automation lane targetParamId must be non-zero');
+  }
+  const normalized = { ...desc, points: desc.points.map(projectAutomationPointValue) };
+  if (desc.targetKind === undefined) {
+    // Keep the legacy descriptor shape intact: the addon uses property
+    // presence to choose the legacy C ABI versus the typed `_ex` form.
+    delete normalized.targetKind;
+  } else {
+    normalized.targetKind = projectAutomationTargetKindValue(desc.targetKind);
+  }
+  return normalized;
 }
 
-const PAN_LAW_VALUES: Record<PanLaw, number> = {
-  const3dB: 0,
-  'const4.5dB': 1,
-  const6dB: 2,
-  linear0dB: 3,
+const PAN_LAW_VALUES: Readonly<Record<string, number>> = {
+  const3db: 0,
+  'const-3db': 0,
+  '-3db': 0,
+  'const4.5db': 1,
+  'const-4.5db': 1,
+  '-4.5db': 1,
+  const6db: 2,
+  'const-6db': 2,
+  '-6db': 2,
+  linear0db: 3,
+  'linear-0db': 3,
+  linear: 3,
+  '0db': 3,
 };
 
 const METER_TAP_VALUES: Record<MeterTap, number> = {
@@ -137,8 +184,9 @@ export function automationCurveValue(curve: AutomationCurve): number {
   );
 }
 
-export function panLawValue(panLaw: PanLaw | number): number {
-  return resolveEnumOrdinal(panLaw, PAN_LAW_VALUES, 'pan law');
+export function panLawValue(panLaw: PanLawInput): number {
+  const normalized = typeof panLaw === 'string' ? panLaw.toLowerCase().replace(/_/g, '-') : panLaw;
+  return resolveEnumOrdinal(normalized, PAN_LAW_VALUES, 'pan law');
 }
 
 export function panModeValue(panMode: PanMode): number {

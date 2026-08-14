@@ -1,5 +1,11 @@
 import { describe, expect, it } from 'vitest';
-import { masteringInsertNames, Project, RealtimeEngine } from '../src/index.js';
+import {
+  masteringInsertNames,
+  PROJECT_AUTOMATION_TARGET_TRACK_FADER_DB,
+  PROJECT_AUTOMATION_TARGET_TRACK_PAN,
+  Project,
+  RealtimeEngine,
+} from '../src/index.js';
 
 /** A small project with one audio track + clip; returns the ids alongside it. */
 function buildProject(): { project: Project; track: number; clip: number } {
@@ -324,6 +330,8 @@ describe('Project edit ops (new bindings)', () => {
     expect(targetParamId).toBe(1);
 
     const afterAdd = project.toJson();
+    expect(afterAdd).toContain('"version":1');
+    expect(afterAdd).not.toContain('"target_kind"');
     project.editAutomationLane(track, targetParamId, {
       targetParamId: 1,
       points: [{ ppq: 0, value: 0.5 }],
@@ -337,6 +345,112 @@ describe('Project edit ops (new bindings)', () => {
     project.undo();
     expect(project.toJson()).toBe(afterAdd);
 
+    project.destroy();
+  });
+
+  it('adds typed fader and pan lanes and round-trips schema v2 JSON', () => {
+    const project = Project.create();
+    const track = project.addTrack({ kind: 'audio' });
+    project.addAutomationLane(track, {
+      targetParamId: 101,
+      targetKind: 'track-fader-db',
+      points: [{ ppq: 0, value: -3 }],
+    });
+    project.addAutomationLane(track, {
+      targetParamId: 102,
+      targetKind: PROJECT_AUTOMATION_TARGET_TRACK_PAN,
+      points: [{ ppq: 0, value: 0 }],
+    });
+
+    const json = project.toJson();
+    expect(json).toContain('"version":2');
+    expect(json).toContain('"target_kind":1');
+    expect(json).toContain('"target_kind":2');
+
+    const restored = Project.fromJson(json);
+    expect(restored.toJson()).toBe(json);
+    restored.destroy();
+    project.destroy();
+  });
+
+  it('rejects a conflicting typed lane atomically', () => {
+    const project = Project.create();
+    const track = project.addTrack({ kind: 'audio' });
+    project.addAutomationLane(track, {
+      targetParamId: 201,
+      targetKind: PROJECT_AUTOMATION_TARGET_TRACK_FADER_DB,
+      points: [{ ppq: 0, value: -3 }],
+    });
+    project.addAutomationLane(track, {
+      targetParamId: 203,
+      targetKind: PROJECT_AUTOMATION_TARGET_TRACK_PAN,
+      points: [{ ppq: 0, value: 0 }],
+    });
+    const before = project.toJson();
+
+    expect(() =>
+      project.addAutomationLane(track, {
+        targetParamId: 202,
+        targetKind: 'track-fader-db',
+        points: [{ ppq: 0, value: -6 }],
+      }),
+    ).toThrow();
+    expect(project.toJson()).toBe(before);
+
+    expect(() =>
+      project.editAutomationLane(track, 201, {
+        targetParamId: 201,
+        targetKind: 'track-pan',
+        points: [{ ppq: 0, value: -6 }],
+      }),
+    ).toThrow();
+    expect(project.toJson()).toBe(before);
+    project.destroy();
+  });
+
+  it('legacy automation edits preserve a typed lane kind', () => {
+    const project = Project.create();
+    const track = project.addTrack({ kind: 'audio' });
+    project.addAutomationLane(track, {
+      targetParamId: 301,
+      targetKind: 'track-fader-db',
+      points: [{ ppq: 0, value: -3 }],
+    });
+    project.editAutomationLane(track, 301, {
+      targetParamId: 301,
+      points: [{ ppq: 0, value: -6 }],
+    });
+    const json = project.toJson();
+    expect(json).toContain('"version":2');
+    expect(json).toContain('"target_kind":1');
+    project.destroy();
+  });
+
+  it('rejects unknown, out-of-width, and non-finite automation target kinds', () => {
+    const project = Project.create();
+    const track = project.addTrack({ kind: 'audio' });
+    const before = project.toJson();
+    for (const targetKind of ['unknown', 3, Number.NaN, Number.POSITIVE_INFINITY]) {
+      expect(() =>
+        project.addAutomationLane(track, {
+          targetParamId: 401,
+          targetKind: targetKind as never,
+          points: [{ ppq: 0, value: 0 }],
+        }),
+      ).toThrow(RangeError);
+      expect(project.toJson()).toBe(before);
+    }
+    project.destroy();
+  });
+
+  it('rejects zero as the reserved automation target id before mutating', () => {
+    const project = Project.create();
+    const track = project.addTrack({ kind: 'audio' });
+    const before = project.toJson();
+    expect(() =>
+      project.addAutomationLane(track, { targetParamId: 0, points: [{ ppq: 0, value: 1 }] }),
+    ).toThrow(RangeError);
+    expect(project.toJson()).toBe(before);
     project.destroy();
   });
 

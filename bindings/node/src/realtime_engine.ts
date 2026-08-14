@@ -23,11 +23,12 @@ import type {
   EngineScopeTelemetry,
   EngineTelemetry,
   EngineTrackLane,
+  EngineTrackMonitorMode,
   EngineTransportState,
   EqBandInput,
   FileClipPageProviderOptions,
   MidiCcBindOptions,
-  PanLaw,
+  PanLawInput,
   PanMode,
   ProjectMidiCcBinding,
   ProjectTempoSegment,
@@ -40,6 +41,7 @@ import {
   panLawValue,
   panModeValue,
   sendTimingValue,
+  trackMonitorModeValue,
 } from './value_coercion.js';
 
 export class RealtimeEngine {
@@ -420,7 +422,7 @@ export class RealtimeEngine {
    * @param trackId Lane the strip belongs to.
    * @param panLaw Pan law as an enum name, the enum, or the raw int.
    */
-  setTrackStripPanLaw(trackId: number, panLaw: PanLaw | number): void {
+  setTrackStripPanLaw(trackId: number, panLaw: PanLawInput): void {
     this.native.setTrackStripPanLaw(trackId, panLawValue(panLaw));
   }
 
@@ -478,8 +480,41 @@ export class RealtimeEngine {
     return this.native.popClipPageRequest();
   }
 
-  setCaptureBuffer(channels: Float32Array[]): void {
-    this.native.setCaptureBuffer(channels);
+  /**
+   * Allocate an addon-owned capture buffer with the requested channel count
+   * and capacity in frames. This is the canonical cross-binding form.
+   */
+  setCaptureBuffer(numChannels: number, capacityFrames: number): void;
+  /**
+   * Install caller-owned capture planes. The addon copies them immediately, so
+   * their ArrayBuffers may be transferred after this call.
+   *
+   * @deprecated Prefer `(numChannels, capacityFrames)` for cross-binding parity.
+   */
+  setCaptureBuffer(channels: Float32Array[]): void;
+  setCaptureBuffer(numChannelsOrChannels: number | Float32Array[], capacityFrames?: number): void {
+    if (Array.isArray(numChannelsOrChannels)) {
+      this.native.setCaptureBuffer(numChannelsOrChannels);
+      return;
+    }
+    if (
+      !Number.isSafeInteger(numChannelsOrChannels) ||
+      numChannelsOrChannels <= 0 ||
+      capacityFrames === undefined ||
+      !Number.isSafeInteger(capacityFrames) ||
+      capacityFrames <= 0
+    ) {
+      throw new RangeError('capture channel count and capacity must be positive safe integers');
+    }
+    // The runtime validation above proves this optional overload argument is a
+    // positive safe integer; retain that fact for TypeScript's type system.
+    const validatedCapacityFrames = capacityFrames as number;
+    this.native.setCaptureBuffer(
+      Array.from(
+        { length: numChannelsOrChannels },
+        () => new Float32Array(validatedCapacityFrames),
+      ),
+    );
   }
 
   armCapture(armed = true): void {
@@ -537,8 +572,9 @@ export class RealtimeEngine {
   }
 
   /**
-   * Renders in place, adding engine output to `channels`. Zero each plane first
-   * when it contains no upstream input.
+   * Renders one block and returns processed channel copies. Input channel
+   * buffers are never mutated: the addon copies each plane before adding engine
+   * output. Pass zero-filled planes when the engine is the only audio source.
    */
   process(channels: Float32Array[]): Float32Array[] {
     return this.native.process(channels);
@@ -625,6 +661,11 @@ export class RealtimeEngine {
 
   setSoloMute(laneIndex: number, solo: boolean, mute: boolean, renderFrame = -1): void {
     this.native.setSoloMute(laneIndex, solo, mute, renderFrame);
+  }
+
+  /** Schedule a per-track PFL/AFL monitor tap at a render-frame boundary. */
+  setTrackMonitorMode(laneIndex: number, mode: EngineTrackMonitorMode, renderFrame = -1): void {
+    this.native.setTrackMonitorMode(laneIndex, trackMonitorModeValue(mode), renderFrame);
   }
 
   /**

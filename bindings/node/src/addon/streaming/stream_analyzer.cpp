@@ -95,6 +95,36 @@ bool SafeSizeTFromValue(const Napi::Value& value, const char* name, size_t* out)
   return true;
 }
 
+bool ParseWindowOption(const Napi::Object& options, Napi::Env env, sonare::WindowType* out) {
+  const Napi::Value value = options.Get("window");
+  if (value.IsUndefined()) return true;
+
+  int ordinal = 0;
+  if (!value.IsNumber() ||
+      !sonare::numeric::checked_integral_cast(value.As<Napi::Number>().DoubleValue(), &ordinal) ||
+      ordinal < 0 || ordinal > 3) {
+    Napi::RangeError::New(env, "window must be an integer ordinal in the range [0, 3]")
+        .ThrowAsJavaScriptException();
+    return false;
+  }
+
+  switch (ordinal) {
+    case 0:
+      *out = sonare::WindowType::Hann;
+      break;
+    case 1:
+      *out = sonare::WindowType::Hamming;
+      break;
+    case 2:
+      *out = sonare::WindowType::Blackman;
+      break;
+    case 3:
+      *out = sonare::WindowType::Rectangular;
+      break;
+  }
+  return true;
+}
+
 }  // namespace
 
 Napi::Object StreamAnalyzerWrap::Init(Napi::Env env, Napi::Object exports) {
@@ -168,12 +198,7 @@ StreamAnalyzerWrap::StreamAnalyzerWrap(const Napi::CallbackInfo& info)
           node_double_option(opts, "keyUpdateIntervalSec", config.key_update_interval_sec));
       config.bpm_update_interval_sec = static_cast<float>(
           node_double_option(opts, "bpmUpdateIntervalSec", config.bpm_update_interval_sec));
-      const int window =
-          static_cast<int>(node_double_option(opts, "window", static_cast<int>(config.window)));
-      config.window = window == 1   ? sonare::WindowType::Hamming
-                      : window == 2 ? sonare::WindowType::Blackman
-                      : window == 3 ? sonare::WindowType::Rectangular
-                                    : sonare::WindowType::Hann;
+      if (!ParseWindowOption(opts, env, &config.window)) return;
       const Napi::Value output_format_value = opts.Get("outputFormat");
       if (!output_format_value.IsUndefined() && !output_format_value.IsNull() &&
           (!output_format_value.IsNumber() ||

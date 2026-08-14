@@ -446,10 +446,11 @@ Napi::Value SonareWrap::AnalyzeImpulseResponse(const Napi::CallbackInfo& info) {
   size_t length = typed.ElementLength();
   int sample_rate = node_arg_int(info, 1, 48000);
   int n_octave_bands = node_arg_int(info, 2, 6);
+  float min_decay_db = node_arg_float(info, 3, 30.0f);
 
   SonareAcousticResult acoustic{};
-  SonareError err =
-      sonare_analyze_impulse_response(data, length, sample_rate, n_octave_bands, &acoustic);
+  SonareError err = sonare_analyze_impulse_response_ex(data, length, sample_rate, n_octave_bands,
+                                                       min_decay_db, &acoustic);
   if (err != SONARE_OK) {
     sonare_node::ThrowSonareError(env, err);
     return env.Undefined();

@@ -41,6 +41,7 @@ class ProjectWrap : public Napi::ObjectWrap<ProjectWrap> {
   Napi::Value SourceCount(const Napi::CallbackInfo& info);
   Napi::Value UnresolvedAudioSourceIds(const Napi::CallbackInfo& info);
   Napi::Value SetSourceAudio(const Napi::CallbackInfo& info);
+  Napi::Value SetAudioSourceMetadata(const Napi::CallbackInfo& info);
   Napi::Value TempoSegmentCount(const Napi::CallbackInfo& info);
   Napi::Value TimeSignatureCount(const Napi::CallbackInfo& info);
   Napi::Value MarkerCount(const Napi::CallbackInfo& info);
@@ -82,6 +83,7 @@ class ProjectWrap : public Napi::ObjectWrap<ProjectWrap> {
   Napi::Value Redo(const Napi::CallbackInfo& info);
   Napi::Value ClearHistory(const Napi::CallbackInfo& info);
   Napi::Value SetMaxUndoDepth(const Napi::CallbackInfo& info);
+  Napi::Value SetMaxHistoryBytes(const Napi::CallbackInfo& info);
 
   // -- MIDI --
   Napi::Value SetMidiEvents(const Napi::CallbackInfo& info);

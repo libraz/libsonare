@@ -152,7 +152,3 @@ export function assertProjectMidiEvents(
     }
   });
 }
-
-/**
- * Audio object wrapping decoded audio samples.
- */

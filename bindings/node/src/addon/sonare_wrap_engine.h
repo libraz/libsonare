@@ -96,6 +96,7 @@ class RealtimeEngineWrap : public Napi::ObjectWrap<RealtimeEngineWrap> {
   Napi::Value SetParameterSmoothed(const Napi::CallbackInfo& info);
   Napi::Value SetParamSmoothingMs(const Napi::CallbackInfo& info);
   Napi::Value SetSoloMute(const Napi::CallbackInfo& info);
+  Napi::Value SetTrackMonitorMode(const Napi::CallbackInfo& info);
   Napi::Value ClearParameters(const Napi::CallbackInfo& info);
   Napi::Value SetMidiClips(const Napi::CallbackInfo& info);
   Napi::Value SetBuiltinInstrument(const Napi::CallbackInfo& info);

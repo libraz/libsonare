@@ -31,8 +31,9 @@ class SonareWrap : public Napi::ObjectWrap<SonareWrap> {
   Napi::Value AnalyzeInstance(const Napi::CallbackInfo& info);
   void Destroy(const Napi::CallbackInfo& info);
 
-  // Static factory methods (return new SonareWrap instances)
+  // Static factory/query methods
   static Napi::Value FromFile(const Napi::CallbackInfo& info);
+  static Napi::Value FileChannelCount(const Napi::CallbackInfo& info);
   static Napi::Value FromBuffer(const Napi::CallbackInfo& info);
   static Napi::Value FromMemory(const Napi::CallbackInfo& info);
 

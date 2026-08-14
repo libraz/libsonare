@@ -33,6 +33,19 @@ function buildMidiOnlyProject(note = 60): Project {
   return project;
 }
 
+function buildGmProgramProject(program = 4): Project {
+  const project = Project.create();
+  project.setSampleRate(48000);
+  const { trackId, clipId } = project.addMidiClip(0, 1);
+  project.setTrackMidiDestination(trackId, 0);
+  project.setMidiEvents(clipId, [
+    Project.midiProgram(0, 0, 0, program),
+    Project.midiNoteOn(0, 0, 0, 60, 100),
+    Project.midiNoteOff(0.5, 0, 0, 60, 0),
+  ]);
+  return project;
+}
+
 function peak(audio: Float32Array): number {
   let p = 0;
   for (let i = 0; i < audio.length; i++) {
@@ -192,6 +205,54 @@ describe('Project.bounceWithSynthInstrument', () => {
     try {
       const audio = project.bounceWithSynthInstrument('drum-kit', { totalFrames: 24000 });
       expect(peak(audio)).toBeGreaterThan(0);
+    } finally {
+      project.destroy();
+    }
+  });
+
+  it('follows GM program changes only when useGmPrograms is enabled', () => {
+    const fixedProject = buildGmProgramProject();
+    const changedProject = buildGmProgramProject(40);
+    try {
+      const options = { totalFrames: 12000, numChannels: 1, sampleRate: 48000 };
+      const fixed = fixedProject.bounceWithSynthInstrument({ preset: 'sine' }, options);
+      const explicitFalse = fixedProject.bounceWithSynthInstrument(
+        { preset: 'sine', useGmPrograms: false },
+        options,
+      );
+      const gm = fixedProject.bounceWithSynthInstrument(
+        { preset: 'sine', useGmPrograms: true },
+        options,
+      );
+      const otherGm = changedProject.bounceWithSynthInstrument(
+        { preset: 'sine', useGmPrograms: true },
+        options,
+      );
+
+      expect(explicitFalse).toEqual(fixed);
+      expect(gm).not.toEqual(fixed);
+      expect(otherGm).not.toEqual(gm);
+    } finally {
+      fixedProject.destroy();
+      changedProject.destroy();
+    }
+  });
+
+  it('validates useGmPrograms through the shared boolean property reader', () => {
+    const project = buildMidiOnlyProject();
+    try {
+      expect(() =>
+        project.bounceWithSynthInstrument(
+          { preset: 'sine', useGmPrograms: 1 } as unknown as SynthPatch,
+          { totalFrames: 128 },
+        ),
+      ).toThrow();
+      expect(() =>
+        project.bounceWithSynthInstrument(
+          { preset: 'sine', useGmPrograms: 'true' } as unknown as SynthPatch,
+          { totalFrames: 128 },
+        ),
+      ).toThrow();
     } finally {
       project.destroy();
     }

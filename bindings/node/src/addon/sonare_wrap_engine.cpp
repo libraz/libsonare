@@ -222,6 +222,7 @@ Napi::Object RealtimeEngineWrap::Init(Napi::Env env, Napi::Object exports) {
           InstanceMethod<&RealtimeEngineWrap::SetParameterSmoothed>("setParameterSmoothed"),
           InstanceMethod<&RealtimeEngineWrap::SetParamSmoothingMs>("setParamSmoothingMs"),
           InstanceMethod<&RealtimeEngineWrap::SetSoloMute>("setSoloMute"),
+          InstanceMethod<&RealtimeEngineWrap::SetTrackMonitorMode>("setTrackMonitorMode"),
           InstanceMethod<&RealtimeEngineWrap::ClearParameters>("clearParameters"),
           InstanceMethod<&RealtimeEngineWrap::SetMidiClips>("setMidiClips"),
           InstanceMethod<&RealtimeEngineWrap::SetBuiltinInstrument>("setBuiltinInstrument"),
@@ -666,6 +667,15 @@ Napi::Value RealtimeEngineWrap::SetSoloMute(const Napi::CallbackInfo& info) {
   const bool mute = node_arg_bool(info, 2, false);
   ThrowIfError(env, sonare_engine_set_solo_mute(engine_, lane_index, solo ? 1 : 0, mute ? 1 : 0,
                                                 OptionalInt64(info, 3, -1)));
+  return env.Undefined();
+}
+
+Napi::Value RealtimeEngineWrap::SetTrackMonitorMode(const Napi::CallbackInfo& info) {
+  Napi::Env env = info.Env();
+  const uint32_t lane_index = node_arg_uint32(info, 0, 0);
+  const auto mode = static_cast<SonareEngineTrackMonitorMode>(node_arg_int(info, 1, 0));
+  ThrowIfError(env, sonare_engine_set_track_monitor_mode(engine_, lane_index, mode,
+                                                         OptionalInt64(info, 2, -1)));
   return env.Undefined();
 }
 

@@ -66,6 +66,7 @@ Napi::Object SonareWrap::Init(Napi::Env env, Napi::Object exports) {
           InstanceMethod<&SonareWrap::AnalyzeInstance>("analyze"),
           InstanceMethod<&SonareWrap::Destroy>("destroy"),
           StaticMethod<&SonareWrap::FromFile>("fromFile"),
+          StaticMethod<&SonareWrap::FileChannelCount>("fileChannelCount"),
           StaticMethod<&SonareWrap::FromBuffer>("fromBuffer"),
           StaticMethod<&SonareWrap::FromMemory>("fromMemory"),
       });
@@ -502,6 +503,24 @@ Napi::Value SonareWrap::FromFile(const Napi::CallbackInfo& info) {
   auto result = info.This().As<Napi::Function>().New({external});
   audio_guard.release();
   return result;
+}
+
+Napi::Value SonareWrap::FileChannelCount(const Napi::CallbackInfo& info) {
+  Napi::Env env = info.Env();
+
+  if (info.Length() < 1 || !info[0].IsString()) {
+    Napi::TypeError::New(env, "Expected string path argument").ThrowAsJavaScriptException();
+    return env.Undefined();
+  }
+
+  const std::string path = info[0].As<Napi::String>().Utf8Value();
+  int channels = 0;
+  const SonareError err = sonare_audio_file_channel_count(path.c_str(), &channels);
+  if (err != SONARE_OK) {
+    sonare_node::ThrowSonareError(env, err);
+    return env.Undefined();
+  }
+  return Napi::Number::New(env, channels);
 }
 
 Napi::Value SonareWrap::FromBuffer(const Napi::CallbackInfo& info) {

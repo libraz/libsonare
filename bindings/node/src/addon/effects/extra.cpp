@@ -33,6 +33,7 @@
 #include "sonare_wrap.h"
 #include "sonare_wrap_options.h"
 #include "sonare_wrap_utils.h"
+#include "util/constants.h"
 
 using namespace sonare_node;
 
@@ -238,27 +239,56 @@ Napi::Value SonareWrap::HpssWithResidual(const Napi::CallbackInfo& info) {
         .ThrowAsJavaScriptException();
     return env.Undefined();
   }
+  SONARE_NODE_TRY
   auto arr = info[0].As<Napi::Float32Array>();
   int sr = info[1].As<Napi::Number>().Int32Value();
   int kernel_harmonic =
       info.Length() >= 3 && info[2].IsNumber() ? info[2].As<Napi::Number>().Int32Value() : 31;
   int kernel_percussive =
       info.Length() >= 4 && info[3].IsNumber() ? info[3].As<Napi::Number>().Int32Value() : 31;
-  float* out_harmonic = nullptr;
-  float* out_percussive = nullptr;
-  float* out_residual = nullptr;
-  size_t out_length = 0;
-  int out_sample_rate = 0;
-  SonareError err = sonare_hpss_with_residual(arr.Data(), arr.ElementLength(), sr, kernel_harmonic,
-                                              kernel_percussive, &out_harmonic, &out_percussive,
-                                              &out_residual, &out_length, &out_sample_rate);
-  if (err != SONARE_OK) return EffectsCheckCResult(env, err);
+  int n_fft = info.Length() >= 5 && info[4].IsNumber() ? info[4].As<Napi::Number>().Int32Value()
+                                                       : sonare::constants::kDefaultNFft;
+  int hop_length = info.Length() >= 6 && info[5].IsNumber()
+                       ? info[5].As<Napi::Number>().Int32Value()
+                       : sonare::constants::kDefaultHopLength;
+  const bool hard_mask =
+      info.Length() >= 7 && info[6].IsBoolean() ? info[6].As<Napi::Boolean>().Value() : false;
+
+  // Re-apply the boundary checks this direct core call would otherwise bypass,
+  // so the addon rejects the same inputs sonare_hpss_ex does.
+  if (n_fft <= 0 || hop_length <= 0) {
+    Napi::RangeError::New(env, "hpssWithResidual: nFft and hopLength must be positive")
+        .ThrowAsJavaScriptException();
+    return env.Undefined();
+  }
+  sonare::validate_offline_audio_input(arr.Data(), arr.ElementLength(), sr);
+  sonare::Audio audio = sonare::Audio::from_buffer(arr.Data(), arr.ElementLength(), sr);
+  sonare::HpssConfig config;
+  config.kernel_size_harmonic = kernel_harmonic;
+  config.kernel_size_percussive = kernel_percussive;
+  config.use_soft_mask = !hard_mask;
+  sonare::StftConfig stft_config;
+  stft_config.n_fft = n_fft;
+  stft_config.hop_length = hop_length;
+  sonare::HpssAudioResultWithResidual source_result =
+      sonare::hpss_with_residual(audio, config, stft_config);
+
+  const size_t out_length = source_result.harmonic.size();
+  Napi::Float32Array out_harmonic = Napi::Float32Array::New(env, out_length);
+  Napi::Float32Array out_percussive = Napi::Float32Array::New(env, out_length);
+  Napi::Float32Array out_residual = Napi::Float32Array::New(env, out_length);
+  if (out_length > 0) {
+    std::memcpy(out_harmonic.Data(), source_result.harmonic.data(), out_length * sizeof(float));
+    std::memcpy(out_percussive.Data(), source_result.percussive.data(), out_length * sizeof(float));
+    std::memcpy(out_residual.Data(), source_result.residual.data(), out_length * sizeof(float));
+  }
   Napi::Object result = Napi::Object::New(env);
-  result.Set("harmonic", EffectsFloatResult(env, out_harmonic, out_length));
-  result.Set("percussive", EffectsFloatResult(env, out_percussive, out_length));
-  result.Set("residual", EffectsFloatResult(env, out_residual, out_length));
-  result.Set("sampleRate", Napi::Number::New(env, out_sample_rate));
+  result.Set("harmonic", out_harmonic);
+  result.Set("percussive", out_percussive);
+  result.Set("residual", out_residual);
+  result.Set("sampleRate", Napi::Number::New(env, source_result.harmonic.sample_rate()));
   return result;
+  SONARE_NODE_CATCH(env)
 }
 
 Napi::Value SonareWrap::PhaseVocoder(const Napi::CallbackInfo& info) {
@@ -271,10 +301,11 @@ Napi::Value SonareWrap::PhaseVocoder(const Napi::CallbackInfo& info) {
   auto arr = info[0].As<Napi::Float32Array>();
   int sr = info[1].As<Napi::Number>().Int32Value();
   float rate = info[2].As<Napi::Number>().FloatValue();
-  int n_fft =
-      info.Length() >= 4 && info[3].IsNumber() ? info[3].As<Napi::Number>().Int32Value() : 2048;
-  int hop_length =
-      info.Length() >= 5 && info[4].IsNumber() ? info[4].As<Napi::Number>().Int32Value() : 512;
+  int n_fft = info.Length() >= 4 && info[3].IsNumber() ? info[3].As<Napi::Number>().Int32Value()
+                                                       : sonare::constants::kDefaultNFft;
+  int hop_length = info.Length() >= 5 && info[4].IsNumber()
+                       ? info[4].As<Napi::Number>().Int32Value()
+                       : sonare::constants::kDefaultHopLength;
   float* out = nullptr;
   size_t out_length = 0;
   SonareError err = sonare_phase_vocoder(arr.Data(), arr.ElementLength(), sr, rate, n_fft,

@@ -112,13 +112,14 @@ describe('spectralEdit requires an explicit sample rate', () => {
  * A request-object form must resolve every omitted field through the same
  * default table as the positional form; a duplicated table is how the two drift.
  *
- * `vqtToAudio.gamma` is the field that drifted (the request form resolved it to
- * 0, the CQT value, while the positional form and every other surface use the
- * core's automatic sentinel -1). Note the reconstruction itself cannot observe
- * gamma today: griffinlim_vqt narrows VqtConfig to a CqtConfig, which has no
- * gamma field, so the value is dropped before it reaches the DSP. The assertion
- * here is therefore about the shared default table, which is what the fix
- * restores — not about a reconstruction difference.
+ * `vqtToAudio.gamma` is the field whose request/positional defaults must stay
+ * aligned: both forms must pass the core's automatic sentinel -1 unless the
+ * caller supplies another value. The VQT inverse now receives that config and
+ * applies its bandwidth in the raw-magnitude path. The C++ result-only overload
+ * intentionally remains a gamma=0 legacy path because a CqtResult carries no
+ * VQT configuration; these C-ABI facades pass gamma explicitly. The assertion
+ * here is about the shared default table, with binsPerOctave providing the
+ * observable reconstruction guard.
  */
 describe('request and positional forms share one default table', () => {
   const nBins = 24;

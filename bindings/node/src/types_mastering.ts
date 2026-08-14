@@ -6,14 +6,32 @@ export type VoicePresetId =
   | 'robot-mascot'
   | 'dark-villain';
 
-export interface RealtimeVoiceChangerPreset {
+export type VoicePresetCategory =
+  | 'monitor'
+  | 'bright'
+  | 'soft'
+  | 'deep'
+  | 'robot'
+  | 'dark'
+  | 'custom';
+
+export interface RealtimeVoiceChangerPresetMetadata {
   schemaVersion: 1;
-  id?: string;
-  name?: string;
+  id: string;
+  name: string;
   description?: string;
-  macros?: Record<string, number>;
-  dsp?: Record<string, unknown>;
+  category: VoicePresetCategory;
 }
+
+export type RealtimeVoiceChangerPreset =
+  | (RealtimeVoiceChangerPresetMetadata & {
+      dsp: Record<string, unknown>;
+      macros?: never;
+    })
+  | (RealtimeVoiceChangerPresetMetadata & {
+      macros: Record<string, number>;
+      dsp?: never;
+    });
 
 export type RealtimeVoiceChangerConfigInput =
   | VoicePresetId
@@ -665,6 +683,26 @@ export type AutomationCurve = 'linear' | 'exponential' | 'hold' | 's-curve';
  * `0=const3dB`, `1=const4.5dB`, `2=const6dB`, `3=linear0dB`.
  */
 export type PanLaw = 'const3dB' | 'const4.5dB' | 'const6dB' | 'linear0dB';
+
+/**
+ * Accepted pan-law name aliases. Names are normalized case-insensitively with
+ * underscores treated as hyphens at runtime; the canonical four spellings in
+ * {@link PanLaw} remain the preferred TypeScript values.
+ */
+export type PanLawName =
+  | PanLaw
+  | 'const-3db'
+  | '-3db'
+  | 'const-4.5db'
+  | '-4.5db'
+  | 'const-6db'
+  | '-6db'
+  | 'linear-0db'
+  | 'linear'
+  | '0db';
+
+/** Pan-law name or raw C ABI ordinal. */
+export type PanLawInput = PanLawName | number;
 
 /**
  * Meter tap point on a strip. Mapped to the C enum ints

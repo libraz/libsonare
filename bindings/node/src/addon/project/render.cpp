@@ -184,6 +184,8 @@ Napi::Value ProjectWrap::BounceWithSynthInstruments(const Napi::CallbackInfo& in
         Napi::Object obj = element.As<Napi::Object>();
         binding.destination_id = sonare_node::Uint32Property(obj, "destinationId", 0u);
         if (env.IsExceptionPending()) return env.Undefined();
+        binding.use_gm_programs = BoolProperty(obj, "useGmPrograms", false) ? 1 : 0;
+        if (env.IsExceptionPending()) return env.Undefined();
       }
       if (!sonare_node::ReadSynthPatch(env, element, &binding.patch)) {
         return env.Undefined();  // exception already pending

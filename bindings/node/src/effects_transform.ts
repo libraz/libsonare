@@ -9,6 +9,41 @@ import type {
 } from './types.js';
 import { assertSampleRate } from './validation.js';
 
+function resolveEffectFftOptions(
+  fnName: string,
+  nFft: unknown,
+  hopLength: unknown,
+): { nFft: number; hopLength: number } {
+  const resolvedNFft = nFft === undefined ? 2048 : nFft;
+  const resolvedHopLength = hopLength === undefined ? 512 : hopLength;
+  if (typeof resolvedNFft !== 'number' || !Number.isInteger(resolvedNFft)) {
+    throw new TypeError(`${fnName}: nFft must be an integer`);
+  }
+  if (resolvedNFft < 2 || resolvedNFft > 2 ** 30) {
+    throw new RangeError(`${fnName}: nFft must be an even power of two >= 2`);
+  }
+  if ((resolvedNFft & (resolvedNFft - 1)) !== 0) {
+    throw new RangeError(`${fnName}: nFft must be an even power of two >= 2`);
+  }
+  if (typeof resolvedHopLength !== 'number' || !Number.isInteger(resolvedHopLength)) {
+    throw new TypeError(`${fnName}: hopLength must be an integer`);
+  }
+  if (resolvedHopLength <= 0 || resolvedHopLength > 2 ** 31 - 1) {
+    throw new RangeError(`${fnName}: hopLength must be a positive integer`);
+  }
+  return { nFft: resolvedNFft, hopLength: resolvedHopLength };
+}
+
+function resolveHardMask(fnName: string, hardMask: unknown): boolean {
+  if (hardMask === undefined) {
+    return false;
+  }
+  if (typeof hardMask !== 'boolean') {
+    throw new TypeError(`${fnName}: hardMask must be a boolean`);
+  }
+  return hardMask;
+}
+
 /** Common audio input fields for stateless effect requests. */
 export interface EffectSamplesRequest {
   samples: Float32Array;
@@ -18,10 +53,15 @@ export interface EffectSamplesRequest {
 export interface HpssRequest extends EffectSamplesRequest {
   kernelHarmonic?: number;
   kernelPercussive?: number;
+  nFft?: number;
+  hopLength?: number;
+  hardMask?: boolean;
 }
 
 export interface TimeStretchRequest extends EffectSamplesRequest {
   rate: number;
+  nFft?: number;
+  hopLength?: number;
 }
 
 export interface SpectralEditRequest extends EffectSamplesRequest, SpectralEditOptions {
@@ -36,6 +76,8 @@ export interface SpectralEditRequest extends EffectSamplesRequest, SpectralEditO
 
 export interface PitchShiftRequest extends EffectSamplesRequest {
   semitones: number;
+  nFft?: number;
+  hopLength?: number;
 }
 
 export interface PitchCorrectToMidiRequest extends EffectSamplesRequest {
@@ -80,22 +122,33 @@ export function hpss(
   sampleRate?: number,
   kernelHarmonic?: number,
   kernelPercussive?: number,
+  nFft?: number,
+  hopLength?: number,
+  hardMask?: boolean,
 ): HpssResult;
 export function hpss(
   samples: Float32Array | HpssRequest,
   sampleRate = 22050,
   kernelHarmonic = 31,
   kernelPercussive = 31,
+  nFft?: number,
+  hopLength?: number,
+  hardMask?: boolean,
 ): HpssResult {
   const request =
     samples instanceof Float32Array
-      ? { samples, sampleRate, kernelHarmonic, kernelPercussive }
+      ? { samples, sampleRate, kernelHarmonic, kernelPercussive, nFft, hopLength, hardMask }
       : samples;
+  const fftOptions = resolveEffectFftOptions('hpss', request.nFft, request.hopLength);
+  const resolvedHardMask = resolveHardMask('hpss', request.hardMask);
   return addon.hpss(
     request.samples,
     request.sampleRate ?? 22050,
     request.kernelHarmonic ?? 31,
     request.kernelPercussive ?? 31,
+    fftOptions.nFft,
+    fftOptions.hopLength,
+    resolvedHardMask,
   );
 }
 
@@ -128,17 +181,33 @@ export function percussive(
  * @returns Time-stretched audio
  */
 export function timeStretch(request: TimeStretchRequest): Float32Array;
-export function timeStretch(samples: Float32Array, sampleRate: number, rate: number): Float32Array;
+export function timeStretch(
+  samples: Float32Array,
+  sampleRate: number,
+  rate: number,
+  nFft?: number,
+  hopLength?: number,
+): Float32Array;
 export function timeStretch(
   samples: Float32Array | TimeStretchRequest,
   sampleRate?: number,
   rate?: number,
+  nFft?: number,
+  hopLength?: number,
 ): Float32Array {
-  const request = samples instanceof Float32Array ? { samples, sampleRate, rate } : samples;
+  const request =
+    samples instanceof Float32Array ? { samples, sampleRate, rate, nFft, hopLength } : samples;
   if (typeof request.rate !== 'number' || !Number.isFinite(request.rate)) {
     throw new TypeError('timeStretch: rate must be a finite number');
   }
-  return addon.timeStretch(request.samples, request.sampleRate ?? 22050, request.rate);
+  const fftOptions = resolveEffectFftOptions('timeStretch', request.nFft, request.hopLength);
+  return addon.timeStretch(
+    request.samples,
+    request.sampleRate ?? 22050,
+    request.rate,
+    fftOptions.nFft,
+    fftOptions.hopLength,
+  );
 }
 
 /**
@@ -197,17 +266,29 @@ export function pitchShift(
   samples: Float32Array,
   sampleRate: number,
   semitones: number,
+  nFft?: number,
+  hopLength?: number,
 ): Float32Array;
 export function pitchShift(
   samples: Float32Array | PitchShiftRequest,
   sampleRate?: number,
   semitones?: number,
+  nFft?: number,
+  hopLength?: number,
 ): Float32Array {
-  const request = samples instanceof Float32Array ? { samples, sampleRate, semitones } : samples;
+  const request =
+    samples instanceof Float32Array ? { samples, sampleRate, semitones, nFft, hopLength } : samples;
   if (typeof request.semitones !== 'number' || !Number.isFinite(request.semitones)) {
     throw new TypeError('pitchShift: semitones must be a finite number');
   }
-  return addon.pitchShift(request.samples, request.sampleRate ?? 22050, request.semitones);
+  const fftOptions = resolveEffectFftOptions('pitchShift', request.nFft, request.hopLength);
+  return addon.pitchShift(
+    request.samples,
+    request.sampleRate ?? 22050,
+    request.semitones,
+    fftOptions.nFft,
+    fftOptions.hopLength,
+  );
 }
 
 /**

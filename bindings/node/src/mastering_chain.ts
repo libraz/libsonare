@@ -16,11 +16,15 @@ import type {
   StreamingPlatform,
 } from './types.js';
 
+export type NormalizeMode = 'peak' | 'rms';
+
 export interface NormalizeRequest {
   samples: Float32Array;
   sampleRate?: number;
-  /** Finite peak target at or below 0 dBFS. Default 0. */
+  /** Finite target level at or below 0 dBFS. Default 0. */
   targetDb?: number;
+  /** Normalization statistic. Defaults to peak normalization. */
+  mode?: NormalizeMode;
 }
 
 export function normalize(request: NormalizeRequest): Float32Array;
@@ -28,14 +32,36 @@ export function normalize(
   samples: Float32Array,
   sampleRate?: number,
   targetDb?: number,
+  mode?: NormalizeMode,
 ): Float32Array;
 export function normalize(
   samples: Float32Array | NormalizeRequest,
   sampleRate = 22050,
   targetDb = 0.0,
+  mode?: NormalizeMode,
 ): Float32Array {
-  const request = samples instanceof Float32Array ? { samples, sampleRate, targetDb } : samples;
-  return addon.normalize(request.samples, request.sampleRate ?? 22050, request.targetDb ?? 0.0);
+  const request =
+    samples instanceof Float32Array ? { samples, sampleRate, targetDb, mode } : samples;
+  const resolvedMode = resolveNormalizeMode(request.mode);
+  return addon.normalize(
+    request.samples,
+    request.sampleRate ?? 22050,
+    request.targetDb ?? 0.0,
+    resolvedMode,
+  );
+}
+
+function resolveNormalizeMode(value: unknown): NormalizeMode {
+  if (value === undefined) {
+    return 'peak';
+  }
+  if (typeof value !== 'string') {
+    throw new TypeError("normalize: mode must be 'peak' or 'rms'");
+  }
+  if (value !== 'peak' && value !== 'rms') {
+    throw new RangeError("normalize: mode must be 'peak' or 'rms'");
+  }
+  return value;
 }
 
 /** Canonical request form for loudness/true-peak mastering. */
@@ -358,12 +384,13 @@ export function masterAudio(
 /**
  * Asynchronous variant of {@link masterAudio}. Runs the full chain on a libuv
  * worker thread; the returned promise resolves with the same shape as the
- * synchronous version. Progress reporting is not available on the async path
- * (use the synchronous `masterAudio` with `onProgress` if you need it, or
- * spin up multiple async calls in parallel).
+ * synchronous version. Progress reporting and cancellation callbacks are not
+ * available on the async path (use the synchronous `masterAudio` with
+ * `onProgress`/`cancel` if you need them, or spin up multiple async calls in
+ * parallel).
  */
 export function masterAudioAsync(
-  request: Omit<MasterAudioRequest, 'onProgress'>,
+  request: Omit<MasterAudioRequest, 'onProgress' | 'cancel'>,
 ): Promise<MasteringChainResult>;
 export function masterAudioAsync(
   samples: Float32Array,
@@ -372,7 +399,7 @@ export function masterAudioAsync(
   overrides?: MasteringChainConfig,
 ): Promise<MasteringChainResult>;
 export function masterAudioAsync(
-  samples: Omit<MasterAudioRequest, 'onProgress'> | Float32Array,
+  samples: Omit<MasterAudioRequest, 'onProgress' | 'cancel'> | Float32Array,
   sampleRate = 22050,
   presetName: MasteringPreset = 'pop',
   overrides: MasteringChainConfig = {},
@@ -442,7 +469,7 @@ export function masterAudioStereo(
  * Asynchronous variant of {@link masterAudioStereo}.
  */
 export function masterAudioStereoAsync(
-  request: Omit<MasterAudioStereoRequest, 'onProgress'>,
+  request: Omit<MasterAudioStereoRequest, 'onProgress' | 'cancel'>,
 ): Promise<MasteringChainStereoResult>;
 export function masterAudioStereoAsync(
   left: Float32Array,
@@ -452,7 +479,7 @@ export function masterAudioStereoAsync(
   overrides?: MasteringChainConfig,
 ): Promise<MasteringChainStereoResult>;
 export function masterAudioStereoAsync(
-  left: Omit<MasterAudioStereoRequest, 'onProgress'> | Float32Array,
+  left: Omit<MasterAudioStereoRequest, 'onProgress' | 'cancel'> | Float32Array,
   right: Float32Array | undefined = undefined,
   sampleRate = 22050,
   presetName: MasteringPreset = 'pop',
