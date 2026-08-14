@@ -9,15 +9,13 @@
 
 namespace sonare::mastering::maximizer {
 
-std::vector<StreamingPreviewResult> streaming_preview(
-    const Audio& audio, const std::vector<StreamingPlatform>& platforms) {
-  if (audio.empty()) throw SonareException(ErrorCode::InvalidParameter, "audio must not be empty");
+namespace {
+
+std::vector<StreamingPreviewResult> preview_from_measurements(
+    float integrated, float true_peak, const std::vector<StreamingPlatform>& platforms) {
   if (platforms.empty())
     throw SonareException(ErrorCode::InvalidParameter, "platform list must not be empty");
 
-  const auto measured = common::measure_lufs_and_true_peak(audio);
-  const float integrated = measured.integrated_lufs;
-  const float true_peak = measured.true_peak_dbtp;
   std::vector<StreamingPreviewResult> results;
   results.reserve(platforms.size());
   for (const auto& platform : platforms) {
@@ -28,6 +26,31 @@ std::vector<StreamingPreviewResult> streaming_preview(
                        std::isfinite(true_peak) && true_peak + gain > platform.ceiling_db});
   }
   return results;
+}
+
+}  // namespace
+
+std::vector<StreamingPreviewResult> streaming_preview(
+    const Audio& audio, const std::vector<StreamingPlatform>& platforms) {
+  if (audio.empty()) throw SonareException(ErrorCode::InvalidParameter, "audio must not be empty");
+
+  const auto measured = common::measure_lufs_and_true_peak(audio);
+  return preview_from_measurements(measured.integrated_lufs, measured.true_peak_dbtp, platforms);
+}
+
+std::vector<StreamingPreviewResult> streaming_preview_interleaved(
+    const float* samples, std::size_t frames, int channels, int sample_rate,
+    const std::vector<StreamingPlatform>& platforms) {
+  if (samples == nullptr || frames == 0)
+    throw SonareException(ErrorCode::InvalidParameter, "audio must not be empty");
+  if (channels <= 0)
+    throw SonareException(ErrorCode::InvalidParameter, "channel count must be positive");
+  if (sample_rate <= 0)
+    throw SonareException(ErrorCode::InvalidParameter, "sample rate must be positive");
+
+  const auto measured =
+      common::measure_loudness_summary_interleaved(samples, frames, channels, sample_rate);
+  return preview_from_measurements(measured.integrated_lufs, measured.true_peak_dbtp, platforms);
 }
 
 std::string streaming_preview_to_json(const std::vector<StreamingPreviewResult>& results) {

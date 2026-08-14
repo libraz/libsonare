@@ -684,6 +684,18 @@ def mastering_audio_profile(
     sample_rate: int = 22050,
     params: MasteringParams | None = None,
 ) -> str: ...
+def mastering_assistant_suggest_stereo(
+    left: FloatSamples,
+    right: FloatSamples,
+    sample_rate: int = 22050,
+    params: MasteringParams | None = None,
+) -> str: ...
+def mastering_audio_profile_stereo(
+    left: FloatSamples,
+    right: FloatSamples,
+    sample_rate: int = 22050,
+    params: MasteringParams | None = None,
+) -> str: ...
 def mastering_processor_names() -> list[SoloProcessor]: ...
 def mastering_pair_processor_names() -> list[PairProcessor]: ...
 def mastering_pair_analysis_names() -> list[PairAnalysis]: ...
@@ -951,6 +963,12 @@ def mastering_stereo_analyze(
 ) -> str: ...
 def mastering_streaming_preview(
     samples: FloatSamples,
+    sample_rate: int = 22050,
+    platforms: Sequence[dict[str, float | str]] | None = None,
+) -> str: ...
+def mastering_streaming_preview_stereo(
+    left: FloatSamples,
+    right: FloatSamples,
     sample_rate: int = 22050,
     platforms: Sequence[dict[str, float | str]] | None = None,
 ) -> str: ...
@@ -1571,6 +1589,13 @@ def metering_silence_ratio(
 ) -> float: ...
 def metering_crest_factor_db(
     samples: FloatSamples, sample_rate: int = 22050, *, validate: bool = True
+) -> float: ...
+def metering_crest_factor_db_stereo(
+    left: FloatSamples,
+    right: FloatSamples,
+    sample_rate: int = 22050,
+    *,
+    validate: bool = True,
 ) -> float: ...
 def metering_dc_offset(
     samples: FloatSamples, sample_rate: int = 22050, *, validate: bool = True

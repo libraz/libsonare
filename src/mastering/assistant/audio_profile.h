@@ -61,6 +61,24 @@ struct AudioProfileConfig {
 AudioProfile analyze_audio_profile(const float* samples, std::size_t length, int sample_rate,
                                    const AudioProfileConfig& config = {});
 AudioProfile analyze_audio_profile(const Audio& audio, const AudioProfileConfig& config = {});
+
+/// @brief Multi-channel counterpart preserving BS.1770 channel summing.
+/// @details Only the `loudness` block is measured from the channels: integrated
+///          LUFS and LRA come from the channel-summed program and the true peak
+///          is the largest across the channels, so decorrelated stereo is not
+///          read roughly 6 dB low the way a `0.5 * (L + R)` downmix reads it.
+///          The spectral, dynamics and tempo fields describe spectral shape and
+///          timing rather than absolute level and are measured on the downmix,
+///          which keeps them comparable with the mono entry point;
+///          `dynamics.shortTermLufsStd` is a spread rather than a level, so the
+///          downmix's near-constant loudness offset cancels out of it.
+/// @param samples Pointer to `frames * channels` interleaved samples.
+/// @param frames Number of sample frames.
+/// @param channels Channel count; must be positive.
+/// @param sample_rate Sample rate in Hz; must be positive.
+AudioProfile analyze_audio_profile_interleaved(const float* samples, std::size_t frames,
+                                               int channels, int sample_rate,
+                                               const AudioProfileConfig& config = {});
 std::string audio_profile_to_json(const AudioProfile& profile);
 
 }  // namespace sonare::mastering::assistant

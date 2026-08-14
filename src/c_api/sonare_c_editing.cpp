@@ -12,6 +12,7 @@
 #include <cstring>
 #include <limits>
 #include <memory>
+#include <vector>
 
 #include "core/audio.h"
 #include "editing/pitch_editor/scale_quantizer.h"
@@ -74,6 +75,26 @@ SonareError sonare_metering_crest_factor_db(const float* samples, size_t length,
     *out_db = metering::crest_factor_db(audio);
     return SONARE_OK;
   });
+}
+
+SonareError sonare_metering_crest_factor_db_stereo(const float* left, const float* right,
+                                                   size_t length, int sample_rate, float* out_db) {
+  SONARE_C_API_ENTRY;
+  if (!out_db) return SONARE_ERROR_INVALID_PARAMETER;
+  SonareError err = validate_audio_params(left, length, sample_rate);
+  if (err != SONARE_OK) return err;
+  err = validate_audio_params(right, length, sample_rate);
+  if (err != SONARE_OK) return err;
+
+  SONARE_C_TRY
+  std::vector<float> interleaved(length * 2);
+  for (size_t index = 0; index < length; ++index) {
+    interleaved[2 * index] = left[index];
+    interleaved[2 * index + 1] = right[index];
+  }
+  *out_db = metering::crest_factor_db_interleaved(interleaved.data(), length, 2);
+  return SONARE_OK;
+  SONARE_C_CATCH
 }
 
 SonareError sonare_metering_dc_offset(const float* samples, size_t length, int sample_rate,

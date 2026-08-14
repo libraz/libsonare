@@ -82,6 +82,103 @@ SonareError sonare_mastering_audio_profile(const float* samples, size_t length, 
   SONARE_C_CATCH
 }
 
+namespace {
+
+// The analysis entry points take an interleaved buffer so BS.1770 channel
+// summing sees the program rather than a downmix, while the C ABI keeps the
+// planar left/right shape the rest of the stereo mastering surface uses.
+SonareError validate_stereo_params(const float* left, const float* right, size_t length,
+                                   int sample_rate) {
+  SonareError err = validate_audio_params(left, length, sample_rate);
+  if (err != SONARE_OK) return err;
+  return validate_audio_params(right, length, sample_rate);
+}
+
+std::vector<float> interleave_pair(const float* left, const float* right, size_t length) {
+  std::vector<float> interleaved(length * 2);
+  for (size_t index = 0; index < length; ++index) {
+    interleaved[2 * index] = left[index];
+    interleaved[2 * index + 1] = right[index];
+  }
+  return interleaved;
+}
+
+}  // namespace
+
+SonareError sonare_mastering_streaming_preview_stereo(const float* left, const float* right,
+                                                      size_t length, int sample_rate,
+                                                      const SonareStreamingPlatform* platforms,
+                                                      size_t platform_count, char** json_out) {
+  SONARE_C_API_ENTRY;
+  if (!json_out) return SONARE_ERROR_INVALID_PARAMETER;
+  SonareError err = validate_stereo_params(left, right, length, sample_rate);
+  if (err != SONARE_OK) return err;
+  if (!platforms && platform_count > 0) return SONARE_ERROR_INVALID_PARAMETER;
+  *json_out = nullptr;
+
+  SONARE_C_TRY
+  std::vector<sonare::mastering::maximizer::StreamingPlatform> cpp_platforms;
+  cpp_platforms.reserve(platform_count);
+  for (size_t index = 0; index < platform_count; ++index) {
+    if (!platforms[index].name) return SONARE_ERROR_INVALID_PARAMETER;
+    cpp_platforms.push_back(
+        {platforms[index].name, platforms[index].target_lufs, platforms[index].ceiling_db});
+  }
+
+  const std::vector<float> interleaved = interleave_pair(left, right, length);
+  const auto results = platform_count == 0
+                           ? sonare::mastering::maximizer::streaming_preview_interleaved(
+                                 interleaved.data(), length, 2, sample_rate)
+                           : sonare::mastering::maximizer::streaming_preview_interleaved(
+                                 interleaved.data(), length, 2, sample_rate, cpp_platforms);
+
+  *json_out = copy_string(sonare::mastering::maximizer::streaming_preview_to_json(results));
+  return SONARE_OK;
+  SONARE_C_CATCH
+}
+
+SonareError sonare_mastering_assistant_suggest_stereo(const float* left, const float* right,
+                                                      size_t length, int sample_rate,
+                                                      const SonareMasteringParam* params,
+                                                      size_t param_count, char** json_out) {
+  SONARE_C_API_ENTRY;
+  if (!json_out) return SONARE_ERROR_INVALID_PARAMETER;
+  SonareError err = validate_stereo_params(left, right, length, sample_rate);
+  if (err != SONARE_OK) return err;
+  if (!params && param_count > 0) return SONARE_ERROR_INVALID_PARAMETER;
+  *json_out = nullptr;
+
+  SONARE_C_TRY
+  const auto config = to_assistant_config(params, param_count);
+  const std::vector<float> interleaved = interleave_pair(left, right, length);
+  const auto result = sonare::mastering::assistant::suggest_chain_interleaved(
+      interleaved.data(), length, 2, sample_rate, config);
+  *json_out = copy_string(sonare::mastering::assistant::assistant_result_to_json(result));
+  return SONARE_OK;
+  SONARE_C_CATCH
+}
+
+SonareError sonare_mastering_audio_profile_stereo(const float* left, const float* right,
+                                                  size_t length, int sample_rate,
+                                                  const SonareMasteringParam* params,
+                                                  size_t param_count, char** json_out) {
+  SONARE_C_API_ENTRY;
+  if (!json_out) return SONARE_ERROR_INVALID_PARAMETER;
+  SonareError err = validate_stereo_params(left, right, length, sample_rate);
+  if (err != SONARE_OK) return err;
+  if (!params && param_count > 0) return SONARE_ERROR_INVALID_PARAMETER;
+  *json_out = nullptr;
+
+  SONARE_C_TRY
+  const auto config = to_audio_profile_config(params, param_count);
+  const std::vector<float> interleaved = interleave_pair(left, right, length);
+  const auto profile = sonare::mastering::assistant::analyze_audio_profile_interleaved(
+      interleaved.data(), length, 2, sample_rate, config);
+  *json_out = copy_string(sonare::mastering::assistant::audio_profile_to_json(profile));
+  return SONARE_OK;
+  SONARE_C_CATCH
+}
+
 // ============================================================================
 // Streaming mastering chain
 // ============================================================================

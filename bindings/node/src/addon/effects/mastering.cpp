@@ -32,6 +32,7 @@
 #include "mastering/repair/denoise_classical.h"
 #include "mastering/repair/dereverb_classical.h"
 #include "mastering/repair/trim_silence.h"
+#include "metering/basic.h"
 #include "sonare_wrap.h"
 #include "sonare_wrap_options.h"
 #include "sonare_wrap_utils.h"
@@ -1094,6 +1095,42 @@ Napi::Value SonareWrap::MasteringStereoAnalyze(const Napi::CallbackInfo& info) {
   SONARE_NODE_CATCH(env)
 }
 
+namespace {
+
+// The analysis entry points take an interleaved buffer so BS.1770 channel
+// summing sees the program rather than a downmix; the JS surface keeps the
+// planar left/right shape the rest of the stereo mastering API uses.
+bool ReadStereoPair(const Napi::CallbackInfo& info, const char* usage,
+                    std::vector<float>* interleaved, size_t* frames, int* sample_rate) {
+  Napi::Env env = info.Env();
+  if (info.Length() < 3 || !IsFloat32Array(info[0]) || !IsFloat32Array(info[1]) ||
+      !info[2].IsNumber()) {
+    Napi::TypeError::New(env, usage).ThrowAsJavaScriptException();
+    return false;
+  }
+  auto left = info[0].As<Napi::Float32Array>();
+  auto right = info[1].As<Napi::Float32Array>();
+  if (left.ElementLength() != right.ElementLength()) {
+    Napi::RangeError::New(env, "left and right channel lengths must match")
+        .ThrowAsJavaScriptException();
+    return false;
+  }
+  *sample_rate = info[2].As<Napi::Number>().Int32Value();
+  // Re-apply the C-ABI input validation this direct core call would otherwise bypass.
+  sonare::validate_offline_audio_input(left.Data(), left.ElementLength(), *sample_rate);
+  sonare::validate_offline_audio_input(right.Data(), right.ElementLength(), *sample_rate);
+
+  *frames = left.ElementLength();
+  interleaved->resize(*frames * 2);
+  for (size_t index = 0; index < *frames; ++index) {
+    (*interleaved)[2 * index] = left[index];
+    (*interleaved)[2 * index + 1] = right[index];
+  }
+  return true;
+}
+
+}  // namespace
+
 Napi::Value SonareWrap::MasteringAssistantSuggest(const Napi::CallbackInfo& info) {
   Napi::Env env = info.Env();
   if (info.Length() < 2 || !IsFloat32Array(info[0]) || !info[1].IsNumber()) {
@@ -1180,5 +1217,103 @@ Napi::Value SonareWrap::MasteringStreamingPreview(const Napi::CallbackInfo& info
                            ? sonare::mastering::maximizer::streaming_preview(audio)
                            : sonare::mastering::maximizer::streaming_preview(audio, platforms);
   return Napi::String::New(env, sonare::mastering::maximizer::streaming_preview_to_json(results));
+  SONARE_NODE_CATCH(env)
+}
+
+Napi::Value SonareWrap::MasteringAssistantSuggestStereo(const Napi::CallbackInfo& info) {
+  Napi::Env env = info.Env();
+  SONARE_NODE_TRY
+  std::vector<float> interleaved;
+  size_t frames = 0;
+  int sample_rate = 0;
+  if (!ReadStereoPair(info, "Expected (left, right, sampleRate, params?)", &interleaved, &frames,
+                      &sample_rate)) {
+    return env.Undefined();
+  }
+  std::vector<sonare::mastering::api::Param> params;
+  if (info.Length() >= 4 && info[3].IsObject())
+    params = ParamsFromObject(info[3].As<Napi::Object>());
+  const sonare::mastering::assistant::AssistantConfig config =
+      sonare::mastering::assistant::assistant_config_from_params(params.data(), params.size());
+  const auto result = sonare::mastering::assistant::suggest_chain_interleaved(
+      interleaved.data(), frames, 2, sample_rate, config);
+  return Napi::String::New(env, sonare::mastering::assistant::assistant_result_to_json(result));
+  SONARE_NODE_CATCH(env)
+}
+
+Napi::Value SonareWrap::MasteringAudioProfileStereo(const Napi::CallbackInfo& info) {
+  Napi::Env env = info.Env();
+  SONARE_NODE_TRY
+  std::vector<float> interleaved;
+  size_t frames = 0;
+  int sample_rate = 0;
+  if (!ReadStereoPair(info, "Expected (left, right, sampleRate, params?)", &interleaved, &frames,
+                      &sample_rate)) {
+    return env.Undefined();
+  }
+  std::vector<sonare::mastering::api::Param> params;
+  if (info.Length() >= 4 && info[3].IsObject())
+    params = ParamsFromObject(info[3].As<Napi::Object>());
+  const sonare::mastering::assistant::AudioProfileConfig config =
+      sonare::mastering::assistant::audio_profile_config_from_params(params.data(), params.size());
+  const auto profile = sonare::mastering::assistant::analyze_audio_profile_interleaved(
+      interleaved.data(), frames, 2, sample_rate, config);
+  return Napi::String::New(env, sonare::mastering::assistant::audio_profile_to_json(profile));
+  SONARE_NODE_CATCH(env)
+}
+
+Napi::Value SonareWrap::MasteringStreamingPreviewStereo(const Napi::CallbackInfo& info) {
+  Napi::Env env = info.Env();
+  SONARE_NODE_TRY
+  std::vector<float> interleaved;
+  size_t frames = 0;
+  int sample_rate = 0;
+  if (!ReadStereoPair(info, "Expected (left, right, sampleRate, platforms?)", &interleaved, &frames,
+                      &sample_rate)) {
+    return env.Undefined();
+  }
+  std::vector<sonare::mastering::maximizer::StreamingPlatform> platforms;
+  if (info.Length() >= 4 && info[3].IsArray()) {
+    Napi::Array input = info[3].As<Napi::Array>();
+    platforms.reserve(input.Length());
+    for (uint32_t index = 0; index < input.Length(); ++index) {
+      Napi::Value value = input.Get(index);
+      if (!value.IsObject()) {
+        Napi::TypeError::New(env, "platforms entries must be objects").ThrowAsJavaScriptException();
+        return env.Undefined();
+      }
+      Napi::Object object = value.As<Napi::Object>();
+      if (!object.Get("name").IsString() || !object.Get("targetLufs").IsNumber() ||
+          !object.Get("ceilingDb").IsNumber()) {
+        Napi::TypeError::New(env, "platforms entries require name, targetLufs, ceilingDb")
+            .ThrowAsJavaScriptException();
+        return env.Undefined();
+      }
+      platforms.push_back({object.Get("name").As<Napi::String>().Utf8Value(),
+                           object.Get("targetLufs").As<Napi::Number>().FloatValue(),
+                           object.Get("ceilingDb").As<Napi::Number>().FloatValue()});
+    }
+  }
+  const auto results = platforms.empty()
+                           ? sonare::mastering::maximizer::streaming_preview_interleaved(
+                                 interleaved.data(), frames, 2, sample_rate)
+                           : sonare::mastering::maximizer::streaming_preview_interleaved(
+                                 interleaved.data(), frames, 2, sample_rate, platforms);
+  return Napi::String::New(env, sonare::mastering::maximizer::streaming_preview_to_json(results));
+  SONARE_NODE_CATCH(env)
+}
+
+Napi::Value SonareWrap::MeteringCrestFactorDbStereo(const Napi::CallbackInfo& info) {
+  Napi::Env env = info.Env();
+  SONARE_NODE_TRY
+  std::vector<float> interleaved;
+  size_t frames = 0;
+  int sample_rate = 0;
+  if (!ReadStereoPair(info, "Expected (left, right, sampleRate)", &interleaved, &frames,
+                      &sample_rate)) {
+    return env.Undefined();
+  }
+  return Napi::Number::New(
+      env, sonare::metering::crest_factor_db_interleaved(interleaved.data(), frames, 2));
   SONARE_NODE_CATCH(env)
 }

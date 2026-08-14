@@ -153,6 +153,39 @@ def configure_mastering_signatures(lib: ctypes.CDLL) -> None:
                 ctypes.c_size_t,
                 ctypes.POINTER(ctypes.c_char_p),
             ]
+        if hasattr(lib, "sonare_mastering_streaming_preview_stereo"):
+            lib.sonare_mastering_streaming_preview_stereo.restype = ctypes.c_int32
+            lib.sonare_mastering_streaming_preview_stereo.argtypes = [
+                ctypes.POINTER(ctypes.c_float),
+                ctypes.POINTER(ctypes.c_float),
+                ctypes.c_size_t,
+                ctypes.c_int,
+                ctypes.POINTER(SonareStreamingPlatform),
+                ctypes.c_size_t,
+                ctypes.POINTER(ctypes.c_char_p),
+            ]
+        if hasattr(lib, "sonare_mastering_assistant_suggest_stereo"):
+            lib.sonare_mastering_assistant_suggest_stereo.restype = ctypes.c_int32
+            lib.sonare_mastering_assistant_suggest_stereo.argtypes = [
+                ctypes.POINTER(ctypes.c_float),
+                ctypes.POINTER(ctypes.c_float),
+                ctypes.c_size_t,
+                ctypes.c_int,
+                ctypes.POINTER(SonareMasteringParam),
+                ctypes.c_size_t,
+                ctypes.POINTER(ctypes.c_char_p),
+            ]
+        if hasattr(lib, "sonare_mastering_audio_profile_stereo"):
+            lib.sonare_mastering_audio_profile_stereo.restype = ctypes.c_int32
+            lib.sonare_mastering_audio_profile_stereo.argtypes = [
+                ctypes.POINTER(ctypes.c_float),
+                ctypes.POINTER(ctypes.c_float),
+                ctypes.c_size_t,
+                ctypes.c_int,
+                ctypes.POINTER(SonareMasteringParam),
+                ctypes.c_size_t,
+                ctypes.POINTER(ctypes.c_char_p),
+            ]
         lib.sonare_free_mastering_stereo_result.restype = None
         lib.sonare_free_mastering_stereo_result.argtypes = [
             ctypes.POINTER(SonareMasteringStereoResult)

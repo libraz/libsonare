@@ -1,5 +1,6 @@
 #include <algorithm>
 #include <catch2/catch_test_macros.hpp>
+#include <catch2/matchers/catch_matchers_floating_point.hpp>
 #include <cmath>
 #include <string>
 #include <vector>
@@ -110,6 +111,79 @@ TEST_CASE("Assistant AudioProfile captures spectral and dynamics differences",
       assistant::analyze_audio_profile(transient_samples.data(), transient_samples.size(), sr, cfg);
   REQUIRE(transient.dynamics.attack_density > steady.dynamics.attack_density);
   REQUIRE(transient.loudness.true_peak_db > steady.loudness.true_peak_db - 12.0f);
+}
+
+TEST_CASE("Assistant AudioProfile measures a stereo pair with channel summing",
+          "[mastering][assistant]") {
+  constexpr int sr = 22050;
+  assistant::AudioProfileConfig cfg;
+  cfg.n_fft = 1024;
+  cfg.hop_length = 256;
+
+  const auto left = tone(sr, 4.0f, 440.0f, 0.3f);
+  const auto right = tone(sr, 4.0f, 761.0f, 0.3f);
+  std::vector<float> interleaved(left.size() * 2);
+  std::vector<float> downmix(left.size());
+  for (size_t index = 0; index < left.size(); ++index) {
+    interleaved[2 * index] = left[index];
+    interleaved[2 * index + 1] = right[index];
+    downmix[index] = 0.5f * (left[index] + right[index]);
+  }
+
+  const auto stereo =
+      assistant::analyze_audio_profile_interleaved(interleaved.data(), left.size(), 2, sr, cfg);
+  const auto mono = assistant::analyze_audio_profile(downmix.data(), downmix.size(), sr, cfg);
+
+  // The loudness block follows BS.1770 channel summing, so a decorrelated pair
+  // reads 6.02 dB above the downmix a mono caller would have to build.
+  REQUIRE_THAT(stereo.loudness.integrated_lufs - mono.loudness.integrated_lufs,
+               Catch::Matchers::WithinAbs(6.02f, 0.3f));
+
+  // Everything else describes spectral shape and timing rather than absolute
+  // level, so it is measured on the same downmix and must match exactly.
+  REQUIRE(stereo.duration_sec == mono.duration_sec);
+  REQUIRE(stereo.spectral.centroid_hz == mono.spectral.centroid_hz);
+  REQUIRE(stereo.spectral.flatness == mono.spectral.flatness);
+  REQUIRE(stereo.spectral.rolloff_hz == mono.spectral.rolloff_hz);
+  REQUIRE(stereo.dynamics.attack_density == mono.dynamics.attack_density);
+  REQUIRE(stereo.dynamics.sustain_ratio == mono.dynamics.sustain_ratio);
+  REQUIRE(stereo.bpm == mono.bpm);
+}
+
+TEST_CASE("Assistant stereo entry points reject degenerate input", "[mastering][assistant]") {
+  const std::vector<float> samples(256, 0.1f);
+  REQUIRE(assistant::analyze_audio_profile_interleaved(nullptr, 64, 2, 22050).duration_sec == 0.0f);
+  REQUIRE(assistant::analyze_audio_profile_interleaved(samples.data(), 0, 2, 22050).duration_sec ==
+          0.0f);
+  REQUIRE(assistant::analyze_audio_profile_interleaved(samples.data(), 64, 0, 22050).duration_sec ==
+          0.0f);
+  REQUIRE(assistant::analyze_audio_profile_interleaved(samples.data(), 64, 2, 0).duration_sec ==
+          0.0f);
+  REQUIRE(assistant::suggest_chain_interleaved(nullptr, 64, 2, 22050).profile.duration_sec == 0.0f);
+}
+
+TEST_CASE("Assistant suggest_chain_interleaved builds on the stereo profile",
+          "[mastering][assistant]") {
+  constexpr int sr = 22050;
+  const auto left = tone(sr, 4.0f, 440.0f, 0.3f);
+  const auto right = tone(sr, 4.0f, 761.0f, 0.3f);
+  std::vector<float> interleaved(left.size() * 2);
+  std::vector<float> downmix(left.size());
+  for (size_t index = 0; index < left.size(); ++index) {
+    interleaved[2 * index] = left[index];
+    interleaved[2 * index + 1] = right[index];
+    downmix[index] = 0.5f * (left[index] + right[index]);
+  }
+
+  const auto stereo = assistant::suggest_chain_interleaved(interleaved.data(), left.size(), 2, sr);
+  const auto mono = assistant::suggest_chain(downmix.data(), downmix.size(), sr);
+  REQUIRE_THAT(stereo.profile.loudness.integrated_lufs,
+               Catch::Matchers::WithinAbs(assistant::analyze_audio_profile_interleaved(
+                                              interleaved.data(), left.size(), 2, sr)
+                                              .loudness.integrated_lufs,
+                                          0.001f));
+  REQUIRE(stereo.profile.loudness.integrated_lufs > mono.profile.loudness.integrated_lufs);
+  REQUIRE(!stereo.explanation.empty());
 }
 
 TEST_CASE("Assistant genre candidates cover synthetic evaluation set", "[mastering][assistant]") {

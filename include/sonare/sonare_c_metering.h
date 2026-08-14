@@ -30,6 +30,14 @@ SonareError sonare_metering_silence_ratio(const float* samples, size_t length, i
 SonareError sonare_metering_crest_factor_db(const float* samples, size_t length, int sample_rate,
                                             float* out_db);
 
+/// @brief Stereo counterpart of @ref sonare_metering_crest_factor_db.
+/// @details Takes the peak across both channels and the RMS over both channels
+/// together. An out-of-phase pair cancels in a @c 0.5*(L+R) downmix, which
+/// understates its RMS and so overstates the crest factor; measuring the
+/// channels avoids that.
+SonareError sonare_metering_crest_factor_db_stereo(const float* left, const float* right,
+                                                   size_t length, int sample_rate, float* out_db);
+
 /// @brief DC offset (mean) of the buffer in linear amplitude.
 SonareError sonare_metering_dc_offset(const float* samples, size_t length, int sample_rate,
                                       float* out_value);

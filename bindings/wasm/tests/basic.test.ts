@@ -27,9 +27,12 @@ import {
   init,
   isInitialized,
   isSonareError,
+  lufsInterleaved,
   mastering,
   masteringAssistantSuggest,
+  masteringAssistantSuggestStereo,
   masteringAudioProfile,
+  masteringAudioProfileStereo,
   masteringChain,
   masteringChainStereo,
   masteringChainStereoWithProgress,
@@ -44,6 +47,9 @@ import {
   masteringStereoAnalysisNames,
   masteringStereoAnalyze,
   masteringStreamingPreview,
+  masteringStreamingPreviewStereo,
+  meteringCrestFactorDb,
+  meteringCrestFactorDbStereo,
   mixingScenePresetJson,
   mixingScenePresetNames,
   mixStereo,
@@ -1980,6 +1986,72 @@ describe('Sonare WASM Module', () => {
       expect(typeof result.platforms[0].truePeakDb).toBe('number');
       expect(typeof result.platforms[0].normalizationGainDb).toBe('number');
       expect(typeof result.platforms[0].ceilingRisk).toBe('boolean');
+    });
+
+    it('should measure a stereo pair with channel summing in WASM', () => {
+      const sampleRate = 48000;
+      const n = sampleRate * 4;
+      const left = new Float32Array(n);
+      const right = new Float32Array(n);
+      const downmix = new Float32Array(n);
+      for (let i = 0; i < n; i++) {
+        left[i] = 0.2 * Math.sin((2 * Math.PI * 1000 * i) / sampleRate);
+        right[i] = 0.2 * Math.sin((2 * Math.PI * 1731 * i) / sampleRate);
+        downmix[i] = 0.5 * (left[i] + right[i]);
+      }
+
+      const interleaved = new Float32Array(n * 2);
+      for (let i = 0; i < n; i++) {
+        interleaved[2 * i] = left[i];
+        interleaved[2 * i + 1] = right[i];
+      }
+
+      const stereo = JSON.parse(masteringStreamingPreviewStereo({ left, right, sampleRate }));
+      const mono = JSON.parse(masteringStreamingPreview(downmix, sampleRate));
+      const stereoLufs = stereo.platforms[0].integratedLufs;
+
+      expect(stereo.platforms[0].name).toBe('Spotify');
+      // BS.1770 sums the channel powers while the 0.5*(L+R) downmix quarters
+      // them, so a decorrelated pair reads 6.02 dB above what a mono caller can
+      // measure, and the normalization gain built on it is off by the same.
+      expect(stereoLufs - mono.platforms[0].integratedLufs).toBeCloseTo(6.02, 1);
+      expect(stereoLufs).toBeCloseTo(lufsInterleaved(interleaved, 2, sampleRate).integratedLufs, 2);
+      expect(stereo.platforms[0].normalizationGainDb).toBeCloseTo(-14 - stereoLufs, 3);
+
+      const profile = JSON.parse(masteringAudioProfileStereo({ left, right, sampleRate }));
+      expect(profile.loudness.integratedLufs).toBeCloseTo(stereoLufs, 2);
+      expect(profile).toHaveProperty('spectral.centroidHz');
+
+      const suggestion = JSON.parse(masteringAssistantSuggestStereo({ left, right, sampleRate }));
+      expect(suggestion).toHaveProperty('chainConfig');
+      expect(Array.isArray(suggestion.explanation)).toBe(true);
+    });
+
+    it('should keep a crest factor where the downmix cancels in WASM', () => {
+      const sampleRate = 48000;
+      const left = new Float32Array(sampleRate);
+      const right = new Float32Array(sampleRate);
+      const downmix = new Float32Array(sampleRate);
+      for (let i = 0; i < left.length; i++) {
+        left[i] = 0.5 * Math.sin((2 * Math.PI * 440 * i) / sampleRate);
+        right[i] = -left[i];
+        downmix[i] = 0.5 * (left[i] + right[i]);
+      }
+
+      expect(meteringCrestFactorDbStereo({ left, right, sampleRate })).toBeCloseTo(3.01, 1);
+      // The anti-phase pair cancels to silence in the downmix, which reports the
+      // 0 dB neutral rather than the pair's real 3 dB crest factor.
+      expect(meteringCrestFactorDb(downmix, sampleRate)).toBeCloseTo(0, 5);
+    });
+
+    it('should reject a stereo pair whose channel lengths differ in WASM', () => {
+      const sampleRate = 48000;
+      const left = new Float32Array(1024).fill(0.1);
+      const right = new Float32Array(512).fill(0.1);
+      expect(() => masteringStreamingPreviewStereo({ left, right, sampleRate })).toThrow();
+      expect(() => masteringAudioProfileStereo({ left, right, sampleRate })).toThrow();
+      expect(() => masteringAssistantSuggestStereo({ left, right, sampleRate })).toThrow();
+      expect(() => meteringCrestFactorDbStereo({ left, right, sampleRate })).toThrow();
     });
 
     it('should expose mixing presets and stereo mix in WASM', () => {

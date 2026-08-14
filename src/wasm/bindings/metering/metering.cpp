@@ -87,6 +87,21 @@ float js_metering_crest_factor_db(val samples, int sample_rate) {
   return metering::crest_factor_db(audio);
 }
 
+float js_metering_crest_factor_db_stereo(val left_samples, val right_samples, int sample_rate) {
+  validateWasmFloat32ArrayPair(left_samples, "left samples", right_samples, "right samples",
+                               "meteringCrestFactorDbStereo input", true);
+  std::vector<float> left = float32ArrayToVector(left_samples);
+  std::vector<float> right = float32ArrayToVector(right_samples);
+  validate_offline_audio_input(left.data(), left.size(), sample_rate);
+  validate_offline_audio_input(right.data(), right.size(), sample_rate);
+  std::vector<float> interleaved(left.size() * 2);
+  for (size_t index = 0; index < left.size(); ++index) {
+    interleaved[2 * index] = left[index];
+    interleaved[2 * index + 1] = right[index];
+  }
+  return metering::crest_factor_db_interleaved(interleaved.data(), left.size(), 2);
+}
+
 float js_metering_dc_offset(val samples, int sample_rate) {
   Audio audio = loadValidatedAudio(samples, sample_rate);
   return metering::dc_offset(audio);
@@ -457,6 +472,7 @@ void registerMeteringBindings() {
   function("meteringRmsDb", &js_metering_rms_db);
   function("meteringSilenceRatio", &js_metering_silence_ratio);
   function("meteringCrestFactorDb", &js_metering_crest_factor_db);
+  function("meteringCrestFactorDbStereo", &js_metering_crest_factor_db_stereo);
   function("meteringDcOffset", &js_metering_dc_offset);
   function("meteringTruePeakDb", &js_metering_true_peak_db);
   function("meteringDetectClipping", &js_metering_detect_clipping);

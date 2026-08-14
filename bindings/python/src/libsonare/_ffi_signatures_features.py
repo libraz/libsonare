@@ -834,6 +834,15 @@ def configure_features_signatures(lib: ctypes.CDLL) -> None:
             ctypes.c_int,
             ctypes.POINTER(ctypes.c_float),
         ]
+    if hasattr(lib, "sonare_metering_crest_factor_db_stereo"):
+        lib.sonare_metering_crest_factor_db_stereo.restype = ctypes.c_int32
+        lib.sonare_metering_crest_factor_db_stereo.argtypes = [
+            ctypes.POINTER(ctypes.c_float),
+            ctypes.POINTER(ctypes.c_float),
+            ctypes.c_size_t,
+            ctypes.c_int,
+            ctypes.POINTER(ctypes.c_float),
+        ]
     lib.sonare_metering_silence_ratio.restype = ctypes.c_int32
     lib.sonare_metering_silence_ratio.argtypes = [
         ctypes.POINTER(ctypes.c_float),

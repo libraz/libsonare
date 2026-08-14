@@ -8,12 +8,14 @@
 #include <limits>
 #include <numeric>
 #include <utility>
+#include <vector>
 
 #include "analysis/bpm_analyzer.h"
 #include "core/spectrum.h"
 #include "feature/mel_spectrogram.h"
 #include "feature/onset.h"
 #include "feature/spectral.h"
+#include "mastering/common/loudness_measure.h"
 #include "metering/basic.h"
 #include "metering/lufs.h"
 #include "metering/true_peak.h"
@@ -275,18 +277,14 @@ AudioProfile analyze_audio_profile(const float* samples, std::size_t length, int
   return analyze_audio_profile(Audio::from_buffer(samples, length, sample_rate), config);
 }
 
-AudioProfile analyze_audio_profile(const Audio& audio, const AudioProfileConfig& config) {
-  AudioProfile profile;
-  if (audio.empty() || audio.sample_rate() <= 0) return profile;
+namespace {
 
-  profile.duration_sec = audio.duration();
-
-  const auto loudness = metering::lufs(audio);
-  profile.loudness.integrated_lufs = loudness.integrated_lufs;
-  profile.loudness.lra_lu = loudness.loudness_range;
-  profile.loudness.true_peak_db = metering::true_peak_db(audio, config.true_peak_oversample);
-  profile.loudness.crest_factor_db = metering::crest_factor_db(audio);
-
+// Everything outside the loudness block: spectral shape, dynamics and tempo.
+// These describe shape and timing rather than absolute level, so the stereo
+// entry point measures them on the downmix and only replaces the loudness
+// block, keeping mono and stereo profiles comparable field by field.
+void fill_profile_body(const Audio& audio, const AudioProfileConfig& config,
+                       AudioProfile& profile) {
   StftConfig stft_config;
   stft_config.n_fft = config.n_fft;
   stft_config.hop_length = config.hop_length;
@@ -340,6 +338,55 @@ AudioProfile analyze_audio_profile(const Audio& audio, const AudioProfileConfig&
   }
 
   profile.genre_candidates = infer_genres(profile.bpm, profile.spectral, profile.dynamics);
+}
+
+}  // namespace
+
+AudioProfile analyze_audio_profile(const Audio& audio, const AudioProfileConfig& config) {
+  AudioProfile profile;
+  if (audio.empty() || audio.sample_rate() <= 0) return profile;
+
+  profile.duration_sec = audio.duration();
+
+  const auto loudness = metering::lufs(audio);
+  profile.loudness.integrated_lufs = loudness.integrated_lufs;
+  profile.loudness.lra_lu = loudness.loudness_range;
+  profile.loudness.true_peak_db = metering::true_peak_db(audio, config.true_peak_oversample);
+  profile.loudness.crest_factor_db = metering::crest_factor_db(audio);
+
+  fill_profile_body(audio, config, profile);
+  return profile;
+}
+
+AudioProfile analyze_audio_profile_interleaved(const float* samples, std::size_t frames,
+                                               int channels, int sample_rate,
+                                               const AudioProfileConfig& config) {
+  AudioProfile profile;
+  if (samples == nullptr || frames == 0 || channels <= 0 || sample_rate <= 0) return profile;
+
+  std::vector<float> mono(frames, 0.0f);
+  const float scale = 1.0f / static_cast<float>(channels);
+  for (std::size_t frame = 0; frame < frames; ++frame) {
+    float sum = 0.0f;
+    for (int channel = 0; channel < channels; ++channel) {
+      sum +=
+          samples[frame * static_cast<std::size_t>(channels) + static_cast<std::size_t>(channel)];
+    }
+    mono[frame] = sum * scale;
+  }
+  const Audio audio = Audio::from_buffer(mono.data(), mono.size(), sample_rate);
+
+  profile.duration_sec = audio.duration();
+
+  const auto summary = common::measure_loudness_summary_interleaved(
+      samples, frames, channels, sample_rate, config.true_peak_oversample);
+  profile.loudness.integrated_lufs = summary.integrated_lufs;
+  profile.loudness.lra_lu = summary.loudness_range;
+  profile.loudness.true_peak_db = summary.true_peak_dbtp;
+  profile.loudness.crest_factor_db =
+      metering::crest_factor_db_interleaved(samples, frames, channels);
+
+  fill_profile_body(audio, config, profile);
   return profile;
 }
 

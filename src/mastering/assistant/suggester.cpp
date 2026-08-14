@@ -101,6 +101,15 @@ AssistantResult suggest_chain(const Audio& audio, const AssistantConfig& config)
   return suggest_chain(analyze_audio_profile(audio), config);
 }
 
+AssistantResult suggest_chain_interleaved(const float* samples, std::size_t frames, int channels,
+                                          int sample_rate, const AssistantConfig& config) {
+  if (samples == nullptr || frames == 0 || channels <= 0 || sample_rate <= 0) {
+    return suggest_chain(AudioProfile{}, config);
+  }
+  return suggest_chain(analyze_audio_profile_interleaved(samples, frames, channels, sample_rate),
+                       config);
+}
+
 AssistantResult suggest_chain(const AudioProfile& profile, const AssistantConfig& config) {
   AssistantResult result;
   result.profile = profile;

@@ -130,6 +130,9 @@ Napi::Object SonareWrap::Init(Napi::Env env, Napi::Object exports) {
               Napi::Function::New(env, &SonareWrap::MeteringSilenceRatio, "meteringSilenceRatio"));
   exports.Set("meteringCrestFactorDb", Napi::Function::New(env, &SonareWrap::MeteringCrestFactorDb,
                                                            "meteringCrestFactorDb"));
+  exports.Set("meteringCrestFactorDbStereo",
+              Napi::Function::New(env, &SonareWrap::MeteringCrestFactorDbStereo,
+                                  "meteringCrestFactorDbStereo"));
   exports.Set("meteringDcOffset",
               Napi::Function::New(env, &SonareWrap::MeteringDcOffset, "meteringDcOffset"));
   exports.Set("meteringTruePeakDb",
@@ -276,6 +279,15 @@ Napi::Object SonareWrap::Init(Napi::Env env, Napi::Object exports) {
   exports.Set("masteringStreamingPreview",
               Napi::Function::New(env, &SonareWrap::MasteringStreamingPreview,
                                   "masteringStreamingPreview"));
+  exports.Set("masteringAssistantSuggestStereo",
+              Napi::Function::New(env, &SonareWrap::MasteringAssistantSuggestStereo,
+                                  "masteringAssistantSuggestStereo"));
+  exports.Set("masteringAudioProfileStereo",
+              Napi::Function::New(env, &SonareWrap::MasteringAudioProfileStereo,
+                                  "masteringAudioProfileStereo"));
+  exports.Set("masteringStreamingPreviewStereo",
+              Napi::Function::New(env, &SonareWrap::MasteringStreamingPreviewStereo,
+                                  "masteringStreamingPreviewStereo"));
   exports.Set("masteringDynamicsCompressor",
               Napi::Function::New(env, &SonareWrap::MasteringDynamicsCompressor,
                                   "masteringDynamicsCompressor"));

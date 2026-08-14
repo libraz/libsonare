@@ -400,6 +400,19 @@ SonareError sonare_mastering_streaming_preview(const float* samples, size_t leng
                                                const SonareStreamingPlatform* platforms,
                                                size_t platform_count, char** json_out);
 
+/// @brief Stereo counterpart of @ref sonare_mastering_streaming_preview.
+/// @details Measures the integrated loudness with BS.1770 channel summing and
+/// reports the larger of the two channel true peaks. Both the normalization
+/// gain and the ceiling-risk flag follow from that loudness, so passing a
+/// @c 0.5*(L+R) downmix to the mono entry point reads roughly 6 dB low on
+/// decorrelated stereo and understates the risk by the same amount.
+/// Pass NULL/0 for @p platforms to use the built-in platform list.
+/// The returned string must be released with sonare_free_string().
+SonareError sonare_mastering_streaming_preview_stereo(const float* left, const float* right,
+                                                      size_t length, int sample_rate,
+                                                      const SonareStreamingPlatform* platforms,
+                                                      size_t platform_count, char** json_out);
+
 /// @brief Analyze audio and suggest a mastering chain as JSON.
 /// @details @p params accepts targetLufs, ceilingDb, enableRepair,
 /// and preferStreamingSafe. The returned string must be released with
@@ -408,12 +421,36 @@ SonareError sonare_mastering_assistant_suggest(const float* samples, size_t leng
                                                const SonareMasteringParam* params,
                                                size_t param_count, char** json_out);
 
+/// @brief Stereo counterpart of @ref sonare_mastering_assistant_suggest.
+/// @details Profiles the pair through @ref sonare_mastering_audio_profile_stereo,
+/// so the loudness stage of the suggested chain is built on the channel-summed
+/// program rather than a downmix that reads roughly 6 dB low.
+/// The returned string must be released with sonare_free_string().
+SonareError sonare_mastering_assistant_suggest_stereo(const float* left, const float* right,
+                                                      size_t length, int sample_rate,
+                                                      const SonareMasteringParam* params,
+                                                      size_t param_count, char** json_out);
+
 /// @brief Analyze audio and return mastering assistant profile JSON.
 /// @details @p params accepts nFft, hopLength, and truePeakOversample.
 /// The returned string must be released with sonare_free_string().
 SonareError sonare_mastering_audio_profile(const float* samples, size_t length, int sample_rate,
                                            const SonareMasteringParam* params, size_t param_count,
                                            char** json_out);
+
+/// @brief Stereo counterpart of @ref sonare_mastering_audio_profile.
+/// @details Only the @c loudness block is measured from the two channels:
+/// integrated LUFS and LRA come from the channel-summed program and the true
+/// peak is the larger of the two, so decorrelated stereo is not read roughly
+/// 6 dB low the way a @c 0.5*(L+R) downmix reads it. The spectral, dynamics and
+/// tempo fields describe shape and timing rather than absolute level and are
+/// measured on the downmix, which keeps them comparable with the mono entry
+/// point. @p params accepts the same keys as the mono entry point.
+/// The returned string must be released with sonare_free_string().
+SonareError sonare_mastering_audio_profile_stereo(const float* left, const float* right,
+                                                  size_t length, int sample_rate,
+                                                  const SonareMasteringParam* params,
+                                                  size_t param_count, char** json_out);
 
 typedef struct {
   float pre_left[SONARE_EQ_SPECTRUM_STREAM_CAPACITY];

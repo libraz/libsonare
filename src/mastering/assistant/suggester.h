@@ -30,6 +30,19 @@ struct AssistantResult {
 
 AssistantResult suggest_chain(const float* samples, std::size_t length, int sample_rate,
                               const AssistantConfig& config = {});
+
+/// @brief Multi-channel counterpart preserving BS.1770 channel summing.
+/// @details Profiles through @ref analyze_audio_profile_interleaved, so the
+///          loudness the suggestion is built on is the channel-summed program
+///          rather than a `0.5 * (L + R)` downmix. The suggested chain's
+///          loudness stage is driven by that measurement, so a downmixed
+///          profile asks for roughly 6 dB more gain than the material needs.
+/// @param samples Pointer to `frames * channels` interleaved samples.
+/// @param frames Number of sample frames.
+/// @param channels Channel count; must be positive.
+/// @param sample_rate Sample rate in Hz; must be positive.
+AssistantResult suggest_chain_interleaved(const float* samples, std::size_t frames, int channels,
+                                          int sample_rate, const AssistantConfig& config = {});
 AssistantResult suggest_chain(const Audio& audio, const AssistantConfig& config = {});
 AssistantResult suggest_chain(const AudioProfile& profile, const AssistantConfig& config = {});
 std::string assistant_result_to_json(const AssistantResult& result);

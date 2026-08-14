@@ -505,6 +505,83 @@ TEST_CASE("StreamingPreview reports platform normalization and ceiling risk",
   REQUIRE(result[0].ceiling_risk);
 }
 
+TEST_CASE("StreamingPreview measures a stereo pair with channel summing",
+          "[mastering][maximizer]") {
+  constexpr int sample_rate = 48000;
+  constexpr int frames = sample_rate * 4;
+  const std::vector<float> left = generate_sine_samples(1000.0f, sample_rate, frames, 0.2f);
+  const std::vector<float> right = generate_sine_samples(1731.0f, sample_rate, frames, 0.2f);
+
+  std::vector<float> interleaved(static_cast<size_t>(frames) * 2);
+  std::vector<float> downmix(static_cast<size_t>(frames));
+  for (size_t index = 0; index < static_cast<size_t>(frames); ++index) {
+    interleaved[2 * index] = left[index];
+    interleaved[2 * index + 1] = right[index];
+    downmix[index] = 0.5f * (left[index] + right[index]);
+  }
+
+  const std::vector<StreamingPlatform> platforms = {{"Test", -14.0f, -1.0f}};
+  const auto stereo =
+      streaming_preview_interleaved(interleaved.data(), frames, 2, sample_rate, platforms);
+  const auto mono = streaming_preview(Audio::from_vector(downmix, sample_rate), platforms);
+
+  const float expected =
+      metering::lufs_interleaved(interleaved.data(), frames, 2, sample_rate).integrated_lufs;
+  REQUIRE_THAT(stereo[0].integrated_lufs, WithinAbs(expected, 0.01f));
+
+  // BS.1770 sums the channel powers while the 0.5*(L+R) downmix a mono caller
+  // has to build quarters them, so a decorrelated pair reads 6.02 dB low. The
+  // normalization gain is target minus that measurement, so the error passes
+  // straight through to the gain and to the ceiling-risk verdict built on it.
+  REQUIRE_THAT(stereo[0].integrated_lufs - mono[0].integrated_lufs, WithinAbs(6.02f, 0.3f));
+  REQUIRE_THAT(stereo[0].normalization_gain_db,
+               WithinAbs(-14.0f - stereo[0].integrated_lufs, 0.001f));
+  REQUIRE_THAT(mono[0].normalization_gain_db - stereo[0].normalization_gain_db,
+               WithinAbs(6.02f, 0.3f));
+}
+
+TEST_CASE("StreamingPreview keeps a measurement where a downmix cancels",
+          "[mastering][maximizer]") {
+  constexpr int sample_rate = 48000;
+  constexpr int frames = sample_rate * 4;
+  const std::vector<float> left = generate_sine_samples(1000.0f, sample_rate, frames, 0.5f);
+
+  // Anti-phase pair: the downmix is silence, so the mono path falls below the
+  // absolute gate and reports a non-finite loudness with a zeroed gain, while
+  // the program itself is loud.
+  std::vector<float> interleaved(static_cast<size_t>(frames) * 2);
+  std::vector<float> downmix(static_cast<size_t>(frames));
+  for (size_t index = 0; index < static_cast<size_t>(frames); ++index) {
+    interleaved[2 * index] = left[index];
+    interleaved[2 * index + 1] = -left[index];
+    downmix[index] = 0.5f * (left[index] - left[index]);
+  }
+
+  const std::vector<StreamingPlatform> platforms = {{"Test", -14.0f, -1.0f}};
+  const auto stereo =
+      streaming_preview_interleaved(interleaved.data(), frames, 2, sample_rate, platforms);
+  const auto mono = streaming_preview(Audio::from_vector(downmix, sample_rate), platforms);
+
+  REQUIRE(!std::isfinite(mono[0].integrated_lufs));
+  REQUIRE(mono[0].normalization_gain_db == 0.0f);
+  REQUIRE(std::isfinite(stereo[0].integrated_lufs));
+  REQUIRE_THAT(
+      stereo[0].integrated_lufs,
+      WithinAbs(
+          metering::lufs_interleaved(interleaved.data(), frames, 2, sample_rate).integrated_lufs,
+          0.01f));
+  REQUIRE(stereo[0].normalization_gain_db != 0.0f);
+}
+
+TEST_CASE("StreamingPreview rejects invalid interleaved input", "[mastering][maximizer]") {
+  const std::vector<float> samples(128, 0.1f);
+  REQUIRE_THROWS(streaming_preview_interleaved(nullptr, 64, 2, 48000));
+  REQUIRE_THROWS(streaming_preview_interleaved(samples.data(), 0, 2, 48000));
+  REQUIRE_THROWS(streaming_preview_interleaved(samples.data(), 64, 0, 48000));
+  REQUIRE_THROWS(streaming_preview_interleaved(samples.data(), 64, 2, 0));
+  REQUIRE_THROWS(streaming_preview_interleaved(samples.data(), 64, 2, 48000, {}));
+}
+
 TEST_CASE("Maximizer processors validate configuration and state", "[mastering][maximizer]") {
   REQUIRE_THROWS(Maximizer({0.0f, -1.0f, -1.0f, 10.0f}));
   REQUIRE_THROWS(TruePeakLimiter({-1.0f, 1.0f, 10.0f, 0}));

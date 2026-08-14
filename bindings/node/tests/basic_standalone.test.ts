@@ -29,7 +29,9 @@ import {
   hasFfmpegSupport,
   hybridCqt,
   masteringAssistantSuggest,
+  masteringAssistantSuggestStereo,
   masteringAudioProfile,
+  masteringAudioProfileStereo,
   masteringPairAnalysisNames,
   masteringPairAnalyze,
   masteringPairProcess,
@@ -37,6 +39,9 @@ import {
   masteringStereoAnalysisNames,
   masteringStereoAnalyze,
   masteringStreamingPreview,
+  masteringStreamingPreviewStereo,
+  meteringCrestFactorDb,
+  meteringCrestFactorDbStereo,
   onsetStrengthMulti,
   padCenter,
   pcen,
@@ -553,5 +558,61 @@ describe('standalone functions', () => {
     expect(typeof result.platforms[0].truePeakDb).toBe('number');
     expect(typeof result.platforms[0].normalizationGainDb).toBe('number');
     expect(typeof result.platforms[0].ceilingRisk).toBe('boolean');
+  });
+
+  it('measures a stereo pair with channel summing, not a downmix', () => {
+    const sampleRate = 48000;
+    const left = generateSine(1000, sampleRate, 4);
+    const right = generateSine(1731, sampleRate, 4);
+    const downmix = new Float32Array(left.length);
+    for (let i = 0; i < left.length; i += 1) {
+      downmix[i] = 0.5 * (left[i] + right[i]);
+    }
+
+    const stereo = JSON.parse(masteringStreamingPreviewStereo({ left, right, sampleRate }));
+    const mono = JSON.parse(masteringStreamingPreview(downmix, sampleRate));
+    const stereoLufs = stereo.platforms[0].integratedLufs;
+    const monoLufs = mono.platforms[0].integratedLufs;
+
+    expect(stereo.platforms[0].name).toBe('Spotify');
+    // BS.1770 sums the channel powers while the 0.5*(L+R) downmix quarters
+    // them, so a decorrelated pair reads 6.02 dB above what a mono caller can
+    // measure, and the normalization gain built on it is off by the same.
+    expect(stereoLufs - monoLufs).toBeCloseTo(6.02, 1);
+    expect(stereo.platforms[0].normalizationGainDb).toBeCloseTo(-14 - stereoLufs, 3);
+
+    const profile = JSON.parse(masteringAudioProfileStereo({ left, right, sampleRate }));
+    expect(profile.loudness.integratedLufs).toBeCloseTo(stereoLufs, 2);
+    expect(profile).toHaveProperty('spectral.centroidHz');
+
+    const suggestion = JSON.parse(masteringAssistantSuggestStereo({ left, right, sampleRate }));
+    expect(suggestion).toHaveProperty('chainConfig');
+    expect(Array.isArray(suggestion.explanation)).toBe(true);
+  });
+
+  it('keeps a crest factor where the downmix cancels', () => {
+    const sampleRate = 48000;
+    const left = generateSine(440, sampleRate, 1);
+    const right = new Float32Array(left.length);
+    const downmix = new Float32Array(left.length);
+    for (let i = 0; i < left.length; i += 1) {
+      right[i] = -left[i];
+      downmix[i] = 0.5 * (left[i] + right[i]);
+    }
+
+    expect(meteringCrestFactorDbStereo({ left, right, sampleRate })).toBeCloseTo(3.01, 1);
+    // The anti-phase pair cancels to silence in the downmix, which reports the
+    // 0 dB neutral rather than the pair's real 3 dB crest factor.
+    expect(meteringCrestFactorDb(downmix, sampleRate)).toBeCloseTo(0, 5);
+  });
+
+  it('rejects a stereo pair whose channel lengths differ', () => {
+    const sampleRate = 48000;
+    const left = generateSine(440, sampleRate, 1);
+    const right = left.subarray(0, left.length - 1);
+    expect(() => masteringStreamingPreviewStereo({ left, right, sampleRate })).toThrow();
+    expect(() => masteringAudioProfileStereo({ left, right, sampleRate })).toThrow();
+    expect(() => masteringAssistantSuggestStereo({ left, right, sampleRate })).toThrow();
+    expect(() => meteringCrestFactorDbStereo({ left, right, sampleRate })).toThrow();
   });
 });

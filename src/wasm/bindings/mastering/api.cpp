@@ -385,6 +385,25 @@ std::string js_mastering_stereo_analyze(std::string analysis_name, val left_samp
                                               sample_rate, masteringParamsFromObject(params));
 }
 
+// The analysis entry points take an interleaved buffer so BS.1770 channel
+// summing sees the program rather than a downmix; the JS surface keeps the
+// planar left/right shape the rest of the stereo mastering API uses.
+std::vector<float> interleaveValidatedPair(val left_samples, val right_samples, int sample_rate,
+                                           const char* context) {
+  validateWasmFloat32ArrayPair(left_samples, "left samples", right_samples, "right samples",
+                               context, true);
+  std::vector<float> left = float32ArrayToVector(left_samples);
+  std::vector<float> right = float32ArrayToVector(right_samples);
+  validate_offline_audio_input(left.data(), left.size(), sample_rate);
+  validate_offline_audio_input(right.data(), right.size(), sample_rate);
+  std::vector<float> interleaved(left.size() * 2);
+  for (size_t index = 0; index < left.size(); ++index) {
+    interleaved[2 * index] = left[index];
+    interleaved[2 * index + 1] = right[index];
+  }
+  return interleaved;
+}
+
 std::string js_mastering_assistant_suggest(val samples, int sample_rate, val params_obj) {
   std::vector<float> data = float32ArrayToVector(samples);
   validate_offline_audio_input(data.data(), data.size(), sample_rate);
@@ -404,6 +423,30 @@ std::string js_mastering_audio_profile(val samples, int sample_rate, val params_
       mastering::assistant::audio_profile_config_from_params(params.data(), params.size());
   const auto profile =
       mastering::assistant::analyze_audio_profile(data.data(), data.size(), sample_rate, config);
+  return mastering::assistant::audio_profile_to_json(profile);
+}
+
+std::string js_mastering_assistant_suggest_stereo(val left_samples, val right_samples,
+                                                  int sample_rate, val params_obj) {
+  const std::vector<float> interleaved = interleaveValidatedPair(
+      left_samples, right_samples, sample_rate, "masteringAssistantSuggestStereo input");
+  std::vector<mastering::api::Param> params = masteringParamsFromObject(params_obj);
+  const mastering::assistant::AssistantConfig config =
+      mastering::assistant::assistant_config_from_params(params.data(), params.size());
+  const auto result = mastering::assistant::suggest_chain_interleaved(
+      interleaved.data(), interleaved.size() / 2, 2, sample_rate, config);
+  return mastering::assistant::assistant_result_to_json(result);
+}
+
+std::string js_mastering_audio_profile_stereo(val left_samples, val right_samples, int sample_rate,
+                                              val params_obj) {
+  const std::vector<float> interleaved = interleaveValidatedPair(
+      left_samples, right_samples, sample_rate, "masteringAudioProfileStereo input");
+  std::vector<mastering::api::Param> params = masteringParamsFromObject(params_obj);
+  const mastering::assistant::AudioProfileConfig config =
+      mastering::assistant::audio_profile_config_from_params(params.data(), params.size());
+  const auto profile = mastering::assistant::analyze_audio_profile_interleaved(
+      interleaved.data(), interleaved.size() / 2, 2, sample_rate, config);
   return mastering::assistant::audio_profile_to_json(profile);
 }
 
@@ -436,6 +479,20 @@ std::string js_mastering_streaming_preview(val samples, int sample_rate, val pla
   return mastering::maximizer::streaming_preview_to_json(results);
 }
 
+std::string js_mastering_streaming_preview_stereo(val left_samples, val right_samples,
+                                                  int sample_rate, val platforms_obj) {
+  const std::vector<float> interleaved = interleaveValidatedPair(
+      left_samples, right_samples, sample_rate, "masteringStreamingPreviewStereo input");
+  const size_t frames = interleaved.size() / 2;
+  const auto platforms = streamingPlatformsFromVal(platforms_obj);
+  const auto results = platforms.empty()
+                           ? mastering::maximizer::streaming_preview_interleaved(
+                                 interleaved.data(), frames, 2, sample_rate)
+                           : mastering::maximizer::streaming_preview_interleaved(
+                                 interleaved.data(), frames, 2, sample_rate, platforms);
+  return mastering::maximizer::streaming_preview_to_json(results);
+}
+
 void registerMasteringApiBindings() {
   function("masteringProcessorNames", &js_mastering_processor_names);
   function("masteringInsertNames", &js_mastering_insert_names);
@@ -454,6 +511,9 @@ void registerMasteringApiBindings() {
   function("masteringAssistantSuggest", &js_mastering_assistant_suggest);
   function("masteringAudioProfile", &js_mastering_audio_profile);
   function("masteringStreamingPreview", &js_mastering_streaming_preview);
+  function("masteringAssistantSuggestStereo", &js_mastering_assistant_suggest_stereo);
+  function("masteringAudioProfileStereo", &js_mastering_audio_profile_stereo);
+  function("masteringStreamingPreviewStereo", &js_mastering_streaming_preview_stereo);
   function("masteringPresetNames", &js_mastering_preset_names);
   function("masterAudio", &js_master_audio);
   function("masterAudioStereo", &js_master_audio_stereo);

@@ -41,12 +41,16 @@ export type {
   MasteringRealtimeCost,
   MasteringSamplesParamsRequest,
   MasteringStereoAnalyzeRequest,
+  MasteringStereoParamsRequest,
   MasteringStreamingPreviewRequest,
+  MasteringStreamingPreviewStereoRequest,
 } from './mastering_core';
 export {
   mastering,
   masteringAssistantSuggest,
+  masteringAssistantSuggestStereo,
   masteringAudioProfile,
+  masteringAudioProfileStereo,
   masteringInsertNames,
   masteringInsertParamInfo,
   masteringInsertParamNames,
@@ -61,6 +65,7 @@ export {
   masteringStereoAnalysisNames,
   masteringStereoAnalyze,
   masteringStreamingPreview,
+  masteringStreamingPreviewStereo,
 } from './mastering_core';
 export type {
   CompressorDetector,

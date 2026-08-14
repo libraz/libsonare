@@ -220,7 +220,13 @@ from .analyzer import (
     mastering_assistant_suggest as mastering_assistant_suggest,
 )
 from .analyzer import (
+    mastering_assistant_suggest_stereo as mastering_assistant_suggest_stereo,
+)
+from .analyzer import (
     mastering_audio_profile as mastering_audio_profile,
+)
+from .analyzer import (
+    mastering_audio_profile_stereo as mastering_audio_profile_stereo,
 )
 from .analyzer import (
     mastering_chain as mastering_chain,
@@ -297,6 +303,9 @@ from .analyzer import (
 from .analyzer import (
     mastering_streaming_preview as mastering_streaming_preview,
 )
+from .analyzer import (
+    mastering_streaming_preview_stereo as mastering_streaming_preview_stereo,
+)
 from .analyzer import mel_delta as mel_delta
 from .analyzer import (
     mel_spectrogram as mel_spectrogram,
@@ -307,6 +316,7 @@ from .analyzer import (
 )
 from .analyzer import mel_to_stft as mel_to_stft
 from .analyzer import metering_crest_factor_db as metering_crest_factor_db
+from .analyzer import metering_crest_factor_db_stereo as metering_crest_factor_db_stereo
 from .analyzer import metering_dc_offset as metering_dc_offset
 from .analyzer import metering_detect_clipping as metering_detect_clipping
 from .analyzer import metering_dynamic_range as metering_dynamic_range

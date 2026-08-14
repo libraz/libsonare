@@ -61,6 +61,17 @@ float crest_factor_db(const Audio& audio) {
   return peak - rms;
 }
 
+float crest_factor_db_interleaved(const float* samples, std::size_t frames, int channels) {
+  if (samples == nullptr || frames == 0 || channels <= 0) return 0.0f;
+  const std::size_t total = frames * static_cast<std::size_t>(channels);
+  const float peak = peak_abs(samples, total);
+  const float level = rms(samples, total);
+  // Silent input has no meaningful peak-to-RMS ratio; return the same 0 dB
+  // neutral the mono meter reports rather than a value callers cannot display.
+  if (peak < kEpsilon || level < kEpsilon) return 0.0f;
+  return linear_to_db(peak) - linear_to_db(level);
+}
+
 float clipping_ratio(const Audio& audio, float threshold) {
   return detect_clipping(audio, threshold).clipping_ratio;
 }

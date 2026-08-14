@@ -501,6 +501,92 @@ TEST_CASE("sonare_mastering_process", "[c_api][mastering]") {
     sonare_free_string(json);
   }
 
+  SECTION("stereo analysis entry points measure the pair, not a downmix") {
+    auto left = generate_sine(1000.0f, 48000, 4.0f);
+    auto right = generate_sine(1731.0f, 48000, 4.0f);
+    for (auto& sample : left) sample *= 0.2f;
+    for (auto& sample : right) sample *= 0.2f;
+    std::vector<float> downmix(left.size());
+    for (size_t index = 0; index < left.size(); ++index) {
+      downmix[index] = 0.5f * (left[index] + right[index]);
+    }
+
+    auto integrated_lufs = [](const char* json) {
+      const auto root = sonare::util::json::parse(json);
+      const auto* platforms = root.find("platforms");
+      REQUIRE(platforms != nullptr);
+      return platforms->as_array().at(0).find("integratedLufs")->as_number();
+    };
+
+    char* stereo_json = nullptr;
+    REQUIRE(sonare_mastering_streaming_preview_stereo(left.data(), right.data(), left.size(), 48000,
+                                                      nullptr, 0, &stereo_json) == SONARE_OK);
+    char* mono_json = nullptr;
+    REQUIRE(sonare_mastering_streaming_preview(downmix.data(), downmix.size(), 48000, nullptr, 0,
+                                               &mono_json) == SONARE_OK);
+    REQUIRE(std::strstr(stereo_json, "\"Spotify\"") != nullptr);
+    // BS.1770 sums the channel powers; the downmix quarters them, so the pair
+    // reads 6.02 dB above what a mono caller can measure.
+    REQUIRE(integrated_lufs(stereo_json) - integrated_lufs(mono_json) > 5.5);
+    REQUIRE(integrated_lufs(stereo_json) - integrated_lufs(mono_json) < 6.5);
+    sonare_free_string(stereo_json);
+    sonare_free_string(mono_json);
+
+    SonareMasteringParam params[] = {{"nFft", 1024.0}, {"hopLength", 256.0}};
+    char* profile_json = nullptr;
+    REQUIRE(sonare_mastering_audio_profile_stereo(left.data(), right.data(), left.size(), 48000,
+                                                  params, 2, &profile_json) == SONARE_OK);
+    REQUIRE(std::strstr(profile_json, "\"integratedLufs\"") != nullptr);
+    REQUIRE(std::strstr(profile_json, "\"centroidHz\"") != nullptr);
+    sonare_free_string(profile_json);
+
+    char* suggest_json = nullptr;
+    REQUIRE(sonare_mastering_assistant_suggest_stereo(left.data(), right.data(), left.size(), 48000,
+                                                      nullptr, 0, &suggest_json) == SONARE_OK);
+    REQUIRE(std::strstr(suggest_json, "\"chainConfig\"") != nullptr);
+    REQUIRE(std::strstr(suggest_json, "\"explanation\"") != nullptr);
+    sonare_free_string(suggest_json);
+
+    float stereo_crest = 0.0f;
+    float mono_crest = 0.0f;
+    REQUIRE(sonare_metering_crest_factor_db_stereo(left.data(), right.data(), left.size(), 48000,
+                                                   &stereo_crest) == SONARE_OK);
+    REQUIRE(sonare_metering_crest_factor_db(downmix.data(), downmix.size(), 48000, &mono_crest) ==
+            SONARE_OK);
+    REQUIRE(std::isfinite(stereo_crest));
+    REQUIRE(std::isfinite(mono_crest));
+  }
+
+  SECTION("stereo analysis entry points reject invalid input") {
+    auto left = generate_sine(440.0f, 48000, 0.25f);
+    auto right = generate_sine(660.0f, 48000, 0.25f);
+    char* json = nullptr;
+    float value = 0.0f;
+
+    REQUIRE(sonare_mastering_streaming_preview_stereo(left.data(), right.data(), left.size(), 48000,
+                                                      nullptr, 0,
+                                                      nullptr) == SONARE_ERROR_INVALID_PARAMETER);
+    REQUIRE(sonare_mastering_streaming_preview_stereo(nullptr, right.data(), left.size(), 48000,
+                                                      nullptr, 0,
+                                                      &json) == SONARE_ERROR_INVALID_PARAMETER);
+    REQUIRE(sonare_mastering_streaming_preview_stereo(left.data(), nullptr, left.size(), 48000,
+                                                      nullptr, 0,
+                                                      &json) == SONARE_ERROR_INVALID_PARAMETER);
+    REQUIRE(sonare_mastering_streaming_preview_stereo(left.data(), right.data(), left.size(), 0,
+                                                      nullptr, 0,
+                                                      &json) == SONARE_ERROR_INVALID_PARAMETER);
+    REQUIRE(sonare_mastering_audio_profile_stereo(nullptr, right.data(), left.size(), 48000,
+                                                  nullptr, 0,
+                                                  &json) == SONARE_ERROR_INVALID_PARAMETER);
+    REQUIRE(sonare_mastering_assistant_suggest_stereo(left.data(), nullptr, left.size(), 48000,
+                                                      nullptr, 0,
+                                                      &json) == SONARE_ERROR_INVALID_PARAMETER);
+    REQUIRE(sonare_metering_crest_factor_db_stereo(left.data(), right.data(), left.size(), 48000,
+                                                   nullptr) == SONARE_ERROR_INVALID_PARAMETER);
+    REQUIRE(sonare_metering_crest_factor_db_stereo(nullptr, right.data(), left.size(), 48000,
+                                                   &value) == SONARE_ERROR_INVALID_PARAMETER);
+  }
+
   SECTION("all listed processors execute through the shared stereo entrypoint") {
     auto left = generate_sine(440.0f, 44100, 0.25f);
     auto right = generate_sine(660.0f, 44100, 0.25f);

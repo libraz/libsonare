@@ -77,6 +77,22 @@ export interface MasteringStreamingPreviewRequest {
   platforms?: StreamingPlatform[];
 }
 
+/** Canonical request form for the stereo analysis entry points. */
+export interface MasteringStereoParamsRequest {
+  left: Float32Array;
+  right: Float32Array;
+  sampleRate?: number;
+  params?: MasteringProcessorParams;
+}
+
+/** Canonical request form for the stereo streaming-platform preview. */
+export interface MasteringStreamingPreviewStereoRequest {
+  left: Float32Array;
+  right: Float32Array;
+  sampleRate?: number;
+  platforms?: StreamingPlatform[];
+}
+
 /**
  * Apply mastering loudness normalization with a true-peak ceiling.
  *
@@ -475,6 +491,60 @@ export function masteringStreamingPreview(
   const request = samples instanceof Float32Array ? { samples, sampleRate, platforms } : samples;
   return requireModule().masteringStreamingPreview(
     request.samples,
+    request.sampleRate ?? 22050,
+    request.platforms ?? [],
+  );
+}
+
+/**
+ * Suggest a mastering chain for a stereo pair, as shared JSON.
+ *
+ * Profiles through {@link masteringAudioProfileStereo}, so the loudness stage
+ * of the suggestion is built on the channel-summed program rather than a
+ * downmix that reads roughly 6 dB low.
+ */
+export function masteringAssistantSuggestStereo(request: MasteringStereoParamsRequest): string {
+  return requireModule().masteringAssistantSuggestStereo(
+    request.left,
+    request.right,
+    request.sampleRate ?? 22050,
+    request.params ?? {},
+  );
+}
+
+/**
+ * Mastering assistant profile of a stereo pair, as shared JSON.
+ *
+ * Only the `loudness` block is measured from the two channels: integrated LUFS
+ * and LRA come from the channel-summed program and the true peak is the larger
+ * of the two. The spectral, dynamics and tempo fields describe shape and timing
+ * rather than absolute level and are measured on the downmix, which keeps them
+ * comparable with {@link masteringAudioProfile}.
+ */
+export function masteringAudioProfileStereo(request: MasteringStereoParamsRequest): string {
+  return requireModule().masteringAudioProfileStereo(
+    request.left,
+    request.right,
+    request.sampleRate ?? 22050,
+    request.params ?? {},
+  );
+}
+
+/**
+ * Preview streaming-platform normalization for a stereo pair, as shared JSON.
+ *
+ * Measures the integrated loudness with BS.1770 channel summing and reports the
+ * larger of the two channel true peaks. Passing a `0.5 * (left + right)` downmix
+ * to {@link masteringStreamingPreview} instead reads roughly 6 dB low on
+ * decorrelated material, and both the normalization gain and the ceiling-risk
+ * flag follow from that measurement.
+ */
+export function masteringStreamingPreviewStereo(
+  request: MasteringStreamingPreviewStereoRequest,
+): string {
+  return requireModule().masteringStreamingPreviewStereo(
+    request.left,
+    request.right,
     request.sampleRate ?? 22050,
     request.platforms ?? [],
   );

@@ -1328,6 +1328,11 @@ export interface SonareModule {
     hopLength: number,
   ) => number;
   meteringCrestFactorDb: (samples: Float32Array, sampleRate: number) => number;
+  meteringCrestFactorDbStereo: (
+    left: Float32Array,
+    right: Float32Array,
+    sampleRate: number,
+  ) => number;
   meteringDcOffset: (samples: Float32Array, sampleRate: number) => number;
   meteringTruePeakDb: (
     samples: Float32Array,
@@ -1690,6 +1695,24 @@ export interface SonareModule {
   ) => string;
   masteringStreamingPreview: (
     samples: Float32Array,
+    sampleRate: number,
+    platforms: Array<{ name: string; targetLufs: number; ceilingDb: number }>,
+  ) => string;
+  masteringAssistantSuggestStereo: (
+    left: Float32Array,
+    right: Float32Array,
+    sampleRate: number,
+    params: Record<string, number | boolean>,
+  ) => string;
+  masteringAudioProfileStereo: (
+    left: Float32Array,
+    right: Float32Array,
+    sampleRate: number,
+    params: Record<string, number | boolean>,
+  ) => string;
+  masteringStreamingPreviewStereo: (
+    left: Float32Array,
+    right: Float32Array,
     sampleRate: number,
     platforms: Array<{ name: string; targetLufs: number; ceilingDb: number }>,
   ) => string;

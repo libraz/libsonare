@@ -82,6 +82,44 @@ TEST_CASE("meter crest factor", "[meter]") {
   REQUIRE_THAT(metering::crest_factor_db(audio), WithinAbs(3.0f, 0.5f));
 }
 
+TEST_CASE("meter crest factor across interleaved channels", "[meter]") {
+  constexpr int sample_rate = 22050;
+  const Audio sine = make_sine(1.0f);
+  const size_t frames = sine.size();
+
+  // Anti-phase pair: each channel is a full-scale sine, so the true crest
+  // factor is a sine's 3.01 dB. The 0.5*(L+R) downmix a mono caller has to
+  // build cancels to silence, which loses the measurement entirely.
+  std::vector<float> interleaved(frames * 2);
+  std::vector<float> downmix(frames);
+  for (size_t index = 0; index < frames; ++index) {
+    interleaved[2 * index] = sine[index];
+    interleaved[2 * index + 1] = -sine[index];
+    downmix[index] = 0.5f * (sine[index] - sine[index]);
+  }
+
+  REQUIRE_THAT(metering::crest_factor_db_interleaved(interleaved.data(), frames, 2),
+               WithinAbs(3.0f, 0.5f));
+  const Audio downmixed = Audio::from_buffer(downmix.data(), downmix.size(), sample_rate);
+  REQUIRE_THAT(metering::crest_factor_db(downmixed), WithinAbs(0.0f, 0.0f));
+
+  // A duplicated channel carries the same crest factor as the single channel.
+  for (size_t index = 0; index < frames; ++index) {
+    interleaved[2 * index + 1] = sine[index];
+  }
+  REQUIRE_THAT(metering::crest_factor_db_interleaved(interleaved.data(), frames, 2),
+               WithinAbs(metering::crest_factor_db(sine), 0.001f));
+}
+
+TEST_CASE("interleaved crest factor reports a neutral value for degenerate input", "[meter]") {
+  const std::vector<float> samples(128, 0.5f);
+  REQUIRE(metering::crest_factor_db_interleaved(nullptr, 64, 2) == 0.0f);
+  REQUIRE(metering::crest_factor_db_interleaved(samples.data(), 0, 2) == 0.0f);
+  REQUIRE(metering::crest_factor_db_interleaved(samples.data(), 64, 0) == 0.0f);
+  const std::vector<float> silence(128, 0.0f);
+  REQUIRE(metering::crest_factor_db_interleaved(silence.data(), 64, 2) == 0.0f);
+}
+
 TEST_CASE("meter clipping ratio", "[meter]") {
   const std::vector<float> samples = {0.0f, 0.5f, -0.999f, 1.0f};
   const Audio audio = Audio::from_buffer(samples.data(), samples.size(), 48000);

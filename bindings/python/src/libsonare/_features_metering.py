@@ -267,6 +267,41 @@ def metering_crest_factor_db(
     )
 
 
+def metering_crest_factor_db_stereo(
+    left: Sequence[float] | list[float],
+    right: Sequence[float] | list[float],
+    sample_rate: int = 22050,
+    *,
+    validate: bool = True,
+) -> float:
+    """Crest factor in dB across both channels of a stereo pair.
+
+    Takes the peak across both channels and the RMS over both together. An
+    out-of-phase pair cancels in the ``0.5 * (left + right)`` downmix
+    :func:`metering_crest_factor_db` would need, which understates its RMS and
+    so overstates the crest factor.
+    """
+    left_buf = _validate_samples("metering_crest_factor_db_stereo", left, validate=validate)
+    right_buf = _validate_samples("metering_crest_factor_db_stereo", right, validate=validate)
+    lib = _get_lib()
+    if not hasattr(lib, "sonare_metering_crest_factor_db_stereo"):
+        raise RuntimeError("libsonare was built without the stereo crest factor meter")
+    left_array, left_length = _to_c_float_array(left_buf)
+    right_array, right_length = _to_c_float_array(right_buf)
+    if left_length != right_length:
+        raise ValueError("left and right channel lengths must match")
+    out = ctypes.c_float(0.0)
+    rc = lib.sonare_metering_crest_factor_db_stereo(
+        left_array,
+        right_array,
+        ctypes.c_size_t(left_length),
+        ctypes.c_int(sample_rate),
+        ctypes.byref(out),
+    )
+    _check(rc)
+    return float(out.value)
+
+
 def metering_dc_offset(
     samples: Sequence[float] | list[float],
     sample_rate: int = 22050,

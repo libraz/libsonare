@@ -149,6 +149,24 @@ export function meteringCrestFactorDb(
   return addon.meteringCrestFactorDb(request.samples, request.sampleRate ?? 22050);
 }
 
+/**
+ * Crest factor in dB across both channels of a stereo pair.
+ *
+ * Takes the peak across both channels and the RMS over both together. An
+ * out-of-phase pair cancels in the `0.5 * (left + right)` downmix
+ * {@link meteringCrestFactorDb} would need, which understates its RMS and so
+ * overstates the crest factor.
+ */
+export function meteringCrestFactorDbStereo(request: MeteringStereoRequest): number {
+  assertSamples('meteringCrestFactorDbStereo', request.left, request.validate !== false);
+  assertSamples('meteringCrestFactorDbStereo', request.right, request.validate !== false);
+  return addon.meteringCrestFactorDbStereo(
+    request.left,
+    request.right,
+    request.sampleRate ?? 22050,
+  );
+}
+
 export function meteringDcOffset(request: MeteringSamplesRequest): number;
 export function meteringDcOffset(
   samples: Float32Array,

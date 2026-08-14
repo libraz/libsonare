@@ -298,6 +298,85 @@ def test_mastering_audio_profile_returns_shared_json() -> None:
     assert '"genreCandidates"' in profile_json
 
 
+def _decorrelated_pair(sr: int, seconds: int) -> tuple[list[float], list[float], list[float]]:
+    n = sr * seconds
+    left = [0.2 * math.sin(2 * math.pi * 1000 * i / sr) for i in range(n)]
+    right = [0.2 * math.sin(2 * math.pi * 1731 * i / sr) for i in range(n)]
+    downmix = [0.5 * (a + b) for a, b in zip(left, right, strict=True)]
+    return left, right, downmix
+
+
+def test_stereo_mastering_analysis_uses_channel_summed_loudness() -> None:
+    """The stereo analysis entry points measure the pair, not a downmix."""
+    import json
+
+    import libsonare
+
+    sr = 48000
+    left, right, downmix = _decorrelated_pair(sr, 4)
+
+    stereo = json.loads(libsonare.mastering_streaming_preview_stereo(left, right, sample_rate=sr))
+    mono = json.loads(libsonare.mastering_streaming_preview(downmix, sample_rate=sr))
+    stereo_lufs = stereo["platforms"][0]["integratedLufs"]
+    mono_lufs = mono["platforms"][0]["integratedLufs"]
+
+    # BS.1770 sums the channel powers while the 0.5*(L+R) downmix quarters them,
+    # so a decorrelated pair reads 6.02 dB above what a mono caller can measure,
+    # and the normalization gain built on it is off by the same amount.
+    assert stereo_lufs - mono_lufs == pytest.approx(6.02, abs=0.3)
+    interleaved = [value for pair in zip(left, right, strict=True) for value in pair]
+    assert stereo_lufs == pytest.approx(
+        libsonare.lufs_interleaved(interleaved, 2, sr).integrated_lufs, abs=0.01
+    )
+    assert stereo["platforms"][0]["normalizationGainDb"] == pytest.approx(
+        -14.0 - stereo_lufs, abs=0.001
+    )
+
+    profile = json.loads(libsonare.mastering_audio_profile_stereo(left, right, sample_rate=sr))
+    assert profile["loudness"]["integratedLufs"] == pytest.approx(stereo_lufs, abs=0.01)
+    assert "centroidHz" in profile["spectral"]
+
+    suggestion = json.loads(
+        libsonare.mastering_assistant_suggest_stereo(left, right, sample_rate=sr)
+    )
+    assert "chainConfig" in suggestion
+    assert "explanation" in suggestion
+
+
+def test_stereo_crest_factor_survives_a_cancelling_pair() -> None:
+    """The stereo crest meter keeps a measurement the downmix loses."""
+    import libsonare
+
+    sr = 48000
+    left = [0.5 * math.sin(2 * math.pi * 440 * i / sr) for i in range(sr)]
+    right = [-value for value in left]
+    downmix = [0.5 * (a + b) for a, b in zip(left, right, strict=True)]
+
+    assert libsonare.metering_crest_factor_db_stereo(left, right, sample_rate=sr) == pytest.approx(
+        3.01, abs=0.5
+    )
+    # The anti-phase pair cancels to silence in the downmix, which reports the
+    # 0 dB neutral rather than the pair's real 3 dB crest factor.
+    assert libsonare.metering_crest_factor_db(downmix, sample_rate=sr) == pytest.approx(0.0)
+
+
+def test_stereo_analysis_rejects_mismatched_channel_lengths() -> None:
+    """Channel length mismatch is caught before reaching the C ABI."""
+    import libsonare
+
+    sr = 48000
+    left = [0.1] * 1024
+    right = [0.1] * 512
+    with pytest.raises(ValueError):
+        libsonare.mastering_streaming_preview_stereo(left, right, sample_rate=sr)
+    with pytest.raises(ValueError):
+        libsonare.mastering_audio_profile_stereo(left, right, sample_rate=sr)
+    with pytest.raises(ValueError):
+        libsonare.mastering_assistant_suggest_stereo(left, right, sample_rate=sr)
+    with pytest.raises(ValueError):
+        libsonare.metering_crest_factor_db_stereo(left, right, sample_rate=sr)
+
+
 def test_mixing_presets_and_stereo_mix() -> None:
     """Mixing scene presets and simple stereo mix are exposed."""
     import libsonare
