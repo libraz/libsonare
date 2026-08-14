@@ -73,20 +73,24 @@ std::array<SynthPreset, kPresetCount> build_presets() noexcept {
     pad.config.bus_drive = 0.15f;  // glue the supersaw stack
   }
 
-  // --- FM ---
-  t[i++] = {"e-piano", from_patch(gm_fallback_patch(0, 4))};
-  t[i++] = {"bell", from_patch(gm_fallback_patch(0, 14))};
-  t[i++] = {"brass", from_patch(gm_fallback_patch(0, 56))};
+  // --- tuned sustain / struck (GM fallback aliases) ---
+  // Every row below is an alias of a GM fallback program, so gm_fallback_map
+  // picks the engine — not the grouping here. The trailing comment names the
+  // engine each row actually resolves to; a heading naming one engine for the
+  // whole group would be wrong for most of it.
+  t[i++] = {"e-piano", from_patch(gm_fallback_patch(0, 4))};  // FM
+  t[i++] = {"bell", from_patch(gm_fallback_patch(0, 14))};    // modal (struck bar)
+  t[i++] = {"brass", from_patch(gm_fallback_patch(0, 56))};   // brass (lip reed)
 
-  // --- Karplus-Strong ---
-  t[i++] = {"pluck", from_patch(gm_fallback_patch(0, 104))};
+  // --- plucked strings (GM fallback aliases) ---
+  t[i++] = {"pluck", from_patch(gm_fallback_patch(0, 104))};  // plucked string (jawari bridge)
   // Classical (nylon) and steel acoustic guitars driven as standalone
   // instruments engage the shared sympathetic open-string bank (the "sound
   // halo") that the per-note GM fallback path cannot host.
-  t[i++] = {"classical-guitar", from_patch(gm_fallback_patch(0, 24))};
-  t[i++] = {"steel-guitar", from_patch(gm_fallback_patch(0, 25))};
-  t[i++] = {"electric-guitar", from_patch(gm_fallback_patch(0, 26))};
-  t[i++] = {"harp", from_patch(gm_fallback_patch(0, 46))};
+  t[i++] = {"classical-guitar", from_patch(gm_fallback_patch(0, 24))};  // Karplus-Strong
+  t[i++] = {"steel-guitar", from_patch(gm_fallback_patch(0, 25))};      // Karplus-Strong
+  t[i++] = {"electric-guitar", from_patch(gm_fallback_patch(0, 26))};   // Karplus-Strong
+  t[i++] = {"harp", from_patch(gm_fallback_patch(0, 46))};              // Karplus-Strong
 
   // --- electric / acoustic bass (plucked-string waveguide) ---
   // The bass family (GM 32-35): the Karplus-Strong string voiced for the low

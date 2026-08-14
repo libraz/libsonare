@@ -6,7 +6,6 @@
 
 - Both CLIs exit 2 for a usage error where the invalid-parameter code was reported before, and a cancelled run exits 11. A script branching on the old codes will misread the outcome.
 - Python raises `SonareError` where native parameter validation previously surfaced as `ValueError`. Python-side preflight of empty, NaN or Inf buffers and bad shapes still raises `ValueError`.
-- The built-in synth preset key `harp` is now `harp-plucked`. A configuration naming the old key no longer resolves.
 - WASM `voiceCharacterPresetId()` returns `VoicePresetId | null` instead of a string, and an unknown ordinal returns null rather than throwing.
 
 This release completes the option coverage of the analysis and effects entry points on every surface, adds typed automation targets, per-track PFL/AFL monitoring, bounded undo/redo memory and owning audio-source metadata, rebuilds the native CLI on a single option registry with a machine-readable contract, and adds a cross-surface conformance harness. It also corrects the predominant local pulse, subsegmentation, chord inversion and pitch-tracking defects, bypass latency continuity in the mixer and the routing graph, the macOS host backends, and a set of binding-level resource and validation defects.
@@ -125,7 +124,7 @@ This release completes the option coverage of the analysis and effects entry poi
 
 - Both CLIs report a parse or schema failure as a usage error exiting 2 instead of the invalid-parameter code, a cancelled run exits 11, and `project validate --strict` exits 9 after the canonical artifact and diagnostics have been written.
 - Python raises `SonareError` with a numeric code for native return-code failures including native parameter validation, where some of those previously surfaced as `ValueError`; Python-side preflight of empty, NaN or Inf buffers and bad shapes still raises `ValueError`, and a malformed project document surfaces as an invalid-format error at the CLI boundary.
-- The built-in synth preset key `harp` is now `harp-plucked`.
+- The built-in synth preset catalog no longer registers two patches under the key `harp`: the physical-model plucked voice is registered as `harp-plucked`, so every catalog key resolves to exactly one patch. Lookup returned the first match, so `harp` resolved to the GM-fallback orchestral harp before and still does; an existing configuration naming it is unaffected.
 - WASM `voiceCharacterPresetId()` returns `VoicePresetId | null`, and an unknown ordinal returns null instead of throwing. The realtime voice-changer preset type is a `dsp`-or-`macros` union with id, name and category required, and a document supplying both sections is rejected.
 - The WASM worklet capture read payload is a transferred `Float32Array` array rather than nested number arrays, and requesting captured audio throws when channels are missing instead of returning an empty result.
 - Node's asynchronous mastering request no longer accepts a `cancel` callback, and the nested note-segment configuration object is deprecated in favour of flat request fields.
