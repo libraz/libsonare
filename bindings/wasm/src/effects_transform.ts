@@ -14,12 +14,65 @@ function requireModule() {
   return getSonareModule();
 }
 
+function resolveEffectFftOptions(
+  fnName: string,
+  nFft: unknown,
+  hopLength: unknown,
+): { nFft: number; hopLength: number } {
+  const resolvedNFft = nFft === undefined ? 2048 : nFft;
+  const resolvedHopLength = hopLength === undefined ? 512 : hopLength;
+  if (typeof resolvedNFft !== 'number' || !Number.isInteger(resolvedNFft)) {
+    throw new TypeError(`${fnName}: nFft must be an integer`);
+  }
+  if (resolvedNFft < 2 || resolvedNFft > 2 ** 30) {
+    throw new RangeError(`${fnName}: nFft must be an even power of two >= 2`);
+  }
+  if ((resolvedNFft & (resolvedNFft - 1)) !== 0) {
+    throw new RangeError(`${fnName}: nFft must be an even power of two >= 2`);
+  }
+  if (typeof resolvedHopLength !== 'number' || !Number.isInteger(resolvedHopLength)) {
+    throw new TypeError(`${fnName}: hopLength must be an integer`);
+  }
+  if (resolvedHopLength <= 0 || resolvedHopLength > 2 ** 31 - 1) {
+    throw new RangeError(`${fnName}: hopLength must be a positive integer`);
+  }
+  return { nFft: resolvedNFft, hopLength: resolvedHopLength };
+}
+
+export type NormalizeMode = 'peak' | 'rms';
+
+function resolveNormalizeMode(value: unknown): NormalizeMode {
+  if (value === undefined) {
+    return 'peak';
+  }
+  if (typeof value !== 'string') {
+    throw new TypeError("normalize: mode must be the string 'peak' or 'rms'");
+  }
+  if (value !== 'peak' && value !== 'rms') {
+    throw new RangeError("normalize: mode must be the string 'peak' or 'rms'");
+  }
+  return value;
+}
+
+function resolveHardMask(value: unknown, fnName: string): boolean {
+  if (value === undefined) {
+    return false;
+  }
+  if (typeof value !== 'boolean') {
+    throw new TypeError(`${fnName}: hardMask must be a boolean`);
+  }
+  return value;
+}
+
 /** Canonical request form for HPSS. */
 export interface HpssRequest {
   samples: Float32Array;
   sampleRate?: number;
   kernelHarmonic?: number;
   kernelPercussive?: number;
+  nFft?: number;
+  hopLength?: number;
+  hardMask?: boolean;
 }
 
 export interface HarmonicRequest extends ValidateOptions {
@@ -36,12 +89,16 @@ export interface TimeStretchRequest extends ValidateOptions {
   samples: Float32Array;
   sampleRate?: number;
   rate: number;
+  nFft?: number;
+  hopLength?: number;
 }
 
 export interface PitchShiftRequest extends ValidateOptions {
   samples: Float32Array;
   sampleRate?: number;
   semitones: number;
+  nFft?: number;
+  hopLength?: number;
 }
 
 export interface PitchCorrectToMidiRequest extends ValidateOptions {
@@ -81,6 +138,7 @@ export interface NormalizeRequest extends ValidateOptions {
   samples: Float32Array;
   sampleRate?: number;
   targetDb?: number;
+  mode?: NormalizeMode;
 }
 
 export interface SpectralEditRequest extends SpectralEditOptions, ValidateOptions {
@@ -108,22 +166,33 @@ export function hpss(
   sampleRate?: number,
   kernelHarmonic?: number,
   kernelPercussive?: number,
+  nFft?: number,
+  hopLength?: number,
+  hardMask?: boolean,
 ): HpssResult;
 export function hpss(
   samples: Float32Array | HpssRequest,
   sampleRate = 22050,
   kernelHarmonic = 31,
   kernelPercussive = 31,
+  nFft?: number,
+  hopLength?: number,
+  hardMask?: boolean,
 ): HpssResult {
   const request =
     samples instanceof Float32Array
-      ? { samples, sampleRate, kernelHarmonic, kernelPercussive }
+      ? { samples, sampleRate, kernelHarmonic, kernelPercussive, nFft, hopLength, hardMask }
       : samples;
-  return requireModule().hpss(
+  const fftOptions = resolveEffectFftOptions('hpss', request.nFft, request.hopLength);
+  const resolvedHardMask = resolveHardMask(request.hardMask, 'hpss');
+  return requireModule().hpssEx(
     request.samples,
     request.sampleRate ?? 22050,
     request.kernelHarmonic ?? 31,
     request.kernelPercussive ?? 31,
+    fftOptions.nFft,
+    fftOptions.hopLength,
+    resolvedHardMask,
   );
 }
 
@@ -189,17 +258,55 @@ export function timeStretch(
   options?: ValidateOptions,
 ): Float32Array;
 export function timeStretch(
+  samples: Float32Array,
+  sampleRate: number,
+  rate: number,
+  nFft?: number,
+  hopLength?: number,
+  options?: ValidateOptions,
+): Float32Array;
+export function timeStretch(
   samples: Float32Array | TimeStretchRequest,
   sampleRate?: number,
   rate?: number,
+  nFftOrOptions?: number | ValidateOptions,
+  hopLength?: number,
   options: ValidateOptions = {},
 ): Float32Array {
+  if (
+    nFftOrOptions !== undefined &&
+    nFftOrOptions !== null &&
+    typeof nFftOrOptions !== 'number' &&
+    typeof nFftOrOptions !== 'object'
+  ) {
+    throw new TypeError('timeStretch: nFft must be an integer or options object');
+  }
+  if (nFftOrOptions === null) {
+    throw new TypeError('timeStretch: nFft must be an integer or options object');
+  }
+  const positionalOptions =
+    typeof nFftOrOptions === 'object' && nFftOrOptions !== null ? nFftOrOptions : options;
+  const positionalNFft = typeof nFftOrOptions === 'number' ? nFftOrOptions : undefined;
   const request: TimeStretchRequest =
     samples instanceof Float32Array
-      ? { samples, sampleRate, rate: rate as number, ...options }
+      ? {
+          samples,
+          sampleRate,
+          rate: rate as number,
+          nFft: positionalNFft,
+          hopLength,
+          ...positionalOptions,
+        }
       : samples;
   assertSamples('timeStretch', request.samples, request.validate !== false);
-  return requireModule().timeStretch(request.samples, request.sampleRate ?? 22050, request.rate);
+  const fftOptions = resolveEffectFftOptions('timeStretch', request.nFft, request.hopLength);
+  return requireModule().timeStretchEx(
+    request.samples,
+    request.sampleRate ?? 22050,
+    request.rate,
+    fftOptions.nFft,
+    fftOptions.hopLength,
+  );
 }
 
 /**
@@ -218,20 +325,54 @@ export function pitchShift(
   options?: ValidateOptions,
 ): Float32Array;
 export function pitchShift(
+  samples: Float32Array,
+  sampleRate: number,
+  semitones: number,
+  nFft?: number,
+  hopLength?: number,
+  options?: ValidateOptions,
+): Float32Array;
+export function pitchShift(
   samples: Float32Array | PitchShiftRequest,
   sampleRate?: number,
   semitones?: number,
+  nFftOrOptions?: number | ValidateOptions,
+  hopLength?: number,
   options: ValidateOptions = {},
 ): Float32Array {
+  if (
+    nFftOrOptions !== undefined &&
+    nFftOrOptions !== null &&
+    typeof nFftOrOptions !== 'number' &&
+    typeof nFftOrOptions !== 'object'
+  ) {
+    throw new TypeError('pitchShift: nFft must be an integer or options object');
+  }
+  if (nFftOrOptions === null) {
+    throw new TypeError('pitchShift: nFft must be an integer or options object');
+  }
+  const positionalOptions =
+    typeof nFftOrOptions === 'object' && nFftOrOptions !== null ? nFftOrOptions : options;
+  const positionalNFft = typeof nFftOrOptions === 'number' ? nFftOrOptions : undefined;
   const request: PitchShiftRequest =
     samples instanceof Float32Array
-      ? { samples, sampleRate, semitones: semitones as number, ...options }
+      ? {
+          samples,
+          sampleRate,
+          semitones: semitones as number,
+          nFft: positionalNFft,
+          hopLength,
+          ...positionalOptions,
+        }
       : samples;
   assertSamples('pitchShift', request.samples, request.validate !== false);
-  return requireModule().pitchShift(
+  const fftOptions = resolveEffectFftOptions('pitchShift', request.nFft, request.hopLength);
+  return requireModule().pitchShiftEx(
     request.samples,
     request.sampleRate ?? 22050,
     request.semitones,
+    fftOptions.nFft,
+    fftOptions.hopLength,
   );
 }
 
@@ -466,11 +607,13 @@ export function noteMove(
 }
 
 /**
- * Normalize audio to target peak level.
+ * Normalize audio to a target peak or RMS level.
  *
  * @param samples - Audio samples (mono, float32)
  * @param sampleRate - Sample rate in Hz (default: 22050)
- * @param targetDb - Finite target at or below 0 dBFS (default: 0 dB = full scale)
+ * @param targetDb - Finite target at or below 0 dBFS (default: 0 dB = full scale).
+ *   For `mode: 'peak'`, this is the peak target; for `mode: 'rms'`, this is the RMS target.
+ * @param mode - Normalization mode: `'peak'` (default) or `'rms'`.
  * @returns Normalized audio
  */
 export function normalize(request: NormalizeRequest): Float32Array;
@@ -481,18 +624,44 @@ export function normalize(
   options?: ValidateOptions,
 ): Float32Array;
 export function normalize(
+  samples: Float32Array,
+  sampleRate: number,
+  targetDb?: number,
+  mode?: NormalizeMode,
+  options?: ValidateOptions,
+): Float32Array;
+export function normalize(
   samples: Float32Array | NormalizeRequest,
   sampleRate?: number,
   targetDb = 0.0,
+  modeOrOptions: NormalizeMode | ValidateOptions = 'peak',
   options: ValidateOptions = {},
 ): Float32Array {
+  if (
+    modeOrOptions !== undefined &&
+    modeOrOptions !== null &&
+    typeof modeOrOptions !== 'string' &&
+    typeof modeOrOptions !== 'object'
+  ) {
+    throw new TypeError("normalize: mode must be the string 'peak' or 'rms'");
+  }
+  if (modeOrOptions === null) {
+    throw new TypeError("normalize: mode must be the string 'peak' or 'rms'");
+  }
+  const positionalOptions =
+    typeof modeOrOptions === 'object' && modeOrOptions !== null ? modeOrOptions : options;
+  const positionalMode = typeof modeOrOptions === 'string' ? modeOrOptions : undefined;
   const request: NormalizeRequest =
-    samples instanceof Float32Array ? { samples, sampleRate, targetDb, ...options } : samples;
+    samples instanceof Float32Array
+      ? { samples, sampleRate, targetDb, mode: positionalMode, ...positionalOptions }
+      : samples;
   assertSamples('normalize', request.samples, request.validate !== false);
-  return requireModule().normalize(
+  const mode = resolveNormalizeMode(request.mode);
+  return requireModule().normalizeEx(
     request.samples,
     request.sampleRate ?? 22050,
     request.targetDb ?? 0.0,
+    mode,
   );
 }
 

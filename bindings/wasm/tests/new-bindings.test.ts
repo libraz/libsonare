@@ -168,11 +168,14 @@ describe('newly exposed WASM functions', () => {
     expect(out[0]).toBe(1);
   });
 
-  it('voiceCharacterPresetId maps a known ordinal to its canonical id', () => {
+  it('voiceCharacterPresetId maps known values and handles unknown values', () => {
     // Ordinal 1 == SONARE_VC_PRESET_BRIGHT_IDOL.
     expect(voiceCharacterPresetId(1)).toBe('bright-idol');
     expect(voiceCharacterPresetId(0)).toBe('neutral-monitor');
-    expect(() => voiceCharacterPresetId(999)).toThrow(/Unknown voice-character preset ordinal/);
+    expect(voiceCharacterPresetId(999)).toBeNull();
+    expect(() => voiceCharacterPresetId('not-a-preset' as never)).toThrow(
+      /Unknown voice character preset/,
+    );
     expect(() => realtimeVoiceChangerPresetConfig(-1)).toThrow(
       /Unknown voice-character preset ordinal/,
     );

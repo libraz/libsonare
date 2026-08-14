@@ -3,6 +3,7 @@
  */
 
 import { beforeAll, describe, expect, it, vi } from 'vitest';
+import type { EngineTrackMonitorMode } from '../dist/index.js';
 import {
   abiVersion,
   amplitudeToDb,
@@ -63,6 +64,7 @@ import {
   vectorNormalize,
   version,
 } from '../dist/index.js';
+import { SonareEngineTelemetryError } from '../dist/worklet.js';
 
 describe('Sonare WASM Module', () => {
   const rms = (data: Float32Array): number => {
@@ -138,6 +140,20 @@ describe('Sonare WASM Module', () => {
       expect(capabilities.engineAbiVersion).toBe(EXPECTED_ENGINE_ABI_VERSION);
       expect(capabilities.abiCompatible).toBe(true);
       expect(capabilities.mode === 'sab' || capabilities.mode === 'postMessage').toBe(true);
+    });
+
+    it('exports the track monitor mode type with the C-ABI ordinals', () => {
+      const modes: EngineTrackMonitorMode[] = ['off', 'pfl', 'afl', 0, 1, 2];
+      expect(modes).toEqual(['off', 'pfl', 'afl', 0, 1, 2]);
+    });
+
+    it('keeps worklet telemetry error ordinals stable when appending channel limits', () => {
+      const numericOrdinals = Object.entries(SonareEngineTelemetryError)
+        .filter(([key]) => Number.isNaN(Number(key)))
+        .map(([, value]) => value);
+      expect(numericOrdinals).toEqual(Array.from({ length: 21 }, (_, ordinal) => ordinal));
+      expect(SonareEngineTelemetryError.InvalidCommand).toBe(19);
+      expect(SonareEngineTelemetryError.MaxChannelsExceeded).toBe(20);
     });
 
     it('processes realtime engine clips, capture, and telemetry', () => {
@@ -739,6 +755,13 @@ describe('Sonare WASM Module', () => {
       expect(processed[0].at(-1)).toBeCloseTo(2, 4);
       expect(processed[1].at(-1)).toBeCloseTo(2, 4);
 
+      engine.setTrackMonitorMode(0, 'pfl');
+      const withPfl = engine.processWithMonitor([new Float32Array(256), new Float32Array(256)]);
+      expect(withPfl.output[0].at(-1)).toBeCloseTo(2, 4);
+      expect(withPfl.monitor[0].at(-1)).toBeCloseTo(1, 4);
+      expect(withPfl.monitor[1].at(-1)).toBeCloseTo(1, 4);
+
+      engine.setTrackMonitorMode(0, 'off');
       engine.setSoloMute(0, true, false);
       for (let block = 0; block < 4; block += 1) {
         processed = engine.process([new Float32Array(256), new Float32Array(256)]);
@@ -752,6 +775,51 @@ describe('Sonare WASM Module', () => {
       }
       expect(processed[0].at(-1)).toBeLessThan(0.45);
       expect(processed[1].at(-1)).toBeLessThan(0.45);
+      engine.destroy();
+    });
+
+    it('routes asymmetric left-only sources through dual-pan and reverses them', () => {
+      const engine = new RealtimeEngine(48000, 256);
+      const frames = 256 * 12;
+      engine.setClips([
+        {
+          id: 401,
+          trackId: 10,
+          channels: [new Float32Array(frames).fill(1), new Float32Array(frames)],
+          startPpq: 0,
+          lengthSamples: frames,
+        },
+      ]);
+      engine.setTrackLanes([10]);
+      engine.setTrackStripJson(
+        10,
+        '{"version":1,"strips":[{"id":"track-10"}],"buses":[],"connections":[]}',
+      );
+      engine.setTrackStripPanMode(10, 'dualPan');
+      engine.setTrackStripDualPan(10, 1, -1);
+      engine.settleParameters();
+      engine.play();
+
+      let routedRight: Float32Array[] = [new Float32Array(256), new Float32Array(256)];
+      for (let block = 0; block < 4; block += 1) {
+        routedRight = engine.process([new Float32Array(256), new Float32Array(256)]);
+      }
+      const rightEnergy = routedRight[1].reduce((sum, sample) => sum + sample * sample, 0);
+      const leftEnergy = routedRight[0].reduce((sum, sample) => sum + sample * sample, 0);
+      expect(rightEnergy).toBeGreaterThan(1);
+      expect(leftEnergy).toBeLessThan(rightEnergy * 1e-6);
+
+      engine.setTrackStripDualPan(10, -1, 1);
+      engine.seekSample(0);
+      engine.settleParameters();
+      let routedLeft: Float32Array[] = [new Float32Array(256), new Float32Array(256)];
+      for (let block = 0; block < 4; block += 1) {
+        routedLeft = engine.process([new Float32Array(256), new Float32Array(256)]);
+      }
+      const reversedLeftEnergy = routedLeft[0].reduce((sum, sample) => sum + sample * sample, 0);
+      const reversedRightEnergy = routedLeft[1].reduce((sum, sample) => sum + sample * sample, 0);
+      expect(reversedLeftEnergy).toBeGreaterThan(1);
+      expect(reversedRightEnergy).toBeLessThan(reversedLeftEnergy * 1e-6);
       engine.destroy();
     });
 

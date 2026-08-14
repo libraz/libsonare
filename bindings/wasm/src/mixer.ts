@@ -12,7 +12,7 @@ import type {
   MeterTap,
   MixerProcessResult,
   MixMeterSnapshot,
-  PanLaw,
+  PanLawInput,
   PanMode,
   SendTiming,
   SurroundPan,
@@ -336,8 +336,8 @@ export class Mixer {
     this.mixer.setPolarityInvert(stripIndex, invertLeft, invertRight);
   }
 
-  /** Set the strip's pan law. */
-  setPanLaw(stripIndex: number, panLaw: PanLaw | number): void {
+  /** Set the strip's pan law (a {@link PanLawName} alias or raw C ABI ordinal). */
+  setPanLaw(stripIndex: number, panLaw: PanLawInput): void {
     this.mixer.setPanLaw(stripIndex, panLawCode(panLaw));
   }
 

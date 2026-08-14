@@ -125,7 +125,7 @@ const decoded = Audio.fromBuffer(samples, sampleRate);
 
 解析・特徴量抽出・メータリングだけが必要なら、より小さい
 `@libraz/libsonare/analysis` entry を使えます。マスタリング・ミキシング・リアルタイム API を除き、
-emsdk 5.0.2 では 0.86 MiB raw / 347 KiB gzip（full entry は 3.76 MiB raw / 1.26 MiB gzip）です。
+emsdk 5.0.2 では 0.91 MiB raw / 368 KiB gzip（full entry は 3.88 MiB raw / 1.31 MiB gzip）です。
 
 → [JavaScript API](https://libsonare.libraz.net/ja/docs/js-api) · [ブラウザ / WASM](https://libsonare.libraz.net/ja/docs/wasm)
 

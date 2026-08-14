@@ -6,7 +6,7 @@ import {
   type ResolvedMetronomeConfig,
   resolveMetronomeConfig,
   type SonareEngineCaptureRequestMessage,
-  type SonareEngineCaptureResponseMessage,
+  type SonareEngineCaptureResponseMessageInternal,
   type SonareEngineSyncMessage,
   type SonareEngineTransportRequestMessage,
   type SonareEngineTransportResponseMessage,
@@ -45,6 +45,22 @@ import {
   writeInt64Words,
   writeSonareEngineTelemetryRingBuffer,
 } from './protocol';
+
+function captureTransferList(channels: readonly Float32Array[]): Transferable[] {
+  const transfers: ArrayBuffer[] = [];
+  const seen = new Set<ArrayBuffer>();
+  for (const channel of channels) {
+    const buffer = channel.buffer;
+    if (!(buffer instanceof ArrayBuffer)) {
+      throw new TypeError('capture response channels must use plain ArrayBuffers');
+    }
+    if (!seen.has(buffer)) {
+      seen.add(buffer);
+      transfers.push(buffer);
+    }
+  }
+  return transfers;
+}
 
 /**
  * AudioWorklet-style bridge for the DAW realtime engine facade.
@@ -599,26 +615,24 @@ export class SonareRealtimeEngineWorkletProcessor {
             source: status.source,
             recordOffsetSamples: status.recordOffsetSamples,
           },
-        } satisfies SonareEngineCaptureResponseMessage);
+        } satisfies SonareEngineCaptureResponseMessageInternal);
         return;
       }
       if (message.op === 'read') {
-        const captured = this.engine.capturedAudio();
-        const channels: number[][] = [];
-        for (let ch = 0; ch < captured.length; ch++) {
-          const source = captured[ch];
-          const copy: number[] = [];
-          for (let i = 0; i < source.length; i++) {
-            copy.push(Number(source[i]));
-          }
-          channels.push(copy);
-        }
-        this.transport?.postMessage?.({
-          type: 'captureResponse',
-          requestId: message.requestId,
-          ok: true,
-          channels,
-        } satisfies SonareEngineCaptureResponseMessage);
+        // Embind's outer val::array is array-like but not structured-cloneable
+        // in every host. Copy only that tiny container; keep each native
+        // Float32Array intact so the channel payload remains transferable.
+        const channels = Array.from(this.engine.capturedAudio());
+        const transfer = captureTransferList(channels);
+        this.transport?.postMessage?.(
+          {
+            type: 'captureResponse',
+            requestId: message.requestId,
+            ok: true,
+            channels,
+          } satisfies SonareEngineCaptureResponseMessageInternal,
+          transfer,
+        );
         return;
       }
       this.engine.resetCapture();
@@ -626,14 +640,14 @@ export class SonareRealtimeEngineWorkletProcessor {
         type: 'captureResponse',
         requestId: message.requestId,
         ok: true,
-      } satisfies SonareEngineCaptureResponseMessage);
+      } satisfies SonareEngineCaptureResponseMessageInternal);
     } catch (error) {
       this.transport?.postMessage?.({
         type: 'captureResponse',
         requestId: message.requestId,
         ok: false,
         error: error instanceof Error ? error.message : String(error),
-      } satisfies SonareEngineCaptureResponseMessage);
+      } satisfies SonareEngineCaptureResponseMessageInternal);
     }
   }
 
@@ -773,6 +787,24 @@ export class SonareRealtimeEngineWorkletProcessor {
           sampleTime,
         );
         break;
+      case SonareEngineCommandType.SetTrackMonitorMode: {
+        const rawMode = command.argInt;
+        const mode = typeof rawMode === 'bigint' ? Number(rawMode) : rawMode;
+        if (typeof mode !== 'number' || !Number.isSafeInteger(mode) || mode < 0 || mode > 2) {
+          throw new RangeError(`Invalid track monitor mode: ${String(rawMode)}`);
+        }
+        const laneIndex = command.targetId;
+        if (
+          typeof laneIndex !== 'number' ||
+          !Number.isSafeInteger(laneIndex) ||
+          laneIndex < 0 ||
+          laneIndex > 0xffff_ffff
+        ) {
+          throw new RangeError(`Invalid track monitor lane index: ${String(laneIndex)}`);
+        }
+        this.engine.setTrackMonitorMode(laneIndex, mode as 0 | 1 | 2, sampleTime);
+        break;
+      }
       default:
         this.publishTelemetryRecord({
           type: SonareEngineTelemetryType.Error,

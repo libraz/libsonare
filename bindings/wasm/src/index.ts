@@ -146,6 +146,7 @@ export {
 export type {
   HarmonicRequest,
   HpssRequest,
+  NormalizeMode,
   NormalizeRequest,
   NoteMoveRequest,
   NoteStretchRequest,
@@ -410,9 +411,11 @@ export type {
   ExternalSeparatedStemImportResult,
   MidiCcLearnOptions,
   ProjectAssistSidecar,
+  ProjectAssistSidecarInput,
   ProjectAutomationCurve,
   ProjectAutomationLaneDesc,
   ProjectAutomationPoint,
+  ProjectAutomationTargetKind,
   ProjectBounceOptions,
   ProjectChordSymbol,
   ProjectClip,
@@ -451,9 +454,13 @@ export type {
   SynthPatch,
 } from './project';
 export {
+  AutomationTargetKind,
   BUILTIN_SYNTH_WAVEFORMS,
   EXPECTED_PROJECT_ABI_VERSION,
   MarkerKind,
+  PROJECT_AUTOMATION_TARGET_OPAQUE,
+  PROJECT_AUTOMATION_TARGET_TRACK_FADER_DB,
+  PROJECT_AUTOMATION_TARGET_TRACK_PAN,
   Project,
   projectAbiVersion,
   SYNTH_BODY_TYPES,
@@ -525,6 +532,8 @@ export type {
   PairAnalysis,
   PairProcessor,
   PanLaw,
+  PanLawInput,
+  PanLawName,
   PanMode,
   PitchCorrectOptions,
   PitchResult,
@@ -636,10 +645,12 @@ export type {
   EngineTempoSegment,
   EngineTimeSignatureSegment,
   EngineTrackLane,
+  EngineTrackMonitorMode,
   EngineTrackSend,
   EngineTransportState,
   ExternalMidiEvent,
   MidiCcBindOptions,
+  TrackMonitorMode,
 } from './realtime_engine';
 export {
   ClipPageProvider,
@@ -840,13 +851,20 @@ function resolveVoicePresetOrdinal(preset: VoicePresetId | number): number {
 
 /**
  * Map a voice-character preset ordinal (or canonical id) to its canonical id
- * string (e.g. `'bright-idol'`). Invalid ordinals throw.
+ * string (e.g. `'bright-idol'`). Unknown numeric ordinals return `null`;
+ * unknown preset ids throw.
  */
-export function voiceCharacterPresetId(preset: VoicePresetId | number): string {
+export function voiceCharacterPresetId(preset: VoicePresetId | number): VoicePresetId | null {
   if (!module) {
     throw new Error('Module not initialized. Call init() first.');
   }
-  return module.voiceCharacterPresetId(resolveVoicePresetOrdinal(preset));
+  if (
+    typeof preset === 'number' &&
+    (!Number.isSafeInteger(preset) || preset < 0 || preset >= VOICE_PRESET_ORDINALS.length)
+  ) {
+    return null;
+  }
+  return module.voiceCharacterPresetId(resolveVoicePresetOrdinal(preset)) as VoicePresetId;
 }
 
 /**

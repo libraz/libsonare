@@ -1,5 +1,5 @@
 import { panLawCode, panModeCode } from '../codes';
-import type { EqBand, PanLaw, PanMode, RealtimeEngine } from '../index';
+import type { EqBand, PanLawInput, PanMode, RealtimeEngine } from '../index';
 import type { SonareEngineInstrumentSyncMessage, SonareEngineSyncMessage } from './messages';
 
 /**
@@ -85,7 +85,7 @@ export function setTrackStripPan(
 export function setTrackStripPanLaw(
   ctx: EngineStripContext,
   target: string | number,
-  panLaw: PanLaw | number,
+  panLaw: PanLawInput,
 ): void {
   const trackId = trackIdFor(ctx, target);
   const code = panLawCode(panLaw);

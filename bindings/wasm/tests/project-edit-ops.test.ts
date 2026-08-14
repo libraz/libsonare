@@ -132,6 +132,52 @@ describe('Sonare WASM Project edit ops', () => {
     }
   });
 
+  it('setMaxHistoryBytes validates without mutating history and supports zero retention', () => {
+    const { project, clipId } = buildAudioProject();
+    try {
+      const invoke = (...args: unknown[]) =>
+        Reflect.apply(project.setMaxHistoryBytes, project, args);
+      const invalidValues: readonly unknown[] = [
+        undefined,
+        null,
+        '64',
+        Number.NaN,
+        Number.POSITIVE_INFINITY,
+        Number.NEGATIVE_INFINITY,
+        1.5,
+        -1,
+        0xffff_ffff + 1,
+        Number.MAX_SAFE_INTEGER,
+      ];
+      for (const value of invalidValues) {
+        const before = project.toJson();
+        expect(() => invoke(value)).toThrow();
+        expect(project.toJson()).toBe(before);
+      }
+      expect(() => invoke()).toThrow();
+
+      // Invalid calls leave the existing history usable, and a normal edit is
+      // still reversible under the largest valid wasm32 cap.
+      project.setMaxHistoryBytes(0xffff_ffff);
+      const beforeEdit = project.toJson();
+      project.setClipGain(clipId, 0.5);
+      expect(project.toJson()).not.toBe(beforeEdit);
+      project.undo();
+      expect(project.toJson()).toBe(beforeEdit);
+
+      // Zero is a successful no-retention policy: the edit mutates state but
+      // cannot be undone.
+      expect(() => project.setMaxHistoryBytes(0)).not.toThrow();
+      project.setClipGain(clipId, 0.75);
+      const afterZeroEdit = project.toJson();
+      expect(afterZeroEdit).not.toBe(beforeEdit);
+      expect(() => project.undo()).toThrow();
+      expect(project.toJson()).toBe(afterZeroEdit);
+    } finally {
+      project.delete();
+    }
+  });
+
   it('setClipGain / setClipFade / setClipLoop apply without throwing', () => {
     const { project, clipId } = buildAudioProject();
     try {
@@ -352,6 +398,153 @@ describe('Sonare WASM Project edit ops', () => {
         }),
       ).not.toThrow();
       expect(() => project.removeAutomationLane(trackId, targetParamId)).not.toThrow();
+    } finally {
+      project.delete();
+    }
+  });
+
+  it('keeps omitted automation target kind on the legacy schema-v1 route', () => {
+    const { project, trackId } = buildAudioProject();
+    try {
+      project.addAutomationLane(trackId, {
+        targetParamId: 10,
+        points: [{ ppq: 0, value: 0 }],
+      });
+      const serialized = JSON.parse(project.toJson()) as {
+        version: number;
+        tracks: Array<{ automation_lanes: Array<Record<string, unknown>> }>;
+      };
+      expect(serialized.version).toBe(1);
+      expect(serialized.tracks[0].automation_lanes[0]).not.toHaveProperty('target_kind');
+    } finally {
+      project.delete();
+    }
+  });
+
+  it('normalizes typed automation target kinds and round-trips schema-v2 JSON', () => {
+    const { project, trackId } = buildAudioProject();
+    try {
+      project.addAutomationLane(trackId, {
+        targetParamId: 20,
+        targetKind: 'track-fader-db',
+        points: [{ ppq: 0, value: -3 }],
+      });
+      project.addAutomationLane(trackId, {
+        targetParamId: 21,
+        targetKind: 2,
+        points: [{ ppq: 0, value: 0 }],
+      });
+      const json = project.toJson();
+      const serialized = JSON.parse(json) as {
+        version: number;
+        tracks: Array<{ automation_lanes: Array<Record<string, unknown>> }>;
+      };
+      expect(serialized.version).toBe(2);
+      expect(serialized.tracks[0].automation_lanes).toEqual(
+        expect.arrayContaining([
+          expect.objectContaining({ target_param_id: 20, target_kind: 1 }),
+          expect.objectContaining({ target_param_id: 21, target_kind: 2 }),
+        ]),
+      );
+
+      const restored = Project.fromJson(json);
+      try {
+        expect(restored.toJson()).toBe(json);
+      } finally {
+        restored.delete();
+      }
+    } finally {
+      project.delete();
+    }
+  });
+
+  it('rejects typed target conflicts atomically and preserves typed lanes on legacy edit', () => {
+    const { project, trackId } = buildAudioProject();
+    try {
+      project.addAutomationLane(trackId, {
+        targetParamId: 30,
+        targetKind: 'track-fader-db',
+        points: [{ ppq: 0, value: -3 }],
+      });
+      project.addAutomationLane(trackId, {
+        targetParamId: 31,
+        targetKind: 'track-pan',
+        points: [{ ppq: 0, value: 0 }],
+      });
+
+      const beforeConflict = project.toJson();
+      expect(() =>
+        project.addAutomationLane(trackId, {
+          targetParamId: 32,
+          targetKind: 'track-fader-db',
+          points: [{ ppq: 0, value: 6 }],
+        }),
+      ).toThrow();
+      expect(project.toJson()).toBe(beforeConflict);
+
+      expect(() =>
+        project.editAutomationLane(trackId, 30, {
+          targetParamId: 30,
+          targetKind: 'track-pan',
+          points: [{ ppq: 0, value: 0.5 }],
+        }),
+      ).toThrow();
+      expect(project.toJson()).toBe(beforeConflict);
+
+      project.editAutomationLane(trackId, 30, {
+        targetParamId: 30,
+        points: [{ ppq: 0, value: -6 }],
+      });
+      const edited = JSON.parse(project.toJson()) as {
+        tracks: Array<{ automation_lanes: Array<Record<string, unknown>> }>;
+      };
+      expect(edited.tracks[0].automation_lanes).toEqual(
+        expect.arrayContaining([expect.objectContaining({ target_param_id: 30, target_kind: 1 })]),
+      );
+    } finally {
+      project.delete();
+    }
+  });
+
+  it('rejects unknown, width-three, and non-finite automation target kinds before mutation', () => {
+    const { project, trackId } = buildAudioProject();
+    try {
+      const invalidKinds: readonly unknown[] = [
+        3,
+        -1,
+        1.5,
+        Number.NaN,
+        Number.POSITIVE_INFINITY,
+        'unknown',
+        true,
+        null,
+      ];
+      for (const invalidKind of invalidKinds) {
+        const before = project.toJson();
+        expect(() =>
+          project.addAutomationLane(trackId, {
+            targetParamId: 40,
+            // Invalid runtime values intentionally exercise the JS boundary.
+            targetKind: invalidKind as never,
+            points: [{ ppq: 0, value: 0 }],
+          }),
+        ).toThrow();
+        expect(project.toJson()).toBe(before);
+      }
+    } finally {
+      project.delete();
+    }
+  });
+
+  it('rejects zero as the reserved automation target id', () => {
+    const { project, trackId } = buildAudioProject();
+    try {
+      expect(() =>
+        project.addAutomationLane(trackId, {
+          targetParamId: 0,
+          points: [{ ppq: 0, value: 0.0 }],
+        }),
+      ).toThrow(RangeError);
     } finally {
       project.delete();
     }

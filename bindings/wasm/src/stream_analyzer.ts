@@ -1,3 +1,4 @@
+import { resolveOrdinalInRange } from './codes';
 import { getSonareModule } from './module_state';
 import type { ChordQuality, PitchClass } from './public_types';
 import type { WasmStreamAnalyzer } from './sonare.js';
@@ -73,6 +74,10 @@ export class StreamAnalyzer {
     ) {
       throw new TypeError('outputFormat must be the integer 0 (Float32)');
     }
+    const window =
+      config.window === undefined
+        ? undefined
+        : resolveOrdinalInRange(config.window, 0, 3, 'stream analyzer window');
     const module = getSonareModule();
     const defaults = streamAnalyzerConfigDefaults();
     this.analyzer = new module.StreamAnalyzer(
@@ -94,7 +99,7 @@ export class StreamAnalyzer {
       config.maxProgressionEntries ?? defaults.maxProgressionEntries,
       config.keyUpdateIntervalSec ?? defaults.keyUpdateIntervalSec,
       config.bpmUpdateIntervalSec ?? defaults.bpmUpdateIntervalSec,
-      config.window ?? defaults.window,
+      window ?? defaults.window,
       config.outputFormat ?? defaults.outputFormat,
     );
   }

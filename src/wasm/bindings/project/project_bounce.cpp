@@ -147,8 +147,14 @@ val ProjectWasm::bounceWithSynthInstrument(val bindings, val options) {
   if (!bindings.isUndefined() && !bindings.isNull()) {
     auto bindingFromVal = [](val desc) {
       SonareSynthInstrumentBinding binding{};
-      if (desc.typeOf().as<std::string>() == "object" && hasProperty(desc, "destinationId")) {
-        binding.destination_id = desc["destinationId"].as<uint32_t>();
+      if (desc.typeOf().as<std::string>() == "object") {
+        if (hasProperty(desc, "destinationId")) {
+          binding.destination_id = desc["destinationId"].as<uint32_t>();
+        }
+        if (hasProperty(desc, "useGmPrograms")) {
+          binding.use_gm_programs =
+              requireProperty<bool>(desc, "useGmPrograms", "synth instrument") ? 1 : 0;
+        }
       }
       binding.patch = sonare_wasm_synth::synthPatchFromVal(desc);
       return binding;

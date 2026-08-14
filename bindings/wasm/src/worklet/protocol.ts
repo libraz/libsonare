@@ -108,6 +108,9 @@ export enum SonareEngineCommandType {
   SetMetronome = 15,
   SetMarker = 16,
   SeekMarker = 17,
+  // Queueable lane monitor-mode transition. The worklet command vocabulary
+  // deliberately leaves 18..25 unused; this is the stable ABI-v3 ordinal.
+  SetTrackMonitorMode = 26,
 }
 
 export enum SonareEngineTelemetryType {
@@ -136,6 +139,7 @@ export enum SonareEngineTelemetryError {
   MidiClockOverflow = 17,
   MetronomeOverflow = 18,
   InvalidCommand = 19,
+  MaxChannelsExceeded = 20,
 }
 
 export interface SonareMeterRingBuffer {

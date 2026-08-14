@@ -1,6 +1,7 @@
+import type { EngineCaptureStatus } from '../index';
 import type {
   SonareEngineCaptureRequestMessage,
-  SonareEngineCaptureResponseMessage,
+  SonareEngineCaptureResponseMessageInternal,
   SonareEngineClipPageRequestMessage,
   SonareEngineSyncMessage,
   SonareEngineTransportRequestMessage,
@@ -91,15 +92,106 @@ export function isEngineCaptureRequestMessage(
   );
 }
 
-export function isEngineCaptureResponseMessage(
-  value: unknown,
-): value is SonareEngineCaptureResponseMessage {
+function isCaptureStatus(value: unknown): value is EngineCaptureStatus {
   return (
     isRecord(value) &&
-    value.type === 'captureResponse' &&
-    typeof value.requestId === 'number' &&
-    typeof value.ok === 'boolean'
+    typeof value.capturedFrames === 'number' &&
+    Number.isSafeInteger(value.capturedFrames) &&
+    value.capturedFrames >= 0 &&
+    typeof value.overflowCount === 'number' &&
+    Number.isSafeInteger(value.overflowCount) &&
+    value.overflowCount >= 0 &&
+    typeof value.armed === 'boolean' &&
+    typeof value.punchEnabled === 'boolean' &&
+    (value.source === 'input' || value.source === 'output') &&
+    typeof value.recordOffsetSamples === 'number' &&
+    Number.isSafeInteger(value.recordOffsetSamples)
   );
+}
+
+function isCaptureChannel(value: unknown): value is Float32Array {
+  // Capture responses are transferred out of the worklet. A typed view onto
+  // the WASM heap or a SharedArrayBuffer must not cross that boundary: the
+  // former can be detached by memory growth and the latter cannot be listed
+  // in a transfer list. `instanceof` also rejects boxed number arrays.
+  return (
+    value instanceof Float32Array &&
+    typeof ArrayBuffer !== 'undefined' &&
+    value.buffer instanceof ArrayBuffer
+  );
+}
+
+function isCaptureChannels(value: unknown): value is Float32Array[] {
+  return Array.isArray(value) && value.every((channel) => isCaptureChannel(channel));
+}
+
+function hasOwn(value: Record<string, unknown>, key: string): boolean {
+  // biome-ignore lint/suspicious/noPrototypeBuiltins: Object.hasOwn is newer than the ES2020 target.
+  return Object.prototype.hasOwnProperty.call(value, key);
+}
+
+/** Return a request ID even when the response payload itself is malformed. */
+export function engineCaptureResponseRequestId(value: unknown): number | undefined {
+  if (
+    !isRecord(value) ||
+    value.type !== 'captureResponse' ||
+    typeof value.requestId !== 'number' ||
+    !Number.isSafeInteger(value.requestId)
+  ) {
+    return undefined;
+  }
+  return value.requestId;
+}
+
+export function isEngineCaptureResponseMessage(
+  value: unknown,
+): value is SonareEngineCaptureResponseMessageInternal {
+  const requestId = engineCaptureResponseRequestId(value);
+  if (requestId === undefined || !isRecord(value)) {
+    return false;
+  }
+  if (value.ok === false) {
+    return (
+      typeof value.error === 'string' && !hasOwn(value, 'status') && !hasOwn(value, 'channels')
+    );
+  }
+  if (value.ok !== true || hasOwn(value, 'error')) {
+    return false;
+  }
+  const hasStatus = hasOwn(value, 'status');
+  const hasChannels = hasOwn(value, 'channels');
+  if (hasStatus && hasChannels) {
+    return false;
+  }
+  if (hasStatus) {
+    return isCaptureStatus(value.status);
+  }
+  if (hasChannels) {
+    return isCaptureChannels(value.channels);
+  }
+  return true;
+}
+
+/**
+ * Check that a strict success response belongs to the requested operation.
+ * Failure responses are operation-independent and are therefore valid for
+ * every pending request (the node rejects them after this check).
+ */
+export function isEngineCaptureResponseForOperation(
+  response: SonareEngineCaptureResponseMessageInternal,
+  op: SonareEngineCaptureRequestMessage['op'],
+): boolean {
+  if (!response.ok) {
+    return true;
+  }
+  switch (op) {
+    case 'status':
+      return 'status' in response;
+    case 'read':
+      return 'channels' in response;
+    case 'reset':
+      return !('status' in response) && !('channels' in response);
+  }
 }
 
 export function isEngineTransportRequestMessage(

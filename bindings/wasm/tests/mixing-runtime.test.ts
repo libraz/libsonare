@@ -60,6 +60,51 @@ describe('Mixer runtime controls (WASM)', () => {
   });
 
   describe('type contracts of readers and setters', () => {
+    it('forwards asymmetric dual-pan and polarity fields through scene JSON', () => {
+      const mixer = Mixer.fromSceneJson(
+        JSON.stringify({
+          version: 1,
+          strips: [
+            {
+              id: 'asymmetric',
+              panMode: 2,
+              dualPanLeft: -0.25,
+              dualPanRight: 0.75,
+              polarityInvertLeft: true,
+              polarityInvertRight: false,
+            },
+          ],
+          buses: [{ id: 'master', role: 'master' }],
+          connections: [],
+        }),
+        SR,
+        BLOCK,
+      );
+      try {
+        const scene = JSON.parse(mixer.toSceneJson()) as {
+          strips: Array<{
+            id: string;
+            panMode: number;
+            dualPanLeft: number;
+            dualPanRight: number;
+            polarityInvertLeft: boolean;
+            polarityInvertRight: boolean;
+          }>;
+        };
+        expect(scene.strips).toHaveLength(1);
+        expect(scene.strips[0]).toMatchObject({
+          id: 'asymmetric',
+          panMode: 2,
+          dualPanLeft: -0.25,
+          dualPanRight: 0.75,
+          polarityInvertLeft: true,
+          polarityInvertRight: false,
+        });
+      } finally {
+        mixer.delete();
+      }
+    });
+
     it('reports the longest serial send tail', () => {
       const mixer = Mixer.fromSceneJson(serialTailScene(), SR, BLOCK);
       try {

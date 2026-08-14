@@ -196,7 +196,7 @@ export interface WorkletTransport {
   postMessage?: (
     message:
       | SonareWorkletTransportMessage
-      | SonareEngineCaptureResponseMessage
+      | SonareEngineCaptureResponseMessageInternal
       | SonareEngineTransportResponseMessage
       | SonareEngineSyncErrorMessage,
     transfer?: Transferable[],
@@ -636,6 +636,12 @@ export interface SonareEngineCaptureRequestMessage {
   op: 'status' | 'read' | 'reset';
 }
 
+/**
+ * Public capture response shape retained for source compatibility.
+ *
+ * The worklet wire protocol is stricter than this legacy structural type; use
+ * `SonareEngineCaptureResponseMessageInternal` inside the implementation.
+ */
 export interface SonareEngineCaptureResponseMessage {
   type: 'captureResponse';
   requestId: number;
@@ -644,6 +650,40 @@ export interface SonareEngineCaptureResponseMessage {
   channels?: Float32Array[] | number[][];
   error?: string;
 }
+
+interface SonareEngineCaptureStatusResponseMessageInternal {
+  type: 'captureResponse';
+  requestId: number;
+  ok: true;
+  status: EngineCaptureStatus;
+}
+
+interface SonareEngineCaptureReadResponseMessageInternal {
+  type: 'captureResponse';
+  requestId: number;
+  ok: true;
+  channels: Float32Array[];
+}
+
+interface SonareEngineCaptureResetResponseMessageInternal {
+  type: 'captureResponse';
+  requestId: number;
+  ok: true;
+}
+
+interface SonareEngineCaptureErrorResponseMessageInternal {
+  type: 'captureResponse';
+  requestId: number;
+  ok: false;
+  error: string;
+}
+
+/** Strict wire response type used only by the worklet implementation. */
+export type SonareEngineCaptureResponseMessageInternal =
+  | SonareEngineCaptureStatusResponseMessageInternal
+  | SonareEngineCaptureReadResponseMessageInternal
+  | SonareEngineCaptureResetResponseMessageInternal
+  | SonareEngineCaptureErrorResponseMessageInternal;
 
 export interface SonareEngineTransportRequestMessage {
   type: 'transportRequest';

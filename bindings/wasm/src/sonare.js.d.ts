@@ -699,6 +699,10 @@ export interface WasmProjectSource {
   storageHandleId: number;
   sampleRateHint: number;
   nameOrUri: string;
+  /** Owning content hash for audio sources; empty for MIDI sources. */
+  contentHash: string;
+  /** External source-separation role for audio sources; empty for MIDI sources. */
+  externalStemRole: string;
 }
 
 export interface WasmEngineMetronomeConfig {
@@ -914,6 +918,7 @@ export interface WasmRealtimeEngine {
   setParameterSmoothed: (paramId: number, value: number, renderFrame: number) => void;
   setParamSmoothingMs: (smoothingMs: number) => void;
   setSoloMute: (laneIndex: number, solo: boolean, mute: boolean, renderFrame: number) => void;
+  setTrackMonitorMode: (laneIndex: number, mode: number, renderFrame: number) => void;
   getTransportState: () => WasmEngineTransportState;
   play: (renderFrame: number) => void;
   stop: (renderFrame: number) => void;
@@ -1234,6 +1239,12 @@ export interface SonareModule {
     sampleRate: number,
     nOctaveBands: number,
   ) => WasmAcousticResult;
+  analyzeImpulseResponseEx: (
+    samples: Float32Array,
+    sampleRate: number,
+    nOctaveBands: number,
+    minDecayDb: number,
+  ) => WasmAcousticResult;
   detectAcoustic: (
     samples: Float32Array,
     sampleRate: number,
@@ -1473,11 +1484,29 @@ export interface SonareModule {
     kernelHarmonic: number,
     kernelPercussive: number,
   ) => WasmHpssResult;
+  hpssEx: (
+    samples: Float32Array,
+    sampleRate: number,
+    kernelHarmonic: number,
+    kernelPercussive: number,
+    nFft: number,
+    hopLength: number,
+    hardMask: boolean,
+  ) => WasmHpssResult;
   hpssWithResidual: (
     samples: Float32Array,
     sampleRate: number,
     kernelHarmonic: number,
     kernelPercussive: number,
+  ) => WasmHpssWithResidualResult;
+  hpssWithResidualEx: (
+    samples: Float32Array,
+    sampleRate: number,
+    kernelHarmonic: number,
+    kernelPercussive: number,
+    nFft: number,
+    hopLength: number,
+    hardMask: boolean,
   ) => WasmHpssWithResidualResult;
   decompose: (
     s: Float32Array,
@@ -1520,7 +1549,21 @@ export interface SonareModule {
   harmonic: (samples: Float32Array, sampleRate: number) => Float32Array;
   percussive: (samples: Float32Array, sampleRate: number) => Float32Array;
   timeStretch: (samples: Float32Array, sampleRate: number, rate: number) => Float32Array;
+  timeStretchEx: (
+    samples: Float32Array,
+    sampleRate: number,
+    rate: number,
+    nFft: number,
+    hopLength: number,
+  ) => Float32Array;
   pitchShift: (samples: Float32Array, sampleRate: number, semitones: number) => Float32Array;
+  pitchShiftEx: (
+    samples: Float32Array,
+    sampleRate: number,
+    semitones: number,
+    nFft: number,
+    hopLength: number,
+  ) => Float32Array;
   pitchCorrectToMidi: (
     samples: Float32Array,
     sampleRate: number,
@@ -1582,6 +1625,12 @@ export interface SonareModule {
     channels: number,
   ) => Float32Array;
   normalize: (samples: Float32Array, sampleRate: number, targetDb: number) => Float32Array;
+  normalizeEx: (
+    samples: Float32Array,
+    sampleRate: number,
+    targetDb: number,
+    mode: string,
+  ) => Float32Array;
   mastering: (
     samples: Float32Array,
     sampleRate: number,
@@ -1760,6 +1809,13 @@ export interface SonareModule {
     options: Record<string, unknown>,
   ) => WasmMixResult;
   trim: (samples: Float32Array, sampleRate: number, thresholdDb: number) => Float32Array;
+  trimEx: (
+    samples: Float32Array,
+    sampleRate: number,
+    thresholdDb: number,
+    frameLength: number,
+    hopLength: number,
+  ) => Float32Array;
   spectralEdit: (
     samples: Float32Array,
     sampleRate: number,
@@ -2189,6 +2245,14 @@ export interface SonareModule {
     enableStftBlend: boolean,
     stftBlendWeight: number,
     stftBlendNFft: number,
+  ) => WasmNnlsChromaResult;
+  nnlsChromaEx: (
+    samples: Float32Array,
+    sampleRate: number,
+    enableStftBlend: boolean,
+    stftBlendWeight: number,
+    stftBlendNFft: number,
+    hopLength: number,
   ) => WasmNnlsChromaResult;
   cqt: (
     samples: Float32Array,

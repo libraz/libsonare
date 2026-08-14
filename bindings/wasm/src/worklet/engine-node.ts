@@ -1,7 +1,9 @@
 import type { EngineCaptureStatus, EngineTransportState } from '../index';
 import { engineCapabilities } from '../index';
 import {
+  engineCaptureResponseRequestId,
   isClipPageRequestMessage,
+  isEngineCaptureResponseForOperation,
   isEngineCaptureResponseMessage,
   isEngineTelemetryRecord,
   isEngineTransportResponseMessage,
@@ -10,7 +12,7 @@ import {
 } from './guards';
 import type {
   SonareEngineCaptureRequestMessage,
-  SonareEngineCaptureResponseMessage,
+  SonareEngineCaptureResponseMessageInternal,
   SonareEngineClipPageRequestMessage,
   SonareEngineSyncErrorMessage,
   SonareEngineTransportResponseMessage,
@@ -53,12 +55,28 @@ function isFiniteInteger(value: number | bigint | undefined): boolean {
   return typeof value === 'bigint' || (Number.isFinite(value) && Number.isSafeInteger(value));
 }
 
+function isTrackMonitorMode(value: number | bigint | undefined): boolean {
+  if (value === undefined) {
+    return false;
+  }
+  const mode = typeof value === 'bigint' ? Number(value) : value;
+  return typeof mode === 'number' && Number.isSafeInteger(mode) && mode >= 0 && mode <= 2;
+}
+
+/** A track-monitor command cannot infer a lane: its target is a uint32 index. */
+function isTrackMonitorLaneIndex(value: number | undefined): boolean {
+  return (
+    typeof value === 'number' && Number.isSafeInteger(value) && value >= 0 && value <= 0xffff_ffff
+  );
+}
+
 function isValidCommandRecord(command: SonareEngineCommandRecord): boolean {
   const type = Number(command.type);
   if (
     !Number.isSafeInteger(type) ||
     type < SonareEngineCommandType.SetParam ||
-    type > SonareEngineCommandType.SeekMarker
+    (type > SonareEngineCommandType.SeekMarker &&
+      type !== SonareEngineCommandType.SetTrackMonitorMode)
   ) {
     return false;
   }
@@ -66,7 +84,9 @@ function isValidCommandRecord(command: SonareEngineCommandRecord): boolean {
     (command.targetId === undefined || Number.isSafeInteger(command.targetId)) &&
     (command.argFloat === undefined || Number.isFinite(command.argFloat)) &&
     isFiniteInteger(command.argInt) &&
-    isFiniteInteger(command.sampleTime)
+    isFiniteInteger(command.sampleTime) &&
+    (type !== SonareEngineCommandType.SetTrackMonitorMode ||
+      (isTrackMonitorLaneIndex(command.targetId) && isTrackMonitorMode(command.argInt)))
   );
 }
 
@@ -109,7 +129,8 @@ export class SonareRealtimeEngineNode {
   private readonly captureRequests = new Map<
     number,
     {
-      resolve: (response: SonareEngineCaptureResponseMessage) => void;
+      op: SonareEngineCaptureRequestMessage['op'];
+      resolve: (response: SonareEngineCaptureResponseMessageInternal) => void;
       reject: (reason?: unknown) => void;
     }
   >();
@@ -151,14 +172,19 @@ export class SonareRealtimeEngineNode {
       this.resolveReady();
     }
     this.node.port.onmessage = (event: MessageEvent<unknown>) => {
-      if (isEngineCaptureResponseMessage(event.data)) {
-        const pending = this.captureRequests.get(event.data.requestId);
+      const captureRequestId = engineCaptureResponseRequestId(event.data);
+      if (captureRequestId !== undefined) {
+        const pending = this.captureRequests.get(captureRequestId);
         if (pending) {
-          this.captureRequests.delete(event.data.requestId);
-          if (event.data.ok) {
+          this.captureRequests.delete(captureRequestId);
+          if (!isEngineCaptureResponseMessage(event.data)) {
+            pending.reject(new Error('Malformed capture response.'));
+          } else if (!isEngineCaptureResponseForOperation(event.data, pending.op)) {
+            pending.reject(new Error('Capture response does not match request operation.'));
+          } else if (event.data.ok) {
             pending.resolve(event.data);
           } else {
-            pending.reject(new Error(event.data.error ?? 'Capture request failed'));
+            pending.reject(new Error(event.data.error));
           }
         }
       } else if (isEngineTransportResponseMessage(event.data)) {
@@ -375,7 +401,7 @@ export class SonareRealtimeEngineNode {
 
   requestCaptureStatus(): Promise<EngineCaptureStatus> {
     return this.sendCaptureRequest('status').then((response) => {
-      if (!response.status) {
+      if (!response.ok || !('status' in response)) {
         throw new Error('Capture status response is missing status.');
       }
       return response.status;
@@ -383,11 +409,12 @@ export class SonareRealtimeEngineNode {
   }
 
   requestCapturedAudio(): Promise<Float32Array[]> {
-    return this.sendCaptureRequest('read').then((response) =>
-      (response.channels ?? []).map((channel) =>
-        channel instanceof Float32Array ? channel : new Float32Array(channel),
-      ),
-    );
+    return this.sendCaptureRequest('read').then((response) => {
+      if (!response.ok || !('channels' in response)) {
+        throw new Error('Capture read response is missing channels.');
+      }
+      return response.channels;
+    });
   }
 
   requestCaptureReset(): Promise<void> {
@@ -529,6 +556,7 @@ export class SonareRealtimeEngineNode {
     this.startRingPolling();
     return () => {
       this.midiOutListeners.delete(callback);
+      this.stopRingPollingIfUnused();
     };
   }
 
@@ -633,15 +661,22 @@ export class SonareRealtimeEngineNode {
 
   private sendCaptureRequest(
     op: SonareEngineCaptureRequestMessage['op'],
-  ): Promise<SonareEngineCaptureResponseMessage> {
+  ): Promise<SonareEngineCaptureResponseMessageInternal> {
     if (this.destroyed) {
       return Promise.reject(new Error('Realtime engine node is destroyed.'));
     }
     const requestId = this.captureRequestId++;
-    const promise = new Promise<SonareEngineCaptureResponseMessage>((resolve, reject) => {
-      this.captureRequests.set(requestId, { resolve, reject });
+    let rejectRequest!: (reason?: unknown) => void;
+    const promise = new Promise<SonareEngineCaptureResponseMessageInternal>((resolve, reject) => {
+      rejectRequest = reject;
+      this.captureRequests.set(requestId, { op, resolve, reject });
     });
-    this.node.port.postMessage({ type: 'captureRequest', requestId, op });
+    try {
+      this.node.port.postMessage({ type: 'captureRequest', requestId, op });
+    } catch (error) {
+      this.captureRequests.delete(requestId);
+      rejectRequest(error);
+    }
     return promise;
   }
 

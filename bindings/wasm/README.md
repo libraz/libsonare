@@ -38,8 +38,8 @@ mastering, mixing, or realtime-engine APIs, import the smaller analysis entry:
 import { detectBpm, init } from '@libraz/libsonare/analysis';
 ```
 
-With emsdk 5.0.2, the analysis binary is 0.86 MiB raw / 347 KiB gzip; the full
-entry is 3.76 MiB raw / 1.26 MiB gzip. The analysis entry deliberately has no
+With emsdk 5.0.2, the analysis binary is 0.91 MiB raw / 368 KiB gzip; the full
+entry is 3.88 MiB raw / 1.31 MiB gzip. The analysis entry deliberately has no
 `masterAudio`, `mixStereo`, `Project`, `Mixer`, or `RealtimeEngine` export.
 
 ## Quick Start

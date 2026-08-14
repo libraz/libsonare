@@ -1,5 +1,6 @@
 import {
   assertProjectMidiEvents,
+  projectAutomationTargetKindValue,
   projectLoopModeValue,
   projectMidi1Event,
   projectModule,
@@ -13,8 +14,10 @@ import type {
   ExternalSeparatedStemImportResult,
   MidiCcLearnOptions,
   ProjectAssistSidecar,
+  ProjectAssistSidecarInput,
   ProjectAutomationLaneDesc,
   ProjectAutomationPoint,
+  ProjectAutomationTargetKind,
   ProjectBounceOptions,
   ProjectChordSymbol,
   ProjectClip,
@@ -49,6 +52,41 @@ import type {
   SynthPatch,
 } from './project_types';
 
+function validateAssistSidecarUint32(value: unknown, field: string): number {
+  if (
+    typeof value !== 'number' ||
+    !Number.isSafeInteger(value) ||
+    value < 0 ||
+    value > 0xffff_ffff
+  ) {
+    throw new RangeError(`Project.setAssistSidecar: ${field} must be a uint32`);
+  }
+  return value;
+}
+
+function validateAssistSidecarPpq(value: unknown, field: string): number {
+  if (typeof value !== 'number' || !Number.isFinite(value) || value < 0) {
+    throw new RangeError(
+      `Project.setAssistSidecar: ${field} must be a finite, non-negative number`,
+    );
+  }
+  return value;
+}
+
+function validateAssistSidecarPayload(value: unknown): Uint8Array {
+  if (!(value instanceof Uint8Array)) {
+    throw new TypeError('Project.setAssistSidecar: payload must be a Uint8Array');
+  }
+  return value;
+}
+
+function validateAssistSidecarModuleId(value: unknown): string {
+  if (typeof value !== 'string' || value.length === 0) {
+    throw new TypeError('Project.setAssistSidecar: moduleId must be a non-empty string');
+  }
+  return value;
+}
+
 /**
  * Headless DAW project (control-thread-only arrangement model).
  *
@@ -80,6 +118,11 @@ export class Project {
 
   constructor() {
     this.native = new (projectModule().Project)();
+  }
+
+  /** Create a new empty project. */
+  static create(): Project {
+    return new Project();
   }
 
   /** Pack a MIDI 1.0 note-on event accepted by {@link setMidiEvents}. */
@@ -462,6 +505,19 @@ export class Project {
     this.native.setMaxUndoDepth(depth);
   }
 
+  /** Set the combined undo/redo history byte cap. Zero disables retention. */
+  setMaxHistoryBytes(bytes: number): void {
+    if (typeof bytes !== 'number') {
+      throw new TypeError('Project.setMaxHistoryBytes: bytes must be a number');
+    }
+    if (!Number.isFinite(bytes) || !Number.isInteger(bytes) || bytes < 0 || bytes > 0xffff_ffff) {
+      throw new RangeError(
+        'Project.setMaxHistoryBytes: bytes must be a finite integer in the uint32 range',
+      );
+    }
+    this.native.setMaxHistoryBytes(bytes);
+  }
+
   /** Replace a MIDI clip's entire event list. */
   setMidiEvents(
     clipId: number,
@@ -625,8 +681,11 @@ export class Project {
    * Karplus-Strong / modal / additive / percussion / extended-waveguide-piano
    * engines plus the realism layer). Pass a {@link SynthPatch}, a preset-name
    * string (`'saw-lead'` / `'va:saw-lead'`; see {@link synthPresetNames}), or
-   * an array of either; each object entry may carry a `destinationId` binding
-   * convenience (default 0), which is not part of the NativeSynth patch itself.
+   * an array of either; each object entry may carry `destinationId` (default
+   * 0) and `useGmPrograms` (default `false`) binding conveniences, neither of
+   * which is part of the NativeSynth patch itself. When enabled, MIDI program
+   * changes select the corresponding General MIDI voice while the patch remains
+   * the fallback.
    * Because the parameter defaults to `{}`, omission and explicit `undefined`
    * both create one default binding. Use an explicitly empty array `[]` (or
    * runtime `null`) for zero bindings. Unknown preset names throw.
@@ -722,6 +781,11 @@ export class Project {
     this.native.setSourceAudio(sourceId, audio, channels, sampleRate);
   }
 
+  /** Replace an audio source's metadata strings as one undoable edit. */
+  setAudioSourceMetadata(sourceId: number, contentHash: string, externalStemRole: string): void {
+    this.native.setAudioSourceMetadata(sourceId, contentHash, externalStemRole);
+  }
+
   /** Replace a clip's take list and active take id (undoable). */
   setClipTakes(clipId: number, takes: ReadonlyArray<ProjectClipTake>, activeTakeId = 0): void {
     this.native.setClipTakes(clipId, takes, activeTakeId);
@@ -778,10 +842,16 @@ export class Project {
 
   /** Append an automation lane; returns its stable target parameter id (undoable). */
   addAutomationLane(trackId: number, desc: ProjectAutomationLaneDesc): number {
-    return this.native.addAutomationLane(trackId, {
-      targetParamId: desc.targetParamId,
-      points: desc.points,
-    });
+    if (desc.targetParamId === 0) {
+      throw new RangeError('project automation lane targetParamId must be non-zero');
+    }
+    const nativeDesc: ProjectAutomationLaneDesc = { ...desc };
+    if (Object.keys(desc).includes('targetKind')) {
+      nativeDesc.targetKind = projectAutomationTargetKindValue(
+        desc.targetKind as ProjectAutomationTargetKind,
+      ) as ProjectAutomationTargetKind;
+    }
+    return this.native.addAutomationLane(trackId, nativeDesc);
   }
 
   /** Replace the lane identified by its stable target parameter id (undoable). */
@@ -790,10 +860,16 @@ export class Project {
     targetParamId: number,
     desc: ProjectAutomationLaneDesc,
   ): void {
-    this.native.editAutomationLane(trackId, targetParamId, {
-      targetParamId: desc.targetParamId,
-      points: desc.points,
-    });
+    if (desc.targetParamId === 0) {
+      throw new RangeError('project automation lane targetParamId must be non-zero');
+    }
+    const nativeDesc: ProjectAutomationLaneDesc = { ...desc };
+    if (Object.keys(desc).includes('targetKind')) {
+      nativeDesc.targetKind = projectAutomationTargetKindValue(
+        desc.targetKind as ProjectAutomationTargetKind,
+      ) as ProjectAutomationTargetKind;
+    }
+    this.native.editAutomationLane(trackId, targetParamId, nativeDesc);
   }
 
   /** Remove the lane identified by its stable target parameter id (undoable). */
@@ -811,7 +887,14 @@ export class Project {
     this.native.annotateChords(chords);
   }
 
-  /** Add or update an opaque assist sidecar by module id + target scope (undoable). */
+  /**
+   * Add or update an opaque assist sidecar via an undoable edit.
+   *
+   * The descriptor form is the canonical API and matches the Node binding;
+   * the positional form remains available for compatibility with the original
+   * WASM facade.
+   */
+  setAssistSidecar(sidecar: ProjectAssistSidecarInput): void;
   setAssistSidecar(
     moduleId: string,
     schemaVersion: number,
@@ -819,14 +902,52 @@ export class Project {
     regionStartPpq: number,
     regionEndPpq: number,
     payload: Uint8Array,
+  ): void;
+  setAssistSidecar(
+    sidecarOrModuleId: ProjectAssistSidecarInput | string,
+    schemaVersion?: number,
+    targetTrackId?: number,
+    regionStartPpq?: number,
+    regionEndPpq?: number,
+    payload?: Uint8Array,
   ): void {
+    if (typeof sidecarOrModuleId === 'string') {
+      if (
+        schemaVersion === undefined ||
+        targetTrackId === undefined ||
+        regionStartPpq === undefined ||
+        regionEndPpq === undefined ||
+        payload === undefined
+      ) {
+        throw new TypeError('Project.setAssistSidecar: positional form requires six arguments');
+      }
+      this.native.setAssistSidecar(
+        validateAssistSidecarModuleId(sidecarOrModuleId),
+        validateAssistSidecarUint32(schemaVersion, 'schemaVersion'),
+        validateAssistSidecarUint32(targetTrackId, 'targetTrackId'),
+        validateAssistSidecarPpq(regionStartPpq, 'regionStartPpq'),
+        validateAssistSidecarPpq(regionEndPpq, 'regionEndPpq'),
+        validateAssistSidecarPayload(payload),
+      );
+      return;
+    }
+
+    if (
+      sidecarOrModuleId === null ||
+      typeof sidecarOrModuleId !== 'object' ||
+      Array.isArray(sidecarOrModuleId)
+    ) {
+      throw new TypeError('Project.setAssistSidecar: expected a sidecar descriptor object');
+    }
+    const sidecar = sidecarOrModuleId;
+    const moduleId = validateAssistSidecarModuleId(sidecar.moduleId);
     this.native.setAssistSidecar(
       moduleId,
-      schemaVersion,
-      targetTrackId,
-      regionStartPpq,
-      regionEndPpq,
-      payload,
+      validateAssistSidecarUint32(sidecar.schemaVersion ?? 0, 'schemaVersion'),
+      validateAssistSidecarUint32(sidecar.targetTrackId ?? 0, 'targetTrackId'),
+      validateAssistSidecarPpq(sidecar.regionStartPpq ?? 0, 'regionStartPpq'),
+      validateAssistSidecarPpq(sidecar.regionEndPpq ?? 0, 'regionEndPpq'),
+      validateAssistSidecarPayload(sidecar.payload ?? new Uint8Array()),
     );
   }
 
@@ -838,6 +959,12 @@ export class Project {
   /** Read one assist sidecar by stable project order. */
   getAssistSidecar(index: number): ProjectAssistSidecar {
     return this.native.getAssistSidecar(index);
+  }
+
+  /** Read every stored assist sidecar in the same order as the index getter. */
+  assistSidecars(): ProjectAssistSidecar[] {
+    const count = this.assistSidecarCount();
+    return Array.from({ length: count }, (_, index) => this.getAssistSidecar(index));
   }
 
   /** Set the project's clip-overlap policy (SonareProjectOverlapPolicy ordinal). */

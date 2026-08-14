@@ -5,6 +5,7 @@
 
 #include <limits>
 
+#include "util/constants.h"
 #include "wasm/bindings/common/common.h"
 
 // ============================================================================
@@ -97,14 +98,15 @@ val js_bass_chroma(val samples, int sample_rate, int hop_length, int n_chroma) {
   return chromaToVal(bass_chroma(audio, config));
 }
 
-val js_nnls_chroma(val samples, int sample_rate, bool enable_stft_blend, float stft_blend_weight,
-                   int stft_blend_n_fft) {
+val js_nnls_chroma_ex(val samples, int sample_rate, bool enable_stft_blend, float stft_blend_weight,
+                      int stft_blend_n_fft, int hop_length) {
   Audio audio = loadValidatedAudio(samples, sample_rate);
 
   NnlsChromaConfig config;
   config.enable_stft_blend = enable_stft_blend;
   config.stft_blend_weight = stft_blend_weight;
   config.stft_blend_n_fft = stft_blend_n_fft;
+  config.cqt.hop_length = hop_length;
   Chroma chroma = nnls_chroma(audio, config);
 
   val out = val::object();
@@ -114,6 +116,12 @@ val js_nnls_chroma(val samples, int sample_rate, bool enable_stft_blend, float s
   std::vector<float> data_vec(chroma.data(), chroma.data() + chroma.n_chroma() * chroma.n_frames());
   out.set("data", vectorToFloat32Array(data_vec));
   return out;
+}
+
+val js_nnls_chroma(val samples, int sample_rate, bool enable_stft_blend, float stft_blend_weight,
+                   int stft_blend_n_fft) {
+  return js_nnls_chroma_ex(samples, sample_rate, enable_stft_blend, stft_blend_weight,
+                           stft_blend_n_fft, constants::kDefaultHopLength);
 }
 
 // ============================================================================
@@ -280,6 +288,7 @@ void registerFeatureMusicBindings() {
   function("chromaCqt", &js_chroma_cqt);
   function("bassChroma", &js_bass_chroma);
   function("nnlsChroma", &js_nnls_chroma);
+  function("nnlsChromaEx", &js_nnls_chroma_ex);
   function("cqt", &js_cqt);
   function("pseudoCqt", &js_pseudo_cqt);
   function("hybridCqt", &js_hybrid_cqt);

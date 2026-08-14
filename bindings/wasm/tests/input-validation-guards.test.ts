@@ -31,6 +31,7 @@ import {
   splitSilence,
   trimSilence,
 } from '../dist/index.js';
+import { SonareEngineTelemetryError } from '../dist/worklet.js';
 
 beforeAll(async () => {
   await init();
@@ -59,6 +60,27 @@ describe('RealtimeEngine prepare/time-signature/loop guards', () => {
     expect(() => engine.prepare(48000, 128, 1024, 1024, 2)).not.toThrow();
   });
 
+  it('forwards prepare() maxChannels and reports an over-limit process block', () => {
+    const engine = new RealtimeEngine(48000, 128);
+    try {
+      engine.prepare(48000, 128, 1024, 1024, 2);
+      expect(() =>
+        engine.process([new Float32Array(128), new Float32Array(128), new Float32Array(128)]),
+      ).not.toThrow();
+
+      expect(engine.drainTelemetry()).toEqual(
+        expect.arrayContaining([
+          expect.objectContaining({
+            error: SonareEngineTelemetryError.MaxChannelsExceeded,
+            value: 3,
+          }),
+        ]),
+      );
+    } finally {
+      engine.destroy();
+    }
+  });
+
   it('rejects a non-positive time signature', () => {
     const engine = new RealtimeEngine(48000, 128);
     expect(() => engine.setTimeSignature(0, 4)).toThrow();
@@ -81,6 +103,35 @@ describe('RealtimeEngine prepare/time-signature/loop guards', () => {
     expect(() => engine.setLoop(4, 4, true)).toThrow(); // empty
     expect(() => engine.setLoop(8, 4, true)).toThrow(); // inverted
     expect(() => engine.setLoop(0, 4, true)).not.toThrow();
+  });
+});
+
+describe('RealtimeEngine track monitor mode guard', () => {
+  it('rejects non-canonical mode values before embind', () => {
+    const engine = new RealtimeEngine(48000, 128);
+    for (const mode of [
+      true,
+      false,
+      0.5,
+      Number.NaN,
+      Number.POSITIVE_INFINITY,
+      Number.NEGATIVE_INFINITY,
+      -1,
+      3,
+      'PFL',
+      'post-fader',
+    ]) {
+      expect(() => engine.setTrackMonitorMode(0, mode as never)).toThrow(RangeError);
+    }
+    engine.destroy();
+  });
+
+  it('accepts only the documented strings and ordinals', () => {
+    const engine = new RealtimeEngine(48000, 128);
+    for (const mode of ['off', 'pfl', 'afl', 0, 1, 2] as const) {
+      expect(() => engine.setTrackMonitorMode(0, mode)).not.toThrow();
+    }
+    engine.destroy();
   });
 });
 
@@ -149,14 +200,27 @@ describe('detectKey / detectKeyCandidates reject unknown enum spellings and out-
 });
 
 describe('StreamAnalyzer rejects an out-of-range window ordinal instead of silently defaulting to Hann', () => {
-  it('rejects window ordinals outside [0, 3]', () => {
-    expect(() => new StreamAnalyzer({ window: 99 as never })).toThrow();
-    expect(() => new StreamAnalyzer({ window: -1 as never })).toThrow();
+  it('rejects non-safe-integer window values before the Embind constructor', () => {
+    for (const window of [
+      -1,
+      4,
+      99,
+      0.5,
+      Number.NaN,
+      Number.POSITIVE_INFINITY,
+      Number.NEGATIVE_INFINITY,
+      '0',
+      null,
+      true,
+    ]) {
+      expect(() => new StreamAnalyzer({ window: window as never })).toThrow(RangeError);
+    }
   });
 
   it('accepts every valid window ordinal', () => {
     for (const window of [0, 1, 2, 3] as const) {
-      expect(() => new StreamAnalyzer({ window })).not.toThrow();
+      const analyzer = new StreamAnalyzer({ window });
+      analyzer.delete();
     }
   });
 });

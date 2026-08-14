@@ -110,6 +110,10 @@ export interface ProjectSource {
   storageHandleId: number;
   sampleRateHint: number;
   nameOrUri: string;
+  /** Owning content hash for audio sources; empty for MIDI sources. */
+  contentHash: string;
+  /** External source-separation role for audio sources; empty for MIDI sources. */
+  externalStemRole: string;
 }
 
 /** Names accepted by the minimal built-in oscillator synth. */
@@ -314,6 +318,8 @@ export interface SynthPatch {
    * `(destination_id, patch)` bindings instead. Defaults to `0`.
    */
   destinationId?: number;
+  /** Resolve MIDI channels from incoming GM bank/program changes; defaults to false. */
+  useGmPrograms?: boolean;
   /** Base preset name (see {@link synthPresetNames}); omit for the init patch. */
   preset?: string;
   engineMode?: SynthEngineMode | number;
@@ -448,12 +454,34 @@ export interface ProjectAutomationPoint {
   curve?: ProjectAutomationCurve;
 }
 
+/**
+ * Persistent target classification for an automation lane.
+ *
+ * The numeric ordinals mirror `SonareAutomationTargetKind`; the string names
+ * are the public WASM spellings accepted by the project facade.
+ */
+export const AutomationTargetKind = {
+  opaque: 0,
+  trackFaderDb: 1,
+  trackPan: 2,
+} as const;
+
+/** Accepted automation target kind name or ABI ordinal. */
+export type ProjectAutomationTargetKind = 'opaque' | 'track-fader-db' | 'track-pan' | 0 | 1 | 2;
+
+/** Numeric aliases matching the C-ABI enum names. */
+export const PROJECT_AUTOMATION_TARGET_OPAQUE = AutomationTargetKind.opaque;
+export const PROJECT_AUTOMATION_TARGET_TRACK_FADER_DB = AutomationTargetKind.trackFaderDb;
+export const PROJECT_AUTOMATION_TARGET_TRACK_PAN = AutomationTargetKind.trackPan;
+
 /** Automation-lane descriptor for {@link Project.addAutomationLane}. */
 export interface ProjectAutomationLaneDesc {
-  /** Host-defined id of the parameter the lane drives. */
+  /** Host-defined, non-zero id of the parameter the lane drives (zero is reserved). */
   targetParamId: number;
   /** Breakpoints (stored verbatim). */
   points: ReadonlyArray<ProjectAutomationPoint>;
+  /** Optional persistent target classification; omission retains the legacy opaque route. */
+  targetKind?: ProjectAutomationTargetKind;
 }
 
 /** One tempo segment for {@link Project.setTempoSegments}. */
@@ -513,6 +541,22 @@ export interface ProjectChordSymbol {
   romanNumeral?: string;
   /** True at a modulation boundary. */
   modulationBoundary?: boolean;
+}
+
+/** Descriptor accepted by {@link Project.setAssistSidecar}. */
+export interface ProjectAssistSidecarInput {
+  /** Non-empty module id key. */
+  moduleId: string;
+  /** Module-defined schema version. Defaults to `0`. */
+  schemaVersion?: number;
+  /** Target track id (`0` = project scope). Defaults to `0`. */
+  targetTrackId?: number;
+  /** Region start in PPQ. Defaults to `0`. */
+  regionStartPpq?: number;
+  /** Region end in PPQ. Defaults to `0`. */
+  regionEndPpq?: number;
+  /** Opaque module-owned payload bytes. Defaults to an empty payload. */
+  payload?: Uint8Array;
 }
 
 /** Assist sidecar snapshot returned by {@link Project.getAssistSidecar}. */

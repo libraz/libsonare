@@ -435,6 +435,33 @@ describe('Sonare worklet ring buffers', () => {
       expect(ring.header[4]).toBe(1);
     });
 
+    it('round-trips the worklet-only InvalidCommand and MaxChannelsExceeded errors', () => {
+      expect(SonareEngineTelemetryError.InvalidCommand).toBe(19);
+      expect(SonareEngineTelemetryError.MaxChannelsExceeded).toBe(20);
+
+      const ring = createSonareEngineTelemetryRingBuffer(2);
+      const baseRecord = {
+        type: SonareEngineTelemetryType.Error,
+        renderFrame: 0,
+        timelineSample: 0,
+        audibleTimelineSample: 0,
+        graphLatencySamplesQ8: 0,
+        value: 0,
+      } as const;
+      writeSonareEngineTelemetryRingBuffer(ring, {
+        ...baseRecord,
+        error: SonareEngineTelemetryError.InvalidCommand,
+      });
+      writeSonareEngineTelemetryRingBuffer(ring, {
+        ...baseRecord,
+        error: SonareEngineTelemetryError.MaxChannelsExceeded,
+      });
+
+      expect(readSonareEngineTelemetryRingBuffer(ring).telemetry.map((item) => item.error)).toEqual(
+        [19, 20],
+      );
+    });
+
     it('documents the shared ring header layout', () => {
       const capacity = 4;
       const sab = new SharedArrayBuffer(sonareEngineCommandRingBufferByteLength(capacity));

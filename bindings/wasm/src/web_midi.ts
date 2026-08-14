@@ -372,20 +372,11 @@ function dispatchUmpMessage(
     if (status === 0x8) {
       engine.pushMidiInputNoteOff(group, channel, data1, (word1 >>> 25) & 0x7f, portTimeSamples);
     } else if (status === 0x9) {
-      // MIDI 2.0 velocity is 16-bit (word1 bits 31:16); downsampling to the
-      // engine's 7-bit API by taking the top 7 bits rounds any velocity below
-      // 512/65535 (~0.8%) down to 0, which would misread a genuine (if very
-      // soft) note-on as a note-off. Only a truly zero 16-bit velocity is a
-      // real note-off (the standard "note-on velocity 0 == note-off" idiom);
-      // anything else is clamped to the audible floor of 1 instead of being
-      // silently dropped.
-      const velocity16 = (word1 >>> 16) & 0xffff;
-      const velocity = velocity16 === 0 ? 0 : Math.max(1, (word1 >>> 25) & 0x7f);
-      if (velocity === 0) {
-        engine.pushMidiInputNoteOff(group, channel, data1, 0, portTimeSamples);
-      } else {
-        engine.pushMidiInputNoteOn(group, channel, data1, velocity, portTimeSamples);
-      }
+      // MIDI 2.0 note-on is distinct from note-off (status 0x8). Downsample
+      // its 16-bit velocity to the engine's 7-bit API, retaining a nonzero
+      // note-on even when the top seven bits are all zero.
+      const velocity = Math.max(1, (word1 >>> 25) & 0x7f);
+      engine.pushMidiInputNoteOn(group, channel, data1, velocity, portTimeSamples);
     } else if (status === 0xb) {
       engine.pushMidiInputCc(group, channel, data1, (word1 >>> 25) & 0x7f, portTimeSamples);
     }

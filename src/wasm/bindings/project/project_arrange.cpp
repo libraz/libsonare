@@ -300,6 +300,13 @@ void ProjectWasm::setMaxUndoDepth(size_t depth) {
   }
 }
 
+void ProjectWasm::setMaxHistoryBytes(size_t bytes) {
+  const SonareError err = sonare_project_set_max_history_bytes(project_.get(), bytes);
+  if (err != SONARE_OK) {
+    throwCError(err, "failed to set max history bytes");
+  }
+}
+
 void registerProjectArrange(class_<ProjectWasm>& cls) {
   cls.function("addTrack", &ProjectWasm::addTrack)
       .function("addClip", &ProjectWasm::addClip)
@@ -321,7 +328,8 @@ void registerProjectArrange(class_<ProjectWasm>& cls) {
       .function("undo", &ProjectWasm::undo)
       .function("redo", &ProjectWasm::redo)
       .function("clearHistory", &ProjectWasm::clearHistory)
-      .function("setMaxUndoDepth", &ProjectWasm::setMaxUndoDepth);
+      .function("setMaxUndoDepth", &ProjectWasm::setMaxUndoDepth)
+      .function("setMaxHistoryBytes", &ProjectWasm::setMaxHistoryBytes);
 }
 
 #endif  // SONARE_WITH_ARRANGEMENT

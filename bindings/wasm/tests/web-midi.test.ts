@@ -280,41 +280,39 @@ describe('Web MIDI helper', () => {
     binding.close();
   });
 
-  it('MT=4 note-on with a very soft nonzero 16-bit velocity is clamped to velocity 1, not dropped as note-off', async () => {
-    // Regression test: the MT=4 (MIDI 2.0) branch downsamples the 16-bit
-    // velocity (word1 bits 31:16) to 7 bits by taking the top 7 bits
-    // (word1 >>> 25). Any 16-bit velocity below 512 (~0.8% of full scale) —
-    // definitely nonzero, i.e. a genuine (very soft) note-on — used to round
-    // down to 0 and get misread as a note-off. It must now dispatch as a
-    // note-on with the audible floor of velocity 1.
+  it('MT=4 routes only status 0x8 as note-off and preserves zero note-on velocity', async () => {
     const access = new FakeAccess();
-    const input = new FakeInput('ump-soft');
+    const input = new FakeInput('ump-velocity-boundaries');
     access.inputs.set(input.id, input);
     const engine = new FakeEngine();
     installMidi(access);
     const binding = await bindWebMidi(engine as never);
 
-    const softVelocity16 = 300; // < 512; rounds to 0 via the naive top-7-bit shift.
-    input.emit([
-      (0x4 << 28) | (0 << 24) | (0x9 << 20) | (0 << 16) | (60 << 8),
-      softVelocity16 << 16,
+    const velocities16 = [0, 1, 511, 512, 65535];
+    for (const [index, velocity16] of velocities16.entries()) {
+      input.emit([
+        (0x4 << 28) | (0 << 24) | (0x9 << 20) | (0 << 16) | ((60 + index) << 8),
+        velocity16 << 16,
+      ]);
+    }
+    // MIDI 1.0 UMP keeps its existing velocity-zero note-off rule.
+    input.emit([0x20903d00]);
+    input.emit([(0x4 << 28) | (0 << 24) | (0x8 << 20) | (0 << 16) | (70 << 8), 0]);
+    input.emit([(0x4 << 28) | (0 << 24) | (0x8 << 20) | (0 << 16) | (71 << 8), 65535 << 16]);
+
+    expect(engine.messages).toEqual([
+      ...velocities16.map((velocity16, index) => ({
+        kind: 'on' as const,
+        group: 0,
+        channel: 0,
+        a: 60 + index,
+        b: Math.max(1, (velocity16 >>> 9) & 0x7f),
+        time: 0,
+      })),
+      { kind: 'off', group: 0, channel: 0, a: 61, b: 0, time: 0 },
+      { kind: 'off', group: 0, channel: 0, a: 70, b: 0, time: 0 },
+      { kind: 'off', group: 0, channel: 0, a: 71, b: 127, time: 0 },
     ]);
-
-    expect(engine.messages).toEqual([{ kind: 'on', group: 0, channel: 0, a: 60, b: 1, time: 0 }]);
-    binding.close();
-  });
-
-  it('MT=4 note-on with a genuinely zero 16-bit velocity is still a note-off', async () => {
-    const access = new FakeAccess();
-    const input = new FakeInput('ump-zero');
-    access.inputs.set(input.id, input);
-    const engine = new FakeEngine();
-    installMidi(access);
-    const binding = await bindWebMidi(engine as never);
-
-    input.emit([(0x4 << 28) | (0 << 24) | (0x9 << 20) | (0 << 16) | (60 << 8), 0]);
-
-    expect(engine.messages).toEqual([{ kind: 'off', group: 0, channel: 0, a: 60, b: 0, time: 0 }]);
     binding.close();
   });
 

@@ -29,7 +29,12 @@ import type {
 import { Mode, PitchClass } from './public_types';
 import type { ProgressCallback, WasmAcousticResult } from './sonare.js';
 import type { ValidateOptions } from './validation';
-import { assertNonNegativeInteger, assertSampleRate, assertSamples } from './validation';
+import {
+  assertFiniteScalar,
+  assertNonNegativeInteger,
+  assertSampleRate,
+  assertSamples,
+} from './validation';
 
 function requireModule() {
   return getSonareModule();
@@ -81,6 +86,7 @@ export interface ChordFunctionalAnalysisRequest extends DetectChordsRequest {
 /** Canonical request form for impulse-response analysis. */
 export interface AnalyzeImpulseResponseRequest extends SamplesRequest {
   nOctaveBands?: number;
+  minDecayDb?: number;
 }
 
 /** Canonical request form for acoustic analysis. */
@@ -435,23 +441,35 @@ export function analyzeImpulseResponse(
   samples: Float32Array,
   sampleRate?: number,
   nOctaveBands?: number,
+  minDecayDb?: number,
 ): AcousticResult;
 export function analyzeImpulseResponse(
   samples: Float32Array | AnalyzeImpulseResponseRequest,
   sampleRate = 48000,
   nOctaveBands = 6,
+  minDecayDb?: number,
 ): AcousticResult {
-  const request = samples instanceof Float32Array ? { samples, sampleRate, nOctaveBands } : samples;
+  const request =
+    samples instanceof Float32Array ? { samples, sampleRate, nOctaveBands, minDecayDb } : samples;
+  if (request.minDecayDb === null) {
+    throw new TypeError('analyzeImpulseResponse: minDecayDb must be a finite number');
+  }
+  const resolvedMinDecayDb = request.minDecayDb === undefined ? 30.0 : request.minDecayDb;
+  assertFiniteScalar('analyzeImpulseResponse', resolvedMinDecayDb, 'minDecayDb');
+  if (resolvedMinDecayDb <= 0) {
+    throw new RangeError('analyzeImpulseResponse: minDecayDb must be greater than zero');
+  }
   validateAnalysisInput(
     'analyzeImpulseResponse',
     request.samples,
     request.sampleRate ?? 48000,
     request,
   );
-  const result: WasmAcousticResult = requireModule().analyzeImpulseResponse(
+  const result: WasmAcousticResult = requireModule().analyzeImpulseResponseEx(
     request.samples,
     request.sampleRate ?? 48000,
     request.nOctaveBands ?? 6,
+    resolvedMinDecayDb,
   );
   return result;
 }

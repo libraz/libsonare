@@ -103,6 +103,7 @@ class RealtimeEngineWasm {
   void setParameterSmoothed(double param_id, float value, int64_t render_frame);
   void setParamSmoothingMs(float smoothing_ms);
   void setSoloMute(uint32_t lane_index, bool solo, bool mute, int64_t render_frame);
+  void setTrackMonitorMode(uint32_t lane_index, int mode, int64_t render_frame);
   void clearParameters();
 
   // ---- MIDI instruments, control & events (realtime_engine_midi.cpp) ---

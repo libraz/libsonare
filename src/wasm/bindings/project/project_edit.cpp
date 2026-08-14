@@ -4,6 +4,8 @@
 
 #ifdef __EMSCRIPTEN__
 
+#include <cmath>
+
 #include "project_wasm.h"
 
 #if defined(SONARE_WITH_ARRANGEMENT)
@@ -79,6 +81,13 @@ void ProjectWasm::setSourceAudio(uint32_t source_id, val audio, int channels, in
       project_.get(), source_id, samples.data(), static_cast<int64_t>(samples.size() / channels),
       channels, sample_rate);
   if (err != SONARE_OK) throwCError(err, "failed to set source audio");
+}
+
+void ProjectWasm::setAudioSourceMetadata(uint32_t source_id, const std::string& content_hash,
+                                         const std::string& external_stem_role) {
+  const SonareError err = sonare_project_set_audio_source_metadata(
+      project_.get(), source_id, content_hash.c_str(), external_stem_role.c_str());
+  if (err != SONARE_OK) throwCError(err, "failed to set audio source metadata");
 }
 
 void ProjectWasm::setClipTakes(uint32_t clip_id, val takes_val, uint32_t active_take_id) {
@@ -251,11 +260,51 @@ SonareAutomationLaneDesc ProjectWasm::automationLaneDescFromVal(
   return d;
 }
 
+namespace {
+
+uint32_t automationTargetKindFromVal(val desc) {
+  if (!hasProperty(desc, "targetKind")) {
+    return SONARE_AUTOMATION_TARGET_OPAQUE;
+  }
+
+  const val target_kind = desc["targetKind"];
+  const std::string type = target_kind.typeOf().as<std::string>();
+  if (type == "number") {
+    const double ordinal = target_kind.as<double>();
+    if (!std::isfinite(ordinal) || std::floor(ordinal) != ordinal || ordinal < 0.0 ||
+        ordinal > static_cast<double>(SONARE_AUTOMATION_TARGET_TRACK_PAN)) {
+      throw sonare::SonareException(sonare::ErrorCode::InvalidParameter,
+                                    "invalid automation target kind");
+    }
+    return static_cast<uint32_t>(ordinal);
+  }
+  if (type == "string") {
+    const std::string name = target_kind.as<std::string>();
+    if (name == "opaque") return SONARE_AUTOMATION_TARGET_OPAQUE;
+    if (name == "track-fader-db") return SONARE_AUTOMATION_TARGET_TRACK_FADER_DB;
+    if (name == "track-pan") return SONARE_AUTOMATION_TARGET_TRACK_PAN;
+  }
+  throw sonare::SonareException(sonare::ErrorCode::InvalidParameter,
+                                "invalid automation target kind");
+}
+
+}  // namespace
+
 double ProjectWasm::addAutomationLane(uint32_t track_id, val desc) {
   std::vector<SonareAutomationPoint> storage;
   SonareAutomationLaneDesc d = automationLaneDescFromVal(desc, &storage);
   uint32_t out = 0;
-  const SonareError err = sonare_project_add_automation_lane(project_.get(), track_id, &d, &out);
+  const bool has_target_kind = hasProperty(desc, "targetKind");
+  SonareAutomationLaneDescEx d_ex{};
+  if (has_target_kind) {
+    d_ex.target_param_id = d.target_param_id;
+    d_ex.target_kind = static_cast<SonareAutomationTargetKind>(automationTargetKindFromVal(desc));
+    d_ex.points = d.points;
+    d_ex.point_count = d.point_count;
+  }
+  const SonareError err =
+      has_target_kind ? sonare_project_add_automation_lane_ex(project_.get(), track_id, &d_ex, &out)
+                      : sonare_project_add_automation_lane(project_.get(), track_id, &d, &out);
   if (err != SONARE_OK) {
     throwCError(err, "failed to add automation lane");
   }
@@ -265,8 +314,19 @@ double ProjectWasm::addAutomationLane(uint32_t track_id, val desc) {
 void ProjectWasm::editAutomationLane(uint32_t track_id, double target_param_id, val desc) {
   std::vector<SonareAutomationPoint> storage;
   SonareAutomationLaneDesc d = automationLaneDescFromVal(desc, &storage);
-  const SonareError err = sonare_project_edit_automation_lane(
-      project_.get(), track_id, static_cast<uint32_t>(target_param_id), &d);
+  const bool has_target_kind = hasProperty(desc, "targetKind");
+  SonareAutomationLaneDescEx d_ex{};
+  if (has_target_kind) {
+    d_ex.target_param_id = d.target_param_id;
+    d_ex.target_kind = static_cast<SonareAutomationTargetKind>(automationTargetKindFromVal(desc));
+    d_ex.points = d.points;
+    d_ex.point_count = d.point_count;
+  }
+  const SonareError err =
+      has_target_kind ? sonare_project_edit_automation_lane_ex(
+                            project_.get(), track_id, static_cast<uint32_t>(target_param_id), &d_ex)
+                      : sonare_project_edit_automation_lane(
+                            project_.get(), track_id, static_cast<uint32_t>(target_param_id), &d);
   if (err != SONARE_OK) {
     throwCError(err, "failed to edit automation lane");
   }
@@ -286,6 +346,7 @@ void registerProjectEdit(class_<ProjectWasm>& cls) {
       .function("setClipFade", &ProjectWasm::setClipFade)
       .function("unresolvedAudioSourceIds", &ProjectWasm::unresolvedAudioSourceIds)
       .function("setSourceAudio", &ProjectWasm::setSourceAudio)
+      .function("setAudioSourceMetadata", &ProjectWasm::setAudioSourceMetadata)
       .function("setClipTakes", &ProjectWasm::setClipTakes)
       .function("setClipCompSegments", &ProjectWasm::setClipCompSegments)
       .function("setClipLoop", &ProjectWasm::setClipLoop)

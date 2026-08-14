@@ -103,6 +103,7 @@ export interface NnlsChromaRequest extends GuardedOptions {
   enableStftBlend?: boolean;
   stftBlendWeight?: number;
   stftBlendNFft?: number;
+  hopLength?: number;
 }
 
 function validateMusicSamples(
@@ -156,12 +157,18 @@ export function nnlsChroma(
     return nnlsChroma(samples.samples, samples.sampleRate, samples);
   }
   validateMusicSamples('nnlsChroma', samples, sampleRate, options);
-  return requireModule().nnlsChroma(
+  const hopLength = options.hopLength === undefined ? 512 : options.hopLength;
+  assertPositiveInteger('nnlsChroma', hopLength, 'hopLength');
+  if (hopLength > 2 ** 31 - 1) {
+    throw new RangeError('nnlsChroma: hopLength must fit in a signed 32-bit integer');
+  }
+  return requireModule().nnlsChromaEx(
     samples,
     sampleRate,
     options.enableStftBlend ?? true,
     options.stftBlendWeight ?? 0.55,
     options.stftBlendNFft ?? 4096,
+    hopLength,
   );
 }
 

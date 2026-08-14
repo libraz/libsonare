@@ -86,9 +86,17 @@ val RealtimeEngineWasm::capturedAudio() const {
   val out = val::array();
   for (size_t ch = 0; ch < capture_storage_.size(); ++ch) {
     const size_t count =
-        static_cast<size_t>(std::min<int64_t>(frames, capture_storage_[ch].size()));
-    std::vector<float> channel(capture_storage_[ch].begin(), capture_storage_[ch].begin() + count);
-    out.set(static_cast<int>(ch), vectorToFloat32Array(channel));
+        frames > 0 ? static_cast<size_t>(std::min<int64_t>(frames, capture_storage_[ch].size()))
+                   : 0;
+    val channel = val::global("Float32Array").new_(count);
+    if (count > 0) {
+      // The result owns its JS ArrayBuffer. The typed memory view is only a
+      // source for this one bulk copy, so transferring the result later cannot
+      // detach or otherwise invalidate the engine's capture storage.
+      val view = val(typed_memory_view(count, capture_storage_[ch].data()));
+      channel.call<void>("set", view);
+    }
+    out.set(static_cast<int>(ch), channel);
   }
   return out;
 }

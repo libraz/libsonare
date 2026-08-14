@@ -113,6 +113,8 @@ export interface TrimRequest extends GuardedOptions {
   samples: Float32Array;
   sampleRate: number;
   thresholdDb?: number;
+  frameLength?: number;
+  hopLength?: number;
 }
 
 function validateSpectrogramSamples(
@@ -184,18 +186,57 @@ export function trim(
   options?: GuardedOptions,
 ): Float32Array;
 export function trim(
+  samples: Float32Array,
+  sampleRate: number,
+  thresholdDb?: number,
+  frameLength?: number,
+  hopLength?: number,
+  options?: GuardedOptions,
+): Float32Array;
+export function trim(
   samples: Float32Array | TrimRequest,
   sampleRate = 22050,
   thresholdDb = -60.0,
+  frameLengthOrOptions?: number | GuardedOptions,
+  hopLength?: number,
   options: GuardedOptions = {},
 ): Float32Array {
   if (!(samples instanceof Float32Array)) {
     const r = samples;
-    return trim(r.samples, r.sampleRate, r.thresholdDb, r);
+    return trim(r.samples, r.sampleRate, r.thresholdDb, r.frameLength, r.hopLength, r);
   }
-  validateSpectrogramSamples('trim', samples, sampleRate, options);
+  if (frameLengthOrOptions === null) {
+    throw new TypeError('trim: frameLength must be an integer or options object');
+  }
+  if (
+    frameLengthOrOptions !== undefined &&
+    typeof frameLengthOrOptions !== 'number' &&
+    typeof frameLengthOrOptions !== 'object'
+  ) {
+    throw new TypeError('trim: frameLength must be an integer or options object');
+  }
+  const positionalOptions =
+    typeof frameLengthOrOptions === 'object' && frameLengthOrOptions !== null
+      ? frameLengthOrOptions
+      : options;
+  const positionalFrameLength =
+    typeof frameLengthOrOptions === 'number' ? frameLengthOrOptions : undefined;
+  const resolvedFrameLength = positionalFrameLength ?? 2048;
+  const resolvedHopLength = hopLength === undefined ? 512 : hopLength;
+  validateSpectrogramSamples('trim', samples, sampleRate, positionalOptions);
   assertFiniteScalar('trim', thresholdDb, 'thresholdDb');
-  return requireModule().trim(samples, sampleRate, thresholdDb);
+  assertPositiveInteger('trim', resolvedFrameLength, 'frameLength');
+  assertPositiveInteger('trim', resolvedHopLength, 'hopLength');
+  if (resolvedFrameLength > 2 ** 31 - 1 || resolvedHopLength > 2 ** 31 - 1) {
+    throw new RangeError('trim: frameLength and hopLength must fit in a signed 32-bit integer');
+  }
+  return requireModule().trimEx(
+    samples,
+    sampleRate,
+    thresholdDb,
+    resolvedFrameLength,
+    resolvedHopLength,
+  );
 }
 
 // ============================================================================

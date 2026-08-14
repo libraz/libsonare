@@ -143,32 +143,146 @@ async function startServer() {
   return new Promise((resolve) => server.listen(0, '127.0.0.1', () => resolve(server)));
 }
 
-function dumpDom(chromePath, url, userDataDir) {
+const sleep = (milliseconds) => new Promise((resolve) => setTimeout(resolve, milliseconds));
+
+function waitForDevToolsEndpoint(chrome, readStderr) {
   return new Promise((resolve, reject) => {
-    const chrome = spawn(chromePath, [
-      '--headless=new',
-      '--disable-gpu',
-      '--no-sandbox',
-      '--no-first-run',
-      '--no-default-browser-check',
-      '--run-all-compositor-stages-before-draw',
-      '--virtual-time-budget=30000',
-      '--dump-dom',
-      `--user-data-dir=${userDataDir}`,
-      url,
-    ]);
-    let stdout = '';
-    let stderr = '';
-    chrome.stdout.setEncoding('utf8');
-    chrome.stderr.setEncoding('utf8');
-    chrome.stdout.on('data', (chunk) => (stdout += chunk));
-    chrome.stderr.on('data', (chunk) => (stderr += chunk));
-    chrome.once('error', reject);
-    chrome.once('exit', (code) => {
-      if (code === 0) resolve(stdout);
-      else reject(new Error(`Chrome exited ${code}: ${stderr}`));
+    let settled = false;
+    const finish = (callback, value) => {
+      if (settled) return;
+      settled = true;
+      clearInterval(checkInterval);
+      clearTimeout(timeout);
+      chrome.off('error', onError);
+      chrome.off('exit', onExit);
+      callback(value);
+    };
+    const check = () => {
+      const match = readStderr().match(/DevTools listening on (ws:\/\/[^\s]+)/);
+      if (match) finish(resolve, match[1]);
+    };
+    const onError = (error) => finish(reject, error);
+    const onExit = (code) => {
+      finish(reject, new Error(`Chrome exited ${code} before exposing DevTools: ${readStderr()}`));
+    };
+    const checkInterval = setInterval(check, 25);
+    const timeout = setTimeout(
+      () => finish(reject, new Error(`Chrome did not expose DevTools: ${readStderr()}`)),
+      10000,
+    );
+    chrome.once('error', onError);
+    chrome.once('exit', onExit);
+    check();
+  });
+}
+
+function connectCdp(endpoint) {
+  return new Promise((resolve, reject) => {
+    const socket = new WebSocket(endpoint);
+    const pending = new Map();
+    let nextId = 1;
+    let connected = false;
+
+    const rejectPending = (error) => {
+      for (const { reject: rejectRequest } of pending.values()) rejectRequest(error);
+      pending.clear();
+    };
+
+    socket.addEventListener('open', () => {
+      connected = true;
+      resolve({
+        send(method, params = {}, sessionId = undefined) {
+          const id = nextId++;
+          const message = { id, method, params, ...(sessionId ? { sessionId } : {}) };
+          return new Promise((resolveRequest, rejectRequest) => {
+            pending.set(id, { method, resolve: resolveRequest, reject: rejectRequest });
+            socket.send(JSON.stringify(message));
+          });
+        },
+        close() {
+          socket.close();
+        },
+      });
+    });
+    socket.addEventListener('message', (event) => {
+      const message = JSON.parse(String(event.data));
+      const request = pending.get(message.id);
+      if (!request) return;
+      pending.delete(message.id);
+      if (message.error) {
+        request.reject(new Error(`CDP ${request.method}: ${message.error.message}`));
+        return;
+      }
+      request.resolve(message.result);
+    });
+    socket.addEventListener('error', () => {
+      const error = new Error('Chrome DevTools WebSocket error');
+      rejectPending(error);
+      if (!connected) reject(error);
+    });
+    socket.addEventListener('close', () => {
+      rejectPending(new Error('Chrome DevTools WebSocket closed'));
     });
   });
+}
+
+async function stopChrome(chrome) {
+  if (chrome.exitCode !== null) return;
+  const exited = new Promise((resolve) => chrome.once('exit', resolve));
+  chrome.kill('SIGTERM');
+  await Promise.race([exited, sleep(5000)]);
+}
+
+async function readSmokeState(cdp, sessionId) {
+  const response = await cdp.send(
+    'Runtime.evaluate',
+    {
+      expression: `(() => {
+        const result = document.querySelector('#result');
+        return result ? { status: result.dataset.status, text: result.textContent } : null;
+      })()`,
+      returnByValue: true,
+    },
+    sessionId,
+  );
+  return response.result.value ?? null;
+}
+
+async function runBrowserSmoke(chromePath, url, userDataDir) {
+  // `--dump-dom` with a virtual-time budget never reaches a deterministic
+  // exit while this page owns a Worker.  Poll the real page through CDP so the
+  // smoke waits for the protocol result and always tears Chrome down itself.
+  const chrome = spawn(chromePath, [
+    '--headless=new',
+    '--disable-gpu',
+    '--no-sandbox',
+    '--no-first-run',
+    '--no-default-browser-check',
+    '--remote-debugging-port=0',
+    `--user-data-dir=${userDataDir}`,
+    'about:blank',
+  ]);
+  let stderr = '';
+  chrome.stderr.setEncoding('utf8');
+  chrome.stderr.on('data', (chunk) => (stderr += chunk));
+
+  let cdp;
+  try {
+    cdp = await connectCdp(await waitForDevToolsEndpoint(chrome, () => stderr));
+    const { targetId } = await cdp.send('Target.createTarget', { url });
+    const { sessionId } = await cdp.send('Target.attachToTarget', { targetId, flatten: true });
+    const deadline = Date.now() + 90000;
+    let state = null;
+    while (Date.now() < deadline) {
+      state = await readSmokeState(cdp, sessionId);
+      if (state?.status && state.status !== 'running') return state;
+      await sleep(25);
+    }
+    throw new Error(`offline worker smoke timed out: ${JSON.stringify(state)}\n${stderr}`);
+  } finally {
+    cdp?.close();
+    await stopChrome(chrome);
+  }
 }
 
 async function main() {
@@ -177,13 +291,15 @@ async function main() {
   const port = server.address().port;
   const userDataDir = await mkdtemp(path.join(os.tmpdir(), 'sonare-worker-chrome-'));
   try {
-    const dom = await dumpDom(chromePath, `http://127.0.0.1:${port}/smoke.html`, userDataDir);
-    const match = dom.match(/<output id="result" data-status="([^"]+)">([^<]*)<\/output>/);
-    if (!match) throw new Error(`offline worker smoke returned no result: ${dom}`);
-    if (match[1] !== 'ok') throw new Error(`offline worker smoke failed: ${match[2]}`);
-    const result = JSON.parse(match[2]);
+    const state = await runBrowserSmoke(
+      chromePath,
+      `http://127.0.0.1:${port}/smoke.html`,
+      userDataDir,
+    );
+    if (state.status !== 'ok') throw new Error(`offline worker smoke failed: ${state.text}`);
+    const result = JSON.parse(state.text);
     if (!result.crossOriginIsolated || !result.cancelled || result.ticks <= 0) {
-      throw new Error(`offline worker smoke incomplete: ${match[2]}`);
+      throw new Error(`offline worker smoke incomplete: ${state.text}`);
     }
     console.log(JSON.stringify(result, null, 2));
   } finally {

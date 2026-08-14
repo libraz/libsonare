@@ -537,11 +537,21 @@ val acousticParametersToVal(const AcousticParameters& params) {
   return out;
 }
 
-val js_analyze_impulse_response(val samples, int sample_rate, int n_octave_bands) {
+val js_analyze_impulse_response_ex(val samples, int sample_rate, int n_octave_bands,
+                                   float min_decay_db) {
+  if (!std::isfinite(min_decay_db) || min_decay_db <= 0.0f) {
+    throw sonare::SonareException(sonare::ErrorCode::InvalidParameter,
+                                  "analyzeImpulseResponse: minDecayDb must be finite and > 0");
+  }
   Audio audio = loadValidatedAudio(samples, sample_rate);
   AcousticConfig config;
   config.n_octave_bands = n_octave_bands;
+  config.min_decay_db = min_decay_db;
   return acousticParametersToVal(analyze_impulse_response(audio, config));
+}
+
+val js_analyze_impulse_response(val samples, int sample_rate, int n_octave_bands) {
+  return js_analyze_impulse_response_ex(samples, sample_rate, n_octave_bands, 30.0f);
 }
 
 val js_detect_acoustic(val samples, int sample_rate, int n_octave_bands,
@@ -899,6 +909,7 @@ void registerQuickAnalysisBindings() {
   function("_analysisResultSchemaPaths", &js_analysis_result_schema_paths);
   function("_analysisResultSchemaFixture", &js_analysis_result_schema_fixture);
   function("analyzeImpulseResponse", &js_analyze_impulse_response);
+  function("analyzeImpulseResponseEx", &js_analyze_impulse_response_ex);
   function("detectAcoustic", &js_detect_acoustic);
 #ifdef SONARE_WITH_ACOUSTIC_SIM
   function("synthesizeRir", &js_synthesize_rir);

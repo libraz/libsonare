@@ -89,6 +89,40 @@ describe('SonareRealtimeEngineNode', () => {
       expect(popSonareEngineCommandRingBuffer(commandRing)).toMatchObject({
         type: SonareEngineCommandType.TransportPlay,
       });
+      expect(
+        node.sendCommand({
+          type: SonareEngineCommandType.SetTrackMonitorMode,
+          targetId: 3,
+          sampleTime: 256,
+          argInt: 1,
+        }),
+      ).toBe(true);
+      expect(popSonareEngineCommandRingBuffer(commandRing)).toEqual({
+        type: SonareEngineCommandType.SetTrackMonitorMode,
+        targetId: 3,
+        sampleTime: 256,
+        argFloat: 0,
+        argInt: 1,
+      });
+      // 18..25 are intentionally not part of the worklet command vocabulary.
+      expect(node.sendCommand({ type: 18, sampleTime: -1 })).toBe(false);
+      expect(
+        node.sendCommand({
+          type: SonareEngineCommandType.SetTrackMonitorMode,
+          sampleTime: -1,
+          argInt: 0.5,
+        }),
+      ).toBe(false);
+      for (const targetId of [undefined, -1, 0x1_0000_0000]) {
+        expect(
+          node.sendCommand({
+            type: SonareEngineCommandType.SetTrackMonitorMode,
+            targetId,
+            sampleTime: -1,
+            argInt: 1,
+          }),
+        ).toBe(false);
+      }
 
       writeSonareEngineTelemetryRingBuffer(telemetryRing, {
         type: SonareEngineTelemetryType.ProcessBlock,
@@ -878,6 +912,20 @@ describe('SonareRealtimeEngineNode', () => {
             }),
           ]),
         );
+        expect(engine.setTrackMonitorMode(5, 'pfl', 321)).toBe(true);
+        expect(posted).toEqual(
+          expect.arrayContaining([
+            expect.objectContaining({
+              type: SonareEngineCommandType.SetTrackMonitorMode,
+              targetId: 1,
+              sampleTime: 321,
+              argInt: 1,
+            }),
+          ]),
+        );
+        for (const mode of [true, false, 0.5, -1, 3, 'PFL', 'post-fader']) {
+          expect(() => engine.setTrackMonitorMode(5, mode as never)).toThrow(RangeError);
+        }
         // Appending keeps existing lanes; entries without sends keep prior sends.
         engine.setTrackLanes([2, 5, 9]);
         expect(posted).toEqual(
@@ -961,6 +1009,57 @@ describe('SonareRealtimeEngineNode', () => {
         ]),
       );
       engine.destroy();
+    });
+
+    it('returns capture typed arrays directly and rejects malformed channel payloads', async () => {
+      const posted: unknown[] = [];
+      const port = {
+        onmessage: undefined as ((event: MessageEvent<unknown>) => void) | undefined,
+        postMessage(message: unknown) {
+          posted.push(message);
+        },
+      };
+      const node = await SonareRealtimeEngineNode.create(fakeContext(), {
+        mode: 'postMessage',
+        nodeFactory: () => readyWorkletNode(port),
+      });
+      await node.ready;
+      try {
+        const channel = new Float32Array([0.5, 0.25]);
+        const pending = node.requestCapturedAudio();
+        const request = posted.at(-1) as { requestId: number };
+        port.onmessage?.({
+          data: {
+            type: 'captureResponse',
+            requestId: request.requestId,
+            ok: true,
+            channels: [channel],
+          },
+        } as MessageEvent<unknown>);
+        const audio = await pending;
+        expect(audio[0]).toBe(channel);
+
+        const malformedChannels: unknown[][] = [
+          [[0.5, 0.25]],
+          [new Float32Array([0.5]), [0.25]],
+          [new Float32Array(new SharedArrayBuffer(Float32Array.BYTES_PER_ELEMENT))],
+        ];
+        for (const channels of malformedChannels) {
+          const malformed = node.requestCapturedAudio();
+          const malformedRequest = posted.at(-1) as { requestId: number };
+          port.onmessage?.({
+            data: {
+              type: 'captureResponse',
+              requestId: malformedRequest.requestId,
+              ok: true,
+              channels,
+            },
+          } as MessageEvent<unknown>);
+          await expect(malformed).rejects.toThrow('Malformed capture response.');
+        }
+      } finally {
+        node.destroy();
+      }
     });
 
     it('syncs time signatures and requests transport state over the worklet port', async () => {

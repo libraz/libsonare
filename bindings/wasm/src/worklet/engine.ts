@@ -15,6 +15,7 @@ import type {
   EngineTempoSegment,
   EngineTimeSignatureSegment,
   EngineTrackLane,
+  EngineTrackMonitorMode,
   EngineTrackSend,
   EngineTransportState,
   EqBand,
@@ -384,6 +385,15 @@ export class SonareEngine {
 
   setSoloMute(target: string | number, solo: boolean, mute: boolean): boolean {
     return parameter.setSoloMute(this.parameterContext, target, solo, mute);
+  }
+
+  /** Queues a per-track PFL/AFL monitor tap mode change. */
+  setTrackMonitorMode(
+    target: string | number,
+    mode: EngineTrackMonitorMode,
+    renderFrame = -1,
+  ): boolean {
+    return parameter.setTrackMonitorMode(this.parameterContext, target, mode, renderFrame);
   }
 
   setStripGain(target: string | number, db: number): boolean {

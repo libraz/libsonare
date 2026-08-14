@@ -1,8 +1,8 @@
-import { panLawCode, panModeCode, sendTimingCode } from './codes';
+import { panLawCode, panModeCode, sendTimingCode, trackMonitorModeCode } from './codes';
 import { ErrorCode, SonareError } from './errors';
 import { getSonareModule } from './module_state';
 import type { ProjectMidiCcBinding, SynthPatch } from './project';
-import type { EqBand, PanLaw, PanMode, SendTiming } from './public_types';
+import type { EqBand, PanLawInput, PanMode, SendTiming } from './public_types';
 import type {
   WasmClipPageRequest,
   WasmEngineAutomationPoint,
@@ -77,6 +77,12 @@ export interface EngineTrackLane {
    */
   sourceChannelLayout?: number;
 }
+
+/** Per-track cue/monitor tap mode: off, pre-fader listen, or after-fader listen. */
+export type EngineTrackMonitorMode = 'off' | 'pfl' | 'afl' | 0 | 1 | 2;
+
+/** Short alias for {@link EngineTrackMonitorMode}. */
+export type TrackMonitorMode = EngineTrackMonitorMode;
 
 export interface EngineBus {
   busId: number;
@@ -217,6 +223,11 @@ export class RealtimeEngine {
 
   setSoloMute(laneIndex: number, solo: boolean, mute: boolean, renderFrame = -1): void {
     this.native.setSoloMute(laneIndex, solo, mute, renderFrame);
+  }
+
+  /** Queue a per-track PFL/AFL monitor tap mode change. */
+  setTrackMonitorMode(laneIndex: number, mode: EngineTrackMonitorMode, renderFrame = -1): void {
+    this.native.setTrackMonitorMode(laneIndex, trackMonitorModeCode(mode), renderFrame);
   }
 
   setMidiClips(clips: readonly EngineMidiClipSchedule[]): void {
@@ -831,7 +842,7 @@ export class RealtimeEngine {
   }
 
   /** Sets a track lane strip's pan law in realtime. */
-  setTrackStripPanLaw(trackId: number, panLaw: PanLaw | number): void {
+  setTrackStripPanLaw(trackId: number, panLaw: PanLawInput): void {
     this.native.setTrackStripPanLaw(trackId, panLawCode(panLaw));
   }
 

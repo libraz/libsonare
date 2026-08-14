@@ -4,7 +4,7 @@
  * and EBU R128 LUFS metering.
  */
 
-import { beforeAll, describe, expect, it } from 'vitest';
+import { beforeAll, describe, expect, it, vi } from 'vitest';
 import {
   Audio,
   analyzeMelody,
@@ -532,6 +532,68 @@ describe('v1.2 feature additions (WASM)', () => {
 
       offline.delete();
       inplace.delete();
+    });
+
+    it('bulk-copies processStereoInto with frame-independent boundary calls', () => {
+      const quantum = 128;
+      const scene = mixingScenePresetJson('vocalReverbSend');
+      const reference = Mixer.fromSceneJson(scene, 48000, quantum);
+      const inplace = Mixer.fromSceneJson(scene, 48000, quantum);
+      reference.compile();
+      inplace.compile();
+
+      const makeInputs = (length: number) => {
+        const vocalL = new Float32Array(length);
+        const vocalR = new Float32Array(length);
+        const returnL = new Float32Array(length);
+        const returnR = new Float32Array(length);
+        if (length > 0) {
+          vocalL[0] = 1.0;
+          vocalR[0] = 1.0;
+        }
+        return { left: [vocalL, returnL], right: [vocalR, returnR] };
+      };
+
+      try {
+        // Establish the same DSP state on both mixers before spying on the
+        // native TypedArray method. processStereo's own result copies happen
+        // before the spy, so only processStereoInto's bridge calls are counted.
+        const empty = makeInputs(0);
+        const short = makeInputs(1);
+        const long = makeInputs(quantum);
+        const expectedShort = reference.processStereo(short.left, short.right);
+        const expectedLong = reference.processStereo(long.left, long.right);
+        const emptyOutL = new Float32Array(0);
+        const emptyOutR = new Float32Array(0);
+        const setSpy = vi.spyOn(Float32Array.prototype, 'set');
+        try {
+          inplace.processStereoInto(empty.left, empty.right, emptyOutL, emptyOutR);
+          expect(setSpy).not.toHaveBeenCalled();
+          setSpy.mockClear();
+
+          const shortOutL = new Float32Array(1);
+          const shortOutR = new Float32Array(1);
+          inplace.processStereoInto(short.left, short.right, shortOutL, shortOutR);
+          expect(Array.from(shortOutL)).toEqual(Array.from(expectedShort.left));
+          expect(Array.from(shortOutR)).toEqual(Array.from(expectedShort.right));
+          expect(setSpy).toHaveBeenCalledTimes(2 * inplace.stripCount() + 2);
+          setSpy.mockClear();
+
+          const longOutL = new Float32Array(quantum);
+          const longOutR = new Float32Array(quantum);
+          inplace.processStereoInto(long.left, long.right, longOutL, longOutR);
+          expect(Array.from(longOutL)).toEqual(Array.from(expectedLong.left));
+          expect(Array.from(longOutR)).toEqual(Array.from(expectedLong.right));
+          expect(setSpy).toHaveBeenCalledTimes(2 * inplace.stripCount() + 2);
+        } finally {
+          // Always restore the native method, even when a parity assertion
+          // fails, so later tests cannot inherit a spied TypedArray prototype.
+          setSpy.mockRestore();
+        }
+      } finally {
+        reference.delete();
+        inplace.delete();
+      }
     });
 
     it('can render through reusable WASM-heap realtime buffers', () => {

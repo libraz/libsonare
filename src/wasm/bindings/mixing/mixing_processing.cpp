@@ -106,9 +106,14 @@ void MixerWasm::processStereoInto(val left_channels, val right_channels, val out
     }
     auto& left_dest = left_scratch_[static_cast<size_t>(index)];
     auto& right_dest = right_scratch_[static_cast<size_t>(index)];
-    for (size_t sample = 0; sample < length; ++sample) {
-      left_dest[sample] = left[sample].as<float>();
-      right_dest[sample] = right[sample].as<float>();
+    if (length > 0) {
+      // The view is temporary and only borrows the already-prepared scratch
+      // storage. Calling Float32Array.set once per channel keeps this bridge
+      // O(number of channels) at the JS/WASM boundary instead of O(frames).
+      val left_view = val(typed_memory_view(length, left_dest.data()));
+      left_view.call<void>("set", left);
+      val right_view = val(typed_memory_view(length, right_dest.data()));
+      right_view.call<void>("set", right);
     }
   }
 
@@ -120,9 +125,13 @@ void MixerWasm::processStereoInto(val left_channels, val right_channels, val out
         sonare::ErrorCode::InvalidState,
         std::string("mixer process failed: ") + sonare_error_message(err));
   }
-  for (size_t sample = 0; sample < length; ++sample) {
-    out_left.set(sample, out_scratch_left_[sample]);
-    out_right.set(sample, out_scratch_right_[sample]);
+  if (length > 0) {
+    // As above, these views borrow scratch memory only for the duration of the
+    // bulk copy; no view is retained by the binding after this call returns.
+    val left_view = val(typed_memory_view(length, out_scratch_left_.data()));
+    out_left.call<void>("set", left_view);
+    val right_view = val(typed_memory_view(length, out_scratch_right_.data()));
+    out_right.call<void>("set", right_view);
   }
 }
 

@@ -19,6 +19,41 @@ function requireModule() {
   return getSonareModule();
 }
 
+function resolveEffectFftOptions(
+  fnName: string,
+  nFft: unknown,
+  hopLength: unknown,
+): { nFft: number; hopLength: number } {
+  const resolvedNFft = nFft === undefined ? 2048 : nFft;
+  const resolvedHopLength = hopLength === undefined ? 512 : hopLength;
+  if (typeof resolvedNFft !== 'number' || !Number.isInteger(resolvedNFft)) {
+    throw new TypeError(`${fnName}: nFft must be an integer`);
+  }
+  if (resolvedNFft < 2 || resolvedNFft > 2 ** 30) {
+    throw new RangeError(`${fnName}: nFft must be an even power of two >= 2`);
+  }
+  if ((resolvedNFft & (resolvedNFft - 1)) !== 0) {
+    throw new RangeError(`${fnName}: nFft must be an even power of two >= 2`);
+  }
+  if (typeof resolvedHopLength !== 'number' || !Number.isInteger(resolvedHopLength)) {
+    throw new TypeError(`${fnName}: hopLength must be an integer`);
+  }
+  if (resolvedHopLength <= 0 || resolvedHopLength > 2 ** 31 - 1) {
+    throw new RangeError(`${fnName}: hopLength must be a positive integer`);
+  }
+  return { nFft: resolvedNFft, hopLength: resolvedHopLength };
+}
+
+function resolveHardMask(fnName: string, value: unknown): boolean {
+  if (value === undefined) {
+    return false;
+  }
+  if (typeof value !== 'boolean') {
+    throw new TypeError(`${fnName}: hardMask must be a boolean`);
+  }
+  return value;
+}
+
 /** Canonical request form for frame-based spectral feature extraction. */
 export interface SpectralFrameRequest {
   samples: Float32Array;
@@ -166,6 +201,9 @@ export interface HpssWithResidualRequest {
   sampleRate?: number;
   kernelHarmonic?: number;
   kernelPercussive?: number;
+  nFft?: number;
+  hopLength?: number;
+  hardMask?: boolean;
 }
 export interface LufsInterleavedRequest extends ValidateOptions {
   samples: Float32Array;
@@ -542,18 +580,42 @@ export function hpssWithResidual(
   sampleRate?: number,
   kernelHarmonic?: number,
   kernelPercussive?: number,
+  nFft?: number,
+  hopLength?: number,
+  hardMask?: boolean,
 ): WasmHpssWithResidualResult;
 export function hpssWithResidual(
   samples: Float32Array | HpssWithResidualRequest,
   sampleRate = 22050,
   kernelHarmonic = 31,
   kernelPercussive = 31,
+  nFft?: number,
+  hopLength?: number,
+  hardMask?: boolean,
 ): WasmHpssWithResidualResult {
   if (!(samples instanceof Float32Array)) {
     const r = samples;
-    return hpssWithResidual(r.samples, r.sampleRate, r.kernelHarmonic, r.kernelPercussive);
+    return hpssWithResidual(
+      r.samples,
+      r.sampleRate,
+      r.kernelHarmonic,
+      r.kernelPercussive,
+      r.nFft,
+      r.hopLength,
+      r.hardMask,
+    );
   }
-  return requireModule().hpssWithResidual(samples, sampleRate, kernelHarmonic, kernelPercussive);
+  const fftOptions = resolveEffectFftOptions('hpssWithResidual', nFft, hopLength);
+  const resolvedHardMask = resolveHardMask('hpssWithResidual', hardMask);
+  return requireModule().hpssWithResidualEx(
+    samples,
+    sampleRate,
+    kernelHarmonic,
+    kernelPercussive,
+    fftOptions.nFft,
+    fftOptions.hopLength,
+    resolvedHardMask,
+  );
 }
 
 /**

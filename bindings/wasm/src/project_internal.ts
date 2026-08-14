@@ -3,7 +3,9 @@ import { getSonareModule } from './module_state';
 import type {
   BuiltinSynthBinding,
   ProjectAssistSidecar,
+  ProjectAutomationLaneDesc,
   ProjectAutomationPoint,
+  ProjectAutomationTargetKind,
   ProjectBounceOptions,
   ProjectChordSymbol,
   ProjectClip,
@@ -65,6 +67,7 @@ export interface WasmProject {
   redo: () => void;
   clearHistory: () => void;
   setMaxUndoDepth: (depth: number) => void;
+  setMaxHistoryBytes: (bytes: number) => void;
   setMidiEvents: (
     clipId: number,
     events: ReadonlyArray<ProjectMidiEvent | readonly [number, number, number]>,
@@ -120,6 +123,7 @@ export interface WasmProject {
     channels: number,
     sampleRate: number,
   ) => void;
+  setAudioSourceMetadata: (sourceId: number, contentHash: string, externalStemRole: string) => void;
   setClipTakes: (
     clipId: number,
     takes: ReadonlyArray<ProjectClipTake>,
@@ -137,14 +141,11 @@ export interface WasmProject {
   removeTrack: (trackId: number) => void;
   renameTrack: (trackId: number, name: string) => void;
   setTrackRoute: (trackId: number, channelStripRef: string, outputTarget: string) => void;
-  addAutomationLane: (
-    trackId: number,
-    desc: { targetParamId: number; points: ReadonlyArray<ProjectAutomationPoint> },
-  ) => number;
+  addAutomationLane: (trackId: number, desc: ProjectAutomationLaneDesc) => number;
   editAutomationLane: (
     trackId: number,
     targetParamId: number,
-    desc: { targetParamId: number; points: ReadonlyArray<ProjectAutomationPoint> },
+    desc: ProjectAutomationLaneDesc,
   ) => void;
   removeAutomationLane: (trackId: number, targetParamId: number) => void;
   annotateKeys: (keys: ReadonlyArray<ProjectKeySegment>) => void;
@@ -323,6 +324,14 @@ export function assertProjectMidiEvents(
 
 export function projectTrackKindValue(kind: ProjectTrackKind | undefined): number {
   return resolveEnumOrdinal(kind ?? 'audio', { audio: 0, midi: 1, aux: 2 }, 'project track kind');
+}
+
+export function projectAutomationTargetKindValue(kind: ProjectAutomationTargetKind): number {
+  return resolveEnumOrdinal(
+    kind,
+    { opaque: 0, 'track-fader-db': 1, 'track-pan': 2 },
+    'project automation target kind',
+  );
 }
 
 export function projectWarpModeValue(mode: ProjectWarpMode | undefined): number {

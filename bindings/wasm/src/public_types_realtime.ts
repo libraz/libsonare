@@ -105,14 +105,32 @@ export type VoicePresetId =
   | 'robot-mascot'
   | 'dark-villain';
 
-export interface RealtimeVoiceChangerPreset {
+export type VoicePresetCategory =
+  | 'monitor'
+  | 'bright'
+  | 'soft'
+  | 'deep'
+  | 'robot'
+  | 'dark'
+  | 'custom';
+
+export interface RealtimeVoiceChangerPresetMetadata {
   schemaVersion: 1;
-  id?: string;
-  name?: string;
+  id: string;
+  name: string;
   description?: string;
-  macros?: Record<string, number>;
-  dsp?: Record<string, unknown>;
+  category: VoicePresetCategory;
 }
+
+export type RealtimeVoiceChangerPreset =
+  | (RealtimeVoiceChangerPresetMetadata & {
+      dsp: Record<string, unknown>;
+      macros?: never;
+    })
+  | (RealtimeVoiceChangerPresetMetadata & {
+      macros: Record<string, number>;
+      dsp?: never;
+    });
 
 export type RealtimeVoiceChangerConfigInput = VoicePresetId | RealtimeVoiceChangerPreset;
 

@@ -229,6 +229,42 @@ describe('SonareRealtimeEngineWorkletProcessor', () => {
       }
     });
 
+    it('dispatches the lane monitor-mode command with its ABI fields', () => {
+      const processor = new SonareRealtimeEngineWorkletProcessor({
+        sampleRate: 48000,
+        blockSize: 128,
+        channelCount: 1,
+      });
+      try {
+        const engine = (
+          processor as unknown as {
+            engine: {
+              setTrackMonitorMode: (laneIndex: number, mode: number, frame: number) => void;
+            };
+          }
+        ).engine;
+        const setTrackMonitorMode = vi.spyOn(engine, 'setTrackMonitorMode');
+        processor.receiveCommand({
+          type: SonareEngineCommandType.SetTrackMonitorMode,
+          targetId: 2,
+          sampleTime: 96,
+          argInt: 2,
+        });
+        expect(setTrackMonitorMode).toHaveBeenCalledWith(2, 2, 96);
+        for (const targetId of [undefined, -1, 0x1_0000_0000]) {
+          processor.receiveCommand({
+            type: SonareEngineCommandType.SetTrackMonitorMode,
+            targetId,
+            sampleTime: 96,
+            argInt: 1,
+          });
+        }
+        expect(setTrackMonitorMode).toHaveBeenCalledTimes(1);
+      } finally {
+        processor.destroy();
+      }
+    });
+
     it('reports a rejected sync without stopping subsequent processing', () => {
       const posted: unknown[] = [];
       const processor = new SonareRealtimeEngineWorkletProcessor(
@@ -1200,6 +1236,71 @@ describe('SonareRealtimeEngineWorkletProcessor', () => {
           AudioWorkletProcessor: previousProcessor,
           registerProcessor: previousRegister,
         });
+      }
+    });
+
+    it('transfers capture buffers without invalidating native capture state', () => {
+      const blockSize = 128;
+      const posted: Array<{ message: unknown; transfer?: Transferable[] }> = [];
+      const processor = new SonareRealtimeEngineWorkletProcessor(
+        { sampleRate: 48000, blockSize, channelCount: 2 },
+        {
+          postMessage: (message, transfer) => {
+            // Model MessagePort's structured-clone + transfer behavior. The
+            // sender-side typed arrays are detached here; the delivered clone
+            // is what a main-thread consumer would receive.
+            const delivered =
+              transfer && transfer.length > 0 ? structuredClone(message, { transfer }) : message;
+            posted.push({ message: delivered, transfer });
+          },
+        },
+      );
+      try {
+        processor.receiveSync({
+          type: 'syncCapture',
+          bufferFrames: blockSize,
+          channels: 2,
+          source: 'input',
+          recordOffsetSamples: 0,
+          inputMonitor: { enabled: false, gain: 1 },
+        });
+        processor.receiveCommand({
+          type: SonareEngineCommandType.ArmRecord,
+          sampleTime: -1,
+          argInt: 1,
+        });
+        processor.process(
+          [[new Float32Array(blockSize).fill(0.25), new Float32Array(blockSize).fill(-0.5)]],
+          [[new Float32Array(blockSize), new Float32Array(blockSize)]],
+        );
+
+        processor.receiveCaptureRequest({ type: 'captureRequest', requestId: 10, op: 'read' });
+        const read = posted.at(-1);
+        const response = read?.message as { channels?: Float32Array[] };
+        expect(response.channels).toHaveLength(2);
+        expect(response.channels?.[0][0]).toBeCloseTo(0.25, 4);
+        expect(response.channels?.[1][0]).toBeCloseTo(-0.5, 4);
+        expect(read?.transfer).toHaveLength(2);
+        expect(new Set(read?.transfer).size).toBe(2);
+        expect(read?.transfer?.every((buffer) => buffer instanceof ArrayBuffer)).toBe(true);
+
+        // The transfer detached only the temporary JS response. Native capture
+        // storage remains available for subsequent control requests.
+        processor.receiveCaptureRequest({ type: 'captureRequest', requestId: 11, op: 'status' });
+        expect(posted.at(-1)?.message).toMatchObject({
+          type: 'captureResponse',
+          requestId: 11,
+          ok: true,
+          status: { capturedFrames: blockSize },
+        });
+        processor.receiveCaptureRequest({ type: 'captureRequest', requestId: 12, op: 'reset' });
+        expect(posted.at(-1)?.message).toMatchObject({
+          type: 'captureResponse',
+          requestId: 12,
+          ok: true,
+        });
+      } finally {
+        processor.destroy();
       }
     });
   });

@@ -7,6 +7,7 @@
 #include <cmath>
 #include <limits>
 
+#include "util/constants.h"
 #include "wasm/bindings/common/common.h"
 
 // ============================================================================
@@ -14,14 +15,20 @@
 // ============================================================================
 
 // HPSS - Harmonic/Percussive Source Separation
-val js_hpss(val samples, int sample_rate, int kernel_harmonic, int kernel_percussive) {
+val js_hpss_ex(val samples, int sample_rate, int kernel_harmonic, int kernel_percussive, int n_fft,
+               int hop_length, bool hard_mask) {
   Audio audio = loadValidatedAudio(samples, sample_rate);
 
   HpssConfig config;
   config.kernel_size_harmonic = kernel_harmonic;
   config.kernel_size_percussive = kernel_percussive;
+  config.use_soft_mask = !hard_mask;
 
-  HpssAudioResult result = hpss(audio, config);
+  StftConfig stft_config;
+  stft_config.n_fft = n_fft;
+  stft_config.hop_length = hop_length;
+
+  HpssAudioResult result = hpss(audio, config, stft_config);
 
   val out = val::object();
 
@@ -38,6 +45,11 @@ val js_hpss(val samples, int sample_rate, int kernel_harmonic, int kernel_percus
   out.set("sampleRate", result.harmonic.sample_rate());
 
   return out;
+}
+
+val js_hpss(val samples, int sample_rate, int kernel_harmonic, int kernel_percussive) {
+  return js_hpss_ex(samples, sample_rate, kernel_harmonic, kernel_percussive,
+                    constants::kDefaultNFft, constants::kDefaultHopLength, false);
 }
 
 // Get harmonic component only
@@ -57,23 +69,41 @@ val js_percussive(val samples, int sample_rate) {
 }
 
 // Time stretch
-val js_time_stretch(val samples, int sample_rate, float rate) {
+val js_time_stretch_ex(val samples, int sample_rate, float rate, int n_fft, int hop_length) {
   Audio audio = loadValidatedAudio(samples, sample_rate);
-  Audio result = time_stretch(audio, rate);
+  TimeStretchConfig config;
+  config.n_fft = n_fft;
+  config.hop_length = hop_length;
+  config.backend = StretchBackend::NativeSpectral;
+  Audio result = time_stretch(audio, rate, config);
   std::vector<float> out_vec(result.data(), result.data() + result.size());
   return vectorToFloat32Array(out_vec);
 }
 
+val js_time_stretch(val samples, int sample_rate, float rate) {
+  return js_time_stretch_ex(samples, sample_rate, rate, constants::kDefaultNFft,
+                            constants::kDefaultHopLength);
+}
+
 // Pitch shift
-val js_pitch_shift(val samples, int sample_rate, float semitones) {
+val js_pitch_shift_ex(val samples, int sample_rate, float semitones, int n_fft, int hop_length) {
   PitchShiftPlan plan;
   if (!make_pitch_shift_plan(samples["length"].as<size_t>(), sample_rate, semitones, &plan)) {
     throw SonareException(ErrorCode::InvalidParameter, "unsupported pitch-shift expansion");
   }
   Audio audio = loadValidatedAudio(samples, sample_rate);
-  Audio result = pitch_shift(audio, semitones);
+  PitchShiftConfig config;
+  config.n_fft = n_fft;
+  config.hop_length = hop_length;
+  config.backend = StretchBackend::NativeSpectral;
+  Audio result = pitch_shift(audio, semitones, config);
   std::vector<float> out_vec(result.data(), result.data() + result.size());
   return vectorToFloat32Array(out_vec);
+}
+
+val js_pitch_shift(val samples, int sample_rate, float semitones) {
+  return js_pitch_shift_ex(samples, sample_rate, semitones, constants::kDefaultNFft,
+                           constants::kDefaultHopLength);
 }
 
 // Pitch-editor bindings (pitch-correct / note stretch / note move).
@@ -398,15 +428,20 @@ val js_remix(val samples, val intervals, int sample_rate, bool align_zeros) {
 // signals (residual = original - harmonic - percussive). Mirrors the C ABI
 // sonare_hpss_with_residual. Returns { harmonic, percussive, residual,
 // sampleRate } where all three buffers share the same length and sample rate.
-val js_hpss_with_residual(val samples, int sample_rate, int kernel_harmonic,
-                          int kernel_percussive) {
+val js_hpss_with_residual_ex(val samples, int sample_rate, int kernel_harmonic,
+                             int kernel_percussive, int n_fft, int hop_length, bool hard_mask) {
   Audio audio = loadValidatedAudio(samples, sample_rate);
 
   HpssConfig config;
   config.kernel_size_harmonic = kernel_harmonic;
   config.kernel_size_percussive = kernel_percussive;
+  config.use_soft_mask = !hard_mask;
 
-  HpssAudioResultWithResidual result = hpss_with_residual(audio, config);
+  StftConfig stft_config;
+  stft_config.n_fft = n_fft;
+  stft_config.hop_length = hop_length;
+
+  HpssAudioResultWithResidual result = hpss_with_residual(audio, config, stft_config);
 
   std::vector<float> harmonic_vec(result.harmonic.data(),
                                   result.harmonic.data() + result.harmonic.size());
@@ -421,6 +456,12 @@ val js_hpss_with_residual(val samples, int sample_rate, int kernel_harmonic,
   out.set("residual", vectorToFloat32Array(residual_vec));
   out.set("sampleRate", result.harmonic.sample_rate());
   return out;
+}
+
+val js_hpss_with_residual(val samples, int sample_rate, int kernel_harmonic,
+                          int kernel_percussive) {
+  return js_hpss_with_residual_ex(samples, sample_rate, kernel_harmonic, kernel_percussive,
+                                  constants::kDefaultNFft, constants::kDefaultHopLength, false);
 }
 
 // Phase-vocoder time-scale modification (STFT -> phase_vocoder -> iSTFT).
@@ -453,19 +494,32 @@ val js_phase_vocoder(val samples, int sample_rate, float rate, int n_fft, int ho
 }
 
 // Normalize
-val js_normalize(val samples, int sample_rate, float target_db) {
+val js_normalize_ex(val samples, int sample_rate, float target_db, const std::string& mode) {
+  if (mode != "peak" && mode != "rms") {
+    throw SonareException(ErrorCode::InvalidParameter, "normalize: mode must be 'peak' or 'rms'");
+  }
   Audio audio = loadValidatedAudio(samples, sample_rate);
-  Audio result = normalize(audio, target_db);
+  Audio result =
+      mode == "rms" ? normalize_rms(audio, target_db, true) : normalize(audio, target_db);
   std::vector<float> out_vec(result.data(), result.data() + result.size());
   return vectorToFloat32Array(out_vec);
 }
 
+val js_normalize(val samples, int sample_rate, float target_db) {
+  return js_normalize_ex(samples, sample_rate, target_db, "peak");
+}
+
 // Trim silence
-val js_trim(val samples, int sample_rate, float threshold_db) {
+val js_trim_ex(val samples, int sample_rate, float threshold_db, int frame_length, int hop_length) {
   Audio audio = loadValidatedAudio(samples, sample_rate);
-  Audio result = trim_absolute(audio, threshold_db);
+  Audio result = trim_absolute(audio, threshold_db, frame_length, hop_length);
   std::vector<float> out_vec(result.data(), result.data() + result.size());
   return vectorToFloat32Array(out_vec);
+}
+
+val js_trim(val samples, int sample_rate, float threshold_db) {
+  return js_trim_ex(samples, sample_rate, threshold_db, constants::kDefaultNFft,
+                    constants::kDefaultHopLength);
 }
 
 namespace {
@@ -567,10 +621,13 @@ val js_spectral_edit(val samples, int sample_rate, val ops, val options) {
 
 void registerEffectsAudioBindings() {
   function("hpss", &js_hpss);
+  function("hpssEx", &js_hpss_ex);
   function("harmonic", &js_harmonic);
   function("percussive", &js_percussive);
   function("timeStretch", &js_time_stretch);
+  function("timeStretchEx", &js_time_stretch_ex);
   function("pitchShift", &js_pitch_shift);
+  function("pitchShiftEx", &js_pitch_shift_ex);
   function("pitchCorrectToMidi", &js_pitch_correct_to_midi);
   function("pitchCorrectToMidiTimevarying", &js_pitch_correct_to_midi_timevarying);
   function("pitchCorrectTimevarying", &js_pitch_correct_timevarying);
@@ -583,9 +640,12 @@ void registerEffectsAudioBindings() {
   function("nnFilter", &js_nn_filter);
   function("remix", &js_remix);
   function("hpssWithResidual", &js_hpss_with_residual);
+  function("hpssWithResidualEx", &js_hpss_with_residual_ex);
   function("phaseVocoder", &js_phase_vocoder);
   function("normalize", &js_normalize);
+  function("normalizeEx", &js_normalize_ex);
   function("trim", &js_trim);
+  function("trimEx", &js_trim_ex);
   function("spectralEdit", &js_spectral_edit);
 }
 

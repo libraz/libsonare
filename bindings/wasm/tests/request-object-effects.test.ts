@@ -1,3 +1,5 @@
+import { readFileSync } from 'node:fs';
+
 import { beforeAll, describe, expect, it } from 'vitest';
 import { meterTapCode, panLawCode, panModeCode, sendTimingCode } from '../src/codes';
 import { ErrorCode } from '../src/errors';
@@ -24,8 +26,20 @@ import {
   projectTrackKindValue,
   projectWarpModeValue,
 } from '../src/project_internal';
+import type { PanLawInput } from '../src/public_types';
 
 const sampleRate = 22050;
+
+interface PanLawCorpus {
+  accepted: Array<{ value: string; ordinal: number }>;
+  normalization: Array<{ value: string; ordinal: number }>;
+  numeric: number[];
+  rejected: string[];
+}
+
+const panLawCorpus = JSON.parse(
+  readFileSync(new URL('../../../tests/conformance/pan_law_names.json', import.meta.url), 'utf8'),
+) as PanLawCorpus;
 
 function sine(length = 8192): Float32Array {
   const samples = new Float32Array(length);
@@ -170,6 +184,18 @@ describe('enum-code helpers reject unknown strings instead of silently defaultin
     expect(panModeCode('stereo-pan')).toBe(1);
     expect(panModeCode('dual-pan')).toBe(2);
     expect(meterTapCode('postFader')).toBe(1);
+  });
+
+  it('resolves every shared pan-law spelling and conservative normalization', () => {
+    for (const { value, ordinal } of [...panLawCorpus.accepted, ...panLawCorpus.normalization]) {
+      expect(panLawCode(value as PanLawInput)).toBe(ordinal);
+    }
+    for (const value of panLawCorpus.numeric) {
+      expect(panLawCode(value)).toBe(value);
+    }
+    for (const value of panLawCorpus.rejected) {
+      expect(() => panLawCode(value as PanLawInput)).toThrow(RangeError);
+    }
   });
 
   it('panModeCode resolves every spelling to the SonarePanMode C ABI ordinal', () => {

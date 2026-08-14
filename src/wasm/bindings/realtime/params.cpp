@@ -194,6 +194,31 @@ void RealtimeEngineWasm::setSoloMute(uint32_t lane_index, bool solo, bool mute,
   }
 }
 
+void RealtimeEngineWasm::setTrackMonitorMode(uint32_t lane_index, int mode, int64_t render_frame) {
+  // The C-ABI guard runs before the feature gate, so invalid modes remain an
+  // InvalidParameter even in an analysis-only (mixing-disabled) WASM build.
+  if (mode < 0 || mode > 2) {
+    throw sonare::SonareException(sonare::ErrorCode::InvalidParameter,
+                                  "unknown track monitor mode");
+  }
+#if defined(SONARE_WITH_MIXING)
+  sonare::rt::Command command{};
+  command.type = sonare::rt::CommandType::kSetTrackMonitorMode;
+  command.target_id = lane_index;
+  command.sample_time = render_frame;
+  command.arg.i = mode;
+  if (!engine_.push_command(command)) {
+    throw sonare::SonareException(sonare::ErrorCode::InvalidState,
+                                  "failed to queue track monitor mode command");
+  }
+#else
+  (void)lane_index;
+  (void)render_frame;
+  throw sonare::SonareException(sonare::ErrorCode::NotImplemented,
+                                "mixing support is not compiled in");
+#endif
+}
+
 // Mirrors the C ABI sonare_engine_clear_parameters.
 void RealtimeEngineWasm::clearParameters() {
   parameters_.clear();
@@ -238,6 +263,7 @@ void registerRealtimeEngineParams(class_<RealtimeEngineWasm>& cls) {
       .function("setParameterSmoothed", &RealtimeEngineWasm::setParameterSmoothed)
       .function("setParamSmoothingMs", &RealtimeEngineWasm::setParamSmoothingMs)
       .function("setSoloMute", &RealtimeEngineWasm::setSoloMute)
+      .function("setTrackMonitorMode", &RealtimeEngineWasm::setTrackMonitorMode)
       .function("clearParameters", &RealtimeEngineWasm::clearParameters)
       .function("addParameter", &RealtimeEngineWasm::addParameter)
       .function("parameterCount", &RealtimeEngineWasm::parameterCount)

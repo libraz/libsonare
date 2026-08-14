@@ -121,6 +121,7 @@ struct ProjectWasm {
   void redo();
   void clearHistory();
   void setMaxUndoDepth(size_t depth);
+  void setMaxHistoryBytes(size_t bytes);
 
   void setMidiEvents(uint32_t clip_id, val events);
   uint32_t importSmf(val data);
@@ -237,6 +238,8 @@ struct ProjectWasm {
   void setClipFade(uint32_t clip_id, val fade_in, val fade_out);
   val unresolvedAudioSourceIds() const;
   void setSourceAudio(uint32_t source_id, val audio, int channels, int sample_rate);
+  void setAudioSourceMetadata(uint32_t source_id, const std::string& content_hash,
+                              const std::string& external_stem_role);
   void setClipTakes(uint32_t clip_id, val takes_val, uint32_t active_take_id);
   void setClipCompSegments(uint32_t clip_id, val segments_val);
   void setClipLoop(uint32_t clip_id, int loop_mode, double loop_length_ppq,

@@ -44,6 +44,178 @@ describe('Sonare WASM Project', () => {
     return project;
   }
 
+  it('reads, edits, clears, undoes, redoes, and serializes audio source metadata', () => {
+    const project = new Project();
+    try {
+      const trackId = project.addTrack({ kind: 'audio', name: 'metadata' });
+      project.addClip({
+        trackId,
+        startPpq: 0,
+        lengthPpq: 1,
+        sourceUri: 'asset://metadata.wav',
+      });
+      const sourceId = project.clipByIndex(0).sourceId;
+
+      expect(project.sourceByIndex(0)).toMatchObject({
+        id: sourceId,
+        contentHash: '',
+        externalStemRole: '',
+      });
+
+      project.setAudioSourceMetadata(sourceId, 'sha256:deadbeef', 'lead');
+      expect(project.sourceByIndex(0)).toMatchObject({
+        id: sourceId,
+        nameOrUri: 'asset://metadata.wav',
+        contentHash: 'sha256:deadbeef',
+        externalStemRole: 'lead',
+      });
+
+      project.setAudioSourceMetadata(sourceId, '', '');
+      expect(project.sourceByIndex(0)).toMatchObject({
+        contentHash: '',
+        externalStemRole: '',
+      });
+
+      project.undo();
+      expect(project.sourceByIndex(0)).toMatchObject({
+        contentHash: 'sha256:deadbeef',
+        externalStemRole: 'lead',
+      });
+      project.redo();
+      expect(project.sourceByIndex(0)).toMatchObject({
+        contentHash: '',
+        externalStemRole: '',
+      });
+
+      project.setAudioSourceMetadata(sourceId, 'sha256:roundtrip', 'vocals');
+      const restored = Project.fromJson(project.toJson());
+      try {
+        expect(restored.sourceByIndex(0)).toMatchObject({
+          id: sourceId,
+          contentHash: 'sha256:roundtrip',
+          externalStemRole: 'vocals',
+        });
+      } finally {
+        restored.delete();
+      }
+    } finally {
+      project.delete();
+    }
+  });
+
+  it('rejects audio source metadata edits for MIDI and unknown sources', () => {
+    const project = new Project();
+    try {
+      const audioTrackId = project.addTrack({ kind: 'audio', name: 'audio' });
+      project.addClip({
+        trackId: audioTrackId,
+        startPpq: 0,
+        lengthPpq: 1,
+        sourceUri: 'asset://audio.wav',
+      });
+      project.addMidiClip(0, 1);
+      const audioSourceId = project.clipByIndex(0).sourceId;
+      const midiSourceId = project.clipByIndex(1).sourceId;
+      project.setAudioSourceMetadata(audioSourceId, 'sha256:valid', 'lead');
+
+      const expectInvalidParameter = (action: () => void) => {
+        let caught: unknown;
+        try {
+          action();
+        } catch (error) {
+          caught = error;
+        }
+        expect(isSonareError(caught)).toBe(true);
+        if (isSonareError(caught)) {
+          expect(caught.code).toBe(ErrorCode.InvalidParameter);
+        }
+      };
+
+      expectInvalidParameter(() =>
+        project.setAudioSourceMetadata(midiSourceId, 'sha256:bad', 'lead'),
+      );
+      expectInvalidParameter(() => project.setAudioSourceMetadata(999999, 'sha256:bad', 'lead'));
+      expect(project.sourceByIndex(0)).toMatchObject({
+        contentHash: 'sha256:valid',
+        externalStemRole: 'lead',
+      });
+      expect(project.sourceByIndex(1)).toMatchObject({
+        contentHash: '',
+        externalStemRole: '',
+      });
+    } finally {
+      project.delete();
+    }
+  });
+
+  it('creates projects and reads canonical assist sidecars in stable order', () => {
+    const project = Project.create();
+    const constructed = new Project();
+    try {
+      expect(project.toJson()).toBe(constructed.toJson());
+
+      project.setAssistSidecar({
+        moduleId: 'project.module',
+        payload: new Uint8Array([1, 2]),
+      });
+      project.setAssistSidecar({
+        moduleId: 'region.module',
+        schemaVersion: 3,
+        targetTrackId: 7,
+        regionStartPpq: 2,
+        regionEndPpq: 8,
+        payload: new Uint8Array([3, 4]),
+      });
+
+      expect(project.assistSidecarCount()).toBe(2);
+      expect(project.assistSidecars()).toEqual([
+        project.getAssistSidecar(0),
+        project.getAssistSidecar(1),
+      ]);
+      expect(project.assistSidecars()[0]).toMatchObject({
+        moduleId: 'project.module',
+        schemaVersion: 0,
+        targetTrackId: 0,
+        regionStartPpq: 0,
+        regionEndPpq: 0,
+      });
+      expect(Array.from(project.assistSidecars()[0].payload)).toEqual([1, 2]);
+      expect(project.assistSidecars()[1]).toMatchObject({
+        moduleId: 'region.module',
+        schemaVersion: 3,
+        targetTrackId: 7,
+        regionStartPpq: 2,
+        regionEndPpq: 8,
+      });
+      expect(Array.from(project.assistSidecars()[1].payload)).toEqual([3, 4]);
+    } finally {
+      project.delete();
+      constructed.delete();
+    }
+  });
+
+  it('validates assist sidecar descriptors before calling embind', () => {
+    const project = new Project();
+    try {
+      expect(() => project.setAssistSidecar(null as never)).toThrow(/sidecar descriptor object/);
+      expect(() => project.setAssistSidecar({ moduleId: '' })).toThrow(/moduleId/);
+      expect(() => project.setAssistSidecar({ moduleId: 'bad', schemaVersion: -1 })).toThrow(
+        /schemaVersion/,
+      );
+      expect(() =>
+        project.setAssistSidecar({ moduleId: 'bad', payload: new Uint8Array(0) }),
+      ).not.toThrow();
+      expect(() => project.setAssistSidecar({ moduleId: 'bad', payload: [1, 2] as never })).toThrow(
+        /payload/,
+      );
+      expect(() => project.setAssistSidecar('legacy', 0, 0, 0, 0)).toThrow(
+        /requires six arguments/,
+      );
+    } finally {
+      project.delete();
+    }
+  });
+
   it('rejects unknown track kinds at both the facade and embind boundaries', () => {
     const project = new Project();
     try {
@@ -401,6 +573,19 @@ describe('Sonare WASM Project', () => {
     return project;
   }
 
+  function buildGmProgramProject(program: number): Project {
+    const project = new Project();
+    project.setSampleRate(48000);
+    const { trackId, clipId } = project.addMidiClip(0, 1);
+    project.setTrackMidiDestination(trackId, 0);
+    project.setMidiEvents(clipId, [
+      Project.midiProgram(0, 0, 0, program),
+      Project.midiNoteOn(0, 0, 0, 60, 100),
+      Project.midiNoteOff(0.5, 0, 0, 60, 0),
+    ]);
+    return project;
+  }
+
   function maxAbs(buffer: Float32Array): number {
     let peak = 0;
     for (let i = 0; i < buffer.length; i++) {
@@ -518,6 +703,86 @@ describe('Sonare WASM Project', () => {
     } finally {
       project.delete();
     }
+  });
+
+  it('forwards useGmPrograms to NativeSynth while preserving fixed-patch defaults', () => {
+    const project = new Project();
+    project.setSampleRate(48000);
+    const { clipId } = project.addMidiClip(0, 4);
+    project.setMidiEvents(clipId, [
+      Project.midiProgram(0, 0, 0, 4), // Electric Piano 1 in the GM map.
+      Project.midiNoteOn(0, 0, 0, 60, 100),
+      Project.midiNoteOff(2, 0, 0, 60, 0),
+    ]);
+    const options = { totalFrames: 24000, numChannels: 1, sampleRate: 48000 };
+    try {
+      const omitted = project.bounceWithSynthInstrument({ preset: 'sine' }, options);
+      const fixed = project.bounceWithSynthInstrument(
+        { preset: 'sine', useGmPrograms: false },
+        options,
+      );
+      const gm = project.bounceWithSynthInstrument(
+        { preset: 'sine', useGmPrograms: true },
+        options,
+      );
+
+      expect(fixed).toEqual(omitted);
+      expect(gm).not.toEqual(fixed);
+      expect(maxAbs(gm)).toBeGreaterThan(0.01);
+
+      for (const invalid of [1, 'true']) {
+        let caught: unknown;
+        try {
+          project.bounceWithSynthInstrument(
+            { preset: 'sine', useGmPrograms: invalid as never },
+            options,
+          );
+        } catch (error) {
+          caught = error;
+        }
+        expect(isSonareError(caught)).toBe(true);
+        if (!isSonareError(caught)) {
+          throw new Error('expected SonareError');
+        }
+        expect(caught.code).toBe(ErrorCode.InvalidParameter);
+      }
+    } finally {
+      project.delete();
+    }
+  });
+
+  it('renders GM programs 4 and 40 as finite, audible, distinct outputs', () => {
+    const render = (program: number, useGmPrograms: boolean): Float32Array => {
+      const project = buildGmProgramProject(program);
+      try {
+        const audio = project.bounceWithSynthInstrument(
+          { preset: 'sine', useGmPrograms },
+          { totalFrames: 12000, blockSize: 128, numChannels: 1, sampleRate: 48000 },
+        );
+        expect(audio.length).toBe(12000);
+        for (const sample of audio) {
+          expect(Number.isFinite(sample)).toBe(true);
+        }
+        expect(maxAbs(audio)).toBeGreaterThan(0);
+        return audio;
+      } finally {
+        project.delete();
+      }
+    };
+
+    const disabled = render(4, false);
+    const gm4 = render(4, true);
+    const gm40 = render(40, true);
+    const maxDelta = (lhs: Float32Array, rhs: Float32Array): number => {
+      expect(lhs.length).toBe(rhs.length);
+      let delta = 0;
+      for (let i = 0; i < lhs.length; i++) {
+        delta = Math.max(delta, Math.abs(lhs[i] - rhs[i]));
+      }
+      return delta;
+    };
+    expect(maxDelta(disabled, gm4)).toBeGreaterThan(1e-6);
+    expect(maxDelta(gm4, gm40)).toBeGreaterThan(1e-6);
   });
 
   it('exports MIDI, applies program/MIDI FX, and preserves imported SysEx payloads', () => {

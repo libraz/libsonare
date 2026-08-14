@@ -1,4 +1,10 @@
-import type { EngineAutomationPoint, EngineParameterInfo, RealtimeEngine } from '../index';
+import { trackMonitorModeCode } from '../codes';
+import type {
+  EngineAutomationPoint,
+  EngineParameterInfo,
+  EngineTrackMonitorMode,
+  RealtimeEngine,
+} from '../index';
 import type { SonareEngineSyncMessage } from './messages';
 import {
   ENGINE_MIXER_PARAM_FADER_DB,
@@ -64,6 +70,29 @@ export function setSoloMute(
     targetId: laneIndex,
     sampleTime: -1,
     argInt: (mute ? 0x1 : 0) | (solo ? 0x2 : 0),
+  });
+}
+
+export function setTrackMonitorMode(
+  ctx: EngineParameterContext,
+  target: string | number,
+  mode: EngineTrackMonitorMode,
+  renderFrame = -1,
+): boolean {
+  // Resolve the mode before declaring a lane or touching either engine. This
+  // keeps booleans, fractions, and unknown spellings from reaching the queue.
+  const modeOrdinal = trackMonitorModeCode(mode);
+  const laneIndex = ctx.ensureTrackLane(target);
+  ctx.offlineEngine.setTrackMonitorMode(
+    laneIndex,
+    modeOrdinal as EngineTrackMonitorMode,
+    renderFrame,
+  );
+  return ctx.sendCommand({
+    type: SonareEngineCommandType.SetTrackMonitorMode,
+    targetId: laneIndex,
+    sampleTime: renderFrame,
+    argInt: modeOrdinal,
   });
 }
 

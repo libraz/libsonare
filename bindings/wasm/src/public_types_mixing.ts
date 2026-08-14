@@ -90,6 +90,22 @@ export type AutomationCurve = 'linear' | 'exponential' | 'hold' | 's-curve';
  */
 export type PanLaw = 'const3dB' | 'const4.5dB' | 'const6dB' | 'linear0dB';
 
+/** Accepted pan-law name aliases for mixer and realtime-engine inputs. */
+export type PanLawName =
+  | PanLaw
+  | 'const-3db'
+  | '-3db'
+  | 'const-4.5db'
+  | '-4.5db'
+  | 'const-6db'
+  | '-6db'
+  | 'linear-0db'
+  | 'linear'
+  | '0db';
+
+/** Pan-law name or raw C ABI ordinal. */
+export type PanLawInput = PanLawName | number;
+
 /**
  * Meter tap point for reading a strip's meter snapshot
  * (see {@link Mixer.meterTap} and {@link Mixer.stripMeter}).
