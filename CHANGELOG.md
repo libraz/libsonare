@@ -1,5 +1,148 @@
 # Changelog
 
+## v1.7.0 (2026-08-14)
+
+**This release contains source-incompatible changes on the JavaScript and Python surfaces, and both command-line tools changed exit codes.** Read Behavioural changes before upgrading; the items that change meaning without raising an error are:
+
+- Both CLIs exit 2 for a usage error where the invalid-parameter code was reported before, and a cancelled run exits 11. A script branching on the old codes will misread the outcome.
+- Python raises `SonareError` where native parameter validation previously surfaced as `ValueError`. Python-side preflight of empty, NaN or Inf buffers and bad shapes still raises `ValueError`.
+- The built-in synth preset key `harp` is now `harp-plucked`. A configuration naming the old key no longer resolves.
+- WASM `voiceCharacterPresetId()` returns `VoicePresetId | null` instead of a string, and an unknown ordinal returns null rather than throwing.
+
+This release completes the option coverage of the analysis and effects entry points on every surface, adds typed automation targets, per-track PFL/AFL monitoring, bounded undo/redo memory and owning audio-source metadata, rebuilds the native CLI on a single option registry with a machine-readable contract, and adds a cross-surface conformance harness. It also corrects the predominant local pulse, subsegmentation, chord inversion and pitch-tracking defects, bypass latency continuity in the mixer and the routing graph, the macOS host backends, and a set of binding-level resource and validation defects.
+
+### New surfaces
+
+- Configuration-taking variants of the remaining one-shot effect and analysis entry points reached the C ABI: `sonare_hpss_ex` (soft or hard mask with an optional residual), `sonare_time_stretch_ex`, `sonare_pitch_shift_ex`, `sonare_trim_ex`, `sonare_normalize_rms`, `sonare_nnls_chroma_ex2`, `sonare_analyze_impulse_response_ex` and `sonare_audio_file_channel_count`. The existing entry points forward with their previous defaults, so current calls are unaffected. Node and WASM take the new settings as additional request fields (`nFft`, `hopLength`, `hardMask`, `frameLength`, `minDecayDb`, a peak or RMS `mode`), Python as keyword arguments, and both CLIs as flags.
+- Automation lanes carry a typed target: `SonareAutomationTargetKind` distinguishes an opaque parameter id from the track fader and pan, `SonareAutomationLaneDescEx` describes it, and `sonare_project_add_automation_lane_ex` / `sonare_project_edit_automation_lane_ex` install it. Typed lanes resolve to the engine's reserved parameter namespace at install time and are applied by the offline bounce through the track mixer. Project JSON moves to schema version 2 only when a typed lane is present, so a document without one keeps its existing bytes. Mirrored as `targetKind` on Node and WASM and as a typed target argument on Python.
+- Per-track-lane cue monitoring is available as `SonareEngineTrackMonitorMode` and `sonare_engine_set_track_monitor_mode`: PFL taps after the lane strip, AFL after the fader, gate and pan, including the surround path. It is a queueable realtime command, mirrored as `setTrackMonitorMode` on Node and WASM, `set_track_monitor_mode` on Python, and reachable from the WASM AudioWorklet.
+- Audio sources carry owning metadata — a content hash and an external stem role — through `SonareProjectAudioSourceMetadata` with set, get and free entry points, committed as one undoable edit and surfaced as `contentHash` / `externalStemRole` on the project source descriptors.
+- Undo/redo memory is bounded: every edit command reports its retained bytes, the history enforces a combined cap over the undo and redo stacks, and `sonare_project_set_max_history_bytes` exposes it. A new rollback seam restores PCM sidecars when an apply or commit step fails part-way.
+- Engine telemetry error ordinals are published as `SonareEngineTelemetryError`, so a host can name a telemetry error instead of matching integers. The telemetry struct layout is unchanged.
+- The mastering chain document gained a structured multiband compressor with an arbitrary band count, written and parsed as configuration schema version 2 with strict field validation.
+- `Project.create` and descriptor-form assist sidecars are available on the JavaScript surfaces, and synth instrument bindings accept `useGmPrograms` so an offline bounce follows incoming GM bank and program changes.
+- The native CLI publishes its own command and option inventory through a hidden `--dump-cli-contract`, and the Python CLI derives the same inventory from its live parser, so the published option contract cannot drift from the parser that runs.
+
+### Analysis
+
+- `plp` reconstructs the predominant local pulse from the masked Fourier tempogram's phase through a COLA-normalized inverse STFT instead of stamping a magnitude-only cosine at each frame centre. The previous reconstruction summed mutually misaligned cosines into a near-flat curve unrelated to the onsets; pulse peaks now land on the onsets. `fourier_tempogram` and `plp` share one complex-STFT front-end.
+- `subsegment` splits a parent span with contiguity-constrained Ward clustering, so a span yields exactly `min(n_segments, len)` temporally contiguous runs. Unconstrained clustering previously emitted recurring labels after an interruption, producing more boundaries than requested and non-contiguous segments.
+- Chord inversion detection reads the bass chromagram in the harmonic chromagram's frame space, and a host-supplied bass source with a different time base has its segment indices remapped through absolute time, so the reported bass pitch class and inversion no longer depend on the bass hop length.
+- `piptrack` can report a peak at the topmost FFT bin, which was unreachable once `fmax` reached Nyquist. The top bin counts as a local maximum whenever it exceeds its predecessor, and the peak is reported at the bin centre with the raw magnitude.
+- One interpolated-percentile kernel backs the dynamics analyzer, dynamic-range and LUFS metering and the acoustic percentile, replacing four hand-synchronized copies. It follows numpy's default linear rule, accumulates in double and returns an exact-rank element directly, so an infinite neighbour at weight zero can no longer turn a result into NaN.
+- One shared CQT-bin to pitch-class fold backs both the `chroma_cqt` mean wrap and the CQT summed pitch-class accumulation, with a single definition of the bins-per-octave centering shift and the `fmin` rotation. `chroma_class_of_frequency` subdivides the twelve pitch classes correctly for resolutions other than twelve.
+- CQT and VQT inversion share one Gaussian spectral projection, so `griffinlim_vqt` inverts with the VQT's own bandwidths when gamma is non-zero while the `VqtResult` overload stays pinned to gamma zero.
+- `bin_to_hz` rejects a non-positive sample rate or FFT size instead of dividing by zero, and the reassigned spectrogram rejects a non-positive FFT size or hop length. The guards live in the core, so the WASM path that calls the reassigned entry point directly is covered.
+
+### Mastering and mixing
+
+- A bypassed insert keeps its latency compensated. Bus processors and channel strips gained a second per-insert alignment bank that substitutes for a bypassed insert's latency across every plane, kept primed while the other bank is active, so toggling bypass switches delay lines instead of opening a hole of silence.
+- A bypassed routing-graph node keeps its per-port latency compensated through a delay sized from the node's reported integer and fractional latency, dropped entirely when no port is latent.
+- Multiband and EQ processors accept a caller-declared channel bound at prepare, so an offline mono or stereo caller sizes per-channel scratch to its real channel count instead of reserving the realtime ceiling, and crossover scratch already sized for more channels is reused rather than reallocated on the audio thread.
+- The air band delays its dry shelf path by the harmonic oversampler's round trip so the two paths stay time-aligned, reports that round trip as latency rather than tail, and derives its detector envelope from the sample rate.
+- The loudness stage measures its own stage input rather than the chain's input report, and a tape or exciter parameter override no longer implicitly enables that stage.
+- Acoustic room inserts carry material preset, per-band absorption and scattering, Eyring preference, mixing time and crossfade options into the streaming insert, and the processor catalog corrects the realtime cost tier of the tube saturator and the true-peak maximizer.
+- Shoebox room validation reports every bad wall coefficient instead of aborting at the first one, `sonare_estimate_room` pads the shorter of the absorption and RT60 estimates with NaN instead of truncating the band count, and room impulse-response synthesis is bounded by a shared working-set budget with a single late-tail resolver, distinguishing a clamp caused by the requested length from one caused by the resource budget.
+
+### Realtime engine, project and MIDI
+
+- Meter telemetry merges across a host block that automation splits into several process calls: peak and true-peak are element-wise maxima over every sub-block and RMS is recomputed from a running energy accumulator, instead of reporting only the last fragment.
+- The master scope record is captured per sub-block before the metronome rather than once at the end of the block, so the metronome is excluded from the master scope.
+- Program delay compensation is reconfigured fail-closed: every replacement delay bank is built before any is installed, a zero delay reclaims its storage, and the reported prepared scratch includes the compensation storage.
+- The engine rejects an offline render, bounce or freeze asking for more channels than prepare reserved instead of writing past the reserved scratch, and reports a channel-bound violation as its own telemetry error rather than the block-size one.
+- The built-in synth renders every GM program: the fallback engine is resolved per program at note-on, every engine's per-voice delay slab is allocated up front, and the reported release tail is sized from the GM fallback tables whenever GM mode or the drum kit is reachable. The native synth and the SoundFont player share one bank-resolution rule and one drum-kit table.
+- Sostenuto captures only on the pedal-down edge and a reused voice slot clears its stale capture; SoundFont exclusive-class choking is scoped to voices predating the current note-on, so a multi-layer strike no longer chokes itself.
+- Project load rejects a present-but-wrong-typed scalar field instead of substituting the default, enforces the edit-API invariants on the assembled model, writes marker key fields whenever they carry a value, and walks an embedded scene in place instead of re-serializing it under a separate budget.
+- Project MIDI import is gated on a persistence round-trip preflight and a project-specific event budget, and SMF parsing skips a zero time-signature numerator and pads a non-MTrk chunk only with an MTrk lookahead.
+- External stem import no longer copies the whole audio content store; ids are transferred with a collision preflight.
+- Non-WAV and non-MP3 input decodes with its source channel layout through FFmpeg for both interleaved loads and channel-count probes, with overflow-checked sample accumulation.
+
+### Voice changer
+
+- The config hand-off moved to a seqlock cell with a monotonic version counter, so setting a config allocates nothing, locks nothing and throws nothing, and is safe to call from the audio thread itself — which the WASM AudioWorklet path needs, since its port handler and process block share one thread. A torn read is reported as a failure and the audio thread advances its applied version only on a consistent read, so a burst of writes cannot permanently drop its final update.
+- Control updates run on an absolute 32-sample cadence shared by the limiter, retune and formant stages, with cached decibel and coefficient derivations and a per-grain retune ratio.
+- A malformed macros section fails the load with an invalid-parameter error instead of falling back to defaults, and the preset validator preserves the caller's id, name, description and category instead of the config-only placeholders that broke pack lookups.
+
+### WebAssembly
+
+- The worklet capture protocol carries a discriminated response type with transferable `Float32Array` channels in place of number arrays, matches replies to their request operation, and rejects a malformed reply instead of dropping it silently.
+- Mixer and capture buffers cross the JavaScript boundary through typed-array bulk copies rather than per-sample access.
+- Pan-law spellings are accepted case-insensitively with underscores read as hyphens, exported as the `PanLawName` and `PanLawInput` types.
+- Web MIDI hotplug fires the inputs-changed callback once per port change, and a MIDI 2.0 note-on stays a note-on regardless of its downsampled 7-bit velocity, since note-off has its own status nibble. MIDI ring polling stops once the last listener unsubscribes.
+- The size gate is split: the baseline file records the measured build while a separate budget file holds the enforced ceiling, so the gate fails on real growth rather than on every byte of drift.
+- The offline worker smoke harness drives Chrome through the DevTools protocol, waiting for the page result and always stopping the browser.
+
+### Node
+
+- The streaming mastering chain, stream analyzer and streaming equalizer gained an idempotent `destroy()` and `Symbol.dispose`, so the native handle is released deterministically, including through `using`.
+- `analyze`, `analyzeAsync` and `mixStereo` throw a `SonareError` carrying the C-ABI error code on every listed failure path, a throwing progress or cancel callback surfaces promptly instead of aborting on a second throw, and `mixStereo` releases the native mixer on every exit path.
+- The asynchronous mastering entry points reject their returned Promise with a `TypeError` for missing, wrong-typed or length-mismatched arguments instead of throwing synchronously.
+- `RealtimeVoiceChanger` destroys its native handle when `prepare()` throws during construction, where the handle was previously leaked.
+- The request form of `vqtToAudio` shares the positional form's defaults, so an omitted `gamma` resolves to the automatic-VQT sentinel as on every other surface, and `pitchPyin` rejects NaN and Inf samples like `pitchYin`.
+- Addon entry points read optional JavaScript fields through the shared property readers, so an explicitly undefined optional field is treated as omitted rather than coerced.
+- Note-segment tuning fields are taken flat on the request, the nested configuration object is deprecated, and supplying both is rejected. Capture buffers accept a channel-count and capacity form beside the deprecated caller-owned plane array. Public types that were reachable only through internal modules are re-exported.
+
+### Command-line tools
+
+- The native CLI is driven by one immutable registry of command leaves and typed option specs, replacing the separate arity table, per-command schemas and accept lists. Aliases and declared defaults resolve through it, repeatable options accumulate, and numeric values and required options are validated during argument validation.
+- Newly forwarded options: chords `--smoothing-window` and `--no-beat-sync`, mel `--htk`, key `--candidates`, mastering `--true-peak-oversample` into the assistant chain, and an always-applied analyze `--chroma-highpass`.
+- The Python CLI covers the remaining options of its analysis, effects and mastering commands, splits stdout-only commands from artifact-producing ones so `--output` on an analysis command is a usage error, and requires a subcommand.
+- Both CLIs report the same JSON: chroma mean energy as an array, minimum and maximum on spectral statistics, beat intervals on rhythm, canonical lowercase section types, sample rate and latency on the mastering payloads, a per-diagnostic message on project compile, and snake_case doctor keys.
+- Project bounce and MIDI render default the sample rate to the project's own stored rate for both the render and the WAV header; an explicit rate is accepted only when it matches.
+- `voice-change` pads its input by the chain latency, processes fixed blocks and drops the pre-roll, so output sample k corresponds to input sample k, and preset resolution routes through the strict validator so a mistyped section or macro key fails loudly.
+- Ambiguous combinations that previously only warned are rejected: mastering preset with configuration or assistant, EQ shortcuts alongside explicit parameters, competing voice-changer preset selectors, HPSS output modes and the trim-silence thresholds.
+
+### Platform and host backends
+
+- The CoreAudio configuration handed to the callback's open carries the device's nominal sample rate and reported input and output latency, so a callback seeding delay compensation is no longer left with zero or the wrong clock domain.
+- CoreMIDI manual injection produces into its own event ring and SysEx reassembler, separate from the live callback's, so an on-screen keyboard keeps working while a device is connected and each ring keeps a single writer. Drains merge both by render frame, injected SysEx keeps the caller's timestamp, the group is masked before indexing reassembly state, and close clears both rings. Output flush reuses one event-list storage block instead of zero-initializing roughly 68 KB per call.
+- The Audio Unit effect's input render callback clamps to the current block's frame count rather than the prepared maximum, fixing an out-of-bounds read on a variable-block-size host, and the MusicDevice instrument exposes its dropped-event counter while keeping allocation failure inside its noexcept boundaries.
+
+### Verification
+
+- A cross-surface CLI contract checker compares both CLIs against a manifest fixture that is independent of either implementation, covering the command inventory, option and alias parity, positional and exit-code contracts, closed payload schemas and native-versus-Python payload equality within a declared tolerance.
+- A GM-program project bounce acceptance check renders the oracle through the C ABI and requires the Python, Node and WASM project facades to match it samplewise in both GM-program modes.
+- One shared pan-law name fixture is checked by every binding, so accepted spellings, normalizations and rejected forms cannot diverge.
+
+### Bug fixes
+
+- Every analysis wrapper zeroes its result struct and owned out-pointers ahead of each validating early return, so a `sonare_free_*_result` after a rejected call can no longer free an uninitialised pointer.
+- The mastering preset-name cache is guarded and uses a write-once flag instead of an emptiness test, so an empty preset set cannot invalidate a previously returned pointer, and the capability catalog fails cleanly when the processor catalog returns null.
+- `sonare_engine_bind_midi_cc_binding` validates its arguments against the C surface in every build, and the wildcard channel is published as `SONARE_MIDI_CC_ANY_CHANNEL`.
+- Optional subsystems compile out cleanly across the MIDI transport SysEx emission, the mixing-lane parameter constants and the SoundFont insert-factory wiring, and the capability catalog reports empty preset lists for absent subsystems.
+- Numeric edges are checked rather than wrapped: matrix view indexing, hertz-to-bin, samples-to-frames and note-to-hertz conversion, the decibel converters' finite arguments, and bounce buffer sizing.
+- Marker ids are pre-allocated and an imported clip whose events end at tick zero keeps a usable length; id-returning edit calls read the committed model rather than the command object.
+- A security policy states where to report a vulnerability privately, the supported-version window, and what is and is not in scope across the audio, MIDI, SoundFont and project-file decoders and every binding.
+
+### Performance
+
+- The pYIN Viterbi transition table is precomputed as log weights and the voicing switch logarithms are hoisted out of the frame loop, so the logarithm runs once per transition pair instead of once per inner-loop iteration.
+- Beat-local low-frequency energy is computed once per analysis and shared by the beat and chord downbeat-refinement passes, which each re-filtered the whole signal before.
+- The benchmark fixture generator emits ground truth derived from the same constants that drive the synthesis and prints the fixture digest, an accuracy pass scores a build against it under the standard tempo, beat, chord and key conventions, the harness builds for WebAssembly, and both harnesses record thread count and load average and warn on a contended machine.
+
+### Behavioural changes
+
+- Both CLIs report a parse or schema failure as a usage error exiting 2 instead of the invalid-parameter code, a cancelled run exits 11, and `project validate --strict` exits 9 after the canonical artifact and diagnostics have been written.
+- Python raises `SonareError` with a numeric code for native return-code failures including native parameter validation, where some of those previously surfaced as `ValueError`; Python-side preflight of empty, NaN or Inf buffers and bad shapes still raises `ValueError`, and a malformed project document surfaces as an invalid-format error at the CLI boundary.
+- The built-in synth preset key `harp` is now `harp-plucked`.
+- WASM `voiceCharacterPresetId()` returns `VoicePresetId | null`, and an unknown ordinal returns null instead of throwing. The realtime voice-changer preset type is a `dsp`-or-`macros` union with id, name and category required, and a document supplying both sections is rejected.
+- The WASM worklet capture read payload is a transferred `Float32Array` array rather than nested number arrays, and requesting captured audio throws when channels are missing instead of returning an empty result.
+- Node's asynchronous mastering request no longer accepts a `cancel` callback, and the nested note-segment configuration object is deprecated in favour of flat request fields.
+- Multiband and EQ processors reject a block or channel count above their prepared bound instead of growing scratch, and the linear-phase EQ recreates state at exactly the prepared capacity, so it can shrink.
+- `RoomReverb` construction rejects invalid geometry with an invalid-parameter error instead of degrading to a dry passthrough, and acoustic room inserts reject it too.
+- The air band's detector envelope is derived from the sample rate rather than fixed, so its output differs away from 48 kHz; mastering output also shifts where the dry shelf path is now latency-aligned and where the loudness stage measures its own input.
+- An automation lane with a target parameter id of zero is rejected, an opaque lane colliding with the engine's reserved namespace is an error rather than accepted, and a track holds at most one lane per target kind.
+- A channel strip bound by several tracks processes only the sum of their signal, with each track's gain, pan and mute folded into its own clips, reported as a shared-channel-strip diagnostic; two tracks automating the same target no longer collide silently in the live engine, and the loss is reported as an automation-lane-conflict diagnostic.
+- A non-zero clip warp ref id naming no registered warp map is rejected on every surface.
+- Project JSON with a present-but-wrong-typed scalar field is rejected as invalid format; an absent field still falls back. The default project-import string budget doubled to 64 MiB, project MIDI import is capped at 250 000 events, and a file that fails the persistence round-trip preflight is rejected even though it parses.
+- The serializer emits configuration schema version 2 for a mastering chain carrying a structured multiband compressor and project schema version 2 for a typed automation lane, keeping version 1 otherwise.
+- `sonare_estimate_room` pads the shorter of the absorption and RT60 estimates with NaN instead of truncating the band count, so consumers must treat NaN entries as not converged.
+- An offline render, bounce or freeze requesting more channels than the engine prepared for is an error, and the graph node and connection counts report not-supported on a graph-disabled build instead of zero.
+- WASM rejects an out-of-range key profile, key mode and stream-analyzer window ordinal at construction instead of falling back to a default, requires every field of the flat realtime voice-changer configuration, and maps `panMode: 'pan'` to the pan law it names rather than aliasing to balance. Node's MIDI helpers raise a single `TypeError` on a missing or wrong-typed required field.
+- `plp`, `subsegment`, `piptrack`, chord inversion and the VQT inversion path produce different output where the fixes above apply, and the loudness range, dynamic range and acoustic percentile metrics now share one double-precision definition.
+- A bypassed insert or graph node stays latency-compensated, so bypass toggling and steady-state alignment differ from the previous behaviour.
+- CLI `voice-change` output is latency-compensated so sample k maps to input sample k, and a preset with a mistyped section or macro key is rejected rather than rendered.
+
 ## v1.6.0 (2026-08-03)
 
 **This release contains source-incompatible changes.** Two of them change behaviour without raising an error, so existing code keeps running with a different meaning — read Behavioural changes before upgrading:

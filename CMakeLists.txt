@@ -1,5 +1,5 @@
 cmake_minimum_required(VERSION 3.16)
-project(libsonare VERSION 1.6.0 LANGUAGES C CXX)
+project(libsonare VERSION 1.7.0 LANGUAGES C CXX)
 
 if(WIN32)
   message(FATAL_ERROR
