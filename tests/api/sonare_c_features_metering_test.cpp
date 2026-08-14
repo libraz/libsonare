@@ -295,6 +295,49 @@ TEST_CASE("sonare_nnls_chroma", "[.][slow][c_api]") {
     REQUIRE(out_length == 12u * static_cast<size_t>(n_frames));
     sonare_free_floats(data);
   }
+
+  SECTION("ex2 preserves the legacy 512-sample hop and exposes another hop") {
+    auto samples = generate_chord({261.63f, 329.63f, 392.00f}, 22050, 1.0f);
+    float* legacy = nullptr;
+    float* explicit_default = nullptr;
+    float* custom = nullptr;
+    size_t legacy_length = 0;
+    size_t explicit_length = 0;
+    size_t custom_length = 0;
+    int legacy_frames = 0;
+    int explicit_frames = 0;
+    int custom_frames = 0;
+
+    REQUIRE(sonare_nnls_chroma_ex(samples.data(), samples.size(), 22050, 1, 0.55f, 4096, &legacy,
+                                  &legacy_length, &legacy_frames) == SONARE_OK);
+    REQUIRE(sonare_nnls_chroma_ex2(samples.data(), samples.size(), 22050, 1, 0.55f, 4096, 512,
+                                   &explicit_default, &explicit_length,
+                                   &explicit_frames) == SONARE_OK);
+    REQUIRE(legacy_length == explicit_length);
+    REQUIRE(legacy_frames == explicit_frames);
+    REQUIRE(std::memcmp(legacy, explicit_default, legacy_length * sizeof(float)) == 0);
+
+    REQUIRE(sonare_nnls_chroma_ex2(samples.data(), samples.size(), 22050, 1, 0.55f, 4096, 256,
+                                   &custom, &custom_length, &custom_frames) == SONARE_OK);
+    REQUIRE(custom_length == 12u * static_cast<size_t>(custom_frames));
+    REQUIRE(custom_frames > legacy_frames);
+
+    sonare_free_floats(legacy);
+    sonare_free_floats(explicit_default);
+    sonare_free_floats(custom);
+  }
+
+  SECTION("ex2 resets outputs before rejecting its hop") {
+    auto samples = generate_sine(440.0f, 22050, 1.0f);
+    float* data = samples.data();
+    size_t out_length = 123;
+    int n_frames = 456;
+    REQUIRE(sonare_nnls_chroma_ex2(samples.data(), samples.size(), 22050, 1, 0.55f, 4096, 0, &data,
+                                   &out_length, &n_frames) == SONARE_ERROR_INVALID_PARAMETER);
+    REQUIRE(data == nullptr);
+    REQUIRE(out_length == 0);
+    REQUIRE(n_frames == 0);
+  }
 }
 
 TEST_CASE("sonare_metering_silence_ratio", "[c_api][meter]") {

@@ -157,6 +157,32 @@ TEST_CASE("hz_to_note with sub-zero octave frequencies", "[convert]") {
   }
 }
 
+TEST_CASE("hz_to_note handles non-finite frequencies without narrowing UB", "[convert][edge]") {
+  REQUIRE(hz_to_note(std::numeric_limits<float>::quiet_NaN()) == "?");
+  REQUIRE(hz_to_note(std::numeric_limits<float>::infinity()) == "?");
+  REQUIRE(hz_to_note(-std::numeric_limits<float>::infinity()) == "?");
+}
+
+TEST_CASE("note_to_hz rejects octaves outside its representable MIDI range", "[convert][edge]") {
+  REQUIRE_NOTHROW(note_to_hz("C2147483647"));
+  REQUIRE_NOTHROW(note_to_hz("C-2147483648"));
+  REQUIRE(note_to_hz("C2147483647") == 0.0f);
+  REQUIRE(note_to_hz("C-2147483648") == 0.0f);
+  REQUIRE(note_to_hz("C2147483648") == 0.0f);
+}
+
+TEST_CASE("hz_to_bin handles non-finite input and saturates extreme bins", "[convert][edge]") {
+  REQUIRE(hz_to_bin(std::numeric_limits<float>::quiet_NaN(), 22050, 2048) == 0);
+  REQUIRE(hz_to_bin(std::numeric_limits<float>::infinity(), 22050, 2048) ==
+          std::numeric_limits<int>::max());
+  REQUIRE(hz_to_bin(-std::numeric_limits<float>::infinity(), 22050, 2048) ==
+          std::numeric_limits<int>::min());
+  REQUIRE(hz_to_bin(std::numeric_limits<float>::max(), 22050, 2048) ==
+          std::numeric_limits<int>::max());
+  REQUIRE(hz_to_bin(-std::numeric_limits<float>::max(), 22050, 2048) ==
+          std::numeric_limits<int>::min());
+}
+
 TEST_CASE("note_to_hz with non-ASCII input", "[convert]") {
   SECTION("non-ASCII bytes should not cause UB") {
     // Should not crash (UB from negative char in toupper)
@@ -195,6 +221,16 @@ TEST_CASE("samples_to_frames guards against non-positive hop_length", "[convert]
     // With n_fft = 2048 the centering offset (1024) is subtracted first.
     REQUIRE(samples_to_frames(5120 + 1024, 512, 2048) == 10);
   }
+}
+
+TEST_CASE("samples_to_frames handles INT_MIN and saturates floor division", "[convert][edge]") {
+  const int min_int = std::numeric_limits<int>::min();
+  REQUIRE(samples_to_frames(min_int, 1, 0) == min_int);
+  // The n_fft offset makes the mathematical quotient smaller than INT_MIN;
+  // the public int result saturates rather than negating an int boundary.
+  REQUIRE(samples_to_frames(min_int, 1, std::numeric_limits<int>::max()) == min_int);
+  REQUIRE(samples_to_frames(-1, 512, 0) == -1);
+  REQUIRE(samples_to_frames(-513, 512, 0) == -2);
 }
 
 TEST_CASE("frames_to_time / time_to_frames", "[convert]") {

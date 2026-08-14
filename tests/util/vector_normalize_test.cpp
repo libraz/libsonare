@@ -8,6 +8,7 @@
 #include <cmath>
 #include <vector>
 
+#include "util/exception.h"
 #include "util/json_reader.h"
 
 using namespace sonare;
@@ -32,6 +33,14 @@ TEST_CASE("normalize leaves zero vectors unchanged", "[util][normalize][edge]") 
   std::vector<float> x(5, 0.0f);
   auto r = normalize(x, NormType::Inf);
   for (float v : r) REQUIRE(v == 0.0f);
+}
+
+TEST_CASE("normalize raw empty inputs accept null pointers", "[util][normalize][edge]") {
+  REQUIRE(normalize(nullptr, 0).empty());
+  REQUIRE(normalize_matrix(nullptr, 0, 4, 1).empty());
+  REQUIRE(normalize_matrix(nullptr, 4, 0, 0).empty());
+  REQUIRE_THROWS_AS(normalize(nullptr, 1), SonareException);
+  REQUIRE_THROWS_AS(normalize_matrix(nullptr, 1, 1, 1), SonareException);
 }
 
 TEST_CASE("vector normalize matches librosa (Inf/L1/L2)", "[librosa][util][normalize]") {

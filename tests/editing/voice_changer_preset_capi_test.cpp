@@ -116,7 +116,7 @@ TEST_CASE("Voice changer normalized config JSON is a valid custom preset",
 TEST_CASE("Voice changer preset expands input macros into normalized DSP",
           "[voice_changer][json]") {
   const std::string macro_only = R"json({
-    "schemaVersion":1,"id":"macro-voice","name":"Macro Voice",
+    "schemaVersion":1,"id":"macro-voice","name":"Macro Voice","category":"custom",
     "macros":{"pitch":5,"formant":1.2,"brightness":1,"space":1,
               "intensity":0.5,"noiseControl":1,"sibilance":1}
   })json";
@@ -141,7 +141,7 @@ TEST_CASE("Voice changer preset expands input macros into normalized DSP",
   REQUIRE(config.deesser.range_db == 18.0f);
 }
 
-TEST_CASE("Voice changer preset DSP remains authoritative over macros", "[voice_changer][json]") {
+TEST_CASE("Voice changer preset rejects simultaneous DSP and macros", "[voice_changer][json]") {
   const auto baseline = realtime_voice_changer_preset_json(VoiceCharacterPreset::NeutralMonitor);
   const auto pos = baseline.find("\"dsp\":");
   REQUIRE(pos != std::string::npos);
@@ -150,11 +150,15 @@ TEST_CASE("Voice changer preset DSP remains authoritative over macros", "[voice_
 
   std::string normalized;
   std::string error;
-  REQUIRE(validate_realtime_voice_changer_preset_json(with_macro, &normalized, &error));
-  REQUIRE(normalized.find("\"macros\"") == std::string::npos);
-  const auto config = realtime_voice_changer_config_from_json(normalized);
-  REQUIRE(config.retune.semitones == 0.0f);
-  REQUIRE(config.formant.brightness == 0.1f);
+  REQUIRE_FALSE(validate_realtime_voice_changer_preset_json(with_macro, &normalized, &error));
+  REQUIRE(error.find("exactly one") != std::string::npos);
+
+  try {
+    (void)realtime_voice_changer_config_from_json(with_macro);
+    FAIL("expected a preset containing both dsp and macros to be rejected");
+  } catch (const sonare::SonareException& ex) {
+    REQUIRE(ex.code() == sonare::ErrorCode::InvalidParameter);
+  }
 }
 
 TEST_CASE("Voice changer schemaVersion validator rejects future versions",
@@ -309,16 +313,18 @@ TEST_CASE(
     "preset JSON validator keeps only the caller's mandatory fields "
     "without inventing placeholders",
     "[voice_changer][json]") {
-  // A preset supplying only the mandatory id/name must keep those two exact
-  // values (not the "custom"/"Custom" placeholders) and must not gain
-  // description/category keys that were never present in the input.
+  // A preset supplying only the mandatory id/name/category must keep those
+  // exact values (not the "custom"/"Custom" placeholders) and must not gain
+  // a description key that was never present in the input.
   const auto baseline = realtime_voice_changer_preset_json(VoiceCharacterPreset::NeutralMonitor);
   const auto dsp_pos = baseline.find("\"dsp\":");
   REQUIRE(dsp_pos != std::string::npos);
   const std::string dsp_and_tail = baseline.substr(dsp_pos);
 
   const std::string minimal_json =
-      "{\"schemaVersion\":1,\"id\":\"my.pack.preset-1\",\"name\":\"Warm Tape\"," + dsp_and_tail;
+      "{\"schemaVersion\":1,\"id\":\"my.pack.preset-1\",\"name\":\"Warm Tape\","
+      "\"category\":\"custom\"," +
+      dsp_and_tail;
 
   std::string normalized;
   std::string error;
@@ -329,7 +335,7 @@ TEST_CASE(
   REQUIRE(root["id"].as_string() == "my.pack.preset-1");
   REQUIRE(root["name"].as_string() == "Warm Tape");
   REQUIRE(root.find("description") == nullptr);
-  REQUIRE(root.find("category") == nullptr);
+  REQUIRE(root["category"].as_string() == "custom");
 }
 
 TEST_CASE("StreamingReverb passes dry input through when mix is zero", "[voice_changer][reverb]") {
@@ -593,16 +599,29 @@ TEST_CASE("Voice changer POD ↔ C++ round-trip preserves every field", "[voice_
   sonare_realtime_voice_changer_destroy(handle);
 }
 
-TEST_CASE("sonare_voice_change_realtime neutral-monitor preserves short signals",
-          "[voice_changer][c-api][regression]") {
-  // Regression: latency_samples() reported the full retune grain even for the
-  // neutral-monitor preset, which bypasses retune (retune.mix == 0). The
-  // one-shot latency-compensation wrapper then dropped the leading ~grain real
-  // samples and padded the tail with silence; for an input shorter than the
-  // grain this silenced the whole output. Now that latency is 0 when
-  // retune.mix == 0, the signal must survive.
+TEST_CASE(
+    "sonare_voice_change_realtime neutral-monitor reports fixed latency and preserves short "
+    "signals",
+    "[voice_changer][c-api][regression]") {
+  // retune.mix == 0 bypasses pitch shifting, not its fixed OLA alignment.
+  // The realtime handle must still report the dry/wet delay so a host can
+  // compensate it; the one-shot wrapper must drain that same delay before
+  // returning its length-preserving result.
   constexpr int sample_rate = 48000;
-  constexpr size_t length = 1024;  // shorter than the old ~2238-sample grain latency
+  constexpr size_t length = 1024;  // shorter than the prepared OLA + ISP delay
+  SonareRealtimeVoiceChangerConfig config{};
+  REQUIRE(sonare_realtime_voice_changer_preset_config(SONARE_VC_PRESET_NEUTRAL_MONITOR, &config) ==
+          SONARE_OK);
+  REQUIRE(config.retune_mix == 0.0f);
+
+  SonareRealtimeVoiceChanger* handle = nullptr;
+  REQUIRE(sonare_realtime_voice_changer_create(&config, sample_rate, 256, 1, &handle) == SONARE_OK);
+  REQUIRE(handle != nullptr);
+  int latency = 0;
+  REQUIRE(sonare_realtime_voice_changer_latency_samples(handle, &latency) == SONARE_OK);
+  REQUIRE(latency > static_cast<int>(length));
+  sonare_realtime_voice_changer_destroy(handle);
+
   std::vector<float> input(length);
   double in_energy = 0.0;
   for (size_t i = 0; i < length; ++i) {

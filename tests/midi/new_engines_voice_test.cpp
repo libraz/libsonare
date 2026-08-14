@@ -8,6 +8,8 @@
 
 #include <catch2/catch_test_macros.hpp>
 #include <cmath>
+#include <set>
+#include <string>
 #include <vector>
 
 #include "midi/midi_event.h"
@@ -127,9 +129,30 @@ TEST_CASE("new engines render deterministically", "[midi][synth][new_engines]") 
 
 TEST_CASE("new-engine presets resolve and select their engine", "[midi][synth][new_engines]") {
   using sonare::midi::synth::find_synth_preset;
-  for (const char* name : {"harp", "koto", "sitar", "tanpura", "choir-aah", "choir-ooh",
-                           "voice-eeh", "accordion", "harmonica", "bandoneon", "reed-organ"}) {
+  for (const char* name :
+       {"harp", "harp-plucked", "koto", "sitar", "tanpura", "choir-aah", "choir-ooh", "voice-eeh",
+        "accordion", "harmonica", "bandoneon", "reed-organ"}) {
     const auto* preset = find_synth_preset(name);
     REQUIRE(preset != nullptr);
   }
+}
+
+TEST_CASE("named synth presets are unique and preserve both harp voicings", "[midi][synth]") {
+  using sonare::midi::synth::find_synth_preset;
+  using sonare::midi::synth::synth_preset_at;
+  using sonare::midi::synth::synth_preset_count;
+
+  std::set<std::string> names;
+  for (size_t index = 0; index < synth_preset_count(); ++index) {
+    const auto* preset = synth_preset_at(index);
+    REQUIRE(preset != nullptr);
+    REQUIRE(names.insert(preset->name).second);
+    REQUIRE(find_synth_preset(preset->name) == preset);
+  }
+
+  const auto* gm_harp = find_synth_preset("harp");
+  const auto* plucked_harp = find_synth_preset("harp-plucked");
+  REQUIRE(gm_harp != nullptr);
+  REQUIRE(plucked_harp != nullptr);
+  REQUIRE(gm_harp->config.patch.mode != plucked_harp->config.patch.mode);
 }

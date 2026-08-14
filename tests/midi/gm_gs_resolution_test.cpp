@@ -298,6 +298,46 @@ TEST_CASE("a quiet MIDI 2.0 note-on never down-scales into a note-off", "[midi][
   REQUIRE(peak(render(fallback, 2048)) > 0.0f);
 }
 
+TEST_CASE("MIDI 2.0 note-on velocity uses the canonical 16-to-7-bit conversion",
+          "[midi][synth][sf2][gm]") {
+  // This is the conversion shared by NativeSynth and Sf2Player. Keep an
+  // independent reference here so the helper's low-velocity clamp cannot drift
+  // back to the plain (note-off-producing) 16 -> 7-bit down-scale.
+  const auto canonical = [](uint16_t velocity16) {
+    const uint8_t velocity7 = static_cast<uint8_t>(velocity16 >> 9u);
+    return velocity16 != 0 && velocity7 == 0 ? uint8_t{1} : velocity7;
+  };
+  constexpr uint16_t boundaries[] = {0, 1, 511, 512, 65535};
+
+  for (const uint16_t velocity16 : boundaries) {
+    INFO("velocity16 " << velocity16);
+    REQUIRE(sonare::midi::scale_note_on_velocity_16_to_7(velocity16) == canonical(velocity16));
+  }
+  for (uint32_t raw_velocity = 0; raw_velocity <= 0xFFFFu; ++raw_velocity) {
+    const uint16_t velocity16 = static_cast<uint16_t>(raw_velocity);
+    REQUIRE(sonare::midi::scale_note_on_velocity_16_to_7(velocity16) == canonical(velocity16));
+  }
+
+  // The boundary cases that produce an audible note must also be bit-identical
+  // to the equivalent MIDI 1.0 event on both canonical consumers.
+  for (const uint16_t velocity16 : {uint16_t{1}, uint16_t{511}, uint16_t{512}, uint16_t{65535}}) {
+    INFO("velocity16 " << velocity16);
+    const uint8_t velocity7 = sonare::midi::scale_note_on_velocity_16_to_7(velocity16);
+
+    NativeSynth gm_midi2 = make_gm_synth();
+    NativeSynth gm_midi1 = make_gm_synth();
+    gm_midi2.on_event(0, event(sonare::midi::make_midi2_note_on(0, 0, 60, velocity16)));
+    gm_midi1.on_event(0, event(sonare::midi::make_midi1_note_on(0, 0, 60, velocity7)));
+    REQUIRE(render(gm_midi2, 2048) == render(gm_midi1, 2048));
+
+    Sf2Player sf2_midi2 = make_fallback_player();
+    Sf2Player sf2_midi1 = make_fallback_player();
+    sf2_midi2.on_event(0, event(sonare::midi::make_midi2_note_on(0, 0, 60, velocity16)));
+    sf2_midi1.on_event(0, event(sonare::midi::make_midi1_note_on(0, 0, 60, velocity7)));
+    REQUIRE(render(sf2_midi2, 2048) == render(sf2_midi1, 2048));
+  }
+}
+
 TEST_CASE("the GS drum-kit table drives both the kit index and the kit name", "[midi][synth][gm]") {
   // The two lookups are derived from kGsDrumKits, so they cannot disagree —
   // assert that across the whole program range, not just the table entries.

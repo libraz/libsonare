@@ -4,9 +4,11 @@
 #include <catch2/catch_test_macros.hpp>
 #include <catch2/matchers/catch_matchers_floating_point.hpp>
 #include <cmath>
+#include <cstddef>
 #include <limits>
 #include <vector>
 
+#include "acoustic/image_source_test_support.h"
 #include "acoustic/late_reverb.h"
 #include "acoustic/material.h"
 #include "acoustic/room_model.h"
@@ -18,6 +20,22 @@ using namespace sonare;
 using namespace sonare::acoustic;
 
 namespace {
+std::size_t g_image_source_frontier_peak = 0;
+
+void observe_image_source_frontier(std::size_t size) {
+  g_image_source_frontier_peak = std::max(g_image_source_frontier_peak, size);
+}
+
+class ScopedImageSourceFrontierObserver {
+ public:
+  ScopedImageSourceFrontierObserver() {
+    sonare::acoustic::test::set_polyhedral_frontier_observer(observe_image_source_frontier);
+  }
+  ~ScopedImageSourceFrontierObserver() {
+    sonare::acoustic::test::set_polyhedral_frontier_observer(nullptr);
+  }
+};
+
 ShoeboxRoom make_room(float l, float w, float h, float alpha = 0.0f) {
   ShoeboxRoom room;
   room.dims = {l, w, h};
@@ -282,6 +300,31 @@ TEST_CASE("polyhedral frontier cap keeps a high order bounded and spurious-free"
       REQUIRE(matched);
     }
   }
+}
+
+TEST_CASE("polyhedral frontier cap is enforced after each high-face child",
+          "[acoustic][image_source]") {
+  // One parent with more than two frontier caps worth of faces used to let
+  // `next` grow to the whole face batch before the per-parent prune. Every
+  // candidate below is intentionally off-face, so this isolates the pending
+  // frontier bound from accepted-image de-duplication and output size.
+  PolyhedralRoom mesh;
+  constexpr std::size_t kFaceCount = kMaxPolyhedralFrontier * 2 + 1;
+  const Triangle off_face{{0.0f, 0.0f, 0.0f}, {0.5f, 0.0f, 0.0f}, {0.0f, 0.5f, 0.0f}};
+  mesh.faces.assign(kFaceCount, off_face);
+  mesh.face_materials = {uniform_material(0.0f, 0.1f)};
+  const SourceListener pl{{10.0f, 10.0f, 10.0f}, {10.0f, 10.0f, 11.0f}};
+
+  g_image_source_frontier_peak = 0;
+  const ScopedImageSourceFrontierObserver observer;
+  const auto images = polyhedral_image_sources(mesh, pl, 1);
+
+  // The callback runs immediately after append and before prune, so one
+  // transient child beyond the cap is the exact expected peak. The old
+  // per-parent implementation reached kFaceCount here.
+  REQUIRE(g_image_source_frontier_peak == kMaxPolyhedralFrontier + 1);
+  REQUIRE(count_order(images, 0) == 1);
+  REQUIRE(count_order(images, 1) == 0);
 }
 
 TEST_CASE("negative order and empty mesh yield no images", "[acoustic][image_source]") {

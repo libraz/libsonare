@@ -5,6 +5,85 @@
 #include "c_api/project_internal.h"
 #include "util/resource_limits.h"
 
+namespace {
+
+std::vector<uint8_t> make_project_limit_running_status_smf(std::size_t event_count) {
+  std::vector<uint8_t> body;
+  body.reserve(event_count * 3u + 8u);
+  for (std::size_t i = 0; i < event_count; ++i) {
+    body.push_back(i == 0 ? 0x00u : 0x01u);
+    if (i == 0) body.push_back(0x90u);
+    body.push_back(static_cast<uint8_t>(60u + (i % 12u)));
+    body.push_back(static_cast<uint8_t>(64u + (i % 64u)));
+  }
+  body.insert(body.end(), {0x00u, 0xFFu, 0x2Fu, 0x00u});
+
+  std::vector<uint8_t> smf;
+  push_tag(&smf, "MThd");
+  push_u32(&smf, 6);
+  push_u16(&smf, 0);
+  push_u16(&smf, 1);
+  push_u16(&smf, 480);
+  push_tag(&smf, "MTrk");
+  push_u32(&smf, static_cast<uint32_t>(body.size()));
+  smf.insert(smf.end(), body.begin(), body.end());
+  return smf;
+}
+
+void append_smf_vlq(std::vector<uint8_t>* bytes, std::size_t value) {
+  uint8_t encoded[4]{};
+  std::size_t count = 0;
+  encoded[count++] = static_cast<uint8_t>(value & 0x7Fu);
+  while ((value >>= 7u) != 0u) {
+    encoded[count++] = static_cast<uint8_t>(value & 0x7Fu);
+  }
+  while (count > 0u) {
+    const std::size_t index = --count;
+    bytes->push_back(static_cast<uint8_t>(encoded[index] | (index == 0u ? 0u : 0x80u)));
+  }
+}
+
+std::vector<uint8_t> make_large_project_sysex_smf(std::size_t payload_size) {
+  std::vector<uint8_t> body;
+  body.reserve(payload_size + 16u);
+  body.push_back(0x00u);
+  body.push_back(0xF0u);
+  append_smf_vlq(&body, payload_size);
+  for (std::size_t i = 0; i < payload_size; ++i) {
+    body.push_back(i + 1u == payload_size ? 0xF7u : static_cast<uint8_t>(i % 0x7Fu));
+  }
+  body.insert(body.end(), {0x00u, 0xFFu, 0x2Fu, 0x00u});
+
+  std::vector<uint8_t> smf;
+  push_tag(&smf, "MThd");
+  push_u32(&smf, 6);
+  push_u16(&smf, 0);
+  push_u16(&smf, 1);
+  push_u16(&smf, 480);
+  push_tag(&smf, "MTrk");
+  push_u32(&smf, static_cast<uint32_t>(body.size()));
+  smf.insert(smf.end(), body.begin(), body.end());
+  return smf;
+}
+
+std::vector<uint8_t> make_project_limit_clip_file(std::size_t event_count) {
+  sonare::midi::MidiClip clip;
+  std::vector<sonare::midi::MidiClipEvent> events;
+  events.reserve(event_count);
+  for (std::size_t i = 0; i < event_count; ++i) {
+    sonare::midi::MidiClipEvent event;
+    event.ppq = 0.0;
+    event.ump = sonare::midi::make_midi1_note_on(0, 0, static_cast<uint8_t>(60u + (i % 12u)),
+                                                 static_cast<uint8_t>(64u + (i % 64u)));
+    events.push_back(event);
+  }
+  clip.set_events(std::move(events));
+  const auto result = sonare::midi::export_clip_file(clip, {}, {}, {});
+  return result.bytes;
+}
+
+}  // namespace
+
 TEST_CASE("project MIDI imports reject oversized buffers before reading caller bytes",
           "[project][resource_limit]") {
   SonareProject* project = nullptr;
@@ -15,6 +94,116 @@ TEST_CASE("project MIDI imports reject oversized buffers before reading caller b
           SONARE_ERROR_INVALID_FORMAT);
   REQUIRE(sonare_project_import_clip_file(project, &prefix, oversized, nullptr) ==
           SONARE_ERROR_INVALID_FORMAT);
+  sonare_project_destroy(project);
+}
+
+TEST_CASE("project MIDI import normalizes a tick-zero clip length",
+          "[project][midi][persistence]") {
+  const std::vector<uint8_t> tick_zero = make_project_limit_running_status_smf(1u);
+  SonareProject* project = nullptr;
+  REQUIRE(sonare_project_create(&project) == SONARE_OK);
+
+  uint32_t first_clip = 0;
+  REQUIRE(sonare_project_import_smf(project, tick_zero.data(), tick_zero.size(), &first_clip) ==
+          SONARE_OK);
+  REQUIRE(first_clip != 0);
+  const auto* clip = project->history.project().find_clip(first_clip);
+  REQUIRE(clip != nullptr);
+  REQUIRE(clip->length_ppq == 1.0);
+
+  const std::string serialized = serialize(project);
+  SonareProject* restored = nullptr;
+  REQUIRE(sonare_project_deserialize(serialized.data(), serialized.size(), &restored, nullptr) ==
+          SONARE_OK);
+  REQUIRE(serialize(restored) == serialized);
+  REQUIRE(restored->history.project().find_clip(first_clip)->length_ppq == 1.0);
+
+  sonare_project_destroy(restored);
+  sonare_project_destroy(project);
+}
+
+TEST_CASE("project MIDI import stays reloadable at its event cap",
+          "[.][slow][project][midi][resource_limit]") {
+  const std::size_t cap = sonare::resource::kMaxProjectMidiImportEvents;
+  const std::vector<uint8_t> at_cap = make_project_limit_running_status_smf(cap);
+
+  SonareProject* project = nullptr;
+  REQUIRE(sonare_project_create(&project) == SONARE_OK);
+  uint32_t first_clip = 0;
+  REQUIRE(sonare_project_import_smf(project, at_cap.data(), at_cap.size(), &first_clip) ==
+          SONARE_OK);
+  REQUIRE(first_clip != 0);
+  REQUIRE(project->history.midi_content().events.at(first_clip).size() == cap);
+
+  const std::string serialized = serialize(project);
+  SonareProject* restored = nullptr;
+  REQUIRE(sonare_project_deserialize(serialized.data(), serialized.size(), &restored, nullptr) ==
+          SONARE_OK);
+  REQUIRE(restored->history.midi_content().events.at(first_clip).size() == cap);
+  REQUIRE(serialize(restored) == serialized);
+
+  const size_t undo_depth = project->history.undo_depth();
+  const size_t redo_depth = project->history.redo_depth();
+  uint32_t rejected_clip = 123u;
+  REQUIRE(sonare_project_import_smf(project, at_cap.data(), at_cap.size(), &rejected_clip) ==
+          SONARE_ERROR_INVALID_FORMAT);
+  REQUIRE(rejected_clip == 0);
+  REQUIRE(serialize(project) == serialized);
+  REQUIRE(project->history.undo_depth() == undo_depth);
+  REQUIRE(project->history.redo_depth() == redo_depth);
+
+  sonare_project_destroy(restored);
+  sonare_project_destroy(project);
+}
+
+TEST_CASE("project MIDI SysEx persistence stays within decoded and JSON budgets",
+          "[.][slow][project][midi][resource_limit]") {
+  constexpr std::size_t kPayloadBytes = 25u * 1024u * 1024u;
+  const std::vector<uint8_t> smf = make_large_project_sysex_smf(kPayloadBytes);
+
+  SonareProject* project = nullptr;
+  REQUIRE(sonare_project_create(&project) == SONARE_OK);
+  uint32_t first_clip = 0;
+  REQUIRE(sonare_project_import_smf(project, smf.data(), smf.size(), &first_clip) == SONARE_OK);
+  REQUIRE(first_clip != 0);
+  REQUIRE(project->history.midi_content().sysex_payloads.size() == 1);
+  REQUIRE(project->history.midi_content().sysex_payloads.begin()->second.size() == kPayloadBytes);
+
+  const std::string serialized = serialize(project);
+  SonareProject* restored = nullptr;
+  REQUIRE(sonare_project_deserialize(serialized.data(), serialized.size(), &restored, nullptr) ==
+          SONARE_OK);
+  REQUIRE(restored->history.midi_content().sysex_payloads.begin()->second.size() == kPayloadBytes);
+  REQUIRE(serialize(restored) == serialized);
+
+  sonare_project_destroy(restored);
+  sonare_project_destroy(project);
+}
+
+TEST_CASE("SMF2 project import shares aggregate persistence preflight",
+          "[.][slow][project][midi][smf2][resource_limit]") {
+  const std::size_t cap = sonare::resource::kMaxProjectMidiImportEvents;
+  const std::vector<uint8_t> clip_file = make_project_limit_clip_file(cap);
+  REQUIRE_FALSE(clip_file.empty());
+
+  SonareProject* project = nullptr;
+  REQUIRE(sonare_project_create(&project) == SONARE_OK);
+  uint32_t first_clip = 0;
+  REQUIRE(sonare_project_import_clip_file(project, clip_file.data(), clip_file.size(),
+                                          &first_clip) == SONARE_OK);
+  REQUIRE(first_clip != 0);
+  const std::string serialized = serialize(project);
+  const size_t undo_depth = project->history.undo_depth();
+  const size_t redo_depth = project->history.redo_depth();
+
+  uint32_t rejected_clip = 99u;
+  REQUIRE(sonare_project_import_clip_file(project, clip_file.data(), clip_file.size(),
+                                          &rejected_clip) == SONARE_ERROR_INVALID_FORMAT);
+  REQUIRE(rejected_clip == 0);
+  REQUIRE(serialize(project) == serialized);
+  REQUIRE(project->history.undo_depth() == undo_depth);
+  REQUIRE(project->history.redo_depth() == redo_depth);
+
   sonare_project_destroy(project);
 }
 

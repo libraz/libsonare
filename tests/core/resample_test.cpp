@@ -11,6 +11,7 @@
 
 #include "support/audio_fixtures.h"
 #include "util/constants.h"
+#include "util/exception.h"
 
 using namespace sonare;
 using Catch::Matchers::WithinAbs;
@@ -32,6 +33,32 @@ TEST_CASE("resample same rate returns copy", "[resample]") {
   for (size_t i = 0; i < samples.size(); ++i) {
     REQUIRE(result[i] == samples[i]);
   }
+}
+
+TEST_CASE("resample rejects null samples for non-empty input", "[resample]") {
+  constexpr size_t size = 1;
+
+  SECTION("same sample rate") {
+    try {
+      (void)resample(nullptr, size, 22050, 22050);
+      FAIL("Expected SonareException");
+    } catch (const SonareException& error) {
+      REQUIRE(error.code() == ErrorCode::InvalidParameter);
+    }
+  }
+
+  SECTION("sample-rate conversion") {
+    try {
+      (void)resample(nullptr, size, 22050, 44100);
+      FAIL("Expected SonareException");
+    } catch (const SonareException& error) {
+      REQUIRE(error.code() == ErrorCode::InvalidParameter);
+    }
+  }
+}
+
+TEST_CASE("resample accepts null samples for empty input", "[resample]") {
+  REQUIRE(resample(nullptr, 0, 22050, 44100).empty());
 }
 
 TEST_CASE("resample 44100 to 22050 (2x downsample)", "[resample]") {

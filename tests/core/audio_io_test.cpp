@@ -16,6 +16,7 @@
 
 #include "core/audio.h"
 #include "support/audio_fixtures.h"
+#include "util/constants.h"
 #include "util/exception.h"
 #include "util/resource_limits.h"
 
@@ -328,6 +329,118 @@ TEST_CASE("load_audio adopts HE-AAC frame parameters", "[audio_io][ffmpeg][he-aa
 
   std::remove(fixture_path.c_str());
 }
+
+TEST_CASE("load_audio_interleaved preserves FFmpeg stereo channel order",
+          "[audio_io][ffmpeg][interleaved]") {
+  if (std::system("command -v ffmpeg >/dev/null 2>&1") != 0) {
+    SKIP("ffmpeg CLI not found on PATH");
+  }
+
+  constexpr int sample_rate = 22050;
+  constexpr size_t frames = static_cast<size_t>(sample_rate);
+  std::vector<float> source(frames * 2);
+  for (size_t frame = 0; frame < frames; ++frame) {
+    const float t = static_cast<float>(frame) / static_cast<float>(sample_rate);
+    source[2 * frame] =
+        0.6f * std::sin(2.0f * static_cast<float>(sonare::constants::kPiD) * 440.0f * t);
+    source[2 * frame + 1] =
+        0.15f * std::sin(2.0f * static_cast<float>(sonare::constants::kPiD) * 880.0f * t);
+  }
+
+  const std::string wav_path = "test_interleaved_ffmpeg_source.wav";
+  const std::string flac_path = "test_interleaved_ffmpeg_source.flac";
+  const std::string m4a_path = "test_interleaved_ffmpeg_source.m4a";
+  auto cleanup = [&]() {
+    std::remove(wav_path.c_str());
+    std::remove(flac_path.c_str());
+    std::remove(m4a_path.c_str());
+  };
+  save_wav_multichannel(wav_path, source.data(), frames, 2, ChannelLayout::Stereo, sample_rate);
+
+  REQUIRE(std::system(
+              ("ffmpeg -loglevel error -i " + wav_path + " -c:a flac -y " + flac_path).c_str()) ==
+          0);
+  REQUIRE(
+      std::system(("ffmpeg -loglevel error -i " + wav_path + " -c:a aac -b:a 128k -y " + m4a_path)
+                      .c_str()) == 0);
+
+  for (const std::string& path : {flac_path, m4a_path}) {
+    auto [decoded, decoded_rate, decoded_channels] = load_audio_interleaved(path);
+    REQUIRE(decoded_rate == sample_rate);
+    REQUIRE(decoded_channels == 2);
+    REQUIRE(decoded.size() >= 2 * frames / 3);
+    REQUIRE(decoded.size() % 2 == 0);
+
+    // The left channel is deliberately four times louder than the right.
+    // Checking both levels and their order catches mono downmixes as well as
+    // a decoder that silently swaps the L/R planes.
+    const size_t decoded_frames = decoded.size() / 2;
+    const size_t begin = decoded_frames / 8;
+    const size_t end = decoded_frames - begin;
+    double left_energy = 0.0;
+    double right_energy = 0.0;
+    for (size_t frame = begin; frame < end; ++frame) {
+      left_energy += static_cast<double>(decoded[2 * frame]) * decoded[2 * frame];
+      right_energy += static_cast<double>(decoded[2 * frame + 1]) * decoded[2 * frame + 1];
+    }
+    const double count = static_cast<double>(end - begin);
+    const double left_rms = std::sqrt(left_energy / count);
+    const double right_rms = std::sqrt(right_energy / count);
+    REQUIRE(left_rms > 0.25);
+    REQUIRE(right_rms > 0.04);
+    REQUIRE(left_rms > 2.5 * right_rms);
+    REQUIRE(audio_channel_count(path) == 2);
+  }
+
+  cleanup();
+}
+
+TEST_CASE("load_audio_interleaved rejects FFmpeg channel renegotiation",
+          "[audio_io][ffmpeg][interleaved]") {
+  if (std::system("command -v ffmpeg >/dev/null 2>&1") != 0) {
+    SKIP("ffmpeg CLI not found on PATH");
+  }
+
+  constexpr int sample_rate = 22050;
+  const std::string mono_path = "test_interleaved_ffmpeg_renegotiate_mono.aac";
+  const std::string stereo_path = "test_interleaved_ffmpeg_renegotiate_stereo.aac";
+  const std::string concat_path = "test_interleaved_ffmpeg_renegotiate.ts";
+  auto cleanup = [&]() {
+    std::remove(mono_path.c_str());
+    std::remove(stereo_path.c_str());
+    std::remove(concat_path.c_str());
+  };
+
+  // ADTS carries the channel configuration in every AAC frame. Concatenating
+  // these two elementary streams therefore makes FFmpeg expose a real
+  // mono-to-stereo layout change to the decoder, without a private test seam.
+  const std::string generate_mono =
+      "ffmpeg -loglevel error -f lavfi -i "
+      "'sine=frequency=440:sample_rate=22050:duration=0.3' "
+      "-ac 1 -c:a aac -b:a 96k -f adts -y " +
+      mono_path;
+  const std::string generate_stereo =
+      "ffmpeg -loglevel error -f lavfi -i "
+      "'sine=frequency=880:sample_rate=22050:duration=0.3' "
+      "-ac 2 -c:a aac -b:a 96k -f adts -y " +
+      stereo_path;
+  const std::string concatenate = "ffmpeg -loglevel error -i 'concat:" + mono_path + "|" +
+                                  stereo_path + "' -c copy -f mpegts -y " + concat_path;
+  REQUIRE(std::system(generate_mono.c_str()) == 0);
+  REQUIRE(std::system(generate_stereo.c_str()) == 0);
+  REQUIRE(std::system(concatenate.c_str()) == 0);
+
+  REQUIRE_THROWS_WITH(load_audio_interleaved(concat_path),
+                      Catch::Matchers::ContainsSubstring("channel layout change"));
+
+  // The legacy loader still downmixes the same stream while rebuilding its
+  // mono resampler, so this guard does not weaken its established behavior.
+  auto [decoded, decoded_rate] = load_audio(concat_path);
+  REQUIRE(decoded_rate == sample_rate);
+  REQUIRE(decoded.size() > 0);
+
+  cleanup();
+}
 #endif  // SONARE_WITH_FFMPEG
 
 TEST_CASE("load_buffer rejects an oversized input before decoding", "[audio_io]") {
@@ -371,6 +484,21 @@ TEST_CASE("load_audio reports extension and ffmpeg hint for unsupported file", "
                                                 ContainsSubstring("ffmpeg -i") &&
                                                 ContainsSubstring("SONARE_WITH_FFMPEG"));
 
+  std::remove(tmp_path.c_str());
+}
+
+TEST_CASE("load_audio_interleaved keeps FFmpeg formats unavailable without FFmpeg",
+          "[audio_io][interleaved]") {
+  const std::string tmp_path = "test_interleaved_unsupported.m4a";
+  {
+    std::ofstream out(tmp_path, std::ios::binary);
+    REQUIRE(out.is_open());
+    const char payload[] = "not really an m4a file";
+    out.write(payload, static_cast<std::streamsize>(sizeof(payload) - 1));
+  }
+
+  REQUIRE_THROWS_WITH(load_audio_interleaved(tmp_path),
+                      Catch::Matchers::ContainsSubstring("WAV and MP3 only"));
   std::remove(tmp_path.c_str());
 }
 #endif  // !SONARE_WITH_FFMPEG

@@ -137,6 +137,23 @@ TEST_CASE("shoebox validation reports placement errors as diagnostics", "[acoust
   }
 }
 
+TEST_CASE("shoebox validation checks material coefficients on every wall",
+          "[acoustic][room_model]") {
+  ShoeboxRoom room;
+  room.dims = {4.0f, 3.0f, 2.5f};
+  for (auto& wall : room.walls) wall = uniform_material(0.2f, 0.1f);
+
+  // The two invalid coefficients deliberately live on different walls.  A
+  // validator that returns after the first bad wall reports only absorption and
+  // silently lets the later scattering defect through.
+  room.walls[kWallXMin].absorption[0] = 1.1f;
+  room.walls[kWallZMax].scattering[0] = -0.1f;
+  const auto diagnostics = validate_shoebox(room, {{1.0f, 1.0f, 1.0f}, {2.0f, 2.0f, 1.5f}});
+
+  REQUIRE(has_code(diagnostics, "acoustic.invalid_absorption"));
+  REQUIRE(has_code(diagnostics, "acoustic.invalid_scattering"));
+}
+
 TEST_CASE("point_inside_mesh on a closed cube", "[acoustic][room_model]") {
   const auto cube = unit_cube();
   REQUIRE(point_inside_mesh(cube, {0.5f, 0.5f, 0.5f}));

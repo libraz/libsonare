@@ -3,6 +3,8 @@
 
 #include <sonare/sonare_c_mixing.h>
 
+#include <array>
+
 #include "binding_project_parity_test_helpers.h"
 
 TEST_CASE("bounce_with_instruments drives a callback instrument for routed MIDI", "[project]") {
@@ -171,6 +173,209 @@ TEST_CASE("channel-strip project bounce shares the live destination voice pool",
   // smoothers, but the shared destination's one-voice steal decision is common
   // to both paths. Its peak is therefore the stable observable for this fixture.
   REQUIRE(std::abs(bounce_peak - live_peak) < 1.0e-5f);
+#endif
+}
+
+TEST_CASE("source-aware MIDI stems keep typed automation on their track", "[project]") {
+#if !defined(SONARE_WITH_MIXING)
+  SUCCEED("source-aware channel-strip bounce requires the mixing build");
+#else
+  SonareProject* project = nullptr;
+  REQUIRE(sonare_project_create(&project) == SONARE_OK);
+  REQUIRE(sonare_project_set_sample_rate(project, 48000.0) == SONARE_OK);
+  const char* scene =
+      R"({"version":1,"buses":[{"id":"master","role":"master"}],"strips":[{"id":"a"},{"id":"b"}]})";
+  REQUIRE(sonare_project_set_mixer_scene_json(project, scene) == SONARE_OK);
+
+  constexpr uint32_t kDestination = 37;
+  uint32_t track_a = 0;
+  uint32_t track_b = 0;
+  uint32_t clip_a = 0;
+  uint32_t clip_b = 0;
+  REQUIRE(sonare_project_add_midi_clip(project, 0.0, 4.0, &track_a, &clip_a) == SONARE_OK);
+  REQUIRE(sonare_project_add_midi_clip(project, 0.0, 4.0, &track_b, &clip_b) == SONARE_OK);
+  // Distinct notes make an accidental A/B owner swap observable once the
+  // typed pan lanes isolate the two source stems into opposite channels.
+  const SonareMidiEventPod events_a[] = {
+      {0.0, 0x20903C7Fu, 0u},
+      {3.0, 0x20803C00u, 0u},
+  };
+  const SonareMidiEventPod events_b[] = {
+      {0.0, 0x20904340u, 0u},
+      {3.0, 0x20804300u, 0u},
+  };
+  REQUIRE(sonare_project_set_midi_events(project, clip_a, events_a, std::size(events_a)) ==
+          SONARE_OK);
+  REQUIRE(sonare_project_set_midi_events(project, clip_b, events_b, std::size(events_b)) ==
+          SONARE_OK);
+  REQUIRE(sonare_project_set_track_midi_destination(project, track_a, kDestination) == SONARE_OK);
+  REQUIRE(sonare_project_set_track_midi_destination(project, track_b, kDestination) == SONARE_OK);
+  REQUIRE(sonare_project_set_track_route(project, track_a, "a", "") == SONARE_OK);
+  REQUIRE(sonare_project_set_track_route(project, track_b, "b", "") == SONARE_OK);
+
+  SonareProjectBounceOptions options{};
+  options.total_frames = 48000;
+  options.block_size = 128;
+  options.num_channels = 2;
+  options.sample_rate = 48000;
+  SonareBuiltinInstrumentBinding binding{};
+  binding.destination_id = kDestination;
+  binding.config.polyphony = 8;
+
+  struct StereoEnergy {
+    double left = 0.0;
+    double right = 0.0;
+  };
+  const auto bounce_energy = [&]() {
+    float* out = nullptr;
+    size_t out_len = 0;
+    REQUIRE(sonare_project_bounce_with_builtin_instruments(project, &options, &binding, 1, &out,
+                                                           &out_len) == SONARE_OK);
+    StereoEnergy energy;
+    const size_t begin = 12000u * 2u;
+    for (size_t i = begin; i + 1 < out_len; i += 2) {
+      energy.left += static_cast<double>(out[i]) * static_cast<double>(out[i]);
+      energy.right += static_cast<double>(out[i + 1]) * static_cast<double>(out[i + 1]);
+    }
+    sonare_free_floats(out);
+    return energy;
+  };
+
+  SonareAutomationPoint pan_a_point{};
+  pan_a_point.ppq = 0.0;
+  pan_a_point.value = -1.0f;
+  pan_a_point.curve_to_next = SONARE_CURVE_HOLD;
+  SonareAutomationLaneDescEx pan_a{};
+  // Persistent ids intentionally use the legacy mixer values. The typed kind,
+  // not this edit-time id, selects the reserved per-track playback route.
+  pan_a.target_param_id = 2;  // TrackMixerRuntime::kPan
+  pan_a.target_kind = SONARE_AUTOMATION_TARGET_TRACK_PAN;
+  pan_a.points = &pan_a_point;
+  pan_a.point_count = 1;
+  REQUIRE(sonare_project_add_automation_lane_ex(project, track_a, &pan_a, nullptr) == SONARE_OK);
+
+  SonareAutomationPoint pan_b_point{};
+  pan_b_point.ppq = 0.0;
+  pan_b_point.value = 1.0f;
+  pan_b_point.curve_to_next = SONARE_CURVE_HOLD;
+  SonareAutomationLaneDescEx pan_b = pan_a;
+  pan_b.points = &pan_b_point;
+  REQUIRE(sonare_project_add_automation_lane_ex(project, track_b, &pan_b, nullptr) == SONARE_OK);
+
+  // First establish the asymmetric, hard-panned per-owner baseline. A lane
+  // accidentally applied to the opposite source would exchange these planes.
+  const StereoEnergy panned = bounce_energy();
+  REQUIRE(panned.left > 1.0e-6);
+  REQUIRE(panned.right > 1.0e-6);
+
+  SonareAutomationPoint fader_point{};
+  fader_point.ppq = 0.0;
+  fader_point.value = -6.0206f;
+  fader_point.curve_to_next = SONARE_CURVE_HOLD;
+  SonareAutomationLaneDescEx fader{};
+  fader.target_param_id = 1;  // TrackMixerRuntime::kFaderDb
+  fader.target_kind = SONARE_AUTOMATION_TARGET_TRACK_FADER_DB;
+  fader.points = &fader_point;
+  fader.point_count = 1;
+  REQUIRE(sonare_project_add_automation_lane_ex(project, track_a, &fader, nullptr) == SONARE_OK);
+
+  const StereoEnergy fader_a_once = bounce_energy();
+  const double left_ratio = fader_a_once.left / panned.left;
+  const double right_ratio = fader_a_once.right / panned.right;
+  // A -6 dB fader is applied once to A's left-panned stem: energy is 0.25x.
+  // Applying it again through the scene strip would be 0.0625x (-12 dB), and
+  // applying it to B would instead change the right plane. Both bounds make
+  // the source owner and the exactly-once rule observable.
+  REQUIRE(left_ratio == Catch::Approx(0.25).margin(0.025));
+  REQUIRE(right_ratio == Catch::Approx(1.0).margin(0.025));
+  sonare_project_destroy(project);
+#endif
+}
+
+TEST_CASE("shared opaque automation keeps the first project-order owner", "[project]") {
+#if !defined(SONARE_WITH_MIXING)
+  SUCCEED("shared channel-strip bounce requires the mixing build");
+#else
+  SonareProject* project = nullptr;
+  REQUIRE(sonare_project_create(&project) == SONARE_OK);
+  REQUIRE(sonare_project_set_sample_rate(project, 48000.0) == SONARE_OK);
+  const char* scene =
+      R"({"version":1,"buses":[{"id":"master","role":"master"}],"strips":[{"id":"shared"}]})";
+  REQUIRE(sonare_project_set_mixer_scene_json(project, scene) == SONARE_OK);
+
+  constexpr uint32_t kDestination = 41;
+  uint32_t track_a = 0;
+  uint32_t track_b = 0;
+  uint32_t clip_a = 0;
+  uint32_t clip_b = 0;
+  REQUIRE(sonare_project_add_midi_clip(project, 0.0, 4.0, &track_a, &clip_a) == SONARE_OK);
+  REQUIRE(sonare_project_add_midi_clip(project, 0.0, 4.0, &track_b, &clip_b) == SONARE_OK);
+  const SonareMidiEventPod events_a[] = {
+      {0.0, 0x20903C7Fu, 0u},
+      {3.0, 0x20803C00u, 0u},
+  };
+  const SonareMidiEventPod events_b[] = {
+      {0.0, 0x20904340u, 0u},
+      {3.0, 0x20804300u, 0u},
+  };
+  REQUIRE(sonare_project_set_midi_events(project, clip_a, events_a, std::size(events_a)) ==
+          SONARE_OK);
+  REQUIRE(sonare_project_set_midi_events(project, clip_b, events_b, std::size(events_b)) ==
+          SONARE_OK);
+  REQUIRE(sonare_project_set_track_midi_destination(project, track_a, kDestination) == SONARE_OK);
+  REQUIRE(sonare_project_set_track_midi_destination(project, track_b, kDestination) == SONARE_OK);
+  REQUIRE(sonare_project_set_track_route(project, track_a, "shared", "") == SONARE_OK);
+  REQUIRE(sonare_project_set_track_route(project, track_b, "shared", "") == SONARE_OK);
+
+  SonareProjectBounceOptions options{};
+  options.total_frames = 48000;
+  options.block_size = 128;
+  options.num_channels = 2;
+  options.sample_rate = 48000;
+  SonareBuiltinInstrumentBinding binding{};
+  binding.destination_id = kDestination;
+  binding.config.polyphony = 8;
+
+  const auto bounce_energy = [&]() {
+    float* out = nullptr;
+    size_t out_len = 0;
+    REQUIRE(sonare_project_bounce_with_builtin_instruments(project, &options, &binding, 1, &out,
+                                                           &out_len) == SONARE_OK);
+    double energy = 0.0;
+    const size_t begin = 12000u * 2u;
+    for (size_t i = begin; i < out_len; ++i) {
+      energy += static_cast<double>(out[i]) * static_cast<double>(out[i]);
+    }
+    sonare_free_floats(out);
+    return energy;
+  };
+
+  const double unautomated = bounce_energy();
+  SonareAutomationPoint first_point{};
+  first_point.ppq = 0.0;
+  first_point.value = -6.0206f;
+  first_point.curve_to_next = SONARE_CURVE_HOLD;
+  SonareAutomationLaneDesc first_lane{};
+  first_lane.target_param_id = 1;  // legacy opaque fader target
+  first_lane.points = &first_point;
+  first_lane.point_count = 1;
+  REQUIRE(sonare_project_add_automation_lane(project, track_a, &first_lane, nullptr) == SONARE_OK);
+
+  SonareAutomationPoint loser_point{};
+  loser_point.ppq = 0.0;
+  loser_point.value = -80.0f;
+  loser_point.curve_to_next = SONARE_CURVE_HOLD;
+  SonareAutomationLaneDesc loser_lane = first_lane;
+  loser_lane.points = &loser_point;
+  REQUIRE(sonare_project_add_automation_lane(project, track_b, &loser_lane, nullptr) == SONARE_OK);
+
+  const double first_owner = bounce_energy();
+  REQUIRE(unautomated > 1.0e-8);
+  // The first project-order opaque lane reaches the shared strip once. The
+  // -6 dB fader therefore reduces energy to one quarter; compiling an error,
+  // selecting B, or scheduling both lanes would fail this narrow range.
+  REQUIRE(first_owner / unautomated == Catch::Approx(0.25).margin(0.03));
+  sonare_project_destroy(project);
 #endif
 }
 
@@ -390,6 +595,69 @@ TEST_CASE("synth bounce GM mode follows program changes through the C API", "[pr
   sonare_project_destroy(project);
 }
 
+TEST_CASE("synth bounce GM programs 4 and 40 stay audible and distinct", "[project][synth_patch]") {
+  const auto render = [](uint8_t program, bool use_gm_programs) {
+    SonareProject* project = nullptr;
+    REQUIRE(sonare_project_create(&project) == SONARE_OK);
+    REQUIRE(sonare_project_set_sample_rate(project, 48000.0) == SONARE_OK);
+
+    uint32_t track = 0;
+    uint32_t clip = 0;
+    REQUIRE(sonare_project_add_midi_clip(project, 0.0, 1.0, &track, &clip) == SONARE_OK);
+    const SonareMidiEventPod events[] = {
+        {0.0, 0x20C00000u | (static_cast<uint32_t>(program) << 8u), 0u},
+        {0.0, 0x20903C64u, 0u},  // C4 note-on after the program change.
+        {0.5, 0x20803C00u, 0u},
+    };
+    REQUIRE(sonare_project_set_midi_events(project, clip, events, std::size(events)) == SONARE_OK);
+    REQUIRE(sonare_project_set_track_midi_destination(project, track, 0) == SONARE_OK);
+
+    SonareProjectBounceOptions options{};
+    options.total_frames = 12000;
+    options.block_size = 128;
+    options.num_channels = 1;
+    options.sample_rate = 48000;
+    SonareSynthInstrumentBinding binding{};
+    binding.destination_id = 0;
+    binding.use_gm_programs = use_gm_programs ? 1 : 0;
+    REQUIRE(sonare_synth_preset_patch("sine", &binding.patch) == SONARE_OK);
+
+    float* audio = nullptr;
+    size_t audio_len = 0;
+    REQUIRE(sonare_project_bounce_with_synth_instruments(project, &options, &binding, 1, &audio,
+                                                         &audio_len) == SONARE_OK);
+    REQUIRE(audio != nullptr);
+    REQUIRE(audio_len == static_cast<size_t>(options.total_frames));
+    std::vector<float> result(audio, audio + audio_len);
+    sonare_free_floats(audio);
+    sonare_project_destroy(project);
+
+    float peak = 0.0f;
+    for (float sample : result) {
+      REQUIRE(std::isfinite(sample));
+      peak = std::max(peak, std::abs(sample));
+    }
+    REQUIRE(peak > 0.0f);
+    return result;
+  };
+
+  const std::vector<float> disabled = render(4, false);
+  const std::vector<float> gm4 = render(4, true);
+  const std::vector<float> gm40 = render(40, true);
+  REQUIRE(disabled.size() == gm4.size());
+  REQUIRE(gm4.size() == gm40.size());
+
+  const auto max_delta = [](const std::vector<float>& lhs, const std::vector<float>& rhs) {
+    float delta = 0.0f;
+    for (size_t i = 0; i < lhs.size(); ++i) {
+      delta = std::max(delta, std::abs(lhs[i] - rhs[i]));
+    }
+    return delta;
+  };
+  REQUIRE(max_delta(disabled, gm4) > 1.0e-6f);
+  REQUIRE(max_delta(gm4, gm40) > 1.0e-6f);
+}
+
 TEST_CASE("bounce auto-derives total_frames from the arrangement", "[project]") {
   SonareProject* project = nullptr;
   REQUIRE(sonare_project_create(&project) == SONARE_OK);
@@ -552,6 +820,54 @@ TEST_CASE("deserialize success returns warnings and failed bounce records missin
   REQUIRE(sonare_project_last_bounce_compile_result(project, &result) == SONARE_OK);
   REQUIRE(result.has_timeline == 0);
   REQUIRE(result.diagnostic_count > 0);
+  sonare_project_free_compile_result(&result);
+  sonare_project_destroy(project);
+}
+
+TEST_CASE("project bounce exposes unrouted opaque automation diagnostics", "[project]") {
+  SonareProject* project = nullptr;
+  REQUIRE(sonare_project_create(&project) == SONARE_OK);
+  REQUIRE(sonare_project_set_sample_rate(project, 48000.0) == SONARE_OK);
+
+  SonareProjectTrackDesc track_desc{};
+  track_desc.kind = SONARE_TRACK_AUDIO;
+  track_desc.name = "unrouted automation";
+  uint32_t track = 0;
+  REQUIRE(sonare_project_add_track(project, &track_desc, &track) == SONARE_OK);
+
+  SonareAutomationPoint point{};
+  point.ppq = 0.0;
+  point.value = 0.25f;
+  point.curve_to_next = SONARE_CURVE_HOLD;
+  SonareAutomationLaneDesc lane{};
+  lane.target_param_id = 99;  // host-defined opaque target
+  lane.points = &point;
+  lane.point_count = 1;
+  REQUIRE(sonare_project_add_automation_lane(project, track, &lane, nullptr) == SONARE_OK);
+
+  SonareProjectBounceOptions options{};
+  options.total_frames = 128;
+  options.block_size = 64;
+  options.num_channels = 2;
+  options.sample_rate = 48000;
+  float* out = nullptr;
+  size_t out_len = 0;
+  REQUIRE(sonare_project_bounce(project, &options, &out, &out_len) == SONARE_OK);
+  REQUIRE(out != nullptr);
+  REQUIRE(out_len == 256);
+  sonare_free_floats(out);
+
+  SonareProjectCompileResult result{};
+  REQUIRE(sonare_project_last_bounce_compile_result(project, &result) == SONARE_OK);
+  REQUIRE(result.has_timeline != 0);
+  REQUIRE(std::any_of(result.diagnostics, result.diagnostics + result.diagnostic_count,
+                      [&](const SonareProjectDiagnostic& diagnostic) {
+                        return diagnostic.code == 18u && diagnostic.severity == 1u &&
+                               diagnostic.target_id == track;
+                      }));
+  REQUIRE(result.messages != nullptr);
+  REQUIRE(std::string(result.messages).find("host-defined") != std::string::npos);
+  REQUIRE(std::string(result.messages).find("unrouted") != std::string::npos);
   sonare_project_free_compile_result(&result);
   sonare_project_destroy(project);
 }

@@ -15,6 +15,16 @@ import librosa
 from pathlib import Path
 
 OUTPUT_DIR = Path(__file__).parent / "reference"
+EXPECTED_LIBROSA_VERSION = "0.11.0"
+
+
+def validate_librosa_version():
+    """Reject reference generation with a different librosa implementation."""
+    if librosa.__version__ != EXPECTED_LIBROSA_VERSION:
+        raise RuntimeError(
+            "Reference generation requires librosa "
+            f"{EXPECTED_LIBROSA_VERSION}; found {librosa.__version__}"
+        )
 
 
 def generate_convert_reference():
@@ -480,7 +490,7 @@ def generate_icqt_reference():
 
 
 def generate_yin_reference():
-    """YIN pitch detection reference."""
+    """YIN pitch detection and voicing/CMNDF references."""
     sr = 22050
     duration = 1.0
 
@@ -499,6 +509,93 @@ def generate_yin_reference():
             "hop_length": 512,
             "shape": list(f0.shape),
             "f0": f0.tolist(),
+        }
+    )
+
+    # A tone followed by exact digital silence exercises both sides of the
+    # YIN voicing decision without relying on a random noise floor.  librosa's
+    # public yin() returns an f0 for every frame (falling back to the global
+    # CMNDF minimum when no trough clears the threshold), so the voiced oracle
+    # below follows librosa 0.11.0's local-minimum + trough-threshold semantics
+    # directly: a frame is voiced iff at least one CMNDF trough is below the
+    # absolute ``trough_threshold``.
+    tone_to_silence_duration = 2.0
+    tone_to_silence = np.zeros(int(sr * tone_to_silence_duration), dtype=np.float64)
+    tone_samples = int(sr * duration)
+    tone_time = np.arange(tone_samples, dtype=np.float64) / sr
+    tone_to_silence[:tone_samples] = np.sin(2.0 * np.pi * 440.0 * tone_time)
+    fmin = 20.0
+    fmax = 1000.0
+    frame_length = 2048
+    hop_length = 512
+    trough_threshold = 0.1
+    center = True
+    f0_tone_to_silence = librosa.yin(
+        tone_to_silence,
+        fmin=fmin,
+        fmax=fmax,
+        sr=sr,
+        frame_length=frame_length,
+        hop_length=hop_length,
+        trough_threshold=trough_threshold,
+        center=center,
+    )
+
+    padded = np.pad(
+        tone_to_silence,
+        (frame_length // 2, frame_length // 2),
+        mode="constant",
+    )
+    frames = librosa.util.frame(
+        padded, frame_length=frame_length, hop_length=hop_length
+    )
+    min_period = int(np.floor(sr / fmax))
+    # Keep this explicit 1024 endpoint aligned with libsonare's public YIN
+    # implementation, which caps reliable lags at frame_length // 2.  The
+    # low fmin=20 setting therefore tests the cap instead of hiding it.
+    max_period = frame_length // 2
+    from librosa.core import pitch as librosa_pitch
+
+    cmndf_frames = librosa_pitch._cumulative_mean_normalized_difference(
+        frames, min_period, max_period
+    )
+    # librosa 0.11.0's yin() uses util.localmin (strict on the left, inclusive
+    # on the right) and marks a frame voiced only when a trough also satisfies
+    # cmndf < trough_threshold.  This intentionally leaves an exact-silence
+    # frame unvoiced even though yin() still returns its fallback f0.
+    is_trough = librosa.util.localmin(cmndf_frames, axis=-2)
+    is_trough[0, ...] = cmndf_frames[0, ...] < cmndf_frames[1, ...]
+    voiced_flag = np.any(
+        np.logical_and(is_trough, cmndf_frames < trough_threshold), axis=-2
+    )
+
+    cmndf_frame_index = 12
+    cmndf_reference = cmndf_frames[:, cmndf_frame_index]
+    refs.append(
+        {
+            "signal": "440Hz_tone_to_silence",
+            "sr": sr,
+            "duration": tone_to_silence_duration,
+            "tone_duration": duration,
+            "fmin": fmin,
+            "fmax": fmax,
+            "frame_length": frame_length,
+            "hop_length": hop_length,
+            "center": center,
+            "trough_threshold": trough_threshold,
+            "shape": list(f0_tone_to_silence.shape),
+            "f0": f0_tone_to_silence.tolist(),
+            "voiced_flag": voiced_flag.astype(bool).tolist(),
+            "acceptance": {
+                "max_voiced_flag_mismatch_ratio": 0.05,
+                "cmndf_max_abs_error": 2.0e-3,
+            },
+            "cmndf": {
+                "frame_index": cmndf_frame_index,
+                "min_period": min_period,
+                "max_period": max_period,
+                "values": cmndf_reference.tolist(),
+            },
         }
     )
 
@@ -1226,7 +1323,7 @@ def generate_pitch_utilities_reference():
 
 
 def generate_plp_reference():
-    """librosa.beat.plp reference: drum-like impulse train."""
+    """librosa.beat.plp references: legacy stats and a full pulse oracle."""
     sr = 22050
     duration = 8.0
     bpm = 120
@@ -1238,6 +1335,35 @@ def generate_plp_reference():
     pulse = librosa.beat.plp(
         y=y, sr=sr, hop_length=hop_length, tempo_min=30, tempo_max=300, win_length=384
     )
+    # Keep the existing audio/onset front-end statistic reference above for
+    # regression coverage.  The full oracle below deliberately starts at the
+    # public beat.plp(onset_envelope=...) boundary so front-end differences do
+    # not obscure PLP waveform parity.
+    oracle_sr = 512
+    oracle_hop_length = 1
+    oracle_frames = 512
+    oracle_period = 16
+    oracle_win_length = 128
+    oracle_onset_envelope = np.zeros(oracle_frames, dtype=np.float32)
+    oracle_onset_envelope[::oracle_period] = 1.0
+    oracle_tempo_min = 30.0
+    oracle_tempo_max = 300.0
+    oracle_pulse = librosa.beat.plp(
+        onset_envelope=oracle_onset_envelope,
+        sr=oracle_sr,
+        hop_length=oracle_hop_length,
+        win_length=oracle_win_length,
+        tempo_min=oracle_tempo_min,
+        tempo_max=oracle_tempo_max,
+    )
+    oracle_peak_margin = 32
+    oracle_peak_frame = int(
+        oracle_peak_margin
+        + np.argmax(
+            oracle_pulse[oracle_peak_margin:-oracle_peak_margin]
+        )
+    )
+
     return {
         "sr": sr,
         "bpm": bpm,
@@ -1248,6 +1374,25 @@ def generate_plp_reference():
         "std": float(pulse.std()),
         "max": float(pulse.max()),
         "min": float(pulse.min()),
+        "oracle": {
+            "sr": oracle_sr,
+            "hop_length": oracle_hop_length,
+            "frames": oracle_frames,
+            "period_frames": oracle_period,
+            "win_length": oracle_win_length,
+            "tempo_min": oracle_tempo_min,
+            "tempo_max": oracle_tempo_max,
+            "onset_envelope": oracle_onset_envelope.tolist(),
+            "pulse": oracle_pulse.tolist(),
+            "length": int(oracle_pulse.size),
+            "peak_margin": oracle_peak_margin,
+            "interior_peak_frame": oracle_peak_frame,
+            "acceptance": {
+                "min_correlation": 0.98,
+                "max_rmse": 0.08,
+                "max_interior_peak_offset": 1,
+            },
+        },
     }
 
 
@@ -1803,6 +1948,7 @@ def generate_reassigned_reference():
 
 
 def main():
+    validate_librosa_version()
     OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
 
     print(f"librosa version: {librosa.__version__}")

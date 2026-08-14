@@ -10,7 +10,10 @@ ir_samples = [1.0, 0.5, 0.25, 0.125, 0.0]
 bpm: float = libsonare.detect_bpm(samples, sample_rate=22050)
 downbeats: list[float] = libsonare.detect_downbeats(samples, sample_rate=22050)
 key: libsonare.Key = libsonare.detect_key(
-    samples, high_pass_hz=80.0, profile=libsonare.KeyProfile.FARALDO_EDMA, genre_hint="edm"
+    samples,
+    high_pass_hz=80.0,
+    profile=libsonare.KeyProfile.FARALDO_EDMA,
+    genre_hint="edm",
 )
 key_candidates: list[libsonare.KeyCandidate] = libsonare.detect_key_candidates(
     samples, high_pass_hz=80.0, modes=[libsonare.Mode.MAJOR, "dorian"], profile="edma"
@@ -19,7 +22,9 @@ analysis: libsonare.AnalysisResult = libsonare.analyze(samples)
 acoustic: libsonare.AcousticResult = libsonare.analyze_impulse_response(ir_samples)
 blind_acoustic: libsonare.AcousticResult = libsonare.detect_acoustic(ir_samples)
 rir: libsonare.RirResult = libsonare.synthesize_rir(6.0, 5.0, 3.0, absorption=0.2)
-room_estimate: libsonare.RoomEstimate = libsonare.estimate_room(ir_samples, prefer_eyring=True)
+room_estimate: libsonare.RoomEstimate = libsonare.estimate_room(
+    ir_samples, prefer_eyring=True
+)
 morphed: list[float] = libsonare.room_morph(samples, 22050, 6.0, 5.0, 3.0, wet=0.4)
 chords: libsonare.ChordAnalysisResult = libsonare.detect_chords(
     samples,
@@ -32,9 +37,15 @@ chords: libsonare.ChordAnalysisResult = libsonare.detect_chords(
     chroma_method="nnls",
 )
 cyclic_frames, cyclic_data = libsonare.cyclic_tempogram(samples)
-mastered: libsonare.MasteringChainResult = libsonare.master_audio(samples, preset_name="aiMusic")
+mastered: libsonare.MasteringChainResult = libsonare.master_audio(
+    samples, preset_name="aiMusic"
+)
 catalog = libsonare.mastering_processor_catalog()
 param_info = libsonare.mastering_insert_param_info("dynamics.compressor")
+project = libsonare.Project()
+project.set_assist_sidecar("python-smoke", b"legacy")
+project.set_assist_sidecar({"moduleId": "python-smoke-descriptor"})
+assist_sidecars: list[libsonare.AssistSidecar] = project.assist_sidecars()
 
 assert_type(bpm, float)
 assert_type(downbeats, list[float])
@@ -57,3 +68,5 @@ assert_type(catalog[0]["kind"], libsonare.MasteringProcessorKind)
 assert_type(catalog[0]["channelPolicy"], libsonare.MasteringChannelPolicy)
 assert_type(param_info, list[libsonare.MasteringInsertParamInfo])
 assert_type(param_info[0]["rtSafe"], bool)
+assert_type(project.get_assist_sidecar(0), libsonare.AssistSidecar)
+assert_type(assist_sidecars, list[libsonare.AssistSidecar])

@@ -10,8 +10,10 @@ FetchContent_MakeAvailable(Catch2)
 # Test executable
 add_executable(sonare_tests
   test_main.cpp
+  ${PROJECT_SOURCE_DIR}/tools/cli_support.cpp
   util/math_utils_test.cpp
   util/numeric_overflow_guard_test.cpp
+  util/types_test.cpp
   util/lru_cache_test.cpp
   util/json_test.cpp
   util/frame_test.cpp
@@ -102,6 +104,7 @@ add_executable(sonare_tests
   engine/clip_player_test.cpp
   engine/clip_fade_bounds_test.cpp
   engine/metronome_test.cpp
+  engine/channel_delay_test.cpp
   engine/realtime_engine_test.cpp
   engine/realtime_engine_concurrency_test.cpp
   engine/telemetry_test.cpp
@@ -163,7 +166,8 @@ add_executable(sonare_tests
 
 target_link_libraries(sonare_tests PRIVATE sonare_engine Catch2::Catch2WithMain)
 target_compile_options(sonare_tests PRIVATE ${SONARE_WARNING_FLAGS})
-target_include_directories(sonare_tests PRIVATE ${CMAKE_CURRENT_SOURCE_DIR} ${PROJECT_SOURCE_DIR}/include)
+target_include_directories(sonare_tests PRIVATE ${CMAKE_CURRENT_SOURCE_DIR} ${PROJECT_SOURCE_DIR}/include
+                                                ${PROJECT_SOURCE_DIR}/src ${PROJECT_SOURCE_DIR}/tools)
 
 if(SONARE_ENABLE_OPTIONAL_FIXTURE_TESTS)
   target_sources(sonare_tests PRIVATE
@@ -401,6 +405,7 @@ if(BUILD_ARRANGEMENT)
     engine/realtime_engine_midi_test.cpp
     bindings/binding_project_c_surface_test.cpp
     bindings/binding_project_bounce_test.cpp
+    bindings/project_bounce_overflow_test.cpp
     bindings/project_bounce_tail_channel_test.cpp
     bindings/binding_project_editing_test.cpp
     bindings/binding_project_midi_test.cpp
@@ -460,6 +465,8 @@ endif()
 # under -DBUILD_CLI=OFF (e.g. CI's native build matrix).
 if(BUILD_CLI AND NOT BUILD_WASM)
   target_sources(sonare_tests PRIVATE cli/cli_test.cpp)
+  target_compile_definitions(sonare_tests PRIVATE SONARE_TEST_CLI="$<TARGET_FILE:sonare>")
+  add_dependencies(sonare_tests sonare)
 endif()
 
 include(CTest)

@@ -341,3 +341,54 @@ TEST_CASE("StreamingFormant applies amount once and preserves tonal controls at 
   REQUIRE(max_shift_difference < 1.0e-5f);
   REQUIRE(max_brightness_difference > 1.0e-4f);
 }
+
+TEST_CASE("StreamingFormant live updates are invariant to caller chunking",
+          "[voice_changer][chunk]") {
+  constexpr int sample_rate = 48000;
+  constexpr int max_block = 256;
+  constexpr int pre_roll = 19;  // Deliberately leaves the 32-sample cadence unaligned.
+  constexpr int rendered = 192;
+  const int total = pre_roll + rendered;
+
+  const auto input = [&] {
+    std::vector<float> signal(static_cast<size_t>(total), 0.0f);
+    for (int i = 0; i < total; ++i) {
+      signal[static_cast<size_t>(i)] =
+          0.45f * std::sin(sonare::constants::kTwoPiD * 180.0 * i / sample_rate) +
+          0.20f * std::sin(sonare::constants::kTwoPiD * 900.0 * i / sample_rate) +
+          0.10f * std::sin(sonare::constants::kTwoPiD * 5200.0 * i / sample_rate);
+    }
+    return signal;
+  }();
+
+  const StreamingFormantConfig initial{1.0f, 1.0f, 0.0f, 0.0f, 0.0f};
+  const StreamingFormantConfig updated{1.35f, 1.0f, -0.6f, 0.7f, 0.4f};
+  StreamingFormant one_block(initial);
+  StreamingFormant ragged(initial);
+  StreamingFormant unchanged(initial);
+  one_block.prepare(sample_rate, max_block);
+  ragged.prepare(sample_rate, max_block);
+  unchanged.prepare(sample_rate, max_block);
+  std::vector<float> pre_output(static_cast<size_t>(pre_roll), 0.0f);
+  one_block.process_block(input.data(), pre_output.data(), pre_roll);
+  ragged.process_block(input.data(), pre_output.data(), pre_roll);
+  unchanged.process_block(input.data(), pre_output.data(), pre_roll);
+
+  one_block.set_config(updated);
+  ragged.set_config(updated);
+  std::vector<float> one_block_output(static_cast<size_t>(rendered), 0.0f);
+  std::vector<float> ragged_output(static_cast<size_t>(rendered), 0.0f);
+  std::vector<float> unchanged_output(static_cast<size_t>(rendered), 0.0f);
+  one_block.process_block(input.data() + pre_roll, one_block_output.data(), rendered);
+  unchanged.process_block(input.data() + pre_roll, unchanged_output.data(), rendered);
+
+  constexpr int kChunkSizes[] = {17, 31, 64, 80};
+  int offset = 0;
+  for (const int chunk : kChunkSizes) {
+    ragged.process_block(input.data() + pre_roll + offset, ragged_output.data() + offset, chunk);
+    offset += chunk;
+  }
+  REQUIRE(offset == rendered);
+  REQUIRE(one_block_output == ragged_output);
+  REQUIRE(one_block_output != unchanged_output);
+}

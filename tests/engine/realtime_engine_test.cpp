@@ -390,6 +390,65 @@ TEST_CASE("RealtimeEngine silences oversized blocks and emits telemetry", "[engi
   REQUIRE(telemetry.value == 128);
 }
 
+TEST_CASE("RealtimeEngine reports channel-bound telemetry after block-size validation",
+          "[engine][realtime]") {
+  constexpr int kPreparedChannels = 2;
+  constexpr int kBlock = 64;
+  sonare::engine::RealtimeEngine engine;
+  engine.prepare(48000.0, kBlock, 16, 16, kPreparedChannels);
+
+  std::array<float, kBlock * 2> left{};
+  std::array<float, kBlock * 2> right{};
+  std::array<float, kBlock * 2> extra{};
+  left.fill(1.0f);
+  right.fill(-1.0f);
+  extra.fill(1.0f);
+  float* too_many_channels[] = {left.data(), right.data(), extra.data()};
+
+  // The block-size guard remains first when both limits are exceeded.
+  engine.process(too_many_channels, 3, kBlock * 2);
+  for (float sample : left) REQUIRE(sample == 0.0f);
+  for (float sample : right) REQUIRE(sample == 0.0f);
+  for (float sample : extra) REQUIRE(sample == 0.0f);
+  REQUIRE(engine.transport().render_frame() == kBlock * 2);
+
+  sonare::engine::Telemetry telemetry{};
+  REQUIRE(engine.pop_telemetry(telemetry));
+  REQUIRE(telemetry.type == sonare::engine::TelemetryType::kError);
+  REQUIRE(telemetry.error == sonare::engine::TelemetryErrorCode::kMaxBlockExceeded);
+  REQUIRE(telemetry.value == static_cast<uint32_t>(kBlock * 2));
+
+  // A block within the prepared size reports the requested channel count and
+  // keeps the existing silence/advance behavior for a channel overflow.
+  left.fill(1.0f);
+  right.fill(-1.0f);
+  extra.fill(1.0f);
+  engine.process(too_many_channels, 3, kBlock);
+  for (int i = 0; i < kBlock; ++i) {
+    REQUIRE(left[static_cast<size_t>(i)] == 0.0f);
+    REQUIRE(right[static_cast<size_t>(i)] == 0.0f);
+    REQUIRE(extra[static_cast<size_t>(i)] == 0.0f);
+  }
+  REQUIRE(engine.transport().render_frame() == kBlock * 3);
+
+  REQUIRE(engine.pop_telemetry(telemetry));
+  REQUIRE(telemetry.type == sonare::engine::TelemetryType::kError);
+  REQUIRE(telemetry.error == sonare::engine::TelemetryErrorCode::kMaxChannelsExceeded);
+  REQUIRE(telemetry.value == 3);
+
+  // The exact prepared channel count remains a valid processing shape.
+  left.fill(0.25f);
+  right.fill(-0.25f);
+  float* prepared_channels[] = {left.data(), right.data()};
+  engine.process(prepared_channels, kPreparedChannels, kBlock);
+  REQUIRE(left[0] == Catch::Approx(0.25f));
+  REQUIRE(right[0] == Catch::Approx(-0.25f));
+  REQUIRE(engine.pop_telemetry(telemetry));
+  REQUIRE(telemetry.type == sonare::engine::TelemetryType::kProcessBlock);
+  REQUIRE(telemetry.error == sonare::engine::TelemetryErrorCode::kNone);
+  REQUIRE(telemetry.value == static_cast<uint32_t>(kBlock));
+}
+
 TEST_CASE("EngineController queues commands and drains telemetry", "[engine][realtime]") {
   sonare::engine::EngineController controller;
   controller.prepare(48000.0, 128);

@@ -69,7 +69,7 @@ TEST_CASE("RealtimeVoiceChanger preset JSON is tolerant and clamps values", "[vo
 
 TEST_CASE("RealtimeVoiceChanger macro-only preset changes rendered audio", "[voice_changer]") {
   const std::string macro_only = R"json({
-    "schemaVersion":1,"id":"macro-render","name":"Macro Render",
+    "schemaVersion":1,"id":"macro-render","name":"Macro Render","category":"custom",
     "macros":{"pitch":4,"formant":1.15,"brightness":1,"space":0.4,
               "intensity":0.8,"noiseControl":0.7,"sibilance":0.9}
   })json";
@@ -493,8 +493,8 @@ TEST_CASE("RealtimeVoiceChanger reported latency tracks wet_mix and the ISP limi
   RealtimeVoiceChanger changer;
   changer.prepare(sample_rate, max_block, 1);
 
-  // Fully wet with the ISP limiter on reports the full grain delay plus the ISP
-  // group delay applied to the mixed output.
+  // Fully wet with the ISP limiter on reports the full grain delay plus the
+  // ISP signal-path latency applied to the mixed output.
   RealtimeVoiceChangerConfig full = changer.config();
   full.wet_mix = 1.0f;
   full.limiter.enable_isp_limiter = true;
@@ -510,7 +510,10 @@ TEST_CASE("RealtimeVoiceChanger reported latency tracks wet_mix and the ISP limi
   const int grain = changer.latency_samples();
   REQUIRE(grain > 0);
   const int isp_latency = wet_with_isp - grain;
-  REQUIRE(isp_latency > 0);
+  // 6 FIR samples + ceil(5 * 0.1 ms * 48 kHz) = 31. Keep the public C/C++
+  // latency documentation tied to the prepared implementation, not a rounded
+  // time-constant approximation.
+  REQUIRE(isp_latency == 31);
 
   // Pure dry stays aligned to the same fixed retune+ISP latency.
   RealtimeVoiceChangerConfig dry = full;
@@ -820,6 +823,64 @@ TEST_CASE("RealtimeVoiceChanger smooths every live snapshot control", "[voice_ch
   for (int i = preroll; i < preroll + rendered; ++i) {
     REQUIRE(std::isfinite(output[static_cast<std::size_t>(i)]));
   }
+}
+
+TEST_CASE("RealtimeVoiceChanger output EQ controls are invariant to caller chunking",
+          "[voice_changer][chunk]") {
+  constexpr int sample_rate = 48000;
+  constexpr int max_block = 256;
+  constexpr int pre_roll = 19;  // Deliberately leaves the 32-sample cadence unaligned.
+  constexpr int rendered = 192;
+
+  RealtimeVoiceChangerConfig initial;
+  initial.wet_mix = 1.0f;
+  initial.retune = {0.0f, 0.0f, 64};
+  initial.formant = {1.0f, 0.0f, 0.0f, 0.0f, 0.0f};
+  initial.eq = {30.0f, 0.0f, 0.0f, 0.0f};
+  initial.gate = {-80.0f, 1.0f, 50.0f, 0.0f};
+  initial.compressor = {0.0f, 1.0f, 5.0f, 50.0f, 0.0f};
+  initial.deesser = {7000.0f, -6.0f, 1.0f, 0.0f};
+  initial.reverb.mix = 0.0f;
+  initial.limiter = {0.0f, 50.0f, false, -1.0f};
+  RealtimeVoiceChangerConfig updated = initial;
+  updated.eq = {30.0f, 8.0f, -7.0f, 6.0f};
+
+  std::vector<float> input(static_cast<size_t>(pre_roll + rendered), 0.0f);
+  for (int i = 0; i < static_cast<int>(input.size()); ++i) {
+    input[static_cast<size_t>(i)] =
+        0.45f * std::sin(sonare::constants::kTwoPiD * 180.0 * i / sample_rate) +
+        0.20f * std::sin(sonare::constants::kTwoPiD * 2700.0 * i / sample_rate) +
+        0.10f * std::sin(sonare::constants::kTwoPiD * 9500.0 * i / sample_rate);
+  }
+
+  RealtimeVoiceChanger one_block(initial);
+  RealtimeVoiceChanger ragged(initial);
+  RealtimeVoiceChanger unchanged(initial);
+  one_block.prepare(sample_rate, max_block, 1);
+  ragged.prepare(sample_rate, max_block, 1);
+  unchanged.prepare(sample_rate, max_block, 1);
+  std::vector<float> pre_output(static_cast<size_t>(pre_roll), 0.0f);
+  one_block.process_block(input.data(), pre_output.data(), pre_roll);
+  ragged.process_block(input.data(), pre_output.data(), pre_roll);
+  unchanged.process_block(input.data(), pre_output.data(), pre_roll);
+
+  one_block.set_config(updated);
+  ragged.set_config(updated);
+  std::vector<float> one_block_output(static_cast<size_t>(rendered), 0.0f);
+  std::vector<float> ragged_output(static_cast<size_t>(rendered), 0.0f);
+  std::vector<float> unchanged_output(static_cast<size_t>(rendered), 0.0f);
+  one_block.process_block(input.data() + pre_roll, one_block_output.data(), rendered);
+  unchanged.process_block(input.data() + pre_roll, unchanged_output.data(), rendered);
+
+  constexpr int kChunkSizes[] = {17, 31, 64, 80};
+  int offset = 0;
+  for (const int chunk : kChunkSizes) {
+    ragged.process_block(input.data() + pre_roll + offset, ragged_output.data() + offset, chunk);
+    offset += chunk;
+  }
+  REQUIRE(offset == rendered);
+  REQUIRE(one_block_output == ragged_output);
+  REQUIRE(one_block_output != unchanged_output);
 }
 
 // ===================================================================

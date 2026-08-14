@@ -244,7 +244,8 @@ bool eq(const transport::TempoSegment& a, const transport::TempoSegment& b) {
 }
 
 bool eq(const automation::AutomationLane& a, const automation::AutomationLane& b) {
-  if (a.target_param_id() != b.target_param_id()) return false;
+  if (a.target_param_id() != b.target_param_id() || a.target_kind() != b.target_kind())
+    return false;
   if (a.points().size() != b.points().size()) return false;
   for (size_t i = 0; i < a.points().size(); ++i) {
     if (a.points()[i].ppq != b.points()[i].ppq) return false;
@@ -447,7 +448,7 @@ TEST_CASE("project serialize is deterministic and stable across calls", "[serial
   REQUIRE(root.is_object());
   REQUIRE(root.contains("version"));
   CHECK(root["version"].as_int() ==
-        static_cast<int>(sonare::serialize::SONARE_PROJECT_SCHEMA_VERSION));
+        static_cast<int>(sonare::serialize::SONARE_PROJECT_SCHEMA_VERSION_OPAQUE));
 }
 
 TEST_CASE("project serialize/deserialize/serialize is byte-identical", "[serialize]") {
@@ -460,6 +461,69 @@ TEST_CASE("project serialize/deserialize/serialize is byte-identical", "[seriali
 
   const std::string s2 = project_to_json(*result.project, result.midi);
   CHECK(s1 == s2);  // Round-trip is byte-for-byte stable.
+}
+
+TEST_CASE("project loader uses the last duplicate sample_rate key", "[serialize]") {
+  const auto duplicate =
+      project_from_json(R"({"version":1,"sample_rate":44100,"sample_rate":96000})");
+  const auto canonical = project_from_json(R"({"version":1,"sample_rate":96000})");
+
+  REQUIRE(duplicate.ok());
+  REQUIRE(canonical.ok());
+  REQUIRE(duplicate.project->sample_rate() == 96000.0);
+  REQUIRE(canonical.project->sample_rate() == 96000.0);
+  CHECK(project_to_json(*duplicate.project, duplicate.midi) ==
+        project_to_json(*canonical.project, canonical.midi));
+}
+
+TEST_CASE("opaque automation lanes retain the schema-v1 wire shape", "[serialize]") {
+  Fixture f = make_fixture();
+  const auto root = util::json::parse(project_to_json(f.project, f.midi));
+  REQUIRE(root["version"].as_int() == 1);
+  const auto& lane = root["tracks"].as_array()[0]["automation_lanes"].as_array()[0];
+  CHECK_FALSE(lane.contains("target_kind"));
+}
+
+TEST_CASE("typed automation lanes select schema-v2 and round-trip", "[serialize]") {
+  Project project;
+  Track track;
+  track.kind = Track::Kind::kAudio;
+  automation::AutomationLane lane(42, automation::AutomationTargetKind::kTrackFaderDb);
+  lane.set_points({{0.0, -3.0f, automation::CurveType::Linear}});
+  track.automation_lanes.push_back(lane);
+  REQUIRE(project.add_track(track) != 0);
+
+  const std::string json = project_to_json(project, {});
+  const auto root = util::json::parse(json);
+  REQUIRE(root["version"].as_int() == 2);
+  const auto& lane_json = root["tracks"].as_array()[0]["automation_lanes"].as_array()[0];
+  REQUIRE(lane_json["target_kind"].as_int() == 1);
+
+  const auto result = project_from_json(json);
+  REQUIRE(result.ok());
+  REQUIRE(result.project->tracks().size() == 1);
+  REQUIRE(result.project->tracks()[0].automation_lanes.size() == 1);
+  CHECK(result.project->tracks()[0].automation_lanes[0].target_kind() ==
+        automation::AutomationTargetKind::kTrackFaderDb);
+  CHECK(project_to_json(*result.project, result.midi) == json);
+}
+
+TEST_CASE("schema-v1 ignores an unknown automation target kind", "[serialize]") {
+  const auto result = project_from_json(
+      R"({"version":1,"tracks":[{"id":1,"automation_lanes":[{"target_param_id":7,"target_kind":99}]}]})");
+  REQUIRE(result.ok());
+  REQUIRE(result.project->tracks()[0].automation_lanes.size() == 1);
+  CHECK(result.project->tracks()[0].automation_lanes[0].target_kind() ==
+        automation::AutomationTargetKind::kOpaque);
+}
+
+TEST_CASE("schema-v2 rejects an unknown automation target kind", "[serialize]") {
+  const auto result = project_from_json(
+      R"({"version":2,"tracks":[{"id":1,"automation_lanes":[{"target_param_id":7,"target_kind":3}]}]})");
+  REQUIRE_FALSE(result.ok());
+  REQUIRE(result.has_error());
+  CHECK(std::any_of(result.diagnostics.begin(), result.diagnostics.end(),
+                    [](const auto& d) { return d.code == "invalid_format"; }));
 }
 
 TEST_CASE("project round-trip preserves all fields", "[serialize]") {
@@ -948,7 +1012,7 @@ TEST_CASE("project deserialize accepts finite float boundaries and ordinary valu
   constexpr const char* kFloatMax = "3.4028234663852886e38";
   const std::string document =
       std::string(
-          R"({"version":1,"sources":[{"id":1,"kind":0}],"tracks":[{"id":1,"gain":0.75,"pan":-0.25,"automation_lanes":[{"points":[{"value":)") +
+          R"({"version":1,"sources":[{"id":1,"kind":0}],"tracks":[{"id":1,"gain":0.75,"pan":-0.25,"automation_lanes":[{"target_param_id":42,"points":[{"value":)") +
       kFloatMax + R"(}]}]}],"clips":[{"id":1,"track_id":1,"source_id":1,"gain":-)" + kFloatMax +
       R"(}],"annotation":{"tempo_confidence":0.8,"onsets":[{"confidence":0.6}]},"scene":{"version":1,"strips":[{"id":"s","inputTrimDb":-3.5,"faderDb":2.25,"vcaOffsetDb":0.5,"pan":0.1,"width":1.2,"dualPanLeft":-0.8,"dualPanRight":0.7,"surroundPan":{"azimuth":45,"elevation":-12,"divergence":0.4,"lfe":0.2,"distance":2},"sends":[{"sendDb":-6}]}],"buses":[{"id":"b","inputTrimDb":1.5,"width":0.9}],"vcaGroups":[{"id":"v","gainDb":-2}]}})";
 
@@ -1269,6 +1333,51 @@ TEST_CASE("a loaded track holds at most one automation lane per target", "[seria
                    [](const automation::AutomationLane& l) { return l.target_param_id() == 7; }));
 }
 
+TEST_CASE("a loaded track holds at most one lane per typed automation target", "[serialize]") {
+  const auto result =
+      project_from_json(R"({"version":2,"tracks":[{"id":1,"automation_lanes":[)"
+                        R"({"target_param_id":7,"target_kind":1,"points":[{"value":0.25}]},)"
+                        R"({"target_param_id":8,"target_kind":1,"points":[{"value":0.75}]},)"
+                        R"({"target_param_id":9,"target_kind":2,"points":[{"value":0.5}]},)"
+                        R"({"target_param_id":10,"target_kind":2,"points":[{"value":0.9}]},)"
+                        R"({"target_param_id":11,"points":[{"value":0.1}]}]}]})");
+  REQUIRE(result.ok());
+  const Track* track = result.project->find_track(1);
+  REQUIRE(track != nullptr);
+  REQUIRE(track->automation_lanes.size() == 3);
+  CHECK(track->automation_lanes[0].target_param_id() == 8);
+  CHECK(track->automation_lanes[0].target_kind() ==
+        automation::AutomationTargetKind::kTrackFaderDb);
+  CHECK(track->automation_lanes[1].target_param_id() == 10);
+  CHECK(track->automation_lanes[1].target_kind() == automation::AutomationTargetKind::kTrackPan);
+  CHECK(track->automation_lanes[2].target_param_id() == 11);
+  CHECK(track->automation_lanes[2].target_kind() == automation::AutomationTargetKind::kOpaque);
+  CHECK(std::count_if(result.diagnostics.begin(), result.diagnostics.end(), [](const auto& d) {
+          return d.code == "duplicate_automation_target_kind" &&
+                 d.severity == serialize::DiagnosticSeverity::kWarning;
+        }) == 2);
+}
+
+TEST_CASE("a loaded automation lane with target id zero is dropped", "[serialize]") {
+  // Target id 0 predates the non-zero requirement, so it survives in documents
+  // written by earlier versions. The lane cannot be addressed or compiled, but
+  // the rest of the project must still load.
+  const auto result =
+      project_from_json(R"({"version":1,"tracks":[{"id":1,"name":"kept","automation_lanes":[)"
+                        R"({"target_param_id":0,"points":[{"value":0.25}]},)"
+                        R"({"target_param_id":7,"points":[{"value":0.5}]}]}]})");
+  REQUIRE(result.ok());
+  const Track* track = result.project->find_track(1);
+  REQUIRE(track != nullptr);
+  CHECK(track->name == "kept");
+  REQUIRE(track->automation_lanes.size() == 1);
+  CHECK(track->automation_lanes[0].target_param_id() == 7);
+  CHECK(std::any_of(result.diagnostics.begin(), result.diagnostics.end(), [](const auto& d) {
+    return d.code == "dropped_automation_lane_target_id" &&
+           d.severity == serialize::DiagnosticSeverity::kWarning;
+  }));
+}
+
 TEST_CASE("a present-but-wrong-typed scalar is rejected whatever its type", "[serialize]") {
   // The forward-compatibility contract covers unknown and ABSENT fields. A
   // present field of the wrong JSON type is malformed input, and the treatment
@@ -1432,7 +1541,7 @@ TEST_CASE("marker key fields survive a save/load on any marker kind", "[serializ
   Project p;
   MidiContentStore midi;
   REQUIRE(
-      SetMarker(0, 4.0, "cue", /*kind=*/1, /*key_fifths=*/3, /*key_minor=*/true).apply(p, midi));
+      SetMarker(0, 4.0, "cue", /*kind=*/1, /*key_fifths=*/100, /*key_minor=*/true).apply(p, midi));
 
   const std::string json = project_to_json(p, midi);
   const auto reloaded = project_from_json(json);
@@ -1440,7 +1549,7 @@ TEST_CASE("marker key fields survive a save/load on any marker kind", "[serializ
   REQUIRE(reloaded.project->markers().size() == 1);
   const ProjectMarker& m = reloaded.project->markers().front();
   REQUIRE(m.kind == 1);
-  REQUIRE(m.key_fifths == 3);
+  REQUIRE(m.key_fifths == 100);
   REQUIRE(m.key_minor);
 
   // Still byte-stable, and a marker with zeroed key fields emits neither field.
@@ -1449,6 +1558,67 @@ TEST_CASE("marker key fields survive a save/load on any marker kind", "[serializ
   MidiContentStore plain_midi;
   REQUIRE(SetMarker(0, 4.0, "cue").apply(plain, plain_midi));
   REQUIRE(project_to_json(plain, plain_midi).find("key_fifths") == std::string::npos);
+}
+
+TEST_CASE("key-signature marker fifths outside the SMF range are rejected", "[serialize]") {
+  for (const int key_fifths : {-8, 8}) {
+    INFO("key_fifths=" << key_fifths);
+    const auto result =
+        project_from_json(std::string(R"({"version":1,"markers":[{"id":1,"kind":4,"key_fifths":)") +
+                          std::to_string(key_fifths) + R"(}]})");
+    REQUIRE_FALSE(result.ok());
+    REQUIRE(result.has_error());
+    CHECK(std::any_of(result.diagnostics.begin(), result.diagnostics.end(),
+                      [](const serialize::Diagnostic& d) { return d.code == "invalid_format"; }));
+  }
+}
+
+TEST_CASE("invalid assist sidecar identity and regions are rejected", "[serialize]") {
+  const auto empty_module =
+      project_from_json(R"({"version":1,"assist_sidecars":[{"module_id":""}]})");
+  REQUIRE_FALSE(empty_module.ok());
+  REQUIRE(empty_module.has_error());
+  CHECK(std::any_of(
+      empty_module.diagnostics.begin(), empty_module.diagnostics.end(),
+      [](const serialize::Diagnostic& d) { return d.code == "invalid_assist_sidecar_module_id"; }));
+
+  const auto embedded_nul =
+      project_from_json(R"({"version":1,"assist_sidecars":[{"module_id":"bad\u0000id"}]})");
+  REQUIRE_FALSE(embedded_nul.ok());
+  REQUIRE(embedded_nul.has_error());
+  CHECK(std::any_of(
+      embedded_nul.diagnostics.begin(), embedded_nul.diagnostics.end(),
+      [](const serialize::Diagnostic& d) { return d.code == "invalid_assist_sidecar_module_id"; }));
+
+  struct RegionCase {
+    const char* json_field;
+    const char* diagnostic_code;
+  };
+  for (const RegionCase c :
+       {RegionCase{"region_start_ppq", "invalid_assist_sidecar_region_start_ppq"},
+        RegionCase{"region_end_ppq", "invalid_assist_sidecar_region_end_ppq"}}) {
+    INFO(c.json_field);
+    const auto result =
+        project_from_json(std::string(R"({"version":1,"assist_sidecars":[{"module_id":"m",)") +
+                          "\"" + c.json_field + R"(":-1.0}]})");
+    REQUIRE_FALSE(result.ok());
+    REQUIRE(result.has_error());
+    CHECK(std::any_of(result.diagnostics.begin(), result.diagnostics.end(),
+                      [&](const serialize::Diagnostic& d) { return d.code == c.diagnostic_code; }));
+  }
+}
+
+TEST_CASE("valid empty sidecar region and unknown module survive load", "[serialize]") {
+  const auto result = project_from_json(
+      R"({"version":1,"assist_sidecars":[{"module_id":"unknown.module","schema_version":0,"target_track_id":0,"region_start_ppq":4.0,"region_end_ppq":2.0}]})");
+  REQUIRE(result.ok());
+  REQUIRE(result.project->assist_sidecars().size() == 1);
+  const AssistSidecar& sidecar = result.project->assist_sidecars().front();
+  CHECK(sidecar.module_id == "unknown.module");
+  CHECK(sidecar.schema_version == 0);
+  CHECK(sidecar.target_track_id == 0);
+  CHECK(sidecar.region_start_ppq == 4.0);
+  CHECK(sidecar.region_end_ppq == 2.0);
 }
 
 TEST_CASE("an embedded scene is walked in place rather than reparsed", "[serialize]") {

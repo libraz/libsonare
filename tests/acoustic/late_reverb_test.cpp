@@ -4,12 +4,14 @@
 #include <catch2/generators/catch_generators.hpp>
 #include <catch2/matchers/catch_matchers_floating_point.hpp>
 #include <cmath>
+#include <limits>
 #include <vector>
 
 #include "acoustic/material.h"
 #include "acoustic/room_model.h"
 #include "acoustic/room_types.h"
 #include "analysis/acoustic_analyzer.h"
+#include "util/resource_limits.h"
 
 using Catch::Matchers::WithinRel;
 using namespace sonare;
@@ -174,6 +176,53 @@ TEST_CASE("late tail length ignores bands above Nyquist", "[acoustic][late_rever
   const int expected =
       static_cast<int>(std::ceil(static_cast<double>(0.25f) * 2.0 * static_cast<double>(sr)));
   REQUIRE(static_cast<int>(tail.size()) == expected);
+}
+
+TEST_CASE("late-tail sample resolver enforces the shared working-set cap",
+          "[acoustic][late_reverb][resource_limit]") {
+  ReverbTime rt;
+  rt.rt60_bands = {60.0f};
+
+  // 60 s * 2 * 384 kHz is substantially above the four-buffer 256-MiB
+  // working-set budget. This is resolver-only so the regression never needs to
+  // allocate the otherwise enormous tail.
+  const LateTailResolution resolution = resolve_late_tail(rt, 384000);
+  REQUIRE(resolution.samples == resource::kMaxAcousticRirSamples);
+  REQUIRE(resolution.samples == 16'777'216u);
+  REQUIRE(resolution.resource_clamped);
+  REQUIRE(resolve_late_tail_samples(rt, 384000) == resolution.samples);
+  static_assert(resource::kMaxAcousticRirSamples * resource::kAcousticRirLiveFloatBuffers *
+                    sizeof(float) <=
+                resource::kMaxAcousticRirPeakBytes);
+}
+
+TEST_CASE("late-tail resolver applies explicit caps and rejects invalid rates",
+          "[acoustic][late_reverb][resource_limit]") {
+  ReverbTime rt;
+  rt.rt60_bands = {1.0f};
+
+  LateReverbConfig capped;
+  capped.max_samples = 1234;
+  const LateTailResolution resolution = resolve_late_tail(rt, 48000, capped);
+  REQUIRE(resolution.samples == 1234u);
+  REQUIRE_FALSE(resolution.resource_clamped);
+  REQUIRE(resolve_late_tail_samples(rt, 48000, capped) == resolution.samples);
+
+  REQUIRE(resolve_late_tail_samples(rt, 0) == 0u);
+  REQUIRE(resolve_late_tail_samples(rt, -1) == 0u);
+}
+
+TEST_CASE("late-tail resolver remains bounded for hostile sizing values",
+          "[acoustic][late_reverb][resource_limit]") {
+  ReverbTime rt;
+  rt.rt60_bands = {std::numeric_limits<float>::infinity(), std::numeric_limits<float>::quiet_NaN()};
+  LateReverbConfig hostile;
+  hostile.headroom = std::numeric_limits<float>::max();
+
+  const LateTailResolution resolution = resolve_late_tail(rt, 384000, hostile);
+  REQUIRE(resolution.samples == resource::kMaxAcousticRirSamples);
+  REQUIRE(resolution.resource_clamped);
+  REQUIRE(resolve_late_tail_samples(rt, 384000, LateReverbConfig{1u, 17, 1.0f}) == 17u);
 }
 
 TEST_CASE("unbounded RT60 does not overflow the auto length", "[acoustic][late_reverb]") {

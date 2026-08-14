@@ -4,6 +4,7 @@
 
 #include "feature/pitch.h"
 
+#include <algorithm>
 #include <catch2/catch_test_macros.hpp>
 #include <catch2/matchers/catch_matchers_floating_point.hpp>
 #include <cmath>
@@ -62,6 +63,9 @@ TEST_CASE("YIN pitch reference compatibility", "[pitch][reference]") {
         config.fmin = fmin;
         config.fmax = fmax;
         config.center = center;
+        if (entry.contains("trough_threshold")) {
+          config.threshold = entry["trough_threshold"].as_float();
+        }
 
         PitchResult result = yin_track(audio, config);
 
@@ -84,6 +88,100 @@ TEST_CASE("YIN pitch reference compatibility", "[pitch][reference]") {
             REQUIRE_THAT(static_cast<double>(det), WithinRel(static_cast<double>(ref), 1e-2));
           }
         }
+      }
+    } else if (signal_name == "440Hz_tone_to_silence") {
+      SECTION("tone to silence voicing and CMNDF") {
+        const float tone_duration = entry["tone_duration"].as_float();
+        const float duration = entry["duration"].as_float();
+        const size_t n_samples = static_cast<size_t>(duration * sr);
+        const size_t tone_samples = static_cast<size_t>(tone_duration * sr);
+        std::vector<float> samples(n_samples, 0.0f);
+        for (size_t i = 0; i < std::min(tone_samples, n_samples); ++i) {
+          const float t = static_cast<float>(i) / static_cast<float>(sr);
+          samples[i] = std::sin(kTwoPi * 440.0f * t);
+        }
+        Audio audio = Audio::from_buffer(samples.data(), n_samples, sr);
+
+        PitchConfig config;
+        config.frame_length = frame_length;
+        config.hop_length = hop_length;
+        config.fmin = fmin;
+        config.fmax = fmax;
+        config.center = center;
+        config.threshold = entry["trough_threshold"].as_float();
+
+        PitchResult result = yin_track(audio, config);
+        const int ref_frames = static_cast<int>(ref_f0.size());
+        const int compare_frames = std::min(result.n_frames(), ref_frames);
+        const auto& ref_voiced = entry["voiced_flag"].as_array();
+        const double max_mismatch_ratio =
+            entry["acceptance"]["max_voiced_flag_mismatch_ratio"].as_number();
+        CAPTURE(result.n_frames(), ref_frames);
+        REQUIRE(compare_frames == ref_frames);
+        REQUIRE(compare_frames > 4);
+
+        int expected_voiced = 0;
+        int expected_unvoiced = 0;
+        int observed_voiced = 0;
+        int observed_unvoiced = 0;
+        int voiced_mismatches = 0;
+        int f0_compared = 0;
+        for (int i = 0; i < compare_frames; ++i) {
+          const bool expected = ref_voiced[static_cast<size_t>(i)].as_bool();
+          const bool observed = result.voiced_flag[static_cast<size_t>(i)];
+          expected ? ++expected_voiced : ++expected_unvoiced;
+          observed ? ++observed_voiced : ++observed_unvoiced;
+          if (expected != observed) {
+            ++voiced_mismatches;
+          }
+          if (expected && observed) {
+            ++f0_compared;
+            REQUIRE_THAT(static_cast<double>(result.f0[static_cast<size_t>(i)]),
+                         WithinRel(ref_f0[static_cast<size_t>(i)].as_number(), 1e-2));
+          }
+        }
+
+        CAPTURE(expected_voiced, expected_unvoiced, observed_voiced, observed_unvoiced,
+                voiced_mismatches, f0_compared);
+        REQUIRE(expected_voiced > 0);
+        REQUIRE(expected_unvoiced > 0);
+        REQUIRE(observed_voiced > 0);
+        REQUIRE(observed_unvoiced > 0);
+        REQUIRE(static_cast<double>(voiced_mismatches) / compare_frames <= max_mismatch_ratio);
+        REQUIRE(f0_compared > 0);
+
+        const auto& cmndf_ref = entry["cmndf"];
+        const int cmndf_frame_index = cmndf_ref["frame_index"].as_int();
+        const int min_period = cmndf_ref["min_period"].as_int();
+        const int max_period = cmndf_ref["max_period"].as_int();
+        const auto& cmndf_values = cmndf_ref["values"].as_array();
+        REQUIRE(static_cast<int>(cmndf_values.size()) == max_period - min_period + 1);
+
+        std::vector<float> frame(static_cast<size_t>(frame_length), 0.0f);
+        const int frame_start = center ? cmndf_frame_index * hop_length - frame_length / 2
+                                       : cmndf_frame_index * hop_length;
+        for (int i = 0; i < frame_length; ++i) {
+          const int sample_index = frame_start + i;
+          if (sample_index >= 0 && sample_index < static_cast<int>(tone_samples)) {
+            const float t = static_cast<float>(sample_index) / static_cast<float>(sr);
+            frame[static_cast<size_t>(i)] = std::sin(kTwoPi * 440.0f * t);
+          }
+        }
+
+        const auto diff = yin_difference(frame.data(), frame_length, max_period + 1);
+        const auto cmndf = yin_cmndf(diff);
+        REQUIRE(static_cast<int>(cmndf.size()) > max_period);
+        double max_cmndf_error = 0.0;
+        for (int period = min_period; period <= max_period; ++period) {
+          max_cmndf_error = std::max(
+              max_cmndf_error,
+              std::abs(static_cast<double>(cmndf[static_cast<size_t>(period)]) -
+                       cmndf_values[static_cast<size_t>(period - min_period)].as_number()));
+        }
+        const double max_cmndf_error_allowed =
+            entry["acceptance"]["cmndf_max_abs_error"].as_number();
+        CAPTURE(min_period, max_period, max_cmndf_error, max_cmndf_error_allowed);
+        REQUIRE(max_cmndf_error <= max_cmndf_error_allowed);
       }
     } else if (signal_name == "chirp_200_800Hz") {
       SECTION("chirp pitch tracking") {

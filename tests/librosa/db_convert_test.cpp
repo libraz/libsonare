@@ -6,6 +6,7 @@
 #include <catch2/catch_test_macros.hpp>
 #include <catch2/matchers/catch_matchers_floating_point.hpp>
 #include <cmath>
+#include <limits>
 #include <vector>
 
 #include "util/constants.h"
@@ -114,4 +115,29 @@ TEST_CASE("dB conversions use the shared default top dB", "[db_convert]") {
   REQUIRE(default_power == explicit_power);
   REQUIRE(default_amplitude == explicit_amplitude);
   REQUIRE_THAT(default_power[1], WithinAbs(-constants::kDefaultTopDb, 1e-5f));
+}
+
+TEST_CASE("dB conversions reject non-finite scalar parameters", "[db_convert][edge]") {
+  const std::vector<float> input{1.0f};
+  const float nan = std::numeric_limits<float>::quiet_NaN();
+  const float inf = std::numeric_limits<float>::infinity();
+
+  REQUIRE_THROWS_AS(power_to_db(input, nan), SonareException);
+  REQUIRE_THROWS_AS(power_to_db(input, 1.0f, nan), SonareException);
+  REQUIRE_THROWS_AS(power_to_db(input, 1.0f, 1e-10f, inf), SonareException);
+  REQUIRE_THROWS_AS(amplitude_to_db(input, inf), SonareException);
+  REQUIRE_THROWS_AS(amplitude_to_db(input, 1.0f, nan), SonareException);
+  REQUIRE_THROWS_AS(amplitude_to_db(input, 1.0f, 1e-5f, nan), SonareException);
+  REQUIRE_THROWS_AS(db_to_power(input, nan), SonareException);
+  REQUIRE_THROWS_AS(db_to_amplitude(input, inf), SonareException);
+}
+
+TEST_CASE("dB finite non-positive references retain max-reference sentinel semantics",
+          "[db_convert][edge]") {
+  const std::vector<float> input{4.0f, 1.0f};
+  const auto zero_ref = power_to_db(input, 0.0f, 1e-10f, -1.0f);
+  const auto negative_ref = power_to_db(input, -1.0f, 1e-10f, -1.0f);
+  REQUIRE_THAT(zero_ref[0], WithinAbs(0.0f, 1e-5f));
+  REQUIRE_THAT(negative_ref[0], WithinAbs(0.0f, 1e-5f));
+  REQUIRE(zero_ref == negative_ref);
 }

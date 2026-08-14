@@ -3,6 +3,7 @@
 
 #include "feature/vqt.h"
 
+#include <algorithm>
 #include <catch2/catch_test_macros.hpp>
 #include <catch2/matchers/catch_matchers_floating_point.hpp>
 #include <cmath>
@@ -400,6 +401,62 @@ TEST_CASE("ivqt reconstruction", "[vqt]") {
 
   REQUIRE(reconstructed.sample_rate() == original.sample_rate());
   REQUIRE(!reconstructed.empty());
+}
+
+TEST_CASE("griffinlim_vqt preserves explicit VQT gamma", "[vqt][inverse][regression]") {
+  const int sr = 22050;
+  Audio audio = generate_sine(440.0f, 0.25f, sr);
+
+  VqtConfig cqt_config;
+  cqt_config.fmin = 65.4f;
+  cqt_config.n_bins = 24;
+  cqt_config.hop_length = 256;
+  cqt_config.gamma = 0.0f;
+
+  VqtResult cqt_result = vqt(audio, cqt_config);
+  Audio cqt_from_raw = griffinlim_vqt(cqt_result.magnitude().data(), cqt_result.n_bins(),
+                                      cqt_result.n_frames(), cqt_config, sr, 2);
+  Audio cqt_direct = griffinlim_cqt(cqt_result.magnitude().data(), cqt_result.n_bins(),
+                                    cqt_result.n_frames(), cqt_config.to_cqt_config(), sr, 2);
+  Audio cqt_from_legacy_result = griffinlim_vqt(cqt_result, sr, 2);
+
+  REQUIRE(cqt_from_raw.size() == cqt_direct.size());
+  REQUIRE(cqt_from_legacy_result.size() == cqt_direct.size());
+  for (size_t i = 0; i < cqt_direct.size(); ++i) {
+    REQUIRE(cqt_from_raw[i] == cqt_direct[i]);
+    REQUIRE(cqt_from_legacy_result[i] == cqt_direct[i]);
+  }
+
+  VqtConfig vqt_config = cqt_config;
+  vqt_config.gamma = 24.0f;
+  VqtResult vqt_result = vqt(audio, vqt_config);
+
+  // The result+config overload must use the same gamma as the raw explicit
+  // configuration overload, rather than silently falling back to CQT.
+  Audio vqt_from_result = griffinlim_vqt(vqt_result, vqt_config, sr, 2);
+  Audio vqt_from_raw = griffinlim_vqt(vqt_result.magnitude().data(), vqt_result.n_bins(),
+                                      vqt_result.n_frames(), vqt_config, sr, 2);
+  REQUIRE(vqt_from_result.size() == vqt_from_raw.size());
+  for (size_t i = 0; i < vqt_from_result.size(); ++i) {
+    REQUIRE(vqt_from_result[i] == vqt_from_raw[i]);
+  }
+
+  // Hold the analyzed VQT magnitude fixed and vary only gamma in the inverse.
+  // A non-zero gamma widens the projection bands, so reconstruction must
+  // differ materially from the gamma=0 CQT reconstruction.
+  Audio vqt_from_zero_gamma = griffinlim_vqt(vqt_result.magnitude().data(), vqt_result.n_bins(),
+                                             vqt_result.n_frames(), cqt_config, sr, 2);
+  const size_t common_size = std::min(vqt_from_zero_gamma.size(), vqt_from_result.size());
+  double squared_difference = 0.0;
+  double zero_gamma_energy = 0.0;
+  for (size_t i = 0; i < common_size; ++i) {
+    const double zero_gamma_sample = vqt_from_zero_gamma[i];
+    const double difference = zero_gamma_sample - vqt_from_result[i];
+    squared_difference += difference * difference;
+    zero_gamma_energy += zero_gamma_sample * zero_gamma_sample;
+  }
+  REQUIRE(zero_gamma_energy > 0.0);
+  REQUIRE(squared_difference > zero_gamma_energy * 1e-4);
 }
 
 #if defined(__GNUC__) || defined(__clang__)

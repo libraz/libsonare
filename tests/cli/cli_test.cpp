@@ -11,16 +11,19 @@
 #include <cstdio>
 #include <cstdlib>
 #include <fstream>
+#include <initializer_list>
 #include <memory>
 #include <sstream>
 #include <string>
 #include <vector>
 
+#include "cli_support.h"
 #include "core/audio.h"
 #include "core/audio_io.h"
 #include "sonare.h"
 #include "util/constants.h"
 #include "util/json.h"
+#include "util/types.h"
 
 using namespace sonare;
 using Catch::Matchers::ContainsSubstring;
@@ -107,6 +110,14 @@ std::pair<int, std::string> exec_command(const std::string& cmd) {
 
 /// @brief Gets the path to the sonare CLI executable.
 std::string get_cli_path() {
+#ifdef SONARE_TEST_CLI
+  return SONARE_TEST_CLI;
+#else
+  if (const char* configured = std::getenv("SONARE_TEST_CLI");
+      configured != nullptr && *configured != '\0') {
+    return configured;
+  }
+
   // Try common build paths
   std::vector<std::string> paths = {"./build/bin/sonare-cli",
                                     "./build-mastering-api/bin/sonare-cli", "./bin/sonare-cli",
@@ -121,6 +132,7 @@ std::string get_cli_path() {
 
   // Default to assuming it's in build/bin
   return "./build/bin/sonare-cli";
+#endif
 }
 
 /// @brief Generates a unique temp file path for this test process.
@@ -147,6 +159,7 @@ TEST_CASE("CLI version command", "[cli]") {
   SECTION("json output") {
     auto [code, output] = exec_command(CLI + " version --json");
     REQUIRE(code == 0);
+    REQUIRE_THAT(output, ContainsSubstring("\"cli\": \"native\""));
     REQUIRE_THAT(output, ContainsSubstring("\"cli_version\""));
     REQUIRE_THAT(output, ContainsSubstring("\"lib_version\""));
   }
@@ -210,6 +223,372 @@ TEST_CASE("CLI help command", "[cli]") {
   REQUIRE(output.find("FEATURE COMMANDS") < output.find("\n  mel            "));
   REQUIRE(output.find("  mfcc-to-audio") < output.find("UTILITY COMMANDS"));
   REQUIRE(output.find("UTILITY COMMANDS") < output.find("\n  frames-to-samples"));
+}
+
+TEST_CASE("CLI hidden contract inventory is machine-readable", "[cli][contract]") {
+  auto [code, output] = exec_command(CLI + " --dump-cli-contract");
+  REQUIRE(code == 0);
+  const auto inventory = sonare::util::json::parse_strict(output);
+  REQUIRE(inventory["schema_version"].as_int() == 2);
+  REQUIRE(inventory["surface"].as_string() == "native");
+  REQUIRE(inventory["commands"].is_array());
+
+  bool found_version = false;
+  bool found_chroma = false;
+  bool found_pitch_shift = false;
+  bool found_resample = false;
+#ifdef SONARE_WITH_ARRANGEMENT
+  bool found_project_validate = false;
+#endif
+  bool found_voice_validate = false;
+  for (const auto& command : inventory["commands"].as_array()) {
+    const auto path = command["path"].as_string();
+    if (path == "version") {
+      found_version = true;
+      REQUIRE(command["options"].size() == 1);
+      REQUIRE(command["options"][0]["name"].as_string() == "json");
+    } else if (path == "chroma") {
+      found_chroma = true;
+      REQUIRE(command["options"].size() == 3);
+      REQUIRE(command["options"][1]["name"].as_string() == "n-fft");
+      REQUIRE(command["options"][1]["default"].as_int() == 2048);
+      REQUIRE(command["options"][2]["default"].as_int() == 512);
+    } else if (path == "pitch-shift") {
+      found_pitch_shift = true;
+      REQUIRE(command["options"][0]["name"].as_string() == "json");
+      REQUIRE(command["options"][1]["name"].as_string() == "semitones");
+      REQUIRE_FALSE(command["options"][1]["required"].as_bool());
+      REQUIRE(command["options"][1]["default"].is_null());
+    } else if (path == "resample") {
+      found_resample = true;
+      REQUIRE(command["options"].size() == 3);
+      REQUIRE(command["options"][1]["name"].as_string() == "target-rate");
+      REQUIRE(command["options"][1]["aliases"][0].as_string() == "target-sr");
+      REQUIRE(command["options"][1]["required"].as_bool());
+      REQUIRE(command["options"][1]["default"].is_null());
+#ifdef SONARE_WITH_ARRANGEMENT
+    } else if (path == "project.validate") {
+      found_project_validate = true;
+      REQUIRE(command["options"].size() == 4);
+      REQUIRE(command["options"][2]["name"].as_string() == "in");
+      REQUIRE(command["options"][2]["required"].as_bool());
+      REQUIRE(command["options"][2]["default"].is_null());
+      REQUIRE(command["options"][3]["aliases"][0].as_string() == "o");
+      REQUIRE_FALSE(command["options"][3]["required"].as_bool());
+#endif
+    } else if (path == "voice-preset-validate") {
+      found_voice_validate = true;
+      REQUIRE(command["options"].size() == 4);
+      REQUIRE(command["options"][3]["repeatable"].as_bool());
+      REQUIRE(command["options"][3]["default"].is_array());
+      REQUIRE(command["options"][3]["default"].size() == 0);
+    }
+  }
+  REQUIRE(found_version);
+  REQUIRE(found_chroma);
+  REQUIRE(found_pitch_shift);
+  REQUIRE(found_resample);
+#ifdef SONARE_WITH_ARRANGEMENT
+  REQUIRE(found_project_validate);
+#endif
+  REQUIRE(found_voice_validate);
+}
+
+TEST_CASE("CLI contract inventory follows path-scoped parser metadata", "[cli][contract]") {
+  const auto inventory =
+      sonare::util::json::parse_strict(exec_command(CLI + " --dump-cli-contract").second);
+  const auto command = [&](const std::string& path) {
+    for (const auto& item : inventory["commands"].as_array()) {
+      if (item["path"].as_string() == path) return item;
+    }
+    return sonare::util::json::Value();
+  };
+  const auto has_option = [&](const sonare::util::json::Value& item, const std::string& name) {
+    for (const auto& option : item["options"].as_array()) {
+      if (option["name"].as_string() == name) return true;
+    }
+    return false;
+  };
+
+  REQUIRE_FALSE(has_option(command("beats"), "hop-length"));
+  REQUIRE_FALSE(has_option(command("downbeats"), "hop-length"));
+  REQUIRE_FALSE(has_option(command("onsets"), "hop-length"));
+  REQUIRE_FALSE(has_option(command("pitch-correct"), "n-fft"));
+  REQUIRE_FALSE(has_option(command("pitch-correct"), "hop-length"));
+  REQUIRE_FALSE(has_option(command("note-stretch"), "n-fft"));
+  REQUIRE_FALSE(has_option(command("note-stretch"), "hop-length"));
+  REQUIRE_FALSE(has_option(command("spectral"), "output"));
+  REQUIRE(has_option(command("pitch-shift"), "output"));
+
+#ifdef SONARE_WITH_ARRANGEMENT
+  REQUIRE_FALSE(has_option(command("project.abi"), "frames"));
+  REQUIRE_FALSE(has_option(command("project.validate"), "frames"));
+  REQUIRE_FALSE(has_option(command("project.compile"), "output"));
+  REQUIRE(has_option(command("project.validate"), "output"));
+  REQUIRE(has_option(command("project.bounce"), "output"));
+
+  SECTION("the parser rejects options absent from each path") {
+    for (const std::string& invocation : {"project abi --frames 1", "project validate --frames 1",
+                                          "project compile -o ignored.wav"}) {
+      auto [code, output] = exec_command(CLI + " " + invocation);
+      REQUIRE(code == 2);
+      REQUIRE_THAT(output, ContainsSubstring("option"));
+    }
+  }
+#endif
+}
+
+TEST_CASE("CLI registry exposes immutable leaf contracts", "[cli][registry]") {
+  const auto& registry = cli_command_registry();
+  REQUIRE_FALSE(registry.empty());
+
+  const auto* chroma = cli_command_spec_for_path("chroma");
+  REQUIRE(chroma != nullptr);
+  const auto* fft = cli_option_spec_for_command("chroma", "n-fft");
+  REQUIRE(fft != nullptr);
+  REQUIRE(fft->scalar_type == CliOptionScalarType::Integer);
+  REQUIRE(fft->arity == CliOptionArity::RequiredValue);
+  REQUIRE(fft->default_value.kind == CliOptionDefaultKind::Integer);
+  REQUIRE(fft->default_value.integer_value == 2048);
+  REQUIRE(fft->global_lexical);
+
+  const auto* output = cli_option_spec_for_command("pitch-shift", "o");
+  REQUIRE(output != nullptr);
+  REQUIRE(output->name == "output");
+  REQUIRE(output->scalar_type == CliOptionScalarType::Path);
+  REQUIRE(output->aliases == std::vector<std::string>{"o"});
+  REQUIRE(output->global_lexical);
+  REQUIRE_FALSE(output->required);
+  REQUIRE(output->default_value.kind == CliOptionDefaultKind::Null);
+
+  const auto* semitones = cli_option_spec_for_command("pitch-shift", "semitones");
+  REQUIRE(semitones != nullptr);
+  REQUIRE_FALSE(semitones->required);
+  REQUIRE(semitones->default_value.kind == CliOptionDefaultKind::Null);
+
+  const auto* target_rate = cli_option_spec_for_command("resample", "target-rate");
+  REQUIRE(target_rate != nullptr);
+  REQUIRE(target_rate->required);
+  REQUIRE(target_rate->aliases == std::vector<std::string>{"target-sr"});
+  REQUIRE(target_rate->default_value.kind == CliOptionDefaultKind::Null);
+  REQUIRE(cli_option_spec_for_command("resample", "target-sr") == target_rate);
+
+  const auto* key_hpss = cli_option_spec_for_command("key", "use-hpss");
+  REQUIRE(key_hpss != nullptr);
+  REQUIRE(key_hpss->name == "use-hpss");
+  REQUIRE(key_hpss->aliases == std::vector<std::string>{"hpss"});
+  REQUIRE(key_hpss->scalar_type == CliOptionScalarType::Boolean);
+  REQUIRE(key_hpss->default_value.kind == CliOptionDefaultKind::Boolean);
+  REQUIRE_FALSE(key_hpss->default_value.boolean_value);
+  REQUIRE(cli_option_spec_for_command("key", "hpss") == key_hpss);
+
+  const auto* candidates = cli_option_spec_for_command("key", "candidates");
+  REQUIRE(candidates != nullptr);
+  REQUIRE(candidates->scalar_type == CliOptionScalarType::Integer);
+  REQUIRE(candidates->default_value.kind == CliOptionDefaultKind::Null);
+
+  const auto* smoothing_window = cli_option_spec_for_command("chords", "smoothing-window");
+  REQUIRE(smoothing_window != nullptr);
+  REQUIRE(smoothing_window->scalar_type == CliOptionScalarType::Number);
+  REQUIRE(smoothing_window->default_value.kind == CliOptionDefaultKind::Number);
+  REQUIRE(smoothing_window->default_value.number_value == 2.0);
+  const auto* no_beat_sync = cli_option_spec_for_command("chords", "no-beat-sync");
+  REQUIRE(no_beat_sync != nullptr);
+  REQUIRE(no_beat_sync->scalar_type == CliOptionScalarType::Boolean);
+  REQUIRE(no_beat_sync->default_value.kind == CliOptionDefaultKind::Boolean);
+  REQUIRE_FALSE(no_beat_sync->default_value.boolean_value);
+
+  for (const std::string& command : {"onset-env", "onset-envelope", "tempogram", "plp"}) {
+    const auto* n_mels = cli_option_spec_for_command(command, "n-mels");
+    REQUIRE(n_mels != nullptr);
+    REQUIRE(n_mels->scalar_type == CliOptionScalarType::Integer);
+    REQUIRE(n_mels->default_value.kind == CliOptionDefaultKind::Integer);
+    REQUIRE(n_mels->default_value.integer_value == 128);
+  }
+  for (const std::string& command : {"fourier-tempogram", "tempogram-ratio"})
+    REQUIRE(cli_option_spec_for_command(command, "n-fft") == nullptr);
+
+  const auto* pitch_threshold = cli_option_spec_for_command("pitch", "threshold");
+  REQUIRE(pitch_threshold != nullptr);
+  REQUIRE(pitch_threshold->default_value.kind == CliOptionDefaultKind::Number);
+  REQUIRE(pitch_threshold->default_value.number_value == 0.1);
+  const auto* pitch_hop = cli_option_spec_for_command("pitch", "hop-length");
+  REQUIRE(pitch_hop != nullptr);
+  REQUIRE(pitch_hop->default_value.kind == CliOptionDefaultKind::Integer);
+  REQUIRE(pitch_hop->default_value.integer_value == 512);
+  const auto* pitch_fmin = cli_option_spec_for_command("pitch", "fmin");
+  REQUIRE(pitch_fmin != nullptr);
+  REQUIRE(pitch_fmin->default_value.kind == CliOptionDefaultKind::Number);
+  REQUIRE(pitch_fmin->default_value.number_value == 65.0);
+  const auto* pitch_fmax = cli_option_spec_for_command("pitch", "fmax");
+  REQUIRE(pitch_fmax != nullptr);
+  REQUIRE(pitch_fmax->default_value.kind == CliOptionDefaultKind::Number);
+  REQUIRE(pitch_fmax->default_value.number_value == 2093.0);
+
+  const auto* mel_htk = cli_option_spec_for_command("mel", "htk");
+  REQUIRE(mel_htk != nullptr);
+  REQUIRE(mel_htk->scalar_type == CliOptionScalarType::Boolean);
+  REQUIRE(mel_htk->default_value.kind == CliOptionDefaultKind::Boolean);
+  REQUIRE_FALSE(mel_htk->default_value.boolean_value);
+
+  const auto* trim_top_db = cli_option_spec_for_command("trim-silence", "top-db");
+  REQUIRE(trim_top_db != nullptr);
+  REQUIRE(trim_top_db->scalar_type == CliOptionScalarType::Number);
+  REQUIRE(trim_top_db->default_value.kind == CliOptionDefaultKind::Null);
+  const auto* trim_threshold_db = cli_option_spec_for_command("trim-silence", "threshold-db");
+  REQUIRE(trim_threshold_db != nullptr);
+  REQUIRE(trim_threshold_db->scalar_type == CliOptionScalarType::Number);
+  REQUIRE(trim_threshold_db->default_value.kind == CliOptionDefaultKind::Null);
+
+  const auto* voice_preset = cli_option_spec_for_command("voice-change", "preset");
+  REQUIRE(voice_preset != nullptr);
+  REQUIRE(voice_preset->default_value.kind == CliOptionDefaultKind::String);
+  REQUIRE(voice_preset->default_value.string_value.empty());
+  const auto* voice_formant = cli_option_spec_for_command("voice-change", "formant-factor");
+  REQUIRE(voice_formant != nullptr);
+  REQUIRE(voice_formant->scalar_type == CliOptionScalarType::Number);
+  REQUIRE(voice_formant->default_value.kind == CliOptionDefaultKind::Null);
+
+#ifdef SONARE_WITH_MASTERING
+  const auto* processor = cli_option_spec_for_command("mastering-processor", "processor");
+  REQUIRE(processor != nullptr);
+  REQUIRE(processor->scalar_type == CliOptionScalarType::String);
+  REQUIRE(processor->required);
+  REQUIRE(processor->default_value.kind == CliOptionDefaultKind::Null);
+  const auto* pair_analysis = cli_option_spec_for_command("mastering-pair-analyze", "analysis");
+  REQUIRE(pair_analysis != nullptr);
+  REQUIRE(pair_analysis->required);
+  REQUIRE(pair_analysis->default_value.kind == CliOptionDefaultKind::Null);
+  const auto* pair_reference = cli_option_spec_for_command("mastering-pair-analyze", "reference");
+  REQUIRE(pair_reference != nullptr);
+  REQUIRE(pair_reference->required);
+  REQUIRE(pair_reference->default_value.kind == CliOptionDefaultKind::Null);
+#endif
+
+#ifdef SONARE_WITH_ACOUSTIC_SIM
+  const auto* octave_bands = cli_option_spec_for_command("estimate-room", "n-octave-bands");
+  REQUIRE(octave_bands != nullptr);
+  REQUIRE(octave_bands->aliases == std::vector<std::string>{"n-bands"});
+  REQUIRE(octave_bands->default_value.kind == CliOptionDefaultKind::Null);
+  REQUIRE(cli_option_spec_for_command("estimate-room", "n-bands") == octave_bands);
+#endif
+
+  const auto* set = cli_option_spec_for_command("voice-preset-validate", "set");
+  REQUIRE(set != nullptr);
+  REQUIRE(set->repeatable);
+  REQUIRE(set->default_value.kind == CliOptionDefaultKind::StringArray);
+  REQUIRE(set->default_value.string_array_value.empty());
+
+#ifdef SONARE_WITH_ARRANGEMENT
+  const auto* synth = cli_option_spec_for_command("project.bounce", "synth");
+  REQUIRE(synth != nullptr);
+  REQUIRE(synth->arity == CliOptionArity::OptionalValue);
+  REQUIRE(synth->implicit_optional_default.kind == CliOptionDefaultKind::String);
+  REQUIRE(synth->implicit_optional_default.string_value == "true");
+
+  size_t project_leaf_count = 0;
+  for (const auto& command : registry) {
+    if (command.path.rfind("project.", 0) == 0) ++project_leaf_count;
+  }
+  REQUIRE(project_leaf_count == 10);
+  REQUIRE(cli_command_spec_for_path("project") == nullptr);
+  const auto* project_input = cli_option_spec_for_command("project.validate", "in");
+  REQUIRE(project_input != nullptr);
+  REQUIRE(project_input->required);
+  REQUIRE(project_input->default_value.kind == CliOptionDefaultKind::Null);
+#endif
+}
+
+TEST_CASE("CLI registry defaults and hidden controls project through parser", "[cli][registry]") {
+  auto parse = [](std::initializer_list<const char*> words) {
+    std::vector<std::string> storage;
+    storage.reserve(words.size());
+    for (const char* word : words) storage.emplace_back(word);
+    std::vector<char*> argv;
+    argv.reserve(storage.size());
+    for (auto& word : storage) argv.push_back(word.data());
+    return ArgParser::parse(static_cast<int>(argv.size()), argv.data());
+  };
+
+  const CliArgs chroma = parse({"sonare-cli", "chroma"});
+  REQUIRE(chroma.get_int("n-fft", -1) == 2048);
+  REQUIRE(chroma.get_int("hop-length", -1) == 512);
+  REQUIRE(chroma.get_int("n-fft", -1) != -1);
+
+  const CliArgs key = parse({"sonare-cli", "key", "--hpss", "--candidates", "3"});
+  REQUIRE(key.has("use-hpss"));
+  REQUIRE(key.has("hpss"));
+  REQUIRE(key.get_int("candidates", -1) == 3);
+  REQUIRE(validate_cli_arguments(key, true).empty());
+
+  const CliArgs chords =
+      parse({"sonare-cli", "chords", "--smoothing-window", "1.25", "--no-beat-sync"});
+  REQUIRE(chords.get_float("smoothing-window", -1.0f) == 1.25f);
+  REQUIRE(chords.has("no-beat-sync"));
+  REQUIRE(validate_cli_arguments(chords, true).empty());
+
+  const CliArgs pitch = parse({"sonare-cli", "pitch"});
+  REQUIRE(pitch.get_float("threshold", -1.0f) == 0.1f);
+  REQUIRE(pitch.get_int("hop-length", -1) == 512);
+  REQUIRE(pitch.get_float("fmin", -1.0f) == 65.0f);
+  REQUIRE(pitch.get_float("fmax", -1.0f) == 2093.0f);
+  REQUIRE(validate_cli_arguments(pitch, true).empty());
+
+  const CliArgs trim = parse({"sonare-cli", "trim-silence"});
+  REQUIRE(trim.get_float("threshold-db", -60.0f) == -60.0f);
+  REQUIRE(trim.get_float("top-db", 60.0f) == 60.0f);
+  REQUIRE(validate_cli_arguments(trim, true).empty());
+
+  const CliArgs voice = parse({"sonare-cli", "voice-change"});
+  REQUIRE(voice.get_string("preset", "sentinel") == "");
+  REQUIRE(voice.get_float("formant-factor", 1.0f) == 1.0f);
+  REQUIRE(validate_cli_arguments(voice, true).empty());
+
+#ifdef SONARE_WITH_ACOUSTIC_SIM
+  const CliArgs estimate = parse({"sonare-cli", "estimate-room", "--n-bands", "8"});
+  REQUIRE(estimate.get_int("n-octave-bands", -1) == 8);
+  REQUIRE(validate_cli_arguments(estimate, true).empty());
+#endif
+
+  const CliArgs tempogram = parse({"sonare-cli", "tempogram", "--n-mels", "64"});
+  REQUIRE(tempogram.n_mels == 64);
+  REQUIRE(validate_cli_arguments(tempogram, true).empty());
+
+  const CliArgs fourier = parse({"sonare-cli", "fourier-tempogram", "--n-fft", "1024"});
+  REQUIRE_FALSE(validate_cli_arguments(fourier, true).empty());
+
+  CliArgs required;
+  required.command = "pitch-shift";
+  REQUIRE(required.get_float("semitones", 17.0f) == 17.0f);
+
+  const auto metadata = cli_option_metadata_for_command("chroma");
+  for (const auto& option : metadata) {
+    REQUIRE(option.name != "quiet");
+    REQUIRE(option.name != "help");
+  }
+  const auto* quiet = cli_option_spec_for_command("chroma", "q");
+  REQUIRE(quiet != nullptr);
+  REQUIRE_FALSE(quiet->inventory);
+  const auto* help = cli_option_spec_for_command("chroma", "h");
+  REQUIRE(help != nullptr);
+  REQUIRE_FALSE(help->inventory);
+
+#ifdef SONARE_WITH_ARRANGEMENT
+  const CliArgs project =
+      parse({"sonare-cli", "project", "validate", "--strict", "--in", "project.json"});
+  REQUIRE(project.command == "project");
+  REQUIRE(project.input_file == "validate");
+  REQUIRE(project.has("strict"));
+  REQUIRE(project.get_string("in") == "project.json");
+  REQUIRE(validate_cli_arguments(project, false).empty());
+
+  const CliArgs bounce =
+      parse({"sonare-cli", "project", "bounce", "--in", "project.json", "--synth"});
+  REQUIRE(bounce.command == "project");
+  REQUIRE(bounce.input_file == "bounce");
+  REQUIRE(bounce.get_string("synth") == "true");
+  REQUIRE(validate_cli_arguments(bounce, false).empty());
+#endif
 }
 
 TEST_CASE("CLI rejects option typos and terminal required options before dispatch",
@@ -340,12 +719,136 @@ TEST_CASE("CLI rejects extra positionals and preserves flag and negative-value p
 
 #ifdef SONARE_WITH_ARRANGEMENT
   SECTION("terminal optional-value flag remains valid") {
-    auto [code, output] = exec_command(CLI + " project abi --synth --json");
-    REQUIRE(code == 0);
-    REQUIRE_THAT(output, ContainsSubstring("abi_version"));
+    // `--synth` belongs to the bounce subcommand.  The old broad project
+    // schema accidentally accepted it for `project abi`; path-scoped schemas
+    // must keep the optional-value parser behavior while rejecting it on
+    // unrelated project routes.
+    auto [code, output] = exec_command(CLI + " project bounce --synth");
+    REQUIRE(code != 0);
+    REQUIRE_THAT(output, !ContainsSubstring("Unknown option"));
   }
 #endif
 }
+
+TEST_CASE("CLI enforces registry requirements and canonical option aliases",
+          "[cli][argument-contract]") {
+  SECTION("missing project input is a usage error before dispatch") {
+#ifdef SONARE_WITH_ARRANGEMENT
+    auto [code, output] = exec_command(CLI + " project validate --json");
+    REQUIRE(code == 2);
+    REQUIRE_THAT(output, ContainsSubstring("Missing required option '--in'"));
+
+    auto [legacy_code, legacy_output] =
+        exec_command("SONARE_LEGACY_EXIT=1 " + CLI + " project validate --json");
+    REQUIRE(legacy_code == 1);
+    REQUIRE_THAT(legacy_output, ContainsSubstring("Missing required option '--in'"));
+#endif
+  }
+
+  SECTION("foreign project options remain path-scoped") {
+#ifdef SONARE_WITH_ARRANGEMENT
+    auto [code, output] = exec_command(CLI + " project validate --frames 1 --json");
+    REQUIRE(code == 2);
+    REQUIRE_THAT(output, ContainsSubstring("Unknown option '--frames'"));
+    REQUIRE_THAT(output, !ContainsSubstring("Missing required option '--in'"));
+#endif
+  }
+
+  SECTION("resample alias satisfies the one required target option") {
+    create_test_wav(TEST_WAV);
+    const std::string output_path = unique_temp_path("_resample_alias.wav");
+    auto [code, output] = exec_command(CLI + " resample --target-sr 16000 " + TEST_WAV + " -o " +
+                                       output_path + " -q");
+    REQUIRE(code == 0);
+    REQUIRE(output_path != TEST_WAV);
+    const auto [samples, sample_rate] = load_wav(output_path);
+    REQUIRE_FALSE(samples.empty());
+    REQUIRE(sample_rate == 16000);
+    std::remove(output_path.c_str());
+  }
+}
+
+TEST_CASE("CLI generic parser failures use the usage exit code", "[cli][argument-contract]") {
+  SECTION("unknown option") {
+    auto [code, output] = exec_command(CLI + " chroma --no-such-option");
+    REQUIRE(code == 2);
+    REQUIRE_THAT(output, ContainsSubstring("Unknown option"));
+  }
+
+  SECTION("missing option value") {
+    auto [code, output] = exec_command(CLI + " chroma --n-fft");
+    REQUIRE(code == 2);
+    REQUIRE_THAT(output, ContainsSubstring("Missing value for option '--n-fft'"));
+  }
+
+  SECTION("invalid numeric value") {
+    auto [code, output] = exec_command(CLI + " chroma --n-fft not-a-number");
+    REQUIRE(code == 2);
+  }
+
+  SECTION("legacy mode folds parser failures to one") {
+    auto [code, output] = exec_command("SONARE_LEGACY_EXIT=1 " + CLI + " chroma --n-fft");
+    REQUIRE(code == 1);
+    REQUIRE_THAT(output, ContainsSubstring("Missing value for option '--n-fft'"));
+  }
+
+  SECTION("legacy mode folds top-level and command early failures to one") {
+    auto [no_args_code, no_args_output] = exec_command("SONARE_LEGACY_EXIT=1 " + CLI);
+    REQUIRE(no_args_code == 1);
+    REQUIRE_THAT(no_args_output, ContainsSubstring("Usage:"));
+
+    auto [unknown_code, unknown_output] =
+        exec_command("SONARE_LEGACY_EXIT=1 " + CLI + " no-such-command");
+    REQUIRE(unknown_code == 1);
+    REQUIRE_THAT(unknown_output, ContainsSubstring("Unknown command"));
+
+    auto [missing_audio_code, missing_audio_output] =
+        exec_command("SONARE_LEGACY_EXIT=1 " + CLI + " chroma");
+    REQUIRE(missing_audio_code == 1);
+    REQUIRE_THAT(missing_audio_output, ContainsSubstring("Missing audio file"));
+  }
+}
+
+TEST_CASE("CLI exception exit codes include cancellation", "[cli][contract]") {
+  // This table is intentionally exercised through the same exception-to-exit
+  // mapping used by main(), rather than making cancellation a synthetic CLI
+  // command.  Cancellation is emitted by cooperative core operations.
+  REQUIRE(cli_exit_code_for_error(sonare::ErrorCode::Cancelled, false) == 11);
+  REQUIRE(cli_exit_code_for_error(sonare::ErrorCode::Cancelled, true) == 1);
+}
+
+#if defined(SONARE_WITH_VOICE_CHANGER)
+TEST_CASE("CLI voice-preset-validate emits the Batch-0 JSON envelope", "[cli][contract]") {
+  const std::string valid_path = unique_temp_path("_contract_valid_preset.json");
+  const std::string invalid_path = unique_temp_path("_contract_invalid_preset.json");
+  {
+    std::ofstream valid(valid_path);
+    valid << R"({"schemaVersion":1,"id":"contract-fixture","name":"Contract Fixture",)"
+             R"("category":"custom","macros":{"pitch":0,"formant":1,"brightness":0,)"
+             R"("space":0,"intensity":0.5,"noiseControl":0,"sibilance":0}})";
+    std::ofstream invalid(invalid_path);
+    invalid << R"({"schemaVersion":1,"id":"contract-invalid","name":"Invalid",)"
+               R"("category":"custom","dsp":{}})";
+  }
+
+  auto [valid_code, valid_output] =
+      exec_command(CLI + " voice-preset-validate " + valid_path + " --json");
+  REQUIRE(valid_code == 0);
+  const auto valid_payload = sonare::util::json::parse_strict(valid_output);
+  REQUIRE(valid_payload["ok"].as_bool());
+  REQUIRE(valid_payload["normalized_json"].is_string());
+
+  auto [invalid_code, invalid_output] =
+      exec_command(CLI + " voice-preset-validate " + invalid_path + " --json");
+  REQUIRE(invalid_code == 3);
+  const auto invalid_payload = sonare::util::json::parse_strict(invalid_output);
+  REQUIRE_FALSE(invalid_payload["ok"].as_bool());
+  REQUIRE(invalid_payload["error"].is_string());
+
+  std::remove(valid_path.c_str());
+  std::remove(invalid_path.c_str());
+}
+#endif
 
 TEST_CASE("CLI honors --flag=false to disable a boolean flag", "[cli][argument-contract]") {
   // A presence-only flag given `=false`/`=0`/`=no`/`=off` must be treated as
@@ -425,7 +928,7 @@ TEST_CASE("CLI rejects -o for commands that produce no file output", "[cli][argu
   std::remove(out.c_str());
 
   auto [code, output] = exec_command(CLI + " bpm " + TEST_WAV + " -o " + out + " -q");
-  REQUIRE(code != 0);
+  REQUIRE(code == 2);
   REQUIRE_THAT(output, ContainsSubstring("does not produce a file output"));
   std::ifstream f(out);
   REQUIRE_FALSE(f.good());
@@ -433,8 +936,34 @@ TEST_CASE("CLI rejects -o for commands that produce no file output", "[cli][argu
   // The long-form spelling is rejected identically.
   auto [long_code, long_output] =
       exec_command(CLI + " lufs " + TEST_WAV + " --output " + out + " -q");
-  REQUIRE(long_code != 0);
+  REQUIRE(long_code == 2);
   REQUIRE_THAT(long_output, ContainsSubstring("does not produce a file output"));
+
+  // Promoted analysis paths must reject both spellings at the parser/schema
+  // boundary, before loading the audio file.  Their contract exit is usage=2
+  // (and the compatibility mode still folds it to legacy=1).
+  for (const std::string& command : {"analyze", "spectral"}) {
+    auto [long_analysis_code, long_analysis_output] =
+        exec_command(CLI + " " + command + " " + TEST_WAV + " --output " + out + " -q");
+    REQUIRE(long_analysis_code == 2);
+    REQUIRE_THAT(long_analysis_output, ContainsSubstring("does not produce a file output"));
+
+    auto [short_analysis_code, short_analysis_output] =
+        exec_command(CLI + " " + command + " " + TEST_WAV + " -o " + out + " -q");
+    REQUIRE(short_analysis_code == 2);
+    REQUIRE_THAT(short_analysis_output, ContainsSubstring("does not produce a file output"));
+
+    auto [legacy_long_code, legacy_long_output] =
+        exec_command("SONARE_LEGACY_EXIT=1 " + CLI + " " + command + " " + TEST_WAV + " --output " +
+                     out + " -q");
+    REQUIRE(legacy_long_code == 1);
+    REQUIRE_THAT(legacy_long_output, ContainsSubstring("does not produce a file output"));
+
+    auto [legacy_short_code, legacy_short_output] = exec_command(
+        "SONARE_LEGACY_EXIT=1 " + CLI + " " + command + " " + TEST_WAV + " -o " + out + " -q");
+    REQUIRE(legacy_short_code == 1);
+    REQUIRE_THAT(legacy_short_output, ContainsSubstring("does not produce a file output"));
+  }
 }
 
 TEST_CASE("CLI effect commands require an output destination", "[cli]") {
@@ -455,6 +984,22 @@ TEST_CASE("CLI effect commands require an output destination", "[cli]") {
   }
 }
 
+TEST_CASE("CLI trim-silence keeps the native threshold fallback dynamic", "[cli]") {
+  create_test_wav(TEST_WAV);
+
+  auto [default_code, default_output] =
+      exec_command(CLI + " trim-silence " + TEST_WAV + " --json -q");
+  auto [explicit_code, explicit_output] =
+      exec_command(CLI + " trim-silence " + TEST_WAV + " --threshold-db -60 --json -q");
+  REQUIRE(default_code == 0);
+  REQUIRE(explicit_code == 0);
+
+  const auto default_payload = sonare::util::json::parse_strict(default_output);
+  const auto explicit_payload = sonare::util::json::parse_strict(explicit_output);
+  REQUIRE(default_payload["threshold_db"].as_number() == -60.0);
+  REQUIRE(default_payload["length"].as_int() == explicit_payload["length"].as_int());
+}
+
 #ifdef SONARE_WITH_ACOUSTIC_SIM
 TEST_CASE("CLI estimate-room accepts both band-count spellings", "[cli][argument-contract]") {
   // Native historically spelled the flag --n-bands; the Python CLI uses
@@ -466,6 +1011,64 @@ TEST_CASE("CLI estimate-room accepts both band-count spellings", "[cli][argument
 
   auto [alias_code, alias_output] = exec_command(CLI + " estimate-room --n-octave-bands 6 -q");
   REQUIRE_THAT(alias_output, !ContainsSubstring("Unknown option"));
+}
+
+TEST_CASE("CLI acoustic commands preserve the default seed for non-positive values",
+          "[cli][acoustic]") {
+  const std::string synth_options =
+      " --length 7 --width 5 --height 3 --absorption 0.2 --ism-order 0"
+      " --max-seconds 0.3 --sample-rate 16000 --json -q";
+  auto run_synthesize = [&](const std::string& label, const std::string& seed_option) {
+    const std::string output = unique_temp_path("_seed_synth_" + label + ".wav");
+    const auto [code, command_output] =
+        exec_command(CLI + " synthesize-rir -o " + output + synth_options + seed_option);
+    REQUIRE(code == 0);
+    const auto [samples, sample_rate] = load_wav(output);
+    REQUIRE(sample_rate == 16000);
+    REQUIRE_FALSE(samples.empty());
+    std::remove(output.c_str());
+    return samples;
+  };
+
+  const auto synth_default = run_synthesize("default", "");
+  const auto synth_zero = run_synthesize("zero", " --seed 0");
+  const auto synth_negative = run_synthesize("negative", " --seed -1");
+  const auto synth_one = run_synthesize("one", " --seed 1");
+  const auto synth_other = run_synthesize("other", " --seed 7");
+  REQUIRE(synth_default == synth_zero);
+  REQUIRE(synth_default == synth_negative);
+  REQUIRE(synth_default == synth_one);
+  REQUIRE(synth_default != synth_other);
+
+  const std::string input = unique_temp_path("_seed_morph_input.wav");
+  std::vector<float> impulse(256, 0.0f);
+  impulse[0] = 1.0f;
+  save_wav(input, impulse, 16000);
+  const std::string morph_options =
+      " --length 7 --width 5 --height 3 --absorption 0.2 --ism-order 0"
+      " --max-seconds 0.3 --wet 1 --suppression 0 --json -q";
+  auto run_morph = [&](const std::string& label, const std::string& seed_option) {
+    const std::string output = unique_temp_path("_seed_morph_" + label + ".wav");
+    const auto [code, command_output] =
+        exec_command(CLI + " room-morph " + input + " -o " + output + morph_options + seed_option);
+    REQUIRE(code == 0);
+    const auto [samples, sample_rate] = load_wav(output);
+    REQUIRE(sample_rate == 16000);
+    REQUIRE_FALSE(samples.empty());
+    std::remove(output.c_str());
+    return samples;
+  };
+
+  const auto morph_default = run_morph("default", "");
+  const auto morph_zero = run_morph("zero", " --seed 0");
+  const auto morph_negative = run_morph("negative", " --seed -1");
+  const auto morph_one = run_morph("one", " --seed 1");
+  const auto morph_other = run_morph("other", " --seed 7");
+  REQUIRE(morph_default == morph_zero);
+  REQUIRE(morph_default == morph_negative);
+  REQUIRE(morph_default == morph_one);
+  REQUIRE(morph_default != morph_other);
+  std::remove(input.c_str());
 }
 #endif
 
@@ -714,8 +1317,30 @@ TEST_CASE("CLI rhythm command", "[cli]") {
   SECTION("json output") {
     auto [code, output] = exec_command(CLI + " rhythm " + TEST_WAV + " --json -q");
     REQUIRE(code == 0);
-    REQUIRE_THAT(output, ContainsSubstring("\"time_signature\""));
-    REQUIRE_THAT(output, ContainsSubstring("\"groove_type\""));
+    const auto payload = sonare::util::json::parse_strict(output);
+    REQUIRE(payload.size() == 7);
+    for (const char* key : {"bpm", "time_signature", "groove_type", "syncopation",
+                            "pattern_regularity", "tempo_stability", "beat_intervals"}) {
+      REQUIRE(payload.contains(key));
+    }
+    REQUIRE(payload["bpm"].is_number());
+    const auto& time_signature = payload["time_signature"];
+    REQUIRE(time_signature.size() == 3);
+    for (const char* key : {"numerator", "denominator", "confidence"}) {
+      REQUIRE(time_signature.contains(key));
+      REQUIRE(time_signature[key].is_number());
+    }
+    REQUIRE(payload["groove_type"].is_string());
+    for (const char* key : {"syncopation", "pattern_regularity", "tempo_stability"}) {
+      REQUIRE(payload[key].is_number());
+    }
+    const auto& intervals = payload["beat_intervals"];
+    REQUIRE(intervals.size() == 5);
+    REQUIRE(intervals["count"].is_number());
+    for (const char* key : {"mean", "std", "min", "max"}) {
+      REQUIRE(intervals.contains(key));
+      REQUIRE(intervals[key].is_number());
+    }
   }
 }
 
@@ -769,6 +1394,20 @@ TEST_CASE("CLI mel command", "[cli]") {
     REQUIRE_THAT(output, ContainsSubstring("\"n_mels\""));
     REQUIRE_THAT(output, ContainsSubstring("\"n_frames\""));
   }
+
+  SECTION("htk flag is accepted and changes the mel filterbank") {
+    const std::string options =
+        " --n-fft 512 --hop-length 128 --n-mels 40 --fmin 20 --fmax 10000 --json -q";
+    auto [slaney_code, slaney_output] = exec_command(CLI + " mel " + TEST_WAV + options);
+    auto [htk_code, htk_output] = exec_command(CLI + " mel " + TEST_WAV + " --htk" + options);
+    REQUIRE(slaney_code == 0);
+    REQUIRE(htk_code == 0);
+    const auto slaney = sonare::util::json::parse_strict(slaney_output);
+    const auto htk = sonare::util::json::parse_strict(htk_output);
+    REQUIRE(slaney["n_mels"].as_int() == 40);
+    REQUIRE(htk["n_mels"].as_int() == 40);
+    REQUIRE(slaney["stats"]["mean"].as_number() != htk["stats"]["mean"].as_number());
+  }
 }
 
 TEST_CASE("CLI chroma command", "[cli]") {
@@ -785,6 +1424,8 @@ TEST_CASE("CLI chroma command", "[cli]") {
     REQUIRE(code == 0);
     REQUIRE_THAT(output, ContainsSubstring("\"n_chroma\""));
     REQUIRE_THAT(output, ContainsSubstring("\"mean_energy\""));
+    REQUIRE_THAT(output, ContainsSubstring("\"mean_energy\": ["));
+    REQUIRE_THAT(output, !ContainsSubstring("\"mean_energy\": {"));
   }
 }
 
@@ -807,13 +1448,13 @@ TEST_CASE("CLI rejects non-finite gain and RMS normalization targets", "[cli]") 
 
   auto [gain_code, gain_message] =
       exec_command(CLI + " gain " + TEST_WAV + " -o " + gain_output + " --gain-db nan -q");
-  REQUIRE(gain_code == 3);
+  REQUIRE(gain_code == 2);
   REQUIRE_THAT(gain_message, ContainsSubstring("must be finite"));
 
   auto [normalize_code, normalize_message] =
       exec_command(CLI + " normalize " + TEST_WAV + " -o " + normalize_output +
                    " --mode rms --target-db inf -q");
-  REQUIRE(normalize_code == 3);
+  REQUIRE(normalize_code == 2);
   REQUIRE_THAT(normalize_message, ContainsSubstring("must be finite"));
 
   REQUIRE_FALSE(std::ifstream(gain_output).good());
@@ -933,6 +1574,18 @@ TEST_CASE("CLI spectral command", "[cli]") {
     REQUIRE(code == 0);
     REQUIRE_THAT(output, ContainsSubstring("\"features\""));
     REQUIRE_THAT(output, ContainsSubstring("\"centroid\""));
+
+    const auto payload = sonare::util::json::parse_strict(output);
+    const auto& features = payload["features"];
+    for (const char* feature_name :
+         {"centroid", "bandwidth", "rolloff", "flatness", "zcr", "rms"}) {
+      const auto& stats = features[feature_name];
+      REQUIRE(stats.size() == 4);
+      for (const char* stat_name : {"mean", "std", "min", "max"}) {
+        REQUIRE(stats.contains(stat_name));
+        REQUIRE(stats[stat_name].is_number());
+      }
+    }
   }
 }
 
@@ -949,8 +1602,22 @@ TEST_CASE("CLI pitch command", "[cli]") {
     auto [code, output] = exec_command(CLI + " pitch " + TEST_WAV + " --json -q");
     INFO("CLI output: " << output);
     REQUIRE(code == 0);
-    REQUIRE_THAT(output, ContainsSubstring("\"algorithm\""));
-    REQUIRE_THAT(output, ContainsSubstring("\"n_frames\""));
+    auto [explicit_code, explicit_output] =
+        exec_command(CLI + " pitch " + TEST_WAV + " --threshold 0.1 --json -q");
+    REQUIRE(explicit_code == 0);
+    REQUIRE(output == explicit_output);
+    const auto payload = sonare::util::json::parse_strict(output);
+    REQUIRE(payload.size() == 6);
+    for (const char* key :
+         {"algorithm", "n_frames", "voiced_count", "voiced_ratio", "median_f0", "mean_f0"}) {
+      REQUIRE(payload.contains(key));
+    }
+    REQUIRE(payload["algorithm"].is_string());
+    REQUIRE(payload["n_frames"].is_number());
+    REQUIRE(payload["voiced_count"].is_number());
+    REQUIRE(payload["voiced_ratio"].is_number());
+    REQUIRE(payload["median_f0"].is_number());
+    REQUIRE(payload["mean_f0"].is_number());
   }
 
   SECTION("with yin algorithm") {
@@ -963,6 +1630,19 @@ TEST_CASE("CLI pitch command", "[cli]") {
     auto [code, output] = exec_command(CLI + " pitch " + TEST_WAV + " --algorithm typo -q");
     REQUIRE(code == 3);
     REQUIRE_THAT(output, ContainsSubstring("--algorithm must be 'yin' or 'pyin'"));
+  }
+
+  SECTION("zero-frame frequency range emits a nullable voiced ratio") {
+    const std::string short_wav = unique_temp_path("_pitch_zero_frames.wav");
+    create_test_wav(short_wav, 0.02f, 440.0f);
+    auto [code, output] =
+        exec_command(CLI + " pitch " + short_wav + " --fmin 5 --fmax 10 --json -q");
+    REQUIRE(code == 0);
+    const auto payload = sonare::util::json::parse_strict(output);
+    REQUIRE(payload["n_frames"].as_int() == 0);
+    REQUIRE(payload["voiced_count"].as_int() == 0);
+    REQUIRE(payload["voiced_ratio"].is_null());
+    std::remove(short_wav.c_str());
   }
 }
 
@@ -1030,6 +1710,23 @@ TEST_CASE("CLI analyze command", "[.][slow][cli]") {
     for (const char* key : {"bpm", "bpm_confidence", "key", "time_signature", "beats", "chords",
                             "sections", "timbre", "dynamics", "rhythm", "form"}) {
       REQUIRE_THAT(output, ContainsSubstring(std::string("\"") + key + "\""));
+    }
+
+    const auto payload = sonare::util::json::parse_strict(output);
+    const auto& sections = payload["sections"];
+    REQUIRE(sections.is_array());
+    REQUIRE_FALSE(sections.as_array().empty());
+    for (const auto& section : sections.as_array()) {
+      const auto type = section["type"].as_string();
+      bool canonical = false;
+      for (const char* expected : {"intro", "verse", "pre-chorus", "chorus", "bridge",
+                                   "instrumental", "outro", "unknown"}) {
+        if (type == expected) {
+          canonical = true;
+          break;
+        }
+      }
+      REQUIRE(canonical);
     }
   }
 }
@@ -1141,13 +1838,12 @@ TEST_CASE("CLI DAW editing commands", "[cli]") {
     REQUIRE(f.good());
   }
 
-  SECTION("voice-change preset warns about ignored simple knobs") {
+  SECTION("voice-change preset rejects simple knob conflicts") {
     auto [code, output] = exec_command(
         CLI + " voice-change --preset neutral-monitor --pitch-semitones 5 --formant-factor 1.1 " +
         TEST_WAV + " -o " + TEST_OUT + " -q");
-    REQUIRE(code == 0);
-    REQUIRE_THAT(output, ContainsSubstring("warning: --pitch-semitones is ignored"));
-    REQUIRE_THAT(output, ContainsSubstring("warning: --formant-factor is ignored"));
+    REQUIRE(code == 3);
+    REQUIRE_THAT(output, ContainsSubstring("cannot be combined with a realtime preset"));
   }
 
   SECTION("voice-change resolves a preset-pack entry and applies overrides") {
@@ -1167,7 +1863,11 @@ TEST_CASE("CLI DAW editing commands", "[cli]") {
         exec_command(CLI + " voice-preset-validate " + pack +
                      " --preset neutral-monitor --set dsp.outputGainDb=-2 --json -q");
     REQUIRE(code == 0);
-    REQUIRE_THAT(output, ContainsSubstring("\"outputGainDb\":-2"));
+    const auto payload = sonare::util::json::parse_strict(output);
+    REQUIRE(payload["ok"].as_bool());
+    const auto normalized =
+        sonare::util::json::parse_strict(payload["normalized_json"].as_string());
+    REQUIRE(normalized["dsp"]["outputGainDb"].as_number() == -2.0);
   }
 }
 
@@ -1221,7 +1921,7 @@ TEST_CASE("CLI voice-change rejects a realtime preset document with an unknown f
     {
       std::ofstream preset(preset_path);
       REQUIRE(preset.good());
-      preset << R"json({"schemaVersion":1,"id":"typo-test","name":"Typo Test",
+      preset << R"json({"schemaVersion":1,"id":"typo-test","name":"Typo Test","category":"custom",
         "dsp":{"inputGainDb":0,"outputGainDb":0,"wetMix":1,
           "retune":{"semitones":0,"mix":0,"grainSize":0},
           "formnt":{"factor":1,"amount":0,"body":0,"brightness":0,"nasal":0},
@@ -1243,9 +1943,17 @@ TEST_CASE("CLI voice-change rejects a realtime preset document with an unknown f
   }
 
   SECTION("typo'd --set macro key") {
+    const std::string preset_path = unique_temp_path("_vc_typo_macro_preset.json");
+    {
+      std::ofstream preset(preset_path);
+      REQUIRE(preset.good());
+      preset << R"json({"schemaVersion":1,"id":"macro-typo-test","name":"Macro Typo Test",
+        "category":"custom","macros":{"brightness":0.2}})json";
+    }
     auto [code, output] =
-        exec_command(CLI + " voice-change --preset neutral-monitor --set macros.brighness=0.8 " +
-                     TEST_WAV + " -o " + TEST_OUT + " -q");
+        exec_command(CLI + " voice-change --preset-json " + preset_path +
+                     " --set macros.brighness=0.8 " + TEST_WAV + " -o " + TEST_OUT + " -q");
+    std::remove(preset_path.c_str());
     REQUIRE(code != 0);
     REQUIRE_THAT(output, ContainsSubstring("macros.brighness"));
     std::ifstream f(TEST_OUT);
@@ -1319,6 +2027,28 @@ TEST_CASE("CLI mastering command", "[cli][mastering]") {
     REQUIRE(f.good());
   }
 
+  SECTION("report JSON always publishes zero latency") {
+    const std::string report = unique_temp_path("_mastering_report.json");
+    auto [code, output] =
+        exec_command(CLI + " mastering " + TEST_WAV + " --report " + report + " --json -q");
+    REQUIRE(code == 0);
+    const auto payload = sonare::util::json::parse_strict(output);
+    REQUIRE(payload.contains("latency_samples"));
+    REQUIRE(payload["latency_samples"].as_int() == 0);
+    REQUIRE(std::ifstream(report).good());
+
+    const std::string preset_report = unique_temp_path("_mastering_preset_report.json");
+    auto [preset_code, preset_output] = exec_command(
+        CLI + " mastering " + TEST_WAV + " --preset pop --report " + preset_report + " --json -q");
+    REQUIRE(preset_code == 0);
+    const auto preset_payload = sonare::util::json::parse_strict(preset_output);
+    REQUIRE(preset_payload.contains("latency_samples"));
+    REQUIRE(preset_payload["latency_samples"].as_int() == 0);
+    REQUIRE(std::ifstream(preset_report).good());
+    std::remove(report.c_str());
+    std::remove(preset_report.c_str());
+  }
+
   SECTION("runs preset mastering chain") {
     std::string preset_out = unique_temp_path("_preset_mastered.wav");
     std::remove(preset_out.c_str());
@@ -1384,8 +2114,16 @@ TEST_CASE("CLI mastering command", "[cli][mastering]") {
         CLI + " mastering-processor " + TEST_WAV +
         " --processor dynamics.compressor --params thresholdDb=-24,ratio=1.5 --json -q");
     REQUIRE(code == 0);
-    REQUIRE_THAT(output, ContainsSubstring("\"processor\": \"dynamics.compressor\""));
-    REQUIRE_THAT(output, ContainsSubstring("\"latency_samples\""));
+    const auto payload = sonare::util::json::parse_strict(output);
+    REQUIRE(payload.size() == 8);
+    for (const char* key : {"processor", "stereo", "input_lufs", "output_lufs", "applied_gain_db",
+                            "latency_samples", "sample_rate", "output"}) {
+      REQUIRE(payload.contains(key));
+    }
+    REQUIRE(payload["processor"].as_string() == "dynamics.compressor");
+    REQUIRE_FALSE(payload["stereo"].as_bool());
+    REQUIRE(payload["sample_rate"].as_int() == 22050);
+    REQUIRE(payload["output"].as_string().empty());
   }
 
   SECTION("rejects malformed parameter entries") {
@@ -1411,13 +2149,22 @@ TEST_CASE("CLI mastering command", "[cli][mastering]") {
     REQUIRE(dynamic_code == 0);
     REQUIRE_THAT(dynamic_output, ContainsSubstring("\"processor\": \"eq.equalizer\""));
 
+    const auto eq_payload = sonare::util::json::parse_strict(dynamic_output);
+    REQUIRE(eq_payload.size() == 7);
+    for (const char* key : {"processor", "input_lufs", "output_lufs", "applied_gain_db",
+                            "latency_samples", "sample_rate", "output"}) {
+      REQUIRE(eq_payload.contains(key));
+    }
+    REQUIRE(eq_payload["processor"].as_string() == "eq.equalizer");
+    REQUIRE(eq_payload["sample_rate"].as_int() == 22050);
+    REQUIRE(eq_payload["output"].as_string().empty());
+
     auto [params_code, params_output] = exec_command(
         CLI + " eq " + TEST_WAV +
         " --params band0.enabled=1 --auto-threshold --sidechain-freq-hz 1000 --sidechain-q 0.7 -q");
-    REQUIRE(params_code == 0);
-    REQUIRE_THAT(params_output, ContainsSubstring("--auto-threshold is ignored when --params"));
-    REQUIRE_THAT(params_output, ContainsSubstring("--sidechain-freq-hz is ignored when --params"));
-    REQUIRE_THAT(params_output, ContainsSubstring("--sidechain-q is ignored when --params"));
+    REQUIRE(params_code == 3);
+    REQUIRE_THAT(params_output,
+                 ContainsSubstring("--auto-threshold cannot be combined with --params"));
   }
 
   SECTION("runs pair processor and analysis") {
@@ -1557,12 +2304,12 @@ TEST_CASE("CLI global options", "[cli]") {
 
   SECTION("rejects numeric suffixes with the option name") {
     auto [code, output] = exec_command(CLI + " key " + TEST_WAV + " --candidates 3junk -q");
-    REQUIRE(code == 3);
+    REQUIRE(code == 2);
     REQUIRE_THAT(output, ContainsSubstring("--candidates"));
 
     auto [global_code, global_output] =
         exec_command(CLI + " mel " + TEST_WAV + " --n-mels=64junk -q");
-    REQUIRE(global_code == 3);
+    REQUIRE(global_code == 2);
     REQUIRE_THAT(global_output, ContainsSubstring("--n-mels"));
   }
 
@@ -1570,7 +2317,7 @@ TEST_CASE("CLI global options", "[cli]") {
     for (const char* option :
          {"--n-fft 4096", "--hop-length 256", "--n-mels 64", "--fmin 20", "--fmax 20000"}) {
       auto [code, output] = exec_command(CLI + " version " + option + " -q");
-      REQUIRE(code == 3);
+      REQUIRE(code == 2);
       REQUIRE_THAT(output, ContainsSubstring("Unknown option"));
     }
   }
@@ -1582,12 +2329,14 @@ TEST_CASE("CLI global options", "[cli]") {
     REQUIRE_THAT(output, ContainsSubstring("\"samples\": 6144"));
   }
 
+#ifdef SONARE_WITH_ARRANGEMENT
   SECTION("project bounce rejects an unknown NativeSynth preset") {
     auto [code, output] = exec_command(
         CLI + " project bounce --in missing.json -o ignored.wav --synth not-a-preset -q");
     REQUIRE(code == 9);
     REQUIRE_THAT(output, ContainsSubstring("unknown synth preset"));
   }
+#endif
 }
 
 TEST_CASE("CLI command help", "[cli]") {
@@ -1603,6 +2352,14 @@ TEST_CASE("CLI command help", "[cli]") {
   REQUIRE_THAT(global_output, ContainsSubstring("--n-mels <int>"));
   REQUIRE_THAT(global_output, ContainsSubstring("--fmin <hz>"));
   REQUIRE_THAT(global_output, ContainsSubstring("--fmax <hz>"));
+
+#ifdef SONARE_WITH_ARRANGEMENT
+  auto [project_code, project_output] = exec_command(CLI + " project validate --help");
+  REQUIRE(project_code == 0);
+  REQUIRE_THAT(project_output, ContainsSubstring("--strict"));
+  REQUIRE_THAT(project_output, ContainsSubstring("--in <value>"));
+  REQUIRE_THAT(project_output, ContainsSubstring("--output <value>"));
+#endif
 }
 
 #if defined(SONARE_WITH_ARRANGEMENT)
@@ -1633,7 +2390,7 @@ TEST_CASE("CLI project command group", "[cli]") {
     const std::string out = unique_temp_path("_project_output.json");
     for (const char* subcommand : {"abi", "compile", "synth-presets"}) {
       auto [code, output] = exec_command(CLI + " project " + subcommand + " -o " + out + " -q");
-      REQUIRE(code == 3);
+      REQUIRE(code == 2);
       REQUIRE_THAT(output, ContainsSubstring("does not produce a file output"));
       std::ifstream file(out);
       REQUIRE_FALSE(file.good());
@@ -1653,6 +2410,58 @@ TEST_CASE("CLI project command group", "[cli]") {
     REQUIRE(cc == 0);
 
     std::remove(proj.c_str());
+  }
+
+  SECTION("compile JSON keeps one human message per diagnostic and always emits messages") {
+    const std::string invalid = unique_temp_path("_compile_diagnostic.json");
+    {
+      std::ofstream file(invalid);
+      file << R"json({
+        "version": 1,
+        "sample_rate": 48000,
+        "sources": [{"kind": 0, "id": 1, "uri": "missing.wav", "channel_count": 1,
+                     "sample_rate_hint": 48000, "storage_handle_id": 0}],
+        "tracks": [{"id": 1, "name": "audio", "kind": 0, "gain": 1, "mute": false,
+                    "solo": false, "pan": 0, "channel_strip_ref": "", "output_target": "",
+                    "midi_destination_id": 0, "automation_lanes": []}],
+        "clips": [{"id": 1, "track_id": 1, "source_id": 1, "start_ppq": 0,
+                   "length_ppq": 1, "source_offset_ppq": 0, "gain": 1, "loop_mode": 0,
+                   "loop_length_ppq": 0, "warp_ref_id": 0, "warp_mode": 0}]
+      })json";
+    }
+
+    auto [diagnostic_code, diagnostic_output] =
+        exec_command(CLI + " project compile --in " + invalid + " --json -q");
+    REQUIRE(diagnostic_code == 9);
+    const auto diagnostic_payload = sonare::util::json::parse_strict(diagnostic_output);
+    REQUIRE(diagnostic_payload["diagnostic_count"].as_int() > 0);
+    REQUIRE(diagnostic_payload["messages"].is_string());
+    const auto& diagnostics = diagnostic_payload["diagnostics"];
+    REQUIRE(diagnostics.size() ==
+            static_cast<size_t>(diagnostic_payload["diagnostic_count"].as_int()));
+    for (const auto& diagnostic : diagnostics.as_array()) {
+      REQUIRE(diagnostic.contains("message"));
+      REQUIRE(diagnostic["message"].is_string());
+      REQUIRE_FALSE(diagnostic["message"].as_string().empty());
+      REQUIRE(diagnostic_payload["messages"].as_string().find(diagnostic["message"].as_string()) !=
+              std::string::npos);
+    }
+
+    const std::string clean = unique_temp_path("_compile_clean.json");
+    auto [new_code, new_output] = exec_command(CLI + " project new -o " + clean);
+    REQUIRE(new_code == 0);
+    auto [clean_code, clean_output] =
+        exec_command(CLI + " project compile --in " + clean + " --json -q");
+    REQUIRE(clean_code == 0);
+    const auto clean_payload = sonare::util::json::parse_strict(clean_output);
+    REQUIRE(clean_payload.contains("messages"));
+    REQUIRE(clean_payload["messages"].is_string());
+    REQUIRE(clean_payload["messages"].as_string().empty());
+    REQUIRE(clean_payload["diagnostics"].is_array());
+    REQUIRE(clean_payload["diagnostics"].as_array().empty());
+
+    std::remove(invalid.c_str());
+    std::remove(clean.c_str());
   }
 
   SECTION("export-midi2 -> import-midi2 is wired through the C ABI") {
@@ -1690,6 +2499,7 @@ TEST_CASE("CLI project command group", "[cli]") {
 
   SECTION("validate reports loader diagnostics and --strict rejects them") {
     const std::string project = unique_temp_path("_warning.json");
+    const std::string canonical = unique_temp_path("_warning_canonical.json");
     {
       std::ofstream file(project);
       file << R"({"version":1,"clips":[{"id":1,"track_id":99,"source_id":99,)"
@@ -1699,17 +2509,30 @@ TEST_CASE("CLI project command group", "[cli]") {
     auto [normal_code, normal_output] =
         exec_command(CLI + " project validate --in " + project + " --json");
     REQUIRE(normal_code == 0);
-    REQUIRE_THAT(normal_output, ContainsSubstring("\"valid\": false"));
+    REQUIRE_THAT(normal_output, ContainsSubstring("\"valid\": true"));
     REQUIRE_THAT(normal_output, ContainsSubstring("dangling_clip_source"));
     REQUIRE_THAT(normal_output, ContainsSubstring("dangling_clip_track"));
 
-    auto [strict_code, strict_output] =
-        exec_command(CLI + " project validate --in " + project + " --strict --json");
+    auto [strict_code, strict_output] = exec_command(CLI + " project validate --in " + project +
+                                                     " --strict -o " + canonical + " --json");
     REQUIRE(strict_code == 9);
-    REQUIRE_THAT(strict_output, ContainsSubstring("\"valid\": false"));
+    REQUIRE_THAT(strict_output, ContainsSubstring("\"valid\": true"));
     REQUIRE_THAT(strict_output, ContainsSubstring("dangling_clip_source"));
     REQUIRE_THAT(strict_output, ContainsSubstring("dangling_clip_track"));
+    REQUIRE(std::ifstream(canonical).good());
 
+    std::remove(project.c_str());
+    std::remove(canonical.c_str());
+  }
+
+  SECTION("validate rejects options from another project subcommand") {
+    const std::string project = unique_temp_path("_validate_option_scope.json");
+    auto [new_code, new_output] = exec_command(CLI + " project new -o " + project);
+    REQUIRE(new_code == 0);
+    auto [code, output] =
+        exec_command(CLI + " project validate --in " + project + " --frames 123 --json");
+    REQUIRE(code == 2);
+    REQUIRE_THAT(output, ContainsSubstring("Unknown option '--frames'"));
     std::remove(project.c_str());
   }
 

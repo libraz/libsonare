@@ -390,6 +390,31 @@ TEST_CASE("SMF import skips non-MTrk chunks before a declared track", "[midi]") 
   REQUIRE(result.skipped_events == 1);
 }
 
+TEST_CASE("SMF import skips odd-length non-MTrk chunks without padding", "[midi]") {
+  std::vector<uint8_t> smf = make_known_smf();
+  const std::vector<uint8_t> vendor = {'J', 'U', 'N', 'K', 0, 0, 0, 1, 0x42};
+  smf.insert(smf.begin() + 14, vendor.begin(), vendor.end());
+
+  const SmfImportResult result = import_smf(smf);
+
+  REQUIRE(result.ok());
+  REQUIRE(result.clips.size() == 1);
+  REQUIRE(result.clips[0].events().size() == 4);
+  REQUIRE(result.skipped_events == 1);
+}
+
+TEST_CASE("SMF import does not treat zero before an arbitrary chunk as padding", "[midi]") {
+  std::vector<uint8_t> smf = make_known_smf();
+  const std::vector<uint8_t> vendor = {'J',  'U', 'N', 'K', 0,   0, 0, 1, 0x42,
+                                       0x00, 'N', 'O', 'P', 'E', 0, 0, 0, 0};
+  smf.insert(smf.begin() + 14, vendor.begin(), vendor.end());
+
+  const SmfImportResult result = import_smf(smf);
+
+  REQUIRE_FALSE(result.ok());
+  REQUIRE(result.status == SmfStatus::kTruncated);
+}
+
 TEST_CASE("SMF import normalizes invalid UTF-8 text metadata", "[midi]") {
   std::vector<uint8_t> smf = make_known_smf();
   const auto track_name = std::find(smf.begin(), smf.end(), static_cast<uint8_t>('l'));
@@ -798,6 +823,30 @@ TEST_CASE("SMF import skips invalid time signature denominator exponents", "[mid
   REQUIRE(imported.ok());
   REQUIRE(imported.skipped_events == 1);
   REQUIRE(imported.time_signatures.size() == 1);
+  REQUIRE(imported.time_signatures[0].time_sig.denominator == 4);
+}
+
+TEST_CASE("SMF import skips zero-numerator time signatures", "[midi]") {
+  std::vector<uint8_t> body;
+  body.push_back(0x00);
+  body.push_back(0xFF);
+  body.push_back(0x58);
+  body.push_back(0x04);
+  body.push_back(0x00);  // A zero numerator violates the SMF time-signature invariant.
+  body.push_back(0x02);  // Denominator exponent 2 (= 4).
+  body.push_back(0x18);
+  body.push_back(0x08);
+  body.push_back(0x00);
+  body.push_back(0xFF);
+  body.push_back(0x2F);
+  body.push_back(0x00);
+
+  const SmfImportResult imported = import_smf(wrap_format0_track(body));
+
+  REQUIRE(imported.ok());
+  REQUIRE(imported.skipped_events == 1);
+  REQUIRE(imported.time_signatures.size() == 1);
+  REQUIRE(imported.time_signatures[0].time_sig.numerator > 0);
   REQUIRE(imported.time_signatures[0].time_sig.denominator == 4);
 }
 

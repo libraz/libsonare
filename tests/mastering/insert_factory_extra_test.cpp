@@ -22,6 +22,7 @@
 #include "mastering/api/named_processor.h"
 #include "mastering/api/presets.h"
 #include "rt/processor_base.h"
+#include "util/exception.h"
 #include "util/json.h"
 
 namespace {
@@ -293,23 +294,81 @@ TEST_CASE("effects.reverb.convolution rejects malformed JSON IR payload",
   REQUIRE_THROWS(make_insert("effects.reverb.convolution", R"({"irF32Base64":"!!!"})"));
 }
 
-TEST_CASE("effects.reverb.room passes through cleanly when geometry is invalid",
+TEST_CASE("acoustic room inserts reject invalid geometry as InvalidParameter",
           "[mastering][insert_factory][effects][acoustic]") {
-  // Source outside the room => validate_shoebox errors => empty RIR. The insert
-  // must not crash and (fully wet) must leave the signal essentially untouched.
-  auto p = make_insert("effects.reverb.room",
-                       R"({"lengthM":8,"widthM":6,"heightM":3.5,"sourceX":99,"dryWet":1})");
-  REQUIRE(p != nullptr);
-  const int block = 256;
-  p->prepare(48000.0, block);
-  std::vector<float> buf(static_cast<size_t>(block) * 4, 0.0f);
-  buf[10] = 0.5f;
-  const std::vector<float> input = buf;
-  for (size_t off = 0; off < buf.size(); off += static_cast<size_t>(block)) {
-    float* blk = buf.data() + off;
-    p->process(&blk, 1, block);
+  // Both geometry-driven inserts must reject the same invalid source placement
+  // at construction, instead of RoomReverb silently becoming a dry passthrough.
+  for (const char* name : {"effects.reverb.room", "effects.acoustic.roomMorph"}) {
+    DYNAMIC_SECTION(name) {
+      try {
+        auto processor =
+            make_insert(name, R"({"lengthM":8,"widthM":6,"heightM":3.5,"sourceX":99,"dryWet":1})");
+        (void)processor;
+        FAIL("invalid geometry was accepted");
+      } catch (const sonare::SonareException& error) {
+        REQUIRE(error.code() == sonare::ErrorCode::InvalidParameter);
+      }
+    }
   }
-  REQUIRE(buf == input);  // empty IR => ConvolutionReverb leaves the buffer unchanged
+}
+
+TEST_CASE("effects.acoustic.roomMorph insert reaches acoustic facade options",
+          "[mastering][insert_factory][effects][acoustic]") {
+  const auto names = insert_param_names("effects.acoustic.roomMorph");
+  for (const char* key : {"bandAbsorption", "bandScattering", "materialPreset", "preferEyring",
+                          "mixingTimeMs", "crossfadeMs"}) {
+    DYNAMIC_SECTION(key) { REQUIRE(ListContains(names, key)); }
+  }
+
+  const auto render = [](const char* params) {
+    auto processor = make_insert("effects.acoustic.roomMorph", params);
+    REQUIRE(processor != nullptr);
+    constexpr int block = 512;
+    std::vector<float> buf(static_cast<size_t>(block) * 24, 0.0f);
+    buf[0] = 1.0f;
+    processor->prepare(48000.0, block);
+    for (size_t off = 0; off < buf.size(); off += static_cast<size_t>(block)) {
+      float* blk = buf.data() + off;
+      processor->process(&blk, 1, block);
+    }
+    return buf;
+  };
+  const auto differs = [](const std::vector<float>& a, const std::vector<float>& b) {
+    if (a.size() != b.size()) return true;
+    for (size_t i = 0; i < a.size(); ++i) {
+      if (std::abs(a[i] - b[i]) > 1e-7f) return true;
+    }
+    return false;
+  };
+
+  constexpr const char* base =
+      R"({"lengthM":12,"widthM":9,"heightM":5,"absorption":0.4,"dryWet":1,"sourceTailSuppression":0,"maxSeconds":0.3,"seed":7})";
+  const std::vector<float> baseline = render(base);
+
+  REQUIRE(differs(
+      baseline,
+      render(
+          R"({"lengthM":12,"widthM":9,"heightM":5,"absorption":0.4,"dryWet":1,"sourceTailSuppression":0,"maxSeconds":0.3,"seed":7,"preferEyring":false})")));
+  REQUIRE(differs(
+      baseline,
+      render(
+          R"({"lengthM":12,"widthM":9,"heightM":5,"absorption":0.4,"dryWet":1,"sourceTailSuppression":0,"maxSeconds":0.3,"seed":7,"mixingTimeMs":60})")));
+  REQUIRE(differs(
+      baseline,
+      render(
+          R"({"lengthM":12,"widthM":9,"heightM":5,"absorption":0.4,"dryWet":1,"sourceTailSuppression":0,"maxSeconds":0.3,"seed":7,"crossfadeMs":35})")));
+  REQUIRE(differs(
+      baseline,
+      render(
+          R"({"lengthM":12,"widthM":9,"heightM":5,"dryWet":1,"sourceTailSuppression":0,"maxSeconds":0.3,"seed":7,"bandAbsorption":[0.75,0.75,0.75,0.75,0.75,0.75]})")));
+  REQUIRE(differs(
+      baseline,
+      render(
+          R"({"lengthM":12,"widthM":9,"heightM":5,"dryWet":1,"sourceTailSuppression":0,"maxSeconds":0.3,"seed":7,"bandAbsorption":[0.4,0.4,0.4,0.4,0.4,0.4],"bandScattering":[0.8,0.8,0.8,0.8,0.8,0.8]})")));
+  REQUIRE(differs(
+      baseline,
+      render(
+          R"({"lengthM":12,"widthM":9,"heightM":5,"dryWet":1,"sourceTailSuppression":0,"maxSeconds":0.3,"seed":7,"materialPreset":3})")));
 }
 
 TEST_CASE("effects.acoustic.roomMorph adds a target-room tail as a streaming insert",
@@ -589,6 +648,19 @@ TEST_CASE("processor_catalog_json classifies every id consistently with the sour
   REQUIRE(fdn != catalog.as_array().end());
   REQUIRE((*fdn)["realtimeCost"].as_string() == "moderate");
 #endif  // SONARE_WITH_FX
+
+  // These tiers are qualitative policy for the default `{}` configuration,
+  // rather than numeric benchmark results.
+  const auto tube =
+      std::find_if(catalog.as_array().begin(), catalog.as_array().end(),
+                   [](const auto& entry) { return entry["id"].as_string() == "saturation.tube"; });
+  REQUIRE(tube != catalog.as_array().end());
+  REQUIRE((*tube)["realtimeCost"].as_string() == "high");
+  const auto true_peak = std::find_if(
+      catalog.as_array().begin(), catalog.as_array().end(),
+      [](const auto& entry) { return entry["id"].as_string() == "maximizer.truePeakLimiter"; });
+  REQUIRE(true_peak != catalog.as_array().end());
+  REQUIRE((*true_peak)["realtimeCost"].as_string() == "moderate");
 
   // Realtime-only ids that are absent from processor_names() are still reported.
   if (ListContains(sonare::mastering::api::insert_factory_names(), "effects.reverb.room")) {

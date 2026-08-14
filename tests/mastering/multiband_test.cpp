@@ -12,6 +12,7 @@
 #include "mastering/multiband/multiband_imager.h"
 #include "mastering/multiband/multiband_limiter.h"
 #include "mastering/multiband/multiband_saturation.h"
+#include "support/alloc_guard.h"
 #include "support/audio_fixtures.h"
 #include "util/constants.h"
 
@@ -19,6 +20,7 @@ using namespace sonare::mastering::multiband;
 
 using sonare::constants::kPi;
 using sonare::constants::kTwoPiD;
+using sonare::test::AllocationGuard;
 
 namespace {
 using sonare::test::process;
@@ -575,6 +577,41 @@ TEST_CASE("Crossover rebuilds state when channel count changes", "[mastering][mu
           rms_tail(stereo_split.bands[0][1], 4096) * 4.0f);
 }
 
+TEST_CASE("Crossover bounded prepare rejects wider channels and retains its bound",
+          "[mastering][multiband]") {
+  Crossover crossover({{1000.0f}, CrossoverSlope::LR4, CrossoverMode::LinkwitzRiley});
+  crossover.prepare(48000.0, 64, 2);
+
+  std::array<std::vector<float>, 3> storage{
+      std::vector<float>(64, 0.0f), std::vector<float>(64, 0.0f), std::vector<float>(64, 0.0f)};
+  std::array<float*, 3> channels{storage[0].data(), storage[1].data(), storage[2].data()};
+  REQUIRE_THROWS_AS(crossover.split(channels.data(), 3, 64), sonare::SonareException);
+
+  crossover.prepare(48000.0, 64, 3);
+  REQUIRE_NOTHROW(crossover.split(channels.data(), 3, 64));
+  crossover.set_config({{1200.0f}, CrossoverSlope::LR4, CrossoverMode::LinkwitzRiley});
+  REQUIRE_NOTHROW(crossover.split(channels.data(), 3, 64));
+  crossover.prepare(48000.0, 64, 1);
+  REQUIRE_THROWS_AS(crossover.split(channels.data(), 2, 64), sonare::SonareException);
+
+  Crossover legacy({{1000.0f}, CrossoverSlope::LR4, CrossoverMode::LinkwitzRiley});
+  legacy.prepare(48000.0, 64);
+  REQUIRE_NOTHROW(legacy.split(channels.data(), 3, 64));
+}
+
+TEST_CASE("MultibandCompressor bounded process is allocation-free after prepare",
+          "[mastering][multiband]") {
+  MultibandCompressor compressor;
+  compressor.prepare(48000.0, 64, 2);
+  std::array<std::vector<float>, 2> storage{std::vector<float>(64, 0.0f),
+                                            std::vector<float>(64, 0.0f)};
+  std::array<float*, 2> channels{storage[0].data(), storage[1].data()};
+
+  AllocationGuard guard;
+  compressor.process(channels.data(), 2, 64);
+  REQUIRE(guard.count() == 0);
+}
+
 TEST_CASE("Crossover without cutoffs returns a single unchanged band", "[mastering][multiband]") {
   for (const CrossoverMode mode :
        {CrossoverMode::LinkwitzRiley, CrossoverMode::Butterworth, CrossoverMode::Bessel}) {
@@ -670,7 +707,7 @@ TEST_CASE("MultibandCompressor compresses only the configured low band", "[maste
       {0.0f, 1.0f, 0.0f, 20.0f, 0.0f, 0.0f, false, sonare::mastering::dynamics::DetectorMode::Rms},
   };
   MultibandCompressor compressor(config);
-  compressor.prepare(48000.0, 1024);
+  compressor.prepare(48000.0, 48000);
 
   auto signal = sine(100.0f, 48000, 48000, 0.6f);
   auto high = sine(8000.0f, 48000, 48000, 0.1f);
@@ -682,7 +719,7 @@ TEST_CASE("MultibandCompressor compresses only the configured low band", "[maste
   process(compressor, signal);
 
   Crossover analyzer(config.crossover);
-  analyzer.prepare(48000.0, 1024);
+  analyzer.prepare(48000.0, 48000);
   float* before_channels[] = {before.data()};
   auto before_split = analyzer.split(before_channels, 1, static_cast<int>(before.size()));
   analyzer.reset();
@@ -708,7 +745,7 @@ TEST_CASE("MultibandCompressor neutral bands preserve tone amplitudes", "[master
       {0.0f, 1.0f, 0.0f, 20.0f, 0.0f, 0.0f, false, sonare::mastering::dynamics::DetectorMode::Rms},
   };
   MultibandCompressor compressor(config);
-  compressor.prepare(48000.0, 4096);
+  compressor.prepare(48000.0, 65536);
 
   auto signal = four_tone_signal(48000, 65536);
 
@@ -732,7 +769,7 @@ TEST_CASE("MultibandLimiter limits only the configured high band", "[mastering][
       {-18.0f, 0.0f, 20.0f},
   };
   MultibandLimiter limiter(config);
-  limiter.prepare(48000.0, 1024);
+  limiter.prepare(48000.0, 48000);
 
   auto low = sine(100.0f, 48000, 48000, 0.1f);
   auto high = sine(8000.0f, 48000, 48000, 0.8f);
@@ -760,7 +797,7 @@ TEST_CASE("MultibandLimiter neutral bands preserve tone amplitudes", "[mastering
       {0.0f, 0.0f, 20.0f},
   };
   MultibandLimiter limiter(config);
-  limiter.prepare(48000.0, 4096);
+  limiter.prepare(48000.0, 65536);
 
   auto signal = four_tone_signal(48000, 65536);
 
@@ -785,7 +822,7 @@ TEST_CASE("MultibandExpander reduces only the configured low noise band",
       {-80.0f, 1.0f, 0.0f, 20.0f, -50.0f},
   };
   MultibandExpander expander(config);
-  expander.prepare(48000.0, 1024);
+  expander.prepare(48000.0, 48000);
 
   auto low = sine(100.0f, 48000, 48000, 0.02f);
   auto high = sine(8000.0f, 48000, 48000, 0.3f);
@@ -813,7 +850,7 @@ TEST_CASE("MultibandExpander neutral bands preserve tone amplitudes", "[masterin
       {0.0f, 1.0f, 0.0f, 20.0f, -60.0f},
   };
   MultibandExpander expander(config);
-  expander.prepare(48000.0, 4096);
+  expander.prepare(48000.0, 65536);
 
   auto signal = four_tone_signal(48000, 65536);
 
@@ -837,7 +874,7 @@ TEST_CASE("MultibandSaturation saturates only the configured high band", "[maste
       {12.0f, 1.0f, -12.0f, true},
   };
   MultibandSaturation saturation(config);
-  saturation.prepare(48000.0, 1024);
+  saturation.prepare(48000.0, 48000);
 
   auto low = sine(100.0f, 48000, 48000, 0.4f);
   auto high = sine(8000.0f, 48000, 48000, 0.8f);
@@ -864,7 +901,7 @@ TEST_CASE("MultibandSaturation disabled bands preserve tone amplitudes", "[maste
       {0.0f, 1.0f, 0.0f, false},
   };
   MultibandSaturation saturation(config);
-  saturation.prepare(48000.0, 4096);
+  saturation.prepare(48000.0, 65536);
 
   auto signal = four_tone_signal(48000, 65536);
 
@@ -918,7 +955,7 @@ TEST_CASE("MultibandDynamicEq applies dynamic EQ inside selected band", "[master
       {},
   };
   MultibandDynamicEq dynamic_eq(config);
-  dynamic_eq.prepare(48000.0, 1024);
+  dynamic_eq.prepare(48000.0, 48000);
 
   auto low = sine(100.0f, 48000, 48000, 0.5f);
   auto high = sine(8000.0f, 48000, 48000, 0.5f);
@@ -942,7 +979,7 @@ TEST_CASE("MultibandDynamicEq empty bands preserve tone amplitudes", "[mastering
       {120.0f, 1000.0f, 6000.0f}, CrossoverSlope::LR4, CrossoverMode::LinkwitzRiley};
   config.bands = {{}, {}, {}, {}};
   MultibandDynamicEq dynamic_eq(config);
-  dynamic_eq.prepare(48000.0, 4096);
+  dynamic_eq.prepare(48000.0, 65536);
 
   auto signal = four_tone_signal(48000, 65536);
 
@@ -973,7 +1010,7 @@ TEST_CASE("MultibandImager widens only the configured high band", "[mastering][m
       {2.0f, true},
   };
   MultibandImager imager(config);
-  imager.prepare(48000.0, 1024);
+  imager.prepare(48000.0, 48000);
 
   auto low_left = sine(100.0f, 48000, 48000, 0.3f);
   auto low_right = low_left;
@@ -1002,7 +1039,7 @@ TEST_CASE("MultibandImager mono input preserves level", "[mastering][multiband]"
   config.crossover = {{1000.0f}, CrossoverSlope::LR4, CrossoverMode::LinkwitzRiley};
   config.bands = {{0.0f, true}, {2.0f, true}};
   MultibandImager imager(config);
-  imager.prepare(48000.0, 1024);
+  imager.prepare(48000.0, 48000);
 
   auto mono = sine(500.0f, 48000, 48000, 0.3f);
   auto before = mono;
@@ -1024,7 +1061,7 @@ TEST_CASE("MultibandImager neutral bands preserve stereo tone amplitudes",
       {1.0f, true},
   };
   MultibandImager imager(config);
-  imager.prepare(48000.0, 4096);
+  imager.prepare(48000.0, 65536);
 
   auto left = four_tone_signal(48000, 65536);
   auto right = left;

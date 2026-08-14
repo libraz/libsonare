@@ -6,8 +6,10 @@
 
 #include <catch2/catch_test_macros.hpp>
 #include <cmath>
+#include <limits>
 #include <vector>
 
+#include "util/exception.h"
 #include "util/json_reader.h"
 
 using namespace sonare;
@@ -56,4 +58,36 @@ TEST_CASE("pcen matches librosa reference", "[librosa][pcen]") {
   }
   CAPTURE(max_abs_diff);
   REQUIRE(max_abs_diff < 1e-3);
+}
+
+TEST_CASE("pcen rejects malformed and non-finite configuration", "[librosa][pcen][edge]") {
+  const std::vector<float> input{1.0f};
+  PcenConfig cfg;
+
+  SECTION("b must contain at most one coefficient") {
+    cfg.b = {0.5f, 0.5f};
+    REQUIRE_THROWS_AS(pcen(input.data(), 1, 1, cfg), SonareException);
+  }
+
+  SECTION("b and zi values must be finite") {
+    cfg.b = {std::numeric_limits<float>::quiet_NaN()};
+    REQUIRE_THROWS_AS(pcen(input.data(), 1, 1, cfg), SonareException);
+
+    cfg.b.clear();
+    cfg.zi = {std::numeric_limits<float>::infinity()};
+    REQUIRE_THROWS_AS(pcen(input.data(), 1, 1, cfg), SonareException);
+  }
+
+  SECTION("scalar parameters must be finite") {
+    cfg.gain = std::numeric_limits<float>::infinity();
+    REQUIRE_THROWS_AS(pcen(input.data(), 1, 1, cfg), SonareException);
+    cfg.gain = 0.98f;
+    cfg.time_constant = std::numeric_limits<float>::quiet_NaN();
+    REQUIRE_THROWS_AS(pcen(input.data(), 1, 1, cfg), SonareException);
+  }
+
+  SECTION("derived smoothing coefficient must be finite") {
+    cfg.time_constant = std::numeric_limits<float>::denorm_min();
+    REQUIRE_THROWS_AS(pcen(input.data(), 1, 1, cfg), SonareException);
+  }
 }

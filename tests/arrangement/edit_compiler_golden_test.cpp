@@ -2,6 +2,7 @@
 /// @brief compiler / RT snapshot golden + determinism tests.
 
 #include <algorithm>
+#include <array>
 #include <catch2/catch_approx.hpp>
 #include <catch2/catch_test_macros.hpp>
 #include <cmath>
@@ -1174,7 +1175,245 @@ TEST_CASE("a track's controls never reach a channel strip it shares", "[arrangem
 
 #endif  // SONARE_WITH_MIXING
 
-TEST_CASE("the live automation lane set holds one lane per target", "[arrangement]") {
+#if defined(SONARE_WITH_MIXING)
+TEST_CASE("typed track automation resolves by project lane and target kind", "[arrangement]") {
+  SharedStripFixture s = make_shared_strip_fixture();
+  // The persistent id is deliberately identical on both tracks.  It is an
+  // edit-model value, not the playback route, so the compiler must resolve the
+  // lanes to project-indexed reserved ids without dropping either owner.
+  const auto make_lane = [](uint32_t target, sonare::automation::AutomationTargetKind kind,
+                            float value) {
+    sonare::automation::AutomationLane lane(target, kind);
+    lane.set_points({{0.0, value, sonare::automation::CurveType::Hold}});
+    return lane;
+  };
+  REQUIRE(arr::AddAutomationLane(
+              s.track_a,
+              make_lane(900, sonare::automation::AutomationTargetKind::kTrackFaderDb, -6.0206f))
+              .apply(s.f.project, s.f.midi));
+  REQUIRE(arr::AddAutomationLane(
+              s.track_b,
+              make_lane(900, sonare::automation::AutomationTargetKind::kTrackFaderDb, -12.0412f))
+              .apply(s.f.project, s.f.midi));
+  REQUIRE(arr::AddAutomationLane(
+              s.track_b, make_lane(901, sonare::automation::AutomationTargetKind::kTrackPan, 1.0f))
+              .apply(s.f.project, s.f.midi));
+
+  // Make the signal constant so the two independent lane values are directly
+  // observable after the normal stopped-block prime/settle used by bounce.
+  auto& samples = s.f.audio.sources.at(s.f.source_id).channels;
+  samples[0].assign(48000, 1.0f);
+  samples[1].assign(48000, 1.0f);
+
+  const arr::CompileResult result = arr::compile(s.f.project, s.f.midi, s.f.audio);
+  REQUIRE_FALSE(result.has_errors());
+  REQUIRE(result.timeline.has_value());
+  REQUIRE(result.timeline->track_lanes.size() == 2);
+  REQUIRE(result.timeline->track_lanes[0].track_id == s.track_a);
+  REQUIRE(result.timeline->track_lanes[1].track_id == s.track_b);
+  REQUIRE(result.timeline->automation_lanes.size() == 3);
+  REQUIRE(result.timeline->mixer.automation_bindings.size() == 3);
+
+  sonare::engine::RealtimeEngine engine;
+  engine.prepare(kProjectSr, kBlock);
+  arr::apply_to_engine(*result.timeline, engine);
+  REQUIRE(engine.automation().lane_count() == 3);
+
+  std::array<float, kBlock> prime_l{};
+  std::array<float, kBlock> prime_r{};
+  float* prime[] = {prime_l.data(), prime_r.data()};
+  engine.process(prime, 2, kBlock);
+  engine.settle_parameters();
+
+  sonare::rt::Command play{};
+  play.type = sonare::rt::CommandType::kTransportPlay;
+  play.sample_time = -1;
+  REQUIRE(engine.push_command(play));
+  std::array<float, kBlock> left{};
+  std::array<float, kBlock> right{};
+  float* io[] = {left.data(), right.data()};
+  for (int block = 0; block < 8; ++block) {
+    left.fill(0.0f);
+    right.fill(0.0f);
+    engine.process(io, 2, kBlock);
+  }
+  // Both fader lanes use persistent id 900, yet resolve to distinct lane
+  // indices. Track B additionally uses a pan lane (id 901), so a mutant that
+  // packs every typed kind as fader would collide with B's fader and fail the
+  // image expectation. A contributes 0.5 to both planes; B contributes 0.25
+  // only to the right plane after its hard-right pan.
+  REQUIRE(left.back() == Catch::Approx(0.5f).margin(0.05f));
+  REQUIRE(right.back() == Catch::Approx(0.75f).margin(0.05f));
+  REQUIRE(engine.automation().unknown_target_count() == 0);
+}
+#endif  // SONARE_WITH_MIXING
+
+TEST_CASE("compiler reports typed lane and reserved-route diagnostics", "[arrangement]") {
+  SECTION("duplicate typed kind on one track") {
+    Fixture f = make_fixture(128);
+    auto* track = f.project.find_track_mutable(f.track_id);
+    REQUIRE(track != nullptr);
+    sonare::automation::AutomationLane first(
+        101, sonare::automation::AutomationTargetKind::kTrackFaderDb);
+    first.set_points({{0.0, -3.0f, sonare::automation::CurveType::Hold}});
+    sonare::automation::AutomationLane second(
+        102, sonare::automation::AutomationTargetKind::kTrackFaderDb);
+    second.set_points({{0.0, -6.0f, sonare::automation::CurveType::Hold}});
+    track->automation_lanes.push_back(first);
+    track->automation_lanes.push_back(second);
+
+    const arr::CompileResult result = arr::compile(f.project, f.midi, f.audio);
+    REQUIRE(result.has_errors());
+    REQUIRE_FALSE(result.timeline.has_value());
+    REQUIRE(std::any_of(result.diagnostics.begin(), result.diagnostics.end(), [](const auto& d) {
+      return d.code == arr::Diagnostic::Code::kAutomationLaneConflict &&
+             d.severity == arr::Diagnostic::Severity::kError;
+    }));
+  }
+
+  SECTION("unknown kind and reserved opaque id") {
+    Fixture f = make_fixture(128);
+    auto* track = f.project.find_track_mutable(f.track_id);
+    REQUIRE(track != nullptr);
+    sonare::automation::AutomationLane unknown(201);
+    unknown.set_target_kind(static_cast<sonare::automation::AutomationTargetKind>(99));
+    unknown.set_points({{0.0, 0.0f, sonare::automation::CurveType::Hold}});
+    sonare::automation::AutomationLane reserved(0x4D580000u);
+    reserved.set_points({{0.0, 0.0f, sonare::automation::CurveType::Hold}});
+    track->automation_lanes.push_back(unknown);
+    track->automation_lanes.push_back(reserved);
+
+    const arr::CompileResult result = arr::compile(f.project, f.midi, f.audio);
+    REQUIRE(result.has_errors());
+    REQUIRE_FALSE(result.timeline.has_value());
+    REQUIRE(std::any_of(result.diagnostics.begin(), result.diagnostics.end(), [](const auto& d) {
+      return d.code == arr::Diagnostic::Code::kInvalidAutomationTargetKind &&
+             d.severity == arr::Diagnostic::Severity::kError;
+    }));
+    REQUIRE(std::any_of(result.diagnostics.begin(), result.diagnostics.end(), [](const auto& d) {
+      return d.code == arr::Diagnostic::Code::kReservedAutomationRouteConflict &&
+             d.severity == arr::Diagnostic::Severity::kError;
+    }));
+  }
+
+#if defined(SONARE_WITH_MIXING)
+  SECTION("track lane capacity") {
+    Fixture f = make_fixture(128);
+    for (size_t i = 0; i < sonare::engine::TrackMixerRuntime::kMaxTrackLanes; ++i) {
+      arr::Track extra;
+      extra.kind = arr::Track::Kind::kAudio;
+      f.project.add_track(extra);
+    }
+    const arr::CompileResult result = arr::compile(f.project, f.midi, f.audio);
+    REQUIRE(result.has_errors());
+    REQUIRE_FALSE(result.timeline.has_value());
+    REQUIRE(std::any_of(result.diagnostics.begin(), result.diagnostics.end(), [](const auto& d) {
+      return d.code == arr::Diagnostic::Code::kAutomationLaneCapacity &&
+             d.severity == arr::Diagnostic::Severity::kError;
+    }));
+  }
+
+#endif  // SONARE_WITH_MIXING
+}
+
+TEST_CASE("compiler reports adopted opaque lanes without a built-in route", "[arrangement]") {
+  const auto add_lane = [](arr::Track* track, uint32_t target,
+                           sonare::automation::AutomationTargetKind kind =
+                               sonare::automation::AutomationTargetKind::kOpaque,
+                           bool add_point = true) {
+    sonare::automation::AutomationLane lane(target, kind);
+    if (add_point) {
+      lane.set_points({{0.0, 0.5f, sonare::automation::CurveType::Hold}});
+    }
+    track->automation_lanes.push_back(std::move(lane));
+  };
+
+  SECTION("host-defined target is diagnosed and retained") {
+    Fixture f = make_fixture(128);
+    auto* track = f.project.find_track_mutable(f.track_id);
+    REQUIRE(track != nullptr);
+    add_lane(track, 99);
+
+    const arr::CompileResult result = arr::compile(f.project, f.midi, f.audio);
+    REQUIRE(result.timeline.has_value());
+    REQUIRE(result.timeline->mixer.automation_bindings.size() == 1);
+    const auto it = std::find_if(
+        result.diagnostics.begin(), result.diagnostics.end(), [&](const auto& diagnostic) {
+          return diagnostic.code == arr::Diagnostic::Code::kAutomationTargetUnrouted &&
+                 diagnostic.severity == arr::Diagnostic::Severity::kWarning &&
+                 diagnostic.target_id == f.track_id;
+        });
+    REQUIRE(it != result.diagnostics.end());
+    REQUIRE(it->message.find("host-defined") != std::string::npos);
+    REQUIRE(it->message.find("unrouted") != std::string::npos);
+  }
+
+  SECTION("legacy target without a resolved strip is diagnosed") {
+    Fixture f = make_fixture(128);
+    auto* track = f.project.find_track_mutable(f.track_id);
+    REQUIRE(track != nullptr);
+    track->channel_strip_ref = "missing-strip";
+    add_lane(track, 1u);  // legacy ChannelStrip fader target
+
+    const arr::CompileResult result = arr::compile(f.project, f.midi, f.audio);
+    REQUIRE(result.timeline.has_value());
+    REQUIRE(std::any_of(
+        result.diagnostics.begin(), result.diagnostics.end(), [&](const auto& diagnostic) {
+          return diagnostic.code == arr::Diagnostic::Code::kAutomationTargetUnrouted &&
+                 diagnostic.severity == arr::Diagnostic::Severity::kWarning &&
+                 diagnostic.target_id == f.track_id &&
+                 diagnostic.message.find("unrouted") != std::string::npos;
+        }));
+  }
+
+#if defined(SONARE_WITH_MIXING)
+  SECTION("legacy target on a resolved strip is not diagnosed") {
+    Fixture f = make_fixture(128);
+    auto* track = f.project.find_track_mutable(f.track_id);
+    REQUIRE(track != nullptr);
+    track->channel_strip_ref = "main";
+    sonare::mixing::api::Strip strip;
+    strip.id = "main";
+    f.project.scene().strips.push_back(strip);
+    add_lane(track, sonare::engine::MixingRuntime::kFaderDb);
+
+    const arr::CompileResult result = arr::compile(f.project, f.midi, f.audio);
+    REQUIRE(result.timeline.has_value());
+    REQUIRE(std::none_of(result.diagnostics.begin(), result.diagnostics.end(), [](const auto& d) {
+      return d.code == arr::Diagnostic::Code::kAutomationTargetUnrouted;
+    }));
+  }
+
+  SECTION("typed fader and pan lanes are not diagnosed") {
+    Fixture f = make_fixture(128);
+    auto* track = f.project.find_track_mutable(f.track_id);
+    REQUIRE(track != nullptr);
+    add_lane(track, 101, sonare::automation::AutomationTargetKind::kTrackFaderDb);
+    add_lane(track, 102, sonare::automation::AutomationTargetKind::kTrackPan);
+
+    const arr::CompileResult result = arr::compile(f.project, f.midi, f.audio);
+    REQUIRE(result.timeline.has_value());
+    REQUIRE(std::none_of(result.diagnostics.begin(), result.diagnostics.end(), [](const auto& d) {
+      return d.code == arr::Diagnostic::Code::kAutomationTargetUnrouted;
+    }));
+  }
+#endif  // SONARE_WITH_MIXING
+
+  SECTION("empty opaque lane is not diagnosed") {
+    Fixture f = make_fixture(128);
+    auto* track = f.project.find_track_mutable(f.track_id);
+    REQUIRE(track != nullptr);
+    add_lane(track, 103, sonare::automation::AutomationTargetKind::kOpaque, false);
+
+    const arr::CompileResult result = arr::compile(f.project, f.midi, f.audio);
+    REQUIRE(result.timeline.has_value());
+    REQUIRE(std::none_of(result.diagnostics.begin(), result.diagnostics.end(), [](const auto& d) {
+      return d.code == arr::Diagnostic::Code::kAutomationTargetUnrouted;
+    }));
+  }
+}
+
+TEST_CASE("compiled automation keeps the opaque first owner", "[arrangement]") {
   SharedStripFixture s = make_shared_strip_fixture();
   constexpr uint32_t target = 7;
   const auto make_lane = [](float value) {
@@ -1188,26 +1427,25 @@ TEST_CASE("the live automation lane set holds one lane per target", "[arrangemen
   arr::CompileResult r = arr::compile(s.f.project, s.f.midi, s.f.audio);
   REQUIRE(r.timeline.has_value());
 
-  // AutomationEngine::set_lanes keeps one lane per target, so the compiled set
-  // already holds exactly one -- deterministically the first track's -- and the
-  // collision is reported instead of being dropped silently on the RT side.
+  // Opaque ids retain the legacy engine-wide first-wins behavior. The second
+  // owner is diagnosed and does not reach either live or offline playback.
   REQUIRE(r.timeline->automation_lanes.size() == 1);
-  REQUIRE(r.timeline->automation_lanes.front().target_param_id() == target);
-  REQUIRE(r.timeline->automation_lanes.front().value_at(0.0) == Catch::Approx(0.25f));
+  REQUIRE(r.timeline->automation_lanes[0].target_param_id() == target);
+  REQUIRE(r.timeline->automation_lanes[0].value_at(0.0) == Catch::Approx(0.25f));
   REQUIRE(std::any_of(r.diagnostics.begin(), r.diagnostics.end(), [&](const auto& d) {
     return d.code == arr::Diagnostic::Code::kAutomationLaneConflict &&
            d.severity == arr::Diagnostic::Severity::kWarning && d.target_id == s.track_b;
   }));
 
-  // Playback must not receive more lanes than it can honor: what compile()
-  // published survives set_lanes unchanged.
+  // The arrangement apply path publishes the compiled lane set, while the
+  // compiler has already applied opaque first-wins deduplication.
   sonare::engine::RealtimeEngine engine;
   engine.prepare(kProjectSr, kBlock);
   arr::apply_to_engine(*r.timeline, engine);
   REQUIRE(engine.automation().lane_count() == 1);
 
-  // The offline path keeps BOTH lanes, tagged with their owning track.
-  REQUIRE(r.timeline->mixer.automation_bindings.size() == 2);
+  // The offline path receives the same single winning lane.
+  REQUIRE(r.timeline->mixer.automation_bindings.size() == 1);
 }
 
 TEST_CASE("distinct automation targets on several tracks all reach playback", "[arrangement]") {

@@ -177,6 +177,72 @@ TEST_CASE("sonare_engine validates realtime queue error classes", "[c_api][engin
   sonare_engine_destroy(engine);
 }
 
+TEST_CASE("sonare_engine reports prepared channel overflow through telemetry", "[c_api][engine]") {
+  constexpr int kBlock = 64;
+  SonareRealtimeEngine* engine = nullptr;
+  REQUIRE(sonare_engine_create(&engine) == SONARE_OK);
+  REQUIRE(sonare_engine_prepare_with_channels(engine, 48000.0, kBlock, 16, 16, 2) == SONARE_OK);
+
+  std::array<float, kBlock * 2> left{};
+  std::array<float, kBlock * 2> right{};
+  std::array<float, kBlock * 2> extra{};
+  float* too_many_channels[] = {left.data(), right.data(), extra.data()};
+  left.fill(1.0f);
+  right.fill(-1.0f);
+  extra.fill(1.0f);
+
+  // A block-size violation wins when both preconditions fail. C process still
+  // returns SONARE_OK because the diagnostic is delivered asynchronously.
+  REQUIRE(sonare_engine_process(engine, too_many_channels, 3, kBlock * 2) == SONARE_OK);
+  for (float sample : left) REQUIRE(sample == 0.0f);
+  for (float sample : right) REQUIRE(sample == 0.0f);
+  for (float sample : extra) REQUIRE(sample == 0.0f);
+
+  std::array<SonareEngineTelemetry, 4> telemetry{};
+  size_t written = 0;
+  REQUIRE(sonare_engine_drain_telemetry(engine, telemetry.data(), telemetry.size(), &written) ==
+          SONARE_OK);
+  REQUIRE(written == 1);
+  REQUIRE(telemetry[0].type == 1);
+  REQUIRE(telemetry[0].error == SONARE_ENGINE_TELEMETRY_ERROR_MAX_BLOCK_EXCEEDED);
+  REQUIRE(telemetry[0].value == static_cast<uint32_t>(kBlock * 2));
+
+  left.fill(1.0f);
+  right.fill(-1.0f);
+  extra.fill(1.0f);
+  REQUIRE(sonare_engine_process(engine, too_many_channels, 3, kBlock) == SONARE_OK);
+  for (int i = 0; i < kBlock; ++i) {
+    REQUIRE(left[static_cast<size_t>(i)] == 0.0f);
+    REQUIRE(right[static_cast<size_t>(i)] == 0.0f);
+    REQUIRE(extra[static_cast<size_t>(i)] == 0.0f);
+  }
+
+  written = 0;
+  REQUIRE(sonare_engine_drain_telemetry(engine, telemetry.data(), telemetry.size(), &written) ==
+          SONARE_OK);
+  REQUIRE(written == 1);
+  REQUIRE(telemetry[0].type == 1);
+  REQUIRE(telemetry[0].error == SONARE_ENGINE_TELEMETRY_ERROR_MAX_CHANNELS_EXCEEDED);
+  REQUIRE(telemetry[0].value == 3);
+
+  left.fill(0.25f);
+  right.fill(-0.25f);
+  float* prepared_channels[] = {left.data(), right.data()};
+  REQUIRE(sonare_engine_process(engine, prepared_channels, 2, kBlock) == SONARE_OK);
+  REQUIRE(left[0] == Catch::Approx(0.25f));
+  REQUIRE(right[0] == Catch::Approx(-0.25f));
+
+  written = 0;
+  REQUIRE(sonare_engine_drain_telemetry(engine, telemetry.data(), telemetry.size(), &written) ==
+          SONARE_OK);
+  REQUIRE(written == 1);
+  REQUIRE(telemetry[0].type == 0);
+  REQUIRE(telemetry[0].error == SONARE_ENGINE_TELEMETRY_ERROR_NONE);
+  REQUIRE(telemetry[0].value == static_cast<uint32_t>(kBlock));
+
+  sonare_engine_destroy(engine);
+}
+
 TEST_CASE("sonare_engine_flush_control_commands drains the command ring without process()",
           "[c_api][engine]") {
   // Mirrors the direct-engine test "RealtimeEngine control flush prevents an
@@ -637,6 +703,109 @@ TEST_CASE("sonare_engine track lanes route clips and accept lane commands", "[c_
 #endif
 
   sonare_engine_destroy(engine);
+}
+
+TEST_CASE("sonare_engine schedules track monitor modes on the prepared monitor bus",
+          "[c_api][engine][monitor]") {
+  SonareRealtimeEngine* engine = nullptr;
+  REQUIRE(sonare_engine_create(&engine) == SONARE_OK);
+  REQUIRE(engine != nullptr);
+
+  // Public validation is independent of the optional mixing feature.
+  REQUIRE(sonare_engine_set_track_monitor_mode(nullptr, 0, SONARE_ENGINE_TRACK_MONITOR_MODE_OFF,
+                                               -1) == SONARE_ERROR_INVALID_PARAMETER);
+  REQUIRE(sonare_engine_set_track_monitor_mode(engine, 0,
+                                               static_cast<SonareEngineTrackMonitorMode>(99),
+                                               -1) == SONARE_ERROR_INVALID_PARAMETER);
+
+#if !defined(SONARE_WITH_MIXING)
+  REQUIRE(sonare_engine_set_track_monitor_mode(engine, 0, SONARE_ENGINE_TRACK_MONITOR_MODE_PFL,
+                                               -1) == SONARE_ERROR_NOT_SUPPORTED);
+  sonare_engine_destroy(engine);
+  return;
+#else
+  constexpr int kBlock = 64;
+  constexpr int kFrames = kBlock * 32;
+  REQUIRE(sonare_engine_prepare(engine, 48000.0, kBlock, 64, 16) == SONARE_OK);
+  std::array<float, kFrames> source{};
+  source.fill(1.0f);
+  const float* source_channels[] = {source.data()};
+  SonareEngineClip clip{};
+  clip.id = 1;
+  clip.track_id = 10;
+  clip.channels = source_channels;
+  clip.num_channels = 1;
+  clip.num_samples = kFrames;
+  clip.length_samples = kFrames;
+  clip.gain = 1.0f;
+  REQUIRE(sonare_engine_set_clips(engine, &clip, 1) == SONARE_OK);
+  SonareEngineTrackLane lane[] = {{10, nullptr, 0, 0, SONARE_CHANNEL_LAYOUT_MONO}};
+  REQUIRE(sonare_engine_set_track_lanes(engine, lane, 1) == SONARE_OK);
+  REQUIRE(sonare_engine_play(engine, -1) == SONARE_OK);
+
+  std::array<float, kBlock> main{};
+  std::array<float, kBlock> monitor{};
+  float* main_channels[] = {main.data()};
+  float* monitor_channels[] = {monitor.data()};
+
+  // A transition in the middle of a block splits the render exactly at the
+  // requested render frame: main remains unchanged, while only the second
+  // half receives the newly enabled PFL cue.
+  REQUIRE(sonare_engine_set_track_monitor_mode(engine, 0, SONARE_ENGINE_TRACK_MONITOR_MODE_PFL,
+                                               kBlock / 2) == SONARE_OK);
+  main.fill(0.0f);
+  monitor.fill(99.0f);
+  REQUIRE(sonare_engine_process_with_monitor(engine, main_channels, monitor_channels, 1, kBlock) ==
+          SONARE_OK);
+  REQUIRE(main[0] == Catch::Approx(1.0f));
+  REQUIRE(main.back() == Catch::Approx(1.0f));
+  REQUIRE(monitor[0] == Catch::Approx(0.0f));
+  REQUIRE(monitor[static_cast<size_t>(kBlock / 2)] == Catch::Approx(1.0f));
+  REQUIRE(monitor.back() == Catch::Approx(1.0f));
+
+  // Set the lane fader down and let its 5 ms smoother settle. PFL remains at
+  // the post-strip/pre-lane-fader level, while AFL follows the lane fader.
+  REQUIRE(sonare_engine_set_parameter(engine, engine_lane_param_target(0, 1), -6.0f, -1) ==
+          SONARE_OK);
+  for (int block = 0; block < 8; ++block) {
+    main.fill(0.0f);
+    monitor.fill(0.0f);
+    REQUIRE(sonare_engine_process_with_monitor(engine, main_channels, monitor_channels, 1,
+                                               kBlock) == SONARE_OK);
+  }
+  main.fill(0.0f);
+  monitor.fill(0.0f);
+  REQUIRE(sonare_engine_process_with_monitor(engine, main_channels, monitor_channels, 1, kBlock) ==
+          SONARE_OK);
+  const float settled_main = main.back();
+  REQUIRE(settled_main < 0.7f);
+  REQUIRE(settled_main > 0.4f);
+  REQUIRE(monitor.back() == Catch::Approx(1.0f).margin(0.01f));
+
+  REQUIRE(sonare_engine_set_track_monitor_mode(engine, 0, SONARE_ENGINE_TRACK_MONITOR_MODE_AFL,
+                                               -1) == SONARE_OK);
+  main.fill(0.0f);
+  monitor.fill(0.0f);
+  REQUIRE(sonare_engine_process_with_monitor(engine, main_channels, monitor_channels, 1, kBlock) ==
+          SONARE_OK);
+  REQUIRE(main.back() < 0.7f);
+  REQUIRE(main.back() > 0.4f);
+  REQUIRE(monitor.back() == Catch::Approx(main.back()).margin(0.01f));
+
+  // A valid transition reports queue back-pressure as OOM, not as an invalid
+  // mode. The tiny queue is intentionally left undrained.
+  SonareRealtimeEngine* tiny = nullptr;
+  REQUIRE(sonare_engine_create(&tiny) == SONARE_OK);
+  REQUIRE(sonare_engine_prepare(tiny, 48000.0, kBlock, 2, 2) == SONARE_OK);
+  REQUIRE(sonare_engine_set_track_monitor_mode(tiny, 0, SONARE_ENGINE_TRACK_MONITOR_MODE_OFF, -1) ==
+          SONARE_OK);
+  REQUIRE(sonare_engine_set_track_monitor_mode(tiny, 0, SONARE_ENGINE_TRACK_MONITOR_MODE_PFL, -1) ==
+          SONARE_OK);
+  REQUIRE(sonare_engine_set_track_monitor_mode(tiny, 0, SONARE_ENGINE_TRACK_MONITOR_MODE_AFL, -1) ==
+          SONARE_ERROR_OUT_OF_MEMORY);
+  sonare_engine_destroy(tiny);
+  sonare_engine_destroy(engine);
+#endif
 }
 
 TEST_CASE("sonare_engine track send zero-init defaults to post-fader", "[c_api][engine]") {
@@ -3474,6 +3643,51 @@ TEST_CASE("sonare_engine scope telemetry reports a tone's spectrum and goniomete
 #else
   REQUIRE(sonare_engine_configure_scope_telemetry(engine, kBlock, 32, nullptr) ==
           SONARE_ERROR_NOT_SUPPORTED);
+#endif
+
+  sonare_engine_destroy(engine);
+}
+
+TEST_CASE("sonare_engine scope telemetry applies a pre-prepare band configuration",
+          "[c_api][engine]") {
+  constexpr int kBlock = 256;
+  constexpr unsigned int kBands = 16;
+  SonareRealtimeEngine* engine = nullptr;
+  REQUIRE(sonare_engine_create(&engine) == SONARE_OK);
+
+#if defined(SONARE_WITH_MIXING)
+  // Configuration before prepare() must be retained for the later tap
+  // allocation, and the return value must describe that requested resolution
+  // rather than the tap's still-unprepared default.
+  unsigned int applied = 0;
+  REQUIRE(sonare_engine_configure_scope_telemetry(engine, kBlock, kBands, &applied) == SONARE_OK);
+  REQUIRE(applied == kBands);
+#else
+  REQUIRE(sonare_engine_configure_scope_telemetry(engine, kBlock, kBands, nullptr) ==
+          SONARE_ERROR_NOT_SUPPORTED);
+#endif
+
+  REQUIRE(sonare_engine_prepare(engine, 48000.0, kBlock, 64, 64) == SONARE_OK);
+
+#if defined(SONARE_WITH_MIXING)
+  REQUIRE(sonare_engine_play(engine, -1) == SONARE_OK);
+  std::array<float, kBlock> left{};
+  std::array<float, kBlock> right{};
+  float* io[] = {left.data(), right.data()};
+  REQUIRE(sonare_engine_process(engine, io, 2, kBlock) == SONARE_OK);
+
+  std::array<SonareScopeTelemetryRecord, 64> records{};
+  size_t count = 0;
+  REQUIRE(sonare_engine_drain_scope_telemetry(engine, records.data(), records.size(), &count) ==
+          SONARE_OK);
+  bool checked_master = false;
+  for (size_t r = 0; r < count; ++r) {
+    if (records[r].target_id != 0) continue;
+    REQUIRE(records[r].band_count == kBands);
+    checked_master = true;
+    break;
+  }
+  REQUIRE(checked_master);
 #endif
 
   sonare_engine_destroy(engine);

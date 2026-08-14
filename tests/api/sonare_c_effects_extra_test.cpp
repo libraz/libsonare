@@ -4,6 +4,7 @@
 
 #include <sonare/sonare_c.h>
 
+#include <algorithm>
 #include <catch2/catch_test_macros.hpp>
 #include <cmath>
 #include <cstdint>
@@ -38,7 +39,253 @@ float* non_null_sentinel_float_ptr() {
   return reinterpret_cast<float*>(static_cast<std::uintptr_t>(0x1));
 }
 
+float max_abs_difference(const float* lhs, const float* rhs, size_t length) {
+  float result = 0.0f;
+  for (size_t i = 0; i < length; ++i) {
+    result = std::max(result, std::abs(lhs[i] - rhs[i]));
+  }
+  return result;
+}
+
 }  // namespace
+
+TEST_CASE("configurable C effects preserve legacy defaults", "[c_api][effects]") {
+  constexpr int sample_rate = 22050;
+  auto samples = generate_sine(440.0f, sample_rate, 0.35f);
+
+  SECTION("time stretch and pitch shift") {
+    float* old_stretched = nullptr;
+    float* new_stretched = nullptr;
+    size_t old_stretched_length = 0;
+    size_t new_stretched_length = 0;
+    REQUIRE(sonare_time_stretch(samples.data(), samples.size(), sample_rate, 0.8f, &old_stretched,
+                                &old_stretched_length) == SONARE_OK);
+    REQUIRE(sonare_time_stretch_ex(samples.data(), samples.size(), sample_rate, 0.8f, 2048, 512,
+                                   &new_stretched, &new_stretched_length) == SONARE_OK);
+    REQUIRE(old_stretched_length == new_stretched_length);
+    REQUIRE(max_abs_difference(old_stretched, new_stretched, old_stretched_length) < 1e-6f);
+    sonare_free_floats(old_stretched);
+    sonare_free_floats(new_stretched);
+
+    float* old_shifted = nullptr;
+    float* new_shifted = nullptr;
+    size_t old_shifted_length = 0;
+    size_t new_shifted_length = 0;
+    REQUIRE(sonare_pitch_shift(samples.data(), samples.size(), sample_rate, 5.0f, &old_shifted,
+                               &old_shifted_length) == SONARE_OK);
+    REQUIRE(sonare_pitch_shift_ex(samples.data(), samples.size(), sample_rate, 5.0f, 2048, 512,
+                                  &new_shifted, &new_shifted_length) == SONARE_OK);
+    REQUIRE(old_shifted_length == new_shifted_length);
+    REQUIRE(max_abs_difference(old_shifted, new_shifted, old_shifted_length) < 1e-6f);
+    sonare_free_floats(old_shifted);
+    sonare_free_floats(new_shifted);
+  }
+
+  SECTION("HPSS and absolute trim") {
+    SonareHpssResult old_hpss{};
+    SonareHpssResult new_hpss{};
+    REQUIRE(sonare_hpss(samples.data(), samples.size(), sample_rate, 31, 31, &old_hpss) ==
+            SONARE_OK);
+    REQUIRE(sonare_hpss_ex(samples.data(), samples.size(), sample_rate, 31, 31, 2048, 512, 1, 0,
+                           &new_hpss, nullptr) == SONARE_OK);
+    REQUIRE(old_hpss.length == new_hpss.length);
+    REQUIRE(old_hpss.sample_rate == new_hpss.sample_rate);
+    REQUIRE(max_abs_difference(old_hpss.harmonic, new_hpss.harmonic, old_hpss.length) < 1e-6f);
+    REQUIRE(max_abs_difference(old_hpss.percussive, new_hpss.percussive, old_hpss.length) < 1e-6f);
+    sonare_free_hpss_result(&old_hpss);
+    sonare_free_hpss_result(&new_hpss);
+
+    std::vector<float> padded(samples.size() + 2048, 0.0f);
+    std::copy(samples.begin(), samples.end(), padded.begin() + 1024);
+    float* old_trimmed = nullptr;
+    float* new_trimmed = nullptr;
+    size_t old_trimmed_length = 0;
+    size_t new_trimmed_length = 0;
+    REQUIRE(sonare_trim(padded.data(), padded.size(), sample_rate, -40.0f, &old_trimmed,
+                        &old_trimmed_length) == SONARE_OK);
+    REQUIRE(sonare_trim_ex(padded.data(), padded.size(), sample_rate, -40.0f, 2048, 512,
+                           &new_trimmed, &new_trimmed_length) == SONARE_OK);
+    REQUIRE(old_trimmed_length == new_trimmed_length);
+    REQUIRE(max_abs_difference(old_trimmed, new_trimmed, old_trimmed_length) < 1e-6f);
+    sonare_free_floats(old_trimmed);
+    sonare_free_floats(new_trimmed);
+  }
+}
+
+TEST_CASE("C effects _ex options reach their native processing paths", "[c_api][effects]") {
+  constexpr int sample_rate = 22050;
+  auto samples = generate_sine(440.0f, sample_rate, 0.8f);
+  for (size_t i = 0; i < samples.size(); ++i) {
+    samples[i] += 0.25f * std::sin(2.0f * static_cast<float>(sonare::constants::kPiD) * 1730.0f *
+                                   i / sample_rate);
+  }
+
+  SECTION("time and pitch FFT settings change the result") {
+    float* default_stretched = nullptr;
+    float* custom_stretched = nullptr;
+    size_t default_stretched_length = 0;
+    size_t custom_stretched_length = 0;
+    REQUIRE(sonare_time_stretch_ex(samples.data(), samples.size(), sample_rate, 0.8f, 2048, 512,
+                                   &default_stretched, &default_stretched_length) == SONARE_OK);
+    REQUIRE(sonare_time_stretch_ex(samples.data(), samples.size(), sample_rate, 0.8f, 1024, 256,
+                                   &custom_stretched, &custom_stretched_length) == SONARE_OK);
+    REQUIRE(default_stretched_length == custom_stretched_length);
+    REQUIRE(max_abs_difference(default_stretched, custom_stretched, default_stretched_length) >
+            1e-5f);
+    sonare_free_floats(default_stretched);
+    sonare_free_floats(custom_stretched);
+
+    float* default_shifted = nullptr;
+    float* custom_shifted = nullptr;
+    size_t default_shifted_length = 0;
+    size_t custom_shifted_length = 0;
+    REQUIRE(sonare_pitch_shift_ex(samples.data(), samples.size(), sample_rate, 5.0f, 2048, 512,
+                                  &default_shifted, &default_shifted_length) == SONARE_OK);
+    REQUIRE(sonare_pitch_shift_ex(samples.data(), samples.size(), sample_rate, 5.0f, 1024, 256,
+                                  &custom_shifted, &custom_shifted_length) == SONARE_OK);
+    REQUIRE(default_shifted_length == custom_shifted_length);
+    REQUIRE(max_abs_difference(default_shifted, custom_shifted, default_shifted_length) > 1e-5f);
+    sonare_free_floats(default_shifted);
+    sonare_free_floats(custom_shifted);
+  }
+
+  SECTION("HPSS supports hard two-way and three-way routing") {
+    SonareHpssResult soft{};
+    SonareHpssResult hard{};
+    float* ignored_residual = non_null_sentinel_float_ptr();
+    REQUIRE(sonare_hpss_ex(samples.data(), samples.size(), sample_rate, 31, 31, 1024, 256, 1, 0,
+                           &soft, &ignored_residual) == SONARE_OK);
+    REQUIRE(ignored_residual == nullptr);
+    REQUIRE(sonare_hpss_ex(samples.data(), samples.size(), sample_rate, 31, 31, 1024, 256, 0, 0,
+                           &hard, nullptr) == SONARE_OK);
+    REQUIRE(soft.length == hard.length);
+    REQUIRE(max_abs_difference(soft.harmonic, hard.harmonic, hard.length) > 1e-5f);
+    sonare_free_hpss_result(&soft);
+    sonare_free_hpss_result(&hard);
+
+    SonareHpssResult hard_two_way{};
+    SonareHpssResult hard_three_way{};
+    float* residual = nullptr;
+    REQUIRE(sonare_hpss_ex(samples.data(), samples.size(), sample_rate, 31, 31, 1024, 256, 0, 0,
+                           &hard_two_way, nullptr) == SONARE_OK);
+    REQUIRE(sonare_hpss_ex(samples.data(), samples.size(), sample_rate, 31, 31, 1024, 256, 0, 1,
+                           &hard_three_way, &residual) == SONARE_OK);
+    REQUIRE(residual != nullptr);
+    REQUIRE(hard_two_way.length == hard_three_way.length);
+    REQUIRE(hard_three_way.length == samples.size());
+    REQUIRE(max_abs_difference(hard_two_way.harmonic, hard_three_way.harmonic,
+                               hard_three_way.length) > 1e-5f);
+    REQUIRE(max_abs_difference(hard_two_way.percussive, hard_three_way.percussive,
+                               hard_three_way.length) > 1e-5f);
+    float reconstruction_error = 0.0f;
+    float residual_peak = 0.0f;
+    for (size_t i = 0; i < hard_three_way.length; ++i) {
+      REQUIRE(std::isfinite(hard_two_way.harmonic[i]));
+      REQUIRE(std::isfinite(hard_two_way.percussive[i]));
+      REQUIRE(std::isfinite(hard_three_way.harmonic[i]));
+      REQUIRE(std::isfinite(hard_three_way.percussive[i]));
+      REQUIRE(std::isfinite(residual[i]));
+      reconstruction_error = std::max(
+          reconstruction_error, std::abs(hard_three_way.harmonic[i] + hard_three_way.percussive[i] +
+                                         residual[i] - samples[i]));
+      residual_peak = std::max(residual_peak, std::abs(residual[i]));
+    }
+    REQUIRE(residual_peak > 1e-5f);
+    REQUIRE(reconstruction_error < 1e-4f);
+    sonare_free_hpss_result(&hard_two_way);
+    sonare_free_hpss_result(&hard_three_way);
+    sonare_free_floats(residual);
+  }
+}
+
+TEST_CASE("sonare_normalize_rms clips and sonare_trim_ex uses custom framing", "[c_api][effects]") {
+  SECTION("RMS normalization clips overshoots") {
+    const std::vector<float> samples = {0.8f, -0.8f, 0.8f, -0.8f};
+    float* out = nullptr;
+    size_t out_length = 0;
+    REQUIRE(sonare_normalize_rms(samples.data(), samples.size(), 22050, 0.0f, &out, &out_length) ==
+            SONARE_OK);
+    REQUIRE(out_length == samples.size());
+    REQUIRE(out[0] == 1.0f);
+    REQUIRE(out[1] == -1.0f);
+    for (size_t i = 0; i < out_length; ++i) REQUIRE(std::abs(out[i]) <= 1.0f);
+    sonare_free_floats(out);
+  }
+
+  SECTION("trim_ex accepts frame and hop overrides") {
+    constexpr int sample_rate = 8000;
+    std::vector<float> samples(1024, 0.0f);
+    for (size_t i = 128; i < 896; ++i) {
+      samples[i] = 0.5f * std::sin(2.0f * static_cast<float>(sonare::constants::kPiD) * 440.0f * i /
+                                   sample_rate);
+    }
+    float* legacy = nullptr;
+    size_t legacy_length = 0;
+    REQUIRE(sonare_trim(samples.data(), samples.size(), sample_rate, -40.0f, &legacy,
+                        &legacy_length) == SONARE_OK);
+
+    float* custom = nullptr;
+    size_t custom_length = 0;
+    REQUIRE(sonare_trim_ex(samples.data(), samples.size(), sample_rate, -40.0f, 64, 16, &custom,
+                           &custom_length) == SONARE_OK);
+    REQUIRE(custom != nullptr);
+    REQUIRE(custom_length < samples.size());
+    REQUIRE((custom_length != legacy_length ||
+             max_abs_difference(custom, legacy, custom_length) > 1e-5f));
+    sonare_free_floats(legacy);
+    sonare_free_floats(custom);
+  }
+}
+
+TEST_CASE("effect _ex outputs are cleared before validation", "[c_api][effects]") {
+  const float sample = 0.25f;
+
+  float* out = non_null_sentinel_float_ptr();
+  size_t out_length = 99;
+  REQUIRE(sonare_time_stretch_ex(nullptr, 0, 22050, 0.8f, 2048, 512, &out, &out_length) ==
+          SONARE_ERROR_INVALID_PARAMETER);
+  REQUIRE(out == nullptr);
+  REQUIRE(out_length == 0);
+
+  out = non_null_sentinel_float_ptr();
+  out_length = 99;
+  REQUIRE(sonare_pitch_shift_ex(&sample, 1, 22050, 0.0f, 2048, 512, &out, &out_length) ==
+          SONARE_ERROR_INVALID_PARAMETER);
+  REQUIRE(out == nullptr);
+  REQUIRE(out_length == 0);
+
+  out = non_null_sentinel_float_ptr();
+  out_length = 99;
+  REQUIRE(sonare_normalize_rms(nullptr, 0, 22050, -10.0f, &out, &out_length) ==
+          SONARE_ERROR_INVALID_PARAMETER);
+  REQUIRE(out == nullptr);
+  REQUIRE(out_length == 0);
+
+  out = non_null_sentinel_float_ptr();
+  out_length = 99;
+  REQUIRE(sonare_trim_ex(&sample, 1, 22050, -40.0f, 64, 0, &out, &out_length) ==
+          SONARE_ERROR_INVALID_PARAMETER);
+  REQUIRE(out == nullptr);
+  REQUIRE(out_length == 0);
+
+  SonareHpssResult result{non_null_sentinel_float_ptr(), non_null_sentinel_float_ptr(), 99, 99};
+  float* residual = non_null_sentinel_float_ptr();
+  REQUIRE(sonare_hpss_ex(nullptr, 0, 22050, 31, 31, 2048, 512, 1, 0, &result, &residual) ==
+          SONARE_ERROR_INVALID_PARAMETER);
+  REQUIRE(result.harmonic == nullptr);
+  REQUIRE(result.percussive == nullptr);
+  REQUIRE(result.length == 0);
+  REQUIRE(result.sample_rate == 0);
+  REQUIRE(residual == nullptr);
+
+  result = {non_null_sentinel_float_ptr(), non_null_sentinel_float_ptr(), 99, 99};
+  REQUIRE(sonare_hpss_ex(&sample, 1, 22050, 31, 31, 2048, 512, 1, 1, &result, nullptr) ==
+          SONARE_ERROR_INVALID_PARAMETER);
+  REQUIRE(result.harmonic == nullptr);
+  REQUIRE(result.percussive == nullptr);
+  REQUIRE(result.length == 0);
+  REQUIRE(result.sample_rate == 0);
+}
 
 TEST_CASE("sonare_decompose", "[c_api][effects]") {
   const int n_features = 16;

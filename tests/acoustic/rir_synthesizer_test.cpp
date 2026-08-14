@@ -10,6 +10,7 @@
 #include "acoustic/material.h"
 #include "acoustic/room_model.h"
 #include "analysis/acoustic_analyzer.h"
+#include "util/resource_limits.h"
 
 using Catch::Matchers::WithinRel;
 using namespace sonare;
@@ -87,6 +88,21 @@ TEST_CASE("synthesize_rir clamps length to max_seconds with a diagnostic", "[aco
   const RirSynthResult full = synthesize_rir(room, pl, sr, {/*ism_order=*/3});
   REQUIRE(full.rir.size() > res.rir.size());
   REQUIRE_FALSE(has_code(full.diagnostics, "acoustic.rir_length_clamped"));
+}
+
+TEST_CASE("synthesize_rir reports a late-tail resource clamp", "[acoustic][rir][resource_limit]") {
+  const int sr = 384000;
+  ShoeboxRoom room;
+  room.dims = {1.0f, 1.0f, 1.0f};
+  for (Material& w : room.walls) w = uniform_material(0.000001f, 0.0f, 1);
+  const SourceListener pl{{0.25f, 0.25f, 0.25f}, {0.75f, 0.75f, 0.75f}};
+
+  RirSynthConfig cfg;
+  cfg.ism_order = 0;
+  const RirSynthResult res = synthesize_rir(room, pl, sr, cfg);
+  REQUIRE_FALSE(has_error(res.diagnostics));
+  REQUIRE(has_code(res.diagnostics, "acoustic.rir_length_clamped"));
+  REQUIRE(res.rir.size() == resource::kMaxAcousticRirSamples);
 }
 
 TEST_CASE("rir_length_clamped is not raised by an above-Nyquist band's huge RT60",

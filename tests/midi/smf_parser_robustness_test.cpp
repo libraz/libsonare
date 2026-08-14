@@ -62,6 +62,42 @@ std::vector<uint8_t> wrap_format0_track(const std::vector<uint8_t>& body) {
   return smf;
 }
 
+std::vector<uint8_t> make_running_status_smf(std::size_t event_count) {
+  std::vector<uint8_t> body;
+  body.reserve(event_count * 3u + 8u);
+  for (std::size_t i = 0; i < event_count; ++i) {
+    body.push_back(i == 0 ? 0x00u : 0x01u);
+    if (i == 0) body.push_back(0x90u);
+    body.push_back(static_cast<uint8_t>(60u + (i % 12u)));
+    body.push_back(static_cast<uint8_t>(64u + (i % 64u)));
+  }
+  body.insert(body.end(), {0x00u, 0xFFu, 0x2Fu, 0x00u});
+  return wrap_format0_track(body);
+}
+
+std::vector<uint8_t> make_sysex_budget_smf(std::size_t payload_size) {
+  const std::size_t original_payload_size = payload_size;
+  std::vector<uint8_t> body;
+  body.reserve(payload_size + 16u);
+  body.insert(body.end(), {0x00u, 0xF0u});
+
+  uint8_t encoded[4]{};
+  std::size_t encoded_count = 0;
+  encoded[encoded_count++] = static_cast<uint8_t>(payload_size & 0x7Fu);
+  for (payload_size >>= 7u; payload_size != 0u; payload_size >>= 7u) {
+    encoded[encoded_count++] = static_cast<uint8_t>(payload_size & 0x7Fu);
+  }
+  while (encoded_count > 0u) {
+    const std::size_t index = --encoded_count;
+    body.push_back(static_cast<uint8_t>(encoded[index] | (index == 0u ? 0u : 0x80u)));
+  }
+  for (std::size_t i = 0; i < original_payload_size; ++i) {
+    body.push_back(i + 1u == original_payload_size ? 0xF7u : static_cast<uint8_t>(i % 0x7Fu));
+  }
+  body.insert(body.end(), {0x00u, 0xFFu, 0x2Fu, 0x00u});
+  return wrap_format0_track(body);
+}
+
 MidiClipEvent ev(double ppq, const Ump& ump) {
   MidiClipEvent e;
   e.ppq = ppq;
@@ -294,6 +330,31 @@ TEST_CASE("SMF import enforces track event metadata and SysEx budgets before exp
       wrap_format0_track({0x00, 0xF0, 0x03, 0x01, 0x02, 0xF7, 0x00, 0xFF, 0x2F, 0x00}), limits);
   REQUIRE_FALSE(imported.ok());
   REQUIRE(imported.status == sonare::midi::SmfStatus::kInvalidArgument);
+}
+
+TEST_CASE("SMF import accepts exactly its raw event budget", "[.][slow][midi][resource_limit]") {
+  const std::size_t cap = sonare::resource::kDefaultMidiImportResourceLimits.max_events;
+  const auto at_cap = import_smf(make_running_status_smf(cap));
+  REQUIRE(at_cap.ok());
+  REQUIRE(at_cap.clips.size() == 1);
+  REQUIRE(at_cap.clips.front().events().size() == cap);
+
+  const auto over_cap = import_smf(make_running_status_smf(cap + 1u));
+  REQUIRE_FALSE(over_cap.ok());
+  REQUIRE(over_cap.status == sonare::midi::SmfStatus::kInvalidArgument);
+  REQUIRE(over_cap.diagnostic.find("resource limit") != std::string::npos);
+}
+
+TEST_CASE("SMF import accepts its raw SysEx byte budget", "[.][slow][midi][resource_limit]") {
+  constexpr std::size_t kPayloadBytes = 32u * 1024u * 1024u;
+  const auto at_cap = import_smf(make_sysex_budget_smf(kPayloadBytes));
+  REQUIRE(at_cap.ok());
+  REQUIRE(at_cap.clips.size() == 1);
+  REQUIRE(at_cap.clips.front().events().size() == 1);
+  const auto* payload =
+      at_cap.sysex_store.lookup(at_cap.clips.front().events().front().ump.sysex_handle);
+  REQUIRE(payload != nullptr);
+  REQUIRE(payload->size() == kPayloadBytes);
 }
 
 TEST_CASE("SMF2 import enforces file and event budgets before normalized allocation",

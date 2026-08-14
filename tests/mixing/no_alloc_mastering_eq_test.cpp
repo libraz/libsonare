@@ -293,10 +293,8 @@ TEST_CASE("PultecEq process performs no heap allocation after prepare", "[master
 
 TEST_CASE("MultibandCompressor mono first block is allocation free after prepare",
           "[mastering][multiband][rt]") {
-  // prepare() pre-sizes the crossover split scratch assuming stereo
-  // (crossover_.prepare_scratch(scratch_, 2, ...)); a mono FIRST block finds
-  // that scratch's channel count mismatched and grows it inside process(),
-  // on the audio thread.
+  // The two-argument prepare() uses the full realtime channel bound, so a
+  // mono FIRST block must not resize crossover scratch on the audio thread.
   constexpr int kBlock = 256;
   sonare::mastering::multiband::MultibandCompressor compressor;
   compressor.prepare(48000.0, kBlock);
@@ -310,6 +308,91 @@ TEST_CASE("MultibandCompressor mono first block is allocation free after prepare
   AllocationGuard guard;
   compressor.process(channels, 1, kBlock);
   REQUIRE(guard.count() == 0);
+}
+
+TEST_CASE("MultibandCompressor 7.1 first block is allocation free", "[mastering][multiband][rt]") {
+  constexpr int kBlock = 64;
+  constexpr int kChannels = 8;
+  sonare::mastering::multiband::MultibandCompressor compressor;
+  compressor.prepare(48000.0, kBlock, kChannels);
+
+  std::array<std::array<float, kBlock>, kChannels> storage{};
+  std::array<float*, kChannels> channels{};
+  for (int ch = 0; ch < kChannels; ++ch) {
+    storage[static_cast<size_t>(ch)][0] = 0.1f * static_cast<float>(ch + 1);
+    channels[static_cast<size_t>(ch)] = storage[static_cast<size_t>(ch)].data();
+  }
+
+  AllocationGuard guard;
+  compressor.process(channels.data(), kChannels, kBlock);
+  REQUIRE(guard.count() == 0);
+}
+
+TEST_CASE("MultibandCompressor config-change block is allocation free",
+          "[mastering][multiband][rt]") {
+  constexpr int kBlock = 64;
+  sonare::mastering::multiband::MultibandCompressor compressor;
+  compressor.prepare(48000.0, kBlock, 2);
+
+  std::array<float, kBlock> left{};
+  std::array<float, kBlock> right{};
+  left[0] = 0.8f;
+  right[0] = 0.4f;
+  float* channels[] = {left.data(), right.data()};
+  compressor.process(channels, 2, kBlock);
+
+  auto updated = compressor.config();
+  updated.crossover.cutoffs_hz[0] = 240.0f;
+  updated.bands[0].threshold_db = -12.0f;
+  compressor.set_config(updated);
+
+  AllocationGuard guard;
+  compressor.process(channels, 2, kBlock);
+  REQUIRE(guard.count() == 0);
+}
+
+TEST_CASE("MultibandCompressor FIR first and second blocks are allocation free",
+          "[mastering][multiband][rt]") {
+  constexpr int kBlock = 64;
+  sonare::mastering::multiband::MultibandCompressorConfig config;
+  config.crossover.mode = sonare::mastering::multiband::CrossoverMode::FirLinearPhase;
+  config.crossover.fir_kernel_size = 65;
+  sonare::mastering::multiband::MultibandCompressor compressor(config);
+  compressor.prepare(48000.0, kBlock, 2);
+
+  std::array<float, kBlock> left{};
+  std::array<float, kBlock> right{};
+  left[0] = 0.8f;
+  right[0] = -0.4f;
+  float* channels[] = {left.data(), right.data()};
+
+  AllocationGuard first_block_guard;
+  compressor.process(channels, 2, kBlock);
+  REQUIRE(first_block_guard.count() == 0);
+
+  AllocationGuard second_block_guard;
+  compressor.process(channels, 2, kBlock);
+  REQUIRE(second_block_guard.count() == 0);
+}
+
+TEST_CASE("MultibandCompressor rejects blocks outside explicit prepare bounds",
+          "[mastering][multiband][rt]") {
+  constexpr int kBlock = 64;
+  constexpr int kChannels = 2;
+  sonare::mastering::multiband::MultibandCompressor compressor;
+  REQUIRE_THROWS_AS(compressor.prepare(48000.0, kBlock, 0), sonare::SonareException);
+  compressor.prepare(48000.0, kBlock, kChannels);
+
+  std::array<std::array<float, kBlock + 1>, kChannels + 1> storage{};
+  std::array<float*, kChannels + 1> channels{};
+  for (int ch = 0; ch < kChannels + 1; ++ch) {
+    channels[static_cast<size_t>(ch)] = storage[static_cast<size_t>(ch)].data();
+  }
+
+  REQUIRE_THROWS_AS(compressor.process(channels.data(), kChannels + 1, kBlock),
+                    sonare::SonareException);
+  REQUIRE_THROWS_AS(compressor.process(channels.data(), kChannels, kBlock + 1),
+                    sonare::SonareException);
 }
 
 TEST_CASE("MultibandSaturation process performs no heap allocation after prepare",

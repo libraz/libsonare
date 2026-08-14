@@ -4,8 +4,10 @@
 
 #include <catch2/catch_test_macros.hpp>
 #include <cstdint>
+#include <limits>
 #include <map>
 #include <memory>
+#include <new>
 #include <utility>
 #include <vector>
 
@@ -39,6 +41,9 @@ class InstallAudioContentForRollbackTest final : public EditCommand {
   }
 
   const char* type_name() const noexcept override { return "InstallAudioContentForRollbackTest"; }
+  size_t retained_bytes() const noexcept override {
+    return retained::saturating_add(sizeof(*this), retained::dynamic_bytes(samples_.channels));
+  }
 
  private:
   AudioContentStore* store_ = nullptr;
@@ -52,6 +57,41 @@ class FailingRollbackTestCommand final : public EditCommand {
   bool apply(Project&, MidiContentStore&) override { return false; }
   EditCommandPtr invert(const Project&, const MidiContentStore&) const override { return nullptr; }
   const char* type_name() const noexcept override { return "FailingRollbackTestCommand"; }
+  size_t retained_bytes() const noexcept override { return sizeof(*this); }
+};
+
+// Synthetic command whose footprint can grow after it has been retained. This
+// exercises dynamic accounting (rather than a cached size) and lets the tests
+// drive the nearest-redo/newest-undo oversized policies without allocating a
+// giant payload.
+class RetainedBudgetCommand final : public EditCommand {
+ public:
+  RetainedBudgetCommand(std::shared_ptr<size_t> budget, double sample_rate,
+                        bool return_false = false, bool throw_on_apply = false)
+      : budget_(std::move(budget)),
+        sample_rate_(sample_rate),
+        return_false_(return_false),
+        throw_on_apply_(throw_on_apply) {}
+
+  bool apply(Project& project, MidiContentStore&) override {
+    project.set_sample_rate(sample_rate_);
+    if (throw_on_apply_) throw std::bad_alloc();
+    return !return_false_;
+  }
+
+  EditCommandPtr invert(const Project& before, const MidiContentStore&) const override {
+    return std::make_unique<RetainedBudgetCommand>(budget_, before.sample_rate());
+  }
+
+  const char* type_name() const noexcept override { return "RetainedBudgetCommand"; }
+  bool mutates_midi_store() const noexcept override { return false; }
+  size_t retained_bytes() const noexcept override { return budget_ != nullptr ? *budget_ : 0; }
+
+ private:
+  std::shared_ptr<size_t> budget_;
+  double sample_rate_ = 0.0;
+  bool return_false_ = false;
+  bool throw_on_apply_ = false;
 };
 
 // ---------------------------------------------------------------------------
@@ -62,7 +102,8 @@ class FailingRollbackTestCommand final : public EditCommand {
 
 bool lane_equal(const sonare::automation::AutomationLane& a,
                 const sonare::automation::AutomationLane& b) {
-  if (a.target_param_id() != b.target_param_id()) return false;
+  if (a.target_param_id() != b.target_param_id() || a.target_kind() != b.target_kind())
+    return false;
   if (a.points().size() != b.points().size()) return false;
   for (size_t i = 0; i < a.points().size(); ++i) {
     const auto& pa = a.points()[i];
@@ -1033,6 +1074,21 @@ TEST_CASE("Automation command round-trips", "[arrangement]") {
     check_round_trip(f.project, store,
                      std::make_unique<EditAutomationLane>(f.audio_track, 20, std::move(edited)));
   }
+  SECTION("typed target equality and per-kind conflicts") {
+    auto fader = make_lane(30);
+    fader.set_target_kind(sonare::automation::AutomationTargetKind::kTrackFaderDb);
+    check_round_trip(f.project, store,
+                     std::make_unique<AddAutomationLane>(f.audio_track, std::move(fader)));
+
+    sonare::automation::AutomationLane existing(
+        31, sonare::automation::AutomationTargetKind::kTrackFaderDb);
+    REQUIRE(AddAutomationLane(f.audio_track, existing).apply(f.project, store));
+    const Project before = f.project;
+    sonare::automation::AutomationLane conflicting(
+        32, sonare::automation::AutomationTargetKind::kTrackFaderDb);
+    CHECK_FALSE(AddAutomationLane(f.audio_track, conflicting).apply(f.project, store));
+    CHECK(project_equal(f.project, before));
+  }
 }
 
 TEST_CASE("MIDI content command round-trips", "[arrangement]") {
@@ -1291,6 +1347,173 @@ TEST_CASE("EditHistory honors a configured maximum undo depth", "[arrangement]")
   REQUIRE_FALSE(h.can_undo());
   REQUIRE_FALSE(h.can_redo());
   REQUIRE(h.project().find_track(f.audio_track)->name == name_before);
+}
+
+TEST_CASE("EditHistory uses the documented default depth and byte cap",
+          "[arrangement][history_bytes]") {
+  EditHistory h;
+  REQUIRE(h.max_undo_depth() == 512);
+  REQUIRE(h.max_history_bytes() == 256u * 1024u * 1024u);
+  REQUIRE(h.retained_history_bytes() == 0);
+}
+
+TEST_CASE("EditHistory enforces a combined retained-byte cap with redo-first eviction",
+          "[arrangement][history_bytes]") {
+  Fixture f;
+  EditHistory h{f.project};
+  auto budget = std::make_shared<size_t>(16);
+  h.set_max_history_bytes(64);
+
+  for (int i = 0; i < 4; ++i) {
+    REQUIRE(
+        h.apply(std::make_unique<RetainedBudgetCommand>(budget, 48000.0 + static_cast<double>(i))));
+  }
+  // Each entry owns a forward+inverse pair (32 bytes), so only the two newest
+  // entries fit. The edit remains successful while the oldest chain unit drops.
+  REQUIRE(h.undo_depth() == 2);
+  REQUIRE(h.redo_depth() == 0);
+  REQUIRE(h.retained_history_bytes() <= 64);
+
+  REQUIRE(h.undo());
+  REQUIRE(h.undo());
+  REQUIRE(h.undo_depth() == 0);
+  REQUIRE(h.redo_depth() == 2);
+  REQUIRE(h.retained_history_bytes() <= 64);
+
+  // Shrinking with redo present evicts redo-oldest first, preserving the
+  // nearest redo entry. With no redo left, shrinking evicts undo-oldest.
+  h.set_max_history_bytes(32);
+  REQUIRE(h.undo_depth() == 0);
+  REQUIRE(h.redo_depth() == 1);
+  REQUIRE(h.retained_history_bytes() <= 32);
+
+  h.set_max_history_bytes(64);
+  REQUIRE(h.redo());
+  REQUIRE(h.undo_depth() == 1);
+  REQUIRE(h.redo_depth() == 0);
+  h.set_max_history_bytes(16);
+  REQUIRE(h.undo_depth() == 0);
+  REQUIRE(h.redo_depth() == 0);
+  REQUIRE(h.retained_history_bytes() == 0);
+}
+
+TEST_CASE("EditHistory keeps oversized successful edits non-undoable",
+          "[arrangement][history_bytes]") {
+  Fixture f;
+  EditHistory h{f.project};
+  auto budget = std::make_shared<size_t>(100);
+  h.set_max_history_bytes(32);
+  REQUIRE(h.apply(std::make_unique<RetainedBudgetCommand>(budget, 96000.0)));
+  REQUIRE(h.project().sample_rate() == 96000.0);
+  REQUIRE(h.undo_depth() == 0);
+  REQUIRE(h.redo_depth() == 0);
+
+  std::vector<EditCommandPtr> transaction;
+  transaction.push_back(std::make_unique<RetainedBudgetCommand>(budget, 44100.0));
+  transaction.push_back(std::make_unique<RetainedBudgetCommand>(budget, 22050.0));
+  REQUIRE(h.apply_transaction(std::move(transaction)));
+  REQUIRE(h.project().sample_rate() == 22050.0);
+  REQUIRE(h.undo_depth() == 0);
+  REQUIRE(h.redo_depth() == 0);
+}
+
+TEST_CASE("EditHistory treats a zero byte cap as no retention", "[arrangement][history_bytes]") {
+  Fixture f;
+  EditHistory h{f.project};
+  h.set_max_history_bytes(0);
+  auto zero_budget = std::make_shared<size_t>(0);
+
+  REQUIRE(h.apply(std::make_unique<RetainedBudgetCommand>(zero_budget, 44100.0)));
+  REQUIRE(h.project().sample_rate() == 44100.0);
+  REQUIRE(h.undo_depth() == 0);
+  REQUIRE(h.redo_depth() == 0);
+  REQUIRE(h.retained_history_bytes() == 0);
+}
+
+TEST_CASE("EditHistory evicts redo oldest before undo oldest when shrinking",
+          "[arrangement][history_bytes]") {
+  Fixture f;
+  EditHistory h{f.project};
+  auto budget = std::make_shared<size_t>(16);
+  h.set_max_history_bytes(128);
+
+  // Each command contributes a 16-byte forward/inverse pair. Keep four edits,
+  // then move the two newest into redo so both stacks are populated.
+  REQUIRE(h.apply(std::make_unique<RetainedBudgetCommand>(budget, 41000.0)));
+  REQUIRE(h.apply(std::make_unique<RetainedBudgetCommand>(budget, 42000.0)));
+  REQUIRE(h.apply(std::make_unique<RetainedBudgetCommand>(budget, 43000.0)));
+  REQUIRE(h.apply(std::make_unique<RetainedBudgetCommand>(budget, 44000.0)));
+  REQUIRE(h.undo());
+  REQUIRE(h.undo());
+  REQUIRE(h.undo_depth() == 2);
+  REQUIRE(h.redo_depth() == 2);
+  REQUIRE(h.retained_history_bytes() == 128);
+
+  // Three entries fit in the smaller cap. The oldest redo entry is the 44000
+  // edit, so it must be evicted before either undo entry is touched; the
+  // nearest redo (43000) remains available.
+  h.set_max_history_bytes(96);
+  REQUIRE(h.undo_depth() == 2);
+  REQUIRE(h.redo_depth() == 1);
+  REQUIRE(h.retained_history_bytes() == 96);
+  REQUIRE(h.redo());
+  REQUIRE(h.project().sample_rate() == 43000.0);
+  REQUIRE_FALSE(h.can_redo());
+
+  // Both original undo entries survived the shrink as well.
+  REQUIRE(h.undo());
+  REQUIRE(h.project().sample_rate() == 42000.0);
+  REQUIRE(h.undo());
+  REQUIRE(h.project().sample_rate() == 41000.0);
+  REQUIRE(h.undo());
+  REQUIRE(h.project().sample_rate() == f.project.sample_rate());
+}
+
+TEST_CASE("EditHistory clears an oversized nearest redo or newest undo dynamically",
+          "[arrangement][history_bytes]") {
+  Fixture f;
+  EditHistory h{f.project};
+  h.set_max_history_bytes(64);
+  auto first_budget = std::make_shared<size_t>(16);
+  auto second_budget = std::make_shared<size_t>(16);
+  REQUIRE(h.apply(std::make_unique<RetainedBudgetCommand>(first_budget, 44100.0)));
+  REQUIRE(h.apply(std::make_unique<RetainedBudgetCommand>(second_budget, 48000.0)));
+  *second_budget = 100;
+  REQUIRE(h.undo());
+  REQUIRE(h.redo_depth() == 0);  // nearest redo was over budget and was cleared
+  REQUIRE(h.undo_depth() == 1);
+
+  h.clear_history();
+  *first_budget = 16;
+  REQUIRE(h.apply(std::make_unique<RetainedBudgetCommand>(first_budget, 44100.0)));
+  REQUIRE(h.undo());
+  *first_budget = 100;
+  REQUIRE(h.redo());
+  REQUIRE(h.undo_depth() == 0);  // newest undo was over budget and was cleared
+  REQUIRE(h.redo_depth() == 0);
+}
+
+TEST_CASE("EditHistory leaves byte accounting unchanged on false and throw paths",
+          "[arrangement][history_bytes][exception_safety]") {
+  Fixture f;
+  EditHistory h{f.project};
+  h.set_max_history_bytes(1024);
+  const size_t before = h.retained_history_bytes();
+  auto budget = std::make_shared<size_t>(256);
+  REQUIRE_FALSE(h.apply(std::make_unique<RetainedBudgetCommand>(budget, 22050.0, true)));
+  REQUIRE(h.retained_history_bytes() == before);
+  REQUIRE(h.project().sample_rate() == f.project.sample_rate());
+  REQUIRE_THROWS_AS(h.apply(std::make_unique<RetainedBudgetCommand>(budget, 96000.0, false, true)),
+                    std::bad_alloc);
+  REQUIRE(h.retained_history_bytes() == before);
+  REQUIRE(h.project().sample_rate() == f.project.sample_rate());
+}
+
+TEST_CASE("retained-byte arithmetic saturates", "[arrangement][history_bytes]") {
+  REQUIRE(retained::saturating_add(std::numeric_limits<size_t>::max(), 1) ==
+          std::numeric_limits<size_t>::max());
+  REQUIRE(retained::saturating_multiply(std::numeric_limits<size_t>::max(), 2) ==
+          std::numeric_limits<size_t>::max());
 }
 
 TEST_CASE("EditHistory transaction rolls back decoded audio sidecars", "[arrangement]") {

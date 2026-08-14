@@ -34,6 +34,22 @@ class LatentStereoInsert final : public sonare::rt::ProcessorBase {
   std::array<sonare::rt::DelayLine, 2> delays_{};
 };
 
+#if defined(SONARE_WITH_ARRANGEMENT)
+class PdcNoAllocInstrument final : public sonare::midi::MidiInstrument {
+ public:
+  explicit PdcNoAllocInstrument(int latency) : latency_(latency) {}
+
+  void prepare(double, int) override {}
+  void process(float* const*, int, int) override {}
+  void reset() override {}
+  int latency_samples() const noexcept override { return latency_; }
+  void on_event(uint32_t, const sonare::midi::MidiEvent&) noexcept override {}
+
+ private:
+  int latency_ = 0;
+};
+#endif
+
 }  // namespace
 
 TEST_CASE("ChannelStrip process performs no heap allocation after prepare", "[mixing][rt]") {
@@ -130,6 +146,30 @@ TEST_CASE("RealtimeEngine process performs no heap allocation after prepare", "[
   engine.process(channels, 2, kBlock);
   REQUIRE(guard.count() == 0);
 }
+
+#if defined(SONARE_WITH_ARRANGEMENT)
+TEST_CASE("RealtimeEngine active PDC process performs no heap allocation", "[engine][midi][rt]") {
+  constexpr int kBlock = 128;
+  sonare::engine::RealtimeEngine engine;
+  engine.prepare(48000.0, kBlock, 16, 16, 2);
+  PdcNoAllocInstrument instrument(19);
+  engine.set_midi_instrument(&instrument);
+
+  sonare::rt::Command play{};
+  play.type = sonare::rt::CommandType::kTransportPlay;
+  play.sample_time = -1;
+  REQUIRE(engine.push_command(play));
+
+  std::array<float, kBlock> left{};
+  std::array<float, kBlock> right{};
+  float* channels[] = {left.data(), right.data()};
+  engine.process(channels, 2, kBlock);
+
+  AllocationGuard guard;
+  engine.process(channels, 2, kBlock);
+  REQUIRE(guard.count() == 0);
+}
+#endif
 
 TEST_CASE("MeterTelemetryTap process performs no heap allocation after prepare",
           "[engine][meter_telemetry][rt]") {
@@ -356,4 +396,44 @@ TEST_CASE("TrackMixerRuntime insert automation render performs no heap allocatio
   AllocationGuard guard;
   REQUIRE(mixer.render_clips(player, io, 1, kBlock, 0));
   REQUIRE(guard.count() == 0);
+}
+
+TEST_CASE("TrackMixerRuntime monitor taps perform no heap allocation after prepare",
+          "[engine][track_mixer][monitor][rt]") {
+  constexpr int kBlock = 128;
+  std::array<float, kBlock> source{};
+  source.fill(1.0f);
+  float* source_channels[] = {source.data()};
+
+  sonare::engine::TrackMixerRuntime mixer;
+  mixer.prepare(48000.0, kBlock);
+  REQUIRE(mixer.set_track_lanes({{10}}));
+
+  std::array<float, kBlock> output{};
+  std::array<float, kBlock> monitor{};
+  float* output_channels[] = {output.data()};
+  float* monitor_channels[] = {monitor.data()};
+  mixer.set_monitor_bus(monitor_channels, 1);
+
+  mixer.set_lane_monitor_mode(0, sonare::engine::TrackMonitorMode::kPfl);
+  REQUIRE(mixer.mix_source(10, source_channels, output_channels, 1, kBlock));
+  output.fill(0.0f);
+  monitor.fill(0.0f);
+  {
+    AllocationGuard guard;
+    REQUIRE(mixer.mix_source(10, source_channels, output_channels, 1, kBlock));
+    REQUIRE(guard.count() == 0);
+  }
+
+  mixer.set_lane_monitor_mode(0, sonare::engine::TrackMonitorMode::kAfl);
+  output.fill(0.0f);
+  monitor.fill(0.0f);
+  REQUIRE(mixer.mix_source(10, source_channels, output_channels, 1, kBlock));
+  output.fill(0.0f);
+  monitor.fill(0.0f);
+  {
+    AllocationGuard guard;
+    REQUIRE(mixer.mix_source(10, source_channels, output_channels, 1, kBlock));
+    REQUIRE(guard.count() == 0);
+  }
 }

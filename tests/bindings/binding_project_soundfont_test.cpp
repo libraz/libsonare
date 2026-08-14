@@ -5,6 +5,7 @@
 ///        sonare_engine_set_sf2_instrument with live MIDI input).
 
 #include "binding_project_parity_test_helpers.h"
+#include "midi/ump.h"
 #include "support/sf2_builder.h"
 #include "util/resource_limits.h"
 
@@ -57,6 +58,29 @@ std::vector<uint8_t> make_sf2_bytes() {
   return b.build();
 }
 
+std::vector<uint8_t> make_velocity_ranged_sf2_bytes() {
+  sonare::test::Sf2Builder b;
+
+  std::vector<float> sine(96);
+  for (size_t i = 0; i < sine.size(); ++i) {
+    sine[i] =
+        0.9f * static_cast<float>(std::sin(2.0 * 3.14159265358979 * static_cast<double>(i) / 32.0));
+  }
+  const int sine_id = b.add_sample("sine1k", sine, 32000, 60, 32, 96);
+
+  sonare::test::Sf2Builder::ZoneSpec velocity_ranged;
+  velocity_ranged.vel_lo = 1;
+  velocity_ranged.vel_hi = 127;
+  velocity_ranged.target = sine_id;
+  const int instrument = b.add_instrument("velocity-ranged", {velocity_ranged});
+
+  sonare::test::Sf2Builder::ZoneSpec preset_zone;
+  preset_zone.target = instrument;
+  b.add_preset("Velocity Ranged", 0, 0, {preset_zone});
+
+  return b.build();
+}
+
 // MIDI 1.0 channel-voice UMP word (MT=2, group 0).
 constexpr uint32_t midi1_word(uint8_t status, uint8_t channel, uint8_t data1, uint8_t data2) {
   return (0x2u << 28) | (static_cast<uint32_t>(status & 0x0Fu) << 20) |
@@ -80,6 +104,14 @@ SonareMidiEventPod pod(double ppq, uint32_t word) {
   e.ppq = ppq;
   e.data0 = word;
   e.data1 = 0;
+  return e;
+}
+
+SonareMidiEventPod pod(double ppq, const sonare::midi::Ump& ump) {
+  SonareMidiEventPod e{};
+  e.ppq = ppq;
+  e.data0 = ump.words[0];
+  e.data1 = ump.words[1];
   return e;
 }
 
@@ -269,6 +301,42 @@ TEST_CASE("sonare_project_soundfont_manifest decodes MIDI 2.0 program change", "
   REQUIRE(std::string(manifest.preset_name) == "Piano 2");
 
   sonare_project_destroy(project);
+}
+
+TEST_CASE("sonare_project_soundfont_manifest preserves low MIDI 2.0 note-on velocity",
+          "[project][sf2]") {
+  const std::vector<uint8_t> sf2 = make_velocity_ranged_sf2_bytes();
+
+  // Both values have zero in the top seven bits: plain `velocity16 >> 9` would
+  // pass 0 to the SF2 velocity range, while note-on scaling must preserve them
+  // as the minimum nonzero MIDI 1.0 velocity (1).
+  for (const uint16_t velocity16 : {uint16_t{1}, uint16_t{511}}) {
+    DYNAMIC_SECTION("velocity16=" << velocity16) {
+      SonareProject* project = nullptr;
+      REQUIRE(sonare_project_create(&project) == SONARE_OK);
+      REQUIRE(sonare_project_set_sample_rate(project, 48000.0) == SONARE_OK);
+
+      uint32_t track = 0;
+      uint32_t clip = 0;
+      REQUIRE(sonare_project_add_midi_clip(project, 0.0, 2.0, &track, &clip) == SONARE_OK);
+      const SonareMidiEventPod event =
+          pod(0.0, sonare::midi::make_midi2_note_on(0, 0, 60, velocity16));
+      REQUIRE(sonare_project_set_midi_events(project, clip, &event, 1) == SONARE_OK);
+      REQUIRE(sonare_project_load_soundfont(project, sf2.data(), sf2.size()) == SONARE_OK);
+
+      size_t total = 0;
+      SonareSf2ProgramStatus manifest{};
+      REQUIRE(sonare_project_soundfont_manifest(project, &manifest, 1, &total) == SONARE_OK);
+      REQUIRE(total == 1);
+      REQUIRE(manifest.channel == 0);
+      REQUIRE(manifest.bank == 0);
+      REQUIRE(manifest.program == 0);
+      REQUIRE(manifest.backend == SONARE_SOURCE_BACKEND_SF2);
+      REQUIRE(std::string(manifest.preset_name) == "Velocity Ranged");
+
+      sonare_project_destroy(project);
+    }
+  }
 }
 
 TEST_CASE("sonare_project_soundfont_manifest resolves GM2 Bank Select LSB", "[project][sf2]") {

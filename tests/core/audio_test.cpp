@@ -49,6 +49,12 @@ TEST_CASE("Audio from_buffer null safety", "[audio]") {
     REQUIRE(audio.empty());
     REQUIRE(audio.size() == 0);
     REQUIRE(audio.sample_rate() == 22050);
+
+    Audio mono = audio.to_mono();
+    REQUIRE(mono.empty());
+    REQUIRE(mono.size() == 0);
+    REQUIRE(mono.sample_rate() == 22050);
+    REQUIRE(mono.data() == nullptr);
   }
 
   SECTION("null pointer with non-zero size throws InvalidParameter") {

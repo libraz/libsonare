@@ -33,6 +33,36 @@ TEST_CASE("sonare_analyze_impulse_response", "[c_api][acoustic]") {
   sonare_free_acoustic_result(&result);
   REQUIRE(result.rt60_bands == nullptr);
   REQUIRE(result.band_count == 0);
+
+  SECTION("explicit default preserves the legacy impulse-response result") {
+    SonareAcousticResult legacy = {};
+    SonareAcousticResult explicit_default = {};
+    REQUIRE(sonare_analyze_impulse_response(samples.data(), samples.size(), sample_rate, 6,
+                                            &legacy) == SONARE_OK);
+    REQUIRE(sonare_analyze_impulse_response_ex(samples.data(), samples.size(), sample_rate, 6,
+                                               30.0f, &explicit_default) == SONARE_OK);
+    REQUIRE(legacy.band_count == explicit_default.band_count);
+    REQUIRE(legacy.rt60 == explicit_default.rt60);
+    REQUIRE(legacy.edt == explicit_default.edt);
+    sonare_free_acoustic_result(&legacy);
+    sonare_free_acoustic_result(&explicit_default);
+  }
+
+  SECTION("explicit decay range is accepted and invalid values reset outputs") {
+    SonareAcousticResult result = {};
+    REQUIRE(sonare_analyze_impulse_response_ex(samples.data(), samples.size(), sample_rate, 6,
+                                               20.0f, &result) == SONARE_OK);
+    REQUIRE(result.band_count == 6);
+    sonare_free_acoustic_result(&result);
+
+    std::memset(&result, 0xAA, sizeof(result));
+    REQUIRE(sonare_analyze_impulse_response_ex(samples.data(), samples.size(), sample_rate, 6,
+                                               std::numeric_limits<float>::infinity(),
+                                               &result) == SONARE_ERROR_INVALID_PARAMETER);
+    sonare_free_acoustic_result(&result);
+    REQUIRE(result.rt60_bands == nullptr);
+    REQUIRE(result.band_count == 0);
+  }
 }
 
 TEST_CASE("sonare_detect_acoustic", "[.][slow][c_api][acoustic]") {

@@ -1,10 +1,14 @@
 /// @file sonare_c_core_test.cpp
 /// @brief Core C API tests.
 
+#include <cstdio>
+#include <fstream>
 #include <limits>
 #include <set>
+#include <vector>
 
 #include "analysis/analysis_json.h"
+#include "core/audio_io.h"
 #include "sonare_c_test_helpers.h"
 #include "support/alloc_guard.h"
 #include "util/constants.h"
@@ -92,6 +96,58 @@ sonare::AnalysisResult make_analysis_schema_fixture() {
 }
 
 }  // namespace
+
+#ifndef __EMSCRIPTEN__
+TEST_CASE("sonare_audio_file_channel_count reports source channels", "[c_api][audio_io]") {
+  const std::string mono_path = "test_c_api_channel_count_mono.wav";
+  const std::string stereo_path = "test_c_api_channel_count_stereo.wav";
+  const std::string invalid_path = "test_c_api_channel_count_invalid.bin";
+  const auto cleanup = [&]() {
+    std::remove(mono_path.c_str());
+    std::remove(stereo_path.c_str());
+    std::remove(invalid_path.c_str());
+  };
+  cleanup();
+
+  const std::vector<float> mono(64, 0.0f);
+  const std::vector<float> stereo(64 * 2, 0.0f);
+  sonare::save_wav(mono_path, mono, 22050);
+  sonare::save_wav_multichannel(stereo_path, stereo.data(), 64, 2, sonare::ChannelLayout::Stereo,
+                                22050);
+  {
+    std::ofstream invalid(invalid_path, std::ios::binary);
+    REQUIRE(invalid.is_open());
+    // Keep the format recognizable so a malformed file exercises the decoder
+    // error path consistently with and without the optional FFmpeg backend.
+    invalid.write("RIFF....WAVE", 12);
+  }
+
+  int channels = -1;
+  REQUIRE(sonare_audio_file_channel_count(mono_path.c_str(), &channels) == SONARE_OK);
+  REQUIRE(channels == 1);
+  channels = -1;
+  REQUIRE(sonare_audio_file_channel_count(stereo_path.c_str(), &channels) == SONARE_OK);
+  REQUIRE(channels == 2);
+
+  channels = 17;
+  REQUIRE(sonare_audio_file_channel_count("missing-c-api-channel-count.wav", &channels) ==
+          SONARE_ERROR_FILE_NOT_FOUND);
+  REQUIRE(channels == 0);
+
+  channels = 17;
+  REQUIRE(sonare_audio_file_channel_count(invalid_path.c_str(), &channels) ==
+          SONARE_ERROR_DECODE_FAILED);
+  REQUIRE(channels == 0);
+
+  channels = 17;
+  REQUIRE(sonare_audio_file_channel_count(nullptr, &channels) == SONARE_ERROR_INVALID_PARAMETER);
+  REQUIRE(channels == 0);
+  REQUIRE(sonare_audio_file_channel_count(mono_path.c_str(), nullptr) ==
+          SONARE_ERROR_INVALID_PARAMETER);
+
+  cleanup();
+}
+#endif
 
 TEST_CASE("C pitch shift rejects unsupported expansion before allocating",
           "[c_api][pitch_shift][resource_limit]") {

@@ -105,3 +105,13 @@ TEST_CASE("lpc rejects invalid order", "[audio_ops][util][edge]") {
   std::vector<float> y(8, 1.0f);
   REQUIRE_THROWS_AS(lpc(y, 0), SonareException);
 }
+
+TEST_CASE("raw LPC helpers accept valid empty null inputs", "[audio_ops][util][edge]") {
+  LpcResult model;
+  model.ar = {1.0f};
+
+  REQUIRE(lpc_residual(nullptr, 0, model).empty());
+  REQUIRE(ar_interpolate(nullptr, nullptr, 0, model).empty());
+  REQUIRE_THROWS_AS(lpc_residual(nullptr, 1, model), SonareException);
+  REQUIRE_THROWS_AS(ar_interpolate(nullptr, nullptr, 1, model), SonareException);
+}

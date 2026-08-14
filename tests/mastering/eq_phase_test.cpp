@@ -2,6 +2,9 @@
 /// @brief Linear and minimum phase EQ tests.
 
 #include "eq_test_helpers.h"
+#include "support/alloc_guard.h"
+
+using sonare::test::AllocationGuard;
 
 TEST_CASE("TiltEq positive tilt brightens highs relative to lows", "[mastering][eq]") {
   constexpr int sample_rate = 48000;
@@ -97,6 +100,41 @@ TEST_CASE("LinearPhaseEq exposes symmetric FIR kernel and latency", "[mastering]
   for (size_t i = 0; i < eq.kernel().size() / 2; ++i) {
     REQUIRE_THAT(eq.kernel()[i], WithinAbs(eq.kernel()[eq.kernel().size() - 1 - i], 0.000001f));
   }
+}
+
+TEST_CASE("LinearPhaseEq bounded prepare rejects wider channels and can reprepare",
+          "[mastering][eq]") {
+  LinearPhaseEqConfig config{1024, 257, true, 64};
+  LinearPhaseEq eq(config);
+  eq.prepare(48000.0, 64, 2);
+
+  std::array<std::vector<float>, 3> storage{
+      std::vector<float>(64, 0.0f), std::vector<float>(64, 0.0f), std::vector<float>(64, 0.0f)};
+  std::array<float*, 3> channels{storage[0].data(), storage[1].data(), storage[2].data()};
+  REQUIRE_THROWS_AS(eq.process(channels.data(), 3, 64), sonare::SonareException);
+
+  // Reprepare on the control thread recreates the exact requested capacity.
+  eq.prepare(48000.0, 64, 3);
+  REQUIRE_NOTHROW(eq.process(channels.data(), 3, 64));
+  eq.prepare(48000.0, 64, 1);
+  REQUIRE_THROWS_AS(eq.process(channels.data(), 2, 64), sonare::SonareException);
+
+  // The legacy overload retains the common realtime capacity.
+  LinearPhaseEq legacy(config);
+  legacy.prepare(48000.0, 64);
+  REQUIRE_NOTHROW(legacy.process(channels.data(), 3, 64));
+}
+
+TEST_CASE("LinearPhaseEq bounded process is allocation-free after prepare", "[mastering][eq]") {
+  LinearPhaseEq eq({1024, 257, true, 64});
+  eq.prepare(48000.0, 64, 2);
+  std::array<std::vector<float>, 2> storage{std::vector<float>(64, 0.0f),
+                                            std::vector<float>(64, 0.0f)};
+  std::array<float*, 2> channels{storage[0].data(), storage[1].data()};
+
+  AllocationGuard guard;
+  eq.process(channels.data(), 2, 64);
+  REQUIRE(guard.count() == 0);
 }
 
 TEST_CASE("LinearPhaseEq resolution presets select deterministic FFT and FIR sizes",

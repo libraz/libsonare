@@ -484,7 +484,59 @@ TEST_CASE("Spectrogram from_complex rejects invalid dimensions", "[spectrum][edg
                     SonareException);
 
   // A valid small case still succeeds.
-  REQUIRE_NOTHROW(Spectrogram::from_complex(data.data(), 2, 1, n_fft, hop_length, sr));
+  REQUIRE_NOTHROW(Spectrogram::from_complex(data.data(), 5, 1, n_fft, hop_length, sr));
+}
+
+TEST_CASE("Spectrogram from_complex rejects invalid STFT metadata before copying",
+          "[spectrum][edge]") {
+  constexpr int n_fft = 8;
+  constexpr int n_bins = n_fft / 2 + 1;
+  constexpr int n_frames = 2;
+  constexpr int hop_length = 4;
+  constexpr int sample_rate = 22050;
+  std::vector<std::complex<float>> data(n_bins * n_frames, {1.0f, 0.0f});
+
+  SECTION("n_fft must be even and at least two") {
+    REQUIRE_THROWS_AS(
+        Spectrogram::from_complex(data.data(), 2, n_frames, 1, hop_length, sample_rate),
+        SonareException);
+    REQUIRE_THROWS_AS(
+        Spectrogram::from_complex(data.data(), 2, n_frames, 3, hop_length, sample_rate),
+        SonareException);
+  }
+
+  SECTION("n_bins must describe the one-sided FFT") {
+    REQUIRE_THROWS_AS(Spectrogram::from_complex(data.data(), n_bins - 1, n_frames, n_fft,
+                                                hop_length, sample_rate),
+                      SonareException);
+    REQUIRE_THROWS_AS(Spectrogram::from_complex(data.data(), n_bins + 1, n_frames, n_fft,
+                                                hop_length, sample_rate),
+                      SonareException);
+  }
+
+  SECTION("hop and sample rate must be positive") {
+    REQUIRE_THROWS_AS(
+        Spectrogram::from_complex(data.data(), n_bins, n_frames, n_fft, 0, sample_rate),
+        SonareException);
+    REQUIRE_THROWS_AS(
+        Spectrogram::from_complex(data.data(), n_bins, n_frames, n_fft, hop_length, 0),
+        SonareException);
+  }
+
+  SECTION("win_length accepts the zero sentinel or a bounded positive value") {
+    REQUIRE_NOTHROW(Spectrogram::from_complex(data.data(), n_bins, n_frames, n_fft, hop_length,
+                                              sample_rate, true, 0));
+    REQUIRE_NOTHROW(Spectrogram::from_complex(data.data(), n_bins, n_frames, n_fft, hop_length,
+                                              sample_rate, true, 1));
+    REQUIRE_NOTHROW(Spectrogram::from_complex(data.data(), n_bins, n_frames, n_fft, hop_length,
+                                              sample_rate, true, n_fft));
+    REQUIRE_THROWS_AS(Spectrogram::from_complex(data.data(), n_bins, n_frames, n_fft, hop_length,
+                                                sample_rate, true, -1),
+                      SonareException);
+    REQUIRE_THROWS_AS(Spectrogram::from_complex(data.data(), n_bins, n_frames, n_fft, hop_length,
+                                                sample_rate, true, n_fft + 1),
+                      SonareException);
+  }
 }
 
 TEST_CASE("Spectrogram from_complex can preserve non-centered origin", "[spectrum]") {
@@ -860,4 +912,36 @@ TEST_CASE("reassign_frequencies uses a cyclic derivative window", "[spectrum][re
   // Reassignment should pin the tone to its true frequency far tighter than the
   // raw FFT bin spacing (~10.77 Hz).
   REQUIRE_THAT(reassigned, WithinAbs(freq, 1.0f));
+}
+
+TEST_CASE("reassignment helpers reject non-positive STFT dimensions", "[spectrum][reassign]") {
+  Audio audio = Audio::from_vector(generate_sine(22050, 440.0f, 22050), 22050);
+
+  SECTION("reassign_frequencies rejects zero n_fft") {
+    StftConfig config;
+    config.n_fft = 0;
+    config.hop_length = 256;
+    REQUIRE_THROWS_AS(reassign_frequencies(audio, config), SonareException);
+  }
+
+  SECTION("reassign_frequencies rejects zero hop_length") {
+    StftConfig config;
+    config.n_fft = 1024;
+    config.hop_length = 0;
+    REQUIRE_THROWS_AS(reassign_frequencies(audio, config), SonareException);
+  }
+
+  SECTION("reassign_times rejects zero n_fft") {
+    StftConfig config;
+    config.n_fft = 0;
+    config.hop_length = 256;
+    REQUIRE_THROWS_AS(reassign_times(audio, config), SonareException);
+  }
+
+  SECTION("reassign_times rejects zero hop_length") {
+    StftConfig config;
+    config.n_fft = 1024;
+    config.hop_length = 0;
+    REQUIRE_THROWS_AS(reassign_times(audio, config), SonareException);
+  }
 }

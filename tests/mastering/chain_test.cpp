@@ -296,6 +296,58 @@ TEST_CASE("Stereo chain uses channel-summed LUFS when limiting a loudness target
   REQUIRE(result.output_lufs < config.loudness.target_lufs - 0.5f);
 }
 
+TEST_CASE("Mono chain measures loudness at the stage input after upstream makeup",
+          "[mastering][chain][loudness]") {
+  constexpr int sample_rate = 48000;
+  constexpr std::size_t length = static_cast<std::size_t>(sample_rate) * 4;
+  std::vector<float> samples(length);
+  for (std::size_t index = 0; index < samples.size(); ++index) {
+    samples[index] = 0.1f * std::sin(sonare::constants::kTwoPi * 440.0f *
+                                     static_cast<float>(index) / sample_rate);
+  }
+
+  MasteringChainConfig upstream_config;
+  upstream_config.dynamics.compressor.enabled = true;
+  upstream_config.dynamics.compressor.config.threshold_db = 0.0f;
+  upstream_config.dynamics.compressor.config.ratio = 1.0f;
+  upstream_config.dynamics.compressor.config.makeup_gain_db = 6.0f;
+  const auto upstream =
+      MasteringChain(upstream_config).process_mono(samples.data(), samples.size(), sample_rate);
+
+  MasteringChainConfig config = upstream_config;
+  config.loudness.enabled = true;
+  config.loudness.target_lufs = upstream.output_lufs - 3.0f;
+  config.loudness.ceiling_db = -1.0f;
+  const auto result =
+      MasteringChain(config).process_mono(samples.data(), samples.size(), sample_rate);
+
+  CAPTURE(upstream.report.before.integrated_lufs, upstream.output_lufs,
+          result.report.before.integrated_lufs, result.input_lufs, result.applied_gain_db,
+          result.output_lufs, config.loudness.target_lufs);
+  REQUIRE(upstream.output_lufs > result.report.before.integrated_lufs + 5.0f);
+  REQUIRE_FALSE(result.loudness_target_limited);
+  REQUIRE_THAT(result.applied_gain_db, WithinAbs(-3.0f, 0.05f));
+  REQUIRE_THAT(result.output_lufs, WithinAbs(config.loudness.target_lufs, 0.05f));
+}
+
+TEST_CASE("Mono chain leaves silence unchanged when loudness is enabled",
+          "[mastering][chain][loudness]") {
+  constexpr int sample_rate = 48000;
+  std::vector<float> silence(static_cast<std::size_t>(sample_rate) * 4, 0.0f);
+  MasteringChainConfig config;
+  config.loudness.enabled = true;
+  config.loudness.target_lufs = -14.0f;
+
+  const auto result =
+      MasteringChain(config).process_mono(silence.data(), silence.size(), sample_rate);
+
+  REQUIRE(result.applied_gain_db == 0.0f);
+  REQUIRE_FALSE(result.loudness_target_limited);
+  REQUIRE(result.output_true_peak_dbtp == sonare::constants::kFloorDb);
+  REQUIRE(std::all_of(result.samples.begin(), result.samples.end(),
+                      [](float sample) { return sample == 0.0f; }));
+}
+
 TEST_CASE("Named stereo fallback processes mono processors per channel", "[mastering][chain]") {
   std::vector<float> left = {0.1f, 0.2f, 0.3f, 0.4f};
   std::vector<float> right = {0.9f, 0.8f, 0.7f, 0.6f};
@@ -571,6 +623,86 @@ TEST_CASE("StreamingMasteringChain flushes AirBand and true-peak latency",
   // are end-of-stream artifacts, not drift, and stay far below audibility.
   CAPTURE(max_abs_difference(aligned, offline.samples));
   REQUIRE(max_abs_difference(aligned, offline.samples) < 1.0e-2f);
+}
+
+TEST_CASE("StreamingMasteringChain flushes stereo AirBand and true-peak latency",
+          "[mastering][chain][streaming]") {
+  constexpr int kSampleRate = 48000;
+  constexpr int kBlockSize = 128;
+  std::vector<float> left(2048, 0.0f);
+  std::vector<float> right(2048, 0.0f);
+  for (size_t i = 0; i < left.size(); ++i) {
+    left[i] = 0.25f *
+              std::sin(static_cast<float>(i) * sonare::constants::kTwoPi * 14000.0f / kSampleRate);
+  }
+  // Keep the planes deliberately different and put a right-only impulse at
+  // the end, where only flush can emit its delayed output.
+  right.back() = 0.5f;
+
+  MasteringChainConfig config;
+  config.spectral.air_band.enabled = true;
+  config.spectral.air_band.config = {0.7f, 10000.0f, -60.0f, 6.0f};
+  config.maximizer.true_peak_limiter.enabled = true;
+
+  const auto offline =
+      MasteringChain(config).process_stereo(left.data(), right.data(), left.size(), kSampleRate);
+  StreamingMasteringChain streaming(config);
+  streaming.prepare(kSampleRate, kBlockSize, 2);
+  REQUIRE(streaming.latency_samples() > 0);
+
+  std::vector<float> streamed_left;
+  std::vector<float> streamed_right;
+  for (size_t offset = 0; offset < left.size(); offset += kBlockSize) {
+    std::vector<float> left_block(left.begin() + static_cast<std::ptrdiff_t>(offset),
+                                  left.begin() + static_cast<std::ptrdiff_t>(offset + kBlockSize));
+    std::vector<float> right_block(
+        right.begin() + static_cast<std::ptrdiff_t>(offset),
+        right.begin() + static_cast<std::ptrdiff_t>(offset + kBlockSize));
+    float* channels[] = {left_block.data(), right_block.data()};
+    streaming.process_block(channels, 2, static_cast<int>(left_block.size()));
+    streamed_left.insert(streamed_left.end(), left_block.begin(), left_block.end());
+    streamed_right.insert(streamed_right.end(), right_block.begin(), right_block.end());
+  }
+  for (;;) {
+    std::vector<float> left_tail(kBlockSize);
+    std::vector<float> right_tail(kBlockSize);
+    float* channels[] = {left_tail.data(), right_tail.data()};
+    const int written = streaming.flush(channels, 2, kBlockSize);
+    if (written == 0) break;
+    streamed_left.insert(streamed_left.end(), left_tail.begin(), left_tail.begin() + written);
+    streamed_right.insert(streamed_right.end(), right_tail.begin(), right_tail.begin() + written);
+  }
+
+  const auto latency = static_cast<size_t>(streaming.latency_samples());
+  CAPTURE(latency, streamed_left.size(), streamed_right.size(), offline.left.size(),
+          offline.right.size());
+  REQUIRE(streamed_left.size() >= left.size() + latency);
+  REQUIRE(streamed_right.size() >= right.size() + latency);
+  const auto aligned = [latency](const std::vector<float>& samples, size_t length) {
+    const auto begin = samples.begin() + static_cast<std::ptrdiff_t>(latency);
+    return std::vector<float>(begin, begin + static_cast<std::ptrdiff_t>(length));
+  };
+  const auto aligned_left = aligned(streamed_left, offline.left.size());
+  const auto aligned_right = aligned(streamed_right, offline.right.size());
+
+  REQUIRE(aligned_left.size() > 2 * latency);
+  REQUIRE(aligned_right.size() > 2 * latency);
+  const auto interior = [latency](const std::vector<float>& samples) {
+    return std::vector<float>(samples.begin() + static_cast<std::ptrdiff_t>(latency),
+                              samples.end() - static_cast<std::ptrdiff_t>(latency));
+  };
+  CAPTURE(max_abs_difference(interior(aligned_left), interior(offline.left)),
+          max_abs_difference(interior(aligned_right), interior(offline.right)));
+  REQUIRE(max_abs_difference(interior(aligned_left), interior(offline.left)) < 1.0e-6f);
+  REQUIRE(max_abs_difference(interior(aligned_right), interior(offline.right)) < 1.0e-6f);
+
+  // As with the mono contract above, only the stream edges may differ: the
+  // offline runner trims each stage's latency before the next stage, while
+  // streaming flush feeds the real continuation through the complete chain.
+  CAPTURE(max_abs_difference(aligned_left, offline.left),
+          max_abs_difference(aligned_right, offline.right));
+  REQUIRE(max_abs_difference(aligned_left, offline.left) < 1.0e-2f);
+  REQUIRE(max_abs_difference(aligned_right, offline.right) < 1.0e-2f);
 }
 
 TEST_CASE("StreamingMasteringChain stage_names lists enabled stages",

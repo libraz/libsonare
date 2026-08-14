@@ -6,8 +6,10 @@
 #include <catch2/catch_test_macros.hpp>
 #include <cmath>
 #include <memory>
+#include <utility>
 #include <vector>
 
+#include "engine/meter_telemetry.h"
 #include "mixing/api/scene.h"
 #include "mixing/channel_strip.h"
 #include "rt/processor_base.h"
@@ -84,6 +86,130 @@ sonare::engine::ClipSchedule clip_for_track(uint32_t clip_id, uint32_t track_id,
 }
 
 }  // namespace
+
+TEST_CASE("TrackMixerRuntime engine-owned strips omit embedded metering", "[engine][track_mixer]") {
+  constexpr int kFrames = 64;
+  constexpr float kSourceLevel = 0.5f;
+
+  sonare::mixing::api::Strip spec;
+  auto factory_strip = sonare::engine::make_channel_strip_from_spec(spec);
+  REQUIRE(factory_strip);
+  REQUIRE_FALSE(factory_strip->metering_enabled());
+
+  // Externally bound strips keep the standalone ChannelStrip default so their
+  // snapshots remain available to callers that own and inspect the strip.
+  sonare::mixing::ChannelStrip external_strip;
+  REQUIRE(external_strip.metering_enabled());
+
+  std::array<float, kFrames> source{};
+  source.fill(kSourceLevel);
+  float* source_channels[] = {source.data()};
+
+  sonare::engine::TrackMixerRuntime owned_mixer;
+  owned_mixer.prepare(48000.0, kFrames);
+  REQUIRE(owned_mixer.set_track_lanes({{10}}));
+  REQUIRE(owned_mixer.set_track_strip(10, spec));
+
+  sonare::engine::TrackMixerRuntime external_mixer;
+  external_mixer.prepare(48000.0, kFrames);
+  REQUIRE(external_mixer.set_track_lanes({{10}}));
+  REQUIRE(external_mixer.bind_track_strip(10, &external_strip));
+
+  std::array<float, kFrames> owned_output{};
+  std::array<float, kFrames> external_output{};
+  float* owned_channels[] = {owned_output.data()};
+  float* external_channels[] = {external_output.data()};
+
+  sonare::engine::MeterTelemetryTap telemetry;
+  telemetry.prepare(48000.0, kFrames, 0, 8);
+  telemetry.begin_block();
+  REQUIRE(
+      owned_mixer.mix_source(10, source_channels, owned_channels, 1, kFrames, &telemetry, 1234));
+  telemetry.end_block();
+  REQUIRE(external_mixer.mix_source(10, source_channels, external_channels, 1, kFrames));
+
+  REQUIRE(owned_output == external_output);
+
+  sonare::engine::MeterTelemetryRecord record;
+  REQUIRE(telemetry.pop(record));
+  REQUIRE(record.target_id == 1);
+  REQUIRE(record.render_frame == 1234);
+  REQUIRE(record.channel_count == 1);
+  REQUIRE(record.peak_db[0] == Catch::Approx(-6.0206f).margin(0.01f));
+  REQUIRE_FALSE(telemetry.pop(record));
+}
+
+TEST_CASE("TrackMixerRuntime lane PFL/AFL taps preserve main and sum staged sources",
+          "[engine][track_mixer][monitor]") {
+  constexpr int kFrames = 8;
+  std::array<float, kFrames> source_a{};
+  std::array<float, kFrames> source_b{};
+  source_a.fill(1.0f);
+  source_b.fill(0.5f);
+  float* source_a_channels[] = {source_a.data()};
+  float* source_b_channels[] = {source_b.data()};
+
+  sonare::engine::TrackMixerRuntime mixer;
+  mixer.prepare(48000.0, kFrames);
+  REQUIRE(mixer.set_track_lanes({{10}, {20}}));
+
+  std::array<float, kFrames> monitor_storage{};
+  float* monitor_channels[] = {monitor_storage.data()};
+  mixer.set_monitor_bus(monitor_channels, 1);
+
+  const auto render_staged = [&](bool include_second_source) {
+    std::array<float, kFrames> output{};
+    float* output_channels[] = {output.data()};
+    monitor_storage.fill(0.0f);
+    REQUIRE(mixer.begin_source_mix(1, kFrames));
+    bool routed = false;
+    REQUIRE(mixer.mix_source_into_lane(10, source_a_channels, output_channels, 1, kFrames, routed));
+    REQUIRE(routed);
+    if (include_second_source) {
+      routed = false;
+      REQUIRE(
+          mixer.mix_source_into_lane(20, source_b_channels, output_channels, 1, kFrames, routed));
+      REQUIRE(routed);
+    }
+    mixer.finish_source_mix(output_channels, 1, kFrames);
+    return std::pair{output, monitor_storage};
+  };
+
+  mixer.set_lane_monitor_mode(0, sonare::engine::TrackMonitorMode::kOff);
+  auto off = render_staged(false);
+  REQUIRE(off.first[0] == Catch::Approx(1.0f));
+  REQUIRE(off.second[0] == Catch::Approx(0.0f));
+
+  mixer.set_lane_monitor_mode(0, sonare::engine::TrackMonitorMode::kPfl);
+  auto pfl = render_staged(false);
+  REQUIRE(pfl.first[0] == Catch::Approx(off.first[0]));
+  REQUIRE(pfl.second[0] == Catch::Approx(1.0f));
+
+  // AFL includes the lane fader/gate stage, while PFL above was taken before it.
+  REQUIRE(mixer.set_lane_parameter(0, sonare::engine::TrackMixerRuntime::kFaderDb, -6.0f));
+  mixer.set_lane_monitor_mode(0, sonare::engine::TrackMonitorMode::kAfl);
+  mixer.settle_smoothers();
+  auto afl = render_staged(false);
+  REQUIRE(afl.first[0] == Catch::Approx(0.501187f).margin(0.0001f));
+  REQUIRE(afl.second[0] == Catch::Approx(afl.first[0]));
+
+  // A staged rack source visits the lane mixer once, so two PFL lanes sum once
+  // into the shared monitor bus. The main output remains the normal lane sum.
+  REQUIRE(mixer.set_lane_parameter(0, sonare::engine::TrackMixerRuntime::kFaderDb, 0.0f));
+  mixer.settle_smoothers();
+  mixer.set_lane_monitor_mode(0, sonare::engine::TrackMonitorMode::kPfl);
+  mixer.set_lane_monitor_mode(1, sonare::engine::TrackMonitorMode::kPfl);
+  auto summed = render_staged(true);
+  REQUIRE(summed.first[0] == Catch::Approx(1.5f));
+  REQUIRE(summed.second[0] == Catch::Approx(1.5f));
+
+  // Republished/reordered lanes retain the mode by track id, not by stale array
+  // position: track 10 moves to lane 1 and continues to feed PFL.
+  REQUIRE(mixer.set_track_lanes({{20}, {10}}));
+  auto reordered = render_staged(false);
+  REQUIRE(reordered.first[0] == Catch::Approx(1.0f));
+  REQUIRE(reordered.second[0] == Catch::Approx(1.0f));
+}
 
 TEST_CASE("TrackMixerRuntime stages multiple sources before processing a lane once",
           "[engine][track_mixer]") {
@@ -325,6 +451,19 @@ TEST_CASE("TrackMixerRuntime validates lane snapshots", "[engine][track_mixer]")
     too_many[i].track_id = static_cast<uint32_t>(i + 1);
   }
   REQUIRE_FALSE(mixer.set_track_lanes(std::move(too_many)));
+}
+
+TEST_CASE("TrackMixerRuntime rejects width and unknown typed lane parameters",
+          "[engine][track_mixer]") {
+  sonare::engine::TrackMixerRuntime mixer;
+  mixer.prepare(48000.0, 64);
+  REQUIRE(mixer.set_track_lanes({{10}}));
+
+  // Width remains a standalone strip control. Arrangement typed lanes own only
+  // fader and pan, so width=3 must not look like a successful lane route.
+  REQUIRE_FALSE(mixer.set_lane_parameter(0, sonare::engine::TrackMixerRuntime::kWidth, 1.0f));
+  REQUIRE_FALSE(mixer.set_lane_parameter(0, 99u, 0.0f));
+  REQUIRE_FALSE(mixer.set_lane_parameter(1, sonare::engine::TrackMixerRuntime::kFaderDb, 0.0f));
 }
 
 TEST_CASE("TrackMixerRuntime aligns strip latency across active lanes", "[engine][track_mixer]") {

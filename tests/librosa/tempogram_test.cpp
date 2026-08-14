@@ -14,6 +14,7 @@
 #include "feature/rhythm.h"
 #include "util/constants.h"
 #include "util/json_reader.h"
+#include "util/math_utils.h"
 
 using namespace sonare;
 using namespace sonare::test;
@@ -184,6 +185,70 @@ TEST_CASE("PLP pulse statistics match librosa reference", "[librosa][plp]") {
   REQUIRE(std::abs(stddev - expected_std) <= 0.12f);
   REQUIRE(min_value >= -1.0e-6f);
   REQUIRE(max_value <= 1.0f + 1.0e-6f);
+}
+
+TEST_CASE("PLP impulse-envelope waveform matches librosa reference", "[librosa][plp][reference]") {
+  auto json = JsonReader::parse_file("tests/librosa/reference/plp.json");
+  const auto& oracle = json["data"]["oracle"];
+  const int sr = oracle["sr"].as_int();
+  const int hop = oracle["hop_length"].as_int();
+  const int win = oracle["win_length"].as_int();
+  const int expected_frames = oracle["frames"].as_int();
+  const int expected_period = oracle["period_frames"].as_int();
+  const int expected_length = oracle["length"].as_int();
+  const auto& ref_envelope = oracle["onset_envelope"].as_array();
+  const auto& ref_pulse = oracle["pulse"].as_array();
+
+  REQUIRE(static_cast<int>(ref_envelope.size()) == expected_frames);
+  REQUIRE(static_cast<int>(ref_pulse.size()) == expected_length);
+  REQUIRE(expected_frames == expected_length);
+
+  std::vector<float> onset_envelope;
+  onset_envelope.reserve(ref_envelope.size());
+  for (size_t frame = 0; frame < ref_envelope.size(); ++frame) {
+    const float value = ref_envelope[frame].as_float();
+    REQUIRE(value == ((frame % static_cast<size_t>(expected_period)) == 0 ? 1.0f : 0.0f));
+    onset_envelope.push_back(value);
+  }
+
+  PlpConfig cfg;
+  cfg.sr = sr;
+  cfg.hop_length = hop;
+  cfg.win_length = win;
+  cfg.tempo_min = oracle["tempo_min"].as_float();
+  cfg.tempo_max = oracle["tempo_max"].as_float();
+  const auto pulse = plp(onset_envelope, cfg);
+
+  std::vector<float> reference;
+  reference.reserve(ref_pulse.size());
+  for (const auto& value : ref_pulse) reference.push_back(value.as_float());
+
+  REQUIRE(pulse.size() == reference.size());
+  double squared_error = 0.0;
+  for (size_t i = 0; i < pulse.size(); ++i) {
+    const double error = static_cast<double>(pulse[i]) - reference[i];
+    squared_error += error * error;
+  }
+  const double rmse = std::sqrt(squared_error / static_cast<double>(pulse.size()));
+  const float correlation = pearson_correlation(pulse.data(), reference.data(), pulse.size());
+
+  const int peak_margin = oracle["peak_margin"].as_int();
+  const auto observed_peak =
+      std::max_element(pulse.begin() + peak_margin, pulse.end() - peak_margin);
+  const auto reference_peak =
+      std::max_element(reference.begin() + peak_margin, reference.end() - peak_margin);
+  const int observed_peak_frame = static_cast<int>(std::distance(pulse.begin(), observed_peak));
+  const int reference_peak_frame =
+      static_cast<int>(std::distance(reference.begin(), reference_peak));
+  const int expected_peak_frame = oracle["interior_peak_frame"].as_int();
+  CAPTURE(pulse.size(), expected_length, correlation, rmse, observed_peak_frame,
+          reference_peak_frame, expected_peak_frame);
+
+  REQUIRE(correlation >= oracle["acceptance"]["min_correlation"].as_float());
+  REQUIRE(rmse <= oracle["acceptance"]["max_rmse"].as_float());
+  REQUIRE(reference_peak_frame == expected_peak_frame);
+  REQUIRE(std::abs(observed_peak_frame - reference_peak_frame) <=
+          oracle["acceptance"]["max_interior_peak_offset"].as_int());
 }
 
 TEST_CASE("cyclic_tempogram folds octave-equivalent tempi", "[tempogram][unit]") {

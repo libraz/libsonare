@@ -763,6 +763,35 @@ TEST_CASE("chroma_class_of_frequency resolves C-relative pitch classes", "[cqt][
   REQUIRE(chroma_class_of_frequency(sonare::constants::kC1Hz, 12) == 0);
   REQUIRE(chroma_class_of_frequency(41.203f, 12) == 4);  // E1
   REQUIRE(chroma_class_of_frequency(440.0f, 12) == 9);   // A4
+  // Higher-resolution chroma scales the pitch class within one octave. In
+  // particular, A4 is class 9 of 12, hence class 18 of 24 (not MIDI 69 % 24).
+  REQUIRE(chroma_class_of_frequency(sonare::constants::kC1Hz, 24) == 0);  // C1
+  REQUIRE(chroma_class_of_frequency(41.203f, 24) == 8);                   // E1
+  REQUIRE(chroma_class_of_frequency(440.0f, 24) == 18);                   // A4
   REQUIRE(chroma_class_of_frequency(0.0f, 12) == 0);
   REQUIRE(chroma_class_of_frequency(-10.0f, 12) == 0);
+}
+
+TEST_CASE("cqt_to_chroma scales non-C fmin pitch classes for 24 bins", "[cqt][chroma]") {
+  // fmin = A0 means CQT bin 0 is pitch class A. With 24 chroma bins, A is
+  // class 18; the old absolute-MIDI modulo mapped the fmin rotation to 21.
+  Audio audio = generate_sine(440.0f, 0.5f, 22050);
+
+  CqtConfig config;
+  config.fmin = 27.5f;  // A0
+  config.n_bins = 60;   // 5 octaves @ 12 bpo
+
+  CqtResult result = cqt(audio, config);
+  auto chroma = cqt_to_chroma(result, 24);
+  const int n_frames = result.n_frames();
+  REQUIRE(n_frames > 0);
+
+  std::vector<double> energy(24, 0.0);
+  for (int c = 0; c < 24; ++c) {
+    for (int t = 0; t < n_frames; ++t) {
+      energy[static_cast<size_t>(c)] += chroma[static_cast<size_t>(c) * n_frames + t];
+    }
+  }
+  const auto peak = std::max_element(energy.begin(), energy.end());
+  REQUIRE(std::distance(energy.begin(), peak) == 18);  // A
 }

@@ -12,6 +12,7 @@
 #include <vector>
 
 #include "rt/polyphase_fir.h"
+#include "util/exception.h"
 
 using namespace sonare;
 using Catch::Matchers::WithinAbs;
@@ -243,6 +244,47 @@ TEST_CASE("compute_autocorrelation", "[math_utils]") {
     for (int i = 0; i < 64; ++i) {
       REQUIRE_THAT(result[i], WithinAbs(0.0f, 1e-6f));
     }
+  }
+
+  SECTION("rejects null input or output for positive lengths") {
+    const std::vector<float> signal = {1.0f, -2.0f, 3.0f, -4.0f};
+    std::vector<float> result(4, 1.0f);
+
+    try {
+      compute_autocorrelation(nullptr, 4, 4, result.data());
+      FAIL("Expected SonareException for null input");
+    } catch (const SonareException& error) {
+      REQUIRE(error.code() == ErrorCode::InvalidParameter);
+    }
+
+    try {
+      compute_autocorrelation(signal.data(), 4, 4, nullptr);
+      FAIL("Expected SonareException for null output");
+    } catch (const SonareException& error) {
+      REQUIRE(error.code() == ErrorCode::InvalidParameter);
+    }
+  }
+
+  SECTION("rejects negative lengths before numeric conversion") {
+    const std::vector<float> signal = {1.0f, -2.0f, 3.0f, -4.0f};
+    std::vector<float> result(4, 1.0f);
+
+    REQUIRE_THROWS_AS(compute_autocorrelation(signal.data(), -1, 4, result.data()),
+                      SonareException);
+    REQUIRE_THROWS_AS(compute_autocorrelation(signal.data(), 4, -1, result.data()),
+                      SonareException);
+  }
+
+  SECTION("preserves empty input and zero-length output contracts") {
+    std::vector<float> empty_input_result(3, 1.0f);
+    compute_autocorrelation(nullptr, 0, 3, empty_input_result.data());
+    for (float value : empty_input_result) {
+      REQUIRE_THAT(value, WithinAbs(0.0f, 1e-6f));
+    }
+
+    const std::vector<float> signal = {1.0f, -2.0f, 3.0f};
+    compute_autocorrelation(signal.data(), static_cast<int>(signal.size()), 0, nullptr);
+    compute_autocorrelation(nullptr, 0, 0, nullptr);
   }
 }
 

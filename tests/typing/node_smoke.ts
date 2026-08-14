@@ -11,6 +11,8 @@ import {
   fixFrames,
   frameSignal,
   masterAudio,
+  masterAudioAsync,
+  masterAudioStereoAsync,
   masteringPresetNames,
   pcen,
   peakPick,
@@ -105,6 +107,25 @@ nodeFacade.cqt(samples, 22050, 512, 32.7, 84, 12);
 nodeFacade.pseudoCqt(samples, 22050, 512, 32.7, 84, 12);
 nodeFacade.hybridCqt(samples, 22050, 512, 32.7, 84, 12);
 nodeFacade.vqt(samples, 22050, 512, 32.7, 84, 12, 0);
+// gamma changes variable-Q bandwidth and must be impossible to pass to a
+// constant-Q request object. This fixture is compiled by CI; Vitest test
+// sources are intentionally excluded from the package tsconfig.
+// @ts-expect-error gamma is VQT-only.
+nodeFacade.cqt({ samples, gamma: 20 });
+// @ts-expect-error gamma is VQT-only.
+nodeFacade.pseudoCqt({ samples, gamma: 20 });
+// @ts-expect-error gamma is VQT-only.
+nodeFacade.hybridCqt({ samples, gamma: 20 });
+nodeFacade.vqt({ samples, gamma: 20 }).magnitude satisfies Float32Array;
+masterAudio({ samples, cancel: () => true, onProgress: () => {} }).stages satisfies string[];
+// @ts-expect-error callbacks cannot cross the async worker boundary.
+masterAudioAsync({ samples, cancel: () => true });
+// @ts-expect-error callbacks cannot cross the async worker boundary.
+masterAudioAsync({ samples, onProgress: () => {} });
+// @ts-expect-error callbacks cannot cross the async worker boundary.
+masterAudioStereoAsync({ left: samples, right: samples, cancel: () => true });
+// @ts-expect-error callbacks cannot cross the async worker boundary.
+masterAudioStereoAsync({ left: samples, right: samples, onProgress: () => {} });
 nodeFacade.cqtToAudio(samples, 1, samples.length, 22050, 512, 32.7, 12, 1);
 nodeFacade.vqtToAudio(samples, 1, samples.length, 22050, 512, 32.7, 12, 0, 1);
 nodeFacade.melToStft(samples, 1, samples.length, 22050, 2048, 0, 8000, false);

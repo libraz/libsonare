@@ -355,6 +355,60 @@ TEST_CASE("AirBand harmonic response is stable across sample rates", "[mastering
   REQUIRE(*maximum - *minimum < 0.5f);
 }
 
+TEST_CASE("AirBand dynamic envelope follows elapsed time across sample rates",
+          "[mastering][spectral]") {
+  constexpr float kToneHz = 14000.0f;
+  constexpr float kAmplitude = 0.3f;
+  constexpr double kOnsetSeconds = 0.010;
+  constexpr double kProbeSeconds = 0.004;
+  constexpr double kTailSeconds = 0.030;
+
+  std::vector<float> probe_gains;
+  for (const int sample_rate : {44100, 48000, 96000}) {
+    const size_t onset = static_cast<size_t>(kOnsetSeconds * sample_rate);
+    const size_t probe = onset + static_cast<size_t>(kProbeSeconds * sample_rate);
+    const size_t tail = onset + static_cast<size_t>(kTailSeconds * sample_rate);
+    std::vector<float> input(tail + static_cast<size_t>(0.010 * sample_rate), 0.0f);
+    for (size_t i = onset; i < input.size(); ++i) {
+      input[i] =
+          kAmplitude * std::sin(sonare::constants::kTwoPi * kToneHz *
+                                static_cast<float>(i - onset) / static_cast<float>(sample_rate));
+    }
+
+    auto dynamic = input;
+    auto steady = input;
+    AirBand dynamic_air({1.0f, 10000.0f, -24.0f, 6.0f});
+    AirBand steady_air({1.0f, 10000.0f, -24.0f, 0.0f});
+    dynamic_air.prepare(sample_rate, static_cast<int>(input.size()));
+    steady_air.prepare(sample_rate, static_cast<int>(input.size()));
+    process(dynamic_air, dynamic);
+    process(steady_air, steady);
+
+    const size_t latency = static_cast<size_t>(dynamic_air.latency_samples());
+    const size_t probe_begin = probe + latency;
+    const size_t probe_end = probe_begin + static_cast<size_t>(0.002 * sample_rate);
+    const size_t tail_begin = tail + latency;
+    const size_t tail_end = tail_begin + static_cast<size_t>(0.002 * sample_rate);
+    REQUIRE(tail_end <= dynamic.size());
+    const auto window_delta_rms = [&](size_t begin, size_t end) {
+      double sum = 0.0;
+      for (size_t i = begin; i < end; ++i) {
+        const float delta = dynamic[i] - steady[i];
+        sum += static_cast<double>(delta) * delta;
+      }
+      return static_cast<float>(std::sqrt(sum / static_cast<double>(end - begin)));
+    };
+    const float probe_gain = window_delta_rms(probe_begin, probe_end);
+    const float tail_gain = window_delta_rms(tail_begin, tail_end);
+    REQUIRE(tail_gain > 0.0f);
+    probe_gains.push_back(probe_gain / tail_gain);
+  }
+
+  const auto [minimum, maximum] = std::minmax_element(probe_gains.begin(), probe_gains.end());
+  CAPTURE(probe_gains[0], probe_gains[1], probe_gains[2], *maximum - *minimum);
+  REQUIRE(*maximum - *minimum < 0.02f);
+}
+
 TEST_CASE("AirBand oversampling suppresses high-tone alias products", "[mastering][spectral]") {
   constexpr int kSampleRate = 48000;
   constexpr int kSamples = 48000;

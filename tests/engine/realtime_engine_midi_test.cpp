@@ -973,6 +973,33 @@ TEST_CASE("PDC threads and applies fractional (Q8) instrument latency", "[engine
   engine.set_midi_instrument(nullptr);
 }
 
+TEST_CASE("PDC scratch follows prepared channels and is reclaimed when unbound", "[engine][midi]") {
+  constexpr double kSr = 48000.0;
+  constexpr int kBlock = 128;
+  constexpr int kLatency = 37;
+  RealtimeEngine engine;
+  engine.prepare(kSr, kBlock, 16, 16, 64);
+  const size_t without_pdc = engine.prepared_scratch_bytes();
+
+  LatencyImpulseInstrument inst(kLatency);
+  engine.set_midi_instrument(&inst);
+  const size_t with_pdc = engine.prepared_scratch_bytes();
+  REQUIRE(with_pdc > without_pdc);
+
+  // PDC is channel-planar just like the engine scratch. Repreparing from the
+  // full 64-plane bound to stereo must shrink the delay banks as well.
+  engine.prepare(kSr, kBlock, 16, 16, 2);
+  const size_t stereo_with_pdc = engine.prepared_scratch_bytes();
+  REQUIRE(stereo_with_pdc == with_pdc / 32);
+
+  engine.set_midi_instrument(nullptr);
+  REQUIRE(engine.prepared_scratch_bytes() ==
+          stereo_with_pdc - 2u * static_cast<size_t>(kLatency) * sizeof(float));
+  // The slowest instrument's own bank is zero-delay; only the clip bank above
+  // contributes storage, and no superseded 64-plane or unbound bank remains.
+  REQUIRE(engine.prepared_scratch_bytes() < stereo_with_pdc);
+}
+
 TEST_CASE("PDC aligns instrument audio with clip audio", "[engine][midi]") {
   constexpr double kSr = 48000.0;
   constexpr int kBlock = 256;

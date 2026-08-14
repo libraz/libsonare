@@ -372,6 +372,144 @@ TEST_CASE("project C surface reads stored tracks clips and sources by index", "[
   sonare_project_destroy(project);
 }
 
+TEST_CASE("project C surface owns and edits audio source metadata", "[project]") {
+  SonareProject* project = nullptr;
+  REQUIRE(sonare_project_create(&project) == SONARE_OK);
+
+  SonareProjectTrackDesc audio_track_desc{};
+  audio_track_desc.kind = SONARE_TRACK_AUDIO;
+  uint32_t audio_track_id = 0;
+  REQUIRE(sonare_project_add_track(project, &audio_track_desc, &audio_track_id) == SONARE_OK);
+
+  const std::vector<float> samples = {0.1f, -0.1f, 0.2f, -0.2f};
+  SonareProjectClipDesc audio_clip_desc{};
+  audio_clip_desc.track_id = audio_track_id;
+  audio_clip_desc.length_ppq = 4.0;
+  audio_clip_desc.audio_interleaved = samples.data();
+  audio_clip_desc.audio_frames = 2;
+  audio_clip_desc.audio_channels = 2;
+  audio_clip_desc.audio_sample_rate = 44100;
+  audio_clip_desc.source_uri = "asset://metadata.wav";
+  uint32_t audio_clip_id = 0;
+  REQUIRE(sonare_project_add_clip(project, &audio_clip_desc, &audio_clip_id) == SONARE_OK);
+
+  SonareProjectClip audio_clip{};
+  REQUIRE(sonare_project_clip_by_index(project, 0, &audio_clip) == SONARE_OK);
+  REQUIRE(audio_clip.source_id != 0);
+
+  SonareProjectAudioSourceMetadata metadata{
+      reinterpret_cast<char*>(static_cast<uintptr_t>(1)),
+      reinterpret_cast<char*>(static_cast<uintptr_t>(2)),
+  };
+  CHECK(sonare_project_get_audio_source_metadata(project, audio_clip.source_id, nullptr) ==
+        SONARE_ERROR_INVALID_PARAMETER);
+  CHECK(metadata.content_hash != nullptr);
+  CHECK(sonare_project_get_audio_source_metadata(nullptr, audio_clip.source_id, &metadata) ==
+        SONARE_ERROR_INVALID_PARAMETER);
+  CHECK(metadata.content_hash == nullptr);
+  CHECK(metadata.external_stem_role == nullptr);
+  CHECK(sonare_project_get_audio_source_metadata(project, 999999u, &metadata) ==
+        SONARE_ERROR_INVALID_PARAMETER);
+  CHECK(metadata.content_hash == nullptr);
+  CHECK(metadata.external_stem_role == nullptr);
+  sonare_project_free_audio_source_metadata(nullptr);
+  sonare_project_free_audio_source_metadata(&metadata);
+
+  // A successful read owns both strings, including empty strings.
+  REQUIRE(sonare_project_get_audio_source_metadata(project, audio_clip.source_id, &metadata) ==
+          SONARE_OK);
+  REQUIRE(metadata.content_hash != nullptr);
+  REQUIRE(metadata.external_stem_role != nullptr);
+  CHECK(std::string(metadata.content_hash).empty());
+  CHECK(std::string(metadata.external_stem_role).empty());
+  sonare_project_free_audio_source_metadata(&metadata);
+  CHECK(metadata.content_hash == nullptr);
+  CHECK(metadata.external_stem_role == nullptr);
+
+  CHECK(sonare_project_set_audio_source_metadata(project, audio_clip.source_id, nullptr, "lead") ==
+        SONARE_ERROR_INVALID_PARAMETER);
+  CHECK(sonare_project_set_audio_source_metadata(project, audio_clip.source_id, "sha256:bad",
+                                                 nullptr) == SONARE_ERROR_INVALID_PARAMETER);
+  CHECK(sonare_project_set_audio_source_metadata(project, 999999u, "sha256:bad", "lead") ==
+        SONARE_ERROR_INVALID_PARAMETER);
+
+  SonareProjectTrackDesc midi_track_desc{};
+  midi_track_desc.kind = SONARE_TRACK_MIDI;
+  uint32_t midi_track_id = 0;
+  REQUIRE(sonare_project_add_track(project, &midi_track_desc, &midi_track_id) == SONARE_OK);
+  SonareProjectClipDesc midi_clip_desc{};
+  midi_clip_desc.track_id = midi_track_id;
+  midi_clip_desc.is_midi = 1;
+  midi_clip_desc.length_ppq = 4.0;
+  uint32_t midi_clip_id = 0;
+  REQUIRE(sonare_project_add_clip(project, &midi_clip_desc, &midi_clip_id) == SONARE_OK);
+  SonareProjectClip midi_clip{};
+  REQUIRE(sonare_project_clip_by_index(project, 1, &midi_clip) == SONARE_OK);
+  CHECK(sonare_project_get_audio_source_metadata(project, midi_clip.source_id, &metadata) ==
+        SONARE_ERROR_INVALID_PARAMETER);
+  CHECK(metadata.content_hash == nullptr);
+  CHECK(metadata.external_stem_role == nullptr);
+  CHECK(sonare_project_set_audio_source_metadata(project, midi_clip.source_id, "sha256:bad",
+                                                 "lead") == SONARE_ERROR_INVALID_PARAMETER);
+
+  SonareProjectSource before{};
+  REQUIRE(sonare_project_source_by_index(project, 0, &before) == SONARE_OK);
+  REQUIRE(sonare_project_set_audio_source_metadata(project, audio_clip.source_id, "sha256:deadbeef",
+                                                   "lead") == SONARE_OK);
+  SonareProjectSource after{};
+  REQUIRE(sonare_project_source_by_index(project, 0, &after) == SONARE_OK);
+  CHECK(after.id == before.id);
+  CHECK(after.kind == before.kind);
+  CHECK(after.channel_count == before.channel_count);
+  CHECK(after.storage_handle_id == before.storage_handle_id);
+  CHECK(after.sample_rate_hint == before.sample_rate_hint);
+  CHECK(std::string(after.name_or_uri) == std::string(before.name_or_uri));
+
+  REQUIRE(sonare_project_get_audio_source_metadata(project, audio_clip.source_id, &metadata) ==
+          SONARE_OK);
+  REQUIRE(metadata.content_hash != nullptr);
+  REQUIRE(metadata.external_stem_role != nullptr);
+  CHECK(std::string(metadata.content_hash) == "sha256:deadbeef");
+  CHECK(std::string(metadata.external_stem_role) == "lead");
+  sonare_project_free_audio_source_metadata(&metadata);
+
+  // Both fields are one history command: one undo restores both, and one redo
+  // reapplies both. Empty strings clear the fields rather than becoming NULL.
+  REQUIRE(sonare_project_set_audio_source_metadata(project, audio_clip.source_id, "", "") ==
+          SONARE_OK);
+  REQUIRE(sonare_project_get_audio_source_metadata(project, audio_clip.source_id, &metadata) ==
+          SONARE_OK);
+  CHECK(std::string(metadata.content_hash).empty());
+  CHECK(std::string(metadata.external_stem_role).empty());
+  sonare_project_free_audio_source_metadata(&metadata);
+  REQUIRE(sonare_project_undo(project) == SONARE_OK);
+  REQUIRE(sonare_project_get_audio_source_metadata(project, audio_clip.source_id, &metadata) ==
+          SONARE_OK);
+  CHECK(std::string(metadata.content_hash) == "sha256:deadbeef");
+  CHECK(std::string(metadata.external_stem_role) == "lead");
+  sonare_project_free_audio_source_metadata(&metadata);
+  REQUIRE(sonare_project_redo(project) == SONARE_OK);
+  REQUIRE(sonare_project_get_audio_source_metadata(project, audio_clip.source_id, &metadata) ==
+          SONARE_OK);
+  CHECK(std::string(metadata.content_hash).empty());
+  CHECK(std::string(metadata.external_stem_role).empty());
+  sonare_project_free_audio_source_metadata(&metadata);
+
+  REQUIRE(sonare_project_set_audio_source_metadata(project, audio_clip.source_id,
+                                                   "sha256:roundtrip", "vocals") == SONARE_OK);
+  const std::string json = serialize(project);
+  SonareProject* restored = nullptr;
+  REQUIRE(sonare_project_deserialize(json.data(), json.size(), &restored, nullptr) == SONARE_OK);
+  REQUIRE(sonare_project_get_audio_source_metadata(restored, audio_clip.source_id, &metadata) ==
+          SONARE_OK);
+  CHECK(std::string(metadata.content_hash) == "sha256:roundtrip");
+  CHECK(std::string(metadata.external_stem_role) == "vocals");
+  sonare_project_free_audio_source_metadata(&metadata);
+
+  sonare_project_destroy(restored);
+  sonare_project_destroy(project);
+}
+
 TEST_CASE("serialize round-trips byte-identically through the C surface", "[project]") {
   const std::vector<float> audio = make_stereo_sine(48000);
   BuiltProject built = build_project(audio);

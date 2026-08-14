@@ -603,7 +603,7 @@ TEST_CASE("MultibandExciter can enhance high band while leaving low band close",
                       sonare::mastering::multiband::CrossoverMode::LinkwitzRiley};
   config.bands = {{3000.0f, 0.0f, 0.0f}, {3000.0f, 12.0f, 0.5f}};
   MultibandExciter exciter(config);
-  exciter.prepare(48000.0, 1024);
+  exciter.prepare(48000.0, 48000);
 
   auto low = generate_sine_samples(100.0f, 48000, 48000, 0.2f);
   auto high = generate_sine_samples(8000.0f, 48000, 48000, 0.2f);
