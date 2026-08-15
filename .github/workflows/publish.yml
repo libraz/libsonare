@@ -13,12 +13,12 @@ jobs:
   publish-npm:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v5
+      - uses: actions/checkout@v7
       - uses: mymindstorm/setup-emsdk@v16
         with:
           version: 5.0.2
 
-      - uses: actions/setup-node@v5
+      - uses: actions/setup-node@v7
         with:
           node-version: '22.22.3'
           registry-url: 'https://registry.npmjs.org'
@@ -27,7 +27,7 @@ jobs:
       - run: corepack enable
       - run: corepack prepare yarn@4.15.0 --activate
 
-      - uses: actions/cache@v5
+      - uses: actions/cache@v6
         with:
           path: |
             bindings/wasm/.yarn/cache
@@ -91,7 +91,7 @@ jobs:
             arch: arm64
     runs-on: ${{ matrix.runner }}
     steps:
-      - uses: actions/checkout@v5
+      - uses: actions/checkout@v7
 
       - name: Install Eigen3 (Linux)
         if: runner.os == 'Linux'
@@ -172,13 +172,13 @@ jobs:
     runs-on: ${{ matrix.os }}
     container: ${{ matrix.container }}
     steps:
-      - uses: actions/checkout@v5
+      - uses: actions/checkout@v7
 
       - name: Install Eigen3 (macOS)
         if: runner.os == 'macOS'
         run: brew install eigen
 
-      - uses: actions/setup-python@v6
+      - uses: actions/setup-python@v7
         if: runner.os == 'macOS'
         with:
           python-version: '3.13'
@@ -246,7 +246,7 @@ jobs:
           python -c "import libsonare; print(f'Version: {libsonare.version()}')"
           cd bindings/python && python -m pytest tests/ -x -q
 
-      - uses: actions/upload-artifact@v6
+      - uses: actions/upload-artifact@v7
         with:
           name: wheel-${{ matrix.os }}-${{ matrix.arch }}
           path: bindings/python/dist/*.whl
@@ -256,7 +256,7 @@ jobs:
     runs-on: ubuntu-latest
     container: python:3.11-slim-bullseye
     steps:
-      - uses: actions/download-artifact@v7
+      - uses: actions/download-artifact@v8
         with:
           name: wheel-ubuntu-latest-x86_64
           path: dist/
@@ -275,7 +275,7 @@ jobs:
     permissions:
       id-token: write
     steps:
-      - uses: actions/download-artifact@v7
+      - uses: actions/download-artifact@v8
         with:
           pattern: wheel-*
           path: dist/

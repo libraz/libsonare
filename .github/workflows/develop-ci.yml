@@ -30,7 +30,7 @@ jobs:
     name: clang-format
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v5
+      - uses: actions/checkout@v7
       - name: Install clang-format
         run: |
           sudo apt-get update
@@ -46,10 +46,10 @@ jobs:
       run:
         working-directory: bindings/wasm
     steps:
-      - uses: actions/checkout@v5
+      - uses: actions/checkout@v7
       - run: corepack enable
         working-directory: .
-      - uses: actions/setup-node@v5
+      - uses: actions/setup-node@v7
         with:
           node-version: 22
           cache: yarn
@@ -61,7 +61,7 @@ jobs:
     name: Native C++ (ubuntu-latest)
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v5
+      - uses: actions/checkout@v7
       - name: Install Linux dependencies
         run: |
           sudo apt-get update
@@ -88,8 +88,8 @@ jobs:
     name: Examples (Python and C++)
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v5
-      - uses: actions/setup-python@v5
+      - uses: actions/checkout@v7
+      - uses: actions/setup-python@v7
         with:
           python-version: '3.13'
       - name: Install Linux dependencies
@@ -140,7 +140,7 @@ jobs:
     runs-on: ubuntu-latest
     container: quay.io/pypa/manylinux_2_28_x86_64
     steps:
-      - uses: actions/checkout@v5
+      - uses: actions/checkout@v7
       - name: Build, audit, and test wheel
         # The manylinux image has no system Eigen package; the top-level CMake
         # FetchContent fallback supplies its header-only dependency.
