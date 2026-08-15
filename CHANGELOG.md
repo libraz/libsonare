@@ -1,5 +1,26 @@
 # Changelog
 
+## v1.7.1 (2026-08-15)
+
+**The feature ABI moved from 3 to 4.** `SonareSynthPatch` gained a trailing `present_fields` word, so the Python binding refuses a shared library built from a different tree; rebuild the library alongside the binding. Existing C callers are otherwise unaffected, at both the source and the call level: the new field is read only when `struct_version` is 2 or higher, so a struct filled as before keeps its previous behaviour. On Python, the `SynthPatch` numeric fields default to `None` instead of `0.0`, so reading a field that was never set returns `None` rather than zero.
+
+This release restores the offline formant path, which lost the whole LPC prediction gain, adds stereo variants of the mastering analysis entry points, lets a synth patch override a field with an explicit zero, and corrects two JavaScript declarations that rejected input the runtime accepts.
+
+### New surfaces
+
+- Mastering analysis reads both channels through `sonare_mastering_audio_profile_stereo`, `sonare_mastering_assistant_suggest_stereo`, `sonare_mastering_streaming_preview_stereo` and `sonare_metering_crest_factor_db_stereo`, which take the planar left and right pair the rest of the stereo mastering surface uses. The mono entry points required a `0.5*(L+R)` downmix, which reads 6.02 dB below the BS.1770 channel sum on decorrelated material and cancels entirely on an anti-phase pair; the streaming preview derived both its normalization gain and its ceiling-risk flag from that loudness, so the error reached the verdict a host shows its user. Only the profile's loudness block is measured from the channels — the spectral, dynamics and tempo fields describe shape and timing rather than absolute level, so they stay on the downmix and remain comparable with the mono entry point field by field. Mirrored as keyword arguments on Python and as request objects on Node and WASM.
+- `SonareSynthPatch` distinguishes a field set to zero from an omitted one. Every numeric field previously read zero as "keep the base", so a host could not ask a preset for no stereo spread, no bus drive or a zero sustain. `present_fields` under `struct_version` 2 names the fields the caller set on purpose: a set bit overrides even when the value is zero, a clear bit keeps the version-1 behaviour, and the modulation-matrix bit lets an empty routing table clear the base matrix rather than keep it, which the routing count alone could not express. The preset read direction reports every bit set, so a preset field that happens to be zero survives a round-trip instead of decaying into "keep base". Node and WASM set a bit for each key the descriptor actually carries, and Python's dataclass fields default to `None` so a supplied zero is a real override.
+
+### Bug fixes
+
+- Offline `voiceChange` with a non-unity `formantFactor` no longer collapses in level. `FormantWarp` recoloured the LPC residual with the absolute all-pole envelope, but the residual already carries the frame's excitation, so every frame was scaled a second time by its own residual RMS. Because that factor is derived from the signal, the transfer was quadratic in input level rather than a fixed offset, and a unity factor hid it by returning the input untouched. The realtime formant path was never affected.
+- `pitchCorrectToMidiTimevarying` and `pitchCorrectTimevarying` accept the voicing a caller actually has. Both declared `voiced` as an `Int32Array` while `PitchResult.voicedFlag` is a `boolean[]`, so the natural call did not type-check on either JavaScript surface. The parameter is now a `VoicedFlags` union over the boolean, plain numeric and typed array forms, reduced to 1 and 0 inside each facade — the Node addon reads only an `Int32Array` and silently voices every frame otherwise.
+- `MasteringChainConfig` accepts the dot-notation override spelling. The flattener passes a caller-supplied dotted key straight to the core, which is the form the C ABI carries parameters in and the form the Python binding documents as accepted, but the type modelled only the nested spelling. Both forms now type-check; the nested form is still checked field by field, and an unknown key without a dot is still rejected.
+
+### Documentation
+
+- The synth preset table's engine attributions match the engines that actually render. The rows grouped under "FM" and "Karplus-Strong" are aliases of GM fallback programs, so `gm_fallback_map` picks the engine, and `bell`, `brass` and `pluck` resolve to the modal, lip-reed and plucked-string engines. The v1.7.0 note describing the `harp` preset key as renamed to `harp-plucked` is restated as the duplicate-key removal it was: the table carried two entries named `harp`, lookup returns the first match, and `harp` resolved to the GM fallback orchestral harp both before and after the rename.
+
 ## v1.7.0 (2026-08-14)
 
 **This release contains source-incompatible changes on the JavaScript and Python surfaces, and both command-line tools changed exit codes.** Read Behavioural changes before upgrading; the items that change meaning without raising an error are:
