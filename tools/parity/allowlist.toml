@@ -130,6 +130,12 @@ python = [
 #     meter-apply, and division arguments are public optional parameters and the
 #     wrappers call the corresponding C `_ex` entry points; the defaults match
 #     the legacy base calls.
+#   project_bake_midi_fx_ex: folded into each Project facade's bake-MIDI-FX
+#     method. The provenance buffer becomes a `withSourceIndex` request field on
+#     Node/WASM and a `with_source_index` keyword on Python, and the wrapper
+#     calls the C `_ex` entry point; omitting it reproduces the base call. The
+#     companion sizing entry point project_preview_midi_fx_count is a real
+#     facade method on all three surfaces and is NOT allowlisted.
 #   error_message / last_error_message / last_warning_message: C-ABI
 #     error/warning-string helpers consumed internally by each facade (errors map
 #     to native exceptions; the scene-load warning surfaces as Mixer.sceneWarnings
@@ -153,6 +159,7 @@ node = [
   "onset_strength",
   "project_auto_tempo_ex",
   "project_snap_to_grid_ex",
+  "project_bake_midi_fx_ex",
   "error_message",
   "last_error_message",
   "last_warning_message",
@@ -239,6 +246,7 @@ wasm = [
   "onset_strength",
   "project_auto_tempo_ex",
   "project_snap_to_grid_ex",
+  "project_bake_midi_fx_ex",
   "error_message",
   "last_error_message",
   "last_warning_message",
@@ -307,6 +315,7 @@ python = [
   "onset_strength",
   "project_auto_tempo_ex",
   "project_snap_to_grid_ex",
+  "project_bake_midi_fx_ex",
   "error_message",
   "last_error_message",
   "last_warning_message",

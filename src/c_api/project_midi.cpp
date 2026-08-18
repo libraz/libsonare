@@ -787,8 +787,55 @@ SonareError sonare_project_validate_midi_notes(const SonareProject* project, uin
 SonareError sonare_project_bake_midi_fx(SonareProject* project, uint32_t clip_id,
                                         const char* config_json) {
   SONARE_C_API_ENTRY;
+  return sonare_project_bake_midi_fx_ex(project, clip_id, config_json, nullptr, 0, nullptr);
+}
+
+SonareError sonare_project_bake_midi_fx_ex(SonareProject* project, uint32_t clip_id,
+                                           const char* config_json, int32_t* out_source_index,
+                                           size_t out_capacity, size_t* out_count) {
+  SONARE_C_API_ENTRY;
 #if defined(SONARE_WITH_ARRANGEMENT)
   if (!project || clip_id == 0 || !config_json) return SONARE_ERROR_INVALID_PARAMETER;
+  if (find_midi_clip(project, clip_id) == nullptr) return SONARE_ERROR_INVALID_PARAMETER;
+  SONARE_C_TRY
+  sonare::midi::MidiFxChain chain;
+  const SonareError parse_err = midi_fx_chain_from_json(config_json, &chain);
+  if (parse_err != SONARE_OK) return parse_err;
+
+  arr::MidiClipEventList current;
+  const auto it = project->history.midi_content().events.find(clip_id);
+  if (it != project->history.midi_content().events.end()) current = it->second;
+  arr::MidiClipEventList transformed;
+  // Provenance is tracked only when the caller asked for it: building it drains
+  // one input per chunk, which costs more chunk calls on a large clip.
+  const bool want_map = out_source_index != nullptr || out_count != nullptr;
+  std::vector<int32_t> source_index;
+  if (!apply_midi_fx_to_events(current, &chain, &transformed, want_map ? &source_index : nullptr)) {
+    return SONARE_ERROR_INVALID_PARAMETER;
+  }
+  auto command = std::make_unique<arr::ReplaceMidiClipEvents>(clip_id, std::move(transformed));
+  if (!project->history.apply(std::move(command))) return SONARE_ERROR_INVALID_STATE;
+  // Written only after the edit commits, so a caller never sees a map for a
+  // bake that did not happen.
+  if (out_count) *out_count = source_index.size();
+  if (out_source_index) {
+    const size_t writable = std::min(out_capacity, source_index.size());
+    std::copy(source_index.begin(), source_index.begin() + static_cast<std::ptrdiff_t>(writable),
+              out_source_index);
+  }
+  return SONARE_OK;
+  SONARE_C_CATCH
+#else
+  SONARE_C_STUB_NOT_SUPPORTED(project, clip_id, config_json, out_source_index, out_capacity,
+                              out_count);
+#endif
+}
+
+SonareError sonare_project_preview_midi_fx_count(const SonareProject* project, uint32_t clip_id,
+                                                 const char* config_json, size_t* out_count) {
+  SONARE_C_API_ENTRY;
+#if defined(SONARE_WITH_ARRANGEMENT)
+  if (!project || clip_id == 0 || !config_json || !out_count) return SONARE_ERROR_INVALID_PARAMETER;
   if (find_midi_clip(project, clip_id) == nullptr) return SONARE_ERROR_INVALID_PARAMETER;
   SONARE_C_TRY
   sonare::midi::MidiFxChain chain;
@@ -802,12 +849,11 @@ SonareError sonare_project_bake_midi_fx(SonareProject* project, uint32_t clip_id
   if (!apply_midi_fx_to_events(current, &chain, &transformed)) {
     return SONARE_ERROR_INVALID_PARAMETER;
   }
-  auto command = std::make_unique<arr::ReplaceMidiClipEvents>(clip_id, std::move(transformed));
-  if (!project->history.apply(std::move(command))) return SONARE_ERROR_INVALID_STATE;
+  *out_count = transformed.size();
   return SONARE_OK;
   SONARE_C_CATCH
 #else
-  SONARE_C_STUB_NOT_SUPPORTED(project, clip_id, config_json);
+  SONARE_C_STUB_NOT_SUPPORTED(project, clip_id, config_json, out_count);
 #endif
 }
 

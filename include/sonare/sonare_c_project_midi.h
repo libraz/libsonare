@@ -299,6 +299,35 @@ SonareError sonare_project_set_program_on_channel(SonareProject* project, uint32
 SonareError sonare_project_bake_midi_fx(SonareProject* project, uint32_t clip_id,
                                         const char* config_json);
 
+/// @brief @ref sonare_project_bake_midi_fx plus per-event provenance, so a host
+///        can carry a selection or an editorial annotation across the bake.
+///
+/// @param out_source_index Optional. Receives, for each transformed event in
+///        canonical order, the index of the input event it derives from, or -1
+///        for an event with no originating input. Chord and arpeggiator fan-out
+///        makes several consecutive-or-not outputs share one source index; a
+///        host that treats the first output per index as "the same event" and
+///        the rest as newly generated recovers the editing identity. At most
+///        @p out_capacity entries are written.
+/// @param out_capacity Number of entries @p out_source_index can hold.
+/// @param out_count Optional. Receives the full transformed event count even
+///        when it exceeds @p out_capacity, so a short buffer is detectable.
+///
+/// Both output parameters are written only after the edit commits. Sizing the
+/// buffer without a destructive trial run is what
+/// @ref sonare_project_preview_midi_fx_count is for: the transform is
+/// deterministic, so the count it reports is the count this call produces for
+/// the same clip and configuration.
+SonareError sonare_project_bake_midi_fx_ex(SonareProject* project, uint32_t clip_id,
+                                           const char* config_json, int32_t* out_source_index,
+                                           size_t out_capacity, size_t* out_count);
+
+/// @brief Reports how many events @ref sonare_project_bake_midi_fx_ex would
+///        produce for @p clip_id under @p config_json, without mutating the
+///        project. Intended for sizing the provenance buffer.
+SonareError sonare_project_preview_midi_fx_count(const SonareProject* project, uint32_t clip_id,
+                                                 const char* config_json, size_t* out_count);
+
 /// @brief Backward alias for @ref sonare_project_bake_midi_fx.
 /// @deprecated Use @ref sonare_project_bake_midi_fx for destructive clip edits,
 ///             or RealtimeEngine MIDI-FX APIs for live non-destructive inserts.

@@ -290,6 +290,15 @@ SonareError sonare_engine_set_bus_strip_insert_param_by_name(SonareRealtimeEngin
 ///   exactly like a fader/pan id. Control-thread resolution of the JSON-key name
 ///   to the strip/insert/param triple. Returns SONARE_ERROR_INVALID_PARAMETER if
 ///   the track, insert, or name is unknown (and leaves @p out_id untouched).
+///
+///   This trio is how a mastering processor gets time-varying automation: the
+///   `eq.*`, `dynamics.*`, `saturation.*`, `spectral.*`, `stereo.*`,
+///   `maximizer.*` and `multiband.*` processors are all available as strip
+///   inserts, so placing one on a strip and resolving its parameter here drives
+///   it at audio-block precision, live and offline alike. The whole-signal
+///   stages of the offline mastering chain (`repair.*`, `loudness`, and the
+///   match stages) have no insert form and no automation id: they buffer the
+///   entire signal by construction and do not run on the realtime path.
 SonareError sonare_engine_resolve_track_insert_automation_id(SonareRealtimeEngine* engine,
                                                              uint32_t track_id,
                                                              unsigned int insert_index,

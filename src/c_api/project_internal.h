@@ -5,6 +5,7 @@
 
 #include <algorithm>
 #include <cmath>
+#include <cstdint>
 #include <cstring>
 #include <limits>
 #include <map>
@@ -221,8 +222,16 @@ bool is_bank_or_program_event_for(const arr::MidiClipEvent& event, uint8_t group
   return cc == 0 || cc == 32;
 }
 
+/// Applies @p chain to @p events and writes the canonically ordered result to
+/// @p transformed. When @p source_index is non-null it receives one entry per
+/// transformed event: the index of the input event that event derives from, or
+/// -1 for an event with no originating input. Building the map narrows the
+/// drain to one input per chunk so each output can be attributed, which is
+/// output-identical to the wide-chunk drain because the ordinal base is passed
+/// explicitly either way.
 bool apply_midi_fx_to_events(const arr::MidiClipEventList& events, sonare::midi::MidiFxChain* chain,
-                             arr::MidiClipEventList* transformed) {
+                             arr::MidiClipEventList* transformed,
+                             std::vector<int32_t>* source_index = nullptr) {
   if (chain == nullptr || transformed == nullptr) return false;
   std::vector<sonare::midi::MidiEvent> in;
   in.reserve(events.size());
@@ -250,17 +259,48 @@ bool apply_midi_fx_to_events(const arr::MidiClipEventList& events, sonare::midi:
   constexpr size_t kInputsPerChunk = sonare::midi::MidiFxBuffer::kCapacity / kMaxOutputPerInput;
   static_assert(kInputsPerChunk > 0);
 
+  // One input per chunk when the caller wants provenance: every event a chunk
+  // emits is then causally the expansion of that single input, which is what
+  // makes the map meaningful. Chord and arpeggiator fan-out therefore lands
+  // several outputs on the same source index.
+  const size_t inputs_per_chunk = source_index != nullptr ? size_t{1} : kInputsPerChunk;
+
   chain->reset();
   std::vector<sonare::midi::MidiEvent> baked;
   baked.reserve(in.size());
+  std::vector<int32_t> baked_source;
+  if (source_index != nullptr) baked_source.reserve(in.size());
   sonare::midi::MidiFxBuffer chunk;
-  for (size_t offset = 0; offset < in.size(); offset += kInputsPerChunk) {
-    const size_t count = std::min(kInputsPerChunk, in.size() - offset);
+  for (size_t offset = 0; offset < in.size(); offset += inputs_per_chunk) {
+    const size_t count = std::min(inputs_per_chunk, in.size() - offset);
     chain->process_chunk(in.data() + offset, count, offset, &chunk);
     if (chain->overflow_count() != 0) return false;
     baked.insert(baked.end(), chunk.events.begin(), chunk.events.begin() + chunk.size);
+    if (source_index != nullptr) {
+      baked_source.insert(baked_source.end(), chunk.size, static_cast<int32_t>(offset));
+    }
   }
-  sonare::midi::sort_render_events_stable(baked);
+
+  if (source_index == nullptr) {
+    sonare::midi::sort_render_events_stable(baked);
+  } else {
+    // Permutation sort so the provenance array follows the events through the
+    // same stable ordering the plain path applies in place.
+    std::vector<size_t> order(baked.size());
+    for (size_t i = 0; i < order.size(); ++i) order[i] = i;
+    std::stable_sort(order.begin(), order.end(), [&baked](size_t a, size_t b) {
+      return sonare::midi::render_event_before(baked[a], baked[b]);
+    });
+    std::vector<sonare::midi::MidiEvent> sorted_baked;
+    sorted_baked.reserve(baked.size());
+    source_index->clear();
+    source_index->reserve(baked.size());
+    for (const size_t index : order) {
+      sorted_baked.push_back(baked[index]);
+      source_index->push_back(baked_source[index]);
+    }
+    baked.swap(sorted_baked);
+  }
 
   transformed->clear();
   transformed->reserve(baked.size());
