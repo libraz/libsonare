@@ -85,6 +85,8 @@ export interface WasmProject {
     bank: number,
   ) => void;
   bakeMidiFx: (clipId: number, configJson: string) => void;
+  bakeMidiFxWithSourceIndex: (clipId: number, configJson: string) => Int32Array;
+  previewMidiFxCount: (clipId: number, configJson: string) => number;
   setMidiFx: (clipId: number, configJson: string) => void;
   validateMidiNotes: (clipId: number) => ProjectNotePairValidation;
   analyzeTempo: (audio: Float32Array, sampleRate: number) => ProjectTempoCandidate[];

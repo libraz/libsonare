@@ -46,6 +46,30 @@ import {
   writeSonareEngineTelemetryRingBuffer,
 } from './protocol';
 
+/**
+ * Copies one plane per output channel, zero-filling the tail past `frames` and
+ * any channel the source does not cover. Shared by the program and cue outputs
+ * so the two cannot drift in their padding behaviour. Allocation-free.
+ */
+function copyPlanesToOutput(
+  output: Float32Array[],
+  planes: readonly Float32Array[],
+  frames: number,
+): void {
+  for (let ch = 0; ch < output.length; ch++) {
+    const target = output[ch];
+    const source = planes[ch] ?? planes[0];
+    if (source) {
+      target.set(source.subarray(0, Math.min(target.length, frames)));
+      if (target.length > frames) {
+        target.fill(0, frames);
+      }
+    } else {
+      target.fill(0);
+    }
+  }
+}
+
 function captureTransferList(channels: readonly Float32Array[]): Transferable[] {
   const transfers: ArrayBuffer[] = [];
   const seen = new Set<ArrayBuffer>();
@@ -94,6 +118,11 @@ export class SonareRealtimeEngineWorkletProcessor {
   // allocated per render quantum (the old engine.process() round-tripped fresh
   // arrays on both heaps every block, an RT-safety hazard).
   private channelBuffers: Float32Array[];
+  // Cue-bus plane, allocated only when the host asked for a separate PFL/AFL
+  // output. Empty otherwise, so a single-output host pays no heap and keeps the
+  // historical behaviour where process() folds the cue into the program mix.
+  private monitorBuffers: Float32Array[] = [];
+  private readonly cueOutput: boolean;
   private readonly liveClips = new Map<number, EngineClip>();
   private readonly pagedClipProviders = new Map<number, number>();
   private readonly pagedClipPageFrames = new Map<number, number>();
@@ -160,6 +189,14 @@ export class SonareRealtimeEngineWorkletProcessor {
     for (let ch = 0; ch < this.channelCount; ch++) {
       this.channelBuffers[ch] = this.engine.getChannelBuffer(ch, this.blockSize);
     }
+    this.cueOutput = options.cueOutput === true;
+    if (this.cueOutput) {
+      this.engine.prepareMonitorChannels(this.channelCount, this.blockSize);
+      this.monitorBuffers = new Array(this.channelCount);
+      for (let ch = 0; ch < this.channelCount; ch++) {
+        this.monitorBuffers[ch] = this.engine.getMonitorChannelBuffer(ch, this.blockSize);
+      }
+    }
     // Arm the engine's scope producer only when a scope ring was provided. The
     // band count follows the ring's record layout so writeScopeRing never
     // overruns its slot.
@@ -213,6 +250,9 @@ export class SonareRealtimeEngineWorkletProcessor {
     if ((this.channelBuffers[0]?.byteLength ?? 0) === 0) {
       this.reacquireChannelBuffers();
     }
+    if (this.cueOutput && (this.monitorBuffers[0]?.byteLength ?? 0) === 0) {
+      this.reacquireMonitorBuffers();
+    }
 
     const input = inputs[0];
     // Write the AudioWorklet input straight into the engine's WASM-heap views;
@@ -227,19 +267,20 @@ export class SonareRealtimeEngineWorkletProcessor {
       }
     }
 
-    // Run the engine in place over the prepared scratch (allocation-free).
-    this.engine.processPrepared(usableFrames);
+    // Run the engine in place over the prepared scratch (allocation-free). The
+    // monitor variant keeps the cue bus out of the program planes so it can go
+    // to its own output; the plain call folds it in, as it always has.
+    if (this.cueOutput) {
+      this.engine.processPreparedWithMonitor(usableFrames);
+    } else {
+      this.engine.processPrepared(usableFrames);
+    }
 
-    for (let ch = 0; ch < output.length; ch++) {
-      const target = output[ch];
-      const source = this.channelBuffers[ch] ?? this.channelBuffers[0];
-      if (source) {
-        target.set(source.subarray(0, Math.min(target.length, usableFrames)));
-        if (target.length > usableFrames) {
-          target.fill(0, usableFrames);
-        }
-      } else {
-        target.fill(0);
+    copyPlanesToOutput(output, this.channelBuffers, usableFrames);
+    if (this.cueOutput) {
+      const cue = outputs[1];
+      if (cue) {
+        copyPlanesToOutput(cue, this.monitorBuffers, usableFrames);
       }
     }
     this.publishClipPageRequests();
@@ -253,6 +294,12 @@ export class SonareRealtimeEngineWorkletProcessor {
   private reacquireChannelBuffers(): void {
     for (let ch = 0; ch < this.channelCount; ch++) {
       this.channelBuffers[ch] = this.engine.getChannelBuffer(ch, this.blockSize);
+    }
+  }
+
+  private reacquireMonitorBuffers(): void {
+    for (let ch = 0; ch < this.channelCount; ch++) {
+      this.monitorBuffers[ch] = this.engine.getMonitorChannelBuffer(ch, this.blockSize);
     }
   }
 

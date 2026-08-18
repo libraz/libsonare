@@ -103,6 +103,39 @@ void ProjectWasm::bakeMidiFx(uint32_t clip_id, const std::string& config_json) {
   }
 }
 
+val ProjectWasm::bakeMidiFxWithSourceIndex(uint32_t clip_id, const std::string& config_json) {
+  // Sized from the non-destructive preview so the bake is a single pass with an
+  // exactly-fitting buffer, rather than a bake that has to be repeated when the
+  // guess is short.
+  size_t expected = 0;
+  const SonareError count_err =
+      sonare_project_preview_midi_fx_count(project_.get(), clip_id, config_json.c_str(), &expected);
+  if (count_err != SONARE_OK) {
+    throwCError(count_err, "failed to set MIDI FX");
+  }
+  static_assert(sizeof(int) == sizeof(int32_t), "vectorToInt32Array assumes a 32-bit int");
+  std::vector<int> source_index(expected, -1);
+  size_t written = 0;
+  const SonareError err =
+      sonare_project_bake_midi_fx_ex(project_.get(), clip_id, config_json.c_str(),
+                                     source_index.data(), source_index.size(), &written);
+  if (err != SONARE_OK) {
+    throwCError(err, "failed to set MIDI FX");
+  }
+  source_index.resize(std::min(written, source_index.size()));
+  return vectorToInt32Array(source_index);
+}
+
+uint32_t ProjectWasm::previewMidiFxCount(uint32_t clip_id, const std::string& config_json) {
+  size_t count = 0;
+  const SonareError err =
+      sonare_project_preview_midi_fx_count(project_.get(), clip_id, config_json.c_str(), &count);
+  if (err != SONARE_OK) {
+    throwCError(err, "failed to preview MIDI FX");
+  }
+  return static_cast<uint32_t>(count);
+}
+
 void ProjectWasm::setMidiFx(uint32_t clip_id, const std::string& config_json) {
   bakeMidiFx(clip_id, config_json);
 }
@@ -407,6 +440,8 @@ void registerProjectMidi(class_<ProjectWasm>& cls) {
       .function("setProgram", &ProjectWasm::setProgram)
       .function("setProgramOnChannel", &ProjectWasm::setProgramOnChannel)
       .function("bakeMidiFx", &ProjectWasm::bakeMidiFx)
+      .function("bakeMidiFxWithSourceIndex", &ProjectWasm::bakeMidiFxWithSourceIndex)
+      .function("previewMidiFxCount", &ProjectWasm::previewMidiFxCount)
       .function("setMidiFx", &ProjectWasm::setMidiFx)
       .function("validateMidiNotes", &ProjectWasm::validateMidiNotes)
       .function("analyzeTempo", &ProjectWasm::analyzeTempo)

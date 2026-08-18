@@ -233,6 +233,73 @@ void RealtimeEngineWasm::processPrepared(int num_frames) {
   engine_.process(prepared_ptrs_.data(), prepared_channels_, num_frames);
 }
 
+// Cue-bus companion to the prepared path. process() folds the monitor bus into
+// the program output for historical compatibility, so a host that wants PFL/AFL
+// as a SEPARATE AudioWorklet output must drive processPreparedWithMonitor()
+// instead: the program plane stays untouched and the cue lands in its own
+// planes. Call prepareMonitorChannels() once, off the audio thread, after
+// prepareChannels().
+void RealtimeEngineWasm::prepareMonitorChannels(int num_channels, int max_frames) {
+  if (num_channels <= 0 || num_channels > 64 || max_frames <= 0) {
+    throw sonare::SonareException(
+        sonare::ErrorCode::InvalidParameter,
+        "RealtimeEngine.prepareMonitorChannels: channels must be within 1..64; "
+        "max_frames must be positive");
+  }
+  monitor_channels_ = num_channels;
+  monitor_capacity_ = max_frames;
+  monitor_storage_.assign(static_cast<size_t>(num_channels),
+                          std::vector<float>(static_cast<size_t>(max_frames), 0.0f));
+  monitor_ptrs_.clear();
+  monitor_ptrs_.reserve(monitor_storage_.size());
+  for (auto& channel : monitor_storage_) {
+    monitor_ptrs_.push_back(channel.data());
+  }
+}
+
+val RealtimeEngineWasm::getMonitorChannelBuffer(int channel, int num_frames) {
+  if (channel < 0 || channel >= monitor_channels_) {
+    throw sonare::SonareException(
+        sonare::ErrorCode::InvalidParameter,
+        "RealtimeEngine.getMonitorChannelBuffer: channel out of range; call "
+        "prepareMonitorChannels() first");
+  }
+  if (num_frames <= 0 || num_frames > monitor_capacity_) {
+    throw sonare::SonareException(sonare::ErrorCode::InvalidParameter,
+                                  "RealtimeEngine.getMonitorChannelBuffer: out-of-range frame "
+                                  "count");
+  }
+  return val(typed_memory_view(static_cast<size_t>(num_frames),
+                               monitor_storage_[static_cast<size_t>(channel)].data()));
+}
+
+void RealtimeEngineWasm::processPreparedWithMonitor(int num_frames) {
+  if (prepared_channels_ <= 0 || prepared_storage_.empty()) {
+    throw sonare::SonareException(sonare::ErrorCode::InvalidState,
+                                  "RealtimeEngine.processPreparedWithMonitor: prepareChannels() "
+                                  "must be called first");
+  }
+  if (monitor_channels_ <= 0 || monitor_storage_.empty()) {
+    throw sonare::SonareException(sonare::ErrorCode::InvalidState,
+                                  "RealtimeEngine.processPreparedWithMonitor: "
+                                  "prepareMonitorChannels() must be called first");
+  }
+  // The engine writes one cue plane per program channel, so a narrower monitor
+  // plane would be written past its end.
+  if (monitor_channels_ < prepared_channels_) {
+    throw sonare::SonareException(sonare::ErrorCode::InvalidParameter,
+                                  "RealtimeEngine.processPreparedWithMonitor: monitor channel "
+                                  "count must be at least the prepared channel count");
+  }
+  if (num_frames <= 0 || num_frames > prepared_capacity_ || num_frames > monitor_capacity_) {
+    throw sonare::SonareException(sonare::ErrorCode::InvalidParameter,
+                                  "RealtimeEngine.processPreparedWithMonitor: out-of-range frame "
+                                  "count");
+  }
+  engine_.process_with_monitor(prepared_ptrs_.data(), monitor_ptrs_.data(), prepared_channels_,
+                               num_frames);
+}
+
 val RealtimeEngineWasm::processWithMonitor(val channels_val) {
   ChannelBlock block = readChannels(channels_val);
   ChannelBlock monitor;
@@ -435,6 +502,9 @@ void registerRealtimeEngineProcessing(class_<RealtimeEngineWasm>& cls) {
       .function("prepareChannels", &RealtimeEngineWasm::prepareChannels)
       .function("getChannelBuffer", &RealtimeEngineWasm::getChannelBuffer)
       .function("processPrepared", &RealtimeEngineWasm::processPrepared)
+      .function("prepareMonitorChannels", &RealtimeEngineWasm::prepareMonitorChannels)
+      .function("getMonitorChannelBuffer", &RealtimeEngineWasm::getMonitorChannelBuffer)
+      .function("processPreparedWithMonitor", &RealtimeEngineWasm::processPreparedWithMonitor)
       .function("processWithMonitor", &RealtimeEngineWasm::processWithMonitor)
       .function("renderOffline", &RealtimeEngineWasm::renderOffline)
       .function("bounceOffline", &RealtimeEngineWasm::bounceOffline)

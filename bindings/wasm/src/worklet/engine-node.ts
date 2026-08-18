@@ -301,10 +301,12 @@ export class SonareRealtimeEngineNode {
         ? createSonareExternalMidiRingBuffer(options.externalMidiRingCapacity ?? 256)
         : undefined;
     const channelCount = Math.max(1, Math.floor(options.channelCount ?? 2));
+    const cueOutput = options.cueOutput === true;
     const processorOptions: SonareRealtimeEngineWorkletProcessorOptions = {
       sampleRate: options.sampleRate ?? context.sampleRate,
       blockSize,
       channelCount,
+      cueOutput,
       commandSharedBuffer: commandRing?.sharedBuffer,
       commandRingCapacity: commandRing?.capacity,
       telemetrySharedBuffer: telemetryRing?.sharedBuffer,
@@ -329,8 +331,10 @@ export class SonareRealtimeEngineNode {
         new AudioWorkletNode(ctx, name, nodeOptions));
     const node = factory(context, processorName, {
       numberOfInputs: 1,
-      numberOfOutputs: 1,
-      outputChannelCount: [channelCount],
+      // The cue bus needs its own output; a single-output node keeps the
+      // historical mix where process() folds the cue into the program.
+      numberOfOutputs: cueOutput ? 2 : 1,
+      outputChannelCount: cueOutput ? [channelCount, channelCount] : [channelCount],
       processorOptions,
     });
     return new SonareRealtimeEngineNode(
@@ -343,6 +347,7 @@ export class SonareRealtimeEngineNode {
         audioWorklet,
         clipPageRequestsRealtimeSafe: mode === 'sab',
         externalMidiRealtimeSafe: mode === 'sab',
+        cueOutput,
         engineAbiVersion: detectedCapabilities?.engineAbiVersion,
         expectedEngineAbiVersion: detectedCapabilities?.expectedEngineAbiVersion,
         abiCompatible: detectedCapabilities?.abiCompatible,

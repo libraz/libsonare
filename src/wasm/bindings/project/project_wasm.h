@@ -132,6 +132,11 @@ struct ProjectWasm {
   void setProgramOnChannel(uint32_t clip_id, uint32_t group, uint32_t channel, int program,
                            int bank);
   void bakeMidiFx(uint32_t clip_id, const std::string& config_json);
+  // Bakes and returns the per-event provenance as an Int32Array: entry i is the
+  // input event index transformed event i derives from, or -1 when it has none.
+  val bakeMidiFxWithSourceIndex(uint32_t clip_id, const std::string& config_json);
+  // Non-destructive: how many events the same bake would produce.
+  uint32_t previewMidiFxCount(uint32_t clip_id, const std::string& config_json);
   void setMidiFx(uint32_t clip_id, const std::string& config_json);
 
   // Pre-flight check for hanging / unmatched notes in a MIDI clip. Returns

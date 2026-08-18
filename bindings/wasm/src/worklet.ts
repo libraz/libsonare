@@ -10,6 +10,11 @@ export { attachOpfsClipStream } from './clip_page_streamer';
 // module singleton. Re-export the lifecycle so that realm can initialize its
 // own wasm instance, independent of the main-thread `index` module.
 export { init, isInitialized } from './index';
+// Host-side mastering preview inside the worklet realm. Kept here rather than
+// left main-thread-only so a live preview does not have to round-trip audio to
+// the main thread; see the class doc for the prepare/loudness/latency contract.
+export type { StreamingMasteringChainConfig } from './public_types';
+export { StreamingMasteringChain } from './streaming_processors';
 export { SonareEngine } from './worklet/engine';
 export { SonareRealtimeEngineNode } from './worklet/engine-node';
 export type { SonareEngineOptions } from './worklet/engine-options';

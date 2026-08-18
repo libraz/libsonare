@@ -49,6 +49,24 @@ const EQ_PHASE_MODES: Record<string, number> = {
  * Call {@link delete} (or use a `try/finally`) to release the underlying WASM
  * object — the embind handle is not garbage-collected automatically.
  *
+ * Reachable from the AudioWorklet realm through the `sonare/worklet` entry, but
+ * the realtime contract is the caller's to keep:
+ *
+ * - {@link prepare} builds the processors and allocates. Call it once from a
+ *   message handler, never from `AudioWorkletProcessor.process()`.
+ * - {@link processMono}/{@link processStereo} return fresh arrays. On the render
+ *   thread, reuse the returned reference for the block rather than retaining it.
+ * - An enabled `loudness` stage needs `loudnessStaticGainDb` measured offline,
+ *   because whole-signal integrated LUFS cannot be measured block by block. Pass
+ *   `loudnessStaticGainPeakDb` too and the static gain is clamped exactly as the
+ *   offline chain clamps it, so the live preview matches the render.
+ * - {@link flush} output starts {@link latencySamples} samples early; discard
+ *   that many leading samples when time alignment matters.
+ *
+ * The chain is a host-side stage, not an engine insert: it does not participate
+ * in the engine's PDC or bypass, so latency compensation against other engine
+ * outputs is also the caller's.
+ *
  * @example
  * ```typescript
  * const chain = new StreamingMasteringChain({ eq: { tiltDb: 1.0 } });

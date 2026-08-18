@@ -823,6 +823,15 @@ export class RealtimeEngine {
    * Returns `-1` when the track, insert, or name is unknown. (The Python binding
    * raises a `SonareError` for an unknown id where Node/WASM return the `-1`
    * sentinel.)
+   *
+   * This trio is how a mastering processor gets time-varying automation: the
+   * `eq.*`, `dynamics.*`, `saturation.*`, `spectral.*`, `stereo.*`,
+   * `maximizer.*` and `multiband.*` processors are all available as strip
+   * inserts, so placing one on a strip and resolving its parameter here drives
+   * it at audio-block precision, live and offline alike. The whole-signal
+   * stages of the offline mastering chain (`repair.*`, `loudness`, and the
+   * match stages) have no insert form and no automation id: they buffer the
+   * entire signal by construction and do not run on the realtime path.
    */
   resolveTrackInsertAutomationId(trackId: number, insertIndex: number, paramName: string): number {
     return this.native.resolveTrackInsertAutomationId(trackId, insertIndex, paramName);
@@ -982,6 +991,36 @@ export class RealtimeEngine {
    */
   processPrepared(numFrames: number): void {
     this.native.processPrepared(numFrames);
+  }
+
+  /**
+   * Allocates the cue-bus counterpart of {@link prepareChannels}. Needed only
+   * when PFL/AFL monitoring must reach a separate output: `processPrepared`
+   * folds the cue bus into the program output, while
+   * {@link processPreparedWithMonitor} keeps the two apart. Call once, off the
+   * audio thread, with at least as many channels as `prepareChannels` got.
+   */
+  prepareMonitorChannels(numChannels: number, maxFrames: number): void {
+    this.native.prepareMonitorChannels(numChannels, maxFrames);
+  }
+
+  /**
+   * Returns a Float32Array view onto the persistent cue-bus scratch for one
+   * channel (valid for up to `numFrames`). Read it after
+   * {@link processPreparedWithMonitor}. Re-acquire after WASM memory growth.
+   */
+  getMonitorChannelBuffer(channel: number, numFrames: number): Float32Array {
+    return this.native.getMonitorChannelBuffer(channel, numFrames);
+  }
+
+  /**
+   * Runs the engine in place over the prepared scratch, writing the cue bus to
+   * the monitor scratch instead of folding it into the program output.
+   * Allocation-free: safe on the AudioWorklet render thread after
+   * `prepareChannels` and `prepareMonitorChannels`.
+   */
+  processPreparedWithMonitor(numFrames: number): void {
+    this.native.processPreparedWithMonitor(numFrames);
   }
 
   processWithMonitor(channels: Float32Array[]): WasmEngineProcessWithMonitorResult {

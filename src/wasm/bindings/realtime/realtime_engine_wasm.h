@@ -223,6 +223,9 @@ class RealtimeEngineWasm {
   void prepareChannels(int num_channels, int max_frames);
   emscripten::val getChannelBuffer(int channel, int num_frames);
   void processPrepared(int num_frames);
+  void prepareMonitorChannels(int num_channels, int max_frames);
+  emscripten::val getMonitorChannelBuffer(int channel, int num_frames);
+  void processPreparedWithMonitor(int num_frames);
   emscripten::val processWithMonitor(emscripten::val channels_val);
   emscripten::val renderOffline(emscripten::val channels_val, int block_size);
   emscripten::val bounceOffline(emscripten::val options_val);
@@ -315,6 +318,12 @@ class RealtimeEngineWasm {
   std::vector<float*> prepared_ptrs_;
   int prepared_channels_ = 0;
   int prepared_capacity_ = 0;
+  // Second plane for the cue (PFL/AFL) bus on the prepared path. Kept separate
+  // from prepared_storage_ so a host that never monitors pays nothing.
+  std::vector<std::vector<float>> monitor_storage_;
+  std::vector<float*> monitor_ptrs_;
+  int monitor_channels_ = 0;
+  int monitor_capacity_ = 0;
 };
 
 // Each domain TU registers its slice of the single RealtimeEngine class_ handle.

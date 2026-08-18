@@ -67,6 +67,13 @@ export interface SonareRealtimeEngineWorkletProcessorOptions {
   /** Lock-free worklet-to-main-thread MIDI-1 output ring. */
   externalMidiSharedBuffer?: SharedArrayBuffer;
   externalMidiRingCapacity?: number;
+  /**
+   * Route the PFL/AFL cue bus to the processor's SECOND output instead of
+   * folding it into the program output. Off by default, so an existing
+   * single-output host keeps its current mix sample for sample. The node must
+   * be constructed with two outputs for the cue to be audible.
+   */
+  cueOutput?: boolean;
 }
 
 export interface SonareRealtimeVoiceChangerWorkletProcessorOptions {
@@ -105,6 +112,11 @@ export interface SonareRealtimeEngineNodeCapabilities {
   clipPageRequestsRealtimeSafe: boolean;
   /** True when external MIDI uses the SAB output ring rather than postMessage. */
   externalMidiRealtimeSafe: boolean;
+  /**
+   * True when the node carries a second output fed by the PFL/AFL cue bus. When
+   * false the cue is folded into the program output, as it always was.
+   */
+  cueOutput: boolean;
   engineAbiVersion?: number;
   expectedEngineAbiVersion?: number;
   abiCompatible?: boolean;
