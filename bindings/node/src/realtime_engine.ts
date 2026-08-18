@@ -389,6 +389,15 @@ export class RealtimeEngine {
    * {@link setParameterSmoothed}, exactly like a fader/pan id. Returns `-1`
    * when the track, insert, or name is unknown. (The Python binding raises a
    * `SonareError` for an unknown id where Node/WASM return the `-1` sentinel.)
+   *
+   * This trio is how a mastering processor gets time-varying automation: the
+   * `eq.*`, `dynamics.*`, `saturation.*`, `spectral.*`, `stereo.*`,
+   * `maximizer.*` and `multiband.*` processors are all available as strip
+   * inserts, so placing one on a strip and resolving its parameter here drives
+   * it at audio-block precision, live and offline alike. The whole-signal
+   * stages of the offline mastering chain (`repair.*`, `loudness`, and the
+   * match stages) have no insert form and no automation id: they buffer the
+   * entire signal by construction and do not run on the realtime path.
    */
   resolveTrackInsertAutomationId(trackId: number, insertIndex: number, paramName: string): number {
     return this.native.resolveTrackInsertAutomationId(trackId, insertIndex, paramName);

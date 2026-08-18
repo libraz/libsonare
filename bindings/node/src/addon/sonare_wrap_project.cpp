@@ -72,6 +72,8 @@ Napi::Object ProjectWrap::Init(Napi::Env env, Napi::Object exports) {
           InstanceMethod<&ProjectWrap::SetProgram>("setProgram"),
           InstanceMethod<&ProjectWrap::SetProgramOnChannel>("setProgramOnChannel"),
           InstanceMethod<&ProjectWrap::BakeMidiFx>("bakeMidiFx"),
+          InstanceMethod<&ProjectWrap::BakeMidiFxWithSourceIndex>("bakeMidiFxWithSourceIndex"),
+          InstanceMethod<&ProjectWrap::PreviewMidiFxCount>("previewMidiFxCount"),
           InstanceMethod<&ProjectWrap::SetMidiFx>("setMidiFx"),
           InstanceMethod<&ProjectWrap::ValidateMidiNotes>("validateMidiNotes"),
           InstanceMethod<&ProjectWrap::AutoTempo>("autoTempo"),

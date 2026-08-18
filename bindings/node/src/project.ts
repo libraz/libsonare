@@ -24,6 +24,9 @@ import type {
   ProjectMidiCcBinding,
   ProjectMidiClipResult,
   ProjectMidiEvent,
+  ProjectMidiFxBakeRequest,
+  ProjectMidiFxBakeResult,
+  ProjectMidiFxPreviewRequest,
   ProjectMidiRouteConfig,
   ProjectMidiRouteResult,
   ProjectSource,
@@ -87,6 +90,28 @@ export function synthPresetPatch(name: string): SynthPatch {
 /** Return the canonical NativeSynth enum tables from the native C oracle. */
 export function synthEnumTables(): SynthEnumTables {
   return addon._synthEnumTables();
+}
+
+/**
+ * Folds the positional and request call forms of `bakeMidiFx` into one shape,
+ * so defaults, validation and errors cannot diverge between them.
+ */
+function normalizeMidiFxBakeRequest(
+  clipIdOrRequest: number | ProjectMidiFxBakeRequest,
+  configJson?: string,
+): Required<ProjectMidiFxBakeRequest> {
+  if (typeof clipIdOrRequest === 'number') {
+    return {
+      clipId: clipIdOrRequest,
+      configJson: configJson ?? '',
+      withSourceIndex: false,
+    };
+  }
+  return {
+    clipId: clipIdOrRequest.clipId,
+    configJson: clipIdOrRequest.configJson,
+    withSourceIndex: clipIdOrRequest.withSourceIndex ?? false,
+  };
 }
 
 /**
@@ -809,8 +834,33 @@ export class Project {
    * Destructively bake a MIDI-FX chain into all stored events. Large clips are
    * drained without truncation; failure leaves the original clip unchanged.
    */
-  bakeMidiFx(clipId: number, configJson: string): void {
-    this.native.bakeMidiFx(clipId, configJson);
+  bakeMidiFx(clipId: number, configJson: string): void;
+  /**
+   * Request form. Setting `withSourceIndex` also returns per-event provenance,
+   * so a selection or an editorial annotation can be carried across the bake.
+   */
+  bakeMidiFx(request: ProjectMidiFxBakeRequest): ProjectMidiFxBakeResult;
+  bakeMidiFx(
+    clipIdOrRequest: number | ProjectMidiFxBakeRequest,
+    configJson?: string,
+  ): ProjectMidiFxBakeResult {
+    const request = normalizeMidiFxBakeRequest(clipIdOrRequest, configJson);
+    if (!request.withSourceIndex) {
+      this.native.bakeMidiFx(request.clipId, request.configJson);
+      return {};
+    }
+    return {
+      sourceIndex: this.native.bakeMidiFxWithSourceIndex(request.clipId, request.configJson),
+    };
+  }
+
+  /**
+   * Count the events {@link bakeMidiFx} would produce for this clip and
+   * configuration, without mutating the project. The transform is
+   * deterministic, so the count matches what the bake goes on to produce.
+   */
+  previewMidiFxCount(request: ProjectMidiFxPreviewRequest): number {
+    return this.native.previewMidiFxCount(request.clipId, request.configJson);
   }
 
   /** Backward alias for {@link bakeMidiFx}. */

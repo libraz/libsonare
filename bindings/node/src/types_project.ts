@@ -715,3 +715,37 @@ export interface ProjectAssistSidecar {
   regionEndPpq: number;
   payload: Uint8Array;
 }
+
+/**
+ * Request form of {@link Project.bakeMidiFx}. The positional
+ * `(clipId, configJson)` call stays supported and normalizes to this shape.
+ */
+export interface ProjectMidiFxBakeRequest {
+  /** Target MIDI clip id. */
+  clipId: number;
+  /** MIDI-FX chain configuration as JSON. */
+  configJson: string;
+  /** Return per-event provenance in the result. Default false. */
+  withSourceIndex?: boolean;
+}
+
+/** Result of the request form of {@link Project.bakeMidiFx}. */
+export interface ProjectMidiFxBakeResult {
+  /**
+   * One entry per transformed event in canonical order: the index of the input
+   * event it derives from, or -1 for an event with no originating input. Chord
+   * and arpeggiator fan-out makes several outputs share one source index, so a
+   * caller that treats the first output per index as the same event and the
+   * rest as newly generated can carry a selection across the bake. Present only
+   * when the request set `withSourceIndex`.
+   */
+  sourceIndex?: Int32Array;
+}
+
+/** Request form of {@link Project.previewMidiFxCount}. */
+export interface ProjectMidiFxPreviewRequest {
+  /** Target MIDI clip id. */
+  clipId: number;
+  /** MIDI-FX chain configuration as JSON. */
+  configJson: string;
+}

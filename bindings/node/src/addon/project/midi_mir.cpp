@@ -167,6 +167,43 @@ Napi::Value ProjectWrap::BakeMidiFx(const Napi::CallbackInfo& info) {
   return env.Undefined();
 }
 
+Napi::Value ProjectWrap::BakeMidiFxWithSourceIndex(const Napi::CallbackInfo& info) {
+  Napi::Env env = info.Env();
+  const uint32_t clip_id = Uint32Arg(info, 0, 0);
+  std::string config = info.Length() > 1 && info[1].IsString()
+                           ? info[1].As<Napi::String>().Utf8Value()
+                           : std::string();
+  // Size the provenance buffer from the non-destructive preview so the bake
+  // runs once with an exactly-fitting buffer.
+  size_t expected = 0;
+  ThrowIfError(env,
+               sonare_project_preview_midi_fx_count(project_, clip_id, config.c_str(), &expected));
+  if (env.IsExceptionPending()) return env.Undefined();
+  std::vector<int32_t> source_index(expected, -1);
+  size_t written = 0;
+  ThrowIfError(
+      env, sonare_project_bake_midi_fx_ex(project_, clip_id, config.c_str(), source_index.data(),
+                                          source_index.size(), &written));
+  if (env.IsExceptionPending()) return env.Undefined();
+  const size_t count = std::min(written, source_index.size());
+  Napi::Int32Array out = Napi::Int32Array::New(env, count);
+  for (size_t i = 0; i < count; ++i) out[i] = source_index[i];
+  return out;
+}
+
+Napi::Value ProjectWrap::PreviewMidiFxCount(const Napi::CallbackInfo& info) {
+  Napi::Env env = info.Env();
+  const uint32_t clip_id = Uint32Arg(info, 0, 0);
+  std::string config = info.Length() > 1 && info[1].IsString()
+                           ? info[1].As<Napi::String>().Utf8Value()
+                           : std::string();
+  size_t count = 0;
+  ThrowIfError(env,
+               sonare_project_preview_midi_fx_count(project_, clip_id, config.c_str(), &count));
+  if (env.IsExceptionPending()) return env.Undefined();
+  return Napi::Number::New(env, static_cast<double>(count));
+}
+
 Napi::Value ProjectWrap::SetMidiFx(const Napi::CallbackInfo& info) { return BakeMidiFx(info); }
 
 Napi::Value ProjectWrap::ValidateMidiNotes(const Napi::CallbackInfo& info) {
