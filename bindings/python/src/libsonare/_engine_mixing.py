@@ -333,6 +333,16 @@ class _EngineMixingMixin:
         :meth:`set_parameter`, or :meth:`set_parameter_smoothed` exactly like a
         fader/pan id. Raises :class:`SonareError` if the track, insert, or name
         is unknown.
+
+        This trio is how a mastering processor gets time-varying automation:
+        the ``eq.*``, ``dynamics.*``, ``saturation.*``, ``spectral.*``,
+        ``stereo.*``, ``maximizer.*`` and ``multiband.*`` processors are all
+        available as strip inserts, so placing one on a strip and resolving its
+        parameter here drives it at audio-block precision, live and offline
+        alike. The whole-signal stages of the offline mastering chain
+        (``repair.*``, ``loudness``, and the match stages) have no insert form
+        and no automation id: they buffer the entire signal by construction and
+        do not run on the realtime path.
         """
         out_id = ctypes.c_uint32()
         _check(

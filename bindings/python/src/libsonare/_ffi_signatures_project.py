@@ -783,6 +783,26 @@ def _configure_project_extra_signatures(lib: ctypes.CDLL) -> None:
             ctypes.c_char_p,
         ]
 
+    if hasattr(lib, "sonare_project_bake_midi_fx_ex"):
+        lib.sonare_project_bake_midi_fx_ex.restype = ctypes.c_int32
+        lib.sonare_project_bake_midi_fx_ex.argtypes = [
+            ctypes.c_void_p,
+            ctypes.c_uint32,
+            ctypes.c_char_p,
+            ctypes.POINTER(ctypes.c_int32),
+            ctypes.c_size_t,
+            ctypes.POINTER(ctypes.c_size_t),
+        ]
+
+    if hasattr(lib, "sonare_project_preview_midi_fx_count"):
+        lib.sonare_project_preview_midi_fx_count.restype = ctypes.c_int32
+        lib.sonare_project_preview_midi_fx_count.argtypes = [
+            ctypes.c_void_p,
+            ctypes.c_uint32,
+            ctypes.c_char_p,
+            ctypes.POINTER(ctypes.c_size_t),
+        ]
+
     if hasattr(lib, "sonare_project_get_sample_rate"):
         lib.sonare_project_get_sample_rate.restype = ctypes.c_int32
         lib.sonare_project_get_sample_rate.argtypes = [
