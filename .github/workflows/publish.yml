@@ -23,7 +23,11 @@ jobs:
           node-version: '22.22.3'
           registry-url: 'https://registry.npmjs.org'
 
-      - run: npm install -g npm@latest
+      # Pinned to a major so a freshly cut npm release cannot break a publish
+      # that is already past the point of no return. npm 12 requires
+      # ^22.22.2 || ^24.15.0 || >=26.0.0, so it is paired with the node-version
+      # above; raise both together.
+      - run: npm install -g npm@12
       - run: corepack enable
       - run: corepack prepare yarn@4.15.0 --activate
 
