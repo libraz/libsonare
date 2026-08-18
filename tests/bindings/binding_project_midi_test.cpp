@@ -990,6 +990,104 @@ TEST_CASE("project C surface set_midi_fx transforms stored MIDI events", "[proje
   sonare_project_destroy(project);
 }
 
+TEST_CASE("project C surface MIDI-FX bake reports per-event provenance", "[project]") {
+  // Two notes, four events. An identity bake must map each output back to the
+  // input it came from, and the mapped bake must produce the same events the
+  // plain bake does -- the drain width is an implementation detail.
+  SonareProject* project = nullptr;
+  REQUIRE(sonare_project_create(&project) == SONARE_OK);
+  uint32_t track = 0;
+  uint32_t clip = 0;
+  REQUIRE(sonare_project_add_midi_clip(project, 0.0, 4.0, &track, &clip) == SONARE_OK);
+
+  SonareMidiEventPod events[4]{};
+  REQUIRE(sonare_midi_note_on(0.0, 0, 0, 60, 100, &events[0]) == SONARE_OK);
+  REQUIRE(sonare_midi_note_off(1.0, 0, 0, 60, 0, &events[1]) == SONARE_OK);
+  REQUIRE(sonare_midi_note_on(2.0, 0, 0, 64, 100, &events[2]) == SONARE_OK);
+  REQUIRE(sonare_midi_note_off(3.0, 0, 0, 64, 0, &events[3]) == SONARE_OK);
+  REQUIRE(sonare_project_set_midi_events(project, clip, events, 4) == SONARE_OK);
+
+  SonareProject* plain = nullptr;
+  REQUIRE(sonare_project_create(&plain) == SONARE_OK);
+  uint32_t plain_track = 0;
+  uint32_t plain_clip = 0;
+  REQUIRE(sonare_project_add_midi_clip(plain, 0.0, 4.0, &plain_track, &plain_clip) == SONARE_OK);
+  REQUIRE(sonare_project_set_midi_events(plain, plain_clip, events, 4) == SONARE_OK);
+
+  SECTION("identity bake maps every output to its own input") {
+    size_t predicted = 0;
+    REQUIRE(sonare_project_preview_midi_fx_count(project, clip, "{}", &predicted) == SONARE_OK);
+    REQUIRE(predicted == 4);
+    // The preview must not have mutated anything.
+    REQUIRE(project->history.midi_content().events.at(clip).size() == 4);
+
+    std::vector<int32_t> map(predicted, -2);
+    size_t written = 0;
+    REQUIRE(sonare_project_bake_midi_fx_ex(project, clip, "{}", map.data(), map.size(), &written) ==
+            SONARE_OK);
+    REQUIRE(written == 4);
+    REQUIRE(map == std::vector<int32_t>{0, 1, 2, 3});
+
+    REQUIRE(sonare_project_bake_midi_fx(plain, plain_clip, "{}") == SONARE_OK);
+    REQUIRE(project->history.midi_content().events.at(clip) ==
+            plain->history.midi_content().events.at(plain_clip));
+  }
+
+  SECTION("chord fan-out shares one source index per input") {
+    const char* config = "{\"chord_intervals\":[0,4,7]}";
+    size_t predicted = 0;
+    REQUIRE(sonare_project_preview_midi_fx_count(project, clip, config, &predicted) == SONARE_OK);
+    REQUIRE(predicted == 12);
+
+    std::vector<int32_t> map(predicted, -2);
+    size_t written = 0;
+    REQUIRE(sonare_project_bake_midi_fx_ex(project, clip, config, map.data(), map.size(),
+                                           &written) == SONARE_OK);
+    REQUIRE(written == predicted);
+    // Every entry names a real input, and each input contributes three events.
+    std::array<int, 4> per_input{};
+    for (const int32_t source : map) {
+      REQUIRE(source >= 0);
+      REQUIRE(source < 4);
+      per_input[static_cast<size_t>(source)]++;
+    }
+    REQUIRE(per_input == std::array<int, 4>{3, 3, 3, 3});
+
+    REQUIRE(sonare_project_bake_midi_fx(plain, plain_clip, config) == SONARE_OK);
+    REQUIRE(project->history.midi_content().events.at(clip) ==
+            plain->history.midi_content().events.at(plain_clip));
+  }
+
+  SECTION("a short buffer still reports the full count") {
+    std::vector<int32_t> map(2, -2);
+    size_t written = 0;
+    REQUIRE(sonare_project_bake_midi_fx_ex(project, clip, "{}", map.data(), map.size(), &written) ==
+            SONARE_OK);
+    REQUIRE(written == 4);
+    REQUIRE(map == std::vector<int32_t>{0, 1});
+    // The bake committed despite the short buffer.
+    REQUIRE(project->history.midi_content().events.at(clip).size() == 4);
+  }
+
+  SECTION("invalid input is rejected before anything is written") {
+    size_t written = 12345;
+    REQUIRE(sonare_project_bake_midi_fx_ex(project, clip, "{bad json", nullptr, 0, &written) ==
+            SONARE_ERROR_INVALID_FORMAT);
+    REQUIRE(written == 12345);
+    size_t count = 999;
+    REQUIRE(sonare_project_preview_midi_fx_count(project, clip, "{bad json", &count) ==
+            SONARE_ERROR_INVALID_FORMAT);
+    REQUIRE(count == 999);
+    REQUIRE(sonare_project_preview_midi_fx_count(project, clip, "{}", nullptr) ==
+            SONARE_ERROR_INVALID_PARAMETER);
+    REQUIRE(sonare_project_preview_midi_fx_count(project, 0, "{}", &count) ==
+            SONARE_ERROR_INVALID_PARAMETER);
+  }
+
+  sonare_project_destroy(plain);
+  sonare_project_destroy(project);
+}
+
 TEST_CASE("project C surface MIDI-FX bake preserves large clips and canonical event order",
           "[project]") {
   SonareProject* project = nullptr;

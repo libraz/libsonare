@@ -129,6 +129,93 @@ describe('SonareRealtimeEngineWorkletProcessor', () => {
       }
     });
 
+    it('routes the cue bus to a second output only when asked', () => {
+      const blockSize = 128;
+      const clipFrames = blockSize * 4;
+      const seed = (processor: SonareRealtimeEngineWorkletProcessor) => {
+        const engine = (
+          processor as unknown as {
+            engine: {
+              setClips: (clips: unknown[]) => void;
+              setTrackLanes: (lanes: unknown[]) => void;
+              setTrackMonitorMode: (target: number, mode: string) => void;
+              play: (sampleTime?: number) => void;
+            };
+          }
+        ).engine;
+        engine.setClips([
+          {
+            id: 1,
+            trackId: 10,
+            channels: [new Float32Array(clipFrames).fill(1), new Float32Array(clipFrames).fill(1)],
+            startPpq: 0,
+            lengthSamples: clipFrames,
+          },
+          {
+            id: 2,
+            trackId: 20,
+            channels: [new Float32Array(clipFrames).fill(1), new Float32Array(clipFrames).fill(1)],
+            startPpq: 0,
+            lengthSamples: clipFrames,
+          },
+        ]);
+        engine.setTrackLanes([10, { trackId: 20 }]);
+        engine.setTrackMonitorMode(0, 'pfl');
+        engine.play();
+      };
+
+      // Default: one output, cue folded into the program mix, exactly as before.
+      const folded = new SonareRealtimeEngineWorkletProcessor({
+        sampleRate: 48000,
+        blockSize,
+        channelCount: 2,
+      });
+      const foldedOut = [new Float32Array(blockSize), new Float32Array(blockSize)];
+      try {
+        seed(folded);
+        expect(folded.process([[]], [foldedOut])).toBe(true);
+      } finally {
+        folded.destroy();
+      }
+
+      const split = new SonareRealtimeEngineWorkletProcessor({
+        sampleRate: 48000,
+        blockSize,
+        channelCount: 2,
+        cueOutput: true,
+      });
+      const program = [new Float32Array(blockSize), new Float32Array(blockSize)];
+      const cue = [new Float32Array(blockSize), new Float32Array(blockSize)];
+      try {
+        seed(split);
+        expect(split.process([[]], [program, cue])).toBe(true);
+        // Both lanes reach the program output; only the PFL-tapped lane reaches
+        // the cue. The folded run mixes the two together, so it sits higher.
+        expect(program[0].at(-1)).toBeCloseTo(2, 4);
+        expect(cue[0].at(-1)).toBeCloseTo(1, 4);
+        expect(cue[1].at(-1)).toBeCloseTo(1, 4);
+        expect(foldedOut[0].at(-1)).toBeGreaterThan(program[0].at(-1) ?? 0);
+      } finally {
+        split.destroy();
+      }
+    });
+
+    it('runs with the cue enabled even when the host supplies one output', () => {
+      const blockSize = 128;
+      const processor = new SonareRealtimeEngineWorkletProcessor({
+        sampleRate: 48000,
+        blockSize,
+        channelCount: 2,
+        cueOutput: true,
+      });
+      try {
+        const out = [new Float32Array(blockSize), new Float32Array(blockSize)];
+        expect(processor.process([[]], [out])).toBe(true);
+      } finally {
+        processor.destroy();
+      }
+    });
+
     it('replaces custom parameters from sync messages', () => {
       const processor = new SonareRealtimeEngineWorkletProcessor({
         sampleRate: 48000,

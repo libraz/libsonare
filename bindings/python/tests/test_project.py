@@ -1396,6 +1396,56 @@ def test_bake_midi_fx_preserves_more_than_512_events() -> None:
         project.close()
 
 
+def test_bake_midi_fx_reports_source_index() -> None:
+    def seed(project: Project, clip: int) -> None:
+        project.set_midi_events(
+            clip,
+            [
+                Project.midi_note_on(0.0, 0, 0, 60, 100),
+                Project.midi_note_off(1.0, 0, 0, 60, 0),
+                Project.midi_note_on(2.0, 0, 0, 64, 100),
+                Project.midi_note_off(3.0, 0, 0, 64, 0),
+            ],
+        )
+
+    config = '{"chord_intervals":[0,4,7]}'
+    tracked = Project()
+    plain = Project()
+    try:
+        _track, tracked_clip = tracked.add_midi_clip(0.0, 4.0)
+        seed(tracked, tracked_clip)
+        assert tracked.preview_midi_fx_count(tracked_clip, config) == 12
+        # The preview must leave the clip alone.
+        assert len(json.loads(tracked.to_json())["midi_content"][str(tracked_clip)]) == 4
+
+        source_index = tracked.bake_midi_fx(tracked_clip, config, with_source_index=True)
+        assert source_index is not None
+        assert len(source_index) == 12
+        per_input = [0, 0, 0, 0]
+        for source in source_index:
+            assert 0 <= source < 4
+            per_input[source] += 1
+        assert per_input == [3, 3, 3, 3]
+
+        # Without the flag the call keeps returning None and produces the same
+        # bytes, so the provenance path cannot drift from the plain one.
+        _plain_track, plain_clip = plain.add_midi_clip(0.0, 4.0)
+        seed(plain, plain_clip)
+        assert plain.bake_midi_fx(plain_clip, config) is None
+        assert (
+            json.loads(tracked.to_json())["midi_content"][str(tracked_clip)]
+            == json.loads(plain.to_json())["midi_content"][str(plain_clip)]
+        )
+
+        with pytest.raises(SonareError):
+            tracked.bake_midi_fx(tracked_clip, "{bad json", with_source_index=True)
+        with pytest.raises(SonareError):
+            tracked.preview_midi_fx_count(tracked_clip, "{bad json")
+    finally:
+        tracked.close()
+        plain.close()
+
+
 def test_project_import_smf_preserves_salvaged_truncation() -> None:
     project = Project()
     try:

@@ -578,6 +578,64 @@ describe('Project native binding', () => {
     project.destroy();
   });
 
+  it('reports MIDI-FX provenance and matches the positional bake', () => {
+    const seed = (project: Project, clip: number) => {
+      project.setMidiEvents(clip, [
+        Project.midiNoteOn(0, 0, 0, 60, 100),
+        Project.midiNoteOff(1, 0, 0, 60, 0),
+        Project.midiNoteOn(2, 0, 0, 64, 100),
+        Project.midiNoteOff(3, 0, 0, 64, 0),
+      ]);
+    };
+    const config = '{"chord_intervals":[0,4,7]}';
+
+    const request = buildProject();
+    const { clipId: requestClip } = request.addMidiClip(0, 4);
+    seed(request, requestClip);
+    expect(request.previewMidiFxCount({ clipId: requestClip, configJson: config })).toBe(12);
+    const result = request.bakeMidiFx({
+      clipId: requestClip,
+      configJson: config,
+      withSourceIndex: true,
+    });
+    expect(result.sourceIndex).toBeInstanceOf(Int32Array);
+    expect(result.sourceIndex).toHaveLength(12);
+    const perInput = [0, 0, 0, 0];
+    for (const source of result.sourceIndex ?? []) {
+      expect(source).toBeGreaterThanOrEqual(0);
+      expect(source).toBeLessThan(4);
+      perInput[source] += 1;
+    }
+    expect(perInput).toEqual([3, 3, 3, 3]);
+
+    // The positional form must land on identical bytes, and the request form
+    // without the flag must behave like it.
+    const positional = buildProject();
+    const { clipId: positionalClip } = positional.addMidiClip(0, 4);
+    seed(positional, positionalClip);
+    positional.bakeMidiFx(positionalClip, config);
+    expect(request.exportSmf()).toEqual(positional.exportSmf());
+
+    const bare = buildProject();
+    const { clipId: bareClip } = bare.addMidiClip(0, 4);
+    seed(bare, bareClip);
+    expect(bare.bakeMidiFx({ clipId: bareClip, configJson: config })).toEqual({});
+    expect(bare.exportSmf()).toEqual(positional.exportSmf());
+
+    // Errors travel the same path in both forms.
+    expect(() => positional.bakeMidiFx(positionalClip, '{bad json')).toThrow();
+    expect(() =>
+      request.bakeMidiFx({ clipId: requestClip, configJson: '{bad json', withSourceIndex: true }),
+    ).toThrow();
+    expect(() =>
+      request.previewMidiFxCount({ clipId: requestClip, configJson: '{bad json' }),
+    ).toThrow();
+
+    request.destroy();
+    positional.destroy();
+    bare.destroy();
+  });
+
   it('applies program changes, MIDI FX, and preserves imported SysEx payloads', () => {
     const project = buildProject();
     const { clipId } = project.addMidiClip(0, 2);

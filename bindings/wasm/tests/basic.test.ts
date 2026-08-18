@@ -784,6 +784,62 @@ describe('Sonare WASM Module', () => {
       engine.destroy();
     });
 
+    it('keeps the cue bus out of the program output on the prepared path', () => {
+      const engine = new RealtimeEngine(48000, 256);
+      const frames = 256 * 10;
+      const blockSize = 256;
+      engine.setClips([
+        {
+          id: 1,
+          trackId: 10,
+          channels: [new Float32Array(frames).fill(1), new Float32Array(frames).fill(1)],
+          startPpq: 0,
+          lengthSamples: frames,
+        },
+        {
+          id: 2,
+          trackId: 20,
+          channels: [new Float32Array(frames).fill(1), new Float32Array(frames).fill(1)],
+          startPpq: 0,
+          lengthSamples: frames,
+        },
+      ]);
+      engine.setTrackLanes([10, { trackId: 20 }]);
+      engine.prepareChannels(2, blockSize);
+      engine.prepareMonitorChannels(2, blockSize);
+      engine.setTrackMonitorMode(0, 'pfl');
+      engine.play();
+
+      for (let ch = 0; ch < 2; ch += 1) {
+        engine.getChannelBuffer(ch, blockSize).fill(0);
+        engine.getMonitorChannelBuffer(ch, blockSize).fill(0);
+      }
+      engine.processPreparedWithMonitor(blockSize);
+
+      // Same split processWithMonitor produces: both lanes in the program
+      // output, only the PFL-tapped lane in the cue.
+      expect(engine.getChannelBuffer(0, blockSize).at(-1)).toBeCloseTo(2, 4);
+      expect(engine.getChannelBuffer(1, blockSize).at(-1)).toBeCloseTo(2, 4);
+      expect(engine.getMonitorChannelBuffer(0, blockSize).at(-1)).toBeCloseTo(1, 4);
+      expect(engine.getMonitorChannelBuffer(1, blockSize).at(-1)).toBeCloseTo(1, 4);
+
+      engine.destroy();
+    });
+
+    it('rejects a prepared monitor call that was never prepared or is too narrow', () => {
+      const engine = new RealtimeEngine(48000, 256);
+      engine.prepareChannels(2, 256);
+      expect(() => engine.processPreparedWithMonitor(256)).toThrow();
+      expect(() => engine.getMonitorChannelBuffer(0, 256)).toThrow();
+      engine.prepareMonitorChannels(1, 256);
+      // One cue plane cannot hold the two the engine writes.
+      expect(() => engine.processPreparedWithMonitor(256)).toThrow();
+      engine.prepareMonitorChannels(2, 256);
+      expect(() => engine.processPreparedWithMonitor(512)).toThrow();
+      expect(() => engine.processPreparedWithMonitor(256)).not.toThrow();
+      engine.destroy();
+    });
+
     it('routes asymmetric left-only sources through dual-pan and reverses them', () => {
       const engine = new RealtimeEngine(48000, 256);
       const frames = 256 * 12;
