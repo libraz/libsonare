@@ -4,7 +4,7 @@ build-backend = "hatchling.build"
 
 [project]
 name = "libsonare"
-version = "1.7.1"
+version = "1.7.2"
 description = "Audio analysis, mastering, mixing, and MIDI synthesis for Python (fast C++ core)"
 requires-python = ">=3.11"
 license = "Apache-2.0"

@@ -1,5 +1,19 @@
 # Changelog
 
+## v1.7.2 (2026-08-18)
+
+This release opens three paths a host could describe but not take: routing the cue bus to its own AudioWorklet output, running the streaming mastering chain inside the worklet realm, and carrying a selection across a destructive MIDI-FX bake. The ABI is unchanged and no existing call behaves differently.
+
+### New surfaces
+
+- The WASM zero-copy realtime path can separate the cue bus from the program output. `prepareMonitorChannels`, `getMonitorChannelBuffer` and `processPreparedWithMonitor` are the monitor-tap counterparts of `prepareChannels` / `getChannelBuffer` / `processPrepared`, and the AudioWorklet node takes a `cueOutput` option that gives the processor a second output fed by the PFL/AFL tap. Per-track monitor modes have been settable since v1.7.0, but the worklet render path only ever called the plain `process`, which folds the cue into the program mix — so a host could select PFL and still have nowhere for the cue to go. The copy-in `processWithMonitor` and the C entry point it mirrors were already available and are unchanged; a node built without `cueOutput` keeps one output and the folded mix, sample for sample.
+- `StreamingMasteringChain` is exported from the AudioWorklet entry, so a live mastering preview no longer has to round-trip audio to the main thread. Its class documentation now states the contract that reaching the render thread makes load-bearing: `prepare` allocates and belongs in a message handler, an enabled loudness stage still requires the offline-measured `loudnessStaticGainDb`, flush output leads by the reported latency, and the chain is a host-side stage outside the engine's own delay compensation.
+- `sonare_project_bake_midi_fx_ex` reports where each baked event came from: one index per transformed event naming the input it derives from, in the same canonical order the bake commits. Chord and arpeggiator fan-out lands several outputs on one source index, which is what lets a host tell the surviving event from the newly generated ones and keep a selection or an editorial annotation across the bake. `sonare_project_preview_midi_fx_count` runs the same deterministic transform without mutating the project, so the buffer can be sized exactly. Node and WASM fold both into a request form of `bakeMidiFx` plus `previewMidiFxCount`; Python takes a `with_source_index` keyword and `preview_midi_fx_count`. The positional and keyword forms without provenance are byte-identical to before, and only a caller that asks for the map pays for the narrower drain that produces it.
+
+### Documentation
+
+- The insert-automation resolvers say which mastering processors they cover. The `eq.*`, `dynamics.*`, `saturation.*`, `spectral.*`, `stereo.*`, `maximizer.*` and `multiband.*` processors are all available as strip inserts, so resolving one through `sonare_engine_resolve_track_insert_automation_id` and its master and bus counterparts already drives it at audio-block precision. The stages with no automation id are the whole-signal ones — `repair.*`, `loudness` and the match stages — which buffer the entire signal and do not run on the realtime path at all.
+
 ## v1.7.1 (2026-08-15)
 
 **The feature ABI moved from 3 to 4.** `SonareSynthPatch` gained a trailing `present_fields` word, so the Python binding refuses a shared library built from a different tree; rebuild the library alongside the binding. Existing C callers are otherwise unaffected, at both the source and the call level: the new field is read only when `struct_version` is 2 or higher, so a struct filled as before keeps its previous behaviour. On Python, the `SynthPatch` numeric fields default to `None` instead of `0.0`, so reading a field that was never set returns `None` rather than zero.
