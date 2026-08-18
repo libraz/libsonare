@@ -198,6 +198,39 @@ The bounded-memory guarantee applies only to an OPFS/page-provider source.
 Passing a `Float32Array[]` to `addClip` keeps that full array in the JavaScript
 heap, so it is appropriate for short clips but does not make long clips bounded.
 
+### Cue bus on a second AudioWorklet output
+
+Per-track PFL/AFL monitoring normally folds the cue into the program output.
+Pass `cueOutput` and the node gains a second output carrying the cue alone, so
+it can be routed to headphones or a separate device while the program mix stays
+untouched.
+
+```typescript
+import { SonareEngine } from '@libraz/libsonare/worklet';
+
+const engine = await SonareEngine.create(audioContext, { cueOutput: true });
+engine.setTrackMonitorMode(trackId, 'pfl');
+
+engine.node.connect(audioContext.destination, 0); // program
+engine.node.connect(cueDestination, 1); // cue
+```
+
+Without `cueOutput` the node keeps a single output and the folded mix, sample
+for sample. Off the worklet, the same split is available on the zero-copy path
+as `prepareMonitorChannels` / `getMonitorChannelBuffer` /
+`processPreparedWithMonitor`, and as `processWithMonitor` for a copy-in call.
+
+### Mastering preview inside the worklet
+
+`StreamingMasteringChain` is exported from `@libraz/libsonare/worklet`, so a live
+preview can run in the render realm instead of round-tripping audio to the main
+thread. Build and `prepare()` it from a message handler — `prepare()` allocates
+and must not run inside `process()`. An enabled `loudness` stage needs the
+offline-measured `loudnessStaticGainDb`, since whole-signal integrated LUFS
+cannot be measured block by block. The chain is a host-side stage: it is outside
+the engine's own delay compensation, so aligning it against other engine outputs
+is the caller's job.
+
 ## Capabilities
 
 Every area below has runnable examples and the full API in the
