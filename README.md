@@ -75,9 +75,11 @@ the browser to see what libsonare can power.
   1.0/2.0 sequencing, SMF and MIDI 2.0 Clip File I/O, deterministic byte-stable
   JSON, and offline bounce through the built-in instruments.
 - **Realtime engine** — a sample-accurate, allocation-free playback engine:
-  transport, clip playback with warp, paged streaming for huge clips, live MIDI
-  input, lock-free automation, and capture/recording. The same engine runs in the
-  browser through an AudioWorklet.
+  transport, clip playback with warp (repitching or pitch-preserving), paged
+  streaming for huge clips with look-ahead page requests, live MIDI input,
+  lock-free automation down to individual instrument parameters, and
+  capture/recording. The same engine runs in the browser through an
+  AudioWorklet.
 
 See the [documentation](https://libsonare.libraz.net) for the full API of every
 feature, runtime, and processor.
