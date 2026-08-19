@@ -216,19 +216,44 @@ class TrackMixerRuntime final : public rt::ProcessorBase {
                   int num_samples, MeterTelemetryTap* meter_tap = nullptr, int64_t render_frame = 0,
                   ScopeTelemetryTap* scope_tap = nullptr) noexcept;
 
-  // Staged variant of mix_source for mixing several sources (e.g. an instrument
-  // rack) into shared buses within one block. A bus's insert chain is stateful
-  // (reverb tails, compressor envelopes) and must advance exactly once per block:
-  // calling mix_source() per source would clear and re-process every bus once per
-  // source, advancing reverb N times and summing N bus passes into the master.
-  // Instead: begin_source_mix() once (clears buses and lane accumulators),
-  // mix_source_into_lane() per source (accumulates each lane before its strip /
-  // PDC / sends run), then finish_source_mix() once (processes every active lane
-  // and bus exactly once before summing into the master). A single source through
-  // this trio is bit-identical to
-  // mix_source(). Note: a track carrying BOTH clips (rendered via render_clips)
-  // and rack instruments still routes its bus twice in a block -- keep a track
-  // clip-only or instrument-only when it feeds a shared bus.
+  // Block-level aggregation: the one begin / accumulate / finish sequence that
+  // routes EVERY contribution of a block -- clip audio and hosted-instrument
+  // audio alike -- through each bus exactly once.
+  //
+  // A bus insert chain is stateful (reverb tails, compressor envelopes) and
+  // non-linear (compression, saturation), so it must see the SUM of its
+  // contributors, once. render_clips() followed by a separate source-mix pass
+  // runs it twice per block: once over the clip contribution and once over the
+  // instrument contribution. A compressor then acts on two partial signals
+  // instead of the summed bus, which is not the same signal, and a reverb
+  // advances twice per block.
+  //
+  //   begin_block()             clears the lane accumulators and every bus, and
+  //                             advances the insert-parameter smoothers once
+  //   render_clips_into_lanes() accumulates clip audio into the lanes
+  //   mix_source_into_lane()    accumulates one instrument source into its lane
+  //   finish_block()            runs each active lane's strip / sends / fader
+  //                             and each bus chain exactly once, into the master
+  //
+  // Only lanes that actually received audio are processed, so a block with no
+  // clip pass still leaves untouched lanes alone.
+  bool begin_block(int num_channels, int num_samples) noexcept;
+  // Accumulates this block's clip audio into the lanes (and sums lane-less
+  // clips straight into @p channels). Does not run any strip, send, or bus.
+  // Returns false when the lane config is empty/invalid.
+  bool render_clips_into_lanes(ClipPlayer& player, float* const* channels, int num_channels,
+                               int num_samples, int64_t timeline_sample) noexcept;
+  // Runs every active lane's strip / sends / fader and every bus insert chain
+  // once, summing the result into @p channels. Call once per block, after the
+  // last accumulate.
+  void finish_block(float* const* channels, int num_channels, int num_samples,
+                    int64_t timeline_sample, MeterTelemetryTap* meter_tap = nullptr,
+                    int64_t render_frame = 0, ScopeTelemetryTap* scope_tap = nullptr) noexcept;
+
+  // Source-only staging, kept for callers that mix instrument sources without a
+  // clip pass (the offline stem collector). begin_source_mix() is begin_block();
+  // finish_source_mix() is finish_block() at timeline 0 with the historical
+  // per-lane interleaving, which the offline bounce goldens depend on.
   bool begin_source_mix(int num_channels, int num_samples) noexcept;
   // Mixes one source into its matching lane. Reads the lane snapshot prepared by
   // begin_source_mix(); does NOT clear or process buses. Returns false only when

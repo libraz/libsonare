@@ -426,6 +426,24 @@ void RealtimeEngine::process_subblock(float* const* io, float* const* monitor_ou
     // would replay the same clip window every block as a sustained buzz.
     const bool transport_rolling = transport_.playing();
 #if defined(SONARE_WITH_ARRANGEMENT)
+#if defined(SONARE_WITH_MIXING)
+    // Block-level bus aggregation. Clip audio and hosted-instrument audio are
+    // two contributors to the same buses, so they share ONE begin/finish pair:
+    // otherwise each bus insert chain runs twice per block, once over the clip
+    // contribution and once over the instrument contribution, and a non-linear
+    // insert (compressor, saturation) acts on two partial signals instead of the
+    // summed bus. Every strip/lane smoother would also advance twice.
+    //
+    // The decision has to be made BEFORE the clip pass, and whether the rack
+    // actually renders is only known after this block's MIDI dispatch (a live
+    // note-on arriving on a stopped transport starts an instrument mid-block).
+    // A non-empty rack is therefore enough to open the block: opening it costs
+    // one clear pass and finish_block() only touches lanes that received audio.
+    // Excluded on the PDC path, where the clip bus is rendered into its own
+    // scratch and delayed, so those buses genuinely belong to that pass.
+    const bool block_open = pdc_total_q8_ == 0 && !instrument_rack_.empty() &&
+                            track_mixer_runtime_.begin_block(channels, num_frames);
+#endif
     if (pdc_total_q8_ > 0) {
       // PDC active: render the clip bus into scratch, delay it by the project's
       // total instrument latency so it lands phase-aligned with the
@@ -462,9 +480,16 @@ void RealtimeEngine::process_subblock(float* const* io, float* const* monitor_ou
       }
     } else if (transport_rolling) {
 #if defined(SONARE_WITH_MIXING)
-      if (!track_mixer_runtime_.render_clips(clip_player_, sub_channels.data(), channels,
-                                             num_frames, transport_.sample_position(), &meter_tap_,
-                                             transport_.render_frame(), &scope_tap_)) {
+      if (block_open) {
+        // Aggregated block: accumulate the clip audio into the lanes now; the
+        // strips, sends and bus chains run once in finish_block() after the
+        // instrument rack has accumulated too.
+        track_mixer_runtime_.render_clips_into_lanes(clip_player_, sub_channels.data(), channels,
+                                                     num_frames, transport_.sample_position());
+      } else if (!track_mixer_runtime_.render_clips(clip_player_, sub_channels.data(), channels,
+                                                    num_frames, transport_.sample_position(),
+                                                    &meter_tap_, transport_.render_frame(),
+                                                    &scope_tap_)) {
         clip_player_.process_at(sub_channels.data(), channels, num_frames,
                                 transport_.sample_position());
       }
@@ -534,14 +559,14 @@ void RealtimeEngine::process_subblock(float* const* io, float* const* monitor_ou
       // sub-block, so multitrack MIDI routed to distinct destinations mixes here.
       const transport::TransportState inst_state = transport_.snapshot();
 #if defined(SONARE_WITH_MIXING)
-      // Clear the shared buses once before mixing the whole rack so a stateful
-      // bus insert chain (e.g. a shared reverb tail or compressor envelope)
-      // advances exactly once per block, not once per instrument. Each instrument
-      // accumulates into its lane/sends via mix_source_into_lane (no bus
-      // processing); finish_source_mix runs the bus chains once afterwards. When
-      // no lanes are configured this stays false and each source is summed
-      // directly, exactly as before.
-      const bool lane_mix_ready = track_mixer_runtime_.begin_source_mix(channels, num_frames);
+      // The lane accumulators and buses were cleared once for the whole block
+      // (begin_block above, shared with the clip pass when it ran). Each
+      // instrument accumulates into its lane/sends via mix_source_into_lane (no
+      // bus processing); finish_block runs every strip and bus chain once
+      // afterwards. On the PDC path the clip pass owns its own delayed scratch,
+      // so the rack still opens its own staging pair here.
+      const bool lane_mix_ready =
+          block_open || track_mixer_runtime_.begin_source_mix(channels, num_frames);
       bool any_lane_routed = false;
       std::array<uint32_t, TrackMixerRuntime::kMaxTrackLanes> source_track_ids{};
       const size_t source_track_count = lane_mix_ready
@@ -639,15 +664,25 @@ void RealtimeEngine::process_subblock(float* const* io, float* const* monitor_ou
         }
       });
 #if defined(SONARE_WITH_MIXING)
-      // Process the shared bus chains once and sum them into the sub-block. Only
-      // when at least one instrument routed through a lane -- mirrors the historic
-      // behaviour where the rack stage touched the buses only on a lane match.
-      if (lane_mix_ready && any_lane_routed) {
+      if (!block_open && lane_mix_ready && any_lane_routed) {
+        // Rack-only staging (PDC path): keep the historic gate and per-lane
+        // interleaving, which the offline bounce goldens depend on.
         track_mixer_runtime_.finish_source_mix(sub_channels.data(), channels, num_frames,
                                                &meter_tap_, transport_.render_frame(), &scope_tap_);
       }
 #endif
     }
+#if defined(SONARE_WITH_MIXING)
+    if (block_open) {
+      // Aggregated block: run every lane that received audio through its strip /
+      // sends / fader, and every bus chain, exactly once over the summed clip +
+      // instrument contributions. Runs outside the rack branch so a block whose
+      // rack ended up silent still closes the pass the clips opened.
+      track_mixer_runtime_.finish_block(sub_channels.data(), channels, num_frames,
+                                        transport_.sample_position(), &meter_tap_,
+                                        transport_.render_frame(), &scope_tap_);
+    }
+#endif
 #endif
 #if defined(SONARE_WITH_MIXING)
     // Mixing channel-strip insert stage (fader/pan/width/EQ/inserts) runs

@@ -12,46 +12,103 @@ bool TrackMixerRuntime::render_clips(ClipPlayer& player, float* const* channels,
                                      int num_samples, int64_t timeline_sample,
                                      MeterTelemetryTap* meter_tap, int64_t render_frame,
                                      ScopeTelemetryTap* scope_tap) noexcept {
+  // Self-contained clip-only block: exactly begin / render-into-lanes / finish
+  // for a block whose only contributor is the clip player. Retained for callers
+  // that have no instrument pass to fold in (the PDC path renders the clip bus
+  // into its own delayed scratch, so its buses genuinely belong to that pass).
   acquire_lanes();
+  const std::vector<TrackLaneConfig>* lanes = lanes_.current();
+  if (!lanes || lanes->empty()) return false;
+  // Degenerate arguments are "handled" (nothing to render), not a fallback.
+  if (!channels || num_channels <= 0 || num_samples <= 0) return true;
+  if (!begin_block(num_channels, num_samples)) return false;
+  if (!render_clips_into_lanes(player, channels, num_channels, num_samples, timeline_sample)) {
+    return false;
+  }
+  finish_block(channels, num_channels, num_samples, timeline_sample, meter_tap, render_frame,
+               scope_tap);
+  return true;
+}
+
+bool TrackMixerRuntime::begin_block(int num_channels, int num_samples) noexcept {
+  acquire_lanes();
+  const std::vector<TrackLaneConfig>* lanes = lanes_.current();
+  if (!lanes || lanes->empty()) return false;
+  if (num_channels <= 0 || num_samples <= 0) return false;
+  if (num_channels > kMaxBusChannels || num_samples > max_block_size_ || scratch_.empty()) {
+    return false;
+  }
+  if (lanes != applied_lane_snapshot_) prepare_lanes_from_snapshot(*lanes);
+  // Advance the insert-parameter smoothers once for this block before any
+  // lane/bus chain runs, so an automated insert param reaches its processor at
+  // the same cadence as the lane fader smoother (no double advance: every lane
+  // and bus chain of this block runs inside the matching finish_block()).
+  advance_insert_automations(num_samples);
+  const int render_channels = std::min(num_channels, kMaxLaneChannels);
+  for (size_t lane_index = 0; lane_index < lanes->size(); ++lane_index) {
+    clear_lane(lane_index, render_channels, num_samples);
+    source_mix_lane_active_[lane_index] = false;
+  }
+  const int master_channels = std::min(num_channels, kMaxBusChannels);
+  for (size_t bus_index = 0; bus_index < bus_configs_.size(); ++bus_index) {
+    clear_bus(bus_index, bus_render_channels(bus_index, master_channels), num_samples);
+  }
+  return true;
+}
+
+bool TrackMixerRuntime::render_clips_into_lanes(ClipPlayer& player, float* const* channels,
+                                                int num_channels, int num_samples,
+                                                int64_t timeline_sample) noexcept {
   const std::vector<TrackLaneConfig>* lanes = lanes_.current();
   if (!lanes || lanes->empty()) return false;
   if (!channels || num_channels <= 0 || num_samples <= 0) return true;
   if (num_channels > kMaxBusChannels || num_samples > max_block_size_ || scratch_.empty()) {
     return false;
   }
-
   const int render_channels = std::min(num_channels, kMaxLaneChannels);
-  const int master_channels = std::min(num_channels, kMaxBusChannels);
-  if (lanes != applied_lane_snapshot_) prepare_lanes_from_snapshot(*lanes);
-  // Advance the insert-parameter smoothers once for this sub-block before any
-  // lane/bus chain runs, so an automated insert param reaches its processor at
-  // the same cadence as the lane fader smoother (no double advance: the bus
-  // chain runs only inside this call).
-  advance_insert_automations(num_samples);
-  for (size_t bus_index = 0; bus_index < bus_configs_.size(); ++bus_index) {
-    clear_bus(bus_index, bus_render_channels(bus_index, master_channels), num_samples);
-  }
   for (size_t lane_index = 0; lane_index < lanes->size(); ++lane_index) {
     active_track_ids_[lane_index] = (*lanes)[lane_index].track_id;
-    clear_lane(lane_index, render_channels, num_samples);
     for (int ch = 0; ch < render_channels; ++ch) {
       lane_channel_ptrs_[static_cast<size_t>(ch)] = lane_channel(lane_index, ch);
     }
     player.process_track_at((*lanes)[lane_index].track_id, lane_channel_ptrs_.data(),
                             render_channels, num_samples, timeline_sample);
+    // The clip pass touches every lane, including the ones the block leaves
+    // silent: a lane strip's inserts are stateful, so skipping a silent lane
+    // would freeze a reverb tail or a compressor release mid-decay.
+    source_mix_lane_active_[lane_index] = true;
+  }
+  // Clips on tracks without a lane sum straight into the master mix; this must
+  // land before any lane output, matching the pre-aggregation order.
+  player.process_excluding_tracks_at(active_track_ids_.data(), lanes->size(), channels,
+                                     render_channels, num_samples, timeline_sample);
+  return true;
+}
+
+void TrackMixerRuntime::finish_block(float* const* channels, int num_channels, int num_samples,
+                                     int64_t timeline_sample, MeterTelemetryTap* meter_tap,
+                                     int64_t render_frame, ScopeTelemetryTap* scope_tap) noexcept {
+  if (!channels || num_channels <= 0 || num_samples <= 0) return;
+  if (num_channels > kMaxBusChannels || num_samples > max_block_size_ || scratch_.empty()) return;
+  const std::vector<TrackLaneConfig>* lanes = lanes_.current();
+  if (!lanes) return;
+  const int render_channels = std::min(num_channels, kMaxLaneChannels);
+  const int master_channels = std::min(num_channels, kMaxBusChannels);
+  const bool any_solo = any_lane_solo(*lanes);
+  // Two passes (all strips + sends, then all lane outputs), not one interleaved
+  // pass: this is the accumulation order the clip path has always used, so a
+  // clip-only block stays bit-identical.
+  for (size_t lane_index = 0; lane_index < lanes->size(); ++lane_index) {
+    if (!source_mix_lane_active_[lane_index]) continue;
     process_lane_strip(lane_index, render_channels, num_samples, timeline_sample);
     mix_lane_sends(lane_index, render_channels, num_samples, timeline_sample);
   }
-  player.process_excluding_tracks_at(active_track_ids_.data(), lanes->size(), channels,
-                                     render_channels, num_samples, timeline_sample);
-
-  const bool any_solo = any_lane_solo(*lanes);
   for (size_t lane_index = 0; lane_index < lanes->size(); ++lane_index) {
+    if (!source_mix_lane_active_[lane_index]) continue;
     apply_lane_to_mix(lane_index, channels, render_channels, num_samples, any_solo, meter_tap,
                       render_frame, scope_tap, master_channels);
   }
   process_buses(channels, master_channels, num_samples, meter_tap, render_frame, scope_tap);
-  return true;
 }
 
 bool TrackMixerRuntime::mix_source(uint32_t track_id, float* const* source, float* const* channels,
@@ -89,25 +146,7 @@ bool TrackMixerRuntime::mix_source(uint32_t track_id, float* const* source, floa
 }
 
 bool TrackMixerRuntime::begin_source_mix(int num_channels, int num_samples) noexcept {
-  acquire_lanes();
-  const std::vector<TrackLaneConfig>* lanes = lanes_.current();
-  if (!lanes || lanes->empty()) return false;
-  if (num_channels <= 0 || num_samples <= 0) return false;
-  if (num_channels > kMaxBusChannels || num_samples > max_block_size_ || scratch_.empty()) {
-    return false;
-  }
-  if (lanes != applied_lane_snapshot_) prepare_lanes_from_snapshot(*lanes);
-  advance_insert_automations(num_samples);
-  const int render_channels = std::min(num_channels, kMaxLaneChannels);
-  for (size_t lane_index = 0; lane_index < lanes->size(); ++lane_index) {
-    clear_lane(lane_index, render_channels, num_samples);
-    source_mix_lane_active_[lane_index] = false;
-  }
-  const int master_channels = std::min(num_channels, kMaxBusChannels);
-  for (size_t bus_index = 0; bus_index < bus_configs_.size(); ++bus_index) {
-    clear_bus(bus_index, bus_render_channels(bus_index, master_channels), num_samples);
-  }
-  return true;
+  return begin_block(num_channels, num_samples);
 }
 
 bool TrackMixerRuntime::mix_source_into_lane(uint32_t track_id, float* const* source,
