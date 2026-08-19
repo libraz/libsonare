@@ -254,15 +254,24 @@ TEST_CASE("get_mel_filterbank_cached distinguishes different keys", "[mel][cache
 TEST_CASE("get_mel_filterbank_cached evicts oldest entries past capacity", "[mel][cache]") {
   // The implementation caps the cache at a small constant (kMaxMelCacheSize =
   // 8 at the time of writing). Insert more than that and verify the oldest
-  // entry is evicted (its pointer becomes stale on re-fetch). We do not pin
-  // the exact capacity from the test — we only require eviction within a
+  // entry is evicted (a re-fetch builds a new filterbank). We do not pin the
+  // exact capacity from the test — we only require eviction within a
   // reasonable upper bound so the test stays robust if the cap changes.
+  //
+  // The handle is held for the whole case, not dropped after reading data().
+  // Dropping it lets eviction free the buffer, and an allocator is free to
+  // hand the same address back for the rebuilt filterbank of the same size, so
+  // comparing against the released address fails intermittently. Holding it
+  // keeps the original allocation live, so a rebuilt entry cannot share its
+  // address and the comparison is decided by the cache, not by malloc. This is
+  // also the documented contract: the handle outlives eviction.
   int sr = 22050;
   int n_fft = 1024;
 
   MelFilterConfig first;
   first.n_mels = 16;
-  const void* first_ptr = get_mel_filterbank_cached(sr, n_fft, first)->data();
+  const auto first_handle = get_mel_filterbank_cached(sr, n_fft, first);
+  const void* first_ptr = first_handle->data();
 
   constexpr int kPressure = 32;
   for (int i = 0; i < kPressure; ++i) {
@@ -273,10 +282,12 @@ TEST_CASE("get_mel_filterbank_cached evicts oldest entries past capacity", "[mel
     (void)get_mel_filterbank_cached(sr, n_fft, c);
   }
 
-  // After kPressure unique inserts, the original entry must have been evicted
-  // and rebuilt — pointers cannot match if the storage was freed.
-  const void* first_ptr_after = get_mel_filterbank_cached(sr, n_fft, first)->data();
-  REQUIRE(first_ptr_after != first_ptr);
+  // After kPressure unique inserts the original entry must have been evicted,
+  // so this call rebuilds it into fresh storage.
+  const auto rebuilt_handle = get_mel_filterbank_cached(sr, n_fft, first);
+  REQUIRE(rebuilt_handle->data() != first_ptr);
+  // The evicted handle still describes the same filterbank it was built with.
+  REQUIRE(*rebuilt_handle == *first_handle);
 }
 
 TEST_CASE("get_mel_filterbank_cached promotes on hit (true LRU)", "[mel][cache]") {
@@ -292,10 +303,14 @@ TEST_CASE("get_mel_filterbank_cached promotes on hit (true LRU)", "[mel][cache]"
   int sr = 22050;
   int n_fft = 1024;
 
-  // Step 1: insert A
+  // Step 1: insert A. The handle is held for the whole case so A's storage
+  // cannot be freed and recycled: without it, an incorrectly evicted A could be
+  // rebuilt at the same address and the pointer comparisons below would pass on
+  // a cache that had actually dropped it.
   MelFilterConfig a;
   a.n_mels = 16;
-  const void* a_ptr = get_mel_filterbank_cached(sr, n_fft, a)->data();
+  const auto a_handle = get_mel_filterbank_cached(sr, n_fft, a);
+  const void* a_ptr = a_handle->data();
 
   // Step 2: fill the remaining cache slots with 7 more distinct keys.
   // kMaxMelCacheSize is 8 today; we touch exactly cap-1 entries so A is the
