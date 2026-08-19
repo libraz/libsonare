@@ -186,6 +186,21 @@ class RealtimeEngine : private ClipPageRequestSink {
   uint32_t clip_page_request_overflow_count() const noexcept {
     return clip_page_request_overflow_count_.load(std::memory_order_relaxed);
   }
+  /// Timeline frames of clip-page look-ahead. The player reports the pages it is
+  /// about to read that are not resident yet, so a streaming host can service
+  /// them BEFORE the audio thread reaches them. Without look-ahead a page miss
+  /// is only reported after the read already produced silence, which costs one
+  /// block of silence at every page boundary the host has not primed.
+  ///
+  /// prepare() defaults this to half a second at the engine's sample rate.
+  /// 0 disables the look-ahead and restores the historical read-then-miss-only
+  /// reporting. A provider that cannot answer a residency query (the default
+  /// ClipPagedAudioProvider::page_resident) never produces look-ahead requests
+  /// regardless of this setting. Safe to change while audio runs.
+  void set_clip_page_prefetch_frames(int64_t frames) noexcept {
+    clip_player_.set_page_prefetch_frames(frames);
+  }
+  int64_t clip_page_prefetch_frames() const noexcept { return clip_player_.page_prefetch_frames(); }
 #if defined(SONARE_WITH_MIXING)
   bool pop_meter_telemetry(MeterTelemetryRecord& out) noexcept { return meter_tap_.pop(out); }
   bool pop_scope_telemetry(ScopeTelemetryRecord& out) noexcept { return scope_tap_.pop(out); }
@@ -341,6 +356,23 @@ class RealtimeEngine : private ClipPageRequestSink {
   // latency summary.
   int midi_instrument_latency_samples() const noexcept {
     return instrument_rack_.max_latency_samples();
+  }
+  /// Resolves a hosted instrument's continuous parameter (JSON-key name, e.g.
+  /// "cutoffHz") to the reserved instrument-automation id used by
+  /// setAutomationLane / setParameter. The id encodes (destination slot,
+  /// instrument param id) in the reserved instrument namespace (see
+  /// instrument_automation_id.h). Returns -1 when no instrument is bound to
+  /// @p destination_id, when the instrument exposes no automatable parameters,
+  /// when the key is unknown, or when the destination table is full.
+  ///
+  /// Control-thread only; touches no audio state. The id stays valid across an
+  /// unbind/rebind of the same destination_id, and applies nothing while that
+  /// destination has no instrument bound.
+  int64_t resolve_instrument_automation_id(uint32_t destination_id,
+                                           const std::string& key) noexcept;
+  /// Slot-table overflows for instrument-parameter automation since prepare().
+  uint32_t instrument_automation_overflow_count() const noexcept {
+    return instrument_automation_overflow_count_;
   }
 #endif
   void set_capture_segment(CaptureSegment segment) noexcept;
@@ -531,11 +563,30 @@ class RealtimeEngine : private ClipPageRequestSink {
   void start_smoothed_param(uint32_t target_id, float value) noexcept;
   void tick_smoothed_params(int num_steps) noexcept;
   bool any_smoothed_param_active() const noexcept;
-#if defined(SONARE_WITH_MIXING)
+#if defined(SONARE_WITH_MIXING) || defined(SONARE_WITH_ARRANGEMENT)
   bool route_engine_parameter(uint32_t target_id, float value) noexcept;
   // AutomationEngine::EngineParamRouter trampoline: forwards reserved-namespace
   // automation lane values to route_engine_parameter on @p context.
   static bool route_engine_parameter_thunk(void* context, uint32_t param_id, float value) noexcept;
+#endif
+#if defined(SONARE_WITH_ARRANGEMENT)
+  // Sets the smoothed target of one hosted-instrument parameter from a reserved
+  // automation lane. Instruments live outside the mixer runtimes, so they get
+  // their own slot table, advanced once per sub-block by tick_smoothed_params
+  // (the same cadence as the master/lane/bus insert slots).
+  bool route_instrument_param_smoothed(uint32_t destination_id, unsigned int param_id,
+                                       float value) noexcept;
+  // Decodes a reserved instrument-param id and forwards it to the slot table.
+  bool route_instrument_parameter(uint32_t target_id, float value) noexcept;
+  void advance_instrument_automations(int num_steps) noexcept;
+  void settle_instrument_automations() noexcept;
+  void clear_instrument_automations() noexcept;
+  // Retires every automation slot bound to @p destination_id (instrument swap /
+  // unbind). The destination's reserved ids stay valid; only the in-flight
+  // smoothers are dropped.
+  void release_instrument_automations(uint32_t destination_id) noexcept;
+#endif
+#if defined(SONARE_WITH_MIXING)
   // Sets the smoothed target of a master-strip insert parameter from a reserved
   // automation lane. The master insert chain lives outside TrackMixerRuntime, so
   // its automated params get a parallel slot table here, advanced once per
@@ -786,6 +837,28 @@ class RealtimeEngine : private ClipPageRequestSink {
       midi_instrument_source_channels_{};
 #endif
   InstrumentSourceRenderSink* instrument_source_render_sink_ = nullptr;
+  // Automated instrument parameters. Each claimed slot pins one destination_id
+  // (never reused for a different destination while the engine lives), so a
+  // reserved id minted by resolve_instrument_automation_id keeps pointing at the
+  // destination it was resolved for even across an unbind/rebind of the rack --
+  // the rack's own slot table hands out the first free slot and would otherwise
+  // silently retarget the lane.
+  static constexpr size_t kMaxInstrumentAutomationDestinations = InstrumentRack::kMaxInstruments;
+  static constexpr size_t kMaxInstrumentAutomations = 32;
+  struct InstrumentAutoSlot {
+    bool active = false;
+    bool assigned = false;
+    uint32_t destination_id = 0;
+    unsigned int param_id = 0;
+    rt::ParamSmoother smoother{};
+  };
+  std::array<uint32_t, kMaxInstrumentAutomationDestinations> instrument_auto_destinations_{};
+  // Published by the control thread after the destination is written, read by
+  // the audio thread when it decodes a reserved id, so the slot it indexes is
+  // always fully written before the count makes it reachable.
+  std::atomic<size_t> instrument_auto_destination_count_{0};
+  std::array<InstrumentAutoSlot, kMaxInstrumentAutomations> instrument_auto_slots_{};
+  uint32_t instrument_automation_overflow_count_ = 0;
 #endif
   CaptureSink capture_sink_{};
   std::atomic<CaptureSource> capture_source_{CaptureSource::kOutput};

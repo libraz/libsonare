@@ -339,7 +339,7 @@ export function projectAutomationTargetKindValue(kind: ProjectAutomationTargetKi
 export function projectWarpModeValue(mode: ProjectWarpMode | undefined): number {
   return resolveEnumOrdinal(
     mode ?? 'off',
-    { off: 0, repitch: 1, 'tempo-sync': 2 },
+    { off: 0, repitch: 1, 'tempo-sync': 2, 'time-stretch': 3 },
     'project warp mode',
   );
 }

@@ -98,6 +98,7 @@ describe('standalone functions', () => {
       mixing: expect.any(Boolean),
       fx: expect.any(Boolean),
       ffmpeg: hasFfmpegSupport(),
+      instrumentParamAutomation: expect.any(Boolean),
     });
     expect(report.decode.builtin).toEqual(['wav', 'mp3']);
     expect(Array.isArray(report.decode.ffmpeg)).toBe(true);

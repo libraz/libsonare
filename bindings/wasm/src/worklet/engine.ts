@@ -360,6 +360,20 @@ export class SonareEngine {
   }
 
   /**
+   * Resolves a hosted instrument's continuous parameter to its reserved
+   * instrument-automation id, so an instrument parameter follows a breakpoint
+   * lane at audio-block precision like a strip insert. Bind the instrument
+   * (`setSynthInstrument`) before resolving.
+   *
+   * @param destinationId MIDI destination the instrument is bound to.
+   * @param paramName Instrument JSON-key parameter name (e.g. `cutoffHz`).
+   * @returns Reserved instrument-automation id, or -1 when destination/key unknown.
+   */
+  resolveInstrumentAutomationId(destinationId: number, paramName: string): number {
+    return parameter.resolveInstrumentAutomationId(this.parameterContext, destinationId, paramName);
+  }
+
+  /**
    * Returns the number of automation lanes installed on the engine, including
    * lanes whose breakpoint list is currently empty.
    *
@@ -662,6 +676,30 @@ export class SonareEngine {
       throw error;
     }
     return { binding, provider: binding.provider };
+  }
+
+  /**
+   * Sets the clip-page look-ahead window in timeline frames on both the worklet
+   * engine and this thread's offline engine.
+   *
+   * The audio thread reports the pages it is *about to* read that are not
+   * resident yet, so the sliding-window streamer can service them before the
+   * playhead reaches them. Without look-ahead a page miss is only reported
+   * after the read already produced silence, which costs one block of silence
+   * at every page boundary that was not primed.
+   *
+   * Defaults to half a second at the engine's sample rate. `0` disables it.
+   * Safe to call during playback.
+   */
+  setClipPagePrefetchFrames(frames: number): void {
+    if (this.destroyed) {
+      throw new Error('SonareEngine is destroyed.');
+    }
+    if (!Number.isFinite(frames) || frames < 0) {
+      throw new Error('clip page prefetch frames must be a finite value >= 0.');
+    }
+    this.offlineEngine.setClipPagePrefetchFrames(frames);
+    this.postSync({ type: 'syncClipPagePrefetchFrames', frames });
   }
 
   addClip(

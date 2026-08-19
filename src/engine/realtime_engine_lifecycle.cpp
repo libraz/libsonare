@@ -24,6 +24,10 @@ void RealtimeEngine::prepare(double sample_rate, int max_block_size, size_t comm
   clip_player_.prepare(sample_rate, max_block_size_);
   clip_player_.set_tempo_map(active_tempo_map_);
   clip_player_.set_page_request_sink(this);
+  // Half a second of clip-page look-ahead by default: enough for a streaming
+  // host to fetch and supply the next pages before the audio thread reads them
+  // at any sane page size, and inert for a fully resident (or non-paged) clip.
+  clip_player_.set_page_prefetch_frames(static_cast<int64_t>(sample_rate_ * 0.5));
 #if defined(SONARE_WITH_ARRANGEMENT)
   midi_sequencer_.prepare(sample_rate);
   midi_clock_.prepare(active_tempo_map_);
@@ -91,14 +95,15 @@ void RealtimeEngine::prepare(double sample_rate, int max_block_size, size_t comm
 #if defined(SONARE_WITH_GRAPH)
   automation_.set_external_target_resolver(&RealtimeEngine::resolve_graph_parameter_thunk, this);
 #endif
-#if defined(SONARE_WITH_MIXING)
+#if defined(SONARE_WITH_MIXING) || defined(SONARE_WITH_ARRANGEMENT)
   // Route reserved engine-namespace automation lanes (mixer fader/pan) straight
   // to the mixer runtimes instead of the bound-processor table.
   automation_.set_engine_param_router(&RealtimeEngine::route_engine_parameter_thunk, this,
                                       kEngineParamNamespaceMask, kEngineParamNamespace);
-  // The router now claims two disjoint id namespaces (mixer fader/pan plus
-  // insert automation), which a single mask/match cannot express, so gate it on
-  // parameter_target_reserved (static and pure: safe as an audio-thread fn ptr).
+  // The router claims three disjoint id namespaces (mixer fader/pan, strip
+  // inserts, hosted-instrument params), which a single mask/match cannot
+  // express, so gate it on parameter_target_reserved (static and pure: safe as
+  // an audio-thread fn ptr).
   automation_.set_engine_param_gate(&RealtimeEngine::parameter_target_reserved);
 #endif
   input_capture_storage_.assign(
@@ -147,6 +152,19 @@ void RealtimeEngine::prepare(double sample_rate, int max_block_size, size_t comm
     slot.smoother.reset(0.0f);
   }
   master_insert_automation_overflow_count_ = 0;
+#endif
+#if defined(SONARE_WITH_ARRANGEMENT)
+  for (InstrumentAutoSlot& slot : instrument_auto_slots_) {
+    slot.active = false;
+    slot.assigned = false;
+    slot.destination_id = 0;
+    slot.param_id = 0;
+    slot.smoother.prepare(sample_rate_, 5.0f);
+    slot.smoother.reset(0.0f);
+  }
+  instrument_automation_overflow_count_ = 0;
+  // The destination table is NOT cleared here: reserved ids handed out before a
+  // re-prepare must keep resolving to the destination they were minted for.
 #endif
   insert_automation_overflow_reported_ = 0;
   telemetry_overflow_count_ = 0;

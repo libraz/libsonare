@@ -79,7 +79,19 @@ export interface ProjectWarpMapDesc {
   anchors: ProjectWarpAnchor[];
 }
 
-export type WarpMode = 'off' | 'repitch' | 'tempo-sync';
+/**
+ * How a clip follows its warp map.
+ *
+ * - `'off'` — no warping.
+ * - `'repitch'` — resample along the map, so a rate change moves the pitch with
+ *   the timing (tape-style).
+ * - `'tempo-sync'` — control-thread bake against the tempo map.
+ * - `'time-stretch'` — realtime pitch-preserving stretch. Follows the same map
+ *   as `'repitch'` but overlap-adds instead of resampling, so a new anchor set
+ *   takes effect from the next block with no re-bake. Falls back to `'repitch'`
+ *   behaviour when the stretcher's voice budget is exhausted.
+ */
+export type WarpMode = 'off' | 'repitch' | 'tempo-sync' | 'time-stretch';
 
 /**
  * Descriptor for {@link Project.addClip}. All musical positions are PPQ

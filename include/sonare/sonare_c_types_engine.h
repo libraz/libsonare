@@ -227,6 +227,11 @@ typedef enum {
   SONARE_ENGINE_WARP_MODE_OFF = 0,
   SONARE_ENGINE_WARP_MODE_REPITCH = 1,
   SONARE_ENGINE_WARP_MODE_TEMPO_SYNC = 2,
+  /* Realtime pitch-preserving warp. Follows the same anchor map as REPITCH but
+     synthesizes the output with an overlap-add stretcher, so a rate change
+     moves the timing without moving the pitch. No control-thread bake, so a new
+     anchor set takes effect from the next block. */
+  SONARE_ENGINE_WARP_MODE_TIME_STRETCH = 3,
 } SonareEngineWarpMode;
 
 typedef struct {

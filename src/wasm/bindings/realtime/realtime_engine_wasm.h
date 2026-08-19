@@ -110,6 +110,7 @@ class RealtimeEngineWasm {
   void setBuiltinInstrument(uint32_t destination_id, emscripten::val config);
   void setMidiClips(emscripten::val clips_val);
   void setSynthInstrument(uint32_t destination_id, emscripten::val patch);
+  double resolveInstrumentAutomationId(uint32_t destination_id, const std::string& param_name);
   void loadSoundFont(emscripten::val data);
   void setSf2Instrument(uint32_t destination_id, emscripten::val config);
 #if defined(SONARE_WITH_ARRANGEMENT)
@@ -203,6 +204,8 @@ class RealtimeEngineWasm {
   uint32_t clipPageRequestScratchClipId() const;
   double clipPageRequestScratchSample() const;
   uint32_t clipPageRequestOverflowCount() const;
+  void setClipPagePrefetchFrames(double frames);
+  double clipPagePrefetchFrames() const;
 
   // ---- Capture / recording (realtime_engine_capture.cpp) ---------------
   void setCaptureBuffer(int num_channels, int capacity_frames);

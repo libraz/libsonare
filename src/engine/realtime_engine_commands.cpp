@@ -7,6 +7,7 @@
 #include <utility>
 
 #include "engine/insert_automation_id.h"
+#include "engine/instrument_automation_id.h"
 #include "engine/realtime_engine.h"
 #include "engine/realtime_engine_internal.h"
 
@@ -58,7 +59,7 @@ bool RealtimeEngine::pop_telemetry(Telemetry& out) noexcept {
 
 bool RealtimeEngine::parameter_target_reserved(uint32_t target_id) noexcept {
   return (target_id & kEngineParamNamespaceMask) == kEngineParamNamespace ||
-         is_insert_param_id(target_id);
+         is_insert_param_id(target_id) || is_instrument_param_id(target_id);
 }
 
 #if defined(SONARE_WITH_GRAPH)
@@ -477,7 +478,7 @@ void RealtimeEngine::settle_parameters() noexcept {
     if (!slot.active) continue;
     const float target = slot.smoother.target();
     slot.smoother.reset(target);
-#if defined(SONARE_WITH_MIXING)
+#if defined(SONARE_WITH_MIXING) || defined(SONARE_WITH_ARRANGEMENT)
     if (parameter_target_reserved(slot.target_id)) {
       route_engine_parameter(slot.target_id, target);
     } else {
@@ -494,6 +495,9 @@ void RealtimeEngine::settle_parameters() noexcept {
   // Quiesce the engine-side monitor (solo/mute) smoothers and their strips so a
   // bounce that starts muted/soloed opens at the steady-state gain.
   monitor_runtime_.settle();
+#endif
+#if defined(SONARE_WITH_ARRANGEMENT)
+  settle_instrument_automations();
 #endif
 }
 
@@ -579,7 +583,7 @@ void RealtimeEngine::tick_smoothed_params(int num_steps) noexcept {
   for (SmoothedParam& slot : smoothed_params_) {
     if (!slot.active) continue;
     const float current = slot.smoother.advance(num_steps);
-#if defined(SONARE_WITH_MIXING)
+#if defined(SONARE_WITH_MIXING) || defined(SONARE_WITH_ARRANGEMENT)
     if (parameter_target_reserved(slot.target_id)) {
       if (!route_engine_parameter(slot.target_id, current)) {
         enqueue_error(TelemetryErrorCode::kUnknownTarget, transport_.render_frame(),
@@ -607,6 +611,11 @@ void RealtimeEngine::tick_smoothed_params(int num_steps) noexcept {
   // cadence and push them to the master inserts (lane/bus insert smoothers are
   // advanced inside the track mixer's own render path).
   advance_master_insert_automations(num_steps);
+#endif
+#if defined(SONARE_WITH_ARRANGEMENT)
+  // Hosted-instrument parameters ride the same sub-block cadence, so an
+  // instrument lane and a strip-insert lane land at the same resolution.
+  advance_instrument_automations(num_steps);
 #endif
 }
 

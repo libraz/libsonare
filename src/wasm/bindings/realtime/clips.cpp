@@ -47,6 +47,11 @@ class WasmClipPageProvider final : public sonare::engine::ClipPagedAudioProvider
     return found;
   }
 
+  bool page_resident(int64_t page_index) const noexcept override {
+    if (page_index < 0 || page_index >= static_cast<int64_t>(pages_.size())) return false;
+    return page_ptrs_[static_cast<size_t>(page_index)].load(std::memory_order_acquire) != nullptr;
+  }
+
   void supply(int64_t page_index, val channels_val) {
     if (page_index < 0 || page_index >= static_cast<int64_t>(pages_.size())) {
       throw sonare::SonareException(sonare::ErrorCode::InvalidParameter, "invalid page index");
@@ -256,6 +261,8 @@ void RealtimeEngineWasm::setClips(val clips) {
           schedule.warp_mode = sonare::engine::WarpMode::kRepitch;
         } else if (mode == "tempo-sync") {
           schedule.warp_mode = sonare::engine::WarpMode::kTempoSync;
+        } else if (mode == "time-stretch") {
+          schedule.warp_mode = sonare::engine::WarpMode::kTimeStretch;
         } else {
           throw sonare::SonareException(sonare::ErrorCode::InvalidParameter, "unknown warp mode");
         }
@@ -267,6 +274,8 @@ void RealtimeEngineWasm::setClips(val clips) {
           schedule.warp_mode = sonare::engine::WarpMode::kRepitch;
         } else if (mode == 2) {
           schedule.warp_mode = sonare::engine::WarpMode::kTempoSync;
+        } else if (mode == 3) {
+          schedule.warp_mode = sonare::engine::WarpMode::kTimeStretch;
         } else {
           throw sonare::SonareException(sonare::ErrorCode::InvalidParameter, "unknown warp mode");
         }
@@ -382,10 +391,11 @@ void RealtimeEngineWasm::setClips(val clips) {
       schedule.loop = false;
       schedule.warp_mode = sonare::engine::WarpMode::kOff;
       schedule.warp_anchors.reset();
-    } else if (schedule.warp_mode == sonare::engine::WarpMode::kRepitch && schedule.loop &&
-               schedule.warp_anchors && schedule.warp_anchors->size() >= 2) {
+    } else if ((schedule.warp_mode == sonare::engine::WarpMode::kRepitch ||
+                schedule.warp_mode == sonare::engine::WarpMode::kTimeStretch) &&
+               schedule.loop && schedule.warp_anchors && schedule.warp_anchors->size() >= 2) {
       throw sonare::SonareException(sonare::ErrorCode::InvalidParameter,
-                                    "repitch warped clips do not support loop=true yet");
+                                    "warped clips do not support loop=true yet");
     }
     schedules.push_back(schedule);
     new_clip_ids.push_back(schedule.id);
@@ -481,6 +491,23 @@ uint32_t RealtimeEngineWasm::clipPageRequestOverflowCount() const {
   return engine_.clip_page_request_overflow_count();
 }
 
+// Clip-page look-ahead: the player reports pages it is about to read that are
+// not resident yet, so a streaming host can service them before the audio
+// thread reaches them (a miss alone is only reported after the read already
+// rendered silence). Frames travel as a double so a long window survives the JS
+// boundary without an int32 truncation.
+void RealtimeEngineWasm::setClipPagePrefetchFrames(double frames) {
+  if (!(frames >= 0.0)) {
+    throw sonare::SonareException(sonare::ErrorCode::InvalidParameter,
+                                  "clip page prefetch frames must be >= 0");
+  }
+  engine_.set_clip_page_prefetch_frames(static_cast<int64_t>(frames));
+}
+
+double RealtimeEngineWasm::clipPagePrefetchFrames() const {
+  return static_cast<double>(engine_.clip_page_prefetch_frames());
+}
+
 void registerRealtimeEngineClips(class_<RealtimeEngineWasm>& cls) {
   cls.function("setClips", &RealtimeEngineWasm::setClips)
       .function("prebakedClipChannels", &RealtimeEngineWasm::prebakedClipChannels)
@@ -493,7 +520,9 @@ void registerRealtimeEngineClips(class_<RealtimeEngineWasm>& cls) {
       .function("popClipPageRequestToScratch", &RealtimeEngineWasm::popClipPageRequestToScratch)
       .function("clipPageRequestScratchClipId", &RealtimeEngineWasm::clipPageRequestScratchClipId)
       .function("clipPageRequestScratchSample", &RealtimeEngineWasm::clipPageRequestScratchSample)
-      .function("clipPageRequestOverflowCount", &RealtimeEngineWasm::clipPageRequestOverflowCount);
+      .function("clipPageRequestOverflowCount", &RealtimeEngineWasm::clipPageRequestOverflowCount)
+      .function("setClipPagePrefetchFrames", &RealtimeEngineWasm::setClipPagePrefetchFrames)
+      .function("clipPagePrefetchFrames", &RealtimeEngineWasm::clipPagePrefetchFrames);
 }
 
 #endif  // __EMSCRIPTEN__

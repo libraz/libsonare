@@ -653,7 +653,17 @@ describe('SonareRealtimeEngineWorkletProcessor', () => {
         });
         processor.receiveCommand({ type: SonareEngineCommandType.TransportPlay, sampleTime: -1 });
 
+        // The first block only reads the resident page 0, but the engine looks
+        // ahead of the playhead, so page 1 is requested before the block that
+        // needs it rather than after that block has already read silence.
         expect(processor.process([[]], [[new Float32Array(blockSize)]])).toBe(true);
+        expect(readSonareClipPageRequestRingBuffer(clipPageRequestRing)).toEqual({
+          requests: [{ clipId: 90, pageIndex: 1 }],
+          dropped: 0,
+        });
+        // The host has not delivered the page yet, so the block that actually
+        // reads it misses and re-requests. A host that keeps the newest request
+        // per clip coalesces the repeat.
         expect(processor.process([[]], [[new Float32Array(blockSize)]])).toBe(true);
         expect(readSonareClipPageRequestRingBuffer(clipPageRequestRing)).toEqual({
           requests: [{ clipId: 90, pageIndex: 1 }],

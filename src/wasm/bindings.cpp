@@ -55,6 +55,17 @@ constexpr bool capability_ffmpeg_enabled() {
 #endif
 }
 
+// True when hosted instruments expose continuously automatable parameters
+// (resolveInstrumentAutomationId). Tied to the arrangement/MIDI subsystem,
+// which owns the instrument rack.
+constexpr bool capability_instrument_param_automation_enabled() {
+#if defined(SONARE_BUILD_ARRANGEMENT) && SONARE_BUILD_ARRANGEMENT
+  return true;
+#else
+  return false;
+#endif
+}
+
 constexpr const char* capability_simd() {
 #if defined(__wasm_simd128__)
   return "wasm-simd128";
@@ -100,6 +111,7 @@ val js_capabilities() {
   features.set("mixing", capability_mixing_enabled());
   features.set("fx", capability_fx_enabled());
   features.set("ffmpeg", capability_ffmpeg_enabled());
+  features.set("instrumentParamAutomation", capability_instrument_param_automation_enabled());
   result.set("features", features);
 
   val decode = val::object();

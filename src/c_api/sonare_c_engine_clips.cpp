@@ -96,11 +96,13 @@ SonareError sonare_engine_set_clips(SonareRealtimeEngine* engine, const SonareEn
         clip.fade_out_samples < 0 ||
         (clip.warp_mode != SONARE_ENGINE_WARP_MODE_OFF &&
          clip.warp_mode != SONARE_ENGINE_WARP_MODE_REPITCH &&
-         clip.warp_mode != SONARE_ENGINE_WARP_MODE_TEMPO_SYNC) ||
+         clip.warp_mode != SONARE_ENGINE_WARP_MODE_TEMPO_SYNC &&
+         clip.warp_mode != SONARE_ENGINE_WARP_MODE_TIME_STRETCH) ||
         (paged && clip.warp_mode == SONARE_ENGINE_WARP_MODE_TEMPO_SYNC) ||
         (clip.warp_mode == SONARE_ENGINE_WARP_MODE_TEMPO_SYNC && clip.loop != 0) ||
-        (clip.warp_mode == SONARE_ENGINE_WARP_MODE_REPITCH && clip.loop != 0 &&
-         clip.warp_anchor_count >= 2) ||
+        ((clip.warp_mode == SONARE_ENGINE_WARP_MODE_REPITCH ||
+          clip.warp_mode == SONARE_ENGINE_WARP_MODE_TIME_STRETCH) &&
+         clip.loop != 0 && clip.warp_anchor_count >= 2) ||
         (clip.warp_anchor_count > 0 && !clip.warp_anchors)) {
       return SONARE_ERROR_INVALID_PARAMETER;
     }
@@ -186,10 +188,13 @@ SonareError sonare_engine_set_clips(SonareRealtimeEngine* engine, const SonareEn
     schedule.gain = clip.gain;
     schedule.fade_in_samples = clip.fade_in_samples;
     schedule.fade_out_samples = clip.fade_out_samples;
-    schedule.warp_mode = clip.warp_mode == SONARE_ENGINE_WARP_MODE_REPITCH
-                             ? engine::WarpMode::kRepitch
-                             : engine::WarpMode::kOff;
-    if (schedule.warp_mode == engine::WarpMode::kRepitch && clip.warp_anchor_count >= 2) {
+    schedule.warp_mode =
+        clip.warp_mode == SONARE_ENGINE_WARP_MODE_REPITCH        ? engine::WarpMode::kRepitch
+        : clip.warp_mode == SONARE_ENGINE_WARP_MODE_TIME_STRETCH ? engine::WarpMode::kTimeStretch
+                                                                 : engine::WarpMode::kOff;
+    if ((schedule.warp_mode == engine::WarpMode::kRepitch ||
+         schedule.warp_mode == engine::WarpMode::kTimeStretch) &&
+        clip.warp_anchor_count >= 2) {
       auto anchors = std::make_shared<std::vector<engine::WarpAnchor>>();
       anchors->reserve(clip.warp_anchor_count);
       for (size_t anchor_index = 0; anchor_index < clip.warp_anchor_count; ++anchor_index) {
@@ -268,5 +273,21 @@ SonareError sonare_engine_pop_clip_page_request(SonareRealtimeEngine* engine,
     *out_request = {};
     *out_has_request = 0;
   }
+  return SONARE_OK;
+}
+
+SonareError sonare_engine_set_clip_page_prefetch_frames(SonareRealtimeEngine* engine,
+                                                        int64_t frames) {
+  SONARE_C_API_ENTRY;
+  if (!engine || frames < 0) return SONARE_ERROR_INVALID_PARAMETER;
+  engine->engine.set_clip_page_prefetch_frames(frames);
+  return SONARE_OK;
+}
+
+SonareError sonare_engine_clip_page_prefetch_frames(SonareRealtimeEngine* engine,
+                                                    int64_t* out_frames) {
+  SONARE_C_API_ENTRY;
+  if (!engine || !out_frames) return SONARE_ERROR_INVALID_PARAMETER;
+  *out_frames = engine->engine.clip_page_prefetch_frames();
   return SONARE_OK;
 }

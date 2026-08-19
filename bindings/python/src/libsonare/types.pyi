@@ -33,6 +33,8 @@ class CapabilitiesFeatures(TypedDict):
     mixing: bool
     fx: bool
     ffmpeg: bool
+    # Key stays camelCase: capabilities() returns the C ABI JSON verbatim.
+    instrumentParamAutomation: bool
 
 class CapabilitiesDecode(TypedDict):
     builtin: list[str]

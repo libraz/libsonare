@@ -422,7 +422,19 @@ export interface ProjectLoopRecordingResult {
 
 /** Clip loop mode for {@link Project.setClipLoop}. */
 export type ProjectLoopMode = 'off' | 'loop' | 0 | 1;
-export type ProjectWarpMode = 'off' | 'repitch' | 'tempo-sync' | 0 | 1 | 2;
+/**
+ * How a clip follows its warp map.
+ *
+ * - `'off'` — no warping.
+ * - `'repitch'` — resample along the map, so a rate change moves the pitch with
+ *   the timing (tape-style).
+ * - `'tempo-sync'` — control-thread bake against the tempo map.
+ * - `'time-stretch'` — realtime pitch-preserving stretch. Follows the same map
+ *   as `'repitch'` but overlap-adds instead of resampling, so a new anchor set
+ *   takes effect from the next block with no re-bake. Falls back to `'repitch'`
+ *   behaviour when the stretcher's voice budget is exhausted.
+ */
+export type ProjectWarpMode = 'off' | 'repitch' | 'tempo-sync' | 'time-stretch' | 0 | 1 | 2 | 3;
 
 /**
  * Automation breakpoint interpolation for {@link ProjectAutomationPoint}.

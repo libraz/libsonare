@@ -1001,6 +1001,44 @@ def test_realtime_engine_renders_repitch_warped_clip() -> None:
         assert max(abs(sample) for sample in tempo_synced[0]) > 0.1
 
 
+def test_realtime_engine_renders_time_stretch_warped_clip_at_source_pitch() -> None:
+    sr = 48000
+    source_samples = 12000
+    output_samples = 24000
+    source = [0.5 * math.sin(2.0 * math.pi * 440.0 * i / sr) for i in range(source_samples)]
+    with RealtimeEngine(sample_rate=float(sr), max_block_size=output_samples) as engine:
+        engine.set_clips(
+            [
+                EngineClip(
+                    id=307,
+                    channels=[source],
+                    start_ppq=0.0,
+                    length_samples=output_samples,
+                    warp_mode="time-stretch",
+                    warp_anchors=[(0.0, 0.0), (float(output_samples), float(source_samples))],
+                )
+            ]
+        )
+        engine.play()
+        out = engine.process([[0.0] * output_samples])[0]
+
+    def power(hz: float) -> float:
+        """Goertzel: a resampling warp at half rate would move the tone to 220 Hz."""
+        w = 2.0 * math.pi * hz / sr
+        coeff = 2.0 * math.cos(w)
+        s1 = 0.0
+        s2 = 0.0
+        for i in range(4096, output_samples - 4096):
+            s0 = out[i] + coeff * s1 - s2
+            s2 = s1
+            s1 = s0
+        real = s1 - s2 * math.cos(w)
+        imag = s2 * math.sin(w)
+        return real * real + imag * imag
+
+    assert power(440.0) > 100.0 * power(220.0)
+
+
 def test_realtime_engine_warp_mode_validation_matches_project_helper() -> None:
     with RealtimeEngine(sample_rate=48000.0, max_block_size=4) as engine:
         engine.set_clips(

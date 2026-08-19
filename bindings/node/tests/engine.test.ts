@@ -1201,6 +1201,50 @@ describe('RealtimeEngine native binding', () => {
     tempoEngine.destroy();
   });
 
+  it('renders time-stretch warped clips at the source pitch', () => {
+    const sr = 48000;
+    const sourceSamples = 12000;
+    const outputSamples = 24000;
+    const source = new Float32Array(sourceSamples);
+    for (let i = 0; i < sourceSamples; i++) {
+      source[i] = 0.5 * Math.sin((2 * Math.PI * 440 * i) / sr);
+    }
+    const engine = new RealtimeEngine(sr, outputSamples);
+    engine.setClips([
+      {
+        id: 305,
+        channels: [source],
+        startPpq: 0,
+        lengthSamples: outputSamples,
+        warpMode: 'time-stretch',
+        warpAnchors: [
+          { warpSample: 0, sourceSample: 0 },
+          { warpSample: outputSamples, sourceSample: sourceSamples },
+        ],
+      },
+    ]);
+    engine.play();
+    const out = engine.process([new Float32Array(outputSamples)])[0];
+
+    // Goertzel: a resampling warp at half rate would move the tone to 220 Hz.
+    const power = (hz: number): number => {
+      const w = (2 * Math.PI * hz) / sr;
+      const coeff = 2 * Math.cos(w);
+      let s1 = 0;
+      let s2 = 0;
+      for (let i = 4096; i < outputSamples - 4096; i++) {
+        const s0 = out[i] + coeff * s1 - s2;
+        s2 = s1;
+        s1 = s0;
+      }
+      const real = s1 - s2 * Math.cos(w);
+      const imag = s2 * Math.sin(w);
+      return real * real + imag * imag;
+    };
+    expect(power(440)).toBeGreaterThan(100 * power(220));
+    engine.destroy();
+  });
+
   it('offline render matches repeated process output', () => {
     const frames = 256;
     const left = new Float32Array(frames);

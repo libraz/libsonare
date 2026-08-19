@@ -296,6 +296,16 @@ export interface SonareEngineSyncClipPageMessage {
   channels: Float32Array[];
 }
 
+/**
+ * Sets the worklet engine's clip-page look-ahead window in timeline frames, so
+ * the audio thread reports the pages it is about to read before it reads them.
+ * 0 disables the look-ahead.
+ */
+export interface SonareEngineSyncClipPagePrefetchFramesMessage {
+  type: 'syncClipPagePrefetchFrames';
+  frames: number;
+}
+
 /** Evicts one page after the main-thread sliding window advances. */
 export interface SonareEngineSyncClipPageClearMessage {
   type: 'syncClipPageClear';
@@ -596,6 +606,7 @@ export type SonareEngineSyncMessage =
   | SonareEngineSyncClipPageProviderMessage
   | SonareEngineSyncClipPageMessage
   | SonareEngineSyncClipPageClearMessage
+  | SonareEngineSyncClipPagePrefetchFramesMessage
   | SonareEngineSyncClipPageCommitMessage
   | SonareEngineSyncClipPageDestroyMessage
   | SonareEngineSyncMidiClipsMessage

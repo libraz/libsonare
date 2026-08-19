@@ -637,6 +637,14 @@ def configure_effects_engine_signatures(lib: ctypes.CDLL) -> None:
             ctypes.c_char_p,
             ctypes.POINTER(ctypes.c_uint32),
         ]
+    if hasattr(lib, "sonare_engine_resolve_instrument_automation_id"):
+        lib.sonare_engine_resolve_instrument_automation_id.restype = ctypes.c_int32
+        lib.sonare_engine_resolve_instrument_automation_id.argtypes = [
+            ctypes.c_void_p,
+            ctypes.c_uint32,
+            ctypes.c_char_p,
+            ctypes.POINTER(ctypes.c_uint32),
+        ]
     if hasattr(lib, "sonare_engine_set_midi_destination_external"):
         lib.sonare_engine_set_midi_destination_external.restype = ctypes.c_int32
         lib.sonare_engine_set_midi_destination_external.argtypes = [
@@ -689,6 +697,18 @@ def configure_effects_engine_signatures(lib: ctypes.CDLL) -> None:
         ctypes.POINTER(SonareClipPageRequest),
         ctypes.POINTER(ctypes.c_int),
     ]
+    if hasattr(lib, "sonare_engine_set_clip_page_prefetch_frames"):
+        lib.sonare_engine_set_clip_page_prefetch_frames.restype = ctypes.c_int32
+        lib.sonare_engine_set_clip_page_prefetch_frames.argtypes = [
+            ctypes.c_void_p,
+            ctypes.c_int64,
+        ]
+    if hasattr(lib, "sonare_engine_clip_page_prefetch_frames"):
+        lib.sonare_engine_clip_page_prefetch_frames.restype = ctypes.c_int32
+        lib.sonare_engine_clip_page_prefetch_frames.argtypes = [
+            ctypes.c_void_p,
+            ctypes.POINTER(ctypes.c_int64),
+        ]
     lib.sonare_engine_set_capture_buffer.restype = ctypes.c_int32
     lib.sonare_engine_set_capture_buffer.argtypes = [
         ctypes.c_void_p,

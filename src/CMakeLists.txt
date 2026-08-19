@@ -220,6 +220,10 @@ target_compile_definitions(sonare_core_objects PRIVATE
   SONARE_BUILD_MASTERING=$<IF:$<BOOL:${BUILD_MASTERING}>,1,0>
   SONARE_BUILD_MIXING=$<IF:$<BOOL:${BUILD_MIXING}>,1,0>
   SONARE_BUILD_FX=$<IF:$<BOOL:${BUILD_FX}>,1,0>
+  # The capability descriptor lives here, so it needs the arrangement flag even
+  # though this target does not link the arrangement/MIDI layer (that dependency
+  # runs the other way).
+  SONARE_BUILD_ARRANGEMENT=$<IF:$<BOOL:${BUILD_ARRANGEMENT}>,1,0>
 )
 
 add_library(sonare_core STATIC $<TARGET_OBJECTS:sonare_core_objects>)
@@ -477,9 +481,11 @@ set(SONARE_ENGINE_SOURCES
   engine/realtime_engine.cpp
   engine/realtime_engine_lifecycle.cpp
   engine/realtime_engine_commands.cpp
+  engine/realtime_engine_instruments.cpp
   engine/realtime_engine_midi.cpp
   engine/realtime_engine_mixing.cpp
   engine/tempo_sync.cpp
+  engine/warp_stretch.cpp
 )
 if(BUILD_GRAPH)
   list(APPEND SONARE_ENGINE_SOURCES engine/graph_runtime.cpp)
@@ -689,6 +695,7 @@ if(BUILD_ARRANGEMENT)
     midi/synth/vocal_voice.cpp
     midi/synth/free_reed_voice.cpp
     midi/synth/native_synth_patch.cpp
+    midi/synth/native_synth_params.cpp
     midi/synth/native_synth_voice.cpp
     midi/synth/native_synth_live_control.cpp
     midi/synth/native_synth.cpp
@@ -1054,6 +1061,7 @@ if(BUILD_WASM)
     SONARE_BUILD_MASTERING=$<IF:$<BOOL:${BUILD_MASTERING}>,1,0>
     SONARE_BUILD_MIXING=$<IF:$<BOOL:${BUILD_MIXING}>,1,0>
     SONARE_BUILD_FX=$<IF:$<BOOL:${BUILD_FX}>,1,0>
+    SONARE_BUILD_ARRANGEMENT=$<IF:$<BOOL:${BUILD_ARRANGEMENT}>,1,0>
     $<$<BOOL:${SONARE_WASM_ANALYSIS_ONLY}>:SONARE_WASM_ANALYSIS_ONLY=1>
   )
   if(NOT SONARE_WASM_ANALYSIS_ONLY)

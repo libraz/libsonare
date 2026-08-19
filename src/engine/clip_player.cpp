@@ -51,6 +51,17 @@ void ClipBoundaryList::sort_unique() noexcept {
 void ClipPlayer::prepare(double sample_rate, int max_block_size) {
   sample_rate_ = sample_rate > 0.0 ? sample_rate : 48000.0;
   max_block_size_ = std::max(max_block_size, 1);
+  // Every stretcher buffer is sized here so the audio thread never allocates.
+  // The voices are preallocated whether or not the session actually warps, in
+  // exchange for a fixed footprint that does not depend on the clip set.
+  stretch_scratch_capacity_ = max_block_size_;
+  for (auto& channel : stretch_scratch_) {
+    channel.assign(static_cast<size_t>(stretch_scratch_capacity_), 0.0f);
+  }
+  for (auto& voice : stretch_voices_) {
+    voice.prepare(max_block_size_, WarpStretchVoice::kMaxChannels);
+  }
+  stretch_overflow_count_ = 0;
 }
 
 void ClipPlayer::process(float* const* channels, int num_channels, int num_samples) {
@@ -148,6 +159,11 @@ void ClipPlayer::process_filtered_at(uint32_t track_id, const uint32_t* track_id
 
     const int start = static_cast<int>(std::max<int64_t>(0, clip.start_sample - timeline_sample));
     const int end = static_cast<int>(std::min<int64_t>(num_samples, clip_end - timeline_sample));
+    if (clip.warp_mode == WarpMode::kTimeStretch &&
+        render_stretched(clip, channels, num_channels, start, end, timeline_sample)) {
+      prefetch_pages(clip, block_end);
+      continue;
+    }
     for (int i = start; i < end; ++i) {
       const int64_t sample = numeric::saturating_add(timeline_sample, static_cast<int64_t>(i));
       const int64_t position = sample - clip.start_sample;
@@ -193,6 +209,9 @@ void ClipPlayer::process_filtered_at(uint32_t track_id, const uint32_t* track_id
         channels[ch][i] += read_source(src_ch) * ch_gain;
       }
     }
+    // Look-ahead AFTER the block's own reads, so a genuine miss for the current
+    // page is queued before the requests for the pages still to come.
+    prefetch_pages(clip, block_end);
   }
   if (scoped_page_miss_block) end_page_miss_block();
 }
@@ -323,7 +342,8 @@ ClipPlayer::LoopRead ClipPlayer::resolve_loop_read(const ClipSchedule& clip,
   // a non-first comp part reads too far into the source. A whole clip leaves both
   // offsets at 0, so the warped and non-warped paths agree.
   const bool warp_active =
-      clip.warp_mode == WarpMode::kRepitch && clip.warp_anchors && clip.warp_anchors->size() >= 2;
+      (clip.warp_mode == WarpMode::kRepitch || clip.warp_mode == WarpMode::kTimeStretch) &&
+      clip.warp_anchors && clip.warp_anchors->size() >= 2;
   // Under active warp the source read is driven entirely by the warp map, so
   // clip_offset_samples is NOT consumed here — subtracting it (as the non-warp path
   // does) would wrongly drive source_len <= 0 and silence a comp part whose
@@ -388,6 +408,96 @@ void ClipPlayer::begin_page_miss_block() noexcept {
   external_page_miss_block_ = true;
   page_miss_cache_size_ = 0;
   page_miss_cache_overflowed_ = false;
+  // Age the stretcher voices once per block. render() zeroes the counter for
+  // every voice it touches, so what is left carries how long a voice has been
+  // unused and drives eviction when a new warped clip needs a slot.
+  for (auto& voice : stretch_voices_) {
+    voice.mark_idle();
+  }
+}
+
+float ClipPlayer::stretch_read_thunk(void* context, int channel, int64_t sample) noexcept {
+  auto* ctx = static_cast<StretchContext*>(context);
+  return ctx->player->sample_channel(*ctx->clip, channel, static_cast<double>(sample));
+}
+
+double ClipPlayer::stretch_map_thunk(void* context, int64_t clip_local_output) noexcept {
+  auto* ctx = static_cast<StretchContext*>(context);
+  // The stretcher works in clip-local output positions; resolve_loop_read takes
+  // timeline samples, so the same warp map, loop wrap and offset rules apply
+  // here as on the resampling path.
+  const LoopRead read = resolve_loop_read(*ctx->clip, ctx->clip->start_sample + clip_local_output);
+  return read.pos >= 0.0 ? read.pos : 0.0;
+}
+
+WarpStretchVoice* ClipPlayer::acquire_stretch_voice(uint32_t clip_id) noexcept {
+  WarpStretchVoice* free_slot = nullptr;
+  WarpStretchVoice* oldest = nullptr;
+  for (auto& voice : stretch_voices_) {
+    if (voice.active() && voice.clip_id() == clip_id) return &voice;
+    if (!voice.active()) {
+      if (!free_slot) free_slot = &voice;
+      continue;
+    }
+    if (!oldest || voice.idle_blocks() > oldest->idle_blocks()) oldest = &voice;
+  }
+  if (free_slot) return free_slot;
+  // Only evict a voice that produced nothing this block. Stealing one that is
+  // still streaming would swap two clips' overlap state mid-note, which is a
+  // far worse artefact than the resampling fallback.
+  if (oldest && oldest->idle_blocks() > 0) return oldest;
+  ++stretch_overflow_count_;
+  return nullptr;
+}
+
+bool ClipPlayer::render_stretched(const ClipSchedule& clip, float* const* channels,
+                                  int num_channels, int start, int end,
+                                  int64_t timeline_sample) noexcept {
+  const int count = end - start;
+  if (count <= 0 || count > stretch_scratch_capacity_) return false;
+  const int source_channels = source_channel_count(clip);
+  // A source wider than the stretcher's state would have to be folded down,
+  // which silently changes the mix; fall back instead.
+  if (source_channels <= 0 || source_channels > WarpStretchVoice::kMaxChannels) return false;
+  WarpStretchVoice* voice = acquire_stretch_voice(clip.id);
+  if (!voice) return false;
+
+  StretchContext context{this, &clip};
+  float* scratch[WarpStretchVoice::kMaxChannels] = {nullptr, nullptr};
+  for (int ch = 0; ch < source_channels; ++ch) {
+    scratch[ch] = stretch_scratch_[static_cast<size_t>(ch)].data();
+  }
+  const int64_t output_start =
+      numeric::saturating_add(timeline_sample, static_cast<int64_t>(start)) - clip.start_sample;
+  if (!voice->render(clip.id, output_start, count, scratch, source_channels,
+                     &ClipPlayer::stretch_read_thunk, &ClipPlayer::stretch_map_thunk, &context)) {
+    return false;
+  }
+
+  const int last_src = source_channels - 1;
+  for (int i = 0; i < count; ++i) {
+    const int64_t position =
+        numeric::saturating_add(timeline_sample, static_cast<int64_t>(start + i)) -
+        clip.start_sample;
+    const float gain = clip.gain * fade_gain(clip, position);
+    if (num_channels == 1) {
+      if (!channels[0]) continue;
+      // Same mono fold as the resampling path: render the panned stereo pair
+      // and downmix, so live mono monitoring matches the mono bounce.
+      float lr = 0.0f;
+      for (int ch = 0; ch < 2; ++ch) {
+        lr += scratch[std::min(ch, last_src)][i] * pan_channel_gain(clip.pan, ch);
+      }
+      channels[0][start + i] += 0.5f * lr * gain;
+      continue;
+    }
+    for (int ch = 0; ch < num_channels; ++ch) {
+      if (!channels[ch]) continue;
+      const float ch_gain = gain * pan_channel_gain(clip.pan, ch);
+      channels[ch][start + i] += scratch[std::min(ch, last_src)][i] * ch_gain;
+    }
+  }
+  return true;
 }
 
 void ClipPlayer::notify_page_miss(const ClipSchedule& clip, int src_ch, int64_t sample) noexcept {
@@ -409,6 +519,52 @@ void ClipPlayer::notify_page_miss(const ClipSchedule& clip, int src_ch, int64_t 
     }
   }
   page_request_sink_->on_clip_page_miss({clip.id, channel, sample});
+}
+
+void ClipPlayer::prefetch_pages(const ClipSchedule& clip, int64_t block_end_sample) noexcept {
+  const int64_t lookahead = page_prefetch_frames_.load(std::memory_order_relaxed);
+  if (lookahead <= 0 || !clip.page_provider || page_request_sink_ == nullptr) return;
+  const int64_t page_frames = std::max<int64_t>(clip.page_provider->page_frames(), 1);
+  const int64_t source_len = source_sample_count(clip);
+  if (source_len <= 0) return;
+  const int64_t clip_end = numeric::saturating_add(clip.start_sample, clip.length_samples);
+  const int64_t window_end =
+      std::min(clip_end, numeric::saturating_add(block_end_sample, lookahead));
+  if (window_end <= block_end_sample) return;
+
+  // Probe on a half-page stride so no whole page between two probes can be
+  // skipped at unity playback rate, and bound the probe count so a long
+  // look-ahead over a small page size cannot make the pass unbounded.
+  constexpr int kMaxProbes = 32;
+  const int64_t stride = std::max<int64_t>(page_frames / 2, 1);
+  int64_t last_page = -1;
+  int64_t timeline = block_end_sample;
+  for (int probe = 0; probe < kMaxProbes; ++probe) {
+    if (probe > 0) {
+      timeline = numeric::saturating_add(timeline, stride);
+      if (timeline >= window_end) timeline = window_end - 1;
+    }
+    const LoopRead read = resolve_loop_read(clip, timeline);
+    if (!(read.pos >= 0.0) || read.pos >= static_cast<double>(source_len)) break;
+    const int64_t sample = static_cast<int64_t>(read.pos);
+    const int64_t page_index = sample / page_frames;
+    // Stop at the first non-monotonic step. A looping clip wraps its source
+    // position back to the loop start inside the window; continuing past the
+    // wrap would report a LOW page as the newest request, which a host that
+    // tracks the newest request per clip reads as a backward seek and services
+    // by evicting the window it just built. The wrap page is still fetched
+    // through the ordinary read-then-miss path.
+    if (last_page >= 0 && page_index < last_page) break;
+    if (page_index != last_page && !clip.page_provider->page_resident(page_index)) {
+      // One request per page, not per channel: a provider page carries every
+      // channel, so a per-channel fan-out would only multiply identical
+      // requests. Channel 0 shares the dedupe cache with genuine misses, so a
+      // page already requested this block is not requested twice.
+      notify_page_miss(clip, 0, sample);
+    }
+    last_page = page_index;
+    if (timeline >= window_end - 1) break;
+  }
 }
 
 float ClipPlayer::sample_channel(const ClipSchedule& clip, int src_ch, double source_pos) noexcept {

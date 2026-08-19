@@ -61,6 +61,11 @@ class CClipPageProvider final : public sonare::engine::ClipPagedAudioProvider {
     return found;
   }
 
+  bool page_resident(int64_t page_index) const noexcept override {
+    if (page_index < 0 || page_index >= page_count()) return false;
+    return page_ptrs_[static_cast<size_t>(page_index)].load(std::memory_order_acquire) != nullptr;
+  }
+
   bool supply(int64_t page_index, const float* const* channels, int channel_count, int64_t frames) {
     if (page_index < 0 || page_index >= page_count() || !channels || channel_count != channels_ ||
         frames <= 0 || frames > page_frames_) {

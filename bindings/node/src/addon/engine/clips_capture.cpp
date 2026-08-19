@@ -33,14 +33,16 @@ int ParseWarpMode(Napi::Env env, const Napi::Value& value) {
     if (mode == "off") return SONARE_ENGINE_WARP_MODE_OFF;
     if (mode == "repitch") return SONARE_ENGINE_WARP_MODE_REPITCH;
     if (mode == "tempo-sync") return SONARE_ENGINE_WARP_MODE_TEMPO_SYNC;
+    if (mode == "time-stretch") return SONARE_ENGINE_WARP_MODE_TIME_STRETCH;
   } else if (value.IsNumber()) {
     const int mode = value.As<Napi::Number>().Int32Value();
     if (mode == SONARE_ENGINE_WARP_MODE_OFF || mode == SONARE_ENGINE_WARP_MODE_REPITCH ||
-        mode == SONARE_ENGINE_WARP_MODE_TEMPO_SYNC) {
+        mode == SONARE_ENGINE_WARP_MODE_TEMPO_SYNC ||
+        mode == SONARE_ENGINE_WARP_MODE_TIME_STRETCH) {
       return mode;
     }
   }
-  Napi::TypeError::New(env, "warpMode must be 'off', 'repitch', or 'tempo-sync'")
+  Napi::TypeError::New(env, "warpMode must be 'off', 'repitch', 'tempo-sync', or 'time-stretch'")
       .ThrowAsJavaScriptException();
   return SONARE_ENGINE_WARP_MODE_OFF;
 }
@@ -479,6 +481,21 @@ Napi::Value RealtimeEngineWrap::ResolveBusInsertAutomationId(const Napi::Callbac
   return Napi::Number::New(env, static_cast<double>(out_id));
 }
 
+Napi::Value RealtimeEngineWrap::ResolveInstrumentAutomationId(const Napi::CallbackInfo& info) {
+  Napi::Env env = info.Env();
+  const uint32_t destination_id = info.Length() > 0 ? info[0].As<Napi::Number>().Uint32Value() : 0;
+  std::string param_name = info.Length() > 1 ? info[1].As<Napi::String>().Utf8Value() : "";
+  uint32_t out_id = 0;
+  const SonareError err = sonare_engine_resolve_instrument_automation_id(
+      engine_, destination_id, param_name.c_str(), &out_id);
+  if (err == SONARE_ERROR_INVALID_PARAMETER) {
+    return Napi::Number::New(env, -1.0);
+  }
+  ThrowIfError(env, err);
+  if (env.IsExceptionPending()) return env.Undefined();
+  return Napi::Number::New(env, static_cast<double>(out_id));
+}
+
 Napi::Value RealtimeEngineWrap::SetTrackStripPan(const Napi::CallbackInfo& info) {
   Napi::Env env = info.Env();
   const uint32_t track_id = info.Length() > 0 ? info[0].As<Napi::Number>().Uint32Value() : 0;
@@ -621,6 +638,27 @@ Napi::Value RealtimeEngineWrap::PopClipPageRequest(const Napi::CallbackInfo& inf
   out.Set("channel", Napi::Number::New(env, request.channel));
   out.Set("sample", Napi::Number::New(env, static_cast<double>(request.sample)));
   return out;
+}
+
+Napi::Value RealtimeEngineWrap::SetClipPagePrefetchFrames(const Napi::CallbackInfo& info) {
+  Napi::Env env = info.Env();
+  const double frames = info.Length() > 0 ? info[0].As<Napi::Number>().DoubleValue() : 0.0;
+  if (!(frames >= 0.0)) {
+    Napi::TypeError::New(env, "clip page prefetch frames must be >= 0")
+        .ThrowAsJavaScriptException();
+    return env.Undefined();
+  }
+  ThrowIfError(env,
+               sonare_engine_set_clip_page_prefetch_frames(engine_, static_cast<int64_t>(frames)));
+  return env.Undefined();
+}
+
+Napi::Value RealtimeEngineWrap::ClipPagePrefetchFrames(const Napi::CallbackInfo& info) {
+  Napi::Env env = info.Env();
+  int64_t frames = 0;
+  ThrowIfError(env, sonare_engine_clip_page_prefetch_frames(engine_, &frames));
+  if (env.IsExceptionPending()) return env.Undefined();
+  return Napi::Number::New(env, static_cast<double>(frames));
 }
 
 Napi::Value RealtimeEngineWrap::SetCaptureBuffer(const Napi::CallbackInfo& info) {

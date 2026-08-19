@@ -11,6 +11,7 @@
 #include <type_traits>
 #include <vector>
 
+#include "engine/warp_stretch.h"
 #include "rt/processor_base.h"
 #include "rt/rt_publisher.h"
 #include "transport/tempo_map.h"
@@ -55,6 +56,18 @@ class ClipPagedAudioProvider {
   virtual int64_t num_samples() const noexcept = 0;
   virtual int64_t page_frames() const noexcept { return 1; }
   virtual bool sample_at(int channel, int64_t sample, float* out) const noexcept = 0;
+  /// True when reading page @p page_index would NOT miss. Answers the player's
+  /// look-ahead pass, which reports a page request BEFORE the audio thread
+  /// reaches that page rather than after it already read silence there.
+  ///
+  /// Must be as cheap and as RT-safe as sample_at(). The default returns true
+  /// ("assume resident"), which keeps a provider that cannot answer out of the
+  /// look-ahead path entirely: it never emits a prefetch request and behaves
+  /// exactly as before.
+  virtual bool page_resident(int64_t page_index) const noexcept {
+    (void)page_index;
+    return true;
+  }
 };
 
 struct ClipPageRequest {
@@ -76,6 +89,12 @@ enum class WarpMode : uint32_t {
   kOff = 0,
   kRepitch = 1,
   kTempoSync = 2,
+  /// Realtime pitch-preserving warp. Follows the same anchor map as kRepitch,
+  /// but synthesizes the output with a WSOLA overlap-add instead of resampling,
+  /// so a rate change moves the timing without moving the pitch. Falls back to
+  /// kRepitch behaviour when no stretcher voice is free or the source has more
+  /// channels than the stretcher handles.
+  kTimeStretch = 3,
 };
 
 struct WarpAnchor {
@@ -169,6 +188,17 @@ class ClipPlayer final : public rt::ProcessorBase {
   void set_tempo_map(const transport::TempoMap* tempo_map) noexcept;
   void set_timeline_sample(int64_t timeline_sample) noexcept { timeline_sample_ = timeline_sample; }
   void set_page_request_sink(ClipPageRequestSink* sink) noexcept { page_request_sink_ = sink; }
+  /// Timeline frames of look-ahead used to request clip pages BEFORE the audio
+  /// thread reads them. 0 disables the look-ahead entirely, leaving only the
+  /// historical read-then-miss reporting (which necessarily renders one block of
+  /// silence at every page the host has not resident yet). Safe to change while
+  /// audio runs.
+  void set_page_prefetch_frames(int64_t frames) noexcept {
+    page_prefetch_frames_.store(std::max<int64_t>(frames, 0), std::memory_order_relaxed);
+  }
+  int64_t page_prefetch_frames() const noexcept {
+    return page_prefetch_frames_.load(std::memory_order_relaxed);
+  }
   void begin_page_miss_block() noexcept;
   void end_page_miss_block() noexcept { external_page_miss_block_ = false; }
   void set_clips(std::vector<ClipSchedule> clips,
@@ -194,6 +224,11 @@ class ClipPlayer final : public rt::ProcessorBase {
 
   size_t clip_count() const noexcept;
 
+  /// Number of blocks in which a @c WarpMode::kTimeStretch clip could not be
+  /// given a stretcher voice and fell back to resampling. Monotonic; read from
+  /// the control thread for telemetry.
+  uint32_t warp_stretch_overflow_count() const noexcept { return stretch_overflow_count_; }
+
  private:
   // Curves come from the clip itself (fade_in_curve / fade_out_curve), so no
   // curve parameter: the legacy single fade_curve field is not consulted here.
@@ -214,7 +249,29 @@ class ClipPlayer final : public rt::ProcessorBase {
   static int source_channel_count(const ClipSchedule& clip) noexcept;
   static int64_t source_sample_count(const ClipSchedule& clip) noexcept;
   void notify_page_miss(const ClipSchedule& clip, int src_ch, int64_t sample) noexcept;
+  /// Reports the pages this clip will read over the look-ahead window that are
+  /// not resident yet. Runs after the block is rendered, so its requests land
+  /// behind this block's genuine misses in the queue and a host that keeps only
+  /// the newest request per clip therefore tracks the look-ahead frontier.
+  void prefetch_pages(const ClipSchedule& clip, int64_t block_end_sample) noexcept;
   float sample_channel(const ClipSchedule& clip, int src_ch, double source_pos) noexcept;
+  /// Context handed to the stretcher's reader / mapper thunks. Stack-allocated
+  /// per clip per block; nothing here outlives the render call.
+  struct StretchContext {
+    ClipPlayer* player;
+    const ClipSchedule* clip;
+  };
+  static float stretch_read_thunk(void* context, int channel, int64_t sample) noexcept;
+  static double stretch_map_thunk(void* context, int64_t clip_local_output) noexcept;
+  /// Returns the voice already streaming @p clip_id, else a free one, else the
+  /// longest-idle one. Null when every voice is busy with a different clip this
+  /// block, which is the caller's signal to fall back to resampling.
+  WarpStretchVoice* acquire_stretch_voice(uint32_t clip_id) noexcept;
+  /// Renders the block range [start, end) of a kTimeStretch clip. Returns false
+  /// when the stretcher cannot take the clip, leaving the output untouched so
+  /// the caller can run the ordinary resampling path instead.
+  bool render_stretched(const ClipSchedule& clip, float* const* channels, int num_channels,
+                        int start, int end, int64_t timeline_sample) noexcept;
   enum class TrackFilterMode {
     kAll,
     kOnlyTrack,
@@ -230,6 +287,15 @@ class ClipPlayer final : public rt::ProcessorBase {
     int64_t page_index = -1;
   };
 
+  /// Preallocated stretcher voices. Eight covers the realistic "a few warped
+  /// clips overlap" case; beyond that a clip falls back to resampling rather
+  /// than allocating on the audio thread.
+  static constexpr size_t kMaxWarpedClips = 8;
+  std::array<WarpStretchVoice, kMaxWarpedClips> stretch_voices_{};
+  std::array<std::vector<float>, WarpStretchVoice::kMaxChannels> stretch_scratch_{};
+  int stretch_scratch_capacity_ = 0;
+  uint32_t stretch_overflow_count_ = 0;
+
   double sample_rate_ = 48000.0;
   int max_block_size_ = 0;
   int64_t timeline_sample_ = 0;
@@ -238,6 +304,7 @@ class ClipPlayer final : public rt::ProcessorBase {
   size_t page_miss_cache_size_ = 0;
   bool page_miss_cache_overflowed_ = false;
   bool external_page_miss_block_ = false;
+  std::atomic<int64_t> page_prefetch_frames_{0};
   const transport::TempoMap* tempo_map_ = nullptr;
   mutable rt::RtPublisher<std::vector<ClipSchedule>> clips_;
   // Published by set_clips() on the control thread; read lock-free by

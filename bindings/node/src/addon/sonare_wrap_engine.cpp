@@ -185,6 +185,8 @@ Napi::Object RealtimeEngineWrap::Init(Napi::Env env, Napi::Object exports) {
               "resolveMasterInsertAutomationId"),
           InstanceMethod<&RealtimeEngineWrap::ResolveBusInsertAutomationId>(
               "resolveBusInsertAutomationId"),
+          InstanceMethod<&RealtimeEngineWrap::ResolveInstrumentAutomationId>(
+              "resolveInstrumentAutomationId"),
           InstanceMethod<&RealtimeEngineWrap::SetTrackStripPan>("setTrackStripPan"),
           InstanceMethod<&RealtimeEngineWrap::SetTrackStripPanLaw>("setTrackStripPanLaw"),
           InstanceMethod<&RealtimeEngineWrap::SetTrackStripPanMode>("setTrackStripPanMode"),
@@ -196,6 +198,9 @@ Napi::Object RealtimeEngineWrap::Init(Napi::Env env, Napi::Object exports) {
           InstanceMethod<&RealtimeEngineWrap::ClearClipPage>("clearClipPage"),
           InstanceMethod<&RealtimeEngineWrap::DestroyClipPageProvider>("destroyClipPageProvider"),
           InstanceMethod<&RealtimeEngineWrap::PopClipPageRequest>("popClipPageRequest"),
+          InstanceMethod<&RealtimeEngineWrap::SetClipPagePrefetchFrames>(
+              "setClipPagePrefetchFrames"),
+          InstanceMethod<&RealtimeEngineWrap::ClipPagePrefetchFrames>("clipPagePrefetchFrames"),
           InstanceMethod<&RealtimeEngineWrap::SetCaptureBuffer>("setCaptureBuffer"),
           InstanceMethod<&RealtimeEngineWrap::ArmCapture>("armCapture"),
           InstanceMethod<&RealtimeEngineWrap::SetCapturePunch>("setCapturePunch"),

@@ -889,7 +889,8 @@ SonareError sonare_project_set_clip_warp_mode(SonareProject* project, uint32_t c
 #if defined(SONARE_WITH_ARRANGEMENT)
   if (!project || clip_id == 0) return SONARE_ERROR_INVALID_PARAMETER;
   if (mode != SONARE_PROJECT_WARP_MODE_OFF && mode != SONARE_PROJECT_WARP_MODE_REPITCH &&
-      mode != SONARE_PROJECT_WARP_MODE_TEMPO_SYNC) {
+      mode != SONARE_PROJECT_WARP_MODE_TEMPO_SYNC &&
+      mode != SONARE_PROJECT_WARP_MODE_TIME_STRETCH) {
     return SONARE_ERROR_INVALID_PARAMETER;
   }
   if (project->history.project().find_clip(clip_id) == nullptr) {
@@ -901,6 +902,8 @@ SonareError sonare_project_set_clip_warp_mode(SonareProject* project, uint32_t c
     arr_mode = arr::WarpMode::kRepitch;
   } else if (mode == SONARE_PROJECT_WARP_MODE_TEMPO_SYNC) {
     arr_mode = arr::WarpMode::kTempoSync;
+  } else if (mode == SONARE_PROJECT_WARP_MODE_TIME_STRETCH) {
+    arr_mode = arr::WarpMode::kTimeStretch;
   }
   auto command = std::make_unique<arr::SetClipWarpMode>(clip_id, arr_mode);
   if (!project->history.apply(std::move(command))) return SONARE_ERROR_INVALID_STATE;

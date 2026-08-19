@@ -184,6 +184,27 @@ SonareError sonare_engine_set_synth_instrument(SonareRealtimeEngine* engine,
 #endif
 }
 
+SonareError sonare_engine_resolve_instrument_automation_id(SonareRealtimeEngine* engine,
+                                                           uint32_t destination_id,
+                                                           const char* param_name,
+                                                           uint32_t* out_id) {
+  SONARE_C_API_ENTRY;
+  if (!engine || !param_name || param_name[0] == '\0' || !out_id) {
+    return SONARE_ERROR_INVALID_PARAMETER;
+  }
+#if !defined(SONARE_WITH_ARRANGEMENT)
+  (void)destination_id;
+  return SONARE_ERROR_NOT_SUPPORTED;
+#else
+  SONARE_C_TRY
+  const int64_t id = engine->engine.resolve_instrument_automation_id(destination_id, param_name);
+  if (id < 0) return SONARE_ERROR_INVALID_PARAMETER;
+  *out_id = static_cast<uint32_t>(id);
+  return SONARE_OK;
+  SONARE_C_CATCH
+#endif
+}
+
 SonareError sonare_engine_load_soundfont(SonareRealtimeEngine* engine, const uint8_t* data,
                                          size_t size) {
   SONARE_C_API_ENTRY;

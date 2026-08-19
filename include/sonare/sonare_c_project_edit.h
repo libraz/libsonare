@@ -147,6 +147,8 @@ typedef enum {
   SONARE_PROJECT_WARP_MODE_OFF = 0,
   SONARE_PROJECT_WARP_MODE_REPITCH = 1,
   SONARE_PROJECT_WARP_MODE_TEMPO_SYNC = 2,
+  /* Realtime pitch-preserving warp; see SONARE_ENGINE_WARP_MODE_TIME_STRETCH. */
+  SONARE_PROJECT_WARP_MODE_TIME_STRETCH = 3,
 } SonareProjectWarpMode;
 
 /// @brief First-class project warp-map descriptor.

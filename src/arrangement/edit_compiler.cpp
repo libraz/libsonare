@@ -39,6 +39,8 @@ engine::WarpMode to_engine_warp_mode(WarpMode mode) noexcept {
       return engine::WarpMode::kTempoSync;
     case WarpMode::kRepitch:
       return engine::WarpMode::kRepitch;
+    case WarpMode::kTimeStretch:
+      return engine::WarpMode::kTimeStretch;
     case WarpMode::kOff:
     default:
       return engine::WarpMode::kOff;
@@ -666,7 +668,8 @@ CompileResult compile(const Project& project, const MidiContentStore& midi,
       const WarpRefId baked_warp_ref = samples != nullptr ? clip.warp_ref_id : 0;
       const WarpMapRef* rt_warp_map =
           (baked_warp_ref == 0 &&
-           (clip.warp_mode == WarpMode::kRepitch || clip.warp_mode == WarpMode::kTempoSync) &&
+           (clip.warp_mode == WarpMode::kRepitch || clip.warp_mode == WarpMode::kTempoSync ||
+            clip.warp_mode == WarpMode::kTimeStretch) &&
            clip.warp_ref_id != 0)
               ? project.find_warp_map(clip.warp_ref_id)
               : nullptr;
@@ -681,10 +684,10 @@ CompileResult compile(const Project& project, const MidiContentStore& midi,
                  clip.id, "clip references a tempo-sync warp map that is not registered");
         continue;
       }
-      if (clip.warp_mode == WarpMode::kRepitch && clip.warp_ref_id != 0 && baked_warp_ref == 0 &&
-          rt_warp_map == nullptr) {
+      if ((clip.warp_mode == WarpMode::kRepitch || clip.warp_mode == WarpMode::kTimeStretch) &&
+          clip.warp_ref_id != 0 && baked_warp_ref == 0 && rt_warp_map == nullptr) {
         add_diag(&result, Diagnostic::Code::kDanglingSourceRef, Diagnostic::Severity::kError,
-                 clip.id, "clip references a repitch warp map that is not registered");
+                 clip.id, "clip references a realtime warp map that is not registered");
         continue;
       }
       if (samples == nullptr) {

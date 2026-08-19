@@ -156,6 +156,23 @@ void RealtimeEngineWasm::setSynthInstrument(uint32_t destination_id, val patch) 
 #endif
 }
 
+// Resolves a hosted instrument's continuous parameter (JSON-key name, e.g.
+// "cutoffHz") to the reserved instrument-automation id passed to
+// setAutomationLane / setParameter. Returns -1 when the destination has no
+// bound instrument, the instrument exposes no automatable parameters, or the
+// key is unknown. Like the insert resolvers, the id is returned as a double so
+// the full 32-bit unsigned reserved id survives the JS boundary.
+double RealtimeEngineWasm::resolveInstrumentAutomationId(uint32_t destination_id,
+                                                         const std::string& param_name) {
+#if defined(SONARE_WITH_ARRANGEMENT)
+  return static_cast<double>(engine_.resolve_instrument_automation_id(destination_id, param_name));
+#else
+  (void)destination_id;
+  (void)param_name;
+  return -1.0;
+#endif
+}
+
 // Loads (parses) SoundFont 2 bytes into the engine so SF2 instruments can be
 // bound with setSf2Instrument. The host copies the .sf2 bytes into linear
 // memory as a Uint8Array; they are not referenced after the call. Replaces
@@ -709,6 +726,7 @@ void registerRealtimeEngineMidi(class_<RealtimeEngineWasm>& cls) {
   cls.function("setMidiClips", &RealtimeEngineWasm::setMidiClips)
       .function("setBuiltinInstrument", &RealtimeEngineWasm::setBuiltinInstrument)
       .function("setSynthInstrument", &RealtimeEngineWasm::setSynthInstrument)
+      .function("resolveInstrumentAutomationId", &RealtimeEngineWasm::resolveInstrumentAutomationId)
       .function("loadSoundFont", &RealtimeEngineWasm::loadSoundFont)
       .function("setSf2Instrument", &RealtimeEngineWasm::setSf2Instrument)
       .function("clearMidiInstrument", &RealtimeEngineWasm::clearMidiInstrument)

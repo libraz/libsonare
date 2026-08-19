@@ -143,6 +143,53 @@ class _EngineMidiMixin:
             )
         )
 
+    def resolve_instrument_automation_id(self, param_name: str, destination_id: int = 0) -> int:
+        """Resolve a hosted instrument's continuous parameter to its automation id.
+
+        The returned id drives :meth:`set_automation_lane`,
+        :meth:`set_parameter`, or :meth:`set_parameter_smoothed` exactly like a
+        fader/pan or strip-insert id, so an instrument parameter follows a
+        breakpoint lane at audio-block precision, live and offline alike.
+
+        For the NativeSynth (:meth:`set_synth_instrument`) ``param_name`` is one
+        of the continuous :class:`SynthPatch` fields, spelled as the JSON key:
+        ``gain``, ``busDrive``, ``cutoffHz``, ``resonanceQ``, ``drive``,
+        ``keyTrack``, ``envToCutoffCents``, ``velToCutoffCents``,
+        ``ampAttackMs``, ``ampDecayMs``, ``ampSustain``, ``ampReleaseMs``,
+        ``filterAttackMs``, ``filterDecayMs``, ``filterSustain``,
+        ``filterReleaseMs``, ``lfoRateHz``, ``lfoToPitchCents``, ``lfo2RateHz``,
+        ``glideMs``, ``bodyMix``, ``stereoSpread``, ``detuneCents``,
+        ``driftCents``, ``pitchOffsetCents``.
+
+        Structural fields (preset, engine mode, waveform, filter model, unison,
+        polyphony, body type, mod routings) are not automatable: they resize
+        voice pools or swap DSP topology, which is not audio-thread safe. Rebind
+        the instrument with a new patch instead.
+
+        ``gain``, ``busDrive``, ``cutoffHz``, ``resonanceQ``,
+        ``envToCutoffCents``, ``lfoToPitchCents`` and ``pitchOffsetCents`` reach
+        voices that are already sounding from the next block; the rest are
+        cached into per-voice state at note-on and take effect from the next
+        note.
+
+        Raises :class:`SonareError` when the destination has no bound
+        instrument, the instrument exposes no automatable parameters, or the
+        name is unknown.
+        """
+        lib = _get_lib()
+        if not hasattr(lib, "sonare_engine_resolve_instrument_automation_id"):
+            raise RuntimeError("libsonare was built without live-MIDI support")
+        out_id = ctypes.c_uint32()
+        _check(
+            lib.sonare_engine_resolve_instrument_automation_id(
+                self._require_handle(),
+                int(destination_id),
+                param_name.encode("utf-8"),
+                ctypes.byref(out_id),
+            )
+        )
+        return int(out_id.value)
+
     def load_soundfont(self, data: bytes | bytearray | memoryview) -> None:
         """Load (parse) SoundFont 2 bytes into the engine.
 

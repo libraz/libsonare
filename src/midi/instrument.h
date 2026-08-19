@@ -27,6 +27,7 @@
 
 #include <cstddef>
 #include <cstdint>
+#include <string>
 
 #include "midi/sequencer.h"
 #include "rt/processor_base.h"
@@ -101,6 +102,31 @@ class MidiInstrument : public rt::ProcessorBase, public MidiEventSink {
   /// True when process_source_tracks() is implemented without changing this
   /// instrument's destination-level voice-pool semantics.
   virtual bool supports_source_track_rendering() const noexcept { return false; }
+
+  /// CONTROL thread: resolves a JSON-key parameter name to this instrument's
+  /// integer param id, or -1 when the key names no continuously automatable
+  /// parameter. Mirrors mixing::ChannelStrip::insert_parameter_id_for_key, so a
+  /// host resolves a name once and then drives the id from an automation lane.
+  ///
+  /// Only parameters that are meaningful to change WHILE the instrument sounds
+  /// belong here. Structural parameters (engine mode, oscillator waveform,
+  /// unison width, voice-pool size) must return -1: they are patch edits, not
+  /// automation targets. Default: no automatable parameters.
+  virtual int parameter_id_for_key(const std::string& key) const noexcept {
+    (void)key;
+    return -1;
+  }
+
+  /// AUDIO thread: applies one resolved parameter. Called at most once per
+  /// parameter per block by the engine's smoother bank, so the effective
+  /// resolution is one audio block. Must be allocation-free, lock-free and
+  /// I/O-free, and must clamp @p value to the parameter's audible range.
+  /// Returns false for an unknown id. Default: nothing is automatable.
+  virtual bool apply_parameter(unsigned int param_id, float value) noexcept {
+    (void)param_id;
+    (void)value;
+    return false;
+  }
 };
 
 }  // namespace sonare::midi

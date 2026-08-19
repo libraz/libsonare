@@ -64,7 +64,11 @@ export function trackKindValue(kind: ProjectTrackDesc['kind']): number {
 }
 
 export function warpModeValue(mode: WarpMode | number | undefined): number {
-  return resolveEnumOrdinal(mode ?? 'off', { off: 0, repitch: 1, 'tempo-sync': 2 }, 'warp mode');
+  return resolveEnumOrdinal(
+    mode ?? 'off',
+    { off: 0, repitch: 1, 'tempo-sync': 2, 'time-stretch': 3 },
+    'warp mode',
+  );
 }
 
 export function engineAutomationCurveValue(curve: EngineAutomationPointCurve | undefined): number {

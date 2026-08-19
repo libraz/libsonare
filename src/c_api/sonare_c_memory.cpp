@@ -65,6 +65,17 @@ constexpr bool capability_fx_enabled() {
 #endif
 }
 
+// True when hosted instruments expose continuously automatable parameters
+// (@ref sonare_engine_resolve_instrument_automation_id). Tied to the
+// arrangement/MIDI subsystem, which owns the instrument rack.
+constexpr bool capability_instrument_param_automation_enabled() {
+#if defined(SONARE_BUILD_ARRANGEMENT) && SONARE_BUILD_ARRANGEMENT
+  return true;
+#else
+  return false;
+#endif
+}
+
 }  // namespace
 
 void sonare_free_floats(float* ptr) { delete[] ptr; }
@@ -137,6 +148,8 @@ const char* sonare_capabilities_json(void) {
                  ",\"mixing\":" + json_bool(capability_mixing_enabled()) +
                  ",\"fx\":" + json_bool(capability_fx_enabled()) +
                  ",\"ffmpeg\":" + json_bool(sonare_has_ffmpeg_support() != 0) +
+                 ",\"instrumentParamAutomation\":" +
+                 json_bool(capability_instrument_param_automation_enabled()) +
                  "},\"decode\":{\"builtin\":[\"wav\",\"mp3\"],\"ffmpeg\":[";
 #ifdef SONARE_WITH_FFMPEG
   capabilities += "\"m4a\",\"aac\",\"flac\",\"ogg\",\"opus\",\"wma\"";

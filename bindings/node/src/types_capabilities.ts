@@ -15,6 +15,11 @@ export interface Capabilities {
     mixing: boolean;
     fx: boolean;
     ffmpeg: boolean;
+    /**
+     * True when hosted instruments expose continuously automatable
+     * parameters (`RealtimeEngine.resolveInstrumentAutomationId`).
+     */
+    instrumentParamAutomation: boolean;
   };
   /** Audio decoding available without, and through, FFmpeg. */
   decode: {

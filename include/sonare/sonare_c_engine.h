@@ -364,6 +364,28 @@ SonareError sonare_clip_page_provider_clear(SonareClipPageProvider* provider, in
 SonareError sonare_engine_pop_clip_page_request(SonareRealtimeEngine* engine,
                                                 SonareClipPageRequest* out_request,
                                                 int* out_has_request);
+/// @brief Sets the clip-page look-ahead window in timeline frames.
+/// @details The clip player reports the pages it is ABOUT TO read that are not
+///   resident yet, so a streaming host can service them before the audio thread
+///   reaches them. Without look-ahead a page miss is only reported after the
+///   read already produced silence, which costs one block of silence at every
+///   page boundary the host has not primed — the reason a sliding-window
+///   streamer cannot keep a live playhead fed by miss reports alone.
+///
+///   Look-ahead requests are drained through the same
+///   @ref sonare_engine_pop_clip_page_request queue and are queued AFTER the
+///   block's genuine misses, so a host that keeps only the newest request per
+///   clip tracks the look-ahead frontier.
+///
+///   @ref sonare_engine_prepare defaults this to half a second at the engine's
+///   sample rate. 0 disables the look-ahead. A clip whose pages are all
+///   resident produces no requests at all, with or without look-ahead.
+///   Safe to call while audio is running.
+SonareError sonare_engine_set_clip_page_prefetch_frames(SonareRealtimeEngine* engine,
+                                                        int64_t frames);
+/// @brief Reads back the clip-page look-ahead window in timeline frames.
+SonareError sonare_engine_clip_page_prefetch_frames(SonareRealtimeEngine* engine,
+                                                    int64_t* out_frames);
 SonareError sonare_engine_set_capture_buffer(SonareRealtimeEngine* engine,
                                              const SonareEngineCaptureBuffer* buffer);
 SonareError sonare_engine_arm_capture(SonareRealtimeEngine* engine, int armed);
@@ -582,6 +604,48 @@ SonareError sonare_engine_set_builtin_instrument(SonareRealtimeEngine* engine,
 SonareError sonare_engine_set_synth_instrument(SonareRealtimeEngine* engine,
                                                uint32_t destination_id,
                                                const SonareSynthPatch* patch);
+
+/// @brief Resolves a hosted instrument's continuous parameter to its reserved
+///        automation id.
+/// @details Instrument counterpart of
+///   @ref sonare_engine_resolve_track_insert_automation_id: the returned id is
+///   driven over time with @ref sonare_engine_set_automation_lane (a PPQ
+///   breakpoint lane) or set once with @ref sonare_engine_set_parameter /
+///   @ref sonare_engine_set_parameter_smoothed, and reaches the instrument at
+///   audio-block precision, live and offline alike.
+///
+///   @p param_name is the instrument's JSON-key parameter name. For the
+///   NativeSynth (@ref sonare_engine_set_synth_instrument) these are the
+///   continuous @ref SonareSynthPatch fields spelled exactly as the bindings
+///   spell them: `gain`, `busDrive`, `cutoffHz`, `resonanceQ`, `drive`,
+///   `keyTrack`, `envToCutoffCents`, `velToCutoffCents`, `ampAttackMs`,
+///   `ampDecayMs`, `ampSustain`, `ampReleaseMs`, `filterAttackMs`,
+///   `filterDecayMs`, `filterSustain`, `filterReleaseMs`, `lfoRateHz`,
+///   `lfoToPitchCents`, `lfo2RateHz`, `glideMs`, `bodyMix`, `stereoSpread`,
+///   `detuneCents`, `driftCents`, `pitchOffsetCents`.
+///
+///   Structural patch fields (preset, engine mode, waveform, filter model,
+///   unison, polyphony, body type, mod routings) are NOT automatable and fail
+///   with SONARE_ERROR_INVALID_PARAMETER: they resize voice pools or swap DSP
+///   topology, which is not audio-thread safe. Change them by rebinding the
+///   instrument with a new patch.
+///
+///   Two timing classes among the automatable ones. `gain`, `busDrive`,
+///   `cutoffHz`, `resonanceQ`, `envToCutoffCents`, `lfoToPitchCents` and
+///   `pitchOffsetCents` reach voices that are ALREADY SOUNDING from the next
+///   block. The rest are cached into per-voice state at note-on, so they take
+///   effect from the NEXT NOTE.
+///
+///   Returns SONARE_ERROR_INVALID_PARAMETER when no instrument is bound to
+///   @p destination_id, when the bound instrument exposes no automatable
+///   parameters (the SF2 player and the built-in synth do not), or when the
+///   name is unknown; @p out_id is left untouched. The id survives an
+///   unbind/rebind of the same destination and applies nothing while that
+///   destination is unbound, so a stale lane is inert rather than dangling.
+SonareError sonare_engine_resolve_instrument_automation_id(SonareRealtimeEngine* engine,
+                                                           uint32_t destination_id,
+                                                           const char* param_name,
+                                                           uint32_t* out_id);
 /// @brief Loads (parses) SF2 bytes into the realtime engine so SoundFont
 ///        instruments can be bound to destinations with
 ///        @ref sonare_engine_set_sf2_instrument. Control-thread API; replaces

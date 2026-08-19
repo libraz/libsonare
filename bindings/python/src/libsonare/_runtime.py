@@ -423,11 +423,11 @@ def _send_timing_value(value: SendTiming | str | int) -> int:
     return _resolve_enum(value, _SEND_TIMING_NAMES, "send timing", enum_cls=SendTiming, dash=True)
 
 
-_WARP_MODE_NAMES = {"off": 0, "repitch": 1, "tempo-sync": 2}
+_WARP_MODE_NAMES = {"off": 0, "repitch": 1, "tempo-sync": 2, "time-stretch": 3}
 
 
 def _warp_mode_value(mode: str | int) -> int:
-    """Resolve a warp mode to its C enum value (0 off, 1 repitch, 2 tempo-sync)."""
+    """Resolve a warp mode to its C enum value (0 off, 1 repitch, 2 tempo-sync, 3 time-stretch)."""
     return _resolve_enum(mode, _WARP_MODE_NAMES, "warp mode", reject_bool=True)
 
 

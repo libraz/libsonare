@@ -60,6 +60,7 @@ class RealtimeEngineWrap : public Napi::ObjectWrap<RealtimeEngineWrap> {
   Napi::Value ResolveTrackInsertAutomationId(const Napi::CallbackInfo& info);
   Napi::Value ResolveMasterInsertAutomationId(const Napi::CallbackInfo& info);
   Napi::Value ResolveBusInsertAutomationId(const Napi::CallbackInfo& info);
+  Napi::Value ResolveInstrumentAutomationId(const Napi::CallbackInfo& info);
   Napi::Value SetTrackStripPan(const Napi::CallbackInfo& info);
   Napi::Value SetTrackStripPanLaw(const Napi::CallbackInfo& info);
   Napi::Value SetTrackStripPanMode(const Napi::CallbackInfo& info);
@@ -70,6 +71,8 @@ class RealtimeEngineWrap : public Napi::ObjectWrap<RealtimeEngineWrap> {
   Napi::Value ClearClipPage(const Napi::CallbackInfo& info);
   Napi::Value DestroyClipPageProvider(const Napi::CallbackInfo& info);
   Napi::Value PopClipPageRequest(const Napi::CallbackInfo& info);
+  Napi::Value SetClipPagePrefetchFrames(const Napi::CallbackInfo& info);
+  Napi::Value ClipPagePrefetchFrames(const Napi::CallbackInfo& info);
   Napi::Value SetCaptureBuffer(const Napi::CallbackInfo& info);
   Napi::Value ArmCapture(const Napi::CallbackInfo& info);
   Napi::Value SetCapturePunch(const Napi::CallbackInfo& info);

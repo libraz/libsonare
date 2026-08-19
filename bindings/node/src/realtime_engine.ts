@@ -414,6 +414,34 @@ export class RealtimeEngine {
   }
 
   /**
+   * Resolves a hosted instrument's continuous parameter (by its JSON-key name)
+   * to the reserved automation id, so an instrument parameter is driven at
+   * audio-block precision exactly like a strip insert. Returns `-1` when the
+   * destination has no bound instrument, the instrument exposes no automatable
+   * parameters, or the name is unknown.
+   *
+   * For the NativeSynth ({@link setSynthInstrument}) the names are the
+   * continuous `SynthPatch` fields: `gain`, `busDrive`, `cutoffHz`,
+   * `resonanceQ`, `drive`, `keyTrack`, `envToCutoffCents`, `velToCutoffCents`,
+   * `ampAttackMs`, `ampDecayMs`, `ampSustain`, `ampReleaseMs`,
+   * `filterAttackMs`, `filterDecayMs`, `filterSustain`, `filterReleaseMs`,
+   * `lfoRateHz`, `lfoToPitchCents`, `lfo2RateHz`, `glideMs`, `bodyMix`,
+   * `stereoSpread`, `detuneCents`, `driftCents`, `pitchOffsetCents`.
+   *
+   * Structural fields (`preset`, `engineMode`, `waveform`, `filterModel`,
+   * `unison`, `polyphony`, `body`, `modRoutings`) are not automatable and
+   * return `-1`; rebind the instrument with a new patch instead.
+   *
+   * `gain`, `busDrive`, `cutoffHz`, `resonanceQ`, `envToCutoffCents`,
+   * `lfoToPitchCents` and `pitchOffsetCents` reach already-sounding voices from
+   * the next block; the rest are cached at note-on and take effect from the
+   * next note.
+   */
+  resolveInstrumentAutomationId(destinationId: number, paramName: string): number {
+    return this.native.resolveInstrumentAutomationId(destinationId, paramName);
+  }
+
+  /**
    * Sets a track lane strip's pan position (-1..1) in realtime. Applied at the
    * next block head via the engine command queue; safe during playback.
    *
@@ -487,6 +515,32 @@ export class RealtimeEngine {
 
   popClipPageRequest(): ClipPageRequest | null {
     return this.native.popClipPageRequest();
+  }
+
+  /**
+   * Sets the clip-page look-ahead window in timeline frames.
+   *
+   * The player reports the pages it is *about to* read that are not resident
+   * yet, so a streaming host can service them before the audio thread reaches
+   * them. Without look-ahead a page miss is only reported after the read
+   * already produced silence, which costs one block of silence at every page
+   * boundary the host has not primed.
+   *
+   * Look-ahead requests drain through the same {@link popClipPageRequest}
+   * queue and are queued *after* the block's genuine misses, so a host that
+   * keeps only the newest request per clip tracks the look-ahead frontier.
+   *
+   * `prepare` defaults this to half a second at the engine's sample rate; `0`
+   * disables it. A clip whose pages are all resident produces no requests
+   * either way. Safe to call during playback.
+   */
+  setClipPagePrefetchFrames(frames: number): void {
+    this.native.setClipPagePrefetchFrames(frames);
+  }
+
+  /** Current clip-page look-ahead window in timeline frames. */
+  clipPagePrefetchFrames(): number {
+    return this.native.clipPagePrefetchFrames();
   }
 
   /**

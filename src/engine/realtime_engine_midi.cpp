@@ -198,6 +198,13 @@ bool RealtimeEngine::set_midi_instrument(uint32_t destination_id,
   if (!instrument_rack_.set(destination_id, instrument)) {
     return false;  // rack full: leave existing bindings untouched
   }
+  if (previous != instrument) {
+    // Retire this destination's automation smoothers. Param ids are per
+    // instrument implementation, so carrying a slot across a swap would push the
+    // outgoing instrument's value into an unrelated parameter of the incoming
+    // one. The host re-resolves and re-drives after a rebind.
+    release_instrument_automations(destination_id);
+  }
   // The sequencer's sink is the rack itself (set in prepare); no per-instrument
   // sink wiring is needed. Prepare the freshly-registered instrument to the
   // engine's sample rate / block size. prepare() may allocate, so this stays a

@@ -18,6 +18,11 @@ export interface SonareCapabilities {
     mixing: boolean;
     fx: boolean;
     ffmpeg: boolean;
+    /**
+     * True when hosted instruments expose continuously automatable
+     * parameters (`RealtimeEngine.resolveInstrumentAutomationId`).
+     */
+    instrumentParamAutomation: boolean;
   };
   decode: {
     builtin: string[];

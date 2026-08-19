@@ -845,6 +845,39 @@ export class RealtimeEngine {
     return this.native.resolveBusInsertAutomationId(busId, insertIndex, paramName);
   }
 
+  /**
+   * Resolves a hosted instrument's continuous parameter (by its JSON-key name)
+   * to the reserved automation id usable with `setAutomationLane` /
+   * `setParameter`, so an instrument parameter is driven at audio-block
+   * precision exactly like a strip insert. Returns `-1` when the destination
+   * has no bound instrument, the instrument exposes no automatable parameters,
+   * or the name is unknown.
+   *
+   * For the NativeSynth ({@link setSynthInstrument}) the names are the
+   * continuous {@link SynthPatch} fields: `gain`, `busDrive`, `cutoffHz`,
+   * `resonanceQ`, `drive`, `keyTrack`, `envToCutoffCents`, `velToCutoffCents`,
+   * `ampAttackMs`, `ampDecayMs`, `ampSustain`, `ampReleaseMs`,
+   * `filterAttackMs`, `filterDecayMs`, `filterSustain`, `filterReleaseMs`,
+   * `lfoRateHz`, `lfoToPitchCents`, `lfo2RateHz`, `glideMs`, `bodyMix`,
+   * `stereoSpread`, `detuneCents`, `driftCents`, `pitchOffsetCents`.
+   *
+   * Structural fields (`preset`, `engineMode`, `waveform`, `filterModel`,
+   * `unison`, `polyphony`, `body`, `modRoutings`) are not automatable and
+   * return `-1`: they resize voice pools or swap DSP topology, which is not
+   * audio-thread safe. Rebind the instrument with a new patch instead.
+   *
+   * `gain`, `busDrive`, `cutoffHz`, `resonanceQ`, `envToCutoffCents`,
+   * `lfoToPitchCents` and `pitchOffsetCents` reach voices that are already
+   * sounding from the next block; the rest are cached into per-voice state at
+   * note-on and take effect from the next note.
+   *
+   * The id survives an unbind/rebind of the same destination and applies
+   * nothing while that destination is unbound.
+   */
+  resolveInstrumentAutomationId(destinationId: number, paramName: string): number {
+    return this.native.resolveInstrumentAutomationId(destinationId, paramName);
+  }
+
   /** Sets a track lane strip's pan position in realtime (glitch-free). */
   setTrackStripPan(trackId: number, pan: number): void {
     this.native.setTrackStripPan(trackId, pan);
@@ -917,6 +950,34 @@ export class RealtimeEngine {
   /** Cumulative page misses dropped because the native bounded request queue was full. */
   clipPageRequestOverflowCount(): number {
     return this.native.clipPageRequestOverflowCount();
+  }
+
+  /**
+   * Sets the clip-page look-ahead window in timeline frames.
+   *
+   * The player reports the pages it is *about to* read that are not resident
+   * yet, so a streaming host can service them before the audio thread reaches
+   * them. Without look-ahead a page miss is only reported after the read
+   * already produced silence, which costs one block of silence at every page
+   * boundary the host has not primed — the reason a sliding-window streamer
+   * cannot keep a live playhead fed from miss reports alone.
+   *
+   * Look-ahead requests drain through the same `popClipPageRequest` queue and
+   * are queued *after* the block's genuine misses, so a host that keeps only
+   * the newest request per clip (as {@link ClipPageStreamer} does) tracks the
+   * look-ahead frontier.
+   *
+   * `prepare` defaults this to half a second at the engine's sample rate. `0`
+   * disables the look-ahead. A clip whose pages are all resident produces no
+   * requests at all, with or without look-ahead. Safe to call during playback.
+   */
+  setClipPagePrefetchFrames(frames: number): void {
+    this.native.setClipPagePrefetchFrames(frames);
+  }
+
+  /** Current clip-page look-ahead window in timeline frames. */
+  clipPagePrefetchFrames(): number {
+    return this.native.clipPagePrefetchFrames();
   }
 
   setCaptureBuffer(numChannels: number, capacityFrames: number): void {

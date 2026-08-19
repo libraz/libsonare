@@ -189,12 +189,15 @@ void ProjectWasm::setClipWarpMode(uint32_t clip_id, val mode_val) {
       mode = SONARE_PROJECT_WARP_MODE_REPITCH;
     } else if (mode_string == "tempo-sync") {
       mode = SONARE_PROJECT_WARP_MODE_TEMPO_SYNC;
+    } else if (mode_string == "time-stretch") {
+      mode = SONARE_PROJECT_WARP_MODE_TIME_STRETCH;
     } else {
       throw sonare::SonareException(sonare::ErrorCode::InvalidParameter, "unknown warp mode");
     }
   } else {
     const int mode_int = mode_val.as<int>();
-    if (mode_int < SONARE_PROJECT_WARP_MODE_OFF || mode_int > SONARE_PROJECT_WARP_MODE_TEMPO_SYNC) {
+    if (mode_int < SONARE_PROJECT_WARP_MODE_OFF ||
+        mode_int > SONARE_PROJECT_WARP_MODE_TIME_STRETCH) {
       throw sonare::SonareException(sonare::ErrorCode::InvalidParameter, "unknown warp mode");
     }
     mode = static_cast<SonareProjectWarpMode>(mode_int);

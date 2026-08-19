@@ -290,6 +290,47 @@ describe('Sonare WASM Module', () => {
       expect(warped[0][3]).toBeCloseTo(15, 4);
       warpEngine.destroy();
 
+      const sr = 48000;
+      const stretchSource = 12000;
+      const stretchOutput = 24000;
+      const tone = new Float32Array(stretchSource);
+      for (let i = 0; i < stretchSource; i++) {
+        tone[i] = 0.5 * Math.sin((2 * Math.PI * 440 * i) / sr);
+      }
+      const stretchEngine = new RealtimeEngine(sr, stretchOutput);
+      stretchEngine.setClips([
+        {
+          id: 305,
+          channels: [tone],
+          startPpq: 0,
+          lengthSamples: stretchOutput,
+          warpMode: 'time-stretch',
+          warpAnchors: [
+            { warpSample: 0, sourceSample: 0 },
+            { warpSample: stretchOutput, sourceSample: stretchSource },
+          ],
+        },
+      ]);
+      stretchEngine.play();
+      const stretched = stretchEngine.process([new Float32Array(stretchOutput)])[0];
+      // Goertzel: a resampling warp at half rate would move the tone to 220 Hz.
+      const stretchPower = (hz: number): number => {
+        const w = (2 * Math.PI * hz) / sr;
+        const coeff = 2 * Math.cos(w);
+        let s1 = 0;
+        let s2 = 0;
+        for (let i = 4096; i < stretchOutput - 4096; i++) {
+          const s0 = stretched[i] + coeff * s1 - s2;
+          s2 = s1;
+          s1 = s0;
+        }
+        const real = s1 - s2 * Math.cos(w);
+        const imag = s2 * Math.sin(w);
+        return real * real + imag * imag;
+      };
+      expect(stretchPower(440)).toBeGreaterThan(100 * stretchPower(220));
+      stretchEngine.destroy();
+
       const fadeEngine = new RealtimeEngine(48000, 4);
       fadeEngine.setClips([
         {

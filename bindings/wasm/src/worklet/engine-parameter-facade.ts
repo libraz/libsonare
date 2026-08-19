@@ -191,6 +191,27 @@ export function resolveBusInsertAutomationId(
 }
 
 /**
+ * Resolves a hosted instrument's continuous parameter to its reserved
+ * instrument-automation id, so an instrument parameter is driven from a
+ * breakpoint lane at audio-block precision like a strip insert.
+ *
+ * The instrument must already be bound on the offline engine for the
+ * destination (the worklet mirrors every instrument sync onto it), otherwise
+ * the resolve returns -1.
+ *
+ * @param destinationId MIDI destination the instrument is bound to.
+ * @param paramName Instrument JSON-key parameter name (e.g. `cutoffHz`).
+ * @returns Reserved instrument-automation id, or -1 when destination/key unknown.
+ */
+export function resolveInstrumentAutomationId(
+  ctx: EngineParameterContext,
+  destinationId: number,
+  paramName: string,
+): number {
+  return ctx.offlineEngine.resolveInstrumentAutomationId(destinationId, paramName);
+}
+
+/**
  * Returns the number of automation lanes installed on the engine, including
  * lanes whose breakpoint list is currently empty.
  *

@@ -314,6 +314,44 @@ class _EngineIoMixin:
             clip_id=int(raw.clip_id), channel=int(raw.channel), sample=int(raw.sample)
         )
 
+    def set_clip_page_prefetch_frames(self, frames: int) -> None:
+        """Set the clip-page look-ahead window in timeline frames.
+
+        The player reports the pages it is *about to* read that are not
+        resident yet, so a streaming host can service them before the audio
+        thread reaches them. Without look-ahead a page miss is only reported
+        after the read already produced silence, which costs one block of
+        silence at every page boundary the host has not primed.
+
+        Look-ahead requests drain through the same
+        :meth:`pop_clip_page_request` queue and are queued *after* the block's
+        genuine misses, so a host that keeps only the newest request per clip
+        tracks the look-ahead frontier.
+
+        :meth:`prepare` defaults this to half a second at the engine's sample
+        rate; ``0`` disables it. A clip whose pages are all resident produces
+        no requests either way. Safe to call during playback.
+        """
+        lib = _get_lib()
+        if not hasattr(lib, "sonare_engine_set_clip_page_prefetch_frames"):
+            raise RuntimeError("libsonare was built without clip-page look-ahead support")
+        _check(
+            lib.sonare_engine_set_clip_page_prefetch_frames(
+                self._require_handle(), ctypes.c_int64(int(frames))
+            )
+        )
+
+    def clip_page_prefetch_frames(self) -> int:
+        """Return the clip-page look-ahead window in timeline frames."""
+        lib = _get_lib()
+        if not hasattr(lib, "sonare_engine_clip_page_prefetch_frames"):
+            raise RuntimeError("libsonare was built without clip-page look-ahead support")
+        out = ctypes.c_int64()
+        _check(
+            lib.sonare_engine_clip_page_prefetch_frames(self._require_handle(), ctypes.byref(out))
+        )
+        return int(out.value)
+
     def drain_meter_telemetry(self, max_records: int = 1024) -> list[MeterTelemetryRecord]:
         """Drain pending meter telemetry records published by the engine."""
         if max_records <= 0:

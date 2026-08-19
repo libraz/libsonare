@@ -44,6 +44,8 @@ enum class WarpMode : uint32_t {
   kOff = 0,
   kRepitch = 1,
   kTempoSync = 2,
+  /// Realtime pitch-preserving warp; see engine::WarpMode::kTimeStretch.
+  kTimeStretch = 3,
 };
 
 // ===========================================================================

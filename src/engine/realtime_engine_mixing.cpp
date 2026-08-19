@@ -6,6 +6,7 @@
 #include <vector>
 
 #include "engine/insert_automation_id.h"
+#include "engine/instrument_automation_id.h"
 #include "engine/realtime_engine.h"
 #include "engine/realtime_engine_internal.h"
 #include "rt/command.h"
@@ -326,6 +327,13 @@ uint32_t RealtimeEngine::configure_scope_telemetry(int interval_frames, uint32_t
 
 bool RealtimeEngine::route_engine_parameter(uint32_t target_id, float value) noexcept {
   if (!parameter_target_reserved(target_id)) return false;
+#if defined(SONARE_WITH_ARRANGEMENT)
+  // Instrument-automation namespace: hosted instruments live outside the mixer
+  // runtimes, so they are decoded first and served by their own slot table.
+  if (is_instrument_param_id(target_id)) {
+    return route_instrument_parameter(target_id, value);
+  }
+#endif
   // Insert-automation namespace: decode (strip selector, insert, param) and set
   // the matching per-target smoother. Master inserts use this engine's slot
   // table; lane/bus inserts use the track mixer's. The strip selector is an

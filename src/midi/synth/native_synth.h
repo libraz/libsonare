@@ -326,6 +326,56 @@ struct NativeSynthConfig {
   bool use_gm_programs = false;
 };
 
+/// Continuously automatable NativeSynth parameters, addressed through
+/// MidiInstrument::parameter_id_for_key / apply_parameter. The ordinals are the
+/// persisted automation-target ids, so they are append-only: never renumber an
+/// existing entry.
+///
+/// Two timing classes, because a voice reads some patch fields every sample and
+/// caches others at note-on:
+///  - applied to SOUNDING voices from the next block: kGain, kBusDrive,
+///    kCutoffHz, kResonanceQ, kEnvToCutoffCents, kLfoToPitchCents,
+///    kPitchOffsetCents
+///  - applied from the NEXT NOTE-ON: kDrive, kKeyTrack, kVelToCutoffCents, the
+///    envelope segments, kLfoRateHz, kLfo2RateHz, kGlideMs, kBodyMix,
+///    kStereoSpread, kDetuneCents, kDriftCents (each is precomputed into
+///    per-voice state when the voice starts)
+enum class NativeSynthParamId : unsigned int {
+  kGain = 0,
+  kBusDrive = 1,
+  kCutoffHz = 2,
+  kResonanceQ = 3,
+  kDrive = 4,
+  kKeyTrack = 5,
+  kEnvToCutoffCents = 6,
+  kVelToCutoffCents = 7,
+  kAmpAttackMs = 8,
+  kAmpDecayMs = 9,
+  kAmpSustain = 10,
+  kAmpReleaseMs = 11,
+  kFilterAttackMs = 12,
+  kFilterDecayMs = 13,
+  kFilterSustain = 14,
+  kFilterReleaseMs = 15,
+  kLfoRateHz = 16,
+  kLfoToPitchCents = 17,
+  kLfo2RateHz = 18,
+  kGlideMs = 19,
+  kBodyMix = 20,
+  kStereoSpread = 21,
+  kDetuneCents = 22,
+  kDriftCents = 23,
+  kPitchOffsetCents = 24,
+};
+
+/// JSON-key name for @p id (the same string a SynthPatch object would use), or
+/// nullptr for an unknown id.
+const char* native_synth_param_name(NativeSynthParamId id) noexcept;
+/// Number of automatable parameters, for enumeration by a host UI.
+size_t native_synth_param_count() noexcept;
+/// JSON-key name at @p index in [0, native_synth_param_count()), or nullptr.
+const char* native_synth_param_name_at(size_t index) noexcept;
+
 /// Standalone patch-driven MidiInstrument: all 16 channels play the same
 /// patch with BuiltinSynth-compatible channel semantics plus the default-
 /// modulator CCs (CC1 vibrato, CC7/CC11 gain, CC10 pan, pitch bend, CC64
@@ -342,8 +392,12 @@ class NativeSynth final : public MidiInstrument {
   void reset() override;
   int tail_samples() const noexcept override { return static_cast<int>(tail_samples_); }
   void on_event(uint32_t destination_id, const MidiEvent& event) noexcept override;
+  int parameter_id_for_key(const std::string& key) const noexcept override;
+  bool apply_parameter(unsigned int param_id, float value) noexcept override;
 
   const NativeSynthPatch& patch() const noexcept { return config_.patch; }
+  /// Instrument master gain (test/diagnostic; the automated kGain target).
+  float gain() const noexcept { return config_.gain; }
 
   /// Currently sounding voices (test/diagnostic).
   int active_voice_count() const noexcept { return pool_.active_count(); }

@@ -467,7 +467,11 @@ TEST_CASE("RealtimeEngine routes instrument destinations through track lanes", "
   REQUIRE(block_peak(left) == Catch::Approx(1.0f));
 
   REQUIRE(engine.track_mixer().set_lane_solo_mute(0, true, false));
-  for (int i = 0; i < 8; ++i) {
+  // 24 blocks is ~64 ms, comfortably past the 10 ms gate smoother. The lane
+  // smoothers advance once per block: they used to advance twice whenever a
+  // block ran both a clip pass and an instrument pass, because each pass opened
+  // its own lane/bus staging, so the same solo ramp settled in half the time.
+  for (int i = 0; i < 24; ++i) {
     std::fill(left.begin(), left.end(), 0.0f);
     std::fill(right.begin(), right.end(), 0.0f);
     engine.process(channels, 2, kBlock);

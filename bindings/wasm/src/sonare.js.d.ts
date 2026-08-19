@@ -598,7 +598,7 @@ export interface WasmEngineClip {
   gain?: number;
   fadeInSamples?: number;
   fadeOutSamples?: number;
-  warpMode?: 'off' | 'repitch' | 'tempo-sync' | 0 | 1 | 2;
+  warpMode?: 'off' | 'repitch' | 'tempo-sync' | 'time-stretch' | 0 | 1 | 2 | 3;
   warpAnchors?: Array<{ warpSample: number; sourceSample: number }>;
   pageProvider?: number | { readonly id: number };
 }
@@ -998,6 +998,7 @@ export interface WasmRealtimeEngine {
   ) => number;
   resolveMasterInsertAutomationId: (insertIndex: number, paramName: string) => number;
   resolveBusInsertAutomationId: (busId: number, insertIndex: number, paramName: string) => number;
+  resolveInstrumentAutomationId: (destinationId: number, paramName: string) => number;
   setTrackStripPan: (trackId: number, pan: number) => void;
   setTrackStripPanLaw: (trackId: number, panLaw: number) => void;
   setTrackStripPanMode: (trackId: number, panMode: number) => void;
@@ -1012,6 +1013,8 @@ export interface WasmRealtimeEngine {
   clipPageRequestScratchClipId: () => number;
   clipPageRequestScratchSample: () => number;
   clipPageRequestOverflowCount: () => number;
+  setClipPagePrefetchFrames: (frames: number) => void;
+  clipPagePrefetchFrames: () => number;
   setCaptureBuffer: (numChannels: number, capacityFrames: number) => void;
   armCapture: (armed: boolean) => void;
   setCapturePunch: (startSample: number, endSample: number, enabled: boolean) => void;
@@ -1547,6 +1550,30 @@ export interface SonareModule {
     sampleRate: number,
     alignZeros: boolean,
   ) => Float32Array;
+  decomposeStems: (
+    samples: Float32Array,
+    sampleRate: number,
+    options: {
+      nComponents?: number;
+      nFft?: number;
+      hopLength?: number;
+      nIter?: number;
+      beta?: number;
+      init?: string;
+      maskPower?: number;
+    },
+  ) => {
+    components: Float32Array[];
+    w: Float32Array;
+    h: Float32Array;
+    sampleRate: number;
+  };
+  remixAlignedIntervals: (
+    samples: Float32Array,
+    intervals: Int32Array,
+    sampleRate: number,
+    alignZeros: boolean,
+  ) => Int32Array;
   phaseVocoder: (
     samples: Float32Array,
     sampleRate: number,
@@ -2145,6 +2172,7 @@ export interface SonareModule {
       segmentationThresholdCents?: number;
       minNoteMs?: number;
       referenceHz?: number;
+      voicedThreshold?: number;
     },
   ) => WasmNoteSegment[];
 
