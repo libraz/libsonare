@@ -189,7 +189,24 @@ export interface ChromaResult {
  */
 export interface PitchResult {
   f0: Float32Array;
+  /**
+   * pYIN's per-frame voiced **observation mass**, exactly as librosa returns
+   * it: the summed probability of the frame's voiced pitch hypotheses.
+   *
+   * This is NOT a signal-quality confidence and NOT a correction weight. The
+   * mass depends on how many periods of the pitch fit inside `frameLength`,
+   * because the CMNDF troughs of a long period measured over a short frame are
+   * shallower. For a fixed `frameLength` it therefore rises with F0 even when
+   * the signal is unchanged: a steady three-harmonic tone at 2048 samples /
+   * 48 kHz averages well under 0.1 at C2 and about 0.5 at C5, with every frame
+   * flagged voiced throughout.
+   *
+   * Use {@link voicedFlag} for any voicing decision. In particular, thresholding
+   * this value at a fixed 0.5 (`noteSegments`' default) drops entire low
+   * registers.
+   */
   voicedProb: Float32Array;
+  /** Per-frame voicing decision from the Viterbi path — the voicing oracle. */
   voicedFlag: boolean[];
   nFrames: number;
   medianF0: number;

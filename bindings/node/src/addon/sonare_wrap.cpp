@@ -197,8 +197,12 @@ Napi::Object SonareWrap::Init(Napi::Env env, Napi::Object exports) {
               Napi::Function::New(env, &SonareWrap::RealtimeVoiceChangerPresetConfig,
                                   "realtimeVoiceChangerPresetConfig"));
   exports.Set("decompose", Napi::Function::New(env, &SonareWrap::Decompose, "decompose"));
+  exports.Set("decomposeStems",
+              Napi::Function::New(env, &SonareWrap::DecomposeStems, "decomposeStems"));
   exports.Set("nnFilter", Napi::Function::New(env, &SonareWrap::NnFilter, "nnFilter"));
   exports.Set("remix", Napi::Function::New(env, &SonareWrap::Remix, "remix"));
+  exports.Set("remixAlignedIntervals", Napi::Function::New(env, &SonareWrap::RemixAlignedIntervals,
+                                                           "remixAlignedIntervals"));
   exports.Set("hpssWithResidual",
               Napi::Function::New(env, &SonareWrap::HpssWithResidual, "hpssWithResidual"));
   exports.Set("phaseVocoder", Napi::Function::New(env, &SonareWrap::PhaseVocoder, "phaseVocoder"));

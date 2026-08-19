@@ -73,31 +73,70 @@ int match_event(int value, const std::vector<int>& sorted_zeros) {
 
 }  // namespace
 
+std::vector<std::pair<int, int>> align_remix_intervals(
+    const float* y, std::size_t n, const std::vector<std::pair<int, int>>& intervals,
+    bool align_zeros) {
+  if (n > 0 && y == nullptr) {
+    throw SonareException(ErrorCode::InvalidParameter,
+                          "align_remix_intervals: null input with non-zero length");
+  }
+  const int length = static_cast<int>(n);
+  const auto clamp_pair = [length](int start, int end) {
+    if (start < 0) start = 0;
+    if (start > length) start = length;
+    if (end > length) end = length;
+    if (end < start) end = start;
+    return std::pair<int, int>{start, end};
+  };
+
+  std::vector<int> zeros;
+  bool snap = false;
+  if (align_zeros) {
+    zeros = zero_crossings_for_remix(y, n, constants::kEpsilon);
+    // zero_crossings_for_remix always reports index 0 (pad=true), so a signal
+    // with no real sign change yields exactly {0} and, once the end sentinel is
+    // appended, the snap set {0, n}. Snapping to that drags every boundary onto
+    // 0 or n and erases the slice — which is what silence, a DC offset and any
+    // constant all do. Treat "no crossing found" as "nothing to snap to".
+    snap = zeros.size() > 1;
+    zeros.push_back(length);
+  }
+
+  std::vector<std::pair<int, int>> out;
+  out.reserve(intervals.size());
+  for (const auto& iv : intervals) {
+    const std::pair<int, int> raw = clamp_pair(iv.first, iv.second);
+    if (!snap) {
+      out.push_back(raw);
+      continue;
+    }
+    const std::pair<int, int> snapped =
+        clamp_pair(match_event(iv.first, zeros), match_event(iv.second, zeros));
+    // A slice that had content before snapping must keep some: with sparse
+    // crossings both boundaries can land on the same point.
+    out.push_back(snapped.second > snapped.first || raw.second <= raw.first ? snapped : raw);
+  }
+  return out;
+}
+
+std::vector<std::pair<int, int>> align_remix_intervals(
+    const std::vector<float>& y, const std::vector<std::pair<int, int>>& intervals,
+    bool align_zeros) {
+  return align_remix_intervals(y.data(), y.size(), intervals, align_zeros);
+}
+
 std::vector<float> remix(const float* y, std::size_t n,
                          const std::vector<std::pair<int, int>>& intervals, bool align_zeros) {
   if (n > 0 && y == nullptr) {
     throw SonareException(ErrorCode::InvalidParameter, "remix: null input with non-zero length");
   }
-
-  std::vector<int> zeros;
-  if (align_zeros) {
-    zeros = zero_crossings_for_remix(y, n, constants::kEpsilon);
-    // Force end-of-signal onto zeros (mirrors librosa).
-    zeros.push_back(static_cast<int>(n));
-  }
+  const std::vector<std::pair<int, int>> resolved =
+      align_remix_intervals(y, n, intervals, align_zeros);
 
   std::vector<float> out;
-  for (const auto& iv : intervals) {
-    int start = iv.first;
-    int end = iv.second;
-    if (align_zeros) {
-      start = match_event(start, zeros);
-      end = match_event(end, zeros);
-    }
-    if (start < 0) start = 0;
-    if (end > static_cast<int>(n)) end = static_cast<int>(n);
-    if (end <= start) continue;
-    out.insert(out.end(), y + start, y + end);
+  for (const auto& iv : resolved) {
+    if (iv.second <= iv.first) continue;
+    out.insert(out.end(), y + iv.first, y + iv.second);
   }
   return out;
 }

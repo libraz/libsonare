@@ -378,6 +378,49 @@ val js_decompose_with_init(val s, int n_features, int n_frames, int n_components
   return out;
 }
 
+// Phase-carrying NMF separation. Mirrors the C ABI sonare_decompose_stems.
+// Unlike decompose(), which returns W/H factors of a magnitude spectrogram,
+// this applies a per-component soft mask to the ORIGINAL complex spectrogram,
+// so every returned component keeps the source's phase and is directly
+// listenable. Returns { components: Float32Array[], w, h }.
+val js_decompose_stems(val samples, int sample_rate, val options) {
+  Audio audio = loadValidatedAudio(samples, sample_rate);
+  DecomposeStemsConfig config;
+  const int n_components = intProperty(options, "nComponents", config.n_components);
+  const int n_fft = intProperty(options, "nFft", config.n_fft);
+  const int hop_length = intProperty(options, "hopLength", config.hop_length);
+  const int n_iter = intProperty(options, "nIter", config.n_iter);
+  const float beta = floatProperty(options, "beta", config.beta);
+  const float mask_power = floatProperty(options, "maskPower", config.mask_power);
+  const std::string init = stringProperty(options, "init", config.init);
+  if (n_components <= 0 || n_fft <= 0 || hop_length <= 0 || n_iter <= 0) {
+    throw SonareException(ErrorCode::InvalidParameter,
+                          "decomposeStems: nComponents, nFft, hopLength and nIter must be > 0");
+  }
+  if (!(mask_power >= 1.0f)) {
+    throw SonareException(ErrorCode::InvalidParameter, "decomposeStems: maskPower must be >= 1");
+  }
+  config.n_components = n_components;
+  config.n_fft = n_fft;
+  config.hop_length = hop_length;
+  config.n_iter = n_iter;
+  config.beta = beta;
+  config.mask_power = mask_power;
+  config.init = init.empty() ? std::string("random") : init;
+
+  DecomposeStemsResult result = decompose_stems(audio.data(), audio.size(), sample_rate, config);
+  val components = val::array();
+  for (const std::vector<float>& component : result.components) {
+    components.call<void>("push", vectorToFloat32Array(component));
+  }
+  val out = val::object();
+  out.set("components", components);
+  out.set("w", vectorToFloat32Array(result.W));
+  out.set("h", vectorToFloat32Array(result.H));
+  out.set("sampleRate", sample_rate);
+  return out;
+}
+
 // Nearest-neighbour spectrogram filter. Mirrors the C ABI sonare_nn_filter /
 // librosa.decompose.nn_filter. Returns the smoothed spectrogram
 // [n_features x n_frames] as { data, rows, cols }.
@@ -422,6 +465,33 @@ val js_remix(val samples, val intervals, int sample_rate, bool align_zeros) {
   }
   std::vector<float> remixed = remix(audio.data(), audio.size(), pairs, align_zeros);
   return vectorToFloat32Array(remixed);
+}
+
+// Resolves the cut points remix() would use, without cutting. Mirrors the C ABI
+// sonare_remix_aligned_intervals. Returns a flat Int32Array of (start, end)
+// pairs so a host can apply ONE cut set to every channel of a multichannel
+// take; calling remix() per channel snaps each channel independently.
+val js_remix_aligned_intervals(val samples, val intervals, int sample_rate, bool align_zeros) {
+  Audio audio = loadValidatedAudio(samples, sample_rate);
+  std::vector<int32_t> interval_ints = int32ArrayToVector(intervals);
+  if (interval_ints.size() % 2 != 0) {
+    throw sonare::SonareException(sonare::ErrorCode::InvalidParameter,
+                                  "remix intervals must be (start, end) pairs");
+  }
+  std::vector<std::pair<int, int>> pairs;
+  pairs.reserve(interval_ints.size() / 2);
+  for (size_t i = 0; i + 1 < interval_ints.size(); i += 2) {
+    pairs.emplace_back(static_cast<int>(interval_ints[i]), static_cast<int>(interval_ints[i + 1]));
+  }
+  const std::vector<std::pair<int, int>> resolved =
+      align_remix_intervals(audio.data(), audio.size(), pairs, align_zeros);
+  std::vector<int> flat;
+  flat.reserve(resolved.size() * 2);
+  for (const auto& pair : resolved) {
+    flat.push_back(pair.first);
+    flat.push_back(pair.second);
+  }
+  return vectorToInt32Array(flat);
 }
 
 // HPSS with residual: separates audio into harmonic, percussive and residual
@@ -637,8 +707,10 @@ void registerEffectsAudioBindings() {
   function("voiceChangeRealtime", &js_voice_change_realtime);
   function("decompose", &js_decompose);
   function("decomposeWithInit", &js_decompose_with_init);
+  function("decomposeStems", &js_decompose_stems);
   function("nnFilter", &js_nn_filter);
   function("remix", &js_remix);
+  function("remixAlignedIntervals", &js_remix_aligned_intervals);
   function("hpssWithResidual", &js_hpss_with_residual);
   function("hpssWithResidualEx", &js_hpss_with_residual_ex);
   function("phaseVocoder", &js_phase_vocoder);

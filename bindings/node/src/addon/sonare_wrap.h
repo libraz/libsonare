@@ -111,8 +111,10 @@ class SonareWrap : public Napi::ObjectWrap<SonareWrap> {
   static Napi::Value VoiceCharacterPresetId(const Napi::CallbackInfo& info);
   static Napi::Value RealtimeVoiceChangerPresetConfig(const Napi::CallbackInfo& info);
   static Napi::Value Decompose(const Napi::CallbackInfo& info);
+  static Napi::Value DecomposeStems(const Napi::CallbackInfo& info);
   static Napi::Value NnFilter(const Napi::CallbackInfo& info);
   static Napi::Value Remix(const Napi::CallbackInfo& info);
+  static Napi::Value RemixAlignedIntervals(const Napi::CallbackInfo& info);
   static Napi::Value HpssWithResidual(const Napi::CallbackInfo& info);
   static Napi::Value PhaseVocoder(const Napi::CallbackInfo& info);
   static Napi::Value Normalize(const Napi::CallbackInfo& info);

@@ -284,6 +284,112 @@ SonareError sonare_remix(const float* samples, size_t length, int sample_rate, c
   });
 }
 
+SonareError sonare_decompose_stems(const float* samples, size_t length, int sample_rate,
+                                   const SonareDecomposeStemsConfig* config, float** out,
+                                   size_t* out_component_count, size_t* out_component_length,
+                                   float** out_w, size_t* out_w_length, float** out_h,
+                                   size_t* out_h_length) {
+  SONARE_C_API_ENTRY;
+  if (!out || !out_component_count || !out_component_length) return SONARE_ERROR_INVALID_PARAMETER;
+  if ((out_w != nullptr) != (out_w_length != nullptr)) return SONARE_ERROR_INVALID_PARAMETER;
+  if ((out_h != nullptr) != (out_h_length != nullptr)) return SONARE_ERROR_INVALID_PARAMETER;
+  *out = nullptr;
+  *out_component_count = 0;
+  *out_component_length = 0;
+  if (out_w != nullptr) {
+    *out_w = nullptr;
+    *out_w_length = 0;
+  }
+  if (out_h != nullptr) {
+    *out_h = nullptr;
+    *out_h_length = 0;
+  }
+  if (config != nullptr && (config->struct_version < 0 || config->struct_version > 1)) {
+    return SONARE_ERROR_INVALID_PARAMETER;
+  }
+
+  DecomposeStemsConfig core_config;
+  if (config != nullptr) {
+    if (config->n_components < 0 || config->n_fft < 0 || config->hop_length < 0 ||
+        config->n_iter < 0 || !std::isfinite(config->beta) || !std::isfinite(config->mask_power) ||
+        config->mask_power < 0.0f) {
+      return SONARE_ERROR_INVALID_PARAMETER;
+    }
+    if (config->n_components > 0) core_config.n_components = config->n_components;
+    if (config->n_fft > 0) core_config.n_fft = config->n_fft;
+    if (config->hop_length > 0) core_config.hop_length = config->hop_length;
+    if (config->n_iter > 0) core_config.n_iter = config->n_iter;
+    if (config->beta != 0.0f) core_config.beta = config->beta;
+    if (config->init != nullptr && config->init[0] != '\0') core_config.init = config->init;
+    if (config->mask_power > 0.0f) core_config.mask_power = config->mask_power;
+  }
+  if (core_config.mask_power < 1.0f) return SONARE_ERROR_INVALID_PARAMETER;
+
+  return run_offline(samples, length, sample_rate, [&](const Audio& audio) -> SonareError {
+    DecomposeStemsResult result =
+        decompose_stems(audio.data(), audio.size(), sample_rate, core_config);
+    if (result.components.empty()) return SONARE_OK;
+    const size_t component_length = result.components.front().size();
+    if (component_length == 0) return SONARE_OK;
+    if (result.components.size() > SIZE_MAX / component_length) {
+      return SONARE_ERROR_INVALID_PARAMETER;
+    }
+    auto flat = std::make_unique<float[]>(result.components.size() * component_length);
+    for (size_t component = 0; component < result.components.size(); ++component) {
+      std::memcpy(flat.get() + component * component_length, result.components[component].data(),
+                  component_length * sizeof(float));
+    }
+    if (out_w != nullptr) {
+      SonareError werr = copy_vector(result.W, out_w, out_w_length);
+      if (werr != SONARE_OK) return werr;
+    }
+    if (out_h != nullptr) {
+      SonareError herr = copy_vector(result.H, out_h, out_h_length);
+      if (herr != SONARE_OK) {
+        if (out_w != nullptr) {
+          sonare_free_floats(*out_w);
+          *out_w = nullptr;
+          *out_w_length = 0;
+        }
+        return herr;
+      }
+    }
+    *out = flat.release();
+    *out_component_count = result.components.size();
+    *out_component_length = component_length;
+    return SONARE_OK;
+  });
+}
+
+SonareError sonare_remix_aligned_intervals(const float* samples, size_t length, int sample_rate,
+                                           const int* intervals, size_t interval_count,
+                                           int align_zeros, int** out, size_t* out_count) {
+  SONARE_C_API_ENTRY;
+  if (!out || !out_count) return SONARE_ERROR_INVALID_PARAMETER;
+  *out = nullptr;
+  *out_count = 0;
+  if (interval_count > 0 && !intervals) return SONARE_ERROR_INVALID_PARAMETER;
+
+  return run_offline(samples, length, sample_rate, [&](const Audio& audio) -> SonareError {
+    std::vector<std::pair<int, int>> pairs;
+    pairs.reserve(interval_count);
+    for (size_t i = 0; i < interval_count; ++i) {
+      pairs.emplace_back(intervals[2 * i], intervals[2 * i + 1]);
+    }
+    const std::vector<std::pair<int, int>> resolved =
+        align_remix_intervals(audio.data(), audio.size(), pairs, align_zeros != 0);
+    if (resolved.empty()) return SONARE_OK;
+    auto flat = std::make_unique<int[]>(resolved.size() * 2);
+    for (size_t i = 0; i < resolved.size(); ++i) {
+      flat[2 * i] = resolved[i].first;
+      flat[2 * i + 1] = resolved[i].second;
+    }
+    *out = flat.release();
+    *out_count = resolved.size();
+    return SONARE_OK;
+  });
+}
+
 SonareError sonare_hpss_with_residual(const float* samples, size_t length, int sample_rate,
                                       int kernel_harmonic, int kernel_percussive,
                                       float** out_harmonic, float** out_percussive,

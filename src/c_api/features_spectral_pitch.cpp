@@ -501,11 +501,12 @@ SonareError sonare_note_segments(const float* f0_hz, size_t f0_count, const floa
       !std::isfinite(frame_rate)) {
     return SONARE_ERROR_INVALID_PARAMETER;
   }
-  if (config != nullptr && (config->struct_version < 0 || config->struct_version > 1)) {
+  if (config != nullptr && (config->struct_version < 0 || config->struct_version > 2)) {
     return SONARE_ERROR_INVALID_PARAMETER;
   }
 
   sonare::editing::pitch_editor::NoteSegmenterConfig segmenter_config;
+  float voiced_threshold = 0.5f;
   if (config != nullptr) {
     if (!std::isfinite(config->segmentation_threshold_cents) ||
         !std::isfinite(config->min_note_ms) || !std::isfinite(config->reference_hz) ||
@@ -518,6 +519,13 @@ SonareError sonare_note_segments(const float* f0_hz, size_t f0_count, const floa
     }
     if (config->min_note_ms > 0.0f) segmenter_config.min_note_ms = config->min_note_ms;
     if (config->reference_hz > 0.0f) segmenter_config.reference_hz = config->reference_hz;
+    if (config->struct_version == 2) {
+      if (!std::isfinite(config->voiced_threshold) || config->voiced_threshold < 0.0f ||
+          config->voiced_threshold > 1.0f) {
+        return SONARE_ERROR_INVALID_PARAMETER;
+      }
+      if (config->voiced_threshold > 0.0f) voiced_threshold = config->voiced_threshold;
+    }
   }
 
   SONARE_C_TRY
@@ -535,7 +543,7 @@ SonareError sonare_note_segments(const float* f0_hz, size_t f0_count, const floa
     }
     track.f0_hz.push_back(f0);
     track.voiced_prob.push_back(probability);
-    track.voiced.push_back(probability >= 0.5f);
+    track.voiced.push_back(probability >= voiced_threshold);
   }
 
   const auto regions =

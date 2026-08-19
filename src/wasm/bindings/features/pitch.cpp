@@ -80,10 +80,11 @@ val js_note_segments(val f0_hz, val voiced_prob, float frame_rate, val options) 
   std::vector<float> f0 = float32ArrayToVector(f0_hz);
   std::vector<float> probabilities = float32ArrayToVector(voiced_prob);
   SonareNoteSegmenterConfig config{};
-  config.struct_version = 1;
+  config.struct_version = 2;
   config.segmentation_threshold_cents = floatProperty(options, "segmentationThresholdCents", 0.0f);
   config.min_note_ms = floatProperty(options, "minNoteMs", 0.0f);
   config.reference_hz = floatProperty(options, "referenceHz", 0.0f);
+  config.voiced_threshold = floatProperty(options, "voicedThreshold", 0.0f);
   SonareNoteSegmentsResult result{};
   const SonareError error =
       sonare_note_segments(f0.data(), f0.size(), probabilities.data(), probabilities.size(),

@@ -56,6 +56,7 @@ add_executable(sonare_tests
   feature/spectral_test.cpp
   feature/onset_test.cpp
   feature/pitch_test.cpp
+  feature/pyin_voicing_contract_test.cpp
   feature/cqt_test.cpp
   feature/vqt_test.cpp
   effects/hpss_test.cpp
@@ -237,6 +238,7 @@ if(BUILD_MIXING)
     engine/mixing_runtime_test.cpp
     engine/monitor_runtime_test.cpp
     engine/track_mixer_test.cpp
+    engine/bus_aggregation_test.cpp
     engine/track_mixer_concurrency_test.cpp
     mixing/downmix_test.cpp
     mixing/golden_hash_test.cpp
@@ -403,6 +405,7 @@ if(BUILD_ARRANGEMENT)
     serialize/project_default_sr_and_uri_test.cpp
     host/host_seam_test.cpp
     engine/realtime_engine_midi_test.cpp
+    engine/instrument_automation_test.cpp
     bindings/binding_project_c_surface_test.cpp
     bindings/binding_project_bounce_test.cpp
     bindings/project_bounce_overflow_test.cpp

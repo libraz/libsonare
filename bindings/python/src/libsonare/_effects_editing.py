@@ -358,8 +358,12 @@ def pitch_correct_to_midi_timevarying(
         hop_length: F0 hop in samples; frame ``i`` covers sample ``i*hop_length``.
         voiced: Optional per-frame voiced flags (non-zero = voiced); ``None``
             treats every frame as voiced.
-        voiced_prob: Optional per-frame voicing probability in ``[0, 1]``;
-            ``None`` derives it from ``voiced`` (1.0 / 0.0).
+        voiced_prob: Optional per-frame voicing probability in ``[0, 1]``. Used
+            ONLY to derive voicing when ``voiced`` is ``None`` (>= 0.5 is
+            voiced); ignored entirely when ``voiced`` is supplied. It never
+            scales the correction amount, so passing :func:`pitch_pyin`'s
+            ``voiced_prob`` (a frequency-dependent observation mass, not a
+            confidence) gives the same result as omitting it.
 
     Returns:
         List of pitch-corrected samples.
@@ -441,7 +445,9 @@ def pitch_correct_timevarying(
         retune_speed_ms: Retune IIR time constant (ms); ``None`` keeps the default.
         vibrato_threshold_cents: Vibrato-preserve threshold; ``None`` keeps the default.
         voiced: Optional per-frame voiced flags (non-zero = voiced).
-        voiced_prob: Optional per-frame voicing probability in ``[0, 1]``.
+        voiced_prob: Optional per-frame voicing probability in ``[0, 1]``. Used
+            only to derive voicing when ``voiced`` is ``None``; never a weight
+            on the correction amount.
 
     Returns:
         List of pitch-corrected samples.

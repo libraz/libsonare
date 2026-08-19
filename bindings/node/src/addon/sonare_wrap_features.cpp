@@ -866,13 +866,14 @@ Napi::Value SonareWrap::NoteSegments(const Napi::CallbackInfo& info) {
       return env.Undefined();
     }
     const Napi::Object options = config_value.As<Napi::Object>();
-    config.struct_version = 1;
+    config.struct_version = 2;
     // Analysis options bag: the type-checked reader family, so an explicit
     // `undefined` (or any non-number) reads as the documented default.
     config.segmentation_threshold_cents =
         node_float_option(options, "segmentationThresholdCents", 0.0f);
     config.min_note_ms = node_float_option(options, "minNoteMs", 0.0f);
     config.reference_hz = node_float_option(options, "referenceHz", 0.0f);
+    config.voiced_threshold = node_float_option(options, "voicedThreshold", 0.0f);
   }
 
   SonareNoteSegmentsResult result{};

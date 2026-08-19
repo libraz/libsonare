@@ -76,6 +76,42 @@ def test_decompose_factorizes_spectrogram() -> None:
     assert _finite(w) and _finite(h)
 
 
+def test_decompose_stems_components_sum_back_to_the_input() -> None:
+    x = _tone(440.0, 0.4)
+    res = libsonare.decompose_stems(x, SR, n_components=2, n_fft=1024, hop_length=256, n_iter=30)
+    components = res["components"]
+    assert len(components) == 2
+    assert all(np.asarray(c).shape == x.shape for c in components)
+    assert np.asarray(res["w"]).shape == (1024 // 2 + 1, 2)
+    assert np.asarray(res["h"]).shape[0] == 2
+    assert res["sample_rate"] == SR
+    total = sum(np.asarray(c, dtype=np.float32) for c in components)
+    interior = slice(1024, len(x) - 1024)
+    err = float(np.linalg.norm(total[interior] - x[interior]))
+    assert err / float(np.linalg.norm(x[interior])) < 0.05
+
+
+def test_decompose_stems_rejects_an_out_of_range_mask_power() -> None:
+    with pytest.raises(ValueError):
+        libsonare.decompose_stems(_tone(440.0, 0.2), SR, mask_power=0.5)
+
+
+def test_remix_aligned_intervals_resolves_cut_points() -> None:
+    x = _tone(440.0, 0.5)
+    pairs = libsonare.remix_aligned_intervals(x, [0, 1000, 5000, 5500])
+    assert len(pairs) == 4
+    assert pairs[0] >= 0
+    assert pairs[1] > pairs[0]
+    assert pairs[3] > pairs[2]
+    assert pairs[3] <= len(x)
+
+
+def test_remix_aligned_intervals_leaves_a_sign_changeless_signal_unsnapped() -> None:
+    # A DC offset has no zero-crossing to snap to; the interval must survive.
+    flat = np.full(4096, 0.25, dtype=np.float32)
+    assert libsonare.remix_aligned_intervals(flat, [100, 200]) == [100, 200]
+
+
 def test_nn_filter_preserves_shape() -> None:
     n_features, n_frames = 12, 20
     rng = np.random.default_rng(1)

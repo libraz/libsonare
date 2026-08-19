@@ -399,6 +399,129 @@ TEST_CASE("sonare_remix", "[c_api][effects]") {
   }
 }
 
+TEST_CASE("sonare_remix_aligned_intervals", "[c_api][effects]") {
+  const int sr = 22050;
+  auto samples = generate_sine(440.0f, sr, 0.5f);
+
+  SECTION("resolves one clamped pair per interval") {
+    std::vector<int> intervals = {0, 1000, 5000, 5500};
+    int* out = nullptr;
+    size_t out_count = 0;
+    REQUIRE(sonare_remix_aligned_intervals(samples.data(), samples.size(), sr, intervals.data(), 2,
+                                           1, &out, &out_count) == SONARE_OK);
+    REQUIRE(out != nullptr);
+    REQUIRE(out_count == 2);
+    for (size_t i = 0; i < out_count; ++i) {
+      REQUIRE(out[2 * i] >= 0);
+      REQUIRE(out[2 * i + 1] <= static_cast<int>(samples.size()));
+      REQUIRE(out[2 * i + 1] > out[2 * i]);
+    }
+    sonare_free_ints(out);
+  }
+
+  SECTION("a signal with no sign change is left unsnapped") {
+    std::vector<float> flat(4096, 0.25f);
+    std::vector<int> intervals = {100, 200};
+    int* out = nullptr;
+    size_t out_count = 0;
+    REQUIRE(sonare_remix_aligned_intervals(flat.data(), flat.size(), sr, intervals.data(), 1, 1,
+                                           &out, &out_count) == SONARE_OK);
+    REQUIRE(out_count == 1);
+    REQUIRE(out[0] == 100);
+    REQUIRE(out[1] == 200);
+    sonare_free_ints(out);
+  }
+
+  SECTION("rejects null out") {
+    std::vector<int> intervals = {0, 100};
+    REQUIRE(sonare_remix_aligned_intervals(samples.data(), samples.size(), sr, intervals.data(), 1,
+                                           1, nullptr, nullptr) == SONARE_ERROR_INVALID_PARAMETER);
+  }
+}
+
+TEST_CASE("sonare_decompose_stems", "[c_api][effects]") {
+  const int sr = 22050;
+  auto samples = generate_sine(440.0f, sr, 0.4f);
+
+  SECTION("emits one flat component buffer plus the factorisation") {
+    SonareDecomposeStemsConfig config{};
+    config.struct_version = 1;
+    config.n_components = 2;
+    config.n_fft = 1024;
+    config.hop_length = 256;
+    config.n_iter = 30;
+    float* out = nullptr;
+    size_t count = 0;
+    size_t length = 0;
+    float* w = nullptr;
+    size_t w_length = 0;
+    float* h = nullptr;
+    size_t h_length = 0;
+    REQUIRE(sonare_decompose_stems(samples.data(), samples.size(), sr, &config, &out, &count,
+                                   &length, &w, &w_length, &h, &h_length) == SONARE_OK);
+    REQUIRE(count == 2);
+    REQUIRE(length == samples.size());
+    REQUIRE(w_length == static_cast<size_t>(config.n_fft / 2 + 1) * count);
+    REQUIRE(h_length % count == 0);
+    // The masks partition the spectrogram, so the components sum back to the
+    // input over the interior where the window overlap is complete.
+    double err = 0.0;
+    double ref = 0.0;
+    for (size_t i = static_cast<size_t>(config.n_fft);
+         i + static_cast<size_t>(config.n_fft) < length; ++i) {
+      const double sum = out[i] + out[length + i];
+      err += (sum - samples[i]) * (sum - samples[i]);
+      ref += static_cast<double>(samples[i]) * samples[i];
+    }
+    REQUIRE(ref > 0.0);
+    REQUIRE(std::sqrt(err / ref) < 0.05);
+    sonare_free_floats(out);
+    sonare_free_floats(w);
+    sonare_free_floats(h);
+  }
+
+  SECTION("NULL config selects the defaults and W/H are optional") {
+    float* out = nullptr;
+    size_t count = 0;
+    size_t length = 0;
+    REQUIRE(sonare_decompose_stems(samples.data(), samples.size(), sr, nullptr, &out, &count,
+                                   &length, nullptr, nullptr, nullptr, nullptr) == SONARE_OK);
+    REQUIRE(count == 4);
+    REQUIRE(length == samples.size());
+    sonare_free_floats(out);
+  }
+
+  SECTION("rejects an unknown struct version and an out-of-range mask power") {
+    SonareDecomposeStemsConfig config{};
+    config.struct_version = 99;
+    float* out = non_null_sentinel_float_ptr();
+    size_t count = 99;
+    size_t length = 99;
+    REQUIRE(sonare_decompose_stems(samples.data(), samples.size(), sr, &config, &out, &count,
+                                   &length, nullptr, nullptr, nullptr,
+                                   nullptr) == SONARE_ERROR_INVALID_PARAMETER);
+    REQUIRE(out == nullptr);
+    REQUIRE(count == 0);
+    REQUIRE(length == 0);
+
+    config = SonareDecomposeStemsConfig{};
+    config.mask_power = 0.5f;
+    REQUIRE(sonare_decompose_stems(samples.data(), samples.size(), sr, &config, &out, &count,
+                                   &length, nullptr, nullptr, nullptr,
+                                   nullptr) == SONARE_ERROR_INVALID_PARAMETER);
+  }
+
+  SECTION("rejects a half-supplied W or H out-parameter pair") {
+    float* out = nullptr;
+    size_t count = 0;
+    size_t length = 0;
+    float* w = nullptr;
+    REQUIRE(sonare_decompose_stems(samples.data(), samples.size(), sr, nullptr, &out, &count,
+                                   &length, &w, nullptr, nullptr,
+                                   nullptr) == SONARE_ERROR_INVALID_PARAMETER);
+  }
+}
+
 TEST_CASE("sonare_hpss_with_residual", "[c_api][effects]") {
   const int sr = 22050;
   auto samples = generate_sine(440.0f, sr, 1.0f);

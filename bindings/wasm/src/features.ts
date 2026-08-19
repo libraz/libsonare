@@ -55,6 +55,7 @@ export { noteSegments, piptrack, pitchPyin, pitchYin } from './feature_pitch';
 export { resample } from './feature_resample';
 export {
   decompose,
+  decomposeStems,
   decomposeWithInit,
   ebur128LoudnessRange,
   estimateTuning,
@@ -65,6 +66,7 @@ export {
   pitchTuning,
   polyFeatures,
   remix,
+  remixAlignedIntervals,
   rmsEnergy,
   segmentAgglomerative,
   segmentCrossSimilarity,

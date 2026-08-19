@@ -8,14 +8,16 @@ from numbers import Integral
 
 import numpy as np
 
-from ._ffi import SonareHpssResult
+from ._ffi import SonareDecomposeStemsConfig, SonareHpssResult
 from ._runtime import (
     ErrorCode,
     SonareError,
     _check,
     _from_c_float_array,
     _get_lib,
+    _int_array_result,
     _out_float_array,
+    _out_int_array,
     _to_c_float_array,
     _to_c_int_array,
     _validate_samples,
@@ -161,6 +163,103 @@ def decompose_with_init(
         return (w, h)
 
 
+def decompose_stems(
+    samples: Sequence[float] | list[float],
+    sample_rate: int = 22050,
+    n_components: int = 4,
+    n_fft: int = _DEFAULT_EFFECT_N_FFT,
+    hop_length: int = _DEFAULT_EFFECT_HOP_LENGTH,
+    n_iter: int = 100,
+    beta: float = 2.0,
+    init: str = "random",
+    mask_power: float = 1.0,
+    *,
+    validate: bool = True,
+) -> dict[str, object]:
+    """NMF separation that carries the original phase, so components are listenable.
+
+    :func:`decompose` returns the W / H factors of a magnitude spectrogram,
+    which have no phase; reconstructing from them needs a phase estimator, and
+    an estimated phase does not hold up as a stem. This builds a per-component
+    soft mask from the factorisation and applies it to the original complex
+    spectrogram. The masks sum to one wherever the model has energy and the
+    inverse STFT is linear, so the components sum back to the input.
+
+    Args:
+        samples: Input signal (mono).
+        sample_rate: Sample rate in Hz (default 22050).
+        n_components: Number of NMF components (default 4).
+        n_fft: STFT size (default 2048).
+        hop_length: STFT hop (default 512).
+        n_iter: NMF multiplicative-update iterations (default 100).
+        beta: Beta divergence (2 = Frobenius, 1 = Kullback-Leibler).
+        init: NMF initialisation, ``"random"`` (default) or ``"nndsvd"``.
+        mask_power: Soft-mask exponent (default 1). 1 keeps the magnitude
+            ratio; 2 is the Wiener-style power ratio, which separates harder at
+            the cost of more artefacts on overlapping partials. Must be >= 1.
+        validate: Validate the input samples (default True).
+
+    Returns:
+        Dict with ``components`` (list of 1-D float32 arrays, each the length of
+        the input), ``w`` (``(n_bins, n_components)``), ``h``
+        (``(n_components, n_frames)``) and ``sample_rate``.
+    """
+    _validate_samples("decompose_stems", samples, validate=validate)
+    n_fft, hop_length = _validate_effect_fft_options("decompose_stems", n_fft, hop_length)
+    if n_components <= 0 or n_iter <= 0:
+        raise ValueError("decompose_stems: n_components and n_iter must be positive")
+    if mask_power < 1.0:
+        raise ValueError("decompose_stems: mask_power must be >= 1")
+    lib = _get_lib()
+    if not hasattr(lib, "sonare_decompose_stems"):
+        raise _unsupported_effect_symbol("sonare_decompose_stems")
+    config = SonareDecomposeStemsConfig(
+        struct_version=1,
+        n_components=int(n_components),
+        n_fft=n_fft,
+        hop_length=hop_length,
+        n_iter=int(n_iter),
+        beta=float(beta),
+        init=init.encode("utf-8") if init else None,
+        mask_power=float(mask_power),
+    )
+    c_array, length = _to_c_float_array(samples)
+    component_count = ctypes.c_size_t()
+    with (
+        _out_float_array(lib) as (out, component_length),
+        _out_float_array(lib) as (out_w, out_w_length),
+        _out_float_array(lib) as (out_h, out_h_length),
+    ):
+        _check(
+            lib.sonare_decompose_stems(
+                c_array,
+                ctypes.c_size_t(length),
+                ctypes.c_int(sample_rate),
+                ctypes.byref(config),
+                ctypes.byref(out),
+                ctypes.byref(component_count),
+                ctypes.byref(component_length),
+                ctypes.byref(out_w),
+                ctypes.byref(out_w_length),
+                ctypes.byref(out_h),
+                ctypes.byref(out_h_length),
+            )
+        )
+        count = component_count.value
+        per = component_length.value
+        flat = _from_c_float_array(out, count * per)
+        components = [np.array(flat[i * per : (i + 1) * per]) for i in range(count)]
+        w = _from_c_float_array(out_w, out_w_length.value)
+        h = _from_c_float_array(out_h, out_h_length.value)
+        n_bins = n_fft // 2 + 1
+        return {
+            "components": components,
+            "w": w.reshape(n_bins, count) if count else w,
+            "h": h.reshape(count, -1) if count else h,
+            "sample_rate": sample_rate,
+        }
+
+
 def nn_filter(
     s: Sequence[float] | list[float],
     n_features: int,
@@ -212,6 +311,11 @@ def remix(
 ) -> np.ndarray:
     """Reorder / concatenate a signal by interval slices (librosa.effects.remix).
 
+    With ``align_zeros`` the boundaries snap to the signal's zero-crossings,
+    which is a per-signal decision: calling this per channel snaps each channel
+    to a different frame and drifts a stereo take apart. Resolve one cut set
+    with :func:`remix_aligned_intervals` and apply it to every channel instead.
+
     Args:
         samples: Input signal.
         intervals: Flat sequence of ``(start, end)`` pairs (even length).
@@ -238,6 +342,54 @@ def remix(
             )
         )
         return _from_c_float_array(out, out_length.value)
+
+
+def remix_aligned_intervals(
+    samples: Sequence[float] | list[float],
+    intervals: Sequence[int] | list[int],
+    sample_rate: int = 22050,
+    align_zeros: bool = True,
+) -> list[int]:
+    """Resolve the cut points :func:`remix` would use, without cutting.
+
+    Returns a flat list of one clamped ``(start, end)`` pair per input interval.
+    With ``align_zeros`` each boundary snaps to the nearest zero-crossing, with
+    two guards that stop a slice from vanishing: a signal with no sign change at
+    all (silence, a DC offset, any constant) is not snapped, and a slice that
+    had content but collapses to empty after snapping keeps its unsnapped
+    boundaries.
+
+    Use this to cut a multichannel take on one common frame set: resolve once
+    from one channel, then slice every channel with the returned pairs.
+
+    Args:
+        samples: Input signal.
+        intervals: Flat sequence of ``(start, end)`` pairs (even length).
+        sample_rate: Sample rate in Hz (default 22050).
+        align_zeros: Snap slice boundaries to zero-crossings (default True).
+
+    Returns:
+        Flat list of resolved ``(start, end)`` pairs.
+    """
+    lib = _get_lib()
+    if not hasattr(lib, "sonare_remix_aligned_intervals"):
+        raise RuntimeError("loaded libsonare does not expose sonare_remix_aligned_intervals")
+    c_array, length = _to_c_float_array(samples)
+    intervals_array, n_ints = _to_c_int_array(intervals)
+    with _out_int_array(lib) as (out, out_count):
+        _check(
+            lib.sonare_remix_aligned_intervals(
+                c_array,
+                ctypes.c_size_t(length),
+                ctypes.c_int(sample_rate),
+                intervals_array,
+                ctypes.c_size_t(n_ints // 2),
+                ctypes.c_int(1 if align_zeros else 0),
+                ctypes.byref(out),
+                ctypes.byref(out_count),
+            )
+        )
+        return _int_array_result(out, out_count.value * 2)
 
 
 def hpss_with_residual(

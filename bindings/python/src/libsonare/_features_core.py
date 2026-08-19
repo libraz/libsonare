@@ -1297,20 +1297,28 @@ def note_segments(
     segmentation_threshold_cents: float | None = None,
     min_note_ms: float | None = None,
     reference_hz: float | None = None,
+    voiced_threshold: float | None = None,
 ) -> list[NoteSegment]:
     """Segment a monophonic F0 track into stable note regions.
 
-    Zero-Hz F0 frames and voiced probabilities below 0.5 delimit note regions.
-    The F0 and probability arrays must have equal non-zero length.
+    Zero-Hz F0 frames and voicing values below ``voiced_threshold`` (default
+    0.5) delimit note regions. The F0 and voicing arrays must have equal
+    non-zero length.
+
+    Pass :func:`pitch_pyin`'s ``voiced_flag`` as 0.0/1.0 for ``voiced_prob``.
+    Do **not** pass its ``voiced_prob``: that value is the frame's voiced
+    observation mass and rises with F0 for a fixed ``frame_length``, so a fixed
+    threshold silently returns no segments at all for low-register material.
     """
     lib = _get_lib()
     f0_array, f0_count = _to_c_float_array(f0_hz)
     probability_array, probability_count = _to_c_float_array(voiced_prob)
     config = SonareNoteSegmenterConfig(
-        1,
+        2,
         0.0 if segmentation_threshold_cents is None else segmentation_threshold_cents,
         0.0 if min_note_ms is None else min_note_ms,
         0.0 if reference_hz is None else reference_hz,
+        0.0 if voiced_threshold is None else voiced_threshold,
     )
     out = SonareNoteSegmentsResult()
     rc = lib.sonare_note_segments(

@@ -6,6 +6,8 @@
 #include <cmath>
 #include <random>
 
+#include "core/audio.h"
+#include "core/spectrum.h"
 #include "util/constants.h"
 #include "util/exception.h"
 
@@ -321,6 +323,80 @@ std::vector<float> nn_filter(const float* S, int n_features, int n_frames,
         out[f * n_frames + t] = s * inv_count;
       }
     }
+  }
+  return out;
+}
+
+DecomposeStemsResult decompose_stems(const float* samples, std::size_t n, int sample_rate,
+                                     const DecomposeStemsConfig& config) {
+  SONARE_CHECK(samples != nullptr && n > 0, ErrorCode::InvalidParameter);
+  SONARE_CHECK(sample_rate > 0, ErrorCode::InvalidParameter);
+  SONARE_CHECK(config.n_components > 0, ErrorCode::InvalidParameter);
+  SONARE_CHECK(config.n_fft > 0 && config.hop_length > 0, ErrorCode::InvalidParameter);
+  SONARE_CHECK(config.n_iter > 0, ErrorCode::InvalidParameter);
+  SONARE_CHECK(std::isfinite(config.mask_power) && config.mask_power >= 1.0f,
+               ErrorCode::InvalidParameter);
+
+  const Audio audio = Audio::from_buffer(samples, n, sample_rate);
+  const Spectrogram spectrum =
+      Spectrogram::compute(audio, make_stft_config(config.n_fft, config.hop_length));
+  const int n_bins = spectrum.n_bins();
+  const int n_frames = spectrum.n_frames();
+  SONARE_CHECK(n_bins > 0 && n_frames > 0, ErrorCode::InvalidParameter);
+
+  const std::vector<float>& magnitude = spectrum.magnitude();
+  DecomposeResult factors = decompose(magnitude.data(), n_bins, n_frames, config.n_components,
+                                      config.n_iter, "mu", config.beta, config.init);
+
+  const int k = config.n_components;
+  const std::complex<float>* source = spectrum.complex_data();
+  const std::size_t cells = static_cast<std::size_t>(n_bins) * static_cast<std::size_t>(n_frames);
+
+  // Model magnitude per component, then the shared denominator. Computed once
+  // for the whole spectrogram rather than per component so the k reconstructions
+  // cost one pass over W*H instead of k.
+  std::vector<float> model(cells * static_cast<std::size_t>(k), 0.0f);
+  std::vector<float> denominator(cells, 0.0f);
+  for (int component = 0; component < k; ++component) {
+    float* plane = model.data() + static_cast<std::size_t>(component) * cells;
+    for (int bin = 0; bin < n_bins; ++bin) {
+      const float w = factors.W[static_cast<std::size_t>(bin) * static_cast<std::size_t>(k) +
+                                static_cast<std::size_t>(component)];
+      for (int frame = 0; frame < n_frames; ++frame) {
+        const float h =
+            factors.H[static_cast<std::size_t>(component) * static_cast<std::size_t>(n_frames) +
+                      static_cast<std::size_t>(frame)];
+        const float value = std::max(w * h, 0.0f);
+        const float weighted =
+            config.mask_power == 1.0f ? value : std::pow(value, config.mask_power);
+        const std::size_t cell =
+            static_cast<std::size_t>(bin) * static_cast<std::size_t>(n_frames) +
+            static_cast<std::size_t>(frame);
+        plane[cell] = weighted;
+        denominator[cell] += weighted;
+      }
+    }
+  }
+
+  DecomposeStemsResult out;
+  out.W = std::move(factors.W);
+  out.H = std::move(factors.H);
+  out.components.reserve(static_cast<std::size_t>(k));
+  std::vector<std::complex<float>> masked(cells);
+  for (int component = 0; component < k; ++component) {
+    const float* plane = model.data() + static_cast<std::size_t>(component) * cells;
+    for (std::size_t cell = 0; cell < cells; ++cell) {
+      // A cell the model gives no energy to is dropped from every component
+      // rather than split evenly, so the masks never manufacture signal where
+      // the factorisation has none.
+      const float total = denominator[cell];
+      const float mask = total > kEps ? plane[cell] / total : 0.0f;
+      masked[cell] = source[cell] * mask;
+    }
+    const Spectrogram component_spectrum = Spectrogram::from_complex(
+        masked.data(), n_bins, n_frames, config.n_fft, config.hop_length, sample_rate);
+    const Audio rendered = component_spectrum.to_audio(static_cast<int>(n));
+    out.components.emplace_back(rendered.data(), rendered.data() + rendered.size());
   }
   return out;
 }

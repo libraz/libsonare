@@ -189,9 +189,15 @@ std::vector<float> PitchCorrector::compute_smooth_deltas(const F0Track& track, T
     const float current_midi = hz_to_midi(track.f0_hz[static_cast<size_t>(f)]);
     const float target_midi =
         (mode == TargetMode::kScale) ? quantizer.quantize_midi(current_midi) : fixed_target_midi;
-    const float voiced_weight =
-        track.voiced_prob.empty() ? 1.0f : track.voiced_prob[static_cast<size_t>(f)];
-    raw[static_cast<size_t>(f)] = (target_midi - current_midi) * voiced_weight;  // semitones
+    // voiced_prob is NOT a correction weight. It used to scale the per-frame
+    // correction amount, which silently made the correction fall short of its
+    // target whenever the caller passed a probability track: pYIN's
+    // voiced_prob is a frame's voiced observation mass, so it varies with F0
+    // and frame length rather than with confidence, and a low-register note
+    // barely moved. Voicing is decided by `voiced` alone (see
+    // valid_voiced_frame); voiced_prob only derives that flag when the caller
+    // supplies no explicit one.
+    raw[static_cast<size_t>(f)] = target_midi - current_midi;  // semitones
   }
 
   // Phase 2: retune IIR. alpha derived from time constant in frames.

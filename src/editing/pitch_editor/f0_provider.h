@@ -17,7 +17,16 @@ namespace sonare::editing::pitch_editor {
 
 struct F0Track {
   std::vector<float> f0_hz;
+  /// Per-frame voiced probability in [0, 1], as pYIN defines it: the frame's
+  /// voiced observation mass. It depends on how many periods of the pitch fit
+  /// in the analysis frame, so for a fixed frame_length it rises with F0 even
+  /// when the signal quality is unchanged. It is therefore NOT a signal-quality
+  /// confidence and NOT a correction weight; consumers that need a voicing
+  /// decision must read `voiced`. Optional: an empty vector is allowed
+  /// everywhere `voiced` is populated.
   std::vector<float> voiced_prob;
+  /// Per-frame voicing decision. This is the authoritative voiced/unvoiced
+  /// flag for every consumer (pitch correction, note segmentation).
   std::vector<bool> voiced;
   int hop_length = 512;
   int sample_rate = 48000;

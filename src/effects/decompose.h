@@ -3,6 +3,7 @@
 /// @file decompose.h
 /// @brief NMF decomposition and neighbour-based denoising (librosa.decompose).
 
+#include <cstddef>
 #include <string>
 #include <vector>
 
@@ -36,6 +37,52 @@ struct DecomposeResult {
 DecomposeResult decompose(const float* S, int n_features, int n_frames, int n_components,
                           int n_iter = 100, const std::string& solver = "mu", float beta = 2.0f,
                           const std::string& init = "random");
+
+/// @brief Options for @ref decompose_stems.
+struct DecomposeStemsConfig {
+  int n_components = 4;         ///< Number of NMF components (k).
+  int n_fft = 2048;             ///< STFT size.
+  int hop_length = 512;         ///< STFT hop.
+  int n_iter = 100;             ///< NMF multiplicative-update iterations.
+  float beta = 2.0f;            ///< Beta divergence: 2 = Frobenius, 1 = KL, 0 = IS.
+  std::string init = "random";  ///< NMF initialisation ("random" or "nndsvd").
+  /// Soft-mask exponent. 1 keeps the magnitude ratio; 2 is the Wiener-style
+  /// power ratio, which separates more aggressively at the cost of more
+  /// artefacts on overlapping partials. Values below 1 are rejected.
+  float mask_power = 1.0f;
+};
+
+/// @brief Output of @ref decompose_stems.
+struct DecomposeStemsResult {
+  /// One time-domain signal per component, each the length of the input.
+  std::vector<std::vector<float>> components;
+  std::vector<float> W;  ///< Component matrix [n_bins x n_components] row-major.
+  std::vector<float> H;  ///< Activation matrix [n_components x n_frames] row-major.
+};
+
+/// @brief NMF separation that CARRIES the original phase, so each component is
+///        directly listenable.
+/// @details @ref decompose returns the W / H factors of a magnitude
+///          spectrogram, which have no phase; reconstructing from them needs a
+///          phase estimator (Griffin-Lim), and an estimated phase does not hold
+///          up as a stem. This instead builds a soft mask per component from
+///          the factorisation and applies it to the ORIGINAL complex
+///          spectrogram, so every component keeps the source's phase:
+///
+///              mask_k = (W[:,k] H[k,:])^p / sum_j (W[:,j] H[j,:])^p
+///
+///          The masks sum to one wherever the model has any energy, and the
+///          inverse STFT is linear, so the component signals sum back to the
+///          input (up to STFT edge effects). Bins where the model has no energy
+///          at all are dropped from every component rather than duplicated.
+/// @param samples Input signal (mono).
+/// @param n Number of samples.
+/// @param sample_rate Sample rate in Hz.
+/// @param config Component count, STFT geometry, NMF and mask settings.
+/// @return One signal per component plus the factorisation that produced them.
+/// @throw sonare::SonareException on an empty input or an invalid configuration.
+DecomposeStemsResult decompose_stems(const float* samples, std::size_t n, int sample_rate,
+                                     const DecomposeStemsConfig& config = DecomposeStemsConfig());
 
 /// @brief Nearest-neighbour filter for spectrogram denoising.
 /// @details Mirrors `librosa.decompose.nn_filter`. For each frame, the k

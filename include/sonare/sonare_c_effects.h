@@ -60,7 +60,13 @@ SonareError sonare_pitch_correct_to_midi(const float* samples, size_t length, in
 ///                    flag is zero (matching pYIN's default unvoiced output).
 ///                    Finite values must be in [0, sample_rate/2].
 /// @param voiced_prob Per-frame voicing probability [0,1] (@p n_frames entries),
-///                    or NULL to derive it from @p voiced (1.0 / 0.0).
+///                    or NULL. It is used ONLY to derive voicing when @p voiced
+///                    is NULL (>= 0.5 is voiced); when @p voiced is supplied it
+///                    is ignored entirely. In particular it does NOT scale the
+///                    per-frame correction amount, so passing
+///                    @ref sonare_pitch_pyin's @c voiced_prob (a frequency-
+///                    dependent observation mass, not a confidence) leaves the
+///                    result identical to omitting it.
 /// @param voiced      Per-frame voiced flags (non-zero = voiced; @p n_frames
 ///                    entries), or NULL to treat every frame as voiced.
 /// @param hop_length  F0 hop in samples (> 0; frame i covers sample i*hop_length).
@@ -110,7 +116,10 @@ SonareError sonare_pitch_correction_config_default(SonarePitchCorrectionConfig* 
 /// @param f0_hz       Per-frame measured F0 in Hz (@p n_frames entries, required).
 ///                    Unvoiced frames may contain NaN when @p voiced is zero;
 ///                    finite values must be in [0, sample_rate/2].
-/// @param voiced_prob Per-frame voicing probability [0,1], or NULL.
+/// @param voiced_prob Per-frame voicing probability [0,1], or NULL. Used only
+///                    to derive voicing when @p voiced is NULL; never a weight
+///                    on the correction amount (see
+///                    @ref sonare_pitch_correct_to_midi_timevarying).
 /// @param voiced      Per-frame voiced flags (non-zero = voiced), or NULL.
 /// @param hop_length  F0 hop in samples (> 0).
 /// @note The returned array is heap-allocated and MUST be released with
@@ -313,6 +322,56 @@ SonareError sonare_decompose_with_init(const float* s, int n_features, int n_fra
                                        float** out_w, size_t* out_w_length, float** out_h,
                                        size_t* out_h_length);
 
+/// @brief Versioned options for @ref sonare_decompose_stems.
+/// @details Zero-initialize for the defaults (4 components, 2048/512 STFT,
+///          100 iterations, Frobenius beta, random init, magnitude mask).
+typedef struct {
+  int struct_version; /* 0 or 1 => version 1 */
+  int n_components;   /* 0 => 4 */
+  int n_fft;          /* 0 => 2048 */
+  int hop_length;     /* 0 => 512 */
+  int n_iter;         /* 0 => 100 */
+  float beta;         /* 0 => 2 (Frobenius); 1 = KL, use a tiny value for IS */
+  const char* init;   /* NULL => "random"; "nndsvd" also accepted */
+  float mask_power;   /* 0 => 1 (magnitude ratio); 2 = Wiener-style power ratio */
+} SonareDecomposeStemsConfig;
+
+/// @brief NMF separation that CARRIES the original phase, so each component is
+///        directly listenable.
+/// @details @ref sonare_decompose returns W / H factors of a magnitude
+///          spectrogram, which have no phase; reconstructing from them needs a
+///          phase estimator (@ref sonare_griffin_lim), and an estimated phase
+///          does not hold up as a stem. This builds a soft mask per component
+///          from the factorisation and applies it to the ORIGINAL complex
+///          spectrogram, so every component keeps the source's phase. The masks
+///          sum to one wherever the model has energy and the inverse STFT is
+///          linear, so the components sum back to the input.
+/// @param samples Input signal (mono).
+/// @param length Number of samples.
+/// @param sample_rate Sample rate in Hz.
+/// @param config Optional versioned options; NULL selects the defaults.
+/// @param out Receives one heap buffer per component, laid out as a single
+///        flat array of @p out_component_count * @p out_component_length
+///        floats (component c starts at c * @p out_component_length). Release
+///        with @ref sonare_free_floats.
+/// @param out_component_count Receives the number of components.
+/// @param out_component_length Receives the per-component sample count (equal
+///        to @p length).
+/// @param out_w Optional; receives the [n_bins x n_components] component matrix
+///        that produced the masks. NULL skips it. Release with
+///        @ref sonare_free_floats.
+/// @param out_w_length Optional; receives n_bins * n_components. Required when
+///        @p out_w is non-NULL.
+/// @param out_h Optional; receives the [n_components x n_frames] activation
+///        matrix. NULL skips it. Release with @ref sonare_free_floats.
+/// @param out_h_length Optional; receives n_components * n_frames. Required
+///        when @p out_h is non-NULL.
+SonareError sonare_decompose_stems(const float* samples, size_t length, int sample_rate,
+                                   const SonareDecomposeStemsConfig* config, float** out,
+                                   size_t* out_component_count, size_t* out_component_length,
+                                   float** out_w, size_t* out_w_length, float** out_h,
+                                   size_t* out_h_length);
+
 /// @brief Nearest-neighbour filter for spectrogram denoising
 ///        (mirror of @c sonare::nn_filter / librosa.decompose.nn_filter).
 /// @details Output is the smoothed spectrogram [n_features x n_frames] row-major
@@ -344,6 +403,33 @@ SonareError sonare_nn_filter(const float* s, int n_features, int n_frames, const
 /// @param out_length Receives the remixed signal length.
 SonareError sonare_remix(const float* samples, size_t length, int sample_rate, const int* intervals,
                          size_t interval_count, int align_zeros, float** out, size_t* out_length);
+
+/// @brief Resolves the cut points @ref sonare_remix would use, without cutting.
+/// @details Returns one clamped (start, end) pair per input interval, in order.
+///          With @p align_zeros zero the pairs are the inputs clamped to
+///          [0, length]; otherwise each boundary is snapped to the nearest
+///          zero-crossing, with two guards that stop a slice from vanishing:
+///          a signal with NO sign change at all (silence, a DC offset, any
+///          constant) is not snapped, and a slice that had content but
+///          collapses to empty after snapping keeps its unsnapped boundaries.
+///
+///          Snapping is a per-signal decision, so applying @ref sonare_remix
+///          channel by channel snaps each channel to a different frame and
+///          drifts a stereo take apart. Resolve the cut points once from one
+///          channel here and apply them to every channel instead.
+/// @param samples Input signal.
+/// @param length Number of samples.
+/// @param sample_rate Sample rate (validated, carried for API symmetry).
+/// @param intervals Flat array of @p interval_count (start, end) pairs.
+/// @param interval_count Number of (start, end) pairs.
+/// @param align_zeros Snap boundaries to zero-crossings (non-zero = true).
+/// @param out Receives a flat array of @p interval_count resolved (start, end)
+///        pairs (2 * @p interval_count ints). Release with
+///        @ref sonare_free_ints.
+/// @param out_count Receives the number of resolved pairs.
+SonareError sonare_remix_aligned_intervals(const float* samples, size_t length, int sample_rate,
+                                           const int* intervals, size_t interval_count,
+                                           int align_zeros, int** out, size_t* out_count);
 
 /// @brief HPSS with residual: separates audio into harmonic, percussive and
 ///        residual signals (mirror of @c sonare::hpss_with_residual).

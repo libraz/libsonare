@@ -581,19 +581,55 @@ void sonare_free_segment_indices(SonareSegmentIndices* result);
 SonareError sonare_pitch_yin(const float* samples, size_t length, int sample_rate, int frame_length,
                              int hop_length, float fmin, float fmax, float threshold, int fill_na,
                              SonarePitchResult* out);
+/// @brief Estimate f0 with probabilistic YIN (librosa.pyin).
 /// @param fill_na If non-zero, return 0 for unvoiced pYIN f0 frames; otherwise keep NaN.
+/// @note @c out->voiced_flag is the voicing decision — the Viterbi path's
+///       voiced/unvoiced state — and is what a consumer should gate on.
+///
+///       @c out->voiced_prob is NOT a signal-quality confidence. It is pYIN's
+///       per-frame voiced OBSERVATION MASS (the same quantity librosa returns):
+///       the summed probability of the frame's voiced pitch hypotheses. That
+///       mass depends on how many periods of the pitch fit inside
+///       @p frame_length, because the CMNDF troughs of a long period computed
+///       over a short frame are shallower. For a fixed @p frame_length it
+///       therefore rises monotonically with f0 even when the signal quality is
+///       identical: a steady three-harmonic tone measured at 2048 samples /
+///       48 kHz averages well under 0.1 at C2 and around 0.5 at C5, with every
+///       frame flagged voiced throughout.
+///
+///       Two consequences worth designing around:
+///        - a fixed 0.5 threshold on @c voiced_prob (the default in
+///          @ref sonare_note_segments) drops entire low registers. Pass
+///          @c voiced_flag as 0.0/1.0 there, or set the config's
+///          @c voiced_threshold.
+///        - @c voiced_prob is not a correction weight.
+///          @ref sonare_pitch_correct_timevarying does not scale its correction
+///          by it; it uses it only to derive voicing when no explicit @c voiced
+///          array is supplied.
 SonareError sonare_pitch_pyin(const float* samples, size_t length, int sample_rate,
                               int frame_length, int hop_length, float fmin, float fmax,
                               float threshold, int fill_na, SonarePitchResult* out);
 
 /// @brief Versioned configuration for @ref sonare_note_segments.
-/// @details Zero-initialize for the defaults (50 cents, 30 ms, A4 = 440 Hz).
-///          @c struct_version 0 and 1 select the current layout.
+/// @details Zero-initialize for the defaults (50 cents, 30 ms, A4 = 440 Hz,
+///          voiced threshold 0.5). @c struct_version 0 and 1 select the
+///          version-1 layout; 2 additionally honours @c voiced_threshold.
 typedef struct {
   int struct_version;
   float segmentation_threshold_cents;
   float min_note_ms;
   float reference_hz;
+  /* --- struct_version 2 --- */
+  /* Value of voiced_prob at or above which a frame counts as voiced. 0 keeps
+     the default 0.5. Ignored unless struct_version is 2, so a caller passing a
+     version-1 struct is unaffected.
+
+     Raise or lower this when the caller's probability track is not a 0/1 flag.
+     In particular, pYIN's voiced_prob is a frame's voiced observation mass and
+     rises with F0 for a fixed frame_length, so the 0.5 default silently drops
+     low-register material: see sonare_pitch_pyin. Passing the pYIN voiced_flag
+     as 0.0/1.0 is the recommended form and needs no threshold change. */
+  float voiced_threshold;
 } SonareNoteSegmenterConfig;
 
 /// One monophonic note region detected from an F0 track. Frame bounds are
@@ -617,9 +653,13 @@ typedef struct {
 /// @param f0_hz F0 values in Hz. Every value must be finite and non-negative;
 ///        zero denotes an unvoiced frame.
 /// @param f0_count Number of F0 frames; must be non-zero.
-/// @param voiced_prob Per-frame voiced probabilities in [0, 1]. A value below
-///        0.5 is treated as unvoiced; @p voiced_prob_count must equal
-///        @p f0_count.
+/// @param voiced_prob Per-frame voicing values in [0, 1]. A value below the
+///        config's @c voiced_threshold (default 0.5) is treated as unvoiced;
+///        @p voiced_prob_count must equal @p f0_count.
+///        Pass @ref sonare_pitch_pyin's @c voiced_flag as 0.0/1.0 here.
+///        Passing its @c voiced_prob instead returns no segments at all for
+///        low-register material, because that value is a frame's voiced
+///        observation mass and rises with F0 rather than with signal quality.
 /// @param frame_rate Number of F0 frames per second; must be finite and > 0.
 /// @param config Optional versioned configuration; NULL selects defaults.
 /// @param out Receives a heap-owned result, cleared before validation. Empty

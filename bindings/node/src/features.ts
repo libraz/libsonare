@@ -260,9 +260,20 @@ export interface NoteSegmentsConfig {
   segmentationThresholdCents?: number;
   minNoteMs?: number;
   referenceHz?: number;
+  /** Voicing threshold applied to `voicedProb`; defaults to `0.5`. */
+  voicedThreshold?: number;
 }
 export interface NoteSegmentsRequest extends NoteSegmentsConfig {
   f0Hz: Float32Array;
+  /**
+   * Per-frame voicing values in `[0, 1]`; anything below `voicedThreshold` is
+   * unvoiced.
+   *
+   * Pass `pitchPyin`'s `voicedFlag` converted to `0`/`1`. Do **not** pass its
+   * `voicedProb`: that value is the frame's voiced observation mass and rises
+   * with F0 for a fixed `frameLength`, so a fixed threshold silently returns no
+   * segments at all for low-register material.
+   */
   voicedProb: Float32Array;
   frameRate: number;
   /** @deprecated Use the flat tuning fields on this request instead. */
@@ -276,6 +287,36 @@ export interface DecomposeRequest {
   nIter?: number;
   beta?: number;
   init?: 'random' | 'nndsvd';
+}
+export interface DecomposeStemsRequest extends FeatureSamplesRequest {
+  /** Number of NMF components (default 4). */
+  nComponents?: number;
+  /** STFT size (default 2048). */
+  nFft?: number;
+  /** STFT hop (default 512). */
+  hopLength?: number;
+  /** NMF multiplicative-update iterations (default 100). */
+  nIter?: number;
+  /** Beta divergence: 2 = Frobenius (default), 1 = Kullback-Leibler. */
+  beta?: number;
+  /** NMF initialisation (default `'random'`). */
+  init?: 'random' | 'nndsvd';
+  /**
+   * Soft-mask exponent (default 1). 1 keeps the magnitude ratio; 2 is the
+   * Wiener-style power ratio, which separates harder at the cost of more
+   * artefacts on overlapping partials. Must be >= 1.
+   */
+  maskPower?: number;
+}
+/** One time-domain signal per NMF component, plus the factorisation. */
+export interface DecomposeStemsResult {
+  /** Component signals, each the length of the input. */
+  components: Float32Array[];
+  /** Component matrix [nBins x nComponents], row-major. */
+  w: Float32Array;
+  /** Activation matrix [nComponents x nFrames], row-major. */
+  h: Float32Array;
+  sampleRate: number;
 }
 export interface NnFilterRequest {
   s: Float32Array;
@@ -1501,6 +1542,31 @@ export function decompose(
   );
 }
 
+/**
+ * NMF separation that **carries the original phase**, so each component is
+ * directly listenable.
+ *
+ * {@link decompose} returns the W/H factors of a magnitude spectrogram, which
+ * have no phase; reconstructing from them needs a phase estimator
+ * ({@link griffinLim}), and an estimated phase does not hold up as a stem. This
+ * instead builds a per-component soft mask from the factorisation and applies
+ * it to the original complex spectrogram. The masks sum to one wherever the
+ * model has energy and the inverse STFT is linear, so the components sum back
+ * to the input.
+ */
+export function decomposeStems(request: DecomposeStemsRequest): DecomposeStemsResult {
+  assertSamples('decomposeStems', request.samples, true);
+  return addon.decomposeStems(request.samples, request.sampleRate ?? 22050, {
+    nComponents: request.nComponents,
+    nFft: request.nFft,
+    hopLength: request.hopLength,
+    nIter: request.nIter,
+    beta: request.beta,
+    init: request.init,
+    maskPower: request.maskPower,
+  });
+}
+
 /** Nearest-neighbour filtering of a flattened [nFeatures x nFrames] spectrogram. */
 export function nnFilter(request: NnFilterRequest): Matrix2D;
 export function nnFilter(
@@ -1530,7 +1596,14 @@ export function nnFilter(
   );
 }
 
-/** Reorder/concatenate a signal by (start,end) interval slices (librosa.effects.remix). */
+/**
+ * Reorder/concatenate a signal by (start,end) interval slices (librosa.effects.remix).
+ *
+ * With `alignZeros` the boundaries snap to the signal's zero-crossings, which is
+ * a per-signal decision: calling this per channel snaps each channel to a
+ * different frame and drifts a stereo take apart. Resolve one cut set with
+ * {@link remixAlignedIntervals} and apply it to every channel instead.
+ */
 export function remix(
   request: FeatureSamplesRequest & { intervals: Int32Array; alignZeros?: boolean },
 ): Float32Array;
@@ -1553,6 +1626,41 @@ export function remix(
     request.intervals,
     request.sampleRate ?? 22050,
     request.alignZeros ?? false,
+  );
+}
+
+/**
+ * Resolve the cut points {@link remix} would use, without cutting.
+ *
+ * Returns a flat `Int32Array` of one clamped `(start, end)` pair per input
+ * interval. With `alignZeros` each boundary snaps to the nearest zero-crossing,
+ * with two guards that stop a slice from vanishing: a signal with no sign
+ * change at all (silence, a DC offset, any constant) is not snapped, and a
+ * slice that had content but collapses to empty after snapping keeps its
+ * unsnapped boundaries.
+ */
+export function remixAlignedIntervals(
+  request: FeatureSamplesRequest & { intervals: Int32Array; alignZeros?: boolean },
+): Int32Array;
+export function remixAlignedIntervals(
+  samples: Float32Array,
+  intervals: Int32Array,
+  sampleRate?: number,
+  alignZeros?: boolean,
+): Int32Array;
+export function remixAlignedIntervals(
+  samples: Float32Array | (FeatureSamplesRequest & { intervals: Int32Array; alignZeros?: boolean }),
+  intervals: Int32Array = new Int32Array(),
+  sampleRate = 22050,
+  alignZeros = true,
+): Int32Array {
+  const request =
+    samples instanceof Float32Array ? { samples, intervals, sampleRate, alignZeros } : samples;
+  return addon.remixAlignedIntervals(
+    request.samples,
+    request.intervals,
+    request.sampleRate ?? 22050,
+    request.alignZeros ?? true,
   );
 }
 
@@ -1908,11 +2016,12 @@ export function pitchPyin(
 
 /** Segment a host-supplied monophonic F0 track into stable note regions. */
 export function noteSegments(request: NoteSegmentsRequest): NoteSegment[] {
-  const { config, segmentationThresholdCents, minNoteMs, referenceHz } = request;
+  const { config, segmentationThresholdCents, minNoteMs, referenceHz, voicedThreshold } = request;
   const hasFlatTuningOptions =
     segmentationThresholdCents !== undefined ||
     minNoteMs !== undefined ||
-    referenceHz !== undefined;
+    referenceHz !== undefined ||
+    voicedThreshold !== undefined;
   if (config !== undefined && hasFlatTuningOptions) {
     throw new RangeError(
       'noteSegments: specify tuning options either flat or in the deprecated config object, not both',
@@ -1932,7 +2041,7 @@ export function noteSegments(request: NoteSegmentsRequest): NoteSegment[] {
   }
   return addon.noteSegments({
     ...baseRequest,
-    config: { segmentationThresholdCents, minNoteMs, referenceHz },
+    config: { segmentationThresholdCents, minNoteMs, referenceHz, voicedThreshold },
   });
 }
 

@@ -188,23 +188,36 @@ export function pitchPyin(
 /** Parameters for segmenting an F0 track into stable monophonic notes. */
 export interface NoteSegmentsRequest {
   f0Hz: Float32Array;
+  /**
+   * Per-frame voicing values in `[0, 1]`; anything below `voicedThreshold` is
+   * unvoiced.
+   *
+   * Pass {@link PitchResult.voicedFlag} converted to `0`/`1`. Do **not** pass
+   * {@link pitchPyin}'s `voicedProb`: that value is the frame's voiced
+   * observation mass and rises with F0 for a fixed `frameLength`, so a fixed
+   * threshold silently returns no segments at all for low-register material
+   * (a steady tone below roughly C5 never reaches 0.5).
+   */
   voicedProb: Float32Array;
   frameRate: number;
   segmentationThresholdCents?: number;
   minNoteMs?: number;
   referenceHz?: number;
+  /** Voicing threshold applied to `voicedProb`; defaults to `0.5`. */
+  voicedThreshold?: number;
 }
 
 /**
  * Segment a caller-supplied monophonic F0 track into stable note regions.
  *
  * `f0Hz` and `voicedProb` must have the same non-zero length. Zero-Hz frames
- * and probabilities below 0.5 are treated as unvoiced.
+ * and values below `voicedThreshold` (default `0.5`) are treated as unvoiced.
  */
 export function noteSegments(request: NoteSegmentsRequest): NoteSegment[] {
   return requireModule().noteSegments(request.f0Hz, request.voicedProb, request.frameRate, {
     segmentationThresholdCents: request.segmentationThresholdCents,
     minNoteMs: request.minNoteMs,
     referenceHz: request.referenceHz,
+    voicedThreshold: request.voicedThreshold,
   });
 }

@@ -463,6 +463,25 @@ class SonareSegmentIndices(ctypes.Structure):
     ]
 
 
+class SonareDecomposeStemsConfig(ctypes.Structure):
+    """Maps to SonareDecomposeStemsConfig in sonare_c_effects.h.
+
+    Zero-initialize for the defaults (4 components, 2048/512 STFT, 100
+    iterations, Frobenius beta, random init, magnitude mask).
+    """
+
+    _fields_ = [
+        ("struct_version", ctypes.c_int),
+        ("n_components", ctypes.c_int),
+        ("n_fft", ctypes.c_int),
+        ("hop_length", ctypes.c_int),
+        ("n_iter", ctypes.c_int),
+        ("beta", ctypes.c_float),
+        ("init", ctypes.c_char_p),
+        ("mask_power", ctypes.c_float),
+    ]
+
+
 class SonareNoteSegmenterConfig(ctypes.Structure):
     """Maps to SonareNoteSegmenterConfig in sonare_c_features.h."""
 
@@ -471,6 +490,8 @@ class SonareNoteSegmenterConfig(ctypes.Structure):
         ("segmentation_threshold_cents", ctypes.c_float),
         ("min_note_ms", ctypes.c_float),
         ("reference_hz", ctypes.c_float),
+        # struct_version 2
+        ("voiced_threshold", ctypes.c_float),
     ]
 
 

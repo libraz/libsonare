@@ -16,6 +16,7 @@
 
 import { describe, expect, it } from 'vitest';
 import {
+  decomposeStems,
   masteringRepairDeclick,
   mixStereo,
   noteSegments,
@@ -122,6 +123,17 @@ const UNDEFINED_EQUIVALENCE: ReadonlyArray<{
     invoke: (o) => {
       const result = synthesizeRir(o);
       return [result.sampleRate, result.hasError, Array.from(result.rir).slice(0, 32)];
+    },
+  },
+  {
+    jsName: 'decomposeStems',
+    invoke: (o) => {
+      const result = decomposeStems({ ...o, samples: sine(4096), sampleRate: SR, nIter: 5 });
+      return [
+        result.sampleRate,
+        result.components.length,
+        Array.from(result.components[0]).slice(0, 8),
+      ];
     },
   },
   {

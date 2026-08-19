@@ -208,6 +208,8 @@ export type {
 export type { ResampleRequest } from './feature_resample';
 export type {
   DecomposeRequest,
+  DecomposeStemsRequest,
+  DecomposeStemsResult,
   DecomposeWithInitRequest,
   Ebur128LoudnessRangeRequest,
   EstimateTuningRequest,
@@ -261,6 +263,7 @@ export {
   dbToAmplitude,
   dbToPower,
   decompose,
+  decomposeStems,
   decomposeWithInit,
   deemphasis,
   ebur128LoudnessRange,
@@ -311,6 +314,7 @@ export {
   pseudoCqt,
   reassignedSpectrogram,
   remix,
+  remixAlignedIntervals,
   resample,
   rmsEnergy,
   samplesToFrames,

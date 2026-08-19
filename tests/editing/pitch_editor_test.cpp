@@ -192,7 +192,7 @@ TEST_CASE("PitchCorrector estimates and limits semitone corrections", "[pitch_ed
   REQUIRE_THAT(corrector.correction_to_midi(track, 70.0f), WithinAbs(0.5f, 0.001f));
 }
 
-TEST_CASE("PitchCorrector uses voiced probability as correction weight", "[pitch_editor]") {
+TEST_CASE("PitchCorrector ignores voiced probability when voicing is explicit", "[pitch_editor]") {
   constexpr int sample_rate = 22050;
   constexpr int hop_length = 256;
   auto samples = sine(440.0f, sample_rate, sample_rate / 2);
@@ -205,18 +205,23 @@ TEST_CASE("PitchCorrector uses voiced probability as correction weight", "[pitch
   config.vibrato_threshold_cents = 0.0f;
   PitchCorrector corrector(config);
 
-  track.voiced_prob.assign(track.f0_hz.size(), 0.0f);
-  const sonare::Audio unweighted = corrector.correct_to_midi_timevarying(audio, track, 71.0f);
+  // voiced_prob is a voicing input, not a correction weight. It used to scale
+  // the per-frame correction, which silently made the corrector fall short of
+  // its target for any caller that passed a real pYIN probability track (that
+  // value tracks F0, not confidence, so low notes barely moved). The correction
+  // must now depend only on the F0 contour and the voicing flags.
+  const sonare::Audio without_prob = corrector.correct_to_midi_timevarying(audio, track, 71.0f);
+  track.voiced_prob.assign(track.f0_hz.size(), 0.25f);
+  const sonare::Audio quarter = corrector.correct_to_midi_timevarying(audio, track, 71.0f);
   track.voiced_prob.assign(track.f0_hz.size(), 1.0f);
-  const sonare::Audio weighted = corrector.correct_to_midi_timevarying(audio, track, 71.0f);
+  const sonare::Audio full = corrector.correct_to_midi_timevarying(audio, track, 71.0f);
 
-  REQUIRE(unweighted.size() == weighted.size());
-  double mean_abs_delta = 0.0;
-  for (size_t i = 0; i < weighted.size(); ++i) {
-    mean_abs_delta += std::abs(static_cast<double>(weighted[i] - unweighted[i]));
+  REQUIRE(without_prob.size() == quarter.size());
+  REQUIRE(without_prob.size() == full.size());
+  for (size_t i = 0; i < full.size(); ++i) {
+    REQUIRE(quarter[i] == without_prob[i]);
+    REQUIRE(full[i] == without_prob[i]);
   }
-  mean_abs_delta /= static_cast<double>(weighted.size());
-  REQUIRE(mean_abs_delta > 0.01);
 }
 
 TEST_CASE("PitchCorrector uses the shared even-sized median for detected MIDI", "[pitch_editor]") {

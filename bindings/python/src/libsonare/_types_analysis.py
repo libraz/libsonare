@@ -1027,7 +1027,20 @@ class ChromaResult:
 
 @dataclass(frozen=True, slots=True)
 class PitchResult:
-    """Pitch detection result."""
+    """Pitch detection result.
+
+    ``voiced_flag`` is the voicing decision and the value every consumer should
+    gate on.
+
+    ``voiced_prob`` is pYIN's per-frame voiced *observation mass* (the same
+    quantity librosa returns), NOT a signal-quality confidence and NOT a
+    correction weight. The mass depends on how many periods of the pitch fit
+    inside ``frame_length``, so for a fixed frame length it rises with F0 even
+    when the signal is unchanged: a steady three-harmonic tone at 2048 samples /
+    48 kHz averages well under 0.1 at C2 and about 0.5 at C5, with every frame
+    flagged voiced throughout. Thresholding it at a fixed 0.5 (the default in
+    :func:`note_segments`) therefore drops entire low registers.
+    """
 
     n_frames: int
     f0: list[float]

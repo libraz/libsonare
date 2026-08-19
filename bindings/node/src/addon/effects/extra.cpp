@@ -54,6 +54,16 @@ Napi::Float32Array EffectsFloatResult(Napi::Env env, float* data, size_t count) 
   return out;
 }
 
+// Copy a heap C int buffer into an Int32Array and free the C allocation.
+Napi::Int32Array EffectsIntResult(Napi::Env env, int* data, size_t count) {
+  auto out = Napi::Int32Array::New(env, count);
+  if (count > 0 && data != nullptr) {
+    std::memcpy(out.Data(), data, count * sizeof(int));
+  }
+  sonare_free_ints(data);
+  return out;
+}
+
 Napi::Value EffectsCheckCResult(Napi::Env env, SonareError err) {
   sonare_node::ThrowSonareError(env, err);
   return env.Undefined();
@@ -174,6 +184,63 @@ Napi::Value SonareWrap::Decompose(const Napi::CallbackInfo& info) {
   return result;
 }
 
+Napi::Value SonareWrap::DecomposeStems(const Napi::CallbackInfo& info) {
+  Napi::Env env = info.Env();
+  if (info.Length() < 2 || !IsFloat32Array(info[0]) || !info[1].IsNumber()) {
+    Napi::TypeError::New(env, "Expected (Float32Array, sampleRate, options?)")
+        .ThrowAsJavaScriptException();
+    return env.Undefined();
+  }
+  SONARE_NODE_TRY
+  auto arr = info[0].As<Napi::Float32Array>();
+  int sr = info[1].As<Napi::Number>().Int32Value();
+  SonareDecomposeStemsConfig config{};
+  config.struct_version = 1;
+  // The init string must outlive the C call, so keep it in a local.
+  std::string init;
+  if (info.Length() >= 3 && info[2].IsObject()) {
+    Napi::Object options = info[2].As<Napi::Object>();
+    config.n_components = node_int_option(options, "nComponents", 0);
+    config.n_fft = node_int_option(options, "nFft", 0);
+    config.hop_length = node_int_option(options, "hopLength", 0);
+    config.n_iter = node_int_option(options, "nIter", 0);
+    config.beta = node_float_option(options, "beta", 0.0f);
+    config.mask_power = node_float_option(options, "maskPower", 0.0f);
+    Napi::Value init_value = options.Get("init");
+    if (init_value.IsString()) {
+      init = init_value.As<Napi::String>().Utf8Value();
+      config.init = init.c_str();
+    }
+  }
+  float* out = nullptr;
+  size_t component_count = 0;
+  size_t component_length = 0;
+  float* out_w = nullptr;
+  size_t out_w_length = 0;
+  float* out_h = nullptr;
+  size_t out_h_length = 0;
+  SonareError err =
+      sonare_decompose_stems(arr.Data(), arr.ElementLength(), sr, &config, &out, &component_count,
+                             &component_length, &out_w, &out_w_length, &out_h, &out_h_length);
+  if (err != SONARE_OK) return EffectsCheckCResult(env, err);
+  Napi::Array components = Napi::Array::New(env, component_count);
+  for (size_t c = 0; c < component_count; ++c) {
+    auto component = Napi::Float32Array::New(env, component_length);
+    if (component_length > 0 && out != nullptr) {
+      std::memcpy(component.Data(), out + c * component_length, component_length * sizeof(float));
+    }
+    components.Set(static_cast<uint32_t>(c), component);
+  }
+  sonare_free_floats(out);
+  Napi::Object result = Napi::Object::New(env);
+  result.Set("components", components);
+  result.Set("w", EffectsFloatResult(env, out_w, out_w_length));
+  result.Set("h", EffectsFloatResult(env, out_h, out_h_length));
+  result.Set("sampleRate", Napi::Number::New(env, sr));
+  return result;
+  SONARE_NODE_CATCH(env)
+}
+
 Napi::Value SonareWrap::NnFilter(const Napi::CallbackInfo& info) {
   Napi::Env env = info.Env();
   if (info.Length() < 3 || !IsFloat32Array(info[0]) || !info[1].IsNumber() || !info[2].IsNumber()) {
@@ -229,6 +296,35 @@ Napi::Value SonareWrap::Remix(const Napi::CallbackInfo& info) {
                                  intervals.size() / 2, align_zeros, &out, &out_length);
   if (err != SONARE_OK) return EffectsCheckCResult(env, err);
   return EffectsFloatResult(env, out, out_length);
+  SONARE_NODE_CATCH(env)
+}
+
+Napi::Value SonareWrap::RemixAlignedIntervals(const Napi::CallbackInfo& info) {
+  Napi::Env env = info.Env();
+  if (info.Length() < 2 || !IsFloat32Array(info[0])) {
+    Napi::TypeError::New(env, "Expected (Float32Array, intervals, sampleRate?, alignZeros?)")
+        .ThrowAsJavaScriptException();
+    return env.Undefined();
+  }
+  SONARE_NODE_TRY
+  auto arr = info[0].As<Napi::Float32Array>();
+  std::vector<int> intervals = IntVectorFromValue(info[1]);
+  if (intervals.size() % 2 != 0) {
+    Napi::TypeError::New(env, "remix intervals must be (start, end) pairs")
+        .ThrowAsJavaScriptException();
+    return env.Undefined();
+  }
+  int sr =
+      info.Length() >= 3 && info[2].IsNumber() ? info[2].As<Napi::Number>().Int32Value() : 22050;
+  int align_zeros =
+      info.Length() >= 4 && info[3].IsBoolean() ? (info[3].As<Napi::Boolean>().Value() ? 1 : 0) : 1;
+  int* out = nullptr;
+  size_t out_count = 0;
+  SonareError err =
+      sonare_remix_aligned_intervals(arr.Data(), arr.ElementLength(), sr, intervals.data(),
+                                     intervals.size() / 2, align_zeros, &out, &out_count);
+  if (err != SONARE_OK) return EffectsCheckCResult(env, err);
+  return EffectsIntResult(env, out, out_count * 2);
   SONARE_NODE_CATCH(env)
 }
 

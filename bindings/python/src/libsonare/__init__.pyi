@@ -118,6 +118,9 @@ from .analyzer import (
     decompose as decompose,
 )
 from .analyzer import (
+    decompose_stems as decompose_stems,
+)
+from .analyzer import (
     decompose_with_init as decompose_with_init,
 )
 from .analyzer import (
@@ -473,6 +476,9 @@ from .analyzer import (
 )
 from .analyzer import (
     remix as remix,
+)
+from .analyzer import (
+    remix_aligned_intervals as remix_aligned_intervals,
 )
 from .analyzer import (
     resample as resample,

@@ -9,6 +9,7 @@
 import { beforeAll, describe, expect, it } from 'vitest';
 import {
   decompose,
+  decomposeStems,
   ebur128LoudnessRange,
   estimateTuning,
   hpssWithResidual,
@@ -22,6 +23,7 @@ import {
   polyFeatures,
   realtimeVoiceChangerPresetConfig,
   remix,
+  remixAlignedIntervals,
   spectralContrast,
   spectralEdit,
   voiceCharacterPresetId,
@@ -146,6 +148,60 @@ describe('newly exposed WASM functions', () => {
     const out = remix(x, new Int32Array([half, x.length, 0, half]));
     expect(out.length).toBe(x.length);
     expect(allFinite(out)).toBe(true);
+  });
+
+  it('remixAlignedIntervals resolves one clamped pair per interval', () => {
+    const x = makeSine(0.5, 440);
+    const pairs = remixAlignedIntervals({
+      samples: x,
+      intervals: new Int32Array([0, 1000, 5000, 5500]),
+    });
+    expect(pairs.length).toBe(4);
+    expect(pairs[0]).toBeGreaterThanOrEqual(0);
+    expect(pairs[1]).toBeGreaterThan(pairs[0]);
+    expect(pairs[3]).toBeGreaterThan(pairs[2]);
+    expect(pairs[3]).toBeLessThanOrEqual(x.length);
+  });
+
+  it('remixAlignedIntervals leaves a signal with no sign change unsnapped', () => {
+    const flat = new Float32Array(4096).fill(0.25);
+    const pairs = remixAlignedIntervals({ samples: flat, intervals: new Int32Array([100, 200]) });
+    expect(Array.from(pairs)).toEqual([100, 200]);
+  });
+
+  it('decomposeStems components carry phase and sum back to the input', () => {
+    const n = 8192;
+    const x = new Float32Array(n);
+    for (let i = 0; i < n; i++) {
+      x[i] = 0.5 * Math.sin((2 * Math.PI * (i < n / 2 ? 220 : 880) * i) / SR);
+    }
+    const r = decomposeStems({
+      samples: x,
+      sampleRate: SR,
+      nComponents: 2,
+      nFft: 1024,
+      hopLength: 256,
+      nIter: 30,
+    });
+    expect(r.components.length).toBe(2);
+    expect(r.components[0].length).toBe(n);
+    expect(r.w.length).toBe((1024 / 2 + 1) * 2);
+    expect(r.h.length % 2).toBe(0);
+    expect(r.sampleRate).toBe(SR);
+    let err = 0;
+    let ref = 0;
+    for (let i = 1024; i < n - 1024; i++) {
+      const sum = r.components[0][i] + r.components[1][i];
+      err += (sum - x[i]) ** 2;
+      ref += x[i] ** 2;
+    }
+    expect(Math.sqrt(err / ref)).toBeLessThan(0.05);
+  });
+
+  it('decomposeStems rejects an out-of-range mask power', () => {
+    expect(() =>
+      decomposeStems({ samples: makeSine(0.2, 440), sampleRate: SR, maskPower: 0.5 }),
+    ).toThrow();
   });
 
   it('remix slices at an exact large integer boundary (>2^24)', () => {

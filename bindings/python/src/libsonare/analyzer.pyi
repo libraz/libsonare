@@ -1177,6 +1177,7 @@ def note_segments(
     segmentation_threshold_cents: float | None = None,
     min_note_ms: float | None = None,
     reference_hz: float | None = None,
+    voiced_threshold: float | None = None,
 ) -> list[NoteSegment]: ...
 def spectral_contrast(
     samples: FloatSamples,
@@ -1244,6 +1245,19 @@ def decompose_with_init(
     beta: float = 2.0,
     init: str = "random",
 ) -> tuple[np.ndarray[Any, Any], np.ndarray[Any, Any]]: ...
+def decompose_stems(
+    samples: FloatSamples,
+    sample_rate: int = 22050,
+    n_components: int = 4,
+    n_fft: int = 2048,
+    hop_length: int = 512,
+    n_iter: int = 100,
+    beta: float = 2.0,
+    init: str = "random",
+    mask_power: float = 1.0,
+    *,
+    validate: bool = True,
+) -> dict[str, object]: ...
 def nn_filter(
     s: FloatSamples,
     n_features: int,
@@ -1258,6 +1272,12 @@ def remix(
     sample_rate: int = 22050,
     align_zeros: bool = False,
 ) -> np.ndarray[Any, Any]: ...
+def remix_aligned_intervals(
+    samples: FloatSamples,
+    intervals: Sequence[int] | list[int],
+    sample_rate: int = 22050,
+    align_zeros: bool = True,
+) -> list[int]: ...
 def hpss_with_residual(
     samples: FloatSamples,
     sample_rate: int = 22050,
