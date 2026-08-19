@@ -111,9 +111,13 @@ TEST_CASE("built-in mastering preset golden hashes stay stable", "[.][mastering]
   REQUIRE(rows.size() == 75);
   REQUIRE(expected.size() == rows.size());
 
+  // CHECK, not REQUIRE: a REQUIRE aborts the case on the first drifted row, so
+  // a chain-wide change reads as one stale preset and the other 74 rows are
+  // never compared. Reporting every drifted row is what tells a stale golden
+  // (one whole stage's presets move together) apart from a real regression.
   for (const auto& [preset, signal, hash] : rows) {
     const std::string key = preset + "/" + signal;
     CAPTURE(key);
-    REQUIRE(expected.at(key) == hash);
+    CHECK(expected.at(key) == hash);
   }
 }

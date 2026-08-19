@@ -198,10 +198,13 @@ TEST_CASE("built-in mixing strip golden hashes stay stable", "[.][mixing][golden
   REQUIRE(rows.size() == 9);
   REQUIRE(expected.size() == rows.size());
 
+  // CHECK, not REQUIRE: a REQUIRE aborts on the first drifted row and hides
+  // how far the drift spreads, which is the signal that separates a stale
+  // golden from a real regression.
   for (const auto& [scenario, signal, hash] : rows) {
     const std::string key = scenario + "/" + signal;
     CAPTURE(key);
-    REQUIRE(expected.at(key) == hash);
+    CHECK(expected.at(key) == hash);
   }
 }
 
@@ -216,9 +219,12 @@ TEST_CASE("surround bus linked-dynamics golden hashes stay stable", "[.][mixing]
   REQUIRE(rows.size() == 2);
   REQUIRE(expected.size() == rows.size());
 
+  // CHECK, not REQUIRE: a REQUIRE aborts on the first drifted row and hides
+  // how far the drift spreads, which is the signal that separates a stale
+  // golden from a real regression.
   for (const auto& [scenario, signal, hash] : rows) {
     const std::string key = scenario + "/" + signal;
     CAPTURE(key);
-    REQUIRE(expected.at(key) == hash);
+    CHECK(expected.at(key) == hash);
   }
 }
