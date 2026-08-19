@@ -129,6 +129,49 @@ TEST_CASE("WarpMap from_markers rejects non-monotonic / too-few anchors", "[mir]
   REQUIRE_THROWS([] { WarpMap::from_markers({0.0, 1.0}, {0.0}); }());
 }
 
+TEST_CASE("chroma-DTW builds its chroma grid from the requested resolution", "[mir]") {
+  // ChromaDtwConfig::bins_per_octave has to move ChromaCqtConfig's n_bins with
+  // it: n_bins is a bin count, not an octave span, so assigning one without the
+  // other stretches the CQT grid past Nyquist and the kernel rejects it. This
+  // ran at every default and threw, but only the [.]-tagged alignment cases
+  // called chroma_dtw_align, so the default run never saw it. Kept fast (short
+  // signals, no assertion on the path) so it stays in the default run.
+  const int sr = 22050;
+  const Audio a = make_tone(sr, 261.63, 0.3);
+  const Audio b = make_tone(sr, 261.63, 0.35);
+
+  SECTION("default configuration") {
+    ChromaDtwConfig cfg;
+    REQUIRE_NOTHROW(chroma_dtw_align(a, b, cfg));
+  }
+
+  SECTION("a finer resolution than the default") {
+    ChromaDtwConfig cfg;
+    cfg.bins_per_octave = 36;
+    REQUIRE_NOTHROW(chroma_dtw_align(a, b, cfg));
+  }
+
+  SECTION("the lowest sample rate that still carries the grid") {
+    // Seven octaves above C1 top out under 4 kHz, so 8 kHz is the floor. The
+    // grid does not shrink with the sample rate, so this is a hard boundary
+    // rather than a graceful degradation.
+    const Audio low_a = make_tone(8000, 261.63, 0.3);
+    const Audio low_b = make_tone(8000, 261.63, 0.35);
+    ChromaDtwConfig cfg;
+    REQUIRE_NOTHROW(chroma_dtw_align(low_a, low_b, cfg));
+
+    const Audio too_low_a = make_tone(4000, 261.63, 0.3);
+    const Audio too_low_b = make_tone(4000, 261.63, 0.35);
+    REQUIRE_THROWS(chroma_dtw_align(too_low_a, too_low_b, cfg));
+  }
+
+  SECTION("rejects a non-positive resolution") {
+    ChromaDtwConfig cfg;
+    cfg.bins_per_octave = 0;
+    REQUIRE_THROWS(chroma_dtw_align(a, b, cfg));
+  }
+}
+
 TEST_CASE("chroma-DTW recovers a known time shift within tolerance", "[.][slow][mir]") {
   const int sr = 22050;
   // Reference: a 1.2 s C-ish tone. Target: a delayed copy (silence prefix),

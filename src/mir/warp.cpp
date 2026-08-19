@@ -2,6 +2,7 @@
 
 #include <algorithm>
 #include <cmath>
+#include <limits>
 
 #include "core/spectrum.h"
 #include "effects/hpss.h"
@@ -12,6 +13,10 @@
 
 namespace sonare::mir {
 namespace {
+
+// Octave span of the chroma CQT grid, matching ChromaCqtConfig's default
+// (252 bins at 36 bins/octave) and the binding-level chroma entry points.
+constexpr int kChromaOctaves = 7;
 
 // Strictly-monotonic de-duplication of anchors sorted by warp_sample. Drops any
 // anchor that does not strictly advance BOTH axes relative to the kept anchor,
@@ -460,10 +465,24 @@ double WarpMap::source_to_warp(double source_sample) const {
 ChromaDtwResult chroma_dtw_align(const Audio& reference, const Audio& target,
                                  const ChromaDtwConfig& config) {
   SONARE_CHECK(!reference.empty() && !target.empty(), ErrorCode::InvalidParameter);
+  SONARE_CHECK(config.bins_per_octave > 0 &&
+                   config.bins_per_octave <= std::numeric_limits<int>::max() / kChromaOctaves,
+               ErrorCode::InvalidParameter);
 
+  // n_bins is a bin count, not an octave span, so it has to move with
+  // bins_per_octave. ChromaCqtConfig defaults to 7 octaves at 36 bins/octave;
+  // assigning bins_per_octave alone would leave 252 bins and stretch the grid
+  // to 252/bins_per_octave octaves, whose top bin runs past Nyquist and is
+  // rejected by the CQT kernel. Deriving n_bins from the octave span is what
+  // the binding-level chroma entry points already do, so the grid here is the
+  // same one those produce for a given resolution. Seven octaves above C1 top
+  // out under 4 kHz, so any sample rate from 8 kHz up carries the whole grid;
+  // below that the CQT kernel rejects it rather than this silently analysing a
+  // narrower, sample-rate-dependent range.
   ChromaCqtConfig ccfg;
   ccfg.cqt.hop_length = config.hop_length;
   ccfg.cqt.bins_per_octave = config.bins_per_octave;
+  ccfg.cqt.n_bins = config.bins_per_octave * kChromaOctaves;
 
   Chroma ref_chroma = chroma_cqt(reference, ccfg);
   Chroma tgt_chroma = chroma_cqt(target, ccfg);
