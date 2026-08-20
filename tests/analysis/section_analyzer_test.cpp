@@ -103,8 +103,11 @@ TEST_CASE("SectionAnalyzer basic", "[section_analyzer]") {
   SectionConfig config;
   SectionAnalyzer analyzer(audio, config);
 
-  // Should have at least one section
-  REQUIRE(analyzer.count() >= 1);
+  // A steady tone changes in nothing the detector reads, so the analyzer returns
+  // its single whole-track fallback span. One is the answer here, not a lower
+  // bound -- any other count would mean the detector cut a tone that never
+  // changed.
+  REQUIRE(analyzer.count() == 1);
 }
 
 TEST_CASE("SectionAnalyzer sections", "[section_analyzer]") {
@@ -282,8 +285,12 @@ TEST_CASE("SectionAnalyzer short audio", "[section_analyzer]") {
 
   SectionAnalyzer analyzer(audio, config);
 
-  // Should still work
-  REQUIRE(analyzer.count() >= 1);
+  // Three seconds is only twice the checkerboard kernel's span, and the tone does
+  // not change anyway, so the whole clip comes back as one span. What this pins is
+  // that a clip that short still analyzes at all rather than throwing or coming
+  // back empty -- and that it returns exactly the one span, not a stray cut made
+  // out of the little room the kernel has.
+  REQUIRE(analyzer.count() == 1);
 }
 
 TEST_CASE("SectionAnalyzer section_at out of range", "[section_analyzer]") {
@@ -309,7 +316,11 @@ TEST_CASE("SectionAnalyzer enforces min_section_sec at its configured value",
   const SectionAnalyzer analyzer(create_sectioned_audio(), boundaries, config);
   const auto& sections = analyzer.sections();
 
-  REQUIRE(sections.size() > 1);
+  // Four spans in, the 4s..6s one merged, three out. Exact rather than a lower
+  // bound: the boundaries are supplied, so nothing here is estimated, and a merge
+  // that ate one span too many would land on two -- the very failure this case
+  // was written to catch.
+  REQUIRE(sections.size() == 3);
   for (const auto& section : sections) {
     REQUIRE(section.duration() >= config.min_section_sec);
   }
@@ -323,6 +334,10 @@ TEST_CASE("SectionAnalyzer is stable across common source rates", "[section_anal
   const SectionAnalyzer at_44100(create_sectioned_audio(44100), boundaries, config);
   const SectionAnalyzer at_48000(create_sectioned_audio(48000), boundaries, config);
 
+  // Pin the absolute count before comparing the two rates. An equality between
+  // them holds just as well when both collapse, and the comparison below would
+  // then be one whole-track span against another -- agreement about nothing.
+  REQUIRE(at_44100.sections().size() == 5);
   REQUIRE(at_44100.form() == at_48000.form());
   REQUIRE(at_44100.sections().size() == at_48000.sections().size());
   for (size_t i = 0; i < at_44100.sections().size(); ++i) {
@@ -362,6 +377,12 @@ TEST_CASE("an unclassified edge segment is not labelled as a verse", "[section_a
   // Both fixtures below were chosen by sweeping until they reached that branch;
   // the ordinary low-intro/loud-chorus fixture in this file never does, so it
   // cannot stand in for them.
+  //
+  // Each pins its section count. That is not the claim being made, it is what
+  // keeps the claim meaningful: front() and back() are only different segments
+  // while there is more than one, and a collapse to a single whole-track span
+  // would satisfy Unknown-with-zero-confidence for free, leaving both branches
+  // green while checking nothing.
   const auto segmented = [](const std::array<std::pair<float, float>, 4>& segments) {
     constexpr int sr = 22050;
     std::vector<float> samples(static_cast<size_t>(sr) * 20);
@@ -377,7 +398,7 @@ TEST_CASE("an unclassified edge segment is not labelled as a verse", "[section_a
   SECTION("a loud non-repeating opening") {
     SectionAnalyzer analyzer(
         segmented({{{0.95f, 660.0f}, {0.30f, 330.0f}, {0.35f, 392.0f}, {0.28f, 294.0f}}}));
-    REQUIRE(analyzer.count() >= 1);
+    REQUIRE(analyzer.count() == 2);
     const Section first = analyzer.sections().front();
     REQUIRE(first.type == SectionType::Unknown);
     REQUIRE(first.confidence == 0.0f);
@@ -386,7 +407,7 @@ TEST_CASE("an unclassified edge segment is not labelled as a verse", "[section_a
   SECTION("a loud non-repeating ending") {
     SectionAnalyzer analyzer(
         segmented({{{0.30f, 330.0f}, {0.32f, 330.0f}, {0.30f, 330.0f}, {0.98f, 740.0f}}}));
-    REQUIRE(analyzer.count() >= 1);
+    REQUIRE(analyzer.count() == 2);
     const Section last = analyzer.sections().back();
     REQUIRE(last.type == SectionType::Unknown);
     REQUIRE(last.confidence == 0.0f);
