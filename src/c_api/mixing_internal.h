@@ -86,19 +86,15 @@ inline sonare::mixing::PanMode to_pan_mode(int mode) {
   }
 }
 
+/// @brief Wire encoding to law, rejecting an unnamed encoding.
+/// @details The C ABI rejects where `pan_law_from_index()` falls back, so the
+/// bound is checked here and the mapping itself is delegated - repeating the
+/// arms would be a second copy that a fifth law would have to be added to twice.
 inline sonare::mixing::PanLaw to_pan_law(int law) {
-  switch (law) {
-    case 0:
-      return sonare::mixing::PanLaw::Const3dB;
-    case 1:
-      return sonare::mixing::PanLaw::Const4p5dB;
-    case 2:
-      return sonare::mixing::PanLaw::Const6dB;
-    case 3:
-      return sonare::mixing::PanLaw::Linear0dB;
-    default:
-      throw sonare::SonareException(sonare::ErrorCode::InvalidParameter, "unknown mixing pan law");
+  if (law < 0 || law >= sonare::mixing::kPanLawCount) {
+    throw sonare::SonareException(sonare::ErrorCode::InvalidParameter, "unknown mixing pan law");
   }
+  return sonare::mixing::pan_law_from_index(law);
 }
 
 inline int from_pan_law(sonare::mixing::PanLaw law) {
