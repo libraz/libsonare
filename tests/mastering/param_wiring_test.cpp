@@ -43,6 +43,7 @@
 #include "mastering/saturation/waveshaper.h"
 #include "mastering/spectral/presence_enhancer.h"
 #include "rt/aliasing_control.h"
+#include "support/audio_fixtures.h"
 #include "util/constants.h"
 #include "util/exception.h"
 
@@ -637,6 +638,234 @@ TEST_CASE("harmonic generator oversampling changes the processed audio",
   const auto presence_oversampled =
       run_insert("spectral.presenceEnhancer", R"({"amount":1,"drive":8,"aliasing":3})", input);
   REQUIRE(presence_direct != presence_oversampled);
+}
+
+// --- Alias suppression measured through the surfaces callers reach -----------
+//
+// saturation_test.cpp and spectral_test.cpp measure the same suppression on the
+// processors themselves, but they build the config struct in C++ -- a path no
+// binding has. The cases below repeat the measurement across the two surfaces a
+// caller does reach, the insert JSON params string and the flat Param[] list,
+// so a mode that stops at the parameter layer fails here while the DSP cases
+// stay green. Both surfaces are driven at 44.1 and 48 kHz because the folded
+// harmonic lands at a different frequency in each.
+
+namespace {
+
+using sonare::test::generate_sine_samples;
+
+// The probe tone sits high enough that its third harmonic is well above
+// Nyquist at both rates, so an unfiltered harmonic generator has to fold it
+// back into the audible band.
+constexpr float kAliasProbeToneRatio = 0.36f;
+constexpr float kAliasProbeAmplitude = 0.5f;
+// Skips the oversampler ramp-up and the bandpass settling, which are transient
+// broadband energy rather than steady-state alias products.
+constexpr std::size_t kAliasSkipSamples = 4096;
+
+/// Folds a synthesized-harmonic frequency back into [0, sample_rate/2], the
+/// same reflection a real-valued sampler applies to content above Nyquist.
+float fold_alias_hz(float source_hz, float sample_rate) {
+  float folded = std::fmod(source_hz, sample_rate);
+  if (folded < 0.0f) folded += sample_rate;
+  if (folded > sample_rate * 0.5f) folded = sample_rate - folded;
+  return folded;
+}
+
+float projected_amplitude(const std::vector<float>& samples, float frequency_hz, int sample_rate) {
+  double sin_sum = 0.0;
+  double cos_sum = 0.0;
+  std::size_t count = 0;
+  for (std::size_t i = std::min(kAliasSkipSamples, samples.size()); i < samples.size(); ++i) {
+    const double phase =
+        sonare::constants::kTwoPiD * frequency_hz * static_cast<double>(i) / sample_rate;
+    sin_sum += static_cast<double>(samples[i]) * std::sin(phase);
+    cos_sum += static_cast<double>(samples[i]) * std::cos(phase);
+    ++count;
+  }
+  return count == 0 ? 0.0f
+                    : static_cast<float>(2.0 * std::sqrt(sin_sum * sin_sum + cos_sum * cos_sum) /
+                                         static_cast<double>(count));
+}
+
+/// Level of the folded third harmonic against the harmonic content the stage
+/// added at the fundamental -- the ratio the AirBand oversampling regression
+/// asserts, applied to the same residual signal.
+float alias_level_db(const std::vector<float>& residual, float input_hz, int sample_rate) {
+  const float folded = fold_alias_hz(3.0f * input_hz, static_cast<float>(sample_rate));
+  const float fundamental = projected_amplitude(residual, input_hz, sample_rate);
+  const float alias = projected_amplitude(residual, folded, sample_rate);
+  CAPTURE(folded, fundamental, alias);
+  REQUIRE(fundamental > 0.0f);
+  return 20.0f * std::log10(alias / fundamental);
+}
+
+float alias_probe_tone_hz(int sample_rate) {
+  return static_cast<float>(sample_rate) * kAliasProbeToneRatio;
+}
+
+/// Harmonic content one insert added, time-aligned against the dry input, with
+/// the insert built from the JSON params string every binding hands to
+/// make_insert().
+std::vector<float> harmonic_residual_from_json(const std::string& name, const std::string& json,
+                                               int sample_rate) {
+  const auto dry = generate_sine_samples(alias_probe_tone_hz(sample_rate), sample_rate, sample_rate,
+                                         kAliasProbeAmplitude);
+  auto processor = make_insert(name, json);
+  REQUIRE(processor != nullptr);
+  processor->prepare(static_cast<double>(sample_rate), sample_rate, 1);
+  std::vector<float> wet = dry;
+  float* channels[] = {wet.data()};
+  processor->process(channels, 1, static_cast<int>(wet.size()));
+
+  // The oversampled path reports a round-trip latency the direct path does not,
+  // so the dry signal is subtracted at the delay the processor declares.
+  const auto latency = static_cast<std::size_t>(processor->latency_samples());
+  REQUIRE(latency < kAliasSkipSamples);
+  for (std::size_t i = wet.size(); i-- > latency;) wet[i] -= dry[i - latency];
+  std::fill(wet.begin(), wet.begin() + static_cast<std::ptrdiff_t>(latency), 0.0f);
+  return wet;
+}
+
+/// Same residual, from the flat Param[] surface instead. The offline runner
+/// already latency-compensates, so the dry signal subtracts sample for sample.
+std::vector<float> harmonic_residual_from_params(const std::string& name,
+                                                 const std::vector<Param>& params,
+                                                 int sample_rate) {
+  const auto dry = generate_sine_samples(alias_probe_tone_hz(sample_rate), sample_rate, sample_rate,
+                                         kAliasProbeAmplitude);
+  const auto result = apply_named_processor(name, dry.data(), dry.size(), sample_rate, params);
+  REQUIRE(result.samples.size() == dry.size());
+  std::vector<float> residual = result.samples;
+  for (std::size_t i = 0; i < residual.size(); ++i) residual[i] -= dry[i];
+  // Compensation pads the tail with zeros, which reads as inverted dry signal
+  // in the residual; that padding is dropped rather than measured.
+  residual.resize(residual.size() - static_cast<std::size_t>(result.latency_samples));
+  return residual;
+}
+
+// Drive and amount are pushed well past their defaults so the residual is the
+// harmonic generator's own output rather than numeric noise, and the excited
+// band is centred on the probe tone so that tone is what gets excited.
+std::string exciter_json(int sample_rate, AliasingControl mode) {
+  return R"({"frequencyHz":)" + std::to_string(alias_probe_tone_hz(sample_rate)) +
+         R"(,"driveDb":24,"amount":1,"q":1,"evenOddMix":1,"aliasing":)" +
+         std::to_string(static_cast<int>(mode)) + "}";
+}
+
+std::vector<Param> exciter_params(int sample_rate, AliasingControl mode) {
+  return {{"frequencyHz", alias_probe_tone_hz(sample_rate)},
+          {"driveDb", 24.0},
+          {"amount", 1.0},
+          {"q", 1.0},
+          {"evenOddMix", 1.0},
+          {"aliasing", static_cast<double>(static_cast<int>(mode))}};
+}
+
+std::string presence_json(int sample_rate, AliasingControl mode) {
+  return R"({"amount":1,"drive":24,"centerFrequencyHz":)" +
+         std::to_string(alias_probe_tone_hz(sample_rate)) + R"(,"q":1,"aliasing":)" +
+         std::to_string(static_cast<int>(mode)) + "}";
+}
+
+std::vector<Param> presence_params(int sample_rate, AliasingControl mode) {
+  return {{"amount", 1.0},
+          {"drive", 24.0},
+          {"centerFrequencyHz", alias_probe_tone_hz(sample_rate)},
+          {"q", 1.0},
+          {"aliasing", static_cast<double>(static_cast<int>(mode))}};
+}
+
+// Alias energy the repository treats as inaudible, and the margin an
+// unsuppressed baseline has to stay above for the suppressed measurement to
+// mean anything.
+constexpr float kAliasSuppressedDb = -40.0f;
+constexpr float kAliasAudibleDb = -20.0f;
+constexpr float kAliasMinimumGainDb = 40.0f;
+
+// One processor at one sample rate: the mode that oversamples has to clear the
+// suppression bar, the mode that does not has to stay audibly above it, and the
+// gap between them is what would collapse if `aliasing` stopped reaching the
+// DSP.
+void require_aliasing_suppression(const char* label, const std::vector<float>& oversampled,
+                                  const std::vector<float>& direct, int sample_rate) {
+  CAPTURE(label, sample_rate);
+  const float input_hz = alias_probe_tone_hz(sample_rate);
+  const float oversampled_db = alias_level_db(oversampled, input_hz, sample_rate);
+  const float direct_db = alias_level_db(direct, input_hz, sample_rate);
+  CAPTURE(oversampled_db, direct_db);
+  REQUIRE(oversampled_db < kAliasSuppressedDb);
+  REQUIRE(direct_db > kAliasAudibleDb);
+  REQUIRE(direct_db - oversampled_db > kAliasMinimumGainDb);
+}
+
+}  // namespace
+
+TEST_CASE("harmonic generator alias suppression is reachable from the insert JSON params surface",
+          "[mastering][saturation][spectral][param_wiring]") {
+  for (const int sample_rate : {44100, 48000}) {
+    require_aliasing_suppression(
+        "saturation.exciter",
+        harmonic_residual_from_json("saturation.exciter",
+                                    exciter_json(sample_rate, AliasingControl::Oversample4x),
+                                    sample_rate),
+        harmonic_residual_from_json("saturation.exciter",
+                                    exciter_json(sample_rate, AliasingControl::None), sample_rate),
+        sample_rate);
+
+    require_aliasing_suppression(
+        "spectral.presenceEnhancer",
+        harmonic_residual_from_json("spectral.presenceEnhancer",
+                                    presence_json(sample_rate, AliasingControl::Oversample4x),
+                                    sample_rate),
+        harmonic_residual_from_json("spectral.presenceEnhancer",
+                                    presence_json(sample_rate, AliasingControl::None), sample_rate),
+        sample_rate);
+  }
+}
+
+TEST_CASE("harmonic generator alias suppression is reachable from the flat parameter surface",
+          "[mastering][saturation][spectral][param_wiring]") {
+  for (const int sample_rate : {44100, 48000}) {
+    require_aliasing_suppression(
+        "saturation.exciter",
+        harmonic_residual_from_params("saturation.exciter",
+                                      exciter_params(sample_rate, AliasingControl::Oversample4x),
+                                      sample_rate),
+        harmonic_residual_from_params(
+            "saturation.exciter", exciter_params(sample_rate, AliasingControl::None), sample_rate),
+        sample_rate);
+
+    require_aliasing_suppression(
+        "spectral.presenceEnhancer",
+        harmonic_residual_from_params("spectral.presenceEnhancer",
+                                      presence_params(sample_rate, AliasingControl::Oversample4x),
+                                      sample_rate),
+        harmonic_residual_from_params("spectral.presenceEnhancer",
+                                      presence_params(sample_rate, AliasingControl::None),
+                                      sample_rate),
+        sample_rate);
+  }
+}
+
+TEST_CASE("spectral.presenceEnhancer aliasing survives an insert params JSON round trip",
+          "[mastering][spectral][param_wiring]") {
+  // The presence enhancer is not a chain stage, so its serialized form is the
+  // insert params JSON string a scene or a GS effect slot stores verbatim.
+  // Round-tripping through that string is what the exciter's chain JSON round
+  // trip is for the chain: a dropped key would silently reset it to None.
+  using sonare::mastering::spectral::PresenceEnhancer;
+
+  for (const AliasingControl mode : {AliasingControl::None, AliasingControl::Oversample4x}) {
+    CAPTURE(static_cast<int>(mode));
+    std::vector<std::string> unknown_keys;
+    auto processor =
+        make_insert("spectral.presenceEnhancer", presence_json(48000, mode), &unknown_keys);
+    auto* presence = dynamic_cast<PresenceEnhancer*>(processor.get());
+    REQUIRE(presence != nullptr);
+    REQUIRE(unknown_keys.empty());
+    REQUIRE(presence->config().aliasing == mode);
+  }
 }
 
 TEST_CASE("dynamics.sidechainRouter lookaheadMs is reachable from the parameter surface",
