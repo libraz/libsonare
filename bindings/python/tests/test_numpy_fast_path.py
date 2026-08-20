@@ -33,7 +33,7 @@ import numpy as np
 import pytest
 
 import libsonare
-from libsonare._runtime import _from_c_float_array, _to_c_float_array
+from libsonare._runtime import _from_c_float_array, _to_c_float_array, _to_c_int_array
 
 
 def _sine(n: int, freq: float = 440.0, sr: int = 22050) -> np.ndarray:
@@ -110,6 +110,46 @@ def test_to_c_float_array_handles_empty_input() -> None:
     c_array, length = _to_c_float_array([])
     assert length == 0
     assert len(c_array) == 0
+
+
+def test_to_c_int_array_accepts_read_only_int_ndarray() -> None:
+    """Read-only int input must be copied instead of leaking the raw
+    ``ctypes.TypeError: underlying buffer is not writable`` — the integer
+    mirror of the float guard above."""
+    ro = np.frombuffer(np.arange(8, dtype=np.int32).tobytes(), dtype=np.int32)
+    assert not ro.flags["WRITEABLE"]
+    c_array, length = _to_c_int_array(ro)
+    assert length == 8
+    assert list(c_array)[:3] == [0, 1, 2]
+
+
+def test_int_apis_accept_read_only_ndarray() -> None:
+    """End-to-end: every public entry point that marshals caller-supplied frame
+    indices must accept a read-only int array rather than raising ``TypeError``.
+    ``detect_key`` / ``detect_key_candidates`` also route through
+    ``_to_c_int_array``, but over a mode list this module builds itself, so a
+    caller cannot reach them with a read-only buffer."""
+
+    def read_only(values: list[int]) -> np.ndarray:
+        arr = np.asarray(values, dtype=np.int32)
+        arr.setflags(write=False)
+        return arr
+
+    assert libsonare.fix_frames(read_only([1, 3, 5])) == [0, 1, 3, 5]
+
+    energy = np.abs(_sine(512)).astype(np.float32)
+    backtracked = libsonare.onset_backtrack(read_only([100, 300]), energy)
+    assert len(backtracked) == 2
+
+    data = np.linspace(0.0, 1.0, 4 * 16, dtype=np.float32)
+    refined = libsonare.subsegment(data, 4, 16, read_only([0, 8]), n_segments=2)
+    assert len(refined) >= 2
+
+    samples = _sine(2048)
+    remixed = libsonare.remix(samples, read_only([0, 512, 1024, 1536]))
+    assert remixed.size == 1024
+    resolved = libsonare.remix_aligned_intervals(samples, read_only([0, 512, 1024, 1536]))
+    assert len(resolved) == 4
 
 
 def test_from_c_float_array_returns_independent_copy() -> None:

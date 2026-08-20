@@ -338,6 +338,12 @@ def _to_c_int_array(values: Sequence[int] | list[int]) -> tuple[ctypes.Array[cty
     # which unpacks every element through Python varargs (mirrors the
     # zero-copy rewrite of `_to_c_float_array`).
     buf = np.ascontiguousarray(np.asarray(values, dtype=np.int32)).reshape(-1)
+    # `ctypes.from_buffer` needs a *writable* buffer, and `ascontiguousarray`
+    # hands a read-only int array back unchanged (`np.frombuffer`, mmap,
+    # `setflags(write=False)`), so force a fresh writable copy in that case —
+    # mirrors the float path in `_as_float32_buffer`.
+    if not buf.flags["WRITEABLE"]:
+        buf = np.array(buf, dtype=np.int32, copy=True, order="C").reshape(-1)
     length = int(buf.shape[0])
     if length == 0:  # noqa: SIM108
         c_array = (ctypes.c_int32 * 0)()
