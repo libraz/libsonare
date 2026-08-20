@@ -110,7 +110,8 @@ std::vector<std::string> split_string(const std::string& text, char delimiter);
 void set_json_path(sonare::util::json::Value& root, const std::string& path,
                    sonare::util::json::Value value);
 std::string find_voice_preset_in_pack(const std::string& pack_json, const std::string& preset_id);
-std::string apply_voice_preset_sets(std::string config_text, const std::string& set_options);
+std::string apply_voice_preset_sets(std::string config_text,
+                                    const std::vector<std::string>& assignments);
 PitchClass parse_pitch_class_option(const std::string& value);
 Mode parse_mode_option(const std::string& value);
 std::vector<Mode> parse_mode_list_option(const std::string& value);

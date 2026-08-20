@@ -811,14 +811,7 @@ void assign_option_value(CliArgs& args, const std::string& key, const std::strin
   const CliCommandSpec* command = cli_command_spec_for_path(command_path_for_args(args));
   const std::string canonical = canonical_option_name(command, key);
   const CliOptionSpec* spec = option_for_spec(command, canonical);
-  if (spec != nullptr && spec->repeatable) {
-    auto it = args.options.find(canonical);
-    if (it != args.options.end() && !it->second.empty()) {
-      it->second += ',';
-      it->second += value;
-      return;
-    }
-  }
+  if (spec != nullptr && spec->repeatable) args.repeated_options[canonical].push_back(value);
   args.options[canonical] = value;
 }
 
@@ -841,6 +834,20 @@ std::map<std::string, std::string>::const_iterator option_value_for(const CliArg
     if (it != args.options.end()) return it;
   }
   return args.options.end();
+}
+
+const std::vector<std::string>* repeated_values_for(const CliArgs& args, const std::string& key) {
+  auto it = args.repeated_options.find(key);
+  if (it != args.repeated_options.end()) return &it->second;
+  const CliOptionSpec* spec = cli_option_spec_for_command(command_path_for_args(args), key);
+  if (spec == nullptr) return nullptr;
+  it = args.repeated_options.find(spec->name);
+  if (it != args.repeated_options.end()) return &it->second;
+  for (const auto& alias : spec->aliases) {
+    it = args.repeated_options.find(alias);
+    if (it != args.repeated_options.end()) return &it->second;
+  }
+  return nullptr;
 }
 
 }  // namespace
@@ -915,6 +922,14 @@ std::string CliArgs::get_string(const std::string& k, const std::string& def) co
   if (it != options.end()) return it->second;
   const CliOptionValue value = static_default_for(*this, k);
   return value.kind == CliOptionDefaultKind::String ? value.string_value : def;
+}
+
+std::vector<std::string> CliArgs::get_string_list(const std::string& k) const {
+  const std::vector<std::string>* values = repeated_values_for(*this, k);
+  if (values != nullptr) return *values;
+  const CliOptionValue value = static_default_for(*this, k);
+  return value.kind == CliOptionDefaultKind::StringArray ? value.string_array_value
+                                                         : std::vector<std::string>{};
 }
 
 CliArgs ArgParser::parse(int argc, char* argv[]) {

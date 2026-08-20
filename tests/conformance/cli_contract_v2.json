@@ -3651,6 +3651,46 @@
           "stdout": "json"
         },
         {
+          "id": "set_object_and_comma_string",
+          "argv": [
+            "voice-preset-validate",
+            "{preset_valid}",
+            "--set",
+            "description=Adds warmth, presence, and air",
+            "--set",
+            "macros={\"pitch\":3,\"brightness\":0.75}",
+            "--json"
+          ],
+          "exit": 0,
+          "legacy_exit": 0,
+          "payload": "success",
+          "artifact": "none",
+          "stdout": "json",
+          "stdout_contains": [
+            "Adds warmth, presence, and air",
+            "\\\"semitones\\\":3",
+            "\\\"presenceDb\\\":3"
+          ]
+        },
+        {
+          "id": "set_array_value",
+          "argv": [
+            "voice-preset-validate",
+            "{preset_valid}",
+            "--set",
+            "macros.pitch=[1,2]",
+            "--json"
+          ],
+          "exit": 3,
+          "legacy_exit": 1,
+          "payload": "failure",
+          "artifact": "none",
+          "stdout": "json",
+          "stdout_contains": [
+            "field must be numeric: macros.pitch"
+          ]
+        },
+        {
           "id": "failure",
           "argv": [
             "voice-preset-validate",

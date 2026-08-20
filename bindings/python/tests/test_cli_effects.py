@@ -134,6 +134,98 @@ def test_voice_change_preset_pack_applies_overrides_end_to_end() -> None:
         assert os.path.exists(out_path)
 
 
+def test_acoustic_cli_stays_blind_without_ir() -> None:
+    """--ir is the only route into IR analysis, on an impulse-like file too.
+
+    This is the anchor half of a two-CLI invariant: the Python CLI runs
+    sonare_detect_acoustic, which takes no mode argument and is therefore blind
+    by construction, and the native CLI case in tests/cli/cli_test.cpp pins the
+    same output shape for the side that can pick a mode.
+    """
+    sample_rate = 48000
+    decay = math.log(1000.0) / 0.6
+    state = 0x1234567
+    samples = []
+    for index in range(int(0.75 * sample_rate)):
+        state = (state * 1664525 + 1013904223) & 0xFFFFFFFF
+        noise = ((state >> 8) & 0xFFFF) / 32768.0 - 1.0
+        samples.append(noise * math.exp(-decay * index / sample_rate))
+    samples[0] = 1.0
+
+    with tempfile.TemporaryDirectory() as tmpdir:
+        wav_path = os.path.join(tmpdir, "ir.wav")
+        _write_test_wav(wav_path, samples, sample_rate)
+
+        result = _run_cli(["acoustic", wav_path, "--json"])
+        assert result.returncode == 0, result.stderr
+        payload = json.loads(result.stdout)
+        assert payload["is_blind"] is True
+        # Blind estimation cannot measure clarity and reports that as null
+        # rather than as a value.
+        assert payload["c50"] is None
+        assert payload["c80"] is None
+        assert payload["d50"] is None
+        assert payload["c50_bands"] == []
+
+
+def test_voice_preset_validate_set_delivers_a_json_value_containing_commas() -> None:
+    """One --set occurrence is one assignment, commas inside the value included.
+
+    Repeated occurrences used to be split on every comma, so an object, an
+    array, or ordinary free text was torn into fragments with no escape
+    available to the caller.
+    """
+    preset = {
+        "schemaVersion": 1,
+        "id": "set-fixture",
+        "name": "Set Fixture",
+        "category": "custom",
+        "macros": {
+            "pitch": 0,
+            "formant": 1,
+            "brightness": 0,
+            "space": 0,
+            "intensity": 0.5,
+            "noiseControl": 0,
+            "sibilance": 0,
+        },
+    }
+    with tempfile.TemporaryDirectory() as tmpdir:
+        preset_path = os.path.join(tmpdir, "macro-preset.json")
+        with open(preset_path, "w", encoding="utf-8") as handle:
+            json.dump(preset, handle)
+
+        applied = _run_cli(
+            [
+                "voice-preset-validate",
+                preset_path,
+                "--set",
+                "description=Adds warmth, presence, and air",
+                "--set",
+                'macros={"pitch":3,"brightness":0.75}',
+                "--json",
+            ]
+        )
+        assert applied.returncode == 0, applied.stderr
+        normalized = json.loads(json.loads(applied.stdout)["normalized_json"])
+        assert normalized["description"] == "Adds warmth, presence, and air"
+        # Both members of the object have to arrive: pitch drives
+        # retune.semitones and brightness 0.75 drives presenceDb +3, so either
+        # one alone would leave the other at its fixture value.
+        assert normalized["dsp"]["retune"]["semitones"] == pytest.approx(3.0)
+        assert normalized["dsp"]["eq"]["presenceDb"] == pytest.approx(3.0)
+
+        rejected = _run_cli(
+            ["voice-preset-validate", preset_path, "--set", "macros.pitch=[1,2]", "--json"]
+        )
+        # The preset schema rejects the array on its own terms; the splitter
+        # used to fail first, on the orphaned "2]" fragment.
+        assert rejected.returncode == 3
+        payload = json.loads(rejected.stdout)
+        assert payload["ok"] is False
+        assert payload["error"] == "field must be numeric: macros.pitch"
+
+
 def test_normalize_cli_reports_target_db_end_to_end() -> None:
     """normalize emits the requested target level and a non-empty result."""
     with tempfile.TemporaryDirectory() as tmpdir:

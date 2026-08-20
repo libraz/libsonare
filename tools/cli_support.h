@@ -64,6 +64,13 @@ struct CliArgs {
   float fmax = 0.0f;
 
   std::map<std::string, std::string> options;
+  // Every occurrence of a repeatable option, in command-line order. A
+  // repeatable option also lands in `options` (last occurrence wins) so that
+  // name-based lookups such as has() and the validators stay uniform, but the
+  // occurrences must never be folded into one string: a `--set` value is
+  // arbitrary JSON, so any separator a fold could pick is also a legal byte
+  // inside the value.
+  std::map<std::string, std::vector<std::string>> repeated_options;
   // Global DSP options are parsed into dedicated fields above, but their
   // spelling must still be validated against the selected command.
   std::vector<std::string> global_options;
@@ -90,6 +97,10 @@ struct CliArgs {
   int require_int_in_range(const std::string& k, int minimum, int maximum) const;
   bool has(const std::string& k) const;
   std::string get_string(const std::string& k, const std::string& def = "") const;
+  /// Reads every occurrence of a repeatable option, in command-line order.
+  /// Each element is one raw value exactly as it was given on the command
+  /// line, so a value carrying its own commas stays intact.
+  std::vector<std::string> get_string_list(const std::string& k) const;
 };
 
 /// Validates command-specific option names, required option values, and

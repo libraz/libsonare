@@ -502,6 +502,12 @@ int cmd_mfcc_to_audio(const CliArgs& args, const Audio& audio) {
 
 int cmd_acoustic(const CliArgs& args, const Audio& audio) {
   AcousticConfig config;
+  // --ir is this command's mode selector, so the branch it does not take must
+  // stay blind rather than letting AcousticConfig's Auto default re-route an
+  // impulse-like input to IR analysis behind the user's back. Blind is also
+  // what the C ABI's sonare_detect_acoustic forces, which is what the Python
+  // CLI and every binding run, so the two shipped CLIs agree on the mode.
+  config.mode = AcousticConfig::Mode::Blind;
   config.n_octave_bands = args.get_int("n-bands", config.n_octave_bands);
   config.min_decay_db = args.get_float("min-decay-db", config.min_decay_db);
   config.noise_floor_margin_db =

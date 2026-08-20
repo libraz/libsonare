@@ -137,10 +137,16 @@ std::string find_voice_preset_in_pack(const std::string& pack_json, const std::s
   return sonare::util::json::dump(*match);
 }
 
-std::string apply_voice_preset_sets(std::string config_text, const std::string& set_options) {
-  if (set_options.empty()) return config_text;
+// One --set occurrence is one PATH=VALUE assignment. The value reaches the JSON
+// parser byte for byte, so an object, an array, or a string that carries its own
+// commas survives; splitting the occurrences on any separator would tear those
+// apart with no escape available to the caller.
+std::string apply_voice_preset_sets(std::string config_text,
+                                    const std::vector<std::string>& assignments) {
+  if (assignments.empty()) return config_text;
   auto root = sonare::util::json::parse(config_text);
-  for (const auto& assignment : split_string(set_options, ',')) {
+  for (const auto& assignment : assignments) {
+    if (assignment.empty()) continue;
     const auto eq = assignment.find('=');
     if (eq == std::string::npos || eq == 0) {
       throw std::invalid_argument("invalid --set assignment: " + assignment);

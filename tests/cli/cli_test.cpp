@@ -8,6 +8,7 @@
 #include <catch2/catch_test_macros.hpp>
 #include <catch2/matchers/catch_matchers_string.hpp>
 #include <cmath>
+#include <cstdint>
 #include <cstdio>
 #include <cstdlib>
 #include <fstream>
@@ -189,6 +190,30 @@ std::string unique_temp_path(const std::string& suffix) {
 /// The shared analysis tone never reaches full scale, so it cannot exercise a
 /// clipping option at all: `--min-region` only selects among detected regions,
 /// and a signal with no clipped samples has none to select from.
+/// @brief Creates a WAV holding a synthetic room impulse response.
+/// @param path Output path
+/// @param rt60 Reverberation time in seconds
+/// @param sample_rate Sample rate
+///
+/// The acoustic command routes on --ir alone, so proving the flag is not a
+/// no-op needs input the analyzer's own impulse-response heuristic accepts: a
+/// full-scale onset followed by exponentially decaying noise.
+void create_impulse_response_wav(const std::string& path, float rt60 = 0.6f,
+                                 int sample_rate = 48000) {
+  const size_t n_samples = static_cast<size_t>(1.5f * static_cast<float>(sample_rate));
+  std::vector<float> samples(n_samples);
+  const float decay = std::log(1000.0f) / rt60;
+  uint32_t state = 0x1234567u;
+  for (size_t i = 0; i < n_samples; ++i) {
+    state = state * 1664525u + 1013904223u;
+    const float noise = static_cast<float>((state >> 8) & 0xffffu) / 32768.0f - 1.0f;
+    const float t = static_cast<float>(i) / static_cast<float>(sample_rate);
+    samples[i] = noise * std::exp(-decay * t);
+  }
+  samples[0] = 1.0f;
+  save_wav(path, samples, sample_rate);
+}
+
 void create_clipped_wav(const std::string& path, int sample_rate = 22050) {
   const size_t n_samples = static_cast<size_t>(sample_rate / 2);
   const size_t clip_begin = n_samples / 4;
@@ -1102,6 +1127,48 @@ TEST_CASE("CLI applies every repeated --set assignment, not just the last",
   REQUIRE_THAT(output, ContainsSubstring("1.5"));
 }
 
+TEST_CASE("CLI --set delivers a JSON value that contains commas intact",
+          "[cli][argument-contract]") {
+  // Repeated --set was folded into one comma-joined string and split back
+  // apart, so every value carrying a comma of its own -- a JSON object, an
+  // array, or ordinary free text -- was torn into fragments, with no escape
+  // available. One occurrence is one assignment, and the value reaches the JSON
+  // parser byte for byte.
+  const std::string preset_path = unique_temp_path("_macro_preset.json");
+  {
+    std::ofstream preset(preset_path);
+    preset << R"({"schemaVersion":1,"id":"set-fixture","name":"Set Fixture","category":"custom",)"
+           << R"("macros":{"pitch":0,"formant":1,"brightness":0,"space":0,"intensity":0.5,)"
+           << R"("noiseControl":0,"sibilance":0}})";
+  }
+
+  SECTION("an object value and a comma-bearing string both survive") {
+    auto [code, output] = exec_command(CLI + " voice-preset-validate " + preset_path +
+                                       " --set 'description=Adds warmth, presence, and air'"
+                                       " --set 'macros={\"pitch\":3,\"brightness\":0.75}' --json");
+    REQUIRE(code == 0);
+    REQUIRE_THAT(output, ContainsSubstring("Adds warmth, presence, and air"));
+    // Both members of the object have to arrive: pitch drives retune.semitones
+    // and brightness 0.75 drives presenceDb +3, so either one alone would leave
+    // the other at its fixture value.
+    REQUIRE_THAT(output, ContainsSubstring("\\\"semitones\\\":3"));
+    REQUIRE_THAT(output, ContainsSubstring("\\\"presenceDb\\\":3"));
+  }
+
+  SECTION("an array value reaches the preset validator as an array") {
+    auto [code, output] = exec_command(CLI + " voice-preset-validate " + preset_path +
+                                       " --set 'macros.pitch=[1,2]' --json");
+    REQUIRE(code == 3);
+    // The preset schema rejects the array on its own terms. The splitter used
+    // to fail first, on the orphaned "2]" fragment, which never reached the
+    // schema at all.
+    REQUIRE_THAT(output, ContainsSubstring("field must be numeric: macros.pitch"));
+    REQUIRE_THAT(output, !ContainsSubstring("invalid --set assignment"));
+  }
+
+  std::remove(preset_path.c_str());
+}
+
 TEST_CASE("CLI voice-preset-validate rejects an invalid preset document",
           "[cli][argument-contract]") {
   const std::string preset_path = unique_temp_path("_invalid_preset.json");
@@ -1759,6 +1826,30 @@ TEST_CASE("CLI presence flags do not swallow the audio file argument", "[cli]") 
   auto [code, output] = exec_command(CLI + " acoustic --ir " + TEST_WAV + " -q");
   REQUIRE_THAT(output, !ContainsSubstring("Missing audio file"));
   REQUIRE(code == 0);
+}
+
+TEST_CASE("CLI acoustic routes into IR analysis only through --ir", "[cli][acoustic]") {
+  // The handler left AcousticConfig on its Auto default, so an impulse-like
+  // file reached IR analysis with no --ir: the documented mode selector was a
+  // no-op, and the command disagreed with sonare_detect_acoustic (which forces
+  // blind) and therefore with the Python CLI and every binding.
+  const std::string ir_path = unique_temp_path("_ir.wav");
+  create_impulse_response_wav(ir_path);
+
+  auto [blind_code, blind_output] = exec_command(CLI + " acoustic " + ir_path + " --json");
+  REQUIRE(blind_code == 0);
+  REQUIRE_THAT(blind_output, ContainsSubstring("\"is_blind\": true"));
+  // Blind estimation cannot measure clarity, and reports that as null rather
+  // than as a value; the Auto route filled these in instead.
+  REQUIRE_THAT(blind_output, ContainsSubstring("\"c50\": null"));
+  REQUIRE_THAT(blind_output, ContainsSubstring("\"c50_bands\": []"));
+
+  auto [ir_code, ir_output] = exec_command(CLI + " acoustic --ir " + ir_path + " --json");
+  REQUIRE(ir_code == 0);
+  REQUIRE_THAT(ir_output, ContainsSubstring("\"is_blind\": false"));
+  REQUIRE_THAT(ir_output, !ContainsSubstring("\"c50\": null"));
+
+  std::remove(ir_path.c_str());
 }
 
 TEST_CASE("CLI chroma text output survives a silent input", "[cli]") {

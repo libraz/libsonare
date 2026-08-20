@@ -221,7 +221,8 @@ int cmd_voice_change(const CliArgs& args, const Audio& audio) {
           editing::voice_changer::realtime_voice_changer_preset_from_id(requested_preset);
       config_text = editing::voice_changer::realtime_voice_changer_preset_json(id);
     }
-    if (args.has("set")) config_text = apply_voice_preset_sets(config_text, args.get_string("set"));
+    if (args.has("set"))
+      config_text = apply_voice_preset_sets(config_text, args.get_string_list("set"));
 
     // Route through the same strict validator as the C ABI / Python entry
     // points (realtime_voice_changer_config_from_input) instead of the
@@ -347,7 +348,7 @@ int cmd_voice_preset_validate(const CliArgs& args, const Audio&) {
     config_text = find_voice_preset_in_pack(config_text, args.get_string("preset"));
   }
   if (args.has("set")) {
-    config_text = apply_voice_preset_sets(config_text, args.get_string("set"));
+    config_text = apply_voice_preset_sets(config_text, args.get_string_list("set"));
   }
   std::string normalized;
   std::string error;

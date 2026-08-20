@@ -598,13 +598,18 @@ def _apply_voice_sets(
         dict[str, Any],
         json.loads(preset) if isinstance(preset, str) else json.loads(json.dumps(preset)),
     )
-    for group in assignments:
-        for assignment in [item for item in group.split(",") if item]:
-            if "=" not in assignment:
-                raise ValueError(f"invalid --set assignment: {assignment}")
-            path, raw = assignment.split("=", 1)
-            value = _parse_voice_set_value(raw)
-            _set_nested_value(root, path, value)
+    # One --set occurrence is one PATH=VALUE assignment. The value reaches the
+    # JSON parser byte for byte, so an object, an array, or a string that
+    # carries its own commas survives; splitting the occurrences on any
+    # separator would tear those apart with no escape available to the caller.
+    for assignment in assignments:
+        if not assignment:
+            continue
+        if "=" not in assignment:
+            raise ValueError(f"invalid --set assignment: {assignment}")
+        path, raw = assignment.split("=", 1)
+        value = _parse_voice_set_value(raw)
+        _set_nested_value(root, path, value)
     return root
 
 

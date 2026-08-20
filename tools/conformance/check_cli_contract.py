@@ -207,6 +207,19 @@ def _strings(value: Any, label: str, errors: list[str]) -> bool:
     return True
 
 
+def _argv(value: Any, label: str, errors: list[str]) -> bool:
+    """Check a case's argument vector.
+
+    Unlike an option or alias list, an argv legitimately repeats a token: a
+    repeatable option is exercised by spelling it more than once, and two
+    occurrences may even carry the same value.
+    """
+    if not isinstance(value, list) or any(not isinstance(item, str) for item in value):
+        errors.append(f"{label}: expected an array of strings")
+        return False
+    return True
+
+
 def _type_token(value: Any, label: str, errors: list[str]) -> bool:
     if not isinstance(value, str) or value not in _OPTION_TYPES | _ARRAY_TYPES:
         errors.append(f"{label}: unknown type token {value!r}")
@@ -1042,7 +1055,7 @@ def validate_manifest(manifest: Any) -> list[str]:
                     elif case_id in case_ids:
                         errors.append(f"{case_label}.id: duplicate case id {case_id}")
                     case_ids.add(case_id)
-                    _strings(case["argv"], f"{case_label}.argv", errors)
+                    _argv(case["argv"], f"{case_label}.argv", errors)
                     if case["exit"] not in _EXIT_CODES:
                         errors.append(
                             f"{case_label}.exit: unsupported exit {case['exit']!r}"
@@ -1189,7 +1202,7 @@ def validate_manifest(manifest: Any) -> list[str]:
             elif case["id"] in parser_ids:
                 errors.append(f"{label}.id: duplicate parser case id {case['id']}")
             parser_ids.add(case["id"])
-            _strings(case["argv"], f"{label}.argv", errors)
+            _argv(case["argv"], f"{label}.argv", errors)
             if case["exit"] not in _EXIT_CODES:
                 errors.append(f"{label}.exit: unsupported exit {case['exit']!r}")
             if case["legacy_exit"] not in {0, 1}:
@@ -2457,7 +2470,9 @@ def _validate_case_payload(
                 )
             )
     if path == "voice-preset-validate":
-        expected_ok = case_id == "success"
+        # The declared payload shape, not the case id, is what says whether the
+        # invocation is meant to validate: several cases produce each shape.
+        expected_ok = case["payload"] == "success"
         if payload.get("ok") is not expected_ok:
             report.append(
                 (
