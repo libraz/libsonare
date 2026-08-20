@@ -345,6 +345,56 @@ TEST_CASE("sonare_mastering_process", "[c_api][mastering]") {
     sonare_streaming_mastering_chain_destroy(stereo_chain);
   }
 
+  SECTION("streaming mastering chain rejects an oversized block without reading it") {
+    // The non-finite scan below runs over the caller's buffer before the core
+    // sees it, so the block bound has to be enforced first: an oversized
+    // num_samples must be refused without dereferencing a single sample past
+    // the buffer. The buffers here are sized to exactly the prepared block, so
+    // an unbounded scan reads out of bounds (ASan-visible). The observable
+    // signal that the rejection happened at the boundary rather than inside the
+    // core is the detailed-error channel: a pre-scan validation early return
+    // records no message, while the core's own rejection throws and leaves its
+    // what() text behind.
+    constexpr int kSampleRate = 48000;
+    constexpr int kBlockSize = 128;
+
+    SonareStreamingMasteringChain* chain =
+        sonare_streaming_mastering_chain_create_ex(nullptr, 0, 0.0f, 0.0f);
+    REQUIRE(chain != nullptr);
+
+    std::vector<float> mono(kBlockSize, 0.0f);
+    REQUIRE(sonare_streaming_mastering_chain_prepare(chain, kSampleRate, kBlockSize, 1) ==
+            SONARE_OK);
+    REQUIRE(sonare_streaming_mastering_chain_process_mono(chain, mono.data(), mono.size()) ==
+            SONARE_OK);
+    REQUIRE(sonare_streaming_mastering_chain_process_mono(chain, mono.data(), mono.size() + 1) ==
+            SONARE_ERROR_INVALID_PARAMETER);
+    REQUIRE(std::string(sonare_last_error_message()).empty());
+    sonare_streaming_mastering_chain_destroy(chain);
+
+    // Never prepared: rejected as a state error, again without reading input.
+    SonareStreamingMasteringChain* unprepared =
+        sonare_streaming_mastering_chain_create_ex(nullptr, 0, 0.0f, 0.0f);
+    REQUIRE(unprepared != nullptr);
+    REQUIRE(sonare_streaming_mastering_chain_process_mono(unprepared, mono.data(), mono.size()) ==
+            SONARE_ERROR_INVALID_STATE);
+    REQUIRE(std::string(sonare_last_error_message()).empty());
+    sonare_streaming_mastering_chain_destroy(unprepared);
+
+    SonareStreamingMasteringChain* stereo_chain =
+        sonare_streaming_mastering_chain_create_ex(nullptr, 0, 0.0f, 0.0f);
+    REQUIRE(stereo_chain != nullptr);
+    REQUIRE(sonare_streaming_mastering_chain_prepare(stereo_chain, kSampleRate, kBlockSize, 2) ==
+            SONARE_OK);
+    std::vector<float> left(kBlockSize, 0.0f);
+    std::vector<float> right(kBlockSize, 0.0f);
+    REQUIRE(sonare_streaming_mastering_chain_process_stereo(stereo_chain, left.data(), right.data(),
+                                                            left.size() + 1) ==
+            SONARE_ERROR_INVALID_PARAMETER);
+    REQUIRE(std::string(sonare_last_error_message()).empty());
+    sonare_streaming_mastering_chain_destroy(stereo_chain);
+  }
+
   SECTION("streaming mastering chain flush drains delayed samples once") {
     constexpr int kSampleRate = 48000;
     constexpr int kBlockSize = 64;

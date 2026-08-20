@@ -444,7 +444,9 @@ SonareError sonare_realtime_voice_changer_set_config_json(SonareRealtimeVoiceCha
 SonareError sonare_realtime_voice_changer_process_mono(SonareRealtimeVoiceChanger* handle,
                                                        const float* input, float* output,
                                                        size_t num_samples) {
-  SONARE_C_API_ENTRY;
+  // Audio-thread entry: no last-error/warning access (first-touch TLS setup is
+  // not realtime-safe) and no try/catch, since process_block is noexcept.
+  SONARE_C_RT_API_ENTRY;
 #if defined(SONARE_WITH_VOICE_CHANGER)
   if (!handle || (!input && num_samples > 0) || (!output && num_samples > 0)) {
     return SONARE_ERROR_INVALID_PARAMETER;
@@ -452,10 +454,8 @@ SonareError sonare_realtime_voice_changer_process_mono(SonareRealtimeVoiceChange
   if (num_samples > static_cast<size_t>(handle->max_block_size)) {
     return SONARE_ERROR_INVALID_PARAMETER;
   }
-  SONARE_C_TRY
   handle->changer.process_block(input, output, static_cast<int>(num_samples));
   return SONARE_OK;
-  SONARE_C_CATCH
 #else
   SONARE_C_STUB_NOT_SUPPORTED(handle, input, output, num_samples);
 #endif
@@ -464,7 +464,8 @@ SonareError sonare_realtime_voice_changer_process_mono(SonareRealtimeVoiceChange
 SonareError sonare_realtime_voice_changer_process_interleaved(SonareRealtimeVoiceChanger* handle,
                                                               const float* input, float* output,
                                                               size_t num_frames, int num_channels) {
-  SONARE_C_API_ENTRY;
+  // Audio-thread entry: see sonare_realtime_voice_changer_process_mono.
+  SONARE_C_RT_API_ENTRY;
 #if defined(SONARE_WITH_VOICE_CHANGER)
   if (!handle || (!input && num_frames > 0) || (!output && num_frames > 0) || num_channels < 1 ||
       num_channels > handle->num_channels) {
@@ -473,7 +474,6 @@ SonareError sonare_realtime_voice_changer_process_interleaved(SonareRealtimeVoic
   if (num_frames > static_cast<size_t>(handle->max_block_size)) {
     return SONARE_ERROR_INVALID_PARAMETER;
   }
-  SONARE_C_TRY
   // RT-safe path: reuse the per-handle planar scratch (allocated in
   // create_json) and pointer table instead of allocating per call.
   const size_t stride = static_cast<size_t>(handle->max_block_size);
@@ -492,7 +492,6 @@ SonareError sonare_realtime_voice_changer_process_interleaved(SonareRealtimeVoic
     }
   }
   return SONARE_OK;
-  SONARE_C_CATCH
 #else
   SONARE_C_STUB_NOT_SUPPORTED(handle, input, output, num_frames, num_channels);
 #endif
@@ -501,7 +500,8 @@ SonareError sonare_realtime_voice_changer_process_interleaved(SonareRealtimeVoic
 SonareError sonare_realtime_voice_changer_process_planar_stereo(SonareRealtimeVoiceChanger* handle,
                                                                 float* left, float* right,
                                                                 size_t num_frames) {
-  SONARE_C_API_ENTRY;
+  // Audio-thread entry: see sonare_realtime_voice_changer_process_mono.
+  SONARE_C_RT_API_ENTRY;
 #if defined(SONARE_WITH_VOICE_CHANGER)
   if (!handle || (!left && num_frames > 0) || (!right && num_frames > 0)) {
     return SONARE_ERROR_INVALID_PARAMETER;
@@ -512,13 +512,11 @@ SonareError sonare_realtime_voice_changer_process_planar_stereo(SonareRealtimeVo
   if (num_frames > static_cast<size_t>(handle->max_block_size)) {
     return SONARE_ERROR_INVALID_PARAMETER;
   }
-  SONARE_C_TRY
   // Planar fast path: no interleave/deinterleave required, just point the
   // changer's process_block at the caller-owned buffers. Realtime-safe.
   float* channels[2] = {left, right};
   handle->changer.process_block(channels, 2, static_cast<int>(num_frames));
   return SONARE_OK;
-  SONARE_C_CATCH
 #else
   SONARE_C_STUB_NOT_SUPPORTED(handle, left, right, num_frames);
 #endif
@@ -526,7 +524,8 @@ SonareError sonare_realtime_voice_changer_process_planar_stereo(SonareRealtimeVo
 
 SonareError sonare_realtime_voice_changer_latency_samples(const SonareRealtimeVoiceChanger* handle,
                                                           int* out_latency_samples) {
-  SONARE_C_API_ENTRY;
+  // Audio-thread entry: see sonare_realtime_voice_changer_process_mono.
+  SONARE_C_RT_API_ENTRY;
 #if defined(SONARE_WITH_VOICE_CHANGER)
   if (!handle || !out_latency_samples) return SONARE_ERROR_INVALID_PARAMETER;
   *out_latency_samples = handle->changer.latency_samples();

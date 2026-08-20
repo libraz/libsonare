@@ -606,10 +606,16 @@ SonareError sonare_streaming_mastering_chain_prepare(SonareStreamingMasteringCha
                                                      int num_channels);
 
 /// @brief Process one mono block in place. @p samples length must be <= max_block_size.
+/// @details A @p num_samples above the prepared max block size returns
+/// SONARE_ERROR_INVALID_PARAMETER, and a chain that has never been prepared
+/// returns SONARE_ERROR_INVALID_STATE, in both cases without reading @p samples
+/// at all. A zero @p num_samples is a no-op success.
 SonareError sonare_streaming_mastering_chain_process_mono(SonareStreamingMasteringChain* handle,
                                                           float* samples, size_t num_samples);
 
 /// @brief Process one stereo block in place. @p left, @p right same length.
+/// @details Same block-size and prepared-state rejections as
+/// @ref sonare_streaming_mastering_chain_process_mono.
 SonareError sonare_streaming_mastering_chain_process_stereo(SonareStreamingMasteringChain* handle,
                                                             float* left, float* right,
                                                             size_t num_samples);

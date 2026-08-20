@@ -185,6 +185,12 @@ SonareError sonare_mastering_audio_profile_stereo(const float* left, const float
 
 struct SonareStreamingMasteringChain {
   std::unique_ptr<sonare::mastering::api::StreamingMasteringChain> chain;
+  // Mirrors the last successful prepare(). The process entries scan the caller's
+  // buffer for non-finite samples before handing it to the core, so the block
+  // bound has to be known HERE: without it the scan is the first thing to
+  // dereference the buffer and would read past its end for any oversized
+  // num_samples the core would have rejected. Zero until prepare() succeeds.
+  int max_block_size = 0;
 };
 
 namespace {
@@ -195,6 +201,18 @@ bool all_finite(const float* samples, size_t num_samples) noexcept {
     if (!std::isfinite(samples[i])) return false;
   }
   return true;
+}
+
+// Reproduces the two rejections StreamingMasteringChain::process_block makes on
+// state and block size, so the finite-sample scan never runs over a block the
+// core would have refused. Error classes match the core's exactly.
+SonareError check_block_bounds(const SonareStreamingMasteringChain* handle,
+                               size_t num_samples) noexcept {
+  if (handle->max_block_size <= 0) return SONARE_ERROR_INVALID_STATE;
+  if (num_samples > static_cast<size_t>(handle->max_block_size)) {
+    return SONARE_ERROR_INVALID_PARAMETER;
+  }
+  return SONARE_OK;
 }
 
 }  // namespace
@@ -244,6 +262,7 @@ SonareStreamingMasteringChain* sonare_streaming_mastering_chain_create_ex(
     if (sample_rate <= 0 || max_block_size <= 0) return SONARE_ERROR_INVALID_PARAMETER;
     SONARE_C_TRY
     handle->chain->prepare(static_cast<double>(sample_rate), max_block_size, num_channels);
+    handle->max_block_size = max_block_size;
     return SONARE_OK;
     SONARE_C_CATCH
   }
@@ -255,6 +274,9 @@ SonareStreamingMasteringChain* sonare_streaming_mastering_chain_create_ex(
       return SONARE_ERROR_INVALID_PARAMETER;
     }
     if (num_samples == 0) return SONARE_OK;
+    if (const SonareError bounds = check_block_bounds(handle, num_samples); bounds != SONARE_OK) {
+      return bounds;
+    }
     if (!all_finite(samples, num_samples)) return SONARE_ERROR_INVALID_PARAMETER;
     SONARE_C_TRY
     float* channels[] = {samples};
@@ -270,6 +292,9 @@ SonareStreamingMasteringChain* sonare_streaming_mastering_chain_create_ex(
       return SONARE_ERROR_INVALID_PARAMETER;
     }
     if (num_samples == 0) return SONARE_OK;
+    if (const SonareError bounds = check_block_bounds(handle, num_samples); bounds != SONARE_OK) {
+      return bounds;
+    }
     if (!all_finite(left, num_samples) || !all_finite(right, num_samples)) {
       return SONARE_ERROR_INVALID_PARAMETER;
     }

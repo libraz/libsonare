@@ -667,6 +667,70 @@ TEST_CASE("sonare_realtime_voice_changer_preset_config rejects an out-of-range p
           SONARE_OK);
 }
 
+TEST_CASE("realtime voice changer audio-thread entries leave the error channel untouched",
+          "[voice_changer][c-api][realtime]") {
+  // The three _process_* entries and latency_samples are documented
+  // realtime-safe, which forbids the first-touch thread-local setup that the
+  // ordinary entry guard's clear_last_error() performs. Not clearing the
+  // detailed-error string is the observable proxy for that: clearing it is the
+  // only access those entries would make to thread-local storage, so a message
+  // recorded before the call surviving it proves the guard did not run. This is
+  // a proxy, not a proof of realtime safety — nothing here counts heap
+  // allocations, so an allocation introduced deeper in the DSP chain would go
+  // unnoticed by this test.
+  const auto record_detailed_error = [] {
+    const std::vector<uint8_t> garbage = {0x00, 0x01, 0x02, 0x03, 0x04, 0x05,
+                                          0x06, 0x07, 0x08, 0x09, 0x0A, 0x0B};
+    SonareAudio* audio = nullptr;
+    REQUIRE(sonare_audio_from_memory(garbage.data(), garbage.size(), &audio) != SONARE_OK);
+    REQUIRE(audio == nullptr);
+    return std::string(sonare_last_error_message());
+  };
+
+  SonareRealtimeVoiceChangerConfig config{};
+  REQUIRE(sonare_realtime_voice_changer_preset_config(SONARE_VC_PRESET_NEUTRAL_MONITOR, &config) ==
+          SONARE_OK);
+  SonareRealtimeVoiceChanger* handle = nullptr;
+  REQUIRE(sonare_realtime_voice_changer_create(&config, 48000, 128, 2, &handle) == SONARE_OK);
+  REQUIRE(handle != nullptr);
+
+  constexpr size_t kFrames = 64;
+  std::vector<float> mono(kFrames, 0.1f);
+  std::vector<float> mono_out(kFrames, 0.0f);
+  std::vector<float> left(kFrames, 0.1f);
+  std::vector<float> right(kFrames, 0.1f);
+  std::vector<float> interleaved(kFrames * 2, 0.1f);
+  std::vector<float> interleaved_out(kFrames * 2, 0.0f);
+
+  // Recorded after create(), which is a control-thread entry and does clear.
+  const std::string recorded = record_detailed_error();
+  REQUIRE_FALSE(recorded.empty());
+
+  REQUIRE(sonare_realtime_voice_changer_process_mono(handle, mono.data(), mono_out.data(),
+                                                     kFrames) == SONARE_OK);
+  REQUIRE(std::string(sonare_last_error_message()) == recorded);
+
+  REQUIRE(sonare_realtime_voice_changer_process_interleaved(
+              handle, interleaved.data(), interleaved_out.data(), kFrames, 2) == SONARE_OK);
+  REQUIRE(std::string(sonare_last_error_message()) == recorded);
+
+  REQUIRE(sonare_realtime_voice_changer_process_planar_stereo(handle, left.data(), right.data(),
+                                                              kFrames) == SONARE_OK);
+  REQUIRE(std::string(sonare_last_error_message()) == recorded);
+
+  int latency = 0;
+  REQUIRE(sonare_realtime_voice_changer_latency_samples(handle, &latency) == SONARE_OK);
+  REQUIRE(std::string(sonare_last_error_message()) == recorded);
+
+  // A rejected argument reports through the return code alone: it neither
+  // records a message of its own nor wipes the one already there.
+  REQUIRE(sonare_realtime_voice_changer_process_mono(
+              handle, mono.data(), mono_out.data(), kFrames * 8) == SONARE_ERROR_INVALID_PARAMETER);
+  REQUIRE(std::string(sonare_last_error_message()) == recorded);
+
+  sonare_realtime_voice_changer_destroy(handle);
+}
+
 TEST_CASE("sonare_voice_changer_abi_version is non-zero and stable", "[voice_changer][c-api]") {
   // The runtime function and the compile-time constant must agree. Bindings
   // call the runtime function at attach time and compare against the
