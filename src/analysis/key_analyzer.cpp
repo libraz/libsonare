@@ -4,6 +4,7 @@
 #include <array>
 #include <cctype>
 #include <cmath>
+#include <iterator>
 #include <limits>
 
 #include "analysis/chord_analyzer.h"
@@ -159,32 +160,46 @@ bool uses_auto_audio_candidates(const KeyConfig& config) {
          !config.loudness_weighted;
 }
 
-std::array<float, 12> compute_mean_chroma_for_audio(const Audio& audio, const KeyConfig& config,
-                                                    bool use_hpss, bool loudness_weighted) {
+void validate_chroma_config(const Audio& audio, const KeyConfig& config) {
   SONARE_CHECK(config.high_pass_hz >= 0.0f, ErrorCode::InvalidParameter);
   SONARE_CHECK(config.high_pass_hz < static_cast<float>(audio.sample_rate()) * 0.5f,
                ErrorCode::InvalidParameter);
+}
 
+ChromaConfig chroma_config_for(const KeyConfig& config) {
   ChromaConfig chroma_config;
   chroma_config.n_fft = config.n_fft;
   chroma_config.hop_length = config.hop_length;
+  return chroma_config;
+}
 
-  StftConfig stft_config = chroma_config.to_stft_config();
-  Audio filtered_audio = audio;
-  if (config.high_pass_hz > 0.0f) {
-    const auto cascade = highpass_coeffs_4th(config.high_pass_hz, audio.sample_rate());
-    filtered_audio = Audio::from_vector(apply_cascade_filtfilt(audio.data(), audio.size(), cascade),
-                                        audio.sample_rate());
-  }
+/// @brief Returns the analysis input, high-passed when the config asks for it.
+Audio high_passed_audio(const Audio& audio, const KeyConfig& config) {
+  if (config.high_pass_hz <= 0.0f) return audio;
+  const auto cascade = highpass_coeffs_4th(config.high_pass_hz, audio.sample_rate());
+  return Audio::from_vector(apply_cascade_filtfilt(audio.data(), audio.size(), cascade),
+                            audio.sample_rate());
+}
 
-  Audio analysis_audio =
-      use_hpss ? harmonic(filtered_audio, HpssConfig(), stft_config) : filtered_audio;
-  Chroma chroma = Chroma::compute(analysis_audio, chroma_config);
-
+/// @brief Mean chroma of one analysis signal, optionally loudness-weighted.
+std::array<float, 12> mean_chroma_of(const Audio& analysis_audio, const KeyConfig& config,
+                                     bool loudness_weighted) {
+  Chroma chroma = Chroma::compute(analysis_audio, chroma_config_for(config));
   if (loudness_weighted) {
     return chroma.weighted_mean_energy(rms_energy(analysis_audio, config.n_fft, config.hop_length));
   }
   return chroma.mean_energy();
+}
+
+std::array<float, 12> compute_mean_chroma_for_audio(const Audio& audio, const KeyConfig& config,
+                                                    bool use_hpss, bool loudness_weighted) {
+  validate_chroma_config(audio, config);
+
+  const Audio filtered_audio = high_passed_audio(audio, config);
+  const Audio analysis_audio =
+      use_hpss ? harmonic(filtered_audio, HpssConfig(), chroma_config_for(config).to_stft_config())
+               : filtered_audio;
+  return mean_chroma_of(analysis_audio, config, loudness_weighted);
 }
 
 float candidate_selection_score(const KeyAnalyzer& analyzer) { return analyzer.confidence(); }
@@ -233,19 +248,37 @@ KeyAnalyzer::KeyAnalyzer(const Audio& audio, const KeyConfig& config) : config_(
         {true, true, 0.17f},
     };
 
+    // The four candidates draw on only two analysis signals -- the (optionally
+    // high-passed) input and its harmonic component -- and differ after that
+    // only in whether the chroma is loudness-weighted. Deriving all four means
+    // from those two signals costs one harmonic separation rather than two, and
+    // two chroma passes rather than four, over the whole track. Each candidate
+    // still sees exactly the signal it saw before, so the means, the scores and
+    // the selection are unchanged.
+    validate_chroma_config(audio, config);
+    std::array<std::array<float, 12>, 4> candidate_means{};
+    {
+      const Audio filtered_audio = high_passed_audio(audio, config);
+      candidate_means[0] = mean_chroma_of(filtered_audio, config, /*loudness_weighted=*/false);
+      candidate_means[2] = mean_chroma_of(filtered_audio, config, /*loudness_weighted=*/true);
+      const Audio harmonic_audio =
+          harmonic(filtered_audio, HpssConfig(), chroma_config_for(config).to_stft_config());
+      candidate_means[1] = mean_chroma_of(harmonic_audio, config, /*loudness_weighted=*/false);
+      candidate_means[3] = mean_chroma_of(harmonic_audio, config, /*loudness_weighted=*/true);
+    }
+
     bool has_best = false;
     float best_score = -std::numeric_limits<float>::infinity();
     KeyAnalyzer best_analyzer(std::array<float, 12>{}, config);
 
-    for (const auto& candidate : audio_candidates) {
+    for (size_t i = 0; i < std::size(audio_candidates); ++i) {
+      const AudioCandidate& candidate = audio_candidates[i];
       KeyConfig candidate_config = config;
       candidate_config.genre_hint = "auto";
       candidate_config.use_hpss = candidate.use_hpss;
       candidate_config.loudness_weighted = candidate.loudness_weighted;
 
-      auto candidate_mean = compute_mean_chroma_for_audio(audio, config, candidate.use_hpss,
-                                                          candidate.loudness_weighted);
-      KeyAnalyzer analyzer(candidate_mean, candidate_config);
+      KeyAnalyzer analyzer(candidate_means[i], candidate_config);
       const float score = candidate_selection_score(analyzer) + candidate.selection_bias;
       if (!has_best || score > best_score) {
         has_best = true;
