@@ -271,6 +271,7 @@ using sonare_node::DoubleProperty;
 using sonare_node::FloatProperty;
 using sonare_node::Int64Property;
 using sonare_node::IntProperty;
+using sonare_node::MidiByteProperty;
 using sonare_node::node_arg_bool;
 using sonare_node::node_arg_double;
 using sonare_node::node_arg_float;

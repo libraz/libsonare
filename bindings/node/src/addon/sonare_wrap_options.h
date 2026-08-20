@@ -105,6 +105,27 @@ inline uint32_t Uint32Property(const Napi::Object& obj, const char* key, uint32_
   return value.IsUndefined() || value.IsNull() ? fallback : value.As<Napi::Number>().Uint32Value();
 }
 
+/// @brief Read a MIDI-byte-wide property destined for a uint8_t C-ABI field.
+/// @details Unlike Uint32Property, this rejects a value that would silently wrap
+///          through the narrowing cast (256 -> 0) and so arrive at the C ABI
+///          already inside the range its own check accepts. Throws a JS
+///          RangeError for a non-integer or out-of-[0,255] value; the caller
+///          must bail on a pending exception before the native call. The finer
+///          MIDI range (group < 16, note < 128, ...) stays the C ABI's to
+///          enforce, so this only closes the wrap.
+inline uint8_t MidiByteProperty(Napi::Env env, const Napi::Object& obj, const char* key,
+                                uint8_t fallback) {
+  Napi::Value value = obj.Get(key);
+  if (value.IsUndefined() || value.IsNull()) return fallback;
+  const double number = value.As<Napi::Number>().DoubleValue();
+  if (!(number >= 0.0) || number > 255.0 || std::floor(number) != number) {
+    Napi::RangeError::New(env, std::string(key) + " must be an integer in [0, 255]")
+        .ThrowAsJavaScriptException();
+    return fallback;
+  }
+  return static_cast<uint8_t>(number);
+}
+
 /// @brief Read an int64 property: undefined/null returns the fallback, otherwise a
 ///        typed read (a non-number raises a pending JS exception).
 inline int64_t Int64Property(const Napi::Object& obj, const char* key, int64_t fallback) {

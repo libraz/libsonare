@@ -1601,6 +1601,57 @@ def test_engine_drains_external_midi_routing_to_host() -> None:
         assert engine.external_midi_dropped_count() == 0
 
 
+def test_engine_clip_event_group_comes_from_word0() -> None:
+    with RealtimeEngine(
+        sample_rate=48000.0, max_block_size=128, command_capacity=16, telemetry_capacity=16
+    ) as engine:
+        engine.set_midi_destination_external(7, True)
+        group = 3
+        note_on = _midi1_word(0x9, 0, 60, 100) | (group << 24)
+        note_off = _midi1_word(0x8, 0, 60, 0) | (group << 24)
+
+        # A group of 256 narrows to 0 in the c_uint8 field, which is a valid
+        # group, so the C ABI's own range check would accept it. Reject the wrap
+        # before ctypes can hide it.
+        with pytest.raises(ValueError):
+            engine.set_midi_clips(
+                [
+                    EngineMidiClipSchedule(
+                        id=1,
+                        track_id=7,
+                        destination_id=7,
+                        events=[EngineMidiEvent(0, word0=note_on, word_count=1, group=256)],
+                    )
+                ]
+            )
+
+        # ``group`` is ignored on input. The pair below is authored on one word0
+        # group and disagrees only in the redundant field; read under two groups
+        # the note-off would not match its note-on, leaving the note sounding so
+        # that stopping the transport emits a hang-note release.
+        engine.set_midi_clips(
+            [
+                EngineMidiClipSchedule(
+                    id=2,
+                    track_id=7,
+                    destination_id=7,
+                    length_samples=256,
+                    events=[
+                        EngineMidiEvent(0, word0=note_on, word_count=1, group=5),
+                        EngineMidiEvent(48, word0=note_off, word_count=1, group=0),
+                    ],
+                )
+            ]
+        )
+        engine.play()
+        engine.process([[0.0] * 128, [0.0] * 128])
+        assert len(engine.drain_external_midi()) == 2
+
+        engine.stop()
+        engine.process([[0.0] * 128, [0.0] * 128])
+        assert engine.drain_external_midi() == []
+
+
 def test_engine_external_destination_table_overflow() -> None:
     with RealtimeEngine(
         sample_rate=48000.0, max_block_size=128, command_capacity=16, telemetry_capacity=16

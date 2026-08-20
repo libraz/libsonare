@@ -1612,6 +1612,53 @@ describe('RealtimeEngine native binding', () => {
     engine.destroy();
   });
 
+  it('takes a clip event group from word0 and rejects one that would wrap', () => {
+    const engine = new RealtimeEngine(48000, 128);
+    engine.prepare(48000, 128, 16, 16);
+    engine.setMidiDestinationExternal(7, true);
+
+    // A group of 256 narrows to 0 in the uint8 struct field, which is a valid
+    // group, so the C-ABI range check would accept it. Reject the wrap here.
+    expect(() =>
+      engine.setMidiClips([
+        {
+          id: 1,
+          trackId: 7,
+          destinationId: 7,
+          events: [{ renderFrame: 0, word0: midi1Word(0x9, 0, 60, 100), wordCount: 1, group: 256 }],
+        },
+      ]),
+    ).toThrow();
+
+    // `group` is ignored on input: the pair below is authored on one word0
+    // group and disagrees only in the redundant field. Read under two groups
+    // the note-off would not match its note-on, so the note would still be
+    // considered sounding and stopping would emit a hang-note release.
+    const group = 3;
+    const packed = (status: number) =>
+      midi1Word(status, 0, 60, status === 0x9 ? 100 : 0) | (group << 24);
+    engine.setMidiClips([
+      {
+        id: 2,
+        trackId: 7,
+        destinationId: 7,
+        lengthSamples: 256,
+        events: [
+          { renderFrame: 0, word0: packed(0x9), wordCount: 1, group: 5 },
+          { renderFrame: 48, word0: packed(0x8), wordCount: 1, group: 0 },
+        ],
+      },
+    ]);
+    engine.play();
+    engine.process([new Float32Array(128), new Float32Array(128)]);
+    expect(engine.drainExternalMidi().length).toBe(2);
+
+    engine.stop();
+    engine.process([new Float32Array(128), new Float32Array(128)]);
+    expect(engine.drainExternalMidi().length).toBe(0);
+    engine.destroy();
+  });
+
   it('exposes the mastering processor catalog with role and capability flags', () => {
     const catalog = masteringProcessorCatalog();
     expect(catalog.length).toBeGreaterThan(0);

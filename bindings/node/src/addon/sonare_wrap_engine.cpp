@@ -112,8 +112,12 @@ std::vector<SonareEngineMidiEvent> ReadEngineMidiEvents(Napi::Env env, Napi::Val
     event.word1 = Uint32Property(obj, "word1", Uint32Property(obj, "data1", 0));
     event.word2 = Uint32Property(obj, "word2", 0);
     event.word3 = Uint32Property(obj, "word3", 0);
-    event.word_count = static_cast<uint8_t>(Uint32Property(obj, "wordCount", 0));
-    event.group = static_cast<uint8_t>(Uint32Property(obj, "group", 0));
+    // wordCount is documented as tolerant: anything outside [1,4] lets the C
+    // bridge infer the word form. Narrow out of range rather than through the
+    // uint8_t cast, which would land 257 on a spurious 1 instead of inferring.
+    const uint32_t word_count = Uint32Property(obj, "wordCount", 0);
+    event.word_count = word_count >= 1 && word_count <= 4 ? static_cast<uint8_t>(word_count) : 0;
+    event.group = MidiByteProperty(env, obj, "group", 0);
     event.sysex_handle = Uint32Property(obj, "sysexHandle", 0);
     // Bail on the first wrong-typed field so the next iteration's explicit
     // TypeError is never raised on top of an already-pending exception.

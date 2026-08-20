@@ -571,14 +571,25 @@ class RealtimeEngine(_EngineMidiMixin, _EngineMixingMixin, _EngineIoMixin):
         for index, clip in enumerate(clips):
             raw_events = (SonareEngineMidiEvent * len(clip.events))()
             for event_index, event in enumerate(clip.events):
+                # ctypes narrows to the c_uint8 field silently, so a group of 256
+                # would arrive as 0 and pass the C ABI's range check instead of
+                # being rejected. Reject the wrap here; the C ABI still owns the
+                # finer [0, 15] MIDI range.
+                group = int(event.group)
+                if not 0 <= group <= 255:
+                    raise ValueError("EngineMidiEvent.group must be an integer in [0, 255]")
+                # Same tolerance the C bridge documents: a word_count outside
+                # [1, 4] means "infer the word form", so narrow it by range
+                # rather than letting c_uint8 wrap 257 onto a spurious 1.
+                word_count = int(event.word_count)
                 raw_events[event_index] = SonareEngineMidiEvent(
                     int(event.render_frame),
                     int(event.word0),
                     int(event.word1),
                     int(event.word2),
                     int(event.word3),
-                    int(event.word_count),
-                    int(event.group),
+                    word_count if 1 <= word_count <= 4 else 0,
+                    group,
                     0,
                     int(event.sysex_handle),
                 )

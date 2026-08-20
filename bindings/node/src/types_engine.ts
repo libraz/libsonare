@@ -481,6 +481,10 @@ export interface EngineMidiEvent {
    * a file — so packing it there is sufficient and a value here that contradicts
    * `word0` is ignored. Must still be in `[0, 15]`; anything else is rejected as
    * a malformed event. Default `0`.
+   *
+   * Utility (`word0` type nibble `0x0`) and UMP Stream (`0xF`) messages have no
+   * group field — those bits are Reserved and `form`/`status` respectively — so
+   * they always read as group `0` and packing a group into them has no effect.
    */
   group?: number;
   /** Optional SysEx side-store handle for native hosts. */
