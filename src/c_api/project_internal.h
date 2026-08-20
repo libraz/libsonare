@@ -192,11 +192,6 @@ const arr::EditClip* find_midi_clip(const SonareProject* project, uint32_t clip_
   return clip;
 }
 
-uint8_t ump_word_count_from_word0(uint32_t word0) noexcept {
-  const uint8_t mt = static_cast<uint8_t>((word0 >> 28u) & 0x0Fu);
-  return mt == static_cast<uint8_t>(sonare::midi::UmpMessageType::kMidi2ChannelVoice) ? 2 : 1;
-}
-
 arr::MidiClipEvent event_from_ump(double ppq, const sonare::midi::Ump& ump) {
   arr::MidiClipEvent event;
   event.ppq = ppq;
@@ -212,7 +207,7 @@ bool is_bank_or_program_event_for(const arr::MidiClipEvent& event, uint8_t group
   sonare::midi::Ump ump;
   ump.words[0] = event.data0;
   ump.words[1] = event.data1;
-  ump.word_count = ump_word_count_from_word0(event.data0);
+  ump.word_count = sonare::midi::ump_word_count_for_word0(event.data0);
   ump.group = static_cast<uint8_t>((event.data0 >> 24u) & 0x0Fu);
   if (ump.group != group || ump.channel() != channel) return false;
   if (ump.message_type() != sonare::midi::UmpMessageType::kMidi1ChannelVoice) return false;
@@ -248,7 +243,7 @@ bool apply_midi_fx_to_events(const arr::MidiClipEventList& events, sonare::midi:
     }
     midi_event.ump.words[0] = event.data0;
     midi_event.ump.words[1] = event.data1;
-    midi_event.ump.word_count = ump_word_count_from_word0(event.data0);
+    midi_event.ump.word_count = sonare::midi::ump_word_count_for_word0(event.data0);
     midi_event.ump.group = static_cast<uint8_t>((event.data0 >> 24u) & 0x0Fu);
     midi_event.ump.sysex_handle = event.sysex_handle;
     in.push_back(midi_event);
@@ -339,7 +334,7 @@ void fill_ump_from_arr_event(const arr::MidiClipEvent& event, const arr::MidiCon
                              sonare::midi::Ump* out) {
   out->words[0] = event.data0;
   out->words[1] = event.data1;
-  out->word_count = ump_word_count_from_word0(event.data0);
+  out->word_count = sonare::midi::ump_word_count_for_word0(event.data0);
   out->group = static_cast<uint8_t>((event.data0 >> 24u) & 0x0Fu);
   const sonare::midi::SysExHandle sysex =
       remap_sysex_handle(midi, event.sysex_handle, export_store, exported_handles);

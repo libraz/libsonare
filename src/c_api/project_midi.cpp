@@ -124,7 +124,7 @@ sonare::midi::Ump ump_from_pod(const SonareMidiEventPod& pod) noexcept {
   sonare::midi::Ump out{};
   out.words[0] = pod.data0;
   out.words[1] = pod.data1;
-  out.word_count = ump_word_count_from_word0(pod.data0);
+  out.word_count = sonare::midi::ump_word_count_for_word0(pod.data0);
   out.group = static_cast<uint8_t>((pod.data0 >> 24u) & 0x0Fu);
   return out;
 }

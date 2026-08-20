@@ -1305,7 +1305,7 @@ TEST_CASE("project C surface MIDI-FX bake preserves large clips and canonical ev
     sonare::midi::Ump ump{};
     ump.words[0] = ordered[i].data0;
     ump.words[1] = ordered[i].data1;
-    ump.word_count = ump_word_count_from_word0(ordered[i].data0);
+    ump.word_count = sonare::midi::ump_word_count_for_word0(ordered[i].data0);
     ump.group = static_cast<uint8_t>((ordered[i].data0 >> 24u) & 0x0Fu);
     REQUIRE(sonare::midi::same_time_rank(ump) == expected_ranks[i]);
   }

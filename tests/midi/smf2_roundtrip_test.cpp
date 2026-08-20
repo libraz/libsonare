@@ -264,6 +264,39 @@ TEST_CASE("SMF2 round-trips a SysEx payload", "[midi][smf2]") {
   REQUIRE(*recovered == payload);
 }
 
+TEST_CASE("SMF2 export drops a SysEx whose payload it cannot resolve", "[midi][smf2]") {
+  // Message type 0x3 is a 64-bit form, so writing one word for it would leave
+  // the reader -- which sizes messages from the same shared table -- consuming
+  // the following word as the missing half and losing its bearings for the rest
+  // of the stream. The writer never gets the chance: a SysEx whose payload it
+  // cannot resolve is counted and dropped before any word is emitted, so the
+  // event's own word_count is never consulted. That guard is what keeps a
+  // stale word_count on a SysEx record from corrupting a file, and it is worth
+  // holding in place.
+  MidiClip clip;
+  Ump orphan = sonare::midi::make_sysex_handle(0, /*handle=*/7);
+  orphan.word_count = 1;  // a short count, as an unmigrated rebuild would leave
+  clip.add_event(ev(0.0, orphan));
+  clip.add_event(ev(1.0, sonare::midi::make_midi1_note_on(0, 0, 60, 100)));
+  clip.add_event(ev(2.0, sonare::midi::make_midi1_note_off(0, 0, 60, 0)));
+
+  Smf2ExportOptions options;  // no sysex_store: the handle stays unresolvable
+  const auto exported = export_clip_file(clip, {}, {}, options);
+  REQUIRE(exported.skipped_events == 1);
+
+  const Smf2ImportResult imported = import_clip_file(exported.bytes);
+  REQUIRE(imported.ok());
+  REQUIRE(imported.clips.size() == 1);
+  const auto& events = imported.clips[0].events();
+  // The note pair survives at its own timing, which a desynchronized reader
+  // would have destroyed.
+  REQUIRE(events.size() == 2);
+  REQUIRE(events[0].ump.is_note_on());
+  REQUIRE(events[0].ump.note_number() == 60);
+  REQUIRE(events[1].ump.is_note_off());
+  REQUIRE(events[1].ppq == Catch::Approx(2.0));
+}
+
 TEST_CASE("SMF2 chains Delta Clockstamps for events beyond the 20-bit tick span", "[midi][smf2]") {
   // At dctpq=480, 5000 quarter notes -> tick 2,400,000, which exceeds two full
   // 20-bit DCS spans (2 * 0xFFFFF = 2,097,150). A single DCS word would clamp /

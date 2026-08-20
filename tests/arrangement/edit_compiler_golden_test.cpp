@@ -519,6 +519,16 @@ TEST_CASE("MIDI compile resolves SysEx handles to stable payload views", "[arran
   REQUIRE(event.sysex_payload_size == payload.size());
   REQUIRE(std::vector<uint8_t>(event.sysex_payload,
                                event.sysex_payload + event.sysex_payload_size) == payload);
+
+  // The compiler rebuilds a UMP from the stored data words, so what comes out
+  // must be the message that went in. A SysEx handle is the case that separates
+  // a real reconstruction from one that only looks right: message type 0x3 is a
+  // 64-bit form even though no payload word rides inline, so a rebuild that
+  // sizes every non-MIDI-2.0 message as one word produces an Ump that carries
+  // the right handle and the right bytes yet is not equal to the one it came
+  // from -- and would serialize a word short.
+  REQUIRE(event.ump.word_count == sysex.word_count);
+  REQUIRE(event.ump == sysex);
 }
 
 TEST_CASE("compiler stamps each MIDI clip with its track's destination id", "[arrangement]") {

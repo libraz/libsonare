@@ -383,11 +383,6 @@ void append_midi_render_events(const midi::MidiClip& midi_clip, const EditClip& 
   }
 }
 
-uint8_t ump_word_count_from_word0(uint32_t word0) noexcept {
-  const uint8_t mt = static_cast<uint8_t>((word0 >> 28u) & 0x0Fu);
-  return mt == static_cast<uint8_t>(midi::UmpMessageType::kMidi2ChannelVoice) ? 2 : 1;
-}
-
 }  // namespace
 
 void CompiledTimeline::copy_from(const CompiledTimeline& other) {
@@ -1042,7 +1037,7 @@ CompileResult compile(const Project& project, const MidiContentStore& midi,
         out.ppq = ev.ppq - clip.source_offset_ppq;
         out.ump.words[0] = ev.data0;
         out.ump.words[1] = ev.data1;
-        out.ump.word_count = ump_word_count_from_word0(ev.data0);
+        out.ump.word_count = midi::ump_word_count_for_word0(ev.data0);
         out.ump.group = static_cast<uint8_t>((ev.data0 >> 24u) & 0x0Fu);
         out.ump.sysex_handle = ev.sysex_handle;
         if (ev.sysex_handle != 0) {
