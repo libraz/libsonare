@@ -7,8 +7,14 @@ from pathlib import Path
 import pytest
 
 
-def _find_lib_path() -> str:
-    """Find libsonare for testing."""
+def _find_dev_lib_path() -> str | None:
+    """Return a development build of libsonare, or None if the checkout has none.
+
+    None is not a failure: an installed wheel carries its own repaired library
+    next to the package and the binding's own loader finds it. Pinning
+    SONARE_LIB_PATH at a build tree whenever one happens to exist would make the
+    wheel job test something other than the artifact it just built.
+    """
     env_path = os.environ.get("SONARE_LIB_PATH")
     if env_path and Path(env_path).exists():
         return env_path
@@ -20,14 +26,17 @@ def _find_lib_path() -> str:
         if build_path.exists():
             return str(build_path)
 
-    pytest.skip(f"libsonare not found under {project_root}/build*/lib")
-    return ""  # unreachable
+    return None
 
 
-os.environ.setdefault("SONARE_LIB_PATH", _find_lib_path())
+_dev_lib_path = _find_dev_lib_path()
+if _dev_lib_path is not None:
+    os.environ.setdefault("SONARE_LIB_PATH", _dev_lib_path)
 
 
 @pytest.fixture()
 def lib_path() -> str:
-    """Provide the path to the libsonare shared library."""
-    return _find_lib_path()
+    """Provide the path to the shared library the binding will load."""
+    from libsonare._ffi import resolved_library_path
+
+    return resolved_library_path()
