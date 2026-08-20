@@ -118,9 +118,13 @@ jobs:
       - name: Generate K-weighting reference fixture
         run: python3 tools/scripts/k_weighting_reference.py
       - name: Test
+        # `halt_on_error=1` is what makes this a gate. UndefinedBehaviorSanitizer
+        # otherwise diagnoses and continues, so the process still exits 0, Catch2
+        # still reports every test passed, ctest still exits 0, and
+        # --output-on-failure never prints the diagnostic because nothing failed.
         env:
           ASAN_OPTIONS: detect_leaks=1:strict_string_checks=1
-          UBSAN_OPTIONS: print_stacktrace=1
+          UBSAN_OPTIONS: print_stacktrace=1:halt_on_error=1
         run: ctest --test-dir build-sanitize --output-on-failure --parallel
       # Windows is intentionally excluded: MSVC sanitizer coverage differs from
       # Clang/GCC ASan+UBSan and would make this gate inconsistent across OSes.
