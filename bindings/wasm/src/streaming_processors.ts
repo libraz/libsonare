@@ -156,6 +156,11 @@ export class StreamingMasteringChain {
   delete(): void {
     this.chain.delete();
   }
+
+  /** Alias for {@link delete}, provided for cross-binding (Node) compatibility. */
+  destroy(): void {
+    this.delete();
+  }
 }
 
 // ============================================================================
@@ -310,6 +315,11 @@ export class StreamingEqualizer {
   delete(): void {
     this.eq.delete();
   }
+
+  /** Alias for {@link delete}, provided for cross-binding (Node) compatibility. */
+  destroy(): void {
+    this.delete();
+  }
 }
 
 // ============================================================================
@@ -370,5 +380,10 @@ export class StreamingRetune {
   /** Release the underlying WASM object. Safe to call only once. */
   delete(): void {
     this.retune.delete();
+  }
+
+  /** Alias for {@link delete}, provided for cross-binding (Node) compatibility. */
+  destroy(): void {
+    this.delete();
   }
 }

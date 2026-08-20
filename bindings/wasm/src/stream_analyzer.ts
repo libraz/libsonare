@@ -283,7 +283,10 @@ export class StreamAnalyzer {
   /**
    * Set tuning reference frequency for non-standard tuning.
    *
-   * @param refHz - Reference frequency for A4 (default 440 Hz)
+   * Throws for a value outside 220..880 Hz rather than clamping into it, so
+   * this and `tuningRefHz` at create time accept exactly the same range.
+   *
+   * @param refHz - Reference frequency for A4 (default 440 Hz, range 220..880)
    * @example
    * // If audio is 1 semitone sharp (A4 = 466.16 Hz)
    * analyzer.setTuningRefHz(466.16);
@@ -297,6 +300,11 @@ export class StreamAnalyzer {
   /** Release the underlying WASM object. Safe to call only once. */
   delete(): void {
     this.analyzer.delete();
+  }
+
+  /** Alias for {@link delete}, provided for cross-binding (Node) compatibility. */
+  destroy(): void {
+    this.delete();
   }
 
   /** Alias for {@link delete}, kept for backward compatibility (historical name). */

@@ -306,6 +306,11 @@ export class RealtimeVoiceChanger {
   delete(): void {
     this.changer.delete();
   }
+
+  /** Alias for {@link delete}, provided for cross-binding (Node) compatibility. */
+  destroy(): void {
+    this.delete();
+  }
 }
 
 export function realtimeVoiceChangerPresetNames(): VoicePresetId[] {

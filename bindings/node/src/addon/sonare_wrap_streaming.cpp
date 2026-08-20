@@ -356,7 +356,9 @@ Napi::Value StreamingMasteringChainWrap::Reset(const Napi::CallbackInfo& info) {
 Napi::Value StreamingMasteringChainWrap::LatencySamples(const Napi::CallbackInfo& info) {
   Napi::Env env = info.Env();
   if (!chain_) {
-    return Napi::Number::New(env, 0);
+    Napi::Error::New(env, "StreamingMasteringChain is not initialized")
+        .ThrowAsJavaScriptException();
+    return env.Undefined();
   }
   return Napi::Number::New(env, chain_->latency_samples());
 }
@@ -364,7 +366,9 @@ Napi::Value StreamingMasteringChainWrap::LatencySamples(const Napi::CallbackInfo
 Napi::Value StreamingMasteringChainWrap::StageNames(const Napi::CallbackInfo& info) {
   Napi::Env env = info.Env();
   if (!chain_) {
-    return Napi::Array::New(env, 0);
+    Napi::Error::New(env, "StreamingMasteringChain is not initialized")
+        .ThrowAsJavaScriptException();
+    return env.Undefined();
   }
   const auto& names = chain_->stage_names();
   Napi::Array out = Napi::Array::New(env, names.size());
@@ -600,9 +604,11 @@ Napi::Value StreamingEqualizerWrap::SetSidechainStereo(const Napi::CallbackInfo&
 
 Napi::Value StreamingEqualizerWrap::ClearSidechain(const Napi::CallbackInfo& info) {
   Napi::Env env = info.Env();
-  if (eq_) {
-    eq_->clear_sidechain();
+  if (!eq_) {
+    Napi::Error::New(env, "StreamingEqualizer is not initialized").ThrowAsJavaScriptException();
+    return env.Undefined();
   }
+  eq_->clear_sidechain();
   sidechain_left_.Reset();
   sidechain_right_.Reset();
   sidechain_channels_ = {};
@@ -612,7 +618,8 @@ Napi::Value StreamingEqualizerWrap::ClearSidechain(const Napi::CallbackInfo& inf
 Napi::Value StreamingEqualizerWrap::LastAutoGainDb(const Napi::CallbackInfo& info) {
   Napi::Env env = info.Env();
   if (!eq_) {
-    return Napi::Number::New(env, 0);
+    Napi::Error::New(env, "StreamingEqualizer is not initialized").ThrowAsJavaScriptException();
+    return env.Undefined();
   }
   return Napi::Number::New(env, eq_->last_auto_gain_db());
 }
@@ -620,7 +627,8 @@ Napi::Value StreamingEqualizerWrap::LastAutoGainDb(const Napi::CallbackInfo& inf
 Napi::Value StreamingEqualizerWrap::LatencySamples(const Napi::CallbackInfo& info) {
   Napi::Env env = info.Env();
   if (!eq_) {
-    return Napi::Number::New(env, 0);
+    Napi::Error::New(env, "StreamingEqualizer is not initialized").ThrowAsJavaScriptException();
+    return env.Undefined();
   }
   return Napi::Number::New(env, eq_->latency_samples());
 }

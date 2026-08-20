@@ -299,6 +299,36 @@ describe('StreamingEqualizer', () => {
   });
 });
 
+describe('streaming handles signal use-after-destroy', () => {
+  // The classes document "Idempotent; any other method called afterwards
+  // throws". A reader that answers with a plausible measurement instead is
+  // indistinguishable from a live handle at the call site.
+  it('throws from every StreamingMasteringChain reader after destroy()', () => {
+    const chain = new StreamingMasteringChain({ 'maximizer.truePeakLimiter.enabled': true });
+    chain.prepare(48000, 64, 1);
+    expect(chain.latencySamples()).toBeGreaterThan(0);
+    chain.destroy();
+    expect(() => chain.latencySamples()).toThrow(/not initialized/);
+    expect(() => chain.stageNames()).toThrow(/not initialized/);
+    expect(() => chain.processMono(new Float32Array(64))).toThrow(/not initialized/);
+    expect(() => chain.reset()).toThrow(/not initialized/);
+    // A second destroy() stays a no-op.
+    expect(() => chain.destroy()).not.toThrow();
+  });
+
+  it('throws from every StreamingEqualizer reader after destroy()', () => {
+    const eq = new StreamingEqualizer({ sampleRate: 48000, maxBlockSize: 512 });
+    eq.setBand(0, { type: 'Peak', frequencyHz: 1000, gainDb: 3, q: 1, enabled: true });
+    expect(eq.lastAutoGainDb()).toBe(0);
+    eq.destroy();
+    expect(() => eq.latencySamples()).toThrow(/not initialized/);
+    expect(() => eq.lastAutoGainDb()).toThrow(/not initialized/);
+    expect(() => eq.clearSidechain()).toThrow(/not initialized/);
+    expect(() => eq.processMono(new Float32Array(512))).toThrow(/not initialized/);
+    expect(() => eq.destroy()).not.toThrow();
+  });
+});
+
 describe('onset, tempogram, NNLS chroma, and LUFS', () => {
   const allFinite = (arr: Float32Array): boolean => {
     for (let i = 0; i < arr.length; i++) {
