@@ -37,8 +37,12 @@ def _validate_effect_fft_options(fn_name: str, n_fft: int, hop_length: int) -> t
         raise SonareValueError(f"{fn_name}: hop_length must be an integer")
     n_fft = int(n_fft)
     hop_length = int(hop_length)
-    if n_fft <= 0 or n_fft > _C_INT_MAX or (n_fft & (n_fft - 1)) != 0:
-        raise SonareValueError(f"{fn_name}: n_fft must be a positive signed 32-bit power of two")
+    # The core FFT is mixed-radix, so any even size transforms exactly; only the
+    # real one-sided spectrum's n_fft / 2 + 1 bin layout needs the evenness. A
+    # power-of-two restriction here would reject sizes the C ABI and the native
+    # CLI accept.
+    if n_fft < 2 or n_fft > _C_INT_MAX or n_fft % 2 != 0:
+        raise SonareValueError(f"{fn_name}: n_fft must be an even signed 32-bit integer >= 2")
     if hop_length <= 0 or hop_length > _C_INT_MAX:
         raise SonareValueError(
             f"{fn_name}: hop_length must fit in a positive signed 32-bit integer"
@@ -427,8 +431,10 @@ def hpss_with_residual(
         sample_rate: Sample rate in Hz (default 22050).
         kernel_harmonic: Horizontal median filter size (positive odd integer).
         kernel_percussive: Vertical median filter size (positive odd integer).
-        n_fft: FFT size used for analysis/synthesis (default 2048).
-        hop_length: Hop size used for analysis/synthesis (default 512).
+        n_fft: FFT size used for analysis/synthesis; an even integer >= 2
+            (default 2048).
+        hop_length: Hop size used for analysis/synthesis, in ``(0, n_fft / 2]``
+            so frames overlap by at least half a window (default 512).
         hard_mask: Use binary harmonic/percussive masks (default ``False``).
         validate: Reject empty / NaN / Inf input (default ``True``).
 
@@ -542,8 +548,10 @@ def phase_vocoder(
         samples: Input audio.
         sample_rate: Sample rate in Hz (default 22050).
         rate: Time stretch rate (< 1.0 slower, > 1.0 faster). Must be > 0.
-        n_fft: FFT size used for analysis/synthesis (default 2048).
-        hop_length: Hop length used for analysis/synthesis (default 512).
+        n_fft: FFT size used for analysis/synthesis; an even integer >= 2
+            (default 2048).
+        hop_length: Hop length used for analysis/synthesis, in ``(0, n_fft / 2]``
+            so frames overlap by at least half a window (default 512).
         validate: Reject empty / NaN / Inf input (default True). Pass
             ``validate=False`` to skip the scan on hot paths.
 

@@ -344,6 +344,7 @@ HpssSpectrogramResult hpss(const Spectrogram& spec, const HpssConfig& config) {
 
 HpssAudioResult hpss(const Audio& audio, const HpssConfig& config, const StftConfig& stft_config) {
   SONARE_CHECK(!audio.empty(), ErrorCode::InvalidParameter);
+  validate_cola_geometry(stft_config.n_fft, stft_config.hop_length);
 
   /// Compute STFT
   Spectrogram spec = Spectrogram::compute(audio, stft_config);
@@ -468,6 +469,7 @@ HpssSpectrogramResultWithResidual hpss_with_residual(const Spectrogram& spec,
 HpssAudioResultWithResidual hpss_with_residual(const Audio& audio, const HpssConfig& config,
                                                const StftConfig& stft_config) {
   SONARE_CHECK(!audio.empty(), ErrorCode::InvalidParameter);
+  validate_cola_geometry(stft_config.n_fft, stft_config.hop_length);
 
   /// Compute STFT
   Spectrogram spec = Spectrogram::compute(audio, stft_config);

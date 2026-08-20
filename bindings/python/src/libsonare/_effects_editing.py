@@ -49,9 +49,12 @@ def _validate_effect_fft_options(fn_name: str, n_fft: int, hop_length: int) -> t
         raise SonareValueError(f"{fn_name}: hop_length must be an integer")
     n_fft = int(n_fft)
     hop_length = int(hop_length)
-    if n_fft <= 0 or n_fft > _C_INT_MAX:
-        raise SonareValueError(f"{fn_name}: n_fft must fit in a signed 32-bit integer")
-    _require_power_of_two(n_fft, "n_fft")
+    # The core FFT is mixed-radix, so any even size transforms exactly; only the
+    # real one-sided spectrum's n_fft / 2 + 1 bin layout needs the evenness. A
+    # power-of-two restriction here would reject sizes the C ABI and the native
+    # CLI accept.
+    if n_fft < 2 or n_fft > _C_INT_MAX or n_fft % 2 != 0:
+        raise SonareValueError(f"{fn_name}: n_fft must be an even signed 32-bit integer >= 2")
     if hop_length <= 0 or hop_length > _C_INT_MAX:
         raise SonareValueError(
             f"{fn_name}: hop_length must fit in a positive signed 32-bit integer"
@@ -95,8 +98,10 @@ def hpss(
         sample_rate: Sample rate in Hz (default 22050).
         kernel_harmonic: Harmonic median filter kernel size (positive odd integer).
         kernel_percussive: Percussive median filter kernel size (positive odd integer).
-        n_fft: FFT size used for analysis/synthesis (default 2048).
-        hop_length: Hop size used for analysis/synthesis (default 512).
+        n_fft: FFT size used for analysis/synthesis; an even integer >= 2
+            (default 2048).
+        hop_length: Hop size used for analysis/synthesis, in ``(0, n_fft / 2]``
+            so frames overlap by at least half a window (default 512).
         hard_mask: Use binary harmonic/percussive masks (default ``False``).
         validate: Reject empty / NaN / Inf input (default ``True``).
 
@@ -235,8 +240,10 @@ def time_stretch(
         samples: Audio samples.
         sample_rate: Sample rate in Hz (default 22050).
         rate: Stretch factor (>1 speeds up, <1 slows down).
-        n_fft: FFT size used for analysis/synthesis (default 2048).
-        hop_length: Hop size used for analysis/synthesis (default 512).
+        n_fft: FFT size used for analysis/synthesis; an even integer >= 2
+            (default 2048).
+        hop_length: Hop size used for analysis/synthesis, in ``(0, n_fft / 2]``
+            so frames overlap by at least half a window (default 512).
         validate: Reject empty / NaN / Inf input (default True). Pass
             ``validate=False`` to skip the scan on hot paths.
 
@@ -279,8 +286,10 @@ def pitch_shift(
         samples: Audio samples.
         sample_rate: Sample rate in Hz (default 22050).
         semitones: Number of semitones to shift (positive = up, negative = down).
-        n_fft: FFT size used for analysis/synthesis (default 2048).
-        hop_length: Hop size used for analysis/synthesis (default 512).
+        n_fft: FFT size used for analysis/synthesis; an even integer >= 2
+            (default 2048).
+        hop_length: Hop size used for analysis/synthesis, in ``(0, n_fft / 2]``
+            so frames overlap by at least half a window (default 512).
         validate: Reject empty / NaN / Inf input (default True). Pass
             ``validate=False`` to skip the scan on hot paths.
 

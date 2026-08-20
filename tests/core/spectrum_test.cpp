@@ -43,6 +43,53 @@ float compute_snr(const float* original, const float* reconstructed, size_t size
 }
 }  // namespace
 
+TEST_CASE("validate_cola_geometry accepts every invertible geometry", "[spectrum]") {
+  SECTION("hop up to half the FFT size") {
+    REQUIRE_NOTHROW(validate_cola_geometry(2048, 512));
+    REQUIRE_NOTHROW(validate_cola_geometry(2048, 1024));
+    REQUIRE_NOTHROW(validate_cola_geometry(2048, 1));
+  }
+  SECTION("an even size that is not a power of two") {
+    // The FFT is mixed-radix, so 1500 = 2^2 * 3 * 5^3 transforms exactly. The
+    // facades used to reject sizes like this while the C ABI accepted them.
+    REQUIRE_NOTHROW(validate_cola_geometry(1500, 256));
+    REQUIRE_NOTHROW(validate_cola_geometry(3000, 750));
+    REQUIRE_NOTHROW(validate_cola_geometry(2, 1));
+  }
+}
+
+TEST_CASE("validate_cola_geometry rejects geometries outside the half-overlap contract",
+          "[spectrum]") {
+  SECTION("hop above half the FFT size") {
+    REQUIRE_THROWS_AS(validate_cola_geometry(2048, 1025), SonareException);
+    REQUIRE_THROWS_AS(validate_cola_geometry(1024, 1024), SonareException);
+    REQUIRE_THROWS_AS(validate_cola_geometry(512, 2048), SonareException);
+  }
+  SECTION("non-positive hop") {
+    REQUIRE_THROWS_AS(validate_cola_geometry(2048, 0), SonareException);
+    REQUIRE_THROWS_AS(validate_cola_geometry(2048, -512), SonareException);
+  }
+  SECTION("an FFT size with no one-sided bin layout") {
+    REQUIRE_THROWS_AS(validate_cola_geometry(1023, 256), SonareException);
+    REQUIRE_THROWS_AS(validate_cola_geometry(1, 1), SonareException);
+    REQUIRE_THROWS_AS(validate_cola_geometry(0, 512), SonareException);
+  }
+}
+
+TEST_CASE("validate_config leaves analysis-only STFTs free of the overlap rule", "[spectrum]") {
+  // Nothing is reconstructed from an analysis STFT, so a sparse hop is a valid
+  // request there and must keep reaching Spectrogram::compute.
+  StftConfig config;
+  config.n_fft = 1024;
+  config.hop_length = 1024;
+  REQUIRE_NOTHROW(validate_config(config));
+
+  constexpr int sr = 22050;
+  std::vector<float> sine = generate_sine(sr / 4, 440.0f, sr);
+  Audio audio = Audio::from_vector(std::move(sine), sr);
+  REQUIRE_NOTHROW(Spectrogram::compute(audio, config));
+}
+
 TEST_CASE("Spectrogram compute basic", "[spectrum]") {
   constexpr int sr = 22050;
   constexpr int samples = sr;  // 1 second

@@ -27,6 +27,10 @@ Audio native_spectral_time_stretch(const Audio& audio, float rate, int n_fft, in
   // defaults so a malformed config never produces an empty/degenerate STFT.
   if (n_fft <= 0) n_fft = constants::kDefaultNFft;
   if (hop_length <= 0) hop_length = constants::kDefaultHopLength;
+  // Checked after the fallback so the substituted defaults are what gets
+  // validated; a caller-supplied geometry that cannot be overlap-added is an
+  // error rather than something to repair.
+  validate_cola_geometry(n_fft, hop_length);
 
   StftConfig stft_config;
   stft_config.n_fft = n_fft;

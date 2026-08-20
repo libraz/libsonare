@@ -37,11 +37,12 @@ function resolveEffectFftOptions(
   if (typeof resolvedNFft !== 'number' || !Number.isInteger(resolvedNFft)) {
     throw new TypeError(`${fnName}: nFft must be an integer`);
   }
-  if (resolvedNFft < 2 || resolvedNFft > 2 ** 30) {
-    throw new RangeError(`${fnName}: nFft must be an even power of two >= 2`);
-  }
-  if ((resolvedNFft & (resolvedNFft - 1)) !== 0) {
-    throw new RangeError(`${fnName}: nFft must be an even power of two >= 2`);
+  // The core FFT is mixed-radix, so any even size transforms exactly; only the
+  // real one-sided spectrum's n_fft/2 + 1 bin layout needs the evenness. A
+  // power-of-two restriction here would reject sizes the C ABI and the native
+  // CLI accept.
+  if (resolvedNFft < 2 || resolvedNFft > 2 ** 30 || resolvedNFft % 2 !== 0) {
+    throw new RangeError(`${fnName}: nFft must be an even integer >= 2`);
   }
   if (typeof resolvedHopLength !== 'number' || !Number.isInteger(resolvedHopLength)) {
     throw new TypeError(`${fnName}: hopLength must be an integer`);
@@ -261,6 +262,9 @@ export function percussive(
  * @param samples - Audio samples (mono, float32)
  * @param sampleRate - Sample rate in Hz (default: 22050)
  * @param rate - Time stretch rate (0.5 = double duration, 2.0 = half duration)
+ * @param nFft - FFT size: an even integer >= 2 (default 2048)
+ * @param hopLength - Hop in samples, in `(0, nFft / 2]` (default 512), so
+ *   frames overlap by at least half a window
  * @returns Time-stretched audio
  */
 export function timeStretch(request: TimeStretchRequest): Float32Array;
@@ -328,6 +332,9 @@ export function timeStretch(
  * @param samples - Audio samples (mono, float32)
  * @param sampleRate - Sample rate in Hz (default: 22050)
  * @param semitones - Pitch shift in semitones (+12 = one octave up, -12 = one octave down)
+ * @param nFft - FFT size: an even integer >= 2 (default 2048)
+ * @param hopLength - Hop in samples, in `(0, nFft / 2]` (default 512), so
+ *   frames overlap by at least half a window
  * @returns Pitch-shifted audio
  */
 export function pitchShift(request: PitchShiftRequest): Float32Array;

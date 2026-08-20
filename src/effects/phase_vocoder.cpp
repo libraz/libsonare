@@ -77,9 +77,8 @@ std::vector<float> compute_instantaneous_frequency(const float* phase, const flo
 }
 
 StreamingPhaseVocoder::StreamingPhaseVocoder(StreamingPhaseVocoderConfig config) : config_(config) {
-  SONARE_CHECK(config_.sample_rate > 0 && config_.n_fft >= 2 && config_.hop_length > 0 &&
-                   config_.hop_length <= config_.n_fft / 2,
-               ErrorCode::InvalidParameter);
+  SONARE_CHECK(config_.sample_rate > 0, ErrorCode::InvalidParameter);
+  validate_cola_geometry(config_.n_fft, config_.hop_length);
   if (config_.win_length <= 0) config_.win_length = config_.n_fft;
   SONARE_CHECK(config_.win_length <= config_.n_fft, ErrorCode::InvalidParameter);
 }
@@ -467,6 +466,10 @@ Spectrogram phase_vocoder(const Spectrogram& spec, float rate, const PhaseVocode
   int n_fft = spec.n_fft();
   int hop_length = config.hop_length > 0 ? config.hop_length : spec.hop_length();
   int sample_rate = spec.sample_rate();
+  // The stretched spectrum is only ever resynthesized by overlap-add at this
+  // same hop, so the geometry is checked on the resolved pair rather than on
+  // whichever of the two sources supplied it.
+  validate_cola_geometry(n_fft, hop_length);
 
   /// Calculate output number of frames
   const int n_frames_out = checked_output_frames(n_bins, n_frames_in, rate);
@@ -553,6 +556,7 @@ Spectrogram phase_vocoder_phaselocked(const Spectrogram& spec, float rate,
   int n_fft = spec.n_fft();
   int hop_length = config.hop_length > 0 ? config.hop_length : spec.hop_length();
   int sample_rate = spec.sample_rate();
+  validate_cola_geometry(n_fft, hop_length);
 
   const int n_frames_out = checked_output_frames(n_bins, n_frames_in, rate);
 

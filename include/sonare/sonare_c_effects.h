@@ -20,6 +20,14 @@ SonareError sonare_hpss(const float* samples, size_t length, int sample_rate, in
 ///          @p with_residual is non-zero, @p out_residual is required and
 ///          receives the third signal; otherwise it is optional and remains
 ///          NULL. All output fields are reset before input/config validation.
+/// @param n_fft      FFT size: an even integer >= 2. Any even size is accepted;
+///                   the FFT is mixed-radix, not power-of-two only.
+/// @param hop_length Hop in samples, in (0, n_fft/2]. The result is
+///                   resynthesized by overlap-add and the phase-coherent
+///                   spectral paths require at least half-window overlap; a
+///                   sparser hop is rejected with
+///                   SONARE_ERROR_INVALID_PARAMETER rather than returning a
+///                   signal with periodic dropouts.
 SonareError sonare_hpss_ex(const float* samples, size_t length, int sample_rate,
                            int kernel_harmonic, int kernel_percussive, int n_fft, int hop_length,
                            int use_soft_mask, int with_residual, SonareHpssResult* out,
@@ -31,11 +39,15 @@ SonareError sonare_percussive(const float* samples, size_t length, int sample_ra
 SonareError sonare_time_stretch(const float* samples, size_t length, int sample_rate, float rate,
                                 float** out, size_t* out_length);
 /// @brief Native spectral time stretch with explicit FFT/hop configuration.
+/// @details @p n_fft must be an even integer >= 2 and @p hop_length must lie in
+///          (0, n_fft/2]; see @ref sonare_hpss_ex for why.
 SonareError sonare_time_stretch_ex(const float* samples, size_t length, int sample_rate, float rate,
                                    int n_fft, int hop_length, float** out, size_t* out_length);
 SonareError sonare_pitch_shift(const float* samples, size_t length, int sample_rate,
                                float semitones, float** out, size_t* out_length);
 /// @brief Native spectral pitch shift with explicit FFT/hop configuration.
+/// @details @p n_fft must be an even integer >= 2 and @p hop_length must lie in
+///          (0, n_fft/2]; see @ref sonare_hpss_ex for why.
 SonareError sonare_pitch_shift_ex(const float* samples, size_t length, int sample_rate,
                                   float semitones, int n_fft, int hop_length, float** out,
                                   size_t* out_length);
@@ -463,8 +475,9 @@ SonareError sonare_hpss_with_residual(const float* samples, size_t length, int s
 /// @param length Number of samples.
 /// @param sample_rate Sample rate.
 /// @param rate Time stretch rate (< 1.0 = slower, > 1.0 = faster). Must be > 0.
-/// @param n_fft FFT size used for analysis/synthesis.
-/// @param hop_length Hop length used for analysis/synthesis.
+/// @param n_fft FFT size used for analysis/synthesis: an even integer >= 2.
+/// @param hop_length Hop length used for analysis/synthesis, in (0, n_fft/2];
+///        see @ref sonare_hpss_ex for why the overlap bound applies.
 /// @param out Receives the time-stretched audio buffer.
 /// @param out_length Receives the output length.
 /// @note Positional facades use the same order after the audio buffer:

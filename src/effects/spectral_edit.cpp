@@ -172,9 +172,10 @@ void apply_op(std::vector<std::complex<float>>& buf, int n_frames, int n_fft, in
 Audio spectral_edit(const Audio& audio, const SpectralEditConfig& config,
                     const SpectralRegionOp* ops, std::size_t n_ops) {
   SONARE_CHECK(!audio.empty(), ErrorCode::InvalidParameter);
+  validate_cola_geometry(config.n_fft, config.hop_length);
+  // Stricter than the shared rule: this entry point has always documented a
+  // power-of-two nFft (spectral_edit.h) and every surface already enforces it.
   SONARE_CHECK(is_power_of_two(config.n_fft), ErrorCode::InvalidParameter);
-  SONARE_CHECK(config.hop_length > 0 && config.hop_length <= config.n_fft / 2,
-               ErrorCode::InvalidParameter);
   SONARE_CHECK(config.heal_radius_frames >= 1, ErrorCode::InvalidParameter);
   SONARE_CHECK(ops != nullptr || n_ops == 0, ErrorCode::InvalidParameter);
 

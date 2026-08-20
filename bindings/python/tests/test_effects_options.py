@@ -167,7 +167,7 @@ def test_invalid_options_are_rejected_before_library_lookup(
 
     monkeypatch.setattr(editing, "_get_lib", fail_lookup)
     with pytest.raises(ValueError, match="n_fft"):
-        editing.time_stretch(_samples(), n_fft=1000)
+        editing.time_stretch(_samples(), n_fft=1001)
     with pytest.raises(ValueError, match="n_fft"):
         editing.time_stretch(_samples(), n_fft=2**32)
     with pytest.raises(ValueError, match="kernel_harmonic"):
@@ -221,3 +221,32 @@ def test_extended_effects_work_with_fresh_library() -> None:
     assert len(separated_residual["residual"]) == len(samples)
     assert len(normalized) == len(samples)
     assert len(trimmed) > 0
+
+
+@pytest.mark.skipif(not _has_extended_effects(), reason="extended effects symbols unavailable")
+def test_effects_reject_a_hop_below_the_half_window_overlap_contract() -> None:
+    samples = np.sin(np.linspace(0.0, 8.0 * np.pi, 4096, dtype=np.float32)) * 0.25
+
+    for call in (
+        lambda: editing.hpss(samples, n_fft=1024, hop_length=1024),
+        lambda: separation.hpss_with_residual(samples, n_fft=1024, hop_length=1024),
+        lambda: editing.time_stretch(samples, rate=1.2, n_fft=512, hop_length=2048),
+        lambda: editing.pitch_shift(samples, semitones=3.0, n_fft=1024, hop_length=1024),
+        lambda: separation.phase_vocoder(samples, rate=1.2, n_fft=1024, hop_length=1024),
+    ):
+        with pytest.raises(SonareError) as error:
+            call()
+        assert error.value.code == ErrorCode.INVALID_PARAMETER
+
+
+@pytest.mark.skipif(not _has_extended_effects(), reason="extended effects symbols unavailable")
+def test_effects_accept_an_even_n_fft_that_is_not_a_power_of_two() -> None:
+    # The core FFT is mixed-radix; the facade used to require a power of two,
+    # which made the same call succeed on the C ABI and fail here.
+    samples = np.sin(np.linspace(0.0, 8.0 * np.pi, 4096, dtype=np.float32)) * 0.25
+
+    separated = editing.hpss(samples, n_fft=1500, hop_length=250)
+    assert separated.length == len(samples)
+    assert len(editing.time_stretch(samples, rate=1.2, n_fft=1500, hop_length=250)) > 0
+    assert len(editing.pitch_shift(samples, semitones=3.0, n_fft=1500, hop_length=250)) > 0
+    assert len(separation.phase_vocoder(samples, rate=1.2, n_fft=1500, hop_length=250)) > 0

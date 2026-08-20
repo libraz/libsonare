@@ -197,6 +197,15 @@ void validate_config(const StftConfig& config) {
                    "StftConfig: winLength must not exceed nFft");
 }
 
+void validate_cola_geometry(int n_fft, int hop_length) {
+  SONARE_CHECK_MSG(n_fft >= 2 && (n_fft % 2) == 0, ErrorCode::InvalidParameter,
+                   "StftConfig: nFft must be an even integer >= 2");
+  SONARE_CHECK_MSG(hop_length > 0, ErrorCode::InvalidParameter,
+                   "StftConfig: hopLength must be positive");
+  SONARE_CHECK_MSG(hop_length <= n_fft / 2, ErrorCode::InvalidParameter,
+                   "StftConfig: hopLength must not exceed nFft / 2 (constant overlap-add)");
+}
+
 Spectrogram Spectrogram::compute(const Audio& audio, const StftConfig& config,
                                  SpectrogramProgressCallback progress_callback) {
   // Validated before the empty-audio shortcut: an unusable configuration is an

@@ -12,6 +12,7 @@
 #include <vector>
 
 #include "util/constants.h"
+#include "util/exception.h"
 
 using namespace sonare;
 using Catch::Matchers::WithinAbs;
@@ -615,5 +616,47 @@ TEST_CASE("hpss resynthesis reconstructs the input for every analysis window", "
       }
       REQUIRE(relative_rms_error(sum, skip) < 1e-5);
     }
+  }
+}
+
+TEST_CASE("hpss rejects a hop below the half-window overlap contract", "[hpss]") {
+  Audio audio = create_harmonic_audio(440.0f, 22050, 0.25f);
+  HpssConfig config;
+  config.kernel_size_harmonic = 7;
+  config.kernel_size_percussive = 7;
+
+  StftConfig no_overlap;
+  no_overlap.n_fft = 1024;
+  no_overlap.hop_length = 1024;
+  REQUIRE_THROWS_AS(hpss(audio, config, no_overlap), SonareException);
+  REQUIRE_THROWS_AS(hpss_with_residual(audio, config, no_overlap), SonareException);
+
+  StftConfig sparse;
+  sparse.n_fft = 512;
+  sparse.hop_length = 2048;
+  REQUIRE_THROWS_AS(hpss(audio, config, sparse), SonareException);
+  REQUIRE_THROWS_AS(hpss_with_residual(audio, config, sparse), SonareException);
+
+  StftConfig ok = no_overlap;
+  ok.hop_length = 512;
+  REQUIRE_NOTHROW(hpss(audio, config, ok));
+}
+
+TEST_CASE("hpss accepts an even n_fft that is not a power of two", "[hpss]") {
+  Audio audio = create_harmonic_audio(440.0f, 22050, 0.25f);
+  HpssConfig config;
+  config.kernel_size_harmonic = 7;
+  config.kernel_size_percussive = 7;
+
+  StftConfig stft_config;
+  stft_config.n_fft = 1500;
+  stft_config.hop_length = 250;
+
+  const HpssAudioResult result = hpss(audio, config, stft_config);
+  REQUIRE(result.harmonic.size() == audio.size());
+  REQUIRE(result.percussive.size() == audio.size());
+  for (size_t i = 0; i < result.harmonic.size(); ++i) {
+    REQUIRE(std::isfinite(result.harmonic.data()[i]));
+    REQUIRE(std::isfinite(result.percussive.data()[i]));
   }
 }

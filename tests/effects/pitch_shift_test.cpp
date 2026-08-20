@@ -175,3 +175,36 @@ TEST_CASE("pitch_shift small shifts", "[pitch_shift]") {
     REQUIRE(shifted.sample_rate() == audio.sample_rate());
   }
 }
+
+TEST_CASE("pitch_shift rejects a hop below the half-window overlap contract", "[pitch_shift]") {
+  Audio audio = create_test_audio(440.0f, 22050, 0.25f);
+
+  for (StretchBackend backend : {StretchBackend::NativeSpectral, StretchBackend::PhaseVocoder}) {
+    PitchShiftConfig sparse;
+    sparse.n_fft = 1024;
+    sparse.hop_length = 1024;
+    sparse.backend = backend;
+    REQUIRE_THROWS_AS(pitch_shift(audio, 2.0f, sparse), SonareException);
+    REQUIRE_THROWS_AS(pitch_shift_ratio(audio, 1.1f, sparse), SonareException);
+
+    PitchShiftConfig ok = sparse;
+    ok.hop_length = 256;
+    REQUIRE_NOTHROW(pitch_shift(audio, 2.0f, ok));
+  }
+}
+
+TEST_CASE("pitch_shift accepts an even n_fft that is not a power of two", "[pitch_shift]") {
+  Audio audio = create_test_audio(440.0f, 22050, 0.25f);
+
+  for (StretchBackend backend : {StretchBackend::NativeSpectral, StretchBackend::PhaseVocoder}) {
+    PitchShiftConfig config;
+    config.n_fft = 1500;
+    config.hop_length = 250;
+    config.backend = backend;
+
+    Audio shifted = pitch_shift(audio, 2.0f, config);
+    REQUIRE(shifted.sample_rate() == audio.sample_rate());
+    REQUIRE(!shifted.empty());
+    for (const float value : shifted) REQUIRE(std::isfinite(value));
+  }
+}

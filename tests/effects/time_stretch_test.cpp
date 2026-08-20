@@ -11,6 +11,7 @@
 
 #include "effects/phase_vocoder.h"
 #include "util/constants.h"
+#include "util/exception.h"
 
 using namespace sonare;
 using Catch::Matchers::WithinAbs;
@@ -317,4 +318,66 @@ TEST_CASE("time_stretch rejects rates whose projected output exceeds the public 
   const Audio recovered = time_stretch(audio, 1.0f);
   REQUIRE(recovered.size() == audio.size());
   for (const float value : recovered) REQUIRE(std::isfinite(value));
+}
+
+TEST_CASE("time_stretch rejects a hop below the half-window overlap contract", "[time_stretch]") {
+  Audio audio = create_test_audio(440.0f, 22050, 0.25f);
+
+  // Both backends reach the shared geometry validator: NativeSpectral through
+  // native_spectral_time_stretch, PhaseVocoder through phase_vocoder.
+  for (StretchBackend backend : {StretchBackend::NativeSpectral, StretchBackend::PhaseVocoder}) {
+    TimeStretchConfig sparse;
+    sparse.n_fft = 512;
+    sparse.hop_length = 2048;
+    sparse.backend = backend;
+    REQUIRE_THROWS_AS(time_stretch(audio, 1.2f, sparse), SonareException);
+
+    TimeStretchConfig no_overlap;
+    no_overlap.n_fft = 1024;
+    no_overlap.hop_length = 1024;
+    no_overlap.backend = backend;
+    REQUIRE_THROWS_AS(time_stretch(audio, 1.2f, no_overlap), SonareException);
+
+    TimeStretchConfig ok = no_overlap;
+    ok.hop_length = 512;
+    REQUIRE_NOTHROW(time_stretch(audio, 1.2f, ok));
+  }
+}
+
+TEST_CASE("time_stretch accepts an even n_fft that is not a power of two", "[time_stretch]") {
+  Audio audio = create_test_audio(440.0f, 22050, 0.25f);
+
+  for (StretchBackend backend : {StretchBackend::NativeSpectral, StretchBackend::PhaseVocoder}) {
+    TimeStretchConfig config;
+    config.n_fft = 1500;
+    config.hop_length = 250;
+    config.backend = backend;
+
+    Audio stretched = time_stretch(audio, 1.25f, config);
+    REQUIRE(!stretched.empty());
+    for (const float value : stretched) REQUIRE(std::isfinite(value));
+  }
+}
+
+TEST_CASE("phase_vocoder rejects a hop below the half-window overlap contract", "[time_stretch]") {
+  Audio audio = create_test_audio(440.0f, 22050, 0.25f);
+
+  StftConfig stft_config;
+  stft_config.n_fft = 1024;
+  stft_config.hop_length = 1024;
+  Spectrogram spec = Spectrogram::compute(audio, stft_config);
+  REQUIRE(spec.n_frames() >= 2);
+
+  // The geometry the spectrogram carries is rejected on its own ...
+  REQUIRE_THROWS_AS(phase_vocoder(spec, 1.2f), SonareException);
+  REQUIRE_THROWS_AS(phase_vocoder_phaselocked(spec, 1.2f), SonareException);
+
+  // ... and so is a config override that reintroduces it over a valid analysis.
+  StftConfig dense = stft_config;
+  dense.hop_length = 256;
+  Spectrogram dense_spec = Spectrogram::compute(audio, dense);
+  PhaseVocoderConfig override_config;
+  override_config.hop_length = 768;
+  REQUIRE_THROWS_AS(phase_vocoder(dense_spec, 1.2f, override_config), SonareException);
+  REQUIRE_NOTHROW(phase_vocoder(dense_spec, 1.2f));
 }
