@@ -92,15 +92,16 @@ describe('RealtimeEngine offline bounce content', () => {
     const shaped = bounce({ dither: 3, ditherBits: DITHER_BITS, ditherSeed: 1 });
 
     // Identifying each type by its effect keeps a remapped integer from
-    // passing: the two noise types perturb without quantizing, the triangular
-    // one being the wider of the two, and only the shaped type snaps every
-    // sample onto the target-depth grid.
+    // passing. Every non-None type lands the output on the target-depth grid --
+    // that is what the shared bit-depth field means -- so the type selects only
+    // the noise, the triangular one being wider than the rectangular.
     expect(maxAbsDiff(none.samples, plain.samples)).toBe(0);
     expect(maxAbsDiff(rpdf.samples, none.samples)).toBeGreaterThan(LSB / 4);
     expect(maxAbsDiff(tpdf.samples, none.samples)).toBeGreaterThan(
       maxAbsDiff(rpdf.samples, none.samples),
     );
-    expect(onGrid(rpdf.samples)).toBeLessThan(rpdf.samples.length / 2);
+    expect(onGrid(rpdf.samples)).toBe(rpdf.samples.length);
+    expect(onGrid(tpdf.samples)).toBe(tpdf.samples.length);
     expect(onGrid(shaped.samples)).toBe(shaped.samples.length);
   });
 

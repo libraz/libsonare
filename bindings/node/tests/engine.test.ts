@@ -1399,7 +1399,11 @@ describe('RealtimeEngine native binding', () => {
     expect(maxAbsDiff(tpdf.samples, none.samples)).toBeGreaterThan(
       maxAbsDiff(rpdf.samples, none.samples),
     );
-    expect(onGrid(rpdf.samples)).toBeLessThan(rpdf.samples.length / 2);
+    // Every non-None type lands the output on the target-depth grid -- that is
+    // what the shared bit-depth field means -- so the type selects only the
+    // noise, the triangular one being wider than the rectangular.
+    expect(onGrid(rpdf.samples)).toBe(rpdf.samples.length);
+    expect(onGrid(tpdf.samples)).toBe(tpdf.samples.length);
     expect(onGrid(shaped.samples)).toBe(shaped.samples.length);
 
     // A fixed seed is reproducible and a different seed is not, so the seed
