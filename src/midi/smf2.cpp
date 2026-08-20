@@ -60,29 +60,6 @@ uint32_t tempo_10ns_from_bpm(double bpm) noexcept {
   return static_cast<uint32_t>(tempo);
 }
 
-// Number of 32-bit words a UMP message occupies, keyed by message type nibble.
-int words_for_message_type(uint32_t mt) noexcept {
-  switch (mt) {
-    case 0x0u:
-    case 0x1u:
-    case 0x2u:
-    case 0x6u:
-    case 0x7u:
-      return 1;
-    case 0x3u:
-    case 0x4u:
-    case 0x8u:
-    case 0x9u:
-    case 0xAu:
-      return 2;
-    case 0xBu:
-    case 0xCu:
-      return 3;
-    default:  // 0x5, 0xD, 0xE, 0xF.
-      return 4;
-  }
-}
-
 // ---------------------------------------------------------------------------
 // Big-endian 32-bit word reader with bounds checking. Never reads out of bounds.
 // ---------------------------------------------------------------------------
@@ -380,7 +357,7 @@ Smf2ImportResult import_clip_file(const uint8_t* data, size_t size,
     const uint32_t word0 = reader.word();
     if (reader.overflow()) break;
     const uint32_t mt = (word0 >> 28) & 0x0Fu;
-    const int nwords = words_for_message_type(mt);
+    const int nwords = ump_word_count_for_message_type(static_cast<uint8_t>(mt));
 
     // Ensure the whole message is present before interpreting it.
     if (reader.remaining_words() + 1u < static_cast<size_t>(nwords)) {
@@ -833,7 +810,9 @@ Smf2ExportResult export_clip_file(
     item.tick = tick;
     item.order = 2;
     const uint32_t mt = (ev.ump.words[0] >> 28) & 0x0Fu;
-    item.word_count = ev.ump.word_count > 0 ? ev.ump.word_count : words_for_message_type(mt);
+    item.word_count = ev.ump.word_count > 0
+                          ? ev.ump.word_count
+                          : ump_word_count_for_message_type(static_cast<uint8_t>(mt));
     for (int w = 0; w < item.word_count && w < 4; ++w)
       item.words[static_cast<size_t>(w)] = ev.ump.words[w];
     items.push_back(item);

@@ -936,16 +936,17 @@ TEST_CASE("CoreMIDI scripted fixed-size sender drains past an unsendable head ev
   namespace midi_detail = sonare::host::backends::detail;
   constexpr size_t kListCapacity = 2;
 
-  // A malformed UMP -- MIDI 1.0 message type (one active word) claiming four --
-  // is refused by MIDIEventListAdd on any list, including an empty one. It can
-  // therefore never head a batch, and retrying it would wedge every event
-  // queued behind it.
-  Ump malformed = sonare::midi::make_midi1_note_on(0, 0, 61, 100);
-  malformed.word_count = 4;
-  const std::array<Ump, 4> queued = {
-      sonare::midi::make_midi1_note_on(0, 0, 60, 100),
-      malformed,
-      sonare::midi::make_midi1_note_on(0, 0, 62, 100),
+  // Two malformed UMPs, both with a word_count that contradicts the message type
+  // in word0. Neither can ever head a batch, and retrying one would wedge every
+  // event queued behind it. The over-long MIDI 1.0 record also indexes past
+  // Ump::words, so it must not reach the SDK at all.
+  Ump over_long = sonare::midi::make_midi1_note_on(0, 0, 61, 100);
+  over_long.word_count = 4;  // message type 0x2 is a one-word form
+  Ump truncated = sonare::midi::make_midi2_note_on(0, 0, 63, 30000);
+  truncated.word_count = 1;  // message type 0x4 is a two-word form
+  const std::array<Ump, 5> queued = {
+      sonare::midi::make_midi1_note_on(0, 0, 60, 100), over_long,
+      sonare::midi::make_midi1_note_on(0, 0, 62, 100), truncated,
       sonare::midi::make_midi1_note_on(0, 0, 64, 100),
   };
 
@@ -963,11 +964,13 @@ TEST_CASE("CoreMIDI scripted fixed-size sender drains past an unsendable head ev
     const auto batch = midi_detail::flush_fixed_batch(
         queued.size() - completed,
         [&](size_t index) {
+          // The production admission rule, not a model of it: flush_output()
+          // gates every candidate through this same predicate.
           const Ump& candidate = queued[completed + index];
-          const bool packable =
-              candidate.message_type() != sonare::midi::UmpMessageType::kMidi1ChannelVoice ||
-              candidate.word_count == 1;
-          if (!packable || packed.size() == kListCapacity) return false;
+          if (!midi_detail::fixed_batch_event_is_sendable(candidate) ||
+              packed.size() == kListCapacity) {
+            return false;
+          }
           packed.push_back(completed + index);
           return true;
         },
@@ -990,12 +993,45 @@ TEST_CASE("CoreMIDI scripted fixed-size sender drains past an unsendable head ev
     sent += batch.batch_count;
   }
 
-  // The queue drains: the unsendable event is consumed as an error, everything
-  // behind it still reaches the device, and the retried batch is sent once.
+  // The queue drains: both unsendable events are consumed as errors, everything
+  // behind them still reaches the device, and no malformed record is handed to
+  // the sender.
   REQUIRE(completed == queued.size());
   REQUIRE(sent == 3);
   REQUIRE(delivered == std::vector<uint8_t>{60, 62, 64});
-  REQUIRE(send_error_count == 2);  // one transport retry + one rejected head
+  REQUIRE(send_error_count == 3);  // one transport retry + two rejected heads
+}
+
+TEST_CASE("CoreMIDI fixed-size admission rejects a word_count its message type contradicts",
+          "[host][coremidi]") {
+  namespace midi_detail = sonare::host::backends::detail;
+
+  // A well-formed record of each family is admitted unchanged.
+  REQUIRE(
+      midi_detail::fixed_batch_event_is_sendable(sonare::midi::make_midi1_note_on(0, 0, 60, 1)));
+  REQUIRE(midi_detail::fixed_batch_event_is_sendable(
+      sonare::midi::make_midi2_note_on(0, 0, 60, 30000)));
+
+  // word_count is caller-supplied on the live push paths while the SDK sizes the
+  // packet from word0, so every disagreement has to be caught before the send.
+  Ump midi1_too_long = sonare::midi::make_midi1_note_on(0, 0, 60, 100);
+  midi1_too_long.word_count = 2;
+  REQUIRE_FALSE(midi_detail::fixed_batch_event_is_sendable(midi1_too_long));
+
+  Ump midi2_too_short = sonare::midi::make_midi2_note_on(0, 0, 60, 30000);
+  midi2_too_short.word_count = 1;
+  REQUIRE_FALSE(midi_detail::fixed_batch_event_is_sendable(midi2_too_short));
+
+  // A count past the end of Ump::words would make the SDK read out of bounds.
+  Ump past_end = sonare::midi::make_midi1_note_on(0, 0, 60, 100);
+  past_end.word_count = 7;
+  REQUIRE_FALSE(midi_detail::fixed_batch_event_is_sendable(past_end));
+
+  // An empty record carries no message, and a SysEx handle is re-packetized from
+  // its payload rather than batched: both stay excluded.
+  Ump empty{};
+  REQUIRE_FALSE(midi_detail::fixed_batch_event_is_sendable(empty));
+  REQUIRE_FALSE(midi_detail::fixed_batch_event_is_sendable(sonare::midi::make_sysex_handle(0, 9)));
 }
 
 TEST_CASE("fixed MIDI input retains absolute future-frame events", "[host]") {

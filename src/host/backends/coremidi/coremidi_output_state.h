@@ -47,6 +47,21 @@ SysExFlushStatus flush_sysex7_payload(const uint8_t* payload, size_t payload_siz
   return SysExFlushStatus::kComplete;
 }
 
+/// True when a queued UMP may be handed to the fixed-size batch path.
+///
+/// A record with no active words carries no message, and a SysEx-handle record
+/// is re-packetized from its payload instead, so neither belongs in a fixed
+/// batch. The third condition is a producer-side guard: word_count arrives from
+/// the caller (a live host event, a C-ABI or WASM push) while the SDK sizes the
+/// packet from the message type in word0, so a word_count that disagrees makes
+/// the SDK read a truncated or over-long packet -- and a count above four would
+/// read past Ump::words entirely. Checking it against the one word-count table
+/// keeps the disagreement local instead of shipping it to the device.
+inline bool fixed_batch_event_is_sendable(const midi::Ump& ump) noexcept {
+  return ump.word_count != 0 && ump.sysex_handle == 0 &&
+         ump.word_count == midi::ump_word_count_for_word0(ump.words[0]);
+}
+
 enum class BatchFlushStatus {
   kSent,
   kRejected,

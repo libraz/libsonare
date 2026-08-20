@@ -76,6 +76,41 @@ enum class UmpStatus : uint8_t {
 /// Handle id for an out-of-band SysEx / property payload. 0 means "no SysEx".
 using SysExHandle = uint32_t;
 
+/// Number of active 32-bit words a UMP of message type @p message_type occupies.
+/// This is the whole 16-entry mapping the UMP specification fixes for the
+/// message-type nibble, including the reserved types whose word form is already
+/// assigned; only the low nibble of @p message_type is read. Every reader that
+/// walks a UMP stream and every writer that emits one must size messages from
+/// here, so a stream written by one and read by another cannot disagree.
+constexpr uint8_t ump_word_count_for_message_type(uint8_t message_type) noexcept {
+  switch (message_type & 0x0Fu) {
+    case 0x0:  // Utility
+    case 0x1:  // System real time / common
+    case 0x2:  // MIDI 1.0 channel voice
+    case 0x6:  // reserved, 32-bit
+    case 0x7:  // reserved, 32-bit
+      return 1;
+    case 0x3:  // Data (SysEx7), 64-bit
+    case 0x4:  // MIDI 2.0 channel voice
+    case 0x8:  // reserved, 64-bit
+    case 0x9:  // reserved, 64-bit
+    case 0xA:  // reserved, 64-bit
+      return 2;
+    case 0xB:  // reserved, 96-bit
+    case 0xC:  // reserved, 96-bit
+      return 3;
+    default:  // 0x5 (128-bit data), 0xD / 0xE / 0xF reserved 128-bit
+      return 4;
+  }
+}
+
+/// Active word count implied by a message's first word. Returns a value in
+/// [1, 4] for every possible input, so a caller can also use it to bound an
+/// index into Ump::words.
+constexpr uint8_t ump_word_count_for_word0(uint32_t word0) noexcept {
+  return ump_word_count_for_message_type(static_cast<uint8_t>((word0 >> 28) & 0x0Fu));
+}
+
 /// Fixed-length, trivially-copyable Universal MIDI Packet.
 ///
 /// `words` holds 1..4 active 32-bit words (the rest are zero); `word_count`

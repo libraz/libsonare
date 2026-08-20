@@ -6,6 +6,7 @@
 #include <array>
 #include <catch2/catch_test_macros.hpp>
 #include <cstdint>
+#include <ios>
 #include <vector>
 
 #include "midi/ump.h"
@@ -549,4 +550,60 @@ TEST_CASE("MIDI 2.0 banked program change lowers to MIDI 1.0 bank select and pro
 
   REQUIRE(lowered.messages[2].status_nibble() == static_cast<uint8_t>(UmpStatus::kProgramChange));
   REQUIRE(((lowered.messages[2].words[0] >> 8) & 0x7Fu) == 42u);
+}
+
+TEST_CASE("UMP word-count table covers every message-type nibble", "[midi]") {
+  // The whole 16-entry mapping, spelled out independently of the implementation
+  // so a hand-edit of the table has to disagree with this list to land. Reading
+  // and writing a UMP stream both size messages from this one function, so a
+  // wrong entry silently desynchronizes a writer from its own reader.
+  constexpr uint8_t kExpected[16] = {
+      1,  // 0x0 Utility
+      1,  // 0x1 System real time / common
+      1,  // 0x2 MIDI 1.0 channel voice
+      2,  // 0x3 Data (SysEx7)
+      2,  // 0x4 MIDI 2.0 channel voice
+      4,  // 0x5 Data 128 (SysEx8 / Mixed Data Set)
+      1,  // 0x6 reserved 32-bit
+      1,  // 0x7 reserved 32-bit
+      2,  // 0x8 reserved 64-bit
+      2,  // 0x9 reserved 64-bit
+      2,  // 0xA reserved 64-bit
+      3,  // 0xB reserved 96-bit
+      3,  // 0xC reserved 96-bit
+      4,  // 0xD Flex Data
+      4,  // 0xE reserved 128-bit
+      4,  // 0xF UMP Stream
+  };
+  for (uint8_t mt = 0; mt < 16; ++mt) {
+    INFO("message type 0x" << std::hex << static_cast<unsigned>(mt));
+    REQUIRE(sonare::midi::ump_word_count_for_message_type(mt) == kExpected[mt]);
+    // Only the low nibble is read, so a caller that forgets to mask gets the
+    // same answer rather than falling into the 128-bit default.
+    REQUIRE(sonare::midi::ump_word_count_for_message_type(static_cast<uint8_t>(mt | 0xF0u)) ==
+            kExpected[mt]);
+    const uint32_t word0 = static_cast<uint32_t>(mt) << 28;
+    REQUIRE(sonare::midi::ump_word_count_for_word0(word0) == kExpected[mt]);
+  }
+}
+
+TEST_CASE("UMP constructors agree with the shared word-count table", "[midi]") {
+  // Every Ump the core mints must already satisfy the invariant that consumers
+  // check, otherwise a producer-side word_count guard would reject our own
+  // messages. SysEx handles are the case worth pinning: they are message type
+  // 0x3, which is a 64-bit form even though no payload word is carried inline.
+  const std::array<Ump, 6> minted = {
+      sonare::midi::make_midi1_note_on(1, 2, 60, 100),
+      sonare::midi::make_midi1_control_change(1, 2, 7, 64),
+      sonare::midi::make_midi2_note_on(1, 2, 60, 30000),
+      sonare::midi::make_midi2_program_change(1, 2, 42, 0, 3, true),
+      sonare::midi::make_midi2_registered_controller(1, 2, 0, 5, 12345),
+      sonare::midi::make_sysex_handle(1, 77),
+  };
+  for (const Ump& ump : minted) {
+    INFO("word0 0x" << std::hex << ump.words[0]);
+    REQUIRE(ump.word_count == sonare::midi::ump_word_count_for_word0(ump.words[0]));
+  }
+  REQUIRE(minted[5].message_type() == UmpMessageType::kData64);
+  REQUIRE(minted[5].word_count == 2);
 }

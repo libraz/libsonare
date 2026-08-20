@@ -42,34 +42,10 @@ struct alignas(MIDIEventList) MidiEventListStorage {
   size_t size() const noexcept { return bytes.size(); }
 };
 
-/// Active 32-bit word count for a UMP message-type nibble (UMP spec §2.1.4).
-uint8_t words_for_message_type(uint8_t mt) noexcept {
-  switch (mt) {
-    case 0x0:  // Utility
-    case 0x1:  // System real time / common
-    case 0x2:  // MIDI 1.0 channel voice
-    case 0x6:  // reserved (32-bit)
-    case 0x7:  // reserved (32-bit)
-      return 1;
-    case 0x3:  // Data (SysEx7, 64-bit)
-    case 0x4:  // MIDI 2.0 channel voice
-    case 0x8:  // reserved (64-bit)
-    case 0x9:
-    case 0xA:
-      return 2;
-    case 0xB:  // reserved (96-bit)
-    case 0xC:
-      return 3;
-    default:  // 0x5 (128-bit data), 0xD-0xF
-      return 4;
-  }
-}
-
 /// Build a core Ump from a run of native-order UMP words starting at `words`.
 /// Returns the number of words consumed (so a caller can walk a packet).
 size_t ump_from_words(const uint32_t* words, size_t available, midi::Ump& out) noexcept {
-  const uint8_t mt = static_cast<uint8_t>((words[0] >> 28) & 0x0Fu);
-  const uint8_t count = words_for_message_type(mt);
+  const uint8_t count = midi::ump_word_count_for_word0(words[0]);
   if (count > available) return available;  // truncated; consume the rest
   out = midi::Ump{};
   for (uint8_t i = 0; i < count; ++i) out.words[i] = words[i];
@@ -754,7 +730,7 @@ size_t CoreMidiOutput::flush_output() noexcept {
         available,
         [&](size_t index) noexcept {
           const auto& candidate = impl_->pending[completed + index].event;
-          if (candidate.ump.word_count == 0 || candidate.ump.sysex_handle != 0) return false;
+          if (!detail::fixed_batch_event_is_sendable(candidate.ump)) return false;
           MIDIEventPacket* next =
               MIDIEventListAdd(list, storage.size(), packet, timestamp_for(candidate),
                                candidate.ump.word_count, candidate.ump.words);
@@ -766,9 +742,11 @@ size_t CoreMidiOutput::flush_output() noexcept {
           return MIDISendEventList(impl_->port, impl_->destination, list) == noErr;
         });
     if (batch.status == detail::BatchFlushStatus::kRejected) {
-      // CoreMIDI refused the head event on an empty list: a malformed UMP that
-      // no list will ever accept. Count it and drop it, like an invalid SysEx,
-      // so the events queued behind it still reach the device.
+      // The head event cannot be packed on an empty list: either its word_count
+      // contradicts its message type (rejected here, before the SDK sees it) or
+      // CoreMIDI refused it outright. Either way no list will ever accept it, so
+      // count it and drop it, like an invalid SysEx, and let the events queued
+      // behind it still reach the device.
       ++impl_->send_error_count;
       ++completed;
       continue;
