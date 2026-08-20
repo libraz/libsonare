@@ -327,3 +327,45 @@ jobs:
         with:
           name: wasm-size-report
           path: build/reports/wasm-size-*.json
+
+  ffmpeg-decode:
+    name: FFmpeg decode (ubuntu-latest)
+    # Every other job pins SONARE_WITH_FFMPEG=OFF, matching the shipped
+    # artifacts, so nothing else in CI compiles core/audio_io_ffmpeg.cpp. Linux
+    # alone is enough: that file branches on the compiler (__clang__ vs
+    # __GNUC__, around the FFmpeg header pragmas) and never on the platform, and
+    # the GCC arm is the one no local build exercises.
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - name: Install dependencies
+        # The four -dev packages are the set src/CMakeLists.txt probes through
+        # pkg-config. The ffmpeg CLI is not optional here: six audio_io cases
+        # synthesize their m4a/flac/aac fixtures at runtime and SKIP without it,
+        # which would leave this job green while exercising nothing.
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y cmake build-essential libeigen3-dev \
+            libavformat-dev libavcodec-dev libavutil-dev libswresample-dev \
+            ffmpeg
+      - name: Verify the ffmpeg CLI is present
+        run: ffmpeg -version
+      - name: Configure
+        # ON, not AUTO: AUTO degrades to the WAV/MP3-only path when the dev
+        # libraries are missing, so a broken install would make this job pass
+        # without compiling core/audio_io_ffmpeg.cpp at all. ON fails at
+        # configure instead.
+        run: cmake -B build-ffmpeg -DCMAKE_BUILD_TYPE=Debug -DBUILD_TESTING=ON -DBUILD_CLI=OFF -DSONARE_WITH_FFMPEG=ON
+      - name: Build
+        # Capped at 2 jobs for the same reason as the other native jobs:
+        # unbounded parallelism OOM-kills cc1plus on the hosted runners.
+        run: cmake --build build-ffmpeg --parallel 2
+      - name: Generate K-weighting reference fixture
+        # The fixture is untracked, so a fresh checkout has to generate it or
+        # the K-weighting cases fail on a missing file.
+        run: python3 tools/scripts/k_weighting_reference.py
+      - name: Test
+        # The whole suite, not the [ffmpeg] tag. Linking FFmpeg changes which
+        # decoder handles a given file, so the regressions worth catching are
+        # the ones in tests that never mention FFmpeg.
+        run: ctest --test-dir build-ffmpeg --output-on-failure --parallel

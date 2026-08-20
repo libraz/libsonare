@@ -216,6 +216,10 @@ are pinned to this mode so installation never depends on your `libavformat`.
 ² **With FFmpeg**: a source build with FFmpeg linked — CMake auto-detects via
 pkg-config (`-DSONARE_WITH_FFMPEG=AUTO`). Python: `SONARE_FFMPEG=1 pip install
 libsonare --no-binary libsonare`; Node native: `SONARE_FFMPEG=1 yarn build`.
+Because detection is automatic, which decoder handles a given file depends on
+what is installed on the build machine: the two modes differ in the formats they
+accept and in the error an undecodable file raises (`InvalidFormat` without
+FFmpeg, `DecodeFailed` with it). Pass `ON` or `OFF` explicitly to pin the mode.
 
 The WASM bundle intentionally excludes large codec libraries. Its small built-in
 WAV/MP3 decoder and browser `decodeAudioData()` fallback cover the normal browser

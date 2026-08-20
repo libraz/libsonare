@@ -209,7 +209,10 @@ SoundFont を読み込めば、GS 互換の SF2 プレーヤー経由でも鳴�
 
 ² **FFmpeg あり**: FFmpeg をリンクしたソースビルド。CMake が pkg-config 経由で自動検出します
 （`-DSONARE_WITH_FFMPEG=AUTO`）。Python: `SONARE_FFMPEG=1 pip install libsonare --no-binary
-libsonare`、Node ネイティブ: `SONARE_FFMPEG=1 yarn build`。
+libsonare`、Node ネイティブ: `SONARE_FFMPEG=1 yarn build`。自動検出である以上、どちらのデコーダが
+使われるかはビルド環境に入っているもの次第です。両モードは受け付けるフォーマットと、デコード
+できないファイルで送出されるエラー（FFmpeg なしなら `InvalidFormat`、あれば `DecodeFailed`）が
+異なります。モードを固定するには `ON` または `OFF` を明示してください。
 
 WASM バンドルには大きなコーデックライブラリを意図的に含めません。小さな内蔵 WAV/MP3
 デコーダとブラウザの `decodeAudioData()` フォールバックが通常の入口で、すでにデコード済み
