@@ -646,6 +646,56 @@ TEST_CASE("project C surface validates MIDI event helpers and input", "[project]
   sonare_project_destroy(project);
 }
 
+TEST_CASE("project C surface routes MIDI events by UMP group", "[project]") {
+  // The group nibble lives in word[0] bits 24..27 of every channel-voice UMP, so
+  // routing must derive it from the pod rather than leaving it at zero.
+  auto group_of = [](const SonareMidiEventPod& pod) {
+    return static_cast<uint8_t>((pod.data0 >> 24u) & 0x0Fu);
+  };
+
+  SonareMidiEventPod events[4]{};
+  REQUIRE(sonare_midi_note_on(0.0, 3, 1, 60, 100, &events[0]) == SONARE_OK);
+  REQUIRE(sonare_midi_note_off(0.5, 3, 1, 60, 0, &events[1]) == SONARE_OK);
+  REQUIRE(sonare_midi_note_on(1.0, 0, 1, 62, 100, &events[2]) == SONARE_OK);
+  REQUIRE(sonare_midi_cc(1.5, 0, 1, 74, 40, &events[3]) == SONARE_OK);
+
+  SonareMidiEventPod routed[4]{};
+  size_t routed_count = 0;
+  int overflowed = 0;
+  uint32_t overflow_count = 0;
+
+  SonareMidiRouteConfig config{3, -1, -1, 1};
+  REQUIRE(sonare_midi_route_events(events, 4, &config, routed, 4, &routed_count, &overflowed,
+                                   &overflow_count) == SONARE_OK);
+  REQUIRE(routed_count == 2);
+  REQUIRE(overflowed == 0);
+  REQUIRE(routed[0].ppq == 0.0);
+  REQUIRE(routed[1].ppq == 0.5);
+  REQUIRE(group_of(routed[0]) == 3);
+  REQUIRE(group_of(routed[1]) == 3);
+
+  config.filter_group = 0;
+  REQUIRE(sonare_midi_route_events(events, 4, &config, routed, 4, &routed_count, &overflowed,
+                                   &overflow_count) == SONARE_OK);
+  REQUIRE(routed_count == 2);
+  REQUIRE(routed[0].ppq == 1.0);
+  REQUIRE(routed[1].ppq == 1.5);
+  REQUIRE(group_of(routed[0]) == 0);
+  REQUIRE(group_of(routed[1]) == 0);
+
+  // A channel remap rewrites the channel nibble only; the group nibble the
+  // filter matched on must survive onto the routed output.
+  config = SonareMidiRouteConfig{3, -1, 7, 1};
+  REQUIRE(sonare_midi_route_events(events, 4, &config, routed, 4, &routed_count, &overflowed,
+                                   &overflow_count) == SONARE_OK);
+  REQUIRE(routed_count == 2);
+  REQUIRE(group_of(routed[0]) == 3);
+  REQUIRE(group_of(routed[1]) == 3);
+  sonare::midi::Ump remapped{};
+  remapped.words[0] = routed[0].data0;
+  REQUIRE(remapped.channel() == 7);
+}
+
 TEST_CASE("project C surface imports SMF time signatures and markers", "[project]") {
   const std::vector<uint8_t> smf = {
       'M',  'T',  'h',  'd',  0x00, 0x00, 0x00, 0x06, 0x00, 0x01, 0x00, 0x02, 0x01, 0xE0, 'M',

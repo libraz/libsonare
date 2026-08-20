@@ -370,9 +370,7 @@ SonareError sonare_midi_route_events(const SonareMidiEventPod* events, size_t co
     if (!valid_midi_event_pod(events[i])) return SONARE_ERROR_INVALID_PARAMETER;
     sonare::midi::MidiEvent event{};
     event.render_frame = static_cast<int64_t>(i);
-    event.ump.words[0] = events[i].data0;
-    event.ump.words[1] = events[i].data1;
-    event.ump.word_count = ump_word_count_from_word0(events[i].data0);
+    event.ump = ump_from_pod(events[i]);
     input.push_back(event);
     ppq_by_index.push_back(events[i].ppq);
   }
