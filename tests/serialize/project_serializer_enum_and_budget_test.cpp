@@ -19,6 +19,7 @@
 #include "arrangement/edit_source.h"
 #include "automation/automation_lane.h"
 #include "bindings/binding_project_parity_test_helpers.h"
+#include "c_api/project_internal.h"
 #include "serialize/project_serializer.h"
 #include "serialize/serialized_enum_bounds.h"
 #include "util/exception.h"
@@ -329,6 +330,88 @@ TEST_CASE("the C ABI refuses to serialize a project the loader could not read ba
         SONARE_ERROR_INVALID_STATE);
   CHECK(oversized_json == nullptr);
   CHECK(oversized_len == 0u);
+
+  sonare_project_destroy(built.project);
+}
+
+TEST_CASE("MIDI events installed through the edit API are counted against the persistence budget",
+          "[project][serialize][midi]") {
+  // The production ceiling (a quarter of a million events) is exercised
+  // elsewhere at its real magnitude. This reaches the same preflight without
+  // building a document that size, by shrinking the budget instead of growing
+  // the project: what a large event list actually consumes is the node and
+  // entity counts, and those are measured on the model the edit API built
+  // before any bytes are emitted.
+  constexpr size_t kEvents = 512;
+
+  BuiltProject built = build_project(make_stereo_sine(240));
+  const arr::Project& model = built.project->history.project();
+  const arr::MidiContentStore& midi = built.project->history.midi_content();
+
+  const sz::ProjectDocumentShape without_events = sz::measure_project_document(model, midi);
+  // A budget that fits this fixture exactly: it emits, so the node and entity
+  // ceilings below are ones the project already fitted under.
+  const sonare::resource::ProjectImportResourceLimits fits_fixture{
+      without_events.json_bytes, without_events.json_nodes, without_events.entities,
+      without_events.string_bytes, without_events.decoded_payload_bytes};
+  REQUIRE_FALSE(sz::project_to_json(model, midi, fits_fixture).empty());
+
+  std::vector<SonareMidiEventPod> events(kEvents);
+  for (size_t i = 0; i < kEvents; ++i) {
+    events[i].ppq = static_cast<double>(i) / 16.0;
+    // Alternating note on / note off on middle C, as a UMP MIDI 1.0 word.
+    events[i].data0 = (i % 2 == 0) ? 0x20903C40u : 0x20803C00u;
+    events[i].data1 = 0u;
+  }
+  REQUIRE(sonare_project_set_midi_events(built.project, built.midi_clip, events.data(),
+                                         events.size()) == SONARE_OK);
+
+  const sz::ProjectDocumentShape with_events = sz::measure_project_document(model, midi);
+  CAPTURE(without_events.json_nodes, with_events.json_nodes, without_events.entities,
+          with_events.entities, with_events.json_bytes);
+  // The events are what grew the document, and they grew the counted dimensions
+  // rather than only its byte length.
+  REQUIRE(with_events.json_nodes > without_events.json_nodes);
+  REQUIRE(with_events.entities > without_events.entities);
+  // No opaque payload anywhere in this fixture, so the payload dimension the
+  // sibling case above exercises cannot be what any rejection here reports.
+  REQUIRE(without_events.decoded_payload_bytes == 0u);
+  REQUIRE(with_events.decoded_payload_bytes == 0u);
+
+  // Under the shipped budget the project is nowhere near the ceiling: it saves
+  // and loads back, so the rejections below are the reduced budget's doing and
+  // not an event list that cannot be serialized at all.
+  const std::string json = serialize(built.project);
+  REQUIRE(sz::project_from_json(json).ok());
+
+  // Every dimension generous enough for the document that now exists, except the
+  // one under test, which is held at the count the fixture fitted under before
+  // the events were installed. Only the events can carry it over.
+  const auto capped_at = [&](size_t json_nodes, size_t entities) {
+    return sonare::resource::ProjectImportResourceLimits{with_events.json_bytes, json_nodes,
+                                                         entities, with_events.string_bytes,
+                                                         with_events.decoded_payload_bytes};
+  };
+
+  const auto rejects = [&](const sonare::resource::ProjectImportResourceLimits& limits) {
+    bool threw = false;
+    try {
+      (void)sz::project_to_json(model, midi, limits);
+    } catch (const sonare::SonareException& error) {
+      threw = true;
+      CHECK(error.code() == sonare::ErrorCode::InvalidState);
+    }
+    CHECK(threw);
+  };
+
+  rejects(capped_at(without_events.json_nodes, with_events.entities));
+  rejects(capped_at(with_events.json_nodes, without_events.entities));
+
+  // ...and with both counted dimensions raised to what the document needs, the
+  // same call emits, so neither cap is rejecting for an unrelated reason.
+  REQUIRE_FALSE(
+      sz::project_to_json(model, midi, capped_at(with_events.json_nodes, with_events.entities))
+          .empty());
 
   sonare_project_destroy(built.project);
 }
