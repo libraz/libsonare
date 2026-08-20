@@ -721,6 +721,15 @@ typedef struct {
 
 /// @brief Offline LPC-based declipper.
 /// @details Output buffer is heap-allocated; release with @ref sonare_free_floats.
+///
+/// Only clipped runs of at most 512 consecutive samples are reconstructed with the LPC
+/// solver. The cap is a fixed sample count: it is not derived from @c lpc_order, from
+/// @c sample_rate, or from any other field, so its duration depends on the rate
+/// (~10.7 ms at 48 kHz). A longer run is filled with cubic / linear interpolation
+/// instead, which keeps the solver's dense matrices bounded by the cap rather than by
+/// the input. Exceeding the cap silently changes the reconstruction method rather than
+/// failing: the call still returns @c SONARE_OK, and @c lpc_order, @c iterations and
+/// @c lpc_blend have no effect on the interpolated run.
 /// @param config Pass NULL to use library defaults.
 SonareError sonare_mastering_repair_declip(const float* samples, size_t length, int sample_rate,
                                            const SonareDeclipConfig* config, float** out,

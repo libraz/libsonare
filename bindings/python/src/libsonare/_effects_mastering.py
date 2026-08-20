@@ -402,7 +402,17 @@ def mastering_repair_declip(
     iterations: int = 2,
     lpc_blend: float = 0.65,
 ) -> np.ndarray:
-    """Offline LPC-based declipper."""
+    """Offline LPC-based declipper.
+
+    Only clipped runs of at most 512 consecutive samples are reconstructed with the
+    LPC solver. The cap is a fixed sample count: it is not derived from ``lpc_order``,
+    from ``sample_rate``, or from any other argument, so its duration depends on the
+    rate (~10.7 ms at 48 kHz). A longer run is filled with cubic / linear interpolation
+    instead, which keeps the solver's dense matrices bounded by the cap rather than by
+    the input. Exceeding the cap silently changes the reconstruction method rather than
+    raising: ``lpc_order``, ``iterations`` and ``lpc_blend`` have no effect on the
+    interpolated run.
+    """
     config = SonareDeclipConfig(  # noqa: F405
         clip_threshold=float(clip_threshold),
         lpc_order=int(lpc_order),

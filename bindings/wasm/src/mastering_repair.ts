@@ -169,7 +169,17 @@ export interface MasteringRepairTrimSilenceRequest extends TrimSilenceOptions {
   sampleRate: number;
 }
 
-/** Offline LPC-based declipper. */
+/**
+ * Offline LPC-based declipper.
+ *
+ * Only clipped runs of at most 512 consecutive samples are reconstructed with the LPC solver.
+ * The cap is a fixed sample count: it is not derived from `lpcOrder`, from `sampleRate`, or from
+ * any other option, so its duration depends on the rate (~10.7 ms at 48 kHz). A longer run is
+ * filled with cubic / linear interpolation instead, which keeps the solver's dense matrices
+ * bounded by the cap rather than by the input. Exceeding the cap silently changes the
+ * reconstruction method rather than throwing: `lpcOrder`, `iterations` and `lpcBlend` have no
+ * effect on the interpolated run.
+ */
 export function masteringRepairDeclip(request: MasteringRepairDeclipRequest): Float32Array;
 export function masteringRepairDeclip(
   samples: Float32Array,
