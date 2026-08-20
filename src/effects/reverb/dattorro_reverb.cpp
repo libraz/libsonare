@@ -26,6 +26,18 @@ constexpr float kGainIn = 0.75f;   // Input diffusion allpass gain.
 constexpr float kGainMod = 0.7f;   // Modulated tank allpass gain.
 constexpr float kGainDiff = 0.5f;  // Decay diffusion allpass gain.
 
+// Folds an LFO phase back into [0, 2pi) for any increment. A single
+// conditional subtract only covers an increment below one period, and nothing
+// bounds the modulation rate against the sample rate, so a rate above it would
+// let the phase grow without limit - and sin() loses argument precision long
+// before the accumulator overflows. The range test keeps the common case at one
+// comparison; fmod folds the rest in a single step rather than looping.
+inline float wrap_lfo_phase(float phase) noexcept {
+  if (phase >= 0.0f && phase < kTwoPi) return phase;
+  phase = std::fmod(phase, kTwoPi);
+  return phase < 0.0f ? phase + kTwoPi : phase;
+}
+
 }  // namespace
 
 // --- Allpass ---------------------------------------------------------------
@@ -235,12 +247,11 @@ void DattorroReverb::process(float* const* channels, int num_channels, int num_s
     const float mod_r = mod_depth_ * std::sin(lfo_phase_r_);
     lfo_phase_l_ += lfo_inc_;
     lfo_phase_r_ += lfo_inc_;
-    // Wrap in both directions so a negative mod_rate (negative lfo_inc_) keeps
-    // the phase bounded instead of drifting unboundedly negative.
-    if (lfo_phase_l_ > kTwoPi) lfo_phase_l_ -= kTwoPi;
-    if (lfo_phase_l_ < 0.0f) lfo_phase_l_ += kTwoPi;
-    if (lfo_phase_r_ > kTwoPi) lfo_phase_r_ -= kTwoPi;
-    if (lfo_phase_r_ < 0.0f) lfo_phase_r_ += kTwoPi;
+    // Wrap in both directions, and for any magnitude: a negative mod_rate gives
+    // a negative lfo_inc_, and a rate above the sample rate gives an increment
+    // past a full period, neither of which a single conditional subtract folds.
+    lfo_phase_l_ = wrap_lfo_phase(lfo_phase_l_);
+    lfo_phase_r_ = wrap_lfo_phase(lfo_phase_r_);
 
     // Half-L: cross-coupled from the previous right tail.
     float l = mod_ap_l_.process(tank_in + decay * prev_tail_r, mod_l);

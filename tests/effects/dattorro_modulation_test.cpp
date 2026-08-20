@@ -1,6 +1,7 @@
 /// @file dattorro_modulation_test.cpp
 /// @brief Tank modulation contract for the Dattorro plate: the depth control
-///        must reach both allpasses and must not degrade the signal as it rises.
+///        must reach both allpasses, must not degrade the signal as it rises,
+///        and must survive a modulation rate above the sample rate.
 
 #include <algorithm>
 #include <catch2/catch_test_macros.hpp>
@@ -77,6 +78,45 @@ double artefact_fraction(const std::vector<float>& tail, float tone_hz) {
   return total > 0.0 ? far / total : 0.0;
 }
 
+/// Squared magnitude of one DFT bin, normalized so it compares directly against
+/// the window's mean square. The shared FFT resolves bins on a fixed grid and
+/// the sideband frequencies measured below do not land on it, so a
+/// single-frequency DFT places the probe exactly instead of splitting the line
+/// across neighbouring bins.
+double bin_power(const std::vector<float>& window, double hz) {
+  const size_t n = window.size();
+  double re = 0.0;
+  double im = 0.0;
+  for (size_t i = 0; i < n; ++i) {
+    const double w = kTwoPiD * hz * static_cast<double>(i) / kSampleRate;
+    re += static_cast<double>(window[i]) * std::cos(w);
+    im -= static_cast<double>(window[i]) * std::sin(w);
+  }
+  const double scale = static_cast<double>(n) * static_cast<double>(n);
+  return (re * re + im * im) / scale;
+}
+
+/// Frequency the LFO actually runs at once sampled: a rate above Nyquist folds
+/// back to |rate - n * sample_rate|.
+double alias_hz(double rate_hz) {
+  return std::fabs(rate_hz - kSampleRate * std::round(rate_hz / kSampleRate));
+}
+
+/// Fraction of the window's energy sitting in the two modulation sidebands. A
+/// steady input tone through a delay line modulated by a coherent LFO produces
+/// discrete lines at tone +/- the LFO frequency; incoherent modulation leaves
+/// those two bins empty however loud the tail is. Each bin holds half the power
+/// of its real sinusoid, hence the factor of two.
+double sideband_fraction(const std::vector<float>& window, double tone_hz, double lfo_hz) {
+  double total = 0.0;
+  for (float value : window) total += static_cast<double>(value) * value;
+  total /= static_cast<double>(window.size());
+  if (total <= 0.0) return 0.0;
+  const double lower = bin_power(window, std::fabs(tone_hz - lfo_hz));
+  const double upper = bin_power(window, tone_hz + lfo_hz);
+  return 2.0 * (lower + upper) / total;
+}
+
 }  // namespace
 
 // A frozen LFO makes the two starting phases observable: at rate 0 each allpass
@@ -145,5 +185,69 @@ TEST_CASE("Tank modulation depth does not add broadband artefacts", "[effects][r
         std::vector<float>(swept.begin() + kWarmup, swept.begin() + kWarmup + kAnalyze), kToneHz);
     CAPTURE(artefact);
     REQUIRE(artefact < baseline * 10.0);
+  }
+}
+
+// A modulation rate is accepted raw from both prepare() and set_parameter(),
+// with nothing clamping it against the sample rate, so a per-sample increment
+// past a full period is reachable. Folding that with a single conditional
+// subtract leaves the phase accumulating without bound, and sin() loses
+// argument precision long before the accumulator overflows: the modulation
+// decays into rounding noise while the output stays perfectly finite, so
+// finiteness cannot detect this and neither can any level or width measure.
+//
+// What does detect it is the modulation's coherence. A rate above Nyquist
+// aliases to |rate - n * sample_rate|, so a bounded phase still drives the tank
+// with a clean tone at the alias frequency and imprints discrete sidebands on a
+// steady input. An unbounded phase quantizes the sin() argument until nothing
+// periodic survives and those two bins empty out, by four orders of magnitude -
+// far outside the spread the measure shows across rates and channels.
+TEST_CASE("Tank modulation survives a rate above the sample rate", "[effects][reverb][dattorro]") {
+  constexpr int kWarmup = 48000;
+  constexpr int kAnalyze = 48000;
+  constexpr float kToneHz = 1000.0f;
+  const auto input = tone(kWarmup + kAnalyze, kToneHz);
+
+  auto measure = [&](float rate_hz, float depth, int channel) {
+    DattorroReverbConfig config;
+    config.dry_wet = 1.0f;
+    config.decay = 0.5f;
+    config.mod_rate_hz = rate_hz;
+    config.mod_depth_samples = depth;
+    const auto out = run_stereo(config, input, channel);
+    const std::vector<float> window(out.begin() + kWarmup, out.begin() + kWarmup + kAnalyze);
+    return sideband_fraction(window, kToneHz, alias_hz(rate_hz));
+  };
+
+  // Controls first: the metric must read the modulation and nothing else.
+  SECTION("an unmodulated tank leaves the sidebands empty") {
+    for (int channel = 0; channel < 2; ++channel) {
+      const double fraction = measure(100000.0f, 0.0f, channel);
+      CAPTURE(channel, fraction);
+      REQUIRE(fraction < 1e-4);
+    }
+  }
+
+  // Below the sample rate the increment stays inside one period, which is the
+  // one case a single conditional subtract does fold. This is the reference the
+  // rates above are held to, and it pins the metric itself.
+  SECTION("a rate below the sample rate modulates") {
+    for (int channel = 0; channel < 2; ++channel) {
+      const double fraction = measure(4000.0f, 24.0f, channel);
+      CAPTURE(channel, fraction);
+      REQUIRE(fraction > 0.01);
+    }
+  }
+
+  SECTION("a rate past the sample rate modulates just as strongly") {
+    // The negative rate is the same defect mirrored: it gives an increment past
+    // a full period in the other direction.
+    for (float rate_hz : {100000.0f, 1000000.0f, -100000.0f}) {
+      for (int channel = 0; channel < 2; ++channel) {
+        const double fraction = measure(rate_hz, 24.0f, channel);
+        CAPTURE(rate_hz, channel, fraction);
+        REQUIRE(fraction > 0.01);
+      }
+    }
   }
 }
