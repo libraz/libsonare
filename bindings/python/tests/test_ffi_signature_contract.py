@@ -134,7 +134,10 @@ _FLAT_HEADERS = _flattened_headers()
 # `typedef struct X X;` with no body is an opaque handle: the binding only ever
 # holds its address, so it is a void* on the Python side.
 OPAQUE_HANDLES = frozenset(re.findall(r"typedef struct (\w+) \1\s*;", _FLAT_HEADERS))
-ENUM_TYPEDEFS = frozenset(re.findall(r"typedef enum \{[^}]*\}\s*(\w+)\s*;", _FLAT_HEADERS))
+# The optional token before the brace is the macro carrying the enum's fixed
+# underlying type. Preprocessor lines are stripped above, so the macro's own
+# definition is gone but its use in the declaration is still a bare word here.
+ENUM_TYPEDEFS = frozenset(re.findall(r"typedef enum (?:\w+ )?\{[^}]*\}\s*(\w+)\s*;", _FLAT_HEADERS))
 STRUCT_TYPEDEFS = frozenset(
     re.findall(r"typedef struct (?:\w+ )?\{[^}]*\}\s*(\w+)\s*;", _FLAT_HEADERS)
 )
