@@ -296,6 +296,19 @@ Napi::Value SonareWrap::SynthesizeRir(const Napi::CallbackInfo& info) {
   // shifts the splice by ~1 sample and clicks, so only a positive override applies.
   if (const float crossfade_ms = node_float_option(opts, "crossfadeMs", 0.0f); crossfade_ms > 0.0f)
     cfg.crossfade_ms = crossfade_ms;
+  cfg.air_absorption_enabled =
+      node_bool_option(opts, "airAbsorptionEnabled", cfg.air_absorption_enabled);
+  // airTemperatureC / airHumidityPercent == 0 keep the ISO reference climate
+  // (20 degC, 50 % RH), matching the C ABI's "0 means the library default" rule
+  // so the same options object yields the same RIR on every surface. An
+  // implausible climate is reported through the diagnostics/hasError channel by
+  // the core, the way the geometry errors already are.
+  if (const float air_temperature_c = node_float_option(opts, "airTemperatureC", 0.0f);
+      air_temperature_c != 0.0f)
+    cfg.air.temperature_c = air_temperature_c;
+  if (const float air_humidity_percent = node_float_option(opts, "airHumidityPercent", 0.0f);
+      air_humidity_percent != 0.0f)
+    cfg.air.humidity_percent = air_humidity_percent;
 
   const auto placement = PlacementFromOptions(opts);
   ValidateRirShapeAndTiming(placement, cfg);
@@ -424,6 +437,17 @@ Napi::Value SonareWrap::RoomMorph(const Napi::CallbackInfo& info) {
   // shifts the splice by ~1 sample and clicks, so only a positive override applies.
   if (const float crossfade_ms = node_float_option(opts, "crossfadeMs", 0.0f); crossfade_ms != 0.0f)
     cfg.crossfade_ms = crossfade_ms;
+  // Air absorption on the target room; the zero-means-ISO-reference rule is the
+  // same as synthesizeRir above. An implausible climate throws here (the morph
+  // core validates rather than diagnosing), matching the C ABI.
+  cfg.air_absorption_enabled =
+      node_bool_option(opts, "airAbsorptionEnabled", cfg.air_absorption_enabled);
+  if (const float air_temperature_c = node_float_option(opts, "airTemperatureC", 0.0f);
+      air_temperature_c != 0.0f)
+    cfg.air.temperature_c = air_temperature_c;
+  if (const float air_humidity_percent = node_float_option(opts, "airHumidityPercent", 0.0f);
+      air_humidity_percent != 0.0f)
+    cfg.air.humidity_percent = air_humidity_percent;
 
   const sonare::Audio result = sonare::effects::acoustic::room_morph(audio, cfg);
   std::vector<float> out = AudioToVector(result);

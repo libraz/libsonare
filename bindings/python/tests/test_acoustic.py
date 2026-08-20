@@ -171,3 +171,104 @@ def test_estimate_room_band_arrays_share_length() -> None:
     rir = libsonare.synthesize_rir(7.0, 5.0, 3.0, absorption=0.15)
     est = libsonare.estimate_room(rir.rir, sample_rate=48000, mode=2, min_decay_db=25.0)
     assert len(est.absorption_bands) == len(est.rt60_bands)
+
+
+@acoustic
+def test_synthesize_rir_routes_air_absorption_through_the_c_abi() -> None:
+    # The ISO 9613-1 atmospheric term used to be reachable only through the
+    # streaming insert; the offline entry point had no way to ask for it. Each
+    # assertion pins one of the three ctypes fields, so dropping any single one
+    # fails here instead of hiding behind the other two.
+    hall = dict(
+        length_m=30.0,
+        width_m=24.0,
+        height_m=15.0,
+        source=(3.0, 3.0, 1.5),
+        listener=(10.0, 8.0, 1.7),
+        absorption=0.2,
+        max_seconds=0.5,
+        ism_order=2,
+        seed=3,
+    )
+    off = libsonare.synthesize_rir(**hall)
+    iso = libsonare.synthesize_rir(
+        **hall,
+        air_absorption_enabled=True,
+        air_temperature_c=20.0,
+        air_humidity_percent=50.0,
+    )
+    assert not off.has_error
+    assert not iso.has_error
+    assert iso.rir != off.rir
+    # Air absorption can only take energy out of the statistical tail; sample
+    # 9600 (200 ms) is past the ~100 ms crossover for this room.
+    assert sum(v * v for v in iso.rir[9600:]) < sum(v * v for v in off.rir[9600:])
+
+    # A zeroed climate resolves to the ISO reference, matching the seed and
+    # crossfade_ms convention the rest of this config already follows.
+    implicit = libsonare.synthesize_rir(**hall, air_absorption_enabled=True)
+    assert implicit.rir == iso.rir
+
+    # Both climate values are read individually.
+    warm = libsonare.synthesize_rir(
+        **hall, air_absorption_enabled=True, air_temperature_c=35.0, air_humidity_percent=50.0
+    )
+    humid = libsonare.synthesize_rir(
+        **hall, air_absorption_enabled=True, air_temperature_c=20.0, air_humidity_percent=90.0
+    )
+    assert warm.rir != iso.rir
+    assert humid.rir != iso.rir
+    assert warm.rir != humid.rir
+
+
+@acoustic
+def test_synthesize_rir_reports_an_implausible_air_climate() -> None:
+    hall = dict(length_m=30.0, width_m=24.0, height_m=15.0, absorption=0.2, max_seconds=0.2)
+    bad = libsonare.synthesize_rir(**hall, air_absorption_enabled=True, air_temperature_c=-500.0)
+    assert bad.has_error
+    assert "acoustic.invalid_air_absorption" in bad.error_message
+    assert bad.rir == []
+    # The same implausible value is ignored while the flag is off.
+    ignored = libsonare.synthesize_rir(**hall, air_temperature_c=-500.0)
+    assert not ignored.has_error
+
+
+@acoustic
+def test_room_morph_routes_air_absorption_and_rejects_a_bad_climate() -> None:
+    samples = [0.0] * 4000
+    samples[0] = 1.0
+    target = dict(
+        source=(3.0, 3.0, 1.5),
+        listener=(10.0, 8.0, 1.7),
+        absorption=0.2,
+        wet=1.0,
+        max_seconds=0.3,
+        ism_order=2,
+        seed=3,
+    )
+    off = libsonare.room_morph(samples, 48000, 30.0, 24.0, 15.0, **target)
+    on = libsonare.room_morph(
+        samples,
+        48000,
+        30.0,
+        24.0,
+        15.0,
+        **target,
+        air_absorption_enabled=True,
+        air_temperature_c=20.0,
+        air_humidity_percent=50.0,
+    )
+    assert len(off) == len(on)
+    assert off != on
+    # The morph validates its config rather than diagnosing, so this raises.
+    with pytest.raises(libsonare.SonareError):
+        libsonare.room_morph(
+            samples,
+            48000,
+            30.0,
+            24.0,
+            15.0,
+            **target,
+            air_absorption_enabled=True,
+            air_humidity_percent=150.0,
+        )

@@ -258,4 +258,109 @@ describe('geometric room acoustics', () => {
     const est = estimateRoom(rir.rir, 48000, { aspectHintLw: 0, aspectHintLh: 0 });
     expect(est.rt60Bands.length).toBeGreaterThanOrEqual(4);
   });
+  // The ISO 9613-1 atmospheric term reached only the streaming insert
+  // ("effects.reverb.room") until these options existed; the offline entry
+  // point could not request it at all. Each assertion below pins one of the
+  // three fields, so dropping any single one on the way to the core fails here
+  // rather than hiding behind the other two.
+  const airHall = {
+    lengthM: 30,
+    widthM: 24,
+    heightM: 15,
+    sourceX: 3,
+    sourceY: 3,
+    sourceZ: 1.5,
+    listenerX: 10,
+    listenerY: 8,
+    listenerZ: 1.7,
+    absorption: 0.2,
+    maxSeconds: 0.5,
+    ismOrder: 2,
+    seed: 3,
+  };
+  // Energy past the ~100 ms crossover for this room, i.e. the statistical tail
+  // the air term reshapes (sample 9600 is 200 ms at 48 kHz).
+  const tailEnergy = (rir: Float32Array) => {
+    let sum = 0;
+    for (let i = 9600; i < rir.length; i += 1) {
+      sum += rir[i] * rir[i];
+    }
+    return sum;
+  };
+
+  it('routes air absorption into the synthesized tail', () => {
+    const off = synthesizeRir(airHall);
+    const iso = synthesizeRir({
+      ...airHall,
+      airAbsorptionEnabled: true,
+      airTemperatureC: 20,
+      airHumidityPercent: 50,
+    });
+    expect(off.hasError).toBe(false);
+    expect(iso.hasError).toBe(false);
+    expect(Array.from(iso.rir)).not.toEqual(Array.from(off.rir));
+    // Air absorption can only take energy out of the tail.
+    expect(tailEnergy(iso.rir)).toBeLessThan(tailEnergy(off.rir));
+
+    // A zeroed/omitted climate resolves to the ISO reference, matching the
+    // seed and crossfadeMs convention these options already follow.
+    const implicitIso = synthesizeRir({ ...airHall, airAbsorptionEnabled: true });
+    expect(Array.from(implicitIso.rir)).toEqual(Array.from(iso.rir));
+
+    // Both climate values are read individually.
+    const warm = synthesizeRir({
+      ...airHall,
+      airAbsorptionEnabled: true,
+      airTemperatureC: 35,
+      airHumidityPercent: 50,
+    });
+    const humid = synthesizeRir({
+      ...airHall,
+      airAbsorptionEnabled: true,
+      airTemperatureC: 20,
+      airHumidityPercent: 90,
+    });
+    expect(Array.from(warm.rir)).not.toEqual(Array.from(iso.rir));
+    expect(Array.from(humid.rir)).not.toEqual(Array.from(iso.rir));
+    expect(Array.from(warm.rir)).not.toEqual(Array.from(humid.rir));
+
+    // The climate is ignored while the flag is off.
+    const ignored = synthesizeRir({ ...airHall, airTemperatureC: 35, airHumidityPercent: 90 });
+    expect(Array.from(ignored.rir)).toEqual(Array.from(off.rir));
+  });
+
+  it('reports an implausible air climate as a diagnostic, not a throw', () => {
+    const bad = synthesizeRir({
+      ...airHall,
+      maxSeconds: 0.2,
+      airAbsorptionEnabled: true,
+      airTemperatureC: -500,
+    });
+    expect(bad.hasError).toBe(true);
+    expect(bad.rir.length).toBe(0);
+    expect(bad.diagnostics.map((d) => d.code)).toContain('acoustic.invalid_air_absorption');
+  });
+
+  it('routes air absorption into the room-morph target room', () => {
+    const samples = new Float32Array(4000);
+    samples[0] = 1.0;
+    const target = { ...airHall, maxSeconds: 0.3, wet: 1.0, sourceTailSuppression: 0.5 };
+    const off = roomMorph(samples, 48000, target);
+    const on = roomMorph(samples, 48000, {
+      ...target,
+      airAbsorptionEnabled: true,
+      airTemperatureC: 20,
+      airHumidityPercent: 50,
+    });
+    expect(on.length).toBe(off.length);
+    expect(Array.from(on)).not.toEqual(Array.from(off));
+    // The morph validates its config rather than diagnosing, so this throws.
+    expect(() =>
+      roomMorph(samples, 48000, {
+        ...target,
+        airAbsorptionEnabled: true,
+        airHumidityPercent: 150,
+      }),
+    ).toThrow();
+  });
 });

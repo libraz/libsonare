@@ -956,6 +956,16 @@ val js_synthesize_rir(val opts) {
   config.mixing_time_ms = floatProperty(opts, "mixingTimeMs", config.mixing_time_ms);
   const float crossfade_ms = floatProperty(opts, "crossfadeMs", 0.0f);
   if (crossfade_ms > 0.0f) config.crossfade_ms = crossfade_ms;
+  config.air_absorption_enabled =
+      boolProperty(opts, "airAbsorptionEnabled", config.air_absorption_enabled);
+  // airTemperatureC / airHumidityPercent == 0 keep the ISO reference climate
+  // (20 degC, 50 % RH), matching the C ABI's "0 means the library default" rule
+  // so the same options object yields the same RIR on every surface. An
+  // implausible climate is reported through diagnostics/hasError by the core.
+  const float air_temperature_c = floatProperty(opts, "airTemperatureC", 0.0f);
+  if (air_temperature_c != 0.0f) config.air.temperature_c = air_temperature_c;
+  const float air_humidity_percent = floatProperty(opts, "airHumidityPercent", 0.0f);
+  if (air_humidity_percent != 0.0f) config.air.humidity_percent = air_humidity_percent;
 
   const auto placement = placementFromVal(opts);
   validateRirShapeAndTiming(placement, config);
@@ -1059,6 +1069,15 @@ val js_room_morph(val samples, int sample_rate, val opts) {
   config.mixing_time_ms = floatProperty(opts, "mixingTimeMs", config.mixing_time_ms);
   const float crossfade_ms = floatProperty(opts, "crossfadeMs", 0.0f);
   if (crossfade_ms != 0.0f) config.crossfade_ms = crossfade_ms;
+  // Air absorption on the target room; the zero-means-ISO-reference rule is the
+  // same as synthesizeRir above. An implausible climate throws here (the morph
+  // core validates rather than diagnosing), matching the C ABI.
+  config.air_absorption_enabled =
+      boolProperty(opts, "airAbsorptionEnabled", config.air_absorption_enabled);
+  const float air_temperature_c = floatProperty(opts, "airTemperatureC", 0.0f);
+  if (air_temperature_c != 0.0f) config.air.temperature_c = air_temperature_c;
+  const float air_humidity_percent = floatProperty(opts, "airHumidityPercent", 0.0f);
+  if (air_humidity_percent != 0.0f) config.air.humidity_percent = air_humidity_percent;
 
   const Audio result = sonare::effects::acoustic::room_morph(audio, config);
   std::vector<float> out;

@@ -299,6 +299,9 @@ export interface WasmRoomGeometryOptions {
   ismOrder?: number;
   seed?: number;
   maxSeconds?: number;
+  airAbsorptionEnabled?: boolean;
+  airTemperatureC?: number;
+  airHumidityPercent?: number;
 }
 
 export interface WasmRirSynthOptions extends WasmRoomGeometryOptions {

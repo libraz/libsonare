@@ -475,6 +475,25 @@ export interface RoomGeometryOptions {
   ismOrder?: number;
   seed?: number;
   maxSeconds?: number;
+  /**
+   * Add the ISO 9613-1 atmospheric-absorption term to the late tail's per-band
+   * RT60. Off by default so the RIR is unchanged; it mainly shortens the high
+   * bands of a large room.
+   */
+  airAbsorptionEnabled?: boolean;
+  /**
+   * Air temperature in degrees Celsius; 0 (or omitted) selects the ISO
+   * reference climate's 20 degC. A literal 0 degC is therefore not
+   * distinguishable from unset -- use 0.01 for a freezing room, which absorbs
+   * identically.
+   */
+  airTemperatureC?: number;
+  /**
+   * Relative humidity in percent; 0 (or omitted) selects the ISO reference
+   * climate's 50 %. Both climate values are read only while
+   * `airAbsorptionEnabled` is set.
+   */
+  airHumidityPercent?: number;
 }
 
 export interface RirSynthOptions extends RoomGeometryOptions {

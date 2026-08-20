@@ -343,6 +343,9 @@ def synthesize_rir(
     max_seconds: float = 0.0,
     mixing_time_ms: float = 0.0,
     crossfade_ms: float = 0.0,
+    air_absorption_enabled: bool = False,
+    air_temperature_c: float = 0.0,
+    air_humidity_percent: float = 0.0,
 ) -> RirResult: ...
 def estimate_room(
     samples: FloatSamples,
@@ -378,6 +381,9 @@ def room_morph(
     max_seconds: float = 0.0,
     mixing_time_ms: float = 0.0,
     crossfade_ms: float = 0.0,
+    air_absorption_enabled: bool = False,
+    air_temperature_c: float = 0.0,
+    air_humidity_percent: float = 0.0,
 ) -> list[float]: ...
 def analyze_rhythm(
     samples: FloatSamples,

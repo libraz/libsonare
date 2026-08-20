@@ -73,6 +73,9 @@ def synthesize_rir(
     max_seconds: float = 0.0,
     mixing_time_ms: float = 0.0,
     crossfade_ms: float = 0.0,
+    air_absorption_enabled: bool = False,
+    air_temperature_c: float = 0.0,
+    air_humidity_percent: float = 0.0,
 ) -> RirResult:
     """Synthesize a room impulse response from shoebox geometry.
 
@@ -98,6 +101,17 @@ def synthesize_rir(
         mixing_time_ms: Early/late crossover in ms (0 = auto, ~sqrt(V) ms).
         crossfade_ms: Equal-power crossfade width around the mixing time in ms
             (0 = library default).
+        air_absorption_enabled: Add the ISO 9613-1 atmospheric-absorption term
+            to the late tail's per-band RT60. Off by default so the RIR is
+            unchanged; it mainly shortens the high bands of a large room.
+        air_temperature_c: Air temperature in degrees Celsius (0 = the ISO
+            reference climate's 20 degC). A literal 0 degC is not
+            distinguishable from unset here; use 0.01 for a freezing room.
+        air_humidity_percent: Relative humidity in percent (0 = the ISO
+            reference climate's 50 %). Both climate values are read only while
+            ``air_absorption_enabled`` is set, and an implausible pair sets
+            ``has_error`` with the ``acoustic.invalid_air_absorption``
+            diagnostic.
 
     Returns:
         A :class:`RirResult`; ``has_error`` is True when the geometry is invalid
@@ -129,6 +143,9 @@ def synthesize_rir(
         # Clamp a negative seed to 0 so every binding (Node/WASM clamp the same
         # way) yields identical deterministic late-tail noise.
         seed=max(0, seed),
+        air_absorption_enabled=1 if air_absorption_enabled else 0,
+        air_temperature_c=air_temperature_c,
+        air_humidity_percent=air_humidity_percent,
         absorption_bands=bands_ptr,
         absorption_band_count=bands_count,
         scattering_bands=scatter_ptr,
@@ -243,6 +260,9 @@ def room_morph(
     max_seconds: float = 0.0,
     mixing_time_ms: float = 0.0,
     crossfade_ms: float = 0.0,
+    air_absorption_enabled: bool = False,
+    air_temperature_c: float = 0.0,
+    air_humidity_percent: float = 0.0,
 ) -> list[float]:
     """Morph a recording's reverberation toward a target room (creative FX).
 
@@ -263,6 +283,13 @@ def room_morph(
         mixing_time_ms: Early/late crossover in ms (0 = auto, ~sqrt(V) ms).
         crossfade_ms: Equal-power crossfade width around the mixing time in ms
             (0 = library default).
+        air_absorption_enabled: Add the ISO 9613-1 atmospheric-absorption term
+            to the target room's late tail (off by default).
+        air_temperature_c: Air temperature in degrees Celsius (0 = the ISO
+            reference 20 degC); see :func:`synthesize_rir`.
+        air_humidity_percent: Relative humidity in percent (0 = the ISO
+            reference 50 %). An implausible climate raises here rather than
+            reporting a diagnostic, because the morph validates its config.
     """
     lib = _get_lib()
     if not hasattr(lib, "sonare_room_morph"):
@@ -291,6 +318,9 @@ def room_morph(
         # Match Node/WASM: clamp a negative seed to 0 for cross-surface
         # reproducibility of the deterministic late-tail noise.
         seed=max(0, seed),
+        air_absorption_enabled=1 if air_absorption_enabled else 0,
+        air_temperature_c=air_temperature_c,
+        air_humidity_percent=air_humidity_percent,
         absorption_bands=bands_ptr,
         absorption_band_count=bands_count,
         scattering_bands=scatter_ptr,
