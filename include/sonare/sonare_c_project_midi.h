@@ -68,7 +68,7 @@ static_assert(sizeof(SonareMidiRouteConfig) == 4u * sizeof(int),
 #endif
 
 /// @brief MIDI CC binding kind ordinals. Mirrors midi::CcBindingKind.
-typedef enum {
+typedef enum SONARE_ENUM_BASE {
   SONARE_MIDI_CC_CONTROL_CHANGE_7 = 0,
   SONARE_MIDI_CC_CONTROL_CHANGE_14 = 1,
   SONARE_MIDI_CC_RPN = 2,

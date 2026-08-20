@@ -143,7 +143,7 @@ static_assert(sizeof(SonareProjectWarpAnchor) == 2u * sizeof(double),
               "SonareProjectWarpAnchor layout drift");
 #endif
 
-typedef enum {
+typedef enum SONARE_ENUM_BASE {
   SONARE_PROJECT_WARP_MODE_OFF = 0,
   SONARE_PROJECT_WARP_MODE_REPITCH = 1,
   SONARE_PROJECT_WARP_MODE_TEMPO_SYNC = 2,
@@ -172,7 +172,7 @@ static_assert(sizeof(SonareProjectWarpMapDesc) == 3u * sizeof(void*) + sizeof(si
 
 /// @brief Clip fade-curve ordinals; mirror sonare::arrangement::FadeCurve.
 ///        Pinned by a static_assert in the .cpp so reordering is caught.
-typedef enum {
+typedef enum SONARE_ENUM_BASE {
   SONARE_FADE_CURVE_LINEAR = 0,
   SONARE_FADE_CURVE_EQUAL_POWER = 1,
   SONARE_FADE_CURVE_EXPONENTIAL = 2,
@@ -187,14 +187,14 @@ SonareError sonare_project_fade_curve_from_name(const char* name, uint32_t* out_
 
 /// @brief Clip loop-mode ordinals; mirror sonare::arrangement::LoopMode.
 ///        Pinned by a static_assert in the .cpp.
-typedef enum {
+typedef enum SONARE_ENUM_BASE {
   SONARE_LOOP_MODE_OFF = 0,
   SONARE_LOOP_MODE_LOOP = 1,
 } SonareProjectLoopMode;
 
 /// @brief Automation breakpoint interpolation ordinals; mirror
 ///        sonare::AutomationCurve. Pinned by a static_assert in the .cpp.
-typedef enum {
+typedef enum SONARE_ENUM_BASE {
   SONARE_CURVE_LINEAR = 0,
   SONARE_CURVE_EXPONENTIAL = 1,
   SONARE_CURVE_HOLD = 2,
@@ -205,7 +205,7 @@ typedef enum {
 ///
 /// Opaque is the legacy host-defined target. Track fader and track pan are
 /// typed mixer targets; no other ordinal is currently valid.
-typedef enum {
+typedef enum SONARE_ENUM_BASE {
   SONARE_AUTOMATION_TARGET_OPAQUE = 0,
   SONARE_AUTOMATION_TARGET_TRACK_FADER_DB = 1,
   SONARE_AUTOMATION_TARGET_TRACK_PAN = 2,

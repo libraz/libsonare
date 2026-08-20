@@ -13,7 +13,7 @@ extern "C" {
 // Mixing
 // ============================================================================
 
-typedef enum {
+typedef enum SONARE_ENUM_BASE {
   SONARE_PAN_MODE_BALANCE = 0,
   SONARE_PAN_MODE_STEREO_PAN = 1,
   SONARE_PAN_MODE_DUAL_PAN = 2
@@ -23,14 +23,14 @@ typedef enum {
 // current pan mode and only move the pan position (see sonare_strip_set_pan).
 #define SONARE_PAN_MODE_KEEP (-1)
 
-typedef enum {
+typedef enum SONARE_ENUM_BASE {
   SONARE_PAN_LAW_CONST_3DB = 0,
   SONARE_PAN_LAW_CONST_4P5DB = 1,
   SONARE_PAN_LAW_CONST_6DB = 2,
   SONARE_PAN_LAW_LINEAR_0DB = 3
 } SonarePanLaw;
 
-typedef enum {
+typedef enum SONARE_ENUM_BASE {
   /* Post-fader is value 0 so a zero-initialized SonareEngineTrackSend defaults to
      the historical lane-send behavior (post-fader) instead of silently flipping
      to pre-fader. The integer is an in-memory ABI detail only -- scene/project
@@ -39,7 +39,10 @@ typedef enum {
   SONARE_SEND_TIMING_PRE_FADER = 1
 } SonareSendTiming;
 
-typedef enum { SONARE_METER_TAP_PRE_FADER = 0, SONARE_METER_TAP_POST_FADER = 1 } SonareMeterTap;
+typedef enum SONARE_ENUM_BASE {
+  SONARE_METER_TAP_PRE_FADER = 0,
+  SONARE_METER_TAP_POST_FADER = 1
+} SonareMeterTap;
 
 /* Maximum number of surround planes a meter snapshot can report (7.1). */
 #define SONARE_MAX_METER_CHANNELS 8

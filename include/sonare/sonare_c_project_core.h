@@ -19,14 +19,14 @@ typedef struct SonareProject SonareProject;
 
 /// Track kind ordinals; mirror sonare::arrangement::Track::Kind. Pinned by a
 /// static_assert in the .cpp so reordering the C++ enum is caught.
-typedef enum {
+typedef enum SONARE_ENUM_BASE {
   SONARE_TRACK_AUDIO = 0,
   SONARE_TRACK_MIDI = 1,
   SONARE_TRACK_AUX = 2
 } SonareProjectTrackKind;
 
 /// Project clip-overlap policy ordinals.
-typedef enum {
+typedef enum SONARE_ENUM_BASE {
   SONARE_PROJECT_OVERLAP_DISALLOW = 0,
   SONARE_PROJECT_OVERLAP_ALLOW = 1
 } SonareProjectOverlapPolicy;

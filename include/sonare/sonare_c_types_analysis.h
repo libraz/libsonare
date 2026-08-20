@@ -9,13 +9,13 @@
 extern "C" {
 #endif
 
-typedef enum {
+typedef enum SONARE_ENUM_BASE {
   SONARE_GROOVE_STRAIGHT = 0,
   SONARE_GROOVE_SHUFFLE = 1,
   SONARE_GROOVE_SWING = 2
 } SonareGrooveType;
 
-typedef enum {
+typedef enum SONARE_ENUM_BASE {
   SONARE_CHORD_MAJOR = 0,
   SONARE_CHORD_MINOR = 1,
   SONARE_CHORD_DIMINISHED = 2,
@@ -217,7 +217,7 @@ typedef struct {
  * analyzer did not identify the segment -- either no boundary was detected at
  * all, or the segment matched none of the positive branches -- and is reported
  * with confidence 0. */
-typedef enum {
+typedef enum SONARE_ENUM_BASE {
   SONARE_SECTION_INTRO = 0,
   SONARE_SECTION_VERSE = 1,
   SONARE_SECTION_PRE_CHORUS = 2,
@@ -281,7 +281,7 @@ typedef struct {
    base patch's engine (the named preset's, or subtractive for an empty
    preset); explicit values select a mode. The field is int-wide so future
    modes extend the enum without a layout change. */
-typedef enum {
+typedef enum SONARE_ENUM_BASE {
   SONARE_SYNTH_ENGINE_DEFAULT = 0,
   SONARE_SYNTH_ENGINE_SUBTRACTIVE = 1,
   SONARE_SYNTH_ENGINE_FM = 2,
@@ -302,7 +302,7 @@ typedef enum {
 #define SONARE_SYNTH_ENGINE_MODE_COUNT 16
 
 /* Oscillator waveform (subtractive mode). 0 keeps the base patch's value. */
-typedef enum {
+typedef enum SONARE_ENUM_BASE {
   SONARE_SYNTH_OSC_DEFAULT = 0,
   SONARE_SYNTH_OSC_SINE = 1,
   SONARE_SYNTH_OSC_SAW = 2,
@@ -313,7 +313,7 @@ typedef enum {
 #define SONARE_SYNTH_OSC_WAVEFORM_COUNT 6
 
 /* Filter model (the character core). 0 keeps the base patch's value. */
-typedef enum {
+typedef enum SONARE_ENUM_BASE {
   SONARE_SYNTH_FILTER_DEFAULT = 0,
   SONARE_SYNTH_FILTER_SVF = 1,
   SONARE_SYNTH_FILTER_MOOG_LADDER = 2,
@@ -324,7 +324,7 @@ typedef enum {
 
 /* Which filter output the voice mixes (SVF only; the ladder and Sallen-Key
    models are lowpass-only). 0 keeps the base patch's value. */
-typedef enum {
+typedef enum SONARE_ENUM_BASE {
   SONARE_SYNTH_FILTER_OUT_DEFAULT = 0,
   SONARE_SYNTH_FILTER_OUT_LOWPASS = 1,
   SONARE_SYNTH_FILTER_OUT_BANDPASS = 2,
@@ -334,7 +334,7 @@ typedef enum {
 
 /* Body/formant resonance voicing. 0 keeps the base patch's value;
    SONARE_SYNTH_BODY_NONE explicitly disables a preset's body. */
-typedef enum {
+typedef enum SONARE_ENUM_BASE {
   SONARE_SYNTH_BODY_DEFAULT = 0,
   SONARE_SYNTH_BODY_NONE = 1,
   SONARE_SYNTH_BODY_GUITAR = 2,

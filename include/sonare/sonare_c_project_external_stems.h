@@ -15,7 +15,7 @@ extern "C" {
 #endif
 
 /// Channel layouts accepted by @ref sonare_project_import_external_stems.
-typedef enum {
+typedef enum SONARE_ENUM_BASE {
   SONARE_EXTERNAL_STEM_MONO = 1,
   SONARE_EXTERNAL_STEM_STEREO = 2,
 } SonareExternalStemLayout;

@@ -102,7 +102,7 @@ SonareError sonare_project_bounce_with_instruments(SonareProject* project,
 
 /// @brief Oscillator waveform for the built-in synth (see
 ///        @ref SonareBuiltinSynthConfig). Out-of-range values fall back to sine.
-typedef enum {
+typedef enum SONARE_ENUM_BASE {
   SONARE_SYNTH_WAVEFORM_SINE = 0,
   SONARE_SYNTH_WAVEFORM_SAW = 1,
   SONARE_SYNTH_WAVEFORM_SQUARE = 2,
@@ -165,7 +165,7 @@ SonareError sonare_project_bounce_with_builtin_instruments(
 ///          @ref sonare_mastering_insert_names).
 const char* sonare_synth_preset_names(void);
 
-typedef enum {
+typedef enum SONARE_ENUM_BASE {
   SONARE_SYNTH_ENUM_ENGINE_MODE = 0,
   SONARE_SYNTH_ENUM_OSC_WAVEFORM = 1,
   SONARE_SYNTH_ENUM_FILTER_MODEL = 2,
@@ -249,7 +249,7 @@ SonareError sonare_project_soundfont_preset_count(SonareProject* project, size_t
 
 /// @brief Source backend a resolved MIDI program renders through: the loaded
 ///        SoundFont (kSf2) or the built-in synthesizer fallback (kSynth).
-typedef enum {
+typedef enum SONARE_ENUM_BASE {
   SONARE_SOURCE_BACKEND_SYNTH = 0,
   SONARE_SOURCE_BACKEND_SF2 = 1,
 } SonareSourceBackend;

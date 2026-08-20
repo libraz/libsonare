@@ -46,14 +46,14 @@ typedef struct {
   size_t max_progression_entries; /* Per chord/bar progression cap; drops oldest (default 4096) */
 } SonareStreamConfig;
 
-typedef enum {
+typedef enum SONARE_ENUM_BASE {
   SONARE_WINDOW_HANN = 0,
   SONARE_WINDOW_HAMMING = 1,
   SONARE_WINDOW_BLACKMAN = 2,
   SONARE_WINDOW_RECTANGULAR = 3,
 } SonareWindowType;
 
-typedef enum {
+typedef enum SONARE_ENUM_BASE {
   SONARE_STREAM_OUTPUT_FLOAT32 = 0,
   SONARE_STREAM_OUTPUT_INT16 = 1, /* Legacy value; analyzer creation rejects it. */
   SONARE_STREAM_OUTPUT_UINT8 = 2, /* Legacy value; analyzer creation rejects it. */
@@ -61,7 +61,7 @@ typedef enum {
 
 /* Feature arrays physically present in a SonareStreamFrames* result. RMS and
    timestamps are always present and therefore need no flag. */
-typedef enum {
+typedef enum SONARE_ENUM_BASE {
   SONARE_STREAM_FEATURE_MEL = 1u << 0,
   SONARE_STREAM_FEATURE_CHROMA = 1u << 1,
   SONARE_STREAM_FEATURE_ONSET = 1u << 2,

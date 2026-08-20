@@ -169,7 +169,7 @@ void sonare_project_free_assist_sidecar(SonareProjectAssistSidecar* sidecar);
 
 /// Labels for ranked tempo-octave hypotheses returned by
 /// @ref sonare_project_analyze_tempo.
-typedef enum {
+typedef enum SONARE_ENUM_BASE {
   SONARE_TEMPO_CANDIDATE_PRIMARY = 0,
   SONARE_TEMPO_CANDIDATE_HALF = 1,
   SONARE_TEMPO_CANDIDATE_DOUBLE = 2,

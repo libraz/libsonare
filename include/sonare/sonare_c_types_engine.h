@@ -13,7 +13,7 @@ extern "C" {
    cross-binding telemetry contract: core owns 0..18 and 20, while ordinal 19
    is reserved by the WASM worklet protocol. SonareEngineTelemetry.error stays
    an int below so this enum does not change the telemetry POD layout. */
-typedef enum {
+typedef enum SONARE_ENUM_BASE {
   SONARE_ENGINE_TELEMETRY_ERROR_NONE = 0,
   SONARE_ENGINE_TELEMETRY_ERROR_COMMAND_QUEUE_OVERFLOW = 1,
   SONARE_ENGINE_TELEMETRY_ERROR_PENDING_COMMAND_OVERFLOW = 2,
@@ -197,7 +197,7 @@ typedef struct {
 
 /* Marker kind ordinals. Mirrors sonare::midi::SmfMarkerKind and the binding
    MarkerKind enums; values are part of the ABI and must not be renumbered. */
-typedef enum {
+typedef enum SONARE_ENUM_BASE {
   SONARE_MARKER_KIND_MARKER = 0,
   SONARE_MARKER_KIND_TEXT = 1,
   SONARE_MARKER_KIND_LYRIC = 2,
@@ -237,7 +237,7 @@ typedef struct {
   double click_seconds;
 } SonareEngineMetronomeConfig;
 
-typedef enum {
+typedef enum SONARE_ENUM_BASE {
   SONARE_ENGINE_WARP_MODE_OFF = 0,
   SONARE_ENGINE_WARP_MODE_REPITCH = 1,
   SONARE_ENGINE_WARP_MODE_TEMPO_SYNC = 2,
@@ -293,7 +293,7 @@ typedef struct {
    and are part of the ABI / JSON wire format — never renumber.
    Plane order is WAVE_FORMAT_EXTENSIBLE (also ITU-R BS.2051 / SMPTE):
      5.1 = L R C LFE Ls Rs, 7.1 = L R C LFE Ls Rs Lss Rss. */
-typedef enum {
+typedef enum SONARE_ENUM_BASE {
   SONARE_CHANNEL_LAYOUT_MONO = 0,
   SONARE_CHANNEL_LAYOUT_STEREO = 1,
   SONARE_CHANNEL_LAYOUT_5_1 = 2,
@@ -316,7 +316,7 @@ typedef struct {
 /* Per-lane cue/monitor tap. The mode is queued against a lane index and takes
    effect at the requested render frame; the lane's track-id mapping keeps the
    state attached to a track when lane order is republished. */
-typedef enum {
+typedef enum SONARE_ENUM_BASE {
   SONARE_ENGINE_TRACK_MONITOR_MODE_OFF = 0,
   SONARE_ENGINE_TRACK_MONITOR_MODE_PFL = 1,
   SONARE_ENGINE_TRACK_MONITOR_MODE_AFL = 2,
@@ -341,7 +341,7 @@ typedef struct {
   int64_t capacity_frames;
 } SonareEngineCaptureBuffer;
 
-typedef enum {
+typedef enum SONARE_ENUM_BASE {
   SONARE_ENGINE_CAPTURE_SOURCE_OUTPUT = 0,
   SONARE_ENGINE_CAPTURE_SOURCE_INPUT = 1,
 } SonareEngineCaptureSource;

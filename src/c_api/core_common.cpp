@@ -1,6 +1,43 @@
 #include <algorithm>
+#include <cstddef>
+#include <type_traits>
 
 #include "c_api/core_internal.h"
+
+// SONARE_ENUM_BASE (sonare_c_types_enums.h) gives every public enum a fixed
+// underlying type under C++ and expands to nothing under C, so the two
+// spellings must stay layout-compatible or a C caller and this library would
+// disagree about the bytes they exchange. These guards hold that: the width and
+// alignment a C compiler gives a plain 4-byte enum, and the placement of a
+// field sitting behind an enum inside a POD the bindings mirror byte for byte.
+// The enums listed are the ones a C ABI entry point range-checks, which is
+// where an underlying-type change would be felt first.
+static_assert(std::is_same_v<std::underlying_type_t<SonareMode>, int32_t>,
+              "SonareMode lost its fixed underlying type");
+static_assert(std::is_same_v<std::underlying_type_t<SonarePitchClass>, int32_t>,
+              "SonarePitchClass lost its fixed underlying type");
+static_assert(std::is_same_v<std::underlying_type_t<SonareKeyProfileType>, int32_t>,
+              "SonareKeyProfileType lost its fixed underlying type");
+static_assert(std::is_same_v<std::underlying_type_t<SonareVoiceCharacterPreset>, int32_t>,
+              "SonareVoiceCharacterPreset lost its fixed underlying type");
+static_assert(std::is_same_v<std::underlying_type_t<SonareEngineTrackMonitorMode>, int32_t>,
+              "SonareEngineTrackMonitorMode lost its fixed underlying type");
+static_assert(std::is_same_v<std::underlying_type_t<SonareEngineCaptureSource>, int32_t>,
+              "SonareEngineCaptureSource lost its fixed underlying type");
+static_assert(std::is_same_v<std::underlying_type_t<SonareProjectWarpMode>, int32_t>,
+              "SonareProjectWarpMode lost its fixed underlying type");
+
+static_assert(sizeof(SonareMode) == 4, "SonareMode is not 4 bytes wide");
+static_assert(alignof(SonareMode) == 4, "SonareMode is not 4-byte aligned");
+static_assert(sizeof(SonareProjectWarpMode) == 4, "SonareProjectWarpMode is not 4 bytes wide");
+static_assert(alignof(SonareProjectWarpMode) == 4, "SonareProjectWarpMode is not 4-byte aligned");
+
+// SonareKey embeds two enums ahead of a float; the ctypes mirror and
+// abi-layout.json both depend on that float staying at offset 8.
+static_assert(sizeof(SonareKey) == 12, "SonareKey changed size");
+static_assert(offsetof(SonareKey, root) == 0, "SonareKey::root moved");
+static_assert(offsetof(SonareKey, mode) == 4, "SonareKey::mode moved");
+static_assert(offsetof(SonareKey, confidence) == 8, "SonareKey::confidence moved");
 
 void fill_acoustic_result(const AcousticParameters& params, SonareAcousticResult* out) {
   out->rt60 = params.rt60;

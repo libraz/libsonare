@@ -92,7 +92,7 @@ SonareError sonare_pitch_correct_to_midi_timevarying(const float* samples, size_
                                                      size_t* out_length);
 
 /// @brief Target selector for @ref sonare_pitch_correct_timevarying.
-typedef enum {
+typedef enum SONARE_ENUM_BASE {
   SONARE_PITCH_TARGET_FIXED_MIDI = 0,  ///< Retune every voiced frame toward @c target_midi.
   SONARE_PITCH_TARGET_SCALE = 1,       ///< Snap each voiced frame to the nearest scale degree.
 } SonarePitchTargetMode;
@@ -487,7 +487,7 @@ SonareError sonare_phase_vocoder(const float* samples, size_t length, int sample
                                  int n_fft, int hop_length, float** out, size_t* out_length);
 
 /// @brief How a spectral region op modifies the masked STFT bins.
-typedef enum {
+typedef enum SONARE_ENUM_BASE {
   SONARE_SPECTRAL_EDIT_MODE_GAIN = 0,      /* multiply magnitude by 10^(gain_db/20); phase kept */
   SONARE_SPECTRAL_EDIT_MODE_ATTENUATE = 1, /* gain with a (typically negative) gain_db */
   SONARE_SPECTRAL_EDIT_MODE_MUTE = 2,      /* hard zero the masked bins (gain_db ignored) */
