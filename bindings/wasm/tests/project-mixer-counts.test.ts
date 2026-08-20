@@ -194,6 +194,12 @@ describe('Project counts and timeline metadata (WASM)', () => {
       expect(result).toBeTypeOf('object');
       expect(result).toHaveProperty('hasTimeline');
       expect(typeof result.hasTimeline).toBe('boolean');
+      // No bounce has run on this project, so the result is empty in full.
+      // A failed bounce is told apart by its diagnostics, never by hasTimeline
+      // alone: losing the timeline always leaves an error diagnostic behind.
+      expect(result.hasTimeline).toBe(false);
+      expect(result.diagnostics).toHaveLength(0);
+      expect(result.diagnosticCount).toBe(0);
     } finally {
       project.delete();
     }

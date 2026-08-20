@@ -394,8 +394,14 @@ SonareError sonare_project_compile(SonareProject* project, SonareProjectCompileR
 ///        @ref sonare_project_bounce / instrument bounce on this project.
 /// @details This surfaces non-fatal warnings from the bounce's internal compile
 ///          step, such as MIDI clips rendering silently without a bound
-///          instrument. If no bounce has run, the result is empty with
-///          @p has_timeline set non-zero. Free with
+///          instrument. On a project no bounce has ever run on, the result is
+///          empty in full: `has_timeline` is zero and `diagnostic_count` is
+///          zero. That state is distinguishable from a failed bounce, because a
+///          bounce only loses its timeline through an error diagnostic and so
+///          always reports at least one diagnostic when it fails. A bounce
+///          rejected for invalid arguments before it compiles clears the
+///          recorded result back to that same empty state; that call reports
+///          its own error to the caller directly. Free with
 ///          @ref sonare_project_free_compile_result.
 SonareError sonare_project_last_bounce_compile_result(const SonareProject* project,
                                                       SonareProjectCompileResult* out);

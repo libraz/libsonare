@@ -599,6 +599,12 @@ class _ProjectInspectionMixin:
         Mirrors :meth:`compile`'s structured :class:`ProjectCompileResult` but
         reads the timeline + diagnostics recorded during the last
         ``bounce*`` call instead of recompiling.
+
+        On a project no bounce has ever run on the result is empty in full:
+        ``has_timeline`` is ``False`` and ``diagnostics`` is empty. A failed
+        bounce is distinguishable from that state, because a bounce only loses
+        its timeline through an error diagnostic and so always reports at least
+        one.
         """
         lib = _get_lib()
         result = SonareProjectCompileResult()

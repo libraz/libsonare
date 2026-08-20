@@ -1030,6 +1030,37 @@ TEST_CASE("deserialize success returns warnings and failed bounce records missin
   sonare_project_destroy(project);
 }
 
+TEST_CASE("a never-bounced project reports a fully empty last-bounce compile result", "[project]") {
+  // Both a freshly created project and one just loaded from JSON have no
+  // recorded bounce, so both read as empty in full: no timeline AND no
+  // diagnostics. That pair is what lets a host tell "never rendered" from a
+  // failed render, since a bounce only loses its timeline through an error
+  // diagnostic and therefore always leaves at least one behind (the case
+  // asserted directly above).
+  SonareProject* created = nullptr;
+  REQUIRE(sonare_project_create(&created) == SONARE_OK);
+  SonareProjectCompileResult fresh{};
+  REQUIRE(sonare_project_last_bounce_compile_result(created, &fresh) == SONARE_OK);
+  REQUIRE(fresh.has_timeline == 0);
+  REQUIRE(fresh.diagnostic_count == 0);
+  sonare_project_free_compile_result(&fresh);
+
+  char* json = nullptr;
+  size_t json_len = 0;
+  REQUIRE(sonare_project_serialize(created, &json, &json_len) == SONARE_OK);
+  sonare_project_destroy(created);
+
+  SonareProject* loaded = nullptr;
+  REQUIRE(sonare_project_deserialize(json, json_len, &loaded, nullptr) == SONARE_OK);
+  sonare_free_string(json);
+  SonareProjectCompileResult reloaded{};
+  REQUIRE(sonare_project_last_bounce_compile_result(loaded, &reloaded) == SONARE_OK);
+  REQUIRE(reloaded.has_timeline == 0);
+  REQUIRE(reloaded.diagnostic_count == 0);
+  sonare_project_free_compile_result(&reloaded);
+  sonare_project_destroy(loaded);
+}
+
 TEST_CASE("project bounce exposes unrouted opaque automation diagnostics", "[project]") {
   SonareProject* project = nullptr;
   REQUIRE(sonare_project_create(&project) == SONARE_OK);

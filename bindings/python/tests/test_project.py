@@ -1362,6 +1362,20 @@ def test_bake_midi_fx_and_last_bounce_compile_result() -> None:
         project.close()
 
 
+def test_last_bounce_compile_result_is_empty_before_any_bounce() -> None:
+    # No bounce has run, so the result is empty in full. A failed bounce is told
+    # apart by its diagnostics, never by has_timeline alone: losing the timeline
+    # always leaves an error diagnostic behind.
+    project = Project()
+    try:
+        result = project.last_bounce_compile_result()
+        assert result.has_timeline is False
+        assert result.diagnostics == ()
+        assert result.diagnostic_count == 0
+    finally:
+        project.close()
+
+
 def test_bake_midi_fx_preserves_more_than_512_events() -> None:
     project = Project()
     try:

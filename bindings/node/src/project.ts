@@ -956,7 +956,14 @@ export class Project {
     return this.native.compile();
   }
 
-  /** Retrieve the compile result captured by the most recent {@link bounce}. */
+  /**
+   * Retrieve the compile result captured by the most recent {@link bounce}.
+   *
+   * On a project no bounce has ever run on, the result is empty in full:
+   * `hasTimeline` is `false` and `diagnostics` is empty. A failed bounce is
+   * distinguishable from that state, because a bounce only loses its timeline
+   * through an error diagnostic and so always reports at least one.
+   */
   lastBounceCompileResult(): ProjectCompileResult {
     return this.native.lastBounceCompileResult();
   }

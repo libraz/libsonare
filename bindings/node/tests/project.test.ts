@@ -979,6 +979,17 @@ describe('Project value-model accessors', () => {
     expect(Array.isArray(result.diagnostics)).toBe(true);
     project.destroy();
   });
+
+  it('reports an empty compile result on a project no bounce has run on', () => {
+    // No bounce has run, so the result is empty in full. A failed bounce is
+    // told apart by its diagnostics, never by hasTimeline alone: losing the
+    // timeline always leaves an error diagnostic behind.
+    const project = Project.create();
+    const result = project.lastBounceCompileResult();
+    expect(result.hasTimeline).toBe(false);
+    expect(result.diagnostics).toHaveLength(0);
+    project.destroy();
+  });
 });
 
 describe('Project validateMidiNotes', () => {
