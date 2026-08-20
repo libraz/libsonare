@@ -5515,9 +5515,27 @@
         "name": "material_preset",
         "offset": 96,
         "size": 4
+      },
+      {
+        "kind": "signed",
+        "name": "air_absorption_enabled",
+        "offset": 100,
+        "size": 4
+      },
+      {
+        "kind": "float",
+        "name": "air_temperature_c",
+        "offset": 104,
+        "size": 4
+      },
+      {
+        "kind": "float",
+        "name": "air_humidity_percent",
+        "offset": 108,
+        "size": 4
       }
     ],
-    "size": 104
+    "size": 112
   },
   "SonareRirSynthResult": {
     "align": 8,
@@ -5803,9 +5821,27 @@
         "name": "material_preset",
         "offset": 104,
         "size": 4
+      },
+      {
+        "kind": "signed",
+        "name": "air_absorption_enabled",
+        "offset": 108,
+        "size": 4
+      },
+      {
+        "kind": "float",
+        "name": "air_temperature_c",
+        "offset": 112,
+        "size": 4
+      },
+      {
+        "kind": "float",
+        "name": "air_humidity_percent",
+        "offset": 116,
+        "size": 4
       }
     ],
-    "size": 112
+    "size": 120
   },
   "SonareScopeTelemetryRecord": {
     "align": 8,

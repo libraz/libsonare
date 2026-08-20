@@ -148,6 +148,13 @@ class SonareRirSynthConfig(ctypes.Structure):
         ("scattering_bands", ctypes.POINTER(ctypes.c_float)),
         ("scattering_band_count", ctypes.c_size_t),
         ("material_preset", ctypes.c_int),
+        # ISO 9613-1 air absorption on the late tail; the climate pair keeps the
+        # ISO reference (20 degC / 50 % RH) at 0, like seed and crossfade_ms.
+        # Placed after the optional tail to match the C header, which appends
+        # them there so the pointer offsets stay pointer-width agnostic.
+        ("air_absorption_enabled", ctypes.c_int),
+        ("air_temperature_c", ctypes.c_float),
+        ("air_humidity_percent", ctypes.c_float),
     ]
 
 
@@ -221,6 +228,10 @@ class SonareRoomMorphConfig(ctypes.Structure):
         ("scattering_bands", ctypes.POINTER(ctypes.c_float)),
         ("scattering_band_count", ctypes.c_size_t),
         ("material_preset", ctypes.c_int),
+        # Air absorption on the target room; see SonareRirSynthConfig.
+        ("air_absorption_enabled", ctypes.c_int),
+        ("air_temperature_c", ctypes.c_float),
+        ("air_humidity_percent", ctypes.c_float),
     ]
 
 

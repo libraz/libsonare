@@ -15,7 +15,7 @@
 #include "sonare_c_types.h"
 
 /// ABI version of the flat acoustic POD structs below. Bump on any layout change.
-#define SONARE_ACOUSTIC_ABI_VERSION 3u
+#define SONARE_ACOUSTIC_ABI_VERSION 4u
 
 /// Statistical late-reverberation RT60 model for RIR synthesis / room morph
 /// (SonareRirSynthConfig::late_model, SonareRoomMorphConfig::late_model).
@@ -92,6 +92,28 @@ typedef struct {
   const float* scattering_bands;
   size_t scattering_band_count;
   int material_preset; /* SONARE_MATERIAL_PRESET_* ; NONE (0) = use bands/scalar */
+  /* Optional ISO 9613-1 atmospheric absorption on the late tail. Off (0) by
+   * default so a zero-initialized config produces the RIR it always did; when
+   * non-zero, the per-band late RT60 gains the `4 m V` air term, which mainly
+   * shortens the high bands of a large room.
+   *
+   * The climate pair follows this ABI's `seed` / `crossfade_ms` convention:
+   * 0 selects the library value, here the ISO reference climate (20 degC,
+   * 50 % relative humidity). A literal 0 degC is therefore not distinguishable
+   * from unset - request 0.01 for a freezing room, which absorbs identically
+   * (the coefficient varies smoothly with temperature). Out-of-range values are
+   * reported the way the surrounding geometry checks are: sonare_synthesize_rir
+   * sets has_error with acoustic.invalid_air_absorption, and sonare_room_morph
+   * returns SONARE_ERROR_INVALID_PARAMETER.
+   *
+   * These sit after the optional tail rather than with the other scalars: the
+   * scalar prefix is a run of 4-byte members and three more would make it an
+   * odd count, which pads before the pointer on a 64-bit target but not on
+   * wasm32. Appending here keeps every existing offset identical on both and
+   * costs no padding at all. */
+  int air_absorption_enabled;
+  float air_temperature_c;
+  float air_humidity_percent;
 } SonareRirSynthConfig;
 
 /// @brief Synthesized room impulse response (mono). Free with
@@ -168,6 +190,13 @@ typedef struct {
   const float* scattering_bands;
   size_t scattering_band_count;
   int material_preset; /* SONARE_MATERIAL_PRESET_* ; NONE (0) = use bands/scalar */
+  /* Optional atmospheric absorption on the target room's late tail; the enable
+   * flag, the zero-means-ISO-reference climate rule, the physical bounds and
+   * the reason this group sits after the tail are all as documented on
+   * SonareRirSynthConfig. */
+  int air_absorption_enabled;
+  float air_temperature_c;
+  float air_humidity_percent;
 } SonareRoomMorphConfig;
 
 #ifdef __cplusplus
@@ -186,6 +215,15 @@ static_assert(offsetof(SonareRirSynthConfig, scattering_bands) ==
 static_assert(offsetof(SonareRirSynthConfig, material_preset) ==
                   offsetof(SonareRirSynthConfig, scattering_band_count) + sizeof(size_t),
               "SonareRirSynthConfig optional tail layout changed");
+// The air-absorption group follows material_preset as a packed 4-byte run, on
+// every target: pinning it member-relative keeps the check pointer-width
+// agnostic (a size_t/pointer is 8 bytes natively and 4 on wasm32).
+static_assert(offsetof(SonareRirSynthConfig, air_absorption_enabled) ==
+                  offsetof(SonareRirSynthConfig, material_preset) + sizeof(int),
+              "SonareRirSynthConfig air-absorption layout changed");
+static_assert(offsetof(SonareRirSynthConfig, air_humidity_percent) ==
+                  offsetof(SonareRirSynthConfig, air_temperature_c) + sizeof(float),
+              "SonareRirSynthConfig air climate layout changed");
 static_assert(sizeof(SonareRoomEstimateConfig) == 8u * sizeof(float),
               "SonareRoomEstimateConfig unexpected size");
 // SonareRoomMorphConfig prefix: 15 floats + 3 ints/unsigned = 18 four-byte members
@@ -198,6 +236,12 @@ static_assert(offsetof(SonareRoomMorphConfig, scattering_bands) ==
 static_assert(offsetof(SonareRoomMorphConfig, material_preset) ==
                   offsetof(SonareRoomMorphConfig, scattering_band_count) + sizeof(size_t),
               "SonareRoomMorphConfig optional tail layout changed");
+static_assert(offsetof(SonareRoomMorphConfig, air_absorption_enabled) ==
+                  offsetof(SonareRoomMorphConfig, material_preset) + sizeof(int),
+              "SonareRoomMorphConfig air-absorption layout changed");
+static_assert(offsetof(SonareRoomMorphConfig, air_humidity_percent) ==
+                  offsetof(SonareRoomMorphConfig, air_temperature_c) + sizeof(float),
+              "SonareRoomMorphConfig air climate layout changed");
 #endif
 
 /// @brief Synthesize a room impulse response from shoebox geometry.

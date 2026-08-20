@@ -189,6 +189,17 @@ SonareError sonare_synthesize_rir(const SonareRirSynthConfig* config, int sample
   // crossfade_ms == 0 means "keep the library default"; a true zero crossfade is
   // not a useful synthesis setting, so a zeroed POD preserves the C++ default.
   if (config->crossfade_ms > 0.0f) rc.crossfade_ms = config->crossfade_ms;
+  rc.air_absorption_enabled = config->air_absorption_enabled != 0;
+  // Zero climate values keep the ISO reference (20 degC / 50 % RH) on the same
+  // "0 means the library default" rule as seed and crossfade_ms, so enabling
+  // air absorption on an otherwise zeroed POD gives the documented climate
+  // rather than a silent 0 degC / 0 % one. An implausible value is left for the
+  // core to diagnose (acoustic.invalid_air_absorption), which keeps the failure
+  // in the same has_error channel as the geometry checks.
+  if (config->air_temperature_c != 0.0f) rc.air.temperature_c = config->air_temperature_c;
+  if (config->air_humidity_percent != 0.0f) {
+    rc.air.humidity_percent = config->air_humidity_percent;
+  }
 
   const RirSynthResult res = synthesize_rir(room, placement, sample_rate, rc);
   out->has_error = has_error(res.diagnostics) ? 1 : 0;
@@ -327,6 +338,15 @@ SonareError sonare_room_morph(const float* samples, size_t length, int sample_ra
         // crossfade_ms == 0 preserves the C++ default (a true zero crossfade is
         // not a useful setting), matching the RIR-synth ABI convention.
         if (config->crossfade_ms != 0.0f) cfg.crossfade_ms = config->crossfade_ms;
+        // Air absorption on the target room; zero climate values keep the ISO
+        // reference, exactly as in synthesize_rir above. Here the core rejects an
+        // implausible climate by throwing, which run_mono_offline maps to
+        // SONARE_ERROR_INVALID_PARAMETER.
+        cfg.air_absorption_enabled = config->air_absorption_enabled != 0;
+        if (config->air_temperature_c != 0.0f) cfg.air.temperature_c = config->air_temperature_c;
+        if (config->air_humidity_percent != 0.0f) {
+          cfg.air.humidity_percent = config->air_humidity_percent;
+        }
         return sonare::effects::acoustic::room_morph(audio, cfg);
       });
 #else
