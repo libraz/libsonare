@@ -9,6 +9,7 @@
 #include "engine/track_mixer_internal.h"
 #include "mastering/api/insert_factory.h"
 #include "mastering/api/named_processor.h"
+#include "mixing/pan_law.h"
 #include "util/constants.h"
 #include "util/db.h"
 
@@ -18,8 +19,8 @@ using sonare::constants::kFloorDb;
 
 std::unique_ptr<mixing::ChannelStrip> make_channel_strip_from_spec(const mixing::api::Strip& spec) {
   auto strip = std::make_unique<mixing::ChannelStrip>(
-      mixing::ChannelStripConfig{spec.fader_db, spec.pan, to_pan_law(spec.pan_law), 5.0f,
-                                 mixing::EqPosition::PreFader, spec.input_trim_db, false});
+      mixing::ChannelStripConfig{spec.fader_db, spec.pan, mixing::pan_law_from_index(spec.pan_law),
+                                 5.0f, mixing::EqPosition::PreFader, spec.input_trim_db, false});
   strip->set_vca_offset_db(spec.vca_offset_db);
   strip->set_width(spec.width);
   strip->set_muted(spec.muted);
@@ -73,7 +74,7 @@ bool strip_inserts_equal(const mixing::api::Strip& a, const mixing::api::Strip& 
 void apply_strip_scalars(mixing::ChannelStrip& strip, const mixing::api::Strip& spec) {
   strip.set_fader_db(spec.fader_db);
   strip.set_pan(spec.pan);
-  strip.set_pan_law(to_pan_law(spec.pan_law));
+  strip.set_pan_law(mixing::pan_law_from_index(spec.pan_law));
   strip.set_input_trim_db(spec.input_trim_db);
   strip.set_vca_offset_db(spec.vca_offset_db);
   strip.set_width(spec.width);

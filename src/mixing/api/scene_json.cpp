@@ -3,6 +3,7 @@
 
 #include "mixing/alignment_delay.h"
 #include "mixing/api/scene.h"
+#include "mixing/pan_law.h"
 #include "util/exception.h"
 #include "util/json.h"
 #include "util/numeric_validation.h"
@@ -224,7 +225,7 @@ Strip strip_from_value(const JsonValue& object) {
   strip.polarity_invert_right = bool_or_legacy(
       object, "polarityInvertRight", "polarity_invert_right", strip.polarity_invert_right);
   strip.pan_law = int_or_legacy(object, "panLaw", "pan_law", strip.pan_law);
-  if (strip.pan_law < 0 || strip.pan_law > 3) {
+  if (strip.pan_law < 0 || strip.pan_law >= kPanLawCount) {
     throw SonareException(ErrorCode::InvalidFormat, "panLaw enum is out of range");
   }
   strip.channel_delay_samples = int_or_legacy(object, "channelDelaySamples",

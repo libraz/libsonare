@@ -13,6 +13,8 @@
 
 using Catch::Matchers::WithinAbs;
 using sonare::mixing::compute_pan_gains;
+using sonare::mixing::kPanLawCount;
+using sonare::mixing::pan_law_from_index;
 using sonare::mixing::PanGains;
 using sonare::mixing::PanLaw;
 using sonare::mixing::PannerConfig;
@@ -105,4 +107,20 @@ TEST_CASE("panner balance mode applies the shared evaluator's near-unity gains",
       REQUIRE_THAT(actual.right, WithinAbs(expected.right, 1e-5f));
     }
   }
+}
+
+TEST_CASE("the wire encoding of a pan law is the enum's declaration order", "[mixing][pan]") {
+  // Every caller that carries a law as an integer — the mixer scene, the C ABI,
+  // the bindings, the engine strip specs — decodes it here, so this mapping is
+  // the wire format and not an implementation detail.
+  REQUIRE(kPanLawCount == static_cast<int>(kAllLaws.size()));
+  for (int index = 0; index < kPanLawCount; ++index) {
+    REQUIRE(pan_law_from_index(index) == kAllLaws[static_cast<size_t>(index)]);
+  }
+
+  // The fallback the decoder documents: an encoding outside the named range
+  // resolves to the constant-power default rather than to an unnamed law.
+  REQUIRE(pan_law_from_index(-1) == PanLaw::Const3dB);
+  REQUIRE(pan_law_from_index(kPanLawCount) == PanLaw::Const3dB);
+  REQUIRE(pan_law_from_index(4) == PanLaw::Const3dB);
 }

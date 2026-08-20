@@ -5,6 +5,7 @@
 
 #include "c_api/eq_band_json.h"
 #include "mixing/api/scene.h"
+#include "mixing/pan_law.h"
 #include "realtime_engine_wasm.h"
 
 void RealtimeEngineWasm::setTrackLanes(val lanes) {
@@ -374,7 +375,7 @@ void RealtimeEngineWasm::setTrackStripPan(uint32_t track_id, float pan) {
 
 void RealtimeEngineWasm::setTrackStripPanLaw(uint32_t track_id, int pan_law) {
 #if defined(SONARE_WITH_MIXING)
-  if (pan_law < 0 || pan_law > 3) {
+  if (pan_law < 0 || pan_law >= sonare::mixing::kPanLawCount) {
     throw sonare::SonareException(sonare::ErrorCode::InvalidParameter, "unknown mixing pan law");
   }
   if (!engine_.set_track_pan_law(track_id, static_cast<sonare::mixing::PanLaw>(pan_law))) {

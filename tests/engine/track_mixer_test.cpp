@@ -12,6 +12,7 @@
 #include "engine/meter_telemetry.h"
 #include "mixing/api/scene.h"
 #include "mixing/channel_strip.h"
+#include "mixing/pan_law.h"
 #include "rt/processor_base.h"
 
 namespace {
@@ -1385,4 +1386,25 @@ TEST_CASE("TrackMixerRuntime settles a bus width so the first block opens settle
     peak = std::max(peak, std::abs(out_r[i]));
   }
   REQUIRE(peak < 1.0e-4f);
+}
+
+TEST_CASE("Strip specs decode their pan law through the shared wire mapping",
+          "[engine][track_mixer]") {
+  // The strip spec carries the law as the wire integer, so the engine path has
+  // to agree with the shared decoder — including its fallback, which is what a
+  // spec built from unvalidated input relies on.
+  for (int index = 0; index < sonare::mixing::kPanLawCount; ++index) {
+    sonare::mixing::api::Strip spec;
+    spec.pan_law = index;
+    auto strip = sonare::engine::make_channel_strip_from_spec(spec);
+    REQUIRE(strip);
+    CAPTURE(index);
+    REQUIRE(strip->pan_law() == sonare::mixing::pan_law_from_index(index));
+  }
+
+  sonare::mixing::api::Strip out_of_range;
+  out_of_range.pan_law = 7;
+  auto strip = sonare::engine::make_channel_strip_from_spec(out_of_range);
+  REQUIRE(strip);
+  REQUIRE(strip->pan_law() == sonare::mixing::PanLaw::Const3dB);
 }

@@ -190,6 +190,43 @@ TEST_CASE("MatchEq band gains follow the composite response of the whole band se
   REQUIRE(peak_db <= config.max_gain_db + kLimitToleranceDb);
 }
 
+TEST_CASE("MatchEq places its full band set at zero gain when the limit is zero",
+          "[mastering][match]") {
+  constexpr int kSampleRate = 48000;
+  const MatchEqConfig limited{8, 12.0f, 40.0f, 18000.0f, 1.0f, 0};
+  MatchEqConfig zero_limit = limited;
+  zero_limit.max_gain_db = 0.0f;
+
+  MatchEqCurve curve = log_spaced_curve(40.0f, 18000.0f, 256, kSampleRate);
+  for (size_t i = 0; i < curve.frequencies.size(); ++i) {
+    curve.gain_db[i] = log_gaussian_db(curve.frequencies[i], 1000.0f, 0.6f, 6.0f) +
+                       log_gaussian_db(curve.frequencies[i], 5000.0f, 0.5f, -5.0f);
+  }
+
+  // The same curve under a usable limit demands real gain, so the zeros below are
+  // the limit's doing rather than a curve that asks for nothing.
+  const auto limited_bands = match_eq_bands_from_curve(curve, limited);
+  REQUIRE(limited_bands.size() == limited.max_bands);
+  float max_abs_gain_db = 0.0f;
+  for (const auto& band : limited_bands) {
+    max_abs_gain_db = std::max(max_abs_gain_db, std::abs(band.gain_db));
+  }
+  REQUIRE(max_abs_gain_db > 1.0f);
+
+  // A zero limit is a valid configuration, not an error. Band selection does not
+  // consult the limit, so the same bands are placed at the same frequencies and
+  // stay enabled; only the solved gains collapse, and to exactly zero rather
+  // than to a clamped residue.
+  const auto bands = match_eq_bands_from_curve(curve, zero_limit);
+  REQUIRE(bands.size() == limited_bands.size());
+  for (size_t i = 0; i < bands.size(); ++i) {
+    CAPTURE(i);
+    REQUIRE_THAT(bands[i].frequency_hz, WithinAbs(limited_bands[i].frequency_hz, 0.001f));
+    REQUIRE(bands[i].enabled);
+    REQUIRE(bands[i].gain_db == 0.0f);
+  }
+}
+
 TEST_CASE("MatchEq keeps densely packed bands from stacking past max_gain_db",
           "[mastering][match]") {
   constexpr int kSampleRate = 48000;

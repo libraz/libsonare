@@ -207,9 +207,14 @@ struct Track {
   bool mute = false;
   bool solo = false;
 
-  /// Stereo balance in [-1, +1] (0 = center). The arrangement compiler folds
-  /// this into the clip's per-channel playback level: positive attenuates the
-  /// left output, negative attenuates the right (center leaves both untouched).
+  /// Stereo balance in [-1, +1] (0 = center), clamped by the compiler. The pan
+  /// is evaluated through the bound channel strip's pan law under near-unity
+  /// normalization: the channel toward the pan direction stays at unity and the
+  /// away channel is attenuated by the ratio that law dictates (default
+  /// mixing::PanLaw::Const3dB), so this is not a linear balance ramp. A track on
+  /// an exclusive strip folds its pan into the strip; a track sharing a strip
+  /// folds it into its own clips, carrying the shared strip's law so both paths
+  /// agree.
   float pan = 0.0f;
 
   /// Link to the mixing::api::Scene Strip by its string id (Track <-> Strip

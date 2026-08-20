@@ -16,6 +16,8 @@ using ::sonare::rt::PanGains;
 using ::sonare::rt::PanLaw;
 using ::sonare::rt::PanNormalization;
 
+using ::sonare::rt::kPanLawCount;
+
 using ::sonare::rt::compute_pan_gains;
 using ::sonare::rt::normalize_pan_gains;
 using ::sonare::rt::pan_law_from_index;

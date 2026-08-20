@@ -9,6 +9,8 @@
 #include <cstddef>
 #include <vector>
 
+#include "feature/chroma.h"
+#include "feature/mel_spectrogram.h"
 #include "util/constants.h"
 
 using namespace sonare;
@@ -367,5 +369,80 @@ TEST_CASE("BoundaryDetector analyzes long audio at full resolution within the ba
     REQUIRE(times[i] >= 0.0f);
     REQUIRE(times[i] <= duration);
     if (i > 0) REQUIRE(times[i] > times[i - 1]);
+  }
+}
+
+TEST_CASE("BoundaryDetector honours a non-default chroma bin count", "[boundary_detector]") {
+  // The chroma bin count has to reach the chromagram computation: the flatten
+  // loop reads config.n_chroma bins per frame, so a chromagram built with the
+  // 12-bin default cannot serve a configuration asking for more, and the bin
+  // index leaves the chromagram's range.
+  Audio audio = create_two_sections();
+
+  BoundaryConfig config;
+  config.use_mfcc = false;
+  config.use_chroma = true;
+  config.n_chroma = 24;
+  config.threshold = 0.1f;
+
+  REQUIRE_NOTHROW(BoundaryDetector{audio, config});
+
+  BoundaryDetector detector(audio, config);
+  REQUIRE(detector.n_frames() > 0);
+
+  const auto& novelty = detector.novelty_curve();
+  REQUIRE(novelty.size() == static_cast<size_t>(detector.n_frames()));
+  for (float v : novelty) {
+    REQUIRE(v >= 0.0f);
+    REQUIRE(v <= 1.0f);
+  }
+
+  // The 24-bin analysis runs on the same time grid as the 12-bin one, so the two
+  // frame counts agree; only the feature dimension differs.
+  BoundaryConfig twelve = config;
+  twelve.n_chroma = 12;
+  BoundaryDetector reference(audio, twelve);
+  REQUIRE(detector.n_frames() == reference.n_frames());
+
+  const float duration = audio.duration();
+  const auto times = detector.boundary_times();
+  for (size_t i = 0; i < times.size(); ++i) {
+    REQUIRE(times[i] >= 0.0f);
+    REQUIRE(times[i] <= duration);
+    if (i > 0) REQUIRE(times[i] > times[i - 1]);
+  }
+}
+
+TEST_CASE("BoundaryDetector tolerates a configuration with no feature dimensions",
+          "[boundary_detector]") {
+  // Contract pins, not proof of the guard: taking the address of the first
+  // element of an empty feature grid never dereferences, so the released output
+  // is identical with and without the guard and only a sanitizer run tells them
+  // apart. What is asserted here is the documented shape of the degenerate
+  // result: the analysis grid is still sized, and an all-zero similarity band
+  // yields an all-zero novelty curve and no boundaries.
+  Audio audio = create_two_sections();
+
+  ChromaConfig chroma_config;
+  Chroma chroma = Chroma::compute(audio, chroma_config);
+  REQUIRE(chroma.n_frames() > 0);
+
+  BoundaryConfig config;
+  config.use_mfcc = false;
+  config.use_chroma = true;
+  config.n_chroma = 0;
+
+  // Only the pre-computed constructor can reach this configuration: computing a
+  // chromagram with no bins is rejected by the chroma filterbank.
+  BoundaryDetector detector(MelSpectrogram(), chroma, audio.sample_rate(), config);
+
+  REQUIRE(detector.n_frames() == chroma.n_frames());
+  REQUIRE(detector.count() == 0);
+  REQUIRE(detector.boundaries().empty());
+
+  const auto& novelty = detector.novelty_curve();
+  REQUIRE(novelty.size() == static_cast<size_t>(detector.n_frames()));
+  for (float v : novelty) {
+    REQUIRE_THAT(v, WithinAbs(0.0f, 0.0f));
   }
 }

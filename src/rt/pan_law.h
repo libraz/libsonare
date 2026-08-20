@@ -28,6 +28,11 @@ enum class PanLaw {
   Linear0dB,
 };
 
+/// @brief Number of named laws, i.e. the exclusive bound of the wire encoding.
+/// @details Callers that reject an out-of-range encoding instead of falling back
+/// take their bound from here rather than repeating the literal.
+inline constexpr int kPanLawCount = 4;
+
 struct PanGains {
   float left = 1.0f;
   float right = 1.0f;

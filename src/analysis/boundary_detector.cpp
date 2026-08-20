@@ -158,6 +158,9 @@ void BoundaryDetector::compute_features() {
     ChromaConfig chroma_config;
     chroma_config.n_fft = config_.n_fft;
     chroma_config.hop_length = config_.hop_length;
+    // The flatten loop below reads config_.n_chroma bins per frame, so the
+    // chromagram has to be computed with that bin count and not the default.
+    chroma_config.n_chroma = config_.n_chroma;
 
     Chroma chroma = Chroma::compute(audio_, chroma_config);
     chroma_frames = chroma.n_frames();
@@ -192,25 +195,31 @@ void BoundaryDetector::combine_features(const std::vector<float>& mfcc_features,
       for (int c = 0; c < config_.n_chroma; ++c) {
         features_[f * n_features_ + config_.n_mfcc + c] = chroma_features[f * config_.n_chroma + c];
       }
-      // Normalize combined feature
-      normalize_feature(&features_[f * n_features_], n_features_);
     }
   } else if (config_.use_mfcc) {
     n_frames_ = mfcc_frames;
     n_features_ = config_.n_mfcc;
     features_ = mfcc_features;
-
-    for (int f = 0; f < n_frames_; ++f) {
-      normalize_feature(&features_[f * n_features_], n_features_);
-    }
   } else if (config_.use_chroma) {
     n_frames_ = chroma_frames;
     n_features_ = config_.n_chroma;
     features_ = chroma_features;
+  }
 
-    for (int f = 0; f < n_frames_; ++f) {
-      normalize_feature(&features_[f * n_features_], n_features_);
-    }
+  // A configuration that enables a feature stream but gives it no dimensions
+  // has nothing to normalize, and taking &features_[0] of the empty grid would
+  // bind a reference past the end. n_frames_ is left as computed so the zeroed
+  // similarity band is still sized the way compute_self_similarity() documents
+  // for a dimensionless configuration.
+  if (n_features_ <= 0) {
+    n_features_ = 0;
+    features_.clear();
+    return;
+  }
+
+  // Features are stored one frame per row, so each row normalizes independently.
+  for (int f = 0; f < n_frames_; ++f) {
+    normalize_feature(&features_[f * n_features_], n_features_);
   }
 }
 

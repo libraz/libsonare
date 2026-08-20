@@ -87,12 +87,24 @@ const std::vector<std::string>& PeakShiftedInserts() {
   return kNames;
 }
 
-/// Inserts with no fixed arrival to measure at all.
+/// Inserts with no fixed arrival to measure at all. They must still declare zero
+/// latency: an insert whose delay is not stationary has no single figure a host
+/// or the offline runner could compensate by, so any non-zero declaration would
+/// misalign it.
 const std::vector<std::string>& UnmeasurableInserts() {
   static const std::vector<std::string> kNames = {
 #ifdef SONARE_WITH_FX
       // Both rotors read fully-wet doppler delay lines whose delay is swept by
-      // the rotor LFOs, so the response has no stationary arrival.
+      // the rotor LFOs, so the response has no stationary arrival. It only looks
+      // stationary from one impulse: both LFOs start at the mean, so a single
+      // measurement reads the mean delay (the 1.2 ms default depth, 57.6 samples
+      // at 48 kHz) while the running delay sweeps the whole 0…2.4 ms span.
+      // Declaring that mean would be wrong in three places at once: the offline
+      // runner would trim a fixed 58 samples off every named-processor render,
+      // the channel strip would add 58 samples of delay compensation, and this
+      // stereo-pair-only insert's untouched rear planes would sit 58 samples
+      // ahead of a front pair whose actual delay sweeps 0…115 — a time-varying
+      // misalignment that does not exist while the declaration stays zero.
       "effects.modulation.rotary",
 #endif
   };
@@ -194,6 +206,9 @@ TEST_CASE("Every factory insert declares the latency its impulse response shows"
     CAPTURE(declared);
     CHECK(declared >= 0);
     if (Contains(UnmeasurableInserts(), name)) {
+      // Nothing to bracket the declaration against, so the declaration itself is
+      // the assertion: a swept, non-stationary delay is compensable by zero only.
+      CHECK(declared == 0);
       continue;
     }
 

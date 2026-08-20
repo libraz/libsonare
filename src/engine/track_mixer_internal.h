@@ -23,19 +23,8 @@ inline mixing::PanMode to_pan_mode(int mode) {
   }
 }
 
-inline mixing::PanLaw to_pan_law(int law) {
-  switch (law) {
-    case 1:
-      return mixing::PanLaw::Const4p5dB;
-    case 2:
-      return mixing::PanLaw::Const6dB;
-    case 3:
-      return mixing::PanLaw::Linear0dB;
-    case 0:
-    default:
-      return mixing::PanLaw::Const3dB;
-  }
-}
+// The pan law has no engine-local mapping: mixing::pan_law_from_index() owns the
+// wire encoding, including the out-of-range fallback, and is called directly.
 
 inline constexpr uint32_t lane_meter_target(size_t lane_index) noexcept {
   return static_cast<uint32_t>(lane_index + 1);
