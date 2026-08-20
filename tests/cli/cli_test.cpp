@@ -2360,6 +2360,39 @@ TEST_CASE("CLI mastering command", "[cli][mastering]") {
     std::remove(preset_report.c_str());
   }
 
+  SECTION("loudness_target_limited reports whether the ceiling decided the level") {
+    // The field is the only machine-readable answer to "did the master reach the
+    // delivery target", so it has to be read as a value here rather than as a
+    // key of the right type: a constant would satisfy one of these two runs and
+    // not the other. The material is a -6 dBFS tone, so a -6 LUFS target under a
+    // -3 dBTP ceiling cannot be reached, while -20 LUFS is reached outright.
+    const std::string limited_out = unique_temp_path("_ceiling_limited.wav");
+    auto [limited_code, limited_output] =
+        exec_command(CLI + " mastering " + TEST_WAV + " -o " + limited_out +
+                     " --target-lufs -6 --ceiling-db -3 --json -q");
+    REQUIRE(limited_code == 0);
+    const auto limited_payload = sonare::util::json::parse_strict(limited_output);
+    REQUIRE(limited_payload.contains("loudness_target_limited"));
+    CHECK(limited_payload["loudness_target_limited"].as_bool());
+    // ...and the reason it could not be reached: the output stopped short of the
+    // target it was asked for.
+    CHECK(limited_payload["output_lufs"].as_number() < -6.5);
+
+    const std::string reached_out = unique_temp_path("_ceiling_clear.wav");
+    auto [reached_code, reached_output] =
+        exec_command(CLI + " mastering " + TEST_WAV + " -o " + reached_out +
+                     " --target-lufs -20 --ceiling-db -1 --json -q");
+    REQUIRE(reached_code == 0);
+    const auto reached_payload = sonare::util::json::parse_strict(reached_output);
+    REQUIRE(reached_payload.contains("loudness_target_limited"));
+    CHECK_FALSE(reached_payload["loudness_target_limited"].as_bool());
+    CHECK(reached_payload["output_lufs"].as_number() < -19.5);
+    CHECK(reached_payload["output_lufs"].as_number() > -20.5);
+
+    std::remove(limited_out.c_str());
+    std::remove(reached_out.c_str());
+  }
+
   SECTION("runs preset mastering chain") {
     std::string preset_out = unique_temp_path("_preset_mastered.wav");
     std::remove(preset_out.c_str());

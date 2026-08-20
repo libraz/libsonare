@@ -4163,6 +4163,25 @@
           "payload": "success",
           "artifact": "none",
           "stdout": "json"
+        },
+        {
+          "id": "target_within_ceiling",
+          "argv": [
+            "mastering",
+            "{audio}",
+            "--report",
+            "{mastering_report}",
+            "--target-lufs",
+            "-20",
+            "--ceiling-db",
+            "-1",
+            "--json"
+          ],
+          "exit": 0,
+          "legacy_exit": 0,
+          "payload": "success",
+          "artifact": "none",
+          "stdout": "json"
         }
       ],
       "artifacts": {}

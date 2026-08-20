@@ -2254,6 +2254,19 @@ def _validate_case_payload(
                         f"{label}.chords: --with-seventh fixture must contain a seventh chord",
                     )
                 )
+    if path == "mastering" and case_id == "target_within_ceiling":
+        # The flag says the true-peak ceiling, not the target, decided the level.
+        # Reading it as a value rather than as a type is what separates a surface
+        # that computes it from one that publishes a constant. A target this far
+        # below the ceiling is reached outright, so both surfaces must say so.
+        limited = payload.get("loudness_target_limited")
+        if limited is not False:
+            report.append(
+                (
+                    "fail",
+                    f"{label}.loudness_target_limited: expected False, got {limited!r}",
+                )
+            )
     if path == "spectral":
         n_frames = payload.get("n_frames")
         if not isinstance(n_frames, int) or n_frames <= 0:
