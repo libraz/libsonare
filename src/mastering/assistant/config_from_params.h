@@ -7,12 +7,15 @@
 ///          Used by both the C-ABI helper layer and the WASM binding so the JS
 ///          and C/Python paths stay in lock-step.
 
+#include <cmath>
 #include <cstddef>
 #include <string>
 
 #include "mastering/api/named_processor.h"
 #include "mastering/assistant/audio_profile.h"
+#include "mastering/assistant/platform_targets.h"
 #include "mastering/assistant/suggester.h"
+#include "util/exception.h"
 
 namespace sonare::mastering::assistant {
 
@@ -33,6 +36,20 @@ inline AssistantConfig assistant_config_from_params(const api::Param* params, st
       config.prefer_streaming_safe = value != 0.0;
     } else if (key == "speechMonoAmount" || key == "speech_mono_amount") {
       config.speech_mono_amount = static_cast<float>(value);
+    } else if (key == "targetPlatform" || key == "target_platform") {
+      // A param value is a number, so the delivery target arrives as the index
+      // platform_index_from_name() resolved. Anything that is not exactly one of
+      // those indices is rejected rather than truncated toward a neighbouring
+      // target: a caller who meant a name and sent a number is wrong in a way
+      // that must be visible. The range is checked before the cast, because
+      // narrowing an out-of-range double to int is undefined.
+      double index = 0.0;
+      const bool integral = std::modf(value, &index) == 0.0;
+      const bool in_range = index >= 0.0 && index < static_cast<double>(kPlatformTargets.size());
+      SONARE_CHECK_MSG(integral && in_range, ErrorCode::InvalidParameter,
+                       "targetPlatform must be a delivery-target index; expected one of: " +
+                           platform_names_joined());
+      config.target_platform = platform_name_at(static_cast<int>(index));
     }
   }
   return config;

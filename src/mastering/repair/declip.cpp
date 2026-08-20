@@ -42,6 +42,17 @@ float interpolate_fallback(const std::vector<float>& samples, size_t start, size
              : left + (right - left) * t;
 }
 
+/// @brief Fills [start, end) with the cubic / linear interpolation fallback.
+/// @details Used for clipped runs longer than @ref kDeclipMaxLpcGapSamples, where
+/// the Janssen solver's dense matrices would grow without bound. Reads only
+/// samples outside the run, so writing in place is safe and every position sees
+/// the same endpoints.
+void interpolate_region(std::vector<float>& samples, size_t start, size_t end) {
+  for (size_t j = start; j < end; ++j) {
+    samples[j] = interpolate_fallback(samples, start, end, j);
+  }
+}
+
 /// @brief Janssen (1986) constrained AR interpolation for a single clipped segment.
 ///
 /// Reference: A. J. E. M. Janssen, "Adaptive interpolation of discrete-time signals
@@ -65,6 +76,9 @@ float interpolate_fallback(const std::vector<float>& samples, size_t start, size
 /// The outer loop re-estimates AR coefficients from progressively better x_u
 /// estimates, converging in 2–5 iterations for typical music material.
 ///
+/// @pre `end - start <= kDeclipMaxLpcGapSamples`. Both dense matrices are sized
+/// from the gap, so the caller routes longer runs to interpolate_region instead.
+///
 /// Note: the original Janssen formulation imposes a clipping-consistency
 /// constraint (|x_u[i]| >= clip_threshold) for the case where the input is
 /// known to be a hard-clipped signal. We omit that constraint here so that
@@ -75,8 +89,10 @@ void reconstruct_region_janssen(std::vector<float>& samples, size_t start, size_
                                 const DeclipConfig& config) {
   const size_t gap = end - start;
   const size_t requested_order = static_cast<size_t>(std::max(config.lpc_order, 0));
-  const size_t context_radius =
-      std::min(samples.size(), std::max<size_t>(4 * requested_order, 8 * gap));
+  // The order-derived term is caller-controlled and would otherwise pull the whole
+  // input into the solver; cap it so the context is a function of the caps alone.
+  const size_t context_radius = std::min(
+      {samples.size(), kDeclipMaxLpcContextRadius, std::max<size_t>(4 * requested_order, 8 * gap)});
   const size_t context_start = start > context_radius ? start - context_radius : 0;
   const size_t context_end = std::min(samples.size(), end + context_radius);
   std::vector<float> context(samples.begin() + static_cast<std::ptrdiff_t>(context_start),
@@ -211,7 +227,15 @@ Audio declip(const Audio& audio, const DeclipConfig& config) {
     const size_t start = i;
     while (i < samples.size() && std::abs(samples[i]) >= config.clip_threshold) ++i;
     const size_t end = i;
-    reconstruct_region_janssen(samples, start, end, config);
+    // A clipped run has no length limit of its own — a sustained full-scale
+    // passage is one run — while the Janssen solver's matrices are sized from the
+    // gap. Route over-long runs to the interpolation fallback so peak memory and
+    // per-run compute stay bounded by the caps rather than by the input.
+    if (end - start > kDeclipMaxLpcGapSamples) {
+      interpolate_region(samples, start, end);
+    } else {
+      reconstruct_region_janssen(samples, start, end, config);
+    }
   }
   return Audio::from_vector(std::move(samples), audio.sample_rate());
 }

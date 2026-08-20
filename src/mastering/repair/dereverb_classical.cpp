@@ -177,9 +177,9 @@ Audio dereverb_classical(const Audio& audio, const DereverbClassicalConfig& conf
     }
   }
 
-  const Spectrogram clean =
-      Spectrogram::from_complex(dereverbed.data(), bins, frames, spec.n_fft(), spec.hop_length(),
-                                spec.sample_rate(), spec.center(), spec.win_length());
+  const Spectrogram clean = Spectrogram::from_complex(
+      dereverbed.data(), bins, frames, spec.n_fft(), spec.hop_length(), spec.sample_rate(),
+      spec.window(), spec.center(), spec.win_length());
   return clean.to_audio(static_cast<int>(audio.size()));
 }
 

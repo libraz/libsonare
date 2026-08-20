@@ -165,9 +165,18 @@ std::size_t checked_nonnegative_size(int value, const char* what) {
 // uses channel_index 1, shifting only its noise.
 constexpr uint32_t kDitherChannelSeedSalt = 0x9E3779B9u;
 
+// A LUFS gain within this tolerance of the requested gain counts as reaching
+// the target. Mirrors the comparison in the standalone loudness_optimize()
+// helper so both paths report loudness_target_limited identically.
+constexpr float kLoudnessTargetGainToleranceDb = 1.0e-4f;
+
 void configure_processor(const std::string& name, const ParamMap& params,
-                         std::vector<float>& samples, int sample_rate, int& latency_samples,
-                         float& applied_gain_db, int channel_index = 0) {
+                         std::vector<float>& samples, int sample_rate, ProcessorOutcome& outcome,
+                         int channel_index = 0) {
+  // Aliases into the outcome: every value this dispatch computes lands in the
+  // one struct the caller copies whole.
+  int& latency_samples = outcome.latency_samples;
+  float& applied_gain_db = outcome.applied_gain_db;
   if (name == "dynamics.brickwallLimiter") {
     dynamics::BrickwallLimiter p(detail::brickwall_limiter_config(params));
     run_processor(p, samples, sample_rate, latency_samples);
@@ -279,6 +288,7 @@ void configure_processor(const std::string& name, const ParamMap& params,
     auto result = maximizer::loudness_optimize(audio, config);
     samples.assign(result.audio.data(), result.audio.data() + result.audio.size());
     applied_gain_db += result.applied_gain_db;
+    outcome.loudness_target_limited = result.loudness_target_limited;
   } else if (name == "saturation.tape") {
     saturation::Tape p(detail::tape_config(params));
     run_processor(p, samples, sample_rate, latency_samples);
@@ -502,11 +512,12 @@ MonoResult apply_named_processor(const std::string& name, const float* samples, 
   result.samples.assign(samples, samples + length);
   result.sample_rate = sample_rate;
   result.input_lufs = lufs_for(result.samples, sample_rate);
+  ProcessorOutcome outcome;
   if (!try_run_effects_insert_mono(name, params, result.samples, sample_rate,
-                                   result.latency_samples)) {
-    configure_processor(name, map, result.samples, sample_rate, result.latency_samples,
-                        result.applied_gain_db);
+                                   outcome.latency_samples)) {
+    configure_processor(name, map, result.samples, sample_rate, outcome);
   }
+  result.apply(outcome);
   result.output_lufs = lufs_for(result.samples, sample_rate);
   return result;
 }
@@ -599,9 +610,15 @@ StereoResult apply_named_processor_stereo(const std::string& name, const float* 
     // Clamp the static normalization gain to the ceiling headroom (mirrors the
     // mono loudness_optimize() helper) so the limiter is not overdriven into
     // distortion.
-    const float gain_db = detail::loudness_gain_db_with_ceiling(
-        result.left, result.right, sample_rate, f(map, "targetLufs", -14.0f), config.ceiling_db,
-        config.oversample_factor);
+    const float target_lufs = f(map, "targetLufs", -14.0f);
+    const float gain_db =
+        detail::loudness_gain_db_with_ceiling(result.left, result.right, sample_rate, target_lufs,
+                                              config.ceiling_db, config.oversample_factor);
+    // result.input_lufs is this stage's input: nothing has processed the
+    // channels yet on this branch.
+    const float requested_gain_db = target_lufs - result.input_lufs;
+    result.loudness_target_limited = std::isfinite(requested_gain_db) &&
+                                     gain_db < requested_gain_db - kLoudnessTargetGainToleranceDb;
     if (gain_db != 0.0f) {
       detail::apply_gain_db(result.left, result.right, gain_db);
       result.applied_gain_db += gain_db;
@@ -673,10 +690,8 @@ StereoResult apply_named_processor_stereo(const std::string& name, const float* 
         result.left, result.right, sample_rate,
         [&config](const Audio& audio) { return repair::dereverb_classical(audio, config); });
   } else {
-    int left_latency = 0;
-    int right_latency = 0;
-    float left_gain_db = 0.0f;
-    float right_gain_db = 0.0f;
+    ProcessorOutcome left_outcome;
+    ProcessorOutcome right_outcome;
     // Generic stereo fallback: run the mono processor independently on each
     // channel. This is correct for memoryless / linear / per-sample stages
     // (EQ, gain, saturation, ...) where channel independence is desired.
@@ -696,14 +711,13 @@ StereoResult apply_named_processor_stereo(const std::string& name, const float* 
     // Pass distinct channel indices so seed-driven processors (the dither /
     // output-chain path) decorrelate L and R; index 0 keeps the left channel
     // bit-identical to the mono path.
-    configure_processor(name, map, result.left, sample_rate, left_latency, left_gain_db, 0);
-    configure_processor(name, map, result.right, sample_rate, right_latency, right_gain_db, 1);
+    configure_processor(name, map, result.left, sample_rate, left_outcome, 0);
+    configure_processor(name, map, result.right, sample_rate, right_outcome, 1);
     if (result.left.size() != result.right.size()) {
       throw SonareException(ErrorCode::InvalidParameter,
                             "stereo processor produced mismatched channel lengths: " + name);
     }
-    result.latency_samples = std::max(left_latency, right_latency);
-    result.applied_gain_db += 0.5f * (left_gain_db + right_gain_db);
+    result.apply(left_outcome, right_outcome);
   }
 
   result.output_lufs = detail::stereo_integrated_lufs(result.left, result.right, sample_rate);

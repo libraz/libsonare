@@ -47,7 +47,10 @@ struct DynamicParams {
   float range_db = -6.0f;
   float attack_ms = 5.0f;
   float release_ms = 50.0f;
-  float lookahead_ms = 0.0f;
+  // Delays the detector's view of the signal by this many ms; a larger value
+  // makes the band react LATER, not earlier -- this is a detector delay, not
+  // true look-ahead, and adds no latency to the audio path.
+  float detector_delay_ms = 0.0f;
   float sidechain_freq_hz = -1.0f;
   float sidechain_q = 1.0f;
   bool external_sidechain = false;

@@ -8,6 +8,16 @@
 #include "util/exception.h"
 
 namespace sonare::mastering::api {
+
+// Coverage guard for the two chain-only tables, whose fields sit directly on a
+// chain stage struct rather than on a processor config. Asserted here because
+// this is where those structs are visible; the processor tables are asserted in
+// processor_params.h. Both stages carry one field the table does not: `enabled`,
+// which the chain surface reads as its own `<stage>.enabled` key so a stage can
+// be switched off without touching its parameters.
+SONARE_ASSERT_TABLE_COVERS(SONARE_FIELDS_EQ_TILT, TiltStage, 1);
+SONARE_ASSERT_TABLE_COVERS(SONARE_FIELDS_LOUDNESS, LoudnessStage, 1);
+
 namespace {
 
 // ---------------------------------------------------------------------------

@@ -7,6 +7,8 @@
 
 #include "mastering/api/presets.h"
 #include "mastering/assistant/audio_profile.h"
+#include "mastering/assistant/config_from_params.h"
+#include "mastering/assistant/platform_targets.h"
 #include "mastering/assistant/suggester.h"
 #include "util/constants.h"
 
@@ -276,6 +278,22 @@ TEST_CASE("Assistant target platform and streaming-safe preference affect sugges
   auto broadcast_result = assistant::suggest_chain(profile, broadcast);
   REQUIRE(broadcast_result.config.loudness.target_lufs == -23.0f);
 
+  // A target that moves the ceiling as well as the loudness: broadcast and
+  // podcast ask for the same ceiling the default already has, so only the loud
+  // delivery formats make the ceiling observable.
+  assistant::AssistantConfig club;
+  club.target_platform = "club";
+  auto club_result = assistant::suggest_chain(profile, club);
+  REQUIRE(club_result.config.loudness.target_lufs == -9.0f);
+  REQUIRE(club_result.config.loudness.ceiling_db == -0.3f);
+
+  // A target that deliberately adds nothing keeps the caller's request.
+  assistant::AssistantConfig cinema;
+  cinema.target_platform = "cinema";
+  auto cinema_result = assistant::suggest_chain(profile, cinema);
+  REQUIRE(cinema_result.config.loudness.target_lufs == -14.0f);
+  REQUIRE(cinema_result.config.loudness.ceiling_db == -1.0f);
+
   assistant::AssistantConfig streaming_safe;
   streaming_safe.enable_repair = true;
   streaming_safe.prefer_streaming_safe = true;
@@ -418,4 +436,55 @@ TEST_CASE("Assistant suggester loudness config matches preset true-peak oversamp
   REQUIRE(suggested.config.loudness.enabled);
   REQUIRE(suggested.config.loudness.true_peak_oversample == preset.loudness.true_peak_oversample);
   REQUIRE(suggested.config.loudness.true_peak_oversample == 4);
+}
+
+TEST_CASE("Assistant delivery targets resolve through the shared table", "[mastering][assistant]") {
+  // Every accepted name resolves to an index, and the index resolves back to the
+  // same name: the two directions bindings rely on must agree.
+  const std::vector<std::string> names = assistant::platform_names();
+  REQUIRE(names.size() == assistant::kPlatformTargets.size());
+  for (const std::string& name : names) {
+    const int index = assistant::platform_index_from_name(name.c_str());
+    REQUIRE(index >= 0);
+    REQUIRE(assistant::platform_name_at(index) != nullptr);
+    REQUIRE(std::string(assistant::platform_name_at(index)) == name);
+  }
+  // The default the AssistantConfig ships with is one of the accepted names, not
+  // a value that only survives because unknown names are tolerated.
+  REQUIRE(assistant::platform_index_from_name(
+              assistant::AssistantConfig{}.target_platform.c_str()) >= 0);
+
+  REQUIRE(assistant::platform_index_from_name("not-a-platform") == -1);
+  REQUIRE(assistant::platform_index_from_name(nullptr) == -1);
+  REQUIRE(assistant::platform_name_at(-1) == nullptr);
+  REQUIRE(assistant::platform_name_at(static_cast<int>(assistant::kPlatformTargets.size())) ==
+          nullptr);
+}
+
+TEST_CASE("Assistant params carry the delivery target as its index", "[mastering][assistant]") {
+  namespace api = sonare::mastering::api;
+  const int broadcast = assistant::platform_index_from_name("broadcast");
+  REQUIRE(broadcast >= 0);
+
+  const api::Param params[] = {{"targetPlatform", static_cast<double>(broadcast)}};
+  const assistant::AssistantConfig config = assistant::assistant_config_from_params(params, 1);
+  REQUIRE(config.target_platform == "broadcast");
+
+  // An index that names no target is rejected rather than truncated toward a
+  // neighbouring one, and so is a fractional index.
+  const api::Param out_of_range[] = {
+      {"targetPlatform", static_cast<double>(assistant::kPlatformTargets.size())}};
+  REQUIRE_THROWS_AS(assistant::assistant_config_from_params(out_of_range, 1),
+                    sonare::SonareException);
+  const api::Param negative[] = {{"targetPlatform", -1.0}};
+  REQUIRE_THROWS_AS(assistant::assistant_config_from_params(negative, 1), sonare::SonareException);
+  const api::Param fractional[] = {{"targetPlatform", static_cast<double>(broadcast) + 0.5}};
+  REQUIRE_THROWS_AS(assistant::assistant_config_from_params(fractional, 1),
+                    sonare::SonareException);
+
+  // The by-name setter every binding funnels through rejects an unknown target.
+  assistant::AssistantConfig by_name;
+  assistant::set_target_platform(by_name, "club");
+  REQUIRE(by_name.target_platform == "club");
+  REQUIRE_THROWS_AS(assistant::set_target_platform(by_name, "vinyl"), sonare::SonareException);
 }

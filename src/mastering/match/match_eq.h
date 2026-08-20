@@ -30,6 +30,9 @@ enum class MatchEqFirPhase {
 struct MatchEqCurve {
   std::vector<float> frequencies;
   std::vector<float> gain_db;
+  /// Rate the curve was measured at. Band solving designs digital biquads, so it
+  /// needs the rate; 0 means unknown and falls back to the DAW default.
+  int sample_rate = 0;
 };
 
 struct MatchEqFirConfig {
@@ -53,9 +56,15 @@ Audio apply_match_eq(const Audio& audio, const ReferenceSpectrum& source,
 float estimate_reference_delay_samples(const Audio& source, const Audio& reference,
                                        int max_abs_delay);
 Audio align_reference_to_source(const Audio& source, const Audio& reference, int max_abs_delay);
+/// @brief Peaking bands whose composite response follows the source/reference difference.
+/// @details Overlapping RBJ peaking sections add in log magnitude, so band gains
+///          are solved against the summed response of the whole band set rather
+///          than assigned independently, and @c max_gain_db bounds that summed
+///          response at every curve frequency instead of bounding one section.
 std::vector<eq::EqBand> match_eq_bands(const ReferenceSpectrum& source,
                                        const ReferenceSpectrum& reference,
                                        const MatchEqConfig& config = {});
+/// @copydoc match_eq_bands
 std::vector<eq::EqBand> match_eq_bands_from_curve(const MatchEqCurve& curve,
                                                   const MatchEqConfig& config = {});
 void configure_equalizer_from_match(eq::EqualizerProcessor& equalizer,

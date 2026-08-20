@@ -84,21 +84,32 @@ double projected_energy(const std::vector<float>& samples, size_t begin, size_t 
 
 float estimate_fundamental(const std::vector<float>& samples, size_t begin, size_t end,
                            int sample_rate, const DehumConfig& config, float previous_hz) {
-  const float low = std::max(1.0f, previous_hz - config.search_range_hz);
-  const float high =
-      std::min(static_cast<float>(sample_rate) * 0.49f, previous_hz + config.search_range_hz);
-  float best_hz = previous_hz;
+  // Anchor the search on the configured fundamental, the same window the PLL
+  // clamps its applied frequency to. Centring on the previous estimate alone
+  // lets the target walk one search range per frame, so material without a
+  // strong tone in band drags the notch to the edge of the window and holds it
+  // there, cutting programme content instead of hum.
+  const float window_low = std::max(1.0f, config.fundamental_hz - config.search_range_hz);
+  const float window_high = std::min(static_cast<float>(sample_rate) * 0.49f,
+                                     config.fundamental_hz + config.search_range_hz);
+  if (!(window_high > window_low)) return std::clamp(previous_hz, window_low, window_high);
+  const float anchored_previous = std::clamp(previous_hz, window_low, window_high);
+  float best_hz = anchored_previous;
   double best_energy = -1.0;
   constexpr int kSteps = 16;
   for (int step = 0; step <= kSteps; ++step) {
-    const float hz = low + (high - low) * static_cast<float>(step) / static_cast<float>(kSteps);
+    const float hz = window_low + (window_high - window_low) * static_cast<float>(step) /
+                                      static_cast<float>(kSteps);
     const double energy = projected_energy(samples, begin, end, hz, sample_rate);
     if (energy > best_energy) {
       best_energy = energy;
       best_hz = hz;
     }
   }
-  return previous_hz + config.adaptation * (best_hz - previous_hz);
+  // Smooth from the anchored estimate rather than the raw previous value, so a
+  // frame cannot hand the next one a target the PLL is unable to follow.
+  return std::clamp(anchored_previous + config.adaptation * (best_hz - anchored_previous),
+                    window_low, window_high);
 }
 
 }  // namespace

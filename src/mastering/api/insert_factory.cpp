@@ -667,6 +667,10 @@ std::unique_ptr<Processor> build_effects(const std::string& name, const ParamMap
         std::max(0, detail::i(params, "seed", static_cast<int>(config.seed))));
     config.max_seconds = f(params, "maxSeconds", config.max_seconds);
     config.dry_wet = f(params, "dryWet", config.dry_wet);
+    config.air_absorption_enabled =
+        b(params, "airAbsorptionEnabled", config.air_absorption_enabled);
+    config.air.temperature_c = f(params, "airTemperatureC", config.air.temperature_c);
+    config.air.humidity_percent = f(params, "airHumidityPercent", config.air.humidity_percent);
     return make<RoomReverb>(config);
   }
   if (name == "effects.acoustic.roomMorph") {
@@ -699,6 +703,10 @@ std::unique_ptr<Processor> build_effects(const std::string& name, const ParamMap
       const float crossfade_ms = f(params, "crossfadeMs", 0.0f);
       if (crossfade_ms != 0.0f) config.crossfade_ms = crossfade_ms;
     }
+    config.air_absorption_enabled =
+        b(params, "airAbsorptionEnabled", config.air_absorption_enabled);
+    config.air.temperature_c = f(params, "airTemperatureC", config.air.temperature_c);
+    config.air.humidity_percent = f(params, "airHumidityPercent", config.air.humidity_percent);
     return make<effects::acoustic::RoomMorphProcessor>(config);
   }
 #endif

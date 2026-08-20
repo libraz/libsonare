@@ -11,7 +11,7 @@
 namespace sonare::mastering::api {
 
 std::vector<std::string> processor_names() {
-  return {
+  std::vector<std::string> names = {
       "dynamics.brickwallLimiter",
       "dynamics.compressor",
       "dynamics.deesser",
@@ -79,21 +79,17 @@ std::vector<std::string> processor_names() {
       "stereo.monoMaker",
       "stereo.phaseAlign",
       "stereo.stereoBalance",
-#ifdef SONARE_HAVE_FX
-      // Creative streaming effects reachable from the one-shot apply path
-      // (built as inserts and run through the latency-compensating runner).
-      // "effects.reverb.plate" is an alias for "effects.reverb.dattorro".
-      "effects.reverb.plate",
-      "effects.reverb.dattorro",
-      "effects.reverb.fdn",
-      "effects.reverb.velvet",
-      "effects.reverb.convolution",
-      "effects.modulation.chorus",
-      "effects.modulation.flanger",
-      "effects.modulation.phaser",
-      "effects.delay.stereo",
-#endif
   };
+  // Creative streaming effects are not configured offline: apply_named_processor
+  // dispatches every "effects." id by building the realtime insert and running
+  // it through the latency-compensating runner. The insert factory is therefore
+  // the only registry of which effects ship in this build configuration, and
+  // deriving the section from it keeps the two from diverging (and keeps the
+  // BUILD_FX / acoustic-simulation guards in exactly one place).
+  for (const std::string& name : insert_factory_names()) {
+    if (name.rfind("effects.", 0) == 0) names.push_back(name);
+  }
+  return names;
 }
 
 std::vector<std::string> stereo_processor_names() {
@@ -219,11 +215,25 @@ InsertTiming insert_timing(const std::string& id) {
 // host avoid treating a bounded, multi-tap Velvet reverb as equivalent to a
 // lightweight zero-latency insert when assembling a live strip.
 const char* realtime_cost(const std::string& id) noexcept {
-  if (id == "saturation.tube") return "high";
-  if (id == "maximizer.truePeakLimiter") return "moderate";
+  // Oversampled triode stages. "saturation.ampSim" runs the same 4x oversampled
+  // Dempwolf triode as "saturation.tube" (it owns a Tube instance and processes
+  // it unconditionally) and adds a tone stack plus a cab EQ on top, so it can
+  // never be cheaper than the stage it embeds.
+  if (id == "saturation.tube" || id == "saturation.ampSim") return "high";
   if (id == "effects.reverb.velvet") return "high";
+  // Default-on 4x polyphase oversampling. "spectral.airBand" resamples its
+  // harmonic band on every block, like the true-peak limiter's detector; the
+  // exciter and the presence enhancer own the same oversampler but leave it off
+  // in the default configuration, which is what this tier describes.
+  if (id == "maximizer.truePeakLimiter" || id == "spectral.airBand") return "moderate";
+  // Partitioned FFT convolution ("effects.reverb.room" derives from
+  // ConvolutionReverb and inherits its process(); "eq.linearPhase" convolves an
+  // FFT-designed linear-phase FIR) and delay-network reverbs, whose tanks of
+  // delay lines and allpasses are an order of magnitude above a biquad chain.
   if (id == "effects.reverb.fdn" || id == "effects.reverb.convolution" ||
-      id == "effects.acoustic.roomMorph") {
+      id == "effects.reverb.room" || id == "effects.reverb.dattorro" ||
+      id == "effects.reverb.plate" || id == "effects.acoustic.roomMorph" ||
+      id == "eq.linearPhase") {
     return "moderate";
   }
   return "low";

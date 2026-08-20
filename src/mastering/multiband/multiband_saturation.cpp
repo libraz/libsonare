@@ -89,6 +89,9 @@ void MultibandSaturation::prepare(double sample_rate, int max_block_size, int ma
   for (auto& processor : processors_) {
     processor->prepare(sample_rate_, max_block_size_, max_working_channels_);
   }
+  // A stage only reports its latency once prepared, so the band alignment is
+  // derived after the sub-processors are.
+  rebuild_band_compensation();
   reset();
 }
 
@@ -116,17 +119,31 @@ void MultibandSaturation::process(float* const* channels, int num_channels, int 
   const int num_bands = scratch_.num_bands();
   for (int band = 0; band < num_bands; ++band) {
     const auto& band_config = config_.bands[static_cast<size_t>(band)];
-    if (!band_config.enabled) {
-      continue;
+    if (band_config.enabled) {
+      processors_[static_cast<size_t>(band)]->process(
+          scratch_.band_channels[static_cast<size_t>(band)].data(), num_channels, num_samples);
+      const float output_gain = db_to_linear(band_config.output_gain_db);
+      if (output_gain != 1.0f) {
+        for (int ch = 0; ch < num_channels; ++ch) {
+          auto& band_samples = scratch_.bands[static_cast<size_t>(band)][static_cast<size_t>(ch)];
+          for (int i = 0; i < num_samples; ++i) {
+            band_samples[static_cast<size_t>(i)] *= output_gain;
+          }
+        }
+      }
     }
-    processors_[static_cast<size_t>(band)]->process(
-        scratch_.band_channels[static_cast<size_t>(band)].data(), num_channels, num_samples);
-    const float output_gain = db_to_linear(band_config.output_gain_db);
-    if (output_gain != 1.0f) {
+    // Pad the shallower bands (including a bypassed one) up to the deepest band
+    // delay so the sum below reconstructs the crossover instead of combining
+    // bands from different points in time. Every channel of a band carries the
+    // same padding, so band 0's line answers for all of them.
+    auto& delays = band_delays_[static_cast<size_t>(band)];
+    if (delays.front().delay_samples() != 0) {
       for (int ch = 0; ch < num_channels; ++ch) {
         auto& band_samples = scratch_.bands[static_cast<size_t>(band)][static_cast<size_t>(ch)];
+        auto& delay = delays[static_cast<size_t>(ch)];
         for (int i = 0; i < num_samples; ++i) {
-          band_samples[static_cast<size_t>(i)] *= output_gain;
+          band_samples[static_cast<size_t>(i)] =
+              delay.process(band_samples[static_cast<size_t>(i)]);
         }
       }
     }
@@ -148,6 +165,11 @@ void MultibandSaturation::reset() {
   for (auto& processor : processors_) {
     processor->reset();
   }
+  for (auto& band : band_delays_) {
+    for (auto& delay : band) {
+      delay.reset();
+    }
+  }
 }
 
 void MultibandSaturation::set_config(const MultibandSaturationConfig& config) {
@@ -168,6 +190,9 @@ void MultibandSaturation::set_config(const MultibandSaturationConfig& config) {
     for (auto& processor : processors_) {
       processor->prepare(sample_rate_, max_block_size_, max_working_channels_);
     }
+    // The band types (and therefore their delays) may have changed with the new
+    // configuration, so the alignment is derived again from what is now held.
+    rebuild_band_compensation();
   }
 }
 
@@ -243,6 +268,30 @@ void MultibandSaturation::rebuild_processors() {
   processors_.reserve(config_.bands.size());
   for (const auto& band_config : config_.bands) {
     processors_.push_back(make_processor(band_config));
+  }
+}
+
+int MultibandSaturation::band_latency(size_t band) const noexcept {
+  // A disabled band is summed in unprocessed (process() skips its stage), so it
+  // contributes nothing regardless of what the stage would report.
+  if (!config_.bands[band].enabled) {
+    return 0;
+  }
+  return std::max(0, processors_[band]->latency_samples());
+}
+
+void MultibandSaturation::rebuild_band_compensation() {
+  band_latency_samples_ = 0;
+  for (size_t band = 0; band < processors_.size(); ++band) {
+    band_latency_samples_ = std::max(band_latency_samples_, band_latency(band));
+  }
+  band_delays_.assign(processors_.size(),
+                      std::vector<rt::DelayLine>(static_cast<size_t>(max_working_channels_)));
+  for (size_t band = 0; band < processors_.size(); ++band) {
+    const size_t padding = static_cast<size_t>(band_latency_samples_ - band_latency(band));
+    for (auto& delay : band_delays_[band]) {
+      delay.prepare(padding);
+    }
   }
 }
 

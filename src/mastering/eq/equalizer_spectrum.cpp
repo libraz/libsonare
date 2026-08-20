@@ -1,15 +1,186 @@
+#include "mastering/eq/equalizer_spectrum.h"
+
 #include <algorithm>
 #include <atomic>
 #include <cmath>
 
+#include "core/window.h"
 #include "mastering/eq/equalizer.h"
 #include "mastering/eq/spectrum_registry.h"
 #include "util/constants.h"
 #include "util/db.h"
+#include "util/exception.h"
 
 namespace sonare::mastering::eq {
 
 using sonare::constants::kFloorDb;
+
+namespace {
+
+// Audible range the profile bands are geometrically spaced across. Band b spans
+// [profile_band_edge_hz(b), profile_band_edge_hz(b + 1)).
+constexpr double kProfileMinHz = 20.0;
+constexpr double kProfileMaxHz = 20000.0;
+// Fall time of the profile ballistics. Rises are immediate so a transient is
+// never under-reported; falls are smoothed so the display does not flicker.
+constexpr double kProfileReleaseSeconds = 0.2;
+
+// Lower frequency edge of profile band @p band; kSpectrumProfileBands returns
+// the top edge. Evaluated directly rather than by repeated multiplication so
+// the edges carry no accumulated rounding, which keeps them identical to a
+// caller's own frequency-to-band lookup.
+double profile_band_edge_hz(size_t band) {
+  const double normalized = static_cast<double>(band) / static_cast<double>(kSpectrumProfileBands);
+  return kProfileMinHz * std::pow(kProfileMaxHz / kProfileMinHz, normalized);
+}
+
+}  // namespace
+
+void EqSpectrumAnalyzer::prepare(double sample_rate) {
+  // Cleared first so a prepare() that throws part-way leaves analyze() inert
+  // rather than reading half-sized buffers.
+  ready_ = false;
+  if (!(sample_rate > 0.0)) {
+    throw SonareException(ErrorCode::InvalidParameter,
+                          "EqSpectrumAnalyzer sample_rate must be positive");
+  }
+  sample_rate_ = sample_rate;
+  if (fft_ == nullptr) {
+    fft_ = std::make_unique<sonare::FFT>(kFftSize);
+  }
+  window_ = hann_window(kFftSize);
+  double window_sum = 0.0;
+  double window_sum_squares = 0.0;
+  for (const float coefficient : window_) {
+    window_sum += coefficient;
+    window_sum_squares += static_cast<double>(coefficient) * coefficient;
+  }
+  window_scale_ = window_sum > 0.0 ? static_cast<float>(2.0 / window_sum) : 0.0f;
+  window_enbw_ = window_sum > 0.0
+                     ? static_cast<float>(kFftSize * window_sum_squares / (window_sum * window_sum))
+                     : 1.0f;
+
+  ring_.assign(static_cast<size_t>(kFftSize), 0.0f);
+  frame_.assign(static_cast<size_t>(kFftSize), 0.0f);
+  bins_.assign(static_cast<size_t>(fft_->n_bins()), {});
+
+  // Exclusive upper bound: bin 0 is DC and the final bin is Nyquist. Neither is
+  // a two-sided bin, so the single-sided window_scale_ would over-count them.
+  const int max_bin = fft_->n_bins() - 1;
+  const double bin_hz = sample_rate / kFftSize;
+  for (size_t band = 0; band < kSpectrumProfileBands; ++band) {
+    const double low_hz = profile_band_edge_hz(band);
+    const double high_hz = profile_band_edge_hz(band + 1);
+    // Half-open bin range so no bin is counted by two adjacent bands.
+    const double begin_bins = std::ceil(low_hz / bin_hz);
+    const double end_bins = std::ceil(high_hz / bin_hz);
+    int begin = static_cast<int>(std::min(begin_bins, static_cast<double>(max_bin)));
+    int end = static_cast<int>(std::min(end_bins, static_cast<double>(max_bin)));
+    begin = std::max(begin, 1);
+    if (end <= begin) {
+      // The band is narrower than the bin spacing (the bottom bands at high
+      // sample rates). Read the single bin nearest the band centre, which is
+      // still a frequency-domain magnitude, only coarser than the band.
+      const double centre_bin = std::floor(std::sqrt(low_hz * high_hz) / bin_hz + 0.5);
+      if (centre_bin >= 1.0 && centre_bin < static_cast<double>(max_bin)) {
+        begin = static_cast<int>(centre_bin);
+        end = begin + 1;
+      } else {
+        // Entirely above Nyquist (or below the first bin): no estimate exists.
+        begin = 0;
+        end = 0;
+      }
+    }
+    band_bin_begin_[band] = begin;
+    band_bin_end_[band] = end;
+  }
+  reset();
+  ready_ = true;
+}
+
+void EqSpectrumAnalyzer::reset() noexcept {
+  std::fill(ring_.begin(), ring_.end(), 0.0f);
+  ring_pos_ = 0;
+  profile_db_.fill(kFloorDb);
+  samples_since_transform_ = 0;
+  has_profile_ = false;
+}
+
+void EqSpectrumAnalyzer::analyze(const float* const* channels, int num_channels, int num_samples,
+                                 std::array<float, kSpectrumProfileBands>& out) noexcept {
+  if (!ready_) {
+    out.fill(kFloorDb);
+    return;
+  }
+  append(channels, num_channels, num_samples);
+  samples_since_transform_ += std::max(num_samples, 0);
+  // The first block transforms its zero-padded window rather than publishing a
+  // placeholder, so the profile is spectral from the very first snapshot.
+  if (!has_profile_ || samples_since_transform_ >= kHopSamples) {
+    transform(samples_since_transform_);
+    samples_since_transform_ = 0;
+    has_profile_ = true;
+  }
+  out = profile_db_;
+}
+
+void EqSpectrumAnalyzer::append(const float* const* channels, int num_channels,
+                                int num_samples) noexcept {
+  if (channels == nullptr || num_channels <= 0 || num_samples <= 0) {
+    return;
+  }
+  // Only the newest window of samples can reach the next transform; a block
+  // longer than the window overwrites itself otherwise.
+  const int start = num_samples > kFftSize ? num_samples - kFftSize : 0;
+  // Channels are averaged: the profile describes the programme the EQ is acting
+  // on, so a downmix is the intended view rather than a per-channel spectrum.
+  const float channel_scale = 1.0f / static_cast<float>(num_channels);
+  for (int i = start; i < num_samples; ++i) {
+    float sum = 0.0f;
+    for (int ch = 0; ch < num_channels; ++ch) {
+      sum += channels[ch] != nullptr ? channels[ch][i] : 0.0f;
+    }
+    ring_[ring_pos_] = sum * channel_scale;
+    if (++ring_pos_ == ring_.size()) {
+      ring_pos_ = 0;
+    }
+  }
+}
+
+void EqSpectrumAnalyzer::transform(int elapsed_samples) noexcept {
+  const size_t size = ring_.size();
+  size_t src = ring_pos_;  // The write cursor also marks the oldest sample.
+  for (size_t i = 0; i < size; ++i) {
+    frame_[i] = ring_[src] * window_[i];
+    if (++src == size) {
+      src = 0;
+    }
+  }
+  fft_->forward(frame_.data(), bins_.data());
+
+  const double elapsed_seconds =
+      sample_rate_ > 0.0 ? static_cast<double>(std::max(elapsed_samples, 0)) / sample_rate_ : 0.0;
+  const float release = static_cast<float>(std::exp(-elapsed_seconds / kProfileReleaseSeconds));
+  for (size_t band = 0; band < kSpectrumProfileBands; ++band) {
+    double power = 0.0;
+    for (int bin = band_bin_begin_[band]; bin < band_bin_end_[band]; ++bin) {
+      const std::complex<float>& value = bins_[static_cast<size_t>(bin)];
+      const double real = static_cast<double>(value.real()) * window_scale_;
+      const double imag = static_cast<double>(value.imag()) * window_scale_;
+      power += real * real + imag * imag;
+    }
+    // Dividing the summed bin power by the window's equivalent noise bandwidth
+    // undoes the spreading of a tone across the window's main lobe, so a
+    // full-scale sine reports 0 dB in the band that contains it.
+    const float level_db =
+        std::max(kFloorDb, power_to_db_scalar(static_cast<float>(power / window_enbw_)));
+    if (!has_profile_ || level_db >= profile_db_[band]) {
+      profile_db_[band] = level_db;
+    } else {
+      profile_db_[band] = level_db + (profile_db_[band] - level_db) * release;
+    }
+  }
+}
 
 EqualizerSpectrumSnapshot EqualizerProcessor::spectrum_snapshot() const noexcept {
   EqualizerSpectrumSnapshot copy;
@@ -34,6 +205,8 @@ void EqualizerProcessor::capture_stream(const float* const* channels, int num_ch
                                         int num_samples,
                                         std::array<SpectrumPoint, kSpectrumStreamCapacity>& stream,
                                         size_t& count) noexcept {
+  // Uniformly decimated time-domain samples: a scope feed, not an estimate of
+  // the signal's spectrum. The spectral view is profile_db.
   count = 0;
   if (channels == nullptr || num_channels <= 0 || num_samples <= 0) {
     return;
@@ -60,37 +233,10 @@ void EqualizerProcessor::publish_spectrum_snapshot(const EqualizerSpectrumSnapsh
           band.dyn.enabled ? last_applied_gain_db_[i] : band.gain_db * gain_scale_;
     }
   }
-  next.profile_db.fill(kFloorDb);
+  // band_gain_db reports what the EQ applies; profile_db reports what the
+  // post-EQ signal contains, measured in the frequency domain.
+  spectrum_analyzer_.analyze(channels, num_channels, num_samples, next.profile_db);
   next.seq = ++spectrum_seq_;
-
-  double sum = 0.0;
-  size_t count = 0;
-  for (size_t i = 0; i < next.post_count; ++i) {
-    const double left = next.post[i].left;
-    const double right = next.post[i].right;
-    sum += left * left + right * right;
-    count += 2;
-  }
-  const float level_db =
-      count == 0 ? kFloorDb : linear_to_db(static_cast<float>(std::sqrt(sum / count)));
-  bool has_profile_band = false;
-  for (size_t i = 0; i < kMaxBands; ++i) {
-    const auto& band = bands_[i];
-    if (!band.enabled || band.bypassed || !(band.frequency_hz > 0.0f)) {
-      continue;
-    }
-    const double clamped_freq = std::clamp(static_cast<double>(band.frequency_hz), 20.0, 20000.0);
-    const double normalized = std::log2(clamped_freq / 20.0) / std::log2(20000.0 / 20.0);
-    const size_t bucket = std::min(
-        kSpectrumProfileBands - 1,
-        static_cast<size_t>(std::max(0.0, std::floor(normalized * kSpectrumProfileBands))));
-    const float activity_db = level_db + std::max(0.0f, std::abs(last_applied_gain_db_[i]));
-    next.profile_db[bucket] = std::max(next.profile_db[bucket], activity_db);
-    has_profile_band = true;
-  }
-  if (!has_profile_band && count > 0) {
-    next.profile_db.fill(level_db);
-  }
 
   const uint32_t guard = spectrum_guard_.load(std::memory_order_relaxed);
   spectrum_guard_.store(guard + 1U, std::memory_order_release);

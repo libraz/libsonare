@@ -2,6 +2,7 @@
 #include <catch2/catch_test_macros.hpp>
 #include <catch2/matchers/catch_matchers_floating_point.hpp>
 #include <cmath>
+#include <cstddef>
 #include <random>
 #include <vector>
 
@@ -262,6 +263,143 @@ TEST_CASE("Declip preserves all unclipped samples exactly", "[mastering][repair]
   }
 }
 
+namespace {
+
+// The gap and context caps are the whole bound: the solver's dense working set is
+// a function of them alone, so a cap raise that would put a mastering pass back
+// into gigabyte territory has to trip here first.
+static_assert(kDeclipMaxLpcWorkingSetBytes < 32u * 1024u * 1024u,
+              "declip LPC solver working set must stay inside a mastering-pass memory budget");
+
+/// @brief Longest run of samples at or above @p threshold.
+size_t longest_clipped_run(const std::vector<float>& samples, float threshold) {
+  size_t longest = 0;
+  size_t current = 0;
+  for (const float value : samples) {
+    current = std::abs(value) >= threshold ? current + 1 : 0;
+    longest = std::max(longest, current);
+  }
+  return longest;
+}
+
+}  // namespace
+
+TEST_CASE("Declip bounds a full-scale run instead of scaling with its length",
+          "[mastering][repair]") {
+  // A sustained full-scale passage is a single clipped run with no length limit of
+  // its own, so sizing the solver from the gap asked for ~46 GB for one second of
+  // 48 kHz material. Runs past the cap must take the interpolation fallback: no
+  // solver matrix at all, and a finite, smooth, no-longer-clipped result.
+  constexpr int kSampleRate = 48000;
+  constexpr size_t kFrames = static_cast<size_t>(kSampleRate) * 3;
+  constexpr size_t kRunStart = static_cast<size_t>(kSampleRate);
+  constexpr size_t kRunLength = static_cast<size_t>(kSampleRate);  // one full second
+  static_assert(kRunLength > kDeclipMaxLpcGapSamples, "run must exceed the LPC gap cap");
+
+  std::vector<float> samples(kFrames);
+  for (size_t i = 0; i < kFrames; ++i) {
+    samples[i] = 0.5f * static_cast<float>(
+                            std::sin(sonare::constants::kTwoPiD * 220.0 * static_cast<double>(i) /
+                                     static_cast<double>(kSampleRate)));
+  }
+  std::fill(samples.begin() + static_cast<std::ptrdiff_t>(kRunStart),
+            samples.begin() + static_cast<std::ptrdiff_t>(kRunStart + kRunLength), 1.0f);
+
+  const auto result =
+      declip(Audio::from_buffer(samples.data(), samples.size(), kSampleRate), DeclipConfig{});
+
+  REQUIRE(result.size() == kFrames);
+  for (size_t i = 0; i < kFrames; ++i) {
+    REQUIRE(std::isfinite(result[i]));
+  }
+
+  // The run is no longer at full scale, and it joins its neighbours without a
+  // step: an interpolation spanning the run has a per-sample slope on the order of
+  // one over its length.
+  for (size_t i = kRunStart; i < kRunStart + kRunLength; ++i) {
+    REQUIRE(std::abs(result[i]) < 1.0f);
+    REQUIRE(std::abs(result[i] - result[i - 1]) < 0.01f);
+  }
+
+  // Everything outside the run is untouched.
+  for (size_t i = 0; i < kRunStart; ++i) {
+    REQUIRE(result[i] == samples[i]);
+  }
+  for (size_t i = kRunStart + kRunLength; i < kFrames; ++i) {
+    REQUIRE(result[i] == samples[i]);
+  }
+}
+
+TEST_CASE("Declip short-gap repair does not depend on the input length", "[mastering][repair]") {
+  // The context window is capped independently of the input, so a short clipped
+  // run's reconstruction is a function of its bounded neighbourhood only. Repairing
+  // the same prefix inside a four-times-longer buffer must therefore reproduce it
+  // bit for bit -- the property that makes the working set input-length independent.
+  constexpr size_t kShort = 4096;
+  constexpr size_t kLong = 16384;
+  constexpr float kThreshold = 0.5f;
+  const DeclipConfig config{kThreshold, 24, 2, 1.0f};
+
+  const auto fx_short = make_clipped_sine(kShort, 700.0f, 0.92f, 48000.0f, kThreshold, 0xC0FFEE);
+  const auto fx_long = make_clipped_sine(kLong, 700.0f, 0.92f, 48000.0f, kThreshold, 0xC0FFEE);
+  // Same generator and seed, so the long buffer starts with the short one.
+  for (size_t i = 0; i < kShort; ++i) {
+    REQUIRE(fx_long.clipped[i] == fx_short.clipped[i]);
+  }
+  // These runs go through the solver, not the fallback: this compares the LPC path.
+  // The upper bound also pins the context window (at most 8 * run) well inside the
+  // margin kCompareEnd leaves at the end of the short buffer.
+  const size_t longest_run = longest_clipped_run(fx_short.clipped, kThreshold);
+  REQUIRE(longest_run > 0);
+  REQUIRE(longest_run <= 64);
+  REQUIRE(longest_run < kDeclipMaxLpcGapSamples);
+
+  const auto repaired_short =
+      declip(Audio::from_buffer(fx_short.clipped.data(), kShort, 48000), config);
+  const auto repaired_long =
+      declip(Audio::from_buffer(fx_long.clipped.data(), kLong, 48000), config);
+
+  // Compare only where the capped context window fits inside the short buffer; past
+  // that the short buffer's context is truncated by its own end.
+  constexpr size_t kCompareEnd = kShort - 1024;
+  bool repaired_anything = false;
+  for (size_t i = 0; i < kCompareEnd; ++i) {
+    REQUIRE(std::isfinite(repaired_short[i]));
+    REQUIRE(repaired_short[i] == repaired_long[i]);
+    if (std::abs(fx_short.clipped[i]) >= kThreshold && repaired_short[i] != fx_short.clipped[i]) {
+      repaired_anything = true;
+    }
+  }
+  REQUIRE(repaired_anything);
+}
+
+TEST_CASE("Declip routes over-cap runs to the interpolation fallback", "[mastering][repair]") {
+  // The fallback has no LPC estimate to blend, so it ignores lpc_blend entirely: a
+  // run one sample past the cap must produce bit-identical output at both blend
+  // extremes, where a solver-reconstructed run does not (see the lpc_blend cases).
+  constexpr int kSampleRate = 48000;
+  constexpr size_t kFrames = 4096;
+  constexpr size_t kRunStart = 1024;
+  constexpr size_t kRunLength = kDeclipMaxLpcGapSamples + 1;
+
+  std::vector<float> samples(kFrames);
+  for (size_t i = 0; i < kFrames; ++i) {
+    samples[i] = 0.4f * static_cast<float>(
+                            std::sin(sonare::constants::kTwoPiD * 440.0 * static_cast<double>(i) /
+                                     static_cast<double>(kSampleRate)));
+  }
+  std::fill(samples.begin() + static_cast<std::ptrdiff_t>(kRunStart),
+            samples.begin() + static_cast<std::ptrdiff_t>(kRunStart + kRunLength), 1.0f);
+  const auto audio = Audio::from_buffer(samples.data(), samples.size(), kSampleRate);
+
+  const auto pure_interp = declip(audio, {0.98f, 36, 2, 0.0f});
+  const auto pure_lpc = declip(audio, {0.98f, 36, 2, 1.0f});
+
+  for (size_t i = 0; i < kFrames; ++i) {
+    REQUIRE(pure_lpc[i] == pure_interp[i]);
+  }
+}
+
 TEST_CASE("Declip and Declick repair a three-minute recording with many short defects",
           "[.][slow][mastering][repair]") {
   constexpr int kSampleRate = 48000;
@@ -320,6 +458,56 @@ TEST_CASE("Dehum adaptive notch follows drifting fundamental", "[mastering][repa
   const auto result = dehum(input, {50.0f, 1, 6.0f, true, 2.5f, 0.8f, 1024});
 
   REQUIRE(rms(result) < rms(input) * 0.8f);
+}
+
+TEST_CASE("Dehum adaptive tracking recovers after out-of-band content", "[mastering][repair]") {
+  // First half: programme content well above the search window and no hum, so a
+  // search re-centred on its own previous estimate climbs toward that content
+  // one search range per frame. Second half: the configured hum appears. The
+  // walk is irreversible -- once the target is outside the window the next
+  // window is centred on it, never on the fundamental -- so the drifted target
+  // pins the PLL against its clamp and the hum is never notched. A search
+  // anchored on fundamental_hz cannot leave, so the hum is removed.
+  // The programme tone sits close enough above the window that a search
+  // re-centred on its own previous estimate reaches it within the first half,
+  // and far enough that a window anchored on the fundamental never does. A tone
+  // several octaves up leaves the drifted target still inside the window, which
+  // is why a 400 Hz fixture here produced identical output either way and
+  // asserted nothing.
+  constexpr int kSampleRate = 48000;
+  constexpr double kHumHz = 50.0;
+  constexpr double kProgrammeHz = 100.0;
+  std::vector<float> samples(48000);
+  for (size_t i = 0; i < samples.size(); ++i) {
+    const double t = static_cast<double>(i) / kSampleRate;
+    const bool second_half = i >= samples.size() / 2;
+    samples[i] = 0.6f * static_cast<float>(std::sin(sonare::constants::kTwoPiD * kProgrammeHz * t));
+    if (second_half) {
+      samples[i] += 0.4f * static_cast<float>(std::sin(sonare::constants::kTwoPiD * kHumHz * t));
+    }
+  }
+  const auto input = make_audio(samples);
+  const auto result = dehum(input, {50.0f, 1, 6.0f, true, 10.0f, 1.0f, 1024});
+
+  const auto energy_at = [](const float* data, size_t count, double hz) {
+    const double w = sonare::constants::kTwoPiD * hz / kSampleRate;
+    const double coeff = 2.0 * std::cos(w);
+    double s1 = 0.0;
+    double s2 = 0.0;
+    for (size_t i = 0; i < count; ++i) {
+      const double s0 = static_cast<double>(data[i]) + coeff * s1 - s2;
+      s2 = s1;
+      s1 = s0;
+    }
+    const double real = s1 - s2 * std::cos(w);
+    const double imag = s2 * std::sin(w);
+    return real * real + imag * imag;
+  };
+
+  const size_t half = samples.size() / 2;
+  const double hum_in = energy_at(input.data() + half, half, kHumHz);
+  const double hum_out = energy_at(result.data() + half, half, kHumHz);
+  REQUIRE(hum_out < 0.5 * hum_in);
 }
 
 namespace {

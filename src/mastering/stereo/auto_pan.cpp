@@ -3,6 +3,7 @@
 #include <algorithm>
 #include <cmath>
 
+#include "rt/pan_law.h"
 #include "rt/scoped_no_denormals.h"
 #include "util/constants.h"
 #include "util/exception.h"
@@ -12,6 +13,10 @@ namespace sonare::mastering::stereo {
 namespace {
 
 using sonare::constants::kTwoPiD;
+using sonare::rt::compute_pan_gains;
+using sonare::rt::PanGains;
+using sonare::rt::PanLaw;
+using sonare::rt::PanNormalization;
 
 }  // namespace
 
@@ -39,14 +44,18 @@ void AutoPan::process(float* const* channels, int num_channels, int num_samples)
     return;
   }
 
+  // Centre-unity constant power: the pair carries the input's stereo energy
+  // unchanged (left^2 + right^2 == 2) at every LFO position, and a centred pan —
+  // which is the whole signal at depth 0 — passes both channels at unity. The
+  // law's raw gains would instead land on 1/sqrt(2) at centre, so merely
+  // inserting the panner would cost 3 dB and depth 0 would not be a bypass.
   const double increment = config_.rate_hz / sample_rate_;
   for (int i = 0; i < num_samples; ++i) {
     const float pan =
         static_cast<float>(std::sin((phase_ + config_.phase) * kTwoPiD)) * config_.depth;
-    const float left_gain = std::sqrt((1.0f - pan) * 0.5f);
-    const float right_gain = std::sqrt((1.0f + pan) * 0.5f);
-    channels[0][i] *= left_gain;
-    channels[1][i] *= right_gain;
+    const PanGains g = compute_pan_gains(pan, PanLaw::Const3dB, PanNormalization::CenterUnity);
+    channels[0][i] *= g.left;
+    channels[1][i] *= g.right;
     phase_ += increment;
     phase_ -= std::floor(phase_);
   }

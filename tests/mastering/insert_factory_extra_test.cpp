@@ -17,13 +17,20 @@
 #include <string>
 #include <vector>
 
+#include "analysis/acoustic_analyzer.h"
+#include "core/audio.h"
 #include "mastering/api/chain.h"
 #include "mastering/api/insert_factory.h"
 #include "mastering/api/named_processor.h"
 #include "mastering/api/presets.h"
+#include "mastering/eq/dynamic_eq.h"
 #include "rt/processor_base.h"
 #include "util/exception.h"
 #include "util/json.h"
+
+#ifdef SONARE_WITH_FX
+#include "effects/reverb/convolution_reverb.h"
+#endif
 
 namespace {
 
@@ -371,6 +378,83 @@ TEST_CASE("effects.acoustic.roomMorph insert reaches acoustic facade options",
           R"({"lengthM":12,"widthM":9,"heightM":5,"dryWet":1,"sourceTailSuppression":0,"maxSeconds":0.3,"seed":7,"materialPreset":3})")));
 }
 
+TEST_CASE("effects.reverb.room and effects.acoustic.roomMorph reach air absorption options",
+          "[mastering][insert_factory][effects][acoustic]") {
+  for (const char* name : {"effects.reverb.room", "effects.acoustic.roomMorph"}) {
+    CAPTURE(name);
+    const auto names = insert_param_names(name);
+    REQUIRE(ListContains(names, "airAbsorptionEnabled"));
+    REQUIRE(ListContains(names, "airTemperatureC"));
+    REQUIRE(ListContains(names, "airHumidityPercent"));
+  }
+}
+
+TEST_CASE("effects.reverb.room air absorption shortens the round-tripped high-band RT60",
+          "[.][slow][mastering][insert_factory][effects][acoustic]") {
+  // Reachability proof: this drives the insert through make_insert()/JSON
+  // params (the same surface every host uses to build a named processor), not
+  // a directly-constructed RoomReverbConfig, and measures the rendered output
+  // through the acoustic analyzer rather than asserting on the internal RIR.
+  using sonare::AcousticConfig;
+  using sonare::AcousticParameters;
+  using sonare::analyze_impulse_response;
+  using sonare::Audio;
+
+  constexpr double kSampleRate = 48000.0;
+  constexpr int kBlock = 512;
+  constexpr int kSeconds = 6;
+  const size_t total = static_cast<size_t>(kSampleRate) * static_cast<size_t>(kSeconds);
+
+  // A large hall with moderate absorption: big enough for the ISO 9613-1 air
+  // term to bias the high bands clearly, with an RT60 short enough that the
+  // per-band decay analysis below stays inside its reliable operating range.
+  const auto render = [&](const char* params) {
+    auto processor = make_insert("effects.reverb.room", params);
+    REQUIRE(processor != nullptr);
+    processor->prepare(kSampleRate, kBlock);
+    std::vector<float> buf(total, 0.0f);
+    buf[0] = 1.0f;
+    for (size_t off = 0; off < total; off += static_cast<size_t>(kBlock)) {
+      const int n = static_cast<int>(std::min<size_t>(kBlock, total - off));
+      float* blk = buf.data() + off;
+      processor->process(&blk, 1, n);
+    }
+    AcousticConfig ac;
+    ac.mode = AcousticConfig::Mode::ImpulseResponse;
+    return analyze_impulse_response(
+        Audio::from_vector(std::move(buf), static_cast<int>(kSampleRate)), ac);
+  };
+
+  constexpr const char* kDry =
+      R"({"lengthM":30,"widthM":24,"heightM":15,"absorption":0.2,"sourceX":3,"sourceY":3,)"
+      R"("sourceZ":1.5,"listenerX":10,"listenerY":8,"listenerZ":1.7,"ismOrder":3,"dryWet":1,)"
+      R"("seed":3})";
+  constexpr const char* kWet =
+      R"({"lengthM":30,"widthM":24,"heightM":15,"absorption":0.2,"sourceX":3,"sourceY":3,)"
+      R"("sourceZ":1.5,"listenerX":10,"listenerY":8,"listenerZ":1.7,"ismOrder":3,"dryWet":1,)"
+      R"("seed":3,"airAbsorptionEnabled":1,"airTemperatureC":20,"airHumidityPercent":50})";
+
+  const AcousticParameters dry = render(kDry);
+  const AcousticParameters humid = render(kWet);
+  REQUIRE(dry.rt60_bands.size() == humid.rt60_bands.size());
+  REQUIRE(dry.rt60_bands.size() >= 6);
+  for (float v : dry.rt60_bands) REQUIRE(v > 1.0f);
+  for (float v : humid.rt60_bands) REQUIRE(v > 0.5f);
+
+  // Non-vacuity: at the ISO reference climate (the default a caller gets by
+  // only setting airAbsorptionEnabled) this is already a large, unmistakable
+  // effect; no sweep was needed to find a defensible threshold. The bottom
+  // band is barely touched, confirming the shortening is the frequency-
+  // dependent air term reaching the insert and not a broadband regression.
+  const float low_ratio = humid.rt60_bands.front() / dry.rt60_bands.front();
+  const float high_ratio = humid.rt60_bands.back() / dry.rt60_bands.back();
+  CAPTURE(dry.rt60_bands.front(), humid.rt60_bands.front(), dry.rt60_bands.back(),
+          humid.rt60_bands.back());
+  REQUIRE(high_ratio < 0.80f);  // top band RT60 shortens by at least 20%
+  REQUIRE(low_ratio > 0.95f);   // bottom band RT60 shifts by less than 5%
+  REQUIRE(high_ratio < low_ratio);
+}
+
 TEST_CASE("effects.acoustic.roomMorph adds a target-room tail as a streaming insert",
           "[mastering][insert_factory][effects][acoustic]") {
   REQUIRE(ListContains(insert_factory_names(), "effects.acoustic.roomMorph"));
@@ -550,6 +634,9 @@ TEST_CASE("processor_catalog_json classifies every id consistently with the sour
 
   const auto catalog = sonare::util::json::parse(json);
   REQUIRE(catalog.is_array());
+#ifdef SONARE_WITH_FX
+  int convolution_engine_inserts = 0;
+#endif
   for (const auto& entry : catalog.as_array()) {
     REQUIRE(entry.contains("id"));
     REQUIRE(entry.contains("realtimeInsertable"));
@@ -579,6 +666,17 @@ TEST_CASE("processor_catalog_json classifies every id consistently with the sour
       REQUIRE((cost == "low" || cost == "moderate" || cost == "high"));
       auto processor = make_insert(entry["id"].as_string(), "{}");
       REQUIRE(processor != nullptr);
+#ifdef SONARE_WITH_FX
+      // Structural guard on the engine rather than on a list of ids: whichever
+      // id wraps the partitioned-convolution reverb, it is not a lightweight
+      // insert. A future ConvolutionReverb subclass therefore cannot be
+      // published as "low" by falling through the classifier's default.
+      if (dynamic_cast<sonare::effects::reverb::ConvolutionReverb*>(processor.get()) != nullptr) {
+        INFO("convolution engine insert: " << entry["id"].as_string());
+        REQUIRE(cost != "low");
+        ++convolution_engine_inserts;
+      }
+#endif  // SONARE_WITH_FX
       processor->prepare(48000.0, 512);
       REQUIRE(latency == std::max(0, processor->latency_samples()));
       REQUIRE(tail == std::max(0, processor->tail_samples()));
@@ -588,6 +686,12 @@ TEST_CASE("processor_catalog_json classifies every id consistently with the sour
       REQUIRE(tail == 0);
     }
   }
+#ifdef SONARE_WITH_FX
+  // The guard above is only worth anything if the engine it names is actually
+  // reachable from the catalog: "effects.reverb.convolution" always is when the
+  // FX suite is built, and the room reverb joins it when acoustics are on.
+  REQUIRE(convolution_engine_inserts >= 1);
+#endif  // SONARE_WITH_FX
 
   // Every realtime-insertable id is reported as kind "realtime" with the flag set
   // (none of the insert ids are pair processors, so the precedence resolves to
@@ -662,12 +766,86 @@ TEST_CASE("processor_catalog_json classifies every id consistently with the sour
   REQUIRE(true_peak != catalog.as_array().end());
   REQUIRE((*true_peak)["realtimeCost"].as_string() == "moderate");
 
-  // Realtime-only ids that are absent from processor_names() are still reported.
+  const auto cost_of = [&catalog](const std::string& id) {
+    const auto found =
+        std::find_if(catalog.as_array().begin(), catalog.as_array().end(),
+                     [&id](const auto& entry) { return entry["id"].as_string() == id; });
+    REQUIRE(found != catalog.as_array().end());
+    return (*found)["realtimeCost"].as_string();
+  };
+
+  // An id whose engine embeds one that is already tiered up inherits that tier
+  // rather than falling through to "low": ampSim owns the same 4x oversampled
+  // triode as saturation.tube (its 12-sample latency is that oversampler's).
+  REQUIRE(cost_of("saturation.ampSim") == cost_of("saturation.tube"));
+
+  // The linear-phase EQ runs a 513-tap FIR (the 256-sample latency is that
+  // kernel's group delay) through the same partitioned convolver the
+  // convolution reverb uses; it is not a biquad-chain EQ.
+  REQUIRE(cost_of("eq.linearPhase") == "moderate");
+
+  // The air band resamples its harmonic path 4x on every block -- its latency is
+  // that oversampler's round trip -- so it shares the true-peak limiter's tier.
+  // The exciter and presence enhancer hold the same oversampler but default it
+  // off (zero latency), which is the configuration these tiers describe.
+  REQUIRE(cost_of("spectral.airBand") == cost_of("maximizer.truePeakLimiter"));
+  REQUIRE(cost_of("saturation.exciter") == "low");
+  REQUIRE(cost_of("spectral.presenceEnhancer") == "low");
+
+#ifdef SONARE_WITH_FX
+  // The plate tank is a delay network like the FDN, so the two reverb families
+  // share a tier. "effects.reverb.plate" is an alias for the same processor.
+  REQUIRE(cost_of("effects.reverb.dattorro") == cost_of("effects.reverb.fdn"));
+  REQUIRE(cost_of("effects.reverb.plate") == cost_of("effects.reverb.dattorro"));
+
+  // The geometry-driven room reverb IS the convolution reverb (it derives from
+  // it and inherits process()), so it carries that engine's tier exactly. The
+  // in-loop dynamic_cast guard above keeps any other id wrapping that engine
+  // off the "low" tier.
+  if (ListContains(sonare::mastering::api::insert_factory_names(), "effects.reverb.room")) {
+    REQUIRE(cost_of("effects.reverb.room") == cost_of("effects.reverb.convolution"));
+  }
+#endif  // SONARE_WITH_FX
+
+  // The room-simulation reverb is only built when the acoustic feature is on, so
+  // it is reported exactly when the insert factory can construct it.
   if (ListContains(sonare::mastering::api::insert_factory_names(), "effects.reverb.room")) {
     REQUIRE(
         json.find("{\"id\":\"effects.reverb.room\",\"kind\":\"realtime\",\"realtimeInsertable\":"
                   "true") != std::string::npos);
   }
+}
+
+TEST_CASE("processor_names() lists every effects insert the apply path dispatches",
+          "[mastering][named_processor][effects]") {
+  const auto inserts = insert_factory_names();
+  const auto named = sonare::mastering::api::processor_names();
+
+  // apply_named_processor() routes every "effects." id through the insert
+  // factory, so an effect the factory builds but the registry omits still runs
+  // when its name is typed by hand while being unreachable from the documented
+  // name list and absent from the published processor-name types.
+  std::size_t effects_listed = 0;
+  for (const auto& id : inserts) {
+    if (id.rfind("effects.", 0) != 0) continue;
+    INFO("insert: " << id);
+    REQUIRE(ListContains(named, id));
+    ++effects_listed;
+  }
+
+  // The converse: the registry must not advertise an effect this build
+  // configuration cannot construct, which would fail at apply time.
+  for (const auto& id : named) {
+    if (id.rfind("effects.", 0) != 0) continue;
+    INFO("processor: " << id);
+    REQUIRE(ListContains(inserts, id));
+  }
+
+#ifdef SONARE_WITH_FX
+  REQUIRE(effects_listed > 0);
+#else
+  REQUIRE(effects_listed == 0);
+#endif
 }
 
 #ifdef SONARE_WITH_FX
@@ -797,4 +975,33 @@ TEST_CASE("Mastering inserts publish non-empty automation parameter descriptors"
       REQUIRE(info.find(c.key_fragment) != std::string::npos);
     }
   }
+}
+
+TEST_CASE("eq.dynamic accepts detectorDelayMs and its former lookaheadMs spelling",
+          "[mastering][insert_factory][eq]") {
+  // detectorDelayMs is the corrected name (see dynamic_eq.h); lookaheadMs is
+  // kept accepted through the flat param-map construction path so a stored
+  // config using the old spelling is not silently dropped.
+  using sonare::mastering::eq::DynamicEq;
+
+  auto with_new =
+      make_insert("eq.dynamic", R"({"band0.frequencyHz":1000,"band0.detectorDelayMs":12})");
+  REQUIRE(with_new != nullptr);
+  auto* dyn_new = dynamic_cast<DynamicEq*>(with_new.get());
+  REQUIRE(dyn_new != nullptr);
+  REQUIRE(dyn_new->band(0).detector_delay_ms == 12.0f);
+
+  auto with_old_camel =
+      make_insert("eq.dynamic", R"({"band0.frequencyHz":1000,"band0.lookaheadMs":8})");
+  auto* dyn_old_camel = dynamic_cast<DynamicEq*>(with_old_camel.get());
+  REQUIRE(dyn_old_camel != nullptr);
+  REQUIRE(dyn_old_camel->band(0).detector_delay_ms == 8.0f);
+
+  // The canonical spelling wins when both are present.
+  auto both =
+      make_insert("eq.dynamic",
+                  R"({"band0.frequencyHz":1000,"band0.lookaheadMs":8,"band0.detectorDelayMs":12})");
+  auto* dyn_both = dynamic_cast<DynamicEq*>(both.get());
+  REQUIRE(dyn_both != nullptr);
+  REQUIRE(dyn_both->band(0).detector_delay_ms == 12.0f);
 }

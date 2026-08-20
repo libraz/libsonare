@@ -15,6 +15,7 @@
 /// flat field layout for ABI stability and are intentionally not derived from
 /// these C++ bases.
 
+#include <algorithm>
 #include <array>
 #include <cstddef>
 #include <string>
@@ -36,6 +37,38 @@ struct MonoAudioResult {
   int latency_samples = 0;
 };
 
+/// @brief Every scalar one named-processor dispatch computes for one channel.
+///
+/// The dispatch reports through this struct rather than through a list of
+/// out-parameters so a caller copies the whole outcome instead of transcribing
+/// the fields it happens to know about: a value added here reaches the result
+/// types through the two @c apply() overloads below and cannot be silently
+/// dropped at the call site.
+struct ProcessorOutcome {
+  int latency_samples = 0;
+  /// Static gain the processor applied (loudness normalization); limiter gain
+  /// reduction is not included.
+  float applied_gain_db = 0.0f;
+  /// True when a true-peak ceiling clamped the requested LUFS normalization
+  /// gain, so the reported output LUFS is the achieved value and not the
+  /// requested target. Only the loudness-normalizing processors set it.
+  bool loudness_target_limited = false;
+};
+
+/// @brief Result of one mono named-processor call: the shared audio fields plus
+/// the dispatch outcome.
+struct MonoProcessorResult : MonoAudioResult {
+  /// @copydoc ProcessorOutcome::loudness_target_limited
+  bool loudness_target_limited = false;
+
+  /// Copies a whole dispatch outcome into the result.
+  void apply(const ProcessorOutcome& outcome) {
+    latency_samples = outcome.latency_samples;
+    applied_gain_db += outcome.applied_gain_db;
+    loudness_target_limited = loudness_target_limited || outcome.loudness_target_limited;
+  }
+};
+
 /// @brief Stereo counterpart to @ref MonoAudioResult.
 struct StereoAudioResult {
   std::vector<float> left;
@@ -47,6 +80,22 @@ struct StereoAudioResult {
   /// reduction. Limiter GR is reported separately in stage_gain_reductions.
   float applied_gain_db = 0.0f;
   int latency_samples = 0;
+};
+
+/// @brief Result of one stereo named-processor call: the shared audio fields
+/// plus the dispatch outcome.
+struct StereoProcessorResult : StereoAudioResult {
+  /// @copydoc ProcessorOutcome::loudness_target_limited
+  bool loudness_target_limited = false;
+
+  /// Copies both per-channel dispatch outcomes of the generic stereo fallback
+  /// (the mono processor run independently on each channel).
+  void apply(const ProcessorOutcome& left_outcome, const ProcessorOutcome& right_outcome) {
+    latency_samples = std::max(left_outcome.latency_samples, right_outcome.latency_samples);
+    applied_gain_db += 0.5f * (left_outcome.applied_gain_db + right_outcome.applied_gain_db);
+    loudness_target_limited = loudness_target_limited || left_outcome.loudness_target_limited ||
+                              right_outcome.loudness_target_limited;
+  }
 };
 
 /// @brief Gain reduction reported by a single dynamics / maximizer stage.

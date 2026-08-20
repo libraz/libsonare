@@ -84,7 +84,6 @@ class CutFilter : public rt::ProcessorBase {
   void build_sections(std::array<Section, kMaxSections>& sections, EqBandType type,
                       float frequency_hz, float q, bool enabled, CutFilterSlope slope);
   void rebuild_brickwall();
-  void ensure_channel_state(int num_channels);
   bool high_pass_is_brickwall() const noexcept;
   bool low_pass_is_brickwall() const noexcept;
   void process_stage(const std::array<Section, kMaxSections>& sections,

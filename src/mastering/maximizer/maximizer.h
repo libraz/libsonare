@@ -26,6 +26,12 @@ class Maximizer : public rt::ProcessorBase {
   void set_config(const MaximizerConfig& config);
   const MaximizerConfig& config() const { return config_; }
   float last_gain_reduction_db() const override { return limiter_.last_gain_reduction_db(); }
+  // The input-gain stage is memoryless, so the whole signal path is delayed by
+  // exactly the inner brickwall limiter's lookahead. Hosts compensate with this
+  // value and the offline runner trims this many leading samples, so leaving it
+  // at the base-class zero would shift the maximizer's output against every
+  // other track.
+  int latency_samples() const noexcept override { return limiter_.latency_samples(); }
 
   // Parameters:
   //   0 = input_gain_db (applied per block, no coefficients)

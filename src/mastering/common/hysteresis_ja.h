@@ -16,6 +16,18 @@ struct JilesAthertonConfig {
   float mean_field_coupling = 1.6e-3f;
   /// Reversibility ratio in [0, 1].
   float reversibility = 0.4f;
+  /// Magnetic after-effect time constant in seconds. When positive, and a
+  /// sample rate is supplied to process(), magnetization relaxes toward the
+  /// anhysteretic curve while the drive field is held constant instead of
+  /// staying where the last field change left it. Zero keeps the classic
+  /// rate-independent behaviour.
+  float viscosity_time_constant_s = 0.025f;
+  /// Largest drive-field change integrated in one Euler step. A field change
+  /// bigger than this is split into equal sub-steps, which keeps the
+  /// loop-transition slope from overshooting its target when the field moves
+  /// fast. Scale it with `coercivity`: the single-step scheme loses accuracy as
+  /// the field change approaches that value. Zero keeps one step per sample.
+  float max_field_step = 0.0f;
 };
 
 struct JilesAthertonState {
@@ -30,7 +42,12 @@ class JilesAtherton {
   void set_config(const JilesAthertonConfig& config);
   const JilesAthertonConfig& config() const noexcept { return config_; }
 
-  float process(JilesAthertonState& state, float field) const;
+  /// @brief Advances the magnetization state by one field sample.
+  /// @param state Per-voice magnetization state.
+  /// @param field Drive field for this sample.
+  /// @param sample_rate Rate at which process() is being called, in Hz. Only
+  ///        used for the held-field relaxation; pass 0 to disable it.
+  float process(JilesAthertonState& state, float field, float sample_rate = 0.0f) const;
   static void reset(JilesAthertonState& state) noexcept;
 
   static float langevin(float x);
@@ -38,6 +55,9 @@ class JilesAtherton {
 
  private:
   static void validate_config(const JilesAthertonConfig& config);
+  /// Advances the state by one Euler step of `d_field`, evaluating the loop
+  /// slope at `field`.
+  void integrate_step(JilesAthertonState& state, float field, float d_field) const;
 
   JilesAthertonConfig config_{};
 };

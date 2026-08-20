@@ -21,6 +21,16 @@ using sonare::test::process_stereo;
 using sonare::test::rms;
 using sonare::test::rms_tail;
 
+/// Folds a synthesized-harmonic frequency back into [0, sample_rate/2], the
+/// same reflection a real-valued sampler applies to any content above
+/// Nyquist.
+float fold_alias_hz(float source_hz, float sample_rate) {
+  float folded = std::fmod(source_hz, sample_rate);
+  if (folded < 0.0f) folded += sample_rate;
+  if (folded > sample_rate * 0.5f) folded = sample_rate - folded;
+  return folded;
+}
+
 float projected_amplitude(const std::vector<float>& samples, float frequency_hz, int sample_rate,
                           size_t skip = 0) {
   double sin_sum = 0.0;
@@ -548,6 +558,74 @@ TEST_CASE("PresenceEnhancer does not hard clip when processing is bypassed",
 
   REQUIRE(signal[0] > 1.9f);
   REQUIRE(signal[1] < -1.9f);
+}
+
+TEST_CASE("PresenceEnhancer Oversample4x suppresses high-tone alias products",
+          "[mastering][spectral]") {
+  for (const int sample_rate : {44100, 48000}) {
+    CAPTURE(sample_rate);
+    const int samples = sample_rate;
+    const float input_hz = static_cast<float>(sample_rate) * 0.36f;
+    const float alias_hz = fold_alias_hz(3.0f * input_hz, static_cast<float>(sample_rate));
+
+    auto dry = generate_sine_samples(input_hz, sample_rate, samples, 0.5f);
+
+    PresenceEnhancer enhancer(
+        {1.0f, 24.0f, input_hz, 1.0f, sonare::rt::AliasingControl::Oversample4x});
+    enhancer.prepare(sample_rate, samples);
+    auto wet = dry;
+    process(enhancer, wet);
+    const auto latency = static_cast<size_t>(enhancer.latency_samples());
+    REQUIRE(latency > 0);
+    for (size_t i = wet.size(); i-- > latency;) {
+      wet[i] -= dry[i - latency];
+    }
+    std::fill(wet.begin(), wet.begin() + static_cast<std::ptrdiff_t>(latency), 0.0f);
+
+    const float distortion_fundamental = projected_amplitude(wet, input_hz, sample_rate, 4096);
+    const float alias = projected_amplitude(wet, alias_hz, sample_rate, 4096);
+    const float alias_db = 20.0f * std::log10(alias / distortion_fundamental);
+
+    CAPTURE(distortion_fundamental, alias, alias_db, alias_hz);
+    REQUIRE(alias_db < -40.0f);
+  }
+}
+
+TEST_CASE("PresenceEnhancer None mode aliases audibly before Oversample4x is applied",
+          "[mastering][spectral]") {
+  // Before Oversample4x was implemented it fell through to the same base-rate
+  // tanh None uses, so this measurement is the level the alias assertion
+  // above would have measured against the unfixed processor.
+  constexpr int kSampleRate = 48000;
+  constexpr int kSamples = kSampleRate;
+  const float input_hz = static_cast<float>(kSampleRate) * 0.36f;
+  const float alias_hz = fold_alias_hz(3.0f * input_hz, static_cast<float>(kSampleRate));
+
+  auto dry = generate_sine_samples(input_hz, kSampleRate, kSamples, 0.5f);
+  PresenceEnhancer enhancer({1.0f, 24.0f, input_hz, 1.0f});
+  enhancer.prepare(kSampleRate, kSamples);
+  auto wet = dry;
+  process(enhancer, wet);
+  for (size_t i = 0; i < wet.size(); ++i) wet[i] -= dry[i];
+
+  const float distortion_fundamental = projected_amplitude(wet, input_hz, kSampleRate, 4096);
+  const float alias = projected_amplitude(wet, alias_hz, kSampleRate, 4096);
+  const float alias_db = 20.0f * std::log10(alias / distortion_fundamental);
+
+  CAPTURE(distortion_fundamental, alias, alias_db, alias_hz);
+  REQUIRE(alias_db > -20.0f);
+}
+
+TEST_CASE("PresenceEnhancer rejects ADAA anti-aliasing instead of silently aliasing",
+          "[mastering][spectral]") {
+  // The harmonic generator is a plain tanh with no ADAA antiderivative wired
+  // up here, so only None and Oversample4x are valid.
+  REQUIRE_THROWS(PresenceEnhancer({0.4f, 4.0f, 3000.0f, 1.2f, sonare::rt::AliasingControl::Adaa1}));
+  REQUIRE_THROWS(PresenceEnhancer({0.4f, 4.0f, 3000.0f, 1.2f, sonare::rt::AliasingControl::Adaa2}));
+
+  PresenceEnhancer enhancer({0.4f, 4.0f, 3000.0f, 1.2f});
+  REQUIRE_THROWS(
+      enhancer.set_config({0.4f, 4.0f, 3000.0f, 1.2f, sonare::rt::AliasingControl::Adaa1}));
 }
 
 TEST_CASE("Spectral processors validate configuration and state", "[mastering][spectral]") {

@@ -63,6 +63,7 @@ void EqualizerProcessor::prepare(double sample_rate, int max_block_size) {
   side_fir_.prepare_channels(1);
   mid_buffer_.assign(static_cast<size_t>(std::max(max_block_size, 0)), 0.0f);
   side_buffer_.assign(static_cast<size_t>(std::max(max_block_size, 0)), 0.0f);
+  spectrum_analyzer_.prepare(sample_rate);
   prepared_ = true;
   last_band_detector_db_.fill(kFloorDb);
   last_applied_gain_db_.fill(0.0f);
@@ -70,14 +71,14 @@ void EqualizerProcessor::prepare(double sample_rate, int max_block_size) {
   auto_threshold_db_.fill(kFloorDb);
   // Preallocate persistent detector state per band so the audio-thread detector
   // never resizes. Sized to the IIR backend's prepared channel capacity, with
-  // each channel's lookahead ring preallocated to the maximum supported lookahead.
-  max_detector_lookahead_samples_ =
-      static_cast<int>(std::round(sample_rate_ * kMaxDetectorLookaheadMs * 0.001));
+  // each channel's detector-delay ring preallocated to the maximum supported
+  // delay.
+  max_detector_delay_samples_ =
+      static_cast<int>(std::round(sample_rate_ * kMaxDetectorDelayMs * 0.001));
   for (auto& states : detector_states_) {
     states.assign(static_cast<size_t>(std::max(config_.max_channels, 0)), DetectorState{});
     for (auto& state : states) {
-      state.look_ring.assign(static_cast<size_t>(std::max(max_detector_lookahead_samples_, 0)),
-                             0.0f);
+      state.look_ring.assign(static_cast<size_t>(std::max(max_detector_delay_samples_, 0)), 0.0f);
     }
   }
   validate_backend_capacity(bands_, phase_mode_);
@@ -183,8 +184,8 @@ void EqualizerProcessor::reset() {
   last_band_detector_db_.fill(kFloorDb);
   for (auto& states : detector_states_) {
     for (auto& state : states) {
-      // Zero the filter/envelope state and the live lookahead window without
-      // releasing the preallocated ring (a default-assign would free it).
+      // Zero the filter/envelope state and the live detector-delay window
+      // without releasing the preallocated ring (a default-assign would free it).
       state.filter_a_z1 = state.filter_a_z2 = 0.0;
       state.filter_b_z1 = state.filter_b_z2 = 0.0;
       state.envelope = 0.0;
@@ -197,6 +198,7 @@ void EqualizerProcessor::reset() {
   auto_threshold_db_.fill(kFloorDb);
   last_auto_gain_db_ = 0.0f;
   smoothed_auto_gain_db_ = 0.0f;
+  spectrum_analyzer_.reset();
   clear_sidechain();
 }
 

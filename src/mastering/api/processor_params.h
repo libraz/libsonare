@@ -266,7 +266,8 @@ inline bool has_eq_band_params(const ParamMap& params, const std::string& prefix
       "rangeDb",
       "attackMs",
       "releaseMs",
-      "lookaheadMs",
+      "detectorDelayMs",
+      "lookaheadMs",  // former spelling of detectorDelayMs, still accepted
       "sidechainFreqHz",
       "sidechainQ",
   };
@@ -299,7 +300,13 @@ inline eq::EqBand eq_band(const ParamMap& params, const std::string& prefix) {
   band.dyn.range_db = f(params, (prefix + "rangeDb").c_str(), band.dyn.range_db);
   band.dyn.attack_ms = f(params, (prefix + "attackMs").c_str(), band.dyn.attack_ms);
   band.dyn.release_ms = f(params, (prefix + "releaseMs").c_str(), band.dyn.release_ms);
-  band.dyn.lookahead_ms = f(params, (prefix + "lookaheadMs").c_str(), band.dyn.lookahead_ms);
+  // "lookaheadMs" is the field's former (misleading) spelling; still accepted
+  // so a stored config using it keeps working, but "detectorDelayMs" wins if
+  // both are present.
+  band.dyn.detector_delay_ms =
+      f(params, (prefix + "lookaheadMs").c_str(), band.dyn.detector_delay_ms);
+  band.dyn.detector_delay_ms =
+      f(params, (prefix + "detectorDelayMs").c_str(), band.dyn.detector_delay_ms);
   band.dyn.sidechain_freq_hz =
       f(params, (prefix + "sidechainFreqHz").c_str(), band.dyn.sidechain_freq_hz);
   band.dyn.sidechain_q = f(params, (prefix + "sidechainQ").c_str(), band.dyn.sidechain_q);
@@ -424,6 +431,27 @@ inline void populate_limiter_bands(multiband::MultibandLimiterConfig& config,
   }
 }
 
+// Decode a per-band saturation algorithm. Unlike the EQ enum decoders above,
+// an unrecognized value is rejected instead of falling back to the first
+// enumerator: the band would otherwise run a different algorithm than the caller
+// asked for with no way to notice. The exhaustive switch makes a newly declared
+// algorithm a compile error here (-Wswitch) until it is listed.
+inline multiband::SaturationType saturation_type(int value) {
+  const auto type = static_cast<multiband::SaturationType>(value);
+  switch (type) {
+    case multiband::SaturationType::SoftClip:
+    case multiband::SaturationType::Tape:
+    case multiband::SaturationType::Tube:
+    case multiband::SaturationType::Exciter:
+      return type;
+  }
+  throw SonareException(ErrorCode::InvalidParameter, "invalid multiband saturation type");
+}
+
+// Overlay per-band fields (band{i}.driveDb / .mix / .outputGainDb / .type /
+// .enabled). `type` selects the algorithm the band delegates to and `enabled`
+// bypasses the band, so both must be read here or every band runs the default
+// soft clipper and no band can be switched off.
 inline void populate_saturation_bands(multiband::MultibandSaturationConfig& config,
                                       const ParamMap& params) {
   resize_bands_to_crossover(config.bands, config.crossover);
@@ -433,6 +461,8 @@ inline void populate_saturation_bands(multiband::MultibandSaturationConfig& conf
     band.drive_db = f(params, (prefix + "driveDb").c_str(), band.drive_db);
     band.mix = f(params, (prefix + "mix").c_str(), band.mix);
     band.output_gain_db = f(params, (prefix + "outputGainDb").c_str(), band.output_gain_db);
+    band.type = saturation_type(i(params, (prefix + "type").c_str(), static_cast<int>(band.type)));
+    band.enabled = b(params, (prefix + "enabled").c_str(), band.enabled);
   }
 }
 
@@ -483,7 +513,11 @@ inline void populate_dynamic_eq_bands(multiband::MultibandDynamicEqConfig& confi
           f(params, (prefix + "sidechainFreqHz").c_str(), band.sidechain_freq_hz);
       band.attack_ms = f(params, (prefix + "attackMs").c_str(), band.attack_ms);
       band.release_ms = f(params, (prefix + "releaseMs").c_str(), band.release_ms);
-      band.lookahead_ms = f(params, (prefix + "lookaheadMs").c_str(), band.lookahead_ms);
+      // "lookaheadMs" is the field's former (misleading) spelling; still
+      // accepted, but "detectorDelayMs" wins if both are present.
+      band.detector_delay_ms = f(params, (prefix + "lookaheadMs").c_str(), band.detector_delay_ms);
+      band.detector_delay_ms =
+          f(params, (prefix + "detectorDelayMs").c_str(), band.detector_delay_ms);
       dyn_bands.push_back(band);
     }
   }
@@ -635,7 +669,11 @@ inline void configure_dynamic_eq_bands(eq::DynamicEq& p, const ParamMap& params)
           f(params, (prefix + "sidechainFreqHz").c_str(), band.sidechain_freq_hz);
       band.attack_ms = f(params, (prefix + "attackMs").c_str(), band.attack_ms);
       band.release_ms = f(params, (prefix + "releaseMs").c_str(), band.release_ms);
-      band.lookahead_ms = f(params, (prefix + "lookaheadMs").c_str(), band.lookahead_ms);
+      // "lookaheadMs" is the field's former (misleading) spelling; still
+      // accepted, but "detectorDelayMs" wins if both are present.
+      band.detector_delay_ms = f(params, (prefix + "lookaheadMs").c_str(), band.detector_delay_ms);
+      band.detector_delay_ms =
+          f(params, (prefix + "detectorDelayMs").c_str(), band.detector_delay_ms);
       p.set_band(index, band);
     }
   }
@@ -905,5 +943,58 @@ inline maximizer::AdaptiveReleaseConfig adaptive_release_config(const ParamMap& 
   SONARE_FIELDS_ADAPTIVE_RELEASE(SONARE_READ_FIELD)
   return config;
 }
+
+// ---------------------------------------------------------------------------
+// Table coverage
+//
+// One assertion per field table, checked against the config struct the table
+// builds. Adding a field to any config below without adding its row fails the
+// build here rather than shipping a parameter no binding can reach. See
+// SONARE_ASSERT_TABLE_COVERS in param_field_tables.h for the contract; the
+// two chain-only tables are asserted in chain_params.cpp, where their stage
+// structs are visible.
+//
+// Every count is currently zero: each table exposes its whole config.
+// ---------------------------------------------------------------------------
+
+SONARE_ASSERT_TABLE_COVERS(SONARE_FIELDS_COMPRESSOR, dynamics::CompressorConfig, 0);
+SONARE_ASSERT_TABLE_COVERS(SONARE_FIELDS_LIMITER, dynamics::LimiterConfig, 0);
+SONARE_ASSERT_TABLE_COVERS(SONARE_FIELDS_BRICKWALL_LIMITER, dynamics::BrickwallLimiterConfig, 0);
+SONARE_ASSERT_TABLE_COVERS(SONARE_FIELDS_DEESSER, dynamics::DeEsserConfig, 0);
+SONARE_ASSERT_TABLE_COVERS(SONARE_FIELDS_EXPANDER, dynamics::ExpanderConfig, 0);
+SONARE_ASSERT_TABLE_COVERS(SONARE_FIELDS_GATE, dynamics::GateConfig, 0);
+SONARE_ASSERT_TABLE_COVERS(SONARE_FIELDS_PARALLEL_COMP, dynamics::ParallelCompConfig, 0);
+SONARE_ASSERT_TABLE_COVERS(SONARE_FIELDS_SIDECHAIN_ROUTER, dynamics::SidechainRouterConfig, 0);
+SONARE_ASSERT_TABLE_COVERS(SONARE_FIELDS_DUCKING, dynamics::DuckingConfig, 0);
+SONARE_ASSERT_TABLE_COVERS(SONARE_FIELDS_TRANSIENT_SHAPER, dynamics::TransientShaperConfig, 0);
+SONARE_ASSERT_TABLE_COVERS(SONARE_FIELDS_UPWARD_COMPRESSOR, dynamics::UpwardCompressorConfig, 0);
+SONARE_ASSERT_TABLE_COVERS(SONARE_FIELDS_UPWARD_EXPANDER, dynamics::UpwardExpanderConfig, 0);
+SONARE_ASSERT_TABLE_COVERS(SONARE_FIELDS_VOCAL_RIDER, dynamics::VocalRiderConfig, 0);
+
+SONARE_ASSERT_TABLE_COVERS(SONARE_FIELDS_TAPE, saturation::TapeConfig, 0);
+SONARE_ASSERT_TABLE_COVERS(SONARE_FIELDS_EXCITER, saturation::ExciterConfig, 0);
+SONARE_ASSERT_TABLE_COVERS(SONARE_FIELDS_BITCRUSHER, saturation::BitCrusherConfig, 0);
+SONARE_ASSERT_TABLE_COVERS(SONARE_FIELDS_HARD_CLIPPER, saturation::HardClipperConfig, 0);
+SONARE_ASSERT_TABLE_COVERS(SONARE_FIELDS_SOFT_CLIPPER, saturation::SoftClipperConfig, 0);
+SONARE_ASSERT_TABLE_COVERS(SONARE_FIELDS_WAVESHAPER, saturation::WaveshaperConfig, 0);
+SONARE_ASSERT_TABLE_COVERS(SONARE_FIELDS_TUBE, saturation::TubeConfig, 0);
+SONARE_ASSERT_TABLE_COVERS(SONARE_FIELDS_TRANSFORMER, saturation::TransformerConfig, 0);
+
+SONARE_ASSERT_TABLE_COVERS(SONARE_FIELDS_AIR_BAND, spectral::AirBandConfig, 0);
+SONARE_ASSERT_TABLE_COVERS(SONARE_FIELDS_LOW_END_FOCUS, spectral::LowEndFocusConfig, 0);
+SONARE_ASSERT_TABLE_COVERS(SONARE_FIELDS_PRESENCE_ENHANCER, spectral::PresenceEnhancerConfig, 0);
+SONARE_ASSERT_TABLE_COVERS(SONARE_FIELDS_SPECTRAL_SHAPER, spectral::SpectralShaperConfig, 0);
+
+SONARE_ASSERT_TABLE_COVERS(SONARE_FIELDS_AUTO_PAN, stereo::AutoPanConfig, 0);
+SONARE_ASSERT_TABLE_COVERS(SONARE_FIELDS_HAAS_ENHANCER, stereo::HaasEnhancerConfig, 0);
+SONARE_ASSERT_TABLE_COVERS(SONARE_FIELDS_IMAGER, stereo::ImagerConfig, 0);
+SONARE_ASSERT_TABLE_COVERS(SONARE_FIELDS_MONO_MAKER, stereo::MonoMakerConfig, 0);
+SONARE_ASSERT_TABLE_COVERS(SONARE_FIELDS_PHASE_ALIGN, stereo::PhaseAlignConfig, 0);
+SONARE_ASSERT_TABLE_COVERS(SONARE_FIELDS_STEREO_BALANCE, stereo::StereoBalanceConfig, 0);
+
+SONARE_ASSERT_TABLE_COVERS(SONARE_FIELDS_MAXIMIZER, maximizer::MaximizerConfig, 0);
+SONARE_ASSERT_TABLE_COVERS(SONARE_FIELDS_TRUE_PEAK_LIMITER, maximizer::TruePeakLimiterConfig, 0);
+SONARE_ASSERT_TABLE_COVERS(SONARE_FIELDS_SOFT_KNEE_MAX, maximizer::SoftKneeMaxConfig, 0);
+SONARE_ASSERT_TABLE_COVERS(SONARE_FIELDS_ADAPTIVE_RELEASE, maximizer::AdaptiveReleaseConfig, 0);
 
 }  // namespace sonare::mastering::api::detail

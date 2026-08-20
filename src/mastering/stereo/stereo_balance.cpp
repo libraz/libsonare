@@ -1,18 +1,19 @@
 #include "mastering/stereo/stereo_balance.h"
 
 #include <algorithm>
-#include <cmath>
 
+#include "rt/pan_law.h"
 #include "rt/scoped_no_denormals.h"
-#include "util/constants.h"
 #include "util/exception.h"
 
 namespace sonare::mastering::stereo {
 
 namespace {
 
-using sonare::constants::kHalfPi;
-using sonare::constants::kSqrt2;
+using sonare::rt::compute_pan_gains;
+using sonare::rt::PanGains;
+using sonare::rt::PanLaw;
+using sonare::rt::PanNormalization;
 
 }  // namespace
 
@@ -77,15 +78,16 @@ void StereoBalance::validate_config(const StereoBalanceConfig& config) {
 }
 
 void StereoBalance::gains(const StereoBalanceConfig& config, float& left, float& right) {
-  const float balance = std::clamp(config.balance, -1.0f, 1.0f);
-  if (config.constant_power) {
-    const float angle = (balance + 1.0f) * 0.5f * kHalfPi;
-    left = std::cos(angle) * kSqrt2;
-    right = std::sin(angle) * kSqrt2;
-  } else {
-    left = balance > 0.0f ? 1.0f - balance : 1.0f;
-    right = balance < 0.0f ? 1.0f + balance : 1.0f;
-  }
+  // A balance control is unity at centre either way; the two settings differ in
+  // what happens off centre. Constant power raises the near channel so the pair
+  // keeps the input's stereo energy, while the linear balance leaves the near
+  // channel alone and only pulls the away channel down.
+  const PanGains g =
+      config.constant_power
+          ? compute_pan_gains(config.balance, PanLaw::Const3dB, PanNormalization::CenterUnity)
+          : compute_pan_gains(config.balance, PanLaw::Linear0dB, PanNormalization::NearUnity);
+  left = g.left;
+  right = g.right;
 }
 
 }  // namespace sonare::mastering::stereo

@@ -10,8 +10,10 @@
 #include "mastering/match/reference_loudness.h"
 #include "mastering/match/reference_spectrum.h"
 #include "mastering/match/tonal_balance.h"
+#include "rt/biquad_design.h"
 #include "support/audio_fixtures.h"
 #include "util/constants.h"
+#include "util/db.h"
 
 using Catch::Matchers::WithinAbs;
 using namespace sonare;
@@ -31,6 +33,46 @@ Audio sine_audio(float frequency_hz, float amplitude, int sample_rate = 48000,
         static_cast<float>(std::sin(sonare::constants::kTwoPiD * frequency_hz * i / sample_rate));
   }
   return Audio::from_vector(std::move(out), sample_rate);
+}
+
+/// @brief Composite dB magnitude of a peaking band set at one frequency.
+/// @details Cascaded sections multiply in magnitude, so their dB responses add.
+///          Coefficients are designed exactly as ParametricEq designs them.
+float composite_response_db(const std::vector<sonare::mastering::eq::EqBand>& bands,
+                            float frequency_hz, double sample_rate) {
+  const auto omega = static_cast<float>(sonare::constants::kTwoPiD *
+                                        static_cast<double>(frequency_hz) / sample_rate);
+  float total_db = 0.0f;
+  for (const auto& band : bands) {
+    const auto w0 = static_cast<float>(sonare::constants::kTwoPiD *
+                                       static_cast<double>(band.frequency_hz) / sample_rate);
+    const auto section = sonare::rt::rbj_peak(w0, band.q, band.gain_db);
+    total_db += sonare::linear_to_db(sonare::rt::biquad_magnitude(section, omega));
+  }
+  return total_db;
+}
+
+MatchEqCurve log_spaced_curve(float min_hz, float max_hz, size_t points, int sample_rate) {
+  MatchEqCurve curve;
+  curve.sample_rate = sample_rate;
+  curve.frequencies.resize(points);
+  curve.gain_db.assign(points, 0.0f);
+  for (size_t i = 0; i < points; ++i) {
+    const double ratio = static_cast<double>(i) / static_cast<double>(points - 1);
+    curve.frequencies[i] = static_cast<float>(
+        static_cast<double>(min_hz) *
+        std::pow(static_cast<double>(max_hz) / static_cast<double>(min_hz), ratio));
+  }
+  return curve;
+}
+
+/// @brief Gaussian bump in dB, centred on @p centre_hz with a log-frequency width.
+float log_gaussian_db(float frequency_hz, float centre_hz, float width_octaves, float peak_db) {
+  const double octaves =
+      std::log2(static_cast<double>(frequency_hz) / static_cast<double>(centre_hz));
+  const double width = static_cast<double>(width_octaves);
+  const double shape = std::exp(-(octaves * octaves) / (2.0 * width * width));
+  return static_cast<float>(static_cast<double>(peak_db) * shape);
 }
 
 }  // namespace
@@ -116,6 +158,93 @@ TEST_CASE("MatchEq curve keeps dense smoothed correction data", "[mastering][mat
   REQUIRE(curve.gain_db.size() == curve.frequencies.size());
   REQUIRE(curve.gain_db.front() > 0.0f);
   REQUIRE(curve.gain_db.back() < 0.0f);
+}
+
+TEST_CASE("MatchEq band gains follow the composite response of the whole band set",
+          "[mastering][match]") {
+  constexpr int kSampleRate = 48000;
+  constexpr float kLimitToleranceDb = 0.001f;
+  const MatchEqConfig config{8, 12.0f, 40.0f, 18000.0f, 1.0f, 0};
+
+  MatchEqCurve curve = log_spaced_curve(40.0f, 18000.0f, 256, kSampleRate);
+  for (size_t i = 0; i < curve.frequencies.size(); ++i) {
+    curve.gain_db[i] = log_gaussian_db(curve.frequencies[i], 1000.0f, 0.6f, 6.0f) +
+                       log_gaussian_db(curve.frequencies[i], 5000.0f, 0.5f, -5.0f);
+  }
+
+  const auto bands = match_eq_bands_from_curve(curve, config);
+  REQUIRE(bands.size() == config.max_bands);
+
+  float max_deviation_db = 0.0f;
+  float peak_db = 0.0f;
+  for (size_t i = 0; i < curve.frequencies.size(); ++i) {
+    const float realised = composite_response_db(bands, curve.frequencies[i], kSampleRate);
+    max_deviation_db = std::max(max_deviation_db, std::abs(realised - curve.gain_db[i]));
+    peak_db = std::max(peak_db, std::abs(realised));
+  }
+
+  // The eight selected bands sit close enough that their responses reinforce:
+  // reading each gain off the curve at its own centre would realise 14.3 dB
+  // against this 12 dB limit and miss the target by 8.4 dB.
+  REQUIRE(max_deviation_db < 1.5f);
+  REQUIRE(peak_db <= config.max_gain_db + kLimitToleranceDb);
+}
+
+TEST_CASE("MatchEq keeps densely packed bands from stacking past max_gain_db",
+          "[mastering][match]") {
+  constexpr int kSampleRate = 48000;
+  constexpr float kLimitToleranceDb = 0.001f;
+  const MatchEqConfig config{8, 12.0f, 40.0f, 18000.0f, 1.0f, 0};
+
+  // A flat correction offers the selector no extrema, so it falls back to the
+  // minimum spacing of log2(18000/40)/8*0.35 = 0.386 octaves.
+  MatchEqCurve curve = log_spaced_curve(40.0f, 18000.0f, 256, kSampleRate);
+  std::fill(curve.gain_db.begin(), curve.gain_db.end(), 6.0f);
+
+  const auto bands = match_eq_bands_from_curve(curve, config);
+  REQUIRE(bands.size() == config.max_bands);
+  REQUIRE(std::log2(bands[6].frequency_hz / bands[0].frequency_hz) < 3.0f);
+
+  float peak_db = 0.0f;
+  float max_overshoot_db = 0.0f;
+  for (size_t i = 0; i < curve.frequencies.size(); ++i) {
+    const float realised = composite_response_db(bands, curve.frequencies[i], kSampleRate);
+    peak_db = std::max(peak_db, std::abs(realised));
+    max_overshoot_db = std::max(max_overshoot_db, realised - curve.gain_db[i]);
+  }
+
+  // Seven bands packed inside two and a half octaves, each carrying the +6 dB
+  // the curve asks for, realise about +22 dB. Only the overshoot is bounded
+  // here: the selector leaves 300 Hz upward uncovered, so undershoot there is
+  // a placement property, not a gain-stacking one.
+  REQUIRE(peak_db <= config.max_gain_db + kLimitToleranceDb);
+  REQUIRE(max_overshoot_db < 4.0f);
+}
+
+TEST_CASE("MatchEq scales the band set when the fitted response exceeds max_gain_db",
+          "[mastering][match]") {
+  constexpr int kSampleRate = 48000;
+  constexpr float kLimitToleranceDb = 0.001f;
+  const MatchEqConfig config{8, 12.0f, 40.0f, 18000.0f, 1.0f, 0};
+
+  // A reference more than max_gain_db louder than the source across the whole
+  // spectrum clamps the curve flat at the limit, so any fit error at all pushes
+  // the realised response past it and the limiter has to engage.
+  MatchEqCurve curve = log_spaced_curve(40.0f, 18000.0f, 256, kSampleRate);
+  std::fill(curve.gain_db.begin(), curve.gain_db.end(), config.max_gain_db);
+
+  const auto bands = match_eq_bands_from_curve(curve, config);
+  REQUIRE(bands.size() == config.max_bands);
+
+  float peak_db = 0.0f;
+  for (size_t i = 0; i < curve.frequencies.size(); ++i) {
+    peak_db = std::max(peak_db,
+                       std::abs(composite_response_db(bands, curve.frequencies[i], kSampleRate)));
+  }
+
+  // Per-band gains equal to the curve would realise about +45 dB here.
+  REQUIRE(peak_db <= config.max_gain_db + kLimitToleranceDb);
+  REQUIRE(peak_db > config.max_gain_db - 1.0f);
 }
 
 TEST_CASE("MatchEq FIR kernel is linear phase and follows curve gain", "[mastering][match]") {

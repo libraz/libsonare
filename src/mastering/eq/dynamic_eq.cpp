@@ -26,14 +26,15 @@ void DynamicEq::prepare(double sample_rate, int max_block_size) {
   eq_.prepare(sample_rate, max_block_size);
   // Preallocate every band's per-channel detector state up front so the audio-
   // thread process()/ensure_detector path never allocates: kRealtimePreparedChannels
-  // channels and a lookahead ring sized to the maximum supported lookahead. The
-  // live FIFO length (look_size) is then varied within this capacity without
-  // resizing, mirroring the fixed-size limiter lookahead.
-  max_lookahead_samples_ = static_cast<int>(std::round(sample_rate_ * kMaxLookaheadMs * 0.001));
+  // channels and a detector-delay ring sized to the maximum supported delay.
+  // The live FIFO length (look_size) is then varied within this capacity
+  // without resizing.
+  max_detector_delay_samples_ =
+      static_cast<int>(std::round(sample_rate_ * kMaxDetectorDelayMs * 0.001));
   for (auto& detector : detectors_) {
     detector.channels.assign(kRealtimePreparedChannels, {});
     for (auto& channel : detector.channels) {
-      channel.look_ring.assign(static_cast<size_t>(std::max(max_lookahead_samples_, 0)), 0.0f);
+      channel.look_ring.assign(static_cast<size_t>(std::max(max_detector_delay_samples_, 0)), 0.0f);
       channel.look_size = 0;
       channel.look_pos = 0;
     }
@@ -248,7 +249,7 @@ bool DynamicEq::set_parameter(unsigned int param_id, float value) {
       band.release_ms = std::max(0.0f, value);
       break;
     case 10:
-      band.lookahead_ms = std::max(0.0f, value);
+      band.detector_delay_ms = std::max(0.0f, value);
       break;
     default:
       return false;
@@ -269,8 +270,8 @@ std::vector<rt::ParamDescriptor> DynamicEq::parameter_descriptors() const {
   // accepted at construction (see configure_dynamic_eq_bands), prefixed with the
   // band index so name-addressed automation resolves to the correct band.
   static constexpr std::array<const char*, kParamsPerBand> kFieldKeys{
-      "frequencyHz", "staticGainDb",    "q",        "thresholdDb", "ratio",      "rangeDb",
-      "sidechainQ",  "sidechainFreqHz", "attackMs", "releaseMs",   "lookaheadMs"};
+      "frequencyHz", "staticGainDb",    "q",        "thresholdDb", "ratio",          "rangeDb",
+      "sidechainQ",  "sidechainFreqHz", "attackMs", "releaseMs",   "detectorDelayMs"};
   std::vector<rt::ParamDescriptor> descriptors;
   descriptors.reserve(kMaxBands * kParamsPerBand);
   for (unsigned int b = 0; b < kMaxBands; ++b) {
@@ -309,7 +310,7 @@ void DynamicEq::validate_band(const DynamicEqBand& band) {
     throw SonareException(ErrorCode::InvalidParameter, "ratio must be at least 1");
   }
   if (!(band.sidechain_q > 0.0f) || band.attack_ms < 0.0f || band.release_ms < 0.0f ||
-      band.lookahead_ms < 0.0f ||
+      band.detector_delay_ms < 0.0f ||
       (band.sidechain_freq_hz != -1.0f && band.sidechain_freq_hz <= 0.0f)) {
     throw SonareException(ErrorCode::InvalidParameter,
                           "invalid dynamic EQ sidechain configuration");
@@ -331,11 +332,12 @@ void DynamicEq::ensure_detector(size_t index, int num_channels) {
                           "num_channels exceeds prepared DynamicEq detector state");
   }
 
-  // Clamp the lookahead to the capacity preallocated in prepare() so the ring is
-  // never reallocated on the audio thread (automation past the bound saturates).
-  const int lookahead_samples =
-      std::clamp(static_cast<int>(std::round(sample_rate_ * band.lookahead_ms * 0.001)), 0,
-                 max_lookahead_samples_);
+  // Clamp the detector delay to the capacity preallocated in prepare() so the
+  // ring is never reallocated on the audio thread (automation past the bound
+  // saturates).
+  const int detector_delay_samples =
+      std::clamp(static_cast<int>(std::round(sample_rate_ * band.detector_delay_ms * 0.001)), 0,
+                 max_detector_delay_samples_);
 
   // (Re)design the bandpass prototype and timing only when the relevant band
   // fields change — coefficient design is double-precision and not free.
@@ -369,22 +371,23 @@ void DynamicEq::ensure_detector(size_t index, int num_channels) {
   // means the observed channel count differs from the previous block (no
   // allocation, just a re-seed of the now-active channels' coefficients).
   const bool channels_changed = state.active_channels != num_channels;
-  const bool lookahead_changed =
-      state.lookahead_ms != band.lookahead_ms || state.lookahead_samples != lookahead_samples;
+  const bool detector_delay_changed = state.detector_delay_ms != band.detector_delay_ms ||
+                                      state.detector_delay_samples != detector_delay_samples;
   if (channels_changed) {
     state.active_channels = num_channels;
   }
-  if (lookahead_changed) {
-    state.lookahead_samples = lookahead_samples;
-    state.lookahead_ms = band.lookahead_ms;
+  if (detector_delay_changed) {
+    state.detector_delay_samples = detector_delay_samples;
+    state.detector_delay_ms = band.detector_delay_ms;
   }
 
-  // Propagate fresh coefficients (and re-window the lookahead ring) only when
-  // something relevant changed; the per-sample filter state (z1/z2) and ring
-  // contents are otherwise preserved across blocks for continuity. The ring is
-  // never resized here — its live FIFO length (look_size) is set within the
-  // capacity preallocated in prepare(), and the newly active window is zeroed.
-  if (design_changed || channels_changed || lookahead_changed) {
+  // Propagate fresh coefficients (and re-window the detector-delay ring) only
+  // when something relevant changed; the per-sample filter state (z1/z2) and
+  // ring contents are otherwise preserved across blocks for continuity. The
+  // ring is never resized here — its live FIFO length (look_size) is set
+  // within the capacity preallocated in prepare(), and the newly active
+  // window is zeroed.
+  if (design_changed || channels_changed || detector_delay_changed) {
     for (int ch = 0; ch < num_channels; ++ch) {
       DetectorChannel& channel = state.channels[static_cast<size_t>(ch)];
       const auto copy = [&](DetectorBiquad& f) {
@@ -396,8 +399,8 @@ void DynamicEq::ensure_detector(size_t index, int num_channels) {
       };
       copy(channel.filter_a);
       copy(channel.filter_b);
-      if (channel.look_size != static_cast<size_t>(lookahead_samples)) {
-        channel.look_size = static_cast<size_t>(lookahead_samples);
+      if (channel.look_size != static_cast<size_t>(detector_delay_samples)) {
+        channel.look_size = static_cast<size_t>(detector_delay_samples);
         std::fill(channel.look_ring.begin(), channel.look_ring.begin() + channel.look_size, 0.0f);
         channel.look_pos = 0;
       }
@@ -410,7 +413,7 @@ float DynamicEq::band_detector_db(const float* const* channels, int num_channels
   if (num_samples <= 0 || num_channels <= 0) return kFloorDb;
   ensure_detector(index, num_channels);
   DetectorState& state = detectors_[index];
-  const int look = state.lookahead_samples;
+  const int look = state.detector_delay_samples;
 
   // Detector-history continuity fix (NOT true zero-latency lookahead). The
   // bandpass filters and envelope follower are persistent across blocks, and a

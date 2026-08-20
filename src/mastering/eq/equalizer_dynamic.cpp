@@ -40,11 +40,12 @@ float EqualizerProcessor::band_detector_db(size_t band_index, const float* const
 
   const double attack = sonare::time_to_attack_release_rate(sample_rate, band.dyn.attack_ms);
   const double release = sonare::time_to_attack_release_rate(sample_rate, band.dyn.release_ms);
-  // Clamp the lookahead to the ring capacity preallocated in prepare() so the
-  // audio-thread path never reallocates (automation past the bound saturates).
-  const int lookahead_samples =
-      std::clamp(static_cast<int>(std::round(sample_rate * band.dyn.lookahead_ms * 0.001)), 0,
-                 max_detector_lookahead_samples_);
+  // Clamp the detector delay to the ring capacity preallocated in prepare() so
+  // the audio-thread path never reallocates (automation past the bound
+  // saturates).
+  const int detector_delay_samples =
+      std::clamp(static_cast<int>(std::round(sample_rate * band.dyn.detector_delay_ms * 0.001)), 0,
+                 max_detector_delay_samples_);
 
   auto& states = detector_states_[band_index];
   // States are preallocated in prepare(); only grow if a wider channel count is
@@ -63,10 +64,10 @@ float EqualizerProcessor::band_detector_db(size_t band_index, const float* const
   double sum = 0.0;
   for (int ch = 0; ch < num_channels; ++ch) {
     DetectorState& s = states[static_cast<size_t>(ch)];
-    // Re-window the persistent lookahead ring when the lookahead changes. The
+    // Re-window the persistent detector-delay ring when the delay changes. The
     // ring is preallocated; offline/unprepared paths that grew states above may
     // have an unsized ring, so grow it here (only off the audio thread).
-    const size_t look = static_cast<size_t>(std::max(lookahead_samples, 0));
+    const size_t look = static_cast<size_t>(std::max(detector_delay_samples, 0));
     if (s.look_size != look) {
       if (s.look_ring.size() < look) {
         s.look_ring.assign(look, 0.0f);

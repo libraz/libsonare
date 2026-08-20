@@ -3,6 +3,7 @@
 #include <algorithm>
 #include <cmath>
 
+#include "mastering/dynamics/channel_limits.h"
 #include "rt/biquad_design.h"
 #include "rt/scoped_no_denormals.h"
 #include "util/constants.h"
@@ -13,6 +14,7 @@ namespace {
 
 using sonare::constants::kButterworthQ;
 using sonare::constants::kPiD;
+using sonare::mastering::dynamics::kRealtimePreparedChannels;
 
 float clamp_frequency(float frequency_hz, double sample_rate) {
   return std::clamp(frequency_hz, 1.0e-3f, static_cast<float>(sample_rate * 0.5) - 1.0e-3f);
@@ -70,7 +72,11 @@ void CutFilter::prepare(double sample_rate, int max_block_size) {
   sample_rate_ = sample_rate;
   brickwall_.prepare(sample_rate, max_block_size);
   prepared_ = true;
-  prepare_channels(2);
+  // Preallocate per-channel biquad state up front so the audio-thread process()
+  // path never resizes the state vectors (resize there would malloc and, worse,
+  // would default-construct the state of channels already being processed).
+  // Blocks wider than this throw instead of allocating (mirrors ParametricEq).
+  prepare_channels(static_cast<int>(kRealtimePreparedChannels));
   apply_high_pass();
   apply_low_pass();
 }
@@ -80,11 +86,14 @@ void CutFilter::prepare_channels(int num_channels) {
     throw SonareException(ErrorCode::InvalidParameter, "num_channels must be non-negative");
   }
   num_channels_ = num_channels;
+  // resize() (not assign()) so growing capacity preserves the filter state of
+  // channels that already existed; only newly added channels are default-
+  // constructed.
   for (auto& states : high_pass_states_) {
-    states.assign(static_cast<size_t>(num_channels), {});
+    states.resize(static_cast<size_t>(num_channels));
   }
   for (auto& states : low_pass_states_) {
-    states.assign(static_cast<size_t>(num_channels), {});
+    states.resize(static_cast<size_t>(num_channels));
   }
   brickwall_.prepare_channels(num_channels);
 }
@@ -95,7 +104,13 @@ void CutFilter::process(float* const* channels, int num_channels, int num_sample
   if (!validate_process_buffers(channels, num_channels, num_samples)) {
     return;
   }
-  ensure_channel_state(num_channels);
+  // Per-channel biquad state is preallocated to kRealtimePreparedChannels in
+  // prepare(); never resize on the audio thread. Reject blocks wider than the
+  // prepared state (matches the ParametricEq/LinearPhaseEq pattern).
+  if (num_channels_ < num_channels) {
+    throw SonareException(ErrorCode::InvalidParameter,
+                          "num_channels exceeds prepared CutFilter state");
+  }
   for (int ch = 0; ch < num_channels; ++ch) {
     process_stage(high_pass_sections_, high_pass_states_, channels[ch], ch, num_samples);
     process_stage(low_pass_sections_, low_pass_states_, channels[ch], ch, num_samples);
@@ -234,13 +249,6 @@ void CutFilter::rebuild_brickwall() {
   lp.slope_db_oct = 0;
   brickwall_.set_band(0, hp);
   brickwall_.set_band(1, lp);
-}
-
-void CutFilter::ensure_channel_state(int num_channels) {
-  if (num_channels_ >= num_channels) {
-    return;
-  }
-  prepare_channels(num_channels);
 }
 
 bool CutFilter::high_pass_is_brickwall() const noexcept {

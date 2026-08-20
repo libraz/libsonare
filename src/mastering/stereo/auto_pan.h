@@ -15,6 +15,11 @@ struct AutoPanConfig {
   float phase = 0.0f;
 };
 
+/// @brief Sweeps a stereo image left/right with an LFO.
+///
+/// Constant power with the centre at unity: the panner conserves the input's
+/// stereo energy at every LFO position and adds no insertion loss, so depth 0
+/// is a true bypass.
 class AutoPan : public rt::ProcessorBase {
  public:
   explicit AutoPan(AutoPanConfig config = {});

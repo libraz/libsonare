@@ -26,7 +26,11 @@ struct DynamicEqBand {
   float sidechain_freq_hz = -1.0f;
   float attack_ms = 5.0f;
   float release_ms = 50.0f;
-  float lookahead_ms = 0.0f;
+  // Delays the detector's view of the signal by this many ms; a larger
+  // value makes the band react LATER, not earlier -- this is a detector
+  // delay, not true look-ahead, and adds no latency to the audio path (see
+  // band_detector_db() for the mechanism).
+  float detector_delay_ms = 0.0f;
 };
 
 class DynamicEq : public rt::ProcessorBase {
@@ -60,14 +64,14 @@ class DynamicEq : public rt::ProcessorBase {
   //   +7  = sidechain_freq_hz  (> 0 to set; -1 follows band frequency_hz)
   //   +8  = attack_ms          (clamped to >= 0)
   //   +9  = release_ms         (clamped to >= 0)
-  //   +10 = lookahead_ms       (clamped to >= 0)
+  //   +10 = detector_delay_ms  (clamped to >= 0)
   // Band type and the enabled flag are not automatable. A param change on a
   // DISABLED band updates config only and has no audible effect until the band
   // is enabled (via set_band). Ids for b >= kMaxBands are rejected (false).
   bool set_parameter(unsigned int param_id, float value) override;
   // Automatable parameters, per band b in [0, kMaxBands): 0=frequencyHz,
   // 1=staticGainDb, 2=q, 3=thresholdDb, 4=ratio, 5=rangeDb, 6=sidechainQ,
-  // 7=sidechainFreqHz, 8=attackMs, 9=releaseMs, 10=lookaheadMs, each offset by
+  // 7=sidechainFreqHz, 8=attackMs, 9=releaseMs, 10=detectorDelayMs, each offset by
   // kParamsPerBand*b and keyed "bandB.<field>" to match the construction JSON.
   std::vector<rt::ParamDescriptor> parameter_descriptors() const override;
   /// Borrows sidechain buffers until the next set/clear/process call.
@@ -92,16 +96,18 @@ class DynamicEq : public rt::ProcessorBase {
   // Skip re-applying a band's coefficients when the smoothed gain has not moved
   // by at least this many dB since the last applied value (steady state).
   static constexpr float kGainEpsilonDb = 1.0e-3f;
-  // Maximum per-band detector lookahead the audio-thread path supports. The
-  // lookahead rings are preallocated to this many samples (at the prepare()
-  // sample rate) so process()/ensure_detector never allocate; a band requesting
-  // more is clamped to this bound, mirroring the fixed-size limiter lookahead.
-  static constexpr float kMaxLookaheadMs = 20.0f;
+  // Maximum per-band detector delay the audio-thread path supports. The
+  // detector-delay rings are preallocated to this many samples (at the
+  // prepare() sample rate) so process()/ensure_detector never allocate; a band
+  // requesting more is clamped to this bound. Unlike the fixed-size limiter
+  // lookahead this mirrors in sizing, this delay is on the detector's input
+  // only -- the audio path itself is never delayed.
+  static constexpr float kMaxDetectorDelayMs = 20.0f;
 
   // Persistent per-(band, channel) sidechain detector state. Kept across blocks
-  // so the bandpass filter, envelope follower and lookahead delay all evolve
+  // so the bandpass filter, envelope follower and detector delay all evolve
   // continuously — the detection horizon therefore crosses block boundaries
-  // correctly (mirrors how dynamics/limiter.cpp persists its lookahead).
+  // correctly.
   struct DetectorBiquad {
     double b0 = 1.0, b1 = 0.0, b2 = 0.0, a1 = 0.0, a2 = 0.0;
     double z1 = 0.0, z2 = 0.0;
@@ -117,12 +123,15 @@ class DynamicEq : public rt::ProcessorBase {
     DetectorBiquad filter_a;
     DetectorBiquad filter_b;
     double envelope = 0.0;
-    // Lookahead delay ring of pre-filter input samples. The detector consumes a
-    // sample that is `lookahead_samples` ahead of the audio position, drawing
-    // the tail from the previous block so the horizon is continuous. The vector
-    // is preallocated in prepare() to the maximum supported lookahead; only the
-    // first `look_size` entries are the live FIFO, so the modulo wrap uses
-    // look_size (not look_ring.size()) and changing the lookahead never resizes.
+    // Detector-delay ring of pre-filter input samples. This is NOT true
+    // lookahead: the detector consumes a sample that is `detector_delay_samples`
+    // BEHIND the audio position (a plain FIFO delay on the detector's own
+    // input), drawing the tail from the previous block so the horizon is
+    // continuous across block boundaries. See band_detector_db() for the full
+    // rationale. The vector is preallocated in prepare() to the maximum
+    // supported delay; only the first `look_size` entries are the live
+    // FIFO, so the modulo wrap uses look_size (not look_ring.size()) and
+    // changing the delay never resizes.
     std::vector<float> look_ring;
     size_t look_size = 0;
     size_t look_pos = 0;
@@ -137,14 +146,14 @@ class DynamicEq : public rt::ProcessorBase {
   struct DetectorState {
     std::vector<DetectorChannel> channels;  // preallocated to kRealtimePreparedChannels
     int active_channels = -1;               // observed channel count (-1 until first block)
-    int lookahead_samples = 0;
+    int detector_delay_samples = 0;
     // Cached design inputs so coefficients/ring are only rebuilt on change.
     float frequency_hz = -1.0f;
     float sidechain_freq_hz = -2.0f;
     float sidechain_q = -1.0f;
     float attack_ms = -1.0f;
     float release_ms = -1.0f;
-    float lookahead_ms = -1.0f;
+    float detector_delay_ms = -1.0f;
     DetectorBiquad prototype;
     double attack = 1.0;
     double release = 1.0;
@@ -155,8 +164,8 @@ class DynamicEq : public rt::ProcessorBase {
   static float detector_db(const float* const* channels, int num_channels, int num_samples);
   // Updates band `index`'s persistent detector against the supplied sidechain
   // and returns the block's detector level in dB. Stateful: advances the
-  // bandpass filters, envelope and lookahead ring so the result is continuous
-  // across blocks.
+  // bandpass filters, envelope and detector-delay ring so the result is
+  // continuous across blocks.
   float band_detector_db(const float* const* channels, int num_channels, int num_samples,
                          size_t index);
   void ensure_detector(size_t index, int num_channels);
@@ -167,8 +176,9 @@ class DynamicEq : public rt::ProcessorBase {
 
   ParametricEq eq_;
   double sample_rate_ = 48000.0;
-  // Lookahead ring capacity (samples) preallocated in prepare() from kMaxLookaheadMs.
-  int max_lookahead_samples_ = 0;
+  // Detector-delay ring capacity (samples) preallocated in prepare() from
+  // kMaxDetectorDelayMs.
+  int max_detector_delay_samples_ = 0;
   bool prepared_ = false;
   std::array<DynamicEqBand, kMaxBands> bands_{};
   std::array<float, kMaxBands> last_band_detector_db_{};

@@ -44,6 +44,16 @@ float projected_amplitude(const std::vector<float>& samples, float frequency_hz,
                                          static_cast<double>(count));
 }
 
+/// Folds a synthesized-harmonic frequency back into [0, sample_rate/2], the
+/// same reflection a real-valued sampler applies to any content above
+/// Nyquist.
+float fold_alias_hz(float source_hz, float sample_rate) {
+  float folded = std::fmod(source_hz, sample_rate);
+  if (folded < 0.0f) folded += sample_rate;
+  if (folded > sample_rate * 0.5f) folded = sample_rate - folded;
+  return folded;
+}
+
 struct LegacyJaState {
   float M = 0.0f;
   float H_prev = 0.0f;
@@ -66,6 +76,20 @@ float legacy_langevin_derivative(float x) {
   return 1.0f / (x * x) - 1.0f / (sinh_x * sinh_x);
 }
 
+/// Transcription of the DAFx-19 loop equation, frozen here so a later edit to
+/// the engine alone shows up as a difference.
+///
+/// It is not an independent oracle. The body below is a line-for-line copy of
+/// JilesAtherton::integrate_step and its Langevin helpers, down to the +-1.2*Ms
+/// clamp, so a change applied to both sides passes unnoticed - which is the
+/// likely shape of a deliberate model change. It also compares only the
+/// single-step rate-independent path: it has no sub-stepping, and no
+/// after-effect relaxation, so the caller must keep max_field_step at 0 and call
+/// the two-argument process() for the two sides to line up at all. Neither of
+/// those paths is compared by it.
+///
+/// The independent checks - built from the published equations rather than from
+/// this code - are in hysteresis_ja_reference_test.cpp.
 float dafx19_reference_ja_process(LegacyJaState& state,
                                   const sonare::mastering::common::JilesAthertonConfig& config,
                                   float field) {
@@ -153,6 +177,53 @@ TEST_CASE("Waveshaper rejects ADAA1 + Asymmetric instead of silently aliasing",
       {0.0f, 1.0f, 0.0f, 0.0f, WaveshaperCurve::Asymmetric, sonare::rt::AliasingControl::None}));
 }
 
+TEST_CASE("Waveshaper Oversample4x suppresses high-tone alias products",
+          "[mastering][saturation]") {
+  for (const int sample_rate : {44100, 48000}) {
+    CAPTURE(sample_rate);
+    const int samples = sample_rate;
+    const float input_hz = static_cast<float>(sample_rate) * 0.36f;
+    const float alias_hz = fold_alias_hz(3.0f * input_hz, static_cast<float>(sample_rate));
+
+    auto dry = generate_sine_samples(input_hz, sample_rate, samples, 0.9f);
+
+    Waveshaper shaper({24.0f, 1.0f, 0.0f, 0.0f, WaveshaperCurve::Tanh,
+                       sonare::rt::AliasingControl::Oversample4x});
+    shaper.prepare(sample_rate, samples);
+    auto wet = dry;
+    process(shaper, wet);
+    const auto latency = static_cast<size_t>(shaper.latency_samples());
+    REQUIRE(latency > 0);
+    for (size_t i = wet.size(); i-- > latency;) {
+      wet[i] -= dry[i - latency];
+    }
+    std::fill(wet.begin(), wet.begin() + static_cast<std::ptrdiff_t>(latency), 0.0f);
+
+    const float distortion_fundamental = projected_amplitude(wet, input_hz, sample_rate, 4096);
+    const float alias = projected_amplitude(wet, alias_hz, sample_rate, 4096);
+    const float alias_db = 20.0f * std::log10(alias / distortion_fundamental);
+
+    CAPTURE(distortion_fundamental, alias, alias_db, alias_hz);
+    REQUIRE(alias_db < -40.0f);
+  }
+}
+
+TEST_CASE("Waveshaper Oversample4x supports the Asymmetric curve", "[mastering][saturation]") {
+  // Oversample4x does not depend on a curve-specific ADAA antiderivative, so
+  // it is not restricted the way Adaa1 is.
+  REQUIRE_NOTHROW(Waveshaper({0.0f, 1.0f, 0.0f, 0.0f, WaveshaperCurve::Asymmetric,
+                              sonare::rt::AliasingControl::Oversample4x}));
+}
+
+TEST_CASE("Waveshaper rejects ADAA2 instead of silently aliasing", "[mastering][saturation]") {
+  REQUIRE_THROWS(Waveshaper(
+      {0.0f, 1.0f, 0.0f, 0.0f, WaveshaperCurve::Tanh, sonare::rt::AliasingControl::Adaa2}));
+
+  Waveshaper shaper({0.0f, 1.0f, 0.0f, 0.0f, WaveshaperCurve::Tanh});
+  REQUIRE_THROWS(shaper.set_config(
+      {0.0f, 1.0f, 0.0f, 0.0f, WaveshaperCurve::Tanh, sonare::rt::AliasingControl::Adaa2}));
+}
+
 TEST_CASE("SoftClipper and HardClipper constrain peaks", "[mastering][saturation]") {
   std::vector<float> soft = {-2.0f, -0.5f, 0.5f, 2.0f};
   std::vector<float> hard = soft;
@@ -188,6 +259,103 @@ TEST_CASE("SoftClipper and HardClipper support ADAA mode", "[mastering][saturati
   std::vector<float> repeated = {2.0f};
   process(hard, repeated);
   REQUIRE_THAT(repeated[0], WithinAbs(hard_signal[0], 0.0001f));
+}
+
+TEST_CASE("HardClipper Oversample4x suppresses high-tone alias products",
+          "[mastering][saturation]") {
+  for (const int sample_rate : {44100, 48000}) {
+    CAPTURE(sample_rate);
+    const int samples = sample_rate;
+    // Above a third of Nyquist so the clip's 3rd harmonic exceeds Nyquist and
+    // folds back into the audible band.
+    const float input_hz = static_cast<float>(sample_rate) * 0.36f;
+    const float alias_hz = fold_alias_hz(3.0f * input_hz, static_cast<float>(sample_rate));
+
+    auto dry = generate_sine_samples(input_hz, sample_rate, samples, 0.9f);
+
+    HardClipper clipper({0.5f, sonare::rt::AliasingControl::Oversample4x});
+    clipper.prepare(sample_rate, samples);
+    auto wet = dry;
+    process(clipper, wet);
+    const auto latency = static_cast<size_t>(clipper.latency_samples());
+    REQUIRE(latency > 0);
+    for (size_t i = wet.size(); i-- > latency;) {
+      wet[i] -= dry[i - latency];
+    }
+    std::fill(wet.begin(), wet.begin() + static_cast<std::ptrdiff_t>(latency), 0.0f);
+
+    const float distortion_fundamental = projected_amplitude(wet, input_hz, sample_rate, 4096);
+    const float alias = projected_amplitude(wet, alias_hz, sample_rate, 4096);
+    const float alias_db = 20.0f * std::log10(alias / distortion_fundamental);
+
+    CAPTURE(distortion_fundamental, alias, alias_db, alias_hz);
+    REQUIRE(alias_db < -40.0f);
+  }
+}
+
+TEST_CASE("HardClipper None mode aliases audibly before Oversample4x is applied",
+          "[mastering][saturation]") {
+  // Before Oversample4x was implemented it fell through to the same base-rate
+  // clamp None uses, so this measurement is the level the alias assertion
+  // above would have measured against the unfixed processor.
+  constexpr int kSampleRate = 48000;
+  constexpr int kSamples = kSampleRate;
+  const float input_hz = static_cast<float>(kSampleRate) * 0.36f;
+  const float alias_hz = fold_alias_hz(3.0f * input_hz, static_cast<float>(kSampleRate));
+
+  auto dry = generate_sine_samples(input_hz, kSampleRate, kSamples, 0.9f);
+  HardClipper clipper({0.5f, sonare::rt::AliasingControl::None});
+  clipper.prepare(kSampleRate, kSamples);
+  auto wet = dry;
+  process(clipper, wet);
+  for (size_t i = 0; i < wet.size(); ++i) wet[i] -= dry[i];
+
+  const float distortion_fundamental = projected_amplitude(wet, input_hz, kSampleRate, 4096);
+  const float alias = projected_amplitude(wet, alias_hz, kSampleRate, 4096);
+  const float alias_db = 20.0f * std::log10(alias / distortion_fundamental);
+
+  CAPTURE(distortion_fundamental, alias, alias_db, alias_hz);
+  REQUIRE(alias_db > -20.0f);
+}
+
+TEST_CASE("SoftClipper Oversample4x suppresses high-tone alias products",
+          "[mastering][saturation]") {
+  for (const int sample_rate : {44100, 48000}) {
+    CAPTURE(sample_rate);
+    const int samples = sample_rate;
+    const float input_hz = static_cast<float>(sample_rate) * 0.36f;
+    const float alias_hz = fold_alias_hz(3.0f * input_hz, static_cast<float>(sample_rate));
+
+    auto dry = generate_sine_samples(input_hz, sample_rate, samples, 0.9f);
+
+    SoftClipper clipper({24.0f, 1.0f, 1.0f, sonare::rt::AliasingControl::Oversample4x});
+    clipper.prepare(sample_rate, samples);
+    auto wet = dry;
+    process(clipper, wet);
+    const auto latency = static_cast<size_t>(clipper.latency_samples());
+    REQUIRE(latency > 0);
+    for (size_t i = wet.size(); i-- > latency;) {
+      wet[i] -= dry[i - latency];
+    }
+    std::fill(wet.begin(), wet.begin() + static_cast<std::ptrdiff_t>(latency), 0.0f);
+
+    const float distortion_fundamental = projected_amplitude(wet, input_hz, sample_rate, 4096);
+    const float alias = projected_amplitude(wet, alias_hz, sample_rate, 4096);
+    const float alias_db = 20.0f * std::log10(alias / distortion_fundamental);
+
+    CAPTURE(distortion_fundamental, alias, alias_db, alias_hz);
+    REQUIRE(alias_db < -40.0f);
+  }
+}
+
+TEST_CASE("SoftClipper rejects ADAA2 instead of silently aliasing", "[mastering][saturation]") {
+  // tanh has no closed-form second antiderivative, so ADAA2 is not
+  // implemented here; it must error at construction and set_config rather
+  // than silently behave like AliasingControl::None.
+  REQUIRE_THROWS(SoftClipper({0.0f, 1.0f, 1.0f, sonare::rt::AliasingControl::Adaa2}));
+
+  SoftClipper clipper({0.0f, 1.0f, 1.0f});
+  REQUIRE_THROWS(clipper.set_config({0.0f, 1.0f, 1.0f, sonare::rt::AliasingControl::Adaa2}));
 }
 
 TEST_CASE("Tube and Transformer introduce asymmetric shaping", "[mastering][saturation]") {
@@ -593,6 +761,72 @@ TEST_CASE("Exciter set_config preserves filter history", "[mastering][saturation
   process(exciter, after_config);
 
   REQUIRE_THAT(after_config[0], WithinAbs(1.0f, 0.1f));
+}
+
+TEST_CASE("Exciter Oversample4x suppresses high-tone alias products", "[mastering][saturation]") {
+  for (const int sample_rate : {44100, 48000}) {
+    CAPTURE(sample_rate);
+    const int samples = sample_rate;
+    const float input_hz = static_cast<float>(sample_rate) * 0.36f;
+    const float alias_hz = fold_alias_hz(3.0f * input_hz, static_cast<float>(sample_rate));
+
+    auto dry = generate_sine_samples(input_hz, sample_rate, samples, 0.5f);
+
+    Exciter exciter({input_hz, 24.0f, 1.0f, 1.0f, 1.0f, sonare::rt::AliasingControl::Oversample4x});
+    exciter.prepare(sample_rate, samples);
+    auto wet = dry;
+    process(exciter, wet);
+    const auto latency = static_cast<size_t>(exciter.latency_samples());
+    REQUIRE(latency > 0);
+    for (size_t i = wet.size(); i-- > latency;) {
+      wet[i] -= dry[i - latency];
+    }
+    std::fill(wet.begin(), wet.begin() + static_cast<std::ptrdiff_t>(latency), 0.0f);
+
+    const float distortion_fundamental = projected_amplitude(wet, input_hz, sample_rate, 4096);
+    const float alias = projected_amplitude(wet, alias_hz, sample_rate, 4096);
+    const float alias_db = 20.0f * std::log10(alias / distortion_fundamental);
+
+    CAPTURE(distortion_fundamental, alias, alias_db, alias_hz);
+    REQUIRE(alias_db < -40.0f);
+  }
+}
+
+TEST_CASE("Exciter None mode aliases audibly before Oversample4x is applied",
+          "[mastering][saturation]") {
+  // Before Oversample4x was implemented it fell through to the same base-rate
+  // tanh None uses, so this measurement is the level the alias assertion
+  // above would have measured against the unfixed processor.
+  constexpr int kSampleRate = 48000;
+  constexpr int kSamples = kSampleRate;
+  const float input_hz = static_cast<float>(kSampleRate) * 0.36f;
+  const float alias_hz = fold_alias_hz(3.0f * input_hz, static_cast<float>(kSampleRate));
+
+  auto dry = generate_sine_samples(input_hz, kSampleRate, kSamples, 0.5f);
+  Exciter exciter({input_hz, 24.0f, 1.0f, 1.0f, 1.0f});
+  exciter.prepare(kSampleRate, kSamples);
+  auto wet = dry;
+  process(exciter, wet);
+  for (size_t i = 0; i < wet.size(); ++i) wet[i] -= dry[i];
+
+  const float distortion_fundamental = projected_amplitude(wet, input_hz, kSampleRate, 4096);
+  const float alias = projected_amplitude(wet, alias_hz, kSampleRate, 4096);
+  const float alias_db = 20.0f * std::log10(alias / distortion_fundamental);
+
+  CAPTURE(distortion_fundamental, alias, alias_db, alias_hz);
+  REQUIRE(alias_db > -20.0f);
+}
+
+TEST_CASE("Exciter rejects ADAA anti-aliasing instead of silently aliasing",
+          "[mastering][saturation]") {
+  // The harmonic generator mixes squaring and tanh with no ADAA
+  // antiderivative wired up here, so only None and Oversample4x are valid.
+  REQUIRE_THROWS(Exciter({3000.0f, 6.0f, 0.25f, 1.0f, 0.5f, sonare::rt::AliasingControl::Adaa1}));
+  REQUIRE_THROWS(Exciter({3000.0f, 6.0f, 0.25f, 1.0f, 0.5f, sonare::rt::AliasingControl::Adaa2}));
+
+  Exciter exciter({3000.0f, 6.0f, 0.25f});
+  REQUIRE_THROWS(
+      exciter.set_config({3000.0f, 6.0f, 0.25f, 1.0f, 0.5f, sonare::rt::AliasingControl::Adaa1}));
 }
 
 TEST_CASE("MultibandExciter can enhance high band while leaving low band close",

@@ -20,6 +20,7 @@ void Transformer::prepare(double sample_rate, int max_block_size) {
     throw SonareException(ErrorCode::InvalidParameter, "sample_rate must be positive");
   if (max_block_size < 0)
     throw SonareException(ErrorCode::InvalidParameter, "max_block_size must be non-negative");
+  sample_rate_ = sample_rate;
   prepared_ = true;
   // Preallocate per-channel hysteresis state so process() never resizes on the
   // audio thread (matches Tube/AmpSim).
@@ -90,13 +91,20 @@ void Transformer::validate_config(const TransformerConfig& config) {
 common::JilesAthertonConfig Transformer::make_ja_config(const TransformerConfig& config) {
   auto ja = common::jiles_atherton_presets::silicon_steel();
   ja.coercivity = std::max(0.02f, ja.coercivity * (1.0f + 0.35f * std::abs(config.asymmetry)));
+  // Sub-step the core once a field change reaches the coercivity, which is the
+  // scale at which a single Euler step stops tracking the loop. Transformer has
+  // no oversampling option, so this is its only guard against a fast field
+  // change running the magnetization into the saturation clamp.
+  ja.max_field_step = ja.coercivity;
   return ja;
 }
 
 float Transformer::process_sample(common::JilesAthertonState& state, float input) const {
   const float drive = db_to_linear(transformer_config_.drive_db);
   const float bias_field = 0.08f * transformer_config_.asymmetry;
-  const float wet = hysteresis_.process(state, input * drive + bias_field) - bias_field;
+  const float wet =
+      hysteresis_.process(state, input * drive + bias_field, static_cast<float>(sample_rate_)) -
+      bias_field;
   const float mix = transformer_config_.mix;
   return input * (1.0f - mix) + wet * mix;
 }

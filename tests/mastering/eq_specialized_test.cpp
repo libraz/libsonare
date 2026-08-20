@@ -2,6 +2,7 @@
 /// @brief Specialized EQ processor tests.
 
 #include "eq_test_helpers.h"
+#include "support/alloc_guard.h"
 
 TEST_CASE("ShelvingEq boosts low and high shelves independently", "[mastering][eq]") {
   constexpr int sample_rate = 48000;
@@ -213,6 +214,87 @@ TEST_CASE("CutFilter brickwall low-pass uses linear-phase FIR latency and steep 
 
   REQUIRE(rms_tail(pass, 8192) / pass_before > 0.85f);
   REQUIRE(rms_tail(stop, 8192) / stop_before < 0.002f);
+}
+
+TEST_CASE("CutFilter growing to 6 channels neither allocates nor discards existing channel state",
+          "[mastering][eq][rt]") {
+  constexpr int sample_rate = 48000;
+  constexpr int kBlock = 64;
+  constexpr int kNumBlocks = 6;
+  constexpr int kWidenAtBlock = 2;  // process() switches from 2 to 6 channels here.
+
+  auto configure = [](CutFilter& eq) {
+    eq.prepare(sample_rate, kBlock);
+    // A resonant low-pass rings for hundreds of samples after an impulse, so a
+    // state wipe at the channel-count transition below shows up as a measurable
+    // step discontinuity rather than silently reproducing near-zero output.
+    eq.set_low_pass(200.0f, 8.0f, CutFilterSlope::Db24PerOct);
+  };
+
+  auto impulse_block = [](int block_index) {
+    std::array<std::array<float, kBlock>, 6> data{};
+    if (block_index == 0) {
+      data[0][0] = 1.0f;
+      data[1][0] = 1.0f;
+    }
+    return data;
+  };
+
+  // Reference: channels 0/1 are processed continuously as a 2-channel stream for
+  // the whole run, so their filter state is never touched by a channel-count
+  // change.
+  CutFilter reference;
+  configure(reference);
+  std::vector<float> reference_ch0;
+  reference_ch0.reserve(static_cast<size_t>(kBlock * kNumBlocks));
+  for (int b = 0; b < kNumBlocks; ++b) {
+    auto data = impulse_block(b);
+    float* channels[] = {data[0].data(), data[1].data()};
+    reference.process(channels, 2, kBlock);
+    reference_ch0.insert(reference_ch0.end(), data[0].begin(), data[0].end());
+  }
+
+  // The resonance must still be ringing at the widen point; otherwise a state
+  // wipe there would be indistinguishable from correct (near-zero) output and
+  // this test would be vacuous.
+  float ringing_energy = 0.0f;
+  for (int i = 0; i < kBlock; ++i) {
+    const float s = reference_ch0[static_cast<size_t>((kWidenAtBlock - 1) * kBlock + i)];
+    ringing_energy += s * s;
+  }
+  REQUIRE(ringing_energy > 1.0e-6f);
+
+  // Widened: channels 0/1 carry the identical input stream, but from
+  // kWidenAtBlock onward process() is driven with 6 channels (channels 2-5
+  // silent). This is the scenario that used to call prepare_channels() from
+  // inside process(), reallocating the state vectors and default-constructing
+  // (wiping) the biquad state of channels 0/1 that were already ringing.
+  CutFilter widened;
+  configure(widened);
+  std::vector<float> widened_ch0;
+  widened_ch0.reserve(static_cast<size_t>(kBlock * kNumBlocks));
+  size_t allocations_at_widen = 0;
+  for (int b = 0; b < kNumBlocks; ++b) {
+    auto data = impulse_block(b);
+    float* channels[] = {data[0].data(), data[1].data(), data[2].data(),
+                         data[3].data(), data[4].data(), data[5].data()};
+    const int num_channels = b < kWidenAtBlock ? 2 : 6;
+    if (b == kWidenAtBlock) {
+      sonare::test::AllocationGuard guard;
+      widened.process(channels, num_channels, kBlock);
+      allocations_at_widen = guard.count();
+    } else {
+      widened.process(channels, num_channels, kBlock);
+    }
+    widened_ch0.insert(widened_ch0.end(), data[0].begin(), data[0].end());
+  }
+
+  // (a) The channel-count widen must not touch the heap: the per-section state
+  // vectors were preallocated in prepare() and keep the same size/identity.
+  REQUIRE(allocations_at_widen == 0);
+  // (b) Channel 0's output must be bit-for-bit identical to the never-widened
+  // reference: no step discontinuity from a state wipe at the widen boundary.
+  REQUIRE(max_abs_difference(widened_ch0, reference_ch0) < 1.0e-6f);
 }
 
 TEST_CASE("BandPassEq passes center frequency and rejects off-band tones", "[mastering][eq]") {

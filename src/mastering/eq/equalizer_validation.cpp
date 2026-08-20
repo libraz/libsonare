@@ -173,7 +173,7 @@ void EqualizerProcessor::validate_dynamic_params(const DynamicParams& dyn) {
     throw SonareException(ErrorCode::InvalidParameter, "dynamic ratio must be at least 1");
   }
   if (!(dyn.sidechain_q > 0.0f) || dyn.attack_ms < 0.0f || dyn.release_ms < 0.0f ||
-      dyn.lookahead_ms < 0.0f ||
+      dyn.detector_delay_ms < 0.0f ||
       (dyn.sidechain_freq_hz != -1.0f && dyn.sidechain_freq_hz <= 0.0f)) {
     throw SonareException(ErrorCode::InvalidParameter, "invalid dynamic EQ configuration");
   }

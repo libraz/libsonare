@@ -3,11 +3,13 @@
 #include <algorithm>
 #include <cmath>
 #include <complex>
+#include <limits>
 #include <utility>
 #include <vector>
 
 #include "core/fft.h"
 #include "core/window.h"
+#include "rt/biquad_design.h"
 #include "rt/partitioned_convolver.h"
 #include "util/constants.h"
 #include "util/db.h"
@@ -16,7 +18,9 @@
 namespace sonare::mastering::match {
 namespace {
 
+using sonare::constants::kDefaultDawSampleRate;
 using sonare::constants::kPiD;
+using sonare::constants::kTwoPiD;
 
 float interpolate_db(const ReferenceSpectrum& spectrum, float frequency_hz) {
   if (spectrum.frequencies.empty() || spectrum.db.empty()) {
@@ -168,6 +172,267 @@ std::vector<float> apply_fir_partitioned(const Audio& audio, const std::vector<f
   return output;
 }
 
+// Composite band-gain solver. Cascaded RBJ peaking sections add approximately in
+// log magnitude, so bands packed closer than a couple of octaves reinforce each
+// other: at the default 40 Hz - 18 kHz / 8 band layout the selector places bands
+// 0.386 octaves apart, where two neighbours set to +6 dB already realise about
+// +10.6 dB. Gains are therefore fitted to the summed response of the whole band
+// set and the gain limit is applied to that summed response.
+
+/// Symmetric probe used to measure each band's small-signal dB shape.
+constexpr float kSolverProbeDb = 1.0f;
+/// Upper bound on Gauss-Newton refinement passes. The regularized step converges
+/// geometrically, so passes beyond this move the fit by well under 0.1 dB.
+constexpr size_t kSolverMaxIterations = 8;
+/// Weighted RMS residual below which the fit is considered converged.
+constexpr double kSolverTargetRmsDb = 0.05;
+/// Smallest residual improvement that still counts as progress.
+constexpr double kSolverImprovementDb = 1.0e-4;
+/// Tikhonov ridge, relative to the mean diagonal of the normal matrix.
+constexpr double kSolverRidge = 1.0e-2;
+/// First-difference (per squared octave) penalty, same relative scale.
+constexpr double kSolverSmoothness = 3.0e-2;
+/// Floor for the normal-matrix scale so a fully degenerate basis stays solvable.
+constexpr double kSolverMatrixFloor = 1.0e-12;
+/// Floor for the band spacing feeding the smoothness penalty, in octaves.
+constexpr double kSolverMinSpacingOctaves = 1.0e-3;
+/// Bisection passes used to bring the composite response under the gain limit.
+/// Resolves the scale factor to 2^-16, i.e. under 0.001 dB of the largest
+/// response that still fits.
+constexpr int kSolverLimitSteps = 16;
+
+/// @brief Designs one peaking section, matching ParametricEq's RBJ coefficients.
+sonare::rt::BiquadCoeffs peak_section(float frequency_hz, float q, float gain_db,
+                                      double sample_rate) {
+  const double w0 =
+      std::clamp(kTwoPiD * static_cast<double>(frequency_hz) / sample_rate, 0.0, kPiD);
+  return sonare::rt::rbj_peak(static_cast<float>(w0), q, gain_db);
+}
+
+/// @brief Summed log magnitude of the cascaded sections at every grid point.
+void composite_response_db(const std::vector<float>& omegas, const std::vector<float>& centres,
+                           float q, const std::vector<float>& gains_db, double sample_rate,
+                           std::vector<float>& response) {
+  response.assign(omegas.size(), 0.0f);
+  for (size_t band = 0; band < centres.size(); ++band) {
+    // A 0 dB peaking section normalizes to an exact passthrough, so it can be
+    // skipped without changing the sum.
+    if (gains_db[band] == 0.0f) continue;
+    const auto section = peak_section(centres[band], q, gains_db[band], sample_rate);
+    for (size_t k = 0; k < omegas.size(); ++k) {
+      response[k] += linear_to_db(sonare::rt::biquad_magnitude(section, omegas[k]));
+    }
+  }
+}
+
+/// @brief Small-signal dB sensitivity of every band at every grid point.
+/// @details Row-major `n_points x n_bands`. RBJ peaking keeps a near
+///          gain-independent shape (its Q is defined at the midpoint gain), so
+///          one Jacobian measured around 0 dB serves the whole refinement.
+std::vector<float> band_sensitivity(const std::vector<float>& omegas,
+                                    const std::vector<float>& centres, float q,
+                                    double sample_rate) {
+  std::vector<float> sensitivity(omegas.size() * centres.size(), 0.0f);
+  for (size_t band = 0; band < centres.size(); ++band) {
+    const auto boosted = peak_section(centres[band], q, kSolverProbeDb, sample_rate);
+    const auto cut = peak_section(centres[band], q, -kSolverProbeDb, sample_rate);
+    for (size_t k = 0; k < omegas.size(); ++k) {
+      const float up = linear_to_db(sonare::rt::biquad_magnitude(boosted, omegas[k]));
+      const float down = linear_to_db(sonare::rt::biquad_magnitude(cut, omegas[k]));
+      sensitivity[k * centres.size() + band] = (up - down) / (2.0f * kSolverProbeDb);
+    }
+  }
+  return sensitivity;
+}
+
+/// @brief In-place Cholesky factorization of a symmetric positive-definite matrix.
+/// @return false when the matrix is not positive definite.
+bool factor_spd(std::vector<double>& matrix, size_t n) {
+  for (size_t i = 0; i < n; ++i) {
+    for (size_t j = 0; j <= i; ++j) {
+      double sum = matrix[i * n + j];
+      for (size_t k = 0; k < j; ++k) {
+        sum -= matrix[i * n + k] * matrix[j * n + k];
+      }
+      if (i == j) {
+        if (!(sum > 0.0)) return false;
+        matrix[i * n + i] = std::sqrt(sum);
+      } else {
+        matrix[i * n + j] = sum / matrix[j * n + j];
+      }
+    }
+  }
+  return true;
+}
+
+/// @brief Forward/back substitution against a matrix already run through @ref factor_spd.
+void solve_factored(const std::vector<double>& factor, size_t n, std::vector<double>& rhs) {
+  for (size_t i = 0; i < n; ++i) {
+    double sum = rhs[i];
+    for (size_t k = 0; k < i; ++k) {
+      sum -= factor[i * n + k] * rhs[k];
+    }
+    rhs[i] = sum / factor[i * n + i];
+  }
+  for (size_t i = n; i-- > 0;) {
+    double sum = rhs[i];
+    for (size_t k = i + 1; k < n; ++k) {
+      sum -= factor[k * n + i] * rhs[k];
+    }
+    rhs[i] = sum / factor[i * n + i];
+  }
+}
+
+/// @brief Fits band gains to the composite target curve and bounds the realised response.
+/// @param frequencies Curve grid the fit and the gain limit are evaluated on.
+/// @param target_db Desired composite response at each grid frequency.
+/// @param centres Selected band centre frequencies, ascending.
+/// @return One gain per band, in the order of @p centres.
+std::vector<float> solve_band_gains(const std::vector<float>& frequencies,
+                                    const std::vector<float>& target_db,
+                                    const std::vector<float>& centres, float q, float max_gain_db,
+                                    double sample_rate) {
+  const size_t n_bands = centres.size();
+  const size_t n_points = frequencies.size();
+  std::vector<float> gains(n_bands, 0.0f);
+  if (n_bands == 0 || n_points == 0 || !(max_gain_db > 0.0f)) {
+    return gains;
+  }
+
+  std::vector<float> omegas(n_points, 0.0f);
+  for (size_t k = 0; k < n_points; ++k) {
+    omegas[k] = static_cast<float>(
+        std::clamp(kTwoPiD * static_cast<double>(frequencies[k]) / sample_rate, 0.0, kPiD));
+  }
+  const std::vector<float> sensitivity = band_sensitivity(omegas, centres, q, sample_rate);
+
+  // Weight each grid point by how much authority the band set has there. Without
+  // it a target the bands cannot reach (a broad boost against a cluster of
+  // low-frequency bands) drags every distant band upward to chase it.
+  std::vector<double> weights(n_points, 0.0);
+  double weight_sum = 0.0;
+  for (size_t k = 0; k < n_points; ++k) {
+    double coverage = 0.0;
+    for (size_t i = 0; i < n_bands; ++i) {
+      coverage += static_cast<double>(sensitivity[k * n_bands + i]);
+    }
+    weights[k] = std::clamp(coverage, 0.0, 1.0);
+    weight_sum += weights[k];
+  }
+  if (!(weight_sum > 0.0)) {
+    return gains;
+  }
+
+  std::vector<double> normal(n_bands * n_bands, 0.0);
+  for (size_t k = 0; k < n_points; ++k) {
+    if (weights[k] <= 0.0) continue;
+    for (size_t i = 0; i < n_bands; ++i) {
+      const double weighted = weights[k] * static_cast<double>(sensitivity[k * n_bands + i]);
+      for (size_t j = 0; j < n_bands; ++j) {
+        normal[i * n_bands + j] += weighted * static_cast<double>(sensitivity[k * n_bands + j]);
+      }
+    }
+  }
+
+  double trace = 0.0;
+  for (size_t i = 0; i < n_bands; ++i) {
+    trace += normal[i * n_bands + i];
+  }
+  const double scale = std::max(trace / static_cast<double>(n_bands), kSolverMatrixFloor);
+
+  // Densely packed bands make the normal matrix ill conditioned. The ridge keeps
+  // it invertible; the octave-normalized first-difference penalty stops the fit
+  // answering with large alternating gains that cancel in magnitude while
+  // wrecking the phase response. Widely spaced neighbours are barely penalized.
+  for (size_t i = 0; i < n_bands; ++i) {
+    normal[i * n_bands + i] += kSolverRidge * scale;
+  }
+  for (size_t i = 0; i + 1 < n_bands; ++i) {
+    const double octaves = std::max(
+        std::abs(std::log2(static_cast<double>(centres[i + 1]) / static_cast<double>(centres[i]))),
+        kSolverMinSpacingOctaves);
+    const double penalty = kSolverSmoothness * scale / (octaves * octaves);
+    normal[i * n_bands + i] += penalty;
+    normal[(i + 1) * n_bands + (i + 1)] += penalty;
+    normal[i * n_bands + (i + 1)] -= penalty;
+    normal[(i + 1) * n_bands + i] -= penalty;
+  }
+
+  std::vector<double> factor = normal;
+  if (!factor_spd(factor, n_bands)) {
+    return gains;
+  }
+
+  // Gauss-Newton against the exact composite response, reusing the single
+  // small-signal Jacobian. The best iterate is kept, so a non-improving step
+  // ends the refinement rather than degrading the result.
+  std::vector<float> best = gains;
+  std::vector<float> response;
+  std::vector<double> residual(n_points, 0.0);
+  std::vector<double> step(n_bands, 0.0);
+  double best_error = std::numeric_limits<double>::max();
+  for (size_t iteration = 0; iteration < kSolverMaxIterations; ++iteration) {
+    composite_response_db(omegas, centres, q, gains, sample_rate, response);
+    double error = 0.0;
+    for (size_t k = 0; k < n_points; ++k) {
+      residual[k] = static_cast<double>(target_db[k]) - static_cast<double>(response[k]);
+      error += weights[k] * residual[k] * residual[k];
+    }
+    error = std::sqrt(error / weight_sum);
+    if (error + kSolverImprovementDb >= best_error) break;
+    best_error = error;
+    best = gains;
+    if (error < kSolverTargetRmsDb) break;
+
+    std::fill(step.begin(), step.end(), 0.0);
+    for (size_t k = 0; k < n_points; ++k) {
+      const double weighted = weights[k] * residual[k];
+      if (weighted == 0.0) continue;
+      for (size_t i = 0; i < n_bands; ++i) {
+        step[i] += weighted * static_cast<double>(sensitivity[k * n_bands + i]);
+      }
+    }
+    solve_factored(factor, n_bands, step);
+    for (size_t i = 0; i < n_bands; ++i) {
+      gains[i] = std::clamp(gains[i] + static_cast<float>(step[i]), -max_gain_db, max_gain_db);
+    }
+  }
+  gains = best;
+
+  // Bound the realised response, not the coefficients. Scaling every gain by one
+  // factor preserves the matched tonal shape, and bisecting that factor always
+  // terminates on a feasible point because a zero scale is feasible by
+  // construction.
+  const auto peak_response_db = [&](const std::vector<float>& candidate) {
+    composite_response_db(omegas, centres, q, candidate, sample_rate, response);
+    double peak = 0.0;
+    for (float value : response) {
+      peak = std::max(peak, std::abs(static_cast<double>(value)));
+    }
+    return peak;
+  };
+  if (peak_response_db(gains) > static_cast<double>(max_gain_db)) {
+    std::vector<float> scaled(n_bands, 0.0f);
+    float low = 0.0f;
+    float high = 1.0f;
+    for (int pass = 0; pass < kSolverLimitSteps; ++pass) {
+      const float mid = 0.5f * (low + high);
+      for (size_t i = 0; i < n_bands; ++i) {
+        scaled[i] = gains[i] * mid;
+      }
+      if (peak_response_db(scaled) <= static_cast<double>(max_gain_db)) {
+        low = mid;
+      } else {
+        high = mid;
+      }
+    }
+    for (size_t i = 0; i < n_bands; ++i) {
+      gains[i] *= low;
+    }
+  }
+  return gains;
+}
+
 }  // namespace
 
 void validate_config(const MatchEqConfig& config) {
@@ -201,6 +466,7 @@ MatchEqCurve match_eq_curve(const ReferenceSpectrum& source, const ReferenceSpec
   }
 
   MatchEqCurve curve;
+  curve.sample_rate = source.sample_rate;
   curve.frequencies.reserve(source.frequencies.size());
   curve.gain_db.reserve(source.frequencies.size());
   for (float frequency : source.frequencies) {
@@ -458,12 +724,24 @@ std::vector<eq::EqBand> match_eq_bands_from_curve(const MatchEqCurve& curve,
   std::sort(selected.begin(), selected.end(),
             [&](size_t a, size_t b) { return curve.frequencies[a] < curve.frequencies[b]; });
 
-  std::vector<eq::EqBand> bands;
-  bands.reserve(selected.size());
+  std::vector<float> centres;
+  centres.reserve(selected.size());
   for (size_t index : selected) {
-    bands.push_back({eq::EqBandType::Peak, curve.frequencies[index],
-                     std::clamp(curve.gain_db[index], -config.max_gain_db, config.max_gain_db),
-                     config.q, true});
+    centres.push_back(curve.frequencies[index]);
+  }
+
+  // Solve every gain at once against the composite response of the placed bands,
+  // then bound that response by max_gain_db. Reading each band's gain straight
+  // off the curve would let overlapping neighbours stack past the limit.
+  const double sample_rate =
+      curve.sample_rate > 0 ? static_cast<double>(curve.sample_rate) : kDefaultDawSampleRate;
+  const std::vector<float> gains = solve_band_gains(curve.frequencies, curve.gain_db, centres,
+                                                    config.q, config.max_gain_db, sample_rate);
+
+  std::vector<eq::EqBand> bands;
+  bands.reserve(centres.size());
+  for (size_t i = 0; i < centres.size(); ++i) {
+    bands.push_back({eq::EqBandType::Peak, centres[i], gains[i], config.q, true});
   }
   return bands;
 }

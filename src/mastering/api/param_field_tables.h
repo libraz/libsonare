@@ -17,13 +17,81 @@
 /// three consumers pick up.
 
 #include <cmath>
+#include <cstddef>
 #include <limits>
 #include <type_traits>
+#include <utility>
 
+#include "rt/aliasing_control.h"
 #include "util/exception.h"
 #include "util/numeric_validation.h"
 
 namespace sonare::mastering::api::detail {
+
+/// @brief Stands in for any field type during aggregate-arity probing.
+/// @details Convertible to everything except the aggregate under test, so a
+/// one-field probe cannot succeed by copy-initializing that aggregate instead.
+/// Declared, never defined: it is only ever used unevaluated.
+template <typename Aggregate>
+struct AnyField {
+  template <typename Field,
+            typename = std::enable_if_t<!std::is_same_v<Aggregate, std::decay_t<Field>>>>
+  constexpr operator Field() const noexcept;
+};
+
+template <typename Aggregate, typename Indices, typename = void>
+struct BraceInitializableWith : std::false_type {};
+
+template <typename Aggregate, std::size_t... I>
+struct BraceInitializableWith<Aggregate, std::index_sequence<I...>,
+                              std::void_t<decltype(Aggregate{(void(I), AnyField<Aggregate>{})...})>>
+    : std::true_type {};
+
+/// @brief Number of fields in an aggregate, counted at compile time.
+/// @details Brace initialization accepts any count up to the field count and
+/// rejects anything beyond it, so the largest accepted count is the answer.
+/// Counts fields, not names: a table row pointing at a renamed field fails to
+/// compile on the member itself, but two same-typed fields swapping meaning is
+/// invisible here.
+template <typename Aggregate, std::size_t N = 0>
+constexpr std::size_t field_count() {
+  // Without a plain aggregate the probe collapses to 0 (no single-argument
+  // constructor matches), so a coverage assertion would report every row as
+  // missing. Failing on the real cause here keeps that from being "fixed" by
+  // raising the unexposed count, which would pass while guarding nothing.
+  static_assert(std::is_aggregate_v<Aggregate>,
+                "field_count requires a plain aggregate: no base classes, no user-declared "
+                "constructor, no private members");
+  if constexpr (BraceInitializableWith<Aggregate, std::make_index_sequence<N + 1>>::value) {
+    return field_count<Aggregate, N + 1>();
+  } else {
+    return N;
+  }
+}
+
+/// @brief Whether an integer-decoded value names a declared enumerator.
+/// @details Default answer for enums that carry no declared value set here; the
+/// flat param API then behaves as it always has and forwards the value to the
+/// processor's own validation.
+template <typename Enum, std::enable_if_t<std::is_enum_v<Enum>, int> = 0>
+inline bool enum_value_declared(Enum) {
+  return true;
+}
+
+/// @brief Rejects an antialiasing mode outside the declared set.
+/// @details The exhaustive switch is the guard: a newly declared mode fails to
+/// compile here (-Wswitch) until it is listed, so a value can never reach a
+/// processor that would silently fall through to the untreated path.
+inline bool enum_value_declared(sonare::rt::AliasingControl value) {
+  switch (value) {
+    case sonare::rt::AliasingControl::None:
+    case sonare::rt::AliasingControl::Adaa1:
+    case sonare::rt::AliasingControl::Adaa2:
+    case sonare::rt::AliasingControl::Oversample4x:
+      return true;
+  }
+  return false;
+}
 
 /// @brief Assigns a flat double param value to a typed config member.
 /// @details One overload per storage kind so a table entry needs no type tag.
@@ -65,7 +133,11 @@ inline void assign_field(Enum& dst, double value) {
   if (!numeric::checked_round_cast(value, &converted)) {
     throw SonareException(ErrorCode::InvalidParameter, "mastering enum parameter is out of range");
   }
-  dst = static_cast<Enum>(converted);
+  const Enum candidate = static_cast<Enum>(converted);
+  if (!enum_value_declared(candidate)) {
+    throw SonareException(ErrorCode::InvalidParameter, "mastering enum parameter is out of range");
+  }
+  dst = candidate;
 }
 
 }  // namespace sonare::mastering::api::detail
@@ -76,6 +148,28 @@ inline void assign_field(Enum& dst, double value) {
 // processor's *Config struct. Order matches the historical serialization order
 // so chain_config_to_json output is byte-stable.
 // ---------------------------------------------------------------------------
+
+// Coverage guard. A config field with no table row is unreachable from every
+// binding, because the flat parameter surface is the only configuration path
+// they share -- and nothing else detects it: the DSP tests build the config
+// struct directly, parity does not model config interiors, and the chain JSON
+// snapshot only moves for stages the chain serializes. Pairing each table with
+// its config struct turns "someone has to remember" into a build failure at the
+// moment the field is added.
+//
+// SONARE_ASSERT_TABLE_COVERS(table, Config, unexposed) reads as: this table plus
+// `unexposed` deliberately-omitted fields accounts for every field of Config.
+// A non-zero `unexposed` needs a one-line reason at the call site naming the
+// omitted fields -- an unexplained count is how a coverage gap gets laundered
+// into an approved exception.
+#define SONARE_COUNT_FIELD(key, member) +1
+#define SONARE_FIELD_TABLE_SIZE(table) (0 table(SONARE_COUNT_FIELD))
+#define SONARE_ASSERT_TABLE_COVERS(table, Config, unexposed)                                   \
+  static_assert(SONARE_FIELD_TABLE_SIZE(table) + (unexposed) ==                                \
+                    static_cast<int>(::sonare::mastering::api::detail::field_count<Config>()), \
+                #table " does not account for every " #Config                                  \
+                       " field: add the missing row, or raise the unexposed count "            \
+                       "and say why")
 
 // --- Dynamics ---
 
@@ -148,7 +242,8 @@ inline void assign_field(Enum& dst, double value) {
   X("sidechainHpfEnabled", sidechain_hpf_enabled) \
   X("sidechainHpfHz", sidechain_hpf_hz)           \
   X("monoSumming", mono_summing)                  \
-  X("keyListen", key_listen)
+  X("keyListen", key_listen)                      \
+  X("lookaheadMs", lookahead_ms)
 
 #define SONARE_FIELDS_DUCKING(X) \
   X("thresholdDb", threshold_db) \
@@ -200,14 +295,16 @@ inline void assign_field(Enum& dst, double value) {
   X("speedIps", speed_ips)          \
   X("headBumpDb", head_bump_db)     \
   X("bias", bias)                   \
-  X("gapLoss", gap_loss)
+  X("gapLoss", gap_loss)            \
+  X("oversampleFactor", oversample_factor)
 
 #define SONARE_FIELDS_EXCITER(X) \
   X("frequencyHz", frequency_hz) \
   X("driveDb", drive_db)         \
   X("amount", amount)            \
   X("q", q)                      \
-  X("evenOddMix", even_odd_mix)
+  X("evenOddMix", even_odd_mix)  \
+  X("aliasing", aliasing)
 
 #define SONARE_FIELDS_BITCRUSHER(X)        \
   X("bitDepth", bit_depth)                 \
@@ -216,19 +313,23 @@ inline void assign_field(Enum& dst, double value) {
   X("ditherType", dither_type)             \
   X("ditherSeed", dither_seed)
 
-#define SONARE_FIELDS_HARD_CLIPPER(X) X("ceiling", ceiling)
+#define SONARE_FIELDS_HARD_CLIPPER(X) \
+  X("ceiling", ceiling)               \
+  X("aliasing", aliasing)
 
 #define SONARE_FIELDS_SOFT_CLIPPER(X) \
   X("driveDb", drive_db)              \
   X("ceiling", ceiling)               \
-  X("mix", mix)
+  X("mix", mix)                       \
+  X("aliasing", aliasing)
 
 #define SONARE_FIELDS_WAVESHAPER(X) \
   X("driveDb", drive_db)            \
   X("mix", mix)                     \
   X("outputGainDb", output_gain_db) \
   X("bias", bias)                   \
-  X("curve", curve)
+  X("curve", curve)                 \
+  X("aliasing", aliasing)
 
 #define SONARE_FIELDS_TUBE(X)              \
   X("driveDb", drive_db)                   \
@@ -261,7 +362,8 @@ inline void assign_field(Enum& dst, double value) {
   X("amount", amount)                         \
   X("drive", drive)                           \
   X("centerFrequencyHz", center_frequency_hz) \
-  X("q", q)
+  X("q", q)                                   \
+  X("aliasing", aliasing)
 
 #define SONARE_FIELDS_SPECTRAL_SHAPER(X)  \
   X("threshold", threshold)               \

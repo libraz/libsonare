@@ -204,13 +204,22 @@ common::JilesAthertonConfig Tape::make_ja_config(const TapeConfig& config) {
   //   k (loss/coercivity)    is larger when hysteresis is large → wider loop.
   const float a = std::max(0.05f, 0.5f - 0.4f * config.saturation);
   const float k = std::max(0.01f, 0.05f + 0.30f * config.hysteresis);
-  return {kMs, a, k, kAlpha, kC};
+  common::JilesAthertonConfig ja{kMs, a, k, kAlpha, kC};
+  // Sub-step the core once a field change reaches the coercivity, which is the
+  // scale at which a single Euler step stops tracking the loop. Below that the
+  // core still takes exactly one step per sample.
+  ja.max_field_step = k;
+  return ja;
 }
 
 float Tape::process_sample(common::JilesAthertonState& state, float input) const {
   const float drive = db_to_linear(config_.drive_db);
   const float H = input * drive + config_.bias * 0.1f;
-  return hysteresis_.process(state, H) * db_to_linear(config_.output_gain_db);
+  // The J-A core is stepped at the oversampled rate, so hand it that rate and
+  // not the base rate; held-field relaxation then runs in wall-clock time
+  // regardless of oversample_factor.
+  const float ja_rate = static_cast<float>(sample_rate_ * std::max(1, config_.oversample_factor));
+  return hysteresis_.process(state, H, ja_rate) * db_to_linear(config_.output_gain_db);
 }
 
 void Tape::ensure_state(int num_channels) {

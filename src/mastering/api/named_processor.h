@@ -19,12 +19,12 @@ struct Param {
 /// processor fields.
 void validate_params(const Param* params, std::size_t count);
 
-// Per-processor results share the same shape as the shared audio-result base
-// types. They are exposed as aliases so callers (binding layers, tests) can
-// keep using `MonoResult` / `StereoResult` while the field definitions live
-// in a single place (@ref result_types.h).
-using MonoResult = MonoAudioResult;
-using StereoResult = StereoAudioResult;
+// Per-processor results extend the shared audio-result base types with the
+// dispatch outcome. They are exposed as aliases so callers (binding layers,
+// tests) can keep using `MonoResult` / `StereoResult` while the field
+// definitions live in a single place (@ref result_types.h).
+using MonoResult = MonoProcessorResult;
+using StereoResult = StereoProcessorResult;
 
 std::vector<std::string> processor_names();
 

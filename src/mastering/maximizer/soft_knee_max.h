@@ -22,6 +22,9 @@ class SoftKneeMax : public rt::ProcessorBase {
   void set_config(const SoftKneeMaxConfig& config);
   const SoftKneeMaxConfig& config() const { return config_; }
   float last_gain_reduction_db() const override { return maximizer_.last_gain_reduction_db(); }
+  // The soft-knee shaping is a memoryless pre-stage, so the delay is entirely
+  // the inner maximizer's (in turn its limiter's lookahead).
+  int latency_samples() const noexcept override { return maximizer_.latency_samples(); }
 
   // Parameters:
   //   0 = input_gain_db (applied per block, no coefficients)

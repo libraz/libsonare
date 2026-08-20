@@ -14,6 +14,7 @@
 // These assert at the config-building level (the resulting config struct) for
 // determinism rather than comparing audio output.
 
+#include <algorithm>
 #include <catch2/catch_test_macros.hpp>
 #include <cmath>
 #include <limits>
@@ -27,6 +28,7 @@
 #include "mastering/api/named_processor.h"
 #include "mastering/api/processor_params.h"
 #include "mastering/dynamics/compressor.h"
+#include "mastering/dynamics/sidechain_router.h"
 #include "mastering/maximizer/loudness_optimize.h"
 #include "mastering/maximizer/true_peak_limiter.h"
 #include "mastering/multiband/multiband_compressor.h"
@@ -34,6 +36,14 @@
 #include "mastering/multiband/multiband_limiter.h"
 #include "mastering/multiband/multiband_saturation.h"
 #include "mastering/repair/declip.h"
+#include "mastering/saturation/exciter.h"
+#include "mastering/saturation/hard_clipper.h"
+#include "mastering/saturation/soft_clipper.h"
+#include "mastering/saturation/tape.h"
+#include "mastering/saturation/waveshaper.h"
+#include "mastering/spectral/presence_enhancer.h"
+#include "rt/aliasing_control.h"
+#include "util/constants.h"
 #include "util/exception.h"
 
 namespace {
@@ -399,4 +409,339 @@ TEST_CASE("maximizer.loudnessOptimize standalone paths pass every loudness param
     REQUIRE(standalone.right == chained.right);
     REQUIRE(standalone.latency_samples == 0);
   }
+}
+
+// --- Nonlinear stage controls the parameter surface has to carry --------------
+//
+// The clippers' antialiasing mode, the tape core's oversampling factor and the
+// multiband saturator's per-band algorithm and bypass switch are config fields
+// the DSP already honours. The flat parameter surface is the only configuration
+// path every binding funnels through, so a field it does not read is a field no
+// caller can set. These cases drive each field from that surface and check both
+// the resulting config and the processed audio.
+
+namespace {
+
+using sonare::mastering::api::apply_named_processor;
+using sonare::mastering::api::insert_param_names;
+using sonare::mastering::multiband::MultibandSaturation;
+using sonare::mastering::multiband::SaturationType;
+using sonare::rt::AliasingControl;
+
+constexpr int kNonlinearSampleRate = 22050;
+constexpr std::size_t kNonlinearFrames = 5512;
+
+// One tone per band of the default 120 / 2000 Hz crossover, hot enough that a
+// saturating stage moves the output well clear of numeric noise.
+std::vector<float> three_band_signal() {
+  std::vector<float> out(kNonlinearFrames);
+  for (std::size_t k = 0; k < kNonlinearFrames; ++k) {
+    const float t = static_cast<float>(k) / static_cast<float>(kNonlinearSampleRate);
+    out[k] = 0.3f * std::sin(sonare::constants::kTwoPi * 60.0f * t) +
+             0.3f * std::sin(sonare::constants::kTwoPi * 800.0f * t) +
+             0.3f * std::sin(sonare::constants::kTwoPi * 6000.0f * t);
+  }
+  return out;
+}
+
+std::vector<float> run_insert(const std::string& name, const std::string& json_params,
+                              const std::vector<float>& input) {
+  auto processor = make_insert(name, json_params);
+  REQUIRE(processor != nullptr);
+  processor->prepare(static_cast<double>(kNonlinearSampleRate), static_cast<int>(input.size()), 1);
+  std::vector<float> out = input;
+  float* channels[] = {out.data()};
+  processor->process(channels, 1, static_cast<int>(out.size()));
+  return out;
+}
+
+// Params selecting one antialiasing mode, spelled as the enum's ordinal.
+std::string aliasing_json(AliasingControl mode) {
+  return R"({"aliasing":)" + std::to_string(static_cast<int>(mode)) + "}";
+}
+
+// A declared mode must either configure the processor or be rejected outright.
+// Quietly keeping the default — what happened while `aliasing` was absent from
+// the parameter surface — is the failure this guards against.
+template <typename Processor>
+void require_aliasing_reaches(const char* name, AliasingControl mode) {
+  CAPTURE(name);
+  CAPTURE(static_cast<int>(mode));
+  const std::string json = aliasing_json(mode);
+  std::unique_ptr<sonare::rt::ProcessorBase> processor;
+  try {
+    processor = make_insert(name, json);
+  } catch (const sonare::SonareException&) {
+    return;  // the processor does not implement this mode and says so
+  }
+  auto* typed = dynamic_cast<Processor*>(processor.get());
+  REQUIRE(typed != nullptr);
+  REQUIRE(typed->config().aliasing == mode);
+}
+
+}  // namespace
+
+TEST_CASE("nonlinear stage controls appear in the published parameter names",
+          "[mastering][saturation][multiband][param_wiring]") {
+  // insert_param_names() is the discovery surface every binding exposes; a key
+  // missing from it is a key no caller can find, whatever the DSP supports.
+  const auto contains = [](const std::vector<std::string>& names, const std::string& key) {
+    return std::find(names.begin(), names.end(), key) != names.end();
+  };
+
+  REQUIRE(contains(insert_param_names("saturation.tape"), "oversampleFactor"));
+  REQUIRE(contains(insert_param_names("saturation.hardClipper"), "aliasing"));
+  REQUIRE(contains(insert_param_names("saturation.softClipper"), "aliasing"));
+  REQUIRE(contains(insert_param_names("saturation.waveshaper"), "aliasing"));
+  REQUIRE(contains(insert_param_names("saturation.exciter"), "aliasing"));
+  REQUIRE(contains(insert_param_names("spectral.presenceEnhancer"), "aliasing"));
+
+  const auto multiband = insert_param_names("multiband.saturation");
+  REQUIRE(contains(multiband, "band0.type"));
+  REQUIRE(contains(multiband, "band0.enabled"));
+}
+
+TEST_CASE("saturation.tape oversampleFactor is reachable from the parameter surface",
+          "[mastering][saturation][param_wiring]") {
+  using sonare::mastering::saturation::Tape;
+
+  const auto input = three_band_signal();
+  std::vector<std::vector<float>> outputs;
+  for (const int factor : {1, 2, 4}) {
+    CAPTURE(factor);
+    const std::string json = R"({"driveDb":18,"oversampleFactor":)" + std::to_string(factor) + "}";
+    auto processor = make_insert("saturation.tape", json);
+    auto* tape = dynamic_cast<Tape*>(processor.get());
+    REQUIRE(tape != nullptr);
+    REQUIRE(tape->config().oversample_factor == factor);
+
+    const auto result = apply_named_processor(
+        "saturation.tape", input.data(), input.size(), kNonlinearSampleRate,
+        {{"driveDb", 18.0}, {"oversampleFactor", static_cast<double>(factor)}});
+    REQUIRE(result.samples.size() == input.size());
+    outputs.push_back(result.samples);
+  }
+
+  // Latency-compensated by the offline runner, so the difference is the
+  // oversampled core, not an alignment shift.
+  REQUIRE(outputs.at(0) != outputs.at(1));
+  REQUIRE(outputs.at(1) != outputs.at(2));
+  REQUIRE(outputs.at(0) != outputs.at(2));
+}
+
+TEST_CASE("saturation.tape rejects an oversample factor its core cannot run",
+          "[mastering][saturation][param_wiring]") {
+  REQUIRE_THROWS_AS(make_insert("saturation.tape", R"({"oversampleFactor":3})"),
+                    sonare::SonareException);
+}
+
+TEST_CASE("saturation clippers see every declared antialiasing mode",
+          "[mastering][saturation][param_wiring]") {
+  using sonare::mastering::saturation::HardClipper;
+  using sonare::mastering::saturation::SoftClipper;
+  using sonare::mastering::saturation::Waveshaper;
+
+  const AliasingControl modes[] = {AliasingControl::None, AliasingControl::Adaa1,
+                                   AliasingControl::Adaa2, AliasingControl::Oversample4x};
+  for (const AliasingControl mode : modes) {
+    require_aliasing_reaches<HardClipper>("saturation.hardClipper", mode);
+    require_aliasing_reaches<SoftClipper>("saturation.softClipper", mode);
+    require_aliasing_reaches<Waveshaper>("saturation.waveshaper", mode);
+  }
+}
+
+TEST_CASE("saturation clippers reject an antialiasing mode outside the declared set",
+          "[mastering][saturation][param_wiring]") {
+  const std::string undeclared =
+      std::to_string(static_cast<int>(AliasingControl::Oversample4x) + 1);
+  for (const char* name :
+       {"saturation.hardClipper", "saturation.softClipper", "saturation.waveshaper"}) {
+    CAPTURE(name);
+    REQUIRE_THROWS_AS(make_insert(name, R"({"aliasing":)" + undeclared + "}"),
+                      sonare::SonareException);
+    REQUIRE_THROWS_AS(make_insert(name, R"({"aliasing":-1})"), sonare::SonareException);
+  }
+}
+
+TEST_CASE("saturation clipper antialiasing mode changes the processed audio",
+          "[mastering][saturation][param_wiring]") {
+  const auto input = three_band_signal();
+
+  const auto soft_direct =
+      run_insert("saturation.softClipper", R"({"driveDb":18,"aliasing":0})", input);
+  const auto soft_adaa1 =
+      run_insert("saturation.softClipper", R"({"driveDb":18,"aliasing":1})", input);
+  REQUIRE(soft_direct != soft_adaa1);
+
+  // A ceiling below the signal peak so the hard clipper actually clips.
+  const auto hard_direct =
+      run_insert("saturation.hardClipper", R"({"ceiling":0.2,"aliasing":0})", input);
+  const auto hard_adaa2 =
+      run_insert("saturation.hardClipper", R"({"ceiling":0.2,"aliasing":2})", input);
+  REQUIRE(hard_direct != hard_adaa2);
+}
+
+TEST_CASE("harmonic generators reach the antialiasing modes they implement",
+          "[mastering][saturation][spectral][param_wiring]") {
+  using sonare::mastering::saturation::Exciter;
+  using sonare::mastering::spectral::PresenceEnhancer;
+
+  for (const AliasingControl mode : {AliasingControl::None, AliasingControl::Oversample4x}) {
+    CAPTURE(static_cast<int>(mode));
+    const std::string json = aliasing_json(mode);
+
+    auto exciter_insert = make_insert("saturation.exciter", json);
+    auto* exciter = dynamic_cast<Exciter*>(exciter_insert.get());
+    REQUIRE(exciter != nullptr);
+    REQUIRE(exciter->config().aliasing == mode);
+
+    auto presence_insert = make_insert("spectral.presenceEnhancer", json);
+    auto* presence = dynamic_cast<PresenceEnhancer*>(presence_insert.get());
+    REQUIRE(presence != nullptr);
+    REQUIRE(presence->config().aliasing == mode);
+  }
+}
+
+TEST_CASE("harmonic generators reject the antialiasing modes they do not implement",
+          "[mastering][saturation][spectral][param_wiring]") {
+  // Neither harmonic generator has an ADAA antiderivative wired up, so unlike
+  // the clippers both Adaa1 and Adaa2 must be refused rather than run as None.
+  // The refusal has to arrive as a SonareException, which is what every facade
+  // knows how to translate.
+  const std::string undeclared =
+      std::to_string(static_cast<int>(AliasingControl::Oversample4x) + 1);
+  for (const char* name : {"saturation.exciter", "spectral.presenceEnhancer"}) {
+    CAPTURE(name);
+    REQUIRE_THROWS_AS(make_insert(name, aliasing_json(AliasingControl::Adaa1)),
+                      sonare::SonareException);
+    REQUIRE_THROWS_AS(make_insert(name, aliasing_json(AliasingControl::Adaa2)),
+                      sonare::SonareException);
+    REQUIRE_THROWS_AS(make_insert(name, R"({"aliasing":)" + undeclared + "}"),
+                      sonare::SonareException);
+    REQUIRE_THROWS_AS(make_insert(name, R"({"aliasing":-1})"), sonare::SonareException);
+  }
+}
+
+TEST_CASE("harmonic generator oversampling changes the processed audio",
+          "[mastering][saturation][spectral][param_wiring]") {
+  const auto input = three_band_signal();
+
+  const auto exciter_direct =
+      run_insert("saturation.exciter", R"({"amount":1,"driveDb":18,"aliasing":0})", input);
+  const auto exciter_oversampled =
+      run_insert("saturation.exciter", R"({"amount":1,"driveDb":18,"aliasing":3})", input);
+  REQUIRE(exciter_direct != exciter_oversampled);
+
+  const auto presence_direct =
+      run_insert("spectral.presenceEnhancer", R"({"amount":1,"drive":8,"aliasing":0})", input);
+  const auto presence_oversampled =
+      run_insert("spectral.presenceEnhancer", R"({"amount":1,"drive":8,"aliasing":3})", input);
+  REQUIRE(presence_direct != presence_oversampled);
+}
+
+TEST_CASE("dynamics.sidechainRouter lookaheadMs is reachable from the parameter surface",
+          "[mastering][dynamics][param_wiring]") {
+  // Found by the table coverage guard: SidechainRouterConfig::lookahead_ms had
+  // no table row, so the router's lookahead -- and the latency it reports --
+  // could not be set from any binding, while the sibling ducking processor
+  // exposed the same field.
+  using sonare::mastering::dynamics::SidechainRouter;
+
+  auto processor = make_insert("dynamics.sidechainRouter", R"({"lookaheadMs":8})");
+  auto* router = dynamic_cast<SidechainRouter*>(processor.get());
+  REQUIRE(router != nullptr);
+  REQUIRE(router->config().lookahead_ms == 8.0f);
+
+  // The lookahead has to reach the DSP, not just the config: it is what the
+  // stage reports as latency.
+  processor->prepare(static_cast<double>(kNonlinearSampleRate), 1024, 1);
+  REQUIRE(processor->latency_samples() > 0);
+
+  auto without = make_insert("dynamics.sidechainRouter", "{}");
+  REQUIRE(without != nullptr);
+  without->prepare(static_cast<double>(kNonlinearSampleRate), 1024, 1);
+  REQUIRE(without->latency_samples() == 0);
+}
+
+TEST_CASE("saturation.exciter aliasing survives a chain JSON round trip",
+          "[mastering][chain_json][saturation][param_wiring]") {
+  // The exciter is a chain stage, so its key has to survive serialization as
+  // well as construction; a dropped key would silently reset it to None.
+  MasteringChainConfig cfg;
+  cfg.saturation.exciter.enabled = true;
+  cfg.saturation.exciter.config.aliasing = AliasingControl::Oversample4x;
+
+  const MasteringChainConfig restored = chain_config_from_json(chain_config_to_json(cfg));
+  REQUIRE(restored.saturation.exciter.config.aliasing == AliasingControl::Oversample4x);
+
+  const std::vector<Param> params{
+      {"saturation.exciter.enabled", 1.0},
+      {"saturation.exciter.aliasing", static_cast<int>(AliasingControl::Oversample4x)}};
+  const MasteringChainConfig parsed = parse_chain_config_params(params.data(), params.size());
+  REQUIRE(parsed.saturation.exciter.config.aliasing == AliasingControl::Oversample4x);
+}
+
+TEST_CASE("multiband.saturation per-band type reaches each band",
+          "[mastering][multiband][param_wiring]") {
+  auto processor =
+      make_insert("multiband.saturation", R"({"band0.type":1,"band1.type":2,"band2.type":3})");
+  auto* mb = dynamic_cast<MultibandSaturation*>(processor.get());
+  REQUIRE(mb != nullptr);
+  REQUIRE(mb->config().bands.at(0).type == SaturationType::Tape);
+  REQUIRE(mb->config().bands.at(1).type == SaturationType::Tube);
+  REQUIRE(mb->config().bands.at(2).type == SaturationType::Exciter);
+
+  auto defaulted = make_insert("multiband.saturation", "{}");
+  auto* mb_default = dynamic_cast<MultibandSaturation*>(defaulted.get());
+  REQUIRE(mb_default != nullptr);
+  REQUIRE(mb_default->config().bands.at(0).type == SaturationType::SoftClip);
+}
+
+TEST_CASE("multiband.saturation rejects a band type outside the declared set",
+          "[mastering][multiband][param_wiring]") {
+  const std::string undeclared = std::to_string(static_cast<int>(SaturationType::Exciter) + 1);
+  REQUIRE_THROWS_AS(make_insert("multiband.saturation", R"({"band0.type":)" + undeclared + "}"),
+                    sonare::SonareException);
+  REQUIRE_THROWS_AS(make_insert("multiband.saturation", R"({"band0.type":-1})"),
+                    sonare::SonareException);
+}
+
+TEST_CASE("multiband.saturation band algorithms each produce a different output",
+          "[mastering][multiband][param_wiring]") {
+  const auto input = three_band_signal();
+  std::vector<std::vector<float>> outputs;
+  for (int type = 0; type <= static_cast<int>(SaturationType::Exciter); ++type) {
+    outputs.push_back(
+        run_insert("multiband.saturation",
+                   R"({"band1.driveDb":18,"band1.type":)" + std::to_string(type) + "}", input));
+  }
+
+  for (std::size_t a = 0; a + 1 < outputs.size(); ++a) {
+    for (std::size_t b = a + 1; b < outputs.size(); ++b) {
+      CAPTURE(a, b);
+      REQUIRE(outputs.at(a) != outputs.at(b));
+    }
+  }
+}
+
+TEST_CASE("multiband.saturation band enabled=false keeps the band out of the sum",
+          "[mastering][multiband][param_wiring]") {
+  auto processor = make_insert("multiband.saturation", R"({"band0.enabled":0})");
+  auto* mb = dynamic_cast<MultibandSaturation*>(processor.get());
+  REQUIRE(mb != nullptr);
+  REQUIRE_FALSE(mb->config().bands.at(0).enabled);
+  REQUIRE(mb->config().bands.at(1).enabled);
+
+  // A disabled band contributes nothing of its own: its drive cannot reach the
+  // output at all, while the same drive on the enabled band does.
+  const auto input = three_band_signal();
+  const auto off_driven =
+      run_insert("multiband.saturation", R"({"band1.enabled":0,"band1.driveDb":24})", input);
+  const auto off_clean =
+      run_insert("multiband.saturation", R"({"band1.enabled":0,"band1.driveDb":0})", input);
+  const auto on_driven =
+      run_insert("multiband.saturation", R"({"band1.enabled":1,"band1.driveDb":24})", input);
+
+  REQUIRE(off_driven == off_clean);
+  REQUIRE(off_driven != on_driven);
 }

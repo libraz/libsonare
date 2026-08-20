@@ -9,6 +9,7 @@
 #include <utility>
 
 #include "mastering/api/presets.h"
+#include "mastering/assistant/platform_targets.h"
 #include "util/json.h"
 
 namespace sonare::mastering::assistant {
@@ -75,16 +76,14 @@ void resolve_platform_loudness(const AssistantConfig& config, float* target_lufs
     return;
   }
 
-  if (config.target_platform == "broadcast") {
-    if (loudness_is_default) *target_lufs = -23.0f;
-    if (ceiling_is_default) *ceiling_db = -1.0f;
-  } else if (config.target_platform == "podcast") {
-    if (loudness_is_default) *target_lufs = -16.0f;
-    if (ceiling_is_default) *ceiling_db = -1.0f;
-  } else if (config.target_platform == "club" || config.target_platform == "cd") {
-    if (loudness_is_default) *target_lufs = -9.0f;
-    if (ceiling_is_default) *ceiling_db = -0.3f;
-  }
+  // The delivery-target vocabulary and its loudness live in one table
+  // (platform_targets.h) that every surface resolves against. A target that
+  // adds nothing to the caller's request is a row with no override, not an
+  // absent name.
+  const PlatformTarget* target = platform_target_from_name(config.target_platform.c_str());
+  if (target == nullptr || !target->overrides_loudness) return;
+  if (loudness_is_default) *target_lufs = target->target_lufs;
+  if (ceiling_is_default) *ceiling_db = target->ceiling_db;
 }
 
 }  // namespace

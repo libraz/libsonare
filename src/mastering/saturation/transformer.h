@@ -41,6 +41,7 @@ class Transformer : public rt::ProcessorBase {
   TransformerConfig transformer_config_{};
   common::JilesAtherton hysteresis_;
   bool prepared_ = false;
+  double sample_rate_ = 48000.0;
   std::vector<common::JilesAthertonState> states_;
 };
 

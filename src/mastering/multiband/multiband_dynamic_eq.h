@@ -57,7 +57,7 @@ class MultibandDynamicEq : public rt::ProcessorBase {
   // construction keys (see populate_dynamic_eq_bands). Crossover band `cb`
   // occupies kParamsPerCrossoverBand ids; within each block the DynamicEq band
   // layout applies (kParamsPerBand fields per dynamic band, e.g. 0=frequencyHz,
-  // 1=staticGainDb, ... 10=lookaheadMs).
+  // 1=staticGainDb, ... 10=detectorDelayMs).
   std::vector<rt::ParamDescriptor> parameter_descriptors() const override;
 
  private:

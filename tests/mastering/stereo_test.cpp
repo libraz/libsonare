@@ -358,10 +358,45 @@ TEST_CASE("AutoPan modulates stereo gains over time", "[mastering][stereo]") {
   pan.prepare(1000.0, 1000);
   process_stereo(pan, left, right);
 
-  REQUIRE_THAT(left[0], WithinAbs(0.70710678f, 0.0001f));
-  REQUIRE_THAT(right[0], WithinAbs(0.70710678f, 0.0001f));
+  // The LFO starts centered, where a centre-unity panner is a pass-through, and
+  // reaches hard right a quarter cycle in — where the near channel carries the
+  // pair's whole energy at sqrt(2).
+  REQUIRE_THAT(left[0], WithinAbs(1.0f, 0.0001f));
+  REQUIRE_THAT(right[0], WithinAbs(1.0f, 0.0001f));
   REQUIRE(left[250] < 0.01f);
-  REQUIRE(right[250] > 0.99f);
+  REQUIRE_THAT(right[250], WithinAbs(sonare::constants::kSqrt2, 0.001f));
+}
+
+TEST_CASE("AutoPan at zero depth passes the input through", "[mastering][stereo]") {
+  const std::vector<float> source = generate_sine_samples(220.0f, 1000, 1000, 0.5f);
+  std::vector<float> left = source;
+  std::vector<float> right = source;
+
+  AutoPan pan({1.0f, 0.0f, 0.0f});
+  pan.prepare(1000.0, 1000);
+  process_stereo(pan, left, right);
+
+  for (size_t i = 0; i < source.size(); ++i) {
+    REQUIRE_THAT(left[i], WithinAbs(source[i], 1e-6f));
+    REQUIRE_THAT(right[i], WithinAbs(source[i], 1e-6f));
+  }
+}
+
+TEST_CASE("AutoPan holds total stereo energy across an LFO cycle", "[mastering][stereo]") {
+  // A steady signal on both channels: the panner moves the image without
+  // changing how much energy the pair carries, so merely inserting it costs
+  // nothing. A raw constant-power law would read 1.0 here instead of 2.0 — a
+  // flat 3 dB of insertion loss.
+  std::vector<float> left(1000, 1.0f);
+  std::vector<float> right(1000, 1.0f);
+
+  AutoPan pan({1.0f, 1.0f, 0.0f});
+  pan.prepare(1000.0, 1000);
+  process_stereo(pan, left, right);
+
+  for (size_t i = 0; i < left.size(); ++i) {
+    REQUIRE_THAT(left[i] * left[i] + right[i] * right[i], WithinAbs(2.0f, 0.001f));
+  }
 }
 
 TEST_CASE("AutoPan validates configuration", "[mastering][stereo]") {

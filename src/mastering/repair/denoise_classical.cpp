@@ -272,9 +272,9 @@ Audio denoise_ephraim_malah(const Audio& audio, const Spectrogram& spec,
     }
   }
 
-  const Spectrogram clean =
-      Spectrogram::from_complex(denoised_data.data(), bins, frames, spec.n_fft(), spec.hop_length(),
-                                spec.sample_rate(), spec.center(), spec.win_length());
+  const Spectrogram clean = Spectrogram::from_complex(
+      denoised_data.data(), bins, frames, spec.n_fft(), spec.hop_length(), spec.sample_rate(),
+      spec.window(), spec.center(), spec.win_length());
   return clean.to_audio(static_cast<int>(audio.size()));
 }
 
@@ -304,9 +304,9 @@ Audio denoise_berouti(const Audio& audio, const Spectrogram& spec,
     }
   }
 
-  const Spectrogram clean =
-      Spectrogram::from_complex(denoised_data.data(), bins, frames, spec.n_fft(), spec.hop_length(),
-                                spec.sample_rate(), spec.center(), spec.win_length());
+  const Spectrogram clean = Spectrogram::from_complex(
+      denoised_data.data(), bins, frames, spec.n_fft(), spec.hop_length(), spec.sample_rate(),
+      spec.window(), spec.center(), spec.win_length());
   return clean.to_audio(static_cast<int>(audio.size()));
 }
 
