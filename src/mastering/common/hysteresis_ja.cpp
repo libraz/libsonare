@@ -48,10 +48,31 @@ void JilesAtherton::integrate_step(JilesAthertonState& state, float field, float
 
   const float d_l = langevin_derivative(x);
   const float d_m_an_d_he = ms * d_l / a;
-  const float d_m_an_d_h = d_m_an_d_he / std::max(1.0f - alpha * d_m_an_d_he, 1e-6f);
+  // Mean-field correction turning a derivative with respect to the effective
+  // field into one with respect to the drive field.
+  const float mean_field_gain = std::max(1.0f - alpha * d_m_an_d_he, 1e-6f);
 
-  const float d_m_d_h = d_m_hyst_d_h + c * d_m_an_d_h;
-  state.magnetization += d_m_d_h * d_field;
+  // The irreversible branch chases the anhysteretic curve, so one step must not
+  // cross it: the loop-transition slope is roughly diff/k and a step of size
+  // d_field therefore overshoots as soon as d_field approaches k. Projecting the
+  // increment onto the remaining distance keeps the trajectory on the branch it
+  // is on, which is what the sub-stepping above achieves while it has sub-steps
+  // left to spend and what has to hold once the sub-step budget is exhausted.
+  float d_m_irr = d_m_hyst_d_h * d_field;
+  d_m_irr = diff >= 0.0f ? std::min(d_m_irr, diff) : std::max(d_m_irr, diff);
+
+  // The reversible branch is integrated in closed form rather than by the same
+  // Euler step, because the antiderivative of dMan/dH is the anhysteretic
+  // magnetization itself. Evaluating it at both ends of the step is exact for
+  // any step size, so this term cannot overshoot either. Both evaluations hold
+  // the magnetization fixed, so the difference is with respect to the effective
+  // field and is divided by the mean-field gain to become one with respect to
+  // the drive field - the same conversion the derivative form applies, and the
+  // term that sets the small-field susceptibility.
+  const float an_start = ms * langevin((field - d_field + alpha * state.magnetization) / a);
+  const float d_m_rev = c * (anhysteretic - an_start) / mean_field_gain;
+
+  state.magnetization += d_m_irr + d_m_rev;
   state.magnetization = std::clamp(state.magnetization, -1.2f * ms, 1.2f * ms);
 }
 

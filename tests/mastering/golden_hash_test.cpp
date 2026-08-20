@@ -9,8 +9,10 @@
 #include <map>
 #include <sstream>
 #include <string>
+#include <tuple>
 #include <vector>
 
+#include "mastering/api/named_processor.h"
 #include "mastering/api/presets.h"
 #include "util/constants.h"
 
@@ -56,6 +58,22 @@ std::string hex64(uint64_t value) {
   return out.str();
 }
 
+// A mastering chain assembled explicitly through the named-processor entry
+// points, run in the fixed compressor -> transformer -> limiter order,
+// covering the transformer's saturation stage that no built-in preset enables.
+std::vector<float> run_explicit_transformer_chain(const std::vector<float>& samples) {
+  const auto compressed = api::apply_named_processor(
+      "dynamics.compressor", samples.data(), samples.size(), kSampleRate,
+      {{"thresholdDb", -18.0}, {"ratio", 4.0}, {"attackMs", 5.0}, {"releaseMs", 80.0}});
+  const auto driven = api::apply_named_processor(
+      "saturation.transformer", compressed.samples.data(), compressed.samples.size(), kSampleRate,
+      {{"driveDb", 10.0}, {"asymmetry", 0.3}, {"mix", 1.0}});
+  const auto limited =
+      api::apply_named_processor("maximizer.truePeakLimiter", driven.samples.data(),
+                                 driven.samples.size(), kSampleRate, {{"ceilingDb", -0.3}});
+  return limited.samples;
+}
+
 std::map<std::string, std::string> load_manifest(const std::filesystem::path& path) {
   std::ifstream file(path);
   REQUIRE(file.is_open());
@@ -86,6 +104,12 @@ std::vector<std::tuple<std::string, std::string, std::string>> compute_rows() {
       rows.emplace_back(preset_name, signal, hex64(sonare::test::fnv1a_quantized(result.samples)));
     }
   }
+  for (const auto& signal : signals) {
+    const auto samples = make_signal(signal);
+    const auto chained = run_explicit_transformer_chain(samples);
+    rows.emplace_back("explicit-transformer-chain", signal,
+                      hex64(sonare::test::fnv1a_quantized(chained)));
+  }
   return rows;
 }
 
@@ -108,13 +132,13 @@ TEST_CASE("built-in mastering preset golden hashes stay stable", "[.][mastering]
 
   const auto expected = load_manifest(manifest);
   const auto rows = compute_rows();
-  REQUIRE(rows.size() == 75);
+  REQUIRE(rows.size() == 78);
   REQUIRE(expected.size() == rows.size());
 
   // CHECK, not REQUIRE: a REQUIRE aborts the case on the first drifted row, so
-  // a chain-wide change reads as one stale preset and the other 74 rows are
-  // never compared. Reporting every drifted row is what tells a stale golden
-  // (one whole stage's presets move together) apart from a real regression.
+  // a chain-wide change reads as one stale preset and the other rows are never
+  // compared. Reporting every drifted row is what tells a stale golden (one
+  // whole stage's presets move together) apart from a real regression.
   for (const auto& [preset, signal, hash] : rows) {
     const std::string key = preset + "/" + signal;
     CAPTURE(key);

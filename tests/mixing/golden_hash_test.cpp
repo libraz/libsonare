@@ -9,17 +9,20 @@
 #include <filesystem>
 #include <fstream>
 #include <map>
+#include <memory>
 #include <sstream>
 #include <string>
 #include <tuple>
 #include <vector>
 
+#include "mastering/api/insert_factory.h"
 #include "mastering/dynamics/compressor.h"
 #include "mixing/bus.h"
 #include "mixing/channel_strip.h"
 #include "util/constants.h"
 
 namespace mixing = sonare::mixing;
+namespace api = sonare::mastering::api;
 
 namespace {
 
@@ -33,6 +36,10 @@ struct Scenario {
   float pan = 0.0f;
   mixing::PanMode pan_mode = mixing::PanMode::Balance;
   float width = 1.0f;
+  // When set, a post-fader effects.reverb.plate insert runs on the strip so a
+  // DSP change to a mixing insert (not just the fader/pan/width chain) moves
+  // this golden.
+  bool with_reverb_insert = false;
 };
 
 std::pair<std::vector<float>, std::vector<float>> make_signal(const std::string& name) {
@@ -74,6 +81,7 @@ std::vector<Scenario> scenarios() {
       {"unity-balance", 0.0f, 0.0f, mixing::PanMode::Balance, 1.0f},
       {"panned-fader", -4.5f, 0.35f, mixing::PanMode::Balance, 1.0f},
       {"stereo-pan-wide", -2.0f, -0.4f, mixing::PanMode::StereoPan, 1.4f},
+      {"plate-insert", -3.0f, 0.15f, mixing::PanMode::Balance, 1.0f, /*with_reverb_insert=*/true},
   };
 }
 
@@ -89,6 +97,12 @@ std::vector<std::tuple<std::string, std::string, std::string>> compute_rows() {
       strip.set_pan_mode(scenario.pan_mode);
       strip.set_pan(scenario.pan);
       strip.set_width(scenario.width);
+      if (scenario.with_reverb_insert) {
+        auto reverb =
+            api::make_insert("effects.reverb.plate", "{\"decaySec\":1.8,\"preDelayMs\":25}");
+        REQUIRE(reverb != nullptr);
+        strip.add_post_insert(std::move(reverb), /*stereo_pair_only=*/true);
+      }
       float* channels[] = {left.data(), right.data()};
       strip.process(channels, 2, kSamples);
       rows.emplace_back(scenario.name, signal_name,
@@ -136,7 +150,7 @@ std::vector<std::tuple<std::string, std::string, std::string>> compute_surround_
     bus.prepare(kSampleRate, kSamples);
     bus.process(pointers.data(), channels, kSamples);
 
-    uint64_t hash = 1469598103934665603ull;
+    uint64_t hash = sonare::test::kFnvOffsetBasis;
     for (int ch = 0; ch < channels; ++ch) {
       for (float sample : planes[static_cast<size_t>(ch)]) {
         sonare::test::golden_fnv_accumulate(hash, sonare::test::golden_quantize(sample));
@@ -195,7 +209,7 @@ TEST_CASE("built-in mixing strip golden hashes stay stable", "[.][mixing][golden
 
   const auto expected = load_manifest(manifest);
   const auto rows = compute_rows();
-  REQUIRE(rows.size() == 9);
+  REQUIRE(rows.size() == 12);
   REQUIRE(expected.size() == rows.size());
 
   // CHECK, not REQUIRE: a REQUIRE aborts on the first drifted row and hides

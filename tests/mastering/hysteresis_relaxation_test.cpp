@@ -111,6 +111,27 @@ std::vector<float> level_response(float hz, const std::vector<float>& amplitudes
   return peaks;
 }
 
+// Same reading for a tape whose config the caller supplies. The band case below
+// is generic over stages and so can only use their default configs; the drive
+// ceiling case needs a tape configured away from its defaults.
+std::vector<float> tape_level_response(const TapeConfig& config, float hz,
+                                       const std::vector<float>& amplitudes) {
+  std::vector<float> peaks;
+  for (float amplitude : amplitudes) {
+    Tape stage{config};
+    std::vector<float> signal(static_cast<size_t>(kSineLength), 0.0f);
+    for (int i = 0; i < kSineLength; ++i) {
+      signal[static_cast<size_t>(i)] =
+          amplitude * std::sin(kTwoPi * hz * static_cast<float>(i) / kSampleRate);
+    }
+    stage.prepare(kSampleRate, kSineLength);
+    float* channels[] = {signal.data()};
+    stage.process(channels, 1, kSineLength);
+    peaks.push_back(peak_magnitude(signal));
+  }
+  return peaks;
+}
+
 }  // namespace
 
 // The property, stated without reference to any particular output number: over
@@ -138,6 +159,47 @@ TEMPLATE_TEST_CASE("Saturation stays bounded and level-responsive across the ban
     for (size_t i = 1; i < peaks.size(); ++i) {
       CAPTURE(amplitudes[i - 1], peaks[i - 1], amplitudes[i], peaks[i]);
       REQUIRE(peaks[i] > peaks[i - 1] * 1.1f);
+    }
+  }
+}
+
+// The same property at the top of the documented drive range. tape.h recommends
+// drive up to +24 dB, and the sub-step budget is finite, so there a
+// high-frequency drive asks for far more sub-steps than the core will take and
+// each sub-step is back above the field change a plain Euler step tracks. The
+// band case above runs at the default drive, where the budget is never
+// exhausted, so it does not reach this regime.
+TEST_CASE("Tape stays bounded and level-responsive at the documented drive ceiling",
+          "[mastering][saturation]") {
+  // head_bump and gap_loss are linear filters with their own memory, so they are
+  // switched off here; what is left is the J-A core and static gain, and a peak
+  // read below is the core's.
+  TapeConfig config{};
+  config.drive_db = 24.0f;
+  config.head_bump_db = 0.0f;
+  config.gap_loss = 0.0f;
+
+  const std::vector<float> amplitudes = {0.25f, 0.5f, 1.0f};
+  for (float hz : {6000.0f, 12000.0f, 16000.0f}) {
+    CAPTURE(hz);
+    const auto peaks = tape_level_response(config, hz, amplitudes);
+    for (size_t i = 0; i < peaks.size(); ++i) {
+      CAPTURE(amplitudes[i], peaks[i]);
+      // Strictly below the +/-1.2*Ms safety clamp, so a run that reaches the
+      // clamp fails. The bound is not 1.0 because the differential form of the
+      // loop equation carries the magnetization a few percent past the
+      // saturation magnetization at this drive - measured 1.05 at 16 kHz - which
+      // is a property of the formulation and not of the step size.
+      REQUIRE(peaks[i] < 1.1f);
+    }
+    // Every level step must still move the output. The stage is deep into
+    // compression here, so the step is small - under two percent for the top
+    // step at 6 and 12 kHz - and the margin is set by that rather than by the
+    // failure it separates from: a stage pinned at the clamp returns the same
+    // peak for every level, so its step ratio is exactly 1.
+    for (size_t i = 1; i < peaks.size(); ++i) {
+      CAPTURE(amplitudes[i - 1], peaks[i - 1], amplitudes[i], peaks[i]);
+      REQUIRE(peaks[i] > peaks[i - 1] * 1.01f);
     }
   }
 }
@@ -216,7 +278,13 @@ TEST_CASE("Held-field relaxation is opt-in at the shared engine", "[mastering][s
     defaulted_tail = defaulted.process(defaulted_state, field);
   }
 
-  REQUIRE(std::abs(held_tail) > 1.0f);
+  // The latching config keeps whatever the transient left behind - a remanent
+  // magnetization, measured 0.396 here - while the relaxing one decays to rest.
+  // The tail is bounded on both sides: too small is a config that relaxed when
+  // it was told not to, and a tail at or above the saturation magnetization is
+  // a state pinned at the +/-1.2*Ms clamp rather than sitting on the loop.
+  REQUIRE(std::abs(held_tail) > 0.1f);
+  REQUIRE(std::abs(held_tail) < config.saturation_magnetization);
   REQUIRE(std::abs(relaxing_tail) < 0.001f);
   REQUIRE_THAT(defaulted_tail, WithinAbs(held_tail, 0.0f));
 }

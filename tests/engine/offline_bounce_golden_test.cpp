@@ -9,12 +9,18 @@
 #include <filesystem>
 #include <fstream>
 #include <map>
+#include <memory>
 #include <sstream>
 #include <string>
 #include <tuple>
 #include <vector>
 
+#include "midi/midi_event.h"
+#include "midi/synth/sf2_file.h"
+#include "midi/synth/sf2_player.h"
+#include "midi/ump.h"
 #include "support/golden_hash.h"
+#include "support/sf2_builder.h"
 #include "util/constants.h"
 
 using sonare::constants::kPi;
@@ -126,6 +132,78 @@ std::tuple<std::string, int64_t, int, int, float> run_bounce(const std::string& 
   return {hash, frames, channels, sample_rate, integrated_lufs};
 }
 
+// A looped tone driven through Sf2Player's GS system-effect bus (reverb +
+// chorus + delay send-returns), the one signal path in this file that touches
+// a SoundFont-backed synth rather than a pre-rendered clip.
+constexpr double kSf2SampleRate = 48000.0;
+constexpr int kSf2Block = 256;
+constexpr int kSf2Frames = 24000;  // 0.5 s
+
+std::shared_ptr<sonare::midi::synth::Sf2File> make_sf2_fixture() {
+  sonare::test::Sf2Builder builder;
+  std::vector<float> tone(64);
+  for (size_t i = 0; i < tone.size(); ++i) {
+    tone[i] = 0.6f * std::sin(2.0f * sonare::constants::kPi * static_cast<float>(i) /
+                              static_cast<float>(tone.size()));
+  }
+  const int sample_id =
+      builder.add_sample("tone", tone, 32000, 60, 0, static_cast<uint32_t>(tone.size()));
+
+  sonare::test::Sf2Builder::ZoneSpec zone;
+  zone.gens.push_back({54 /*sampleModes*/, 1});  // loop the whole sample
+  zone.target = sample_id;
+  const int instrument_id = builder.add_instrument("tone", {zone});
+
+  sonare::test::Sf2Builder::ZoneSpec preset_zone;
+  preset_zone.target = instrument_id;
+  builder.add_preset("Tone", 0, 0, {preset_zone});
+
+  const auto bytes = builder.build();
+  auto sf2 = std::make_shared<sonare::midi::synth::Sf2File>();
+  std::string error;
+  REQUIRE(sf2->parse(bytes.data(), bytes.size(), &error));
+  return sf2;
+}
+
+sonare::midi::MidiEvent sf2_event(const sonare::midi::Ump& ump) {
+  sonare::midi::MidiEvent e;
+  e.ump = ump;
+  return e;
+}
+
+std::tuple<std::string, int64_t, int, int> run_sf2_gs_effects_bounce() {
+  using sonare::midi::synth::Sf2Player;
+  using sonare::midi::synth::Sf2PlayerConfig;
+
+  Sf2PlayerConfig config;
+  config.gain = 1.0f;
+#if defined(SONARE_MIDI_WITH_FX)
+  config.effects.enable_reverb = true;
+  config.effects.enable_chorus = true;
+  config.effects.enable_delay = true;
+#endif
+  Sf2Player player(config);
+  player.set_soundfont(make_sf2_fixture());
+  player.prepare(kSf2SampleRate, kSf2Block);
+
+  player.on_event(0, sf2_event(sonare::midi::make_midi1_control_change(0, 0, 91, 100)));
+  player.on_event(0, sf2_event(sonare::midi::make_midi1_control_change(0, 0, 93, 90)));
+  player.on_event(0, sf2_event(sonare::midi::make_midi1_control_change(0, 0, 94, 80)));
+  player.on_event(0, sf2_event(sonare::midi::make_midi1_note_on(0, 0, 60, 127)));
+
+  std::vector<float> left(kSf2Frames, 0.0f);
+  std::vector<float> right(kSf2Frames, 0.0f);
+  for (int rendered = 0; rendered < kSf2Frames;) {
+    const int chunk = std::min(kSf2Block, kSf2Frames - rendered);
+    float* block_channels[] = {left.data() + rendered, right.data() + rendered};
+    player.process(block_channels, 2, chunk);
+    rendered += chunk;
+  }
+
+  const std::string hash = hex64(sonare::test::fnv1a_quantized_stereo(left, right));
+  return {hash, kSf2Frames, 2, static_cast<int>(kSf2SampleRate)};
+}
+
 std::vector<std::tuple<std::string, std::string, std::string, int64_t, int, int>> compute_rows() {
   const std::array<std::string, 2> signals{"tone", "transient"};
   std::vector<std::tuple<std::string, std::string, std::string, int64_t, int, int>> rows;
@@ -134,6 +212,10 @@ std::vector<std::tuple<std::string, std::string, std::string, int64_t, int, int>
       auto [hash, frames, channels, sample_rate, _lufs] = run_bounce(signal, scenario);
       rows.emplace_back(scenario.name, signal, hash, frames, channels, sample_rate);
     }
+  }
+  {
+    auto [hash, frames, channels, sample_rate] = run_sf2_gs_effects_bounce();
+    rows.emplace_back("sf2-gs-effects", "reverb-chorus-delay", hash, frames, channels, sample_rate);
   }
   return rows;
 }
@@ -186,7 +268,7 @@ TEST_CASE("realtime engine offline bounce golden hashes stay stable",
 
   const auto expected = load_manifest(manifest);
   const auto rows = compute_rows();
-  REQUIRE(rows.size() == 6);
+  REQUIRE(rows.size() == 7);
   REQUIRE(expected.size() == rows.size());
 
   for (const auto& [scenario, signal, hash, frames, channels, sample_rate] : rows) {
