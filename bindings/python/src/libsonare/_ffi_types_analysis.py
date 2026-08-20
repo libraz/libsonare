@@ -389,6 +389,7 @@ class SonareMusicAnalyzeOptions(ctypes.Structure):
         ("detect_chord_inversions", ctypes.c_int),
         ("adaptive_tempo", ctypes.c_int),
         ("tempo_update_interval_beats", ctypes.c_int),
+        ("compute_tempo_curve", ctypes.c_int),
         ("meter_candidate_numerators", ctypes.c_int * SONARE_MAX_METER_CANDIDATE_NUMERATORS),
         ("meter_candidate_numerator_count", ctypes.c_int),
         ("meter_denominator", ctypes.c_int),

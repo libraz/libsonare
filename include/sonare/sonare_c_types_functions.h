@@ -163,6 +163,13 @@ typedef struct {
   int adaptive_tempo;
   /* Local tempo context length in beats; used only when adaptive_tempo is 1. */
   int tempo_update_interval_beats;
+  /* Decode a per-beat local tempo curve into the result's beatLocalBpm array.
+     Off by default: it is an extra output rather than a better analysis, so a
+     caller that does not read the curve would pay a decode over the beat grid
+     for nothing. The curve describes the beat grid it was decoded from, and
+     beat tracking holds a fixed tempo prior unless adaptive_tempo is also 1, so
+     measuring a tempo that moves needs both set. */
+  int compute_tempo_curve;
   /* Meter numerators the estimator scores. Only the first
      meter_candidate_numerator_count entries are read; each must be in [2, 32].
      Widening the set does not force a wider meter — the default {3, 4, 6}
@@ -210,6 +217,11 @@ SonareMeterOptions sonare_meter_options_default(void);
    AnalysisResult beatObservations.onsetStrength is the intended strength
    source, being the windowed value the library's own downbeat pass scores;
    beats[].strength also works but is a single unwindowed envelope frame.
+   Neither needs pre-scaling: the series is divided by its own maximum before
+   scoring, so only the accent contrast within it is read.
+   The result carries a grouping alongside the numerator: how the bar divides
+   into accent groups of two and three beats, so a seven comes back as 3+2+2 or
+   2+2+3 rather than as a bare seven.
    Emits the schema documented on meter_result_to_json. *out_json is
    heap-allocated and MUST be released with sonare_free_string; on any error it
    is set to NULL, so a caller may check it instead of the return code. */

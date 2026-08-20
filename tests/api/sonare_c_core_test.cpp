@@ -88,6 +88,10 @@ sonare::AnalysisResult make_analysis_schema_fixture() {
   result.beat_observations.onset_strength = {0.62f, 0.37f};
   result.beat_observations.low_frequency_energy = {0.31f, 0.12f};
   result.beat_observations.chord_change = {1.0f, 0.0f};
+  // Two beats half a second apart is 120 BPM, but the curve is a decoded value
+  // rather than a restatement of the beat spacing, so the fixture carries
+  // numbers no other field could supply.
+  result.beat_local_bpm = {118.5f, 121.5f};
   result.chords.push_back({sonare::PitchClass::C, sonare::ChordQuality::Major, 0.0f, 1.0f, 0.8f,
                            sonare::PitchClass::C});
   result.sections.push_back({sonare::SectionType::Verse, 0.0f, 1.0f, 0.5f, 0.9f});
@@ -1084,6 +1088,34 @@ TEST_CASE("sonare_analyze_json", "[.][slow][c_api]") {
     REQUIRE(sonare_analyze_json_ex(samples.data(), samples.size(), 22050, &options, &json) ==
             SONARE_ERROR_INVALID_PARAMETER);
   }
+
+  SECTION("emits the tempo curve only when it is asked for") {
+    SonareMusicAnalyzeOptions options = sonare_music_analyze_options_default();
+    REQUIRE(options.compute_tempo_curve == 0);
+
+    char* json = nullptr;
+    REQUIRE(sonare_analyze_json_ex(samples.data(), samples.size(), 22050, &options, &json) ==
+            SONARE_OK);
+    const auto without = sonare::util::json::parse(json);
+    // The key is always present; it is the array that is empty, so a reader
+    // never has to distinguish "not asked for" from "field missing".
+    REQUIRE(without["beatLocalBpm"].as_array().empty());
+    const size_t beat_count = without["beats"].as_array().size();
+    sonare_free_string(json);
+    json = nullptr;
+
+    options.compute_tempo_curve = 1;
+    REQUIRE(sonare_analyze_json_ex(samples.data(), samples.size(), 22050, &options, &json) ==
+            SONARE_OK);
+    const auto with = sonare::util::json::parse(json);
+    const auto& curve = with["beatLocalBpm"].as_array();
+    REQUIRE(curve.size() == beat_count);
+    REQUIRE(!curve.empty());
+    for (const auto& value : curve) {
+      REQUIRE(value.as_number() > 0.0);
+    }
+    sonare_free_string(json);
+  }
 }
 
 namespace {
@@ -1133,11 +1165,22 @@ TEST_CASE("analysis_result_to_json emits beat-parallel observation streams",
             Catch::Approx(root["beats"][i]["strength"].as_number()));
   }
 
+  // Beat-indexed alongside the streams above, and serialized from the result
+  // rather than re-derived from the beat spacing.
+  REQUIRE(root.contains("beatLocalBpm"));
+  REQUIRE(root["beatLocalBpm"].is_array());
+  REQUIRE(root["beatLocalBpm"].size() == fixture.beats.size());
+  for (std::size_t i = 0; i < fixture.beats.size(); ++i) {
+    CAPTURE(i);
+    REQUIRE(root["beatLocalBpm"][i].as_number() == Catch::Approx(fixture.beat_local_bpm[i]));
+  }
+
   // The streams belong to the canonical schema rather than being an incidental
   // extra the snapshot comparison would not police.
   const auto& paths = sonare::analysis_result_schema_paths();
-  for (const char* path : {"beatObservations", "beatObservations.onsetStrength",
-                           "beatObservations.lowFrequencyEnergy", "beatObservations.chordChange"}) {
+  for (const char* path :
+       {"beatObservations", "beatObservations.onsetStrength", "beatObservations.lowFrequencyEnergy",
+        "beatObservations.chordChange", "beatLocalBpm"}) {
     CAPTURE(path);
     REQUIRE(std::find(paths.begin(), paths.end(), std::string(path)) != paths.end());
   }
@@ -1152,6 +1195,7 @@ TEST_CASE("meter_result_to_json matches its schema snapshot", "[c_api][analysis_
   // lists would drop the candidates[] paths instead of comparing them.
   REQUIRE_FALSE(result.candidate_scores.empty());
   REQUIRE_FALSE(result.candidates.empty());
+  REQUIRE_FALSE(result.grouping.empty());
 
   const auto root = sonare::util::json::parse(sonare::meter_result_to_json(result));
   std::set<std::string> actual;
@@ -1168,6 +1212,15 @@ TEST_CASE("meter_result_to_json matches its schema snapshot", "[c_api][analysis_
   REQUIRE(root["timeSignature"]["confidence"].as_number() ==
           Catch::Approx(result.time_signature.confidence));
   REQUIRE(root["downbeatPhase"].as_number() == static_cast<double>(result.downbeat_phase));
+
+  REQUIRE(root["grouping"].size() == result.grouping.size());
+  int grouped_beats = 0;
+  for (std::size_t i = 0; i < result.grouping.size(); ++i) {
+    CAPTURE(i);
+    REQUIRE(root["grouping"][i].as_number() == static_cast<double>(result.grouping[i]));
+    grouped_beats += result.grouping[i];
+  }
+  REQUIRE(grouped_beats == result.time_signature.numerator);
 
   REQUIRE(root["candidateScores"].size() == result.candidate_scores.size());
   for (std::size_t i = 0; i < result.candidate_scores.size(); ++i) {

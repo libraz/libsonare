@@ -363,6 +363,7 @@ class AnalysisResult:
     rhythm: AnalysisRhythm | None
     melody: AnalysisMelody | None
     beat_observations: AnalysisBeatObservations | None
+    beat_local_bpm: list[float]
     form: str
     def __init__(
         self,
@@ -383,6 +384,7 @@ class AnalysisResult:
         rhythm: AnalysisRhythm | None = None,
         melody: AnalysisMelody | None = None,
         beat_observations: AnalysisBeatObservations | None = None,
+        beat_local_bpm: list[float] = ...,
         form: str = "",
     ) -> None: ...
     @property
@@ -404,22 +406,31 @@ class AnalysisResult:
     @property
     def beatObservations(self) -> AnalysisBeatObservations | None: ...
     @property
+    def beatLocalBpm(self) -> list[float]: ...
+    @property
     def beats(self) -> list[Beat]: ...
 
 class MeterEstimate:
     """Meter estimated over a caller-supplied beat series. ``candidate_scores``
     is parallel to the numerators that were *requested*, in request order,
     while ``candidates`` is ordered by descending support — the two do not
-    index alike."""
+    index alike. A score is standardized and signed: zero is the level a
+    numerator reaches on beats carrying no meter, so only the ordering and the
+    gaps between entries carry meaning. ``grouping`` is how the bar divides, in
+    beats per accent group — ``[3, 2, 2]`` for a 7/8 notated 3+2+2 — and always
+    sums to the reported numerator; a single entry means no internal division
+    was resolved."""
 
     time_signature: TimeSignature
     downbeat_phase: int
+    grouping: list[int]
     candidate_scores: list[float]
     candidates: list[TimeSignature]
     def __init__(
         self,
         time_signature: TimeSignature,
         downbeat_phase: int,
+        grouping: list[int] = ...,
         candidate_scores: list[float] = ...,
         candidates: list[TimeSignature] = ...,
     ) -> None: ...

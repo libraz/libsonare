@@ -415,6 +415,20 @@ export interface MusicAnalyzeOptions {
    */
   tempoUpdateIntervalBeats?: number;
   /**
+   * Decode a per-beat local tempo curve into
+   * {@link AnalysisResult.beatLocalBpm} (default: false).
+   *
+   * @remarks
+   * Off by default because it is an extra output rather than a better analysis:
+   * nothing else in the result changes, and a caller that does not read the
+   * curve would pay a decode over the beat grid for nothing.
+   *
+   * The curve describes the beat grid it was decoded from, and beat tracking
+   * holds a fixed tempo prior unless {@link MusicAnalyzeOptions.adaptiveTempo}
+   * is also set, so measuring a tempo that moves needs both.
+   */
+  computeTempoCurve?: boolean;
+  /**
    * Meter numerators the estimator scores (default: `[3, 4, 6]`).
    *
    * @remarks
@@ -481,6 +495,8 @@ export interface EstimateMeterRequest {
    * `AnalysisResult.beatObservations.onsetStrength` is the intended source —
    * it is the windowed value the library's own downbeat pass scores.
    * `beats[].strength` also works but is a single unwindowed envelope frame.
+   * Neither needs pre-scaling: the series is divided by its own maximum before
+   * scoring, so only the accent contrast within it is read.
    */
   beatStrengths: ArrayLike<number>;
   /**
@@ -511,13 +527,18 @@ export interface EstimateMeterRequest {
  * Estimate meter over a caller-supplied beat series.
  *
  * @param request - Beat series plus optional scoring configuration
- * @returns The selected signature, its downbeat phase, and the scored candidates
+ * @returns The selected signature, its downbeat phase and grouping, and the
+ *   scored candidates
  *
  * @remarks
  * Scores only the per-beat strengths, so no audio and no frame-level onset
  * envelope is needed: an arbitrary span of an existing analysis can be scored
  * without re-running it. Pass `beatObservations.onsetStrength` rather than
  * `beats[].strength` — see {@link EstimateMeterRequest.beatStrengths}.
+ *
+ * The result carries `grouping` alongside the numerator: how the bar divides
+ * into accent groups of two and three beats, so a seven comes back as `[3, 2,
+ * 2]` or `[2, 2, 3]` rather than as a bare seven.
  */
 export function estimateMeter(request: EstimateMeterRequest): MeterEstimate {
   return requireModule().estimateMeter(request.beatTimes, request.beatStrengths, request);

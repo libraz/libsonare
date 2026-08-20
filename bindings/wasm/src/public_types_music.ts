@@ -374,12 +374,28 @@ export interface MeterEstimate {
   /** Beat index the first measure starts on, in `[0, timeSignature.numerator)`. */
   downbeatPhase: number;
   /**
+   * How the bar divides, in beats per accent group.
+   *
+   * @remarks
+   * `[3, 2, 2]` is the 7/8 an aksak meter notates as 3+2+2, and `[2, 2]` an
+   * ordinary four. Always sums to `timeSignature.numerator`.
+   *
+   * A single entry means no internal division was resolved — the numerator has
+   * none to find, it was too wide to search, or the span was too short to
+   * search at all.
+   */
+  grouping: number[];
+  /**
    * Multi-comb score per requested candidate numerator.
    *
    * @remarks
    * Parallel to the `candidateNumerators` that were requested, in the order
    * they were given. This does NOT index alike with {@link candidates}, which
    * is ordered by descending support.
+   *
+   * Standardized and signed: zero is the level a numerator reaches on beats
+   * carrying no meter, so a negative entry means less support than noise would
+   * produce. Only the ordering and the gaps between entries carry meaning.
    */
   candidateScores: number[];
   /**
@@ -459,6 +475,21 @@ export interface AnalysisResult {
    * {@link AnalysisResult.beats}.
    */
   beatObservations: BeatObservations;
+  /**
+   * Smoothed local tempo at each beat, in BPM, parallel to
+   * {@link AnalysisResult.beats}.
+   *
+   * @remarks
+   * Empty unless `computeTempoCurve` was set, and empty regardless when fewer
+   * than two beats were detected, since a tempo is a property of the interval
+   * between two beats. The last entry repeats the tempo of the interval leading
+   * into the final beat, which opens no interval of its own.
+   *
+   * This is the local tempo rather than {@link AnalysisResult.bpm} resampled:
+   * on material whose tempo moves it departs from `bpm`, and reading a single
+   * number out of it is not how to get the global tempo.
+   */
+  beatLocalBpm: number[];
   chords: Chord[];
   sections: Section[];
   timbre: Timbre;

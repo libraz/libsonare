@@ -420,6 +420,10 @@ def _parse_analysis_json(data: dict[str, Any]) -> AnalysisResult:
         else None
     )
 
+    # Beat-indexed like the streams above, and likewise empty rather than absent
+    # when it was not produced -- here because the caller did not ask for it.
+    beat_local_bpm = [float(v) for v in data.get("beatLocalBpm", [])]
+
     # Chords
     chord_quality_str: dict[str, str] = {
         "major": "major",
@@ -566,5 +570,6 @@ def _parse_analysis_json(data: dict[str, Any]) -> AnalysisResult:
         rhythm=rhythm,
         melody=melody,
         beat_observations=beat_observations,
+        beat_local_bpm=beat_local_bpm,
         form=str(data.get("form", "")),
     )

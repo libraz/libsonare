@@ -81,6 +81,39 @@ describe('estimateMeter()', () => {
     expect(result.timeSignature.confidence).toBeGreaterThan(0);
   });
 
+  it('reads accent contrast rather than absolute level', () => {
+    // `beatObservations.onsetStrength`, the documented strength source, is a
+    // windowed aggregate in the onset envelope's own units and runs well above
+    // 1 on ordinary material. Scoring divides the series by its own maximum, so
+    // a caller has no scale to supply; saturating it instead would flatten
+    // every beat to one value and tie every candidate.
+    const { beatTimes, beatStrengths } = beatSeries(4, 8);
+    const scaled = Float32Array.from(beatStrengths, (value) => value * 20);
+
+    const unit = estimateMeter({ beatTimes, beatStrengths });
+    const loud = estimateMeter({ beatTimes, beatStrengths: scaled });
+
+    expect(loud).toEqual(unit);
+    expect(loud.timeSignature.numerator).toBe(4);
+    expect(new Set(loud.candidateScores).size).toBe(loud.candidateScores.length);
+  });
+
+  it('scores an unmetred series below the no-meter level', () => {
+    // The scores are standardized against what a numerator reaches on beats
+    // carrying no meter, so zero is that level and a flat series lands under
+    // it. The wider the numerator the further under: it searched more phases
+    // and found nothing in any of them, which is the width advantage the
+    // standardization removes.
+    const beatTimes = Float32Array.from({ length: 48 }, (_, i) => i * 0.5);
+    const beatStrengths = new Float32Array(48).fill(0.5);
+
+    const result = estimateMeter({ beatTimes, beatStrengths, candidateNumerators: [3, 4, 13] });
+
+    expect(result.candidateScores.every((score) => score < 0)).toBe(true);
+    expect(result.candidateScores).toEqual([...result.candidateScores].sort((a, b) => b - a));
+    expect(result.timeSignature.confidence).toBeLessThan(0.6);
+  });
+
   it('accepts a plain number[] beat series', () => {
     const { beatTimes, beatStrengths } = beatSeries(4, 8);
     const fromArrays = estimateMeter({
@@ -245,12 +278,119 @@ describe('analyze() beat observations', () => {
   });
 
   it('feeds estimateMeter without re-running analysis', () => {
+    const { onsetStrength } = result.beatObservations;
+    // The stream arrives in the envelope's units rather than pre-scaled, which
+    // is the case the estimator has to handle for the documented source to be
+    // usable at all.
+    expect(Math.max(...onsetStrength)).toBeGreaterThan(1);
+
     const estimate = estimateMeter({
       beatTimes: result.beats.map((beat) => beat.time),
-      beatStrengths: result.beatObservations.onsetStrength,
+      beatStrengths: onsetStrength,
     });
 
     expect(estimate.timeSignature.numerator).toBeGreaterThan(1);
     expect(estimate.downbeatPhase).toBeLessThan(estimate.timeSignature.numerator);
+    // Every candidate scoring alike is the signature of a saturated series, so
+    // the scores have to separate for this to be a search and not a fallback.
+    expect(new Set(estimate.candidateScores).size).toBe(estimate.candidateScores.length);
+  });
+});
+
+/**
+ * Build a beat series whose bars divide exactly as `grouping` says.
+ *
+ * The downbeat is loudest, every following group starts on a middling beat and
+ * the rest are quiet, which is the accent shape an additive meter is written
+ * for.
+ *
+ * @param grouping Beats per accent group within one bar.
+ * @param measures Number of measures to render.
+ * @returns Parallel beat times and accent strengths.
+ */
+function groupedSeries(
+  grouping: number[],
+  measures = 12,
+): { beatTimes: Float32Array; beatStrengths: Float32Array } {
+  const accents = new Set<number>();
+  let position = 0;
+  for (const part of grouping.slice(0, -1)) {
+    position += part;
+    accents.add(position);
+  }
+
+  const numerator = grouping.reduce((sum, part) => sum + part, 0);
+  const count = numerator * measures;
+  const beatTimes = new Float32Array(count);
+  const beatStrengths = new Float32Array(count);
+  for (let i = 0; i < count; i++) {
+    const pos = i % numerator;
+    beatTimes[i] = i * 0.5;
+    beatStrengths[i] = pos === 0 ? 1 : accents.has(pos) ? 0.65 : 0.35;
+  }
+  return { beatTimes, beatStrengths };
+}
+
+describe('estimateMeter() grouping', () => {
+  it('reports how the bar divides, not just how many beats it holds', () => {
+    // These layouts share a numerator and an accent count and differ only in
+    // where the accents fall, so the numerator alone cannot tell them apart.
+    const candidateNumerators = [3, 4, 5, 6, 7, 9, 11, 13];
+    for (const grouping of [
+      [3, 2, 2],
+      [2, 3, 2],
+      [2, 2, 3],
+      [3, 2],
+      [2, 3],
+      [2, 2, 2, 3],
+      [3, 3, 3, 2, 2],
+    ]) {
+      const result = estimateMeter({ ...groupedSeries(grouping), candidateNumerators });
+      expect(result.timeSignature.numerator).toBe(grouping.reduce((sum, p) => sum + p, 0));
+      expect(result.grouping).toEqual(grouping);
+    }
+  });
+
+  it('always reports a grouping that sums to the numerator', () => {
+    // The invariant every consumer of the field relies on, checked across the
+    // whole candidate range so it covers the numerators too wide to divide.
+    for (let numerator = 2; numerator <= 32; numerator++) {
+      const result = estimateMeter({
+        ...beatSeries(numerator, 6),
+        candidateNumerators: [numerator],
+      });
+      expect(result.grouping.length).toBeGreaterThan(0);
+      expect(result.grouping.reduce((sum, part) => sum + part, 0)).toBe(
+        result.timeSignature.numerator,
+      );
+      expect(result.grouping.every((part) => Number.isInteger(part) && part > 0)).toBe(true);
+    }
+  });
+
+  it('leaves a bar undivided when nothing divided it', () => {
+    // Below the search floor no scoring ran at all, so the bar comes back whole
+    // rather than carrying the 2+2 a four would have been given.
+    const { beatTimes, beatStrengths } = beatSeries(4, 8);
+    const result = estimateMeter({
+      beatTimes: beatTimes.slice(0, 4),
+      beatStrengths: beatStrengths.slice(0, 4),
+    });
+
+    expect(result.timeSignature.confidence).toBeLessThanOrEqual(0.5);
+    expect(result.grouping).toEqual([result.timeSignature.numerator]);
+  });
+
+  it('makes a six compound only when its beats divide into threes', () => {
+    const compound = estimateMeter(groupedSeries([3, 3]));
+    expect(compound.timeSignature.numerator).toBe(6);
+    expect(compound.timeSignature.denominator).toBe(8);
+    expect(compound.grouping).toEqual([3, 3]);
+
+    // A six grouped into three twos is a simple meter and keeps the requested
+    // unit, which is what keeps the assertions above from being about 6 alone.
+    const simple = estimateMeter(groupedSeries([2, 2, 2]));
+    expect(simple.timeSignature.numerator).toBe(6);
+    expect(simple.timeSignature.denominator).toBe(4);
+    expect(simple.grouping).toEqual([2, 2, 2]);
   });
 });

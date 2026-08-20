@@ -24,6 +24,7 @@ namespace sonare {
 ///     "key": {root, mode, confidence, name, shortName},
 ///     "timeSignature": {numerator, denominator, confidence},
 ///     "beats": [{time, strength}],
+///     "beatLocalBpm": [number],
 ///     "chords": [{root, bass, quality, start, end, confidence, name}],
 ///     "sections": [{type, start, end, energyLevel, confidence, name}],
 ///     "timbre": {brightness, warmth, density, roughness, complexity},
@@ -49,11 +50,17 @@ const std::vector<std::string>& analysis_result_schema_paths();
 ///   {
 ///     "timeSignature": {numerator, denominator, confidence},
 ///     "downbeatPhase": number,
+///     "grouping": [number],
 ///     "candidateScores": [number],
 ///     "candidates": [{numerator, denominator, confidence}]
 ///   }
 /// candidateScores is parallel to the requested candidate numerators, while
 /// candidates is ordered by descending support, so the two do not index alike.
+/// A candidateScores entry is standardized and may be negative: zero is the
+/// level a numerator reaches on beats carrying no meter.
+/// grouping holds the beats per accent group within one bar and always sums to
+/// timeSignature.numerator; a single entry means no internal division was
+/// resolved.
 std::string meter_result_to_json(const MeterResult& result);
 
 /// @brief Canonical field paths for the standalone meter estimate schema.

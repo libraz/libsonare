@@ -36,6 +36,137 @@ float mean_or_zero(float sum, int count) {
   return count > 0 ? sum / static_cast<float>(count) : 0.0f;
 }
 
+/// @brief Expected maximum of n independent standard normal draws, by numerator.
+/// @details A candidate's score is the best of the numerator's own phases, so a
+///          numerator with more phases wins more of that maximum from noise
+///          alone: on beat series carrying no meter at all, the unadjusted score
+///          rises monotonically with the numerator and the widest candidate wins
+///          several times as often as the narrowest. Subtracting the expected
+///          maximum puts every candidate's score on the same zero, which is what
+///          makes a wide candidate list usable. The entries are exact for the
+///          standard normal rather than fitted, and the index is the numerator
+///          itself, so 0 and 1 are unused padding.
+constexpr float kExpectedMaxOfNormals[kMaxMeterCandidateNumerator + 1] = {
+    0.000000f, 0.000000f, 0.564190f, 0.846284f, 1.029375f, 1.162964f, 1.267206f,
+    1.352178f, 1.423600f, 1.485013f, 1.538753f, 1.586436f, 1.629228f, 1.667990f,
+    1.703382f, 1.735913f, 1.765991f, 1.793942f, 1.820032f, 1.844482f, 1.867475f,
+    1.889168f, 1.909692f, 1.929162f, 1.947674f, 1.965315f, 1.982158f, 1.998269f,
+    2.013707f, 2.028522f, 2.042761f, 2.056464f, 2.069669f,
+};
+
+/// @brief Expected maximum of the grouping search, by numerator.
+/// @details The counterpart of kExpectedMaxOfNormals for the second search the
+///          scorer runs: within one phase it also picks the best of the ways
+///          the bar divides into twos and threes, and that maximum is worth
+///          something on beats carrying no meter at all. This table cannot be
+///          the same one, and not only because it is indexed by numerator
+///          rather than by how many alternatives there are. Phases partition
+///          the beats into disjoint groups, so their scores are independent and
+///          the expected maximum is the textbook one; groupings share accent
+///          positions with each other, and the correlation that creates pulls
+///          the expected maximum well below the independent value — 13 beats
+///          divide 16 ways but behave like about 5. There is no closed form for
+///          a maximum over correlated groups, so these are measured under a
+///          null of unstructured beats. They depend only on which positions the
+///          groupings share, not on the beat strengths: repeating the
+///          measurement over uniform, normal, exponential, log-normal and
+///          bimodal strengths, and over spans from 24 to 96 beats, moves no
+///          entry by more than 0.04.
+///
+///          Subtracting this and the phase correction separately treats the two
+///          searches as one after the other, which holds while the phase is
+///          chosen by the downbeat: at subdivision_weight up to about
+///          downbeat_weight the corrected scores stay level across numerators,
+///          and past that the grouping term starts choosing the phase too and
+///          the correction turns into an over-correction. The default weights
+///          sit an order of magnitude inside that.
+constexpr float kExpectedMaxOfGroupings[kMaxGroupedMeterNumerator + 1] = {
+    0.000000f, 0.000000f, 0.000000f, 0.000000f, 0.000000f, 0.573058f,
+    0.568201f, 0.689606f, 0.843203f, 0.905015f, 0.997446f, 1.082682f,
+    1.154480f, 1.229718f, 1.294572f, 1.354813f, 1.417368f,
+};
+
+/// @brief Margin, in units of the score's own noise, at which meter confidence
+///        reaches certainty.
+/// @details The scores are standardized, so the gap between the winner and the
+///          runner-up is measured in standard deviations and needs a scale to
+///          become a confidence. A beat series with no meter separates its top
+///          two candidates by well under one unit, and a clear detection by
+///          several, so this sits above the former and below the latter.
+constexpr float kConfidenceMarginScale = 6.0f;
+
+/// @brief Standardized difference between a group of beats and the whole span.
+/// @details Reading the group's mean against the span's own spread, scaled by
+///          the group size, is what removes the numerator from the score's
+///          noise floor: a plain difference of means is noisier for a wide
+///          numerator simply because fewer beats fall on its downbeat.
+float group_z_score(float group_mean, int group_size, float overall_mean, float spread) {
+  if (group_size < 1 || spread <= constants::kEpsilon) return 0.0f;
+  return (group_mean - overall_mean) * std::sqrt(static_cast<float>(group_size)) / spread;
+}
+
+/// @brief One way a bar divides, as its group sizes and the beats they start on.
+struct Grouping {
+  std::vector<int> parts;
+  /// @brief Bar positions carrying a secondary accent: every group start except
+  ///        the downbeat, which is scored separately.
+  std::vector<int> accent_positions;
+};
+
+void collect_groupings(int remaining, std::vector<int>& parts, std::vector<std::vector<int>>& out) {
+  if (remaining == 0) {
+    out.push_back(parts);
+    return;
+  }
+  // Twos before threes, so a numerator whose groupings tie -- which is what an
+  // unaccented bar produces -- reports the most subdivided of them. That keeps
+  // the compound reading something the beats have to argue for.
+  for (const int part : {2, 3}) {
+    if (part > remaining) continue;
+    parts.push_back(part);
+    collect_groupings(remaining - part, parts, out);
+    parts.pop_back();
+  }
+}
+
+/// @brief Every way @p numerator beats divide into groups of two and three.
+/// @details A numerator too wide to search gets the single undivided group,
+///          which scores exactly as the ungrouped path did: no accent positions
+///          means no secondary term.
+std::vector<Grouping> meter_groupings(int numerator) {
+  std::vector<Grouping> groupings;
+  if (numerator >= kMinMeterCandidateNumerator && numerator <= kMaxGroupedMeterNumerator) {
+    std::vector<std::vector<int>> partitions;
+    std::vector<int> parts;
+    collect_groupings(numerator, parts, partitions);
+    groupings.reserve(partitions.size());
+    for (auto& partition : partitions) {
+      Grouping grouping;
+      int position = 0;
+      for (size_t i = 0; i + 1 < partition.size(); ++i) {
+        position += partition[i];
+        grouping.accent_positions.push_back(position);
+      }
+      grouping.parts = std::move(partition);
+      groupings.push_back(std::move(grouping));
+    }
+  }
+  if (groupings.empty()) {
+    groupings.push_back({{numerator}, {}});
+  }
+  return groupings;
+}
+
+float grouping_search_bias(int numerator) {
+  return numerator >= 0 && numerator <= kMaxGroupedMeterNumerator
+             ? kExpectedMaxOfGroupings[numerator]
+             : 0.0f;
+}
+
+bool is_compound_pair(const std::vector<int>& parts) {
+  return parts.size() == 2 && parts[0] == 3 && parts[1] == 3;
+}
+
 float compound_subdivision_score(const std::vector<float>& onset_strength,
                                  const std::vector<Beat>& beats, float max_value) {
   if (onset_strength.empty() || beats.size() < 4) return 0.0f;
@@ -73,6 +204,9 @@ void MeterAnalyzer::analyze(const std::vector<float>& onset_strength,
 
   if (beats.size() < 8 || config_.candidate_numerators.empty()) {
     result_.time_signature.confidence = 0.5f;
+    // No search ran, so the bar is reported undivided rather than carrying the
+    // 2+2 that a four would have been given had anything been scored.
+    result_.grouping = {result_.time_signature.numerator};
     result_.candidates = {result_.time_signature};
     return;
   }
@@ -83,66 +217,89 @@ void MeterAnalyzer::analyze(const std::vector<float>& onset_strength,
                               ? 0.0f
                               : *std::max_element(onset_strength.begin(), onset_strength.end());
 
+  // Without an envelope the per-beat strengths carried on the beats are the only
+  // accent source, and they need the same treatment the envelope gets: division
+  // by the maximum of whatever series is being read. Clamping them instead
+  // saturates every beat above 1 at exactly 1, which erases the accent contrast
+  // the whole score is built on -- and the stream this path documents as its
+  // input, AnalysisResult::beat_observations.onset_strength, is a raw windowed
+  // aggregate in the envelope's own units, so it exceeds 1 on ordinary material.
+  const bool use_envelope = onset_max > constants::kEpsilon;
+  float beat_strength_max = 0.0f;
+  if (!use_envelope) {
+    for (const auto& beat : beats) {
+      beat_strength_max = std::max(beat_strength_max, beat.strength);
+    }
+  }
+
   std::vector<float> beat_strengths;
   beat_strengths.reserve(beats.size());
   for (const auto& beat : beats) {
-    const float strength = onset_max <= constants::kEpsilon
-                               ? beat.strength
-                               : normalized_strength(onset_strength, beat.frame, onset_max);
+    float strength = beat.strength;
+    if (use_envelope) {
+      strength = normalized_strength(onset_strength, beat.frame, onset_max);
+    } else if (beat_strength_max > constants::kEpsilon) {
+      strength = beat.strength / beat_strength_max;
+    }
     beat_strengths.push_back(std::clamp(strength, 0.0f, 1.0f));
   }
 
-  float best_score = -1.0f;
+  // The span's own centre and spread, which every candidate's accent groups are
+  // read against. Computing them once keeps every candidate on one scale.
+  const float overall_mean =
+      mean_or_zero(std::accumulate(beat_strengths.begin(), beat_strengths.end(), 0.0f),
+                   static_cast<int>(beat_strengths.size()));
+  float variance = 0.0f;
+  for (float strength : beat_strengths) {
+    const float deviation = strength - overall_mean;
+    variance += deviation * deviation;
+  }
+  const float spread = std::sqrt(mean_or_zero(variance, static_cast<int>(beat_strengths.size())));
+
+  float best_score = -std::numeric_limits<float>::infinity();
   int best_numerator = 4;
   int best_phase = 0;
-  // The phase that scored best for each candidate, kept alongside the scores so
-  // the compound-meter fallback below can adopt the phase belonging to the
-  // numerator it substitutes rather than the one it rejected.
+  std::vector<int> best_grouping{best_numerator};
+  // The phase and grouping that scored best for each candidate, kept alongside
+  // the scores so the compound-meter fallback below can adopt the ones
+  // belonging to the numerator it substitutes rather than the one it rejected.
   std::vector<int> candidate_phases(config_.candidate_numerators.size(), 0);
+  std::vector<std::vector<int>> candidate_groupings(config_.candidate_numerators.size());
+
+  // Scratch reused across candidates: one accumulator per bar position, filled
+  // once per phase so each grouping only has to add up the positions it accents.
+  std::vector<float> position_sums;
+  std::vector<int> position_counts;
 
   for (size_t candidate_index = 0; candidate_index < config_.candidate_numerators.size();
        ++candidate_index) {
     const int numerator = config_.candidate_numerators[candidate_index];
     if (numerator <= 1) continue;
+    const std::vector<Grouping> groupings = meter_groupings(numerator);
 
-    float candidate_best = -1.0f;
+    float candidate_best = -std::numeric_limits<float>::infinity();
     int candidate_phase = 0;
+    const std::vector<int>* candidate_grouping = &groupings.front().parts;
     for (int phase = 0; phase < numerator; ++phase) {
-      float downbeat_sum = 0.0f;
-      float strong_sum = 0.0f;
-      float weak_sum = 0.0f;
-      int downbeat_count = 0;
-      int strong_count = 0;
-      int weak_count = 0;
-
+      position_sums.assign(static_cast<size_t>(numerator), 0.0f);
+      position_counts.assign(static_cast<size_t>(numerator), 0);
       for (size_t i = 0; i < beat_strengths.size(); ++i) {
-        const int position = (static_cast<int>(i) - phase + numerator) % numerator;
-        const float strength = beat_strengths[i];
-        if (position == 0) {
-          downbeat_sum += strength;
-          ++downbeat_count;
-        } else if ((numerator == 4 && position == 2) || (numerator == 6 && position == 3)) {
-          strong_sum += strength;
-          ++strong_count;
-        } else {
-          weak_sum += strength;
-          ++weak_count;
-        }
+        const size_t position =
+            static_cast<size_t>((static_cast<int>(i) - phase + numerator) % numerator);
+        position_sums[position] += beat_strengths[i];
+        ++position_counts[position];
       }
 
-      const float downbeat = mean_or_zero(downbeat_sum, downbeat_count);
-      const float strong = mean_or_zero(strong_sum, strong_count);
-      const float weak = mean_or_zero(weak_sum, weak_count);
-      float contrast = std::max(0.0f, downbeat - weak) * config_.downbeat_weight +
-                       std::max(0.0f, strong - weak) * config_.subdivision_weight;
-      if (numerator == 6 && downbeat > 1e-6f) {
-        const float midpoint_ratio = strong / downbeat;
-        if (midpoint_ratio > 0.85f) {
-          contrast *= 0.65f;
-        } else if (midpoint_ratio > 0.35f) {
-          contrast *= 1.15f;
-        }
-      }
+      const float downbeat = mean_or_zero(position_sums[0], position_counts[0]);
+      // Each accent group is read against the whole span rather than against the
+      // remaining beats, and scaled by its own size, so the score does not get
+      // noisier as the numerator widens and leaves fewer beats on the downbeat.
+      // That is the half of the numerator bias the phase search does not cause,
+      // and the sign is kept rather than clipped at zero because the correction
+      // subtracted below is calibrated on a signed score.
+      const float downbeat_contrast =
+          group_z_score(downbeat, position_counts[0], overall_mean, spread) *
+          config_.downbeat_weight;
 
       int complete_measures = 0;
       float measure_consistency = 0.0f;
@@ -155,35 +312,68 @@ void MeterAnalyzer::analyze(const std::vector<float>& onset_strength,
         ++complete_measures;
       }
       measure_consistency = mean_or_zero(measure_consistency, complete_measures);
+      const float phase_base = downbeat_contrast + config_.measure_weight * measure_consistency;
 
-      const float score = contrast + config_.measure_weight * measure_consistency;
-      if (score > candidate_best) {
-        candidate_best = score;
-        candidate_phase = phase;
+      // The downbeat and the bar-to-bar consistency are the same whichever way
+      // the bar divides, so only the secondary-accent term separates the
+      // groupings from each other.
+      for (const Grouping& grouping : groupings) {
+        float strong_sum = 0.0f;
+        int strong_count = 0;
+        for (const int position : grouping.accent_positions) {
+          strong_sum += position_sums[static_cast<size_t>(position)];
+          strong_count += position_counts[static_cast<size_t>(position)];
+        }
+        const float strong = mean_or_zero(strong_sum, strong_count);
+        const float score = phase_base + group_z_score(strong, strong_count, overall_mean, spread) *
+                                             config_.subdivision_weight;
+        if (score > candidate_best) {
+          candidate_best = score;
+          candidate_phase = phase;
+          candidate_grouping = &grouping.parts;
+        }
       }
     }
 
-    result_.candidate_scores[candidate_index] = candidate_best;
+    // The candidate keeps the best of both its searches, so it also keeps
+    // whatever those two maxima won from noise. Removing the expected maximum of
+    // each leaves every candidate measured from the same zero regardless of how
+    // many phases and how many groupings it had to choose from. The two are
+    // subtracted separately because they are searched at different weights, and
+    // each carries the weight of the term it inflated.
+    const float phase_search_bias =
+        kExpectedMaxOfNormals[std::clamp(numerator, 0, kMaxMeterCandidateNumerator)] *
+        config_.downbeat_weight;
+    result_.candidate_scores[candidate_index] =
+        candidate_best - phase_search_bias -
+        grouping_search_bias(numerator) * config_.subdivision_weight;
     candidate_phases[candidate_index] = candidate_phase;
-    if (candidate_best > best_score) {
-      best_score = candidate_best;
+    candidate_groupings[candidate_index] = *candidate_grouping;
+    if (result_.candidate_scores[candidate_index] > best_score) {
+      best_score = result_.candidate_scores[candidate_index];
       best_numerator = numerator;
       best_phase = candidate_phase;
+      best_grouping = *candidate_grouping;
     }
   }
 
+  // The scores are standardized, so the gap to the runner-up is a number of
+  // standard deviations and is divided by the scale at which that gap counts as
+  // certainty. A single candidate was never compared against anything, so it
+  // reports no margin rather than treating its own score as one.
   std::vector<float> sorted_scores = result_.candidate_scores;
-  sorted_scores.erase(std::remove_if(sorted_scores.begin(), sorted_scores.end(),
-                                     [](float value) { return value < 0.0f; }),
-                      sorted_scores.end());
   std::sort(sorted_scores.begin(), sorted_scores.end(), std::greater<float>());
-  const float runner_up = sorted_scores.size() > 1 ? sorted_scores[1] : 0.0f;
-  const float margin = std::max(0.0f, best_score - runner_up);
-  float confidence = std::clamp(0.45f + margin, 0.0f, 1.0f);
+  const float margin =
+      sorted_scores.size() > 1 ? std::max(0.0f, sorted_scores[0] - sorted_scores[1]) : 0.0f;
+  float confidence = std::clamp(0.45f + margin / kConfidenceMarginScale, 0.0f, 1.0f);
 
   int denominator = config_.denominator;
   const float compound_score = compound_subdivision_score(onset_strength, beats, onset_max);
-  if (best_numerator == 6) {
+  // A six only reaches the compound question if that is how its own beats
+  // divide. Six grouped as 2+2+2 is a simple meter, and used to be forced
+  // through this branch and out the other side as a three or a four; it now
+  // keeps the numerator its accents support.
+  if (best_numerator == 6 && is_compound_pair(best_grouping)) {
     if (onset_strength.empty() || compound_score >= config_.compound_subdivision_threshold) {
       denominator = 8;
     } else if (config_.candidate_numerators.size() >= 2) {
@@ -215,6 +405,9 @@ void MeterAnalyzer::analyze(const std::vector<float>& onset_strength,
       const int substitute_index = index_of(best_numerator);
       best_phase = substitute_index >= 0 ? candidate_phases[static_cast<size_t>(substitute_index)]
                                          : best_phase % best_numerator;
+      best_grouping = substitute_index >= 0
+                          ? candidate_groupings[static_cast<size_t>(substitute_index)]
+                          : std::vector<int>{best_numerator};
       denominator = config_.denominator;
       confidence = std::max(0.0f, confidence - 0.15f);
     } else {
@@ -225,13 +418,18 @@ void MeterAnalyzer::analyze(const std::vector<float>& onset_strength,
       confidence = std::max(0.0f, confidence - 0.15f);
     }
   } else if (best_numerator == 3 && compound_score >= config_.compound_subdivision_threshold) {
+    // Promoting a three to a compound six pairs its bars, so the grouping is
+    // the pair of threes that promotion is defined as; the scored grouping
+    // belonged to a numerator that no longer describes the result.
     best_numerator = 6;
     denominator = 8;
+    best_grouping = {3, 3};
     confidence = std::max(confidence, 0.55f);
   }
 
   result_.time_signature = {best_numerator, denominator, confidence};
   result_.downbeat_phase = best_phase;
+  result_.grouping = std::move(best_grouping);
 
   // Preserve the scores already calculated by the multi-comb estimator. The
   // normalized values deliberately express relative candidate support; no new
@@ -243,8 +441,11 @@ void MeterAnalyzer::analyze(const std::vector<float>& onset_strength,
     const int numerator = config_.candidate_numerators[i];
     if (numerator <= 1) continue;
     const float score = std::max(0.0f, result_.candidate_scores[i]);
+    // A six is listed as a compound one on the same terms the primary result
+    // reaches that reading, its own grouping included, so the two cannot
+    // disagree about the beat unit of the same numerator.
     const int candidate_denominator =
-        numerator == 6 &&
+        numerator == 6 && is_compound_pair(candidate_groupings[i]) &&
                 (onset_strength.empty() || compound_score >= config_.compound_subdivision_threshold)
             ? 8
             : config_.denominator;

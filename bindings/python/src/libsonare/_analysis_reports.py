@@ -84,6 +84,7 @@ def analyze(
     detect_chord_inversions: bool = False,
     adaptive_tempo: bool = False,
     tempo_update_interval_beats: int = 8,
+    compute_tempo_curve: bool = False,
     meter_candidate_numerators: Sequence[int] | None = None,
     meter_denominator: int = 4,
 ) -> AnalysisResult:
@@ -100,6 +101,12 @@ def analyze(
             tracking instead of holding one global tempo.
         tempo_update_interval_beats: Local tempo context length in beats, used
             only when ``adaptive_tempo`` is true. Must be positive.
+        compute_tempo_curve: Decode a per-beat local tempo curve into
+            ``beat_local_bpm``. Off by default because it is an extra output
+            rather than a better analysis — nothing else in the result changes.
+            The curve describes the beat grid it was decoded from, and beat
+            tracking holds a fixed tempo prior unless ``adaptive_tempo`` is also
+            set, so measuring a tempo that moves needs both.
         meter_candidate_numerators: Meter numerators the estimator scores.
             ``None`` selects the native default ``(3, 4, 6)``. At most 16
             entries, each in ``[2, 32]``. Widening the set does not force a
@@ -125,6 +132,9 @@ def analyze(
           analysis starts on
         - ``beat_observations`` (:class:`AnalysisBeatObservations`) — the
           beat-level evidence the downbeat and meter pass scores
+        - ``beat_local_bpm`` (``list[float]``) — smoothed local tempo at each
+          beat, parallel to ``beat_times``. Empty unless
+          ``compute_tempo_curve`` was set
         - ``chords`` (``list[Chord]``) — detected chord segments
         - ``sections`` (``list[Section]``) — detected structural sections
         - ``timbre`` (:class:`AnalysisTimbre`) — spectral character summary
@@ -175,6 +185,7 @@ def analyze(
                 detect_chord_inversions=int(detect_chord_inversions),
                 adaptive_tempo=int(adaptive_tempo),
                 tempo_update_interval_beats=tempo_update_interval_beats,
+                compute_tempo_curve=int(compute_tempo_curve),
                 # Both the array and its count must be written: ctypes zeroes
                 # any field left unset, and a zero count reads to the core as
                 # an empty candidate set, which it rejects.
@@ -385,7 +396,10 @@ def estimate_meter(
             :attr:`AnalysisResult.beat_observations` ``.onset_strength``: it is
             the windowed value the library's own downbeat pass scores.
             ``AnalysisResult.beat_strengths`` also works, but it is a single
-            unwindowed envelope frame per beat and scores accordingly.
+            unwindowed envelope frame per beat and scores accordingly. Neither
+            needs pre-scaling: the series is divided by its own maximum before
+            scoring, so only the accent contrast within it is read and the
+            absolute units it arrives in do not matter.
         candidate_numerators: Meter numerators to score. ``None`` selects the
             native default ``(3, 4, 6)``. At most 16 entries, each in
             ``[2, 32]``. Widening the set does not force a wider meter — the
@@ -402,7 +416,12 @@ def estimate_meter(
     Returns:
         :class:`libsonare.MeterEstimate`. ``candidate_scores`` is parallel to
         ``candidate_numerators`` as requested, while ``candidates`` is ordered
-        by descending support — the two do not index alike.
+        by descending support — the two do not index alike. A score is
+        standardized and signed, with zero the level a numerator reaches on
+        beats carrying no meter, so only the ordering and the gaps between
+        entries carry meaning. ``grouping`` reports how the bar divides into
+        accent groups of two and three beats — ``[3, 2, 2]`` for a 7/8 notated
+        3+2+2 — and always sums to the reported numerator.
 
     Raises:
         SonareValueError: If ``beat_times`` and ``beat_strengths`` differ in
@@ -476,6 +495,7 @@ def estimate_meter(
             confidence=float(ts_d.get("confidence", 0.0)),
         ),
         downbeat_phase=int(data.get("downbeatPhase", 0)),
+        grouping=[int(part) for part in data.get("grouping", [])],
         candidate_scores=[float(score) for score in data.get("candidateScores", [])],
         candidates=[
             TimeSignature(

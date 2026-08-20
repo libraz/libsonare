@@ -100,6 +100,7 @@ set(SONARE_SOURCES
   analysis/dynamics_analyzer.cpp
   analysis/beat_analyzer.cpp
   analysis/meter_analyzer.cpp
+  analysis/tempo_curve.cpp
   analysis/chord_analyzer.cpp
   analysis/chord_hmm.cpp
   analysis/downbeat_analyzer.cpp

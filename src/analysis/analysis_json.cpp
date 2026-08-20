@@ -65,6 +65,7 @@ const std::vector<std::string>& analysis_result_schema_paths() {
       "beatObservations.onsetStrength",
       "beatObservations.lowFrequencyEnergy",
       "beatObservations.chordChange",
+      "beatLocalBpm",
       "chords",
       "chords[].root",
       "chords[].bass",
@@ -196,6 +197,10 @@ std::string analysis_result_to_json(const AnalysisResult& result) {
         Value(to_array(result.beat_observations.low_frequency_energy));
     observations["chordChange"] = Value(to_array(result.beat_observations.chord_change));
     root["beatObservations"] = Value(std::move(observations));
+
+    // Beat-indexed like the streams above, and likewise empty rather than absent
+    // when it was not produced — here because the caller did not ask for it.
+    root["beatLocalBpm"] = Value(to_array(result.beat_local_bpm));
   }
 
   // Chords
@@ -299,6 +304,7 @@ const std::vector<std::string>& meter_result_schema_paths() {
       "timeSignature.denominator",
       "timeSignature.confidence",
       "downbeatPhase",
+      "grouping",
       "candidateScores",
       "candidates",
       "candidates[].numerator",
@@ -312,6 +318,13 @@ std::string meter_result_to_json(const MeterResult& result) {
   Object root;
   root["timeSignature"] = time_signature_to_value(result.time_signature);
   root["downbeatPhase"] = Value(result.downbeat_phase);
+
+  Array grouping;
+  grouping.reserve(result.grouping.size());
+  for (int part : result.grouping) {
+    grouping.push_back(Value(part));
+  }
+  root["grouping"] = Value(std::move(grouping));
 
   Array scores;
   scores.reserve(result.candidate_scores.size());

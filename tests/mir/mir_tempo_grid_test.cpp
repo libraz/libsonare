@@ -9,6 +9,7 @@
 #include <string>
 #include <vector>
 
+#include "analysis/tempo_curve.h"
 #include "mir/grid_snap.h"
 #include "mir/tempo_estimator_bridge.h"
 #include "transport/tempo_map.h"
@@ -392,4 +393,47 @@ TEST_CASE("mir bridge segments feed TempoMap with sane conversions", "[mir]") {
   // At 120 BPM, one quarter note (1 ppq) = 0.5 s = sr/2 samples.
   REQUIRE(static_cast<double>(map.ppq_to_sample(1.0)) ==
           Catch::Approx(in.sample_rate / 2.0).epsilon(0.02));
+}
+
+TEST_CASE("mir bridge segments start where the shared tempo curve moves", "[mir]") {
+  // The bridge and a plain analysis decode the same per-beat curve, so a
+  // segment boundary is not an independent decision the bridge makes — it is the
+  // point where that curve leaves the run it opened. Recomputing the boundaries
+  // from the curve here and requiring them to land exactly on the emitted
+  // start_ppq values is what keeps the two paths from drifting apart: change the
+  // decoder for one and this fails for the other.
+  const BeatAnalysisInput in = make_ramp_fixture(96.0, 152.0, 64);
+  TempoEstimatorConfig config;
+  config.include_octave_candidates = false;
+
+  const std::vector<float> curve =
+      sonare::estimate_beat_local_bpm(in.beats, in.onset_strength, in.sample_rate, in.hop_length);
+  REQUIRE(curve.size() == in.beats.size());
+
+  // The curve is decoded over intervals, so it carries one fewer independent
+  // value than it has beats; the run scan walks those intervals.
+  const size_t interval_count = in.beats.size() - 1;
+  std::vector<double> expected_starts;
+  size_t run_start = 0;
+  for (size_t i = 1; i <= interval_count; ++i) {
+    const bool at_end = (i == interval_count);
+    bool boundary = at_end;
+    if (!at_end) {
+      const double base = curve[run_start];
+      boundary = std::abs(curve[i] - base) / std::max(base, 1.0) >= config.ramp_threshold;
+    }
+    if (!boundary) continue;
+    expected_starts.push_back(static_cast<double>(run_start));
+    run_start = i;
+  }
+
+  const std::vector<TempoEstimate> cands = estimate_tempo(in, config);
+  const TempoEstimate& primary = cands.front();
+  REQUIRE(primary.segments.size() == expected_starts.size());
+  for (size_t i = 0; i < expected_starts.size(); ++i) {
+    REQUIRE(primary.segments[i].start_ppq == Catch::Approx(expected_starts[i]));
+  }
+  // A ramp this wide must actually be segmented, or the loop above would agree
+  // with the bridge on a single trivial segment and prove nothing.
+  REQUIRE(primary.segments.size() > 3);
 }

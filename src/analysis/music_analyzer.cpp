@@ -1,6 +1,7 @@
 #include "analysis/music_analyzer.h"
 
 #include "analysis/downbeat_analyzer.h"
+#include "analysis/tempo_curve.h"
 #include "core/resample.h"
 #include "core/spectrum.h"
 #include "effects/hpss.h"
@@ -511,6 +512,15 @@ std::optional<AnalysisResult> MusicAnalyzer::analyze_impl() {
   result.beat_observations.onset_strength = beat_analyzer().beat_onset_observations();
   result.beat_observations.low_frequency_energy = beat_analyzer().beat_low_frequency_observations();
   result.beat_observations.chord_change = beat_analyzer().beat_chord_change_observations();
+
+  if (config_->compute_tempo_curve) {
+    // Decoded from the same beat grid published above, and by the same decoder
+    // the arrangement tempo bridge runs, so a curve read here and the tempo
+    // segments written into a project describe one estimate rather than two.
+    result.beat_local_bpm =
+        estimate_beat_local_bpm(result.beats, beat_analyzer().onset_strength(),
+                                beat_analyzer().sample_rate(), beat_analyzer().hop_length());
+  }
 
   // Refine key using chord progression analysis
   result.key = refine_key_with_chords(chroma_key, result.chords);

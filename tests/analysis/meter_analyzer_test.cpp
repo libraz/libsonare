@@ -3,10 +3,16 @@
 
 #include "analysis/meter_analyzer.h"
 
+#include <algorithm>
 #include <catch2/catch_test_macros.hpp>
 #include <cmath>
 #include <cstddef>
+#include <cstdint>
+#include <iterator>
 #include <limits>
+#include <map>
+#include <numeric>
+#include <utility>
 #include <vector>
 
 #include "util/exception.h"
@@ -42,6 +48,35 @@ BeatSeries make_beat_series(int numerator, int measures) {
   for (const auto& beat : make_beats(numerator, measures)) {
     series.times.push_back(beat.time);
     series.strengths.push_back(beat.strength);
+  }
+  return series;
+}
+
+/// @brief A beat series whose bars divide exactly as @p grouping says.
+/// @details The downbeat is the loudest beat, each following group starts on a
+///          middling one, and the rest are quiet, which is the accent shape an
+///          additive meter is notated for.
+BeatSeries make_grouped_series(const std::vector<int>& grouping, int measures) {
+  std::vector<int> accent_positions;
+  int position = 0;
+  for (size_t i = 0; i + 1 < grouping.size(); ++i) {
+    position += grouping[i];
+    accent_positions.push_back(position);
+  }
+  const int numerator = std::accumulate(grouping.begin(), grouping.end(), 0);
+
+  BeatSeries series;
+  for (int i = 0; i < numerator * measures; ++i) {
+    const int pos = i % numerator;
+    float strength = 0.35f;
+    if (pos == 0) {
+      strength = 1.0f;
+    } else if (std::find(accent_positions.begin(), accent_positions.end(), pos) !=
+               accent_positions.end()) {
+      strength = 0.65f;
+    }
+    series.times.push_back(static_cast<float>(i) * 0.5f);
+    series.strengths.push_back(strength);
   }
   return series;
 }
@@ -187,12 +222,22 @@ TEST_CASE("MeterAnalyzer reports the requested beat unit", "[meter_analyzer]") {
   REQUIRE(half_analyzer.time_signature().numerator == 4);
   REQUIRE(half_analyzer.time_signature().denominator == 2);
 
-  // The candidate list carries the same unit, except for the compound-6 entry
-  // the estimator reports in eighths on its own.
+  // The candidate list carries the requested unit throughout: these beats are a
+  // four, so nothing in them divides into two groups of three and no candidate
+  // earns the compound reading that is the one exception to the requested unit.
   for (const auto& candidate : half_analyzer.result().candidates) {
     CAPTURE(candidate.numerator, candidate.denominator);
-    REQUIRE(candidate.denominator == (candidate.numerator == 6 ? 8 : 2));
+    REQUIRE(candidate.denominator == 2);
   }
+
+  // The same candidate on beats that do divide into two threes takes the
+  // eighth, which is what keeps the loop above from passing vacuously.
+  MeterAnalyzer compound_analyzer({}, make_beats(6, 8), half);
+  const auto& compound_candidates = compound_analyzer.result().candidates;
+  const auto six = std::find_if(compound_candidates.begin(), compound_candidates.end(),
+                                [](const TimeSignature& c) { return c.numerator == 6; });
+  REQUIRE(six != compound_candidates.end());
+  REQUIRE(six->denominator == 8);
 }
 
 TEST_CASE("MeterAnalyzer keeps the compound beat unit over the requested one", "[meter_analyzer]") {
@@ -461,6 +506,101 @@ TEST_CASE("estimate_meter_from_beats detects 4/4 from a caller-supplied series",
   REQUIRE(result.candidates.size() == direct.candidates.size());
 }
 
+TEST_CASE("estimate_meter_from_beats reads accent contrast, not absolute level",
+          "[meter_analyzer]") {
+  const BeatSeries unit = make_beat_series(4, 8);
+
+  // The stream this entry point documents as its input --
+  // AnalysisResult::beat_observations.onset_strength -- is a windowed aggregate
+  // of the onset envelope in the envelope's own units, so every value in it
+  // routinely exceeds 1 on ordinary material. Scoring must divide the series by
+  // its own maximum; clamping it instead flattens every beat to the same value
+  // and leaves the candidates tied, which reads as a detection of whichever one
+  // was listed first.
+  BeatSeries scaled = unit;
+  for (float& strength : scaled.strengths) {
+    strength *= 20.0f;
+  }
+
+  MeterConfig config;
+  config.candidate_numerators = {3, 4, 5, 6, 7};
+  const MeterResult unit_result = estimate_meter_from_beats(unit.times, unit.strengths, config);
+  const MeterResult scaled_result =
+      estimate_meter_from_beats(scaled.times, scaled.strengths, config);
+
+  REQUIRE(scaled_result.time_signature.numerator == 4);
+  REQUIRE(scaled_result.time_signature.numerator == unit_result.time_signature.numerator);
+  REQUIRE(scaled_result.time_signature.denominator == unit_result.time_signature.denominator);
+  REQUIRE(scaled_result.time_signature.confidence == unit_result.time_signature.confidence);
+  REQUIRE(scaled_result.downbeat_phase == unit_result.downbeat_phase);
+  REQUIRE(scaled_result.candidate_scores == unit_result.candidate_scores);
+
+  // A tie across every candidate is what saturation produces, so name it: the
+  // winning candidate has to stand above the rest on its own score.
+  const auto& scores = scaled_result.candidate_scores;
+  const size_t best = static_cast<size_t>(
+      std::distance(scores.begin(), std::max_element(scores.begin(), scores.end())));
+  REQUIRE(config.candidate_numerators[best] == 4);
+  for (size_t i = 0; i < scores.size(); ++i) {
+    if (i != best) {
+      REQUIRE(scores[i] < scores[best]);
+    }
+  }
+}
+
+TEST_CASE("estimate_meter_from_beats does not favour a wide numerator on unmetred beats",
+          "[meter_analyzer]") {
+  // A candidate keeps the best of its own phases, so a wide numerator has more
+  // phases to win that maximum from noise and fewer beats on each downbeat to
+  // average it over. Left uncorrected both push the same way, and on beats
+  // carrying no meter at all the widest candidate wins several times as often as
+  // the narrowest -- which makes a wide candidate list unusable on material
+  // whose accents are only mildly contrasted, as a real onset stream's are.
+  // Scoring unmetred series is the direct measurement of that, so it is what
+  // this asserts. The series are deterministic, so the counts below are fixed.
+  const std::vector<int> numerators = {3, 4, 5, 7, 9, 11, 13};
+  MeterConfig config;
+  config.candidate_numerators = numerators;
+
+  std::map<int, int> wins;
+  for (int numerator : numerators) {
+    wins[numerator] = 0;
+  }
+
+  constexpr int kTrials = 200;
+  constexpr int kBeats = 32;
+  uint32_t state = 20260821u;
+  const auto next_unit = [&state]() {
+    state = state * 1664525u + 1013904223u;
+    return static_cast<float>((state >> 8) & 0xFFFFFFu) / static_cast<float>(0xFFFFFF);
+  };
+
+  for (int trial = 0; trial < kTrials; ++trial) {
+    std::vector<float> times;
+    std::vector<float> strengths;
+    for (int beat = 0; beat < kBeats; ++beat) {
+      times.push_back(static_cast<float>(beat) * 0.5f);
+      strengths.push_back(next_unit());
+    }
+    ++wins[estimate_meter_from_beats(times, strengths, config).time_signature.numerator];
+  }
+
+  const auto extremes = std::minmax_element(
+      wins.begin(), wins.end(),
+      [](const std::pair<const int, int>& lhs, const std::pair<const int, int>& rhs) {
+        return lhs.second < rhs.second;
+      });
+  CAPTURE(wins[3], wins[4], wins[5], wins[7], wins[9], wins[11], wins[13]);
+
+  // An even split is 200 / 7 ~= 29 each. The bound is loose enough that ordinary
+  // sampling spread cannot trip it and tight enough that the bias it guards
+  // against -- which took more than half the trials for the widest candidate --
+  // cannot pass.
+  REQUIRE(extremes.second->second <= kTrials / 2);
+  REQUIRE(wins[13] * 3 >= wins[3]);
+  REQUIRE(wins[3] * 3 >= wins[13]);
+}
+
 TEST_CASE("estimate_meter_from_beats reports an odd meter only when it is a candidate",
           "[meter_analyzer]") {
   for (int numerator : {5, 7}) {
@@ -538,4 +678,154 @@ TEST_CASE("estimate_meter_from_beats keeps the downbeat phase inside the numerat
   // Without a non-zero phase somewhere the range check above would hold for a
   // constant-zero implementation.
   REQUIRE(saw_non_zero_phase);
+}
+
+TEST_CASE("estimate_meter_from_beats reports how the bar divides", "[meter_analyzer]") {
+  // Two sevens carrying the same numerator and the same number of accents, laid
+  // out differently. Reporting the numerator alone cannot tell them apart, which
+  // is the whole point of the grouping.
+  MeterConfig config;
+  config.candidate_numerators = {3, 4, 5, 6, 7, 9, 11, 13};
+
+  const std::vector<std::vector<int>> layouts = {
+      {3, 2, 2}, {2, 3, 2}, {2, 2, 3}, {3, 2}, {2, 3}, {2, 2, 2, 3}, {3, 3, 3, 2, 2},
+  };
+  for (const std::vector<int>& grouping : layouts) {
+    const BeatSeries series = make_grouped_series(grouping, 12);
+    const MeterResult result = estimate_meter_from_beats(series.times, series.strengths, config);
+
+    CAPTURE(grouping, result.time_signature.numerator, result.grouping);
+    REQUIRE(result.time_signature.numerator ==
+            std::accumulate(grouping.begin(), grouping.end(), 0));
+    REQUIRE(result.grouping == grouping);
+  }
+}
+
+TEST_CASE("estimate_meter_from_beats always reports a grouping that sums to the numerator",
+          "[meter_analyzer]") {
+  // The invariant every consumer of the field relies on, checked over the whole
+  // candidate range including the numerators too wide to search and the spans
+  // too short to search at all.
+  MeterConfig config;
+  for (int numerator = kMinMeterCandidateNumerator; numerator <= kMaxMeterCandidateNumerator;
+       ++numerator) {
+    config.candidate_numerators = {numerator};
+    for (const int measures : {1, 3, 12}) {
+      const BeatSeries series = make_beat_series(numerator, measures);
+      const MeterResult result = estimate_meter_from_beats(series.times, series.strengths, config);
+
+      CAPTURE(numerator, measures, result.time_signature.numerator, result.grouping);
+      REQUIRE_FALSE(result.grouping.empty());
+      REQUIRE(std::accumulate(result.grouping.begin(), result.grouping.end(), 0) ==
+              result.time_signature.numerator);
+      for (const int part : result.grouping) {
+        REQUIRE(part > 0);
+      }
+    }
+  }
+}
+
+TEST_CASE("estimate_meter_from_beats divides only the numerators it can search",
+          "[meter_analyzer]") {
+  MeterConfig config;
+  bool saw_divided = false;
+  for (int numerator = kMinMeterCandidateNumerator; numerator <= kMaxMeterCandidateNumerator;
+       ++numerator) {
+    config.candidate_numerators = {numerator};
+    const BeatSeries series = make_beat_series(numerator, 12);
+    const MeterResult result = estimate_meter_from_beats(series.times, series.strengths, config);
+    if (result.time_signature.numerator != numerator) continue;
+
+    CAPTURE(numerator, result.grouping);
+    if (numerator > kMaxGroupedMeterNumerator) {
+      // Too wide to search: one undivided group rather than a guess.
+      REQUIRE(result.grouping == std::vector<int>{numerator});
+    } else {
+      // Inside the searched range every part is a two or a three, and 2 and 3
+      // are the two numerators that legitimately come back undivided.
+      for (const int part : result.grouping) {
+        REQUIRE((part == 2 || part == 3));
+      }
+      saw_divided = saw_divided || result.grouping.size() > 1;
+    }
+  }
+  REQUIRE(saw_divided);
+}
+
+TEST_CASE("estimate_meter_from_beats leaves a six undivided until its beats divide it",
+          "[meter_analyzer]") {
+  // A six that groups into two threes is the compound meter, and takes the
+  // eighth. A six that groups into three twos is a simple meter and keeps the
+  // requested unit -- it used to be pushed through the compound branch and come
+  // back out as a three or a four.
+  MeterConfig config;
+  config.candidate_numerators = {3, 4, 6};
+
+  const BeatSeries compound = make_grouped_series({3, 3}, 12);
+  const MeterResult compound_result =
+      estimate_meter_from_beats(compound.times, compound.strengths, config);
+  REQUIRE(compound_result.time_signature.numerator == 6);
+  REQUIRE(compound_result.time_signature.denominator == 8);
+  REQUIRE(compound_result.grouping == std::vector<int>{3, 3});
+
+  const BeatSeries simple = make_grouped_series({2, 2, 2}, 12);
+  const MeterResult simple_result =
+      estimate_meter_from_beats(simple.times, simple.strengths, config);
+  REQUIRE(simple_result.time_signature.numerator == 6);
+  REQUIRE(simple_result.time_signature.denominator == config.denominator);
+  REQUIRE(simple_result.grouping == std::vector<int>{2, 2, 2});
+}
+
+TEST_CASE("estimate_meter_from_beats does not favour a divisible numerator on unmetred beats",
+          "[meter_analyzer]") {
+  // Picking the best of a numerator's groupings is a second search on top of the
+  // phase search, and a maximum over more alternatives is worth more on noise
+  // alone. Numerators divide into wildly different numbers of groupings -- 4 has
+  // one, 13 has sixteen -- so an uncorrected grouping search hands the divisible
+  // numerators a lead that has nothing to do with the beats.
+  constexpr int kTrials = 200;
+  constexpr int kBeats = 32;
+  const std::vector<int> candidates = {4, 5, 7, 9, 11, 13};
+
+  MeterConfig config;
+  config.candidate_numerators = candidates;
+  // At the default 0.15 the grouping term is a small part of the score and its
+  // bias hides inside the phase search's own noise at any trial count a test can
+  // afford. Weighting it like the downbeat brings the effect into view, which is
+  // what makes the thresholds below able to fail.
+  config.subdivision_weight = 1.0f;
+
+  std::vector<float> times(kBeats);
+  for (int i = 0; i < kBeats; ++i) {
+    times[static_cast<size_t>(i)] = static_cast<float>(i) * 0.5f;
+  }
+
+  std::map<int, int> wins;
+  for (int candidate : candidates) {
+    wins[candidate] = 0;
+  }
+  uint32_t state = 20260821u;
+  for (int trial = 0; trial < kTrials; ++trial) {
+    std::vector<float> strengths(kBeats);
+    for (int i = 0; i < kBeats; ++i) {
+      state = state * 1664525u + 1013904223u;
+      strengths[static_cast<size_t>(i)] = static_cast<float>(state >> 8) / 16777216.0f;
+    }
+    const MeterResult result = estimate_meter_from_beats(times, strengths, config);
+    const auto best =
+        std::max_element(result.candidate_scores.begin(), result.candidate_scores.end());
+    ++wins[candidates[static_cast<size_t>(std::distance(result.candidate_scores.begin(), best))]];
+  }
+
+  CAPTURE(wins);
+  // Thirteen divides sixteen ways and four divides one way, so if the grouping
+  // search went uncorrected this is where it would show.
+  REQUIRE(wins[13] * 3 >= wins[4]);
+  REQUIRE(wins[4] * 3 >= wins[13]);
+  const auto extremes = std::minmax_element(
+      wins.begin(), wins.end(),
+      [](const std::pair<const int, int>& lhs, const std::pair<const int, int>& rhs) {
+        return lhs.second < rhs.second;
+      });
+  REQUIRE(extremes.second->second <= kTrials / 2);
 }

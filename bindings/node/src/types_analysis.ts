@@ -200,6 +200,20 @@ export interface AnalysisResult {
   beats: AnalysisBeat[];
   /** Per-beat evidence behind the downbeat and meter decisions. */
   beatObservations: BeatObservations;
+  /**
+   * Smoothed local tempo at each beat, in BPM, indexing in parallel with
+   * `beats`.
+   *
+   * Empty unless `computeTempoCurve` was set, and empty regardless when fewer
+   * than two beats were detected, since a tempo is a property of the interval
+   * between two beats. The last entry repeats the tempo of the interval leading
+   * into the final beat, which opens no interval of its own.
+   *
+   * This is the local tempo rather than `bpm` resampled: on material whose
+   * tempo moves it departs from `bpm`, and reading a single number out of it is
+   * not how to get the global tempo.
+   */
+  beatLocalBpm: number[];
   /** Indices into `beats` that fall on a measure start. Not the same length as `beats`. */
   downbeatIndices: number[];
   /** Beat index the first measure starts on. */
@@ -227,8 +241,23 @@ export interface MeterEstimate {
   /** Beat index the first measure starts on; always in `[0, timeSignature.numerator)`. */
   downbeatPhase: number;
   /**
-   * Raw support score per *requested* candidate numerator, in the order the
-   * request listed them.
+   * How the bar divides, in beats per accent group: `[3, 2, 2]` is the 7/8 an
+   * aksak meter notates as 3+2+2, and `[2, 2]` an ordinary four. Always sums to
+   * `timeSignature.numerator`.
+   *
+   * A single entry means no internal division was resolved — the numerator has
+   * none to find, it was too wide to search, or the span was too short to
+   * search at all.
+   */
+  grouping: number[];
+  /**
+   * Support per *requested* candidate numerator, in the order the request
+   * listed them.
+   *
+   * Standardized and signed: zero is the level a numerator reaches on beats
+   * carrying no meter, so a negative entry means less support than noise would
+   * produce. Only the ordering and the gaps between entries carry meaning —
+   * one entry read on its own says nothing.
    */
   candidateScores: number[];
   /**

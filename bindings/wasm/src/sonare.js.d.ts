@@ -97,6 +97,7 @@ export interface WasmBeatObservationsResult {
 export interface WasmMeterEstimateResult {
   timeSignature: WasmTimeSignatureResult;
   downbeatPhase: number;
+  grouping: number[];
   candidateScores: number[];
   candidates: WasmTimeSignatureResult[];
 }
@@ -170,6 +171,7 @@ export interface WasmAnalysisResult {
   downbeatIndices: number[];
   downbeatPhase: number;
   beatObservations: WasmBeatObservationsResult;
+  beatLocalBpm: number[];
   chords: WasmChordResult[];
   sections: WasmSectionResult[];
   timbre: WasmTimbreResult;

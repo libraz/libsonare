@@ -77,6 +77,7 @@ add_executable(sonare_tests
   analysis/onset_analyzer_test.cpp
   analysis/dynamics_analyzer_test.cpp
   analysis/beat_analyzer_test.cpp
+  analysis/tempo_curve_test.cpp
   analysis/meter_analyzer_test.cpp
   analysis/downbeat_analyzer_test.cpp
   analysis/chord_analyzer_test.cpp

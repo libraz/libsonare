@@ -85,6 +85,18 @@ export interface MusicAnalyzeOptions {
    */
   tempoUpdateIntervalBeats?: number;
   /**
+   * Decode a per-beat local tempo curve into the result's `beatLocalBpm`.
+   *
+   * Off by default because it is an extra output rather than a better analysis:
+   * nothing else in the result changes, and a caller that does not read the
+   * curve would pay a decode over the beat grid for nothing.
+   *
+   * The curve describes the beat grid it was decoded from, and beat tracking
+   * holds a fixed tempo prior unless `adaptiveTempo` is also set, so measuring
+   * a tempo that moves needs both. Default false.
+   */
+  computeTempoCurve?: boolean;
+  /**
    * Meter numerators the estimator scores. At most 16 entries, each in
    * `[2, 32]`; an empty list is rejected rather than restoring the default.
    * Widening the set does not force a wider meter. Default `[3, 4, 6]`.
@@ -106,7 +118,9 @@ export interface EstimateMeterRequest {
   /**
    * Per-beat accent value, the same length as `beatTimes`. `AnalysisResult`'s
    * `beatObservations.onsetStrength` is the intended source; `beats[].strength`
-   * also works but is a single unwindowed envelope frame.
+   * also works but is a single unwindowed envelope frame. Neither needs
+   * pre-scaling: the series is divided by its own maximum before scoring, so
+   * only the accent contrast within it is read.
    */
   beatStrengths: ArrayLike<number>;
   /**
@@ -245,11 +259,17 @@ const asFloat32Array = (values: ArrayLike<number>): Float32Array =>
  *
  * `beatStrengths` is the accent evidence the scoring reads; feed it
  * `AnalysisResult`'s `beatObservations.onsetStrength` rather than
- * `beats[].strength`, which is a single unwindowed envelope frame.
+ * `beats[].strength`, which is a single unwindowed envelope frame. Either
+ * arrives in whatever units the envelope produced; the series is divided by its
+ * own maximum before scoring, so it needs no pre-scaling.
  *
  * Option values are validated by the core, so an out-of-range weight, a
  * denominator that is not a power of two, an empty `candidateNumerators`, or a
  * `beatTimes` that decreases surfaces as a `SonareError`.
+ *
+ * The result carries `grouping` alongside the numerator: how the bar divides
+ * into accent groups of two and three beats, so a seven comes back as
+ * `[3, 2, 2]` or `[2, 2, 3]` rather than as a bare seven.
  */
 export function estimateMeter(request: EstimateMeterRequest): MeterEstimate {
   return addon.estimateMeter(

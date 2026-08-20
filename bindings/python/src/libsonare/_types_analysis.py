@@ -556,6 +556,15 @@ class AnalysisResult:
     rhythm: AnalysisRhythm | None = None
     melody: AnalysisMelody | None = None
     beat_observations: AnalysisBeatObservations | None = None
+    # Smoothed local tempo at each beat, in BPM, parallel to ``beat_times``.
+    # Empty unless ``compute_tempo_curve`` was set, and empty regardless when
+    # fewer than two beats were detected, since a tempo is a property of the
+    # interval between two beats. The last entry repeats the tempo of the
+    # interval leading into the final beat, which opens no interval of its own.
+    # This is the local tempo rather than ``bpm`` resampled: on material whose
+    # tempo moves it departs from ``bpm``, and reading a single number out of it
+    # is not how to get the global tempo.
+    beat_local_bpm: list[float] = dataclasses.field(default_factory=list)
     form: str = ""
 
     @property
@@ -595,6 +604,10 @@ class AnalysisResult:
         return self.beat_observations
 
     @property
+    def beatLocalBpm(self) -> list[float]:  # noqa: N802
+        return self.beat_local_bpm
+
+    @property
     def beats(self) -> list[Beat]:
         if self.beat_strengths:
             return [
@@ -613,10 +626,22 @@ class MeterEstimate:
     in the order they were requested, while ``candidates`` is ordered by
     descending support. Pair a score with a numerator through the request list,
     never through ``candidates``.
+
+    A ``candidate_scores`` entry is standardized and signed: zero is the level a
+    numerator reaches on beats carrying no meter, so a negative entry means less
+    support than noise would produce. Only the ordering and the gaps between
+    entries carry meaning — one entry read on its own says nothing.
+
+    ``grouping`` is how the bar divides, in beats per accent group: ``[3, 2, 2]``
+    is the 7/8 an aksak meter notates as 3+2+2, and ``[2, 2]`` an ordinary four.
+    It always sums to ``time_signature.numerator``. A single entry means no
+    internal division was resolved — the numerator has none to find, it was too
+    wide to search, or the span was too short to search at all.
     """
 
     time_signature: TimeSignature
     downbeat_phase: int
+    grouping: list[int] = dataclasses.field(default_factory=list)
     candidate_scores: list[float] = dataclasses.field(default_factory=list)
     candidates: list[TimeSignature] = dataclasses.field(default_factory=list)
 
@@ -853,7 +878,16 @@ class WaveformPeaksReport:
 
 @dataclass(frozen=True, slots=True)
 class EqSpectrumSnapshot:
-    """Realtime equalizer spectrum snapshot."""
+    """Realtime equalizer snapshot.
+
+    ``pre_left``/``pre_right`` and ``post_left``/``post_right`` are the pre- and
+    post-EQ waveform streams (uniformly decimated time-domain samples), so they
+    are a scope feed rather than a spectral estimate. ``profile_db`` is the
+    frequency-domain view: the post-EQ signal is Hann-windowed, transformed and
+    its bin powers summed into 16 geometrically spaced bands covering 20 Hz to
+    20 kHz, in amplitude decibels relative to full scale, rising immediately and
+    falling smoothly.
+    """
 
     pre_left: list[float]
     pre_right: list[float]

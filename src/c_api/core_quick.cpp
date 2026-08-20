@@ -275,6 +275,7 @@ SonareMusicAnalyzeOptions sonare_music_analyze_options_default(void) {
                                        config.detect_chord_inversions ? 1 : 0,
                                        config.adaptive_tempo ? 1 : 0,
                                        config.tempo_update_interval_beats,
+                                       config.compute_tempo_curve ? 1 : 0,
                                        {},
                                        0,
                                        config.meter_denominator};
@@ -321,6 +322,7 @@ SonareError sonare_analyze_json_ex(const float* samples, size_t length, int samp
     config.detect_chord_inversions = options->detect_chord_inversions != 0;
     config.adaptive_tempo = options->adaptive_tempo != 0;
     config.tempo_update_interval_beats = options->tempo_update_interval_beats;
+    config.compute_tempo_curve = options->compute_tempo_curve != 0;
     config.meter_candidate_numerators.assign(
         options->meter_candidate_numerators,
         options->meter_candidate_numerators + options->meter_candidate_numerator_count);

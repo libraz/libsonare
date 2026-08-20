@@ -104,6 +104,18 @@ struct AnalysisResult {
   int downbeat_phase = 0;
   /// @brief Beat-level evidence behind the downbeat and meter decisions.
   BeatObservations beat_observations;
+  /// @brief Smoothed local tempo at each beat, in BPM.
+  /// @details One value per entry of @ref beats, so the two index in parallel.
+  ///          Empty unless MusicAnalyzerConfig::compute_tempo_curve was set, and
+  ///          empty regardless when fewer than two beats were detected, since a
+  ///          tempo is a property of the interval between two beats. The last
+  ///          entry repeats the tempo of the interval leading into the final
+  ///          beat, which opens no interval of its own.
+  ///
+  ///          This is the local tempo, not @ref bpm resampled: on material whose
+  ///          tempo moves it departs from @ref bpm, and reading a single number
+  ///          out of it is not how to get the global tempo.
+  std::vector<float> beat_local_bpm;
   std::vector<Chord> chords;      ///< Chord progression
   std::vector<Section> sections;  ///< Song sections
   Timbre timbre;                  ///< Overall timbre
@@ -132,6 +144,19 @@ struct MusicAnalyzerConfig {
   bool detect_chord_inversions = false;  ///< Estimate slash-chord bass notes in unified analysis
   bool adaptive_tempo = false;           ///< Track a locally updated tempo prior during beat DP
   int tempo_update_interval_beats = 8;   ///< Local tempo context length in beats
+  /// @brief Decode a per-beat local tempo curve into AnalysisResult::beat_local_bpm.
+  /// @details Off by default because it is an additional output rather than a
+  ///          better one: nothing else in the result changes, and a caller that
+  ///          does not read the curve pays a Viterbi decode over the beat grid
+  ///          for nothing.
+  ///
+  ///          The curve is only as good as the beat grid underneath it. Beat
+  ///          tracking holds a fixed tempo prior unless @ref adaptive_tempo is
+  ///          also set, so on material whose tempo moves this reports a nearly
+  ///          flat curve at the wrong tempo — it faithfully describes a beat
+  ///          grid that did not follow the music. Set both to measure a tempo
+  ///          that changes.
+  bool compute_tempo_curve = false;
   /// @brief Meter numerators the multi-comb estimator scores.
   /// @details Adding a numerator widens the search; it does not force the
   ///          result. The default is the historical `{3, 4, 6}`, so an analysis

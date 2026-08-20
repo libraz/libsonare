@@ -134,6 +134,14 @@ val numberArrayFromVector(const std::vector<float>& values) {
   return out;
 }
 
+val numberArrayFromVector(const std::vector<int>& values) {
+  val out = val::array();
+  for (int value : values) {
+    out.call<void>("push", value);
+  }
+  return out;
+}
+
 /// @brief Converts AnalysisResult to JavaScript object.
 /// @param result Analysis result
 /// @return JavaScript object with all analysis data
@@ -215,6 +223,9 @@ val analysisResultToVal(const AnalysisResult& result) {
                        numberArrayFromVector(result.beat_observations.low_frequency_energy));
   beatObservations.set("chordChange", numberArrayFromVector(result.beat_observations.chord_change));
   out.set("beatObservations", beatObservations);
+  // Beat-indexed like the streams above, and likewise empty rather than absent
+  // when it was not produced — here because the caller did not ask for it.
+  out.set("beatLocalBpm", numberArrayFromVector(result.beat_local_bpm));
 
   // Chords
   out.set("chords", chordsToVal(result.chords));
@@ -563,6 +574,7 @@ val js_analyze(val samples, int sample_rate, val options) {
   set_bool("detectChordInversions", config.detect_chord_inversions);
   set_bool("adaptiveTempo", config.adaptive_tempo);
   set_number("tempoUpdateIntervalBeats", config.tempo_update_interval_beats);
+  set_bool("computeTempoCurve", config.compute_tempo_curve);
   set_number("meterDenominator", config.meter_denominator);
   // meterCandidateNumerators is an array, so set_number (a scalar reader) does
   // not apply. An undefined/null value leaves the core default {3, 4, 6} in
@@ -608,6 +620,7 @@ val js_estimate_meter(val beat_times, val beat_strengths, val options) {
   val out = val::object();
   out.set("timeSignature", timeSignatureToVal(result.time_signature));
   out.set("downbeatPhase", result.downbeat_phase);
+  out.set("grouping", numberArrayFromVector(result.grouping));
   out.set("candidateScores", numberArrayFromVector(result.candidate_scores));
   val candidates = val::array();
   for (const TimeSignature& candidate : result.candidates) {
@@ -642,6 +655,7 @@ val js_analysis_result_schema_fixture() {
   result.beat_observations.onset_strength.push_back(0.6f);
   result.beat_observations.low_frequency_energy.push_back(0.4f);
   result.beat_observations.chord_change.push_back(0.2f);
+  result.beat_local_bpm.push_back(118.5f);
   result.chords.push_back({PitchClass::C, ChordQuality::Major, 0.0f, 1.0f, 0.8f, PitchClass::C});
   result.sections.push_back({SectionType::Verse, 0.0f, 1.0f, 0.5f, 0.9f});
   result.timbre = {0.1f, 0.2f, 0.3f, 0.4f, 0.5f};
