@@ -189,6 +189,39 @@ describe('geometric room acoustics', () => {
     expect(est.absorptionBands.length).toBe(est.rt60Bands.length);
   });
 
+  // The diagnostic list is transcribed by the WASM wrapper independently of the
+  // C ABI, so Node passing says nothing about this surface. Until these two, the
+  // only WASM assertion on the RIR result was the band-length invariant above.
+  it('reports which diagnostic fired instead of a bare hasError boolean', () => {
+    const invalid = synthesizeRir({ lengthM: 7, widthM: 5, heightM: 3, sourceX: 99 });
+    expect(invalid.hasError).toBe(true);
+    // The five geometry errors were indistinguishable through hasError alone.
+    expect(invalid.errorMessage).toContain('acoustic.source_outside_room');
+    expect(invalid.diagnostics.map((d) => d.code)).toContain('acoustic.source_outside_room');
+    expect(invalid.diagnostics.every((d) => d.severity === 'error')).toBe(true);
+
+    const clean = synthesizeRir({ lengthM: 7, widthM: 5, heightM: 3, absorption: 0.15 });
+    expect(clean.hasError).toBe(false);
+    expect(clean.errorMessage).toBe('');
+    expect(clean.diagnostics).toEqual([]);
+  });
+
+  it('surfaces a maxSeconds tail clamp as a warning on a successful call', () => {
+    // A clamped tail used to be indistinguishable from an untruncated RIR: the
+    // convolution just sounded wrong, with hasError still false.
+    const clamped = synthesizeRir({
+      lengthM: 20,
+      widthM: 15,
+      heightM: 8,
+      absorption: 0.03,
+      maxSeconds: 0.2,
+    });
+    expect(clamped.hasError).toBe(false);
+    const warning = clamped.diagnostics.find((d) => d.code === 'acoustic.rir_length_clamped');
+    expect(warning).toBeDefined();
+    expect(warning?.severity).toBe('warning');
+  });
+
   // Cross-surface parity fixes: these paths previously diverged from the C ABI.
   it('rejects a negative ISM order instead of clamping it to zero', () => {
     expect(() =>
