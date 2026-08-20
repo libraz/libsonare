@@ -749,24 +749,37 @@ size_t CoreMidiOutput::flush_output() noexcept {
     // only after CoreMIDI accepts the whole list, so a failure is retryable.
     auto* list = storage.list();
     MIDIEventPacket* packet = MIDIEventListInit(list, kMIDIProtocol_2_0);
-    size_t batch_count = 0;
-    while (completed + batch_count < impl_->pending_count.load(std::memory_order_relaxed)) {
-      const auto& candidate = impl_->pending[completed + batch_count].event;
-      if (candidate.ump.word_count == 0 || candidate.ump.sysex_handle != 0) break;
-      MIDIEventPacket* next =
-          MIDIEventListAdd(list, storage.size(), packet, timestamp_for(candidate),
-                           candidate.ump.word_count, candidate.ump.words);
-      if (next == nullptr) break;
-      packet = next;
-      ++batch_count;
+    const size_t available = impl_->pending_count.load(std::memory_order_relaxed) - completed;
+    const auto batch = detail::flush_fixed_batch(
+        available,
+        [&](size_t index) noexcept {
+          const auto& candidate = impl_->pending[completed + index].event;
+          if (candidate.ump.word_count == 0 || candidate.ump.sysex_handle != 0) return false;
+          MIDIEventPacket* next =
+              MIDIEventListAdd(list, storage.size(), packet, timestamp_for(candidate),
+                               candidate.ump.word_count, candidate.ump.words);
+          if (next == nullptr) return false;
+          packet = next;
+          return true;
+        },
+        [&]() noexcept {
+          return MIDISendEventList(impl_->port, impl_->destination, list) == noErr;
+        });
+    if (batch.status == detail::BatchFlushStatus::kRejected) {
+      // CoreMIDI refused the head event on an empty list: a malformed UMP that
+      // no list will ever accept. Count it and drop it, like an invalid SysEx,
+      // so the events queued behind it still reach the device.
+      ++impl_->send_error_count;
+      ++completed;
+      continue;
     }
-    if (batch_count == 0 || MIDISendEventList(impl_->port, impl_->destination, list) != noErr) {
+    if (batch.status == detail::BatchFlushStatus::kRetry) {
       ++impl_->send_error_count;
       retain_from(completed);
       return sent;
     }
-    completed += batch_count;
-    sent += batch_count;
+    completed += batch.batch_count;
+    sent += batch.batch_count;
   }
   impl_->pending_count.store(0, std::memory_order_release);
   return sent;

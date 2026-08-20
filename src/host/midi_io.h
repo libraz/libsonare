@@ -291,6 +291,11 @@ class FixedMidiInputSource final : public MidiInputSource {
     while (read != write && n < capacity) {
       const Slot& slot = buffer_[read];
       const int64_t offset = slot.time_samples < 0 ? 0 : slot.time_samples;
+      // A live input event owns no track lane and no resolved SysEx view, so the
+      // slot is reset first: a caller-owned scratch buffer reused across drains
+      // would otherwise keep the previous drain's source_track_id and its
+      // (by now dangling) sysex_payload pointer.
+      out[n] = midi::MidiEvent{};
       out[n].render_frame =
           slot.absolute_render_frame ? slot.time_samples : block_start_frame + offset;
       out[n].ump = slot.ump;
@@ -324,6 +329,9 @@ class FixedMidiInputSource final : public MidiInputSource {
         // everything after it queued until the block containing its frame.
         break;
       }
+      // Reset the slot before filling it: see drain() for why a reused caller
+      // buffer must not inherit the previous drain's non-UMP fields.
+      out[n] = midi::MidiEvent{};
       if (slot.absolute_render_frame) {
         out[n].render_frame =
             slot.time_samples < block_start_frame ? block_start_frame : slot.time_samples;

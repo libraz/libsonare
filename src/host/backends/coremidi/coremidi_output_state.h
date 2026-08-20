@@ -1,7 +1,8 @@
 #pragma once
 
 /// @file coremidi_output_state.h
-/// @brief SDK-free retry state for bounded CoreMIDI SysEx7 transmission.
+/// @brief SDK-free retry state for bounded CoreMIDI transmission: SysEx7
+///        payloads and fixed-size UMP batches.
 
 #include <cstddef>
 #include <cstdint>
@@ -44,6 +45,42 @@ SysExFlushStatus flush_sysex7_payload(const uint8_t* payload, size_t payload_siz
     *packet_position = packetizer.packet_position();
   }
   return SysExFlushStatus::kComplete;
+}
+
+enum class BatchFlushStatus {
+  kSent,
+  kRejected,
+  kRetry,
+};
+
+struct BatchFlushResult {
+  BatchFlushStatus status = BatchFlushStatus::kRejected;
+  /// Events packed into the list. Non-zero only for kSent / kRetry.
+  size_t batch_count = 0;
+};
+
+/// Packs up to `available` adjacent fixed-size events into one event list and
+/// sends it. `add_event(index)` reports whether the event at `index` joined the
+/// list; it returns false for an event that cannot be batched here (a SysEx or
+/// empty record), for a full list, and for a packet the SDK refuses.
+///
+/// The head event is the case that matters: refused on an empty list, it can
+/// never be packed, so retrying it would block every event behind it forever.
+/// That is reported as kRejected, which the caller consumes like an invalid
+/// SysEx. A refused `send_list()` on a non-empty list is a transport failure and
+/// stays retryable (kRetry), leaving the batch queued.
+template <typename AddEvent, typename SendList>
+BatchFlushResult flush_fixed_batch(size_t available, AddEvent&& add_event,
+                                   SendList&& send_list) noexcept {
+  BatchFlushResult result;
+  while (result.batch_count < available && add_event(result.batch_count)) ++result.batch_count;
+  if (result.batch_count == 0) {
+    result.status = BatchFlushStatus::kRejected;
+    return result;
+  }
+  result.status =
+      std::forward<SendList>(send_list)() ? BatchFlushStatus::kSent : BatchFlushStatus::kRetry;
+  return result;
 }
 
 }  // namespace sonare::host::backends::detail

@@ -712,6 +712,47 @@ TEST_CASE("fixed MIDI input drain_block clamps offsets to block bounds", "[host]
   REQUIRE(drained[2].ump.note_number() == 64);
 }
 
+TEST_CASE("fixed MIDI input drains leave no residue in a reused caller buffer", "[host]") {
+  // A host drains into the same scratch buffer every block. An input event
+  // carries only a render frame and a UMP, so every other MidiEvent field must
+  // be reset per drain -- a stale source_track_id would misroute the event and
+  // a stale sysex_payload would point at a payload that no longer exists.
+  FixedMidiInputSource<4> input;
+  const Ump first = sonare::midi::make_midi1_note_on(0, 0, 60, 100);
+  const Ump second = sonare::midi::make_midi1_note_on(0, 0, 62, 100);
+  const std::array<uint8_t, 3> payload{0x7Du, 0x01u, 0x02u};
+
+  std::array<MidiEvent, 4> scratch{};
+  REQUIRE(input.push_event(first, 4));
+  REQUIRE(input.drain(scratch.data(), scratch.size(), 1000) == 1);
+
+  // Whatever the caller left in the buffer between drains (here, a scheduled
+  // event with a resolved SysEx view) must not survive into the next drain.
+  scratch[0].source_track_id = 42;
+  scratch[0].sysex_payload = payload.data();
+  scratch[0].sysex_payload_size = payload.size();
+
+  REQUIRE(input.push_event(second, 6));
+  REQUIRE(input.drain(scratch.data(), scratch.size(), 2000) == 1);
+  REQUIRE(scratch[0].render_frame == 2006);
+  REQUIRE(scratch[0].ump.note_number() == 62);
+  REQUIRE(scratch[0].source_track_id == 0);
+  REQUIRE(scratch[0].sysex_payload == nullptr);
+  REQUIRE(scratch[0].sysex_payload_size == 0);
+
+  // drain_block() fills the same buffer through its own loop.
+  scratch[0].source_track_id = 42;
+  scratch[0].sysex_payload = payload.data();
+  scratch[0].sysex_payload_size = payload.size();
+  REQUIRE(input.push_event(first, 8));
+  REQUIRE(input.drain_block(scratch.data(), scratch.size(), 3000, 64) == 1);
+  REQUIRE(scratch[0].render_frame == 3008);
+  REQUIRE(scratch[0].ump.note_number() == 60);
+  REQUIRE(scratch[0].source_track_id == 0);
+  REQUIRE(scratch[0].sysex_payload == nullptr);
+  REQUIRE(scratch[0].sysex_payload_size == 0);
+}
+
 TEST_CASE("MIDI host-time mapper round-trips sample-accurate frame offsets", "[host]") {
   sonare::host::MidiHostTimeMapper mapper;
   int64_t frame = 0;
@@ -888,6 +929,73 @@ TEST_CASE("CoreMIDI scripted SysEx sender retries without duplicating accepted p
   if (invalid_status == midi_detail::SysExFlushStatus::kInvalid) ++invalid_sysex_count;
   REQUIRE(invalid_status == midi_detail::SysExFlushStatus::kInvalid);
   REQUIRE(invalid_sysex_count == 1);
+}
+
+TEST_CASE("CoreMIDI scripted fixed-size sender drains past an unsendable head event",
+          "[host][coremidi]") {
+  namespace midi_detail = sonare::host::backends::detail;
+  constexpr size_t kListCapacity = 2;
+
+  // A malformed UMP -- MIDI 1.0 message type (one active word) claiming four --
+  // is refused by MIDIEventListAdd on any list, including an empty one. It can
+  // therefore never head a batch, and retrying it would wedge every event
+  // queued behind it.
+  Ump malformed = sonare::midi::make_midi1_note_on(0, 0, 61, 100);
+  malformed.word_count = 4;
+  const std::array<Ump, 4> queued = {
+      sonare::midi::make_midi1_note_on(0, 0, 60, 100),
+      malformed,
+      sonare::midi::make_midi1_note_on(0, 0, 62, 100),
+      sonare::midi::make_midi1_note_on(0, 0, 64, 100),
+  };
+
+  std::vector<uint8_t> delivered;
+  std::vector<size_t> packed;
+  size_t completed = 0;
+  size_t sent = 0;
+  size_t send_calls = 0;
+  uint32_t send_error_count = 0;
+  // Each pass models one flush_output() call: the caller returns on a retryable
+  // send failure and resumes from the retained head next time. Bounded so a
+  // queue that stops advancing fails the assertion below instead of hanging.
+  for (int pass = 0; pass < 8 && completed < queued.size(); ++pass) {
+    packed.clear();
+    const auto batch = midi_detail::flush_fixed_batch(
+        queued.size() - completed,
+        [&](size_t index) {
+          const Ump& candidate = queued[completed + index];
+          const bool packable =
+              candidate.message_type() != sonare::midi::UmpMessageType::kMidi1ChannelVoice ||
+              candidate.word_count == 1;
+          if (!packable || packed.size() == kListCapacity) return false;
+          packed.push_back(completed + index);
+          return true;
+        },
+        [&]() {
+          ++send_calls;
+          if (send_calls == 1) return false;  // one transient transport failure
+          for (size_t index : packed) delivered.push_back(queued[index].note_number());
+          return true;
+        });
+    if (batch.status == midi_detail::BatchFlushStatus::kRejected) {
+      ++send_error_count;
+      ++completed;
+      continue;
+    }
+    if (batch.status == midi_detail::BatchFlushStatus::kRetry) {
+      ++send_error_count;
+      continue;
+    }
+    completed += batch.batch_count;
+    sent += batch.batch_count;
+  }
+
+  // The queue drains: the unsendable event is consumed as an error, everything
+  // behind it still reaches the device, and the retried batch is sent once.
+  REQUIRE(completed == queued.size());
+  REQUIRE(sent == 3);
+  REQUIRE(delivered == std::vector<uint8_t>{60, 62, 64});
+  REQUIRE(send_error_count == 2);  // one transport retry + one rejected head
 }
 
 TEST_CASE("fixed MIDI input retains absolute future-frame events", "[host]") {
