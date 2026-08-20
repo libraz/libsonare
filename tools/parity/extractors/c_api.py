@@ -1,12 +1,17 @@
 """Extract the canonical C API surface from sonare_c.h and its generated headers.
 
 The C API is the canonical ABI: it defines the authoritative function NAME,
-PARAMETER ORDER and PARAM TYPES. C has no default values.
+PARAMETER ORDER and PARAM TYPES, and — for the record-shape unit — the
+authoritative FIELD LIST of every public struct. C has no default values.
 
 Parsing strategy: C declarations are not regular, but the libsonare headers are
 machine-generated / hand-written in a consistent style: each declaration is a
 return-type + ``sonare_<name>(`` + comma-separated params, terminated by ``);``.
 We strip comments, join continuation lines, then split on the top-level ``;``.
+Record types follow the same discipline — ``typedef struct { ... } SonareXxx;``
+(occasionally tag-named) — so the body is brace-matched and split on ``;``.
+Both units walk the SAME header set (``_collect_api_headers``), so a header
+added to the public umbrella is picked up by both without a second list.
 """
 
 from __future__ import annotations
@@ -14,8 +19,8 @@ from __future__ import annotations
 import re
 from pathlib import Path
 
-from model import Extraction, FunctionSig, Param
-from normalize import canonical_key
+from model import Extraction, FunctionSig, Param, RecordField, RecordShape
+from normalize import canonical_field_name, canonical_key, canonical_record_key
 
 from ._tokens import split_top_level_commas, strip_c_comments
 
@@ -152,6 +157,175 @@ def _collect_api_headers(root: Path) -> list[Path]:
     return out
 
 
+# ``typedef struct [Tag] {`` — the opening of a record definition. An opaque
+# handle typedef (``typedef struct SonareProject SonareProject;``) has no body
+# and is deliberately not matched: it declares no fields to compare.
+_STRUCT_OPEN_RE = re.compile(r"\btypedef\s+struct(?:\s+[A-Za-z_][A-Za-z0-9_]*)?\s*\{")
+
+# The trailing ``} SonareXxx;`` that names the typedef.
+_STRUCT_CLOSE_RE = re.compile(r"^\s*(?P<name>[A-Za-z_][A-Za-z0-9_]*)\s*;")
+
+# A function-pointer member: ``void (*render)(float* const*, int, int)``. The
+# member name sits inside the ``(*name)`` group, not at the end of the decl.
+_FUNC_PTR_RE = re.compile(r"\(\s*\*\s*(?P<name>[A-Za-z_][A-Za-z0-9_]*)\s*\)")
+
+# Explicit padding / reserved bytes. Present purely to pin the byte layout, so
+# no facade mirrors them (Python ctypes does, to keep offsets right, but the
+# field carries no semantic meaning to compare).
+_PADDING_FIELD_RE = re.compile(r"^(reserved|_?pad(ding)?)([0-9_].*)?$")
+
+# Length companions of a pointer / array member: a trailing ``_count`` /
+# ``_length`` / ``_len``, a leading ``num_``, or the bare noun on its own
+# (``SonareHpssResult.length`` next to ``harmonic`` / ``percussive``). The
+# facades derive the count from the array they hand back, so a record that owns
+# at least one pointer or array member may legitimately drop these (the
+# allowlist's "array-length derivation" category, expressed as a rule rather
+# than as per-record entries).
+_LENGTH_FIELD_RE = re.compile(
+    r"^(count|length|len|size)$|.*_(count|length|len)$|^num_.+"
+)
+
+# ABI plumbing members that describe the STRUCT rather than the data in it: the
+# version tag that selects which field generation is populated, and the presence
+# bitmask that says which optional fields the caller filled in. The JS facades
+# express both through the type system (a versioned union, an optional field),
+# so no facade mirrors them as data.
+_ABI_PLUMBING_FIELDS = {
+    "struct_version",
+    "struct_size",
+    "abi_version",
+    "present_fields",
+}
+
+# Integer spellings a length companion is written in. A ``float* ..._length``
+# would not be a count, so the type is checked as well as the name.
+_INT_TYPE_TOKENS = (
+    "int",
+    "size_t",
+    "uint8_t",
+    "uint16_t",
+    "uint32_t",
+    "uint64_t",
+    "int8_t",
+    "int16_t",
+    "int32_t",
+    "int64_t",
+    "unsigned",
+    "long",
+    "short",
+)
+
+
+def _is_int_type(ctype: str) -> bool:
+    if "*" in ctype:
+        return False
+    tokens = ctype.replace("const", " ").split()
+    return any(t in _INT_TYPE_TOKENS for t in tokens)
+
+
+def _parse_record_field(decl: str) -> RecordField | None:
+    """Parse one struct member declaration into a RecordField.
+
+    Handles the three shapes the public headers use: a plain scalar / pointer
+    member (``float* magnitude``), a fixed array member (``char name[64]``,
+    ``float points[A * 2]``) and a function-pointer member
+    (``void (*render)(float* const*, int, int)``).
+    """
+    decl = " ".join(decl.split())
+    if not decl:
+        return None
+    fp = _FUNC_PTR_RE.search(decl)
+    if fp is not None:
+        name = fp.group("name")
+        return RecordField(
+            name=canonical_field_name(name),
+            raw_name=name,
+            type=decl[: fp.start()].strip() + " (*)()",
+            structural=False,
+        )
+    # Drop any array extents before locating the trailing identifier.
+    base = re.sub(r"\[[^\]]*\]", "", decl).strip()
+    is_array = base != decl
+    m = re.search(r"([A-Za-z_][A-Za-z0-9_]*)\s*$", base)
+    if m is None:
+        return None
+    name = m.group(1)
+    ctype = base[: m.start()].strip()
+    if not ctype:
+        return None  # a bare identifier is not a member declaration
+    if is_array:
+        ctype += "[]"
+    return RecordField(name=canonical_field_name(name), raw_name=name, type=ctype)
+
+
+def _mark_structural_fields(fields: list[RecordField]) -> None:
+    """Flag members with no facade counterpart by design (in place).
+
+    Padding / ``reserved`` members and ABI plumbing (the version tag, the
+    presence bitmask) are always structural. A length companion is structural
+    only when the record actually owns a pointer or array member for the facade
+    to derive the count from — otherwise the ``_count`` name is carrying real
+    information and must be compared.
+    """
+    has_indirect = any(("*" in f.type or f.type.endswith("[]")) for f in fields)
+    for f in fields:
+        if _PADDING_FIELD_RE.match(f.name) or f.name in _ABI_PLUMBING_FIELDS:
+            f.structural = True
+        elif has_indirect and _LENGTH_FIELD_RE.match(f.name) and _is_int_type(f.type):
+            f.structural = True
+
+
+def _extract_records(text: str, raw: str, path_rel: str, ex: Extraction) -> None:
+    """Append every ``typedef struct { ... } SonareXxx;`` in ``text`` to ``ex``.
+
+    ``text`` is the comment-stripped header; ``raw`` is the original, used only
+    to report a line number a reader can jump to.
+    """
+    for m in _STRUCT_OPEN_RE.finditer(text):
+        open_idx = text.index("{", m.end() - 1)
+        depth = 0
+        close_idx = -1
+        for i in range(open_idx, len(text)):
+            if text[i] == "{":
+                depth += 1
+            elif text[i] == "}":
+                depth -= 1
+                if depth == 0:
+                    close_idx = i
+                    break
+        if close_idx < 0:
+            ex.unparsed += 1
+            ex.unparsed_notes.append(f"{path_rel}: unbalanced struct body")
+            continue
+        tail = _STRUCT_CLOSE_RE.match(text[close_idx + 1 :])
+        if tail is None:
+            ex.unparsed += 1
+            ex.unparsed_notes.append(f"{path_rel}: unnamed typedef struct")
+            continue
+        name = tail.group("name")
+        body = text[open_idx + 1 : close_idx]
+        fields: list[RecordField] = []
+        for part in body.split(";"):
+            fld = _parse_record_field(part)
+            if fld is not None:
+                fields.append(fld)
+        if not fields:
+            continue
+        _mark_structural_fields(fields)
+        decl = f"}} {name};"
+        line = raw.count("\n", 0, raw.find(decl)) + 1 if decl in raw else 0
+        ex.records.append(
+            RecordShape(
+                key=canonical_record_key(name, "c"),
+                surface="c",
+                raw_name=name,
+                fields=fields,
+                file=path_rel,
+                line=line,
+            )
+        )
+
+
 def extract(root: Path) -> Extraction:
     ex = Extraction(surface="c")
     files = _collect_api_headers(root)
@@ -162,6 +336,7 @@ def extract(root: Path) -> Extraction:
         raw = path.read_text(encoding="utf-8")
         # Map char offset -> line number for diagnostics.
         text = strip_c_comments(raw)
+        _extract_records(text, raw, str(path.relative_to(root)), ex)
         for m in _DECL_RE.finditer(text):
             name = m.group("name")
             key = canonical_key(name, "c")

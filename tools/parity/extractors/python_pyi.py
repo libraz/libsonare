@@ -41,6 +41,8 @@ from pathlib import Path
 from model import Extraction, FunctionSig, Param
 from normalize import canonical_key, normalize_default, normalize_param_name
 
+from . import python_ctypes
+
 
 def _ann_to_str(node: ast.expr | None) -> str:
     if node is None:
@@ -367,4 +369,5 @@ def extract(root: Path) -> Extraction:
             continue
         _walk(tree, ex, str(path.relative_to(root)), class_bases)
     _flatten_mixin_methods(ex, class_bases)
+    python_ctypes.extract_records(root, ex)
     return ex

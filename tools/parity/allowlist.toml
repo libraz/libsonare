@@ -585,3 +585,102 @@ names = []
 [tuning]
 # input_roles = ["samples", "sample_rate", "sr", "left", "right", "mono", "audio", "x", "y", "buffer", "data", "length"]
 # handle_prefixes = ["audio", "eq", "mixer", "engine", "strip", "stream", "streaming", "realtime", "voice", "free", "master"]
+
+# ---------------------------------------------------------------------------
+# [record] — RECORD-SHAPE unit (the second extraction unit). Intentional,
+# reviewed divergences between a facade's declared record and the C struct that
+# is its oracle. Three entry kinds, narrowest first: `fields` (one field),
+# `extra_fields` (a richer facade read model; MISSING C fields still report),
+# `records` (whole record — blunt, suppresses missing fields too).
+#
+# A record that merely SHARES A NAME with an unrelated C struct does NOT belong
+# here: that is a matching fact, and it lives in `_NOT_A_C_MIRROR` in compare.py.
+# ---------------------------------------------------------------------------
+[record]
+# Category 1 (ergonomic rename or fold) and category 2 (array-length derivation).
+# Every entry below was read against both the C header and the facade source.
+fields = [
+  # --- category 2 + 1: parallel C arrays folded into one array-of-struct ---
+  # C carries `stage_gain_reduction_stages` (char**) and
+  # `stage_gain_reduction_values` (float*) plus their shared count; both JS
+  # facades expose the zipped `stageGainReductions: StageGainReduction[]`.
+  "mastering_chain_result.stage_gain_reduction_stages",
+  "mastering_chain_result.stage_gain_reduction_values",
+  "mastering_chain_result.stage_gain_reductions",
+  "mastering_chain_stereo_result.stage_gain_reduction_stages",
+  "mastering_chain_stereo_result.stage_gain_reduction_values",
+  "mastering_chain_stereo_result.stage_gain_reductions",
+
+  # --- category 2 + 1: interleaved buffer + frame count -> one typed array ---
+  # C takes `audio_interleaved` (const float*) with `audio_frames`; both JS
+  # facades pass `audio: Float32Array` and derive the frame count from it.
+  "project_clip_desc.audio_interleaved",
+  "project_clip_desc.audio_frames",
+  "project_clip_desc.audio",
+  "project_loop_recording_desc.audio_interleaved",
+  "project_loop_recording_desc.audio_frames",
+  "project_loop_recording_desc.audio",
+
+  # --- category 1: ordinal -> string union, and a clearer field name ---
+  # C `kind` (SonareProjectTempoCandidateKind ordinal) is spelled `label`
+  # ('primary' | 'half' | 'double'); C `first_time_signature` is `timeSignature`.
+  "project_tempo_candidate.kind",
+  "project_tempo_candidate.label",
+  "project_tempo_candidate.first_time_signature",
+  "project_tempo_candidate.time_signature",
+
+  # --- category 1: a C function argument folded into the facade config bag ---
+  # The C ABI passes the MIDI destination id (and, for the synth patch, the
+  # GM-program follow flag) as separate arguments to the bounce entry points;
+  # every facade folds them into the config object. bindings/node/src/project.ts
+  # states this in the bounceWithSynthInstrument docs ("`destinationId` and
+  # `useGmPrograms` are JS binding" fields).
+  "builtin_synth_config.destination_id",
+  "sf2_instrument_config.destination_id",
+  "synth_patch.destination_id",
+  "synth_patch.use_gm_programs",
+
+  # --- category 1: two C accessors merged into one facade read model ---
+  # The facade's source descriptor also carries the owning audio metadata, which
+  # the C ABI serves from sonare_project_get_audio_source_metadata (already
+  # credited to `source_by_index` in compare._ALIAS_COVERAGE).
+  "project_source.content_hash",
+  "project_source.external_stem_role",
+
+  # --- category 4: intentionally one-sided facade additions ---
+  # Documented MIDI 1.0 aliases for the first two UMP words; the comments in
+  # bindings/node/src/types_engine.ts call them "Project-style alias".
+  "engine_midi_event.data0",
+  "engine_midi_event.data1",
+  # Human-readable text derived from the diagnostic `code`; the C POD carries
+  # the ordinal only.
+  "project_diagnostic.message",
+
+  # --- category 1: canonical name strings beside a C enum ordinal ---
+  # Both JS facades add the core's canonical spelling next to the ordinal, and
+  # say so in-file ("Canonical core spelling; stable across all language
+  # bindings"). `chord.duration` is deliberately NOT listed: it exists on Node
+  # and not on WASM, which is real cross-facade drift.
+  "key.name",
+  "key.short_name",
+  "section.name",
+  "chord.name",
+  "chord.root_name",
+  "chord.bass_name",
+]
+
+# Category 4 (intentionally one-sided): the facade record is a RICHER read model
+# than the C struct, so extra fields are expected while a MISSING C field still
+# reports. `SonareAnalysisResult` is the lean POD returned by the struct-based C
+# entry points; the TS `AnalysisResult` mirrors the parsed sonare_analyze_json
+# document (nested beats / chords / sections / timbre / dynamics / rhythm /
+# melody / form). Stated as a direction rather than as a field list so the entry
+# stays correct as the analysis document grows.
+[record.extra_fields]
+node = ["analysis_result"]
+wasm = ["analysis_result"]
+
+# Whole-record suppression. Empty on purpose: it hides missing C fields too,
+# which is the drift this unit exists to catch. Reach for `extra_fields` or
+# `fields` instead.
+[record.records]

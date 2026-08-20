@@ -71,6 +71,52 @@ def normalize_param_name(name: str) -> str:
     return name.lower()
 
 
+def strip_sonare_type_prefix(name: str) -> str:
+    """``SonareAcousticResult`` -> ``AcousticResult``.
+
+    The C ABI namespaces every record type with a ``Sonare`` prefix and the
+    Python ctypes mirrors keep it verbatim; the TypeScript facades drop it
+    (``AcousticResult``) because the package name already namespaces them.
+    Only the exact PascalCase prefix is stripped, so a type that merely starts
+    with those letters in lowercase is untouched.
+    """
+    if name.startswith("Sonare") and len(name) > len("Sonare"):
+        return name[len("Sonare") :]
+    return name
+
+
+def canonical_record_key(name: str, surface: str) -> str:
+    """Map a record TYPE name on any surface to its canonical key.
+
+    Each surface spells the same record differently, and the difference is
+    convention rather than drift:
+
+    * C:      ``SonareAcousticResult``  (PascalCase, ``Sonare`` prefix)
+    * Python: ``SonareAcousticResult``  (ctypes mirror keeps the C spelling)
+    * Node:   ``AcousticResult``        (TS interface, prefix dropped)
+    * WASM:   ``AcousticResult``        (TS interface, prefix dropped)
+
+    All four fold to ``acoustic_result``. ``surface`` is accepted for symmetry
+    with :func:`canonical_key` and to keep the call sites self-documenting; the
+    transform is currently identical on every surface, which is exactly the
+    property the unit tests pin.
+    """
+    del surface  # same transform on every surface; kept for call-site symmetry
+    return camel_to_snake(strip_sonare_type_prefix(name.strip()))
+
+
+def canonical_field_name(name: str) -> str:
+    """Map a record FIELD name on any surface to its canonical snake_case form.
+
+    C and Python ctypes spell fields ``snake_case`` (``rt60_bands``, ``is_blind``);
+    the Node and WASM TypeScript records spell the same fields ``camelCase``
+    (``rt60Bands``, ``isBlind``). Both fold to the snake form. Digit runs never
+    take a boundary (``rt60Bands`` -> ``rt60_bands``, not ``rt_60_bands``), which
+    matches how the C names are written.
+    """
+    return normalize_param_name(name.strip().strip("?").strip())
+
+
 # Enum members whose integer value is 0 across the C ABI and every facade. A
 # facade may spell a zero-valued default either as the bare ``0`` (Node/WASM) or
 # as the named enum member (Python ``PitchClass.C`` / ``Mode.MAJOR`` / ...). They

@@ -12,6 +12,24 @@ Loaded from ``allowlist.toml`` via the stdlib ``tomllib``. Entries fall into:
 * ``[enum]``      list of ``"key.param"`` whose enum sets are allowed to differ.
 * ``[wasm_internal]`` list of WASM embind/SonareModule ``names`` whose
                   intra-binding wiring inconsistency is intentional.
+* ``[record]``    three entry kinds, narrowest first:
+
+  - ``fields``      a list of ``"record_key.field_name"`` for a single field that
+                    legitimately differs. Surface-independent on purpose: a field
+                    dropped for one facade's convention is nearly always dropped
+                    for all of them, and a per-surface exception is the shape
+                    drift looks like.
+  - ``extra_fields`` surface -> record keys whose facade record is a RICHER read
+                    model than the C struct, so fields it declares beyond the C
+                    field list are expected. Suppresses only that direction — a C
+                    field the facade FAILS to declare still reports. Use this
+                    rather than ``records`` for a record under active
+                    development, so the entry does not have to name (and thereby
+                    pre-bless) fields that do not exist yet.
+  - ``records``     surface -> record keys whose whole shape is intentionally not
+                    mirrored there. This is the blunt one: it suppresses missing
+                    C fields too, so it goes blind to exactly the drift this unit
+                    exists to catch. Prefer ``extra_fields`` or ``fields``.
 """
 
 from __future__ import annotations
@@ -42,6 +60,9 @@ class Allowlist:
     enum: list[str] = field(default_factory=list)
     input_naming: list[str] = field(default_factory=list)
     wasm_internal: list[str] = field(default_factory=list)
+    record: dict[str, list[str]] = field(default_factory=dict)
+    record_extra: dict[str, list[str]] = field(default_factory=dict)
+    record_fields: list[str] = field(default_factory=list)
     # Overrides for the central tuning knobs (empty -> use compare.py defaults).
     input_roles: list[str] = field(default_factory=list)
     handle_prefixes: list[str] = field(default_factory=list)
@@ -72,6 +93,24 @@ class Allowlist:
     def wasm_internal_ok(self, name: str) -> bool:
         return _match(name, self.wasm_internal)
 
+    def record_ok(self, key: str, surface: str) -> bool:
+        return _match(key, self.record.get(surface, [])) or _match(
+            key, self.record.get("any", [])
+        )
+
+    def record_extra_ok(self, key: str, surface: str) -> bool:
+        """True when EXTRA fields on this record are expected on ``surface``.
+
+        Missing C fields on the same record still report — this is deliberately
+        one-directional.
+        """
+        return _match(key, self.record_extra.get(surface, [])) or _match(
+            key, self.record_extra.get("any", [])
+        )
+
+    def record_field_ok(self, key: str, field_name: str) -> bool:
+        return _match(f"{key}.{field_name}", self.record_fields)
+
 
 def load(path: Path) -> Allowlist:
     if not path.exists():
@@ -86,6 +125,14 @@ def load(path: Path) -> Allowlist:
         enum=list(data.get("enum", {}).get("params", [])),
         input_naming=list(data.get("input_naming", {}).get("keys", [])),
         wasm_internal=list(data.get("wasm_internal", {}).get("names", [])),
+        record={
+            k: list(v) for k, v in data.get("record", {}).get("records", {}).items()
+        },
+        record_extra={
+            k: list(v)
+            for k, v in data.get("record", {}).get("extra_fields", {}).items()
+        },
+        record_fields=list(data.get("record", {}).get("fields", [])),
         input_roles=list(data.get("tuning", {}).get("input_roles", [])),
         handle_prefixes=list(data.get("tuning", {}).get("handle_prefixes", [])),
     )

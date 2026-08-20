@@ -26,9 +26,30 @@ Flags: `--json`, `--surface <csv>`, `--root <path>`, `--allowlist <path>`,
 `--core-map <path>`. Exit code is **0** when there is no active drift, **1**
 otherwise (CI-gate friendly).
 
-## What it reports — seven categories
+## Two extraction units
 
-Categories 1–6 compare each facade against the **C API**. Category 7 is a
+The tool extracts two independent units from every surface.
+
+- **`FunctionSig`** — a function / method: its name, parameter order, defaults
+  and types. Categories 1–7 below are built from it.
+- **`RecordShape`** — a struct / record TYPE and its field list. Category 8 is
+  built from it. The C `typedef struct { … } SonareXxx;` is the oracle; Python
+  mirrors it as a `ctypes.Structure`, and Node and WASM declare it as a
+  TypeScript `interface`.
+
+The units are separate because a signature check models argument lists only and
+is structurally blind to a struct's interior. Node N-API and WASM embind marshal
+records field by field (no `value_object`; WASM uses `val.set("camelCase", …)`),
+so a field added to a C struct and mirrored on three surfaces but forgotten on
+the fourth used to be invisible to every gate in the repo. Python is separately
+protected against *layout* desync by `tools/abi/abi-layout.json` +
+`bindings/python/tests/test_abi_layout.py`, but that guard reads byte offsets,
+not names — a same-width rename keeps every offset valid — and it does not cover
+Node or WASM at all.
+
+## What it reports — eight categories
+
+Categories 1–6 and 8 compare each facade against the **C API**. Category 7 is a
 different axis: it compares the WASM binding against **itself** (its own three
 files), catching a wiring break the C-anchored checks structurally cannot see.
 
@@ -70,6 +91,32 @@ files), catching a wiring break the C-anchored checks structurally cannot see.
    "exported from `index.ts`", blind to a break upstream of it. Only
    FREE-function registrations are checked; class methods (`.function(...)`
    inside a `class_<T>()` chain) belong to bound class types, not `SonareModule`.
+8. **record** — a facade's declared record shape diverges from the C struct that
+   is its oracle. *Active* when the facade's record omits a C field, or declares
+   a field C does not have; *informational* when the facade declares no record
+   for that C struct at all **but a peer facade does**. Uniform absence is not
+   reported: a C struct no facade exposes is a core-exposure question for an
+   audit, not drift (the same principle the coverage check follows).
+
+   Naming convention is not drift. C and Python ctypes spell fields
+   `snake_case`, Node and WASM spell them `camelCase`, and the TS facades drop
+   the `Sonare` type prefix; every record name folds through
+   `normalize.canonical_record_key` and every field name through
+   `normalize.canonical_field_name` before anything is compared, and both folds
+   are pinned by `test_record_shape.py` rather than left implicit.
+
+   Three families of C member are **structural** — stripped from the C side
+   before the diff, because no facade mirrors them by design. These implement
+   the allowlist's "array-length derivation" category as a rule instead of as
+   per-record entries:
+   - explicit padding / `reserved` members;
+   - ABI plumbing that describes the struct rather than the data (`struct_version`,
+     `present_fields`, `struct_size`, `abi_version`);
+   - the length companion of a pointer / array member (`*_count`, `*_length`,
+     `*_len`, `num_*`, or the bare `length` / `count` / `size`) — **only** when
+     the record actually owns a pointer or array for the facade to derive the
+     count from. Without one, a `_count` field is carrying real data and is
+     compared.
 
 ### Finding states
 
@@ -126,15 +173,51 @@ Intentional divergences, one section per category:
 `[coverage]`, `[surface_only]`, `[order]` (each keyed by surface → list of
 keys), `[default]` / `[core_default]` / `[enum]` (lists of `"key.param"`),
 `[input_naming]` (list of keys), `[wasm_internal]` (list of `names` whose
-intra-binding wiring inconsistency is intentional). `[tuning]` overrides the
-central knobs (`input_roles`, `handle_prefixes`).
+intra-binding wiring inconsistency is intentional), `[record]` (see below).
+`[tuning]` overrides the central knobs (`input_roles`, `handle_prefixes`).
+
+`[record]` has three entry kinds. **Prefer the narrowest that fits:**
+
+| entry | scope | missing C field still reports? |
+|---|---|---|
+| `fields` | one `"record_key.field_name"` | n/a (that field is excused both ways) |
+| `[record.extra_fields]` | surface → record keys | **yes** |
+| `[record.records]` | surface → record keys | no — suppresses everything |
+
+`fields` entries are surface-independent on purpose: a field dropped for one
+facade's convention is nearly always dropped for all of them, and a field that
+differs on exactly one surface is the shape drift looks like.
+
+`extra_fields` is for a facade record that is a genuinely richer read model than
+the C struct (the TS `AnalysisResult` mirrors the parsed `sonare_analyze_json`
+document; C's `SonareAnalysisResult` is a lean POD). It excuses fields the facade
+*adds* while still reporting a C field the facade *drops*, so a record under
+active development can be excused without naming — and thereby pre-blessing —
+fields that do not exist yet. `[record.records]` is the blunt form and goes blind
+to exactly the drift this unit exists to catch; it is empty and should stay that
+way.
+
+Every suppressed field divergence is emitted as an `allowlisted` finding rather
+than filtered before a finding is built, so the suppressed total stays auditable
+in the report instead of being a silent number.
+
+A record that merely *shares a name* with an unrelated C struct does **not**
+belong in `allowlist.toml` — that is a matching fact and it lives in
+`_NOT_A_C_MIRROR` in `compare.py`. See the blind-spots subsection.
 
 ## Architecture
 
 ```
 check_parity.py     entry point: load extractors + allowlist + core_map, build report
 extractors/         one parser per surface:
-  c_api.py            include/sonare/sonare_c.h + the sonare_c_<domain>.h headers it includes
+  c_api.py            include/sonare/sonare_c.h + the sonare_c_<domain>.h headers it
+                      includes — BOTH units: function declarations and
+                      `typedef struct { ... } SonareXxx;` record bodies, walking
+                      one header set so a new public header feeds both
+  python_ctypes.py    the ctypes.Structure mirrors in _ffi_types_<domain>.py
+                      (globbed, not listed); records only
+  ts_records.py       the Node / WASM TypeScript `interface` + record-shaped
+                      `type` declarations; records only
   python_pyi.py       analyzer.pyi stubs
   node_ts.py / wasm_ts.py / ts_common.py   the TS facades (the index re-export
                       closure: `export ... from './m'` is followed transitively,
@@ -146,9 +229,10 @@ extractors/         one parser per surface:
                       src/wasm / SonareModule / the facade modules under
                       bindings/wasm/src; both source sets are walked, not listed)
 core_defaults.py    loads core_map.toml, resolves each struct/func to its core defaults
-model.py            FunctionSig / Param / Extraction data model (canonical keys)
+model.py            FunctionSig / Param + RecordShape / RecordField / Extraction
+                    data model (canonical keys)
 normalize.py        name + default canonicalization (cross-surface equality)
-compare.py          builds the matrix and the seven drift categories
+compare.py          builds the matrix and the eight drift categories
 report.py           markdown / JSON rendering
 allowlist.py        loads allowlist.toml
 ```
@@ -171,3 +255,60 @@ layers. It also assumes the facade reaches the raw module via `module.X` or
 `requireModule().X`; a name reached through a differently-named accessor (e.g.
 the arrangement surface's `projectModule().X`) reads as unwrapped — surfaced
 informationally, never as an active gap.
+
+### What the `record` unit is blind to
+
+- **Whether a declared field is ever populated.** It compares the *declared*
+  record shape — the C header, the ctypes `_fields_` list, the TS `interface` —
+  not the marshalling code that fills it. A field the TypeScript declares and
+  the addon's `obj.Set("…")` / embind's `val.set("…")` never writes reads as
+  present. Matching a marshalling site to a record has no reliable identity
+  anchor (the builder functions name no record type), and the naive
+  vocabulary-membership substitute is dominated by the *read* side: most
+  mirrored fields belong to option / config records that the native code reads
+  through `node_*_option` / `*Property` and never writes at all.
+- **Types.** Only field NAMES are compared. A C `float` mirrored as a TS
+  `string`, an `int64_t` narrowed to a JS `number`, a pointer mirrored as a
+  scalar — none of these are findings. (The Python side is separately covered
+  for width and offset by `make abi-layout`.)
+- **Field ORDER.** A record is compared as a set. Order matters for the ctypes
+  mirrors only, and `abi-layout.json` already pins it by offset.
+- **Optionality and nullability.** A TS `field?:` is recorded but not diffed
+  against the C ABI's presence semantics.
+- **Records the surfaces name differently.** Matching is by canonical record
+  name, so a facade that exposes the same C struct under an unrelated type name
+  is invisible to the check.
+
+  The reverse hazard — a facade type that coincidentally shares a C struct's
+  name — is handled by two mechanisms, and **each is a new way for the matcher
+  to be wrong**:
+
+  - `_NOT_A_C_MIRROR` in `compare.py` is the record unit's analogue of
+    `_ALIAS_COVERAGE`: it names `(surface, canonical key, surface-native type
+    name)` triples that collide by coincidence and carries the reason inline.
+    This is a *matching* fact, not a drift exemption, which is why it is not in
+    `allowlist.toml` — allowlisting would assert "this record legitimately
+    differs from its C counterpart" when the truth is that it has no C
+    counterpart. The type name is part of the key on purpose: rename the
+    colliding type and the entry stops applying rather than silently covering
+    whatever takes the name next. **How it can be wrong:** an entry added for a
+    collision keeps suppressing after the facade grows a *real* mirror under a
+    different type name but the same canonical key — the real mirror is compared
+    (the colliding shape is skipped at index time, not the key), but only if the
+    two shapes really do have different declared names.
+  - `_INTERNAL_PATH_PARTS` in `extractors/ts_records.py` excludes
+    `bindings/*/src/worklet/` from being *emitted* as records, matching the
+    existing decision in `ts_common.py` to keep the AudioWorklet entry points out
+    of the function surface. Those files are still parsed, because a record
+    outside the worklet may `extend` a type declared inside it. **How it can be
+    wrong:** a genuine public C-struct mirror placed under `worklet/` would stop
+    being compared with nothing to show for it. Today exactly one excluded
+    record overlapped a C key (`SonareClipPageRequest`, the SAB ring's
+    `{clipId, pageIndex}` wire form versus the C `{clip_id, channel, sample}`);
+    the other 105 had no C counterpart at all.
+- **Nested record types.** A field whose type is another record is compared as
+  one field name; the nested record is compared separately, on its own key, only
+  if it is itself a public C struct.
+- **C structs no facade declares.** Uniform absence is deliberately silent, so
+  this unit does not measure how much of the C record surface is exposed. That
+  is an audit question, exactly as it is for function coverage.

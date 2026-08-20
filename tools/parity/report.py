@@ -15,6 +15,7 @@ _CATEGORIES = (
     "input",
     "enum",
     "wasm_internal",
+    "record",
 )
 _CAT_TITLE = {
     "coverage": "Coverage gaps / surface-only symbols",
@@ -24,6 +25,7 @@ _CAT_TITLE = {
     "input": "Audio-input param naming consistency",
     "enum": "Enum value-set mismatch",
     "wasm_internal": "WASM-internal wiring (embind vs SonareModule vs index.ts)",
+    "record": "Record-shape drift (facade record vs C struct)",
 }
 
 
@@ -34,6 +36,7 @@ def to_json(rep: Report) -> str:
         "unparsed_notes": rep.unparsed_notes,
         "surface_only": rep.surface_only,
         "handle_keys": rep.handle_keys,
+        "record_counts": rep.record_counts,
         "matrix": rep.matrix,
         "findings": [asdict(f) for f in rep.findings],
         "summary": _summary(rep),
@@ -88,6 +91,18 @@ def to_markdown(rep: Report) -> str:
         f"C functions classified as handle/class API (informational coverage): "
         f"**{len(rep.handle_keys)}** of {len(c_keys)}.\n"
     )
+
+    # Record-shape extraction volume. A record checker that finds nothing because
+    # it PARSED nothing is indistinguishable from a clean tree in the findings
+    # table, so the per-surface record count is reported next to the matrix.
+    if rep.record_counts:
+        out.append("## Record shapes extracted (second extraction unit)\n")
+        out.append("| surface | records |")
+        out.append("|---|---|")
+        for s in rep.surfaces:
+            if s in rep.record_counts:
+                out.append(f"| {s} | {rep.record_counts[s]} |")
+        out.append("")
 
     # Self-confidence: unparsed counts.
     out.append("## Parser confidence (unparsed declarations)\n")

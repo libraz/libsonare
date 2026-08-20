@@ -22,6 +22,12 @@ canonical key we line up the C signature against each language surface and emit:
 7. wasm_internal — the WASM binding is inconsistent across its own three files
                 (embind registration -> SonareModule type -> index.ts facade);
                 catches a wiring break the index.ts-only checks cannot see.
+8. record    — a facade's declared RECORD SHAPE diverges from the C struct that
+                is its oracle: a C field the facade never declares, or a field
+                the facade declares that C does not have. This is the second
+                extraction unit (``RecordShape``, not ``FunctionSig``): the six
+                signature checks model argument lists only and are blind to a
+                struct's interior.
 
 A finding may be marked ``informational``: it is reported but does not count
 toward the non-zero exit code (CI gate). Allowlisted findings are suppressed
@@ -37,7 +43,7 @@ import re
 from allowlist import Allowlist
 from core_defaults import CoreConfig
 from extractors.wasm_internal import WasmInternal
-from model import Extraction, FunctionSig
+from model import Extraction, FunctionSig, RecordShape
 from normalize import (
     canonical_core_default,
     canonical_default,
@@ -293,7 +299,9 @@ _ALIAS_COVERAGE = {
 @dataclass
 class Finding:
     category: (
-        str  # coverage | default | core_default | order | input | enum | wasm_internal
+        # coverage | default | core_default | order | input | enum |
+        # wasm_internal | record
+        str
     )
     key: str
     surface: str  # surface the finding is attributed to (or 'cross')
@@ -313,6 +321,9 @@ class Report:
     unparsed_notes: dict[str, list[str]] = field(default_factory=dict)
     surface_only: dict[str, list[str]] = field(default_factory=dict)
     handle_keys: list[str] = field(default_factory=list)
+    # Records extracted per surface (the record unit's vacuity metric: a checker
+    # that reports nothing because it parsed nothing is the failure mode to see).
+    record_counts: dict[str, int] = field(default_factory=dict)
 
     def active(self) -> list[Finding]:
         """Findings that count toward failure (non-allowlisted, non-informational)."""
@@ -560,6 +571,9 @@ def build_report(
     # --- 7. WASM-internal wiring consistency (embind <-> SonareModule <-> facade) ---
     if wasm_internal is not None:
         _wasm_internal_drift(wasm_internal, allow, rep)
+
+    # --- 8. Record-shape drift (facade record vs the C struct that is its oracle) ---
+    _record_drift(extractions, allow, rep, selected)
 
     return rep
 
@@ -1032,3 +1046,196 @@ def _wasm_internal_drift(wi: WasmInternal, allow, rep: Report) -> None:
             str(site),
             informational=True,
         )
+
+
+# ---------------------------------------------------------------------------
+# 8. Record-shape drift (second extraction unit)
+# ---------------------------------------------------------------------------
+
+# Facade surfaces that declare record shapes. The CLI prints values, it does not
+# declare record types, so it has nothing to compare.
+_RECORD_SURFACES = ("python", "node", "wasm")
+
+# Fields a facade record may carry that no C struct declares, because they are
+# the facade's own ergonomic additions rather than mirrored ABI data. Kept as a
+# named set rather than allowlist entries: they are a property of the surface
+# convention, not of any one record.
+_FACADE_ONLY_FIELDS = {
+    # JS/TS request-object plumbing: a request record folds the call's control
+    # hooks and the validation opt-out in alongside the mirrored config fields.
+    "on_progress",
+    "cancel",
+    "validate",
+    "signal",
+    "options",
+}
+
+
+# Records that merely SHARE A NAME with a C struct and are not a mirror of it.
+# This is the record unit's analogue of ``_ALIAS_COVERAGE``: a statement about
+# what matches what, not an exemption from drift. It belongs here rather than in
+# ``allowlist.toml`` because the fact being recorded is "these two types are
+# unrelated and collide by coincidence" — allowlisting it would instead assert
+# "this record legitimately differs from its C counterpart", which is false: it
+# has no C counterpart.
+#
+# Keyed by ``(surface, canonical key, surface-native type name)``. The type name
+# is part of the key deliberately: if the facade renames the colliding type, the
+# entry stops applying and the record is compared again, rather than silently
+# covering whatever takes the name next.
+_NOT_A_C_MIRROR = {
+    # The offline mastering dynamics processors return an audio envelope
+    # (samples + reported latency). The analysis-side SonareDynamicsResult is a
+    # loudness/crest measurement block. Same name, unrelated concepts; Node is
+    # unaffected because it spells its mastering result differently.
+    ("wasm", "dynamics_result", "DynamicsResult"): (
+        "offline mastering dynamics output envelope; unrelated to the "
+        "analysis-side SonareDynamicsResult measurement block"
+    ),
+}
+
+
+def _index_records(ex: Extraction | None) -> dict[str, RecordShape]:
+    """Canonical record key -> shape, first declaration wins.
+
+    A shape listed in :data:`_NOT_A_C_MIRROR` is skipped rather than indexed, so
+    a genuine mirror declared elsewhere under the same canonical key can still
+    take the slot instead of being shadowed by the collision.
+    """
+    out: dict[str, RecordShape] = {}
+    for r in ex.records if ex else []:
+        if (r.surface, r.key, r.raw_name) in _NOT_A_C_MIRROR:
+            continue
+        out.setdefault(r.key, r)
+    return out
+
+
+def _record_drift(extractions, allow, rep: Report, selected) -> None:
+    """Compare each facade's declared record shape against its C struct oracle.
+
+    Anchored on the C ABI exactly like the signature checks: for every public
+    ``typedef struct { ... } SonareXxx;`` the C field list is the reference, and
+    a facade that declares the same record must declare the same fields. Naming
+    convention is not drift — every field name is canonicalized to snake_case
+    first (``rt60Bands`` and ``rt60_bands`` are one field), and structural
+    members with no facade counterpart by design (padding, the length companion
+    of a pointer array) are stripped from the C side.
+
+    Three outcomes:
+
+    * ACTIVE -- a C field the facade's record omits (the drift this unit exists
+      for: a struct grown on three surfaces and forgotten on the fourth).
+    * ACTIVE -- a field the facade's record declares that C does not have, once
+      the facade-only ergonomic names are excluded.
+    * INFORMATIONAL -- the facade declares no record for this C struct at all,
+      but a PEER facade does. Uniform absence is not reported: a C struct no
+      facade exposes is a core-exposure question for an audit, not drift.
+    """
+    indexed = {
+        s: _index_records(extractions.get(s))
+        for s in ("c", *_RECORD_SURFACES)
+        if s in extractions
+    }
+    for s in ("c", *_RECORD_SURFACES):
+        if s in extractions:
+            rep.record_counts[s] = len(extractions[s].records)
+
+    c_records = indexed.get("c", {})
+    facades = [s for s in _RECORD_SURFACES if s in selected and s in indexed]
+
+    for key in sorted(c_records):
+        c_rec = c_records[key]
+        c_fields = c_rec.core_field_names()
+        if not c_fields:
+            continue
+        present = [s for s in facades if key in indexed[s]]
+        for s in facades:
+            if allow.record_ok(key, s):
+                rep.findings.append(Finding("record", key, s, "", allowlisted=True))
+                continue
+            shape = indexed[s].get(key)
+            if shape is None:
+                if not present:
+                    continue  # uniform absence reads as agreement, not drift
+                rep.findings.append(
+                    Finding(
+                        category="record",
+                        key=key,
+                        surface=s,
+                        message=(
+                            f"C record '{c_rec.raw_name}' is declared by "
+                            f"{', '.join(present)} but not by {s}"
+                        ),
+                        location=f"{c_rec.file}:{c_rec.line}",
+                        detail={"declared_by": present},
+                        informational=True,
+                    )
+                )
+                continue
+            declared = {f.name for f in shape.fields}
+            c_names = {x.name for x in c_rec.fields}
+            missing: list[str] = []
+            extra: list[str] = []
+            # Suppressed names are collected rather than dropped, so the
+            # allowlisted total stays auditable per record instead of vanishing
+            # before a Finding is ever built.
+            suppressed: list[str] = []
+            for n in c_fields:
+                if n in declared:
+                    continue
+                (suppressed if allow.record_field_ok(key, n) else missing).append(n)
+            extra_allowed = allow.record_extra_ok(key, s)
+            for f in shape.core_fields():
+                if f.name in c_names or f.name in _FACADE_ONLY_FIELDS:
+                    continue
+                if extra_allowed or allow.record_field_ok(key, f.name):
+                    suppressed.append(f.name)
+                else:
+                    extra.append(f.name)
+            if suppressed:
+                rep.findings.append(
+                    Finding(
+                        category="record",
+                        key=key,
+                        surface=s,
+                        message=(
+                            f"record '{shape.raw_name}': {len(suppressed)} "
+                            f"allowlisted field divergence(s): {suppressed}"
+                        ),
+                        detail={"suppressed": suppressed},
+                        location=f"{shape.file}:{shape.line}",
+                        allowlisted=True,
+                    )
+                )
+            if missing:
+                rep.findings.append(
+                    Finding(
+                        category="record",
+                        key=key,
+                        surface=s,
+                        message=(
+                            f"record '{shape.raw_name}' is missing "
+                            f"{len(missing)} C field(s) of '{c_rec.raw_name}': "
+                            f"{missing}"
+                        ),
+                        detail={"missing": missing, "c_fields": c_fields},
+                        location=f"{shape.file}:{shape.line} "
+                        f"(C {c_rec.file}:{c_rec.line})",
+                    )
+                )
+            if extra:
+                rep.findings.append(
+                    Finding(
+                        category="record",
+                        key=key,
+                        surface=s,
+                        message=(
+                            f"record '{shape.raw_name}' declares "
+                            f"{len(extra)} field(s) absent from C "
+                            f"'{c_rec.raw_name}': {extra}"
+                        ),
+                        detail={"extra": extra, "c_fields": c_fields},
+                        location=f"{shape.file}:{shape.line} "
+                        f"(C {c_rec.file}:{c_rec.line})",
+                    )
+                )
