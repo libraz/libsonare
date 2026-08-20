@@ -49,9 +49,51 @@ jobs:
         with:
           node-version: 22
           cache: yarn
-          cache-dependency-path: bindings/wasm/yarn.lock
+          cache-dependency-path: |
+            bindings/wasm/yarn.lock
+            bindings/node/yarn.lock
       - run: yarn install --immutable
       - run: yarn lint
+      - name: Lint and type-check the Node binding
+        # Source-only, so neither check needs the native addon built:
+        # tsconfig.test.json excludes dist/ and build/, and the tests import
+        # from ../src rather than the package entry point.
+        working-directory: bindings/node
+        run: |
+          yarn install --immutable
+          yarn lint
+          yarn test:types
+      - name: Lint the Python binding
+        # Pinned to the resolved version in requirements-dev.lock: an unpinned
+        # install lets a new ruff release fail an unrelated pull request.
+        # Invoked as a module so the check does not depend on pip's script
+        # directory being on PATH.
+        working-directory: .
+        run: |
+          python3 -m pip install --disable-pip-version-check ruff==0.15.14
+          python3 -m ruff check bindings/python/src bindings/python/tests
+      - name: Drift gates
+        # The mechanical cross-surface gates. All are stdlib-only and read-only.
+        # `gen_abi_layout.py --check` is the only one needing a compiler, and it
+        # builds a small probe from the public C headers rather than the
+        # project, so this job stays build-free. Invoked directly rather than
+        # through `make ci-local`, whose layout target wraps the same script in
+        # rye -- which the runner does not have and the script does not need.
+        #
+        # The layout check is the load-bearing one: it compares every ctypes
+        # Structure against sizeof/alignof/offsetof taken from the C headers,
+        # and a desync there segfaults the Python binding rather than failing a
+        # test.
+        working-directory: .
+        run: |
+          python3 tools/abi/check_abi_versions.py
+          python3 tools/generate_processor_types.py --check
+          python3 tools/abi/gen_abi_layout.py --check
+          python3 tools/conformance/check_public_contracts.py
+          python3 tools/api/check_request_object_coverage.py
+          python3 tools/conformance/check_cli_contract.py --schema
+          python3 -m unittest tests/conformance/test_cli_contract.py
+          python3 tools/parity/check_parity.py
 
   build-and-test:
     name: Native C++ (${{ matrix.os }})
@@ -183,7 +225,8 @@ jobs:
           cmake -B build \
             -DCMAKE_BUILD_TYPE=Debug \
             -DBUILD_TESTING=ON \
-            -DENABLE_COVERAGE=ON
+            -DENABLE_COVERAGE=ON \
+            -DSONARE_WITH_FFMPEG=OFF
 
       - name: Build
         # Capped at 2 jobs: coverage instrumentation makes the Debug test TUs
@@ -225,6 +268,15 @@ jobs:
             -DBUILD_CLI=OFF \
             -DBUILD_SHARED=ON
           cmake --build build-shared --parallel --target sonare_shared
+      - name: Check capability catalog
+        # develop-ci runs this through `make capability-catalog-check`, whose
+        # build-shared prerequisite would retarget build/ to Release and discard
+        # the coverage tree this job depends on. The underlying script takes the
+        # library path directly, so point it at the shared build above and add
+        # no build.
+        run: |
+          python3 tools/generate_capability_catalog.py \
+            --library build-shared/lib/libsonare.so --check
       - name: Type-check Python stubs
         working-directory: bindings/python
         run: |
@@ -250,6 +302,23 @@ jobs:
             exit 1
           fi
           SONARE_LIB_PATH="$libpath" python ../../tests/fixtures/realtime_voice_changer_quality_gate.py
+
+      - name: Python binding tests
+        # The wheel is a shipped artifact and its suite otherwise runs only in
+        # publish.yml, which is after the decision to release. Reuses the shared
+        # library and the editable install from the two steps above, so this
+        # adds no build.
+        env:
+          SONARE_LIB_DIR: ${{ github.workspace }}/build-shared/lib
+        working-directory: bindings/python
+        run: |
+          libpath="$(ls "$SONARE_LIB_DIR"/libsonare.so "$SONARE_LIB_DIR"/libsonare.dylib 2>/dev/null | head -n 1)"
+          if [ -z "$libpath" ]; then
+            echo "No shared sonare library found under $SONARE_LIB_DIR" >&2
+            exit 1
+          fi
+          python -m pip install pytest
+          SONARE_LIB_PATH="$libpath" python -m pytest tests/ -q
 
       - name: Type-check Node preset literals
         working-directory: bindings/node

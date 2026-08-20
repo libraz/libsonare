@@ -53,9 +53,51 @@ jobs:
         with:
           node-version: 22
           cache: yarn
-          cache-dependency-path: bindings/wasm/yarn.lock
+          cache-dependency-path: |
+            bindings/wasm/yarn.lock
+            bindings/node/yarn.lock
       - run: yarn install --immutable
       - run: yarn lint
+      - name: Lint and type-check the Node binding
+        # Source-only, so neither check needs the native addon built:
+        # tsconfig.test.json excludes dist/ and build/, and the tests import
+        # from ../src rather than the package entry point.
+        working-directory: bindings/node
+        run: |
+          yarn install --immutable
+          yarn lint
+          yarn test:types
+      - name: Lint the Python binding
+        # Pinned to the resolved version in requirements-dev.lock: an unpinned
+        # install lets a new ruff release fail an unrelated pull request.
+        # Invoked as a module so the check does not depend on pip's script
+        # directory being on PATH.
+        working-directory: .
+        run: |
+          python3 -m pip install --disable-pip-version-check ruff==0.15.14
+          python3 -m ruff check bindings/python/src bindings/python/tests
+      - name: Drift gates
+        # The mechanical cross-surface gates. All are stdlib-only and read-only.
+        # `gen_abi_layout.py --check` is the only one needing a compiler, and it
+        # builds a small probe from the public C headers rather than the
+        # project, so this job stays build-free. Invoked directly rather than
+        # through `make ci-local`, whose layout target wraps the same script in
+        # rye -- which the runner does not have and the script does not need.
+        #
+        # The layout check is the load-bearing one: it compares every ctypes
+        # Structure against sizeof/alignof/offsetof taken from the C headers,
+        # and a desync there segfaults the Python binding rather than failing a
+        # test.
+        working-directory: .
+        run: |
+          python3 tools/abi/check_abi_versions.py
+          python3 tools/generate_processor_types.py --check
+          python3 tools/abi/gen_abi_layout.py --check
+          python3 tools/conformance/check_public_contracts.py
+          python3 tools/api/check_request_object_coverage.py
+          python3 tools/conformance/check_cli_contract.py --schema
+          python3 -m unittest tests/conformance/test_cli_contract.py
+          python3 tools/parity/check_parity.py
 
   build-and-test:
     name: Native C++ (ubuntu-latest)
@@ -157,3 +199,7 @@ jobs:
           auditwheel show dist/*.whl
           /opt/python/cp313-cp313/bin/python -m pip install dist/*.whl
           /opt/python/cp313-cp313/bin/python -c "import libsonare; libsonare.version()"
+          # The wheel is a shipped artifact, so run its suite against the
+          # repaired wheel here rather than for the first time at publish time.
+          # pytest is installed above; `-m "not slow"` comes from pyproject.
+          /opt/python/cp313-cp313/bin/python -m pytest tests/ -x -q
