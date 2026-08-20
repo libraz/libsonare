@@ -7,9 +7,12 @@
 #include "feature/mel_spectrogram.h"
 #include "feature/onset.h"
 #include "feature/spectral.h"
+#include "util/constants.h"
 #include "util/exception.h"
 
 namespace sonare {
+
+using constants::kEpsilon;
 
 namespace {
 
@@ -17,9 +20,14 @@ namespace {
 /// @details Centroids at or above this frequency are perceived as maximally bright;
 ///          ~8 kHz approximates the upper edge of musically relevant brightness.
 constexpr float kBrightnessCentroidRefHz = 8000.0f;
-/// @brief Reference spectral flux mapped to maximum roughness (1.0).
-/// @details Frame-to-frame spectral flux at or above this value saturates roughness.
-constexpr float kRoughnessFluxRef = 100.0f;
+/// @brief Frame lag used for the spectral flux behind roughness.
+/// @details One hop: roughness tracks the change between adjacent analysis frames.
+constexpr int kRoughnessFluxLag = 1;
+/// @brief Relative spectral flux mapped to maximum roughness (1.0).
+/// @details The relative flux of a steady tone sits near zero while dense inharmonic
+///          or noisy material reaches a few tenths; scaling by this factor spreads
+///          musical material across [0, 1] before the clamp.
+constexpr float kRoughnessFluxScale = 4.0f;
 /// @brief Reference MFCC standard deviation mapped to maximum complexity (1.0).
 /// @details The RMS spread of MFCC variances at or above this value saturates complexity.
 constexpr float kComplexityMfccStdRef = 50.0f;
@@ -66,13 +74,16 @@ void TimbreAnalyzer::init_from_features(const Spectrogram& spec, const MelSpectr
   spectral_centroid_ = sonare::spectral_centroid(spec, sr_);
   spectral_flatness_ = sonare::spectral_flatness(spec);
   spectral_rolloff_ = sonare::spectral_rolloff(spec, sr_, 0.85f);
-  spectral_flux_ = sonare::spectral_flux(spec);
+  relative_flux_ = sonare::spectral_flux(spec, kRoughnessFluxLag);
 
   // Precompute the per-frame low-frequency energy ratio here, where the full
   // magnitude spectrogram is in scope, so warmth can be derived from actual
   // low-band energy rather than a linear inverse of brightness. The ratio is the
   // fraction of spectral power below kWarmthCutoffHz for each frame.
+  // The same pass accumulates each frame's L1 magnitude norm, which turns the raw
+  // flux into a scale-free ratio below.
   low_band_ratio_.assign(static_cast<size_t>(n_frames_), 0.0f);
+  std::vector<float> frame_l1(static_cast<size_t>(n_frames_), 0.0f);
   {
     const std::vector<float>& mag = spec.magnitude();
     const int n_bins = spec.n_bins();
@@ -87,16 +98,37 @@ void TimbreAnalyzer::init_from_features(const Spectrogram& spec, const MelSpectr
     for (int f = 0; f < n_frames_; ++f) {
       double low = 0.0;
       double total = 0.0;
+      double l1 = 0.0;
       for (int b = 0; b < n_bins; ++b) {
         const float m =
             mag[static_cast<size_t>(b) * static_cast<size_t>(n_frames_) + static_cast<size_t>(f)];
         const double power = static_cast<double>(m) * static_cast<double>(m);
         total += power;
+        l1 += m;
         if (b < cutoff_bin) low += power;
       }
       low_band_ratio_[static_cast<size_t>(f)] =
           total > 0.0 ? static_cast<float>(low / total) : 0.0f;
+      frame_l1[static_cast<size_t>(f)] = static_cast<float>(l1);
     }
+  }
+
+  // Turn the raw flux into a scale-free ratio: the L1 magnitude change between two
+  // frames divided by the combined L1 magnitude of those same two frames. Both
+  // sides carry the same amplitude and bin-count factors, so they cancel: the
+  // ratio is unchanged by input gain and by the window-length and bin-count scaling
+  // that follows n_fft, and the triangle inequality keeps it inside [0, 1]. What it
+  // measures is the fraction of the spectrum that moved between the two frames.
+  const int flux_frames = std::min(static_cast<int>(relative_flux_.size()), n_frames_);
+  for (int f = 0; f < flux_frames; ++f) {
+    float& flux = relative_flux_[static_cast<size_t>(f)];
+    if (f < kRoughnessFluxLag) {
+      flux = 0.0f;
+      continue;
+    }
+    const float denom =
+        frame_l1[static_cast<size_t>(f)] + frame_l1[static_cast<size_t>(f - kRoughnessFluxLag)];
+    flux = denom > kEpsilon ? flux / denom : 0.0f;
   }
 
   // Retain the per-frame MFCC matrix so timbre complexity can be computed over
@@ -194,18 +226,19 @@ Timbre TimbreAnalyzer::compute_window_timbre(int start_frame, int end_frame) con
   float avg_flatness = flatness_sum / count;
   t.density = std::min(1.0f, avg_flatness * 2.0f);
 
-  // Roughness: based on spectral flux
-  // Higher flux = more rapid spectral changes = rougher
+  // Roughness: based on relative spectral flux
+  // Larger relative change between adjacent frames = rougher. The ratio is already
+  // level independent, so a quiet take and a loud one report the same roughness.
   float flux_sum = 0.0f;
   for (int f = start_frame; f < end_frame; ++f) {
-    if (f < static_cast<int>(spectral_flux_.size())) {
-      flux_sum += spectral_flux_[f];
+    if (f < static_cast<int>(relative_flux_.size())) {
+      flux_sum += relative_flux_[f];
     }
   }
   float avg_flux = flux_sum / count;
 
-  // Normalize flux to [0, 1] relative to the roughness reference.
-  t.roughness = std::min(1.0f, avg_flux / kRoughnessFluxRef);
+  // Spread the relative flux over [0, 1] before clamping.
+  t.roughness = std::min(1.0f, avg_flux * kRoughnessFluxScale);
 
   // Complexity: based on per-window MFCC variance.
   // Higher variance across MFCCs within this window = more complex timbre.

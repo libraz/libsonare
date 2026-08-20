@@ -61,6 +61,53 @@ Audio create_warm_sound(int sr = 22050, float duration = 2.0f) {
   return Audio::from_vector(std::move(samples), sr);
 }
 
+/// @brief Creates a rough sound from closely spaced inharmonic partials.
+/// @details Partials a few Hz apart beat against one another; the resulting
+///          amplitude modulation is the classic sensory-dissonance (roughness) cue.
+/// @param gain Uniform linear gain applied to the whole signal
+Audio create_rough_sound(float gain = 1.0f, int sr = 22050, float duration = 2.0f) {
+  int n_samples = static_cast<int>(sr * duration);
+  std::vector<float> samples(n_samples, 0.0f);
+
+  const float partials[] = {440.0f, 446.0f, 452.0f, 458.0f};
+  for (int i = 0; i < n_samples; ++i) {
+    float t = static_cast<float>(i) / static_cast<float>(sr);
+    float s = 0.0f;
+    for (float f : partials) {
+      s += std::sin(2.0f * sonare::constants::kPiD * f * t);
+    }
+    samples[i] = gain * 0.2f * s;
+  }
+
+  return Audio::from_vector(std::move(samples), sr);
+}
+
+/// @brief Creates a short melodic phrase of plucked harmonic notes.
+/// @details Ordinary musical material: four notes per second, five harmonics each,
+///          exponential decay, at a realistic (well below full scale) level.
+/// @param gain Uniform linear gain applied to the whole signal
+Audio create_note_sequence(float gain = 0.1f, int sr = 22050, float duration = 2.0f) {
+  int n_samples = static_cast<int>(sr * duration);
+  std::vector<float> samples(n_samples, 0.0f);
+
+  constexpr int kNoteCount = 8;
+  constexpr double kNotesPerSecond = 4.0;
+  const float notes[kNoteCount] = {220.0f, 277.2f, 329.6f, 440.0f, 329.6f, 277.2f, 220.0f, 164.8f};
+
+  for (int i = 0; i < n_samples; ++i) {
+    const double t = static_cast<double>(i) / static_cast<double>(sr);
+    const int step = static_cast<int>(t * kNotesPerSecond);
+    const double env = std::exp(-6.0 * (t - step / kNotesPerSecond));
+    double s = 0.0;
+    for (int h = 1; h <= 5; ++h) {
+      s += (0.3 / h) * std::sin(2.0 * sonare::constants::kPiD * notes[step % kNoteCount] * h * t);
+    }
+    samples[i] = static_cast<float>(gain * env * s);
+  }
+
+  return Audio::from_vector(std::move(samples), sr);
+}
+
 /// @brief Creates white noise.
 Audio create_noise(int sr = 22050, float duration = 1.0f) {
   int n_samples = static_cast<int>(sr * duration);
@@ -290,6 +337,65 @@ TEST_CASE("TimbreAnalyzer warmth is independent of brightness", "[timbre_analyze
   // Yet the low-band-heavy signal is markedly warmer. The gap exceeds the maximum
   // warmth difference the old affine map could have produced (0.7 * 0.2 = 0.14).
   REQUIRE(split_analyzer.warmth() > mid_analyzer.warmth() + 0.2f);
+}
+
+TEST_CASE("TimbreAnalyzer roughness is invariant to input gain", "[timbre_analyzer]") {
+  // Roughness is a perceptual descriptor, not a level meter: turning the input
+  // down must not make it read as smoother. Every other timbre field is already
+  // scale free (centroid ratio, band-energy ratio, flatness, MFCC spread), so the
+  // whole struct is checked here.
+  Audio loud = create_rough_sound(1.0f);
+  Audio quiet = create_rough_sound(0.1f);
+
+  TimbreAnalyzer loud_analyzer(loud);
+  TimbreAnalyzer quiet_analyzer(quiet);
+
+  const Timbre& a = loud_analyzer.timbre();
+  const Timbre& b = quiet_analyzer.timbre();
+
+  // The measure must not be invariant by being degenerate.
+  REQUIRE(a.roughness > 0.05f);
+  REQUIRE_THAT(b.roughness, WithinAbs(a.roughness, 1e-3f));
+
+  REQUIRE_THAT(b.brightness, WithinAbs(a.brightness, 1e-3f));
+  REQUIRE_THAT(b.warmth, WithinAbs(a.warmth, 1e-3f));
+  REQUIRE_THAT(b.density, WithinAbs(a.density, 1e-3f));
+}
+
+TEST_CASE("TimbreAnalyzer roughness is invariant to FFT size", "[timbre_analyzer]") {
+  // Raw spectral flux is a sum over bins, so doubling n_fft both doubles the bin
+  // count and scales every magnitude with the longer window. Roughness must
+  // describe the material, not the resolution it was analyzed at.
+  Audio audio = create_note_sequence();
+
+  TimbreConfig small_fft;
+  small_fft.n_fft = 2048;
+  TimbreConfig large_fft;
+  large_fft.n_fft = 4096;
+
+  TimbreAnalyzer small_analyzer(audio, small_fft);
+  TimbreAnalyzer large_analyzer(audio, large_fft);
+
+  REQUIRE_THAT(large_analyzer.roughness(), WithinAbs(small_analyzer.roughness(), 0.05f));
+  // Not invariant by being degenerate: the phrase is genuinely mid-scale rough.
+  REQUIRE(small_analyzer.roughness() > 0.3f);
+}
+
+TEST_CASE("TimbreAnalyzer roughness discriminates beating partials", "[timbre_analyzer]") {
+  // A steady pure tone has an essentially static magnitude spectrum; a cluster of
+  // closely spaced partials modulates it frame to frame. The gap between the two
+  // is what roughness has to report.
+  Audio pure = create_sine(440.0f);
+  Audio rough = create_rough_sound();
+
+  TimbreAnalyzer pure_analyzer(pure);
+  TimbreAnalyzer rough_analyzer(rough);
+
+  REQUIRE(rough_analyzer.roughness() > pure_analyzer.roughness() + 0.2f);
+  REQUIRE(pure_analyzer.roughness() >= 0.0f);
+  // Ordinary rough material must leave headroom rather than pinning the clamp,
+  // otherwise the descriptor cannot rank two rough signals against each other.
+  REQUIRE(rough_analyzer.roughness() < 1.0f);
 }
 
 TEST_CASE("TimbreAnalyzer complexity comparison", "[timbre_analyzer]") {
