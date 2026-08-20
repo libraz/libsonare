@@ -65,7 +65,7 @@ export interface MixerRealtimeBuffer {
  *
  * @example
  * ```typescript
- * const mixer = Mixer.fromSceneJson(mixingScenePresetJson('basicStereo'), 48000, 512);
+ * const mixer = Mixer.fromSceneJson(mixingScenePresetJson('vocalReverbSend'), 48000, 512);
  * try {
  *   const out = mixer.processStereo([stripL], [stripR]);
  * } finally {

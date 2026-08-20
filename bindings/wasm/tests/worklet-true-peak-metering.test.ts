@@ -43,18 +43,60 @@ function interSamplePeakSine(length: number, amplitude = 0.5): Float32Array {
   return out;
 }
 
+/**
+ * A scene that routes one strip to master at unity with no processing.
+ *
+ * The shipped presets all shape the signal, which is fine for asserting that a
+ * meter reports an inter-sample peak but not for comparing two producers'
+ * readings of the same audio: any gain in the path shows up as a difference
+ * between the numbers. Metering agreement is a property of the measurement, so
+ * it has to be observed on a path that changes nothing.
+ */
+const UNITY_SCENE_JSON = JSON.stringify({
+  version: 1,
+  vcaGroups: [],
+  buses: [{ id: 'master', inserts: [], role: 'master' }],
+  connections: [{ destination: 'master', source: 'a' }],
+  strips: [
+    {
+      id: 'a',
+      faderDb: 0,
+      inputTrimDb: 0,
+      pan: 0,
+      panLaw: 0,
+      panMode: 0,
+      width: 1,
+      channelDelaySamples: 0,
+      dualPanLeft: -1,
+      dualPanRight: 1,
+      muted: false,
+      polarityInvertLeft: false,
+      polarityInvertRight: false,
+      sends: [],
+      inserts: [],
+      soloSafe: false,
+      soloed: false,
+      vcaOffsetDb: 0,
+    },
+  ],
+});
+
 interface MixerRun {
   meters: SonareWorkletMeterSnapshot[];
   output: Float32Array;
 }
 
 /** Runs `blocks` blocks of `input` through the mixer worklet, capturing both. */
-function runMixerWorklet(input: Float32Array, blocks: number): MixerRun {
+function runMixerWorklet(
+  input: Float32Array,
+  blocks: number,
+  sceneJson: string = mixingScenePresetJson('vocalReverbSend'),
+): MixerRun {
   const meters: SonareWorkletMeterSnapshot[] = [];
   const output = new Float32Array(blocks * BLOCK);
   const processor = new SonareWorkletProcessor(
     {
-      sceneJson: mixingScenePresetJson('vocalReverbSend'),
+      sceneJson,
       sampleRate: SR,
       blockSize: BLOCK,
       meterIntervalFrames: BLOCK,
@@ -161,6 +203,42 @@ describe('mixer worklet true-peak metering', () => {
       ]) {
         expect(value).toBe(FLOOR_DB);
       }
+    } finally {
+      engine.destroy();
+    }
+  });
+
+  it('reads the same inter-sample peak as the engine on the same signal', () => {
+    // `truePeakDbL/R` names one quantity, so the two producers that publish it
+    // have to be reading the same thing. Two ways for that to break are visible
+    // here: a producer measuring the sample peak lands on peakDb, and one with
+    // oversampling disabled lands on the floor. Both are ruled out by comparing
+    // against the other producer *and* against the sample peak.
+    const input = interSamplePeakSine(blocks * BLOCK);
+    const { meters } = runMixerWorklet(input, blocks, UNITY_SCENE_JSON);
+    const mixerMeter = meters.at(-1);
+    if (!mixerMeter) {
+      throw new Error('expected the worklet to publish a meter');
+    }
+
+    const engine = new RealtimeEngine(SR, BLOCK);
+    try {
+      engine.play();
+      for (let block = 0; block < blocks; block++) {
+        const source = input.subarray(block * BLOCK, (block + 1) * BLOCK);
+        engine.process([Float32Array.from(source), Float32Array.from(source)]);
+      }
+      const engineMeter = engine.drainMeterTelemetry(64).at(-1);
+      if (!engineMeter) {
+        throw new Error('expected the engine to publish meter telemetry');
+      }
+
+      expect(mixerMeter.truePeakDbL).toBeCloseTo(engineMeter.truePeakDbL, 3);
+      expect(mixerMeter.truePeakDbR).toBeCloseTo(engineMeter.truePeakDbR, 3);
+      // The construction places the inter-sample peak 3.01 dB above the sample
+      // peak, so agreeing on the sample peak or on the floor cannot satisfy this.
+      expect(engineMeter.truePeakDbL).toBeGreaterThan(engineMeter.peakDbL + 1.5);
+      expect(engineMeter.truePeakDbR).toBeGreaterThan(engineMeter.peakDbR + 1.5);
     } finally {
       engine.destroy();
     }
