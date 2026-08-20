@@ -189,7 +189,7 @@ void RealtimeEngine::apply_due_commands(int64_t boundary_render_frame) noexcept 
 void RealtimeEngine::apply_command(const rt::Command& command) noexcept {
   switch (command.type) {
     case rt::CommandType::kSetParam:
-#if defined(SONARE_WITH_MIXING)
+#if defined(SONARE_WITH_MIXING) || defined(SONARE_WITH_ARRANGEMENT)
       if (parameter_target_reserved(command.target_id)) {
         if (!route_engine_parameter(command.target_id, command.arg.f)) {
           enqueue_error(TelemetryErrorCode::kUnknownTarget, transport_.render_frame(),
@@ -204,7 +204,7 @@ void RealtimeEngine::apply_command(const rt::Command& command) noexcept {
       automation_.set_parameter(command.target_id, command.arg.f);
       break;
     case rt::CommandType::kSetParamSmoothed:
-#if defined(SONARE_WITH_MIXING)
+#if defined(SONARE_WITH_MIXING) || defined(SONARE_WITH_ARRANGEMENT)
       if (parameter_target_reserved(command.target_id)) {
         if (!route_engine_parameter(command.target_id, command.arg.f)) {
           enqueue_error(TelemetryErrorCode::kUnknownTarget, transport_.render_frame(),
