@@ -607,3 +607,40 @@ TEST_CASE("UMP constructors agree with the shared word-count table", "[midi]") {
   REQUIRE(minted[5].message_type() == UmpMessageType::kData64);
   REQUIRE(minted[5].word_count == 2);
 }
+
+TEST_CASE("UMP group derivation returns 0 for the message types that have no group", "[midi]") {
+  // Bits 24..27 are the group for every message type except two, and for those
+  // two they are something else that is routinely non-zero. Deriving a group
+  // from them would mint a group for a message that addresses the endpoint.
+  //
+  // Utility (0x0): the nibble is Reserved. A sender that leaves it dirty, or a
+  // caller that packs a group into a Utility word0 believing it lands somewhere,
+  // must not produce a grouped message.
+  for (uint8_t nibble = 0; nibble <= 0x0F; ++nibble) {
+    const uint32_t utility = (uint32_t{0x0} << 28) | (uint32_t{nibble} << 24) | 0x0000'1234u;
+    INFO("utility word0 nibble 0x" << std::hex << static_cast<int>(nibble));
+    REQUIRE(sonare::midi::ump_group_from_word0(utility) == 0);
+  }
+
+  // UMP Stream (0xF): bits 26..27 are `form` and bits 24..25 the top of the
+  // 10-bit `status`, so the nibble is structural and set on ordinary traffic.
+  // A Start packet (form 0b01) alone reads as group 4 without this rule.
+  const uint32_t stream_start = (uint32_t{0xF} << 28) | (uint32_t{0b01} << 26);
+  REQUIRE(((stream_start >> 24) & 0x0Fu) == 4u);
+  REQUIRE(sonare::midi::ump_group_from_word0(stream_start) == 0);
+  const uint32_t stream_end = (uint32_t{0xF} << 28) | (uint32_t{0b11} << 26);
+  REQUIRE(((stream_end >> 24) & 0x0Fu) == 12u);
+  REQUIRE(sonare::midi::ump_group_from_word0(stream_end) == 0);
+
+  // Every other type still reads its group straight out of the nibble, so the
+  // exemption cannot be mistaken for "the derivation stopped working".
+  for (uint8_t mt = 0; mt <= 0x0F; ++mt) {
+    if (mt == 0x0 || mt == 0x0F) continue;
+    const uint32_t word0 = (uint32_t{mt} << 28) | (uint32_t{9} << 24);
+    INFO("message type 0x" << std::hex << static_cast<int>(mt));
+    REQUIRE(sonare::midi::ump_message_type_has_group(mt));
+    REQUIRE(sonare::midi::ump_group_from_word0(word0) == 9);
+  }
+  REQUIRE_FALSE(sonare::midi::ump_message_type_has_group(0x0));
+  REQUIRE_FALSE(sonare::midi::ump_message_type_has_group(0x0F));
+}

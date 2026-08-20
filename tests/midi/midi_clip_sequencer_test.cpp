@@ -1132,3 +1132,44 @@ TEST_CASE("MidiSequencer keeps a clip event's group when it already agrees with 
   REQUIRE(sink.events[0].event.ump.group == 9);
   REQUIRE(seq.active_note_count() == 0);
 }
+
+TEST_CASE("MidiSequencer gives a groupless clip event group 0, not the packed nibble", "[midi]") {
+  // Two message types carry no group and put something else in word[0] bits
+  // 24..27, so neither the caller-supplied field nor a blind read of the nibble
+  // yields a group for them. A UMP Stream Start packet is the sharp case: its
+  // `form` field alone puts 0b01 in the top two bits of that nibble, so reading
+  // it as a group returns 4 on entirely well-formed input.
+  MidiSequencer seq;
+  CapturingSink sink;
+  seq.prepare(48000.0);
+  seq.set_sink(&sink);
+
+  Ump stream;
+  stream.words[0] = (uint32_t{0xF} << 28) | (uint32_t{0b01} << 26);
+  stream.word_count = 4;
+  stream.group = 7;  // a caller-supplied group that the message cannot carry
+  Ump utility;
+  utility.words[0] = (uint32_t{0x0} << 28) | (uint32_t{6} << 24) | 0x0002'0000u;
+  utility.word_count = 1;
+  utility.group = 7;
+
+  // Reading the nibble is what the derivation would otherwise return, and it is
+  // neither 0 nor the caller's 7 -- so this case separates all three readings.
+  REQUIRE(((stream.words[0] >> 24) & 0x0Fu) == 4u);
+  REQUIRE(((utility.words[0] >> 24) & 0x0Fu) == 6u);
+
+  MidiClipSchedule clip;
+  clip.id = 1;
+  clip.destination_id = 3;
+  clip.events = {{32, stream}, {96, utility}};
+  seq.set_midi_clips({clip});
+  seq.acquire_midi_clips();
+  seq.process_block(0, 256);
+
+  REQUIRE(sink.events.size() == 2);
+  REQUIRE(sink.events[0].event.ump.group == 0);
+  REQUIRE(sink.events[1].event.ump.group == 0);
+  // word0 is untouched: normalization only ever rewrites the cached field.
+  REQUIRE(sink.events[0].event.ump.words[0] == stream.words[0]);
+  REQUIRE(sink.events[1].event.ump.words[0] == utility.words[0]);
+}

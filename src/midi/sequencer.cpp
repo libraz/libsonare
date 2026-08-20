@@ -33,6 +33,12 @@ void MidiSequencer::set_midi_clips(std::vector<MidiClipSchedule> clips) {
   // leaves the process. Doing it here rather than in a binding covers every
   // entry point in one place: the C ABI, the WASM wrappers that call the core
   // directly, and the arrangement compiler all publish through this function.
+  //
+  // This loop is the ENFORCING site for that invariant. The C ABI and the WASM
+  // wrapper each derive the group again at their own boundary, but only so their
+  // local conversion is self-consistent; removing either leaves the tests green,
+  // while removing this one turns them red. Anything relying on the group being
+  // normalized is relying on this loop.
   for (MidiClipSchedule& clip : clips) {
     for (MidiEvent& event : clip.events) {
       event.ump.group = ump_group_from_word0(event.ump.words[0]);

@@ -85,8 +85,14 @@ bool midi_event_from_c(const SonareEngineMidiEvent& src, midi::MidiEvent* out) n
   // src.group carries no information the UMP does not already hold in word0, so
   // it is validated as struct well-formedness (like `reserved`) and not read for
   // its value: the group is taken from word0, the copy that leaves the process.
-  // MidiSequencer::set_midi_clips re-derives it for every publisher, so the
-  // assignment here is only what keeps this conversion self-consistent.
+  //
+  // THIS IS NOT THE ENFORCING SITE. MidiSequencer::set_midi_clips re-derives the
+  // group for every publisher, and that is the line the invariant actually rests
+  // on -- reverting it turns tests red, while reverting the assignment below
+  // leaves every test green because the sequencer normalizes afterwards. The
+  // assignment is kept so this boundary conversion yields a self-consistent Ump
+  // on its own terms, not because anything downstream depends on it. Anyone
+  // changing the sequencer's derivation must not read this line as coverage.
   if (!out || src.group > 15 || src.reserved != 0) return false;
   midi::Ump ump{};
   ump.words[0] = src.word0;

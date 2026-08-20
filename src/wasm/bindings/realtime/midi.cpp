@@ -117,8 +117,15 @@ void RealtimeEngineWasm::setMidiClips(val clips_val) {
       // an event authored only through word0 would otherwise arrive with the two
       // disagreeing. word0 wins, matching the C ABI; the supplied value is still
       // range-checked so a malformed event is rejected rather than masked.
-      // MidiSequencer::set_midi_clips re-derives it for every publisher, so this
-      // assignment only keeps the conversion self-consistent.
+      //
+      // THIS IS NOT THE ENFORCING SITE. MidiSequencer::set_midi_clips re-derives
+      // the group for every publisher, and that is the line the invariant
+      // actually rests on -- reverting it turns tests red, while reverting the
+      // assignment below leaves every test green because the sequencer
+      // normalizes afterwards. The assignment is kept so this boundary
+      // conversion yields a self-consistent Ump on its own terms, not because
+      // anything downstream depends on it. Anyone changing the sequencer's
+      // derivation must not read this line as coverage.
       const uint32_t group = uintProperty(event_val, "group", 0);
       if (group > 15) {
         throw sonare::SonareException(sonare::ErrorCode::InvalidParameter,

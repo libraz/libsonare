@@ -90,6 +90,33 @@ TEST_CASE("MidiRouter filters by group and channel", "[midi]") {
   REQUIRE(out.events[1].ump.note_number() == 63);
 }
 
+TEST_CASE("MidiRouter's group filter exempts the message types that have no group", "[midi]") {
+  // A group-filtered route must still carry endpoint-wide traffic. Utility and
+  // UMP Stream messages have no group field at all, so they always read as
+  // group 0 and a filter on any other group would drop every one of them.
+  MidiRouter router;
+  MidiRouteConfig cfg;
+  cfg.filter_group = 1;
+  cfg.filter_channel = kRouteAnyChannel;
+  router.set_config(cfg);
+
+  MidiEvent jr_timestamp;
+  jr_timestamp.render_frame = 0;
+  jr_timestamp.ump.words[0] = (uint32_t{0x0} << 28) | (uint32_t{0x2} << 20) | 0x1234u;
+  jr_timestamp.ump.word_count = 1;
+  MidiEvent stream_start;
+  stream_start.render_frame = 1;
+  stream_start.ump.words[0] = (uint32_t{0xF} << 28) | (uint32_t{0b01} << 26);
+  stream_start.ump.word_count = 4;
+  MidiEvent wrong_group = note_on_event(2, 0, 3, 62);
+
+  std::vector<MidiEvent> input = {jr_timestamp, stream_start, wrong_group};
+  MidiRouteOutput out;
+  REQUIRE(router.process(input.data(), input.size(), &out) == 2);
+  REQUIRE(out.events[0].ump.words[0] == jr_timestamp.ump.words[0]);
+  REQUIRE(out.events[1].ump.words[0] == stream_start.ump.words[0]);
+}
+
 TEST_CASE("MidiRouter remaps channel", "[midi]") {
   MidiRouter router;
   MidiRouteConfig cfg;

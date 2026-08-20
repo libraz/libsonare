@@ -11,20 +11,23 @@ bool is_channel_voice(const Ump& ump) noexcept {
   return type == UmpMessageType::kMidi1ChannelVoice || type == UmpMessageType::kMidi2ChannelVoice;
 }
 
-// Utility (MT 0x0) and System (MT 0x1) UMP messages are global, group-agnostic
-// transport/clock/realtime messages (JR timestamp, MIDI clock, start/stop,
-// active sensing, ...). They are NOT per-group channel-voice traffic, so the
-// per-group filter must NOT drop them; routing them by group would silently
-// strip clock/transport from any group-filtered route.
-bool is_utility_or_system(const Ump& ump) noexcept {
-  const UmpMessageType type = ump.message_type();
-  return type == UmpMessageType::kUtility || type == UmpMessageType::kSystem;
+// Messages the per-group filter must never drop, for two separate reasons:
+//   - Utility (MT 0x0) and UMP Stream (MT 0xF) have no group field at all (see
+//     ump_message_type_has_group), so they always read as group 0 and a route
+//     filtered on any other group would drop every one of them.
+//   - System (MT 0x1) does carry a group, but its traffic is global
+//     transport/clock/realtime (MIDI clock, start/stop, active sensing, ...)
+//     rather than per-group channel-voice, so filtering it by group would
+//     silently strip clock and transport from a group-filtered route.
+bool is_group_filter_exempt(const Ump& ump) noexcept {
+  const uint8_t type = static_cast<uint8_t>((ump.words[0] >> 28) & 0x0Fu);
+  return !ump_message_type_has_group(type) || type == static_cast<uint8_t>(UmpMessageType::kSystem);
 }
 
 }  // namespace
 
 bool MidiRouter::passes_filter(const Ump& ump) const noexcept {
-  if (config_.filter_group != kRouteAnyGroup && !is_utility_or_system(ump) &&
+  if (config_.filter_group != kRouteAnyGroup && !is_group_filter_exempt(ump) &&
       ump.group != config_.filter_group) {
     return false;
   }

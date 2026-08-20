@@ -111,12 +111,30 @@ constexpr uint8_t ump_word_count_for_word0(uint32_t word0) noexcept {
   return ump_word_count_for_message_type(static_cast<uint8_t>((word0 >> 28) & 0x0Fu));
 }
 
+/// Whether message type @p message_type carries a group in word[0] bits 24..27.
+/// Two types do not, and for them those bits mean something else entirely:
+///   - Utility (0x0): the nibble is Reserved. Utility messages (JR clock, JR
+///     timestamp, delta clockstamps) address the endpoint, not a group.
+///   - UMP Stream (0xF): bits 26..27 are the multi-packet `form` field and bits
+///     24..25 are the top two bits of the 10-bit `status`. Reading them as a
+///     group yields 4, 8 or 12 for any Start / Continue / End packet: a number
+///     assembled out of structural bits that never was a group. UMP Stream
+///     messages are endpoint-wide for the same reason Utility messages are.
+/// Every other type, including the ones still reserved, places a group there.
+constexpr bool ump_message_type_has_group(uint8_t message_type) noexcept {
+  const uint8_t type = message_type & 0x0Fu;
+  return type != 0x0u && type != 0x0Fu;
+}
+
 /// UMP group carried by a message's first word (bits 24..27). This is where a
 /// group physically lives: it is what a device or a file receives, so it is the
-/// authority whenever a caller also supplies the group out of band. Utility
-/// messages (type 0x0) are groupless and hold zero in this field by
-/// specification, which is the value this returns for them.
+/// authority whenever a caller also supplies the group out of band. Groupless
+/// message types (see @ref ump_message_type_has_group) return 0 whatever their
+/// bits 24..27 hold, so a groupless message can never acquire a group by being
+/// read: neither from a Reserved nibble a non-conforming sender left dirty nor
+/// from the UMP Stream form/status bits, which are structural and always set.
 constexpr uint8_t ump_group_from_word0(uint32_t word0) noexcept {
+  if (!ump_message_type_has_group(static_cast<uint8_t>((word0 >> 28) & 0x0Fu))) return 0;
   return static_cast<uint8_t>((word0 >> 24) & 0x0Fu);
 }
 

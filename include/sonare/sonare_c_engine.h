@@ -567,6 +567,13 @@ SonareError sonare_engine_set_track_monitor_mode(SonareRealtimeEngine* engine, u
 ///          @ref sonare_engine_set_midi_clips returns
 ///          @c SONARE_ERROR_INVALID_PARAMETER, exactly as a non-zero `reserved`
 ///          does.
+///
+///          Two message types have no group at all and are read as group 0
+///          whatever `word0` bits 24..27 hold: Utility (type nibble `0x0`),
+///          where that nibble is Reserved, and UMP Stream (`0xF`), where those
+///          bits are the `form` field and the top of the `status` field. Both
+///          address the endpoint rather than a group, so packing a group into
+///          them has no effect.
 typedef struct {
   int64_t render_frame;
   uint32_t word0;
