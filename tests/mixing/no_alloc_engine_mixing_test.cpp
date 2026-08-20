@@ -173,9 +173,13 @@ TEST_CASE("RealtimeEngine active PDC process performs no heap allocation", "[eng
 
 TEST_CASE("MeterTelemetryTap process performs no heap allocation after prepare",
           "[engine][meter_telemetry][rt]") {
+  // The true-peak-off arm of a deliberate pair: the case below guards the same
+  // contract with the reconstruction enabled, which allocates a different set of
+  // buffers in prepare(). Keeping both means neither allocation path is covered
+  // only by accident, so the config here is stated rather than defaulted.
   constexpr int kBlock = 128;
   sonare::engine::MeterTelemetryTap tap;
-  tap.prepare(48000.0, kBlock, 3, 16);
+  tap.prepare(48000.0, kBlock, 3, 16, sonare::mixing::MeterConfig{true, false, 4});
 
   std::array<float, kBlock> left{};
   std::array<float, kBlock> right{};

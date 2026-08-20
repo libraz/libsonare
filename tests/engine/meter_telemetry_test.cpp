@@ -16,13 +16,19 @@ using Catch::Approx;
 constexpr int kSampleRate = 48000;
 constexpr int kBlock = 128;
 
+/// LUFS metering with true peak off. Cases that assert peak, RMS, LUFS or ring
+/// behaviour do not need the reconstruction, and the ones below that drive
+/// process_lightweight() never reach the MeterProcessor at all; both state the
+/// config anyway so enabling true peak stays an explicit act.
+constexpr sonare::mixing::MeterConfig kLufsOnly{true, false, 4};
+
 }  // namespace
 
 TEST_CASE("MeterTelemetryTap publishes peak RMS LUFS and goniometer data",
           "[engine][meter_telemetry]") {
   constexpr int kFrames = kSampleRate * 3;
   sonare::engine::MeterTelemetryTap tap;
-  tap.prepare(kSampleRate, kBlock, 42, 256);
+  tap.prepare(kSampleRate, kBlock, 42, 256, kLufsOnly);
 
   std::vector<float> left(kFrames, 0.5f);
   std::vector<float> right(kFrames, 0.5f);
@@ -65,7 +71,7 @@ TEST_CASE("MeterTelemetryTap drops newest record and counts drops when full",
   // The freshest meter *value* is independently available via the meter seqlock
   // snapshot, so dropping newest telemetry records does not stall live meters.
   sonare::engine::MeterTelemetryTap tap;
-  tap.prepare(48000.0, kBlock, 7, 1);
+  tap.prepare(48000.0, kBlock, 7, 1, kLufsOnly);
 
   std::array<float, kBlock> left{};
   std::array<float, kBlock> right{};
@@ -96,7 +102,7 @@ TEST_CASE("MeterTelemetryTap drops newest record and counts drops when full",
 
 TEST_CASE("MeterTelemetryTap publishes lightweight target records", "[engine][meter_telemetry]") {
   sonare::engine::MeterTelemetryTap tap;
-  tap.prepare(48000.0, kBlock, 0, 8);
+  tap.prepare(48000.0, kBlock, 0, 8, kLufsOnly);
 
   std::array<float, kBlock> left{};
   std::array<float, kBlock> right{};
@@ -115,12 +121,21 @@ TEST_CASE("MeterTelemetryTap publishes lightweight target records", "[engine][me
 
   // Unmeasured fields must be finite (JSON-safe), not NaN, and sit at the dB
   // floor so a host can serialize the record without producing invalid JSON.
+  // Finiteness alone would pass on any value, so the fields this path leaves
+  // unmeasured are pinned to the floor: the true-peak fields in particular are
+  // the ones that silently read -120 for every signal when a tap is prepared
+  // without true-peak measurement, and an isfinite check cannot tell the two
+  // apart. Both planes are checked because the lightweight path writes neither.
   REQUIRE(std::isfinite(record.integrated_lufs));
   REQUIRE(record.integrated_lufs == Approx(sonare::constants::kFloorDb));
   REQUIRE(std::isfinite(record.momentary_lufs));
   REQUIRE(std::isfinite(record.short_term_lufs));
   REQUIRE(std::isfinite(record.max_true_peak_db));
+  REQUIRE(record.max_true_peak_db == Approx(sonare::constants::kFloorDb));
   REQUIRE(std::isfinite(record.true_peak_db[0]));
+  REQUIRE(record.true_peak_db[0] == Approx(sonare::constants::kFloorDb));
+  REQUIRE(std::isfinite(record.true_peak_db[1]));
+  REQUIRE(record.true_peak_db[1] == Approx(sonare::constants::kFloorDb));
   REQUIRE(std::isfinite(record.gain_reduction_db));
   REQUIRE_FALSE(tap.pop(record));
 }
@@ -130,7 +145,7 @@ TEST_CASE("MeterTelemetryTap lightweight mono input floors the unused plane",
   // A mono lane writes only plane 0; the right plane must report silence
   // (the dB floor), never an uninitialized 0 dBFS that pins the meter to clip.
   sonare::engine::MeterTelemetryTap tap;
-  tap.prepare(48000.0, kBlock, 0, 8);
+  tap.prepare(48000.0, kBlock, 0, 8, kLufsOnly);
 
   std::array<float, kBlock> mono{};
   mono.fill(0.5f);
@@ -149,7 +164,7 @@ TEST_CASE("MeterTelemetryTap lightweight seq advances monotonically", "[engine][
   // The lightweight path carries its own counter; consecutive records must have
   // strictly increasing seq so host-side change/drop detection works.
   sonare::engine::MeterTelemetryTap tap;
-  tap.prepare(48000.0, kBlock, 0, 8);
+  tap.prepare(48000.0, kBlock, 0, 8, kLufsOnly);
 
   std::array<float, kBlock> left{};
   std::array<float, kBlock> right{};
@@ -189,7 +204,7 @@ TEST_CASE("MeterTelemetryTap lightweight mono_compat_width matches the full mete
   }
 
   sonare::engine::MeterTelemetryTap tap;
-  tap.prepare(kSampleRate, kFrames, 7, 8);
+  tap.prepare(kSampleRate, kFrames, 7, 8, kLufsOnly);
   float* channels[] = {left.data(), right.data()};
   tap.process_lightweight(channels, 2, kFrames, 0, 7);
   sonare::engine::MeterTelemetryRecord record{};
@@ -216,7 +231,7 @@ TEST_CASE("MeterTelemetryTap merges sub-block peak and RMS across a host block",
   // would report the floor peak and zero RMS) is caught.
   constexpr int kSubBlock = 64;
   sonare::engine::MeterTelemetryTap tap;
-  tap.prepare(kSampleRate, kSubBlock, 99, 8);
+  tap.prepare(kSampleRate, kSubBlock, 99, 8, kLufsOnly);
 
   std::array<float, kSubBlock> loud{};
   loud.fill(1.0f);  // 0 dBFS transient confined to the first sub-block

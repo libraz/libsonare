@@ -30,7 +30,7 @@ class TelemetryCaptureProcessor final : public sonare::rt::ProcessorBase {
 TEST_CASE("MeterTelemetryTap publishes one record per target per host block",
           "[engine][telemetry]") {
   sonare::engine::MeterTelemetryTap tap;
-  tap.prepare(48000.0, 128, 0, 8);
+  tap.prepare(48000.0, 128, 0, 8, sonare::mixing::MeterConfig{true, false, 4});
   std::array<float, 64> first{};
   std::array<float, 64> latest{};
   latest.fill(0.5f);

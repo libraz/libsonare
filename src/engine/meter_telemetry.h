@@ -54,9 +54,13 @@ class MeterTelemetryTap {
   static constexpr size_t kGoniometerCapacity = 512;
   static constexpr size_t kMaxTargetsPerBlock = 64;
 
+  /// @param config Metering configuration for the underlying MeterProcessor.
+  /// Deliberately has no default: a default-constructed MeterConfig leaves
+  /// measure_true_peak false, which once left the master tap publishing the dB
+  /// floor for true_peak_db / max_true_peak_db on every surface. Requiring the
+  /// caller to state it makes that choice visible at the call site.
   void prepare(double sample_rate, int max_block_size, uint32_t target_id,
-               size_t telemetry_capacity = 64,
-               const mixing::MeterConfig& config = mixing::MeterConfig{});
+               size_t telemetry_capacity, const mixing::MeterConfig& config);
   void reset() noexcept;
 
   /// Starts a host render block. Calls to process()/process_lightweight() retain

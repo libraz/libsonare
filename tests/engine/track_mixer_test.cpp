@@ -122,7 +122,7 @@ TEST_CASE("TrackMixerRuntime engine-owned strips omit embedded metering", "[engi
   float* external_channels[] = {external_output.data()};
 
   sonare::engine::MeterTelemetryTap telemetry;
-  telemetry.prepare(48000.0, kFrames, 0, 8);
+  telemetry.prepare(48000.0, kFrames, 0, 8, sonare::mixing::MeterConfig{true, false, 4});
   telemetry.begin_block();
   REQUIRE(
       owned_mixer.mix_source(10, source_channels, owned_channels, 1, kFrames, &telemetry, 1234));
