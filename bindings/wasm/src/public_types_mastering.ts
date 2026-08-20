@@ -1,3 +1,18 @@
+/**
+ * Built-in mastering presets. Each carries an integrated-loudness target and a
+ * true-peak ceiling, which are not equally binding: the ceiling always holds,
+ * while the loudness target is what one normalization pass aims at.
+ *
+ * Reaching a target above the input's loudness costs gain the input's peak
+ * headroom may not have, so the stage drives its true-peak limiter up to
+ * `loudness.maxLimiterGainReductionDb` (12 dB by default) to close the distance
+ * and stops there. Material needing more limiting than that — and material where
+ * the limiter's own gain reduction takes back part of the applied gain, which a
+ * single pass does not re-measure — finishes below target with
+ * `loudnessTargetLimited` set on the result. Peak-normalized input, whose
+ * headroom is ~0 dB, is the common case for both. Read `outputLufs` for what was
+ * achieved rather than assuming the preset's target.
+ */
 export type MasteringPreset =
   | 'pop'
   | 'edm'
@@ -394,6 +409,14 @@ export interface MasteringChainConfig {
     truePeakOversample?: number;
     releaseMs?: number;
     applyGainAtInputRate?: boolean;
+    /**
+     * How deep, in dB, the stage may drive its post-gain true-peak limiter to
+     * reach {@link targetLufs}. Default 12. The static normalization gain may
+     * exceed the peak headroom toward `ceilingDb` by this much; `0` restores a
+     * strict headroom clamp, under which peak-normalized input keeps its input
+     * loudness whatever target is asked for. `ceilingDb` holds at every setting.
+     */
+    maxLimiterGainReductionDb?: number;
   };
   /**
    * Dot-notation spelling of any leaf above, e.g. `'loudness.targetLufs': -20`

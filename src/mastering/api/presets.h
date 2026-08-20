@@ -13,6 +13,21 @@
 namespace sonare::mastering::api {
 
 /// @brief Built-in preset identifiers.
+///
+/// Every preset carries an integrated-loudness target and a true-peak ceiling.
+/// The two are not equally binding: the ceiling always holds, while the loudness
+/// target is what one normalization pass aims at.
+///
+/// Reaching a target above the input's loudness costs gain the input's peak
+/// headroom may not have. The stage therefore drives its true-peak limiter up to
+/// @c loudness.maxLimiterGainReductionDb (12 dB by default) to close the
+/// distance, and stops there. Two cases finish below target and set
+/// @c loudness_target_limited on the result: material that would need more
+/// limiting than that allowance, and material where the limiter's own gain
+/// reduction takes back part of the applied gain, which a single pass does not
+/// re-measure. Peak-normalized input, whose headroom is ~0 dB, is the common
+/// case for both. Read the result's @c output_lufs for what was achieved rather
+/// than assuming the preset's target.
 enum class Preset {
   Pop,
   EDM,

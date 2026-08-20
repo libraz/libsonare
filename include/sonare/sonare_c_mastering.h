@@ -19,6 +19,14 @@ extern "C" {
 // (sonare_mastering_apply_named_processor with "maximizer.loudnessOptimize") or
 // the full MasteringChain API instead.
 //
+// ceiling_db always holds; target_lufs is what one normalization pass aims at.
+// Where the input's peak headroom cannot supply the gain the target needs, the
+// helper drives its true-peak limiter up to 12 dB to close the distance and
+// stops there, so peaky or peak-normalized input can finish below target with
+// loudness_target_limited set on the result. The named-processor and
+// MasteringChain paths behave identically and expose that depth as
+// "maxLimiterGainReductionDb"; this struct always uses the default.
+//
 // The struct is zero-init friendly: a field left 0 uses the library default
 // (target_lufs/ceiling_db are real values, so pass them explicitly). release_ms
 // and apply_gain_at_input_rate are appended so older zero-initialized callers
@@ -27,11 +35,10 @@ typedef struct {
   float target_lufs;
   float ceiling_db;
   int true_peak_oversample;
-  // Post true-peak limiter release in ms. 0 => library default (50 ms). NOTE: the
-  // single-pass helper pre-clamps the static gain to the ceiling, so the limiter
-  // rarely reduces gain and this knob is mostly inert here; for audible release
-  // control use the named-processor / MasteringChain path. Exposed for config
-  // parity with those paths and the C++ LoudnessOptimizeConfig.
+  // Post true-peak limiter release in ms. 0 => library default (50 ms). The
+  // helper drives this limiter whenever peak headroom alone cannot reach
+  // target_lufs, so the release shapes the result on low-headroom input; it is
+  // inert only when the static gain already lands under the ceiling.
   float release_ms;
   // Apply the static loudness gain at the input (pre-oversample) rate. 0 => off
   // (default); nonzero => on. Matches TruePeakLimiterConfig::apply_gain_at_input_rate.

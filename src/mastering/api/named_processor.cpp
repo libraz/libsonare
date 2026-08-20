@@ -165,11 +165,6 @@ std::size_t checked_nonnegative_size(int value, const char* what) {
 // uses channel_index 1, shifting only its noise.
 constexpr uint32_t kDitherChannelSeedSalt = 0x9E3779B9u;
 
-// A LUFS gain within this tolerance of the requested gain counts as reaching
-// the target. Mirrors the comparison in the standalone loudness_optimize()
-// helper so both paths report loudness_target_limited identically.
-constexpr float kLoudnessTargetGainToleranceDb = 1.0e-4f;
-
 void configure_processor(const std::string& name, const ParamMap& params,
                          std::vector<float>& samples, int sample_rate, ProcessorOutcome& outcome,
                          int channel_index = 0) {
@@ -285,6 +280,8 @@ void configure_processor(const std::string& name, const ParamMap& params,
     config.release_ms = f(params, "releaseMs", config.release_ms);
     config.apply_gain_at_input_rate =
         b(params, "applyGainAtInputRate", config.apply_gain_at_input_rate);
+    config.max_limiter_gain_reduction_db =
+        f(params, "maxLimiterGainReductionDb", config.max_limiter_gain_reduction_db);
     auto result = maximizer::loudness_optimize(audio, config);
     samples.assign(result.audio.data(), result.audio.data() + result.audio.size());
     applied_gain_db += result.applied_gain_db;
@@ -534,6 +531,11 @@ StereoResult apply_named_processor_stereo(const std::string& name, const float* 
   result.right.assign(right, right + length);
   result.sample_rate = sample_rate;
   result.input_lufs = detail::stereo_integrated_lufs(result.left, result.right, sample_rate);
+  // Set only by the loudness branch below, which decides `loudness_target_limited`
+  // against the output loudness this function measures once at the end anyway.
+  float loudness_target_lufs = 0.0f;
+  float loudness_requested_gain_db = std::numeric_limits<float>::quiet_NaN();
+  float loudness_applied_gain_db = 0.0f;
   if (try_run_effects_insert_stereo(name, params, result.left, result.right, sample_rate,
                                     result.latency_samples)) {
     // Handled by the streaming-effects insert path below; fall through to the
@@ -607,18 +609,19 @@ StereoResult apply_named_processor_stereo(const std::string& name, const float* 
         i(map, "truePeakOversample", defaults.oversample_factor),
         f(map, "releaseMs", defaults.release_ms),
         b(map, "applyGainAtInputRate", defaults.apply_gain_at_input_rate));
-    // Clamp the static normalization gain to the ceiling headroom (mirrors the
-    // mono loudness_optimize() helper) so the limiter is not overdriven into
-    // distortion.
+    // Bound the static normalization gain to the ceiling headroom plus the depth
+    // the limiter may be driven to (mirrors the mono loudness_optimize() helper).
     const float target_lufs = f(map, "targetLufs", -14.0f);
-    const float gain_db =
-        detail::loudness_gain_db_with_ceiling(result.left, result.right, sample_rate, target_lufs,
-                                              config.ceiling_db, config.oversample_factor);
+    const float max_limiter_gain_reduction_db =
+        f(map, "maxLimiterGainReductionDb", maximizer::kDefaultLoudnessMaxLimiterGainReductionDb);
+    const float gain_db = detail::loudness_gain_db_with_ceiling(
+        result.left, result.right, sample_rate, target_lufs, config.ceiling_db,
+        config.oversample_factor, max_limiter_gain_reduction_db);
     // result.input_lufs is this stage's input: nothing has processed the
     // channels yet on this branch.
-    const float requested_gain_db = target_lufs - result.input_lufs;
-    result.loudness_target_limited = std::isfinite(requested_gain_db) &&
-                                     gain_db < requested_gain_db - kLoudnessTargetGainToleranceDb;
+    loudness_target_lufs = target_lufs;
+    loudness_requested_gain_db = target_lufs - result.input_lufs;
+    loudness_applied_gain_db = gain_db;
     if (gain_db != 0.0f) {
       detail::apply_gain_db(result.left, result.right, gain_db);
       result.applied_gain_db += gain_db;
@@ -721,6 +724,9 @@ StereoResult apply_named_processor_stereo(const std::string& name, const float* 
   }
 
   result.output_lufs = detail::stereo_integrated_lufs(result.left, result.right, sample_rate);
+  result.loudness_target_limited =
+      detail::loudness_target_was_limited(loudness_requested_gain_db, loudness_applied_gain_db,
+                                          loudness_target_lufs, result.output_lufs);
   return result;
 }
 

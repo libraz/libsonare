@@ -448,9 +448,10 @@ inline void assign_field(Enum& dst, double value) {
   X("tiltDb", tilt_db)           \
   X("pivotHz", pivot_hz)
 
-#define SONARE_FIELDS_LOUDNESS(X)               \
-  X("targetLufs", target_lufs)                  \
-  X("ceilingDb", ceiling_db)                    \
-  X("truePeakOversample", true_peak_oversample) \
-  X("releaseMs", release_ms)                    \
-  X("applyGainAtInputRate", apply_gain_at_input_rate)
+#define SONARE_FIELDS_LOUDNESS(X)                     \
+  X("targetLufs", target_lufs)                        \
+  X("ceilingDb", ceiling_db)                          \
+  X("truePeakOversample", true_peak_oversample)       \
+  X("releaseMs", release_ms)                          \
+  X("applyGainAtInputRate", apply_gain_at_input_rate) \
+  X("maxLimiterGainReductionDb", max_limiter_gain_reduction_db)

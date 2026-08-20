@@ -191,6 +191,10 @@ void validate_mastering_chain_config(const MasteringChainConfig& config) {
   SONARE_CHECK_MSG(valid_true_peak_oversample(config.loudness.true_peak_oversample),
                    ErrorCode::InvalidParameter,
                    "loudness.truePeakOversample must be one of 1, 2, 4, 8, or 16");
+  SONARE_CHECK_MSG(std::isfinite(config.loudness.max_limiter_gain_reduction_db) &&
+                       config.loudness.max_limiter_gain_reduction_db >= 0.0f,
+                   ErrorCode::InvalidParameter,
+                   "loudness.maxLimiterGainReductionDb must be finite and >= 0");
   if (config.maximizer.true_peak_limiter.enabled) {
     SONARE_CHECK_MSG(
         valid_true_peak_oversample(config.maximizer.true_peak_limiter.config.oversample_factor),
@@ -373,21 +377,25 @@ std::optional<MonoChainResult> MasteringChain::process_mono_impl(const float* sa
   }
 
   // 16. loudness (mono path: manual gain + TruePeakLimiter pass, mirrors stereo)
+  float loudness_requested_gain_db = 0.0f;
+  float loudness_applied_gain_db = 0.0f;
   if (config_.loudness.enabled) {
-    // Clamp the static normalization gain to the ceiling headroom (mirrors the
-    // mono loudness_optimize() helper) so the limiter is not overdriven.
-    // Measure the post-processor stage input once. `report.before` describes
-    // the original chain input and must not drive this stage's normalization.
+    // Bound the static normalization gain to the ceiling headroom plus the depth
+    // the limiter below may be driven to (mirrors the mono loudness_optimize()
+    // helper). Measure the post-processor stage input once. `report.before`
+    // describes the original chain input and must not drive this stage's
+    // normalization.
     const Audio stage_audio = Audio::from_buffer(data.data(), data.size(), sample_rate);
     const common::LufsAndTruePeak stage_measurement =
         common::measure_lufs_and_true_peak(stage_audio, config_.loudness.true_peak_oversample);
     const float gain_db = detail::loudness_gain_db_with_ceiling(
         stage_measurement.integrated_lufs, config_.loudness.target_lufs,
-        config_.loudness.ceiling_db, stage_measurement.true_peak_dbtp);
+        config_.loudness.ceiling_db, stage_measurement.true_peak_dbtp,
+        config_.loudness.max_limiter_gain_reduction_db);
     const float requested_gain_db =
         config_.loudness.target_lufs - stage_measurement.integrated_lufs;
-    result.loudness_target_limited =
-        std::isfinite(requested_gain_db) && gain_db < requested_gain_db - 1e-4f;
+    loudness_requested_gain_db = requested_gain_db;
+    loudness_applied_gain_db = gain_db;
     if (gain_db != 0.0f) {
       detail::apply_gain_db(data, gain_db);
       applied_gain_db += gain_db;
@@ -407,6 +415,14 @@ std::optional<MonoChainResult> MasteringChain::process_mono_impl(const float* sa
   result.report.after =
       to_report_summary(common::measure_loudness_summary(after_audio, true_peak_oversample));
   result.output_lufs = result.report.after.integrated_lufs;
+  // Loudness is the last stage, so the chain output measured just above is
+  // exactly what it achieved; no second measurement is needed to tell a reached
+  // target from a limited one.
+  if (config_.loudness.enabled) {
+    result.loudness_target_limited =
+        detail::loudness_target_was_limited(loudness_requested_gain_db, loudness_applied_gain_db,
+                                            config_.loudness.target_lufs, result.output_lufs);
+  }
   result.applied_gain_db = applied_gain_db;
   result.output_true_peak_dbtp = result.report.after.true_peak_dbtp;
   result.output_lra = result.report.after.loudness_range;
@@ -598,17 +614,20 @@ std::optional<StereoChainResult> MasteringChain::process_stereo_impl(const float
   }
 
   // 18. loudness (stereo path: manual gain + TruePeakLimiter pass)
+  float loudness_requested_gain_db = 0.0f;
+  float loudness_applied_gain_db = 0.0f;
   if (config_.loudness.enabled) {
-    // One BS.1770 measurement drives both the requested gain and the ceiling-clamped gain.
+    // One BS.1770 measurement drives both the requested gain and the bounded gain.
     // In particular, avoid a second interleaved stereo allocation for the target-limited flag.
     const float current_lufs = detail::stereo_integrated_lufs(left, right, sample_rate);
     const float peak_db = detail::stereo_true_peak_dbtp(left, right, sample_rate,
                                                         config_.loudness.true_peak_oversample);
     const float gain_db = detail::loudness_gain_db_with_ceiling(
-        current_lufs, config_.loudness.target_lufs, config_.loudness.ceiling_db, peak_db);
+        current_lufs, config_.loudness.target_lufs, config_.loudness.ceiling_db, peak_db,
+        config_.loudness.max_limiter_gain_reduction_db);
     const float requested_gain_db = config_.loudness.target_lufs - current_lufs;
-    result.loudness_target_limited =
-        std::isfinite(requested_gain_db) && gain_db < requested_gain_db - 1e-4f;
+    loudness_requested_gain_db = requested_gain_db;
+    loudness_applied_gain_db = gain_db;
     if (gain_db != 0.0f) {
       detail::apply_gain_db(left, right, gain_db);
       applied_gain_db += gain_db;
@@ -630,6 +649,13 @@ std::optional<StereoChainResult> MasteringChain::process_stereo_impl(const float
   result.report.after = to_report_summary(common::measure_loudness_summary_interleaved(
       after_interleaved.data(), left.size(), 2, sample_rate, true_peak_oversample));
   result.output_lufs = result.report.after.integrated_lufs;
+  // Loudness is the last stage; see the mono path for why the chain output is
+  // the achieved value the target-limited flag is decided against.
+  if (config_.loudness.enabled) {
+    result.loudness_target_limited =
+        detail::loudness_target_was_limited(loudness_requested_gain_db, loudness_applied_gain_db,
+                                            config_.loudness.target_lufs, result.output_lufs);
+  }
   result.applied_gain_db = applied_gain_db;
   result.output_true_peak_dbtp = result.report.after.true_peak_dbtp;
   result.output_lra = result.report.after.loudness_range;

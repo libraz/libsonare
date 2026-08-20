@@ -449,12 +449,44 @@ TEST_CASE("LoudnessOptimize moves loudness toward target without exceeding ceili
   REQUIRE(metering::true_peak_db(result.audio, 4) <= -0.99f);
 }
 
-TEST_CASE("LoudnessOptimize caps gain when target would exceed ceiling", "[mastering][maximizer]") {
+TEST_CASE("LoudnessOptimize drives its limiter toward a target the headroom cannot reach",
+          "[mastering][maximizer]") {
+  // A 0 LUFS target at a -6 dB ceiling asks for more gain than the peak headroom
+  // has: the limiter is what closes the distance, so the static gain goes up and
+  // the ceiling is enforced afterwards.
   const Audio input = sine_audio(0.8f);
-  const auto result = loudness_optimize(input, {0.0f, -6.0f, 4});
+  LoudnessOptimizeConfig config;
+  config.target_lufs = 0.0f;
+  config.ceiling_db = -6.0f;
+  const auto result = loudness_optimize(input, config);
+
+  REQUIRE(result.applied_gain_db > 0.0f);
+  // Never more than the requested target - input gain, whatever the allowance.
+  REQUIRE(result.applied_gain_db <= config.target_lufs - result.input_lufs + 1e-3f);
+  REQUIRE(metering::true_peak_db(result.audio, 4) <= -5.99f);
+  // A steady sine cannot be limited into loudness, so the target is missed and
+  // the result has to say so.
+  REQUIRE(result.loudness_target_limited);
+}
+
+TEST_CASE("LoudnessOptimize clamps to the bare headroom at zero limiter allowance",
+          "[mastering][maximizer]") {
+  const Audio input = sine_audio(0.8f);
+  LoudnessOptimizeConfig config;
+  config.target_lufs = 0.0f;
+  config.ceiling_db = -6.0f;
+  config.max_limiter_gain_reduction_db = 0.0f;
+  const auto result = loudness_optimize(input, config);
 
   REQUIRE(result.applied_gain_db < 0.0f);
   REQUIRE(metering::true_peak_db(result.audio, 4) <= -5.99f);
+  REQUIRE(result.loudness_target_limited);
+}
+
+TEST_CASE("LoudnessOptimize rejects a negative limiter allowance", "[mastering][maximizer]") {
+  LoudnessOptimizeConfig config;
+  config.max_limiter_gain_reduction_db = -1.0f;
+  REQUIRE_THROWS(loudness_optimize(sine_audio(0.5f), config));
 }
 
 TEST_CASE("LoudnessOptimize returns time-aligned output with zero reported latency",

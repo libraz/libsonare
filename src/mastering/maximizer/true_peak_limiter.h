@@ -30,6 +30,29 @@ struct TruePeakLimiterConfig {
   bool apply_gain_at_input_rate = false;
 };
 
+/// @brief Default depth (dB) the loudness stages may drive their post-gain
+///        true-peak limiter to in order to reach the requested LUFS target.
+/// @details The static normalization gain may exceed the peak headroom toward
+///          the ceiling by this much; the limiter then brings the signal back
+///          under the ceiling, which it does at every setting. The allowance
+///          only ever permits gain up to `target - current`, so it cannot make a
+///          master louder than the requested target — it decides how peaky an
+///          input the stage will still try to normalize.
+///
+///          12 dB is the point at which the clamp stops being what limits any
+///          built-in preset on peak-normalized program material (crest ~13.5 dB,
+///          the worst case among the built-in test signals): every preset's
+///          applied gain reaches its full `target - current` there, and larger
+///          allowances measure identically. Smaller allowances reach the -14 and
+///          -12 LUFS streaming targets but leave the loud club targets short by
+///          enough that presets several LU apart deliver near-identical masters.
+///
+///          Every loudness path shares this default so the chain, the standalone
+///          helper, and the named processor normalize alike; override per run
+///          through `loudness.maxLimiterGainReductionDb`, where 0 restores a
+///          strict headroom clamp.
+inline constexpr float kDefaultLoudnessMaxLimiterGainReductionDb = 12.0f;
+
 /// @brief Builds the limiter config the loudness-normalization stage runs after
 ///        applying its static normalization gain.
 /// @details The standalone @ref loudness_optimize helper, the per-processor

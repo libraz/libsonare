@@ -5,6 +5,7 @@
 #include <utility>
 #include <vector>
 
+#include "mastering/api/audio_utils.h"
 #include "mastering/api/internal_processor_runner.h"
 #include "mastering/common/loudness_measure.h"
 #include "mastering/maximizer/true_peak_limiter.h"
@@ -21,6 +22,11 @@ LoudnessOptimizeResult loudness_optimize(const Audio& audio, const LoudnessOptim
                           "target_lufs, ceiling_db, and release_ms must be finite and release_ms "
                           "must be positive");
   }
+  if (!std::isfinite(config.max_limiter_gain_reduction_db) ||
+      config.max_limiter_gain_reduction_db < 0.0f) {
+    throw SonareException(ErrorCode::InvalidParameter,
+                          "max_limiter_gain_reduction_db must be finite and >= 0");
+  }
   if (config.true_peak_oversample != 1 && config.true_peak_oversample != 2 &&
       config.true_peak_oversample != 4 && config.true_peak_oversample != 8 &&
       config.true_peak_oversample != 16) {
@@ -34,10 +40,13 @@ LoudnessOptimizeResult loudness_optimize(const Audio& audio, const LoudnessOptim
   float gain_db = requested_gain_db;
   const float peak_db = common::measure_true_peak_dbtp(audio, config.true_peak_oversample);
   if (std::isfinite(peak_db)) {
-    // Headroom toward the ceiling estimated from the true (inter-sample) peak so
-    // the static gain alone rarely exceeds the ceiling; the limiter below catches
-    // the residual inter-sample overshoots that a sample-peak clamp would miss.
-    gain_db = std::min(gain_db, config.ceiling_db - peak_db);
+    // Headroom toward the ceiling estimated from the true (inter-sample) peak,
+    // plus the depth the limiter below is allowed to be driven to. Clamping at
+    // the bare headroom instead would leave a peak-normalized input (headroom
+    // ~0 dB) at its input loudness whatever target was asked for, and give the
+    // limiter nothing to do; the limiter is what makes the target reachable.
+    gain_db = std::min(gain_db, (config.ceiling_db - peak_db) +
+                                    std::max(config.max_limiter_gain_reduction_db, 0.0f));
   }
 
   std::vector<float> samples(audio.data(), audio.data() + audio.size());
@@ -64,7 +73,9 @@ LoudnessOptimizeResult loudness_optimize(const Audio& audio, const LoudnessOptim
   result.output_lufs = common::measure_lufs(result.audio);
   result.applied_gain_db = linear_to_db(gain);
   result.loudness_target_limited =
-      std::isfinite(input_lufs) && gain_db < requested_gain_db - 1.0e-4f;
+      std::isfinite(input_lufs) &&
+      api::detail::loudness_target_was_limited(requested_gain_db, gain_db, config.target_lufs,
+                                               result.output_lufs);
   // The returned audio is time-aligned: the limiter's look-ahead latency was
   // streamed and dropped above, so no downstream compensation is
   // needed. Report zero rather than the internal limiter latency, which would

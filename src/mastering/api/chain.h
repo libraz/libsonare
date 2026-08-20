@@ -167,6 +167,15 @@ struct LoudnessStage {
   int true_peak_oversample = 4;
   float release_ms = 50.0f;
   bool apply_gain_at_input_rate = false;
+  /// @brief How deep (dB, >= 0) the stage may drive its post-gain true-peak
+  ///        limiter to reach @ref target_lufs.
+  /// @details The static normalization gain may exceed the peak headroom toward
+  ///          @ref ceiling_db by this much. 0 restores a strict headroom clamp,
+  ///          under which a peak-normalized input (headroom ~0 dB) keeps its
+  ///          input loudness no matter what target is asked for. The ceiling
+  ///          itself is never exceeded: the limiter enforces it after the gain.
+  float max_limiter_gain_reduction_db =
+      mastering::maximizer::kDefaultLoudnessMaxLimiterGainReductionDb;
 };
 
 /// @brief Full chain configuration.

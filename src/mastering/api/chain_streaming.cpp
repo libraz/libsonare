@@ -97,15 +97,17 @@ StreamingMasteringChain::StreamingMasteringChain(MasteringChainConfig config,
           "StreamingMasteringChain: loudness is enabled but loudness_static_gain_db is not finite; "
           "supply a precomputed static gain (e.g. target_lufs - measured_integrated_lufs)");
     }
-    // Clamp the caller-supplied static gain to the ceiling headroom when an
-    // offline-measured source peak is provided, mirroring the offline chain's
-    // loudness stage (loudness_gain_db_with_ceiling). Without this, a caller
-    // feeding the raw target_lufs - measured_lufs could drive the streaming
-    // loudness limiter harder than the offline render for low-headroom material.
+    // Bound the caller-supplied static gain by the ceiling headroom plus the
+    // configured limiter depth when an offline-measured source peak is provided,
+    // mirroring the offline chain's loudness stage
+    // (loudness_gain_db_with_ceiling). Without this, a caller feeding the raw
+    // target_lufs - measured_lufs could drive the streaming loudness limiter
+    // harder than the offline render for low-headroom material.
     float gain_db = options.loudness_static_gain_db;
     if (std::isfinite(options.loudness_static_gain_peak_db)) {
-      gain_db =
-          std::min(gain_db, config_.loudness.ceiling_db - options.loudness_static_gain_peak_db);
+      const float headroom_db = config_.loudness.ceiling_db - options.loudness_static_gain_peak_db;
+      gain_db = std::min(
+          gain_db, headroom_db + std::max(config_.loudness.max_limiter_gain_reduction_db, 0.0f));
     }
     loudness_static_gain_linear_ = ::sonare::db_to_linear(gain_db);
   }
