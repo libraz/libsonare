@@ -296,6 +296,8 @@ def mastering_repair_denoise_classical(
         RuntimeError: If the C call rejects the request (e.g. non-power-of-two
         ``n_fft`` or non-positive ``hop_length``).
     """
+    # The core requires a power of two here (denoise_classical.cpp), narrower
+    # than the shared even-size rule; check it eagerly so the message names it.
     _require_power_of_two(n_fft, "n_fft")
     if hop_length <= 0:
         raise SonareValueError("hop_length must be positive")
@@ -487,6 +489,8 @@ def mastering_repair_dereverb_classical(
     wpe_strength: float = 0.7,
 ) -> np.ndarray:
     """Offline classical dereverberator (spectral subtraction + optional WPE)."""
+    # The core requires a power of two here (dereverb_classical.cpp), narrower
+    # than the shared even-size rule; check it eagerly so the message names it.
     _require_power_of_two(n_fft, "n_fft")
     if hop_length <= 0 or hop_length > n_fft:
         raise SonareValueError("hop_length must be in (0, n_fft]")

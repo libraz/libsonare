@@ -250,3 +250,47 @@ def test_effects_accept_an_even_n_fft_that_is_not_a_power_of_two() -> None:
     assert len(editing.time_stretch(samples, rate=1.2, n_fft=1500, hop_length=250)) > 0
     assert len(editing.pitch_shift(samples, semitones=3.0, n_fft=1500, hop_length=250)) > 0
     assert len(separation.phase_vocoder(samples, rate=1.2, n_fft=1500, hop_length=250)) > 0
+
+
+@pytest.mark.skipif(not _has_extended_effects(), reason="extended effects symbols unavailable")
+def test_the_n_fft_verdict_matches_the_core_for_both_families() -> None:
+    # The accepted n_fft domain is a cross-surface contract anchored on the core,
+    # and the core draws it in two places, not one. The COLA family takes any
+    # even size because the FFT is mixed-radix; spectral_edit and the two repair
+    # entry points additionally require a power of two, each in its own core
+    # source. A facade must not narrow the first set (that is a divergence) and
+    # must not widen the second (that turns an eager, named rejection into a
+    # generic invalid-parameter return from the core). 1500 is even and not a
+    # power of two, so one size separates the two families.
+    samples = np.sin(np.linspace(0.0, 8.0 * np.pi, 8192, dtype=np.float32)) * 0.25
+
+    # Mixed-radix family: accepted.
+    assert editing.hpss(samples, n_fft=1500, hop_length=250).length == len(samples)
+    assert len(separation.phase_vocoder(samples, rate=1.2, n_fft=1500, hop_length=250)) > 0
+
+    # Power-of-two family: rejected, by the facade rather than by the core, so
+    # the message names the rule.
+    with pytest.raises(ValueError, match="power of two"):
+        editing.spectral_edit(samples, 22050, [], n_fft=1500, hop_length=250)
+    with pytest.raises(ValueError, match="power of two"):
+        mastering.mastering_repair_denoise_classical(samples, 22050, n_fft=1500, hop_length=250)
+    with pytest.raises(ValueError, match="power of two"):
+        mastering.mastering_repair_dereverb_classical(samples, 22050, n_fft=1500, hop_length=250)
+
+    # The same three accept a power of two, so the rejection above is the rule
+    # and not the entry point refusing everything.
+    assert len(editing.spectral_edit(samples, 22050, [], n_fft=1024, hop_length=256)) == len(
+        samples
+    )
+    assert (
+        mastering.mastering_repair_denoise_classical(
+            samples, 22050, n_fft=1024, hop_length=256
+        ).shape
+        == samples.shape
+    )
+    assert (
+        mastering.mastering_repair_dereverb_classical(
+            samples, 22050, n_fft=1024, hop_length=256
+        ).shape
+        == samples.shape
+    )

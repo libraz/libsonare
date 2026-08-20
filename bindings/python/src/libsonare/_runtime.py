@@ -8,6 +8,7 @@ import functools
 import inspect
 from collections.abc import Callable, Iterator, Mapping, Sequence
 from enum import IntEnum
+from numbers import Integral
 from typing import Any, TypeVar, cast
 
 import numpy as np
@@ -422,10 +423,72 @@ def _resolve_enum(
     return names[key]
 
 
+_C_INT_MAX = 2**31 - 1
+
+
 def _require_power_of_two(value: int, name: str) -> None:
     """Validate a positive power-of-two integer with a consistent error."""
     if value <= 0 or (value & (value - 1)) != 0:
         raise SonareValueError(f"{name} must be a positive power of two")
+
+
+def _validate_stft_n_fft(fn_name: str, n_fft: int) -> int:
+    """Validate an STFT size against the domain the core accepts.
+
+    The core FFT is mixed-radix, so any even size transforms exactly; only the
+    real one-sided spectrum's ``n_fft / 2 + 1`` bin layout needs the evenness. A
+    power-of-two restriction here would reject sizes the C ABI and the native
+    CLI accept, which makes the facade diverge rather than merely be stricter.
+
+    This is the single definition of that domain for the Python binding. Every
+    STFT-framed entry point routes through it, so the accepted range cannot
+    drift apart between them.
+
+    Args:
+        fn_name: Caller name, used to prefix the error message.
+        n_fft: Requested STFT size.
+
+    Returns:
+        The validated size as a plain ``int``.
+
+    Raises:
+        SonareValueError: If ``n_fft`` is not an even integer in
+            ``[2, 2**31 - 1]``.
+    """
+    if isinstance(n_fft, bool) or not isinstance(n_fft, Integral):
+        raise SonareValueError(f"{fn_name}: n_fft must be an integer")
+    n_fft = int(n_fft)
+    if n_fft < 2 or n_fft > _C_INT_MAX or n_fft % 2 != 0:
+        raise SonareValueError(f"{fn_name}: n_fft must be an even signed 32-bit integer >= 2")
+    return n_fft
+
+
+def _validate_effect_fft_options(fn_name: str, n_fft: int, hop_length: int) -> tuple[int, int]:
+    """Validate and normalize the FFT options shared by spectral effects.
+
+    Entry points that additionally constrain the hop (the constant-overlap-add
+    rule, for instance) apply that on top of what this returns.
+
+    Args:
+        fn_name: Caller name, used to prefix the error messages.
+        n_fft: Requested STFT size; see :func:`_validate_stft_n_fft`.
+        hop_length: Requested hop size in samples.
+
+    Returns:
+        The validated ``(n_fft, hop_length)`` pair as plain ``int`` values.
+
+    Raises:
+        SonareValueError: If either value falls outside the accepted domain.
+    """
+    n_fft = _validate_stft_n_fft(fn_name, n_fft)
+    if isinstance(hop_length, bool) or not isinstance(hop_length, Integral):
+        raise SonareValueError(f"{fn_name}: hop_length must be an integer")
+    hop_length = int(hop_length)
+    if hop_length <= 0 or hop_length > _C_INT_MAX:
+        raise SonareValueError(
+            f"{fn_name}: hop_length must fit in a positive signed 32-bit integer"
+        )
+    return n_fft, hop_length
 
 
 def _synth_enum_value(value: str | int, names: Mapping[str, int], what: str) -> int:

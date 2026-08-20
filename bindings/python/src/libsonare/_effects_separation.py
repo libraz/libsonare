@@ -10,6 +10,7 @@ import numpy as np
 
 from ._ffi import SonareDecomposeStemsConfig, SonareHpssResult
 from ._runtime import (
+    _C_INT_MAX,
     ErrorCode,
     SonareError,
     SonareValueError,
@@ -22,32 +23,12 @@ from ._runtime import (
     _out_int_array,
     _to_c_float_array,
     _to_c_int_array,
+    _validate_effect_fft_options,
     _validate_samples,
 )
 
 _DEFAULT_EFFECT_N_FFT = 2048
 _DEFAULT_EFFECT_HOP_LENGTH = 512
-_C_INT_MAX = 2**31 - 1
-
-
-def _validate_effect_fft_options(fn_name: str, n_fft: int, hop_length: int) -> tuple[int, int]:
-    if isinstance(n_fft, bool) or not isinstance(n_fft, Integral):
-        raise SonareValueError(f"{fn_name}: n_fft must be an integer")
-    if isinstance(hop_length, bool) or not isinstance(hop_length, Integral):
-        raise SonareValueError(f"{fn_name}: hop_length must be an integer")
-    n_fft = int(n_fft)
-    hop_length = int(hop_length)
-    # The core FFT is mixed-radix, so any even size transforms exactly; only the
-    # real one-sided spectrum's n_fft / 2 + 1 bin layout needs the evenness. A
-    # power-of-two restriction here would reject sizes the C ABI and the native
-    # CLI accept.
-    if n_fft < 2 or n_fft > _C_INT_MAX or n_fft % 2 != 0:
-        raise SonareValueError(f"{fn_name}: n_fft must be an even signed 32-bit integer >= 2")
-    if hop_length <= 0 or hop_length > _C_INT_MAX:
-        raise SonareValueError(
-            f"{fn_name}: hop_length must fit in a positive signed 32-bit integer"
-        )
-    return n_fft, hop_length
 
 
 def _unsupported_effect_symbol(symbol: str) -> SonareError:

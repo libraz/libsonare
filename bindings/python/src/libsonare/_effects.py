@@ -64,13 +64,6 @@ from ._effects_voice import (
     _voice_config_to_json as _voice_config_to_json,
 )
 from ._facade import rebind_facade_exports as _rebind_facade_exports
-from ._runtime import _require_power_of_two
-
-
-def _require_pow2_nfft(n_fft: int) -> None:
-    """Compatibility wrapper for the former module-local validator."""
-    _require_power_of_two(n_fft, "n_fft")
-
 
 _rebind_facade_exports(globals(), "libsonare._effects_")
 del _rebind_facade_exports
