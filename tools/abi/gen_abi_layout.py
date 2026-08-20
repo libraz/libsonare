@@ -41,6 +41,8 @@ from __future__ import annotations
 import argparse
 import ctypes
 import importlib
+import importlib.machinery
+import importlib.util
 import json
 import os
 import shutil
@@ -77,6 +79,25 @@ PROBE_HEADERS = ("sonare/sonare_c.h", "c_api/sonare_c_mastering_helpers.h")
 EXCLUDED_STRUCTS: frozenset[str] = frozenset()
 
 
+def _register_bare_package() -> None:
+    """Register ``libsonare`` as a path-only package so its ``__init__`` never runs.
+
+    Importing ``libsonare._ffi_types_core`` normally executes the package
+    ``__init__``, which re-exports the whole facade and so drags in numpy and the
+    ctypes loader. The mirror modules need neither -- they only ``import
+    ctypes`` -- and this tool is a drift gate that must run on a bare
+    interpreter with no build and no third-party packages. Binding the package
+    name to its directory alone gives the submodules a parent for their relative
+    imports without any of that.
+    """
+    if "libsonare" in sys.modules:
+        return
+    spec = importlib.machinery.ModuleSpec("libsonare", None, is_package=True)
+    module = importlib.util.module_from_spec(spec)
+    module.__path__ = [str(PY_SRC / "libsonare")]
+    sys.modules["libsonare"] = module
+
+
 def collect_structs() -> dict[str, list[str]]:
     """Map each mirrored C struct name to its ordered ctypes field names.
 
@@ -92,6 +113,7 @@ def collect_structs() -> dict[str, list[str]]:
     whose fields diverge, fails the probe compile.
     """
     sys.path.insert(0, str(PY_SRC))
+    _register_bare_package()
     seen: dict[str, type[ctypes.Structure]] = {}
     fields: dict[str, list[str]] = {}
     for mod_name in FFI_MODULES:
