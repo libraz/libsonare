@@ -140,6 +140,10 @@ bool is_midi2_per_note_controller_form(const Ump& ump) noexcept {
          status == static_cast<uint8_t>(UmpStatus::kAssignablePerNoteController);
 }
 
+bool is_poly_pressure_form(const Ump& ump) noexcept {
+  return ump.status_nibble() == static_cast<uint8_t>(UmpStatus::kPolyPressure);
+}
+
 uint8_t note_velocity7(const Ump& ump) noexcept {
   if (ump.message_type() == UmpMessageType::kMidi2ChannelVoice) {
     return scale_velocity_16_to_7(static_cast<uint16_t>(ump.words[1] >> 16u));
@@ -189,6 +193,15 @@ Ump make_note_preserving_velocity(const Ump& src, bool note_on, uint8_t note) no
     return make_midi2_note_off(src.group, src.channel(), note, velocity16);
   }
   return make_note(src, note_on, note, midi1_velocity7(src));
+}
+
+/// Rewrites the note a poly-pressure message addresses, preserving its pressure
+/// payload. The note number lives in word[0] bits 8..14 for both protocols, so
+/// the field is patched in place (same rewrite as the drum-map remap).
+Ump make_poly_pressure_preserving_value(const Ump& src, uint8_t note) noexcept {
+  Ump out = src;
+  out.words[0] = (out.words[0] & ~(0x7Fu << 8u)) | (static_cast<uint32_t>(note & 0x7Fu) << 8u);
+  return out;
 }
 
 Ump make_per_note_controller_preserving_value(const Ump& src, uint8_t note) noexcept {
@@ -263,14 +276,20 @@ void MidiFxChain::process_chunk(const MidiEvent* in, size_t count, size_t input_
     const bool note_on = channel_voice && ev.ump.is_note_on();
     const bool note_off = channel_voice && ev.ump.is_note_off();
     const bool per_note_controller = channel_voice && is_midi2_per_note_controller_form(ev.ump);
+    const bool poly_pressure = channel_voice && is_poly_pressure_form(ev.ump);
 
-    // ---- 1. Transpose (note-on/off and MIDI 2.0 per-note controller note) ----
+    // ---- 1. Transpose (note-on/off, poly pressure, MIDI 2.0 per-note controller) ----
+    // Every note-addressed message shifts by the same amount: aftertouch left on
+    // the source note number would address a note the shifted voice never played.
     if (transpose_.enabled && (note_on || note_off)) {
       const int shifted = clamp_note(static_cast<int>(ev.ump.note_number()) + transpose_.semitones);
       ev.ump = make_note_preserving_velocity(ev.ump, note_on, static_cast<uint8_t>(shifted));
     } else if (transpose_.enabled && per_note_controller) {
       const int shifted = clamp_note(static_cast<int>(ev.ump.note_number()) + transpose_.semitones);
       ev.ump = make_per_note_controller_preserving_value(ev.ump, static_cast<uint8_t>(shifted));
+    } else if (transpose_.enabled && poly_pressure) {
+      const int shifted = clamp_note(static_cast<int>(ev.ump.note_number()) + transpose_.semitones);
+      ev.ump = make_poly_pressure_preserving_value(ev.ump, static_cast<uint8_t>(shifted));
     }
 
     // ---- 2. Velocity curve (note-on only) ----

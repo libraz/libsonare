@@ -71,7 +71,8 @@ struct MidiFxBuffer {
 
 /// Per-stage configuration. All POD so the chain stays trivially copyable.
 
-/// Semitone transpose applied to note-on / note-off / poly-pressure events.
+/// Semitone transpose applied to every note-addressed message: note-on,
+/// note-off, poly pressure, and the MIDI 2.0 per-note controllers.
 struct TransposeConfig {
   bool enabled = false;
   /// Signed semitone shift. Resulting note numbers are clamped to [0, 127];

@@ -66,6 +66,52 @@ TEST_CASE("MidiFx transpose shifts note numbers and clamps", "[midi]") {
   REQUIRE(out.events[0].ump.note_number() == 127);
 }
 
+TEST_CASE("MidiFx transpose shifts poly pressure onto the transposed note", "[midi]") {
+  // Poly pressure addresses a note by number. Shifting the note-on without
+  // shifting its aftertouch would leave the pressure aimed at a note the
+  // shifted voice never played.
+  MidiFxChain fx;
+  fx.prepare();
+  TransposeConfig t;
+  t.enabled = true;
+  t.semitones = -3;
+  fx.set_transpose(t);
+
+  const MidiEvent in[] = {
+      note_on(0, 60, 100),
+      {10, sonare::midi::make_midi1_poly_pressure(0, 0, 60, 88)},
+      {20, sonare::midi::make_midi2_poly_pressure(1, 5, 60, 0x12345678u)},
+  };
+  MidiFxBuffer out;
+  fx.process(in, 3, &out);
+
+  REQUIRE(out.size == 3);
+  REQUIRE(out.events[0].ump.note_number() == 57);
+
+  REQUIRE(out.events[1].ump.status_nibble() ==
+          static_cast<uint8_t>(sonare::midi::UmpStatus::kPolyPressure));
+  REQUIRE(out.events[1].ump.message_type() == sonare::midi::UmpMessageType::kMidi1ChannelVoice);
+  REQUIRE(out.events[1].ump.note_number() == 57);
+  REQUIRE(out.events[1].ump.channel() == 0);
+  REQUIRE(out.events[1].ump.data2_7bit() == 88);
+
+  REQUIRE(out.events[2].ump.status_nibble() ==
+          static_cast<uint8_t>(sonare::midi::UmpStatus::kPolyPressure));
+  REQUIRE(out.events[2].ump.message_type() == sonare::midi::UmpMessageType::kMidi2ChannelVoice);
+  REQUIRE(out.events[2].ump.note_number() == 57);
+  REQUIRE(out.events[2].ump.channel() == 5);
+  REQUIRE(out.events[2].ump.group == 1);
+  REQUIRE(out.events[2].ump.word_count == 2);
+  REQUIRE(out.events[2].ump.words[1] == 0x12345678u);
+
+  // Clamp at the bottom, exactly like a note: 1 - 3 -> 0.
+  const MidiEvent low[] = {{0, sonare::midi::make_midi1_poly_pressure(0, 0, 1, 64)}};
+  fx.process(low, 1, &out);
+  REQUIRE(out.size == 1);
+  REQUIRE(out.events[0].ump.note_number() == 0);
+  REQUIRE(out.events[0].ump.data2_7bit() == 64);
+}
+
 TEST_CASE("MidiFx quantize snaps render frames to grid", "[midi]") {
   MidiFxChain fx;
   fx.prepare();
