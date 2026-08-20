@@ -458,13 +458,20 @@ export function masterAudioAsync(
   if (!(samples instanceof Float32Array) && (!samples || typeof samples !== 'object')) {
     return addon.masterAudioAsync(presetName, samples as unknown as Float32Array, sampleRate, {});
   }
-  const request = masterAudioRequest(samples, sampleRate, presetName, overrides);
-  return addon.masterAudioAsync(
-    request.preset ?? 'pop',
-    request.samples,
-    request.sampleRate ?? 22050,
-    flattenChainConfig(request.overrides ?? {}),
-  );
+  // Normalizing and flattening can throw on a malformed request (e.g. a
+  // non-numeric override leaf); route that through the same rejected-Promise
+  // contract so `fn(...).catch(h)` sees every validation failure.
+  try {
+    const request = masterAudioRequest(samples, sampleRate, presetName, overrides);
+    return addon.masterAudioAsync(
+      request.preset ?? 'pop',
+      request.samples,
+      request.sampleRate ?? 22050,
+      flattenChainConfig(request.overrides ?? {}),
+    );
+  } catch (error) {
+    return Promise.reject(error);
+  }
 }
 
 export function masterAudioStereo(request: MasterAudioStereoRequest): MasteringChainStereoResult;
@@ -545,14 +552,21 @@ export function masterAudioStereoAsync(
       {},
     );
   }
-  const request = masterAudioStereoRequest(left, right, sampleRate, presetName, overrides);
-  return addon.masterAudioStereoAsync(
-    request.preset ?? 'pop',
-    request.left,
-    request.right,
-    request.sampleRate ?? 22050,
-    flattenChainConfig(request.overrides ?? {}),
-  );
+  // Normalizing and flattening can throw on a malformed request (e.g. a
+  // non-numeric override leaf); route that through the same rejected-Promise
+  // contract so `fn(...).catch(h)` sees every validation failure.
+  try {
+    const request = masterAudioStereoRequest(left, right, sampleRate, presetName, overrides);
+    return addon.masterAudioStereoAsync(
+      request.preset ?? 'pop',
+      request.left,
+      request.right,
+      request.sampleRate ?? 22050,
+      flattenChainConfig(request.overrides ?? {}),
+    );
+  } catch (error) {
+    return Promise.reject(error);
+  }
 }
 
 export function masteringProcessorNames(): SoloProcessor[] {

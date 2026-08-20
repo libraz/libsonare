@@ -354,22 +354,71 @@ describe('a throwing progress callback surfaces as a catchable JS exception', ()
 });
 
 describe('async entry points reject instead of throwing synchronously', () => {
-  const invalidAsyncCalls: ReadonlyArray<[string, () => Promise<unknown>]> = [
-    ['masterAudioAsync(undefined)', () => masterAudioAsync(undefined as never)],
-    ['masterAudioAsync({})', () => masterAudioAsync({} as never)],
-    ['masterAudioAsync without samples', () => masterAudioAsync({ sampleRate: 22050 } as never)],
-    ['masterAudioStereoAsync(undefined)', () => masterAudioStereoAsync(undefined as never)],
-    ['masterAudioStereoAsync({})', () => masterAudioStereoAsync({} as never)],
+  const badOverrides = { loudness: { targetLufs: 'x' } } as never;
+  const invalidAsyncCalls: ReadonlyArray<[string, () => Promise<unknown>, RegExp]> = [
+    [
+      'masterAudioAsync(undefined)',
+      () => masterAudioAsync(undefined as never),
+      /Expected \(presetName/,
+    ],
+    ['masterAudioAsync({})', () => masterAudioAsync({} as never), /Expected \(presetName/],
+    [
+      'masterAudioAsync without samples',
+      () => masterAudioAsync({ sampleRate: 22050 } as never),
+      /Expected \(presetName/,
+    ],
+    [
+      'masterAudioStereoAsync(undefined)',
+      () => masterAudioStereoAsync(undefined as never),
+      /Expected \(presetName/,
+    ],
+    [
+      'masterAudioStereoAsync({})',
+      () => masterAudioStereoAsync({} as never),
+      /Expected \(presetName/,
+    ],
+    [
+      'masterAudioAsync with a non-numeric override leaf',
+      () => masterAudioAsync({ samples: new Float32Array(1024), overrides: badOverrides }),
+      /must be a number or boolean/,
+    ],
+    [
+      'masterAudioStereoAsync with a non-numeric override leaf',
+      () =>
+        masterAudioStereoAsync({
+          left: new Float32Array(1024),
+          right: new Float32Array(1024),
+          overrides: badOverrides,
+        }),
+      /must be a number or boolean/,
+    ],
+    [
+      'masterAudioAsync (positional) with a non-numeric override leaf',
+      () => masterAudioAsync(new Float32Array(1024), 22050, 'pop', badOverrides),
+      /must be a number or boolean/,
+    ],
+    [
+      'masterAudioStereoAsync (positional) with a non-numeric override leaf',
+      () =>
+        masterAudioStereoAsync(
+          new Float32Array(1024),
+          new Float32Array(1024),
+          22050,
+          'pop',
+          badOverrides,
+        ),
+      /must be a number or boolean/,
+    ],
   ];
 
-  for (const [label, call] of invalidAsyncCalls) {
+  for (const [label, call, expected] of invalidAsyncCalls) {
     it(`rejects rather than throwing: ${label}`, async () => {
       let promise: Promise<unknown> | undefined;
       expect(() => {
         promise = call();
       }).not.toThrow();
       expect(promise).toBeInstanceOf(Promise);
-      await expect(promise).rejects.toThrow(/Expected \(presetName/);
+      await expect(promise).rejects.toThrow(expected);
     });
   }
 });
