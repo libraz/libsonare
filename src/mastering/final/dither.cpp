@@ -28,6 +28,15 @@ float sanitize_sample(float sample) noexcept {
   return sample;
 }
 
+// Round a dithered sample onto the target-bit code grid. Dither is the noise a
+// quantizer needs to decorrelate its error, so every mode quantizes here: a
+// target_bits of 16 has to leave a 16-bit signal whichever mode produced it.
+// The code clamp also bounds the result to [-1, 1 - lsb] regardless of how far
+// the added noise pushed the value.
+float quantize_to_grid(float value, float lsb, float min_code, float max_code) noexcept {
+  return std::clamp(std::round(value / lsb), min_code, max_code) * lsb;
+}
+
 }  // namespace
 
 Audio dither(const Audio& audio, const DitherConfig& config) {
@@ -50,16 +59,16 @@ Audio dither(const Audio& audio, const DitherConfig& config) {
 
   if (config.type == DitherType::Rpdf) {
     for (auto& sample : samples) {
-      sample = sanitize_sample(sample);
-      sample += dist(rng) * lsb;
+      const float dithered = sanitize_sample(sample) + dist(rng) * lsb;
+      sample = quantize_to_grid(dithered, lsb, min_code, max_code);
     }
     return Audio::from_vector(std::move(samples), audio.sample_rate());
   }
 
   if (config.type == DitherType::Tpdf) {
     for (auto& sample : samples) {
-      sample = sanitize_sample(sample);
-      sample += (dist(rng) + dist(rng)) * lsb;
+      const float dithered = sanitize_sample(sample) + (dist(rng) + dist(rng)) * lsb;
+      sample = quantize_to_grid(dithered, lsb, min_code, max_code);
     }
     return Audio::from_vector(std::move(samples), audio.sample_rate());
   }
@@ -80,7 +89,7 @@ Audio dither(const Audio& audio, const DitherConfig& config) {
     // so the shaper accounts for the clamping as part of the quantization step.
     const float clamped = std::clamp(dithered, -1.0f, 1.0f);
     // Quantize the dithered signal to the target LSB resolution.
-    const float quantized = std::clamp(std::round(clamped / lsb), min_code, max_code) * lsb;
+    const float quantized = quantize_to_grid(clamped, lsb, min_code, max_code);
     const float quant_error = (dithered - quantized) / lsb;
 
     // Shift the error history (newest at index 0).
