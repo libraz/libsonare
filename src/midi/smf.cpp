@@ -617,10 +617,13 @@ bool parse_track(Reader* reader, size_t length, uint16_t ppqn, TrackParseState* 
   return true;
 }
 
-}  // namespace
-
-SmfImportResult import_smf(const uint8_t* data, size_t size,
-                           const resource::MidiImportResourceLimits& limits) {
+// Parses the SMF byte stream into a raw result. Every failure path returns
+// early, keeping whatever complete tracks / meta data were already recovered.
+// It deliberately derives neither has_recovered_content nor the tempo /
+// time-signature defaults: import_smf() does both on its single exit path, so
+// no early return here can skip them.
+SmfImportResult parse_smf(const uint8_t* data, size_t size,
+                          const resource::MidiImportResourceLimits& limits) {
   SmfImportResult result;
   if (data == nullptr || size == 0) {
     result.status = SmfStatus::kInvalidArgument;
@@ -767,12 +770,33 @@ SmfImportResult import_smf(const uint8_t* data, size_t size,
     }
   }
 
+  if (any_track_truncated) {
+    result.status = SmfStatus::kTruncated;
+    result.diagnostic = "one or more SMF tracks were truncated";
+  } else {
+    result.status = SmfStatus::kOk;
+  }
+  return result;
+}
+
+}  // namespace
+
+SmfImportResult import_smf(const uint8_t* data, size_t size,
+                           const resource::MidiImportResourceLimits& limits) {
+  SmfImportResult result = parse_smf(data, size, limits);
+
+  // Derived on the importer's single exit path, before the defaults below are
+  // injected: a truncated track aborts parse_smf() at the failing chunk, and
+  // the complete tracks parsed ahead of it are already in the result. Deciding
+  // this per return site is what previously dropped them.
   result.has_recovered_content = !result.clips.empty() || !result.tempo_segments.empty() ||
                                  !result.time_signatures.empty() || !result.markers.empty() ||
                                  !result.sequence_name.empty();
 
   // Provide sane defaults so the consumer can hand the segment vectors straight
-  // to TempoMap::set_segments without an empty-vector crash.
+  // to TempoMap::set_segments without an empty-vector crash. A recovered
+  // truncated import reaches the same consumers as a clean one, so the defaults
+  // apply to every result rather than only to the clean parse.
   if (result.tempo_segments.empty()) {
     transport::TempoSegment seg;
     seg.start_ppq = 0.0;
@@ -793,13 +817,6 @@ SmfImportResult import_smf(const uint8_t* data, size_t size,
       [](const transport::TimeSignatureSegment& a, const transport::TimeSignatureSegment& b) {
         return a.start_ppq < b.start_ppq;
       });
-
-  if (any_track_truncated) {
-    result.status = SmfStatus::kTruncated;
-    result.diagnostic = "one or more SMF tracks were truncated";
-  } else {
-    result.status = SmfStatus::kOk;
-  }
   return result;
 }
 

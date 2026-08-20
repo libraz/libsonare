@@ -287,16 +287,19 @@ bool ClockParser::parse_byte(uint8_t byte) noexcept {
   if (byte & 0x80u) {
     switch (byte) {
       case kStatusClock:
-        pending_ = Pending::kNone;
+        // A clock tick may arrive between the status and data bytes of a System
+        // Common message, so it must not disturb a half-assembled SPP or MTC:
+        // pending_ is deliberately left alone here.
         ++clock_ticks_;
         return true;
       case kStatusStart:
       case kStatusContinue:
-        pending_ = Pending::kNone;
+        // Every System Real-Time byte is transparent to System Common assembly,
+        // not just the clock tick, so pending_ survives here too. Transport
+        // semantics still apply: Start / Continue re-anchor the tick count.
         clock_ticks_ = 0;
         return true;
       case kStatusStop:
-        pending_ = Pending::kNone;
         return true;
       case kStatusSongPosition:
         pending_ = Pending::kSppLsb;

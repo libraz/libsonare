@@ -21,15 +21,21 @@ using sonare::midi::destination_emits_midi2;
 using sonare::midi::DestinationKind;
 using sonare::midi::DestinationTable;
 using sonare::midi::DrumMapOverride;
+using sonare::midi::gm2_drum_entry;
 using sonare::midi::gm2_drum_name;
+using sonare::midi::gm2_drum_set_entry;
 using sonare::midi::gm2_drum_set_name;
 using sonare::midi::gm2_instrument_name;
+using sonare::midi::Gm2DrumEntry;
+using sonare::midi::Gm2DrumSet;
+using sonare::midi::Gm2DrumSetInfo;
 using sonare::midi::gm_drum_name;
 using sonare::midi::gm_drum_note_for_name;
 using sonare::midi::gm_family_first_program;
 using sonare::midi::gm_family_name;
 using sonare::midi::gm_instrument_name;
 using sonare::midi::gm_program_for_name;
+using sonare::midi::kGm2DrumSets;
 using sonare::midi::make_midi1_note_on;
 using sonare::midi::make_midi2_note_on;
 using sonare::midi::per_note_controller_name;
@@ -142,9 +148,108 @@ TEST_CASE("GM2 percussion sets re-voice notes and fall back to Standard", "[midi
   REQUIRE(gm2_drum_name(8, 42) == gm_drum_name(42));
   // Unknown bank LSB behaves as Standard.
   REQUIRE(gm2_drum_name(99, 38) == gm_drum_name(38));
-  // Out-of-range notes are empty for any set.
-  REQUIRE(gm2_drum_name(16, 34).empty());
-  REQUIRE(gm2_drum_name(16, 82).empty());
+  // Out-of-range notes are empty. Note 88 is assigned only by the Orchestra set.
+  REQUIRE(gm2_drum_name(16, 26).empty());
+  REQUIRE(gm2_drum_name(16, 88).empty());
+}
+
+TEST_CASE("GM2 Standard percussion set extends the GM Level 1 drum map", "[midi]") {
+  // The GM Level 1 range is unchanged...
+  for (int n = 35; n <= 81; ++n) {
+    REQUIRE(gm2_drum_name(0, static_cast<uint8_t>(n)) == gm_drum_name(static_cast<uint8_t>(n)));
+  }
+  // ...and GM2 adds the keys below and above it, which gm_drum_name (a GM
+  // Level 1 lookup) does not carry.
+  REQUIRE(gm2_drum_name(0, 27) == "High Q");
+  REQUIRE(gm2_drum_name(0, 31) == "Sticks");
+  REQUIRE(gm2_drum_name(0, 34) == "Metronome Bell");
+  REQUIRE(gm2_drum_name(0, 82) == "Shaker");
+  REQUIRE(gm2_drum_name(0, 85) == "Castanets");
+  REQUIRE(gm2_drum_name(0, 87) == "Open Surdo");
+  REQUIRE(gm_drum_name(27).empty());
+  REQUIRE(gm_drum_name(87).empty());
+  // Either side of the GM2 range stays empty.
+  REQUIRE(gm2_drum_name(0, 26).empty());
+  REQUIRE(gm2_drum_name(0, 88).empty());
+}
+
+TEST_CASE("every GM2 percussion set names its whole assigned note range", "[midi]") {
+  // Driven by the set roster the library itself publishes, so a set added there
+  // without note data fails here instead of shipping empty.
+  REQUIRE(kGm2DrumSets.size() > 0);
+  for (const Gm2DrumSetInfo& set : kGm2DrumSets) {
+    INFO("percussion set " << set.name << " at bank LSB " << static_cast<int>(set.bank_lsb));
+    REQUIRE_FALSE(set.name.empty());
+    REQUIRE(set.note_low <= set.note_high);
+    REQUIRE(gm2_drum_set_name(set.bank_lsb) == set.name);
+    REQUIRE(gm2_drum_set_entry(set.bank_lsb) == &set);
+
+    int named = 0;
+    int set_specific = 0;
+    for (int n = 0; n < 128; ++n) {
+      const uint8_t note = static_cast<uint8_t>(n);
+      const std::string_view name = gm2_drum_name(set.bank_lsb, note);
+      const Gm2DrumEntry entry = gm2_drum_entry(set.bank_lsb, note);
+      INFO("note " << n);
+      if (note >= set.note_low && note <= set.note_high) {
+        // Every note the set advertises resolves, to its own instrument or to
+        // the Standard set's — never to nothing.
+        REQUIRE_FALSE(name.empty());
+        REQUIRE(entry != Gm2DrumEntry::kUnassigned);
+        ++named;
+        if (entry == Gm2DrumEntry::kSetSpecific) ++set_specific;
+      } else {
+        REQUIRE(name.empty());
+        REQUIRE(entry == Gm2DrumEntry::kUnassigned);
+      }
+    }
+    REQUIRE(named == static_cast<int>(set.note_high) - static_cast<int>(set.note_low) + 1);
+    // A set that only borrows the Standard map is an advertised set with no
+    // content of its own.
+    REQUIRE(set_specific > 0);
+  }
+}
+
+TEST_CASE("GM2 SFX and Orchestra percussion sets carry their own instruments", "[midi]") {
+  const Gm2DrumSetInfo* sfx = gm2_drum_set_entry(static_cast<uint8_t>(Gm2DrumSet::kSfx));
+  REQUIRE(sfx != nullptr);
+  REQUIRE(sfx->name == "SFX");
+  // The SFX set replaces the drum map instead of layering over it, so every
+  // note it assigns is its own and it has no Standard fallback.
+  REQUIRE_FALSE(sfx->inherits_standard);
+  REQUIRE(sfx->note_low == 39);
+  REQUIRE(sfx->note_high == 84);
+  for (int n = sfx->note_low; n <= sfx->note_high; ++n) {
+    INFO("SFX note " << n);
+    REQUIRE(gm2_drum_entry(sfx->bank_lsb, static_cast<uint8_t>(n)) == Gm2DrumEntry::kSetSpecific);
+  }
+  REQUIRE(gm2_drum_name(sfx->bank_lsb, 39) == "High Q");
+  REQUIRE(gm2_drum_name(sfx->bank_lsb, 51) == "Flute Key Click");
+  REQUIRE(gm2_drum_name(sfx->bank_lsb, 63) == "Car Engine");
+  REQUIRE(gm2_drum_name(sfx->bank_lsb, 84) == "Bubble");
+  // A drum key the SFX set does not assign has no sound rather than a kit piece.
+  REQUIRE(gm2_drum_name(sfx->bank_lsb, 35).empty());
+  REQUIRE(gm2_drum_name(sfx->bank_lsb, 87).empty());
+
+  const Gm2DrumSetInfo* orchestra =
+      gm2_drum_set_entry(static_cast<uint8_t>(Gm2DrumSet::kOrchestra));
+  REQUIRE(orchestra != nullptr);
+  REQUIRE(orchestra->name == "Orchestra");
+  // The chromatic timpani run F..f occupies notes 41..53.
+  for (int n = 41; n <= 53; ++n) {
+    INFO("Orchestra note " << n);
+    REQUIRE(gm2_drum_entry(orchestra->bank_lsb, static_cast<uint8_t>(n)) ==
+            Gm2DrumEntry::kSetSpecific);
+    REQUIRE(gm2_drum_name(orchestra->bank_lsb, static_cast<uint8_t>(n)).substr(0, 7) == "Timpani");
+  }
+  REQUIRE(gm2_drum_name(orchestra->bank_lsb, 27) == "Closed Hi-Hat 2");
+  REQUIRE(gm2_drum_name(orchestra->bank_lsb, 36) == "Concert Bass Drum 1");
+  REQUIRE(gm2_drum_name(orchestra->bank_lsb, 39) == "Castanets");
+  REQUIRE(gm2_drum_name(orchestra->bank_lsb, 59) == "Concert Cymbal 1");
+  REQUIRE(gm2_drum_name(orchestra->bank_lsb, 88) == "Applause");
+  // Notes the Orchestra set leaves alone still sound the Standard instrument.
+  REQUIRE(gm2_drum_entry(orchestra->bank_lsb, 60) == Gm2DrumEntry::kStandardShared);
+  REQUIRE(gm2_drum_name(orchestra->bank_lsb, 60) == gm2_drum_name(0, 60));
 }
 
 TEST_CASE("DrumMapOverride remaps drum notes and is the identity when empty", "[midi]") {

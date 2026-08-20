@@ -588,6 +588,109 @@ TEST_CASE("SPP generate and parse round-trip", "[midi]") {
   REQUIRE(parser.position_ppq() == 4.0);
 }
 
+TEST_CASE("a clock tick interleaved in a System Common message is transparent", "[midi]") {
+  // System Real-Time may arrive between the status and data bytes of a System
+  // Common message, so a tick must be counted without disturbing the SPP being
+  // assembled around it.
+  ClockParser parser;
+  parser.reset();
+
+  uint8_t spp[3] = {0, 0, 0};
+  REQUIRE(sonare::midi::encode_spp(16, spp, sizeof(spp)) == 3);
+
+  parser.parse_byte(spp[0]);
+  REQUIRE(parser.parse_byte(sonare::midi::kStatusClock));
+  parser.parse_byte(spp[1]);
+  REQUIRE(parser.parse_byte(sonare::midi::kStatusClock));
+  parser.parse_byte(spp[2]);
+
+  REQUIRE(parser.has_spp());
+  REQUIRE(parser.spp_beats() == 16);
+  // The completed SPP re-anchors the tick count, so the two ticks that arrived
+  // before it are not carried past the anchor.
+  REQUIRE(parser.clock_ticks() == 0);
+
+  // A tick after the anchor still advances the position.
+  REQUIRE(parser.parse_byte(sonare::midi::kStatusClock));
+  REQUIRE(parser.clock_ticks() == 1);
+}
+
+TEST_CASE("a transport command interleaved in an SPP is transparent", "[midi]") {
+  // Start / Continue / Stop are System Real-Time too, so like the clock tick
+  // they may land between the status and data bytes of a System Common message
+  // and must leave the SPP being assembled around them intact.
+  const uint8_t transports[3] = {sonare::midi::kStatusStart, sonare::midi::kStatusContinue,
+                                 sonare::midi::kStatusStop};
+  for (uint8_t transport : transports) {
+    INFO("transport status " << static_cast<int>(transport));
+    ClockParser parser;
+    parser.reset();
+
+    uint8_t spp[3] = {0, 0, 0};
+    REQUIRE(sonare::midi::encode_spp(16, spp, sizeof(spp)) == 3);
+
+    parser.parse_byte(spp[0]);
+    REQUIRE(parser.parse_byte(transport));
+    parser.parse_byte(spp[1]);
+    REQUIRE(parser.parse_byte(transport));
+    parser.parse_byte(spp[2]);
+
+    REQUIRE(parser.has_spp());
+    REQUIRE(parser.spp_beats() == 16);
+    REQUIRE(parser.position_ppq() == 4.0);
+  }
+}
+
+TEST_CASE("a transport command interleaved in an MTC quarter-frame is transparent", "[midi]") {
+  MtcTime t;
+  t.hours = 1;
+  t.minutes = 23;
+  t.seconds = 45;
+  t.frames = 12;
+  t.rate = sonare::midi::MtcFrameRate::kFps25;
+
+  const uint8_t transports[3] = {sonare::midi::kStatusStart, sonare::midi::kStatusContinue,
+                                 sonare::midi::kStatusStop};
+  for (uint8_t transport : transports) {
+    INFO("transport status " << static_cast<int>(transport));
+    ClockParser parser;
+    parser.reset();
+
+    for (int piece = 0; piece < 8; ++piece) {
+      uint8_t bytes[2] = {0, 0};
+      REQUIRE(sonare::midi::encode_mtc_quarter_frame(t, piece, bytes, sizeof(bytes)) == 2);
+      parser.parse_byte(bytes[0]);
+      // Squeeze the real-time byte in between the F1 status and its data nibble.
+      REQUIRE(parser.parse_byte(transport));
+      parser.parse_byte(bytes[1]);
+    }
+    REQUIRE(parser.has_mtc());
+    REQUIRE(parser.mtc_time() == t);
+  }
+}
+
+TEST_CASE("Start and Continue re-anchor the tick count, Stop does not", "[midi]") {
+  ClockParser parser;
+  parser.reset();
+
+  for (int i = 0; i < 5; ++i) {
+    REQUIRE(parser.parse_byte(sonare::midi::kStatusClock));
+  }
+  REQUIRE(parser.clock_ticks() == 5);
+
+  // Stop halts the transport but leaves the accumulated position readable.
+  REQUIRE(parser.parse_byte(sonare::midi::kStatusStop));
+  REQUIRE(parser.clock_ticks() == 5);
+
+  REQUIRE(parser.parse_byte(sonare::midi::kStatusContinue));
+  REQUIRE(parser.clock_ticks() == 0);
+
+  REQUIRE(parser.parse_byte(sonare::midi::kStatusClock));
+  REQUIRE(parser.clock_ticks() == 1);
+  REQUIRE(parser.parse_byte(sonare::midi::kStatusStart));
+  REQUIRE(parser.clock_ticks() == 0);
+}
+
 TEST_CASE("MTC quarter-frame generate and parse round-trip", "[midi]") {
   MtcTime t;
   t.hours = 1;

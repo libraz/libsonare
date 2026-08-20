@@ -306,7 +306,10 @@ struct Midi1MessageList {
 /// timestamp. MIDI 2.0-only controller forms produce count == 0.
 Midi1MessageList midi2_to_midi1_messages(const Ump& ump) noexcept;
 
-/// 7-bit -> 16-bit velocity up-scale (MIDI-Association min/center/max scaling).
+/// 7-bit -> 16-bit velocity up-scale (bit-replication scaling: repeats the
+/// source bits to fill the destination width). Distinct from pitch bend's
+/// true min-center-max scaling (see scale_bend_14_to_32), which velocity does
+/// not need since it has no "unbent" center value to preserve.
 uint16_t scale_velocity_7_to_16(uint8_t velocity7) noexcept;
 /// 16-bit -> 7-bit velocity down-scale (top 7 bits). LOSSY.
 uint8_t scale_velocity_16_to_7(uint16_t velocity16) noexcept;

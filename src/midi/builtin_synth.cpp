@@ -3,6 +3,7 @@
 #include <algorithm>
 #include <cmath>
 
+#include "midi/synth/sf2_voice.h"
 #include "midi/ump.h"
 #include "util/constants.h"
 
@@ -82,7 +83,9 @@ int64_t synth_tail_samples(const BuiltinSynthConfig& cfg, double sample_rate) no
 }
 
 BuiltinSynth::BuiltinSynth(const BuiltinSynthConfig& config) noexcept
-    : config_(clamp_synth_config(config)) {}
+    : config_(clamp_synth_config(config)) {
+  for (uint8_t ch = 0; ch < 16; ++ch) refresh_channel_controls(ch);
+}
 
 void BuiltinSynth::prepare(double sample_rate, int /*max_block_size*/) {
   sample_rate_ = sample_rate > 0.0 ? sample_rate : 48000.0;
@@ -100,7 +103,20 @@ void BuiltinSynth::reset() {
   sustain_down_ = {};
   channel_bend_semitones_ = {};
   channel_pressure_ = {};
+  channel_controls_ = {};
+  for (uint8_t ch = 0; ch < 16; ++ch) refresh_channel_controls(ch);
   next_age_ = 1;
+}
+
+void BuiltinSynth::refresh_channel_controls(uint8_t channel) noexcept {
+  ChannelControls& c = channel_controls_[channel & 0x0Fu];
+  // Volume and expression multiply through the same concave (v/127)^2 curve the
+  // SF2 / native voices use, so a part keeps its balance across instruments.
+  c.gain = synth::sf2_cc_gain(c.volume) * synth::sf2_cc_gain(c.expression);
+  // CC10 is 0..127 around a centre of 64, so the positive half spans 63 steps
+  // and both 0 and 1 land hard left -- the GM mapping the other instruments use.
+  const float pan_units = (static_cast<float>(c.pan) - 64.0f) / 63.0f * synth::kPanUnitsFullScale;
+  c.pan_gains = synth::voice_pan_gains(pan_units);
 }
 
 void BuiltinSynth::note_on(uint8_t channel, uint8_t note, float velocity,
@@ -220,6 +236,9 @@ void BuiltinSynth::reset_all_controllers(uint8_t channel) noexcept {
   // Recenter pitch bend and restore the unbent pitch of every active voice.
   channel_bend_semitones_[ch] = 0.0f;
   channel_pressure_[ch] = 0.0f;
+  // RP-015: expression returns to full, volume and pan are left alone.
+  channel_controls_[ch].expression = 127;
+  refresh_channel_controls(ch);
   for (auto& v : voices_) {
     if (v.active && (v.channel & 0x0Fu) == ch) {
       v.phase_inc = v.base_phase_inc;
@@ -264,21 +283,33 @@ void BuiltinSynth::on_event(uint32_t /*destination_id*/, const MidiEvent& event)
     const uint8_t pressure7 = is_midi1 ? u.data2_7bit() : scale_cc_32_to_7(u.words[1]);
     poly_pressure(u.channel(), u.note_number(), pressure7);
   } else if (u.status_nibble() == static_cast<uint8_t>(UmpStatus::kControlChange)) {
-    // Channel-mode messages. The controller index rides word[0] bits 8..14 for
-    // both protocols (same slot as a note number).
+    // Mix controllers and channel-mode messages. The controller index rides
+    // word[0] bits 8..14 for both protocols (same slot as a note number).
     const uint8_t controller = u.note_number();
     const uint8_t channel = u.channel();
     const uint8_t value7 = u.message_type() == UmpMessageType::kMidi1ChannelVoice
                                ? u.data2_7bit()
                                : scale_cc_32_to_7(u.words[1]);
     switch (controller) {
+      case 7:  // Channel Volume.
+        channel_controls_[channel & 0x0Fu].volume = value7;
+        refresh_channel_controls(channel);
+        break;
+      case 10:  // Pan.
+        channel_controls_[channel & 0x0Fu].pan = value7;
+        refresh_channel_controls(channel);
+        break;
+      case 11:  // Expression.
+        channel_controls_[channel & 0x0Fu].expression = value7;
+        refresh_channel_controls(channel);
+        break;
       case 64:  // Damper/sustain pedal: >=64 holds released keys.
         sustain_pedal(channel, value7 >= 64);
         break;
       case 120:  // All Sound Off — immediate silence.
         all_sound_off(channel);
         break;
-      case 121:  // Reset All Controllers — lift damper, recenter bend, clear pressure.
+      case 121:  // Reset All Controllers — damper, bend, pressure, expression.
         reset_all_controllers(channel);
         break;
       case 123:  // All Notes Off — graceful release.
@@ -353,21 +384,43 @@ float BuiltinSynth::render_voice_sample(Voice& v) noexcept {
   // unity, so the multiplier is exactly 1.0 (no change) when neither is sent.
   const float pressure = clampf(channel_pressure_[v.channel & 0x0Fu] + v.poly_pressure, 0.0f, 1.0f);
   const float pressure_gain = 1.0f + kPressureModDepth * pressure;
-  return osc * v.env * v.velocity * pressure_gain;
+  // Channel volume x expression. Read per sample so a CC ramp is heard as it
+  // arrives rather than at the next note.
+  const float channel_gain = channel_controls_[v.channel & 0x0Fu].gain;
+  return osc * v.env * v.velocity * pressure_gain * channel_gain;
+}
+
+void BuiltinSynth::add_frame(float* const* target, int num_channels, int sample, float left,
+                             float right) const noexcept {
+  if (target == nullptr) return;
+  // Mono host: fold both pan legs so a centre-panned voice keeps the level it
+  // would have had before the stereo split.
+  if (num_channels == 1) {
+    if (target[0] != nullptr) target[0][sample] += constants::kInvSqrt2 * (left + right);
+    return;
+  }
+  if (target[0] != nullptr) target[0][sample] += left;
+  if (target[1] != nullptr) target[1][sample] += right;
+  // Anything past the stereo pair takes the same mono fold-down.
+  for (int ch = 2; ch < num_channels; ++ch) {
+    if (target[ch] != nullptr) target[ch][sample] += constants::kInvSqrt2 * (left + right);
+  }
 }
 
 void BuiltinSynth::process(float* const* channels, int num_channels, int num_samples) {
   if (!prepared_ || channels == nullptr || num_channels <= 0 || num_samples <= 0) return;
   for (int i = 0; i < num_samples; ++i) {
-    float mix = 0.0f;
+    float left = 0.0f;
+    float right = 0.0f;
     for (auto& v : voices_) {
-      if (v.active) mix += render_voice_sample(v);
+      if (!v.active) continue;
+      const rt::PanGains& pan = channel_controls_[v.channel & 0x0Fu].pan_gains;
+      const float sample = render_voice_sample(v);
+      left += sample * pan.left;
+      right += sample * pan.right;
     }
-    mix *= config_.gain;
-    // ADD into the planar scratch (engine zero-fills first); fan mono to all channels.
-    for (int ch = 0; ch < num_channels; ++ch) {
-      if (channels[ch] != nullptr) channels[ch][i] += mix;
-    }
+    // ADD into the planar scratch (the engine zero-fills first).
+    add_frame(channels, num_channels, i, left * config_.gain, right * config_.gain);
   }
 }
 
@@ -393,11 +446,10 @@ bool BuiltinSynth::process_source_tracks(const MidiInstrumentSourceOutput* outpu
   for (int i = 0; i < num_samples; ++i) {
     for (auto& voice : voices_) {
       if (!voice.active) continue;
+      const rt::PanGains& pan = channel_controls_[voice.channel & 0x0Fu].pan_gains;
       const float sample = render_voice_sample(voice) * config_.gain;
-      float* const* target = output_for(voice.source_track_id);
-      for (int ch = 0; ch < num_channels; ++ch) {
-        if (target[ch] != nullptr) target[ch][i] += sample;
-      }
+      add_frame(output_for(voice.source_track_id), num_channels, i, sample * pan.left,
+                sample * pan.right);
     }
   }
   return true;

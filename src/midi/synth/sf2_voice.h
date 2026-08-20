@@ -35,8 +35,24 @@
 #include "midi/synth/sf2_file.h"
 #include "midi/synth/svf.h"
 #include "midi/synth/voice_pool.h"
+#include "rt/pan_law.h"
+#include "util/constants.h"
 
 namespace sonare::midi::synth {
+
+/// Full-scale magnitude of an SF2 pan generator / MIDI CC10, in 0.1% units.
+inline constexpr float kPanUnitsFullScale = 500.0f;
+
+/// @brief Constant-power gains for a voice at @p pan_units.
+///
+/// Shared by the SF2 voices and the native-synth voices so both spread a voice
+/// across the stereo field with the project's one pan law. Raw gains, not
+/// balance-normalized: a voice is a point source being placed, not a stereo
+/// image being rebalanced, so a centred voice sits at 1/sqrt(2) per channel and
+/// the pair carries unit energy wherever it is placed.
+inline rt::PanGains voice_pan_gains(float pan_units) noexcept {
+  return rt::compute_pan_gains(pan_units / kPanUnitsFullScale, rt::PanLaw::Const3dB);
+}
 
 /// Effective generator values for one (preset zone, instrument zone) pair.
 /// Values are stored in raw SF2 units (timecents, centibels, cents, ...).
@@ -199,9 +215,10 @@ struct Sf2Voice : VoiceState {
   /// note keeps ringing after note-off until the pedal lifts.
   bool sostenuto = false;
   // Cached stereo gains for (zone pan + channel pan); recomputed on change.
+  // Seeded centred, which under the constant-power law is 1/sqrt(2) a side.
   float cached_pan_units = 1.0e9f;
-  float gain_left = 0.70710678f;
-  float gain_right = 0.70710678f;
+  float gain_left = ::sonare::constants::kInvSqrt2;
+  float gain_right = ::sonare::constants::kInvSqrt2;
 
   /// Starts playback of @p p (pool base @p pool_data) at @p velocity_gain_in.
   void start(const float* pool_data, const Sf2VoiceParams& p, double sample_rate,

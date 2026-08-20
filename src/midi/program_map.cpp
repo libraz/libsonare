@@ -227,24 +227,38 @@ constexpr std::array<std::string_view, kDrumNoteHigh - kDrumNoteLow + 1> kGmDrum
 
 // --- GM2 percussion sets. -----------------------------------------------------
 // Each GM2 percussion set is selected by a bank LSB on the GM2 percussion bank
-// (bank MSB 0x78). A set differs from the Standard GM drum map only at a small
-// number of notes; this tabulates ONLY those re-voiced notes, and any note not
-// listed for a set falls back to the Standard GM name (kGmDrums). The Standard
-// set (LSB 0) has no overrides.
-struct Gm2DrumSetInfo {
-  uint8_t bank_lsb;
+// (bank MSB 0x78). The set roster, per-set note range and Standard-inheritance
+// flag live in kGm2DrumSets (program_map.h); the two tables below carry the
+// note names.
+//
+// kGm2StandardExtra holds the keys the GM2 Standard set adds below and above the
+// GM Level 1 range, so the Standard set spans 27..87 (kGmDrums still holds the
+// GM Level 1 range 35..81 on its own, since gm_drum_name() is a GM Level 1
+// lookup). kGm2DrumOverrides holds each layered set's own instruments; notes a
+// layered set does not list sound the Standard set's instrument.
+//
+// The SFX set is not a layer: it replaces the drum map with a bank of one-shot
+// effects across 39..84 and inherits nothing, so all 46 of its keys are listed
+// here and every other key is unassigned.
+struct Gm2DrumNote {
+  uint8_t note;
   std::string_view name;
 };
-constexpr std::array<Gm2DrumSetInfo, 9> kGm2DrumSets = {{
-    {0, "Standard"},
-    {8, "Room"},
-    {16, "Power"},
-    {24, "Electronic"},
-    {25, "Analog"},
-    {32, "Jazz"},
-    {40, "Brush"},
-    {48, "Orchestra"},
-    {56, "SFX"},
+constexpr std::array<Gm2DrumNote, 14> kGm2StandardExtra = {{
+    {27, "High Q"},
+    {28, "Slap"},
+    {29, "Scratch Push"},
+    {30, "Scratch Pull"},
+    {31, "Sticks"},
+    {32, "Square Click"},
+    {33, "Metronome Click"},
+    {34, "Metronome Bell"},
+    {82, "Shaker"},
+    {83, "Jingle Bell"},
+    {84, "Belltree"},
+    {85, "Castanets"},
+    {86, "Mute Surdo"},
+    {87, "Open Surdo"},
 }};
 
 struct Gm2DrumOverride {
@@ -252,9 +266,8 @@ struct Gm2DrumOverride {
   uint8_t note;
   std::string_view name;
 };
-// Canonical per-set note re-voicings from the GM2 specification's percussion
-// sets. (Only the notes that differ from the Standard set are listed.)
-constexpr std::array<Gm2DrumOverride, 40> kGm2DrumOverrides = {{
+// Per-set instruments from the GM2 specification's percussion sound sets.
+constexpr std::array<Gm2DrumOverride, 119> kGm2DrumOverrides = {{
     // Room set (8)
     {8, 41, "Room Low Tom 2"},
     {8, 43, "Room Low Tom 1"},
@@ -287,22 +300,155 @@ constexpr std::array<Gm2DrumOverride, 40> kGm2DrumOverrides = {{
     {25, 37, "Analog Rim Shot"},
     {25, 38, "Analog Snare 1"},
     {25, 40, "Analog Snare 2"},
+    {25, 41, "Analog Low Tom 2"},
     {25, 42, "Analog Closed Hi-Hat 1"},
+    {25, 43, "Analog Low Tom 1"},
     {25, 44, "Analog Closed Hi-Hat 2"},
+    {25, 45, "Analog Mid Tom 2"},
     {25, 46, "Analog Open Hi-Hat"},
+    {25, 47, "Analog Mid Tom 1"},
+    {25, 48, "Analog Hi Tom 2"},
+    {25, 49, "Analog Cymbal"},
+    {25, 50, "Analog Hi Tom 1"},
     {25, 56, "Analog Cowbell"},
+    {25, 62, "Analog High Conga"},
+    {25, 63, "Analog Mid Conga"},
+    {25, 64, "Analog Low Conga"},
     {25, 75, "Analog Claves"},
     // Jazz set (32)
-    {32, 36, "Jazz Kick Drum"},
+    {32, 35, "Jazz Kick 2"},
+    {32, 36, "Jazz Kick 1"},
     // Brush set (40)
     {40, 38, "Brush Tap"},
     {40, 39, "Brush Slap"},
     {40, 40, "Brush Swirl"},
-    // Orchestra set (48)
+    // Orchestra set (48). Notes 41..53 are the chromatic timpani run, which is
+    // why this set reaches past the Standard range to 88 for Applause.
+    {48, 27, "Closed Hi-Hat 2"},
+    {48, 28, "Pedal Hi-Hat 2"},
+    {48, 29, "Open Hi-Hat 2"},
+    {48, 30, "Ride Cymbal 1"},
+    {48, 35, "Concert Bass Drum 2"},
+    {48, 36, "Concert Bass Drum 1"},
     {48, 38, "Concert Snare Drum"},
+    {48, 39, "Castanets"},
     {48, 40, "Concert Snare Drum"},
     {48, 41, "Timpani F"},
+    {48, 42, "Timpani F#"},
+    {48, 43, "Timpani G"},
+    {48, 44, "Timpani G#"},
+    {48, 45, "Timpani A"},
+    {48, 46, "Timpani A#"},
+    {48, 47, "Timpani B"},
+    {48, 48, "Timpani c"},
+    {48, 49, "Timpani c#"},
+    {48, 50, "Timpani d"},
+    {48, 51, "Timpani d#"},
+    {48, 52, "Timpani e"},
+    {48, 53, "Timpani f"},
+    {48, 57, "Concert Cymbal 2"},
+    {48, 59, "Concert Cymbal 1"},
+    {48, 88, "Applause"},
+    // SFX set (56). A standalone bank of one-shot effects covering 39..84; it
+    // shares nothing with the drum map, so this is the whole set.
+    {56, 39, "High Q"},
+    {56, 40, "Slap"},
+    {56, 41, "Scratch Push"},
+    {56, 42, "Scratch Pull"},
+    {56, 43, "Sticks"},
+    {56, 44, "Square Click"},
+    {56, 45, "Metronome Click"},
+    {56, 46, "Metronome Bell"},
+    {56, 47, "Guitar Fret Noise"},
+    {56, 48, "Guitar Cutting Noise Up"},
+    {56, 49, "Guitar Cutting Noise Down"},
+    {56, 50, "String Slap of Double Bass"},
+    {56, 51, "Flute Key Click"},
+    {56, 52, "Laughing"},
+    {56, 53, "Screaming"},
+    {56, 54, "Punch"},
+    {56, 55, "Heart Beat"},
+    {56, 56, "Footsteps 1"},
+    {56, 57, "Footsteps 2"},
+    {56, 58, "Applause"},
+    {56, 59, "Door Creaking"},
+    {56, 60, "Door"},
+    {56, 61, "Scratch"},
+    {56, 62, "Wind Chimes"},
+    {56, 63, "Car Engine"},
+    {56, 64, "Car Stop"},
+    {56, 65, "Car Pass"},
+    {56, 66, "Car Crash"},
+    {56, 67, "Siren"},
+    {56, 68, "Train"},
+    {56, 69, "Jetplane"},
+    {56, 70, "Helicopter"},
+    {56, 71, "Starship"},
+    {56, 72, "Gun Shot"},
+    {56, 73, "Machine Gun"},
+    {56, 74, "Lasergun"},
+    {56, 75, "Explosion"},
+    {56, 76, "Dog"},
+    {56, 77, "Horse Gallop"},
+    {56, 78, "Birds"},
+    {56, 79, "Rain"},
+    {56, 80, "Thunder"},
+    {56, 81, "Wind"},
+    {56, 82, "Seashore"},
+    {56, 83, "Stream"},
+    {56, 84, "Bubble"},
 }};
+
+/// Name the GM2 Standard set gives `note`, or empty outside its 27..87 range.
+/// The GM Level 1 range comes from kGmDrums so the two never diverge.
+constexpr std::string_view gm2_standard_drum_name(uint8_t note) noexcept {
+  if (note >= kDrumNoteLow && note <= kDrumNoteHigh) return kGmDrums[note - kDrumNoteLow];
+  for (const auto& e : kGm2StandardExtra) {
+    if (e.note == note) return e.name;
+  }
+  return {};
+}
+
+/// Name the set at `bank_lsb` defines for `note`, or empty when it defines none.
+constexpr std::string_view gm2_set_specific_drum_name(uint8_t bank_lsb, uint8_t note) noexcept {
+  for (const auto& o : kGm2DrumOverrides) {
+    if (o.bank_lsb == bank_lsb && o.note == note) return o.name;
+  }
+  return {};
+}
+
+// The note range each set advertises in kGm2DrumSets is a promise the name
+// tables have to keep: every note inside it names an instrument, and no entry
+// sits outside it. Checking that here turns a gap or a stray note into a build
+// failure rather than a set that silently stops answering mid-range.
+constexpr bool gm2_drum_sets_name_their_whole_range() noexcept {
+  for (const Gm2DrumSetInfo& s : kGm2DrumSets) {
+    for (int n = s.note_low; n <= s.note_high; ++n) {
+      const uint8_t note = static_cast<uint8_t>(n);
+      if (!gm2_set_specific_drum_name(s.bank_lsb, note).empty()) continue;
+      if (s.inherits_standard && !gm2_standard_drum_name(note).empty()) continue;
+      return false;
+    }
+  }
+  return true;
+}
+static_assert(gm2_drum_sets_name_their_whole_range(),
+              "a GM2 percussion set left a note in its range unnamed");
+
+constexpr bool gm2_drum_entries_stay_in_range() noexcept {
+  for (const Gm2DrumOverride& o : kGm2DrumOverrides) {
+    bool in_range = false;
+    for (const Gm2DrumSetInfo& s : kGm2DrumSets) {
+      if (s.bank_lsb != o.bank_lsb) continue;
+      in_range = o.note >= s.note_low && o.note <= s.note_high;
+      break;
+    }
+    if (!in_range) return false;
+  }
+  return true;
+}
+static_assert(gm2_drum_entries_stay_in_range(),
+              "a GM2 percussion entry falls outside its set's note range");
 
 // --- Standard MIDI controller names. Index = CC number; empty = undefined. ---
 constexpr std::array<std::string_view, 128> kCcNames = [] {
@@ -595,22 +741,43 @@ int gm_drum_note_for_name(std::string_view name) noexcept {
   return -1;
 }
 
-std::string_view gm2_drum_name(uint8_t bank_lsb, uint8_t note) noexcept {
-  if (note < kDrumNoteLow || note > kDrumNoteHigh) return {};
-  if (bank_lsb != 0) {
-    for (const auto& o : kGm2DrumOverrides) {
-      if (o.bank_lsb == bank_lsb && o.note == note) return o.name;
-    }
+const Gm2DrumSetInfo* gm2_drum_set_entry(uint8_t bank_lsb) noexcept {
+  for (const Gm2DrumSetInfo& s : kGm2DrumSets) {
+    if (s.bank_lsb == bank_lsb) return &s;
   }
-  // Notes a set does not re-voice (and the Standard set) use the GM Level 1 name.
-  return kGmDrums[note - kDrumNoteLow];
+  return nullptr;
+}
+
+Gm2DrumEntry gm2_drum_entry(uint8_t bank_lsb, uint8_t note) noexcept {
+  const Gm2DrumSetInfo* set = gm2_drum_set_entry(bank_lsb);
+  // An unrecognised bank LSB behaves as the Standard set.
+  if (set == nullptr) set = &kGm2DrumSets.front();
+  if (note < set->note_low || note > set->note_high) return Gm2DrumEntry::kUnassigned;
+  if (!gm2_set_specific_drum_name(set->bank_lsb, note).empty()) return Gm2DrumEntry::kSetSpecific;
+  if (!set->inherits_standard) return Gm2DrumEntry::kUnassigned;
+  if (gm2_standard_drum_name(note).empty()) return Gm2DrumEntry::kUnassigned;
+  // The Standard set owns the shared map rather than borrowing it.
+  return set->bank_lsb == static_cast<uint8_t>(Gm2DrumSet::kStandard)
+             ? Gm2DrumEntry::kSetSpecific
+             : Gm2DrumEntry::kStandardShared;
+}
+
+std::string_view gm2_drum_name(uint8_t bank_lsb, uint8_t note) noexcept {
+  const Gm2DrumSetInfo* set = gm2_drum_set_entry(bank_lsb);
+  // An unrecognised bank LSB behaves as the Standard set.
+  if (set == nullptr) set = &kGm2DrumSets.front();
+  if (note < set->note_low || note > set->note_high) return {};
+  const std::string_view own = gm2_set_specific_drum_name(set->bank_lsb, note);
+  if (!own.empty()) return own;
+  // A layered set borrows the Standard instrument where it defines none; the
+  // SFX set does not layer, so an unlisted note has no sound.
+  if (!set->inherits_standard) return {};
+  return gm2_standard_drum_name(note);
 }
 
 std::string_view gm2_drum_set_name(uint8_t bank_lsb) noexcept {
-  for (const auto& s : kGm2DrumSets) {
-    if (s.bank_lsb == bank_lsb) return s.name;
-  }
-  return {};
+  const Gm2DrumSetInfo* set = gm2_drum_set_entry(bank_lsb);
+  return set != nullptr ? set->name : std::string_view{};
 }
 
 Ump remap_drum_note(const Ump& ump, const DrumMapOverride& map) noexcept {

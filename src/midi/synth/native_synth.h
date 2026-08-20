@@ -50,6 +50,7 @@
 #include "midi/synth/sf2_voice.h"
 #include "midi/synth/vocal_voice.h"
 #include "midi/synth/voice_pool.h"
+#include "util/constants.h"
 
 namespace sonare::midi::synth {
 
@@ -272,10 +273,11 @@ struct NativeSynthVoice : VoiceState {
   /// Captured by the sostenuto pedal (CC66): held past key-up until the pedal
   /// lifts, regardless of the sustain pedal.
   bool sostenuto = false;
-  // Cached stereo gains for the channel pan; recomputed on change.
+  // Cached stereo gains for the channel pan; recomputed on change. Seeded
+  // centred, which under the constant-power law is 1/sqrt(2) a side.
   float cached_pan_units = 1.0e9f;
-  float gain_left = 0.70710678f;
-  float gain_right = 0.70710678f;
+  float gain_left = ::sonare::constants::kInvSqrt2;
+  float gain_right = ::sonare::constants::kInvSqrt2;
   /// GS per-note drum overrides (pitch coarse / absolute pan; level is folded
   /// into velocity_gain at start). Defaults are no-ops.
   float drum_pitch_ratio = 1.0f;

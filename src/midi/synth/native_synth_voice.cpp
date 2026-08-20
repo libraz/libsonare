@@ -13,11 +13,6 @@ namespace {
 /// Sf2Player so the fallback and SF2 voices respond alike).
 constexpr float kModWheelVibratoCents = 50.0f;
 
-float pan_angle(float pan_units) noexcept {
-  const float pan = std::clamp(pan_units, -500.0f, 500.0f);
-  return (pan + 500.0f) / 1000.0f * 1.57079632679f;  // 0..pi/2
-}
-
 }  // namespace
 
 // ---------------------------------------------------------------------------
@@ -204,9 +199,9 @@ float NativeSynthVoice::render(const Sf2ChannelMod& mod, float wind_pitch,
   const float pan_units = base_pan + offsets.pan_units + pan_spread_units;
   if (pan_units != cached_pan_units) {
     cached_pan_units = pan_units;
-    const float angle = pan_angle(pan_units);
-    gain_left = std::cos(angle);
-    gain_right = std::sin(angle);
+    const rt::PanGains gains = voice_pan_gains(pan_units);
+    gain_left = gains.left;
+    gain_right = gains.right;
   }
 
   // --- glide: one-pole decay of the previous-note offset ---

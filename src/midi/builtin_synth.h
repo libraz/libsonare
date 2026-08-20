@@ -6,12 +6,20 @@
 ///        silence. A richer literature-backed instrument bank (FM, Karplus-Strong,
 ///        modal) is planned separately.
 ///
-/// This fallback implements note on/off, sustain, channel mode, volume,
-/// expression and pan, plus MPE-style expression: per-channel pitch bend
-/// (default +/-2 semitone range) and channel / polyphonic pressure. Because MPE
-/// places each note on its own member channel, per-channel bend and pressure act
-/// per-note. RPN / NRPN (including a configurable bend range) remain the domain
-/// of NativeSynth / Sf2Player, not this minimal oscillator fallback.
+/// This fallback implements note on/off, sustain, channel mode, volume (CC7),
+/// pan (CC10) and expression (CC11), plus MPE-style expression: per-channel
+/// pitch bend (default +/-2 semitone range) and channel / polyphonic pressure.
+/// Because MPE places each note on its own member channel, per-channel bend and
+/// pressure act per-note. RPN / NRPN (including a configurable bend range)
+/// remain the domain of NativeSynth / Sf2Player, not this minimal oscillator
+/// fallback.
+///
+/// Volume, pan and expression use the same laws as NativeSynth / Sf2Player, so
+/// the same arrangement keeps its balance and stereo image when the instrument
+/// is swapped: volume x expression as a (v/127)^2 gain, and CC10 placed with the
+/// project's constant-power pan law. A voice is a point source being placed, so
+/// a centre-panned voice sits at 1/sqrt(2) per channel; a mono host folds both
+/// legs back with the same factor.
 ///
 /// RT contract (inherited from MidiInstrument):
 ///   - prepare() runs on the control thread and is the ONLY place that allocates
@@ -28,6 +36,7 @@
 #include <vector>
 
 #include "midi/instrument.h"
+#include "rt/pan_law.h"
 
 namespace sonare::midi {
 
@@ -114,11 +123,20 @@ class BuiltinSynth final : public MidiInstrument {
   void all_sound_off(uint8_t channel) noexcept;
   // Channel-mode "Reset All Controllers" (CC#121): lift the damper and return
   // every continuous controller this synth honours to its neutral value --
-  // pitch bend to center (restoring active voices' pitch) and channel/poly
-  // pressure to zero. Without the bend/pressure reset a prior MPE expression
-  // would bleed into subsequent notes (detuned pitch, residual +pressure gain).
+  // pitch bend to center (restoring active voices' pitch), channel/poly
+  // pressure to zero and expression to full. Volume and pan survive, as MIDI
+  // RP-015 requires: they are mix settings, not performance gestures. Without
+  // the bend/pressure reset a prior MPE expression would bleed into subsequent
+  // notes (detuned pitch, residual +pressure gain).
   void reset_all_controllers(uint8_t channel) noexcept;
+  // Recomputes the cached gain / pan pair after a CC7, CC10 or CC11 change, so
+  // the per-sample render only multiplies.
+  void refresh_channel_controls(uint8_t channel) noexcept;
   float render_voice_sample(Voice& v) noexcept;
+  // Adds one already-panned frame to a render target, folding to mono for a
+  // single-channel host and fanning the mono fold to any channel beyond stereo.
+  void add_frame(float* const* target, int num_channels, int sample, float left,
+                 float right) const noexcept;
 
   BuiltinSynthConfig config_{};
   double sample_rate_ = 0.0;
@@ -131,6 +149,19 @@ class BuiltinSynth final : public MidiInstrument {
   float decay_inc_ = 1.0f;
   float release_inc_ = 1.0f;
 
+  // Per-channel mix controllers, at their GM power-on values. `gain` and
+  // `pan_gains` are derived from the three CC values by
+  // refresh_channel_controls(); the raw values are kept so a change to one
+  // controller does not lose the others.
+  struct ChannelControls {
+    uint8_t volume = 100;      // CC7
+    uint8_t pan = 64;          // CC10 (centre)
+    uint8_t expression = 127;  // CC11
+    float gain = 1.0f;
+    rt::PanGains pan_gains{};
+  };
+
+  std::array<ChannelControls, 16> channel_controls_{};
   std::array<bool, 16> sustain_down_{};
   // Per-channel MPE expression state. Bend is stored in semitones (0 == centered);
   // pressure in [0,1]. Both default to neutral so a project that sends no

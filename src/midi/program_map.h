@@ -101,7 +101,8 @@ int gm_drum_note_for_name(std::string_view name) noexcept;
 
 /// The nine GM2 percussion sets, identified by the bank LSB that selects them on
 /// the GM2 percussion bank (bank MSB 0x78). The Standard set is the GM Level 1
-/// drum map; the other sets re-voice a handful of notes (the rest stay Standard).
+/// drum map extended with the GM2-only keys; seven sets re-voice a handful of
+/// notes over it, and the SFX set replaces it outright.
 enum class Gm2DrumSet : uint8_t {
   kStandard = 0,
   kRoom = 8,
@@ -114,11 +115,70 @@ enum class Gm2DrumSet : uint8_t {
   kSfx = 56,
 };
 
+/// One GM2 percussion set: the bank LSB that selects it, its name, the closed
+/// note range the GM2 specification assigns within it, and whether notes it does
+/// not itself re-voice sound the Standard set's instrument.
+///
+/// `note_low`..`note_high` is the set's full assigned range and is closed on
+/// both ends with no holes: gm2_drum_name() returns a name for every note in it
+/// and an empty view for every note outside it. The Standard set and the seven
+/// sets layered over it span 27..87; the Orchestra set extends to 88 (Applause);
+/// the SFX set is an independent bank of one-shots spanning 39..84 with no
+/// Standard fallback, so a note it does not assign has no sound at all rather
+/// than a drum-kit piece.
+struct Gm2DrumSetInfo {
+  uint8_t bank_lsb;        ///< CC#32 value selecting the set on bank MSB 0x78.
+  std::string_view name;   ///< Human-readable set name.
+  uint8_t note_low;        ///< Lowest note the set assigns.
+  uint8_t note_high;       ///< Highest note the set assigns.
+  bool inherits_standard;  ///< True when unre-voiced notes sound the Standard set.
+};
+
+/// The nine GM2 percussion sets. This is the single source of truth for which
+/// sets exist and which notes each one covers: gm2_drum_set_name(),
+/// gm2_drum_name() and gm2_drum_entry() all resolve through it, so a consumer
+/// enumerating the sets sees exactly what the lookups implement.
+inline constexpr std::array<Gm2DrumSetInfo, 9> kGm2DrumSets = {{
+    {0, "Standard", 27, 87, true},
+    {8, "Room", 27, 87, true},
+    {16, "Power", 27, 87, true},
+    {24, "Electronic", 27, 87, true},
+    {25, "Analog", 27, 87, true},
+    {32, "Jazz", 27, 87, true},
+    {40, "Brush", 27, 87, true},
+    {48, "Orchestra", 27, 88, true},
+    {56, "SFX", 39, 84, false},
+}};
+
+/// Returns the kGm2DrumSets entry selected by `bank_lsb`, or nullptr when the
+/// bank LSB does not name a GM2 percussion set.
+const Gm2DrumSetInfo* gm2_drum_set_entry(uint8_t bank_lsb) noexcept;
+
+/// Where a GM2 percussion set's sound for a note comes from. This distinguishes
+/// the notes a set genuinely defines from the ones it merely borrows, so a
+/// caller (or a kit editor) can tell a set's own voice from the shared default.
+enum class Gm2DrumEntry : uint8_t {
+  kUnassigned = 0,  ///< The set assigns no percussion sound to this note.
+  kSetSpecific,     ///< The set defines its own instrument for this note.
+  kStandardShared,  ///< The set has no entry here, so the Standard instrument sounds.
+};
+
+/// Returns how the percussion set selected by `bank_lsb` resolves `note`.
+/// Unknown bank LSBs are treated as the Standard set. Every note the set
+/// assigns (see Gm2DrumSetInfo::note_low / note_high) returns a non-kUnassigned
+/// kind, and gm2_drum_name() returns a non-empty name for exactly those notes.
+Gm2DrumEntry gm2_drum_entry(uint8_t bank_lsb, uint8_t note) noexcept;
+
 /// Returns the GM2 percussion name for a note on the drum channel within the
-/// percussion set selected by `bank_lsb` (bank MSB 0x78). A bank LSB that names
-/// a known GM2 set returns that set's name where it re-voices the note, falling
-/// back to the Standard GM name otherwise. Unknown bank LSBs are treated as the
-/// Standard set. Notes outside the GM drum range (35..81) return an empty view.
+/// percussion set selected by `bank_lsb` (bank MSB 0x78). A set returns its own
+/// name where it defines the note and the Standard GM2 name otherwise; the SFX
+/// set has no Standard fallback. Unknown bank LSBs are treated as the Standard
+/// set. Notes outside the set's assigned range return an empty string view.
+///
+/// These are the specification's instrument names, which describe what a
+/// conforming sound module plays — not a claim about the built-in fallback
+/// synth, whose data-free percussion voices cover the Standard kit pieces and
+/// resolve everything else (the SFX set included) to a generic one-shot.
 std::string_view gm2_drum_name(uint8_t bank_lsb, uint8_t note) noexcept;
 
 /// Returns the human-readable name of the GM2 percussion set selected by

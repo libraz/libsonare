@@ -9,6 +9,7 @@
 #include <catch2/catch_approx.hpp>
 #include <catch2/catch_test_macros.hpp>
 #include <cmath>
+#include <cstdint>
 #include <vector>
 
 #include "midi/midi_event.h"
@@ -35,6 +36,36 @@ float render_peak(BuiltinSynth* synth, int num_samples) {
   float peak = 0.0f;
   for (float s : buffer) peak = std::max(peak, std::fabs(s));
   return peak;
+}
+
+// Renders `num_samples` frames into `num_channels` planar buffers and returns
+// the per-channel RMS. Used for the mix controllers, whose effect is a level
+// ratio rather than a change in the waveform.
+std::vector<float> render_rms(BuiltinSynth* synth, int num_channels, int num_samples) {
+  std::vector<std::vector<float>> buffers(
+      static_cast<size_t>(num_channels),
+      std::vector<float>(static_cast<size_t>(num_samples), 0.0f));
+  std::vector<float*> channels;
+  for (auto& buffer : buffers) channels.push_back(buffer.data());
+  synth->process(channels.data(), num_channels, num_samples);
+  std::vector<float> rms;
+  for (const auto& buffer : buffers) {
+    double sum = 0.0;
+    for (float s : buffer) sum += static_cast<double>(s) * static_cast<double>(s);
+    rms.push_back(static_cast<float>(std::sqrt(sum / static_cast<double>(num_samples))));
+  }
+  return rms;
+}
+
+// The concave controller curve shared with the SF2 / native voices.
+float cc_gain(int value) {
+  const float v = static_cast<float>(value) / 127.0f;
+  return v * v;
+}
+
+MidiEvent control_change(int controller, int value) {
+  return event(sonare::midi::make_midi1_control_change(0, 0, static_cast<uint8_t>(controller),
+                                                       static_cast<uint8_t>(value)));
 }
 
 // Estimates the fundamental of the (sine) output by counting rising zero
@@ -248,6 +279,102 @@ TEST_CASE("BuiltinSynth All Notes Off only affects the addressed channel", "[mid
   // All Sound Off on channel 0 must leave channel 1's note sounding.
   synth.on_event(0, event(sonare::midi::make_midi1_control_change(0, 0, 120, 0)));
   REQUIRE(render_peak(&synth, 256) > 0.0f);
+}
+
+TEST_CASE("BuiltinSynth tracks CC11 expression over a sustained note", "[midi][synth]") {
+  constexpr int kSettle = 8192;  // Past attack + decay, into the sustain stage.
+  constexpr int kWindow = 4800;  // Whole periods enough for a steady RMS.
+  BuiltinSynth synth(BuiltinSynthConfig{});
+  synth.prepare(48000.0, 0);
+
+  synth.on_event(0, event(sonare::midi::make_midi1_note_on(0, 0, 60, 100)));
+  render_rms(&synth, 1, kSettle);
+  // Reference level at the power-on expression (CC11 == 127).
+  const float reference = render_rms(&synth, 1, kWindow)[0];
+  REQUIRE(reference > 0.0f);
+
+  // A fade-out: each step's level must follow the controller, not stay flat.
+  float previous = reference;
+  for (int value : {96, 64, 32}) {
+    synth.on_event(0, control_change(11, value));
+    const float level = render_rms(&synth, 1, kWindow)[0];
+    REQUIRE(level == Catch::Approx(reference * cc_gain(value)).epsilon(0.03));
+    REQUIRE(level < previous);
+    previous = level;
+  }
+
+  // Expression 0 mutes the part while the note is still held.
+  synth.on_event(0, control_change(11, 0));
+  REQUIRE(render_rms(&synth, 1, kWindow)[0] == 0.0f);
+
+  // Restoring expression brings the same note back at the reference level.
+  synth.on_event(0, control_change(11, 127));
+  REQUIRE(render_rms(&synth, 1, kWindow)[0] == Catch::Approx(reference).epsilon(0.03));
+}
+
+TEST_CASE("BuiltinSynth balances parts with CC7 volume", "[midi][synth]") {
+  constexpr int kSettle = 8192;
+  constexpr int kWindow = 4800;
+  BuiltinSynth synth(BuiltinSynthConfig{});
+  synth.prepare(48000.0, 0);
+
+  synth.on_event(0, event(sonare::midi::make_midi1_note_on(0, 0, 60, 100)));
+  render_rms(&synth, 1, kSettle);
+  const float reference = render_rms(&synth, 1, kWindow)[0];
+  REQUIRE(reference > 0.0f);
+
+  // Volume and expression are independent gains through the same curve.
+  synth.on_event(0, control_change(7, 50));
+  REQUIRE(render_rms(&synth, 1, kWindow)[0] ==
+          Catch::Approx(reference * cc_gain(50) / cc_gain(100)).epsilon(0.03));
+
+  synth.on_event(0, control_change(11, 64));
+  REQUIRE(render_rms(&synth, 1, kWindow)[0] ==
+          Catch::Approx(reference * cc_gain(50) / cc_gain(100) * cc_gain(64)).epsilon(0.03));
+
+  // Reset All Controllers restores expression but keeps the mix settings, as
+  // MIDI RP-015 requires.
+  synth.on_event(0, control_change(121, 0));
+  REQUIRE(render_rms(&synth, 1, kWindow)[0] ==
+          Catch::Approx(reference * cc_gain(50) / cc_gain(100)).epsilon(0.03));
+}
+
+TEST_CASE("BuiltinSynth places a part in the stereo field with CC10 pan", "[midi][synth]") {
+  constexpr int kSettle = 8192;
+  constexpr int kWindow = 4800;
+  BuiltinSynth synth(BuiltinSynthConfig{});
+  synth.prepare(48000.0, 0);
+
+  synth.on_event(0, event(sonare::midi::make_midi1_note_on(0, 0, 60, 100)));
+  render_rms(&synth, 2, kSettle);
+
+  // Power-on pan is centre: both legs carry the same level.
+  const std::vector<float> centre = render_rms(&synth, 2, kWindow);
+  REQUIRE(centre[0] > 0.0f);
+  REQUIRE(centre[0] == Catch::Approx(centre[1]).epsilon(0.001));
+
+  synth.on_event(0, control_change(10, 0));
+  const std::vector<float> left = render_rms(&synth, 2, kWindow);
+  REQUIRE(left[0] > centre[0]);
+  REQUIRE(left[1] < left[0] * 0.01f);
+
+  synth.on_event(0, control_change(10, 127));
+  const std::vector<float> right = render_rms(&synth, 2, kWindow);
+  REQUIRE(right[1] > centre[1]);
+  REQUIRE(right[0] < right[1] * 0.01f);
+
+  // Constant power: the pair carries the same energy wherever it is placed.
+  REQUIRE(left[0] * left[0] + left[1] * left[1] ==
+          Catch::Approx(centre[0] * centre[0] + centre[1] * centre[1]).epsilon(0.02));
+
+  // A second part can sit on the opposite side of the same synth.
+  synth.on_event(0, event(sonare::midi::make_midi1_note_on(0, 1, 67, 100)));
+  synth.on_event(0, control_change(10, 0));  // Channel 0 stays hard left.
+  synth.on_event(0, event(sonare::midi::make_midi1_control_change(0, 1, 10, 127)));
+  render_rms(&synth, 2, kSettle);
+  const std::vector<float> split = render_rms(&synth, 2, kWindow);
+  REQUIRE(split[0] > 0.0f);
+  REQUIRE(split[1] > 0.0f);
 }
 
 TEST_CASE("BuiltinSynth renders shared-pool voices into their source tracks", "[midi][synth]") {

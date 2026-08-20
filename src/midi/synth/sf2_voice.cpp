@@ -79,11 +79,6 @@ DahdsrConfig envelope_from_gens(const Sf2GenSet& gens, uint16_t delay_op, uint16
   return cfg;
 }
 
-float pan_angle(float pan_units) noexcept {
-  const float pan = std::clamp(pan_units, -500.0f, 500.0f);
-  return (pan + 500.0f) / 1000.0f * 1.57079632679f;  // 0..pi/2
-}
-
 }  // namespace
 
 Sf2GenSet::Sf2GenSet() noexcept {
@@ -253,9 +248,9 @@ float Sf2Voice::render(const Sf2ChannelMod& mod) noexcept {
   const float pan_units = params.pan_units + mod.pan_units;
   if (pan_units != cached_pan_units) {
     cached_pan_units = pan_units;
-    const float angle = pan_angle(pan_units);
-    gain_left = std::cos(angle);
-    gain_right = std::sin(angle);
+    const rt::PanGains gains = voice_pan_gains(pan_units);
+    gain_left = gains.left;
+    gain_right = gains.right;
   }
 
   const bool looping = params.loop_mode == 1 || (params.loop_mode == 3 && key_down);

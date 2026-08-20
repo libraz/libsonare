@@ -11,10 +11,13 @@
 #include "midi/synth/gm_fallback_map.h"
 #include "midi/synth/sf2_player.h"
 #include "midi/ump.h"
+#include "util/constants.h"
 
 namespace sonare::midi::synth {
 
 namespace {
+
+using sonare::constants::kInvSqrt2;
 
 #if defined(SONARE_MIDI_WITH_FX)
 constexpr float kCcSendDepth = 0.35f;
@@ -43,11 +46,11 @@ void Sf2Player::render_chunk(int n, const MidiInstrumentSourceOutput* source_out
   const auto add_output = [&](float* const* target, int sample, float l, float r) noexcept {
     if (target == nullptr) return;
     if (target[0] != nullptr) {
-      target[0][sample] += num_channels == 1 ? 0.70710678f * (l + r) : l;
+      target[0][sample] += num_channels == 1 ? kInvSqrt2 * (l + r) : l;
     }
     if (num_channels > 1 && target[1] != nullptr) target[1][sample] += r;
     for (int ch = 2; ch < num_channels; ++ch) {
-      if (target[ch] != nullptr) target[ch][sample] += 0.70710678f * (l + r);
+      if (target[ch] != nullptr) target[ch][sample] += kInvSqrt2 * (l + r);
     }
   };
   // Read the realised-EFX routing for this block from the snapshot the control
@@ -395,12 +398,12 @@ void Sf2Player::process_impl(float* const* channels,
         const float mix_r = mix_r_[static_cast<size_t>(i)] * config_.gain;
         if (left != nullptr) {
           // Mono host: fold both pan legs so centre-panned voices keep level.
-          left[offset + i] += mono ? 0.70710678f * (mix_l + mix_r) : mix_l;
+          left[offset + i] += mono ? kInvSqrt2 * (mix_l + mix_r) : mix_l;
         }
         if (right != nullptr) right[offset + i] += mix_r;
         // Fan a mono fold-down to any additional channels.
         for (int ch = 2; ch < num_channels; ++ch) {
-          if (channels[ch] != nullptr) channels[ch][offset + i] += 0.70710678f * (mix_l + mix_r);
+          if (channels[ch] != nullptr) channels[ch][offset + i] += kInvSqrt2 * (mix_l + mix_r);
         }
       }
     }
