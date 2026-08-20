@@ -18,6 +18,7 @@ import { describe, expect, it } from 'vitest';
 import {
   analyze,
   decomposeStems,
+  estimateMeter,
   masteringDynamicsCompressor,
   masteringDynamicsGate,
   masteringDynamicsTransientShaper,
@@ -96,6 +97,15 @@ const UNDEFINED_EQUIVALENCE: ReadonlyArray<{
 }> = [
   { jsName: 'pcen', invoke: (o) => Array.from(pcen(sine(32), 4, 8, o)) },
   { jsName: 'analyze', invoke: (o) => analyze(sine(8192), SR, o) },
+  {
+    jsName: 'estimateMeter',
+    invoke: (o) =>
+      estimateMeter({
+        ...o,
+        beatTimes: new Float32Array(32).map((_, i) => i * 0.5),
+        beatStrengths: new Float32Array(32).map((_, i) => (i % 4 === 0 ? 1 : 0.3)),
+      }),
+  },
   {
     jsName: 'noteSegments',
     invoke: (o) =>

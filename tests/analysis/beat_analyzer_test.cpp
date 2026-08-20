@@ -531,3 +531,83 @@ TEST_CASE("BeatAnalyzer downbeat phase and indices address its own beats", "[bea
     REQUIRE(analyzer.downbeats()[i].time == analyzer.beats()[static_cast<size_t>(indices[i])].time);
   }
 }
+
+TEST_CASE("BeatAnalyzer retains the beat-level evidence the downbeat pass scored",
+          "[beat_analyzer]") {
+  Audio audio = create_drum_pattern(120.0f, 4, 22050, 4.0f);
+  BeatAnalyzer analyzer(audio);
+
+  const size_t beat_count = analyzer.beats().size();
+  REQUIRE(beat_count >= 4);
+
+  // Every populated stream indexes in parallel with beats().
+  REQUIRE(analyzer.beat_onset_observations().size() == beat_count);
+  REQUIRE(analyzer.beat_low_frequency_observations().size() == beat_count);
+  // Chord changes only arrive from a caller that has analyzed chords, which
+  // BeatAnalyzer never does on its own.
+  REQUIRE(analyzer.beat_chord_change_observations().empty());
+
+  for (size_t i = 0; i < beat_count; ++i) {
+    CAPTURE(i, analyzer.beat_onset_observations()[i],
+            analyzer.beat_low_frequency_observations()[i]);
+    REQUIRE(std::isfinite(analyzer.beat_onset_observations()[i]));
+    REQUIRE(analyzer.beat_onset_observations()[i] >= 0.0f);
+    REQUIRE(std::isfinite(analyzer.beat_low_frequency_observations()[i]));
+    REQUIRE(analyzer.beat_low_frequency_observations()[i] >= 0.0f);
+  }
+
+  // The exposed onset observation is a beat-local window; Beat::strength is a
+  // single unwindowed envelope frame. Being able to read the windowed quantity
+  // is the reason the accessor exists, so the two must not collapse into one.
+  bool differs = false;
+  for (size_t i = 0; i < beat_count && !differs; ++i) {
+    differs = analyzer.beat_onset_observations()[i] != analyzer.beats()[i].strength;
+  }
+  REQUIRE(differs);
+}
+
+TEST_CASE("BeatAnalyzer without audio scores onsets but has no low-frequency evidence",
+          "[beat_analyzer]") {
+  Audio audio = create_drum_pattern(120.0f, 4, 22050, 4.0f);
+  BeatAnalyzer audio_backed(audio);
+  BeatAnalyzer onset_backed(audio_backed.onset_strength(), audio.sample_rate(), 512);
+
+  REQUIRE_FALSE(onset_backed.beats().empty());
+  REQUIRE(onset_backed.beat_onset_observations().size() == onset_backed.beats().size());
+  // Low-frequency energy is measured on the waveform, which this constructor
+  // never receives, and chord changes need an analysis this class does not run.
+  REQUIRE(onset_backed.beat_low_frequency_observations().empty());
+  REQUIRE(onset_backed.beat_chord_change_observations().empty());
+
+  // The audio-backed constructor does fill it, so the emptiness above is the
+  // absent audio rather than an accessor that never populates.
+  REQUIRE_FALSE(audio_backed.beat_low_frequency_observations().empty());
+}
+
+TEST_CASE("BeatAnalyzer republishes the observations of the latest refinement", "[beat_analyzer]") {
+  // MusicAnalyzer refines a second time once chords exist, so the accessors have
+  // to expose the evidence of the most recent pass and not the first one.
+  Audio audio = create_drum_pattern(120.0f, 4, 22050, 4.0f);
+  BeatAnalyzer analyzer(audio);
+
+  const size_t beat_count = analyzer.beats().size();
+  REQUIRE(beat_count >= 4);
+  const std::vector<float> initial_low_frequency = analyzer.beat_low_frequency_observations();
+  REQUIRE(analyzer.beat_chord_change_observations().empty());
+
+  const std::vector<float> low_frequency(beat_count, 0.25f);
+  std::vector<float> chord_changes(beat_count, 0.0f);
+  for (size_t i = 0; i < beat_count; i += 4) {
+    chord_changes[i] = 1.0f;
+  }
+  // Otherwise the equality below could hold without the refinement replacing
+  // anything.
+  REQUIRE(initial_low_frequency != low_frequency);
+
+  analyzer.refine_downbeats(low_frequency, chord_changes);
+
+  REQUIRE(analyzer.beat_low_frequency_observations() == low_frequency);
+  REQUIRE(analyzer.beat_chord_change_observations() == chord_changes);
+  // The onset window is recomputed by the refinement and stays one per beat.
+  REQUIRE(analyzer.beat_onset_observations().size() == beat_count);
+}

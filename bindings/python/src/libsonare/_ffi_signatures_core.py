@@ -893,6 +893,22 @@ def configure_core_signatures(lib: ctypes.CDLL) -> None:
             ctypes.POINTER(ctypes.c_char_p),
         ]
 
+    # sonare_estimate_meter_json: meter estimation over a caller-supplied beat
+    # series, with no audio and no re-analysis. Free *out_json with
+    # sonare_free_string.
+    if hasattr(lib, "sonare_meter_options_default"):
+        lib.sonare_meter_options_default.restype = SonareMeterOptions
+        lib.sonare_meter_options_default.argtypes = []
+    if hasattr(lib, "sonare_estimate_meter_json"):
+        lib.sonare_estimate_meter_json.restype = ctypes.c_int32
+        lib.sonare_estimate_meter_json.argtypes = [
+            ctypes.POINTER(ctypes.c_float),
+            ctypes.POINTER(ctypes.c_float),
+            ctypes.c_size_t,
+            ctypes.POINTER(SonareMeterOptions),
+            ctypes.POINTER(ctypes.c_char_p),
+        ]
+
     # sonare_analyze_json_with_progress: same as sonare_analyze_json but emits
     # progress callbacks. The callback signature is:
     #   void (*)(float progress, const char* stage, void* user_data)

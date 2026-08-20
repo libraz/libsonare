@@ -414,7 +414,8 @@ class Audio:
         four calls run the pipeline four times.
 
         Returns:
-            Beat times in seconds. For per-beat strength, the time signature,
+            Beat times in seconds. For the beat-level accent evidence
+            (``beat_observations.onset_strength``), the time signature,
             confidence values, or the bar-start positions, use
             :func:`libsonare.analyze` instead — one call returns all of them.
         """
@@ -432,10 +433,11 @@ class Audio:
         four calls run the pipeline four times.
 
         Returns:
-            Downbeat times in seconds. For per-beat strength, the time
-            signature, confidence values, or the bar starts as indices into
-            the beat list, use :func:`libsonare.analyze` instead — one call
-            returns all of them.
+            Downbeat times in seconds. For the beat-level accent evidence
+            (``beat_observations.onset_strength``), the time signature,
+            confidence values, or the bar starts as indices into the beat
+            list, use :func:`libsonare.analyze` instead — one call returns all
+            of them.
         """
         with _out_float_array(self._lib) as (out_times, out_count):
             rc = self._lib.sonare_audio_detect_downbeats(
@@ -462,11 +464,12 @@ class Audio:
         """Run music analysis over the flat native result.
 
         This path fills only bpm, key, time signature and beat times; the
-        richer fields of :class:`~libsonare.AnalysisResult` — beat strengths,
-        ``downbeat_indices``, chords, sections, timbre, dynamics, rhythm,
-        melody and form — are left at their defaults. Call the module-level
-        :func:`libsonare.analyze` for the complete result, and for the tempo
-        and meter options.
+        richer fields of :class:`~libsonare.AnalysisResult` — ``beat_strengths``
+        (one raw onset-envelope frame per beat), ``beat_observations`` (the
+        windowed beat-level evidence), ``downbeat_indices``, chords, sections,
+        timbre, dynamics, rhythm, melody and form — are left at their defaults.
+        Call the module-level :func:`libsonare.analyze` for the complete
+        result, and for the tempo and meter options.
         """
         from ._ffi import SonareAnalysisResult
         from .types import Mode, PitchClass, TimeSignature

@@ -18,6 +18,7 @@ from ._ffi import (
     SonareAnalyzeProgressCallback,
     SonareBpmAnalysisResult,
     SonareDynamicsResult,
+    SonareMeterOptions,
     SonareMusicAnalyzeOptions,
     SonareRhythmResult,
     SonareTimbreResult,
@@ -40,6 +41,7 @@ from .types import (
     BpmHypothesis,
     DynamicsResult,
     Key,
+    MeterEstimate,
     Mode,
     PitchClass,
     RhythmResult,
@@ -112,11 +114,17 @@ def analyze(
         - ``bpm`` (``float``) and ``bpm_confidence`` (``float`` in ``[0, 1]``)
         - ``key`` (:class:`Key`), ``time_signature`` (:class:`TimeSignature`)
         - ``beat_times`` (``list[float]`` in seconds)
-        - ``beat_strengths`` (``list[float]``) — per-beat strength values
+        - ``beat_strengths`` (``list[float]``) — one raw onset-envelope frame
+          per beat, sampled at the beat's own frame. Not normalized, scaled by
+          the material, and sensitive to beat-position jitter, so it is not a
+          salience comparable across beats; score accents with
+          ``beat_observations.onset_strength`` instead
         - ``downbeat_indices`` (``list[int]``) — positions in ``beat_times``
           that are bar starts, not a separate time series
         - ``downbeat_phase`` (``int``) — which beat of the first bar the
           analysis starts on
+        - ``beat_observations`` (:class:`AnalysisBeatObservations`) — the
+          beat-level evidence the downbeat and meter pass scores
         - ``chords`` (``list[Chord]``) — detected chord segments
         - ``sections`` (``list[Section]``) — detected structural sections
         - ``timbre`` (:class:`AnalysisTimbre`) — spectral character summary
@@ -351,6 +359,133 @@ def analyze_with_progress(
         if out_json.value and hasattr(lib, "sonare_free_string"):
             lib.sonare_free_string(out_json)
     return _parse_analysis_json(data)
+
+
+def estimate_meter(
+    beat_times: Sequence[float],
+    beat_strengths: Sequence[float],
+    *,
+    candidate_numerators: Sequence[int] | None = None,
+    denominator: int = 4,
+    downbeat_weight: float = 1.0,
+    measure_weight: float = 0.5,
+    subdivision_weight: float = 0.15,
+    compound_subdivision_threshold: float = 0.85,
+) -> MeterEstimate:
+    """Estimate meter over a beat series, without audio and without re-analyzing.
+
+    Scoring reads only the per-beat strengths, so an existing analysis can be
+    re-scored — over a different candidate set, or over an arbitrary span of
+    its beats — without running the pipeline again.
+
+    Args:
+        beat_times: Beat positions in seconds, non-decreasing.
+        beat_strengths: Per-beat accent value, the same length as
+            ``beat_times``. Pass
+            :attr:`AnalysisResult.beat_observations` ``.onset_strength``: it is
+            the windowed value the library's own downbeat pass scores.
+            ``AnalysisResult.beat_strengths`` also works, but it is a single
+            unwindowed envelope frame per beat and scores accordingly.
+        candidate_numerators: Meter numerators to score. ``None`` selects the
+            native default ``(3, 4, 6)``. At most 16 entries, each in
+            ``[2, 32]``. Widening the set does not force a wider meter — the
+            default reproduces the historical result.
+        denominator: Beat unit reported for the detected meter; a power of two
+            in ``[1, 32]``. The estimator still reports 8 on its own when it
+            resolves a compound meter.
+        downbeat_weight: Weight of the downbeat term in the multi-comb score.
+        measure_weight: Weight of the measure-level term.
+        subdivision_weight: Weight of the subdivision term.
+        compound_subdivision_threshold: Subdivision support at which a meter is
+            resolved as compound rather than simple.
+
+    Returns:
+        :class:`libsonare.MeterEstimate`. ``candidate_scores`` is parallel to
+        ``candidate_numerators`` as requested, while ``candidates`` is ordered
+        by descending support — the two do not index alike.
+
+    Raises:
+        SonareValueError: If ``beat_times`` and ``beat_strengths`` differ in
+            length, or ``candidate_numerators`` holds more entries than the
+            native array can carry.
+        SonareError: If the core rejects an option value or a beat series it
+            cannot answer.
+    """
+    numerators = (
+        tuple(_DEFAULT_METER_CANDIDATE_NUMERATORS)
+        if candidate_numerators is None
+        else tuple(int(value) for value in candidate_numerators)
+    )
+    # The flat C array cannot carry an over-long list, so reject it here rather
+    # than truncating it into a set the caller never asked for. Every other
+    # rule (non-empty, per-entry range, denominator, weights, beat series) is
+    # the core's to enforce.
+    if len(numerators) > SONARE_MAX_METER_CANDIDATE_NUMERATORS:
+        raise SonareValueError(
+            "estimate_meter: candidate_numerators must hold at most "
+            f"{SONARE_MAX_METER_CANDIDATE_NUMERATORS} entries"
+        )
+
+    lib = _get_lib()
+    if not hasattr(lib, "sonare_estimate_meter_json"):
+        raise _unsupported_feature_symbol("sonare_estimate_meter_json")
+
+    c_times, time_count = _to_c_float_array(beat_times)
+    c_strengths, strength_count = _to_c_float_array(beat_strengths)
+    # The C entry point carries one beat count for both arrays, so a mismatch
+    # never reaches the core's own check — reject it with the same meaning.
+    if time_count != strength_count:
+        raise SonareValueError(
+            "estimate_meter: beat_times and beat_strengths must be the same length "
+            f"(got {time_count} and {strength_count})"
+        )
+
+    options = SonareMeterOptions(
+        # Both the array and its count must be written: ctypes zeroes any field
+        # left unset, and a zero count reads to the core as an empty candidate
+        # set, which it rejects.
+        candidate_numerators=(ctypes.c_int * SONARE_MAX_METER_CANDIDATE_NUMERATORS)(*numerators),
+        candidate_numerator_count=len(numerators),
+        denominator=denominator,
+        downbeat_weight=downbeat_weight,
+        measure_weight=measure_weight,
+        subdivision_weight=subdivision_weight,
+        compound_subdivision_threshold=compound_subdivision_threshold,
+    )
+    out_json = ctypes.c_char_p()
+    rc = lib.sonare_estimate_meter_json(
+        c_times,
+        c_strengths,
+        ctypes.c_size_t(time_count),
+        ctypes.byref(options),
+        ctypes.byref(out_json),
+    )
+    _check(rc)
+    try:
+        raw = out_json.value
+        data = json.loads(raw.decode("utf-8") if raw else "{}")
+    finally:
+        if out_json.value and hasattr(lib, "sonare_free_string"):
+            lib.sonare_free_string(out_json)
+
+    ts_d = data.get("timeSignature", {})
+    return MeterEstimate(
+        time_signature=TimeSignature(
+            numerator=int(ts_d.get("numerator", 4)),
+            denominator=int(ts_d.get("denominator", 4)),
+            confidence=float(ts_d.get("confidence", 0.0)),
+        ),
+        downbeat_phase=int(data.get("downbeatPhase", 0)),
+        candidate_scores=[float(score) for score in data.get("candidateScores", [])],
+        candidates=[
+            TimeSignature(
+                numerator=int(candidate.get("numerator", 4)),
+                denominator=int(candidate.get("denominator", 4)),
+                confidence=float(candidate.get("confidence", 0.0)),
+            )
+            for candidate in data.get("candidates", [])
+        ],
+    )
 
 
 @_guard_buffer("samples")

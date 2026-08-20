@@ -9,6 +9,7 @@
 #include <type_traits>
 
 #include "analysis/analysis_json.h"
+#include "analysis/meter_analyzer.h"
 #include "analysis/music_analyzer.h"
 #include "analysis/onset_analyzer.h"
 #include "util/numeric_validation.h"
@@ -113,6 +114,26 @@ val chordsToVal(const std::vector<Chord>& chord_results) {
   return chords;
 }
 
+val timeSignatureToVal(const TimeSignature& time_signature) {
+  val out = val::object();
+  out.set("numerator", time_signature.numerator);
+  out.set("denominator", time_signature.denominator);
+  out.set("confidence", time_signature.confidence);
+  return out;
+}
+
+// Emits a float series as a plain JS number array rather than a Float32Array.
+// The analysis and meter results are field-for-field mirrors of
+// analysis_result_to_json / meter_result_to_json, which serialize these as JSON
+// number arrays, and the cross-surface field-set test compares the two.
+val numberArrayFromVector(const std::vector<float>& values) {
+  val out = val::array();
+  for (float value : values) {
+    out.call<void>("push", value);
+  }
+  return out;
+}
+
 /// @brief Converts AnalysisResult to JavaScript object.
 /// @param result Analysis result
 /// @return JavaScript object with all analysis data
@@ -155,18 +176,10 @@ val analysisResultToVal(const AnalysisResult& result) {
   out.set("key", key);
 
   // Time signature
-  val timeSig = val::object();
-  timeSig.set("numerator", result.time_signature.numerator);
-  timeSig.set("denominator", result.time_signature.denominator);
-  timeSig.set("confidence", result.time_signature.confidence);
-  out.set("timeSignature", timeSig);
+  out.set("timeSignature", timeSignatureToVal(result.time_signature));
   val timeSignatureCandidates = val::array();
   for (const auto& candidate : result.time_signature_candidates) {
-    val value = val::object();
-    value.set("numerator", candidate.numerator);
-    value.set("denominator", candidate.denominator);
-    value.set("confidence", candidate.confidence);
-    timeSignatureCandidates.call<void>("push", value);
+    timeSignatureCandidates.call<void>("push", timeSignatureToVal(candidate));
   }
   out.set("timeSignatureCandidates", timeSignatureCandidates);
 
@@ -190,6 +203,18 @@ val analysisResultToVal(const AnalysisResult& result) {
   }
   out.set("downbeatIndices", downbeatIndices);
   out.set("downbeatPhase", result.downbeat_phase);
+
+  // Beat-level evidence the downbeat and meter decisions score, one value per
+  // entry of `beats`. An empty stream means the analysis could not produce it —
+  // lowFrequencyEnergy without audio, chordChange before chords are analyzed —
+  // which is not the same as every beat having scored zero.
+  val beatObservations = val::object();
+  beatObservations.set("onsetStrength",
+                       numberArrayFromVector(result.beat_observations.onset_strength));
+  beatObservations.set("lowFrequencyEnergy",
+                       numberArrayFromVector(result.beat_observations.low_frequency_energy));
+  beatObservations.set("chordChange", numberArrayFromVector(result.beat_observations.chord_change));
+  out.set("beatObservations", beatObservations);
 
   // Chords
   out.set("chords", chordsToVal(result.chords));
@@ -236,11 +261,7 @@ val analysisResultToVal(const AnalysisResult& result) {
   rhythm.set("grooveType", result.rhythm.groove_type);
   rhythm.set("patternRegularity", result.rhythm.pattern_regularity);
   rhythm.set("tempoStability", result.rhythm.tempo_stability);
-  val rhythmTimeSig = val::object();
-  rhythmTimeSig.set("numerator", result.rhythm.time_signature.numerator);
-  rhythmTimeSig.set("denominator", result.rhythm.time_signature.denominator);
-  rhythmTimeSig.set("confidence", result.rhythm.time_signature.confidence);
-  rhythm.set("timeSignature", rhythmTimeSig);
+  rhythm.set("timeSignature", timeSignatureToVal(result.rhythm.time_signature));
   out.set("rhythm", rhythm);
 
   // Melody
@@ -465,30 +486,62 @@ val js_chord_functional_analysis(val samples, int key_root, int key_mode, int sa
   return out;
 }
 
+// Reads an optional JS number into a config field. Field semantics (positive
+// ranges, even sizes, powers of two, ...) stay with the core validators, so
+// what this owns is the JS-number narrowing: a non-finite or out-of-range
+// Number must not reach a static_cast to int/float. An undefined or null value
+// leaves the core default in place. @p subject prefixes the error message.
+template <typename Field>
+void setNumberOption(const val& options, const char* key, const char* subject, Field* field) {
+  const val value = options[key];
+  if (value.isUndefined() || value.isNull()) return;
+  const double raw = value.as<double>();
+  Field converted{};
+  bool converted_ok = false;
+  if constexpr (std::is_integral_v<Field>) {
+    converted_ok = sonare::numeric::checked_round_cast(raw, &converted);
+  } else {
+    converted_ok = sonare::numeric::checked_float_cast(raw, &converted);
+  }
+  if (!converted_ok) {
+    throw SonareException(ErrorCode::InvalidParameter,
+                          std::string(subject) + ": " + key + " must be a finite in-range number");
+  }
+  *field = converted;
+}
+
+// Reads a meter candidate-numerator list from a JS array-like. The entry-count
+// bound is applied to the JS length before any element is read, because the
+// core can only see the vector after the whole array has been converted; the
+// non-empty rule and the [2, 32] per-entry range stay with the core validators.
+// @p subject names the field, e.g. "analyze: meterCandidateNumerators".
+std::vector<int> meterCandidateNumeratorsFromVal(const val& numerators, const char* subject) {
+  const std::size_t length = wasmArrayLikeLength(numerators, subject);
+  if (length > static_cast<std::size_t>(sonare::kMaxMeterCandidateNumerators)) {
+    throw SonareException(ErrorCode::InvalidParameter,
+                          std::string(subject) + " must hold at most " +
+                              std::to_string(sonare::kMaxMeterCandidateNumerators) + " entries");
+  }
+  std::vector<int> out;
+  out.reserve(length);
+  for (int i = 0; i < static_cast<int>(length); ++i) {
+    int converted = 0;
+    if (!sonare::numeric::checked_round_cast(numerators[i].as<double>(), &converted)) {
+      throw SonareException(ErrorCode::InvalidParameter,
+                            std::string(subject) + " entries must be finite in-range numbers");
+    }
+    out.push_back(converted);
+  }
+  return out;
+}
+
 val js_analyze(val samples, int sample_rate, val options) {
   Audio audio = loadValidatedAudio(samples, sample_rate);
   MusicAnalyzerConfig config;
   // Field semantics (positive BPM range, even nFft, positive beam width, ...)
-  // are enforced by validate_config when MusicAnalyzer is constructed below, so
-  // this surface only handles the JS-number narrowing: a non-finite or
-  // out-of-range Number must not reach a static_cast to int/float.
+  // are enforced by validate_config when MusicAnalyzer is constructed below.
   auto set_number = [&](const char* key, auto& field) {
-    const val value = options[key];
-    if (value.isUndefined() || value.isNull()) return;
-    using Field = std::decay_t<decltype(field)>;
-    const double raw = value.as<double>();
-    Field converted{};
-    bool converted_ok = false;
-    if constexpr (std::is_integral_v<Field>) {
-      converted_ok = sonare::numeric::checked_round_cast(raw, &converted);
-    } else {
-      converted_ok = sonare::numeric::checked_float_cast(raw, &converted);
-    }
-    if (!converted_ok) {
-      throw SonareException(ErrorCode::InvalidParameter,
-                            std::string("analyze: ") + key + " must be a finite in-range number");
-    }
-    field = converted;
+    setNumberOption(options, key, "analyze", &field);
   };
   auto set_bool = [&](const char* key, bool& field) {
     const val value = options[key];
@@ -512,37 +565,56 @@ val js_analyze(val samples, int sample_rate, val options) {
   set_number("tempoUpdateIntervalBeats", config.tempo_update_interval_beats);
   set_number("meterDenominator", config.meter_denominator);
   // meterCandidateNumerators is an array, so set_number (a scalar reader) does
-  // not apply. The non-empty rule and the [2, 32] per-entry range stay with
-  // validate_config; what this surface owns is the JS-number narrowing plus the
-  // entry-count bound. The count is rejected from the JS length before any
-  // element is read, because the core can only see the vector after the whole
-  // array has been converted. An undefined/null value leaves the core default
-  // {3, 4, 6} in place.
+  // not apply. An undefined/null value leaves the core default {3, 4, 6} in
+  // place.
   const val meter_numerators = options["meterCandidateNumerators"];
   if (!meter_numerators.isUndefined() && !meter_numerators.isNull()) {
-    const std::size_t length =
-        wasmArrayLikeLength(meter_numerators, "analyze: meterCandidateNumerators");
-    if (length > static_cast<std::size_t>(sonare::kMaxMeterCandidateNumerators)) {
-      throw SonareException(ErrorCode::InvalidParameter,
-                            "analyze: meterCandidateNumerators must hold at most " +
-                                std::to_string(sonare::kMaxMeterCandidateNumerators) + " entries");
-    }
-    std::vector<int> numerators;
-    numerators.reserve(length);
-    for (int i = 0; i < static_cast<int>(length); ++i) {
-      int converted = 0;
-      if (!sonare::numeric::checked_round_cast(meter_numerators[i].as<double>(), &converted)) {
-        throw SonareException(
-            ErrorCode::InvalidParameter,
-            "analyze: meterCandidateNumerators entries must be finite in-range numbers");
-      }
-      numerators.push_back(converted);
-    }
-    config.meter_candidate_numerators = std::move(numerators);
+    config.meter_candidate_numerators =
+        meterCandidateNumeratorsFromVal(meter_numerators, "analyze: meterCandidateNumerators");
   }
   MusicAnalyzer analyzer(audio, config);
   AnalysisResult result = analyzer.analyze();
   return analysisResultToVal(result);
+}
+
+val js_estimate_meter(val beat_times, val beat_strengths, val options) {
+  // Budget both arrays before either one is copied. Their lengths are
+  // deliberately NOT compared here: estimate_meter_from_beats rejects a
+  // mismatch itself, so every surface reports it with the same message.
+  validateWasmFloat32ArrayPair(beat_times, "estimateMeter: beatTimes", beat_strengths,
+                               "estimateMeter: beatStrengths", "estimateMeter",
+                               /*require_matching_lengths=*/false);
+
+  MeterConfig config;
+  const val candidate_numerators = options["candidateNumerators"];
+  if (!candidate_numerators.isUndefined() && !candidate_numerators.isNull()) {
+    config.candidate_numerators =
+        meterCandidateNumeratorsFromVal(candidate_numerators, "estimateMeter: candidateNumerators");
+  }
+  setNumberOption(options, "denominator", "estimateMeter", &config.denominator);
+  setNumberOption(options, "downbeatWeight", "estimateMeter", &config.downbeat_weight);
+  setNumberOption(options, "measureWeight", "estimateMeter", &config.measure_weight);
+  setNumberOption(options, "subdivisionWeight", "estimateMeter", &config.subdivision_weight);
+  setNumberOption(options, "compoundSubdivisionThreshold", "estimateMeter",
+                  &config.compound_subdivision_threshold);
+
+  // validate_meter_config runs inside estimate_meter_from_beats, so the empty
+  // candidate list, the per-entry range, the denominator rule, and the weight
+  // finiteness are all rejected by the core rather than re-checked here.
+  const MeterResult result = estimate_meter_from_beats(
+      float32ArrayToVector(beat_times), float32ArrayToVector(beat_strengths), config);
+
+  // Field names and order mirror meter_result_to_json.
+  val out = val::object();
+  out.set("timeSignature", timeSignatureToVal(result.time_signature));
+  out.set("downbeatPhase", result.downbeat_phase);
+  out.set("candidateScores", numberArrayFromVector(result.candidate_scores));
+  val candidates = val::array();
+  for (const TimeSignature& candidate : result.candidates) {
+    candidates.call<void>("push", timeSignatureToVal(candidate));
+  }
+  out.set("candidates", candidates);
+  return out;
 }
 
 val js_analysis_result_schema_paths() {
@@ -567,6 +639,9 @@ val js_analysis_result_schema_fixture() {
   result.beats.push_back({0.25f, 0, 0.6f});
   result.downbeat_indices.push_back(0);
   result.downbeat_phase = 0;
+  result.beat_observations.onset_strength.push_back(0.6f);
+  result.beat_observations.low_frequency_energy.push_back(0.4f);
+  result.beat_observations.chord_change.push_back(0.2f);
   result.chords.push_back({PitchClass::C, ChordQuality::Major, 0.0f, 1.0f, 0.8f, PitchClass::C});
   result.sections.push_back({SectionType::Verse, 0.0f, 1.0f, 0.5f, 0.9f});
   result.timbre = {0.1f, 0.2f, 0.3f, 0.4f, 0.5f};
@@ -1014,6 +1089,7 @@ void registerQuickAnalysisBindings() {
   function("detectChords", &js_detect_chords);
   function("chordFunctionalAnalysis", &js_chord_functional_analysis);
   function("analyze", &js_analyze);
+  function("estimateMeter", &js_estimate_meter);
   function("_analysisResultSchemaPaths", &js_analysis_result_schema_paths);
   function("_analysisResultSchemaFixture", &js_analysis_result_schema_fixture);
   function("analyzeImpulseResponse", &js_analyze_impulse_response);

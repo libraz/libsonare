@@ -20,6 +20,7 @@ import type {
   Key,
   KeyCandidate,
   KeyDetectionOptions,
+  MeterEstimate,
   RirResult,
   RirSynthOptions,
   RoomEstimateOptions,
@@ -460,6 +461,66 @@ export function analyze(
   validateAnalysisInput('analyze', request.samples, request.sampleRate ?? 22050, request);
   const result = requireModule().analyze(request.samples, request.sampleRate ?? 22050, request);
   return convertAnalysisResult(result);
+}
+
+/**
+ * Canonical request form for {@link estimateMeter}.
+ *
+ * @remarks
+ * Every scoring field is optional and falls back to the core default when
+ * omitted; the core validates them and rejects a value it cannot answer rather
+ * than substituting one.
+ */
+export interface EstimateMeterRequest {
+  /** Beat positions in seconds, non-decreasing. */
+  beatTimes: ArrayLike<number>;
+  /**
+   * Per-beat accent value, the same length as {@link beatTimes}.
+   *
+   * @remarks
+   * `AnalysisResult.beatObservations.onsetStrength` is the intended source —
+   * it is the windowed value the library's own downbeat pass scores.
+   * `beats[].strength` also works but is a single unwindowed envelope frame.
+   */
+  beatStrengths: ArrayLike<number>;
+  /**
+   * Meter numerators to score (default: `[3, 4, 6]`).
+   *
+   * @remarks
+   * Adding a numerator widens the search; it does not force the result. The
+   * list must hold between 1 and 16 entries, each in `[2, 32]`.
+   */
+  candidateNumerators?: number[];
+  /**
+   * Beat unit reported for the detected meter (default: 4). Must be a power of
+   * two in `[1, 32]`. The estimator still reports 8 on its own when it resolves
+   * a compound meter, so this is the unit for everything else.
+   */
+  denominator?: number;
+  /** Weight of the downbeat accent term (default: 1). */
+  downbeatWeight?: number;
+  /** Weight of the measure-periodicity term (default: 0.5). */
+  measureWeight?: number;
+  /** Weight of the subdivision term (default: 0.15). */
+  subdivisionWeight?: number;
+  /** Score ratio above which a compound meter is preferred (default: 0.85). */
+  compoundSubdivisionThreshold?: number;
+}
+
+/**
+ * Estimate meter over a caller-supplied beat series.
+ *
+ * @param request - Beat series plus optional scoring configuration
+ * @returns The selected signature, its downbeat phase, and the scored candidates
+ *
+ * @remarks
+ * Scores only the per-beat strengths, so no audio and no frame-level onset
+ * envelope is needed: an arbitrary span of an existing analysis can be scored
+ * without re-running it. Pass `beatObservations.onsetStrength` rather than
+ * `beats[].strength` — see {@link EstimateMeterRequest.beatStrengths}.
+ */
+export function estimateMeter(request: EstimateMeterRequest): MeterEstimate {
+  return requireModule().estimateMeter(request.beatTimes, request.beatStrengths, request);
 }
 
 export function analyzeImpulseResponse(request: AnalyzeImpulseResponseRequest): AcousticResult;

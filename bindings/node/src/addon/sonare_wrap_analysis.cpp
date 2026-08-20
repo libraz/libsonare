@@ -203,6 +203,54 @@ Napi::Value SonareWrap::DetectDownbeats(const Napi::CallbackInfo& info) {
   return result;
 }
 
+Napi::Value SonareWrap::EstimateMeter(const Napi::CallbackInfo& info) {
+  Napi::Env env = info.Env();
+
+  if (!RequireFloat32Array(info, 0, "estimateMeter: beatTimes must be a Float32Array") ||
+      !RequireFloat32Array(info, 1, "estimateMeter: beatStrengths must be a Float32Array")) {
+    return env.Undefined();
+  }
+
+  auto beat_times = info[0].As<Napi::Float32Array>();
+  auto beat_strengths = info[1].As<Napi::Float32Array>();
+  // The C ABI carries a single beat count for both arrays, so a mismatch cannot
+  // reach the core guard that rejects it: passing the shorter length would read
+  // a prefix nobody asked about, and the longer one would run off a buffer.
+  if (beat_times.ElementLength() != beat_strengths.ElementLength()) {
+    Napi::RangeError::New(
+        env, "estimateMeter: beatTimes and beatStrengths must be the same length (got " +
+                 std::to_string(beat_times.ElementLength()) + " and " +
+                 std::to_string(beat_strengths.ElementLength()) + ")")
+        .ThrowAsJavaScriptException();
+    return env.Undefined();
+  }
+
+  SonareMeterOptions options = sonare_meter_options_default();
+  if (info.Length() >= 3 && info[2].IsObject()) {
+    Napi::Object bag = info[2].As<Napi::Object>();
+    options.denominator = node_int_option(bag, "denominator", options.denominator);
+    options.downbeat_weight = node_float_option(bag, "downbeatWeight", options.downbeat_weight);
+    options.measure_weight = node_float_option(bag, "measureWeight", options.measure_weight);
+    options.subdivision_weight =
+        node_float_option(bag, "subdivisionWeight", options.subdivision_weight);
+    options.compound_subdivision_threshold = node_float_option(
+        bag, "compoundSubdivisionThreshold", options.compound_subdivision_threshold);
+    if (!ReadMeterCandidateNumerators(bag, "candidateNumerators", options.candidate_numerators,
+                                      &options.candidate_numerator_count)) {
+      return env.Undefined();
+    }
+  }
+
+  char* json_str = nullptr;
+  SonareError err = sonare_estimate_meter_json(beat_times.Data(), beat_strengths.Data(),
+                                               beat_times.ElementLength(), &options, &json_str);
+  if (err != SONARE_OK) {
+    sonare_node::ThrowSonareError(env, err);
+    return env.Undefined();
+  }
+  return ParseJsonObjectAndFree(env, json_str, "Failed to parse meter estimation JSON");
+}
+
 Napi::Value SonareWrap::DetectOnsets(const Napi::CallbackInfo& info) {
   Napi::Env env = info.Env();
 

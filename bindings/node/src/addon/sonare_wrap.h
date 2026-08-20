@@ -44,6 +44,7 @@ class SonareWrap : public Napi::ObjectWrap<SonareWrap> {
   static Napi::Value DetectBeats(const Napi::CallbackInfo& info);
   static Napi::Value DetectDownbeats(const Napi::CallbackInfo& info);
   static Napi::Value DetectOnsets(const Napi::CallbackInfo& info);
+  static Napi::Value EstimateMeter(const Napi::CallbackInfo& info);
   static Napi::Value Analyze(const Napi::CallbackInfo& info);
   static Napi::Value AnalyzeAsync(const Napi::CallbackInfo& info);
   static Napi::Value AnalyzeWithProgress(const Napi::CallbackInfo& info);

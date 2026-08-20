@@ -50,6 +50,25 @@ void DecorateSonareError(Napi::Env env, Napi::Object error, SonareError err);
 /// aborts the process.
 bool ReadMusicAnalyzeOptions(const Napi::Value& value, SonareMusicAnalyzeOptions* options);
 
+/// @brief Read a meter candidate-numerator list from @p object's @p key into a C
+/// options struct's fixed-capacity array, writing the entry count to @p count.
+/// Shared by every entry point carrying such a list, so the capacity rule and
+/// the rejection wording cannot drift apart between them.
+///
+/// An absent or non-array value leaves @p numerators and @p count alone, which
+/// keeps whatever default the caller staged — the type-checked fallback the
+/// node_*_option family gives every other key. An array replaces the set
+/// wholesale, including an empty one: the core rejects a cleared list rather
+/// than silently restoring the default, so the caller is told instead of
+/// getting a set it did not ask for.
+///
+/// The two cases that cannot fall back throw exactly one catchable JS error and
+/// return false: a list longer than the C-ABI capacity (truncating it would
+/// analyse a different meter set than requested) and a non-numeric entry.
+bool ReadMeterCandidateNumerators(const Napi::Object& object, const char* key,
+                                  int (&numerators)[SONARE_MAX_METER_CANDIDATE_NUMERATORS],
+                                  int* count);
+
 bool IsFloat32Array(const Napi::Value& value);
 bool IsUint8Array(const Napi::Value& value);
 bool IsInt32Array(const Napi::Value& value);
@@ -126,6 +145,16 @@ const char* ChordQualityName(SonareChordQuality quality);
 Napi::Object KeyToObject(Napi::Env env, SonarePitchClass root, SonareMode mode, float confidence);
 Napi::Object AnalysisToObject(Napi::Env env, const SonareAnalysisResult& analysis);
 bool EnrichFullAnalysisObject(Napi::Env env, Napi::Object result, Napi::Error* error);
+
+/// @brief Parse a heap-allocated C-ABI JSON string with the JS engine's own
+/// JSON.parse and release it, whether or not the parse succeeded.
+///
+/// Throws a JS Error carrying @p failure_message when the string is missing or
+/// does not parse into an object, so a caller only has to check
+/// env.IsExceptionPending() before using the result.
+///
+/// @return The parsed object or env.Undefined() (exception already thrown).
+Napi::Value ParseJsonObjectAndFree(Napi::Env env, char* json, const char* failure_message);
 
 /// @brief Run sonare_analyze_json, parse the result with JSON.parse, inject a
 /// legacy `beatTimes` Float32Array derived from `beats[].time`, and return the

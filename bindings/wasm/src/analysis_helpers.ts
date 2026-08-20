@@ -161,6 +161,7 @@ export function convertAnalysisResult(wasm: WasmAnalysisResult): AnalysisResult 
     beats: wasm.beats,
     downbeatIndices: wasm.downbeatIndices,
     downbeatPhase: wasm.downbeatPhase,
+    beatObservations: wasm.beatObservations,
     chords: wasm.chords.map((c) => ({
       root: c.root as PitchClass,
       bass: c.bass as PitchClass,

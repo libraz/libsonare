@@ -2,6 +2,7 @@
 #include <cmath>
 
 #include "analysis/analysis_json.h"
+#include "analysis/meter_analyzer.h"
 #include "analysis/onset_analyzer.h"
 #include "c_api/core_internal.h"
 
@@ -329,6 +330,80 @@ SonareError sonare_analyze_json_ex(const float* samples, size_t length, int samp
     *out_json = copy_string(analysis_result_to_json(result));
     return SONARE_OK;
   });
+}
+
+SonareMeterOptions sonare_meter_options_default(void) {
+  const MeterConfig config;
+  SonareMeterOptions options = {{},
+                                0,
+                                config.denominator,
+                                config.downbeat_weight,
+                                config.measure_weight,
+                                config.subdivision_weight,
+                                config.compound_subdivision_threshold};
+  const size_t count = std::min(config.candidate_numerators.size(),
+                                static_cast<size_t>(SONARE_MAX_METER_CANDIDATE_NUMERATORS));
+  for (size_t i = 0; i < count; ++i) {
+    options.candidate_numerators[i] = config.candidate_numerators[i];
+  }
+  options.candidate_numerator_count = static_cast<int>(count);
+  return options;
+}
+
+SonareError sonare_estimate_meter_json(const float* beat_times, const float* beat_strengths,
+                                       size_t beat_count, const SonareMeterOptions* options,
+                                       char** out_json) {
+  SONARE_C_API_ENTRY;
+  // Value rules live in validate_meter_config, which estimate_meter_from_beats
+  // applies; this entry point only checks what the core cannot see (the
+  // pointers and the length of the flat candidate array it never receives).
+  if (out_json == nullptr) {
+    return SONARE_ERROR_INVALID_PARAMETER;
+  }
+  // Cleared before every other early return, so the contract is "always null on
+  // error" rather than "null only on the paths that reach the try block". The
+  // options check is deliberately below this line for that reason.
+  *out_json = nullptr;
+  if (options == nullptr) {
+    return SONARE_ERROR_INVALID_PARAMETER;
+  }
+  // A zero count with null pointers is an empty beat series, not a null-pointer
+  // mistake. Rejecting it here would answer it with the generic "invalid
+  // parameter" and hide the core's specific message from this surface while
+  // WASM, which calls the core directly, reported the specific one — so the
+  // null check applies only where a pointer is actually going to be read.
+  if (beat_count > 0 && (beat_times == nullptr || beat_strengths == nullptr)) {
+    return SONARE_ERROR_INVALID_PARAMETER;
+  }
+  if (options->candidate_numerator_count < 0 ||
+      options->candidate_numerator_count > SONARE_MAX_METER_CANDIDATE_NUMERATORS) {
+    return SONARE_ERROR_INVALID_PARAMETER;
+  }
+
+  SONARE_C_TRY
+  MeterConfig config;
+  config.candidate_numerators.assign(
+      options->candidate_numerators,
+      options->candidate_numerators + options->candidate_numerator_count);
+  config.denominator = options->denominator;
+  config.downbeat_weight = options->downbeat_weight;
+  config.measure_weight = options->measure_weight;
+  config.subdivision_weight = options->subdivision_weight;
+  config.compound_subdivision_threshold = options->compound_subdivision_threshold;
+
+  // Built only when there is something to copy: a (null, null) iterator pair is
+  // not a valid empty range, and an empty series has to reach the core guard
+  // rather than trip over its own construction on the way there.
+  std::vector<float> times;
+  std::vector<float> strengths;
+  if (beat_count > 0) {
+    times.assign(beat_times, beat_times + beat_count);
+    strengths.assign(beat_strengths, beat_strengths + beat_count);
+  }
+  *out_json =
+      copy_string(meter_result_to_json(estimate_meter_from_beats(times, strengths, config)));
+  return SONARE_OK;
+  SONARE_C_CATCH
 }
 
 SonareError sonare_analyze_json(const float* samples, size_t length, int sample_rate,

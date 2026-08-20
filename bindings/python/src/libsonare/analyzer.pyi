@@ -34,6 +34,7 @@ from .types import (
     MasteringStereoResult,
     MelodyResult,
     MelSpectrogramResult,
+    MeterEstimate,
     MeterTap,
     MfccResult,
     MixMeterSnapshot,
@@ -288,6 +289,17 @@ def analyze_with_progress(
     *,
     cancel: CancelCallback | None = None,
 ) -> AnalysisResult: ...
+def estimate_meter(
+    beat_times: Sequence[float],
+    beat_strengths: Sequence[float],
+    *,
+    candidate_numerators: Sequence[int] | None = None,
+    denominator: int = 4,
+    downbeat_weight: float = 1.0,
+    measure_weight: float = 0.5,
+    subdivision_weight: float = 0.15,
+    compound_subdivision_threshold: float = 0.85,
+) -> MeterEstimate: ...
 def analyze_bpm(
     samples: FloatSamples,
     sample_rate: int = 22050,

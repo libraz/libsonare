@@ -3,6 +3,7 @@
 
 #include "analysis/music_analyzer.h"
 
+#include <algorithm>
 #include <atomic>
 #include <catch2/catch_approx.hpp>
 #include <catch2/catch_test_macros.hpp>
@@ -708,4 +709,60 @@ TEST_CASE("MusicAnalyzer tempo update interval changes the tracked beats",
 
   REQUIRE(shorter_frames.size() >= 6);
   REQUIRE(longer_frames != shorter_frames);
+}
+
+TEST_CASE("MusicAnalyzer publishes the beat observations behind the downbeat decision",
+          "[.][slow][music_analyzer]") {
+  Audio audio = create_offset_chord_audio(120.0f, 4, 1, 22050, 8.0f);
+
+  MusicAnalyzerConfig config;
+  config.start_bpm = 120.0f;
+
+  MusicAnalyzer analyzer(audio, config);
+  const AnalysisResult result = analyzer.analyze();
+
+  const size_t beat_count = result.beats.size();
+  REQUIRE(beat_count >= 8);
+  REQUIRE(result.beat_observations.onset_strength.size() == beat_count);
+  REQUIRE(result.beat_observations.low_frequency_energy.size() == beat_count);
+
+  // Chord-change evidence exists only once the chord analyzer has run, and the
+  // result reads the observations after it. Reading them next to the beats
+  // would publish the preliminary pass's empty vector instead.
+  REQUIRE_FALSE(result.chords.empty());
+  const auto& chord_change = result.beat_observations.chord_change;
+  REQUIRE(chord_change.size() == beat_count);
+  REQUIRE(std::any_of(chord_change.begin(), chord_change.end(),
+                      [](float value) { return value > 0.0f; }));
+
+  // Without this the assertions above would hold for either read order: the
+  // stream is empty right up until the chord analyzer's lazy initialization
+  // re-refines the downbeats, so it is the ordering that fills it.
+  MusicAnalyzer staged(audio, config);
+  (void)staged.beat_analyzer().beats();
+  REQUIRE(staged.beat_analyzer().beat_chord_change_observations().empty());
+  (void)staged.chord_analyzer().count();
+  REQUIRE(staged.beat_analyzer().beat_chord_change_observations().size() == beat_count);
+
+  // What the result carries is what the analyzer holds after that refinement.
+  REQUIRE(result.beat_observations.onset_strength ==
+          analyzer.beat_analyzer().beat_onset_observations());
+  REQUIRE(result.beat_observations.low_frequency_energy ==
+          analyzer.beat_analyzer().beat_low_frequency_observations());
+  REQUIRE(chord_change == analyzer.beat_analyzer().beat_chord_change_observations());
+
+  // Same distinction the accessors exist for: the windowed observation is not
+  // the single unwindowed envelope frame Beat::strength samples.
+  bool differs = false;
+  for (size_t i = 0; i < beat_count && !differs; ++i) {
+    differs = result.beat_observations.onset_strength[i] != result.beats[i].strength;
+  }
+  REQUIRE(differs);
+
+  for (size_t i = 0; i < beat_count; ++i) {
+    CAPTURE(i);
+    REQUIRE(std::isfinite(result.beat_observations.onset_strength[i]));
+    REQUIRE(std::isfinite(result.beat_observations.low_frequency_energy[i]));
+    REQUIRE(std::isfinite(chord_change[i]));
+  }
 }

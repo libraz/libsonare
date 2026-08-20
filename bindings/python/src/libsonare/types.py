@@ -10,6 +10,9 @@ from ._types_analysis import (
     AcousticResult as AcousticResult,
 )
 from ._types_analysis import (
+    AnalysisBeatObservations as AnalysisBeatObservations,
+)
+from ._types_analysis import (
     AnalysisDynamics as AnalysisDynamics,
 )
 from ._types_analysis import (
@@ -140,6 +143,9 @@ from ._types_analysis import (
 )
 from ._types_analysis import (
     MelSpectrogramResult as MelSpectrogramResult,
+)
+from ._types_analysis import (
+    MeterEstimate as MeterEstimate,
 )
 from ._types_analysis import (
     MeterTap as MeterTap,

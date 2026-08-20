@@ -184,6 +184,39 @@ SonareError sonare_analyze_json_with_progress(const float* samples, size_t lengt
                                               SonareAnalyzeProgressCallback callback,
                                               void* user_data, char** out_json);
 
+/* Scoring options for sonare_estimate_meter_json. Always start from
+   sonare_meter_options_default() rather than zeroing the struct: a zeroed
+   candidate_numerator_count is rejected, not treated as "use the default set". */
+typedef struct {
+  /* Meter numerators to score. Only the first candidate_numerator_count
+     entries are read; each must be in [2, 32] and the count must be at least
+     one. */
+  int candidate_numerators[SONARE_MAX_METER_CANDIDATE_NUMERATORS];
+  int candidate_numerator_count;
+  /* Beat unit reported for the detected meter; a power of two in [1, 32]. The
+     estimator still reports 8 on its own when it resolves a compound meter. */
+  int denominator;
+  float downbeat_weight;
+  float measure_weight;
+  float subdivision_weight;
+  float compound_subdivision_threshold;
+} SonareMeterOptions;
+
+SonareMeterOptions sonare_meter_options_default(void);
+
+/* Estimates meter over a caller-supplied beat series, without audio and
+   without re-running analysis. beat_times and beat_strengths are parallel
+   arrays of beat_count entries; beat_times must be non-decreasing.
+   AnalysisResult beatObservations.onsetStrength is the intended strength
+   source, being the windowed value the library's own downbeat pass scores;
+   beats[].strength also works but is a single unwindowed envelope frame.
+   Emits the schema documented on meter_result_to_json. *out_json is
+   heap-allocated and MUST be released with sonare_free_string; on any error it
+   is set to NULL, so a caller may check it instead of the return code. */
+SonareError sonare_estimate_meter_json(const float* beat_times, const float* beat_strengths,
+                                       size_t beat_count, const SonareMeterOptions* options,
+                                       char** out_json);
+
 /* Cancellation-capable equivalent of sonare_analyze_json_with_progress. When
    cancelled, returns SONARE_ERROR_CANCELLED and leaves *out_json NULL. */
 SonareError sonare_analyze_json_with_progress_ex(

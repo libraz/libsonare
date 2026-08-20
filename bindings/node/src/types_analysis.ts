@@ -73,8 +73,34 @@ export interface BpmHypothesis {
 export interface AnalysisBeat {
   /** Beat time in seconds. */
   time: number;
-  /** Relative beat strength / salience. */
+  /**
+   * The onset envelope sampled at the single frame nearest this beat. It is a
+   * raw, unnormalized value: its scale depends on the material, and it shifts
+   * with beat-position jitter because nothing is averaged around the beat. For
+   * accent scoring use {@link BeatObservations.onsetStrength}, the windowed
+   * aggregate the library's own downbeat and meter passes score.
+   */
   strength: number;
+}
+
+/**
+ * Beat-level evidence the library's own downbeat and meter decisions score —
+ * the input to those decisions, not their output. Each stream is parallel to
+ * {@link AnalysisResult.beats}, one value per beat. An empty stream means the
+ * analysis could not produce it, NOT that every beat scored zero.
+ */
+export interface BeatObservations {
+  /**
+   * Onset-envelope aggregate over a window around each beat. This is the
+   * strength {@link estimateMeter} is meant to be fed;
+   * {@link AnalysisBeat.strength} is a single unwindowed frame of the same
+   * envelope.
+   */
+  onsetStrength: number[];
+  /** Low-frequency energy at each beat. Empty when the analysis ran without audio. */
+  lowFrequencyEnergy: number[];
+  /** Chord-change evidence at each beat. Empty until chords are analyzed. */
+  chordChange: number[];
 }
 
 /**
@@ -172,6 +198,8 @@ export interface AnalysisResult {
    */
   beatTimes: Float32Array;
   beats: AnalysisBeat[];
+  /** Per-beat evidence behind the downbeat and meter decisions. */
+  beatObservations: BeatObservations;
   /** Indices into `beats` that fall on a measure start. Not the same length as `beats`. */
   downbeatIndices: number[];
   /** Beat index the first measure starts on. */
@@ -190,6 +218,26 @@ export interface AnalysisResult {
   melody: AnalysisMelody;
   /** Human-readable musical form label (e.g. `'AABA'`). */
   form: string;
+}
+
+/** Result of {@link estimateMeter}. */
+export interface MeterEstimate {
+  /** The best-supported meter over the scored beat series. */
+  timeSignature: TimeSignature;
+  /** Beat index the first measure starts on; always in `[0, timeSignature.numerator)`. */
+  downbeatPhase: number;
+  /**
+   * Raw support score per *requested* candidate numerator, in the order the
+   * request listed them.
+   */
+  candidateScores: number[];
+  /**
+   * The scored meters ordered by descending support, with `confidence` as each
+   * one's share of the total score. This ordering is not the request order, so
+   * `candidates[i]` is not the candidate `candidateScores[i]` scores — match
+   * the two on `numerator` rather than by index.
+   */
+  candidates: TimeSignature[];
 }
 
 /**

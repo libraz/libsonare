@@ -44,4 +44,19 @@ std::string analysis_result_to_json(const AnalysisResult& result);
 /// this list.
 const std::vector<std::string>& analysis_result_schema_paths();
 
+/// @brief Serializes a standalone meter estimate to a camelCase JSON object.
+/// @details Schema (every field always present):
+///   {
+///     "timeSignature": {numerator, denominator, confidence},
+///     "downbeatPhase": number,
+///     "candidateScores": [number],
+///     "candidates": [{numerator, denominator, confidence}]
+///   }
+/// candidateScores is parallel to the requested candidate numerators, while
+/// candidates is ordered by descending support, so the two do not index alike.
+std::string meter_result_to_json(const MeterResult& result);
+
+/// @brief Canonical field paths for the standalone meter estimate schema.
+const std::vector<std::string>& meter_result_schema_paths();
+
 }  // namespace sonare

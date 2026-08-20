@@ -229,8 +229,50 @@ export interface AnalyzeSectionsOptions {
  * Detected beat
  */
 export interface Beat {
+  /** Beat position in seconds. */
   time: number;
+  /**
+   * Onset-envelope value sampled at the beat's frame.
+   *
+   * @remarks
+   * A single raw frame of the onset envelope, not a normalized or relative
+   * salience: it is unbounded, its scale depends on the material, and it moves
+   * with any jitter in the beat position. For accent scoring use
+   * {@link BeatObservations.onsetStrength}, which is the windowed aggregate the
+   * library's own downbeat pass scores.
+   */
   strength: number;
+}
+
+/**
+ * Beat-level evidence behind the downbeat and meter decisions.
+ *
+ * @remarks
+ * These are inputs to the library's decision, not outputs of it, exposed so a
+ * caller running its own meter work scores the same evidence instead of
+ * reconstructing a weaker approximation from the frame-level onset envelope.
+ * Each non-empty stream holds one value per entry of
+ * {@link AnalysisResult.beats} and indexes in parallel with it. An empty stream
+ * means the analysis could not produce it, which is not the same as every beat
+ * having scored zero.
+ */
+export interface BeatObservations {
+  /**
+   * Beat-local onset-strength window.
+   *
+   * @remarks
+   * Unlike {@link Beat.strength} this is aggregated over a window around the
+   * beat rather than sampled at a single frame, so it is the stream to score
+   * accents with.
+   */
+  onsetStrength: number[];
+  /**
+   * Beat-local low-frequency energy — the accent evidence a log-spectral
+   * difference discards. Empty when the analysis ran without audio.
+   */
+  lowFrequencyEnergy: number[];
+  /** Per-beat chord-change evidence. Empty until chords are analyzed. */
+  chordChange: number[];
 }
 
 /**
@@ -323,6 +365,34 @@ export interface TimeSignature {
   confidence: number;
 }
 
+/**
+ * Meter estimated over a caller-supplied beat series.
+ */
+export interface MeterEstimate {
+  /** Selected time signature. */
+  timeSignature: TimeSignature;
+  /** Beat index the first measure starts on, in `[0, timeSignature.numerator)`. */
+  downbeatPhase: number;
+  /**
+   * Multi-comb score per requested candidate numerator.
+   *
+   * @remarks
+   * Parallel to the `candidateNumerators` that were requested, in the order
+   * they were given. This does NOT index alike with {@link candidates}, which
+   * is ordered by descending support.
+   */
+  candidateScores: number[];
+  /**
+   * Candidate signatures ordered by descending support.
+   *
+   * @remarks
+   * A ranking, so entry `k` is the k-th best hypothesis — not the k-th
+   * requested numerator. Use {@link candidateScores} to read the score of a
+   * specific requested numerator.
+   */
+  candidates: TimeSignature[];
+}
+
 /** Existing tempo-estimator hypothesis retained by unified analysis. */
 export interface BpmHypothesis {
   value: number;
@@ -384,6 +454,11 @@ export interface AnalysisResult {
    * moves the first measure start.
    */
   downbeatPhase: number;
+  /**
+   * Beat-level evidence behind the downbeat and meter decisions, parallel to
+   * {@link AnalysisResult.beats}.
+   */
+  beatObservations: BeatObservations;
   chords: Chord[];
   sections: Section[];
   timbre: Timbre;

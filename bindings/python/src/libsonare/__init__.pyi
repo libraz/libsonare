@@ -158,6 +158,9 @@ from .analyzer import (
     engine_abi_version as engine_abi_version,
 )
 from .analyzer import (
+    estimate_meter as estimate_meter,
+)
+from .analyzer import (
     estimate_room as estimate_room,
 )
 from .analyzer import (
@@ -602,6 +605,9 @@ from .types import (
     AcousticResult as AcousticResult,
 )
 from .types import (
+    AnalysisBeatObservations as AnalysisBeatObservations,
+)
+from .types import (
     AnalysisDynamics as AnalysisDynamics,
 )
 from .types import (
@@ -774,6 +780,9 @@ from .types import (
 )
 from .types import (
     MelSpectrogramResult as MelSpectrogramResult,
+)
+from .types import (
+    MeterEstimate as MeterEstimate,
 )
 from .types import (
     MeterTap as MeterTap,

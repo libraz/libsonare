@@ -33,6 +33,7 @@ export type {
   DetectChordsRequest,
   DetectKeyRequest,
   DynamicsAnalysisResult,
+  EstimateMeterRequest,
   MusicAnalyzeOptions,
   MusicAnalyzeRequest,
   RhythmAnalysisResult,
@@ -57,6 +58,7 @@ export {
   detectKey,
   detectKeyCandidates,
   detectOnsets,
+  estimateMeter,
   hasFfmpegSupport,
 } from './quick_analysis';
 

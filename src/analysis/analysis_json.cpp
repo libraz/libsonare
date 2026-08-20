@@ -292,4 +292,42 @@ std::string analysis_result_to_json(const AnalysisResult& result) {
   return sonare::util::json::dump(Value(std::move(root)));
 }
 
+const std::vector<std::string>& meter_result_schema_paths() {
+  static const std::vector<std::string> paths = {
+      "timeSignature",
+      "timeSignature.numerator",
+      "timeSignature.denominator",
+      "timeSignature.confidence",
+      "downbeatPhase",
+      "candidateScores",
+      "candidates",
+      "candidates[].numerator",
+      "candidates[].denominator",
+      "candidates[].confidence",
+  };
+  return paths;
+}
+
+std::string meter_result_to_json(const MeterResult& result) {
+  Object root;
+  root["timeSignature"] = time_signature_to_value(result.time_signature);
+  root["downbeatPhase"] = Value(result.downbeat_phase);
+
+  Array scores;
+  scores.reserve(result.candidate_scores.size());
+  for (float score : result.candidate_scores) {
+    scores.push_back(Value(score));
+  }
+  root["candidateScores"] = Value(std::move(scores));
+
+  Array candidates;
+  candidates.reserve(result.candidates.size());
+  for (const auto& candidate : result.candidates) {
+    candidates.push_back(time_signature_to_value(candidate));
+  }
+  root["candidates"] = Value(std::move(candidates));
+
+  return sonare::util::json::dump(Value(std::move(root)));
+}
+
 }  // namespace sonare

@@ -19,6 +19,7 @@ import type {
   KeyDetectionOptions,
   MelodyOptions,
   MelodyResult,
+  MeterEstimate,
   RhythmResult,
   RirResult,
   RirSynthOptions,
@@ -97,6 +98,38 @@ export interface MusicAnalyzeOptions {
   meterDenominator?: number;
 }
 export interface MusicAnalyzeRequest extends SamplesRequest, MusicAnalyzeOptions {}
+
+/** Request for {@link estimateMeter}. */
+export interface EstimateMeterRequest {
+  /** Beat positions in seconds, non-decreasing. */
+  beatTimes: ArrayLike<number>;
+  /**
+   * Per-beat accent value, the same length as `beatTimes`. `AnalysisResult`'s
+   * `beatObservations.onsetStrength` is the intended source; `beats[].strength`
+   * also works but is a single unwindowed envelope frame.
+   */
+  beatStrengths: ArrayLike<number>;
+  /**
+   * Meter numerators to score. At most 16 entries, each in `[2, 32]`; an empty
+   * list is rejected rather than restoring the default. Widening the set does
+   * not force a wider meter. Default `[3, 4, 6]`.
+   */
+  candidateNumerators?: number[];
+  /**
+   * Beat unit reported for the detected meter; a power of two in `[1, 32]`. The
+   * estimator still reports 8 on its own when it resolves a compound meter.
+   * Default 4.
+   */
+  denominator?: number;
+  /** Weight on the accent at each measure's first beat. Default 1. */
+  downbeatWeight?: number;
+  /** Weight on measure-to-measure accent agreement. Default 0.5. */
+  measureWeight?: number;
+  /** Weight on the subdivision accent pattern. Default 0.15. */
+  subdivisionWeight?: number;
+  /** Subdivision score at which a 6 candidate is reported as compound (x/8). Default 0.85. */
+  compoundSubdivisionThreshold?: number;
+}
 
 export interface AnalyzeSectionsRequest extends AnalyzeSectionsOptions, SamplesRequest {}
 export interface AnalyzeMelodyRequest extends MelodyOptions, SamplesRequest {}
@@ -200,6 +233,30 @@ export function analyze(
 ): AnalysisResult {
   const request = samples instanceof Float32Array ? { samples, sampleRate, ...options } : samples;
   return addon.analyze(request.samples, request.sampleRate ?? 22050, request);
+}
+
+const asFloat32Array = (values: ArrayLike<number>): Float32Array =>
+  values instanceof Float32Array ? values : Float32Array.from(values);
+
+/**
+ * Estimate meter over a caller-supplied beat series, without audio and without
+ * re-running analysis, so an arbitrary span of an existing result — or a beat
+ * series from anywhere else — can be scored on its own.
+ *
+ * `beatStrengths` is the accent evidence the scoring reads; feed it
+ * `AnalysisResult`'s `beatObservations.onsetStrength` rather than
+ * `beats[].strength`, which is a single unwindowed envelope frame.
+ *
+ * Option values are validated by the core, so an out-of-range weight, a
+ * denominator that is not a power of two, an empty `candidateNumerators`, or a
+ * `beatTimes` that decreases surfaces as a `SonareError`.
+ */
+export function estimateMeter(request: EstimateMeterRequest): MeterEstimate {
+  return addon.estimateMeter(
+    asFloat32Array(request.beatTimes),
+    asFloat32Array(request.beatStrengths),
+    request,
+  );
 }
 
 /**

@@ -71,6 +71,7 @@ from .analyzer import (
     detect_onsets,
     ebur128_loudness_range,
     engine_abi_version,
+    estimate_meter,
     estimate_room,
     estimate_tuning,
     fix_frames,
@@ -243,6 +244,7 @@ from .engine import ClipPageProvider, FileClipPageProvider, RealtimeEngine
 from .streaming import StreamAnalyzer
 from .types import (
     AcousticResult,
+    AnalysisBeatObservations,
     AnalysisDynamics,
     AnalysisMelody,
     AnalysisResult,
@@ -313,6 +315,7 @@ from .types import (
     MelodyPoint,
     MelodyResult,
     MelSpectrogramResult,
+    MeterEstimate,
     MeterTap,
     MeterTelemetryRecord,
     MeterTelemetryRecordWide,
@@ -368,6 +371,7 @@ except PackageNotFoundError:
 
 __all__ = [
     "AcousticResult",
+    "AnalysisBeatObservations",
     "AnalysisDynamics",
     "AnalysisMelody",
     "AnalysisResult",
@@ -450,6 +454,7 @@ __all__ = [
     "MelodyPoint",
     "MelodyResult",
     "MelSpectrogramResult",
+    "MeterEstimate",
     "MeterTap",
     "MeterTelemetryRecord",
     "MeterTelemetryRecordWide",
@@ -546,6 +551,7 @@ __all__ = [
     "detect_onsets",
     "ebur128_loudness_range",
     "engine_abi_version",
+    "estimate_meter",
     "project_abi_version",
     "synth_enum_tables",
     "synth_preset_names",

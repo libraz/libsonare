@@ -6,6 +6,8 @@
 #include <numeric>
 
 #include "util/constants.h"
+#include "util/exception.h"
+#include "util/numeric_validation.h"
 
 namespace sonare {
 
@@ -275,6 +277,75 @@ MeterResult estimate_meter(const std::vector<float>& onset_strength, const std::
                            const MeterConfig& config) {
   MeterAnalyzer analyzer(onset_strength, beats, config);
   return analyzer.result();
+}
+
+void validate_meter_config(const MeterConfig& config) {
+  // An empty candidate set makes the estimator return a fixed low-confidence
+  // 4/4 rather than searching, which reads as a detection result. Reject it so
+  // a caller who cleared the list is told instead of being answered.
+  SONARE_CHECK_MSG(!config.candidate_numerators.empty(), ErrorCode::InvalidParameter,
+                   "MeterConfig: candidateNumerators must not be empty");
+  SONARE_CHECK_MSG(
+      config.candidate_numerators.size() <= static_cast<size_t>(kMaxMeterCandidateNumerators),
+      ErrorCode::InvalidParameter, "MeterConfig: candidateNumerators must hold at most 16 entries");
+  for (int numerator : config.candidate_numerators) {
+    SONARE_CHECK_MSG(
+        numerator >= kMinMeterCandidateNumerator && numerator <= kMaxMeterCandidateNumerator,
+        ErrorCode::InvalidParameter, "MeterConfig: candidateNumerators entries must be in [2, 32]");
+  }
+  // Only a power of two is a note value, and the estimator reports 8 itself
+  // when it resolves a compound meter, so a non-power-of-two could never
+  // round-trip through the reported signature.
+  SONARE_CHECK_MSG(config.denominator > 0 && config.denominator <= kMaxMeterDenominator &&
+                       (config.denominator & (config.denominator - 1)) == 0,
+                   ErrorCode::InvalidParameter,
+                   "MeterConfig: denominator must be a power of two in [1, 32]");
+  SONARE_CHECK_MSG(numeric::finite_non_negative(config.downbeat_weight),
+                   ErrorCode::InvalidParameter,
+                   "MeterConfig: downbeatWeight must be finite and non-negative");
+  SONARE_CHECK_MSG(numeric::finite_non_negative(config.measure_weight), ErrorCode::InvalidParameter,
+                   "MeterConfig: measureWeight must be finite and non-negative");
+  SONARE_CHECK_MSG(numeric::finite_non_negative(config.subdivision_weight),
+                   ErrorCode::InvalidParameter,
+                   "MeterConfig: subdivisionWeight must be finite and non-negative");
+  SONARE_CHECK_MSG(numeric::finite_non_negative(config.compound_subdivision_threshold),
+                   ErrorCode::InvalidParameter,
+                   "MeterConfig: compoundSubdivisionThreshold must be finite and non-negative");
+}
+
+MeterResult estimate_meter_from_beats(const std::vector<float>& beat_times,
+                                      const std::vector<float>& beat_strengths,
+                                      const MeterConfig& config) {
+  validate_meter_config(config);
+  // Mismatched lengths mean the caller paired the wrong two arrays. Scoring the
+  // shorter prefix would answer a question nobody asked, so reject instead.
+  SONARE_CHECK_MSG(beat_times.size() == beat_strengths.size(), ErrorCode::InvalidParameter,
+                   "estimateMeter: beatTimes and beatStrengths must be the same length");
+  // No beats is not a short search, it is nothing to search. The estimator
+  // would answer with its fixed low-confidence 4/4, which reads as a detection
+  // result — the same objection validate_meter_config makes to an empty
+  // candidate set, reached through the same code path. A series that holds at
+  // least one beat still gets that default, because there the caller did supply
+  // something to score and the confidence is the honest report on it.
+  SONARE_CHECK_MSG(!beat_times.empty(), ErrorCode::InvalidParameter,
+                   "estimateMeter: beatTimes must not be empty");
+
+  std::vector<Beat> beats;
+  beats.reserve(beat_times.size());
+  for (size_t i = 0; i < beat_times.size(); ++i) {
+    SONARE_CHECK_MSG(numeric::finite_non_negative(beat_times[i]), ErrorCode::InvalidParameter,
+                     "estimateMeter: beatTimes entries must be finite and non-negative");
+    SONARE_CHECK_MSG(i == 0 || beat_times[i] >= beat_times[i - 1], ErrorCode::InvalidParameter,
+                     "estimateMeter: beatTimes must be non-decreasing");
+    SONARE_CHECK_MSG(numeric::finite(beat_strengths[i]), ErrorCode::InvalidParameter,
+                     "estimateMeter: beatStrengths entries must be finite");
+    // The frame index is unused while the onset envelope is empty, which is the
+    // only mode this entry point runs in; it is filled positionally so a beat
+    // still round-trips as an ordered series.
+    beats.push_back({beat_times[i], static_cast<int>(i), beat_strengths[i]});
+  }
+
+  return estimate_meter({}, beats, config);
 }
 
 }  // namespace sonare

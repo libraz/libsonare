@@ -3149,6 +3149,54 @@
     ],
     "size": 32
   },
+  "SonareMeterOptions": {
+    "align": 4,
+    "fields": [
+      {
+        "kind": "aggregate",
+        "name": "candidate_numerators",
+        "offset": 0,
+        "size": 64
+      },
+      {
+        "kind": "signed",
+        "name": "candidate_numerator_count",
+        "offset": 64,
+        "size": 4
+      },
+      {
+        "kind": "signed",
+        "name": "denominator",
+        "offset": 68,
+        "size": 4
+      },
+      {
+        "kind": "float",
+        "name": "downbeat_weight",
+        "offset": 72,
+        "size": 4
+      },
+      {
+        "kind": "float",
+        "name": "measure_weight",
+        "offset": 76,
+        "size": 4
+      },
+      {
+        "kind": "float",
+        "name": "subdivision_weight",
+        "offset": 80,
+        "size": 4
+      },
+      {
+        "kind": "float",
+        "name": "compound_subdivision_threshold",
+        "offset": 84,
+        "size": 4
+      }
+    ],
+    "size": 88
+  },
   "SonareMeterTelemetryRecord": {
     "align": 8,
     "fields": [

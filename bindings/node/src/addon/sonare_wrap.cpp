@@ -82,6 +82,8 @@ Napi::Object SonareWrap::Init(Napi::Env env, Napi::Object exports) {
   exports.Set("detectDownbeats",
               Napi::Function::New(env, &SonareWrap::DetectDownbeats, "detectDownbeats"));
   exports.Set("detectOnsets", Napi::Function::New(env, &SonareWrap::DetectOnsets, "detectOnsets"));
+  exports.Set("estimateMeter",
+              Napi::Function::New(env, &SonareWrap::EstimateMeter, "estimateMeter"));
   exports.Set("analyze", Napi::Function::New(env, &SonareWrap::Analyze, "analyze"));
   exports.Set("analyzeAsync", Napi::Function::New(env, &SonareWrap::AnalyzeAsync, "analyzeAsync"));
   exports.Set("analyzeWithProgress",

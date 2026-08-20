@@ -200,6 +200,9 @@ _ALIAS_COVERAGE = {
     # Extended one-shot variants folded into their base facade functions. Each
     # base function exposes the extended fields and routes to this C entry point.
     "analyze_json_ex": ("analyze",),
+    # The C entry point returns the estimate as JSON; each facade parses it and
+    # exposes the same operation under the unsuffixed name.
+    "estimate_meter_json": ("estimate_meter",),
     # Onset facades take the complete extended option set under the base name.
     "detect_onsets_ex": ("detect_onsets",),
     "chroma_cens_ex": ("chroma_cens",),

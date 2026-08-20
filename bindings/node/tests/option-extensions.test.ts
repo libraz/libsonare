@@ -4,6 +4,7 @@ import {
   hpss,
   hpssWithResidual,
   nnlsChroma,
+  phaseVocoder,
   pitchShift,
   timeStretch,
 } from '../src/index.js';
@@ -56,5 +57,33 @@ describe('additive effect and feature options', () => {
     expect(() => hpss({ samples, hardMask: 'yes' as never })).toThrow(TypeError);
     expect(() => timeStretch(samples, sampleRate, 1, 2048, 0)).toThrow(RangeError);
     expect(() => nnlsChroma(samples, sampleRate, { hopLength: 1.5 })).toThrow(TypeError);
+  });
+
+  it('rejects a hop below the half-window overlap contract', () => {
+    // The core validator is the single gate, so every spectral effect that
+    // resynthesizes by overlap-add rejects the same geometry.
+    expect(() => hpss({ samples, sampleRate, nFft: 1024, hopLength: 1024 })).toThrow();
+    expect(() => hpssWithResidual({ samples, sampleRate, nFft: 1024, hopLength: 1024 })).toThrow();
+    expect(() =>
+      timeStretch({ samples, sampleRate, rate: 1.2, nFft: 512, hopLength: 2048 }),
+    ).toThrow();
+    expect(() =>
+      pitchShift({ samples, sampleRate, semitones: 3, nFft: 1024, hopLength: 1024 }),
+    ).toThrow();
+    expect(() =>
+      phaseVocoder({ samples, sampleRate, rate: 1.2, nFft: 1024, hopLength: 1024 }),
+    ).toThrow();
+  });
+
+  it('accepts an even nFft that is not a power of two, matching the C ABI', () => {
+    // The core FFT is mixed-radix; only the facades used to require a power of
+    // two, which made the same call succeed on the C ABI and fail here.
+    const geometry = { nFft: 1500, hopLength: 250 };
+    expect(hpss({ samples, sampleRate, ...geometry }).harmonic.length).toBe(samples.length);
+    expect(timeStretch({ samples, sampleRate, rate: 1.2, ...geometry }).length).toBeGreaterThan(0);
+    expect(pitchShift({ samples, sampleRate, semitones: 3, ...geometry }).length).toBeGreaterThan(
+      0,
+    );
+    expect(phaseVocoder({ samples, sampleRate, rate: 1.2, ...geometry }).length).toBeGreaterThan(0);
   });
 });

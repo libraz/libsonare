@@ -6,6 +6,7 @@ import {
   init,
   nnlsChroma,
   normalize,
+  phaseVocoder,
   pitchShift,
   timeStretch,
   trim,
@@ -77,5 +78,33 @@ describe('additive effect and feature options', () => {
     expect(() => normalize(samples, sampleRate, 0, 'RMS' as never)).toThrow(RangeError);
     expect(() => trim(samples, sampleRate, -60, 0, 512)).toThrow(RangeError);
     expect(() => nnlsChroma(samples, sampleRate, { hopLength: 1.5 })).toThrow(RangeError);
+  });
+
+  it('rejects a hop below the half-window overlap contract', () => {
+    // The core validator is the single gate, and WASM calls the core directly
+    // rather than through the C ABI, so the rejection is inherited here too.
+    expect(() => hpss({ samples, sampleRate, nFft: 1024, hopLength: 1024 })).toThrow();
+    expect(() => hpssWithResidual({ samples, sampleRate, nFft: 1024, hopLength: 1024 })).toThrow();
+    expect(() =>
+      timeStretch({ samples, sampleRate, rate: 1.2, nFft: 512, hopLength: 2048 }),
+    ).toThrow();
+    expect(() =>
+      pitchShift({ samples, sampleRate, semitones: 3, nFft: 1024, hopLength: 1024 }),
+    ).toThrow();
+    expect(() =>
+      phaseVocoder({ samples, sampleRate, rate: 1.2, nFft: 1024, hopLength: 1024 }),
+    ).toThrow();
+  });
+
+  it('accepts an even nFft that is not a power of two, matching the C ABI', () => {
+    // The core FFT is mixed-radix; only the facades used to require a power of
+    // two, which made the same call succeed on the C ABI and fail here.
+    const geometry = { nFft: 1500, hopLength: 250 };
+    expect(hpss({ samples, sampleRate, ...geometry }).harmonic.length).toBe(samples.length);
+    expect(timeStretch({ samples, sampleRate, rate: 1.2, ...geometry }).length).toBeGreaterThan(0);
+    expect(pitchShift({ samples, sampleRate, semitones: 3, ...geometry }).length).toBeGreaterThan(
+      0,
+    );
+    expect(phaseVocoder({ samples, sampleRate, rate: 1.2, ...geometry }).length).toBeGreaterThan(0);
   });
 });

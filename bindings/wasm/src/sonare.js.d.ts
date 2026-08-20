@@ -79,7 +79,26 @@ export interface WasmRealtimeVoiceChangerPodConfig {
 
 export interface WasmBeatResult {
   time: number;
+  /**
+   * Onset-envelope value sampled at the beat's frame — a single raw frame, not
+   * a normalized or relative salience. Use
+   * `WasmBeatObservationsResult.onsetStrength` for accent scoring.
+   */
   strength: number;
+}
+
+/** Beat-level evidence behind the downbeat and meter decisions. */
+export interface WasmBeatObservationsResult {
+  onsetStrength: number[];
+  lowFrequencyEnergy: number[];
+  chordChange: number[];
+}
+
+export interface WasmMeterEstimateResult {
+  timeSignature: WasmTimeSignatureResult;
+  downbeatPhase: number;
+  candidateScores: number[];
+  candidates: WasmTimeSignatureResult[];
 }
 
 export interface WasmChordResult {
@@ -150,6 +169,7 @@ export interface WasmAnalysisResult {
   beats: WasmBeatResult[];
   downbeatIndices: number[];
   downbeatPhase: number;
+  beatObservations: WasmBeatObservationsResult;
   chords: WasmChordResult[];
   sections: WasmSectionResult[];
   timbre: WasmTimbreResult;
@@ -1289,6 +1309,11 @@ export interface SonareModule {
     chromaMethod: number,
   ) => string[];
   analyze: (samples: Float32Array, sampleRate: number, options: object) => WasmAnalysisResult;
+  estimateMeter: (
+    beatTimes: ArrayLike<number>,
+    beatStrengths: ArrayLike<number>,
+    options: object,
+  ) => WasmMeterEstimateResult;
   _synthEnumTables: () => WasmSynthEnumTables;
   _synthPatchRoundTrip: (patch: unknown) => unknown;
   // Arrangement surface. Present only in a build with arrangement support, like

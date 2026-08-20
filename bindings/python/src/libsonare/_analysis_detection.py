@@ -22,6 +22,7 @@ from ._runtime import (
     _to_c_int_array,
 )
 from .types import (
+    AnalysisBeatObservations,
     AnalysisDynamics,
     AnalysisMelody,
     AnalysisResult,
@@ -378,6 +379,20 @@ def _parse_analysis_json(data: dict[str, Any]) -> AnalysisResult:
     downbeat_indices = [int(i) for i in data.get("downbeatIndices", [])]
     downbeat_phase = int(data.get("downbeatPhase", 0))
 
+    # Beat-level evidence the downbeat and meter pass scores. Each stream is
+    # beat-indexed; an empty one means the analysis could not produce it rather
+    # than that every beat scored zero.
+    obs_d = data.get("beatObservations", {})
+    beat_observations = (
+        AnalysisBeatObservations(
+            onset_strength=[float(v) for v in obs_d.get("onsetStrength", [])],
+            low_frequency_energy=[float(v) for v in obs_d.get("lowFrequencyEnergy", [])],
+            chord_change=[float(v) for v in obs_d.get("chordChange", [])],
+        )
+        if obs_d
+        else None
+    )
+
     # Chords
     chord_quality_str: dict[str, str] = {
         "major": "major",
@@ -517,5 +532,6 @@ def _parse_analysis_json(data: dict[str, Any]) -> AnalysisResult:
         dynamics=dynamics,
         rhythm=rhythm,
         melody=melody,
+        beat_observations=beat_observations,
         form=str(data.get("form", "")),
     )

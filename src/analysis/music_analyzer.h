@@ -21,6 +21,7 @@
 #include "analysis/dynamics_analyzer.h"
 #include "analysis/key_analyzer.h"
 #include "analysis/melody_analyzer.h"
+#include "analysis/meter_analyzer.h"
 #include "analysis/onset_analyzer.h"
 #include "analysis/rhythm_analyzer.h"
 #include "analysis/section_analyzer.h"
@@ -142,20 +143,8 @@ struct MusicAnalyzerConfig {
   int meter_denominator = 4;
 };
 
-/// @brief Largest number of meter numerators a flat C options struct can carry.
-/// @details The C ABI passes the candidates as a fixed-size array, so the limit
-///          is part of the public contract on every surface rather than an
-///          implementation detail of one of them.
-constexpr int kMaxMeterCandidateNumerators = 16;
-
-/// @brief Smallest meter numerator the estimator can score.
-constexpr int kMinMeterCandidateNumerator = 2;
-
-/// @brief Largest meter numerator the estimator can score.
-constexpr int kMaxMeterCandidateNumerator = 32;
-
-/// @brief Largest meter denominator (beat unit) that can be requested.
-constexpr int kMaxMeterDenominator = 32;
+// The meter candidate and denominator limits live in analysis/meter_analyzer.h
+// alongside the estimator that enforces them.
 
 /// @brief Validation rules for @ref MusicAnalyzerConfig.
 /// @details Found by argument-dependent lookup from @ref Validated, which is the

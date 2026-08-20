@@ -358,7 +358,15 @@ class TimeSignature:
 
 @dataclass(frozen=True, slots=True)
 class Beat:
-    """Beat event."""
+    """Beat event.
+
+    ``strength`` is a single raw frame of the onset envelope, sampled at the
+    beat's own frame. It is not normalized, its scale depends on the material,
+    and it moves with beat-position jitter, so it is not a relative salience
+    across beats. For accent scoring use
+    :attr:`AnalysisResult.beat_observations` ``.onset_strength``, which is the
+    windowed aggregate the library's own downbeat pass scores.
+    """
 
     time: float
     strength: float | None = None
@@ -475,6 +483,39 @@ class AnalysisMelody:
 
 
 @dataclass(frozen=True, slots=True)
+class AnalysisBeatObservations:
+    """Beat-level evidence behind the downbeat and meter decisions.
+
+    These are the inputs the library's own downbeat and meter pass scores, not
+    outputs of it. Each stream is parallel to ``AnalysisResult.beat_times``,
+    one value per beat. An empty stream means the analysis could not produce
+    it, *not* that every beat scored zero: ``low_frequency_energy`` is empty
+    when the analysis ran without audio, and ``chord_change`` is empty until
+    chords have been analyzed.
+    """
+
+    # Windowed onset aggregate around each beat — the accent value the downbeat
+    # pass scores, and the strength source :func:`libsonare.estimate_meter`
+    # expects. Distinct from ``AnalysisResult.beat_strengths``, which is a
+    # single raw unwindowed envelope frame at the beat's frame.
+    onset_strength: list[float] = dataclasses.field(default_factory=list)
+    low_frequency_energy: list[float] = dataclasses.field(default_factory=list)
+    chord_change: list[float] = dataclasses.field(default_factory=list)
+
+    @property
+    def onsetStrength(self) -> list[float]:  # noqa: N802
+        return self.onset_strength
+
+    @property
+    def lowFrequencyEnergy(self) -> list[float]:  # noqa: N802
+        return self.low_frequency_energy
+
+    @property
+    def chordChange(self) -> list[float]:  # noqa: N802
+        return self.chord_change
+
+
+@dataclass(frozen=True, slots=True)
 class AnalysisResult:
     """Full audio analysis result."""
 
@@ -491,6 +532,10 @@ class AnalysisResult:
     # leaves these four unset. The compiled bindings always ship the JSON path,
     # so they can guarantee presence; Python cannot without dropping the
     # fallback. Guard with `is not None` before use.
+    # One raw onset-envelope frame per beat, sampled at the beat's own frame.
+    # Not normalized and not comparable across material, and it moves with
+    # beat-position jitter — ``beat_observations.onset_strength`` is the
+    # windowed aggregate to score accents with.
     beat_strengths: list[float] = dataclasses.field(default_factory=list)
     # Positions of the bar starts within ``beat_times``, so
     # ``beat_times[downbeat_indices[k]]`` is the k-th downbeat. This is an
@@ -510,6 +555,7 @@ class AnalysisResult:
     dynamics: AnalysisDynamics | None = None
     rhythm: AnalysisRhythm | None = None
     melody: AnalysisMelody | None = None
+    beat_observations: AnalysisBeatObservations | None = None
     form: str = ""
 
     @property
@@ -545,6 +591,10 @@ class AnalysisResult:
         return self.downbeat_phase
 
     @property
+    def beatObservations(self) -> AnalysisBeatObservations | None:  # noqa: N802
+        return self.beat_observations
+
+    @property
     def beats(self) -> list[Beat]:
         if self.beat_strengths:
             return [
@@ -552,6 +602,35 @@ class AnalysisResult:
                 for t, s in zip(self.beat_times, self.beat_strengths, strict=False)
             ]
         return [Beat(time=t) for t in self.beat_times]
+
+
+@dataclass(frozen=True, slots=True)
+class MeterEstimate:
+    """Meter estimated over a caller-supplied beat series.
+
+    ``candidate_scores`` and ``candidates`` do not index alike:
+    ``candidate_scores`` is parallel to the numerators that were *requested*,
+    in the order they were requested, while ``candidates`` is ordered by
+    descending support. Pair a score with a numerator through the request list,
+    never through ``candidates``.
+    """
+
+    time_signature: TimeSignature
+    downbeat_phase: int
+    candidate_scores: list[float] = dataclasses.field(default_factory=list)
+    candidates: list[TimeSignature] = dataclasses.field(default_factory=list)
+
+    @property
+    def timeSignature(self) -> TimeSignature:  # noqa: N802
+        return self.time_signature
+
+    @property
+    def downbeatPhase(self) -> int:  # noqa: N802
+        return self.downbeat_phase
+
+    @property
+    def candidateScores(self) -> list[float]:  # noqa: N802
+        return self.candidate_scores
 
 
 @dataclass(frozen=True, slots=True)

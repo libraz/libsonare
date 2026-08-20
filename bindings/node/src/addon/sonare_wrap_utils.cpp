@@ -101,28 +101,17 @@ void DecorateSonareError(Napi::Env env, Napi::Object error, SonareError err) {
   SetSonareErrorProperties(env, error, err);
 }
 
-namespace {
-
-/// @brief Read the `meterCandidateNumerators` list into @p options.
-///
-/// An absent or non-array value keeps the C default set, which is the
-/// type-checked fallback the node_*_option family gives every other key. An
-/// array replaces the default set wholesale, including an empty one: the core
-/// rejects a cleared list rather than silently restoring {3, 4, 6}, so the
-/// caller is told instead of getting a set it did not ask for.
-///
-/// The two cases that cannot fall back throw exactly one catchable JS error and
-/// return false: a list longer than the C-ABI capacity (truncating it would
-/// analyse a different meter set than requested) and a non-numeric entry.
-bool ReadMeterCandidateNumerators(const Napi::Object& object, SonareMusicAnalyzeOptions* options) {
+bool ReadMeterCandidateNumerators(const Napi::Object& object, const char* key,
+                                  int (&numerators)[SONARE_MAX_METER_CANDIDATE_NUMERATORS],
+                                  int* count) {
   Napi::Env env = object.Env();
-  const Napi::Value value = object.Get("meterCandidateNumerators");
+  const Napi::Value value = object.Get(key);
   if (!value.IsArray()) return true;
 
   const Napi::Array array = value.As<Napi::Array>();
   const uint32_t length = array.Length();
   if (length > static_cast<uint32_t>(SONARE_MAX_METER_CANDIDATE_NUMERATORS)) {
-    Napi::RangeError::New(env, "meterCandidateNumerators must hold at most " +
+    Napi::RangeError::New(env, std::string(key) + " must hold at most " +
                                    std::to_string(SONARE_MAX_METER_CANDIDATE_NUMERATORS) +
                                    " entries (got " + std::to_string(length) + ")")
         .ThrowAsJavaScriptException();
@@ -131,19 +120,17 @@ bool ReadMeterCandidateNumerators(const Napi::Object& object, SonareMusicAnalyze
 
   // Staged locally so a rejected entry leaves the defaults untouched; the
   // zero-initialized tail also clears the default entries past the new count.
-  int numerators[SONARE_MAX_METER_CANDIDATE_NUMERATORS] = {};
+  int staged[SONARE_MAX_METER_CANDIDATE_NUMERATORS] = {};
   for (uint32_t i = 0; i < length; ++i) {
-    if (!RequiredIntValue(env, array.Get(i), "meterCandidateNumerators[" + std::to_string(i) + "]",
-                          &numerators[i])) {
+    if (!RequiredIntValue(env, array.Get(i), std::string(key) + "[" + std::to_string(i) + "]",
+                          &staged[i])) {
       return false;
     }
   }
-  std::copy(std::begin(numerators), std::end(numerators), options->meter_candidate_numerators);
-  options->meter_candidate_numerator_count = static_cast<int>(length);
+  std::copy(std::begin(staged), std::end(staged), numerators);
+  *count = static_cast<int>(length);
   return true;
 }
-
-}  // namespace
 
 bool ReadMusicAnalyzeOptions(const Napi::Value& value, SonareMusicAnalyzeOptions* options) {
   if (options == nullptr) return false;
@@ -180,7 +167,9 @@ bool ReadMusicAnalyzeOptions(const Napi::Value& value, SonareMusicAnalyzeOptions
       node_int_option(object, "tempoUpdateIntervalBeats", options->tempo_update_interval_beats);
   options->meter_denominator =
       node_int_option(object, "meterDenominator", options->meter_denominator);
-  return ReadMeterCandidateNumerators(object, options);
+  return ReadMeterCandidateNumerators(object, "meterCandidateNumerators",
+                                      options->meter_candidate_numerators,
+                                      &options->meter_candidate_numerator_count);
 }
 
 bool IsFloat32Array(const Napi::Value& value) {
@@ -416,6 +405,23 @@ bool EnrichFullAnalysisObject(Napi::Env env, Napi::Object result, Napi::Error* e
   return true;
 }
 
+Napi::Value ParseJsonObjectAndFree(Napi::Env env, char* json, const char* failure_message) {
+  // Parse on the main thread using the JS engine's built-in parser (V8 is not
+  // thread-safe), then release the heap-allocated C string either way.
+  Napi::Object json_global = env.Global().Get("JSON").As<Napi::Object>();
+  Napi::Function json_parse = json_global.Get("parse").As<Napi::Function>();
+  Napi::Value parsed = json_parse.Call({Napi::String::New(env, json != nullptr ? json : "")});
+  sonare_free_string(json);
+
+  if (env.IsExceptionPending() || !parsed.IsObject()) {
+    if (!env.IsExceptionPending()) {
+      Napi::Error::New(env, failure_message).ThrowAsJavaScriptException();
+    }
+    return env.Undefined();
+  }
+  return parsed;
+}
+
 Napi::Value FullAnalysisJsonToObject(Napi::Env env, const float* data, size_t length,
                                      int sample_rate, const SonareMusicAnalyzeOptions* options) {
   char* json_str = nullptr;
@@ -428,19 +434,8 @@ Napi::Value FullAnalysisJsonToObject(Napi::Env env, const float* data, size_t le
     return env.Undefined();
   }
 
-  // Parse the JSON on the main thread using the JS engine's built-in parser.
-  Napi::Object json_global = env.Global().Get("JSON").As<Napi::Object>();
-  Napi::Function json_parse = json_global.Get("parse").As<Napi::Function>();
-  Napi::Value parsed =
-      json_parse.Call({Napi::String::New(env, json_str != nullptr ? json_str : "")});
-  sonare_free_string(json_str);
-
-  if (env.IsExceptionPending() || !parsed.IsObject()) {
-    if (!env.IsExceptionPending()) {
-      Napi::Error::New(env, "Failed to parse analysis JSON").ThrowAsJavaScriptException();
-    }
-    return env.Undefined();
-  }
+  Napi::Value parsed = ParseJsonObjectAndFree(env, json_str, "Failed to parse analysis JSON");
+  if (env.IsExceptionPending()) return env.Undefined();
 
   Napi::Object result = parsed.As<Napi::Object>();
   Napi::Error enrich_error;

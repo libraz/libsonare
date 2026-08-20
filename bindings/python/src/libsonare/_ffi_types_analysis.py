@@ -393,3 +393,17 @@ class SonareMusicAnalyzeOptions(ctypes.Structure):
         ("meter_candidate_numerator_count", ctypes.c_int),
         ("meter_denominator", ctypes.c_int),
     ]
+
+
+class SonareMeterOptions(ctypes.Structure):
+    """Maps to SonareMeterOptions in sonare_c_types_functions.h."""
+
+    _fields_ = [
+        ("candidate_numerators", ctypes.c_int * SONARE_MAX_METER_CANDIDATE_NUMERATORS),
+        ("candidate_numerator_count", ctypes.c_int),
+        ("denominator", ctypes.c_int),
+        ("downbeat_weight", ctypes.c_float),
+        ("measure_weight", ctypes.c_float),
+        ("subdivision_weight", ctypes.c_float),
+        ("compound_subdivision_threshold", ctypes.c_float),
+    ]

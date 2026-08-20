@@ -208,6 +208,13 @@ class TimeSignature:
     def __init__(self, numerator: int, denominator: int, confidence: float) -> None: ...
 
 class Beat:
+    """Beat event. ``strength`` is a single raw frame of the onset envelope
+    sampled at the beat's own frame — not normalized, scaled by the material,
+    and sensitive to beat-position jitter, so it is not a salience comparable
+    across beats. Score accents with
+    ``AnalysisResult.beat_observations.onset_strength``, the windowed value the
+    library's own downbeat pass uses."""
+
     time: float
     strength: float | None
     def __init__(self, time: float, strength: float | None = None) -> None: ...
@@ -313,6 +320,31 @@ class AnalysisMelody:
     @property
     def vibratoRate(self) -> float: ...
 
+class AnalysisBeatObservations:
+    """Beat-level evidence the downbeat and meter pass scores, one value per
+    beat and parallel to ``AnalysisResult.beat_times``. An empty stream means
+    the analysis could not produce it, not that every beat scored zero:
+    ``low_frequency_energy`` is empty without audio, and ``chord_change`` is
+    empty until chords are analyzed. ``onset_strength`` is the windowed
+    aggregate around each beat, distinct from ``AnalysisResult.beat_strengths``
+    (a single raw unwindowed envelope frame)."""
+
+    onset_strength: list[float]
+    low_frequency_energy: list[float]
+    chord_change: list[float]
+    def __init__(
+        self,
+        onset_strength: list[float] = ...,
+        low_frequency_energy: list[float] = ...,
+        chord_change: list[float] = ...,
+    ) -> None: ...
+    @property
+    def onsetStrength(self) -> list[float]: ...
+    @property
+    def lowFrequencyEnergy(self) -> list[float]: ...
+    @property
+    def chordChange(self) -> list[float]: ...
+
 class AnalysisResult:
     bpm: float
     bpm_confidence: float
@@ -330,6 +362,7 @@ class AnalysisResult:
     dynamics: AnalysisDynamics | None
     rhythm: AnalysisRhythm | None
     melody: AnalysisMelody | None
+    beat_observations: AnalysisBeatObservations | None
     form: str
     def __init__(
         self,
@@ -349,6 +382,7 @@ class AnalysisResult:
         dynamics: AnalysisDynamics | None = None,
         rhythm: AnalysisRhythm | None = None,
         melody: AnalysisMelody | None = None,
+        beat_observations: AnalysisBeatObservations | None = None,
         form: str = "",
     ) -> None: ...
     @property
@@ -368,7 +402,33 @@ class AnalysisResult:
     @property
     def downbeatPhase(self) -> int: ...
     @property
+    def beatObservations(self) -> AnalysisBeatObservations | None: ...
+    @property
     def beats(self) -> list[Beat]: ...
+
+class MeterEstimate:
+    """Meter estimated over a caller-supplied beat series. ``candidate_scores``
+    is parallel to the numerators that were *requested*, in request order,
+    while ``candidates`` is ordered by descending support — the two do not
+    index alike."""
+
+    time_signature: TimeSignature
+    downbeat_phase: int
+    candidate_scores: list[float]
+    candidates: list[TimeSignature]
+    def __init__(
+        self,
+        time_signature: TimeSignature,
+        downbeat_phase: int,
+        candidate_scores: list[float] = ...,
+        candidates: list[TimeSignature] = ...,
+    ) -> None: ...
+    @property
+    def timeSignature(self) -> TimeSignature: ...
+    @property
+    def downbeatPhase(self) -> int: ...
+    @property
+    def candidateScores(self) -> list[float]: ...
 
 class BpmCandidate:
     bpm: float
