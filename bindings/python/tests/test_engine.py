@@ -86,8 +86,11 @@ def test_engine_track_monitor_mode_pfl_and_afl() -> None:
     from libsonare._runtime import _get_lib
 
     lib = _get_lib()
-    if not hasattr(lib, "sonare_engine_set_track_monitor_mode"):
-        pytest.skip("loaded native library predates track monitor mode")
+    # Presence is asserted for the whole suite by test_imports.py; a missing
+    # symbol here is a broken build rather than an older library to tolerate.
+    assert hasattr(lib, "sonare_engine_set_track_monitor_mode"), (
+        "loaded libsonare is missing sonare_engine_set_track_monitor_mode"
+    )
 
     block = 64
     frames = block * 16
@@ -1691,3 +1694,51 @@ def test_engine_forwards_midi_clock_transport_to_external_queue() -> None:
             assert len(event.bytes) == 1
         assert drained[0].bytes[0] == 0xFA  # Start
         assert drained[1].bytes[0] == 0xF8  # Clock
+
+
+def test_engine_set_midi_clips_forwards_explicit_destination_id_zero() -> None:
+    # Regression: an explicit destination_id=0 must be forwarded unchanged, not
+    # silently rewritten to track_id. Only the instrument at destination 0 is
+    # bound, so a rewrite to track_id would leave the note unheard (silence).
+    with RealtimeEngine(sample_rate=48000.0, max_block_size=128) as engine:
+        engine.set_builtin_instrument(BuiltinSynthConfig(gain=0.5), 0)
+        engine.set_midi_clips(
+            [
+                EngineMidiClipSchedule(
+                    id=1,
+                    track_id=6,
+                    destination_id=0,
+                    length_samples=8192,
+                    events=[
+                        EngineMidiEvent(0, word0=_midi1_word(0x9, 0, 60, 100), word_count=1),
+                        EngineMidiEvent(4096, word0=_midi1_word(0x8, 0, 60, 0), word_count=1),
+                    ],
+                )
+            ]
+        )
+        engine.play()
+        out = np.asarray(engine.process([[0.0] * 128, [0.0] * 128]))
+        assert float(np.max(np.abs(out))) > 0.0
+
+
+def test_engine_set_midi_clips_omitted_destination_id_falls_back_to_track_id() -> None:
+    # Omitting destination_id (the sentinel default None) still falls back to
+    # track_id, so an instrument bound only at the track's own destination is heard.
+    with RealtimeEngine(sample_rate=48000.0, max_block_size=128) as engine:
+        engine.set_builtin_instrument(BuiltinSynthConfig(gain=0.5), 6)
+        engine.set_midi_clips(
+            [
+                EngineMidiClipSchedule(
+                    id=1,
+                    track_id=6,
+                    length_samples=8192,
+                    events=[
+                        EngineMidiEvent(0, word0=_midi1_word(0x9, 0, 60, 100), word_count=1),
+                        EngineMidiEvent(4096, word0=_midi1_word(0x8, 0, 60, 0), word_count=1),
+                    ],
+                )
+            ]
+        )
+        engine.play()
+        out = np.asarray(engine.process([[0.0] * 128, [0.0] * 128]))
+        assert float(np.max(np.abs(out))) > 0.0

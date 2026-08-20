@@ -261,10 +261,6 @@ def test_mastering_chain_invokes_progress_callback() -> None:
 def test_mastering_chain_false_progress_result_does_not_cancel() -> None:
     """A progress callback's boolean return value is ignored."""
     from libsonare import mastering_chain
-    from libsonare._runtime import _get_lib
-
-    if not hasattr(_get_lib(), "sonare_mastering_chain_with_progress_ex"):
-        pytest.skip("libsonare built without cancellation-capable mastering progress")
 
     calls: list[float] = []
 
@@ -289,10 +285,6 @@ def test_mastering_chain_false_progress_result_does_not_cancel() -> None:
 def test_mastering_chain_cancel_callable_cancels_without_a_result() -> None:
     """The keyword-only cancellation callback is forwarded to the C ABI."""
     from libsonare import SonareError, mastering_chain
-    from libsonare._runtime import _get_lib
-
-    if not hasattr(_get_lib(), "sonare_mastering_chain_with_progress_ex"):
-        pytest.skip("libsonare built without cancellation-capable mastering progress")
 
     result = None
     with pytest.raises(SonareError) as exc:
@@ -319,15 +311,6 @@ def test_remaining_mastering_progress_variants_forward_cancellation(operation: s
         master_audio_stereo,
         mastering_chain_stereo,
     )
-    from libsonare._runtime import _get_lib
-
-    symbols = {
-        "chain-stereo": "sonare_mastering_chain_stereo_with_progress_ex",
-        "preset-mono": "sonare_master_audio_with_progress_ex",
-        "preset-stereo": "sonare_master_audio_stereo_with_progress_ex",
-    }
-    if not hasattr(_get_lib(), symbols[operation]):
-        pytest.skip("libsonare built without cancellation-capable mastering progress")
 
     samples = [0.1] * 22050
     result = None

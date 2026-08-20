@@ -144,6 +144,29 @@ def test_atomic_wav_writer_preserves_old_output_at_every_failure_stage(
     _assert_only_old_output(tmp_path, output)
 
 
+def test_wav_writer_saturates_non_finite_samples_like_the_core(tmp_path) -> None:
+    """NaN and infinities saturate to full scale instead of raising.
+
+    The core's WAV writer clamps with ``std::max(-1, std::min(1, x))``, where
+    every comparison against NaN is false, so NaN and +Inf land on +1.0 and
+    -Inf on -1.0. A writer that lets NaN reach ``int(round(...))`` raises
+    instead, turning a hostile sample into a failed export.
+    """
+    import struct
+
+    from libsonare import cli
+
+    samples = [float("nan"), float("inf"), float("-inf"), 0.5, 0.0]
+    output = tmp_path / "non_finite.wav"
+    cli._write_wav(str(output), samples, 48000)
+
+    with wave.open(str(output), "rb") as wav:
+        assert wav.getnframes() == len(samples)
+        frames = wav.readframes(wav.getnframes())
+    written = struct.unpack("<" + "h" * len(samples), frames)
+    assert written == (32767, 32767, -32767, 16384, 0)
+
+
 def test_wav_writer_peak_memory_is_bounded_by_chunk_size(tmp_path) -> None:
     """Writer scratch memory stays nearly constant as output duration grows."""
     import libsonare._cli_common as implementation

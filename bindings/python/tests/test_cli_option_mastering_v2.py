@@ -313,8 +313,15 @@ def test_mastering_pair_analyze_forwards_params(monkeypatch) -> None:
 
 
 def test_mixing_preset_uses_stable_default(monkeypatch, capsys) -> None:
+    """Omitting ``--preset`` still resolves to the advertised default.
+
+    Driven through the parser rather than a hand-built namespace: ``--preset``
+    declares its default in argparse, so ``preset=None`` is a state the CLI
+    cannot produce, and asserting on it pinned a handler-side fallback that was
+    unreachable. What the contract actually promises is this end-to-end path.
+    """
     import libsonare
-    from libsonare import _cli_mastering
+    from libsonare import _cli_mastering, cli
 
     calls: list[str] = []
     monkeypatch.setattr(
@@ -322,9 +329,35 @@ def test_mixing_preset_uses_stable_default(monkeypatch, capsys) -> None:
         "mixing_scene_preset_json",
         lambda name: calls.append(name) or "{}",
     )
-    assert _cli_mastering.cmd_mixing_preset(argparse.Namespace(preset=None)) == 0
+    args = cli._build_parser().parse_args(["mixing-preset"])
+    assert _cli_mastering.cmd_mixing_preset(args) == 0
     assert calls == ["vocalReverbSend"]
     assert capsys.readouterr().out == "{}\n"
+
+
+def test_mixing_preset_default_matches_the_native_cli() -> None:
+    """Both CLIs advertise the same default, from their own declarations.
+
+    The two surfaces declare it separately, so a change to one is invisible to
+    the other; this is the only place the pair is compared.
+    """
+    from pathlib import Path
+
+    from libsonare import cli
+
+    action = next(
+        action
+        for action in cli._build_parser()
+        ._subparsers._group_actions[0]  # noqa: SLF001
+        .choices["mixing-preset"]
+        ._actions
+        if action.dest == "preset"
+    )
+    assert action.default == "vocalReverbSend"
+
+    native = Path(__file__).resolve().parents[3] / "tools" / "cli_support.cpp"
+    text = native.read_text(encoding="utf-8")
+    assert 'string_value("preset", "vocalReverbSend")' in text
 
 
 def test_python_wav_writer_emits_24_bit_header(tmp_path) -> None:
@@ -345,3 +378,47 @@ def test_native_handler_source_consumes_bits_and_rejects_eq_conflicts() -> None:
     assert 'args.get_int("bits", 16)' in text
     assert '" cannot be combined with --params"' in text
     assert 'args.has("stereo") || is_stereo_only_processor(processor)' in text
+
+
+def test_mastering_cli_reports_a_blocked_loudness_target(capsys, monkeypatch) -> None:
+    """The default JSON payload carries the flag, and it agrees with the API.
+
+    Peak-normalized material asked for -6 LUFS under a -3 dBTP ceiling cannot
+    reach the target, and the CLI is the only machine-readable way to learn that
+    without switching to the ``--report`` code path.
+    """
+    import math
+
+    import libsonare
+    from libsonare import _cli_mastering, cli
+
+    sample_rate = 48_000
+    samples = [
+        math.sin(2.0 * math.pi * 440.0 * index / sample_rate) for index in range(sample_rate)
+    ]
+    monkeypatch.setattr(_cli_mastering, "_load_audio", lambda path: (samples, sample_rate))
+
+    args = cli._build_parser().parse_args(
+        [
+            "mastering",
+            "input.wav",
+            "--target-lufs",
+            "-6",
+            "--ceiling-db",
+            "-3",
+            "--json",
+        ]
+    )
+    assert _cli_mastering.cmd_mastering(args) == 0
+    payload = json.loads(capsys.readouterr().out)
+    assert payload["loudness_target_limited"] is True
+
+    # The same input through the named-processor entry point must agree: these
+    # are two views of one computation, not two independent estimates.
+    processed = libsonare.mastering_process(
+        "maximizer.loudnessOptimize",
+        samples,
+        sample_rate=sample_rate,
+        params={"targetLufs": -6.0, "ceilingDb": -3.0},
+    )
+    assert processed.loudness_target_limited is True

@@ -233,9 +233,12 @@ class _EngineIoMixin:
     def bounce_offline(self, options: EngineBounceOptions) -> EngineBounceResult:
         lib = _get_lib()
         raw_options = SonareEngineBounceOptions()
-        # Seed native defaults first (mirrors StreamAnalyzer.__init__) so any
-        # field the caller leaves at the dataclass sentinel still tracks the C
-        # layer's defaults instead of a hardcoded Python copy that can drift.
+        # Seeded from the C defaults so a field appended to the struct on the C
+        # side starts at its documented value rather than zero. Every field this
+        # facade knows about is then overwritten below, so for those the
+        # EngineBounceOptions dataclass defaults are the authority, not the C
+        # ones; test_bounce_dataclass_defaults_match_the_native_defaults keeps
+        # the two from diverging.
         _check(lib.sonare_engine_bounce_options_default(ctypes.byref(raw_options)))
         raw_options.total_frames = int(options.total_frames)
         raw_options.block_size = int(options.block_size)

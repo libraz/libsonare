@@ -582,7 +582,7 @@ class RealtimeEngine(_EngineMidiMixin, _EngineMixingMixin, _EngineIoMixin):
                 int(clip.length_samples),
                 1 if clip.loop else 0,
                 int(clip.loop_length_samples),
-                int(clip.destination_id if clip.destination_id != 0 else clip.track_id),
+                int(clip.track_id if clip.destination_id is None else clip.destination_id),
                 raw_events,
                 len(clip.events),
             )

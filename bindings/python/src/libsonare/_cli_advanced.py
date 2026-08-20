@@ -79,6 +79,8 @@ def cmd_dynamics(args: argparse.Namespace) -> int:
     dynamics_options = {}
     if hasattr(args, "window_sec"):
         dynamics_options["window_sec"] = args.window_sec
+    if hasattr(args, "hop_length"):
+        dynamics_options["hop_length"] = args.hop_length
     r = analyze_dynamics(samples, sample_rate=sr, **dynamics_options)
 
     if args.json:

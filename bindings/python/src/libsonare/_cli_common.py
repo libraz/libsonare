@@ -15,6 +15,7 @@ from typing import Any, cast
 from ._ffi import (
     SONARE_ERROR_CANCELLED,
     SONARE_ERROR_DECODE_FAILED,
+    SONARE_ERROR_ENCODE_FAILED,
     SONARE_ERROR_FILE_NOT_FOUND,
     SONARE_ERROR_INVALID_FORMAT,
     SONARE_ERROR_INVALID_PARAMETER,
@@ -51,6 +52,7 @@ EXIT_NOT_SUPPORTED = 8
 EXIT_INVALID_STATE = 9
 EXIT_ERROR = 10
 EXIT_CANCELLED = 11
+EXIT_ENCODE_FAILED = 12
 
 _SONARE_CODE_TO_EXIT = {
     SONARE_ERROR_INVALID_PARAMETER: EXIT_INVALID_PARAMETER,
@@ -61,6 +63,7 @@ _SONARE_CODE_TO_EXIT = {
     SONARE_ERROR_NOT_SUPPORTED: EXIT_NOT_SUPPORTED,
     SONARE_ERROR_INVALID_STATE: EXIT_INVALID_STATE,
     SONARE_ERROR_CANCELLED: EXIT_CANCELLED,
+    SONARE_ERROR_ENCODE_FAILED: EXIT_ENCODE_FAILED,
 }
 
 
@@ -226,6 +229,18 @@ def _resample_linear(samples: list[float], source_rate: int, target_rate: int) -
     return output
 
 
+def _clamp_sample(sample: float) -> float:
+    """Clamp a float sample to ``[-1.0, 1.0]``, including non-finite input.
+
+    Mirrors the C++ writer's ``std::max(-1, std::min(1, x))`` (audio_io.cpp),
+    where every comparison against NaN is false: NaN and +Inf both saturate to
+    +1.0 and -Inf to -1.0. Ordering the clamp as cap-then-floor reproduces that
+    instead of passing NaN through to ``int(round(...))``, which raises.
+    """
+    capped = sample if sample < 1.0 else 1.0
+    return capped if capped > -1.0 else -1.0
+
+
 def _pcm16(sample: float) -> bytes:
     """Clamp a float to ``[-1.0, 1.0]`` and pack it as little-endian 16-bit PCM.
 
@@ -233,14 +248,12 @@ def _pcm16(sample: float) -> bytes:
     """
     import struct
 
-    clamped = -1.0 if sample < -1.0 else (1.0 if sample > 1.0 else sample)
-    return struct.pack("<h", int(round(clamped * 32767.0)))
+    return struct.pack("<h", int(round(_clamp_sample(sample) * 32767.0)))
 
 
 def _pcm24(sample: float) -> bytes:
     """Clamp a float and pack it as little-endian 24-bit PCM."""
-    clamped = -1.0 if sample < -1.0 else (1.0 if sample > 1.0 else sample)
-    value = int(round(clamped * 8388607.0))
+    value = int(round(_clamp_sample(sample) * 8388607.0))
     return value.to_bytes(3, byteorder="little", signed=True)
 
 

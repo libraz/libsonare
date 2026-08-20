@@ -10,7 +10,7 @@ from ._ffi import (
     SonareMasteringResult,
     SonareStreamingPlatform,
 )
-from ._mastering_offline import _mastering_params
+from ._mastering_offline import _assistant_params, _mastering_params
 from ._runtime import _check, _get_lib, _to_c_float_array
 from .types import (
     MasteringResult,
@@ -184,14 +184,18 @@ def mastering_streaming_preview(
 def mastering_assistant_suggest(
     samples: Sequence[float] | list[float],
     sample_rate: int = 22050,
-    params: dict[str, float | int | bool] | None = None,
+    params: dict[str, float | int | bool | str] | None = None,
 ) -> str:
-    """Analyze audio and suggest a mastering chain as shared JSON."""
+    """Analyze audio and suggest a mastering chain as shared JSON.
+
+    ``params`` accepts ``targetPlatform`` as a delivery-target name (see
+    :func:`mastering_platform_names`); every other key is numeric.
+    """
     lib = _get_lib()
     if not hasattr(lib, "sonare_mastering_assistant_suggest"):
         raise RuntimeError("libsonare was built without mastering assistant support")
     c_array, length = _to_c_float_array(samples)
-    param_array, param_count = _mastering_params(params)
+    param_array, param_count = _assistant_params(params)
     json_ptr = ctypes.c_char_p()
     rc = lib.sonare_mastering_assistant_suggest(
         c_array,
@@ -309,14 +313,15 @@ def mastering_assistant_suggest_stereo(
     left: Sequence[float] | list[float],
     right: Sequence[float] | list[float],
     sample_rate: int = 22050,
-    params: dict[str, float | int | bool] | None = None,
+    params: dict[str, float | int | bool | str] | None = None,
 ) -> str:
     """Suggest a mastering chain for a stereo pair as shared JSON.
 
     Profiles through :func:`mastering_audio_profile_stereo`, so the loudness
-    stage of the suggestion is built on the channel-summed program.
+    stage of the suggestion is built on the channel-summed program. ``params``
+    accepts ``targetPlatform`` as a delivery-target name.
     """
-    param_array, param_count = _mastering_params(params)
+    param_array, param_count = _assistant_params(params)
     return _stereo_analysis_json(
         "sonare_mastering_assistant_suggest_stereo",
         "libsonare was built without mastering assistant support",

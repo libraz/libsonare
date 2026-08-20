@@ -225,18 +225,25 @@ def test_automation_lane_rejects_zero_as_reserved_target_id() -> None:
 
 
 def _require_typed_automation_api() -> None:
-    """Skip typed-lane integration checks against an older development dylib."""
+    """Fail, rather than skip, when the typed-lane C ABI is missing.
+
+    These symbols are asserted present for the whole suite by
+    test_imports.py::test_loaded_library_exports_every_guarded_symbol, so an
+    absence here is a broken build, not a configuration to opt out of. Skipping
+    made a dylib missing the ABI look green while the shipped facade raised.
+    """
     from libsonare._runtime import _get_lib
 
     lib = _get_lib()
-    if not all(
-        hasattr(lib, name)
+    missing = [
+        name
         for name in (
             "sonare_project_add_automation_lane_ex",
             "sonare_project_edit_automation_lane_ex",
         )
-    ):
-        pytest.skip("loaded libsonare has no typed automation-lane C ABI")
+        if not hasattr(lib, name)
+    ]
+    assert not missing, f"loaded libsonare is missing the typed automation-lane C ABI: {missing}"
 
 
 def test_automation_lane_typed_kind_roundtrip_and_legacy_edit_preservation() -> None:

@@ -30,8 +30,10 @@ def _find_library() -> str:
 
     Search order:
         1. SONARE_LIB_PATH environment variable
-        2. Package-adjacent (wheel distribution)
-        3. Build directory (development)
+        2. Build directory (development) -- checked before the package-adjacent
+           copy so an editable/source checkout always picks up a freshly built
+           library instead of a stale copy an older build may have left behind
+        3. Package-adjacent (wheel distribution)
         4. System library path
     """
     env_path = os.environ.get("SONARE_LIB_PATH")

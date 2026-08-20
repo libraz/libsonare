@@ -268,7 +268,9 @@ class EngineMidiClipSchedule:
     events: list[EngineMidiEvent]
     id: int = 0
     track_id: int = 0
-    destination_id: int = 0
+    # MIDI destination to route to. None (the default) falls back to track_id;
+    # an explicit value, including 0, is forwarded unchanged.
+    destination_id: int | None = None
     start_sample: int = 0
     start_ppq: float = 0.0
     length_samples: int = 0

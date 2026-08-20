@@ -27,113 +27,165 @@ def _literal_default(node: ast.expr) -> object:
     return ast.literal_eval(node)
 
 
-def test_audio_stub_signatures_match_runtime() -> None:
-    """Keep the public ``Audio`` stub mechanically lockstep with its facade.
+# ---------------------------------------------------------------------------
+# Shipped .pyi stubs vs runtime signatures.
+#
+# mypy validates CONSUMERS of a stub but cannot see a stub that has drifted from
+# its implementation, so a stub is only as trustworthy as whatever compares it
+# to runtime. That comparison used to cover ``Audio`` and one analyzer function,
+# which left `analyzer.pyi`'s free functions, `engine.pyi` (including the most
+# frequently edited facade in the repository) and `types.pyi` unchecked. The
+# comparison below is the same one, generalized over every stub and applied to
+# every concrete callable each declares.
+# ---------------------------------------------------------------------------
 
-    ``mypy`` verifies consumers of ``audio.pyi``, but cannot detect a method
-    whose stub quietly diverges from the Python implementation.  Parse the
-    shipped stub rather than importing it, then compare every concrete method
-    with literal defaults to ``inspect.signature`` on the public class.
-    """
-    from libsonare.audio import Audio
+STUB_DIR = Path(__file__).parents[1] / "src" / "libsonare"
 
-    stub_path = Path(__file__).parents[1] / "src" / "libsonare" / "audio.pyi"
-    module = ast.parse(stub_path.read_text(encoding="utf-8"), filename=str(stub_path))
-    audio_stub = next(
-        node for node in module.body if isinstance(node, ast.ClassDef) and node.name == "Audio"
-    )
-    checked = 0
-    for node in audio_stub.body:
-        if not isinstance(node, ast.FunctionDef):
-            continue
-        if node.name.startswith("__"):
-            continue
-        decorators = {
-            decorator.id for decorator in node.decorator_list if isinstance(decorator, ast.Name)
-        }
-        if "property" in decorators or "overload" in decorators:
-            continue
-        runtime = getattr(Audio, node.name, None)
-        assert runtime is not None, f"Audio.{node.name} is present in audio.pyi but not at runtime"
-        stub_args = [*node.args.posonlyargs, *node.args.args]
-        if "classmethod" in decorators and stub_args:
-            stub_args = stub_args[1:]
+# Minimum concrete callables each stub must contribute, so the parametrization
+# cannot quietly collapse to a smoke check as the facades grow or a decorator
+# filter starts over-matching.
+_STUB_FLOORS = {"analyzer.pyi": 250, "engine.pyi": 110, "audio.pyi": 50}
+
+
+def _is_checkable(node: ast.FunctionDef) -> bool:
+    """Concrete callables only: dunders, properties and overloads are skipped."""
+    if node.name.startswith("__"):
+        return False
+    decorators = {d.id for d in node.decorator_list if isinstance(d, ast.Name)}
+    return not ({"property", "overload"} & decorators)
+
+
+def _collect_stub_callables() -> list[tuple[str, str, ast.FunctionDef]]:
+    """(stub file, dotted name, stub node) for every concrete callable declared."""
+    out: list[tuple[str, str, ast.FunctionDef]] = []
+    for stub_name in sorted(_STUB_FLOORS):
+        tree = ast.parse((STUB_DIR / stub_name).read_text(encoding="utf-8"))
+        for node in tree.body:
+            if isinstance(node, ast.FunctionDef):
+                if _is_checkable(node):
+                    out.append((stub_name, node.name, node))
+            elif isinstance(node, ast.ClassDef):
+                out += [
+                    (stub_name, f"{node.name}.{m.name}", m)
+                    for m in node.body
+                    if isinstance(m, ast.FunctionDef) and _is_checkable(m)
+                ]
+    return out
+
+
+STUB_CALLABLES = _collect_stub_callables()
+
+
+def _resolve(dotted: str) -> object:
+    """Resolve a stub's dotted name against the imported package."""
+    import libsonare
+
+    target: object = libsonare
+    for part in dotted.split("."):
+        target = getattr(target, part, None)
+        if target is None:
+            return None
+    return target
+
+
+@pytest.mark.parametrize(
+    ("stub_name", "dotted", "node"),
+    [pytest.param(s, d, n, id=f"{s}:{d}") for s, d, n in STUB_CALLABLES],
+)
+def test_stub_signature_matches_runtime(stub_name: str, dotted: str, node: ast.FunctionDef) -> None:
+    """A shipped stub's parameter names, kinds and defaults must match runtime."""
+    runtime = _resolve(dotted)
+    assert runtime is not None, f"{dotted} is declared in {stub_name} but absent at runtime"
+    try:
         runtime_parameters = list(inspect.signature(runtime).parameters.values())
-        stub_names = [argument.arg for argument in stub_args]
-        assert [parameter.name for parameter in runtime_parameters] == stub_names + [
-            argument.arg for argument in node.args.kwonlyargs
-        ], f"Audio.{node.name} parameter names drifted"
-        assert [
-            parameter.kind is inspect.Parameter.KEYWORD_ONLY for parameter in runtime_parameters
-        ] == [False] * len(stub_args) + [True] * len(node.args.kwonlyargs), (
-            f"Audio.{node.name} keyword-only parameters drifted"
-        )
-        try:
-            defaults = [inspect.Parameter.empty] * (len(stub_args) - len(node.args.defaults)) + [
-                _literal_default(default) for default in node.args.defaults
-            ]
-            defaults.extend(
-                inspect.Parameter.empty if default is None else _literal_default(default)
-                for default in node.args.kw_defaults
-            )
-        except ValueError:
-            # Names such as ``DEFAULT_HOP_LENGTH`` are deliberately resolved
-            # by the module at import time; this structural guard does not
-            # execute stub expressions.
-            continue
-        for parameter, expected in zip(runtime_parameters, defaults, strict=True):
-            if expected is inspect.Parameter.empty:
-                assert parameter.default is inspect.Parameter.empty, (
-                    f"Audio.{node.name}.{parameter.name} unexpectedly has a runtime default"
-                )
-            else:
-                assert parameter.default == expected, (
-                    f"Audio.{node.name}.{parameter.name} default drifted: "
-                    f"{parameter.default!r} != {expected!r}"
-                )
-        checked += 1
+    except (TypeError, ValueError) as exc:  # pragma: no cover - defensive
+        pytest.fail(f"{dotted}: runtime object has no inspectable signature ({exc})")
 
-    # This is intentionally broad enough to prevent the test being weakened
-    # into a one-method smoke check when the facade grows.
-    assert checked >= 50
+    decorators = {d.id for d in node.decorator_list if isinstance(d, ast.Name)}
+    posonly, positional = list(node.args.posonlyargs), list(node.args.args)
+    # A classmethod's `cls` is not in the runtime signature; a method's `self`
+    # is already absent because the lookup goes through the class attribute.
+    if "classmethod" in decorators and positional:
+        positional = positional[1:]
+    stub_args = posonly + positional
 
-
-def test_synthesize_rir_stub_signature_matches_runtime() -> None:
-    """Keep the analyzer RIR stub's callable contract aligned with runtime."""
-    from libsonare import synthesize_rir
-
-    stub_path = Path(__file__).parents[1] / "src" / "libsonare" / "analyzer.pyi"
-    module = ast.parse(stub_path.read_text(encoding="utf-8"), filename=str(stub_path))
-    stub = next(
-        node
-        for node in module.body
-        if isinstance(node, ast.FunctionDef) and node.name == "synthesize_rir"
+    expected_names = [a.arg for a in stub_args] + [a.arg for a in node.args.kwonlyargs]
+    assert [p.name for p in runtime_parameters] == expected_names, (
+        f"{dotted}: parameter names drifted from {stub_name}"
     )
-    positional = [*stub.args.posonlyargs, *stub.args.args]
-    runtime_parameters = list(inspect.signature(synthesize_rir).parameters.values())
-    stub_names = [argument.arg for argument in positional] + [
-        argument.arg for argument in stub.args.kwonlyargs
-    ]
-    assert [parameter.name for parameter in runtime_parameters] == stub_names
-    expected_kinds = [
-        *([inspect.Parameter.POSITIONAL_ONLY] * len(stub.args.posonlyargs)),
-        *([inspect.Parameter.POSITIONAL_OR_KEYWORD] * len(stub.args.args)),
-        *([inspect.Parameter.KEYWORD_ONLY] * len(stub.args.kwonlyargs)),
-    ]
-    assert [parameter.kind for parameter in runtime_parameters] == expected_kinds
 
-    defaults = [inspect.Parameter.empty] * (len(positional) - len(stub.args.defaults)) + [
-        _literal_default(default) for default in stub.args.defaults
-    ]
-    defaults.extend(
-        inspect.Parameter.empty if default is None else _literal_default(default)
-        for default in stub.args.kw_defaults
+    expected_kinds = (
+        [inspect.Parameter.POSITIONAL_ONLY] * len(posonly)
+        + [inspect.Parameter.POSITIONAL_OR_KEYWORD] * len(positional)
+        + [inspect.Parameter.KEYWORD_ONLY] * len(node.args.kwonlyargs)
     )
+    assert [p.kind for p in runtime_parameters] == expected_kinds, (
+        f"{dotted}: parameter kinds drifted from {stub_name}"
+    )
+
+    try:
+        defaults = [inspect.Parameter.empty] * (len(stub_args) - len(node.args.defaults)) + [
+            _literal_default(d) for d in node.args.defaults
+        ]
+        defaults += [
+            inspect.Parameter.empty if d is None else _literal_default(d)
+            for d in node.args.kw_defaults
+        ]
+    except ValueError:
+        # Names such as ``DEFAULT_HOP_LENGTH`` are deliberately resolved by the
+        # module at import time; this structural guard does not execute stub
+        # expressions, so default VALUES go unchecked for this callable. Names
+        # and kinds above are still enforced.
+        return
+
     for parameter, expected in zip(runtime_parameters, defaults, strict=True):
-        assert parameter.default == expected, (
-            f"synthesize_rir.{parameter.name} default drifted: "
-            f"{parameter.default!r} != {expected!r}"
-        )
+        if expected is inspect.Parameter.empty:
+            assert parameter.default is inspect.Parameter.empty, (
+                f"{dotted}.{parameter.name} has a runtime default that {stub_name} omits"
+            )
+        elif expected is Ellipsis:
+            # `= ...` is the PEP 484 stub spelling for "has a default, value
+            # elided", so require one to exist without pinning its value.
+            assert parameter.default is not inspect.Parameter.empty, (
+                f"{dotted}.{parameter.name}: {stub_name} declares a default with `...` "
+                "but the runtime parameter is required"
+            )
+        else:
+            assert parameter.default == expected, (
+                f"{dotted}.{parameter.name} default drifted: {parameter.default!r} != {expected!r}"
+            )
+
+
+@pytest.mark.parametrize("stub_name", sorted(_STUB_FLOORS))
+def test_stub_coverage_floor(stub_name: str) -> None:
+    """Each stub must keep contributing callables to the comparison above."""
+    count = sum(1 for name, _dotted, _node in STUB_CALLABLES if name == stub_name)
+    assert count >= _STUB_FLOORS[stub_name], (
+        f"{stub_name} contributes only {count} checked callables "
+        f"(floor {_STUB_FLOORS[stub_name]}); the stub shrank or the collector stopped matching"
+    )
+
+
+def test_types_stub_declares_no_comparable_callable() -> None:
+    """``types.pyi`` is result/config shapes, so it has nothing to compare here.
+
+    Recorded as an assertion rather than an omission: every member is a
+    property, a dunder or a dataclass field today, so if a real method ever
+    appears there this fails and `types.pyi` has to join the comparison above
+    instead of silently staying outside it.
+    """
+    tree = ast.parse((STUB_DIR / "types.pyi").read_text(encoding="utf-8"))
+    concrete = [
+        f"{cls.name}.{m.name}"
+        for cls in tree.body
+        if isinstance(cls, ast.ClassDef)
+        for m in cls.body
+        if isinstance(m, ast.FunctionDef) and _is_checkable(m)
+    ]
+    assert not concrete, (
+        f"types.pyi now declares concrete callables {concrete}; add 'types.pyi' to "
+        "_STUB_FLOORS so they are compared against runtime"
+    )
 
 
 def _first_preset_json() -> str:
@@ -340,10 +392,6 @@ def test_empty_bounce_returns_empty_array_repeatably() -> None:
 def test_empty_bounce_with_builtin_instrument_is_empty() -> None:
     """The built-in-instrument bounce also frees the sentinel on empty output."""
     from libsonare import Project
-    from libsonare._runtime import _get_lib
-
-    if not hasattr(_get_lib(), "sonare_project_bounce_with_builtin_instruments"):
-        pytest.skip("libsonare built without the built-in instrument bounce ABI")
 
     project = Project()
     try:
@@ -368,3 +416,52 @@ def test_audio_from_buffer_default_sample_rate_is_48000() -> None:
 
     explicit = Audio.from_buffer([0.0] * 1000, sample_rate=16000)
     assert explicit.sample_rate == 16000
+
+
+def _stub_typed_dict_fields() -> dict[str, set[str]]:
+    """Annotated field names per ``TypedDict`` class declared in ``types.pyi``."""
+    tree = ast.parse((STUB_DIR / "types.pyi").read_text(encoding="utf-8"))
+    fields: dict[str, set[str]] = {}
+    for node in tree.body:
+        if not isinstance(node, ast.ClassDef):
+            continue
+        if not any(isinstance(base, ast.Name) and base.id == "TypedDict" for base in node.bases):
+            continue
+        fields[node.name] = {
+            member.target.id
+            for member in node.body
+            if isinstance(member, ast.AnnAssign) and isinstance(member.target, ast.Name)
+        }
+    return fields
+
+
+def test_types_stub_typed_dicts_match_runtime() -> None:
+    """Every ``TypedDict`` in ``types.pyi`` declares the runtime class's keys.
+
+    The callable comparison above skips ``types.pyi`` entirely because it holds
+    no methods, which left its ``TypedDict`` keys unchecked from either side: a
+    key present at runtime but missing from the stub is invisible to the tests
+    and to ``mypy`` alike, and it is a key describing the C-ABI capabilities
+    payload, so the drift is silent on both surfaces at once.
+    """
+    from libsonare import types as runtime_types
+
+    stub_fields = _stub_typed_dict_fields()
+    # Floor: the stub is parsed, not imported, so a parser change that stops
+    # matching would otherwise pass by comparing nothing.
+    assert len(stub_fields) >= 8, (
+        f"only {len(stub_fields)} TypedDicts parsed from types.pyi; the collector stopped matching"
+    )
+
+    compared = 0
+    for name, declared in sorted(stub_fields.items()):
+        runtime = getattr(runtime_types, name, None)
+        if runtime is None:
+            raise AssertionError(f"types.pyi declares {name}, which does not exist at runtime")
+        expected = set(runtime.__annotations__)
+        assert declared == expected, (
+            f"{name} keys differ: stub-only {sorted(declared - expected)}, "
+            f"runtime-only {sorted(expected - declared)}"
+        )
+        compared += 1
+    assert compared == len(stub_fields)

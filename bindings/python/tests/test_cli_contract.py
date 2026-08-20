@@ -958,3 +958,39 @@ def test_project_bounce_rejects_an_explicit_sample_rate_disagreeing_with_the_pro
     assert "44100" in result.stderr
     assert "48000" in result.stderr
     assert not wav.exists()
+
+
+def test_mastering_cli_reports_ceiling_limited_loudness(tmp_path) -> None:
+    """The default JSON payload carries the computed ceiling-clamp flag.
+
+    Without it the only machine-readable answer to "did this reach the delivery
+    target?" is a manual diff of output_lufs against target_lufs.
+    """
+    import libsonare
+
+    source = tmp_path / "tone.wav"
+    _write_tone_wav(source)
+
+    limited = _run_console(
+        "mastering", "--json", "--target-lufs", "-6", "--ceiling-db", "-12", str(source)
+    )
+    assert limited.returncode == 0, limited.stderr
+    limited_payload = json.loads(limited.stdout)
+    assert limited_payload["loudness_target_limited"] is True
+
+    reachable = _run_console(
+        "mastering", "--json", "--target-lufs", "-20", "--ceiling-db", "-1", str(source)
+    )
+    assert reachable.returncode == 0, reachable.stderr
+    assert json.loads(reachable.stdout)["loudness_target_limited"] is False
+
+    # The CLI payload must agree with the library entry points on the same input.
+    with libsonare.Audio.from_file(str(source)) as audio:
+        samples, sample_rate = audio.data, audio.sample_rate
+    named = libsonare.mastering_process(
+        "maximizer.loudnessOptimize",
+        samples,
+        sample_rate=sample_rate,
+        params={"targetLufs": -6.0, "ceilingDb": -12.0},
+    )
+    assert named.loudness_target_limited is limited_payload["loudness_target_limited"]

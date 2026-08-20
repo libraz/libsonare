@@ -162,8 +162,20 @@ def cmd_project(args: argparse.Namespace) -> int:
                     }
                 )
             )
+        elif strict and diagnostics:
+            # A diagnostic that changes the exit status is part of the result and
+            # goes to stdout; one that does not is advisory and goes to stderr.
+            # Strict mode returns a failing status, so the diagnostics are the
+            # result and replace the success line: printing "valid" while exiting
+            # non-zero left no way to see what was wrong without --json.
+            print(f"  Project JSON loaded with {len(diagnostics)} diagnostic(s):")
+            for entry in diagnostics:
+                print(f"  {entry}")
         else:
             print(f"  Project JSON is valid ({bytes_written} bytes canonical)")
+            # Advisory: these did not change the exit status, so stdout carries
+            # the result alone and they go to stderr. Dropping them would hide a
+            # repaired dangling reference from anyone not also passing --json.
             for entry in diagnostics:
                 print(f"  warning: {entry}", file=sys.stderr)
         if strict and diagnostics:

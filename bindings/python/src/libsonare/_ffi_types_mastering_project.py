@@ -55,6 +55,7 @@ class SonareMasteringStereoResult(ctypes.Structure):
         ("output_lufs", ctypes.c_float),
         ("applied_gain_db", ctypes.c_float),
         ("latency_samples", ctypes.c_int32),
+        ("loudness_target_limited", ctypes.c_int32),
     ]
 
 
@@ -424,6 +425,12 @@ class SonareBuiltinSynthConfig(ctypes.Structure):
     zero-initialized config is the default sine patch.
     """
 
+    # The engine-side typedef is a separate C struct that this mirror is also
+    # passed to (sonare_engine_set_builtin_instrument). Naming it here is what
+    # puts it in the layout snapshot: the generator keys on the ctypes class
+    # name, so an aliased C struct is invisible to the guard unless listed.
+    _c_aliases_ = ("SonareEngineBuiltinSynthConfig",)
+
     _fields_ = [
         ("waveform", ctypes.c_int),
         ("gain", ctypes.c_float),
@@ -468,6 +475,10 @@ class SonareSf2InstrumentConfig(ctypes.Structure):
     ``prefer_model_for_modeled_families``.
     """
 
+    # See SonareBuiltinSynthConfig._c_aliases_: the engine-side typedef this
+    # mirror is also passed to (sonare_engine_set_sf2_instrument).
+    _c_aliases_ = ("SonareEngineSf2InstrumentConfig",)
+
     _fields_ = [
         ("struct_version", ctypes.c_int),
         ("gain", ctypes.c_float),
@@ -485,9 +496,10 @@ class SonareSf2InstrumentBinding(ctypes.Structure):
     ]
 
 
-# The engine-side SonareEngineSf2InstrumentConfig has the identical layout;
-# the SonareSf2InstrumentConfig mirror is reused for both (same convention as
-# SonareBuiltinSynthConfig / SonareEngineBuiltinSynthConfig).
+# Both engine-side aliases are declared as _c_aliases_ on their mirrors above,
+# so the layout snapshot carries a row per C typedef and test_abi_layout.py
+# checks the mirror against each one. Reusing a mirror without naming the alias
+# leaves that C struct's layout unverified on a live Python call path.
 
 
 class SonareSynthModRouting(ctypes.Structure):
@@ -786,4 +798,5 @@ SONARE_ERROR_OUT_OF_MEMORY = 5
 SONARE_ERROR_NOT_SUPPORTED = 6
 SONARE_ERROR_INVALID_STATE = 7
 SONARE_ERROR_CANCELLED = 8
+SONARE_ERROR_ENCODE_FAILED = 9
 SONARE_ERROR_UNKNOWN = 99

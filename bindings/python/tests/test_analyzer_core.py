@@ -41,6 +41,29 @@ def test_capabilities_returns_native_build_descriptor() -> None:
     assert descriptor["hardwareConcurrency"] >= 1
 
 
+def test_capabilities_typed_dicts_match_the_payload() -> None:
+    """The TypedDicts describe exactly the keys the C ABI JSON carries.
+
+    Derived from the payload rather than from a written-down list, so a key
+    added on the C side fails here instead of drifting until someone reads
+    both files.
+    """
+    import libsonare
+    from libsonare._types_analysis import (
+        CapabilitiesAbi,
+        CapabilitiesDecode,
+        CapabilitiesFeatures,
+    )
+
+    descriptor = libsonare.capabilities()
+    for section, typed_dict in (
+        ("abi", CapabilitiesAbi),
+        ("features", CapabilitiesFeatures),
+        ("decode", CapabilitiesDecode),
+    ):
+        assert set(descriptor[section]) == set(typed_dict.__annotations__), section
+
+
 @pytest.mark.skipif(
     not _has_ffmpeg_build_support() or _ffmpeg_cli() is None,
     reason="requires libsonare built with FFmpeg and ffmpeg CLI on PATH",

@@ -25,7 +25,6 @@ from libsonare import (
     project_abi_version,
 )
 from libsonare._project import EXPECTED_PROJECT_ABI_VERSION
-from libsonare._runtime import _get_lib
 
 
 def _make_stereo_sine(frames: int, sample_rate: float = 48000.0) -> np.ndarray:
@@ -529,8 +528,6 @@ class _ConstantInstrument:
 
 def test_bounce_with_instruments_hosts_external_callback() -> None:
     """Flagship: a MIDI-only project routes through a host-supplied instrument."""
-    if not hasattr(_get_lib(), "sonare_project_bounce_with_instruments"):
-        pytest.skip("libsonare built without the external-instrument bounce ABI")
     project = _build_midi_only_project()
     instrument = _ConstantInstrument(level=0.25)
     try:
@@ -554,8 +551,6 @@ def test_bounce_with_instruments_hosts_external_callback() -> None:
 
 def test_bounce_with_instruments_render_only_instrument() -> None:
     """Only render() is required; prepare/on_event are optional (duck-typed)."""
-    if not hasattr(_get_lib(), "sonare_project_bounce_with_instruments"):
-        pytest.skip("libsonare built without the external-instrument bounce ABI")
 
     class RenderOnly:
         def render(self, channels: np.ndarray, num_frames: int) -> None:
@@ -574,8 +569,6 @@ def test_bounce_with_instruments_render_only_instrument() -> None:
 
 def test_bounce_with_instruments_auto_length_includes_tail_samples() -> None:
     """External instruments can report release/effect tail for auto-length bounce."""
-    if not hasattr(_get_lib(), "sonare_project_bounce_with_instruments"):
-        pytest.skip("libsonare built without the external-instrument bounce ABI")
 
     project = _build_midi_only_project()
     try:
@@ -596,8 +589,6 @@ def test_bounce_with_instruments_auto_length_includes_tail_samples() -> None:
 
 def test_bounce_with_instruments_propagates_callback_error() -> None:
     """An exception raised inside a callback surfaces to the caller, not silenced."""
-    if not hasattr(_get_lib(), "sonare_project_bounce_with_instruments"):
-        pytest.skip("libsonare built without the external-instrument bounce ABI")
 
     class Boom:
         def __init__(self) -> None:

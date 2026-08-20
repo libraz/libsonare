@@ -100,6 +100,43 @@ def _mastering_params(params: dict[str, float | int | bool] | None) -> tuple[Any
     return array, len(items)
 
 
+def _assistant_params(
+    params: dict[str, float | int | bool | str] | None,
+) -> tuple[Any, int]:
+    """Marshal assistant params, resolving ``targetPlatform`` to its index.
+
+    The param transport carries numbers, so a delivery target travels as the
+    index the library resolves for its name. The name is looked up through the
+    library rather than mapped here, so the accepted set cannot drift out of
+    step with the core.
+    """
+    if not params:
+        return _mastering_params(None)
+    resolved: dict[str, float | int | bool] = {}
+    for key, value in params.items():
+        if key in ("targetPlatform", "target_platform"):
+            if not isinstance(value, str):
+                raise ValueError(
+                    f"{key} must be a delivery-target name; "
+                    f"expected one of: {', '.join(mastering_platform_names())}"
+                )
+            lib = _get_lib()
+            if not hasattr(lib, "sonare_mastering_platform_from_name"):
+                raise RuntimeError("libsonare was built without mastering assistant support")
+            index = lib.sonare_mastering_platform_from_name(value.encode("utf-8"))
+            if index < 0:
+                raise ValueError(
+                    f"unknown mastering target platform {value!r}; "
+                    f"expected one of: {', '.join(mastering_platform_names())}"
+                )
+            resolved[key] = index
+            continue
+        if isinstance(value, str):
+            raise ValueError(f"{key} must be a number; only targetPlatform takes a name")
+        resolved[key] = value
+    return _mastering_params(resolved)
+
+
 def mastering_processor_names() -> list[str]:
     """Return supported mastering processor names shared by CLI/Node/WASM/Python."""
     lib = _get_lib()
@@ -314,6 +351,7 @@ def mastering_process_stereo(
             output_lufs=float(out.output_lufs),
             applied_gain_db=float(out.applied_gain_db),
             latency_samples=int(out.latency_samples),
+            loudness_target_limited=bool(out.loudness_target_limited),
         )
     finally:
         lib.sonare_free_mastering_stereo_result(ctypes.byref(out))
@@ -645,6 +683,20 @@ def mastering_preset_names() -> list[str]:
     if not hasattr(lib, "sonare_mastering_preset_names"):
         raise RuntimeError("libsonare was built without mastering preset support")
     raw = lib.sonare_mastering_preset_names()
+    return raw.decode("utf-8").splitlines() if raw else []
+
+
+def mastering_platform_names() -> list[str]:
+    """Return the delivery targets the mastering assistant accepts.
+
+    These are the values ``targetPlatform`` selects between (e.g. ``"broadcast"``,
+    ``"club"``). The list comes from the library rather than from a table kept
+    here, so a target added in the core is visible without a Python change.
+    """
+    lib = _get_lib()
+    if not hasattr(lib, "sonare_mastering_platform_names"):
+        raise RuntimeError("libsonare was built without mastering assistant support")
+    raw = lib.sonare_mastering_platform_names()
     return raw.decode("utf-8").splitlines() if raw else []
 
 

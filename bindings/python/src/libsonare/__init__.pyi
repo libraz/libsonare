@@ -262,6 +262,9 @@ from .analyzer import (
     mastering_pair_processor_names as mastering_pair_processor_names,
 )
 from .analyzer import (
+    mastering_platform_names as mastering_platform_names,
+)
+from .analyzer import (
     mastering_preset_names as mastering_preset_names,
 )
 from .analyzer import (

@@ -181,12 +181,27 @@ def test_set_pan_law_matches_shared_name_corpus(mixer) -> None:
             mixer.set_pan_law(0, value)
 
 
-def test_simple_strip_setters_do_not_raise(mixer) -> None:
-    """The simple per-strip setters accept valid values without raising."""
+def test_simple_strip_setters_reach_the_scene(mixer) -> None:
+    """The simple per-strip setters are observable through the shipped readback.
+
+    Channel delay is the multi-mic phase-alignment control: a silently applied
+    0 instead of 8 samples has no symptom until someone compares a final mix.
+    Both values here are distinguishable from the scene defaults (0 and 0), so
+    a setter reduced to a no-op fails rather than passing on the default.
+    """
     mixer.set_polarity_invert("vocal", True, False)
     mixer.set_channel_delay_samples("vocal", 8)
     mixer.set_vca_offset_db("vocal", -2.0)
     mixer.set_dual_pan("vocal", -0.3, 0.4)
+
+    scene = json.loads(mixer.to_scene_json())
+    vocal = next(strip for strip in scene["strips"] if strip["id"] == "vocal")
+    assert vocal["channelDelaySamples"] == 8
+    assert vocal["vcaOffsetDb"] == pytest.approx(-2.0)
+    assert vocal["polarityInvertLeft"] is True
+    assert vocal["polarityInvertRight"] is False
+    assert vocal["dualPanLeft"] == pytest.approx(-0.3)
+    assert vocal["dualPanRight"] == pytest.approx(0.4)
 
 
 def test_asymmetric_strip_controls_round_trip_in_scene_json(mixer) -> None:

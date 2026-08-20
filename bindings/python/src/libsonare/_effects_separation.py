@@ -203,6 +203,15 @@ def decompose_stems(
         Dict with ``components`` (list of 1-D float32 arrays, each the length of
         the input), ``w`` (``(n_bins, n_components)``), ``h``
         (``(n_components, n_frames)``) and ``sample_rate``.
+
+    Raises:
+        ValueError: If ``n_components``, ``n_fft``, ``hop_length`` or ``n_iter``
+            is not positive, or ``mask_power`` is below 1. These arguments carry
+            real defaults here, so 0 is refused as a caller mistake rather than
+            read as the "use the default" sentinel that the same field means on
+            the C ABI and the JavaScript surfaces.
+        SonareError: If the library rejects a value that reaches it, such as a
+            non-finite ``beta`` or ``mask_power``.
     """
     _validate_samples("decompose_stems", samples, validate=validate)
     n_fft, hop_length = _validate_effect_fft_options("decompose_stems", n_fft, hop_length)

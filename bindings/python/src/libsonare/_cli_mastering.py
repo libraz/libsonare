@@ -322,6 +322,7 @@ def cmd_mastering(args: argparse.Namespace) -> int:
                 "ceiling_db": getattr(args, "ceiling_db", -1.0),
                 "true_peak_oversample": getattr(args, "true_peak_oversample", 4),
                 "latency_samples": getattr(result, "latency_samples", 0),
+                "loudness_target_limited": bool(result.loudness_target_limited),
                 "sample_rate": result.sample_rate,
                 "output": output,
             }
@@ -435,7 +436,7 @@ def cmd_eq(args: argparse.Namespace) -> int:
             "band0.rangeDb": float(getattr(args, "range_db", -6.0)),
             "band0.attackMs": float(getattr(args, "attack_ms", 5.0)),
             "band0.releaseMs": float(getattr(args, "release_ms", 50.0)),
-            "band0.lookaheadMs": float(getattr(args, "lookahead_ms", 0.0)),
+            "band0.detectorDelayMs": float(getattr(args, "lookahead_ms", 0.0)),
             "band0.sidechainFreqHz": float(getattr(args, "sidechain_freq_hz", -1.0)),
             "band0.sidechainQ": float(getattr(args, "sidechain_q", 1.0)),
             "phaseMode": float(getattr(args, "phase_mode", 1)),
@@ -685,7 +686,9 @@ def cmd_mixing_presets(args: argparse.Namespace) -> int:
 def cmd_mixing_preset(args: argparse.Namespace) -> int:
     from . import mixing_scene_preset_json
 
-    print(mixing_scene_preset_json(getattr(args, "preset", None) or "vocalReverbSend"))
+    # The declared argparse default is the only default: a second fallback here
+    # would be a value the published contract does not name.
+    print(mixing_scene_preset_json(args.preset))
     return 0
 
 

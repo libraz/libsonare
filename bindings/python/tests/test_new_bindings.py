@@ -8,6 +8,8 @@ returns the documented shape with finite values.
 from __future__ import annotations
 
 import math
+from collections.abc import Sequence
+from typing import Any, cast
 
 import numpy as np
 import pytest
@@ -94,6 +96,48 @@ def test_decompose_stems_components_sum_back_to_the_input() -> None:
 def test_decompose_stems_rejects_an_out_of_range_mask_power() -> None:
     with pytest.raises(ValueError):
         libsonare.decompose_stems(_tone(440.0, 0.2), SR, mask_power=0.5)
+
+
+def _stems_fingerprint(**kwargs: float) -> tuple[int, int, tuple[float, ...]]:
+    res = libsonare.decompose_stems(_tone(440.0, 0.37), SR, **kwargs)  # type: ignore[arg-type]
+    components = cast("Sequence[Any]", res["components"])
+    first = np.asarray(components[0], dtype=np.float32)
+    return len(components), int(first.size), tuple(float(v) for v in first[:8])
+
+
+def test_decompose_stems_beta_zero_selects_the_documented_default() -> None:
+    """0 reaches the C ABI, which reads it as "use the built-in default".
+
+    The C ABI documents 0 on every numeric field of SonareDecomposeStemsConfig
+    as that sentinel, which is what makes a zero-initialised config mean the
+    documented defaults. ``beta`` is the field this facade forwards untouched,
+    so the sentinel is observable here.
+    """
+    assert _stems_fingerprint(beta=0.0) == _stems_fingerprint(beta=2.0)
+    # Without this the assertion above would also hold on a facade that dropped
+    # beta on the floor.
+    assert _stems_fingerprint(beta=0.5) != _stems_fingerprint(beta=0.0)
+
+
+def test_decompose_stems_validates_ahead_of_the_c_abi() -> None:
+    """This facade rejects values the C ABI would resolve to its defaults.
+
+    Keyword arguments carry real defaults here, so an explicit 0 is a caller
+    mistake rather than a request for the default, and it is refused instead of
+    being substituted. The refusal is a ``ValueError`` raised before the call,
+    where a value that reaches the library surfaces a ``SonareError``.
+    """
+    tone = _tone(440.0, 0.2)
+    for field in ("n_components", "n_fft", "hop_length", "n_iter"):
+        for value in (0, -1):
+            with pytest.raises(ValueError):
+                libsonare.decompose_stems(tone, SR, **{field: value})  # type: ignore[arg-type]
+    with pytest.raises(ValueError):
+        libsonare.decompose_stems(tone, SR, mask_power=0.0)
+    with pytest.raises(libsonare.SonareError):
+        libsonare.decompose_stems(tone, SR, beta=float("nan"))
+    with pytest.raises(libsonare.SonareError):
+        libsonare.decompose_stems(tone, SR, mask_power=float("nan"))
 
 
 def test_remix_aligned_intervals_resolves_cut_points() -> None:

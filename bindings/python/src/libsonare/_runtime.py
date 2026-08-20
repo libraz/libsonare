@@ -43,6 +43,7 @@ class ErrorCode(IntEnum):
     NOT_SUPPORTED = 6
     INVALID_STATE = 7
     CANCELLED = 8
+    ENCODE_FAILED = 9
     UNKNOWN = 99
 
 
@@ -66,6 +67,7 @@ class SonareError(RuntimeError):
             ErrorCode.NOT_SUPPORTED: "NotSupported",
             ErrorCode.INVALID_STATE: "InvalidState",
             ErrorCode.CANCELLED: "Cancelled",
+            ErrorCode.ENCODE_FAILED: "EncodeFailed",
             ErrorCode.UNKNOWN: "Unknown",
         }
         try:

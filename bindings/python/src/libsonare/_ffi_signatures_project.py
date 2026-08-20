@@ -44,7 +44,7 @@ def configure_project_signatures(lib: ctypes.CDLL) -> None:
         lib.sonare_project_unresolved_audio_source_id_by_index.restype = ctypes.c_int32
         lib.sonare_project_unresolved_audio_source_id_by_index.argtypes = [
             ctypes.c_void_p,
-            ctypes.c_uint32,
+            ctypes.c_size_t,
             ctypes.POINTER(ctypes.c_uint32),
         ]
         lib.sonare_project_set_source_audio.restype = ctypes.c_int32
@@ -257,7 +257,7 @@ def configure_project_signatures(lib: ctypes.CDLL) -> None:
             ctypes.c_void_p,
             ctypes.c_uint32,
             ctypes.POINTER(SonareProjectClipTake),
-            ctypes.c_uint32,
+            ctypes.c_size_t,
             ctypes.c_uint32,
         ]
 
@@ -266,7 +266,7 @@ def configure_project_signatures(lib: ctypes.CDLL) -> None:
             ctypes.c_void_p,
             ctypes.c_uint32,
             ctypes.POINTER(SonareProjectClipCompSegment),
-            ctypes.c_uint32,
+            ctypes.c_size_t,
         ]
 
         lib.sonare_project_set_warp_map.restype = ctypes.c_int32

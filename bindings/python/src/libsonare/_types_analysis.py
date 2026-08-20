@@ -36,6 +36,8 @@ class CapabilitiesFeatures(TypedDict):
     mixing: bool
     fx: bool
     ffmpeg: bool
+    # Key stays camelCase: capabilities() returns the C ABI JSON verbatim.
+    instrumentParamAutomation: bool
 
 
 class CapabilitiesDecode(TypedDict):
@@ -242,7 +244,14 @@ class SendTiming(IntEnum):
 
 
 class SectionType(IntEnum):
-    """Song-structure section type (mirrors sonare::SectionType ordinals)."""
+    """Song-structure section type (mirrors sonare::SectionType ordinals).
+
+    ``PRE_CHORUS`` is never produced by the analyzer: it has no detection
+    branch, so filtering sections on it always yields an empty result. Every
+    other value is reachable. ``UNKNOWN`` means the analyzer did not identify
+    the segment -- no boundary was detected, or the segment matched none of the
+    positive branches -- and comes with ``confidence`` 0.
+    """
 
     INTRO = 0
     VERSE = 1
@@ -1125,6 +1134,7 @@ class MasteringStereoResult:
     output_lufs: float
     applied_gain_db: float
     latency_samples: int = 0
+    loudness_target_limited: bool = False
 
 
 @dataclass(frozen=True, slots=True)

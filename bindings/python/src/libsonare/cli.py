@@ -754,7 +754,9 @@ def _build_parser() -> _ContractArgumentParser:
         "--suppression", type=float, default=0.5, help="Source-tail suppression [0,1]"
     )
 
-    rhythm_p = sub.add_parser("rhythm", parents=[stdout_options], help="Analyze rhythm primitives")
+    rhythm_p = sub.add_parser(
+        "rhythm", parents=[fft_stdout_options], help="Analyze rhythm primitives"
+    )
     rhythm_p.add_argument("--start-bpm", type=float, default=120.0)
     rhythm_p.add_argument("--bpm-min", type=float, default=60.0)
     rhythm_p.add_argument("--bpm-max", type=float, default=200.0)
@@ -762,6 +764,9 @@ def _build_parser() -> _ContractArgumentParser:
         "dynamics", parents=[stdout_options], help="Analyze dynamics/loudness"
     )
     dynamics_p.add_argument("--window-sec", type=float, default=0.4)
+    # Dynamics windows the loudness series but runs no FFT, so it takes the hop
+    # control without the matching --n-fft.
+    dynamics_p.add_argument("--hop-length", type=int, default=512, help="Hop length (default: 512)")
     sub.add_parser("timbre", parents=[mel_options], help="Analyze timbre/spectral shape")
     lufs_p = sub.add_parser("lufs", parents=[stdout_options], help="Compute LUFS loudness")
     lufs_p.add_argument(
@@ -845,7 +850,12 @@ def _build_parser() -> _ContractArgumentParser:
     eq_p.add_argument("--range-db", type=float, default=-6.0)
     eq_p.add_argument("--attack-ms", type=float, default=5.0)
     eq_p.add_argument("--release-ms", type=float, default=50.0)
-    eq_p.add_argument("--lookahead-ms", type=float, default=0.0)
+    # "--lookahead-ms" is the flag's former (misleading) spelling; still
+    # accepted, both writing to the same destination, so a stored script
+    # keeps working.
+    eq_p.add_argument(
+        "--detector-delay-ms", "--lookahead-ms", dest="lookahead_ms", type=float, default=0.0
+    )
     eq_p.add_argument("--sidechain-freq-hz", type=float, default=-1.0)
     eq_p.add_argument("--sidechain-q", type=float, default=1.0)
     eq_p.add_argument("--bits", type=int, default=16)
@@ -1036,7 +1046,9 @@ def _build_parser() -> _ContractArgumentParser:
     mixing_preset_p = sub.add_parser(
         "mixing-preset", parents=[stdout_options], help="Print a built-in mixer scene preset"
     )
-    mixing_preset_p.add_argument("--preset", default="", help="Built-in scene preset name")
+    mixing_preset_p.add_argument(
+        "--preset", default="vocalReverbSend", help="Built-in scene preset name"
+    )
 
     mix_p = sub.add_parser(
         "mix",

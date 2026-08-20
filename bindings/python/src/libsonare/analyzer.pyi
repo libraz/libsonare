@@ -77,6 +77,9 @@ AutomationCurveArg: TypeAlias = AutomationCurve | str | int
 IntSamples: TypeAlias = Sequence[int] | list[int]
 MasteringParamValue: TypeAlias = float | int | bool
 MasteringParams: TypeAlias = dict[str, MasteringParamValue]
+# The assistant additionally accepts targetPlatform, whose value is a
+# delivery-target name (see mastering_platform_names).
+MasteringAssistantParams: TypeAlias = dict[str, MasteringParamValue | str]
 ProgressCallback: TypeAlias = Callable[[float, str], None]
 CancelCallback: TypeAlias = Callable[[], bool]
 
@@ -107,20 +110,40 @@ MasteringPreset: TypeAlias = Literal[
     "trance",
     "gameOst",
 ]
+# BEGIN GENERATED SoloProcessor (make processor-types)
+# Every processor name mastering_processor_names() can return, and therefore
+# every name mastering_process() / mastering_process_stereo() accept.
 SoloProcessor: TypeAlias = Literal[
     "dynamics.brickwallLimiter",
     "dynamics.compressor",
     "dynamics.deesser",
+    "dynamics.duckingProcessor",
     "dynamics.expander",
     "dynamics.gate",
     "dynamics.limiter",
     "dynamics.parallelComp",
     "dynamics.sidechainRouter",
-    "dynamics.duckingProcessor",
     "dynamics.transientShaper",
     "dynamics.upwardCompressor",
     "dynamics.upwardExpander",
     "dynamics.vocalRider",
+    "effects.acoustic.roomMorph",
+    "effects.delay.stereo",
+    "effects.modulation.autoWah",
+    "effects.modulation.chorus",
+    "effects.modulation.ensemble",
+    "effects.modulation.flanger",
+    "effects.modulation.phaser",
+    "effects.modulation.pitchShifter",
+    "effects.modulation.ringModulator",
+    "effects.modulation.rotary",
+    "effects.modulation.wah",
+    "effects.reverb.convolution",
+    "effects.reverb.dattorro",
+    "effects.reverb.fdn",
+    "effects.reverb.plate",
+    "effects.reverb.room",
+    "effects.reverb.velvet",
     "eq.apiStyle",
     "eq.bandPass",
     "eq.cutFilter",
@@ -155,11 +178,11 @@ SoloProcessor: TypeAlias = Literal[
     "repair.denoiseClassical",
     "repair.dereverbClassical",
     "repair.trimSilence",
+    "saturation.ampSim",
     "saturation.bitcrusher",
     "saturation.exciter",
     "saturation.hardClipper",
     "saturation.multibandExciter",
-    "saturation.ampSim",
     "saturation.softClipper",
     "saturation.tape",
     "saturation.transformer",
@@ -176,6 +199,7 @@ SoloProcessor: TypeAlias = Literal[
     "stereo.phaseAlign",
     "stereo.stereoBalance",
 ]
+# END GENERATED SoloProcessor
 PairProcessor: TypeAlias = Literal[
     "match.applyMatchEq",
     "match.alignReferenceToSource",
@@ -677,7 +701,7 @@ def mastering(
 def mastering_assistant_suggest(
     samples: FloatSamples,
     sample_rate: int = 22050,
-    params: MasteringParams | None = None,
+    params: MasteringAssistantParams | None = None,
 ) -> str: ...
 def mastering_audio_profile(
     samples: FloatSamples,
@@ -688,7 +712,7 @@ def mastering_assistant_suggest_stereo(
     left: FloatSamples,
     right: FloatSamples,
     sample_rate: int = 22050,
-    params: MasteringParams | None = None,
+    params: MasteringAssistantParams | None = None,
 ) -> str: ...
 def mastering_audio_profile_stereo(
     left: FloatSamples,
@@ -731,6 +755,7 @@ def mastering_chain_stereo(
     cancel: CancelCallback | None = None,
 ) -> MasteringChainStereoResult: ...
 def mastering_preset_names() -> list[MasteringPreset]: ...
+def mastering_platform_names() -> list[str]: ...
 def mastering_insert_names() -> list[str]: ...
 def mastering_insert_param_names(name: str) -> list[str]: ...
 def mastering_insert_param_info(name: str) -> list[MasteringInsertParamInfo]: ...

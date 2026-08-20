@@ -144,6 +144,10 @@ class SendTiming(IntEnum):
     POST_FADER = 1
 
 class SectionType(IntEnum):
+    """``PRE_CHORUS`` is never produced by the analyzer; every other value is
+    reachable. ``UNKNOWN`` marks a segment the analyzer did not identify and
+    carries ``confidence`` 0."""
+
     INTRO = 0
     VERSE = 1
     PRE_CHORUS = 2
@@ -379,6 +383,13 @@ class BpmAnalysisResult:
     ) -> None: ...
 
 class AcousticResult:
+    """Room acoustic parameters from a blind recording or a measured impulse
+    response (``is_blind`` distinguishes the two). ``rt60``/``edt`` (and their
+    per-band variants) are available in both modes. ``c50``/``c80``/``d50``
+    (and their per-band variants) require a known direct-sound arrival time,
+    which only a measured impulse response provides, so they are NaN when
+    ``is_blind`` is true."""
+
     rt60: float
     edt: float
     c50: float
@@ -485,6 +496,17 @@ class LufsResult:
     def loudnessRange(self) -> float: ...
 
 class EqSpectrumSnapshot:
+    """Realtime equalizer snapshot.
+
+    ``pre_left``/``pre_right`` and ``post_left``/``post_right`` are the pre- and
+    post-EQ waveform streams (uniformly decimated time-domain samples), so they
+    are a scope feed rather than a spectral estimate. ``profile_db`` is the
+    frequency-domain view: the post-EQ signal is Hann-windowed, transformed and
+    its bin powers summed into 16 geometrically spaced bands covering 20 Hz to
+    20 kHz, in amplitude decibels relative to full scale, rising immediately and
+    falling smoothly.
+    """
+
     pre_left: list[float]
     pre_right: list[float]
     post_left: list[float]
@@ -918,6 +940,7 @@ class MasteringStereoResult:
     output_lufs: float
     applied_gain_db: float
     latency_samples: int
+    loudness_target_limited: bool
     def __init__(
         self,
         left: list[float],
@@ -927,6 +950,7 @@ class MasteringStereoResult:
         output_lufs: float,
         applied_gain_db: float,
         latency_samples: int = 0,
+        loudness_target_limited: bool = False,
     ) -> None: ...
 
 class StageGainReduction:
@@ -1330,7 +1354,7 @@ class EngineMidiClipSchedule:
     events: list[EngineMidiEvent]
     id: int
     track_id: int
-    destination_id: int
+    destination_id: int | None
     start_sample: int
     start_ppq: float
     length_samples: int
@@ -1341,7 +1365,7 @@ class EngineMidiClipSchedule:
         events: list[EngineMidiEvent],
         id: int = 0,
         track_id: int = 0,
-        destination_id: int = 0,
+        destination_id: int | None = None,
         start_sample: int = 0,
         start_ppq: float = 0.0,
         length_samples: int = 0,

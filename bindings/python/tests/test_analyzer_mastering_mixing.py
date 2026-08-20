@@ -479,3 +479,110 @@ def test_mastering_chain_reports_output_metrics() -> None:
     assert math.isfinite(preset_result.output_lra)
     assert isinstance(preset_result.stage_gain_reductions, list)
     assert preset_result.report is not None
+
+
+def test_loudness_target_limited_agrees_across_entry_points() -> None:
+    """Every entry point that normalizes loudness reports the same clamp.
+
+    The named-processor and the simple-helper paths previously disagreed: the
+    core computed the flag and the boundary replaced it with a constant false.
+    """
+    import libsonare
+
+    sr = 22050
+    samples = [0.5 * math.sin(2 * math.pi * 440 * i / sr) for i in range(sr)]
+
+    def run_all(target_lufs: float, ceiling_db: float) -> list[bool]:
+        simple = libsonare.mastering(
+            samples, sample_rate=sr, target_lufs=target_lufs, ceiling_db=ceiling_db
+        )
+        named = libsonare.mastering_process(
+            "maximizer.loudnessOptimize",
+            samples,
+            sample_rate=sr,
+            params={"targetLufs": target_lufs, "ceilingDb": ceiling_db},
+        )
+        # The chain's loudness stage is the one master_audio composes; a preset
+        # only supplies different target / ceiling values.
+        chain = libsonare.mastering_chain(
+            samples,
+            sample_rate=sr,
+            config={"loudness": {"targetLufs": target_lufs, "ceilingDb": ceiling_db}},
+        )
+        return [
+            simple.loudness_target_limited,
+            named.loudness_target_limited,
+            chain.loudness_target_limited,
+            chain.report.loudness_target_limited,
+        ]
+
+    # The ceiling sits below the material's true peak while the target asks for
+    # a boost, so the normalization gain is clamped on every path.
+    assert run_all(-6.0, -12.0) == [True, True, True, True]
+    assert run_all(-20.0, -1.0) == [False, False, False, False]
+
+
+def test_loudness_target_limited_matches_on_the_stereo_named_processor() -> None:
+    """The stereo named-processor path reports the clamp the mono path reports.
+
+    The source is peak-normalized by a lone transient, so its program loudness
+    stays far below the -6 LUFS target and the -3 dBTP ceiling is the binding
+    constraint on both paths -- by a margin far wider than the 3 dB BS.1770
+    channel-summing offset between the mono and the dual-mono stereo
+    measurement.
+    """
+    import libsonare
+
+    sr = 22050
+    target_lufs = -6.0
+    ceiling_db = -3.0
+    samples = [0.05 * math.sin(2 * math.pi * 440 * i / sr) for i in range(sr)]
+    samples[len(samples) // 2] = 1.0
+    params = {"targetLufs": target_lufs, "ceilingDb": ceiling_db, "truePeakOversample": 4}
+
+    mono = libsonare.mastering_process(
+        "maximizer.loudnessOptimize", samples, sample_rate=sr, params=params
+    )
+    stereo = libsonare.mastering_process_stereo(
+        "maximizer.loudnessOptimize", samples, samples, sample_rate=sr, params=params
+    )
+
+    assert mono.loudness_target_limited is True
+    assert stereo.loudness_target_limited == mono.loudness_target_limited
+    assert stereo.output_lufs < target_lufs
+
+
+def test_mastering_assistant_suggest_follows_target_platform() -> None:
+    """A delivery target reaches the assistant as a name and moves the loudness."""
+    import libsonare
+
+    sr = 48000
+    samples = [0.2 * math.sin(2 * math.pi * 220 * i / sr) for i in range(sr)]
+
+    names = libsonare.mastering_platform_names()
+    assert "broadcast" in names
+    assert "club" in names
+
+    # Without a target the assistant returns the streaming default of -14 LUFS.
+    default_json = libsonare.mastering_assistant_suggest(samples, sample_rate=sr)
+    assert '"loudness.targetLufs":-14' in default_json
+
+    broadcast_json = libsonare.mastering_assistant_suggest(
+        samples, sample_rate=sr, params={"targetPlatform": "broadcast"}
+    )
+    assert '"loudness.targetLufs":-23' in broadcast_json
+
+    # Only a loud delivery format moves the ceiling as well as the target.
+    club_json = libsonare.mastering_assistant_suggest(
+        samples, sample_rate=sr, params={"targetPlatform": "club"}
+    )
+    assert '"loudness.targetLufs":-9' in club_json
+    assert '"loudness.ceilingDb":-0.3' in club_json
+
+    with pytest.raises(ValueError):
+        libsonare.mastering_assistant_suggest(
+            samples, sample_rate=sr, params={"targetPlatform": "vinyl"}
+        )
+    # The numeric index is a transport detail, not part of the Python vocabulary.
+    with pytest.raises(ValueError):
+        libsonare.mastering_assistant_suggest(samples, sample_rate=sr, params={"targetPlatform": 2})
