@@ -87,13 +87,14 @@ def test_bounce_dither_types_apply_their_documented_behaviour() -> None:
     shaped, _ = _bounce(dither=3, dither_bits=DITHER_BITS, dither_seed=1)
 
     # Identifying each type by what it does keeps a remapped integer from
-    # passing: the two noise types perturb without quantizing, the triangular
-    # one being the wider of the two, and only the shaped type snaps every
-    # sample onto the target-depth grid.
+    # passing. Every non-None type lands the output on the target-depth grid --
+    # that is what the shared bit-depth field means -- so the type selects only
+    # the noise, the triangular one being wider than the rectangular.
     assert _max_abs_diff(none, plain) == 0.0
     assert _max_abs_diff(rpdf, none) > LSB / 4
     assert _max_abs_diff(tpdf, none) > _max_abs_diff(rpdf, none)
-    assert _on_grid(rpdf) < len(rpdf) // 2
+    assert _on_grid(rpdf) == len(rpdf)
+    assert _on_grid(tpdf) == len(tpdf)
     assert _on_grid(shaped) == len(shaped)
 
 
