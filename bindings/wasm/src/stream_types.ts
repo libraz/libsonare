@@ -164,6 +164,8 @@ export interface StreamConfig {
   nMels?: number;
   fmin?: number;
   fmax?: number;
+  /** A4 tuning reference in Hz. Defaults to 440; must be within 220..880, the
+   *  same range `setTuningRefHz` accepts live. */
   tuningRefHz?: number;
   /** Unsupported: no read path surfaces per-frame magnitude spectra. */
   computeMagnitude?: boolean;

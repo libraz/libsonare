@@ -319,7 +319,12 @@ class StreamAnalyzer:
         )
 
     def set_tuning_ref_hz(self, ref_hz: float) -> None:
-        """Set the A4 tuning reference (Hz) and rebuild the chroma filterbank."""
+        """Set the A4 tuning reference (Hz) and rebuild the chroma filterbank.
+
+        ``ref_hz`` must be within 220..880, the same range
+        :attr:`StreamConfig.tuning_ref_hz` accepts at create time. A value
+        outside it raises instead of being clamped into range.
+        """
         _check(
             _get_lib().sonare_stream_analyzer_set_tuning_ref_hz(
                 self._require_handle(), ctypes.c_float(float(ref_hz))

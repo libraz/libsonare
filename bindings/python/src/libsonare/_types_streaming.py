@@ -65,6 +65,8 @@ class StreamConfig:
     n_mels: int = 128
     fmin: float = 0.0
     fmax: float = 0.0
+    # A4 tuning reference in Hz. Must be within 220..880, the same range
+    # StreamAnalyzer.set_tuning_ref_hz accepts live.
     tuning_ref_hz: float = 440.0
     # The streaming C ABI has no magnitude read path, so magnitude is off by
     # default and an explicit True is rejected by the native layer.

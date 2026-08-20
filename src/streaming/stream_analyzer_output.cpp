@@ -442,11 +442,14 @@ void StreamAnalyzer::set_normalization_gain(float gain) {
 }
 
 void StreamAnalyzer::set_tuning_ref_hz(float ref_hz) {
-  if (!numeric::finite_positive(ref_hz)) {
+  // Rejected, not clamped, and over the same range StreamConfig accepts at
+  // construction: clamping here would silently turn a 1000 Hz request into
+  // 880 Hz while the same value handed to the constructor was refused, so the
+  // chromagram would depend on which entry point the host used.
+  if (!numeric::finite_positive(ref_hz) || ref_hz < kMinTuningRefHz || ref_hz > kMaxTuningRefHz) {
     throw SonareException(ErrorCode::InvalidParameter,
-                          "tuning reference must be finite and positive");
+                          "tuning reference must be finite and within 220..880 Hz");
   }
-  ref_hz = std::clamp(ref_hz, 220.0f, 880.0f);
   config_.tuning_ref_hz = ref_hz;
 
   if (config_.compute_chroma) {

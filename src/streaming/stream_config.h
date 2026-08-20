@@ -22,6 +22,16 @@ inline constexpr size_t kMaxStreamPendingFrames = 1u << 20;
 inline constexpr size_t kDefaultStreamMaxProgressionEntries = 4096;
 inline constexpr size_t kMaxStreamProgressionEntries = 1u << 20;
 
+/// @brief Accepted A4 tuning reference range, one octave either side of concert
+///        pitch.
+/// @details StreamConfig validation and StreamAnalyzer::set_tuning_ref_hz share
+///          these bounds so the parameter has one accepted range no matter which
+///          entry point sets it: a value the live setter would refuse must not
+///          be constructible at create time either, or the same user setting
+///          would bin the chromagram differently depending on when it arrived.
+inline constexpr float kMinTuningRefHz = 220.0f;
+inline constexpr float kMaxTuningRefHz = 880.0f;
+
 /// @brief Configuration for StreamAnalyzer.
 struct StreamConfig {
   // Basic parameters

@@ -62,9 +62,10 @@ StreamAnalyzer::StreamAnalyzer(const StreamConfig& config) : config_(config) {
   if (config_.fmax > 0.0f && config_.fmax <= config_.fmin)
     throw SonareException(ErrorCode::InvalidParameter,
                           "StreamConfig: fmax must be greater than fmin");
-  if (!finite_positive(config_.tuning_ref_hz))
+  if (!finite_positive(config_.tuning_ref_hz) || config_.tuning_ref_hz < kMinTuningRefHz ||
+      config_.tuning_ref_hz > kMaxTuningRefHz)
     throw SonareException(ErrorCode::InvalidParameter,
-                          "StreamConfig: tuning_ref_hz must be finite and positive");
+                          "StreamConfig: tuning_ref_hz must be finite and within 220..880 Hz");
   if (!finite_positive(config_.key_update_interval_sec) ||
       !finite_positive(config_.bpm_update_interval_sec))
     throw SonareException(ErrorCode::InvalidParameter,

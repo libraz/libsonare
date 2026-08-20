@@ -24,7 +24,10 @@ typedef struct {
   int n_mels;                /* Number of Mel bands (default 128) */
   float fmin;                /* Minimum Mel frequency */
   float fmax;                /* Maximum Mel frequency (0 = Nyquist) */
-  float tuning_ref_hz;       /* A4 tuning reference */
+  float tuning_ref_hz;       /* A4 tuning reference in Hz (default 440; must be
+                                within 220..880, the same range
+                                sonare_stream_analyzer_set_tuning_ref_hz
+                                accepts) */
   int compute_magnitude;     /* Magnitude readout is not yet supported through the
                                 C ABI; must be 0 (non-zero is rejected with
                                 SONARE_ERROR_INVALID_PARAMETER). */
@@ -289,6 +292,11 @@ SonareError sonare_stream_analyzer_set_normalization_gain(SonareStreamAnalyzer* 
                                                           float gain);
 
 /// @brief Sets the A4 tuning reference (Hz) and rebuilds the chroma filterbank.
+/// @details @p ref_hz must be within 220..880, the same range
+///   SonareStreamConfig::tuning_ref_hz accepts at create time. A value outside
+///   it returns SONARE_ERROR_INVALID_PARAMETER and leaves the filterbank alone;
+///   it is not clamped, so a live change and a create-time setting of the same
+///   value always bin the chromagram identically.
 SonareError sonare_stream_analyzer_set_tuning_ref_hz(SonareStreamAnalyzer* analyzer, float ref_hz);
 
 /// @brief Frees all arrays held by a SonareStreamFrames batch.

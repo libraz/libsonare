@@ -107,7 +107,8 @@ SonareError sonare_stream_analyzer_create(const SonareStreamConfig* config,
       config->max_progression_entries > kMaxStreamProgressionEntries ||
       !finite_non_negative(config->fmin) || !finite_non_negative(config->fmax) ||
       (config->fmax > 0.0f && config->fmax <= config->fmin) ||
-      !finite_positive(config->tuning_ref_hz) ||
+      !finite_positive(config->tuning_ref_hz) || config->tuning_ref_hz < kMinTuningRefHz ||
+      config->tuning_ref_hz > kMaxTuningRefHz ||
       !finite_positive(config->key_update_interval_sec) ||
       !finite_positive(config->bpm_update_interval_sec) || !valid_window(config->window) ||
       config->output_format != SONARE_STREAM_OUTPUT_FLOAT32) {

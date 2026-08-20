@@ -42,6 +42,8 @@ export interface StreamAnalyzerConfig {
   nMels?: number;
   fmin?: number;
   fmax?: number;
+  /** A4 tuning reference in Hz. Defaults to 440; must be within 220..880, the
+   *  same range `setTuningRefHz` accepts live. */
   tuningRefHz?: number;
   /** Compute the per-frame magnitude spectrum. Defaults to false: no read path
    *  surfaces it, so enabling it only burns realtime CPU with no readable result. */

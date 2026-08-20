@@ -624,6 +624,20 @@ TEST_CASE("StreamAnalyzer rejects malformed config geometry", "[streaming][edge]
     c.tuning_ref_hz = 0.0f;
     REQUIRE_THROWS_AS(StreamAnalyzer(c), SonareException);
   }
+  SECTION("tuning_ref_hz outside the accepted range") {
+    // Construction accepts exactly what set_tuning_ref_hz accepts. Were create
+    // to take a wider range, the same host setting would bin the chromagram one
+    // way through the constructor and another through the live setter.
+    StreamConfig c = base();
+    c.tuning_ref_hz = 100.0f;
+    REQUIRE_THROWS_AS(StreamAnalyzer(c), SonareException);
+    c.tuning_ref_hz = 1000.0f;
+    REQUIRE_THROWS_AS(StreamAnalyzer(c), SonareException);
+    c.tuning_ref_hz = kMinTuningRefHz;
+    REQUIRE_NOTHROW(StreamAnalyzer(c));
+    c.tuning_ref_hz = kMaxTuningRefHz;
+    REQUIRE_NOTHROW(StreamAnalyzer(c));
+  }
   SECTION("non-finite update interval") {
     StreamConfig c = base();
     c.bpm_update_interval_sec = std::numeric_limits<float>::infinity();
@@ -672,6 +686,56 @@ TEST_CASE("StreamAnalyzer rejects non-finite runtime and quantization parameters
   quantize.mel_db_min = 1.0f;
   quantize.mel_db_max = 0.0f;
   REQUIRE_THROWS_AS(analyzer.read_frames_quantized_i16(0, i16, quantize), SonareException);
+}
+
+TEST_CASE("tuning_ref_hz has one accepted range across create and the live setter",
+          "[streaming][numeric]") {
+  // One parameter, one accepted range, one normalization rule. The live setter
+  // rejects out-of-range values instead of clamping them: clamping would turn a
+  // 1000 Hz request into 880 Hz here while the constructor refused the same
+  // number outright, so the chromagram would depend on which entry point the
+  // host happened to use.
+  StreamConfig config;
+  config.sample_rate = 22050;
+  config.n_fft = 1024;
+  config.hop_length = 256;
+  config.n_mels = 24;
+  config.compute_chroma = true;
+  config.max_pending_frames = 256;
+
+  StreamAnalyzer bounds_probe(config);
+  REQUIRE_THROWS_AS(bounds_probe.set_tuning_ref_hz(100.0f), SonareException);
+  REQUIRE_THROWS_AS(bounds_probe.set_tuning_ref_hz(1000.0f), SonareException);
+  REQUIRE_NOTHROW(bounds_probe.set_tuning_ref_hz(kMinTuningRefHz));
+  REQUIRE_NOTHROW(bounds_probe.set_tuning_ref_hz(kMaxTuningRefHz));
+
+  // An accepted value bins the chromagram identically through either path.
+  constexpr float kRefHz = 466.16f;  // A4 a semitone sharp
+  std::vector<float> audio(12288, 0.0f);
+  for (size_t i = 0; i < audio.size(); ++i) {
+    const float t = static_cast<float>(i) / static_cast<float>(config.sample_rate);
+    audio[i] = 0.5f * std::sin(kTwoPi * 233.08f * t) + 0.3f * std::sin(kTwoPi * kRefHz * t);
+  }
+
+  StreamConfig at_create = config;
+  at_create.tuning_ref_hz = kRefHz;
+  StreamAnalyzer created(at_create);
+  created.process(audio.data(), audio.size());
+  const auto expected = created.read_frames(256);
+  REQUIRE_FALSE(expected.empty());
+
+  StreamAnalyzer live(config);
+  live.set_tuning_ref_hz(kRefHz);
+  live.process(audio.data(), audio.size());
+  const auto actual = live.read_frames(256);
+  REQUIRE(actual.size() == expected.size());
+  for (size_t f = 0; f < actual.size(); ++f) {
+    CAPTURE(f);
+    REQUIRE(actual[f].chroma.size() == expected[f].chroma.size());
+    for (size_t k = 0; k < actual[f].chroma.size(); ++k) {
+      REQUIRE_THAT(actual[f].chroma[k], WithinAbs(expected[f].chroma[k], 1.0e-5f));
+    }
+  }
 }
 
 TEST_CASE("StreamAnalyzer SOA read", "[streaming]") {
