@@ -369,3 +369,48 @@ def test_analyze_with_progress_matches_analyze_shape(analyze_result, progress_re
     assert (a.dynamics is None) == (b.dynamics is None)
     assert (a.rhythm is None) == (b.rhythm is None)
     assert (a.melody is None) == (b.melody is None)
+
+
+def test_parse_analysis_json_rejects_an_unmirrored_section_type() -> None:
+    """A section ordinal outside SectionType names a drifted enum mirror.
+
+    Substituting UNKNOWN for it would present the drift as an analysis result,
+    so the decoder raises and names the ordinal instead.
+    """
+    from libsonare import SonareValueError
+    from libsonare._analysis_detection import _parse_analysis_json
+    from libsonare.types import SectionType
+
+    def parse(section: dict[str, object]) -> object:
+        return _parse_analysis_json({"key": {}, "beats": [], "sections": [section]})
+
+    with pytest.raises(SonareValueError, match="99"):
+        parse({"type": 99, "start": 0.0, "end": 1.0})
+
+    with pytest.raises(SonareValueError, match="missing its type"):
+        parse({"start": 0.0, "end": 1.0})
+
+    result = parse({"type": int(SectionType.CHORUS), "start": 0.0, "end": 1.0})
+    assert result.sections[0].type is SectionType.CHORUS  # type: ignore[attr-defined]
+
+
+def test_parse_analysis_json_rejects_an_unmirrored_chord_quality() -> None:
+    """An "unknown" chord quality and an unmapped ordinal are not the same thing.
+
+    The analyzer reports "unknown" through an ordinal of its own, so an ordinal
+    outside the table means the mirror has drifted rather than that the chord
+    was unrecognized.
+    """
+    from libsonare import SonareValueError
+    from libsonare._analysis_detection import _parse_analysis_json
+
+    def parse(chord: dict[str, object]) -> object:
+        return _parse_analysis_json({"key": {}, "beats": [], "chords": [chord]})
+
+    with pytest.raises(SonareValueError, match="99"):
+        parse({"root": 0, "quality": 99, "start": 0.0, "end": 1.0})
+
+    # The genuine "unknown" quality still round-trips, including as the default
+    # when the producer omitted the field.
+    assert parse({"root": 0, "quality": 9, "start": 0.0, "end": 1.0}).chords[0].quality == "unknown"  # type: ignore[attr-defined]
+    assert parse({"root": 0, "start": 0.0, "end": 1.0}).chords[0].quality == "unknown"  # type: ignore[attr-defined]

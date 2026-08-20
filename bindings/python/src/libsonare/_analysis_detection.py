@@ -12,6 +12,7 @@ from ._ffi_types_core import (
     SonareOnsetDetectConfig,
 )
 from ._runtime import (
+    SonareValueError,
     _check,
     _get_lib,
     _guard_buffer,
@@ -324,6 +325,32 @@ _QUALITY_NAMES: dict[int, str] = {
     16: "sus2Add4",
 }
 
+# Derived from the table rather than written out, so renumbering the mirror
+# cannot leave the fallback pointing at a different quality.
+_UNKNOWN_QUALITY_ORDINAL: int = next(
+    ordinal for ordinal, name in _QUALITY_NAMES.items() if name == "unknown"
+)
+
+
+def _section_type_from_ordinal(raw: Any) -> SectionType:
+    """Convert a raw ``sections[].type`` ordinal into a :class:`SectionType`.
+
+    The analyzer always writes this field, and its ordinals are a mirror of
+    ``sonare::SectionType``. Both facts are load-bearing, so neither a missing
+    field nor an ordinal outside the enum is treated as a value to substitute
+    for: a silent fallback would turn a mirror that has drifted apart into
+    plausible-looking analysis output. Raising names the ordinal instead.
+
+    :raises SonareValueError: the field is absent or names no known section type.
+    """
+    if raw is None:
+        raise SonareValueError("analysis result section is missing its type field")
+    ordinal = int(raw)
+    try:
+        return SectionType(ordinal)
+    except ValueError as exc:
+        raise SonareValueError(f"unknown analysis section type ordinal: {ordinal}") from exc
+
 
 def _parse_analysis_json(data: dict[str, Any]) -> AnalysisResult:
     """Parse the camelCase JSON dict returned by ``sonare_analyze_json`` into
@@ -415,10 +442,16 @@ def _parse_analysis_json(data: dict[str, Any]) -> AnalysisResult:
     }
     chords: list[Chord] = []
     for c in data.get("chords", []):
-        q_raw = c.get("quality", 9)
+        q_raw = c.get("quality", _UNKNOWN_QUALITY_ORDINAL)
         # quality field may be int (enum value) or str (name from JSON)
         if isinstance(q_raw, int):
-            quality_str = _QUALITY_NAMES.get(q_raw, "unknown")
+            # "unknown" is a quality the analyzer genuinely reports, so it has an
+            # ordinal of its own. An ordinal outside the table is something else
+            # -- the mirror has drifted -- and folding the two together would
+            # present that as a detection result.
+            if q_raw not in _QUALITY_NAMES:
+                raise SonareValueError(f"unknown analysis chord quality ordinal: {q_raw}")
+            quality_str = _QUALITY_NAMES[q_raw]
         else:
             quality_str = chord_quality_str.get(str(q_raw), "unknown")
         chords.append(
@@ -438,7 +471,7 @@ def _parse_analysis_json(data: dict[str, Any]) -> AnalysisResult:
     for s in data.get("sections", []):
         sections.append(
             Section(
-                type=SectionType(int(s.get("type", 7))),
+                type=_section_type_from_ordinal(s.get("type")),
                 start=float(s.get("start", 0.0)),
                 end=float(s.get("end", 0.0)),
                 energy_level=float(s.get("energyLevel", 0.0)),
