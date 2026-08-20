@@ -50,14 +50,22 @@ files), catching a wiring break the C-anchored checks structurally cannot see.
 6. **enum** — the accepted enum / string-union value set for a param differs
    across surfaces.
 7. **wasm_internal** — the WASM binding is inconsistent across its own three
-   files: an embind free-function registration (`src/wasm/bindings.cpp`), the
-   `SonareModule` TS interface (`bindings/wasm/src/sonare.js.d.ts`) and the
-   `index.ts` facade. *Active* when a registered free function is missing from
-   the `SonareModule` type (TypeScript can't call it) or `index.ts` calls a
-   `module.X` the type never declares; *informational* when a registered + typed
-   function has no `index.ts` wrapper (often a raw entry superseded by a richer
-   variant). This is the leg that would have caught **P0-4** (`analyzeSections`
-   registered in embind but absent from both the type and the facade) — the
+   surfaces: the embind free-function registrations (every `*.cpp` under
+   `src/wasm/`), the `SonareModule` TS interface
+   (`bindings/wasm/src/sonare.js.d.ts`) and the facade modules (every `*.ts`
+   under `bindings/wasm/src/`). *Active* when a registered free function is
+   missing from the `SonareModule` type (TypeScript can't call it) or a facade
+   calls a `module.X` the type never declares; *informational* when a registered
+   + typed function has no facade wrapper (often a raw entry superseded by a
+   richer variant, or an internal helper the facade consumes without
+   re-exporting). Both source sets are discovered by walking their root rather
+   than listed, because a listed path keeps resolving after the tree moves under
+   it and silently stops covering what moved; a walk that collapses raises
+   instead of reporting clean. Comments and (on the facade side) string literals
+   are blanked before matching, so prose naming a symbol is not mistaken for
+   code. This is the leg that catches a registration that never reaches a
+   caller — a free function present in embind but absent from both the type and
+   the facade, which is how `analyzeSections` was once unreachable — the
    other six checks read `index.ts` alone and so model "exposed in WASM" =
    "exported from `index.ts`", blind to a break upstream of it. Only
    FREE-function registrations are checked; class methods (`.function(...)`
@@ -134,7 +142,9 @@ extractors/         one parser per surface:
                       across sibling modules all count)
   cli.py              the curated CLI command surface
   cpp_struct.py       C++ core struct field inits + free-fn default args (+ constants)
-  wasm_internal.py    the WASM binding's own 3 files (embind regs / SonareModule / index.ts)
+  wasm_internal.py    the WASM binding's own 3 surfaces (embind regs under
+                      src/wasm / SonareModule / the facade modules under
+                      bindings/wasm/src; both source sets are walked, not listed)
 core_defaults.py    loads core_map.toml, resolves each struct/func to its core defaults
 model.py            FunctionSig / Param / Extraction data model (canonical keys)
 normalize.py        name + default canonicalization (cross-surface equality)
@@ -153,10 +163,11 @@ not silent passes: an un-mapped function simply isn't checked for core-default
 drift.
 
 The `wasm_internal` check covers only WASM **free-function** wiring (embind
-`function(...)` ↔ `SonareModule` ↔ `index.ts` `module.X`). It does NOT
+`function(...)` ↔ `SonareModule` ↔ a facade `module.X`). It does NOT
 cross-validate class-method registrations (`.function(...)` inside a
 `class_<T>()` chain) against their bound-class interfaces, nor does it compare
 embind argument *types/arity* — only the existence of the name across the three
 layers. It also assumes the facade reaches the raw module via `module.X` or
-`requireModule().X`; a method aliased through a differently-named local would
-read as unwrapped (surfaced informationally, never as an active gap).
+`requireModule().X`; a name reached through a differently-named accessor (e.g.
+the arrangement surface's `projectModule().X`) reads as unwrapped — surfaced
+informationally, never as an active gap.

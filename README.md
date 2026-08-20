@@ -41,10 +41,12 @@ the browser to see what libsonare can power.
 
 - **Analysis** — BPM, key, chords (HMM smoothing, inversions, key-context),
   beat/downbeat, time signature, sections, timbre, dynamics, pitch (YIN/pYIN),
-  tempogram/PLP, NNLS chroma, EBU R128 loudness, and room acoustics (blind or
-  IR-based RT60/EDT/C50/C80/D50). Where it overlaps librosa, defaults match and
-  are validated against librosa reference values in CI — so results port over
-  without surprises.
+  tempogram/PLP, NNLS chroma, EBU R128 loudness, and room acoustics (RT60/EDT
+  from either a blind recording or a measured impulse response; C50/C80/D50
+  require the impulse response and read as NaN in blind mode, since clarity
+  metrics need a known direct-sound arrival time a blind recording does not
+  have). Where it overlaps librosa, defaults match and are validated against
+  librosa reference values in CI — so results port over without surprises.
 - **Mastering** — 88 distinct named DSP processors (EQ, dynamics, multiband,
   stereo, saturation, repair, maximizer, reference matching), or 71 with
   `BUILD_FX=OFF` (the creative streaming effects are omitted), built against
