@@ -311,15 +311,31 @@ class Audio:
         _check(rc)
         return cls(handle, lib)
 
+    def _require_handle(self) -> ctypes.c_void_p:
+        """Return the live handle, or raise if this audio has been closed.
+
+        The test is falsiness, not ``is None``: :meth:`close` leaves a NULL
+        ``c_void_p`` behind rather than ``None``, so an identity test never
+        fires while every C accessor reached through that handle silently
+        returns a neutral value.
+        """
+        if not self._handle:
+            raise RuntimeError("Audio is closed")
+        return self._handle
+
     @property
     def data(self) -> np.ndarray:
         """Return audio samples as a ``float32`` numpy array.
 
         The returned array owns its memory (a copy of the native buffer), so it
         stays valid after the :class:`Audio` handle is closed.
+
+        Raises:
+            RuntimeError: If the audio has been closed.
         """
-        ptr = self._lib.sonare_audio_data(self._handle)
-        length = int(self._lib.sonare_audio_length(self._handle))
+        handle = self._require_handle()
+        ptr = self._lib.sonare_audio_data(handle)
+        length = int(self._lib.sonare_audio_length(handle))
         if length == 0:
             return np.empty(0, dtype=np.float32)
         view = np.ctypeslib.as_array(ptr, shape=(length,))
@@ -327,18 +343,30 @@ class Audio:
 
     @property
     def length(self) -> int:
-        """Return the number of audio samples."""
-        return int(self._lib.sonare_audio_length(self._handle))
+        """Return the number of audio samples.
+
+        Raises:
+            RuntimeError: If the audio has been closed.
+        """
+        return int(self._lib.sonare_audio_length(self._require_handle()))
 
     @property
     def sample_rate(self) -> int:
-        """Return the sample rate in Hz."""
-        return int(self._lib.sonare_audio_sample_rate(self._handle))
+        """Return the sample rate in Hz.
+
+        Raises:
+            RuntimeError: If the audio has been closed.
+        """
+        return int(self._lib.sonare_audio_sample_rate(self._require_handle()))
 
     @property
     def duration(self) -> float:
-        """Return the audio duration in seconds."""
-        return float(self._lib.sonare_audio_duration(self._handle))
+        """Return the audio duration in seconds.
+
+        Raises:
+            RuntimeError: If the audio has been closed.
+        """
+        return float(self._lib.sonare_audio_duration(self._require_handle()))
 
     def detect_bpm(self) -> float:
         """Detect BPM (tempo).
@@ -349,9 +377,13 @@ class Audio:
         Returns:
             Estimated tempo in beats per minute. For confidence and time
             signature, use :func:`libsonare.analyze` instead.
+
+        Raises:
+            RuntimeError: If the audio has been closed.
         """
+        handle = self._require_handle()
         out_bpm = ctypes.c_float()
-        rc = self._lib.sonare_audio_detect_bpm(self._handle, ctypes.byref(out_bpm))
+        rc = self._lib.sonare_audio_detect_bpm(handle, ctypes.byref(out_bpm))
         _check(rc)
         return float(out_bpm.value)
 
@@ -418,10 +450,14 @@ class Audio:
             (``beat_observations.onset_strength``), the time signature,
             confidence values, or the bar-start positions, use
             :func:`libsonare.analyze` instead — one call returns all of them.
+
+        Raises:
+            RuntimeError: If the audio has been closed.
         """
+        handle = self._require_handle()
         with _out_float_array(self._lib) as (out_times, out_count):
             rc = self._lib.sonare_audio_detect_beats(
-                self._handle, ctypes.byref(out_times), ctypes.byref(out_count)
+                handle, ctypes.byref(out_times), ctypes.byref(out_count)
             )
             _check(rc)
             return [float(out_times[i]) for i in range(out_count.value)]
@@ -438,20 +474,29 @@ class Audio:
             confidence values, or the bar starts as indices into the beat
             list, use :func:`libsonare.analyze` instead — one call returns all
             of them.
+
+        Raises:
+            RuntimeError: If the audio has been closed.
         """
+        handle = self._require_handle()
         with _out_float_array(self._lib) as (out_times, out_count):
             rc = self._lib.sonare_audio_detect_downbeats(
-                self._handle, ctypes.byref(out_times), ctypes.byref(out_count)
+                handle, ctypes.byref(out_times), ctypes.byref(out_count)
             )
             _check(rc)
             return [float(out_times[i]) for i in range(out_count.value)]
 
     def detect_onsets(self) -> list[float]:
-        """Detect onset times in seconds."""
+        """Detect onset times in seconds.
+
+        Raises:
+            RuntimeError: If the audio has been closed.
+        """
+        handle = self._require_handle()
         out_times = ctypes.POINTER(ctypes.c_float)()
         out_count = ctypes.c_size_t()
         rc = self._lib.sonare_audio_detect_onsets(
-            self._handle, ctypes.byref(out_times), ctypes.byref(out_count)
+            handle, ctypes.byref(out_times), ctypes.byref(out_count)
         )
         _check(rc)
         try:
@@ -470,12 +515,16 @@ class Audio:
         timbre, dynamics, rhythm, melody and form — are left at their defaults.
         Call the module-level :func:`libsonare.analyze` for the complete
         result, and for the tempo and meter options.
+
+        Raises:
+            RuntimeError: If the audio has been closed.
         """
         from ._ffi import SonareAnalysisResult
         from .types import Mode, PitchClass, TimeSignature
 
+        handle = self._require_handle()
         out = SonareAnalysisResult()
-        rc = self._lib.sonare_audio_analyze(self._handle, ctypes.byref(out))
+        rc = self._lib.sonare_audio_analyze(handle, ctypes.byref(out))
         _check(rc)
         try:
             beat_times = [float(out.beat_times[i]) for i in range(out.beat_count)]
