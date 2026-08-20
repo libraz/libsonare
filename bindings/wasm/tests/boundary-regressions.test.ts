@@ -89,8 +89,7 @@ describe('boundary regressions (WASM)', () => {
       // Exercise other raw native frames before processing; the borrowed outer
       // pointer array must remain valid regardless of stack reuse.
       for (let i = 0; i < 64; i++) {
-        // @ts-expect-error the binding takes a fifth `lifter` argument
-        module.mfccToMel(new Float32Array([1]), 1, 1, 1);
+        module.mfccToMel(new Float32Array([1]), 1, 1, 1, 0);
       }
       const actualOutputs = [actual.processMono(sine(0.005)), actual.processMono(sine(0.005))];
       expect(actualOutputs.map((output) => Array.from(output))).toEqual(

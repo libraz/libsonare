@@ -97,6 +97,7 @@ add_executable(sonare_tests
   rt/k_weighting_freq_response_test.cpp
   rt/spsc_queue_test.cpp
   rt/partitioned_convolver_test.cpp
+  rt/polyphase_fir_identity_test.cpp
   rt/true_peak_filter_test.cpp
   rt/rt_publisher_test.cpp
   rt/seqlock_cell_test.cpp
@@ -202,6 +203,7 @@ if(BUILD_MASTERING)
     mastering/golden_hash_test.cpp
     mastering/hysteresis_relaxation_test.cpp
     mastering/hysteresis_ja_reference_test.cpp
+    mastering/hysteresis_ja_physical_test.cpp
     mastering/amp_sim_test.cpp
     mastering/insert_factory_extra_test.cpp
     mastering/insert_latency_alignment_test.cpp

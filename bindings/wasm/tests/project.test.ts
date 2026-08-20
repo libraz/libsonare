@@ -641,21 +641,46 @@ describe('Sonare WASM Project', () => {
     }
   });
 
-  it('keeps the base preset when synth patch numeric fields are explicitly zero', () => {
+  it('treats an omitted synth patch field as keep and an explicit zero as the value zero', () => {
     const project = buildMidiOnlyProject();
     try {
-      // @ts-expect-error BuiltinSynthBinding declares neither a preset-name string
-      const preset = project.bounceWithBuiltinInstrument('warm-pad', {
-        totalFrames: 4096,
-        numChannels: 2,
-        sampleRate: 48000,
-      });
-      const explicitZero = project.bounceWithBuiltinInstrument(
-        // @ts-expect-error nor the preset/ampSustain/filterSustain/gain fields
-        { preset: 'warm-pad', ampSustain: 0, filterSustain: 0, gain: 0 },
-        { totalFrames: 4096, numChannels: 2, sampleRate: 48000 },
+      // The patch carries a present-field bitmask, so it can tell "unset" from
+      // "set to zero" and does not need the zero-means-default convention the
+      // bitmask-less config structs use. The render window has to be long
+      // enough for the note to reach its sustain stage; a few thousand frames
+      // is still inside attack/decay, where no sustain value can matter and
+      // any comparison would agree for the wrong reason.
+      const options = { totalFrames: 48000, numChannels: 2, sampleRate: 48000 };
+      const tailEnergy = (audio: Float32Array): number => {
+        let sum = 0;
+        for (let i = Math.floor(audio.length * 0.75); i < audio.length; i++) {
+          sum += audio[i] * audio[i];
+        }
+        return sum;
+      };
+
+      const base = project.bounceWithSynthInstrument({ preset: 'warm-pad' }, options);
+      const explicitZero = project.bounceWithSynthInstrument(
+        { preset: 'warm-pad', ampSustain: 0 },
+        options,
       );
-      expect(explicitZero).toEqual(preset);
+      const explicitLow = project.bounceWithSynthInstrument(
+        { preset: 'warm-pad', ampSustain: 0.2 },
+        options,
+      );
+
+      expect(maxAbs(base)).toBeGreaterThan(0.01);
+      // An explicit zero applies zero instead of falling back to the preset,
+      // so the note decays away and the sustained tail collapses. Comparing
+      // tail energy rather than peak level is what makes this discriminating:
+      // the attack transient is identical in all three renders.
+      expect(explicitZero).not.toEqual(base);
+      expect(tailEnergy(explicitZero)).toBeLessThan(tailEnergy(base) * 0.5);
+      // A non-zero override is neither the preset value nor the zero case, so
+      // the field is carried through as a value rather than as a flag.
+      expect(explicitLow).not.toEqual(base);
+      expect(explicitLow).not.toEqual(explicitZero);
+      expect(tailEnergy(explicitLow)).toBeGreaterThan(tailEnergy(explicitZero));
     } finally {
       project.delete();
     }

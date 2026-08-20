@@ -39,6 +39,15 @@ set(SONARE_SOURCES
   core/synthesis.cpp
   core/audio_ops.cpp
   core/harmonic.cpp
+  # The base layer owns the shared coefficient designers: filters/ and metering/
+  # call them just as the realtime layer does, and both files are pure
+  # design-time coefficient/table computation over util/ only. Compiling them
+  # with sonare_rt instead would make sonare_core depend upward on sonare_rt,
+  # which fails to link once the feature libraries that happen to pull in both
+  # are switched off. The headers stay under rt/, and sonare_rt links
+  # sonare_core, so every existing include keeps resolving.
+  rt/biquad_design.cpp
+  rt/true_peak_fir.cpp
   filters/mel.cpp
   filters/chroma.cpp
   filters/dct.cpp
@@ -261,14 +270,12 @@ if(SONARE_FFMPEG_ENABLED)
 endif()
 
 add_library(sonare_rt STATIC
-  rt/biquad_design.cpp
   rt/delay_line.cpp
   rt/envelope_follower.cpp
   rt/lookahead_buffer.cpp
   rt/oversampler.cpp
   rt/param_smoother.cpp
   rt/partitioned_convolver.cpp
-  rt/true_peak_fir.cpp
   rt/true_peak_filter.cpp
   transport/marker.cpp
   transport/musical_time.cpp
@@ -1060,9 +1067,11 @@ if(BUILD_WASM)
 
   add_executable(sonare ${SONARE_WASM_BINDING_SOURCES})
   set_target_properties(sonare PROPERTIES OUTPUT_NAME ${SONARE_WASM_OUTPUT_NAME})
-  # Core analysis and metering share the canonical K-weighting / RBJ filter
-  # coefficient helpers from sonare_rt. The analysis entry deliberately stops
-  # here: it does not link the realtime engine, mixer, or arrangement layers.
+  # sonare_rt supplies the realtime processor and transport translation units the
+  # bindings reach for; the canonical K-weighting / RBJ coefficient designers
+  # that core analysis and metering share live one layer down in sonare_core.
+  # The analysis entry deliberately stops here: it does not link the realtime
+  # engine, mixer, or arrangement layers.
   target_link_libraries(sonare PRIVATE sonare_core sonare_rt)
   target_compile_definitions(sonare PRIVATE
     SONARE_BUILD_MASTERING=$<IF:$<BOOL:${BUILD_MASTERING}>,1,0>

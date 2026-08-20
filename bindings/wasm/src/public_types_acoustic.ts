@@ -34,7 +34,11 @@ export interface RoomGeometryOptions {
   lengthM?: number;
   widthM?: number;
   heightM?: number;
-  /** Uniform wall absorption, clamped to [0, 0.999] (the back-compat scalar). */
+  /**
+   * Uniform wall absorption, clamped to [0, 0.999] (the back-compat scalar).
+   * Defaults to 0.2. Higher absorption shortens RT60, so it changes both the
+   * rendered content and the tail length rather than only the timbre.
+   */
   absorption?: number;
   /**
    * Optional per-octave-band wall absorption (125/250/500/1k/2k/4k.. Hz). When

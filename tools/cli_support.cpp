@@ -373,7 +373,11 @@ CliOptionSpec path_value(const char* name, bool required = false, bool global_le
                      std::move(aliases), {}, required, false, global_lexical, inventory);
 }
 
+// Every caller sits inside one of these two command blocks, so the helper has
+// to carry their union or it becomes an unused function when both are off.
+#if defined(SONARE_WITH_MASTERING) || defined(SONARE_WITH_ARRANGEMENT)
 CliOptionSpec required_path(const char* name) { return path_value(name, true); }
+#endif
 
 #ifdef SONARE_WITH_ARRANGEMENT
 CliOptionSpec optional_string(const char* name, const char* implicit = "true",

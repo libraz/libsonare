@@ -2,7 +2,8 @@
        coverage-build coverage-clean build-shared build-node build-wasm-binding \
        test-python test-python-slow test-node test-wasm parity conformance test-gm-cross-surface abi-layout abi-layout-check check-abi-version \
        capability-catalog capability-catalog-check processor-types processor-types-check ci-local \
-       test-hardening test-hardening-asan test-hardening-tsan test-hardening-host test-hardening-wasm
+       test-hardening test-hardening-asan test-hardening-tsan test-hardening-host test-hardening-wasm \
+       build-feature-matrix
 
 BUILD_DIR := build
 OPTIONAL_FIXTURE_BUILD_DIR := build-optional-fixtures
@@ -177,6 +178,34 @@ test-hardening-wasm: build-wasm-binding
 	cd bindings/wasm && yarn vitest run tests/basic.test.ts tests/public-input-conformance.test.ts -t "processes realtime engine clips|keeps marker transactions conformant" --reporter=verbose > build-wasm/test-hardening.log
 
 test-hardening: test-hardening-asan test-hardening-tsan test-hardening-host test-hardening-wasm
+
+# Feature-gate build matrix. Configure + compile only, no ctest: what it catches
+# is the defect class where an always-compiled translation unit references a
+# symbol that only exists inside a feature gate, which shows up as a compile or
+# link failure and never as a test failure. It catches no behaviour at all -- a
+# stub returning wrong values, or a feature-off build answering SONARE_OK with
+# zeroes, passes this gate.
+#
+# The all-off entry is not redundant with the single-option rows. A gated symbol
+# can be reachable through a second enabled feature, so a break that needs two
+# options off together is invisible to a matrix that only turns one off at a
+# time. Tests are excluded so a failure points at the shipped library and the
+# CLI rather than at test code that assumes a full-feature build.
+FEATURE_MATRIX_OPTIONS := BUILD_MASTERING BUILD_MIXING BUILD_GRAPH BUILD_FX BUILD_ACOUSTIC_SIM \
+       BUILD_PITCH_EDITOR BUILD_VOICE_CHANGER BUILD_ARRANGEMENT BUILD_ASSIST
+FEATURE_MATRIX_ALL_OFF := $(foreach opt,$(FEATURE_MATRIX_OPTIONS),-D$(opt)=OFF)
+
+build-feature-matrix:
+	@set -e; \
+	for opt in $(FEATURE_MATRIX_OPTIONS); do \
+	  dir="build-feature-$$(echo $$opt | tr 'A-Z_' 'a-z-')-off"; \
+	  echo "=== $$opt=OFF ($$dir) ==="; \
+	  $(CMAKE) -B "$$dir" -DCMAKE_BUILD_TYPE=Debug -DBUILD_TESTING=OFF -DSONARE_WITH_FFMPEG=OFF -D$$opt=OFF > "$$dir.log" 2>&1 || { cat "$$dir.log"; exit 1; }; \
+	  $(CMAKE) --build "$$dir" --parallel $(HARDENING_JOBS) >> "$$dir.log" 2>&1 || { cat "$$dir.log"; exit 1; }; \
+	done; \
+	echo "=== all features OFF (build-feature-all-off) ==="; \
+	$(CMAKE) -B build-feature-all-off -DCMAKE_BUILD_TYPE=Debug -DBUILD_TESTING=OFF -DSONARE_WITH_FFMPEG=OFF $(FEATURE_MATRIX_ALL_OFF) > build-feature-all-off.log 2>&1 || { cat build-feature-all-off.log; exit 1; }; \
+	$(CMAKE) --build build-feature-all-off --parallel $(HARDENING_JOBS) >> build-feature-all-off.log 2>&1 || { cat build-feature-all-off.log; exit 1; }
 
 # Cross-binding parity gate (C API is canonical). Stdlib-only, no build needed:
 # it reads the binding sources directly and exits non-zero on active drift.
