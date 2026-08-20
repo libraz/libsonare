@@ -5,6 +5,7 @@
 
 #include "engine/realtime_engine.h"
 #include "engine/realtime_engine_internal.h"
+#include "util/constants.h"
 #include "util/exception.h"
 #include "util/math_utils.h"
 
@@ -12,6 +13,66 @@ namespace sonare::engine {
 
 void RealtimeEngine::prepare(double sample_rate, int max_block_size, size_t command_capacity,
                              size_t telemetry_capacity, int max_channels) {
+  try {
+    prepare_impl(sample_rate, max_block_size, command_capacity, telemetry_capacity, max_channels);
+  } catch (...) {
+    // Roll forward rather than back. The sequence below adopts the new sample
+    // rate, block size and channel count before it sizes the scratch that
+    // addresses them, so an engine that kept them after a partial run would let
+    // process() stride past buffers still sized for the previous configuration.
+    // Restoring the previous configuration instead is not available: preparing
+    // rebuilds sub-objects in place and re-prepares bound instruments the engine
+    // does not own, so undoing it would re-run the same fallible steps.
+    reset_to_unprepared();
+    throw;
+  }
+}
+
+void RealtimeEngine::reset_to_unprepared() noexcept {
+  // max_block_size_ == 0 is the unprepared sentinel process(),
+  // process_with_monitor() and render_offline() all test before anything else,
+  // so clearing it is what turns every audio entry point into a clean refusal.
+  max_block_size_ = 0;
+  prepared_channels_ = static_cast<int>(kMaxAudioChannels);
+  sample_rate_ = constants::kDefaultDawSampleRate;
+
+  // Release the channel-planar scratch and drop every pointer into it. A vector
+  // whose assign() threw is left valid but unspecified, so a previously computed
+  // channel pointer can address freed storage; nothing may keep one.
+  input_capture_storage_.clear();
+  input_capture_channels_.fill(nullptr);
+#if defined(SONARE_WITH_ARRANGEMENT)
+  midi_instrument_storage_.clear();
+  midi_instrument_channels_.fill(nullptr);
+#if defined(SONARE_WITH_MIXING)
+  for (auto& source : midi_instrument_source_channels_) {
+    source.fill(nullptr);
+  }
+#endif
+  clip_scratch_storage_.clear();
+  clip_scratch_channels_.fill(nullptr);
+  // configure(0, 0) swaps in an empty bank, which is how the delay lines give
+  // their storage back; it allocates nothing and cannot throw.
+  clip_pdc_delay_.configure(0, 0);
+  for (size_t i = 0; i < pdc_instrument_count_; ++i) {
+    instrument_pdc_delays_[i].configure(0, 0);
+  }
+  pdc_instrument_count_ = 0;
+  pdc_total_q8_ = 0;
+#endif
+#if defined(SONARE_WITH_MIXING)
+  monitor_bus_storage_.clear();
+  monitor_bus_channels_.fill(nullptr);
+#endif
+  graph_latency_samples_q8_ = 0;
+
+  // The command and telemetry queues keep whatever capacity they had. Telemetry
+  // in particular must stay pushable: reporting kNotPrepared to the host is how
+  // a refused block is visible, and the next prepare() re-reserves both.
+}
+
+void RealtimeEngine::prepare_impl(double sample_rate, int max_block_size, size_t command_capacity,
+                                  size_t telemetry_capacity, int max_channels) {
   // Clamp the queue capacities the same way max_block_size and max_channels are
   // clamped below. The telemetry number is multiplied by the metered lane count
   // before the meter tap reserves, so an unbounded value here is an unbounded

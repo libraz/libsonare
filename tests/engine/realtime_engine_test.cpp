@@ -11,8 +11,14 @@
 
 #include "engine/clip_player.h"
 #include "engine/engine_controller.h"
+#include "engine/telemetry.h"
 #include "transport/tempo_map.h"
 #include "util/exception.h"
+
+#if defined(SONARE_WITH_ARRANGEMENT)
+#include "midi/instrument.h"
+#include "midi/midi_event.h"
+#endif
 
 namespace {
 
@@ -49,6 +55,48 @@ TEST_CASE("RealtimeEngine prepares scratch for the declared channel count", "[en
   engine.process(over_prepared, 3, 64);
   REQUIRE(extra[0] == Catch::Approx(0.0f));
 }
+
+#if defined(SONARE_WITH_ARRANGEMENT)
+/// @brief Host instrument whose prepare() fails once, on demand.
+/// @details The engine prepares every bound instrument from inside its own
+///          prepare(), and an instrument's prepare() is neither noexcept nor
+///          owned by the engine. Arming this reproduces a control-thread failure
+///          at that seam without exhausting real memory, and it sits partway
+///          through the sequence: the engine has already adopted the new sample
+///          rate, block size and channel count, and has already resized some
+///          scratch, but has not yet reserved its queues or the capture scratch.
+class FailingPrepareInstrument final : public sonare::midi::MidiInstrument {
+ public:
+  void arm() noexcept { armed_ = true; }
+  int prepare_calls() const noexcept { return prepare_calls_; }
+
+  void prepare(double, int) override {
+    ++prepare_calls_;
+    if (armed_) {
+      armed_ = false;
+      throw sonare::SonareException(sonare::ErrorCode::OutOfMemory,
+                                    "instrument prepare could not allocate");
+    }
+  }
+  void process(float* const*, int, int) override {}
+  void reset() override {}
+  void on_event(uint32_t, const sonare::midi::MidiEvent&) noexcept override {}
+
+ private:
+  bool armed_ = false;
+  int prepare_calls_ = 0;
+};
+
+/// @brief Drains telemetry and reports whether the engine refused to render.
+bool drained_not_prepared(sonare::engine::RealtimeEngine& engine) {
+  bool seen = false;
+  sonare::engine::Telemetry record{};
+  while (engine.pop_telemetry(record)) {
+    if (record.error == sonare::engine::TelemetryErrorCode::kNotPrepared) seen = true;
+  }
+  return seen;
+}
+#endif  // defined(SONARE_WITH_ARRANGEMENT)
 
 template <size_t N>
 void fill_signal(std::array<float, N>& left, std::array<float, N>& right) {
@@ -1614,3 +1662,95 @@ TEST_CASE("RealtimeEngine::bind_mixing_strip is not noexcept and binds successfu
   REQUIRE(engine.mixing().strip() == &strip);
 }
 #endif  // defined(SONARE_WITH_MIXING)
+
+#if defined(SONARE_WITH_ARRANGEMENT)
+TEST_CASE("RealtimeEngine reports unprepared when prepare fails partway", "[engine]") {
+  sonare::engine::RealtimeEngine engine;
+  engine.prepare(48000.0, 256, 16, 16, 8);
+
+  FailingPrepareInstrument instrument;
+  REQUIRE(engine.set_midi_instrument(0, &instrument));
+  // Binding to an already-prepared engine prepares the instrument, so the arm
+  // below is what makes the NEXT prepare fail rather than this one.
+  REQUIRE(instrument.prepare_calls() == 1);
+  REQUIRE(engine.prepared_scratch_bytes() > 0);
+
+  // Narrower than the configuration in place, so the scratch left behind is
+  // larger than the abandoned configuration would address. That keeps the
+  // half-prepared engine inside its own buffers and lets the assertions below
+  // observe the state rather than a memory fault.
+  instrument.arm();
+  REQUIRE_THROWS_AS(engine.prepare(44100.0, 64, 16, 16, 2), sonare::SonareException);
+
+  // A failed prepare leaves the engine unprepared: it holds no scratch, and the
+  // configuration it half-adopted is not reported as if it had been committed.
+  CAPTURE(engine.prepared_scratch_bytes(), engine.prepared_channels(), engine.sample_rate());
+  REQUIRE(engine.prepared_scratch_bytes() == 0);
+
+  // process() must refuse rather than render through resources the abandoned
+  // prepare never finished committing.
+  std::array<float, 64> left{};
+  std::array<float, 64> right{};
+  left.fill(0.25f);
+  right.fill(-0.25f);
+  float* stereo[] = {left.data(), right.data()};
+  engine.process(stereo, 2, 64);
+  REQUIRE(drained_not_prepared(engine));
+
+  // render_offline() must refuse too, and leave the caller's buffer untouched
+  // rather than reporting a completed render of silence.
+  std::array<float, 64> offline_left{};
+  std::array<float, 64> offline_right{};
+  offline_left.fill(7.0f);
+  offline_right.fill(7.0f);
+  float* offline[] = {offline_left.data(), offline_right.data()};
+  engine.render_offline(offline, 2, 64, 64);
+  REQUIRE(offline_left[0] == Catch::Approx(7.0f));
+  REQUIRE(offline_right[0] == Catch::Approx(7.0f));
+  REQUIRE(drained_not_prepared(engine));
+
+  // The half-state usually breaks the recovery, so the point of the contract is
+  // that a later prepare still fully commits. Compare against an engine that
+  // only ever saw the successful call.
+  engine.prepare(44100.0, 64, 16, 16, 2);
+  REQUIRE(instrument.prepare_calls() == 3);
+
+  sonare::engine::RealtimeEngine reference;
+  FailingPrepareInstrument reference_instrument;
+  REQUIRE(reference.set_midi_instrument(0, &reference_instrument));
+  reference.prepare(44100.0, 64, 16, 16, 2);
+
+  REQUIRE(engine.prepared_channels() == reference.prepared_channels());
+  REQUIRE(engine.sample_rate() == reference.sample_rate());
+  REQUIRE(engine.prepared_scratch_bytes() == reference.prepared_scratch_bytes());
+
+  left.fill(0.25f);
+  right.fill(-0.25f);
+  engine.process(stereo, 2, 64);
+  REQUIRE(left[0] == Catch::Approx(0.25f));
+  REQUIRE(right[0] == Catch::Approx(-0.25f));
+  REQUIRE_FALSE(drained_not_prepared(engine));
+}
+
+TEST_CASE("RealtimeEngine does not keep a wider configuration a failed prepare abandoned",
+          "[engine]") {
+  // The widening direction is the dangerous one: the block size and channel
+  // count are adopted at the top of prepare() while the scratch they address is
+  // sized later, so an engine that kept them would let process() stride past
+  // buffers the abandoned prepare never resized. The engine is only inspected
+  // here, never rendered, because rendering is the fault this guards against.
+  sonare::engine::RealtimeEngine engine;
+  engine.prepare(48000.0, 64, 16, 16, 2);
+  const size_t narrow_scratch_bytes = engine.prepared_scratch_bytes();
+  REQUIRE(narrow_scratch_bytes > 0);
+
+  FailingPrepareInstrument instrument;
+  REQUIRE(engine.set_midi_instrument(0, &instrument));
+
+  instrument.arm();
+  REQUIRE_THROWS_AS(engine.prepare(48000.0, 1024, 16, 16, 16), sonare::SonareException);
+
+  CAPTURE(engine.prepared_channels(), engine.prepared_scratch_bytes(), narrow_scratch_bytes);
+  REQUIRE(engine.prepared_scratch_bytes() == 0);
+}
+#endif  // defined(SONARE_WITH_ARRANGEMENT)

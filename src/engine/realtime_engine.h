@@ -24,6 +24,7 @@
 #include "transport/marker.h"
 #include "transport/tempo_map.h"
 #include "transport/transport.h"
+#include "util/constants.h"
 
 #if defined(SONARE_WITH_ARRANGEMENT)
 #include "engine/channel_delay.h"
@@ -154,6 +155,25 @@ class RealtimeEngine : private ClipPageRequestSink {
   /// callers must not later process more planes without preparing again.
   /// @param command_capacity Clamped to @ref kMaxCommandCapacity.
   /// @param telemetry_capacity Clamped to @ref kMaxTelemetryCapacity.
+  /// @throws Whatever the underlying acquisition threw — most often
+  ///         @c std::bad_alloc, or an exception from a bound instrument's own
+  ///         @c prepare.
+  ///
+  /// @par Failure contract
+  /// A prepare that throws leaves the engine **unprepared**, not restored to the
+  /// configuration that preceded it. The engine holds no scratch, reports zero
+  /// from @ref prepared_scratch_bytes, and every audio entry point refuses:
+  /// @c process and @c process_with_monitor silence their buffers and report
+  /// @c TelemetryErrorCode::kNotPrepared, and @c render_offline returns without
+  /// writing to the caller's buffer. A later @c prepare starts over and commits
+  /// fully, so recovery is one more call and needs no other cleanup.
+  ///
+  /// The previous configuration is deliberately NOT restored. Preparing rebuilds
+  /// sub-objects in place and re-prepares every bound instrument, so undoing a
+  /// partial run would mean re-running those same fallible steps in reverse —
+  /// each able to fail again, and none of them required to be reversible by an
+  /// instrument the engine does not own. Rolling forward to a state the engine
+  /// can always reach is honest where a rollback would only sometimes work.
   void prepare(double sample_rate, int max_block_size, size_t command_capacity = 1024,
                size_t telemetry_capacity = 1024, int max_channels = 64);
   double sample_rate() const noexcept { return sample_rate_; }
@@ -633,6 +653,15 @@ class RealtimeEngine : private ClipPageRequestSink {
 #endif
   void publish_tempo_map_snapshot();
   void adopt_tempo_map_snapshot() noexcept;
+  // The whole of prepare()'s acquisition sequence. prepare() wraps it so a
+  // throw from any step lands in one place.
+  void prepare_impl(double sample_rate, int max_block_size, size_t command_capacity,
+                    size_t telemetry_capacity, int max_channels);
+  // Puts the engine back into the state a freshly constructed one is in as far
+  // as rendering is concerned: no scratch, no configuration claimed, and no
+  // pointer left addressing a buffer a partial prepare may have reallocated.
+  // Must not throw — it runs while an exception is in flight.
+  void reset_to_unprepared() noexcept;
 
   struct InputMonitorState {
     bool enabled = true;
@@ -972,7 +1001,7 @@ class RealtimeEngine : private ClipPageRequestSink {
 #endif
   std::atomic<float> param_smoothing_ms_{20.0f};
   float applied_param_smoothing_ms_ = 20.0f;  // audio thread only
-  double sample_rate_ = 48000.0;
+  double sample_rate_ = constants::kDefaultDawSampleRate;
   uint32_t telemetry_overflow_count_ = 0;
   bool clip_page_underrun_reported_this_block_ = false;
   int graph_latency_samples_q8_ = 0;
