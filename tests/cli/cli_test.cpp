@@ -49,6 +49,46 @@ void create_test_wav(const std::string& path, float duration = 3.0f, float frequ
   save_wav(path, samples, sample_rate);
 }
 
+/// @brief Creates a WAV whose second half gains an upper partial.
+/// @param path Output path
+/// @param sample_rate Sample rate
+///
+/// Structural analysis only reacts to the FFT size when the material has a
+/// timbral change to resolve; a single steady tone yields the same boundaries
+/// at every --n-fft, so it cannot show that the option reaches the analysis.
+void create_two_segment_wav(const std::string& path, int sample_rate = 22050) {
+  const size_t segment = static_cast<size_t>(1.5f * sample_rate);
+  std::vector<float> samples(2 * segment);
+  const float two_pi = 2.0f * static_cast<float>(sonare::constants::kPiD);
+  for (size_t i = 0; i < samples.size(); ++i) {
+    const float t = static_cast<float>(i) / sample_rate;
+    samples[i] = i < segment
+                     ? 0.5f * std::sin(two_pi * 220.0f * t)
+                     : 0.4f * std::sin(two_pi * 880.0f * t) + 0.2f * std::sin(two_pi * 2640.0f * t);
+  }
+  save_wav(path, samples, sample_rate);
+}
+
+/// @brief Creates a WAV whose level steps between loud and quiet blocks.
+/// @param path Output path
+/// @param sample_rate Sample rate
+///
+/// Only the windowed RMS series reacts to the dynamics hop length; peak, RMS
+/// and crest are whole-signal, and the loudness range runs EBU R128 on its own
+/// fixed windows. A stepped envelope is what gives that series a percentile
+/// spread to move.
+void create_stepped_level_wav(const std::string& path, int sample_rate = 22050) {
+  const std::array<float, 6> levels{0.9f, 0.08f, 0.6f, 0.15f, 0.8f, 0.05f};
+  const size_t block = static_cast<size_t>(0.5f * sample_rate);
+  std::vector<float> samples(levels.size() * block);
+  for (size_t i = 0; i < samples.size(); ++i) {
+    const float t = static_cast<float>(i) / sample_rate;
+    samples[i] = levels[i / block] *
+                 std::sin(2.0f * static_cast<float>(sonare::constants::kPiD) * 220.0f * t);
+  }
+  save_wav(path, samples, sample_rate);
+}
+
 void create_test_stereo_wav(const std::string& path, int sample_rate = 22050) {
   std::vector<float> samples = {0.25f, -0.25f, 0.5f, -0.5f};
   save_wav_multichannel(path, samples.data(), 2, 2, ChannelLayout::Stereo, sample_rate);
@@ -142,11 +182,86 @@ std::string unique_temp_path(const std::string& suffix) {
          suffix;
 }
 
+/// @brief Creates a WAV with a sustained full-scale region.
+/// @param path Output path
+/// @param sample_rate Sample rate
+///
+/// The shared analysis tone never reaches full scale, so it cannot exercise a
+/// clipping option at all: `--min-region` only selects among detected regions,
+/// and a signal with no clipped samples has none to select from.
+void create_clipped_wav(const std::string& path, int sample_rate = 22050) {
+  const size_t n_samples = static_cast<size_t>(sample_rate / 2);
+  const size_t clip_begin = n_samples / 4;
+  const size_t clip_end = clip_begin + static_cast<size_t>(sample_rate / 20);
+  std::vector<float> samples(n_samples);
+  const float two_pi = 2.0f * static_cast<float>(sonare::constants::kPiD);
+  for (size_t i = 0; i < n_samples; ++i) {
+    const float t = static_cast<float>(i) / sample_rate;
+    samples[i] = (i >= clip_begin && i < clip_end) ? 1.0f : 0.25f * std::sin(two_pi * 220.0f * t);
+  }
+  save_wav(path, samples, sample_rate);
+}
+
 const std::string CLI = get_cli_path();
 const std::string TEST_WAV = unique_temp_path(".wav");
 const std::string TEST_OUT = unique_temp_path("_out.wav");
 
 }  // namespace
+
+// Native-only commands have no cross-surface contract, so the conformance
+// harness (which runs every case on both surfaces) has no place for them by
+// design. Their exit codes and message shapes are locked here instead.
+TEST_CASE("CLI numeric option validation", "[cli]") {
+  SECTION("a negative size is a rejected parameter, not an internal error") {
+    // The value used to be narrowed to size_t before any range check, so -1
+    // became a huge allocation bound and surfaced as a generic failure.
+    for (const std::string command : {"pad-center", "fix-length"}) {
+      auto [code, output] = exec_command(CLI + " " + command + " --values 1,2,3 --size -1");
+      INFO(command);
+      REQUIRE(code == 3);
+      REQUIRE_THAT(output, ContainsSubstring("--size"));
+      REQUIRE_THAT(output, ContainsSubstring("-1"));
+    }
+  }
+
+  SECTION("a size option with no usable default is required, not silently empty") {
+    auto [fix_code, fix_output] = exec_command(CLI + " fix-length --values 1,2,3");
+    REQUIRE(fix_code == 3);
+    REQUIRE_THAT(fix_output, ContainsSubstring("--size"));
+
+    auto [pcen_code, pcen_output] = exec_command(CLI + " pcen --values 1,2,3,4");
+    REQUIRE(pcen_code == 3);
+    REQUIRE_THAT(pcen_output, ContainsSubstring("--n-bins"));
+  }
+
+  SECTION("a negative region length is rejected instead of yielding contradictory output") {
+    const std::string clipped = unique_temp_path("_clipped.wav");
+    create_clipped_wav(clipped);
+    auto [code, output] = exec_command(CLI + " clipping " + clipped + " --min-region -1 --json");
+    REQUIRE(code == 3);
+    REQUIRE_THAT(output, ContainsSubstring("--min-region"));
+    std::remove(clipped.c_str());
+  }
+
+  SECTION("the same option rejects every unparsable value the same way") {
+    // A value with a numeric prefix and a value with none take different paths
+    // through the standard library's conversion, and the second used to escape
+    // as "stoi: no conversion" with no option name and no rejected value.
+    auto [partial_code, partial_output] =
+        exec_command(CLI + " pad-center --values 1,2,3 --size 1.5x");
+    auto [none_code, none_output] = exec_command(CLI + " pad-center --values 1,2,3 --size abc");
+    REQUIRE(partial_code == none_code);
+    REQUIRE_THAT(partial_output, ContainsSubstring("invalid integer value for --size: 1.5x"));
+    REQUIRE_THAT(none_output, ContainsSubstring("invalid integer value for --size: abc"));
+  }
+
+  SECTION("a list element names the option and the element that failed") {
+    auto [code, output] = exec_command(CLI + " fix-frames --values a,b,c");
+    REQUIRE(code == 3);
+    REQUIRE_THAT(output, ContainsSubstring("--values"));
+    REQUIRE_THAT(output, ContainsSubstring("a"));
+  }
+}
 
 TEST_CASE("CLI version command", "[cli]") {
   SECTION("text output") {
@@ -320,6 +435,21 @@ TEST_CASE("CLI contract inventory follows path-scoped parser metadata", "[cli][c
   REQUIRE_FALSE(has_option(command("spectral"), "output"));
   REQUIRE(has_option(command("pitch-shift"), "output"));
 
+  // A handler that reads a global DSP field must have the matching option on
+  // its own path, or the parser rejects the spelling and the read can only
+  // ever observe the built-in default.
+  REQUIRE(has_option(command("melody"), "hop-length"));
+  REQUIRE(has_option(command("melody"), "fmin"));
+  REQUIRE(has_option(command("melody"), "fmax"));
+  REQUIRE(has_option(command("boundaries"), "n-fft"));
+  REQUIRE(has_option(command("boundaries"), "hop-length"));
+  REQUIRE(has_option(command("pcen"), "hop-length"));
+  REQUIRE(has_option(command("dynamics"), "hop-length"));
+  REQUIRE(has_option(command("rhythm"), "n-fft"));
+  REQUIRE(has_option(command("rhythm"), "hop-length"));
+  // dynamics windows a loudness series but runs no FFT of its own.
+  REQUIRE_FALSE(has_option(command("dynamics"), "n-fft"));
+
 #ifdef SONARE_WITH_ARRANGEMENT
   REQUIRE_FALSE(has_option(command("project.abi"), "frames"));
   REQUIRE_FALSE(has_option(command("project.validate"), "frames"));
@@ -336,6 +466,87 @@ TEST_CASE("CLI contract inventory follows path-scoped parser metadata", "[cli][c
     }
   }
 #endif
+}
+
+TEST_CASE("CLI global DSP options reach the analysis on every path that reads them",
+          "[cli][argument-contract]") {
+  const auto payload_of = [](const std::string& invocation) {
+    auto [code, output] = exec_command(invocation);
+    REQUIRE(code == 0);
+    return sonare::util::json::parse_strict(output);
+  };
+
+  SECTION("melody") {
+    create_test_wav(TEST_WAV);
+    const std::string base_command = CLI + " melody " + TEST_WAV + " --json -q";
+    const auto base = payload_of(base_command);
+
+    const auto finer_hop = payload_of(base_command + " --hop-length 256");
+    REQUIRE(finer_hop["pitch_count"].as_int() != base["pitch_count"].as_int());
+
+    const auto lowered_ceiling = payload_of(base_command + " --fmax 300");
+    REQUIRE(lowered_ceiling["mean_frequency"].as_float() != base["mean_frequency"].as_float());
+
+    const auto raised_floor = payload_of(base_command + " --fmin 500");
+    REQUIRE(raised_floor["has_melody"].as_bool() != base["has_melody"].as_bool());
+  }
+
+  SECTION("boundaries") {
+    const std::string segmented = unique_temp_path("_segmented.wav");
+    create_two_segment_wav(segmented);
+    const std::string base_command = CLI + " boundaries " + segmented + " --json -q";
+    const auto base = payload_of(base_command);
+    REQUIRE(base["count"].as_int() > 0);
+
+    const auto finer_hop = payload_of(base_command + " --hop-length 256");
+    REQUIRE(finer_hop["boundaries"][0]["frame"].as_int() !=
+            base["boundaries"][0]["frame"].as_int());
+
+    const auto wider_window = payload_of(base_command + " --n-fft 8192");
+    REQUIRE(wider_window["boundaries"][0]["time"].as_float() !=
+            base["boundaries"][0]["time"].as_float());
+  }
+
+  SECTION("dynamics") {
+    const std::string stepped = unique_temp_path("_stepped.wav");
+    create_stepped_level_wav(stepped);
+    const std::string base_command = CLI + " dynamics " + stepped + " --json -q";
+    const auto base = payload_of(base_command);
+
+    // dynamic_range_db is the only reading the hop reaches: it is the
+    // percentile spread of the windowed RMS series.
+    const auto coarser_hop = payload_of(base_command + " --hop-length 4096");
+    REQUIRE(coarser_hop["dynamic_range_db"].as_float() != base["dynamic_range_db"].as_float());
+  }
+
+  SECTION("rhythm") {
+    create_test_wav(TEST_WAV);
+    const std::string base_command = CLI + " rhythm " + TEST_WAV + " --json -q";
+    const auto base = payload_of(base_command);
+
+    const auto finer_hop = payload_of(base_command + " --hop-length 256");
+    REQUIRE(finer_hop["bpm"].as_float() != base["bpm"].as_float());
+
+    const auto wider_window = payload_of(base_command + " --n-fft 8192");
+    REQUIRE(wider_window["bpm"].as_float() != base["bpm"].as_float());
+  }
+
+  SECTION("pcen") {
+    const std::string base_command =
+        CLI + " pcen --values 1,2,3,4,5,6 --n-bins 1 --n-frames 6 --json";
+    const auto base = payload_of(base_command);
+    const auto finer_hop = payload_of(base_command + " --hop-length 256");
+    REQUIRE(base.size() == finer_hop.size());
+    REQUIRE(base[base.size() - 1].as_float() != finer_hop[finer_hop.size() - 1].as_float());
+  }
+
+  SECTION("pitch-correct corrects to one constant pitch and takes no hop control") {
+    create_test_wav(TEST_WAV);
+    auto [code, output] = exec_command(CLI + " pitch-correct --current-midi 69 --target-midi 70 " +
+                                       TEST_WAV + " -o " + TEST_OUT + " -q --hop-length 256");
+    REQUIRE(code == 2);
+    REQUIRE_THAT(output, ContainsSubstring("Unknown option '--hop-length'"));
+  }
 }
 
 TEST_CASE("CLI registry exposes immutable leaf contracts", "[cli][registry]") {

@@ -1,3 +1,5 @@
+#include <limits>
+
 #include "sonare_cli.h"
 
 int cmd_normalize(const CliArgs& args, const Audio& audio) {
@@ -187,7 +189,14 @@ int cmd_resample(const CliArgs& args, const Audio& audio) {
     return 1;
   }
   const int source_sr = audio.sample_rate();
-  const int target_sr = args.get_int("target-rate", args.get_int("target-sr", source_sr));
+  // The core resample() only checks for a positive rate, so an unbounded value
+  // reaches allocation and can write a multi-gigabyte file instead of failing.
+  // Bound it to the same supported range the library documents for Audio.
+  const int target_sr =
+      args.has("target-rate")
+          ? args.get_int_in_range("target-rate", kMinAudioSampleRate, kMaxAudioSampleRate,
+                                  source_sr)
+          : args.get_int_in_range("target-sr", kMinAudioSampleRate, kMaxAudioSampleRate, source_sr);
   Audio result = resample(audio, target_sr);
   save_wav(args.output_file, result.data(), result.size(), result.sample_rate());
 

@@ -234,6 +234,7 @@ int cmd_mastering(const CliArgs& args, const Audio& audio) {
           .kv("ceiling_db", config.ceiling_db)
           .kv("true_peak_oversample", config.true_peak_oversample)
           .kv("latency_samples", 0)
+          .kv("loudness_target_limited", result.loudness_target_limited)
           .kv("sample_rate", result.sample_rate)
           .kv("output", args.output_file)
           .end_object()
@@ -268,6 +269,7 @@ int cmd_mastering(const CliArgs& args, const Audio& audio) {
         .kv("ceiling_db", config.ceiling_db)
         .kv("true_peak_oversample", config.true_peak_oversample)
         .kv("latency_samples", result.latency_samples)
+        .kv("loudness_target_limited", result.loudness_target_limited)
         .kv("sample_rate", result.audio.sample_rate())
         .kv("output", args.output_file)
         .end_object()
@@ -404,7 +406,7 @@ int cmd_eq(const CliArgs& args, const Audio& audio) {
     for (const char* shortcut :
          {"type",         "frequency-hz",   "gain-db",           "q",          "coeff-mode",
           "slope-db-oct", "placement",      "proportional-q",    "dynamic",    "threshold-db",
-          "ratio",        "range-db",       "attack-ms",         "release-ms", "lookahead-ms",
+          "ratio",        "range-db",       "attack-ms",         "release-ms", "detector-delay-ms",
           "phase-mode",   "resolution",     "auto-gain",         "gain-scale", "output-gain-db",
           "output-pan",   "auto-threshold", "sidechain-freq-hz", "sidechain-q"}) {
       if (args.has(shortcut)) {
@@ -430,7 +432,10 @@ int cmd_eq(const CliArgs& args, const Audio& audio) {
     params.push_back({"band0.rangeDb", args.get_float("range-db", -6.0f)});
     params.push_back({"band0.attackMs", args.get_float("attack-ms", 5.0f)});
     params.push_back({"band0.releaseMs", args.get_float("release-ms", 50.0f)});
-    params.push_back({"band0.lookaheadMs", args.get_float("lookahead-ms", 0.0f)});
+    // "--lookahead-ms" is registered as an alias of "--detector-delay-ms" (see
+    // cli_support.cpp), so this lookup already resolves either spelling; the
+    // constructed key is always the canonical "detectorDelayMs".
+    params.push_back({"band0.detectorDelayMs", args.get_float("detector-delay-ms", 0.0f)});
     params.push_back({"band0.sidechainFreqHz", args.get_float("sidechain-freq-hz", -1.0f)});
     params.push_back({"band0.sidechainQ", args.get_float("sidechain-q", 1.0f)});
     params.push_back({"phaseMode", static_cast<double>(args.get_int("phase-mode", 1))});
@@ -635,11 +640,13 @@ int cmd_mix(const CliArgs& args, const Audio& audio) {
   strip.set_pan(args.get_float("pan", 0.0f));
   strip.set_pan_mode(parse_pan_mode_option(args.get_string("pan-mode", "balance")));
   strip.set_width(width);
-  strip.prepare(static_cast<double>(audio.sample_rate()), static_cast<int>(audio.size()));
 
   std::vector<float> left(audio.begin(), audio.end());
   std::vector<float> right(audio.begin(), audio.end());
-  const int source_channels = audio_channel_count(args.input_file);
+  // main() already probed the channel count for this invocation and stored it;
+  // re-probing here read the file again and gave the handler a second, parallel
+  // answer that nothing kept in step with the first.
+  const int source_channels = args.source_channels;
   if (source_channels == 2) {
     auto [interleaved, sample_rate, channels] = load_audio_interleaved(args.input_file);
     SONARE_CHECK(sample_rate == audio.sample_rate() && channels == 2, ErrorCode::DecodeFailed);
@@ -653,8 +660,16 @@ int cmd_mix(const CliArgs& args, const Audio& audio) {
     std::cerr << color::red << "Error: --width requires a stereo input" << color::reset << "\n";
     return 1;
   }
+  // Both the prepared block size and the processed frame count come from the
+  // buffers actually being processed, not from the mono decode that sized
+  // nothing here. The two agree on a well-formed static file, but that was an
+  // assumption nothing enforced: on a stereo input `left`/`right` are resized
+  // from the interleaved decode, so any disagreement between the decodes would
+  // have read past or short of the real buffers.
+  const auto frames = static_cast<int>(left.size());
+  strip.prepare(static_cast<double>(audio.sample_rate()), frames);
   float* channels[] = {left.data(), right.data()};
-  strip.process(channels, 2, static_cast<int>(audio.size()));
+  strip.process(channels, 2, frames);
 
   if (!args.output_file.empty()) {
     std::vector<float> interleaved(2 * left.size());

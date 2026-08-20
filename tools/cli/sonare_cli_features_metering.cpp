@@ -910,7 +910,8 @@ int cmd_meter(const CliArgs& args, const Audio& audio) {
 
 int cmd_clipping(const CliArgs& args, const Audio& audio) {
   const float threshold = args.get_float("threshold", 0.999f);
-  const size_t min_region = static_cast<size_t>(args.get_int("min-region", 1));
+  const auto min_region = static_cast<size_t>(
+      args.get_int_in_range("min-region", 1, std::numeric_limits<int>::max(), 1));
 
   metering::ClippingResult result = metering::detect_clipping(audio, threshold, min_region);
 

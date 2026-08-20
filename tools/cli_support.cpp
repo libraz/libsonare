@@ -15,6 +15,8 @@
 #include <thread>
 #include <utility>
 
+#include "util/exception.h"
+
 #if defined(_WIN32)
 #include <io.h>
 #else
@@ -45,6 +47,8 @@ int cli_exit_code_for_error(sonare::ErrorCode error, bool legacy_mode) noexcept 
       return 9;
     case sonare::ErrorCode::Cancelled:
       return 11;
+    case sonare::ErrorCode::EncodeFailed:
+      return 12;
     case sonare::ErrorCode::Ok:
     default:
       return 10;
@@ -216,11 +220,23 @@ std::string JsonBuilder::escape(const std::string& s) {
 
 namespace {
 
+// Every numeric CLI value converts here, so a rejection always reads the same
+// way. std::stof / std::stoi report two different failures for one option:
+// a value with a numeric prefix ("1.5x") returns a partial conversion, while a
+// value with none ("abc") throws from the standard library itself. Letting the
+// second escape produced raw text such as "stoi: no conversion", with no option
+// name and no rejected value, for the same option that reported properly on the
+// first. Both are caught here and rephrased identically.
 float parse_float_strict(const std::string& option, const std::string& value) {
   size_t consumed = 0;
-  const float parsed = std::stof(value, &consumed);
+  float parsed = 0.0f;
+  try {
+    parsed = std::stof(value, &consumed);
+  } catch (const std::exception&) {
+    throw std::invalid_argument("invalid float value for --" + option + ": " + value);
+  }
   if (consumed != value.size()) {
-    throw std::invalid_argument("invalid numeric value for --" + option + ": " + value);
+    throw std::invalid_argument("invalid float value for --" + option + ": " + value);
   }
   if (!std::isfinite(parsed)) {
     throw std::invalid_argument("numeric value for --" + option + " must be finite: " + value);
@@ -230,7 +246,12 @@ float parse_float_strict(const std::string& option, const std::string& value) {
 
 int parse_int_strict(const std::string& option, const std::string& value) {
   size_t consumed = 0;
-  const int parsed = std::stoi(value, &consumed);
+  int parsed = 0;
+  try {
+    parsed = std::stoi(value, &consumed);
+  } catch (const std::exception&) {
+    throw std::invalid_argument("invalid integer value for --" + option + ": " + value);
+  }
   if (consumed != value.size()) {
     throw std::invalid_argument("invalid integer value for --" + option + ": " + value);
   }
@@ -319,9 +340,11 @@ CliOptionSpec int_value(const char* name, bool required = false, bool global_lex
 }
 
 CliOptionSpec number_value(const char* name, double value, bool required = false,
-                           bool global_lexical = false, bool inventory = true) {
+                           bool global_lexical = false, bool inventory = true,
+                           std::vector<std::string> aliases = {}) {
   return make_option(name, CliOptionArity::RequiredValue, CliOptionScalarType::Number,
-                     number_default(value), {}, {}, required, false, global_lexical, inventory);
+                     number_default(value), std::move(aliases), {}, required, false, global_lexical,
+                     inventory);
 }
 
 CliOptionSpec number_value(const char* name, bool required = false, bool global_lexical = false,
@@ -426,14 +449,19 @@ const std::vector<CliCommandSpec>& build_cli_registry() {
     add_command(commands, "sections", true,
                 {number_value("min-duration", 4.0), number_value("threshold", 0.3),
                  global_int("n-fft", 2048), global_int("hop-length", 512)});
-    add_command(commands, "dynamics", true, {number_value("window-sec", 0.4)});
-    add_command(commands, "rhythm", true,
-                {number_value("start-bpm", 120.0), number_value("bpm-min", 60.0),
-                 number_value("bpm-max", 200.0)});
-    add_command(commands, "melody", true, {number_value("threshold", 0.1)});
+    add_command(commands, "dynamics", true,
+                {number_value("window-sec", 0.4), global_int("hop-length", 512)});
+    add_command(
+        commands, "rhythm", true,
+        {number_value("start-bpm", 120.0), number_value("bpm-min", 60.0),
+         number_value("bpm-max", 200.0), global_int("n-fft", 2048), global_int("hop-length", 512)});
+    add_command(commands, "melody", true,
+                {number_value("threshold", 0.1), global_int("hop-length", 512),
+                 global_number("fmin", 80.0), global_number("fmax", 1000.0)});
     add_command(commands, "boundaries", true,
                 {number_value("threshold", 0.3), int_value("kernel-size", 64),
-                 number_value("min-distance", 2.0)});
+                 number_value("min-distance", 2.0), global_int("n-fft", 2048),
+                 global_int("hop-length", 512)});
 
     // Processing leaves.
     add_command(commands, "pitch-shift", true,
@@ -501,34 +529,23 @@ const std::vector<CliCommandSpec>& build_cli_registry() {
     add_command(commands, "mastering-processor", true,
                 {required_string("processor"), string_value("params"), int_value("bits", 16),
                  output_value(), flag("stereo")});
-    add_command(commands, "eq", true,
-                {string_value("params"),
-                 int_value("type", 0),
-                 number_value("frequency-hz", 1000.0),
-                 number_value("gain-db", 0.0),
-                 number_value("q", 1.0),
-                 int_value("coeff-mode", 0),
-                 int_value("slope-db-oct", 12),
-                 int_value("placement", 0),
-                 number_value("threshold-db", -24.0),
-                 number_value("ratio", 2.0),
-                 number_value("range-db", -6.0),
-                 number_value("attack-ms", 5.0),
-                 number_value("release-ms", 50.0),
-                 number_value("lookahead-ms", 0.0),
-                 number_value("sidechain-freq-hz", -1.0),
-                 number_value("sidechain-q", 1.0),
-                 int_value("phase-mode", 1),
-                 int_value("resolution", 0),
-                 number_value("gain-scale", 1.0),
-                 number_value("output-gain-db", 0.0),
-                 number_value("output-pan", 0.0),
-                 int_value("bits", 16),
-                 output_value(),
-                 flag("proportional-q"),
-                 flag("dynamic"),
-                 flag("auto-threshold"),
-                 flag("auto-gain")});
+    add_command(
+        commands, "eq", true,
+        {string_value("params"), int_value("type", 0), number_value("frequency-hz", 1000.0),
+         number_value("gain-db", 0.0), number_value("q", 1.0), int_value("coeff-mode", 0),
+         int_value("slope-db-oct", 12), int_value("placement", 0),
+         number_value("threshold-db", -24.0), number_value("ratio", 2.0),
+         number_value("range-db", -6.0), number_value("attack-ms", 5.0),
+         number_value("release-ms", 50.0),
+         // "--lookahead-ms" is the flag's former (misleading) spelling,
+         // registered as an alias so it still resolves to the same
+         // "detector-delay-ms" storage key (see canonical_option_name()).
+         number_value("detector-delay-ms", 0.0, false, false, true, {"lookahead-ms"}),
+         number_value("sidechain-freq-hz", -1.0), number_value("sidechain-q", 1.0),
+         int_value("phase-mode", 1), int_value("resolution", 0), number_value("gain-scale", 1.0),
+         number_value("output-gain-db", 0.0), number_value("output-pan", 0.0),
+         int_value("bits", 16), output_value(), flag("proportional-q"), flag("dynamic"),
+         flag("auto-threshold"), flag("auto-gain")});
     add_command(commands, "mastering-pair-processor", true,
                 {required_string("processor"), required_path("reference"), string_value("params"),
                  int_value("bits", 16), output_value()});
@@ -553,7 +570,10 @@ const std::vector<CliCommandSpec>& build_cli_registry() {
                  number_value("width", 1.0), output_value()},
                 {"mix-strip"});
     add_command(commands, "mixing-presets", false, {});
-    add_command(commands, "mixing-preset", false, {string_value("preset")});
+    // The advertised default has to be one the command can actually run: an
+    // empty string reaches the preset lookup and fails, and the handler's own
+    // fallback never applied because the registry default wins over it.
+    add_command(commands, "mixing-preset", false, {string_value("preset", "vocalReverbSend")});
 #endif
 
     // Feature leaves.
@@ -678,7 +698,7 @@ const std::vector<CliCommandSpec>& build_cli_registry() {
                 {string_value("values"), int_value("sample-rate", 22050),
                  number_value("time-constant", 0.4), number_value("gain", 0.98),
                  number_value("bias", 2.0), number_value("power", 0.5), number_value("eps", 1e-6),
-                 int_value("n-bins"), int_value("n-frames")});
+                 int_value("n-bins"), int_value("n-frames"), global_int("hop-length", 512)});
     add_command(commands, "info", true, {});
 
     add_command(commands, "version", false, {});
@@ -839,6 +859,47 @@ int CliArgs::get_int(const std::string& k, int def) const {
   }
   const CliOptionValue value = static_default_for(*this, k);
   return value.kind == CliOptionDefaultKind::Integer ? value.integer_value : def;
+}
+
+namespace {
+
+[[noreturn]] void reject_option_range(const std::string& option, const std::string& value,
+                                      int minimum, int maximum) {
+  std::ostringstream message;
+  message << "value out of range for --" << option << ": " << value << " (expected ";
+  if (maximum == std::numeric_limits<int>::max()) {
+    message << minimum << " or greater)";
+  } else {
+    message << minimum << " to " << maximum << ")";
+  }
+  throw sonare::SonareException(sonare::ErrorCode::InvalidParameter, message.str());
+}
+
+}  // namespace
+
+int CliArgs::get_int_in_range(const std::string& k, int minimum, int maximum, int def) const {
+  if (!has(k)) {
+    const int fallback = get_int(k, def);
+    // A registry default outside the caller's range is a registry bug, not user
+    // input; clamping would hide it, so report it the same way.
+    if (fallback < minimum || fallback > maximum) {
+      reject_option_range(k, std::to_string(fallback), minimum, maximum);
+    }
+    return fallback;
+  }
+  const int value = get_int(k, def);
+  if (value < minimum || value > maximum) {
+    reject_option_range(k, std::to_string(value), minimum, maximum);
+  }
+  return value;
+}
+
+int CliArgs::require_int_in_range(const std::string& k, int minimum, int maximum) const {
+  if (!has(k)) {
+    throw sonare::SonareException(sonare::ErrorCode::InvalidParameter,
+                                  "--" + k + " is required for this command");
+  }
+  return get_int_in_range(k, minimum, maximum, minimum);
 }
 
 bool CliArgs::has(const std::string& k) const {

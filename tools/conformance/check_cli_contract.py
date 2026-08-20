@@ -160,6 +160,7 @@ _MASTERING_REPORT_KEYS = {
     "ceiling_db",
     "true_peak_oversample",
     "latency_samples",
+    "loudness_target_limited",
     "sample_rate",
     "output",
 }
@@ -209,6 +210,41 @@ def _type_token(value: Any, label: str, errors: list[str]) -> bool:
         errors.append(f"{label}: unknown type token {value!r}")
         return False
     return True
+
+
+_TEXT_EXPECTATION_KEYS = ("stdout_contains", "stdout_excludes", "stderr_contains")
+
+
+def _declared_text_keys(case: Any) -> set[str]:
+    """The optional content-assertion keys a case actually declares.
+
+    Kept optional so the vast majority of cases, which assert JSON payloads or
+    empty output, keep their exact key set.
+    """
+    if not isinstance(case, dict):
+        return set()
+    return {key for key in _TEXT_EXPECTATION_KEYS if key in case}
+
+
+def _validate_text_expectations(case: Any, label: str, errors: list[str]) -> None:
+    if not isinstance(case, dict):
+        return
+    for key in _TEXT_EXPECTATION_KEYS:
+        if key not in case:
+            continue
+        value = case[key]
+        if not isinstance(value, list) or not value:
+            errors.append(f"{label}.{key}: expected a non-empty array")
+            continue
+        if not _strings(value, f"{label}.{key}", errors):
+            continue
+        if any(not needle for needle in value):
+            errors.append(f"{label}.{key}: substrings must not be empty")
+    if case.get("stdout") == "text" and "stdout_contains" not in case:
+        errors.append(
+            f"{label}: a text stdout case must declare stdout_contains, "
+            "otherwise it asserts nothing about the output"
+        )
 
 
 def _validate_option(option: Any, label: str, errors: list[str]) -> None:
@@ -992,7 +1028,8 @@ def validate_manifest(manifest: Any) -> list[str]:
                             {"stderr"}
                             if isinstance(case, dict) and "stderr" in case
                             else set()
-                        ),
+                        )
+                        | _declared_text_keys(case),
                         case_label,
                         errors,
                     ):
@@ -1020,12 +1057,15 @@ def validate_manifest(manifest: Any) -> list[str]:
                         )
                     if not isinstance(case["artifact"], str):
                         errors.append(f"{case_label}.artifact: expected a string")
-                    if case["stdout"] not in {"json", "empty"}:
-                        errors.append(f"{case_label}.stdout: expected json or empty")
+                    if case["stdout"] not in {"json", "empty", "text"}:
+                        errors.append(
+                            f"{case_label}.stdout: expected json, empty or text"
+                        )
                     if case.get("stderr", "empty") not in {"empty", "nonempty"}:
                         errors.append(
                             f"{case_label}.stderr: expected empty or nonempty"
                         )
+                    _validate_text_expectations(case, case_label, errors)
             artifacts = contract["artifacts"]
             if not isinstance(artifacts, dict):
                 errors.append(f"{label}.artifacts: expected an object")
@@ -1136,7 +1176,8 @@ def validate_manifest(manifest: Any) -> list[str]:
             label = f"manifest.parser_cases[{index}]"
             if not _exact(
                 case,
-                {"id", "argv", "exit", "legacy_exit", "stdout", "payload"},
+                {"id", "argv", "exit", "legacy_exit", "stdout", "payload"}
+                | _declared_text_keys(case),
                 label,
                 errors,
             ):
@@ -1153,8 +1194,9 @@ def validate_manifest(manifest: Any) -> list[str]:
                 errors.append(f"{label}.legacy_exit: expected 0 or 1")
             elif (case["exit"] == 0) != (case["legacy_exit"] == 0):
                 errors.append(f"{label}: legacy exit must fold non-zero to 1")
-            if case["stdout"] not in {"json", "empty"}:
-                errors.append(f"{label}.stdout: expected json or empty")
+            if case["stdout"] not in {"json", "empty", "text"}:
+                errors.append(f"{label}.stdout: expected json, empty or text")
+            _validate_text_expectations(case, label, errors)
             if case["payload"] != "none":
                 errors.append(
                     f"{label}.payload: parser cases must not declare a JSON payload"
@@ -2608,9 +2650,10 @@ def _run_active_cases(
                         f"got {result['stderr'][:160]!r}",
                     )
                 )
+            _check_text_expectations(case, result, label, report)
             parsed: Any = None
-            if case["stdout"] == "empty":
-                if result["stdout"].strip():
+            if case["stdout"] in {"empty", "text"}:
+                if case["stdout"] == "empty" and result["stdout"].strip():
                     report.append(
                         (
                             "fail",
@@ -2667,8 +2710,9 @@ def _run_active_cases(
                         f"got {legacy_result['stderr'][:160]!r}",
                     )
                 )
-            if case["stdout"] == "empty":
-                if legacy_result["stdout"].strip():
+            _check_text_expectations(case, legacy_result, f"{label} [legacy]", report)
+            if case["stdout"] in {"empty", "text"}:
+                if case["stdout"] == "empty" and legacy_result["stdout"].strip():
                     message = (
                         f"{label} [legacy]: expected empty stdout, "
                         f"got {legacy_result['stdout'][:160]!r}"
@@ -2733,6 +2777,51 @@ def _run_active_cases(
     return payloads
 
 
+def _check_text_expectations(
+    case: dict[str, Any],
+    result: dict[str, Any],
+    label: str,
+    report: list[tuple[str, str]],
+) -> None:
+    """Check the human-readable expectations a case declares.
+
+    ``stdout: "text"`` marks a case whose output is prose rather than JSON, so
+    it is asserted by content instead of being parsed.  ``stdout_contains`` and
+    ``stderr_contains`` hold substrings that must appear, which is how a case
+    pins a diagnostic that must be shown or a message that must name the
+    option and the value it rejected.  ``stdout_excludes`` holds substrings that
+    must NOT appear: a command whose text output claims success while it returns
+    a failing status cannot be caught by any positive assertion, because the
+    diagnostic it should print and the success line it should not print can both
+    be present at once.
+    """
+    if case["stdout"] == "text" and not result["stdout"].strip():
+        report.append(("fail", f"{label}: expected text stdout, got nothing"))
+    for stream in ("stdout", "stderr"):
+        expected = case.get(f"{stream}_contains")
+        if not expected:
+            continue
+        actual = result[stream]
+        for needle in expected:
+            if needle not in actual:
+                report.append(
+                    (
+                        "fail",
+                        f"{label}: expected {stream} to contain {needle!r}, "
+                        f"got {actual[:160]!r}",
+                    )
+                )
+    for needle in case.get("stdout_excludes") or []:
+        if needle in result["stdout"]:
+            report.append(
+                (
+                    "fail",
+                    f"{label}: expected stdout not to contain {needle!r}, "
+                    f"got {result['stdout'][:160]!r}",
+                )
+            )
+
+
 def _run_parser_cases(
     surface: str,
     executable: str,
@@ -2756,6 +2845,7 @@ def _run_parser_cases(
                     f"{label}: expected empty stdout, got {result['stdout'][:160]!r}",
                 )
             )
+        _check_text_expectations(case, result, label, report)
         legacy = _run(surface, executable, argv, True, timeout)
         if legacy["returncode"] != case["legacy_exit"]:
             detail = legacy.get("error") or f"got exit {legacy['returncode']}"
@@ -2772,6 +2862,7 @@ def _run_parser_cases(
                     f"{label} [legacy]: expected empty stdout, got {legacy['stdout'][:160]!r}",
                 )
             )
+        _check_text_expectations(case, legacy, f"{label} [legacy]", report)
 
 
 def _print_listing(manifest: dict[str, Any]) -> None:

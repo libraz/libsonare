@@ -10,6 +10,19 @@
 #include <unistd.h>
 #endif
 
+// Every subcommand here reports its result on stdout and keeps stderr for
+// errors, usage, and advisory output, matching the rest of this CLI. The
+// deciding reason is that `--json` already prints the result to stdout: the
+// text branch renders the same result the JSON branch emits, so sending it to
+// stderr would split one result across two streams depending only on a
+// formatting flag.
+//
+// Diagnostics split on the same principle: one that changes the exit status is
+// part of the result and goes to stdout; one that does not is advisory and goes
+// to stderr. That is why `--strict` prints its diagnostics to stdout in place
+// of the success line, while a plain run prints the success line to stdout and
+// the same diagnostics to stderr.
+//
 // Usage exit code, mirroring kExitUsage in tools/sonare_cli.cpp. A missing or
 // blank `project` subcommand is a usage error; without this the handler's plain
 // `1` would be remapped to the project invalid-state code (9) by main().
@@ -109,9 +122,15 @@ bool write_binary_file(const std::string& path, const uint8_t* data, size_t len)
   return true;
 }
 
-// Loads a project JSON file from --in (or the second positional) into a fresh
-// handle. Returns true on success. On failure prints an error and leaves the
-// handle empty.
+// Loads a project JSON file from --in into a fresh handle. Returns true on
+// success. On failure prints an error and leaves the handle empty.
+//
+// `project` accepts one positional and the subcommand name consumes it, so
+// there is no second positional to fall back to: the --project and
+// args.input_file branches below are unreachable from every current caller,
+// all of which declare --in as required. They are kept as a guard for a future
+// subcommand that does not, which would otherwise read its own subcommand name
+// as a file path.
 bool load_project_from_args(const CliArgs& args, ProjectHandle* handle,
                             std::string* diagnostics = nullptr, SonareError* load_error = nullptr) {
   if (load_error != nullptr) *load_error = SONARE_OK;
@@ -247,7 +266,7 @@ int cmd_project_new(const CliArgs& args) {
         .end_object()
         .print();
   } else if (!args.quiet) {
-    std::cerr << color::green << "Wrote empty project to " << args.output_file << color::reset
+    std::cout << color::green << "Wrote empty project to " << args.output_file << color::reset
               << "\n";
   }
   return 0;
@@ -270,9 +289,13 @@ int cmd_project_validate(const CliArgs& args) {
     return 1;
   }
   // A successful parse is valid even when the loader emitted repair/warning
-  // diagnostics. `--strict` changes only the exit status; the canonical
-  // artifact and the complete diagnostic payload are always produced first.
+  // diagnostics, and that is what the JSON payload reports. `--strict` promotes
+  // those diagnostics to a failing exit status, so the text output has to
+  // describe the outcome the caller will branch on: printing the green "valid"
+  // line while returning a failure left the user no way to see what was wrong
+  // except to re-run with --json.
   const bool valid = true;
+  const bool strict_failure = args.has("strict") && !diagnostics.empty();
   char* json = nullptr;
   size_t len = 0;
   SonareError err = sonare_project_serialize(handle.ptr, &json, &len);
@@ -292,15 +315,26 @@ int cmd_project_validate(const CliArgs& args) {
   sonare_free_string(json);
   if (args.json_output) {
     print_project_validation_json(valid, len, diagnostics);
-  } else if (!valid && !args.quiet) {
-    std::cerr << color::yellow << "Project JSON loaded with "
+  } else if (strict_failure && !args.quiet) {
+    std::cout << color::yellow << "Project JSON loaded with "
               << project_diagnostic_count(diagnostics) << " diagnostic(s):\n"
               << diagnostics << color::reset << "\n";
   } else if (!args.quiet) {
-    std::cerr << color::green << "Project JSON is valid (" << len << " bytes canonical)"
+    std::cout << color::green << "Project JSON is valid (" << len << " bytes canonical)"
               << color::reset << "\n";
+    // Advisory here rather than part of the result: without --strict these do
+    // not change the exit status, so they go to stderr and leave stdout as the
+    // result alone. Suppressing them entirely hid a repaired dangling reference
+    // from anyone who did not also ask for --json.
+    std::istringstream diagnostic_lines(diagnostics);
+    std::string line;
+    while (std::getline(diagnostic_lines, line)) {
+      if (!line.empty()) {
+        std::cerr << color::yellow << "warning: " << line << color::reset << "\n";
+      }
+    }
   }
-  if (args.has("strict") && !diagnostics.empty()) return kExitInvalidState;
+  if (strict_failure) return kExitInvalidState;
   return 0;
 }
 
@@ -337,11 +371,11 @@ int cmd_project_compile(const CliArgs& args) {
     builder.end_array().kv("messages", messages);
     builder.end_object().print();
   } else if (!args.quiet) {
-    std::cerr << (has_timeline ? color::green : color::yellow)
+    std::cout << (has_timeline ? color::green : color::yellow)
               << (has_timeline ? "Compiled (renderable timeline)" : "Compiled with errors")
               << color::reset << ", " << result.diagnostic_count << " diagnostic(s)\n";
     if (result.messages != nullptr && result.messages[0] != '\0') {
-      std::cerr << result.messages << "\n";
+      std::cout << result.messages << "\n";
     }
   }
   sonare_project_free_compile_result(&result);
@@ -438,7 +472,7 @@ int cmd_project_bounce(const CliArgs& args) {
         .end_object()
         .print();
   } else if (!args.quiet) {
-    std::cerr << color::green << "Bounced " << frames << " frames (" << channels << " ch @ "
+    std::cout << color::green << "Bounced " << frames << " frames (" << channels << " ch @ "
               << sample_rate << " Hz" << (use_synth ? ", NativeSynth" : "") << ") to "
               << args.output_file << color::reset << "\n";
   }
@@ -477,7 +511,7 @@ int cmd_project_export_smf(const CliArgs& args) {
         .end_object()
         .print();
   } else if (!args.quiet) {
-    std::cerr << color::green << "Exported SMF (" << len << " bytes) to " << args.output_file
+    std::cout << color::green << "Exported SMF (" << len << " bytes) to " << args.output_file
               << color::reset << "\n";
   }
   return 0;
@@ -515,7 +549,7 @@ int cmd_project_export_midi2(const CliArgs& args) {
         .end_object()
         .print();
   } else if (!args.quiet) {
-    std::cerr << color::green << "Exported MIDI2 Clip File (" << len << " bytes) to "
+    std::cout << color::green << "Exported MIDI2 Clip File (" << len << " bytes) to "
               << args.output_file << color::reset << "\n";
   }
   return 0;
@@ -574,7 +608,7 @@ int cmd_project_import_smf(const CliArgs& args) {
         .end_object()
         .print();
   } else if (!args.quiet) {
-    std::cerr << color::green << "Imported SMF to " << args.output_file << color::reset << "\n";
+    std::cout << color::green << "Imported SMF to " << args.output_file << color::reset << "\n";
   }
   return 0;
 }
@@ -633,7 +667,7 @@ int cmd_project_import_midi2(const CliArgs& args) {
         .end_object()
         .print();
   } else if (!args.quiet) {
-    std::cerr << color::green << "Imported MIDI2 Clip File to " << args.output_file << color::reset
+    std::cout << color::green << "Imported MIDI2 Clip File to " << args.output_file << color::reset
               << "\n";
   }
   return 0;

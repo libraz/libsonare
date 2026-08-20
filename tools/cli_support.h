@@ -72,6 +72,22 @@ struct CliArgs {
 
   float get_float(const std::string& k, float def) const;
   int get_int(const std::string& k, int def) const;
+  /// Reads an optional integer option and rejects a value outside
+  /// [@p minimum, @p maximum].
+  ///
+  /// Handlers must not narrow a raw get_int result to an unsigned type: a
+  /// negative value becomes a huge positive bound, which reads as a nonsensical
+  /// threshold downstream and surfaces as a generic internal failure rather
+  /// than a rejected parameter. Range checking belongs here, once, so the
+  /// message names the option and the rejected value the same way for every
+  /// command.
+  /// @throws sonare::SonareException(InvalidParameter) — CLI exit 3.
+  int get_int_in_range(const std::string& k, int minimum, int maximum, int def) const;
+  /// Range-checked integer option with no usable default. Absent is rejected
+  /// too: a command that cannot produce meaningful output without the option
+  /// must fail rather than succeed with empty output.
+  /// @throws sonare::SonareException(InvalidParameter) — CLI exit 3.
+  int require_int_in_range(const std::string& k, int minimum, int maximum) const;
   bool has(const std::string& k) const;
   std::string get_string(const std::string& k, const std::string& def = "") const;
 };

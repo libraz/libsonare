@@ -1,4 +1,5 @@
 #include "sonare_cli.h"
+#include "util/constants.h"
 
 // Offline-effect output contract: a command that renders an audio buffer
 // requires -o/--output. Running it without a destination has no useful result
@@ -95,7 +96,12 @@ int cmd_pitch_correct(const CliArgs& args, const Audio& audio) {
   editing::pitch_editor::PitchCorrector corrector;
   editing::pitch_editor::F0Track track;
   track.sample_rate = audio.sample_rate();
-  track.hop_length = args.hop_length;
+  // The command corrects to one constant pitch, so the track it builds is a
+  // single frame and carries a fixed hop purely to satisfy the F0Track
+  // contract. Reading the global --hop-length here would consume an option the
+  // command's schema does not accept, and no facade exposes a hop control for
+  // constant-pitch correction on any surface.
+  track.hop_length = sonare::constants::kDefaultHopLength;
   track.f0_hz = {editing::pitch_editor::PitchCorrector::midi_to_hz(current_midi)};
   track.voiced = {true};
   track.voiced_prob = {1.0f};

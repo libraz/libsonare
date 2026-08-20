@@ -1,13 +1,25 @@
 #include <algorithm>
+#include <limits>
 
 #include "sonare_cli.h"
 
+// The list parsers name --values and the element that failed, so a bad entry
+// reads the same way as a bad scalar option instead of surfacing the standard
+// library's own "stof: no conversion" text with no indication of which entry.
 std::vector<float> parse_float_list(const std::string& text) {
   std::vector<float> values;
   std::stringstream stream(text);
   std::string item;
   while (std::getline(stream, item, ',')) {
-    if (!item.empty()) values.push_back(std::stof(item));
+    if (item.empty()) continue;
+    try {
+      size_t consumed = 0;
+      const float parsed = std::stof(item, &consumed);
+      if (consumed != item.size()) throw std::invalid_argument("trailing characters");
+      values.push_back(parsed);
+    } catch (const std::exception&) {
+      throw std::invalid_argument("invalid float value in --values: " + item);
+    }
   }
   if (values.empty()) throw std::invalid_argument("--values must contain at least one number");
   return values;
@@ -18,7 +30,15 @@ std::vector<int> parse_int_list(const std::string& text) {
   std::stringstream stream(text);
   std::string item;
   while (std::getline(stream, item, ',')) {
-    if (!item.empty()) values.push_back(std::stoi(item));
+    if (item.empty()) continue;
+    try {
+      size_t consumed = 0;
+      const int parsed = std::stoi(item, &consumed);
+      if (consumed != item.size()) throw std::invalid_argument("trailing characters");
+      values.push_back(parsed);
+    } catch (const std::exception&) {
+      throw std::invalid_argument("invalid integer value in --values: " + item);
+    }
   }
   if (values.empty()) throw std::invalid_argument("--values must contain at least one integer");
   return values;
@@ -270,6 +290,13 @@ int cmd_version(const CliArgs& args) {
 
 int cmd_doctor(const CliArgs& args) {
   const char* capabilities_json = sonare_capabilities_json();
+  // NULL is the documented failure return, and the accessor sets the last-error
+  // message before taking it. Passing it straight to the parser would make an
+  // allocation failure read as undefined behaviour rather than as the loud
+  // failure the C ABI already reported.
+  SONARE_CHECK_MSG(
+      capabilities_json != nullptr, sonare::ErrorCode::OutOfMemory,
+      std::string("Failed to read native capabilities: ") + sonare_last_error_message());
   const auto native_capabilities = sonare::util::json::parse_strict(capabilities_json);
   const auto& native_object = native_capabilities.as_object();
 
@@ -429,15 +456,17 @@ int cmd_frame_signal(const CliArgs& args, const Audio&) {
 
 int cmd_pad_center(const CliArgs& args, const Audio&) {
   auto values = require_float_values(args);
-  print_float_values(args, pad_center(values, static_cast<size_t>(args.get_int("size", 0)),
-                                      args.get_float("pad-value", 0.0f)));
+  const auto size =
+      static_cast<size_t>(args.require_int_in_range("size", 1, std::numeric_limits<int>::max()));
+  print_float_values(args, pad_center(values, size, args.get_float("pad-value", 0.0f)));
   return 0;
 }
 
 int cmd_fix_length(const CliArgs& args, const Audio&) {
   auto values = require_float_values(args);
-  print_float_values(args, fix_length(values, static_cast<size_t>(args.get_int("size", 0)),
-                                      args.get_float("pad-value", 0.0f)));
+  const auto size =
+      static_cast<size_t>(args.require_int_in_range("size", 1, std::numeric_limits<int>::max()));
+  print_float_values(args, fix_length(values, size, args.get_float("pad-value", 0.0f)));
   return 0;
 }
 
@@ -477,8 +506,9 @@ int cmd_pcen(const CliArgs& args, const Audio&) {
   config.bias = args.get_float("bias", config.bias);
   config.power = args.get_float("power", config.power);
   config.eps = args.get_float("eps", config.eps);
-  print_float_values(args,
-                     pcen(values, args.get_int("n-bins", 0), args.get_int("n-frames", 0), config));
+  const int n_bins = args.require_int_in_range("n-bins", 1, std::numeric_limits<int>::max());
+  const int n_frames = args.require_int_in_range("n-frames", 1, std::numeric_limits<int>::max());
+  print_float_values(args, pcen(values, n_bins, n_frames, config));
   return 0;
 }
 

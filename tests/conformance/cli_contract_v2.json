@@ -300,6 +300,14 @@
       ],
       "dynamics": [
         {
+          "name": "hop-length",
+          "type": "integer",
+          "default": 512,
+          "aliases": [],
+          "repeatable": false,
+          "required": false
+        },
+        {
           "name": "json",
           "type": "boolean",
           "default": false,
@@ -358,6 +366,16 @@
           "required": false
         },
         {
+          "name": "detector-delay-ms",
+          "type": "number",
+          "default": 0,
+          "aliases": [
+            "lookahead-ms"
+          ],
+          "repeatable": false,
+          "required": false
+        },
+        {
           "name": "dynamic",
           "type": "boolean",
           "default": false,
@@ -393,14 +411,6 @@
           "name": "json",
           "type": "boolean",
           "default": false,
-          "aliases": [],
-          "repeatable": false,
-          "required": false
-        },
-        {
-          "name": "lookahead-ms",
-          "type": "number",
-          "default": 0,
           "aliases": [],
           "repeatable": false,
           "required": false
@@ -1086,7 +1096,7 @@
         {
           "name": "preset",
           "type": "string",
-          "default": "",
+          "default": "vocalReverbSend",
           "aliases": [],
           "repeatable": false,
           "required": false
@@ -1770,9 +1780,25 @@
           "required": false
         },
         {
+          "name": "hop-length",
+          "type": "integer",
+          "default": 512,
+          "aliases": [],
+          "repeatable": false,
+          "required": false
+        },
+        {
           "name": "json",
           "type": "boolean",
           "default": false,
+          "aliases": [],
+          "repeatable": false,
+          "required": false
+        },
+        {
+          "name": "n-fft",
+          "type": "integer",
+          "default": 2048,
           "aliases": [],
           "repeatable": false,
           "required": false
@@ -3498,6 +3524,45 @@
           "payload": "none",
           "artifact": "none",
           "stdout": "empty"
+        },
+        {
+          "id": "clean_text",
+          "argv": [
+            "project",
+            "validate",
+            "--in",
+            "{project_clean}"
+          ],
+          "exit": 0,
+          "legacy_exit": 0,
+          "payload": "none",
+          "artifact": "none",
+          "stdout": "text",
+          "stdout_contains": [
+            "Project JSON is valid"
+          ]
+        },
+        {
+          "id": "warning_strict_text",
+          "argv": [
+            "project",
+            "validate",
+            "--in",
+            "{project_warning}",
+            "--strict"
+          ],
+          "exit": 9,
+          "legacy_exit": 1,
+          "payload": "none",
+          "artifact": "none",
+          "stdout": "text",
+          "stdout_contains": [
+            "diagnostic(s):",
+            "dangling_clip_source"
+          ],
+          "stdout_excludes": [
+            "Project JSON is valid"
+          ]
         }
       ],
       "artifacts": {
@@ -4032,6 +4097,7 @@
             "ceiling_db": "number",
             "true_peak_oversample": "integer",
             "latency_samples": "integer",
+            "loudness_target_limited": "boolean",
             "sample_rate": "integer",
             "output": "path"
           }
@@ -4267,9 +4333,25 @@
           "required": false
         },
         {
+          "name": "hop-length",
+          "type": "integer",
+          "default": 512,
+          "aliases": [],
+          "repeatable": false,
+          "required": false
+        },
+        {
           "name": "json",
           "type": "boolean",
           "default": false,
+          "aliases": [],
+          "repeatable": false,
+          "required": false
+        },
+        {
+          "name": "n-fft",
+          "type": "integer",
+          "default": 2048,
           "aliases": [],
           "repeatable": false,
           "required": false
@@ -4330,6 +4412,23 @@
           "payload": "success",
           "artifact": "none",
           "stdout": "json"
+        },
+        {
+          "id": "success_text",
+          "argv": [
+            "rhythm",
+            "{audio}"
+          ],
+          "exit": 0,
+          "legacy_exit": 0,
+          "payload": "none",
+          "artifact": "none",
+          "stdout": "text",
+          "stdout_contains": [
+            "161.50",
+            "4/4",
+            "straight"
+          ]
         }
       ],
       "artifacts": {}
@@ -4466,6 +4565,16 @@
           "required": false
         },
         {
+          "name": "detector-delay-ms",
+          "type": "number",
+          "default": 0,
+          "aliases": [
+            "lookahead-ms"
+          ],
+          "repeatable": false,
+          "required": false
+        },
+        {
           "name": "dynamic",
           "type": "boolean",
           "default": false,
@@ -4501,14 +4610,6 @@
           "name": "json",
           "type": "boolean",
           "default": false,
-          "aliases": [],
-          "repeatable": false,
-          "required": false
-        },
-        {
-          "name": "lookahead-ms",
-          "type": "number",
-          "default": 0,
           "aliases": [],
           "repeatable": false,
           "required": false
