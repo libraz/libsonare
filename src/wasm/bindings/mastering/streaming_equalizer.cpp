@@ -85,7 +85,12 @@ mastering::eq::EqBand eqBandFromVal(val band) {
   result.dyn.range_db = floatProperty(band, "rangeDb", result.dyn.range_db);
   result.dyn.attack_ms = floatProperty(band, "attackMs", result.dyn.attack_ms);
   result.dyn.release_ms = floatProperty(band, "releaseMs", result.dyn.release_ms);
-  result.dyn.lookahead_ms = floatProperty(band, "lookaheadMs", result.dyn.lookahead_ms);
+  // "lookaheadMs" is the field's former (misleading) spelling; still accepted
+  // so a stored config keeps working, but "detectorDelayMs" wins if both are
+  // present.
+  result.dyn.detector_delay_ms = floatProperty(band, "lookaheadMs", result.dyn.detector_delay_ms);
+  result.dyn.detector_delay_ms =
+      floatProperty(band, "detectorDelayMs", result.dyn.detector_delay_ms);
   result.dyn.external_sidechain =
       boolProperty(band, "externalSidechain", result.dyn.external_sidechain);
   result.dyn.sidechain_freq_hz =

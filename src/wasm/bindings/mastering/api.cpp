@@ -7,6 +7,8 @@
 #include "mastering/api/insert_factory.h"
 #include "mastering/api/named_processor.h"
 #include "mastering/api/presets.h"
+#include "mastering/assistant/config_from_params.h"
+#include "mastering/assistant/platform_targets.h"
 #include "midi/synth/synth_presets.h"
 #include "mixing/api/presets.h"
 #include "sonare.h"
@@ -131,6 +133,16 @@ val js_mastering_preset_names() {
   val out = val::array();
   auto names = mastering::api::preset_names();
   for (const auto& name : names) {
+    out.call<void>("push", name);
+  }
+  return out;
+}
+
+val js_mastering_platform_names() {
+  // Read from the shared delivery-target table, so the names a caller can pass
+  // as `targetPlatform` are the names the assistant actually accepts.
+  val out = val::array();
+  for (const std::string& name : mastering::assistant::platform_names()) {
     out.call<void>("push", name);
   }
   return out;
@@ -312,6 +324,7 @@ val js_mastering_process(std::string processor_name, val samples, int sample_rat
   out.set("outputLufs", result.output_lufs);
   out.set("appliedGainDb", result.applied_gain_db);
   out.set("latencySamples", result.latency_samples);
+  out.set("loudnessTargetLimited", result.loudness_target_limited);
   return out;
 }
 
@@ -334,6 +347,7 @@ val js_mastering_process_stereo(std::string processor_name, val left_samples, va
   out.set("outputLufs", result.output_lufs);
   out.set("appliedGainDb", result.applied_gain_db);
   out.set("latencySamples", result.latency_samples);
+  out.set("loudnessTargetLimited", result.loudness_target_limited);
   return out;
 }
 
@@ -404,12 +418,40 @@ std::vector<float> interleaveValidatedPair(val left_samples, val right_samples, 
   return interleaved;
 }
 
+// Builds an assistant config from a JS params object. `targetPlatform` is a
+// delivery-target NAME on this surface: it is read here, validated against the
+// shared table, and kept out of the numeric conversion. The index the C ABI
+// carries is a transport detail for callers that cannot pass a string, so a
+// number is rejected here rather than silently accepted as an index.
+mastering::assistant::AssistantConfig assistantConfigFromParams(val params_obj) {
+  static const std::vector<std::string> kPlatformKeys = {"targetPlatform", "target_platform"};
+  std::string platform;
+  bool has_platform = false;
+  if (!params_obj.isNull() && !params_obj.isUndefined()) {
+    for (const std::string& key : kPlatformKeys) {
+      if (!hasProperty(params_obj, key.c_str())) continue;
+      val value = params_obj[key];
+      if (value.typeOf().as<std::string>() != "string") {
+        throw SonareException(ErrorCode::InvalidParameter,
+                              "'" + key + "' must be one of the delivery-target names: " +
+                                  mastering::assistant::platform_names_joined());
+      }
+      platform = value.as<std::string>();
+      has_platform = true;
+    }
+  }
+  const std::vector<mastering::api::Param> params =
+      masteringParamsFromObject(params_obj, kPlatformKeys);
+  mastering::assistant::AssistantConfig config =
+      mastering::assistant::assistant_config_from_params(params.data(), params.size());
+  if (has_platform) mastering::assistant::set_target_platform(config, platform);
+  return config;
+}
+
 std::string js_mastering_assistant_suggest(val samples, int sample_rate, val params_obj) {
   std::vector<float> data = float32ArrayToVector(samples);
   validate_offline_audio_input(data.data(), data.size(), sample_rate);
-  std::vector<mastering::api::Param> params = masteringParamsFromObject(params_obj);
-  const mastering::assistant::AssistantConfig config =
-      mastering::assistant::assistant_config_from_params(params.data(), params.size());
+  const mastering::assistant::AssistantConfig config = assistantConfigFromParams(params_obj);
   const auto result =
       mastering::assistant::suggest_chain(data.data(), data.size(), sample_rate, config);
   return mastering::assistant::assistant_result_to_json(result);
@@ -430,9 +472,7 @@ std::string js_mastering_assistant_suggest_stereo(val left_samples, val right_sa
                                                   int sample_rate, val params_obj) {
   const std::vector<float> interleaved = interleaveValidatedPair(
       left_samples, right_samples, sample_rate, "masteringAssistantSuggestStereo input");
-  std::vector<mastering::api::Param> params = masteringParamsFromObject(params_obj);
-  const mastering::assistant::AssistantConfig config =
-      mastering::assistant::assistant_config_from_params(params.data(), params.size());
+  const mastering::assistant::AssistantConfig config = assistantConfigFromParams(params_obj);
   const auto result = mastering::assistant::suggest_chain_interleaved(
       interleaved.data(), interleaved.size() / 2, 2, sample_rate, config);
   return mastering::assistant::assistant_result_to_json(result);
@@ -515,6 +555,7 @@ void registerMasteringApiBindings() {
   function("masteringAudioProfileStereo", &js_mastering_audio_profile_stereo);
   function("masteringStreamingPreviewStereo", &js_mastering_streaming_preview_stereo);
   function("masteringPresetNames", &js_mastering_preset_names);
+  function("masteringPlatformNames", &js_mastering_platform_names);
   function("masterAudio", &js_master_audio);
   function("masterAudioStereo", &js_master_audio_stereo);
   function("masterAudioWithProgress", &js_master_audio_with_progress);

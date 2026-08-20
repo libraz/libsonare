@@ -97,7 +97,8 @@ export interface EngineBus {
 }
 
 export interface EngineMidiEvent {
-  renderFrame: number;
+  /** Absolute render frame for this event. Default `0`. */
+  renderFrame?: number;
   word0?: number;
   word1?: number;
   word2?: number;
@@ -383,6 +384,10 @@ export class RealtimeEngine {
    * block / animation frame. `maxRecords` caps the number of output events
    * returned — the shared unit across every surface. Events past the cap stay
    * queued for the next call (lossless); call again to drain the rest.
+   *
+   * One queued record lowers to at most 3 MIDI 1.0 messages, so a positive
+   * `maxRecords` below 3 could never consume a record and is rejected with an
+   * `InvalidParameter` `SonareError` instead of returning nothing forever.
    */
   drainExternalMidi(maxRecords = 1024): WasmExternalMidiEvent[] {
     return this.native.drainExternalMidi(maxRecords);
@@ -582,11 +587,11 @@ export class RealtimeEngine {
     return this.native.parameterCount();
   }
 
-  parameterInfoByIndex(index: number): EngineParameterInfo {
+  parameterInfoByIndex(index: number): Required<EngineParameterInfo> {
     return this.native.parameterInfoByIndex(index);
   }
 
-  parameterInfo(id: number): EngineParameterInfo {
+  parameterInfo(id: number): Required<EngineParameterInfo> {
     return this.native.parameterInfo(id);
   }
 
@@ -1088,14 +1093,27 @@ export class RealtimeEngine {
     return this.native.processWithMonitor(channels);
   }
 
+  /**
+   * Render `channels` offline from the current transport position. Requesting
+   * more planes than `prepare` reserved throws an `InvalidParameter`
+   * `SonareError` rather than returning silence that reads as a finished render.
+   */
   renderOffline(channels: Float32Array[], blockSize = 128): Float32Array[] {
     return this.native.renderOffline(channels, blockSize);
   }
 
+  /**
+   * Bounce the timeline to an interleaved buffer. `numChannels` above the
+   * prepared channel count throws an `InvalidParameter` `SonareError`.
+   */
   bounceOffline(options: EngineBounceOptions): EngineBounceResult {
     return this.native.bounceOffline(options);
   }
 
+  /**
+   * Freeze the current graph to audio. `numChannels` above the prepared channel
+   * count throws an `InvalidParameter` `SonareError`.
+   */
   freezeOffline(options: EngineFreezeOptions): EngineFreezeResult {
     return this.native.freezeOffline(options);
   }

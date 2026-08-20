@@ -4,11 +4,14 @@
 #ifdef __EMSCRIPTEN__
 
 #include <algorithm>
+#include <limits>
+#include <string>
 #include <type_traits>
 
 #include "analysis/analysis_json.h"
 #include "analysis/music_analyzer.h"
 #include "analysis/onset_analyzer.h"
+#include "util/numeric_validation.h"
 #include "wasm/bindings/common/common.h"
 
 std::vector<Mode> modesFromVal(val modes) {
@@ -454,11 +457,27 @@ val js_chord_functional_analysis(val samples, int key_root, int key_mode, int sa
 val js_analyze(val samples, int sample_rate, val options) {
   Audio audio = loadValidatedAudio(samples, sample_rate);
   MusicAnalyzerConfig config;
+  // Field semantics (positive BPM range, even nFft, positive beam width, ...)
+  // are enforced by validate_config when MusicAnalyzer is constructed below, so
+  // this surface only handles the JS-number narrowing: a non-finite or
+  // out-of-range Number must not reach a static_cast to int/float.
   auto set_number = [&](const char* key, auto& field) {
     const val value = options[key];
-    if (!value.isUndefined() && !value.isNull()) {
-      field = static_cast<std::decay_t<decltype(field)>>(value.as<double>());
+    if (value.isUndefined() || value.isNull()) return;
+    using Field = std::decay_t<decltype(field)>;
+    const double raw = value.as<double>();
+    Field converted{};
+    bool converted_ok = false;
+    if constexpr (std::is_integral_v<Field>) {
+      converted_ok = sonare::numeric::checked_round_cast(raw, &converted);
+    } else {
+      converted_ok = sonare::numeric::checked_float_cast(raw, &converted);
     }
+    if (!converted_ok) {
+      throw SonareException(ErrorCode::InvalidParameter,
+                            std::string("analyze: ") + key + " must be a finite in-range number");
+    }
+    field = converted;
   };
   auto set_bool = [&](const char* key, bool& field) {
     const val value = options[key];
@@ -745,6 +764,42 @@ void validateAcousticInput(const std::vector<float>& data) {
   }
 }
 
+// Wire string for a diagnostic severity, matching the RirDiagnostic type.
+const char* rirSeverityName(sonare::Diagnostic::Severity severity) {
+  switch (severity) {
+    case sonare::Diagnostic::Severity::Error:
+      return "error";
+    case sonare::Diagnostic::Severity::Warning:
+      return "warning";
+    case sonare::Diagnostic::Severity::Info:
+      break;
+  }
+  return "info";
+}
+
+// Transcribes the synthesizer's whole diagnostic list onto the result object.
+// The synthesizer reports five distinct geometry errors plus the clamp /
+// no-tail warnings, so a lone hasError boolean cannot tell a caller which one
+// fired, nor that a maxSeconds clamp shortened the tail of an otherwise
+// successful RIR. `errorMessage` carries the first error as "code: message",
+// matching the string the C ABI leaves in sonare_last_error_message().
+void setRirDiagnostics(val& out, const std::vector<sonare::Diagnostic>& diagnostics) {
+  val entries = val::array();
+  std::string error_message;
+  for (const sonare::Diagnostic& diagnostic : diagnostics) {
+    val entry = val::object();
+    entry.set("code", diagnostic.code);
+    entry.set("message", diagnostic.message);
+    entry.set("severity", std::string(rirSeverityName(diagnostic.severity)));
+    entries.call<void>("push", entry);
+    if (error_message.empty() && diagnostic.severity == sonare::Diagnostic::Severity::Error) {
+      error_message = diagnostic.code + ": " + diagnostic.message;
+    }
+  }
+  out.set("diagnostics", entries);
+  out.set("errorMessage", error_message);
+}
+
 val js_synthesize_rir(val opts) {
   const int sample_rate = intProperty(opts, "sampleRate", 48000);
   validateAcousticSampleRate(sample_rate);
@@ -780,6 +835,7 @@ val js_synthesize_rir(val opts) {
   out.set("rir", vectorToFloat32Array(rir));
   out.set("sampleRate", result.rir.sample_rate());
   out.set("hasError", sonare::has_error(result.diagnostics));
+  setRirDiagnostics(out, result.diagnostics);
   return out;
 }
 
@@ -819,12 +875,19 @@ val js_estimate_room(val samples, int sample_rate, val opts) {
   }
 
   const sonare::RoomEstimate est = sonare::estimate_room(audio, config);
-  // The estimator always returns equal-length band vectors; report both at the
-  // shared min length so consumers see the same band count as the C ABI/Python.
-  const size_t band_count = std::min(est.absorption_bands.size(), est.rt60_bands.size());
-  std::vector<float> absorption_bands(est.absorption_bands.begin(),
-                                      est.absorption_bands.begin() + band_count);
-  std::vector<float> rt60_bands(est.rt60_bands.begin(), est.rt60_bands.begin() + band_count);
+  // Absorption (from the inverse problem) and RT60 (from the decay fit) are
+  // independent estimates and either can fail on its own. Both arrays report at
+  // the longer length with the failed side NaN-filled, exactly as the C ABI does
+  // (sonare_c_acoustic.cpp): truncating to the shorter side discarded a
+  // fully-computed vector precisely when its sibling failed, which is when the
+  // caller needs the surviving one most.
+  const size_t band_count = std::max(est.absorption_bands.size(), est.rt60_bands.size());
+  const auto pad_with_nan = [band_count](std::vector<float> values) {
+    values.resize(band_count, std::numeric_limits<float>::quiet_NaN());
+    return values;
+  };
+  const std::vector<float> absorption_bands = pad_with_nan(est.absorption_bands);
+  const std::vector<float> rt60_bands = pad_with_nan(est.rt60_bands);
   val out = val::object();
   out.set("volume", est.volume);
   out.set("length", est.dims.length);

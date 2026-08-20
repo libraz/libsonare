@@ -291,7 +291,7 @@ describe('SonareWorkletProcessor', () => {
         };
       }) => {
         port: { posted: unknown[]; onmessage?: (event: { data: unknown }) => void };
-        process: (inputs: Float32Array[][], outputs: Float32Array[][][]) => boolean;
+        process: (inputs: Float32Array[][], outputs: Float32Array[][]) => boolean;
       };
       const blockSize = 128;
       const instance = new Ctor({

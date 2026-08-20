@@ -18,6 +18,20 @@ import type {
   SurroundPan,
 } from './public_types';
 
+/**
+ * One master-output meter reading. All dB fields are finite and floored at
+ * -120; `truePeakDb*` is an oversampled inter-sample peak, not a sample peak.
+ */
+export interface MixerMeterSnapshot {
+  peakDbL: number;
+  peakDbR: number;
+  rmsDbL: number;
+  rmsDbR: number;
+  correlation: number;
+  truePeakDbL: number;
+  truePeakDbR: number;
+}
+
 export interface MixerRealtimeBuffer {
   leftInputs: Float32Array[];
   rightInputs: Float32Array[];
@@ -183,6 +197,35 @@ export class Mixer {
         this.mixer.processPreparedStereo(numSamples);
       },
     };
+  }
+
+  /**
+   * Turn the master-output meter on or off.
+   *
+   * While on, every {@link MixerRealtimeBuffer.process} call meters the stereo
+   * master it just produced, so a caller reads {@link meterSnapshot} instead of
+   * copying the output and measuring it again. `truePeakDb*` is an inter-sample
+   * peak taken after oversampling (ITU-R BS.1770-4 Annex 2 requires at least
+   * 4x), which is a different and higher quantity than the sample peak.
+   *
+   * Enabling resets the meter, so a reading never mixes in audio from a period
+   * when metering was off.
+   *
+   * @param enabled - Whether to meter the master output.
+   * @param truePeakOversample - 0 (= 4x) or a power of two in [1, 16].
+   */
+  configureMeter(enabled: boolean, truePeakOversample = 4): void {
+    this.mixer.configureMeter(enabled, truePeakOversample);
+  }
+
+  /**
+   * Latest master-output meter reading, describing the most recently metered
+   * block. All dB fields are finite and floored at -120.
+   *
+   * @throws When the meter has never been enabled.
+   */
+  meterSnapshot(): MixerMeterSnapshot {
+    return this.mixer.meterSnapshot();
   }
 
   /** Number of strips in the mixer (e.g. strips loaded from the scene). */

@@ -25,6 +25,7 @@ import {
   mixStereo,
   Project,
 } from '../dist/index.js';
+import { assertStripIndex } from './_helpers';
 
 const SR = 48000;
 const BLOCK = 512;
@@ -123,6 +124,7 @@ describe('WASM cross-binding consistency', () => {
       const mixer = Mixer.fromSceneJson(mixingScenePresetJson('vocalReverbSend'), SR, BLOCK);
       try {
         const vocal = mixer.stripById('vocal');
+        assertStripIndex(vocal, 'vocal');
         // Force StereoPan, then nudge the position with no explicit mode.
         mixer.setPan(vocal, 0, 'stereoPan');
         mixer.setPan(vocal, 0.3);
@@ -147,6 +149,7 @@ describe('WASM cross-binding consistency', () => {
       const mixer = Mixer.fromSceneJson(mixingScenePresetJson('vocalReverbSend'), SR, BLOCK);
       try {
         const vocal = mixer.stripById('vocal');
+        assertStripIndex(vocal, 'vocal');
         mixer.compile();
         const block = new Float32Array(BLOCK);
         for (let i = 0; i < BLOCK; i++) {

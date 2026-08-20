@@ -15,9 +15,11 @@ import {
   detectKey,
   detectKeyCandidates,
   detectOnsets,
+  ErrorCode,
   fixLength,
   frameSignal,
   init,
+  isSonareError,
   Mixer,
   masteringChain,
   meteringDetectClipping,
@@ -403,6 +405,117 @@ describe('RealtimeEngine clip/parameter/metronome guards mirror the C ABI', () =
     const engine = new RealtimeEngine(48000, 128);
     expect(() => engine.renderOffline([new Float32Array(128)], 0)).toThrow();
     expect(() => engine.renderOffline([new Float32Array(128)], -1)).toThrow();
+  });
+});
+
+describe('RealtimeEngine.bindMidiCcBinding defaults omitted descriptor fields', () => {
+  // `ccNumber` and `paramId` are the only required fields; the rest fall back
+  // to the CcBinding defaults (channel = any, kind = 7-bit CC, range 0..1),
+  // matching the Node addon reader and the Project-side descriptor reader.
+  // There is no engine-side getter for a bound descriptor, so the defaults are
+  // pinned through the range guard instead: it rejects `maxValue < minValue`,
+  // which brackets each default from both sides.
+  //
+  // The public descriptor type marks the defaulted fields as required, so the
+  // partial literals below are cast; what is under test is the runtime reader.
+  type CcBindingDescriptor = Parameters<RealtimeEngine['bindMidiCcBinding']>[0];
+
+  const expectInvalidParameter = (action: () => void) => {
+    let caught: unknown;
+    try {
+      action();
+    } catch (error) {
+      caught = error;
+    }
+    expect(isSonareError(caught)).toBe(true);
+    if (isSonareError(caught)) {
+      expect(caught.code).toBe(ErrorCode.InvalidParameter);
+    }
+  };
+
+  it('accepts a descriptor carrying only ccNumber and paramId', () => {
+    const engine = new RealtimeEngine(48000, 128);
+    expect(() =>
+      engine.bindMidiCcBinding({ ccNumber: 7, paramId: 1 } as CcBindingDescriptor),
+    ).not.toThrow();
+    expect(engine.midiCcBindingCount()).toBe(1);
+  });
+
+  it('defaults an omitted kind to 7-bit Control Change', () => {
+    const engine = new RealtimeEngine(48000, 128);
+    // A kind of 1 (14-bit CC) additionally requires ccLsbNumber === ccNumber + 32,
+    // so the descriptor below is accepted only while the default kind is 0.
+    expect(() =>
+      engine.bindMidiCcBinding({ ccNumber: 7, paramId: 1 } as CcBindingDescriptor),
+    ).not.toThrow();
+    // The explicit spelling of the same default behaves identically. A distinct
+    // ccNumber is used because binding an existing (ccNumber, channel) replaces
+    // it rather than appending.
+    expect(() =>
+      engine.bindMidiCcBinding({ ccNumber: 8, kind: 0, paramId: 2 } as CcBindingDescriptor),
+    ).not.toThrow();
+    expect(engine.midiCcBindingCount()).toBe(2);
+  });
+
+  it('defaults an omitted minValue to 0 and an omitted maxValue to 1', () => {
+    const engine = new RealtimeEngine(48000, 128);
+    // maxValue defaults to exactly 1: a minValue of 1 is still a valid
+    // (degenerate) range, a minValue of 2 inverts it.
+    expect(() =>
+      engine.bindMidiCcBinding({ ccNumber: 7, paramId: 1, minValue: 1 } as CcBindingDescriptor),
+    ).not.toThrow();
+    expectInvalidParameter(() =>
+      engine.bindMidiCcBinding({ ccNumber: 7, paramId: 1, minValue: 2 } as CcBindingDescriptor),
+    );
+    // minValue defaults to exactly 0, bracketed the same way.
+    expect(() =>
+      engine.bindMidiCcBinding({ ccNumber: 7, paramId: 1, maxValue: 0 } as CcBindingDescriptor),
+    ).not.toThrow();
+    expectInvalidParameter(() =>
+      engine.bindMidiCcBinding({ ccNumber: 7, paramId: 1, maxValue: -1 } as CcBindingDescriptor),
+    );
+  });
+
+  it('still rejects a supplied non-finite range instead of defaulting it', () => {
+    const engine = new RealtimeEngine(48000, 128);
+    expectInvalidParameter(() =>
+      engine.bindMidiCcBinding({
+        ccNumber: 7,
+        paramId: 1,
+        minValue: Number.NaN,
+      } as CcBindingDescriptor),
+    );
+    expectInvalidParameter(() =>
+      engine.bindMidiCcBinding({
+        ccNumber: 7,
+        paramId: 1,
+        maxValue: Number.POSITIVE_INFINITY,
+      } as CcBindingDescriptor),
+    );
+    expectInvalidParameter(() =>
+      engine.bindMidiCcBinding({
+        ccNumber: 7,
+        paramId: 1,
+        minValue: Number.NEGATIVE_INFINITY,
+        maxValue: 1,
+      } as CcBindingDescriptor),
+    );
+    expect(engine.midiCcBindingCount()).toBe(0);
+  });
+
+  it('still requires paramId and range-checks a supplied kind', () => {
+    const engine = new RealtimeEngine(48000, 128);
+    expectInvalidParameter(() =>
+      engine.bindMidiCcBinding({ ccNumber: 7 } as unknown as CcBindingDescriptor),
+    );
+    expectInvalidParameter(() =>
+      engine.bindMidiCcBinding({
+        ccNumber: 7,
+        kind: 9,
+        paramId: 1,
+      } as unknown as CcBindingDescriptor),
+    );
+    expect(engine.midiCcBindingCount()).toBe(0);
   });
 });
 

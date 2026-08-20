@@ -1,12 +1,17 @@
 /**
- * Realtime equalizer spectrum snapshot.
+ * Realtime equalizer snapshot.
  *
  * Mirrors the C++ `EqualizerSpectrumSnapshot`: `preLeft`/`preRight` and
- * `postLeft`/`postRight` are the pre- and post-EQ spectrum streams (trimmed to
- * their valid count). `bandGainDb` holds per-band applied gain (24 entries),
- * `profileDb` the smoothed magnitude profile (16 entries), `lastAutoGainDb`
- * the latest auto-gain compensation, and `seq` increments each time a new
- * snapshot is published.
+ * `postLeft`/`postRight` are the pre- and post-EQ waveform streams (uniformly
+ * decimated time-domain samples, trimmed to their valid count), so they are a
+ * scope feed rather than a spectral estimate. `bandGainDb` holds per-band
+ * applied gain (24 entries). `profileDb` is the frequency-domain view: the
+ * post-EQ signal is Hann-windowed, transformed and its bin powers summed into
+ * 16 geometrically spaced bands covering 20 Hz to 20 kHz, in amplitude decibels
+ * relative to full scale (a full-scale sine reads about 0 dB in its own band),
+ * rising immediately and falling smoothly. `lastAutoGainDb` is the latest
+ * auto-gain compensation, and `seq` increments each time a new snapshot is
+ * published.
  */
 export interface EqSpectrumSnapshot {
   preLeft: Float32Array;
@@ -52,11 +57,22 @@ export interface EqBand {
   type?: EqBandType;
   frequencyHz?: number;
   gainDb?: number;
+  /**
+   * Resonance/slope. Ignored for a LowShelf/HighShelf band once `phase:
+   * 'NaturalPhase'` forces Vicanek coefficients (the Vicanek matched-Z shelf
+   * design has no Q/S parameter) -- the value is still stored and read back
+   * verbatim, so a reflected `q` on such a band does not describe the applied
+   * response. Set `coeffMode: 'Rbj'` for a Q-controllable shelf.
+   */
   q?: number;
   enabled?: boolean;
   coeffMode?: EqCoeffMode;
   slopeDbOct?: number;
   placement?: EqStereoPlacement;
+  /**
+   * `'NaturalPhase'` forces `coeffMode: 'Vicanek'` for this band, which
+   * ignores `q` for LowShelf/HighShelf (see `q`'s doc).
+   */
   phase?: EqBandPhase;
   soloed?: boolean;
   bypassed?: boolean;
@@ -69,6 +85,13 @@ export interface EqBand {
   rangeDb?: number;
   attackMs?: number;
   releaseMs?: number;
+  /**
+   * Delays the detector's view of the signal by this many ms; a larger value
+   * makes the band react LATER, not earlier -- this is a detector delay, not
+   * true look-ahead, and adds no latency to the audio path.
+   */
+  detectorDelayMs?: number;
+  /** Former (misleading) spelling of `detectorDelayMs`, still accepted; `detectorDelayMs` wins if both are set. */
   lookaheadMs?: number;
   externalSidechain?: boolean;
   sidechainFreqHz?: number;

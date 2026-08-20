@@ -38,7 +38,16 @@ function nativeExceptionPtr(error: unknown): number | null {
 /**
  * Turn a thrown native exception pointer into a {@link SonareError}. The bound
  * `sonareExceptionInfo` decodes the pointer back into { code, codeName,
- * message }.
+ * message }, then `sonareReleaseException` drops the reference emscripten's
+ * `__cxa_throw` took before rethrowing the pointer into JS.
+ *
+ * The release is mandatory, not an optimization: no C++ frame catches the
+ * exception, so that reference is the only one and nothing else ever drops it.
+ * Every rejected input would otherwise leak its exception object for the
+ * lifetime of the module — and rejection-as-control-flow (re-validating markers
+ * or clips on each edit, a scrub handle seeking every pointer move) is a
+ * documented usage of this API. It runs in a `finally` so a decode failure
+ * still frees, and after decoding because freeing invalidates the message.
  */
 function makeSonareError(raw: SonareModule, thrown: number): SonareError {
   let code: number = ErrorCode.Unknown;
@@ -55,6 +64,13 @@ function makeSonareError(raw: SonareModule, thrown: number): SonareError {
     }
   } catch {
     // Fall back to the generic message if decoding fails.
+  } finally {
+    try {
+      raw.sonareReleaseException(thrown);
+    } catch {
+      // A module built before the release binding existed still yields an error
+      // object; it just keeps leaking, which is what this replaces.
+    }
   }
   return new SonareError(code, codeName, message);
 }

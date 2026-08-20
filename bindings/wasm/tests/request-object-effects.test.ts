@@ -204,8 +204,10 @@ describe('enum-code helpers reject unknown strings instead of silently defaultin
     // the same spelling picks the same panning algorithm on every surface.
     expect(panModeCode('balance')).toBe(0);
     expect(panModeCode('pan')).toBe(1);
+    // @ts-expect-error panModeCode lowercases its input; PanMode lists the canonical spellings
     expect(panModeCode('stereopan')).toBe(1);
     expect(panModeCode('stereo-pan')).toBe(1);
+    // @ts-expect-error panModeCode lowercases its input; PanMode lists the canonical spellings
     expect(panModeCode('dualpan')).toBe(2);
     expect(panModeCode('dual-pan')).toBe(2);
   });

@@ -1,4 +1,4 @@
-export type { MixerRealtimeBuffer } from './mixer';
+export type { MixerMeterSnapshot, MixerRealtimeBuffer } from './mixer';
 export { Mixer } from './mixer';
 export type {
   RealtimeVoiceChangerInterleavedBuffer,

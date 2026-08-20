@@ -139,10 +139,18 @@ val vectorToUint8Array(const std::vector<uint8_t>& vec);
 /// the linear-memory heap. Keeping this below the native offline ceiling leaves
 /// room for the input copy, DSP work buffers, and output arrays.
 inline constexpr std::size_t kMaxWasmFloat32Elements = 64u * 1024u * 1024u;
-/// Reads an array-like object's JS `.length` after rejecting null, undefined,
+/// Upper bound on the elements a caller-supplied length may pre-reserve for a
+/// JS array of objects. Larger arrays still work — the destination vector grows
+/// as elements are read and validated — so a fabricated `.length` cannot turn
+/// into an allocation the actual data does not back.
+inline constexpr std::size_t kMaxWasmObjectArrayReserve = 1u * 1024u * 1024u;
+/// Reads an array-like object's element count after rejecting null, undefined,
 /// non-numeric, fractional, unsafe, and over-budget values. Use this before
 /// indexing arbitrary JS arrays so embind never leaks a raw JS TypeError.
-std::size_t wasmArrayLikeLength(const val& arr, const char* subject = "array");
+/// @p length_key names the count property ("length" for arrays and Int32Array,
+/// "byteLength" for a Uint8Array byte blob).
+std::size_t wasmArrayLikeLength(const val& arr, const char* subject = "array",
+                                const char* length_key = "length");
 /// Reads and validates an array-like object's JS `.length` without narrowing a
 /// non-finite, fractional, or unsafe Number to wasm32 size_t.
 std::size_t wasmFloat32ArrayLength(const val& arr, const char* subject = "Float32Array");
@@ -251,7 +259,12 @@ T requireProperty(const val& object, const char* key, const char* subject) {
   }
   return value.as<T>();
 }
-std::vector<mastering::api::Param> masteringParamsFromObject(val object);
+/// @brief Converts a JS object of {name -> number|boolean} into mastering params.
+/// @param skip_keys Keys the caller consumes itself and that must not reach the
+///        numeric conversion — a string-valued key would otherwise be rejected
+///        as an unsupported type.
+std::vector<mastering::api::Param> masteringParamsFromObject(
+    val object, const std::vector<std::string>& skip_keys = {});
 mastering::api::MasteringChainConfig masteringChainConfigFromVal(val config);
 
 void registerProjectBindings();

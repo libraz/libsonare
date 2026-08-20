@@ -39,9 +39,11 @@ import type {
   SynthPatch,
 } from './project_types';
 
-// Embind handle for the C++ `ProjectWasm` class. The generated `SonareModule`
-// type only gains `Project` / `projectAbiVersion` after a WASM rebuild, so the
-// module is cast through this shape here.
+// Embind handle for the C++ `ProjectWasm` class. `SonareModule` describes the
+// raw module's free functions and does not carry bound-class handles, so the
+// module is narrowed through this shape here — which is also where the
+// arrangement surface is probed for, since a build without arrangement support
+// registers neither the class nor its free functions.
 export interface WasmProject {
   toJson: () => string;
   setSampleRate: (sampleRate: number) => void;

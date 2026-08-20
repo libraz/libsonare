@@ -1,5 +1,10 @@
 /**
- * Type declarations for the Emscripten-generated WASM module with embind
+ * Hand-written type declarations describing the Emscripten/embind WASM module.
+ *
+ * This file is NOT generated — nothing in the build writes it. A new embind
+ * registration reaches TypeScript only when someone declares it here, in the
+ * same change as the binding, so a missing declaration is a lockstep omission
+ * rather than a stale artifact waiting on a rebuild.
  */
 
 import type {
@@ -279,10 +284,18 @@ export interface WasmRirSynthOptions extends WasmRoomGeometryOptions {
   crossfadeMs?: number;
 }
 
+export interface WasmRirDiagnostic {
+  code: string;
+  message: string;
+  severity: 'info' | 'warning' | 'error';
+}
+
 export interface WasmRirResult {
   rir: Float32Array;
   sampleRate: number;
   hasError: boolean;
+  errorMessage: string;
+  diagnostics: WasmRirDiagnostic[];
 }
 
 export interface WasmRoomEstimateOptions {
@@ -554,6 +567,7 @@ export interface WasmMasteringStereoResult {
   outputLufs: number;
   appliedGainDb: number;
   latencySamples: number;
+  loudnessTargetLimited: boolean;
 }
 
 export interface WasmMixMeterSnapshot {
@@ -639,12 +653,18 @@ export interface WasmClipPageRequest {
 export interface WasmEngineParameterInfo {
   id: number;
   name: string;
-  unit: string;
-  minValue: number;
-  maxValue: number;
-  defaultValue: number;
-  rtSafe: boolean;
-  defaultCurve: number;
+  /** Display unit; omit for an empty string. */
+  unit?: string;
+  /** Lower end of the parameter range. Default `0`. */
+  minValue?: number;
+  /** Upper end of the parameter range. Default `1`. */
+  maxValue?: number;
+  /** Value the parameter starts at. Default `0`. */
+  defaultValue?: number;
+  /** Whether the parameter is safe to change from the realtime thread. Default `true`. */
+  rtSafe?: boolean;
+  /** Curve used by automation points that omit `curveToNext`. Default `1` (exponential). */
+  defaultCurve?: number;
 }
 
 export interface WasmEngineAutomationPoint {
@@ -934,8 +954,8 @@ export interface WasmRealtimeEngine {
   setLoop: (startPpq: number, endPpq: number, enabled: boolean) => void;
   addParameter: (info: WasmEngineParameterInfo) => void;
   parameterCount: () => number;
-  parameterInfoByIndex: (index: number) => WasmEngineParameterInfo;
-  parameterInfo: (id: number) => WasmEngineParameterInfo;
+  parameterInfoByIndex: (index: number) => Required<WasmEngineParameterInfo>;
+  parameterInfo: (id: number) => Required<WasmEngineParameterInfo>;
   setAutomationLane: (paramId: number, points: WasmEngineAutomationPoint[]) => void;
   automationLaneCount: () => number;
   setMarkers: (markers: WasmEngineMarker[]) => void;
@@ -1238,6 +1258,50 @@ export interface SonareModule {
   analyze: (samples: Float32Array, sampleRate: number, options: object) => WasmAnalysisResult;
   _synthEnumTables: () => WasmSynthEnumTables;
   _synthPatchRoundTrip: (patch: unknown) => unknown;
+  // Arrangement surface. Present only in a build with arrangement support, like
+  // the mixing and voice-changer entries elsewhere in this interface; callers
+  // probe for it at runtime (see projectModule() in project_internal.ts) rather
+  // than through the type. `unknown` marks the shapes the facade owns — this
+  // file describes the raw module and does not depend on the facade's types.
+  projectAbiVersion: () => number;
+  synthPresetNames: () => string[];
+  synthPresetPatch: (name: string) => unknown;
+  midiGmInstrumentName: (program: number) => string | null;
+  midiGmProgramForName: (name: string) => number;
+  midiGmFamilyName: (family: number) => string | null;
+  midiGmFamilyFirstProgram: (family: number) => number;
+  midiGm2InstrumentName: (bankLsb: number, program: number) => string | null;
+  midiGmDrumName: (note: number) => string | null;
+  midiGmDrumNoteForName: (name: string) => number;
+  midiGm2DrumSetName: (bankLsb: number) => string | null;
+  midiGm2DrumName: (bankLsb: number, note: number) => string | null;
+  midiCcName: (controller: number) => string | null;
+  midiCcIndexForName: (name: string) => number;
+  midiPerNoteControllerName: (index: number) => string | null;
+  midiBankProgram: (
+    ppq: number,
+    group: number,
+    channel: number,
+    bankMsb: number,
+    bankLsb: number,
+    program: number,
+  ) => unknown;
+  midiRouteEvents: (events: readonly unknown[], config: unknown) => unknown;
+  midiCcLearn: (
+    events: readonly unknown[],
+    paramId: number,
+    minValue: number,
+    maxValue: number,
+    minMovement: number,
+  ) => unknown;
+  midiCcToBreakpoint: (bindings: readonly unknown[], event: unknown) => unknown;
+  midiParamToCc: (
+    bindings: readonly unknown[],
+    paramId: number,
+    unitValue: number,
+    group: number,
+    ppq: number,
+  ) => unknown;
   _analysisResultSchemaPaths: () => string[];
   _analysisResultSchemaFixture: () => WasmAnalysisResult;
   analyzeImpulseResponse: (
@@ -1679,6 +1743,11 @@ export interface SonareModule {
   masteringPairProcessorNames: () => string[];
   masteringPairAnalysisNames: () => string[];
   masteringStereoAnalysisNames: () => string[];
+  masteringInsertNames: () => string[];
+  masteringInsertParamNames: (name: string) => string[];
+  // Both return JSON the facade parses; the raw module has no object shape here.
+  masteringInsertParamInfo: (name: string) => string;
+  masteringProcessorCatalog: () => string;
   masteringProcess: (
     processorName: string,
     samples: Float32Array,
@@ -1716,7 +1785,7 @@ export interface SonareModule {
   masteringAssistantSuggest: (
     samples: Float32Array,
     sampleRate: number,
-    params: Record<string, number | boolean>,
+    params: Record<string, number | boolean | string>,
   ) => string;
   masteringAudioProfile: (
     samples: Float32Array,
@@ -1732,7 +1801,7 @@ export interface SonareModule {
     left: Float32Array,
     right: Float32Array,
     sampleRate: number,
-    params: Record<string, number | boolean>,
+    params: Record<string, number | boolean | string>,
   ) => string;
   masteringAudioProfileStereo: (
     left: Float32Array,
@@ -1823,6 +1892,7 @@ export interface SonareModule {
     cancelCallback: (() => boolean) | null,
   ) => WasmMasteringStereoChainResult;
   masteringPresetNames: () => string[];
+  masteringPlatformNames: () => string[];
   masterAudio: (
     presetName: string,
     samples: Float32Array,
@@ -2527,6 +2597,11 @@ export interface SonareModule {
   // surfaces a C++ throw as the raw pointer number) into a structured error.
   // Consumed by the module-error wrapper in module_state.ts.
   sonareExceptionInfo: (ptr: number) => { code: number; codeName: string; message: string };
+
+  // Drops the reference emscripten's __cxa_throw took on the exception object
+  // before rethrowing its pointer into JS. Nothing else ever drops it, so the
+  // module-error wrapper releases every pointer it surfaces.
+  sonareReleaseException: (ptr: number) => void;
 }
 
 export interface WasmStreamingMasteringChain {
@@ -2615,6 +2690,18 @@ export interface WasmRealtimeVoiceChanger {
   delete: () => void;
 }
 
+/** One block's worth of meter readings, all dB fields floored at -120. */
+export interface WasmMixerMeterSnapshot {
+  peakDbL: number;
+  peakDbR: number;
+  rmsDbL: number;
+  rmsDbR: number;
+  correlation: number;
+  /** Inter-sample peak, oversampled per ITU-R BS.1770-4 Annex 2. */
+  truePeakDbL: number;
+  truePeakDbR: number;
+}
+
 export interface WasmMixer {
   compile: () => void;
   processStereo: (
@@ -2632,6 +2719,8 @@ export interface WasmMixer {
   outputLeftView: () => Float32Array;
   outputRightView: () => Float32Array;
   processPreparedStereo: (numSamples: number) => void;
+  configureMeter: (enabled: boolean, truePeakOversample: number) => void;
+  meterSnapshot: () => WasmMixerMeterSnapshot;
   stripCount: () => number;
   sceneWarnings: () => string[];
   scheduleInsertAutomation: (

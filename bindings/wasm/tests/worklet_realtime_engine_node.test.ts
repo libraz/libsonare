@@ -13,6 +13,11 @@ import {
   writeSonareEngineTelemetryRingBuffer,
 } from './_worklet_helpers';
 
+/** The engine `SonareEngine.create` accepts as its offline mirror. */
+type OfflineEngineOption = NonNullable<
+  NonNullable<Parameters<typeof SonareEngine.create>[1]>['offlineEngine']
+>;
+
 describe('SonareRealtimeEngineNode', () => {
   setupWorklet();
 
@@ -33,11 +38,10 @@ describe('SonareRealtimeEngineNode', () => {
       } as unknown as BaseAudioContext;
     }
 
-    function readyWorkletNode<
-      T extends {
-        onmessage?: ((event: MessageEvent<unknown>) => void) | null;
-      },
-    >(port: T): AudioWorkletNode {
+    function readyWorkletNode(port: {
+      onmessage?: ((event: MessageEvent<unknown>) => void) | null;
+      [member: string]: unknown;
+    }): AudioWorkletNode {
       queueMicrotask(() => {
         port.onmessage?.({
           data: { type: 'ready', runtimeTarget: 'embind' },
@@ -238,7 +242,13 @@ describe('SonareRealtimeEngineNode', () => {
     });
 
     it('drains the offline mirror after more commands than its realtime ring capacity', async () => {
-      const offline = new (await import('../dist/index.js')).RealtimeEngine(48000, 128);
+      // The index and worklet bundles each emit a self-contained .d.ts, so
+      // RealtimeEngine is declared twice and its private field makes the two
+      // copies nominally distinct. Same class at runtime.
+      const offline = new (await import('../dist/index.js')).RealtimeEngine(
+        48000,
+        128,
+      ) as unknown as OfflineEngineOption;
       offline.prepare(48000, 128, 4, 4);
       offline.addParameter({
         id: 7,
@@ -446,7 +456,13 @@ describe('SonareRealtimeEngineNode', () => {
 
     it('exposes the high-level SonareEngine facade for transport, timeline, and offline APIs', async () => {
       const posted: unknown[] = [];
-      const offline = new (await import('../dist/index.js')).RealtimeEngine(48000, 128);
+      // The index and worklet bundles each emit a self-contained .d.ts, so
+      // RealtimeEngine is declared twice and its private field makes the two
+      // copies nominally distinct. Same class at runtime.
+      const offline = new (await import('../dist/index.js')).RealtimeEngine(
+        48000,
+        128,
+      ) as unknown as OfflineEngineOption;
       offline.addParameter({
         id: 7,
         name: 'gain',
@@ -763,7 +779,13 @@ describe('SonareRealtimeEngineNode', () => {
 
     it('pre-bakes tempo-synced clips before posting them to the AudioWorklet', async () => {
       const posted: unknown[] = [];
-      const offline = new (await import('../dist/index.js')).RealtimeEngine(48000, 128);
+      // The index and worklet bundles each emit a self-contained .d.ts, so
+      // RealtimeEngine is declared twice and its private field makes the two
+      // copies nominally distinct. Same class at runtime.
+      const offline = new (await import('../dist/index.js')).RealtimeEngine(
+        48000,
+        128,
+      ) as unknown as OfflineEngineOption;
       const engine = await SonareEngine.create(fakeContext(), {
         mode: 'postMessage',
         offlineEngine: offline,
@@ -809,9 +831,11 @@ describe('SonareRealtimeEngineNode', () => {
           loop: false,
         });
         expect(clip?.warpAnchors).toBeUndefined();
-        expect(clip?.channels).toHaveLength(1);
-        expect(clip?.channels?.[0]).toBeInstanceOf(Float32Array);
-        expect(clip?.channels?.[0]).toHaveLength(8192);
+        // The delta message is read back as Record<string, unknown>.
+        const channels = clip?.channels as Float32Array[] | undefined;
+        expect(channels).toHaveLength(1);
+        expect(channels?.[0]).toBeInstanceOf(Float32Array);
+        expect(channels?.[0]).toHaveLength(8192);
       } finally {
         engine.destroy();
       }

@@ -11,6 +11,7 @@ import {
   analyzeSections,
   bassChroma,
   chromaCens,
+  chromaCqt,
   cqt,
   cqtToAudio,
   fourierTempogram,
@@ -184,6 +185,18 @@ describe('v1.2 feature additions (WASM)', () => {
       expect(bass.hopLength).toBe(512);
       expect(allFinite(bass.features)).toBe(true);
       expect(allFinite(bass.meanEnergy)).toBe(true);
+    });
+
+    it('forwards binsPerOctave on the constant-Q chroma variants', () => {
+      // These two keep the option because the entry point honours it. The bass
+      // chroma does not take it at all: its bin count and lowest frequency are
+      // fixed together, so there is nothing to forward.
+      for (const variant of [chromaCens, chromaCqt]) {
+        const base = variant({ samples: signal, sampleRate: SR });
+        const coarser = variant({ samples: signal, sampleRate: SR, binsPerOctave: 12 });
+        expect(coarser.features.length).toBe(base.features.length);
+        expect(Array.from(coarser.features)).not.toEqual(Array.from(base.features));
+      }
     });
   });
 

@@ -134,9 +134,10 @@ describe('RealtimeVoiceChanger flat POD setConfig', () => {
   it('rejects a partial nested preset instead of applying defaults', () => {
     const vc = new RealtimeVoiceChanger('neutral-monitor');
     vc.prepare(48000, 128, 1);
-    expect(() => vc.setConfig({ schemaVersion: 1, dsp: { retune: { semitones: 3 } } })).toThrow(
-      /missing field|field must/i,
-    );
+    expect(() =>
+      // @ts-expect-error preset metadata is deliberately omitted; the runtime rejects it
+      vc.setConfig({ schemaVersion: 1, dsp: { retune: { semitones: 3 } } }),
+    ).toThrow(/missing field|field must/i);
     vc.delete();
   });
 

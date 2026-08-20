@@ -283,9 +283,22 @@ describe('WASM basic analysis request objects', () => {
       stftDb(samples, frame.sampleRate, frame.nFft, frame.hopLength),
     );
     const chromaOptions = { sampleRate, hopLength: 256, nChroma: 12 };
+    // A union of the three overloaded functions keeps only the request-object
+    // call signature, so the positional side names the shared one it drops.
+    type PositionalChromaFn = (
+      samples: Float32Array,
+      sampleRate?: number,
+      hopLength?: number,
+      nChroma?: number,
+    ) => ReturnType<typeof chromaCens>;
     for (const fn of [chromaCens, chromaCqt, bassChroma]) {
       expect(fn({ samples, ...chromaOptions })).toEqual(
-        fn(samples, chromaOptions.sampleRate, chromaOptions.hopLength, chromaOptions.nChroma),
+        (fn as PositionalChromaFn)(
+          samples,
+          chromaOptions.sampleRate,
+          chromaOptions.hopLength,
+          chromaOptions.nChroma,
+        ),
       );
     }
     expect(chroma({ samples, ...frame })).toEqual(

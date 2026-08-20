@@ -357,6 +357,7 @@ describe('Sonare WASM Module', () => {
           startPpq: 0,
           lengthSamples: 6,
           loop: true,
+          // @ts-expect-error loopLengthSamples belongs to setMidiClips; audio clips ignore it
           loopLengthSamples: 2,
         },
       ]);
@@ -1254,7 +1255,7 @@ describe('Sonare WASM Module', () => {
       expect(badIndexError.code).toBe(ErrorCode.InvalidParameter);
 
       engine.play();
-      let eqOut = new Float32Array(256);
+      let eqOut: Float32Array = new Float32Array(256);
       for (let block = 0; block < 6; block += 1) {
         [eqOut] = engine.process([new Float32Array(256)]);
       }
@@ -1308,7 +1309,7 @@ describe('Sonare WASM Module', () => {
         enabled: true,
       });
       engine.seekSample(0);
-      let eqOut = new Float32Array(256);
+      let eqOut: Float32Array = new Float32Array(256);
       for (let block = 0; block < 6; block += 1) {
         [eqOut] = engine.process([new Float32Array(256)]);
       }
@@ -1416,7 +1417,7 @@ describe('Sonare WASM Module', () => {
         enabled: true,
       });
       engine.seekSample(0);
-      let eqOut = new Float32Array(256);
+      let eqOut: Float32Array = new Float32Array(256);
       for (let block = 0; block < 6; block += 1) {
         [eqOut] = engine.process([new Float32Array(256)]);
       }
@@ -1955,6 +1956,32 @@ describe('Sonare WASM Module', () => {
         'band0.q': 1,
       });
       expect(linearEq.latencySamples).toBeGreaterThan(0);
+    });
+
+    it('should report the same loudnessTargetLimited from the mono and stereo named processors', () => {
+      // A lone full-scale transient peak-normalizes the source without lifting
+      // its program loudness, so the -3 dBTP ceiling blocks the requested
+      // -6 LUFS boost on both paths by a margin far wider than the 3 dB BS.1770
+      // channel-summing offset between mono and dual-mono stereo.
+      const sampleRate = 22050;
+      const peaky = new Float32Array(sampleRate);
+      for (let i = 0; i < peaky.length; i++) {
+        peaky[i] = 0.05 * Math.sin((2 * Math.PI * 440 * i) / sampleRate);
+      }
+      peaky[peaky.length >> 1] = 1;
+      const params = { targetLufs: -6, ceilingDb: -3, truePeakOversample: 4 };
+
+      const mono = masteringProcess('maximizer.loudnessOptimize', peaky, sampleRate, params);
+      const stereo = masteringProcessStereo(
+        'maximizer.loudnessOptimize',
+        peaky,
+        peaky,
+        sampleRate,
+        params,
+      );
+      expect(mono.loudnessTargetLimited).toBe(true);
+      expect(stereo.loudnessTargetLimited).toBe(mono.loudnessTargetLimited);
+      expect(stereo.outputLufs).toBeLessThan(params.targetLufs);
     });
 
     it('should expose pair and stereo mastering APIs in WASM', () => {

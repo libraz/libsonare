@@ -28,9 +28,12 @@ export {
   masteringChainStereo,
   masteringChainStereoWithProgress,
   masteringChainWithProgress,
+  masteringPlatformNames,
   masteringPresetNames,
 } from './mastering_chain';
 export type {
+  MasteringAssistantParamsRequest,
+  MasteringAssistantStereoParamsRequest,
   MasteringChannelPolicy,
   MasteringInsertParamInfo,
   MasteringPairAnalyzeRequest,

@@ -1,4 +1,8 @@
 import { beforeAll, describe, expect, it } from 'vitest';
+// `attachOpfsClipStream` ships in both bundles, and each call below takes it
+// from the bundle its other arguments come from. tsup emits every entry as a
+// self-contained .d.ts, so ClipPageProvider is declared twice and its private
+// field makes the two copies nominally distinct.
 import {
   attachOpfsClipStream,
   ClipPageStreamer,
@@ -7,6 +11,7 @@ import {
   RealtimeEngine,
 } from '../dist/index.js';
 import {
+  attachOpfsClipStream as attachWorkletOpfsClipStream,
   init as initWorklet,
   SonareEngine,
   SonareEngineCommandType,
@@ -211,7 +216,7 @@ describe('worklet attachOpfsClipStream', () => {
         throw new Error('expected a worklet processor');
       }
       engine.setTrackLanes([10]);
-      const { provider } = await attachOpfsClipStream(engine, {
+      const { provider } = await attachWorkletOpfsClipStream(engine, {
         path: 'clips/clip.f32',
         clipId: 701,
         numChannels: 1,
@@ -266,7 +271,7 @@ describe('worklet attachOpfsClipStream', () => {
     });
     try {
       await expect(
-        attachOpfsClipStream(engine, {
+        attachWorkletOpfsClipStream(engine, {
           path: 'clips/clip.f32',
           clipId: 702,
           numChannels: 1,

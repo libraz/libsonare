@@ -6,6 +6,7 @@
 
 import { beforeAll, describe, expect, it } from 'vitest';
 import { init, Mixer, mixingScenePresetJson } from '../dist/index.js';
+import { assertStripIndex } from './_helpers';
 
 const SR = 48000;
 const BLOCK = 512;
@@ -119,6 +120,7 @@ describe('Mixer runtime controls (WASM)', () => {
       try {
         // stripById resolves a scene id to a numeric index in [0, stripCount()).
         const vocal = mixer.stripById('vocal');
+        assertStripIndex(vocal, 'vocal');
         expect(typeof vocal).toBe('number');
         expect(Number.isInteger(vocal)).toBe(true);
         expect(vocal).toBeGreaterThanOrEqual(0);
@@ -199,6 +201,7 @@ describe('Mixer runtime controls (WASM)', () => {
       const mixer = Mixer.fromSceneJson(mixingScenePresetJson('vocalReverbSend'), SR, BLOCK);
       try {
         const vocal = mixer.stripById('vocal');
+        assertStripIndex(vocal, 'vocal');
         for (const law of ['const3dB', 'const4.5dB', 'const6dB', 'linear0dB'] as const) {
           expect(() => mixer.setPanLaw(vocal, law)).not.toThrow();
         }
@@ -226,6 +229,7 @@ describe('Mixer runtime controls (WASM)', () => {
       const mixer = Mixer.fromSceneJson(mixingScenePresetJson('vocalReverbSend'), SR, BLOCK);
       try {
         const vocal = mixer.stripById('vocal');
+        assertStripIndex(vocal, 'vocal');
         // Add two sends to the same bus; remove the first so the second shifts
         // down into index 0.
         const first = mixer.addSend(vocal, 'rt-send-a', 'vocal-verb', -20, 'postFader');
@@ -267,6 +271,9 @@ describe('Mixer runtime controls (WASM)', () => {
         const kick = mixer.stripById('kick');
         const busReturn = mixer.stripById('drum-bus-return');
         const target = mixer.stripById(feedStripId);
+        assertStripIndex(kick, 'kick');
+        assertStripIndex(busReturn, 'drum-bus-return');
+        assertStripIndex(target, feedStripId);
         expect(kick).toBeGreaterThanOrEqual(0);
         expect(busReturn).toBeGreaterThanOrEqual(0);
         expect(target).toBeGreaterThanOrEqual(0);

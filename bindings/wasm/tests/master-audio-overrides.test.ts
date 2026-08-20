@@ -53,6 +53,7 @@ describe('WASM masterAudio nested overrides (H-1)', () => {
       overrides,
     });
     expect(request.outputLufs).toBeCloseTo(positional.outputLufs, 6);
+    // @ts-expect-error the stereo result carries left/right, not samples
     expect(request.samples).toEqual(positional.samples);
   });
 });

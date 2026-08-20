@@ -4,6 +4,8 @@
 #ifdef __EMSCRIPTEN__
 
 #include <algorithm>
+#include <string>
+#include <type_traits>
 
 #include "c_api/midi_fx_json.h"
 #include "c_api/synth_patch_common.h"
@@ -308,7 +310,13 @@ void RealtimeEngineWasm::bindMidiCcBinding(val object) {
   const val channel = object["channel"];
   binding.channel = channel.isUndefined() || channel.isNull() ? sonare::midi::kCcAnyChannel
                                                               : channel.as<uint8_t>();
-  binding.kind = static_cast<sonare::midi::CcBindingKind>(object["kind"].as<uint8_t>());
+  // Only ccNumber and paramId are required; every other field falls back to the
+  // CcBinding default (any channel, 7-bit Control Change, unit output range),
+  // matching the Node addon reader and the Project-side descriptor reader. A
+  // field that IS supplied is still range-checked below, so the leniency covers
+  // omission only and a non-finite range is still rejected.
+  binding.kind = static_cast<sonare::midi::CcBindingKind>(
+      static_cast<uint8_t>(uintProperty(object, "kind", 0u)));
   const val cc_lsb = object["ccLsbNumber"];
   const val selector_msb = object["selectorMsb"];
   const val selector_lsb = object["selectorLsb"];
@@ -316,8 +324,8 @@ void RealtimeEngineWasm::bindMidiCcBinding(val object) {
   binding.selector_msb = selector_msb.isUndefined() ? 0u : selector_msb.as<uint8_t>();
   binding.selector_lsb = selector_lsb.isUndefined() ? 0u : selector_lsb.as<uint8_t>();
   binding.param_id = object["paramId"].as<uint32_t>();
-  binding.min_value = object["minValue"].as<float>();
-  binding.max_value = object["maxValue"].as<float>();
+  binding.min_value = floatProperty(object, "minValue", 0.0f);
+  binding.max_value = floatProperty(object, "maxValue", 1.0f);
   if (binding.cc_number > 127 || binding.param_id == 0 ||
       static_cast<uint8_t>(binding.kind) >
           static_cast<uint8_t>(sonare::midi::CcBindingKind::kNrpn) ||
@@ -471,13 +479,25 @@ size_t RealtimeEngineWasm::externalMidiPendingCount() const {
 val RealtimeEngineWasm::drainExternalMidi(int max_records) {
   val out = val::array();
 #if defined(SONARE_WITH_ARRANGEMENT)
+  // One queue record lowers to at most this many MIDI-1 messages, so a smaller
+  // budget can never consume a record and the drain would report nothing while
+  // the queue keeps growing. The bound is read from the shared lowering type so
+  // it cannot drift from the lowering rules or from the C ABI's identical guard.
+  constexpr int kMaxLoweredMessages =
+      static_cast<int>(std::extent<decltype(sonare::host::ExternalMidi1Lowered::messages)>::value);
+  if (max_records > 0 && max_records < kMaxLoweredMessages) {
+    throw sonare::SonareException(sonare::ErrorCode::InvalidParameter,
+                                  "drainExternalMidi: maxRecords must be at least " +
+                                      std::to_string(kMaxLoweredMessages) +
+                                      " to guarantee forward progress");
+  }
   if (max_records <= 0 || engine_.external_midi_pending_count() == 0) return out;
   sonare::host::ExternalMidiRecord record{};
   int out_count = 0;
-  while (out_count + 3 <= max_records) {
+  while (out_count + kMaxLoweredMessages <= max_records) {
     if (engine_.drain_external_midi(&record, 1) == 0) break;
-    // Shared lowering: identical MIDI-1 rules across every host surface. With
-    // >=3 slots free, every lowered message of this record fits the budget.
+    // Shared lowering: identical MIDI-1 rules across every host surface. With a
+    // full record's worth of slots free, every lowered message fits the budget.
     const sonare::host::ExternalMidi1Lowered lowered =
         sonare::host::lower_external_midi_record(record);
     for (uint8_t m = 0; m < lowered.count; ++m) {

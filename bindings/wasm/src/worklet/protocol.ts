@@ -307,8 +307,24 @@ export interface SharedSpectrumRingWriter {
   recordFloats: number;
 }
 
+/**
+ * Shared finite dB floor (`sonare::constants::kFloorDb`). Every level-in-dB
+ * field on a worklet snapshot bottoms out here rather than at `-Infinity`.
+ */
+export const SONARE_FLOOR_DB = -120;
+
+/**
+ * Magnitude to dB with the shared finite floor.
+ *
+ * `-Infinity` is not a usable value for a meter reading: it propagates NaN
+ * through the usual `(db + 60) / 60 * height` bar geometry, serializes to
+ * `null` through `JSON.stringify`, and poisons `Math.min`/`Math.max`
+ * aggregation. The native meters have always floored at `kFloorDb`, so a
+ * producer emitting `-Infinity` also made the two worklets disagree about
+ * silence.
+ */
 export function toDb(value: number): number {
-  return value > 0 ? 20 * Math.log10(value) : Number.NEGATIVE_INFINITY;
+  return value > 0 ? Math.max(20 * Math.log10(value), SONARE_FLOOR_DB) : SONARE_FLOOR_DB;
 }
 
 export function isRecord(value: unknown): value is Record<string, unknown> {

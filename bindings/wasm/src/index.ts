@@ -58,6 +58,8 @@ export type {
   DereverbClassicalOptions,
   DynamicsResult,
   GateOptions,
+  MasteringAssistantParamsRequest,
+  MasteringAssistantStereoParamsRequest,
   MasteringChannelPolicy,
   MasteringDynamicsCompressorRequest,
   MasteringDynamicsGateRequest,
@@ -116,6 +118,7 @@ export {
   masteringPairAnalyze,
   masteringPairProcess,
   masteringPairProcessorNames,
+  masteringPlatformNames,
   masteringPresetNames,
   masteringProcess,
   masteringProcessorCatalog,
@@ -234,6 +237,7 @@ export type {
   ZeroCrossingsRequest,
 } from './feature_spectral';
 export type {
+  BassChromaSpectrogramRequest,
   ChromaSpectrogramRequest,
   GriffinLimRequest,
   MelDeltaRequest,
@@ -519,6 +523,7 @@ export type {
   KeyDetectionOptions,
   KeyProfileName,
   LufsResult,
+  MasteringAssistantParams,
   MasteringChainConfig,
   MasteringChainResult,
   MasteringChainStereoResult,
@@ -553,6 +558,7 @@ export type {
   RealtimeVoiceChangerConfigInput,
   RealtimeVoiceChangerPodConfig,
   RhythmFeatures,
+  RirDiagnostic,
   RirResult,
   RirSynthOptions,
   RoomEstimateOptions,
@@ -689,6 +695,7 @@ export type {
   StreamQuantizeConfig,
 } from './stream_types';
 export type {
+  MixerMeterSnapshot,
   MixerRealtimeBuffer,
   RealtimeVoiceChangerInterleavedBuffer,
   RealtimeVoiceChangerMonoBuffer,

@@ -98,9 +98,13 @@ void RealtimeEngineWasm::setAutomationLane(double param_id, val points) {
   }
   sonare::automation::AutomationLane lane(static_cast<uint32_t>(param_id));
   std::vector<sonare::automation::Breakpoint> breakpoints;
-  const int count = points["length"].as<int>();
-  breakpoints.reserve(static_cast<size_t>(count));
-  for (int i = 0; i < count; ++i) {
+  // The point count comes from an untrusted JS `.length`: validate it through
+  // the shared safe-integer + budget guard, and cap the pre-reserve so a
+  // fabricated length cannot allocate storage the array does not back. A longer
+  // genuine array still works — the vector grows as points are validated.
+  const size_t count = wasmArrayLikeLength(points, "automation points");
+  breakpoints.reserve(std::min(count, kMaxWasmObjectArrayReserve));
+  for (size_t i = 0; i < count; ++i) {
     val point = points[i];
     const double ppq = objectProperty(point, "ppq").as<double>();
     const float value = floatProperty(point, "value", 0.0f);

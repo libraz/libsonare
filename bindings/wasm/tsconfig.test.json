@@ -1,0 +1,15 @@
+{
+  // Tests-only program. The published package is browser-facing, so
+  // `tsconfig.json` keeps `lib` at ES2020 and `types` empty; the tests run
+  // under Node through vitest, so they get the newer lib and node globals.
+  // `tsc -p tsconfig.json` still checks src against the shipped ES2020 lib.
+  "extends": "./tsconfig.json",
+  "compilerOptions": {
+    "noEmit": true,
+    "rootDir": ".",
+    "lib": ["ES2022", "DOM"],
+    "types": ["node"]
+  },
+  "include": ["src/**/*.ts", "tests/**/*.ts", "vitest.config.ts"],
+  "exclude": ["node_modules", "build-wasm", "build-wasm-analysis"]
+}

@@ -30,6 +30,13 @@ export interface SpectrogramRequest extends GuardedOptions {
   hopLength?: number;
 }
 
+/**
+ * Options for the constant-Q chroma variants.
+ *
+ * Carries no `nFft`: these are built on a constant-Q transform, which resolves
+ * frequency through per-bin filter lengths rather than a framed FFT, so there
+ * is no FFT size to set. Use `chroma` for the STFT-framed chromagram.
+ */
 export interface ChromaSpectrogramRequest extends GuardedOptions {
   samples: Float32Array;
   sampleRate?: number;
@@ -37,6 +44,32 @@ export interface ChromaSpectrogramRequest extends GuardedOptions {
   nChroma?: number;
   binsPerOctave?: number;
 }
+
+/**
+ * Options for the bass-focused chroma.
+ *
+ * Unlike {@link ChromaSpectrogramRequest} this carries no `binsPerOctave`: the
+ * bass chroma fixes its bin count and its lowest frequency together, so the
+ * resolution is not independently settable through this entry point.
+ */
+export interface BassChromaSpectrogramRequest extends GuardedOptions {
+  samples: Float32Array;
+  sampleRate?: number;
+  hopLength?: number;
+  nChroma?: number;
+}
+
+/**
+ * Compile-time guard for the two request shapes above. A field the entry point
+ * cannot forward is worse than a missing one: it type-checks, runs, and returns
+ * the default silently. These aliases fail to compile if either field appears,
+ * so adding one has to be a deliberate act.
+ */
+type AbsentKey<T extends never> = T;
+type _ChromaRequestHasNoFftSize = AbsentKey<Extract<keyof ChromaSpectrogramRequest, 'nFft'>>;
+type _BassChromaRequestHasNoResolutionControls = AbsentKey<
+  Extract<keyof BassChromaSpectrogramRequest, 'nFft' | 'binsPerOctave'>
+>;
 
 export interface MelSpectrogramRequest extends SpectrogramRequest {
   nMels?: number;
@@ -412,7 +445,7 @@ export function chromaCqt(
  * @param nChroma - Number of chroma bins (default: 12)
  * @returns Chroma result
  */
-export function bassChroma(request: ChromaSpectrogramRequest): ChromaResult;
+export function bassChroma(request: BassChromaSpectrogramRequest): ChromaResult;
 export function bassChroma(
   samples: Float32Array,
   sampleRate?: number,
@@ -421,7 +454,7 @@ export function bassChroma(
   options?: GuardedOptions,
 ): ChromaResult;
 export function bassChroma(
-  samples: Float32Array | ChromaSpectrogramRequest,
+  samples: Float32Array | BassChromaSpectrogramRequest,
   sampleRate = 22050,
   hopLength = 512,
   nChroma = 12,

@@ -438,9 +438,11 @@ val js_waveform_peaks(val samples, int channels, size_t samples_per_bucket) {
 val js_waveform_peak_pyramid(val samples, int channels, val js_levels) {
   std::vector<float> data = float32ArrayToVector(samples);
   std::vector<size_t> levels;
-  const uint32_t n = js_levels["length"].as<uint32_t>();
+  // The level count is caller-controlled and drives the reserve, so it goes
+  // through the shared safe-integer + budget guard instead of a raw narrowing.
+  const size_t n = wasmArrayLikeLength(js_levels, "waveformPeakPyramid levels");
   levels.reserve(n);
-  for (uint32_t i = 0; i < n; ++i) {
+  for (size_t i = 0; i < n; ++i) {
     levels.push_back(js_levels[i].as<size_t>());
   }
   // Reject a length that is not a whole number of interleaved frames instead of

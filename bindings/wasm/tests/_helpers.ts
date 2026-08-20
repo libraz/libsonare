@@ -1,5 +1,5 @@
 /**
- * Shared test-signal generators for the WASM binding suites.
+ * Shared test-signal generators and assertions for the WASM binding suites.
  */
 
 /** Options for {@link sine}. */
@@ -27,4 +27,19 @@ export function sine(freqHz: number, durationSec: number, opts: SineOptions = {}
     out[i] = amp * Math.sin((2 * Math.PI * freqHz * i) / sampleRate);
   }
   return out;
+}
+
+/**
+ * Asserts that a `Mixer.stripById()` lookup resolved, narrowing away the `null`
+ * it returns for an unknown id so the index can be passed to the strip-indexed
+ * setters and meter readers.
+ *
+ * @param index - The `stripById()` return value.
+ * @param id - The scene strip id that was looked up, used in the failure message.
+ * @throws Error when the lookup missed.
+ */
+export function assertStripIndex(index: number | null, id: string): asserts index is number {
+  if (index === null) {
+    throw new Error(`Mixer.stripById(${JSON.stringify(id)}) did not resolve to a strip index`);
+  }
 }

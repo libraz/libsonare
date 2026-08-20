@@ -417,16 +417,26 @@ describe('SonareRealtimeVoiceChangerWorkletProcessor', () => {
       }
     });
 
-    it.skip('invalid preset at construction throws or falls back gracefully (skipped: WASM embind preset validation path not yet exposed at worklet ctor level)', () => {
-      // The SonareRealtimeVoiceChangerWorkletProcessor constructor calls
-      //   new RealtimeVoiceChanger(options.preset ?? 'neutral-monitor')
-      // followed by changer.prepare(). Whether an unknown preset string throws
-      // depends on whether the embind RealtimeVoiceChanger constructor validates
-      // the preset ID or silently falls back to neutral-monitor. The current WASM
-      // binding passes the preset string directly to the C++ constructor which
-      // may silently default rather than throw, making this assertion
-      // implementation-dependent. Skip until the WASM binding documents the
-      // exact contract for unknown preset IDs.
+    it('rejects an unknown preset id at construction', async () => {
+      // The contract is not implementation-dependent: the preset lookup in the
+      // core throws SonareException(InvalidParameter) for an id it does not
+      // recognize, the embind wrapper rethrows, and -fexceptions carries it to
+      // JS as a catchable SonareError. Constructing with an unknown id must
+      // therefore fail rather than fall back to a default voice, which would
+      // send a performer's audio through the wrong processing chain silently.
+      const { ErrorCode, isSonareError } = await import('../dist/index.js');
+      let caught: unknown;
+      try {
+        new SonareRealtimeVoiceChangerWorkletProcessor({
+          preset: 'definitely-not-a-preset',
+        } as never);
+      } catch (error) {
+        caught = error;
+      }
+      expect(caught, 'an unknown preset id must not construct silently').toBeDefined();
+      expect(isSonareError(caught)).toBe(true);
+      expect((caught as { code: number }).code).toBe(ErrorCode.InvalidParameter);
+      expect((caught as Error).message).toContain('unknown realtime voice changer preset');
     });
   });
 });

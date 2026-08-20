@@ -3,6 +3,7 @@
 
 #ifdef __EMSCRIPTEN__
 
+#include <cxxabi.h>
 #include <emscripten/emscripten.h>
 
 #include "bindings/common/common.h"
@@ -191,6 +192,20 @@ val js_sonare_exception_info(std::uintptr_t exception_ptr) {
   return info;
 }
 
+// Releases the reference emscripten's __cxa_throw takes on the exception object
+// before rethrowing it into JS as a raw pointer. No C++ frame catches it, so
+// nothing on either side of the boundary ever drops that reference: without this
+// call every rejected input leaks its exception object for the lifetime of the
+// module, and callers are explicitly invited to use rejection as control flow.
+// Exposed as a binding rather than through -sEXPORT_EXCEPTION_HANDLING_HELPERS
+// so the release sits next to the decoder that reads the same pointer.
+// Call exactly once per surfaced pointer, after js_sonare_exception_info: the
+// object is freed when the count reaches zero, so its message is gone after.
+void js_sonare_release_exception(std::uintptr_t exception_ptr) {
+  if (exception_ptr == 0) return;
+  __cxxabiv1::__cxa_decrement_exception_refcount(reinterpret_cast<void*>(exception_ptr));
+}
+
 // Aggregate C-ABI version: the per-subsystem ABI macros folded into one 32-bit
 // value, matching the Node addon (sonare_abi_version) and Python. Computed from
 // the compile-time SONARE_ABI_VERSION macro so it stays correct without linking
@@ -358,6 +373,7 @@ EMSCRIPTEN_BINDINGS(sonare) {
   function("version", &js_version);
   function("capabilities", &js_capabilities);
   function("sonareExceptionInfo", &js_sonare_exception_info);
+  function("sonareReleaseException", &js_sonare_release_exception);
   function("abiVersion", &js_abi_version);
   function("engineAbiVersion", &js_engine_abi_version);
   function("voiceChangerAbiVersion", &js_voice_changer_abi_version);

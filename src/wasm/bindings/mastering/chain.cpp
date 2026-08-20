@@ -3,6 +3,7 @@
 
 #ifdef __EMSCRIPTEN__
 
+#include "rt/aliasing_control.h"
 #include "wasm/bindings/common/common.h"
 #include "wasm/bindings/mastering/chain_result.h"
 
@@ -172,6 +173,7 @@ mastering::api::MasteringChainConfig masteringChainConfigFromVal(val config) {
     tc.head_bump_db = floatProperty(tape, "headBumpDb", tc.head_bump_db);
     tc.bias = floatProperty(tape, "bias", tc.bias);
     tc.gap_loss = floatProperty(tape, "gapLoss", tc.gap_loss);
+    tc.oversample_factor = intProperty(tape, "oversampleFactor", tc.oversample_factor);
     // Tape is a color stage, so the mere presence of the object must not engage
     // it: an explicit `enabled` wins, otherwise defer to the shared core rule
     // (tape_engages_color) so a `{ tape: { driveDb: 0, saturation: 0 } }` config
@@ -188,6 +190,19 @@ mastering::api::MasteringChainConfig masteringChainConfigFromVal(val config) {
     ec.amount = floatProperty(exciter, "amount", ec.amount);
     ec.q = floatProperty(exciter, "q", ec.q);
     ec.even_odd_mix = floatProperty(exciter, "evenOddMix", ec.even_odd_mix);
+    if (hasProperty(exciter, "aliasing")) {
+      // This reader builds the config directly and never passes through the
+      // C-ABI enum guard, so the ordinal is range-checked here. A blind cast
+      // would put a value into the config that no AliasingControl member names.
+      // Modes that name a member but the exciter does not implement (the ADAA
+      // pair) are rejected downstream by Exciter::validate_config, which is the
+      // same split the flat-param path uses.
+      const int aliasing = intProperty(exciter, "aliasing", static_cast<int>(ec.aliasing));
+      requireOrdinalInRange(aliasing, static_cast<int>(sonare::rt::AliasingControl::None),
+                            static_cast<int>(sonare::rt::AliasingControl::Oversample4x),
+                            "saturation.exciter.aliasing");
+      ec.aliasing = static_cast<sonare::rt::AliasingControl>(aliasing);
+    }
     // Same color-stage rule as tape: explicit `enabled` wins, otherwise defer to
     // the shared core rule (exciter_engages_color) so `{ exciter: { amount: 0 } }`
     // stays bypassed.

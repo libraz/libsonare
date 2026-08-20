@@ -655,16 +655,18 @@ export interface MidiCcLearnOptions {
 /** MIDI CC <-> automation binding descriptor used by CC learn/conversion helpers. */
 export interface ProjectMidiCcBinding {
   ccNumber: number;
-  /** MIDI channel 0..15, or 255 for any channel. */
-  channel: number;
-  /** 0 = 7-bit CC, 1 = 14-bit CC, 2 = RPN, 3 = NRPN. */
-  kind: ProjectMidiCcBindingKind;
+  /** MIDI channel 0..15, or 255 for any channel. Omit for the any-channel sentinel `255`. */
+  channel?: number;
+  /** 0 = 7-bit CC, 1 = 14-bit CC, 2 = RPN, 3 = NRPN. Default `0`. */
+  kind?: ProjectMidiCcBindingKind;
   ccLsbNumber?: number;
   selectorMsb?: number;
   selectorLsb?: number;
   paramId: number;
-  minValue: number;
-  maxValue: number;
+  /** Lower end of the mapped parameter range. Default `0`. */
+  minValue?: number;
+  /** Upper end of the mapped parameter range. Default `1`. */
+  maxValue?: number;
 }
 
 /** Result of {@link Project.validateMidiNotes}. */

@@ -1,4 +1,5 @@
 import { vi } from 'vitest';
+import type { RealtimeEngine } from '../dist/index.js';
 import {
   createSonareClipPageRequestRingBuffer,
   createSonareEngineCommandRingBuffer,
@@ -211,6 +212,139 @@ describe('SonareRealtimeEngineWorkletProcessor', () => {
       try {
         const out = [new Float32Array(blockSize), new Float32Array(blockSize)];
         expect(processor.process([[]], [out])).toBe(true);
+      } finally {
+        processor.destroy();
+      }
+    });
+
+    it('fans a mono engine plane out to every host output channel', () => {
+      const blockSize = 128;
+      const clipFrames = blockSize * 4;
+      const processor = new SonareRealtimeEngineWorkletProcessor({
+        sampleRate: 48000,
+        blockSize,
+        channelCount: 1,
+      });
+      try {
+        const engine = (
+          processor as unknown as {
+            engine: {
+              setClips: (clips: unknown[]) => void;
+              setTrackLanes: (lanes: unknown[]) => void;
+              play: (sampleTime?: number) => void;
+            };
+          }
+        ).engine;
+        engine.setClips([
+          {
+            id: 1,
+            trackId: 10,
+            channels: [new Float32Array(clipFrames).fill(1)],
+            startPpq: 0,
+            lengthSamples: clipFrames,
+          },
+        ]);
+        engine.setTrackLanes([10]);
+        engine.play();
+        const out = [new Float32Array(blockSize), new Float32Array(blockSize)];
+        expect(processor.process([[]], [out])).toBe(true);
+
+        // A single plane must reach both host channels: sending it to output 0
+        // only would play the mono program hard-panned left.
+        expect(out[0].at(-1)).not.toBe(0);
+        expect(Array.from(out[1])).toEqual(Array.from(out[0]));
+      } finally {
+        processor.destroy();
+      }
+    });
+
+    it('silences a host output channel past the last engine plane', () => {
+      const blockSize = 128;
+      const clipFrames = blockSize * 4;
+      const processor = new SonareRealtimeEngineWorkletProcessor({
+        sampleRate: 48000,
+        blockSize,
+        channelCount: 2,
+      });
+      try {
+        const engine = (
+          processor as unknown as {
+            engine: {
+              setClips: (clips: unknown[]) => void;
+              setTrackLanes: (lanes: unknown[]) => void;
+              play: (sampleTime?: number) => void;
+            };
+          }
+        ).engine;
+        engine.setClips([
+          {
+            id: 1,
+            trackId: 10,
+            channels: [new Float32Array(clipFrames).fill(1), new Float32Array(clipFrames).fill(1)],
+            startPpq: 0,
+            lengthSamples: clipFrames,
+          },
+        ]);
+        engine.setTrackLanes([10]);
+        engine.play();
+        // The stale sentinel proves the third channel is actively zeroed rather
+        // than left untouched.
+        const out = [
+          new Float32Array(blockSize),
+          new Float32Array(blockSize),
+          new Float32Array(blockSize).fill(0.5),
+        ];
+        expect(processor.process([[]], [out])).toBe(true);
+
+        // Both engine planes carry audio, so a plane-0 fallback into the
+        // uncovered channel would be audible rather than silent.
+        expect(out[0].at(-1)).not.toBe(0);
+        expect(out[1].at(-1)).not.toBe(0);
+        expect(out[2].every((sample) => sample === 0)).toBe(true);
+      } finally {
+        processor.destroy();
+      }
+    });
+
+    it('zeroes the output tail a short engine plane does not fill', () => {
+      const blockSize = 128;
+      const shortFrames = 64;
+      const clipFrames = blockSize * 4;
+      const processor = new SonareRealtimeEngineWorkletProcessor({
+        sampleRate: 48000,
+        blockSize,
+        channelCount: 2,
+      });
+      try {
+        const internals = processor as unknown as {
+          engine: {
+            setClips: (clips: unknown[]) => void;
+            setTrackLanes: (lanes: unknown[]) => void;
+            play: (sampleTime?: number) => void;
+          };
+          channelBuffers: Float32Array[];
+        };
+        internals.engine.setClips([
+          {
+            id: 1,
+            trackId: 10,
+            channels: [new Float32Array(clipFrames).fill(1), new Float32Array(clipFrames).fill(1)],
+            startPpq: 0,
+            lengthSamples: clipFrames,
+          },
+        ]);
+        internals.engine.setTrackLanes([10]);
+        internals.engine.play();
+        // Narrow one heap view so the plane covers less than the render quantum.
+        internals.channelBuffers[1] = internals.channelBuffers[1].subarray(0, shortFrames);
+        const out = [new Float32Array(blockSize), new Float32Array(blockSize).fill(0.5)];
+        expect(processor.process([[]], [out])).toBe(true);
+
+        // The narrowed view must still be the one that was rendered through; a
+        // re-acquire would restore the full plane and make this vacuous.
+        expect(internals.channelBuffers[1].length).toBe(shortFrames);
+        expect(out[1][shortFrames - 1]).not.toBe(0);
+        expect(out[1].subarray(shortFrames).every((sample) => sample === 0)).toBe(true);
       } finally {
         processor.destroy();
       }
@@ -963,11 +1097,15 @@ describe('SonareRealtimeEngineWorkletProcessor', () => {
         expect(outL[0]).toBeCloseTo(0.125, 4);
         expect(outR[0]).toBeCloseTo(-0.125, 4);
 
-        const status = processor.engine.captureStatus();
+        // The processor keeps its engine private and exposes no capture reader.
+        const { engine } = processor as unknown as {
+          engine: Pick<RealtimeEngine, 'captureStatus' | 'capturedAudio'>;
+        };
+        const status = engine.captureStatus();
         expect(status.capturedFrames).toBe(blockSize);
         expect(status.source).toBe('input');
         expect(status.recordOffsetSamples).toBe(-12);
-        const captured = processor.engine.capturedAudio();
+        const captured = engine.capturedAudio();
         expect(captured[0][0]).toBeCloseTo(0.25, 4);
         expect(captured[1][0]).toBeCloseTo(-0.25, 4);
         expect(meters.some((meter) => (meter as { targetId?: number }).targetId === 0xffff)).toBe(

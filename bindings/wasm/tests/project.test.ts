@@ -208,9 +208,10 @@ describe('Sonare WASM Project', () => {
       expect(() => project.setAssistSidecar({ moduleId: 'bad', payload: [1, 2] as never })).toThrow(
         /payload/,
       );
-      expect(() => project.setAssistSidecar('legacy', 0, 0, 0, 0)).toThrow(
-        /requires six arguments/,
-      );
+      expect(() =>
+        // @ts-expect-error the five-argument legacy form is rejected at runtime
+        project.setAssistSidecar('legacy', 0, 0, 0, 0),
+      ).toThrow(/requires six arguments/);
     } finally {
       project.delete();
     }
@@ -643,12 +644,14 @@ describe('Sonare WASM Project', () => {
   it('keeps the base preset when synth patch numeric fields are explicitly zero', () => {
     const project = buildMidiOnlyProject();
     try {
+      // @ts-expect-error BuiltinSynthBinding declares neither a preset-name string
       const preset = project.bounceWithBuiltinInstrument('warm-pad', {
         totalFrames: 4096,
         numChannels: 2,
         sampleRate: 48000,
       });
       const explicitZero = project.bounceWithBuiltinInstrument(
+        // @ts-expect-error nor the preset/ampSustain/filterSustain/gain fields
         { preset: 'warm-pad', ampSustain: 0, filterSustain: 0, gain: 0 },
         { totalFrames: 4096, numChannels: 2, sampleRate: 48000 },
       );

@@ -240,6 +240,7 @@ describe('Sonare WASM NativeSynth', () => {
       );
       expect(wobble).not.toEqual(plain);
       expect(() =>
+        // @ts-expect-error unknown waveform name is rejected at runtime
         project.bounceWithSynthInstrument({ waveform: 'sawtooth-ish' }, { totalFrames: 128 }),
       ).toThrow();
     } finally {

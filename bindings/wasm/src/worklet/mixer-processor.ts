@@ -19,7 +19,6 @@ import {
   type SonareWorkletMeterSnapshot,
   type SonareWorkletSpectrumSnapshot,
   spectrumRingFromSharedBuffer,
-  toDb,
 } from './protocol';
 
 /**
@@ -76,6 +75,10 @@ export class SonareWorkletProcessor {
       throw new Error('stripCount must match the scene strip count.');
     }
     this.realtime = this.mixer.createRealtimeBuffer();
+    // The mixer meters the master it just produced, so the true-peak filter sees
+    // every block without the worklet copying the output back in. 4x is the
+    // BS.1770-4 Annex 2 minimum.
+    this.mixer.configureMeter(this.meterIntervalFrames > 0, 4);
   }
 
   process(inputs: WorkletInput, outputs: WorkletOutput): boolean {
@@ -132,10 +135,7 @@ export class SonareWorkletProcessor {
       }
     }
     this.processedFrames += usable;
-    this.publishMeter(
-      this.realtime.outLeft.subarray(0, usable),
-      this.realtime.outRight.subarray(0, usable),
-    );
+    this.publishMeter();
     this.publishSpectrum(
       this.realtime.outLeft.subarray(0, usable),
       this.realtime.outRight.subarray(0, usable),
@@ -152,7 +152,15 @@ export class SonareWorkletProcessor {
       return;
     }
     if (message.type === 'setMeterInterval') {
-      this.meterIntervalFrames = Math.max(0, Math.floor(message.frames));
+      const frames = Math.max(0, Math.floor(message.frames));
+      // Toggling metering also toggles the mixer's meter, so a disabled meter
+      // costs nothing per block. Re-enabling restarts it: the filter history and
+      // the published snapshot are from before the gap, and carrying them
+      // forward would report a peak the caller never asked to be measured.
+      if (frames > 0 !== this.meterIntervalFrames > 0) {
+        this.mixer.configureMeter(frames > 0, 4);
+      }
+      this.meterIntervalFrames = frames;
       return;
     }
     if (message.type === 'scheduleInsertAutomation') {
@@ -174,7 +182,7 @@ export class SonareWorkletProcessor {
     }
   }
 
-  private publishMeter(left: Float32Array, right: Float32Array): void {
+  private publishMeter(): void {
     if (!this.transport || this.meterIntervalFrames <= 0) {
       return;
     }
@@ -183,40 +191,20 @@ export class SonareWorkletProcessor {
     }
     this.lastMeterFrame = this.processedFrames;
 
-    let peakL = 0;
-    let peakR = 0;
-    let sumL = 0;
-    let sumR = 0;
-    let sumLR = 0;
-    for (let i = 0; i < left.length; i++) {
-      const l = left[i] ?? 0;
-      const r = right[i] ?? 0;
-      const absL = Math.abs(l);
-      const absR = Math.abs(r);
-      if (absL > peakL) {
-        peakL = absL;
-      }
-      if (absR > peakR) {
-        peakR = absR;
-      }
-      sumL += l * l;
-      sumR += r * r;
-      sumLR += l * r;
-    }
-    const rmsL = Math.sqrt(sumL / Math.max(1, left.length));
-    const rmsR = Math.sqrt(sumR / Math.max(1, right.length));
-    const denominator = Math.sqrt(sumL * sumR);
+    const measured = this.mixer.meterSnapshot();
     const meter: SonareWorkletMeterSnapshot = {
       type: 'meter',
       targetId: 0,
       frame: this.processedFrames,
-      peakDbL: toDb(peakL),
-      peakDbR: toDb(peakR),
-      rmsDbL: toDb(rmsL),
-      rmsDbR: toDb(rmsR),
-      correlation: denominator > 0 ? sumLR / denominator : 0,
-      truePeakDbL: toDb(peakL),
-      truePeakDbR: toDb(peakR),
+      peakDbL: measured.peakDbL,
+      peakDbR: measured.peakDbR,
+      rmsDbL: measured.rmsDbL,
+      rmsDbR: measured.rmsDbR,
+      correlation: measured.correlation,
+      truePeakDbL: measured.truePeakDbL,
+      truePeakDbR: measured.truePeakDbR,
+      // Declared unavailable rather than floored: the mixer worklet does not run
+      // the K-weighting filters, and a floor value would read as silence.
       momentaryLufs: Number.NaN,
       shortTermLufs: Number.NaN,
       integratedLufs: Number.NaN,

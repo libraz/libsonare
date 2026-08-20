@@ -48,7 +48,7 @@ describe('Realtime Voice Changer preset JSON Schema contract', () => {
     const factoryPack = JSON.parse(await readFile(factoryPresetPackUrl, 'utf8')) as {
       presets: object[];
     };
-    expect(validatePackSchema(factoryPack), validatePackSchema.errors).toBe(true);
+    expect(validatePackSchema(factoryPack), JSON.stringify(validatePackSchema.errors)).toBe(true);
     for (const preset of factoryPack.presets) {
       const json = JSON.stringify(preset);
       expect(

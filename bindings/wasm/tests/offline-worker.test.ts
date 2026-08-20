@@ -5,6 +5,11 @@ import { installOfflineWorkerEndpoint } from '../dist/worker.js';
 
 type MessageListener = (event: MessageEvent) => void;
 
+/** The client's worker option; the interface itself is not exported. */
+type OfflineWorkerLike = NonNullable<
+  NonNullable<ConstructorParameters<typeof OfflineWorkerClient>[0]>['worker']
+>;
+
 /**
  * A structured-clone loopback for the Worker protocol. It mirrors the boundary
  * that Node's worker_threads provides while keeping the test portable to the
@@ -123,7 +128,12 @@ describe('OfflineWorkerClient', () => {
       new URL('./fixtures/offline-worker-node-entry.mjs', import.meta.url),
     );
     const client = new OfflineWorkerClient({
-      worker,
+      // `OfflineWorker.postMessage` takes DOM `Transferable[]`, worker_threads
+      // takes its own `Transferable[]`; the two unions are not subsets of each
+      // other (OffscreenCanvas vs X509Certificate), so neither side is
+      // assignable even under method bivariance. The runtime contract holds —
+      // this test is what proves it.
+      worker: worker as unknown as OfflineWorkerLike,
       terminateWorkerOnDispose: true,
     });
     const samples = makeTone();

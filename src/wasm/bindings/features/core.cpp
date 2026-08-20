@@ -185,10 +185,12 @@ val js_fix_length(val values, int size, float pad_value) {
 }
 
 std::vector<int> intArrayToVector(val arr) {
-  const int length = arr["length"].as<int>();
-  std::vector<int> out(static_cast<size_t>(length));
-  for (int index = 0; index < length; ++index) {
-    out[static_cast<size_t>(index)] = arr[index].as<int>();
+  // The caller-supplied `.length` decides the allocation, so it goes through the
+  // shared safe-integer + budget guard rather than a raw as<int>() narrowing.
+  const size_t length = wasmArrayLikeLength(arr, "Int32Array");
+  std::vector<int> out(length);
+  for (size_t index = 0; index < length; ++index) {
+    out[index] = arr[index].as<int>();
   }
   return out;
 }

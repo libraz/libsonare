@@ -386,26 +386,35 @@ val js_decompose_with_init(val s, int n_features, int n_frames, int n_components
 val js_decompose_stems(val samples, int sample_rate, val options) {
   Audio audio = loadValidatedAudio(samples, sample_rate);
   DecomposeStemsConfig config;
-  const int n_components = intProperty(options, "nComponents", config.n_components);
-  const int n_fft = intProperty(options, "nFft", config.n_fft);
-  const int hop_length = intProperty(options, "hopLength", config.hop_length);
-  const int n_iter = intProperty(options, "nIter", config.n_iter);
-  const float beta = floatProperty(options, "beta", config.beta);
-  const float mask_power = floatProperty(options, "maskPower", config.mask_power);
+  // 0 is the "use the built-in default" sentinel the C ABI documents on
+  // SonareDecomposeStemsConfig, so an explicit 0 must land on the same
+  // effective value here as it does through sonare_decompose_stems. Reading
+  // each field with 0 as its fallback lets an absent key and an explicit 0
+  // take that one path. Everything else is left to validate_config, which
+  // decompose_stems applies to the config it is handed, so a negative count or
+  // a sub-unit mask power is rejected with the same error the C ABI returns.
+  const int n_components = intProperty(options, "nComponents", 0);
+  const int n_fft = intProperty(options, "nFft", 0);
+  const int hop_length = intProperty(options, "hopLength", 0);
+  const int n_iter = intProperty(options, "nIter", 0);
+  const float beta = floatProperty(options, "beta", 0.0f);
+  const float mask_power = floatProperty(options, "maskPower", 0.0f);
   const std::string init = stringProperty(options, "init", config.init);
-  if (n_components <= 0 || n_fft <= 0 || hop_length <= 0 || n_iter <= 0) {
+  // Rejected before the sentinel promotion, exactly as the C ABI does: a
+  // negative value must not be quietly swallowed by the "0 or less keeps the
+  // default" rule that follows.
+  if (n_components < 0 || n_fft < 0 || hop_length < 0 || n_iter < 0 || !std::isfinite(beta) ||
+      !std::isfinite(mask_power) || mask_power < 0.0f) {
     throw SonareException(ErrorCode::InvalidParameter,
-                          "decomposeStems: nComponents, nFft, hopLength and nIter must be > 0");
+                          "decomposeStems: counts must not be negative, beta and maskPower must "
+                          "be finite, and maskPower must not be negative");
   }
-  if (!(mask_power >= 1.0f)) {
-    throw SonareException(ErrorCode::InvalidParameter, "decomposeStems: maskPower must be >= 1");
-  }
-  config.n_components = n_components;
-  config.n_fft = n_fft;
-  config.hop_length = hop_length;
-  config.n_iter = n_iter;
-  config.beta = beta;
-  config.mask_power = mask_power;
+  if (n_components > 0) config.n_components = n_components;
+  if (n_fft > 0) config.n_fft = n_fft;
+  if (hop_length > 0) config.hop_length = hop_length;
+  if (n_iter > 0) config.n_iter = n_iter;
+  if (beta != 0.0f) config.beta = beta;
+  if (mask_power > 0.0f) config.mask_power = mask_power;
   config.init = init.empty() ? std::string("random") : init;
 
   DecomposeStemsResult result = decompose_stems(audio.data(), audio.size(), sample_rate, config);

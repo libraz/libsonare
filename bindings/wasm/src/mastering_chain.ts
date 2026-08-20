@@ -280,6 +280,18 @@ export function masteringPresetNames(): MasteringPreset[] {
 }
 
 /**
+ * List the delivery targets the mastering assistant accepts as `targetPlatform`.
+ *
+ * Read from the library rather than from a list kept here, so a target added in
+ * the core is discoverable without a binding change.
+ *
+ * @returns Target names in index order (e.g. "streaming", "broadcast", "club")
+ */
+export function masteringPlatformNames(): string[] {
+  return Array.from(requireModule().masteringPlatformNames());
+}
+
+/**
  * Apply a named mastering preset chain to mono audio.
  *
  * @param samples - Audio samples (mono, float32)

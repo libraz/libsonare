@@ -90,7 +90,13 @@ export const ChordQuality = {
 export type ChordQuality = (typeof ChordQuality)[keyof typeof ChordQuality];
 
 /**
- * Section type
+ * Section type.
+ *
+ * `PreChorus` is never produced by `analyze()`: it has no detection branch, so
+ * filtering sections on it always yields an empty result. Every other value is
+ * reachable. `Unknown` means the analyzer did not identify the segment -- no
+ * boundary was detected, or the segment matched none of the positive branches
+ * -- and comes with `confidence` 0.
  */
 export const SectionType = {
   Intro: 0,

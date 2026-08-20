@@ -69,10 +69,29 @@ export interface RirSynthOptions extends RoomGeometryOptions {
   crossfadeMs?: number;
 }
 
+/** One diagnostic reported by the RIR synthesizer. */
+export interface RirDiagnostic {
+  /** Stable machine-readable id, e.g. `acoustic.source_outside_room`. */
+  code: string;
+  message: string;
+  severity: 'info' | 'warning' | 'error';
+}
+
 export interface RirResult {
   rir: Float32Array;
   sampleRate: number;
   hasError: boolean;
+  /**
+   * First error diagnostic as `code: message`, empty when `hasError` is false.
+   * Matches the string the C ABI leaves in `sonare_last_error_message()`.
+   */
+  errorMessage: string;
+  /**
+   * Every diagnostic the synthesizer reported, in order. Warnings appear here on
+   * successful calls too — a `maxSeconds` clamp that cut the tail is a warning,
+   * not an error, and is otherwise indistinguishable from an untruncated RIR.
+   */
+  diagnostics: RirDiagnostic[];
 }
 
 export interface RoomEstimateOptions {

@@ -1,5 +1,6 @@
 import { getSonareModule } from './module_state';
 import type {
+  MasteringAssistantParams,
   MasteringOptions,
   MasteringProcessorParams,
   MasteringResult,
@@ -70,6 +71,13 @@ export interface MasteringSamplesParamsRequest {
   params?: MasteringProcessorParams;
 }
 
+/** Canonical request form for the assistant, whose params carry a target platform. */
+export interface MasteringAssistantParamsRequest {
+  samples: Float32Array;
+  sampleRate?: number;
+  params?: MasteringAssistantParams;
+}
+
 /** Canonical request form for streaming-platform preview. */
 export interface MasteringStreamingPreviewRequest {
   samples: Float32Array;
@@ -83,6 +91,14 @@ export interface MasteringStereoParamsRequest {
   right: Float32Array;
   sampleRate?: number;
   params?: MasteringProcessorParams;
+}
+
+/** Stereo counterpart of {@link MasteringAssistantParamsRequest}. */
+export interface MasteringAssistantStereoParamsRequest {
+  left: Float32Array;
+  right: Float32Array;
+  sampleRate?: number;
+  params?: MasteringAssistantParams;
 }
 
 /** Canonical request form for the stereo streaming-platform preview. */
@@ -137,9 +153,7 @@ export function masteringProcessorNames(): SoloProcessor[] {
  * `sonare_mastering_insert_names` (which joins this list) as a `string[]`.
  */
 export function masteringInsertNames(): string[] {
-  return (
-    requireModule() as unknown as { masteringInsertNames: () => string[] }
-  ).masteringInsertNames();
+  return requireModule().masteringInsertNames();
 }
 
 /**
@@ -153,11 +167,7 @@ export function masteringInsertNames(): string[] {
  * @param name - Insert processor name (see {@link masteringInsertNames}).
  */
 export function masteringInsertParamNames(name: string): string[] {
-  return Array.from(
-    (
-      requireModule() as unknown as { masteringInsertParamNames: (name: string) => string[] }
-    ).masteringInsertParamNames(name),
-  );
+  return Array.from(requireModule().masteringInsertParamNames(name));
 }
 
 /** One realtime-automatable parameter of an insert processor. */
@@ -184,9 +194,7 @@ export interface MasteringInsertParamInfo {
  * @param name - Insert processor name (see {@link masteringInsertNames}).
  */
 export function masteringInsertParamInfo(name: string): MasteringInsertParamInfo[] {
-  const json = (
-    requireModule() as unknown as { masteringInsertParamInfo: (name: string) => string }
-  ).masteringInsertParamInfo(name);
+  const json = requireModule().masteringInsertParamInfo(name);
   return JSON.parse(json) as MasteringInsertParamInfo[];
 }
 
@@ -246,9 +254,7 @@ export interface MasteringProcessorCatalogEntry {
  * instead of offering ids the realtime strip would reject.
  */
 export function masteringProcessorCatalog(): MasteringProcessorCatalogEntry[] {
-  const json = (
-    requireModule() as unknown as { masteringProcessorCatalog: () => string }
-  ).masteringProcessorCatalog();
+  const json = requireModule().masteringProcessorCatalog();
   return JSON.parse(json) as MasteringProcessorCatalogEntry[];
 }
 
@@ -439,16 +445,16 @@ export function masteringStereoAnalyze(
   );
 }
 
-export function masteringAssistantSuggest(request: MasteringSamplesParamsRequest): string;
+export function masteringAssistantSuggest(request: MasteringAssistantParamsRequest): string;
 export function masteringAssistantSuggest(
   samples: Float32Array,
   sampleRate?: number,
-  params?: MasteringProcessorParams,
+  params?: MasteringAssistantParams,
 ): string;
 export function masteringAssistantSuggest(
-  samples: Float32Array | MasteringSamplesParamsRequest,
+  samples: Float32Array | MasteringAssistantParamsRequest,
   sampleRate = 22050,
-  params: MasteringProcessorParams = {},
+  params: MasteringAssistantParams = {},
 ): string {
   const request = samples instanceof Float32Array ? { samples, sampleRate, params } : samples;
   return requireModule().masteringAssistantSuggest(
@@ -503,7 +509,9 @@ export function masteringStreamingPreview(
  * of the suggestion is built on the channel-summed program rather than a
  * downmix that reads roughly 6 dB low.
  */
-export function masteringAssistantSuggestStereo(request: MasteringStereoParamsRequest): string {
+export function masteringAssistantSuggestStereo(
+  request: MasteringAssistantStereoParamsRequest,
+): string {
   return requireModule().masteringAssistantSuggestStereo(
     request.left,
     request.right,

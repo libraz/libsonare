@@ -13,6 +13,9 @@
 
 #ifdef __EMSCRIPTEN__
 
+#include <optional>
+
+#include "mixing/meter.h"
 #include "wasm/bindings/common/common.h"
 
 #if defined(SONARE_WITH_MIXING) && defined(SONARE_WITH_GRAPH)
@@ -188,6 +191,28 @@ class MixerWasm {
 
   void processPreparedStereo(size_t num_samples);
 
+  // Turns the master-output meter on or off. While on, processPreparedStereo
+  // meters the stereo master it just produced, so the caller neither copies the
+  // output nor re-implements the measurement.
+  //
+  // The measurement is sonare::mixing::MeterProcessor, the same processor the
+  // engine's meter telemetry publishes from: its true peak is an inter-sample
+  // peak taken after oversampling (ITU-R BS.1770-4 Annex 2 requires at least
+  // 4x), which is a different quantity from the sample peak and the one a
+  // ceiling decision depends on. @p true_peak_oversample must be 0 (= 4x) or a
+  // power of two in [1, 16]; the core raises anything below 4x to the standard's
+  // minimum.
+  //
+  // Enabling resets the meter, so a reading never mixes audio from before a
+  // period when metering was off. Re-enabling at the same factor does not
+  // reallocate, which keeps it usable from an audio-thread message handler.
+  void configureMeter(bool enabled, int true_peak_oversample);
+
+  // Latest meter reading, describing the most recently metered block. All dB
+  // fields are finite and floored at kFloorDb (-120). Throws when the meter has
+  // never been enabled.
+  val meterSnapshot() const;
+
   // Reports the longest audible serial processor-tail path to the master
   // (samples). Lazily compiles if the topology is dirty.
   int tailSamples();
@@ -220,6 +245,11 @@ class MixerWasm {
   std::vector<const float*> right_ptrs_;
   std::vector<float> out_scratch_left_;
   std::vector<float> out_scratch_right_;
+  // Master-output meter. Absent until configureMeter() first enables it, and
+  // kept prepared afterwards so toggling costs no allocation.
+  std::optional<sonare::mixing::MeterProcessor> meter_;
+  bool meter_active_ = false;
+  int meter_oversample_ = 0;
 };
 
 MixerWasm* createMixerFromSceneJson(std::string json, int sample_rate, int block_size);

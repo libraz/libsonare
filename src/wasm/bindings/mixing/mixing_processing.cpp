@@ -173,6 +173,61 @@ void MixerWasm::processPreparedStereo(size_t num_samples) {
         sonare::ErrorCode::InvalidState,
         std::string("mixer process failed: ") + sonare_error_message(err));
   }
+  if (meter_active_ && meter_.has_value()) {
+    // Metered here rather than by the caller so every block reaches the meter.
+    // The true-peak filter carries cross-block history, and an inter-sample peak
+    // straddling a block boundary is only measured when the blocks arrive
+    // unbroken — skipping blocks would reintroduce the under-reporting the
+    // oversampling exists to remove.
+    float* channels[2] = {out_scratch_left_.data(), out_scratch_right_.data()};
+    meter_->process(channels, 2, static_cast<int>(num_samples));
+  }
+}
+
+void MixerWasm::configureMeter(bool enabled, int true_peak_oversample) {
+  if (!enabled) {
+    meter_active_ = false;
+    return;
+  }
+  // Same acceptance as the offline meteringTruePeakDb entry point; the core
+  // resolves the request to a factor its realtime filter implements and raises
+  // anything below the BS.1770-4 4x minimum.
+  const int factor = true_peak_oversample == 0 ? 4 : true_peak_oversample;
+  if (factor < 1 || factor > 16 || (factor & (factor - 1)) != 0) {
+    throw sonare::SonareException(sonare::ErrorCode::InvalidParameter,
+                                  "meter oversample must be 0 or a power of two from 1 to 16");
+  }
+  if (!meter_.has_value() || meter_oversample_ != factor) {
+    sonare::mixing::MeterConfig config;
+    config.measure_true_peak = true;
+    config.true_peak_oversample = factor;
+    // LUFS stays off: the caller reports it as unavailable rather than paying
+    // for the K-weighting filters, and a floor value would read as silence.
+    config.measure_lufs = false;
+    meter_.emplace(config);
+    meter_->prepare(static_cast<double>(sample_rate_), block_size_);
+    meter_oversample_ = factor;
+  } else {
+    meter_->reset();
+  }
+  meter_active_ = true;
+}
+
+val MixerWasm::meterSnapshot() const {
+  if (!meter_.has_value()) {
+    throw sonare::SonareException(sonare::ErrorCode::InvalidState,
+                                  "mixer meter has not been enabled");
+  }
+  const sonare::mixing::MeterSnapshot meter = meter_->snapshot();
+  val out = val::object();
+  out.set("peakDbL", meter.peak_db[0]);
+  out.set("peakDbR", meter.peak_db[1]);
+  out.set("rmsDbL", meter.rms_db[0]);
+  out.set("rmsDbR", meter.rms_db[1]);
+  out.set("correlation", meter.correlation);
+  out.set("truePeakDbL", meter.true_peak_db[0]);
+  out.set("truePeakDbR", meter.true_peak_db[1]);
+  return out;
 }
 
 // Reports the longest audible serial processor-tail path to the master
@@ -235,6 +290,8 @@ void registerMixerProcessing(class_<MixerWasm>& cls) {
       .function("outputLeftView", &MixerWasm::outputLeftView)
       .function("outputRightView", &MixerWasm::outputRightView)
       .function("processPreparedStereo", &MixerWasm::processPreparedStereo)
+      .function("configureMeter", &MixerWasm::configureMeter)
+      .function("meterSnapshot", &MixerWasm::meterSnapshot)
       .function("tailSamples", &MixerWasm::tailSamples)
       .function("latencySamples", &MixerWasm::latencySamples)
       .function("drainTailStereo", &MixerWasm::drainTailStereo);
