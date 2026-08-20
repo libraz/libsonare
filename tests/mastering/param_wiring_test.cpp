@@ -776,6 +776,39 @@ std::vector<Param> presence_params(int sample_rate, AliasingControl mode) {
           {"aliasing", static_cast<double>(static_cast<int>(mode))}};
 }
 
+// A clipper distorts by reshaping the probe tone rather than by adding a band
+// of harmonics beside it, so each one is pushed past its own shaping control --
+// a ceiling below the probe amplitude, or a drive well past unity -- instead of
+// past a generator's drive/amount pair. The residual measured afterwards is the
+// same quantity either way: what the stage added to the tone it was given.
+struct ClipperProbe {
+  const char* name;
+  std::vector<Param> shaping;
+};
+
+const std::vector<ClipperProbe>& clipper_probes() {
+  static const std::vector<ClipperProbe> kProbes = {
+      {"saturation.hardClipper", {{"ceiling", 0.2}}},
+      {"saturation.softClipper", {{"driveDb", 24.0}, {"ceiling", 0.2}}},
+      {"saturation.waveshaper", {{"driveDb", 24.0}}},
+  };
+  return kProbes;
+}
+
+std::string clipper_json(const ClipperProbe& probe, AliasingControl mode) {
+  std::string json = "{";
+  for (const Param& field : probe.shaping) {
+    json += '"' + field.key + "\":" + std::to_string(field.value) + ',';
+  }
+  return json + R"("aliasing":)" + std::to_string(static_cast<int>(mode)) + "}";
+}
+
+std::vector<Param> clipper_params(const ClipperProbe& probe, AliasingControl mode) {
+  std::vector<Param> params = probe.shaping;
+  params.push_back({"aliasing", static_cast<double>(static_cast<int>(mode))});
+  return params;
+}
+
 // Alias energy the repository treats as inaudible, and the margin an
 // unsuppressed baseline has to stay above for the suppressed measurement to
 // mean anything.
@@ -845,6 +878,40 @@ TEST_CASE("harmonic generator alias suppression is reachable from the flat param
                                       presence_params(sample_rate, AliasingControl::None),
                                       sample_rate),
         sample_rate);
+  }
+}
+
+TEST_CASE("clipper alias suppression is reachable from the insert JSON params surface",
+          "[mastering][saturation][param_wiring]") {
+  // The clippers' antialiasing is measured the way the harmonic generators' is:
+  // through the params surface a caller actually has, so a mode that stopped
+  // reaching the DSP would show up as the unsuppressed baseline rather than as
+  // a config field nothing reads.
+  for (const int sample_rate : {44100, 48000}) {
+    for (const ClipperProbe& probe : clipper_probes()) {
+      require_aliasing_suppression(
+          probe.name,
+          harmonic_residual_from_json(
+              probe.name, clipper_json(probe, AliasingControl::Oversample4x), sample_rate),
+          harmonic_residual_from_json(probe.name, clipper_json(probe, AliasingControl::None),
+                                      sample_rate),
+          sample_rate);
+    }
+  }
+}
+
+TEST_CASE("clipper alias suppression is reachable from the flat parameter surface",
+          "[mastering][saturation][param_wiring]") {
+  for (const int sample_rate : {44100, 48000}) {
+    for (const ClipperProbe& probe : clipper_probes()) {
+      require_aliasing_suppression(
+          probe.name,
+          harmonic_residual_from_params(
+              probe.name, clipper_params(probe, AliasingControl::Oversample4x), sample_rate),
+          harmonic_residual_from_params(probe.name, clipper_params(probe, AliasingControl::None),
+                                        sample_rate),
+          sample_rate);
+    }
   }
 }
 
