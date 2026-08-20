@@ -1,51 +1,23 @@
 #pragma once
 
 /// @file pan_law.h
-/// @brief Stereo pan-law gain calculation.
+/// @brief Mixer-facing names for the shared pan-law evaluator.
+///
+/// The one implementation lives in rt/pan_law.h so the mastering stereo
+/// processors and the clip player can reach it without depending on the mixer.
+/// These declarations only re-export it under sonare::mixing, which is where the
+/// mixer, the engine and the C ABI already spell it.
 
-#include <algorithm>
-#include <cmath>
-
-#include "util/constants.h"
+#include "rt/pan_law.h"
 
 namespace sonare::mixing {
 
-enum class PanLaw {
-  Const3dB,
-  Const4p5dB,
-  Const6dB,
-  Linear0dB,
-};
+using ::sonare::rt::PanGains;
+using ::sonare::rt::PanLaw;
+using ::sonare::rt::PanNormalization;
 
-struct PanGains {
-  float left = 1.0f;
-  float right = 1.0f;
-};
-
-inline PanGains compute_pan_gains(float pan, PanLaw law = PanLaw::Const3dB) noexcept {
-  const float p = std::clamp(pan, -1.0f, 1.0f);
-  const float t = (p + 1.0f) * 0.5f;
-  const float linear_left = 1.0f - t;
-  const float linear_right = t;
-
-  switch (law) {
-    case PanLaw::Const3dB: {
-      const float angle = t * ::sonare::constants::kHalfPi;
-      return {std::cos(angle), std::sin(angle)};
-    }
-    case PanLaw::Const4p5dB: {
-      const float angle = t * ::sonare::constants::kHalfPi;
-      const float constant_left = std::cos(angle);
-      const float constant_right = std::sin(angle);
-      return {std::sqrt(linear_left * constant_left), std::sqrt(linear_right * constant_right)};
-    }
-    case PanLaw::Const6dB:
-      return {linear_left, linear_right};
-    case PanLaw::Linear0dB:
-      return {p <= 0.0f ? 1.0f : 1.0f - p, p >= 0.0f ? 1.0f : 1.0f + p};
-  }
-
-  return {1.0f, 1.0f};
-}
+using ::sonare::rt::compute_pan_gains;
+using ::sonare::rt::normalize_pan_gains;
+using ::sonare::rt::pan_law_from_index;
 
 }  // namespace sonare::mixing

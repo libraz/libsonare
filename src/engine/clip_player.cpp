@@ -4,21 +4,28 @@
 #include <cmath>
 #include <memory>
 
+#include "rt/pan_law.h"
 #include "util/constants.h"
 #include "util/numeric_validation.h"
 
 namespace sonare::engine {
 
 using sonare::constants::kHalfPi;
+using sonare::rt::compute_pan_gains;
+using sonare::rt::PanGains;
+using sonare::rt::PanNormalization;
 
 namespace {
-/// Linear balance law for a stereo output channel. pan in [-1, +1]: positive
-/// (right) attenuates the left channel, negative (left) attenuates the right;
-/// center and any channel beyond the first stereo pair are left at unity.
-float pan_channel_gain(float pan, int channel) noexcept {
-  pan = std::clamp(pan, -1.0f, 1.0f);
-  if (channel == 0) return pan > 0.0f ? 1.0f - pan : 1.0f;
-  if (channel == 1) return pan < 0.0f ? 1.0f + pan : 1.0f;
+/// Balance gains for a clip, evaluated with the clip's own pan law. Any channel
+/// beyond the first stereo pair is left at unity, so the caller indexes this
+/// pair only for channels 0 and 1.
+PanGains clip_pan_gains(const ClipSchedule& clip) noexcept {
+  return compute_pan_gains(clip.pan, clip.pan_law, PanNormalization::NearUnity);
+}
+
+float channel_gain(const PanGains& gains, int channel) noexcept {
+  if (channel == 0) return gains.left;
+  if (channel == 1) return gains.right;
   return 1.0f;
 }
 }  // namespace
@@ -164,6 +171,9 @@ void ClipPlayer::process_filtered_at(uint32_t track_id, const uint32_t* track_id
       prefetch_pages(clip, block_end);
       continue;
     }
+    // The clip's pan is fixed for the whole schedule, so evaluate the law once
+    // per clip rather than once per sample per channel.
+    const PanGains pan_gains = clip_pan_gains(clip);
     for (int i = start; i < end; ++i) {
       const int64_t sample = numeric::saturating_add(timeline_sample, static_cast<int64_t>(i));
       const int64_t position = sample - clip.start_sample;
@@ -189,15 +199,15 @@ void ClipPlayer::process_filtered_at(uint32_t track_id, const uint32_t* track_id
         // Mono live monitoring previews the mono BOUNCE: it renders the panned
         // stereo pair (clip pan applied per channel, a mono source fanned to
         // both channels, a stereo/multichannel source split L/R) and downmixes
-        // 0.5*(L+R), matching project_bounce.cpp. With the linear balance law a
-        // centered clip (pan=0) leaves both channels at unity, so 0.5*(L+R)
-        // collapses to the source read and only off-center clips change — live
-        // and mono bounce now agree in level and balance for any pan.
+        // 0.5*(L+R), matching project_bounce.cpp. The balance normalization
+        // leaves a centered clip (pan=0) at unity on both channels for any law,
+        // so 0.5*(L+R) collapses to the source read and only off-center clips
+        // change — live and mono bounce agree in level and balance for any pan.
         const int last_src = source_channel_count(clip) - 1;
         float lr = 0.0f;
         for (int ch = 0; ch < 2; ++ch) {
           const int src_ch = std::min(ch, last_src);
-          lr += read_source(src_ch) * pan_channel_gain(clip.pan, ch);
+          lr += read_source(src_ch) * channel_gain(pan_gains, ch);
         }
         channels[0][i] += 0.5f * lr * gain;
         continue;
@@ -205,7 +215,7 @@ void ClipPlayer::process_filtered_at(uint32_t track_id, const uint32_t* track_id
       for (int ch = 0; ch < num_channels; ++ch) {
         if (!channels[ch]) continue;
         const int src_ch = std::min(ch, source_channel_count(clip) - 1);
-        const float ch_gain = gain * pan_channel_gain(clip.pan, ch);
+        const float ch_gain = gain * channel_gain(pan_gains, ch);
         channels[ch][i] += read_source(src_ch) * ch_gain;
       }
     }
@@ -475,6 +485,7 @@ bool ClipPlayer::render_stretched(const ClipSchedule& clip, float* const* channe
   }
 
   const int last_src = source_channels - 1;
+  const PanGains pan_gains = clip_pan_gains(clip);
   for (int i = 0; i < count; ++i) {
     const int64_t position =
         numeric::saturating_add(timeline_sample, static_cast<int64_t>(start + i)) -
@@ -486,14 +497,14 @@ bool ClipPlayer::render_stretched(const ClipSchedule& clip, float* const* channe
       // and downmix, so live mono monitoring matches the mono bounce.
       float lr = 0.0f;
       for (int ch = 0; ch < 2; ++ch) {
-        lr += scratch[std::min(ch, last_src)][i] * pan_channel_gain(clip.pan, ch);
+        lr += scratch[std::min(ch, last_src)][i] * channel_gain(pan_gains, ch);
       }
       channels[0][start + i] += 0.5f * lr * gain;
       continue;
     }
     for (int ch = 0; ch < num_channels; ++ch) {
       if (!channels[ch]) continue;
-      const float ch_gain = gain * pan_channel_gain(clip.pan, ch);
+      const float ch_gain = gain * channel_gain(pan_gains, ch);
       channels[ch][start + i] += scratch[std::min(ch, last_src)][i] * ch_gain;
     }
   }

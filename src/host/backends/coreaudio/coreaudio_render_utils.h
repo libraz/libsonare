@@ -3,6 +3,7 @@
 /// @file coreaudio_render_utils.h
 /// @brief SDK-free, deterministic helpers for the CoreAudio render trampoline.
 
+#include <cmath>
 #include <cstddef>
 #include <cstdint>
 #include <limits>
@@ -14,6 +15,43 @@ struct CoreAudioCallbackFramePlan {
   int64_t next_sample_time = 0;
   uint32_t xrun_delta = 0;
 };
+
+/// Convert a latency/safety-offset/buffer-size value counted in the device's
+/// own hardware clock domain into samples at a different render domain (the
+/// AU's negotiated stream-format rate), by ratio, instead of leaving it
+/// silently mismatched against the render domain the caller reports it in.
+/// Falls back to an unconverted pass-through when either rate is non-finite
+/// or non-positive (the "unknown" case, e.g. a device property was
+/// unavailable), so a property-read failure degrades to leaving the value as-
+/// is rather than corrupting it with a division by an invalid rate.
+inline int64_t scale_coreaudio_device_domain_samples(int64_t device_domain_samples,
+                                                     double device_domain_rate,
+                                                     double render_domain_rate) noexcept {
+  if (!(device_domain_rate > 0.0) || !std::isfinite(device_domain_rate) ||
+      !(render_domain_rate > 0.0) || !std::isfinite(render_domain_rate)) {
+    return device_domain_samples;
+  }
+  const double scaled =
+      static_cast<double>(device_domain_samples) * (render_domain_rate / device_domain_rate);
+  if (!std::isfinite(scaled)) return device_domain_samples;
+  return static_cast<int64_t>(std::llround(scaled));
+}
+
+/// True when the device's own hardware clock domain and the AU's negotiated
+/// render-callback domain are the same rate, so a quantity spanning both
+/// (e.g. comparing a HAL sample-clock timestamp against an accumulated
+/// render-domain frame count to detect an xrun) stays meaningful. The
+/// comparison is exact: a rate that only nearly matches still accumulates
+/// drift, and reporting a mismatch there is the safe direction. An
+/// "unknown" device rate (<= 0, the property was unavailable) is treated as a
+/// match: the caller has no evidence of a mismatch, so it keeps whatever
+/// behaviour it already has rather than newly disabling the check on missing
+/// telemetry.
+inline bool coreaudio_sample_clock_domains_match(double device_domain_rate,
+                                                 double render_domain_rate) noexcept {
+  if (!(device_domain_rate > 0.0)) return true;
+  return device_domain_rate == render_domain_rate;
+}
 
 /// Bound the engine request to its negotiated scratch while advancing the
 /// device clock by every frame the hardware actually requested. An oversize

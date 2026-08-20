@@ -12,6 +12,7 @@
 #include <vector>
 
 #include "engine/warp_stretch.h"
+#include "rt/pan_law.h"
 #include "rt/processor_base.h"
 #include "rt/rt_publisher.h"
 #include "transport/tempo_map.h"
@@ -150,9 +151,17 @@ struct ClipSchedule {
   uint32_t track_id = 0;
   float gain = 1.0f;
   /// Stereo balance in [-1, +1] (0 = center). Applied per output channel by the
-  /// player: positive attenuates left, negative attenuates right. Folded from
-  /// the source track's pan at compile time.
+  /// player as a balance control: unity at center, attenuating only the channel
+  /// away from the pan direction. Folded from the source track's pan at compile
+  /// time.
   float pan = 0.0f;
+  /// Pan law the player evaluates @c pan with. The compiler stamps the law of
+  /// the channel strip whose controls it folded into this clip, so a track's pan
+  /// lands on the same gains whether it was folded here or left on its own
+  /// strip. The default is the law a clip carries when no strip was involved at
+  /// all — a build without the mixing runtime, or a clip whose pan was set
+  /// directly rather than folded from a track.
+  rt::PanLaw pan_law = rt::PanLaw::Linear0dB;
   int64_t fade_in_samples = 0;
   int64_t fade_out_samples = 0;
   /// Optional whole-clip fade domain for schedule fragments (for example comp

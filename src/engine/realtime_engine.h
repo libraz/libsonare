@@ -176,6 +176,9 @@ class RealtimeEngine : private ClipPageRequestSink {
   /// @c process, so a second call renders the NEXT span, not a re-render of the
   /// same one. To bounce the same span again, seek the transport back to 0 (push
   /// a kTransportSeekSample command with arg 0) before re-calling.
+  /// @throws SonareException(InvalidParameter) when @p num_channels exceeds
+  ///         @c prepared_channels(); the render would otherwise produce silence
+  ///         that reads as a successful result.
   void render_offline(float* const* out, int num_channels, int64_t total_frames, int block_size);
 
   bool push_command(const rt::Command& command) noexcept;

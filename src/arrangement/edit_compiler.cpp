@@ -2,6 +2,7 @@
 
 #include <algorithm>
 #include <cmath>
+#include <map>
 #include <memory>
 #include <set>
 #include <string>
@@ -13,9 +14,13 @@
 #include "engine/realtime_engine_internal.h"
 #include "engine/tempo_sync.h"
 #include "midi/midi_clip.h"
+#include "rt/pan_law.h"
+#include "util/constants.h"
 #include "util/db.h"
 
 namespace sonare::arrangement {
+
+using constants::kDefaultBpm;
 
 namespace {
 
@@ -115,7 +120,7 @@ void fill_tempo_map(const Project& project, transport::TempoMap* map) {
 
   std::vector<transport::TempoSegment> segments = project.tempo_segments();
   if (segments.empty()) {
-    segments.push_back(transport::TempoSegment{0.0, 120.0, 0.0});
+    segments.push_back(transport::TempoSegment{0.0, kDefaultBpm, 0.0});
   }
   map->set_segments(std::move(segments));
 
@@ -494,8 +499,11 @@ CompileResult compile(const Project& project, const MidiContentStore& midi,
   }
   std::set<std::string> shared_strips_reported;
   // Tracks whose gain/pan fold into their own ClipSchedules rather than into a
-  // channel strip, because the strip they are bound to is shared.
-  std::set<TrackId> per_clip_control_tracks;
+  // channel strip, because the strip they are bound to is shared. Each carries
+  // the shared strip's pan law: the fold has to evaluate the track's pan with
+  // the law the strip would have used, otherwise the same pan value would give
+  // different gains depending on whether the strip happened to be shared.
+  std::map<TrackId, rt::PanLaw> per_clip_control_tracks;
 #endif
   for (const auto& track : project.tracks()) {
 #if defined(SONARE_WITH_MIXING)
@@ -527,7 +535,9 @@ CompileResult compile(const Project& project, const MidiContentStore& midi,
         // Move this track's controls to its own clips: they then apply before
         // the signal reaches the shared strip, so the strip still processes the
         // sum of its tracks and the others on it keep their level and image.
-        if (needs_mix) per_clip_control_tracks.insert(track.id);
+        if (needs_mix) {
+          per_clip_control_tracks.emplace(track.id, rt::pan_law_from_index(strip->pan_law));
+        }
         if (shared_strips_reported.insert(track.channel_strip_ref).second) {
           add_diag(&result, Diagnostic::Code::kSharedChannelStrip, Diagnostic::Severity::kWarning,
                    track.id,
@@ -860,7 +870,8 @@ CompileResult compile(const Project& project, const MidiContentStore& midi,
       // all, and a track bound to a strip SHARED with other tracks, whose strip
       // processes the sum and so cannot carry any one track's controls.
 #if defined(SONARE_WITH_MIXING)
-      const bool fold_track_into_clip = per_clip_control_tracks.count(clip.track_id) != 0;
+      const auto folded_track = per_clip_control_tracks.find(clip.track_id);
+      const bool fold_track_into_clip = folded_track != per_clip_control_tracks.end();
 #else
       constexpr bool fold_track_into_clip = true;
 #endif
@@ -892,6 +903,12 @@ CompileResult compile(const Project& project, const MidiContentStore& midi,
       sched.track_id = clip.track_id;
       if (fold_track_into_clip) {
         sched.pan = effective_track_pan(project.find_track(clip.track_id));
+#if defined(SONARE_WITH_MIXING)
+        // Evaluate the folded pan with the shared strip's own law. Without the
+        // mixing runtime there is no strip to agree with, so the schedule keeps
+        // its default law.
+        sched.pan_law = folded_track->second;
+#endif
       }
       if (loop_crossfade_samples > 0) {
         if (sched.warp_mode != engine::WarpMode::kOff) {

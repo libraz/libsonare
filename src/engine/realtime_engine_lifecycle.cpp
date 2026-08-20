@@ -216,6 +216,16 @@ void RealtimeEngine::render_offline(float* const* out, int num_channels, int64_t
                   transport_.sample_position(), 0);
     return;
   }
+  // Requesting more planes than prepare() reserved scratch for makes process()
+  // silence every block and report through telemetry, which an offline caller
+  // reads as a completed render of pure silence. This is a control-thread entry
+  // point, so the precondition is reported here instead — every surface calls
+  // render_offline, so none of them can render past the prepared width.
+  if (num_channels > prepared_channels_) {
+    throw SonareException(ErrorCode::InvalidParameter,
+                          "render_offline: requested channel count exceeds the prepared channel "
+                          "count");
+  }
 
   const int frames_per_block = std::max(1, std::min(block_size, max_block_size_));
   // Clips and sequenced MIDI only render (and the playhead only advances)

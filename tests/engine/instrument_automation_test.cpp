@@ -195,6 +195,46 @@ TEST_CASE("An instrument-parameter lane drives the instrument at block precision
   engine.set_midi_instrument(0, nullptr);
 }
 
+TEST_CASE("An instrument automation id routes through the one-shot parameter path",
+          "[engine][automation]") {
+  // The id is documented as usable both from a PPQ lane and from a direct
+  // set_parameter. The lane path is covered above; this drives the command
+  // path, which reaches the instrument through a separate dispatch site.
+  constexpr int kBlock = 256;
+  RealtimeEngine engine;
+  engine.prepare(48000.0, kBlock);
+
+  ProbeInstrument instrument;
+  REQUIRE(engine.set_midi_instrument(4, &instrument));
+  const int64_t id = engine.resolve_instrument_automation_id(4, "level");
+  REQUIRE(id >= 0);
+
+  sonare::rt::Command play{};
+  play.type = sonare::rt::CommandType::kTransportPlay;
+  play.sample_time = -1;
+  REQUIRE(engine.push_command(play));
+
+  sonare::rt::Command set{};
+  set.type = sonare::rt::CommandType::kSetParam;
+  set.target_id = static_cast<uint32_t>(id);
+  set.arg.f = 0.5f;
+  set.sample_time = -1;
+  REQUIRE(engine.push_command(set));
+  run_blocks(engine, kBlock, 2);
+  REQUIRE(instrument.level() == 0.5f);
+
+  sonare::rt::Command smoothed{};
+  smoothed.type = sonare::rt::CommandType::kSetParamSmoothed;
+  smoothed.target_id = static_cast<uint32_t>(id);
+  smoothed.arg.f = 0.125f;
+  smoothed.sample_time = -1;
+  REQUIRE(engine.push_command(smoothed));
+  run_blocks(engine, kBlock, 16);
+  REQUIRE(std::abs(instrument.level() - 0.125f) < 1.0e-3f);
+
+  engine.set_midi_instrument(4, nullptr);
+}
+
 TEST_CASE("An unbound destination makes its automation lane inert, not dangling",
           "[engine][automation]") {
   constexpr int kBlock = 256;

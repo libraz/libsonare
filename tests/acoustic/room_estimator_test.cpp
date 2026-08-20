@@ -4,6 +4,7 @@
 #include <catch2/catch_test_macros.hpp>
 #include <catch2/matchers/catch_matchers_floating_point.hpp>
 #include <cmath>
+#include <cstddef>
 #include <limits>
 #include <vector>
 
@@ -46,6 +47,16 @@ std::vector<float> add_noise(const Audio& rir, float amp, uint64_t seed) {
     out[i] = rir[i] + (2.0f * u - 1.0f) * amp;
   }
   return out;
+}
+
+// Same recording, more leading silence in front of the direct sound.
+Audio prepend_silence(const Audio& audio, float delay_sec) {
+  const size_t delay_samples =
+      static_cast<size_t>(std::lround(static_cast<double>(delay_sec) * audio.sample_rate()));
+  std::vector<float> samples(delay_samples + audio.size(), 0.0f);
+  std::copy(audio.data(), audio.data() + audio.size(),
+            samples.begin() + static_cast<std::ptrdiff_t>(delay_samples));
+  return Audio::from_vector(std::move(samples), audio.sample_rate());
 }
 
 }  // namespace
@@ -141,6 +152,36 @@ TEST_CASE("estimate_room round-trips through the Sabine model", "[acoustic][room
     }
   }
   REQUIRE(rt_ok >= 4);
+}
+
+TEST_CASE("estimate_room is invariant to leading silence in the recording",
+          "[acoustic][room_estimator]") {
+  const int sr = 48000;
+  const float kLen = 7.0f, kWid = 5.0f, kHgt = 3.0f, kAlpha = 0.15f;
+  const ShoeboxRoom room = uniform_room(kLen, kWid, kHgt, kAlpha);
+  const SourceListener pl{{1.5f, 1.0f, 1.2f}, {5.0f, 4.0f, 1.7f}};
+  const Audio rir = synthesize_rir(room, pl, sr).rir;
+  REQUIRE(rir.size() > 0);
+
+  RoomEstimateConfig cfg;  // the delegated acoustic mode defaults to Auto
+  cfg.aspect_hint_lw = kLen / kWid;
+  cfg.aspect_hint_lh = kLen / kHgt;
+  cfg.reference_absorption = kAlpha;
+
+  const RoomEstimate flush = estimate_room(rir, cfg);
+  REQUIRE(flush.confidence > 0.0f);
+  REQUIRE_THAT(flush.volume, WithinRel(kLen * kWid * kHgt, 0.20f));
+
+  // A measured recording always carries a delay in front of the direct sound
+  // (converter round trip, sweep deconvolution pre-delay, microphone distance).
+  // Auto must keep routing it to impulse-response analysis instead of dropping
+  // to the blind estimator, so the recovered room is the same room.
+  for (float delay_sec : {0.05f, 0.5f}) {
+    INFO("leading silence (s): " << delay_sec);
+    const RoomEstimate delayed = estimate_room(prepend_silence(rir, delay_sec), cfg);
+    REQUIRE(delayed.confidence > 0.0f);
+    REQUIRE_THAT(delayed.volume, WithinRel(flush.volume, 1e-3f));
+  }
 }
 
 TEST_CASE("estimate_room DRR falls as the listener moves away", "[acoustic][room_estimator]") {

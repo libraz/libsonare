@@ -29,8 +29,10 @@ void PannerProcessor::process(float* const* channels, int num_channels, int num_
     return;
   }
 
-  const PanGains gains = compute_pan_gains(pan_.load(std::memory_order_relaxed),
-                                           pan_law_.load(std::memory_order_relaxed));
+  // One load per block: the law is read again below to normalize the smoothed
+  // pair, and both reads must describe the same law for the whole block.
+  const PanLaw law = pan_law_.load(std::memory_order_relaxed);
+  const PanGains gains = compute_pan_gains(pan_.load(std::memory_order_relaxed), law);
   left_.set_target(gains.left);
   right_.set_target(gains.right);
   const PanMode mode = pan_mode_.load(std::memory_order_relaxed);
@@ -69,7 +71,6 @@ void PannerProcessor::process(float* const* channels, int num_channels, int num_
   }
 
   if (mode == PanMode::DualPan) {
-    const PanLaw law = pan_law_.load(std::memory_order_relaxed);
     const PanGains left_gains =
         compute_pan_gains(dual_pan_left_.load(std::memory_order_relaxed), law);
     const PanGains right_gains =
@@ -97,19 +98,18 @@ void PannerProcessor::process(float* const* channels, int num_channels, int num_
 
   // Balance (default): a balance control leaves the existing stereo image
   // intact and is unity at center, attenuating only the channel away from the
-  // pan direction. Multiplying each channel by its raw pan gain would attenuate
-  // a centered signal by ~3 dB under the constant-power default law (both gains
-  // = cos(pi/4) = 0.707). To keep center at unity for any law, normalize by the
-  // louder (near) channel so it stays at unity and only the away channel is
-  // pulled down by the same ratio the raw pan law dictates. This matches the
-  // mono path's "centered signal stays at unity" intent.
+  // pan direction — PanNormalization::NearUnity. Multiplying each channel by its
+  // raw pan gain would instead attenuate a centered signal by ~3 dB under the
+  // constant-power default law (both gains = cos(pi/4) = 0.707). The smoothers
+  // interpolate the raw law gains, so the normalization is applied to the
+  // interpolated pair rather than to the targets. This matches the mono path's
+  // "centered signal stays at unity" intent.
   for (int i = 0; i < num_samples; ++i) {
     const float l = left_.process();
     const float r = right_.process();
-    const float norm = std::max(l, r);
-    const float inv_norm = norm > 0.0f ? 1.0f / norm : 0.0f;
-    channels[0][i] *= l * inv_norm;
-    channels[1][i] *= r * inv_norm;
+    const PanGains g = normalize_pan_gains({l, r}, law, PanNormalization::NearUnity);
+    channels[0][i] *= g.left;
+    channels[1][i] *= g.right;
   }
 }
 

@@ -114,6 +114,14 @@ RirSynthResult synthesize_rir(const ShoeboxRoom& room, const SourceListener& pla
     result.diagnostics.push_back({Diagnostic::Severity::Error, "acoustic.invalid_sample_rate",
                                   "sample rate is outside supported bounds"});
   }
+  if (config.air_absorption_enabled &&
+      (!numeric::finite(config.air.temperature_c) ||
+       config.air.temperature_c <= kAbsoluteZeroCelsius ||
+       !numeric::finite_in_closed_range(config.air.humidity_percent, 0.0f, 100.0f))) {
+    result.diagnostics.push_back(
+        {Diagnostic::Severity::Error, "acoustic.invalid_air_absorption",
+         "air absorption temperature/humidity is outside the physical range"});
+  }
   if (has_error(result.diagnostics)) {
     const int diagnostic_sample_rate =
         sample_rate >= kMinAudioSampleRate && sample_rate <= kMaxAudioSampleRate ? sample_rate
@@ -153,7 +161,8 @@ RirSynthResult synthesize_rir(const ShoeboxRoom& room, const SourceListener& pla
   if (early_reflections_are_colored(images)) {
     early_audio = color_early_ir(images, sample_rate, early_audio, early_cfg);
   }
-  const ReverbTime rt = shoebox_reverb_time(room, config.late_model);
+  const ReverbTime rt = shoebox_reverb_time(room, config.late_model,
+                                            config.air_absorption_enabled ? &config.air : nullptr);
 
   // The early IR is now capped to the cap, so early_audio.size() no longer reveals
   // the natural (uncapped) early length. Mirror synthesize_early_ir's own auto-size

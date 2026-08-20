@@ -82,10 +82,11 @@ class ChannelStrip : public rt::ProcessorBase {
   void process(float* const* channels, int num_channels, int num_samples) override;
   void process_at(float* const* channels, int num_channels, int num_samples, int64_t block_start);
   void reset() override;
-  /// Snaps the strip's gain-stage smoothers (input trim + fader) to their
-  /// steady-state targets so the next render block opens without a ramp-in,
-  /// keeping an offline bounce deterministic. Pan/width/EQ smoothers settle over
-  /// their short (~5 ms) window on the first block and are not snapped here.
+  /// Snaps the strip's gain-stage and pan/width smoothers (input trim, fader,
+  /// width, pan) to their steady-state targets so the next render block opens
+  /// without a ramp-in, keeping an offline bounce deterministic. EQ state
+  /// settles over its own short (~5 ms) window on the first block and is not
+  /// snapped here.
   void settle() noexcept;
   int latency_samples() const noexcept override;
   int latency_samples_q8() const noexcept override;

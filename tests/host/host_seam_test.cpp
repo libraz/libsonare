@@ -17,6 +17,7 @@
 #include <cstring>
 #include <filesystem>
 #include <fstream>
+#include <limits>
 #include <memory>
 #include <string>
 #include <vector>
@@ -774,6 +775,49 @@ TEST_CASE("CoreAudio oversize callback plan bounds render and zeros device tail"
     REQUIRE(planar_left[frame] == 0.0f);
   }
   for (float sample : planar_missing) REQUIRE(sample == 0.0f);
+}
+
+TEST_CASE("CoreAudio scales device-domain samples by ratio and passes unknown rates through",
+          "[host]") {
+  // The CoreAudio backend converts device-domain latency/safety-offset/
+  // buffer-frame counts into samples at the AU's negotiated render domain by
+  // ratio rather than overwriting AudioStreamConfig::sample_rate with the raw
+  // device-domain value. This is the pure arithmetic that conversion runs on,
+  // tested without any CoreAudio hardware.
+  namespace ca_detail = sonare::host::backends::detail;
+
+  // A device buffering 480 device-domain samples at 48 kHz reports 441
+  // samples once converted to a 44.1 kHz render domain (same duration).
+  REQUIRE(ca_detail::scale_coreaudio_device_domain_samples(480, 48'000.0, 44'100.0) == 441);
+  // Equal domains: an exact pass-through, not merely close.
+  REQUIRE(ca_detail::scale_coreaudio_device_domain_samples(512, 48'000.0, 48'000.0) == 512);
+  // An unavailable device-domain rate (0.0, the "property absent" sentinel
+  // read_device_nominal_sample_rate returns) degrades to an unconverted
+  // pass-through rather than corrupting the value via division by zero.
+  REQUIRE(ca_detail::scale_coreaudio_device_domain_samples(256, 0.0, 44'100.0) == 256);
+  REQUIRE(ca_detail::scale_coreaudio_device_domain_samples(256, 48'000.0, 0.0) == 256);
+  // Non-finite input rates degrade the same way.
+  const double nan_rate = std::numeric_limits<double>::quiet_NaN();
+  REQUIRE(ca_detail::scale_coreaudio_device_domain_samples(256, nan_rate, 44'100.0) == 256);
+}
+
+TEST_CASE("CoreAudio sample-clock domain match gates the xrun continuity check", "[host]") {
+  // The mSampleTime-continuity xrun check compares a device-domain HAL
+  // timestamp against a render-domain accumulated frame count; when the two
+  // domains disagree (a device negotiated a different rate than requested)
+  // the comparison is meaningless and must not miscount xruns.
+  namespace ca_detail = sonare::host::backends::detail;
+
+  // Matching domains (the common case, e.g. a request the device honors
+  // exactly): the check stays enabled.
+  REQUIRE(ca_detail::coreaudio_sample_clock_domains_match(48'000.0, 48'000.0));
+  // A device that silently negotiated a different render rate than its own
+  // hardware clock domain: the check must be disabled rather than comparing
+  // across the mismatched domains.
+  REQUIRE_FALSE(ca_detail::coreaudio_sample_clock_domains_match(44'100.0, 48'000.0));
+  // An unavailable device-domain rate (0.0) carries no evidence of a
+  // mismatch: treated as a match so prior (pre-fix) behaviour is preserved.
+  REQUIRE(ca_detail::coreaudio_sample_clock_domains_match(0.0, 48'000.0));
 }
 
 TEST_CASE("CoreMIDI scripted SysEx sender retries without duplicating accepted packets",

@@ -216,6 +216,106 @@ TEST_CASE("synthesized RIR round-trips RT60 within 10%", "[acoustic][rir]") {
   REQUIRE(std::isfinite(params.d50));
 }
 
+TEST_CASE("synthesize_rir leaves the RIR unchanged when air absorption is left disabled",
+          "[acoustic][rir]") {
+  // RirSynthConfig::air_absorption_enabled defaults to false specifically so an
+  // existing caller's RIR is unchanged byte for byte by this option's addition.
+  const int sr = 48000;
+  const ShoeboxRoom hall = uniform_room(30.0f, 24.0f, 15.0f, 0.08f);
+  const SourceListener pl{{5.0f, 5.0f, 1.5f}, {20.0f, 15.0f, 1.7f}};
+
+  RirSynthConfig without_field;
+  without_field.ism_order = 2;
+  without_field.seed = 3u;
+  RirSynthConfig with_field_off = without_field;
+  with_field_off.air_absorption_enabled = false;
+  with_field_off.air = AirAbsorption{35.0f, 90.0f};  // ignored while disabled
+
+  const RirSynthResult a = synthesize_rir(hall, pl, sr, without_field);
+  const RirSynthResult b = synthesize_rir(hall, pl, sr, with_field_off);
+  REQUIRE_FALSE(has_error(a.diagnostics));
+  REQUIRE(a.rir.size() == b.rir.size());
+  for (size_t i = 0; i < a.rir.size(); ++i) REQUIRE(a.rir[i] == b.rir[i]);
+}
+
+TEST_CASE("synthesize_rir air absorption shortens the round-tripped high-band RT60",
+          "[acoustic][rir]") {
+  // A large hall with moderate absorption: big enough for the air term to bias
+  // the high bands clearly, but with an RT60 short enough (a few seconds) that
+  // the per-band decay analysis below stays inside its reliable operating
+  // range (a design RT60 approaching the 60s auto-length ceiling has been
+  // observed to make the analyzer's longest-band estimate unreliable; that is
+  // an AcousticAnalyzer limitation unrelated to air absorption, so this test
+  // picks parameters that avoid it rather than exercising it).
+  const int sr = 48000;
+  const ShoeboxRoom hall = uniform_room(30.0f, 24.0f, 15.0f, 0.2f);
+  const SourceListener pl{{3.0f, 3.0f, 1.5f}, {10.0f, 8.0f, 1.7f}};
+
+  RirSynthConfig config;
+  config.ism_order = 3;
+  config.seed = 3u;
+  const RirSynthResult dry = synthesize_rir(hall, pl, sr, config);
+  config.air_absorption_enabled = true;
+  config.air = AirAbsorption{};  // ISO reference climate (20 degC, 50% RH)
+  const RirSynthResult wet = synthesize_rir(hall, pl, sr, config);
+  REQUIRE_FALSE(has_error(dry.diagnostics));
+  REQUIRE_FALSE(has_error(wet.diagnostics));
+
+  AcousticConfig ac;
+  ac.mode = AcousticConfig::Mode::ImpulseResponse;
+  const AcousticParameters dry_params = analyze_impulse_response(dry.rir, ac);
+  const AcousticParameters wet_params = analyze_impulse_response(wet.rir, ac);
+  REQUIRE(dry_params.rt60_bands.size() == wet_params.rt60_bands.size());
+  REQUIRE(dry_params.rt60_bands.size() >= 6);
+  // Sanity floor: every per-band estimate must land in a physically plausible
+  // range before trusting the ratios below (guards against a decay-fit landing
+  // on a spurious short segment instead of the room's actual tail).
+  for (float v : dry_params.rt60_bands) REQUIRE(v > 1.0f);
+  for (float v : wet_params.rt60_bands) REQUIRE(v > 0.5f);
+
+  // Non-vacuity: at the ISO reference climate this is already a large,
+  // unmistakable effect (not a fraction of a dB) -- no parameter sweep was
+  // needed to find a defensible threshold. The bottom band is barely touched,
+  // confirming the shortening is the frequency-dependent air term and not a
+  // broadband bug.
+  const float low_ratio = wet_params.rt60_bands.front() / dry_params.rt60_bands.front();
+  const float high_ratio = wet_params.rt60_bands.back() / dry_params.rt60_bands.back();
+  CAPTURE(dry_params.rt60_bands.front(), wet_params.rt60_bands.front(),
+          dry_params.rt60_bands.back(), wet_params.rt60_bands.back());
+  REQUIRE(high_ratio < 0.80f);  // top band RT60 shortens by at least 20%
+  REQUIRE(low_ratio > 0.95f);   // bottom band RT60 shifts by less than 5%
+  REQUIRE(high_ratio < low_ratio);
+}
+
+TEST_CASE("synthesize_rir rejects a nonphysical air absorption temperature or humidity",
+          "[acoustic][rir]") {
+  const int sr = 48000;
+  const ShoeboxRoom room = uniform_room(8.0f, 6.0f, 3.5f, 0.12f);
+  const SourceListener pl{{2.0f, 1.5f, 1.5f}, {6.0f, 4.5f, 1.8f}};
+
+  RirSynthConfig below_absolute_zero;
+  below_absolute_zero.air_absorption_enabled = true;
+  below_absolute_zero.air = AirAbsorption{-500.0f, 50.0f};
+  const RirSynthResult a = synthesize_rir(room, pl, sr, below_absolute_zero);
+  REQUIRE(has_error(a.diagnostics));
+  REQUIRE(has_code(a.diagnostics, "acoustic.invalid_air_absorption"));
+  REQUIRE(a.rir.size() == 0);
+
+  RirSynthConfig humidity_out_of_range;
+  humidity_out_of_range.air_absorption_enabled = true;
+  humidity_out_of_range.air = AirAbsorption{20.0f, 150.0f};
+  const RirSynthResult b = synthesize_rir(room, pl, sr, humidity_out_of_range);
+  REQUIRE(has_error(b.diagnostics));
+  REQUIRE(has_code(b.diagnostics, "acoustic.invalid_air_absorption"));
+
+  // A disabled block is never validated, however implausible its (unused) values.
+  RirSynthConfig disabled_but_implausible;
+  disabled_but_implausible.air_absorption_enabled = false;
+  disabled_but_implausible.air = AirAbsorption{-500.0f, 150.0f};
+  const RirSynthResult c = synthesize_rir(room, pl, sr, disabled_but_implausible);
+  REQUIRE_FALSE(has_error(c.diagnostics));
+}
+
 namespace {
 // Uniform room with an explicit per-wall scattering coefficient.
 ShoeboxRoom uniform_room_scatter(float length, float width, float height, float absorption,

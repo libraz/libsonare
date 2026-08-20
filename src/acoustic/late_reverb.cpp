@@ -108,6 +108,10 @@ float eyring_rt60(float volume, float surface_area, float mean_absorption) noexc
 float air_absorption_m_per_meter(float freq_hz, float temperature_c,
                                  float humidity_percent) noexcept {
   if (!std::isfinite(freq_hz) || freq_hz <= 0.0f) return 0.0f;
+  // Absolute zero is a hard physical floor (the Kelvin conversion below would
+  // go non-positive and feed pow()/log() a domain error); treat a caller-
+  // supplied nonphysical temperature the same as the frequency guard above.
+  if (!std::isfinite(temperature_c) || temperature_c <= kAbsoluteZeroCelsius) return 0.0f;
 
   // ISO 9613-1 pure-tone atmospheric absorption at sea-level pressure
   // (pa == reference pressure, so the pressure ratios drop out). Computed in

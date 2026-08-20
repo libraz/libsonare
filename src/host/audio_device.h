@@ -31,9 +31,16 @@
 namespace sonare::host {
 
 /// Negotiated stream format the host opens the device with. Plain value data;
-/// no device handle. `sample_rate` is the agreed device sample rate (Hz);
-/// `max_block_size` is the largest frame count a single render() call may
-/// request (the host sizes its scratch and calls engine.prepare() with it).
+/// no device handle. `sample_rate` is the rate the render() callback is
+/// ACTUALLY driven at (Hz) — it must be the same value used as the divisor
+/// for AudioCallbackTime::stream_time_seconds and as the sample rate a
+/// backend hands to any shared clock mapper (e.g. a MIDI host-time mapper) on
+/// every subsequent render(). A device that silently negotiates a different
+/// rate than requested (rather than failing outright) must reflect the
+/// negotiated rate here before calling AudioDeviceCallback::open(), never the
+/// caller's original request. `max_block_size` is the largest frame count a
+/// single render() call may request (the host sizes its scratch and calls
+/// engine.prepare() with it).
 struct AudioStreamConfig {
   double sample_rate = 48000.0;
   int max_block_size = 512;

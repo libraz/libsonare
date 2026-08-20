@@ -96,6 +96,14 @@ struct CoreAudioDevice::Impl {
   // A callback whose mSampleTime jumps past this expected value means the HAL
   // skipped samples between cycles, i.e. an output overload / xrun.
   int64_t expected_next_sample_time = -1;
+  // Whether the device's own hardware clock domain and config.sample_rate (the
+  // AU's negotiated render domain) agree. Gates every use of the HAL sample
+  // clock below: mSampleTime ticks in the device domain, while the frame counts
+  // it is combined with advance in the render domain, so on a mismatch both the
+  // transport position derived from it and the continuity check comparing
+  // against it are meaningless and would miscount xruns.
+  // See coreaudio_render_utils.h's coreaudio_sample_clock_domains_match.
+  bool sample_clock_domains_match = true;
 
   static OSStatus render_trampoline(void* ref, AudioUnitRenderActionFlags* flags,
                                     const AudioTimeStamp* ts, UInt32 bus, UInt32 frames,
@@ -126,7 +134,13 @@ struct CoreAudioDevice::Impl {
     view.num_input_channels = 0;
     view.num_frames = frame_plan.render_frames;
     view.time.sample_time = frame_counter;
-    if (ts != nullptr && (ts->mFlags & kAudioTimeStampSampleTimeValid)) {
+    // The HAL sample clock is only adopted as the transport position when it
+    // shares config.sample_rate's domain. On a mismatch the accumulated
+    // render-domain frame_counter stays authoritative, so the sample_time handed
+    // to the callback, the stream_time_seconds divisor and the rate the MIDI
+    // anchor is published at all remain the one negotiated render domain.
+    if (ts != nullptr && (ts->mFlags & kAudioTimeStampSampleTimeValid) &&
+        sample_clock_domains_match) {
       const int64_t current = static_cast<int64_t>(ts->mSampleTime);
       if (device_sample_origin < 0) device_sample_origin = current;
       const int64_t relative = std::max<int64_t>(0, current - device_sample_origin);
@@ -290,17 +304,38 @@ bool CoreAudioDevice::open(const AudioStreamConfig& config, AudioDeviceCallback*
     impl_->output_ptrs[c] = impl_->output_scratch.data() + c * block;
   }
 
+  // A device that cannot honor the requested sample rate does not fail
+  // AudioUnitInitialize — it silently reverts the input scope to a rate it can
+  // actually service. Query the ACTUALLY negotiated input-scope stream format
+  // now that the unit is initialized, and make that value authoritative for
+  // config.sample_rate: it is the single domain that callback->open() below,
+  // every subsequent render()'s stream_time_seconds, and every subsequent
+  // render()'s midi_time_mapper.publish_anchor() call must all share, because
+  // it is the rate the render callback is actually driven at. A property-read
+  // failure here aborts open() rather than silently continuing with the
+  // originally requested (possibly wrong) rate.
+  AudioStreamBasicDescription negotiated_fmt{};
+  UInt32 negotiated_fmt_size = sizeof(negotiated_fmt);
+  if (!ok(AudioUnitGetProperty(impl_->unit, kAudioUnitProperty_StreamFormat, kAudioUnitScope_Input,
+                               0, &negotiated_fmt, &negotiated_fmt_size)) ||
+      !std::isfinite(negotiated_fmt.mSampleRate) || negotiated_fmt.mSampleRate <= 0.0) {
+    close();
+    return false;
+  }
+  impl_->config.sample_rate = negotiated_fmt.mSampleRate;
+
   // The device/safety-offset/buffer-frame-size properties queried below are all
-  // counted in the DEVICE's own hardware clock domain, which need not equal the
-  // rate config.sample_rate was requested at (the AU's stream-format converter
-  // bridges the two). Make config.sample_rate authoritative for the device's
-  // actual nominal rate before computing or reporting anything in "samples at
-  // sample_rate" terms, so a caller reading it later (callback->open() below,
-  // or a PDC computation against output_latency_samples()) is not silently
-  // working in the wrong sample-rate domain. Falls back to the originally
-  // requested rate if the property is unavailable.
+  // counted in the DEVICE's own hardware clock domain (its nominal sample
+  // rate), which need not equal the negotiated render domain above. nominal_rate
+  // is scoped to converting those device-domain counts into samples at
+  // impl_->config.sample_rate by ratio (scale_coreaudio_device_domain_samples
+  // below) rather than overwriting the canonical field, and to gating the
+  // render-time xrun continuity check when the two domains disagree
+  // (coreaudio_sample_clock_domains_match). 0.0 means the property was
+  // unavailable; both helpers pass their input through unconverted in that case.
   const double nominal_rate = read_device_nominal_sample_rate(impl_->device_id);
-  if (nominal_rate > 0.0) impl_->config.sample_rate = nominal_rate;
+  impl_->sample_clock_domains_match =
+      detail::coreaudio_sample_clock_domains_match(nominal_rate, impl_->config.sample_rate);
 
   // Query the driver's actual latency now that the unit is initialized. Total
   // output latency = device latency + safety offset + the buffer frame size.
@@ -312,7 +347,10 @@ bool CoreAudioDevice::open(const AudioStreamConfig& config, AudioDeviceCallback*
       impl_->device_id, kAudioDevicePropertySafetyOffset, kAudioDevicePropertyScopeOutput);
   const UInt32 buffer_frames = read_device_uint32(
       impl_->device_id, kAudioDevicePropertyBufferFrameSize, kAudioDevicePropertyScopeOutput);
-  impl_->reported_output_latency = static_cast<int>(device_latency + safety_offset + buffer_frames);
+  const int64_t device_domain_latency =
+      static_cast<int64_t>(device_latency) + safety_offset + buffer_frames;
+  impl_->reported_output_latency = static_cast<int>(detail::scale_coreaudio_device_domain_samples(
+      device_domain_latency, nominal_rate, impl_->config.sample_rate));
   impl_->reported_input_latency = 0;
   // Populate the config the callback actually receives below — AudioStreamConfig's
   // own latency fields (audio_device.h), not just the out-of-band

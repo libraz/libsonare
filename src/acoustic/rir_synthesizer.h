@@ -31,6 +31,12 @@ struct RirSynthConfig {
   float max_seconds = 0.0f;     ///< RIR length cap (s); 0 = auto from the longest RT60
   float mixing_time_ms = 0.0f;  ///< early/late crossover; 0 = auto (~sqrt(V) ms)
   float crossfade_ms = 5.0f;    ///< equal-power crossfade width around the mixing time
+  /// Disabled by default so an existing caller's RIR is unchanged byte for
+  /// byte. When enabled, the late tail's per-band RT60 gains the ISO 9613-1
+  /// atmospheric-absorption term (see shoebox_reverb_time); `air` supplies the
+  /// temperature/humidity and defaults to the ISO reference climate.
+  bool air_absorption_enabled = false;
+  AirAbsorption air{};
 };
 
 /// @brief A synthesized RIR plus the diagnostics gathered producing it.

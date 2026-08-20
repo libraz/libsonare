@@ -28,6 +28,12 @@ namespace sonare::acoustic {
 ///        inversion so the estimate inverts the synthesis exactly.
 inline constexpr float kSabineCoeff = 0.161f;
 
+/// @brief Absolute zero (degrees Celsius), the physical floor below which the
+///        ISO 9613-1 Kelvin conversion in `air_absorption_m_per_meter` is
+///        undefined. Shared with the RIR synthesizer's own air-absorption
+///        input validation so both sides agree on the same physical bound.
+inline constexpr float kAbsoluteZeroCelsius = -273.15f;
+
 /// @brief Historical upper bound for auto-sized acoustic buffers.
 ///
 /// The effective RIR/late-tail cap is lower and is derived from the shared
@@ -73,11 +79,14 @@ struct AirAbsorption {
 
 /// @brief Pure-tone atmospheric absorption coefficient (energy, nepers/m).
 ///
-/// ISO 9613-1 model at sea-level ambient pressure. Returns the energy
-/// attenuation exponent m such that intensity decays as exp(-m * distance);
-/// this is the coefficient used by the Sabine/Eyring `4 m V` air term. Grows
-/// steeply with frequency, so it mainly shortens the high-band reverberation
-/// time of large rooms. Returns 0 for a non-positive or non-finite frequency.
+/// ISO 9613-1 model at sea-level ambient pressure (pressure is not a
+/// parameter here: pa == the reference pressure, so the standard's pressure
+/// ratios drop out). Returns the energy attenuation exponent m such that
+/// intensity decays as exp(-m * distance); this is the coefficient used by
+/// the Sabine/Eyring `4 m V` air term. Grows steeply with frequency, so it
+/// mainly shortens the high-band reverberation time of large rooms. Returns 0
+/// for a non-positive/non-finite frequency or a temperature at/below absolute
+/// zero; humidity is clamped to [0, 100].
 float air_absorption_m_per_meter(float freq_hz, float temperature_c,
                                  float humidity_percent) noexcept;
 

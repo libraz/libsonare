@@ -235,6 +235,20 @@ struct Track {
 // Markers
 // ===========================================================================
 
+/// Marker kinds, mirroring the SonareMarkerKind ordinals. ProjectMarker::kind
+/// stays a plain uint8_t so the model keeps no dependency on the public C
+/// header; this enum names the range the edit API admits, so persistence and
+/// validation derive the bound from the enumerators instead of repeating a
+/// literal. The C ordinals are pinned to these values in the project edit
+/// bridge.
+enum class MarkerKind : uint8_t {
+  kMarker = 0,
+  kText = 1,
+  kLyric = 2,
+  kCuePoint = 3,
+  kKeySignature = 4,
+};
+
 /// Timeline marker with an OWNED name. Compilation to transport::Marker (which
 /// stores a non-owning const char*) happens in the compiler, which guarantees the storage
 /// lifetime; the model owns the string here.
@@ -242,9 +256,8 @@ struct ProjectMarker {
   double ppq = 0.0;
   uint32_t id = 0;
   std::string name;
-  /// Marker kind + key signature. `kind` mirrors SonareMarkerKind values
-  /// (0 = marker, 1 = text, 2 = lyric, 3 = cue point, 4 = key signature); the
-  /// key fields apply only to the key-signature kind.
+  /// Marker kind + key signature. `kind` holds a MarkerKind ordinal; the key
+  /// fields apply only to the key-signature kind.
   uint8_t kind = 0;
   int8_t key_fifths = 0;
   bool key_minor = false;
