@@ -57,6 +57,25 @@ struct BpmCandidateHypothesis {
   BpmCandidateRelation relation = BpmCandidateRelation::Other;
 };
 
+/// @brief Beat-level evidence the downbeat estimator scores.
+/// @details Each vector holds one value per entry of AnalysisResult::beats, so
+///          they index in parallel with it. These are inputs to the meter and
+///          downbeat decision rather than outputs of it, exposed so callers
+///          running their own meter work score the same evidence the library
+///          does instead of reconstructing a weaker approximation from the
+///          frame-level onset envelope. A stream is empty when the analysis
+///          could not produce it.
+struct BeatObservations {
+  /// @brief Beat-local onset-strength window; unlike Beat::strength this is
+  ///        aggregated over a window rather than sampled at a single frame.
+  std::vector<float> onset_strength;
+  /// @brief Beat-local low-frequency energy, the accent evidence a log-spectral
+  ///        difference discards. Empty when analysis ran without audio.
+  std::vector<float> low_frequency_energy;
+  /// @brief Per-beat chord-change evidence. Empty until chords are analyzed.
+  std::vector<float> chord_change;
+};
+
 /// @brief Complete music analysis result.
 struct AnalysisResult {
   float bpm = 0.0f;             ///< Detected BPM
@@ -67,7 +86,23 @@ struct AnalysisResult {
   TimeSignature time_signature;  ///< Detected time signature
   /// @brief Meter hypotheses from the existing multi-comb meter estimator.
   std::vector<TimeSignature> time_signature_candidates;
-  std::vector<Beat> beats;        ///< Beat positions
+  std::vector<Beat> beats;  ///< Beat positions
+  /// @brief Indices into @ref beats that fall on a measure start.
+  /// @details Not the same length as @ref beats — it holds one entry per
+  ///          detected downbeat, and each entry indexes @ref beats, so
+  ///          `beats[downbeat_indices[k]]` is the k-th downbeat. Testing a beat
+  ///          for downbeat status is a membership check on this list rather
+  ///          than a time comparison against a separate downbeat time series.
+  std::vector<int> downbeat_indices;
+  /// @brief Beat index the first measure starts on, in [0, numerator).
+  /// @details The meter estimator's phase, so `downbeat_indices` normally
+  ///          begins at this value. It comes from the meter estimate and is not
+  ///          re-derived when downbeats are refined from chord and
+  ///          low-frequency-energy evidence, so the two can disagree when the
+  ///          refinement moves the first measure start.
+  int downbeat_phase = 0;
+  /// @brief Beat-level evidence behind the downbeat and meter decisions.
+  BeatObservations beat_observations;
   std::vector<Chord> chords;      ///< Chord progression
   std::vector<Section> sections;  ///< Song sections
   Timbre timbre;                  ///< Overall timbre
@@ -94,7 +129,33 @@ struct MusicAnalyzerConfig {
   bool use_chord_key_context = false;    ///< Bias chord HMM transitions using the detected key
   int chord_hmm_beam_width = 24;         ///< Candidate beam width for chord HMM smoothing
   bool detect_chord_inversions = false;  ///< Estimate slash-chord bass notes in unified analysis
+  bool adaptive_tempo = false;           ///< Track a locally updated tempo prior during beat DP
+  int tempo_update_interval_beats = 8;   ///< Local tempo context length in beats
+  /// @brief Meter numerators the multi-comb estimator scores.
+  /// @details Adding a numerator widens the search; it does not force the
+  ///          result. The default is the historical `{3, 4, 6}`, so an analysis
+  ///          that does not set this keeps its previous meter.
+  std::vector<int> meter_candidate_numerators = {3, 4, 6};
+  /// @brief Beat unit reported for the detected meter.
+  /// @details The estimator still reports 8 on its own when it resolves a
+  ///          compound meter, so this is the unit for everything else.
+  int meter_denominator = 4;
 };
+
+/// @brief Largest number of meter numerators a flat C options struct can carry.
+/// @details The C ABI passes the candidates as a fixed-size array, so the limit
+///          is part of the public contract on every surface rather than an
+///          implementation detail of one of them.
+constexpr int kMaxMeterCandidateNumerators = 16;
+
+/// @brief Smallest meter numerator the estimator can score.
+constexpr int kMinMeterCandidateNumerator = 2;
+
+/// @brief Largest meter numerator the estimator can score.
+constexpr int kMaxMeterCandidateNumerator = 32;
+
+/// @brief Largest meter denominator (beat unit) that can be requested.
+constexpr int kMaxMeterDenominator = 32;
 
 /// @brief Validation rules for @ref MusicAnalyzerConfig.
 /// @details Found by argument-dependent lookup from @ref Validated, which is the

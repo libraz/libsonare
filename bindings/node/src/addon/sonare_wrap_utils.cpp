@@ -5,6 +5,7 @@
 #include <string>
 
 #include "c_api/sonare_c_error_mapping.h"
+#include "sonare_wrap_options.h"
 
 namespace sonare_node {
 
@@ -100,39 +101,86 @@ void DecorateSonareError(Napi::Env env, Napi::Object error, SonareError err) {
   SetSonareErrorProperties(env, error, err);
 }
 
+namespace {
+
+/// @brief Read the `meterCandidateNumerators` list into @p options.
+///
+/// An absent or non-array value keeps the C default set, which is the
+/// type-checked fallback the node_*_option family gives every other key. An
+/// array replaces the default set wholesale, including an empty one: the core
+/// rejects a cleared list rather than silently restoring {3, 4, 6}, so the
+/// caller is told instead of getting a set it did not ask for.
+///
+/// The two cases that cannot fall back throw exactly one catchable JS error and
+/// return false: a list longer than the C-ABI capacity (truncating it would
+/// analyse a different meter set than requested) and a non-numeric entry.
+bool ReadMeterCandidateNumerators(const Napi::Object& object, SonareMusicAnalyzeOptions* options) {
+  Napi::Env env = object.Env();
+  const Napi::Value value = object.Get("meterCandidateNumerators");
+  if (!value.IsArray()) return true;
+
+  const Napi::Array array = value.As<Napi::Array>();
+  const uint32_t length = array.Length();
+  if (length > static_cast<uint32_t>(SONARE_MAX_METER_CANDIDATE_NUMERATORS)) {
+    Napi::RangeError::New(env, "meterCandidateNumerators must hold at most " +
+                                   std::to_string(SONARE_MAX_METER_CANDIDATE_NUMERATORS) +
+                                   " entries (got " + std::to_string(length) + ")")
+        .ThrowAsJavaScriptException();
+    return false;
+  }
+
+  // Staged locally so a rejected entry leaves the defaults untouched; the
+  // zero-initialized tail also clears the default entries past the new count.
+  int numerators[SONARE_MAX_METER_CANDIDATE_NUMERATORS] = {};
+  for (uint32_t i = 0; i < length; ++i) {
+    if (!RequiredIntValue(env, array.Get(i), "meterCandidateNumerators[" + std::to_string(i) + "]",
+                          &numerators[i])) {
+      return false;
+    }
+  }
+  std::copy(std::begin(numerators), std::end(numerators), options->meter_candidate_numerators);
+  options->meter_candidate_numerator_count = static_cast<int>(length);
+  return true;
+}
+
+}  // namespace
+
 bool ReadMusicAnalyzeOptions(const Napi::Value& value, SonareMusicAnalyzeOptions* options) {
   if (options == nullptr) return false;
   *options = sonare_music_analyze_options_default();
   if (!value.IsObject()) return false;
 
   const Napi::Object object = value.As<Napi::Object>();
-  auto integer = [&](const char* key, int* field) {
-    const Napi::Value item = object.Get(key);
-    if (item.IsNumber()) *field = item.As<Napi::Number>().Int32Value();
-  };
-  auto number = [&](const char* key, float* field) {
-    const Napi::Value item = object.Get(key);
-    if (item.IsNumber()) *field = item.As<Napi::Number>().FloatValue();
-  };
-  auto boolean = [&](const char* key, int* field) {
-    const Napi::Value item = object.Get(key);
-    if (item.IsBoolean()) *field = item.As<Napi::Boolean>().Value() ? 1 : 0;
-  };
-  integer("nFft", &options->n_fft);
-  integer("hopLength", &options->hop_length);
-  number("bpmMin", &options->bpm_min);
-  number("bpmMax", &options->bpm_max);
-  number("startBpm", &options->start_bpm);
-  boolean("useTriadsOnly", &options->use_triads_only);
-  boolean("useHpss", &options->use_hpss);
-  number("chromaHighpassHz", &options->chroma_highpass_hz);
-  boolean("useBassWeighted", &options->use_bass_weighted);
-  integer("chromaHopMultiplier", &options->chroma_hop_multiplier);
-  boolean("useChordHmm", &options->use_chord_hmm);
-  boolean("useChordKeyContext", &options->use_chord_key_context);
-  integer("chordHmmBeamWidth", &options->chord_hmm_beam_width);
-  boolean("detectChordInversions", &options->detect_chord_inversions);
-  return true;
+  options->n_fft = node_int_option(object, "nFft", options->n_fft);
+  options->hop_length = node_int_option(object, "hopLength", options->hop_length);
+  options->bpm_min = node_float_option(object, "bpmMin", options->bpm_min);
+  options->bpm_max = node_float_option(object, "bpmMax", options->bpm_max);
+  options->start_bpm = node_float_option(object, "startBpm", options->start_bpm);
+  options->use_triads_only =
+      node_bool_option(object, "useTriadsOnly", options->use_triads_only != 0) ? 1 : 0;
+  options->use_hpss = node_bool_option(object, "useHpss", options->use_hpss != 0) ? 1 : 0;
+  options->chroma_highpass_hz =
+      node_float_option(object, "chromaHighpassHz", options->chroma_highpass_hz);
+  options->use_bass_weighted =
+      node_bool_option(object, "useBassWeighted", options->use_bass_weighted != 0) ? 1 : 0;
+  options->chroma_hop_multiplier =
+      node_int_option(object, "chromaHopMultiplier", options->chroma_hop_multiplier);
+  options->use_chord_hmm =
+      node_bool_option(object, "useChordHmm", options->use_chord_hmm != 0) ? 1 : 0;
+  options->use_chord_key_context =
+      node_bool_option(object, "useChordKeyContext", options->use_chord_key_context != 0) ? 1 : 0;
+  options->chord_hmm_beam_width =
+      node_int_option(object, "chordHmmBeamWidth", options->chord_hmm_beam_width);
+  options->detect_chord_inversions =
+      node_bool_option(object, "detectChordInversions", options->detect_chord_inversions != 0) ? 1
+                                                                                               : 0;
+  options->adaptive_tempo =
+      node_bool_option(object, "adaptiveTempo", options->adaptive_tempo != 0) ? 1 : 0;
+  options->tempo_update_interval_beats =
+      node_int_option(object, "tempoUpdateIntervalBeats", options->tempo_update_interval_beats);
+  options->meter_denominator =
+      node_int_option(object, "meterDenominator", options->meter_denominator);
+  return ReadMeterCandidateNumerators(object, options);
 }
 
 bool IsFloat32Array(const Napi::Value& value) {

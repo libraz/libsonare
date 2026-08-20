@@ -252,6 +252,8 @@ def test_analyze_options_forward_existing_api_keywords(monkeypatch, capsys) -> N
             ),
             time_signature=SimpleNamespace(numerator=4, denominator=4, confidence=0.5),
             beats=[],
+            downbeat_indices=[],
+            downbeat_phase=0,
             chords=[],
             sections=[],
             timbre=None,

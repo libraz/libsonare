@@ -868,6 +868,7 @@ Napi::Value SonareWrap::AnalyzeInstance(const Napi::CallbackInfo& info) {
 
   SonareMusicAnalyzeOptions options{};
   const bool has_options = info.Length() >= 1 && ReadMusicAnalyzeOptions(info[0], &options);
+  if (env.IsExceptionPending()) return env.Undefined();
   return FullAnalysisJsonToObject(env, sonare_audio_data(audio_), sonare_audio_length(audio_),
                                   sonare_audio_sample_rate(audio_),
                                   has_options ? &options : nullptr);

@@ -366,6 +366,9 @@ class SonareWaveformPeakPyramidResult(ctypes.Structure):
     ]
 
 
+SONARE_MAX_METER_CANDIDATE_NUMERATORS = 16
+
+
 class SonareMusicAnalyzeOptions(ctypes.Structure):
     """Maps to SonareMusicAnalyzeOptions in sonare_c_types_functions.h."""
 
@@ -384,4 +387,9 @@ class SonareMusicAnalyzeOptions(ctypes.Structure):
         ("use_chord_key_context", ctypes.c_int),
         ("chord_hmm_beam_width", ctypes.c_int),
         ("detect_chord_inversions", ctypes.c_int),
+        ("adaptive_tempo", ctypes.c_int),
+        ("tempo_update_interval_beats", ctypes.c_int),
+        ("meter_candidate_numerators", ctypes.c_int * SONARE_MAX_METER_CANDIDATE_NUMERATORS),
+        ("meter_candidate_numerator_count", ctypes.c_int),
+        ("meter_denominator", ctypes.c_int),
     ]

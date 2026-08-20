@@ -76,6 +76,25 @@ export interface MusicAnalyzeOptions {
   useChordKeyContext?: boolean;
   chordHmmBeamWidth?: number;
   detectChordInversions?: boolean;
+  /** Track a locally updated tempo prior through beat tracking. Default false. */
+  adaptiveTempo?: boolean;
+  /**
+   * Local tempo context length in beats, used only when `adaptiveTempo` is
+   * true. Must be positive. Default 8.
+   */
+  tempoUpdateIntervalBeats?: number;
+  /**
+   * Meter numerators the estimator scores. At most 16 entries, each in
+   * `[2, 32]`; an empty list is rejected rather than restoring the default.
+   * Widening the set does not force a wider meter. Default `[3, 4, 6]`.
+   */
+  meterCandidateNumerators?: number[];
+  /**
+   * Beat unit reported for the detected meter; a power of two in `[1, 32]`.
+   * The estimator still reports 8 on its own when it resolves a compound
+   * meter. Default 4.
+   */
+  meterDenominator?: number;
 }
 export interface MusicAnalyzeRequest extends SamplesRequest, MusicAnalyzeOptions {}
 

@@ -320,6 +320,8 @@ class AnalysisResult:
     time_signature: TimeSignature
     beat_times: list[float]
     beat_strengths: list[float]
+    downbeat_indices: list[int]
+    downbeat_phase: int
     bpm_candidates: list[BpmHypothesis]
     time_signature_candidates: list[TimeSignature]
     chords: list[Chord]
@@ -337,6 +339,8 @@ class AnalysisResult:
         time_signature: TimeSignature,
         beat_times: list[float],
         beat_strengths: list[float] = ...,
+        downbeat_indices: list[int] = ...,
+        downbeat_phase: int = 0,
         bpm_candidates: list[BpmHypothesis] = ...,
         time_signature_candidates: list[TimeSignature] = ...,
         chords: list[Chord] = ...,
@@ -359,6 +363,10 @@ class AnalysisResult:
     def beatTimes(self) -> list[float]: ...
     @property
     def beatStrengths(self) -> list[float]: ...
+    @property
+    def downbeatIndices(self) -> list[int]: ...
+    @property
+    def downbeatPhase(self) -> int: ...
     @property
     def beats(self) -> list[Beat]: ...
 

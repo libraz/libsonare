@@ -180,6 +180,17 @@ val analysisResultToVal(const AnalysisResult& result) {
   }
   out.set("beats", beats);
 
+  // Downbeats as indices into beats, plus the meter phase they start from.
+  // Field names and order mirror analysis_result_to_json /
+  // analysis_result_schema_paths, which the cross-surface field-set test
+  // compares this object against.
+  val downbeatIndices = val::array();
+  for (int index : result.downbeat_indices) {
+    downbeatIndices.call<void>("push", index);
+  }
+  out.set("downbeatIndices", downbeatIndices);
+  out.set("downbeatPhase", result.downbeat_phase);
+
   // Chords
   out.set("chords", chordsToVal(result.chords));
 
@@ -497,6 +508,38 @@ val js_analyze(val samples, int sample_rate, val options) {
   set_bool("useChordKeyContext", config.use_chord_key_context);
   set_number("chordHmmBeamWidth", config.chord_hmm_beam_width);
   set_bool("detectChordInversions", config.detect_chord_inversions);
+  set_bool("adaptiveTempo", config.adaptive_tempo);
+  set_number("tempoUpdateIntervalBeats", config.tempo_update_interval_beats);
+  set_number("meterDenominator", config.meter_denominator);
+  // meterCandidateNumerators is an array, so set_number (a scalar reader) does
+  // not apply. The non-empty rule and the [2, 32] per-entry range stay with
+  // validate_config; what this surface owns is the JS-number narrowing plus the
+  // entry-count bound. The count is rejected from the JS length before any
+  // element is read, because the core can only see the vector after the whole
+  // array has been converted. An undefined/null value leaves the core default
+  // {3, 4, 6} in place.
+  const val meter_numerators = options["meterCandidateNumerators"];
+  if (!meter_numerators.isUndefined() && !meter_numerators.isNull()) {
+    const std::size_t length =
+        wasmArrayLikeLength(meter_numerators, "analyze: meterCandidateNumerators");
+    if (length > static_cast<std::size_t>(sonare::kMaxMeterCandidateNumerators)) {
+      throw SonareException(ErrorCode::InvalidParameter,
+                            "analyze: meterCandidateNumerators must hold at most " +
+                                std::to_string(sonare::kMaxMeterCandidateNumerators) + " entries");
+    }
+    std::vector<int> numerators;
+    numerators.reserve(length);
+    for (int i = 0; i < static_cast<int>(length); ++i) {
+      int converted = 0;
+      if (!sonare::numeric::checked_round_cast(meter_numerators[i].as<double>(), &converted)) {
+        throw SonareException(
+            ErrorCode::InvalidParameter,
+            "analyze: meterCandidateNumerators entries must be finite in-range numbers");
+      }
+      numerators.push_back(converted);
+    }
+    config.meter_candidate_numerators = std::move(numerators);
+  }
   MusicAnalyzer analyzer(audio, config);
   AnalysisResult result = analyzer.analyze();
   return analysisResultToVal(result);
@@ -522,6 +565,8 @@ val js_analysis_result_schema_fixture() {
   result.time_signature = {4, 4, 0.7f};
   result.time_signature_candidates.push_back({4, 4, 0.7f});
   result.beats.push_back({0.25f, 0, 0.6f});
+  result.downbeat_indices.push_back(0);
+  result.downbeat_phase = 0;
   result.chords.push_back({PitchClass::C, ChordQuality::Major, 0.0f, 1.0f, 0.8f, PitchClass::C});
   result.sections.push_back({SectionType::Verse, 0.0f, 1.0f, 0.5f, 0.9f});
   result.timbre = {0.1f, 0.2f, 0.3f, 0.4f, 0.5f};

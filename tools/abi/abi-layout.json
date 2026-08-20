@@ -3733,9 +3733,39 @@
         "name": "detect_chord_inversions",
         "offset": 52,
         "size": 4
+      },
+      {
+        "kind": "signed",
+        "name": "adaptive_tempo",
+        "offset": 56,
+        "size": 4
+      },
+      {
+        "kind": "signed",
+        "name": "tempo_update_interval_beats",
+        "offset": 60,
+        "size": 4
+      },
+      {
+        "kind": "aggregate",
+        "name": "meter_candidate_numerators",
+        "offset": 64,
+        "size": 64
+      },
+      {
+        "kind": "signed",
+        "name": "meter_candidate_numerator_count",
+        "offset": 128,
+        "size": 4
+      },
+      {
+        "kind": "signed",
+        "name": "meter_denominator",
+        "offset": 132,
+        "size": 4
       }
     ],
-    "size": 56
+    "size": 136
   },
   "SonareNotePairValidation": {
     "align": 4,

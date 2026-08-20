@@ -12,6 +12,7 @@ from typing import Any, Literal, cast
 from ._analysis_detection import _parse_analysis_json
 from ._cancellation import CancellationState, make_cancel_trampoline
 from ._ffi import (
+    SONARE_MAX_METER_CANDIDATE_NUMERATORS,
     SonareAcousticResult,
     SonareAnalysisResult,
     SonareAnalyzeProgressCallback,
@@ -47,6 +48,11 @@ from .types import (
     TimeSignature,
 )
 
+# Meter numerators the estimator scores when the caller passes none. Mirrors
+# MusicAnalyzerConfig::meter_candidate_numerators, so a default-argument
+# analyze() reproduces the native default rather than a Python-side guess.
+_DEFAULT_METER_CANDIDATE_NUMERATORS = (3, 4, 6)
+
 
 def _unsupported_feature_symbol(symbol: str) -> SonareError:
     return SonareError(
@@ -74,6 +80,10 @@ def analyze(
     use_chord_key_context: bool = False,
     chord_hmm_beam_width: int = 24,
     detect_chord_inversions: bool = False,
+    adaptive_tempo: bool = False,
+    tempo_update_interval_beats: int = 8,
+    meter_candidate_numerators: Sequence[int] | None = None,
+    meter_denominator: int = 4,
 ) -> AnalysisResult:
     """Run full audio analysis on samples.
 
@@ -84,6 +94,17 @@ def analyze(
         samples: Mono audio samples (1D float). See :func:`detect_bpm` for
             accepted types.
         sample_rate: Sample rate in Hz (default 22050).
+        adaptive_tempo: Track a locally updated tempo prior through beat
+            tracking instead of holding one global tempo.
+        tempo_update_interval_beats: Local tempo context length in beats, used
+            only when ``adaptive_tempo`` is true. Must be positive.
+        meter_candidate_numerators: Meter numerators the estimator scores.
+            ``None`` selects the native default ``(3, 4, 6)``. At most 16
+            entries, each in ``[2, 32]``. Widening the set does not force a
+            wider meter — the default reproduces the historical result.
+        meter_denominator: Beat unit reported for the detected meter; a power
+            of two in ``[1, 32]``. The estimator still reports 8 on its own
+            when it resolves a compound meter.
 
     Returns:
         :class:`libsonare.AnalysisResult` with all fields:
@@ -92,6 +113,10 @@ def analyze(
         - ``key`` (:class:`Key`), ``time_signature`` (:class:`TimeSignature`)
         - ``beat_times`` (``list[float]`` in seconds)
         - ``beat_strengths`` (``list[float]``) — per-beat strength values
+        - ``downbeat_indices`` (``list[int]``) — positions in ``beat_times``
+          that are bar starts, not a separate time series
+        - ``downbeat_phase`` (``int``) — which beat of the first bar the
+          analysis starts on
         - ``chords`` (``list[Chord]``) — detected chord segments
         - ``sections`` (``list[Section]``) — detected structural sections
         - ``timbre`` (:class:`AnalysisTimbre`) — spectral character summary
@@ -101,8 +126,24 @@ def analyze(
         - ``form`` (``str``) — overall form classification
 
     Raises:
+        SonareValueError: If ``meter_candidate_numerators`` holds more entries
+            than the native array can carry.
         RuntimeError: If analysis fails.
     """
+    numerators = (
+        tuple(_DEFAULT_METER_CANDIDATE_NUMERATORS)
+        if meter_candidate_numerators is None
+        else tuple(int(value) for value in meter_candidate_numerators)
+    )
+    # The flat C array cannot carry an over-long list, so reject it here rather
+    # than truncating it into a set the caller never asked for. Every other
+    # rule (non-empty, per-entry range, denominator) is the core's to enforce.
+    if len(numerators) > SONARE_MAX_METER_CANDIDATE_NUMERATORS:
+        raise SonareValueError(
+            "analyze: meter_candidate_numerators must hold at most "
+            f"{SONARE_MAX_METER_CANDIDATE_NUMERATORS} entries"
+        )
+
     lib = _get_lib()
     c_array, length = _to_c_float_array(samples)
 
@@ -124,6 +165,16 @@ def analyze(
                 use_chord_key_context=int(use_chord_key_context),
                 chord_hmm_beam_width=chord_hmm_beam_width,
                 detect_chord_inversions=int(detect_chord_inversions),
+                adaptive_tempo=int(adaptive_tempo),
+                tempo_update_interval_beats=tempo_update_interval_beats,
+                # Both the array and its count must be written: ctypes zeroes
+                # any field left unset, and a zero count reads to the core as
+                # an empty candidate set, which it rejects.
+                meter_candidate_numerators=(ctypes.c_int * SONARE_MAX_METER_CANDIDATE_NUMERATORS)(
+                    *numerators
+                ),
+                meter_candidate_numerator_count=len(numerators),
+                meter_denominator=meter_denominator,
             )
             rc = lib.sonare_analyze_json_ex(
                 c_array,

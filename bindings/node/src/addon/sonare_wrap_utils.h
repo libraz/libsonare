@@ -41,6 +41,13 @@ void DecorateSonareError(Napi::Env env, Napi::Object error, SonareError err);
 
 /// @brief Read the optional JavaScript music-analysis settings into the C ABI
 /// struct. Returns true only when @p value is an object supplied by the caller.
+///
+/// A false return has two meanings the caller must tell apart: no options were
+/// supplied (analyse with the C defaults), or the options were rejected, in
+/// which case a JS exception is already pending. Check env.IsExceptionPending()
+/// and bail out before any further N-API call — the addon is built with
+/// NAPI_DISABLE_CPP_EXCEPTIONS, where a second throw on a pending exception
+/// aborts the process.
 bool ReadMusicAnalyzeOptions(const Napi::Value& value, SonareMusicAnalyzeOptions* options);
 
 bool IsFloat32Array(const Napi::Value& value);

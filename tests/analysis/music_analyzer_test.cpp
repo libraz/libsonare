@@ -46,6 +46,96 @@ Audio create_test_audio(int sr = 22050, float duration = 5.0f) {
   return Audio::from_vector(std::move(samples), sr);
 }
 
+/// @brief Creates a click track whose first beat of every bar is accented.
+Audio create_accented_audio(float bpm, int beats_per_bar, int sr = 22050, float duration = 10.0f) {
+  int n_samples = static_cast<int>(sr * duration);
+  std::vector<float> samples(n_samples, 0.0f);
+
+  float beat_interval = 60.0f / bpm;
+  int click_length = sr / 100;
+  int beat_count = 0;
+
+  for (float t = 0.0f; t < duration; t += beat_interval) {
+    int start = static_cast<int>(t * sr);
+    float amplitude = (beat_count % beats_per_bar == 0) ? 1.0f : 0.5f;
+
+    for (int i = 0; i < click_length && start + i < n_samples; ++i) {
+      float envelope = 1.0f - static_cast<float>(i) / click_length;
+      samples[start + i] = envelope * amplitude;
+    }
+    beat_count++;
+  }
+
+  return Audio::from_vector(std::move(samples), sr);
+}
+
+/// @brief Creates a click track that accelerates linearly between two tempi.
+Audio create_tempo_ramp(float start_bpm, float end_bpm, int sr = 22050, float duration = 8.0f) {
+  int n_samples = static_cast<int>(sr * duration);
+  std::vector<float> samples(n_samples, 0.0f);
+  int click_length = sr / 100;
+
+  for (float t = 0.0f; t < duration;) {
+    int start = static_cast<int>(t * sr);
+    for (int i = 0; i < click_length && start + i < n_samples; ++i) {
+      float envelope = 1.0f - static_cast<float>(i) / click_length;
+      samples[start + i] = envelope * 0.9f;
+    }
+    const float bpm = start_bpm + (end_bpm - start_bpm) * (t / duration);
+    t += 60.0f / bpm;
+  }
+
+  return Audio::from_vector(std::move(samples), sr);
+}
+
+/// @brief Clicks on every beat with chord changes offset from bar starts.
+Audio create_offset_chord_audio(float bpm, int beats_per_bar, int chord_offset_beats, int sr,
+                                float duration) {
+  const int n_samples = static_cast<int>(sr * duration);
+  std::vector<float> samples(n_samples, 0.0f);
+  const float beat_interval = 60.0f / bpm;
+  const int click_length = sr / 100;
+
+  for (float t = 0.0f; t < duration; t += beat_interval) {
+    const int start = static_cast<int>(t * sr);
+    for (int i = 0; i < click_length && start + i < n_samples; ++i) {
+      const float envelope = 1.0f - static_cast<float>(i) / click_length;
+      samples[start + i] = envelope * 0.7f;
+    }
+  }
+
+  // Triads change every bar, but the change lands chord_offset_beats after the
+  // accented bar start.
+  static const float kTriads[4][3] = {{261.63f, 329.63f, 392.00f},
+                                      {349.23f, 440.00f, 523.25f},
+                                      {293.66f, 349.23f, 440.00f},
+                                      {220.00f, 261.63f, 329.63f}};
+  const float bar_seconds = beat_interval * static_cast<float>(beats_per_bar);
+  const float offset_seconds = beat_interval * static_cast<float>(chord_offset_beats);
+  for (int i = 0; i < n_samples; ++i) {
+    const float t = static_cast<float>(i) / static_cast<float>(sr);
+    const float shifted = t - offset_seconds;
+    if (shifted < 0.0f) continue;
+    const int bar = static_cast<int>(shifted / bar_seconds);
+    const float* triad = kTriads[bar % 4];
+    for (int voice = 0; voice < 3; ++voice) {
+      samples[i] += 0.22f * std::sin(2.0f * sonare::constants::kPiD * triad[voice] * t);
+    }
+  }
+
+  return Audio::from_vector(std::move(samples), sr);
+}
+
+/// @brief Mean frame distance between consecutive beats over a half-open range.
+float mean_beat_interval(const std::vector<int>& frames, size_t begin, size_t end) {
+  if (end <= begin + 1) return 0.0f;
+  float total = 0.0f;
+  for (size_t i = begin + 1; i < end; ++i) {
+    total += static_cast<float>(frames[i] - frames[i - 1]);
+  }
+  return total / static_cast<float>(end - begin - 1);
+}
+
 }  // namespace
 
 TEST_CASE("MusicAnalyzer basic", "[music_analyzer]") {
@@ -446,4 +536,176 @@ TEST_CASE("MusicAnalyzer precompute then lazy access", "[.][slow][music_analyzer
   REQUIRE(!analyzer.rhythm_analyzer().groove_type().empty());
   (void)analyzer.section_analyzer().count();
   (void)analyzer.melody_analyzer().count();
+}
+
+TEST_CASE("MusicAnalyzer reports downbeats as ascending in-range beat indices",
+          "[.][slow][music_analyzer]") {
+  Audio audio = create_accented_audio(120.0f, 4, 22050, 6.0f);
+
+  MusicAnalyzerConfig config;
+  config.start_bpm = 120.0f;
+  MusicAnalyzer analyzer(audio, config);
+  const AnalysisResult result = analyzer.analyze();
+
+  REQUIRE_FALSE(result.beats.empty());
+  REQUIRE_FALSE(result.downbeat_indices.empty());
+  // One entry per measure start, not one per beat.
+  REQUIRE(result.downbeat_indices.size() <= result.beats.size());
+
+  int previous = -1;
+  for (size_t i = 0; i < result.downbeat_indices.size(); ++i) {
+    const int index = result.downbeat_indices[i];
+    CAPTURE(i, index, result.beats.size());
+    REQUIRE(index >= 0);
+    REQUIRE(index < static_cast<int>(result.beats.size()));
+    REQUIRE(index > previous);
+    previous = index;
+  }
+
+  CAPTURE(result.downbeat_phase, result.time_signature.numerator);
+  REQUIRE(result.time_signature.numerator > 0);
+  REQUIRE(result.downbeat_phase >= 0);
+  REQUIRE(result.downbeat_phase < result.time_signature.numerator);
+}
+
+TEST_CASE("MusicAnalyzer publishes the chord-refined downbeats", "[.][slow][music_analyzer]") {
+  // Clicks are uniform and the chord changes land one beat after the bar start,
+  // so the beat analyzer's own downbeat estimate and the chord-informed one
+  // disagree. Downbeat refinement runs a second time when the chord analyzer is
+  // first used, and the result has to carry that second pass.
+  Audio audio = create_offset_chord_audio(120.0f, 4, 1, 22050, 8.0f);
+
+  MusicAnalyzerConfig config;
+  config.start_bpm = 120.0f;
+
+  MusicAnalyzer staged(audio, config);
+  const std::vector<int> preliminary = staged.beat_analyzer().downbeat_indices();
+  (void)staged.chord_analyzer().count();
+  const std::vector<int> refined = staged.beat_analyzer().downbeat_indices();
+
+  MusicAnalyzer full(audio, config);
+  const AnalysisResult result = full.analyze();
+
+  CAPTURE(preliminary, refined, result.downbeat_indices);
+  REQUIRE_FALSE(refined.empty());
+  // Without this the comparison below would hold for either read order.
+  INFO("the fixture must keep the preliminary and chord-refined estimates apart");
+  REQUIRE(preliminary != refined);
+  REQUIRE(result.downbeat_indices == refined);
+  REQUIRE(result.downbeat_phase == full.beat_analyzer().downbeat_phase());
+}
+
+TEST_CASE("MusicAnalyzer meter candidates change the detected numerator",
+          "[.][slow][music_analyzer]") {
+  Audio audio = create_accented_audio(120.0f, 5, 22050, 10.0f);
+
+  MusicAnalyzerConfig odd;
+  odd.start_bpm = 120.0f;
+  odd.meter_candidate_numerators = {5, 7};
+  MusicAnalyzer odd_analyzer(audio, odd);
+  const AnalysisResult odd_result = odd_analyzer.analyze();
+
+  MusicAnalyzerConfig default_config;
+  default_config.start_bpm = 120.0f;
+  MusicAnalyzer default_analyzer(audio, default_config);
+  const AnalysisResult default_result = default_analyzer.analyze();
+
+  CAPTURE(odd_result.time_signature.numerator, odd_result.rhythm.time_signature.numerator,
+          default_result.time_signature.numerator);
+
+  // Both meter estimates in the result — the beat analyzer's and the rhythm
+  // analyzer's own — have to come from the requested candidate set.
+  REQUIRE((odd_result.time_signature.numerator == 5 || odd_result.time_signature.numerator == 7));
+  REQUIRE((odd_result.rhythm.time_signature.numerator == 5 ||
+           odd_result.rhythm.time_signature.numerator == 7));
+
+  // The defaults cannot reach those numerators, so the pattern alone does not
+  // explain the result above.
+  REQUIRE(default_result.time_signature.numerator != 5);
+  REQUIRE(default_result.time_signature.numerator != 7);
+  REQUIRE(default_result.rhythm.time_signature.numerator != 5);
+  REQUIRE(default_result.rhythm.time_signature.numerator != 7);
+}
+
+TEST_CASE("MusicAnalyzer reports the requested beat unit on both meter paths",
+          "[.][slow][music_analyzer]") {
+  Audio audio = create_accented_audio(120.0f, 4, 22050, 6.0f);
+
+  MusicAnalyzerConfig eighth;
+  eighth.start_bpm = 120.0f;
+  eighth.meter_denominator = 8;
+  MusicAnalyzer eighth_analyzer(audio, eighth);
+  const AnalysisResult eighth_result = eighth_analyzer.analyze();
+
+  MusicAnalyzerConfig default_config;
+  default_config.start_bpm = 120.0f;
+  MusicAnalyzer default_analyzer(audio, default_config);
+  const AnalysisResult default_result = default_analyzer.analyze();
+
+  CAPTURE(eighth_result.time_signature.numerator, default_result.time_signature.numerator);
+  REQUIRE(eighth_result.time_signature.denominator == 8);
+  REQUIRE(eighth_result.rhythm.time_signature.denominator == 8);
+  REQUIRE(default_result.time_signature.denominator == 4);
+  REQUIRE(default_result.rhythm.time_signature.denominator == 4);
+}
+
+TEST_CASE("MusicAnalyzer adaptive tempo changes the tracked beats", "[.][slow][music_analyzer]") {
+  // A click track that accelerates from 90 to 150 BPM: a fixed tempo prior
+  // holds one spacing across the whole take, while the adaptive prior has to
+  // contract with the ramp.
+  Audio audio = create_tempo_ramp(90.0f, 150.0f, 22050, 8.0f);
+
+  MusicAnalyzerConfig fixed;
+  fixed.start_bpm = 100.0f;
+  MusicAnalyzer fixed_analyzer(audio, fixed);
+  const std::vector<int> fixed_frames = fixed_analyzer.beat_analyzer().beat_frames();
+
+  MusicAnalyzerConfig adaptive = fixed;
+  adaptive.adaptive_tempo = true;
+  adaptive.tempo_update_interval_beats = 4;
+  MusicAnalyzer adaptive_analyzer(audio, adaptive);
+  const std::vector<int> adaptive_frames = adaptive_analyzer.beat_analyzer().beat_frames();
+
+  REQUIRE(fixed_frames.size() >= 6);
+  REQUIRE(adaptive_frames.size() >= 6);
+  // A config field that never reached BeatConfig would leave these identical.
+  REQUIRE(adaptive_frames != fixed_frames);
+
+  const auto contraction = [](const std::vector<int>& frames) {
+    const size_t midpoint = frames.size() / 2;
+    const float early = mean_beat_interval(frames, 0, midpoint);
+    const float late = mean_beat_interval(frames, midpoint, frames.size());
+    return early > 0.0f ? late / early : 0.0f;
+  };
+  const float adaptive_contraction = contraction(adaptive_frames);
+  const float fixed_contraction = contraction(fixed_frames);
+
+  CAPTURE(adaptive_contraction, fixed_contraction);
+  REQUIRE(adaptive_contraction > 0.0f);
+  // The adaptive prior follows the accelerando; the fixed prior barely moves.
+  REQUIRE(adaptive_contraction < 0.9f);
+  REQUIRE(adaptive_contraction < fixed_contraction);
+}
+
+TEST_CASE("MusicAnalyzer tempo update interval changes the tracked beats",
+          "[.][slow][music_analyzer]") {
+  // The interval sets how much history the local tempo estimate sees, so two
+  // very different context lengths cannot produce the same beat grid on a ramp.
+  Audio audio = create_tempo_ramp(90.0f, 150.0f, 22050, 8.0f);
+
+  MusicAnalyzerConfig shorter;
+  shorter.start_bpm = 100.0f;
+  shorter.adaptive_tempo = true;
+  shorter.tempo_update_interval_beats = 4;
+  MusicAnalyzer shorter_analyzer(audio, shorter);
+
+  MusicAnalyzerConfig longer = shorter;
+  longer.tempo_update_interval_beats = 32;
+  MusicAnalyzer longer_analyzer(audio, longer);
+
+  const std::vector<int> shorter_frames = shorter_analyzer.beat_analyzer().beat_frames();
+  const std::vector<int> longer_frames = longer_analyzer.beat_analyzer().beat_frames();
+
+  REQUIRE(shorter_frames.size() >= 6);
+  REQUIRE(longer_frames != shorter_frames);
 }

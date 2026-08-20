@@ -59,6 +59,12 @@ const std::vector<std::string>& analysis_result_schema_paths() {
       "beats",
       "beats[].time",
       "beats[].strength",
+      "downbeatIndices",
+      "downbeatPhase",
+      "beatObservations",
+      "beatObservations.onsetStrength",
+      "beatObservations.lowFrequencyEnergy",
+      "beatObservations.chordChange",
       "chords",
       "chords[].root",
       "chords[].bass",
@@ -159,6 +165,37 @@ std::string analysis_result_to_json(const AnalysisResult& result) {
       beats.push_back(Value(std::move(b)));
     }
     root["beats"] = Value(std::move(beats));
+  }
+
+  // Downbeats as indices into beats, plus the meter phase they start from.
+  {
+    Array downbeat_indices;
+    downbeat_indices.reserve(result.downbeat_indices.size());
+    for (int index : result.downbeat_indices) {
+      downbeat_indices.push_back(Value(index));
+    }
+    root["downbeatIndices"] = Value(std::move(downbeat_indices));
+  }
+  root["downbeatPhase"] = Value(result.downbeat_phase);
+
+  // Beat-level evidence behind the downbeat and meter decisions. Each stream is
+  // beat-indexed, and an empty stream means the analysis could not produce it
+  // rather than that every beat scored zero.
+  {
+    const auto to_array = [](const std::vector<float>& values) {
+      Array out;
+      out.reserve(values.size());
+      for (float value : values) {
+        out.push_back(Value(value));
+      }
+      return out;
+    };
+    Object observations;
+    observations["onsetStrength"] = Value(to_array(result.beat_observations.onset_strength));
+    observations["lowFrequencyEnergy"] =
+        Value(to_array(result.beat_observations.low_frequency_energy));
+    observations["chordChange"] = Value(to_array(result.beat_observations.chord_change));
+    root["beatObservations"] = Value(std::move(observations));
   }
 
   // Chords

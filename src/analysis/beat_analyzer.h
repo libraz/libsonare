@@ -11,9 +11,16 @@ namespace sonare {
 
 /// @brief Detected beat event.
 struct Beat {
-  float time;      ///< Beat time in seconds
-  int frame;       ///< Beat frame index
-  float strength;  ///< Beat strength
+  float time;  ///< Beat time in seconds
+  int frame;   ///< Beat frame index
+  /// @brief Onset-envelope value sampled at @ref frame.
+  /// @details A single raw frame, neither windowed nor normalized, so it is
+  ///          sensitive to beat-position jitter and its scale depends on the
+  ///          material. The downbeat refinement deliberately does not use this
+  ///          value — it scores a beat-local window instead, exposed as
+  ///          BeatAnalyzer::beat_onset_observations(). Prefer that for accent
+  ///          scoring, and keep this for cheap per-beat magnitude readouts.
+  float strength;
 };
 
 /// @brief Detected time signature.
@@ -35,6 +42,12 @@ struct BeatConfig {
   int hop_length = 512;                 ///< Hop length for onset detection
   bool adaptive_tempo = false;          ///< Locally update tempo prior during DP
   int tempo_update_interval_beats = 8;  ///< Local tempo context length in beats
+  /// @brief Meter numerators handed to the meter estimator.
+  /// @details Mirrors MeterConfig::candidate_numerators. It is flattened here
+  ///          rather than holding a MeterConfig because meter_analyzer.h
+  ///          already depends on this header.
+  std::vector<int> meter_candidate_numerators = {3, 4, 6};
+  int meter_denominator = 4;  ///< Beat unit handed to the meter estimator
 };
 
 /// @brief Beat analyzer using dynamic programming beat tracking.
@@ -70,9 +83,36 @@ class BeatAnalyzer {
   /// @brief Returns estimated downbeats.
   const std::vector<Beat>& downbeats() const { return downbeats_; }
 
+  /// @brief Returns the beat index the first measure starts on.
+  /// @details Set by the meter estimate and left alone by refine_downbeats(),
+  ///          so it can disagree with downbeat_indices().front() once the
+  ///          refinement has moved the first measure start.
+  int downbeat_phase() const { return downbeat_phase_; }
+
   /// @brief Refines downbeats using optional beat-level observations.
   void refine_downbeats(const std::vector<float>& low_frequency_energy = {},
                         const std::vector<float>& chord_changes = {});
+
+  /// @brief Returns the beat-local onset-strength window the refinement scored.
+  /// @details One value per beat, aggregated over a window around the beat
+  ///          rather than sampled at a single frame like Beat::strength. Empty
+  ///          until refine_downbeats() has run.
+  const std::vector<float>& beat_onset_observations() const { return onset_observations_; }
+
+  /// @brief Returns beat-local low-frequency energy, the accent evidence that
+  ///        survives the log-spectral difference onset strength discards.
+  /// @details One value per beat, or empty when the analyzer was built without
+  ///          audio or refine_downbeats() has not run.
+  const std::vector<float>& beat_low_frequency_observations() const {
+    return low_frequency_observations_;
+  }
+
+  /// @brief Returns per-beat chord-change evidence.
+  /// @details One value per beat, or empty unless refine_downbeats() was called
+  ///          with chord changes — which only happens once chords are analyzed.
+  const std::vector<float>& beat_chord_change_observations() const {
+    return chord_change_observations_;
+  }
 
   /// @brief Returns estimated BPM from beat intervals.
   float bpm() const { return bpm_; }
@@ -106,6 +146,13 @@ class BeatAnalyzer {
   std::vector<int> downbeat_indices_;
   std::vector<Beat> downbeats_;
   std::vector<float> onset_strength_;
+  // Retained from the last refine_downbeats() call. These are the scored
+  // evidence rather than a derived result, kept so callers doing their own
+  // meter or downbeat work can reuse them instead of recomputing a weaker
+  // approximation from the frame-level envelope.
+  std::vector<float> onset_observations_;
+  std::vector<float> low_frequency_observations_;
+  std::vector<float> chord_change_observations_;
   float bpm_;
   TimeSignature time_signature_;
   std::vector<TimeSignature> time_signature_candidates_;

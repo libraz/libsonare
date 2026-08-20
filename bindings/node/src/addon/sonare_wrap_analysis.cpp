@@ -273,6 +273,7 @@ Napi::Value SonareWrap::Analyze(const Napi::CallbackInfo& info) {
   int sample_rate = node_arg_int(info, 1, 22050);
   SonareMusicAnalyzeOptions options{};
   const bool has_options = info.Length() >= 3 && ReadMusicAnalyzeOptions(info[2], &options);
+  if (env.IsExceptionPending()) return env.Undefined();
   return FullAnalysisJsonToObject(env, data, length, sample_rate, has_options ? &options : nullptr);
 }
 
@@ -372,6 +373,14 @@ Napi::Value SonareWrap::AnalyzeAsync(const Napi::CallbackInfo& info) {
   int sample_rate = node_arg_int(info, 1, 22050);
   SonareMusicAnalyzeOptions options{};
   const bool has_options = info.Length() >= 3 && ReadMusicAnalyzeOptions(info[2], &options);
+  if (env.IsExceptionPending()) {
+    // The async form reports bad input as a rejected Promise, so the pending
+    // exception is cleared before it can collide with the Promise plumbing.
+    Napi::Error error = env.GetAndClearPendingException();
+    auto deferred = Napi::Promise::Deferred::New(env);
+    deferred.Reject(error.Value());
+    return deferred.Promise();
+  }
   auto* worker = new AnalyzeAsyncWorker(env, std::move(samples), sample_rate, options, has_options);
   Napi::Promise promise = worker->GetPromise();
   worker->Queue();

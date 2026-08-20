@@ -25,6 +25,8 @@ RhythmAnalyzer::RhythmAnalyzer(const Audio& audio, const RhythmConfig& config)
   beat_config.bpm_max = config.bpm_max;
   beat_config.n_fft = config.n_fft;
   beat_config.hop_length = config.hop_length;
+  beat_config.meter_candidate_numerators = config.meter_candidate_numerators;
+  beat_config.meter_denominator = config.meter_denominator;
 
   BeatAnalyzer beat_analyzer(audio, beat_config);
   beats_ = beat_analyzer.beats();
@@ -159,9 +161,13 @@ void RhythmAnalyzer::analyze() {
 }
 
 void RhythmAnalyzer::detect_time_signature() {
-  // Default to 4/4
+  MeterConfig meter_config;
+  meter_config.candidate_numerators = config_.meter_candidate_numerators;
+  meter_config.denominator = config_.meter_denominator;
+
+  // Default to 4 over the requested beat unit
   features_.time_signature.numerator = 4;
-  features_.time_signature.denominator = 4;
+  features_.time_signature.denominator = meter_config.denominator;
   features_.time_signature.confidence = 0.5f;
 
   if (beats_.size() < 8) {
@@ -175,7 +181,7 @@ void RhythmAnalyzer::detect_time_signature() {
   // Keep the full MeterResult so the downbeat phase (which beat index the first
   // downbeat falls on) can offset the strong-beat classification in
   // compute_syncopation(), matching how BeatAnalyzer aligns its downbeats.
-  MeterResult meter = estimate_meter(onset_strength_, beats_);
+  MeterResult meter = estimate_meter(onset_strength_, beats_, meter_config);
   features_.time_signature = meter.time_signature;
   downbeat_phase_ = meter.downbeat_phase;
 }

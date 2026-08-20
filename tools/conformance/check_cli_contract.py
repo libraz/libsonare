@@ -55,6 +55,8 @@ _ANALYZE_TOP_LEVEL_KEYS = {
     "key",
     "time_signature",
     "beats",
+    "downbeat_indices",
+    "downbeat_phase",
     "chords",
     "sections",
     "timbre",

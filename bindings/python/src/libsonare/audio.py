@@ -343,9 +343,12 @@ class Audio:
     def detect_bpm(self) -> float:
         """Detect BPM (tempo).
 
+        Each ``detect_*`` call runs its own analysis; nothing is cached, so
+        four calls run the pipeline four times.
+
         Returns:
             Estimated tempo in beats per minute. For confidence and time
-            signature, use :meth:`analyze` instead.
+            signature, use :func:`libsonare.analyze` instead.
         """
         out_bpm = ctypes.c_float()
         rc = self._lib.sonare_audio_detect_bpm(self._handle, ctypes.byref(out_bpm))
@@ -405,7 +408,16 @@ class Audio:
         )
 
     def detect_beats(self) -> list[float]:
-        """Detect beat times in seconds."""
+        """Detect beat times in seconds.
+
+        Each ``detect_*`` call runs its own analysis; nothing is cached, so
+        four calls run the pipeline four times.
+
+        Returns:
+            Beat times in seconds. For per-beat strength, the time signature,
+            confidence values, or the bar-start positions, use
+            :func:`libsonare.analyze` instead — one call returns all of them.
+        """
         with _out_float_array(self._lib) as (out_times, out_count):
             rc = self._lib.sonare_audio_detect_beats(
                 self._handle, ctypes.byref(out_times), ctypes.byref(out_count)
@@ -414,7 +426,17 @@ class Audio:
             return [float(out_times[i]) for i in range(out_count.value)]
 
     def detect_downbeats(self) -> list[float]:
-        """Detect downbeat times in seconds."""
+        """Detect downbeat times in seconds.
+
+        Each ``detect_*`` call runs its own analysis; nothing is cached, so
+        four calls run the pipeline four times.
+
+        Returns:
+            Downbeat times in seconds. For per-beat strength, the time
+            signature, confidence values, or the bar starts as indices into
+            the beat list, use :func:`libsonare.analyze` instead — one call
+            returns all of them.
+        """
         with _out_float_array(self._lib) as (out_times, out_count):
             rc = self._lib.sonare_audio_detect_downbeats(
                 self._handle, ctypes.byref(out_times), ctypes.byref(out_count)
@@ -437,7 +459,15 @@ class Audio:
                 self._lib.sonare_free_floats(out_times)
 
     def analyze(self) -> AnalysisResult:
-        """Run full music analysis."""
+        """Run music analysis over the flat native result.
+
+        This path fills only bpm, key, time signature and beat times; the
+        richer fields of :class:`~libsonare.AnalysisResult` — beat strengths,
+        ``downbeat_indices``, chords, sections, timbre, dynamics, rhythm,
+        melody and form — are left at their defaults. Call the module-level
+        :func:`libsonare.analyze` for the complete result, and for the tempo
+        and meter options.
+        """
         from ._ffi import SonareAnalysisResult
         from .types import Mode, PitchClass, TimeSignature
 

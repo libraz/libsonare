@@ -492,6 +492,16 @@ class AnalysisResult:
     # so they can guarantee presence; Python cannot without dropping the
     # fallback. Guard with `is not None` before use.
     beat_strengths: list[float] = dataclasses.field(default_factory=list)
+    # Positions of the bar starts within ``beat_times``, so
+    # ``beat_times[downbeat_indices[k]]`` is the k-th downbeat. This is an
+    # index list, not a parallel array: it is shorter than ``beat_times``, and
+    # testing a beat for downbeat status is a membership check on it rather
+    # than a time comparison against a separate downbeat series.
+    downbeat_indices: list[int] = dataclasses.field(default_factory=list)
+    # Which beat of the first bar the analysis starts on. The meter estimator's
+    # own phase, so it can disagree with ``downbeat_indices[0]`` once downbeats
+    # are refined from chord and low-frequency evidence.
+    downbeat_phase: int = 0
     bpm_candidates: list[BpmHypothesis] = dataclasses.field(default_factory=list)
     time_signature_candidates: list[TimeSignature] = dataclasses.field(default_factory=list)
     chords: list[Chord] = dataclasses.field(default_factory=list)
@@ -525,6 +535,14 @@ class AnalysisResult:
     @property
     def beatStrengths(self) -> list[float]:  # noqa: N802
         return self.beat_strengths
+
+    @property
+    def downbeatIndices(self) -> list[int]:  # noqa: N802
+        return self.downbeat_indices
+
+    @property
+    def downbeatPhase(self) -> int:  # noqa: N802
+        return self.downbeat_phase
 
     @property
     def beats(self) -> list[Beat]:

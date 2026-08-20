@@ -1,3 +1,4 @@
+#include <algorithm>
 #include <cmath>
 
 #include "analysis/analysis_json.h"
@@ -249,22 +250,40 @@ SonareError sonare_analyze(const float* samples, size_t length, int sample_rate,
 // sonare_analyze, which only fills the flat bpm/key/beats struct. The schema is
 // the single source of truth in analysis_result_to_json and is mirrored by the
 // WASM native object. *out_json is heap-allocated; free with sonare_free_string.
+static_assert(SONARE_MAX_METER_CANDIDATE_NUMERATORS == sonare::kMaxMeterCandidateNumerators,
+              "The C array capacity and the core's validation limit must agree, or a list the "
+              "core accepts would not fit the flat struct");
+
 SonareMusicAnalyzeOptions sonare_music_analyze_options_default(void) {
   const MusicAnalyzerConfig config;
-  return {config.n_fft,
-          config.hop_length,
-          config.bpm_min,
-          config.bpm_max,
-          config.start_bpm,
-          config.use_triads_only ? 1 : 0,
-          config.use_hpss ? 1 : 0,
-          config.chroma_highpass_hz,
-          config.use_bass_weighted ? 1 : 0,
-          config.chroma_hop_multiplier,
-          config.use_chord_hmm ? 1 : 0,
-          config.use_chord_key_context ? 1 : 0,
-          config.chord_hmm_beam_width,
-          config.detect_chord_inversions ? 1 : 0};
+  // Positional aggregate initialization: the order here must track the field
+  // order in SonareMusicAnalyzeOptions.
+  SonareMusicAnalyzeOptions options = {config.n_fft,
+                                       config.hop_length,
+                                       config.bpm_min,
+                                       config.bpm_max,
+                                       config.start_bpm,
+                                       config.use_triads_only ? 1 : 0,
+                                       config.use_hpss ? 1 : 0,
+                                       config.chroma_highpass_hz,
+                                       config.use_bass_weighted ? 1 : 0,
+                                       config.chroma_hop_multiplier,
+                                       config.use_chord_hmm ? 1 : 0,
+                                       config.use_chord_key_context ? 1 : 0,
+                                       config.chord_hmm_beam_width,
+                                       config.detect_chord_inversions ? 1 : 0,
+                                       config.adaptive_tempo ? 1 : 0,
+                                       config.tempo_update_interval_beats,
+                                       {},
+                                       0,
+                                       config.meter_denominator};
+  const size_t count = std::min(config.meter_candidate_numerators.size(),
+                                static_cast<size_t>(SONARE_MAX_METER_CANDIDATE_NUMERATORS));
+  for (size_t i = 0; i < count; ++i) {
+    options.meter_candidate_numerators[i] = config.meter_candidate_numerators[i];
+  }
+  options.meter_candidate_numerator_count = static_cast<int>(count);
+  return options;
 }
 
 SonareError sonare_analyze_json_ex(const float* samples, size_t length, int sample_rate,
@@ -272,8 +291,13 @@ SonareError sonare_analyze_json_ex(const float* samples, size_t length, int samp
   SONARE_C_API_ENTRY;
   // Field rules live in validate_config, which MusicAnalyzer's constructor
   // applies below; the exception maps back to SONARE_ERROR_INVALID_PARAMETER, so
-  // this entry point only checks what the core cannot see (the out pointers).
+  // this entry point only checks what the core cannot see (the out pointers and
+  // the length of the flat candidate array, which the core never receives).
   if (out_json == nullptr || options == nullptr) {
+    return SONARE_ERROR_INVALID_PARAMETER;
+  }
+  if (options->meter_candidate_numerator_count < 0 ||
+      options->meter_candidate_numerator_count > SONARE_MAX_METER_CANDIDATE_NUMERATORS) {
     return SONARE_ERROR_INVALID_PARAMETER;
   }
   *out_json = nullptr;
@@ -294,6 +318,12 @@ SonareError sonare_analyze_json_ex(const float* samples, size_t length, int samp
     config.use_chord_key_context = options->use_chord_key_context != 0;
     config.chord_hmm_beam_width = options->chord_hmm_beam_width;
     config.detect_chord_inversions = options->detect_chord_inversions != 0;
+    config.adaptive_tempo = options->adaptive_tempo != 0;
+    config.tempo_update_interval_beats = options->tempo_update_interval_beats;
+    config.meter_candidate_numerators.assign(
+        options->meter_candidate_numerators,
+        options->meter_candidate_numerators + options->meter_candidate_numerator_count);
+    config.meter_denominator = options->meter_denominator;
     MusicAnalyzer analyzer(audio, config);
     AnalysisResult result = analyzer.analyze();
     *out_json = copy_string(analysis_result_to_json(result));

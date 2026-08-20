@@ -105,6 +105,30 @@ Audio create_3_4_pattern(float bpm, int sr = 22050, float duration = 6.0f) {
   return Audio::from_vector(std::move(samples), sr);
 }
 
+/// @brief Creates a click track whose first beat of every bar is accented.
+Audio create_accented_pattern(float bpm, int beats_per_bar, int sr = 22050,
+                              float duration = 10.0f) {
+  int n_samples = static_cast<int>(sr * duration);
+  std::vector<float> samples(n_samples, 0.0f);
+
+  float beat_interval = 60.0f / bpm;
+  int click_length = sr / 100;
+  int beat_count = 0;
+
+  for (float t = 0.0f; t < duration; t += beat_interval) {
+    int start = static_cast<int>(t * sr);
+    float amplitude = (beat_count % beats_per_bar == 0) ? 1.0f : 0.5f;
+
+    for (int i = 0; i < click_length && start + i < n_samples; ++i) {
+      float envelope = 1.0f - static_cast<float>(i) / click_length;
+      samples[start + i] = envelope * amplitude;
+    }
+    beat_count++;
+  }
+
+  return Audio::from_vector(std::move(samples), sr);
+}
+
 }  // namespace
 
 TEST_CASE("RhythmAnalyzer basic", "[rhythm_analyzer]") {
@@ -270,4 +294,64 @@ TEST_CASE("RhythmAnalyzer short audio", "[rhythm_analyzer]") {
 
   // Should still work for short audio
   REQUIRE(analyzer.bpm() > 0.0f);
+}
+
+TEST_CASE("RhythmAnalyzer meter candidates reach its own time signature", "[rhythm_analyzer]") {
+  // RhythmFeatures carries a meter estimate this analyzer runs itself. If the
+  // candidate set stopped here, the reported signature would depend on which
+  // analyzer a caller happened to read.
+  for (int numerator : {5, 7}) {
+    Audio audio = create_accented_pattern(120.0f, numerator, 22050, 10.0f);
+
+    RhythmConfig config;
+    config.start_bpm = 120.0f;
+    config.meter_candidate_numerators = {numerator};
+    RhythmAnalyzer analyzer(audio, config);
+
+    CAPTURE(numerator);
+    REQUIRE(analyzer.features().time_signature.numerator == numerator);
+    REQUIRE(analyzer.features().time_signature.denominator == 4);
+    REQUIRE(analyzer.features().time_signature.confidence > 0.0f);
+
+    RhythmConfig default_config;
+    default_config.start_bpm = 120.0f;
+    RhythmAnalyzer default_analyzer(audio, default_config);
+    const int default_numerator = default_analyzer.features().time_signature.numerator;
+    CAPTURE(default_numerator);
+    REQUIRE(default_numerator != numerator);
+    REQUIRE((default_numerator == 3 || default_numerator == 4 || default_numerator == 6));
+  }
+}
+
+TEST_CASE("RhythmAnalyzer reports the requested beat unit", "[rhythm_analyzer]") {
+  Audio audio = create_4_4_pattern(120.0f, 22050, 8.0f);
+
+  RhythmConfig eighth;
+  eighth.start_bpm = 120.0f;
+  eighth.meter_denominator = 8;
+  RhythmAnalyzer eighth_analyzer(audio, eighth);
+
+  RhythmConfig default_config;
+  default_config.start_bpm = 120.0f;
+  RhythmAnalyzer default_analyzer(audio, default_config);
+
+  CAPTURE(eighth_analyzer.features().time_signature.numerator);
+  REQUIRE(eighth_analyzer.features().time_signature.denominator == 8);
+  REQUIRE(default_analyzer.features().time_signature.denominator == 4);
+}
+
+TEST_CASE("RhythmAnalyzer applies the numerator and beat-unit settings together",
+          "[rhythm_analyzer]") {
+  // Both meter fields are read from the same config, so a copy that carried
+  // only one of them would still be caught here.
+  Audio audio = create_accented_pattern(120.0f, 5, 22050, 10.0f);
+
+  RhythmConfig config;
+  config.start_bpm = 120.0f;
+  config.meter_candidate_numerators = {5};
+  config.meter_denominator = 8;
+  RhythmAnalyzer analyzer(audio, config);
+
+  REQUIRE(analyzer.features().time_signature.numerator == 5);
+  REQUIRE(analyzer.features().time_signature.denominator == 8);
 }

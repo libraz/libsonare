@@ -172,6 +172,10 @@ export interface AnalysisResult {
    */
   beatTimes: Float32Array;
   beats: AnalysisBeat[];
+  /** Indices into `beats` that fall on a measure start. Not the same length as `beats`. */
+  downbeatIndices: number[];
+  /** Beat index the first measure starts on. */
+  downbeatPhase: number;
   /** Detected chord progression. */
   chords: AnalysisChord[];
   /** Detected song-structure sections. */

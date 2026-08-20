@@ -342,6 +342,8 @@ def cmd_analyze(args: argparse.Namespace) -> int:
                         "confidence": r.time_signature.confidence,
                     },
                     "beats": beats,
+                    "downbeat_indices": list(r.downbeat_indices),
+                    "downbeat_phase": r.downbeat_phase,
                     "chords": chords,
                     "sections": sections,
                     "timbre": {

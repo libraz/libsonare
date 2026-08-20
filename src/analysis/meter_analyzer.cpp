@@ -93,6 +93,10 @@ void MeterAnalyzer::analyze(const std::vector<float>& onset_strength,
   float best_score = -1.0f;
   int best_numerator = 4;
   int best_phase = 0;
+  // The phase that scored best for each candidate, kept alongside the scores so
+  // the compound-meter fallback below can adopt the phase belonging to the
+  // numerator it substitutes rather than the one it rejected.
+  std::vector<int> candidate_phases(config_.candidate_numerators.size(), 0);
 
   for (size_t candidate_index = 0; candidate_index < config_.candidate_numerators.size();
        ++candidate_index) {
@@ -158,6 +162,7 @@ void MeterAnalyzer::analyze(const std::vector<float>& onset_strength,
     }
 
     result_.candidate_scores[candidate_index] = candidate_best;
+    candidate_phases[candidate_index] = candidate_phase;
     if (candidate_best > best_score) {
       best_score = candidate_best;
       best_numerator = numerator;
@@ -183,18 +188,31 @@ void MeterAnalyzer::analyze(const std::vector<float>& onset_strength,
       // Resolve the 6-vs-(3|4) ambiguity by score, looking candidates up by
       // value rather than positional index so the result is stable regardless
       // of candidate_numerators ordering.
-      const auto score_for = [this](int numerator) {
+      const auto index_of = [this](int numerator) -> int {
         for (size_t i = 0; i < config_.candidate_numerators.size(); ++i) {
           if (config_.candidate_numerators[i] == numerator) {
-            return result_.candidate_scores[i];
+            return static_cast<int>(i);
           }
         }
-        return -std::numeric_limits<float>::infinity();
+        return -1;
+      };
+      const auto score_for = [this, &index_of](int numerator) {
+        const int index = index_of(numerator);
+        return index < 0 ? -std::numeric_limits<float>::infinity()
+                         : result_.candidate_scores[static_cast<size_t>(index)];
       };
       const float score_3 = score_for(3);
       const float score_4 = score_for(4);
       // If neither 3 nor 4 is a candidate, fall back to 4.
       best_numerator = score_3 > score_4 ? 3 : 4;
+      // Adopt the phase scored for the substituted numerator. Keeping the
+      // phase found for 6 can leave it at or past the new numerator, which
+      // breaks the documented [0, numerator) range and offsets every downstream
+      // bar-position calculation by a beat. When the substitute is not itself a
+      // candidate no phase was scored for it, so wrap the old one instead.
+      const int substitute_index = index_of(best_numerator);
+      best_phase = substitute_index >= 0 ? candidate_phases[static_cast<size_t>(substitute_index)]
+                                         : best_phase % best_numerator;
       denominator = config_.denominator;
       confidence = std::max(0.0f, confidence - 0.15f);
     } else {

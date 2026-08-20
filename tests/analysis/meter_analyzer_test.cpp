@@ -124,3 +124,110 @@ TEST_CASE("MeterAnalyzer retains its existing candidate signatures", "[meter_ana
   REQUIRE(analyzer.result().candidates.front().numerator == 4);
   REQUIRE(analyzer.result().candidates.front().confidence >= 0.0f);
 }
+
+TEST_CASE("MeterAnalyzer detects an odd meter only when it is a candidate", "[meter_analyzer]") {
+  for (int numerator : {5, 7}) {
+    const auto beats = make_beats(numerator, 5);
+
+    MeterConfig widened;
+    widened.candidate_numerators = {3, 4, 5, 6, 7};
+    MeterAnalyzer widened_analyzer({}, beats, widened);
+
+    CAPTURE(numerator, widened_analyzer.result().candidate_scores);
+    REQUIRE(widened_analyzer.time_signature().numerator == numerator);
+    REQUIRE(widened_analyzer.time_signature().denominator == 4);
+    REQUIRE(widened_analyzer.time_signature().confidence > 0.5f);
+    REQUIRE(widened_analyzer.result().downbeat_phase == 0);
+
+    // The same accented beats with the default candidate set cannot report the
+    // odd numerator, so the detection above comes from the config rather than
+    // from the pattern alone.
+    MeterAnalyzer default_analyzer({}, beats);
+    const int default_numerator = default_analyzer.time_signature().numerator;
+    CAPTURE(default_numerator);
+    REQUIRE(default_numerator != numerator);
+    REQUIRE((default_numerator == 3 || default_numerator == 4 || default_numerator == 6));
+  }
+}
+
+TEST_CASE("MeterAnalyzer reports the requested beat unit", "[meter_analyzer]") {
+  // A 4-beat accent pattern never reaches the compound branch, which is the one
+  // place the estimator overrides the requested unit.
+  const auto beats = make_beats(4, 8);
+
+  MeterConfig eighth;
+  eighth.denominator = 8;
+  MeterAnalyzer eighth_analyzer({}, beats, eighth);
+  REQUIRE(eighth_analyzer.time_signature().numerator == 4);
+  REQUIRE(eighth_analyzer.time_signature().denominator == 8);
+
+  MeterConfig half;
+  half.denominator = 2;
+  MeterAnalyzer half_analyzer({}, beats, half);
+  REQUIRE(half_analyzer.time_signature().numerator == 4);
+  REQUIRE(half_analyzer.time_signature().denominator == 2);
+
+  // The candidate list carries the same unit, except for the compound-6 entry
+  // the estimator reports in eighths on its own.
+  for (const auto& candidate : half_analyzer.result().candidates) {
+    CAPTURE(candidate.numerator, candidate.denominator);
+    REQUIRE(candidate.denominator == (candidate.numerator == 6 ? 8 : 2));
+  }
+}
+
+TEST_CASE("MeterAnalyzer keeps the compound beat unit over the requested one", "[meter_analyzer]") {
+  // Documented exception to the requested-unit rule: a resolved compound meter
+  // is reported in eighths whatever the config asked for.
+  const auto beats = make_beats(6, 8);
+
+  MeterConfig config;
+  config.denominator = 2;
+  MeterAnalyzer analyzer({}, beats, config);
+
+  REQUIRE(analyzer.time_signature().numerator == 6);
+  REQUIRE(analyzer.time_signature().denominator == 8);
+}
+
+TEST_CASE("MeterAnalyzer reports an odd meter in the requested unit", "[meter_analyzer]") {
+  // The compound override is keyed on numerator 6, so an odd meter keeps the
+  // requested unit rather than being promoted to eighths.
+  const auto beats = make_beats(5, 5);
+
+  MeterConfig config;
+  config.candidate_numerators = {3, 4, 5, 6};
+  config.denominator = 8;
+  MeterAnalyzer analyzer({}, beats, config);
+
+  REQUIRE(analyzer.time_signature().numerator == 5);
+  REQUIRE(analyzer.time_signature().denominator == 8);
+}
+
+TEST_CASE("MeterAnalyzer phase stays inside the reported numerator", "[meter_analyzer]") {
+  // A 6-accent pattern whose first downbeat is at beat 4 scores best as a
+  // 6-comb at phase 4. When the weak compound evidence sends the result back to
+  // a simple meter, the phase has to follow the numerator that is actually
+  // reported — a phase of 4 against a numerator of 3 addresses no beat of the
+  // first measure and shifts every bar position downstream.
+  std::vector<Beat> beats;
+  const int total = 36;
+  beats.reserve(static_cast<size_t>(total));
+  std::vector<float> onset_strength(static_cast<size_t>(total) * 10, 0.05f);
+  for (int i = 0; i < total; ++i) {
+    const bool downbeat = ((i - 4) % 6 + 6) % 6 == 0;
+    const float strength = downbeat ? 1.0f : 0.3f;
+    beats.push_back({static_cast<float>(i) * 0.5f, i * 10, strength});
+    onset_strength[static_cast<size_t>(i * 10)] = strength;
+  }
+
+  const MeterResult result = estimate_meter(onset_strength, beats, MeterConfig());
+
+  // Precondition, not the property under test: the range check below is only
+  // meaningful while this fixture still takes the simple-meter fallback. A
+  // reported 6 would satisfy `phase < numerator` for the rejected phase too.
+  INFO("reported " << result.time_signature.numerator << "/" << result.time_signature.denominator
+                   << " phase " << result.downbeat_phase);
+  REQUIRE(result.time_signature.numerator != 6);
+
+  REQUIRE(result.downbeat_phase >= 0);
+  REQUIRE(result.downbeat_phase < result.time_signature.numerator);
+}

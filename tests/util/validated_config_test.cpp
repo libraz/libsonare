@@ -66,6 +66,56 @@ TEST_CASE("Validated<MusicAnalyzerConfig> rejects out-of-range fields", "[util][
   });
 }
 
+TEST_CASE("Validated<MusicAnalyzerConfig> rejects unusable meter and tempo-tracking fields",
+          "[util][validated]") {
+  const auto rejects = [](void (*mutate)(MusicAnalyzerConfig&)) {
+    MusicAnalyzerConfig config;
+    mutate(config);
+    REQUIRE_THROWS_AS(Validated<MusicAnalyzerConfig>::make(config), SonareException);
+  };
+  const auto accepts = [](void (*mutate)(MusicAnalyzerConfig&)) {
+    MusicAnalyzerConfig config;
+    mutate(config);
+    REQUIRE_NOTHROW(Validated<MusicAnalyzerConfig>::make(config));
+  };
+
+  rejects([](MusicAnalyzerConfig& c) { c.tempo_update_interval_beats = 0; });
+  rejects([](MusicAnalyzerConfig& c) { c.tempo_update_interval_beats = -1; });
+  // An empty candidate list would silently degrade to a fixed low-confidence
+  // 4/4 that reads like a detection result, so it has to be rejected.
+  rejects([](MusicAnalyzerConfig& c) { c.meter_candidate_numerators.clear(); });
+  rejects([](MusicAnalyzerConfig& c) {
+    c.meter_candidate_numerators.assign(kMaxMeterCandidateNumerators + 1, 4);
+  });
+  rejects([](MusicAnalyzerConfig& c) {
+    c.meter_candidate_numerators = {kMinMeterCandidateNumerator - 1};
+  });
+  rejects([](MusicAnalyzerConfig& c) {
+    c.meter_candidate_numerators = {kMaxMeterCandidateNumerator + 1};
+  });
+  // Every entry is checked, not just the first.
+  rejects([](MusicAnalyzerConfig& c) { c.meter_candidate_numerators = {4, 1}; });
+  rejects([](MusicAnalyzerConfig& c) { c.meter_candidate_numerators = {4, -3}; });
+  // Only a power of two is a note value.
+  rejects([](MusicAnalyzerConfig& c) { c.meter_denominator = 3; });
+  rejects([](MusicAnalyzerConfig& c) { c.meter_denominator = 6; });
+  rejects([](MusicAnalyzerConfig& c) { c.meter_denominator = 0; });
+  rejects([](MusicAnalyzerConfig& c) { c.meter_denominator = -4; });
+  rejects([](MusicAnalyzerConfig& c) { c.meter_denominator = kMaxMeterDenominator * 2; });
+
+  // The inclusive ends of each range stay accepted, so the guards cannot be
+  // tightened past the documented contract without a red test.
+  accepts([](MusicAnalyzerConfig& c) { c.tempo_update_interval_beats = 1; });
+  accepts([](MusicAnalyzerConfig& c) {
+    c.meter_candidate_numerators.assign(kMaxMeterCandidateNumerators, 4);
+  });
+  accepts([](MusicAnalyzerConfig& c) {
+    c.meter_candidate_numerators = {kMinMeterCandidateNumerator, kMaxMeterCandidateNumerator};
+  });
+  accepts([](MusicAnalyzerConfig& c) { c.meter_denominator = 1; });
+  accepts([](MusicAnalyzerConfig& c) { c.meter_denominator = kMaxMeterDenominator; });
+}
+
 TEST_CASE("MusicAnalyzer construction rejects an invalid config", "[util][validated]") {
   const Audio audio = make_tone();
   MusicAnalyzerConfig config;
@@ -74,6 +124,14 @@ TEST_CASE("MusicAnalyzer construction rejects an invalid config", "[util][valida
 
   config = MusicAnalyzerConfig();
   config.chord_hmm_beam_width = 0;
+  REQUIRE_THROWS_AS(construct_analyzer(audio, config), SonareException);
+
+  config = MusicAnalyzerConfig();
+  config.meter_candidate_numerators.clear();
+  REQUIRE_THROWS_AS(construct_analyzer(audio, config), SonareException);
+
+  config = MusicAnalyzerConfig();
+  config.meter_denominator = 3;
   REQUIRE_THROWS_AS(construct_analyzer(audio, config), SonareException);
 
   REQUIRE_NOTHROW(construct_analyzer(audio, MusicAnalyzerConfig()));

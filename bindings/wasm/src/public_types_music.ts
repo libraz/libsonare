@@ -246,6 +246,8 @@ export interface Chord {
   quality: ChordQuality;
   start: number;
   end: number;
+  /** Derived from `end - start`; the core carries only the two endpoints. */
+  duration: number;
   confidence: number;
   name: string;
 }
@@ -362,6 +364,26 @@ export interface AnalysisResult {
   timeSignatureCandidates: TimeSignature[];
   beatTimes: Float32Array;
   beats: Beat[];
+  /**
+   * Indices into {@link AnalysisResult.beats} that fall on a measure start.
+   *
+   * @remarks
+   * Not the same length as `beats` — it holds one entry per detected downbeat,
+   * and each entry indexes `beats`, so `beats[downbeatIndices[k]]` is the k-th
+   * downbeat. Testing a beat for downbeat status is a membership check on this
+   * list rather than a time comparison against a separate downbeat series.
+   */
+  downbeatIndices: number[];
+  /**
+   * Beat index the first measure starts on, in `[0, timeSignature.numerator)`.
+   *
+   * @remarks
+   * The meter estimator's phase, so `downbeatIndices` normally begins at this
+   * value. It is not re-derived when downbeats are refined from chord and
+   * low-frequency-energy evidence, so the two can disagree when the refinement
+   * moves the first measure start.
+   */
+  downbeatPhase: number;
   chords: Chord[];
   sections: Section[];
   timbre: Timbre;

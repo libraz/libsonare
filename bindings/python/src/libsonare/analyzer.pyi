@@ -276,6 +276,10 @@ def analyze(
     use_chord_key_context: bool = False,
     chord_hmm_beam_width: int = 24,
     detect_chord_inversions: bool = False,
+    adaptive_tempo: bool = False,
+    tempo_update_interval_beats: int = 8,
+    meter_candidate_numerators: Sequence[int] | None = None,
+    meter_denominator: int = 4,
 ) -> AnalysisResult: ...
 def analyze_with_progress(
     samples: FloatSamples,

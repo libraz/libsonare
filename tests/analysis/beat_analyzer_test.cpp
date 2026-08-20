@@ -438,3 +438,96 @@ TEST_CASE("BeatAnalyzer accessors", "[beat_analyzer]") {
   REQUIRE(analyzer.beat_times().size() == analyzer.count());
   REQUIRE(analyzer.beat_frames().size() == analyzer.count());
 }
+
+TEST_CASE("BeatAnalyzer detects an odd meter only when its numerator is a candidate",
+          "[beat_analyzer]") {
+  for (int numerator : {5, 7}) {
+    Audio audio = create_drum_pattern(120.0f, numerator, 22050, 10.0f);
+
+    BeatConfig widened;
+    widened.start_bpm = 120.0f;
+    widened.meter_candidate_numerators = {3, 4, 5, 6, 7};
+    BeatAnalyzer widened_analyzer(audio, widened);
+
+    CAPTURE(numerator, widened_analyzer.count());
+    REQUIRE(widened_analyzer.time_signature().numerator == numerator);
+    REQUIRE(widened_analyzer.time_signature().denominator == 4);
+    // The phase the meter estimate settled on has to address a beat inside the
+    // bar it belongs to.
+    REQUIRE(widened_analyzer.downbeat_phase() >= 0);
+    REQUIRE(widened_analyzer.downbeat_phase() < numerator);
+
+    // Same audio, default candidate set: the odd numerator is unreachable, so
+    // the detection above is the config taking effect and not the pattern.
+    BeatConfig default_config;
+    default_config.start_bpm = 120.0f;
+    BeatAnalyzer default_analyzer(audio, default_config);
+    const int default_numerator = default_analyzer.time_signature().numerator;
+    CAPTURE(default_numerator);
+    REQUIRE(default_numerator != numerator);
+    REQUIRE((default_numerator == 3 || default_numerator == 4 || default_numerator == 6));
+  }
+}
+
+TEST_CASE("BeatAnalyzer reports the requested beat unit", "[beat_analyzer]") {
+  Audio audio = create_drum_pattern(120.0f, 4, 22050, 8.0f);
+
+  BeatConfig eighth;
+  eighth.start_bpm = 120.0f;
+  eighth.meter_denominator = 8;
+  BeatAnalyzer eighth_analyzer(audio, eighth);
+
+  BeatConfig default_config;
+  default_config.start_bpm = 120.0f;
+  BeatAnalyzer default_analyzer(audio, default_config);
+
+  CAPTURE(eighth_analyzer.time_signature().numerator);
+  REQUIRE(eighth_analyzer.time_signature().denominator == 8);
+  REQUIRE(default_analyzer.time_signature().denominator == 4);
+}
+
+TEST_CASE("BeatAnalyzer uses the requested beat unit for the too-few-beats default",
+          "[beat_analyzer]") {
+  // One second of audio cannot produce the eight beats the meter estimator
+  // needs, and the low-confidence fallback still has to answer in the unit the
+  // caller asked for.
+  Audio audio = create_drum_pattern(120.0f, 4, 22050, 1.0f);
+
+  BeatConfig config;
+  config.start_bpm = 120.0f;
+  config.meter_denominator = 8;
+  BeatAnalyzer analyzer(audio, config);
+
+  REQUIRE(analyzer.count() < 8);
+  REQUIRE(analyzer.time_signature().numerator == 4);
+  REQUIRE(analyzer.time_signature().denominator == 8);
+  REQUIRE(analyzer.downbeat_phase() == 0);
+}
+
+TEST_CASE("BeatAnalyzer downbeat phase and indices address its own beats", "[beat_analyzer]") {
+  Audio audio = create_drum_pattern(120.0f, 4, 22050, 8.0f);
+
+  BeatConfig config;
+  config.start_bpm = 120.0f;
+  BeatAnalyzer analyzer(audio, config);
+
+  const int numerator = analyzer.time_signature().numerator;
+  REQUIRE(numerator > 0);
+  CAPTURE(numerator, analyzer.downbeat_phase(), analyzer.count());
+  REQUIRE(analyzer.downbeat_phase() >= 0);
+  REQUIRE(analyzer.downbeat_phase() < numerator);
+
+  const auto& indices = analyzer.downbeat_indices();
+  REQUIRE_FALSE(indices.empty());
+  REQUIRE(indices.size() == analyzer.downbeats().size());
+
+  int previous = -1;
+  for (size_t i = 0; i < indices.size(); ++i) {
+    CAPTURE(i, indices[i]);
+    REQUIRE(indices[i] >= 0);
+    REQUIRE(indices[i] < static_cast<int>(analyzer.beats().size()));
+    REQUIRE(indices[i] > previous);
+    previous = indices[i];
+    REQUIRE(analyzer.downbeats()[i].time == analyzer.beats()[static_cast<size_t>(indices[i])].time);
+  }
+}

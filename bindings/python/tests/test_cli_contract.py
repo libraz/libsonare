@@ -515,6 +515,8 @@ def test_info_and_lufs_json_match_the_native_cli_schema(tmp_path) -> None:
         "key",
         "time_signature",
         "beats",
+        "downbeat_indices",
+        "downbeat_phase",
         "chords",
         "sections",
         "timbre",
@@ -523,6 +525,10 @@ def test_info_and_lufs_json_match_the_native_cli_schema(tmp_path) -> None:
         "form",
     }
     assert isinstance(analyze["beats"], list)
+    # Downbeats are indices into beats, so every one has to address a beat.
+    assert isinstance(analyze["downbeat_indices"], list)
+    assert all(0 <= index < len(analyze["beats"]) for index in analyze["downbeat_indices"])
+    assert isinstance(analyze["downbeat_phase"], int)
 
 
 def _minimal_analysis_result(*, sections: list[object] | None = None) -> SimpleNamespace:
@@ -537,6 +543,8 @@ def _minimal_analysis_result(*, sections: list[object] | None = None) -> SimpleN
         ),
         time_signature=SimpleNamespace(numerator=4, denominator=4, confidence=0.5),
         beats=[],
+        downbeat_indices=[],
+        downbeat_phase=0,
         chords=[],
         sections=[] if sections is None else sections,
         timbre=None,

@@ -76,6 +76,9 @@ sonare::AnalysisResult make_analysis_schema_fixture() {
   result.time_signature = {4, 4, 0.7f};
   result.time_signature_candidates.push_back({4, 4, 0.7f});
   result.beats.push_back({0.25f, 0, 0.6f});
+  result.beats.push_back({0.75f, 22, 0.4f});
+  result.downbeat_indices = {0};
+  result.downbeat_phase = 2;
   result.chords.push_back({sonare::PitchClass::C, sonare::ChordQuality::Major, 0.0f, 1.0f, 0.8f,
                            sonare::PitchClass::C});
   result.sections.push_back({sonare::SectionType::Verse, 0.0f, 1.0f, 0.5f, 0.9f});
@@ -960,6 +963,14 @@ TEST_CASE("sonare_analyze_json", "[.][slow][c_api]") {
     const auto& expected_paths = sonare::analysis_result_schema_paths();
     const std::set<std::string> expected(expected_paths.begin(), expected_paths.end());
     REQUIRE(actual == expected);
+
+    // Downbeats serialize as indices into the beat array plus the meter phase,
+    // so a reader can resolve them without a second time series.
+    REQUIRE(root["downbeatIndices"].is_array());
+    REQUIRE(root["downbeatIndices"].size() == fixture.downbeat_indices.size());
+    REQUIRE(root["downbeatIndices"][static_cast<std::size_t>(0)].as_number() ==
+            static_cast<double>(fixture.downbeat_indices.front()));
+    REQUIRE(root["downbeatPhase"].as_number() == static_cast<double>(fixture.downbeat_phase));
   }
 
   SECTION("reports progress and matches the silent variant's schema") {

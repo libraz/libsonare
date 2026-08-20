@@ -135,6 +135,15 @@ typedef int (*SonareCancelCallback)(void* user_data);
    sonare_free_string. */
 SonareError sonare_analyze_json(const float* samples, size_t length, int sample_rate,
                                 char** out_json);
+/* Capacity of SonareMusicAnalyzeOptions::meter_candidate_numerators. Part of
+   the public contract: a caller cannot request more numerators than this, and
+   every binding rejects an over-long list rather than truncating it. */
+#define SONARE_MAX_METER_CANDIDATE_NUMERATORS 16
+
+/* Options for sonare_analyze_json_ex. Boolean fields are 0/1 ints. Always
+   start from sonare_music_analyze_options_default() rather than zeroing the
+   struct: a zeroed meter_candidate_numerator_count is rejected, not treated as
+   "use the default set". */
 typedef struct {
   int n_fft;
   int hop_length;
@@ -150,6 +159,19 @@ typedef struct {
   int use_chord_key_context;
   int chord_hmm_beam_width;
   int detect_chord_inversions;
+  /* Track a locally updated tempo prior through beat tracking. */
+  int adaptive_tempo;
+  /* Local tempo context length in beats; used only when adaptive_tempo is 1. */
+  int tempo_update_interval_beats;
+  /* Meter numerators the estimator scores. Only the first
+     meter_candidate_numerator_count entries are read; each must be in [2, 32].
+     Widening the set does not force a wider meter — the default {3, 4, 6}
+     reproduces the historical result. */
+  int meter_candidate_numerators[SONARE_MAX_METER_CANDIDATE_NUMERATORS];
+  int meter_candidate_numerator_count;
+  /* Beat unit reported for the detected meter; a power of two in [1, 32]. The
+     estimator still reports 8 on its own when it resolves a compound meter. */
+  int meter_denominator;
 } SonareMusicAnalyzeOptions;
 
 SonareMusicAnalyzeOptions sonare_music_analyze_options_default(void);

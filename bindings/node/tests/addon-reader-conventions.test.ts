@@ -16,6 +16,7 @@
 
 import { describe, expect, it } from 'vitest';
 import {
+  analyze,
   decomposeStems,
   masteringDynamicsCompressor,
   masteringDynamicsGate,
@@ -94,6 +95,7 @@ const UNDEFINED_EQUIVALENCE: ReadonlyArray<{
   invoke: (options: Record<string, unknown>) => unknown;
 }> = [
   { jsName: 'pcen', invoke: (o) => Array.from(pcen(sine(32), 4, 8, o)) },
+  { jsName: 'analyze', invoke: (o) => analyze(sine(8192), SR, o) },
   {
     jsName: 'noteSegments',
     invoke: (o) =>
@@ -357,6 +359,10 @@ const UNCOVERED_OPTION_READERS: ReadonlyMap<string, string> = new Map(
       ['addAutomationLane', 'Needs a project with a parameterised track.'],
       ['addClip', 'Needs a project with a registered audio source.'],
       ['addLoopRecordingTakes', 'Needs a capture session with recorded takes.'],
+      [
+        'analyzeAsync',
+        'Shares its reader with analyze, which the table drives; the table compares synchronous return values.',
+      ],
       ['annotateChords', 'Needs a project carrying analysed chord data.'],
       ['annotateKeys', 'Needs a project carrying analysed key data.'],
       ['bounce', 'Covered by project.test.ts; needs a fully built project.'],

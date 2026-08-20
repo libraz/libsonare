@@ -48,6 +48,13 @@ struct RhythmConfig {
   int n_fft = 2048;               ///< FFT size
   int hop_length = 512;           ///< Hop length
   float swing_threshold = 0.15f;  ///< Threshold for detecting swing
+  /// @brief Meter numerators handed to the meter estimator.
+  /// @details Must be kept in step with BeatConfig's copy: this analyzer runs
+  ///          its own meter estimate for RhythmFeatures::time_signature, so a
+  ///          candidate set that reaches only one of the two makes the reported
+  ///          meter depend on which field a caller happens to read.
+  std::vector<int> meter_candidate_numerators = {3, 4, 6};
+  int meter_denominator = 4;  ///< Beat unit handed to the meter estimator
 };
 
 /// @brief Rhythm analyzer for detecting musical rhythm characteristics.

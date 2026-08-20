@@ -3175,6 +3175,11 @@
                 }
               }
             },
+            "downbeat_indices": {
+              "type": "array",
+              "items": "integer"
+            },
+            "downbeat_phase": "integer",
             "chords": {
               "type": "array",
               "items": {

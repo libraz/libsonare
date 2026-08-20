@@ -374,6 +374,10 @@ def _parse_analysis_json(data: dict[str, Any]) -> AnalysisResult:
     beat_times = [float(b.get("time", 0.0)) for b in beats_raw]
     beat_strengths = [float(b.get("strength", 0.0)) for b in beats_raw]
 
+    # Downbeats are indices into ``beats``, not a parallel array.
+    downbeat_indices = [int(i) for i in data.get("downbeatIndices", [])]
+    downbeat_phase = int(data.get("downbeatPhase", 0))
+
     # Chords
     chord_quality_str: dict[str, str] = {
         "major": "major",
@@ -503,6 +507,8 @@ def _parse_analysis_json(data: dict[str, Any]) -> AnalysisResult:
         time_signature=time_signature,
         beat_times=beat_times,
         beat_strengths=beat_strengths,
+        downbeat_indices=downbeat_indices,
+        downbeat_phase=downbeat_phase,
         bpm_candidates=bpm_candidates,
         time_signature_candidates=time_signature_candidates,
         chords=chords,

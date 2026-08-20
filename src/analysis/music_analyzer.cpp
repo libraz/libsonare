@@ -42,6 +42,31 @@ void validate_config(const MusicAnalyzerConfig& config) {
   // which turns chord smoothing into an order-of-magnitude slower full search.
   SONARE_CHECK_MSG(config.chord_hmm_beam_width > 0, ErrorCode::InvalidParameter,
                    "MusicAnalyzerConfig: chordHmmBeamWidth must be positive");
+  SONARE_CHECK_MSG(config.tempo_update_interval_beats > 0, ErrorCode::InvalidParameter,
+                   "MusicAnalyzerConfig: tempoUpdateIntervalBeats must be positive");
+  // An empty candidate set makes the meter estimator return a fixed
+  // low-confidence 4/4 rather than searching, which reads as a detection
+  // result. Reject it instead so a caller who cleared the list is told.
+  SONARE_CHECK_MSG(!config.meter_candidate_numerators.empty(), ErrorCode::InvalidParameter,
+                   "MusicAnalyzerConfig: meterCandidateNumerators must not be empty");
+  SONARE_CHECK_MSG(
+      config.meter_candidate_numerators.size() <= static_cast<size_t>(kMaxMeterCandidateNumerators),
+      ErrorCode::InvalidParameter,
+      "MusicAnalyzerConfig: meterCandidateNumerators must hold at most 16 entries");
+  for (int numerator : config.meter_candidate_numerators) {
+    SONARE_CHECK_MSG(
+        numerator >= kMinMeterCandidateNumerator && numerator <= kMaxMeterCandidateNumerator,
+        ErrorCode::InvalidParameter,
+        "MusicAnalyzerConfig: meterCandidateNumerators entries must be in [2, 32]");
+  }
+  // Only a power of two is a note value, and the estimator reports 8 itself
+  // when it resolves a compound meter, so a non-power-of-two here could never
+  // round-trip through the reported signature.
+  SONARE_CHECK_MSG(config.meter_denominator > 0 &&
+                       config.meter_denominator <= kMaxMeterDenominator &&
+                       (config.meter_denominator & (config.meter_denominator - 1)) == 0,
+                   ErrorCode::InvalidParameter,
+                   "MusicAnalyzerConfig: meterDenominator must be a power of two in [1, 32]");
 }
 
 MusicAnalyzer::MusicAnalyzer(const Audio& audio, const MusicAnalyzerConfig& config)
@@ -124,6 +149,10 @@ BeatAnalyzer& MusicAnalyzer::beat_analyzer() {
     beat_config.start_bpm = config_->start_bpm;
     beat_config.n_fft = config_->n_fft;
     beat_config.hop_length = config_->hop_length;
+    beat_config.adaptive_tempo = config_->adaptive_tempo;
+    beat_config.tempo_update_interval_beats = config_->tempo_update_interval_beats;
+    beat_config.meter_candidate_numerators = config_->meter_candidate_numerators;
+    beat_config.meter_denominator = config_->meter_denominator;
     // Use cached onset strength to avoid recomputation
     beat_analyzer_ = std::make_unique<BeatAnalyzer>(onset_strength(), analysis_sr_,
                                                     config_->hop_length, beat_config);
@@ -202,6 +231,8 @@ RhythmAnalyzer& MusicAnalyzer::rhythm_analyzer() {
     rhythm_config.start_bpm = config_->start_bpm;
     rhythm_config.n_fft = config_->n_fft;
     rhythm_config.hop_length = config_->hop_length;
+    rhythm_config.meter_candidate_numerators = config_->meter_candidate_numerators;
+    rhythm_config.meter_denominator = config_->meter_denominator;
     // Use cached beat_analyzer to avoid recomputation
     rhythm_analyzer_ = std::make_unique<RhythmAnalyzer>(beat_analyzer(), rhythm_config);
   });
@@ -467,6 +498,19 @@ std::optional<AnalysisResult> MusicAnalyzer::analyze_impl() {
     if (cancel_callback_ && cancel_callback_()) return std::nullopt;
   }
   result.chords = chord_analyzer().chords();
+
+  // Downbeats are read only now that chord_analyzer() has run: its lazy
+  // initialization re-refines the same BeatAnalyzer with chord-change evidence,
+  // so reading them alongside the beats above would publish the preliminary
+  // low-frequency-energy-only estimate.
+  result.downbeat_indices = beat_analyzer().downbeat_indices();
+  result.downbeat_phase = beat_analyzer().downbeat_phase();
+  // Read from the same post-chord refinement as the downbeats above, so the
+  // chord-change stream is the populated one rather than the empty vector the
+  // preliminary pass scored.
+  result.beat_observations.onset_strength = beat_analyzer().beat_onset_observations();
+  result.beat_observations.low_frequency_energy = beat_analyzer().beat_low_frequency_observations();
+  result.beat_observations.chord_change = beat_analyzer().beat_chord_change_observations();
 
   // Refine key using chord progression analysis
   result.key = refine_key_with_chords(chroma_key, result.chords);

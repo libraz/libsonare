@@ -148,6 +148,8 @@ export interface WasmAnalysisResult {
   timeSignature: WasmTimeSignatureResult;
   timeSignatureCandidates: WasmTimeSignatureResult[];
   beats: WasmBeatResult[];
+  downbeatIndices: number[];
+  downbeatPhase: number;
   chords: WasmChordResult[];
   sections: WasmSectionResult[];
   timbre: WasmTimbreResult;

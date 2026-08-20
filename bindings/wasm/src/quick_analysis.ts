@@ -387,19 +387,8 @@ export function chordFunctionalAnalysis(
 }
 
 /**
- * Perform complete music analysis.
- *
- * @param samples - Audio samples (mono, float32)
- * @param sampleRate - Sample rate in Hz (default: 22050)
- * @returns Complete analysis result
- *
- * @remarks
- * This call is synchronous and blocks until analysis completes. Unlike the
- * Node binding (which offers `analyzeAsync` on a libuv worker thread), the
- * WASM build runs on a single thread, so there is no non-blocking variant —
- * the DSP pipeline always runs to completion on the calling thread. To keep
- * the UI responsive for long inputs, drive this from a Web Worker and use
- * {@link analyzeWithProgress} to report progress.
+ * Options for {@link analyze}. Every field is optional and falls back to the
+ * core default when omitted.
  */
 export interface MusicAnalyzeOptions {
   nFft?: number;
@@ -416,9 +405,46 @@ export interface MusicAnalyzeOptions {
   useChordKeyContext?: boolean;
   chordHmmBeamWidth?: number;
   detectChordInversions?: boolean;
+  /**
+   * Track a locally updated tempo prior during beat tracking (default: false).
+   */
+  adaptiveTempo?: boolean;
+  /**
+   * Length of the local tempo context in beats (default: 8). Must be positive.
+   */
+  tempoUpdateIntervalBeats?: number;
+  /**
+   * Meter numerators the estimator scores (default: `[3, 4, 6]`).
+   *
+   * @remarks
+   * Adding a numerator widens the search; it does not force the result. The
+   * list must hold between 1 and 16 entries, each in `[2, 32]`.
+   */
+  meterCandidateNumerators?: number[];
+  /**
+   * Beat unit reported for the detected meter (default: 4). Must be a power of
+   * two in `[1, 32]`. The estimator still reports 8 on its own when it resolves
+   * a compound meter, so this is the unit for everything else.
+   */
+  meterDenominator?: number;
 }
 export interface MusicAnalyzeRequest extends SamplesRequest, MusicAnalyzeOptions {}
 
+/**
+ * Perform complete music analysis.
+ *
+ * @param samples - Audio samples (mono, float32)
+ * @param sampleRate - Sample rate in Hz (default: 22050)
+ * @returns Complete analysis result
+ *
+ * @remarks
+ * This call is synchronous and blocks until analysis completes. Unlike the
+ * Node binding (which offers `analyzeAsync` on a libuv worker thread), the
+ * WASM build runs on a single thread, so there is no non-blocking variant —
+ * the DSP pipeline always runs to completion on the calling thread. To keep
+ * the UI responsive for long inputs, drive this from a Web Worker and use
+ * {@link analyzeWithProgress} to report progress.
+ */
 export function analyze(request: MusicAnalyzeRequest): AnalysisResult;
 export function analyze(
   samples: Float32Array,

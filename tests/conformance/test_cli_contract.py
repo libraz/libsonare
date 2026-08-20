@@ -172,6 +172,8 @@ class CliContractSelfTest(unittest.TestCase):
                 "key",
                 "time_signature",
                 "beats",
+                "downbeat_indices",
+                "downbeat_phase",
                 "chords",
                 "sections",
                 "timbre",

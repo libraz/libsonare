@@ -537,7 +537,11 @@ int cmd_analyze(const CliArgs& args, const Audio& audio) {
     for (const auto& b : r.beats) {
       json.begin_object().kv("time", b.time).kv("strength", b.strength).end_object();
     }
-    json.end_array().key("chords").begin_array();
+    json.end_array().key("downbeat_indices").begin_array();
+    for (int index : r.downbeat_indices) {
+      json.value(index);
+    }
+    json.end_array().kv("downbeat_phase", r.downbeat_phase).key("chords").begin_array();
     for (const auto& c : r.chords) {
       json.begin_object()
           .kv("name", c.to_string())

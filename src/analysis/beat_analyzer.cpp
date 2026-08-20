@@ -213,6 +213,9 @@ void BeatAnalyzer::refine_downbeats(const std::vector<float>& low_frequency_ener
   if (beats_.empty()) {
     downbeat_indices_.clear();
     downbeats_.clear();
+    onset_observations_.clear();
+    low_frequency_observations_.clear();
+    chord_change_observations_.clear();
     return;
   }
 
@@ -221,6 +224,10 @@ void BeatAnalyzer::refine_downbeats(const std::vector<float>& low_frequency_ener
   observations.chord_changes = chord_changes;
   observations.beat_strengths =
       onset_strength_observations(beats_, onset_strength_, sr_, hop_length_);
+
+  onset_observations_ = observations.beat_strengths;
+  low_frequency_observations_ = low_frequency_energy;
+  chord_change_observations_ = chord_changes;
 
   DownbeatResult downbeat_result =
       estimate_downbeats(beats_, time_signature_, downbeat_phase_, observations);
@@ -491,8 +498,14 @@ void BeatAnalyzer::track_beats() {
 }
 
 void BeatAnalyzer::estimate_time_signature(const std::vector<float>& beat_strength_observations) {
+  MeterConfig meter_config;
+  meter_config.candidate_numerators = config_.meter_candidate_numerators;
+  meter_config.denominator = config_.meter_denominator;
+
   if (beats_.size() < 8) {
-    time_signature_ = {4, 4, 0.5f};  // Default to 4/4 with low confidence
+    // Matches MeterAnalyzer's own too-few-beats guard, so the same condition
+    // reports the same signature whichever estimator reaches it first.
+    time_signature_ = {4, meter_config.denominator, 0.5f};  // Low-confidence default
     time_signature_candidates_ = {time_signature_};
     downbeat_phase_ = 0;
     DownbeatResult downbeat_result = estimate_downbeats(beats_, time_signature_, 0);
@@ -512,9 +525,9 @@ void BeatAnalyzer::estimate_time_signature(const std::vector<float>& beat_streng
       observed_beats[i].strength =
           std::clamp(beat_strength_observations[i] / observation_max, 0.0f, 1.0f);
     }
-    meter = estimate_meter({}, observed_beats);
+    meter = estimate_meter({}, observed_beats, meter_config);
   } else {
-    meter = estimate_meter(onset_strength_, beats_);
+    meter = estimate_meter(onset_strength_, beats_, meter_config);
   }
   time_signature_ = meter.time_signature;
   time_signature_candidates_ = std::move(meter.candidates);
