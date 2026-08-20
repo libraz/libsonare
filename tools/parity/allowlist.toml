@@ -659,14 +659,21 @@ fields = [
   # --- category 1: canonical name strings beside a C enum ordinal ---
   # Both JS facades add the core's canonical spelling next to the ordinal, and
   # say so in-file ("Canonical core spelling; stable across all language
-  # bindings"). `chord.duration` is deliberately NOT listed: it exists on Node
-  # and not on WASM, which is real cross-facade drift.
+  # bindings").
   "key.name",
   "key.short_name",
   "section.name",
   "chord.name",
   "chord.root_name",
   "chord.bass_name",
+
+  # --- category 1: a span reported as its two endpoints plus their difference ---
+  # The C struct carries `start` and `end`; every facade also exposes the span
+  # itself, because a caller asking "how long is this chord" should not have to
+  # subtract. Python derives it as a property, Node computes it in the addon,
+  # WASM computes it in the result converter, and all three define it as
+  # `end - start`, so the three agree on both the name and the value.
+  "chord.duration",
 ]
 
 # Category 4 (intentionally one-sided): the facade record is a RICHER read model
