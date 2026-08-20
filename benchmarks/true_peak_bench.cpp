@@ -8,7 +8,11 @@
 ///
 ///  1. MeterProcessor::process() with true peak off vs on (2x / 4x / 8x), which
 ///     is the cost a host actually pays, stated as a share of the real-time
-///     budget for the block.
+///     budget for the block. The engine's master meter runs the 4x variant
+///     (MeterConfig::true_peak_oversample defaults to 4), so that is the row to
+///     read for the shipped configuration; 2x and 8x are there for comparison.
+///     Two percentages are reported per row and they answer different
+///     questions - see the legend printed above the meter table.
 ///  2. TruePeakFilter::upsample_with_history() in isolation, which is where
 ///     essentially all of that cost sits.
 ///  3. The reading itself at several block sizes, because the streaming
@@ -227,6 +231,22 @@ int main(int argc, char** argv) {
   std::printf(
       "# meter,channels,block,variant,p50_us,p95_us,p50_pct_realtime,delta_pct_realtime,"
       "delta_ns_per_frame,max_true_peak_db\n");
+  // Both percentage columns are shares of the same real-time budget, so they are
+  // easy to confuse; they are not interchangeable.
+  //   p50_pct_realtime   total cost of MeterProcessor::process() for this variant.
+  //   delta_pct_realtime that total minus the lufs_only baseline at the same
+  //                      channel count and block size, i.e. the cost of TURNING
+  //                      TRUE PEAK ON. Quote this one when the question is what
+  //                      the feature costs; it runs 1.2x-1.5x below the total.
+  // Both are wall-clock shares and inflate with whatever else the machine is
+  // doing - the same binary reads over 2x higher under heavy load than on an idle
+  // machine, which is wider than the gap between the two columns. A figure taken
+  // from here is only comparable to another one measured under the same load, so
+  // record the load alongside any number quoted outside this file.
+  std::printf(
+      "# p50_pct_realtime = total meter cost; delta_pct_realtime = cost of enabling true peak"
+      " (vs lufs_only). Both scale with machine load; quote them with the load they were"
+      " measured under.\n");
   const int phase_blocks = 500;
   const int rounds = std::max(2, iterations / phase_blocks);
   for (const int channels : {1, 2}) {
