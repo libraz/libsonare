@@ -1,8 +1,8 @@
 /// @file modulation_inserts_test.cpp
 /// @brief The GS-EFX-driven modulation inserts (wah / auto-wah / rotary /
-///        ring modulator / pitch shifter): each imparts its characteristic
-///        transformation, stays finite/stable, renders deterministically, and
-///        builds through the insert factory.
+///        phaser / ring modulator / pitch shifter): each imparts its
+///        characteristic transformation, stays finite/stable, renders
+///        deterministically, and builds through the insert factory.
 
 #include <catch2/catch_test_macros.hpp>
 #include <cmath>
@@ -11,6 +11,7 @@
 
 #include "core/fft.h"
 #include "effects/modulation/auto_wah.h"
+#include "effects/modulation/phaser.h"
 #include "effects/modulation/pitch_shifter.h"
 #include "effects/modulation/ring_modulator.h"
 #include "effects/modulation/rotary.h"
@@ -170,6 +171,70 @@ TEST_CASE("the rotary speaker decorrelates a mono input into a swirling stereo",
   REQUIRE(rms(diff, 2400, diff.size()) > 0.05f * rms(left, 2400, left.size()));
 }
 
+TEST_CASE("the phaser sweeps its two channels out of step", "[effects][modulation][phaser]") {
+  // The phaser is a stereo effect: its notches must not sit on the same
+  // frequencies in both channels. Driving the pair from one oscillator leaves an
+  // identical L/R input identical on the way out, which is a mono effect wearing
+  // a stereo label -- no width, and the sweep collapses on a mono fold.
+  Phaser fx;  // Default sweep: 0.4 Hz over 300..1600 Hz, 4 stages, 50% wet.
+  const std::vector<float> input = square(220.0, 0.3f, kNumSamples);
+  std::vector<float> left = input;
+  std::vector<float> right = input;
+  fx.prepare(kRate, 512);
+  for (size_t off = 0; off + 512 <= left.size(); off += 512) {
+    float* block[2] = {left.data() + off, right.data() + off};
+    fx.process(block, 2, 512);
+  }
+  REQUIRE(all_finite(left));
+  REQUIRE(all_finite(right));
+
+  // The notches are deep enough to hear on a single channel...
+  std::vector<float> wet(left.size());
+  for (size_t i = 0; i < wet.size(); ++i) wet[i] = left[i] - input[i];
+  REQUIRE(rms(wet, 2400, wet.size()) > 0.05f * rms(input, 2400, input.size()));
+
+  // ...and the two sweeps are a quarter cycle apart, so the channels come out
+  // decorrelated instead of bit-identical.
+  std::vector<float> diff(left.size());
+  for (size_t i = 0; i < diff.size(); ++i) diff[i] = left[i] - right[i];
+  REQUIRE(rms(diff, 2400, diff.size()) > 0.05f * rms(left, 2400, left.size()));
+}
+
+TEST_CASE("the rotary speaker's tremolo does not add gain", "[effects][modulation][rotary]") {
+  // A tremolo is an amplitude modulator, so its loudest point is the unmodulated
+  // signal. Swinging the gain symmetrically around unity instead would make the
+  // effect louder the deeper it is set, and the depth control would double as an
+  // undocumented makeup gain. Two depths are checked because the defect scales
+  // with depth: a single depth cannot tell a fixed offset from a scaling one.
+  const auto peak = [](const std::vector<float>& v, size_t begin) {
+    float m = 0.0f;
+    for (size_t i = begin; i < v.size(); ++i) m = std::max(m, std::abs(v[i]));
+    return m;
+  };
+  const std::vector<float> input = sine(220.0, 0.4f, kNumSamples);
+  const float input_peak = peak(input, 2400);
+
+  for (const float tremolo : {0.5f, 1.0f}) {
+    Rotary fx({/*rate_hz=*/6.0f, /*depth_ms=*/1.5f, tremolo, /*stereo_spread=*/1.0f,
+               /*dry_wet=*/1.0f});
+    std::vector<float> left = input;
+    std::vector<float> right = input;
+    fx.prepare(kRate, 512);
+    for (size_t off = 0; off + 512 <= left.size(); off += 512) {
+      float* block[2] = {left.data() + off, right.data() + off};
+      fx.process(block, 2, 512);
+    }
+    INFO("tremolo depth " << tremolo);
+    // The horn/drum crossover splits and re-sums the signal through two
+    // different delays, so the reconstruction alone lifts the peak to about
+    // 1.15x regardless of depth -- that is the floor this bound has to clear,
+    // not zero. A gain swinging around unity instead measures 1.51x at depth
+    // 0.5 and 1.86x at depth 1.0, so the bound sits between the two.
+    REQUIRE(peak(left, 2400) < input_peak * 1.25f);
+    REQUIRE(peak(right, 2400) < input_peak * 1.25f);
+  }
+}
+
 TEST_CASE("the pitch shifter raises a tone by an octave", "[effects][modulation][pitchshift]") {
   PitchShifter up({/*semitones=*/12.0f, /*dry_wet=*/1.0f});
   const std::vector<float> shifted = run_mono(up, sine(220.0, 0.4f, kNumSamples));
@@ -182,6 +247,30 @@ TEST_CASE("the pitch shifter raises a tone by an octave", "[effects][modulation]
   const std::vector<float> passed = run_mono(unity, sine(220.0, 0.4f, kNumSamples));
   REQUIRE(dominant_hz(passed) > 200.0);
   REQUIRE(dominant_hz(passed) < 240.0);
+}
+
+TEST_CASE("the pitch shifter is sample-identical at zero shift",
+          "[effects][modulation][pitchshift][latency]") {
+  // The grain taps sit half a window apart, so an unshifted signal used to come
+  // out delayed by that half window (22.5 ms) while the processor reported zero
+  // latency. Zero semitones must now be an exact passthrough, at any mix, so the
+  // declared latency is the truth.
+  const std::vector<float> input = square(180.0, 0.35f, kNumSamples);
+  for (float dry_wet : {1.0f, 0.5f, 0.0f}) {
+    PitchShifter unity({/*semitones=*/0.0f, dry_wet});
+    const std::vector<float> out = run_mono(unity, input);
+    INFO("dryWet " << dry_wet);
+    REQUIRE(out == input);
+    REQUIRE(unity.latency_samples() == 0);
+  }
+
+  // The short circuit must not swallow a real shift: an impulse driven through a
+  // shifting instance still comes out delayed by the grain read, so a caller
+  // that asked for a shift keeps getting one.
+  std::vector<float> impulse(kNumSamples, 0.0f);
+  impulse[128] = 0.5f;
+  PitchShifter shifted({/*semitones=*/7.0f, /*dry_wet=*/1.0f});
+  REQUIRE(run_mono(shifted, impulse) != impulse);
 }
 
 TEST_CASE("the new modulation inserts render deterministically", "[effects][modulation]") {

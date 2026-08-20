@@ -206,10 +206,10 @@ Audio spectral_edit(const Audio& audio, const SpectralEditConfig& config,
     }
   }
 
-  Spectrogram edited =
-      Spectrogram::from_complex(buf.data(), n_bins, n_frames, config.n_fft, config.hop_length,
-                                sample_rate, /*center=*/true, spec.win_length());
-  return edited.to_audio(static_cast<int>(audio.size()), config.window);
+  Spectrogram edited = Spectrogram::from_complex(buf.data(), n_bins, n_frames, config.n_fft,
+                                                 config.hop_length, sample_rate, config.window,
+                                                 /*center=*/true, spec.win_length());
+  return edited.to_audio(static_cast<int>(audio.size()));
 }
 
 }  // namespace sonare

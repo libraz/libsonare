@@ -64,6 +64,23 @@ void PitchShifter::process(float* const* channels, int num_channels, int num_sam
   // beyond the pair pass through dry (see the registry's stereoPairOnly
   // classification).
   const int active = std::min(num_channels, 2);
+  if (ratio == 1.0f) {
+    // At unity ratio the phase never advances, so both taps sit at a fixed
+    // offset and the "no shift" default would delay the signal by half a grain
+    // window (22.5 ms) while reporting zero latency. Pass the input through
+    // instead, and keep filling the grain buffers so a later shift starts from
+    // real history rather than silence.
+    for (int i = 0; i < num_samples; ++i) {
+      for (int ch = 0; ch < active; ++ch) {
+        if (channels[ch] == nullptr) continue;
+        auto& buffer = buffers_[static_cast<size_t>(ch)];
+        auto& write_pos = write_pos_[static_cast<size_t>(ch)];
+        buffer[static_cast<size_t>(write_pos)] = channels[ch][i];
+        write_pos = (write_pos + 1) % static_cast<int>(buffer.size());
+      }
+    }
+    return;
+  }
   for (int i = 0; i < num_samples; ++i) {
     // Advance the shared grain phase and derive the two tap positions/gains.
     float phase = phase_ + step;

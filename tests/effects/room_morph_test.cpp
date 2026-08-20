@@ -176,6 +176,23 @@ TEST_CASE("room_morph rejects non-finite and out-of-range controls",
   RoomMorphConfig timing = base;
   timing.max_seconds = std::numeric_limits<float>::quiet_NaN();
   REQUIRE_THROWS_AS(room_morph(rec, timing), SonareException);
+
+  // Air absorption is only validated while enabled -- an implausible value
+  // left in a disabled block must not fail the whole config.
+  RoomMorphConfig disabled_air = base;
+  disabled_air.air_absorption_enabled = false;
+  disabled_air.air = sonare::acoustic::AirAbsorption{-500.0f, 250.0f};
+  REQUIRE_NOTHROW(room_morph(rec, disabled_air));
+
+  for (const sonare::acoustic::AirAbsorption& invalid_air :
+       {sonare::acoustic::AirAbsorption{-500.0f, 50.0f},
+        sonare::acoustic::AirAbsorption{20.0f, 250.0f},
+        sonare::acoustic::AirAbsorption{std::numeric_limits<float>::quiet_NaN(), 50.0f}}) {
+    RoomMorphConfig enabled_air = base;
+    enabled_air.air_absorption_enabled = true;
+    enabled_air.air = invalid_air;
+    REQUIRE_THROWS_AS(room_morph(rec, enabled_air), SonareException);
+  }
 }
 
 TEST_CASE("room_morph is deterministic", "[effects][acoustic][room_morph]") {
@@ -233,4 +250,33 @@ TEST_CASE("room_morph exposes the late-tail synthesis controls",
   REQUIRE(p1.size() == p2.size());
   REQUIRE(p1.size() > rec.size());
   for (size_t i = 0; i < p1.size(); ++i) REQUIRE(p1[i] == p2[i]);
+}
+
+TEST_CASE("room_morph exposes air absorption controls", "[effects][acoustic][room_morph]") {
+  const int sr = 48000;
+  std::vector<float> samples(4000, 0.0f);
+  samples[0] = 1.0f;
+  const Audio rec = Audio::from_vector(std::vector<float>(samples), sr);
+
+  RoomMorphConfig without_air;
+  without_air.target = uniform_room(30.0f, 24.0f, 15.0f, 0.2f);
+  without_air.placement = {{3.0f, 3.0f, 1.5f}, {10.0f, 8.0f, 1.7f}};
+  without_air.wet = 1.0f;
+  without_air.source_tail_suppression = 0.0f;
+  without_air.seed = 3u;
+  // A short cap keeps this a cheap wiring/reachability check; the RT60
+  // magnitude itself is covered by the dedicated rir_synthesizer_test.cpp and
+  // insert_factory_extra_test.cpp cases.
+  without_air.max_seconds = 0.3f;
+
+  RoomMorphConfig with_air = without_air;
+  with_air.air_absorption_enabled = true;
+  with_air.air = sonare::acoustic::AirAbsorption{};  // ISO reference climate
+
+  const Audio a = room_morph(rec, without_air);
+  const Audio b = room_morph(rec, with_air);
+  bool differs = a.size() != b.size();
+  const size_t common = std::min(a.size(), b.size());
+  for (size_t i = 0; i < common && !differs; ++i) differs = (a[i] != b[i]);
+  REQUIRE(differs);
 }

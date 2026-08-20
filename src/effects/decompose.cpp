@@ -10,6 +10,8 @@
 #include "core/spectrum.h"
 #include "util/constants.h"
 #include "util/exception.h"
+#include "util/numeric_validation.h"
+#include "util/validated.h"
 
 namespace sonare {
 
@@ -327,28 +329,40 @@ std::vector<float> nn_filter(const float* S, int n_features, int n_frames,
   return out;
 }
 
+void validate_config(const DecomposeStemsConfig& config) {
+  SONARE_CHECK_MSG(config.n_components > 0, ErrorCode::InvalidParameter,
+                   "DecomposeStemsConfig: nComponents must be positive");
+  SONARE_CHECK_MSG(config.n_fft > 0, ErrorCode::InvalidParameter,
+                   "DecomposeStemsConfig: nFft must be positive");
+  SONARE_CHECK_MSG(config.hop_length > 0, ErrorCode::InvalidParameter,
+                   "DecomposeStemsConfig: hopLength must be positive");
+  SONARE_CHECK_MSG(config.n_iter > 0, ErrorCode::InvalidParameter,
+                   "DecomposeStemsConfig: nIter must be positive");
+  SONARE_CHECK_MSG(numeric::finite(config.beta), ErrorCode::InvalidParameter,
+                   "DecomposeStemsConfig: beta must be finite");
+  SONARE_CHECK_MSG(numeric::finite(config.mask_power) && config.mask_power >= 1.0f,
+                   ErrorCode::InvalidParameter,
+                   "DecomposeStemsConfig: maskPower must be finite and at least 1");
+}
+
 DecomposeStemsResult decompose_stems(const float* samples, std::size_t n, int sample_rate,
                                      const DecomposeStemsConfig& config) {
+  const DecomposeStemsConfig checked = Validated<DecomposeStemsConfig>::make(config).get();
   SONARE_CHECK(samples != nullptr && n > 0, ErrorCode::InvalidParameter);
   SONARE_CHECK(sample_rate > 0, ErrorCode::InvalidParameter);
-  SONARE_CHECK(config.n_components > 0, ErrorCode::InvalidParameter);
-  SONARE_CHECK(config.n_fft > 0 && config.hop_length > 0, ErrorCode::InvalidParameter);
-  SONARE_CHECK(config.n_iter > 0, ErrorCode::InvalidParameter);
-  SONARE_CHECK(std::isfinite(config.mask_power) && config.mask_power >= 1.0f,
-               ErrorCode::InvalidParameter);
 
   const Audio audio = Audio::from_buffer(samples, n, sample_rate);
   const Spectrogram spectrum =
-      Spectrogram::compute(audio, make_stft_config(config.n_fft, config.hop_length));
+      Spectrogram::compute(audio, make_stft_config(checked.n_fft, checked.hop_length));
   const int n_bins = spectrum.n_bins();
   const int n_frames = spectrum.n_frames();
   SONARE_CHECK(n_bins > 0 && n_frames > 0, ErrorCode::InvalidParameter);
 
   const std::vector<float>& magnitude = spectrum.magnitude();
-  DecomposeResult factors = decompose(magnitude.data(), n_bins, n_frames, config.n_components,
-                                      config.n_iter, "mu", config.beta, config.init);
+  DecomposeResult factors = decompose(magnitude.data(), n_bins, n_frames, checked.n_components,
+                                      checked.n_iter, "mu", checked.beta, checked.init);
 
-  const int k = config.n_components;
+  const int k = checked.n_components;
   const std::complex<float>* source = spectrum.complex_data();
   const std::size_t cells = static_cast<std::size_t>(n_bins) * static_cast<std::size_t>(n_frames);
 
@@ -368,7 +382,7 @@ DecomposeStemsResult decompose_stems(const float* samples, std::size_t n, int sa
                       static_cast<std::size_t>(frame)];
         const float value = std::max(w * h, 0.0f);
         const float weighted =
-            config.mask_power == 1.0f ? value : std::pow(value, config.mask_power);
+            checked.mask_power == 1.0f ? value : std::pow(value, checked.mask_power);
         const std::size_t cell =
             static_cast<std::size_t>(bin) * static_cast<std::size_t>(n_frames) +
             static_cast<std::size_t>(frame);
@@ -393,8 +407,9 @@ DecomposeStemsResult decompose_stems(const float* samples, std::size_t n, int sa
       const float mask = total > kEps ? plane[cell] / total : 0.0f;
       masked[cell] = source[cell] * mask;
     }
-    const Spectrogram component_spectrum = Spectrogram::from_complex(
-        masked.data(), n_bins, n_frames, config.n_fft, config.hop_length, sample_rate);
+    const Spectrogram component_spectrum =
+        Spectrogram::from_complex(masked.data(), n_bins, n_frames, checked.n_fft,
+                                  checked.hop_length, sample_rate, spectrum.window());
     const Audio rendered = component_spectrum.to_audio(static_cast<int>(n));
     out.components.emplace_back(rendered.data(), rendered.data() + rendered.size());
   }

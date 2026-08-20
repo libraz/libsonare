@@ -6,6 +6,7 @@
 ///        absorption, then convolves the signal with it.
 
 #include "acoustic/geometry.h"
+#include "acoustic/late_reverb.h"  // AirAbsorption
 #include "acoustic/room_types.h"
 #include "effects/reverb/convolution_reverb.h"
 
@@ -25,6 +26,13 @@ struct RoomReverbConfig {
   unsigned seed = 1u;        ///< deterministic late-tail noise seed
   float max_seconds = 0.0f;  ///< RIR length cap (s); 0 = auto from the RT60
   float dry_wet = 0.35f;     ///< wet mix (send-style default)
+  /// Disabled by default so an existing config's RIR is unchanged byte for
+  /// byte. When enabled, the late tail's per-band RT60 gains the ISO 9613-1
+  /// atmospheric-absorption term (see acoustic::shoebox_reverb_time); `air`
+  /// supplies the temperature/humidity and defaults to the ISO reference
+  /// climate.
+  bool air_absorption_enabled = false;
+  sonare::acoustic::AirAbsorption air{};
 };
 
 /// @brief Convolution reverb whose impulse response is synthesized from room

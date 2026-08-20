@@ -31,6 +31,8 @@ void RoomReverb::prepare(double sample_rate, int max_block_size) {
   rc.ism_order = config_.ism_order;
   rc.seed = config_.seed;
   rc.max_seconds = config_.max_seconds;
+  rc.air_absorption_enabled = config_.air_absorption_enabled;
+  rc.air = config_.air;
 
   const int sr = sample_rate > 0.0 ? static_cast<int>(std::lround(sample_rate)) : 48000;
   const RirSynthResult res =

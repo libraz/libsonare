@@ -38,8 +38,10 @@ void Phaser::prepare(double sample_rate, int) {
     x1_[static_cast<size_t>(ch)].assign(static_cast<size_t>(stages), 0.0f);
     y1_[static_cast<size_t>(ch)].assign(static_cast<size_t>(stages), 0.0f);
   }
-  lfo_.prepare(sample_rate_);
-  lfo_.set_rate_hz(config_.rate_hz);
+  lfos_[0].prepare(sample_rate_);
+  lfos_[1].prepare(sample_rate_);
+  lfos_[0].set_rate_hz(config_.rate_hz);
+  lfos_[1].set_rate_hz(config_.rate_hz);
   reset();
 }
 
@@ -56,17 +58,17 @@ void Phaser::process(float* const* channels, int num_channels, int num_samples) 
   const float wet = std::clamp(config_.dry_wet, 0.0f, 1.0f);
   const float dry = 1.0f - wet;
   for (int i = 0; i < num_samples; ++i) {
-    const float sweep = 0.5f + 0.5f * lfo_.process();
-    const float freq = config_.min_hz + (config_.max_hz - config_.min_hz) * sweep;
-    const float t = std::tan(::sonare::constants::kPi * freq / static_cast<float>(sample_rate_));
-    const float coeff = (1.0f - t) / (1.0f + t);
+    const float coeff_l = sweep_coeff(lfos_[0].process());
     const float in_l = left[i];
-    left[i] = dry * in_l + wet * process_channel(in_l, 0, coeff);
+    left[i] = dry * in_l + wet * process_channel(in_l, 0, coeff_l);
     if (stereo) {
-      // Only advance the channel-1 allpass state for genuine stereo input so a
-      // mono buffer is not written twice and channel-1 state is left untouched.
+      // Only advance the channel-1 LFO and allpass state for genuine stereo
+      // input so a mono buffer is not written twice and channel-1 state is left
+      // untouched. The quarter-cycle offset between the two oscillators is what
+      // keeps the notches from tracking each other across the pair.
+      const float coeff_r = sweep_coeff(lfos_[1].process());
       const float in_r = right[i];
-      right[i] = dry * in_r + wet * process_channel(in_r, 1, coeff);
+      right[i] = dry * in_r + wet * process_channel(in_r, 1, coeff_r);
     }
   }
 }
@@ -75,8 +77,10 @@ bool Phaser::set_parameter(unsigned int param_id, float value) {
   switch (param_id) {
     case 0:
       config_.rate_hz = std::max(0.0f, value);
-      // Updates the LFO increment in place; preserves oscillator phase.
-      lfo_.set_rate_hz(config_.rate_hz);
+      // Updates the LFO increment in place; preserves oscillator phase, so the
+      // L/R offset survives a rate change.
+      lfos_[0].set_rate_hz(config_.rate_hz);
+      lfos_[1].set_rate_hz(config_.rate_hz);
       return true;
     case 1:
       config_.min_hz = std::clamp(value, 1.0f, max_sweep_hz(sample_rate_));
@@ -114,7 +118,15 @@ void Phaser::reset() {
   for (auto& state : y1_) {
     std::fill(state.begin(), state.end(), 0.0f);
   }
-  lfo_.reset();
+  lfos_[0].reset(0.0);
+  lfos_[1].reset(0.25);
+}
+
+float Phaser::sweep_coeff(float lfo_value) const noexcept {
+  const float sweep = 0.5f + 0.5f * lfo_value;
+  const float freq = config_.min_hz + (config_.max_hz - config_.min_hz) * sweep;
+  const float t = std::tan(kPi * freq / static_cast<float>(sample_rate_));
+  return (1.0f - t) / (1.0f + t);
 }
 
 float Phaser::process_channel(float input, int channel, float coeff) {

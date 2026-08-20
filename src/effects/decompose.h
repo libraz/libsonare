@@ -52,6 +52,15 @@ struct DecomposeStemsConfig {
   float mask_power = 1.0f;
 };
 
+/// @brief Validation rules for @ref DecomposeStemsConfig.
+/// @details Found by argument-dependent lookup from @ref Validated, which
+///          @ref decompose_stems applies before any spectrogram work. Bindings
+///          that build the config directly inherit the rules from that single
+///          entry point.
+/// @throws SonareException(InvalidParameter) for a non-positive size or count,
+///         a non-finite beta, or a mask power below 1.
+void validate_config(const DecomposeStemsConfig& config);
+
 /// @brief Output of @ref decompose_stems.
 struct DecomposeStemsResult {
   /// One time-domain signal per component, each the length of the input.

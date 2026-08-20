@@ -67,10 +67,16 @@ void Rotary::process(float* const* channels, int num_channels, int num_samples) 
       const float drum_mod = drum_lfo_[ch].process();
       const float horn_delay = (base + swing * horn_mod) * ms_to_samp;
       const float drum_delay = (base + 0.7f * swing * drum_mod) * ms_to_samp;
-      const float horn = horn_delay_[ch].process(horn_in, horn_delay) * (1.0f + trem * horn_mod);
+      // Tremolo attenuates from unity rather than swinging around it. The LFO
+      // spans [-1, 1], so a gain of 1 + depth * mod would peak at 1 + depth --
+      // at the default depth that is +3.5 dB of makeup nobody asked for, and it
+      // scales with the depth control. Mapping the LFO to [1 - depth, 1] keeps
+      // the same modulation shape and leaves the loudest point at unity.
+      const float horn_gain = 1.0f - trem * 0.5f * (1.0f - horn_mod);
       // The bass rotor's tremolo is shallower (the drum baffle throws less).
-      const float drum =
-          drum_delay_[ch].process(drum_in, drum_delay) * (1.0f + 0.6f * trem * drum_mod);
+      const float drum_gain = 1.0f - 0.6f * trem * 0.5f * (1.0f - drum_mod);
+      const float horn = horn_delay_[ch].process(horn_in, horn_delay) * horn_gain;
+      const float drum = drum_delay_[ch].process(drum_in, drum_delay) * drum_gain;
       channels[ch][i] = dry * in + wet * (horn + drum);
     }
   }

@@ -39,11 +39,16 @@ class Phaser : public rt::ProcessorBase {
   std::vector<rt::ParamDescriptor> parameter_descriptors() const override;
 
  private:
+  /// Allpass coefficient for one channel's current LFO value, mapping the
+  /// oscillator's [-1, 1] output onto the configured sweep range.
+  float sweep_coeff(float lfo_value) const noexcept;
   float process_channel(float input, int channel, float coeff);
 
   PhaserConfig config_{};
   double sample_rate_ = 48000.0;
-  Lfo lfo_;
+  /// [L, R] sweep oscillators, offset by a quarter cycle in reset() so the two
+  /// channels' notches never sit on the same frequencies (as in Chorus/Flanger).
+  std::array<Lfo, 2> lfos_;
   std::array<std::vector<float>, 2> x1_;
   std::array<std::vector<float>, 2> y1_;
 };

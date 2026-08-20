@@ -9,6 +9,7 @@
 
 namespace sonare::effects::reverb {
 
+using sonare::constants::kHalfPi;
 using sonare::constants::kTwoPi;
 
 namespace {
@@ -88,10 +89,21 @@ void DattorroReverb::ModAllpass::reset() {
 }
 
 float DattorroReverb::ModAllpass::process(float in, float mod_offset) {
-  long delay = static_cast<long>(base) + std::lround(mod_offset);
-  delay = std::clamp<long>(delay, 1, static_cast<long>(capacity) - 1);
-  const size_t read = (index + capacity - static_cast<size_t>(delay)) % capacity;
-  const float d = buf[read];
+  // Read at a fractional delay. Rounding the modulated delay to whole samples
+  // steps the read pointer, and each step is a discontinuity in the tank - a
+  // periodic tick whose rate rises with the modulation depth, so the depth
+  // control degraded the signal as it was raised. Interpolating between the two
+  // neighbouring samples makes a continuous mod_offset produce a continuous
+  // output. The upper clamp leaves room for the second tap; prepare() reserves
+  // the two guard samples this needs.
+  const float requested = static_cast<float>(base) + mod_offset;
+  const float delay = std::clamp(requested, 1.0f, static_cast<float>(capacity - 2));
+  const float whole = std::floor(delay);
+  const float frac = delay - whole;
+  const size_t near = static_cast<size_t>(whole);
+  const size_t read0 = (index + capacity - near) % capacity;
+  const size_t read1 = (index + capacity - near - 1) % capacity;
+  const float d = buf[read0] + frac * (buf[read1] - buf[read0]);
   const float out = -gain * in + d;
   buf[index] = in + gain * out;
   index = (index + 1) % capacity;
@@ -354,7 +366,14 @@ void DattorroReverb::reset() {
   tail_l_ = 0.0f;
   tail_r_ = 0.0f;
   lfo_phase_l_ = 0.0f;
-  lfo_phase_r_ = 0.0f;
+  // Quadrature, so the two tank allpasses lengthen and shorten in opposition
+  // instead of together. Starting both at zero leaves the two offsets identical
+  // for every sample of every run, which makes the modulation common-mode and
+  // contributes nothing to the width of the tail. Dattorro's "figure-8" names
+  // the tank's cross-coupled topology, not a trajectory for the LFOs, so the
+  // offset is a design choice; a quarter cycle is the one that makes two
+  // same-rate sinusoids uncorrelated.
+  lfo_phase_r_ = kHalfPi;
 }
 
 }  // namespace sonare::effects::reverb

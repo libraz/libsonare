@@ -47,6 +47,14 @@ void validate_room_morph_config(const RoomMorphConfig& config) {
           numeric::finite_in_closed_range(config.crossfade_ms, 0.0f,
                                           sonare::acoustic::kMaxRirCrossfadeMs),
       ErrorCode::InvalidParameter, "room morph RIR timing values are invalid");
+  if (config.air_absorption_enabled) {
+    SONARE_CHECK_MSG(
+        numeric::finite(config.air.temperature_c) &&
+            config.air.temperature_c > sonare::acoustic::kAbsoluteZeroCelsius &&
+            numeric::finite_in_closed_range(config.air.humidity_percent, 0.0f, 100.0f),
+        ErrorCode::InvalidParameter,
+        "room morph air absorption temperature/humidity is outside the physical range");
+  }
 }
 
 RoomMorphProcessor::RoomMorphProcessor(RoomMorphConfig config) : config_(std::move(config)) {
@@ -65,6 +73,8 @@ void RoomMorphProcessor::prepare(double sample_rate, int max_block_size) {
   rc.late_model = config_.late_model;
   rc.mixing_time_ms = config_.mixing_time_ms;  // 0 = auto (~sqrt(V) ms)
   rc.crossfade_ms = config_.crossfade_ms;
+  rc.air_absorption_enabled = config_.air_absorption_enabled;
+  rc.air = config_.air;
   const RirSynthResult res = synthesize_rir(config_.target, config_.placement, sr, rc);
 
   // prepare() otherwise synthesizes a default noise IR which load_ir() below

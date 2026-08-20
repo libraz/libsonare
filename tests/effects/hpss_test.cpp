@@ -366,7 +366,7 @@ TEST_CASE("hpss spectrogram with NaN does not propagate NaN", "[hpss][nan]") {
 
   Spectrogram spec = Spectrogram::from_complex(poisoned.data(), n_bins, n_frames, clean.n_fft(),
                                                clean.hop_length(), clean.sample_rate(),
-                                               clean.center(), clean.win_length());
+                                               clean.window(), clean.center(), clean.win_length());
 
   HpssConfig config;
   config.kernel_size_harmonic = 11;
@@ -492,8 +492,9 @@ TEST_CASE("HPSS soft mask applies margin before the power (librosa parity)", "[h
   constexpr float kAmp = 1.0f;
   std::vector<std::complex<float>> data(static_cast<size_t>(kBins * kFrames),
                                         std::complex<float>(kAmp, 0.0f));
-  Spectrogram spec = Spectrogram::from_complex(data.data(), kBins, kFrames, /*n_fft=*/16,
-                                               /*hop_length=*/8, /*sample_rate=*/22050);
+  Spectrogram spec =
+      Spectrogram::from_complex(data.data(), kBins, kFrames, /*n_fft=*/16,
+                                /*hop_length=*/8, /*sample_rate=*/22050, WindowType::Hann);
 
   HpssConfig config;
   config.use_soft_mask = true;
@@ -528,8 +529,9 @@ TEST_CASE("HPSS soft mask honors asymmetric margins with margin^power", "[hpss]"
   constexpr int kFrames = 9;
   std::vector<std::complex<float>> data(static_cast<size_t>(kBins * kFrames),
                                         std::complex<float>(1.0f, 0.0f));
-  Spectrogram spec = Spectrogram::from_complex(data.data(), kBins, kFrames, /*n_fft=*/16,
-                                               /*hop_length=*/8, /*sample_rate=*/22050);
+  Spectrogram spec =
+      Spectrogram::from_complex(data.data(), kBins, kFrames, /*n_fft=*/16,
+                                /*hop_length=*/8, /*sample_rate=*/22050, WindowType::Hann);
 
   HpssConfig config;
   config.use_soft_mask = true;
@@ -551,4 +553,67 @@ TEST_CASE("HPSS soft mask honors asymmetric margins with margin^power", "[hpss]"
 
   REQUIRE_THAT(harm_mag, WithinAbs(expected_h, 1e-4f));
   REQUIRE_THAT(perc_mag, WithinAbs(expected_p, 1e-4f));
+}
+
+TEST_CASE("hpss resynthesis reconstructs the input for every analysis window", "[hpss]") {
+  // The separated components are resynthesized through the iSTFT, whose
+  // overlap-add divisor has to be built from the analysis window. If it is not,
+  // the harmonic and percussive signals each carry a gain ripple at the hop
+  // rate and their sum no longer returns the input, however exact the masking.
+  constexpr int sr = 22050;
+  constexpr int samples = sr / 2;
+  std::vector<float> source(samples);
+  for (int i = 0; i < samples; ++i) {
+    const float t = static_cast<float>(i) / static_cast<float>(sr);
+    source[i] = 0.4f * std::sin(2.0f * static_cast<float>(constants::kPiD) * 220.0f * t);
+    if (i % 2205 == 0) {
+      source[i] += 0.5f;
+    }
+  }
+  const Audio audio = Audio::from_vector(std::vector<float>(source), sr);
+
+  const auto relative_rms_error = [&source](const std::vector<float>& sum, size_t skip) {
+    double num = 0.0;
+    double den = 0.0;
+    for (size_t i = skip; i + skip < source.size(); ++i) {
+      const double diff = static_cast<double>(source[i]) - static_cast<double>(sum[i]);
+      num += diff * diff;
+      den += static_cast<double>(source[i]) * static_cast<double>(source[i]);
+    }
+    REQUIRE(den > 0.0);
+    return std::sqrt(num / den);
+  };
+
+  for (const WindowType window :
+       {WindowType::Hann, WindowType::Hamming, WindowType::Blackman, WindowType::Rectangular}) {
+    CAPTURE(static_cast<int>(window));
+    StftConfig stft_config;
+    stft_config.n_fft = 2048;
+    stft_config.hop_length = 512;
+    stft_config.window = window;
+    const HpssConfig config;
+    const size_t skip = static_cast<size_t>(stft_config.n_fft);
+
+    SECTION("harmonic plus percussive") {
+      const HpssAudioResult result = hpss(audio, config, stft_config);
+      REQUIRE(result.harmonic.size() == source.size());
+      REQUIRE(result.percussive.size() == source.size());
+      std::vector<float> sum(source.size());
+      for (size_t i = 0; i < source.size(); ++i) {
+        sum[i] = result.harmonic.data()[i] + result.percussive.data()[i];
+      }
+      REQUIRE(relative_rms_error(sum, skip) < 1e-5);
+    }
+
+    SECTION("harmonic plus percussive plus residual") {
+      const HpssAudioResultWithResidual result = hpss_with_residual(audio, config, stft_config);
+      REQUIRE(result.harmonic.size() == source.size());
+      std::vector<float> sum(source.size());
+      for (size_t i = 0; i < source.size(); ++i) {
+        sum[i] =
+            result.harmonic.data()[i] + result.percussive.data()[i] + result.residual.data()[i];
+      }
+      REQUIRE(relative_rms_error(sum, skip) < 1e-5);
+    }
+  }
 }
