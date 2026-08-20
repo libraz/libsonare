@@ -42,7 +42,7 @@ SonareError sonare_metering_crest_factor_db_stereo(const float* left, const floa
 SonareError sonare_metering_dc_offset(const float* samples, size_t length, int sample_rate,
                                       float* out_value);
 
-/// @brief Inter-sample (true) peak in dBFS for a mono buffer. Interleaved
+/// @brief Inter-sample (true) peak in dBTP for a mono buffer. Interleaved
 ///        multichannel input is not accepted as channels. @p oversample_factor must be a
 ///        power of two in [1, 16]; pass 0 for the library default (4).
 SonareError sonare_metering_true_peak_db(const float* samples, size_t length, int sample_rate,

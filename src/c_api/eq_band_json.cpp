@@ -140,8 +140,13 @@ sonare::mastering::eq::EqBand parse_eq_band_json(const char* band_json) {
       static_cast<float>(json_number_any(json, "attackMs", "attack_ms", band.dyn.attack_ms));
   band.dyn.release_ms =
       static_cast<float>(json_number_any(json, "releaseMs", "release_ms", band.dyn.release_ms));
-  band.dyn.lookahead_ms = static_cast<float>(
-      json_number_any(json, "lookaheadMs", "lookahead_ms", band.dyn.lookahead_ms));
+  // "lookaheadMs"/"lookahead_ms" are the field's former (misleading) spelling;
+  // still accepted so a stored config keeps working, but the canonical
+  // "detectorDelayMs"/"detector_delay_ms" wins if both are present.
+  band.dyn.detector_delay_ms = static_cast<float>(
+      json_number_any(json, "lookaheadMs", "lookahead_ms", band.dyn.detector_delay_ms));
+  band.dyn.detector_delay_ms = static_cast<float>(
+      json_number_any(json, "detectorDelayMs", "detector_delay_ms", band.dyn.detector_delay_ms));
   band.dyn.sidechain_freq_hz = static_cast<float>(
       json_number_any(json, "sidechainFreqHz", "sidechain_freq_hz", band.dyn.sidechain_freq_hz));
   band.dyn.sidechain_q =

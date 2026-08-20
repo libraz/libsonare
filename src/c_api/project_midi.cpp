@@ -1,5 +1,7 @@
 #include "c_api/project_internal.h"
 
+using sonare::constants::kDefaultBpm;
+
 // ============================================================================
 // MIDI
 // ============================================================================
@@ -109,6 +111,7 @@ SonareError sonare_midi_program(double ppq, uint8_t group, uint8_t channel, uint
 #endif
 }
 
+#if defined(SONARE_WITH_ARRANGEMENT)
 namespace {
 
 const char* view_to_cstr(std::string_view value) { return value.empty() ? nullptr : value.data(); }
@@ -182,6 +185,7 @@ bool populate_cc_map(const SonareMidiCcBinding* bindings, size_t binding_count,
 }
 
 }  // namespace
+#endif
 
 const char* sonare_midi_gm_instrument_name(int program) {
 #if defined(SONARE_WITH_ARRANGEMENT)
@@ -584,7 +588,7 @@ SonareError sonare_project_export_clip_file(const SonareProject* project, uint8_
   SONARE_C_TRY
   const arr::Project& model = project->history.project();
   std::vector<sonare::transport::TempoSegment> tempo = model.tempo_segments();
-  if (tempo.empty()) tempo.push_back({0.0, 120.0, 0.0});
+  if (tempo.empty()) tempo.push_back({0.0, kDefaultBpm, 0.0});
   std::vector<sonare::transport::TimeSignatureSegment> sigs = model.time_signatures();
   if (sigs.empty()) sigs.push_back({0.0, {4, 4}});
 
@@ -646,7 +650,7 @@ SonareError sonare_project_export_smf(const SonareProject* project, uint8_t** ou
   SONARE_C_TRY
   const arr::Project& model = project->history.project();
   std::vector<sonare::transport::TempoSegment> tempo = model.tempo_segments();
-  if (tempo.empty()) tempo.push_back({0.0, 120.0, 0.0});
+  if (tempo.empty()) tempo.push_back({0.0, kDefaultBpm, 0.0});
   std::vector<sonare::transport::TimeSignatureSegment> sigs = model.time_signatures();
   if (sigs.empty()) sigs.push_back({0.0, {4, 4}});
 

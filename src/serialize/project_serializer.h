@@ -42,6 +42,20 @@
 /// structural inconsistency and returns a @ref DeserializeResult carrying
 /// diagnostics with an empty optional Project.
 ///
+/// Persistence budget
+/// ------------------
+/// A saved document must be readable by @ref project_from_json, which admits an
+/// input only within @ref sonare::resource::kDefaultProjectImportResourceLimits.
+/// The edit API is not bounded by that budget, so a caller can assemble a
+/// project whose document would exceed it. @ref project_to_json therefore
+/// measures the document it is about to emit against the same budget and throws
+/// @c SonareException(ErrorCode::InvalidState) rather than returning bytes that
+/// nothing can load back; a project within budget is serialized exactly as
+/// before, byte for byte. Callers that must report an over-budget document as
+/// something other than a project-state error — the MIDI import preflight,
+/// which rejects the import as invalid input — use
+/// @ref try_project_to_json instead.
+///
 /// Entity ID policy
 /// ----------------
 /// Source, track, clip, and marker IDs use the inclusive range
@@ -51,6 +65,7 @@
 /// namespace. Importing `UINT32_MAX - 1` is valid, but subsequent allocation in
 /// that namespace fails explicitly by returning zero rather than wrapping.
 
+#include <cstddef>
 #include <cstdint>
 #include <optional>
 #include <string>
@@ -58,6 +73,7 @@
 
 #include "arrangement/edit_command.h"  // MidiContentStore
 #include "arrangement/edit_model.h"
+#include "util/resource_limits.h"
 
 namespace sonare::serialize {
 
@@ -121,11 +137,55 @@ struct DeserializeResult {
   }
 };
 
+/// @brief Size of an encoded project, in the same terms the import preflight
+///        admits a document by.
+///
+/// The counts mirror @ref sonare::util::json::Parser exactly: one node per JSON
+/// value (object keys are not values), cumulative decoded bytes for every key
+/// and string value, one entity per array element, and the decoded (not base64)
+/// size of every sidecar / SysEx payload.
+struct ProjectDocumentShape {
+  std::size_t json_bytes = 0;
+  std::size_t json_nodes = 0;
+  std::size_t entities = 0;
+  std::size_t string_bytes = 0;
+  std::size_t decoded_payload_bytes = 0;
+};
+
+/// @brief Measures the document @ref project_to_json would emit for this model,
+///        without applying any budget. Encodes the project, so callers on the
+///        save path should use @ref project_to_json (which checks the budget
+///        itself) rather than measuring first.
+ProjectDocumentShape measure_project_document(const arrangement::Project& project,
+                                              const arrangement::MidiContentStore& midi);
+
 /// @brief Serializes a project (+ its MIDI content store) to a deterministic
 ///        JSON string. Stable key order, schema "version" field, round-trippable
 ///        float text. Pure: no I/O, no clock, no random.
+/// @param limits Persistence budget the emitted document must fit; the default
+///        is the budget @ref project_from_json reads under. Overridable so the
+///        exact boundary can be exercised without building a document of the
+///        production size.
+/// @throws sonare::SonareException with @c ErrorCode::InvalidState when the
+///         document would exceed @p limits, i.e. when it could not be read
+///         back. Nothing is emitted in that case.
 std::string project_to_json(const arrangement::Project& project,
-                            const arrangement::MidiContentStore& midi);
+                            const arrangement::MidiContentStore& midi,
+                            const resource::ProjectImportResourceLimits& limits =
+                                resource::kDefaultProjectImportResourceLimits);
+
+/// @brief Non-throwing form of @ref project_to_json, for callers that must tell
+///        "this document does not fit the persistence budget" apart from an
+///        error and report it in their own terms (the MIDI import preflight,
+///        which rejects such an import as invalid input rather than as a broken
+///        project state).
+/// @param out_json Receives the encoded document on success; cleared on failure.
+/// @return False when the document would exceed @p limits, i.e. exactly when
+///         @ref project_to_json would throw. Nothing is emitted in that case.
+bool try_project_to_json(const arrangement::Project& project,
+                         const arrangement::MidiContentStore& midi, std::string* out_json,
+                         const resource::ProjectImportResourceLimits& limits =
+                             resource::kDefaultProjectImportResourceLimits);
 
 /// @brief Deserializes a project JSON produced by @ref project_to_json. Unknown
 ///        fields are ignored; AssistSidecars are preserved verbatim. Malformed /

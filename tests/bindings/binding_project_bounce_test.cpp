@@ -6,6 +6,7 @@
 #include <algorithm>
 #include <array>
 
+#include "arrangement/edit_compiler.h"
 #include "binding_project_parity_test_helpers.h"
 
 TEST_CASE("bounce_with_instruments drives a callback instrument for routed MIDI", "[project]") {
@@ -377,6 +378,210 @@ TEST_CASE("shared opaque automation keeps the first project-order owner", "[proj
   // selecting B, or scheduling both lanes would fail this narrow range.
   REQUIRE(first_owner / unautomated == Catch::Approx(0.25).margin(0.03));
   sonare_project_destroy(project);
+#endif
+}
+
+TEST_CASE("auto-length bounce keeps both tracks of a shared MIDI destination", "[project]") {
+#if !defined(SONARE_WITH_MIXING)
+  SUCCEED("channel-strip bounce requires the mixing build");
+#else
+  SonareProject* project = nullptr;
+  REQUIRE(sonare_project_create(&project) == SONARE_OK);
+  REQUIRE(sonare_project_set_sample_rate(project, 48000.0) == SONARE_OK);
+  // Hard-panned strips keep each track's stem on its own plane, so a dropped
+  // track shows up as a silent plane instead of a slightly quieter mix.
+  const char* scene = R"({"version":1,"buses":[{"id":"master","role":"master"}],)"
+                      R"("strips":[{"id":"left","pan":-1.0},{"id":"right","pan":1.0}]})";
+  REQUIRE(sonare_project_set_mixer_scene_json(project, scene) == SONARE_OK);
+
+  uint32_t track_a = 0;
+  uint32_t track_b = 0;
+  uint32_t clip_a = 0;
+  uint32_t clip_b = 0;
+  REQUIRE(sonare_project_add_midi_clip(project, 0.0, 1.0, &track_a, &clip_a) == SONARE_OK);
+  REQUIRE(sonare_project_add_midi_clip(project, 0.0, 1.0, &track_b, &clip_b) == SONARE_OK);
+
+  // A tritone apart: neither fundamental sits on a harmonic of the other, so a
+  // per-frequency probe attributes each tone to exactly one track.
+  constexpr int kNoteA = 60;
+  constexpr int kNoteB = 66;
+  const auto note_on = [](int note) {
+    return 0x20900000u | (static_cast<uint32_t>(note) << 8) | 0x7Fu;
+  };
+  const auto note_off = [](int note) { return 0x20800000u | (static_cast<uint32_t>(note) << 8); };
+  const SonareMidiEventPod events_a[] = {
+      {0.0, note_on(kNoteA), 0u},
+      {0.9, note_off(kNoteA), 0u},
+  };
+  const SonareMidiEventPod events_b[] = {
+      {0.0, note_on(kNoteB), 0u},
+      {0.9, note_off(kNoteB), 0u},
+  };
+  REQUIRE(sonare_project_set_midi_events(project, clip_a, events_a, std::size(events_a)) ==
+          SONARE_OK);
+  REQUIRE(sonare_project_set_midi_events(project, clip_b, events_b, std::size(events_b)) ==
+          SONARE_OK);
+  // Both tracks keep the default MIDI destination id 0: the implicit share that
+  // must still bounce once each of them is bound to a channel strip.
+  REQUIRE(sonare_project_set_track_route(project, track_a, "left", "") == SONARE_OK);
+  REQUIRE(sonare_project_set_track_route(project, track_b, "right", "") == SONARE_OK);
+
+  SonareProjectBounceOptions options{};
+  // Auto-length is the path that prebuilds a mixer for the caller's tail query
+  // and hands it to the stem summing pass.
+  options.total_frames = 0;
+  options.block_size = 128;
+  options.num_channels = 2;
+  options.sample_rate = 48000;
+  SonareBuiltinInstrumentBinding binding{};
+  binding.destination_id = 0;
+  binding.config.polyphony = 8;
+
+  float* out = nullptr;
+  size_t out_len = 0;
+  REQUIRE(sonare_project_bounce_with_builtin_instruments(project, &options, &binding, 1, &out,
+                                                         &out_len) == SONARE_OK);
+  REQUIRE(out != nullptr);
+  REQUIRE(out_len > 0);
+  REQUIRE(out_len % 2 == 0);
+
+  // Probe the sustained middle of the render, past the attack/decay stages and
+  // before the note-offs.
+  const size_t frames = out_len / 2;
+  const size_t begin = frames / 4;
+  const size_t end = begin + (frames * 2) / 5;
+  REQUIRE(end > begin);
+  const auto note_hz = [](int note) {
+    return static_cast<double>(sonare::constants::kA4Hz) *
+           std::pow(2.0, static_cast<double>(note - static_cast<int>(sonare::constants::kMidiA4)) /
+                             static_cast<double>(sonare::constants::kSemitonesPerOctave));
+  };
+  const auto tone_magnitude = [&](size_t channel, double hz) {
+    const double w = sonare::constants::kTwoPiD * hz / 48000.0;
+    double re = 0.0;
+    double im = 0.0;
+    for (size_t i = begin; i < end; ++i) {
+      const double sample = static_cast<double>(out[i * 2 + channel]);
+      re += sample * std::cos(w * static_cast<double>(i));
+      im += sample * std::sin(w * static_cast<double>(i));
+    }
+    return std::sqrt(re * re + im * im) / static_cast<double>(end - begin);
+  };
+  const double left_a = tone_magnitude(0, note_hz(kNoteA));
+  const double left_b = tone_magnitude(0, note_hz(kNoteB));
+  const double right_a = tone_magnitude(1, note_hz(kNoteA));
+  const double right_b = tone_magnitude(1, note_hz(kNoteB));
+  sonare_free_floats(out);
+
+  // Each track reaches its own strip: dropping either one - or rejecting the
+  // whole bounce over a strip-count mismatch - collapses one of these tones.
+  REQUIRE(left_a > 1.0e-3);
+  REQUIRE(right_b > 1.0e-3);
+  REQUIRE(left_a > 2.0 * left_b);
+  REQUIRE(right_b > 2.0 * right_a);
+  sonare_project_destroy(project);
+#endif
+}
+
+TEST_CASE("an over-capacity opaque automation lane is reported, not truncated", "[project]") {
+#if !defined(SONARE_WITH_MIXING)
+  SUCCEED("channel-strip bounce requires the mixing build");
+#else
+  // Builds a project whose single strip-bound track carries one opaque fader
+  // lane with `point_count` breakpoints, bounces it, and returns the resulting
+  // status plus the diagnostics the bounce recorded.
+  struct BounceOutcome {
+    SonareError status = SONARE_OK;
+    std::vector<SonareProjectDiagnostic> diagnostics;
+    uint32_t track_id = 0;
+  };
+  const auto bounce_with_breakpoints = [](size_t point_count, int64_t total_frames) {
+    SonareProject* project = nullptr;
+    REQUIRE(sonare_project_create(&project) == SONARE_OK);
+    REQUIRE(sonare_project_set_sample_rate(project, 48000.0) == SONARE_OK);
+    const char* scene =
+        R"({"version":1,"buses":[{"id":"master","role":"master"}],"strips":[{"id":"strip"}]})";
+    REQUIRE(sonare_project_set_mixer_scene_json(project, scene) == SONARE_OK);
+
+    uint32_t track = 0;
+    uint32_t clip = 0;
+    REQUIRE(sonare_project_add_midi_clip(project, 0.0, 4.0, &track, &clip) == SONARE_OK);
+    const SonareMidiEventPod events[] = {
+        {0.0, 0x20903C7Fu, 0u},
+        {3.0, 0x20803C00u, 0u},
+    };
+    REQUIRE(sonare_project_set_midi_events(project, clip, events, std::size(events)) == SONARE_OK);
+    REQUIRE(sonare_project_set_track_midi_destination(project, track, 7u) == SONARE_OK);
+    REQUIRE(sonare_project_set_track_route(project, track, "strip", "") == SONARE_OK);
+
+    // Strictly increasing positions: at 120 BPM / 48 kHz these are 240 samples
+    // apart, so every breakpoint is a distinct monotonic push and a rejection
+    // can only be the lane running out of capacity.
+    std::vector<SonareAutomationPoint> points(point_count);
+    for (size_t i = 0; i < point_count; ++i) {
+      points[i].ppq = 0.01 * static_cast<double>(i + 1);
+      points[i].value = -6.0f * static_cast<float>(i % 2);
+      points[i].curve_to_next = SONARE_CURVE_LINEAR;
+    }
+    SonareAutomationLaneDesc lane{};
+    lane.target_param_id = 1;  // legacy opaque fader target
+    lane.points = points.data();
+    lane.point_count = points.size();
+    REQUIRE(sonare_project_add_automation_lane(project, track, &lane, nullptr) == SONARE_OK);
+
+    SonareProjectBounceOptions options{};
+    options.total_frames = total_frames;
+    options.block_size = 128;
+    options.num_channels = 2;
+    options.sample_rate = 48000;
+    SonareBuiltinInstrumentBinding binding{};
+    binding.destination_id = 7u;
+    binding.config.polyphony = 8;
+
+    BounceOutcome outcome;
+    outcome.track_id = track;
+    float* out = nullptr;
+    size_t out_len = 0;
+    outcome.status = sonare_project_bounce_with_builtin_instruments(project, &options, &binding, 1,
+                                                                    &out, &out_len);
+    sonare_free_floats(out);
+
+    SonareProjectCompileResult compiled{};
+    REQUIRE(sonare_project_last_bounce_compile_result(project, &compiled) == SONARE_OK);
+    outcome.diagnostics.assign(compiled.diagnostics,
+                               compiled.diagnostics + compiled.diagnostic_count);
+    sonare_project_free_compile_result(&compiled);
+    sonare_project_destroy(project);
+    return outcome;
+  };
+
+  const auto capacity_error = [](const BounceOutcome& outcome) {
+    return std::any_of(
+        outcome.diagnostics.begin(), outcome.diagnostics.end(),
+        [&](const SonareProjectDiagnostic& d) {
+          return d.code == static_cast<uint32_t>(
+                               sonare::arrangement::Diagnostic::Code::kAutomationLaneCapacity) &&
+                 d.severity ==
+                     static_cast<uint32_t>(sonare::arrangement::Diagnostic::Severity::kError) &&
+                 d.target_id == outcome.track_id;
+        });
+  };
+
+  // A lane the strip can hold bounces unchanged, with no capacity diagnostic:
+  // this pins that the check does not fire on ordinary automation.
+  const BounceOutcome fits = bounce_with_breakpoints(512, 48000);
+  REQUIRE(fits.status == SONARE_OK);
+  REQUIRE_FALSE(capacity_error(fits));
+
+  // Past the strip lane's capacity the bounce used to render the curve frozen at
+  // the last accepted breakpoint and still return success. Both the explicit and
+  // the auto-derived render length must now name the lane instead.
+  for (const int64_t total_frames : {static_cast<int64_t>(48000), static_cast<int64_t>(0)}) {
+    INFO("total_frames " << total_frames);
+    const BounceOutcome overflows = bounce_with_breakpoints(2048, total_frames);
+    REQUIRE(overflows.status != SONARE_OK);
+    REQUIRE(capacity_error(overflows));
+  }
 #endif
 }
 
@@ -1694,3 +1899,82 @@ TEST_CASE("channel-strip bounce opens at the static fader gain without a first-b
   sonare_project_destroy(project);
 }
 #endif  // SONARE_WITH_MIXING
+
+TEST_CASE("bounce_with_builtin_instruments follows CC7 volume and CC11 expression", "[project]") {
+  // 120 BPM: one quarter note is 24000 frames at 48 kHz.
+  constexpr uint32_t kNoteOn = 0x20903C64u;   // note-on, note 60, vel 100
+  constexpr uint32_t kNoteOff = 0x20803C00u;  // note-off, note 60
+
+  // RMS of one interleaved frame range, over every channel.
+  auto range_rms = [](const float* data, size_t first_frame, size_t last_frame, int num_channels) {
+    double sum = 0.0;
+    const size_t first = first_frame * static_cast<size_t>(num_channels);
+    const size_t last = last_frame * static_cast<size_t>(num_channels);
+    for (size_t i = first; i < last; ++i) sum += static_cast<double>(data[i]) * data[i];
+    return static_cast<float>(std::sqrt(sum / static_cast<double>(last - first)));
+  };
+
+  SonareProjectBounceOptions options{};
+  options.total_frames = 48000;
+  options.block_size = 128;
+  options.num_channels = 2;
+  options.sample_rate = 48000;
+  SonareBuiltinInstrumentBinding binding{};
+  binding.destination_id = 3;
+
+  // Renders one held note under the given control-change events.
+  auto bounce_with = [&](const std::vector<SonareMidiEventPod>& events) {
+    SonareProject* project = nullptr;
+    REQUIRE(sonare_project_create(&project) == SONARE_OK);
+    REQUIRE(sonare_project_set_sample_rate(project, 48000.0) == SONARE_OK);
+    uint32_t track = 0;
+    uint32_t clip = 0;
+    REQUIRE(sonare_project_add_midi_clip(project, 0.0, 4.0, &track, &clip) == SONARE_OK);
+    REQUIRE(sonare_project_set_midi_events(project, clip, events.data(), events.size()) ==
+            SONARE_OK);
+    REQUIRE(sonare_project_set_track_midi_destination(project, track, 3) == SONARE_OK);
+    float* out = nullptr;
+    size_t out_len = 0;
+    REQUIRE(sonare_project_bounce_with_builtin_instruments(project, &options, &binding, 1, &out,
+                                                           &out_len) == SONARE_OK);
+    REQUIRE(out_len == static_cast<size_t>(options.total_frames) * 2u);
+    std::vector<float> audio(out, out + out_len);
+    sonare_free_floats(out);
+    sonare_project_destroy(project);
+    return audio;
+  };
+
+  // A fade-out written as expression: full for the first beat, then CC11 == 32.
+  const std::vector<float> faded = bounce_with(
+      {{0.0, kNoteOn, 0u}, {0.0, 0x20B00B7Fu, 0u}, {1.0, 0x20B00B20u, 0u}, {2.0, kNoteOff, 0u}});
+  const float before_fade = range_rms(faded.data(), 4000, 20000, 2);
+  const float after_fade = range_rms(faded.data(), 28000, 44000, 2);
+  REQUIRE(before_fade > 0.0f);
+  const float expression_ratio = (32.0f / 127.0f) * (32.0f / 127.0f);
+  REQUIRE(after_fade == Catch::Approx(before_fade * expression_ratio).epsilon(0.1));
+
+  // The same note under a lower CC7 renders quieter by the same law.
+  const std::vector<float> loud =
+      bounce_with({{0.0, kNoteOn, 0u}, {0.0, 0x20B0077Fu, 0u}, {2.0, kNoteOff, 0u}});
+  const std::vector<float> quiet =
+      bounce_with({{0.0, kNoteOn, 0u}, {0.0, 0x20B00740u, 0u}, {2.0, kNoteOff, 0u}});
+  const float loud_rms = range_rms(loud.data(), 4000, 44000, 2);
+  const float quiet_rms = range_rms(quiet.data(), 4000, 44000, 2);
+  REQUIRE(loud_rms > 0.0f);
+  const float volume_ratio = (64.0f / 127.0f) * (64.0f / 127.0f);
+  REQUIRE(quiet_rms == Catch::Approx(loud_rms * volume_ratio).epsilon(0.1));
+
+  // CC10 places the part: hard left leaves the right channel nearly empty.
+  const std::vector<float> left_panned =
+      bounce_with({{0.0, kNoteOn, 0u}, {0.0, 0x20B00A00u, 0u}, {2.0, kNoteOff, 0u}});
+  double left_energy = 0.0;
+  double right_energy = 0.0;
+  for (size_t frame = 4000; frame < 44000; ++frame) {
+    const double l = left_panned[frame * 2u];
+    const double r = left_panned[frame * 2u + 1u];
+    left_energy += l * l;
+    right_energy += r * r;
+  }
+  REQUIRE(left_energy > 0.0);
+  REQUIRE(right_energy < left_energy * 1e-4);
+}

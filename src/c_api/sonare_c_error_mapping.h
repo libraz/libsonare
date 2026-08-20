@@ -29,6 +29,8 @@ inline sonare::ErrorCode error_code_from_c_error(SonareError err) {
       return sonare::ErrorCode::InvalidState;
     case SONARE_ERROR_CANCELLED:
       return sonare::ErrorCode::Cancelled;
+    case SONARE_ERROR_ENCODE_FAILED:
+      return sonare::ErrorCode::EncodeFailed;
     case SONARE_OK:
     case SONARE_ERROR_UNKNOWN:
     default:

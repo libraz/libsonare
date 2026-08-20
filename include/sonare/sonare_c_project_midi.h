@@ -226,7 +226,9 @@ SonareError sonare_midi_pitch_bend(double ppq, uint8_t group, uint8_t channel, u
 ///        truncated prefix is installed and reported through the normal success
 ///        path. @ref sonare_last_error_message describes rejected truncation.
 ///        A valid raw MIDI file can still be rejected when the projected
-///        persistent Project JSON would exceed its aggregate resource budgets.
+///        persistent Project JSON would exceed its aggregate resource budgets;
+///        that rejection is also SONARE_ERROR_INVALID_FORMAT, because it is a
+///        statement about the imported data, and leaves the project unchanged.
 SonareError sonare_project_import_smf(SonareProject* project, const uint8_t* bytes, size_t len,
                                       uint32_t* out_first_clip_id);
 
@@ -247,7 +249,9 @@ SonareError sonare_project_export_smf(const SonareProject* project, uint8_t** ou
 ///        Adds one MIDI track + clip. @p out_first_clip_id (optional) receives
 ///        the added clip id. Malformed input returns an error without crashing.
 ///        A valid MIDI Clip File can still be rejected when the projected
-///        persistent Project JSON would exceed its aggregate resource budgets.
+///        persistent Project JSON would exceed its aggregate resource budgets;
+///        that rejection is also SONARE_ERROR_INVALID_FORMAT, because it is a
+///        statement about the imported data, and leaves the project unchanged.
 SonareError sonare_project_import_clip_file(SonareProject* project, const uint8_t* bytes,
                                             size_t len, uint32_t* out_first_clip_id);
 
@@ -303,12 +307,15 @@ SonareError sonare_project_bake_midi_fx(SonareProject* project, uint32_t clip_id
 ///        can carry a selection or an editorial annotation across the bake.
 ///
 /// @param out_source_index Optional. Receives, for each transformed event in
-///        canonical order, the index of the input event it derives from, or -1
-///        for an event with no originating input. Chord and arpeggiator fan-out
-///        makes several consecutive-or-not outputs share one source index; a
-///        host that treats the first output per index as "the same event" and
-///        the rest as newly generated recovers the editing identity. At most
-///        @p out_capacity entries are written.
+///        canonical order, the index of the input event it derives from. Every
+///        entry is non-negative: requesting provenance drives the chain one
+///        input at a time, so each emitted event is by construction the
+///        expansion of exactly one input and there is no "generated from
+///        nothing" case to report. Chord and arpeggiator fan-out makes several
+///        consecutive-or-not outputs share one source index; a host that treats
+///        the first output per index as "the same event" and the rest as newly
+///        generated recovers the editing identity. At most @p out_capacity
+///        entries are written.
 /// @param out_capacity Number of entries @p out_source_index can hold.
 /// @param out_count Optional. Receives the full transformed event count even
 ///        when it exceeds @p out_capacity, so a short buffer is detectable.

@@ -120,6 +120,8 @@ const char* sonare_error_message(SonareError error) {
       return "Invalid state";
     case SONARE_ERROR_CANCELLED:
       return "Cancelled";
+    case SONARE_ERROR_ENCODE_FAILED:
+      return "Encode failed";
     case SONARE_ERROR_UNKNOWN:
       return "Unknown error";
   }

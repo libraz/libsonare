@@ -14,19 +14,28 @@
 #include "automation/automation_lane.h"
 #include "mixing/api/scene.h"
 #include "serialize/project_serializer_internal.h"
+#include "serialize/serialized_enum_bounds.h"
 #include "transport/tempo_map.h"
+#include "util/constants.h"
 #include "util/exception.h"
 #include "util/numeric_validation.h"
 
 namespace sonare::serialize {
+
+using constants::kDefaultBpm;
+
 namespace detail {
 
 namespace {
 
+// The accepted ordinal range comes from the enum's own last enumerator (see
+// serialized_enum_bounds.h), never from a literal repeated at the call site: a
+// literal that lags the enum makes the decoder reject a document the encoder
+// just produced, which discards the whole project.
 template <typename Enum>
-Enum enum_or(const Value& value, const char* key, Enum fallback, uint32_t maximum) {
+Enum enum_or(const Value& value, const char* key, Enum fallback) {
   const uint32_t ordinal = uint_or(value, key, static_cast<uint32_t>(fallback));
-  if (ordinal > maximum) {
+  if (ordinal > kMaxSerializedOrdinal<Enum>) {
     throw SonareException(ErrorCode::InvalidFormat,
                           std::string("enum field is out of range: ") + key);
   }
@@ -61,7 +70,9 @@ float float_or(const Value& value, const char* key, float fallback, const char* 
 transport::TempoSegment tempo_segment_from_json(const Value& v) {
   transport::TempoSegment s;
   s.start_ppq = num_or(v, "start_ppq", 0.0);
-  s.bpm = num_or(v, "bpm", 120.0);
+  // The absent-field fallback is the model's own default, so a document with no
+  // tempo decodes to the same segment a default-constructed one produces.
+  s.bpm = num_or(v, "bpm", kDefaultBpm);
   s.start_sample = num_or(v, "start_sample", 0.0);
   s.end_bpm = num_or(v, "end_bpm", 0.0);
   return s;
@@ -79,7 +90,7 @@ automation::AutomationLane automation_lane_from_json(const Value& v, uint32_t sc
   automation::AutomationTargetKind target_kind = automation::AutomationTargetKind::kOpaque;
   if (schema_version >= 2u) {
     const uint32_t ordinal = uint_or(v, "target_kind", 0);
-    if (ordinal > static_cast<uint32_t>(automation::AutomationTargetKind::kTrackPan)) {
+    if (ordinal > kMaxSerializedOrdinal<automation::AutomationTargetKind>) {
       throw SonareException(ErrorCode::InvalidFormat,
                             "automation target kind ordinal is out of range");
     }
@@ -93,7 +104,7 @@ automation::AutomationLane automation_lane_from_json(const Value& v, uint32_t sc
       automation::Breakpoint bp;
       bp.ppq = num_or(pv, "ppq", 0.0);
       bp.value = float_or(pv, "value", 0.0f, "tracks[].automation_lanes[].points[].value");
-      bp.curve_to_next = enum_or(pv, "curve_to_next", automation::CurveType::Linear, 3);
+      bp.curve_to_next = enum_or(pv, "curve_to_next", automation::CurveType::Linear);
       points.push_back(bp);
     }
   }
@@ -105,7 +116,7 @@ arrangement::Track track_from_json(const Value& v, uint32_t schema_version) {
   arrangement::Track t;
   t.id = uint_or(v, "id", 0);
   t.name = str_or(v, "name", "");
-  t.kind = enum_or(v, "kind", arrangement::Track::Kind::kAudio, 2);
+  t.kind = enum_or(v, "kind", arrangement::Track::Kind::kAudio);
   t.gain = std::max(0.0f, float_or(v, "gain", 1.0f, "tracks[].gain"));
   t.mute = bool_or(v, "mute", false);
   t.solo = bool_or(v, "solo", false);
@@ -128,7 +139,7 @@ arrangement::Track track_from_json(const Value& v, uint32_t schema_version) {
 arrangement::ClipFade fade_from_json(const Value& v) {
   arrangement::ClipFade f;
   f.length_ppq = num_or(v, "length_ppq", 0.0);
-  f.curve = enum_or(v, "curve", arrangement::FadeCurve::kLinear, 3);
+  f.curve = enum_or(v, "curve", arrangement::FadeCurve::kLinear);
   return f;
 }
 
@@ -160,11 +171,11 @@ arrangement::EditClip clip_from_json(const Value& v) {
   c.gain = float_or(v, "gain", 1.0f, "clips[].gain");
   if (const auto* fi = object_at(v, "fade_in")) c.fade_in = fade_from_json(Value(*fi));
   if (const auto* fo = object_at(v, "fade_out")) c.fade_out = fade_from_json(Value(*fo));
-  c.loop_mode = enum_or(v, "loop_mode", arrangement::LoopMode::kOff, 1);
+  c.loop_mode = enum_or(v, "loop_mode", arrangement::LoopMode::kOff);
   c.loop_length_ppq = num_or(v, "loop_length_ppq", 0.0);
   c.loop_crossfade_ppq = num_or(v, "loop_crossfade_ppq", 0.0);
   c.warp_ref_id = uint_or(v, "warp_ref_id", 0);
-  c.warp_mode = enum_or(v, "warp_mode", arrangement::WarpMode::kOff, 2);
+  c.warp_mode = enum_or(v, "warp_mode", arrangement::WarpMode::kOff);
   if (const auto* arr = array_at(v, "takes")) {
     for (const auto& tv : *arr) {
       if (tv.is_object()) c.takes.push_back(take_from_json(tv));
@@ -196,7 +207,7 @@ arrangement::WarpMapRef warp_map_from_json(const Value& v) {
 }
 
 arrangement::ClipSource source_from_json(const Value& v) {
-  const auto kind = enum_or(v, "kind", arrangement::SourceKind::kAudio, 1);
+  const auto kind = enum_or(v, "kind", arrangement::SourceKind::kAudio);
   if (kind == arrangement::SourceKind::kMidi) {
     arrangement::MidiSourceRef m;
     m.id = uint_or(v, "id", 0);
@@ -221,7 +232,7 @@ arrangement::ChordSymbol chord_from_json(const Value& v) {
   c.start_ppq = num_or(v, "start_ppq", 0.0);
   c.end_ppq = num_or(v, "end_ppq", 0.0);
   c.root_pc = pitch_class_or(v, "root_pc");
-  c.quality = enum_or(v, "quality", arrangement::ChordQuality::kUnknown, 7);
+  c.quality = enum_or(v, "quality", arrangement::ChordQuality::kUnknown);
   if (const auto* arr = array_at(v, "extensions")) {
     for (const auto& ev : *arr) {
       if (!ev.is_number()) continue;
@@ -244,7 +255,7 @@ arrangement::KeySegment key_segment_from_json(const Value& v) {
   k.start_ppq = num_or(v, "start_ppq", 0.0);
   k.end_ppq = num_or(v, "end_ppq", 0.0);
   k.tonic_pc = pitch_class_or(v, "tonic_pc");
-  k.mode = enum_or(v, "mode", arrangement::KeyMode::kUnknown, 7);
+  k.mode = enum_or(v, "mode", arrangement::KeyMode::kUnknown);
   return k;
 }
 

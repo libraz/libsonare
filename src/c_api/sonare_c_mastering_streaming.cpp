@@ -332,6 +332,7 @@ SonareStreamingMasteringChain* sonare_streaming_mastering_chain_create_ex(
 
   const char* sonare_streaming_mastering_chain_stage_names(
       const SonareStreamingMasteringChain* handle) {
+    SONARE_C_TRY
     // Depends on the handle (and its prepare state), so it cannot use a
     // program-lifetime cache: recompute into a thread-local each call (valid
     // until the next call on the same thread, like sonare_mastering_insert_param_names).
@@ -339,6 +340,7 @@ SonareStreamingMasteringChain* sonare_streaming_mastering_chain_create_ex(
     names.clear();
     if (!handle || !handle->chain) return names.c_str();
     return join_names(handle->chain->stage_names(), names);
+    SONARE_C_CATCH_RETURN(nullptr)
   }
 
   void sonare_streaming_mastering_chain_destroy(SonareStreamingMasteringChain * handle) {

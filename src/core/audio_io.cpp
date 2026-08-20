@@ -547,7 +547,7 @@ void save_wav(const std::string& path, const float* samples, size_t n_samples, i
   TmpFileGuard guard{tmp};
   drwav wav;
   drwav_bool32 ok = drwav_init_file_write(&wav, tmp.c_str(), &format, nullptr);
-  SONARE_CHECK_MSG(ok, ErrorCode::DecodeFailed, "Failed to create WAV file: " + path);
+  SONARE_CHECK_MSG(ok, ErrorCode::EncodeFailed, "Failed to create WAV file: " + path);
 
   if (bits_per_sample == 16) {
     // Convert float to int16
@@ -557,7 +557,7 @@ void save_wav(const std::string& path, const float* samples, size_t n_samples, i
     }
     drwav_uint64 written = drwav_write_pcm_frames(&wav, n_samples, int_samples.data());
     drwav_uninit(&wav);
-    SONARE_CHECK_MSG(written == n_samples, ErrorCode::DecodeFailed, "Failed to write all samples");
+    SONARE_CHECK_MSG(written == n_samples, ErrorCode::EncodeFailed, "Failed to write all samples");
   } else {
     // 24-bit: pack as tightly packed 3-byte little-endian samples. dr_wav's
     // writer is a raw byte copy (bytesToWrite = frames * channels * 24 / 8) with
@@ -572,7 +572,7 @@ void save_wav(const std::string& path, const float* samples, size_t n_samples, i
     }
     drwav_uint64 written = drwav_write_pcm_frames(&wav, n_samples, bytes.data());
     drwav_uninit(&wav);
-    SONARE_CHECK_MSG(written == n_samples, ErrorCode::DecodeFailed, "Failed to write all samples");
+    SONARE_CHECK_MSG(written == n_samples, ErrorCode::EncodeFailed, "Failed to write all samples");
   }
   finalize_atomic(tmp, path);
   guard.committed = true;
@@ -644,7 +644,7 @@ void write_wav_extensible(const std::string& path, const float* interleaved, siz
   const std::string tmp = atomic_tmp_path(path);
   TmpFileGuard guard{tmp};
   std::ofstream os(tmp, std::ios::binary);
-  SONARE_CHECK_MSG(os.is_open(), ErrorCode::DecodeFailed, "Failed to create WAV file: " + path);
+  SONARE_CHECK_MSG(os.is_open(), ErrorCode::EncodeFailed, "Failed to create WAV file: " + path);
 
   os.write("RIFF", 4);
   write_le32(os, riff_size);
@@ -667,7 +667,7 @@ void write_wav_extensible(const std::string& path, const float* interleaved, siz
   write_le32(os, data_size);
   os.write(reinterpret_cast<const char*>(pcm.data()), static_cast<std::streamsize>(pcm.size()));
   os.flush();
-  SONARE_CHECK_MSG(os.good(), ErrorCode::DecodeFailed, "Failed to write WAV file: " + path);
+  SONARE_CHECK_MSG(os.good(), ErrorCode::EncodeFailed, "Failed to write WAV file: " + path);
   os.close();
   finalize_atomic(tmp, path);
   guard.committed = true;
@@ -712,13 +712,13 @@ void save_wav_multichannel(const std::string& path, const float* interleaved, si
     TmpFileGuard guard{tmp};
     drwav wav;
     drwav_bool32 ok = drwav_init_file_write(&wav, tmp.c_str(), &format, nullptr);
-    SONARE_CHECK_MSG(ok, ErrorCode::DecodeFailed, "Failed to create WAV file: " + path);
+    SONARE_CHECK_MSG(ok, ErrorCode::EncodeFailed, "Failed to create WAV file: " + path);
 
     const std::vector<uint8_t> pcm =
         pack_pcm_bytes(interleaved, n_frames * static_cast<size_t>(channel_count), bits_per_sample);
     drwav_uint64 written = drwav_write_pcm_frames(&wav, n_frames, pcm.data());
     drwav_uninit(&wav);
-    SONARE_CHECK_MSG(written == n_frames, ErrorCode::DecodeFailed, "Failed to write all frames");
+    SONARE_CHECK_MSG(written == n_frames, ErrorCode::EncodeFailed, "Failed to write all frames");
     finalize_atomic(tmp, path);
     guard.committed = true;
     return;

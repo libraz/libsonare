@@ -62,6 +62,15 @@ struct StftConfig {
   int actual_win_length() const { return win_length > 0 ? win_length : n_fft; }
 };
 
+/// @brief Validation rules for @ref StftConfig.
+/// @details Found by argument-dependent lookup from @ref Validated, which
+///          @ref Spectrogram::compute uses before it touches the framing loop.
+///          Every surface reaches the STFT through that entry point, so the
+///          rules do not need repeating per binding.
+/// @throws SonareException(InvalidParameter) for a non-positive size, a
+///         negative window length, or a window longer than the FFT.
+void validate_config(const StftConfig& config);
+
 /// @brief Builds an StftConfig with the given FFT and hop sizes.
 /// @details Convenience helper for the common case where callers only need to
 /// override @p n_fft and @p hop_length. All other fields (window, win_length,
@@ -124,9 +133,14 @@ class Spectrogram {
   /// @param center Whether the source signal was center-padded
   /// @param win_length Analysis window length (0 = n_fft)
   /// @return Spectrogram object
+  /// @param window Window the caller's frequency-domain data was analyzed with.
+  ///        Carried so @ref to_audio normalizes with it. Deliberately has no
+  ///        default: a wrong window here produces a reconstruction gain ripple
+  ///        rather than an error, so every caller has to state which one
+  ///        produced its data instead of inheriting a guess.
   static Spectrogram from_complex(const std::complex<float>* data, int n_bins, int n_frames,
-                                  int n_fft, int hop_length, int sample_rate, bool center = true,
-                                  int win_length = 0);
+                                  int n_fft, int hop_length, int sample_rate, WindowType window,
+                                  bool center = true, int win_length = 0);
 
   /// @brief Returns number of frequency bins (n_fft/2 + 1).
   int n_bins() const { return n_bins_; }
@@ -181,16 +195,33 @@ class Spectrogram {
 
   /// @brief Reconstructs audio from spectrogram via iSTFT.
   /// @param length Target length in samples (0 = auto)
-  /// @param window Window function for synthesis
   /// @return Reconstructed audio
-  Audio to_audio(int length = 0, WindowType window = WindowType::Hann) const;
+  /// @details Normalizes with the analysis window this spectrogram carries. The
+  ///          iSTFT divides the overlap-add by the analysis*synthesis window
+  ///          sum, so the divisor is only correct when it is built from the
+  ///          window the frequency-domain data was actually produced with.
+  Audio to_audio(int length = 0) const;
+
+  /// @brief Reconstructs audio via iSTFT, overriding the analysis window.
+  /// @param length Target length in samples (0 = auto)
+  /// @param window Window the frequency-domain data was analyzed with
+  /// @return Reconstructed audio
+  /// @details Only for data whose analysis window this spectrogram cannot know,
+  ///          such as a buffer assembled outside @ref from_complex. Passing a
+  ///          window other than the true analysis one makes the normalization
+  ///          divisor wrong and imprints a gain ripple at the hop rate.
+  Audio to_audio(int length, WindowType window) const;
+
+  /// @brief Returns the analysis window this spectrogram was produced with.
+  WindowType window() const { return window_; }
 
   /// @brief Access complex value at (bin, frame).
   const std::complex<float>& at(int bin, int frame) const;
 
  private:
   Spectrogram(std::vector<std::complex<float>> data, int n_bins, int n_frames, int n_fft,
-              int hop_length, int sample_rate, int win_length = 0, bool center = true);
+              int hop_length, int sample_rate, int win_length = 0, bool center = true,
+              WindowType window = WindowType::Hann);
 
   std::vector<std::complex<float>> data_;  ///< Complex spectrum [n_bins * n_frames]
   int n_bins_;
@@ -200,6 +231,7 @@ class Spectrogram {
   int sample_rate_;
   int win_length_;  ///< Window length used for analysis (defaults to n_fft)
   bool center_;
+  WindowType window_;  ///< Window family used for analysis; drives iSTFT normalization
 
   // Cached derived data (computed lazily)
   mutable std::vector<float> magnitude_cache_;

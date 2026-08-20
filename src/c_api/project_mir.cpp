@@ -9,6 +9,7 @@ SonareError sonare_project_auto_tempo(SonareProject* project, const float* audio
   return sonare_project_auto_tempo_ex(project, audio, len, sample_rate, 0, 0, out_bpm);
 }
 
+#if defined(SONARE_WITH_ARRANGEMENT)
 namespace {
 
 SonareProjectTempoCandidateKind tempo_candidate_kind(const char* label) noexcept {
@@ -39,6 +40,7 @@ std::vector<sonare::mir::TempoEstimate> analyze_tempo_candidates(const float* au
 }
 
 }  // namespace
+#endif
 
 SonareError sonare_project_analyze_tempo(const SonareProject* project, const float* audio,
                                          size_t len, int sample_rate,

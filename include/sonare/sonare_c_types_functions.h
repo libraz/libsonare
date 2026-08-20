@@ -223,13 +223,18 @@ const char* sonare_last_warning_message(void);
 const char* sonare_version(void);
 uint32_t sonare_engine_abi_version(void);
 
-/// @brief Returns a JSON document describing the capabilities of this build.
+/// @brief Returns a JSON document describing the capabilities of this build, or
+///        NULL when the document could not be assembled.
 /// @details The document contains the library version, project and engine ABI
 ///   versions, platform, enabled feature families, available decode backends,
 ///   SIMD mode, and reported hardware concurrency. The pointer is owned by
 ///   libsonare and must not be freed. Copy the JSON before making another C API
 ///   call on the same thread.
-/// @return A non-NULL, NUL-terminated JSON document.
+///   - The document is rebuilt into thread-local storage on every call, so an
+///     allocation failure returns NULL rather than a partial or stale document.
+///     Check the pointer before dereferencing it;
+///     sonare_last_error_message() then carries the reason.
+/// @return Pointer to a NUL-terminated JSON document, or NULL on failure.
 const char* sonare_capabilities_json(void);
 
 /// @brief Returns 1 if libsonare was compiled with FFmpeg-backed decoding for

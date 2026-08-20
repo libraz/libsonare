@@ -205,9 +205,10 @@ const Object* object_at(const Value& obj, const char* key) {
 }
 
 // ===========================================================================
-// Migration hook. The current serializer knows schema version 1. A document with the same
-// MAJOR version is accepted (forward-compatible field handling above); an
-// unknown future major is rejected with a diagnostic rather than misread.
+// Migration hook. A document at or below SONARE_PROJECT_SCHEMA_VERSION (the
+// serializer's current version) is accepted -- forward-compatible field
+// handling above absorbs earlier versions' documents; an unknown future
+// version is rejected with a diagnostic rather than misread.
 // ===========================================================================
 
 bool schema_version_supported(uint32_t version) { return version <= SONARE_PROJECT_SCHEMA_VERSION; }

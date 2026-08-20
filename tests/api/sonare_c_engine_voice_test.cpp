@@ -421,6 +421,40 @@ TEST_CASE("sonare_engine_bounce_offline validates the channel count against a la
   sonare_engine_destroy(engine);
 }
 
+TEST_CASE("sonare_engine_bounce_offline rejects an out-of-range dither type", "[c_api][engine]") {
+  SonareRealtimeEngine* engine = nullptr;
+  REQUIRE(sonare_engine_create(&engine) == SONARE_OK);
+  REQUIRE(sonare_engine_prepare(engine, 48000.0, 128, 2, 2) == SONARE_OK);
+
+  SonareEngineBounceOptions options{};
+  REQUIRE(sonare_engine_bounce_options_default(&options) == SONARE_OK);
+  options.total_frames = 128;
+  options.block_size = 128;
+  options.num_channels = 2;
+  options.source_sample_rate = 48000;
+  options.target_sample_rate = 48000;
+
+  // Only 0..3 are documented. A value outside that range mapped to "no dither"
+  // would return SONARE_OK with undithered audio, leaving the caller no way to
+  // tell the request was dropped.
+  for (int bad : {-1, 4, 7}) {
+    options.dither = bad;
+    SonareEngineBounceResult result{};
+    REQUIRE(sonare_engine_bounce_offline(engine, &options, &result) ==
+            SONARE_ERROR_INVALID_PARAMETER);
+    sonare_free_bounce_result(&result);
+  }
+
+  for (int good : {0, 1, 2, 3}) {
+    options.dither = good;
+    SonareEngineBounceResult result{};
+    REQUIRE(sonare_engine_bounce_offline(engine, &options, &result) == SONARE_OK);
+    sonare_free_bounce_result(&result);
+  }
+
+  sonare_engine_destroy(engine);
+}
+
 TEST_CASE("engine-owned offline results reject shapes above the allocation budget",
           "[c_api][engine]") {
   const sonare::resource::EngineOfflineLimits tiny_limits{/*max_total_samples=*/100,

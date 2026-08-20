@@ -66,6 +66,47 @@ std::vector<uint8_t> make_large_project_sysex_smf(std::size_t payload_size) {
   return smf;
 }
 
+// Format-1 SMF holding a conductor track plus two note tracks, with the byte
+// offset just past each MTrk chunk so a truncation test can cut the buffer
+// where a known number of leading tracks still parse completely.
+struct TruncatableSmf {
+  std::vector<uint8_t> bytes;
+  std::vector<std::size_t> track_end_offsets;
+};
+
+TruncatableSmf make_multi_track_smf() {
+  const auto append_chunk = [](std::vector<uint8_t>* out, const std::vector<uint8_t>& body) {
+    push_tag(out, "MTrk");
+    push_u32(out, static_cast<uint32_t>(body.size()));
+    out->insert(out->end(), body.begin(), body.end());
+  };
+
+  TruncatableSmf smf;
+  push_tag(&smf.bytes, "MThd");
+  push_u32(&smf.bytes, 6);
+  push_u16(&smf.bytes, 1);
+  push_u16(&smf.bytes, 3);
+  push_u16(&smf.bytes, 480);
+
+  // Conductor track: 120 BPM set-tempo followed by end-of-track.
+  append_chunk(&smf.bytes,
+               {0x00u, 0xFFu, 0x51u, 0x03u, 0x07u, 0xA1u, 0x20u, 0x00u, 0xFFu, 0x2Fu, 0x00u});
+  smf.track_end_offsets.push_back(smf.bytes.size());
+
+  for (int root : {60, 67}) {
+    std::vector<uint8_t> body;
+    for (int i = 0; i < 4; ++i) {
+      const uint8_t note = static_cast<uint8_t>(root + i);
+      body.insert(body.end(), {0x00u, 0x90u, note, 0x64u});
+      body.insert(body.end(), {0x60u, 0x80u, note, 0x00u});
+    }
+    body.insert(body.end(), {0x00u, 0xFFu, 0x2Fu, 0x00u});
+    append_chunk(&smf.bytes, body);
+    smf.track_end_offsets.push_back(smf.bytes.size());
+  }
+  return smf;
+}
+
 std::vector<uint8_t> make_project_limit_clip_file(std::size_t event_count) {
   sonare::midi::MidiClip clip;
   std::vector<sonare::midi::MidiClipEvent> events;
@@ -153,6 +194,49 @@ TEST_CASE("project MIDI import stays reloadable at its event cap",
   REQUIRE(project->history.redo_depth() == redo_depth);
 
   sonare_project_destroy(restored);
+  sonare_project_destroy(project);
+}
+
+TEST_CASE("an over-budget project and an over-limit import report different errors",
+          "[.][slow][project][midi][resource_limit]") {
+  const std::size_t cap = sonare::resource::kMaxProjectMidiImportEvents;
+  const std::vector<uint8_t> at_cap = make_project_limit_running_status_smf(cap);
+
+  SonareProject* project = nullptr;
+  REQUIRE(sonare_project_create(&project) == SONARE_OK);
+  uint32_t first_clip = 0;
+  REQUIRE(sonare_project_import_smf(project, at_cap.data(), at_cap.size(), &first_clip) ==
+          SONARE_OK);
+  REQUIRE_FALSE(serialize(project).empty());
+
+  // Importing the file again would double the encoded document. That is a
+  // statement about the imported data, so it is reported as a rejected input.
+  uint32_t rejected_clip = 0;
+  REQUIRE(sonare_project_import_smf(project, at_cap.data(), at_cap.size(), &rejected_clip) ==
+          SONARE_ERROR_INVALID_FORMAT);
+
+  // The edit API carries no persistence budget, so the very same content
+  // installed through it succeeds and leaves the project unsaveable. That is a
+  // statement about the project, so saving reports an invalid state.
+  uint32_t track = 0;
+  uint32_t clip = 0;
+  REQUIRE(sonare_project_add_midi_clip(project, 0.0, 2.0, &track, &clip) == SONARE_OK);
+  std::vector<SonareMidiEventPod> events(cap);
+  bool packed = true;
+  for (std::size_t i = 0; i < cap; ++i) {
+    packed = packed &&
+             sonare_midi_note_on(0.0, 0, 0, static_cast<uint8_t>(60u + (i % 12u)),
+                                 static_cast<uint8_t>(64u + (i % 64u)), &events[i]) == SONARE_OK;
+  }
+  REQUIRE(packed);
+  REQUIRE(sonare_project_set_midi_events(project, clip, events.data(), events.size()) == SONARE_OK);
+
+  char* json = nullptr;
+  size_t json_len = 0;
+  REQUIRE(sonare_project_serialize(project, &json, &json_len) == SONARE_ERROR_INVALID_STATE);
+  REQUIRE(json == nullptr);
+  REQUIRE(json_len == 0);
+
   sonare_project_destroy(project);
 }
 
@@ -1058,6 +1142,31 @@ TEST_CASE("project C surface MIDI-FX bake reports per-event provenance", "[proje
             plain->history.midi_content().events.at(plain_clip));
   }
 
+  SECTION("an arpeggiated bake still attributes every output to an input") {
+    // The arpeggiator is the one stage whose output is not a per-input fan-out:
+    // it consumes the held note's note-off and emits its own gated pairs, so it
+    // is where an event with no originating input could plausibly appear. The
+    // header promises every entry is non-negative; nothing exercised that
+    // promise on this shape, only on the 1:1 and fixed-fan-out ones.
+    const char* config =
+        "{\"arpeggiator_intervals\":[0,12],\"arpeggiator_step_ppq\":0.25,"
+        "\"arpeggiator_gate_ppq\":0.125}";
+    size_t predicted = 0;
+    REQUIRE(sonare_project_preview_midi_fx_count(project, clip, config, &predicted) == SONARE_OK);
+    REQUIRE(predicted > 0);
+
+    std::vector<int32_t> map(predicted, -2);
+    size_t written = 0;
+    REQUIRE(sonare_project_bake_midi_fx_ex(project, clip, config, map.data(), map.size(),
+                                           &written) == SONARE_OK);
+    REQUIRE(written == predicted);
+    for (const int32_t source : map) {
+      INFO("source index " << source);
+      REQUIRE(source >= 0);
+      REQUIRE(source < 4);
+    }
+  }
+
   SECTION("a short buffer still reports the full count") {
     std::vector<int32_t> map(2, -2);
     size_t written = 0;
@@ -1463,4 +1572,34 @@ TEST_CASE("project C surface warns that a MIDI-only project bounces to silence",
   sonare_project_free_compile_result(&bounce_result);
 
   sonare_project_destroy(project);
+}
+
+TEST_CASE("truncated multi-track SMF import keeps every track that parsed completely",
+          "[project][midi]") {
+  const TruncatableSmf smf = make_multi_track_smf();
+  const std::size_t first_note_track_end = smf.track_end_offsets[1];
+  REQUIRE(first_note_track_end < smf.bytes.size());
+
+  // Every cut past the first note track leaves that track fully parsed, so the
+  // importer must report the recovered content instead of rejecting the file,
+  // and the project bindings must install the recovered clip.
+  for (std::size_t cut = first_note_track_end; cut < smf.bytes.size(); ++cut) {
+    INFO("truncated at byte " << cut << " of " << smf.bytes.size());
+    const auto imported = sonare::midi::import_smf(smf.bytes.data(), cut);
+    REQUIRE(imported.clips.size() == 1);
+    REQUIRE(imported.clips[0].events().size() == 8);
+    REQUIRE(imported.recoverable());
+    // The tempo map stays usable on the recovered path: a consumer hands these
+    // straight to TempoMap::set_segments.
+    REQUIRE_FALSE(imported.tempo_segments.empty());
+    REQUIRE_FALSE(imported.time_signatures.empty());
+
+    SonareProject* project = nullptr;
+    REQUIRE(sonare_project_create(&project) == SONARE_OK);
+    uint32_t first_clip = 0;
+    REQUIRE(sonare_project_import_smf(project, smf.bytes.data(), cut, &first_clip) == SONARE_OK);
+    REQUIRE(first_clip != 0);
+    REQUIRE(project->history.midi_content().events.at(first_clip).size() == 8);
+    sonare_project_destroy(project);
+  }
 }

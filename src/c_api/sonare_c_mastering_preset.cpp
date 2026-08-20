@@ -7,6 +7,7 @@
 
 #include "mastering/api/chain.h"
 #include "mastering/api/presets.h"
+#include "mastering/assistant/platform_targets.h"
 #include "sonare_c_internal.h"
 #include "sonare_c_mastering_helpers.h"
 
@@ -34,6 +35,26 @@ const char* sonare_mastering_preset_names(void) {
   }
   return names.c_str();
   SONARE_C_CATCH_RETURN(nullptr)
+}
+
+const char* sonare_mastering_platform_names(void) {
+  SONARE_C_TRY
+  // Same write-once thread_local contract as sonare_mastering_preset_names: the
+  // returned pointer must stay valid across later calls on the thread.
+  static thread_local std::string names;
+  static thread_local bool built = false;
+  if (!built) {
+    join_names(sonare::mastering::assistant::platform_names(), names);
+    built = true;
+  }
+  return names.c_str();
+  SONARE_C_CATCH_RETURN(nullptr)
+}
+
+int sonare_mastering_platform_from_name(const char* name) {
+  SONARE_C_TRY
+  return sonare::mastering::assistant::platform_index_from_name(name);
+  SONARE_C_CATCH_RETURN(-1)
 }
 
 SonareError sonare_master_audio(const char* preset_name, const float* samples, size_t length,

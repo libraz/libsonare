@@ -96,6 +96,11 @@ typedef struct {
   float confidence;
 } SonareBpmCandidate;
 
+/* Room-acoustic measures. The clarity family (c50, c80, d50, c50_bands and
+   c80_bands) needs a known direct-sound arrival time, which only a measured
+   impulse response supplies, so those fields are NaN and those band pointers are
+   NULL whenever is_blind is nonzero. rt60 and edt carry no such requirement and
+   are estimated in both modes. */
 typedef struct {
   float rt60;
   float edt;
@@ -205,7 +210,13 @@ typedef struct {
   size_t count;
 } SonareStringArray;
 
-/* Song-structure section types (mirrors sonare::SectionType ordinals). */
+/* Song-structure section types (mirrors sonare::SectionType ordinals).
+ * SONARE_SECTION_PRE_CHORUS is never produced by sonare_analyze_sections: it
+ * has no detection branch, so filtering sections on it always yields an empty
+ * result. Every other value is reachable. SONARE_SECTION_UNKNOWN means the
+ * analyzer did not identify the segment -- either no boundary was detected at
+ * all, or the segment matched none of the positive branches -- and is reported
+ * with confidence 0. */
 typedef enum {
   SONARE_SECTION_INTRO = 0,
   SONARE_SECTION_VERSE = 1,

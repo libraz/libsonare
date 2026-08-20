@@ -39,6 +39,7 @@
 #include "rt/command.h"
 #include "serialize/project_serializer.h"
 #include "transport/tempo_map.h"
+#include "util/constants.h"
 #include "util/json.h"
 #include "util/numeric_validation.h"
 #include "util/resource_limits.h"
@@ -224,8 +225,10 @@ bool is_bank_or_program_event_for(const arr::MidiClipEvent& event, uint8_t group
 
 /// Applies @p chain to @p events and writes the canonically ordered result to
 /// @p transformed. When @p source_index is non-null it receives one entry per
-/// transformed event: the index of the input event that event derives from, or
-/// -1 for an event with no originating input. Building the map narrows the
+/// transformed event: the index of the input event that event derives from.
+/// Every entry is non-negative -- the only writer fills each chunk with its own
+/// input's ordinal and the permutation sort merely reorders, so there is no
+/// path that produces an unattributed event. Building the map narrows the
 /// drain to one input per chunk so each output can be attributed, which is
 /// output-identical to the wide-chunk drain because the ordinal base is passed
 /// explicitly either way.
@@ -450,7 +453,7 @@ void fill_project_tempo_map(const arr::Project& project, sonare::transport::Temp
   if (map == nullptr) return;
   map->prepare(project.sample_rate());
   std::vector<sonare::transport::TempoSegment> tempo = project.tempo_segments();
-  if (tempo.empty()) tempo.push_back({0.0, 120.0, 0.0});
+  if (tempo.empty()) tempo.push_back({0.0, sonare::constants::kDefaultBpm, 0.0});
   std::vector<sonare::transport::TimeSignatureSegment> sigs = project.time_signatures();
   if (sigs.empty()) sigs.push_back({0.0, {4, 4}});
   map->set_segments(std::move(tempo));
@@ -464,7 +467,9 @@ void fill_project_tempo_map(const arr::Project& project, sonare::transport::Temp
 // objects can be moved into the live history transaction after the preflight.
 // project_from_json is the aggregate resource gate for parser nodes, array
 // entities, decoded strings, and decoded sidecar/SysEx payload bytes; the
-// explicit byte check keeps the encoder side bounded as well.
+// non-throwing encoder form keeps the encoder side bounded as well, and reports
+// an over-budget document as a rejected import instead of letting it surface as
+// a project-state error.
 bool imported_midi_persistence_preflight(const arr::Project& project,
                                          const arr::MidiContentStore& midi,
                                          const std::vector<arr::EditCommandPtr>& commands) {
@@ -474,17 +479,18 @@ bool imported_midi_persistence_preflight(const arr::Project& project,
     if (command == nullptr || !command->apply(candidate_project, candidate_midi)) return false;
   }
 
-  const std::string serialized =
-      sonare::serialize::project_to_json(candidate_project, candidate_midi);
-  if (serialized.size() > sonare::resource::kDefaultProjectImportResourceLimits.max_json_bytes) {
+  std::string serialized;
+  if (!sonare::serialize::try_project_to_json(candidate_project, candidate_midi, &serialized)) {
     return false;
   }
   const sonare::serialize::DeserializeResult decoded =
       sonare::serialize::project_from_json(serialized);
   if (!decoded.ok() || !decoded.project.has_value()) return false;
 
-  const std::string reserialized =
-      sonare::serialize::project_to_json(*decoded.project, decoded.midi);
+  std::string reserialized;
+  if (!sonare::serialize::try_project_to_json(*decoded.project, decoded.midi, &reserialized)) {
+    return false;
+  }
   return serialized == reserialized;
 }
 

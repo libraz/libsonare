@@ -94,6 +94,12 @@ enum class ErrorCode : int {
   InvalidState,
   /// @brief A cooperative cancellation callback requested an early stop.
   Cancelled,
+  /// @brief Producing or writing an output artefact failed (creating the file,
+  ///        a short write, an encoder refusing the data). The read-side sibling
+  ///        is @c DecodeFailed; a failure to write is not a failure to decode,
+  ///        and callers routing on the code cannot recover the distinction once
+  ///        the two are merged.
+  EncodeFailed,
 };
 
 /// @brief Pitch class (0-11, C=0).
@@ -145,6 +151,11 @@ enum class ChordQuality {
 };
 
 /// @brief Song section types.
+/// @note @c PreChorus is never produced by @ref SectionAnalyzer: it has no
+///       detection branch, so filtering sections on it always yields an empty
+///       result. Every other value is reachable. @c Unknown carries a specific
+///       meaning — the segmenter found no structure, or a segment matched none
+///       of the positive branches — and is reported with @c confidence 0.
 enum class SectionType {
   Intro,
   Verse,
@@ -219,6 +230,8 @@ inline const char* error_message(ErrorCode code) {
       return "Invalid state";
     case ErrorCode::Cancelled:
       return "Cancelled";
+    case ErrorCode::EncodeFailed:
+      return "Encode failed";
     default:
       return "Unknown error";
   }

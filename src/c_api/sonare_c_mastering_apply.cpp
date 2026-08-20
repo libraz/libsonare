@@ -117,6 +117,7 @@ SonareError sonare_mastering_apply_processor_stereo(const char* processor_name, 
   out->output_lufs = 0.0f;
   out->applied_gain_db = 0.0f;
   out->latency_samples = 0;
+  out->loudness_target_limited = 0;
 
   SONARE_C_TRY
   auto result = sonare::mastering::api::apply_named_processor_stereo(
@@ -127,6 +128,7 @@ SonareError sonare_mastering_apply_processor_stereo(const char* processor_name, 
   out->output_lufs = result.output_lufs;
   out->applied_gain_db = result.applied_gain_db;
   out->latency_samples = result.latency_samples;
+  out->loudness_target_limited = result.loudness_target_limited ? 1 : 0;
   std::unique_ptr<float[]> left_out(new float[out->length]);
   std::unique_ptr<float[]> right_out(new float[out->length]);
   std::memcpy(left_out.get(), result.left.data(), out->length * sizeof(float));

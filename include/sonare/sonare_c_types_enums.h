@@ -18,6 +18,9 @@ typedef enum {
   SONARE_ERROR_NOT_SUPPORTED = 6,
   SONARE_ERROR_INVALID_STATE = 7,
   SONARE_ERROR_CANCELLED = 8,
+  /// Producing or writing an output artefact failed. The read-side sibling is
+  /// SONARE_ERROR_DECODE_FAILED.
+  SONARE_ERROR_ENCODE_FAILED = 9,
   SONARE_ERROR_UNKNOWN = 99
 } SonareError;
 

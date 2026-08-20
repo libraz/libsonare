@@ -1,6 +1,9 @@
 /// @file sonare_c_mastering_test.cpp
 /// @brief Mastering C API tests.
 
+#include "c_api/eq_band_json.h"
+#include "core/audio.h"
+#include "mastering/maximizer/loudness_optimize.h"
 #include "sonare_c_test_helpers.h"
 #include "util/json.h"
 
@@ -482,6 +485,52 @@ TEST_CASE("sonare_mastering_process", "[c_api][mastering]") {
     sonare_free_string(json);
   }
 
+  SECTION("assistant suggestion follows the requested delivery target") {
+    auto samples = generate_sine(220.0f, 48000, 3.0f);
+    for (auto& sample : samples) sample *= 0.2f;
+
+    const char* names = sonare_mastering_platform_names();
+    REQUIRE(names != nullptr);
+    REQUIRE(std::strstr(names, "broadcast") != nullptr);
+    REQUIRE(std::strstr(names, "club") != nullptr);
+    REQUIRE(sonare_mastering_platform_from_name("not-a-platform") == -1);
+    REQUIRE(sonare_mastering_platform_from_name(nullptr) == -1);
+
+    const int broadcast = sonare_mastering_platform_from_name("broadcast");
+    REQUIRE(broadcast >= 0);
+    SonareMasteringParam broadcast_params[] = {{"targetPlatform", static_cast<double>(broadcast)}};
+    char* json = nullptr;
+    REQUIRE(sonare_mastering_assistant_suggest(samples.data(), samples.size(), 48000,
+                                               broadcast_params, 1, &json) == SONARE_OK);
+    REQUIRE(json != nullptr);
+    // Without the target the assistant returns the streaming default of -14.
+    REQUIRE(std::strstr(json, "\"loudness.targetLufs\":-23") != nullptr);
+    sonare_free_string(json);
+
+    // Only a loud delivery format moves the ceiling: broadcast and podcast ask
+    // for the ceiling the default already carries.
+    const int club = sonare_mastering_platform_from_name("club");
+    REQUIRE(club >= 0);
+    SonareMasteringParam club_params[] = {{"targetPlatform", static_cast<double>(club)}};
+    json = nullptr;
+    REQUIRE(sonare_mastering_assistant_suggest(samples.data(), samples.size(), 48000, club_params,
+                                               1, &json) == SONARE_OK);
+    REQUIRE(json != nullptr);
+    REQUIRE(std::strstr(json, "\"loudness.targetLufs\":-9") != nullptr);
+    REQUIRE(std::strstr(json, "\"loudness.ceilingDb\":-0.3") != nullptr);
+    sonare_free_string(json);
+
+    // An index naming no target, and a fractional index, are rejected rather
+    // than truncated toward a neighbouring target.
+    SonareMasteringParam unknown[] = {{"targetPlatform", 4096.0}};
+    json = nullptr;
+    REQUIRE(sonare_mastering_assistant_suggest(samples.data(), samples.size(), 48000, unknown, 1,
+                                               &json) == SONARE_ERROR_INVALID_PARAMETER);
+    SonareMasteringParam fractional[] = {{"targetPlatform", static_cast<double>(broadcast) + 0.25}};
+    REQUIRE(sonare_mastering_assistant_suggest(samples.data(), samples.size(), 48000, fractional, 1,
+                                               &json) == SONARE_ERROR_INVALID_PARAMETER);
+  }
+
   SECTION("assistant audio profile is reachable through the C API") {
     auto samples = generate_sine(330.0f, 48000, 2.0f);
     for (auto& sample : samples) sample *= 0.2f;
@@ -659,6 +708,41 @@ TEST_CASE("sonare_mastering_process", "[c_api][mastering]") {
       sonare_free_string(json);
     }
   }
+}
+
+TEST_CASE("sonare_eq_set_band accepts detectorDelayMs and its former lookaheadMs spelling",
+          "[c_api][mastering][eq]") {
+  // detectorDelayMs is the corrected name (see dynamic_eq.h); lookaheadMs is
+  // kept accepted so a stored band config using the old spelling is not
+  // silently dropped. Checked directly against the shared JSON parser (not
+  // just SONARE_OK) so a regression that silently ignored the key would be
+  // caught here rather than only showing up as a behavioural difference.
+  using sonare::c_api::parse_eq_band_json;
+
+  const auto with_new =
+      parse_eq_band_json(R"({"type":"Peak","dynamic":true,"detectorDelayMs":12})");
+  REQUIRE(with_new.dyn.detector_delay_ms == 12.0f);
+
+  const auto with_old_camel =
+      parse_eq_band_json(R"({"type":"Peak","dynamic":true,"lookaheadMs":8})");
+  REQUIRE(with_old_camel.dyn.detector_delay_ms == 8.0f);
+
+  const auto with_old_snake =
+      parse_eq_band_json(R"({"type":"Peak","dynamic":true,"lookahead_ms":6})");
+  REQUIRE(with_old_snake.dyn.detector_delay_ms == 6.0f);
+
+  // The canonical spelling wins when both are present.
+  const auto both =
+      parse_eq_band_json(R"({"type":"Peak","dynamic":true,"lookaheadMs":8,"detectorDelayMs":12})");
+  REQUIRE(both.dyn.detector_delay_ms == 12.0f);
+
+  // Also reachable end to end through the C ABI, not just the parser.
+  SonareEq* eq = sonare_eq_create(48000.0, 512);
+  REQUIRE(eq != nullptr);
+  REQUIRE(sonare_eq_set_band(eq, 0,
+                             "{\"type\":\"Peak\",\"dynamic\":true,"
+                             "\"lookaheadMs\":8}") == SONARE_OK);
+  sonare_eq_destroy(eq);
 }
 
 TEST_CASE("sonare_mastering name getters return a stable pointer across calls",
@@ -843,6 +927,59 @@ TEST_CASE("mastering chain C result includes the before and after report", "[c_a
   REQUIRE(result.report.band_energy_delta_db[0] == 0.0f);
 }
 
+TEST_CASE("loudness_target_limited agrees across the mastering entry points",
+          "[c_api][mastering]") {
+  constexpr int sample_rate = 22050;
+  auto samples = generate_sine(440.0f, sample_rate, 2.0f);
+  for (auto& sample : samples) sample *= 0.5f;
+
+  // Drives all three entry points that normalize loudness and publish the flag,
+  // with the same material and the same target / ceiling, and returns their
+  // reported values. The chain stands in for master_audio: a preset chain runs
+  // the same loudness stage, just with preset-chosen values.
+  const auto run_all = [&](float target_lufs, float ceiling_db) {
+    SonareMasteringConfig config{};
+    config.target_lufs = target_lufs;
+    config.ceiling_db = ceiling_db;
+    config.true_peak_oversample = 4;
+    SonareMasteringResult simple{};
+    REQUIRE(sonare_mastering_process(samples.data(), samples.size(), sample_rate, &config,
+                                     &simple) == SONARE_OK);
+
+    const SonareMasteringParam params[] = {{"targetLufs", target_lufs}, {"ceilingDb", ceiling_db}};
+    SonareMasteringResult named{};
+    REQUIRE(sonare_mastering_apply_processor("maximizer.loudnessOptimize", samples.data(),
+                                             samples.size(), sample_rate, params, 2,
+                                             &named) == SONARE_OK);
+
+    const SonareMasteringParam chain_params[] = {{"loudness.targetLufs", target_lufs},
+                                                 {"loudness.ceilingDb", ceiling_db}};
+    SonareMasteringChainResult chain{};
+    REQUIRE(sonare_mastering_chain(samples.data(), samples.size(), sample_rate, chain_params, 2,
+                                   &chain) == SONARE_OK);
+
+    const std::array<int, 4> reported = {
+        simple.loudness_target_limited, named.loudness_target_limited,
+        chain.loudness_target_limited, chain.report.loudness_target_limited};
+    sonare_free_mastering_result(&simple);
+    sonare_free_mastering_result(&named);
+    sonare_free_mastering_chain_result(&chain);
+    return reported;
+  };
+
+  SECTION("a ceiling that provably blocks the target reports true everywhere") {
+    // The ceiling sits below the material's true peak while the target asks for
+    // a large boost, so the normalization gain is clamped on every path.
+    const auto reported = run_all(-6.0f, -12.0f);
+    for (int value : reported) REQUIRE(value == 1);
+  }
+
+  SECTION("a reachable target reports false everywhere") {
+    const auto reported = run_all(-20.0f, -1.0f);
+    for (int value : reported) REQUIRE(value == 0);
+  }
+}
+
 TEST_CASE("cancellation-capable mastering C APIs leave outputs empty", "[c_api][mastering]") {
   auto samples = generate_sine(440.0f, 22050, 1.0f);
   struct CancelState {
@@ -897,5 +1034,101 @@ TEST_CASE("cancellation-capable mastering C APIs leave outputs empty", "[c_api][
   REQUIRE(preset_stereo.left == nullptr);
   REQUIRE(preset_stereo.right == nullptr);
   REQUIRE(preset_stereo.stages == nullptr);
+}
+
+TEST_CASE("a peak-normalized source under a blocking ceiling reports limited on every path",
+          "[c_api][mastering][loudness]") {
+  // Peak-normalized material asked for -6 LUFS under a -3 dBTP ceiling: the
+  // requested boost is far larger than the remaining headroom, so no path can
+  // honestly claim it reached the target. Complements the entry-point agreement
+  // case above by adding the CLI-facing helper and by pinning the direction of
+  // the value rather than only that the paths agree.
+  constexpr int kSampleRate = 48000;
+  constexpr float kTargetLufs = -6.0f;
+  constexpr float kCeilingDb = -3.0f;
+  std::vector<float> samples = generate_sine(440.0f, kSampleRate, 1.0f);
+  const float peak = *std::max_element(samples.begin(), samples.end());
+  REQUIRE(peak > 0.0f);
+  for (float& sample : samples) sample /= peak;
+
+  // The named-processor route the header points detect-only / chain-composing
+  // callers at. Its result type had no field to carry the flag, so this path
+  // used to report a confident false.
+  const SonareMasteringParam processor_params[] = {
+      {"targetLufs", kTargetLufs},
+      {"ceilingDb", kCeilingDb},
+      {"truePeakOversample", 4.0},
+  };
+  SonareMasteringResult named{};
+  REQUIRE(sonare_mastering_apply_processor("maximizer.loudnessOptimize", samples.data(),
+                                           samples.size(), kSampleRate, processor_params,
+                                           std::size(processor_params), &named) == SONARE_OK);
+  REQUIRE(named.loudness_target_limited == 1);
+  REQUIRE(named.output_lufs < kTargetLufs);
+  sonare_free_mastering_result(&named);
+
+  // The chain shape master_audio and the CLI --report path return.
+  const SonareMasteringParam chain_params[] = {
+      {"loudness.enabled", 1.0},
+      {"loudness.targetLufs", kTargetLufs},
+      {"loudness.ceilingDb", kCeilingDb},
+  };
+  SonareMasteringChainResult chain{};
+  REQUIRE(sonare_mastering_chain(samples.data(), samples.size(), kSampleRate, chain_params,
+                                 std::size(chain_params), &chain) == SONARE_OK);
+  REQUIRE(chain.loudness_target_limited == 1);
+  REQUIRE(chain.report.loudness_target_limited == chain.loudness_target_limited);
+  sonare_free_mastering_chain_result(&chain);
+
+  // The C++ helper whose result the native CLI prints verbatim in its default
+  // JSON payload, so this pins the value that CLI reports.
+  sonare::mastering::maximizer::LoudnessOptimizeConfig cpp_config;
+  cpp_config.target_lufs = kTargetLufs;
+  cpp_config.ceiling_db = kCeilingDb;
+  cpp_config.true_peak_oversample = 4;
+  const auto direct = sonare::mastering::maximizer::loudness_optimize(
+      sonare::Audio::from_buffer(samples.data(), samples.size(), kSampleRate), cpp_config);
+  REQUIRE(direct.loudness_target_limited);
+}
+
+TEST_CASE("the stereo named-processor path reports loudness_target_limited like the mono path",
+          "[c_api][mastering][loudness]") {
+  // A peak-normalized source whose program loudness sits far below the -6 LUFS
+  // target: the -3 dBTP ceiling leaves no headroom for the requested boost, so
+  // both entry points are blocked by a margin far wider than the 3 dB BS.1770
+  // channel-summing offset between the mono measurement and the dual-mono
+  // stereo one. The stereo result type had no field to carry the flag, so this
+  // path used to report a confident false while the core computed true.
+  constexpr int kSampleRate = 48000;
+  constexpr float kTargetLufs = -6.0f;
+  constexpr float kCeilingDb = -3.0f;
+  std::vector<float> samples = generate_sine(440.0f, kSampleRate, 1.0f);
+  for (float& sample : samples) sample *= 0.05f;
+  // A lone full-scale transient normalizes the peak without lifting the program
+  // loudness, which is what makes the ceiling the binding constraint.
+  samples[samples.size() / 2] = 1.0f;
+
+  const SonareMasteringParam params[] = {
+      {"targetLufs", kTargetLufs},
+      {"ceilingDb", kCeilingDb},
+      {"truePeakOversample", 4.0},
+  };
+
+  SonareMasteringResult mono{};
+  REQUIRE(sonare_mastering_apply_processor("maximizer.loudnessOptimize", samples.data(),
+                                           samples.size(), kSampleRate, params, std::size(params),
+                                           &mono) == SONARE_OK);
+  REQUIRE(mono.loudness_target_limited == 1);
+  REQUIRE(mono.output_lufs < kTargetLufs);
+
+  SonareMasteringStereoResult stereo{};
+  REQUIRE(sonare_mastering_apply_processor_stereo("maximizer.loudnessOptimize", samples.data(),
+                                                  samples.data(), samples.size(), kSampleRate,
+                                                  params, std::size(params), &stereo) == SONARE_OK);
+  REQUIRE(stereo.loudness_target_limited == mono.loudness_target_limited);
+  REQUIRE(stereo.output_lufs < kTargetLufs);
+
+  sonare_free_mastering_result(&mono);
+  sonare_free_mastering_stereo_result(&stereo);
 }
 #endif

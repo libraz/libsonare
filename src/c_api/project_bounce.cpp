@@ -2,6 +2,7 @@
 #include <array>
 #include <cstring>
 #include <limits>
+#include <string>
 
 #include "c_api/project_internal.h"
 #include "util/numeric_validation.h"
@@ -554,8 +555,25 @@ MixerRouting resolve_mixer_routing(const arr::CompiledTimeline& timeline) {
   return routing;
 }
 
+// True when any diagnostic in `diagnostics` is an error (a warning-only list
+// still describes a renderable bounce).
+bool has_error_diagnostic(const std::vector<arr::Diagnostic>& diagnostics) {
+  return std::any_of(diagnostics.begin(), diagnostics.end(), [](const arr::Diagnostic& d) {
+    return d.severity == arr::Diagnostic::Severity::kError;
+  });
+}
+
+// Installs the compiled opaque automation lanes on the scene strips.
+//
+// A strip automation lane is a bounded ring, so a project lane with more
+// breakpoints than it holds cannot be installed in full. Every push result is
+// inspected and a rejection becomes a diagnostic naming the lane: the curve
+// would otherwise render frozen at the last accepted breakpoint with nothing to
+// tell the caller the ramp was cut short. `out_diagnostics` may be null for the
+// probe mixers whose only job is to report latency.
 void schedule_mixer_automation(const arr::CompiledTimeline& timeline, const MixerRouting& routing,
-                               double sample_rate, SonareMixer* mixer) {
+                               double sample_rate, SonareMixer* mixer,
+                               std::vector<arr::Diagnostic>* out_diagnostics) {
   if (mixer == nullptr) return;
   std::map<uint32_t, std::string> strip_for_track;
   for (size_t i = 0; i < routing.strip_ids.size(); ++i) {
@@ -607,27 +625,60 @@ void schedule_mixer_automation(const arr::CompiledTimeline& timeline, const Mixe
                               sonare::mixing::AutomationCurveType curve) {
       switch (lane.target_param_id()) {
         case sonare::engine::MixingRuntime::kFaderDb:
-          return strip->strip.schedule_fader_automation(sample, value, curve);
+          return strip->strip.schedule_fader_automation_result(sample, value, curve);
         case sonare::engine::MixingRuntime::kPan:
-          return strip->strip.schedule_pan_automation(sample, value, curve);
+          return strip->strip.schedule_pan_automation_result(sample, value, curve);
         case sonare::engine::MixingRuntime::kWidth:
-          return strip->strip.schedule_width_automation(sample, value, curve);
+          return strip->strip.schedule_width_automation_result(sample, value, curve);
         default:
-          return false;
+          return sonare::mixing::AutomationPushResult::NonMonotonic;
       }
     };
 
-    schedule(0, initial_value, sonare::mixing::AutomationCurveType::Hold);
+    bool lane_full = false;
+    if (schedule(0, initial_value, sonare::mixing::AutomationCurveType::Hold) ==
+        sonare::mixing::AutomationPushResult::Full) {
+      lane_full = true;
+    }
     for (const auto& point : points) {
+      if (lane_full) break;
       const int64_t sample = std::max<int64_t>(0, tempo_map.ppq_to_sample(point.ppq));
-      schedule(sample, point.value, to_mixing_curve(point.curve_to_next));
+      if (schedule(sample, point.value, to_mixing_curve(point.curve_to_next)) ==
+          sonare::mixing::AutomationPushResult::Full) {
+        lane_full = true;
+      }
+    }
+    if (lane_full && out_diagnostics != nullptr) {
+      const char* parameter = "automation";
+      switch (lane.target_param_id()) {
+        case sonare::engine::MixingRuntime::kFaderDb:
+          parameter = "fader";
+          break;
+        case sonare::engine::MixingRuntime::kPan:
+          parameter = "pan";
+          break;
+        case sonare::engine::MixingRuntime::kWidth:
+          parameter = "width";
+          break;
+        default:
+          break;
+      }
+      arr::Diagnostic diagnostic;
+      diagnostic.code = arr::Diagnostic::Code::kAutomationLaneCapacity;
+      diagnostic.severity = arr::Diagnostic::Severity::kError;
+      diagnostic.target_id = binding.track_id;
+      diagnostic.message = std::string("the ") + parameter + " automation lane on channel strip '" +
+                           route->second + "' has " + std::to_string(points.size()) +
+                           " breakpoints, more than the strip's automation lane holds";
+      out_diagnostics->push_back(std::move(diagnostic));
     }
   }
 }
 
 SonareMixer* create_timeline_mixer(const arr::CompiledTimeline& timeline,
                                    const MixerRouting& routing, double sample_rate, int block_size,
-                                   const std::string& direct_strip_id = {}) {
+                                   const std::string& direct_strip_id = {},
+                                   std::vector<arr::Diagnostic>* out_diagnostics = nullptr) {
   sonare::mixing::api::Scene scene = timeline.mixer.scene;
   if (!direct_strip_id.empty()) {
     sonare::mixing::api::Strip direct_strip;
@@ -639,7 +690,7 @@ SonareMixer* create_timeline_mixer(const arr::CompiledTimeline& timeline,
       sonare_mixer_from_scene_json(scene_json.c_str(), static_cast<int>(sample_rate), block_size);
   if (mixer == nullptr) return nullptr;
   sonare_c_mixing_detail::build_and_compile(mixer);
-  schedule_mixer_automation(timeline, routing, sample_rate, mixer);
+  schedule_mixer_automation(timeline, routing, sample_rate, mixer, out_diagnostics);
 
   // Snap each strip's fader/input-trim/width/pan smoothers to their steady-state
   // targets so the mixer summing pass opens at the configured gain instead of
@@ -665,10 +716,12 @@ struct MixerLatencyTail {
   bool valid = false;
 };
 
-MixerLatencyTail mixer_latency_tail_for_timeline(const arr::CompiledTimeline& timeline,
-                                                 const MixerRouting& routing, double sample_rate,
-                                                 int block_size, MixerPtr* out_mixer = nullptr) {
-  MixerPtr mixer(create_timeline_mixer(timeline, routing, sample_rate, block_size));
+MixerLatencyTail mixer_latency_tail_for_timeline(
+    const arr::CompiledTimeline& timeline, const MixerRouting& routing, double sample_rate,
+    int block_size, MixerPtr* out_mixer = nullptr,
+    std::vector<arr::Diagnostic>* out_diagnostics = nullptr) {
+  MixerPtr mixer(create_timeline_mixer(timeline, routing, sample_rate, block_size,
+                                       /*direct_strip_id=*/{}, out_diagnostics));
   if (!mixer) return {};
   MixerLatencyTail result;
   int latency = 0;
@@ -697,7 +750,8 @@ SonareError bounce_through_mixer(const arr::CompiledTimeline& timeline,
                                  const MixerRouting& routing, double sample_rate, int block_size,
                                  int num_channels, int64_t frames, int64_t pdc,
                                  int64_t mixer_input_frames, float** out_interleaved,
-                                 size_t* out_len, SonareMixer* prebuilt_mixer = nullptr) {
+                                 size_t* out_len, SonareMixer* prebuilt_mixer = nullptr,
+                                 std::vector<arr::Diagnostic>* out_diagnostics = nullptr) {
   size_t total = 0;
   if (num_channels <= 0 ||
       !checked_frame_shape(frames, static_cast<size_t>(num_channels), &total) || pdc < 0 ||
@@ -722,12 +776,25 @@ SonareError bounce_through_mixer(const arr::CompiledTimeline& timeline,
   }
 
   // Build the mixer before rendering stems so we know how many extra internal
-  // frames are needed to compensate master-output latency.
+  // frames are needed to compensate master-output latency. A prebuilt mixer is
+  // reusable only when it holds exactly the strips this routing feeds; anything
+  // else is discarded and rebuilt so the input count handed to
+  // sonare_mixer_process_stereo always matches the mixer's strip count.
+  if (mixer_owner &&
+      sonare_mixer_strip_count(mixer_owner.get()) != effective_routing.strip_ids.size()) {
+    mixer_owner.reset();
+  }
   if (!mixer_owner) {
-    mixer_owner.reset(
-        create_timeline_mixer(timeline, routing, sample_rate, block_size, direct_strip_id));
+    mixer_owner.reset(create_timeline_mixer(timeline, routing, sample_rate, block_size,
+                                            direct_strip_id, out_diagnostics));
   }
   if (!mixer_owner) return SONARE_ERROR_INVALID_STATE;
+  // An automation lane that did not fit its strip is caught here, before any
+  // stem is rendered, so the caller gets the diagnostic instead of audio whose
+  // automation curve froze partway through.
+  if (out_diagnostics != nullptr && has_error_diagnostic(*out_diagnostics)) {
+    return SONARE_ERROR_INVALID_STATE;
+  }
   int mixer_latency = 0;
   if (sonare_mixer_latency_samples(mixer_owner.get(), &mixer_latency) != SONARE_OK ||
       mixer_latency < 0) {
@@ -959,7 +1026,14 @@ SonareError do_project_bounce(SonareProject* project, const SonareProjectBounceO
 
 #if defined(SONARE_WITH_MIXING)
   const MixerRouting routing = resolve_mixer_routing(*compiled.timeline);
-  const bool mixer_route_direct = timeline_has_unbound_tracks(*compiled.timeline, routing);
+  // Must match bounce_through_mixer's own direct-strip decision, shared MIDI
+  // destination included: a mixer built here is reused there as-is, so deciding
+  // the direct strip only afterwards would hand the summing pass one more input
+  // than the mixer has strips.
+  const bool mixer_route_direct =
+      timeline_has_unbound_tracks(*compiled.timeline, routing) ||
+      has_shared_hosted_midi_destination(*compiled.timeline, instruments,
+                                         /*all_hosts_source_aware=*/nullptr);
   MixerPtr reusable_mixer;
 #endif
 
@@ -1009,8 +1083,14 @@ SonareError do_project_bounce(SonareProject* project, const SonareProjectBounceO
 #if defined(SONARE_WITH_MIXING)
     if (frames > 0 && !routing.bound_tracks.empty()) {
       MixerPtr* reusable = mixer_route_direct ? nullptr : &reusable_mixer;
-      const MixerLatencyTail mixer_delay = mixer_latency_tail_for_timeline(
-          *compiled.timeline, routing, sample_rate, block_size, reusable);
+      const MixerLatencyTail mixer_delay =
+          mixer_latency_tail_for_timeline(*compiled.timeline, routing, sample_rate, block_size,
+                                          reusable, &project->last_bounce_diagnostics);
+      // This mixer already scheduled the automation lanes, so an over-capacity
+      // lane is known before the render window is even fixed.
+      if (has_error_diagnostic(project->last_bounce_diagnostics)) {
+        return SONARE_ERROR_INVALID_STATE;
+      }
       if (!mixer_delay.valid ||
           !checked_nonnegative_add(frames, static_cast<int64_t>(mixer_delay.tail_samples),
                                    &frames)) {
@@ -1053,7 +1133,8 @@ SonareError do_project_bounce(SonareProject* project, const SonareProjectBounceO
   if (!routing.bound_tracks.empty()) {
     return bounce_through_mixer(*compiled.timeline, instruments, routing, sample_rate, block_size,
                                 num_channels, frames, pdc, mixer_input_frames, out_interleaved,
-                                out_len, reusable_mixer.release());
+                                out_len, reusable_mixer.release(),
+                                &project->last_bounce_diagnostics);
   }
 #endif
 

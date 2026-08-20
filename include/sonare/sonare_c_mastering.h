@@ -64,6 +64,8 @@ typedef struct {
   float output_lufs;
   float applied_gain_db;
   int latency_samples;
+  /// Non-zero when the true-peak ceiling prevented reaching target_lufs.
+  int loudness_target_limited;
 } SonareMasteringStereoResult;
 
 /// @brief Progress callback type. Called per chain stage completion.
@@ -413,10 +415,26 @@ SonareError sonare_mastering_streaming_preview_stereo(const float* left, const f
                                                       const SonareStreamingPlatform* platforms,
                                                       size_t platform_count, char** json_out);
 
+/// @brief Returns the delivery-target identifiers the mastering assistant
+///        accepts, separated by '\n'.
+/// @details These are the values @c targetPlatform selects between. Storage
+///   follows @ref sonare_mastering_preset_names: thread-local, valid for the
+///   calling thread's lifetime, not to be cached across threads or freed.
+const char* sonare_mastering_platform_names(void);
+
+/// @brief Converts a delivery-target identifier to the index @c targetPlatform
+///        carries.
+/// @details Accepts the names returned by @ref sonare_mastering_platform_names.
+///   Returns -1 for NULL or an unknown name. The index is resolved by the same
+///   library that consumes it, so callers must look it up rather than embed it.
+int sonare_mastering_platform_from_name(const char* name);
+
 /// @brief Analyze audio and suggest a mastering chain as JSON.
 /// @details @p params accepts targetLufs, ceilingDb, enableRepair,
-/// and preferStreamingSafe. The returned string must be released with
-/// sonare_free_string().
+/// preferStreamingSafe, speechMonoAmount, and targetPlatform. The last carries
+/// the index from @ref sonare_mastering_platform_from_name, because a param
+/// value is a number; an out-of-range or non-integral value is rejected. The
+/// returned string must be released with sonare_free_string().
 SonareError sonare_mastering_assistant_suggest(const float* samples, size_t length, int sample_rate,
                                                const SonareMasteringParam* params,
                                                size_t param_count, char** json_out);
@@ -452,6 +470,18 @@ SonareError sonare_mastering_audio_profile_stereo(const float* left, const float
                                                   const SonareMasteringParam* params,
                                                   size_t param_count, char** json_out);
 
+/// @brief Latest equalizer waveform streams, per-band gains and magnitude profile.
+/// @details @c pre_* and @c post_* hold uniformly decimated time-domain samples
+/// of the block as it entered and left the equalizer, valid up to @c pre_count
+/// and @c post_count entries. They are a scope feed and are not a spectral
+/// estimate. @c band_gain_db reports the gain each configured band applied.
+/// @c profile_db is the frequency-domain view: the post-equalizer signal is
+/// Hann-windowed, transformed, and its bin powers summed into
+/// @c SONARE_EQ_SPECTRUM_PROFILE_BANDS geometrically spaced bands covering
+/// 20 Hz to 20 kHz. Values are amplitude decibels relative to full scale, so a
+/// full-scale sine reads roughly 0 dB in the band containing it; the profile
+/// rises immediately and falls smoothly. Bands that no analysis bin reaches
+/// (above Nyquist) read the numerical floor.
 typedef struct {
   float pre_left[SONARE_EQ_SPECTRUM_STREAM_CAPACITY];
   float pre_right[SONARE_EQ_SPECTRUM_STREAM_CAPACITY];
@@ -481,9 +511,16 @@ void sonare_eq_destroy(SonareEq* eq);
 /// LinearPhase), @c soloed, @c bypassed, @c proportionalQ, and
 /// @c proportionalQStrength. Dynamic-band fields are @c dynamic / @c dynEnabled,
 /// @c thresholdDb, @c autoThreshold, @c ratio, @c rangeDb, @c attackMs,
-/// @c releaseMs, @c lookaheadMs, @c sidechainFreqHz, @c sidechainQ, and
+/// @c releaseMs, @c detectorDelayMs, @c sidechainFreqHz, @c sidechainQ, and
 /// @c externalSidechain. The corresponding snake_case spellings are also
 /// accepted where applicable. Omitted fields use the default @c EqBand values.
+/// @c detectorDelayMs delays the detector's view of the signal, so a larger
+/// value makes the band react later; it is not look-ahead and adds no latency
+/// to the audio path. @c lookaheadMs is still accepted as its former spelling.
+/// @c phase == NaturalPhase forces @c coeffMode = Vicanek for the band. Vicanek
+/// has no Q/S parameter, so @c q is ignored on LowShelf and HighShelf, though it
+/// is still stored and read back verbatim; Peak, pass and notch bands honour
+/// @c q in both coefficient modes.
 SonareError sonare_eq_set_band(SonareEq* eq, int index, const char* band_json);
 /// @brief Removes all configured bands and restores zero-latency processing.
 void sonare_eq_clear(SonareEq* eq);
@@ -521,7 +558,10 @@ void sonare_eq_clear_sidechain(SonareEq* eq);
 /// @ref sonare_eq_create; all @p channels must contain @p num_samples frames.
 SonareError sonare_eq_process(SonareEq* eq, float* const* channels, int num_channels,
                               int num_samples);
-/// @brief Copies the latest spectrum, per-band gain, and meter snapshot to @p out.
+/// @brief Copies the latest waveform, per-band gain, magnitude profile, and
+/// meter snapshot to @p out.
+/// @details Refreshed by every @ref sonare_eq_process call; see
+/// @ref SonareEqSnapshot for what each field holds.
 SonareError sonare_eq_spectrum(const SonareEq* eq, SonareEqSnapshot* out);
 
 void sonare_free_mastering_result(SonareMasteringResult* result);

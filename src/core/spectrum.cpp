@@ -13,6 +13,7 @@
 #include "util/exception.h"
 #include "util/padding.h"
 #include "util/reflect_padding.h"
+#include "util/validated.h"
 
 namespace sonare {
 
@@ -162,10 +163,12 @@ Spectrogram::Spectrogram()
       hop_length_(0),
       sample_rate_(0),
       win_length_(0),
-      center_(true) {}
+      center_(true),
+      window_(WindowType::Hann) {}
 
 Spectrogram::Spectrogram(std::vector<std::complex<float>> data, int n_bins, int n_frames, int n_fft,
-                         int hop_length, int sample_rate, int win_length, bool center)
+                         int hop_length, int sample_rate, int win_length, bool center,
+                         WindowType window)
     : data_(std::move(data)),
       n_bins_(n_bins),
       n_frames_(n_frames),
@@ -173,29 +176,41 @@ Spectrogram::Spectrogram(std::vector<std::complex<float>> data, int n_bins, int 
       hop_length_(hop_length),
       sample_rate_(sample_rate),
       win_length_(win_length > 0 ? win_length : n_fft),
-      center_(center) {
+      center_(center),
+      window_(window) {
   // A real STFT frame needs at least a 2-point FFT; smaller sizes make the
   // n_fft/2 center-trim degenerate. Guards to_audio() against tiny-n_fft input.
   SONARE_CHECK(n_fft >= 2, ErrorCode::InvalidParameter);
 }
 
+void validate_config(const StftConfig& config) {
+  SONARE_CHECK_MSG(config.n_fft > 0, ErrorCode::InvalidParameter,
+                   "StftConfig: nFft must be positive");
+  SONARE_CHECK_MSG(config.hop_length > 0, ErrorCode::InvalidParameter,
+                   "StftConfig: hopLength must be positive");
+  // 0 is the documented "use nFft" sentinel; a negative value would take the
+  // same branch and silently read as that default.
+  SONARE_CHECK_MSG(config.win_length >= 0, ErrorCode::InvalidParameter,
+                   "StftConfig: winLength must be non-negative");
+  SONARE_CHECK_MSG(config.actual_win_length() <= config.n_fft, ErrorCode::InvalidParameter,
+                   "StftConfig: winLength must not exceed nFft");
+}
+
 Spectrogram Spectrogram::compute(const Audio& audio, const StftConfig& config,
                                  SpectrogramProgressCallback progress_callback) {
+  // Validated before the empty-audio shortcut: an unusable configuration is an
+  // error on every input, so it must not depend on how much audio was passed.
+  const StftConfig checked = Validated<StftConfig>::make(config).get();
   if (audio.empty()) {
     return Spectrogram();
   }
 
-  SONARE_CHECK(config.n_fft > 0, ErrorCode::InvalidParameter);
-  SONARE_CHECK(config.hop_length > 0, ErrorCode::InvalidParameter);
-
-  int n_fft = config.n_fft;
-  int hop_length = config.hop_length;
-  int win_length = config.actual_win_length();
-
-  SONARE_CHECK(win_length <= n_fft, ErrorCode::InvalidParameter);
+  int n_fft = checked.n_fft;
+  int hop_length = checked.hop_length;
+  int win_length = checked.actual_win_length();
 
   // Get cached window (periodic for STFT, matching librosa/scipy fftbins=True).
-  const auto window_handle = get_window_cached(config.window, win_length, true);
+  const auto window_handle = get_window_cached(checked.window, win_length, true);
   const std::vector<float>& window = *window_handle;
 
   /// Pad window to n_fft if necessary
@@ -206,17 +221,17 @@ Spectrogram Spectrogram::compute(const Audio& audio, const StftConfig& config,
   /// Run the shared framing/FFT loop (handles centering, frame count, progress).
   int n_frames = 0;
   std::vector<std::complex<float>> spectrum =
-      stft_with_window(audio.data(), audio.size(), padded_window, n_fft, hop_length, config.center,
-                       config.pad_mode, &n_frames, progress_callback);
+      stft_with_window(audio.data(), audio.size(), padded_window, n_fft, hop_length, checked.center,
+                       checked.pad_mode, &n_frames, progress_callback);
   int n_bins = n_fft / 2 + 1;
 
   return Spectrogram(std::move(spectrum), n_bins, n_frames, n_fft, hop_length, audio.sample_rate(),
-                     win_length, config.center);
+                     win_length, checked.center, checked.window);
 }
 
 Spectrogram Spectrogram::from_complex(const std::complex<float>* data, int n_bins, int n_frames,
-                                      int n_fft, int hop_length, int sample_rate, bool center,
-                                      int win_length) {
+                                      int n_fft, int hop_length, int sample_rate, WindowType window,
+                                      bool center, int win_length) {
   // Validate the caller-supplied STFT metadata before sizing or copying the
   // external buffer.  Apart from preventing malformed dimensions from being
   // carried into iSTFT, this keeps the invariant used by FFT::inverse:
@@ -243,7 +258,7 @@ Spectrogram Spectrogram::from_complex(const std::complex<float>* data, int n_bin
                ErrorCode::InvalidParameter);
   std::vector<std::complex<float>> spectrum(data, data + total);
   return Spectrogram(std::move(spectrum), n_bins, n_frames, n_fft, hop_length, sample_rate,
-                     win_length, center);
+                     win_length, center, window);
 }
 
 float Spectrogram::duration() const {
@@ -287,6 +302,8 @@ const std::complex<float>& Spectrogram::at(int bin, int frame) const {
   SONARE_CHECK(frame >= 0 && frame < n_frames_, ErrorCode::InvalidParameter);
   return data_[bin * n_frames_ + frame];
 }
+
+Audio Spectrogram::to_audio(int length) const { return to_audio(length, window_); }
 
 Audio Spectrogram::to_audio(int length, WindowType window_type) const {
   if (empty()) {
@@ -438,7 +455,8 @@ Audio griffin_lim(const float* magnitude, int n_bins, int n_frames, int n_fft, i
   for (int iter = 0; iter < config.n_iter; ++iter) {
     // Create spectrogram and do iSTFT
     Spectrogram spec = Spectrogram::from_complex(spectrum.data(), n_bins, n_frames, n_fft,
-                                                 hop_length, sample_rate, true);
+                                                 hop_length, sample_rate, stft_config.window,
+                                                 /*center=*/true);
     Audio reconstructed = spec.to_audio(target_length);
 
     // Forward STFT of reconstructed signal
@@ -473,7 +491,8 @@ Audio griffin_lim(const float* magnitude, int n_bins, int n_frames, int n_fft, i
 
   // Final reconstruction
   Spectrogram final_spec = Spectrogram::from_complex(spectrum.data(), n_bins, n_frames, n_fft,
-                                                     hop_length, sample_rate, true);
+                                                     hop_length, sample_rate, stft_config.window,
+                                                     /*center=*/true);
   return final_spec.to_audio(target_length);
 }
 

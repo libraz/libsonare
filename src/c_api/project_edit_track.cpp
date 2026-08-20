@@ -30,6 +30,16 @@ static_assert(static_cast<int>(arr::Track::Kind::kMidi) == SONARE_TRACK_MIDI,
               "SonareProjectTrackKind midi ordinal drift");
 static_assert(static_cast<int>(arr::Track::Kind::kAux) == SONARE_TRACK_AUX,
               "SonareProjectTrackKind aux ordinal drift");
+static_assert(static_cast<int>(arr::MarkerKind::kMarker) == SONARE_MARKER_KIND_MARKER,
+              "SonareMarkerKind marker ordinal drift");
+static_assert(static_cast<int>(arr::MarkerKind::kText) == SONARE_MARKER_KIND_TEXT,
+              "SonareMarkerKind text ordinal drift");
+static_assert(static_cast<int>(arr::MarkerKind::kLyric) == SONARE_MARKER_KIND_LYRIC,
+              "SonareMarkerKind lyric ordinal drift");
+static_assert(static_cast<int>(arr::MarkerKind::kCuePoint) == SONARE_MARKER_KIND_CUE_POINT,
+              "SonareMarkerKind cue point ordinal drift");
+static_assert(static_cast<int>(arr::MarkerKind::kKeySignature) == SONARE_MARKER_KIND_KEY_SIGNATURE,
+              "SonareMarkerKind key signature ordinal drift");
 
 namespace {
 

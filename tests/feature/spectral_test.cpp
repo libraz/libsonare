@@ -327,7 +327,7 @@ TEST_CASE("spectral_contrast uses librosa band quantile means", "[spectral]") {
       {1.0f, 0.0f}, {2.0f, 0.0f}, {3.0f, 0.0f}, {4.0f, 0.0f},
       {5.0f, 0.0f}, {6.0f, 0.0f}, {7.0f, 0.0f}, {8.0f, 0.0f},
   };
-  Spectrogram spec = Spectrogram::from_complex(data.data(), 8, 1, 14, 1, 14);
+  Spectrogram spec = Spectrogram::from_complex(data.data(), 8, 1, 14, 1, 14, WindowType::Hann);
 
   std::vector<float> contrast = spectral_contrast(spec, 14, 2, 1.0f, 0.5f);
 
@@ -343,7 +343,7 @@ TEST_CASE("spectral_contrast sanitizes NaN magnitudes before sorting", "[spectra
       {1.0f, 0.0f}, {nan, 0.0f},  {3.0f, 0.0f}, {4.0f, 0.0f},
       {5.0f, 0.0f}, {6.0f, 0.0f}, {7.0f, 0.0f}, {8.0f, 0.0f},
   };
-  Spectrogram spec = Spectrogram::from_complex(data.data(), 8, 1, 14, 1, 14);
+  Spectrogram spec = Spectrogram::from_complex(data.data(), 8, 1, 14, 1, 14, WindowType::Hann);
 
   const std::vector<float> contrast = spectral_contrast(spec, 14, 2, 1.0f, 0.5f);
   REQUIRE(contrast.size() == 3);

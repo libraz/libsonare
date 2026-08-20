@@ -69,7 +69,7 @@ inline void set_mastering_result(const sonare::mastering::api::MonoResult& resul
   out->output_lufs = result.output_lufs;
   out->applied_gain_db = result.applied_gain_db;
   out->latency_samples = result.latency_samples;
-  out->loudness_target_limited = 0;
+  out->loudness_target_limited = result.loudness_target_limited ? 1 : 0;
   std::unique_ptr<float[]> processed(new float[out->length]);
   std::memcpy(processed.get(), result.samples.data(), out->length * sizeof(float));
   out->samples = sonare_c_detail::release_array(processed);

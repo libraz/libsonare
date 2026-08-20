@@ -5,7 +5,9 @@
 
 #include <algorithm>
 #include <cmath>
+#include <cstddef>
 #include <cstdint>
+#include <limits>
 #include <string>
 #include <unordered_map>
 #include <unordered_set>
@@ -14,6 +16,7 @@
 #include "arrangement/edit_source.h"
 #include "mixing/api/scene.h"
 #include "serialize/project_serializer_internal.h"
+#include "serialize/serialized_enum_bounds.h"
 #include "transport/tempo_map.h"
 #include "util/exception.h"
 #include "util/json.h"
@@ -48,6 +51,39 @@ bool count_array_entities(const Value& value, std::size_t limit, std::size_t* to
   return true;
 }
 
+// Mirrors the parser's accounting on the encoder's own tree: one node per JSON
+// value (a key is not a value, so it is not a node) and cumulative decoded bytes
+// for every key and string value.
+void count_document_nodes(const Value& value, ProjectDocumentShape* shape) {
+  ++shape->json_nodes;
+  if (value.is_string()) {
+    shape->string_bytes += value.as_string().size();
+  } else if (value.is_array()) {
+    for (const auto& child : value.as_array()) count_document_nodes(child, shape);
+  } else if (value.is_object()) {
+    for (const auto& [key, child] : value.as_object()) {
+      shape->string_bytes += key.size();
+      count_document_nodes(child, shape);
+    }
+  }
+}
+
+// Payload bytes the decoder accumulates for this model. Its per-entry charge is
+// the base64 decoded upper bound, which equals the exact payload size for the
+// well-formed base64 the encoder writes.
+std::size_t model_decoded_payload_bytes(const arrangement::Project& project,
+                                        const arrangement::MidiContentStore& midi) {
+  std::size_t total = 0;
+  for (const arrangement::AssistSidecar& sidecar : project.assist_sidecars()) {
+    total += sidecar.payload.size();
+  }
+  for (const auto& [handle, payload] : midi.sysex_payloads) {
+    (void)handle;
+    total += payload.size();
+  }
+  return total;
+}
+
 std::size_t base64_decoded_upper_bound(const std::string& text) noexcept {
   std::size_t decoded_size = (text.size() / 4u) * 3u;
   // Guard each decrement: a malformed short payload (e.g. "==") has a zero base
@@ -58,14 +94,10 @@ std::size_t base64_decoded_upper_bound(const std::string& text) noexcept {
   return decoded_size;
 }
 
-}  // namespace
-
-// ===========================================================================
-// Public: serialize
-// ===========================================================================
-
-std::string project_to_json(const arrangement::Project& project,
-                            const arrangement::MidiContentStore& midi) {
+// Builds the document tree. The two public entry points below share it so the
+// measured shape is always the shape of the bytes that would be emitted.
+Value project_to_value(const arrangement::Project& project,
+                       const arrangement::MidiContentStore& midi) {
   Object root;
   const bool has_typed_automation_lane = std::any_of(
       project.tracks().begin(), project.tracks().end(), [](const arrangement::Track& track) {
@@ -124,7 +156,69 @@ std::string project_to_json(const arrangement::Project& project,
   for (const auto& s : project.assist_sidecars()) sidecars.push_back(sidecar_to_json(s));
   root["assist_sidecars"] = std::move(sidecars);
 
-  return json::dump(Value(std::move(root)));
+  return Value(std::move(root));
+}
+
+// Shape of an already-built document, minus the byte count (which only the dump
+// can supply).
+ProjectDocumentShape measure_document(const Value& document, const arrangement::Project& project,
+                                      const arrangement::MidiContentStore& midi) {
+  ProjectDocumentShape shape;
+  count_document_nodes(document, &shape);
+  // Counting only: the unlimited budget makes the accumulate step infallible.
+  (void)count_array_entities(document, std::numeric_limits<std::size_t>::max(), &shape.entities);
+  shape.decoded_payload_bytes = model_decoded_payload_bytes(project, midi);
+  return shape;
+}
+
+constexpr const char* kOverBudgetMessage =
+    "encoded project exceeds the persistence budget and could not be loaded back";
+
+}  // namespace
+
+// ===========================================================================
+// Public: serialize
+// ===========================================================================
+
+ProjectDocumentShape measure_project_document(const arrangement::Project& project,
+                                              const arrangement::MidiContentStore& midi) {
+  const Value document = project_to_value(project, midi);
+  ProjectDocumentShape shape = measure_document(document, project, midi);
+  shape.json_bytes = json::dump(document).size();
+  return shape;
+}
+
+bool try_project_to_json(const arrangement::Project& project,
+                         const arrangement::MidiContentStore& midi, std::string* out_json,
+                         const resource::ProjectImportResourceLimits& limits) {
+  if (out_json == nullptr) return false;
+  out_json->clear();
+  // The opaque payloads are a property of the model, so their budget is checked
+  // before the document (and the base64 expansion of those payloads) is built.
+  if (model_decoded_payload_bytes(project, midi) > limits.max_decoded_payload_bytes) return false;
+  const Value document = project_to_value(project, midi);
+  // The dump is the largest remaining allocation on this path, so the counted
+  // budgets are checked on the tree first; passing 0 bytes here trivially
+  // satisfies the byte budget, which is checked against the dumped text below.
+  const ProjectDocumentShape shape = measure_document(document, project, midi);
+  if (!resource::project_document_fits(0u, shape.json_nodes, shape.entities, shape.string_bytes,
+                                       shape.decoded_payload_bytes, limits)) {
+    return false;
+  }
+  std::string text = json::dump(document);
+  if (text.size() > limits.max_json_bytes) return false;
+  *out_json = std::move(text);
+  return true;
+}
+
+std::string project_to_json(const arrangement::Project& project,
+                            const arrangement::MidiContentStore& midi,
+                            const resource::ProjectImportResourceLimits& limits) {
+  std::string text;
+  if (!try_project_to_json(project, midi, &text, limits)) {
+    throw SonareException(ErrorCode::InvalidState, kOverBudgetMessage);
+  }
+  return text;
 }
 
 // ===========================================================================
@@ -215,7 +309,7 @@ DeserializeResult project_from_json(const std::string& json_text) {
     }
     project.set_sample_rate(sample_rate);
     const uint32_t overlap_policy = uint_or(root, "overlap_policy", 0);
-    if (overlap_policy > static_cast<uint32_t>(arrangement::OverlapPolicy::kAllow)) {
+    if (overlap_policy > kMaxSerializedOrdinal<arrangement::OverlapPolicy>) {
       throw SonareException(ErrorCode::InvalidFormat, "overlap_policy enum is out of range");
     }
     project.set_overlap_policy(static_cast<arrangement::OverlapPolicy>(overlap_policy));
@@ -494,7 +588,7 @@ DeserializeResult project_from_json(const std::string& json_text) {
         m.ppq = num_or(mv, "ppq", 0.0);
         m.name = str_or(mv, "name", "");
         const uint32_t marker_kind = uint_or(mv, "kind", 0);
-        if (marker_kind > 4) {
+        if (marker_kind > kMaxSerializedOrdinal<arrangement::MarkerKind>) {
           throw SonareException(ErrorCode::InvalidFormat, "marker kind enum is out of range");
         }
         m.kind = static_cast<uint8_t>(marker_kind);
@@ -503,7 +597,8 @@ DeserializeResult project_from_json(const std::string& json_text) {
         // kind (which the C ABI accepts) survives a save/load unchanged. Only
         // key-signature markers carry the SMF fifths range restriction.
         m.key_fifths = int8_or(mv, "key_fifths", 0);
-        if (m.kind == 4 && (m.key_fifths < -7 || m.key_fifths > 7)) {
+        if (m.kind == static_cast<uint8_t>(arrangement::MarkerKind::kKeySignature) &&
+            (m.key_fifths < -7 || m.key_fifths > 7)) {
           throw SonareException(ErrorCode::InvalidFormat, "key_fifths must be within [-7, 7]");
         }
         m.key_minor = bool_or(mv, "key_minor", false);

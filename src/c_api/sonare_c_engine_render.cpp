@@ -142,6 +142,12 @@ SonareError sonare_engine_bounce_offline(SonareRealtimeEngine* engine,
                                           options->target_sample_rate)) {
     return SONARE_ERROR_INVALID_PARAMETER;
   }
+  // Reject an out-of-range dither type instead of silently mapping it to None,
+  // which would return SONARE_OK with undithered audio and no way to tell that
+  // the request was ignored (same policy as the analysis options' chroma_method).
+  if (options->dither < 0 || options->dither > 3) {
+    return SONARE_ERROR_INVALID_PARAMETER;
+  }
   // The bounce width must map to a supported speaker layout (1 mono, 2 stereo,
   // 6 = 5.1, 8 = 7.1). Counts like 3/4/5/7 have no layout and would silently
   // leave their extra planes unpanned, so reject them up front.

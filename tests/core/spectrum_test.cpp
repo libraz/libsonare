@@ -141,6 +141,62 @@ TEST_CASE("STFT/iSTFT roundtrip", "[spectrum]") {
   }
 }
 
+TEST_CASE("STFT/iSTFT reconstructs the input for every analysis window", "[spectrum]") {
+  // The iSTFT divides the overlap-add by the analysis*synthesis window sum, so
+  // reconstruction is exact for any window whenever that divisor is built from
+  // the window the frames were actually analyzed with. The property under test
+  // is that reconstruction, not that two window values happen to be equal: a
+  // spectrogram that recorded its window and then ignored it would pass an
+  // equality check and fail this one.
+  constexpr int sr = 22050;
+  constexpr int samples = sr;
+  std::vector<float> original(samples);
+  for (int i = 0; i < samples; ++i) {
+    const float t = static_cast<float>(i) / sr;
+    original[i] = 0.4f * std::sin(kTwoPi * 220.0f * t) + 0.2f * std::sin(kTwoPi * 1310.0f * t);
+    if (i % 4410 == 0) {
+      original[i] += 0.5f;
+    }
+  }
+  const Audio audio = Audio::from_vector(std::vector<float>(original), sr);
+
+  for (const WindowType window :
+       {WindowType::Hann, WindowType::Hamming, WindowType::Blackman, WindowType::Rectangular}) {
+    // Hops from a quarter of the window up to three quarters of it. At hop ==
+    // n_fft there is no overlap at all and a window that reaches zero at its
+    // endpoints annihilates the samples under those zeros, which no divisor can
+    // recover; that is a property of the transform, not of the normalization.
+    for (const int hop : {128, 512, 1024, 1536}) {
+      CAPTURE(static_cast<int>(window), hop);
+      StftConfig config;
+      config.n_fft = 2048;
+      config.hop_length = hop;
+      config.window = window;
+
+      const Spectrogram spec = Spectrogram::compute(audio, config);
+      REQUIRE(spec.window() == window);
+      const Audio reconstructed = spec.to_audio(samples);
+      REQUIRE(reconstructed.size() == original.size());
+
+      // Relative RMS error over the interior. Measured worst case across this
+      // grid is under 4e-7; the bound leaves room for platform FFT differences
+      // while staying orders of magnitude below the error a mismatched divisor
+      // produces (percent-level even for the mildest non-Hann window).
+      const size_t skip = static_cast<size_t>(config.n_fft);
+      double num = 0.0;
+      double den = 0.0;
+      for (size_t i = skip; i + skip < original.size(); ++i) {
+        const double diff =
+            static_cast<double>(original[i]) - static_cast<double>(reconstructed.data()[i]);
+        num += diff * diff;
+        den += static_cast<double>(original[i]) * static_cast<double>(original[i]);
+      }
+      REQUIRE(den > 0.0);
+      REQUIRE(std::sqrt(num / den) < 1e-5);
+    }
+  }
+}
+
 TEST_CASE("STFT/iSTFT roundtrip preserves gain with symmetric synthesis window", "[spectrum]") {
   constexpr int sr = 22050;
   constexpr int samples = 8192;
@@ -269,8 +325,8 @@ TEST_CASE("Spectrogram iSTFT length pads when requested length exceeds reconstru
   std::vector<std::complex<float>> data(n_bins * n_frames, {0.0f, 0.0f});
   data[0] = {1.0f, 0.0f};
 
-  Spectrogram spec =
-      Spectrogram::from_complex(data.data(), n_bins, n_frames, n_fft, hop_length, sr, false);
+  Spectrogram spec = Spectrogram::from_complex(data.data(), n_bins, n_frames, n_fft, hop_length, sr,
+                                               WindowType::Hann, false);
   Audio reconstructed = spec.to_audio(12);
 
   REQUIRE(reconstructed.size() == 12);
@@ -448,8 +504,8 @@ TEST_CASE("Spectrogram from_complex", "[spectrum]") {
     }
   }
 
-  Spectrogram spec =
-      Spectrogram::from_complex(data.data(), n_bins, n_frames, n_fft, hop_length, sr);
+  Spectrogram spec = Spectrogram::from_complex(data.data(), n_bins, n_frames, n_fft, hop_length, sr,
+                                               WindowType::Hann);
 
   REQUIRE(spec.n_bins() == n_bins);
   REQUIRE(spec.n_frames() == n_frames);
@@ -472,19 +528,24 @@ TEST_CASE("Spectrogram from_complex rejects invalid dimensions", "[spectrum][edg
   std::vector<std::complex<float>> data(8, {1.0f, 0.0f});
 
   // n_bins <= 0
-  REQUIRE_THROWS_AS(Spectrogram::from_complex(data.data(), 0, 3, n_fft, hop_length, sr),
-                    SonareException);
-  REQUIRE_THROWS_AS(Spectrogram::from_complex(data.data(), -1, 3, n_fft, hop_length, sr),
-                    SonareException);
+  REQUIRE_THROWS_AS(
+      Spectrogram::from_complex(data.data(), 0, 3, n_fft, hop_length, sr, WindowType::Hann),
+      SonareException);
+  REQUIRE_THROWS_AS(
+      Spectrogram::from_complex(data.data(), -1, 3, n_fft, hop_length, sr, WindowType::Hann),
+      SonareException);
 
   // n_frames <= 0
-  REQUIRE_THROWS_AS(Spectrogram::from_complex(data.data(), 5, 0, n_fft, hop_length, sr),
-                    SonareException);
-  REQUIRE_THROWS_AS(Spectrogram::from_complex(data.data(), 5, -1, n_fft, hop_length, sr),
-                    SonareException);
+  REQUIRE_THROWS_AS(
+      Spectrogram::from_complex(data.data(), 5, 0, n_fft, hop_length, sr, WindowType::Hann),
+      SonareException);
+  REQUIRE_THROWS_AS(
+      Spectrogram::from_complex(data.data(), 5, -1, n_fft, hop_length, sr, WindowType::Hann),
+      SonareException);
 
   // A valid small case still succeeds.
-  REQUIRE_NOTHROW(Spectrogram::from_complex(data.data(), 5, 1, n_fft, hop_length, sr));
+  REQUIRE_NOTHROW(
+      Spectrogram::from_complex(data.data(), 5, 1, n_fft, hop_length, sr, WindowType::Hann));
 }
 
 TEST_CASE("Spectrogram from_complex rejects invalid STFT metadata before copying",
@@ -497,44 +558,44 @@ TEST_CASE("Spectrogram from_complex rejects invalid STFT metadata before copying
   std::vector<std::complex<float>> data(n_bins * n_frames, {1.0f, 0.0f});
 
   SECTION("n_fft must be even and at least two") {
-    REQUIRE_THROWS_AS(
-        Spectrogram::from_complex(data.data(), 2, n_frames, 1, hop_length, sample_rate),
-        SonareException);
-    REQUIRE_THROWS_AS(
-        Spectrogram::from_complex(data.data(), 2, n_frames, 3, hop_length, sample_rate),
-        SonareException);
+    REQUIRE_THROWS_AS(Spectrogram::from_complex(data.data(), 2, n_frames, 1, hop_length,
+                                                sample_rate, WindowType::Hann),
+                      SonareException);
+    REQUIRE_THROWS_AS(Spectrogram::from_complex(data.data(), 2, n_frames, 3, hop_length,
+                                                sample_rate, WindowType::Hann),
+                      SonareException);
   }
 
   SECTION("n_bins must describe the one-sided FFT") {
     REQUIRE_THROWS_AS(Spectrogram::from_complex(data.data(), n_bins - 1, n_frames, n_fft,
-                                                hop_length, sample_rate),
+                                                hop_length, sample_rate, WindowType::Hann),
                       SonareException);
     REQUIRE_THROWS_AS(Spectrogram::from_complex(data.data(), n_bins + 1, n_frames, n_fft,
-                                                hop_length, sample_rate),
+                                                hop_length, sample_rate, WindowType::Hann),
                       SonareException);
   }
 
   SECTION("hop and sample rate must be positive") {
-    REQUIRE_THROWS_AS(
-        Spectrogram::from_complex(data.data(), n_bins, n_frames, n_fft, 0, sample_rate),
-        SonareException);
-    REQUIRE_THROWS_AS(
-        Spectrogram::from_complex(data.data(), n_bins, n_frames, n_fft, hop_length, 0),
-        SonareException);
+    REQUIRE_THROWS_AS(Spectrogram::from_complex(data.data(), n_bins, n_frames, n_fft, 0,
+                                                sample_rate, WindowType::Hann),
+                      SonareException);
+    REQUIRE_THROWS_AS(Spectrogram::from_complex(data.data(), n_bins, n_frames, n_fft, hop_length, 0,
+                                                WindowType::Hann),
+                      SonareException);
   }
 
   SECTION("win_length accepts the zero sentinel or a bounded positive value") {
     REQUIRE_NOTHROW(Spectrogram::from_complex(data.data(), n_bins, n_frames, n_fft, hop_length,
-                                              sample_rate, true, 0));
+                                              sample_rate, WindowType::Hann, true, 0));
     REQUIRE_NOTHROW(Spectrogram::from_complex(data.data(), n_bins, n_frames, n_fft, hop_length,
-                                              sample_rate, true, 1));
+                                              sample_rate, WindowType::Hann, true, 1));
     REQUIRE_NOTHROW(Spectrogram::from_complex(data.data(), n_bins, n_frames, n_fft, hop_length,
-                                              sample_rate, true, n_fft));
+                                              sample_rate, WindowType::Hann, true, n_fft));
     REQUIRE_THROWS_AS(Spectrogram::from_complex(data.data(), n_bins, n_frames, n_fft, hop_length,
-                                                sample_rate, true, -1),
+                                                sample_rate, WindowType::Hann, true, -1),
                       SonareException);
     REQUIRE_THROWS_AS(Spectrogram::from_complex(data.data(), n_bins, n_frames, n_fft, hop_length,
-                                                sample_rate, true, n_fft + 1),
+                                                sample_rate, WindowType::Hann, true, n_fft + 1),
                       SonareException);
   }
 }
@@ -547,8 +608,8 @@ TEST_CASE("Spectrogram from_complex can preserve non-centered origin", "[spectru
   constexpr int sr = 22050;
 
   std::vector<std::complex<float>> data(n_bins * n_frames, {1.0f, 0.0f});
-  Spectrogram spec =
-      Spectrogram::from_complex(data.data(), n_bins, n_frames, n_fft, hop_length, sr, false);
+  Spectrogram spec = Spectrogram::from_complex(data.data(), n_bins, n_frames, n_fft, hop_length, sr,
+                                               WindowType::Hann, false);
 
   REQUIRE_FALSE(spec.center());
   Audio reconstructed = spec.to_audio();
@@ -567,7 +628,7 @@ TEST_CASE("Spectrogram from_complex can preserve win_length", "[spectrum]") {
   data[10] = {1.0f, 0.0f};
 
   Spectrogram spec = Spectrogram::from_complex(data.data(), n_bins, n_frames, n_fft, hop_length, sr,
-                                               true, win_length);
+                                               WindowType::Hann, true, win_length);
 
   REQUIRE(spec.win_length() == win_length);
   REQUIRE(spec.center());
@@ -744,8 +805,8 @@ TEST_CASE("Spectrogram from_complex defaults win_length to n_fft", "[spectrum]")
   constexpr int sr = 22050;
 
   std::vector<std::complex<float>> data(n_bins * n_frames, {1.0f, 0.0f});
-  Spectrogram spec =
-      Spectrogram::from_complex(data.data(), n_bins, n_frames, n_fft, hop_length, sr);
+  Spectrogram spec = Spectrogram::from_complex(data.data(), n_bins, n_frames, n_fft, hop_length, sr,
+                                               WindowType::Hann);
 
   // from_complex does not accept win_length, so it should default to n_fft
   REQUIRE(spec.win_length() == n_fft);

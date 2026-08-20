@@ -40,6 +40,8 @@ SonareError map_sonare_exception(const SonareException& e) {
       return SONARE_ERROR_INVALID_STATE;
     case sonare::ErrorCode::Cancelled:
       return SONARE_ERROR_CANCELLED;
+    case sonare::ErrorCode::EncodeFailed:
+      return SONARE_ERROR_ENCODE_FAILED;
     default:
       return SONARE_ERROR_UNKNOWN;
   }

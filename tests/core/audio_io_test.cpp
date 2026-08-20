@@ -741,3 +741,33 @@ TEST_CASE("save_wav uses a per-writer temp path so writes to one destination sta
     std::remove(path.c_str());
   }
 }
+
+TEST_CASE("a failed write reports an encode error, not a decode error", "[audio_io]") {
+  // Writing and reading fail for unrelated reasons, so they carry unrelated
+  // error codes: a caller that retries a decode failure with a different
+  // decoder, or reports "corrupt input" to a user, would do the wrong thing for
+  // a full disk or an unwritable directory. Both save entry points are covered
+  // because they are separate implementations rather than one wrapping the
+  // other.
+  const std::vector<float> samples(64, 0.25f);
+  const std::string unwritable = "/nonexistent-directory-for-write-failure/out.wav";
+
+  const auto code_of = [](auto&& fn) {
+    try {
+      fn();
+    } catch (const SonareException& e) {
+      return e.code();
+    }
+    return ErrorCode::Ok;
+  };
+
+  REQUIRE(code_of([&] { save_wav(unwritable, samples, 48000); }) == ErrorCode::EncodeFailed);
+  REQUIRE(code_of([&] {
+            save_wav_multichannel(unwritable, samples.data(), samples.size() / 2, 2,
+                                  ChannelLayout::Stereo, 48000);
+          }) == ErrorCode::EncodeFailed);
+
+  // The read side keeps its own code: the two must not have been merged in the
+  // other direction either.
+  REQUIRE(code_of([&] { Audio::from_file(unwritable); }) != ErrorCode::EncodeFailed);
+}

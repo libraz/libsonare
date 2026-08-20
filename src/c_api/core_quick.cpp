@@ -270,13 +270,10 @@ SonareMusicAnalyzeOptions sonare_music_analyze_options_default(void) {
 SonareError sonare_analyze_json_ex(const float* samples, size_t length, int sample_rate,
                                    const SonareMusicAnalyzeOptions* options, char** out_json) {
   SONARE_C_API_ENTRY;
-  if (out_json == nullptr || options == nullptr || options->n_fft < 2 ||
-      (options->n_fft & 1) != 0 || options->hop_length <= 0 || !std::isfinite(options->bpm_min) ||
-      !std::isfinite(options->bpm_max) || !std::isfinite(options->start_bpm) ||
-      options->bpm_min <= 0.0f || options->bpm_max < options->bpm_min ||
-      options->start_bpm <= 0.0f || !std::isfinite(options->chroma_highpass_hz) ||
-      options->chroma_highpass_hz < 0.0f || options->chroma_hop_multiplier <= 0 ||
-      options->chord_hmm_beam_width <= 0) {
+  // Field rules live in validate_config, which MusicAnalyzer's constructor
+  // applies below; the exception maps back to SONARE_ERROR_INVALID_PARAMETER, so
+  // this entry point only checks what the core cannot see (the out pointers).
+  if (out_json == nullptr || options == nullptr) {
     return SONARE_ERROR_INVALID_PARAMETER;
   }
   *out_json = nullptr;
