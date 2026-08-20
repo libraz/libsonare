@@ -212,6 +212,7 @@ if(BUILD_MASTERING)
     mastering/match_test.cpp
     mastering/maximizer_test.cpp
     mastering/multiband_test.cpp
+    mastering/offline_runner_blocking_test.cpp
     mastering/param_wiring_test.cpp
     mastering/config_zero_init_test.cpp
     mastering/repair_test.cpp
