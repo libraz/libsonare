@@ -3,6 +3,7 @@
 
 #include "analysis/rhythm_analyzer.h"
 
+#include <algorithm>
 #include <catch2/catch_test_macros.hpp>
 #include <catch2/matchers/catch_matchers_floating_point.hpp>
 #include <cmath>
@@ -105,6 +106,74 @@ Audio create_3_4_pattern(float bpm, int sr = 22050, float duration = 6.0f) {
   return Audio::from_vector(std::move(samples), sr);
 }
 
+/// @brief Creates a four-beat click pattern accenting the listed bar positions.
+/// @param bpm Beat rate of the click grid.
+/// @param accented_positions Bar positions (0-3) that receive the loud click.
+/// @details Every beat is present at the same grid, so the only thing that
+///          varies between two patterns built from this template is which bar
+///          positions carry the accent.
+Audio create_positional_accent_pattern(float bpm, const std::vector<int>& accented_positions,
+                                       int sr = 22050, float duration = 8.0f) {
+  int n_samples = static_cast<int>(sr * duration);
+  std::vector<float> samples(n_samples, 0.0f);
+
+  float beat_interval = 60.0f / bpm;
+  int click_length = sr / 100;
+  int beat_count = 0;
+
+  for (float t = 0.0f; t < duration; t += beat_interval) {
+    int start = static_cast<int>(t * sr);
+    bool accented = std::find(accented_positions.begin(), accented_positions.end(),
+                              beat_count % 4) != accented_positions.end();
+    float amplitude = accented ? 1.0f : 0.2f;
+
+    for (int i = 0; i < click_length && start + i < n_samples; ++i) {
+      float envelope = 1.0f - static_cast<float>(i) / click_length;
+      samples[start + i] = envelope * amplitude;
+    }
+    beat_count++;
+  }
+
+  return Audio::from_vector(std::move(samples), sr);
+}
+
+/// @brief Creates a six-beat accent pattern with optional beat-midpoint clicks.
+/// @param bpm Beat rate of the click grid.
+/// @param subdivision_amplitude Amplitude of the click placed halfway between
+///        consecutive beats; zero leaves the space between beats empty.
+/// @details The accents alone (strong on bar positions 0 and 3) describe a
+///          six-beat bar without saying whether the beat divides in two or in
+///          three. Only the midpoint clicks carry that evidence, so two patterns
+///          differing solely in @p subdivision_amplitude isolate it.
+Audio create_six_beat_pattern(float bpm, float subdivision_amplitude, int sr = 22050,
+                              float duration = 8.0f) {
+  int n_samples = static_cast<int>(sr * duration);
+  std::vector<float> samples(n_samples, 0.0f);
+
+  float beat_interval = 60.0f / bpm;
+  int click_length = sr / 100;
+  int beat_count = 0;
+
+  auto place_click = [&](float t, float amplitude) {
+    int start = static_cast<int>(t * sr);
+    for (int i = 0; i < click_length && start + i < n_samples; ++i) {
+      float envelope = 1.0f - static_cast<float>(i) / click_length;
+      samples[start + i] = envelope * amplitude;
+    }
+  };
+
+  for (float t = 0.0f; t < duration; t += beat_interval) {
+    int pos = beat_count % 6;
+    place_click(t, pos == 0 ? 1.0f : (pos == 3 ? 0.8f : 0.4f));
+    if (subdivision_amplitude > 0.0f && t + 0.5f * beat_interval < duration) {
+      place_click(t + 0.5f * beat_interval, subdivision_amplitude);
+    }
+    beat_count++;
+  }
+
+  return Audio::from_vector(std::move(samples), sr);
+}
+
 /// @brief Creates a click track whose first beat of every bar is accented.
 Audio create_accented_pattern(float bpm, int beats_per_bar, int sr = 22050,
                               float duration = 10.0f) {
@@ -129,6 +198,32 @@ Audio create_accented_pattern(float bpm, int beats_per_bar, int sr = 22050,
   return Audio::from_vector(std::move(samples), sr);
 }
 
+/// @brief Time signatures the beat pass and the rhythm pass report for one take.
+struct MeterPair {
+  TimeSignature beat;
+  TimeSignature rhythm;
+};
+
+/// @brief Runs both meter estimates over a single set of tracked beats.
+/// @details MusicAnalyzer builds its rhythm analyzer from its beat analyzer the
+///          same way and publishes both signatures side by side, so this is the
+///          pairing a caller actually observes.
+MeterPair estimate_meter_both_ways(const Audio& audio, float bpm, float bpm_min, float bpm_max) {
+  BeatConfig beat_config;
+  beat_config.start_bpm = bpm;
+  beat_config.bpm_min = bpm_min;
+  beat_config.bpm_max = bpm_max;
+  BeatAnalyzer beat_analyzer(audio, beat_config);
+
+  RhythmConfig rhythm_config;
+  rhythm_config.start_bpm = bpm;
+  rhythm_config.bpm_min = bpm_min;
+  rhythm_config.bpm_max = bpm_max;
+  RhythmAnalyzer rhythm_analyzer(beat_analyzer, rhythm_config);
+
+  return {beat_analyzer.time_signature(), rhythm_analyzer.time_signature()};
+}
+
 }  // namespace
 
 TEST_CASE("RhythmAnalyzer basic", "[rhythm_analyzer]") {
@@ -139,8 +234,12 @@ TEST_CASE("RhythmAnalyzer basic", "[rhythm_analyzer]") {
 
   const auto& features = analyzer.features();
 
+  // Every click in the track is identical, so no beat carries an accent the
+  // meter does not already expect and the score has to stay near zero. A score
+  // built from unnormalized envelope values instead saturates here.
+  CAPTURE(features.syncopation);
   REQUIRE(features.syncopation >= 0.0f);
-  REQUIRE(features.syncopation <= 1.0f);
+  REQUIRE(features.syncopation < 0.3f);
   REQUIRE(features.pattern_regularity >= 0.0f);
   REQUIRE(features.pattern_regularity <= 1.0f);
   REQUIRE(features.tempo_stability >= 0.0f);
@@ -219,11 +318,11 @@ TEST_CASE("RhythmAnalyzer beat intervals", "[rhythm_analyzer]") {
 
   const auto& intervals = analyzer.beat_intervals();
 
-  // Should have intervals between beats
-  if (!intervals.empty()) {
-    for (float interval : intervals) {
-      REQUIRE(interval > 0.0f);
-    }
+  // Four seconds of 120 BPM clicks always yields tracked beats, so an empty
+  // series is a failure rather than a case to skip over.
+  REQUIRE(!intervals.empty());
+  for (float interval : intervals) {
+    REQUIRE(interval > 0.0f);
   }
 }
 
@@ -240,14 +339,30 @@ TEST_CASE("RhythmAnalyzer from BeatAnalyzer", "[rhythm_analyzer]") {
   REQUIRE(rhythm_analyzer.groove_type().length() > 0);
 }
 
-TEST_CASE("RhythmAnalyzer syncopation", "[rhythm_analyzer]") {
-  Audio audio = create_4_4_pattern(120.0f, 22050, 4.0f);
+TEST_CASE("RhythmAnalyzer syncopation separates on-beat from off-beat accents",
+          "[rhythm_analyzer]") {
+  // Both patterns come from the same click template and differ only in which bar
+  // position carries the accent, so the score has to be driven by accent
+  // placement and not by the absolute loudness of the material. The candidate
+  // set is pinned to 4 so both are scored against the same bar grid.
+  RhythmConfig config;
+  config.start_bpm = 120.0f;
+  config.meter_candidate_numerators = {4};
 
-  RhythmAnalyzer analyzer(audio);
+  RhythmAnalyzer on_beat(create_positional_accent_pattern(120.0f, {0}), config);
+  RhythmAnalyzer off_beat(create_positional_accent_pattern(120.0f, {0, 3}), config);
 
-  // Regular 4/4 pattern should have low syncopation
-  REQUIRE(analyzer.syncopation() >= 0.0f);
-  REQUIRE(analyzer.syncopation() <= 1.0f);
+  const float on_beat_score = on_beat.syncopation();
+  const float off_beat_score = off_beat.syncopation();
+  CAPTURE(on_beat_score, off_beat_score);
+
+  // Accents only on the downbeat: nothing lands off the metric grid.
+  REQUIRE(on_beat_score >= 0.0f);
+  REQUIRE(on_beat_score < 0.3f);
+  // Adding an accent on bar position 3, a weak position in 4/4, has to move the
+  // score up by a margin a reader would call visible rather than by rounding.
+  REQUIRE(off_beat_score > on_beat_score + 0.05f);
+  REQUIRE(off_beat_score <= 1.0f);
 }
 
 TEST_CASE("RhythmAnalyzer 6/8 secondary accent is not counted as syncopation",
@@ -272,6 +387,75 @@ TEST_CASE("RhythmAnalyzer 6/8 secondary accent is not counted as syncopation",
     INFO("detected 6/8: accents on positions 0 and 3 should not read as syncopation");
     REQUIRE(analyzer.syncopation() < 0.5f);
   }
+}
+
+TEST_CASE("Meter estimates over the same beats agree", "[rhythm_analyzer]") {
+  // The beat pass and the rhythm pass estimate the meter separately over one set
+  // of tracked beats and both signatures are published, so they have to rest on
+  // the same evidence.
+  SECTION("triple meter") {
+    MeterPair meter =
+        estimate_meter_both_ways(create_3_4_pattern(120.0f, 22050, 9.0f), 120.0f, 60.0f, 200.0f);
+    CAPTURE(meter.beat.numerator, meter.beat.denominator, meter.rhythm.numerator,
+            meter.rhythm.denominator);
+    REQUIRE(meter.beat.numerator == meter.rhythm.numerator);
+    REQUIRE(meter.beat.denominator == meter.rhythm.denominator);
+  }
+
+  SECTION("six-beat accents with nothing between the beats") {
+    MeterPair meter =
+        estimate_meter_both_ways(create_6_8_pattern(120.0f, 22050, 8.0f), 120.0f, 60.0f, 200.0f);
+    CAPTURE(meter.beat.numerator, meter.beat.denominator, meter.rhythm.numerator,
+            meter.rhythm.denominator);
+    REQUIRE(meter.beat.numerator == meter.rhythm.numerator);
+    REQUIRE(meter.beat.denominator == meter.rhythm.denominator);
+    // The beats never subdivide, so nothing here supports a compound beat unit.
+    REQUIRE(meter.beat.denominator == 4);
+  }
+}
+
+TEST_CASE("A compound beat unit needs subdivision energy rather than its absence",
+          "[rhythm_analyzer]") {
+  // Same click grid, same accents, same tracked beats: the only difference is
+  // whether a click sits halfway between the beats. That evidence, and not the
+  // lack of an onset envelope, is what may promote the beat unit to an eighth.
+  const float bpm = 120.0f;
+  const float bpm_min = 90.0f;
+  const float bpm_max = 150.0f;
+
+  BeatConfig beat_config;
+  beat_config.start_bpm = bpm;
+  beat_config.bpm_min = bpm_min;
+  beat_config.bpm_max = bpm_max;
+
+  BeatAnalyzer bare(create_six_beat_pattern(bpm, 0.0f), beat_config);
+  BeatAnalyzer subdivided(create_six_beat_pattern(bpm, 0.35f), beat_config);
+
+  // Otherwise the two runs would be scoring different beat series and the
+  // comparison below would not isolate the subdivision energy.
+  CAPTURE(bare.count(), subdivided.count());
+  REQUIRE(bare.count() == subdivided.count());
+
+  RhythmConfig rhythm_config;
+  rhythm_config.start_bpm = bpm;
+  rhythm_config.bpm_min = bpm_min;
+  rhythm_config.bpm_max = bpm_max;
+  RhythmAnalyzer bare_rhythm(bare, rhythm_config);
+  RhythmAnalyzer subdivided_rhythm(subdivided, rhythm_config);
+
+  CAPTURE(bare.time_signature().numerator, bare.time_signature().denominator,
+          bare_rhythm.time_signature().numerator, bare_rhythm.time_signature().denominator);
+  REQUIRE(bare.time_signature().denominator == 4);
+  REQUIRE(bare_rhythm.time_signature().denominator == 4);
+
+  CAPTURE(subdivided.time_signature().numerator, subdivided.time_signature().denominator,
+          subdivided_rhythm.time_signature().numerator,
+          subdivided_rhythm.time_signature().denominator);
+  REQUIRE(subdivided.time_signature().numerator == 6);
+  REQUIRE(subdivided.time_signature().denominator == 8);
+  REQUIRE(subdivided_rhythm.time_signature().numerator == subdivided.time_signature().numerator);
+  REQUIRE(subdivided_rhythm.time_signature().denominator ==
+          subdivided.time_signature().denominator);
 }
 
 TEST_CASE("RhythmAnalyzer features struct", "[rhythm_analyzer]") {

@@ -162,6 +162,22 @@ class BeatAnalyzer {
   BeatConfig config_;
 };
 
+/// @brief Rewrites an onset envelope so each frame carries the energy around it.
+/// @param onset_strength Frame-level onset envelope.
+/// @param sr Sample rate the envelope was computed at.
+/// @param hop_length Hop length the envelope was computed at.
+/// @return An envelope of the same length, or the input unchanged when it is
+///         empty or the rate arguments are not positive.
+/// @details A beat whose position falls between two hops splits its energy over
+///          neighbouring frames, so a single frame reads it as weaker than an
+///          identical beat that lands on a hop boundary. Anything scoring one
+///          frame per beat — meter estimation, accent comparison — would report
+///          that split as an accent difference, so it compares this envelope
+///          instead of the raw one. Where the energy sits, which is what those
+///          consumers actually measure, is unchanged.
+std::vector<float> beat_local_energy(const std::vector<float>& onset_strength, int sr,
+                                     int hop_length);
+
 /// @brief Quick beat detection function.
 /// @param audio Input audio
 /// @param config Beat configuration

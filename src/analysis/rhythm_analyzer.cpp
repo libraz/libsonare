@@ -6,10 +6,13 @@
 
 #include "analysis/meter_analyzer.h"
 #include "analysis/onset_analyzer.h"
+#include "util/constants.h"
 #include "util/exception.h"
 #include "util/math_utils.h"
 
 namespace sonare {
+
+using sonare::constants::kEpsilon;
 
 RhythmAnalyzer::RhythmAnalyzer(const Audio& audio, const RhythmConfig& config)
     : bpm_(config.start_bpm),
@@ -145,6 +148,10 @@ float RhythmAnalyzer::calculate_swing_ratio() const {
 }
 
 void RhythmAnalyzer::analyze() {
+  // One accent measure feeds both the meter estimate and the syncopation score,
+  // so the two cannot rest on different readings of the same beats.
+  beat_energy_ = beat_local_energy(onset_strength_, sr_, hop_length_);
+
   // Compute beat intervals
   beat_intervals_.clear();
   if (beats_.size() >= 2) {
@@ -174,14 +181,15 @@ void RhythmAnalyzer::detect_time_signature() {
     return;
   }
 
-  // Pass the beat-aligned onset strength envelope (matching BeatAnalyzer) so
-  // estimate_meter can resolve simple-vs-compound meter from the audio instead
-  // of being forced into the empty-envelope 6/8 fallback.
+  // Pass the beat-local energy envelope (the same one BeatAnalyzer scores) so
+  // estimate_meter resolves simple-vs-compound meter from the audio instead of
+  // being forced into the empty-envelope compound fallback, and so this estimate
+  // and BeatAnalyzer's cannot disagree over the same beats.
   //
   // Keep the full MeterResult so the downbeat phase (which beat index the first
   // downbeat falls on) can offset the strong-beat classification in
   // compute_syncopation(), matching how BeatAnalyzer aligns its downbeats.
-  MeterResult meter = estimate_meter(onset_strength_, beats_, meter_config);
+  MeterResult meter = estimate_meter(beat_energy_, beats_, meter_config);
   features_.time_signature = meter.time_signature;
   downbeat_phase_ = meter.downbeat_phase;
 }
@@ -217,33 +225,69 @@ void RhythmAnalyzer::compute_syncopation() {
   int beats_per_bar = features_.time_signature.numerator;
   if (beats_per_bar <= 0) beats_per_bar = 4;
 
-  // Count off-beat accents
-  float syncopation_score = 0.0f;
-  int count = 0;
+  // Read each beat's accent from the beat-local energy envelope rather than from
+  // Beat::strength, which is one raw frame and therefore reports the hop jitter
+  // of a beat falling between two hops as an accent difference. This is the same
+  // envelope the meter estimate above scored, so the two rest on one measure.
+  const float accent_max =
+      beat_energy_.empty() ? 0.0f : *std::max_element(beat_energy_.begin(), beat_energy_.end());
+  const int n_frames = static_cast<int>(beat_energy_.size());
+
+  float strong_sum = 0.0f;
+  int strong_count = 0;
+  std::vector<float> weak_strengths;
+  weak_strengths.reserve(beats_.size());
 
   for (size_t i = 0; i < beats_.size(); ++i) {
     // Determine position within bar, offset by the estimated downbeat phase so
     // bar_position == 0 lands on the actual downbeat (consistent with BeatAnalyzer).
-    int bar_position =
+    const int bar_position =
         ((static_cast<int>(i) - downbeat_phase_) % beats_per_bar + beats_per_bar) % beats_per_bar;
 
     // Strong beats are typically 0 (downbeat) plus a secondary accent: position 2
     // for 4/4 and position 3 for 6/8 compound meter (consistent with
     // MeterAnalyzer/DownbeatAnalyzer). Position 0 alone covers 3/4.
-    bool is_strong_beat = (bar_position == 0) || (beats_per_bar == 4 && bar_position == 2) ||
-                          (beats_per_bar == 6 && bar_position == 3);
+    const bool is_strong_beat = (bar_position == 0) || (beats_per_bar == 4 && bar_position == 2) ||
+                                (beats_per_bar == 6 && bar_position == 3);
 
-    // Calculate strength relative to expected
-    float relative_strength = beats_[i].strength;
+    // Bring the accents onto a common [0, 1] scale before comparing them. They
+    // are sums of log-power differences whose range depends entirely on the
+    // material, so no fixed threshold can tell an accent from an ordinary beat.
+    const float accent =
+        n_frames == 0
+            ? 0.0f
+            : beat_energy_[static_cast<size_t>(std::clamp(beats_[i].frame, 0, n_frames - 1))];
+    const float scaled = accent_max <= kEpsilon ? 0.0f : accent / accent_max;
+    const float normalized = std::clamp(scaled, 0.0f, 1.0f);
 
-    if (!is_strong_beat && relative_strength > 0.6f) {
-      syncopation_score += relative_strength;
+    if (is_strong_beat) {
+      strong_sum += normalized;
+      ++strong_count;
+    } else {
+      weak_strengths.push_back(normalized);
     }
-    count++;
   }
 
-  features_.syncopation = (count > 0) ? syncopation_score / count : 0.0f;
-  features_.syncopation = std::min(1.0f, features_.syncopation);
+  if (strong_count == 0 || weak_strengths.empty()) {
+    return;
+  }
+
+  // Syncopation is accent energy landing where the meter does not expect it,
+  // measured against the level the meter does expect: only the part of a
+  // weak-position beat that rises above the mean strong-beat level counts, and
+  // that excess is reported as a fraction of the same level so the result is a
+  // ratio in [0, 1] on every path rather than a clamped absolute quantity.
+  const float expected = strong_sum / static_cast<float>(strong_count);
+  if (expected <= kEpsilon) {
+    return;
+  }
+
+  float excess = 0.0f;
+  for (float strength : weak_strengths) {
+    excess += std::max(0.0f, strength - expected);
+  }
+  const float mean_excess = excess / static_cast<float>(weak_strengths.size());
+  features_.syncopation = std::clamp(mean_excess / expected, 0.0f, 1.0f);
 }
 
 void RhythmAnalyzer::compute_regularity() {

@@ -22,6 +22,11 @@ using sonare::constants::kEpsilon;
 
 namespace {
 
+/// @brief Length of the window an accent is summed over, in seconds.
+/// @details Matches the beat-local window the downbeat pass scores, and stays
+///          well inside one beat at the tempi the tracker admits.
+constexpr double kAccentWindowSeconds = 0.08;
+
 /// @brief Converts BPM to period in frames.
 float bpm_to_period(float bpm, int sr, int hop_length) {
   if (bpm <= 0.0f) return 0.0f;
@@ -147,6 +152,31 @@ void prepend_missed_initial_beat(std::vector<int>& beat_frames, float period) {
 }
 
 }  // namespace
+
+std::vector<float> beat_local_energy(const std::vector<float>& onset_strength, int sr,
+                                     int hop_length) {
+  if (onset_strength.empty() || sr <= 0 || hop_length <= 0) return onset_strength;
+
+  const int n_frames = static_cast<int>(onset_strength.size());
+  const int half_window =
+      std::max(1, static_cast<int>(std::lround(0.5 * kAccentWindowSeconds * sr / hop_length)));
+
+  std::vector<float> prefix(onset_strength.size() + 1, 0.0f);
+  for (int frame = 0; frame < n_frames; ++frame) {
+    prefix[static_cast<size_t>(frame) + 1] =
+        prefix[static_cast<size_t>(frame)] +
+        std::max(0.0f, onset_strength[static_cast<size_t>(frame)]);
+  }
+
+  std::vector<float> energy(onset_strength.size(), 0.0f);
+  for (int frame = 0; frame < n_frames; ++frame) {
+    const int first = std::max(0, frame - half_window);
+    const int last = std::min(n_frames, frame + half_window + 1);
+    energy[static_cast<size_t>(frame)] =
+        prefix[static_cast<size_t>(last)] - prefix[static_cast<size_t>(first)];
+  }
+  return energy;
+}
 
 BeatAnalyzer::BeatAnalyzer(const Audio& audio, const BeatConfig& config)
     : bpm_(config.start_bpm),
@@ -514,6 +544,14 @@ void BeatAnalyzer::estimate_time_signature(const std::vector<float>& beat_streng
     return;
   }
 
+  // The estimator reads simple-vs-compound meter from the subdivision energy
+  // sitting between the beats, and with no envelope to read it reports a
+  // compound beat unit for every six-beat bar — absence of evidence and absence
+  // of an envelope are the same thing to it. Always hand it the envelope, so the
+  // beat unit rests on the audio and this estimate agrees with the one the
+  // rhythm pass runs over the same beats.
+  const std::vector<float> scoring_envelope = beat_local_energy(onset_strength_, sr_, hop_length_);
+
   MeterResult meter;
   const float observation_max =
       beat_strength_observations.empty()
@@ -525,9 +563,12 @@ void BeatAnalyzer::estimate_time_signature(const std::vector<float>& beat_streng
       observed_beats[i].strength =
           std::clamp(beat_strength_observations[i] / observation_max, 0.0f, 1.0f);
     }
-    meter = estimate_meter({}, observed_beats, meter_config);
+    // The estimator prefers the envelope for per-beat accent scoring, so these
+    // observations govern only where the envelope carries no dynamic range to
+    // read — they are the accent evidence of last resort, not of first resort.
+    meter = estimate_meter(scoring_envelope, observed_beats, meter_config);
   } else {
-    meter = estimate_meter(onset_strength_, beats_, meter_config);
+    meter = estimate_meter(scoring_envelope, beats_, meter_config);
   }
   time_signature_ = meter.time_signature;
   time_signature_candidates_ = std::move(meter.candidates);

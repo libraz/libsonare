@@ -110,7 +110,10 @@ class RhythmAnalyzer {
   std::vector<Beat> beats_;
   std::vector<float> beat_intervals_;
   std::vector<float> onset_strength_;  ///< Onset strength envelope (beat-aligned)
-  std::vector<float> onset_times_;     ///< Detected onset times in seconds
+  /// @brief Onset strength rewritten as beat-local energy (@ref beat_local_energy).
+  /// @details Scored by both the meter estimate and the syncopation measure.
+  std::vector<float> beat_energy_;
+  std::vector<float> onset_times_;  ///< Detected onset times in seconds
   float bpm_;
   int downbeat_phase_ = 0;  ///< Beat index of the first downbeat (from estimate_meter)
   RhythmConfig config_;
