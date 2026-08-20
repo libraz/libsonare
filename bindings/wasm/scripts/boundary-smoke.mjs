@@ -135,7 +135,10 @@ window.runBoundarySmoke = async () => {
         'mismatched sidechain update',
       );
       for (let i = 0; i < 64; i++) {
-        module.mfccToMel(new Float32Array([1]), 1, 1, 1);
+        // Five arguments: js_mfcc_to_mel takes a lifter after n_mels. No tsc
+        // program covers this file, so the argument count is checked by nothing
+        // but this comment and the sibling loop in boundary-regressions.test.ts.
+        module.mfccToMel(new Float32Array([1]), 1, 1, 1, 0);
       }
       const actualOutputs = [actual.processMono(sine(0.005)), actual.processMono(sine(0.005))];
       assert(
