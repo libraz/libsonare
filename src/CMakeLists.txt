@@ -110,6 +110,13 @@ set(SONARE_SOURCES
   streaming/stream_resampler.cpp
   quick.cpp
   c_api/sonare_c.cpp
+  # Compiled here rather than with the mastering module: eq_band_json.cpp below
+  # is always compiled (sonare_c_engine_mixing.cpp needs it in every shared
+  # build) and calls these parsers, so leaving them behind a feature gate makes
+  # -DBUILD_MASTERING=OFF -DBUILD_MIXING=OFF fail at link. The file is a pure
+  # string<->enum mapping over a header-only enum, with no mastering runtime
+  # behind it.
+  mastering/eq/band_strings.cpp
   c_api/eq_band_json.cpp
   c_api/core_analysis.cpp
   c_api/core_audio.cpp
@@ -379,7 +386,7 @@ if(BUILD_MASTERING)
     mastering/stereo/stereo_balance.cpp
     mastering/eq/api_style.cpp
     mastering/eq/band_pass.cpp
-    mastering/eq/band_strings.cpp
+    # band_strings.cpp is in the always-compiled core list; see the note there.
     mastering/eq/cut_filter.cpp
     mastering/eq/dynamic_eq.cpp
     mastering/eq/equalizer.cpp

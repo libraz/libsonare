@@ -1,7 +1,7 @@
 .PHONY: all build release test test-slow test-golden test-optional-fixtures test-librosa-live clean rebuild format format-check lint wasm coverage \
        coverage-build coverage-clean build-shared build-node build-wasm-binding \
        test-python test-python-slow test-node test-wasm parity conformance test-gm-cross-surface abi-layout abi-layout-check check-abi-version \
-       capability-catalog capability-catalog-check ci-local \
+       capability-catalog capability-catalog-check processor-types processor-types-check ci-local \
        test-hardening test-hardening-asan test-hardening-tsan test-hardening-host test-hardening-wasm
 
 BUILD_DIR := build
@@ -85,9 +85,13 @@ format:
 	UV_CACHE_DIR=$(UV_CACHE_DIR) $(RYE) run --pyproject bindings/python/pyproject.toml ruff check --fix bindings/python/src bindings/python/tests
 	$(MAKE) lint
 
+# `test:types` type-checks the Node binding's tests against src (biome does not
+# type-check, and the build tsconfig excludes tests). It reads sources only —
+# no built addon or dist/ needed — so it belongs with the other static gates.
 lint:
 	cd bindings/wasm && yarn lint
 	cd bindings/node && yarn lint
+	cd bindings/node && yarn test:types
 	UV_CACHE_DIR=$(UV_CACHE_DIR) $(RYE) sync --pyproject bindings/python/pyproject.toml
 	UV_CACHE_DIR=$(UV_CACHE_DIR) $(RYE) run --pyproject bindings/python/pyproject.toml ruff check bindings/python/src bindings/python/tests
 
@@ -112,6 +116,15 @@ capability-catalog: build-shared
 capability-catalog-check: build-shared
 	python3 tools/generate_capability_catalog.py --library $(SHARED_LIB) --check
 
+# Render the per-binding processor-name declarations from the tracked catalog,
+# so no surface carries a hand-maintained copy of the shipped name set. Reads
+# only the committed catalog, so neither target needs a build.
+processor-types:
+	python3 tools/generate_processor_types.py
+
+processor-types-check:
+	python3 tools/generate_processor_types.py --check
+
 build-node:
 	cd bindings/node && yarn install && yarn build
 
@@ -131,8 +144,12 @@ test-python-slow: build-shared
 test-node: build-node
 	cd bindings/node && yarn test
 
+# The WASM tests type-check against dist/, so unlike the Node one this gate
+# cannot live in `lint` — it needs the build prerequisite this target already
+# carries. Left unwired it would decay into a script nobody runs.
 test-wasm: build-wasm-binding
 	cd bindings/wasm && yarn test
+	cd bindings/wasm && yarn test:types
 
 # Focused security-hardening gates. Each test command writes its complete log
 # under the matching build directory, and --no-tests=error prevents a renamed
@@ -233,6 +250,7 @@ check-abi-version:
 ci-local:
 	$(MAKE) format-check
 	$(MAKE) parity
+	$(MAKE) processor-types-check
 	$(MAKE) check-abi-version
 	$(MAKE) abi-layout-check
 

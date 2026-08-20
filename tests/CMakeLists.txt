@@ -39,6 +39,7 @@ add_executable(sonare_tests
   util/sequence_test.cpp
   util/decompose_test.cpp
   util/reassigned_test.cpp
+  util/validated_config_test.cpp
   core/convert_test.cpp
   core/window_test.cpp
   core/fft_test.cpp
@@ -79,6 +80,7 @@ add_executable(sonare_tests
   analysis/downbeat_analyzer_test.cpp
   analysis/chord_analyzer_test.cpp
   analysis/chord_synthetic_matrix_test.cpp
+  analysis/progression_patterns_test.cpp
   analysis/boundary_detector_test.cpp
   metering/meter_basic_test.cpp
   analysis/rhythm_analyzer_test.cpp
@@ -198,8 +200,11 @@ if(BUILD_MASTERING)
     mastering/eq_dynamic_detail_test.cpp
     mastering/final_test.cpp
     mastering/golden_hash_test.cpp
+    mastering/hysteresis_relaxation_test.cpp
+    mastering/hysteresis_ja_reference_test.cpp
     mastering/amp_sim_test.cpp
     mastering/insert_factory_extra_test.cpp
+    mastering/insert_latency_alignment_test.cpp
     mastering/loudness_ceiling_test.cpp
     mastering/match_test.cpp
     mastering/maximizer_test.cpp
@@ -251,6 +256,7 @@ if(BUILD_MIXING)
     mixing/mixing_meter_lufs_integration_test.cpp
     mixing/no_alloc_allocators.cpp
     mixing/no_alloc_engine_mixing_test.cpp
+    mixing/pan_law_test.cpp
     mixing/surround_panner_test.cpp
     mixing/no_alloc_mastering_eq_test.cpp
     mixing/no_alloc_mastering_dynamics_test.cpp
@@ -283,6 +289,7 @@ if(BUILD_FX)
   target_sources(sonare_tests PRIVATE effects/ensemble_test.cpp)
   target_sources(sonare_tests PRIVATE effects/fdn_reverb_test.cpp)
   target_sources(sonare_tests PRIVATE effects/reverb_tail_test.cpp)
+  target_sources(sonare_tests PRIVATE effects/dattorro_modulation_test.cpp)
   target_sources(sonare_tests PRIVATE effects/modulation_inserts_test.cpp)
   if(NOT BUILD_MASTERING)
     target_link_libraries(sonare_tests PRIVATE sonare_fx)
@@ -363,6 +370,7 @@ if(BUILD_ARRANGEMENT)
     arrangement/external_stems_test.cpp
     arrangement/edit_command_history_test.cpp
     arrangement/edit_compiler_golden_test.cpp
+    arrangement/edit_compiler_pan_law_test.cpp
     arrangement/c_abi_edit_ops_test.cpp
     midi/midi_ump_test.cpp
     midi/builtin_synth_test.cpp
@@ -401,6 +409,7 @@ if(BUILD_ARRANGEMENT)
     mir/mir_warp_test.cpp
     mir/mir_key_chord_onset_test.cpp
     serialize/project_serializer_roundtrip_test.cpp
+    serialize/project_serializer_enum_and_budget_test.cpp
     serialize/project_deserialize_fuzz_test.cpp
     serialize/project_default_sr_and_uri_test.cpp
     host/host_seam_test.cpp

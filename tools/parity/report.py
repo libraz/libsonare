@@ -97,6 +97,17 @@ def to_markdown(rep: Report) -> str:
         out.append(f"| {s} | {rep.unparsed.get(s, 0)} |")
     out.append("")
 
+    # Extractor notes: what a surface could not parse, and the classifications a
+    # reader needs to interpret its findings. These reached the JSON output only,
+    # so anything an extractor recorded here was invisible to a reader of this
+    # report -- including notes explaining why a finding is not what it looks like.
+    notes = [(s, n) for s in rep.surfaces for n in rep.unparsed_notes.get(s, [])]
+    if notes:
+        out.append("## Extractor notes\n")
+        for surface, note in notes:
+            out.append(f"- **{surface}**: {note}")
+        out.append("")
+
     summary = _summary(rep)
     out.append("## Findings summary\n")
     out.append(

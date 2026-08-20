@@ -63,6 +63,11 @@ SCALAR_HELPERS = {
     "scaleCorrectionSemitones",
     "scalePitchClassEnabled",
 }
+# Do not add a zero-argument accessor here: the zero-argument clause in
+# exemption() already covers every one of them structurally, and it is the rule
+# these names were spelling out by hand. This list is kept only so the entries
+# that predate that clause keep their more specific reason string. A name
+# belongs here only if it takes arguments and is still metadata.
 METADATA_HELPERS = {
     "version",
     "capabilities",
@@ -124,7 +129,18 @@ def has_request_overload(text: str, name: str) -> bool:
     )
 
 
-def exemption(path: Path, name: str) -> str | None:
+def takes_no_arguments(text: str, name: str) -> bool:
+    """True when every exported declaration of `name` has an empty parameter list.
+
+    Deliberately conservative: a signature the pattern cannot read counts as
+    taking arguments, so an unreadable declaration is reviewed rather than
+    exempted.
+    """
+    declarations = re.findall(rf"export function {re.escape(name)}\s*\(([^)]*)\)", text)
+    return bool(declarations) and all(not params.strip() for params in declarations)
+
+
+def exemption(path: Path, name: str, text: str) -> str | None:
     if path.name in EXEMPT_FILES:
         return "stateful/project/platform API"
     if name in SCALAR_HELPERS:
@@ -135,6 +151,14 @@ def exemption(path: Path, name: str) -> str | None:
         return "pre-existing object-shaped API"
     if name in STATEFUL_ATTACH_HELPERS:
         return "stateful attach helper with an existing options object"
+    # A request object exists to name and order arguments; a function that takes
+    # none has nothing to name, and wrapping it would produce `f({})`. This is
+    # structural rather than a judgement about the individual function: a
+    # one-shot audio operation takes at least a buffer, so a zero-argument
+    # export is discovery or metadata by construction. Checked last so the named
+    # sets above keep their existing, more specific reason strings.
+    if takes_no_arguments(text, name):
+        return "zero-argument accessor (no arguments to name)"
     return None
 
 
@@ -216,7 +240,7 @@ def main() -> int:
                 marker = f"{surface}:{path.name}:{name}"
                 if has_request_overload(text, name):
                     covered.append(marker)
-                elif reason := exemption(path, name):
+                elif reason := exemption(path, name, text):
                     exempt.append(f"{marker} ({reason})")
                 else:
                     missing.append(marker)

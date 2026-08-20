@@ -958,25 +958,27 @@ def _core_default_drift(
 
 
 def _wasm_internal_drift(wi: WasmInternal, allow, rep: Report) -> None:
-    """Cross-validate the WASM binding against ITSELF across its three files.
+    """Cross-validate the WASM binding against ITSELF across its three surfaces.
 
-    The cross-binding checks read ``index.ts`` alone, so they model "exposed in
-    WASM" == "exported from index.ts" and are blind to a partial wiring break
-    spread across embind (``bindings.cpp``) -> the ``SonareModule`` type
-    (``sonare.js.d.ts``) -> the facade (``index.ts``). This check closes that gap
-    (the P0-4 class: a function registered in embind but missing from the type
-    and/or the facade). Three legs:
+    The cross-binding checks read the facade's re-export graph alone, so they
+    model "exposed in WASM" == "exported from index.ts" and are blind to a
+    partial wiring break spread across embind -> the ``SonareModule`` type
+    (``sonare.js.d.ts``) -> the facade. This check closes that gap (a function
+    registered in embind but missing from the type and/or the facade). Three
+    legs:
 
     1. ACTIVE -- a FREE-function embind registration absent from ``SonareModule``
        (TypeScript cannot call it; a real type/registration break).
-    2. ACTIVE -- ``index.ts`` calls ``module.X`` / ``requireModule().X`` for a
+    2. ACTIVE -- a facade module calls ``module.X`` / ``requireModule().X`` for a
        name absent from ``SonareModule`` (a TS compile gap).
-    3. INFORMATIONAL -- a registered AND typed free function with no ``index.ts``
-       facade wrapper. Often intentional (a raw entry superseded by a richer
-       variant, e.g. ``detectKey`` -> ``_detectKeyWithOptions``), so non-gating.
+    3. INFORMATIONAL -- a registered AND typed free function that no facade
+       wraps. Often intentional (a raw entry superseded by a richer variant,
+       e.g. ``detectKey`` -> ``_detectKeyWithOptions``, or an internal helper the
+       facade consumes without re-exporting), so non-gating.
+
+    Locations come from the per-name site the extractor recorded, because both
+    the registrations and the facade span dozens of files.
     """
-    if not wi.available:
-        return
 
     def _emit(name: str, message: str, location: str, informational: bool) -> None:
         if allow.wasm_internal_ok(name):
@@ -996,37 +998,37 @@ def _wasm_internal_drift(wi: WasmInternal, allow, rep: Report) -> None:
         )
 
     # 1. embind free registration not declared in the SonareModule type.
-    for name, line in sorted(wi.embind.items()):
+    for name, site in sorted(wi.embind.items()):
         if name in wi.iface:
             continue
         _emit(
             name,
             f"embind registers free function '{name}' but it is not declared in "
             "the SonareModule interface (TypeScript cannot call it)",
-            f"{wi.bindings_file}:{line}",
+            str(site),
             informational=False,
         )
 
-    # 2. index.ts calls module.X for a name the SonareModule type does not declare.
-    for name, line in sorted(wi.refs.items()):
+    # 2. A facade calls module.X for a name the SonareModule type does not declare.
+    for name, site in sorted(wi.refs.items()):
         if name in wi.iface:
             continue
         _emit(
             name,
-            f"index.ts calls module.{name} but it is not declared in the "
+            f"the facade calls module.{name} but it is not declared in the "
             "SonareModule interface",
-            f"{wi.index_file}:{line}",
+            str(site),
             informational=False,
         )
 
-    # 3. Registered AND typed, but no index.ts facade wraps it (module.X unused).
-    for name, line in sorted(wi.embind.items()):
+    # 3. Registered AND typed, but no facade wraps it (module.X never called).
+    for name, site in sorted(wi.embind.items()):
         if name not in wi.iface or name in wi.refs:
             continue
         _emit(
             name,
             f"embind registers free function '{name}' (typed in SonareModule) but "
-            f"no index.ts facade wraps it (module.{name} is never called)",
-            f"{wi.bindings_file}:{line}",
+            f"no facade wraps it (module.{name} is never called)",
+            str(site),
             informational=True,
         )

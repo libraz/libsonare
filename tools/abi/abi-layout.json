@@ -1337,6 +1337,54 @@
     ],
     "size": 40
   },
+  "SonareEngineBuiltinSynthConfig": {
+    "align": 4,
+    "fields": [
+      {
+        "kind": "signed",
+        "name": "waveform",
+        "offset": 0,
+        "size": 4
+      },
+      {
+        "kind": "float",
+        "name": "gain",
+        "offset": 4,
+        "size": 4
+      },
+      {
+        "kind": "float",
+        "name": "attack_ms",
+        "offset": 8,
+        "size": 4
+      },
+      {
+        "kind": "float",
+        "name": "decay_ms",
+        "offset": 12,
+        "size": 4
+      },
+      {
+        "kind": "float",
+        "name": "sustain",
+        "offset": 16,
+        "size": 4
+      },
+      {
+        "kind": "float",
+        "name": "release_ms",
+        "offset": 20,
+        "size": 4
+      },
+      {
+        "kind": "signed",
+        "name": "polyphony",
+        "offset": 24,
+        "size": 4
+      }
+    ],
+    "size": 28
+  },
   "SonareEngineBus": {
     "align": 4,
     "fields": [
@@ -1942,6 +1990,36 @@
       }
     ],
     "size": 32
+  },
+  "SonareEngineSf2InstrumentConfig": {
+    "align": 4,
+    "fields": [
+      {
+        "kind": "signed",
+        "name": "struct_version",
+        "offset": 0,
+        "size": 4
+      },
+      {
+        "kind": "float",
+        "name": "gain",
+        "offset": 4,
+        "size": 4
+      },
+      {
+        "kind": "signed",
+        "name": "polyphony",
+        "offset": 8,
+        "size": 4
+      },
+      {
+        "kind": "signed",
+        "name": "prefer_model_for_modeled_families",
+        "offset": 12,
+        "size": 4
+      }
+    ],
+    "size": 16
   },
   "SonareEngineTelemetry": {
     "align": 8,
@@ -2952,6 +3030,12 @@
         "kind": "signed",
         "name": "latency_samples",
         "offset": 40,
+        "size": 4
+      },
+      {
+        "kind": "signed",
+        "name": "loudness_target_limited",
+        "offset": 44,
         "size": 4
       }
     ],

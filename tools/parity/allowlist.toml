@@ -234,6 +234,11 @@ node = [
   # names. Facades expose the accepted string union on synth constructors, not
   # this integer conversion helper.
   "synth_builtin_waveform_from_name",
+  # Name-to-index converter for the assistant's targetPlatform. Node takes the
+  # delivery target by name and resolves it against the core table directly, so
+  # it never calls this; the index is the C-ABI transport form. The accepted set
+  # is exposed as masteringPlatformNames.
+  "mastering_platform_from_name",
 ]
 wasm = [
   "detect_chords_ex",
@@ -303,6 +308,9 @@ wasm = [
   "realtime_voice_changer_process_planar_stereo",
   # See the Node note: this C enum parser is internal to typed facade inputs.
   "synth_builtin_waveform_from_name",
+  # See the Node note: WASM also takes the delivery target by name and resolves
+  # it against the core table, and exposes the set as masteringPlatformNames.
+  "mastering_platform_from_name",
 ]
 python = [
   "detect_chords_ex",
@@ -360,6 +368,10 @@ python = [
   "pitch_correction_config_default",
   # See the JS notes: Python resolves typed waveform strings internally.
   "synth_builtin_waveform_from_name",
+  # Called by the Python facade to turn the targetPlatform name into the index
+  # the numeric param transport carries; the public Python API takes the name,
+  # and mastering_platform_names() exposes the accepted set.
+  "mastering_platform_from_name",
 ]
 
 # ---------------------------------------------------------------------------
@@ -560,13 +572,7 @@ keys = ["mel_to_stft", "mel_to_audio", "mfcc_to_mel", "mfcc_to_audio"]
 # type declaration is a real TS break worth surfacing.
 # ---------------------------------------------------------------------------
 [wasm_internal]
-# projectAbiVersion: the embind free function is reachable from TypeScript via
-# the `ProjectModule` cast in index.ts (projectModule().projectAbiVersion(),
-# guarded by a runtime `typeof candidate.projectAbiVersion !== 'function'`
-# check). The generated `SonareModule` type only gains `projectAbiVersion` /
-# `Project` after a WASM rebuild regenerates sonare.js.d.ts, so the facade
-# deliberately does not depend on that type for the arrangement surface.
-names = ["projectAbiVersion"]
+names = []
 
 # ---------------------------------------------------------------------------
 # [tuning] — central knobs. Leave empty to use the built-in defaults in

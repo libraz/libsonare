@@ -78,10 +78,18 @@ EXCLUDED_STRUCTS: frozenset[str] = frozenset()
 
 
 def collect_structs() -> dict[str, list[str]]:
-    """Map each mirrored struct name to its ordered ctypes field names.
+    """Map each mirrored C struct name to its ordered ctypes field names.
 
     Re-exports (the same class imported into several modules) collapse to one
     entry. Two *different* classes sharing a name is a hard error.
+
+    A mirror may be passed to more than one C typedef -- the engine-side
+    instrument configs duplicate the project-side ones field for field, and the
+    binding reuses a single ctypes class for both. Keying the probe on the
+    ctypes class name alone would leave every such alias unprobed, so a mirror
+    declares the extra C names in ``_c_aliases_`` and each gets its own row.
+    The C compiler still validates every name: an alias that stops existing, or
+    whose fields diverge, fails the probe compile.
     """
     sys.path.insert(0, str(PY_SRC))
     seen: dict[str, type[ctypes.Structure]] = {}
@@ -106,7 +114,11 @@ def collect_structs() -> dict[str, list[str]]:
                     raise SystemExit(f"two distinct ctypes Structures named {name!r}")
                 continue
             seen[name] = attr
-            fields[name] = [field_name for field_name, *_ in attr._fields_]
+            field_names = [field_name for field_name, *_ in attr._fields_]
+            for c_name in (name, *getattr(attr, "_c_aliases_", ())):
+                if c_name in fields:
+                    raise SystemExit(f"duplicate C struct name in the probe: {c_name!r}")
+                fields[c_name] = field_names
     if not fields:
         raise SystemExit("no ctypes Structure mirrors found")
     return dict(sorted(fields.items()))

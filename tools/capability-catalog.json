@@ -1720,7 +1720,7 @@
           "unit": "referenceSamples@29761Hz"
         }
       ],
-      "realtimeCost": "low",
+      "realtimeCost": "moderate",
       "realtimeInsertable": true,
       "stereoOnly": false,
       "tailSamples": 86752
@@ -1826,7 +1826,7 @@
           "unit": "referenceSamples@29761Hz"
         }
       ],
-      "realtimeCost": "low",
+      "realtimeCost": "moderate",
       "realtimeInsertable": true,
       "stereoOnly": false,
       "tailSamples": 86752
@@ -1849,7 +1849,7 @@
           "unit": null
         }
       ],
-      "realtimeCost": "low",
+      "realtimeCost": "moderate",
       "realtimeInsertable": true,
       "stereoOnly": false,
       "tailSamples": 51217
@@ -2218,7 +2218,7 @@
           "id": 10,
           "max": null,
           "min": null,
-          "name": "band0.lookaheadMs",
+          "name": "band0.detectorDelayMs",
           "rtSafe": true,
           "type": "number",
           "unit": "ms"
@@ -2328,7 +2328,7 @@
           "id": 21,
           "max": null,
           "min": null,
-          "name": "band1.lookaheadMs",
+          "name": "band1.detectorDelayMs",
           "rtSafe": true,
           "type": "number",
           "unit": "ms"
@@ -2438,7 +2438,7 @@
           "id": 32,
           "max": null,
           "min": null,
-          "name": "band2.lookaheadMs",
+          "name": "band2.detectorDelayMs",
           "rtSafe": true,
           "type": "number",
           "unit": "ms"
@@ -2548,7 +2548,7 @@
           "id": 43,
           "max": null,
           "min": null,
-          "name": "band3.lookaheadMs",
+          "name": "band3.detectorDelayMs",
           "rtSafe": true,
           "type": "number",
           "unit": "ms"
@@ -2658,7 +2658,7 @@
           "id": 54,
           "max": null,
           "min": null,
-          "name": "band4.lookaheadMs",
+          "name": "band4.detectorDelayMs",
           "rtSafe": true,
           "type": "number",
           "unit": "ms"
@@ -2768,7 +2768,7 @@
           "id": 65,
           "max": null,
           "min": null,
-          "name": "band5.lookaheadMs",
+          "name": "band5.detectorDelayMs",
           "rtSafe": true,
           "type": "number",
           "unit": "ms"
@@ -2878,7 +2878,7 @@
           "id": 76,
           "max": null,
           "min": null,
-          "name": "band6.lookaheadMs",
+          "name": "band6.detectorDelayMs",
           "rtSafe": true,
           "type": "number",
           "unit": "ms"
@@ -2988,7 +2988,7 @@
           "id": 87,
           "max": null,
           "min": null,
-          "name": "band7.lookaheadMs",
+          "name": "band7.detectorDelayMs",
           "rtSafe": true,
           "type": "number",
           "unit": "ms"
@@ -4783,7 +4783,7 @@
           "unit": null
         }
       ],
-      "realtimeCost": "low",
+      "realtimeCost": "moderate",
       "realtimeInsertable": true,
       "stereoOnly": false,
       "tailSamples": 0
@@ -8100,7 +8100,7 @@
       "channelPolicy": "multichannel",
       "id": "maximizer.maximizer",
       "kind": "realtime",
-      "latencySamples": 0,
+      "latencySamples": 48,
       "params": [
         {
           "default": null,
@@ -8143,7 +8143,7 @@
       "channelPolicy": "multichannel",
       "id": "maximizer.softKneeMax",
       "kind": "realtime",
-      "latencySamples": 0,
+      "latencySamples": 48,
       "params": [
         {
           "default": null,
@@ -11644,7 +11644,7 @@
           "unit": null
         }
       ],
-      "realtimeCost": "low",
+      "realtimeCost": "high",
       "realtimeInsertable": true,
       "stereoOnly": false,
       "tailSamples": 0
@@ -12154,7 +12154,7 @@
           "unit": "dB"
         }
       ],
-      "realtimeCost": "low",
+      "realtimeCost": "moderate",
       "realtimeInsertable": true,
       "stereoOnly": false,
       "tailSamples": 0
