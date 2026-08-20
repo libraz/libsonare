@@ -128,34 +128,47 @@ void OnsetAnalyzer::detect_onsets() {
   }
 }
 
+int OnsetAnalyzer::frame_for_time(float time) const {
+  // Round rather than truncate: an onset time is `frame * hop / sr` evaluated in
+  // float, and truncating that product back can land one frame early (the
+  // quotient comes out a hair below the integer). Rounding recovers the frame
+  // the onset was actually detected at, which is what both this accessor and
+  // the backtracking search need.
+  const double frame =
+      static_cast<double>(time) * static_cast<double>(sr_) / static_cast<double>(hop_length_);
+  return static_cast<int>(std::lround(frame));
+}
+
 void OnsetAnalyzer::backtrack_onsets() {
-  if (onset_strength_.empty()) {
+  if (onset_strength_.empty() || onsets_.empty()) {
     return;
   }
   const int last_frame = static_cast<int>(onset_strength_.size()) - 1;
-  for (auto& onset : onsets_) {
-    int frame =
-        static_cast<int>(onset.time * static_cast<float>(sr_) / static_cast<float>(hop_length_));
-    // Clamp the derived frame into range: rounding at the final onset can push it
-    // to (or past) onset_strength_.size(), which would read out of bounds.
-    frame = std::clamp(frame, 0, last_frame);
 
-    // Find local minimum before onset
-    int best_frame = frame;
-    float min_val = onset_strength_[frame];
+  std::vector<int> frames;
+  frames.reserve(onsets_.size());
+  for (const auto& onset : onsets_) {
+    // Clamp the derived frame into range: a time at the final onset can land on
+    // (or past) onset_strength_.size(), which would read out of bounds.
+    frames.push_back(std::clamp(frame_for_time(onset.time), 0, last_frame));
+  }
 
-    for (int i = frame - 1; i >= std::max(0, frame - config_.backtrack_range); --i) {
-      if (onset_strength_[i] < min_val) {
-        min_val = onset_strength_[i];
-        best_frame = i;
-      } else if (onset_strength_[i] > min_val * 1.5f) {
-        // Stop if we start going up significantly
-        break;
-      }
-    }
+  // One backtracking rule for the whole project. onset_backtrack() stops by
+  // comparing neighbouring envelope samples, so it is invariant to the offset
+  // and scale of the envelope it is handed. That matters here because this
+  // analyzer detrends (see the constructor), which subtracts the mean and
+  // leaves most of the envelope negative: a stopping rule that compares a
+  // sample against a *scaled* running minimum moves its threshold the wrong way
+  // once that minimum is negative, and stops at the first ripple instead of the
+  // attack.
+  const std::vector<int> backtracked = onset_backtrack(frames, onset_strength_);
 
-    // Update onset time
-    onset.time = static_cast<float>(best_frame * hop_length_) / static_cast<float>(sr_);
+  const int max_travel = std::max(0, config_.backtrack_range);
+  for (size_t i = 0; i < onsets_.size() && i < backtracked.size(); ++i) {
+    // backtrack_range bounds how far an onset may travel; it is a limit on the
+    // search, not a stopping rule of its own.
+    const int limited = std::max(backtracked[i], frames[i] - max_travel);
+    onsets_[i].time = static_cast<float>(limited * hop_length_) / static_cast<float>(sr_);
   }
 }
 
@@ -172,9 +185,7 @@ std::vector<int> OnsetAnalyzer::onset_frames() const {
   std::vector<int> frames;
   frames.reserve(onsets_.size());
   for (const auto& onset : onsets_) {
-    int frame =
-        static_cast<int>(onset.time * static_cast<float>(sr_) / static_cast<float>(hop_length_));
-    frames.push_back(frame);
+    frames.push_back(frame_for_time(onset.time));
   }
   return frames;
 }

@@ -29,6 +29,7 @@
 #include "core/spectrum.h"
 #include "feature/chroma.h"
 #include "feature/mel_spectrogram.h"
+#include "util/validated.h"
 
 namespace sonare {
 
@@ -95,6 +96,15 @@ struct MusicAnalyzerConfig {
   bool detect_chord_inversions = false;  ///< Estimate slash-chord bass notes in unified analysis
 };
 
+/// @brief Validation rules for @ref MusicAnalyzerConfig.
+/// @details Found by argument-dependent lookup from @ref Validated, which is the
+///          only construction path for a checked config. @ref MusicAnalyzer holds
+///          one, so every surface that builds a config — the C ABI, WASM, and any
+///          future binding — is rejected on the same inputs without repeating the
+///          rules.
+/// @throws SonareException(InvalidParameter) for a non-finite or out-of-range field.
+void validate_config(const MusicAnalyzerConfig& config);
+
 /// @brief Unified music analysis facade.
 /// @details Provides lazy access to all analysis modules and a combined analysis result.
 /// Each analyzer is created on first access and cached for subsequent use.
@@ -102,7 +112,9 @@ class MusicAnalyzer {
  public:
   /// @brief Constructs music analyzer from audio.
   /// @param audio Input audio
-  /// @param config Analysis configuration
+  /// @param config Analysis configuration, validated before it is stored
+  /// @throws SonareException(InvalidParameter) when @p config is rejected by
+  ///         @ref validate_config, or when @p audio is empty.
   explicit MusicAnalyzer(const Audio& audio,
                          const MusicAnalyzerConfig& config = MusicAnalyzerConfig());
 
@@ -181,7 +193,7 @@ class MusicAnalyzer {
   const Audio& audio() const { return audio_; }
 
   /// @brief Returns the configuration.
-  const MusicAnalyzerConfig& config() const { return config_; }
+  const MusicAnalyzerConfig& config() const { return config_.get(); }
 
  private:
   /// @brief Reports progress to callback if set.
@@ -198,7 +210,7 @@ class MusicAnalyzer {
   Audio audio_;
   Audio analysis_audio_;  ///< Downsampled audio for spectral analysis (22050 Hz)
   int analysis_sr_;       ///< Sample rate of analysis_audio_
-  MusicAnalyzerConfig config_;
+  Validated<MusicAnalyzerConfig> config_;
   ProgressCallback progress_callback_;
   CancelCallback cancel_callback_;
 

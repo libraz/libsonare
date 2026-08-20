@@ -12,7 +12,11 @@ namespace sonare {
 
 struct ProgressionPattern {
   std::string name;
-  std::vector<std::pair<int, int>> chords;  ///< (scale degree, quality) pairs
+  /// @brief (semitones above the key root, quality) pairs. The first element is
+  ///        a semitone offset and not a scale degree, so the subdominant is 5
+  ///        rather than 4. Quality follows @c diatonic_triads: 0 major, 1 minor,
+  ///        2 diminished.
+  std::vector<std::pair<int, int>> chords;
 };
 
 /// @brief Common pop/J-pop/blues progression templates as scale-degree chords.

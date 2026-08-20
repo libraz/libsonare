@@ -2,6 +2,7 @@
 
 #include <Eigen/Core>
 #include <algorithm>
+#include <climits>
 #include <cmath>
 
 #include "core/spectrum.h"
@@ -32,19 +33,39 @@ void normalize_feature(float* feature, int n) {
   }
 }
 
-// Largest SSM side length kept at full per-hop resolution. Past this the
-// checkerboard kernel's `row * n_frames_ + col` int index overflows (UB) and the
-// matrix grows without bound, so longer inputs are pooled (see below). Inputs at
-// or below this length are never pooled, so their behavior is unchanged.
-constexpr int kMaxSsmFrames = 46340;  // floor(sqrt(INT_MAX))
-
-// When an input exceeds kMaxSsmFrames, the feature grid is mean-pooled down to at
-// most this many frames. This both bounds the SSM memory (~kPooledTargetFrames^2
-// floats ≈ 256 MB) and keeps the int index well clear of overflow, trading time
-// resolution for the ability to analyze long-form audio (DJ sets, podcasts).
-constexpr int kPooledTargetFrames = 8192;
+/// @brief Stored half-bandwidth of the self-similarity band.
+/// @details The checkerboard kernel centred on frame c reads ssm(c + i, c + j)
+/// for i and j in [-half, half), so `row - col` spans [-(2 * half - 1),
+/// 2 * half - 1] and nothing outside that band is reachable.
+int band_radius(int kernel_size) {
+  const int half = std::max(kernel_size, 0) / 2;
+  return half > 0 ? 2 * half - 1 : 0;
+}
 
 }  // namespace
+
+size_t boundary_ssm_band_width(int kernel_size) {
+  return 2u * static_cast<size_t>(band_radius(kernel_size)) + 1u;
+}
+
+int boundary_pooled_target_frames(int kernel_size) {
+  const size_t per_frame = boundary_ssm_band_width(kernel_size) * sizeof(float);
+  const size_t frames = kBoundarySsmBudgetBytes / per_frame;  // per_frame >= sizeof(float)
+  return frames > 0 ? static_cast<int>(std::min<size_t>(frames, INT_MAX)) : 1;
+}
+
+int boundary_pooling_stride(int n_frames, int kernel_size) {
+  const int target = boundary_pooled_target_frames(kernel_size);
+  if (n_frames <= target) return 1;
+  // Ceil-divide without the `n + target - 1` form, which would overflow for a
+  // frame count near INT_MAX.
+  return 1 + (n_frames - 1) / target;
+}
+
+int boundary_ssm_frames(int n_frames, int kernel_size) {
+  if (n_frames <= 0) return 0;
+  return 1 + (n_frames - 1) / boundary_pooling_stride(n_frames, kernel_size);
+}
 
 BoundaryDetector::BoundaryDetector(const Audio& audio, const BoundaryConfig& config)
     : n_frames_(0),
@@ -194,12 +215,11 @@ void BoundaryDetector::combine_features(const std::vector<float>& mfcc_features,
 }
 
 void BoundaryDetector::downsample_features() {
-  if (n_frames_ <= kMaxSsmFrames || n_features_ <= 0) return;
+  if (n_features_ <= 0) return;
 
-  // Ceil-divide so the pooled frame count never exceeds kPooledTargetFrames.
-  const int stride = (n_frames_ + kPooledTargetFrames - 1) / kPooledTargetFrames;
+  const int stride = boundary_pooling_stride(n_frames_, config_.kernel_size);
   if (stride <= 1) return;
-  const int reduced = (n_frames_ + stride - 1) / stride;
+  const int reduced = boundary_ssm_frames(n_frames_, config_.kernel_size);
 
   std::vector<float> pooled(static_cast<size_t>(reduced) * static_cast<size_t>(n_features_), 0.0f);
   for (int r = 0; r < reduced; ++r) {
@@ -229,27 +249,49 @@ void BoundaryDetector::downsample_features() {
 void BoundaryDetector::compute_self_similarity() {
   if (n_frames_ == 0) return;
 
-  // The SSM is an n_frames_ x n_frames_ matrix indexed with the int expression
-  // `row * n_frames_ + col`, which overflows int (UB) past ~46340 frames. Very
-  // long inputs (e.g. >~18 min at the default hop=512/sr=22050) cross this bound,
-  // so instead of failing we mean-pool the feature grid down to the cap: the
-  // matrix size (and memory) stays bounded and structural analysis still returns
-  // a coarser-resolution result. Inputs at or below the cap are untouched.
+  // compute_checkerboard_kernel is the only reader of the self-similarity matrix
+  // and only ever touches a band of diagonals around it, so only that band is
+  // stored: the working set is O(n_frames_ * band width) instead of
+  // O(n_frames_^2). Pooling remains as a budget backstop for a pathological
+  // length; for every realistic input it is a no-op and full time resolution is
+  // preserved.
   downsample_features();
 
-  ssm_.resize(static_cast<size_t>(n_frames_) * static_cast<size_t>(n_frames_));
+  // Clamp to what can actually be indexed. Whenever the kernel guard admits any
+  // centre at all we have n_frames_ > 2 * half_size > band_radius, so this never
+  // binds for a configuration that reads the band; it only stops an absurd
+  // kernel_size from sizing the allocation.
+  band_radius_ = std::min(band_radius(config_.kernel_size), std::max(n_frames_ - 1, 0));
+  const size_t width = 2u * static_cast<size_t>(band_radius_) + 1u;
 
-  // Features are already L2-normalized, so cosine similarity = dot product
-  // SSM = features @ features^T
-  // features: [n_frames x n_features] (row-major)
-  // result: [n_frames x n_frames] (row-major)
-  Eigen::Map<const Eigen::Matrix<float, Eigen::Dynamic, Eigen::Dynamic, Eigen::RowMajor>>
-      features_map(features_.data(), n_frames_, n_features_);
-  Eigen::Map<Eigen::Matrix<float, Eigen::Dynamic, Eigen::Dynamic, Eigen::RowMajor>> ssm_map(
-      ssm_.data(), n_frames_, n_frames_);
+  // Budget backstop: pooling has already brought the frame count within the band
+  // budget, so fail loudly rather than allocate past it if that ever stops holding.
+  SONARE_CHECK(static_cast<size_t>(n_frames_) * width * sizeof(float) <= kBoundarySsmBudgetBytes,
+               ErrorCode::InvalidState);
 
-  // BLAS-optimized: SSM = features * features^T
-  ssm_map.noalias() = features_map * features_map.transpose();
+  ssm_band_.assign(static_cast<size_t>(n_frames_) * width, 0.0f);
+
+  // A configuration with no feature dimensions leaves the band at zero, which is
+  // what the full-matrix product produced for it too. Return before indexing
+  // features_, which is empty in that case.
+  if (n_features_ <= 0) return;
+
+  // Features are already L2-normalized, so cosine similarity is a plain dot
+  // product. Row r stores ssm(r, col) for col in [r - band_radius_, r + band_radius_]
+  // at offset (col - r + band_radius_); entries clipped by the ends stay zero and
+  // are never read.
+  for (int row = 0; row < n_frames_; ++row) {
+    Eigen::Map<const Eigen::VectorXf> lhs(
+        &features_[static_cast<size_t>(row) * static_cast<size_t>(n_features_)], n_features_);
+    const int col_begin = std::max(0, row - band_radius_);
+    const int col_end = std::min(n_frames_ - 1, row + band_radius_);
+    float* dst = &ssm_band_[static_cast<size_t>(row) * width];
+    for (int col = col_begin; col <= col_end; ++col) {
+      Eigen::Map<const Eigen::VectorXf> rhs(
+          &features_[static_cast<size_t>(col) * static_cast<size_t>(n_features_)], n_features_);
+      dst[col - row + band_radius_] = lhs.dot(rhs);
+    }
+  }
 }
 
 float BoundaryDetector::compute_checkerboard_kernel(int center) const {
@@ -263,14 +305,19 @@ float BoundaryDetector::compute_checkerboard_kernel(int center) const {
   // Compute checkerboard kernel response
   // The kernel has +1 in upper-left and lower-right quadrants
   // and -1 in upper-right and lower-left quadrants
+  const size_t width = 2u * static_cast<size_t>(band_radius_) + 1u;
   float sum = 0.0f;
 
   for (int i = -half_size; i < half_size; ++i) {
+    int row = center + i;
+    // Every (row, col) this loop touches satisfies |row - col| = |i - j| <=
+    // 2 * half_size - 1 == band_radius_, so it lies inside the stored band.
+    const float* band_row = &ssm_band_[static_cast<size_t>(row) * width];
+
     for (int j = -half_size; j < half_size; ++j) {
-      int row = center + i;
       int col = center + j;
 
-      float ssm_val = ssm_[static_cast<size_t>(row) * static_cast<size_t>(n_frames_) + col];
+      float ssm_val = band_row[col - row + band_radius_];
 
       // Checkerboard pattern: + - / - +
       int sign = ((i < 0 && j < 0) || (i >= 0 && j >= 0)) ? 1 : -1;

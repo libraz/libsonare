@@ -11,6 +11,7 @@
 #include "filters/iir.h"
 #include "util/constants.h"
 #include "util/exception.h"
+#include "util/numeric_validation.h"
 
 #ifndef __EMSCRIPTEN__
 #include <future>
@@ -18,8 +19,35 @@
 
 namespace sonare {
 
+void validate_config(const MusicAnalyzerConfig& config) {
+  // A real-valued FFT of an odd size has no n_fft/2 + 1 bin layout, so an odd
+  // size is rejected rather than silently rounded.
+  SONARE_CHECK_MSG(config.n_fft >= 2 && (config.n_fft & 1) == 0, ErrorCode::InvalidParameter,
+                   "MusicAnalyzerConfig: nFft must be an even value of at least 2");
+  SONARE_CHECK_MSG(config.hop_length > 0, ErrorCode::InvalidParameter,
+                   "MusicAnalyzerConfig: hopLength must be positive");
+  SONARE_CHECK_MSG(numeric::finite_positive(config.bpm_min), ErrorCode::InvalidParameter,
+                   "MusicAnalyzerConfig: bpmMin must be finite and positive");
+  SONARE_CHECK_MSG(numeric::finite(config.bpm_max) && config.bpm_max >= config.bpm_min,
+                   ErrorCode::InvalidParameter,
+                   "MusicAnalyzerConfig: bpmMax must be finite and at least bpmMin");
+  SONARE_CHECK_MSG(numeric::finite_positive(config.start_bpm), ErrorCode::InvalidParameter,
+                   "MusicAnalyzerConfig: startBpm must be finite and positive");
+  SONARE_CHECK_MSG(numeric::finite_non_negative(config.chroma_highpass_hz),
+                   ErrorCode::InvalidParameter,
+                   "MusicAnalyzerConfig: chromaHighpassHz must be finite and non-negative");
+  SONARE_CHECK_MSG(config.chroma_hop_multiplier > 0, ErrorCode::InvalidParameter,
+                   "MusicAnalyzerConfig: chromaHopMultiplier must be positive");
+  // A non-positive beam width disables the HMM beam cut instead of erroring,
+  // which turns chord smoothing into an order-of-magnitude slower full search.
+  SONARE_CHECK_MSG(config.chord_hmm_beam_width > 0, ErrorCode::InvalidParameter,
+                   "MusicAnalyzerConfig: chordHmmBeamWidth must be positive");
+}
+
 MusicAnalyzer::MusicAnalyzer(const Audio& audio, const MusicAnalyzerConfig& config)
-    : audio_(audio), config_(config), progress_callback_(nullptr) {
+    : audio_(audio),
+      config_(Validated<MusicAnalyzerConfig>::make(config)),
+      progress_callback_(nullptr) {
   SONARE_CHECK(!audio.empty(), ErrorCode::InvalidParameter);
 
   // Downsample to 22050 Hz for spectral analysis if sample rate is higher
@@ -63,14 +91,14 @@ std::string MusicAnalyzer::form() { return section_analyzer().form(); }
 BpmAnalyzer& MusicAnalyzer::bpm_analyzer() {
   std::call_once(bpm_analyzer_once_, [this]() {
     BpmConfig bpm_config;
-    bpm_config.bpm_min = config_.bpm_min;
-    bpm_config.bpm_max = config_.bpm_max;
-    bpm_config.start_bpm = config_.start_bpm;
-    bpm_config.n_fft = config_.n_fft;
-    bpm_config.hop_length = config_.hop_length;
+    bpm_config.bpm_min = config_->bpm_min;
+    bpm_config.bpm_max = config_->bpm_max;
+    bpm_config.start_bpm = config_->start_bpm;
+    bpm_config.n_fft = config_->n_fft;
+    bpm_config.hop_length = config_->hop_length;
     // Use cached onset strength to avoid recomputation
     bpm_analyzer_ = std::make_unique<BpmAnalyzer>(onset_strength(), analysis_sr_,
-                                                  config_.hop_length, bpm_config);
+                                                  config_->hop_length, bpm_config);
   });
   return *bpm_analyzer_;
 }
@@ -78,7 +106,7 @@ BpmAnalyzer& MusicAnalyzer::bpm_analyzer() {
 KeyAnalyzer& MusicAnalyzer::key_analyzer() {
   std::call_once(key_analyzer_once_, [this]() {
     KeyConfig key_config;
-    key_config.hop_length = config_.hop_length;
+    key_config.hop_length = config_->hop_length;
     // Build the key analyzer from the analysis audio (not a pre-computed chroma)
     // so the full refinement runs: the auto candidate search, the 60 Hz harmonic
     // high-pass fallback, and the loudness-weighted chroma refinement. Feeding a
@@ -91,14 +119,14 @@ KeyAnalyzer& MusicAnalyzer::key_analyzer() {
 BeatAnalyzer& MusicAnalyzer::beat_analyzer() {
   std::call_once(beat_analyzer_once_, [this]() {
     BeatConfig beat_config;
-    beat_config.bpm_min = config_.bpm_min;
-    beat_config.bpm_max = config_.bpm_max;
-    beat_config.start_bpm = config_.start_bpm;
-    beat_config.n_fft = config_.n_fft;
-    beat_config.hop_length = config_.hop_length;
+    beat_config.bpm_min = config_->bpm_min;
+    beat_config.bpm_max = config_->bpm_max;
+    beat_config.start_bpm = config_->start_bpm;
+    beat_config.n_fft = config_->n_fft;
+    beat_config.hop_length = config_->hop_length;
     // Use cached onset strength to avoid recomputation
     beat_analyzer_ = std::make_unique<BeatAnalyzer>(onset_strength(), analysis_sr_,
-                                                    config_.hop_length, beat_config);
+                                                    config_->hop_length, beat_config);
     beat_analyzer_->refine_downbeats(beat_low_frequency_energy());
   });
   return *beat_analyzer_;
@@ -107,14 +135,14 @@ BeatAnalyzer& MusicAnalyzer::beat_analyzer() {
 ChordAnalyzer& MusicAnalyzer::chord_analyzer() {
   std::call_once(chord_analyzer_once_, [this]() {
     ChordConfig chord_config;
-    chord_config.n_fft = config_.n_fft;
-    chord_config.hop_length = config_.hop_length;
-    chord_config.use_triads_only = config_.use_triads_only;
+    chord_config.n_fft = config_->n_fft;
+    chord_config.hop_length = config_->hop_length;
+    chord_config.use_triads_only = config_->use_triads_only;
     chord_config.use_beat_sync = true;
-    chord_config.use_hmm = config_.use_chord_hmm;
-    chord_config.hmm_beam_width = config_.chord_hmm_beam_width;
-    chord_config.detect_inversions = config_.detect_chord_inversions;
-    if (config_.use_chord_key_context) {
+    chord_config.use_hmm = config_->use_chord_hmm;
+    chord_config.hmm_beam_width = config_->chord_hmm_beam_width;
+    chord_config.detect_inversions = config_->detect_chord_inversions;
+    if (config_->use_chord_key_context) {
       const Key key = key_analyzer().key();
       chord_config.use_key_context = true;
       chord_config.key_root = key.root;
@@ -131,7 +159,7 @@ ChordAnalyzer& MusicAnalyzer::chord_analyzer() {
       // Match harmonic_chroma()'s hop so both chromagrams share one frame
       // space: the chord segments are expressed in harmonic-chroma frames and
       // are used directly to slice the bass chromagram.
-      bass_config.cqt.hop_length = config_.hop_length * config_.chroma_hop_multiplier;
+      bass_config.cqt.hop_length = config_->hop_length * config_->chroma_hop_multiplier;
       chord_analyzer_ = std::make_unique<ChordAnalyzer>(
           harmonic_chroma(), beat_times, bass_chroma(analysis_audio_, bass_config), chord_config);
     } else {
@@ -148,11 +176,11 @@ ChordAnalyzer& MusicAnalyzer::chord_analyzer() {
 OnsetAnalyzer& MusicAnalyzer::onset_analyzer() {
   std::call_once(onset_analyzer_once_, [this]() {
     OnsetDetectConfig onset_config;
-    onset_config.n_fft = config_.n_fft;
-    onset_config.hop_length = config_.hop_length;
+    onset_config.n_fft = config_->n_fft;
+    onset_config.hop_length = config_->hop_length;
     // Use cached onset strength to avoid recomputation
     onset_analyzer_ = std::make_unique<OnsetAnalyzer>(onset_strength(), analysis_sr_,
-                                                      config_.hop_length, onset_config);
+                                                      config_->hop_length, onset_config);
   });
   return *onset_analyzer_;
 }
@@ -160,7 +188,7 @@ OnsetAnalyzer& MusicAnalyzer::onset_analyzer() {
 DynamicsAnalyzer& MusicAnalyzer::dynamics_analyzer() {
   std::call_once(dynamics_analyzer_once_, [this]() {
     DynamicsConfig dynamics_config;
-    dynamics_config.hop_length = config_.hop_length;
+    dynamics_config.hop_length = config_->hop_length;
     dynamics_analyzer_ = std::make_unique<DynamicsAnalyzer>(audio_, dynamics_config);
   });
   return *dynamics_analyzer_;
@@ -169,11 +197,11 @@ DynamicsAnalyzer& MusicAnalyzer::dynamics_analyzer() {
 RhythmAnalyzer& MusicAnalyzer::rhythm_analyzer() {
   std::call_once(rhythm_analyzer_once_, [this]() {
     RhythmConfig rhythm_config;
-    rhythm_config.bpm_min = config_.bpm_min;
-    rhythm_config.bpm_max = config_.bpm_max;
-    rhythm_config.start_bpm = config_.start_bpm;
-    rhythm_config.n_fft = config_.n_fft;
-    rhythm_config.hop_length = config_.hop_length;
+    rhythm_config.bpm_min = config_->bpm_min;
+    rhythm_config.bpm_max = config_->bpm_max;
+    rhythm_config.start_bpm = config_->start_bpm;
+    rhythm_config.n_fft = config_->n_fft;
+    rhythm_config.hop_length = config_->hop_length;
     // Use cached beat_analyzer to avoid recomputation
     rhythm_analyzer_ = std::make_unique<RhythmAnalyzer>(beat_analyzer(), rhythm_config);
   });
@@ -183,8 +211,8 @@ RhythmAnalyzer& MusicAnalyzer::rhythm_analyzer() {
 TimbreAnalyzer& MusicAnalyzer::timbre_analyzer() {
   std::call_once(timbre_analyzer_once_, [this]() {
     TimbreConfig timbre_config;
-    timbre_config.n_fft = config_.n_fft;
-    timbre_config.hop_length = config_.hop_length;
+    timbre_config.n_fft = config_->n_fft;
+    timbre_config.hop_length = config_->hop_length;
     // Use cached spectrogram and mel spectrogram to avoid recomputation
     timbre_analyzer_ =
         std::make_unique<TimbreAnalyzer>(spectrogram(), mel_spectrogram(), timbre_config);
@@ -195,7 +223,7 @@ TimbreAnalyzer& MusicAnalyzer::timbre_analyzer() {
 MelodyAnalyzer& MusicAnalyzer::melody_analyzer() {
   std::call_once(melody_analyzer_once_, [this]() {
     MelodyConfig melody_config;
-    melody_config.hop_length = config_.hop_length;
+    melody_config.hop_length = config_->hop_length;
     melody_analyzer_ = std::make_unique<MelodyAnalyzer>(audio_, melody_config);
   });
   return *melody_analyzer_;
@@ -204,8 +232,8 @@ MelodyAnalyzer& MusicAnalyzer::melody_analyzer() {
 SectionAnalyzer& MusicAnalyzer::section_analyzer() {
   std::call_once(section_analyzer_once_, [this]() {
     SectionConfig section_config;
-    section_config.n_fft = config_.n_fft;
-    section_config.hop_length = config_.hop_length;
+    section_config.n_fft = config_->n_fft;
+    section_config.hop_length = config_->hop_length;
     // Run section descriptors on the same analysis-rate signal the boundaries
     // were detected on (analysis_audio_ at kAnalysisSampleRate), not the native
     // input. This keeps the whole music-analysis pipeline on one sample rate and
@@ -220,8 +248,8 @@ SectionAnalyzer& MusicAnalyzer::section_analyzer() {
 BoundaryDetector& MusicAnalyzer::boundary_detector() {
   std::call_once(boundary_detector_once_, [this]() {
     BoundaryConfig boundary_config;
-    boundary_config.n_fft = config_.n_fft;
-    boundary_config.hop_length = config_.hop_length;
+    boundary_config.n_fft = config_->n_fft;
+    boundary_config.hop_length = config_->hop_length;
     // Use cached mel_spectrogram and chroma to avoid recomputation
     boundary_detector_ = std::make_unique<BoundaryDetector>(mel_spectrogram(), chroma(),
                                                             analysis_sr_, boundary_config);
@@ -231,8 +259,8 @@ BoundaryDetector& MusicAnalyzer::boundary_detector() {
 
 const Spectrogram& MusicAnalyzer::spectrogram() {
   std::call_once(spectrogram_once_, [this]() {
-    spectrogram_ = std::make_unique<Spectrogram>(
-        Spectrogram::compute(analysis_audio_, make_stft_config(config_.n_fft, config_.hop_length)));
+    spectrogram_ = std::make_unique<Spectrogram>(Spectrogram::compute(
+        analysis_audio_, make_stft_config(config_->n_fft, config_->hop_length)));
   });
   return *spectrogram_;
 }
@@ -257,25 +285,25 @@ const Chroma& MusicAnalyzer::harmonic_chroma() {
     // - Optional bass-weighted computation (use_bass_weighted)
     // - Reduced CQT bins for bass (36 bins = 3 octaves)
 
-    int chroma_hop = config_.hop_length * config_.chroma_hop_multiplier;
+    int chroma_hop = config_->hop_length * config_->chroma_hop_multiplier;
     const Audio& analysis_audio = analysis_audio_;
     int analysis_sr = analysis_sr_;
 
     // Step 1: Apply HPSS once with margin=3.0 to extract harmonic content
     Audio harmonic_audio = analysis_audio;
-    if (config_.use_hpss) {
+    if (config_->use_hpss) {
       HpssConfig hpss_config;
       hpss_config.margin_harmonic = 3.0f;
       hpss_config.margin_percussive = 3.0f;
 
       harmonic_audio = harmonic(analysis_audio, hpss_config,
-                                make_stft_config(config_.n_fft, config_.hop_length));
+                                make_stft_config(config_->n_fft, config_->hop_length));
     }
 
     // Step 2: Apply 4th order Butterworth high-pass filter
     Audio filtered_audio = harmonic_audio;
-    if (config_.chroma_highpass_hz > 0) {
-      auto cascade = highpass_coeffs_4th(config_.chroma_highpass_hz, analysis_sr);
+    if (config_->chroma_highpass_hz > 0) {
+      auto cascade = highpass_coeffs_4th(config_->chroma_highpass_hz, analysis_sr);
       auto filtered = apply_cascade_filtfilt(harmonic_audio.data(), harmonic_audio.size(), cascade);
       filtered_audio = Audio::from_vector(std::move(filtered), analysis_sr);
     }
@@ -292,7 +320,7 @@ const Chroma& MusicAnalyzer::harmonic_chroma() {
     int n_frames = cqt_result.n_frames();
 
     // Step 4: Bass-weighted chroma (optional, controlled by use_bass_weighted)
-    if (config_.use_bass_weighted && n_frames > 0) {
+    if (config_->use_bass_weighted && n_frames > 0) {
       // Apply preemphasis to filtered audio (already harmonic)
       auto preemph_samples =
           preemphasis_zero_initial_state(filtered_audio.data(), filtered_audio.size(), 0.97f);
@@ -343,8 +371,9 @@ const std::vector<float>& MusicAnalyzer::onset_strength() {
     // Internal analysis pipeline opts into detrend explicitly (the public
     // OnsetConfig default is detrend=false to match librosa).
     onset_config.detrend = true;
-    onset_strength_ = center_onset_strength(compute_onset_strength(mel_spectrogram(), onset_config),
-                                            config_.n_fft, config_.hop_length, onset_config.center);
+    onset_strength_ =
+        center_onset_strength(compute_onset_strength(mel_spectrogram(), onset_config),
+                              config_->n_fft, config_->hop_length, onset_config.center);
     onset_strength_computed_ = true;
   });
   return onset_strength_;

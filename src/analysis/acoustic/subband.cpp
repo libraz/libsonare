@@ -250,30 +250,57 @@ BlindRt60Estimate extrapolate_low_frequency_rt60(const BlindRt60Estimate& high_b
   return result;
 }
 
+// Onset level relative to the strongest sample. An impulse response's direct
+// sound rises through this level a fraction of a millisecond before its peak,
+// while sustained programme material crosses it seconds earlier.
+constexpr float kOnsetThresholdDb = -20.0f;
+
 bool looks_like_impulse_response(const Audio& audio) {
-  if (audio.empty() || audio.sample_rate() <= 0 ||
-      audio.size() < static_cast<size_t>(audio.sample_rate() / 5)) {
+  if (audio.empty() || audio.sample_rate() <= 0) {
     return false;
   }
 
   const size_t first_window =
       std::min(audio.size(), static_cast<size_t>(std::round(0.02f * audio.sample_rate())));
-  const size_t late_start =
-      std::min(audio.size(), static_cast<size_t>(std::round(0.10f * audio.sample_rate())));
-  const size_t tail_start = audio.size() * 2 / 3;
 
-  size_t peak_index = 0;
-  float peak = 0.0f;
-  for (size_t i = 0; i < audio.size(); ++i) {
-    const float value = std::abs(audio.data()[i]);
-    if (value > peak) {
-      peak = value;
-      peak_index = i;
-    }
-  }
-  if (peak <= 1e-6f || peak_index >= first_window) {
+  // Reuse the same origin resolver the Schroeder-domain metrics anchor on
+  // (AnchoredDecay::from_band in ir.cpp), so the peak this function classifies
+  // against is defined identically to the direct sound RT60/EDT/clarity fit
+  // against, rather than a second hand-rolled peak search.
+  const std::vector<double> energy = squared_energy(audio.data(), audio.size());
+  const size_t peak_index = direct_sound_index(energy);
+  const float peak = static_cast<float>(std::sqrt(energy[peak_index]));
+  if (peak <= 1e-6f) {
     return false;
   }
+
+  // Anchor every window on the input's own onset instead of the container's
+  // first sample. A measured room impulse response always carries a leading
+  // delay (converter round trip, sweep deconvolution pre-delay, microphone
+  // distance), and how much silence the container holds must not decide whether
+  // the input is treated as an impulse response.
+  const float onset_threshold = peak * db_to_linear(kOnsetThresholdDb);
+  size_t onset = peak_index;
+  for (size_t i = 0; i < peak_index; ++i) {
+    if (std::abs(audio.data()[i]) >= onset_threshold) {
+      onset = i;
+      break;
+    }
+  }
+
+  const size_t span = audio.size() - onset;
+  if (span < static_cast<size_t>(audio.sample_rate() / 5)) {
+    return false;
+  }
+  // The dominant peak must sit inside the onset window: sustained programme
+  // material reaches its loudest sample long after its first significant energy.
+  if (peak_index - onset >= first_window) {
+    return false;
+  }
+
+  const size_t late_start =
+      std::min(audio.size(), onset + static_cast<size_t>(std::round(0.10f * audio.sample_rate())));
+  const size_t tail_start = onset + span * 2 / 3;
 
   float later_peak = 0.0f;
   for (size_t i = late_start; i < audio.size(); ++i) {

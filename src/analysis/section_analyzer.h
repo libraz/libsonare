@@ -30,9 +30,11 @@ struct Section {
 
 /// @brief Configuration for section analysis.
 struct SectionConfig {
-  int n_fft = 2048;                 ///< FFT size
-  int hop_length = 512;             ///< Hop length
-  float min_section_sec = 4.0f;     ///< Minimum section duration
+  int n_fft = 2048;      ///< FFT size
+  int hop_length = 512;  ///< Hop length
+  /// Minimum section duration in seconds. Shorter sections are merged into
+  /// their neighbour; only a lone whole-track section may fall below it.
+  float min_section_sec = 4.0f;
   float boundary_threshold = 0.3f;  ///< Boundary detection threshold
   int kernel_size = 64;             ///< Checkerboard kernel size
 };
@@ -40,14 +42,16 @@ struct SectionConfig {
 /// @brief Section analyzer producing a heuristic song-structure estimate.
 /// @details Combines boundary detection with energy / chroma / vocal-band
 /// analysis to split the track and classify each segment into Intro, Verse,
-/// Chorus, Bridge, Instrumental and Outro.
+/// Chorus, Bridge, Instrumental and Outro. A segment that matches none of those
+/// is reported as Unknown rather than folded into one of them, so a caller can
+/// tell an identified section from an unidentified one.
 ///
 /// @warning This is a fixed-threshold heuristic, NOT a trained structure
 /// detector. The boundary positions are generally usable, but the *labels*
 /// (Verse vs Chorus vs Bridge, etc.) are best-effort and will be wrong on many
 /// real songs, especially material that does not follow a conventional
 /// pop/verse-chorus form; a track with no detected boundaries collapses to a
-/// single whole-track "Verse". Treat @ref form / per-section @ref Section::type
+/// single whole-track Unknown. Treat @ref form / per-section @ref Section::type
 /// as hints, not ground truth. For downstream algorithms prefer the raw signals
 /// — @ref boundary_times (segment boundaries) and @ref section_self_similarity
 /// (the chroma cosine self-similarity matrix) — and apply your own thresholds.

@@ -80,8 +80,32 @@ void StreamAnalyzer::prepare_progressive_estimate() {
   current_estimate_.chord_progression.reserve(config_.max_progression_entries);
   current_estimate_.bar_chord_progression.reserve(config_.max_progression_entries);
   current_estimate_.voted_pattern.reserve(4);
-  current_estimate_.all_pattern_scores.reserve(known_progression_patterns().size());
-  current_estimate_.detected_pattern_name.reserve(64);
+
+  // Bounds for everything the progression path touches on the audio thread,
+  // taken from the pattern table itself so they stay correct when it changes.
+  // A correction is recorded at most once per position, and only for a pattern
+  // whose length equals the voted pattern's, so the longest pattern bounds both
+  // correction lists; the longest name bounds every name buffer.
+  const auto& patterns = known_progression_patterns();
+  size_t max_pattern_length = 0;
+  size_t max_pattern_name_length = 0;
+  for (const auto& pattern : patterns) {
+    max_pattern_length = std::max(max_pattern_length, pattern.chords.size());
+    max_pattern_name_length = std::max(max_pattern_name_length, pattern.name.size());
+  }
+  pattern_corrections_.reserve(max_pattern_length);
+  best_pattern_correction_.reserve(max_pattern_length);
+  correction_pattern_name_.reserve(max_pattern_name_length);
+  detected_pattern_scratch_name_.reserve(max_pattern_name_length);
+
+  // Pre-size the score entries and their names: detect_progression_pattern()
+  // rewrites them in place every call rather than clearing, which would release
+  // the name buffers it is about to need again.
+  current_estimate_.all_pattern_scores.resize(patterns.size());
+  for (auto& score : current_estimate_.all_pattern_scores) {
+    score.first.reserve(max_pattern_name_length);
+  }
+  current_estimate_.detected_pattern_name.reserve(std::max<size_t>(64, max_pattern_name_length));
 }
 
 void StreamAnalyzer::initialize_stats_publication() {
@@ -179,7 +203,10 @@ void StreamAnalyzer::publish_stats_snapshot() noexcept {
     snapshot.estimate.voted_pattern[i] = current_estimate_.voted_pattern[i];
   }
   snapshot.estimate.detected_pattern_name = current_estimate_.detected_pattern_name;
-  slot.all_pattern_scores_size = current_estimate_.all_pattern_scores.size();
+  // The estimate's score vector is storage kept at full size so its name
+  // buffers survive between passes; the meaningful prefix is the count the last
+  // scoring pass wrote, mirroring how the slots already separate the two.
+  slot.all_pattern_scores_size = all_pattern_scores_count_;
   for (size_t i = 0; i < slot.all_pattern_scores_size; ++i) {
     snapshot.estimate.all_pattern_scores[i] = current_estimate_.all_pattern_scores[i];
   }
@@ -369,6 +396,7 @@ void StreamAnalyzer::reset(size_t base_sample_offset) {
   last_bpm_update_time_ = 0.0f;
   current_estimate_ = ProgressiveEstimate();
   prepare_progressive_estimate();
+  all_pattern_scores_count_ = 0;
   dropped_chord_progression_entries_ = 0;
   dropped_bar_progression_entries_ = 0;
 

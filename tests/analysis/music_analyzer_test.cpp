@@ -11,6 +11,7 @@
 #include <vector>
 
 #include "analysis/beat_analyzer.h"
+#include "support/section_form.h"
 #include "util/constants.h"
 
 using namespace sonare;
@@ -167,11 +168,8 @@ TEST_CASE("MusicAnalyzer native-rate section path", "[music_analyzer]") {
 
   std::string form = analyzer.form();
   REQUIRE(!form.empty());
-  for (char c : form) {
-    const bool is_valid =
-        (c == 'I' || c == 'A' || c == 'P' || c == 'B' || c == 'C' || c == 'S' || c == 'O');
-    REQUIRE(is_valid);
-  }
+  INFO("form " << form);
+  REQUIRE(sonare::test::is_section_form(form));
 
   const auto& sections = analyzer.section_analyzer().sections();
   REQUIRE(!sections.empty());

@@ -3,11 +3,13 @@
 
 #include "analysis/onset_analyzer.h"
 
+#include <algorithm>
 #include <catch2/catch_test_macros.hpp>
 #include <catch2/matchers/catch_matchers_floating_point.hpp>
 #include <cmath>
 #include <vector>
 
+#include "feature/onset.h"
 #include "util/constants.h"
 
 using namespace sonare;
@@ -140,7 +142,7 @@ TEST_CASE("OnsetAnalyzer steady tone few onsets", "[onset_analyzer]") {
   REQUIRE(analyzer.count() <= 5);
 }
 
-TEST_CASE("OnsetAnalyzer backtrack", "[onset_analyzer]") {
+TEST_CASE("OnsetAnalyzer backtrack lands on the preceding local minimum", "[onset_analyzer]") {
   Audio audio = create_click_track(4);
 
   OnsetDetectConfig config_no_bt;
@@ -148,17 +150,84 @@ TEST_CASE("OnsetAnalyzer backtrack", "[onset_analyzer]") {
 
   OnsetDetectConfig config_bt;
   config_bt.backtrack = true;
-  config_bt.backtrack_range = 5;
+  // Large enough not to bound the search, so this case tests the rule alone.
+  config_bt.backtrack_range = 100000;
 
   OnsetAnalyzer analyzer_no_bt(audio, config_no_bt);
   OnsetAnalyzer analyzer_bt(audio, config_bt);
 
-  // Both should detect onsets
   REQUIRE(analyzer_no_bt.count() > 0);
-  REQUIRE(analyzer_bt.count() > 0);
+  REQUIRE(analyzer_bt.count() == analyzer_no_bt.count());
 
-  // Backtracked times might be slightly earlier
-  // (but not guaranteed, depends on signal)
+  const std::vector<float>& envelope = analyzer_no_bt.onset_strength();
+  // The envelope this analyzer backtracks over is mean-removed, so most of it
+  // is negative; the stopping rule must not depend on the sign.
+  const bool has_negative =
+      std::any_of(envelope.begin(), envelope.end(), [](float v) { return v < 0.0f; });
+  REQUIRE(has_negative);
+
+  const std::vector<int> detected = analyzer_no_bt.onset_frames();
+  const std::vector<int> backtracked = analyzer_bt.onset_frames();
+  for (size_t i = 0; i < detected.size(); ++i) {
+    // Backtracking only ever moves an onset earlier.
+    REQUIRE(backtracked[i] <= detected[i]);
+    // And it stops at a local minimum: the frame before it is strictly higher,
+    // unless the search ran to the start of the envelope.
+    const int frame = backtracked[i];
+    if (frame > 0) {
+      REQUIRE(envelope[static_cast<size_t>(frame) - 1] > envelope[static_cast<size_t>(frame)]);
+    }
+  }
+}
+
+TEST_CASE("OnsetAnalyzer backtrack agrees with the shared onset_backtrack", "[onset_analyzer]") {
+  // One backtracking rule: the analyzer's backtrack option and the standalone
+  // onset_backtrack primitive must return the same frames for the same envelope.
+  Audio audio = create_click_track(4);
+
+  OnsetDetectConfig config_no_bt;
+  OnsetDetectConfig config_bt;
+  config_bt.backtrack = true;
+  config_bt.backtrack_range = 100000;  // Unbounded in practice; see the bound case below.
+
+  OnsetAnalyzer analyzer_no_bt(audio, config_no_bt);
+  OnsetAnalyzer analyzer_bt(audio, config_bt);
+  REQUIRE(analyzer_no_bt.count() > 0);
+
+  const std::vector<int> detected = analyzer_no_bt.onset_frames();
+  const std::vector<int> expected = onset_backtrack(detected, analyzer_no_bt.onset_strength());
+  REQUIRE(analyzer_bt.onset_frames() == expected);
+}
+
+TEST_CASE("OnsetAnalyzer backtrack_range bounds how far an onset travels", "[onset_analyzer]") {
+  Audio audio = create_click_track(4);
+  constexpr int kRange = 5;
+
+  OnsetDetectConfig config_no_bt;
+  OnsetDetectConfig config_bt;
+  config_bt.backtrack = true;
+  config_bt.backtrack_range = kRange;
+
+  OnsetAnalyzer analyzer_no_bt(audio, config_no_bt);
+  OnsetAnalyzer analyzer_bt(audio, config_bt);
+  REQUIRE(analyzer_no_bt.count() > 0);
+
+  const std::vector<int> detected = analyzer_no_bt.onset_frames();
+  const std::vector<int> unbounded = onset_backtrack(detected, analyzer_no_bt.onset_strength());
+  const std::vector<int> bounded = analyzer_bt.onset_frames();
+
+  // Guard against a vacuous check: on this material the unbounded rule travels
+  // farther than kRange, so the bound has something to clamp.
+  bool bound_binds = false;
+  for (size_t i = 0; i < detected.size(); ++i) {
+    if (unbounded[i] < detected[i] - kRange) bound_binds = true;
+  }
+  REQUIRE(bound_binds);
+
+  for (size_t i = 0; i < detected.size(); ++i) {
+    REQUIRE(detected[i] - bounded[i] <= kRange);
+    REQUIRE(bounded[i] == std::max(unbounded[i], detected[i] - kRange));
+  }
 }
 
 TEST_CASE("OnsetAnalyzer sample rate and hop length", "[onset_analyzer]") {

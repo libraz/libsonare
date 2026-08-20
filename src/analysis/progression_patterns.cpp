@@ -6,7 +6,11 @@ namespace sonare {
 
 const std::vector<ProgressionPattern>& known_progression_patterns() {
   static const std::vector<ProgressionPattern> patterns = {
-      {"royalRoad", {{0, 0}, {7, 0}, {9, 1}, {5, 0}}},
+      // IV-V-iii-vi, rooted on the subdominant. Matching is positional against
+      // bars rather than cyclic, so entries that are rotations of one another
+      // stay distinguishable; what makes a spelling wrong here is its chord
+      // content, and a tonic-first I-V-vi-IV is a different progression.
+      {"royalRoad", {{5, 0}, {7, 0}, {4, 1}, {9, 1}}},
       {"komuro", {{9, 1}, {5, 0}, {7, 0}, {0, 0}}},
       {"canon", {{0, 0}, {7, 0}, {9, 1}, {4, 1}, {5, 0}, {0, 0}, {5, 0}, {7, 0}}},
       {"justTheTwoOfUs", {{5, 0}, {4, 1}, {9, 1}}},

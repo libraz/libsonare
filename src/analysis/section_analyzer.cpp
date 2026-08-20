@@ -51,8 +51,11 @@ void add_fallback_section(std::vector<Section>& sections, float audio_duration) 
   section.start = 0.0f;
   section.end = audio_duration;
   section.energy_level = 0.0f;
-  section.confidence = 0.5f;
-  section.type = SectionType::Verse;
+  // No boundary was detected, so nothing was classified. The whole-track span is
+  // a fallback for "the segmenter found no structure", not a finding that the
+  // track is one long verse.
+  section.confidence = 0.0f;
+  section.type = SectionType::Unknown;
   sections.push_back(section);
 }
 
@@ -204,7 +207,7 @@ void SectionAnalyzer::analyze() {
 }
 
 void SectionAnalyzer::merge_short_sections() {
-  const float minimum = std::max(0.0f, config_.min_section_sec * 0.5f);
+  const float minimum = std::max(0.0f, config_.min_section_sec);
   if (minimum <= 0.0f) return;
   size_t index = 0;
   while (sections_.size() > 1 && index < sections_.size()) {
@@ -445,8 +448,15 @@ void SectionAnalyzer::classify_sections() {
       type = SectionType::Bridge;
       confidence = 0.5f;
     } else {
-      type = SectionType::Verse;
-      confidence = 0.5f;
+      // Everything above is a positive identification. What reaches here is the
+      // single shape none of them claim: a high-energy, non-repeating first or
+      // last segment -- the branches above cover every repeat and every interior
+      // segment. Musically that is more often a cold-open or a final chorus than
+      // a verse, so labelling it Verse asserts a reading the classifier has not
+      // earned and quietly merges it with the repeated sections branch 4 does
+      // identify. Unknown is the value that exists to say exactly this.
+      type = SectionType::Unknown;
+      confidence = 0.0f;
     }
 
     sections_[i].type = type;
@@ -471,7 +481,7 @@ Section SectionAnalyzer::section_at(float time) const {
 
   // Return empty section if not found
   Section empty;
-  empty.type = SectionType::Verse;
+  empty.type = SectionType::Unknown;
   empty.start = 0.0f;
   empty.end = 0.0f;
   empty.energy_level = 0.0f;

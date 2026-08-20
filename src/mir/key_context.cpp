@@ -24,9 +24,23 @@ void add_pc(std::vector<uint8_t>& out, int pc) {
   if (std::find(out.begin(), out.end(), v) == out.end()) out.push_back(v);
 }
 
+/// True when @p extensions carries the scale degree @p degree.
+bool has_degree(const std::vector<uint8_t>& extensions, uint8_t degree) {
+  return std::find(extensions.begin(), extensions.end(), degree) != extensions.end();
+}
+
 /// Chord-tone semitone offsets (from the root) for an arrangement chord quality.
 /// Extensions on the ChordSymbol add further tones in derive_pitch_correction_target.
-std::vector<int> quality_intervals(arrangement::ChordQuality quality) {
+///
+/// @p extensions participates because a suspended chord's suspended tone is
+/// chosen rather than fixed: suspending to the second replaces the fourth, and
+/// only a chord that also carries a fourth keeps both. The extension pass is
+/// purely additive, so a base that always included the fourth would make every
+/// sus2 indistinguishable from a sus2add4. This is the one quality that needs
+/// it -- a further removal elsewhere would want a representation that can
+/// express subtraction rather than another special case here.
+std::vector<int> quality_intervals(arrangement::ChordQuality quality,
+                                   const std::vector<uint8_t>& extensions) {
   switch (quality) {
     case arrangement::ChordQuality::kMajor:
       return {0, 4, 7};
@@ -41,7 +55,11 @@ std::vector<int> quality_intervals(arrangement::ChordQuality quality) {
     case arrangement::ChordQuality::kHalfDiminished:
       return {0, 3, 6, 10};
     case arrangement::ChordQuality::kSuspended:
-      return {0, 5, 7};  // sus4 by default; sus2 distinguished via extensions.
+      // Suspended to the second, with no fourth of its own: the fourth is the
+      // tone being replaced. Every other spelling keeps it, including a bare
+      // kSuspended with no extensions, which stays a sus4.
+      if (has_degree(extensions, 2) && !has_degree(extensions, 4)) return {0, 2, 7};
+      return {0, 5, 7};
     case arrangement::ChordQuality::kUnknown:
     default:
       return {0};
@@ -58,7 +76,14 @@ int extension_semitones(uint8_t degree, arrangement::ChordQuality quality) {
     case 6:
       return 9;  // 13th folded, or add6.
     case 7:
-      return quality == arrangement::ChordQuality::kMajor ? 11 : 10;
+      // The seventh's own quality follows the triad it sits on: major seventh
+      // over a major triad, diminished seventh over a diminished one (a fully
+      // diminished chord is four stacked minor thirds), minor seventh
+      // otherwise -- which is what leaves a half-diminished chord its minor
+      // seventh over a diminished triad.
+      if (quality == arrangement::ChordQuality::kMajor) return 11;
+      if (quality == arrangement::ChordQuality::kDiminished) return 9;
+      return 10;
     case 9:
       return 2;
     case 11:
@@ -270,7 +295,9 @@ PitchCorrectionTarget derive_pitch_correction_target(const arrangement::Harmonic
   const arrangement::ChordSymbol* chord = timeline.chord_at(ppq);
   if (chord != nullptr && chord->root_pc != arrangement::kUnknownPitchClass) {
     const int root = chord->root_pc;
-    for (int iv : quality_intervals(chord->quality)) add_pc(target.chord_tones, root + iv);
+    for (int iv : quality_intervals(chord->quality, chord->extensions)) {
+      add_pc(target.chord_tones, root + iv);
+    }
     for (uint8_t deg : chord->extensions) {
       const int semis = extension_semitones(deg, chord->quality);
       if (semis >= 0) add_pc(target.chord_tones, root + semis);

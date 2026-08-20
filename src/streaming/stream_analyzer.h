@@ -6,6 +6,8 @@
 #include <array>
 #include <complex>
 #include <memory>
+#include <string>
+#include <utility>
 #include <vector>
 
 #include "analysis/chord_templates.h"
@@ -239,6 +241,29 @@ class StreamAnalyzer {
   /// @brief Test-only accessor for the full chroma history frame cap.
   static constexpr size_t full_chroma_history_cap_for_test() { return kMaxChromaHistoryFrames; }
 
+  /// @brief Test-only seeding of the voted pattern and detected key.
+  /// @details The known-pattern correction only reaches its correcting branch
+  ///          for a voted pattern that is confusable-but-not-equal to a known
+  ///          pattern, which synthetic audio reaches only by chance. Seeding the
+  ///          input directly lets a test exercise that branch on purpose rather
+  ///          than hoping a fixture wanders into it. Not part of the public
+  ///          streaming API.
+  void seed_voted_pattern_for_test(const std::vector<BarChord>& voted, int key);
+
+  /// @brief Test-only seeding of the bar-chord history the pattern scoring pass
+  ///        reads.
+  void seed_bar_progression_for_test(const std::vector<BarChord>& bars);
+
+  /// @brief Test-only entry point running the known-pattern correction exactly
+  ///        as the realtime path does, with nothing else in the call.
+  void run_pattern_correction_for_test() { correct_voted_pattern_by_known_patterns(); }
+
+  /// @brief Test-only entry point running the pattern scoring pass.
+  void detect_progression_pattern_for_test() { detect_progression_pattern(); }
+
+  /// @brief Test-only accessor for the in-progress progressive estimate.
+  const ProgressiveEstimate& progressive_estimate_for_test() const { return current_estimate_; }
+
  private:
   StreamConfig config_;
 
@@ -356,6 +381,22 @@ class StreamAnalyzer {
   ProgressiveEstimate current_estimate_;
   size_t dropped_chord_progression_entries_ = 0;
   size_t dropped_bar_progression_entries_ = 0;
+
+  // Scratch for the known-pattern correction, which runs on the audio thread.
+  // These were per-call locals whose only protection was that the shipped
+  // pattern table never drove them past their small-buffer capacity, so an edit
+  // to the table alone could put a heap allocation in process(). Reserved from
+  // the table's own bounds in prepare_progressive_estimate() and reused, so the
+  // capacity cannot be exceeded by any table the loop can iterate.
+  std::vector<std::pair<int, int>> pattern_corrections_;
+  std::vector<std::pair<int, int>> best_pattern_correction_;
+  std::string correction_pattern_name_;
+  std::string detected_pattern_scratch_name_;
+  /// Entries of current_estimate_.all_pattern_scores the last scoring pass
+  /// wrote. The vector itself stays at full size so each entry's name buffer
+  /// survives; this is what gets published, so a consumer still sees no scores
+  /// until the first pass has run.
+  size_t all_pattern_scores_count_ = 0;
 
   // Chord progression tracking
   int prev_chord_root_ = -1;

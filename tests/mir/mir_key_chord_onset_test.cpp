@@ -12,6 +12,7 @@
 #include <catch2/matchers/catch_matchers_floating_point.hpp>
 #include <vector>
 
+#include "analysis/chord_templates.h"
 #include "arrangement/harmonic_timeline.h"
 #include "mir/key_context.h"
 #include "transport/tempo_map.h"
@@ -305,4 +306,118 @@ TEST_CASE("onset_split_candidates returns empty for a degenerate clip span", "[m
   std::vector<Onset> onsets = {Onset{0.5f, 1.0f}};
   const auto cands = sonare::mir::onset_split_candidates(onsets, map, 4.0, 4.0);
   CHECK(cands.empty());
+}
+
+// ---------------------------------------------------------------------------
+// Chord-tone derivation vs the detector's own templates.
+//
+// The mapping and the detector are two independent spellings of the same chord
+// vocabulary, so they are checked against each other rather than against a
+// table restated here: a test asserting a literal pitch-class set only repeats
+// whatever the mapping currently produces, and passes just as happily when both
+// sides are wrong together. The detector's templates are the reference because
+// they are what the analyzer matches chroma against.
+// ---------------------------------------------------------------------------
+
+namespace {
+
+/// Pitch classes the detector's template for @p quality marks as chord tones.
+std::vector<uint8_t> template_pitch_classes(ChordQuality quality, PitchClass root) {
+  for (const auto& tmpl : sonare::generate_all_chord_templates()) {
+    if (tmpl.quality != quality || tmpl.root != root) continue;
+    std::vector<uint8_t> out;
+    for (uint8_t pc = 0; pc < 12; ++pc) {
+      if (tmpl.pattern[pc] > 0.0f) out.push_back(pc);
+    }
+    std::sort(out.begin(), out.end());
+    return out;
+  }
+  return {};
+}
+
+/// Chord tones the mapping derives for @p quality, through the shipped path.
+std::vector<uint8_t> derived_pitch_classes(ChordQuality quality, PitchClass root) {
+  const sonare::mir::MappedQuality mapped = sonare::mir::map_chord_quality(quality);
+  HarmonicTimeline timeline;
+  sonare::arrangement::ChordSymbol chord;
+  chord.start_ppq = 0.0;
+  chord.end_ppq = 4.0;
+  chord.root_pc = static_cast<uint8_t>(root);
+  chord.quality = mapped.quality;
+  chord.extensions = mapped.extensions;
+  timeline.chords.push_back(chord);
+  return sonare::mir::derive_pitch_correction_target(timeline, 1.0).chord_tones;
+}
+
+/// Ascending semitone steps between consecutive tones, wrapping to the octave.
+std::vector<int> stacked_intervals(const std::vector<uint8_t>& pcs) {
+  std::vector<int> steps;
+  for (size_t i = 1; i < pcs.size(); ++i) {
+    steps.push_back(static_cast<int>(pcs[i]) - static_cast<int>(pcs[i - 1]));
+  }
+  return steps;
+}
+
+}  // namespace
+
+TEST_CASE("derived chord tones agree with the detector templates", "[mir]") {
+  // Every quality the detector can emit, so a new one cannot be added on one
+  // side alone. Unknown has no template and is covered separately.
+  const ChordQuality qualities[] = {
+      ChordQuality::Major,     ChordQuality::Minor,     ChordQuality::Diminished,
+      ChordQuality::Augmented, ChordQuality::Dominant7, ChordQuality::Major7,
+      ChordQuality::Minor7,    ChordQuality::Sus2,      ChordQuality::Sus4,
+      ChordQuality::Add9,      ChordQuality::MinorAdd9, ChordQuality::Dim7,
+      ChordQuality::HalfDim7,  ChordQuality::Major9,    ChordQuality::Dominant9,
+      ChordQuality::Sus2Add4,
+  };
+  for (const PitchClass root : {PitchClass::C, PitchClass::Fs, PitchClass::A}) {
+    for (const ChordQuality quality : qualities) {
+      const std::vector<uint8_t> expected = template_pitch_classes(quality, root);
+      REQUIRE_FALSE(expected.empty());
+      INFO("quality ordinal " << static_cast<int>(quality) << " root " << static_cast<int>(root));
+      CHECK(derived_pitch_classes(quality, root) == expected);
+    }
+  }
+}
+
+TEST_CASE("a fully diminished seventh is four stacked minor thirds", "[mir]") {
+  // The defining property of the chord, not the row that spells it: every
+  // adjacent interval is a minor third. A half-diminished seventh shares the
+  // diminished triad but not the stacking, which is the confusion this guards.
+  const std::vector<uint8_t> dim7 = derived_pitch_classes(ChordQuality::Dim7, PitchClass::C);
+  REQUIRE(dim7.size() == 4);
+  CHECK(stacked_intervals(dim7) == std::vector<int>{3, 3, 3});
+
+  const std::vector<uint8_t> half_dim7 =
+      derived_pitch_classes(ChordQuality::HalfDim7, PitchClass::C);
+  REQUIRE(half_dim7.size() == 4);
+  CHECK(stacked_intervals(half_dim7) != std::vector<int>{3, 3, 3});
+  CHECK(dim7 != half_dim7);
+}
+
+TEST_CASE("a suspended chord carries the tone it suspends to", "[mir]") {
+  // Suspension replaces the third with a second or a fourth; a chord suspended
+  // to the second does not also carry a fourth unless it is spelled with one.
+  // Both must stay distinguishable, which an additive-only mapping loses.
+  const std::vector<uint8_t> sus2 = derived_pitch_classes(ChordQuality::Sus2, PitchClass::C);
+  const std::vector<uint8_t> sus4 = derived_pitch_classes(ChordQuality::Sus4, PitchClass::C);
+  const std::vector<uint8_t> sus2add4 =
+      derived_pitch_classes(ChordQuality::Sus2Add4, PitchClass::C);
+
+  const auto contains = [](const std::vector<uint8_t>& pcs, uint8_t pc) {
+    return std::find(pcs.begin(), pcs.end(), pc) != pcs.end();
+  };
+  // Relative to a C root: 2 is the second, 5 the fourth, 4 the major third.
+  CHECK(contains(sus2, 2));
+  CHECK_FALSE(contains(sus2, 5));
+  CHECK(contains(sus4, 5));
+  CHECK_FALSE(contains(sus4, 2));
+  CHECK(contains(sus2add4, 2));
+  CHECK(contains(sus2add4, 5));
+  for (const auto& pcs : {sus2, sus4, sus2add4}) {
+    CHECK_FALSE(contains(pcs, 4));
+  }
+  CHECK(sus2 != sus2add4);
+  CHECK(sus4 != sus2add4);
 }

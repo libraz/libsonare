@@ -531,6 +531,15 @@ void StreamAnalyzer::compute_voted_pattern(int pattern_length) {
   correct_voted_pattern_by_known_patterns();
 }
 
+void StreamAnalyzer::seed_voted_pattern_for_test(const std::vector<BarChord>& voted, int key) {
+  current_estimate_.voted_pattern.assign(voted.begin(), voted.end());
+  current_estimate_.key = key;
+}
+
+void StreamAnalyzer::seed_bar_progression_for_test(const std::vector<BarChord>& bars) {
+  current_estimate_.bar_chord_progression.assign(bars.begin(), bars.end());
+}
+
 void StreamAnalyzer::correct_voted_pattern_by_known_patterns() {
   auto& voted = current_estimate_.voted_pattern;
   if (voted.size() < 4) return;
@@ -560,10 +569,16 @@ void StreamAnalyzer::correct_voted_pattern_by_known_patterns() {
   int detected_key = current_estimate_.key;
   int pattern_length = static_cast<int>(voted.size());
 
-  /// Find best matching known pattern
-  std::string best_pattern_name;
+  /// Find best matching known pattern. The name and both correction lists are
+  /// reserved members rather than locals: this runs on the audio thread, and a
+  /// local would allocate the first time a position is merely confusable --
+  /// which pattern-table data alone decides. clear() keeps the reserved
+  /// capacity, so no iteration of the loop below can allocate.
+  std::string& best_pattern_name = correction_pattern_name_;
+  best_pattern_name.clear();
   float best_match_score = 0.0f;
-  std::vector<std::pair<int, int>> best_correction;  // position -> (new_root, new_quality)
+  auto& best_correction = best_pattern_correction_;  // position -> (new_root, new_quality)
+  best_correction.clear();
 
   for (const auto& pattern : patterns) {
     int known_len = static_cast<int>(pattern.chords.size());
@@ -571,7 +586,8 @@ void StreamAnalyzer::correct_voted_pattern_by_known_patterns() {
 
     int exact_matches = 0;
     int confusable_matches = 0;
-    std::vector<std::pair<int, int>> corrections;
+    auto& corrections = pattern_corrections_;
+    corrections.clear();
 
     for (int pos = 0; pos < pattern_length; ++pos) {
       int voted_root = voted[pos].root;
@@ -599,8 +615,13 @@ void StreamAnalyzer::correct_voted_pattern_by_known_patterns() {
     int total_matches = exact_matches + confusable_matches;
     if (total_matches >= pattern_length - 1 && score > best_match_score) {
       best_match_score = score;
-      best_pattern_name = pattern.name;
-      best_correction = corrections;
+      best_pattern_name.assign(pattern.name);
+      // clear() + insert rather than assignment: insert is specified to
+      // reallocate only when the new size exceeds capacity, so the reserved
+      // capacity is what makes this copy allocation-free rather than an
+      // implementation's choice to reuse a buffer.
+      best_correction.clear();
+      best_correction.insert(best_correction.end(), corrections.begin(), corrections.end());
     }
   }
 
@@ -619,7 +640,7 @@ void StreamAnalyzer::correct_voted_pattern_by_known_patterns() {
     }
 
     // Also set the detected pattern name based on the correction
-    current_estimate_.detected_pattern_name = best_pattern_name;
+    current_estimate_.detected_pattern_name.assign(best_pattern_name);
     current_estimate_.detected_pattern_score = best_match_score;
 
     // Lock the pattern only if we have enough data (4+ repetitions)
@@ -643,9 +664,16 @@ void StreamAnalyzer::detect_progression_pattern() {
   const auto& patterns = known_progression_patterns();
   int detected_key = current_estimate_.key;
 
-  std::string best_pattern_name;
+  // Same audio-thread constraint as the correction pass above. all_pattern_scores
+  // is not cleared: clear() destroys each entry's name buffer, so the next
+  // emplace_back would reallocate it for any pattern name longer than the
+  // small-string limit. The entries are pre-sized and their names reserved in
+  // prepare_progressive_estimate(), and rewritten in place here.
+  std::string& best_pattern_name = detected_pattern_scratch_name_;
+  best_pattern_name.clear();
   float best_score = 0.0f;
-  current_estimate_.all_pattern_scores.clear();
+  auto& all_scores = current_estimate_.all_pattern_scores;
+  all_pattern_scores_count_ = 0;
 
   for (const auto& pattern : patterns) {
     int pattern_len = static_cast<int>(pattern.chords.size());
@@ -678,24 +706,28 @@ void StreamAnalyzer::detect_progression_pattern() {
     float score = (max_possible > 0.0f) ? total_score / max_possible : 0.0f;
 
     /// Store all pattern scores
-    current_estimate_.all_pattern_scores.emplace_back(pattern.name, score);
+    if (all_pattern_scores_count_ == all_scores.size()) all_scores.emplace_back();
+    all_scores[all_pattern_scores_count_].first.assign(pattern.name);
+    all_scores[all_pattern_scores_count_].second = score;
+    ++all_pattern_scores_count_;
 
     if (score > best_score) {
       best_score = score;
-      best_pattern_name = pattern.name;
+      best_pattern_name.assign(pattern.name);
     }
   }
 
-  /// Sort by score descending
-  std::sort(current_estimate_.all_pattern_scores.begin(),
-            current_estimate_.all_pattern_scores.end(),
+  /// Sort by score descending. Only the entries written this pass are ordered;
+  /// the storage beyond them holds name buffers being kept alive for reuse.
+  std::sort(all_scores.begin(),
+            all_scores.begin() + static_cast<std::ptrdiff_t>(all_pattern_scores_count_),
             [](const auto& a, const auto& b) { return a.second > b.second; });
 
   /// Only report pattern if score meets minimum threshold (75%)
   /// A low score means the pattern is a poor match, even if it's the "best" among patterns
   constexpr float kMinPatternScore = 0.75f;
   if (best_score >= kMinPatternScore) {
-    current_estimate_.detected_pattern_name = best_pattern_name;
+    current_estimate_.detected_pattern_name.assign(best_pattern_name);
     current_estimate_.detected_pattern_score = best_score;
   } else if (current_estimate_.detected_pattern_name.empty()) {
     // Only clear if not already set by pattern-based correction

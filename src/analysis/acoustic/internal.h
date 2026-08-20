@@ -85,16 +85,60 @@ BlindRt60Estimate estimate_blind_rt60_from_decay(const float* samples, size_t si
                                                  float min_decay_db, float noise_floor_margin_db,
                                                  bool suppress_stationary_noise = true);
 
-std::vector<float> schroeder_edc_db(const std::vector<double>& energy);
-float decay_time_from_range(const std::vector<float>& edc_db, int sample_rate, float upper_db,
-                            float lower_db);
 double sum_range(const std::vector<double>& energy, size_t first, size_t last);
 size_t direct_sound_index(const std::vector<double>& energy);
-float clarity_db(const std::vector<double>& energy, int sample_rate, float boundary_sec);
-float clarity_db(const std::vector<double>& energy, int sample_rate, float boundary_sec,
-                 size_t origin);
-float definition_d50(const std::vector<double>& energy, int sample_rate);
-float definition_d50(const std::vector<double>& energy, int sample_rate, size_t origin);
+
+/// @brief Schroeder decay curve anchored at the direct sound and truncated at the noise floor.
+///
+/// Every room-acoustic parameter is defined against the direct-sound arrival:
+/// the backward energy integration starts there, and the ISO 3382 early/late
+/// split points (50 ms, 80 ms) are measured from it. `from_band` is the only
+/// way to obtain an instance, and it locates the origin and the Lundeby
+/// truncation itself, so a call site cannot compute a metric against a curve
+/// that is still referenced to the container's first sample: the leading
+/// silence every measured impulse response carries (converter round trip,
+/// sweep deconvolution pre-delay, microphone distance) is removed once, at
+/// construction, for all metrics at once.
+///
+/// The analysis window is the half-open range [origin, end). Every metric is
+/// measured inside it, so the early and late intervals are always
+/// complementary sub-intervals of one window.
+class AnchoredDecay {
+ public:
+  /// @brief Anchors one (optionally band-filtered) signal at its direct sound.
+  static AnchoredDecay from_band(const float* samples, size_t size, int sample_rate);
+
+  /// @brief Least-squares decay time in seconds between two levels of the anchored curve.
+  /// @return Seconds, or NaN when the level range holds fewer than two usable points.
+  float decay_time(float upper_db, float lower_db) const;
+
+  /// @brief Clarity in dB: early-to-late energy ratio split `boundary_sec` after the origin.
+  /// @return dB, or NaN when either side of the split is unmeasurable.
+  float clarity_db(float boundary_sec) const;
+
+  /// @brief Definition D50: the fraction of window energy arriving in the first 50 ms.
+  /// @return A value in [0, 1], or NaN when the window does not reach past the split.
+  float definition_d50() const;
+
+  /// @brief Direct-sound arrival index into the analysed signal.
+  size_t origin() const { return origin_; }
+
+  /// @brief Exclusive end of the analysis window; greater than `origin()` for non-empty input.
+  size_t end() const { return end_; }
+
+ private:
+  AnchoredDecay() = default;
+
+  /// @brief Early/late split index, clamped into the analysis window.
+  size_t split_index(float boundary_sec) const;
+
+  std::vector<double> energy_;  ///< Sample-wise squared energy of the analysed signal.
+  std::vector<float> edc_db_;   ///< Schroeder curve in dB; index 0 is `origin_`, where it is 0 dB.
+  size_t origin_ = 0;
+  size_t end_ = 0;
+  int sample_rate_ = 0;
+};
+
 float estimate_confidence(float rt60, float edt, float min_decay_db);
 AcousticParameters analyze_band(const float* samples, size_t size, int sample_rate,
                                 float min_decay_db);

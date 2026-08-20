@@ -1,10 +1,12 @@
 /// @file stream_analyzer_core_test.cpp
 /// @brief StreamAnalyzer core behavior tests.
 
+#include <algorithm>
 #include <atomic>
 #include <limits>
 #include <thread>
 
+#include "analysis/progression_patterns.h"
 #include "core/resample.h"
 #include "stream_analyzer_test_helpers.h"
 #include "support/alloc_guard.h"
@@ -946,4 +948,132 @@ TEST_CASE("StreamAnalyzer external offset sync", "[streaming]") {
   // First frame timestamp should be based on external offset
   float expected_time = static_cast<float>(external_offset) / config.sample_rate;
   REQUIRE_THAT(frames[0].timestamp, WithinRel(expected_time, 0.01f));
+}
+
+// --- Progression path allocation guards --------------------------------------
+//
+// The 60-second guard above proves the realtime path allocates nothing for the
+// audio it happens to feed. That is a weaker claim than it looks for the
+// known-pattern correction: corrections are recorded only when a voted chord is
+// confusable with the expected one, and whether any input reaches that branch is
+// decided by the pattern table, not by the code. The cases below drive the
+// branch on purpose and assert the correction actually landed, so a fixture that
+// stopped reaching it would fail rather than pass quietly.
+
+namespace {
+
+/// Voted pattern matching `royalRoad` in C at three positions, with C major
+/// where A minor is expected. C major and A minor share C and E, so the
+/// position is confusable rather than exact -- the input shape that makes the
+/// correction pass record a correction at all.
+std::vector<BarChord> confusable_voted_pattern() {
+  std::vector<BarChord> voted(4);
+  const int roots[] = {5, 7, 4, 0};      // F, G, E, C
+  const int qualities[] = {0, 0, 1, 0};  // major, major, minor, major
+  for (size_t i = 0; i < voted.size(); ++i) {
+    voted[i].bar_index = static_cast<int>(i);
+    voted[i].root = roots[i];
+    voted[i].quality = qualities[i];
+    voted[i].confidence = 0.9f;
+  }
+  return voted;
+}
+
+size_t longest_pattern_name_length() {
+  size_t longest = 0;
+  for (const auto& pattern : sonare::known_progression_patterns()) {
+    longest = std::max(longest, pattern.name.size());
+  }
+  return longest;
+}
+
+}  // namespace
+
+TEST_CASE("StreamAnalyzer known-pattern correction is allocation free on the correcting branch",
+          "[streaming][rt]") {
+  StreamConfig config;
+  config.sample_rate = 8000;
+  config.n_fft = 256;
+  config.hop_length = 128;
+  config.n_mels = 16;
+  config.max_progression_entries = 8;
+  StreamAnalyzer analyzer(config);
+
+  analyzer.seed_voted_pattern_for_test(confusable_voted_pattern(), 0);
+
+  size_t allocations = 0;
+  {
+    sonare::test::AllocationGuard guard;
+    analyzer.run_pattern_correction_for_test();
+    allocations = guard.count();
+  }
+
+  // The fixture reached the correcting branch: position 3 was rewritten from
+  // the voted C major to royalRoad's expected A minor. Without this the
+  // allocation count below would be measuring a path that never ran.
+  const auto& estimate = analyzer.progressive_estimate_for_test();
+  REQUIRE(estimate.voted_pattern.size() == 4);
+  REQUIRE(estimate.voted_pattern[3].root == 9);
+  REQUIRE(estimate.voted_pattern[3].quality == 1);
+  REQUIRE(estimate.detected_pattern_name == "royalRoad");
+  // The three exact positions are left alone.
+  REQUIRE(estimate.voted_pattern[0].root == 5);
+  REQUIRE(estimate.voted_pattern[1].root == 7);
+  REQUIRE(estimate.voted_pattern[2].root == 4);
+
+  REQUIRE(allocations == 0);
+}
+
+TEST_CASE("StreamAnalyzer pattern scoring pass is allocation free", "[streaming][rt]") {
+  StreamConfig config;
+  config.sample_rate = 8000;
+  config.n_fft = 256;
+  config.hop_length = 128;
+  config.n_mels = 16;
+  config.max_progression_entries = 16;
+  StreamAnalyzer analyzer(config);
+
+  std::vector<BarChord> bars(8);
+  for (size_t i = 0; i < bars.size(); ++i) {
+    bars[i].bar_index = static_cast<int>(i);
+    bars[i].root = (i % 2 == 0) ? 0 : 7;
+    bars[i].quality = 0;
+    bars[i].confidence = 0.8f;
+  }
+  analyzer.seed_bar_progression_for_test(bars);
+
+  // Two passes: the first fills the score entries, the second must reuse them.
+  for (int pass = 0; pass < 2; ++pass) {
+    CAPTURE(pass);
+    size_t allocations = 0;
+    {
+      sonare::test::AllocationGuard guard;
+      analyzer.detect_progression_pattern_for_test();
+      allocations = guard.count();
+    }
+    REQUIRE(allocations == 0);
+    REQUIRE(analyzer.progressive_estimate_for_test().all_pattern_scores.size() ==
+            sonare::known_progression_patterns().size());
+  }
+}
+
+TEST_CASE("StreamAnalyzer pattern score name buffers are reserved from the pattern table",
+          "[streaming][rt]") {
+  // Inert while every pattern name fits a std::string's small buffer, which is
+  // the situation today. It becomes the load-bearing check the moment a longer
+  // name is added -- which is exactly when the scoring pass would otherwise
+  // start allocating on the audio thread once per pattern per call.
+  StreamConfig config;
+  config.sample_rate = 8000;
+  config.n_fft = 256;
+  config.hop_length = 128;
+  config.n_mels = 16;
+  StreamAnalyzer analyzer(config);
+
+  const size_t longest = longest_pattern_name_length();
+  const auto& scores = analyzer.progressive_estimate_for_test().all_pattern_scores;
+  REQUIRE(scores.size() == sonare::known_progression_patterns().size());
+  for (const auto& score : scores) {
+    REQUIRE(score.first.capacity() >= longest);
+  }
 }

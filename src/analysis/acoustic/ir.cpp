@@ -11,33 +11,45 @@ namespace sonare::acoustic_detail {
 
 namespace {
 
-size_t estimate_lundeby_truncation_index(const std::vector<double>& energy, int sample_rate) {
+// ISO 3382 early/late split points, measured from the direct-sound arrival:
+// 50 ms for C50 and D50, 80 ms for C80.
+constexpr float kEarlyBoundary50Sec = 0.05f;
+constexpr float kEarlyBoundary80Sec = 0.08f;
+
+// Level drop the Schroeder fit spans to report a reverberation time.
+constexpr double kDecayRangeDb = 60.0;
+
+// Lundeby noise-floor crossing, searched forward of the direct sound. Both the
+// noise estimate and the moving-average window are measured over the post-origin
+// span, so the returned index shifts by exactly the amount of leading silence
+// the container carries and the anchored window [origin, end) is unchanged.
+size_t lundeby_truncation_index(const std::vector<double>& energy, size_t origin, int sample_rate) {
   const size_t n = energy.size();
-  if (n < 64 || sample_rate <= 0) {
+  const size_t span = n - origin;
+  if (span < 64 || sample_rate <= 0) {
     return n;
   }
 
-  const size_t peak = direct_sound_index(energy);
-  const size_t tail_count = std::clamp(n / 10, static_cast<size_t>(16), n / 2);
+  const size_t tail_count = std::clamp(span / 10, static_cast<size_t>(16), span / 2);
   const double tail_sum = sum_range(energy, n - tail_count, n);
   const double noise_power = tail_sum / static_cast<double>(tail_count);
   if (!(noise_power > static_cast<double>(kEnergyEpsilon))) {
     return n;
   }
 
-  const size_t max_window = std::max<size_t>(16, std::min<size_t>(2048, n / 4));
+  const size_t max_window = std::max<size_t>(16, std::min<size_t>(2048, span / 4));
   const size_t window =
       std::clamp(static_cast<size_t>(std::lround(0.01 * static_cast<double>(sample_rate))),
                  static_cast<size_t>(16), max_window);
-  if (window >= n) {
+  if (window >= span) {
     return n;
   }
 
-  double moving = sum_range(energy, 0, window);
+  double moving = sum_range(energy, origin, origin + window);
   const double threshold = noise_power * 4.0;
-  const size_t first = std::min(n - window, peak + window);
+  const size_t first = origin + window;
   const size_t last = n - window;
-  for (size_t i = 0; i <= last; ++i) {
+  for (size_t i = origin; i <= last; ++i) {
     if (i >= first && moving / static_cast<double>(window) <= threshold) {
       return i;
     }
@@ -49,46 +61,61 @@ size_t estimate_lundeby_truncation_index(const std::vector<double>& energy, int 
   return n;
 }
 
-std::vector<float> schroeder_edc_db_until(const std::vector<double>& energy, size_t end) {
-  std::vector<float> edc(energy.size(), nan_value());
-  if (energy.empty()) {
-    return edc;
-  }
-
-  end = std::clamp(end, static_cast<size_t>(1), energy.size());
+// Backward energy integration over [origin, end), in dB relative to the energy
+// at the origin. Index 0 of the result is the direct-sound arrival, so two
+// inputs differing only in leading silence produce the same curve.
+std::vector<float> schroeder_edc_db(const std::vector<double>& energy, size_t origin, size_t end) {
+  std::vector<float> edc(end - origin);
   double cumulative = 0.0;
-  for (size_t i = end; i-- > 0;) {
+  for (size_t i = end; i-- > origin;) {
     cumulative += energy[i];
-    edc[i] = static_cast<float>(cumulative);
+    edc[i - origin] = static_cast<float>(cumulative);
   }
 
   const float reference = std::max(edc.front(), kEnergyEpsilon);
-  for (size_t i = 0; i < end; ++i) {
-    edc[i] = power_to_db_scalar(std::max(edc[i], kEnergyEpsilon) / reference);
+  for (float& value : edc) {
+    value = power_to_db_scalar(std::max(value, kEnergyEpsilon) / reference);
   }
   return edc;
 }
 
 }  // namespace
 
-std::vector<float> schroeder_edc_db(const std::vector<double>& energy) {
-  return schroeder_edc_db_until(energy, energy.size());
+AnchoredDecay AnchoredDecay::from_band(const float* samples, size_t size, int sample_rate) {
+  AnchoredDecay decay;
+  decay.sample_rate_ = sample_rate;
+  decay.energy_ = squared_energy(samples, size);
+  if (decay.energy_.empty()) {
+    return decay;  // origin_ == end_, so every metric reports NaN
+  }
+
+  decay.origin_ = direct_sound_index(decay.energy_);
+  // A crossing found at or before the direct sound would invert the window; keep
+  // one sample so [origin, end) stays well formed and the metrics degrade to NaN
+  // rather than reading past the end of the buffer.
+  decay.end_ = std::max(lundeby_truncation_index(decay.energy_, decay.origin_, sample_rate),
+                        decay.origin_ + 1);
+  decay.edc_db_ = schroeder_edc_db(decay.energy_, decay.origin_, decay.end_);
+  return decay;
 }
 
-float decay_time_from_range(const std::vector<float>& edc_db, int sample_rate, float upper_db,
-                            float lower_db) {
+float AnchoredDecay::decay_time(float upper_db, float lower_db) const {
+  if (sample_rate_ <= 0) {
+    return nan_value();
+  }
+
   double sum_t = 0.0;
   double sum_y = 0.0;
   double sum_tt = 0.0;
   double sum_ty = 0.0;
   size_t count = 0;
 
-  for (size_t i = 0; i < edc_db.size(); ++i) {
-    const float y = edc_db[i];
+  for (size_t i = 0; i < edc_db_.size(); ++i) {
+    const float y = edc_db_[i];
     if (!std::isfinite(y) || y > upper_db || y < lower_db) {
       continue;
     }
-    const double t = static_cast<double>(i) / static_cast<double>(sample_rate);
+    const double t = static_cast<double>(i) / static_cast<double>(sample_rate_);
     sum_t += t;
     sum_y += y;
     sum_tt += t * t;
@@ -110,7 +137,41 @@ float decay_time_from_range(const std::vector<float>& edc_db, int sample_rate, f
   if (slope >= -1e-9) {
     return nan_value();
   }
-  return static_cast<float>(-60.0 / slope);
+  return static_cast<float>(-kDecayRangeDb / slope);
+}
+
+float AnchoredDecay::clarity_db(float boundary_sec) const {
+  const size_t split = split_index(boundary_sec);
+  const double early = sum_range(energy_, origin_, split);
+  const double late = sum_range(energy_, split, end_);
+  // A truncation landing at or before the split leaves no late window. Reporting
+  // the epsilon-floor ratio there would claim extreme clarity; the honest answer
+  // is that the late energy was not measurable.
+  if (!(early > 0.0) || !(late > 0.0)) {
+    return nan_value();
+  }
+  return static_cast<float>(power_to_db_scalar(early / late));
+}
+
+float AnchoredDecay::definition_d50() const {
+  const size_t split = split_index(kEarlyBoundary50Sec);
+  if (split >= end_) {
+    return nan_value();  // no late window: the ratio would be pinned at 1 by construction
+  }
+  const double early = sum_range(energy_, origin_, split);
+  const double total = sum_range(energy_, origin_, end_);
+  if (!(total > 0.0)) {
+    return nan_value();
+  }
+  // `early` sums a prefix of the same non-negative range as `total`, so the
+  // ratio cannot leave [0, 1] on any exit path.
+  return static_cast<float>(early / total);
+}
+
+size_t AnchoredDecay::split_index(float boundary_sec) const {
+  const size_t boundary = static_cast<size_t>(
+      std::max<long>(0, std::lround(static_cast<double>(boundary_sec) * sample_rate_)));
+  return std::min(origin_ + boundary, end_);
 }
 
 double sum_range(const std::vector<double>& energy, size_t first, size_t last) {
@@ -131,43 +192,6 @@ size_t direct_sound_index(const std::vector<double>& energy) {
       std::distance(energy.begin(), std::max_element(energy.begin(), energy.end())));
 }
 
-float clarity_db(const std::vector<double>& energy, int sample_rate, float boundary_sec,
-                 size_t origin, size_t end) {
-  const size_t boundary = static_cast<size_t>(std::round(boundary_sec * sample_rate));
-  const double early = sum_range(energy, origin, origin + boundary);
-  const double late = sum_range(energy, origin + boundary, end);
-  return power_to_db_scalar(std::max(early, static_cast<double>(kEnergyEpsilon)) /
-                            std::max(late, static_cast<double>(kEnergyEpsilon)));
-}
-
-float clarity_db(const std::vector<double>& energy, int sample_rate, float boundary_sec,
-                 size_t origin) {
-  return clarity_db(energy, sample_rate, boundary_sec, origin, energy.size());
-}
-
-float clarity_db(const std::vector<double>& energy, int sample_rate, float boundary_sec) {
-  return clarity_db(energy, sample_rate, boundary_sec, 0);
-}
-
-float definition_d50(const std::vector<double>& energy, int sample_rate, size_t origin,
-                     size_t end) {
-  const size_t boundary = static_cast<size_t>(std::round(0.05f * sample_rate));
-  const double early = sum_range(energy, origin, origin + boundary);
-  const double total = sum_range(energy, origin, end);
-  if (total <= 0.0) {
-    return nan_value();
-  }
-  return static_cast<float>(early / total);
-}
-
-float definition_d50(const std::vector<double>& energy, int sample_rate, size_t origin) {
-  return definition_d50(energy, sample_rate, origin, energy.size());
-}
-
-float definition_d50(const std::vector<double>& energy, int sample_rate) {
-  return definition_d50(energy, sample_rate, 0);
-}
-
 float estimate_confidence(float rt60, float edt, float min_decay_db) {
   if (!std::isfinite(rt60) || !std::isfinite(edt) || rt60 <= 0.0f || edt <= 0.0f) {
     return 0.0f;
@@ -179,20 +203,17 @@ float estimate_confidence(float rt60, float edt, float min_decay_db) {
 
 AcousticParameters analyze_band(const float* samples, size_t size, int sample_rate,
                                 float min_decay_db) {
-  const auto energy = squared_energy(samples, size);
-  const size_t truncation = estimate_lundeby_truncation_index(energy, sample_rate);
-  const auto edc_db = schroeder_edc_db_until(energy, truncation);
-  const size_t origin = direct_sound_index(energy);
+  const AnchoredDecay decay = AnchoredDecay::from_band(samples, size, sample_rate);
 
   AcousticParameters result;
-  result.rt60 = decay_time_from_range(edc_db, sample_rate, -5.0f, -5.0f - min_decay_db);
+  result.rt60 = decay.decay_time(-5.0f, -5.0f - min_decay_db);
   if (!std::isfinite(result.rt60) && min_decay_db > 20.0f) {
-    result.rt60 = decay_time_from_range(edc_db, sample_rate, -5.0f, -25.0f);
+    result.rt60 = decay.decay_time(-5.0f, -25.0f);
   }
-  result.edt = decay_time_from_range(edc_db, sample_rate, 0.0f, -10.0f);
-  result.c50 = clarity_db(energy, sample_rate, 0.05f, origin, truncation);
-  result.c80 = clarity_db(energy, sample_rate, 0.08f, origin, truncation);
-  result.d50 = definition_d50(energy, sample_rate, origin, truncation);
+  result.edt = decay.decay_time(0.0f, -10.0f);
+  result.c50 = decay.clarity_db(kEarlyBoundary50Sec);
+  result.c80 = decay.clarity_db(kEarlyBoundary80Sec);
+  result.d50 = decay.definition_d50();
   result.confidence = estimate_confidence(result.rt60, result.edt, min_decay_db);
   return result;
 }

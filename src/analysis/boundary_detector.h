@@ -3,6 +3,7 @@
 /// @file boundary_detector.h
 /// @brief Section boundary detection using self-similarity analysis.
 
+#include <cstddef>
 #include <vector>
 
 #include "core/audio.h"
@@ -12,6 +13,46 @@ namespace sonare {
 // Forward declarations
 class MelSpectrogram;
 class Chroma;
+
+/// @brief Memory budget for the stored self-similarity band, in bytes.
+/// @details Only the diagonal band of the self-similarity matrix is ever read,
+/// so only that band is stored (see @ref boundary_ssm_band_width). The working
+/// set is therefore linear in the frame count rather than quadratic, and this
+/// budget is the backstop that keeps even a pathological length bounded: past it
+/// the feature grid is mean-pooled.
+inline constexpr size_t kBoundarySsmBudgetBytes = 256u * 1024u * 1024u;
+
+/// @brief Returns the number of self-similarity diagonals stored per frame.
+/// @param kernel_size Checkerboard kernel size in frames.
+/// @details The checkerboard kernel centred on frame c reads ssm(row, col) with
+/// row and col both in [c - kernel_size/2, c + kernel_size/2), so `row - col`
+/// never leaves [-(kernel_size - 1), kernel_size - 1] for an even kernel size.
+/// Everything outside that band of the full matrix is unreachable, so the store
+/// keeps `2 * (2 * (kernel_size / 2) - 1) + 1` diagonals and nothing else.
+size_t boundary_ssm_band_width(int kernel_size);
+
+/// @brief Returns the frame count at which the band budget starts pooling.
+/// @param kernel_size Checkerboard kernel size in frames.
+/// @return `kBoundarySsmBudgetBytes / (band width * sizeof(float))`, at least 1.
+///         With the default 64-frame kernel this is several hours of audio, so
+///         pooling is a backstop rather than a normal-path behaviour.
+int boundary_pooled_target_frames(int kernel_size);
+
+/// @brief Returns the feature pooling stride for a raw frame count.
+/// @param n_frames Raw analysis frame count before pooling.
+/// @param kernel_size Checkerboard kernel size in frames.
+/// @return 1 when the input fits the band budget, otherwise the number of raw
+///         frames averaged into each analysis frame.
+int boundary_pooling_stride(int n_frames, int kernel_size);
+
+/// @brief Returns the analysis frame count the band is built on.
+/// @param n_frames Raw analysis frame count before pooling.
+/// @param kernel_size Checkerboard kernel size in frames.
+/// @return The pooled frame count, never above
+///         @ref boundary_pooled_target_frames, so
+///         `frames * band width * sizeof(float)` never exceeds
+///         @ref kBoundarySsmBudgetBytes for any input length.
+int boundary_ssm_frames(int n_frames, int kernel_size);
 
 /// @brief Configuration for boundary detection.
 struct BoundaryConfig {
@@ -79,17 +120,31 @@ class BoundaryDetector {
   /// @brief Returns hop length.
   int hop_length() const { return hop_length_; }
 
+  /// @brief Returns the analysis frame count the similarity band was built on.
+  /// @details Never exceeds @ref boundary_pooled_target_frames: for an input past
+  /// the band budget this is the pooled frame count, not the raw STFT frame count.
+  int n_frames() const { return n_frames_; }
+
+  /// @brief Returns the feature pooling stride.
+  /// @details 1 when the input fit the band budget without pooling — which is the
+  /// case for every realistic input length — otherwise the number of raw STFT
+  /// frames averaged into each analysis frame, which is also the factor by which
+  /// the effective hop duration was multiplied.
+  int frame_stride() const { return frame_stride_; }
+
  private:
   void compute_features();
   /// @brief Combines and L2-normalizes flattened MFCC/chroma features.
   /// @details Shared by both constructors. Sets n_frames_, n_features_, features_.
   void combine_features(const std::vector<float>& mfcc_features, int mfcc_frames,
                         const std::vector<float>& chroma_features, int chroma_frames);
+  /// @brief Fills ssm_band_ with the diagonal band the checkerboard kernel reads.
   void compute_self_similarity();
-  /// @brief Mean-pools the feature grid so the SSM stays within bounds.
-  /// @details No-op (stride 1) unless n_frames_ exceeds the SSM cap; otherwise it
-  /// averages consecutive frames into pooled, re-normalized feature vectors and
-  /// records the pooling stride in frame_stride_ so boundary times stay correct.
+  /// @brief Mean-pools the feature grid so the band stays within its memory budget.
+  /// @details No-op (stride 1) unless n_frames_ exceeds
+  /// @ref boundary_pooled_target_frames; otherwise it averages consecutive frames
+  /// into pooled, re-normalized feature vectors and records the pooling stride in
+  /// frame_stride_ so boundary times stay correct.
   void downsample_features();
   void compute_novelty_curve();
   void detect_boundaries();
@@ -98,10 +153,12 @@ class BoundaryDetector {
   std::vector<Boundary> boundaries_;
   std::vector<float> novelty_curve_;
   std::vector<float> features_;  // Combined feature matrix
-  std::vector<float> ssm_;       // Self-similarity matrix
+  std::vector<float> ssm_band_;  // Diagonal band of the self-similarity matrix,
+                                 // n_frames_ rows of (2 * band_radius_ + 1) diagonals
   int n_frames_;
   int n_features_;
-  int frame_stride_ = 1;  // feature pooling factor (>1 only for long-form inputs)
+  int band_radius_ = 0;   // stored half-bandwidth: only |row - col| <= this is kept
+  int frame_stride_ = 1;  // feature pooling factor (>1 only past the band budget)
   int sr_;
   int hop_length_;
   BoundaryConfig config_;

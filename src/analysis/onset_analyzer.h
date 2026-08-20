@@ -18,17 +18,22 @@ struct Onset {
 /// @brief Configuration for onset detection.
 /// @details Default values follow common onset-detection settings (sr=22050, hop=512).
 struct OnsetDetectConfig {
-  int n_fft = 2048;          ///< FFT size
-  int hop_length = 512;      ///< Hop length
-  float threshold = 0.0f;    ///< Minimum onset strength (0 = adaptive)
-  int pre_max = 1;           ///< Frames before peak for local max (~30ms)
-  int post_max = 1;          ///< Frames after peak for local max
-  int pre_avg = 3;           ///< Frames for pre-onset average
-  int post_avg = 4;          ///< Frames for post-onset average
-  float delta = 0.06f;       ///< Offset for adaptive threshold
-  int wait = 1;              ///< Minimum frames between consecutive onsets (~30ms)
-  bool backtrack = false;    ///< Backtrack to nearest local minimum
-  int backtrack_range = 10;  ///< Maximum backtrack range in frames
+  int n_fft = 2048;        ///< FFT size
+  int hop_length = 512;    ///< Hop length
+  float threshold = 0.0f;  ///< Minimum onset strength (0 = adaptive)
+  int pre_max = 1;         ///< Frames before peak for local max (~30ms)
+  int post_max = 1;        ///< Frames after peak for local max
+  int pre_avg = 3;         ///< Frames for pre-onset average
+  int post_avg = 4;        ///< Frames for post-onset average
+  float delta = 0.06f;     ///< Offset for adaptive threshold
+  int wait = 1;            ///< Minimum frames between consecutive onsets (~30ms)
+  bool backtrack = false;  ///< Backtrack each onset to the preceding local minimum
+  /// @brief Maximum backtrack travel in frames.
+  /// @details A bound on the search, not a stopping rule: an onset lands on the
+  ///          preceding local minimum found by onset_backtrack() unless that is
+  ///          farther back than this many frames, in which case it stops here.
+  ///          Raise it to reproduce the unbounded onset_backtrack() result.
+  int backtrack_range = 10;
 };
 
 /// @brief Onset analyzer for detecting note/beat onsets.
@@ -71,6 +76,8 @@ class OnsetAnalyzer {
  private:
   void detect_onsets();
   void backtrack_onsets();
+  /// @brief Frame index an onset time refers to, rounded to the nearest frame.
+  int frame_for_time(float time) const;
 
   std::vector<Onset> onsets_;
   std::vector<float> onset_strength_;

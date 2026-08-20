@@ -3,9 +3,11 @@
 
 #include "analysis/acoustic_analyzer.h"
 
+#include <algorithm>
 #include <catch2/catch_test_macros.hpp>
 #include <catch2/matchers/catch_matchers_floating_point.hpp>
 #include <cmath>
+#include <cstddef>
 #include <vector>
 
 #include "util/constants.h"
@@ -108,6 +110,51 @@ Audio create_upper_band_free_decay(float rt60_sec, int sample_rate = 48000) {
   return Audio::from_vector(std::move(samples), sample_rate);
 }
 
+// Same signal, more leading silence: every anchored metric must be blind to it.
+Audio prepend_silence(const Audio& audio, float delay_sec) {
+  const size_t delay_samples =
+      static_cast<size_t>(std::lround(static_cast<double>(delay_sec) * audio.sample_rate()));
+  std::vector<float> samples(delay_samples + audio.size(), 0.0f);
+  std::copy(audio.data(), audio.data() + audio.size(),
+            samples.begin() + static_cast<std::ptrdiff_t>(delay_samples));
+  return Audio::from_vector(std::move(samples), audio.sample_rate());
+}
+
+// Cabinet-style impulse response: a few tens of milliseconds of decay over a
+// low but non-zero noise floor, so the noise-floor truncation lands well before
+// the 50 ms and 80 ms clarity split points.
+Audio create_cabinet_ir(int sample_rate = 48000, float duration_sec = 0.5f) {
+  const size_t n_samples = static_cast<size_t>(sample_rate * duration_sec);
+  std::vector<float> samples(n_samples, 0.0f);
+  const float decay = std::log(1000.0f) / 0.02f;  // 20 ms reverberation time
+  uint32_t state = 0x2468acefu;
+  for (size_t i = 0; i < n_samples; ++i) {
+    state = state * 1664525u + 1013904223u;
+    const float noise = (static_cast<float>((state >> 8) & 0xffffu) / 32768.0f - 1.0f) * 0.02f;
+    const float t = static_cast<float>(i) / static_cast<float>(sample_rate);
+    samples[i] = std::exp(-decay * t) + noise;
+  }
+  return Audio::from_vector(std::move(samples), sample_rate);
+}
+
+// Room-style impulse response: a dominant direct sound followed by an
+// exponentially decaying diffuse tail, long enough for the analysis window to
+// reach past the 80 ms clarity split.
+Audio create_room_ir(float rt60_sec, int sample_rate = 48000, float duration_sec = 1.5f) {
+  const size_t n_samples = static_cast<size_t>(sample_rate * duration_sec);
+  std::vector<float> samples(n_samples, 0.0f);
+  const float decay = std::log(1000.0f) / rt60_sec;
+  uint32_t state = 0x13579bdfu;
+  for (size_t i = 0; i < n_samples; ++i) {
+    state = state * 1664525u + 1013904223u;
+    const float white = static_cast<float>((state >> 8) & 0xffffu) / 32768.0f - 1.0f;
+    const float t = static_cast<float>(i) / static_cast<float>(sample_rate);
+    samples[i] = 0.35f * white * std::exp(-decay * t);
+  }
+  samples[0] = 1.0f;  // direct sound
+  return Audio::from_vector(std::move(samples), sample_rate);
+}
+
 float theoretical_clarity(float rt60_sec, float boundary_sec) {
   const float decay = std::log(1000.0f) / rt60_sec;
   return 10.0f * std::log10(std::exp(2.0f * decay * boundary_sec) - 1.0f);
@@ -177,6 +224,83 @@ TEST_CASE("AcousticAnalyzer anchors IR clarity metrics at the direct sound",
   REQUIRE_THAT(params.c50, WithinAbs(theoretical_clarity(expected_rt60, 0.05f), 0.2f));
   REQUIRE_THAT(params.c80, WithinAbs(theoretical_clarity(expected_rt60, 0.08f), 0.2f));
   REQUIRE_THAT(params.d50, WithinAbs(theoretical_d50(expected_rt60), 0.02f));
+}
+
+TEST_CASE("AcousticAnalyzer anchors IR decay times at the direct sound", "[acoustic_analyzer]") {
+  const float expected_rt60 = 1.0f;
+  const Audio base = create_exponential_ir(expected_rt60, 48000, 3.0f);
+
+  AcousticConfig config;
+  config.n_octave_bands = 0;  // broadband decay times only
+
+  const auto flush = analyze_impulse_response(base, config);
+  REQUIRE(std::isfinite(flush.rt60));
+  REQUIRE(std::isfinite(flush.edt));
+  REQUIRE_THAT(flush.rt60, WithinRel(expected_rt60, 0.05f));
+  REQUIRE_THAT(flush.edt, WithinRel(expected_rt60, 0.05f));
+
+  // The Schroeder curve is integrated and fitted from the direct-sound arrival
+  // onward, so two inputs differing only in leading silence -- the delay every
+  // measured impulse response carries -- must report the same decay times.
+  for (float delay_sec : {0.08f, 0.5f}) {
+    INFO("leading silence (s): " << delay_sec);
+    const auto delayed = analyze_impulse_response(prepend_silence(base, delay_sec), config);
+    REQUIRE(std::isfinite(delayed.rt60));
+    REQUIRE(std::isfinite(delayed.edt));
+    REQUIRE_THAT(delayed.rt60, WithinRel(flush.rt60, 1e-4f));
+    REQUIRE_THAT(delayed.edt, WithinRel(flush.edt, 1e-4f));
+  }
+}
+
+TEST_CASE("AcousticAnalyzer keeps truncated-IR clarity metrics inside their definitions",
+          "[acoustic_analyzer]") {
+  AcousticConfig config;
+  config.n_octave_bands = 0;
+
+  const auto params = analyze_impulse_response(create_cabinet_ir(), config);
+
+  // D50 is a ratio of complementary sub-intervals of one analysis window, so it
+  // cannot leave [0, 1]; a clarity ratio must be a level, never the +200 dB the
+  // energy epsilon yields when the late window is empty.
+  REQUIRE((std::isnan(params.d50) || (params.d50 >= 0.0f && params.d50 <= 1.0f)));
+  REQUIRE(
+      (std::isnan(params.c50) || (std::isfinite(params.c50) && std::abs(params.c50) <= 100.0f)));
+  REQUIRE(
+      (std::isnan(params.c80) || (std::isfinite(params.c80) && std::abs(params.c80) <= 100.0f)));
+  // Non-vacuity: this IR really is truncated before 80 ms, so the 80 ms split
+  // leaves no late window to measure and the ratio is reported as unavailable.
+  REQUIRE(std::isnan(params.c80));
+}
+
+TEST_CASE("AcousticAnalyzer auto mode ignores leading silence when routing an IR",
+          "[acoustic_analyzer]") {
+  const Audio base = create_room_ir(0.6f);
+
+  AcousticConfig config;  // default Auto mode
+  config.n_octave_bands = 0;
+
+  const auto flush = detect_acoustic(base, config);
+  REQUIRE_FALSE(flush.is_blind);
+  REQUIRE(std::isfinite(flush.rt60));
+  REQUIRE(std::isfinite(flush.c50));
+  REQUIRE(std::isfinite(flush.c80));
+  REQUIRE(std::isfinite(flush.d50));
+
+  // Auto classifies on the input's shape relative to its own onset, so however
+  // much silence the container carries in front of the direct sound, the input
+  // still routes to IR analysis and reports the same clarity metrics.
+  for (float delay_sec : {0.05f, 0.5f}) {
+    INFO("leading silence (s): " << delay_sec);
+    const auto delayed = detect_acoustic(prepend_silence(base, delay_sec), config);
+    REQUIRE_FALSE(delayed.is_blind);
+    REQUIRE(std::isfinite(delayed.c50));
+    REQUIRE(std::isfinite(delayed.c80));
+    REQUIRE(std::isfinite(delayed.d50));
+    REQUIRE_THAT(delayed.c50, WithinAbs(flush.c50, 1e-3f));
+    REQUIRE_THAT(delayed.c80, WithinAbs(flush.c80, 1e-3f));
+    REQUIRE_THAT(delayed.d50, WithinAbs(flush.d50, 1e-3f));
+    REQUIRE_THAT(delayed.rt60, WithinRel(flush.rt60, 1e-4f));
+  }
 }
 
 TEST_CASE("AcousticAnalyzer truncates IR Schroeder decay above the noise floor",
