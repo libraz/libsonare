@@ -64,6 +64,19 @@ struct MeterSnapshot {
   float short_term_lufs = constants::kFloorDb;
   float integrated_lufs = constants::kFloorDb;
   float gain_reduction_db = 0.0f;
+  /// Per-plane inter-sample (true) peak in dBFS, and its maximum over every
+  /// plane, from the ITU-R BS.1770-4 polyphase reconstruction at
+  /// MeterConfig::true_peak_oversample. Both stay at the dB floor when
+  /// MeterConfig::measure_true_peak is false.
+  ///
+  /// @note This is a STREAMING measurement and is very slightly block-size
+  /// dependent. The reconstruction's centered stencil needs a few future
+  /// base-rate samples, which a realtime path does not have, so the last samples
+  /// of each block interpolate against a zero-padded forward kernel and read
+  /// marginally low -- roughly 0.1 dB across 64..8192-sample blocks on a
+  /// near-Nyquist tone, always in the under-reading direction. Use the offline
+  /// metering::true_peak over the whole signal when an exact dBTP number is
+  /// required (a delivery ceiling check, say) rather than a live indication.
   std::array<float, kMaxMeterChannels> true_peak_db = detail::meter_floor_array();
   float max_true_peak_db = constants::kFloorDb;
   // Number of planes carrying valid per-channel meters (1..kMaxMeterChannels).

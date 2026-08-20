@@ -55,11 +55,18 @@ export interface EngineMeterTelemetry {
   rmsDbL: number;
   /** Right-channel RMS level in dB. */
   rmsDbR: number;
-  /** Left-channel true-peak level in dB. */
+  /**
+   * Left-channel inter-sample (true) peak in dB, from the ITU-R BS.1770-4
+   * polyphase reconstruction at 4x. A streaming measurement: the centered
+   * reconstruction stencil needs a few future samples a realtime path does not
+   * have, so each block's last samples read marginally low (about 0.1 dB across
+   * 64..8192-sample blocks on a near-Nyquist tone, always under-reading). Use
+   * `meteringTruePeakDb` over the whole signal for an exact dBTP number.
+   */
   truePeakDbL: number;
-  /** Right-channel true-peak level in dB. */
+  /** Right-channel inter-sample (true) peak in dB. See {@link truePeakDbL}. */
   truePeakDbR: number;
-  /** Maximum true-peak across channels in dB. */
+  /** Maximum inter-sample peak across channels in dB. See {@link truePeakDbL}. */
   maxTruePeakDb: number;
   /** Stereo correlation in `[-1, 1]`. */
   correlation: number;
@@ -119,9 +126,17 @@ export interface EngineMeterTelemetryWide {
   peakDb: number[];
   /** Per-plane RMS level in dB (length `channelCount`). */
   rmsDb: number[];
-  /** Per-plane true-peak level in dB (length `channelCount`). */
+  /**
+   * Per-plane inter-sample (true) peak in dB (length `channelCount`), from the
+   * ITU-R BS.1770-4 polyphase reconstruction at 4x. A streaming measurement: the
+   * centered reconstruction stencil needs a few future samples a realtime path
+   * does not have, so each block's last samples read marginally low (about
+   * 0.1 dB across 64..8192-sample blocks on a near-Nyquist tone, always
+   * under-reading). Use `meteringTruePeakDb` over the whole signal for an exact
+   * dBTP number.
+   */
   truePeakDb: number[];
-  /** Maximum true-peak across channels in dB. */
+  /** Maximum inter-sample peak across channels in dB. See {@link truePeakDb}. */
   maxTruePeakDb: number;
   /** Stereo correlation in `[-1, 1]` (front pair). */
   correlation: number;

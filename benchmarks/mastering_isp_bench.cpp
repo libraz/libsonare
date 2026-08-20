@@ -5,8 +5,8 @@
 #include <cstdlib>
 #include <vector>
 
-#include "mastering/common/sliding_max.h"
-#include "mastering/common/true_peak_filter.h"
+#include "rt/sliding_max.h"
+#include "rt/true_peak_filter.h"
 #include "util/constants.h"
 
 namespace {
@@ -64,8 +64,8 @@ int main(int argc, char** argv) {
       kChannels, std::vector<float>(kBlockSamples * kOversampleFactor, 0.0f));
   float* output_ptrs[kChannels] = {upsampled[0].data(), upsampled[1].data()};
 
-  sonare::mastering::common::TruePeakFilter filter(kChannels);
-  sonare::mastering::common::SlidingMax<float> sliding_max(kBlockSamples * kOversampleFactor);
+  sonare::rt::TruePeakFilter filter(kChannels);
+  sonare::rt::SlidingMax<float> sliding_max(kBlockSamples * kOversampleFactor);
 
   const double ms_per_1ms_block = bench(
       [&] {

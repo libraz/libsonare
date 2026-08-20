@@ -58,6 +58,13 @@ typedef struct {
   float short_term_lufs;
   float integrated_lufs;
   float gain_reduction_db;
+  /* Inter-sample (true) peak in dBFS, from the ITU-R BS.1770-4 polyphase
+     reconstruction at 4x. This is a STREAMING measurement and is very slightly
+     block-size dependent: the reconstruction's centered stencil needs a few
+     future samples a realtime path does not have, so each block's last samples
+     read marginally low (about 0.1 dB across 64..8192-sample blocks on a
+     near-Nyquist tone, always under-reading). Use sonare_metering_true_peak_db
+     over the whole signal when an exact dBTP number is required. */
   float true_peak_db_l;
   float true_peak_db_r;
   float max_true_peak_db;

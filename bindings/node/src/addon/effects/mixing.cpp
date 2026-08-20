@@ -264,11 +264,14 @@ Napi::Value SonareWrap::MixStereo(const Napi::CallbackInfo& info) {
   if (err != SONARE_OK)
     throw sonare::SonareException(sonare_node::CodeFromCError(err), ErrorMessageForCode(err));
 
-  // Per-strip meter snapshots. NOTE: the integrating fields
-  // (momentaryLufs / shortTermLufs / integratedLufs / truePeakDb*) require
-  // sustained streaming to converge; on a short one-shot mix they have not
-  // accumulated enough signal and read the -120 dB floor sentinel. Use the
-  // streaming Mixer for meaningful loudness/true-peak readings.
+  // Per-strip meter snapshots. NOTE: the LUFS fields (momentaryLufs /
+  // shortTermLufs / integratedLufs) are integrators whose windows this one-shot
+  // mix does not fill, so they read the -120 dB floor sentinel; use the
+  // streaming Mixer for meaningful loudness. The true-peak fields are not
+  // integrators -- each is a max-hold over the block just processed and is valid
+  // immediately. The mixer above was created with a block size equal to the full
+  // input length, so this is the whole-signal case and the reading carries none
+  // of the per-block edge under-read the streaming path has.
   Napi::Array meters = Napi::Array::New(env, strips.size());
   for (size_t index = 0; index < strips.size(); ++index) {
     SonareMixMeterSnapshot snapshot{};

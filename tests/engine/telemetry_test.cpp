@@ -1,9 +1,11 @@
 #include <array>
 #include <catch2/catch_test_macros.hpp>
+#include <cmath>
 #include <vector>
 
 #include "engine/meter_telemetry.h"
 #include "engine/realtime_engine.h"
+#include "util/constants.h"
 
 namespace {
 
@@ -424,3 +426,66 @@ TEST_CASE("RealtimeEngine newly claimed smoother slot does not leak its previous
   engine.process(io, 1, 128);
   REQUIRE(processors[1].last_value == -0.75f);
 }
+
+#if defined(SONARE_WITH_MIXING)
+TEST_CASE("RealtimeEngine master meter telemetry carries a real inter-sample peak",
+          "[engine][telemetry][truepeak]") {
+  // The master tap's true_peak_db / max_true_peak_db are published on the C ABI
+  // and on every binding. They are only a true peak if the engine prepares its
+  // meter with true-peak measurement enabled; with the measurement off the
+  // fields sit at the dB floor for every signal, so this test is what stands
+  // between those names and a permanent -120.
+  //
+  // A sine at a quarter of the sample rate offset by an eighth of a period puts
+  // every sample on +-amplitude/sqrt(2) and the waveform's peak at +-amplitude,
+  // so the true peak is 3.01 dB above the sample peak by construction.
+  constexpr int kBlock = 128;
+  constexpr int kBlocks = 24;
+  constexpr float kAmplitude = 0.5f;
+
+  sonare::engine::RealtimeEngine engine;
+  engine.prepare(48000.0, kBlock, 1024, 1024, 2);
+  engine.set_input_monitor(true, 1.0f);
+
+  sonare::rt::Command play{};
+  play.type = sonare::rt::CommandType::kTransportPlay;
+  play.sample_time = -1;
+  REQUIRE(engine.push_command(play));
+
+  std::vector<float> left(kBlock, 0.0f);
+  std::vector<float> right(kBlock, 0.0f);
+  bool saw_master = false;
+  float master_peak_db = sonare::constants::kFloorDb;
+  float master_true_peak_db = sonare::constants::kFloorDb;
+  float master_max_true_peak_db = sonare::constants::kFloorDb;
+
+  sonare::engine::MeterTelemetryRecord record{};
+  for (int block = 0; block < kBlocks; ++block) {
+    for (int i = 0; i < kBlock; ++i) {
+      const float value = kAmplitude * std::sin(static_cast<float>(sonare::constants::kTwoPi) *
+                                                    0.25f * static_cast<float>(block * kBlock + i) +
+                                                static_cast<float>(sonare::constants::kPi) * 0.25f);
+      left[static_cast<size_t>(i)] = value;
+      right[static_cast<size_t>(i)] = value;
+    }
+    float* io[] = {left.data(), right.data()};
+    engine.process(io, 2, kBlock);
+    while (engine.pop_meter_telemetry(record)) {
+      if (record.target_id != 0) continue;
+      saw_master = true;
+      master_peak_db = record.peak_db[0];
+      master_true_peak_db = record.true_peak_db[0];
+      master_max_true_peak_db = record.max_true_peak_db;
+    }
+  }
+
+  REQUIRE(saw_master);
+  CAPTURE(master_peak_db, master_true_peak_db, master_max_true_peak_db);
+  REQUIRE(master_true_peak_db > sonare::constants::kFloorDb);
+  REQUIRE(master_true_peak_db > master_peak_db + 1.5f);
+  REQUIRE(master_max_true_peak_db >= master_true_peak_db);
+  // Finite, never NaN: the record is serialized straight into host JSON.
+  REQUIRE(std::isfinite(master_true_peak_db));
+  REQUIRE(std::isfinite(master_max_true_peak_db));
+}
+#endif  // defined(SONARE_WITH_MIXING)

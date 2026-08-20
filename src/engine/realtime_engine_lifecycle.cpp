@@ -82,9 +82,17 @@ void RealtimeEngine::prepare(double sample_rate, int max_block_size, size_t comm
 #endif
   metronome_.prepare(sample_rate, active_tempo_map_);
 #if defined(SONARE_WITH_MIXING)
+  // The master meter measures true peak as well as LUFS, so the true_peak_db /
+  // max_true_peak_db fields of every telemetry record carry an ITU-R BS.1770-4
+  // inter-sample reading instead of resting at the dB floor. 4x oversampling is
+  // the standard's minimum and the same configuration the mixer channel strips
+  // meter with, so the engine and the mixer report one quantity rather than two.
+  // The oversampling buffers are sized here (non-RT); the per-block path stays
+  // allocation-free.
   meter_tap_.prepare(sample_rate, max_block_size_, 0,
                      telemetry_capacity *
-                         (TrackMixerRuntime::kMaxTrackLanes + TrackMixerRuntime::kMaxBusLanes + 2));
+                         (TrackMixerRuntime::kMaxTrackLanes + TrackMixerRuntime::kMaxBusLanes + 2),
+                     mixing::MeterConfig{true, true, 4});
   // Spectrum/vectorscope snapshots are interval-gated, so a shallower per-target
   // ring depth than the meter tap suffices.
   scope_tap_.prepare(sample_rate, max_block_size_,

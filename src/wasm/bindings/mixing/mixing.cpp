@@ -405,10 +405,14 @@ val js_mix_stereo(val left_channels, val right_channels, int sample_rate, val op
           std::string("mixer process failed: ") + sonare_error_message(err));
     }
     // The per-strip meter snapshots reflect only this single one-shot block.
-    // The integrating-meter fields (momentaryLufs/shortTermLufs/integratedLufs
-    // and the true-peak fields) require sustained streaming to populate; on a
-    // short one-shot mix they read the -120 dB floor sentinel. Use the
-    // streaming Mixer path if you need meaningful loudness/true-peak readings.
+    // The LUFS fields (momentaryLufs/shortTermLufs/integratedLufs) are
+    // integrators whose windows that block does not fill, so they read the
+    // -120 dB floor sentinel; use the streaming Mixer path for meaningful
+    // loudness. The true-peak fields are not integrators -- each is a max-hold
+    // over the block just processed and is valid immediately. The mixer was
+    // created with a block size equal to the full input length, so this is the
+    // whole-signal case and the reading carries none of the per-block edge
+    // under-read the streaming path has.
     for (size_t index = 0; index < strips.size(); ++index) {
       SonareMixMeterSnapshot snapshot{};
       sonare_strip_meter(strips[index], &snapshot);

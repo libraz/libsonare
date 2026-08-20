@@ -20,7 +20,13 @@ import type {
 
 /**
  * One master-output meter reading. All dB fields are finite and floored at
- * -120; `truePeakDb*` is an oversampled inter-sample peak, not a sample peak.
+ * -120; `truePeakDb*` is an inter-sample peak from the ITU-R BS.1770-4
+ * polyphase reconstruction at 4x, not a sample peak. That reconstruction is a
+ * streaming measurement: its centered stencil needs a few future samples a
+ * realtime path does not have, so each block's last samples read marginally low
+ * (about 0.1 dB across 64..8192-sample blocks on a near-Nyquist tone, always
+ * under-reading). Use `meteringTruePeakDb` over the whole signal for an exact
+ * dBTP number.
  */
 export interface MixerMeterSnapshot {
   peakDbL: number;

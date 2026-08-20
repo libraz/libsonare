@@ -34,7 +34,8 @@ TEST_CASE("Polyphase interpolation matches centered convolution for every phase"
   sonare::rt::PolyphaseFir fir;
   fir.phases = 2;
   fir.taps_per_phase = 3;
-  fir.phase_taps = {{1.0f, 2.0f, 3.0f}, {4.0f, 5.0f, 6.0f}};
+  // Phase-major flat layout: phase 0 is {1, 2, 3}, phase 1 is {4, 5, 6}.
+  fir.taps = {1.0f, 2.0f, 3.0f, 4.0f, 5.0f, 6.0f};
   const std::vector<float> data = {1.0f, 2.0f, 3.0f, 4.0f, 5.0f, 6.0f, 7.0f};
 
   REQUIRE_THAT(sonare::rt::interpolate_polyphase_sample(data.data(), data.size(), 3, 0, fir),
@@ -55,7 +56,7 @@ TEST_CASE("true-peak FIR factory owns every supported design", "[rt][truepeak]")
     const auto& fir = sonare::rt::true_peak_fir_for(factor);
     REQUIRE(fir.phases == factor);
     REQUIRE(fir.taps_per_phase == 12);
-    REQUIRE(fir.phase_taps.size() == static_cast<size_t>(factor));
+    REQUIRE(fir.taps.size() == static_cast<size_t>(factor * fir.taps_per_phase));
     REQUIRE(TruePeakFilter(1, factor).history_samples() == fir.taps_per_phase);
   }
 

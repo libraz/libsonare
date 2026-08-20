@@ -7,6 +7,7 @@
 #include <vector>
 
 #include "metering/lufs.h"
+#include "util/constants.h"
 
 namespace {
 
@@ -241,4 +242,57 @@ TEST_CASE("MeterTelemetryTap merges sub-block peak and RMS across a host block",
   // reflect both halves rather than just the last one.
   const double expected_rms_db = 10.0 * std::log10(0.5);
   REQUIRE(record.rms_db[0] == Approx(static_cast<float>(expected_rms_db)).margin(0.05f));
+}
+
+TEST_CASE("MeterTelemetryTap reports an inter-sample peak when configured for true peak",
+          "[engine][meter_telemetry][truepeak]") {
+  // A sine at a quarter of the sample rate, offset by an eighth of a period:
+  // every sample lands on +-amplitude/sqrt(2) while the waveform they encode
+  // reaches +-amplitude, so the true peak sits 3.01 dB above the sample peak by
+  // construction. A tap that published the sample peak under the true-peak name
+  // could not produce that gap, which is what makes this non-vacuous.
+  constexpr float kAmplitude = 0.5f;
+  constexpr int kBlocks = 16;
+  const int frames = kBlock * kBlocks;
+
+  std::vector<float> tone(static_cast<size_t>(frames), 0.0f);
+  for (int i = 0; i < frames; ++i) {
+    tone[static_cast<size_t>(i)] =
+        kAmplitude *
+        std::sin(static_cast<float>(sonare::constants::kTwoPi) * 0.25f * static_cast<float>(i) +
+                 static_cast<float>(sonare::constants::kPi) * 0.25f);
+  }
+
+  sonare::engine::MeterTelemetryTap tap;
+  tap.prepare(kSampleRate, kBlock, 5, 64, sonare::mixing::MeterConfig{true, true, 4});
+
+  sonare::engine::MeterTelemetryRecord latest{};
+  sonare::engine::MeterTelemetryRecord record{};
+  for (int block = 0; block < kBlocks; ++block) {
+    float* channels[] = {tone.data() + block * kBlock, tone.data() + block * kBlock};
+    tap.process(channels, 2, kBlock, block * kBlock);
+    while (tap.pop(record)) latest = record;
+  }
+
+  const float sample_peak_db = 20.0f * std::log10(kAmplitude / std::sqrt(2.0f));
+  REQUIRE(latest.peak_db[0] == Approx(sample_peak_db).margin(0.05f));
+  REQUIRE(latest.true_peak_db[0] > latest.peak_db[0] + 1.5f);
+  REQUIRE(latest.true_peak_db[1] > latest.peak_db[1] + 1.5f);
+  REQUIRE(latest.max_true_peak_db >= latest.true_peak_db[0]);
+  // The reconstruction must not invent headroom either: the analog envelope is
+  // the amplitude, and the FIR's ripple keeps the reading just under it.
+  REQUIRE(latest.max_true_peak_db < 20.0f * std::log10(kAmplitude) + 0.5f);
+  REQUIRE(std::isfinite(latest.max_true_peak_db));
+
+  // Silence must still floor rather than report the previous block's peak.
+  std::vector<float> silence(static_cast<size_t>(frames), 0.0f);
+  sonare::engine::MeterTelemetryTap silent_tap;
+  silent_tap.prepare(kSampleRate, kBlock, 5, 64, sonare::mixing::MeterConfig{true, true, 4});
+  for (int block = 0; block < kBlocks; ++block) {
+    float* channels[] = {silence.data(), silence.data()};
+    silent_tap.process(channels, 2, kBlock, block * kBlock);
+    while (silent_tap.pop(record)) latest = record;
+  }
+  REQUIRE(latest.true_peak_db[0] == Approx(sonare::constants::kFloorDb));
+  REQUIRE(latest.max_true_peak_db == Approx(sonare::constants::kFloorDb));
 }

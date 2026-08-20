@@ -701,8 +701,18 @@ export interface MixMeterSnapshot {
   shortTermLufs: number;
   integratedLufs: number;
   gainReductionDb: number;
+  /**
+   * Left-channel inter-sample (true) peak in dB, from the ITU-R BS.1770-4
+   * polyphase reconstruction at 4x. A streaming measurement: the centered
+   * reconstruction stencil needs a few future samples a realtime path does not
+   * have, so each block's last samples read marginally low (about 0.1 dB across
+   * 64..8192-sample blocks on a near-Nyquist tone, always under-reading). Use
+   * `meteringTruePeakDb` over the whole signal for an exact dBTP number.
+   */
   truePeakDbL: number;
+  /** Right-channel inter-sample (true) peak in dB. See {@link truePeakDbL}. */
   truePeakDbR: number;
+  /** Maximum inter-sample peak across channels in dB. See {@link truePeakDbL}. */
   maxTruePeakDb: number;
   seq: number;
   /** Number of valid surround planes (5.1/7.1); 0 before the meter sees audio. */
@@ -711,7 +721,10 @@ export interface MixMeterSnapshot {
   peakDb: number[];
   /** Per-plane RMS dB, length channelCount; [0]/[1] mirror rmsDbL/rmsDbR. */
   rmsDb: number[];
-  /** Per-plane true-peak dB, length channelCount; [0]/[1] mirror truePeakDbL/R. */
+  /**
+   * Per-plane true-peak dB, length channelCount; [0]/[1] mirror
+   * {@link truePeakDbL}/R and carry the same streaming caveat.
+   */
   truePeakDb: number[];
 }
 

@@ -190,6 +190,43 @@ TEST_CASE("MeterTelemetryTap process performs no heap allocation after prepare",
   REQUIRE(guard.count() == 0);
 }
 
+TEST_CASE("MeterTelemetryTap true-peak process performs no heap allocation, including the first",
+          "[engine][meter_telemetry][truepeak][rt]") {
+  // True-peak metering adds a polyphase upsample with cross-block history and a
+  // per-channel oversampled scratch buffer. Those are sized in prepare(); if any
+  // of them were grown lazily the audio thread would allocate, so the FIRST
+  // metered block is guarded here as well as a steady-state one, and a
+  // short block (a sub-block split by automation) is guarded separately because
+  // it takes a different length through the same buffers.
+  constexpr int kBlock = 128;
+  sonare::engine::MeterTelemetryTap tap;
+  tap.prepare(48000.0, kBlock, 3, 16, sonare::mixing::MeterConfig{true, true, 4});
+
+  std::array<float, kBlock> left{};
+  std::array<float, kBlock> right{};
+  left.fill(0.5f);
+  right.fill(0.25f);
+  float* channels[] = {left.data(), right.data()};
+
+  {
+    AllocationGuard guard;
+    tap.process(channels, 2, kBlock, 0);
+    REQUIRE(guard.count() == 0);
+  }
+  {
+    AllocationGuard guard;
+    for (int block = 1; block < 64; ++block) {
+      tap.process(channels, 2, kBlock, block * kBlock);
+    }
+    REQUIRE(guard.count() == 0);
+  }
+  {
+    AllocationGuard guard;
+    tap.process(channels, 2, kBlock / 2, 64 * kBlock);
+    REQUIRE(guard.count() == 0);
+  }
+}
+
 TEST_CASE("AutomationEngine apply performs no heap allocation after prepare", "[automation][rt]") {
   sonare::transport::TempoMap tempo;
   tempo.prepare(48000.0);

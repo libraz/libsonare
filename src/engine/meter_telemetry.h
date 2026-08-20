@@ -28,6 +28,11 @@ struct MeterTelemetryRecord {
   // the record is always JSON-safe (no NaN reaches the host).
   std::array<float, mixing::kMaxMeterChannels> peak_db = mixing::detail::meter_floor_array();
   std::array<float, mixing::kMaxMeterChannels> rms_db = mixing::detail::meter_floor_array();
+  // Inter-sample (true) peak per plane and its maximum, measured by the tap's
+  // MeterProcessor when the prepare() config enables it. See
+  // mixing::MeterSnapshot for the streaming block-edge approximation these
+  // values carry; the lightweight (input-monitor) path does not measure true
+  // peak at all and leaves them at the floor.
   std::array<float, mixing::kMaxMeterChannels> true_peak_db = mixing::detail::meter_floor_array();
   float max_true_peak_db = constants::kFloorDb;
   float correlation = 0.0f;

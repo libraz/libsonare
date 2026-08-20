@@ -584,13 +584,24 @@ export interface WasmMixMeterSnapshot {
   shortTermLufs: number;
   integratedLufs: number;
   gainReductionDb: number;
+  /**
+   * Left-channel inter-sample (true) peak in dB, from the ITU-R BS.1770-4
+   * polyphase reconstruction at 4x. A streaming measurement: the centered
+   * reconstruction stencil needs a few future samples a realtime path does not
+   * have, so each block's last samples read marginally low (about 0.1 dB across
+   * 64..8192-sample blocks on a near-Nyquist tone, always under-reading). Use
+   * `meteringTruePeakDb` over the whole signal for an exact dBTP number.
+   */
   truePeakDbL: number;
+  /** Right-channel inter-sample (true) peak in dB. See {@link truePeakDbL}. */
   truePeakDbR: number;
+  /** Maximum inter-sample peak across channels in dB. See {@link truePeakDbL}. */
   maxTruePeakDb: number;
   seq: number;
   channelCount: number;
   peakDb: number[];
   rmsDb: number[];
+  /** Per-plane inter-sample peak in dB; [0]/[1] mirror {@link truePeakDbL}/R. */
   truePeakDb: number[];
 }
 
@@ -782,8 +793,18 @@ export interface WasmEngineMeterTelemetry {
   peakDbR: number;
   rmsDbL: number;
   rmsDbR: number;
+  /**
+   * Left-channel inter-sample (true) peak in dB, from the ITU-R BS.1770-4
+   * polyphase reconstruction at 4x. A streaming measurement: the centered
+   * reconstruction stencil needs a few future samples a realtime path does not
+   * have, so each block's last samples read marginally low (about 0.1 dB across
+   * 64..8192-sample blocks on a near-Nyquist tone, always under-reading). Use
+   * `meteringTruePeakDb` over the whole signal for an exact dBTP number.
+   */
   truePeakDbL: number;
+  /** Right-channel inter-sample (true) peak in dB. See {@link truePeakDbL}. */
   truePeakDbR: number;
+  /** Maximum inter-sample peak across channels in dB. See {@link truePeakDbL}. */
   maxTruePeakDb: number;
   correlation: number;
   monoCompatWidth: number;
@@ -801,7 +822,17 @@ export interface WasmEngineMeterTelemetryWide {
   channelCount: number;
   peakDb: number[];
   rmsDb: number[];
+  /**
+   * Per-plane inter-sample (true) peak in dB (length `channelCount`), from the
+   * ITU-R BS.1770-4 polyphase reconstruction at 4x. A streaming measurement: the
+   * centered reconstruction stencil needs a few future samples a realtime path
+   * does not have, so each block's last samples read marginally low (about
+   * 0.1 dB across 64..8192-sample blocks on a near-Nyquist tone, always
+   * under-reading). Use `meteringTruePeakDb` over the whole signal for an exact
+   * dBTP number.
+   */
   truePeakDb: number[];
+  /** Maximum inter-sample peak across channels in dB. See {@link truePeakDb}. */
   maxTruePeakDb: number;
   correlation: number;
   monoCompatWidth: number;
@@ -2697,8 +2728,16 @@ export interface WasmMixerMeterSnapshot {
   rmsDbL: number;
   rmsDbR: number;
   correlation: number;
-  /** Inter-sample peak, oversampled per ITU-R BS.1770-4 Annex 2. */
+  /**
+   * Left-channel inter-sample (true) peak in dB, from the ITU-R BS.1770-4
+   * polyphase reconstruction at 4x. A streaming measurement: the centered
+   * reconstruction stencil needs a few future samples a realtime path does not
+   * have, so each block's last samples read marginally low (about 0.1 dB across
+   * 64..8192-sample blocks on a near-Nyquist tone, always under-reading). Use
+   * `meteringTruePeakDb` over the whole signal for an exact dBTP number.
+   */
   truePeakDbL: number;
+  /** Right-channel inter-sample (true) peak in dB. See {@link truePeakDbL}. */
   truePeakDbR: number;
 }
 

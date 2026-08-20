@@ -103,6 +103,13 @@ if(BUILD_MASTERING)
 endif()
 
 if(BUILD_MIXING)
+  add_executable(sonare_true_peak_bench true_peak_bench.cpp)
+  target_link_libraries(sonare_true_peak_bench PRIVATE sonare_mixing)
+  target_compile_options(sonare_true_peak_bench PRIVATE ${SONARE_WARNING_FLAGS})
+  target_include_directories(sonare_true_peak_bench PRIVATE
+    ${PROJECT_SOURCE_DIR}/src
+  )
+
   add_executable(sonare_mixing_bench mixing_bench.cpp)
   target_link_libraries(sonare_mixing_bench PRIVATE sonare_mixing)
   target_compile_options(sonare_mixing_bench PRIVATE ${SONARE_WARNING_FLAGS})

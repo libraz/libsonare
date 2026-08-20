@@ -494,10 +494,15 @@ export class Mixer {
  * stereo strips down to one stereo bus.
  *
  * The returned `meters` array carries a per-strip {@link MixMeterSnapshot}.
- * Its integrating fields (`momentaryLufs`, `shortTermLufs`, `integratedLufs`,
- * `truePeakDbL`, `truePeakDbR`) need sustained streaming to converge; a short
- * one-shot mix can report the -120 dB floor sentinel. Use {@link Mixer} for
- * meaningful loudness or true-peak readings.
+ * Its LUFS fields (`momentaryLufs`, `shortTermLufs`, `integratedLufs`) are
+ * integrators whose windows a short one-shot mix does not fill, so they read the
+ * -120 dB floor sentinel. Use {@link Mixer} for meaningful loudness.
+ *
+ * The true-peak fields are not integrators and need no streaming: each is a
+ * max-hold over the block just processed and is valid from the first one,
+ * flooring only on silence. This facade mixes the whole input as a single block,
+ * which is the whole-signal case, so the block-edge under-read described on
+ * {@link MixMeterSnapshot.truePeakDbL} does not apply to the reading here.
  */
 export interface MixStereoRequest extends MixOptions {
   leftChannels: Float32Array[];

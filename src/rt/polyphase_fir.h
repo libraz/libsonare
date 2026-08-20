@@ -12,10 +12,27 @@
 
 namespace sonare::rt {
 
+/// @brief A prototype low-pass split into @ref phases interpolation sub-filters.
+///
+/// The coefficients live in one contiguous block rather than a vector of rows:
+/// interpolation reads a whole phase per output sample, so a row-per-phase
+/// layout costs an extra pointer chase per tap on the hottest loop in the
+/// realtime meter for no benefit.
 struct PolyphaseFir {
   int phases = 1;
   int taps_per_phase = 1;
-  std::vector<std::vector<float>> phase_taps;
+  /// Phase-major coefficients: phase @c p occupies the half-open range
+  /// `[p * taps_per_phase, (p + 1) * taps_per_phase)`. Built by
+  /// build_polyphase(); size is `phases * taps_per_phase` for any FIR it
+  /// produces.
+  std::vector<float> taps;
+
+  /// @brief First coefficient of @p phase.
+  /// @param phase Must be in `[0, phases)` and the FIR must be sized by
+  ///        build_polyphase(); no bounds checking is performed.
+  const float* phase_row(int phase) const noexcept {
+    return taps.data() + static_cast<size_t>(phase) * static_cast<size_t>(taps_per_phase);
+  }
 };
 
 inline double modified_bessel_i0(double x) {
@@ -86,17 +103,19 @@ inline PolyphaseFir build_polyphase(const std::vector<float>& taps, int oversamp
       oversample_factor <= 0
           ? 0
           : (static_cast<int>(taps.size()) + oversample_factor - 1) / oversample_factor;
-  fir.phase_taps.assign(
-      static_cast<size_t>(std::max(0, fir.phases)),
-      std::vector<float>(static_cast<size_t>(std::max(0, fir.taps_per_phase)), 0.0f));
+  fir.taps.assign(static_cast<size_t>(std::max(0, fir.phases)) *
+                      static_cast<size_t>(std::max(0, fir.taps_per_phase)),
+                  0.0f);
   for (int phase = 0; phase < fir.phases; ++phase) {
+    float* row =
+        fir.taps.data() + static_cast<size_t>(phase) * static_cast<size_t>(fir.taps_per_phase);
     for (int tap = 0; tap < fir.taps_per_phase; ++tap) {
       const size_t src =
           static_cast<size_t>(tap) * static_cast<size_t>(fir.phases) + static_cast<size_t>(phase);
       if (src >= taps.size()) {
         continue;
       }
-      fir.phase_taps[static_cast<size_t>(phase)][static_cast<size_t>(tap)] = taps[src];
+      row[static_cast<size_t>(tap)] = taps[src];
     }
   }
   return fir;
@@ -109,6 +128,15 @@ inline PolyphaseFir design_polyphase_lowpass(int oversample_factor, int total_ta
       oversample_factor);
 }
 
+/// @brief One oversampled output sample: @p data convolved with @p phase of @p fir,
+///        centered on @p index.
+///
+/// Tap @c t reads `data[index + taps_per_phase / 2 - t]`; taps whose source
+/// index falls outside `[0, length)` are dropped, which zero-pads the stencil at
+/// the buffer edges (see TruePeakFilter for what that means for a streaming
+/// measurement). The contributing tap range depends only on @p index, so it is
+/// resolved once instead of being re-tested per tap, and the sum is accumulated
+/// in double regardless of the float coefficients.
 inline float interpolate_polyphase_sample(const float* data, size_t length, size_t index, int phase,
                                           const PolyphaseFir& fir) {
   if (data == nullptr || length == 0 || index >= length || phase < 0 || phase >= fir.phases ||
@@ -118,17 +146,22 @@ inline float interpolate_polyphase_sample(const float* data, size_t length, size
   if (fir.phases == 1) {
     return data[index];
   }
+  if (fir.taps.size() < static_cast<size_t>(fir.phases) * static_cast<size_t>(fir.taps_per_phase)) {
+    return 0.0f;
+  }
 
-  const auto& h = fir.phase_taps[static_cast<size_t>(phase)];
-  const int half = fir.taps_per_phase / 2;
+  using diff_t = std::ptrdiff_t;
+  const diff_t half = static_cast<diff_t>(fir.taps_per_phase / 2);
+  const diff_t base = static_cast<diff_t>(index) + half;
+  // Tap t is in range when 0 <= base - t < length, i.e. t in
+  // [base - length + 1, base], intersected with the filter's own tap range.
+  const diff_t first = std::max<diff_t>(0, base - static_cast<diff_t>(length) + 1);
+  const diff_t last = std::min<diff_t>(static_cast<diff_t>(fir.taps_per_phase) - 1, base);
+  const float* h = fir.phase_row(phase);
+  const float* x = data + (base - first);
   double accum = 0.0;
-  for (int tap = 0; tap < fir.taps_per_phase; ++tap) {
-    const long src = static_cast<long>(index) - static_cast<long>(tap) + static_cast<long>(half);
-    if (src < 0 || src >= static_cast<long>(length)) {
-      continue;
-    }
-    accum += static_cast<double>(h[static_cast<size_t>(tap)]) *
-             static_cast<double>(data[static_cast<size_t>(src)]);
+  for (diff_t tap = first; tap <= last; ++tap) {
+    accum += static_cast<double>(h[tap]) * static_cast<double>(*x--);
   }
   return static_cast<float>(accum);
 }
