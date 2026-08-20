@@ -218,6 +218,7 @@ if(BUILD_MASTERING)
     mastering/saturation_test.cpp
     mastering/set_parameter_test.cpp
     mastering/tape_oversample_test.cpp
+    mastering/true_peak_limiter_block_invariance_test.cpp
     mastering/spectral_test.cpp
     mastering/stereo_test.cpp
   )

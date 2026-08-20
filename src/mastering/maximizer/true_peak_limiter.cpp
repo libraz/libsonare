@@ -213,28 +213,28 @@ void TruePeakLimiter::process_polyphase(float* const* channels, int num_channels
     }
   }
 
-  // FIR decimation can ring above the bounded oversampled samples. Measure the
-  // reconstructed base-rate block with the same all-phase interpolator and
-  // apply one linked correction so the public true-peak ceiling remains a hard
-  // output invariant after downsampling as well.
-  float reconstructed_peak = 0.0f;
-  if (excluded_channel < 0) {
-    reconstructed_peak = true_peak_filter_.process(input_ptrs_.data(), num_channels, num_samples);
-  } else {
+  // FIR decimation can ring above the bound the oversampled path already
+  // enforced, so the decimated block is pulled back under the ceiling here.
+  //
+  // The correction is per sample and channel-linked. It must NOT be derived
+  // from a whole-block maximum: `num_samples` is the host's buffer size, so a
+  // block-wide scalar gain makes the output a function of how the caller chose
+  // to chunk the stream, and drags every sample in a block down for a single
+  // ringing one. Every other stage here is sample-serial and carries its state
+  // across calls, so this is the one place that decision would leak out.
+  for (int i = 0; i < num_samples; ++i) {
+    float linked_peak = 0.0f;
     for (int ch = 0; ch < num_channels; ++ch) {
       if (ch == excluded_channel) continue;
-      reconstructed_peak = std::max(
-          reconstructed_peak, true_peak_filter_.process(input_ptrs_.data() + ch, 1, num_samples));
+      linked_peak = std::max(linked_peak, std::abs(channels[ch][i]));
     }
-  }
-  if (reconstructed_peak > ceiling && reconstructed_peak > 0.0f) {
-    const float reconstruction_gain = ceiling / reconstructed_peak;
-    for (int ch = 0; ch < num_channels; ++ch) {
-      for (int i = 0; i < num_samples; ++i) {
-        channels[ch][i] *= reconstruction_gain;
+    if (linked_peak > ceiling && linked_peak > 0.0f) {
+      const float correction = ceiling / linked_peak;
+      for (int ch = 0; ch < num_channels; ++ch) {
+        channels[ch][i] *= correction;
       }
+      min_gain = std::min(min_gain, correction);
     }
-    min_gain = std::min(min_gain, reconstruction_gain);
   }
 
   last_gain_reduction_db_ = std::min(0.0f, linear_to_db(min_gain));

@@ -14,6 +14,22 @@
 namespace sonare::mastering::maximizer {
 
 struct TruePeakLimiterConfig {
+  /// @brief Output true-peak ceiling in dBTP.
+  /// @details Enforced per sample at @ref oversample_factor, which is the
+  ///   resolution this limiter reconstructs the signal at. A meter running at a
+  ///   HIGHER oversampling than the limiter interpolates points the limiter
+  ///   never evaluated, so it reads slightly above the ceiling: measured at
+  ///   +0.02 dB for a -0.3 dBTP ceiling with the default 4x limiter read by an
+  ///   8x meter, on transient program material, flat from 0 to +36 dB of drive.
+  ///   That residue is a property of measuring finer than the limiter runs, not
+  ///   a limiter fault, and it is bounded — it does not grow with drive. Meter
+  ///   at the same oversampling as the limiter to see the ceiling held exactly,
+  ///   or raise @ref oversample_factor to push the residue down.
+  ///
+  ///   The ceiling is applied sample by sample and never as a whole-block
+  ///   rescale: a correction derived from a block's own maximum would make the
+  ///   output depend on the host's buffer size, so an offline render and a
+  ///   streaming render of the same material would disagree.
   float ceiling_db = -1.0f;
   float lookahead_ms = 1.0f;
   float release_ms = 50.0f;
