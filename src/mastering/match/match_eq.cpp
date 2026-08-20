@@ -689,33 +689,68 @@ std::vector<eq::EqBand> match_eq_bands_from_curve(const MatchEqCurve& curve,
                      return a.strength > b.strength;
                    });
 
+  // Corrections below this are inaudible; placing a band there wastes a slot.
+  constexpr float kMinCandidateStrengthDb = 0.05f;
+
   std::vector<size_t> selected;
   selected.reserve(config.max_bands);
   const float min_spacing_octaves =
       std::max(0.0f, std::log2(config.max_frequency_hz / config.min_frequency_hz) /
                          static_cast<float>(std::max<size_t>(config.max_bands, 1)) * 0.35f);
-  for (int pass = 0; pass < 2 && selected.size() < config.max_bands; ++pass) {
+
+  // Octave distance from a candidate to the nearest already-selected band.
+  // An empty selection is infinitely far from everything.
+  const auto distance_to_selection = [&](size_t index) {
+    float distance = std::numeric_limits<float>::max();
+    const float frequency = curve.frequencies[index];
+    for (size_t existing : selected) {
+      distance = std::min(distance, std::abs(std::log2(frequency / curve.frequencies[existing])));
+    }
+    return distance;
+  };
+
+  // Pass 0 takes real extrema in strength order: a peak or dip in the correction
+  // curve is where a band belongs, so nothing overrides that ranking.
+  for (const auto& candidate : candidates) {
+    if (selected.size() >= config.max_bands) {
+      break;
+    }
+    if (!candidate.extrema || candidate.strength < kMinCandidateStrengthDb) {
+      continue;
+    }
+    if (distance_to_selection(candidate.index) >= min_spacing_octaves) {
+      selected.push_back(candidate.index);
+    }
+  }
+
+  // Pass 1 fills the remaining budget with the candidate that sits farthest from
+  // everything already placed. Scanning the strength-sorted list in order instead
+  // leaves placement at the mercy of the scan order whenever the curve offers no
+  // extrema to rank by: a flat correction gives every candidate the same
+  // strength, so the sort degenerates into ascending frequency and the scan takes
+  // the first few. min_spacing_octaves is no defence there, since consuming the
+  // whole budget at the minimum spacing still covers only 35% of the range.
+  // Ties keep the strength order, so an even curve still resolves deterministically.
+  while (selected.size() < config.max_bands) {
+    const Candidate* best = nullptr;
+    float best_distance = -1.0f;
     for (const auto& candidate : candidates) {
-      if (selected.size() >= config.max_bands) {
-        break;
-      }
-      if (pass == 0 && !candidate.extrema) {
+      if (candidate.strength < kMinCandidateStrengthDb) {
         continue;
       }
-      if (candidate.strength < 0.05f) {
+      const float distance = distance_to_selection(candidate.index);
+      if (distance < min_spacing_octaves) {
         continue;
       }
-      const float frequency = curve.frequencies[candidate.index];
-      bool too_close = false;
-      for (size_t existing : selected) {
-        const float existing_frequency = curve.frequencies[existing];
-        too_close =
-            too_close || std::abs(std::log2(frequency / existing_frequency)) < min_spacing_octaves;
-      }
-      if (!too_close) {
-        selected.push_back(candidate.index);
+      if (distance > best_distance) {
+        best = &candidate;
+        best_distance = distance;
       }
     }
+    if (best == nullptr) {
+      break;
+    }
+    selected.push_back(best->index);
   }
   if (selected.empty()) {
     return {};

@@ -1,5 +1,6 @@
 #include <algorithm>
 #include <catch2/catch_test_macros.hpp>
+#include <catch2/generators/catch_generators.hpp>
 #include <catch2/matchers/catch_matchers_floating_point.hpp>
 #include <cmath>
 #include <vector>
@@ -64,6 +65,38 @@ MatchEqCurve log_spaced_curve(float min_hz, float max_hz, size_t points, int sam
         std::pow(static_cast<double>(max_hz) / static_cast<double>(min_hz), ratio));
   }
   return curve;
+}
+
+/// @brief FFT-bin frequency grid, the shape production curves actually carry.
+/// @details Bins are uniform in Hz, so the low end of a configured range holds a
+///          handful of bins and the top holds thousands. Placement has to spread
+///          across the range on this grid, not just on a log-spaced one.
+MatchEqCurve fft_bin_curve(int fft_size, int sample_rate, float gain_db) {
+  MatchEqCurve curve;
+  curve.sample_rate = sample_rate;
+  const float spacing = static_cast<float>(sample_rate) / static_cast<float>(fft_size);
+  for (size_t i = 0; i <= static_cast<size_t>(fft_size / 2); ++i) {
+    curve.frequencies.push_back(static_cast<float>(i) * spacing);
+    curve.gain_db.push_back(gain_db);
+  }
+  return curve;
+}
+
+/// @brief Octave span from the lowest placed band to the highest.
+float placed_span_octaves(const std::vector<sonare::mastering::eq::EqBand>& bands) {
+  if (bands.size() < 2) {
+    return 0.0f;
+  }
+  return std::log2(bands.back().frequency_hz / bands.front().frequency_hz);
+}
+
+/// @brief Widest octave hole between two neighbouring placed bands.
+float widest_band_gap_octaves(const std::vector<sonare::mastering::eq::EqBand>& bands) {
+  float widest = 0.0f;
+  for (size_t i = 1; i < bands.size(); ++i) {
+    widest = std::max(widest, std::log2(bands[i].frequency_hz / bands[i - 1].frequency_hz));
+  }
+  return widest;
 }
 
 /// @brief Gaussian bump in dB, centred on @p centre_hz with a log-frequency width.
@@ -227,20 +260,30 @@ TEST_CASE("MatchEq places its full band set at zero gain when the limit is zero"
   }
 }
 
-TEST_CASE("MatchEq keeps densely packed bands from stacking past max_gain_db",
+TEST_CASE("MatchEq places a featureless correction across the range and fits it without overshoot",
           "[mastering][match]") {
   constexpr int kSampleRate = 48000;
   constexpr float kLimitToleranceDb = 0.001f;
   const MatchEqConfig config{8, 12.0f, 40.0f, 18000.0f, 1.0f, 0};
 
-  // A flat correction offers the selector no extrema, so it falls back to the
-  // minimum spacing of log2(18000/40)/8*0.35 = 0.386 octaves.
+  // A flat correction offers the selector no extrema to rank by, so every band
+  // past the two range endpoints comes from the diversity fill.
   MatchEqCurve curve = log_spaced_curve(40.0f, 18000.0f, 256, kSampleRate);
   std::fill(curve.gain_db.begin(), curve.gain_db.end(), 6.0f);
 
   const auto bands = match_eq_bands_from_curve(curve, config);
   REQUIRE(bands.size() == config.max_bands);
-  REQUIRE(std::log2(bands[6].frequency_hz / bands[0].frequency_hz) < 3.0f);
+
+  // Coverage, not clustering: a featureless curve asks for the same correction
+  // everywhere, so the band set has to reach across the configured range and
+  // leave no wide hole inside it. The fill is greedy farthest-first, which
+  // bisects the widest remaining hole, so eight bands land 2.18 octaves apart at
+  // worst against the 8.81-octave range. The bounds below leave that room and
+  // still reject spending the budget on one corner.
+  const float configured_span_octaves =
+      std::log2(config.max_frequency_hz / config.min_frequency_hz);
+  REQUIRE(placed_span_octaves(bands) > configured_span_octaves * 0.9f);
+  REQUIRE(widest_band_gap_octaves(bands) < 3.0f);
 
   float peak_db = 0.0f;
   float max_overshoot_db = 0.0f;
@@ -250,10 +293,13 @@ TEST_CASE("MatchEq keeps densely packed bands from stacking past max_gain_db",
     max_overshoot_db = std::max(max_overshoot_db, realised - curve.gain_db[i]);
   }
 
-  // Seven bands packed inside two and a half octaves, each carrying the +6 dB
-  // the curve asks for, realise about +22 dB. Only the overshoot is bounded
-  // here: the selector leaves 300 Hz upward uncovered, so undershoot there is
-  // a placement property, not a gain-stacking one.
+  // Eight bands spread across the range still overlap: reading each gain off the
+  // curve realises 9.9 dB against this 6 dB target, so the joint solve has to
+  // back the gains off. It stays inside the 12 dB limit at this target, which is
+  // why the sibling case below runs the same curve at the limit to make the
+  // clamp itself engage. Only the overshoot is bounded here: a peaking band set
+  // cannot hold a flat shelf between its centres, so the undershoot in between
+  // is a band-shape property rather than a gain-stacking one.
   REQUIRE(peak_db <= config.max_gain_db + kLimitToleranceDb);
   REQUIRE(max_overshoot_db < 4.0f);
 }
@@ -273,15 +319,97 @@ TEST_CASE("MatchEq scales the band set when the fitted response exceeds max_gain
   const auto bands = match_eq_bands_from_curve(curve, config);
   REQUIRE(bands.size() == config.max_bands);
 
+  // This curve is as featureless as the one above, so it exercises the same fill
+  // and has to spread the same way. Asserting it here keeps the limiter case from
+  // passing on a band set collapsed into one corner of the range.
+  const float configured_span_octaves =
+      std::log2(config.max_frequency_hz / config.min_frequency_hz);
+  REQUIRE(placed_span_octaves(bands) > configured_span_octaves * 0.9f);
+  REQUIRE(widest_band_gap_octaves(bands) < 3.0f);
+
   float peak_db = 0.0f;
   for (size_t i = 0; i < curve.frequencies.size(); ++i) {
     peak_db = std::max(peak_db,
                        std::abs(composite_response_db(bands, curve.frequencies[i], kSampleRate)));
   }
 
-  // Per-band gains equal to the curve would realise about +45 dB here.
+  // Per-band gains equal to the curve realise 20.5 dB here, so the clamp engages
+  // and the realised response has to land just under the limit rather than at it.
   REQUIRE(peak_db <= config.max_gain_db + kLimitToleranceDb);
   REQUIRE(peak_db > config.max_gain_db - 1.0f);
+}
+
+TEST_CASE("MatchEq spreads a featureless correction across the configured range",
+          "[mastering][match]") {
+  constexpr int kSampleRate = 48000;
+  constexpr int kFftSize = 2048;
+  // Greedy farthest-first insertion bisects the widest remaining hole, so the
+  // worst gap it can leave is bounded by a small multiple of the even spacing
+  // rather than by the minimum-spacing floor. Measured worst across band counts,
+  // configured ranges, FFT sizes and Q values is 1.82x; the collapse this
+  // replaces sat at 5.0x.
+  constexpr float kMaxGapVersusEven = 2.5f;
+  const size_t band_count = GENERATE(size_t{4}, size_t{6}, size_t{8}, size_t{12});
+  CAPTURE(band_count);
+
+  const MatchEqConfig config{band_count, 12.0f, 40.0f, 18000.0f, 1.0f, 0};
+  const MatchEqCurve curve = fft_bin_curve(kFftSize, kSampleRate, 6.0f);
+
+  const auto bands = match_eq_bands_from_curve(curve, config);
+  REQUIRE(bands.size() == band_count);
+
+  // The lowest FFT bin inside the range is 46.9 Hz against a 40 Hz floor, which
+  // is 0.23 of the 8.81 configured octaves and the only reason coverage is not 1.
+  const float configured_span_octaves =
+      std::log2(config.max_frequency_hz / config.min_frequency_hz);
+  REQUIRE(placed_span_octaves(bands) > configured_span_octaves * 0.9f);
+
+  const float even_spacing_octaves = configured_span_octaves / static_cast<float>(band_count - 1);
+  REQUIRE(widest_band_gap_octaves(bands) < even_spacing_octaves * kMaxGapVersusEven);
+}
+
+TEST_CASE("MatchEq places every band on a curve extremum when extrema fill the budget",
+          "[mastering][match]") {
+  constexpr int kSampleRate = 48000;
+  constexpr float kCentreTolerance = 0.02f;
+  const std::vector<float> peak_centres_hz = {80.0f, 500.0f, 3000.0f, 12000.0f};
+
+  MatchEqCurve curve = log_spaced_curve(40.0f, 18000.0f, 256, kSampleRate);
+  for (size_t i = 0; i < curve.frequencies.size(); ++i) {
+    curve.gain_db[i] = log_gaussian_db(curve.frequencies[i], peak_centres_hz[0], 0.35f, 5.0f) +
+                       log_gaussian_db(curve.frequencies[i], peak_centres_hz[1], 0.35f, -4.0f) +
+                       log_gaussian_db(curve.frequencies[i], peak_centres_hz[2], 0.35f, 6.0f) +
+                       log_gaussian_db(curve.frequencies[i], peak_centres_hz[3], 0.35f, -5.0f);
+  }
+
+  // Four peaks and four slots: the extremum pass fills the budget on its own and
+  // the diversity fill never runs, so each band must sit on a peak of the curve
+  // and not on an evenly spaced grid point.
+  MatchEqConfig config{peak_centres_hz.size(), 12.0f, 40.0f, 18000.0f, 1.0f, 0};
+  const auto bands = match_eq_bands_from_curve(curve, config);
+  REQUIRE(bands.size() == peak_centres_hz.size());
+  for (size_t i = 0; i < bands.size(); ++i) {
+    CAPTURE(i);
+    REQUIRE_THAT(bands[i].frequency_hz,
+                 WithinAbs(peak_centres_hz[i], peak_centres_hz[i] * kCentreTolerance));
+  }
+  REQUIRE(bands[0].gain_db > 0.0f);
+  REQUIRE(bands[1].gain_db < 0.0f);
+  REQUIRE(bands[2].gain_db > 0.0f);
+  REQUIRE(bands[3].gain_db < 0.0f);
+
+  // Widening the budget lets the fill add bands, but it must not displace what the
+  // extremum pass already chose.
+  config.max_bands = peak_centres_hz.size() + 4;
+  const auto widened = match_eq_bands_from_curve(curve, config);
+  REQUIRE(widened.size() == config.max_bands);
+  for (const auto& band : bands) {
+    CAPTURE(band.frequency_hz);
+    const bool retained = std::any_of(widened.begin(), widened.end(), [&](const auto& candidate) {
+      return std::abs(candidate.frequency_hz - band.frequency_hz) < 0.001f;
+    });
+    REQUIRE(retained);
+  }
 }
 
 TEST_CASE("MatchEq FIR kernel is linear phase and follows curve gain", "[mastering][match]") {
