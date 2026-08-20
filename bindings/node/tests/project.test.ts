@@ -231,6 +231,19 @@ function danglingSourceJson(): string {
   return '{"version":1,"sample_rate":48000,"tracks":[{"id":1,"name":"audio","kind":0,"channel_strip_ref":"","output_target":"","midi_destination_id":0,"automation_lanes":[]}],"clips":[{"id":1,"track_id":1,"source_id":99,"start_ppq":0,"length_ppq":1,"source_offset_ppq":0,"gain":1,"fade_in":{"length_ppq":0,"curve":0},"fade_out":{"length_ppq":0,"curve":0},"loop_mode":0,"loop_length_ppq":0,"warp_ref_id":0,"warp_mode":0}]}';
 }
 
+function accelerando(sampleRate = 22050, startBpm = 100, endBpm = 160, seconds = 24): Float32Array {
+  const audio = new Float32Array(Math.round(sampleRate * seconds));
+  let t = 0;
+  while (t < seconds) {
+    const at = Math.round(t * sampleRate);
+    for (let i = 0; i < 64 && at + i < audio.length; i++) {
+      audio[at + i] += Math.exp(-i / 12) * (i % 2 === 0 ? 1 : -1);
+    }
+    t += 60 / (startBpm + (endBpm - startBpm) * (t / seconds));
+  }
+  return audio;
+}
+
 describe('Project native binding', () => {
   it('reports the expected project ABI version', () => {
     expect(projectAbiVersion()).toBe(EXPECTED_PROJECT_ABI_VERSION);
@@ -899,6 +912,30 @@ describe('Project value-model accessors', () => {
     project.destroy();
   });
 
+  it('reads tempo segments back in the shape the setter takes', () => {
+    // The count is only usable alongside a way to read what it counts, and a
+    // segment that reads back in the setter's own shape can be moved between
+    // projects without a translation step.
+    const source = Project.create();
+    const segments = [
+      { startPpq: 0, bpm: 120, endBpm: 0 },
+      { startPpq: 4, bpm: 140, endBpm: 160 },
+    ];
+    source.setTempoSegments(segments);
+    const readBack = [source.tempoSegmentByIndex(0), source.tempoSegmentByIndex(1)];
+    expect(readBack).toEqual(segments);
+    // startSample is never returned: the setter ignores it and a project keeps
+    // musical positions only.
+    expect('startSample' in readBack[0]).toBe(false);
+    expect(() => source.tempoSegmentByIndex(2)).toThrow();
+
+    const target = Project.create();
+    target.setTempoSegments(readBack);
+    expect(target.tempoSegmentByIndex(1)).toEqual(readBack[1]);
+    source.destroy();
+    target.destroy();
+  });
+
   it('replaces time signatures and counts them', () => {
     const project = Project.create();
     project.setTimeSignatures([
@@ -906,6 +943,12 @@ describe('Project value-model accessors', () => {
       { startPpq: 8, numerator: 3, denominator: 4 },
     ]);
     expect(project.timeSignatureCount()).toBe(2);
+    expect(project.timeSignatureByIndex(1)).toEqual({
+      startPpq: 8,
+      numerator: 3,
+      denominator: 4,
+    });
+    expect(() => project.timeSignatureByIndex(2)).toThrow();
     project.destroy();
   });
 
@@ -1159,5 +1202,56 @@ describe('UMP MIDI-1.0 packing matches the canonical word layout', () => {
     expect(((event?.data0 ?? 0) >>> 16) & 0xf).toBe(4);
     expect(((event?.data0 ?? 0) >>> 8) & 0x7f).toBe(74);
     expect((event?.data0 ?? 0) & 0x7f).toBe(0);
+  });
+
+  it('follows a tempo that moves only when asked to', () => {
+    // Without adaptiveTempo the tracker fits one tempo to the whole take, so the
+    // map it produces describes the take's average rather than its shape.
+    const audio = accelerando();
+    const segmentsFor = (options?: Record<string, unknown>) => {
+      const project = Project.create();
+      try {
+        project.autoTempo(audio, 22050, 0, false, options);
+        return Array.from({ length: project.tempoSegmentCount() }, (_, i) =>
+          project.tempoSegmentByIndex(i),
+        );
+      } finally {
+        project.destroy();
+      }
+    };
+
+    const fixed = segmentsFor();
+    const adaptive = segmentsFor({ adaptiveTempo: true });
+    expect(adaptive.length).toBeGreaterThan(fixed.length);
+
+    // The reported tempo has to span the sweep, not sit on its average.
+    const bpms = adaptive.map((segment) => segment.bpm);
+    expect(Math.max(...bpms) - Math.min(...bpms)).toBeGreaterThan(20);
+
+    // A coarser ramp threshold merges more of the take into constant stretches.
+    const coarse = segmentsFor({ adaptiveTempo: true, rampThreshold: 0.2 });
+    expect(coarse.length).toBeLessThan(adaptive.length);
+
+    // Passing nothing must not quietly enable anything.
+    expect(segmentsFor({})).toEqual(fixed);
+  });
+
+  it('rejects a tempo option value the bridge cannot use', () => {
+    const audio = accelerando();
+    const project = Project.create();
+    try {
+      expect(() =>
+        project.autoTempo(audio, 22050, 0, false, { tempoUpdateIntervalBeats: 0 }),
+      ).toThrow();
+      expect(() => project.analyzeTempo(audio, 22050, { rampThreshold: -1 })).toThrow();
+      expect(project.analyzeTempo(audio, 22050, { includeOctaveCandidates: false })).toHaveLength(
+        1,
+      );
+      expect(
+        project.analyzeTempo(audio, 22050, { includeOctaveCandidates: true }).length,
+      ).toBeGreaterThan(1);
+    } finally {
+      project.destroy();
+    }
   });
 });

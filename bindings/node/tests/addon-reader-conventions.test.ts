@@ -82,6 +82,19 @@ const SR = 22050;
 const sine = (length: number, freq = 440, sampleRate = SR): Float32Array =>
   new Float32Array(length).map((_, i) => 0.25 * Math.sin((2 * Math.PI * freq * i) / sampleRate));
 
+/** A steady click track, so the tempo entry points below have a grid to find. */
+const clicks = (bpm: number, seconds: number, sampleRate = SR): Float32Array => {
+  const samples = new Float32Array(Math.floor(sampleRate * seconds));
+  const clickLength = Math.floor(sampleRate / 100);
+  const period = (60 / bpm) * sampleRate;
+  for (let start = 0; start < samples.length; start += period) {
+    for (let i = 0; i < clickLength && Math.floor(start) + i < samples.length; i++) {
+      samples[Math.floor(start) + i] = (1 - i / clickLength) * 0.9;
+    }
+  }
+  return samples;
+};
+
 /**
  * How to invoke each covered entry point with an options bag. The option KEYS
  * are not listed here — they are derived from the C++ source, so a newly added
@@ -134,6 +147,24 @@ const UNDEFINED_EQUIVALENCE: ReadonlyArray<{
     jsName: 'midiRouteEvents',
     invoke: (o) =>
       Project.midiRouteEvents([{ ppq: 0, data0: (0x2 << 28) | (0x9 << 20) | (60 << 8) | 100 }], o),
+  },
+  {
+    jsName: 'analyzeTempo',
+    invoke: (o) => Project.create().analyzeTempo(clicks(120, 6), SR, o),
+  },
+  {
+    // Reads the installed map back rather than only the returned BPM: the option
+    // bag reaches the segmentation as well as the tempo decision, so comparing
+    // one number would miss a divergence in how the map was cut.
+    jsName: 'autoTempo',
+    invoke: (o) => {
+      const project = Project.create();
+      const bpm = project.autoTempo(clicks(120, 6), SR, 0, false, o);
+      const segments = Array.from({ length: project.tempoSegmentCount() }, (_, i) =>
+        project.tempoSegmentByIndex(i),
+      );
+      return [bpm, segments];
+    },
   },
   {
     jsName: 'roomMorph',

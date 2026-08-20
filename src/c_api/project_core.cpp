@@ -287,6 +287,47 @@ SonareError sonare_project_marker_by_index(const SonareProject* project, size_t 
 #endif
 }
 
+SonareError sonare_project_tempo_segment_by_index(const SonareProject* project, size_t index,
+                                                  SonareProjectTempoSegment* out) {
+  SONARE_C_API_ENTRY;
+#if defined(SONARE_WITH_ARRANGEMENT)
+  if (!project || !out) return SONARE_ERROR_INVALID_PARAMETER;
+  const auto& segments = project->history.project().tempo_segments();
+  if (index >= segments.size()) return SONARE_ERROR_INVALID_PARAMETER;
+  const sonare::transport::TempoSegment& seg = segments[index];
+  *out = {};
+  out->start_ppq = seg.start_ppq;
+  out->bpm = seg.bpm;
+  // Reported as stored. A project holds musical positions only; the sample
+  // position is derived by tempo-map normalization at compile time, and the
+  // core's own end_ppq is normalization state that the C struct has no field
+  // for, so neither is invented here.
+  out->start_sample = seg.start_sample;
+  out->end_bpm = seg.end_bpm;
+  return SONARE_OK;
+#else
+  SONARE_C_STUB_NOT_SUPPORTED(project, index, out);
+#endif
+}
+
+SonareError sonare_project_time_signature_by_index(const SonareProject* project, size_t index,
+                                                   SonareProjectTimeSignatureSegment* out) {
+  SONARE_C_API_ENTRY;
+#if defined(SONARE_WITH_ARRANGEMENT)
+  if (!project || !out) return SONARE_ERROR_INVALID_PARAMETER;
+  const auto& segments = project->history.project().time_signatures();
+  if (index >= segments.size()) return SONARE_ERROR_INVALID_PARAMETER;
+  const sonare::transport::TimeSignatureSegment& seg = segments[index];
+  *out = {};
+  out->start_ppq = seg.start_ppq;
+  out->numerator = seg.time_sig.numerator;
+  out->denominator = seg.time_sig.denominator;
+  return SONARE_OK;
+#else
+  SONARE_C_STUB_NOT_SUPPORTED(project, index, out);
+#endif
+}
+
 SonareError sonare_project_track_by_index(const SonareProject* project, size_t index,
                                           SonareProjectTrack* out) {
   SONARE_C_API_ENTRY;

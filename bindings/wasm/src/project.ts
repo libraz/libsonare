@@ -47,6 +47,8 @@ export type {
   ProjectMidiRouteResult,
   ProjectNotePairValidation,
   ProjectSource,
+  ProjectTempoCandidate,
+  ProjectTempoOptions,
   ProjectTempoSegment,
   ProjectTimeSignatureSegment,
   ProjectTrack,

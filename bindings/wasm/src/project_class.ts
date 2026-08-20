@@ -43,6 +43,7 @@ import type {
   ProjectNotePairValidation,
   ProjectSource,
   ProjectTempoCandidate,
+  ProjectTempoOptions,
   ProjectTempoSegment,
   ProjectTimeSignatureSegment,
   ProjectTrack,
@@ -681,18 +682,30 @@ export class Project {
   }
 
   /** Return ranked tempo-octave and detected-meter candidates without editing. */
-  analyzeTempo(audio: Float32Array, sampleRate: number): ProjectTempoCandidate[] {
-    return this.native.analyzeTempo(audio, sampleRate);
+  analyzeTempo(
+    audio: Float32Array,
+    sampleRate: number,
+    options?: ProjectTempoOptions,
+  ): ProjectTempoCandidate[] {
+    return this.native.analyzeTempo(audio, sampleRate, options);
   }
 
-  /** Detect and install a ranked tempo candidate; optionally apply detected meter. */
+  /**
+   * Detect and install a ranked tempo candidate; optionally apply detected meter.
+   *
+   * @remarks
+   * `candidateIndex` indexes the ranking {@link analyzeTempo} produced, so pair
+   * the two on the same `options`. Read the installed map back with
+   * {@link tempoSegmentCount} and {@link tempoSegmentByIndex}.
+   */
   autoTempo(
     audio: Float32Array,
     sampleRate: number,
     candidateIndex = 0,
     applyTimeSignatures = false,
+    options?: ProjectTempoOptions,
   ): number {
-    return this.native.autoTempo(audio, sampleRate, candidateIndex, applyTimeSignatures);
+    return this.native.autoTempo(audio, sampleRate, candidateIndex, applyTimeSignatures, options);
   }
 
   /** Snap to a bar (`division=0`), beat (`1`), or beat subdivision (`2+`). */
@@ -1122,6 +1135,28 @@ export class Project {
   /** Number of tempo-map segments on the project. */
   tempoSegmentCount(): number {
     return this.native.tempoSegmentCount();
+  }
+
+  /**
+   * Reads a tempo segment by index, in stored order.
+   *
+   * @param index - Zero-based index below {@link tempoSegmentCount}
+   * @returns The segment, in the shape {@link setTempoSegments} accepts
+   * @throws When the index is at or past the count
+   */
+  tempoSegmentByIndex(index: number): ProjectTempoSegment {
+    return this.native.tempoSegmentByIndex(index);
+  }
+
+  /**
+   * Reads a time-signature segment by index, in stored order.
+   *
+   * @param index - Zero-based index below {@link timeSignatureCount}
+   * @returns The segment, in the shape {@link setTimeSignatures} accepts
+   * @throws When the index is at or past the count
+   */
+  timeSignatureByIndex(index: number): ProjectTimeSignatureSegment {
+    return this.native.timeSignatureByIndex(index);
   }
 
   /** Number of time-signature segments on the project. */

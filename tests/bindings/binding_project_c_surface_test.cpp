@@ -51,6 +51,27 @@ TEST_CASE("project C surface exposes read-only project state without JSON", "[pr
   REQUIRE(sonare_project_tempo_segment_count(project, &count) == SONARE_OK);
   CHECK(count == 2);
 
+  // The list is readable back, which is what makes the count usable for
+  // anything: an index alone tells a caller nothing without the segment.
+  SonareProjectTempoSegment read_tempo{};
+  REQUIRE(sonare_project_tempo_segment_by_index(project, 0, &read_tempo) == SONARE_OK);
+  CHECK(read_tempo.start_ppq == tempos[0].start_ppq);
+  CHECK(read_tempo.bpm == tempos[0].bpm);
+  CHECK(read_tempo.end_bpm == tempos[0].end_bpm);
+  REQUIRE(sonare_project_tempo_segment_by_index(project, 1, &read_tempo) == SONARE_OK);
+  CHECK(read_tempo.start_ppq == tempos[1].start_ppq);
+  CHECK(read_tempo.bpm == tempos[1].bpm);
+  CHECK(read_tempo.end_bpm == tempos[1].end_bpm);
+  // The setter ignored the -123 it was handed, and the getter reports what the
+  // project holds rather than echoing the input back.
+  CHECK(read_tempo.start_sample == 0.0);
+  CHECK(sonare_project_tempo_segment_by_index(project, 2, &read_tempo) ==
+        SONARE_ERROR_INVALID_PARAMETER);
+  CHECK(sonare_project_tempo_segment_by_index(project, 0, nullptr) ==
+        SONARE_ERROR_INVALID_PARAMETER);
+  CHECK(sonare_project_tempo_segment_by_index(nullptr, 0, &read_tempo) ==
+        SONARE_ERROR_INVALID_PARAMETER);
+
   SonareProjectTimeSignatureSegment sig{};
   sig.start_ppq = 0.0;
   sig.numerator = 7;
@@ -58,6 +79,16 @@ TEST_CASE("project C surface exposes read-only project state without JSON", "[pr
   REQUIRE(sonare_project_set_time_signatures(project, &sig, 1) == SONARE_OK);
   REQUIRE(sonare_project_time_signature_count(project, &count) == SONARE_OK);
   CHECK(count == 1);
+
+  SonareProjectTimeSignatureSegment read_sig{};
+  REQUIRE(sonare_project_time_signature_by_index(project, 0, &read_sig) == SONARE_OK);
+  CHECK(read_sig.start_ppq == sig.start_ppq);
+  CHECK(read_sig.numerator == sig.numerator);
+  CHECK(read_sig.denominator == sig.denominator);
+  CHECK(sonare_project_time_signature_by_index(project, 1, &read_sig) ==
+        SONARE_ERROR_INVALID_PARAMETER);
+  CHECK(sonare_project_time_signature_by_index(project, 0, nullptr) ==
+        SONARE_ERROR_INVALID_PARAMETER);
 
   uint32_t marker_id = 0;
   REQUIRE(sonare_project_set_marker(project, 0, 12.0, "Verse", &marker_id) == SONARE_OK);

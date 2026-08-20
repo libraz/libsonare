@@ -8,6 +8,19 @@
 import { beforeAll, describe, expect, it } from 'vitest';
 import { init, MarkerKind, Mixer, mixingScenePresetJson, Project } from '../dist/index.js';
 
+function accelerando(sampleRate = 22050, startBpm = 100, endBpm = 160, seconds = 24): Float32Array {
+  const audio = new Float32Array(Math.round(sampleRate * seconds));
+  let t = 0;
+  while (t < seconds) {
+    const at = Math.round(t * sampleRate);
+    for (let i = 0; i < 64 && at + i < audio.length; i++) {
+      audio[at + i] += Math.exp(-i / 12) * (i % 2 === 0 ? 1 : -1);
+    }
+    t += 60 / (startBpm + (endBpm - startBpm) * (t / seconds));
+  }
+  return audio;
+}
+
 describe('Project counts and timeline metadata (WASM)', () => {
   beforeAll(async () => {
     await init();
@@ -85,6 +98,33 @@ describe('Project counts and timeline metadata (WASM)', () => {
     }
   });
 
+  it('reads tempo segments back in the shape the setter takes', () => {
+    // The count is only usable alongside a way to read what it counts, and a
+    // segment that reads back in the setter's own shape can be moved between
+    // projects without a translation step.
+    const source = new Project();
+    const target = new Project();
+    try {
+      const segments = [
+        { startPpq: 0, bpm: 120, endBpm: 0 },
+        { startPpq: 1920, bpm: 140, endBpm: 160 },
+      ];
+      source.setTempoSegments(segments);
+      const readBack = [source.tempoSegmentByIndex(0), source.tempoSegmentByIndex(1)];
+      expect(readBack).toEqual(segments);
+      // startSample is never returned: the setter ignores it and a project keeps
+      // musical positions only.
+      expect('startSample' in readBack[0]).toBe(false);
+      expect(() => source.tempoSegmentByIndex(2)).toThrow();
+
+      target.setTempoSegments(readBack);
+      expect(target.tempoSegmentByIndex(1)).toEqual(readBack[1]);
+    } finally {
+      source.delete();
+      target.delete();
+    }
+  });
+
   it('sets and counts time-signature segments', () => {
     const project = new Project();
     try {
@@ -93,6 +133,12 @@ describe('Project counts and timeline metadata (WASM)', () => {
         { startPpq: 1920, numerator: 6, denominator: 8 },
       ]);
       expect(project.timeSignatureCount()).toBe(2);
+      expect(project.timeSignatureByIndex(1)).toEqual({
+        startPpq: 1920,
+        numerator: 6,
+        denominator: 8,
+      });
+      expect(() => project.timeSignatureByIndex(2)).toThrow();
     } finally {
       project.delete();
     }
@@ -247,6 +293,57 @@ describe('Mixer tail draining (WASM)', () => {
       expect(result.sampleRate).toBe(48000);
     } finally {
       mixer.delete();
+    }
+  });
+
+  it('follows a tempo that moves only when asked to', () => {
+    // Without adaptiveTempo the tracker fits one tempo to the whole take, so the
+    // map it produces describes the take's average rather than its shape.
+    const audio = accelerando();
+    const segmentsFor = (options?: Record<string, unknown>) => {
+      const project = new Project();
+      try {
+        project.autoTempo(audio, 22050, 0, false, options);
+        return Array.from({ length: project.tempoSegmentCount() }, (_, i) =>
+          project.tempoSegmentByIndex(i),
+        );
+      } finally {
+        project.delete();
+      }
+    };
+
+    const fixed = segmentsFor();
+    const adaptive = segmentsFor({ adaptiveTempo: true });
+    expect(adaptive.length).toBeGreaterThan(fixed.length);
+
+    // The reported tempo has to span the sweep, not sit on its average.
+    const bpms = adaptive.map((segment) => segment.bpm);
+    expect(Math.max(...bpms) - Math.min(...bpms)).toBeGreaterThan(20);
+
+    // A coarser ramp threshold merges more of the take into constant stretches.
+    const coarse = segmentsFor({ adaptiveTempo: true, rampThreshold: 0.2 });
+    expect(coarse.length).toBeLessThan(adaptive.length);
+
+    // Passing nothing must not quietly enable anything.
+    expect(segmentsFor({})).toEqual(fixed);
+  });
+
+  it('rejects a tempo option value the bridge cannot use', () => {
+    const audio = accelerando();
+    const project = new Project();
+    try {
+      expect(() =>
+        project.autoTempo(audio, 22050, 0, false, { tempoUpdateIntervalBeats: 0 }),
+      ).toThrow();
+      expect(() => project.analyzeTempo(audio, 22050, { rampThreshold: -1 })).toThrow();
+      expect(project.analyzeTempo(audio, 22050, { includeOctaveCandidates: false })).toHaveLength(
+        1,
+      );
+      expect(
+        project.analyzeTempo(audio, 22050, { includeOctaveCandidates: true }).length,
+      ).toBeGreaterThan(1);
+    } finally {
+      project.delete();
     }
   });
 });

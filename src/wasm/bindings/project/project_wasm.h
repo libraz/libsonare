@@ -143,8 +143,9 @@ struct ProjectWasm {
   // { ok, unmatchedNoteOns, unmatchedNoteOffs }; throws if the clip id is
   // unknown or not a MIDI clip.
   val validateMidiNotes(uint32_t clip_id);
-  val analyzeTempo(val audio, int sample_rate);
-  float autoTempo(val audio, int sample_rate, int candidate_index, bool apply_time_signatures);
+  val analyzeTempo(val audio, int sample_rate, val options);
+  float autoTempo(val audio, int sample_rate, int candidate_index, bool apply_time_signatures,
+                  val options);
   double snapToGrid(double ppq, double strength, int division);
 
   // Compiles the project into a renderable timeline, returning a small JS
@@ -304,6 +305,8 @@ struct ProjectWasm {
   double clipCount() const;
   double sourceCount() const;
   double tempoSegmentCount() const;
+  val tempoSegmentByIndex(int index) const;
+  val timeSignatureByIndex(int index) const;
   double timeSignatureCount() const;
 
   // Replaces the project's tempo map from an array of { startPpq, bpm,

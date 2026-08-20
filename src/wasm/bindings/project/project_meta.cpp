@@ -326,6 +326,38 @@ double ProjectWasm::timeSignatureCount() const {
   return static_cast<double>(out);
 }
 
+val ProjectWasm::tempoSegmentByIndex(int index) const {
+  SonareProjectTempoSegment seg{};
+  const SonareError err =
+      sonare_project_tempo_segment_by_index(project_.get(), static_cast<size_t>(index), &seg);
+  if (err != SONARE_OK) {
+    throwCError(err, "tempo segment index out of range");
+  }
+  val out = val::object();
+  // The same three fields setTempoSegments reads, so a segment read back can be
+  // written straight to another project. start_sample is left out on purpose:
+  // the setter ignores it and a project stores 0 in it, so surfacing it would
+  // only offer a number that means nothing.
+  out.set("startPpq", seg.start_ppq);
+  out.set("bpm", seg.bpm);
+  out.set("endBpm", seg.end_bpm);
+  return out;
+}
+
+val ProjectWasm::timeSignatureByIndex(int index) const {
+  SonareProjectTimeSignatureSegment seg{};
+  const SonareError err =
+      sonare_project_time_signature_by_index(project_.get(), static_cast<size_t>(index), &seg);
+  if (err != SONARE_OK) {
+    throwCError(err, "time signature index out of range");
+  }
+  val out = val::object();
+  out.set("startPpq", seg.start_ppq);
+  out.set("numerator", seg.numerator);
+  out.set("denominator", seg.denominator);
+  return out;
+}
+
 void ProjectWasm::setTempoSegments(val segments) {
   std::vector<SonareProjectTempoSegment> segs;
   if (!segments.isUndefined() && !segments.isNull()) {
@@ -401,6 +433,8 @@ void registerProjectMeta(class_<ProjectWasm>& cls) {
       .function("clipCount", &ProjectWasm::clipCount)
       .function("sourceCount", &ProjectWasm::sourceCount)
       .function("tempoSegmentCount", &ProjectWasm::tempoSegmentCount)
+      .function("tempoSegmentByIndex", &ProjectWasm::tempoSegmentByIndex)
+      .function("timeSignatureByIndex", &ProjectWasm::timeSignatureByIndex)
       .function("timeSignatureCount", &ProjectWasm::timeSignatureCount)
       .function("setTempoSegments", &ProjectWasm::setTempoSegments)
       .function("setTimeSignatures", &ProjectWasm::setTimeSignatures)

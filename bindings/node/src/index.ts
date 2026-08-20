@@ -161,6 +161,7 @@ export type {
   ProjectMidiRouteResult,
   ProjectSource,
   ProjectTempoCandidate,
+  ProjectTempoOptions,
   ProjectTempoSegment,
   ProjectTimeSignatureSegment,
   ProjectTrack,

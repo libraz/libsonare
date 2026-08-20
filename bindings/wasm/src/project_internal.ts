@@ -27,6 +27,7 @@ import type {
   ProjectNotePairValidation,
   ProjectSource,
   ProjectTempoCandidate,
+  ProjectTempoOptions,
   ProjectTempoSegment,
   ProjectTimeSignatureSegment,
   ProjectTrack,
@@ -91,12 +92,17 @@ export interface WasmProject {
   previewMidiFxCount: (clipId: number, configJson: string) => number;
   setMidiFx: (clipId: number, configJson: string) => void;
   validateMidiNotes: (clipId: number) => ProjectNotePairValidation;
-  analyzeTempo: (audio: Float32Array, sampleRate: number) => ProjectTempoCandidate[];
+  analyzeTempo: (
+    audio: Float32Array,
+    sampleRate: number,
+    options: ProjectTempoOptions | undefined,
+  ) => ProjectTempoCandidate[];
   autoTempo: (
     audio: Float32Array,
     sampleRate: number,
     candidateIndex: number,
     applyTimeSignatures: boolean,
+    options: ProjectTempoOptions | undefined,
   ) => number;
   snapToGrid: (ppq: number, strength: number, division: number) => number;
   compile: () => ProjectCompileResult;
@@ -179,6 +185,8 @@ export interface WasmProject {
   clipCount: () => number;
   sourceCount: () => number;
   tempoSegmentCount: () => number;
+  tempoSegmentByIndex: (index: number) => ProjectTempoSegment;
+  timeSignatureByIndex: (index: number) => ProjectTimeSignatureSegment;
   timeSignatureCount: () => number;
   setTempoSegments: (segments: ReadonlyArray<ProjectTempoSegment>) => void;
   setTimeSignatures: (segments: ReadonlyArray<ProjectTimeSignatureSegment>) => void;

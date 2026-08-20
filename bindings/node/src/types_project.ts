@@ -249,19 +249,34 @@ export interface ProjectCompileResult {
   diagnostics: ProjectDiagnostic[];
 }
 
-/** One tempo segment for {@link Project.setTempoSegments}. */
+/**
+ * One tempo segment, as {@link Project.setTempoSegments} accepts it and
+ * {@link Project.tempoSegmentByIndex} returns it.
+ *
+ * @remarks
+ * A segment read back carries the fields the setter reads, so it can be written
+ * straight to another project. `startSample` is never among them — see its own
+ * note.
+ */
 export interface ProjectTempoSegment {
   /** Segment start position in PPQ. */
   startPpq: number;
   /** Tempo in BPM at the segment start. */
   bpm: number;
-  /** Derived segment start in samples. Accepted for compatibility, ignored on input. */
+  /**
+   * Derived segment start in samples. Accepted for compatibility and ignored on
+   * input; never returned, because a project stores musical positions only and
+   * sample positions are derived when it is compiled.
+   */
   startSample?: number;
   /** Tempo in BPM at the segment end for a ramp; `0` / omitted = constant tempo. */
   endBpm?: number;
 }
 
-/** One time-signature segment for {@link Project.setTimeSignatures}. */
+/**
+ * One time-signature segment, as {@link Project.setTimeSignatures} accepts it
+ * and {@link Project.timeSignatureByIndex} returns it.
+ */
 export interface ProjectTimeSignatureSegment {
   /** Segment start position in PPQ. */
   startPpq: number;
@@ -269,6 +284,40 @@ export interface ProjectTimeSignatureSegment {
   numerator: number;
   /** Beat unit (e.g. `4` for quarter note). */
   denominator: number;
+}
+
+/**
+ * Scoring options for the beat-analysis to tempo-map bridge, shared by
+ * {@link Project.analyzeTempo} and {@link Project.autoTempo}.
+ *
+ * @remarks
+ * Every field is optional and falls back to the native default. Pair the two
+ * calls on the same options: `candidateIndex` indexes the ranking `analyzeTempo`
+ * produced under whatever options it was given.
+ */
+export interface ProjectTempoOptions {
+  /**
+   * Whether beat tracking may follow a tempo that moves during the take
+   * (default: `false`).
+   *
+   * @remarks
+   * With it off the tracker fits one tempo to the whole take, so on a
+   * performance that accelerates, slows or breathes every segment the bridge
+   * emits sits near the take's average. Leave it off for material recorded to a
+   * click; turn it on for a performance. Constant-tempo material still comes
+   * back as a single segment either way.
+   */
+  adaptiveTempo?: boolean;
+  /** Beats of context the local tempo estimate is read over. Used only when {@link adaptiveTempo} is on. */
+  tempoUpdateIntervalBeats?: number;
+  /**
+   * Relative tempo change at which one segment closes and the next opens
+   * (default: `0.02`). Smaller follows the performance more closely and emits
+   * more segments; larger merges more of it into constant stretches.
+   */
+  rampThreshold?: number;
+  /** Whether to rank the half- and double-tempo alternatives alongside the primary (default: `true`). */
+  includeOctaveCandidates?: boolean;
 }
 
 /** A ranked primary/half/double tempo hypothesis from {@link Project.analyzeTempo}. */

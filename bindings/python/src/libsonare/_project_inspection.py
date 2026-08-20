@@ -26,6 +26,7 @@ from ._runtime import (
     SonareProjectMarker,
     SonareProjectSource,
     SonareProjectTempoCandidate,
+    SonareProjectTempoOptions,
     SonareProjectTempoSegment,
     SonareProjectTimeSignatureSegment,
     SonareProjectTrack,
@@ -42,19 +43,76 @@ class _ProjectInspectionMixin:
 
         def _require_handle(self) -> ctypes.c_void_p: ...
 
+    @staticmethod
+    def _tempo_options(
+        adaptive_tempo: bool | None,
+        tempo_update_interval_beats: int | None,
+        ramp_threshold: float | None,
+        include_octave_candidates: bool | None,
+    ) -> SonareProjectTempoOptions:
+        """Seed the native defaults, then apply whichever were given.
+
+        Seeding rather than zeroing matters: a zeroed ``ramp_threshold`` folds
+        the whole take into one tempo segment.
+        """
+        options = _get_lib().sonare_project_tempo_options_default()
+        if adaptive_tempo is not None:
+            options.adaptive_tempo = 1 if adaptive_tempo else 0
+        if tempo_update_interval_beats is not None:
+            options.tempo_update_interval_beats = int(tempo_update_interval_beats)
+        if ramp_threshold is not None:
+            options.ramp_threshold = float(ramp_threshold)
+        if include_octave_candidates is not None:
+            options.include_octave_candidates = 1 if include_octave_candidates else 0
+        return options
+
     def analyze_tempo(
-        self, audio: Sequence[float] | np.ndarray, sample_rate: int
+        self,
+        audio: Sequence[float] | np.ndarray,
+        sample_rate: int,
+        adaptive_tempo: bool | None = None,
+        tempo_update_interval_beats: int | None = None,
+        ramp_threshold: float | None = None,
+        include_octave_candidates: bool | None = None,
     ) -> list[dict[str, object]]:
-        """Return ranked primary/half/double tempo and meter candidates without editing."""
+        """Return ranked primary/half/double tempo and meter candidates without editing.
+
+        Args:
+            audio: Mono samples.
+            sample_rate: Sample rate of ``audio`` in Hz.
+            adaptive_tempo: Whether beat tracking may follow a tempo that moves
+                during the take. ``None`` keeps the native default, which is
+                off: the tracker fits one tempo to the whole take, so on a
+                performance that accelerates or breathes every segment the
+                bridge emits sits near the take's average. Turn it on for that
+                material.
+            tempo_update_interval_beats: Beats of context the local tempo
+                estimate is read over. Used only when ``adaptive_tempo`` is on.
+            ramp_threshold: Relative tempo change at which one tempo segment
+                closes and the next opens. Smaller follows the performance more
+                closely and emits more segments.
+            include_octave_candidates: Whether to rank the half- and
+                double-tempo alternatives alongside the primary.
+
+        Returns:
+            One dict per ranked candidate, most-supported first.
+        """
         c_array, length = _to_c_float_array(audio)
         count = ctypes.c_size_t()
         candidates = (SonareProjectTempoCandidate * 3)()
+        options = self._tempo_options(
+            adaptive_tempo,
+            tempo_update_interval_beats,
+            ramp_threshold,
+            include_octave_candidates,
+        )
         _check(
-            _get_lib().sonare_project_analyze_tempo(
+            _get_lib().sonare_project_analyze_tempo_with_options(
                 self._require_handle(),
                 c_array,
                 ctypes.c_size_t(length),
                 int(sample_rate),
+                ctypes.byref(options),
                 candidates,
                 ctypes.c_size_t(len(candidates)),
                 ctypes.byref(count),
@@ -82,19 +140,37 @@ class _ProjectInspectionMixin:
         sample_rate: int,
         candidate_index: int = 0,
         apply_time_signatures: bool = False,
+        adaptive_tempo: bool | None = None,
+        tempo_update_interval_beats: int | None = None,
+        ramp_threshold: float | None = None,
+        include_octave_candidates: bool | None = None,
     ) -> float:
         """Detect tempo from a mono buffer and install it (undoable).
 
-        Returns the primary BPM estimate.
+        The scoring arguments mean what they do on :meth:`analyze_tempo`, and
+        ``candidate_index`` indexes the ranking that method returns, so pair the
+        two on the same values rather than mixing two option sets. Read the
+        installed map back with :meth:`tempo_segment_count` and
+        :meth:`tempo_segment_by_index`.
+
+        Returns:
+            The BPM of the installed map's first segment.
         """
         c_array, length = _to_c_float_array(audio)
         out_bpm = ctypes.c_float()
+        options = self._tempo_options(
+            adaptive_tempo,
+            tempo_update_interval_beats,
+            ramp_threshold,
+            include_octave_candidates,
+        )
         _check(
-            _get_lib().sonare_project_auto_tempo_ex(
+            _get_lib().sonare_project_auto_tempo_with_options(
                 self._require_handle(),
                 c_array,
                 ctypes.c_size_t(length),
                 int(sample_rate),
+                ctypes.byref(options),
                 ctypes.c_size_t(candidate_index),
                 ctypes.c_uint8(apply_time_signatures),
                 ctypes.byref(out_bpm),
@@ -586,6 +662,47 @@ class _ProjectInspectionMixin:
     def time_signature_count(self) -> int:
         """Number of time-signature segments in the project."""
         return self._count("sonare_project_time_signature_count")
+
+    def tempo_segment_by_index(self, index: int) -> dict[str, float]:
+        """Read a tempo-map segment by 0-based stored index.
+
+        Returns the keys :meth:`set_tempo_segments` accepts, so a segment read
+        back can be written straight to another project. ``start_sample`` is not
+        among them: a project stores musical positions only, and sample
+        positions are derived when it is compiled.
+
+        Raises:
+            SonareError: If ``index`` is at or past :meth:`tempo_segment_count`.
+        """
+        raw = SonareProjectTempoSegment()
+        _check(
+            _get_lib().sonare_project_tempo_segment_by_index(
+                self._require_handle(), ctypes.c_size_t(int(index)), ctypes.byref(raw)
+            )
+        )
+        return {
+            "start_ppq": float(raw.start_ppq),
+            "bpm": float(raw.bpm),
+            "end_bpm": float(raw.end_bpm),
+        }
+
+    def time_signature_by_index(self, index: int) -> dict[str, float | int]:
+        """Read a time-signature segment by 0-based stored index.
+
+        Raises:
+            SonareError: If ``index`` is at or past :meth:`time_signature_count`.
+        """
+        raw = SonareProjectTimeSignatureSegment()
+        _check(
+            _get_lib().sonare_project_time_signature_by_index(
+                self._require_handle(), ctypes.c_size_t(int(index)), ctypes.byref(raw)
+            )
+        )
+        return {
+            "start_ppq": float(raw.start_ppq),
+            "numerator": int(raw.numerator),
+            "denominator": int(raw.denominator),
+        }
 
     def track_count(self) -> int:
         """Number of tracks in the project."""

@@ -1203,8 +1203,25 @@ def test_project_getters_setters_and_counts() -> None:
 
         project.set_tempo_segments([(0.0, 120.0), (480.0, 140.0)])
         assert project.tempo_segment_count() == 2
+        # The count is only usable alongside a way to read the segments it counts.
+        assert project.tempo_segment_by_index(0) == {
+            "start_ppq": 0.0,
+            "bpm": 120.0,
+            "end_bpm": 0.0,
+        }
+        assert project.tempo_segment_by_index(1)["bpm"] == 140.0
+        with pytest.raises(SonareError):
+            project.tempo_segment_by_index(2)
+
         project.set_time_signatures([(0.0, 4, 4), (1920.0, 3, 4)])
         assert project.time_signature_count() == 2
+        assert project.time_signature_by_index(1) == {
+            "start_ppq": 1920.0,
+            "numerator": 3,
+            "denominator": 4,
+        }
+        with pytest.raises(SonareError):
+            project.time_signature_by_index(2)
 
         marker_id = project.set_marker(0, 1.0, "intro")
         assert marker_id > 0
@@ -1455,5 +1472,87 @@ def test_project_import_smf_preserves_salvaged_truncation() -> None:
     project = Project()
     try:
         assert project.import_smf(_make_truncated_smf()) > 0
+    finally:
+        project.close()
+
+
+def _accelerando(
+    sample_rate: int = 22050,
+    start_bpm: float = 100.0,
+    end_bpm: float = 160.0,
+    seconds: float = 24.0,
+) -> np.ndarray:
+    """A click track whose tempo sweeps from ``start_bpm`` to ``end_bpm``."""
+    audio = np.zeros(int(sample_rate * seconds), dtype=np.float32)
+    click = np.exp(-np.arange(64) / 12.0) * np.where(np.arange(64) % 2 == 0, 1.0, -1.0)
+    t = 0.0
+    while t < seconds:
+        at = int(t * sample_rate)
+        end = min(at + click.size, audio.size)
+        audio[at:end] += click[: end - at]
+        t += 60.0 / (start_bpm + (end_bpm - start_bpm) * (t / seconds))
+    return audio
+
+
+def _segments(audio: np.ndarray, sample_rate: int = 22050, **options: object) -> list[dict]:
+    project = Project()
+    try:
+        project.auto_tempo(audio, sample_rate, **options)
+        return [project.tempo_segment_by_index(i) for i in range(project.tempo_segment_count())]
+    finally:
+        project.close()
+
+
+def test_tempo_options_reach_the_bridge() -> None:
+    """adaptive_tempo is what lets a tempo map follow a tempo that moves.
+
+    Without it the tracker fits one tempo to the whole take, so the map it
+    produces describes the take's average rather than its shape.
+    """
+    audio = _accelerando()
+
+    fixed = _segments(audio)
+    adaptive = _segments(audio, adaptive_tempo=True)
+    assert len(adaptive) > len(fixed)
+
+    # The reported tempo has to span the sweep, not sit on its average.
+    bpms = [segment["bpm"] for segment in adaptive]
+    assert max(bpms) - min(bpms) > 20.0
+
+    # A coarser ramp threshold merges more of the take into constant stretches,
+    # which is the direction the argument is documented to move.
+    coarse = _segments(audio, adaptive_tempo=True, ramp_threshold=0.2)
+    assert len(coarse) < len(adaptive)
+
+
+def test_tempo_options_default_to_the_previous_behaviour() -> None:
+    """Passing nothing must not quietly enable anything."""
+    audio = _accelerando()
+    assert _segments(audio) == _segments(audio, adaptive_tempo=None, ramp_threshold=None)
+
+    candidates = Project().analyze_tempo(audio, 22050)
+    assert candidates
+    assert candidates[0]["bpm"] > 0.0
+    assert {c["label"] for c in candidates} <= {"primary", "half", "double"}
+
+
+def test_octave_candidates_can_be_switched_off() -> None:
+    audio = _accelerando()
+    project = Project()
+    try:
+        assert len(project.analyze_tempo(audio, 22050, include_octave_candidates=True)) > 1
+        assert len(project.analyze_tempo(audio, 22050, include_octave_candidates=False)) == 1
+    finally:
+        project.close()
+
+
+def test_tempo_options_reject_an_unusable_value() -> None:
+    audio = _accelerando()
+    project = Project()
+    try:
+        with pytest.raises(SonareError):
+            project.auto_tempo(audio, 22050, tempo_update_interval_beats=0)
+        with pytest.raises(SonareError):
+            project.analyze_tempo(audio, 22050, ramp_threshold=-1.0)
     finally:
         project.close()

@@ -115,6 +115,90 @@ TEST_CASE("project tempo analysis exposes ranked candidates and applies detected
   sonare_project_destroy(project);
 }
 
+TEST_CASE("project tempo options reach the bridge and default to the fixed-signature calls",
+          "[project]") {
+  // A tempo that moves across the take. The fixed-signature entry points fit one
+  // tempo to the whole thing and emit a map that says so; the options are how a
+  // caller asks the tracker to follow it.
+  constexpr int kSampleRate = 22050;
+  constexpr double kStartBpm = 100.0;
+  constexpr double kEndBpm = 160.0;
+  constexpr double kSeconds = 24.0;
+  std::vector<float> audio(static_cast<size_t>(kSampleRate * kSeconds), 0.0f);
+  for (double t = 0.0; t < kSeconds;) {
+    const auto at = static_cast<size_t>(t * kSampleRate);
+    for (int i = 0; i < 64 && at + static_cast<size_t>(i) < audio.size(); ++i) {
+      audio[at + static_cast<size_t>(i)] =
+          (i % 2 == 0 ? 1.0f : -1.0f) * std::exp(-static_cast<float>(i) / 12.0f);
+    }
+    t += 60.0 / (kStartBpm + (kEndBpm - kStartBpm) * (t / kSeconds));
+  }
+
+  const SonareProjectTempoOptions defaults = sonare_project_tempo_options_default();
+  CHECK(defaults.adaptive_tempo == 0);
+  CHECK(defaults.tempo_update_interval_beats > 0);
+  CHECK(defaults.ramp_threshold > 0.0f);
+
+  const auto segment_count = [&audio](const SonareProjectTempoOptions* options) {
+    SonareProject* project = nullptr;
+    REQUIRE(sonare_project_create(&project) == SONARE_OK);
+    float bpm = 0.0f;
+    REQUIRE(sonare_project_auto_tempo_with_options(project, audio.data(), audio.size(), kSampleRate,
+                                                   options, 0, 0, &bpm) == SONARE_OK);
+    size_t count = 0;
+    REQUIRE(sonare_project_tempo_segment_count(project, &count) == SONARE_OK);
+    sonare_project_destroy(project);
+    return count;
+  };
+
+  // Passing the defaults, and passing nothing, must both reproduce the
+  // fixed-signature behaviour rather than quietly enabling anything.
+  SonareProject* legacy = nullptr;
+  REQUIRE(sonare_project_create(&legacy) == SONARE_OK);
+  float legacy_bpm = 0.0f;
+  REQUIRE(sonare_project_auto_tempo_ex(legacy, audio.data(), audio.size(), kSampleRate, 0, 0,
+                                       &legacy_bpm) == SONARE_OK);
+  size_t legacy_count = 0;
+  REQUIRE(sonare_project_tempo_segment_count(legacy, &legacy_count) == SONARE_OK);
+  sonare_project_destroy(legacy);
+
+  CHECK(segment_count(&defaults) == legacy_count);
+  CHECK(segment_count(nullptr) == legacy_count);
+
+  // Following the tempo has to change the map, otherwise the option reached
+  // nothing. This is the whole point of the entry point.
+  SonareProjectTempoOptions adaptive = defaults;
+  adaptive.adaptive_tempo = 1;
+  const size_t adaptive_count = segment_count(&adaptive);
+  CHECK(adaptive_count > legacy_count);
+
+  // A coarser ramp threshold merges more of the take into constant stretches,
+  // which is the direction the field is documented to move.
+  SonareProjectTempoOptions coarse = adaptive;
+  coarse.ramp_threshold = 0.20f;
+  CHECK(segment_count(&coarse) < adaptive_count);
+
+  // A zeroed struct is rejected rather than read as "use the defaults": its
+  // interval is unusable and its threshold would fold the take into one segment.
+  SonareProject* project = nullptr;
+  REQUIRE(sonare_project_create(&project) == SONARE_OK);
+  SonareProjectTempoOptions zeroed{};
+  float bpm = 0.0f;
+  CHECK(sonare_project_auto_tempo_with_options(project, audio.data(), audio.size(), kSampleRate,
+                                               &zeroed, 0, 0,
+                                               &bpm) == SONARE_ERROR_INVALID_PARAMETER);
+  SonareProjectTempoCandidate candidates[SONARE_PROJECT_MAX_TEMPO_CANDIDATES]{};
+  size_t count = 0;
+  CHECK(sonare_project_analyze_tempo_with_options(project, audio.data(), audio.size(), kSampleRate,
+                                                  &zeroed, candidates, std::size(candidates),
+                                                  &count) == SONARE_ERROR_INVALID_PARAMETER);
+  REQUIRE(sonare_project_analyze_tempo_with_options(project, audio.data(), audio.size(),
+                                                    kSampleRate, &adaptive, candidates,
+                                                    std::size(candidates), &count) == SONARE_OK);
+  CHECK(count > 0);
+  sonare_project_destroy(project);
+}
+
 TEST_CASE("project C surface composite edits roll back on failure", "[project]") {
   SonareProject* project = nullptr;
   REQUIRE(sonare_project_create(&project) == SONARE_OK);

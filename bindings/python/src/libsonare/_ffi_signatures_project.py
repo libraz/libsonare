@@ -607,6 +607,34 @@ def configure_project_signatures(lib: ctypes.CDLL) -> None:
             ctypes.POINTER(ctypes.c_float),
         ]
 
+        if hasattr(lib, "sonare_project_tempo_options_default"):
+            lib.sonare_project_tempo_options_default.restype = SonareProjectTempoOptions
+            lib.sonare_project_tempo_options_default.argtypes = []
+        if hasattr(lib, "sonare_project_analyze_tempo_with_options"):
+            lib.sonare_project_analyze_tempo_with_options.restype = ctypes.c_int32
+            lib.sonare_project_analyze_tempo_with_options.argtypes = [
+                ctypes.c_void_p,
+                ctypes.POINTER(ctypes.c_float),
+                ctypes.c_size_t,
+                ctypes.c_int,
+                ctypes.POINTER(SonareProjectTempoOptions),
+                ctypes.POINTER(SonareProjectTempoCandidate),
+                ctypes.c_size_t,
+                ctypes.POINTER(ctypes.c_size_t),
+            ]
+        if hasattr(lib, "sonare_project_auto_tempo_with_options"):
+            lib.sonare_project_auto_tempo_with_options.restype = ctypes.c_int32
+            lib.sonare_project_auto_tempo_with_options.argtypes = [
+                ctypes.c_void_p,
+                ctypes.POINTER(ctypes.c_float),
+                ctypes.c_size_t,
+                ctypes.c_int,
+                ctypes.POINTER(SonareProjectTempoOptions),
+                ctypes.c_size_t,
+                ctypes.c_uint8,
+                ctypes.POINTER(ctypes.c_float),
+            ]
+
         lib.sonare_project_snap_to_grid.restype = ctypes.c_int32
         lib.sonare_project_snap_to_grid.argtypes = [
             ctypes.c_void_p,
@@ -858,6 +886,15 @@ def _configure_project_extra_signatures(lib: ctypes.CDLL) -> None:
             ctypes.c_size_t,
             ctypes.POINTER(SonareProjectMarker),
         ]
+
+    for _name, _struct in (
+        ("sonare_project_tempo_segment_by_index", SonareProjectTempoSegment),
+        ("sonare_project_time_signature_by_index", SonareProjectTimeSignatureSegment),
+    ):
+        if hasattr(lib, _name):
+            _fn = getattr(lib, _name)
+            _fn.restype = ctypes.c_int32
+            _fn.argtypes = [ctypes.c_void_p, ctypes.c_size_t, ctypes.POINTER(_struct)]
 
     if hasattr(lib, "sonare_project_marker_name_by_index"):
         lib.sonare_project_marker_name_by_index.restype = ctypes.c_int32

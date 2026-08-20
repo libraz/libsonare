@@ -153,13 +153,37 @@ val ProjectWasm::validateMidiNotes(uint32_t clip_id) {
   return out;
 }
 
-val ProjectWasm::analyzeTempo(val audio, int sample_rate) {
+namespace {
+
+// Seeds the native defaults, then applies whichever the caller supplied.
+// Seeding rather than zeroing matters: a zeroed ramp_threshold folds the whole
+// take into one tempo segment and a zeroed interval is rejected.
+SonareProjectTempoOptions tempoOptionsFrom(val options) {
+  SonareProjectTempoOptions out = sonare_project_tempo_options_default();
+  if (options.isUndefined() || options.isNull()) return out;
+  // The presence-checked *Property readers, not a bare object["key"] read: every
+  // field here is optional and the seeded default is the value to keep when one
+  // is omitted. Range rules stay with the C ABI, which rejects what it cannot
+  // use rather than silently substituting a default.
+  out.adaptive_tempo = boolProperty(options, "adaptiveTempo", out.adaptive_tempo != 0) ? 1 : 0;
+  out.tempo_update_interval_beats =
+      intProperty(options, "tempoUpdateIntervalBeats", out.tempo_update_interval_beats);
+  out.ramp_threshold = floatProperty(options, "rampThreshold", out.ramp_threshold);
+  out.include_octave_candidates =
+      boolProperty(options, "includeOctaveCandidates", out.include_octave_candidates != 0) ? 1 : 0;
+  return out;
+}
+
+}  // namespace
+
+val ProjectWasm::analyzeTempo(val audio, int sample_rate, val options) {
   std::vector<float> samples = float32ArrayToVector(audio);
   SonareProjectTempoCandidate candidates[SONARE_PROJECT_MAX_TEMPO_CANDIDATES]{};
   size_t count = 0;
-  const SonareError err =
-      sonare_project_analyze_tempo(project_.get(), samples.data(), samples.size(), sample_rate,
-                                   candidates, std::size(candidates), &count);
+  const SonareProjectTempoOptions resolved = tempoOptionsFrom(options);
+  const SonareError err = sonare_project_analyze_tempo_with_options(
+      project_.get(), samples.data(), samples.size(), sample_rate, &resolved, candidates,
+      std::size(candidates), &count);
   if (err != SONARE_OK) {
     throwCError(err, "failed to analyze project tempo");
   }
@@ -183,11 +207,12 @@ val ProjectWasm::analyzeTempo(val audio, int sample_rate) {
 }
 
 float ProjectWasm::autoTempo(val audio, int sample_rate, int candidate_index,
-                             bool apply_time_signatures) {
+                             bool apply_time_signatures, val options) {
   std::vector<float> samples = float32ArrayToVector(audio);
   float bpm = 0.0f;
-  const SonareError err = sonare_project_auto_tempo_ex(
-      project_.get(), samples.data(), samples.size(), sample_rate,
+  const SonareProjectTempoOptions resolved = tempoOptionsFrom(options);
+  const SonareError err = sonare_project_auto_tempo_with_options(
+      project_.get(), samples.data(), samples.size(), sample_rate, &resolved,
       static_cast<size_t>(std::max(candidate_index, 0)), apply_time_signatures ? 1 : 0, &bpm);
   if (err != SONARE_OK) throwCError(err, "failed to detect project tempo");
   return bpm;

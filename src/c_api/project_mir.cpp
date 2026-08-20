@@ -9,6 +9,25 @@ SonareError sonare_project_auto_tempo(SonareProject* project, const float* audio
   return sonare_project_auto_tempo_ex(project, audio, len, sample_rate, 0, 0, out_bpm);
 }
 
+SonareProjectTempoOptions sonare_project_tempo_options_default(void) {
+  SonareProjectTempoOptions options = {};
+#if defined(SONARE_WITH_ARRANGEMENT)
+  // Seeded from the two core configs the bridge runs on, so the defaults cannot
+  // drift away from what the fixed-signature entry points do.
+  const sonare::BeatConfig beat_config;
+  const sonare::mir::TempoEstimatorConfig bridge_config;
+  options.adaptive_tempo = beat_config.adaptive_tempo ? 1 : 0;
+  options.tempo_update_interval_beats = beat_config.tempo_update_interval_beats;
+  options.ramp_threshold = bridge_config.ramp_threshold;
+  options.include_octave_candidates = bridge_config.include_octave_candidates ? 1 : 0;
+#endif
+  // Without arrangement the bridge these options configure is not in the build
+  // and every entry point that would read them reports NOT_SUPPORTED, so the
+  // zeroed struct is the honest answer rather than a hand-copied set of values
+  // with nothing to keep them in step with the core.
+  return options;
+}
+
 #if defined(SONARE_WITH_ARRANGEMENT)
 namespace {
 
@@ -32,11 +51,32 @@ void fill_tempo_candidate(const sonare::mir::TempoEstimate& estimate,
   }
 }
 
+std::vector<sonare::mir::TempoEstimate> analyze_tempo_candidates(
+    const float* audio, size_t len, int sample_rate, const SonareProjectTempoOptions& options) {
+  sonare::BeatConfig beat_config;
+  beat_config.adaptive_tempo = options.adaptive_tempo != 0;
+  beat_config.tempo_update_interval_beats = options.tempo_update_interval_beats;
+  sonare::mir::TempoEstimatorConfig bridge_config;
+  bridge_config.ramp_threshold = options.ramp_threshold;
+  bridge_config.include_octave_candidates = options.include_octave_candidates != 0;
+
+  sonare::Audio wrapped = sonare::Audio::from_buffer(audio, len, sample_rate);
+  sonare::BeatAnalyzer analyzer(wrapped, beat_config);
+  return sonare::mir::estimate_tempo(sonare::mir::make_input_from_analyzer(analyzer),
+                                     bridge_config);
+}
+
 std::vector<sonare::mir::TempoEstimate> analyze_tempo_candidates(const float* audio, size_t len,
                                                                  int sample_rate) {
-  sonare::Audio wrapped = sonare::Audio::from_buffer(audio, len, sample_rate);
-  sonare::BeatAnalyzer analyzer(wrapped);
-  return sonare::mir::estimate_tempo(sonare::mir::make_input_from_analyzer(analyzer));
+  return analyze_tempo_candidates(audio, len, sample_rate, sonare_project_tempo_options_default());
+}
+
+// A caller who zeroed the struct instead of seeding it would silently get a
+// whole-take single segment and an interval the local estimate cannot use, so
+// the values are checked rather than clamped.
+bool tempo_options_valid(const SonareProjectTempoOptions& options) noexcept {
+  return options.tempo_update_interval_beats > 0 && std::isfinite(options.ramp_threshold) &&
+         options.ramp_threshold >= 0.0f;
 }
 
 }  // namespace
@@ -64,6 +104,75 @@ SonareError sonare_project_analyze_tempo(const SonareProject* project, const flo
   SONARE_C_CATCH
 #else
   SONARE_C_STUB_NOT_SUPPORTED(project, audio, len, sample_rate, candidates, capacity, out_count);
+#endif
+}
+
+SonareError sonare_project_analyze_tempo_with_options(const SonareProject* project,
+                                                      const float* audio, size_t len,
+                                                      int sample_rate,
+                                                      const SonareProjectTempoOptions* options,
+                                                      SonareProjectTempoCandidate* candidates,
+                                                      size_t capacity, size_t* out_count) {
+  SONARE_C_API_ENTRY;
+#if defined(SONARE_WITH_ARRANGEMENT)
+  if (out_count) *out_count = 0;
+  if (!project) return SONARE_ERROR_INVALID_PARAMETER;
+  if (capacity > 0 && !candidates) return SONARE_ERROR_INVALID_PARAMETER;
+  const SonareProjectTempoOptions resolved =
+      options ? *options : sonare_project_tempo_options_default();
+  if (!tempo_options_valid(resolved)) return SONARE_ERROR_INVALID_PARAMETER;
+  SonareError err = validate_audio_params(audio, len, sample_rate);
+  if (err != SONARE_OK) return err;
+  SONARE_C_TRY
+  const std::vector<sonare::mir::TempoEstimate> estimates =
+      analyze_tempo_candidates(audio, len, sample_rate, resolved);
+  if (estimates.empty()) return SONARE_ERROR_INVALID_STATE;
+  if (out_count) *out_count = estimates.size();
+  const size_t emitted = std::min(capacity, estimates.size());
+  for (size_t i = 0; i < emitted; ++i) fill_tempo_candidate(estimates[i], &candidates[i]);
+  return SONARE_OK;
+  SONARE_C_CATCH
+#else
+  SONARE_C_STUB_NOT_SUPPORTED(project, audio, len, sample_rate, options, candidates, capacity,
+                              out_count);
+#endif
+}
+
+SonareError sonare_project_auto_tempo_with_options(SonareProject* project, const float* audio,
+                                                   size_t len, int sample_rate,
+                                                   const SonareProjectTempoOptions* options,
+                                                   size_t candidate_index,
+                                                   uint8_t apply_time_signatures, float* out_bpm) {
+  SONARE_C_API_ENTRY;
+#if defined(SONARE_WITH_ARRANGEMENT)
+  if (out_bpm) *out_bpm = 0.0f;
+  if (!project) return SONARE_ERROR_INVALID_PARAMETER;
+  const SonareProjectTempoOptions resolved =
+      options ? *options : sonare_project_tempo_options_default();
+  if (!tempo_options_valid(resolved)) return SONARE_ERROR_INVALID_PARAMETER;
+  SonareError err = validate_audio_params(audio, len, sample_rate);
+  if (err != SONARE_OK) return err;
+  SONARE_C_TRY
+  const std::vector<sonare::mir::TempoEstimate> estimates =
+      analyze_tempo_candidates(audio, len, sample_rate, resolved);
+  if (candidate_index >= estimates.size() || estimates[candidate_index].segments.empty()) {
+    return SONARE_ERROR_INVALID_PARAMETER;
+  }
+  const sonare::mir::TempoEstimate& selected = estimates[candidate_index];
+  auto command = std::make_unique<arr::SetTempoSegment>(selected.segments);
+  if (!project->history.apply(std::move(command))) return SONARE_ERROR_INVALID_STATE;
+  if (apply_time_signatures != 0 && !selected.time_sigs.empty()) {
+    auto time_signature_command =
+        std::make_unique<arr::SetTimeSignatureSegment>(selected.time_sigs);
+    if (!project->history.apply(std::move(time_signature_command)))
+      return SONARE_ERROR_INVALID_STATE;
+  }
+  if (out_bpm) *out_bpm = static_cast<float>(selected.segments.front().bpm);
+  return SONARE_OK;
+  SONARE_C_CATCH
+#else
+  SONARE_C_STUB_NOT_SUPPORTED(project, audio, len, sample_rate, options, candidate_index,
+                              apply_time_signatures, out_bpm);
 #endif
 }
 

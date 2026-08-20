@@ -43,6 +43,8 @@ class ProjectWrap : public Napi::ObjectWrap<ProjectWrap> {
   Napi::Value SetSourceAudio(const Napi::CallbackInfo& info);
   Napi::Value SetAudioSourceMetadata(const Napi::CallbackInfo& info);
   Napi::Value TempoSegmentCount(const Napi::CallbackInfo& info);
+  Napi::Value TempoSegmentByIndex(const Napi::CallbackInfo& info);
+  Napi::Value TimeSignatureByIndex(const Napi::CallbackInfo& info);
   Napi::Value TimeSignatureCount(const Napi::CallbackInfo& info);
   Napi::Value MarkerCount(const Napi::CallbackInfo& info);
 

@@ -31,6 +31,7 @@ import type {
   ProjectMidiRouteResult,
   ProjectSource,
   ProjectTempoCandidate,
+  ProjectTempoOptions,
   ProjectTempoSegment,
   ProjectTimeSignatureSegment,
   ProjectTrack,
@@ -507,6 +508,28 @@ export class Project {
     return this.native.timeSignatureCount();
   }
 
+  /**
+   * Reads a tempo segment by index, in stored order.
+   *
+   * @param index - Zero-based index below {@link tempoSegmentCount}
+   * @returns The segment, in the shape {@link setTempoSegments} accepts
+   * @throws A `SonareError` when the index is at or past the count
+   */
+  tempoSegmentByIndex(index: number): ProjectTempoSegment {
+    return this.native.tempoSegmentByIndex(index);
+  }
+
+  /**
+   * Reads a time-signature segment by index, in stored order.
+   *
+   * @param index - Zero-based index below {@link timeSignatureCount}
+   * @returns The segment, in the shape {@link setTimeSignatures} accepts
+   * @throws A `SonareError` when the index is at or past the count
+   */
+  timeSignatureByIndex(index: number): ProjectTimeSignatureSegment {
+    return this.native.timeSignatureByIndex(index);
+  }
+
   // -- edit --
 
   /** Add a track and return its allocated stable id. */
@@ -915,18 +938,30 @@ export class Project {
   // -- MIR --
 
   /** Return ranked tempo-octave and detected-meter candidates without editing the project. */
-  analyzeTempo(audio: Float32Array, sampleRate: number): ProjectTempoCandidate[] {
-    return this.native.analyzeTempo(audio, sampleRate);
+  analyzeTempo(
+    audio: Float32Array,
+    sampleRate: number,
+    options?: ProjectTempoOptions,
+  ): ProjectTempoCandidate[] {
+    return this.native.analyzeTempo(audio, sampleRate, options);
   }
 
-  /** Detect and install a ranked tempo candidate; optionally apply its detected meter. */
+  /**
+   * Detect and install a ranked tempo candidate; optionally apply its detected meter.
+   *
+   * @remarks
+   * `candidateIndex` indexes the ranking {@link analyzeTempo} produced, so pair
+   * the two on the same `options`. Read the installed map back with
+   * {@link tempoSegmentCount} and {@link tempoSegmentByIndex}.
+   */
   autoTempo(
     audio: Float32Array,
     sampleRate: number,
     candidateIndex = 0,
     applyTimeSignatures = false,
+    options?: ProjectTempoOptions,
   ): number {
-    return this.native.autoTempo(audio, sampleRate, candidateIndex, applyTimeSignatures);
+    return this.native.autoTempo(audio, sampleRate, candidateIndex, applyTimeSignatures, options);
   }
 
   /**

@@ -499,7 +499,11 @@ export interface ProjectTempoSegment {
   startPpq: number;
   /** Tempo in beats per minute at the segment start. */
   bpm: number;
-  /** Derived segment start in samples. Accepted for compatibility, ignored on input. */
+  /**
+   * Derived segment start in samples. Accepted for compatibility and ignored on
+   * input; never returned, because a project stores musical positions only and
+   * sample positions are derived when it is compiled.
+   */
   startSample?: number;
   /** Optional ramp end tempo in BPM (0 = constant tempo over the segment). */
   endBpm?: number;
@@ -516,6 +520,40 @@ export interface ProjectTimeSignatureSegment {
 }
 
 /** A ranked primary/half/double tempo hypothesis returned by {@link Project.analyzeTempo}. */
+/**
+ * Scoring options for the beat-analysis to tempo-map bridge, shared by
+ * {@link Project.analyzeTempo} and {@link Project.autoTempo}.
+ *
+ * @remarks
+ * Every field is optional and falls back to the native default. Pair the two
+ * calls on the same options: `candidateIndex` indexes the ranking `analyzeTempo`
+ * produced under whatever options it was given.
+ */
+export interface ProjectTempoOptions {
+  /**
+   * Whether beat tracking may follow a tempo that moves during the take
+   * (default: `false`).
+   *
+   * @remarks
+   * With it off the tracker fits one tempo to the whole take, so on a
+   * performance that accelerates, slows or breathes every segment the bridge
+   * emits sits near the take's average. Leave it off for material recorded to a
+   * click; turn it on for a performance. Constant-tempo material still comes
+   * back as a single segment either way.
+   */
+  adaptiveTempo?: boolean;
+  /** Beats of context the local tempo estimate is read over. Used only when {@link adaptiveTempo} is on. */
+  tempoUpdateIntervalBeats?: number;
+  /**
+   * Relative tempo change at which one segment closes and the next opens
+   * (default: `0.02`). Smaller follows the performance more closely and emits
+   * more segments; larger merges more of it into constant stretches.
+   */
+  rampThreshold?: number;
+  /** Whether to rank the half- and double-tempo alternatives alongside the primary (default: `true`). */
+  includeOctaveCandidates?: boolean;
+}
+
 export interface ProjectTempoCandidate {
   bpm: number;
   confidence: number;

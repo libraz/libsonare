@@ -225,6 +225,31 @@ Napi::Value ProjectWrap::ValidateMidiNotes(const Napi::CallbackInfo& info) {
   return result;
 }
 
+namespace {
+
+// Seeds the native defaults, then applies whichever the caller supplied. Seeding
+// rather than zeroing matters: a zeroed ramp_threshold folds the whole take into
+// one tempo segment and a zeroed interval is rejected.
+SonareProjectTempoOptions TempoOptionsFrom(Napi::Value value) {
+  SonareProjectTempoOptions options = sonare_project_tempo_options_default();
+  if (!value.IsObject()) return options;
+  Napi::Object object = value.As<Napi::Object>();
+  options.adaptive_tempo =
+      sonare_node::node_bool_option(object, "adaptiveTempo", options.adaptive_tempo != 0) ? 1 : 0;
+  options.tempo_update_interval_beats = sonare_node::node_int_option(
+      object, "tempoUpdateIntervalBeats", options.tempo_update_interval_beats);
+  options.ramp_threshold = static_cast<float>(
+      sonare_node::node_double_option(object, "rampThreshold", options.ramp_threshold));
+  options.include_octave_candidates =
+      sonare_node::node_bool_option(object, "includeOctaveCandidates",
+                                    options.include_octave_candidates != 0)
+          ? 1
+          : 0;
+  return options;
+}
+
+}  // namespace
+
 Napi::Value ProjectWrap::AutoTempo(const Napi::CallbackInfo& info) {
   Napi::Env env = info.Env();
   if (info.Length() < 1 || !sonare_node::IsFloat32Array(info[0])) {
@@ -237,9 +262,11 @@ Napi::Value ProjectWrap::AutoTempo(const Napi::CallbackInfo& info) {
   float out_bpm = 0.0f;
   const size_t candidate_index = static_cast<size_t>(NumberArg(info, 2, 0.0));
   const bool apply_time_signatures = info.Length() > 3 && info[3].ToBoolean().Value();
-  ThrowIfError(
-      env, sonare_project_auto_tempo_ex(project_, audio.Data(), audio.ElementLength(), sample_rate,
-                                        candidate_index, apply_time_signatures ? 1 : 0, &out_bpm));
+  const SonareProjectTempoOptions options =
+      TempoOptionsFrom(info.Length() > 4 ? info[4] : env.Undefined());
+  ThrowIfError(env, sonare_project_auto_tempo_with_options(
+                        project_, audio.Data(), audio.ElementLength(), sample_rate, &options,
+                        candidate_index, apply_time_signatures ? 1 : 0, &out_bpm));
   if (env.IsExceptionPending()) return env.Undefined();
   return Napi::Number::New(env, out_bpm);
 }
@@ -254,9 +281,12 @@ Napi::Value ProjectWrap::AnalyzeTempo(const Napi::CallbackInfo& info) {
   Napi::Float32Array audio = info[0].As<Napi::Float32Array>();
   SonareProjectTempoCandidate candidates[SONARE_PROJECT_MAX_TEMPO_CANDIDATES]{};
   size_t count = 0;
-  ThrowIfError(env, sonare_project_analyze_tempo(project_, audio.Data(), audio.ElementLength(),
-                                                 static_cast<int>(NumberArg(info, 1, 0.0)),
-                                                 candidates, std::size(candidates), &count));
+  const SonareProjectTempoOptions options =
+      TempoOptionsFrom(info.Length() > 2 ? info[2] : env.Undefined());
+  ThrowIfError(env, sonare_project_analyze_tempo_with_options(
+                        project_, audio.Data(), audio.ElementLength(),
+                        static_cast<int>(NumberArg(info, 1, 0.0)), &options, candidates,
+                        std::size(candidates), &count));
   if (env.IsExceptionPending()) return env.Undefined();
   Napi::Array output =
       Napi::Array::New(env, static_cast<uint32_t>(std::min(count, std::size(candidates))));

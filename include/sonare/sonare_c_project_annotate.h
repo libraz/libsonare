@@ -192,6 +192,35 @@ typedef struct {
 /// call; it is not necessary to make a capacity-0 count query first.
 #define SONARE_PROJECT_MAX_TEMPO_CANDIDATES 3u
 
+/// Scoring options for the beat-analysis -> tempo bridge. Always start from
+/// sonare_project_tempo_options_default() rather than zeroing the struct: a
+/// zeroed ramp_threshold folds the whole take into one segment, and a zeroed
+/// tempo_update_interval_beats is rejected.
+typedef struct {
+  /* Whether beat tracking may follow a tempo that changes during the take.
+     0 keeps the one-tempo-per-take behaviour the fixed-signature entry points
+     have always had, which is the right answer for material recorded to a
+     click. Turn it on for a performance that accelerates, slows or breathes:
+     with it off the tracker locks near the take's average and every tempo
+     segment the bridge emits sits near that same average. */
+  int adaptive_tempo;
+  /* Beats of context the local tempo estimate is read over. Used only when
+     adaptive_tempo is 1. Must be positive. */
+  int tempo_update_interval_beats;
+  /* Relative tempo change (as a fraction) at which the bridge closes one tempo
+     segment and opens the next. Smaller follows the performance more closely
+     and emits more segments; larger merges more of it into constant stretches.
+     Must be non-negative and finite. */
+  float ramp_threshold;
+  /* Whether to emit the half-tempo and double-tempo alternatives alongside the
+     primary candidate. 0 emits the primary only. */
+  int include_octave_candidates;
+} SonareProjectTempoOptions;
+
+/// @brief Returns the tempo-bridge defaults, which reproduce the behaviour of
+///        the entry points that take no options.
+SonareProjectTempoOptions sonare_project_tempo_options_default(void);
+
 /// @brief Detects tempo from a mono audio buffer and installs the primary
 ///        tempo-segment estimate via an edit command (undoable). Uses the
 ///        beat analysis -> tempo bridge. @p out_bpm (optional) receives the
@@ -220,6 +249,33 @@ SonareError sonare_project_analyze_tempo(const SonareProject* project, const flo
 SonareError sonare_project_auto_tempo_ex(SonareProject* project, const float* audio, size_t len,
                                          int sample_rate, size_t candidate_index,
                                          uint8_t apply_time_signatures, float* out_bpm);
+
+/// @brief @ref sonare_project_analyze_tempo with the bridge options exposed.
+/// @details The fixed-signature entry points run the bridge on a beat track
+///          fitted with one tempo for the whole take, which is what makes their
+///          tempo maps flat on a performance whose tempo moves. @p options is
+///          how a caller asks for something else; passing the defaults from
+///          @ref sonare_project_tempo_options_default reproduces them exactly.
+///          A NULL @p options is the defaults.
+SonareError sonare_project_analyze_tempo_with_options(const SonareProject* project,
+                                                      const float* audio, size_t len,
+                                                      int sample_rate,
+                                                      const SonareProjectTempoOptions* options,
+                                                      SonareProjectTempoCandidate* candidates,
+                                                      size_t capacity, size_t* out_count);
+
+/// @brief @ref sonare_project_auto_tempo_ex with the bridge options exposed.
+/// @details Reads the ranked candidate @p candidate_index produced under the
+///          same @p options and installs it, so a caller pairs this with
+///          @ref sonare_project_analyze_tempo_with_options run on the same
+///          options rather than mixing the two option sets. Read the installed
+///          map back with @ref sonare_project_tempo_segment_count and
+///          @ref sonare_project_tempo_segment_by_index.
+SonareError sonare_project_auto_tempo_with_options(SonareProject* project, const float* audio,
+                                                   size_t len, int sample_rate,
+                                                   const SonareProjectTempoOptions* options,
+                                                   size_t candidate_index,
+                                                   uint8_t apply_time_signatures, float* out_bpm);
 
 /// @brief Snaps a PPQ coordinate to the nearest beat of the project's grid at
 ///        that position. @p strength in [0,1] (0 = no snap, 1 = exact line).

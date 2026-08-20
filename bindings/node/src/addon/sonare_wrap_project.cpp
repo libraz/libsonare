@@ -115,6 +115,8 @@ Napi::Object ProjectWrap::Init(Napi::Env env, Napi::Object exports) {
           InstanceMethod<&ProjectWrap::SetSourceAudio>("setSourceAudio"),
           InstanceMethod<&ProjectWrap::SetAudioSourceMetadata>("setAudioSourceMetadata"),
           InstanceMethod<&ProjectWrap::TempoSegmentCount>("tempoSegmentCount"),
+          InstanceMethod<&ProjectWrap::TempoSegmentByIndex>("tempoSegmentByIndex"),
+          InstanceMethod<&ProjectWrap::TimeSignatureByIndex>("timeSignatureByIndex"),
           InstanceMethod<&ProjectWrap::TimeSignatureCount>("timeSignatureCount"),
           InstanceMethod<&ProjectWrap::MarkerCount>("markerCount"),
           InstanceMethod<&ProjectWrap::Destroy>("destroy"),
@@ -400,6 +402,36 @@ Napi::Value ProjectWrap::SourceByIndex(const Napi::CallbackInfo& info) {
   out.Set("contentHash", metadata.value.content_hash != nullptr ? metadata.value.content_hash : "");
   out.Set("externalStemRole",
           metadata.value.external_stem_role != nullptr ? metadata.value.external_stem_role : "");
+  return out;
+}
+
+Napi::Value ProjectWrap::TempoSegmentByIndex(const Napi::CallbackInfo& info) {
+  Napi::Env env = info.Env();
+  SonareProjectTempoSegment seg{};
+  ThrowIfError(env, sonare_project_tempo_segment_by_index(
+                        project_, static_cast<size_t>(NumberArg(info, 0, 0.0)), &seg));
+  if (env.IsExceptionPending()) return env.Undefined();
+  Napi::Object out = Napi::Object::New(env);
+  // The same three fields setTempoSegments accepts, so a segment read back can
+  // be written straight to another project. start_sample is left out on
+  // purpose: the setter ignores it and a project stores 0 in it, so surfacing
+  // it would only offer a number that means nothing.
+  out.Set("startPpq", Napi::Number::New(env, seg.start_ppq));
+  out.Set("bpm", Napi::Number::New(env, seg.bpm));
+  out.Set("endBpm", Napi::Number::New(env, seg.end_bpm));
+  return out;
+}
+
+Napi::Value ProjectWrap::TimeSignatureByIndex(const Napi::CallbackInfo& info) {
+  Napi::Env env = info.Env();
+  SonareProjectTimeSignatureSegment seg{};
+  ThrowIfError(env, sonare_project_time_signature_by_index(
+                        project_, static_cast<size_t>(NumberArg(info, 0, 0.0)), &seg));
+  if (env.IsExceptionPending()) return env.Undefined();
+  Napi::Object out = Napi::Object::New(env);
+  out.Set("startPpq", Napi::Number::New(env, seg.start_ppq));
+  out.Set("numerator", Napi::Number::New(env, seg.numerator));
+  out.Set("denominator", Napi::Number::New(env, seg.denominator));
   return out;
 }
 

@@ -219,6 +219,25 @@ SonareError sonare_project_set_time_signatures(SonareProject* project,
                                                const SonareProjectTimeSignatureSegment* segments,
                                                size_t segment_count);
 
+/// @brief Reads a project tempo segment by index (0-based, in stored order).
+/// @details Pairs with @ref sonare_project_tempo_segment_count, which is the
+///          only way to learn the valid index range; an index at or past that
+///          count yields SONARE_ERROR_INVALID_PARAMETER.
+///
+///          @p start_sample comes back as the project stores it, which is 0 for
+///          every segment: a project keeps musical positions only, and sample
+///          positions are derived by tempo-map normalization when the project is
+///          compiled. Read @p start_ppq and @p bpm; a caller that needs sample
+///          positions has to run them through the tempo map itself.
+SonareError sonare_project_tempo_segment_by_index(const SonareProject* project, size_t index,
+                                                  SonareProjectTempoSegment* out);
+
+/// @brief Reads a project time-signature segment by index (0-based, in stored order).
+/// @details Pairs with @ref sonare_project_time_signature_count. An index out of
+///          range yields SONARE_ERROR_INVALID_PARAMETER.
+SonareError sonare_project_time_signature_by_index(const SonareProject* project, size_t index,
+                                                   SonareProjectTimeSignatureSegment* out);
+
 /// @brief Project timeline marker with its kind and (for key signatures) the
 ///        structured key. @c kind is a SonareMarkerKind ordinal; the key fields
 ///        apply only to the key-signature kind. The layout mirrors

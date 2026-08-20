@@ -399,6 +399,17 @@ class SonareProjectTimeSignatureSegment(ctypes.Structure):
     ]
 
 
+class SonareProjectTempoOptions(ctypes.Structure):
+    """Maps to SonareProjectTempoOptions in sonare_c_project_annotate.h (sizeof 16)."""
+
+    _fields_ = [
+        ("adaptive_tempo", ctypes.c_int),
+        ("tempo_update_interval_beats", ctypes.c_int),
+        ("ramp_threshold", ctypes.c_float),
+        ("include_octave_candidates", ctypes.c_int),
+    ]
+
+
 class SonareProjectTempoCandidate(ctypes.Structure):
     """Maps to SonareProjectTempoCandidate in sonare_c_project.h."""
 

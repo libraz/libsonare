@@ -130,6 +130,14 @@ python = [
 #     meter-apply, and division arguments are public optional parameters and the
 #     wrappers call the corresponding C `_ex` entry points; the defaults match
 #     the legacy base calls.
+#   project_analyze_tempo_with_options / project_auto_tempo_with_options: folded
+#     into the same two Project facade methods. The bridge options become an
+#     optional options bag on Node/WASM and keyword arguments on Python, and both
+#     wrappers now call the with-options entry points; passing nothing reproduces
+#     the fixed-signature calls exactly.
+#   project_tempo_options_default: the default seeder the facades call to fill
+#     the options bag before applying whichever fields the caller gave, so it
+#     never reaches a facade signature of its own.
 #   project_bake_midi_fx_ex: folded into each Project facade's bake-MIDI-FX
 #     method. The provenance buffer becomes a `withSourceIndex` request field on
 #     Node/WASM and a `with_source_index` keyword on Python, and the wrapper
@@ -158,6 +166,9 @@ node = [
   "tempogram_with_mode",
   "onset_strength",
   "project_auto_tempo_ex",
+  "project_analyze_tempo_with_options",
+  "project_auto_tempo_with_options",
+  "project_tempo_options_default",
   "project_snap_to_grid_ex",
   "project_bake_midi_fx_ex",
   "error_message",
@@ -250,6 +261,9 @@ wasm = [
   "tempogram_with_mode",
   "onset_strength",
   "project_auto_tempo_ex",
+  "project_analyze_tempo_with_options",
+  "project_auto_tempo_with_options",
+  "project_tempo_options_default",
   "project_snap_to_grid_ex",
   "project_bake_midi_fx_ex",
   "error_message",
@@ -322,6 +336,9 @@ python = [
   "tempogram_with_mode",
   "onset_strength",
   "project_auto_tempo_ex",
+  "project_analyze_tempo_with_options",
+  "project_auto_tempo_with_options",
+  "project_tempo_options_default",
   "project_snap_to_grid_ex",
   "project_bake_midi_fx_ex",
   "error_message",
