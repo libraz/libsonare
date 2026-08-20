@@ -532,6 +532,54 @@ TEST_CASE("SMF export flags a non-power-of-two time-signature denominator as los
   REQUIRE(clean.skipped_events == 0);
 }
 
+TEST_CASE("SMF export flags a time-signature numerator it cannot store", "[midi]") {
+  // The time-signature meta stores the numerator in a single byte, so a request
+  // outside 1..255 cannot be written at all. A bare narrowing loses it silently
+  // and lands on a meter the reader accepts as legitimate - 260 becomes an
+  // unrelated 4/4, and 256 becomes the zero numerator the reader drops - so the
+  // clamp must be counted the way the denominator's rounding is.
+  std::vector<sonare::transport::TimeSignatureSegment> ts(1);
+  ts[0].start_ppq = 0.0;
+  ts[0].time_sig.denominator = 4;  // power of two: the denominator arm counts nothing
+  ts[0].clocks_per_metronome_click = 24;
+  ts[0].thirty_seconds_per_quarter = 8;
+
+  SmfExportOptions opts;
+  opts.ticks_per_quarter = 480;
+
+  SECTION("an unstorable numerator is clamped and counted") {
+    for (int numerator : {256, 260, 1000}) {
+      CAPTURE(numerator);
+      ts[0].time_sig.numerator = numerator;
+      const auto exported = export_smf({}, {}, ts, {}, opts);
+      REQUIRE(exported.ok());
+      REQUIRE(exported.skipped_events == 1);
+
+      const SmfImportResult round = import_smf(exported.bytes);
+      REQUIRE(round.ok());
+      REQUIRE(round.time_signatures.size() == 1);
+      REQUIRE(round.time_signatures[0].time_sig.numerator == 255);
+      REQUIRE(round.time_signatures[0].time_sig.denominator == 4);
+    }
+  }
+
+  SECTION("a storable numerator round-trips exactly and counts nothing") {
+    for (int numerator : {3, 7, 255}) {
+      CAPTURE(numerator);
+      ts[0].time_sig.numerator = numerator;
+      const auto exported = export_smf({}, {}, ts, {}, opts);
+      REQUIRE(exported.ok());
+      REQUIRE(exported.skipped_events == 0);
+
+      const SmfImportResult round = import_smf(exported.bytes);
+      REQUIRE(round.ok());
+      REQUIRE(round.time_signatures.size() == 1);
+      REQUIRE(round.time_signatures[0].time_sig.numerator == numerator);
+      REQUIRE(round.time_signatures[0].time_sig.denominator == 4);
+    }
+  }
+}
+
 TEST_CASE("SMF import tags text / lyric / cue / marker / key-signature meta with kinds", "[midi]") {
   using sonare::midi::SmfMarkerKind;
   const SmfImportResult r = import_smf(make_meta_classes_smf());

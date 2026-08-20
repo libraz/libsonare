@@ -957,7 +957,16 @@ SmfExportResult export_smf(const std::vector<MidiClip>& clips,
         if ((1 << dd) != den) {
           ++result.skipped_events;
         }
-        const uint8_t payload[4] = {static_cast<uint8_t>(item.numerator), dd,
+        // The numerator occupies a single byte, so a request outside 1..255
+        // cannot be stored. Clamp it and count the loss the way the denominator
+        // does: a bare narrowing rewrites the meter into an unrelated but valid
+        // one (260 becomes 4) with nothing to tell the caller it happened, and
+        // 256 becomes the zero the reader above rejects.
+        const int stored_numerator = std::clamp(item.numerator, 1, 255);
+        if (stored_numerator != item.numerator) {
+          ++result.skipped_events;
+        }
+        const uint8_t payload[4] = {static_cast<uint8_t>(stored_numerator), dd,
                                     item.clocks_per_metronome_click,
                                     item.thirty_seconds_per_quarter};
         put_meta(&body, delta, kMetaTimeSignature, payload, 4);
