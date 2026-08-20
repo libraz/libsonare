@@ -1670,6 +1670,133 @@ def _resolve_executable(executable: str) -> str:
     return executable
 
 
+def _resolved_python_library(python_executable: str, timeout: float) -> str | None:
+    """Ask the Python surface which shared library it will load.
+
+    The search order (``SONARE_LIB_PATH``, then the build tree, then the
+    package-adjacent copy) belongs to the surface, and it does not follow this
+    checker's ``--native`` directory, so the answer is taken from the
+    interpreter that is about to run rather than reconstructed from a path.
+    Returns None when the surface cannot be asked, which leaves the comparison
+    to proceed exactly as before.
+    """
+    if Path(python_executable).name.startswith("sonare"):
+        return None
+    cwd = ROOT / "bindings" / "python"
+    environment = os.environ.copy()
+    environment["PYTHONPATH"] = (
+        str(cwd / "src") + os.pathsep + environment.get("PYTHONPATH", "")
+    )
+    try:
+        completed = subprocess.run(
+            [
+                python_executable,
+                "-c",
+                "from libsonare._ffi import resolved_library_path;"
+                "print(resolved_library_path())",
+            ],
+            cwd=str(cwd),
+            env=environment,
+            capture_output=True,
+            text=True,
+            timeout=timeout,
+            check=False,
+        )
+    except (OSError, subprocess.SubprocessError):
+        return None
+    if completed.returncode != 0:
+        return None
+    return completed.stdout.strip() or None
+
+
+def _straddling_source(older: float, newer: float) -> Path | None:
+    """Return a core source file last modified between two artifact link times."""
+    for directory in ("src", "include"):
+        root = ROOT / directory
+        if not root.is_dir():
+            continue
+        for path in root.rglob("*"):
+            if not path.is_file():
+                continue
+            try:
+                mtime = path.stat().st_mtime
+            except OSError:
+                continue
+            if older < mtime <= newer:
+                return path
+    return None
+
+
+def _count_sources_after(mtime: float) -> int:
+    """Count core source files last modified after a given time."""
+    count = 0
+    for directory in ("src", "include"):
+        root = ROOT / directory
+        if not root.is_dir():
+            continue
+        for path in root.rglob("*"):
+            if not path.is_file():
+                continue
+            try:
+                if path.stat().st_mtime > mtime:
+                    count += 1
+            except OSError:
+                continue
+    return count
+
+
+def _check_artifact_skew(
+    native_executable: str,
+    python_executable: str,
+    timeout: float,
+    report: list[tuple[str, str]],
+) -> None:
+    """Name the compared artifacts, and reject two built from different cores.
+
+    Every run prints which two artifacts were compared. Whether the Python
+    surface loads the build tree, a ``SONARE_LIB_PATH`` override, or the
+    package-adjacent copy is not visible from the invocation, so a passing
+    contract run that does not say leaves the reader to assume it.
+
+    The rejection is narrower than the announcement. The two surfaces are
+    separate link products and the targets that refresh them are separate as
+    well: ``build-shared`` rebuilds only the shared library, so a core edit
+    followed by ``build-shared`` alone leaves the native CLI a generation
+    behind, and comparing across that gap reports a difference belonging to the
+    build rather than to either surface. Two equally stale artifacts still agree
+    with each other, so staleness alone is reported and not rejected; what is
+    rejected is a core source change landing between the two link times.
+    """
+    library = _resolved_python_library(python_executable, timeout)
+    if library is None:
+        return
+    try:
+        native_mtime = os.path.getmtime(native_executable)
+        library_mtime = os.path.getmtime(library)
+    except OSError:
+        return
+    provenance = f"cli contract v2: comparing {native_executable} and {library}"
+    pending = _count_sources_after(max(native_mtime, library_mtime))
+    if pending:
+        provenance += f" ({pending} core source file(s) are newer)"
+    print(provenance)
+    straddling = _straddling_source(*sorted((native_mtime, library_mtime)))
+    if straddling is None:
+        return
+    behind, ahead = (
+        (native_executable, library)
+        if native_mtime < library_mtime
+        else (library, native_executable)
+    )
+    report.append(
+        (
+            "fail",
+            f"artifact skew: {behind} predates {straddling.relative_to(ROOT)}, "
+            f"which {ahead} already includes -- rebuild both before comparing",
+        )
+    )
+
+
 def _run(
     surface: str, executable: str, argv: list[str], legacy: bool, timeout: float
 ) -> dict[str, Any]:
@@ -2265,6 +2392,31 @@ def _validate_case_payload(
                 (
                     "fail",
                     f"{label}.loudness_target_limited: expected False, got {limited!r}",
+                )
+            )
+    if path == "mastering" and case_id == "ceiling_limits_target":
+        # The opposite direction of target_within_ceiling: the fixture is a -6
+        # dBFS tone, so a -6 LUFS target under a -3 dBTP ceiling cannot be
+        # reached and both surfaces must say so. The cross-surface comparison
+        # protects what applied_gain_db means -- the pre-limiter static gain,
+        # not the bare ceiling headroom, which sits about 0.86 dB away on this
+        # fixture. Omitting --report also makes this the one mastering case
+        # entering through the standalone loudness helper rather than the chain.
+        limited = payload.get("loudness_target_limited")
+        if limited is not True:
+            report.append(
+                (
+                    "fail",
+                    f"{label}.loudness_target_limited: expected True, got {limited!r}",
+                )
+            )
+        output_lufs = payload.get("output_lufs")
+        if not _is_number(output_lufs) or float(output_lufs) > -6.5:
+            report.append(
+                (
+                    "fail",
+                    f"{label}.output_lufs: ceiling-limited run must stop short of "
+                    f"its target, got {output_lufs!r}",
                 )
             )
     if path == "spectral":
@@ -3014,6 +3166,7 @@ def main(argv: list[str] | None = None) -> int:
     python_executable = _resolve_executable(args.python)
 
     report: list[tuple[str, str]] = []
+    _check_artifact_skew(native_executable, python_executable, args.timeout, report)
     with tempfile.TemporaryDirectory(prefix="libsonare-cli-contract-") as temporary:
         paths = _write_fixtures(Path(temporary), manifest)
         native_inventory: dict[str, dict[str, Any]] | None = None

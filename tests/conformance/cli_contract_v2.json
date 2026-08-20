@@ -4182,6 +4182,23 @@
           "payload": "success",
           "artifact": "none",
           "stdout": "json"
+        },
+        {
+          "id": "ceiling_limits_target",
+          "argv": [
+            "mastering",
+            "{audio}",
+            "--target-lufs",
+            "-6",
+            "--ceiling-db",
+            "-3",
+            "--json"
+          ],
+          "exit": 0,
+          "legacy_exit": 0,
+          "payload": "success",
+          "artifact": "none",
+          "stdout": "json"
         }
       ],
       "artifacts": {}
