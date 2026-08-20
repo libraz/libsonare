@@ -56,10 +56,41 @@ int boundary_ssm_frames(int n_frames, int kernel_size);
 
 /// @brief Configuration for boundary detection.
 struct BoundaryConfig {
-  int n_fft = 2048;            ///< FFT size
-  int hop_length = 512;        ///< Hop length
-  int kernel_size = 64;        ///< Checkerboard kernel size in frames
-  float threshold = 0.3f;      ///< Novelty threshold for boundary detection
+  int n_fft = 2048;      ///< FFT size
+  int hop_length = 512;  ///< Hop length
+  int kernel_size = 64;  ///< Checkerboard kernel size in frames
+  /// Relative novelty threshold, applied to the curve after it has been scaled
+  /// by its own maximum. Selects how prominent a peak must be *within this
+  /// track*; it says nothing about how much the features actually changed.
+  float threshold = 0.3f;
+  /// Absolute novelty threshold, applied to the raw checkerboard response before
+  /// that scaling. A stationary feature sequence still produces a full-scale
+  /// normalized curve — self-scaling turns residual fluctuation into peaks of
+  /// 1.0 — so the relative threshold alone segments material that never changes,
+  /// and a repeated loop shatters into a section every few seconds. This is the
+  /// floor that asks whether anything changed at all.
+  ///
+  /// The default is the midpoint of two measured populations. Stationary material
+  /// tops out around 0.003 (a repeated loop: 0.00004 to 0.0012 depending on how
+  /// much of it the kernel spans; a steady chord 0.0003; steady white noise, the
+  /// worst case, 0.003). A genuine section change runs from 0.008 for a weak one
+  /// up to 0.95 where the timbre changes outright. Set to 0 to disable the floor
+  /// and gate on the relative threshold alone.
+  ///
+  /// Two limits worth knowing. A change carried by level alone is not invisible
+  /// here — the first MFCC coefficient tracks level, and per-frame normalization
+  /// removes the feature vector's length but not that coefficient's ratio to the
+  /// rest, so the vector really does turn. It just turns about five times less
+  /// than a comparable change of pitch does, which puts its response at 0.0003
+  /// sustained (0.001 if the level steps abruptly and the step itself registers
+  /// as a transient) — below what steady noise produces. **Lowering this floor
+  /// does not recover level-only structure**; it admits noise first, because the
+  /// noise is louder than the signal being chased. Segmenting on level needs an
+  /// energy-based segmenter, not a smaller threshold here. Second limit: a loop
+  /// longer than the kernel span (@ref kernel_size hops, 1.5 s by default) is not
+  /// stationary at the scale the kernel measures, so its within-loop contrast
+  /// clears the floor and it is segmented.
+  float absolute_threshold = 0.005f;
   int n_mfcc = 13;             ///< Number of MFCC coefficients
   int n_chroma = 12;           ///< Number of chroma bins
   float peak_distance = 2.0f;  ///< Minimum distance between peaks in seconds
@@ -71,10 +102,12 @@ struct BoundaryConfig {
 struct Boundary {
   float time;      ///< Boundary time in seconds (authoritative output)
   int frame;       ///< Index into the analysis grid. Equals the STFT frame index
-                   ///< at the configured hop_length for normal-length inputs. For
-                   ///< long-form inputs the feature grid is mean-pooled, so this
-                   ///< is an index into the pooled grid (not the raw STFT frame);
-                   ///< use @c time for sample/second mapping in that case.
+                   ///< at the configured hop_length for normal-length inputs, on
+                   ///< the analysis rate's time base rather than the source's --
+                   ///< a higher-rate input is resampled first. For long-form
+                   ///< inputs the feature grid is additionally mean-pooled, so
+                   ///< this is an index into the pooled grid (not the raw STFT
+                   ///< frame); use @c time for sample/second mapping either way.
   float strength;  ///< Boundary strength (novelty score)
 };
 
@@ -84,7 +117,10 @@ struct Boundary {
 class BoundaryDetector {
  public:
   /// @brief Constructs boundary detector from audio.
-  /// @param audio Input audio
+  /// @param audio Input audio; rates above 22.05 kHz are analyzed at 22.05 kHz,
+  /// so boundary times are stable across common source rates. The same rendering
+  /// delivered at 44.1 kHz and at 48 kHz lands on one time grid, and matches the
+  /// section analysis layered on this detector, which resamples the same way.
   /// @param config Boundary detection configuration
   explicit BoundaryDetector(const Audio& audio, const BoundaryConfig& config = BoundaryConfig());
 
@@ -108,13 +144,25 @@ class BoundaryDetector {
   /// @brief Returns boundary times in seconds.
   std::vector<float> boundary_times() const;
 
-  /// @brief Returns the novelty curve.
+  /// @brief Returns the novelty curve, scaled by its own maximum.
+  /// @details Values are in [0, 1] and are what @ref BoundaryConfig::threshold is
+  /// compared against. The scaling is per-track, so a peak of 1.0 means "the most
+  /// novel frame here", not "a large change" — multiply by @ref novelty_peak to
+  /// recover the raw checkerboard response the absolute threshold reads.
   const std::vector<float>& novelty_curve() const { return novelty_curve_; }
+
+  /// @brief Returns the largest raw checkerboard response, before normalization.
+  /// @details The factor that maps @ref novelty_curve back onto the absolute
+  /// scale @ref BoundaryConfig::absolute_threshold lives on. Zero when the curve
+  /// was left unnormalized because nothing rose above the numerical floor.
+  float novelty_peak() const { return novelty_peak_; }
 
   /// @brief Returns number of detected boundaries.
   size_t count() const { return boundaries_.size(); }
 
-  /// @brief Returns sample rate.
+  /// @brief Returns the rate the analysis ran at, not the input's rate.
+  /// @details Equals the input rate at or below 22.05 kHz, and 22.05 kHz above
+  /// it, since a higher-rate input is resampled before any feature is computed.
   int sample_rate() const { return sr_; }
 
   /// @brief Returns hop length.
@@ -157,12 +205,15 @@ class BoundaryDetector {
                                  // n_frames_ rows of (2 * band_radius_ + 1) diagonals
   int n_frames_;
   int n_features_;
-  int band_radius_ = 0;   // stored half-bandwidth: only |row - col| <= this is kept
-  int frame_stride_ = 1;  // feature pooling factor (>1 only past the band budget)
+  int band_radius_ = 0;        // stored half-bandwidth: only |row - col| <= this is kept
+  int frame_stride_ = 1;       // feature pooling factor (>1 only past the band budget)
+  float novelty_peak_ = 0.0f;  // raw novelty maximum the curve was divided by
+  // Declared before sr_ because sr_ is initialized from it: the audio the
+  // detector analyses may have been resampled away from the caller's rate.
+  Audio audio_;
   int sr_;
   int hop_length_;
   BoundaryConfig config_;
-  Audio audio_;
 };
 
 /// @brief Quick boundary detection function.

@@ -5,6 +5,7 @@
 #include <climits>
 #include <cmath>
 
+#include "core/resample.h"
 #include "core/spectrum.h"
 #include "feature/chroma.h"
 #include "feature/mel_spectrogram.h"
@@ -31,6 +32,19 @@ void normalize_feature(float* feature, int n) {
       feature[i] /= norm;
     }
   }
+}
+
+/// @brief Returns the audio the detector analyses, at most the analysis rate.
+/// @details Boundary times must not move with the source rate, so a higher-rate
+/// input is resampled before any feature is computed. Matches the resampling the
+/// section analysis layered on this detector applies to the same input, so the
+/// two entry points segment on one time grid.
+Audio boundary_analysis_audio(const Audio& audio) {
+  constexpr int kAnalysisSampleRate = constants::kDefaultSampleRate;
+  if (!audio.empty() && audio.sample_rate() > kAnalysisSampleRate) {
+    return resample(audio, kAnalysisSampleRate);
+  }
+  return audio;
 }
 
 /// @brief Stored half-bandwidth of the self-similarity band.
@@ -70,10 +84,10 @@ int boundary_ssm_frames(int n_frames, int kernel_size) {
 BoundaryDetector::BoundaryDetector(const Audio& audio, const BoundaryConfig& config)
     : n_frames_(0),
       n_features_(0),
-      sr_(audio.sample_rate()),
+      audio_(boundary_analysis_audio(audio)),
+      sr_(audio_.sample_rate()),
       hop_length_(config.hop_length),
-      config_(config),
-      audio_(audio) {
+      config_(config) {
   SONARE_CHECK(!audio.empty(), ErrorCode::InvalidParameter);
 
   compute_features();
@@ -348,13 +362,15 @@ void BoundaryDetector::compute_novelty_curve() {
     novelty_curve_[i] = compute_checkerboard_kernel(i);
   }
 
-  // Normalize novelty curve to [0, 1]
+  // Normalize novelty curve to [0, 1]. The divisor is kept: it is the only link
+  // back to the absolute scale, which self-normalization otherwise destroys.
   float max_val = 0.0f;
   for (float val : novelty_curve_) {
     max_val = std::max(max_val, val);
   }
 
   if (max_val > constants::kEpsilon) {
+    novelty_peak_ = max_val;
     for (float& val : novelty_curve_) {
       val = std::max(0.0f, val / max_val);
     }
@@ -371,12 +387,18 @@ void BoundaryDetector::detect_boundaries() {
   int min_peak_distance = static_cast<int>(config_.peak_distance / hop_duration);
   min_peak_distance = std::max(1, min_peak_distance);
 
-  // Find local maxima above threshold
+  // Find local maxima above both thresholds. The relative one ranks peaks within
+  // this track; the absolute one asks whether the features changed at all, which
+  // the normalized curve cannot answer because it was scaled by its own maximum.
+  // novelty_peak_ is 0 exactly when the curve was left unnormalized for sitting
+  // under the numerical floor, and multiplying by it rejects that curve too.
   for (int i = 1; i < n_frames_ - 1; ++i) {
     bool is_peak =
         (novelty_curve_[i] > novelty_curve_[i - 1] && novelty_curve_[i] > novelty_curve_[i + 1]);
+    const float absolute_novelty = novelty_curve_[i] * novelty_peak_;
 
-    if (is_peak && novelty_curve_[i] >= config_.threshold) {
+    if (is_peak && novelty_curve_[i] >= config_.threshold &&
+        absolute_novelty >= config_.absolute_threshold) {
       // Check minimum distance from previous boundary
       bool far_enough = true;
       if (!boundaries_.empty()) {

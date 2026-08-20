@@ -19,34 +19,64 @@ using Catch::Matchers::WithinAbs;
 
 namespace {
 
-/// @brief Creates audio with distinct sections (different energy levels).
+/// @brief Creates 20 seconds of audio as five sections of four seconds each.
+/// @param sr Sample rate in Hz.
+/// @details Sections differ in pitch and harmonic richness as well as level:
+///
+///   0-4s    F3, 1 partial,  level 0.2   quiet opening
+///   4-8s    C4, 3 partials, level 0.5
+///   8-12s   G4, 4 partials, level 0.9   loudest and brightest
+///   12-16s  C4, 3 partials, level 0.5   repeats 4-8s
+///   16-20s  F3, 1 partial,  level 0.2   repeats 0-4s
+///
+/// Level alone would not be enough, and the pitch contrast is not decoration. An
+/// earlier version of this fixture stepped only its amplitude, and once the
+/// boundary detector gained an absolute novelty floor it produced no boundaries at
+/// all, leaving every test here iterating one whole-track span. That is correct
+/// behaviour, not a regression: the detector reads MFCC and chroma, where a change
+/// of level turns the feature vector about five times less than a comparable
+/// change of pitch, which leaves it quieter than steady noise. **It cannot be
+/// recovered by lowering the threshold** — anything low enough to admit it admits
+/// noise first. So the sections have to differ in what the detector actually
+/// reads. The level plateaus are kept on top of that so cases relying on energy
+/// ordering still hold.
+///
+/// Section *labels* are deliberately not asserted anywhere: the classifier is a
+/// fixed-threshold heuristic and this signal is not shaped like a pop song.
 Audio create_sectioned_audio(int sr = 22050) {
-  // Create 20-second audio with:
-  // 0-4s: Intro (low energy)
-  // 4-8s: Verse (medium energy)
-  // 8-12s: Chorus (high energy)
-  // 12-16s: Verse (medium energy)
-  // 16-20s: Outro (low energy)
+  struct SectionTone {
+    float amplitude;
+    float frequency;
+    int partials;
+  };
+  constexpr float kDuration = 20.0f;
+  constexpr float kSectionSeconds = 4.0f;
+  // Keeps the richest section inside [-1, 1] once its partials are summed.
+  constexpr float kHeadroom = 0.45f;
+  constexpr float kPartialDecay = 0.6f;
+  const std::array<SectionTone, 5> tones = {{{0.2f, 174.61f, 1},
+                                             {0.5f, 261.63f, 3},
+                                             {0.9f, 392.00f, 4},
+                                             {0.5f, 261.63f, 3},
+                                             {0.2f, 174.61f, 1}}};
 
-  float duration = 20.0f;
-  int n_samples = static_cast<int>(sr * duration);
-  std::vector<float> samples(n_samples);
+  const int n_samples = static_cast<int>(static_cast<float>(sr) * kDuration);
+  std::vector<float> samples(static_cast<size_t>(n_samples));
 
   for (int i = 0; i < n_samples; ++i) {
-    float t = static_cast<float>(i) / sr;
-    float freq = 440.0f;
+    const float t = static_cast<float>(i) / static_cast<float>(sr);
+    const size_t index = static_cast<size_t>(
+        std::min<int>(static_cast<int>(tones.size()) - 1, static_cast<int>(t / kSectionSeconds)));
+    const SectionTone& tone = tones[index];
 
-    // Determine amplitude based on section
-    float amplitude = 0.2f;  // Default low (intro/outro)
-    if (t >= 4.0f && t < 8.0f) {
-      amplitude = 0.5f;  // Verse
-    } else if (t >= 8.0f && t < 12.0f) {
-      amplitude = 0.9f;  // Chorus
-    } else if (t >= 12.0f && t < 16.0f) {
-      amplitude = 0.5f;  // Verse
+    float value = 0.0f;
+    float weight = 1.0f;
+    for (int harmonic = 1; harmonic <= tone.partials; ++harmonic) {
+      value += weight * std::sin(2.0f * sonare::constants::kPiD * tone.frequency *
+                                 static_cast<float>(harmonic) * t);
+      weight *= kPartialDecay;
     }
-
-    samples[i] = amplitude * std::sin(2.0f * sonare::constants::kPiD * freq * t);
+    samples[static_cast<size_t>(i)] = tone.amplitude * kHeadroom * value;
   }
 
   return Audio::from_vector(std::move(samples), sr);
@@ -87,6 +117,11 @@ TEST_CASE("SectionAnalyzer sections", "[section_analyzer]") {
   SectionAnalyzer analyzer(audio, config);
 
   const auto& sections = analyzer.sections();
+
+  // The fixture is built as five sections and this configuration resolves all
+  // five, so pin the count: a fixture the detector cannot separate would leave
+  // the loop below iterating one whole-track span and asserting nothing.
+  REQUIRE(sections.size() == 5);
 
   // Each section should have valid timing
   for (const auto& section : sections) {
@@ -169,6 +204,10 @@ TEST_CASE("SectionAnalyzer boundary_times", "[section_analyzer]") {
 
   auto boundaries = analyzer.boundary_times();
 
+  // One boundary per section change. Pinned because the ordering check below is
+  // vacuous on an empty vector, which is what an undetectable fixture produces.
+  REQUIRE(boundaries.size() == 4);
+
   // Boundaries should be sorted
   for (size_t i = 1; i < boundaries.size(); ++i) {
     REQUIRE(boundaries[i] > boundaries[i - 1]);
@@ -223,10 +262,16 @@ TEST_CASE("SectionAnalyzer config options", "[section_analyzer]") {
   config.min_section_sec = 1.0f;
   config.boundary_threshold = 0.1f;
 
-  SectionAnalyzer analyzer(audio, config);
+  const SectionAnalyzer analyzer(audio, config);
 
-  // Should produce valid sections
-  REQUIRE(analyzer.count() >= 1);
+  // The point of the case is that the options reach the analysis, so assert the
+  // outcome they change rather than that some sections came back. A permissive
+  // minimum keeps all five detected sections; the default 4 s minimum is longer
+  // than the first detected span, which merges into its neighbour and cascades.
+  // Asserting only non-emptiness passed even when the fixture collapsed to a
+  // single whole-track span, which is the failure this pins.
+  REQUIRE(analyzer.count() == 5);
+  REQUIRE(SectionAnalyzer(audio, SectionConfig{}).count() == 2);
 }
 
 TEST_CASE("SectionAnalyzer short audio", "[section_analyzer]") {

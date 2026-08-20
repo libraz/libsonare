@@ -3,12 +3,15 @@
 
 #include "analysis/boundary_detector.h"
 
+#include <algorithm>
 #include <catch2/catch_test_macros.hpp>
 #include <catch2/matchers/catch_matchers_floating_point.hpp>
 #include <cmath>
 #include <cstddef>
+#include <string>
 #include <vector>
 
+#include "analysis/section_analyzer.h"
 #include "feature/chroma.h"
 #include "feature/mel_spectrogram.h"
 #include "util/constants.h"
@@ -76,6 +79,70 @@ Audio create_multi_sections(int sr = 22050, float section_duration = 1.5f) {
 
   return Audio::from_vector(std::move(samples), sr);
 }
+
+/// @brief Renders one short pattern back to back with no variation between copies.
+/// @param sr Sample rate in Hz.
+/// @param loop_seconds Duration of the repeated pattern in seconds.
+/// @param repeats Number of consecutive, bit-identical copies.
+/// @details Each copy is a four-note arpeggio with a decaying envelope, so the
+/// feature sequence fluctuates inside a loop yet never changes from one loop to
+/// the next -- the stationary case a boundary detector must not segment.
+Audio create_looped_pattern(int sr, float loop_seconds, int repeats) {
+  const int loop_samples = static_cast<int>(static_cast<float>(sr) * loop_seconds);
+  const float note_seconds = loop_seconds / 4.0f;
+  const float notes[] = {220.0f, 277.18f, 329.63f, 440.0f};
+
+  std::vector<float> loop(static_cast<size_t>(loop_samples), 0.0f);
+  for (int i = 0; i < loop_samples; ++i) {
+    const float t = static_cast<float>(i) / static_cast<float>(sr);
+    const int note = std::min(3, static_cast<int>(t / note_seconds));
+    const float env = std::exp(-6.0f * (t - static_cast<float>(note) * note_seconds));
+    loop[static_cast<size_t>(i)] =
+        0.5f * env * std::sin(2.0f * sonare::constants::kPiD * notes[note] * t) +
+        0.2f * env * std::sin(2.0f * sonare::constants::kPiD * notes[note] * 2.0f * t);
+  }
+
+  std::vector<float> samples;
+  samples.reserve(static_cast<size_t>(loop_samples) * static_cast<size_t>(repeats));
+  for (int r = 0; r < repeats; ++r) {
+    samples.insert(samples.end(), loop.begin(), loop.end());
+  }
+  return Audio::from_vector(std::move(samples), sr);
+}
+
+/// @brief Renders steady white noise from a fixed seed.
+/// @param sr Sample rate in Hz.
+/// @param seconds Duration in seconds.
+/// @details Stationary in content yet varying frame to frame, which makes its
+/// self-similarity matrix the noisiest of the stationary fixtures and its
+/// checkerboard response the largest -- the case an absolute floor must clear.
+Audio create_steady_noise(int sr, float seconds) {
+  std::vector<float> samples(static_cast<size_t>(static_cast<float>(sr) * seconds));
+  unsigned state = 7u;
+  for (float& sample : samples) {
+    state = state * 1664525u + 1013904223u;
+    sample = 0.4f * (static_cast<float>(state >> 8) / 8388608.0f - 1.0f);
+  }
+  return Audio::from_vector(std::move(samples), sr);
+}
+
+/// @brief Largest absolute difference between two boundary-time vectors.
+float max_time_delta(const std::vector<float>& a, const std::vector<float>& b) {
+  float worst = 0.0f;
+  const size_t n = std::min(a.size(), b.size());
+  for (size_t i = 0; i < n; ++i) {
+    worst = std::max(worst, std::fabs(a[i] - b[i]));
+  }
+  return worst;
+}
+
+/// @brief One hop of the 22.05 kHz analysis grid, in seconds.
+/// @details Boundary times are frame indices scaled by the hop duration, so a
+/// hop is the finest difference two runs can express. Resampling 44.1 kHz and
+/// 48 kHz to the analysis rate goes through different filter phases, which can
+/// move a novelty peak onto the neighbouring frame but no further.
+constexpr float kAnalysisHopSeconds = static_cast<float>(constants::kDefaultHopLength) /
+                                      static_cast<float>(constants::kDefaultSampleRate);
 
 }  // namespace
 
@@ -445,4 +512,181 @@ TEST_CASE("BoundaryDetector tolerates a configuration with no feature dimensions
   for (float v : novelty) {
     REQUIRE_THAT(v, WithinAbs(0.0f, 0.0f));
   }
+}
+
+TEST_CASE("Boundary detection runs at the analysis rate whatever the source rate",
+          "[boundary_detector]") {
+  // boundaries() and sections() are two entry points onto one segmentation, and
+  // section analysis has always resampled to 22.05 kHz. A detector that adopted
+  // the source rate verbatim segmented the same material differently depending
+  // on how it was delivered, and disagreed with the sections built on top of it.
+  const Audio at_44100 = create_multi_sections(44100, 3.0f);
+  const Audio at_48000 = create_multi_sections(48000, 3.0f);
+
+  SectionConfig section_config;
+  section_config.min_section_sec = 2.0f;
+  section_config.boundary_threshold = 0.2f;
+
+  // The configuration SectionAnalyzer derives for its own detector, so the two
+  // entry points are compared on identical settings.
+  BoundaryConfig boundary_config;
+  boundary_config.n_fft = section_config.n_fft;
+  boundary_config.hop_length = section_config.hop_length;
+  boundary_config.threshold = section_config.boundary_threshold;
+  boundary_config.kernel_size = section_config.kernel_size;
+  boundary_config.peak_distance = section_config.min_section_sec;
+
+  const BoundaryDetector detector_44100(at_44100, boundary_config);
+  const BoundaryDetector detector_48000(at_48000, boundary_config);
+
+  REQUIRE(detector_44100.sample_rate() == constants::kDefaultSampleRate);
+  REQUIRE(detector_48000.sample_rate() == constants::kDefaultSampleRate);
+  REQUIRE(detector_44100.n_frames() == detector_48000.n_frames());
+
+  const std::vector<float> boundaries_44100 = detector_44100.boundary_times();
+  const std::vector<float> boundaries_48000 = detector_48000.boundary_times();
+  const std::vector<float> sections_44100 =
+      SectionAnalyzer(at_44100, section_config).boundary_times();
+  const std::vector<float> sections_48000 =
+      SectionAnalyzer(at_48000, section_config).boundary_times();
+
+  // Anti-vacuity: the material really does change, so agreement on an empty set
+  // would not be agreement on a segmentation.
+  REQUIRE(!boundaries_44100.empty());
+  REQUIRE(boundaries_44100.size() == boundaries_48000.size());
+  REQUIRE(boundaries_44100.size() == sections_44100.size());
+  REQUIRE(boundaries_44100.size() == sections_48000.size());
+
+  INFO("44.1 vs 48 kHz: " << max_time_delta(boundaries_44100, boundaries_48000));
+  REQUIRE(max_time_delta(boundaries_44100, boundaries_48000) <= kAnalysisHopSeconds);
+  REQUIRE(max_time_delta(sections_44100, sections_48000) <= kAnalysisHopSeconds);
+
+  // Both entry points read the same grid built from the same resampled signal,
+  // so at a matched configuration they agree exactly, not merely within the grid.
+  REQUIRE_THAT(max_time_delta(boundaries_44100, sections_44100), WithinAbs(0.0f, 0.0f));
+  REQUIRE_THAT(max_time_delta(boundaries_48000, sections_48000), WithinAbs(0.0f, 0.0f));
+}
+
+TEST_CASE("A repeated loop is not segmented", "[boundary_detector]") {
+  // Self-normalizing the novelty curve rescales whatever fluctuation it finds to
+  // full scale, so a relative threshold on its own reports boundaries in material
+  // that never changes. Loop-based material is exactly where that happens.
+  const Audio audio = create_looped_pattern(22050, 0.5f, 60);  // 30 s, no variation
+
+  const BoundaryDetector detector(audio, BoundaryConfig{});
+  INFO("boundaries " << detector.count());
+  REQUIRE(detector.count() <= 2);
+
+  const std::string form = SectionAnalyzer(audio).form();
+  INFO("form " << form);
+  REQUIRE(form.size() >= 1);
+  REQUIRE(form.size() <= 2);
+}
+
+TEST_CASE("A repeated loop is not segmented over a full track length",
+          "[boundary_detector][.][slow]") {
+  // The 30 s case above pins the behaviour; this is the track-length version,
+  // where a per-few-seconds false boundary accumulated into dozens of sections
+  // and a form string of one letter repeated.
+  const Audio audio = create_looped_pattern(22050, 0.5f, 720);  // 360 s, no variation
+
+  const BoundaryDetector detector(audio, BoundaryConfig{});
+  INFO("boundaries " << detector.count());
+  REQUIRE(detector.count() <= 2);
+
+  const std::string form = SectionAnalyzer(audio).form();
+  INFO("form " << form);
+  REQUIRE(form.size() >= 1);
+  REQUIRE(form.size() <= 2);
+}
+
+TEST_CASE("Genuine structural change stays detected", "[boundary_detector]") {
+  // The counterweight to the stationary case: a floor high enough to silence a
+  // loop must still leave the structured fixtures of this file segmented.
+  BoundaryConfig config;
+  config.threshold = 0.2f;
+  config.peak_distance = 1.0f;
+
+  REQUIRE(!detect_boundaries(create_two_sections(22050, 3.0f), config).empty());
+  REQUIRE(!detect_boundaries(create_multi_sections(22050, 3.0f), config).empty());
+  REQUIRE(!detect_boundaries(create_multi_sections(44100, 3.0f), config).empty());
+}
+
+TEST_CASE("The absolute novelty floor separates stationary from structured material",
+          "[boundary_detector]") {
+  // What justifies the floor is a gap between two measured populations, so this
+  // asserts the gap rather than the constant. Raw checkerboard response with the
+  // floor disabled -- strongest peak for stationary material, weakest reported
+  // boundary for structured material, since that is the pair the floor must fit
+  // between:
+  //
+  //   loop, 0.25 s period    0.00004      four sections, weakest   0.008
+  //   loop, 0.5 s period     0.0007       four sections, strongest 0.020
+  //   loop, 1 s period       0.0012       two sections             0.049
+  //   steady tone            0.0003       noise into a tone        0.95
+  //   steady white noise     0.003
+  //
+  // Steady white noise is the binding stationary case and a weak section change
+  // the binding structural one; the default floor of 0.005 is close to their
+  // geometric midpoint.
+  //
+  // Level-only structure lands inside the stationary population rather than above
+  // it. Not because the features ignore level -- the first MFCC coefficient
+  // tracks it, and per-frame normalization takes the vector's length but not that
+  // coefficient's ratio to the rest -- but because the resulting turn is roughly
+  // five times smaller than a comparable change of pitch, which leaves it quieter
+  // than steady noise. No floor separates the two, so lowering this one admits
+  // noise before it admits level structure.
+  BoundaryConfig ungated;
+  ungated.absolute_threshold = 0.0f;
+
+  const auto raw_peak = [&ungated](const Audio& audio) {
+    const BoundaryDetector detector(audio, ungated);
+    float worst = 0.0f;
+    for (float value : detector.novelty_curve()) {
+      worst = std::max(worst, value * detector.novelty_peak());
+    }
+    return worst;
+  };
+  const auto weakest_boundary = [&ungated](const Audio& audio) {
+    const BoundaryDetector detector(audio, ungated);
+    float weakest = 0.0f;
+    for (const auto& boundary : detector.boundaries()) {
+      const float absolute = boundary.strength * detector.novelty_peak();
+      weakest = (weakest == 0.0f) ? absolute : std::min(weakest, absolute);
+    }
+    return weakest;
+  };
+
+  const float floor = BoundaryConfig{}.absolute_threshold;
+  REQUIRE(floor > 0.0f);
+
+  // Every stationary fixture stays under the floor, including steady noise, whose
+  // frame-to-frame variation is what makes it the worst of them.
+  REQUIRE(raw_peak(create_looped_pattern(22050, 0.5f, 60)) < floor);
+  REQUIRE(raw_peak(create_sine(440.0f, 22050, 10.0f)) < floor);
+  REQUIRE(raw_peak(create_steady_noise(22050, 30.0f)) < floor);
+
+  // A real section change clears it -- every one of them, not just the strongest.
+  REQUIRE(weakest_boundary(create_multi_sections(22050, 3.0f)) > floor);
+  REQUIRE(raw_peak(create_two_sections(22050, 3.0f)) > floor * 4.0f);
+}
+
+TEST_CASE("A loop that does change is still segmented at the change", "[boundary_detector]") {
+  // The floor must not silence a boundary just because the material around it
+  // repeats. Half of this signal is the stationary loop that must yield nothing;
+  // the other half is a steady tone unrelated to it, so exactly one boundary is
+  // genuine, and it is the only one that may be reported.
+  const Audio loop = create_looped_pattern(22050, 0.5f, 60);
+  std::vector<float> samples(loop.begin(), loop.end());
+  const float change_time = 0.5f * static_cast<float>(samples.size()) / 22050.0f;
+  for (size_t i = samples.size() / 2; i < samples.size(); ++i) {
+    const float t = static_cast<float>(i) / 22050.0f;
+    samples[i] = 0.5f * std::sin(2.0f * sonare::constants::kPiD * 1200.0f * t);
+  }
+
+  const BoundaryDetector detector(Audio::from_vector(std::move(samples), 22050), BoundaryConfig{});
+
+  REQUIRE(detector.count() == 1);
+  REQUIRE_THAT(detector.boundary_times()[0], WithinAbs(change_time, 1.0f));
 }
