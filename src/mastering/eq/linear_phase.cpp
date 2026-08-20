@@ -211,13 +211,19 @@ void LinearPhaseEq::process(float* const* channels, int num_channels, int num_sa
                           "LinearPhaseEq channel count exceeds prepared capacity");
   }
 
+  const int partition_size = active_partition_size();
+  const bool aligned = partition_size > 0 && (num_samples % partition_size) == 0;
   for (int ch = 0; ch < num_channels; ++ch) {
     auto& state = states_[static_cast<size_t>(ch)];
     float* samples = channels[ch];
-    const int partition_size = active_partition_size();
-    const bool can_use_convolver = state.convolver && !state.direct_fallback &&
-                                   partition_size > 0 && (num_samples % partition_size) == 0;
-    if (can_use_convolver) {
+    if (state.convolver && aligned) {
+      // The convolver's ring only advances in whole partitions, so anything
+      // that bypassed or reset it left it out of step with the stream. Replay
+      // the FIR history through it so it resumes at the current position.
+      if (state.convolver_stale) {
+        reprime_convolver(state);
+        state.convolver_stale = false;
+      }
       // Mirror the inputs into the time-domain history before the convolver
       // overwrites them, so the direct path stays primed with the real
       // convolution tail and can take over seamlessly on a later ragged block.
@@ -226,10 +232,10 @@ void LinearPhaseEq::process(float* const* channels, int num_channels, int num_sa
         state.convolver->process_block(samples + offset, samples + offset);
       }
     } else {
-      // A ragged block cannot be fed to the fixed-block convolver; latch to the
-      // direct path for the rest of the stream (until reset()) since the
-      // convolver's ring would otherwise be permanently misaligned.
-      if (state.convolver) state.direct_fallback = true;
+      // A ragged block cannot be fed to the fixed-block convolver, so the
+      // direct path (whose history is always maintained) handles it and the
+      // convolver is re-primed from that history on the next aligned block.
+      if (state.convolver) state.convolver_stale = true;
       process_direct(samples, num_samples, state);
     }
   }
@@ -239,7 +245,9 @@ void LinearPhaseEq::reset() {
   for (auto& state : states_) {
     std::fill(state.history.begin(), state.history.end(), 0.0f);
     state.write_index = 0;
-    state.direct_fallback = false;
+    // A zeroed history and a reset convolver already agree, so nothing to
+    // re-prime.
+    state.convolver_stale = false;
     if (state.convolver) state.convolver->reset();
   }
 }
@@ -367,11 +375,13 @@ void LinearPhaseEq::reconfigure() {
   // Non-destructive reconfiguration for band/parameter changes. Only the FIR
   // coefficients (kernel_) change; kernel_size — and therefore the FIR history
   // length and latency — is fixed for a given instance by the resolution/custom
-  // config, so the existing per-channel FIR history (and the partitioned
-  // convolver's internal ring) remain valid. rebuild_kernel() recomputes the
-  // taps and pushes the fresh impulse response into each convolver via
-  // ensure_channel_state WITHOUT resetting the convolver, so there is no
-  // ~kernel-length silence gap on a change.
+  // config, so the existing per-channel FIR history remains valid.
+  // rebuild_kernel() recomputes the taps and pushes the fresh impulse response
+  // into each convolver via ensure_channel_state. Installing an impulse response
+  // does clear the convolver's own ring, so ensure_channel_state marks it stale
+  // and the next aligned block replays the surviving FIR history into it — the
+  // convolved path therefore resumes with the real convolution tail rather than
+  // a ~kernel-length silence gap.
   //
   // Note: parameter_is_realtime_safe() returns false for all params — these
   // mutators are intended as prepare-time / offline reconfiguration. Preserving
@@ -411,13 +421,24 @@ void LinearPhaseEq::ensure_channel_state(int num_channels) {
             sonare::rt::PartitionedConvolverConfig{partition_size});
         state.convolver_kernel_current = false;
       }
+      const size_t scratch_size = static_cast<size_t>(state.convolver->partition_size());
+      if (state.prime_scratch.size() != scratch_size) {
+        state.prime_scratch.assign(scratch_size, 0.0f);
+      }
       if (!state.convolver_kernel_current) {
+        // set_impulse_response() clears the convolver's ring and overlap-add
+        // tail. The FIR history survives, so mark the convolver stale and let
+        // the next aligned block replay that history into it instead of
+        // resuming from silence.
         state.convolver->set_impulse_response(kernel_);
         state.convolver_kernel_current = true;
+        state.convolver_stale = true;
       }
     } else {
       state.convolver.reset();
       state.convolver_kernel_current = false;
+      state.convolver_stale = false;
+      state.prime_scratch.clear();
     }
   }
 }
@@ -447,6 +468,34 @@ void LinearPhaseEq::feed_history(const float* samples, int num_samples, ChannelS
   for (int i = 0; i < num_samples; ++i) {
     state.history[state.write_index] = samples[i];
     state.write_index = (state.write_index + 1) % kernel_size;
+  }
+}
+
+void LinearPhaseEq::reprime_convolver(ChannelState& state) const {
+  auto& convolver = *state.convolver;
+  const int partition_size = convolver.partition_size();
+  const int partitions = convolver.num_partitions();
+  const size_t history_size = state.history.size();
+  if (partitions <= 0 || partition_size <= 0 || history_size == 0 ||
+      state.prime_scratch.size() != static_cast<size_t>(partition_size)) {
+    return;
+  }
+
+  convolver.reset();
+  // Replay the most recent `partitions * partition_size` stream samples, oldest
+  // first, so the input-spectrum ring and the overlap-add tail describe the real
+  // stream ending at the current position. That span can reach further back than
+  // the FIR history, but a sample older than the history only ever meets a zero
+  // tap, so substituting zeros for it is exact for every subsequent output.
+  size_t age = static_cast<size_t>(partitions) * static_cast<size_t>(partition_size);
+  for (int partition = 0; partition < partitions; ++partition) {
+    for (int i = 0; i < partition_size; ++i, --age) {
+      state.prime_scratch[static_cast<size_t>(i)] =
+          age <= history_size
+              ? state.history[(state.write_index + history_size - age) % history_size]
+              : 0.0f;
+    }
+    convolver.process_block(state.prime_scratch.data(), state.prime_scratch.data());
   }
 }
 

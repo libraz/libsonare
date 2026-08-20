@@ -1,6 +1,9 @@
 /// @file eq_phase_test.cpp
 /// @brief Linear and minimum phase EQ tests.
 
+#include <catch2/generators/catch_generators.hpp>
+#include <chrono>
+
 #include "eq_test_helpers.h"
 #include "support/alloc_guard.h"
 
@@ -391,6 +394,135 @@ TEST_CASE("LinearPhaseEq partitioned convolution matches direct convolution", "[
   for (size_t i = 0; i < direct_signal.size(); ++i) {
     REQUIRE_THAT(partitioned_signal[i], WithinAbs(direct_signal[i], 0.00001f));
   }
+}
+
+TEST_CASE("LinearPhaseEq re-primes the convolver after a ragged block", "[mastering][eq]") {
+  // A ragged block leaves the partitioned convolver out of step with the
+  // stream, so it is re-primed from the FIR history on the next aligned block.
+  // The long aligned run afterwards is what a broken re-prime would corrupt: it
+  // is convolver output whose tail comes entirely from the replayed history.
+  const EqBand band{EqBandType::Peak, 2500.0f, 6.0f, 1.2f, true};
+  // A partition below the 257-tap kernel spans several convolver partitions; one
+  // above it spans a single partition whose replay reaches further back than the
+  // FIR history holds.
+  const int partition = GENERATE(128, 512);
+  std::vector<int> block_sizes{partition, 64};
+  block_sizes.insert(block_sizes.end(), 10, partition);
+  int total = 0;
+  for (int b : block_sizes) total += b;
+
+  auto source = sine(700.0f, 48000, total, 0.25f);
+  const auto run = [&](LinearPhaseEqConfig config) {
+    LinearPhaseEq eq(config);
+    eq.prepare(48000.0, partition);
+    eq.set_band(0, band);
+    auto buffer = source;
+    int offset = 0;
+    for (int b : block_sizes) {
+      float* channels[] = {buffer.data() + offset};
+      eq.process(channels, 1, b);
+      offset += b;
+    }
+    return buffer;
+  };
+
+  LinearPhaseEqConfig convolved_config{1024, 257};
+  convolved_config.partition_size = partition;
+  LinearPhaseEqConfig direct_config{1024, 257};
+  direct_config.use_partitioned_convolution = false;
+
+  const auto convolved = run(convolved_config);
+  const auto direct = run(direct_config);
+  REQUIRE(max_abs_difference(convolved, direct) < 0.00001f);
+}
+
+TEST_CASE("LinearPhaseEq convolver re-prime is allocation-free", "[mastering][eq]") {
+  LinearPhaseEq eq({1024, 257, true, 64});
+  eq.prepare(48000.0, 64, 1);
+  eq.set_band(0, {EqBandType::Peak, 2500.0f, 6.0f, 1.2f, true});
+  std::vector<float> storage(64, 0.25f);
+  float* channels[] = {storage.data()};
+
+  eq.process(channels, 1, 64);
+  eq.process(channels, 1, 32);  // ragged: the convolver falls out of step
+
+  AllocationGuard guard;
+  eq.process(channels, 1, 64);  // replays the FIR history before using it again
+  REQUIRE(guard.count() == 0);
+}
+
+TEST_CASE("LinearPhaseEq keeps the convolution tail across a band change", "[mastering][eq]") {
+  // Installing a new impulse response clears the convolver's ring and
+  // overlap-add tail. The FIR history survives, so the convolved path must
+  // replay it rather than resume from silence; without that the block after a
+  // band change loses most of its amplitude.
+  const EqBand before{EqBandType::Peak, 2500.0f, 6.0f, 1.2f, true};
+  const EqBand after{EqBandType::Peak, 2500.0f, 3.0f, 1.2f, true};
+  const int partition = 128;
+  const int total = partition * 12;
+
+  auto source = sine(700.0f, 48000, total, 0.25f);
+  const auto run = [&](LinearPhaseEqConfig config) {
+    LinearPhaseEq eq(config);
+    eq.prepare(48000.0, partition);
+    eq.set_band(0, before);
+    auto buffer = source;
+    for (int offset = 0; offset < total; offset += partition) {
+      if (offset == partition * 6) eq.set_band(0, after);
+      float* channels[] = {buffer.data() + offset};
+      eq.process(channels, 1, partition);
+    }
+    return buffer;
+  };
+
+  LinearPhaseEqConfig convolved_config{1024, 257};
+  convolved_config.partition_size = partition;
+  LinearPhaseEqConfig direct_config{1024, 257};
+  direct_config.use_partitioned_convolution = false;
+
+  const auto convolved = run(convolved_config);
+  const auto direct = run(direct_config);
+  REQUIRE(max_abs_difference(convolved, direct) < 0.00001f);
+}
+
+TEST_CASE("LinearPhaseEq keeps the partitioned fast path after a ragged block",
+          "[.][slow][mastering][eq]") {
+  // Hardware-sensitive by nature, hence opt-in: the assertion is on the ratio
+  // between two runs of identical work on the same machine, not on wall time.
+  // Direct convolution of a 4097-tap kernel costs tens of times a partitioned
+  // block, so a convolver that never recovers from a ragged block shows up as a
+  // large slowdown of the aligned blocks that follow it.
+  const EqBand band{EqBandType::Peak, 2500.0f, 6.0f, 1.2f, true};
+  const int partition = 512;
+  LinearPhaseEqConfig config;
+  config.resolution = LinearPhaseEqConfig::Resolution::High;
+  config.partition_size = partition;
+
+  auto source = sine(700.0f, 48000, partition * 200, 0.25f);
+  const auto aligned_run_ms = [&](bool lead_with_ragged_block) {
+    LinearPhaseEq eq(config);
+    eq.prepare(48000.0, partition);
+    eq.set_band(0, band);
+    auto buffer = source;
+    int offset = 0;
+    if (lead_with_ragged_block) {
+      float* channels[] = {buffer.data()};
+      eq.process(channels, 1, 64);
+      offset = 64;
+    }
+    const auto start = std::chrono::steady_clock::now();
+    while (offset + partition <= static_cast<int>(buffer.size())) {
+      float* channels[] = {buffer.data() + offset};
+      eq.process(channels, 1, partition);
+      offset += partition;
+    }
+    return std::chrono::duration<double>(std::chrono::steady_clock::now() - start).count();
+  };
+
+  const double baseline = aligned_run_ms(false);
+  const double after_ragged = aligned_run_ms(true);
+  INFO("baseline " << baseline << " s, after ragged block " << after_ragged << " s");
+  REQUIRE(after_ragged < baseline * 8.0);
 }
 
 TEST_CASE("LinearPhaseEq validates configuration and bands", "[mastering][eq]") {
