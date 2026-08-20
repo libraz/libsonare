@@ -113,12 +113,18 @@ void RealtimeEngineWasm::setMidiClips(val clips_val) {
       } else {
         ump.word_count = 1;
       }
+      // `group` is redundant with word0 bits 24..27 and defaults to 0 here, so
+      // an event authored only through word0 would otherwise arrive with the two
+      // disagreeing. word0 wins, matching the C ABI; the supplied value is still
+      // range-checked so a malformed event is rejected rather than masked.
+      // MidiSequencer::set_midi_clips re-derives it for every publisher, so this
+      // assignment only keeps the conversion self-consistent.
       const uint32_t group = uintProperty(event_val, "group", 0);
       if (group > 15) {
         throw sonare::SonareException(sonare::ErrorCode::InvalidParameter,
                                       "setMidiClips: event group must be in [0,15]");
       }
-      ump.group = static_cast<uint8_t>(group);
+      ump.group = sonare::midi::ump_group_from_word0(ump.words[0]);
       ump.sysex_handle = uintProperty(event_val, "sysexHandle", 0);
       event.ump = ump;
       clip.events.push_back(event);

@@ -22,6 +22,22 @@ void MidiSequencer::reset() noexcept {
 }
 
 void MidiSequencer::set_midi_clips(std::vector<MidiClipSchedule> clips) {
+  // Bring every incoming event into the one group basis before it is published.
+  // Ump::group is a cache of word[0] bits 24..27, and the two halves are read by
+  // different consumers: routing, active-note tracking and MIDI FX read the
+  // cached field, while the bytes that reach a device or an SMF2 file come from
+  // word0. A caller that supplies them separately -- which the binding surfaces
+  // do, with the group defaulting to 0 while word0 is authored -- can hand over
+  // a pair that disagrees, and every consumer downstream would then see a
+  // different group for the same message. word0 wins because it is the form that
+  // leaves the process. Doing it here rather than in a binding covers every
+  // entry point in one place: the C ABI, the WASM wrappers that call the core
+  // directly, and the arrangement compiler all publish through this function.
+  for (MidiClipSchedule& clip : clips) {
+    for (MidiEvent& event : clip.events) {
+      event.ump.group = ump_group_from_word0(event.ump.words[0]);
+    }
+  }
   const size_t count = clips.size();
   auto snapshot = std::make_shared<const std::vector<MidiClipSchedule>>(std::move(clips));
   if (clips_.publish(std::move(snapshot))) {

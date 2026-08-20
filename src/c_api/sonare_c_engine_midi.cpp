@@ -82,6 +82,11 @@ uint8_t infer_ump_word_count(const SonareEngineMidiEvent& event) noexcept {
 }
 
 bool midi_event_from_c(const SonareEngineMidiEvent& src, midi::MidiEvent* out) noexcept {
+  // src.group carries no information the UMP does not already hold in word0, so
+  // it is validated as struct well-formedness (like `reserved`) and not read for
+  // its value: the group is taken from word0, the copy that leaves the process.
+  // MidiSequencer::set_midi_clips re-derives it for every publisher, so the
+  // assignment here is only what keeps this conversion self-consistent.
   if (!out || src.group > 15 || src.reserved != 0) return false;
   midi::Ump ump{};
   ump.words[0] = src.word0;
@@ -89,7 +94,7 @@ bool midi_event_from_c(const SonareEngineMidiEvent& src, midi::MidiEvent* out) n
   ump.words[2] = src.word2;
   ump.words[3] = src.word3;
   ump.word_count = infer_ump_word_count(src);
-  ump.group = src.group;
+  ump.group = midi::ump_group_from_word0(src.word0);
   ump.sysex_handle = src.sysex_handle;
   out->render_frame = src.render_frame;
   out->ump = ump;

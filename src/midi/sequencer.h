@@ -70,6 +70,12 @@ class MidiSequencer {
   void set_sink(MidiEventSink* sink) noexcept { sink_ = sink; }
 
   /// CONTROL thread: publish a new compiled MIDI clip set. May allocate.
+  ///
+  /// Every event's Ump::group is re-derived from its own word[0] before the set
+  /// is published, so a caller that carries the group out of band cannot leave
+  /// the cached field contradicting the wire form. This is the single place the
+  /// rule lives: the C ABI, the WASM wrappers and the arrangement compiler all
+  /// reach the sequencer through here.
   void set_midi_clips(std::vector<MidiClipSchedule> clips);
 
   /// CONTROL thread: install / replace a live MIDI FX insert for one

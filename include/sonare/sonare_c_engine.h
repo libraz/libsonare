@@ -555,6 +555,18 @@ SonareError sonare_engine_set_track_monitor_mode(SonareRealtimeEngine* engine, u
 ///          an absolute sample position on the engine timeline. `word_count` is
 ///          the number of active UMP words (1..4); 0 lets the C bridge infer a
 ///          one-word MIDI 1.0 event when only `word0` is set.
+///
+///          `group` is REDUNDANT: a UMP already carries its group in `word0`
+///          bits 24..27, and that is the copy the engine uses, because it is the
+///          form that reaches a device or a file. Packing the group into `word0`
+///          (as this header's `data0` packing describes) is sufficient and is
+///          the recommended form; a `group` that contradicts `word0` is ignored
+///          rather than honoured, so the two can never be read as different
+///          groups by different parts of the engine. The field is still
+///          range-checked: a value above 15 makes the struct malformed and
+///          @ref sonare_engine_set_midi_clips returns
+///          @c SONARE_ERROR_INVALID_PARAMETER, exactly as a non-zero `reserved`
+///          does.
 typedef struct {
   int64_t render_frame;
   uint32_t word0;

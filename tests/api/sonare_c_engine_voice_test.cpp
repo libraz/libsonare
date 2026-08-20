@@ -1645,6 +1645,76 @@ TEST_CASE("sonare_engine drains external MIDI routing to the host", "[c_api][eng
   sonare_engine_destroy(engine);
 }
 
+TEST_CASE("sonare_engine takes a clip event's UMP group from word0, not the struct field",
+          "[c_api][engine]") {
+  // SonareEngineMidiEvent.group is a separate field from word0 and a
+  // zero-initialized struct leaves it 0, while the header documents packing the
+  // group into word0 itself. A caller who follows the header and does not also
+  // restate the group is the normal case, not a caller error, so the core reads
+  // the group from word0. Observable here through hang-note bookkeeping: the
+  // sequencer keys its active-note table on the UMP group, so a note-on and its
+  // note-off read under two different groups never pair up and the note is still
+  // considered sounding when the transport stops.
+  SonareRealtimeEngine* engine = nullptr;
+  REQUIRE(sonare_engine_create(&engine) == SONARE_OK);
+  REQUIRE(engine != nullptr);
+  REQUIRE(sonare_engine_prepare(engine, 48000.0, 128, 16, 16) == SONARE_OK);
+  REQUIRE(sonare_engine_set_midi_destination_external(engine, 5, 1) == SONARE_OK);
+
+  constexpr uint32_t kGroup = 5u;
+  const uint32_t note_on = midi1_word(0x9, 1, 64, 110) | (kGroup << 24u);
+  const uint32_t note_off = midi1_word(0x8, 1, 64, 0) | (kGroup << 24u);
+  // The pair is authored identically on the wire; only the redundant struct
+  // field differs, and only because one event was written without restating it.
+  const SonareEngineMidiEvent events[] = {
+      {0, note_on, 0, 0, 0, 1, static_cast<uint8_t>(kGroup), 0, 0},
+      {48, note_off, 0, 0, 0, 1, 0, 0, 0},
+  };
+  SonareEngineMidiClipSchedule clip{};
+  clip.id = 7;
+  clip.track_id = 5;
+  clip.length_samples = 256;
+  clip.destination_id = 5;
+  clip.events = events;
+  clip.event_count = 2;
+  REQUIRE(sonare_engine_set_midi_clips(engine, &clip, 1) == SONARE_OK);
+  REQUIRE(sonare_engine_play(engine, -1) == SONARE_OK);
+
+  std::vector<float> left(128, 0.0f);
+  std::vector<float> right(128, 0.0f);
+  float* channels[] = {left.data(), right.data()};
+  REQUIRE(sonare_engine_process(engine, channels, 2, 128) == SONARE_OK);
+
+  std::array<SonareExternalMidiEvent, 32> drained{};
+  size_t count = 0;
+  REQUIRE(sonare_engine_drain_external_midi(engine, drained.data(), drained.size(), &count) ==
+          SONARE_OK);
+  // Both events are dispatched either way; the group only decides bookkeeping.
+  REQUIRE(count == 2);
+  REQUIRE((drained[0].bytes[0] & 0xF0u) == 0x90u);
+  REQUIRE((drained[1].bytes[0] & 0xF0u) == 0x80u);
+
+  // Stopping releases every note the sequencer still believes is sounding. The
+  // pair above matched, so there is nothing left to release and the queue stays
+  // empty; an unmatched note-on would surface here as an extra release.
+  REQUIRE(sonare_engine_stop(engine, -1) == SONARE_OK);
+  REQUIRE(sonare_engine_process(engine, channels, 2, 128) == SONARE_OK);
+  REQUIRE(sonare_engine_drain_external_midi(engine, drained.data(), drained.size(), &count) ==
+          SONARE_OK);
+  REQUIRE(count == 0);
+
+  // An out-of-range group is still a malformed struct and is still rejected,
+  // exactly like a non-zero `reserved`.
+  SonareEngineMidiEvent bad = events[0];
+  bad.group = 16;
+  SonareEngineMidiClipSchedule bad_clip = clip;
+  bad_clip.events = &bad;
+  bad_clip.event_count = 1;
+  REQUIRE(sonare_engine_set_midi_clips(engine, &bad_clip, 1) == SONARE_ERROR_INVALID_PARAMETER);
+
+  sonare_engine_destroy(engine);
+}
+
 TEST_CASE("sonare_engine reports external-destination table overflow", "[c_api][engine]") {
   SonareRealtimeEngine* engine = nullptr;
   REQUIRE(sonare_engine_create(&engine) == SONARE_OK);

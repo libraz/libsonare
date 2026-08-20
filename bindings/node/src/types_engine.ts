@@ -475,7 +475,13 @@ export interface EngineMidiEvent {
   word2?: number;
   word3?: number;
   wordCount?: number;
-  /** UMP group, 0..15. */
+  /**
+   * Redundant with `word0`, which already carries the UMP group in bits 24..27.
+   * The engine reads the group from `word0` — the form that reaches a device or
+   * a file — so packing it there is sufficient and a value here that contradicts
+   * `word0` is ignored. Must still be in `[0, 15]`; anything else is rejected as
+   * a malformed event. Default `0`.
+   */
   group?: number;
   /** Optional SysEx side-store handle for native hosts. */
   sysexHandle?: number;

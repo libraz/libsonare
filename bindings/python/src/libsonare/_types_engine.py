@@ -259,7 +259,14 @@ class EngineClip:
 
 @dataclass(frozen=True, slots=True)
 class EngineMidiEvent:
-    """Absolute render-frame MIDI event for realtime engine MIDI clips."""
+    """Absolute render-frame MIDI event for realtime engine MIDI clips.
+
+    ``group`` is redundant with ``word0``, which already carries the UMP group in
+    bits 24..27. The engine reads the group from ``word0`` -- the form that
+    reaches a device or a file -- so packing it there is sufficient and a
+    ``group`` that contradicts ``word0`` is ignored. It must still be in
+    ``[0, 15]``; anything else is rejected as a malformed event.
+    """
 
     render_frame: int
     word0: int = 0

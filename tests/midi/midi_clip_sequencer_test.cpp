@@ -1058,3 +1058,77 @@ TEST_CASE("MidiSequencer collect_boundaries returns in-block event offsets", "[m
   REQUIRE(out.offsets[1] == 64);
   REQUIRE(out.offsets[2] == 200);
 }
+
+TEST_CASE("MidiSequencer takes a clip event's UMP group from its own word0", "[midi]") {
+  // A UMP carries its group in word[0] bits 24..27; Ump::group is a cache of
+  // that nibble, and every core constructor writes both from one argument. The
+  // binding surfaces do not: SonareEngineMidiEvent.group and the WASM event
+  // object's `group` are separate fields that DEFAULT TO 0, while word0 is
+  // authored by the caller (the C header documents packing the group into it).
+  // A caller doing exactly what the header describes therefore hands the core a
+  // pair that disagrees, and the two halves would then be read by different
+  // consumers: routing / note tracking / MIDI FX read Ump::group, while the
+  // bytes written to a device or an SMF2 file come from word0.
+  constexpr uint8_t kGroup = 5;
+  const auto packed = [](uint8_t status, uint8_t note, uint8_t velocity) {
+    Ump ump;
+    ump.words[0] = (uint32_t{0x2} << 28) | (uint32_t{kGroup} << 24) | (uint32_t{status} << 20) |
+                   (uint32_t{note} << 8) | uint32_t{velocity};
+    ump.word_count = 1;
+    ump.group = 0;  // left at the default every binding surface supplies
+    return ump;
+  };
+
+  MidiSequencer seq;
+  CapturingSink sink;
+  seq.prepare(48000.0);
+  seq.set_sink(&sink);
+
+  MidiClipSchedule clip;
+  clip.id = 1;
+  clip.destination_id = 3;
+  clip.events = {
+      {32, packed(0x9, 60, 100)},
+      {96, packed(0x8, 60, 0)},
+  };
+  seq.set_midi_clips({clip});
+  seq.acquire_midi_clips();
+  seq.process_block(0, 256);
+
+  REQUIRE(sink.events.size() == 2);
+  // The delivered events agree with the wire form they were authored in.
+  REQUIRE(sink.events[0].event.ump.group == kGroup);
+  REQUIRE(sink.events[1].event.ump.group == kGroup);
+  REQUIRE(sink.events[0].event.ump.words[0] == clip.events[0].ump.words[0]);
+  // The note-off matches the note-on it belongs to. Read under two different
+  // groups the pair never pairs up and the note is left sounding forever.
+  REQUIRE(seq.active_note_count() == 0);
+}
+
+TEST_CASE("MidiSequencer keeps a clip event's group when it already agrees with word0", "[midi]") {
+  // Normalization must be a no-op for every event the core itself mints, so a
+  // conforming caller sees no behaviour change at all.
+  MidiSequencer seq;
+  CapturingSink sink;
+  seq.prepare(48000.0);
+  seq.set_sink(&sink);
+
+  MidiClipSchedule clip;
+  clip.id = 1;
+  clip.destination_id = 3;
+  clip.events = {
+      {32, sonare::midi::make_midi1_note_on(9, 2, 60, 100)},
+      {96, sonare::midi::make_midi2_note_off(9, 2, 60, 0)},
+  };
+  const Ump before_on = clip.events[0].ump;
+  const Ump before_off = clip.events[1].ump;
+  seq.set_midi_clips({clip});
+  seq.acquire_midi_clips();
+  seq.process_block(0, 256);
+
+  REQUIRE(sink.events.size() == 2);
+  REQUIRE(sink.events[0].event.ump == before_on);
+  REQUIRE(sink.events[1].event.ump == before_off);
+  REQUIRE(sink.events[0].event.ump.group == 9);
+  REQUIRE(seq.active_note_count() == 0);
+}
