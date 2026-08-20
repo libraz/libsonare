@@ -37,6 +37,20 @@ inline bool finite_ordered_range(Float minimum, Float maximum) noexcept {
   return finite(minimum) && finite(maximum) && minimum < maximum;
 }
 
+/// True when every element of a contiguous float buffer is finite.
+inline bool all_finite(const float* data, std::size_t count) noexcept {
+  for (std::size_t index = 0; index < count; ++index) {
+    if (!finite(data[index])) return false;
+  }
+  return true;
+}
+
+/// Row-major matrix overload. Callers validate the dimensions as positive
+/// first, so the product is well defined here.
+inline bool all_finite(const float* data, int rows, int n_frames) noexcept {
+  return all_finite(data, static_cast<std::size_t>(rows) * static_cast<std::size_t>(n_frames));
+}
+
 /// Checked floating-point narrowing. Non-finite and target-range-exceeding
 /// values are rejected before the cast; ordinary rounding within the target
 /// type's finite range is permitted.

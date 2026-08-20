@@ -100,6 +100,9 @@ VqtResult vqt(const Audio& audio, const VqtConfig& config = VqtConfig(),
 /// @details VQT shares the CQT geometric frequency grid, so reconstruction smears
 ///          the VQT magnitudes back onto an STFT magnitude grid (matching
 ///          @ref griffinlim_cqt) and recovers phase with Griffin-Lim.
+/// @throw sonare::SonareException (InvalidParameter) on any non-finite element
+///        of @p magnitude. The finiteness precondition lives here so every
+///        surface reports it identically.
 Audio griffinlim_vqt(const float* magnitude, int n_bins, int n_frames, const VqtConfig& config,
                      int sr, int n_iter = 32);
 

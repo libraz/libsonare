@@ -486,15 +486,29 @@ describe('features', () => {
   });
 
   it('inverse feature wrappers reject non-finite matrices', () => {
+    // The rejection comes from the core transform, so the message names the
+    // core function and its argument rather than the addon wrapper.
     const mel = new Float32Array(8 * 4).fill(0.1);
     mel[3] = Number.NaN;
-    expect(() => melToStft(mel, 8, 4, SR, 256)).toThrow(/NaN|Inf/);
-    expect(() => melToAudio(mel, 8, 4, SR, 256, 64, 0, 0, 2)).toThrow(/NaN|Inf/);
+    expect(() => melToStft(mel, 8, 4, SR, 256)).toThrow(
+      /mel_to_stft: M contains a non-finite value/,
+    );
+    expect(() => melToAudio(mel, 8, 4, SR, 256, 64, 0, 0, 2)).toThrow(/non-finite value/);
 
     const mfccCoeffs = new Float32Array(5 * 4).fill(0.1);
     mfccCoeffs[7] = Number.POSITIVE_INFINITY;
-    expect(() => mfccToMel(mfccCoeffs, 5, 4, 8)).toThrow(/NaN|Inf/);
-    expect(() => mfccToAudio(mfccCoeffs, 5, 4, 8, SR, 256, 64, 0, 0, 2)).toThrow(/NaN|Inf/);
+    expect(() => mfccToMel(mfccCoeffs, 5, 4, 8)).toThrow(
+      /mfcc_to_mel: mfcc contains a non-finite value/,
+    );
+    expect(() => mfccToAudio(mfccCoeffs, 5, 4, 8, SR, 256, 64, 0, 0, 2)).toThrow(
+      /non-finite value/,
+    );
+
+    const magnitude = new Float32Array(3 * 5).fill(1);
+    magnitude[4] = Number.NaN;
+    expect(() => griffinLim(magnitude, 3, 5, SR, 4, 1, 1, 0)).toThrow(
+      /griffin_lim: magnitude contains a non-finite value/,
+    );
   });
 
   it('passes the forward lifter back to MFCC inversion', () => {

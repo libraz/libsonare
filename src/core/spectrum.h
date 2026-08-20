@@ -264,6 +264,10 @@ MagPhase magphase(const Spectrogram& spec, float power = 1.0f);
 /// @param sample_rate Sample rate
 /// @param config Griffin-Lim configuration
 /// @return Reconstructed audio
+/// @throw sonare::SonareException (InvalidParameter) on a null @p magnitude, a
+///        non-positive dimension, an @p n_bins that is not n_fft/2 + 1, or any
+///        non-finite element of @p magnitude. The finiteness precondition lives
+///        here so every surface reports it identically.
 Audio griffin_lim(const float* magnitude, int n_bins, int n_frames, int n_fft, int hop_length,
                   int sample_rate, const GriffinLimConfig& config = GriffinLimConfig());
 

@@ -6,6 +6,7 @@
 
 #include <catch2/catch_test_macros.hpp>
 #include <cmath>
+#include <string>
 #include <vector>
 
 #include "c_api/sonare_c_error_mapping.h"
@@ -107,6 +108,55 @@ TEST_CASE("inverse transforms reject non-finite input uniformly", "[c_api][abi]"
   REQUIRE(sonare_mfcc_to_audio_checked(mfcc.data(), mfcc.size(), n_mfcc, n_frames, n_mels,
                                        sample_rate, n_fft, hop_length, 0.0f, 0.0f, 2, &audio,
                                        &audio_len) == SONARE_ERROR_INVALID_PARAMETER);
+  REQUIRE(audio == nullptr);
+  REQUIRE(audio_len == 0);
+
+  // The rejection comes from the core transform, so it also records a message
+  // naming the function rather than returning a bare code.
+  const char* detail = sonare_last_error_message();
+  REQUIRE(detail != nullptr);
+  REQUIRE(std::string(detail).find("non-finite") != std::string::npos);
+}
+
+TEST_CASE("Griffin-Lim inverse entry points reject non-finite input uniformly", "[c_api][abi]") {
+  const int sample_rate = 22050;
+  float* audio = nullptr;
+  size_t audio_len = 0;
+
+  const int n_fft = 4;
+  const int n_bins = n_fft / 2 + 1;
+  const int n_frames = 5;
+  std::vector<float> magnitude(static_cast<size_t>(n_bins) * n_frames, 1.0f);
+  REQUIRE(sonare_griffin_lim(magnitude.data(), magnitude.size(), n_bins, n_frames, n_fft, 1,
+                             sample_rate, 1, 0.0f, &audio, &audio_len) == SONARE_OK);
+  sonare_free_floats(audio);
+
+  magnitude[4] = std::nanf("");
+  audio = nullptr;
+  audio_len = 0;
+  REQUIRE(sonare_griffin_lim(magnitude.data(), magnitude.size(), n_bins, n_frames, n_fft, 1,
+                             sample_rate, 1, 0.0f, &audio,
+                             &audio_len) == SONARE_ERROR_INVALID_PARAMETER);
+  REQUIRE(audio == nullptr);
+  REQUIRE(audio_len == 0);
+
+  const int cq_sr = 8000;
+  const int cq_bins = 12;
+  const int cq_frames = 4;
+  std::vector<float> cq_magnitude(static_cast<size_t>(cq_bins) * cq_frames, 0.5f);
+  cq_magnitude[5] = INFINITY;
+  audio = nullptr;
+  audio_len = 0;
+  REQUIRE(sonare_cqt_to_audio_checked(cq_magnitude.data(), cq_magnitude.size(), cq_bins, cq_frames,
+                                      cq_sr, 128, 130.8128f, 12, 1, &audio,
+                                      &audio_len) == SONARE_ERROR_INVALID_PARAMETER);
+  REQUIRE(audio == nullptr);
+
+  audio = nullptr;
+  audio_len = 0;
+  REQUIRE(sonare_vqt_to_audio_checked(cq_magnitude.data(), cq_magnitude.size(), cq_bins, cq_frames,
+                                      cq_sr, 128, 130.8128f, 12, 24.0f, 1, &audio,
+                                      &audio_len) == SONARE_ERROR_INVALID_PARAMETER);
   REQUIRE(audio == nullptr);
   REQUIRE(audio_len == 0);
 }

@@ -11,6 +11,7 @@
 #include "core/window.h"
 #include "util/constants.h"
 #include "util/exception.h"
+#include "util/numeric_validation.h"
 #include "util/padding.h"
 #include "util/reflect_padding.h"
 #include "util/validated.h"
@@ -425,6 +426,16 @@ Audio griffin_lim(const float* magnitude, int n_bins, int n_frames, int n_fft, i
   const size_t total = static_cast<size_t>(n_bins) * static_cast<size_t>(n_frames);
   SONARE_CHECK(total / static_cast<size_t>(n_bins) == static_cast<size_t>(n_frames),
                ErrorCode::InvalidParameter);
+
+  // std::polar of a non-finite magnitude seeds the whole iteration with NaN,
+  // and the result is an all-NaN Audio of the expected length that no caller can
+  // tell apart from a valid reconstruction by shape. Rejected here rather than
+  // at each binding so the C ABI, the WASM bindings (which call this directly)
+  // and the in-process callers all inherit one rule.
+  if (!numeric::all_finite(magnitude, total)) {
+    throw SonareException(ErrorCode::InvalidParameter,
+                          "griffin_lim: magnitude contains a non-finite value");
+  }
 
   // Initialize with random phase
   std::vector<std::complex<float>> spectrum(total);

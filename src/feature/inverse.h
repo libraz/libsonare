@@ -27,6 +27,10 @@ namespace sonare {
 ///         Matches `librosa.feature.inverse.mel_to_stft` (default `power=2.0`),
 ///         which square-roots the non-negative least-squares result so the
 ///         output is magnitude, not squared magnitude.
+/// @throw sonare::SonareException (InvalidParameter) on a null @p M, a
+///        non-positive @p n_fft or @p sr, an input beyond the inverse resource
+///        limit, or any non-finite element of @p M. The finiteness precondition
+///        lives here so every surface reports it identically.
 std::vector<float> mel_to_stft(const float* M, int n_mels, int n_frames,
                                const MelConfig& mel_config, int sr = constants::kDefaultSampleRate);
 
@@ -39,6 +43,9 @@ std::vector<float> mel_to_stft(const float* M, int n_mels, int n_frames,
 /// @param sr Sample rate of the original audio (Hz). Used for both the Mel
 ///        filterbank inversion and the Griffin-Lim STFT timing.
 /// @return Reconstructed audio.
+/// @throw sonare::SonareException (InvalidParameter) for everything @ref
+///        mel_to_stft rejects, including a non-finite element of @p M, plus
+///        anything @ref griffin_lim rejects in the reconstructed magnitudes.
 Audio mel_to_audio(const float* M, int n_mels, int n_frames, const MelConfig& mel_config,
                    int n_iter = 32, int sr = constants::kDefaultSampleRate);
 
@@ -53,6 +60,10 @@ Audio mel_to_audio(const float* M, int n_mels, int n_frames, const MelConfig& me
 ///        `librosa.feature.inverse.mfcc_to_mel(..., lifter=...)`. Must match the
 ///        value passed to @ref MelSpectrogram::mfcc.
 /// @return Mel power spectrogram [n_mels x n_frames] row-major.
+/// @throw sonare::SonareException (InvalidParameter) on a null @p mfcc, a
+///        negative @p lifter, or any non-finite element of @p mfcc. The
+///        finiteness precondition lives here so every surface reports it
+///        identically.
 std::vector<float> mfcc_to_mel(const float* mfcc, int n_mfcc, int n_frames, int n_mels = 128,
                                float lifter = 0.0f);
 
@@ -63,6 +74,9 @@ std::vector<float> mfcc_to_mel(const float* mfcc, int n_mfcc, int n_frames, int 
 ///        @ref mel_to_audio.
 /// @param lifter Cepstral lifter factor applied to the MFCC (default 0 = none),
 ///        forwarded to @ref mfcc_to_mel so liftered MFCCs round-trip correctly.
+/// @throw sonare::SonareException (InvalidParameter) for everything @ref
+///        mfcc_to_mel rejects, including a non-finite element of @p mfcc, plus
+///        anything @ref mel_to_audio rejects in the reconstructed Mel bands.
 Audio mfcc_to_audio(const float* mfcc, int n_mfcc, int n_frames, const MelConfig& mel_config,
                     int n_iter = 32, int sr = constants::kDefaultSampleRate, float lifter = 0.0f);
 

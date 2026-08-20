@@ -28,6 +28,14 @@ std::vector<float> mel_to_stft(const float* M, int n_mels, int n_frames,
   if (sr <= 0) {
     throw SonareException(ErrorCode::InvalidParameter, "mel_to_stft: sr must be > 0");
   }
+  // A non-finite mel band poisons the NNLS active set, which then returns an
+  // all-NaN spectrogram of the expected shape. Rejected here rather than at each
+  // binding so the C ABI, the WASM bindings (which call this directly) and the
+  // in-process callers all inherit one rule.
+  if (!numeric::all_finite(M, n_mels, n_frames)) {
+    throw SonareException(ErrorCode::InvalidParameter,
+                          "mel_to_stft: M contains a non-finite value");
+  }
   constexpr int kMaxInverseFrames = 4096;
   if (n_frames > kMaxInverseFrames || mel_config.n_fft > 8192) {
     throw SonareException(ErrorCode::InvalidParameter,
@@ -80,6 +88,15 @@ std::vector<float> mfcc_to_mel(const float* mfcc, int n_mfcc, int n_frames, int 
   if (n_mfcc <= 0 || n_frames <= 0 || n_mels <= 0) return {};
   if (lifter < 0.0f)
     throw SonareException(ErrorCode::InvalidParameter, "mfcc_to_mel: lifter must be >= 0");
+  // A non-finite coefficient spreads across every Mel band through the inverse
+  // DCT, and the dB-to-power conversion turns part of it back into 0 or Inf, so
+  // the caller gets a plausible-looking spectrogram with no way to detect it.
+  // Rejected here rather than at each binding so the C ABI, the WASM bindings
+  // (which call this directly) and the in-process callers all inherit one rule.
+  if (!numeric::all_finite(mfcc, n_mfcc, n_frames)) {
+    throw SonareException(ErrorCode::InvalidParameter,
+                          "mfcc_to_mel: mfcc contains a non-finite value");
+  }
 
   // Undo MFCC liftering before the inverse DCT. MelSpectrogram::mfcc multiplies
   // coefficient k (0-indexed) by `1 + (lifter/2) * sin(pi * (k + 1) / lifter)`;

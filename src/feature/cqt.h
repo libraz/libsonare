@@ -250,6 +250,9 @@ CqtResult pseudo_cqt(const Audio& audio, const CqtConfig& config = CqtConfig());
 /// @param sr Sample rate of the original signal.
 /// @param n_iter Number of Griffin-Lim iterations.
 /// @return Reconstructed audio.
+/// @throw sonare::SonareException (InvalidParameter) on any non-finite element
+///        of @p magnitude. The finiteness precondition lives here so every
+///        surface reports it identically.
 Audio griffinlim_cqt(const float* magnitude, int n_bins, int n_frames, const CqtConfig& config,
                      int sr, int n_iter = 32);
 

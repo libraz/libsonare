@@ -1,15 +1,21 @@
 /// @file inverse_features_test.cpp
-/// @brief Smoke tests for mel_to_stft / mel_to_audio / mfcc_to_mel / mfcc_to_audio.
+/// @brief Smoke tests for the inverse reconstruction transforms, plus the
+///        finiteness preconditions they all share.
 
 #include <catch2/catch_test_macros.hpp>
 #include <cmath>
+#include <limits>
 #include <vector>
 
 #include "core/audio.h"
+#include "core/spectrum.h"
+#include "feature/cqt.h"
 #include "feature/inverse.h"
 #include "feature/mel_spectrogram.h"
+#include "feature/vqt.h"
 #include "filters/mel.h"
 #include "util/constants.h"
+#include "util/exception.h"
 
 using namespace sonare;
 using namespace sonare::constants;
@@ -139,4 +145,114 @@ TEST_CASE("mfcc_to_audio returns a non-empty Audio", "[inverse_features][unit][s
   mcfg.n_mels = 64;
   Audio out = mfcc_to_audio(mfcc.data(), n_mfcc, n_frames, mcfg, /*n_iter=*/2);
   REQUIRE(out.size() > 0);
+}
+
+TEST_CASE("inverse transforms reject non-finite input in the core",
+          "[inverse_features][unit][validation]") {
+  // Every one of these fabricated an all-NaN result of the expected shape from a
+  // single poisoned cell, which no caller could tell apart from a valid
+  // reconstruction. The precondition lives in the core so the C ABI, Node,
+  // Python, WASM and both CLIs inherit it from one place.
+  const float nan_value = std::numeric_limits<float>::quiet_NaN();
+  const float inf_value = std::numeric_limits<float>::infinity();
+  const int sr = 22050;
+
+  SECTION("mel_to_stft and mel_to_audio") {
+    const int n_mels = 8;
+    const int n_frames = 4;
+    MelConfig mcfg;
+    mcfg.n_fft = 256;
+    mcfg.hop_length = 64;
+    mcfg.n_mels = n_mels;
+
+    std::vector<float> mel(static_cast<size_t>(n_mels) * n_frames, 0.1f);
+    REQUIRE_NOTHROW(mel_to_stft(mel.data(), n_mels, n_frames, mcfg, sr));
+
+    mel[3] = nan_value;
+    REQUIRE_THROWS_AS(mel_to_stft(mel.data(), n_mels, n_frames, mcfg, sr), SonareException);
+    REQUIRE_THROWS_AS(mel_to_audio(mel.data(), n_mels, n_frames, mcfg, /*n_iter=*/2, sr),
+                      SonareException);
+
+    mel[3] = inf_value;
+    REQUIRE_THROWS_AS(mel_to_stft(mel.data(), n_mels, n_frames, mcfg, sr), SonareException);
+  }
+
+  SECTION("mfcc_to_mel and mfcc_to_audio") {
+    const int n_mfcc = 5;
+    const int n_frames = 4;
+    const int n_mels = 8;
+    MelConfig mcfg;
+    mcfg.n_fft = 256;
+    mcfg.hop_length = 64;
+    mcfg.n_mels = n_mels;
+
+    std::vector<float> mfcc(static_cast<size_t>(n_mfcc) * n_frames, 0.1f);
+    REQUIRE_NOTHROW(mfcc_to_mel(mfcc.data(), n_mfcc, n_frames, n_mels));
+
+    mfcc[7] = inf_value;
+    REQUIRE_THROWS_AS(mfcc_to_mel(mfcc.data(), n_mfcc, n_frames, n_mels), SonareException);
+    REQUIRE_THROWS_AS(mfcc_to_audio(mfcc.data(), n_mfcc, n_frames, mcfg, /*n_iter=*/2, sr),
+                      SonareException);
+
+    mfcc[7] = nan_value;
+    REQUIRE_THROWS_AS(mfcc_to_mel(mfcc.data(), n_mfcc, n_frames, n_mels), SonareException);
+  }
+
+  SECTION("griffin_lim") {
+    const int n_fft = 4;
+    const int n_bins = n_fft / 2 + 1;
+    const int n_frames = 5;
+    GriffinLimConfig config;
+    config.n_iter = 1;
+    config.momentum = 0.0f;
+
+    std::vector<float> magnitude(static_cast<size_t>(n_bins) * n_frames, 1.0f);
+    REQUIRE_NOTHROW(griffin_lim(magnitude.data(), n_bins, n_frames, n_fft, 1, sr, config));
+
+    magnitude[4] = nan_value;
+    REQUIRE_THROWS_AS(griffin_lim(magnitude.data(), n_bins, n_frames, n_fft, 1, sr, config),
+                      SonareException);
+
+    magnitude[4] = inf_value;
+    REQUIRE_THROWS_AS(griffin_lim(magnitude.data(), n_bins, n_frames, n_fft, 1, sr, config),
+                      SonareException);
+  }
+
+  SECTION("griffinlim_cqt and griffinlim_vqt") {
+    const int n_bins = 12;
+    const int n_frames = 4;
+    const int cq_sr = 8000;
+    CqtConfig cqt_config;
+    cqt_config.fmin = 130.8128f;
+    cqt_config.n_bins = n_bins;
+    cqt_config.bins_per_octave = 12;
+    cqt_config.hop_length = 128;
+    VqtConfig vqt_config;
+    vqt_config.fmin = cqt_config.fmin;
+    vqt_config.n_bins = n_bins;
+    vqt_config.bins_per_octave = 12;
+    vqt_config.hop_length = 128;
+    vqt_config.gamma = 24.0f;
+
+    std::vector<float> magnitude(static_cast<size_t>(n_bins) * n_frames, 0.5f);
+    REQUIRE_NOTHROW(griffinlim_cqt(magnitude.data(), n_bins, n_frames, cqt_config, cq_sr, 1));
+    REQUIRE_NOTHROW(griffinlim_vqt(magnitude.data(), n_bins, n_frames, vqt_config, cq_sr, 1));
+
+    magnitude[5] = nan_value;
+    REQUIRE_THROWS_AS(griffinlim_cqt(magnitude.data(), n_bins, n_frames, cqt_config, cq_sr, 1),
+                      SonareException);
+    REQUIRE_THROWS_AS(griffinlim_vqt(magnitude.data(), n_bins, n_frames, vqt_config, cq_sr, 1),
+                      SonareException);
+
+    // The gamma=0 VQT path delegates to griffinlim_cqt, so it must reject the
+    // same input before the delegation rather than through it.
+    VqtConfig zero_gamma = vqt_config;
+    zero_gamma.gamma = 0.0f;
+    REQUIRE_THROWS_AS(griffinlim_vqt(magnitude.data(), n_bins, n_frames, zero_gamma, cq_sr, 1),
+                      SonareException);
+
+    magnitude[5] = inf_value;
+    REQUIRE_THROWS_AS(griffinlim_cqt(magnitude.data(), n_bins, n_frames, cqt_config, cq_sr, 1),
+                      SonareException);
+  }
 }

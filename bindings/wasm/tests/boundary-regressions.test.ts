@@ -47,6 +47,46 @@ describe('boundary regressions (WASM)', () => {
     expect(valid.nFrames).toBe(1);
   });
 
+  it('rejects non-finite inverse matrices in the core, not in the embind wrapper', () => {
+    // The embind wrappers call the C++ core directly, so the C-ABI translation
+    // unit's validation never runs here. These assert the core precondition
+    // itself, reached with the facade's JS pre-check bypassed.
+    const module = getSonareModule();
+
+    const mel = new Float32Array(8 * 4).fill(0.1);
+    mel[3] = Number.NaN;
+    expect(() => module.melToStft(mel, 8, 4, SR, 256, 0, 0, false)).toThrow(
+      /mel_to_stft: M contains a non-finite value/,
+    );
+    expect(() => module.melToAudio(mel, 8, 4, SR, 256, 64, 0, 0, 2, false)).toThrow(
+      /non-finite value/,
+    );
+
+    const mfcc = new Float32Array(5 * 4).fill(0.1);
+    mfcc[7] = Number.POSITIVE_INFINITY;
+    expect(() => module.mfccToMel(mfcc, 5, 4, 8, 0)).toThrow(
+      /mfcc_to_mel: mfcc contains a non-finite value/,
+    );
+    expect(() => module.mfccToAudio(mfcc, 5, 4, 8, SR, 256, 64, 0, 0, 2, false, 0)).toThrow(
+      /non-finite value/,
+    );
+
+    const magnitude = new Float32Array(3 * 5).fill(1);
+    magnitude[4] = Number.NaN;
+    expect(() => module.griffinLim(magnitude, 3, 5, SR, 4, 1, 1, 0)).toThrow(
+      /griffin_lim: magnitude contains a non-finite value/,
+    );
+
+    const cq = new Float32Array(12 * 4).fill(0.5);
+    cq[5] = Number.NaN;
+    expect(() => module.cqtToAudio(cq, 12, 4, 8000, 128, 130.8128, 12, 1)).toThrow(
+      /griffinlim_cqt: magnitude contains a non-finite value/,
+    );
+    expect(() => module.vqtToAudio(cq, 12, 4, 8000, 128, 130.8128, 12, 24, 1)).toThrow(
+      /griffinlim_vqt: magnitude contains a non-finite value/,
+    );
+  });
+
   it('rejects an oversized array-like length before allocation and keeps the module usable', () => {
     const module = getSonareModule();
     const oversized = { length: 64 * 1024 * 1024 + 1 } as unknown as Float32Array;

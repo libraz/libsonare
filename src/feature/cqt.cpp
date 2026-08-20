@@ -593,6 +593,14 @@ CqtResult hybrid_cqt(const Audio& audio, const CqtConfig& config) {
 Audio griffinlim_cqt(const float* magnitude, int n_bins, int n_frames, const CqtConfig& config,
                      int sr, int n_iter) {
   if (magnitude == nullptr || n_bins <= 0 || n_frames <= 0) return Audio();
+  // The Gaussian projection smears one non-finite bin across the whole STFT
+  // magnitude grid, so a single NaN reaches every output sample. Rejected here
+  // rather than at each binding so the C ABI, the WASM bindings (which call this
+  // directly) and the in-process callers all inherit one rule.
+  if (!numeric::all_finite(magnitude, n_bins, n_frames)) {
+    throw SonareException(ErrorCode::InvalidParameter,
+                          "griffinlim_cqt: magnitude contains a non-finite value");
+  }
 
   std::vector<float> freqs = cqt_frequencies(config.fmin, n_bins, config.bins_per_octave);
   const int n_fft = detail::choose_pseudo_cqt_nfft(config, sr);

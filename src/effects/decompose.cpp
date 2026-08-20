@@ -20,16 +20,7 @@ namespace {
 // Divide-by-amplitude / near-zero guard (== sonare::constants::kAmpEpsilon, 1e-9f).
 constexpr float kEps = sonare::constants::kAmpEpsilon;
 
-/// @brief True when every element of a rows x n_frames matrix is finite.
-/// @details Callers validate the dimensions as positive first, so the product
-///          is well defined here.
-bool all_finite(const float* S, int rows, int n_frames) noexcept {
-  const size_t total = static_cast<size_t>(rows) * static_cast<size_t>(n_frames);
-  for (size_t index = 0; index < total; ++index) {
-    if (!std::isfinite(S[index])) return false;
-  }
-  return true;
-}
+using sonare::numeric::all_finite;
 
 /// @brief Random non-negative initialisation, seeded for determinism.
 void init_random(std::vector<float>& W, std::vector<float>& H, int n_features, int n_components,

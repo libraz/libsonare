@@ -24,14 +24,9 @@ size_t inverse_input_length(int rows, int n_frames) noexcept {
   return r * f;
 }
 
-bool all_finite(const float* input, int rows, int n_frames) noexcept {
-  const auto total = static_cast<size_t>(rows) * static_cast<size_t>(n_frames);
-  for (size_t index = 0; index < total; ++index) {
-    if (!std::isfinite(input[index])) return false;
-  }
-  return true;
-}
-
+// The non-finite element case is not checked here: griffinlim_cqt / griffinlim_vqt
+// / mel_to_stft / mfcc_to_mel / griffin_lim reject it themselves, so the rule has
+// a single home that WASM (which calls the core directly) inherits too.
 SonareError validate_cqt_inverse(const float* magnitude, size_t input_length, int n_bins,
                                  int n_frames, int sample_rate, int hop_length, float fmin,
                                  int bins_per_octave, int n_iter) {
@@ -40,11 +35,7 @@ SonareError validate_cqt_inverse(const float* magnitude, size_t input_length, in
       bins_per_octave <= 0 || n_iter <= 0 || n_iter > sonare::resource::kMaxGriffinLimIterations) {
     return SONARE_ERROR_INVALID_PARAMETER;
   }
-  if (check_inverse_input_length(input_length, n_bins, n_frames) != SONARE_OK ||
-      !all_finite(magnitude, n_bins, n_frames)) {
-    return SONARE_ERROR_INVALID_PARAMETER;
-  }
-  return SONARE_OK;
+  return check_inverse_input_length(input_length, n_bins, n_frames);
 }
 
 }  // namespace
@@ -126,7 +117,6 @@ SonareError sonare_mel_to_stft_ex(const float* mel, int n_mels, int n_frames, in
   }
 
   *out = {};
-  if (!all_finite(mel, n_mels, n_frames)) return SONARE_ERROR_INVALID_PARAMETER;
 
   SONARE_C_TRY
   MelConfig config;
@@ -158,7 +148,6 @@ SonareError sonare_mel_to_audio_ex(const float* mel, int n_mels, int n_frames, i
 
   *out = nullptr;
   *out_length = 0;
-  if (!all_finite(mel, n_mels, n_frames)) return SONARE_ERROR_INVALID_PARAMETER;
 
   SONARE_C_TRY
   MelConfig config;
@@ -189,8 +178,7 @@ SonareError sonare_griffin_lim(const float* magnitude, size_t input_length, int 
       hop_length <= 0 || sample_rate < kMinSampleRate || sample_rate > kMaxSampleRate ||
       n_iter <= 0 || n_iter > resource::kMaxGriffinLimIterations || !std::isfinite(momentum) ||
       momentum < 0.0f || momentum >= 1.0f || n_bins != n_fft / 2 + 1 ||
-      check_inverse_input_length(input_length, n_bins, n_frames) != SONARE_OK ||
-      !all_finite(magnitude, n_bins, n_frames)) {
+      check_inverse_input_length(input_length, n_bins, n_frames) != SONARE_OK) {
     return SONARE_ERROR_INVALID_PARAMETER;
   }
   *out = nullptr;
@@ -213,7 +201,6 @@ SonareError sonare_mfcc_to_mel_ex(const float* mfcc, int n_mfcc, int n_frames, i
     return SONARE_ERROR_INVALID_PARAMETER;
 
   *out = {};
-  if (!all_finite(mfcc, n_mfcc, n_frames)) return SONARE_ERROR_INVALID_PARAMETER;
 
   SONARE_C_TRY
   std::vector<float> mel = mfcc_to_mel(mfcc, n_mfcc, n_frames, n_mels, lifter);
@@ -240,7 +227,6 @@ SonareError sonare_mfcc_to_audio_ex2(const float* mfcc, int n_mfcc, int n_frames
 
   *out = nullptr;
   *out_length = 0;
-  if (!all_finite(mfcc, n_mfcc, n_frames)) return SONARE_ERROR_INVALID_PARAMETER;
 
   SONARE_C_TRY
   MelConfig config;

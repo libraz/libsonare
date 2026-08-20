@@ -41,6 +41,10 @@ void validate_mel_range(const char* fn_name, float fmin, float fmax, int sample_
   }
 }
 
+/// Validates a JS matrix argument's shape and copies it out. The non-finite
+/// element case is deliberately absent: the core transforms this helper feeds
+/// reject it themselves, so the rule has a single home shared with every other
+/// surface.
 std::vector<float> load_validated_matrix(const char* fn_name, val input, int rows, int frames,
                                          const char* data_name, const char* rows_name) {
   validate_positive(fn_name, rows, rows_name);
@@ -58,14 +62,7 @@ std::vector<float> load_validated_matrix(const char* fn_name, val input, int row
     throw SonareException(ErrorCode::InvalidParameter, std::string(fn_name) + ": " + data_name +
                                                            " length must equal rows * n_frames");
   }
-  std::vector<float> data = float32ArrayToVector(input);
-  for (size_t i = 0; i < data.size(); ++i) {
-    if (!std::isfinite(data[i])) {
-      throw SonareException(ErrorCode::InvalidParameter,
-                            std::string(fn_name) + ": " + data_name + " contains NaN or Inf");
-    }
-  }
-  return data;
+  return float32ArrayToVector(input);
 }
 
 }  // namespace

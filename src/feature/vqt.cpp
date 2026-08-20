@@ -416,6 +416,15 @@ VqtResult vqt(const Audio& audio, const VqtConfig& config, VqtProgressCallback p
 Audio griffinlim_vqt(const float* magnitude, int n_bins, int n_frames, const VqtConfig& config,
                      int sr, int n_iter) {
   if (magnitude == nullptr || n_bins <= 0 || n_frames <= 0) return Audio();
+  // The projection smears one non-finite bin across the whole STFT magnitude
+  // grid, so a single NaN reaches every output sample. Checked before the
+  // gamma=0 delegation so the message names the entry point the caller used.
+  // Rejected here rather than at each binding so the C ABI, the WASM bindings
+  // (which call this directly) and the in-process callers all inherit one rule.
+  if (!numeric::all_finite(magnitude, n_bins, n_frames)) {
+    throw SonareException(ErrorCode::InvalidParameter,
+                          "griffinlim_vqt: magnitude contains a non-finite value");
+  }
 
   VqtConfig resolved = config;
   resolved.gamma = resolve_vqt_gamma(config);
