@@ -13,9 +13,16 @@
 namespace sonare::effects::modulation {
 
 struct RotaryConfig {
-  float rate_hz = 6.0f;   ///< horn rotor rate (the drum rotor tracks slower).
-  float depth_ms = 1.2f;  ///< peak doppler delay swing.
-  float tremolo = 0.5f;   ///< amplitude-modulation depth [0, 1].
+  float rate_hz = 6.0f;  ///< horn rotor rate (the drum rotor tracks slower).
+  /// Peak doppler delay swing. The modulated delay is centred on this value
+  /// rather than on zero, so the effect carries a mean delay of `depth_ms` -
+  /// 1.2 ms by default. That delay is part of the modulation, not a processing
+  /// latency: it swings continuously and has no steady arrival point, so it is
+  /// deliberately not reported through `latency_samples()` and is not
+  /// compensated by mixer PDC. The whole modulation family follows this
+  /// convention (`ChorusConfig::center_delay_ms` is 14 ms on the same terms).
+  float depth_ms = 1.2f;
+  float tremolo = 0.5f;  ///< amplitude-modulation depth [0, 1].
   /// L/R anti-phase amount [0, 1]. Construction/reset-only: changing it
   /// requires reconstructing or resetting the effect, so it is intentionally
   /// absent from the realtime automation parameter list.
