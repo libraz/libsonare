@@ -17,6 +17,7 @@ from ._runtime import (
     SonareStreamFramesU8,
     SonareStreamQuantizeConfig,
     SonareStreamStats,
+    SonareValueError,
     StreamBarChord,
     StreamChordChange,
     StreamConfig,
@@ -38,13 +39,15 @@ _SIZE_T_MAX = (1 << (ctypes.sizeof(ctypes.c_size_t) * 8)) - 1
 def _checked_size_t(value: int, name: str) -> ctypes.c_size_t:
     """Convert an integer to ``size_t`` without truncation or modulo wrapping."""
     if isinstance(value, bool):
-        raise ValueError(f"{name} must be a non-negative integer within size_t range")
+        raise SonareValueError(f"{name} must be a non-negative integer within size_t range")
     try:
         integer = operator.index(value)
     except TypeError:
-        raise ValueError(f"{name} must be a non-negative integer within size_t range") from None
+        raise SonareValueError(
+            f"{name} must be a non-negative integer within size_t range"
+        ) from None
     if integer < 0 or integer > _SIZE_T_MAX:
-        raise ValueError(f"{name} must be a non-negative integer within size_t range")
+        raise SonareValueError(f"{name} must be a non-negative integer within size_t range")
     return ctypes.c_size_t(integer)
 
 

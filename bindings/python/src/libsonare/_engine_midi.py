@@ -18,7 +18,7 @@ from ._project import (
     _cc_binding_to_c,
     _synth_patch_arg,
 )
-from ._runtime import _check, _get_lib
+from ._runtime import SonareValueError, _check, _get_lib
 
 
 class _EngineMidiMixin:
@@ -76,7 +76,7 @@ class _EngineMidiMixin:
             raise RuntimeError("libsonare was built without live-MIDI support")
         buf = bytes(data)
         if not buf:
-            raise ValueError("SysEx data must not be empty")
+            raise SonareValueError("SysEx data must not be empty")
         c_data = (ctypes.c_uint8 * len(buf)).from_buffer_copy(buf)
         _check(
             lib.sonare_engine_push_midi_sysex(
@@ -203,7 +203,7 @@ class _EngineMidiMixin:
             raise RuntimeError("libsonare was built without live-MIDI support")
         buf = bytes(data)
         if not buf:
-            raise ValueError("SoundFont data must not be empty")
+            raise SonareValueError("SoundFont data must not be empty")
         c_data = (ctypes.c_uint8 * len(buf)).from_buffer_copy(buf)
         _check(
             lib.sonare_engine_load_soundfont(

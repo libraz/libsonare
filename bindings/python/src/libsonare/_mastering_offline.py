@@ -17,7 +17,7 @@ from ._ffi import (
     SonareMasteringResult,
     SonareMasteringStereoResult,
 )
-from ._runtime import _check, _get_lib, _to_c_float_array
+from ._runtime import SonareValueError, _check, _get_lib, _guard_buffer, _to_c_float_array
 from .types import (
     CapabilityCatalog,
     MasteringChainResult,
@@ -32,6 +32,7 @@ from .types import (
 )
 
 
+@_guard_buffer("samples")
 def mastering(
     samples: Sequence[float] | list[float],
     sample_rate: int = 22050,
@@ -116,7 +117,7 @@ def _assistant_params(
     for key, value in params.items():
         if key in ("targetPlatform", "target_platform"):
             if not isinstance(value, str):
-                raise ValueError(
+                raise SonareValueError(
                     f"{key} must be a delivery-target name; "
                     f"expected one of: {', '.join(mastering_platform_names())}"
                 )
@@ -125,14 +126,14 @@ def _assistant_params(
                 raise RuntimeError("libsonare was built without mastering assistant support")
             index = lib.sonare_mastering_platform_from_name(value.encode("utf-8"))
             if index < 0:
-                raise ValueError(
+                raise SonareValueError(
                     f"unknown mastering target platform {value!r}; "
                     f"expected one of: {', '.join(mastering_platform_names())}"
                 )
             resolved[key] = index
             continue
         if isinstance(value, str):
-            raise ValueError(f"{key} must be a number; only targetPlatform takes a name")
+            raise SonareValueError(f"{key} must be a number; only targetPlatform takes a name")
         resolved[key] = value
     return _mastering_params(resolved)
 
@@ -277,6 +278,7 @@ def capability_catalog() -> CapabilityCatalog:
     return cast("CapabilityCatalog", json.loads(raw.decode("utf-8")))
 
 
+@_guard_buffer("samples")
 def mastering_process(
     processor_name: str,
     samples: Sequence[float] | list[float],
@@ -314,6 +316,7 @@ def mastering_process(
         lib.sonare_free_mastering_result(ctypes.byref(out))
 
 
+@_guard_buffer("left", "right")
 def mastering_process_stereo(
     processor_name: str,
     left: Sequence[float] | list[float],
@@ -328,7 +331,7 @@ def mastering_process_stereo(
     left_array, left_length = _to_c_float_array(left)
     right_array, right_length = _to_c_float_array(right)
     if left_length != right_length:
-        raise ValueError("left and right channel lengths must match")
+        raise SonareValueError("left and right channel lengths must match")
     param_array, param_count = _mastering_params(params)
     out = SonareMasteringStereoResult()
     rc = lib.sonare_mastering_apply_processor_stereo(
@@ -467,6 +470,7 @@ def _make_progress_trampoline(
     return SonareMasteringProgressCallback(_trampoline)
 
 
+@_guard_buffer("samples")
 def mastering_chain(
     samples: Sequence[float] | list[float],
     sample_rate: int = 22050,
@@ -579,6 +583,7 @@ def mastering_chain(
         lib.sonare_free_mastering_chain_result(ctypes.byref(out))
 
 
+@_guard_buffer("left", "right")
 def mastering_chain_stereo(
     left: Sequence[float] | list[float],
     right: Sequence[float] | list[float],
@@ -600,7 +605,7 @@ def mastering_chain_stereo(
     left_array, left_length = _to_c_float_array(left)
     right_array, right_length = _to_c_float_array(right)
     if left_length != right_length:
-        raise ValueError("left and right channel lengths must match")
+        raise SonareValueError("left and right channel lengths must match")
     param_array, param_count = _chain_params(config)
     out = SonareMasteringChainStereoResult()
     if on_progress is None and cancel is None:
@@ -700,6 +705,7 @@ def mastering_platform_names() -> list[str]:
     return raw.decode("utf-8").splitlines() if raw else []
 
 
+@_guard_buffer("samples")
 def master_audio(
     samples: Sequence[float] | list[float],
     sample_rate: int = 22050,
@@ -811,6 +817,7 @@ def master_audio(
         lib.sonare_free_mastering_chain_result(ctypes.byref(out))
 
 
+@_guard_buffer("left", "right")
 def master_audio_stereo(
     left: Sequence[float] | list[float],
     right: Sequence[float] | list[float],
@@ -832,7 +839,7 @@ def master_audio_stereo(
     left_array, left_length = _to_c_float_array(left)
     right_array, right_length = _to_c_float_array(right)
     if left_length != right_length:
-        raise ValueError("left and right channel lengths must match")
+        raise SonareValueError("left and right channel lengths must match")
     param_array, param_count = _chain_params(overrides)
     out = SonareMasteringChainStereoResult()
     if on_progress is None and cancel is None:

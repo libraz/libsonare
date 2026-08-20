@@ -37,11 +37,13 @@ from ._ffi import (
 from ._runtime import (
     ErrorCode,
     SonareError,
+    SonareValueError,
     _as_float32_buffer,
     _check,
     _float_array_result,
     _from_c_float_array,
     _get_lib,
+    _guard_buffer,
     _out_float_array,
     _require_power_of_two,
     _resolve_enum,
@@ -64,15 +66,15 @@ def _unsupported_effect_symbol(symbol: str) -> SonareError:
 
 def _validate_trim_options(frame_length: int, hop_length: int) -> tuple[int, int]:
     if isinstance(frame_length, bool) or not isinstance(frame_length, Integral):
-        raise ValueError("trim: frame_length must be an integer")
+        raise SonareValueError("trim: frame_length must be an integer")
     if isinstance(hop_length, bool) or not isinstance(hop_length, Integral):
-        raise ValueError("trim: hop_length must be an integer")
+        raise SonareValueError("trim: hop_length must be an integer")
     frame_length = int(frame_length)
     hop_length = int(hop_length)
     if frame_length <= 0 or frame_length > _C_INT_MAX:
-        raise ValueError("trim: frame_length must fit in a positive signed 32-bit integer")
+        raise SonareValueError("trim: frame_length must fit in a positive signed 32-bit integer")
     if hop_length <= 0 or hop_length > _C_INT_MAX:
-        raise ValueError("trim: hop_length must fit in a positive signed 32-bit integer")
+        raise SonareValueError("trim: hop_length must fit in a positive signed 32-bit integer")
     return frame_length, hop_length
 
 
@@ -136,9 +138,9 @@ def normalize_rms(
     target_db = _validate_scalar("normalize_rms", target_db, "target_db")
     target_db_c = ctypes.c_float(target_db).value
     if not np.isfinite(target_db_c):
-        raise ValueError("normalize_rms: target_db must fit in a finite float32 value")
+        raise SonareValueError("normalize_rms: target_db must fit in a finite float32 value")
     if target_db_c > 0.0:
-        raise ValueError("normalize_rms: target_db must be at or below 0 dBFS")
+        raise SonareValueError("normalize_rms: target_db must be at or below 0 dBFS")
     lib = _get_lib()
     if not hasattr(lib, "sonare_normalize_rms"):
         raise _unsupported_effect_symbol("sonare_normalize_rms")
@@ -200,6 +202,7 @@ def _coerce_denoise_estimator(value: int | str) -> int:
     )
 
 
+@_guard_buffer("samples")
 def mastering_repair_declick(
     samples: Sequence[float] | list[float] | np.ndarray,
     sample_rate: int = 22050,
@@ -225,7 +228,7 @@ def mastering_repair_declick(
         ``numpy.ndarray`` of ``float32`` with the same length as the input.
     """
     if max_click_samples <= 0:
-        raise ValueError("max_click_samples must be positive")
+        raise SonareValueError("max_click_samples must be positive")
     lib = _get_lib()
     in_buf = _as_float32_buffer(samples)
     length = int(in_buf.shape[0])
@@ -250,6 +253,7 @@ def mastering_repair_declick(
         return _from_c_float_array(out, out_length.value)
 
 
+@_guard_buffer("samples")
 def mastering_repair_denoise_classical(
     samples: Sequence[float] | list[float] | np.ndarray,
     sample_rate: int = 22050,
@@ -288,13 +292,13 @@ def mastering_repair_denoise_classical(
         ``numpy.ndarray`` of ``float32`` with the same length as the input.
 
     Raises:
-        ValueError: If ``mode`` / ``noise_estimator`` cannot be resolved.
+        SonareValueError: If ``mode`` / ``noise_estimator`` cannot be resolved.
         RuntimeError: If the C call rejects the request (e.g. non-power-of-two
         ``n_fft`` or non-positive ``hop_length``).
     """
     _require_power_of_two(n_fft, "n_fft")
     if hop_length <= 0:
-        raise ValueError("hop_length must be positive")
+        raise SonareValueError("hop_length must be positive")
 
     lib = _get_lib()
     in_buf = _as_float32_buffer(samples)
@@ -388,6 +392,7 @@ def _run_repair(
         return _from_c_float_array(out, out_length.value)
 
 
+@_guard_buffer("samples")
 def mastering_repair_declip(
     samples: Sequence[float] | list[float] | np.ndarray,
     sample_rate: int = 22050,
@@ -407,6 +412,7 @@ def mastering_repair_declip(
     return _run_repair(_get_lib().sonare_mastering_repair_declip, samples, sample_rate, config)
 
 
+@_guard_buffer("samples")
 def mastering_repair_decrackle(
     samples: Sequence[float] | list[float] | np.ndarray,
     sample_rate: int = 22050,
@@ -424,6 +430,7 @@ def mastering_repair_decrackle(
     return _run_repair(_get_lib().sonare_mastering_repair_decrackle, samples, sample_rate, config)
 
 
+@_guard_buffer("samples")
 def mastering_repair_dehum(
     samples: Sequence[float] | list[float] | np.ndarray,
     sample_rate: int = 22050,
@@ -451,6 +458,7 @@ def mastering_repair_dehum(
     return _run_repair(_get_lib().sonare_mastering_repair_dehum, samples, sample_rate, config)
 
 
+@_guard_buffer("samples")
 def mastering_repair_dereverb_classical(
     samples: Sequence[float] | list[float] | np.ndarray,
     sample_rate: int = 22050,
@@ -471,7 +479,7 @@ def mastering_repair_dereverb_classical(
     """Offline classical dereverberator (spectral subtraction + optional WPE)."""
     _require_power_of_two(n_fft, "n_fft")
     if hop_length <= 0 or hop_length > n_fft:
-        raise ValueError("hop_length must be in (0, n_fft]")
+        raise SonareValueError("hop_length must be in (0, n_fft]")
     config = SonareDereverbClassicalConfig(  # noqa: F405
         threshold=float(threshold),
         attenuation=float(attenuation),
@@ -491,6 +499,7 @@ def mastering_repair_dereverb_classical(
     )
 
 
+@_guard_buffer("samples")
 def mastering_repair_trim_silence(
     samples: Sequence[float] | list[float] | np.ndarray,
     sample_rate: int = 22050,
@@ -503,7 +512,7 @@ def mastering_repair_trim_silence(
 ) -> np.ndarray:
     """Offline silence trimmer (peak threshold or LUFS-gated)."""
     if padding_samples < 0:
-        raise ValueError("padding_samples must be non-negative")
+        raise SonareValueError("padding_samples must be non-negative")
     config = SonareTrimSilenceConfig(  # noqa: F405
         threshold=float(threshold),
         padding_samples=int(padding_samples),

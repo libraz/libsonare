@@ -1,9 +1,11 @@
 """Empty / NaN-Inf input guards for metering / dynamics / voice-changer wrappers.
 
-Source-side helpers (`_validate_samples` in `_runtime.py`) raise typed
-`ValueError`s with `{fn_name}: {arg_name}` prefixes so callers can pattern-match
-on the wrapper rather than on a generic C error string. These tests pin the
-behavior across all in-scope public wrappers.
+Source-side helpers (`_validate_samples` in `_runtime.py`) raise
+`SonareValueError` with `{fn_name}: {arg_name}` prefixes so callers can
+pattern-match on the wrapper rather than on a generic C error string. These
+tests pin the behavior across all in-scope public wrappers, along with the
+dual-base catch contract that keeps `except ValueError` and `except SonareError`
+equally valid.
 """
 
 from __future__ import annotations
@@ -14,6 +16,10 @@ import numpy as np
 import pytest
 
 from libsonare import (
+    bass_chroma,
+    chroma,
+    chroma_cens,
+    chroma_cqt,
     ebur128_loudness_range,
     harmonic,
     lufs,
@@ -21,6 +27,7 @@ from libsonare import (
     mastering_dynamics_compressor,
     mastering_dynamics_gate,
     mastering_dynamics_transient_shaper,
+    mel_spectrogram,
     metering_detect_clipping,
     metering_dynamic_range,
     metering_peak_db,
@@ -29,28 +36,32 @@ from libsonare import (
     metering_spectrum_frame,
     metering_stereo_correlation,
     metering_true_peak_db,
+    mfcc,
     momentary_lufs,
     normalize,
     percussive,
     phase_vocoder,
     pitch_pyin,
     pitch_shift,
+    pitch_tuning,
     pitch_yin,
     short_term_lufs,
+    stft,
     time_stretch,
     waveform_peak_pyramid,
     waveform_peaks,
+    zero_crossings,
 )
 from libsonare._effects import voice_change, voice_change_realtime
-from libsonare._runtime import SonareError
+from libsonare._runtime import SonareError, SonareValueError
 
 SR = 22050
 
 # Every public wrapper that routes its primary buffer through
-# ``_validate_samples`` (arg ``samples``). Keeping this list aligned with the
-# Node/WASM guard suites ensures a Python-only regression in the finite/empty
-# preflight fails a test rather than propagating NaN downstream. Each entry maps
-# a wrapper name to an invoker taking the validated buffer as its first argument.
+# ``_validate_samples``. Keeping this list aligned with the Node/WASM guard
+# suites ensures a Python-only regression in the finite/empty preflight fails a
+# test rather than propagating NaN downstream. Each entry maps a wrapper name to
+# an invoker taking the validated buffer as its first argument.
 _SAMPLE_WRAPPERS = {
     "lufs": lambda buf: lufs(buf, SR),
     "momentary_lufs": lambda buf: momentary_lufs(buf, SR),
@@ -64,6 +75,15 @@ _SAMPLE_WRAPPERS = {
     "metering_spectrum_frame": lambda buf: metering_spectrum_frame(buf, SR),
     "waveform_peaks": lambda buf: waveform_peaks(buf, 1),
     "waveform_peak_pyramid": lambda buf: waveform_peak_pyramid(buf, 1),
+    "mel_spectrogram": lambda buf: mel_spectrogram(buf, SR),
+    "mfcc": lambda buf: mfcc(buf, SR),
+    "stft": lambda buf: stft(buf, SR),
+    "chroma": lambda buf: chroma(buf, SR),
+    "chroma_cens": lambda buf: chroma_cens(buf, SR),
+    "chroma_cqt": lambda buf: chroma_cqt(buf, SR),
+    "bass_chroma": lambda buf: bass_chroma(buf, SR),
+    "zero_crossings": lambda buf: zero_crossings(buf),
+    "pitch_tuning": lambda buf: pitch_tuning(buf),
     "harmonic": lambda buf: harmonic(buf, SR),
     "percussive": lambda buf: percussive(buf, SR),
     "normalize": lambda buf: normalize(buf, SR),
@@ -224,23 +244,142 @@ class TestPitchCAbiValidation:
         assert len(result.voiced_flag) == result.n_frames
 
 
+# Wrappers whose validated buffer is not called ``samples``; the guard names the
+# real parameter, so the expected message differs.
+_BUFFER_ARG_NAMES = {"pitch_tuning": "frequencies"}
+
+
+def _buffer_arg(name: str) -> str:
+    return _BUFFER_ARG_NAMES.get(name, "samples")
+
+
 class TestSampleWrapperGuardCoverage:
-    """Parametrized empty / NaN / Inf coverage across every ``samples`` wrapper."""
+    """Parametrized empty / NaN / Inf coverage across every guarded buffer wrapper."""
 
     @pytest.mark.parametrize("name", sorted(_SAMPLE_WRAPPERS))
     def test_rejects_empty(self, name):
-        with pytest.raises(ValueError, match=rf"{name}: samples must not be empty"):
+        arg = _buffer_arg(name)
+        with pytest.raises(ValueError, match=rf"{name}: {arg} must not be empty"):
             _SAMPLE_WRAPPERS[name](np.empty(0, dtype=np.float32))
 
     @pytest.mark.parametrize("name", sorted(_SAMPLE_WRAPPERS))
     def test_rejects_nan_with_index(self, name):
-        with pytest.raises(ValueError, match=rf"{name}: samples contains NaN or Inf at index 100"):
+        arg = _buffer_arg(name)
+        with pytest.raises(ValueError, match=rf"{name}: {arg} contains NaN or Inf at index 100"):
             _SAMPLE_WRAPPERS[name](_with_nan())
 
     @pytest.mark.parametrize("name", sorted(_SAMPLE_WRAPPERS))
     def test_rejects_inf_with_index(self, name):
-        with pytest.raises(ValueError, match=rf"{name}: samples contains NaN or Inf at index 200"):
+        arg = _buffer_arg(name)
+        with pytest.raises(ValueError, match=rf"{name}: {arg} contains NaN or Inf at index 200"):
             _SAMPLE_WRAPPERS[name](_with_inf())
+
+
+class TestSonareValueErrorCatchContract:
+    """``SonareValueError`` must satisfy every catch style callers already use."""
+
+    def test_caught_as_value_error(self):
+        with pytest.raises(ValueError):
+            lufs(np.empty(0, dtype=np.float32), SR)
+
+    def test_caught_as_sonare_error(self):
+        with pytest.raises(SonareError):
+            lufs(np.empty(0, dtype=np.float32), SR)
+
+    def test_caught_as_sonare_value_error(self):
+        with pytest.raises(SonareValueError):
+            lufs(np.empty(0, dtype=np.float32), SR)
+
+    def test_single_instance_satisfies_all_three_bases(self):
+        with pytest.raises(SonareValueError) as exc_info:
+            lufs(np.empty(0, dtype=np.float32), SR)
+        raised = exc_info.value
+        assert isinstance(raised, ValueError)
+        assert isinstance(raised, SonareError)
+        assert isinstance(raised, RuntimeError)
+
+    def test_message_carries_no_error_code_prefix(self):
+        with pytest.raises(SonareValueError) as exc_info:
+            lufs(np.empty(0, dtype=np.float32), SR)
+        assert str(exc_info.value) == "lufs: samples must not be empty"
+
+    def test_reports_the_invalid_parameter_code(self):
+        with pytest.raises(SonareValueError) as exc_info:
+            lufs(np.empty(0, dtype=np.float32), SR)
+        assert exc_info.value.code == 4
+        assert exc_info.value.code_name == "InvalidParameter"
+
+
+# Spectral transforms whose buffer used to reach the C ABI unchecked, so an
+# empty or non-finite input surfaced as a bare ``[4] Invalid parameter``.
+_SPECTRAL_TRANSFORMS = {
+    "mel_spectrogram": mel_spectrogram,
+    "mfcc": mfcc,
+    "stft": stft,
+    "chroma": chroma,
+    "chroma_cens": chroma_cens,
+    "chroma_cqt": chroma_cqt,
+    "bass_chroma": bass_chroma,
+}
+
+
+class TestSpectralTransformsMatchSiblingGuards:
+    """Each spectral transform routes its buffer through the sibling preflight."""
+
+    @pytest.mark.parametrize("name", sorted(_SPECTRAL_TRANSFORMS))
+    def test_empty_raises_sibling_exception_type(self, name):
+        empty = np.empty(0, dtype=np.float32)
+        with pytest.raises(SonareValueError) as sibling_info:
+            pitch_yin(empty, SR)
+        with pytest.raises(SonareValueError) as exc_info:
+            _SPECTRAL_TRANSFORMS[name](empty, SR)
+        assert type(exc_info.value) is type(sibling_info.value)
+
+    @pytest.mark.parametrize("name", sorted(_SPECTRAL_TRANSFORMS))
+    def test_nan_raises_sibling_exception_type(self, name):
+        buf = _with_nan()
+        with pytest.raises(SonareValueError) as sibling_info:
+            pitch_yin(buf, SR)
+        with pytest.raises(SonareValueError) as exc_info:
+            _SPECTRAL_TRANSFORMS[name](buf, SR)
+        assert type(exc_info.value) is type(sibling_info.value)
+
+    @pytest.mark.parametrize("name", sorted(_SPECTRAL_TRANSFORMS))
+    def test_message_uses_the_wrapper_name(self, name):
+        # The chroma variants share one private helper, so the message must name
+        # the entry point the caller used rather than the helper or the C symbol.
+        with pytest.raises(SonareValueError, match=rf"{name}: samples must not be empty"):
+            _SPECTRAL_TRANSFORMS[name](np.empty(0, dtype=np.float32), SR)
+
+    @pytest.mark.parametrize("name", sorted(_SPECTRAL_TRANSFORMS))
+    def test_invalid_sample_rate_keeps_sonare_error_code(self, name):
+        # Preflight covers the buffer only; scalar arguments stay the C ABI's job.
+        with pytest.raises(SonareError) as exc_info:
+            _SPECTRAL_TRANSFORMS[name](_sine(SR), sample_rate=0)
+        assert type(exc_info.value) is SonareError
+        assert exc_info.value.code == 4
+
+
+class TestNonFiniteInputYieldsNoPlausibleResult:
+    """Input with no usable data must fail rather than resolve to a normal answer."""
+
+    def test_zero_crossings_rejects_nan_rather_than_fabricating_crossings(self):
+        # A non-finite sample compares unequal to itself, so the sign test would
+        # report crossings on both sides of it that the clean signal does not have.
+        alternating = np.array([1.0, -1.0] * 16, dtype=np.float32)
+        assert len(zero_crossings(alternating)) > 0
+        corrupted = alternating.copy()
+        corrupted[10] = math.nan
+        with pytest.raises(SonareValueError, match=r"zero_crossings: samples contains NaN"):
+            zero_crossings(corrupted)
+
+    def test_pitch_tuning_rejects_an_all_non_finite_track(self):
+        # Non-finite entries are dropped like non-positive ones, so a track with
+        # nothing usable in it must not resolve to 0.0 -- a legitimate "perfectly
+        # in tune" answer that no caller could distinguish from a real one.
+        assert math.isfinite(pitch_tuning([440.0, 880.0, 660.0]))
+        with pytest.raises(SonareValueError, match=r"pitch_tuning: frequencies contains NaN"):
+            pitch_tuning(np.full(32, math.nan, dtype=np.float32))
 
 
 class TestPositiveSmoke:

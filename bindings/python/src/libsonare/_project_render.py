@@ -28,6 +28,7 @@ from ._runtime import (
     SonareSf2InstrumentBinding,
     SonareSf2ProgramStatus,
     SonareSynthInstrumentBinding,
+    SonareValueError,
     _check,
     _from_c_float_array,
     _get_lib,
@@ -279,7 +280,7 @@ class _ProjectRenderMixin:
             raise RuntimeError("libsonare was built without the SoundFont ABI")
         buf = bytes(data)
         if not buf:
-            raise ValueError("SoundFont data must not be empty")
+            raise SonareValueError("SoundFont data must not be empty")
         c_data = (ctypes.c_uint8 * len(buf)).from_buffer_copy(buf)
         _check(
             lib.sonare_project_load_soundfont(
@@ -457,7 +458,9 @@ class _ProjectRenderMixin:
             raise RuntimeError("libsonare was built without the external-instrument bounce ABI")
         if instruments is None:
             if instrument is None:
-                raise ValueError("bounce_with_instruments requires `instrument` or `instruments`")
+                raise SonareValueError(
+                    "bounce_with_instruments requires `instrument` or `instruments`"
+                )
             bindings = [(int(destination_id), instrument)]
         else:
             bindings = [(int(dst), inst) for dst, inst in instruments]

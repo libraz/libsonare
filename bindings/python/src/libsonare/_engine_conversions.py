@@ -36,6 +36,7 @@ from ._runtime import (
     SonareMeterTelemetryRecordWide,
     SonareParameterInfo,
     SonareScopeTelemetryRecord,
+    SonareValueError,
     _warp_mode_value,
 )
 from ._types_engine import EngineTrackMonitorMode
@@ -64,15 +65,17 @@ def _track_monitor_mode_value(mode: EngineTrackMonitorMode | str | int) -> int:
                 return _TRACK_MONITOR_MODE_VALUES[mode.lower()]
             except KeyError:
                 pass
-        raise ValueError("track monitor mode must be OFF/PFL/AFL or an integer 0, 1, or 2")
+        raise SonareValueError("track monitor mode must be OFF/PFL/AFL or an integer 0, 1, or 2")
     if isinstance(mode, bool):
-        raise ValueError("track monitor mode must be OFF/PFL/AFL or an integer 0, 1, or 2")
+        raise SonareValueError("track monitor mode must be OFF/PFL/AFL or an integer 0, 1, or 2")
     try:
         value = operator.index(mode)
     except (TypeError, ValueError, OverflowError) as exc:
-        raise ValueError("track monitor mode must be OFF/PFL/AFL or an integer 0, 1, or 2") from exc
+        raise SonareValueError(
+            "track monitor mode must be OFF/PFL/AFL or an integer 0, 1, or 2"
+        ) from exc
     if value not in _TRACK_MONITOR_MODE_VALUES.values():
-        raise ValueError("track monitor mode must be OFF/PFL/AFL or an integer 0, 1, or 2")
+        raise SonareValueError("track monitor mode must be OFF/PFL/AFL or an integer 0, 1, or 2")
     return int(value)
 
 
@@ -81,11 +84,11 @@ def _capture_source_value(source: str | int) -> int:
         try:
             return _CAPTURE_SOURCE_VALUES[source]
         except KeyError as exc:
-            raise ValueError("capture source must be 'output' or 'input'") from exc
+            raise SonareValueError("capture source must be 'output' or 'input'") from exc
     value = int(source)
     if value in _CAPTURE_SOURCE_VALUES.values():
         return value
-    raise ValueError("capture source must be 'output' or 'input'")
+    raise SonareValueError("capture source must be 'output' or 'input'")
 
 
 def _capture_source_name(source: int) -> str:
@@ -129,9 +132,9 @@ def _marker_to_c(marker: EngineMarker) -> SonareEngineMarker:
     try:
         marker_id = operator.index(marker.id)
     except TypeError as exc:
-        raise ValueError("marker id must be a positive uint32 integer") from exc
+        raise SonareValueError("marker id must be a positive uint32 integer") from exc
     if marker_id <= 0 or marker_id > 0xFFFFFFFF:
-        raise ValueError("marker id must be a positive uint32 integer")
+        raise SonareValueError("marker id must be a positive uint32 integer")
     raw = SonareEngineMarker()
     raw.id = marker_id
     raw.kind = int(marker.kind) & 0xFF
@@ -221,15 +224,15 @@ def _clips_to_c(
             channel_arrays.append([])
             continue
         if not clip.channels:
-            raise ValueError("clip channels must not be empty")
+            raise SonareValueError("clip channels must not be empty")
         num_samples = len(clip.channels[0])
         if num_samples <= 0:
-            raise ValueError("clip channels must not be empty")
+            raise SonareValueError("clip channels must not be empty")
         arrays: list[ctypes.Array[ctypes.c_float]] = []
         ptr_values: list[ctypes._Pointer[ctypes.c_float]] = []
         for channel in clip.channels:
             if len(channel) != num_samples:
-                raise ValueError("all clip channels must have the same length")
+                raise SonareValueError("all clip channels must have the same length")
             array = (ctypes.c_float * num_samples)(*channel)
             arrays.append(array)
             ptr_values.append(ctypes.cast(array, ctypes.POINTER(ctypes.c_float)))

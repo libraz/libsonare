@@ -12,6 +12,7 @@ import numpy as np
 
 from ._runtime import (
     ClipPageRequest,
+    SonareValueError,
     _check,
     _get_lib,
 )
@@ -61,15 +62,15 @@ class ClipPageProvider:
 
     def supply(self, page_index: int, channels: Sequence[Sequence[float]]) -> None:
         if not channels:
-            raise ValueError("channels must not be empty")
+            raise SonareValueError("channels must not be empty")
         frames = len(channels[0])
         if frames <= 0:
-            raise ValueError("channels must not be empty")
+            raise SonareValueError("channels must not be empty")
         arrays: list[ctypes.Array[ctypes.c_float]] = []
         ptr_values: list[ctypes._Pointer[ctypes.c_float]] = []
         for channel in channels:
             if len(channel) != frames:
-                raise ValueError("all channels must have the same length")
+                raise SonareValueError("all channels must have the same length")
             array = (ctypes.c_float * frames)(*channel)
             arrays.append(array)
             ptr_values.append(ctypes.cast(array, ctypes.POINTER(ctypes.c_float)))
@@ -105,7 +106,7 @@ class FileClipPageProvider(ClipPageProvider):
         data_offset_bytes: int = 0,
     ) -> None:
         if num_channels <= 0 or num_samples <= 0 or page_frames <= 0:
-            raise ValueError("num_channels, num_samples, and page_frames must be positive")
+            raise SonareValueError("num_channels, num_samples, and page_frames must be positive")
         super().__init__(num_channels, num_samples, page_frames)
         self._file: BinaryIO | None = None
         try:

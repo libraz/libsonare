@@ -10,10 +10,12 @@ from collections.abc import Sequence
 from ._runtime import (
     ErrorCode,
     SonareError,
+    SonareValueError,
     _call_float_transform,
     _check,
     _float_array_result,
     _get_lib,
+    _guard_buffer,
     _int_array_result,
     _out_float_array,
     _out_int_array,
@@ -174,6 +176,7 @@ def deemphasis(
     )
 
 
+@_guard_buffer("samples")
 def trim_silence(
     samples: Sequence[float] | list[float],
     top_db: float = 60.0,
@@ -201,6 +204,7 @@ def trim_silence(
         return (_float_array_result(out, out_length.value), int(start.value), int(end.value))
 
 
+@_guard_buffer("samples")
 def split_silence(
     samples: Sequence[float] | list[float],
     top_db: float = 60.0,
@@ -255,7 +259,7 @@ def pad_center(
 ) -> list[float]:
     """Pad an array by centering it within target size."""
     if not isinstance(target_size, int) or target_size < 0:
-        raise ValueError("target_size must be a non-negative integer")
+        raise SonareValueError("target_size must be a non-negative integer")
     return _call_float_transform(
         "sonare_pad_center", values, ctypes.c_size_t(target_size), ctypes.c_float(pad_value)
     )
@@ -268,12 +272,13 @@ def fix_length(
 ) -> list[float]:
     """Crop or pad an array to exact length."""
     if not isinstance(target_size, int) or target_size < 0:
-        raise ValueError("target_size must be a non-negative integer")
+        raise SonareValueError("target_size must be a non-negative integer")
     return _call_float_transform(
         "sonare_fix_length", values, ctypes.c_size_t(target_size), ctypes.c_float(pad_value)
     )
 
 
+@_guard_buffer("frames")
 def fix_frames(
     frames: Sequence[int] | list[int],
     x_min: int = 0,
@@ -356,7 +361,7 @@ def pcen(
     lib = _get_lib()
     c_array, length = _to_c_float_array(values)
     if length != n_bins * n_frames:
-        raise ValueError("values length must equal n_bins * n_frames")
+        raise SonareValueError("values length must equal n_bins * n_frames")
     with _out_float_array(lib) as (out, out_length):
         rc = lib.sonare_pcen(
             c_array,
@@ -381,7 +386,7 @@ def tonnetz(chromagram: Sequence[float] | list[float], n_chroma: int, n_frames: 
     lib = _get_lib()
     c_array, length = _to_c_float_array(chromagram)
     if length != n_chroma * n_frames:
-        raise ValueError("chromagram length must equal n_chroma * n_frames")
+        raise SonareValueError("chromagram length must equal n_chroma * n_frames")
     with _out_float_array(lib) as (out, out_length):
         rc = lib.sonare_tonnetz(
             c_array,
@@ -406,7 +411,7 @@ def tempogram(
     """Compute tempogram. Returns (n_frames, row-major matrix)."""
     mode_id = {"autocorrelation": 0, "auto": 0, "ac": 0, "cosine": 1}.get(mode)
     if mode_id is None:
-        raise ValueError("mode must be 'autocorrelation' or 'cosine'")
+        raise SonareValueError("mode must be 'autocorrelation' or 'cosine'")
     lib = _get_lib()
     c_array, length = _to_c_float_array(onset_envelope)
     n_frames = ctypes.c_int()
@@ -477,6 +482,7 @@ def plp(
     )
 
 
+@_guard_buffer("samples")
 def onset_envelope(
     samples: Sequence[float] | list[float],
     sample_rate: int = 22050,
@@ -498,6 +504,7 @@ def onset_envelope(
     )
 
 
+@_guard_buffer("samples")
 def onset_strength_multi(
     samples: Sequence[float] | list[float],
     sample_rate: int = 22050,
@@ -560,6 +567,7 @@ def fourier_tempogram(
         return (int(n_frames.value), _float_array_result(out, out_length.value))
 
 
+@_guard_buffer("tempogram_data")
 def tempogram_ratio(
     tempogram_data: Sequence[float] | list[float],
     win_length: int = 384,
@@ -576,7 +584,17 @@ def tempogram_ratio(
         factors_ptr: ctypes.Array[ctypes.c_float] | None = None
         n_factors = 0
     else:
-        factors_ptr, n_factors = _to_c_float_array(factors)
+        # Every factor scales the reference lag, so it must be finite and
+        # positive: a NaN reaches an undefined float-to-int cast in the core
+        # and an infinity silently degenerates to the DC lag. The list is a
+        # handful of tempo ratios, so a plain scan costs nothing.
+        factor_values = [float(value) for value in factors]
+        for index, factor in enumerate(factor_values):
+            if not math.isfinite(factor) or factor <= 0.0:
+                raise SonareValueError(
+                    f"tempogram_ratio: factors[{index}] must be a finite positive number"
+                )
+        factors_ptr, n_factors = _to_c_float_array(factor_values)
     return _call_float_transform(
         "sonare_tempogram_ratio",
         tempogram_data,
@@ -588,6 +606,7 @@ def tempogram_ratio(
     )
 
 
+@_guard_buffer("samples")
 def nnls_chroma(
     samples: Sequence[float] | list[float],
     sample_rate: int = 22050,
@@ -604,32 +623,34 @@ def nnls_chroma(
     512-sample hop.
     """
     if isinstance(hop_length, bool):
-        raise ValueError("nnls_chroma: hop_length must be a positive integer")
+        raise SonareValueError("nnls_chroma: hop_length must be a positive integer")
     try:
         hop_length_value = operator.index(hop_length)
     except TypeError as exc:
-        raise ValueError("nnls_chroma: hop_length must be a positive integer") from exc
+        raise SonareValueError("nnls_chroma: hop_length must be a positive integer") from exc
     if hop_length_value <= 0 or hop_length_value > 2**31 - 1:
-        raise ValueError("nnls_chroma: hop_length must be a positive integer")
+        raise SonareValueError("nnls_chroma: hop_length must be a positive integer")
     if isinstance(stft_blend_n_fft, bool):
-        raise ValueError("nnls_chroma: stft_blend_n_fft must be an even integer >= 2")
+        raise SonareValueError("nnls_chroma: stft_blend_n_fft must be an even integer >= 2")
     try:
         stft_blend_n_fft_value = operator.index(stft_blend_n_fft)
     except TypeError as exc:
-        raise ValueError("nnls_chroma: stft_blend_n_fft must be an even integer >= 2") from exc
+        raise SonareValueError(
+            "nnls_chroma: stft_blend_n_fft must be an even integer >= 2"
+        ) from exc
     if (
         stft_blend_n_fft_value < 2
         or stft_blend_n_fft_value > 2**31 - 1
         or (stft_blend_n_fft_value & 1) != 0
     ):
-        raise ValueError("nnls_chroma: stft_blend_n_fft must be an even integer >= 2")
+        raise SonareValueError("nnls_chroma: stft_blend_n_fft must be an even integer >= 2")
     try:
         blend_weight = float(stft_blend_weight)
         blend_weight_c = ctypes.c_float(blend_weight).value
     except (TypeError, ValueError, OverflowError) as exc:
-        raise ValueError("nnls_chroma: stft_blend_weight must be finite in [0, 1]") from exc
+        raise SonareValueError("nnls_chroma: stft_blend_weight must be finite in [0, 1]") from exc
     if not math.isfinite(blend_weight_c) or not 0.0 <= blend_weight_c <= 1.0:
-        raise ValueError("nnls_chroma: stft_blend_weight must be finite in [0, 1]")
+        raise SonareValueError("nnls_chroma: stft_blend_weight must be finite in [0, 1]")
 
     lib = _get_lib()
     c_array, length = _to_c_float_array(samples)
@@ -681,6 +702,7 @@ def nnls_chroma(
         return (int(n_frames.value), _float_array_result(out, out_length.value))
 
 
+@_guard_buffer("samples")
 def resample(
     samples: Sequence[float] | list[float],
     src_sr: int,

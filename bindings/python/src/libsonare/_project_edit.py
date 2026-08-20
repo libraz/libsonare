@@ -41,6 +41,7 @@ from ._runtime import (
     SonareProjectTrackDesc,
     SonareProjectWarpAnchor,
     SonareProjectWarpMapDesc,
+    SonareValueError,
     _as_float32_buffer,
     _check,
     _get_lib,
@@ -88,7 +89,7 @@ class _ProjectEditMixin:
         """Register decoded interleaved PCM for an existing audio source (undoable)."""
         backing, total = _to_c_float_array(audio)
         if channels <= 0 or total % channels != 0:
-            raise ValueError("audio length must be a multiple of channels")
+            raise SonareValueError("audio length must be a multiple of channels")
         _check(
             _get_lib().sonare_project_set_source_audio(
                 self._require_handle(),
@@ -172,7 +173,7 @@ class _ProjectEditMixin:
             c_audio = backing
             channels = int(audio_channels)
             if channels <= 0 or total % channels != 0:
-                raise ValueError("audio length must be a multiple of audio_channels")
+                raise SonareValueError("audio length must be a multiple of audio_channels")
             audio_frames = total // channels
         desc = SonareProjectClipDesc(
             track_id=int(track_id),
@@ -222,10 +223,10 @@ class _ProjectEditMixin:
                 raise TypeError("each stem needs string name and planar_samples")
             layout_value: object = 1 if layout == "mono" else 2 if layout == "stereo" else layout
             if layout_value not in (1, 2) or len(planes) != layout_value:
-                raise ValueError("planar_samples must match mono or stereo layout")
+                raise SonareValueError("planar_samples must match mono or stereo layout")
             arrays = [_as_float32_buffer(plane) for plane in planes]
             if not arrays or any(array.size != arrays[0].size for array in arrays):
-                raise ValueError("all planar_samples entries must have equal length")
+                raise SonareValueError("all planar_samples entries must have equal length")
             names.append(name.encode("utf-8"))
             role = stem.get("role")
             if role is not None and not isinstance(role, str):
@@ -287,7 +288,7 @@ class _ProjectEditMixin:
         channels = int(audio_channels)
         backing, total = _to_c_float_array(audio)
         if channels <= 0 or total % channels != 0:
-            raise ValueError("audio length must be a multiple of audio_channels")
+            raise SonareValueError("audio length must be a multiple of audio_channels")
         frames = total // channels
         desc = SonareProjectLoopRecordingDesc(
             track_id=int(track_id),
@@ -518,7 +519,7 @@ class _ProjectEditMixin:
         """
         g = float(gain)
         if not math.isfinite(g) or g < 0.0:
-            raise ValueError("gain must be a finite number >= 0")
+            raise SonareValueError("gain must be a finite number >= 0")
         _check(_get_lib().sonare_project_set_track_gain(self._require_handle(), int(track_id), g))
 
     def set_track_mute(self, track_id: int, mute: bool) -> None:
@@ -547,7 +548,7 @@ class _ProjectEditMixin:
         """
         p = float(pan)
         if not math.isfinite(p):
-            raise ValueError("pan must be a finite number")
+            raise SonareValueError("pan must be a finite number")
         _check(_get_lib().sonare_project_set_track_pan(self._require_handle(), int(track_id), p))
 
     def remove_clip(self, clip_id: int) -> None:
@@ -558,7 +559,7 @@ class _ProjectEditMixin:
         """Set a clip's linear playback gain (>= 0; 0 = muted) via an undoable edit."""
         g = float(gain)
         if not math.isfinite(g) or g < 0.0:
-            raise ValueError("gain must be a finite number >= 0")
+            raise SonareValueError("gain must be a finite number >= 0")
         _check(_get_lib().sonare_project_set_clip_gain(self._require_handle(), int(clip_id), g))
 
     def set_clip_fade(
@@ -579,9 +580,9 @@ class _ProjectEditMixin:
         fin = float(fade_in_length_ppq)
         fout = float(fade_out_length_ppq)
         if not math.isfinite(fin) or fin < 0.0:
-            raise ValueError("fade_in_length_ppq must be a finite number >= 0")
+            raise SonareValueError("fade_in_length_ppq must be a finite number >= 0")
         if not math.isfinite(fout) or fout < 0.0:
-            raise ValueError("fade_out_length_ppq must be a finite number >= 0")
+            raise SonareValueError("fade_out_length_ppq must be a finite number >= 0")
         c_in = SonareProjectClipFade(length_ppq=fin, curve=_fade_curve_value(fade_in_curve))
         c_out = SonareProjectClipFade(length_ppq=fout, curve=_fade_curve_value(fade_out_curve))
         _check(
@@ -613,9 +614,9 @@ class _ProjectEditMixin:
         length = float(loop_length_ppq)
         crossfade = float(loop_crossfade_ppq)
         if not math.isfinite(length) or length < 0.0:
-            raise ValueError("loop_length_ppq must be a finite number >= 0")
+            raise SonareValueError("loop_length_ppq must be a finite number >= 0")
         if not math.isfinite(crossfade) or crossfade < 0.0:
-            raise ValueError("loop_crossfade_ppq must be a finite number >= 0")
+            raise SonareValueError("loop_crossfade_ppq must be a finite number >= 0")
         _check(
             _get_lib().sonare_project_set_clip_loop(
                 self._require_handle(), int(clip_id), int(mode), length, crossfade
@@ -842,13 +843,15 @@ class _ProjectEditMixin:
         optional additive C ABI symbol.
         """
         if isinstance(bytes, bool):
-            raise ValueError("bytes must be a non-negative integer within size_t range")
+            raise SonareValueError("bytes must be a non-negative integer within size_t range")
         try:
             value = operator.index(bytes)
         except TypeError:
-            raise ValueError("bytes must be a non-negative integer within size_t range") from None
+            raise SonareValueError(
+                "bytes must be a non-negative integer within size_t range"
+            ) from None
         if value < 0 or value > _SIZE_T_MAX:
-            raise ValueError("bytes must be a non-negative integer within size_t range")
+            raise SonareValueError("bytes must be a non-negative integer within size_t range")
 
         lib = _get_lib()
         if not hasattr(lib, "sonare_project_set_max_history_bytes"):

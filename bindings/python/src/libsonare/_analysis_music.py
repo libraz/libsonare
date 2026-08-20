@@ -15,8 +15,10 @@ from ._ffi import (
     SonareStringArray,
 )
 from ._runtime import (
+    SonareValueError,
     _check,
     _get_lib,
+    _guard_buffer,
     _to_c_float_array,
 )
 from .types import (
@@ -33,6 +35,7 @@ from .types import (
 )
 
 
+@_guard_buffer("samples")
 def detect_chords(
     samples: Sequence[float] | list[float],
     sample_rate: int = 22050,
@@ -58,7 +61,7 @@ def detect_chords(
     """
     chroma_method_value = {"stft": 0, "nnls": 1}.get(chroma_method.lower())
     if chroma_method_value is None:
-        raise ValueError("chroma_method must be 'stft' or 'nnls'")
+        raise SonareValueError("chroma_method must be 'stft' or 'nnls'")
     lib = _get_lib()
     c_array, length = _to_c_float_array(samples)
     out = SonareChordAnalysisResult()
@@ -123,6 +126,7 @@ def detect_chords(
         lib.sonare_free_chord_analysis_result(ctypes.byref(out))
 
 
+@_guard_buffer("samples")
 def chord_functional_analysis(
     samples: Sequence[float] | list[float],
     key_root: PitchClass,
@@ -149,7 +153,7 @@ def chord_functional_analysis(
     """
     chroma_method_value = {"stft": 0, "nnls": 1}.get(chroma_method.lower())
     if chroma_method_value is None:
-        raise ValueError("chroma_method must be 'stft' or 'nnls'")
+        raise SonareValueError("chroma_method must be 'stft' or 'nnls'")
     lib = _get_lib()
     c_array, length = _to_c_float_array(samples)
     out = SonareStringArray()
@@ -185,6 +189,7 @@ def chord_functional_analysis(
         lib.sonare_free_string_array(ctypes.byref(out))
 
 
+@_guard_buffer("samples")
 def analyze_sections(
     samples: Sequence[float] | list[float],
     sample_rate: int = 22050,
@@ -243,6 +248,7 @@ def analyze_sections(
         lib.sonare_free_section_result(ctypes.byref(out))
 
 
+@_guard_buffer("samples")
 def analyze_melody(
     samples: Sequence[float] | list[float],
     sample_rate: int = 22050,

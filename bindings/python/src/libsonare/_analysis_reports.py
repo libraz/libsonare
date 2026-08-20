@@ -24,8 +24,10 @@ from ._ffi import (
 from ._runtime import (
     ErrorCode,
     SonareError,
+    SonareValueError,
     _check,
     _get_lib,
+    _guard_buffer,
     _optional_float_array_result,
     _to_c_float_array,
 )
@@ -53,6 +55,7 @@ def _unsupported_feature_symbol(symbol: str) -> SonareError:
     )
 
 
+@_guard_buffer("samples")
 def analyze(
     samples: Sequence[float] | list[float],
     sample_rate: int = 22050,
@@ -213,6 +216,7 @@ def _make_analyze_progress_trampoline(
     return SonareAnalyzeProgressCallback(_trampoline)
 
 
+@_guard_buffer("samples")
 def analyze_with_progress(
     samples: Sequence[float] | list[float],
     sample_rate: int = 22050,
@@ -298,6 +302,7 @@ def analyze_with_progress(
     return _parse_analysis_json(data)
 
 
+@_guard_buffer("samples")
 def analyze_bpm(
     samples: Sequence[float] | list[float],
     sample_rate: int = 22050,
@@ -353,6 +358,7 @@ def analyze_bpm(
         lib.sonare_free_bpm_analysis_result(ctypes.byref(out))
 
 
+@_guard_buffer("samples")
 def analyze_impulse_response(
     samples: Sequence[float] | list[float],
     sample_rate: int = 48000,
@@ -365,24 +371,28 @@ def analyze_impulse_response(
     regression and defaults to the legacy 30 dB range.
     """
     if isinstance(n_octave_bands, bool):
-        raise ValueError("analyze_impulse_response: n_octave_bands must be a non-negative integer")
+        raise SonareValueError(
+            "analyze_impulse_response: n_octave_bands must be a non-negative integer"
+        )
     try:
         n_octave_bands_value = operator.index(n_octave_bands)
     except TypeError as exc:
-        raise ValueError(
+        raise SonareValueError(
             "analyze_impulse_response: n_octave_bands must be a non-negative integer"
         ) from exc
     if n_octave_bands_value < 0 or n_octave_bands_value > 2**31 - 1:
-        raise ValueError("analyze_impulse_response: n_octave_bands must be a non-negative integer")
+        raise SonareValueError(
+            "analyze_impulse_response: n_octave_bands must be a non-negative integer"
+        )
     try:
         decay_db = float(min_decay_db)
         decay_db_c = ctypes.c_float(decay_db).value
     except (TypeError, ValueError, OverflowError) as exc:
-        raise ValueError(
+        raise SonareValueError(
             "analyze_impulse_response: min_decay_db must be finite and positive"
         ) from exc
     if not math.isfinite(decay_db_c) or decay_db_c <= 0.0:
-        raise ValueError("analyze_impulse_response: min_decay_db must be finite and positive")
+        raise SonareValueError("analyze_impulse_response: min_decay_db must be finite and positive")
 
     lib = _get_lib()
     c_array, length = _to_c_float_array(samples)
@@ -426,6 +436,7 @@ def analyze_impulse_response(
         lib.sonare_free_acoustic_result(ctypes.byref(out))
 
 
+@_guard_buffer("samples")
 def detect_acoustic(
     samples: Sequence[float] | list[float],
     sample_rate: int = 48000,
@@ -468,6 +479,7 @@ def detect_acoustic(
         lib.sonare_free_acoustic_result(ctypes.byref(out))
 
 
+@_guard_buffer("samples")
 def analyze_rhythm(
     samples: Sequence[float] | list[float],
     sample_rate: int = 22050,
@@ -521,6 +533,7 @@ def analyze_rhythm(
         lib.sonare_free_rhythm_result(ctypes.byref(out))
 
 
+@_guard_buffer("samples")
 def analyze_dynamics(
     samples: Sequence[float] | list[float],
     sample_rate: int = 22050,
@@ -557,6 +570,7 @@ def analyze_dynamics(
         lib.sonare_free_dynamics_result(ctypes.byref(out))
 
 
+@_guard_buffer("samples")
 def analyze_timbre(
     samples: Sequence[float] | list[float],
     sample_rate: int = 22050,

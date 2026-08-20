@@ -10,9 +10,11 @@ from ._ffi import (
     SonareInverseResult,
 )
 from ._runtime import (
+    SonareValueError,
     _check,
     _float_array_result,
     _get_lib,
+    _guard_buffer,
     _out_float_array,
     _to_c_float_array,
 )
@@ -38,6 +40,7 @@ def _cqt_result_from_c(out: SonareCqtResult) -> CqtResult:
     )
 
 
+@_guard_buffer("samples")
 def cqt(
     samples: Sequence[float] | list[float],
     sample_rate: int = 22050,
@@ -112,6 +115,7 @@ def _cqt_variant(
         lib.sonare_free_cqt_result(ctypes.byref(out))
 
 
+@_guard_buffer("samples")
 def pseudo_cqt(
     samples: Sequence[float] | list[float],
     sample_rate: int = 22050,
@@ -126,6 +130,7 @@ def pseudo_cqt(
     )
 
 
+@_guard_buffer("samples")
 def hybrid_cqt(
     samples: Sequence[float] | list[float],
     sample_rate: int = 22050,
@@ -212,7 +217,7 @@ def mel_to_stft(
         raise RuntimeError("libsonare was built without inverse-reconstruction support")
     c_array, length = _to_c_float_array(mel)
     if length != n_mels * n_frames:
-        raise ValueError("mel length must equal n_mels * n_frames")
+        raise SonareValueError("mel length must equal n_mels * n_frames")
     out = SonareInverseResult()
     if htk:
         if not hasattr(lib, "sonare_mel_to_stft_ex"):
@@ -314,7 +319,7 @@ def mel_to_audio(
         raise RuntimeError("libsonare was built without inverse-reconstruction support")
     c_array, length = _to_c_float_array(mel)
     if length != n_mels * n_frames:
-        raise ValueError("mel length must equal n_mels * n_frames")
+        raise SonareValueError("mel length must equal n_mels * n_frames")
     return _inverse_audio(
         lib,
         "sonare_mel_to_audio",
@@ -389,7 +394,7 @@ def mfcc_to_mel(
         raise RuntimeError("libsonare was built without inverse-reconstruction support")
     c_array, length = _to_c_float_array(mfcc_coeffs)
     if length != n_mfcc * n_frames:
-        raise ValueError("mfcc_coeffs length must equal n_mfcc * n_frames")
+        raise SonareValueError("mfcc_coeffs length must equal n_mfcc * n_frames")
     out = SonareInverseResult()
     if hasattr(lib, "sonare_mfcc_to_mel_ex"):
         rc = lib.sonare_mfcc_to_mel_ex(
@@ -459,7 +464,7 @@ def mfcc_to_audio(
         raise RuntimeError("libsonare was built without inverse-reconstruction support")
     c_array, length = _to_c_float_array(mfcc_coeffs)
     if length != n_mfcc * n_frames:
-        raise ValueError("mfcc_coeffs length must equal n_mfcc * n_frames")
+        raise SonareValueError("mfcc_coeffs length must equal n_mfcc * n_frames")
     if lifter == 0.0:
         return _inverse_audio(
             lib,
@@ -506,6 +511,7 @@ def mfcc_to_audio(
         lib.sonare_free_floats(out)
 
 
+@_guard_buffer("samples")
 def vqt(
     samples: Sequence[float] | list[float],
     sample_rate: int = 22050,

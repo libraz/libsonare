@@ -29,6 +29,7 @@ from ._runtime import (
     SonareMidiEventPod,
     SonareMidiRouteConfig,
     SonareNotePairValidation,
+    SonareValueError,
     _check,
     _get_lib,
 )
@@ -54,7 +55,7 @@ class _ProjectMidiMixin:
         c_events = (SonareMidiEventPod * count)()
         for i, ev in enumerate(rows):
             if len(ev) < 3:
-                raise ValueError(f"events[{i}] must contain (ppq, data0, data1)")
+                raise SonareValueError(f"events[{i}] must contain (ppq, data0, data1)")
             ppq, data0, data1 = ev[0], ev[1], ev[2]
             c_events[i].ppq = _validate_midi_event_ppq(ppq, f"events[{i}].ppq")
             c_events[i].data0 = _validate_midi_event_word(data0, f"events[{i}].data0")
@@ -434,7 +435,7 @@ class _ProjectMidiMixin:
         for i, ev in enumerate(rows):
             seq = tuple(ev)
             if len(seq) < 3:
-                raise ValueError(f"events[{i}] must contain (ppq, data0, data1)")
+                raise SonareValueError(f"events[{i}] must contain (ppq, data0, data1)")
             c_in[i].ppq = _validate_midi_event_ppq(seq[0], f"events[{i}].ppq")
             c_in[i].data0 = _validate_midi_event_word(seq[1], f"events[{i}].data0")
             c_in[i].data1 = _validate_midi_event_word(seq[2], f"events[{i}].data1")
@@ -491,7 +492,7 @@ class _ProjectMidiMixin:
         for i, ev in enumerate(rows):
             seq = tuple(ev)
             if len(seq) < 3:
-                raise ValueError(f"events[{i}] must contain (ppq, data0, data1)")
+                raise SonareValueError(f"events[{i}] must contain (ppq, data0, data1)")
             c_in[i].ppq = _validate_midi_event_ppq(seq[0], f"events[{i}].ppq")
             c_in[i].data0 = _validate_midi_event_word(seq[1], f"events[{i}].data0")
             c_in[i].data1 = _validate_midi_event_word(seq[2], f"events[{i}].data1")
@@ -526,7 +527,7 @@ class _ProjectMidiMixin:
         c_bindings = (SonareMidiCcBinding * m)(*[_cc_binding_to_c(b) for b in rows])
         seq = tuple(event)
         if len(seq) < 3:
-            raise ValueError("event must contain (ppq, data0, data1)")
+            raise SonareValueError("event must contain (ppq, data0, data1)")
         ev = SonareMidiEventPod(
             ppq=_validate_midi_event_ppq(seq[0], "event.ppq"),
             data0=_validate_midi_event_word(seq[1], "event.data0"),

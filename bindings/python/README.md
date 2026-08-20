@@ -89,7 +89,10 @@ is preferred when doing more than one computation on the same signal.
 Native return-code failures, including native input/parameter validation, raise
 `libsonare.SonareError` (a `RuntimeError` subclass carrying a numeric `.code`).
 Python-side preflight validation of empty / NaN / Inf buffers and bad shapes
-raises `ValueError`.
+raises `libsonare.SonareValueError`, which subclasses both `SonareError` and
+`ValueError`: `except ValueError` and `except SonareError` both catch it, so
+either handler style works. Its `.code` is `ErrorCode.INVALID_PARAMETER`, and
+its message is the plain validation text without a numeric prefix.
 
 ## CLI
 

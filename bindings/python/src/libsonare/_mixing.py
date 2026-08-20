@@ -15,6 +15,7 @@ from ._runtime import (
     PanLawInput,
     SendTiming,
     SonareMixMeterSnapshot,
+    SonareValueError,
     _check,
     _curve_value,
     _get_lib,
@@ -24,6 +25,7 @@ from ._runtime import (
     _pan_mode_value,
     _send_timing_value,
     _to_c_float_array,
+    _validate_samples,
 )
 from .types import GoniometerPoint
 
@@ -645,7 +647,7 @@ class Mixer:
         """
         self._require()
         if len(left_channels) != len(right_channels):
-            raise ValueError("left_channels and right_channels must have the same length")
+            raise SonareValueError("left_channels and right_channels must have the same length")
 
         left_arrays: list[ctypes.Array[ctypes.c_float]] = []
         right_arrays: list[ctypes.Array[ctypes.c_float]] = []
@@ -654,11 +656,11 @@ class Mixer:
             left_array, left_length = _to_c_float_array(left)
             right_array, right_length = _to_c_float_array(right)
             if left_length != right_length:
-                raise ValueError("left and right channel lengths must match")
+                raise SonareValueError("left and right channel lengths must match")
             if length is None:
                 length = left_length
             elif left_length != length:
-                raise ValueError("all strips must have the same length")
+                raise SonareValueError("all strips must have the same length")
             left_arrays.append(left_array)
             right_arrays.append(right_array)
 
@@ -728,10 +730,10 @@ class Mixer:
         # Unify the accepted range with the Node and WASM facades: an integer in
         # [1, block_size]. Reject non-integer floats rather than truncating them.
         if isinstance(num_samples, float) and not num_samples.is_integer():
-            raise ValueError(f"num_samples must be an integer in [1, {self._block_size}]")
+            raise SonareValueError(f"num_samples must be an integer in [1, {self._block_size}]")
         count = int(num_samples)
         if count < 1 or count > self._block_size:
-            raise ValueError(f"num_samples must be an integer in [1, {self._block_size}]")
+            raise SonareValueError(f"num_samples must be an integer in [1, {self._block_size}]")
         out_left = (ctypes.c_float * count)()
         out_right = (ctypes.c_float * count)()
         _check(
@@ -788,7 +790,8 @@ def mix_stereo(
 
     Args:
         strips: Sequence of ``(left, right)`` sample buffers. All buffers must
-            have the same length.
+            have the same length, that length must be non-zero, and every
+            sample must be finite.
         sample_rate: Sample rate in Hz.
         fader_db: Optional per-strip fader values in dB.
         pan: Optional per-strip pan values in ``[-1, 1]``.
@@ -800,17 +803,22 @@ def mix_stereo(
 
     Note:
         The per-strip meters in the result expose integrating loudness fields
-        (``momentary_lufs``, ``short_term_lufs``, ``integrated_lufs``) and
-        ``true_peak_db``. These require sustained streaming to be meaningful:
-        on a short one-shot mix they have not accumulated enough history and
-        read the ``-120`` dB floor sentinel. For accurate loudness/true-peak
-        metering, drive a strip over a streaming session instead.
+        (``momentary_lufs``, ``short_term_lufs``, ``integrated_lufs``) whose
+        windows a short one-shot mix does not fill, so they read the ``-120`` dB
+        floor sentinel; drive a strip over a streaming session when a meaningful
+        loudness number is needed. ``true_peak_db`` is not an integrator — it is
+        a max-hold over the block just processed, so it is valid immediately and
+        floors only on digital silence. This call sizes the mixer to the input
+        and mixes the whole signal in one block, so there are no internal block
+        edges for the under-read documented on :class:`MixMeterSnapshot` to
+        occur at, and the reported true peak matches
+        :func:`metering_true_peak_db` over the same signal.
     """
     lib = _get_lib()
     if not hasattr(lib, "sonare_mixer_create"):
         raise RuntimeError("libsonare was built without mixing support")
     if not strips:
-        raise ValueError("at least one strip is required")
+        raise SonareValueError("mix_stereo: at least one strip is required")
 
     # Each per-strip option must have exactly one entry per strip; otherwise the
     # per-index access below would raise a cryptic IndexError (or silently use
@@ -824,31 +832,49 @@ def mix_stereo(
         ("muted", muted),
     ):
         if opt is not None and len(opt) != n_strips:
-            raise ValueError(f"mix_stereo: '{name}' must have one entry per strip ({n_strips})")
+            raise SonareValueError(
+                f"mix_stereo: '{name}' must have one entry per strip ({n_strips})"
+            )
     if (
         isinstance(pan_mode, Sequence)
         and not isinstance(pan_mode, str)
         and len(pan_mode) != n_strips
     ):
-        raise ValueError(f"mix_stereo: 'pan_mode' must have one entry per strip ({n_strips})")
+        raise SonareValueError(f"mix_stereo: 'pan_mode' must have one entry per strip ({n_strips})")
 
     left_arrays: list[ctypes.Array[ctypes.c_float]] = []
     right_arrays: list[ctypes.Array[ctypes.c_float]] = []
     length: int | None = None
-    for left, right in strips:
-        left_array, left_length = _to_c_float_array(left)
-        right_array, right_length = _to_c_float_array(right)
+    for index, (left, right) in enumerate(strips):
+        # A NaN loses every comparison the peak meter makes, so an unguarded
+        # non-finite strip reads as the -120 dB silence floor rather than as a
+        # fault; an infinity propagates into the master sum and the meter.
+        left_buf = _validate_samples(
+            "mix_stereo", left, arg_name=f"strips[{index}] left", allow_empty=True
+        )
+        right_buf = _validate_samples(
+            "mix_stereo", right, arg_name=f"strips[{index}] right", allow_empty=True
+        )
+        left_array, left_length = _to_c_float_array(left_buf)
+        right_array, right_length = _to_c_float_array(right_buf)
         if left_length != right_length:
-            raise ValueError("left and right channel lengths must match")
+            raise SonareValueError("left and right channel lengths must match")
         if length is None:
             length = left_length
         elif left_length != length:
-            raise ValueError("all strips must have the same length")
+            raise SonareValueError("all strips must have the same length")
         left_arrays.append(left_array)
         right_arrays.append(right_array)
 
     assert length is not None
-    mixer = lib.sonare_mixer_create(ctypes.c_int(sample_rate), ctypes.c_int(max(1, length)))
+    if length == 0:
+        # Every strip shares one length, so a zero here means the whole scene is
+        # empty. The C ABI treats a zero-frame block as a valid no-op, which
+        # would answer with an empty mix and meters reading the silence floor —
+        # indistinguishable from a real mix of silence.
+        raise SonareValueError("mix_stereo: every strip is empty; there is no audio to mix")
+
+    mixer = lib.sonare_mixer_create(ctypes.c_int(sample_rate), ctypes.c_int(length))
     if not mixer:
         raise RuntimeError("failed to create mixer")
 

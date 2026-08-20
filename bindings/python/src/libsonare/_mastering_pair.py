@@ -11,12 +11,13 @@ from ._ffi import (
     SonareStreamingPlatform,
 )
 from ._mastering_offline import _assistant_params, _mastering_params
-from ._runtime import _check, _get_lib, _to_c_float_array
+from ._runtime import SonareValueError, _check, _get_lib, _guard_buffer, _to_c_float_array
 from .types import (
     MasteringResult,
 )
 
 
+@_guard_buffer("source", "reference")
 def mastering_pair_process(
     processor_name: str,
     source: Sequence[float] | list[float],
@@ -60,6 +61,7 @@ def mastering_pair_process(
         lib.sonare_free_mastering_result(ctypes.byref(out))
 
 
+@_guard_buffer("source", "reference")
 def mastering_pair_analyze(
     analysis_name: str,
     source: Sequence[float] | list[float],
@@ -95,6 +97,7 @@ def mastering_pair_analyze(
             lib.sonare_free_string(json_ptr)
 
 
+@_guard_buffer("left", "right")
 def mastering_stereo_analyze(
     analysis_name: str,
     left: Sequence[float] | list[float],
@@ -109,7 +112,7 @@ def mastering_stereo_analyze(
     left_array, left_length = _to_c_float_array(left)
     right_array, right_length = _to_c_float_array(right)
     if left_length != right_length:
-        raise ValueError("left and right channel lengths must match")
+        raise SonareValueError("left and right channel lengths must match")
     param_array, param_count = _mastering_params(params)
     json_ptr = ctypes.c_char_p()
     rc = lib.sonare_mastering_analyze_stereo(
@@ -152,6 +155,7 @@ def _streaming_platforms(
     return platform_array, platform_count, platform_buffers
 
 
+@_guard_buffer("samples")
 def mastering_streaming_preview(
     samples: Sequence[float] | list[float],
     sample_rate: int = 22050,
@@ -181,6 +185,7 @@ def mastering_streaming_preview(
             lib.sonare_free_string(json_ptr)
 
 
+@_guard_buffer("samples")
 def mastering_assistant_suggest(
     samples: Sequence[float] | list[float],
     sample_rate: int = 22050,
@@ -213,6 +218,7 @@ def mastering_assistant_suggest(
             lib.sonare_free_string(json_ptr)
 
 
+@_guard_buffer("samples")
 def mastering_audio_profile(
     samples: Sequence[float] | list[float],
     sample_rate: int = 22050,
@@ -248,7 +254,7 @@ def _stereo_channels(
     left_array, left_length = _to_c_float_array(left)
     right_array, right_length = _to_c_float_array(right)
     if left_length != right_length:
-        raise ValueError("left and right channel lengths must match")
+        raise SonareValueError("left and right channel lengths must match")
     return left_array, right_array, left_length
 
 
@@ -283,6 +289,7 @@ def _stereo_analysis_json(
             lib.sonare_free_string(json_ptr)
 
 
+@_guard_buffer("left", "right")
 def mastering_streaming_preview_stereo(
     left: Sequence[float] | list[float],
     right: Sequence[float] | list[float],
@@ -309,6 +316,7 @@ def mastering_streaming_preview_stereo(
     )
 
 
+@_guard_buffer("left", "right")
 def mastering_assistant_suggest_stereo(
     left: Sequence[float] | list[float],
     right: Sequence[float] | list[float],
@@ -333,6 +341,7 @@ def mastering_assistant_suggest_stereo(
     )
 
 
+@_guard_buffer("left", "right")
 def mastering_audio_profile_stereo(
     left: Sequence[float] | list[float],
     right: Sequence[float] | list[float],

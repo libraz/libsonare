@@ -62,7 +62,7 @@ from ._project_model import (
     _validate_midi_event_word as _validate_midi_event_word,
 )
 from ._project_render import _ProjectRenderMixin
-from ._runtime import _check, _get_lib
+from ._runtime import SonareValueError, _check, _get_lib
 
 
 class Project(
@@ -151,8 +151,8 @@ class Project(
     def from_json(cls, json: str | bytes) -> Project:
         """Deserialize project JSON into a new :class:`Project`.
 
-        Raises ``ValueError`` on malformed input (with the joined native
-        diagnostic messages), never crashing.
+        Raises :class:`SonareValueError` on malformed input (with the joined
+        native diagnostic messages), never crashing.
         """
         lib = _get_lib()
         _check_project_abi(lib)
@@ -168,7 +168,7 @@ class Project(
             finally:
                 if diag:
                     lib.sonare_free_string(diag)
-            raise ValueError(detail or "failed to deserialize project JSON")
+            raise SonareValueError(detail or "failed to deserialize project JSON")
         if diag:
             lib.sonare_free_string(diag)
         obj = cls.__new__(cls)
@@ -192,7 +192,7 @@ class Project(
             if diag:
                 lib.sonare_free_string(diag)
         if rc != 0:
-            raise ValueError(diagnostics or "failed to deserialize project JSON")
+            raise SonareValueError(diagnostics or "failed to deserialize project JSON")
         obj = cls.__new__(cls)
         obj._handle = handle
         return ProjectDeserializeResult(project=obj, diagnostics=diagnostics)

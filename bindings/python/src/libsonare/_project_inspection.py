@@ -29,6 +29,7 @@ from ._runtime import (
     SonareProjectTempoSegment,
     SonareProjectTimeSignatureSegment,
     SonareProjectTrack,
+    SonareValueError,
     _check,
     _get_lib,
     _to_c_float_array,
@@ -137,7 +138,9 @@ class _ProjectInspectionMixin:
             for i, k in enumerate(rows):
                 seq = tuple(k)
                 if len(seq) < 4:
-                    raise ValueError(f"keys[{i}] must contain (start_ppq, end_ppq, tonic_pc, mode)")
+                    raise SonareValueError(
+                        f"keys[{i}] must contain (start_ppq, end_ppq, tonic_pc, mode)"
+                    )
                 c_keys[i].start_ppq = float(seq[0])
                 c_keys[i].end_ppq = float(seq[1])
                 c_keys[i].tonic_pc = int(seq[2])
@@ -254,7 +257,7 @@ class _ProjectInspectionMixin:
             raise TypeError("module_id must be a string")
 
         if not module_id:
-            raise ValueError("module_id must be a non-empty string")
+            raise SonareValueError("module_id must be a non-empty string")
         raw = bytes(payload)
         buf = (ctypes.c_uint8 * len(raw)).from_buffer_copy(raw) if raw else None
         _check(
@@ -510,7 +513,7 @@ class _ProjectInspectionMixin:
             else:
                 tup = tuple(seg)
                 if len(tup) < 2:
-                    raise ValueError(f"segments[{i}] must contain (start_ppq, bpm)")
+                    raise SonareValueError(f"segments[{i}] must contain (start_ppq, bpm)")
                 start_ppq = float(tup[0])
                 bpm = float(tup[1])
                 end_bpm = float(tup[3]) if len(tup) >= 4 else 0.0
@@ -544,7 +547,7 @@ class _ProjectInspectionMixin:
             else:
                 tup = tuple(seg)
                 if len(tup) < 3:
-                    raise ValueError(
+                    raise SonareValueError(
                         f"segments[{i}] must contain (start_ppq, numerator, denominator)"
                     )
                 start_ppq = float(tup[0])

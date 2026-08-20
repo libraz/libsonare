@@ -20,12 +20,14 @@ from ._ffi import (
     SonareStftResult,
 )
 from ._runtime import (
+    SonareValueError,
     _call_float_transform,
     _check,
     _float_array_result,
     _from_c_float_array,
     _from_c_int_array,
     _get_lib,
+    _guard_buffer,
     _out_float_array,
     _out_int_array,
     _to_c_float_array,
@@ -137,7 +139,8 @@ def stft(
         StftResult with magnitude and power spectrograms.
     """
     lib = _get_lib()
-    c_array, length = _to_c_float_array(samples)
+    sample_buf = _validate_samples("stft", samples)
+    c_array, length = _to_c_float_array(sample_buf)
     out = SonareStftResult()
     rc = lib.sonare_stft(
         c_array,
@@ -163,6 +166,7 @@ def stft(
         lib.sonare_free_stft_result(ctypes.byref(out))
 
 
+@_guard_buffer("samples")
 def stft_db(
     samples: Sequence[float] | list[float],
     sample_rate: int = 22050,
@@ -239,7 +243,8 @@ def mel_spectrogram(
         MelSpectrogramResult with power and dB spectrograms.
     """
     lib = _get_lib()
-    c_array, length = _to_c_float_array(samples)
+    sample_buf = _validate_samples("mel_spectrogram", samples)
+    c_array, length = _to_c_float_array(sample_buf)
     out = SonareMelResult()
     rc = lib.sonare_mel_spectrogram_ex(
         c_array,
@@ -298,7 +303,8 @@ def mfcc(
         MfccResult with coefficient matrix.
     """
     lib = _get_lib()
-    c_array, length = _to_c_float_array(samples)
+    sample_buf = _validate_samples("mfcc", samples)
+    c_array, length = _to_c_float_array(sample_buf)
     out = SonareMfccResult()
     rc = lib.sonare_mfcc_ex(
         c_array,
@@ -334,9 +340,9 @@ def mel_delta(
 ) -> list[float]:
     """Compute first-order regression deltas of a row-major feature matrix."""
     if n_features <= 0 or n_frames <= 0 or len(features) != n_features * n_frames:
-        raise ValueError("mel_delta: feature matrix length must equal n_features * n_frames")
+        raise SonareValueError("mel_delta: feature matrix length must equal n_features * n_frames")
     if width < 3 or width % 2 == 0:
-        raise ValueError("mel_delta: width must be an odd integer of at least 3")
+        raise SonareValueError("mel_delta: width must be an odd integer of at least 3")
     lib = _get_lib()
     c_array, _ = _to_c_float_array(features)
     out = ctypes.POINTER(ctypes.c_float)()
@@ -384,7 +390,8 @@ def chroma(
         ChromaResult with chroma features and mean energy.
     """
     lib = _get_lib()
-    c_array, length = _to_c_float_array(samples)
+    sample_buf = _validate_samples("chroma", samples)
+    c_array, length = _to_c_float_array(sample_buf)
     out = SonareChromaResult()
     rc = lib.sonare_chroma(
         c_array,
@@ -416,9 +423,14 @@ def _chroma_variant(
     hop_length: int,
     n_chroma: int,
     bins_per_octave: int | None = None,
+    *,
+    wrapper_name: str,
 ) -> ChromaResult:
+    # ``fn_name`` is the C symbol; ``wrapper_name`` is the public Python name the
+    # caller used, so the preflight blames the entry point rather than the ABI.
     lib = _get_lib()
-    c_array, length = _to_c_float_array(samples)
+    sample_buf = _validate_samples(wrapper_name, samples)
+    c_array, length = _to_c_float_array(sample_buf)
     out = SonareChromaResult()
     args: list[object] = [
         c_array,
@@ -461,6 +473,7 @@ def chroma_cens(
         hop_length,
         n_chroma,
         bins_per_octave,
+        wrapper_name="chroma_cens",
     )
 
 
@@ -479,6 +492,7 @@ def chroma_cqt(
         hop_length,
         n_chroma,
         bins_per_octave,
+        wrapper_name="chroma_cqt",
     )
 
 
@@ -489,7 +503,14 @@ def bass_chroma(
     n_chroma: int = 12,
 ) -> ChromaResult:
     """Compute bass-focused chroma features."""
-    return _chroma_variant("sonare_bass_chroma", samples, sample_rate, hop_length, n_chroma)
+    return _chroma_variant(
+        "sonare_bass_chroma",
+        samples,
+        sample_rate,
+        hop_length,
+        n_chroma,
+        wrapper_name="bass_chroma",
+    )
 
 
 # ============================================================================
@@ -497,6 +518,7 @@ def bass_chroma(
 # ============================================================================
 
 
+@_guard_buffer("samples")
 def spectral_centroid(
     samples: Sequence[float] | list[float],
     sample_rate: int = 22050,
@@ -523,6 +545,7 @@ def spectral_centroid(
     )
 
 
+@_guard_buffer("samples")
 def spectral_bandwidth(
     samples: Sequence[float] | list[float],
     sample_rate: int = 22050,
@@ -552,6 +575,7 @@ def spectral_bandwidth(
     )
 
 
+@_guard_buffer("samples")
 def spectral_flux(
     samples: Sequence[float] | list[float],
     sample_rate: int = 22050,
@@ -591,6 +615,7 @@ def onset_backtrack(
         return _from_c_int_array(out, out_count.value)
 
 
+@_guard_buffer("samples")
 def spectral_rolloff(
     samples: Sequence[float] | list[float],
     sample_rate: int = 22050,
@@ -620,6 +645,7 @@ def spectral_rolloff(
     )
 
 
+@_guard_buffer("samples")
 def spectral_flatness(
     samples: Sequence[float] | list[float],
     sample_rate: int = 22050,
@@ -646,6 +672,7 @@ def spectral_flatness(
     )
 
 
+@_guard_buffer("samples")
 def zero_crossing_rate(
     samples: Sequence[float] | list[float],
     sample_rate: int = 22050,
@@ -672,6 +699,7 @@ def zero_crossing_rate(
     )
 
 
+@_guard_buffer("samples")
 def rms_energy(
     samples: Sequence[float] | list[float],
     sample_rate: int = 22050,
@@ -703,6 +731,7 @@ def rms_energy(
 # ============================================================================
 
 
+@_guard_buffer("samples")
 def spectral_contrast(
     samples: Sequence[float] | list[float],
     sample_rate: int = 22050,
@@ -751,6 +780,7 @@ def spectral_contrast(
         return _from_c_float_array(out, rows * cols).reshape(rows, cols)
 
 
+@_guard_buffer("samples")
 def poly_features(
     samples: Sequence[float] | list[float],
     sample_rate: int = 22050,
@@ -813,7 +843,11 @@ def zero_crossings(
         A 1-D ``int32`` array of zero-crossing sample indices.
     """
     lib = _get_lib()
-    c_array, length = _to_c_float_array(samples)
+    # A non-finite sample does not merely propagate here: it compares unequal to
+    # itself, so the sign test fabricates crossings on both sides of it that are
+    # absent from the same signal without the NaN.
+    sample_buf = _validate_samples("zero_crossings", samples)
+    c_array, length = _to_c_float_array(sample_buf)
     with _out_int_array(lib) as (out, out_count):
         rc = lib.sonare_zero_crossings(
             c_array,
@@ -838,6 +872,10 @@ def pitch_tuning(
 
     Args:
         frequencies: Detected pitch frequencies in Hz (non-positive ignored).
+            Non-finite entries are rejected, so a pitch track carrying NaN for
+            unvoiced frames -- what :func:`pitch_pyin` returns with
+            ``fill_na=False`` -- must be filtered or produced with
+            ``fill_na=True`` first.
         resolution: Tuning resolution in fractions of a bin (default 0.01).
         bins_per_octave: Pitch bins per octave (default 12).
 
@@ -845,7 +883,11 @@ def pitch_tuning(
         Tuning offset in fractions of a bin, in ``(-0.5, 0.5]``.
     """
     lib = _get_lib()
-    c_array, length = _to_c_float_array(frequencies)
+    # Non-finite entries are dropped like non-positive ones, so an all-NaN track
+    # would report 0.0 -- a legitimate "perfectly in tune" answer -- rather than
+    # signalling that nothing usable was supplied.
+    frequency_buf = _validate_samples("pitch_tuning", frequencies, arg_name="frequencies")
+    c_array, length = _to_c_float_array(frequency_buf)
     out = ctypes.c_float(0.0)
     rc = lib.sonare_pitch_tuning(
         c_array,
@@ -858,6 +900,7 @@ def pitch_tuning(
     return float(out.value)
 
 
+@_guard_buffer("samples")
 def estimate_tuning(
     samples: Sequence[float] | list[float],
     sample_rate: int = 22050,
@@ -896,6 +939,7 @@ def estimate_tuning(
     return float(out.value)
 
 
+@_guard_buffer("samples")
 def piptrack(
     samples: Sequence[float] | list[float],
     sample_rate: int = 22050,
@@ -942,6 +986,7 @@ def piptrack(
             lib.sonare_free_floats(magnitudes)
 
 
+@_guard_buffer("samples")
 def reassigned_spectrogram(
     samples: Sequence[float] | list[float],
     sample_rate: int = 22050,
@@ -952,7 +997,7 @@ def reassigned_spectrogram(
 ) -> ReassignedSpectrogramResult:
     """Return magnitude, reassigned times, and reassigned frequencies per STFT bin."""
     if ref_power < 0.0 or not np.isfinite(ref_power):
-        raise ValueError("reassigned_spectrogram: ref_power must be finite and non-negative")
+        raise SonareValueError("reassigned_spectrogram: ref_power must be finite and non-negative")
     lib = _get_lib()
     c_array, length = _to_c_float_array(samples)
     out = SonareReassignedSpectrogramResult()
@@ -990,12 +1035,19 @@ def _segment_input(
     data: Sequence[float] | list[float],
     rows: int,
     cols: int,
+    *,
+    arg_name: str = "data",
+    dims_prefix: str = "",
 ) -> tuple[ctypes.Array[ctypes.c_float], int]:
+    # ``arg_name`` / ``dims_prefix`` name the caller's own parameters, so a
+    # two-matrix entry point such as `cross_similarity` reports `x` / `x_rows`
+    # rather than the helper's internal `data` / `rows` spelling.
+    rows_name, cols_name = f"{dims_prefix}rows", f"{dims_prefix}cols"
     if rows <= 0 or cols <= 0:
-        raise ValueError(f"{name}: rows and cols must be positive")
-    values = _validate_samples(name, data, arg_name="data")
+        raise SonareValueError(f"{name}: {rows_name} and {cols_name} must be positive")
+    values = _validate_samples(name, data, arg_name=arg_name)
     if len(values) != rows * cols:
-        raise ValueError(f"{name}: data length must equal rows * cols")
+        raise SonareValueError(f"{name}: {arg_name} length must equal {rows_name} * {cols_name}")
     return _to_c_float_array(values)
 
 
@@ -1026,8 +1078,12 @@ def cross_similarity(
     mode: str = "connectivity",
 ) -> SegmentMatrix:
     """Return column-wise cross-similarity (``librosa.segment.cross_similarity``)."""
-    x_array, _ = _segment_input("cross_similarity", x, x_rows, x_cols)
-    y_array, _ = _segment_input("cross_similarity", y, y_rows, y_cols)
+    x_array, _ = _segment_input(
+        "cross_similarity", x, x_rows, x_cols, arg_name="x", dims_prefix="x_"
+    )
+    y_array, _ = _segment_input(
+        "cross_similarity", y, y_rows, y_cols, arg_name="y", dims_prefix="y_"
+    )
     out = SonareSegmentMatrix()
     rc = _get_lib().sonare_segment_cross_similarity(
         x_array,

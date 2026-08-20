@@ -22,10 +22,12 @@ from ._ffi import (
 from ._runtime import (
     ErrorCode,
     SonareError,
+    SonareValueError,
     _call_float_transform,
     _check,
     _float_array_result,
     _get_lib,
+    _guard_buffer,
     _out_float_array,
     _require_power_of_two,
     _resolve_enum,
@@ -42,16 +44,18 @@ _C_INT_MAX = 2**31 - 1
 def _validate_effect_fft_options(fn_name: str, n_fft: int, hop_length: int) -> tuple[int, int]:
     """Validate and normalize the FFT options shared by spectral effects."""
     if isinstance(n_fft, bool) or not isinstance(n_fft, Integral):
-        raise ValueError(f"{fn_name}: n_fft must be an integer")
+        raise SonareValueError(f"{fn_name}: n_fft must be an integer")
     if isinstance(hop_length, bool) or not isinstance(hop_length, Integral):
-        raise ValueError(f"{fn_name}: hop_length must be an integer")
+        raise SonareValueError(f"{fn_name}: hop_length must be an integer")
     n_fft = int(n_fft)
     hop_length = int(hop_length)
     if n_fft <= 0 or n_fft > _C_INT_MAX:
-        raise ValueError(f"{fn_name}: n_fft must fit in a signed 32-bit integer")
+        raise SonareValueError(f"{fn_name}: n_fft must fit in a signed 32-bit integer")
     _require_power_of_two(n_fft, "n_fft")
     if hop_length <= 0 or hop_length > _C_INT_MAX:
-        raise ValueError(f"{fn_name}: hop_length must fit in a positive signed 32-bit integer")
+        raise SonareValueError(
+            f"{fn_name}: hop_length must fit in a positive signed 32-bit integer"
+        )
     return n_fft, hop_length
 
 
@@ -64,10 +68,12 @@ def _unsupported_effect_symbol(symbol: str) -> SonareError:
 
 def _validate_hpss_kernel(fn_name: str, value: int, arg_name: str) -> int:
     if isinstance(value, bool) or not isinstance(value, Integral):
-        raise ValueError(f"{fn_name}: {arg_name} must be an integer")
+        raise SonareValueError(f"{fn_name}: {arg_name} must be an integer")
     value = int(value)
     if value <= 0 or value > _C_INT_MAX or value % 2 == 0:
-        raise ValueError(f"{fn_name}: {arg_name} must be a positive odd signed 32-bit integer")
+        raise SonareValueError(
+            f"{fn_name}: {arg_name} must be a positive odd signed 32-bit integer"
+        )
     return value
 
 
@@ -102,7 +108,7 @@ def hpss(
     kernel_harmonic = _validate_hpss_kernel("hpss", kernel_harmonic, "kernel_harmonic")
     kernel_percussive = _validate_hpss_kernel("hpss", kernel_percussive, "kernel_percussive")
     if not isinstance(hard_mask, bool):
-        raise ValueError("hpss: hard_mask must be a bool")
+        raise SonareValueError("hpss: hard_mask must be a bool")
 
     lib = _get_lib()
     use_soft_mask = 0 if hard_mask else 1
@@ -302,6 +308,7 @@ def pitch_shift(
     )
 
 
+@_guard_buffer("samples")
 def pitch_correct_to_midi(
     samples: Sequence[float] | list[float],
     sample_rate: int = 22050,
@@ -332,6 +339,7 @@ def pitch_correct_to_midi(
     )
 
 
+@_guard_buffer("samples")
 def pitch_correct_to_midi_timevarying(
     samples: Sequence[float] | list[float],
     f0_hz: Sequence[float] | list[float],
@@ -377,12 +385,12 @@ def pitch_correct_to_midi_timevarying(
     if voiced_prob is not None:
         prob_array, prob_len = _to_c_float_array(voiced_prob)
         if prob_len != n_frames:
-            raise ValueError("voiced_prob must have the same length as f0_hz")
+            raise SonareValueError("voiced_prob must have the same length as f0_hz")
     voiced_array = None
     if voiced is not None:
         voiced_seq = [int(v) for v in voiced]
         if len(voiced_seq) != n_frames:
-            raise ValueError("voiced must have the same length as f0_hz")
+            raise SonareValueError("voiced must have the same length as f0_hz")
         voiced_array = (ctypes.c_int32 * n_frames)(*voiced_seq)
     with _out_float_array(lib) as (out, out_length):
         _check(
@@ -403,6 +411,7 @@ def pitch_correct_to_midi_timevarying(
         return _float_array_result(out, out_length.value)
 
 
+@_guard_buffer("samples")
 def pitch_correct_timevarying(
     samples: Sequence[float] | list[float],
     f0_hz: Sequence[float] | list[float],
@@ -453,7 +462,7 @@ def pitch_correct_timevarying(
         List of pitch-corrected samples.
     """
     if mode not in ("midi", "scale"):
-        raise ValueError("mode must be 'midi' or 'scale'")
+        raise SonareValueError("mode must be 'midi' or 'scale'")
     lib = _get_lib()
     if not hasattr(lib, "sonare_pitch_correct_timevarying"):
         raise RuntimeError("libsonare was built without pitch-editor support")
@@ -484,12 +493,12 @@ def pitch_correct_timevarying(
     if voiced_prob is not None:
         prob_array, prob_len = _to_c_float_array(voiced_prob)
         if prob_len != n_frames:
-            raise ValueError("voiced_prob must have the same length as f0_hz")
+            raise SonareValueError("voiced_prob must have the same length as f0_hz")
     voiced_array = None
     if voiced is not None:
         voiced_seq = [int(v) for v in voiced]
         if len(voiced_seq) != n_frames:
-            raise ValueError("voiced must have the same length as f0_hz")
+            raise SonareValueError("voiced must have the same length as f0_hz")
         voiced_array = (ctypes.c_int32 * n_frames)(*voiced_seq)
     with _out_float_array(lib) as (out, out_length):
         _check(
@@ -510,6 +519,7 @@ def pitch_correct_timevarying(
         return _float_array_result(out, out_length.value)
 
 
+@_guard_buffer("samples")
 def note_stretch(
     samples: Sequence[float] | list[float],
     sample_rate: int = 22050,
@@ -540,6 +550,7 @@ def note_stretch(
     )
 
 
+@_guard_buffer("samples")
 def note_move(
     samples: Sequence[float] | list[float],
     sample_rate: int = 22050,
@@ -622,6 +633,7 @@ class SpectralRegionOp:
     mode: str | int = "gain"
 
 
+@_guard_buffer("samples")
 def spectral_edit(
     samples: Sequence[float] | list[float],
     sample_rate: int,
@@ -657,16 +669,17 @@ def spectral_edit(
 
     Note:
         ``n_fft``/``hop_length``/``heal_radius_frames`` are validated eagerly here
-        and raise :class:`ValueError`, the idiomatic Python contract. The Node and
-        WASM surfaces accept the same valid inputs but delegate rejection to the
-        C++ core, so an invalid value surfaces as a ``SonareError`` there. The
-        accepted input range is identical across surfaces.
+        and raise :class:`SonareValueError`, which is both a ``ValueError`` (the
+        idiomatic Python contract) and a ``SonareError``. The Node and WASM
+        surfaces accept the same valid inputs but delegate rejection to the C++
+        core, so an invalid value surfaces there only once it reaches the core.
+        The accepted input range is identical across surfaces.
     """
     _require_power_of_two(n_fft, "n_fft")
     if hop_length <= 0 or hop_length > n_fft // 2:
-        raise ValueError("hop_length must satisfy 0 < hop_length <= n_fft / 2")
+        raise SonareValueError("hop_length must satisfy 0 < hop_length <= n_fft / 2")
     if heal_radius_frames < 0:
-        raise ValueError("heal_radius_frames must be non-negative")
+        raise SonareValueError("heal_radius_frames must be non-negative")
     window_value = _coerce_spectral_edit_window(window)
 
     lib = _get_lib()

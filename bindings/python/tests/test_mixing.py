@@ -431,3 +431,83 @@ def test_scene_warnings_surface_ignored_insert_params() -> None:
         assert mixer.scene_warnings() == []
     finally:
         mixer.close()
+
+
+def test_mix_stereo_rejects_a_scene_with_no_audio() -> None:
+    """An all-empty scene is a fault, not a mix of silence.
+
+    A zero-frame block is a legitimate no-op for the C mixer, so without a
+    facade guard `mix_stereo` answers an empty result plus meters reading the
+    -120 dB floor — indistinguishable from a real mix. The positive control in
+    the same test keeps this from passing because the call failed for some
+    unrelated reason.
+    """
+    from libsonare import SonareValueError, mix_stereo
+
+    with pytest.raises(SonareValueError, match="at least one strip is required"):
+        mix_stereo([])
+
+    with pytest.raises(SonareValueError, match="no audio to mix"):
+        mix_stereo([([], [])])
+    with pytest.raises(SonareValueError, match="no audio to mix"):
+        mix_stereo([([], []), ([], [])])
+
+    # Positive control: the ordinary two-strip mix still renders, and renders
+    # something audible rather than the silence an empty result would show.
+    left = [0.5, -0.5, 0.5, -0.5]
+    right = [0.25, -0.25, 0.25, -0.25]
+    result = mix_stereo([(left, right), (left, right)], sample_rate=48000)
+    assert len(result.left) == len(left)
+    assert len(result.right) == len(right)
+    assert len(result.meters) == 2
+    assert max(abs(v) for v in result.left) > 0.5
+    assert max(abs(v) for v in result.right) > 0.25
+
+
+def test_mix_stereo_rejects_non_finite_strip_samples() -> None:
+    """NaN reads as silence on the peak meter, so it must never reach the mix."""
+    from libsonare import SonareValueError, mix_stereo
+
+    tone = [0.5, -0.5, 0.5, -0.5]
+
+    with pytest.raises(SonareValueError, match=r"strips\[0\] left contains NaN or Inf"):
+        mix_stereo([([math.nan] * 4, tone)])
+    with pytest.raises(SonareValueError, match=r"strips\[0\] right contains NaN or Inf"):
+        mix_stereo([(tone, [math.inf] * 4)])
+    # The offending strip is named by index, not just the first one scanned.
+    with pytest.raises(SonareValueError, match=r"strips\[1\] right contains NaN or Inf"):
+        mix_stereo([(tone, tone), (tone, [0.5, math.nan, 0.5, -0.5])])
+
+
+def test_mix_stereo_true_peak_is_valid_on_a_one_shot_mix() -> None:
+    """True peak is a max-hold, not an integrator, so it is valid immediately.
+
+    Pins the `mix_stereo` docstring's meter caveat, which previously claimed
+    true peak needed sustained streaming and read the floor on a one-shot mix.
+    The loudness half of the caveat is real and is asserted alongside it.
+    """
+    from libsonare import metering_true_peak_db, mix_stereo
+
+    sr = 48000
+    for frequency, n in ((1000, 64), (1000, 4096), (11000, 1024)):
+        tone = [0.5 * math.sin(2 * math.pi * frequency * i / sr) for i in range(n)]
+        meter = mix_stereo([(tone, tone)], sample_rate=sr).meters[0]
+
+        # Not the floor sentinel, and above the -6.02 dBFS sample peak by the
+        # genuine inter-sample overshoot rather than by chance.
+        assert meter.true_peak_db_l > -20.0
+        assert meter.true_peak_db_l > meter.peak_db_l
+        # One block over the whole signal leaves no internal block edge, so the
+        # strip meter agrees with the offline whole-signal measurement.
+        assert meter.true_peak_db_l == pytest.approx(
+            metering_true_peak_db(tone, sample_rate=sr), abs=1e-4
+        )
+        # The integrating loudness fields genuinely have not filled their
+        # windows at these lengths.
+        assert meter.momentary_lufs == pytest.approx(-120.0)
+
+    # True peak floors only on digital silence.
+    silence = [0.0] * 1024
+    assert mix_stereo([(silence, silence)], sample_rate=sr).meters[0].true_peak_db_l == (
+        pytest.approx(-120.0)
+    )

@@ -18,6 +18,7 @@ from ._project import synth_preset_names as synth_preset_names
 from ._project import synth_preset_patch as synth_preset_patch
 from ._runtime import ErrorCode as ErrorCode
 from ._runtime import SonareError as SonareError
+from ._runtime import SonareValueError as SonareValueError
 from .analyzer import (
     Mixer as Mixer,
 )

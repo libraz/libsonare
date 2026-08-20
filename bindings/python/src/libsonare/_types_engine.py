@@ -20,7 +20,17 @@ from ._types_analysis import (
 
 @dataclass(frozen=True, slots=True)
 class MixMeterSnapshot:
-    """Realtime mixer meter snapshot for one strip."""
+    """Realtime mixer meter snapshot for one strip.
+
+    ``true_peak_db_l``/``true_peak_db_r``/``max_true_peak_db`` are inter-sample
+    peaks from the ITU-R BS.1770-4 polyphase reconstruction at 4x. They are a
+    streaming measurement: the centered reconstruction stencil needs a few
+    future samples a realtime path does not have, so each block's last samples
+    read marginally low (about 0.1 dB across 64..8192-sample blocks on a
+    near-Nyquist tone, always in the under-reading direction). Use
+    :func:`metering_true_peak_db` over the whole signal when an exact dBTP
+    number is required.
+    """
 
     peak_db_l: float
     peak_db_r: float
@@ -404,7 +414,17 @@ class EngineGraphSpec:
 
 @dataclass(frozen=True, slots=True)
 class MeterTelemetryRecord:
-    """A meter snapshot drained from the realtime engine's meter tap."""
+    """A meter snapshot drained from the realtime engine's meter tap.
+
+    ``true_peak_db_l``/``true_peak_db_r``/``max_true_peak_db`` are inter-sample
+    peaks from the ITU-R BS.1770-4 polyphase reconstruction at 4x. They are a
+    streaming measurement: the centered reconstruction stencil needs a few
+    future samples a realtime path does not have, so each block's last samples
+    read marginally low (about 0.1 dB across 64..8192-sample blocks on a
+    near-Nyquist tone, always in the under-reading direction). Use
+    :func:`metering_true_peak_db` over the whole signal when an exact dBTP
+    number is required.
+    """
 
     target_id: int
     render_frame: int
@@ -433,6 +453,14 @@ class MeterTelemetryRecordWide:
     in canonical WAVE order (5.1 = L R C LFE Ls Rs, 7.1 = L R C LFE Ls Rs Lss
     Rss). Use this drain for a surround target; ``MeterTelemetryRecord`` stays the
     stereo fast path.
+
+    ``true_peak_db``/``max_true_peak_db`` are inter-sample peaks from the
+    ITU-R BS.1770-4 polyphase reconstruction at 4x. They are a streaming
+    measurement: the centered reconstruction stencil needs a few future samples
+    a realtime path does not have, so each block's last samples read marginally
+    low (about 0.1 dB across 64..8192-sample blocks on a near-Nyquist tone,
+    always in the under-reading direction). Use :func:`metering_true_peak_db`
+    over the whole signal when an exact dBTP number is required.
     """
 
     target_id: int

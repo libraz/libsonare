@@ -21,7 +21,7 @@ from ._project import (
     synth_preset_names,
     synth_preset_patch,
 )
-from ._runtime import ErrorCode, SonareError
+from ._runtime import ErrorCode, SonareError, SonareValueError
 from .analyzer import (
     Mixer,
     MixerStereoResult,
@@ -485,6 +485,7 @@ __all__ = [
     "SynthModRouting",
     "SynthPatch",
     "SonareError",
+    "SonareValueError",
     "ErrorCode",
     "SpectrumReport",
     "StageGainReduction",

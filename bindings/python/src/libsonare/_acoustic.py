@@ -23,6 +23,7 @@ from ._runtime import (
     _check,
     _float_array_result,
     _get_lib,
+    _guard_buffer,
     _optional_float_array_result,
     _to_c_float_array,
 )
@@ -154,6 +155,7 @@ def synthesize_rir(
         lib.sonare_free_rir_synth_result(ctypes.byref(out))
 
 
+@_guard_buffer("samples")
 def estimate_room(
     samples: Sequence[float] | list[float],
     sample_rate: int = 48000,
@@ -219,6 +221,7 @@ def estimate_room(
         lib.sonare_free_room_estimate(ctypes.byref(out))
 
 
+@_guard_buffer("samples")
 def room_morph(
     samples: Sequence[float] | list[float],
     sample_rate: int,

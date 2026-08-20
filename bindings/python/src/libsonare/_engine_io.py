@@ -49,6 +49,7 @@ from ._runtime import (
     MeterTelemetryRecord,
     MeterTelemetryRecordWide,
     ScopeTelemetryRecord,
+    SonareValueError,
     _as_float32_buffer,
     _check,
     _from_c_float_array,
@@ -66,9 +67,9 @@ class _EngineIoMixin:
 
     def set_capture_buffer(self, num_channels: int, capacity_frames: int) -> None:
         if num_channels <= 0:
-            raise ValueError("num_channels must be positive")
+            raise SonareValueError("num_channels must be positive")
         if capacity_frames <= 0:
-            raise ValueError("capacity_frames must be positive")
+            raise SonareValueError("capacity_frames must be positive")
         self._capture_arrays = [
             (ctypes.c_float * int(capacity_frames))() for _ in range(int(num_channels))
         ]
@@ -434,14 +435,14 @@ class _EngineIoMixin:
         channels: Sequence[Sequence[float]],
     ) -> tuple[list[ctypes.Array[ctypes.c_float]], ctypes.Array[Any], int]:
         if not channels:
-            raise ValueError("channels must not be empty")
+            raise SonareValueError("channels must not be empty")
         frame_count = len(channels[0])
         if frame_count == 0:
-            raise ValueError("channels must not be empty")
+            raise SonareValueError("channels must not be empty")
         arrays: list[ctypes.Array[ctypes.c_float]] = []
         for channel in channels:
             if len(channel) != frame_count:
-                raise ValueError("all channels must have the same length")
+                raise SonareValueError("all channels must have the same length")
             # Zero-copy marshal each channel via NumPy's vectorised C path
             # instead of `(c_float*N)(*channel)`, which unpacks every sample
             # through Python varargs on this realtime path. The engine writes

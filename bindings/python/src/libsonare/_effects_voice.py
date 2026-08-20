@@ -23,6 +23,7 @@ from ._ffi import (
     SonareRealtimeVoiceChangerConfig,
 )
 from ._runtime import (
+    SonareValueError,
     _as_float32_buffer,
     _check,
     _float_array_result,
@@ -228,7 +229,7 @@ class RealtimeVoiceChanger:
         in_buf = _as_float32_buffer(samples)
         total_samples = int(in_buf.shape[0])
         if ch <= 0 or total_samples % ch != 0:
-            raise ValueError("interleaved samples length must be divisible by channels")
+            raise SonareValueError("interleaved samples length must be divisible by channels")
         frames = total_samples // ch
         out_buf = np.empty(total_samples, dtype=np.float32)
         step = self._max_block_size
@@ -266,7 +267,7 @@ class RealtimeVoiceChanger:
         right_buf = _as_float32_buffer(right)
         total = int(left_buf.shape[0])
         if total != int(right_buf.shape[0]):
-            raise ValueError("left and right channels must have equal length")
+            raise SonareValueError("left and right channels must have equal length")
         # Copy into fresh contiguous output buffers; the C call mutates in place.
         out_left = np.array(left_buf, dtype=np.float32, copy=True)
         out_right = np.array(right_buf, dtype=np.float32, copy=True)
@@ -307,10 +308,12 @@ def voice_change_realtime(
     working.
     """
     if channels < 1 or channels > 2:
-        raise ValueError("channels must be 1 or 2")
+        raise SonareValueError("channels must be 1 or 2")
     in_buf = _validate_samples("voice_change_realtime", samples, validate=True)
     if channels == 2 and int(in_buf.shape[0]) % 2 != 0:
-        raise ValueError("voice_change_realtime: interleaved stereo input length must be even")
+        raise SonareValueError(
+            "voice_change_realtime: interleaved stereo input length must be even"
+        )
     lib = _get_lib()
     c_array, length = _to_c_float_array(in_buf)
     with _out_float_array(lib) as (out, out_length):
@@ -527,7 +530,7 @@ def _resolve_preset_ordinal(preset: str | int) -> int:
     try:
         return _VC_PRESET_NAME_TO_ORDINAL[preset]
     except KeyError as exc:
-        raise ValueError(f"unknown voice character preset: {preset!r}") from exc
+        raise SonareValueError(f"unknown voice character preset: {preset!r}") from exc
 
 
 def realtime_voice_changer_preset_config(preset: str | int) -> RealtimeVoiceChangerConfig:

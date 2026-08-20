@@ -14,6 +14,7 @@ from ._ffi_types_core import (
 from ._runtime import (
     _check,
     _get_lib,
+    _guard_buffer,
     _mode_values,
     _out_float_array,
     _profile_value,
@@ -40,6 +41,7 @@ from .types import (
 )
 
 
+@_guard_buffer("samples")
 def detect_bpm(
     samples: Sequence[float] | list[float],
     sample_rate: int = 22050,
@@ -72,6 +74,7 @@ def detect_bpm(
     return float(out_bpm.value)
 
 
+@_guard_buffer("samples")
 def detect_key(
     samples: Sequence[float] | list[float],
     sample_rate: int = 22050,
@@ -134,6 +137,7 @@ def detect_key(
     )
 
 
+@_guard_buffer("samples")
 def detect_key_candidates(
     samples: Sequence[float] | list[float],
     sample_rate: int = 22050,
@@ -187,6 +191,7 @@ def detect_key_candidates(
             lib.sonare_free_key_candidates(out_candidates)
 
 
+@_guard_buffer("samples")
 def detect_beats(
     samples: Sequence[float] | list[float],
     sample_rate: int = 22050,
@@ -218,6 +223,7 @@ def detect_beats(
         return [float(out_times[i]) for i in range(count)]
 
 
+@_guard_buffer("samples")
 def detect_downbeats(
     samples: Sequence[float] | list[float],
     sample_rate: int = 22050,
@@ -238,6 +244,7 @@ def detect_downbeats(
         return [float(out_times[i]) for i in range(count)]
 
 
+@_guard_buffer("samples")
 def detect_onsets(
     samples: Sequence[float] | list[float],
     sample_rate: int = 22050,

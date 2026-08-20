@@ -75,6 +75,7 @@ from ._ffi_types_mastering_project import (
     SonareProjectTimeSignatureSegment,
 )
 from ._runtime import (
+    SonareValueError,
     _check,
     _get_lib,
 )
@@ -256,7 +257,7 @@ class RealtimeEngine(_EngineMidiMixin, _EngineMixingMixin, _EngineIoMixin):
             else:
                 tup = tuple(seg)
                 if len(tup) < 2:
-                    raise ValueError(f"segments[{i}] must contain (start_ppq, bpm)")
+                    raise SonareValueError(f"segments[{i}] must contain (start_ppq, bpm)")
                 start_ppq = float(tup[0])
                 bpm = float(tup[1])
                 end_bpm = float(tup[3]) if len(tup) >= 4 else 0.0
@@ -290,7 +291,7 @@ class RealtimeEngine(_EngineMidiMixin, _EngineMixingMixin, _EngineIoMixin):
             else:
                 tup = tuple(seg)
                 if len(tup) < 3:
-                    raise ValueError(
+                    raise SonareValueError(
                         f"segments[{i}] must contain (start_ppq, numerator, denominator)"
                     )
                 start_ppq = float(tup[0])

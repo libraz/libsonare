@@ -13,7 +13,7 @@ from ._ffi import (
     SonareEqSnapshot,
 )
 from ._mastering_offline import _chain_params
-from ._runtime import _check, _get_lib, _to_c_float_array, _to_c_float_array_owned
+from ._runtime import SonareValueError, _check, _get_lib, _to_c_float_array, _to_c_float_array_owned
 from .types import (
     EqSpectrumSnapshot,
 )
@@ -154,7 +154,7 @@ class StreamingMasteringChain:
         left_array, left_length = _to_c_float_array_owned(left)
         right_array, right_length = _to_c_float_array_owned(right)
         if left_length != right_length:
-            raise ValueError("left and right channel lengths must match")
+            raise SonareValueError("left and right channel lengths must match")
         rc = self._lib.sonare_streaming_mastering_chain_process_stereo(
             self._handle, left_array, right_array, ctypes.c_size_t(left_length)
         )
@@ -304,7 +304,7 @@ class StreamingEqualizer:
         if isinstance(mode, str):
             key = mode.lower()
             if key not in self._PHASES:
-                raise ValueError(f"unknown EQ phase mode: {mode}")
+                raise SonareValueError(f"unknown EQ phase mode: {mode}")
             value = self._PHASES[key]
         else:
             value = int(mode)
@@ -349,7 +349,7 @@ class StreamingEqualizer:
         left_array, left_length = _to_c_float_array(left)
         right_array, right_length = _to_c_float_array(right)
         if left_length != right_length:
-            raise ValueError("left and right sidechain lengths must match")
+            raise SonareValueError("left and right sidechain lengths must match")
         channel_array_type = ctypes.POINTER(ctypes.c_float) * 2
         channels = channel_array_type(
             ctypes.cast(left_array, ctypes.POINTER(ctypes.c_float)),
@@ -379,7 +379,7 @@ class StreamingEqualizer:
         source_array, source_length = _to_c_float_array(source)
         reference_array, reference_length = _to_c_float_array(reference)
         if source_length != reference_length:
-            raise ValueError("source and reference lengths must match")
+            raise SonareValueError("source and reference lengths must match")
         rc = self._lib.sonare_eq_match(
             self._handle,
             source_array,
@@ -418,7 +418,7 @@ class StreamingEqualizer:
         left_array, left_length = _to_c_float_array_owned(left)
         right_array, right_length = _to_c_float_array_owned(right)
         if left_length != right_length:
-            raise ValueError("left and right channel lengths must match")
+            raise SonareValueError("left and right channel lengths must match")
         channel_array_type = ctypes.POINTER(ctypes.c_float) * 2
         channels = channel_array_type(
             ctypes.cast(left_array, ctypes.POINTER(ctypes.c_float)),

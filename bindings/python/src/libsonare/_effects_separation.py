@@ -12,9 +12,11 @@ from ._ffi import SonareDecomposeStemsConfig, SonareHpssResult
 from ._runtime import (
     ErrorCode,
     SonareError,
+    SonareValueError,
     _check,
     _from_c_float_array,
     _get_lib,
+    _guard_buffer,
     _int_array_result,
     _out_float_array,
     _out_int_array,
@@ -30,15 +32,17 @@ _C_INT_MAX = 2**31 - 1
 
 def _validate_effect_fft_options(fn_name: str, n_fft: int, hop_length: int) -> tuple[int, int]:
     if isinstance(n_fft, bool) or not isinstance(n_fft, Integral):
-        raise ValueError(f"{fn_name}: n_fft must be an integer")
+        raise SonareValueError(f"{fn_name}: n_fft must be an integer")
     if isinstance(hop_length, bool) or not isinstance(hop_length, Integral):
-        raise ValueError(f"{fn_name}: hop_length must be an integer")
+        raise SonareValueError(f"{fn_name}: hop_length must be an integer")
     n_fft = int(n_fft)
     hop_length = int(hop_length)
     if n_fft <= 0 or n_fft > _C_INT_MAX or (n_fft & (n_fft - 1)) != 0:
-        raise ValueError(f"{fn_name}: n_fft must be a positive signed 32-bit power of two")
+        raise SonareValueError(f"{fn_name}: n_fft must be a positive signed 32-bit power of two")
     if hop_length <= 0 or hop_length > _C_INT_MAX:
-        raise ValueError(f"{fn_name}: hop_length must fit in a positive signed 32-bit integer")
+        raise SonareValueError(
+            f"{fn_name}: hop_length must fit in a positive signed 32-bit integer"
+        )
     return n_fft, hop_length
 
 
@@ -51,10 +55,12 @@ def _unsupported_effect_symbol(symbol: str) -> SonareError:
 
 def _validate_hpss_kernel(fn_name: str, value: int, arg_name: str) -> int:
     if isinstance(value, bool) or not isinstance(value, Integral):
-        raise ValueError(f"{fn_name}: {arg_name} must be an integer")
+        raise SonareValueError(f"{fn_name}: {arg_name} must be an integer")
     value = int(value)
     if value <= 0 or value > _C_INT_MAX or value % 2 == 0:
-        raise ValueError(f"{fn_name}: {arg_name} must be a positive odd signed 32-bit integer")
+        raise SonareValueError(
+            f"{fn_name}: {arg_name} must be a positive odd signed 32-bit integer"
+        )
     return value
 
 
@@ -89,7 +95,7 @@ def decompose(
     lib = _get_lib()
     c_array, length = _to_c_float_array(s)
     if length != n_features * n_frames:
-        raise ValueError("s length must equal n_features * n_frames")
+        raise SonareValueError("s length must equal n_features * n_frames")
     with (
         _out_float_array(lib) as (out_w, out_w_length),
         _out_float_array(lib) as (out_h, out_h_length),
@@ -138,7 +144,7 @@ def decompose_with_init(
         raise RuntimeError("libsonare was built without sonare_decompose_with_init")
     c_array, length = _to_c_float_array(s)
     if length != n_features * n_frames:
-        raise ValueError("s length must equal n_features * n_frames")
+        raise SonareValueError("s length must equal n_features * n_frames")
     with (
         _out_float_array(lib) as (out_w, out_w_length),
         _out_float_array(lib) as (out_h, out_h_length),
@@ -205,8 +211,8 @@ def decompose_stems(
         (``(n_components, n_frames)``) and ``sample_rate``.
 
     Raises:
-        ValueError: If ``n_components``, ``n_fft``, ``hop_length`` or ``n_iter``
-            is not positive, or ``mask_power`` is below 1. These arguments carry
+        SonareValueError: If ``n_components``, ``n_fft``, ``hop_length`` or
+            ``n_iter`` is not positive, or ``mask_power`` is below 1. These arguments carry
             real defaults here, so 0 is refused as a caller mistake rather than
             read as the "use the default" sentinel that the same field means on
             the C ABI and the JavaScript surfaces.
@@ -216,9 +222,9 @@ def decompose_stems(
     _validate_samples("decompose_stems", samples, validate=validate)
     n_fft, hop_length = _validate_effect_fft_options("decompose_stems", n_fft, hop_length)
     if n_components <= 0 or n_iter <= 0:
-        raise ValueError("decompose_stems: n_components and n_iter must be positive")
+        raise SonareValueError("decompose_stems: n_components and n_iter must be positive")
     if mask_power < 1.0:
-        raise ValueError("decompose_stems: mask_power must be >= 1")
+        raise SonareValueError("decompose_stems: mask_power must be >= 1")
     lib = _get_lib()
     if not hasattr(lib, "sonare_decompose_stems"):
         raise _unsupported_effect_symbol("sonare_decompose_stems")
@@ -294,7 +300,7 @@ def nn_filter(
     lib = _get_lib()
     c_array, length = _to_c_float_array(s)
     if length != n_features * n_frames:
-        raise ValueError("s length must equal n_features * n_frames")
+        raise SonareValueError("s length must equal n_features * n_frames")
     aggregate_bytes = aggregate.encode("utf-8") if aggregate else None
     with _out_float_array(lib) as (out, out_length):
         _check(
@@ -312,6 +318,7 @@ def nn_filter(
         return _from_c_float_array(out, out_length.value).reshape(n_features, n_frames)
 
 
+@_guard_buffer("samples")
 def remix(
     samples: Sequence[float] | list[float],
     intervals: Sequence[int] | list[int],
@@ -353,6 +360,7 @@ def remix(
         return _from_c_float_array(out, out_length.value)
 
 
+@_guard_buffer("samples")
 def remix_aligned_intervals(
     samples: Sequence[float] | list[float],
     intervals: Sequence[int] | list[int],
@@ -437,7 +445,7 @@ def hpss_with_residual(
         "hpss_with_residual", kernel_percussive, "kernel_percussive"
     )
     if not isinstance(hard_mask, bool):
-        raise ValueError("hpss_with_residual: hard_mask must be a bool")
+        raise SonareValueError("hpss_with_residual: hard_mask must be a bool")
 
     lib = _get_lib()
     use_soft_mask = 0 if hard_mask else 1

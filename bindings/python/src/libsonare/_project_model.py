@@ -91,6 +91,7 @@ from ._runtime import (
     SonareSf2InstrumentConfig,
     SonareSynthModRouting,
     SonareSynthPatch,
+    SonareValueError,
     _check,
     _curve_value,
     _get_lib,
@@ -195,26 +196,26 @@ def _automation_target_kind_value(value: object) -> int:
         key = value.lower()
         if key in _AUTOMATION_TARGET_KIND_NAMES:
             return _AUTOMATION_TARGET_KIND_NAMES[key]
-        raise ValueError(
+        raise SonareValueError(
             "unknown automation target kind; expected opaque, track-fader-db, or track-pan"
         )
     if isinstance(value, bool) or not isinstance(value, numbers.Real):
-        raise ValueError("automation target kind must be an integer in [0, 2]")
+        raise SonareValueError("automation target kind must be an integer in [0, 2]")
     ordinal = float(cast(SupportsFloat, value))
     if not math.isfinite(ordinal) or not ordinal.is_integer() or ordinal < 0.0 or ordinal > 2.0:
-        raise ValueError("automation target kind must be an integer in [0, 2]")
+        raise SonareValueError("automation target kind must be an integer in [0, 2]")
     return int(ordinal)
 
 
 def _automation_target_param_id_value(value: object) -> int:
     """Validate a non-zero uint32 automation target parameter id."""
     if isinstance(value, bool) or not isinstance(value, numbers.Real):
-        raise ValueError("target_param_id must be a finite integer in [1, 4294967295]")
+        raise SonareValueError("target_param_id must be a finite integer in [1, 4294967295]")
     target = float(cast(SupportsFloat, value))
     if not math.isfinite(target) or not target.is_integer() or target < 1.0 or target > 0xFFFFFFFF:
         if math.isfinite(target) and target == 0.0:
-            raise ValueError("target_param_id must be non-zero")
-        raise ValueError("target_param_id must be a finite integer in [1, 4294967295]")
+            raise SonareValueError("target_param_id must be non-zero")
+        raise SonareValueError("target_param_id must be a finite integer in [1, 4294967295]")
     return int(target)
 
 
@@ -319,14 +320,14 @@ def _automation_lane_desc(
         else:
             seq = tuple(pt)
         if len(seq) < 2:
-            raise ValueError(f"points[{i}] must contain at least (ppq, value)")
+            raise SonareValueError(f"points[{i}] must contain at least (ppq, value)")
         ppq = float(cast(SupportsFloat, seq[0]))
         value = float(cast(SupportsFloat, seq[1]))
         curve = _curve_value(cast(int | str, seq[2])) if len(seq) >= 3 else 0
         if not math.isfinite(ppq):
-            raise ValueError(f"points[{i}].ppq must be a finite number")
+            raise SonareValueError(f"points[{i}].ppq must be a finite number")
         if not math.isfinite(value):
-            raise ValueError(f"points[{i}].value must be a finite number")
+            raise SonareValueError(f"points[{i}].value must be a finite number")
         c_points[i].ppq = ppq
         c_points[i].value = value
         c_points[i].curve_to_next = int(curve)
@@ -557,7 +558,7 @@ def _synth_waveform_value(waveform: str | int) -> int:
             value = int(resolver(waveform.encode("utf-8")))
             if value >= 0:
                 return value
-            raise ValueError(f"unknown synth waveform: {waveform!r}")
+            raise SonareValueError(f"unknown synth waveform: {waveform!r}")
     return _resolve_enum(waveform, _SYNTH_WAVEFORM_NAMES, "synth waveform")
 
 
@@ -698,7 +699,7 @@ class SynthPatch:
         if self.mod_routings is not None:
             c.present_fields |= SONARE_SYNTH_FIELD_MOD_ROUTINGS
         if len(routings) > SONARE_SYNTH_PATCH_MOD_ROUTINGS:
-            raise ValueError(
+            raise SonareValueError(
                 f"a synth patch supports at most {SONARE_SYNTH_PATCH_MOD_ROUTINGS} mod routings"
             )
         c.num_mod_routings = len(routings)
@@ -971,17 +972,17 @@ def _midi_event_tuple(name: str, *args: float | int) -> tuple[float, int, int]:
 
 def _validate_midi_event_word(value: object, label: str) -> int:
     if isinstance(value, bool) or not isinstance(value, numbers.Real):
-        raise ValueError(f"{label} must be an integer in [0, 4294967295]")
+        raise SonareValueError(f"{label} must be an integer in [0, 4294967295]")
     word = float(cast(SupportsFloat, value))
     if not math.isfinite(word) or not word.is_integer() or word < 0.0 or word > 0xFFFFFFFF:
-        raise ValueError(f"{label} must be an integer in [0, 4294967295]")
+        raise SonareValueError(f"{label} must be an integer in [0, 4294967295]")
     return int(word)
 
 
 def _validate_midi_event_ppq(value: object, label: str) -> float:
     if isinstance(value, bool) or not isinstance(value, numbers.Real):
-        raise ValueError(f"{label} must be a non-negative finite number")
+        raise SonareValueError(f"{label} must be a non-negative finite number")
     ppq = float(cast(SupportsFloat, value))
     if not math.isfinite(ppq) or ppq < 0.0:
-        raise ValueError(f"{label} must be a non-negative finite number")
+        raise SonareValueError(f"{label} must be a non-negative finite number")
     return ppq

@@ -20,6 +20,7 @@ from ._ffi import (
     SonareWaveformPeaksResult,
 )
 from ._runtime import (
+    SonareValueError,
     _call_float_transform,
     _check,
     _from_c_float_array,
@@ -133,11 +134,11 @@ def lufs_interleaved(
     """
     sample_buf = _validate_samples("lufs_interleaved", samples, validate=validate)
     if channels <= 0:
-        raise ValueError("lufs_interleaved: channels must be > 0")
+        raise SonareValueError("lufs_interleaved: channels must be > 0")
     lib = _get_lib()
     c_array, total = _to_c_float_array(sample_buf)
     if total % channels != 0:
-        raise ValueError(
+        raise SonareValueError(
             "lufs_interleaved: interleaved samples length must be divisible by channels"
         )
     frames = total // channels
@@ -197,7 +198,9 @@ def _metering_scalar(
     *,
     validate: bool = True,
 ) -> float:
-    sample_buf = _validate_samples(name, samples, validate=validate)
+    # ``name`` is the C symbol; validation messages quote the facade spelling
+    # the caller actually invoked.
+    sample_buf = _validate_samples(name.removeprefix("sonare_"), samples, validate=validate)
     lib = _get_lib()
     c_array, length = _to_c_float_array(sample_buf)
     out = ctypes.c_float(0.0)
@@ -289,7 +292,7 @@ def metering_crest_factor_db_stereo(
     left_array, left_length = _to_c_float_array(left_buf)
     right_array, right_length = _to_c_float_array(right_buf)
     if left_length != right_length:
-        raise ValueError("left and right channel lengths must match")
+        raise SonareValueError("left and right channel lengths must match")
     out = ctypes.c_float(0.0)
     rc = lib.sonare_metering_crest_factor_db_stereo(
         left_array,
@@ -349,7 +352,7 @@ def metering_detect_clipping(
 ) -> ClippingReport:
     """Detect contiguous runs of clipped samples."""
     if not isinstance(min_region_samples, int) or min_region_samples < 0:
-        raise ValueError("min_region_samples must be a non-negative integer")
+        raise SonareValueError("min_region_samples must be a non-negative integer")
     sample_buf = _validate_samples("metering_detect_clipping", samples, validate=validate)
     lib = _get_lib()
     c_array, length = _to_c_float_array(sample_buf)
@@ -391,13 +394,16 @@ def _stereo_scalar(
     *,
     validate: bool = True,
 ) -> float:
-    left_buf = _validate_samples(name, left, validate=validate, arg_name="left")
-    right_buf = _validate_samples(name, right, validate=validate, arg_name="right")
+    # ``name`` is the C symbol; validation messages quote the facade spelling
+    # the caller actually invoked.
+    fn_name = name.removeprefix("sonare_")
+    left_buf = _validate_samples(fn_name, left, validate=validate, arg_name="left")
+    right_buf = _validate_samples(fn_name, right, validate=validate, arg_name="right")
     lib = _get_lib()
     left_array, left_len = _to_c_float_array(left_buf)
     right_array, right_len = _to_c_float_array(right_buf)
     if left_len != right_len:
-        raise ValueError(f"{name}: left and right buffers must have the same length")
+        raise SonareValueError(f"{fn_name}: left and right buffers must have the same length")
     out = ctypes.c_float(0.0)
     rc = getattr(lib, name)(
         left_array,
@@ -471,7 +477,9 @@ def metering_vectorscope(
     left_array, left_len = _to_c_float_array(left_buf)
     right_array, right_len = _to_c_float_array(right_buf)
     if left_len != right_len:
-        raise ValueError("metering_vectorscope: left and right buffers must have the same length")
+        raise SonareValueError(
+            "metering_vectorscope: left and right buffers must have the same length"
+        )
     out = SonareVectorscopeResult()
     rc = lib.sonare_metering_vectorscope(
         left_array,
@@ -526,7 +534,7 @@ def metering_vectorscope_decimated(
     left_array, left_len = _to_c_float_array(left_buf)
     right_array, right_len = _to_c_float_array(right_buf)
     if left_len != right_len:
-        raise ValueError(
+        raise SonareValueError(
             "metering_vectorscope_decimated: left and right buffers must have the same length"
         )
     out = SonareVectorscopeResult()
@@ -585,7 +593,9 @@ def metering_phase_scope(
     left_array, left_len = _to_c_float_array(left_buf)
     right_array, right_len = _to_c_float_array(right_buf)
     if left_len != right_len:
-        raise ValueError("metering_phase_scope: left and right buffers must have the same length")
+        raise SonareValueError(
+            "metering_phase_scope: left and right buffers must have the same length"
+        )
     out = SonarePhaseScopeResult()
     rc = lib.sonare_metering_phase_scope(
         left_array,
@@ -654,7 +664,7 @@ def metering_phase_scope_decimated(
     left_array, left_len = _to_c_float_array(left_buf)
     right_array, right_len = _to_c_float_array(right_buf)
     if left_len != right_len:
-        raise ValueError(
+        raise SonareValueError(
             "metering_phase_scope_decimated: left and right buffers must have the same length"
         )
     out = SonarePhaseScopeResult()
@@ -838,9 +848,9 @@ def waveform_peaks(
     """
     sample_buf = _validate_samples("waveform_peaks", samples, validate=validate)
     if channels <= 0 or len(sample_buf) % channels != 0:
-        raise ValueError("waveform_peaks: samples length must be a multiple of channels")
+        raise SonareValueError("waveform_peaks: samples length must be a multiple of channels")
     if samples_per_bucket <= 0:
-        raise ValueError("waveform_peaks: samples_per_bucket must be > 0")
+        raise SonareValueError("waveform_peaks: samples_per_bucket must be > 0")
     lib = _get_lib()
     c_array, length = _to_c_float_array(sample_buf)
     out = SonareWaveformPeaksResult()
@@ -876,9 +886,11 @@ def waveform_peak_pyramid(
     sample_buf = _validate_samples("waveform_peak_pyramid", samples, validate=validate)
     levels = [int(level) for level in samples_per_bucket_levels]
     if channels <= 0 or len(sample_buf) % channels != 0:
-        raise ValueError("waveform_peak_pyramid: samples length must be a multiple of channels")
+        raise SonareValueError(
+            "waveform_peak_pyramid: samples length must be a multiple of channels"
+        )
     if not levels or any(level <= 0 for level in levels):
-        raise ValueError(
+        raise SonareValueError(
             "waveform_peak_pyramid: samples_per_bucket_levels must be non-empty and > 0"
         )
     lib = _get_lib()

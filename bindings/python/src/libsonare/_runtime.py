@@ -4,9 +4,11 @@ from __future__ import annotations
 
 import contextlib
 import ctypes
-from collections.abc import Iterator, Mapping, Sequence
+import functools
+import inspect
+from collections.abc import Callable, Iterator, Mapping, Sequence
 from enum import IntEnum
-from typing import Any, cast
+from typing import Any, TypeVar, cast
 
 import numpy as np
 
@@ -76,6 +78,28 @@ class SonareError(RuntimeError):
             return names[ErrorCode.UNKNOWN]
 
 
+class SonareValueError(SonareError, ValueError):
+    """Exception raised when the binding rejects a caller-supplied argument.
+
+    Deriving from both :class:`SonareError` and :class:`ValueError` is the
+    compatibility contract, not an implementation detail: every
+    argument-validation failure the binding raises must be caught by
+    ``except ValueError`` (the plain type argument validation has always used)
+    and by ``except SonareError`` (the binding's own error hierarchy), so
+    neither style of caller needs to know which one a given entry point picks.
+
+    Unlike :class:`SonareError`, the message is the plain validation text with
+    no ``[code]`` prefix, since the failure never reached the C ABI.
+    :attr:`code` defaults to :attr:`ErrorCode.INVALID_PARAMETER` so error-class
+    and exit-code mapping treat it exactly like the C-ABI rejection it stands
+    in for.
+    """
+
+    def __init__(self, message: str, code: int = int(ErrorCode.INVALID_PARAMETER)) -> None:
+        self.code = int(code)
+        ValueError.__init__(self, message)
+
+
 def _get_lib() -> ctypes.CDLL:
     global _lib
     if _lib is None:
@@ -106,32 +130,87 @@ def _validate_samples(
     *,
     validate: bool = True,
     arg_name: str = "samples",
+    allow_empty: bool = False,
 ) -> np.ndarray:
     """Coerce ``samples`` to a contiguous float32 buffer and apply input guards.
 
-    Always rejects empty buffers with ``ValueError``. When ``validate`` is True
-    (the default), additionally scans for NaN / Inf and raises ``ValueError``
-    on the first offending index. Hot paths may pass ``validate=False`` to
-    skip the O(n) scan.
+    Rejects empty buffers with :class:`SonareValueError`. When ``validate`` is
+    True (the default), additionally scans for NaN / Inf and raises
+    :class:`SonareValueError` on the first offending index. Hot paths may pass
+    ``validate=False`` to skip the O(n) scan.
+
+    ``allow_empty`` skips only the emptiness check, for a caller that inspects
+    several buffers together and reports "nothing to work on" once rather than
+    per buffer. The non-finite scan is unaffected — it is a no-op on an empty
+    buffer — so the NaN / Inf message stays defined in this one place.
     """
     buf = _as_float32_buffer(samples)
-    if int(buf.shape[0]) == 0:
-        raise ValueError(f"{fn_name}: {arg_name} must not be empty")
+    if not allow_empty and int(buf.shape[0]) == 0:
+        raise SonareValueError(f"{fn_name}: {arg_name} must not be empty")
     if validate:
         # `np.isfinite` is vectorised C, so this stays cheap relative to the
         # actual DSP call but lets us surface the *index* of the bad value.
         finite = np.isfinite(buf)
         if not bool(finite.all()):
             bad = int(np.argmin(finite))
-            raise ValueError(f"{fn_name}: {arg_name} contains NaN or Inf at index {bad}")
+            raise SonareValueError(f"{fn_name}: {arg_name} contains NaN or Inf at index {bad}")
     return buf
 
 
+_GuardedFn = TypeVar("_GuardedFn", bound=Callable[..., Any])
+
+
+def _guard_buffer(*arg_names: str) -> Callable[[_GuardedFn], _GuardedFn]:
+    """Preflight the named sample-buffer arguments of a facade function.
+
+    Runs :func:`_validate_samples` on each named argument before the wrapped
+    call, so an empty or non-finite buffer raises :class:`SonareValueError`
+    naming both the facade function and the offending argument instead of the
+    bare ``[4] Invalid parameter`` the C ABI reports for the same input.
+
+    Arguments are resolved through the wrapped function's signature, so both
+    call styles keep working — the librosa mirrors and the realtime event
+    packers are positional by design. A name the call never supplied (an
+    optional buffer left at its default) is skipped. When the wrapped function
+    exposes a ``validate`` flag, the value in effect for the call decides
+    whether the O(n) non-finite scan runs.
+
+    The wrapper is built with :func:`functools.wraps`, so ``__doc__``,
+    ``__module__`` and the introspected signature survive decoration; the
+    ``.pyi`` stubs and :func:`libsonare._facade.rebind_facade_exports` both
+    depend on that.
+    """
+
+    def decorate(fn: _GuardedFn) -> _GuardedFn:
+        signature = inspect.signature(fn)
+        validate_param = signature.parameters.get("validate")
+
+        @functools.wraps(fn)
+        def guarded(*args: Any, **kwargs: Any) -> Any:
+            bound = signature.bind_partial(*args, **kwargs)
+            validate = True
+            if validate_param is not None:
+                validate = bool(bound.arguments.get("validate", validate_param.default))
+            for arg_name in arg_names:
+                if arg_name in bound.arguments:
+                    _validate_samples(
+                        fn.__name__,
+                        bound.arguments[arg_name],
+                        validate=validate,
+                        arg_name=arg_name,
+                    )
+            return fn(*args, **kwargs)
+
+        return cast(_GuardedFn, guarded)
+
+    return decorate
+
+
 def _validate_scalar(fn_name: str, value: float, arg_name: str) -> float:
-    """Reject NaN / Inf scalar inputs with ``ValueError``."""
+    """Reject NaN / Inf scalar inputs with :class:`SonareValueError`."""
     v = float(value)
     if not np.isfinite(v):
-        raise ValueError(f"{fn_name}: {arg_name} must be a finite number")
+        raise SonareValueError(f"{fn_name}: {arg_name} must be a finite number")
     return v
 
 
@@ -313,8 +392,8 @@ def _resolve_enum(
     ``names`` maps accepted lowercase spellings (with underscores folded to
     dashes when ``dash`` is set) to ordinals. Integers pass through unchanged;
     an ``enum_cls`` instance is coerced with ``int()``. Unknown inputs raise
-    ``ValueError`` built from ``verb`` / ``what`` (and, when ``expected`` is
-    set, the sorted accepted names).
+    :class:`SonareValueError` built from ``verb`` / ``what`` (and, when
+    ``expected`` is set, the sorted accepted names).
     """
     if enum_cls is not None and isinstance(value, enum_cls):
         return cast(int, value)
@@ -322,10 +401,10 @@ def _resolve_enum(
         if (reject_bool and isinstance(value, bool)) or (
             validate_int and value not in names.values()
         ):
-            raise ValueError(_enum_error(value, names, what, verb, expected, quote_value))
+            raise SonareValueError(_enum_error(value, names, what, verb, expected, quote_value))
         return value
     if not isinstance(value, str):
-        raise ValueError(_enum_error(value, names, what, verb, expected, quote_value))
+        raise SonareValueError(_enum_error(value, names, what, verb, expected, quote_value))
     key = value.strip() if strip else value
     if dash:
         key = key.replace("_", "-")
@@ -333,14 +412,14 @@ def _resolve_enum(
         key = key.replace("-", "_")
     key = key.lower()
     if key not in names:
-        raise ValueError(_enum_error(value, names, what, verb, expected, quote_value))
+        raise SonareValueError(_enum_error(value, names, what, verb, expected, quote_value))
     return names[key]
 
 
 def _require_power_of_two(value: int, name: str) -> None:
     """Validate a positive power-of-two integer with a consistent error."""
     if value <= 0 or (value & (value - 1)) != 0:
-        raise ValueError(f"{name} must be a positive power of two")
+        raise SonareValueError(f"{name} must be a positive power of two")
 
 
 def _synth_enum_value(value: str | int, names: Mapping[str, int], what: str) -> int:
