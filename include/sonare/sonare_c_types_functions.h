@@ -239,10 +239,20 @@ const char* sonare_error_message(SonareError error);
 ///   detailed message is currently recorded.
 ///
 ///   CONTRACT (read carefully):
-///   - Every public C-ABI call that returns SonareError CLEARS the thread-local
+///   - Public C-ABI calls that return SonareError CLEAR the thread-local
 ///     message on entry, so a detailed message can never leak into a later
 ///     error-code result. Diagnostic accessors and void cleanup helpers do not
 ///     clear it, allowing callers to release partial outputs before inspection.
+///   - AUDIO-THREAD entry points are the exception: they neither clear nor
+///     record a message. The first use of a thread-local object can allocate
+///     TLS storage on some platforms, which would break their no-allocation
+///     contract. They also never throw, so they have no exception-path detail
+///     to report. The consequence is that after one of them returns an error
+///     code, this function still returns whatever an earlier control-thread
+///     call left behind -- do not read it as belonging to the failed call.
+///     Validate and configure on the control thread instead. This class is the
+///     engine block-render entry points and the realtime voice-changer
+///     process / latency entry points.
 ///   - A message is recorded ONLY on the caught-C++-exception return path (the
 ///     library mapped a thrown sonare::SonareException / std::exception to a
 ///     SonareError). For those, this returns the exception's what() text.
