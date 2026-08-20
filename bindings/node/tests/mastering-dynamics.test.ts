@@ -11,8 +11,8 @@ import {
   masteringDynamicsCompressor,
   masteringDynamicsGate,
   masteringDynamicsTransientShaper,
-} from '../src/index';
-import { sine as sineWave } from './_helpers';
+} from '../src/index.js';
+import { sine as sineWave } from './_helpers.js';
 
 const SR = 44100;
 

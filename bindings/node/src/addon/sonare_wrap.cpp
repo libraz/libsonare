@@ -226,6 +226,9 @@ Napi::Object SonareWrap::Init(Napi::Env env, Napi::Object exports) {
   exports.Set("masteringPresetNames",
               Napi::Function::New(env, &SonareWrap::MasteringPresetNames, "masteringPresetNames"));
   exports.Set(
+      "masteringPlatformNames",
+      Napi::Function::New(env, &SonareWrap::MasteringPlatformNames, "masteringPlatformNames"));
+  exports.Set(
       "mixingScenePresetNames",
       Napi::Function::New(env, &SonareWrap::MixingScenePresetNames, "mixingScenePresetNames"));
   exports.Set("mixingScenePresetJson", Napi::Function::New(env, &SonareWrap::MixingScenePresetJson,

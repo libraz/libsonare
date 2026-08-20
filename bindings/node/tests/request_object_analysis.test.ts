@@ -131,9 +131,19 @@ describe('analysis request-object compatibility', () => {
     expect(estimateRoom({ samples, sampleRate, ...estimateOptions })).toEqual(
       estimateRoom(samples, sampleRate, estimateOptions),
     );
-    const morphOptions = { targetRt60: 0.2, mix: 0.25 };
+    // Both keys are swept to a value that measurably moves the output: with an
+    // option bag the call ignores, the two forms agree on the default result and
+    // the comparison says nothing about whether options reach the call at all.
+    // `targetRt60` and `mix` were exactly that -- neither exists on
+    // RoomMorphOptions, and the output was byte-identical to passing `{}`.
+    const morphOptions = { wet: 0.25, lengthM: 12, widthM: 9, heightM: 4 };
     expect(roomMorph({ samples, sampleRate, ...morphOptions })).toEqual(
       roomMorph(samples, sampleRate, morphOptions),
+    );
+    // The bag is not inert: dropping it changes the result, so the equivalence
+    // above is over a non-default configuration.
+    expect(roomMorph(samples, sampleRate, morphOptions)).not.toEqual(
+      roomMorph(samples, sampleRate, {}),
     );
   });
 

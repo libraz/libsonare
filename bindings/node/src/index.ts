@@ -173,6 +173,7 @@ export type {
   RealtimeVoiceChangerPresetMetadata,
   ReassignedSpectrogramResult,
   RhythmResult,
+  RirDiagnostic,
   RirResult,
   RirSynthOptions,
   RoomEstimateOptions,

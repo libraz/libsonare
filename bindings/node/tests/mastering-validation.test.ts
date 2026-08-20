@@ -12,7 +12,7 @@ import {
   masteringChain,
   masteringChainStereo,
   masteringProcess,
-} from '../src/index';
+} from '../src/index.js';
 
 const SR = 44100;
 

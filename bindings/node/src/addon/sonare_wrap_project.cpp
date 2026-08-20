@@ -417,10 +417,10 @@ Napi::Value ProjectWrap::SetTempoSegments(const Napi::CallbackInfo& info) {
       }
       Napi::Object obj = entry.As<Napi::Object>();
       SonareProjectTempoSegment seg{};
-      seg.start_ppq = obj.Get("startPpq").As<Napi::Number>().DoubleValue();
-      seg.bpm = obj.Get("bpm").As<Napi::Number>().DoubleValue();
-      Napi::Value end_bpm = obj.Get("endBpm");
-      seg.end_bpm = end_bpm.IsUndefined() ? 0.0 : end_bpm.As<Napi::Number>().DoubleValue();
+      if (!RequiredDoubleProperty(env, obj, "startPpq", &seg.start_ppq)) return env.Undefined();
+      if (!RequiredDoubleProperty(env, obj, "bpm", &seg.bpm)) return env.Undefined();
+      seg.end_bpm = DoubleProperty(obj, "endBpm", 0.0);
+      if (env.IsExceptionPending()) return env.Undefined();
       segments.push_back(seg);
     }
   } else if (info.Length() > 0 && !info[0].IsUndefined() && !info[0].IsNull()) {
@@ -447,9 +447,9 @@ Napi::Value ProjectWrap::SetTimeSignatures(const Napi::CallbackInfo& info) {
       }
       Napi::Object obj = entry.As<Napi::Object>();
       SonareProjectTimeSignatureSegment seg{};
-      seg.start_ppq = obj.Get("startPpq").As<Napi::Number>().DoubleValue();
-      seg.numerator = obj.Get("numerator").As<Napi::Number>().Int32Value();
-      seg.denominator = obj.Get("denominator").As<Napi::Number>().Int32Value();
+      if (!RequiredDoubleProperty(env, obj, "startPpq", &seg.start_ppq)) return env.Undefined();
+      if (!RequiredIntProperty(env, obj, "numerator", &seg.numerator)) return env.Undefined();
+      if (!RequiredIntProperty(env, obj, "denominator", &seg.denominator)) return env.Undefined();
       segments.push_back(seg);
     }
   } else if (info.Length() > 0 && !info[0].IsUndefined() && !info[0].IsNull()) {

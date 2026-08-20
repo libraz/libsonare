@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
-import { flattenChainConfig } from '../src/_chain_config';
-import type { MasteringChainConfig } from '../src/types';
+import { flattenChainConfig } from '../src/_chain_config.js';
+import type { MasteringChainConfig } from '../src/types.js';
 
 describe('flattenChainConfig legacy flat aliases', () => {
   it('leaves legacy flat spellings for the core canonicalizer', () => {

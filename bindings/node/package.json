@@ -18,6 +18,7 @@
     "lint:fix": "biome check --write src/ tests/",
     "format": "biome format --write src/ tests/",
     "test": "vitest run",
+    "test:types": "tsc -p tsconfig.test.json",
     "test:watch": "vitest"
   },
   "license": "Apache-2.0",

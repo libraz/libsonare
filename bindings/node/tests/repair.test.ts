@@ -7,7 +7,7 @@
  */
 
 import { describe, expect, it } from 'vitest';
-import { masteringRepairDeclick, masteringRepairDenoiseClassical } from '../src/index';
+import { masteringRepairDeclick, masteringRepairDenoiseClassical } from '../src/index.js';
 
 const SR = 22050;
 

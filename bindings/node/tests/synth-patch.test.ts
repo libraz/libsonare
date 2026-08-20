@@ -240,6 +240,7 @@ describe('Project.bounceWithSynthInstrument', () => {
         project.bounceWithSynthInstrument('no-such-preset', { totalFrames: 128 }),
       ).toThrow();
       expect(() =>
+        // @ts-expect-error deliberately unknown waveform name; the patch resolver must reject it.
         project.bounceWithSynthInstrument({ waveform: 'sawtooth-ish' }, { totalFrames: 128 }),
       ).toThrow();
     } finally {

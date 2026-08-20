@@ -33,29 +33,6 @@ bool ClipFadeFromObject(Napi::Env env, const Napi::Object& obj, SonareProjectCli
   return true;
 }
 
-bool RequiredUint32Property(Napi::Env env, const Napi::Object& obj, const char* name,
-                            uint32_t* out) {
-  Napi::Value value = obj.Get(name);
-  if (env.IsExceptionPending()) return false;
-  if (!value.IsNumber()) {
-    Napi::TypeError::New(env, std::string(name) + " must be a number").ThrowAsJavaScriptException();
-    return false;
-  }
-  *out = value.As<Napi::Number>().Uint32Value();
-  return !env.IsExceptionPending();
-}
-
-bool RequiredDoubleProperty(Napi::Env env, const Napi::Object& obj, const char* name, double* out) {
-  Napi::Value value = obj.Get(name);
-  if (env.IsExceptionPending()) return false;
-  if (!value.IsNumber()) {
-    Napi::TypeError::New(env, std::string(name) + " must be a number").ThrowAsJavaScriptException();
-    return false;
-  }
-  *out = value.As<Napi::Number>().DoubleValue();
-  return !env.IsExceptionPending();
-}
-
 bool ParseClipTakes(Napi::Env env, const Napi::Value& value,
                     std::vector<SonareProjectClipTake>* takes,
                     std::vector<std::string>* name_storage) {
@@ -143,11 +120,14 @@ bool ParseAutomationPoints(Napi::Env env, const Napi::Value& value,
     }
     Napi::Object obj = entry.As<Napi::Object>();
     SonareAutomationPoint point{};
-    point.ppq = obj.Get("ppq").As<Napi::Number>().DoubleValue();
-    point.value = obj.Get("value").As<Napi::Number>().FloatValue();
+    if (!RequiredDoubleProperty(env, obj, "ppq", &point.ppq)) return false;
+    if (!RequiredFloatProperty(env, obj, "value", &point.value)) return false;
     Napi::Value curve = obj.Get("curve");
-    if (curve.IsUndefined()) curve = obj.Get("curveToNext");
-    point.curve_to_next = curve.IsUndefined() ? 0 : curve.As<Napi::Number>().Int32Value();
+    if (env.IsExceptionPending()) return false;
+    if (curve.IsUndefined() || curve.IsNull()) curve = obj.Get("curveToNext");
+    point.curve_to_next =
+        curve.IsUndefined() || curve.IsNull() ? 0 : curve.As<Napi::Number>().Int32Value();
+    if (env.IsExceptionPending()) return false;
     points->push_back(point);
   }
   return true;
@@ -219,7 +199,7 @@ bool FillAutomationLaneDesc(Napi::Env env, const Napi::Object& obj,
 bool FillWarpMapDesc(Napi::Env env, const Napi::Object& obj,
                      std::vector<SonareProjectWarpAnchor>* anchors,
                      SonareProjectWarpMapDesc* desc) {
-  desc->id = obj.Get("id").As<Napi::Number>().Uint32Value();
+  if (!RequiredUint32Property(env, obj, "id", &desc->id)) return false;
   desc->name = nullptr;
   Napi::Value value = obj.Get("anchors");
   if (!value.IsArray()) {
@@ -236,8 +216,8 @@ bool FillWarpMapDesc(Napi::Env env, const Napi::Object& obj,
     }
     Napi::Object anchor = entry.As<Napi::Object>();
     SonareProjectWarpAnchor out{};
-    out.warp_sample = anchor.Get("warpSample").As<Napi::Number>().DoubleValue();
-    out.source_sample = anchor.Get("sourceSample").As<Napi::Number>().DoubleValue();
+    if (!RequiredDoubleProperty(env, anchor, "warpSample", &out.warp_sample)) return false;
+    if (!RequiredDoubleProperty(env, anchor, "sourceSample", &out.source_sample)) return false;
     anchors->push_back(out);
   }
   desc->anchors = anchors->empty() ? nullptr : anchors->data();

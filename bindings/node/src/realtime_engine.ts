@@ -153,11 +153,11 @@ export class RealtimeEngine {
     return this.native.parameterCount();
   }
 
-  parameterInfoByIndex(index: number): EngineParameterInfo {
+  parameterInfoByIndex(index: number): Required<EngineParameterInfo> {
     return this.native.parameterInfoByIndex(index);
   }
 
-  parameterInfo(id: number): EngineParameterInfo {
+  parameterInfo(id: number): Required<EngineParameterInfo> {
     return this.native.parameterInfo(id);
   }
 

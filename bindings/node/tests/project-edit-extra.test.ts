@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest';
+import type { ProjectFadeCurve } from '../src/index.js';
 import {
   masteringInsertNames,
   PROJECT_AUTOMATION_TARGET_TRACK_FADER_DB,
@@ -94,7 +95,7 @@ describe('Project edit ops (new bindings)', () => {
     expect(() =>
       project.setClipFade(clip, {
         lengthPpq: null as unknown as number,
-        curve: null as unknown as number,
+        curve: null as unknown as ProjectFadeCurve,
       }),
     ).not.toThrow();
     json = project.toJson();

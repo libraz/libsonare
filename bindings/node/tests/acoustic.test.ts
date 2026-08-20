@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { estimateRoom, roomMorph, synthesizeRir } from '../src/index';
+import { estimateRoom, roomMorph, synthesizeRir } from '../src/index.js';
 
 describe('geometric room acoustics', () => {
   it('synthesizes a decaying RIR from geometry', () => {
@@ -166,6 +166,58 @@ describe('geometric room acoustics', () => {
     const rir = synthesizeRir({ lengthM: 7, widthM: 5, heightM: 3, absorption: 0.15 });
     const est = estimateRoom(rir.rir, 48000);
     expect(est.absorptionBands.length).toBe(est.rt60Bands.length);
+  });
+
+  it('keeps the full band count when one of the two estimates fails', () => {
+    // Absorption (the inverse problem) and RT60 (the decay fit) are independent:
+    // white noise has no usable broadband decay, so the absorption solve bails
+    // out with no bands at all while the analyzer still reports its per-band
+    // vector. Reporting both at the shorter length threw the surviving vector
+    // away; the C ABI NaN-fills the failed side instead and Node now matches.
+    let state = 7;
+    const noise = new Float32Array(48000);
+    for (let i = 0; i < noise.length; i++) {
+      state = (state * 1103515245 + 12345) & 0x7fffffff;
+      noise[i] = (state / 0x7fffffff) * 2 - 1;
+    }
+    const analyzable = synthesizeRir({ lengthM: 7, widthM: 5, heightM: 3, absorption: 0.15 });
+    const bandCount = estimateRoom(analyzable.rir, 48000).rt60Bands.length;
+    expect(bandCount).toBeGreaterThan(0);
+
+    const degraded = estimateRoom(noise, 48000);
+    expect(degraded.confidence).toBe(0);
+    expect(degraded.rt60Bands.length).toBe(bandCount);
+    expect(degraded.absorptionBands.length).toBe(degraded.rt60Bands.length);
+  });
+
+  it('reports which diagnostic fired instead of a bare hasError boolean', () => {
+    const invalid = synthesizeRir({ lengthM: 7, widthM: 5, heightM: 3, sourceX: 99 });
+    expect(invalid.hasError).toBe(true);
+    // The five geometry errors were indistinguishable through hasError alone.
+    expect(invalid.errorMessage).toContain('acoustic.source_outside_room');
+    expect(invalid.diagnostics.map((d) => d.code)).toContain('acoustic.source_outside_room');
+    expect(invalid.diagnostics.every((d) => d.severity === 'error')).toBe(true);
+
+    const clean = synthesizeRir({ lengthM: 7, widthM: 5, heightM: 3, absorption: 0.15 });
+    expect(clean.hasError).toBe(false);
+    expect(clean.errorMessage).toBe('');
+    expect(clean.diagnostics).toEqual([]);
+  });
+
+  it('surfaces a maxSeconds tail clamp as a warning on a successful call', () => {
+    // A clamped tail used to be indistinguishable from an untruncated RIR: the
+    // convolution just sounded wrong, with hasError still false.
+    const clamped = synthesizeRir({
+      lengthM: 20,
+      widthM: 15,
+      heightM: 8,
+      absorption: 0.03,
+      maxSeconds: 0.2,
+    });
+    expect(clamped.hasError).toBe(false);
+    const warning = clamped.diagnostics.find((d) => d.code === 'acoustic.rir_length_clamped');
+    expect(warning).toBeDefined();
+    expect(warning?.severity).toBe('warning');
   });
 
   // Cross-surface parity fixes: these paths previously diverged from the C ABI.

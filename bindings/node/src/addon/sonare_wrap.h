@@ -126,6 +126,7 @@ class SonareWrap : public Napi::ObjectWrap<SonareWrap> {
   static Napi::Value MasteringChainWithProgress(const Napi::CallbackInfo& info);
   static Napi::Value MasteringChainStereoWithProgress(const Napi::CallbackInfo& info);
   static Napi::Value MasteringPresetNames(const Napi::CallbackInfo& info);
+  static Napi::Value MasteringPlatformNames(const Napi::CallbackInfo& info);
   static Napi::Value MixingScenePresetNames(const Napi::CallbackInfo& info);
   static Napi::Value MixingScenePresetJson(const Napi::CallbackInfo& info);
   static Napi::Value MixStereo(const Napi::CallbackInfo& info);

@@ -1,5 +1,6 @@
 #include "sonare_wrap_utils.h"
 
+#include <algorithm>
 #include <cstring>
 #include <string>
 
@@ -35,6 +36,8 @@ const char* ErrorCodeName(SonareError err) {
       return "InvalidState";
     case SONARE_ERROR_CANCELLED:
       return "Cancelled";
+    case SONARE_ERROR_ENCODE_FAILED:
+      return "EncodeFailed";
     case SONARE_ERROR_UNKNOWN:
     default:
       return "Unknown";
@@ -245,7 +248,8 @@ Napi::Object KeyToObject(Napi::Env env, SonarePitchClass root, SonareMode mode, 
   return key;
 }
 
-std::vector<sonare::mastering::api::Param> ParamsFromObject(const Napi::Object& object) {
+std::vector<sonare::mastering::api::Param> ParamsFromObject(
+    const Napi::Object& object, const std::vector<std::string>& skip_keys) {
   std::vector<sonare::mastering::api::Param> params;
   Napi::Env env = object.Env();
   Napi::Array names = object.GetPropertyNames();
@@ -253,6 +257,7 @@ std::vector<sonare::mastering::api::Param> ParamsFromObject(const Napi::Object& 
     Napi::Value key_value = names.Get(index);
     Napi::Value value = object.Get(key_value);
     const std::string key = key_value.As<Napi::String>().Utf8Value();
+    if (std::find(skip_keys.begin(), skip_keys.end(), key) != skip_keys.end()) continue;
     if (value.IsNumber()) {
       params.push_back({key, value.As<Napi::Number>().DoubleValue()});
     } else if (value.IsBoolean()) {

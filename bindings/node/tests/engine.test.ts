@@ -3,6 +3,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { Worker } from 'node:worker_threads';
 import { describe, expect, it } from 'vitest';
+import type { EngineBounceOptions } from '../src/index.js';
 import {
   Audio,
   ErrorCode,
@@ -146,6 +147,7 @@ describe('RealtimeEngine native binding', () => {
       defaultCurve: 0,
     });
     // An out-of-range breakpoint curve is rejected, not clamped.
+    // @ts-expect-error deliberately out-of-range curve ordinal; the addon must reject it.
     expect(() => engine.setAutomationLane(9, [{ ppq: 0, value: 0.5, curveToNext: 99 }])).toThrow();
     // An out-of-range default curve is rejected on registration.
     expect(() =>
@@ -157,6 +159,7 @@ describe('RealtimeEngine native binding', () => {
         maxValue: 1,
         defaultValue: 0,
         rtSafe: true,
+        // @ts-expect-error deliberately out-of-range curve ordinal; the addon must reject it.
         defaultCurve: 99,
       }),
     ).toThrow();
@@ -834,7 +837,7 @@ describe('RealtimeEngine native binding', () => {
     expect(badIndexError.code).toBe(ErrorCode.InvalidParameter);
 
     engine.play();
-    let eqOut = new Float32Array(256);
+    let eqOut: Float32Array<ArrayBufferLike> = new Float32Array(256);
     for (let block = 0; block < 6; block += 1) {
       [eqOut] = engine.process([new Float32Array(256)]);
     }
@@ -888,7 +891,7 @@ describe('RealtimeEngine native binding', () => {
       enabled: true,
     });
     engine.seekSample(0);
-    let eqOut = new Float32Array(256);
+    let eqOut: Float32Array<ArrayBufferLike> = new Float32Array(256);
     for (let block = 0; block < 6; block += 1) {
       [eqOut] = engine.process([new Float32Array(256)]);
     }
@@ -996,7 +999,7 @@ describe('RealtimeEngine native binding', () => {
       enabled: true,
     });
     engine.seekSample(0);
-    let eqOut = new Float32Array(256);
+    let eqOut: Float32Array<ArrayBufferLike> = new Float32Array(256);
     for (let block = 0; block < 6; block += 1) {
       [eqOut] = engine.process([new Float32Array(256)]);
     }
@@ -1325,6 +1328,88 @@ describe('RealtimeEngine native binding', () => {
     expect(frozenRendered[1][0]).toBeCloseTo(-0.25, 4);
   });
 
+  it('bounces clip content, hits the loudness target and applies dither', () => {
+    const frames = 256;
+    const amplitude = 0.5;
+    const tone = new Float32Array(frames);
+    for (let i = 0; i < frames; i++) {
+      tone[i] = amplitude * Math.sin((2 * Math.PI * 440 * i) / 48000);
+    }
+
+    const bounce = (
+      options: Partial<EngineBounceOptions> = {},
+    ): { samples: Float32Array; lufs: number } => {
+      const engine = new RealtimeEngine(48000, 128);
+      engine.setClips([
+        { id: 1, channels: [tone, tone.slice()], startPpq: 0, lengthSamples: frames },
+      ]);
+      engine.play();
+      const result = engine.bounceOffline({
+        totalFrames: frames,
+        blockSize: 128,
+        numChannels: 2,
+        sourceSampleRate: 48000,
+        targetSampleRate: 48000,
+        ...options,
+      });
+      engine.destroy();
+      return { samples: result.interleaved, lufs: result.integratedLufs };
+    };
+
+    const peak = (samples: Float32Array): number =>
+      samples.reduce((acc, sample) => Math.max(acc, Math.abs(sample)), 0);
+    const maxAbsDiff = (a: Float32Array, b: Float32Array): number =>
+      a.reduce((acc, sample, index) => Math.max(acc, Math.abs(sample - b[index])), 0);
+
+    // The scheduled clip must actually reach the bounce: a bounce that renders
+    // silence would satisfy every shape assertion while exporting nothing.
+    const plain = bounce();
+    expect(plain.samples.length).toBe(frames * 2);
+    expect(peak(plain.samples)).toBeCloseTo(amplitude, 3);
+    expect(plain.samples.some((sample) => sample !== 0)).toBe(true);
+    expect(Number.isFinite(plain.lufs)).toBe(true);
+
+    // Requested loudness is reached, and the documented 0 sentinel resolves to
+    // the shared -14 LUFS default rather than to a literal 0 LUFS target.
+    for (const targetLufs of [-20, -9]) {
+      const normalized = bounce({ normalizeLufs: true, targetLufs });
+      expect(normalized.lufs).toBeCloseTo(targetLufs, 1);
+    }
+    expect(bounce({ normalizeLufs: true, targetLufs: 0 }).lufs).toBeCloseTo(-14, 1);
+
+    // Dither types are identified by what they do to the signal rather than by
+    // the integer alone, so a remapped type cannot pass: RPDF and TPDF add
+    // noise without quantizing (TPDF is the wider of the two, being the sum of
+    // two uniform draws), and only the noise-shaped type quantizes onto the
+    // target-depth grid.
+    const bits = 8;
+    const lsb = 1 / (1 << (bits - 1));
+    const none = bounce({ dither: 0, ditherBits: bits, ditherSeed: 1 });
+    const rpdf = bounce({ dither: 1, ditherBits: bits, ditherSeed: 1 });
+    const tpdf = bounce({ dither: 2, ditherBits: bits, ditherSeed: 1 });
+    const shaped = bounce({ dither: 3, ditherBits: bits, ditherSeed: 1 });
+    const onGrid = (samples: Float32Array): number =>
+      samples.reduce(
+        (acc, sample) => acc + (Math.abs(sample / lsb - Math.round(sample / lsb)) < 1e-4 ? 1 : 0),
+        0,
+      );
+
+    expect(maxAbsDiff(none.samples, plain.samples)).toBe(0);
+    expect(maxAbsDiff(rpdf.samples, none.samples)).toBeGreaterThan(lsb / 4);
+    expect(maxAbsDiff(tpdf.samples, none.samples)).toBeGreaterThan(
+      maxAbsDiff(rpdf.samples, none.samples),
+    );
+    expect(onGrid(rpdf.samples)).toBeLessThan(rpdf.samples.length / 2);
+    expect(onGrid(shaped.samples)).toBe(shaped.samples.length);
+
+    // A fixed seed is reproducible and a different seed is not, so the seed
+    // reaches the generator instead of being dropped.
+    const repeat = bounce({ dither: 2, ditherBits: bits, ditherSeed: 1 });
+    expect(Array.from(repeat.samples)).toEqual(Array.from(tpdf.samples));
+    const otherSeed = bounce({ dither: 2, ditherBits: bits, ditherSeed: 2 });
+    expect(maxAbsDiff(otherSeed.samples, tpdf.samples)).toBeGreaterThan(0);
+  });
+
   it('reads captured audio out of the capture buffer', () => {
     const engine = new RealtimeEngine(48000, 128);
     const captureLeft = new Float32Array(128);
@@ -1610,14 +1695,14 @@ describe('RealtimeEngine native binding', () => {
     expect(() => engine.setTrackStripInsertParamByName(10, 0, 'bogusParam', 1)).toThrow();
 
     engine.play();
-    let dry = new Float32Array(256);
+    let dry: Float32Array<ArrayBufferLike> = new Float32Array(256);
     for (let b = 0; b < 8; b++) {
       dry = engine.process([new Float32Array(256)])[0];
     }
     const dryRms = rms(dry);
 
     engine.setTrackStripInsertParamByName(10, 0, 'dryWet', 1.0);
-    let wet = new Float32Array(256);
+    let wet: Float32Array<ArrayBufferLike> = new Float32Array(256);
     for (let b = 0; b < 8; b++) {
       wet = engine.process([new Float32Array(256)])[0];
     }

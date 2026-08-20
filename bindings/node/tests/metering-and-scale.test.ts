@@ -21,8 +21,8 @@ import {
   scaleQuantizeMidi,
   waveformPeakPyramid,
   waveformPeaks,
-} from '../src/index';
-import { sine as sineWave } from './_helpers';
+} from '../src/index.js';
+import { sine as sineWave } from './_helpers.js';
 
 const SR = 22050;
 const C_MAJOR_MASK = 0b101010110101;

@@ -13,6 +13,7 @@ export enum ErrorCode {
   NotSupported = 6,
   InvalidState = 7,
   Cancelled = 8,
+  EncodeFailed = 9,
   Unknown = 99,
 }
 

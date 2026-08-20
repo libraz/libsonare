@@ -209,74 +209,100 @@ export interface StreamingPlatform {
   ceilingDb: number;
 }
 
-export type SoloProcessor =
-  | 'dynamics.brickwallLimiter'
-  | 'dynamics.compressor'
-  | 'dynamics.deesser'
-  | 'dynamics.expander'
-  | 'dynamics.gate'
-  | 'dynamics.limiter'
-  | 'dynamics.parallelComp'
-  | 'dynamics.sidechainRouter'
-  | 'dynamics.duckingProcessor'
-  | 'dynamics.transientShaper'
-  | 'dynamics.upwardCompressor'
-  | 'dynamics.upwardExpander'
-  | 'dynamics.vocalRider'
-  | 'eq.apiStyle'
-  | 'eq.bandPass'
-  | 'eq.cutFilter'
-  | 'eq.dynamic'
-  | 'eq.equalizer'
-  | 'eq.graphic'
-  | 'eq.linearPhase'
-  | 'eq.midSide'
-  | 'eq.minimumPhase'
-  | 'eq.parametric'
-  | 'eq.pultec'
-  | 'eq.shelving'
-  | 'eq.tilt'
-  | 'final.bitDepth'
-  | 'final.dither'
-  | 'final.outputChain'
-  | 'maximizer.adaptiveRelease'
-  | 'maximizer.loudnessOptimize'
-  | 'maximizer.maximizer'
-  | 'maximizer.softKneeMax'
-  | 'maximizer.truePeakLimiter'
-  | 'multiband.compressor'
-  | 'multiband.dynamicEq'
-  | 'multiband.expander'
-  | 'multiband.imager'
-  | 'multiband.limiter'
-  | 'multiband.saturation'
-  | 'repair.declick'
-  | 'repair.declip'
-  | 'repair.decrackle'
-  | 'repair.dehum'
-  | 'repair.denoiseClassical'
-  | 'repair.dereverbClassical'
-  | 'repair.trimSilence'
-  | 'saturation.bitcrusher'
-  | 'saturation.exciter'
-  | 'saturation.hardClipper'
-  | 'saturation.multibandExciter'
-  | 'saturation.ampSim'
-  | 'saturation.softClipper'
-  | 'saturation.tape'
-  | 'saturation.transformer'
-  | 'saturation.tube'
-  | 'saturation.waveshaper'
-  | 'spectral.airBand'
-  | 'spectral.lowEndFocus'
-  | 'spectral.presenceEnhancer'
-  | 'spectral.spectralShaper'
-  | 'stereo.autoPan'
-  | 'stereo.haasEnhancer'
-  | 'stereo.imager'
-  | 'stereo.monoMaker'
-  | 'stereo.phaseAlign'
-  | 'stereo.stereoBalance';
+// BEGIN GENERATED SoloProcessor (make processor-types)
+/**
+ * Every processor name `masteringProcessorNames()` can return, and therefore
+ * every name `masteringProcess` / `masteringProcessStereo` accept.
+ */
+export const SOLO_PROCESSORS = [
+  'dynamics.brickwallLimiter',
+  'dynamics.compressor',
+  'dynamics.deesser',
+  'dynamics.duckingProcessor',
+  'dynamics.expander',
+  'dynamics.gate',
+  'dynamics.limiter',
+  'dynamics.parallelComp',
+  'dynamics.sidechainRouter',
+  'dynamics.transientShaper',
+  'dynamics.upwardCompressor',
+  'dynamics.upwardExpander',
+  'dynamics.vocalRider',
+  'effects.acoustic.roomMorph',
+  'effects.delay.stereo',
+  'effects.modulation.autoWah',
+  'effects.modulation.chorus',
+  'effects.modulation.ensemble',
+  'effects.modulation.flanger',
+  'effects.modulation.phaser',
+  'effects.modulation.pitchShifter',
+  'effects.modulation.ringModulator',
+  'effects.modulation.rotary',
+  'effects.modulation.wah',
+  'effects.reverb.convolution',
+  'effects.reverb.dattorro',
+  'effects.reverb.fdn',
+  'effects.reverb.plate',
+  'effects.reverb.room',
+  'effects.reverb.velvet',
+  'eq.apiStyle',
+  'eq.bandPass',
+  'eq.cutFilter',
+  'eq.dynamic',
+  'eq.equalizer',
+  'eq.graphic',
+  'eq.linearPhase',
+  'eq.midSide',
+  'eq.minimumPhase',
+  'eq.parametric',
+  'eq.pultec',
+  'eq.shelving',
+  'eq.tilt',
+  'final.bitDepth',
+  'final.dither',
+  'final.outputChain',
+  'maximizer.adaptiveRelease',
+  'maximizer.loudnessOptimize',
+  'maximizer.maximizer',
+  'maximizer.softKneeMax',
+  'maximizer.truePeakLimiter',
+  'multiband.compressor',
+  'multiband.dynamicEq',
+  'multiband.expander',
+  'multiband.imager',
+  'multiband.limiter',
+  'multiband.saturation',
+  'repair.declick',
+  'repair.declip',
+  'repair.decrackle',
+  'repair.dehum',
+  'repair.denoiseClassical',
+  'repair.dereverbClassical',
+  'repair.trimSilence',
+  'saturation.ampSim',
+  'saturation.bitcrusher',
+  'saturation.exciter',
+  'saturation.hardClipper',
+  'saturation.multibandExciter',
+  'saturation.softClipper',
+  'saturation.tape',
+  'saturation.transformer',
+  'saturation.tube',
+  'saturation.waveshaper',
+  'spectral.airBand',
+  'spectral.lowEndFocus',
+  'spectral.presenceEnhancer',
+  'spectral.spectralShaper',
+  'stereo.autoPan',
+  'stereo.haasEnhancer',
+  'stereo.imager',
+  'stereo.monoMaker',
+  'stereo.phaseAlign',
+  'stereo.stereoBalance',
+] as const;
+
+export type SoloProcessor = (typeof SOLO_PROCESSORS)[number];
+// END GENERATED SoloProcessor
 
 export type PairProcessor =
   | 'match.applyMatchEq'
@@ -312,6 +338,8 @@ export interface MasteringStereoResult {
   outputLufs: number;
   appliedGainDb: number;
   latencySamples: number;
+  /** True when peak headroom prevented the requested LUFS target. */
+  loudnessTargetLimited: boolean;
 }
 
 /** Generic traversal view used by chain-config tooling; public configs are fully typed below. */
@@ -482,6 +510,8 @@ export interface MasteringChainConfig {
       headBumpDb?: number;
       bias?: number;
       gapLoss?: number;
+      /** Jiles-Atherton core oversampling: 1 (default), 2, or 4. */
+      oversampleFactor?: number;
     };
     exciter?: {
       enabled?: boolean;
@@ -490,6 +520,12 @@ export interface MasteringChainConfig {
       amount?: number;
       q?: number;
       evenOddMix?: number;
+      /**
+       * Antialiasing mode ordinal: 0 = none, 3 = 4x oversampling. The ADAA
+       * modes (1, 2) name a member the exciter does not implement and are
+       * rejected; an ordinal outside 0-3 is rejected as out of range.
+       */
+      aliasing?: number;
     };
   };
   spectral?: {

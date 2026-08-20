@@ -292,7 +292,15 @@ export interface AnalyzeSectionsOptions {
   minSectionSec?: number;
 }
 
-/** Song-structure section type ordinal (mirrors the C `SonareSectionType`). */
+/**
+ * Song-structure section type ordinal (mirrors the C `SonareSectionType`).
+ *
+ * Ordinal 2 (PreChorus) is never produced by the analyzer: it has no detection
+ * branch, so filtering sections on it always yields an empty result. Every
+ * other ordinal is reachable. 7 (Unknown) means the analyzer did not identify
+ * the segment -- no boundary was detected, or the segment matched none of the
+ * positive branches -- and comes with `confidence` 0.
+ */
 export type SectionTypeOrdinal = 0 | 1 | 2 | 3 | 4 | 5 | 6 | 7;
 
 export interface Section {
@@ -394,10 +402,29 @@ export interface RirSynthOptions extends RoomGeometryOptions {
   crossfadeMs?: number;
 }
 
+/** One diagnostic reported by the RIR synthesizer. */
+export interface RirDiagnostic {
+  /** Stable machine-readable id, e.g. `acoustic.source_outside_room`. */
+  code: string;
+  message: string;
+  severity: 'info' | 'warning' | 'error';
+}
+
 export interface RirResult {
   rir: Float32Array;
   sampleRate: number;
   hasError: boolean;
+  /**
+   * First error diagnostic as `code: message`, empty when `hasError` is false.
+   * Matches the string the C ABI leaves in `sonare_last_error_message()`.
+   */
+  errorMessage: string;
+  /**
+   * Every diagnostic the synthesizer reported, in order. Warnings appear here on
+   * successful calls too — a `maxSeconds` clamp that cut the tail is a warning,
+   * not an error, and is otherwise indistinguishable from an untruncated RIR.
+   */
+  diagnostics: RirDiagnostic[];
 }
 
 export interface RoomEstimateOptions {
@@ -421,6 +448,12 @@ export interface RoomEstimateResult {
   height: number;
   drrDb: number;
   confidence: number;
+  /**
+   * Per-octave-band mean absorption and RT60 (s). The two are independent
+   * estimates and either can fail to converge on its own; both arrays are always
+   * the same length, with the failed side NaN-filled rather than truncating both
+   * to the shorter (possibly empty) one.
+   */
   absorptionBands: Float32Array;
   rt60Bands: Float32Array;
 }
@@ -537,6 +570,8 @@ export interface Chord {
     | 'dominant9'
     | 'sus2Add4'
     | 'unknown';
+  /** Canonical core chord symbol (e.g. `'Cmaj7'`, `'Am/C'`, `'N.C.'`). */
+  name: string;
   start: number;
   end: number;
   duration: number;

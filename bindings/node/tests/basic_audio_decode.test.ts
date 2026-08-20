@@ -3,6 +3,7 @@ import * as fs from 'node:fs';
 import * as os from 'node:os';
 import * as path from 'node:path';
 import { describe, expect, it } from 'vitest';
+import type { KeyDetectionOptions } from '../src/index.js';
 import {
   Audio,
   analyze,
@@ -97,7 +98,11 @@ describe('Audio class methods', () => {
         /invalid key mode/,
       );
 
-      const opts = { modes: 'major-minor', profile: 'temperley', genreHint: 'edm' };
+      const opts: KeyDetectionOptions = {
+        modes: 'major-minor',
+        profile: 'temperley',
+        genreHint: 'edm',
+      };
       const instanceKey = native.detectKey(opts) as { root: string; mode: string };
       const standaloneKey = detectKey(samples, SR, opts);
       expect(instanceKey.root).toBe(standaloneKey.root);

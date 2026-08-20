@@ -15,7 +15,7 @@ import {
   masterAudio,
   masterAudioAsync,
   masterAudioStereoAsync,
-} from '../src/index';
+} from '../src/index.js';
 
 const SR = 22050;
 

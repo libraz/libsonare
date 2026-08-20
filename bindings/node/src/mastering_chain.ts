@@ -126,13 +126,27 @@ export interface MasteringStereoAnalyzeRequest {
   params?: Record<string, number | boolean>;
 }
 
+/**
+ * Params accepted by the assistant entry points. Every key is numeric except
+ * `targetPlatform`, which is a delivery-target NAME (`'broadcast'`, `'podcast'`,
+ * `'club'`, ...). A number is rejected for it: the numeric index the C ABI
+ * carries is a transport detail for callers that cannot pass a string, not part
+ * of the JavaScript vocabulary.
+ */
+export type MasteringAssistantParams = Record<string, number | boolean | string>;
+
 export interface MasteringAssistantSuggestRequest {
+  samples: Float32Array;
+  sampleRate?: number;
+  params?: MasteringAssistantParams;
+}
+
+/** The profile entry points take numeric params only; they have no target platform. */
+export interface MasteringAudioProfileRequest {
   samples: Float32Array;
   sampleRate?: number;
   params?: Record<string, number | boolean>;
 }
-
-export interface MasteringAudioProfileRequest extends MasteringAssistantSuggestRequest {}
 
 export interface MasteringStreamingPreviewRequest {
   samples: Float32Array;
@@ -145,12 +159,16 @@ export interface MasteringAssistantSuggestStereoRequest {
   left: Float32Array;
   right: Float32Array;
   sampleRate?: number;
-  params?: Record<string, number | boolean>;
+  params?: MasteringAssistantParams;
 }
 
 /** Request for {@link masteringAudioProfileStereo}. */
-export interface MasteringAudioProfileStereoRequest
-  extends MasteringAssistantSuggestStereoRequest {}
+export interface MasteringAudioProfileStereoRequest {
+  left: Float32Array;
+  right: Float32Array;
+  sampleRate?: number;
+  params?: Record<string, number | boolean>;
+}
 
 /** Request for {@link masteringStreamingPreviewStereo}. */
 export interface MasteringStreamingPreviewStereoRequest {
@@ -309,6 +327,16 @@ export function masteringChainStereo(
 
 export function masteringPresetNames(): MasteringPreset[] {
   return addon.masteringPresetNames();
+}
+
+/**
+ * Delivery targets the mastering assistant accepts as `targetPlatform`.
+ *
+ * Read from the library rather than from a list kept here, so a target added in
+ * the core is discoverable without a binding change.
+ */
+export function masteringPlatformNames(): string[] {
+  return addon.masteringPlatformNames();
 }
 
 /** Canonical request form for one-shot preset mastering. */
@@ -777,12 +805,12 @@ export function masteringAssistantSuggest(request: MasteringAssistantSuggestRequ
 export function masteringAssistantSuggest(
   samples: Float32Array,
   sampleRate?: number,
-  params?: Record<string, number | boolean>,
+  params?: MasteringAssistantParams,
 ): string;
 export function masteringAssistantSuggest(
   samples: Float32Array | MasteringAssistantSuggestRequest,
   sampleRate = 22050,
-  params: Record<string, number | boolean> = {},
+  params: MasteringAssistantParams = {},
 ): string {
   const request = samples instanceof Float32Array ? { samples, sampleRate, params } : samples;
   return addon.masteringAssistantSuggest(

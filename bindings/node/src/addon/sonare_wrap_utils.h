@@ -131,7 +131,11 @@ Napi::Value FullAnalysisJsonToObject(Napi::Env env, const float* data, size_t le
                                      const SonareMusicAnalyzeOptions* options = nullptr);
 
 /// @brief Convert a JS object of {name -> number|boolean} into mastering API params.
-std::vector<sonare::mastering::api::Param> ParamsFromObject(const Napi::Object& object);
+/// @param skip_keys Keys the caller consumes itself and that must not reach the
+///        numeric conversion — a string-valued key would otherwise be rejected
+///        as an unsupported type.
+std::vector<sonare::mastering::api::Param> ParamsFromObject(
+    const Napi::Object& object, const std::vector<std::string>& skip_keys = {});
 
 }  // namespace sonare_node
 

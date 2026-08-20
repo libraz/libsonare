@@ -234,9 +234,8 @@ describe('Mixer solo behaviour', () => {
     const baseline = buildMixer();
     const equalAmplitudes = [0.5, 0.5, 0.5];
 
-    const baselineResult = baseline.processStereo(
-      ...Object.values(constantStrips(equalAmplitudes)),
-    );
+    const baselineInput = constantStrips(equalAmplitudes);
+    const baselineResult = baseline.processStereo(baselineInput.left, baselineInput.right);
     const baselinePeak = peakAbs(baselineResult.left);
 
     const soloed = buildMixer();

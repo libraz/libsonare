@@ -261,16 +261,23 @@ describe('explicit undefined reads as an omitted option', () => {
   it('binds a builtin instrument whose config fields are explicitly undefined', () => {
     const engine = new RealtimeEngine(48000, 128);
     try {
+      // The facade takes (config, destinationId); passing them in the addon's
+      // (destinationId, config) order made `config` the number 1, so the
+      // explicitly-undefined bag never reached the reader and this test
+      // established nothing about undefined-safety.
       expect(() =>
-        engine.setBuiltinInstrument(1, {
-          waveform: undefined,
-          gain: undefined,
-          attackMs: undefined,
-          decayMs: undefined,
-          sustain: undefined,
-          releaseMs: undefined,
-          polyphony: undefined,
-        }),
+        engine.setBuiltinInstrument(
+          {
+            waveform: undefined,
+            gain: undefined,
+            attackMs: undefined,
+            decayMs: undefined,
+            sustain: undefined,
+            releaseMs: undefined,
+            polyphony: undefined,
+          },
+          1,
+        ),
       ).not.toThrow();
     } finally {
       engine.destroy();

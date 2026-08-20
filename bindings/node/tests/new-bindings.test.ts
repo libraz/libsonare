@@ -26,7 +26,7 @@ import {
   timeStretch,
   voiceCharacterPresetId,
   zeroCrossings,
-} from '../src/index';
+} from '../src/index.js';
 
 const SR = 22050;
 
@@ -134,8 +134,8 @@ describe('newly exposed Node functions', () => {
   it('timeStretch/pitchShift reject a missing required argument instead of producing NaN', () => {
     const x = sine(0.1, 220);
     // sampleRate then the transform factor; both are required, so a bare call must throw.
-    expect(() => (timeStretch as (s: Float32Array) => Float32Array)(x)).toThrow();
-    expect(() => (pitchShift as (s: Float32Array) => Float32Array)(x)).toThrow();
+    expect(() => (timeStretch as unknown as (s: Float32Array) => Float32Array)(x)).toThrow();
+    expect(() => (pitchShift as unknown as (s: Float32Array) => Float32Array)(x)).toThrow();
     // Valid calls still work.
     expect(allFinite(timeStretch(x, SR, 1.25))).toBe(true);
     expect(allFinite(pitchShift(x, SR, 2))).toBe(true);
@@ -150,7 +150,10 @@ describe('newly exposed Node functions', () => {
   });
 
   it('realtimeVoiceChangerPresetConfig exposes the ISP true-peak limiter fields', () => {
-    const cfg = realtimeVoiceChangerPresetConfig('neutral-monitor') as Record<string, unknown>;
+    const cfg = realtimeVoiceChangerPresetConfig('neutral-monitor') as unknown as Record<
+      string,
+      unknown
+    >;
     expect(typeof cfg.limiterEnableIspLimiter).toBe('boolean');
     expect(typeof cfg.limiterIspCeilingDbtp).toBe('number');
     expect(Number.isFinite(cfg.limiterIspCeilingDbtp as number)).toBe(true);
@@ -210,6 +213,56 @@ describe('newly exposed Node functions', () => {
       ref += x[i] ** 2;
     }
     expect(Math.sqrt(err / ref)).toBeLessThan(0.05);
+  });
+
+  it('decomposeStems reads 0 as the documented default in every sentinel field', () => {
+    // The C ABI documents 0 on SonareDecomposeStemsConfig as "use the built-in
+    // default", which is what lets a zero-initialised config mean the
+    // documented defaults. The same literal input must land on the same
+    // effective value on every surface that exposes these option names.
+    const n = 8192;
+    const samples = new Float32Array(n);
+    for (let i = 0; i < n; i++) {
+      samples[i] =
+        0.5 * Math.sin((2 * Math.PI * 440 * i) / SR) + 0.3 * Math.sin((2 * Math.PI * 660 * i) / SR);
+    }
+    const run = (options: Record<string, number>) =>
+      decomposeStems({ samples, sampleRate: SR, ...options });
+    const fingerprint = (options: Record<string, number>): string => {
+      const r = run(options);
+      return JSON.stringify([
+        r.components.length,
+        r.components[0].length,
+        r.w.length,
+        r.h.length,
+        Array.from(r.components[0].slice(0, 8)),
+      ]);
+    };
+
+    for (const [field, documentedDefault] of [
+      ['nComponents', 4],
+      ['nFft', 2048],
+      ['hopLength', 512],
+      ['nIter', 100],
+      ['beta', 2],
+      ['maskPower', 1],
+    ] as Array<[string, number]>) {
+      expect(fingerprint({ [field]: 0 })).toBe(fingerprint({ [field]: documentedDefault }));
+    }
+
+    // Without these the case above would also pass on a surface that ignored
+    // the option outright.
+    expect(fingerprint({ nComponents: 3 })).not.toBe(fingerprint({ nComponents: 0 }));
+    expect(fingerprint({ beta: 0.5 })).not.toBe(fingerprint({ beta: 0 }));
+    expect(fingerprint({ maskPower: 2 })).not.toBe(fingerprint({ maskPower: 0 }));
+
+    // A negative value is rejected rather than folded into the default.
+    for (const field of ['nComponents', 'nFft', 'hopLength', 'nIter', 'maskPower']) {
+      expect(() => run({ [field]: -1 })).toThrow();
+    }
+    expect(() => run({ maskPower: 0.5 })).toThrow();
+    expect(() => run({ maskPower: Number.NaN })).toThrow();
+    expect(() => run({ beta: Number.NaN })).toThrow();
   });
 
   it('phaseVocoder time-scales the signal', () => {
@@ -272,7 +325,10 @@ describe('newly exposed Node functions', () => {
   });
 
   it('realtimeVoiceChangerPresetConfig returns a config object with expected fields', () => {
-    const cfg = realtimeVoiceChangerPresetConfig('bright-idol');
+    const cfg = realtimeVoiceChangerPresetConfig('bright-idol') as unknown as Record<
+      string,
+      number
+    >;
     for (const key of [
       'inputGainDb',
       'outputGainDb',
@@ -285,8 +341,8 @@ describe('newly exposed Node functions', () => {
       'limiterCeilingDb',
       'limiterReleaseMs',
     ]) {
-      expect(typeof (cfg as Record<string, number>)[key]).toBe('number');
-      expect(Number.isFinite((cfg as Record<string, number>)[key])).toBe(true);
+      expect(typeof cfg[key]).toBe('number');
+      expect(Number.isFinite(cfg[key])).toBe(true);
     }
   });
 

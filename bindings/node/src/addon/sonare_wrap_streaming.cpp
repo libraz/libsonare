@@ -140,8 +140,13 @@ sonare::mastering::eq::EqBand EqBandFromObject(const Napi::Object& object) {
   band.dyn.range_db = static_cast<float>(NumberKey(object, "rangeDb", band.dyn.range_db));
   band.dyn.attack_ms = static_cast<float>(NumberKey(object, "attackMs", band.dyn.attack_ms));
   band.dyn.release_ms = static_cast<float>(NumberKey(object, "releaseMs", band.dyn.release_ms));
-  band.dyn.lookahead_ms =
-      static_cast<float>(NumberKey(object, "lookaheadMs", band.dyn.lookahead_ms));
+  // "lookaheadMs" is the field's former (misleading) spelling; still accepted
+  // so a stored config keeps working, but "detectorDelayMs" wins if both are
+  // present.
+  band.dyn.detector_delay_ms =
+      static_cast<float>(NumberKey(object, "lookaheadMs", band.dyn.detector_delay_ms));
+  band.dyn.detector_delay_ms =
+      static_cast<float>(NumberKey(object, "detectorDelayMs", band.dyn.detector_delay_ms));
   band.dyn.external_sidechain = BoolKey(object, "externalSidechain", band.dyn.external_sidechain);
   band.dyn.sidechain_freq_hz =
       static_cast<float>(NumberKey(object, "sidechainFreqHz", band.dyn.sidechain_freq_hz));

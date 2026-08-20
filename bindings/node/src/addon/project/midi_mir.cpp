@@ -45,15 +45,21 @@ Napi::Value ProjectWrap::SetMidiEvents(const Napi::CallbackInfo& info) {
       SonareMidiEventPod ev{};
       if (entry.IsArray()) {
         Napi::Array tuple = entry.As<Napi::Array>();
-        ev.ppq = tuple.Get(0u).As<Napi::Number>().DoubleValue();
-        ev.data0 = tuple.Get(1u).As<Napi::Number>().Uint32Value();
-        ev.data1 = tuple.Get(2u).As<Napi::Number>().Uint32Value();
+        if (!RequiredDoubleValue(env, tuple.Get(0u), "MIDI event ppq", &ev.ppq)) {
+          return env.Undefined();
+        }
+        if (!RequiredUint32Value(env, tuple.Get(1u), "MIDI event data0", &ev.data0)) {
+          return env.Undefined();
+        }
+        if (!RequiredUint32Value(env, tuple.Get(2u), "MIDI event data1", &ev.data1)) {
+          return env.Undefined();
+        }
       } else if (entry.IsObject()) {
         Napi::Object obj = entry.As<Napi::Object>();
-        ev.ppq = obj.Get("ppq").As<Napi::Number>().DoubleValue();
-        ev.data0 = obj.Get("data0").As<Napi::Number>().Uint32Value();
-        ev.data1 =
-            obj.Get("data1").IsUndefined() ? 0u : obj.Get("data1").As<Napi::Number>().Uint32Value();
+        if (!RequiredDoubleProperty(env, obj, "ppq", &ev.ppq)) return env.Undefined();
+        if (!RequiredUint32Property(env, obj, "data0", &ev.data0)) return env.Undefined();
+        ev.data1 = Uint32Property(obj, "data1", 0u);
+        if (env.IsExceptionPending()) return env.Undefined();
       } else {
         Napi::TypeError::New(env, "MIDI event must be a [ppq, data0, data1] tuple or object")
             .ThrowAsJavaScriptException();

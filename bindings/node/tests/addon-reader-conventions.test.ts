@@ -17,7 +17,16 @@
 import { describe, expect, it } from 'vitest';
 import {
   decomposeStems,
+  masteringDynamicsCompressor,
+  masteringDynamicsGate,
+  masteringDynamicsTransientShaper,
   masteringRepairDeclick,
+  masteringRepairDeclip,
+  masteringRepairDecrackle,
+  masteringRepairDehum,
+  masteringRepairDenoiseClassical,
+  masteringRepairDereverbClassical,
+  masteringRepairTrimSilence,
   mixStereo,
   noteSegments,
   Project,
@@ -141,6 +150,53 @@ const UNDEFINED_EQUIVALENCE: ReadonlyArray<{
     invoke: (o) => Array.from(masteringRepairDeclick(sine(2048), SR, o)).slice(0, 32),
   },
   {
+    jsName: 'masteringRepairDeclip',
+    invoke: (o) => Array.from(masteringRepairDeclip(sine(2048), SR, o)).slice(0, 32),
+  },
+  {
+    jsName: 'masteringRepairDecrackle',
+    invoke: (o) => Array.from(masteringRepairDecrackle(sine(2048), SR, o)).slice(0, 32),
+  },
+  {
+    jsName: 'masteringRepairDehum',
+    invoke: (o) => Array.from(masteringRepairDehum(sine(2048), SR, o)).slice(0, 32),
+  },
+  {
+    jsName: 'masteringRepairTrimSilence',
+    invoke: (o) => Array.from(masteringRepairTrimSilence(sine(2048), SR, o)).slice(0, 32),
+  },
+  // Both classical restorers are STFT-based and reject a buffer shorter than
+  // one analysis window, so these cannot be trimmed below the default nFft.
+  {
+    jsName: 'masteringRepairDenoiseClassical',
+    invoke: (o) => Array.from(masteringRepairDenoiseClassical(sine(2048), SR, o)).slice(0, 32),
+  },
+  {
+    jsName: 'masteringRepairDereverbClassical',
+    invoke: (o) => Array.from(masteringRepairDereverbClassical(sine(2048), SR, o)).slice(0, 32),
+  },
+  {
+    jsName: 'masteringDynamicsCompressor',
+    invoke: (o) => {
+      const result = masteringDynamicsCompressor(sine(2048), SR, o);
+      return [Array.from(result.samples).slice(0, 32), result.latencySamples];
+    },
+  },
+  {
+    jsName: 'masteringDynamicsGate',
+    invoke: (o) => {
+      const result = masteringDynamicsGate(sine(2048), SR, o);
+      return [Array.from(result.samples).slice(0, 32), result.latencySamples];
+    },
+  },
+  {
+    jsName: 'masteringDynamicsTransientShaper',
+    invoke: (o) => {
+      const result = masteringDynamicsTransientShaper(sine(2048), SR, o);
+      return [Array.from(result.samples).slice(0, 32), result.latencySamples];
+    },
+  },
+  {
     jsName: 'mixStereo',
     invoke: (o) => {
       const channel = sine(256);
@@ -159,7 +215,7 @@ const UNDEFINED_EQUIVALENCE: ReadonlyArray<{
   },
   {
     jsName: 'setBuiltinInstrument',
-    invoke: (o) => withEngine((engine) => engine.setBuiltinInstrument(1, o)),
+    invoke: (o) => withEngine((engine) => engine.setBuiltinInstrument(o, 1)),
   },
   {
     jsName: 'setSf2Instrument',
@@ -213,6 +269,61 @@ const UNDEFINED_EQUIVALENCE: ReadonlyArray<{
       }),
   },
   { jsName: 'addTrack', invoke: (o) => withProject((p) => p.addTrack({ ...o, kind: 'audio' })) },
+  {
+    jsName: 'setGraph',
+    invoke: (o) =>
+      withEngine((engine) => {
+        engine.setGraph({
+          ...o,
+          nodes: [
+            { ...o, id: 'in' },
+            { ...o, id: 'out' },
+          ],
+          connections: [{ ...o, sourceNode: 'in', sourcePort: 0, destNode: 'out', destPort: 0 }],
+          inputNode: 'in',
+          outputNode: 'out',
+        });
+        return [engine.graphNodeCount(), engine.graphConnectionCount()];
+      }),
+  },
+  {
+    jsName: 'setClips',
+    invoke: (o) =>
+      withEngine((engine) => {
+        engine.setClips([
+          { ...o, id: 1, startPpq: 0, channels: [new Float32Array(64).fill(0.25)] },
+        ]);
+        return engine.clipCount();
+      }),
+  },
+  {
+    jsName: 'setTrackLanes',
+    invoke: (o) =>
+      withEngine((engine) => {
+        engine.setTrackBuses([{ busId: 1 }]);
+        engine.setTrackLanes([{ ...o, trackId: 1, sends: [{ ...o, busId: 1 }] }]);
+        return 'accepted';
+      }),
+  },
+  {
+    jsName: 'setTrackBuses',
+    invoke: (o) =>
+      withEngine((engine) => {
+        engine.setTrackBuses([{ ...o, busId: 1 }]);
+        return 'accepted';
+      }),
+  },
+  {
+    jsName: 'setMidiEvents',
+    invoke: (o) =>
+      withProject((p) => {
+        const { clipId } = p.addMidiClip(0, 4);
+        p.setMidiEvents(clipId, [
+          { ...o, ppq: 0, data0: Project.midiNoteOn(0, 0, 0, 60, 100).data0 },
+        ]);
+        return p.clipCount();
+      }),
+  },
 ];
 
 function withEngine<T>(body: (engine: RealtimeEngine) => T): T {
@@ -260,15 +371,6 @@ const UNCOVERED_OPTION_READERS: ReadonlyMap<string, string> = new Map(
       ['estimateRoom', 'Needs a measured impulse response.'],
       ['freezeOffline', 'Needs a prepared engine graph.'],
       ['importExternalStems', 'Needs external stem buffers; covered by project-edit tests.'],
-      ['masteringDynamicsCompressor', 'Sibling of masteringRepairDeclick, same reader shape.'],
-      ['masteringDynamicsGate', 'Sibling of masteringRepairDeclick, same reader shape.'],
-      ['masteringDynamicsTransientShaper', 'Sibling of masteringRepairDeclick.'],
-      ['masteringRepairDeclip', 'Sibling of masteringRepairDeclick.'],
-      ['masteringRepairDecrackle', 'Sibling of masteringRepairDeclick.'],
-      ['masteringRepairDehum', 'Sibling of masteringRepairDeclick.'],
-      ['masteringRepairDenoiseClassical', 'Sibling of masteringRepairDeclick; slow.'],
-      ['masteringRepairDereverbClassical', 'Sibling of masteringRepairDeclick; slow.'],
-      ['masteringRepairTrimSilence', 'Sibling of masteringRepairDeclick.'],
       ['meteringSpectrum', 'Covered by metering-and-scale.test.ts.'],
       ['meteringSpectrumFrame', 'Covered by metering-and-scale.test.ts.'],
       ['midiCcLearn', 'Covered by public-input-conformance.test.ts.'],

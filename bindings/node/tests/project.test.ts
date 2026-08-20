@@ -771,21 +771,23 @@ describe('Project native binding', () => {
     project.destroy();
   });
 
-  it('keeps the base preset when synth patch numeric fields are explicitly zero', () => {
+  it('keeps the base patch when builtin synth numeric fields are explicitly zero', () => {
     const project = buildMidiOnlyProject();
-    const preset = project.bounceWithBuiltinInstrument(
-      { preset: 'warm-pad' },
-      {
-        totalFrames: 4096,
-        numChannels: 2,
-        sampleRate: 48000,
-      },
-    );
+    const options = { totalFrames: 4096, numChannels: 2, sampleRate: 48000 };
+    // This facade binds the minimal oscillator synth, whose numeric fields all
+    // use "0 / omit => default". The NativeSynth patch vocabulary (preset,
+    // ampSustain, filterSustain) is not read here, so only the oscillator
+    // fields are exercised.
+    const base = project.bounceWithBuiltinInstrument({ waveform: 'saw' }, options);
     const explicitZero = project.bounceWithBuiltinInstrument(
-      { preset: 'warm-pad', ampSustain: 0, filterSustain: 0, gain: 0 },
-      { totalFrames: 4096, numChannels: 2, sampleRate: 48000 },
+      { waveform: 'saw', gain: 0, attackMs: 0, decayMs: 0, sustain: 0, releaseMs: 0, polyphony: 0 },
+      options,
     );
-    expect(explicitZero).toEqual(preset);
+    expect(explicitZero).toEqual(base);
+    // Guard against a vacuous pass: a non-default value must move the render,
+    // otherwise the equality above would hold for an unrelated reason.
+    const moved = project.bounceWithBuiltinInstrument({ waveform: 'saw', sustain: 0.1 }, options);
+    expect(moved).not.toEqual(base);
     project.destroy();
   });
 

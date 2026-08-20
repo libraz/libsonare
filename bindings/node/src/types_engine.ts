@@ -208,15 +208,26 @@ export type EngineAutomationPointCurve =
   | 'hold'
   | 's-curve';
 
+/**
+ * Parameter descriptor accepted by {@link RealtimeEngine.addParameter}. The
+ * optional fields fall back to the documented default when omitted; the
+ * `parameterInfo` getters always return a fully populated object.
+ */
 export interface EngineParameterInfo {
   id: number;
   name: string;
-  unit: string;
-  minValue: number;
-  maxValue: number;
-  defaultValue: number;
-  rtSafe: boolean;
-  defaultCurve: EngineAutomationPointCurve;
+  /** Display unit; omit for an empty string. */
+  unit?: string;
+  /** Lower end of the parameter range. Default `0`. */
+  minValue?: number;
+  /** Upper end of the parameter range. Default `1`. */
+  maxValue?: number;
+  /** Value the parameter starts at. Default `0`. */
+  defaultValue?: number;
+  /** Whether the parameter is safe to change from the realtime thread. Default `true`. */
+  rtSafe?: boolean;
+  /** Curve used by automation points that omit `curveToNext`. Default `1` (exponential). */
+  defaultCurve?: EngineAutomationPointCurve;
 }
 
 export interface EngineAutomationPoint {
@@ -440,7 +451,8 @@ export interface MidiCcBindOptions {
 
 /** One absolute render-frame MIDI event accepted by {@link RealtimeEngine.setMidiClips}. */
 export interface EngineMidiEvent {
-  renderFrame: number;
+  /** Absolute render frame for this event. Default `0`. */
+  renderFrame?: number;
   /** First UMP word. `data0` is accepted by native wrappers as an alias. */
   word0?: number;
   /** Second UMP word. `data1` is accepted by native wrappers as an alias. */

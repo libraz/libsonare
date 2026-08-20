@@ -317,11 +317,22 @@ export interface EqBandInput {
     | 'FlatTilt';
   frequencyHz?: number;
   gainDb?: number;
+  /**
+   * Resonance/slope. Ignored for a LowShelf/HighShelf band once `phase:
+   * 'NaturalPhase'` forces Vicanek coefficients (the Vicanek matched-Z shelf
+   * design has no Q/S parameter) -- the value is still stored and read back
+   * verbatim, so a reflected `q` on such a band does not describe the applied
+   * response. Set `coeffMode: 'Rbj'` for a Q-controllable shelf.
+   */
   q?: number;
   enabled?: boolean;
   coeffMode?: 'Rbj' | 'Vicanek';
   slopeDbOct?: number;
   placement?: 'Stereo' | 'Left' | 'Right' | 'Mid' | 'Side';
+  /**
+   * `'NaturalPhase'` forces `coeffMode: 'Vicanek'` for this band, which
+   * ignores `q` for LowShelf/HighShelf (see `q`'s doc).
+   */
   phase?: 'Inherit' | 'ZeroLatency' | 'NaturalPhase' | 'LinearPhase';
   soloed?: boolean;
   bypassed?: boolean;
@@ -334,13 +345,30 @@ export interface EqBandInput {
   rangeDb?: number;
   attackMs?: number;
   releaseMs?: number;
+  /**
+   * Delays the detector's view of the signal by this many ms; a larger value
+   * makes the band react LATER, not earlier -- this is a detector delay, not
+   * true look-ahead, and adds no latency to the audio path.
+   */
+  detectorDelayMs?: number;
+  /** Former (misleading) spelling of `detectorDelayMs`, still accepted; `detectorDelayMs` wins if both are set. */
   lookaheadMs?: number;
   externalSidechain?: boolean;
   sidechainFreqHz?: number;
   sidechainQ?: number;
 }
 
-/** Realtime-safe spectrum snapshot from {@link StreamingEqualizer.spectrum}. */
+/**
+ * Realtime-safe snapshot from {@link StreamingEqualizer.spectrum}.
+ *
+ * `preLeft`/`preRight` and `postLeft`/`postRight` are the pre- and post-EQ
+ * waveform streams (uniformly decimated time-domain samples), so they are a
+ * scope feed rather than a spectral estimate. `profileDb` is the frequency-domain
+ * view: the post-EQ signal is Hann-windowed, transformed and its bin powers
+ * summed into 16 geometrically spaced bands covering 20 Hz to 20 kHz, in
+ * amplitude decibels relative to full scale, rising immediately and falling
+ * smoothly.
+ */
 export interface EqSpectrumSnapshot {
   preLeft: Float32Array;
   preRight: Float32Array;

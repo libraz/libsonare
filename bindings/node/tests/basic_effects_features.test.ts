@@ -4,6 +4,7 @@ import {
   bassChroma,
   chroma,
   chromaCens,
+  chromaCqt,
   cqt,
   cqtToAudio,
   framesToTime,
@@ -222,6 +223,40 @@ describe('effects', () => {
     } finally {
       audio.destroy();
     }
+  });
+
+  it('reports the same loudnessTargetLimited from mastering and masteringProcess', () => {
+    // Peak-normalized material asked for -6 LUFS under a -3 dBTP ceiling: the
+    // ceiling, not the target, decides the level. masteringProcess used to
+    // hardcode false here while mastering() reported the computed truth.
+    const peak = new Float32Array(SR);
+    for (let i = 0; i < peak.length; i++) {
+      peak[i] = Math.sin((2 * Math.PI * 440 * i) / SR);
+    }
+    const options = { targetLufs: -6, ceilingDb: -3, truePeakOversample: 4 };
+    const simple = mastering(peak, SR, options);
+    const named = masteringProcess('maximizer.loudnessOptimize', peak, SR, options);
+    expect(simple.loudnessTargetLimited).toBe(true);
+    expect(named.loudnessTargetLimited).toBe(simple.loudnessTargetLimited);
+    expect(named.outputLufs).toBeLessThan(options.targetLufs);
+  });
+
+  it('reports the same loudnessTargetLimited from the mono and stereo named processors', () => {
+    // A lone full-scale transient peak-normalizes the source without lifting its
+    // program loudness, so the -3 dBTP ceiling blocks the requested -6 LUFS
+    // boost on both paths by a margin far wider than the 3 dB BS.1770
+    // channel-summing offset between mono and dual-mono stereo.
+    const peaky = new Float32Array(SR);
+    for (let i = 0; i < peaky.length; i++) {
+      peaky[i] = 0.05 * Math.sin((2 * Math.PI * 440 * i) / SR);
+    }
+    peaky[peaky.length >> 1] = 1;
+    const params = { targetLufs: -6, ceilingDb: -3, truePeakOversample: 4 };
+    const mono = masteringProcess('maximizer.loudnessOptimize', peaky, SR, params);
+    const stereo = masteringProcessStereo('maximizer.loudnessOptimize', peaky, peaky, SR, params);
+    expect(mono.loudnessTargetLimited).toBe(true);
+    expect(stereo.loudnessTargetLimited).toBe(mono.loudnessTargetLimited);
+    expect(stereo.outputLufs).toBeLessThan(params.targetLufs);
   });
 
   it('treats truePeakOversample: 0 as the library default', () => {
@@ -533,6 +568,18 @@ describe('features', () => {
       expect(result.features).toBeInstanceOf(Float32Array);
       expect(result.features.length).toBe(result.nChroma * result.nFrames);
       expect(result.meanEnergy.length).toBe(12);
+    }
+  });
+
+  it('chromaCens and chromaCqt forward binsPerOctave to the transform', () => {
+    // The constant-Q chroma variants keep this option because the entry point
+    // honours it. Falling back to the non-extended core call would leave the
+    // option accepted and ignored, which is what this catches.
+    for (const variant of [chromaCens, chromaCqt]) {
+      const base = variant({ samples: tone, sampleRate: SR });
+      const coarser = variant({ samples: tone, sampleRate: SR, binsPerOctave: 12 });
+      expect(coarser.features.length).toBe(base.features.length);
+      expect(Array.from(coarser.features)).not.toEqual(Array.from(base.features));
     }
   });
 

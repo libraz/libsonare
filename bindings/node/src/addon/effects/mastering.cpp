@@ -19,6 +19,7 @@
 #include "mastering/api/named_processor.h"
 #include "mastering/api/presets.h"
 #include "mastering/assistant/config_from_params.h"
+#include "mastering/assistant/platform_targets.h"
 #include "mastering/assistant/suggester.h"
 #include "mastering/dynamics/compressor.h"
 #include "mastering/dynamics/gate.h"
@@ -264,7 +265,7 @@ Napi::Value SonareWrap::MasteringProcess(const Napi::CallbackInfo& info) {
   out.Set("outputLufs", Napi::Number::New(env, result.output_lufs));
   out.Set("appliedGainDb", Napi::Number::New(env, result.applied_gain_db));
   out.Set("latencySamples", Napi::Number::New(env, result.latency_samples));
-  out.Set("loudnessTargetLimited", Napi::Boolean::New(env, false));
+  out.Set("loudnessTargetLimited", Napi::Boolean::New(env, result.loudness_target_limited));
   return out;
   SONARE_NODE_CATCH(env)
 }
@@ -305,6 +306,7 @@ Napi::Value SonareWrap::MasteringProcessStereo(const Napi::CallbackInfo& info) {
   out.Set("outputLufs", Napi::Number::New(env, result.output_lufs));
   out.Set("appliedGainDb", Napi::Number::New(env, result.applied_gain_db));
   out.Set("latencySamples", Napi::Number::New(env, result.latency_samples));
+  out.Set("loudnessTargetLimited", Napi::Boolean::New(env, result.loudness_target_limited));
   return out;
   SONARE_NODE_CATCH(env)
 }
@@ -390,6 +392,18 @@ Napi::Value SonareWrap::MasteringChainStereo(const Napi::CallbackInfo& info) {
 Napi::Value SonareWrap::MasteringPresetNames(const Napi::CallbackInfo& info) {
   Napi::Env env = info.Env();
   auto names = sonare::mastering::api::preset_names();
+  Napi::Array out = Napi::Array::New(env, names.size());
+  for (size_t index = 0; index < names.size(); ++index) {
+    out.Set(index, names[index]);
+  }
+  return out;
+}
+
+Napi::Value SonareWrap::MasteringPlatformNames(const Napi::CallbackInfo& info) {
+  Napi::Env env = info.Env();
+  // Read from the shared delivery-target table, so the names a caller can pass
+  // as `targetPlatform` are the names the assistant actually accepts.
+  const std::vector<std::string> names = sonare::mastering::assistant::platform_names();
   Napi::Array out = Napi::Array::New(env, names.size());
   for (size_t index = 0; index < names.size(); ++index) {
     out.Set(index, names[index]);
@@ -1129,6 +1143,38 @@ bool ReadStereoPair(const Napi::CallbackInfo& info, const char* usage,
   return true;
 }
 
+// Builds an assistant config from a JS params object. `targetPlatform` is a
+// delivery-target NAME on this surface: it is read here, validated against the
+// shared table, and kept out of the numeric conversion. The index the C ABI
+// carries is a transport detail for callers that cannot pass a string, so a
+// number is rejected here rather than silently accepted as an index.
+sonare::mastering::assistant::AssistantConfig AssistantConfigFromParams(
+    const Napi::CallbackInfo& info, size_t index) {
+  static const std::vector<std::string> kPlatformKeys = {"targetPlatform", "target_platform"};
+  std::vector<sonare::mastering::api::Param> params;
+  std::string platform;
+  bool has_platform = false;
+  if (info.Length() > index && info[index].IsObject()) {
+    Napi::Object object = info[index].As<Napi::Object>();
+    for (const std::string& key : kPlatformKeys) {
+      if (!object.Has(key)) continue;
+      Napi::Value platform_value = object.Get(key);
+      if (!platform_value.IsString()) {
+        throw sonare::SonareException(sonare::ErrorCode::InvalidParameter,
+                                      "'" + key + "' must be one of the delivery-target names: " +
+                                          sonare::mastering::assistant::platform_names_joined());
+      }
+      platform = platform_value.As<Napi::String>().Utf8Value();
+      has_platform = true;
+    }
+    params = ParamsFromObject(object, kPlatformKeys);
+  }
+  sonare::mastering::assistant::AssistantConfig config =
+      sonare::mastering::assistant::assistant_config_from_params(params.data(), params.size());
+  if (has_platform) sonare::mastering::assistant::set_target_platform(config, platform);
+  return config;
+}
+
 }  // namespace
 
 Napi::Value SonareWrap::MasteringAssistantSuggest(const Napi::CallbackInfo& info) {
@@ -1143,11 +1189,7 @@ Napi::Value SonareWrap::MasteringAssistantSuggest(const Napi::CallbackInfo& info
   // Re-apply the C-ABI input validation this direct core call would otherwise bypass.
   sonare::validate_offline_audio_input(samples.Data(), samples.ElementLength(),
                                        info[1].As<Napi::Number>().Int32Value());
-  std::vector<sonare::mastering::api::Param> params;
-  if (info.Length() >= 3 && info[2].IsObject())
-    params = ParamsFromObject(info[2].As<Napi::Object>());
-  const sonare::mastering::assistant::AssistantConfig config =
-      sonare::mastering::assistant::assistant_config_from_params(params.data(), params.size());
+  const sonare::mastering::assistant::AssistantConfig config = AssistantConfigFromParams(info, 2);
   const auto result = sonare::mastering::assistant::suggest_chain(
       samples.Data(), samples.ElementLength(), info[1].As<Napi::Number>().Int32Value(), config);
   return Napi::String::New(env, sonare::mastering::assistant::assistant_result_to_json(result));
@@ -1230,11 +1272,7 @@ Napi::Value SonareWrap::MasteringAssistantSuggestStereo(const Napi::CallbackInfo
                       &sample_rate)) {
     return env.Undefined();
   }
-  std::vector<sonare::mastering::api::Param> params;
-  if (info.Length() >= 4 && info[3].IsObject())
-    params = ParamsFromObject(info[3].As<Napi::Object>());
-  const sonare::mastering::assistant::AssistantConfig config =
-      sonare::mastering::assistant::assistant_config_from_params(params.data(), params.size());
+  const sonare::mastering::assistant::AssistantConfig config = AssistantConfigFromParams(info, 3);
   const auto result = sonare::mastering::assistant::suggest_chain_interleaved(
       interleaved.data(), frames, 2, sample_rate, config);
   return Napi::String::New(env, sonare::mastering::assistant::assistant_result_to_json(result));

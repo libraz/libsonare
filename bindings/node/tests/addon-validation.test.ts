@@ -8,7 +8,7 @@
  */
 
 import { describe, expect, it } from 'vitest';
-import { hpss, masterAudio, mastering } from '../src/index';
+import { hpss, masterAudio, mastering } from '../src/index.js';
 
 const SR = 44100;
 

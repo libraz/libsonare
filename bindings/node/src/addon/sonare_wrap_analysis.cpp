@@ -713,6 +713,45 @@ Napi::Value SonareWrap::AnalyzeTimbre(const Napi::CallbackInfo& info) {
   return result;
 }
 
+namespace {
+
+// The C chord record carries the root, bass and quality but not the rendered
+// symbol, so the canonical spelling is recovered by rebuilding the core chord
+// and asking it. Formatting the symbol here instead would fork the spelling
+// away from the core the moment a quality is added.
+//
+// Rebuilding relies on the two quality enumerations agreeing value for value,
+// which the C API's own root/bass conversion already assumes. These assertions
+// make a future divergence a build failure rather than a mislabelled chord.
+static_assert(static_cast<int>(sonare::ChordQuality::Major) == SONARE_CHORD_MAJOR, "");
+static_assert(static_cast<int>(sonare::ChordQuality::Minor) == SONARE_CHORD_MINOR, "");
+static_assert(static_cast<int>(sonare::ChordQuality::Diminished) == SONARE_CHORD_DIMINISHED, "");
+static_assert(static_cast<int>(sonare::ChordQuality::Augmented) == SONARE_CHORD_AUGMENTED, "");
+static_assert(static_cast<int>(sonare::ChordQuality::Dominant7) == SONARE_CHORD_DOMINANT7, "");
+static_assert(static_cast<int>(sonare::ChordQuality::Major7) == SONARE_CHORD_MAJOR7, "");
+static_assert(static_cast<int>(sonare::ChordQuality::Minor7) == SONARE_CHORD_MINOR7, "");
+static_assert(static_cast<int>(sonare::ChordQuality::Sus2) == SONARE_CHORD_SUS2, "");
+static_assert(static_cast<int>(sonare::ChordQuality::Sus4) == SONARE_CHORD_SUS4, "");
+static_assert(static_cast<int>(sonare::ChordQuality::Unknown) == SONARE_CHORD_UNKNOWN, "");
+static_assert(static_cast<int>(sonare::ChordQuality::Add9) == SONARE_CHORD_ADD9, "");
+static_assert(static_cast<int>(sonare::ChordQuality::MinorAdd9) == SONARE_CHORD_MINOR_ADD9, "");
+static_assert(static_cast<int>(sonare::ChordQuality::Dim7) == SONARE_CHORD_DIM7, "");
+static_assert(static_cast<int>(sonare::ChordQuality::HalfDim7) == SONARE_CHORD_HALF_DIM7, "");
+static_assert(static_cast<int>(sonare::ChordQuality::Major9) == SONARE_CHORD_MAJOR9, "");
+static_assert(static_cast<int>(sonare::ChordQuality::Dominant9) == SONARE_CHORD_DOMINANT9, "");
+static_assert(static_cast<int>(sonare::ChordQuality::Sus2Add4) == SONARE_CHORD_SUS2_ADD4, "");
+
+/// @brief Returns the core's canonical symbol for one C chord record.
+std::string ChordSymbol(const SonareChord& chord) {
+  sonare::Chord core{};
+  core.root = static_cast<sonare::PitchClass>(chord.root);
+  core.bass = static_cast<sonare::PitchClass>(chord.bass);
+  core.quality = static_cast<sonare::ChordQuality>(chord.quality);
+  return core.to_string();
+}
+
+}  // namespace
+
 Napi::Value SonareWrap::DetectChords(const Napi::CallbackInfo& info) {
   Napi::Env env = info.Env();
 
@@ -772,6 +811,7 @@ Napi::Value SonareWrap::DetectChords(const Napi::CallbackInfo& info) {
     chord.Set("rootName", Napi::String::New(env, root));
     chord.Set("bassName", Napi::String::New(env, bass));
     chord.Set("quality", Napi::String::New(env, quality));
+    chord.Set("name", Napi::String::New(env, ChordSymbol(analysis.chords[i])));
     chord.Set("start", Napi::Number::New(env, analysis.chords[i].start));
     chord.Set("end", Napi::Number::New(env, analysis.chords[i].end));
     chord.Set("duration",

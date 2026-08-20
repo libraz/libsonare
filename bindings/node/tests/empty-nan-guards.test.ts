@@ -17,7 +17,7 @@ import {
   tempogramRatio,
   voiceChange,
   voiceChangeRealtime,
-} from '../src/index';
+} from '../src/index.js';
 
 const SR = 22050;
 
@@ -160,7 +160,9 @@ describe('sample-rate guards (Node)', () => {
 
 describe('addon input errors remain catchable (Node)', () => {
   it('converts option-parser errors into JavaScript exceptions', () => {
+    // @ts-expect-error deliberately invalid key profile; the option parser must reject it.
     expect(() => detectKey(sine(), SR, { profile: 'bogus' })).toThrow(/invalid key profile/);
+    // @ts-expect-error deliberately invalid key mode; the option parser must reject it.
     expect(() => detectKey(sine(), SR, { modes: ['major', 'nope'] })).toThrow(/invalid key mode/);
     expect(() => tempogramRatio(sine(), 384, SR, 512, 'nope' as unknown as Float32Array)).toThrow(
       /Expected Float32Array or number\[\]/,

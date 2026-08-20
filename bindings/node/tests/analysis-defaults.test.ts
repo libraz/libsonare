@@ -150,6 +150,8 @@ describe('analysis options-bag defaults are pinned to the documented values', ()
       targetLufs: -14.0,
       ceilingDb: -1.0,
       truePeakOversample: 4,
+      releaseMs: 0.0,
+      applyGainAtInputRate: false,
     };
     expect(mastering(x, SR)).toEqual(mastering(x, SR, defaults));
   });

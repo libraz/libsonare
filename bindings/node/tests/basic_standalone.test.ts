@@ -292,9 +292,26 @@ describe('standalone functions', () => {
 
     const chords = detectChords(tone, SR, 0.3, 2.0, 0.5, false, 2048, 512, false);
     expect(Array.isArray(chords.chords)).toBe(true);
+    // The per-chord assertions below say nothing on an empty progression, and
+    // this input is a sustained triad, so it must detect at least one chord.
+    expect(chords.chords.length).toBeGreaterThan(0);
     for (const chord of chords.chords) {
       expect(chord.rootName).toBe(chord.root);
       expect(chord.bassName).toBe(chord.bass);
+      // `name` is the core's rendered symbol: root spelling, then the quality
+      // suffix, then a slash bass only when the bass differs from the root.
+      expect(typeof chord.name).toBe('string');
+      expect(chord.name.length).toBeGreaterThan(0);
+      if (chord.quality === 'unknown') {
+        expect(chord.name).toBe('N.C.');
+      } else {
+        expect(chord.name.startsWith(chord.rootName)).toBe(true);
+        if (chord.bass === chord.root) {
+          expect(chord.name).not.toContain('/');
+        } else {
+          expect(chord.name.endsWith(`/${chord.bassName}`)).toBe(true);
+        }
+      }
     }
 
     // Roman-numeral labels: one per detected chord, all non-empty strings.

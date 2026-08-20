@@ -276,6 +276,11 @@ using sonare_node::node_arg_double;
 using sonare_node::node_arg_float;
 using sonare_node::node_arg_int;
 using sonare_node::node_arg_uint32;
+using sonare_node::NonNegativeSizeTArg;
+using sonare_node::RequiredDoubleProperty;
+using sonare_node::RequiredIntProperty;
+using sonare_node::RequiredStringProperty;
+using sonare_node::RequiredUint32Property;
 using sonare_node::ThrowIfError;
 using sonare_node::Uint32Property;
 

@@ -328,11 +328,10 @@ Napi::Value MidiRouteEvents(const Napi::CallbackInfo& info) {
   return result;
 }
 
-// NativeSynth preset catalog: '\n'-joined program-lifetime string from the C
-// ABI, split into a JS string[] like masteringInsertNames.
-Napi::Value SynthPresetNames(const Napi::CallbackInfo& info) {
-  Napi::Env env = info.Env();
-  const char* joined = sonare_synth_preset_names();
+// Splits a '\n'-joined C-ABI catalog string into a JS string[]. Every catalog
+// the addon exposes goes through here so the empty-input and trailing-separator
+// handling stays identical across them.
+Napi::Array SplitJoinedNames(Napi::Env env, const char* joined) {
   Napi::Array out = Napi::Array::New(env);
   if (joined == nullptr || joined[0] == '\0') return out;
   std::string names(joined);
@@ -350,22 +349,10 @@ Napi::Value SynthPresetNames(const Napi::CallbackInfo& info) {
   return out;
 }
 
-Napi::Array SplitJoinedNames(Napi::Env env, const char* joined) {
-  Napi::Array out = Napi::Array::New(env);
-  if (joined == nullptr || joined[0] == '\0') return out;
-  std::string names(joined);
-  uint32_t index = 0;
-  size_t start = 0;
-  while (start <= names.size()) {
-    const size_t end = names.find('\n', start);
-    if (end == std::string::npos) {
-      out.Set(index++, Napi::String::New(env, names.substr(start)));
-      break;
-    }
-    out.Set(index++, Napi::String::New(env, names.substr(start, end - start)));
-    start = end + 1;
-  }
-  return out;
+// NativeSynth preset catalog: '\n'-joined program-lifetime string from the C
+// ABI, split into a JS string[] like masteringInsertNames.
+Napi::Value SynthPresetNames(const Napi::CallbackInfo& info) {
+  return SplitJoinedNames(info.Env(), sonare_synth_preset_names());
 }
 
 // Fetches a named catalog preset as a SynthPatch object (the preset name plus

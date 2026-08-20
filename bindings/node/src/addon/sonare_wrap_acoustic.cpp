@@ -1,5 +1,7 @@
 #include <algorithm>
 #include <cmath>
+#include <limits>
+#include <string>
 #include <vector>
 
 #include "acoustic/material.h"
@@ -220,6 +222,44 @@ std::vector<float> AudioToVector(const sonare::Audio& audio) {
   return std::vector<float>(audio.data(), audio.data() + audio.size());
 }
 
+// Wire string for a diagnostic severity, matching the RirDiagnostic type.
+const char* SeverityName(sonare::Diagnostic::Severity severity) {
+  switch (severity) {
+    case sonare::Diagnostic::Severity::Error:
+      return "error";
+    case sonare::Diagnostic::Severity::Warning:
+      return "warning";
+    case sonare::Diagnostic::Severity::Info:
+      break;
+  }
+  return "info";
+}
+
+// Transcribes the synthesizer's whole diagnostic list onto the result object.
+// The synthesizer reports five distinct geometry errors plus the clamp / no-tail
+// warnings, so a lone hasError boolean cannot tell a caller which one fired, nor
+// that a maxSeconds clamp shortened the tail of an otherwise successful RIR.
+// `errorMessage` carries the first error as "code: message", matching the string
+// the C ABI leaves in sonare_last_error_message() and Python's RirResult.
+void SetRirDiagnostics(Napi::Env env, Napi::Object out,
+                       const std::vector<sonare::Diagnostic>& diagnostics) {
+  Napi::Array entries = Napi::Array::New(env, diagnostics.size());
+  std::string error_message;
+  for (size_t index = 0; index < diagnostics.size(); ++index) {
+    const sonare::Diagnostic& diagnostic = diagnostics[index];
+    Napi::Object entry = Napi::Object::New(env);
+    entry.Set("code", Napi::String::New(env, diagnostic.code));
+    entry.Set("message", Napi::String::New(env, diagnostic.message));
+    entry.Set("severity", Napi::String::New(env, SeverityName(diagnostic.severity)));
+    entries.Set(static_cast<uint32_t>(index), entry);
+    if (error_message.empty() && diagnostic.severity == sonare::Diagnostic::Severity::Error) {
+      error_message = diagnostic.code + ": " + diagnostic.message;
+    }
+  }
+  out.Set("diagnostics", entries);
+  out.Set("errorMessage", Napi::String::New(env, error_message));
+}
+
 }  // namespace
 
 Napi::Value SonareWrap::SynthesizeRir(const Napi::CallbackInfo& info) {
@@ -267,6 +307,7 @@ Napi::Value SonareWrap::SynthesizeRir(const Napi::CallbackInfo& info) {
   out.Set("rir", VecToFloat32(env, rir));
   out.Set("sampleRate", Napi::Number::New(env, result.rir.sample_rate()));
   out.Set("hasError", Napi::Boolean::New(env, sonare::has_error(result.diagnostics)));
+  SetRirDiagnostics(env, out, result.diagnostics);
   return out;
   SONARE_NODE_CATCH(env)
 }
@@ -319,12 +360,19 @@ Napi::Value SonareWrap::EstimateRoom(const Napi::CallbackInfo& info) {
   }
 
   const sonare::RoomEstimate est = sonare::estimate_room(audio, cfg);
-  // The estimator always returns equal-length band vectors; report both at the
-  // shared min length so consumers see the same band count as the C ABI/Python.
-  const size_t band_count = std::min(est.absorption_bands.size(), est.rt60_bands.size());
-  std::vector<float> absorption_bands(est.absorption_bands.begin(),
-                                      est.absorption_bands.begin() + band_count);
-  std::vector<float> rt60_bands(est.rt60_bands.begin(), est.rt60_bands.begin() + band_count);
+  // Absorption (from the inverse problem) and RT60 (from the decay fit) are
+  // independent estimates and either can fail on its own. Both arrays report at
+  // the longer length with the failed side NaN-filled, exactly as the C ABI does
+  // (sonare_c_acoustic.cpp): truncating to the shorter side discarded a
+  // fully-computed vector precisely when its sibling failed, which is when the
+  // caller needs the surviving one most.
+  const size_t band_count = std::max(est.absorption_bands.size(), est.rt60_bands.size());
+  const auto pad_with_nan = [band_count](std::vector<float> values) {
+    values.resize(band_count, std::numeric_limits<float>::quiet_NaN());
+    return values;
+  };
+  const std::vector<float> absorption_bands = pad_with_nan(est.absorption_bands);
+  const std::vector<float> rt60_bands = pad_with_nan(est.rt60_bands);
   Napi::Object out = Napi::Object::New(env);
   out.Set("volume", Napi::Number::New(env, est.volume));
   out.Set("length", Napi::Number::New(env, est.dims.length));

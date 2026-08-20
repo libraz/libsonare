@@ -32,38 +32,24 @@ inline uint32_t Uint32Arg(const Napi::CallbackInfo& info, size_t index, uint32_t
   return info[index].As<Napi::Number>().Uint32Value();
 }
 
-inline bool NonNegativeSizeTArg(Napi::Env env, const Napi::CallbackInfo& info, size_t index,
-                                const char* name, size_t* out) {
-  if (out == nullptr || info.Length() <= index || !info[index].IsNumber()) {
-    Napi::TypeError::New(env, std::string(name) + " must be a number").ThrowAsJavaScriptException();
-    return false;
-  }
-
-  const double value = info[index].As<Napi::Number>().DoubleValue();
-  constexpr double kMaxSafeInteger = 9007199254740991.0;  // Number.MAX_SAFE_INTEGER
-  const double max_size_t = static_cast<double>(std::numeric_limits<size_t>::max());
-  if (!std::isfinite(value) || std::trunc(value) != value || value < 0.0 ||
-      value > kMaxSafeInteger || value > max_size_t) {
-    Napi::RangeError::New(
-        env, std::string(name) +
-                 " must be a finite non-negative integer no greater than Number.MAX_SAFE_INTEGER "
-                 "or the native size_t maximum")
-        .ThrowAsJavaScriptException();
-    return false;
-  }
-
-  *out = static_cast<size_t>(value);
-  return true;
-}
-
-// BoolProperty / DoubleProperty / FloatProperty / Int64Property / IntProperty
-// come from sonare_wrap_options.h (namespace sonare_node); re-exported here so
-// the project TUs that `using namespace sonare_node::project` keep finding them.
+// The property readers, the required-field readers and NonNegativeSizeTArg come
+// from sonare_wrap_options.h (namespace sonare_node); re-exported here so the
+// project TUs that `using namespace sonare_node::project` keep finding them.
 using sonare_node::BoolProperty;
 using sonare_node::DoubleProperty;
 using sonare_node::FloatProperty;
 using sonare_node::Int64Property;
 using sonare_node::IntProperty;
+using sonare_node::NonNegativeSizeTArg;
+using sonare_node::RequiredDoubleProperty;
+using sonare_node::RequiredDoubleValue;
+using sonare_node::RequiredFloatProperty;
+using sonare_node::RequiredIntProperty;
+using sonare_node::RequiredStringProperty;
+using sonare_node::RequiredUint32Property;
+using sonare_node::RequiredUint32Value;
+using sonare_node::RequireNumberValue;
 using sonare_node::ThrowIfError;
+using sonare_node::Uint32Property;
 
 }  // namespace sonare_node::project

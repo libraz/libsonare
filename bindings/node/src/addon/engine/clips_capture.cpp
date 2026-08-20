@@ -76,7 +76,12 @@ Napi::Value RealtimeEngineWrap::SetClips(const Napi::CallbackInfo& info) {
   clips.reserve(input.Length());
 
   for (uint32_t i = 0; i < input.Length(); ++i) {
-    Napi::Object obj = input.Get(i).As<Napi::Object>();
+    Napi::Value entry = input.Get(i);
+    if (!entry.IsObject()) {
+      Napi::TypeError::New(env, "clip must be an object").ThrowAsJavaScriptException();
+      return env.Undefined();
+    }
+    Napi::Object obj = entry.As<Napi::Object>();
     const bool has_page_provider = obj.Has("pageProvider") &&
                                    !obj.Get("pageProvider").IsUndefined() &&
                                    !obj.Get("pageProvider").IsNull();
@@ -124,12 +129,12 @@ Napi::Value RealtimeEngineWrap::SetClips(const Napi::CallbackInfo& info) {
     }
 
     SonareEngineClip clip{};
-    clip.id = obj.Get("id").As<Napi::Number>().Uint32Value();
-    clip.track_id = obj.Has("trackId") && !obj.Get("trackId").IsUndefined()
-                        ? obj.Get("trackId").As<Napi::Number>().Uint32Value()
-                        : 0;
+    if (!RequiredUint32Property(env, obj, "id", &clip.id)) return env.Undefined();
+    clip.track_id = Uint32Property(obj, "trackId", 0);
+    if (env.IsExceptionPending()) return env.Undefined();
     if (has_page_provider) {
-      const int provider_id = obj.Get("pageProvider").As<Napi::Number>().Int32Value();
+      int provider_id = 0;
+      if (!RequiredIntProperty(env, obj, "pageProvider", &provider_id)) return env.Undefined();
       SonareClipPageProvider* provider = ProviderById(clip_page_providers_, provider_id);
       if (!provider) {
         Napi::TypeError::New(env, "pageProvider is not a live ClipPageProvider")
@@ -145,26 +150,16 @@ Napi::Value RealtimeEngineWrap::SetClips(const Napi::CallbackInfo& info) {
       clip.num_channels = static_cast<int>(clip_ptrs.size());
       clip.num_samples = static_cast<int64_t>(num_samples);
     }
-    clip.start_ppq = obj.Get("startPpq").As<Napi::Number>().DoubleValue();
-    clip.clip_offset_samples =
-        obj.Has("clipOffsetSamples") && !obj.Get("clipOffsetSamples").IsUndefined()
-            ? obj.Get("clipOffsetSamples").As<Napi::Number>().Int64Value()
-            : 0;
-    clip.length_samples = obj.Has("lengthSamples") && !obj.Get("lengthSamples").IsUndefined()
-                              ? obj.Get("lengthSamples").As<Napi::Number>().Int64Value()
-                              : static_cast<int64_t>(num_samples);
-    clip.loop = obj.Has("loop") && !obj.Get("loop").IsUndefined()
-                    ? (obj.Get("loop").As<Napi::Boolean>().Value() ? 1 : 0)
-                    : 0;
-    clip.gain = obj.Has("gain") && !obj.Get("gain").IsUndefined()
-                    ? obj.Get("gain").As<Napi::Number>().FloatValue()
-                    : 1.0f;
-    clip.fade_in_samples = obj.Has("fadeInSamples") && !obj.Get("fadeInSamples").IsUndefined()
-                               ? obj.Get("fadeInSamples").As<Napi::Number>().Int64Value()
-                               : 0;
-    clip.fade_out_samples = obj.Has("fadeOutSamples") && !obj.Get("fadeOutSamples").IsUndefined()
-                                ? obj.Get("fadeOutSamples").As<Napi::Number>().Int64Value()
-                                : 0;
+    if (!RequiredDoubleProperty(env, obj, "startPpq", &clip.start_ppq)) return env.Undefined();
+    clip.clip_offset_samples = Int64Property(obj, "clipOffsetSamples", 0);
+    clip.length_samples = Int64Property(obj, "lengthSamples", static_cast<int64_t>(num_samples));
+    clip.loop = BoolProperty(obj, "loop", false) ? 1 : 0;
+    clip.gain = FloatProperty(obj, "gain", 1.0f);
+    clip.fade_in_samples = Int64Property(obj, "fadeInSamples", 0);
+    clip.fade_out_samples = Int64Property(obj, "fadeOutSamples", 0);
+    // A wrong-typed optional field left one pending JS exception; stop before
+    // ParseWarpMode can throw a second one on top of it (a fatal abort).
+    if (env.IsExceptionPending()) return env.Undefined();
     clip.warp_mode =
         obj.Has("warpMode") ? ParseWarpMode(env, obj.Get("warpMode")) : SONARE_ENGINE_WARP_MODE_OFF;
     if (env.IsExceptionPending()) return env.Undefined();
@@ -177,10 +172,19 @@ Napi::Value RealtimeEngineWrap::SetClips(const Napi::CallbackInfo& info) {
       Napi::Array anchors = anchors_value.As<Napi::Array>();
       clip_warp_anchors.reserve(anchors.Length());
       for (uint32_t anchor_index = 0; anchor_index < anchors.Length(); ++anchor_index) {
-        Napi::Object anchor = anchors.Get(anchor_index).As<Napi::Object>();
+        Napi::Value anchor_value = anchors.Get(anchor_index);
+        if (!anchor_value.IsObject()) {
+          Napi::TypeError::New(env, "warp anchor must be an object").ThrowAsJavaScriptException();
+          return env.Undefined();
+        }
+        Napi::Object anchor = anchor_value.As<Napi::Object>();
         SonareEngineWarpAnchor out{};
-        out.warp_sample = anchor.Get("warpSample").As<Napi::Number>().DoubleValue();
-        out.source_sample = anchor.Get("sourceSample").As<Napi::Number>().DoubleValue();
+        if (!RequiredDoubleProperty(env, anchor, "warpSample", &out.warp_sample)) {
+          return env.Undefined();
+        }
+        if (!RequiredDoubleProperty(env, anchor, "sourceSample", &out.source_sample)) {
+          return env.Undefined();
+        }
         clip_warp_anchors.push_back(out);
       }
       clip.warp_anchors = clip_warp_anchors.data();
@@ -214,16 +218,11 @@ Napi::Value RealtimeEngineWrap::SetTrackLanes(const Napi::CallbackInfo& info) {
       lane.track_id = value.As<Napi::Number>().Uint32Value();
     } else if (value.IsObject()) {
       Napi::Object obj = value.As<Napi::Object>();
-      lane.track_id = obj.Get("trackId").As<Napi::Number>().Uint32Value();
-      if (obj.Has("outputBusId") && !obj.Get("outputBusId").IsUndefined() &&
-          !obj.Get("outputBusId").IsNull()) {
-        lane.output_bus_id = obj.Get("outputBusId").As<Napi::Number>().Uint32Value();
-      }
-      if (obj.Has("sourceChannelLayout") && !obj.Get("sourceChannelLayout").IsUndefined() &&
-          !obj.Get("sourceChannelLayout").IsNull()) {
-        lane.source_channel_layout =
-            static_cast<uint8_t>(obj.Get("sourceChannelLayout").As<Napi::Number>().Uint32Value());
-      }
+      if (!RequiredUint32Property(env, obj, "trackId", &lane.track_id)) return env.Undefined();
+      lane.output_bus_id = Uint32Property(obj, "outputBusId", lane.output_bus_id);
+      lane.source_channel_layout = static_cast<uint8_t>(
+          Uint32Property(obj, "sourceChannelLayout", lane.source_channel_layout));
+      if (env.IsExceptionPending()) return env.Undefined();
       if (obj.Has("sends") && !obj.Get("sends").IsUndefined() && !obj.Get("sends").IsNull()) {
         if (!obj.Get("sends").IsArray()) {
           Napi::TypeError::New(env, "track lane sends must be an array")
@@ -241,20 +240,16 @@ Napi::Value RealtimeEngineWrap::SetTrackLanes(const Napi::CallbackInfo& info) {
           }
           Napi::Object send_obj = sends.Get(send_index).As<Napi::Object>();
           SonareEngineTrackSend send{};
-          send.bus_id = send_obj.Get("busId").As<Napi::Number>().Uint32Value();
-          send.level_db = send_obj.Has("levelDb") && !send_obj.Get("levelDb").IsUndefined()
-                              ? send_obj.Get("levelDb").As<Napi::Number>().FloatValue()
-                              : 0.0f;
-          send.enabled = !send_obj.Has("enabled") || send_obj.Get("enabled").IsUndefined() ||
-                                 send_obj.Get("enabled").As<Napi::Boolean>().Value()
-                             ? 1
-                             : 0;
+          if (!RequiredUint32Property(env, send_obj, "busId", &send.bus_id)) {
+            return env.Undefined();
+          }
+          send.level_db = FloatProperty(send_obj, "levelDb", 0.0f);
+          send.enabled = BoolProperty(send_obj, "enabled", true) ? 1 : 0;
           // Default to post-fader when sendTiming is absent to preserve the
           // historical behavior before the field existed (post-fader is the
           // zero value of SonareSendTiming).
-          send.send_timing = send_obj.Has("sendTiming") && !send_obj.Get("sendTiming").IsUndefined()
-                                 ? send_obj.Get("sendTiming").As<Napi::Number>().Int32Value()
-                                 : SONARE_SEND_TIMING_POST_FADER;
+          send.send_timing = IntProperty(send_obj, "sendTiming", SONARE_SEND_TIMING_POST_FADER);
+          if (env.IsExceptionPending()) return env.Undefined();
           lane_sends.push_back(send);
         }
         send_storage.push_back(std::move(lane_sends));
@@ -302,16 +297,13 @@ Napi::Value RealtimeEngineWrap::SetTrackBuses(const Napi::CallbackInfo& info) {
     }
     Napi::Object obj = input.Get(i).As<Napi::Object>();
     SonareEngineBus bus{};
-    bus.bus_id = obj.Get("busId").As<Napi::Number>().Uint32Value();
-    bus.gain_db = obj.Has("gainDb") && !obj.Get("gainDb").IsUndefined()
-                      ? obj.Get("gainDb").As<Napi::Number>().FloatValue()
-                      : 0.0f;
+    if (!RequiredUint32Property(env, obj, "busId", &bus.bus_id)) return env.Undefined();
+    bus.gain_db = FloatProperty(obj, "gainDb", 0.0f);
     // Zero-init leaves channel_layout at 0 (mono); default to stereo so existing
     // callers that omit it keep the prior stereo behavior.
     bus.channel_layout =
-        obj.Has("channelLayout") && !obj.Get("channelLayout").IsUndefined()
-            ? static_cast<uint8_t>(obj.Get("channelLayout").As<Napi::Number>().Uint32Value())
-            : SONARE_CHANNEL_LAYOUT_STEREO;
+        static_cast<uint8_t>(Uint32Property(obj, "channelLayout", SONARE_CHANNEL_LAYOUT_STEREO));
+    if (env.IsExceptionPending()) return env.Undefined();
     buses.push_back(bus);
   }
   ThrowIfError(env, sonare_engine_set_track_buses(engine_, buses.data(), buses.size()));

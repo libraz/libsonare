@@ -341,14 +341,6 @@ describe('editing effects', () => {
   });
 
   describe('RealtimeVoiceChanger error paths', () => {
-    it.skip('process-before-prepare throws at native layer (skipped: TS constructor always prepares)', () => {
-      // The public TypeScript RealtimeVoiceChanger constructor unconditionally
-      // calls prepare(), so the unprepared state is unreachable via the public
-      // API. The native C++ layer does guard on prepared_ and throws
-      // Error("RealtimeVoiceChanger must be prepared before processing"), but
-      // that path requires bypassing the TS wrapper to access addon directly.
-    });
-
     it('processMonoInto with oversized block throws RangeError', () => {
       const changer = new RealtimeVoiceChanger({
         sampleRate: 48000,

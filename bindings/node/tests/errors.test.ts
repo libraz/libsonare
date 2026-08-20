@@ -7,7 +7,7 @@ import {
   mixStereo,
   type SonareError,
   synthPresetPatch,
-} from '../src/index';
+} from '../src/index.js';
 
 describe('SonareError', () => {
   it('exposes an ErrorCode enum aligned with the C ABI', () => {
