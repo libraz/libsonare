@@ -672,13 +672,14 @@ class RealtimeEngine : private ClipPageRequestSink {
     // representable. Linear-scanned on the audio thread (<= 16 slots); the
     // control thread publishes via set_external().
     std::array<std::atomic<uint64_t>, kMaxExternalDestinations> external_destinations{};
-    // AUDIO thread only: added to a sequenced external event's render_frame to
-    // convert it from the TIMELINE sample position (which wraps backward on a
-    // loop / jumps on a seek) to the monotonic DEVICE render frame, so every
-    // record in the external output queue shares the device coordinate and stays
-    // in dispatch order across loop boundaries. process() sets this to
-    // (render_frame - sample_position) around the sequencer's process_block and
-    // restores 0 for the device-framed all-notes-off / command paths.
+    // AUDIO thread only: added to a sequenced event's render_frame to convert it
+    // from the TIMELINE sample position (which wraps backward on a loop / jumps
+    // on a seek) to the monotonic DEVICE render frame. Every consumer downstream
+    // of this sink -- instrument rack, merged output sink and external queue --
+    // is device-framed, so applying it here is what makes a single clock domain
+    // reach all of them. process() sets this to (render_frame - sample_position)
+    // around the sequencer's process_block and restores 0 for the already
+    // device-framed all-notes-off / live-input / command paths.
     int64_t timeline_to_device_offset = 0;
 
     static constexpr uint64_t encode(uint32_t destination_id) noexcept {
@@ -718,24 +719,23 @@ class RealtimeEngine : private ClipPageRequestSink {
     }
 
     void on_event(uint32_t destination_id, const midi::MidiEvent& event) noexcept override {
+      // Translate once, for every route: an instrument, a merged output sink and
+      // an external device all receive DEVICE render frames, so none of them has
+      // to know which engine path stamped the event. The offset is 0 on the paths
+      // that are device-framed already, making this a no-op copy for them.
+      midi::MidiEvent device_event = event;
+      device_event.render_frame += timeline_to_device_offset;
       if (is_external(destination_id)) {
         // An external destination drives its own device queue only -- it is
         // routed there INSTEAD of the rack and is not also mirrored to the
         // merged output sink, otherwise a host using both would emit the event
-        // twice to the device path. Stamp the queued record with the DEVICE
-        // render frame (timeline render frame + the per-sub-block offset) so the
-        // queue stays monotonic across loop wraps; the rack copy below is left in
-        // its native timeline frame.
-        if (external != nullptr) {
-          midi::MidiEvent device_event = event;
-          device_event.render_frame += timeline_to_device_offset;
-          external->send(destination_id, device_event);
-        }
+        // twice to the device path.
+        if (external != nullptr) external->send(destination_id, device_event);
         return;
       }
-      if (rack != nullptr) rack->on_event(destination_id, event);
+      if (rack != nullptr) rack->on_event(destination_id, device_event);
       host::MidiOutputSink* sink = output.load(std::memory_order_acquire);
-      if (sink != nullptr) sink->send(event);
+      if (sink != nullptr) sink->send(device_event);
     }
   };
 

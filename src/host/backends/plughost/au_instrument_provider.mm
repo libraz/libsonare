@@ -18,6 +18,7 @@
 
 #include "midi/midi_event.h"
 #include "midi/ump.h"
+#include "transport/transport_state.h"
 #include "util/exception.h"
 
 namespace sonare::host::backends {
@@ -210,6 +211,18 @@ class AuMidiInstrument final : public midi::MidiInstrument, public AuInstrumentT
     event_count_ = 0;
   }
 
+  /// Adopts the block's first DEVICE render frame as the basis every queued event
+  /// is placed against (see "Event clock domain" in midi/instrument.h). The engine
+  /// pushes this snapshot immediately before each process() call. A self-
+  /// accumulated position cannot serve as the basis: the engine renders an
+  /// instrument only while the transport rolls or one of its notes still sounds,
+  /// so an internal counter drifts out of the event basis on the first stop and
+  /// never resyncs on a seek or a loop wrap. Without a host transport the
+  /// free-running position advanced by process() remains the fallback.
+  void set_transport(const transport::TransportState& state) noexcept override {
+    position_ = state.render_frame;
+  }
+
   void process(float* const* channels, int num_channels, int num_samples) override {
     if (unit_ == nullptr || !initialized_ || channels == nullptr || num_channels <= 0 ||
         num_samples <= 0) {
@@ -243,6 +256,10 @@ class AuMidiInstrument final : public midi::MidiInstrument, public AuInstrumentT
       events_[j] = key;
     }
     // Flush queued events at their intra-block sample offset before rendering.
+    // position_ is the block's first DEVICE render frame, taken from the engine's
+    // transport snapshot in set_transport(); the negative case below is the
+    // stopped-and-silent window in which the engine renders nothing and events
+    // queue across more than one block (midi/instrument.h).
     for (size_t i = 0; i < event_count_; ++i) {
       const int64_t offset = events_[i].render_frame - position_;
       const UInt32 frame = offset < 0                 ? 0
@@ -321,6 +338,8 @@ class AuMidiInstrument final : public midi::MidiInstrument, public AuInstrumentT
   int latency_ = 0;
   int output_channels_ = 0;
   bool initialized_ = false;
+  // Block's first DEVICE render frame: overwritten by set_transport() under a
+  // host, self-advanced by process() when there is none.
   int64_t position_ = 0;
   BufferListStorage buffers_{};
   std::vector<float> scratch_{};
@@ -495,6 +514,14 @@ struct AuCallSpyState {
   UInt32 probe_input_frames = 0;
   std::array<float, 1024> probe_dst_left{};
   std::array<float, 1024> probe_dst_right{};
+
+  // --- event-placement probe ---
+  // Block-relative frames the instrument adapter handed to MusicDeviceMIDIEvent,
+  // and the sample time it stamped on each render timestamp, in call order.
+  std::array<UInt32, 8> midi_event_frames{};
+  size_t midi_event_count = 0;
+  std::array<Float64, 8> render_sample_times{};
+  size_t render_sample_time_count = 0;
 };
 
 thread_local AuCallSpyState* g_au_call_spy = nullptr;
@@ -531,6 +558,10 @@ OSStatus spy_uninitialize(AudioUnit) {
 OSStatus spy_render(AudioUnit, AudioUnitRenderActionFlags* flags, const AudioTimeStamp* ts,
                     UInt32 bus, UInt32 /*frames*/, AudioBufferList* /*data*/) {
   ++g_au_call_spy->render_calls;
+  if (ts != nullptr &&
+      g_au_call_spy->render_sample_time_count < g_au_call_spy->render_sample_times.size()) {
+    g_au_call_spy->render_sample_times[g_au_call_spy->render_sample_time_count++] = ts->mSampleTime;
+  }
   if (g_au_call_spy->probe_input_frames > 0 && g_au_call_spy->has_input_cb) {
     BufferListStorage storage;
     AudioBufferList* list = storage.list();
@@ -552,7 +583,12 @@ OSStatus spy_render(AudioUnit, AudioUnitRenderActionFlags* flags, const AudioTim
 
 OSStatus spy_reset(AudioUnit, AudioUnitScope, AudioUnitElement) { return noErr; }
 
-OSStatus spy_midi_event(MusicDeviceComponent, UInt32, UInt32, UInt32, UInt32) { return noErr; }
+OSStatus spy_midi_event(MusicDeviceComponent, UInt32, UInt32, UInt32, UInt32 frame) {
+  if (g_au_call_spy->midi_event_count < g_au_call_spy->midi_event_frames.size()) {
+    g_au_call_spy->midi_event_frames[g_au_call_spy->midi_event_count++] = frame;
+  }
+  return noErr;
+}
 
 OSStatus spy_dispose(AudioComponentInstance) { return noErr; }
 
@@ -717,6 +753,55 @@ detail::AuInstrumentDroppedEventProbeResult detail::run_au_instrument_dropped_ev
     }
   }
   g_au_call_spy = nullptr;
+  return result;
+}
+
+detail::AuInstrumentTransportPlacementProbeResult
+detail::run_au_instrument_transport_placement_probe() {
+  constexpr int kProbeBlock = 8;
+  constexpr int64_t kFirstBlockFrame = 1000;
+  constexpr int64_t kFirstEventOffset = 3;
+  // A device frame far past kFirstBlockFrame + kProbeBlock: the engine keeps
+  // advancing the render frame through blocks it does not ask this instrument to
+  // render, and a seek or loop wrap lands the next rendered block anywhere.
+  constexpr int64_t kSecondBlockFrame = 5000;
+  constexpr int64_t kSecondEventOffset = 6;
+
+  AuCallSpyState state;
+  g_au_call_spy = &state;
+  auto fake_unit = reinterpret_cast<AudioUnit>(static_cast<uintptr_t>(1));
+
+  detail::AuInstrumentTransportPlacementProbeResult result;
+  {
+    // Scoped so ~AuMidiInstrument() runs before g_au_call_spy is cleared.
+    AuMidiInstrument instrument(fake_unit, &kSpyAuRuntimeApi);
+    instrument.prepare(48000.0, kProbeBlock);
+    std::array<float, kProbeBlock> left{};
+    std::array<float, kProbeBlock> right{};
+    std::array<float*, 2> channels{left.data(), right.data()};
+
+    transport::TransportState block{};
+    block.render_frame = kFirstBlockFrame;
+    instrument.on_event(0, midi::MidiEvent{kFirstBlockFrame + kFirstEventOffset,
+                                           midi::make_midi1_note_on(0, 0, 60, 100)});
+    instrument.set_transport(block);
+    instrument.process(channels.data(), 2, kProbeBlock);
+
+    block.render_frame = kSecondBlockFrame;
+    instrument.on_event(0, midi::MidiEvent{kSecondBlockFrame + kSecondEventOffset,
+                                           midi::make_midi1_note_on(0, 0, 62, 100)});
+    instrument.set_transport(block);
+    instrument.process(channels.data(), 2, kProbeBlock);
+  }
+  g_au_call_spy = nullptr;
+
+  result.ran = state.midi_event_count == 2 && state.render_sample_time_count == 2;
+  if (result.ran) {
+    result.first_event_frame = state.midi_event_frames[0];
+    result.second_event_frame = state.midi_event_frames[1];
+    result.first_sample_time = state.render_sample_times[0];
+    result.second_sample_time = state.render_sample_times[1];
+  }
   return result;
 }
 

@@ -525,17 +525,19 @@ void RealtimeEngine::process_subblock(float* const* io, float* const* monitor_ou
     // aligned with the kMidi boundaries inserted above. No allocation.
     //
     // When an instrument is registered it IS the sequencer's sink, so this call
-    // feeds the block's events to the instrument at their sample-accurate render
-    // frames (event.render_frame relative to this sub-block's first frame). The
+    // feeds the block's events to the instrument at their sample-accurate DEVICE
+    // render frames, from which the intra-block offset is event.render_frame
+    // minus the TransportState::render_frame pushed by set_transport below. The
     // instrument buffers them; rendering happens immediately below so the events
     // and the audio they drive stay in the same sub-block.
     if (transport_rolling) {
       emit_midi_clock_block(transport_.sample_position(), transport_.render_frame(), num_frames);
       // The sequencer stamps events in TIMELINE samples; translate them to the
-      // monotonic DEVICE render frame as they enter the external output queue so
-      // a loop wrap (timeline jumps backward, device keeps rising) cannot invert
-      // their order. Restored to 0 afterwards so the device-framed all-notes-off
-      // / command dispatch paths pass through untranslated.
+      // monotonic DEVICE render frame as they leave the dispatch sink so a loop
+      // wrap (timeline jumps backward, device keeps rising) cannot invert their
+      // order and so every event an instrument sees shares one basis with the
+      // live-input / command / all-notes-off paths. Restored to 0 afterwards
+      // because those paths are device-framed already.
       midi_dispatch_sink_.timeline_to_device_offset =
           transport_.render_frame() - transport_.sample_position();
       midi_sequencer_.process_block(transport_.sample_position(), num_frames);

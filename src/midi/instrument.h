@@ -16,14 +16,48 @@
 ///    allocate (scratch / voice tables). It is the only place allocation is
 ///    allowed.
 ///  - on_event(...) and process(...) run on the AUDIO thread and MUST be
-///    allocation-free, lock-free and I/O-free. on_event() is delivered by the
-///    MidiSequencer at sample-accurate render frames during a block; process()
-///    then renders the block's audio. The instrument is responsible for placing
-///    each event at its intra-block sample offset (event.render_frame minus the
-///    block's first render frame).
+///    allocation-free, lock-free and I/O-free. on_event() is delivered at
+///    sample-accurate render frames during a block; process() then renders the
+///    block's audio. The instrument is responsible for placing each event at its
+///    intra-block sample offset (see "Event clock domain" below).
 ///  - latency_samples() (inherited from rt::ProcessorBase) reports the
 ///    instrument's reported latency in samples; the arrangement compiler folds
 ///    this into the CompiledTimeline PDC / latency summary.
+///
+/// Event clock domain
+/// ------------------
+/// MidiEvent::render_frame is ALWAYS a DEVICE render frame: the engine's
+/// free-running output-sample counter, which is monotonic and never rewinds on
+/// seek, loop or stop. It is NOT the transport's timeline sample position, which
+/// jumps on a seek and wraps backward on a loop. The engine feeds an instrument
+/// from several paths -- compiled MIDI clips, live MIDI input, queued commands,
+/// and the hang-note releases emitted at a seek, loop wrap, stop or clip end --
+/// and every one of them arrives in this single basis.
+///
+/// The block's first frame is TransportState::render_frame, pushed by
+/// set_transport() before each process() call, so
+///
+///     offset = event.render_frame - state.render_frame
+///
+/// is the event's intra-block sample offset and lies in [0, num_samples) for
+/// every event delivered since the previous process() call.
+///
+/// Placement therefore belongs in process(), not in on_event(): a block's events
+/// are delivered BEFORE that block's set_transport(), so at on_event() time the
+/// snapshot still describes the previous block. Queue each event as it arrives
+/// and convert the whole batch once process() runs.
+///
+/// Deriving the basis from an instrument-accumulated sample counter is wrong:
+/// the engine renders an instrument only while the transport rolls or one of its
+/// notes is still sounding, so such a counter drifts away from the engine's clock
+/// the first time playback stops and never resyncs on a seek or a loop wrap.
+/// TransportState::sample_position is the timeline coordinate and must not be
+/// used to place events.
+///
+/// One case falls outside the range guarantee: while the transport is stopped
+/// and the instrument has no sounding note the engine renders nothing, so events
+/// delivered in that window queue up and reach the next process() call with a
+/// negative offset. Clamp to 0 rather than indexing out of the block.
 
 #include <cstddef>
 #include <cstdint>
@@ -67,7 +101,10 @@ class MidiInstrument : public rt::ProcessorBase, public MidiEventSink {
   /// hosted instrument follows the host transport instead of free-running. The
   /// state is the same immutable per-block snapshot the engine feeds the
   /// sequencer / automation (playing, ppq/sample position, bpm, time signature,
-  /// loop region). Must be allocation-free and lock-free. Default: ignored
+  /// loop region). Its render_frame is the block's first DEVICE frame and is the
+  /// basis every queued event must be placed against (see "Event clock domain"
+  /// above), so an instrument that schedules events overrides this even when it
+  /// ignores tempo. Must be allocation-free and lock-free. Default: ignored
   /// (a free-running instrument needs no transport).
   virtual void set_transport(const transport::TransportState& state) noexcept { (void)state; }
 

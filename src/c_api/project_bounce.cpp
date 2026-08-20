@@ -67,28 +67,71 @@ bool checked_midi_source_stem_shape(size_t track_count, int64_t frames, size_t* 
 // bounce engine can drive an external instrument: events are forwarded to
 // on_event at their sample-accurate render frame and render() sums the audio.
 // Only opaque UMP words / planar buffers cross the seam (invariant 6).
+//
+// Clock domain: the engine stamps events in DEVICE render frames (see "Event
+// clock domain" in midi/instrument.h), a counter the C seam gives the host no
+// way to observe -- render() reports only a frame count. Events are therefore
+// held until process(), where the block's first device frame (from
+// set_transport) turns each into an intra-block offset, and re-expressed in the
+// only basis the host can keep: frames this instrument has been asked to render.
+// The two bases differ whenever the engine renders nothing (a stopped transport
+// with no sounding note, e.g. the smoother-priming block below), so forwarding
+// the raw device frame would place every later event too late by that amount.
 class CallbackInstrument final : public sonare::midi::MidiInstrument {
  public:
   explicit CallbackInstrument(const SonareInstrumentCallbacks& callbacks) : cb_(callbacks) {}
 
   void prepare(double sample_rate, int max_block_size) override {
+    pending_count_ = 0;
     if (cb_.prepare) cb_.prepare(cb_.user_data, sample_rate, max_block_size);
   }
-  void process(float* const* channels, int num_channels, int num_samples) override {
-    if (cb_.render) cb_.render(cb_.user_data, channels, num_channels, num_samples);
+  void set_transport(const sonare::transport::TransportState& state) noexcept override {
+    block_first_frame_ = state.render_frame;
   }
-  void reset() override {}
+  void process(float* const* channels, int num_channels, int num_samples) override {
+    flush_pending(num_samples);
+    if (cb_.render) cb_.render(cb_.user_data, channels, num_channels, num_samples);
+    rendered_frames_ += num_samples;
+  }
+  // rendered_frames_ is deliberately NOT cleared: the C table has no reset
+  // callback, so the host's own frame counter keeps running across the several
+  // render passes a stem bounce makes, and this mirror must keep running too.
+  void reset() override { pending_count_ = 0; }
   int latency_samples() const noexcept override { return cb_.latency_samples; }
   int tail_samples() const noexcept override { return cb_.tail_samples; }
   void on_event(uint32_t destination_id, const sonare::midi::MidiEvent& event) noexcept override {
-    if (cb_.on_event) {
-      cb_.on_event(cb_.user_data, destination_id, event.ump.words, event.ump.word_count,
-                   event.render_frame);
-    }
+    // Only the UMP words cross the seam, so nothing here borrows the event's
+    // SysEx view, which is valid for the duration of this call alone.
+    if (cb_.on_event == nullptr || pending_count_ >= pending_.size()) return;
+    pending_[pending_count_++] = {destination_id, event.render_frame, event.ump};
   }
 
  private:
+  struct PendingEvent {
+    uint32_t destination_id = 0;
+    int64_t render_frame = 0;
+    sonare::midi::Ump ump{};
+  };
+
+  void flush_pending(int num_samples) noexcept {
+    const int64_t last = num_samples > 0 ? num_samples - 1 : 0;
+    for (size_t i = 0; i < pending_count_; ++i) {
+      const int64_t offset = pending_[i].render_frame - block_first_frame_;
+      const int64_t placed = offset < 0 ? 0 : offset > last ? last : offset;
+      cb_.on_event(cb_.user_data, pending_[i].destination_id, pending_[i].ump.words,
+                   pending_[i].ump.word_count, rendered_frames_ + placed);
+    }
+    pending_count_ = 0;
+  }
+
   SonareInstrumentCallbacks cb_;
+  // Bounded per-block event hold. One sub-block normally carries a single event
+  // (the engine splits at every MIDI frame); the dense case is a hang-note
+  // release, which is capped by the sequencer's active-note table.
+  std::array<PendingEvent, 512> pending_{};
+  size_t pending_count_ = 0;
+  int64_t block_first_frame_ = 0;
+  int64_t rendered_frames_ = 0;
 };
 
 // A destination id paired with a borrowed instrument pointer (the owning storage

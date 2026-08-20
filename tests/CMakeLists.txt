@@ -373,6 +373,7 @@ if(BUILD_ARRANGEMENT)
     arrangement/edit_command_history_test.cpp
     arrangement/edit_compiler_golden_test.cpp
     arrangement/edit_compiler_pan_law_test.cpp
+    arrangement/shared_strip_midi_controls_test.cpp
     arrangement/c_abi_edit_ops_test.cpp
     midi/midi_ump_test.cpp
     midi/builtin_synth_test.cpp
@@ -416,6 +417,7 @@ if(BUILD_ARRANGEMENT)
     serialize/project_default_sr_and_uri_test.cpp
     host/host_seam_test.cpp
     engine/realtime_engine_midi_test.cpp
+    engine/instrument_clock_domain_test.cpp
     engine/instrument_automation_test.cpp
     bindings/binding_project_c_surface_test.cpp
     bindings/binding_project_bounce_test.cpp

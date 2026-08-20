@@ -9,6 +9,7 @@
 
 #include <array>
 #include <atomic>
+#include <catch2/catch_approx.hpp>
 #include <catch2/catch_test_macros.hpp>
 #include <chrono>
 #include <cmath>
@@ -311,6 +312,25 @@ TEST_CASE("AU MusicDevice instrument's dropped-event counter is reachable and co
   REQUIRE(result.telemetry_reachable);
   REQUIRE(result.dropped_before_overflow == 0);
   REQUIRE(result.dropped_after_overflow == 1);
+}
+
+TEST_CASE("AU MusicDevice instrument places events against the host transport frame",
+          "[host][au]") {
+  // Events reach the adapter stamped in DEVICE render frames (see "Event clock
+  // domain" in midi/instrument.h), so the block base has to come from the
+  // transport snapshot the host pushes before process(). Deriving it from the
+  // adapter's own accumulated position instead only agrees while every block is
+  // rendered back to back from frame 0; the second block below deliberately does
+  // not continue the first, as a seek, a loop wrap, or a stretch of blocks the
+  // engine did not ask this instrument to render leaves it.
+  const auto result = sonare::host::backends::detail::run_au_instrument_transport_placement_probe();
+  REQUIRE(result.ran);
+  REQUIRE(result.first_event_frame == 3u);
+  REQUIRE(result.second_event_frame == 6u);
+  // The AU render timestamp follows the same basis, so it stays a continuous
+  // host sample time rather than a private per-instrument counter.
+  REQUIRE(result.first_sample_time == Catch::Approx(1000.0));
+  REQUIRE(result.second_sample_time == Catch::Approx(5000.0));
 }
 
 TEST_CASE("AU host enumerates and renders a system instrument", "[host][au][.]") {

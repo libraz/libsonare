@@ -84,6 +84,24 @@ struct AuInstrumentDroppedEventProbeResult {
 
 AuInstrumentDroppedEventProbeResult run_au_instrument_dropped_event_probe();
 
+/// Result from probing where the MusicDevice adapter places queued events once
+/// the host pushes a transport snapshot. Two blocks are rendered: the second one
+/// starts at a render frame that does NOT continue the first, as a seek or a loop
+/// wrap does, so an adapter deriving the block base from its own accumulated
+/// position misplaces the second block's event. No SDK object or installed
+/// plugin is required.
+struct AuInstrumentTransportPlacementProbeResult {
+  bool ran = false;
+  // Block-relative frames handed to MusicDeviceMIDIEvent, one per rendered block.
+  unsigned first_event_frame = 0;
+  unsigned second_event_frame = 0;
+  // Sample times stamped on each block's render timestamp.
+  double first_sample_time = 0.0;
+  double second_sample_time = 0.0;
+};
+
+AuInstrumentTransportPlacementProbeResult run_au_instrument_transport_placement_probe();
+
 }  // namespace detail
 
 /// Factory over the system's Audio Units. Control-thread only; instantiation
