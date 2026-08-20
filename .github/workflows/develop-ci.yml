@@ -115,7 +115,7 @@ jobs:
         # 4-core/16GB hosted runners when compiling the large Debug test TUs.
         run: cmake --build build --parallel 2
       - name: Generate K-weighting reference fixture
-        run: python3 tools/scripts/k_weighting_reference.py
+        run: make fixtures
       - name: Test
         run: ctest --test-dir build --output-on-failure --parallel
       # `make test-golden` is deliberately not run here. The golden hashes

@@ -116,7 +116,7 @@ jobs:
         # hosted runners when compiling the large Debug test TUs.
         run: cmake --build build --parallel 2
       - name: Generate K-weighting reference fixture
-        run: python3 tools/scripts/k_weighting_reference.py
+        run: make fixtures
       - name: Test
         run: ctest --test-dir build --output-on-failure --parallel
       # `make test-golden` is deliberately not run here. The golden hashes
@@ -158,7 +158,7 @@ jobs:
         # even heavier; unbounded parallelism OOM-kills the compiler.
         run: cmake --build build-sanitize --parallel 2
       - name: Generate K-weighting reference fixture
-        run: python3 tools/scripts/k_weighting_reference.py
+        run: make fixtures
       - name: Test
         # `halt_on_error=1` is what makes this a gate. UndefinedBehaviorSanitizer
         # otherwise diagnoses and continues, so the process still exits 0, Catch2
@@ -237,7 +237,7 @@ jobs:
         run: ccache --show-stats
 
       - name: Generate K-weighting reference fixture
-        run: python3 tools/scripts/k_weighting_reference.py
+        run: make fixtures
 
       - name: Run C++ tests
         run: ctest --test-dir build --output-on-failure --parallel
@@ -432,7 +432,7 @@ jobs:
       - name: Generate K-weighting reference fixture
         # The fixture is untracked, so a fresh checkout has to generate it or
         # the K-weighting cases fail on a missing file.
-        run: python3 tools/scripts/k_weighting_reference.py
+        run: make fixtures
       - name: Test
         # The whole suite, not the [ffmpeg] tag. Linking FFmpeg changes which
         # decoder handles a given file, so the regressions worth catching are

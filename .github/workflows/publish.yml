@@ -54,7 +54,7 @@ jobs:
         run: |
           cmake -B build -DCMAKE_BUILD_TYPE=Debug -DBUILD_TESTING=ON -DSONARE_WITH_FFMPEG=OFF
           cmake --build build --parallel 2
-          python3 tools/scripts/k_weighting_reference.py
+          make fixtures
           ctest --test-dir build --output-on-failure --parallel
 
       - name: Install Node deps (WASM binding)

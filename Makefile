@@ -1,4 +1,4 @@
-.PHONY: all build release test test-slow test-golden test-optional-fixtures test-librosa-live clean rebuild format format-check lint wasm coverage \
+.PHONY: all build fixtures release test test-slow test-golden test-optional-fixtures test-librosa-live clean rebuild format format-check lint wasm coverage \
        coverage-build coverage-clean build-shared build-node build-wasm-binding \
        test-python test-python-slow test-node test-wasm parity conformance test-gm-cross-surface abi-layout abi-layout-check check-abi-version \
        capability-catalog capability-catalog-check processor-types processor-types-check ci-local \
@@ -38,18 +38,26 @@ wasm:
 	$(CMAKE) --build build-wasm -j
 	cd bindings/wasm && yarn build:js
 
-test: build
+# The K-weighting cases compare against a reference this script computes, and
+# the file it writes is gitignored, so a fresh checkout has no copy of it. The
+# cases fail rather than skip when it is absent, so every target that runs them
+# generates it first and CI invokes this same target rather than repeating the
+# command.
+fixtures:
+	python3 tools/scripts/k_weighting_reference.py
+
+test: build fixtures
 	ctest --test-dir $(BUILD_DIR) --output-on-failure --parallel
 
 # Heavy cases (>~2 s each) are tagged [.][slow] and hidden from the default
 # ctest run; this runs just those. Must run from the repo root (librosa
 # fixtures load by relative path).
-test-slow: build
+test-slow: build fixtures
 	./$(BUILD_DIR)/bin/sonare_tests "[slow]"
 
 # Golden regressions are hidden from the default Catch2 run so they can be
 # invoked explicitly in local development and CI.
-test-golden: build
+test-golden: build fixtures
 	./$(BUILD_DIR)/bin/sonare_tests "[golden]"
 
 test-optional-fixtures:
