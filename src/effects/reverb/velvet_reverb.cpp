@@ -80,12 +80,23 @@ void VelvetReverb::prepare(double sample_rate, int max_block_size) {
   prepared_ = true;
 
   const float rho = std::clamp(config_.density_hz, 1000.0f, 3000.0f);
-  const int grid_ls = std::max(1, static_cast<int>(std::lround(sr / rho)));
   // decay scales the base reverb time around its nominal value.
   const float rt60 = effective_rt60(config_);
   const int n_seg = std::max(2, static_cast<int>(std::lround(rt60 * sr)));
-  const int num_pulses =
-      std::clamp(static_cast<int>(std::lround(rho * rt60)), 1, VelvetReverbConfig::kMaxTapCount);
+  // The pulse count is derived from the grid so the table always spans the
+  // whole n_seg window tail_samples() declares. Deriving it from density * rt60
+  // instead lets the two disagree: rounding the grid step up, or the tap cap
+  // binding, leaves the last tap short of n_seg and the impulse response drops
+  // to permanent zero part way through a still-audible tail.
+  int grid_ls = std::max(1, static_cast<int>(std::lround(sr / rho)));
+  int num_pulses = (n_seg + grid_ls - 1) / grid_ls;
+  if (num_pulses > VelvetReverbConfig::kMaxTapCount) {
+    // Widen the grid rather than drop the trailing taps: the tail keeps its
+    // declared length, at a reduced effective density of sr / grid_ls.
+    grid_ls = (n_seg + VelvetReverbConfig::kMaxTapCount - 1) / VelvetReverbConfig::kMaxTapCount;
+    num_pulses = (n_seg + grid_ls - 1) / grid_ls;
+  }
+  num_pulses = std::max(1, num_pulses);
   const float decay_rate = std::log(kT60Drop) / rt60;
 
   // Evaluate the first partition directly (early reflections). The remaining

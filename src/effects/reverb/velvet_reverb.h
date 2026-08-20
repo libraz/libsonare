@@ -15,8 +15,14 @@ namespace sonare::effects::reverb {
 struct VelvetReverbConfig {
   /// Maximum accepted base reverb time. Keeps ring-buffer allocation bounded.
   static constexpr float kMaxReverbTimeSeconds = 12.0f;
-  /// Maximum taps per channel. Bounds the per-sample sparse-FIR work.
-  static constexpr int kMaxTapCount = 8192;
+  /// Maximum taps per channel. Only taps inside the early partition are summed
+  /// per sample; the rest are folded into a dense FFT impulse response whose
+  /// cost is independent of how many taps land in it, so this bounds the
+  /// prepare()-time table rather than the audio-thread work. The largest
+  /// in-range request (3000 Hz density over the 18 s effective T60 ceiling)
+  /// needs about 54000 taps, so the tap grid only has to widen at sample rates
+  /// low enough that the requested density approaches them.
+  static constexpr int kMaxTapCount = 65536;
 
   /// @brief Scales reverb_time_s: effective T60 = reverb_time_s * (0.5 + decay).
   float decay = 0.45f;

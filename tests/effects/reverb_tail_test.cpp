@@ -2,8 +2,11 @@
 /// @brief Reverb/delay decay-tail reporting so offline bounces are not
 ///        truncated, plus the convolution empty-IR latency contract.
 
+#include <algorithm>
 #include <catch2/catch_approx.hpp>
 #include <catch2/catch_test_macros.hpp>
+#include <cmath>
+#include <vector>
 
 #include "effects/delay/stereo_delay.h"
 #include "effects/reverb/convolution_reverb.h"
@@ -21,6 +24,49 @@ using sonare::effects::reverb::FdnReverb;
 using sonare::effects::reverb::FdnReverbConfig;
 using sonare::effects::reverb::VelvetReverb;
 using sonare::effects::reverb::VelvetReverbConfig;
+
+namespace {
+
+/// @brief Renders an impulse through a fully wet VelvetReverb, block by block,
+///        for exactly the window it declares as its tail.
+/// @return The RMS of each of @p num_segments equal slices, in dB relative to
+///         the first slice. A slice with no energy at all reports -600 dB
+///         rather than -inf so a failure prints a readable number.
+std::vector<double> velvet_tail_segments_db(VelvetReverbConfig config, double sample_rate,
+                                            int num_segments) {
+  constexpr int kBlockSize = 512;
+  config.dry_wet = 1.0f;
+  VelvetReverb reverb(config);
+  reverb.prepare(sample_rate, kBlockSize);
+
+  const int total = reverb.tail_samples();
+  std::vector<float> out(static_cast<size_t>(total), 0.0f);
+  out[0] = 1.0f;
+  for (int offset = 0; offset < total;) {
+    const int count = std::min(kBlockSize, total - offset);
+    float* channels[] = {out.data() + offset};
+    reverb.process(channels, 1, count);
+    offset += count;
+  }
+
+  const int segment = total / num_segments;
+  std::vector<double> segments_db;
+  segments_db.reserve(static_cast<size_t>(num_segments));
+  double reference = 0.0;
+  for (int s = 0; s < num_segments; ++s) {
+    double sum = 0.0;
+    for (int i = s * segment; i < (s + 1) * segment; ++i) {
+      const double sample = out[static_cast<size_t>(i)];
+      sum += sample * sample;
+    }
+    const double rms = std::sqrt(sum / static_cast<double>(segment));
+    if (s == 0) reference = rms > 0.0 ? rms : 1.0;
+    segments_db.push_back(rms > 0.0 ? 20.0 * std::log10(rms / reference) : -600.0);
+  }
+  return segments_db;
+}
+
+}  // namespace
 
 TEST_CASE("FdnReverb reports a non-zero decay tail", "[effects][reverb][fdn]") {
   FdnReverbConfig config;
@@ -57,6 +103,53 @@ TEST_CASE("VelvetReverb bounds excessive reverb time and tap work", "[effects][r
   float* channels[] = {samples.data()};
   reverb.process(channels, 1, static_cast<int>(samples.size()));
   for (const float sample : samples) REQUIRE(std::isfinite(sample));
+}
+
+TEST_CASE("VelvetReverb decays smoothly across the whole tail it declares",
+          "[effects][reverb][velvet]") {
+  constexpr int kSegments = 20;
+  // The tap gains span 60 dB over the declared T60, so each 5 % slice sits
+  // 3 dB below the one before it.
+  constexpr double kStepDb = -60.0 / kSegments;
+
+  // 16 kHz rather than 48 kHz: the pulse count follows density * T60 while the
+  // grid step follows sample_rate / density, so the fraction of the tail a
+  // saturated tap table covers is the same at every rate, and the FFT tail
+  // render is quadratic in the T60 sample count.
+  constexpr double kSampleRate = 16000.0;
+
+  VelvetReverbConfig config;
+  SECTION("decaySec = 8 s") {
+    // insert_factory maps decaySec onto reverb_time_s * (0.5 + decay).
+    config.decay = 0.45f;
+    config.reverb_time_s = 8.0f / (0.5f + 0.45f);
+    config.density_hz = 2000.0f;
+  }
+  SECTION("reverb time above the ceiling") {
+    config.decay = 1.0f;
+    config.reverb_time_s = 40.0f;  // clamped to the 12 s base, i.e. an 18 s T60
+    config.density_hz = 3000.0f;
+  }
+
+  const std::vector<double> segments_db = velvet_tail_segments_db(config, kSampleRate, kSegments);
+
+  for (int s = 0; s < kSegments; ++s) {
+    INFO("segment " << s << " = " << segments_db[static_cast<size_t>(s)] << " dB");
+    // Every slice tracks the exponential envelope. A tap table that stops short
+    // of the declared tail leaves the trailing slices far below this floor.
+    REQUIRE(segments_db[static_cast<size_t>(s)] > kStepDb * s - 8.0);
+    REQUIRE(segments_db[static_cast<size_t>(s)] < kStepDb * s + 4.0);
+    // ...and it gets there smoothly: no step big enough to be an edge.
+    if (s > 0) {
+      REQUIRE(segments_db[static_cast<size_t>(s)] - segments_db[static_cast<size_t>(s - 1)] >
+              -15.0);
+    }
+  }
+  // The end of the declared window has reached the -60 dB target without
+  // collapsing into silence before it.
+  INFO("last segment = " << segments_db.back() << " dB");
+  REQUIRE(segments_db.back() < -45.0);
+  REQUIRE(segments_db.back() > -70.0);
 }
 
 TEST_CASE("VelvetReverb hybrid tap reconstruction is independent of host block boundaries",
