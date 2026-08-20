@@ -82,15 +82,15 @@ float legacy_langevin_derivative(float x) {
 /// It is not an independent oracle, and it does not check that the scheme is
 /// right. The body below is a line-for-line copy of JilesAtherton::integrate_step
 /// and its Langevin helpers, down to the +-1.2*Ms clamp and to the way each
-/// branch of the loop equation is integrated - the irreversible one by a
-/// projected Euler step, the reversible one in closed form. What it detects is
-/// therefore divergence between the two copies, not an error in the scheme
-/// itself: a change applied to both sides passes unnoticed, which is the likely
-/// shape of a deliberate model change. It also compares only the single-step
-/// rate-independent path: it has no sub-stepping, and no after-effect
-/// relaxation, so the caller must keep max_field_step at 0 and call the
-/// two-argument process() for the two sides to line up at all. Neither of those
-/// paths is compared by it.
+/// branch of the loop equation is integrated - the irreversible one by an Euler
+/// step, the reversible one in closed form, and their sum projected onto the
+/// anhysteretic curve it is chasing. What it detects is therefore divergence
+/// between the two copies, not an error in the scheme itself: a change applied
+/// to both sides passes unnoticed, which is the likely shape of a deliberate
+/// model change. It also compares only the single-step rate-independent path: it
+/// has no sub-stepping, and no after-effect relaxation, so the caller must keep
+/// max_field_step at 0 and call the two-argument process() for the two sides to
+/// line up at all. Neither of those paths is compared by it.
 ///
 /// What the scheme itself is answerable to, built from the published equations
 /// rather than from this code, is elsewhere: the closed-form small-field
@@ -124,15 +124,15 @@ float dafx19_reference_ja_process(LegacyJaState& state,
   const float dM_an_dHe = config.saturation_magnetization * dL / config.anhysteretic_shape;
   const float mean_field_gain = std::max(1.0f - config.mean_field_coupling * dM_an_dHe, 1e-6f);
 
-  float dM_irr = dM_hyst_dH * dH;
-  dM_irr = diff >= 0.0f ? std::min(dM_irr, diff) : std::max(dM_irr, diff);
+  const float dM_irr = dM_hyst_dH * dH;
 
   const float M_an_start = config.saturation_magnetization *
                            legacy_langevin((field - dH + config.mean_field_coupling * state.M) /
                                            config.anhysteretic_shape);
   const float dM_rev = config.reversibility * (M_an - M_an_start) / mean_field_gain;
 
-  state.M += dM_irr + dM_rev;
+  const float reach = diff / mean_field_gain;
+  state.M += diff >= 0.0f ? std::min(dM_irr + dM_rev, reach) : std::max(dM_irr + dM_rev, reach);
   state.M = std::clamp(state.M, -1.2f * config.saturation_magnetization,
                        1.2f * config.saturation_magnetization);
   state.H_prev = field;

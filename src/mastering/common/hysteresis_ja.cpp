@@ -7,15 +7,6 @@
 
 namespace sonare::mastering::common {
 
-namespace {
-
-// Upper bound on the sub-steps one process() call may take, so the worst-case
-// cost of an audio-thread call stays bounded no matter how large a field jump
-// the caller hands in.
-constexpr int kMaxSubSteps = 32;
-
-}  // namespace
-
 JilesAtherton::JilesAtherton(JilesAthertonConfig config) : config_(config) {
   validate_config(config_);
 }
@@ -52,27 +43,39 @@ void JilesAtherton::integrate_step(JilesAthertonState& state, float field, float
   // field into one with respect to the drive field.
   const float mean_field_gain = std::max(1.0f - alpha * d_m_an_d_he, 1e-6f);
 
-  // The irreversible branch chases the anhysteretic curve, so one step must not
-  // cross it: the loop-transition slope is roughly diff/k and a step of size
-  // d_field therefore overshoots as soon as d_field approaches k. Projecting the
-  // increment onto the remaining distance keeps the trajectory on the branch it
-  // is on, which is what the sub-stepping above achieves while it has sub-steps
-  // left to spend and what has to hold once the sub-step budget is exhausted.
-  float d_m_irr = d_m_hyst_d_h * d_field;
-  d_m_irr = diff >= 0.0f ? std::min(d_m_irr, diff) : std::max(d_m_irr, diff);
+  const float d_m_irr = d_m_hyst_d_h * d_field;
 
   // The reversible branch is integrated in closed form rather than by the same
   // Euler step, because the antiderivative of dMan/dH is the anhysteretic
-  // magnetization itself. Evaluating it at both ends of the step is exact for
-  // any step size, so this term cannot overshoot either. Both evaluations hold
-  // the magnetization fixed, so the difference is with respect to the effective
-  // field and is divided by the mean-field gain to become one with respect to
-  // the drive field - the same conversion the derivative form applies, and the
-  // term that sets the small-field susceptibility.
+  // magnetization itself. Both evaluations hold the magnetization fixed, so the
+  // difference is with respect to the effective field and is divided by the mean
+  // field gain to become one with respect to the drive field - the same
+  // conversion the derivative form applies, and the term that sets the
+  // small-field susceptibility.
   const float an_start = ms * langevin((field - d_field + alpha * state.magnetization) / a);
   const float d_m_rev = c * (anhysteretic - an_start) / mean_field_gain;
 
-  state.magnetization += d_m_irr + d_m_rev;
+  // Both branches chase the anhysteretic curve, so their sum must not carry the
+  // magnetization across it: the loop-transition slope is roughly diff/k and a
+  // step of size d_field therefore overshoots as soon as d_field approaches k,
+  // while the reversible term telescopes to c times the whole anhysteretic
+  // excursion over a fast half cycle and so overshoots on its own even where the
+  // irreversible term has already landed on the curve. Projecting the total
+  // increment onto the remaining distance keeps the trajectory on the branch it
+  // is on, which is what the sub-stepping above achieves while it has sub-steps
+  // left to spend and what has to hold once the sub-step budget is exhausted.
+  //
+  // The distance projected onto is `diff` divided by the mean-field gain rather
+  // than `diff` itself. `diff` is measured against the anhysteretic value for
+  // the magnetization the step starts from, which is not yet self-consistent;
+  // dividing by the gain is the first-order correction to the value the curve
+  // actually settles at, and it is what keeps the projection from cancelling the
+  // mean-field term the small-field susceptibility depends on.
+  const float reach = diff / mean_field_gain;
+  const float d_m =
+      diff >= 0.0f ? std::min(d_m_irr + d_m_rev, reach) : std::max(d_m_irr + d_m_rev, reach);
+
+  state.magnetization += d_m;
   state.magnetization = std::clamp(state.magnetization, -1.2f * ms, 1.2f * ms);
 }
 

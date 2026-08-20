@@ -149,12 +149,13 @@ TEST_CASE("Jiles-Atherton initial susceptibility matches the small-field limit",
 // case here that constrains the full model with the irreversible branch live,
 // and it is a property of the published equations rather than of our arithmetic.
 //
-// The range is bounded deliberately. The engine sub-steps a large field change
-// but caps the number of sub-steps, so past a per-sample field change of roughly
-// 8 (at these parameters) the effective sub-step grows beyond the range where a
-// forward-Euler step tracks the loop, and the bound stops holding. Everything
-// tested here is inside that range; see the note in the report accompanying this
-// file for the residual above it.
+// The bound does not depend on the step size. The engine sub-steps a large field
+// change but caps the number of sub-steps, so a per-sample field change past
+// kMaxSubSteps times max_field_step leaves each sub-step larger than asked for;
+// the bound is held there by the step itself, which may not carry the
+// magnetization across the anhysteretic curve. The largest field step swept
+// below crosses that cap, and hysteresis_ja_physical_test.cpp drives the same
+// regime harder.
 // A rate-independent hysteresis loop is closed: once the trajectory has settled,
 // a symmetric drive cycle returns the magnetization to where the cycle started.
 // The state is a point on the loop, so repeating the same excursion has to land

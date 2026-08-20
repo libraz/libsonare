@@ -185,12 +185,12 @@ TEST_CASE("Tape stays bounded and level-responsive at the documented drive ceili
     const auto peaks = tape_level_response(config, hz, amplitudes);
     for (size_t i = 0; i < peaks.size(); ++i) {
       CAPTURE(amplitudes[i], peaks[i]);
-      // Strictly below the +/-1.2*Ms safety clamp, so a run that reaches the
-      // clamp fails. The bound is not 1.0 because the differential form of the
-      // loop equation carries the magnetization a few percent past the
-      // saturation magnetization at this drive - measured 1.05 at 16 kHz - which
-      // is a property of the formulation and not of the step size.
-      REQUIRE(peaks[i] < 1.1f);
+      // The saturation magnetization is the bound, and the stage's output gain
+      // is unity here, so it is also the bound on the peak. Neither branch of
+      // the loop equation may carry the magnetization across the anhysteretic
+      // curve within a step, and that curve approaches Ms only asymptotically,
+      // so no drive rate lifts the peak above it - measured 0.979 at 16 kHz.
+      REQUIRE(peaks[i] < 1.0f);
     }
     // Every level step must still move the output. The stage is deep into
     // compression here, so the step is small - under two percent for the top
@@ -267,23 +267,42 @@ TEST_CASE("Held-field relaxation is opt-in at the shared engine", "[mastering][s
   common::JilesAthertonState held_state;
   common::JilesAthertonState defaulted_state;
 
+  // What is left behind has to be a remanent magnetization off the loop, so the
+  // field walks out to the excursion and back rather than jumping there in one
+  // sample: at a per-sample field change this far below the coercivity the
+  // engine tracks the branch it is on, while a single-sample excursion is a step
+  // many times the coercivity, which the loop equation resolves as a move
+  // straight onto the anhysteretic curve and back off it, leaving nothing.
+  constexpr float kExcursion = 0.8f;
+  constexpr float kFieldStep = 0.002f;
+  constexpr int kRise = static_cast<int>(kExcursion / kFieldStep);
+
   float relaxing_tail = 0.0f;
   float held_tail = 0.0f;
   float defaulted_tail = 0.0f;
   for (int i = 0; i < kTailLength; ++i) {
-    const float field = i == 0 ? 0.8f : 0.0f;
+    float field = 0.0f;
+    if (i < kRise) {
+      field = kFieldStep * static_cast<float>(i + 1);
+    } else if (i < 2 * kRise) {
+      field = kExcursion - kFieldStep * static_cast<float>(i + 1 - kRise);
+    }
     relaxing_tail = relaxing.process(relaxing_state, field, static_cast<float>(kSampleRate));
     held_tail = held.process(held_state, field, static_cast<float>(kSampleRate));
     // The two-argument form supplies no sample rate and must stay rate-independent.
     defaulted_tail = defaulted.process(defaulted_state, field);
   }
 
-  // The latching config keeps whatever the transient left behind - a remanent
-  // magnetization, measured 0.396 here - while the relaxing one decays to rest.
-  // The tail is bounded on both sides: too small is a config that relaxed when
-  // it was told not to, and a tail at or above the saturation magnetization is
-  // a state pinned at the +/-1.2*Ms clamp rather than sitting on the loop.
-  REQUIRE(std::abs(held_tail) > 0.1f);
+  // The latching config keeps whatever the excursion left behind - a remanent
+  // magnetization, measured 0.0925 here - while the relaxing one decays to rest.
+  // The excursion traces a minor loop, reaching 69% of the saturation
+  // magnetization, but its remanence is within 0.6% of what a saturating
+  // excursion leaves, so the tail is the loop's remanence and not a fraction of
+  // it. The tail is bounded on both sides: too small is a config that relaxed
+  // when it was told not to, and a tail at or above the saturation
+  // magnetization is a state pinned at the safety clamp rather than sitting on
+  // the loop.
+  REQUIRE(std::abs(held_tail) > 0.05f);
   REQUIRE(std::abs(held_tail) < config.saturation_magnetization);
   REQUIRE(std::abs(relaxing_tail) < 0.001f);
   REQUIRE_THAT(defaulted_tail, WithinAbs(held_tail, 0.0f));

@@ -11,6 +11,12 @@
 /// susceptibility, and a bounded magnetization envelope - are properties of the
 /// loop equation that hold for any parameter set.
 ///
+/// The quasi-static sweeps take one Euler step per sample by construction, so
+/// they say nothing about the adaptive sub-stepping. The last three cases cover
+/// that separately: the raw single-step engine under a fast drive, the sub-step
+/// branch under the max_field_step the shipped stages set, and the regime past
+/// the sub-step budget where the cap leaves each sub-step larger than asked for.
+///
 /// Coverage boundary:
 ///   - The mean-field coupling is a weak parameter at these presets. Doubling
 ///     it moves every quantity here by under half a percent, so it is not
@@ -29,12 +35,14 @@
 #include <vector>
 
 #include "mastering/common/hysteresis_ja.h"
+#include "util/constants.h"
 
 namespace common = sonare::mastering::common;
 
 namespace {
 
 using Catch::Matchers::WithinRel;
+using sonare::constants::kTwoPiD;
 
 /// Per-sample field increment of the quasi-static sweep. It is far below every
 /// preset's coercivity, so the forward-Euler integration follows the loop
@@ -136,6 +144,34 @@ double initial_susceptibility(const common::JilesAthertonConfig& config) {
   common::JilesAtherton engine(config);
   common::JilesAthertonState state;
   return engine.process(state, static_cast<float>(kProbeField)) / kProbeField;
+}
+
+/// Largest field change between consecutive samples of the sinusoidal stimulus
+/// used by the sub-step cases, which is what decides how many sub-steps
+/// process() asks for.
+double largest_field_step(double amplitude, double hz, double sample_rate, int samples) {
+  double largest = 0.0;
+  for (int i = 1; i < samples; ++i) {
+    const double now = amplitude * std::sin(kTwoPiD * hz * static_cast<double>(i) / sample_rate);
+    const double before =
+        amplitude * std::sin(kTwoPiD * hz * static_cast<double>(i - 1) / sample_rate);
+    largest = std::max(largest, std::abs(now - before));
+  }
+  return largest;
+}
+
+/// Peak magnetization over a sine drive at `hz`.
+double peak_over_sine(const common::JilesAthertonConfig& config, double amplitude, double hz,
+                      double sample_rate, int samples) {
+  common::JilesAtherton engine(config);
+  common::JilesAthertonState state;
+  double peak = 0.0;
+  for (int i = 0; i < samples; ++i) {
+    const double field = amplitude * std::sin(kTwoPiD * hz * static_cast<double>(i) / sample_rate);
+    peak = std::max(
+        peak, std::abs(static_cast<double>(engine.process(state, static_cast<float>(field)))));
+  }
+  return peak;
 }
 
 struct PresetLoop {
@@ -241,42 +277,134 @@ TEST_CASE("Jiles-Atherton magnetization never moves against the drive field",
 }
 
 // A drive that slews faster than the loop equation can integrate in one step
-// pushes the magnetization past the anhysteretic curve it is chasing. The model
-// still has to stay inside a finite envelope set by its own saturation
-// magnetization, rather than running away with the step size.
+// still has to leave the magnetization inside the envelope the model sets for
+// itself. Ms is that envelope: the anhysteretic curve the trajectory chases is
+// Ms*L(x) and approaches Ms only asymptotically, and neither branch may carry
+// the magnetization across the curve within a step, so no step size can put the
+// magnetization above Ms. The step size sets how close to it the drive gets, not
+// whether the bound holds.
 //
 // The presets here leave max_field_step at its default 0, so this drives the raw
 // single-step engine deliberately. It is not a statement about the shipped tape
 // and transformer stages, which set that field and so sub-step a fast field
-// change instead of integrating it in one go.
+// change instead of integrating it in one go; those are covered below.
 TEST_CASE("Jiles-Atherton magnetization stays inside its saturation envelope",
           "[mastering][saturation]") {
-  constexpr double kFieldJump = 2.0;
   constexpr double kFieldLimit = 40.0;
   constexpr int kSamples = 4000;
 
-  for (const auto& preset : preset_loops()) {
-    CAPTURE(preset.name);
-    common::JilesAtherton engine(preset.config);
-    common::JilesAthertonState state;
+  // Each jump is several times every preset's coercivity, so a single Euler step
+  // is outside the range where it tracks the loop, and the largest one crosses
+  // most of the field range in a sample.
+  for (double field_jump : {0.5, 2.0, 8.0, 32.0}) {
+    for (const auto& preset : preset_loops()) {
+      CAPTURE(preset.name, field_jump, field_jump / preset.config.coercivity);
+      common::JilesAtherton engine(preset.config);
+      common::JilesAthertonState state;
 
-    double peak = 0.0;
-    double field = 0.0;
-    double direction = 1.0;
-    for (int i = 0; i < kSamples; ++i) {
-      field += direction * kFieldJump;
-      if (field > kFieldLimit) direction = -1.0;
-      if (field < -kFieldLimit) direction = 1.0;
-      const double magnetization = engine.process(state, static_cast<float>(field));
-      if (!(std::abs(magnetization) <= peak)) peak = std::abs(magnetization);
+      double peak = 0.0;
+      double field = 0.0;
+      double direction = 1.0;
+      for (int i = 0; i < kSamples; ++i) {
+        field += direction * field_jump;
+        if (field > kFieldLimit) direction = -1.0;
+        if (field < -kFieldLimit) direction = 1.0;
+        const double magnetization = engine.process(state, static_cast<float>(field));
+        if (!(std::abs(magnetization) <= peak)) peak = std::abs(magnetization);
+      }
+      CAPTURE(peak);
+
+      const double ms = preset.config.saturation_magnetization;
+      REQUIRE(std::isfinite(peak));
+      REQUIRE(peak <= ms);
+      // The drive is fast enough that the envelope is approached rather than
+      // passed by a wide margin, so the bound above is being exercised. Measured,
+      // every row here lands between 0.992 and 0.998.
+      REQUIRE(peak > 0.95 * ms);
     }
-    CAPTURE(peak);
+  }
+}
 
-    const double ms = preset.config.saturation_magnetization;
-    REQUIRE(std::isfinite(peak));
-    REQUIRE(peak <= 1.2 * ms + 1e-5);
-    // The drive is fast enough that the envelope is actually reached, so the
-    // bound above is being exercised rather than passed by a wide margin.
-    REQUIRE(peak > ms);
+// The sub-step branch, which the cases above never enter: they all leave
+// max_field_step at zero, so process() takes exactly one step per sample and the
+// loop that walks the field is dead code for them. Here every preset carries the
+// max_field_step the shipped tape and transformer stages give it - their own
+// coercivity - and the drive is fast enough that the branch runs.
+//
+// The two invariants are the ones that hold for any parameter set: the
+// magnetization stays inside its own saturation envelope, and a level step still
+// moves the output. The second is what a magnetization stuck against a bound
+// loses first - a pinned stage returns the same peak for every level, so its
+// step ratio is exactly 1 - and it is asserted rather than a peak value because
+// the peaks themselves are preset-specific.
+TEST_CASE("Jiles-Atherton sub-stepping holds the envelope and the level response",
+          "[mastering][saturation]") {
+  constexpr double kSampleRate = 48000.0;
+  constexpr int kSamples = 48000;
+  const double amplitudes[] = {0.25, 0.5, 1.0, 2.0, 4.0};
+
+  for (const auto& preset : preset_loops()) {
+    for (double hz : {1000.0, 6000.0, 12000.0, 16000.0}) {
+      auto config = preset.config;
+      config.max_field_step = config.coercivity;
+      CAPTURE(preset.name, hz, config.max_field_step);
+
+      const double ms = config.saturation_magnetization;
+      double previous = 0.0;
+      for (double amplitude : amplitudes) {
+        const double peak = peak_over_sine(config, amplitude, hz, kSampleRate, kSamples);
+        CAPTURE(amplitude, peak, previous);
+        REQUIRE(peak <= ms);
+        // Measured, the smallest step on this ladder is 1.049 at the top of it,
+        // where the stage is deepest in compression.
+        if (previous > 0.0) REQUIRE(peak > previous * 1.02);
+        previous = peak;
+      }
+
+      // Non-vacuous on both counts: the branch under test was entered, and the
+      // ladder reached the compressed part of the curve where a pinned stage
+      // would stop responding rather than passing on the linear part.
+      const double demand = largest_field_step(amplitudes[4], hz, kSampleRate, kSamples);
+      CAPTURE(demand);
+      REQUIRE(demand > static_cast<double>(config.max_field_step));
+      REQUIRE(previous > 0.8 * ms);
+    }
+  }
+}
+
+// Past the sub-step budget. Asking for more sub-steps than kMaxSubSteps allows
+// leaves each one larger than max_field_step requested, which is the regime the
+// sub-stepping exists to avoid and which it cannot avoid here - so the envelope
+// has to be held by the step itself rather than by the sub-step count. A 16 kHz
+// drive at 48 kHz moves the field by up to 1.73 times its own amplitude between
+// samples, so the top of the ladder here - a field amplitude of 16, which is
+// what a full-scale input reaches at the +24 dB the tape stage documents - asks
+// for five to sixteen times the budget depending on the preset.
+TEST_CASE("Jiles-Atherton holds the envelope past the sub-step budget", "[mastering][saturation]") {
+  constexpr double kSampleRate = 48000.0;
+  constexpr int kSamples = 48000;
+  constexpr double kHz = 16000.0;
+  const double amplitudes[] = {1.0, 4.0, 16.0};
+
+  for (const auto& preset : preset_loops()) {
+    auto config = preset.config;
+    config.max_field_step = config.coercivity;
+    const double budget =
+        common::JilesAtherton::kMaxSubSteps * static_cast<double>(config.max_field_step);
+    const double demand = largest_field_step(amplitudes[2], kHz, kSampleRate, kSamples);
+    CAPTURE(preset.name, budget, demand);
+    // The budget really is exhausted, so the cap path is the one under test.
+    REQUIRE(demand > budget);
+
+    const double ms = config.saturation_magnetization;
+    double previous = 0.0;
+    for (double amplitude : amplitudes) {
+      const double peak = peak_over_sine(config, amplitude, kHz, kSampleRate, kSamples);
+      CAPTURE(amplitude, peak, previous);
+      REQUIRE(peak <= ms);
+      // Measured, the smallest step across this ladder is 1.041.
+      if (previous > 0.0) REQUIRE(peak > previous * 1.01);
+      previous = peak;
+    }
   }
 }

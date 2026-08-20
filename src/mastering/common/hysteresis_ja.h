@@ -37,6 +37,12 @@ struct JilesAthertonState {
 
 class JilesAtherton {
  public:
+  /// Upper bound on the sub-steps one process() call may take, so the worst-case
+  /// cost of an audio-thread call stays bounded no matter how large a field jump
+  /// the caller hands in. A field change beyond kMaxSubSteps * max_field_step is
+  /// integrated in sub-steps larger than max_field_step asks for.
+  static constexpr int kMaxSubSteps = 32;
+
   explicit JilesAtherton(JilesAthertonConfig config = {});
 
   void set_config(const JilesAthertonConfig& config);
