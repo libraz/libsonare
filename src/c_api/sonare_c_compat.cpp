@@ -35,6 +35,15 @@ namespace {
 // (NaN / Inf) sample is rejected so a NaN can never silently propagate through a
 // transform. The non-finite policy is uniform with validate_audio_params; see
 // the INPUT-BUFFER POLICY block in sonare_c_features.h.
+//
+// Four entry points below are stricter than this and reject an empty input:
+// sonare_trim_silence, sonare_split_silence, sonare_fix_frames and
+// sonare_tempogram_ratio, whose empty results already encode a real measurement.
+// Those rejections live in the core functions they wrap (sonare::trim /
+// sonare::split / sonare::fix_frames / sonare::tempogram_ratio) so that the WASM
+// bindings, which call the core directly and do not go through this layer, share
+// one policy instead of a hand-mirrored copy. They arrive here as a
+// SonareException and map to SONARE_ERROR_INVALID_PARAMETER via SONARE_C_CATCH.
 SonareError validate_buffer(const float* values, size_t length) {
   if (length > 0 && values == nullptr) return SONARE_ERROR_INVALID_PARAMETER;
   for (size_t i = 0; i < length; ++i) {

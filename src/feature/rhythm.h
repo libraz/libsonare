@@ -99,9 +99,19 @@ std::vector<float> cyclic_tempogram(const Audio& audio,
 /// @param win_length Tempogram win_length used to compute the lag axis
 /// @param sr Sample rate (currently unused, see warning above)
 /// @param hop_length Hop length used for the onset envelope
-/// @param factors Lag ratios to evaluate (default {0.5, 1, 2, 3, 4})
+/// @param factors Lag ratios to evaluate (default {0.5, 1, 2, 3, 4}); each must
+///        be finite and > 0
 /// @return Vector of length factors.size() with the frame-averaged
 ///         autocorrelation sampled at each ratio's integer lag.
+/// @throw sonare::SonareException on non-positive @p win_length / @p hop_length,
+///        an empty @p tempogram_data or @p factors, a @p factors entry that is
+///        not finite and > 0, or a @p tempogram_data shorter than
+///        @p win_length (fewer than one frame).
+/// @note These are rejections, not zero-filled results: a zero at a ratio means
+///       "no autocorrelation energy at that lag", so an unanswerable call must
+///       not produce one. A NaN factor in particular used to reach
+///       round(reference_lag / factor) as undefined behaviour, and an infinite
+///       one resolved to lag 0 — the DC peak the reference search excludes.
 std::vector<float> tempogram_ratio(const std::vector<float>& tempogram_data, int win_length, int sr,
                                    int hop_length,
                                    const std::vector<float>& factors = {0.5f, 1.0f, 2.0f, 3.0f,

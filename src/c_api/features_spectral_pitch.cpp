@@ -306,6 +306,26 @@ SonareError sonare_onset_backtrack(const int* events, size_t event_count, const 
   }
   *out = nullptr;
   *out_count = 0;
+  // An empty envelope is legitimate here (onset_backtrack then has nothing to
+  // walk back over), but a non-finite one is not: a NaN makes the descent
+  // comparison false, so the walk stops on the spot and the event index is
+  // returned as if it were already a local minimum. Matches the WASM
+  // onsetBacktrack binding, which already rejects it via validateFiniteVector,
+  // and the non-finite policy of validate_audio_params.
+  //
+  // This one guards the caller-supplied envelope at the boundary rather than
+  // inside core onset_backtrack, unlike the decompose / nn_filter / mel-delta
+  // rules. The core function is also fed envelopes the library computed itself
+  // (OnsetAnalyzer::backtrack_onsets, and through it MusicAnalyzer and
+  // RhythmAnalyzer), and compute_onset_strength can produce a non-finite
+  // envelope from input this API accepts as valid: samples near FLT_MAX are
+  // finite, so validate_audio_params admits them, but the STFT then overflows
+  // to Inf. Making finiteness a core precondition would turn those analyses
+  // into thrown exceptions. Finiteness is therefore a contract on envelopes
+  // that come from outside, not an invariant of the core function.
+  for (size_t index = 0; index < energy_count; ++index) {
+    if (!std::isfinite(energy[index])) return SONARE_ERROR_INVALID_PARAMETER;
+  }
   SONARE_C_TRY
   std::vector<int> event_values;
   std::vector<float> energy_values;

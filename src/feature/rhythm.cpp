@@ -364,11 +364,33 @@ std::vector<float> tempogram_ratio(const std::vector<float>& tempogram_data, int
     throw SonareException(ErrorCode::InvalidParameter,
                           "tempogram_ratio: win_length and hop_length must be > 0");
   }
-  std::vector<float> out(factors.size(), 0.0f);
-  if (tempogram_data.empty() || factors.empty()) return out;
+  // Every rejection below used to be answered with a zero-filled vector, which
+  // reads as a genuine "no energy at this ratio" measurement. Reject instead so
+  // a caller can never mistake an unanswerable call for a result.
+  if (tempogram_data.empty()) {
+    throw SonareException(ErrorCode::InvalidParameter,
+                          "tempogram_ratio: tempogram_data must not be empty");
+  }
+  if (factors.empty()) {
+    throw SonareException(ErrorCode::InvalidParameter,
+                          "tempogram_ratio: factors must not be empty");
+  }
+  // A NaN factor passes any `<= 0` test and would reach round(best_lag / f) as
+  // undefined behaviour; an infinite one deterministically selects lag 0, the DC
+  // autocorrelation peak the reference search below deliberately excludes.
+  for (float factor : factors) {
+    if (!std::isfinite(factor) || factor <= 0.0f) {
+      throw SonareException(ErrorCode::InvalidParameter,
+                            "tempogram_ratio: factors must be finite and > 0");
+    }
+  }
   const int n_frames =
       static_cast<int>(tempogram_data.size() / static_cast<std::size_t>(win_length));
-  if (n_frames <= 0) return out;
+  if (n_frames <= 0) {
+    throw SonareException(ErrorCode::InvalidParameter,
+                          "tempogram_ratio: tempogram_data is shorter than win_length");
+  }
+  std::vector<float> out(factors.size(), 0.0f);
 
   // Estimate a reference tempo: pick the lag with the strongest mean energy.
   std::vector<double> lag_mean(win_length, 0.0);
@@ -393,8 +415,8 @@ std::vector<float> tempogram_ratio(const std::vector<float>& tempogram_data, int
   // Reference tempo in BPM is 60 * sr / (best_lag * hop_length); ratios scale lag.
   for (std::size_t k = 0; k < factors.size(); ++k) {
     const float f = factors[k];
-    if (f <= 0.0f) continue;
-    // Tempo scales inversely with lag: factor 2 (tempo*2) => half lag.
+    // Tempo scales inversely with lag: factor 2 (tempo*2) => half lag. f is
+    // finite and > 0 (validated above), so the rounded lag is well defined.
     const int lag = static_cast<int>(std::round(best_lag / f));
     if (lag < 0 || lag >= win_length) continue;
     out[k] = static_cast<float>(lag_mean[lag]);

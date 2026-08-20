@@ -9,6 +9,7 @@
 #include <cmath>
 #include <cstdint>
 #include <limits>
+#include <string>
 #include <vector>
 
 #include "support/audio_fixtures.h"
@@ -374,4 +375,89 @@ TEST_CASE("sonare_analyze_timbre exposes timbre_over_time", "[c_api][features]")
   sonare_free_timbre_result(&result);
   REQUIRE(result.timbre_over_time == nullptr);
   REQUIRE(result.timbre_over_time_count == 0);
+}
+
+TEST_CASE("sonare_trim_silence and sonare_split_silence reject an empty input",
+          "[c_api][features][edge]") {
+  // 0.1 s of silence framed by 0.1 s tones, so a real trim has to move both edges.
+  const int quarter = kSampleRate / 10;
+  std::vector<float> samples;
+  const auto tone = sonare::test::generate_sine_samples(440.0f, kSampleRate, quarter, 1.0f);
+  samples.insert(samples.end(), tone.begin(), tone.end());
+  samples.insert(samples.end(), static_cast<size_t>(quarter), 0.0f);
+  samples.insert(samples.end(), tone.begin(), tone.end());
+
+  const std::vector<float> silence(static_cast<size_t>(kSampleRate), 0.0f);
+
+  SECTION("trim: normal, all-silent and empty are three distinct outcomes") {
+    float* out = nullptr;
+    size_t count = 0;
+    int start = -1;
+    int end = -1;
+
+    REQUIRE(sonare_trim_silence(samples.data(), samples.size(), 60.0f, 2048, 512, &out, &count,
+                                &start, &end) == SONARE_OK);
+    REQUIRE(count > 0);
+    REQUIRE(out != nullptr);
+    REQUIRE(end > start);
+    sonare_free_floats(out);
+
+    // All-silent still succeeds and reports the zero range.
+    out = nullptr;
+    count = 7;
+    start = -1;
+    end = -1;
+    REQUIRE(sonare_trim_silence(silence.data(), silence.size(), 60.0f, 2048, 512, &out, &count,
+                                &start, &end) == SONARE_OK);
+    REQUIRE(out == nullptr);
+    REQUIRE(count == 0);
+    REQUIRE(start == 0);
+    REQUIRE(end == 0);
+
+    // Empty no longer shares that result: it is an error, with a message.
+    REQUIRE(sonare_trim_silence(nullptr, 0, 60.0f, 2048, 512, &out, &count, &start, &end) ==
+            SONARE_ERROR_INVALID_PARAMETER);
+    REQUIRE(std::string(sonare_last_error_message()).find("empty") != std::string::npos);
+  }
+
+  SECTION("split: normal, all-silent and empty are three distinct outcomes") {
+    int* intervals = nullptr;
+    size_t interval_count = 0;
+
+    REQUIRE(sonare_split_silence(samples.data(), samples.size(), 60.0f, 2048, 512, &intervals,
+                                 &interval_count) == SONARE_OK);
+    REQUIRE(interval_count > 0);
+    REQUIRE(intervals != nullptr);
+    sonare_free_ints(intervals);
+
+    intervals = nullptr;
+    interval_count = 7;
+    REQUIRE(sonare_split_silence(silence.data(), silence.size(), 60.0f, 2048, 512, &intervals,
+                                 &interval_count) == SONARE_OK);
+    REQUIRE(intervals == nullptr);
+    REQUIRE(interval_count == 0);
+
+    REQUIRE(sonare_split_silence(nullptr, 0, 60.0f, 2048, 512, &intervals, &interval_count) ==
+            SONARE_ERROR_INVALID_PARAMETER);
+    REQUIRE(std::string(sonare_last_error_message()).find("empty") != std::string::npos);
+  }
+}
+
+TEST_CASE("sonare_fix_frames rejects an empty frame list", "[c_api][features][edge]") {
+  const std::vector<int> frames{2, 4};
+  int* out = nullptr;
+  size_t count = 0;
+
+  REQUIRE(sonare_fix_frames(frames.data(), frames.size(), 0, 5, 1, &out, &count) == SONARE_OK);
+  REQUIRE(count == 4);
+  REQUIRE(out != nullptr);
+  REQUIRE(out[0] == 0);
+  REQUIRE(out[3] == 5);
+  sonare_free_ints(out);
+
+  // Previously this padded an empty list into the single element {x_min}.
+  out = nullptr;
+  count = 7;
+  REQUIRE(sonare_fix_frames(nullptr, 0, 0, -1, 1, &out, &count) == SONARE_ERROR_INVALID_PARAMETER);
+  REQUIRE(std::string(sonare_last_error_message()).find("empty") != std::string::npos);
 }

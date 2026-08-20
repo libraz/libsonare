@@ -191,6 +191,27 @@ TEST_CASE("sonare_mel_delta returns the slope of a linear feature row", "[c_api]
   REQUIRE(sonare_mel_delta(features.data(), 2, 5, 4, &delta) == SONARE_ERROR_INVALID_PARAMETER);
 }
 
+TEST_CASE("sonare_mel_delta rejects a non-finite feature instead of differentiating it",
+          "[c_api][features]") {
+  const std::vector<float> features = {0.0f, 1.0f, 2.0f, 3.0f, 4.0f, 5.0f, 6.0f, 7.0f, 8.0f, 9.0f};
+  float* delta = nullptr;
+  // Positive control: identical arguments on the clean row succeed, so the
+  // rejections below can only come from the non-finite element.
+  REQUIRE(sonare_mel_delta(features.data(), 2, 5, 5, &delta) == SONARE_OK);
+  sonare_free_floats(delta);
+
+  for (float bad :
+       {std::numeric_limits<float>::quiet_NaN(), std::numeric_limits<float>::infinity()}) {
+    std::vector<float> poisoned = features;
+    poisoned[7] = bad;
+    delta = nullptr;
+    REQUIRE(sonare_mel_delta(poisoned.data(), 2, 5, 5, &delta) == SONARE_ERROR_INVALID_PARAMETER);
+    // Without the guard the call returns SONARE_OK and a delta whose whole
+    // window around index 7 is NaN.
+    REQUIRE(delta == nullptr);
+  }
+}
+
 TEST_CASE("sonare_piptrack returns equally shaped pitch and magnitude matrices",
           "[c_api][features]") {
   constexpr int sr = 22050;
@@ -360,6 +381,42 @@ TEST_CASE("sonare_onset_backtrack returns the preceding energy minimum", "[c_api
   REQUIRE(count == 1);
   REQUIRE(result[0] == 3);
   sonare_free_ints(result);
+}
+
+TEST_CASE("sonare_onset_backtrack rejects a non-finite energy envelope", "[c_api][features]") {
+  const std::vector<int> events = {6};
+  const std::vector<float> energy = {1.0f, 0.8f, 0.5f, 0.2f, 0.6f, 0.9f, 1.2f};
+  int* result = nullptr;
+  size_t count = 0;
+
+  // Positive control: the clean envelope backtracks to the minimum at index 3.
+  REQUIRE(sonare_onset_backtrack(events.data(), events.size(), energy.data(), energy.size(),
+                                 &result, &count) == SONARE_OK);
+  REQUIRE(count == 1);
+  REQUIRE(result[0] == 3);
+  sonare_free_ints(result);
+
+  // An empty envelope stays legitimate: nothing to walk back over, no error.
+  result = nullptr;
+  count = 99;
+  REQUIRE(sonare_onset_backtrack(events.data(), events.size(), nullptr, 0, &result, &count) ==
+          SONARE_OK);
+  REQUIRE(count == 0);
+
+  for (float bad :
+       {std::numeric_limits<float>::quiet_NaN(), std::numeric_limits<float>::infinity()}) {
+    std::vector<float> poisoned = energy;
+    poisoned[4] = bad;
+    result = nullptr;
+    count = 99;
+    // Without the guard the descent comparison against the non-finite value is
+    // false, so the walk stops one frame short of it and reports index 5 as the
+    // preceding minimum with SONARE_OK.
+    REQUIRE(sonare_onset_backtrack(events.data(), events.size(), poisoned.data(), poisoned.size(),
+                                   &result, &count) == SONARE_ERROR_INVALID_PARAMETER);
+    REQUIRE(result == nullptr);
+    REQUIRE(count == 0);
+  }
 }
 
 TEST_CASE("sonare_griffin_lim reconstructs STFT magnitude", "[c_api][features]") {

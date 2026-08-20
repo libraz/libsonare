@@ -20,6 +20,17 @@ namespace {
 // Divide-by-amplitude / near-zero guard (== sonare::constants::kAmpEpsilon, 1e-9f).
 constexpr float kEps = sonare::constants::kAmpEpsilon;
 
+/// @brief True when every element of a rows x n_frames matrix is finite.
+/// @details Callers validate the dimensions as positive first, so the product
+///          is well defined here.
+bool all_finite(const float* S, int rows, int n_frames) noexcept {
+  const size_t total = static_cast<size_t>(rows) * static_cast<size_t>(n_frames);
+  for (size_t index = 0; index < total; ++index) {
+    if (!std::isfinite(S[index])) return false;
+  }
+  return true;
+}
+
 /// @brief Random non-negative initialisation, seeded for determinism.
 void init_random(std::vector<float>& W, std::vector<float>& H, int n_features, int n_components,
                  int n_frames) {
@@ -127,6 +138,13 @@ DecomposeResult decompose(const float* S, int n_features, int n_frames, int n_co
   if (n_iter < 0) {
     throw SonareException(ErrorCode::InvalidParameter, "decompose: n_iter must be non-negative");
   }
+  // A non-finite element factorises into all-NaN W/H that no caller can tell
+  // apart from a valid result by shape. Rejected here rather than at each
+  // binding so the C ABI, the WASM bindings (which call this directly) and the
+  // in-process callers all inherit one rule.
+  if (!all_finite(S, n_features, n_frames)) {
+    throw SonareException(ErrorCode::InvalidParameter, "decompose: S contains a non-finite value");
+  }
 
   DecomposeResult out;
   if (init == "random") {
@@ -215,6 +233,13 @@ std::vector<float> nn_filter(const float* S, int n_features, int n_frames,
   // filter). Mirror that rejection instead of treating width<0 as width=0.
   if (width < 0) {
     throw SonareException(ErrorCode::InvalidParameter, "nn_filter: width must be non-negative");
+  }
+  // The most dangerous non-finite case in this file: a NaN poisons the cosine
+  // similarities, then disappears in the aggregation, so the caller gets an
+  // entirely finite spectrogram whose values have silently shifted, with
+  // nothing to detect it by. Rejected here so every surface inherits the rule.
+  if (!all_finite(S, n_features, n_frames)) {
+    throw SonareException(ErrorCode::InvalidParameter, "nn_filter: S contains a non-finite value");
   }
   if (k <= 0) k = std::min(5, n_frames);
 

@@ -34,9 +34,17 @@ std::vector<float> fix_length(const std::vector<float>& x, std::size_t size,
 /// @param x_min Minimum allowed value (inclusive)
 /// @param x_max Maximum allowed value (exclusive). If negative, only x_min is enforced.
 /// @param pad If true, prepend x_min and append x_max (when set) if missing.
-/// @return New vector with bounds applied and duplicates removed.
-/// @throw sonare::SonareException if frames is not non-decreasing, or contains
-///        a negative value when x_min >= 0.
+/// @return New vector with bounds applied and duplicates removed. Never empty.
+/// @throw sonare::SonareException if @p frames is empty, is not non-decreasing,
+///        or contains a negative value when x_min >= 0.
+/// @note An empty @p frames is rejected, not padded. With @p pad the result
+///       would be `[x_min]` (or `[x_min, x_max]`), boundary values a caller
+///       cannot tell apart from real detected frames, so an empty onset/beat
+///       list would silently gain a frame at 0; returning an empty vector
+///       instead would silently ignore @p pad. Callers holding a possibly empty
+///       frame list must decide what "no frames" means before calling.
+///       This is the one point where the behaviour deliberately diverges from
+///       librosa.util.fix_frames, which has no stable empty-input result.
 std::vector<int> fix_frames(const std::vector<int>& frames, int x_min = 0, int x_max = -1,
                             bool pad = true);
 

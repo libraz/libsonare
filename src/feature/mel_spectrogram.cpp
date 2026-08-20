@@ -130,6 +130,18 @@ std::vector<float> MelSpectrogram::delta(const float* features, int n_features, 
   SONARE_CHECK(features != nullptr, ErrorCode::InvalidParameter);
   SONARE_CHECK(n_features > 0 && n_frames > 0, ErrorCode::InvalidParameter);
   SONARE_CHECK(width >= 3 && width % 2 == 1, ErrorCode::InvalidParameter);
+  // The regression below spreads one non-finite element across every frame
+  // whose window covers it, so a NaN input yields a mostly-NaN delta that is
+  // indistinguishable from a valid result by shape. Rejected here rather than
+  // at each binding so the C ABI and the WASM binding (which calls this
+  // directly) inherit one rule.
+  const size_t total = static_cast<size_t>(n_features) * static_cast<size_t>(n_frames);
+  bool features_finite = true;
+  for (size_t index = 0; index < total && features_finite; ++index) {
+    features_finite = std::isfinite(features[index]);
+  }
+  SONARE_CHECK_MSG(features_finite, ErrorCode::InvalidParameter,
+                   "MelSpectrogram::delta: features contains a non-finite value");
 
   int half_width = width / 2;
   std::vector<float> out(n_features * n_frames, 0.0f);

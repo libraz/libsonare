@@ -61,6 +61,32 @@ TEST_CASE("fix_frames adds bounds and removes duplicates", "[util][padding]") {
   REQUIRE(r == std::vector<int>{0, 1, 3, 5, 10});
 }
 
+TEST_CASE("fix_frames rejects an empty frame list instead of padding it", "[util][padding][edge]") {
+  SECTION("a non-empty list is still padded") {
+    const std::vector<int> frames{2, 4};
+    REQUIRE(fix_frames(frames, 0, 5, true) == std::vector<int>{0, 2, 4, 5});
+  }
+
+  SECTION("empty is rejected with pad on") {
+    try {
+      static_cast<void>(fix_frames({}, 0, 5, true));
+      FAIL("Expected fix_frames to reject an empty frame list");
+    } catch (const SonareException& error) {
+      REQUIRE(error.code() == ErrorCode::InvalidParameter);
+    }
+  }
+
+  SECTION("empty is rejected with the defaults that used to fabricate x_min") {
+    // The default pad=true, x_max=-1 configuration previously answered with the
+    // single-element {x_min}.
+    REQUIRE_THROWS_AS(fix_frames({}), SonareException);
+  }
+
+  SECTION("empty is rejected with pad off too") {
+    REQUIRE_THROWS_AS(fix_frames({}, 0, 5, false), SonareException);
+  }
+}
+
 TEST_CASE("reflect_center_pad reflects the input at both edges", "[util][reflect_padding]") {
   const std::vector<float> input{1.0f, 2.0f, 3.0f};
   const auto output = reflect_center_pad(input.data(), input.size(), 1);

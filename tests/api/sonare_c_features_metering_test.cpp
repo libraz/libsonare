@@ -241,6 +241,44 @@ TEST_CASE("sonare_tempogram_ratio", "[c_api]") {
     REQUIRE(sonare_tempogram_ratio(tg.data(), tg.size(), 384, 22050, 512, nullptr, 2, &ratio,
                                    &ratio_count) == SONARE_ERROR_INVALID_PARAMETER);
   }
+
+  SECTION("rejects empty data and non-finite factors instead of answering") {
+    const int win_length = 384;
+    std::vector<float> tg(static_cast<size_t>(win_length) * 4u, 0.1f);
+    float* ratio = nullptr;
+    size_t ratio_count = 0;
+
+    // Baseline: the same call with good factors succeeds, so the rejections
+    // below cannot be passing for an unrelated reason.
+    const float good[] = {1.0f, 2.0f};
+    REQUIRE(sonare_tempogram_ratio(tg.data(), tg.size(), win_length, 22050, 512, good, 2, &ratio,
+                                   &ratio_count) == SONARE_OK);
+    REQUIRE(ratio_count == 2);
+    REQUIRE(ratio != nullptr);
+    sonare_free_floats(ratio);
+
+    // Empty tempogram data used to answer with five zeros.
+    REQUIRE(sonare_tempogram_ratio(nullptr, 0, win_length, 22050, 512, nullptr, 0, &ratio,
+                                   &ratio_count) == SONARE_ERROR_INVALID_PARAMETER);
+
+    // Fewer samples than win_length is zero frames, i.e. no data to average.
+    REQUIRE(sonare_tempogram_ratio(tg.data(), static_cast<size_t>(win_length) - 1u, win_length,
+                                   22050, 512, good, 2, &ratio,
+                                   &ratio_count) == SONARE_ERROR_INVALID_PARAMETER);
+
+    // A NaN factor reached round(lag / NaN); an Inf factor resolved to lag 0.
+    const float nan_factor[] = {1.0f, std::numeric_limits<float>::quiet_NaN()};
+    REQUIRE(sonare_tempogram_ratio(tg.data(), tg.size(), win_length, 22050, 512, nan_factor, 2,
+                                   &ratio, &ratio_count) == SONARE_ERROR_INVALID_PARAMETER);
+
+    const float inf_factor[] = {1.0f, std::numeric_limits<float>::infinity()};
+    REQUIRE(sonare_tempogram_ratio(tg.data(), tg.size(), win_length, 22050, 512, inf_factor, 2,
+                                   &ratio, &ratio_count) == SONARE_ERROR_INVALID_PARAMETER);
+
+    const float zero_factor[] = {1.0f, 0.0f};
+    REQUIRE(sonare_tempogram_ratio(tg.data(), tg.size(), win_length, 22050, 512, zero_factor, 2,
+                                   &ratio, &ratio_count) == SONARE_ERROR_INVALID_PARAMETER);
+  }
 }
 
 TEST_CASE("sonare_nnls_chroma", "[.][slow][c_api]") {

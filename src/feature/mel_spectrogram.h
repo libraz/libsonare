@@ -107,6 +107,10 @@ class MelSpectrogram {
   /// @param n_features Number of features per frame
   /// @param width Window width for delta computation
   /// @return Delta features [n_features x n_frames]
+  /// @throw sonare::SonareException (InvalidParameter) on a null @p features, a
+  ///        non-positive dimension, an even or under-3 @p width, or any
+  ///        non-finite element of @p features. The finiteness precondition
+  ///        lives here so every surface reports it identically.
   static std::vector<float> delta(const float* features, int n_features, int n_frames,
                                   int width = 9);
 

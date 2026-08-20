@@ -34,6 +34,11 @@ struct DecomposeResult {
 /// @param init Initialisation: "random" (default, deterministic seed) or
 ///        "nndsvd" (SVD-based, deterministic). "nndsvd" tends to converge in
 ///        fewer iterations but costs an SVD up-front.
+/// @throw sonare::SonareException (InvalidParameter) on a null @p S, a
+///        non-positive dimension, an unsupported solver, a non-finite @p beta,
+///        a negative @p n_iter, or any non-finite element of @p S. The
+///        finiteness precondition lives here rather than in each binding so
+///        every surface reports it identically.
 DecomposeResult decompose(const float* S, int n_features, int n_frames, int n_components,
                           int n_iter = 100, const std::string& solver = "mu", float beta = 2.0f,
                           const std::string& init = "random");
@@ -100,6 +105,11 @@ DecomposeStemsResult decompose_stems(const float* samples, std::size_t n, int sa
 /// "min", "max". @p width must be >= 0 (negative values are rejected, mirroring
 /// librosa, rather than silently disabling the time-exclusion band).
 /// @return Smoothed spectrogram [n_features x n_frames] row-major.
+/// @throw sonare::SonareException (InvalidParameter) on a null @p S, an
+///        unsupported aggregator, a negative @p width, or any non-finite
+///        element of @p S. Non-finite input is rejected rather than filtered
+///        because a NaN vanishes in the aggregation and leaves an entirely
+///        finite but silently altered result.
 std::vector<float> nn_filter(const float* S, int n_features, int n_frames,
                              const std::string& aggregate = "mean", int k = 5, int width = 1);
 

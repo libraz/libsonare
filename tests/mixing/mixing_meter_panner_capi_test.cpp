@@ -235,6 +235,65 @@ TEST_CASE("Mixing C API processes stereo strips and exposes meters", "[mixing][c
   sonare_mixer_destroy(mixer);
 }
 
+TEST_CASE("Mixing C API rejects a non-finite process block without touching the mix",
+          "[mixing][capi]") {
+  SonareMixer* mixer = sonare_mixer_create(48000, 8);
+  REQUIRE(mixer != nullptr);
+  SonareStrip* strip = sonare_mixer_add_strip(mixer, "a");
+  REQUIRE(strip != nullptr);
+
+  std::array<float, 4> in_l{0.5f, 0.5f, 0.5f, 0.5f};
+  std::array<float, 4> in_r{0.5f, 0.5f, 0.5f, 0.5f};
+  const float* inputs_l[] = {in_l.data()};
+  const float* inputs_r[] = {in_r.data()};
+  std::array<float, 4> out_l{};
+  std::array<float, 4> out_r{};
+
+  // Positive control: the identical call with finite input must succeed and
+  // produce an audible mix, so a later rejection cannot be an unrelated failure.
+  REQUIRE(sonare_mixer_process_stereo(mixer, inputs_l, inputs_r, 1, out_l.data(), out_r.data(),
+                                      out_l.size()) == SONARE_OK);
+  REQUIRE(out_l[0] > 0.1f);
+  SonareMixMeterSnapshot mixed{};
+  REQUIRE(sonare_strip_meter(strip, &mixed) == SONARE_OK);
+  REQUIRE(mixed.seq > 0);
+
+  // A zero-frame block stays a documented no-op (see the EMPTY-BLOCK POLICY in
+  // sonare_mixer_process_stereo); sonare_mixer_drain_tail_stereo relies on it.
+  REQUIRE(sonare_mixer_process_stereo(mixer, inputs_l, inputs_r, 1, out_l.data(), out_r.data(),
+                                      0) == SONARE_OK);
+
+  SECTION("NaN in the left channel") {
+    std::array<float, 4> nan_l = in_l;
+    nan_l[2] = std::numeric_limits<float>::quiet_NaN();
+    const float* bad_l[] = {nan_l.data()};
+    const std::array<float, 4> sentinel{-7.0f, -7.0f, -7.0f, -7.0f};
+    out_l = sentinel;
+    out_r = sentinel;
+
+    REQUIRE(sonare_mixer_process_stereo(mixer, bad_l, inputs_r, 1, out_l.data(), out_r.data(),
+                                        out_l.size()) == SONARE_ERROR_INVALID_PARAMETER);
+    // The rejection happens before any mixer state changes: the output buffers
+    // are left untouched and the meters do not advance, so a NaN can never be
+    // read back as a plausible mix.
+    REQUIRE(out_l == sentinel);
+    REQUIRE(out_r == sentinel);
+    SonareMixMeterSnapshot after{};
+    REQUIRE(sonare_strip_meter(strip, &after) == SONARE_OK);
+    REQUIRE(after.seq == mixed.seq);
+  }
+
+  SECTION("Inf in the right channel") {
+    std::array<float, 4> inf_r = in_r;
+    inf_r[0] = std::numeric_limits<float>::infinity();
+    const float* bad_r[] = {inf_r.data()};
+    REQUIRE(sonare_mixer_process_stereo(mixer, inputs_l, bad_r, 1, out_l.data(), out_r.data(),
+                                        out_l.size()) == SONARE_ERROR_INVALID_PARAMETER);
+  }
+
+  sonare_mixer_destroy(mixer);
+}
+
 TEST_CASE("Mixing C API exposes scene preset JSON", "[mixing][capi]") {
   const char* names = sonare_mixing_scene_preset_names();
   REQUIRE(names != nullptr);

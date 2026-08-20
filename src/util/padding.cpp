@@ -60,6 +60,13 @@ std::vector<float> fix_length(const std::vector<float>& x, std::size_t size, flo
 }
 
 std::vector<int> fix_frames(const std::vector<int>& frames, int x_min, int x_max, bool pad) {
+  // An empty frame list has no honest answer: with pad the padded bounds would
+  // be indistinguishable from real frames at those positions, and returning an
+  // empty vector would silently drop the requested padding. Reject instead of
+  // inventing either result.
+  if (frames.empty()) {
+    throw SonareException(ErrorCode::InvalidParameter, "fix_frames: frames must not be empty");
+  }
   // Validate monotonicity and bounds.
   for (std::size_t i = 1; i < frames.size(); ++i) {
     if (frames[i] < frames[i - 1]) {

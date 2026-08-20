@@ -26,9 +26,14 @@ struct TrimResult {
 /// @param frame_length Frame length for RMS computation
 /// @param hop_length Hop length for RMS computation
 /// @return TrimResult with the trimmed audio and the original-sample range.
+///         An entirely silent input yields `{{}, 0, 0}` (empty audio, zero range).
 /// @details Computes RMS per frame, finds the peak, and treats frames whose
 ///          RMS is below peak_dB - top_db as silent. Mirrors librosa.effects.trim.
-/// @throw sonare::SonareException on null input, non-positive frame/hop, or top_db <= 0.
+/// @throw sonare::SonareException on empty input (`n == 0`), null input,
+///        non-positive frame/hop, or top_db <= 0.
+/// @note Empty input is rejected instead of returning `{{}, 0, 0}`, which is
+///       reserved for the all-silent result; sharing one value between the two
+///       would leave a caller unable to tell them apart.
 TrimResult trim(const float* x, std::size_t n, float top_db = 60.0f, int frame_length = 2048,
                 int hop_length = 512);
 TrimResult trim(const std::vector<float>& x, float top_db = 60.0f, int frame_length = 2048,
@@ -38,6 +43,10 @@ TrimResult trim(const std::vector<float>& x, float top_db = 60.0f, int frame_len
 /// @return Vector of (start_sample, end_sample) pairs (end exclusive). Empty
 ///         if the entire signal is silent.
 /// @details Same RMS-based silence detection as trim().
+/// @throw sonare::SonareException on empty input (`n == 0`), null input,
+///        non-positive frame/hop, or top_db <= 0.
+/// @note Empty input is rejected for the same reason as in trim(): an empty
+///       interval list already means "the whole signal is silent".
 std::vector<std::pair<int, int>> split(const float* x, std::size_t n, float top_db = 60.0f,
                                        int frame_length = 2048, int hop_length = 512);
 std::vector<std::pair<int, int>> split(const std::vector<float>& x, float top_db = 60.0f,

@@ -8,6 +8,7 @@
 #include <vector>
 
 #include "util/constants.h"
+#include "util/exception.h"
 #include "util/json_reader.h"
 
 using namespace sonare;
@@ -93,4 +94,59 @@ TEST_CASE("trim on all-silent input returns empty audio", "[silence][edge]") {
   REQUIRE(r.audio.empty());
   REQUIRE(r.start_sample == 0);
   REQUIRE(r.end_sample == 0);
+}
+
+TEST_CASE("trim separates an empty input from an all-silent one", "[silence][edge]") {
+  const int sr = 22050;
+
+  SECTION("a normal signal still trims") {
+    const auto y = build_signal(sr);
+    const auto r = trim(y, 60.0f, 2048, 512);
+    REQUIRE(r.end_sample > r.start_sample);
+    REQUIRE_FALSE(r.audio.empty());
+  }
+
+  SECTION("all-silent succeeds with the empty-range result") {
+    const std::vector<float> silent(sr, 0.0f);
+    const auto r = trim(silent, 60.0f, 2048, 512);
+    REQUIRE(r.audio.empty());
+    REQUIRE(r.start_sample == 0);
+    REQUIRE(r.end_sample == 0);
+  }
+
+  SECTION("empty is rejected, so the two cases are distinguishable") {
+    const std::vector<float> empty;
+    try {
+      static_cast<void>(trim(empty, 60.0f, 2048, 512));
+      FAIL("Expected trim to reject an empty input");
+    } catch (const SonareException& error) {
+      REQUIRE(error.code() == ErrorCode::InvalidParameter);
+    }
+    REQUIRE_THROWS_AS(trim(nullptr, 0, 60.0f, 2048, 512), SonareException);
+  }
+}
+
+TEST_CASE("split separates an empty input from an all-silent one", "[silence][edge]") {
+  const int sr = 22050;
+
+  SECTION("a normal signal still yields intervals") {
+    const auto y = build_signal(sr);
+    REQUIRE_FALSE(split(y, 60.0f, 2048, 512).empty());
+  }
+
+  SECTION("all-silent succeeds with zero intervals") {
+    const std::vector<float> silent(sr, 0.0f);
+    REQUIRE(split(silent, 60.0f, 2048, 512).empty());
+  }
+
+  SECTION("empty is rejected, so the two cases are distinguishable") {
+    const std::vector<float> empty;
+    try {
+      static_cast<void>(split(empty, 60.0f, 2048, 512));
+      FAIL("Expected split to reject an empty input");
+    } catch (const SonareException& error) {
+      REQUIRE(error.code() == ErrorCode::InvalidParameter);
+    }
+    REQUIRE_THROWS_AS(split(nullptr, 0, 60.0f, 2048, 512), SonareException);
+  }
 }

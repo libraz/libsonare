@@ -18,6 +18,21 @@ std::vector<std::string> unique_vca_members(const std::vector<std::string>& memb
   return unique;
 }
 
+// Rejects a non-finite (NaN / Inf) sample in one channel of a process block.
+// The routing graph, the inserts, and the meters all propagate a NaN silently,
+// so a fabricated mix would otherwise be reported as SONARE_OK. Uniform with the
+// non-finite policy of validate_audio_params. The scan is O(num_samples) per
+// channel, which this entry point can afford: it lazily compiles and allocates
+// (see sonare_mixer_process_stereo) and is therefore not an audio-thread entry.
+bool block_finite(const float* samples, size_t num_samples) noexcept {
+  for (size_t index = 0; index < num_samples; ++index) {
+    if (!finite(samples[index])) {
+      return false;
+    }
+  }
+  return true;
+}
+
 }  // namespace
 
 size_t sonare_mixer_strip_count(const SonareMixer* mixer) {
@@ -500,8 +515,24 @@ SonareMixer* sonare_mixer_from_scene_json(const char* json, int sample_rate, int
         num_samples > static_cast<size_t>(mixer->max_block_size)) {
       return SONARE_ERROR_INVALID_PARAMETER;
     }
+    // EMPTY-BLOCK POLICY: a zero-frame block is a no-op, not an error. This is a
+    // block-processing entry, not an offline analysis (validate_audio_params
+    // rejects empty there), and sonare_mixer_drain_tail_stereo delegates here
+    // with input_count == 0, so a host that hands over an empty callback block
+    // must get SONARE_OK. Rejecting empty *input material* belongs to the
+    // caller that knows a mix of nothing is meaningless.
     if (num_samples == 0) {
       return SONARE_OK;
+    }
+    // Non-finite input is rejected before any mixer state changes, so a NaN can
+    // neither reach the mix nor advance the meters / timeline position.
+    for (size_t index = 0; index < input_count; ++index) {
+      if (input_left[index] && !block_finite(input_left[index], num_samples)) {
+        return SONARE_ERROR_INVALID_PARAMETER;
+      }
+      if (input_right[index] && !block_finite(input_right[index], num_samples)) {
+        return SONARE_ERROR_INVALID_PARAMETER;
+      }
     }
 
     SONARE_C_TRY

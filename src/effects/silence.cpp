@@ -59,7 +59,14 @@ std::vector<bool> non_silent_frames(const std::vector<float>& rms, float top_db)
 }  // namespace
 
 TrimResult trim(const float* x, std::size_t n, float top_db, int frame_length, int hop_length) {
-  if (n > 0 && x == nullptr) {
+  // Empty input is rejected rather than answered with {{}, 0, 0}: that value is
+  // the all-silent result, so accepting an empty buffer would make "nothing was
+  // passed in" and "nothing in the signal rose above the threshold"
+  // indistinguishable to the caller.
+  if (n == 0) {
+    throw SonareException(ErrorCode::InvalidParameter, "trim: input must not be empty");
+  }
+  if (x == nullptr) {
     throw SonareException(ErrorCode::InvalidParameter, "trim: null input with non-zero length");
   }
   if (frame_length <= 0 || hop_length <= 0) {
@@ -70,8 +77,6 @@ TrimResult trim(const float* x, std::size_t n, float top_db, int frame_length, i
     throw SonareException(ErrorCode::InvalidParameter, "trim: top_db must be > 0");
   }
   TrimResult result{{}, 0, 0};
-  if (n == 0) return result;
-
   const auto rms = centered_rms(x, n, frame_length, hop_length);
   const auto mask = non_silent_frames(rms, top_db);
 
@@ -102,7 +107,12 @@ TrimResult trim(const std::vector<float>& x, float top_db, int frame_length, int
 
 std::vector<std::pair<int, int>> split(const float* x, std::size_t n, float top_db,
                                        int frame_length, int hop_length) {
-  if (n > 0 && x == nullptr) {
+  // Rejected for the same reason as trim(): an empty interval list is already
+  // the all-silent result, so an empty input must not share it.
+  if (n == 0) {
+    throw SonareException(ErrorCode::InvalidParameter, "split: input must not be empty");
+  }
+  if (x == nullptr) {
     throw SonareException(ErrorCode::InvalidParameter, "split: null input with non-zero length");
   }
   if (frame_length <= 0 || hop_length <= 0) {
@@ -113,8 +123,6 @@ std::vector<std::pair<int, int>> split(const float* x, std::size_t n, float top_
     throw SonareException(ErrorCode::InvalidParameter, "split: top_db must be > 0");
   }
   std::vector<std::pair<int, int>> intervals;
-  if (n == 0) return intervals;
-
   const auto rms = centered_rms(x, n, frame_length, hop_length);
   const auto mask = non_silent_frames(rms, top_db);
 

@@ -222,6 +222,8 @@ SonareError sonare_decompose_with_init(const float* s, int n_features, int n_fra
   if (static_cast<size_t>(n_features) > SIZE_MAX / static_cast<size_t>(n_frames)) {
     return SONARE_ERROR_INVALID_PARAMETER;
   }
+  // Non-finite elements of `s` are rejected by the core (decompose throws
+  // InvalidParameter, which SONARE_C_CATCH maps to SONARE_ERROR_INVALID_PARAMETER).
 
   SONARE_C_TRY
   std::string init_str = init ? init : "random";
@@ -255,6 +257,8 @@ SonareError sonare_nn_filter(const float* s, int n_features, int n_frames, const
   if (static_cast<size_t>(n_features) > SIZE_MAX / static_cast<size_t>(n_frames)) {
     return SONARE_ERROR_INVALID_PARAMETER;
   }
+  // Non-finite elements of `s` are rejected by the core (nn_filter throws
+  // InvalidParameter, which SONARE_C_CATCH maps to SONARE_ERROR_INVALID_PARAMETER).
 
   SONARE_C_TRY
   std::string agg = aggregate ? aggregate : "mean";

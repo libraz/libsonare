@@ -688,8 +688,8 @@ int sonare_samples_to_frames(int samples, int hop_length, int n_fft);
 
 /* INPUT-BUFFER POLICY for the compat / transform functions below
    (power_to_db, amplitude_to_db, db_to_power, db_to_amplitude, preemphasis,
-   deemphasis, trim_silence, split_silence, frame_signal, pad_center, fix_length,
-   peak_pick, vector_normalize, pcen, tonnetz, and the tempogram/plp family):
+   deemphasis, frame_signal, pad_center, fix_length, peak_pick,
+   vector_normalize, pcen, tonnetz, and the tempogram/plp family):
 
    - EMPTY input (length == 0) is ALLOWED and yields an empty result
      (*out == NULL, *out_length == 0). This differs from the offline
@@ -699,7 +699,15 @@ int sonare_samples_to_frames(int samples, int hop_length, int n_fft);
    - A NULL buffer with length > 0 is rejected with SONARE_ERROR_INVALID_PARAMETER.
    - NON-FINITE samples (NaN / Inf) are rejected with
      SONARE_ERROR_INVALID_PARAMETER, matching validate_audio_params, so a NaN can
-     never silently propagate through these transforms. */
+     never silently propagate through these transforms.
+
+   EMPTY-INPUT EXCEPTIONS: sonare_trim_silence, sonare_split_silence,
+   sonare_fix_frames and sonare_tempogram_ratio reject an empty input with
+   SONARE_ERROR_INVALID_PARAMETER. For each of them the empty result is already
+   the encoding of a real measurement (an all-silent signal, an empty frame list,
+   a ratio with no autocorrelation energy), so accepting an empty input would
+   make "no data was supplied" indistinguishable from that measurement. Their
+   individual contracts are documented at each declaration below. */
 
 SonareError sonare_power_to_db(const float* values, size_t length, float ref, float amin,
                                float top_db, float** out, size_t* out_length);
@@ -715,9 +723,19 @@ SonareError sonare_preemphasis(const float* samples, size_t length, float coef, 
 SonareError sonare_deemphasis(const float* samples, size_t length, float coef, float zi, int use_zi,
                               float** out, size_t* out_length);
 
+/// @brief Trims leading and trailing silence (librosa.effects.trim).
+/// @details An entirely silent input succeeds and reports the all-silent result:
+///   @c *out == NULL, @c *out_length == 0, @c *start_sample == @c *end_sample == 0.
+///   An EMPTY input (@p length == 0) is rejected with
+///   SONARE_ERROR_INVALID_PARAMETER so it cannot be confused with that result.
 SonareError sonare_trim_silence(const float* samples, size_t length, float top_db, int frame_length,
                                 int hop_length, float** out, size_t* out_length, int* start_sample,
                                 int* end_sample);
+/// @brief Lists non-silent intervals as flattened (start, end) pairs.
+/// @details An entirely silent input succeeds with zero intervals
+///   (@c *out_intervals == NULL, @c *out_interval_count == 0). An EMPTY input
+///   (@p length == 0) is rejected with SONARE_ERROR_INVALID_PARAMETER so it
+///   cannot be confused with that result.
 SonareError sonare_split_silence(const float* samples, size_t length, float top_db,
                                  int frame_length, int hop_length, int** out_intervals,
                                  size_t* out_interval_count);
@@ -728,6 +746,12 @@ SonareError sonare_pad_center(const float* values, size_t length, size_t target_
                               float pad_value, float** out, size_t* out_length);
 SonareError sonare_fix_length(const float* values, size_t length, size_t target_size,
                               float pad_value, float** out, size_t* out_length);
+/// @brief Clamps, pads and de-duplicates frame indices (librosa.util.fix_frames).
+/// @details An EMPTY @p frames (@p length == 0) is rejected with
+///   SONARE_ERROR_INVALID_PARAMETER. With @p pad set, the padded result would be
+///   just the bounds (@p x_min, and @p x_max when >= 0) — values a caller cannot
+///   tell apart from real detected frames, so an empty onset or beat list would
+///   silently gain a frame at @p x_min. The result is never empty.
 SonareError sonare_fix_frames(const int* frames, size_t length, int x_min, int x_max, int pad,
                               int** out, size_t* out_length);
 SonareError sonare_peak_pick(const float* values, size_t length, int pre_max, int post_max,
@@ -777,6 +801,13 @@ SonareError sonare_fourier_tempogram(const float* onset_envelope, size_t length,
 /// @brief Aggregated tempogram values at integer tempo ratios of a reference tempo.
 /// @details If @p factors is NULL or @p n_factors is 0, the library default
 ///   factors {0.5, 1, 2, 3, 4} are used. The output contains one value per factor.
+///
+///   Rejected with SONARE_ERROR_INVALID_PARAMETER: an EMPTY @p tempogram_data
+///   (@p length == 0), a @p length below @p win_length (fewer than one frame),
+///   and any @p factors entry that is not finite and > 0. A zero in the output
+///   means "no autocorrelation energy at that lag", so none of these cases may
+///   answer with a zero-filled vector. Supplying fewer factors than requested is
+///   not possible: the output length always equals the effective factor count.
 SonareError sonare_tempogram_ratio(const float* tempogram_data, size_t length, int win_length,
                                    int sr, int hop_length, const float* factors, size_t n_factors,
                                    float** out, size_t* out_length);

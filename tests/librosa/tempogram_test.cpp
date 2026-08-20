@@ -6,6 +6,7 @@
 #include <catch2/catch_test_macros.hpp>
 #include <cmath>
 #include <cstdlib>
+#include <limits>
 #include <numeric>
 #include <vector>
 
@@ -13,6 +14,7 @@
 #include "feature/onset.h"
 #include "feature/rhythm.h"
 #include "util/constants.h"
+#include "util/exception.h"
 #include "util/json_reader.h"
 #include "util/math_utils.h"
 
@@ -331,4 +333,57 @@ TEST_CASE("tempogram_ratio returns one value per factor", "[tempogram][unit]") {
   std::vector<float> tg(384 * 10, 0.5f);
   auto r = tempogram_ratio(tg, 384, 22050, 512);
   REQUIRE(r.size() == 5);
+}
+
+TEST_CASE("tempogram_ratio rejects unanswerable input instead of zero-filling",
+          "[tempogram][unit][edge]") {
+  const int win_length = 384;
+  const std::vector<float> tg(static_cast<size_t>(win_length) * 10u, 0.5f);
+
+  auto require_invalid_parameter = [](auto&& call) {
+    try {
+      static_cast<void>(call());
+      FAIL("Expected tempogram_ratio to reject the input");
+    } catch (const SonareException& error) {
+      REQUIRE(error.code() == ErrorCode::InvalidParameter);
+    }
+  };
+
+  SECTION("a well-formed call still succeeds") {
+    const auto r = tempogram_ratio(tg, win_length, 22050, 512, {1.0f, 2.0f});
+    REQUIRE(r.size() == 2);
+    REQUIRE(std::isfinite(r[0]));
+    REQUIRE(std::isfinite(r[1]));
+  }
+
+  SECTION("empty tempogram data") {
+    require_invalid_parameter([&] { return tempogram_ratio({}, win_length, 22050, 512); });
+  }
+
+  SECTION("empty factors") {
+    require_invalid_parameter([&] { return tempogram_ratio(tg, win_length, 22050, 512, {}); });
+  }
+
+  SECTION("tempogram data shorter than one frame") {
+    const std::vector<float> short_tg(static_cast<size_t>(win_length) - 1u, 0.5f);
+    require_invalid_parameter([&] { return tempogram_ratio(short_tg, win_length, 22050, 512); });
+  }
+
+  SECTION("a NaN factor") {
+    // NaN passes `factor <= 0` as false and used to reach round(lag / NaN).
+    const std::vector<float> factors{1.0f, std::numeric_limits<float>::quiet_NaN()};
+    require_invalid_parameter([&] { return tempogram_ratio(tg, win_length, 22050, 512, factors); });
+  }
+
+  SECTION("an infinite factor") {
+    // Inf used to resolve to lag 0, the DC peak the reference search excludes,
+    // so the answer silently came from a lag the algorithm rules out.
+    const std::vector<float> factors{1.0f, std::numeric_limits<float>::infinity()};
+    require_invalid_parameter([&] { return tempogram_ratio(tg, win_length, 22050, 512, factors); });
+  }
+
+  SECTION("a non-positive factor") {
+    const std::vector<float> factors{1.0f, 0.0f};
+    require_invalid_parameter([&] { return tempogram_ratio(tg, win_length, 22050, 512, factors); });
+  }
 }

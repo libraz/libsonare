@@ -161,6 +161,8 @@ SonareError sonare_mel_delta(const float* features, int n_features, int n_frames
       n_features > std::numeric_limits<int>::max() / n_frames) {
     return SONARE_ERROR_INVALID_PARAMETER;
   }
+  // Non-finite elements of `features` are rejected by MelSpectrogram::delta
+  // itself; SONARE_C_CATCH maps that to SONARE_ERROR_INVALID_PARAMETER.
 
   SONARE_C_TRY
   const std::vector<float> result = MelSpectrogram::delta(features, n_features, n_frames, width);

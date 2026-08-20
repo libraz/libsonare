@@ -8,6 +8,7 @@
 #include <catch2/catch_test_macros.hpp>
 #include <cmath>
 #include <cstdint>
+#include <limits>
 #include <vector>
 
 #include "util/constants.h"
@@ -332,6 +333,39 @@ TEST_CASE("sonare_decompose", "[c_api][effects]") {
     REQUIRE(w == nullptr);
     REQUIRE(h == nullptr);
   }
+
+  SECTION("rejects a non-finite input element instead of factorising it") {
+    float* w = nullptr;
+    float* h = nullptr;
+    size_t w_len = 0;
+    size_t h_len = 0;
+    // The same call with the untouched matrix succeeds, so the rejections below
+    // cannot come from an unrelated precondition.
+    REQUIRE(sonare_decompose_with_init(s.data(), n_features, n_frames, n_components, 20, 2.0f,
+                                       "nndsvd", &w, &w_len, &h, &h_len) == SONARE_OK);
+    sonare_free_floats(w);
+    sonare_free_floats(h);
+
+    for (float bad :
+         {std::numeric_limits<float>::quiet_NaN(), std::numeric_limits<float>::infinity()}) {
+      auto poisoned = s;
+      poisoned[poisoned.size() / 2] = bad;
+      w = non_null_sentinel_float_ptr();
+      h = non_null_sentinel_float_ptr();
+      w_len = 99;
+      h_len = 99;
+      REQUIRE(sonare_decompose_with_init(poisoned.data(), n_features, n_frames, n_components, 20,
+                                         2.0f, "nndsvd", &w, &w_len, &h,
+                                         &h_len) == SONARE_ERROR_INVALID_PARAMETER);
+      REQUIRE(w == nullptr);
+      REQUIRE(h == nullptr);
+      REQUIRE(w_len == 0);
+      REQUIRE(h_len == 0);
+      // The plain entry delegates to the _with_init one, so it must reject too.
+      REQUIRE(sonare_decompose(poisoned.data(), n_features, n_frames, n_components, 20, 2.0f, &w,
+                               &w_len, &h, &h_len) == SONARE_ERROR_INVALID_PARAMETER);
+    }
+  }
 }
 
 TEST_CASE("sonare_nn_filter", "[c_api][effects]") {
@@ -368,6 +402,34 @@ TEST_CASE("sonare_nn_filter", "[c_api][effects]") {
             SONARE_ERROR_INVALID_PARAMETER);
     REQUIRE(out == nullptr);
     REQUIRE(out_len == 0);
+  }
+
+  SECTION("rejects a non-finite input element instead of smoothing it") {
+    float* out = nullptr;
+    size_t out_len = 0;
+    // Positive control on the untouched matrix: identical arguments, so the
+    // rejections below can only come from the non-finite element.
+    REQUIRE(sonare_nn_filter(s.data(), n_features, n_frames, "mean", 3, 1, &out, &out_len) ==
+            SONARE_OK);
+    REQUIRE(out_len == static_cast<size_t>(n_features) * n_frames);
+    sonare_free_floats(out);
+
+    for (float bad :
+         {std::numeric_limits<float>::quiet_NaN(), std::numeric_limits<float>::infinity()}) {
+      auto poisoned = s;
+      poisoned[0] = bad;
+      out = non_null_sentinel_float_ptr();
+      out_len = 99;
+      // Without the guard this call returns SONARE_OK and an output that is
+      // entirely finite: the poisoned element does not propagate, it vanishes
+      // in the aggregation. Measured for the NaN case on this input: 0
+      // non-finite outputs, but 32 of the 384 values silently shifted by up to
+      // 0.13 — the caller has nothing to detect it by.
+      REQUIRE(sonare_nn_filter(poisoned.data(), n_features, n_frames, "mean", 3, 1, &out,
+                               &out_len) == SONARE_ERROR_INVALID_PARAMETER);
+      REQUIRE(out == nullptr);
+      REQUIRE(out_len == 0);
+    }
   }
 }
 
