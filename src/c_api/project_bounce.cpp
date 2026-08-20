@@ -106,6 +106,29 @@ class CallbackInstrument final : public sonare::midi::MidiInstrument {
     pending_[pending_count_++] = {destination_id, event.render_frame, event.ump};
   }
 
+  /// CONTROL thread, once a render has produced its last block: forwards
+  /// whatever the per-block hold still carries.
+  ///
+  /// The engine releases every note still sounding AFTER its final process()
+  /// call (RealtimeEngine::render_offline), so the note-off that closes a
+  /// sustained note -- and the channel reset that follows it -- arrive when no
+  /// further block will ever flush them. Without this drain a host would see the
+  /// note-on and never its release, and an external instrument would be left
+  /// with the note hanging past the end of the bounce. They are placed at
+  /// rendered_frames_, one past the last rendered frame, which is the host-basis
+  /// image of the render frame the engine stamped them with.
+  void flush_trailing_events() noexcept {
+    if (cb_.on_event == nullptr) {
+      pending_count_ = 0;
+      return;
+    }
+    for (size_t i = 0; i < pending_count_; ++i) {
+      cb_.on_event(cb_.user_data, pending_[i].destination_id, pending_[i].ump.words,
+                   pending_[i].ump.word_count, rendered_frames_);
+    }
+    pending_count_ = 0;
+  }
+
  private:
   struct PendingEvent {
     uint32_t destination_id = 0;
@@ -140,6 +163,13 @@ class CallbackInstrument final : public sonare::midi::MidiInstrument {
 struct HostedInstrument {
   uint32_t destination_id = 0;
   sonare::midi::MidiInstrument* instrument = nullptr;
+  // Non-null only when `instrument` is the C callback seam. That adapter holds a
+  // block's events until the block renders, so the end-of-render release needs
+  // an explicit drain (see CallbackInstrument::flush_trailing_events). The
+  // built-in synth and SF2 paths consume events as they arrive and leave this
+  // null. Naming the concrete type here keeps the drain a compile-time fact
+  // rather than a downcast at the end of every render.
+  CallbackInstrument* callback = nullptr;
 };
 
 // End of the arrangement in frames at the render sample rate: the latest sample
@@ -240,6 +270,12 @@ bool render_timeline(const arr::CompiledTimeline& timeline,
   engine.render_offline(ptrs.data(), num_channels, render_frames, block_size);
   for (const HostedInstrument& hosted : instruments) {
     engine.set_midi_instrument(hosted.destination_id, nullptr);
+  }
+  // Drain after unbinding, not before: clearing a destination releases anything
+  // still sounding on it through the OUTGOING instrument, so a drain placed
+  // first would leave those releases held for the next pass.
+  for (const HostedInstrument& hosted : instruments) {
+    if (hosted.callback != nullptr) hosted.callback->flush_trailing_events();
   }
   return true;
 }
@@ -1298,7 +1334,7 @@ SonareError sonare_project_bounce_with_instruments(SonareProject* project,
   hosted.reserve(instrument_count);
   for (size_t i = 0; i < instrument_count; ++i) {
     owned.push_back(std::make_unique<CallbackInstrument>(instruments[i].callbacks));
-    hosted.push_back({instruments[i].destination_id, owned.back().get()});
+    hosted.push_back({instruments[i].destination_id, owned.back().get(), owned.back().get()});
   }
   return do_project_bounce(project, options, hosted, out_interleaved, out_len);
   SONARE_C_CATCH

@@ -1764,6 +1764,105 @@ TEST_CASE("bounce dispatches every note of a sequential melody, not just the fir
 
 namespace {
 
+// Records the status nibble and frame of every dispatched event, plus the number
+// of frames the host was actually asked to render, so a test can check both that
+// the end-of-render release arrives and where it lands.
+struct TrailingReleaseState {
+  std::vector<uint8_t> statuses;
+  std::vector<int64_t> frames;
+  int64_t rendered_frames = 0;
+};
+
+void trail_on_event(void* user, uint32_t /*destination_id*/, const uint32_t* words, int word_count,
+                    int64_t render_frame) {
+  if (word_count < 1) return;
+  auto* state = static_cast<TrailingReleaseState*>(user);
+  state->statuses.push_back(static_cast<uint8_t>((words[0] >> 16) & 0xF0u));
+  state->frames.push_back(render_frame);
+}
+
+void trail_render(void* user, float* const* /*channels*/, int /*num_channels*/, int num_frames) {
+  static_cast<TrailingReleaseState*>(user)->rendered_frames += num_frames;
+}
+
+}  // namespace
+
+TEST_CASE("bounce delivers the end-of-render note release to a callback instrument", "[project]") {
+  // A note still sounding when the render ends is released by the engine AFTER
+  // its final block, so the release reaches the instrument with no further
+  // render call behind it. A host that never sees it is left holding the note.
+  //
+  // The frame it arrives at is the second half of this: the bounce primes its
+  // smoothers with one stopped block that renders no instrument audio, so the
+  // engine's own render frame runs one block ahead of the frames this host was
+  // asked to render. The release must be reported in the host's frame count,
+  // which is the only clock the C seam gives it.
+  SonareProject* project = nullptr;
+  REQUIRE(sonare_project_create(&project) == SONARE_OK);
+  REQUIRE(sonare_project_set_sample_rate(project, 48000.0) == SONARE_OK);
+
+  uint32_t track = 0;
+  uint32_t clip = 0;
+  REQUIRE(sonare_project_add_midi_clip(project, 0.0, 4.0, &track, &clip) == SONARE_OK);
+
+  // Note-on at the head; its note-off sits at ppq 2.0, which at 120 BPM is
+  // sample 48000 -- the exclusive end of the render below, so the clip's own
+  // release is never scanned and the engine's end-of-render release is the only
+  // way this note is ever let go.
+  SonareMidiEventPod events[2];
+  events[0].ppq = 0.0;
+  events[0].data0 = 0x20903C64u;  // note-on, note 60, velocity 100
+  events[0].data1 = 0u;
+  events[1].ppq = 2.0;
+  events[1].data0 = 0x20803C00u;  // note-off, note 60
+  events[1].data1 = 0u;
+  REQUIRE(sonare_project_set_midi_events(project, clip, events, 2) == SONARE_OK);
+  REQUIRE(sonare_project_set_track_midi_destination(project, track, 5) == SONARE_OK);
+
+  SonareProjectBounceOptions options{};
+  options.total_frames = 48000;
+  options.block_size = 128;
+  options.num_channels = 2;
+  options.sample_rate = 48000;
+
+  TrailingReleaseState state;
+  SonareInstrumentBinding binding{};
+  binding.destination_id = 5;
+  binding.callbacks.user_data = &state;
+  binding.callbacks.on_event = &trail_on_event;
+  binding.callbacks.render = &trail_render;
+
+  float* out = nullptr;
+  size_t out_len = 0;
+  REQUIRE(sonare_project_bounce_with_instruments(project, &options, &binding, 1, &out, &out_len) ==
+          SONARE_OK);
+  sonare_free_floats(out);
+
+  REQUIRE(state.rendered_frames == options.total_frames);
+  REQUIRE_FALSE(state.statuses.empty());
+  REQUIRE(state.statuses.front() == 0x90u);
+  REQUIRE(state.frames.front() == 0);
+
+  // The release arrives, and at the frame one past the last one the host
+  // rendered -- not one block further on, which is where the engine's own
+  // render frame stands by then.
+  size_t release_index = state.statuses.size();
+  for (size_t i = 0; i < state.statuses.size(); ++i) {
+    if (state.statuses[i] == 0x80u) {
+      release_index = i;
+      break;
+    }
+  }
+  INFO("dispatched " << state.statuses.size() << " events over " << state.rendered_frames
+                     << " rendered frames");
+  REQUIRE(release_index < state.statuses.size());
+  REQUIRE(state.frames[release_index] == state.rendered_frames);
+
+  sonare_project_destroy(project);
+}
+
+namespace {
+
 // Median f0 (Hz) of a mono window via the C-ABI YIN tracker, over voiced frames
 // only (fill_na = 0). Returns 0 when no frame is voiced.
 float window_median_hz(const float* samples, size_t length, float fmin, float fmax) {
