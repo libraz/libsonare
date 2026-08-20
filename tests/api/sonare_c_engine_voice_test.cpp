@@ -539,6 +539,39 @@ TEST_CASE("offline render/bounce/freeze reject a never-prepared engine", "[c_api
   sonare_engine_destroy(engine);
 }
 
+TEST_CASE("sonare_engine_prepare bounds the command and telemetry capacities", "[c_api][engine]") {
+  // telemetry_capacity is not a queue depth the caller pays for one-for-one:
+  // prepare() reserves that many meter records per metered lane, so a host
+  // passing a merely generous number drives an allocation two orders of
+  // magnitude larger than it asked for. Both capacities are refused above the
+  // documented maximum instead, and a refused prepare leaves the engine exactly
+  // as unprepared as it was.
+  SonareRealtimeEngine* engine = nullptr;
+  REQUIRE(sonare_engine_create(&engine) == SONARE_OK);
+  REQUIRE(engine != nullptr);
+
+  REQUIRE(
+      sonare_engine_prepare(engine, 48000.0, 128, 16, SONARE_ENGINE_MAX_TELEMETRY_CAPACITY + 1) ==
+      SONARE_ERROR_INVALID_PARAMETER);
+  REQUIRE(sonare_engine_prepare(engine, 48000.0, 128, SONARE_ENGINE_MAX_COMMAND_CAPACITY + 1, 16) ==
+          SONARE_ERROR_INVALID_PARAMETER);
+  REQUIRE(sonare_engine_prepare(engine, 48000.0, 128, 16, 1000000) ==
+          SONARE_ERROR_INVALID_PARAMETER);
+  REQUIRE(sonare_engine_prepare_with_channels(engine, 48000.0, 128, 16, 1000000, 2) ==
+          SONARE_ERROR_INVALID_PARAMETER);
+
+  constexpr int64_t kFrames = 128;
+  std::array<float, kFrames> left{};
+  std::array<float, kFrames> right{};
+  std::array<float*, 2> channels{left.data(), right.data()};
+  REQUIRE(sonare_engine_render_offline(engine, channels.data(), 2, kFrames, 128) ==
+          SONARE_ERROR_INVALID_STATE);
+
+  REQUIRE(sonare_engine_prepare(engine, 48000.0, 128, 16, 16) == SONARE_OK);
+  REQUIRE(sonare_engine_render_offline(engine, channels.data(), 2, kFrames, 128) == SONARE_OK);
+  sonare_engine_destroy(engine);
+}
+
 TEST_CASE("offline render/bounce/freeze reject more channels than the prepared bound",
           "[c_api][engine]") {
   // sonare_engine_prepare_with_channels bounds capture/instrument/PDC/monitor

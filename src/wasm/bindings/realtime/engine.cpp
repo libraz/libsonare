@@ -45,6 +45,16 @@ void RealtimeEngineWasm::prepareWithChannels(double sample_rate, int max_block_s
     throw sonare::SonareException(sonare::ErrorCode::InvalidParameter,
                                   "prepare: max_channels must be within 1..64");
   }
+  // Mirrors the C ABI: the engine clamps these, but a host asking for more than
+  // it can get should hear about it rather than quietly receive a smaller
+  // engine. telemetry_capacity is the sharp one — the engine reserves it per
+  // metered lane, so its fan-out dwarfs the requested number.
+  if (capacity(command_capacity) > sonare::engine::RealtimeEngine::kMaxCommandCapacity ||
+      capacity(telemetry_capacity) > sonare::engine::RealtimeEngine::kMaxTelemetryCapacity) {
+    throw sonare::SonareException(
+        sonare::ErrorCode::InvalidParameter,
+        "prepare: command_capacity or telemetry_capacity exceeds its documented maximum");
+  }
   engine_.prepare(sample_rate, max_block_size, capacity(command_capacity),
                   capacity(telemetry_capacity), max_channels);
 }

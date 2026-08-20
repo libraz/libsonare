@@ -130,6 +130,16 @@ class RealtimeEngine : private ClipPageRequestSink {
  public:
   static constexpr size_t kMaxCommandsPerBlock = 64;
   static constexpr size_t kMaxPendingCommands = 64;
+  /// @brief Upper bound @ref prepare clamps @p command_capacity to.
+  static constexpr size_t kMaxCommandCapacity = 65536;
+  /// @brief Upper bound @ref prepare clamps @p telemetry_capacity to.
+  /// @details The telemetry capacity fans out internally: the meter tap sizes
+  /// its own queue at this many records per metered lane (every track and bus
+  /// lane plus master and monitor), so the allocation prepare() drives grows by
+  /// nearly two orders of magnitude beyond the number the caller supplies. The
+  /// bound keeps a generous host request from turning into a multi-gigabyte
+  /// reserve, and keeps the fan-out multiply well inside size_t.
+  static constexpr size_t kMaxTelemetryCapacity = 16384;
 
 #if defined(SONARE_WITH_ARRANGEMENT)
   class MidiSyncSink {
@@ -142,6 +152,8 @@ class RealtimeEngine : private ClipPageRequestSink {
   /// @param max_channels Maximum simultaneous audio planes. Supplying the real
   /// channel count avoids reserving 64-channel capture/instrument/PDC scratch;
   /// callers must not later process more planes without preparing again.
+  /// @param command_capacity Clamped to @ref kMaxCommandCapacity.
+  /// @param telemetry_capacity Clamped to @ref kMaxTelemetryCapacity.
   void prepare(double sample_rate, int max_block_size, size_t command_capacity = 1024,
                size_t telemetry_capacity = 1024, int max_channels = 64);
   double sample_rate() const noexcept { return sample_rate_; }

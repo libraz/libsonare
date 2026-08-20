@@ -79,6 +79,26 @@ extern "C" {
 ///   The drain functions are single-consumer: drive them from one thread only.
 SonareError sonare_engine_create(SonareRealtimeEngine** out);
 void sonare_engine_destroy(SonareRealtimeEngine* engine);
+
+/// @brief Largest @p command_capacity the prepare entry points accept.
+#define SONARE_ENGINE_MAX_COMMAND_CAPACITY 65536u
+/// @brief Largest @p telemetry_capacity the prepare entry points accept.
+/// @details Considerably lower than the command bound because the engine fans
+///   this number out internally: the meter tap reserves this many records for
+///   every metered lane (each track and bus lane plus master and monitor), so
+///   the memory prepare() reserves grows by nearly two orders of magnitude
+///   beyond the number supplied here. Sizing this for a host's drain interval
+///   rather than for headroom is the intent; the default both other bindings
+///   use is 1024.
+#define SONARE_ENGINE_MAX_TELEMETRY_CAPACITY 16384u
+
+/// @brief Prepares an engine with 64-channel planar scratch.
+/// @details @p command_capacity must not exceed @ref
+///          SONARE_ENGINE_MAX_COMMAND_CAPACITY and @p telemetry_capacity must
+///          not exceed @ref SONARE_ENGINE_MAX_TELEMETRY_CAPACITY; a larger
+///          value returns SONARE_ERROR_INVALID_PARAMETER and leaves the engine
+///          untouched. Both are rounded up to a power of two internally, and 0
+///          selects the internal minimum rather than disabling the queue.
 SonareError sonare_engine_prepare(SonareRealtimeEngine* engine, double sample_rate,
                                   int max_block_size, size_t command_capacity,
                                   size_t telemetry_capacity);
@@ -87,7 +107,8 @@ SonareError sonare_engine_prepare(SonareRealtimeEngine* engine, double sample_ra
 ///          @p max_channels (1..64) for capture, instrument, PDC, and monitor
 ///          scratch. The host must not pass more channels to process/render
 ///          until it prepares again with a larger bound. Use the legacy prepare
-///          function when the maximum channel count is not known.
+///          function when the maximum channel count is not known. The two
+///          capacities carry the same bounds as @ref sonare_engine_prepare.
 SonareError sonare_engine_prepare_with_channels(SonareRealtimeEngine* engine, double sample_rate,
                                                 int max_block_size, size_t command_capacity,
                                                 size_t telemetry_capacity, int max_channels);

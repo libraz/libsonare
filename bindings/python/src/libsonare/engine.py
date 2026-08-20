@@ -165,6 +165,14 @@ class RealtimeEngine(_EngineMidiMixin, _EngineMixingMixin, _EngineIoMixin):
         telemetry_capacity: int = 1024,
         max_channels: int = 64,
     ) -> None:
+        """Size the engine's queues and scratch for a sample rate and block size.
+
+        ``command_capacity`` must not exceed 65536 and ``telemetry_capacity``
+        must not exceed 16384; a larger value raises and leaves the engine
+        untouched. The telemetry number is not a queue depth paid for
+        one-for-one: the engine reserves that many meter records per metered
+        lane, so its memory cost is far larger than the number given here.
+        """
         lib = _get_lib()
         prepare_with_channels = getattr(lib, "sonare_engine_prepare_with_channels", None)
         supports_max_channels = prepare_with_channels is not None

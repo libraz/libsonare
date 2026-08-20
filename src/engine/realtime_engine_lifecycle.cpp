@@ -12,6 +12,12 @@ namespace sonare::engine {
 
 void RealtimeEngine::prepare(double sample_rate, int max_block_size, size_t command_capacity,
                              size_t telemetry_capacity, int max_channels) {
+  // Clamp the queue capacities the same way max_block_size and max_channels are
+  // clamped below. The telemetry number is multiplied by the metered lane count
+  // before the meter tap reserves, so an unbounded value here is an unbounded
+  // allocation rather than merely a deep queue.
+  command_capacity = std::min(command_capacity, kMaxCommandCapacity);
+  telemetry_capacity = std::min(telemetry_capacity, kMaxTelemetryCapacity);
   max_block_size_ = std::max(max_block_size, 1);
   prepared_channels_ = std::clamp(max_channels, 1, static_cast<int>(kMaxAudioChannels));
   sample_rate_ = sample_rate > 0.0 ? sample_rate : 48000.0;

@@ -66,6 +66,23 @@ SonareEngineMetronomeConfig metronome_to_c(const engine::MetronomeConfig& config
           config.click_seconds};
 }
 
+// The public bounds and the core's clamps are two spellings of one limit; keep
+// them pinned so the header cannot promise a ceiling the engine does not honor.
+static_assert(SONARE_ENGINE_MAX_COMMAND_CAPACITY == engine::RealtimeEngine::kMaxCommandCapacity,
+              "SONARE_ENGINE_MAX_COMMAND_CAPACITY drift");
+static_assert(SONARE_ENGINE_MAX_TELEMETRY_CAPACITY == engine::RealtimeEngine::kMaxTelemetryCapacity,
+              "SONARE_ENGINE_MAX_TELEMETRY_CAPACITY drift");
+
+// The engine multiplies telemetry_capacity by the metered lane count before
+// reserving, so an unchecked capacity is an unbounded allocation (and, far
+// enough out, an overflowing multiply). The core clamps; the C ABI reports the
+// out-of-range request instead of silently preparing a smaller engine than the
+// host asked for.
+bool capacities_in_range(size_t command_capacity, size_t telemetry_capacity) noexcept {
+  return command_capacity <= SONARE_ENGINE_MAX_COMMAND_CAPACITY &&
+         telemetry_capacity <= SONARE_ENGINE_MAX_TELEMETRY_CAPACITY;
+}
+
 engine::MetronomeConfig metronome_from_c(const SonareEngineMetronomeConfig& config) {
   engine::MetronomeConfig out;
   out.enabled = config.enabled != 0;
@@ -100,7 +117,8 @@ SonareError sonare_engine_prepare(SonareRealtimeEngine* engine, double sample_ra
                                   size_t telemetry_capacity) {
   SONARE_C_API_ENTRY;
   if (!engine || !std::isfinite(sample_rate) || sample_rate < kMinSampleRate ||
-      sample_rate > kMaxSampleRate || max_block_size <= 0) {
+      sample_rate > kMaxSampleRate || max_block_size <= 0 ||
+      !capacities_in_range(command_capacity, telemetry_capacity)) {
     return SONARE_ERROR_INVALID_PARAMETER;
   }
   SONARE_C_TRY
@@ -115,7 +133,7 @@ SonareError sonare_engine_prepare_with_channels(SonareRealtimeEngine* engine, do
   SONARE_C_API_ENTRY;
   if (!engine || !std::isfinite(sample_rate) || sample_rate < kMinSampleRate ||
       sample_rate > kMaxSampleRate || max_block_size <= 0 || max_channels <= 0 ||
-      max_channels > 64) {
+      max_channels > 64 || !capacities_in_range(command_capacity, telemetry_capacity)) {
     return SONARE_ERROR_INVALID_PARAMETER;
   }
   SONARE_C_TRY
