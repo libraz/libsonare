@@ -7,6 +7,7 @@
 #include <string>
 #include <vector>
 
+#include "mixing/downmix.h"
 #include "util/exception.h"
 #include "util/numeric_validation.h"
 #include "util/resource_limits.h"
@@ -170,6 +171,112 @@ int64_t memory_seek(void* opaque, int64_t offset, int whence) {
   }
   state->pos = static_cast<size_t>(target);
   return target;
+}
+
+// ---------------------------------------------------------------------------
+// Mono downmix matrix. swresample's own default folds the front pair at -3 dB
+// each without normalizing, which is sqrt(2) hotter than the ITU-R BS.775 rule
+// mixing/downmix.h declares and the built-in WAV/MP3 decoders apply. Overriding
+// it keeps one downmix rule per source layout across every decoder path.
+// ---------------------------------------------------------------------------
+
+/// @brief Coefficients of the library's mono fold, in canonical plane order.
+/// @details Obtained by running one unit impulse per source plane through
+///          sonare::mixing::downmix(). The fold is linear, so its impulse
+///          response is exactly its coefficient row; deriving the row this way
+///          rather than restating the constants means this path cannot drift
+///          from the rule in mixing/downmix.h.
+std::vector<double> mono_downmix_row(ChannelLayout layout) {
+  const size_t planes = static_cast<size_t>(channel_count(layout));
+  std::vector<float> impulse(planes, 0.0f);
+  std::vector<const float*> in(planes);
+  for (size_t plane = 0; plane < planes; ++plane) in[plane] = &impulse[plane];
+
+  std::vector<double> row(planes, 0.0);
+  for (size_t plane = 0; plane < planes; ++plane) {
+    std::fill(impulse.begin(), impulse.end(), 0.0f);
+    impulse[plane] = 1.0f;
+    float folded = 0.0f;
+    float* out[1] = {&folded};
+    mixing::downmix(layout, ChannelLayout::Mono, in.data(), out, 1);
+    row[plane] = static_cast<double>(folded);
+  }
+  return row;
+}
+
+/// @brief FFmpeg channel ids that can carry one canonical speaker role.
+/// @details A 5.1 stream spells its surround pair BACK_LEFT/BACK_RIGHT or
+///          SIDE_LEFT/SIDE_RIGHT depending on the muxer, so the surround planes
+///          accept either; 7.1 carries both pairs and resolves the back one
+///          first, which is the order the canonical plane list uses.
+struct RoleChannels {
+  AVChannel primary = AV_CHAN_NONE;
+  AVChannel alternate = AV_CHAN_NONE;
+};
+
+RoleChannels role_channels(SpeakerRole role) {
+  switch (role) {
+    case SpeakerRole::L:
+      return {AV_CHAN_FRONT_LEFT, AV_CHAN_NONE};
+    case SpeakerRole::R:
+      return {AV_CHAN_FRONT_RIGHT, AV_CHAN_NONE};
+    case SpeakerRole::C:
+      return {AV_CHAN_FRONT_CENTER, AV_CHAN_NONE};
+    case SpeakerRole::LFE:
+      return {AV_CHAN_LOW_FREQUENCY, AV_CHAN_NONE};
+    case SpeakerRole::Ls:
+      return {AV_CHAN_BACK_LEFT, AV_CHAN_SIDE_LEFT};
+    case SpeakerRole::Rs:
+      return {AV_CHAN_BACK_RIGHT, AV_CHAN_SIDE_RIGHT};
+    case SpeakerRole::Lss:
+      return {AV_CHAN_SIDE_LEFT, AV_CHAN_NONE};
+    case SpeakerRole::Rss:
+      return {AV_CHAN_SIDE_RIGHT, AV_CHAN_NONE};
+  }
+  return {};
+}
+
+/// @brief Plane index of a canonical speaker role within @p layout, or -1.
+int layout_index_for_role(const AVChannelLayout& layout, SpeakerRole role) {
+  const RoleChannels candidates = role_channels(role);
+  int index = av_channel_layout_index_from_channel(&layout, candidates.primary);
+  if (index < 0 && candidates.alternate != AV_CHAN_NONE) {
+    index = av_channel_layout_index_from_channel(&layout, candidates.alternate);
+  }
+  return index;
+}
+
+/// @brief Installs the library's mono fold as @p swr's rematrix matrix.
+/// @details Layouts outside the speaker model, and any layout that does not
+///          carry every role the model expects, fall back to the unweighted mean
+///          of all planes -- the same fallback core/audio_io.cpp applies, so the
+///          two decoder paths agree there too.
+/// @param swr Allocated resampler that has not been initialized yet.
+/// @param in_layout Source channel layout.
+/// @return 0 on success, or a negative FFmpeg error code.
+int set_mono_downmix_matrix(SwrContext* swr, const AVChannelLayout& in_layout) {
+  const int channels = in_layout.nb_channels;
+  // A single-plane source reaches mono untouched, with no matrix to install.
+  if (channels <= 1) return 0;
+
+  std::vector<double> matrix(static_cast<size_t>(channels), 1.0 / static_cast<double>(channels));
+  const ChannelLayout layout = layout_from_channel_count(channels);
+  if (channels == channel_count(layout)) {
+    const std::vector<double> row = mono_downmix_row(layout);
+    const SpeakerRole* roles = speaker_roles(layout);
+    std::vector<double> mapped(static_cast<size_t>(channels), 0.0);
+    bool complete = true;
+    for (int plane = 0; plane < channels; ++plane) {
+      const int index = layout_index_for_role(in_layout, roles[plane]);
+      if (index < 0 || index >= channels) {
+        complete = false;
+        break;
+      }
+      mapped[static_cast<size_t>(index)] = row[static_cast<size_t>(plane)];
+    }
+    if (complete) matrix = std::move(mapped);
+  }
+  return swr_set_matrix(swr, matrix.data(), channels);
 }
 
 // ---------------------------------------------------------------------------
@@ -347,6 +454,13 @@ InterleavedAudioLoadResult decode_first_audio_stream(AVFormatContext* format_ctx
     swr.reset(swr_raw);
     SONARE_CHECK_MSG(ret >= 0 && swr != nullptr, ErrorCode::DecodeFailed,
                      "FFmpeg: swr_alloc_set_opts2 failed: " + ff_err(ret));
+    if (!preserve_channels) {
+      // Rebuilt with the context, so a midstream layout change re-derives the
+      // matrix for the new source layout rather than carrying the old one over.
+      ret = set_mono_downmix_matrix(swr.get(), active_in_layout.layout);
+      SONARE_CHECK_MSG(ret >= 0, ErrorCode::DecodeFailed,
+                       "FFmpeg: swr_set_matrix failed: " + ff_err(ret));
+    }
     ret = swr_init(swr.get());
     SONARE_CHECK_MSG(ret >= 0, ErrorCode::DecodeFailed, "FFmpeg: swr_init failed: " + ff_err(ret));
     active_input_rate = input_rate;

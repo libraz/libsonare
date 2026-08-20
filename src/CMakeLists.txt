@@ -126,6 +126,12 @@ set(SONARE_SOURCES
   # string<->enum mapping over a header-only enum, with no mastering runtime
   # behind it.
   mastering/eq/band_strings.cpp
+  # Compiled here rather than with the mixing module for the same reason:
+  # core/audio_io.cpp is always compiled and folds every multichannel source to
+  # mono through downmix(), so leaving it behind a feature gate makes
+  # -DBUILD_MIXING=OFF fail at link. The file is a pure stateless coefficient
+  # matrix over a header-only layout enum, with no mixing runtime behind it.
+  mixing/downmix.cpp
   c_api/eq_band_json.cpp
   c_api/core_analysis.cpp
   c_api/core_audio.cpp
@@ -444,7 +450,6 @@ if(BUILD_MIXING)
     mixing/automation_lane.cpp
     mixing/bus.cpp
     mixing/channel_strip.cpp
-    mixing/downmix.cpp
     mixing/fx_bus.cpp
     mixing/gain.cpp
     mixing/meter.cpp

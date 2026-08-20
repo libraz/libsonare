@@ -2,6 +2,14 @@
 
 /// @file audio_io.h
 /// @brief Audio file loading utilities using dr_wav and minimp3.
+///
+/// Every mono loader in this header folds its source down with one rule, chosen
+/// by the source channel layout: layouts the speaker model covers (mono, stereo,
+/// 5.1, 7.1) go through sonare::mixing::downmix(), so the center and surround
+/// feeds enter the front pair at -3 dB and the LFE plane is dropped, per ITU-R
+/// BS.775. Stereo therefore stays the plain average of the pair. Channel counts
+/// outside the model (quad, LCR, anything above 7.1) have no speaker assignment
+/// to weight, so they fall back to the unweighted mean of every plane.
 
 #include <cstddef>
 #include <cstdint>

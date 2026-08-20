@@ -95,6 +95,70 @@ std::vector<uint8_t> create_wav_buffer_pcm16(const float* samples, size_t sample
   return buffer;
 }
 
+/// @brief Creates a frame-interleaved float32 WAV file in memory with @p channels planes.
+std::vector<uint8_t> create_wav_buffer_multichannel(const float* interleaved, size_t frame_count,
+                                                    int channels, int sample_rate) {
+  struct WavHeader {
+    char riff[4] = {'R', 'I', 'F', 'F'};
+    uint32_t file_size;
+    char wave[4] = {'W', 'A', 'V', 'E'};
+    char fmt[4] = {'f', 'm', 't', ' '};
+    uint32_t fmt_size = 16;
+    uint16_t audio_format = 3;  // IEEE float
+    uint16_t num_channels;
+    uint32_t sample_rate;
+    uint32_t byte_rate;
+    uint16_t block_align;
+    uint16_t bits_per_sample = 32;
+    char data[4] = {'d', 'a', 't', 'a'};
+    uint32_t data_size;
+  };
+
+  const size_t sample_count = frame_count * static_cast<size_t>(channels);
+  WavHeader header;
+  header.num_channels = static_cast<uint16_t>(channels);
+  header.sample_rate = static_cast<uint32_t>(sample_rate);
+  header.block_align = static_cast<uint16_t>(channels * 4);
+  header.byte_rate = header.sample_rate * header.block_align;
+  header.data_size = static_cast<uint32_t>(sample_count * 4);
+  header.file_size = 36 + header.data_size;
+
+  std::vector<uint8_t> buffer(sizeof(WavHeader) + header.data_size);
+  std::memcpy(buffer.data(), &header, sizeof(WavHeader));
+  std::memcpy(buffer.data() + sizeof(WavHeader), interleaved, sample_count * 4);
+
+  return buffer;
+}
+
+/// @brief Root-mean-square level of a signal.
+double rms(const std::vector<float>& samples) {
+  double energy = 0.0;
+  for (float sample : samples) energy += static_cast<double>(sample) * sample;
+  return samples.empty() ? 0.0 : std::sqrt(energy / static_cast<double>(samples.size()));
+}
+
+/// @brief Largest absolute sample value.
+float peak(const std::vector<float>& samples) {
+  float highest = 0.0f;
+  for (float sample : samples) highest = std::max(highest, std::abs(sample));
+  return highest;
+}
+
+/// @brief Scatters per-plane signals into one frame-interleaved buffer.
+/// @param planes One vector per plane, in canonical ChannelLayout order; empty
+///        vectors are written as silence.
+std::vector<float> interleave(const std::vector<std::vector<float>>& planes, size_t frame_count) {
+  const size_t channels = planes.size();
+  std::vector<float> interleaved(frame_count * channels, 0.0f);
+  for (size_t channel = 0; channel < channels; ++channel) {
+    if (planes[channel].empty()) continue;
+    for (size_t frame = 0; frame < frame_count; ++frame) {
+      interleaved[frame * channels + channel] = planes[channel][frame];
+    }
+  }
+  return interleaved;
+}
+
 using sonare::test::generate_sine;
 
 }  // namespace
@@ -188,6 +252,122 @@ TEST_CASE("load_buffer auto-detect WAV", "[audio_io]") {
   REQUIRE(loaded.size() == samples);
 }
 
+TEST_CASE("load_buffer_wav folds 5.1 with the same rule as stereo", "[audio_io][downmix]") {
+  // A 5.1 master whose program sits in the front pair must arrive at the same
+  // level as the stereo mixdown of that pair: BS.775 averages the folded front
+  // channels, it does not average every plane in the file.
+  constexpr int sr = 22050;
+  constexpr size_t frames = 1024;
+  const std::vector<float> left = generate_sine(static_cast<int>(frames), 440.0f, sr, 0.6f);
+  const std::vector<float> right = generate_sine(static_cast<int>(frames), 660.0f, sr, 0.4f);
+
+  const std::vector<float> stereo = interleave({left, right}, frames);
+  const std::vector<float> surround = interleave({left, right, {}, {}, {}, {}}, frames);
+  const std::vector<uint8_t> stereo_wav =
+      create_wav_buffer_multichannel(stereo.data(), frames, 2, sr);
+  const std::vector<uint8_t> surround_wav =
+      create_wav_buffer_multichannel(surround.data(), frames, 6, sr);
+
+  auto [stereo_mono, stereo_sr] = load_buffer_wav(stereo_wav.data(), stereo_wav.size());
+  auto [surround_mono, surround_sr] = load_buffer_wav(surround_wav.data(), surround_wav.size());
+  REQUIRE(stereo_sr == sr);
+  REQUIRE(surround_sr == sr);
+  REQUIRE(stereo_mono.size() == frames);
+  REQUIRE(surround_mono.size() == frames);
+
+  const double stereo_level = rms(stereo_mono);
+  const double surround_level = rms(surround_mono);
+  REQUIRE(stereo_level > 0.1);
+  INFO("stereo RMS " << stereo_level << ", 5.1 RMS " << surround_level);
+  const double level_difference_db = 20.0 * std::log10(surround_level / stereo_level);
+  REQUIRE_THAT(level_difference_db, Catch::Matchers::WithinAbs(0.0, 0.05));
+
+  // Silent center/LFE/surround planes contribute nothing, so the folded signal
+  // is the stereo mixdown sample for sample.
+  for (size_t i = 0; i < frames; ++i) {
+    REQUIRE_THAT(surround_mono[i], Catch::Matchers::WithinAbs(stereo_mono[i], 1e-6f));
+  }
+}
+
+TEST_CASE("load_buffer_wav drops LFE and attenuates the center when folding 5.1",
+          "[audio_io][downmix]") {
+  // BS.775 omits the LFE plane: a cinema LFE feed is calibrated +10 dB and would
+  // otherwise dominate the low end of every analysis. The center plane is the
+  // positive control -- the same signal placed there must survive at -3 dB, so
+  // the LFE assertion cannot pass by the loader returning silence.
+  constexpr int sr = 22050;
+  constexpr size_t frames = 1024;
+  const std::vector<float> tone = generate_sine(static_cast<int>(frames), 80.0f, sr, 0.8f);
+
+  const std::vector<float> lfe_only = interleave({{}, {}, {}, tone, {}, {}}, frames);
+  const std::vector<float> center_only = interleave({{}, {}, tone, {}, {}, {}}, frames);
+  const std::vector<uint8_t> lfe_wav =
+      create_wav_buffer_multichannel(lfe_only.data(), frames, 6, sr);
+  const std::vector<uint8_t> center_wav =
+      create_wav_buffer_multichannel(center_only.data(), frames, 6, sr);
+
+  auto [lfe_mono, lfe_sr] = load_buffer_wav(lfe_wav.data(), lfe_wav.size());
+  auto [center_mono, center_sr] = load_buffer_wav(center_wav.data(), center_wav.size());
+  REQUIRE(lfe_sr == sr);
+  REQUIRE(center_sr == sr);
+
+  INFO("LFE-only peak " << peak(lfe_mono) << ", center-only peak " << peak(center_mono));
+  REQUIRE_THAT(peak(lfe_mono), Catch::Matchers::WithinAbs(0.0f, 1e-7f));
+  REQUIRE_THAT(peak(center_mono),
+               Catch::Matchers::WithinAbs(sonare::constants::kInvSqrt2 * peak(tone), 1e-5f));
+}
+
+TEST_CASE("load_buffer_wav keeps the mono and stereo folds bit-identical", "[audio_io][downmix]") {
+  // Every golden in the repo runs through the stereo fold, so it must stay
+  // exactly the arithmetic mean of the pair -- compared bitwise rather than
+  // within a tolerance, and against the literal expression the loader has always
+  // evaluated (a double-precision sum divided by the channel count).
+  constexpr int sr = 44100;
+  constexpr size_t frames = 2048;
+  const std::vector<float> left = generate_sine(static_cast<int>(frames), 437.3f, sr, 0.71f);
+  const std::vector<float> right = generate_sine(static_cast<int>(frames), 913.1f, sr, 0.29f);
+
+  const std::vector<float> stereo = interleave({left, right}, frames);
+  const std::vector<uint8_t> stereo_wav =
+      create_wav_buffer_multichannel(stereo.data(), frames, 2, sr);
+  auto [stereo_mono, stereo_sr] = load_buffer_wav(stereo_wav.data(), stereo_wav.size());
+  REQUIRE(stereo_sr == sr);
+  REQUIRE(stereo_mono.size() == frames);
+  for (size_t i = 0; i < frames; ++i) {
+    const float expected =
+        static_cast<float>((static_cast<double>(left[i]) + static_cast<double>(right[i])) / 2.0);
+    REQUIRE(stereo_mono[i] == expected);
+  }
+
+  // A single-channel file is passed through untouched.
+  const std::vector<uint8_t> mono_wav = create_wav_buffer_multichannel(left.data(), frames, 1, sr);
+  auto [mono, mono_sr] = load_buffer_wav(mono_wav.data(), mono_wav.size());
+  REQUIRE(mono_sr == sr);
+  REQUIRE(mono.size() == frames);
+  for (size_t i = 0; i < frames; ++i) {
+    REQUIRE(mono[i] == left[i]);
+  }
+}
+
+TEST_CASE("load_buffer_wav averages channel counts outside the speaker model",
+          "[audio_io][downmix]") {
+  // ChannelLayout covers 1/2/6/8 planes. A quad or LCR file carries no speaker
+  // assignment the downmix matrix can reason about, so those keep the
+  // unweighted mean rather than silently dropping the unmapped planes.
+  constexpr int sr = 22050;
+  constexpr size_t frames = 256;
+  const std::vector<float> tone = generate_sine(static_cast<int>(frames), 300.0f, sr, 0.5f);
+  const std::vector<float> quad = interleave({tone, tone, tone, tone}, frames);
+  const std::vector<uint8_t> quad_wav = create_wav_buffer_multichannel(quad.data(), frames, 4, sr);
+
+  auto [quad_mono, quad_sr] = load_buffer_wav(quad_wav.data(), quad_wav.size());
+  REQUIRE(quad_sr == sr);
+  REQUIRE(quad_mono.size() == frames);
+  for (size_t i = 0; i < frames; ++i) {
+    REQUIRE_THAT(quad_mono[i], Catch::Matchers::WithinAbs(tone[i], 1e-6f));
+  }
+}
+
 TEST_CASE("load_buffer_mp3 rejects an oversized declared PCM stream before decode allocation",
           "[audio_io]") {
   // A Xing/Info VBR tag supplies frame count before PCM decode. Mutate a tiny
@@ -222,6 +402,35 @@ TEST_CASE("load_buffer_mp3 rejects an oversized declared PCM stream before decod
   REQUIRE_THROWS_WITH(load_buffer_mp3(mp3.data(), mp3.size()),
                       Catch::Matchers::ContainsSubstring("offline decode limit"));
   std::remove(path.c_str());
+}
+
+TEST_CASE("load_buffer_mp3 folds stereo to the same arithmetic mean", "[audio_io][downmix]") {
+  // MP3 carries at most two channels, so the only fold it can perform is the
+  // stereo one -- and that fold must stay the plain arithmetic mean of the
+  // decoded pair, bit for bit.
+  if (std::system("command -v ffmpeg >/dev/null 2>&1") != 0) {
+    SKIP("ffmpeg CLI not found on PATH");
+  }
+  const std::string path = "test_mp3_stereo_fold.mp3";
+  const std::string command =
+      "ffmpeg -loglevel error -f lavfi -i "
+      "'sine=frequency=440:duration=0.25:sample_rate=22050' -f lavfi -i "
+      "'sine=frequency=1300:duration=0.25:sample_rate=22050' "
+      "-filter_complex '[0:a][1:a]amerge=inputs=2[a]' -map '[a]' "
+      "-c:a libmp3lame -b:a 128k -y " +
+      path;
+  REQUIRE(std::system(command.c_str()) == 0);
+
+  auto [interleaved, interleaved_sr, channels] = load_audio_interleaved(path);
+  auto [mono, mono_sr] = load_audio(path);
+  std::remove(path.c_str());
+
+  REQUIRE(channels == 2);
+  REQUIRE(mono_sr == interleaved_sr);
+  REQUIRE(mono.size() == interleaved.size() / 2);
+  for (size_t frame = 0; frame < mono.size(); ++frame) {
+    REQUIRE(mono[frame] == 0.5f * (interleaved[2 * frame] + interleaved[2 * frame + 1]));
+  }
 }
 
 TEST_CASE("AudioLoadOptions defaults", "[audio_io]") {
@@ -393,6 +602,78 @@ TEST_CASE("load_audio_interleaved preserves FFmpeg stereo channel order",
   }
 
   cleanup();
+}
+
+TEST_CASE("load_audio folds a bed identically through the built-in and FFmpeg decoders",
+          "[audio_io][ffmpeg][downmix]") {
+  // The same program must reach analysis as the same mono signal no matter which
+  // container it arrived in: WAV takes the built-in decoder, FLAC takes FFmpeg.
+  if (std::system("command -v ffmpeg >/dev/null 2>&1") != 0) {
+    SKIP("ffmpeg CLI not found on PATH");
+  }
+
+  constexpr int sample_rate = 22050;
+  constexpr size_t frames = 4096;
+  const std::vector<std::vector<float>> planes = {
+      generate_sine(static_cast<int>(frames), 220.0f, sample_rate, 0.50f),  // L
+      generate_sine(static_cast<int>(frames), 330.0f, sample_rate, 0.40f),  // R
+      generate_sine(static_cast<int>(frames), 550.0f, sample_rate, 0.30f),  // C
+      generate_sine(static_cast<int>(frames), 45.0f, sample_rate, 0.60f),   // LFE
+      generate_sine(static_cast<int>(frames), 770.0f, sample_rate, 0.20f),  // Ls
+      generate_sine(static_cast<int>(frames), 990.0f, sample_rate, 0.15f),  // Rs
+  };
+
+  ChannelLayout layout = ChannelLayout::Stereo;
+  std::string transcode_filter;
+  SECTION("stereo") { layout = ChannelLayout::Stereo; }
+  SECTION("5.1") { layout = ChannelLayout::FivePointOne; }
+  SECTION("5.1 relabelled with side surrounds") {
+    // Muxers spell the 5.1 surround pair either BACK_LEFT/BACK_RIGHT or
+    // SIDE_LEFT/SIDE_RIGHT. Both name the same speakers, so relabelling the
+    // planes must not change the fold -- in particular it must not drop the
+    // stream out of the speaker model and onto a plain average of all six.
+    layout = ChannelLayout::FivePointOne;
+    transcode_filter = " -af 'pan=5.1(side)|c0=c0|c1=c1|c2=c2|c3=c3|c4=c4|c5=c5'";
+  }
+
+  const int channels = channel_count(layout);
+  const std::vector<float> bed = interleave(
+      std::vector<std::vector<float>>(planes.begin(), planes.begin() + channels), frames);
+
+  const std::string wav_path = "test_downmix_bed.wav";
+  const std::string flac_path = "test_downmix_bed.flac";
+  auto cleanup = [&]() {
+    std::remove(wav_path.c_str());
+    std::remove(flac_path.c_str());
+  };
+  save_wav_multichannel(wav_path, bed.data(), frames, channels, layout, sample_rate, 24);
+  REQUIRE(std::system(("ffmpeg -loglevel error -i " + wav_path + transcode_filter +
+                       " -c:a flac -y " + flac_path)
+                          .c_str()) == 0);
+
+  auto [wav_mono, wav_sr] = load_audio(wav_path);
+  auto [flac_mono, flac_sr] = load_audio(flac_path);
+  cleanup();
+
+  REQUIRE(wav_sr == sample_rate);
+  REQUIRE(flac_sr == sample_rate);
+  REQUIRE(wav_mono.size() == frames);
+  REQUIRE(flac_mono.size() == frames);
+
+  const double wav_level = rms(wav_mono);
+  const double flac_level = rms(flac_mono);
+  REQUIRE(wav_level > 0.05);
+  INFO("layout " << channel_layout_to_string(layout) << ": WAV RMS " << wav_level << ", FLAC RMS "
+                 << flac_level);
+  REQUIRE_THAT(20.0 * std::log10(flac_level / wav_level), Catch::Matchers::WithinAbs(0.0, 0.05));
+
+  // 24-bit PCM plus FLAC's lossless round trip leaves only quantization noise.
+  double worst = 0.0;
+  for (size_t i = 0; i < frames; ++i) {
+    worst = std::max(worst, std::abs(static_cast<double>(wav_mono[i]) - flac_mono[i]));
+  }
+  INFO("largest per-sample difference " << worst);
+  REQUIRE(worst < 1e-4);
 }
 
 TEST_CASE("load_audio_interleaved rejects FFmpeg channel renegotiation",

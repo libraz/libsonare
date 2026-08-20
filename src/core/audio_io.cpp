@@ -21,6 +21,7 @@
 #endif
 #endif
 
+#include "mixing/downmix.h"
 #include "util/exception.h"
 #include "util/numeric_validation.h"
 #include "util/resource_limits.h"
@@ -43,6 +44,63 @@ namespace sonare {
 namespace {
 
 constexpr int kMinSupportedChannels = 1;
+
+/// @brief Widest plane count any ChannelLayout carries.
+constexpr int kMaxLayoutPlanes = channel_count(ChannelLayout::SevenPointOne);
+
+/// @brief True when a channel count maps onto a modelled speaker layout (1/2/6/8).
+/// @details layout_from_channel_count() falls back to stereo for every other
+///          count, so round-tripping the count through it is the membership test.
+constexpr bool has_modelled_layout(int channels) noexcept {
+  return channels == channel_count(layout_from_channel_count(channels));
+}
+
+/// @brief Folds one interleaved decode chunk down to mono and appends it to @p mono.
+/// @details Layouts the speaker model covers go through @ref sonare::mixing::downmix,
+///          so the built-in decoders apply the same ITU-R BS.775 rule the rest of
+///          the library uses: the center and surround feeds enter the front pair
+///          at -3 dB and the LFE plane is dropped. Channel counts outside the
+///          model (quad, LCR, and anything above 7.1) carry no speaker assignment
+///          the matrix can reason about, so they keep the unweighted mean rather
+///          than losing their unmapped planes.
+/// @param interleaved Frame-interleaved chunk of @p n_frames * @p channels samples.
+/// @param n_frames    Frames in the chunk.
+/// @param channels    Source channel count (>= @ref kMinSupportedChannels).
+/// @param planar      Caller-owned de-interleave scratch, reused across chunks.
+/// @param mono        Destination; the folded frames are appended to it.
+void append_mono_fold(const float* interleaved, size_t n_frames, int channels,
+                      std::vector<float>& planar, std::vector<float>& mono) {
+  const size_t base = mono.size();
+  mono.resize(base + n_frames);
+  float* out = mono.data() + base;
+
+  if (!has_modelled_layout(channels)) {
+    for (size_t frame = 0; frame < n_frames; ++frame) {
+      double sum = 0.0;
+      const size_t frame_base = frame * static_cast<size_t>(channels);
+      for (int channel = 0; channel < channels; ++channel) {
+        sum += interleaved[frame_base + static_cast<size_t>(channel)];
+      }
+      out[frame] = static_cast<float>(sum / static_cast<double>(channels));
+    }
+    return;
+  }
+
+  // downmix() reads planar input, so split the chunk into planes first.
+  planar.resize(n_frames * static_cast<size_t>(channels));
+  std::array<const float*, kMaxLayoutPlanes> planes{};
+  for (int channel = 0; channel < channels; ++channel) {
+    float* plane = planar.data() + static_cast<size_t>(channel) * n_frames;
+    for (size_t frame = 0; frame < n_frames; ++frame) {
+      plane[frame] =
+          interleaved[frame * static_cast<size_t>(channels) + static_cast<size_t>(channel)];
+    }
+    planes[static_cast<size_t>(channel)] = plane;
+  }
+  float* mono_plane[1] = {out};
+  mixing::downmix(layout_from_channel_count(channels), ChannelLayout::Mono, planes.data(),
+                  mono_plane, n_frames);
+}
 
 #ifndef SONARE_WITH_FFMPEG
 #ifndef __EMSCRIPTEN__
@@ -295,20 +353,14 @@ AudioLoadResult load_buffer_wav(const uint8_t* data, size_t size) {
                        resource::kMaxOfflineAudioSamples, &scratch_samples),
                    ErrorCode::DecodeFailed, "WAV channel layout exceeds the decode limit");
   std::vector<float> scratch(scratch_samples);
+  std::vector<float> planar;
   drwav_uint64 total_frames_read = 0;
   while (total_frames_read < wav.totalPCMFrameCount) {
     const drwav_uint64 request =
         std::min<drwav_uint64>(kDecodeChunkFrames, wav.totalPCMFrameCount - total_frames_read);
     const drwav_uint64 frames_read = drwav_read_pcm_frames_f32(&wav, request, scratch.data());
     if (frames_read == 0) break;
-    for (drwav_uint64 frame = 0; frame < frames_read; ++frame) {
-      double sum = 0.0;
-      const size_t base = static_cast<size_t>(frame) * static_cast<size_t>(channels);
-      for (int channel = 0; channel < channels; ++channel) {
-        sum += scratch[base + static_cast<size_t>(channel)];
-      }
-      mono.push_back(static_cast<float>(sum / static_cast<double>(channels)));
-    }
+    append_mono_fold(scratch.data(), static_cast<size_t>(frames_read), channels, planar, mono);
     total_frames_read += frames_read;
   }
   drwav_uninit(&wav);
@@ -345,6 +397,8 @@ AudioLoadResult load_buffer_mp3(const uint8_t* data, size_t size) {
   std::array<mp3d_sample_t, kMp3DecodeChunkSamples> chunk{};
   std::vector<float> mono;
   mono.reserve(static_cast<size_t>(declared_samples / static_cast<uint64_t>(channels)));
+  std::vector<float> normalized;
+  std::vector<float> planar;
   size_t decoded_samples = 0;
   while (true) {
     const size_t read_samples = mp3dec_ex_read(&decoder_guard.decoder, chunk.data(), chunk.size());
@@ -360,14 +414,11 @@ AudioLoadResult load_buffer_mp3(const uint8_t* data, size_t size) {
     decoded_samples = next_total;
 
     const size_t frame_count = read_samples / static_cast<size_t>(channels);
-    for (size_t frame = 0; frame < frame_count; ++frame) {
-      float sum = 0.0f;
-      for (int channel = 0; channel < channels; ++channel) {
-        sum += static_cast<float>(
-            chunk[frame * static_cast<size_t>(channels) + static_cast<size_t>(channel)]);
-      }
-      mono.push_back(sum / (32768.0f * static_cast<float>(channels)));
+    normalized.resize(read_samples);
+    for (size_t i = 0; i < read_samples; ++i) {
+      normalized[i] = static_cast<float>(chunk[i]) / 32768.0f;
     }
+    append_mono_fold(normalized.data(), frame_count, channels, planar, mono);
   }
   SONARE_CHECK_MSG(!mono.empty(), ErrorCode::DecodeFailed, "No audio samples in MP3 data");
 
