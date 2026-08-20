@@ -212,9 +212,11 @@ struct Track {
   /// normalization: the channel toward the pan direction stays at unity and the
   /// away channel is attenuated by the ratio that law dictates (default
   /// mixing::PanLaw::Const3dB), so this is not a linear balance ramp. A track on
-  /// an exclusive strip folds its pan into the strip; a track sharing a strip
-  /// folds it into its own clips, carrying the shared strip's law so both paths
-  /// agree.
+  /// an exclusive strip folds its pan into the strip; an audio track sharing a
+  /// strip folds it into its own clips, carrying the shared strip's law so both
+  /// paths agree. A MIDI track sharing a strip has no clip to fold into and pans
+  /// on its track lane, which carries the law of whatever strip is bound to that
+  /// lane.
   float pan = 0.0f;
 
   /// Link to the mixing::api::Scene Strip by its string id (Track <-> Strip

@@ -425,12 +425,27 @@ SonareError sonare_project_set_track_midi_destination(SonareProject* project, ui
                                                       uint32_t destination_id);
 
 /// @brief Sets a track's linear playback gain (1.0 = unity) via an undoable edit
-///        command. The arrangement compiler folds the track's gain/mute/solo/pan
-///        into the track's channel strip (synthesizing one when the track is not
-///        bound to a strip), so the value applies uniformly to the track's audio
-///        and MIDI. @p gain must be finite and >= 0; a negative or non-finite
-///        gain is rejected with SONARE_ERROR_INVALID_PARAMETER. @p track_id must
+///        command. @p gain must be finite and >= 0; a negative or non-finite gain
+///        is rejected with SONARE_ERROR_INVALID_PARAMETER. @p track_id must
 ///        reference an existing track.
+///
+/// @details The arrangement compiler applies the track's gain/mute/solo/pan so
+///          that the value reaches the track's audio and MIDI alike, but the
+///          stage it lands on follows the track's channel strip. A strip bound by
+///          this track alone (including one synthesized for an unbound track)
+///          carries the controls on its own fader and panner. A strip several
+///          tracks share processes their sum and so carries none of them; each
+///          track applies its controls upstream of it instead — on its own clip
+///          schedules for audio, on its track lane for MIDI.
+///
+/// @note A MIDI track's gain/pan on a SHARED strip ride the track lane, which is
+///       fed per source track only by an instrument that preserves source-track
+///       identity (see @ref sonare_project_set_track_midi_destination). An opaque
+///       host-callback instrument, or one reporting non-zero latency, renders one
+///       buffer per destination and has no per-track stage on a shared strip, so
+///       its gain/pan do not reach the bounce there; bind such an instrument to a
+///       track with an exclusive strip. Mute and solo are unaffected in every
+///       case: a silenced MIDI track schedules no events at all.
 SonareError sonare_project_set_track_gain(SonareProject* project, uint32_t track_id, float gain);
 
 /// @brief Sets a track's mute flag via an undoable edit command. A muted track is
@@ -447,6 +462,14 @@ SonareError sonare_project_set_track_solo(SonareProject* project, uint32_t track
 ///        edit command. @p pan is clamped to the valid range. @p track_id must
 ///        reference an existing track. See @ref sonare_project_set_track_gain for
 ///        how track controls are applied.
+///
+/// @note The pan law that shapes the balance belongs to the stage the pan lands
+///       on. On a channel strip, and on the clips of an audio track sharing a
+///       strip, that is the strip's configured law. A MIDI track sharing a strip
+///       pans on its track lane, which uses the law of whatever strip the host
+///       bound to that lane and a linear balance when none is bound. Every law is
+///       normalized so a centered track stays at unity and only the away channel
+///       is attenuated, so the difference is a taper, not a level offset.
 SonareError sonare_project_set_track_pan(SonareProject* project, uint32_t track_id, float pan);
 
 /// @brief Removes a clip via an undoable edit command. @p clip_id must

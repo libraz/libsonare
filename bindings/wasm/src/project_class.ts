@@ -487,7 +487,24 @@ export class Project {
     this.native.setTrackMidiDestination(trackId, destinationId);
   }
 
-  /** Set a track's linear playback gain (1.0 = unity; >= 0) via an undoable edit. */
+  /**
+   * Set a track's linear playback gain (1.0 = unity; >= 0) via an undoable edit.
+   *
+   * The value reaches the track's audio and MIDI alike, but the stage it lands
+   * on follows the track's channel strip. A strip bound by this track alone
+   * (including one synthesized for an unbound track) carries the controls on its
+   * own fader and panner. A strip several tracks share processes their sum and
+   * carries none of them; each track applies its controls upstream instead — on
+   * its own clip schedules for audio, on its track lane for MIDI.
+   *
+   * A MIDI track's gain/pan on a shared strip ride the track lane, which is fed
+   * per source track only by an instrument that preserves source-track identity
+   * (see {@link setTrackMidiDestination}). An opaque host-callback instrument, or
+   * one reporting non-zero latency, renders one buffer per destination and has no
+   * per-track stage on a shared strip, so its gain/pan do not reach the bounce
+   * there; bind such an instrument to a track with an exclusive strip. Mute and
+   * solo are unaffected: a silenced MIDI track schedules no events at all.
+   */
   setTrackGain(trackId: number, gain: number): void {
     this.native.setTrackGain(trackId, gain);
   }
@@ -502,7 +519,17 @@ export class Project {
     this.native.setTrackSolo(trackId, solo);
   }
 
-  /** Set a track's stereo balance in [-1, +1] (0 = center) via an undoable edit. */
+  /**
+   * Set a track's stereo balance in [-1, +1] (0 = center) via an undoable edit.
+   *
+   * See {@link setTrackGain} for which stage a track's controls land on. The pan
+   * law that shapes the balance belongs to that stage: the strip's configured law
+   * on a channel strip and on the clips of an audio track sharing a strip, and
+   * the track lane's law for a MIDI track sharing a strip (the law of whatever
+   * strip the host bound to that lane, or a linear balance when none is bound).
+   * Every law is normalized so a centered track stays at unity and only the away
+   * channel is attenuated, so the difference is a taper, not a level offset.
+   */
   setTrackPan(trackId: number, pan: number): void {
     this.native.setTrackPan(trackId, pan);
   }

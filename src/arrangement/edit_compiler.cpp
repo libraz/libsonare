@@ -108,6 +108,60 @@ std::string unique_track_strip_id(const mixing::api::Scene& scene) {
     if (!exists(candidate)) return candidate;
   }
 }
+
+// The typed automation binding a track's static control folds into, appending an
+// empty one when the track authored no lane of that kind. The persistent target
+// id is an editing value only -- the playback route is derived from the lane
+// index and the kind when the binding is installed -- so a synthesized lane is
+// indistinguishable from an authored one from there on.
+MixerAutomationBinding& track_lane_binding(TrackId track_id, automation::AutomationTargetKind kind,
+                                           std::vector<MixerAutomationBinding>* bindings) {
+  for (MixerAutomationBinding& binding : *bindings) {
+    if (binding.track_id == track_id && binding.lane.target_kind() == kind) return binding;
+  }
+  MixerAutomationBinding fresh;
+  fresh.track_id = track_id;
+  fresh.lane = automation::AutomationLane(static_cast<uint32_t>(kind), kind);
+  bindings->push_back(std::move(fresh));
+  return bindings->back();
+}
+
+// Folds a static per-track control into the track's typed automation binding,
+// which the install resolves onto the reserved track-lane fader/pan route. An
+// authored lane of the same kind keeps its shape and is offset by the static
+// value: the two controls occupy one lane parameter, so they compose there the
+// same way a static strip control and its lane counterpart compose in cascade.
+// The runtime clamps each resolved value to the lane parameter's own range, so
+// the offset is applied verbatim here.
+void fold_static_control_into_lane(TrackId track_id, automation::AutomationTargetKind kind,
+                                   float value, std::vector<MixerAutomationBinding>* bindings) {
+  MixerAutomationBinding& binding = track_lane_binding(track_id, kind, bindings);
+  std::vector<automation::Breakpoint> points = binding.lane.points();
+  if (points.empty()) {
+    points.push_back(automation::Breakpoint{0.0, value, automation::CurveType::Hold});
+  } else {
+    for (automation::Breakpoint& point : points) point.value += value;
+  }
+  binding.lane.set_points(std::move(points));
+}
+
+// Routes a MIDI track's gain/pan onto its track lane, the per-track stage that
+// sits upstream of the channel strip. An audio track folds these controls into
+// its own clip schedules, but a MIDI clip carries UMP events rather than a
+// sample level, so it has no gain to fold into; the track lane is where the
+// track's instrument audio is already faded and panned by a typed automation
+// lane, and a static control lands there identically.
+void fold_midi_track_controls_into_lane(const Track& track, float pan,
+                                        std::vector<MixerAutomationBinding>* bindings) {
+  if (track.gain > 0.0f && track.gain != 1.0f) {
+    fold_static_control_into_lane(track.id, automation::AutomationTargetKind::kTrackFaderDb,
+                                  linear_to_db(track.gain), bindings);
+  }
+  if (pan != 0.0f) {
+    fold_static_control_into_lane(track.id, automation::AutomationTargetKind::kTrackPan, pan,
+                                  bindings);
+  }
+}
 #endif
 
 // Fills a deterministic transport::TempoMap from the project's plain segment
@@ -485,21 +539,23 @@ CompileResult compile(const Project& project, const MidiContentStore& midi,
   // existing strip. The no-mixing fallback keeps folding gain/pan into the per
   // -clip schedules below, and so does a track bound to a SHARED strip: a strip
   // several tracks route into processes their sum, so it is not a per-track
-  // stage and must not carry any one of their controls.
+  // stage and must not carry any one of their controls. A MIDI track on a shared
+  // strip has no clip gain to fold into and takes its track lane instead.
   const bool any_solo = any_track_soloed(project);
   timeline.mixer.scene = project.scene();
 #if defined(SONARE_WITH_MIXING)
   // How many tracks reference each explicit scene strip. A strip referenced by
   // more than one track is a SHARED strip: it processes the summed contribution
   // of all of them, so folding one track's gain/pan/mute into it would move the
-  // others too. Those tracks fold their controls into their own clips instead.
+  // others too. Those tracks fold their controls into their own clips (audio) or
+  // their track lane (MIDI) instead.
   std::map<std::string, size_t> strip_ref_counts;
   for (const auto& track : project.tracks()) {
     if (!track.channel_strip_ref.empty()) ++strip_ref_counts[track.channel_strip_ref];
   }
   std::set<std::string> shared_strips_reported;
-  // Tracks whose gain/pan fold into their own ClipSchedules rather than into a
-  // channel strip, because the strip they are bound to is shared. Each carries
+  // Audio tracks whose gain/pan fold into their own ClipSchedules rather than
+  // into a channel strip, because the strip they are bound to is shared. Each carries
   // the shared strip's pan law: the fold has to evaluate the track's pan with
   // the law the strip would have used, otherwise the same pan value would give
   // different gains depending on whether the strip happened to be shared.
@@ -532,20 +588,26 @@ CompileResult compile(const Project& project, const MidiContentStore& midi,
     }
     if (strip != nullptr) {
       if (shared_strip) {
-        // Move this track's controls to its own clips: they then apply before
-        // the signal reaches the shared strip, so the strip still processes the
-        // sum of its tracks and the others on it keep their level and image.
+        // Move this track's controls to the per-track stage that precedes the
+        // shared strip, so the strip still processes the sum of its tracks and
+        // the others on it keep their level and image. An audio track has its
+        // own clip schedules; a MIDI track has only its track lane.
         if (needs_mix) {
-          per_clip_control_tracks.emplace(track.id, rt::pan_law_from_index(strip->pan_law));
+          if (track.kind == Track::Kind::kMidi) {
+            fold_midi_track_controls_into_lane(track, track_pan,
+                                               &timeline.mixer.automation_bindings);
+          } else {
+            per_clip_control_tracks.emplace(track.id, rt::pan_law_from_index(strip->pan_law));
+          }
         }
         if (shared_strips_reported.insert(track.channel_strip_ref).second) {
           add_diag(&result, Diagnostic::Code::kSharedChannelStrip, Diagnostic::Severity::kWarning,
                    track.id,
                    "channel strip \"" + track.channel_strip_ref + "\" is bound by " +
                        std::to_string(strip_ref_counts[track.channel_strip_ref]) +
-                       " tracks; each track's gain/pan/mute is applied to its own clips instead of "
-                       "the shared strip, and a MIDI track's continuous gain/pan cannot be applied "
-                       "at all (mute and solo still are)");
+                       " tracks; each track's gain/pan/mute is applied ahead of the shared strip "
+                       "(on the track's own clips for audio, on its track lane for MIDI) instead "
+                       "of on the strip itself");
         }
       } else {
         if (track.gain > 0.0f) strip->fader_db += linear_to_db(track.gain);
@@ -958,13 +1020,14 @@ CompileResult compile(const Project& project, const MidiContentStore& midi,
     // A muted (or non-soloed-while-soloing) track emits no notes. Only the
     // silence gate is honored here: a MIDI clip carries UMP events, not a sample
     // level, so a track's continuous gain/pan cannot be baked into the schedule.
-    // In mixing builds those controls take effect at the track's channel strip
-    // (see the mixer-scene pass above), which applies them uniformly to the
-    // instrument's rendered audio. Without SONARE_WITH_MIXING there is no per
-    // -track output stage, and folding gain into note velocity would be lossy and
-    // wrong (velocity selects sample layers / brightness, not linear level, and
-    // cannot express gain > 1), so non-mixer MIDI honors mute/solo only —
-    // continuous gain and pan require SONARE_WITH_MIXING.
+    // In mixing builds those controls take effect on the instrument's rendered
+    // audio instead — at the track's channel strip, or on its track lane when
+    // that strip is shared (see the mixer-scene pass above). Without
+    // SONARE_WITH_MIXING there is no per-track output stage, and folding gain
+    // into note velocity would be lossy and wrong (velocity selects sample layers
+    // / brightness, not linear level, and cannot express gain > 1), so non-mixer
+    // MIDI honors mute/solo only — continuous gain and pan require
+    // SONARE_WITH_MIXING.
     if (effective_track_gain(project.find_track(clip.track_id), any_solo) <= 0.0f) {
       continue;
     }

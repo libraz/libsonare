@@ -142,7 +142,10 @@ struct GraphRequest {
 /// (gain / pan / mute / solo) must NOT be folded into it: that would move every
 /// other track on the strip too. compile() folds a track's controls into the
 /// strip only when that track is the strip's sole reference, and otherwise folds
-/// them into the track's own ClipSchedules, which run before the summing point.
+/// them into a per-track stage that runs before the summing point -- the track's
+/// own ClipSchedules for an audio track, and the track lane (through a typed
+/// automation binding) for a MIDI track, whose clips carry events rather than a
+/// sample level.
 struct MixerStripBinding {
   TrackId track_id = 0;
   std::string strip_id;  // mixing::api::Strip::id
