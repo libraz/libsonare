@@ -4,6 +4,7 @@
 #include <catch2/catch_test_macros.hpp>
 #include <catch2/matchers/catch_matchers_floating_point.hpp>
 #include <string>
+#include <string_view>
 #include <vector>
 
 #include "arrangement/edit_compiler.h"
@@ -88,8 +89,10 @@ Fixture make_fixture(int shared_pan_law) {
   return f;
 }
 
+// The id is taken by value: a reference parameter bound to a string literal
+// makes GCC read the returned reference as possibly dangling.
 const sonare::mixing::api::Strip& find_strip(const arr::CompiledTimeline& timeline,
-                                             const std::string& id) {
+                                             std::string_view id) {
   for (const sonare::mixing::api::Strip& strip : timeline.mixer.scene.strips) {
     if (strip.id == id) return strip;
   }
