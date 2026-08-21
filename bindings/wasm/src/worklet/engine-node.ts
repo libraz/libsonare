@@ -208,7 +208,7 @@ export class SonareRealtimeEngineNode {
       } else if (isRecord(event.data) && event.data.type === 'syncError') {
         const syncError: SonareEngineSyncErrorMessage = {
           type: 'syncError',
-          syncType: String(event.data.syncType) as SonareEngineSyncErrorMessage['syncType'],
+          syncType: String(event.data.syncType),
           message: String(event.data.message ?? 'AudioWorklet sync failed'),
         };
         for (const listener of this.syncErrorListeners) {

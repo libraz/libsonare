@@ -9,6 +9,7 @@ import {
   isEngineTransportRequestMessage,
 } from './guards';
 import type { SonareRealtimeEngineWorkletProcessorOptions, WorkletPort } from './messages';
+import { isRecord } from './protocol';
 
 export function registerSonareRealtimeEngineWorkletProcessor(
   name = 'sonare-realtime-engine-processor',
@@ -43,15 +44,7 @@ export function registerSonareRealtimeEngineWorkletProcessor(
           }
           return;
         }
-        if (isEngineCommandRecord(event.data)) {
-          this.bridge.receiveCommand(event.data);
-        } else if (isEngineSyncMessage(event.data)) {
-          this.bridge.receiveSync(event.data);
-        } else if (isEngineCaptureRequestMessage(event.data)) {
-          this.bridge.receiveCaptureRequest(event.data);
-        } else if (isEngineTransportRequestMessage(event.data)) {
-          this.bridge.receiveTransportRequest(event.data);
-        }
+        this.routeMessage(event.data);
       };
       if (port?.addEventListener) {
         port.addEventListener('message', onMessage);
@@ -72,18 +65,39 @@ export function registerSonareRealtimeEngineWorkletProcessor(
       return true;
     }
 
+    /**
+     * Single dispatch point for the port, shared with the buffered replay so
+     * the two cannot recognize different message sets.
+     */
+    private routeMessage(data: unknown): void {
+      const bridge = this.bridge;
+      if (!bridge) {
+        return;
+      }
+      if (isEngineCommandRecord(data)) {
+        bridge.receiveCommand(data);
+      } else if (isEngineSyncMessage(data)) {
+        bridge.receiveSync(data);
+      } else if (isEngineCaptureRequestMessage(data)) {
+        bridge.receiveCaptureRequest(data);
+      } else if (isEngineTransportRequestMessage(data)) {
+        bridge.receiveTransportRequest(data);
+      } else if (isRecord(data) && typeof data.type === 'string' && data.type.startsWith('sync')) {
+        // A sync the guard does not accept would otherwise vanish, leaving the
+        // live engine out of step with the offline mirror and nothing to see.
+        // Report it through the same channel as a sync the engine rejected.
+        this.port?.postMessage?.({
+          type: 'syncError',
+          syncType: data.type,
+          message: `Unrecognized worklet sync message: ${data.type}`,
+        });
+      }
+    }
+
     private replayPendingMessages(): void {
       const messages = this.pendingMessages.splice(0);
       for (const data of messages) {
-        if (isEngineCommandRecord(data)) {
-          this.bridge?.receiveCommand(data);
-        } else if (isEngineSyncMessage(data)) {
-          this.bridge?.receiveSync(data);
-        } else if (isEngineCaptureRequestMessage(data)) {
-          this.bridge?.receiveCaptureRequest(data);
-        } else if (isEngineTransportRequestMessage(data)) {
-          this.bridge?.receiveTransportRequest(data);
-        }
+        this.routeMessage(data);
       }
     }
 

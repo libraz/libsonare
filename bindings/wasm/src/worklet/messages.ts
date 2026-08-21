@@ -193,7 +193,13 @@ export interface SonareWorkletExternalMidiMessage {
 /** A control-plane sync message that the worklet rejected without crashing. */
 export interface SonareEngineSyncErrorMessage {
   type: 'syncError';
-  syncType: SonareEngineSyncMessage['type'];
+  /**
+   * Discriminant of the rejected sync. Usually a known member, but a
+   * `sync`-prefixed type this build does not recognize is reported here too
+   * rather than dropped, so the set is open. `Record<never, never>` keeps the
+   * known members as editor completions instead of collapsing to `string`.
+   */
+  syncType: SonareEngineSyncMessage['type'] | (string & Record<never, never>);
   message: string;
 }
 

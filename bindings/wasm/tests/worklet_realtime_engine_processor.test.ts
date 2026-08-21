@@ -1,5 +1,9 @@
 import { vi } from 'vitest';
 import type { RealtimeEngine } from '../dist/index.js';
+// The accepted-type table itself, so the coverage below is generated from the
+// same source of truth as the guard rather than restated.
+import { ENGINE_SYNC_MESSAGE_TYPES } from '../src/worklet/guards';
+import type { SonareEngineSyncMessage } from '../src/worklet/messages';
 import {
   createSonareClipPageRequestRingBuffer,
   createSonareEngineCommandRingBuffer,
@@ -1332,13 +1336,236 @@ describe('SonareRealtimeEngineWorkletProcessor', () => {
       }
     });
 
+    // One sample per SonareEngineSyncMessage member, keyed by discriminant. The
+    // Record annotation makes the union the source of truth for the coverage
+    // below as well: a member without a sample here is a compile error, so this
+    // table cannot quietly fall behind the one the guard is derived from.
+    const syncMessageSamples: Record<SonareEngineSyncMessage['type'], SonareEngineSyncMessage> = {
+      destroy: { type: 'destroy' },
+      syncAutomation: { type: 'syncAutomation', paramId: 7, points: [{ ppq: 0, value: 0.5 }] },
+      syncBuiltinInstrument: {
+        type: 'syncBuiltinInstrument',
+        destinationId: 4,
+        config: { gain: 0.5 },
+      },
+      syncBusStripInsertParamByName: {
+        type: 'syncBusStripInsertParamByName',
+        busId: 200,
+        insertIndex: 0,
+        paramName: 'band0.gainDb',
+        value: 3,
+      },
+      syncCapture: {
+        type: 'syncCapture',
+        bufferFrames: 128,
+        channels: 2,
+        source: 'input',
+        recordOffsetSamples: -12,
+        inputMonitor: { enabled: true, gain: 0.5 },
+      },
+      syncClearMidiFx: { type: 'syncClearMidiFx', destinationId: 4 },
+      syncClearMidiInputSource: { type: 'syncClearMidiInputSource' },
+      syncClipPage: {
+        type: 'syncClipPage',
+        clipId: 900,
+        pageIndex: 0,
+        channels: [new Float32Array(256)],
+      },
+      syncClipPageClear: { type: 'syncClipPageClear', clipId: 900, pageIndex: 0 },
+      syncClipPageCommit: { type: 'syncClipPageCommit', clipId: 900 },
+      syncClipPageDestroy: { type: 'syncClipPageDestroy', clipId: 900 },
+      syncClipPagePrefetchFrames: { type: 'syncClipPagePrefetchFrames', frames: 4096 },
+      syncClipPageProvider: {
+        type: 'syncClipPageProvider',
+        clipId: 900,
+        numChannels: 1,
+        numSamples: 1024,
+        pageFrames: 256,
+      },
+      syncClips: { type: 'syncClips', clips: [] },
+      syncClipsDelta: { type: 'syncClipsDelta', upserts: [], removeIds: [] },
+      syncExternalMidiClock: { type: 'syncExternalMidiClock', enabled: true },
+      syncLoadSoundFont: { type: 'syncLoadSoundFont', data: new Uint8Array(0) },
+      syncMarkers: { type: 'syncMarkers', markers: [] },
+      syncMasterStripEqBand: {
+        type: 'syncMasterStripEqBand',
+        bandIndex: 0,
+        bandJson: '{"type":"Peak","frequencyHz":1000,"gainDb":3}',
+      },
+      syncMasterStripInsertBypassed: {
+        type: 'syncMasterStripInsertBypassed',
+        insertIndex: 0,
+        bypassed: true,
+        resetOnBypass: false,
+      },
+      syncMasterStripInsertParamByName: {
+        type: 'syncMasterStripInsertParamByName',
+        insertIndex: 0,
+        paramName: 'band0.gainDb',
+        value: 1,
+      },
+      syncMetronome: {
+        type: 'syncMetronome',
+        config: {
+          enabled: true,
+          beatGain: 0.35,
+          accentGain: 0.7,
+          clickSamples: 0,
+          clickSeconds: 0,
+        },
+      },
+      syncMidiCc: {
+        type: 'syncMidiCc',
+        destinationId: 4,
+        group: 0,
+        channel: 0,
+        controller: 7,
+        value: 100,
+        renderFrame: 0,
+      },
+      syncMidiCcBinding: {
+        type: 'syncMidiCcBinding',
+        channel: 0,
+        controller: 7,
+        paramId: 7,
+        minValue: 0,
+        maxValue: 1,
+      },
+      syncMidiClips: { type: 'syncMidiClips', clips: [] },
+      syncMidiDestinationExternal: {
+        type: 'syncMidiDestinationExternal',
+        destinationId: 7,
+        external: true,
+      },
+      syncMidiFx: { type: 'syncMidiFx', destinationId: 4, configJson: '{}' },
+      syncMidiInputCc: {
+        type: 'syncMidiInputCc',
+        group: 0,
+        channel: 0,
+        data0: 7,
+        data1: 100,
+        portTimeSamples: 0,
+      },
+      syncMidiInputNoteOff: {
+        type: 'syncMidiInputNoteOff',
+        group: 0,
+        channel: 0,
+        data0: 60,
+        data1: 0,
+        portTimeSamples: 0,
+      },
+      syncMidiInputNoteOn: {
+        type: 'syncMidiInputNoteOn',
+        group: 0,
+        channel: 0,
+        data0: 60,
+        data1: 100,
+        portTimeSamples: 0,
+      },
+      syncMidiInputSource: { type: 'syncMidiInputSource', destinationId: 4 },
+      syncMidiNoteOff: {
+        type: 'syncMidiNoteOff',
+        destinationId: 4,
+        group: 0,
+        channel: 0,
+        note: 60,
+        velocity: 0,
+        renderFrame: 0,
+      },
+      syncMidiNoteOn: {
+        type: 'syncMidiNoteOn',
+        destinationId: 4,
+        group: 0,
+        channel: 0,
+        note: 60,
+        velocity: 100,
+        renderFrame: 0,
+      },
+      syncMidiPanic: { type: 'syncMidiPanic', renderFrame: 0 },
+      syncMidiSysex: {
+        type: 'syncMidiSysex',
+        destinationId: 4,
+        data: new Uint8Array([0xf0, 0x7e, 0x7f, 0x09, 0x01, 0xf7]),
+        renderFrame: 0,
+      },
+      syncMidiUmp: {
+        type: 'syncMidiUmp',
+        destinationId: 4,
+        word0: midi1Word(0x9, 0, 60, 100),
+        renderFrame: 0,
+      },
+      syncMixer: {
+        type: 'syncMixer',
+        lanes: [{ trackId: 10, sends: [{ busId: 200, levelDb: 0, enabled: true }] }],
+        buses: [{ busId: 200, gainDb: 0 }],
+      },
+      syncParameters: {
+        type: 'syncParameters',
+        parameters: [
+          {
+            id: 7,
+            name: 'gain',
+            unit: 'dB',
+            minValue: 0,
+            maxValue: 1,
+            defaultValue: 0,
+            rtSafe: true,
+            defaultCurve: 2,
+          },
+        ],
+      },
+      syncSf2Instrument: { type: 'syncSf2Instrument', destinationId: 4, config: { gain: 0.5 } },
+      syncSynthInstrument: { type: 'syncSynthInstrument', destinationId: 4, patch: 'saw-lead' },
+      syncTempo: {
+        type: 'syncTempo',
+        bpm: 120,
+        timeSignature: { numerator: 4, denominator: 4 },
+      },
+      syncTrackStripChannelDelaySamples: {
+        type: 'syncTrackStripChannelDelaySamples',
+        trackId: 10,
+        delaySamples: 4,
+      },
+      syncTrackStripDualPan: {
+        type: 'syncTrackStripDualPan',
+        trackId: 10,
+        leftPan: -1,
+        rightPan: 1,
+      },
+      syncTrackStripEqBand: {
+        type: 'syncTrackStripEqBand',
+        trackId: 10,
+        bandIndex: 0,
+        bandJson: '{"type":"Peak","frequencyHz":1000,"gainDb":3}',
+      },
+      syncTrackStripInsertBypassed: {
+        type: 'syncTrackStripInsertBypassed',
+        trackId: 10,
+        insertIndex: 0,
+        bypassed: true,
+        resetOnBypass: false,
+      },
+      syncTrackStripInsertParamByName: {
+        type: 'syncTrackStripInsertParamByName',
+        trackId: 10,
+        insertIndex: 0,
+        paramName: 'band0.gainDb',
+        value: 1,
+      },
+      syncTrackStripPan: { type: 'syncTrackStripPan', trackId: 10, pan: 0 },
+      syncTrackStripPanLaw: { type: 'syncTrackStripPanLaw', trackId: 10, panLaw: 0 },
+      syncTrackStripPanMode: { type: 'syncTrackStripPanMode', trackId: 10, panMode: 0 },
+    };
+
     it('routes every producer sync message through the guarded port handler', async () => {
       // The producers post these over node.port; the worklet's onMessage handler
       // gates them with isEngineSyncMessage before reaching receiveSync. A message
       // type missing from the guard is silently dropped, so the live engine never
-      // sees it even though the offline mirror does. Drive each one through the
-      // real registered-processor onMessage path (not receiveSync directly) so a
-      // guard omission fails here instead of shipping a dead feature.
+      // sees it even though the offline mirror does. Drive every union member
+      // through the real registered-processor onMessage path (not receiveSync
+      // directly) so a guard omission fails here instead of shipping a dead
+      // feature, and take the case list from the guard's own table so the two
+      // cannot disagree.
       const previousProcessor = (
         globalThis as typeof globalThis & { AudioWorkletProcessor?: unknown }
       ).AudioWorkletProcessor;
@@ -1357,6 +1584,15 @@ describe('SonareRealtimeEngineWorkletProcessor', () => {
       const receiveSyncSpy = vi.spyOn(
         SonareRealtimeEngineWorkletProcessor.prototype,
         'receiveSync',
+      );
+      // applySync is the handler that actually touches the live engine;
+      // receiveSync only wraps it in the syncError reporter. Assert on the inner
+      // one so "reached the engine" is what the case proves.
+      const applySyncSpy = vi.spyOn(
+        SonareRealtimeEngineWorkletProcessor.prototype as unknown as {
+          applySync: (message: SonareEngineSyncMessage) => void;
+        },
+        'applySync',
       );
       try {
         Object.assign(globalThis, {
@@ -1394,44 +1630,93 @@ describe('SonareRealtimeEngineWorkletProcessor', () => {
           }
           await new Promise((resolve) => setTimeout(resolve, 5));
         }
-        // Configure a bus with an insert so the bus-insert-param sync resolves a
-        // real target instead of throwing; this also drives syncMixer (already in
-        // the guard) through the same guarded path.
+        // Give the track, bus and master strips a real insert so the strip
+        // syncs resolve a live target instead of throwing; this also drives
+        // syncMixer through the same guarded path.
+        const insertParams =
+          '{\\"band0.type\\":1,\\"band0.frequencyHz\\":1000,\\"band0.gainDb\\":0,\\"band0.enabled\\":1}';
+        const insertJson = `{"slot":"pre","processor":"eq.parametric","params":"${insertParams}"}`;
         port.onmessage?.({
           data: {
             type: 'syncMixer',
             buses: [{ busId: 200, gainDb: 0 }],
             lanes: [{ trackId: 10, sends: [{ busId: 200, levelDb: 0, enabled: true }] }],
+            trackStrips: [
+              {
+                trackId: 10,
+                sceneJson: `{"version":1,"strips":[{"id":"track-10","inserts":[${insertJson}]}],"buses":[],"connections":[]}`,
+              },
+            ],
             busStrips: [
               {
                 busId: 200,
-                sceneJson:
-                  '{"version":1,"strips":[],"buses":[{"id":"200","inserts":[{"slot":"pre","processor":"eq.parametric","params":"{\\"band0.type\\":1,\\"band0.frequencyHz\\":1000,\\"band0.gainDb\\":0,\\"band0.enabled\\":1}"}]}],"connections":[]}',
+                sceneJson: `{"version":1,"strips":[],"buses":[{"id":"200","inserts":[${insertJson}]}],"connections":[]}`,
               },
             ],
+            masterStripJson: `{"version":1,"strips":[{"id":"master","inserts":[${insertJson}]}],"buses":[],"connections":[]}`,
           },
         });
         receiveSyncSpy.mockClear();
-        const syncMessages = [
-          {
-            type: 'syncBusStripInsertParamByName',
-            busId: 200,
-            insertIndex: 0,
-            paramName: 'band0.gainDb',
-            value: 3,
-          },
-          { type: 'syncMidiDestinationExternal', destinationId: 7, external: true },
-          { type: 'syncExternalMidiClock', enabled: true },
-        ];
-        for (const message of syncMessages) {
-          port.onmessage?.({ data: message });
+        applySyncSpy.mockClear();
+        const syncMessageTypes = Object.keys(syncMessageSamples) as Array<
+          SonareEngineSyncMessage['type']
+        >;
+        // Both tables are exhaustive over the union by their own annotation, so
+        // they must hold the same keys. Cross-checking them makes a key deleted
+        // from either one red here too, not only at compile time.
+        expect([...syncMessageTypes].sort()).toEqual(Object.keys(ENGINE_SYNC_MESSAGE_TYPES).sort());
+        // Every sample must key itself, or the table could cover a member by
+        // name while driving a different message.
+        for (const type of syncMessageTypes) {
+          expect(syncMessageSamples[type].type).toBe(type);
         }
+        // Ordering the engine imposes on the fixture: a MIDI input source has to
+        // be selected before an input event is accepted, and both clearing it and
+        // closing the bridge have to come after everything depending on them.
+        // 'destroy' last in particular, since receiveSync returns early once
+        // closed and nothing after it would reach applySync.
+        const first: Array<SonareEngineSyncMessage['type']> = ['syncMidiInputSource'];
+        const last: Array<SonareEngineSyncMessage['type']> = [
+          'syncClearMidiInputSource',
+          'destroy',
+        ];
+        const drivenTypes: Array<SonareEngineSyncMessage['type']> = [
+          ...first,
+          ...syncMessageTypes.filter((type) => !first.includes(type) && !last.includes(type)),
+          ...last,
+        ];
+        for (const type of drivenTypes.slice(0, -1)) {
+          port.onmessage?.({ data: syncMessageSamples[type] });
+        }
+        // Reaching applySync is the guard's contract, but a handler that then
+        // rejects its own producer's payload is the same dead feature one layer
+        // down. Only a SoundFont load is expected to fail here: unlike a strip or
+        // a MIDI destination, no valid SF2 can be fabricated in the fixture.
+        expect(
+          port.posted
+            .filter((message) => (message as { type?: string }).type === 'syncError')
+            .map((message) => (message as { syncType: string }).syncType),
+        ).toEqual(['syncLoadSoundFont']);
         // A string-typed message the guard does not know must stay dropped.
         port.onmessage?.({ data: { type: 'totallyUnknownSync' } });
+        // A sync-prefixed one the guard does not know must not vanish: it is a
+        // producer/worklet version skew, and the node surfaces it via onSyncError.
+        port.posted.length = 0;
+        port.onmessage?.({ data: { type: 'syncSomethingThisBuildDoesNotKnow' } });
+        expect(port.posted).toEqual([
+          {
+            type: 'syncError',
+            syncType: 'syncSomethingThisBuildDoesNotKnow',
+            message: 'Unrecognized worklet sync message: syncSomethingThisBuildDoesNotKnow',
+          },
+        ]);
+        port.onmessage?.({ data: syncMessageSamples.destroy });
+        expect(applySyncSpy.mock.calls.map((call) => call[0].type)).toEqual(drivenTypes);
         expect(receiveSyncSpy.mock.calls.map((call) => (call[0] as { type: string }).type)).toEqual(
-          ['syncBusStripInsertParamByName', 'syncMidiDestinationExternal', 'syncExternalMidiClock'],
+          drivenTypes,
         );
       } finally {
+        applySyncSpy.mockRestore();
         receiveSyncSpy.mockRestore();
         Object.assign(globalThis, {
           AudioWorkletProcessor: previousProcessor,

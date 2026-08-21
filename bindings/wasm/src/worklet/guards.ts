@@ -32,52 +32,74 @@ export function isEngineCommandRecord(value: unknown): value is SonareEngineComm
   return isRecord(value) && typeof value.type === 'number';
 }
 
+/**
+ * Every discriminant the worklet accepts on the control plane, derived from the
+ * `SonareEngineSyncMessage` union rather than restated as literals.
+ *
+ * The `Record<SonareEngineSyncMessage['type'], true>` annotation rejects a
+ * missing key and the object literal's excess-property check rejects a stale
+ * one, so a union member that never reaches this table is a compile error
+ * instead of a message the port drops in silence.
+ */
+export const ENGINE_SYNC_MESSAGE_TYPES: Record<SonareEngineSyncMessage['type'], true> = {
+  destroy: true,
+  syncAutomation: true,
+  syncBuiltinInstrument: true,
+  syncBusStripInsertParamByName: true,
+  syncCapture: true,
+  syncClearMidiFx: true,
+  syncClearMidiInputSource: true,
+  syncClipPage: true,
+  syncClipPageClear: true,
+  syncClipPageCommit: true,
+  syncClipPageDestroy: true,
+  syncClipPagePrefetchFrames: true,
+  syncClipPageProvider: true,
+  syncClips: true,
+  syncClipsDelta: true,
+  syncExternalMidiClock: true,
+  syncLoadSoundFont: true,
+  syncMarkers: true,
+  syncMasterStripEqBand: true,
+  syncMasterStripInsertBypassed: true,
+  syncMasterStripInsertParamByName: true,
+  syncMetronome: true,
+  syncMidiCc: true,
+  syncMidiCcBinding: true,
+  syncMidiClips: true,
+  syncMidiDestinationExternal: true,
+  syncMidiFx: true,
+  syncMidiInputCc: true,
+  syncMidiInputNoteOff: true,
+  syncMidiInputNoteOn: true,
+  syncMidiInputSource: true,
+  syncMidiNoteOff: true,
+  syncMidiNoteOn: true,
+  syncMidiPanic: true,
+  syncMidiSysex: true,
+  syncMidiUmp: true,
+  syncMixer: true,
+  syncParameters: true,
+  syncSf2Instrument: true,
+  syncSynthInstrument: true,
+  syncTempo: true,
+  syncTrackStripChannelDelaySamples: true,
+  syncTrackStripDualPan: true,
+  syncTrackStripEqBand: true,
+  syncTrackStripInsertBypassed: true,
+  syncTrackStripInsertParamByName: true,
+  syncTrackStripPan: true,
+  syncTrackStripPanLaw: true,
+  syncTrackStripPanMode: true,
+};
+
+// A Set rather than a property lookup on the table: an inherited member name
+// ('constructor', 'toString') must not read as an accepted discriminant.
+const engineSyncMessageTypes: ReadonlySet<string> = new Set(Object.keys(ENGINE_SYNC_MESSAGE_TYPES));
+
 export function isEngineSyncMessage(value: unknown): value is SonareEngineSyncMessage {
-  if (!isRecord(value) || typeof value.type !== 'string') {
-    return false;
-  }
   return (
-    value.type === 'syncClips' ||
-    value.type === 'syncClipsDelta' ||
-    value.type === 'syncClipPageProvider' ||
-    value.type === 'syncClipPage' ||
-    value.type === 'syncClipPageClear' ||
-    value.type === 'syncClipPageCommit' ||
-    value.type === 'syncClipPageDestroy' ||
-    value.type === 'syncMidiClips' ||
-    value.type === 'syncMarkers' ||
-    value.type === 'syncMetronome' ||
-    value.type === 'syncAutomation' ||
-    value.type === 'syncTempo' ||
-    value.type === 'syncMixer' ||
-    value.type === 'syncCapture' ||
-    value.type === 'syncTrackStripEqBand' ||
-    value.type === 'syncMasterStripEqBand' ||
-    value.type === 'syncTrackStripInsertBypassed' ||
-    value.type === 'syncMasterStripInsertBypassed' ||
-    value.type === 'syncTrackStripInsertParamByName' ||
-    value.type === 'syncMasterStripInsertParamByName' ||
-    value.type === 'syncBusStripInsertParamByName' ||
-    value.type === 'syncTrackStripPan' ||
-    value.type === 'syncTrackStripPanLaw' ||
-    value.type === 'syncTrackStripPanMode' ||
-    value.type === 'syncTrackStripDualPan' ||
-    value.type === 'syncTrackStripChannelDelaySamples' ||
-    value.type === 'syncBuiltinInstrument' ||
-    value.type === 'syncSynthInstrument' ||
-    value.type === 'syncSf2Instrument' ||
-    value.type === 'syncLoadSoundFont' ||
-    value.type === 'syncMidiFx' ||
-    value.type === 'syncClearMidiFx' ||
-    value.type === 'syncMidiNoteOn' ||
-    value.type === 'syncMidiNoteOff' ||
-    value.type === 'syncMidiCc' ||
-    value.type === 'syncMidiUmp' ||
-    value.type === 'syncMidiSysex' ||
-    value.type === 'syncMidiPanic' ||
-    value.type === 'syncMidiDestinationExternal' ||
-    value.type === 'syncExternalMidiClock' ||
-    value.type === 'destroy'
+    isRecord(value) && typeof value.type === 'string' && engineSyncMessageTypes.has(value.type)
   );
 }
 
