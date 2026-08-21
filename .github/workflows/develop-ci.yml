@@ -76,6 +76,28 @@ jobs:
         run: |
           python3 -m pip install --disable-pip-version-check ruff==0.15.14
           python3 -m ruff check bindings/python/src bindings/python/tests
+      - name: Type-check the Python binding
+        # main-ci type-checks the stubs, but only on main, so type errors used
+        # to accumulate on develop and surface all at once at release time.
+        # Source-only like the ruff step: mypy_path resolves libsonare from
+        # src/, so the package itself is neither installed nor built. numpy is
+        # needed even though the config skips following it -- the override only
+        # applies once the module resolves, and without it every importing
+        # module reports import-not-found. Both are pinned for the reason ruff
+        # is, and mypy in particular reports new errors on unchanged code with
+        # every release.
+        #
+        # The second invocation is the non-vacuity guard: a file that must not
+        # type-check, so a misconfiguration that silently checks nothing fails
+        # here rather than passing everything.
+        working-directory: bindings/python
+        run: |
+          python3 -m pip install --disable-pip-version-check mypy==2.1.0 numpy==2.4.6
+          python3 -m mypy --strict src/libsonare ../../tests/typing/python_smoke.py
+          if python3 -m mypy --strict ../../tests/typing/python_catalog_invalid.py; then
+            echo "python_catalog_invalid.py unexpectedly passed mypy" >&2
+            exit 1
+          fi
       - name: Drift gates
         # The mechanical cross-surface gates. All are stdlib-only and read-only.
         # `gen_abi_layout.py --check` is the only one needing a compiler, and it
