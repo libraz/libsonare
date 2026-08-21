@@ -224,7 +224,7 @@
           "min": null,
           "name": "autoMakeup",
           "rtSafe": true,
-          "type": "number",
+          "type": "boolean",
           "unit": null
         },
         {
@@ -8384,7 +8384,7 @@
       ],
       "realtimeCost": "low",
       "realtimeInsertable": true,
-      "stereoOnly": true,
+      "stereoOnly": false,
       "tailSamples": 0
     },
     {
@@ -11037,7 +11037,7 @@
       ],
       "realtimeCost": "low",
       "realtimeInsertable": true,
-      "stereoOnly": true,
+      "stereoOnly": false,
       "tailSamples": 0
     },
     {
@@ -11200,7 +11200,7 @@
       ],
       "realtimeCost": "low",
       "realtimeInsertable": true,
-      "stereoOnly": true,
+      "stereoOnly": false,
       "tailSamples": 0
     },
     {
@@ -11346,7 +11346,7 @@
       ],
       "realtimeCost": "low",
       "realtimeInsertable": true,
-      "stereoOnly": true,
+      "stereoOnly": false,
       "tailSamples": 0
     },
     {
@@ -11449,7 +11449,7 @@
       ],
       "realtimeCost": "low",
       "realtimeInsertable": true,
-      "stereoOnly": true,
+      "stereoOnly": false,
       "tailSamples": 0
     },
     {
