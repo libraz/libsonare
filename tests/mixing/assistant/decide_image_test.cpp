@@ -222,6 +222,40 @@ TEST_CASE("two tracks of one class are spread symmetrically", "[mixing][assistan
   CHECK_THAT(first, WithinAbs(-second, kPositionTolerance));
 }
 
+TEST_CASE("a paired spreadable class is placed genuinely wide", "[mixing][assistant]") {
+  // A survey of professional practice finds wide placements accounting for about
+  // a third of all panning decisions, so the main spreadable parts have to land
+  // out near the edge rather than hedged towards the centre. A floor rather than
+  // an equality: the extents are convention and may be retuned, but not back to
+  // a timid spread.
+  constexpr float kWideFloor = 0.75f;
+
+  const std::vector<TrackProfile> profiles = {
+      make_profile("gtrA", SourceClass::Guitar), make_profile("gtrB", SourceClass::Guitar),
+      make_profile("fxA", SourceClass::Fx),      make_profile("fxB", SourceClass::Fx),
+      make_profile("keysA", SourceClass::Keys),  make_profile("keysB", SourceClass::Keys),
+  };
+  const std::vector<SceneDelta> deltas =
+      decide_image(profiles, make_mix(profiles.size()), MixAssistantConfig{});
+
+  const float guitar = std::fabs(pan_of(deltas, "gtrA"));
+  CHECK(guitar >= kWideFloor);
+  CHECK(std::fabs(pan_of(deltas, "gtrB")) >= kWideFloor);
+  // A colour part sits at least as far out as a main spreadable one...
+  CHECK(std::fabs(pan_of(deltas, "fxA")) >= guitar);
+  // ...while a support part stays inside them, because the finding is that wide
+  // placements are common, not that every part belongs wide.
+  CHECK(std::fabs(pan_of(deltas, "keysA")) < guitar);
+
+  // Nothing reaches a full hard pan, which would leave the part absent from one
+  // speaker altogether.
+  for (const SceneDelta& delta : deltas) {
+    REQUIRE(delta.pan);
+    INFO("strip " << delta.strip_id);
+    CHECK(std::fabs(*delta.pan) < 1.0f);
+  }
+}
+
 TEST_CASE("a third track of one class is placed nearer the centre", "[mixing][assistant]") {
   const std::vector<TrackProfile> profiles = {
       make_profile("gtrA", SourceClass::Guitar),

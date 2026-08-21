@@ -9,6 +9,7 @@
 #include <cctype>
 #include <cmath>
 #include <cstddef>
+#include <limits>
 #include <string>
 #include <vector>
 
@@ -132,6 +133,36 @@ TEST_CASE("balance places forward parts above bed parts", "[mixing][assistant]")
     if (delta.strip_id != "vocal") CHECK(*delta.fader_db < fader_of(deltas, "vocal"));
     if (delta.strip_id != "fx") CHECK(*delta.fader_db > fader_of(deltas, "fx"));
   }
+}
+
+TEST_CASE("the lead vocal clears the loudest other element by a professional margin",
+          "[mixing][assistant]") {
+  // A survey of professional practice measures the lead vocal sitting 3-8 LU
+  // above the other elements. The table's rows may be retuned freely, so what is
+  // asserted is the gap landing inside that band rather than the vocal row
+  // holding a particular value.
+  constexpr float kMinVocalGapDb = 3.0f;
+  constexpr float kMaxVocalGapDb = 8.0f;
+
+  const std::vector<TrackProfile> profiles = profiles_for_every_class();
+  const std::vector<SceneDelta> deltas = decide_balance(profiles, MixAssistantConfig{});
+  REQUIRE(deltas.size() == profiles.size());
+
+  float loudest_other = -std::numeric_limits<float>::infinity();
+  std::string loudest_id;
+  for (const SceneDelta& delta : deltas) {
+    if (delta.strip_id == "vocal") continue;
+    REQUIRE(delta.fader_db.has_value());
+    if (*delta.fader_db <= loudest_other) continue;
+    loudest_other = *delta.fader_db;
+    loudest_id = delta.strip_id;
+  }
+
+  const float gap = fader_of(deltas, "vocal") - loudest_other;
+  INFO("loudest element under the vocal is " << loudest_id << " at " << loudest_other << " dB, gap "
+                                             << gap << " dB");
+  CHECK(gap >= kMinVocalGapDb);
+  CHECK(gap <= kMaxVocalGapDb);
 }
 
 TEST_CASE("a balance reason names the class and the amount", "[mixing][assistant]") {

@@ -272,10 +272,19 @@ struct EffectSendRow {
 // These send levels are studio convention, not physics.
 // ---------------------------------------------------------------------------
 // Every value is a customary starting amount from recording practice, in dB
-// below the strip's post-fader signal, and none of them is derived or measured.
-// They are deliberately conservative — a place to start from, not a finished
-// effect balance — so nothing downstream may depend on an exact number; only
-// the ordering between classes carries meaning.
+// below the strip's post-fader signal. They are deliberately conservative — a
+// place to start from, not a finished effect balance — so nothing downstream may
+// depend on an exact number; only the ordering between classes carries meaning.
+//
+// The reverb column is the one part of that which is pinned rather than chosen.
+// A survey of professional practice measures the reverb return sitting about
+// 9 LU below the direct sound (Pestana and Reiss, "Intelligent Audio Production
+// Strategies Informed by Best Practices", AES 53rd International Conference on
+// Semantic Audio, 2014). A send amount is not that relative loudness, so the
+// whole column is offset together until a rendered mix measures the return
+// there, and the spacing between its rows — the part that carries meaning — is
+// left alone. Moving one row changes the ordering; moving the column moves the
+// return level.
 //
 // Two rules run through the whole table. Low-frequency parts are not sent: a
 // reverb tail under 150 Hz turns the bottom of the mix to mud, which is why the
@@ -291,34 +300,34 @@ constexpr std::array<EffectSendRow, static_cast<std::size_t>(kSourceClassCount)>
         {SourceClass::Kick, kNoSendDb, kNoSendDb},
         // The classic reverb feed: the backbeat is where the room is heard, and
         // a short slap off the snare is the oldest trick in the delay's book.
-        {SourceClass::Snare, -10.0f, -22.0f},
+        {SourceClass::Snare, -12.5f, -22.0f},
         {SourceClass::HiHat, kNoSendDb, kNoSendDb},
         // Fills read as gestures, so the tail is what makes them land, but a tom
         // is still a low drum and gets less than the snare.
-        {SourceClass::Tom, -12.0f, kNoSendDb},
+        {SourceClass::Tom, -14.5f, kNoSendDb},
         {SourceClass::Cymbal, kNoSendDb, kNoSendDb},
         {SourceClass::Bass, kNoSendDb, kNoSendDb},
         // A rhythm bed wants depth rather than a tail it would smear itself
         // with, so it takes the smallest reverb send of the tonal parts.
-        {SourceClass::Guitar, -18.0f, -20.0f},
+        {SourceClass::Guitar, -20.5f, -20.0f},
         // Comping fills the space between the other parts already; more tail
         // only makes the mids denser.
-        {SourceClass::Keys, -16.0f, kNoSendDb},
+        {SourceClass::Keys, -18.5f, kNoSendDb},
         // Sustained and already spacious, but a string bed with no tail sits in
         // front of the mix instead of behind it.
-        {SourceClass::Strings, -14.0f, kNoSendDb},
+        {SourceClass::Strings, -16.5f, kNoSendDb},
         // A focus part just behind the voice, treated the same way and a little
         // less.
-        {SourceClass::Lead, -11.0f, -14.0f},
+        {SourceClass::Lead, -13.5f, -14.0f},
         // The most treated element on a popular record, and the one the effect
         // buses exist for in the first place.
-        {SourceClass::Vocal, -8.0f, -14.0f},
+        {SourceClass::Vocal, -10.5f, -14.0f},
         // Pushed further back than the lead voice, which is what the stack is
         // for, so it takes more tail and less repeat.
-        {SourceClass::Backing, -12.0f, -20.0f},
+        {SourceClass::Backing, -14.5f, -20.0f},
         // A colour layer over the kit: enough tail to sit in the same room, not
         // enough to blur the hits.
-        {SourceClass::Percussion, -18.0f, kNoSendDb},
+        {SourceClass::Percussion, -20.5f, kNoSendDb},
         // An effects track normally arrives with its own treatment printed, so
         // adding more would double it.
         {SourceClass::Fx, kNoSendDb, kNoSendDb},
@@ -360,9 +369,14 @@ constexpr const char* kDelayLabel = "stereo delay";
 // next bar at a moderate tempo. The general-purpose plate setting.
 constexpr float kReverbDecaySec = 1.6f;
 // Pre-delay keeps the onset of a part clear of its own tail, which is what lets
-// a vocal stay intelligible with a reverb on it. Roughly the shortest gap that
-// separates the two audibly.
-constexpr float kReverbPreDelayMs = 20.0f;
+// a vocal stay intelligible with a reverb on it. Subjective testing across
+// professional practice reports a strong benefit in exceeding 30-40 ms
+// (Pestana and Reiss, "Intelligent Audio Production Strategies Informed by Best
+// Practices", AES 53rd International Conference on Semantic Audio, 2014), so the
+// general-purpose setting clears the top of that band. It stops there because a
+// gap much beyond this detaches the tail from the source and is heard as a
+// separate event rather than as the room the part is sitting in.
+constexpr float kReverbPreDelayMs = 45.0f;
 
 // Milliseconds in a minute: the conversion from a tempo in BPM to a beat.
 constexpr float kMillisecondsPerMinute = 60000.0f;

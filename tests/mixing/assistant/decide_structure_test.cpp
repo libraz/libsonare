@@ -15,8 +15,11 @@
 #include <vector>
 
 #include "mastering/api/insert_factory.h"
+#include "mastering/common/loudness_measure.h"
+#include "mix_eval.h"
 #include "mixing/api/scene.h"
 #include "mixing/assistant/scene_delta.h"
+#include "mixing/assistant/suggester.h"
 #include "mixing/assistant/track_profile.h"
 #include "util/json.h"
 
@@ -35,6 +38,7 @@ using sonare::mixing::assistant::MixAssistantConfig;
 using sonare::mixing::assistant::MixProfile;
 using sonare::mixing::assistant::SceneDelta;
 using sonare::mixing::assistant::SourceClass;
+using sonare::mixing::assistant::suggest_scene;
 using sonare::mixing::assistant::TrackProfile;
 
 namespace {
@@ -155,6 +159,53 @@ void require_every_strip_reaches_master(const Scene& scene) {
     INFO("strip " << strip.id);
     REQUIRE(reaches(scene, strip.id, master));
   }
+}
+
+// Id of the return strip carrying the plate reverb, or empty when the scene has
+// no reverb bus at all.
+std::string reverb_return_id(const Scene& scene) {
+  for (const auto& strip : scene.strips) {
+    for (const auto& insert : strip.inserts) {
+      if (insert.processor_name == std::string("effects.reverb.plate")) return strip.id;
+    }
+  }
+  return {};
+}
+
+// Id of the aux bus that feeds @p return_id. Read from the graph rather than
+// assumed, because a track of the same name pushes the generated id to a suffix.
+std::string bus_feeding(const Scene& scene, const std::string& return_id) {
+  for (const auto& connection : scene.connections) {
+    if (connection.destination != return_id) continue;
+    if (has_bus(scene, connection.source)) return connection.source;
+  }
+  return {};
+}
+
+// The same scene with nothing feeding the reverb, so its return contributes
+// silence. Every other path — the strips' own inserts, the delay return, the
+// master trim — is left exactly as it was, and the whole signal path outside
+// the reverb return is linear, so subtracting this render from the untouched
+// one leaves the return's contribution and nothing else.
+Scene without_reverb_sends(const Scene& scene, const std::string& reverb_bus_id) {
+  Scene dry = scene;
+  for (auto& strip : dry.strips) {
+    strip.sends.erase(std::remove_if(strip.sends.begin(), strip.sends.end(),
+                                     [&](const sonare::mixing::api::Send& send) {
+                                       return send.destination_bus_id == reverb_bus_id;
+                                     }),
+                      strip.sends.end());
+  }
+  return dry;
+}
+
+std::vector<float> interleave(const std::vector<float>& left, const std::vector<float>& right) {
+  std::vector<float> out(left.size() * 2, 0.0f);
+  for (std::size_t frame = 0; frame < left.size(); ++frame) {
+    out[frame * 2] = left[frame];
+    out[frame * 2 + 1] = right[frame];
+  }
+  return out;
 }
 
 std::vector<TrackProfile> full_band_session() {
@@ -388,4 +439,67 @@ TEST_CASE("effect returns name a processor the factory can build", "[mixing][ass
       REQUIRE(reaches(scene, destination, master_bus_id(scene)));
     }
   }
+}
+
+TEST_CASE("the reverb return sits well below the direct sound", "[mixing][assistant][.][slow]") {
+  // The send table's reverb column is anchored on a survey of professional
+  // practice, which measures the reverb return about 9 LU below the direct
+  // sound. A send amount is not that relative loudness, so the only way to see
+  // where the column actually puts the return is to render the suggested mix
+  // twice — once as suggested and once with nothing feeding the reverb — and
+  // measure the difference of the two renders, which is the return's whole
+  // contribution.
+  //
+  // A band rather than a value. The figure is a population statistic over a song
+  // corpus and this is one synthetic session, so what is defended is that the
+  // return is a clearly subordinate layer rather than either an inaudible one or
+  // a second mix.
+  constexpr float kTargetRelativeLu = -9.0f;
+  constexpr float kToleranceLu = 3.0f;
+
+  namespace eval = sonare::mixing::assistant::test;
+
+  const auto fixture = eval::make_demo_tracks(48000, 1.2f);
+  const auto tracks = fixture.inputs();
+  const auto result = suggest_scene(tracks);
+
+  // Required, not probed. The fixture carries a lead vocal and a guitar, both of
+  // which the send table feeds, so a scene without a reverb return means the
+  // effect-bus stage did not run — and a case that quietly passed in that state
+  // would hide exactly the thing it exists to measure.
+  const std::string return_id = reverb_return_id(result.scene);
+  REQUIRE_FALSE(return_id.empty());
+  const std::string reverb_bus = bus_feeding(result.scene, return_id);
+  REQUIRE_FALSE(reverb_bus.empty());
+
+  std::vector<float> mixed_left;
+  std::vector<float> mixed_right;
+  REQUIRE(eval::render_scene(tracks, result.scene, mixed_left, mixed_right));
+
+  std::vector<float> dry_left;
+  std::vector<float> dry_right;
+  REQUIRE(eval::render_scene(tracks, without_reverb_sends(result.scene, reverb_bus), dry_left,
+                             dry_right));
+  REQUIRE(mixed_left.size() == dry_left.size());
+
+  // In place: the mixed render becomes the wet component once the dry one is
+  // taken out of it.
+  std::vector<float>& wet_left = mixed_left;
+  std::vector<float>& wet_right = mixed_right;
+  for (std::size_t frame = 0; frame < wet_left.size(); ++frame) {
+    wet_left[frame] -= dry_left[frame];
+    wet_right[frame] -= dry_right[frame];
+  }
+
+  const std::vector<float> wet = interleave(wet_left, wet_right);
+  const std::vector<float> dry = interleave(dry_left, dry_right);
+  const float wet_lufs = sonare::mastering::common::measure_lufs_interleaved(
+      wet.data(), wet_left.size(), 2, fixture.sample_rate);
+  const float dry_lufs = sonare::mastering::common::measure_lufs_interleaved(
+      dry.data(), dry_left.size(), 2, fixture.sample_rate);
+  const float relative_lu = wet_lufs - dry_lufs;
+  INFO("dry " << dry_lufs << " LUFS, wet " << wet_lufs << " LUFS, relative " << relative_lu
+              << " LU");
+  CHECK(relative_lu <= kTargetRelativeLu + kToleranceLu);
+  CHECK(relative_lu >= kTargetRelativeLu - kToleranceLu);
 }

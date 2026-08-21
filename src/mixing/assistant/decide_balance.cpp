@@ -102,8 +102,14 @@ constexpr BalanceTable kGeneralTable{
         // The focus instrument, in front of every bed part but under the voice.
         {SourceClass::Lead, 1.5f},
         // The most forward element in popular music, which is what the rest of
-        // this table is arranged around.
-        {SourceClass::Vocal, 3.0f},
+        // this table is arranged around. A survey of professional practice found
+        // the lead vocal sitting 3-8 LU above the other elements (Pestana and
+        // Reiss, "Intelligent Audio Production Strategies Informed by Best
+        // Practices", AES 53rd International Conference on Semantic Audio,
+        // 2014). This clears the loudest of those elements, the lead instrument,
+        // by 3.5 dB — inside the range and at its conservative end, because the
+        // assistant proposes a starting balance rather than a finished one.
+        {SourceClass::Vocal, 5.0f},
         // Supports the lead voice and must not compete with it, so it sits far
         // enough back to be felt rather than followed.
         {SourceClass::Backing, -4.0f},

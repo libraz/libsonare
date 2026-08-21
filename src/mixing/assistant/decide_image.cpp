@@ -32,13 +32,22 @@ struct PlacementRule {
 
 // Placement extents, written as the few coarse steps a mixer actually works in
 // rather than on a continuous scale nothing here could justify.
+//
+// The two widest steps are set against a survey of professional practice, which
+// tested "hard panning should be avoided" and found it false, and reports wide
+// placements accounting for roughly a third of all panning decisions (Pestana
+// and Reiss, "Intelligent Audio Production Strategies Informed by Best
+// Practices", AES 53rd International Conference on Semantic Audio, 2014). The
+// support and inner-image steps below them are unchanged by that finding: it
+// says wide placements are common, not that every part belongs wide.
 constexpr float kCentreExtent = 0.0f;
-// Effects and colour parts can sit near the edge; nothing in the arrangement
-// depends on them being present in both speakers.
-constexpr float kEdgeExtent = 0.8f;
-// The main spreadable parts: far enough out to clear the centred elements,
-// still short of the edge so a mono fold barely moves their level.
-constexpr float kWideExtent = 0.7f;
+// Effects and colour parts sit at the edge; nothing in the arrangement depends
+// on them being present in both speakers.
+constexpr float kEdgeExtent = 0.9f;
+// The main spreadable parts, and where a double-tracked pair lands: far enough
+// out to be a wide placement rather than a hedge towards the centre, and short
+// of the edge so the part is still present in the opposite speaker.
+constexpr float kWideExtent = 0.8f;
 // Parts that support the centre rather than frame it.
 constexpr float kMediumExtent = 0.55f;
 // Parts that belong inside another group's image — a hi-hat sits just off the
@@ -102,8 +111,11 @@ constexpr float kLoneMemberFraction = 0.5f;
 // decided, and a large factor would let the measurement take the decision over.
 constexpr float kCrowdedSpreadBoost = 1.25f;
 
-// A suggestion never hard-pans. A part at ±1 leaves one speaker entirely, which
-// is a deliberate effect rather than a placement.
+// A suggestion stops just short of a full hard pan. Not because hard panning is
+// a mistake — the survey cited above tested that belief and found it false — but
+// because a part at exactly ±1 is absent from one speaker, and choosing to make
+// a part disappear for half the room is a decision the mixer takes rather than
+// one an automatic starting point takes on their behalf.
 constexpr float kMaxAbsPan = 0.9f;
 
 // Below this the classifier is closer to guessing than to deciding, and a wrong
