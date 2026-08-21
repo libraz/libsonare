@@ -282,8 +282,32 @@ size_t sysex7_payload_to_umps(const uint8_t* data, size_t size, uint8_t group, U
                               size_t cap) noexcept;
 
 /// Control-thread payload store for variable-length SysEx / property data.
+/// Retention budget a LIVE MIDI input owner installs on its store.
+///
+/// A store fed by an import holds a document: every entry is referenced by the
+/// clip it was parsed with, and the whole store dies with the import result, so
+/// its size is bounded by the import budget and nothing may be evicted. A store
+/// fed by a live input holds a stream: entries accumulate for as long as the
+/// device is open, consumers copy the bytes out and never say so, and without a
+/// bound the footprint is whatever the device has sent since it was opened.
+///
+/// Chosen ABOVE MidiImportResourceLimits::max_sysex_bytes so the two policies
+/// cannot conflict -- a budget under the import cap would evict payloads the
+/// import path deliberately accepted.
+inline constexpr size_t kLiveSysExRetentionBudgetBytes = 48u * 1024u * 1024u;
+/// Companion entry cap. Bounding payload bytes alone does not bound memory: the
+/// same 48 MiB as one-byte payloads is 48 million map nodes, whose per-node
+/// overhead dwarfs the payload it accounts for. A live device sends few, large
+/// payloads, so a few thousand entries is generous and caps the map at a few
+/// hundred KB of overhead.
+inline constexpr size_t kLiveSysExRetentionBudgetEntries = 4096u;
+
 /// UMPs carry only a SysExHandle so RT structures stay fixed-size; callers keep
 /// the payload bytes here and pass handles through the MIDI graph.
+///
+/// Retention: unbounded by default, which is what an import result wants (see
+/// kLiveSysExRetentionBudgetBytes). A store attached to a live input must call
+/// set_retention_budget(), or it grows for the lifetime of the device.
 class SysExStore {
  public:
   /// Stores `size` bytes and returns a non-zero handle, or 0 on invalid input /
@@ -297,29 +321,69 @@ class SysExStore {
   /// buffer. Lets a producer that must assign a handle before the payload reaches
   /// the store (e.g. a realtime MIDI reader staging completed SysEx for a control
   /// thread) commit the bytes later under the pre-assigned handle.
-  bool add_with_handle(SysExHandle handle, const uint8_t* data, size_t size) {
-    if (handle == 0 || data == nullptr || size == 0) {
-      return false;
-    }
-    payloads_[handle] = std::vector<uint8_t>(data, data + size);
-    return true;
-  }
+  bool add_with_handle(SysExHandle handle, const uint8_t* data, size_t size);
 
   /// Returns the payload for `handle`, or nullptr if unknown / zero.
   const std::vector<uint8_t>* lookup(SysExHandle handle) const noexcept;
 
   /// Removes a payload. Returns true only when an existing non-zero handle was
-  /// removed.
+  /// removed. This is how a consumer that has copied the bytes out returns the
+  /// storage without closing the device that produced it.
   bool remove(SysExHandle handle) noexcept;
   void clear() noexcept;
   size_t size() const noexcept { return payloads_.size(); }
   bool contains(SysExHandle handle) const noexcept { return lookup(handle) != nullptr; }
 
+  /// Caps retention at @p max_bytes of payload AND @p max_entries entries.
+  /// Either being 0 means unbounded, which is the default and what an import
+  /// store keeps. A live input installs kLiveSysExRetentionBudgetBytes /
+  /// kLiveSysExRetentionBudgetEntries here.
+  ///
+  /// Over either cap the OLDEST entries are dropped until the new one fits, and
+  /// each drop bumps evicted_count(). Eviction is by insertion order, not by
+  /// use: a live consumer reads a payload in the same drain that delivered its
+  /// handle, so the oldest retained entry is the one least likely to still be
+  /// wanted.
+  ///
+  /// Configure-time, control thread: it allocates the fixed-size eviction ring
+  /// once, here, so every later add() is O(1) and allocates nothing beyond the
+  /// payload itself. Installing a budget on a NON-EMPTY store evicts down to it
+  /// in unspecified order -- entries stored while unbounded have no recorded
+  /// arrival order to evict by.
+  void set_retention_budget(size_t max_bytes, size_t max_entries);
+
+  /// Payload bytes currently retained (excludes per-entry container overhead).
+  size_t retained_bytes() const noexcept { return retained_bytes_; }
+  /// Entries dropped to stay inside the retention budget since construction.
+  /// Nonzero means a consumer lost bytes it never read.
+  uint64_t evicted_count() const noexcept { return evicted_count_; }
+
  private:
   SysExHandle allocate_handle() noexcept;
+  // Stores `data` under `handle`, replacing any existing payload, then trims to
+  // the retention budget. Shared by both add paths.
+  bool store_payload(SysExHandle handle, const uint8_t* data, size_t size);
+  void note_insertion(SysExHandle handle) noexcept;
+  // Drops the oldest still-resolving entry. Returns false when the order held
+  // nothing left to drop.
+  bool evict_oldest() noexcept;
+  void enforce_budget() noexcept;
 
   SysExHandle next_handle_ = 1;
   std::unordered_map<SysExHandle, std::vector<uint8_t>> payloads_;
+  // Arrival order, as a FIXED-CAPACITY ring sized once by
+  // set_retention_budget(). Empty while unbounded, because a store that never
+  // evicts has no use for the order -- so the import path pays nothing for a
+  // policy it does not use, and the bounded path cannot grow a second container
+  // behind the budget's back. remove() leaves its slot to be skipped on
+  // eviction rather than scanning for it, which keeps remove() O(1); a slot is
+  // reclaimed the moment the ring wraps onto it.
+  std::vector<SysExHandle> order_;
+  size_t order_head_ = 0;
+  size_t order_count_ = 0;
+  size_t retained_bytes_ = 0;
+  size_t max_retained_bytes_ = 0;
+  uint64_t evicted_count_ = 0;
 };
 
 // ===========================================================================
@@ -384,6 +448,17 @@ uint8_t scale_note_on_velocity_16_to_7(uint16_t velocity16) noexcept;
 uint32_t scale_cc_7_to_32(uint8_t value7) noexcept;
 /// 32-bit -> 7-bit CC down-scale (top 7 bits). LOSSY.
 uint8_t scale_cc_32_to_7(uint32_t value32) noexcept;
+/// 14-bit -> 32-bit CC up-scale, for the controller quantities assembled from an
+/// MSB/LSB CC pair or from RPN/NRPN Data Entry.
+///
+/// Bit-replication, the same family as scale_cc_7_to_32, NOT the min-center-max
+/// scale_bend_14_to_32 below: a controller has no "unbent" center to preserve,
+/// and preserving one costs precision everywhere else. Measured over all 16384
+/// values, replication round-trips within 3.0e-8 (float epsilon) while the
+/// center-preserving scaler is off by up to 3.1e-5 near the middle of the range.
+uint32_t scale_cc_14_to_32(uint16_t value14) noexcept;
+/// 32-bit -> 14-bit CC down-scale (top 14 bits). LOSSY.
+uint16_t scale_cc_32_to_14(uint32_t value32) noexcept;
 /// 14-bit pitch bend -> 32-bit MIDI 2.0 value.
 uint32_t scale_bend_14_to_32(uint16_t bend14) noexcept;
 /// 32-bit MIDI 2.0 pitch bend -> 14-bit MIDI 1.0 value. LOSSY.

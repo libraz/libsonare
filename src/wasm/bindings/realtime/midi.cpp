@@ -647,6 +647,14 @@ void RealtimeEngineWasm::pushMidiCc(uint32_t destination_id, int group, int chan
   }
 }
 
+// Queues one single-word MIDI 1.0 channel-voice UMP to a MIDI destination at
+// @p render_frame (-1 = immediate).
+//
+// A control-change word reaches the CC binding table exactly as it would through
+// pushMidiCc or a live input source: the engine resolves every live entry point
+// through one kind-aware decoder, so a controller bound to automation is driven
+// whichever call the host used. It used to reach the sequencer only, which made
+// this the one live path that silently skipped the CC -> automation mapping.
 void RealtimeEngineWasm::pushMidiUmp(uint32_t destination_id, uint32_t word0,
                                      int64_t render_frame) {
   if (((word0 >> 28) & 0x0Fu) != 0x2u) {

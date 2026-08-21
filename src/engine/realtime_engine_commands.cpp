@@ -314,14 +314,7 @@ void RealtimeEngine::apply_command(const rt::Command& command) noexcept {
       const uint8_t channel = static_cast<uint8_t>((packed >> 16) & 0x0Fu);
       const uint8_t group = static_cast<uint8_t>((packed >> 24) & 0x0Fu);
       const midi::Ump ump = midi::make_midi1_control_change(group, channel, controller, value7);
-      uint32_t param_id = 0;
-      float mapped_value = 0.0f;
-      const midi::CcMap* cc_map = midi_cc_maps_.current();
-      if (cc_map != nullptr && cc_map->lookup_param(controller, channel, &param_id) &&
-          cc_map->value_to_unit(controller, channel, static_cast<float>(value7) / 127.0f,
-                                &mapped_value)) {
-        automation_.set_parameter(param_id, mapped_value);
-      }
+      observe_live_cc_for_automation(ump);
       midi_sequencer_.inject_event(command.target_id, command.sample_time, ump);
 #endif
       break;
@@ -332,6 +325,13 @@ void RealtimeEngine::apply_command(const rt::Command& command) noexcept {
       ump.words[0] = static_cast<uint32_t>(command.arg.i);
       ump.word_count = 1;
       ump.group = static_cast<uint8_t>((ump.words[0] >> 24) & 0x0Fu);
+      // A queued UMP carrying a control-change used to reach the sequencer
+      // without the binding table ever being consulted, so the same gesture
+      // drove automation or not depending purely on which entry point a surface
+      // happened to call. Every live entry point resolves through the one
+      // kind-aware decoder now; a non-CC word resolves to nothing and falls
+      // straight through to the sequencer as before.
+      observe_live_cc_for_automation(ump);
       midi_sequencer_.inject_event(command.target_id, command.sample_time, ump);
 #endif
       break;

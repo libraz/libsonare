@@ -618,7 +618,27 @@ TEST_CASE("project C surface validates MIDI event helpers and input", "[project]
   rpn_binding.param_id = 78;
   rpn_binding.min_value = 0.0f;
   rpn_binding.max_value = 1.0f;
-  REQUIRE(sonare_midi_param_to_cc(&rpn_binding, 1, 78, 0.5f, 0, 4.0, &back_cc) ==
+  // The binding sonare_midi_cc_learn just produced above writes back: an RPN
+  // gesture is four MIDI 1.0 messages, so it is emitted as the one-word MIDI 2.0
+  // Registered Controller that carries the selector and the value together.
+  // Refusing it here used to return the same code as "nothing is bound to this
+  // parameter", so a caller could not tell a learned binding from a missing one.
+  REQUIRE(sonare_midi_param_to_cc(&rpn_binding, 1, 78, 0.5f, 0, 4.0, &back_cc) == SONARE_OK);
+  REQUIRE(back_cc.ppq == 4.0);
+  sonare::midi::Ump rpn_ump{};
+  rpn_ump.words[0] = back_cc.data0;
+  rpn_ump.words[1] = back_cc.data1;
+  rpn_ump.word_count = 2;
+  REQUIRE(rpn_ump.channel() == 3);
+  REQUIRE(rpn_ump.status_nibble() ==
+          static_cast<uint8_t>(sonare::midi::UmpStatus::kRegisteredController));
+  float rpn_norm = 0.0f;
+  REQUIRE(sonare::midi::cc_normalized_value(rpn_ump, &rpn_norm));
+  REQUIRE(rpn_norm == Catch::Approx(0.5f).margin(1.0e-4));
+
+  // SONARE_ERROR_INVALID_STATE now means exactly one thing: no binding targets
+  // the requested parameter.
+  REQUIRE(sonare_midi_param_to_cc(&rpn_binding, 1, 999, 0.5f, 0, 4.0, &back_cc) ==
           SONARE_ERROR_INVALID_STATE);
 
   SonareProject* project = nullptr;

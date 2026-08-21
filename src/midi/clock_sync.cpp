@@ -283,7 +283,10 @@ void ClockParser::assemble_mtc() noexcept {
 }
 
 bool ClockParser::parse_byte(uint8_t byte) noexcept {
-  // Status bytes (0x80+) interrupt any pending data assembly.
+  // Status bytes (0x80+) interrupt any pending data assembly, EXCEPT the System
+  // Real-Time range (0xF8..0xFF), which the MIDI 1.0 spec allows to appear
+  // anywhere -- including between the status and data bytes of a System Common
+  // message -- and which therefore has to leave the assembly alone.
   if (byte & 0x80u) {
     switch (byte) {
       case kStatusClock:
@@ -308,7 +311,19 @@ bool ClockParser::parse_byte(uint8_t byte) noexcept {
         pending_ = Pending::kMtcData;
         return false;
       default:
-        // Other system real-time bytes pass through without changing state.
+        // Everything else. Only System Real-Time (0xF8..0xFF) is transparent to
+        // a half-assembled System Common message -- the cases above are the ones
+        // of those this parser acts on, and the rest (0xF9, 0xFD, Active Sensing
+        // 0xFE, System Reset 0xFF) are equally transparent and equally ignored.
+        //
+        // Any OTHER status byte ends the message being assembled. A Channel
+        // Voice status or an unhandled System Common arriving after an 0xF2 used
+        // to leave pending_ set, so the next two data bytes -- which belong to
+        // the new message -- were eaten by the SPP state machine and published
+        // as a song position nobody sent.
+        if (byte < 0xF8u) {
+          pending_ = Pending::kNone;
+        }
         return false;
     }
   }

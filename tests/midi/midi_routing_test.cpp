@@ -4,6 +4,7 @@
 ///        mapping + MIDI learn; clock / MTC / SPP generate+parse round-trips; and
 ///        capture draining queued events into a MidiClip with correct PPQ/order.
 
+#include <algorithm>
 #include <catch2/catch_test_macros.hpp>
 #include <cmath>
 #include <cstdint>
@@ -131,6 +132,37 @@ TEST_CASE("MidiRouter remaps channel", "[midi]") {
   REQUIRE(out.events[0].ump.channel() == 7);
   REQUIRE(out.events[0].ump.note_number() == 64);
   REQUIRE(out.events[0].ump.is_note_on());
+}
+
+// The router rewrites the UMP and nothing else, so every other documented field
+// has to survive it. Building the output field by field dropped whatever was
+// added to MidiEvent after that code was written: source_track_id, documented as
+// surviving MIDI-FX expansion so a shared instrument can render into the right
+// track lane, and the control-thread-resolved SysEx payload view.
+TEST_CASE("MidiRouter preserves every event field it does not route", "[midi]") {
+  MidiRouter router;
+  MidiRouteConfig cfg;
+  cfg.filter_channel = kRouteAnyChannel;
+  cfg.remap_channel = 7;
+  router.set_config(cfg);
+
+  const std::vector<uint8_t> payload = {0xF0u, 0x7Eu, 0x01u, 0xF7u};
+  MidiEvent input = note_on_event(0, 0, 2, 64);
+  input.render_frame = 4242;
+  input.source_track_id = 909;
+  input.sysex_payload = payload.data();
+  input.sysex_payload_size = payload.size();
+
+  MidiRouteOutput out;
+  router.process(&input, 1, &out);
+  REQUIRE(out.size == 1);
+  // Routed: the channel is remapped as configured.
+  REQUIRE(out.events[0].ump.channel() == 7);
+  // Preserved: everything else.
+  REQUIRE(out.events[0].render_frame == 4242);
+  REQUIRE(out.events[0].source_track_id == 909);
+  REQUIRE(out.events[0].sysex_payload == payload.data());
+  REQUIRE(out.events[0].sysex_payload_size == payload.size());
 }
 
 TEST_CASE("MidiRouter thru toggle suppresses all output", "[midi]") {
@@ -511,7 +543,11 @@ TEST_CASE("CcMap param_to_cc round-trips value", "[midi]") {
   REQUIRE(norm == 1.0f);  // 127/127
 }
 
-TEST_CASE("CcMap param_to_cc rejects RPN and NRPN single-UMP emission", "[midi]") {
+// cc_learn is documented to assemble RPN / NRPN selectors and does; param_to_cc
+// used to refuse exactly those bindings, and with the same return value it uses
+// for "nothing is bound to this parameter", so a host could not tell a binding
+// it had just learned from one that never existed.
+TEST_CASE("CcMap param_to_cc round-trips every binding kind", "[midi]") {
   CcMap map;
   CcBinding rpn;
   rpn.kind = sonare::midi::CcBindingKind::kRpn;
@@ -531,8 +567,109 @@ TEST_CASE("CcMap param_to_cc rejects RPN and NRPN single-UMP emission", "[midi]"
   REQUIRE(map.bind(nrpn));
 
   sonare::midi::Ump out;
-  REQUIRE_FALSE(map.param_to_cc(90, 0.5f, 0, &out));
-  REQUIRE_FALSE(map.param_to_cc(91, 0.5f, 0, &out));
+  float norm = 0.0f;
+
+  REQUIRE(map.param_to_cc(90, 0.25f, 0, &out));
+  REQUIRE(out.status_nibble() ==
+          static_cast<uint8_t>(sonare::midi::UmpStatus::kRegisteredController));
+  REQUIRE(out.channel() == 0);
+  REQUIRE(sonare::midi::cc_normalized_value(out, &norm));
+  REQUIRE(std::fabs(norm - 0.25f) < 1.0e-4f);
+
+  REQUIRE(map.param_to_cc(91, 0.75f, 0, &out));
+  REQUIRE(out.status_nibble() ==
+          static_cast<uint8_t>(sonare::midi::UmpStatus::kAssignableController));
+  REQUIRE(out.channel() == 1);
+  REQUIRE(sonare::midi::cc_normalized_value(out, &norm));
+  REQUIRE(std::fabs(norm - 0.75f) < 1.0e-4f);
+
+  // The one remaining false is "no binding targets this parameter", so the two
+  // outcomes a caller has to tell apart no longer share a return value.
+  REQUIRE_FALSE(map.param_to_cc(999, 0.5f, 0, &out));
+}
+
+// A controller has no "unbent" center to preserve, so it scales by bit
+// replication. The min-center-max pitch-bend scaler this used to call buys that
+// center at the cost of precision across the rest of the range: it round-trips
+// the extremes exactly and is off by up to 3.1e-5 in the middle, which is three
+// orders of magnitude worse than float can represent.
+TEST_CASE("CcMap param_to_cc scales 14-bit CC at float precision across the range", "[midi]") {
+  CcMap map;
+  CcBinding wide;
+  wide.kind = sonare::midi::CcBindingKind::kControlChange14;
+  wide.cc_number = 7;
+  wide.cc_lsb_number = 39;
+  wide.channel = 0;
+  wide.param_id = 77;
+  wide.min_value = 0.0f;
+  wide.max_value = 1.0f;
+  REQUIRE(map.bind(wide));
+
+  float worst = 0.0f;
+  for (int step = 0; step <= 16383; ++step) {
+    const float unit = static_cast<float>(step) / 16383.0f;
+    sonare::midi::Ump out;
+    REQUIRE(map.param_to_cc(77, unit, 0, &out));
+    float norm = 0.0f;
+    REQUIRE(sonare::midi::cc_normalized_value(out, &norm));
+    worst = std::max(worst, std::fabs(norm - unit));
+  }
+  // Not just the extremes: every one of the 16384 representable values.
+  REQUIRE(worst < 1.0e-6f);
+}
+
+// The kind is not part of a binding's address, so binding a controller a second
+// time at a different resolution has to replace it rather than leave two entries
+// for the same incoming message -- the scalar lookup returns whichever came
+// first, which silently drove the parameter the user thought they had replaced.
+TEST_CASE("CcMap binding identity is the address, not the kind", "[midi]") {
+  CcMap map;
+  map.bind(CcBinding{7, 0, 100, 0.0f, 1.0f});
+  REQUIRE(map.binding_count() == 1);
+
+  CcBinding wide;
+  wide.kind = sonare::midi::CcBindingKind::kControlChange14;
+  wide.cc_number = 7;
+  wide.cc_lsb_number = 39;
+  wide.channel = 0;
+  wide.param_id = 200;
+  REQUIRE(map.bind(wide));
+  REQUIRE(map.binding_count() == 1);
+  uint32_t param = 0;
+  REQUIRE(map.lookup_param(7, 0, &param));
+  REQUIRE(param == 200);
+
+  // unbind reaches the 14-bit binding it could not name before.
+  REQUIRE(map.unbind(7, 0));
+  REQUIRE(map.binding_count() == 0);
+
+  // Selector-addressed bindings are the exception: every one names Data Entry as
+  // its cc_number, so they are distinguished by their selector and coexist.
+  CcBinding a;
+  a.kind = sonare::midi::CcBindingKind::kNrpn;
+  a.cc_number = 6;
+  a.channel = 3;
+  a.param_id = 301;
+  a.selector_msb = 1;
+  a.selector_lsb = 2;
+  CcBinding b = a;
+  b.param_id = 302;
+  b.selector_lsb = 3;
+  REQUIRE(map.bind(a));
+  REQUIRE(map.bind(b));
+  REQUIRE(map.binding_count() == 2);
+
+  // A plain CC#6 binding on the same channel is a different address again.
+  map.bind(CcBinding{6, 3, 303, 0.0f, 1.0f});
+  REQUIRE(map.binding_count() == 3);
+  REQUIRE(map.unbind(6, 3));  // removes the plain one, not either NRPN
+  REQUIRE(map.binding_count() == 2);
+
+  // The CcBinding overload is how a selector-addressed binding is removed.
+  REQUIRE(map.unbind(a));
+  REQUIRE(map.binding_count() == 1);
+  REQUIRE(map.binding_at(0).param_id == 302);
+  REQUIRE_FALSE(map.unbind(a));
 }
 
 TEST_CASE("CcMap lookup_param performs no allocation", "[midi][rt]") {
@@ -613,6 +750,61 @@ TEST_CASE("SPP generate and parse round-trip", "[midi]") {
   REQUIRE(parser.has_spp());
   REQUIRE(parser.spp_beats() == 16);
   REQUIRE(parser.position_ppq() == 4.0);
+}
+
+// System Real-Time is transparent to a half-assembled System Common message.
+// Every OTHER status byte ends it -- and the default branch used to return
+// without touching pending_, so the data bytes of whatever arrived next were
+// eaten by the SPP state machine and published as a song position nobody sent.
+TEST_CASE("an unhandled status byte ends a pending System Common assembly", "[midi]") {
+  SECTION("a Channel Voice status abandons a half-received SPP") {
+    ClockParser parser;
+    parser.reset();
+    parser.parse_byte(sonare::midi::kStatusSongPosition);
+    // Note On interrupts: its own two data bytes must not become an SPP.
+    parser.parse_byte(0x90u);
+    parser.parse_byte(60u);
+    parser.parse_byte(100u);
+    REQUIRE_FALSE(parser.has_spp());
+  }
+
+  SECTION("a following SPP is still parsed correctly") {
+    ClockParser parser;
+    parser.reset();
+    parser.parse_byte(sonare::midi::kStatusSongPosition);
+    parser.parse_byte(0x90u);
+    parser.parse_byte(60u);
+    parser.parse_byte(100u);
+    // The abandoned assembly must not corrupt the next real one.
+    parser.parse_byte(sonare::midi::kStatusSongPosition);
+    parser.parse_byte(16u);
+    parser.parse_byte(0u);
+    REQUIRE(parser.has_spp());
+    REQUIRE(parser.spp_beats() == 16);
+  }
+
+  SECTION("Active Sensing and System Reset stay transparent") {
+    // 0xFE / 0xFF are System Real-Time: they may appear anywhere, including
+    // mid-message, so they must NOT abandon the assembly.
+    ClockParser parser;
+    parser.reset();
+    parser.parse_byte(sonare::midi::kStatusSongPosition);
+    parser.parse_byte(0xFEu);
+    parser.parse_byte(16u);
+    parser.parse_byte(0xFFu);
+    parser.parse_byte(0u);
+    REQUIRE(parser.has_spp());
+    REQUIRE(parser.spp_beats() == 16);
+  }
+
+  SECTION("an unhandled System Common abandons the assembly") {
+    ClockParser parser;
+    parser.reset();
+    parser.parse_byte(sonare::midi::kStatusMtcQuarterFrame);
+    parser.parse_byte(0xF6u);  // Tune Request: System Common, not real-time.
+    parser.parse_byte(0x01u);
+    REQUIRE_FALSE(parser.has_mtc());
+  }
 }
 
 TEST_CASE("a clock tick interleaved in a System Common message is transparent", "[midi]") {

@@ -667,6 +667,12 @@ class RealtimeEngine : private ClipPageRequestSink {
   // AUDIO thread: flush the PDC delay lines on a transport discontinuity so no
   // stale clip/instrument audio rings out across a stop/seek/loop.
   void flush_pdc_delays() noexcept;
+  // AUDIO thread: the single live control-change decode. Resolves @p ump through
+  // the kind-aware CcMap::observe_live_cc and pushes the resulting unit value to
+  // its bound parameter; a non-controller message resolves to nothing. Every
+  // live CC entry point routes through this, so the queued and engine-owned
+  // input paths cannot drift apart.
+  void observe_live_cc_for_automation(const midi::Ump& ump) noexcept;
   void emit_midi_transport_command(uint8_t status, int64_t render_frame) noexcept;
   void emit_midi_clock_block(int64_t timeline_start_sample, int64_t render_start_frame,
                              int num_frames) noexcept;

@@ -224,6 +224,96 @@ TEST_CASE("SysExStore owns variable-length payloads behind UMP handles", "[midi]
   REQUIRE(store.lookup(second) == nullptr);
 }
 
+// A store fed by a live input accumulates for as long as the device is open:
+// consumers copy the bytes out of a drain and never tell the store they are
+// done, so without a budget the footprint is everything the device has ever
+// sent. An import store has the opposite lifetime and must keep everything,
+// which is why the budget is opt-in rather than a default.
+TEST_CASE("SysExStore retention budget bounds a live stream", "[midi]") {
+  sonare::midi::SysExStore store;
+  const std::vector<uint8_t> chunk(1024u, 0x7Fu);
+
+  SECTION("unbounded by default, so an import store keeps every entry") {
+    for (int i = 0; i < 256; ++i) {
+      REQUIRE(store.add(chunk) != 0);
+    }
+    REQUIRE(store.size() == 256);
+    REQUIRE(store.retained_bytes() == 256u * 1024u);
+    REQUIRE(store.evicted_count() == 0);
+  }
+
+  SECTION("a budget caps the footprint and drops the oldest first") {
+    store.set_retention_budget(8u * 1024u, 1024u);
+    std::vector<sonare::midi::SysExHandle> handles;
+    for (int i = 0; i < 64; ++i) {
+      const sonare::midi::SysExHandle h = store.add(chunk);
+      REQUIRE(h != 0);
+      handles.push_back(h);
+    }
+    // Steady state, not growth: 8 KiB of payload however much was pushed.
+    REQUIRE(store.retained_bytes() <= 8u * 1024u);
+    REQUIRE(store.size() == 8);
+    REQUIRE(store.evicted_count() == 56);
+    // The survivors are the newest, and the oldest are the ones gone.
+    for (size_t i = 0; i < handles.size() - 8u; ++i) {
+      REQUIRE_FALSE(store.contains(handles[i]));
+    }
+    for (size_t i = handles.size() - 8u; i < handles.size(); ++i) {
+      REQUIRE(store.contains(handles[i]));
+    }
+  }
+
+  SECTION("lowering the budget evicts immediately") {
+    for (int i = 0; i < 16; ++i) REQUIRE(store.add(chunk) != 0);
+    REQUIRE(store.retained_bytes() == 16u * 1024u);
+    store.set_retention_budget(4u * 1024u, 1024u);
+    REQUIRE(store.retained_bytes() <= 4u * 1024u);
+    REQUIRE(store.evicted_count() == 12);
+  }
+
+  SECTION("a consumer that reclaims keeps the store empty and evicts nothing") {
+    // The reclaim path: remove() after copying the bytes out. Nothing is ever
+    // lost to eviction, and the bookkeeping the eviction order needs does not
+    // itself become the unbounded thing.
+    store.set_retention_budget(8u * 1024u, 1024u);
+    for (int i = 0; i < 4096; ++i) {
+      const sonare::midi::SysExHandle h = store.add(chunk);
+      REQUIRE(h != 0);
+      REQUIRE(store.remove(h));
+    }
+    REQUIRE(store.size() == 0);
+    REQUIRE(store.retained_bytes() == 0);
+    REQUIRE(store.evicted_count() == 0);
+  }
+
+  SECTION("the entry cap bounds memory that the byte cap alone does not") {
+    // 48 MiB of one-byte payloads is 48 million map nodes: the byte budget is
+    // satisfied while the per-node overhead is orders of magnitude larger than
+    // everything it accounts for. The entry cap is what actually bounds memory.
+    sonare::midi::SysExStore tiny;
+    tiny.set_retention_budget(1024u * 1024u, 32u);
+    const std::vector<uint8_t> one_byte(1u, 0x01u);
+    for (int i = 0; i < 4096; ++i) {
+      REQUIRE(tiny.add(one_byte) != 0);
+    }
+    REQUIRE(tiny.size() == 32);
+    REQUIRE(tiny.retained_bytes() == 32u);
+    REQUIRE(tiny.evicted_count() == 4064);
+  }
+
+  SECTION("re-committing a handle replaces its bytes without double-counting") {
+    store.set_retention_budget(8u * 1024u, 1024u);
+    const sonare::midi::SysExHandle handle = 42;
+    REQUIRE(store.add_with_handle(handle, chunk.data(), chunk.size()));
+    REQUIRE(store.retained_bytes() == 1024u);
+    const std::vector<uint8_t> shorter(16u, 0x01u);
+    REQUIRE(store.add_with_handle(handle, shorter.data(), shorter.size()));
+    REQUIRE(store.size() == 1);
+    REQUIRE(store.retained_bytes() == 16u);
+    REQUIRE(store.evicted_count() == 0);
+  }
+}
+
 namespace {
 // Decode one SysEx7 (MT=0x3) UMP data message back to its payload bytes, the
 // inverse of sysex7_payload_to_umps. Mirrors the SMF2 importer's reader.

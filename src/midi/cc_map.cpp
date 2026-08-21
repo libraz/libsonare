@@ -20,20 +20,43 @@ bool is_control_change(const Ump& ump) noexcept {
   return ump.status_nibble() == static_cast<uint8_t>(UmpStatus::kControlChange);
 }
 
-bool same_binding_identity(const CcBinding& a, const CcBinding& b) noexcept {
-  if (a.kind != b.kind || a.cc_number != b.cc_number || a.channel != b.channel) {
+// The MIDI 2.0 one-word RPN / NRPN forms. They are controller messages that
+// carry a 32-bit value in word[1] exactly like a MIDI 2.0 Control Change, but
+// address it by (bank, index) instead of by controller number -- which is what
+// param_to_cc emits for a selector-addressed binding.
+bool is_registered_or_assignable_controller(const Ump& ump) noexcept {
+  if (ump.message_type() != UmpMessageType::kMidi2ChannelVoice) {
     return false;
   }
-  switch (a.kind) {
-    case CcBindingKind::kControlChange7:
-      return true;
-    case CcBindingKind::kControlChange14:
-      return a.cc_lsb_number == b.cc_lsb_number;
-    case CcBindingKind::kRpn:
-    case CcBindingKind::kNrpn:
-      return a.selector_msb == b.selector_msb && a.selector_lsb == b.selector_lsb;
+  const uint8_t status = ump.status_nibble();
+  return status == static_cast<uint8_t>(UmpStatus::kRegisteredController) ||
+         status == static_cast<uint8_t>(UmpStatus::kAssignableController);
+}
+
+// True for the kinds addressed by an RPN/NRPN selector pair rather than by their
+// own controller number. Their cc_number is the Data Entry controller every such
+// binding shares, so it identifies nothing on its own.
+bool is_selector_kind(CcBindingKind kind) noexcept {
+  return kind == CcBindingKind::kRpn || kind == CcBindingKind::kNrpn;
+}
+
+// Two bindings collide when the same incoming message would address both.
+//
+// The kind is NOT part of the identity, because it is not part of the address: a
+// 7-bit CC#7 and a 14-bit CC#7 are reached by the very same MSB message, so the
+// table cannot hold both and expect a lookup to be well defined -- binding one
+// over the other has to replace it. What the kind decides is WHICH field carries
+// the address: a plain / 14-bit controller is addressed by (cc_number, channel),
+// an RPN or NRPN by (selector, channel), which is why two NRPN bindings with
+// different selectors coexist on one channel even though both name Data Entry as
+// their cc_number.
+bool same_binding_identity(const CcBinding& a, const CcBinding& b) noexcept {
+  if (a.channel != b.channel) return false;
+  if (is_selector_kind(a.kind) != is_selector_kind(b.kind)) return false;
+  if (is_selector_kind(a.kind)) {
+    return a.kind == b.kind && a.selector_msb == b.selector_msb && a.selector_lsb == b.selector_lsb;
   }
-  return false;
+  return a.cc_number == b.cc_number;
 }
 
 }  // namespace
@@ -49,7 +72,14 @@ bool cc_number_of(const Ump& ump, uint8_t* out_cc) noexcept {
 }
 
 bool cc_normalized_value(const Ump& ump, float* out_norm) noexcept {
-  if (out_norm == nullptr || !is_control_change(ump)) {
+  if (out_norm == nullptr) {
+    return false;
+  }
+  if (is_registered_or_assignable_controller(ump)) {
+    *out_norm = static_cast<float>(ump.words[1]) / static_cast<float>(0xFFFFFFFFu);
+    return true;
+  }
+  if (!is_control_change(ump)) {
     return false;
   }
   if (ump.message_type() == UmpMessageType::kMidi1ChannelVoice) {
@@ -63,9 +93,13 @@ bool cc_normalized_value(const Ump& ump, float* out_norm) noexcept {
 }
 
 size_t CcMap::find_exact(uint8_t cc_number, uint8_t channel) const noexcept {
+  // The binding a control-change on this number addresses, whatever resolution
+  // it was bound at. Restricting this to kControlChange7 is what left a 14-bit
+  // binding unremovable: unbind() could not name it, and clear() was the only
+  // way back.
   for (size_t i = 0; i < count_; ++i) {
-    if (bindings_[i].kind == CcBindingKind::kControlChange7 &&
-        bindings_[i].cc_number == cc_number && bindings_[i].channel == channel) {
+    if (!is_selector_kind(bindings_[i].kind) && bindings_[i].cc_number == cc_number &&
+        bindings_[i].channel == channel) {
       return i;
     }
   }
@@ -79,6 +113,16 @@ size_t CcMap::find_exact_binding(const CcBinding& binding) const noexcept {
     }
   }
   return kMaxBindings;
+}
+
+bool CcMap::unbind(const CcBinding& binding) noexcept {
+  const size_t idx = find_exact_binding(binding);
+  if (idx == kMaxBindings) {
+    return false;
+  }
+  bindings_[idx] = bindings_[count_ - 1];
+  --count_;
+  return true;
 }
 
 bool CcMap::bind(const CcBinding& binding) {
@@ -498,16 +542,27 @@ bool CcMap::param_to_cc(uint32_t param_id, float unit_value, uint8_t group,
     if (b.kind == CcBindingKind::kControlChange14) {
       // A 14-bit (MSB+LSB) controller cannot be expressed losslessly in a single
       // 7-bit MIDI 1.0 Control Change. Emit a MIDI 2.0 Control Change instead,
-      // which carries the full-resolution value in a single UMP (the 14-bit
-      // value is bit-scaled up to the MIDI 2.0 32-bit field). The 7-bit MIDI 1.0
-      // path below is unchanged for plain kControlChange7 bindings.
+      // which carries the full-resolution value in a single UMP. The 7-bit
+      // MIDI 1.0 path below is unchanged for plain kControlChange7 bindings.
       const uint16_t value14 = static_cast<uint16_t>(norm * kCc14BitMax + 0.5f);
-      *out_ump =
-          make_midi2_control_change(group, channel, b.cc_number, scale_bend_14_to_32(value14));
+      *out_ump = make_midi2_control_change(group, channel, b.cc_number, scale_cc_14_to_32(value14));
       return true;
     }
-    if (b.kind == CcBindingKind::kRpn || b.kind == CcBindingKind::kNrpn) {
-      return false;
+    if (is_selector_kind(b.kind)) {
+      // Same reasoning one step further: an RPN / NRPN gesture is a four-message
+      // MIDI 1.0 sequence (selector MSB, selector LSB, Data Entry MSB, LSB) that
+      // no single Ump can hold, but MIDI 2.0 has a one-word form carrying the
+      // selector as (bank, index) plus a 32-bit value. Emitting it is what closes
+      // the cc_learn -> store -> param_to_cc round trip that used to dead-end
+      // here on the very bindings cc_learn is documented to produce.
+      const uint16_t value14 = static_cast<uint16_t>(norm * kCc14BitMax + 0.5f);
+      const uint32_t value32 = scale_cc_14_to_32(value14);
+      *out_ump = b.kind == CcBindingKind::kRpn
+                     ? make_midi2_registered_controller(group, channel, b.selector_msb,
+                                                        b.selector_lsb, value32)
+                     : make_midi2_assignable_controller(group, channel, b.selector_msb,
+                                                        b.selector_lsb, value32);
+      return true;
     }
     const uint8_t value7 = static_cast<uint8_t>(norm * kCc7BitMax + 0.5f);
     *out_ump = make_midi1_control_change(group, channel, b.cc_number, value7);

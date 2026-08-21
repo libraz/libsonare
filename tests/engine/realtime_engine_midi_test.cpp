@@ -313,6 +313,115 @@ TEST_CASE("RealtimeEngine emits MIDI clock and transport bytes while rolling", "
   REQUIRE(sink.events[12].byte == sonare::midi::kStatusStop);
 }
 
+namespace {
+
+// Pushes a live CC through the queued scalar entry point (the packing is
+// rt/command.h's kMidiCcImmediate encoding).
+void push_live_cc(RealtimeEngine& engine, uint8_t group, uint8_t channel, uint8_t controller,
+                  uint8_t value) {
+  const uint64_t packed = static_cast<uint64_t>(value) | (static_cast<uint64_t>(controller) << 8) |
+                          (static_cast<uint64_t>(channel) << 16) |
+                          (static_cast<uint64_t>(group) << 24);
+  sonare::rt::Command c{};
+  c.type = sonare::rt::CommandType::kMidiCcImmediate;
+  c.sample_time = -1;
+  c.arg.i = static_cast<int64_t>(packed);
+  REQUIRE(engine.push_command(c));
+}
+
+// Pushes the same gesture through the queued raw-UMP entry point (the one the
+// WASM pushMidiUmp uses).
+void push_live_ump(RealtimeEngine& engine, const sonare::midi::Ump& ump) {
+  sonare::rt::Command c{};
+  c.type = sonare::rt::CommandType::kMidiUmpImmediate;
+  c.sample_time = -1;
+  c.arg.i = static_cast<int64_t>(ump.words[0]);
+  REQUIRE(engine.push_command(c));
+}
+
+}  // namespace
+
+// The engine has three ways to deliver a live controller message, and they used
+// to disagree: the queued scalar CC resolved through the cc_number-only lookup
+// (MSB-only 7 bits, no RPN/NRPN), the queued raw UMP never consulted the binding
+// table at all, and only the engine-owned input source ran the kind-aware
+// decoder. The same gesture therefore drove a parameter, drove it at the wrong
+// resolution, or drove nothing, depending purely on which call a surface made.
+//
+// `unknown_target_count` is the probe: the binding points at a parameter id
+// nothing is bound to, so it increments once per RESOLVED message and stays put
+// when a path skipped the table.
+TEST_CASE("every live CC entry point resolves through the same kind-aware decoder",
+          "[engine][midi]") {
+  constexpr uint32_t kUnboundParam = 7777;
+  std::vector<float> left(64, 0.0f);
+  std::vector<float> right(64, 0.0f);
+  float* io[] = {left.data(), right.data()};
+
+  sonare::midi::CcBinding wide;
+  wide.kind = sonare::midi::CcBindingKind::kControlChange14;
+  wide.cc_number = 1;
+  wide.cc_lsb_number = 33;
+  wide.channel = 0;
+  wide.param_id = kUnboundParam;
+  wide.min_value = 0.0f;
+  wide.max_value = 1.0f;
+
+  SECTION("the queued scalar CC path") {
+    RealtimeEngine engine;
+    engine.prepare(48000.0, 64);
+    REQUIRE(engine.bind_midi_cc(wide));
+    push_live_cc(engine, 0, 0, 1, 64);
+    engine.process(io, 2, 64);
+    REQUIRE(engine.automation().unknown_target_count() == 1);
+  }
+
+  SECTION("the queued raw UMP path") {
+    RealtimeEngine engine;
+    engine.prepare(48000.0, 64);
+    REQUIRE(engine.bind_midi_cc(wide));
+    push_live_ump(engine, sonare::midi::make_midi1_control_change(0, 0, 1, 64));
+    engine.process(io, 2, 64);
+    // Zero here is the defect this closes: the raw-UMP path reached the
+    // sequencer without ever looking at the binding table.
+    REQUIRE(engine.automation().unknown_target_count() == 1);
+  }
+
+  SECTION("the engine-owned live input path") {
+    RealtimeEngine engine;
+    engine.prepare(48000.0, 64);
+    REQUIRE(engine.bind_midi_cc(wide));
+    sonare::host::FixedMidiInputSource<8> input;
+    engine.set_midi_input_source(&input, 0);
+    REQUIRE(input.push_event(sonare::midi::make_midi1_control_change(0, 0, 1, 64), 0));
+    engine.process(io, 2, 64);
+    REQUIRE(engine.automation().unknown_target_count() == 1);
+  }
+
+  SECTION("an unbound controller resolves on no path") {
+    RealtimeEngine engine;
+    engine.prepare(48000.0, 64);
+    REQUIRE(engine.bind_midi_cc(wide));
+    push_live_cc(engine, 0, 0, 90, 64);
+    push_live_ump(engine, sonare::midi::make_midi1_control_change(0, 0, 90, 64));
+    engine.process(io, 2, 64);
+    REQUIRE(engine.automation().unknown_target_count() == 0);
+  }
+
+  SECTION("a 14-bit gesture holds its LSB on every queued path") {
+    // The kind-aware decoder emits at MSB resolution, then again once the LSB
+    // completes the pair: two resolutions for one gesture. The old cc_number-only
+    // lookup saw the LSB (CC 33) as an unbound controller and dropped it.
+    RealtimeEngine engine;
+    engine.prepare(48000.0, 64);
+    REQUIRE(engine.bind_midi_cc(wide));
+    push_live_cc(engine, 0, 0, 1, 64);
+    push_live_cc(engine, 0, 0, 33, 127);
+    engine.process(io, 2, 64);
+    REQUIRE(engine.automation().unknown_target_count() == 2);
+  }
+}
+
 TEST_CASE("RealtimeEngine drains live MIDI input into instruments while stopped",
           "[engine][midi]") {
   RealtimeEngine engine;

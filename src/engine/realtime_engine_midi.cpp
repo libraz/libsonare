@@ -159,6 +159,32 @@ void RealtimeEngine::set_external_midi_clock_enabled(bool enabled) noexcept {
   set_midi_sync_sink(enabled ? &external_clock_sync_sink_ : nullptr);
 }
 
+void RealtimeEngine::observe_live_cc_for_automation(const midi::Ump& ump) noexcept {
+  // The ONE live CC decode in the engine. Every path that can deliver a live
+  // controller message -- the queued scalar CC command, the queued raw UMP
+  // command, and the engine-owned live input source -- runs through here, so a
+  // gesture resolves to the same parameter and the same value whichever one it
+  // arrived on.
+  //
+  // observe_live_cc is the kind-aware decoder: it accumulates 14-bit MSB/LSB
+  // pairs and RPN/NRPN selector + Data Entry state per channel, so a
+  // high-resolution controller drives its parameter at full precision instead of
+  // MSB-only 7 bits, and Data Entry resolves against the selector currently
+  // addressed on that channel. The cc_number-only lookup_param / value_to_unit
+  // pair cannot do either, which is why no live path calls it any more.
+  //
+  // AUDIO thread: called from apply_command and from dispatch_live_midi_input,
+  // both inside process(). The per-channel accumulator it mutates is owned by
+  // that single thread.
+  const midi::CcMap* cc_map = midi_cc_maps_.current();
+  if (cc_map == nullptr) return;
+  uint32_t param_id = 0;
+  float mapped_value = 0.0f;
+  if (cc_map->observe_live_cc(ump, &param_id, &mapped_value)) {
+    automation_.set_parameter(param_id, mapped_value);
+  }
+}
+
 void RealtimeEngine::dispatch_live_midi_input(int64_t render_start_frame, int num_frames) noexcept {
   if (num_frames <= 0) return;
   const int64_t render_end_frame = render_start_frame + num_frames;
@@ -166,15 +192,7 @@ void RealtimeEngine::dispatch_live_midi_input(int64_t render_start_frame, int nu
     const midi::MidiEvent& event = live_midi_input_events_[i];
     if (event.render_frame < render_start_frame) continue;
     if (event.render_frame >= render_end_frame) break;
-    // Kind-aware live decode: accumulates 14-bit MSB/LSB and RPN/NRPN selector +
-    // Data Entry state so high-resolution controllers drive the parameter at full
-    // precision instead of MSB-only 7 bits (see CcMap::observe_live_cc).
-    uint32_t param_id = 0;
-    float mapped_value = 0.0f;
-    const midi::CcMap* cc_map = midi_cc_maps_.current();
-    if (cc_map != nullptr && cc_map->observe_live_cc(event.ump, &param_id, &mapped_value)) {
-      automation_.set_parameter(param_id, mapped_value);
-    }
+    observe_live_cc_for_automation(event.ump);
     midi_sequencer_.inject_event(live_midi_input_destination_id_, event.render_frame, event.ump);
   }
 }

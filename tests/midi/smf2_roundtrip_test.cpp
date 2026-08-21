@@ -491,3 +491,51 @@ TEST_CASE("SMF2 import rejects malformed input without reading out of bounds", "
     REQUIRE(r.clips.empty());
   }
 }
+
+// A Delta Clockstamp carries a 20-bit delta, so a larger gap becomes a chain of
+// max-valued words. The gaps across a clip sum to its span, so the chain cost of
+// a whole export is the SPAN divided by 0xFFFFF whatever the event count -- and
+// a single event at the legal PPQ ceiling (1e12) asks for roughly 460 million
+// words, about 1.8 GB, before anything else has been written.
+TEST_CASE("export_clip_file bounds its output by a fixed tick span", "[midi]") {
+  const auto note = sonare::midi::make_midi1_note_on(0, 0, 60, 100);
+
+  SECTION("an event past the span limit is refused instead of serialized") {
+    MidiClip clip;
+    // transport::kMaxPublicPpq itself: legal everywhere else in the system. At
+    // the default 480 DCTPQ that is ~4.8e14 ticks, whose DCS chain is ~4.6e8
+    // words -- about 1.8 GB, from this one event.
+    clip.add_event(ev(1.0e12, note));
+    Smf2ExportOptions options;
+    const auto result = export_clip_file(clip, {}, {}, options);
+    REQUIRE(result.status == Smf2Status::kInvalidArgument);
+    REQUIRE(result.bytes.empty());
+    REQUIRE_FALSE(result.diagnostic.empty());
+  }
+
+  SECTION("a declared length past the limit is refused too") {
+    MidiClip clip;
+    clip.add_event(ev(0.0, note));
+    Smf2ExportOptions options;
+    options.length_ppq = 1.0e12;
+    const auto result = export_clip_file(clip, {}, {}, options);
+    REQUIRE(result.status == Smf2Status::kInvalidArgument);
+    REQUIRE(result.bytes.empty());
+  }
+
+  SECTION("a long but representable clip still exports, and cheaply") {
+    // Just inside the limit: at 480 DCTPQ this is ~8.9 million quarter notes,
+    // and the whole chain for it is a few thousand words.
+    MidiClip clip;
+    const double last_ppq = static_cast<double>(sonare::midi::kMaxExportTick) / 480.0 - 1.0;
+    clip.add_event(ev(0.0, note));
+    clip.add_event(ev(last_ppq, note));
+    Smf2ExportOptions options;
+    const auto result = export_clip_file(clip, {}, {}, options);
+    REQUIRE(result.status == Smf2Status::kOk);
+    REQUIRE_FALSE(result.bytes.empty());
+    // Two events spanning the entire legal range: the DCS chain is the span over
+    // 0xFFFFF, so the file stays in the tens of kilobytes rather than gigabytes.
+    REQUIRE(result.bytes.size() < 64u * 1024u);
+  }
+}

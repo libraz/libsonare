@@ -98,6 +98,14 @@ uint32_t scale_cc_7_to_32(uint8_t value7) noexcept { return scale_up(value7 & 0x
 
 uint8_t scale_cc_32_to_7(uint32_t value32) noexcept { return static_cast<uint8_t>(value32 >> 25u); }
 
+uint32_t scale_cc_14_to_32(uint16_t value14) noexcept {
+  return scale_up(value14 & 0x3FFFu, 14u, 32u);
+}
+
+uint16_t scale_cc_32_to_14(uint32_t value32) noexcept {
+  return static_cast<uint16_t>(value32 >> 18u);
+}
+
 uint32_t scale_bend_14_to_32(uint16_t bend14) noexcept {
   return scale_up_center(bend14 & 0x3FFFu, 14u, 32u);
 }
@@ -357,6 +365,97 @@ SysExHandle SysExStore::allocate_handle() noexcept {
   return 0;
 }
 
+void SysExStore::note_insertion(SysExHandle handle) noexcept {
+  if (order_.empty()) {
+    return;  // Unbounded: nothing evicts, so arrival order is not worth keeping.
+  }
+  if (order_count_ == order_.size()) {
+    // Ring full. Dropping the oldest is what makes room, and it is the same
+    // eviction the byte budget performs -- a full ring IS the entry budget.
+    evict_oldest();
+  }
+  order_[(order_head_ + order_count_) % order_.size()] = handle;
+  ++order_count_;
+}
+
+bool SysExStore::evict_oldest() noexcept {
+  while (order_count_ > 0) {
+    const SysExHandle oldest = order_[order_head_];
+    order_head_ = (order_head_ + 1) % order_.size();
+    --order_count_;
+    const auto it = payloads_.find(oldest);
+    if (it == payloads_.end()) {
+      continue;  // A consumer already reclaimed it; the slot was stale.
+    }
+    retained_bytes_ -= it->second.size();
+    payloads_.erase(it);
+    ++evicted_count_;
+    return true;
+  }
+  return false;
+}
+
+bool SysExStore::store_payload(SysExHandle handle, const uint8_t* data, size_t size) {
+  const auto existing = payloads_.find(handle);
+  if (existing != payloads_.end()) {
+    // Replacing an existing handle: swap the byte accounting and leave its place
+    // in the arrival order alone (a re-commit is not a fresh arrival).
+    retained_bytes_ -= existing->second.size();
+    existing->second.assign(data, data + size);
+  } else {
+    payloads_.emplace(handle, std::vector<uint8_t>(data, data + size));
+    note_insertion(handle);
+  }
+  retained_bytes_ += size;
+  enforce_budget();
+  return true;
+}
+
+void SysExStore::enforce_budget() noexcept {
+  if (max_retained_bytes_ == 0) {
+    return;
+  }
+  while (retained_bytes_ > max_retained_bytes_ && evict_oldest()) {
+  }
+}
+
+void SysExStore::set_retention_budget(size_t max_bytes, size_t max_entries) {
+  if (max_bytes == 0 || max_entries == 0) {
+    max_retained_bytes_ = 0;
+    order_.clear();
+    order_head_ = 0;
+    order_count_ = 0;
+    return;
+  }
+  max_retained_bytes_ = max_bytes;
+  // One allocation, here, at configure time. Every later add() reuses it.
+  order_.assign(max_entries, SysExHandle{0});
+  order_head_ = 0;
+  order_count_ = 0;
+  // Seed with what is already stored so installing a budget on a populated
+  // store still bounds it. The map is unordered, so their relative arrival
+  // order is genuinely unknown and the header says so; anything that does not
+  // fit the ring is dropped here rather than being retained off the books.
+  for (auto it = payloads_.begin(); it != payloads_.end();) {
+    if (order_count_ < order_.size()) {
+      order_[order_count_++] = it->first;
+      ++it;
+      continue;
+    }
+    retained_bytes_ -= it->second.size();
+    it = payloads_.erase(it);
+    ++evicted_count_;
+  }
+  enforce_budget();
+}
+
+bool SysExStore::add_with_handle(SysExHandle handle, const uint8_t* data, size_t size) {
+  if (handle == 0 || data == nullptr || size == 0) {
+    return false;
+  }
+  return store_payload(handle, data, size);
+}
+
 SysExHandle SysExStore::add(const uint8_t* data, size_t size) {
   if (data == nullptr || size == 0) {
     return 0;
@@ -365,7 +464,7 @@ SysExHandle SysExStore::add(const uint8_t* data, size_t size) {
   if (handle == 0) {
     return 0;
   }
-  payloads_[handle] = std::vector<uint8_t>(data, data + size);
+  store_payload(handle, data, size);
   return handle;
 }
 
@@ -381,10 +480,24 @@ bool SysExStore::remove(SysExHandle handle) noexcept {
   if (handle == 0) {
     return false;
   }
-  return payloads_.erase(handle) != 0;
+  const auto it = payloads_.find(handle);
+  if (it == payloads_.end()) {
+    return false;
+  }
+  retained_bytes_ -= it->second.size();
+  payloads_.erase(it);
+  // The handle's slot in order_ is left to be skipped on eviction, so this stays
+  // O(1) instead of scanning the ring for it. The ring is fixed size, so stale
+  // slots cost nothing and are reclaimed the moment it wraps onto them.
+  return true;
 }
 
-void SysExStore::clear() noexcept { payloads_.clear(); }
+void SysExStore::clear() noexcept {
+  payloads_.clear();
+  order_head_ = 0;
+  order_count_ = 0;
+  retained_bytes_ = 0;
+}
 
 namespace {
 

@@ -122,8 +122,12 @@ size_t MidiRouter::process(const MidiEvent* input, size_t count, MidiRouteOutput
       overflow_count_.bump();
       continue;
     }
-    MidiEvent routed;
-    routed.render_frame = ev.render_frame;
+    // Copy the event, then rewrite only what routing is defined to change. The
+    // field-by-field construction this replaces silently dropped every field
+    // added to MidiEvent after it was written -- source_track_id and the SysEx
+    // payload view, both documented as surviving transformation -- and would
+    // drop the next one the same way.
+    MidiEvent routed = ev;
     routed.ump = apply_remap(ev.ump);
     out->events[out->size++] = routed;
   }

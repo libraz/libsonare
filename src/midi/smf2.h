@@ -111,6 +111,21 @@ inline Smf2ImportResult import_clip_file(const std::vector<uint8_t>& data,
 }
 
 /// Options controlling MIDI Clip File export.
+/// Largest absolute Delta Clockstamp tick @ref export_clip_file will place an
+/// event at.
+///
+/// A DCS word carries a 20-bit delta, so a larger gap is written as a chain of
+/// max-valued words. The chain length is the gap divided by 0xFFFFF, and the
+/// gaps across a whole clip sum to its span -- so the total DCS cost of an
+/// export is the SPAN divided by 0xFFFFF, whatever the event count. Bounding the
+/// span is therefore what bounds the output; without it a single event at the
+/// legal PPQ ceiling (transport::kMaxPublicPpq, 1e12) asks for ~460 million
+/// words, about 1.8 GB, from one event.
+///
+/// 2^32 ticks is ~8.9 million quarter notes at the default 480 DCTPQ -- weeks of
+/// music -- and costs at most 4096 chained words (16 KB) for the whole file.
+inline constexpr uint64_t kMaxExportTick = 1ull << 32u;
+
 struct Smf2ExportOptions {
   /// Delta Clockstamp ticks per quarter note written as DCTPQ (and used to
   /// quantize PPQ event positions to integer ticks). Defaults to 480.
@@ -144,6 +159,11 @@ struct Smf2ExportResult {
 /// File. MIDI 2.0-only messages are written WITHOUT loss (this is the format's
 /// purpose). Events are taken in their existing order; the clip should be sorted
 /// by the caller (MidiClip::sort_stable) for deterministic output.
+///
+/// Returns Smf2Status::kInvalidArgument with an empty buffer when any event, or
+/// the declared length, lands past @ref kMaxExportTick. The output size and the
+/// time to produce it are then bounded by the event count and that fixed span,
+/// never by how large a caller's raw PPQ values happen to be.
 Smf2ExportResult export_clip_file(
     const MidiClip& clip, const std::vector<transport::TempoSegment>& tempo_segments,
     const std::vector<transport::TimeSignatureSegment>& time_signatures,

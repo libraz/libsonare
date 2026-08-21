@@ -205,7 +205,18 @@ SonareError sonare_midi_cc_to_breakpoint(const SonareMidiCcBinding* bindings, si
                                          const SonareMidiEventPod* event,
                                          SonareAutomationPoint* out_point);
 
-/// @brief Converts an automation parameter value back to a CC UMP event.
+/// @brief Converts an automation parameter value back to a controller UMP event.
+/// @details Every binding kind this table accepts round-trips: a
+///          SONARE_MIDI_CC_CONTROL_CHANGE_7 binding produces a 7-bit MIDI 1.0
+///          control-change, SONARE_MIDI_CC_CONTROL_CHANGE_14 a MIDI 2.0
+///          control-change carrying the full 14-bit value, and
+///          SONARE_MIDI_CC_RPN / SONARE_MIDI_CC_NRPN a MIDI 2.0 Registered /
+///          Assignable Controller carrying the selector and the value in one
+///          word. The binding a preceding sonare_midi_cc_learn produced can
+///          therefore always be written back.
+/// @return SONARE_ERROR_INVALID_STATE only when no binding in @p bindings
+///         targets @p param_id. A supported binding never fails, so this code
+///         means "not bound" and nothing else.
 SonareError sonare_midi_param_to_cc(const SonareMidiCcBinding* bindings, size_t binding_count,
                                     uint32_t param_id, float unit_value, uint8_t group, double ppq,
                                     SonareMidiEventPod* out_event);

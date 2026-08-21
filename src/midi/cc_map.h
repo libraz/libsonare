@@ -76,9 +76,14 @@ struct CcBinding {
 /// Returns false if `ump` is not a control-change message.
 bool cc_number_of(const Ump& ump, uint8_t* out_cc) noexcept;
 
-/// Extracts the normalized (0..1) control value from a control-change UMP.
-/// MIDI 1.0 uses the 7-bit value; MIDI 2.0 uses the 32-bit value. Returns false
-/// if `ump` is not a control-change message.
+/// Extracts the normalized (0..1) control value from a controller UMP.
+/// MIDI 1.0 control-change uses the 7-bit value; MIDI 2.0 control-change and the
+/// one-word Registered / Assignable Controller (RPN / NRPN) forms use the 32-bit
+/// value. Returns false for any other message.
+///
+/// The RPN / NRPN forms are accepted so that every message param_to_cc can emit
+/// reads back through this function: without them the round trip closed for
+/// 7-bit and 14-bit bindings only.
 bool cc_normalized_value(const Ump& ump, float* out_norm) noexcept;
 
 /// Bidirectional CC <-> automation parameter map with MIDI learn.
@@ -90,13 +95,32 @@ class CcMap {
 
   // -- CONTROL thread ------------------------------------------------------
 
-  /// Bind a CC (number + channel) to a parameter id over [min_value, max_value].
-  /// If a binding with the same (cc_number, channel) exists it is replaced.
+  /// Bind a CC to a parameter id over [min_value, max_value], replacing whatever
+  /// binding the same incoming message would already have addressed.
+  ///
+  /// Binding identity is the ADDRESS, not the kind: a kControlChange7 and a
+  /// kControlChange14 binding on the same (cc_number, channel) are reached by the
+  /// very same MSB message, so binding one replaces the other rather than leaving
+  /// two entries a lookup would have to choose between. kRpn / kNrpn bindings are
+  /// addressed by (kind, selector_msb, selector_lsb, channel) instead, because
+  /// every one of them names Data Entry as its cc_number; two NRPN bindings with
+  /// different selectors therefore coexist on one channel.
+  ///
   /// Returns false if the table is full and the binding is new.
   bool bind(const CcBinding& binding);
 
-  /// Remove the binding for (cc_number, channel). Returns true if one existed.
+  /// Remove the binding a control-change on (cc_number, channel) addresses,
+  /// whatever resolution it was bound at (7-bit or 14-bit). Selector-addressed
+  /// kRpn / kNrpn bindings are NOT reachable this way -- their cc_number is the
+  /// shared Data Entry controller and names no single binding; use the
+  /// CcBinding overload for those. Returns true if one existed.
   bool unbind(uint8_t cc_number, uint8_t channel) noexcept;
+
+  /// Remove exactly the binding @p binding would have replaced on bind(), by the
+  /// same identity rule. This is the form that can address a kRpn / kNrpn
+  /// binding: only @p channel, @p kind and the selector fields are read for
+  /// those. Returns true if one existed.
+  bool unbind(const CcBinding& binding) noexcept;
 
   /// Remove all bindings and disarm learn.
   void clear() noexcept;
@@ -175,13 +199,26 @@ class CcMap {
   /// allocate (push_back). The breakpoint's value is the unit-mapped CC value.
   bool cc_to_breakpoint(const Ump& ump, double ppq, std::vector<automation::Breakpoint>* out) const;
 
-  /// Build a control-change UMP from an automation unit value for `param_id`.
+  /// Build a controller UMP from an automation unit value for `param_id`.
+  ///
   /// The unit value is inverse-mapped to a normalized 0..1 then encoded at the
-  /// binding's resolution: a kControlChange7 binding emits a 7-bit MIDI 1.0
-  /// control-change; a kControlChange14 binding emits a MIDI 2.0 control-change
-  /// carrying the full-resolution (14-bit, bit-scaled to 32-bit) value in a
-  /// single UMP — a single 7-bit MIDI 1.0 CC cannot carry 14 bits losslessly.
-  /// Returns false if no binding targets `param_id`. MAY scan the table; no
+  /// binding's resolution. EVERY kind the table accepts produces a message, in
+  /// the narrowest single-UMP form that carries it losslessly:
+  ///  - kControlChange7  -> 7-bit MIDI 1.0 control-change.
+  ///  - kControlChange14 -> MIDI 2.0 control-change with the 14-bit value
+  ///    bit-replicated into the 32-bit field (a single 7-bit MIDI 1.0 CC cannot
+  ///    carry 14 bits, and a MIDI 1.0 MSB/LSB pair is two messages).
+  ///  - kRpn / kNrpn     -> MIDI 2.0 Registered / Assignable Controller, whose
+  ///    one word carries the selector as (bank, index) plus the 32-bit value.
+  ///    The MIDI 1.0 spelling of the same gesture is four messages.
+  ///
+  /// The scaling is bit-replication (scale_cc_14_to_32), the controller family --
+  /// not the min-center-max pitch-bend family, which trades precision across the
+  /// range to keep a center value a controller does not have.
+  ///
+  /// Returns false ONLY when no binding targets `param_id`; a supported binding
+  /// never fails here, so the caller can report the two apart. Every emitted
+  /// message reads back through cc_normalized_value. MAY scan the table; no
   /// allocation. Control-thread (config-time) use.
   bool param_to_cc(uint32_t param_id, float unit_value, uint8_t group, Ump* out_ump) const noexcept;
 

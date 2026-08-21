@@ -823,6 +823,20 @@ Smf2ExportResult export_clip_file(
     return a.order < b.order;
   });
 
+  // Reject a span the format cannot carry cheaply BEFORE emitting any of it.
+  // The DCS chain for a gap is that gap divided by 0xFFFFF, so an event at the
+  // legal PPQ ceiling asks for hundreds of millions of words from a single
+  // event; the caller gets an error instead of a multi-gigabyte buffer and the
+  // minutes spent building it. items is sorted by tick, so the last is the max.
+  const uint64_t length_tick = ppq_to_tick(options.length_ppq, dctpq);
+  const uint64_t furthest_tick = std::max(items.empty() ? 0u : items.back().tick, length_tick);
+  if (furthest_tick > kMaxExportTick) {
+    result.status = Smf2Status::kInvalidArgument;
+    result.diagnostic = "clip spans more Delta Clockstamp ticks than the export limit";
+    result.bytes.clear();
+    return result;
+  }
+
   uint64_t last_tick = 0;
   uint64_t max_tick = 0;
   for (const SeqItem& item : items) {
@@ -834,7 +848,6 @@ Smf2ExportResult export_clip_file(
   // End of clip at the clip's declared length or the final event, whichever is
   // later, so trailing silence and sustained tails are not shortened on the
   // round trip.
-  const uint64_t length_tick = ppq_to_tick(options.length_ppq, dctpq);
   const uint64_t end_tick = std::max(max_tick, length_tick);
   put_dcs(&out, &last_tick, end_tick);
   put_stream(&out, kStreamEndOfClip);

@@ -141,17 +141,17 @@ NotePairValidation MidiClip::validate_note_pairs() const {
 void MidiClip::to_render_events(const transport::TempoMap& tempo_map, double clip_start_ppq,
                                 std::vector<MidiEvent>* out) const {
   if (out == nullptr) return;
-  const int64_t clip_start_sample = tempo_map.ppq_to_sample(clip_start_ppq);
   for (const MidiClipEvent& ev : events_) {
-    const int64_t abs_sample = tempo_map.ppq_to_sample(clip_start_ppq + ev.ppq);
     MidiEvent rendered;
-    // Anchor relative to the clip start so any small PPQ->sample rounding stays
-    // consistent with the clip's own start_sample baking in the compiler.
-    rendered.render_frame = abs_sample;
+    // Absolute mapping, as the header states: each event's own position on the
+    // timeline, mapped through the tempo map in one step. The clip start is a
+    // term in that sum, not a separate anchor -- the sequencer recomputes the
+    // local offset it needs from the clip's own start_sample, so subtracting one
+    // here would only reintroduce the rounding it already accounts for.
+    rendered.render_frame = tempo_map.ppq_to_sample(clip_start_ppq + ev.ppq);
     rendered.ump = ev.ump;
     rendered.sysex_payload = ev.sysex_payload;
     rendered.sysex_payload_size = ev.sysex_payload_size;
-    (void)clip_start_sample;
     out->push_back(rendered);
   }
 }
