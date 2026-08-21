@@ -1188,29 +1188,178 @@ if(BUILD_WASM)
   # -fexceptions must be on the COMPILE line, not only the link line: emscripten
   # defaults to DISABLE_EXCEPTION_CATCHING=1, which elides landing pads at
   # compile time, so enabling runtime support at link time cannot restore a
-  # `catch` that was never emitted. Scope it to the translation units that
-  # actually catch: the C-ABI units rely on SONARE_C_TRY/SONARE_C_CATCH to turn
-  # a C++ throw into a SonareError, and these binding units catch to clean up or
-  # to convert. Whole-target -fexceptions emits landing pads everywhere and
-  # costs several times as much for no additional behaviour.
+  # `catch` that was never emitted. Losing one is silent -- not a compile error,
+  # not a link error, not a test failure. A C-ABI guard that promises an error
+  # code delivers a raw exception instead, and a `noexcept` function whose
+  # catch(...) was deleted calls std::terminate and takes the module with it.
+  #
+  # Every unit that catches gets the flag, across every target linked into the
+  # module -- the sibling static libraries are compiled by their own target's
+  # flags, so listing only this target's sources leaves the engine, mastering,
+  # mixing, serializer and C-ABI units uncovered. Whole-target -fexceptions
+  # needs no list at all, but emits landing pads in the 343 units that do not
+  # catch, and measures at roughly twice the size for the same behaviour
+  # (gzip +11.6% against +6.5% on the full module, +12.3% against +4.1% on the
+  # analysis-only one).
+  #
+  # The per-target if(TARGET) guards are load-bearing: a feature-reduced
+  # configuration does not create every target, and TARGET_DIRECTORY on a target
+  # that does not exist is a hard configure error. That failure appears only in
+  # the reduced configuration, so the full build cannot catch it.
+  #
   # Kept in step with the sources by tests/conformance/check_wasm_exception_scope.py,
-  # which fails when a unit compiled into this target catches without being listed.
-  set(SONARE_WASM_EXCEPTION_SOURCES
-    c_api/sonare_c_streaming_retune.cpp
-    c_api/sonare_c_voice_changer.cpp
-    wasm/bindings/effects/realtime_voice_changer.cpp
-    wasm/bindings/mixing/mixing.cpp
-    wasm/bindings/project/project_external_stems.cpp
-    wasm/bindings/realtime/mixer.cpp)
-  if(BUILD_MIXING AND NOT SONARE_WASM_ANALYSIS_ONLY AND BUILD_GRAPH)
-    list(APPEND SONARE_WASM_EXCEPTION_SOURCES ${SONARE_C_MIXING_SOURCES})
+  # which resolves the linked object set from the module's link line, follows the
+  # compiler's own dependency files so a catch reached through a header counts,
+  # and fails on any unit that catches without the flag.
+  if(TARGET sonare)
+    set_source_files_properties(
+      c_api/mixing_assistant.cpp
+      c_api/mixing_graph.cpp
+      c_api/mixing_mixer.cpp
+      c_api/mixing_strip.cpp
+      c_api/project_bounce.cpp
+      c_api/project_core.cpp
+      c_api/project_edit_clip.cpp
+      c_api/project_edit_track.cpp
+      c_api/project_external_stems.cpp
+      c_api/project_midi.cpp
+      c_api/project_mir.cpp
+      c_api/project_soundfont.cpp
+      c_api/sonare_c_mixing.cpp
+      c_api/sonare_c_project.cpp
+      c_api/sonare_c_streaming_retune.cpp
+      c_api/sonare_c_voice_changer.cpp
+      wasm/bindings.cpp
+      wasm/bindings/analysis/quick.cpp
+      wasm/bindings/analysis/quick_detailed.cpp
+      wasm/bindings/analysis/stream_analyzer.cpp
+      wasm/bindings/common/common.cpp
+      wasm/bindings/effects/audio.cpp
+      wasm/bindings/effects/offline_dynamics_editing.cpp
+      wasm/bindings/effects/realtime_voice_changer.cpp
+      wasm/bindings/effects/repair.cpp
+      wasm/bindings/features/core.cpp
+      wasm/bindings/features/music.cpp
+      wasm/bindings/features/pitch.cpp
+      wasm/bindings/features/spectral.cpp
+      wasm/bindings/features/spectrogram.cpp
+      wasm/bindings/mastering/api.cpp
+      wasm/bindings/mastering/chain.cpp
+      wasm/bindings/mastering/streaming_chain.cpp
+      wasm/bindings/mastering/streaming_equalizer.cpp
+      wasm/bindings/metering/metering.cpp
+      wasm/bindings/mixing/mixing.cpp
+      wasm/bindings/mixing/mixing_assistant.cpp
+      wasm/bindings/mixing/mixing_automation.cpp
+      wasm/bindings/mixing/mixing_processing.cpp
+      wasm/bindings/mixing/mixing_strip.cpp
+      wasm/bindings/mixing/mixing_topology.cpp
+      wasm/bindings/offline.cpp
+      wasm/bindings/project/project.cpp
+      wasm/bindings/project/project_arrange.cpp
+      wasm/bindings/project/project_bounce.cpp
+      wasm/bindings/project/project_edit.cpp
+      wasm/bindings/project/project_external_stems.cpp
+      wasm/bindings/project/project_meta.cpp
+      wasm/bindings/project/project_midi.cpp
+      wasm/bindings/realtime/capture.cpp
+      wasm/bindings/realtime/clips.cpp
+      wasm/bindings/realtime/engine.cpp
+      wasm/bindings/realtime/midi.cpp
+      wasm/bindings/realtime/mixer.cpp
+      wasm/bindings/realtime/params.cpp
+      wasm/bindings/realtime/processing.cpp
+      wasm/bindings/realtime/telemetry.cpp
+      wasm/bindings/realtime/transport.cpp
+      wasm/bindings/streaming/retune.cpp
+      TARGET_DIRECTORY sonare
+      PROPERTIES COMPILE_OPTIONS -fexceptions)
   endif()
-  if(BUILD_ARRANGEMENT AND NOT SONARE_WASM_ANALYSIS_ONLY)
-    list(APPEND SONARE_WASM_EXCEPTION_SOURCES ${SONARE_C_PROJECT_SOURCES})
+  if(TARGET sonare_arrangement)
+    set_source_files_properties(
+      arrangement/edit_compiler.cpp
+      arrangement/edit_history.cpp
+      arrangement/external_stems.cpp
+      arrangement/retained_bytes.cpp
+      TARGET_DIRECTORY sonare_arrangement
+      PROPERTIES COMPILE_OPTIONS -fexceptions)
   endif()
-  set_source_files_properties(${SONARE_WASM_EXCEPTION_SOURCES}
-    TARGET_DIRECTORY sonare
-    PROPERTIES COMPILE_OPTIONS -fexceptions)
+  if(TARGET sonare_core_objects)
+    set_source_files_properties(
+      c_api/core_analysis.cpp
+      c_api/core_audio.cpp
+      c_api/core_common.cpp
+      c_api/core_cqt.cpp
+      c_api/core_quick.cpp
+      c_api/eq_band_json.cpp
+      c_api/features_common.cpp
+      c_api/features_inverse.cpp
+      c_api/features_music.cpp
+      c_api/features_segment.cpp
+      c_api/features_spectral_pitch.cpp
+      c_api/features_spectrogram_mel.cpp
+      c_api/features_streaming.cpp
+      c_api/sonare_c.cpp
+      c_api/sonare_c_compat.cpp
+      c_api/sonare_c_editing.cpp
+      c_api/sonare_c_effects.cpp
+      c_api/sonare_c_features.cpp
+      c_api/sonare_c_internal.cpp
+      c_api/sonare_c_memory.cpp
+      core/convert.cpp
+      TARGET_DIRECTORY sonare_core_objects
+      PROPERTIES COMPILE_OPTIONS -fexceptions)
+  endif()
+  if(TARGET sonare_engine)
+    set_source_files_properties(
+      engine/engine_controller.cpp
+      engine/realtime_engine.cpp
+      engine/realtime_engine_commands.cpp
+      engine/realtime_engine_instruments.cpp
+      engine/realtime_engine_lifecycle.cpp
+      engine/realtime_engine_midi.cpp
+      engine/realtime_engine_mixing.cpp
+      engine/track_mixer.cpp
+      engine/track_mixer_params.cpp
+      TARGET_DIRECTORY sonare_engine
+      PROPERTIES COMPILE_OPTIONS -fexceptions)
+  endif()
+  if(TARGET sonare_mastering)
+    set_source_files_properties(
+      mastering/api/chain_json.cpp
+      mastering/api/insert_factory.cpp
+      mastering/api/named_processor_registry.cpp
+      mastering/assistant/audio_profile.cpp
+      mastering/eq/equalizer.cpp
+      TARGET_DIRECTORY sonare_mastering
+      PROPERTIES COMPILE_OPTIONS -fexceptions)
+  endif()
+  if(TARGET sonare_midi)
+    set_source_files_properties(
+      midi/sequencer.cpp
+      TARGET_DIRECTORY sonare_midi
+      PROPERTIES COMPILE_OPTIONS -fexceptions)
+  endif()
+  if(TARGET sonare_mixing)
+    set_source_files_properties(
+      mixing/alignment_delay.cpp
+      mixing/channel_strip.cpp
+      TARGET_DIRECTORY sonare_mixing
+      PROPERTIES COMPILE_OPTIONS -fexceptions)
+  endif()
+  if(TARGET sonare_serialize)
+    set_source_files_properties(
+      serialize/project_serializer.cpp
+      serialize/project_serializer_decode.cpp
+      TARGET_DIRECTORY sonare_serialize
+      PROPERTIES COMPILE_OPTIONS -fexceptions)
+  endif()
+  if(TARGET sonare_voice_changer)
+    set_source_files_properties(
+      editing/voice_changer/realtime/config.cpp
+      TARGET_DIRECTORY sonare_voice_changer
+      PROPERTIES COMPILE_OPTIONS -fexceptions)
+  endif()
   target_link_options(sonare PRIVATE
     -msimd128
     # Enable classic (JS-based) C++ exception support so a native throw

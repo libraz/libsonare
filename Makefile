@@ -233,6 +233,7 @@ conformance:
 	python3 tools/api/check_request_object_coverage.py
 	python3 tools/conformance/check_cli_contract.py --schema
 	python3 -m unittest tests/conformance/test_cli_contract.py
+	python3 -m unittest tests/conformance/test_wasm_exception_scope.py
 	@if test -x "$(BUILD_DIR)/bin/sonare-cli" && test -x "bindings/python/.venv/bin/python"; then \
 		python3 tools/conformance/check_cli_contract.py \
 			--native "$(BUILD_DIR)/bin/sonare-cli" \
