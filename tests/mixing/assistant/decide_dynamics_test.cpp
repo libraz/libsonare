@@ -419,6 +419,35 @@ TEST_CASE("a kick and a bass contending in the low end get a sidechain duck",
   CHECK_FALSE(has_insert(deltas, "kick", "dynamics.duckingProcessor"));
 }
 
+TEST_CASE("a duck recovers between the key's hits, not between the ducked part's",
+          "[mixing][assistant]") {
+  // The detector listens to the key, so the gap the recovery has to fit inside
+  // is the key's. Giving the two tracks opposite onset rates is what separates
+  // the two readings: a release bounded by the ducked part's rate would read the
+  // sparse figure and stay long.
+  auto duck_release = [](float key_onsets_per_sec, float ducked_onsets_per_sec) {
+    const std::vector<TrackProfile> profiles{
+        make_profile("kick", SourceClass::Kick, 10.0f, kTransientSustain, key_onsets_per_sec),
+        make_profile("bass", SourceClass::Bass, 10.0f, kSustainedSustain, ducked_onsets_per_sec)};
+    MixProfile mix = make_mix(profiles.size());
+    set_dominance(mix, 0, 1, 1, 0.72f, 400);
+    const std::vector<SceneDelta> deltas = decide_dynamics(profiles, mix, MixAssistantConfig{});
+    const Insert* duck = find_insert(deltas, "bass", "dynamics.duckingProcessor");
+    REQUIRE(duck != nullptr);
+    return param_number(*duck, "releaseMs");
+  };
+
+  const float dense_key = duck_release(kDenseOnsetsPerSec, kSparseOnsetsPerSec);
+  const float sparse_key = duck_release(kSparseOnsetsPerSec, kDenseOnsetsPerSec);
+
+  INFO("dense key " << dense_key << " ms, sparse key " << sparse_key << " ms");
+  CHECK(dense_key < sparse_key);
+  CHECK(dense_key <= recovery_bound_ms(kDenseOnsetsPerSec));
+  // The sparse key leaves the starting point alone, so the case above cannot
+  // pass on a stage that simply shortens every duck.
+  CHECK(sparse_key < recovery_bound_ms(kSparseOnsetsPerSec));
+}
+
 TEST_CASE("a pair that does not contend in the low end gets no sidechain duck",
           "[mixing][assistant]") {
   const std::vector<TrackProfile> profiles{make_profile("kick", SourceClass::Kick),

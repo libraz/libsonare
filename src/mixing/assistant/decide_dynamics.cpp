@@ -426,8 +426,10 @@ constexpr float kDuckingThresholdOffsetDb = -12.0f;
 constexpr float kDuckingRatio = 4.0f;
 // Fast enough that the space is open by the time the kick's body arrives.
 constexpr float kDuckingAttackMs = 5.0f;
-// And recovered before the next beat at any ordinary tempo, so the bass is only
-// out of the way while the kick is there.
+// Starting point for the recovery, before the key track's own event rate bounds
+// it. The duck is only worth having while the key is sounding, so the gain has
+// to be back before the key's next hit; the interval between those hits is
+// measured on the key rather than assumed from a tempo nobody supplied.
 constexpr float kDuckingReleaseMs = 120.0f;
 // A few dB of movement clears the collision. Deeper ducking is an audible
 // production effect, and an assistant that produces one has made a creative
@@ -752,13 +754,16 @@ void decide_sidechain(const std::vector<TrackProfile>& profiles, const MixProfil
 
     const float ratio = scale_ratio(kDuckingRatio, strength);
     const float depth_db = kDuckingMaxDepthDb * strength;
+    // Bounded by the key's onset rate, not the ducked track's: what the gain has
+    // to be clear of is the next hit of the part driving the detector.
+    const float release_ms = cap_release_to_onset_rate(keying, kDuckingReleaseMs);
 
     json::Object params;
     put_number(params, "thresholdDb",
                keying.base.loudness.integrated_lufs + kDuckingThresholdOffsetDb);
     put_number(params, "ratio", ratio);
     put_number(params, "attackMs", kDuckingAttackMs);
-    put_number(params, "releaseMs", kDuckingReleaseMs);
+    put_number(params, "releaseMs", release_ms);
     put_number(params, "rangeDb", depth_db);
 
     const std::string reason =
