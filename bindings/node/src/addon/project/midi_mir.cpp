@@ -146,9 +146,13 @@ Napi::Value ProjectWrap::ExportClipFile(const Napi::CallbackInfo& info) {
 
 Napi::Value ProjectWrap::SetProgram(const Napi::CallbackInfo& info) {
   Napi::Env env = info.Env();
-  ThrowIfError(env, sonare_project_set_program(project_, Uint32Arg(info, 0, 0),
-                                               static_cast<int>(NumberArg(info, 1, 0.0)),
-                                               static_cast<int>(NumberArg(info, 2, 0.0))));
+  int program = 0;
+  int bank = 0;
+  if (!Int32Arg(env, info, 1, "program", 0, &program) ||
+      !Int32Arg(env, info, 2, "bank", 0, &bank)) {
+    return env.Undefined();
+  }
+  ThrowIfError(env, sonare_project_set_program(project_, Uint32Arg(info, 0, 0), program, bank));
   return env.Undefined();
 }
 
@@ -162,10 +166,14 @@ Napi::Value ProjectWrap::SetProgramOnChannel(const Napi::CallbackInfo& info) {
       !OptionalMidiByteArg(env, info, 2, "channel", 0, &channel)) {
     return env.Undefined();
   }
-  ThrowIfError(
-      env, sonare_project_set_program_on_channel(project_, Uint32Arg(info, 0, 0), group, channel,
-                                                 static_cast<int>(NumberArg(info, 3, 0.0)),
-                                                 static_cast<int>(NumberArg(info, 4, -1.0))));
+  int program = 0;
+  int bank = -1;
+  if (!Int32Arg(env, info, 3, "program", 0, &program) ||
+      !Int32Arg(env, info, 4, "bank", -1, &bank)) {
+    return env.Undefined();
+  }
+  ThrowIfError(env, sonare_project_set_program_on_channel(project_, Uint32Arg(info, 0, 0), group,
+                                                          channel, program, bank));
   return env.Undefined();
 }
 
@@ -264,9 +272,13 @@ Napi::Value ProjectWrap::AutoTempo(const Napi::CallbackInfo& info) {
     return env.Undefined();
   }
   Napi::Float32Array audio = info[0].As<Napi::Float32Array>();
-  const int sample_rate = static_cast<int>(NumberArg(info, 1, 0.0));
+  int sample_rate = 0;
+  if (!Int32Arg(env, info, 1, "sampleRate", 0, &sample_rate)) return env.Undefined();
+  size_t candidate_index = 0;
+  if (!NonNegativeSizeTArg(env, info, 2, "candidateIndex", &candidate_index)) {
+    return env.Undefined();
+  }
   float out_bpm = 0.0f;
-  const size_t candidate_index = static_cast<size_t>(NumberArg(info, 2, 0.0));
   const bool apply_time_signatures = info.Length() > 3 && info[3].ToBoolean().Value();
   const SonareProjectTempoOptions options =
       TempoOptionsFrom(info.Length() > 4 ? info[4] : env.Undefined());
@@ -285,14 +297,15 @@ Napi::Value ProjectWrap::AnalyzeTempo(const Napi::CallbackInfo& info) {
     return env.Undefined();
   }
   Napi::Float32Array audio = info[0].As<Napi::Float32Array>();
+  int sample_rate = 0;
+  if (!Int32Arg(env, info, 1, "sampleRate", 0, &sample_rate)) return env.Undefined();
   SonareProjectTempoCandidate candidates[SONARE_PROJECT_MAX_TEMPO_CANDIDATES]{};
   size_t count = 0;
   const SonareProjectTempoOptions options =
       TempoOptionsFrom(info.Length() > 2 ? info[2] : env.Undefined());
   ThrowIfError(env, sonare_project_analyze_tempo_with_options(
-                        project_, audio.Data(), audio.ElementLength(),
-                        static_cast<int>(NumberArg(info, 1, 0.0)), &options, candidates,
-                        std::size(candidates), &count));
+                        project_, audio.Data(), audio.ElementLength(), sample_rate, &options,
+                        candidates, std::size(candidates), &count));
   if (env.IsExceptionPending()) return env.Undefined();
   Napi::Array output =
       Napi::Array::New(env, static_cast<uint32_t>(std::min(count, std::size(candidates))));
@@ -320,10 +333,11 @@ Napi::Value ProjectWrap::AnalyzeTempo(const Napi::CallbackInfo& info) {
 
 Napi::Value ProjectWrap::SnapToGrid(const Napi::CallbackInfo& info) {
   Napi::Env env = info.Env();
+  int division = 1;
+  if (!Int32Arg(env, info, 2, "division", 1, &division)) return env.Undefined();
   double out_ppq = 0.0;
-  ThrowIfError(env, sonare_project_snap_to_grid_ex(
-                        project_, NumberArg(info, 0, 0.0), NumberArg(info, 1, 1.0),
-                        static_cast<int>(NumberArg(info, 2, 1.0)), &out_ppq));
+  ThrowIfError(env, sonare_project_snap_to_grid_ex(project_, NumberArg(info, 0, 0.0),
+                                                   NumberArg(info, 1, 1.0), division, &out_ppq));
   if (env.IsExceptionPending()) return env.Undefined();
   return Napi::Number::New(env, out_ppq);
 }
@@ -451,7 +465,8 @@ Napi::Value ProjectWrap::AssistSidecarCount(const Napi::CallbackInfo& info) {
 
 Napi::Value ProjectWrap::GetAssistSidecar(const Napi::CallbackInfo& info) {
   Napi::Env env = info.Env();
-  const size_t index = static_cast<size_t>(NumberArg(info, 0, 0.0));
+  size_t index = 0;
+  if (!NonNegativeSizeTArg(env, info, 0, "index", &index)) return env.Undefined();
   SonareProjectAssistSidecar sidecar{};
   ThrowIfError(env, sonare_project_get_assist_sidecar(project_, index, &sidecar));
   if (env.IsExceptionPending()) return env.Undefined();
