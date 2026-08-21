@@ -69,6 +69,111 @@ with libsonare.Project() as project:
     audio = project.bounce_with_synth_instrument("saw-lead", num_channels=2)
 ```
 
+## Mixing assistant
+
+`suggest_mix_scene` takes a set of tracks and returns a starting point for a
+mixer scene — per-strip input trim and fader, pan and width, corrective EQ,
+dynamics, bus structure and sends — alongside the measurements it was derived
+from and a written explanation of every decision.
+
+**The assistant suggests; it does not apply.** It never processes or emits
+audio: what comes back is parameters and prose. Applying them is a separate,
+explicit step, so nothing changes behind the user's back.
+
+```python
+import libsonare
+
+tracks = [
+    libsonare.MixTrackInput("kick", kick_samples, name="Kick"),
+    libsonare.MixTrackInput("bass", bass_samples, name="Bass"),
+    libsonare.MixTrackInput("vox", vox_left, vox_right, "Lead Vox"),
+]
+
+result = libsonare.suggest_mix_scene(
+    tracks, sample_rate=48000, target_track_lufs=-18.0, eq_max_cut_db=3.0,
+)
+
+for line in result["explanation"]:
+    print(line)
+for track in result["tracks"]:
+    print(track["stripId"], track["source"], track["sourceConfidence"])
+```
+
+Nothing has been applied at this point. Realizing the suggestion is the second
+step, and it is the caller's own:
+
+```python
+import json
+
+mixer = libsonare.Mixer.from_scene_json(
+    json.dumps(result["scene"]), sample_rate=48000, block_size=512,
+)
+try:
+    out = mixer.process_stereo(left_blocks, right_blocks)  # (left, right, sample_rate)
+finally:
+    mixer.close()
+```
+
+`suggest_mix_scene_json` takes the same arguments and returns only the scene,
+already serialized in the form `Mixer.from_scene_json` reads, for a caller that
+goes straight to applying it.
+
+### Reading the explanation
+
+`explanation` is a list of English declarative sentences in the order the
+changes were applied — structure, then gain, then balance, then EQ, then
+dynamics, then stereo image. Reading it top to bottom retraces how the scene was
+built, one decision at a time. It is empty when every decision domain is
+switched off, or when no track survived exclusion.
+
+### What it does not do
+
+- **Suggestion, not automation.** No audio is processed and no audio is
+  returned. Whether to apply the scene is the user's decision.
+- **Classification is confidence-scored.** Each track resolves to a source class
+  with a confidence in `[0, 1]`, and a track the rules cannot place stays
+  `"unknown"`. An unknown track keeps a neutral strip routed straight to master;
+  no class-driven EQ, dynamics or placement is suggested for it. A track name is
+  read only as a hint and can never select a class on its own.
+- **Degenerate audio is not an error; a malformed call is.** A track that is
+  silent, shorter than the minimum measurable duration (0.4 s), or without
+  energy in the analysis bands comes back with `"usable": False` and an
+  `"exclusionReason"`, and gets no suggestion; an empty track list yields an
+  empty scene. A malformed *call* is rejected instead — a missing or duplicate
+  `track_id`, a non-positive `sample_rate`, mismatched left/right lengths, or
+  NaN/Inf samples raise `SonareValueError`.
+- **Genre- and material-dependent.** The relative levels and placements follow
+  common recording practice, not a universal correct answer. Expect to treat the
+  result as a first pass on unusual material.
+- **Offline only.** The pipeline allocates, runs an STFT per track and evaluates
+  every track pair; it must not be called from a realtime audio thread.
+
+### Options
+
+Every option is keyword-only, and one left at `None` keeps the core default
+rather than being sent as an explicit value.
+
+| Option                   | Default | Meaning                                                    |
+|--------------------------|---------|------------------------------------------------------------|
+| `target_track_lufs`      | `-18.0` | Absolute integrated-loudness target each track is staged towards, in LUFS |
+| `suggestion_strength`    | `1.0`   | Overall strength in `[0, 1]`, scaling every level-like decision; `0` suggests nothing |
+| `eq_max_cut_db`          | `4.0`   | Largest cut a single suggested EQ band may apply, in dB      |
+| `mix_bus_headroom_dbtp`  | `-6.0`  | Headroom the summed mix is left with on the master bus, in dBTP |
+| `enable_structure`       | `True`  | Evaluate bus structure, routing and sends                    |
+| `enable_gain`            | `True`  | Evaluate per-track gain staging                              |
+| `enable_balance`         | `True`  | Evaluate fader balance between tracks                        |
+| `enable_eq`              | `True`  | Evaluate corrective EQ                                       |
+| `enable_dynamics`        | `True`  | Evaluate dynamics processing                                 |
+| `enable_image`           | `True`  | Evaluate stereo placement and width                          |
+| `n_fft`                  | `2048`  | Shared analysis FFT size for every track                     |
+| `hop_length`             | `512`   | Shared analysis hop length, in samples                       |
+
+A disabled domain is not evaluated at all rather than evaluated and discarded.
+
+The assistant is an optional addition on top of the mixer, not a required part
+of it: `-DBUILD_MIXING_ASSISTANT=OFF` (default `ON`) removes the subsystem
+entirely and leaves the rest of the library unchanged.
+
 ## Capabilities
 
 Every area below has runnable examples and the full API in the
@@ -79,6 +184,7 @@ is preferred when doing more than one computation on the same signal.
 - **Analysis** — BPM, key (+ candidates), chords, downbeats, sections, melody, tuning; pitch (YIN / pYIN), timbre, and the full spectral feature set (STFT, mel, MFCC, chroma, CQT/VQT, spectral contrast); metering (`metering_*`, `waveform_peaks`). → [Python API](https://libsonare.libraz.net/docs/python-api)
 - **Mastering** — 88 named DSP processors, the configurable `mastering_chain`, 25 named presets via `master_audio`, dynamics / repair specialist functions, and reference-matching. → [Mastering processors](https://libsonare.libraz.net/docs/mastering-processors)
 - **Mixing** — offline `mix_stereo` and the block-based `Mixer` with scene presets. → [Mixing](https://libsonare.libraz.net/docs/mixing)
+- **Mixing assistant** — `suggest_mix_scene` analyzes a set of tracks and suggests a mixer scene with a written explanation; it suggests only, and applying the scene is a separate step. → [Mixing assistant](#mixing-assistant)
 - **Editing DSP** — time-stretch, pitch-shift, HPSS (+ residual), phase vocoder, normalize, trim, remix. → [Editing DSP](https://libsonare.libraz.net/docs/editing-dsp)
 - **Room acoustics** — blind RT60 / EDT, impulse-response clarity metrics, `estimate_room`, `synthesize_rir`, `room_morph`. → [Room acoustics](https://libsonare.libraz.net/docs/acoustic-analysis)
 - **Realtime & streaming** — `RealtimeEngine` (transport / MIDI / render / capture), `StreamAnalyzer`, `StreamingMasteringChain`, `RealtimeVoiceChanger`. → [Realtime & streaming](https://libsonare.libraz.net/docs/realtime-streaming)

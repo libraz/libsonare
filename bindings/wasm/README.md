@@ -231,6 +231,118 @@ cannot be measured block by block. The chain is a host-side stage: it is outside
 the engine's own delay compensation, so aligning it against other engine outputs
 is the caller's job.
 
+## Mixing assistant
+
+`suggestMixScene` takes a set of tracks and returns a starting point for a mixer
+scene — per-strip input trim and fader, pan and width, corrective EQ, dynamics,
+bus structure and sends — alongside the measurements it was derived from and a
+written explanation of every decision.
+
+**The assistant suggests; it does not apply.** It never processes or emits
+audio: what comes back is parameters and prose. Applying them is a separate,
+explicit step, so nothing changes behind the user's back.
+
+```typescript
+import { init, suggestMixScene } from '@libraz/libsonare';
+
+await init();
+
+const tracks = [
+  { id: 'kick', name: 'Kick', left: kickSamples },
+  { id: 'bass', name: 'Bass', left: bassSamples },
+  { id: 'vox', name: 'Lead Vox', left: voxLeft, right: voxRight },
+];
+
+const result = suggestMixScene({
+  tracks,
+  sampleRate: 48000,
+  options: { targetTrackLufs: -18, eqMaxCutDb: 3 },
+});
+
+for (const line of result.explanation) console.log(line);
+for (const track of result.tracks) {
+  console.log(track.stripId, track.source, track.sourceConfidence);
+}
+```
+
+Nothing has been applied at this point. Realizing the suggestion is the second
+step, and it is the caller's own:
+
+```typescript
+import { Mixer } from '@libraz/libsonare';
+
+const mixer = Mixer.fromSceneJson(JSON.stringify(result.scene), 48000, 512);
+try {
+  const out = mixer.processStereo(leftBlocks, rightBlocks); // { left, right, sampleRate }
+} finally {
+  mixer.delete();
+}
+```
+
+`suggestMixSceneJson` takes the same request and returns only the scene, already
+serialized in the form `Mixer.fromSceneJson` reads, for a caller that goes
+straight to applying it.
+
+### Reading the explanation
+
+`explanation` is a list of English declarative sentences in the order the
+changes were applied — structure, then gain, then balance, then EQ, then
+dynamics, then stereo image. Reading it top to bottom retraces how the scene was
+built, one decision at a time. It is empty when every decision domain is
+switched off, or when no track survived exclusion.
+
+### What it does not do
+
+- **Suggestion, not automation.** No audio is processed and no audio is
+  returned. Whether to apply the scene is the user's decision.
+- **Classification is confidence-scored.** Each track resolves to a source class
+  with a confidence in `[0, 1]`, and a track the rules cannot place stays
+  `'unknown'`. An unknown track keeps a neutral strip routed straight to master;
+  no class-driven EQ, dynamics or placement is suggested for it. A track name is
+  read only as a hint and can never select a class on its own.
+- **Degenerate audio is not an error; a malformed call is.** A track that is
+  silent, shorter than the minimum measurable duration (0.4 s), or without
+  energy in the analysis bands comes back with `usable: false` and an
+  `exclusionReason`, and gets no suggestion; an empty track list yields an empty
+  scene. A malformed *call* is rejected instead — a missing or non-string track
+  id, a `left` that is not a `Float32Array`, a `right` whose length differs from
+  `left`, or a non-positive `sampleRate` throws.
+- **Genre- and material-dependent.** The relative levels and placements follow
+  common recording practice, not a universal correct answer. Expect to treat the
+  result as a first pass on unusual material.
+- **Offline only.** The pipeline allocates, runs an STFT per track and evaluates
+  every track pair; it must not be called from an AudioWorklet or any other
+  realtime audio callback. The WASM build is single-threaded, so drive it from a
+  Web Worker to keep the UI responsive on a large session.
+
+### Options
+
+Every field is optional, and an omitted field keeps the core default rather than
+being sent as an explicit value. `sampleRate` itself defaults to `48000`.
+
+| Option               | Default | Meaning                                                        |
+| -------------------- | ------- | -------------------------------------------------------------- |
+| `targetTrackLufs`    | `-18`   | Absolute integrated-loudness target each track is staged towards, in LUFS |
+| `suggestionStrength` | `1`     | Overall strength in `[0, 1]`, scaling every level-like decision; `0` suggests nothing |
+| `eqMaxCutDb`         | `4`     | Largest cut a single suggested EQ band may apply, in dB          |
+| `mixBusHeadroomDbtp` | `-6`    | Headroom the summed mix is left with on the master bus, in dBTP  |
+| `enableStructure`    | `true`  | Evaluate bus structure, routing and sends                        |
+| `enableGain`         | `true`  | Evaluate per-track gain staging                                  |
+| `enableBalance`      | `true`  | Evaluate fader balance between tracks                            |
+| `enableEq`           | `true`  | Evaluate corrective EQ                                           |
+| `enableDynamics`     | `true`  | Evaluate dynamics processing                                     |
+| `enableImage`        | `true`  | Evaluate stereo placement and width                              |
+| `nFft`               | `2048`  | Shared analysis FFT size for every track                         |
+| `hopLength`          | `512`   | Shared analysis hop length, in samples                           |
+
+A disabled domain is not evaluated at all rather than evaluated and discarded.
+
+The assistant is an optional addition on top of the mixer, not a required part
+of it: source builds can drop the subsystem entirely with
+`-DBUILD_MIXING_ASSISTANT=OFF` (default `ON`), which leaves the rest of the
+library unchanged. It is not part of the smaller `@libraz/libsonare/analysis`
+entry.
+
 ## Capabilities
 
 Every area below has runnable examples and the full API in the
@@ -239,6 +351,7 @@ Every area below has runnable examples and the full API in the
 - **Analysis** — BPM, key (+ candidates), chords, downbeats, sections, melody, tuning; pitch (YIN / pYIN), timbre, and the full spectral feature set (STFT, mel, MFCC, chroma, CQT/VQT, spectral contrast); metering (true-peak, LUFS, correlation, vectorscope, waveform peaks). → [API](https://libsonare.libraz.net/docs/wasm)
 - **Mastering** — 88 named DSP processors, the configurable `masteringChain`, 25 named presets via `masterAudio`, and reference-matching. → [Mastering processors](https://libsonare.libraz.net/docs/mastering-processors)
 - **Mixing** — offline `mixStereo` and the block-based `Mixer` with scene presets. → [Mixing](https://libsonare.libraz.net/docs/mixing)
+- **Mixing assistant** — `suggestMixScene` analyzes a set of tracks and suggests a mixer scene with a written explanation; it suggests only, and applying the scene is a separate step. → [Mixing assistant](#mixing-assistant)
 - **Editing DSP** — time-stretch, pitch-shift, HPSS (+ residual), phase vocoder, normalize, trim, remix. → [Editing DSP](https://libsonare.libraz.net/docs/editing-dsp)
 - **Room acoustics** — blind RT60 / EDT, impulse-response clarity metrics, RIR synthesis, room estimation and morphing. → [Room acoustics](https://libsonare.libraz.net/docs/acoustic-analysis)
 - **Realtime & streaming** — `RealtimeEngine` (transport / MIDI / render, bounded-memory clip streaming), `StreamingMasteringChain` / `StreamingEqualizer` / `StreamingRetune`, `RealtimeVoiceChanger`, and the AudioWorklet bridge. → [Realtime & streaming](https://libsonare.libraz.net/docs/realtime-streaming)

@@ -58,6 +58,10 @@ the browser to see what libsonare can power.
 - **Mixing & routing** — a real-time-safe channel-strip / bus model
   (denormal-guarded, lock-free parameter changes, plugin-delay compensation) with
   pan modes, sends, FX buses, metering, scene presets, and offline rendering.
+- **Mixing assistant** — an optional offline pass that analyzes a set of tracks
+  and suggests a mixer scene (trims, faders, pans, EQ, dynamics, buses, sends)
+  with a written explanation of every decision. It suggests only: no audio is
+  processed, and handing the scene to the mixer is the caller's separate step.
 - **Editing & creative FX** — time stretch / pitch shift, pitch correction, note
   stretch, voice change, five reverb engines, modulation effects, stereo delay,
   guitar amp sim, and ducking.
@@ -234,7 +238,9 @@ make release               # optimized native build
 ```
 
 Trim the binary with `-DBUILD_MASTERING=OFF` / `-DBUILD_MIXING=OFF` for
-analysis-only builds. Optional, experimental, off-by-default macOS host backends
+analysis-only builds, or drop just the mixing assistant with
+`-DBUILD_MIXING_ASSISTANT=OFF` (default `ON`) and keep the mixer. Optional,
+experimental, off-by-default macOS host backends
 (CoreAudio / CoreMIDI / AU host) cover device I/O and AU hosting for source
 builds; they ship in no published package. See the
 [architecture docs](https://libsonare.libraz.net/docs/architecture) for build
