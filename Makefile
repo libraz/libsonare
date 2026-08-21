@@ -1,6 +1,6 @@
 .PHONY: all build fixtures release test test-slow test-golden test-optional-fixtures test-librosa-live clean rebuild format format-check lint wasm coverage \
        coverage-build coverage-clean build-shared build-node build-wasm-binding \
-       test-python test-python-slow test-node test-wasm parity conformance test-gm-cross-surface abi-layout abi-layout-check check-abi-version \
+       test-python test-python-slow test-node test-wasm parity conformance test-gm-cross-surface test-mix-assistant-cross-surface abi-layout abi-layout-check check-abi-version \
        capability-catalog capability-catalog-check processor-types processor-types-check ci-local \
        test-hardening test-hardening-asan test-hardening-tsan test-hardening-host test-hardening-wasm \
        build-feature-matrix
@@ -202,8 +202,9 @@ test-hardening: test-hardening-asan test-hardening-tsan test-hardening-host test
 # options off together is invisible to a matrix that only turns one off at a
 # time. Tests are excluded so a failure points at the shipped library and the
 # CLI rather than at test code that assumes a full-feature build.
-FEATURE_MATRIX_OPTIONS := BUILD_MASTERING BUILD_MIXING BUILD_GRAPH BUILD_FX BUILD_ACOUSTIC_SIM \
-       BUILD_PITCH_EDITOR BUILD_VOICE_CHANGER BUILD_ARRANGEMENT BUILD_ASSIST
+FEATURE_MATRIX_OPTIONS := BUILD_MASTERING BUILD_MIXING BUILD_MIXING_ASSISTANT BUILD_GRAPH \
+       BUILD_FX BUILD_ACOUSTIC_SIM BUILD_PITCH_EDITOR BUILD_VOICE_CHANGER BUILD_ARRANGEMENT \
+       BUILD_ASSIST
 FEATURE_MATRIX_ALL_OFF := $(foreach opt,$(FEATURE_MATRIX_OPTIONS),-D$(opt)=OFF)
 
 build-feature-matrix:
@@ -265,6 +266,33 @@ test-gm-cross-surface:
 	done
 	SONARE_LIB_PATH=$(PYTHON_SHARED_LIB) PYTHONPATH=$(CURDIR)/bindings/python/src \
 	$(RYE) run --pyproject bindings/python/pyproject.toml python tests/conformance/check_gm_project_surfaces.py
+
+# Opt-in mixing-assistant scene acceptance across the C, Python, Node, and WASM
+# public surfaces: one synthetic multi-track fixture in, one scene JSON out of
+# each facade. Request-object shapes and per-binding option-name tables are
+# invisible to the parity checker, so this runs the surfaces instead of reading
+# them. Like the GM check, it builds nothing and preflights the artifacts.
+test-mix-assistant-cross-surface:
+	@command -v "$(RYE)" >/dev/null 2>&1 || { \
+		echo "test-mix-assistant-cross-surface: required command not found: $(RYE)" >&2; \
+		exit 1; \
+	}
+	@set -eu; \
+	for artifact in \
+		"$(PYTHON_SHARED_LIB)" \
+		"bindings/node/dist/index.js" \
+		"bindings/node/build/Release/sonare-node.node" \
+		"bindings/wasm/dist/index.js" \
+		"bindings/wasm/dist/sonare.js" \
+		"bindings/wasm/dist/sonare.wasm"; do \
+		if test ! -f "$$artifact"; then \
+			echo "test-mix-assistant-cross-surface: missing required artifact: $$artifact" >&2; \
+			echo "test-mix-assistant-cross-surface: run 'make build-shared build-node build-wasm-binding' first" >&2; \
+			exit 1; \
+		fi; \
+	done
+	SONARE_LIB_PATH=$(PYTHON_SHARED_LIB) PYTHONPATH=$(CURDIR)/bindings/python/src \
+	$(RYE) run --pyproject bindings/python/pyproject.toml python tests/conformance/check_mix_assistant_surfaces.py
 
 # Regenerate the authoritative C-ABI struct layout snapshot. Compiles a tiny
 # probe (needs a C++ compiler, not a full build) that reports sizeof/alignof/
