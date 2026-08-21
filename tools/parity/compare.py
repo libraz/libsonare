@@ -228,6 +228,14 @@ _ALIAS_COVERAGE = {
     "decompose_with_init": ("decompose",),
     # Progress-callback mastering variants -> base fn with an optional callback.
     "master_audio_with_progress": ("master_audio",),
+    # The mixing assistant's C entry points are named after the subsystem; the
+    # facades name them after what the caller asks for, which is a suggested mix
+    # scene. Anchored to the facade members that actually deliver the operation,
+    # so the credit lapses if one of them is removed.
+    "mixing_assistant_suggest": ("suggest_mix_scene",),
+    "mixing_assistant_suggest_scene_json": ("suggest_mix_scene_json",),
+    "mixing_assistant_source_class_names": ("mix_source_class_names",),
+    "mixing_assistant_source_class_from_name": ("mix_source_class_from_name",),
     "master_audio_stereo_with_progress": ("master_audio_stereo",),
     # C cancellation is additive in `_ex` variants; every facade folds it into
     # the same progress-capable method rather than exposing a second spelling.

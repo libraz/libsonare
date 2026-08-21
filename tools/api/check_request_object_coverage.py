@@ -90,6 +90,9 @@ METADATA_HELPERS = {
     "masteringProcessorCatalog",
     "mixingScenePresetNames",
     "mixingScenePresetJson",
+    # Name-to-index lookup over the mixing assistant's source taxonomy. A
+    # request object around a single enum name would name nothing.
+    "mixSourceClassFromName",
     "realtimeVoiceChangerPresetNames",
     "realtimeVoiceChangerPresetJson",
     "validateRealtimeVoiceChangerPresetJson",
