@@ -22,6 +22,17 @@ constexpr int kChromaOctaves = 7;
 // anchor that does not strictly advance BOTH axes relative to the kept anchor,
 // so the map is invertible in both directions.
 std::vector<WarpAnchor> sanitize_anchors(std::vector<WarpAnchor> anchors) {
+  // Non-finite anchors go before the sort, not with the monotonicity pass
+  // below: every comparison against a NaN coordinate is false, which is not the
+  // strict weak ordering std::sort requires, so leaving one in the input is
+  // undefined behaviour rather than a wrong result. Dropping them can leave
+  // fewer than two anchors, which the callers already treat as an invalid map.
+  anchors.erase(std::remove_if(anchors.begin(), anchors.end(),
+                               [](const WarpAnchor& a) {
+                                 return !std::isfinite(a.warp_sample) ||
+                                        !std::isfinite(a.source_sample);
+                               }),
+                anchors.end());
   std::sort(anchors.begin(), anchors.end(), [](const WarpAnchor& a, const WarpAnchor& b) {
     if (a.warp_sample != b.warp_sample) return a.warp_sample < b.warp_sample;
     return a.source_sample < b.source_sample;

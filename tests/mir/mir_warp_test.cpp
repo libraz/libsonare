@@ -10,6 +10,7 @@
 #include <cmath>
 #include <cstdint>
 #include <cstring>
+#include <limits>
 #include <vector>
 
 #include "core/audio.h"
@@ -127,6 +128,32 @@ TEST_CASE("WarpMap from_markers rejects non-monotonic / too-few anchors", "[mir]
   REQUIRE_THROWS([] { WarpMap::from_anchors({{0.0, 0.0}}); }());
   // Mismatched marker vectors -> invalid.
   REQUIRE_THROWS([] { WarpMap::from_markers({0.0, 1.0}, {0.0}); }());
+}
+
+TEST_CASE("WarpMap drops non-finite anchors before ordering them", "[mir]") {
+  // A NaN coordinate compares false against every other value, so an anchor
+  // carrying one is not merely unusable: it breaks the strict weak ordering the
+  // anchor sort requires. Both entry points have to discard it before that
+  // sort, and neither infinity is a position on a timeline either.
+  const double nan_sample = std::numeric_limits<double>::quiet_NaN();
+  const double inf_sample = std::numeric_limits<double>::infinity();
+
+  const WarpMap map = WarpMap::from_anchors({{0.0, 0.0},
+                                             {nan_sample, 500.0},
+                                             {1000.0, 1200.0},
+                                             {2000.0, inf_sample},
+                                             {3000.0, nan_sample}});
+  REQUIRE(map.valid());
+  REQUIRE(map.anchors().size() == 2);
+  REQUIRE(map.anchors()[0].warp_sample == 0.0);
+  REQUIRE(map.anchors()[1].warp_sample == 1000.0);
+  REQUIRE(map.warp_to_source(500.0) == Catch::Approx(600.0).margin(1e-6));
+
+  // Dropping them can leave too few anchors to interpolate between, which is
+  // the same invalid-map refusal a caller gets for any other unusable input.
+  REQUIRE_THROWS([&] { WarpMap::from_anchors({{0.0, 0.0}, {nan_sample, nan_sample}}); }());
+  REQUIRE_THROWS(
+      [&] { WarpMap::from_markers({0.0, inf_sample, 1000.0}, {0.0, 500.0, nan_sample}); }());
 }
 
 TEST_CASE("chroma-DTW builds its chroma grid from the requested resolution", "[mir]") {
