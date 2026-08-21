@@ -5,6 +5,15 @@ set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_CXX_EXTENSIONS OFF)
 
+# The root CMakeLists turns this on too, but a plain set() there lives in the
+# subdirectory scope add_subdirectory() creates, so it reached the libsonare
+# targets and never the addon's own. The result was a compile_commands.json of
+# 391 entries with not one addon translation unit in it: clang-tidy, clangd and
+# every other tool that reads the database could see the core and not the code
+# this project exists to build. It has to be set here, before the addon target
+# is created, because the property is read at target-creation time.
+set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
+
 # Root of the libsonare source tree.
 set(SONARE_ROOT ${CMAKE_CURRENT_SOURCE_DIR}/../..)
 get_filename_component(SONARE_ROOT ${SONARE_ROOT} ABSOLUTE)
