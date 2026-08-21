@@ -260,12 +260,15 @@ static_assert(offsetof(SonareProjectMarker, name) == 16u, "SonareProjectMarker n
 /// @brief Adds or replaces a marker. @p marker_id 0 allocates a new id. The
 ///        marker is created with the default (Marker) kind; use
 ///        sonare_project_set_marker_ex to set a text / lyric / cue / key
-///        signature kind.
+///        signature kind. An explicit @p marker_id of UINT32_MAX is reserved and
+///        yields SONARE_ERROR_INVALID_PARAMETER: a project holding one would
+///        serialize but could never be deserialized again.
 SonareError sonare_project_set_marker(SonareProject* project, uint32_t marker_id, double ppq,
                                       const char* name, uint32_t* out_marker_id);
 
 /// @brief Adds or replaces a marker from a full SonareProjectMarker, including
-///        its kind and key signature. @p marker->id 0 allocates a new id; the
+///        its kind and key signature. @p marker->id 0 allocates a new id and
+///        UINT32_MAX is reserved (SONARE_ERROR_INVALID_PARAMETER); the
 ///        allocated / affected id is returned via @p out_marker_id. For the
 ///        key-signature kind @p marker->key_fifths must be in -7..7 (the SMF
 ///        `sf` range); an out-of-range value yields SONARE_ERROR_INVALID_PARAMETER.
@@ -273,8 +276,9 @@ SonareError sonare_project_set_marker_ex(SonareProject* project, const SonarePro
                                          uint32_t* out_marker_id);
 
 /// @brief Adds or replaces a full marker while accepting an unbounded UTF-8 name.
-/// @details @p marker supplies the non-name fields. @p name is copied verbatim;
-///          use this API when the fixed 64-byte compatibility field is too small.
+/// @details @p marker supplies the non-name fields, under the same id rules as
+///          sonare_project_set_marker_ex. @p name is copied verbatim; use this
+///          API when the fixed 64-byte compatibility field is too small.
 SonareError sonare_project_set_marker_ex_name(SonareProject* project,
                                               const SonareProjectMarker* marker, const char* name,
                                               uint32_t* out_marker_id);

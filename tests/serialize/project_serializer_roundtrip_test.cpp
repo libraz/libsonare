@@ -884,7 +884,7 @@ TEST_CASE("malformed warp map is dropped with a diagnostic instead of silently",
 TEST_CASE("clip referencing a missing warp map reports a dangling diagnostic", "[serialize]") {
   auto result = project_from_json(
       "{\"version\": 1, \"clips\": [{\"id\": 1, \"track_id\": 1, \"source_id\": 1, "
-      "\"warp_ref_id\": 99}]}");
+      "\"length_ppq\": 1.0, \"warp_ref_id\": 99}]}");
   bool found = false;
   for (const auto& d : result.diagnostics) {
     if (d.code == "dangling_clip_warp") found = true;
@@ -1013,7 +1013,8 @@ TEST_CASE("project deserialize accepts finite float boundaries and ordinary valu
   const std::string document =
       std::string(
           R"({"version":1,"sources":[{"id":1,"kind":0}],"tracks":[{"id":1,"gain":0.75,"pan":-0.25,"automation_lanes":[{"target_param_id":42,"points":[{"value":)") +
-      kFloatMax + R"(}]}]}],"clips":[{"id":1,"track_id":1,"source_id":1,"gain":-)" + kFloatMax +
+      kFloatMax + R"(}]}]}],"clips":[{"id":1,"track_id":1,"source_id":1,"length_ppq":1,"gain":-)" +
+      kFloatMax +
       R"(}],"annotation":{"tempo_confidence":0.8,"onsets":[{"confidence":0.6}]},"scene":{"version":1,"strips":[{"id":"s","inputTrimDb":-3.5,"faderDb":2.25,"vcaOffsetDb":0.5,"pan":0.1,"width":1.2,"dualPanLeft":-0.8,"dualPanRight":0.7,"surroundPan":{"azimuth":45,"elevation":-12,"divergence":0.4,"lfe":0.2,"distance":2},"sends":[{"sendDb":-6}]}],"buses":[{"id":"b","inputTrimDb":1.5,"width":0.9}],"vcaGroups":[{"id":"v","gainDb":-2}]}})";
 
   const auto result = project_from_json(document);
@@ -1049,13 +1050,57 @@ TEST_CASE("project deserialize accepts finite float boundaries and ordinary valu
             .is_number());
 }
 
-TEST_CASE("project deserialize warns for raw clip PPQ outside the edit contract", "[serialize]") {
+TEST_CASE("project deserialize rejects clip fields outside the edit contract", "[serialize]") {
+  // Every one of these clips is reachable by hand-editing a document but by no
+  // sequence of C ABI edit calls, and each would have suppressed the whole
+  // compiled timeline at bounce time rather than at load time.
+  const std::string prologue =
+      R"({"version":1,"sources":[{"id":1,"kind":0}],"tracks":[{"id":1}],"clips":[{"id":1,"track_id":1,"source_id":1,)";
+  const std::vector<std::pair<std::string, std::string>> fixtures = {
+      {R"("start_ppq":-1,"length_ppq":0,"source_offset_ppq":-2)", "invalid_clip_ppq"},
+      {R"("length_ppq":0)", "invalid_clip_ppq"},
+      {R"("length_ppq":-4)", "invalid_clip_ppq"},
+      {R"("length_ppq":1,"start_ppq":-1)", "invalid_clip_ppq"},
+      {R"("length_ppq":1,"source_offset_ppq":-1)", "invalid_clip_ppq"},
+      {R"("length_ppq":1,"fade_in":{"length_ppq":-1})", "invalid_clip_fade_ppq"},
+      {R"("length_ppq":1,"fade_out":{"length_ppq":-1})", "invalid_clip_fade_ppq"},
+      {R"("length_ppq":1,"loop_mode":1,"loop_length_ppq":-1)", "invalid_clip_loop_ppq"},
+      {R"("length_ppq":1,"loop_crossfade_ppq":-1)", "invalid_clip_loop_ppq"},
+      {R"("length_ppq":1,"takes":[{"id":0,"source_id":1}])", "invalid_clip_take_id"},
+      {R"("length_ppq":1,"takes":[{"id":1,"source_offset_ppq":-1}])", "invalid_clip_take_ppq"},
+      {R"("length_ppq":1,"comp_segments":[{"start_ppq":-1,"end_ppq":1}])",
+       "invalid_clip_comp_segment_ppq"},
+      {R"("length_ppq":1,"comp_segments":[{"start_ppq":1,"end_ppq":1}])",
+       "invalid_clip_comp_segment_ppq"},
+  };
+
+  for (const auto& [clip_fields, expected_code] : fixtures) {
+    const std::string document = prologue + clip_fields + "}]}";
+    INFO(document);
+    const auto result = project_from_json(document);
+    CHECK_FALSE(result.ok());
+    REQUIRE_FALSE(result.diagnostics.empty());
+    CHECK(result.diagnostics.back().severity == serialize::DiagnosticSeverity::kError);
+    CHECK(result.diagnostics.back().code == expected_code);
+  }
+}
+
+TEST_CASE("project deserialize accepts the clip fields the edit API admits", "[serialize]") {
+  // The mirror image of the rejection cases: a loop length of 0 means "loop the
+  // whole clip", zero-length fades are the default, and an ordered comp lane
+  // over a registered take is exactly what set_clip_takes / set_clip_comp_segments
+  // produce.
   const auto result = project_from_json(
-      R"({"version":1,"sources":[{"id":1,"kind":0}],"tracks":[{"id":1}],"clips":[{"id":1,"track_id":1,"source_id":1,"start_ppq":-1,"length_ppq":0,"source_offset_ppq":-2}]})");
+      R"({"version":1,"sources":[{"id":1,"kind":0}],"tracks":[{"id":1}],"clips":[{"id":1,)"
+      R"("track_id":1,"source_id":1,"start_ppq":0,"length_ppq":8,"source_offset_ppq":0,)"
+      R"("fade_in":{"length_ppq":0},"fade_out":{"length_ppq":0},"loop_mode":1,)"
+      R"("loop_length_ppq":0,"loop_crossfade_ppq":0,"takes":[{"id":1,"source_id":1,)"
+      R"("source_offset_ppq":0}],"active_take_id":1,)"
+      R"("comp_segments":[{"start_ppq":0,"end_ppq":4,"take_id":1}]}]})");
   REQUIRE(result.ok());
   REQUIRE(result.project->clips().size() == 1);
-  REQUIRE_FALSE(result.diagnostics.empty());
-  CHECK(result.diagnostics[0].code == "invalid_clip_ppq");
+  CHECK(result.project->clips()[0].takes.size() == 1);
+  CHECK(result.project->clips()[0].comp_segments.size() == 1);
 }
 
 TEST_CASE("project deserialize bounds dangling-reference diagnostics", "[serialize]") {

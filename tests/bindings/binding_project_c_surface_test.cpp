@@ -1,6 +1,8 @@
 /// @file binding_project_c_surface_test.cpp
 /// @brief Project C surface parity tests.
 
+#include <algorithm>
+
 #include "binding_project_parity_test_helpers.h"
 
 TEST_CASE("project ABI version is positive and matches the macro", "[project]") {
@@ -142,6 +144,63 @@ TEST_CASE("project C surface exposes read-only project state without JSON", "[pr
   CHECK(json.find("\"id\":\"lead\"") != std::string::npos);
   CHECK(json.find("\"gain\":1") != std::string::npos);
 
+  sonare_project_destroy(project);
+}
+
+TEST_CASE("marker setters reject the reserved entity id", "[project]") {
+  // UINT32_MAX is reserved for every entity id, and the deserializer drops a
+  // whole document over one. A marker setter that accepted it would build a
+  // project that serializes but can never be loaded back -- unrecoverable
+  // except by hand-editing the file.
+  constexpr uint32_t kReserved = std::numeric_limits<uint32_t>::max();
+
+  SonareProject* project = nullptr;
+  REQUIRE(sonare_project_create(&project) == SONARE_OK);
+
+  uint32_t out_id = 99;
+  CHECK(sonare_project_set_marker(project, kReserved, 1.0, "reserved", &out_id) ==
+        SONARE_ERROR_INVALID_PARAMETER);
+  CHECK(out_id == 0u);
+
+  const std::string marker_name = "reserved";
+  SonareProjectMarker marker{};
+  marker.id = kReserved;
+  marker.ppq = 1.0;
+  std::copy(marker_name.begin(), marker_name.end(), marker.name);
+  out_id = 99;
+  CHECK(sonare_project_set_marker_ex(project, &marker, &out_id) == SONARE_ERROR_INVALID_PARAMETER);
+  CHECK(out_id == 0u);
+  out_id = 99;
+  CHECK(sonare_project_set_marker_ex_name(project, &marker, "reserved", &out_id) ==
+        SONARE_ERROR_INVALID_PARAMETER);
+  CHECK(out_id == 0u);
+
+  size_t count = 99;
+  REQUIRE(sonare_project_marker_count(project, &count) == SONARE_OK);
+  CHECK(count == 0u);
+
+  // Every id the setters do accept survives a serialize / deserialize round
+  // trip, including the largest usable one. Allocate before pinning the id
+  // counter to its top: an explicit id of UINT32_MAX-1 exhausts the allocator.
+  REQUIRE(sonare_project_set_marker(project, 0, 2.0, "allocated", &out_id) == SONARE_OK);
+  CHECK(out_id != 0u);
+  CHECK(out_id != kReserved);
+  marker.id = kReserved - 1u;
+  out_id = 0;
+  REQUIRE(sonare_project_set_marker_ex(project, &marker, &out_id) == SONARE_OK);
+  CHECK(out_id == kReserved - 1u);
+
+  const std::string json = serialize(project);
+  SonareProject* reloaded = nullptr;
+  char* diagnostics = nullptr;
+  REQUIRE(sonare_project_deserialize(json.c_str(), json.size(), &reloaded, &diagnostics) ==
+          SONARE_OK);
+  REQUIRE(reloaded != nullptr);
+  sonare_free_string(diagnostics);
+  REQUIRE(sonare_project_marker_count(reloaded, &count) == SONARE_OK);
+  CHECK(count == 2u);
+
+  sonare_project_destroy(reloaded);
   sonare_project_destroy(project);
 }
 

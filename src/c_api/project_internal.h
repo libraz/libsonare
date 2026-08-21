@@ -105,6 +105,14 @@ bool finite_non_negative(double value) noexcept { return std::isfinite(value) &&
 
 bool finite_positive(double value) noexcept { return std::isfinite(value) && value > 0.0; }
 
+/// True for the entity id the arrangement reserves as its exhausted-counter
+/// sentinel. `allocate_entity_id` never hands it out and the project
+/// deserializer rejects it for every entity kind, so a setter that accepted it
+/// from a caller would build a project that serializes but can never be loaded
+/// back. Id 0 is reserved too, but it carries a per-API meaning (allocate a new
+/// id / no reference), so callers test for it separately.
+bool reserved_entity_id(uint32_t id) noexcept { return id == std::numeric_limits<uint32_t>::max(); }
+
 bool valid_u7(uint8_t value) noexcept { return value <= 127; }
 
 bool valid_nibble(uint8_t value) noexcept { return value <= 15; }

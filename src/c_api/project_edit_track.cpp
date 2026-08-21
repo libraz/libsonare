@@ -215,7 +215,10 @@ SonareError sonare_project_set_marker(SonareProject* project, uint32_t marker_id
   SONARE_C_API_ENTRY;
 #if defined(SONARE_WITH_ARRANGEMENT)
   if (out_marker_id) *out_marker_id = 0;
-  if (!project || !out_marker_id || !finite_non_negative(ppq)) {
+  // A marker id of UINT32_MAX would serialize but could never be loaded back:
+  // the deserializer enforces the [1, UINT32_MAX-1] entity-id convention and
+  // drops the whole document over one reserved id.
+  if (!project || !out_marker_id || !finite_non_negative(ppq) || reserved_entity_id(marker_id)) {
     return SONARE_ERROR_INVALID_PARAMETER;
   }
   SONARE_C_TRY
@@ -241,7 +244,7 @@ SonareError sonare_project_set_marker_ex(SonareProject* project, const SonarePro
 #if defined(SONARE_WITH_ARRANGEMENT)
   if (out_marker_id) *out_marker_id = 0;
   if (!project || !out_marker_id || !marker || !finite_non_negative(marker->ppq) ||
-      marker->kind > SONARE_MARKER_KIND_KEY_SIGNATURE) {
+      marker->kind > SONARE_MARKER_KIND_KEY_SIGNATURE || reserved_entity_id(marker->id)) {
     return SONARE_ERROR_INVALID_PARAMETER;
   }
   // Key signatures encode the SMF `sf` byte, which is constrained to -7..7
@@ -276,7 +279,7 @@ SonareError sonare_project_set_marker_ex_name(SonareProject* project,
 #if defined(SONARE_WITH_ARRANGEMENT)
   if (out_marker_id) *out_marker_id = 0;
   if (!project || !out_marker_id || !marker || !name || !finite_non_negative(marker->ppq) ||
-      marker->kind > SONARE_MARKER_KIND_KEY_SIGNATURE)
+      marker->kind > SONARE_MARKER_KIND_KEY_SIGNATURE || reserved_entity_id(marker->id))
     return SONARE_ERROR_INVALID_PARAMETER;
   if (marker->kind == SONARE_MARKER_KIND_KEY_SIGNATURE &&
       (marker->key_fifths < -7 || marker->key_fifths > 7))

@@ -3,6 +3,7 @@
 
 #include <algorithm>
 #include <cmath>
+#include <limits>
 #include <optional>
 #include <string>
 #include <tuple>
@@ -345,6 +346,17 @@ namespace {
 // (`finite_non_negative` in the project edit bridge).
 bool valid_position_ppq(double ppq) noexcept { return std::isfinite(ppq) && ppq >= 0.0; }
 
+// Durations the C ABI setters admit: finite and strictly positive
+// (`finite_positive` in the project edit bridge).
+bool valid_length_ppq(double ppq) noexcept { return std::isfinite(ppq) && ppq > 0.0; }
+
+// Entity ids the model admits. 0 is the failure/sentinel value and UINT32_MAX
+// is the exhausted-counter sentinel; the id allocator hands out neither, so a
+// document carrying one describes a project no edit sequence could build.
+bool valid_entity_id(uint32_t id) noexcept {
+  return id != 0 && id != std::numeric_limits<uint32_t>::max();
+}
+
 // Identity a sidecar is addressed by. SetAssistSidecar overwrites an existing
 // entry with this key rather than appending, and RemoveAssistSidecarInternal
 // erases the first match, so two entries sharing it make the second unreachable.
@@ -377,6 +389,60 @@ std::optional<InvariantViolation> enforce_edit_api_invariants(arrangement::Proje
     if (!valid_position_ppq(m.ppq)) {
       return InvariantViolation{"invalid_marker_ppq", "marker " + std::to_string(m.id) +
                                                           " ppq must be finite and non-negative"};
+    }
+    if (!valid_entity_id(m.id)) {
+      return InvariantViolation{
+          "invalid_marker_id",
+          "marker id " + std::to_string(m.id) + " is reserved and cannot be addressed or reloaded"};
+    }
+  }
+
+  // ---- Clip field invariants -----------------------------------------------
+  // sonare_project_add_clip and the clip setters (fade / loop / takes / comp
+  // segments) enforce these; the load path inserts clips verbatim to preserve
+  // the saved arrangement, so without this pass a hand-edited document could
+  // carry a clip no edit call could have produced -- one that loads here and
+  // then suppresses the whole timeline at compile time. None of these has a
+  // repair that preserves musical intent: clamping a negative offset or a
+  // non-positive length would silently move or resize content. All fatal.
+  for (const arrangement::EditClip& c : project->clips()) {
+    const std::string label = "clip " + std::to_string(c.id) + " ";
+    if (!valid_position_ppq(c.start_ppq) || !valid_length_ppq(c.length_ppq) ||
+        !valid_position_ppq(c.source_offset_ppq)) {
+      return InvariantViolation{"invalid_clip_ppq",
+                                label +
+                                    "must have a finite non-negative start_ppq and "
+                                    "source_offset_ppq and a finite positive length_ppq"};
+    }
+    if (!valid_position_ppq(c.fade_in.length_ppq) || !valid_position_ppq(c.fade_out.length_ppq)) {
+      return InvariantViolation{"invalid_clip_fade_ppq",
+                                label + "fade lengths must be finite and non-negative"};
+    }
+    // A loop length of 0 is the documented "loop the whole clip" request, so
+    // only negatives and non-finite values are out of contract.
+    if (!valid_position_ppq(c.loop_length_ppq) || !valid_position_ppq(c.loop_crossfade_ppq)) {
+      return InvariantViolation{
+          "invalid_clip_loop_ppq",
+          label + "loop_length_ppq and loop_crossfade_ppq must be finite and non-negative"};
+    }
+    for (const arrangement::ClipTake& take : c.takes) {
+      if (take.id == 0) {
+        return InvariantViolation{"invalid_clip_take_id",
+                                  label + "carries a take with the reserved id 0"};
+      }
+      if (!valid_position_ppq(take.source_offset_ppq)) {
+        return InvariantViolation{"invalid_clip_take_ppq",
+                                  label + "take " + std::to_string(take.id) +
+                                      " source_offset_ppq must be finite and non-negative"};
+      }
+    }
+    for (const arrangement::ClipCompSegment& segment : c.comp_segments) {
+      if (!valid_position_ppq(segment.start_ppq) || !valid_length_ppq(segment.end_ppq) ||
+          !(segment.end_ppq > segment.start_ppq)) {
+        return InvariantViolation{
+            "invalid_clip_comp_segment_ppq",
+            label + "comp segment bounds must be finite with 0 <= start_ppq < end_ppq"};
+      }
     }
   }
 

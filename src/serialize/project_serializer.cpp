@@ -471,13 +471,9 @@ DeserializeResult project_from_json(const std::string& json_text) {
           decode_diagnostics.warn("clip_gain_clamped", "clip " + std::to_string(id) +
                                                            " had a negative gain; clamped to zero");
         }
-        if (!std::isfinite(c.start_ppq) || !std::isfinite(c.length_ppq) ||
-            !std::isfinite(c.source_offset_ppq) || c.start_ppq < 0.0 || c.length_ppq <= 0.0 ||
-            c.source_offset_ppq < 0.0) {
-          decode_diagnostics.warn(
-              "invalid_clip_ppq",
-              "clip " + std::to_string(id) + " has PPQ values outside the public edit contract");
-        }
+        // Clip PPQ fields are checked by enforce_edit_api_invariants() below,
+        // with the rest of the edit-API value set, so one enumeration covers
+        // every clip field no matter which decoder produced it.
         if (!clip_ids.insert(id).second ||
             !project.insert_clip_raw(std::move(c), arrangement::Project::kAppend, true)) {
           reject_entity_id("clip", id, true);

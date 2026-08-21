@@ -3,6 +3,7 @@
 
 #include <algorithm>
 #include <cmath>
+#include <limits>
 #include <utility>
 
 #include "arrangement/edit_command.h"
@@ -127,6 +128,12 @@ EditCommandPtr SetScene::invert(const Project& before,
 }
 
 bool SetMarker::apply(Project& project, MidiContentStore& /*store*/) {
+  // UINT32_MAX is the exhausted-counter sentinel: allocate_entity_id never
+  // returns it and the project deserializer rejects it, so honouring an
+  // explicit id of UINT32_MAX would produce a project that can no longer be
+  // loaded back. Refuse it here rather than at a single caller, since every
+  // surface that reaches SetMarker directly needs the same convention.
+  if (id_ == std::numeric_limits<uint32_t>::max()) return false;
   if (id_ == 0 && allocated_id_ == 0) {
     allocated_id_ = project.add_marker(ppq_, name_, kind_, key_fifths_, key_minor_);
     return allocated_id_ != 0;
