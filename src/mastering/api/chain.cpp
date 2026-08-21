@@ -6,7 +6,6 @@
 #include <algorithm>
 #include <array>
 #include <cmath>
-#include <stdexcept>
 #include <utility>
 #include <vector>
 
@@ -32,7 +31,6 @@
 #include "mastering/spectral/air_band.h"
 #include "mastering/stereo/imager.h"
 #include "mastering/stereo/mono_maker.h"
-#include "rt/processor_base.h"
 
 namespace sonare::mastering::api {
 namespace {
@@ -107,23 +105,31 @@ float stereo_spectrum_db(const mastering::match::ReferenceSpectrum& left,
   return 10.0f * std::log10(0.5f * (left_power + right_power));
 }
 
-std::array<float, kMasteringReportBandCount> stereo_spectrum_delta(const Audio& before_left,
-                                                                   const Audio& before_right,
-                                                                   const Audio& after_left,
-                                                                   const Audio& after_right) {
-  const auto before_left_spectrum = mastering::match::reference_spectrum(before_left);
-  const auto before_right_spectrum = mastering::match::reference_spectrum(before_right);
-  const auto after_left_spectrum = mastering::match::reference_spectrum(after_left);
-  const auto after_right_spectrum = mastering::match::reference_spectrum(after_right);
+// Long-term spectrum of one channel. Audio::from_buffer deep-copies, so the
+// copy is scoped to this call: the caller keeps the 1025-bin spectrum, not
+// another track-length buffer.
+mastering::match::ReferenceSpectrum channel_spectrum(const std::vector<float>& channel,
+                                                     int sample_rate) {
+  const Audio audio = Audio::from_buffer(channel.data(), channel.size(), sample_rate);
+  return mastering::match::reference_spectrum(audio);
+}
+
+// Takes spectra rather than Audio so the caller decides how long each
+// track-length copy stays alive; the report only ever needs the bins.
+std::array<float, kMasteringReportBandCount> stereo_spectrum_delta(
+    const mastering::match::ReferenceSpectrum& before_left,
+    const mastering::match::ReferenceSpectrum& before_right,
+    const mastering::match::ReferenceSpectrum& after_left,
+    const mastering::match::ReferenceSpectrum& after_right, int sample_rate) {
   std::array<float, kMasteringReportBandCount> delta{};
-  const float low_hz = std::min(20.0f, static_cast<float>(before_left.sample_rate()) * 0.5f);
-  const float high_hz = static_cast<float>(before_left.sample_rate()) * 0.5f;
+  const float low_hz = std::min(20.0f, static_cast<float>(sample_rate) * 0.5f);
+  const float high_hz = static_cast<float>(sample_rate) * 0.5f;
   for (size_t index = 0; index < delta.size(); ++index) {
     const float position =
         (static_cast<float>(index) + 0.5f) / static_cast<float>(kMasteringReportBandCount);
     const float frequency_hz = low_hz * std::pow(high_hz / low_hz, position);
-    delta[index] = stereo_spectrum_db(after_left_spectrum, after_right_spectrum, frequency_hz) -
-                   stereo_spectrum_db(before_left_spectrum, before_right_spectrum, frequency_hz);
+    delta[index] = stereo_spectrum_db(after_left, after_right, frequency_hz) -
+                   stereo_spectrum_db(before_left, before_right, frequency_hz);
   }
   return delta;
 }
@@ -201,6 +207,32 @@ void validate_mastering_chain_config(const MasteringChainConfig& config) {
         ErrorCode::InvalidParameter,
         "maximizer.truePeakLimiter.oversampleFactor must be one of 1, 2, 4, 8, or 16");
   }
+  if (config.eq.tilt.enabled) {
+    // TiltEq::set_pivot_hz rejects this at stage time, which for a chain with
+    // repair stages in front of it is minutes of STFT work into the render.
+    // The rate-dependent half of the same constraint (pivot below Nyquist)
+    // cannot be checked here because the sample rate is not known until
+    // process time; validate_chain_config_for_rate() carries it.
+    SONARE_CHECK_MSG(std::isfinite(config.eq.tilt.pivot_hz) && config.eq.tilt.pivot_hz > 0.0f,
+                     ErrorCode::InvalidParameter, "eq.tilt.pivotHz must be finite and > 0");
+    SONARE_CHECK_MSG(std::isfinite(config.eq.tilt.tilt_db), ErrorCode::InvalidParameter,
+                     "eq.tilt.tiltDb must be finite");
+  }
+}
+
+void validate_chain_config_for_rate(const MasteringChainConfig& config, int sample_rate) {
+  // Everything here needs the sample rate, so it cannot live in the
+  // construction-time check. It still runs before stage 1, which is the part
+  // that matters: the alternative is discovering it after the repair stages
+  // have already processed the whole track.
+  if (config.eq.tilt.enabled && config.eq.tilt.tilt_db != 0.0f) {
+    // A zero tilt leaves both shelves disabled, and a disabled band never has
+    // its coefficients designed, so mirror that condition exactly rather than
+    // rejecting a configuration the stage would have run.
+    const float nyquist = 0.5f * static_cast<float>(sample_rate);
+    SONARE_CHECK_MSG(config.eq.tilt.pivot_hz < nyquist, ErrorCode::InvalidParameter,
+                     "eq.tilt.pivotHz must be below Nyquist for this sample rate");
+  }
 }
 
 MasteringChain::MasteringChain(MasteringChainConfig config) : config_(std::move(config)) {
@@ -223,6 +255,7 @@ std::optional<MonoChainResult> MasteringChain::process_mono_impl(const float* sa
   // Python) rejects empty / out-of-range-rate / non-finite input identically.
   // The realtime block path (process_block) intentionally does not funnel here.
   validate_offline_audio_input(samples, length, sample_rate);
+  validate_chain_config_for_rate(config_, sample_rate);
 
   MonoChainResult result;
   result.sample_rate = sample_rate;
@@ -442,6 +475,7 @@ std::optional<StereoChainResult> MasteringChain::process_stereo_impl(const float
   // Centralized offline-input validation for both channels (see process_mono).
   validate_offline_audio_input(left_in, length, sample_rate);
   validate_offline_audio_input(right_in, length, sample_rate);
+  validate_chain_config_for_rate(config_, sample_rate);
 
   StereoChainResult result;
   result.sample_rate = sample_rate;
@@ -450,11 +484,22 @@ std::optional<StereoChainResult> MasteringChain::process_stereo_impl(const float
   std::vector<float> right(right_in, right_in + length);
 
   const int true_peak_oversample = reported_true_peak_oversample(config_);
-  const Audio before_left_audio = Audio::from_buffer(left.data(), left.size(), sample_rate);
-  const Audio before_right_audio = Audio::from_buffer(right.data(), right.size(), sample_rate);
-  const std::vector<float> before_interleaved = detail::interleave_stereo(left, right);
-  result.report.before = to_report_summary(common::measure_loudness_summary_interleaved(
-      before_interleaved.data(), left.size(), 2, sample_rate, true_peak_oversample));
+  // Everything the report needs from the INPUT is measured here and reduced to
+  // its measurements before a single stage runs. Each track-length temporary
+  // (the interleaved view the loudness meter consumes, and one Audio copy per
+  // channel for the spectrum) is scoped so it is released before the next is
+  // taken, and only two 1025-bin spectra survive to the end of the function.
+  // Holding the four "before" copies until the band-delta report was computed
+  // made the peak working set grow with the number of measurements taken
+  // instead of with the track.
+  mastering::match::ReferenceSpectrum before_left_spectrum;
+  mastering::match::ReferenceSpectrum before_right_spectrum;
+  {
+    result.report.before = to_report_summary(common::measure_loudness_summary_stereo_planar(
+        left.data(), right.data(), left.size(), sample_rate, true_peak_oversample));
+    before_left_spectrum = channel_spectrum(left, sample_rate);
+    before_right_spectrum = channel_spectrum(right, sample_rate);
+  }
   result.input_lufs = result.report.before.integrated_lufs;
   float applied_gain_db = 0.0f;
 
@@ -643,11 +688,16 @@ std::optional<StereoChainResult> MasteringChain::process_stereo_impl(const float
     if (!report("loudness.optimize")) return std::nullopt;
   }
 
-  const Audio after_left_audio = Audio::from_buffer(left.data(), left.size(), sample_rate);
-  const Audio after_right_audio = Audio::from_buffer(right.data(), right.size(), sample_rate);
-  const std::vector<float> after_interleaved = detail::interleave_stereo(left, right);
-  result.report.after = to_report_summary(common::measure_loudness_summary_interleaved(
-      after_interleaved.data(), left.size(), 2, sample_rate, true_peak_oversample));
+  // Same shape on the output side: measure, then release, one track-length
+  // temporary at a time.
+  mastering::match::ReferenceSpectrum after_left_spectrum;
+  mastering::match::ReferenceSpectrum after_right_spectrum;
+  {
+    result.report.after = to_report_summary(common::measure_loudness_summary_stereo_planar(
+        left.data(), right.data(), left.size(), sample_rate, true_peak_oversample));
+    after_left_spectrum = channel_spectrum(left, sample_rate);
+    after_right_spectrum = channel_spectrum(right, sample_rate);
+  }
   result.output_lufs = result.report.after.integrated_lufs;
   // Loudness is the last stage; see the mono path for why the chain output is
   // the achieved value the target-limited flag is decided against.
@@ -662,8 +712,9 @@ std::optional<StereoChainResult> MasteringChain::process_stereo_impl(const float
   result.report.applied_gain_db = applied_gain_db;
   result.report.max_gain_reduction_db = max_gain_reduction_db(result.stage_gain_reductions);
   result.report.loudness_target_limited = result.loudness_target_limited;
-  result.report.band_energy_delta_db = stereo_spectrum_delta(before_left_audio, before_right_audio,
-                                                             after_left_audio, after_right_audio);
+  result.report.band_energy_delta_db =
+      stereo_spectrum_delta(before_left_spectrum, before_right_spectrum, after_left_spectrum,
+                            after_right_spectrum, sample_rate);
   result.left = std::move(left);
   result.right = std::move(right);
   return result;

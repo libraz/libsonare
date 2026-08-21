@@ -1,3 +1,4 @@
+import { flattenChainConfig, STREAMING_ONLY_CONFIG_KEYS } from './_chain_config.js';
 import { addon } from './native.js';
 import type {
   EqBandInput,
@@ -42,12 +43,15 @@ export interface StreamingMasteringChainConfig extends Record<string, unknown> {
  * Block-by-block streaming variant of {@link masteringChain}.
  *
  * Maintains processor state across {@link processMono}/{@link processStereo}
- * calls. Only ProcessorBase-backed stages (`eq.tilt`, `dynamics.compressor`,
- * `saturation.tape`, `saturation.exciter`, `spectral.airBand`, `stereo.imager`,
- * `stereo.monoMaker`, `maximizer.truePeakLimiter`) are supported. Constructing
- * with `repair.denoise` enabled throws an Error. A `loudness`-enabled config
- * also throws unless {@link StreamingMasteringChainConfig.loudnessStaticGainDb}
- * is supplied.
+ * calls. Only ProcessorBase-backed stages are supported: `eq.tilt`,
+ * `dynamics.deesser`, `dynamics.transientShaper`, `dynamics.compressor`,
+ * `dynamics.multibandComp`, `saturation.tape`, `saturation.exciter`,
+ * `spectral.airBand`, `stereo.imager` (stereo only), `stereo.monoMaker`
+ * (stereo only), `maximizer.truePeakLimiter`. Constructing with ANY of the six
+ * whole-signal repair stages enabled (`repair.declick`, `repair.declip`,
+ * `repair.decrackle`, `repair.dehum`, `repair.dereverb`, `repair.denoise`)
+ * throws an Error. A `loudness`-enabled config also throws unless
+ * {@link StreamingMasteringChainConfig.loudnessStaticGainDb} is supplied.
  *
  * @example
  * ```typescript
@@ -62,6 +66,15 @@ export class StreamingMasteringChain {
   private disposed = false;
 
   constructor(config: StreamingMasteringChainConfig = {}) {
+    // The addon flattens the nested config itself and keeps only the number and
+    // boolean leaves; anything else is skipped with no error, so a value that
+    // arrived as a string from a JSON preset or a UI field used to build a
+    // chain at the stage default and say nothing, while the same object threw
+    // a TypeError on the offline path. Run the canonical flattener first purely
+    // for its rejection: it names the offending dotted path, so both paths fail
+    // the same way on the same input. The result is discarded — the addon still
+    // does the flattening that actually reaches the core.
+    flattenChainConfig(config, STREAMING_ONLY_CONFIG_KEYS);
     this.native = new addon.StreamingMasteringChain(config);
   }
 

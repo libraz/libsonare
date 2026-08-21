@@ -12,6 +12,7 @@
 #include <cmath>
 #include <cstdint>
 #include <string>
+#include <type_traits>
 #include <unordered_map>
 #include <unordered_set>
 #include <vector>
@@ -81,15 +82,23 @@
 
 namespace sonare::mastering::api::detail {
 
+/// @brief Public type of a flat mastering parameter, as reported by the
+/// processor catalog.
+/// @details Derived from how a config builder reads the key, never from the
+///          key's spelling: `b()` and a `bool` config field mean @c Boolean,
+///          every other accessor means @c Number.
+enum class ParamKind : std::uint8_t { Number, Boolean };
+
 /// @brief Flat (key -> value) param store that records which keys a config
-/// builder probes.
+/// builder probes, and what C++ type it read each one as.
 ///
 /// Every config builder reads a param through `find()` (directly, or via the
 /// `f` / `i` / `b` / `read_field` helpers below), and it probes a key even when
 /// that key is absent (it then falls back to the field's default). Recording
 /// each probed key therefore yields, for free and with no hand-maintained list:
 ///   - the set of keys a processor *consumes* (probe an empty map -> the names
-///     it reads for a default configuration; see insert_param_names), and
+///     it reads for a default configuration; see insert_param_names),
+///   - the public type of each of those keys (see @ref probed_kinds), and
 ///   - the keys a caller supplied that *no* builder read (build the real map ->
 ///     `unprobed_keys()`; these took no effect and are surfaced as warnings).
 /// The wrapper is a drop-in for the previous `std::unordered_map` alias: only
@@ -113,6 +122,21 @@ class ParamMap {
   }
   const_iterator end() const { return map_.end(); }
 
+  /// @brief Records the C++ type a builder read @p key as.
+  /// @details Called by the accessors below, so the recorded kind is the
+  ///          declared type of the destination field (or of the accessor the
+  ///          builder chose), not an inference from the key name. A key read
+  ///          as a number by any builder stays @c Number: a numeric read is
+  ///          evidence that the value is not a two-state toggle, while a
+  ///          boolean read of the same key would only be an aliasing bug.
+  void note_kind(const std::string& key, ParamKind kind) const {
+    auto [it, inserted] = kinds_.emplace(key, kind);
+    if (!inserted && kind == ParamKind::Number) it->second = ParamKind::Number;
+  }
+
+  /// @brief Public type of every key probed while building, keyed by name.
+  const std::unordered_map<std::string, ParamKind>& probed_kinds() const { return kinds_; }
+
   /// @brief Keys this processor read (probed) when built; reflects an empty map
   /// as the names consumed for a default configuration.
   const std::unordered_set<std::string>& probed_keys() const { return probed_; }
@@ -132,6 +156,7 @@ class ParamMap {
  private:
   Map map_;
   mutable std::unordered_set<std::string> probed_;
+  mutable std::unordered_map<std::string, ParamKind> kinds_;
 };
 
 inline ParamMap make_map(const std::vector<Param>& params) {
@@ -144,11 +169,13 @@ inline ParamMap make_map(const std::vector<Param>& params) {
 }
 
 inline float f(const ParamMap& params, const char* key, float default_value) {
+  params.note_kind(key, ParamKind::Number);
   auto it = params.find(key);
   return it == params.end() ? default_value : static_cast<float>(it->second);
 }
 
 inline int i(const ParamMap& params, const char* key, int default_value) {
+  params.note_kind(key, ParamKind::Number);
   auto it = params.find(key);
   if (it == params.end()) return default_value;
   int converted = 0;
@@ -159,6 +186,7 @@ inline int i(const ParamMap& params, const char* key, int default_value) {
 }
 
 inline bool b(const ParamMap& params, const char* key, bool default_value) {
+  params.note_kind(key, ParamKind::Boolean);
   auto it = params.find(key);
   return it == params.end() ? default_value : it->second != 0.0;
 }
@@ -166,8 +194,14 @@ inline bool b(const ParamMap& params, const char* key, bool default_value) {
 /// @brief Overlays a flat param onto a config field, leaving it untouched when
 /// the key is absent. Paired with the SONARE_FIELDS_* tables so a config
 /// builder is a single table expansion instead of one line per field.
+/// @details The destination's declared type is what decides the parameter's
+///          public kind, so a config field that is a C++ `bool` is published as
+///          a boolean without anyone maintaining a second list of which keys
+///          those are.
 template <typename T>
 inline void read_field(const ParamMap& params, const char* key, T& dst) {
+  params.note_kind(
+      key, std::is_same_v<std::remove_cv_t<T>, bool> ? ParamKind::Boolean : ParamKind::Number);
   auto it = params.find(key);
   if (it != params.end()) assign_field(dst, it->second);
 }

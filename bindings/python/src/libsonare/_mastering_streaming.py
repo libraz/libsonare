@@ -23,10 +23,14 @@ class StreamingMasteringChain:
     """Block-by-block streaming variant of :func:`mastering_chain`.
 
     Maintains processor state across :meth:`process_mono`/:meth:`process_stereo`
-    calls. Only ProcessorBase-backed stages (eq.tilt, dynamics.compressor,
-    saturation.tape, saturation.exciter, spectral.airBand, stereo.imager,
-    stereo.monoMaker, maximizer.truePeakLimiter) are supported. Configurations
-    that enable ``repair.denoise`` or ``loudness`` raise :class:`RuntimeError`.
+    calls. Only ProcessorBase-backed stages are supported: eq.tilt,
+    dynamics.deesser, dynamics.transientShaper, dynamics.compressor,
+    dynamics.multibandComp, saturation.tape, saturation.exciter,
+    spectral.airBand, stereo.imager (stereo only), stereo.monoMaker (stereo
+    only), maximizer.truePeakLimiter. Configurations that enable any of the six
+    whole-signal repair stages (``repair.declick``, ``repair.declip``,
+    ``repair.decrackle``, ``repair.dehum``, ``repair.dereverb``,
+    ``repair.denoise``) or ``loudness`` raise :class:`RuntimeError`.
 
     Example::
 

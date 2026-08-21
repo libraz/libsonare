@@ -193,7 +193,19 @@ struct MasteringChainConfig {
 };
 
 /// @brief Validates cross-stage invariants before any audio stage executes.
+/// @details Covers every configuration a later stage would reject at process
+///          time using only rate-independent information. The rate-dependent
+///          half is @ref validate_chain_config_for_rate, which the chain runs
+///          before its first stage.
 void validate_mastering_chain_config(const MasteringChainConfig& config);
+
+/// @brief Rate-dependent half of @ref validate_mastering_chain_config.
+/// @details Constructing a chain does not fix a sample rate, so the constraints
+///          that are expressed against Nyquist can only be checked once the
+///          rate is known. Run before the first stage so a configuration that
+///          would throw mid-render is rejected while the audio is untouched.
+/// @throws SonareException (InvalidParameter) naming the offending stage.
+void validate_chain_config_for_rate(const MasteringChainConfig& config, int sample_rate);
 
 // ---------------------------------------------------------------------------
 // Chain results
@@ -269,10 +281,18 @@ class MasteringChain {
 // StreamingMasteringChain
 // Block-by-block streaming variant of MasteringChain. Maintains processor
 // state across process_block() calls. Supports only ProcessorBase-based
-// stages (eq.tilt, dynamics.compressor, saturation.tape, saturation.exciter,
-// spectral.airBand, stereo.imager, stereo.monoMaker, maximizer.truePeakLimiter).
-// Throws std::invalid_argument from constructor if config enables
-// repair.denoise or loudness (those require whole-signal buffering).
+// stages: eq.tilt, dynamics.deesser, dynamics.transientShaper,
+// dynamics.compressor, dynamics.multibandComp, saturation.tape,
+// saturation.exciter, spectral.airBand, stereo.imager (stereo only),
+// stereo.monoMaker (stereo only), maximizer.truePeakLimiter.
+// The constructor throws InvalidParameter if the config enables ANY of the six
+// whole-signal repair stages (repair.declick, repair.declip, repair.decrackle,
+// repair.dehum, repair.dereverb, repair.denoise), and for loudness unless a
+// precomputed static gain is supplied (see StreamingMasteringChainOptions).
+// This list is pinned against prepare() and the constructor by
+// "StreamingMasteringChain supported and rejected stages match the
+// implementation" in tests/mastering/chain_test.cpp, which derives both sets by
+// probing every stage the config surface exposes.
 // ---------------------------------------------------------------------------
 
 /// @brief Optional construction parameters for StreamingMasteringChain.

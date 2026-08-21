@@ -129,16 +129,33 @@ void StreamingMasteringChain::prepare(double sample_rate, int max_block_size, in
     throw SonareException(ErrorCode::InvalidParameter, "sample_rate must be > 0");
   }
 
+  // A stage's own prepare() can throw for a reason only it can see — a
+  // crossover whose cutoff sits at or above the NEW rate's Nyquist is the
+  // reachable case — and that leaves two states this object must never be in:
+  // holding a chain that stops short of the ceiling-enforcing stages, and
+  // reporting a truncated stage_names(). So drop the prepared marker before
+  // building anything, and assemble into locals that are only committed once
+  // every stage has been prepared. Either the object comes back fully prepared
+  // for these arguments, or process_block() rejects with InvalidState; there is
+  // no partial chain in between.
+  //
+  // The argument checks above run before this point deliberately: a rejected
+  // argument is not a failed re-prepare and must leave a working chain alone.
+  prepared_channels_ = 0;
+  max_block_size_ = 0;
   impl_->processors.clear();
+  impl_->loudness_limiter.reset();
   stage_names_.clear();
 
+  std::vector<std::unique_ptr<rt::ProcessorBase>> processors;
+  std::vector<std::string> stage_names;
   auto add_stage = [&](std::unique_ptr<rt::ProcessorBase> proc, const char* name) {
     // The streaming contract has already limited this chain to mono or stereo.
     // Preserve that bound so channel-aware stages do not allocate scratch for
     // every realtime-supported channel.
     proc->prepare(sample_rate, max_block_size, num_channels);
-    impl_->processors.push_back(std::move(proc));
-    stage_names_.emplace_back(name);
+    processors.push_back(std::move(proc));
+    stage_names.emplace_back(name);
   };
 
   // 1. eq.tilt
@@ -218,7 +235,7 @@ void StreamingMasteringChain::prepare(double sample_rate, int max_block_size, in
   // process_block(); here we prepare the matching final limiter that mirrors the
   // offline chain's loudness stage so the streaming preview's ceiling behaviour
   // matches the offline render.
-  impl_->loudness_limiter.reset();
+  std::unique_ptr<rt::ProcessorBase> loudness_limiter;
   if (config_.loudness.enabled) {
     const mastering::maximizer::TruePeakLimiterConfig limiter_config =
         mastering::maximizer::loudness_limiter_config(
@@ -226,10 +243,15 @@ void StreamingMasteringChain::prepare(double sample_rate, int max_block_size, in
             config_.loudness.release_ms, config_.loudness.apply_gain_at_input_rate);
     auto limiter = std::make_unique<mastering::maximizer::TruePeakLimiter>(limiter_config);
     limiter->prepare(sample_rate, max_block_size, num_channels);
-    impl_->loudness_limiter = std::move(limiter);
-    stage_names_.emplace_back("loudness.optimize");
+    loudness_limiter = std::move(limiter);
+    stage_names.emplace_back("loudness.optimize");
   }
 
+  // Commit. Nothing below here can throw, so the object goes from "unprepared"
+  // to "prepared for these arguments" in one step.
+  impl_->processors = std::move(processors);
+  impl_->loudness_limiter = std::move(loudness_limiter);
+  stage_names_ = std::move(stage_names);
   prepared_channels_ = num_channels;
   max_block_size_ = max_block_size;
   flush_samples_remaining_ = 0;

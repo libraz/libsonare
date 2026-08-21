@@ -103,6 +103,7 @@ using detail::compressor_config;
 using detail::crossover_config;
 using detail::f;
 using detail::limiter_config;
+using detail::ParamKind;
 using detail::ParamMap;
 
 #ifdef SONARE_HAVE_FX
@@ -991,6 +992,13 @@ std::string insert_param_info_json(const std::string& name) {
   // tell which params accept realtime changes from the audio thread.
   ParamMap params;
   auto processor = build_insert(name, params);
+  // The same build recorded, per key, the C++ type the config builder read it
+  // as (ParamMap::note_kind, driven by the `b()` accessor and by the declared
+  // type of the SONARE_FIELDS_* destination field). Reporting from that instead
+  // of from the key's spelling is what keeps `type` honest: a boolean config
+  // field whose key does not end in "Enabled" - CompressorConfig::auto_makeup
+  // is the standing example - was published as a number by the old suffix test.
+  const auto& kinds = params.probed_kinds();
   std::string out = "[";
   if (processor != nullptr) {
     const auto descriptors = processor->parameter_descriptors();
@@ -1003,9 +1011,11 @@ std::string insert_param_info_json(const std::string& name) {
       out += ",\"rtSafe\":";
       out += processor->parameter_is_realtime_safe(descriptors[index].id) ? "true" : "false";
       out += ",\"type\":\"";
-      const bool is_boolean =
-          descriptors[index].key.size() >= 7 &&
-          descriptors[index].key.compare(descriptors[index].key.size() - 7, 7, "Enabled") == 0;
+      // A descriptor key the builder never probed has no declared field to read
+      // a type from; those are numeric automation targets, which is also the
+      // catalog's neutral value.
+      const auto kind = kinds.find(descriptors[index].key);
+      const bool is_boolean = kind != kinds.end() && kind->second == ParamKind::Boolean;
       out += is_boolean ? "boolean" : "number";
       // The registry currently publishes no generic bounds/default interface.
       // Preserve that distinction rather than inventing values by heuristic;

@@ -100,4 +100,15 @@ LoudnessSummary measure_loudness_summary_interleaved(
     const float* samples, std::size_t frames, int channels, int sample_rate,
     int true_peak_oversample = kDefaultTruePeakOversample);
 
+/// @brief Stereo counterpart for callers that already hold planar channels.
+/// @details Same measurements as @ref measure_loudness_summary_interleaved on
+///          the interleaved form of the same audio. It exists for its memory
+///          profile: an offline caller with planar buffers would otherwise
+///          interleave a track-length copy and keep it alive across the call,
+///          while this holds one only for the loudness step and reads the
+///          caller's own buffers for the true peak.
+LoudnessSummary measure_loudness_summary_stereo_planar(
+    const float* left, const float* right, std::size_t frames, int sample_rate,
+    int true_peak_oversample = kDefaultTruePeakOversample);
+
 }  // namespace sonare::mastering::common

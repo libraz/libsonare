@@ -88,13 +88,12 @@ struct StereoProcessorResult : StereoAudioResult {
   /// @copydoc ProcessorOutcome::loudness_target_limited
   bool loudness_target_limited = false;
 
-  /// Copies both per-channel dispatch outcomes of the generic stereo fallback
-  /// (the mono processor run independently on each channel).
-  void apply(const ProcessorOutcome& left_outcome, const ProcessorOutcome& right_outcome) {
-    latency_samples = std::max(left_outcome.latency_samples, right_outcome.latency_samples);
-    applied_gain_db += 0.5f * (left_outcome.applied_gain_db + right_outcome.applied_gain_db);
-    loudness_target_limited = loudness_target_limited || left_outcome.loudness_target_limited ||
-                              right_outcome.loudness_target_limited;
+  /// Copies the dispatch outcome of the shared stereo path, which runs one
+  /// processor over both channels.
+  void apply(const ProcessorOutcome& outcome) {
+    latency_samples = outcome.latency_samples;
+    applied_gain_db += outcome.applied_gain_db;
+    loudness_target_limited = loudness_target_limited || outcome.loudness_target_limited;
   }
 };
 

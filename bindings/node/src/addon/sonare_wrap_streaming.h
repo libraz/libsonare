@@ -17,8 +17,10 @@ namespace sonare_node {
 /// @brief N-API wrapper around sonare::mastering::api::StreamingMasteringChain.
 ///
 /// Block-by-block streaming variant of the mastering chain. Stages that
-/// require whole-signal buffering (repair.denoise, loudness) are rejected at
-/// construction. JS surface:
+/// require whole-signal buffering are rejected at construction: all six repair
+/// stages (repair.declick, repair.declip, repair.decrackle, repair.dehum,
+/// repair.dereverb, repair.denoise), and loudness unless a precomputed static
+/// gain is supplied. JS surface:
 ///   const chain = new sonare.StreamingMasteringChain(config);
 ///   chain.prepare(sampleRate, maxBlockSize, numChannels);
 ///   const out = chain.processMono(samples);              // mono

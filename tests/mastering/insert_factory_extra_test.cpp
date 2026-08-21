@@ -965,6 +965,163 @@ TEST_CASE("processor_catalog_json classifies every id consistently with the sour
   }
 }
 
+// stereo_processor_names() asserts a capability: "this id has no mono form".
+// The list is derived from the offline dispatch, and this pins that derivation
+// against the behaviour a mono caller actually sees, for every registered id.
+// A processor that gains a mono branch but stays on the list, or one that loses
+// its mono branch without joining it, fails here rather than reaching a caller
+// as a wrong diagnostic.
+TEST_CASE("stereo_processor_names matches what the mono entry point does with every id",
+          "[mastering][named_processor][channels]") {
+  using sonare::mastering::api::apply_named_processor;
+  using sonare::mastering::api::processor_names;
+  using sonare::mastering::api::stereo_processor_names;
+
+  constexpr int kSampleRate = 48000;
+  std::vector<float> signal(4096, 0.0f);
+  for (std::size_t index = 0; index < signal.size(); ++index) {
+    signal[index] = 0.5f * std::sin(2.0f * 3.14159265f * 220.0f * static_cast<float>(index) /
+                                    static_cast<float>(kSampleRate));
+  }
+
+  const auto declared = stereo_processor_names();
+  std::vector<std::string> observed;
+  for (const std::string& id : processor_names()) {
+    INFO("processor " << id);
+    try {
+      apply_named_processor(id, signal.data(), signal.size(), kSampleRate, {});
+    } catch (const sonare::SonareException& error) {
+      const std::string message = error.what();
+      // The only tolerated mono failure is the stereo-only diagnostic; an
+      // "unknown processor" here would mean a registered id no entry point can
+      // reach.
+      REQUIRE(message.find("stereo-only") != std::string::npos);
+      observed.push_back(id);
+    }
+  }
+  std::sort(observed.begin(), observed.end());
+  CHECK(observed == declared);
+
+  // The five band-splitting dynamics processors are channel-generic and must
+  // NOT be on the list: MasteringChain runs the same classes over a mono
+  // buffer, so rejecting them from the mono one-shot API locked mono users out
+  // of DSP that was already there.
+  for (const char* id : {"multiband.compressor", "multiband.expander", "multiband.limiter",
+                         "multiband.saturation", "multiband.dynamicEq"}) {
+    INFO(id);
+    CHECK(!ListContains(declared, id));
+  }
+  // multiband.imager works on the mid/side decomposition and stays stereo-only.
+  CHECK(ListContains(declared, "multiband.imager"));
+}
+
+// A processor whose detector links its channels must produce one gain envelope
+// for the pair. The one-shot stereo API used to run the mono processor twice,
+// so an asymmetric input came back with two independent envelopes - audible as
+// the stereo image moving on every transient, and different from what
+// MasteringChain produces from the same settings.
+TEST_CASE("apply_named_processor_stereo keeps a linked detector linked",
+          "[mastering][named_processor][channels]") {
+  using sonare::mastering::api::apply_named_processor_stereo;
+  using sonare::mastering::api::Param;
+
+  constexpr int kSampleRate = 48000;
+  constexpr std::size_t kLength = 4096;
+  std::vector<float> left(kLength, 0.0f);
+  std::vector<float> right(kLength, 0.0f);
+  for (std::size_t index = 0; index < kLength; ++index) {
+    const float phase =
+        2.0f * 3.14159265f * 220.0f * static_cast<float>(index) / static_cast<float>(kSampleRate);
+    left[index] = 0.9f * std::sin(phase);
+    right[index] = 0.2f * std::sin(phase);  // ~13 dB quieter
+  }
+
+  const std::vector<Param> params{
+      {"thresholdDb", -30.0}, {"ratio", 8.0}, {"attackMs", 1.0}, {"releaseMs", 50.0}};
+  const auto result = apply_named_processor_stereo("dynamics.compressor", left.data(), right.data(),
+                                                   kLength, kSampleRate, params);
+  REQUIRE(result.left.size() == kLength);
+
+  float worst_gain_delta = 0.0f;
+  int compared = 0;
+  for (std::size_t index = 0; index < kLength; ++index) {
+    // Skip near-zero-crossing samples, where the per-sample gain ratio is
+    // numerically meaningless.
+    if (std::abs(left[index]) < 0.05f || std::abs(right[index]) < 0.05f) continue;
+    const float gain_left = result.left[index] / left[index];
+    const float gain_right = result.right[index] / right[index];
+    worst_gain_delta = std::max(worst_gain_delta, std::abs(gain_left - gain_right));
+    ++compared;
+  }
+  REQUIRE(compared > 1000);
+  INFO("max per-sample |gainL - gainR| = " << worst_gain_delta);
+  CHECK(worst_gain_delta < 1.0e-5f);
+}
+
+// The mono entry point and the stereo entry point are the same dispatch, so a
+// duplicated-channel stereo run must reproduce the mono run exactly. This is
+// what makes "the multiband stages now work in mono" a routing fix rather than
+// a second implementation.
+TEST_CASE("mono and duplicated-stereo named-processor runs agree",
+          "[mastering][named_processor][channels]") {
+  using sonare::mastering::api::apply_named_processor;
+  using sonare::mastering::api::apply_named_processor_stereo;
+
+  constexpr int kSampleRate = 48000;
+  std::vector<float> signal(4096, 0.0f);
+  for (std::size_t index = 0; index < signal.size(); ++index) {
+    signal[index] = 0.5f * std::sin(2.0f * 3.14159265f * 220.0f * static_cast<float>(index) /
+                                    static_cast<float>(kSampleRate));
+  }
+
+  for (const char* id : {"multiband.compressor", "multiband.expander", "multiband.limiter",
+                         "multiband.saturation", "multiband.dynamicEq", "dynamics.compressor"}) {
+    INFO(id);
+    const auto mono = apply_named_processor(id, signal.data(), signal.size(), kSampleRate, {});
+    const auto stereo = apply_named_processor_stereo(id, signal.data(), signal.data(),
+                                                     signal.size(), kSampleRate, {});
+    REQUIRE(mono.samples.size() == stereo.left.size());
+    float worst = 0.0f;
+    for (std::size_t index = 0; index < mono.samples.size(); ++index) {
+      worst = std::max(worst, std::abs(mono.samples[index] - stereo.left[index]));
+      // A duplicated input must stay duplicated on the way out.
+      CHECK(stereo.left[index] == stereo.right[index]);
+    }
+    INFO("max |mono - stereoL| = " << worst);
+    CHECK(worst < 1.0e-6f);
+  }
+}
+
+// The catalog's `type` comes from the declared C++ type of the config field a
+// parameter writes, not from the key's spelling. autoMakeup is the standing
+// counter-example to the old "key ends in Enabled" heuristic: it is a
+// CompressorConfig `bool` that a host must draw as a toggle.
+TEST_CASE("processor catalog publishes a boolean parameter as boolean",
+          "[mastering][catalog][params]") {
+  const std::string info = insert_param_info_json("dynamics.compressor");
+  const auto params = sonare::util::json::parse(info);
+  REQUIRE(params.is_array());
+  bool saw_auto_makeup = false;
+  bool saw_a_number = false;
+  for (const auto& param : params.as_array()) {
+    const std::string name = param["name"].as_string();
+    const std::string type = param["type"].as_string();
+    REQUIRE((type == "boolean" || type == "number"));
+    if (name == "autoMakeup") {
+      saw_auto_makeup = true;
+      CHECK(type == "boolean");
+    }
+    if (name == "thresholdDb" || name == "ratio" || name == "sidechainHpfHz") {
+      saw_a_number = true;
+      CHECK(type == "number");
+    }
+    // An enum-valued field is still a number: only a C++ bool is a toggle.
+    if (name == "detector") CHECK(type == "number");
+  }
+  CHECK(saw_auto_makeup);
+  CHECK(saw_a_number);
+}
+
 TEST_CASE("processor_names() lists every effects insert the apply path dispatches",
           "[mastering][named_processor][effects]") {
   const auto inserts = insert_factory_names();

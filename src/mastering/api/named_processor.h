@@ -39,6 +39,12 @@ StereoResult apply_named_processor_stereo(const std::string& name, const float* 
 // through apply_named_processor_stereo(). Calling apply_named_processor() (the
 // mono entry point) with one of these names throws InvalidParameter. Exposed so
 // callers can distinguish "stereo-only processor" from "unknown processor".
+//
+// Derived from the offline dispatch rather than maintained beside it: an id is
+// reported here exactly when the shared mono/stereo dispatch has no branch for
+// it. Adding a mono implementation therefore removes an id from this list on
+// its own, and the list cannot claim a processor is stereo-only while a mono
+// caller can reach it (or the reverse). Sorted; computed once.
 std::vector<std::string> stereo_processor_names();
 
 std::vector<std::string> pair_processor_names();

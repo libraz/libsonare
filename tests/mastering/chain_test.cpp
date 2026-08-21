@@ -5,6 +5,7 @@
 #include <catch2/matchers/catch_matchers_floating_point.hpp>
 #include <cmath>
 #include <limits>
+#include <string>
 #include <vector>
 
 #include "mastering/api/audio_utils.h"
@@ -13,6 +14,7 @@
 #include "mastering/common/loudness_measure.h"
 #include "util/constants.h"
 #include "util/exception.h"
+#include "util/json.h"
 
 using Catch::Matchers::WithinAbs;
 
@@ -144,6 +146,62 @@ TEST_CASE("MasteringChain stereo LRA uses channel summing, not a phase-cancellin
   MasteringChain chain(MasteringChainConfig{});
   auto result = chain.process_stereo(left.data(), right.data(), left.size(), sr);
   REQUIRE(result.output_lra > 1.0f);
+}
+
+// validate_mastering_chain_config() promises to reject anything a later stage
+// would throw on, before any stage runs. eq.tilt's pivot was missing from it,
+// and eq.tilt sits behind six repair stages: an album-length render with denoise
+// enabled used to spend minutes on STFT work and then die on an EQ error that
+// never named the tilt stage.
+TEST_CASE("MasteringChain rejects an invalid eq.tilt pivot at construction", "[mastering][chain]") {
+  for (const float pivot : {0.0f, -100.0f, std::numeric_limits<float>::quiet_NaN(),
+                            std::numeric_limits<float>::infinity()}) {
+    CAPTURE(pivot);
+    MasteringChainConfig config;
+    config.eq.tilt.enabled = true;
+    config.eq.tilt.tilt_db = 1.0f;
+    config.eq.tilt.pivot_hz = pivot;
+    CHECK_THROWS_AS(MasteringChain(config), sonare::SonareException);
+  }
+  // A disabled tilt carries no constraint.
+  MasteringChainConfig disabled;
+  disabled.eq.tilt.pivot_hz = 0.0f;
+  CHECK_NOTHROW(MasteringChain(disabled));
+}
+
+TEST_CASE("MasteringChain rejects a tilt pivot above Nyquist before the first stage",
+          "[mastering][chain]") {
+  constexpr int kSampleRate = 22050;  // Nyquist 11025
+  MasteringChainConfig config;
+  config.repair.declick.enabled = true;  // the expensive stage that must not run
+  config.eq.tilt.enabled = true;
+  config.eq.tilt.tilt_db = 1.5f;
+  config.eq.tilt.pivot_hz = 18000.0f;
+  MasteringChain chain(config);
+
+  // The progress callback fires once per completed stage, so "never called" is
+  // the observable proof that nothing ran before the rejection.
+  int stages_run = 0;
+  chain.set_progress_callback([&](float, const char*) { ++stages_run; });
+
+  std::vector<float> samples(kSampleRate, 0.1f);
+  CHECK_THROWS_AS(chain.process_mono(samples.data(), samples.size(), kSampleRate),
+                  sonare::SonareException);
+  CHECK(stages_run == 0);
+  CHECK_THROWS_AS(chain.process_stereo(samples.data(), samples.data(), samples.size(), kSampleRate),
+                  sonare::SonareException);
+  CHECK(stages_run == 0);
+
+  // The same pivot is legal at a rate whose Nyquist is above it.
+  CHECK_NOTHROW(chain.process_mono(samples.data(), samples.size(), 48000));
+
+  // A zero tilt leaves both shelves disabled, and a disabled band never has its
+  // coefficients designed - so the rate check must not reject what the stage
+  // would have run happily.
+  MasteringChainConfig flat = config;
+  flat.eq.tilt.tilt_db = 0.0f;
+  MasteringChain flat_chain(flat);
+  CHECK_NOTHROW(flat_chain.process_mono(samples.data(), samples.size(), kSampleRate));
 }
 
 TEST_CASE("MasteringChain rejects unsupported true-peak oversampling before processing",
@@ -476,10 +534,150 @@ TEST_CASE("MasteringChain stereo denoise applies a shared stereo transfer",
 // StreamingMasteringChain
 // ---------------------------------------------------------------------------
 
+// prepare() clears the chain before rebuilding it, and a stage's own prepare()
+// can fail for a reason only it can see: a multiband crossover cutoff that sat
+// below Nyquist at the old rate can be at or above it at the new one. A device
+// switch that fails this way used to leave the object holding whatever stages
+// had been built before the throw - typically everything except the
+// ceiling-enforcing tail - while still accepting blocks, so the live preview
+// kept playing, unlimited, with no error.
+TEST_CASE("StreamingMasteringChain prepare leaves no partial chain when a stage throws",
+          "[mastering][chain][streaming]") {
+  MasteringChainConfig config;
+  config.eq.tilt.enabled = true;                      // stage 1: prepares at any rate
+  config.dynamics.multiband_comp.enabled = true;      // stage 5: 2 kHz crossover by default
+  config.maximizer.true_peak_limiter.enabled = true;  // the tail that must never go missing
+  StreamingMasteringChain chain(config);
+
+  chain.prepare(48000.0, 512, 2);
+  REQUIRE(chain.stage_names().size() == 3);
+  std::vector<float> left(512, 0.05f);
+  std::vector<float> right(512, 0.05f);
+  float* channels[] = {left.data(), right.data()};
+  REQUIRE_NOTHROW(chain.process_block(channels, 2, 512));
+
+  // 3 kHz puts Nyquist at 1.5 kHz, below the crossover's default 2 kHz split,
+  // so the multiband stage throws after eq.tilt has already been built.
+  REQUIRE_THROWS_AS(chain.prepare(3000.0, 512, 2), sonare::SonareException);
+
+  // Not "prepared with the stages that happened to succeed": unprepared.
+  CHECK(chain.stage_names().empty());
+  REQUIRE_THROWS_AS(chain.process_block(channels, 2, 512), sonare::SonareException);
+  try {
+    chain.process_block(channels, 2, 512);
+    FAIL("process_block must reject after a failed prepare");
+  } catch (const sonare::SonareException& error) {
+    CHECK(error.code() == sonare::ErrorCode::InvalidState);
+  }
+
+  // A working chain can still be re-established.
+  REQUIRE_NOTHROW(chain.prepare(48000.0, 512, 2));
+  CHECK(chain.stage_names().size() == 3);
+  REQUIRE_NOTHROW(chain.process_block(channels, 2, 512));
+}
+
+// An argument the entry point itself rejects is not a failed re-prepare: it
+// never touched a stage, so the chain that was already prepared keeps working.
+TEST_CASE("StreamingMasteringChain keeps a prepared chain when prepare rejects its arguments",
+          "[mastering][chain][streaming]") {
+  MasteringChainConfig config;
+  config.eq.tilt.enabled = true;
+  StreamingMasteringChain chain(config);
+  chain.prepare(48000.0, 512, 2);
+  REQUIRE(chain.stage_names().size() == 1);
+
+  REQUIRE_THROWS_AS(chain.prepare(48000.0, 512, 3), sonare::SonareException);
+  REQUIRE_THROWS_AS(chain.prepare(48000.0, 0, 2), sonare::SonareException);
+  REQUIRE_THROWS_AS(chain.prepare(0.0, 512, 2), sonare::SonareException);
+
+  CHECK(chain.stage_names().size() == 1);
+  std::vector<float> left(512, 0.05f);
+  std::vector<float> right(512, 0.05f);
+  float* channels[] = {left.data(), right.data()};
+  CHECK_NOTHROW(chain.process_block(channels, 2, 512));
+}
+
 TEST_CASE("StreamingMasteringChain throws if denoise enabled", "[mastering][chain][streaming]") {
   MasteringChainConfig config;
   config.repair.denoise.enabled = true;
   REQUIRE_THROWS_AS(StreamingMasteringChain(std::move(config)), sonare::SonareException);
+}
+
+// The class doc in chain.h and the three binding docstrings that mirror it name
+// the stages this chain supports and the stages it rejects. Both sets are
+// derived here from the implementation rather than restated: the stage universe
+// comes from the config surface (every switchable stage serializes a
+// "<stage>.enabled" key), the rejected set is whichever of those stages makes
+// the constructor throw, and the supported set is what prepare() actually
+// instantiates, read back from stage_names(). A stage added to prepare() or a
+// change to the rejection set turns this red, and the doc lists are the
+// expectations it is checked against.
+TEST_CASE("StreamingMasteringChain supported and rejected stages match the implementation",
+          "[mastering][chain][streaming]") {
+  const std::vector<std::string> stage_ids = [] {
+    const MasteringChainConfig defaults;
+    const auto root = sonare::util::json::parse_strict(chain_config_to_json(defaults));
+    const std::string suffix = ".enabled";
+    std::vector<std::string> out;
+    for (const auto& [key, value] : root["params"].as_object()) {
+      (void)value;
+      if (key.size() > suffix.size() &&
+          key.compare(key.size() - suffix.size(), suffix.size(), suffix) == 0) {
+        out.push_back(key.substr(0, key.size() - suffix.size()));
+      }
+    }
+    std::sort(out.begin(), out.end());
+    return out;
+  }();
+  REQUIRE(stage_ids.size() >= 12);
+
+  std::vector<std::string> rejected;
+  std::vector<std::string> supported;
+  for (const std::string& stage : stage_ids) {
+    const std::vector<Param> params{{stage + ".enabled", 1.0}};
+    MasteringChainConfig config = parse_chain_config_params(params.data(), params.size());
+    INFO("stage " << stage);
+    try {
+      StreamingMasteringChain chain(config);
+      // Stereo, so the two stereo-only stages are reachable.
+      chain.prepare(48000.0, 512, 2);
+      // Enabling exactly one stage must instantiate exactly that stage: this is
+      // what makes the list prepare()'s instantiation set rather than "the
+      // constructor tolerated the config".
+      REQUIRE(chain.stage_names() == std::vector<std::string>{stage});
+      supported.push_back(stage);
+    } catch (const sonare::SonareException&) {
+      rejected.push_back(stage);
+    }
+  }
+
+  // Every whole-signal repair stage is rejected - all six of them, not just
+  // repair.denoise - and so is loudness without a precomputed static gain.
+  const std::vector<std::string> kRejected = {
+      "loudness",     "repair.declick", "repair.declip",  "repair.decrackle",
+      "repair.dehum", "repair.denoise", "repair.dereverb"};
+  const std::vector<std::string> kSupported = {"dynamics.compressor",
+                                               "dynamics.deesser",
+                                               "dynamics.multibandComp",
+                                               "dynamics.transientShaper",
+                                               "eq.tilt",
+                                               "maximizer.truePeakLimiter",
+                                               "saturation.exciter",
+                                               "saturation.tape",
+                                               "spectral.airBand",
+                                               "stereo.imager",
+                                               "stereo.monoMaker"};
+  CHECK(rejected == kRejected);
+  CHECK(supported == kSupported);
+
+  // The two stereo-image stages are the only ones prepare() drops on a mono
+  // chain, which is the "(stereo only)" qualifier in the same doc.
+  const std::vector<Param> stereo_params{
+      {"stereo.imager.enabled", 1.0}, {"stereo.monoMaker.enabled", 1.0}, {"eq.tilt.enabled", 1.0}};
+  StreamingMasteringChain mono_chain(
+      parse_chain_config_params(stereo_params.data(), stereo_params.size()));
+  mono_chain.prepare(48000.0, 512, 1);
+  CHECK(mono_chain.stage_names() == std::vector<std::string>{"eq.tilt"});
 }
 
 TEST_CASE("StreamingMasteringChain throws if loudness enabled", "[mastering][chain][streaming]") {

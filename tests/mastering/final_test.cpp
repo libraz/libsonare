@@ -1,3 +1,4 @@
+#include <algorithm>
 #include <catch2/catch_test_macros.hpp>
 #include <catch2/matchers/catch_matchers_floating_point.hpp>
 #include <cmath>
@@ -85,6 +86,64 @@ TEST_CASE("Every dither mode lands on the same target-bit grid", "[mastering][fi
       if (result[i] != undithered[i]) ++moved;
     }
     CHECK(moved > 0);
+  }
+}
+
+// target_bits accepts up to 32, but the grid is realized in float samples, so
+// it stops getting finer once the step drops below binary32's own spacing. The
+// headers state that ceiling; this pins the number they state, and pins that it
+// is the sample TYPE that sets it - the same computation carried out in double
+// and stored back into a float lands on exactly the same grid, so promoting the
+// arithmetic would not buy the finer grid either.
+TEST_CASE("bit_depth grids finer than float32 collapse onto the achievable one",
+          "[mastering][final]") {
+  // A dense ramp around half scale, where binary32's spacing is 2^-24 and the
+  // finest achievable grid is therefore 25 bits.
+  constexpr int kCount = 40000;
+  std::vector<float> ramp(kCount);
+  for (int index = 0; index < kCount; ++index) {
+    ramp[static_cast<std::size_t>(index)] = 0.5f + static_cast<float>(index) * 1.0e-9f;
+  }
+  const auto audio = make_audio(ramp);
+
+  const auto smallest_step = [](const Audio& out) {
+    std::vector<float> values(out.data(), out.data() + out.size());
+    std::sort(values.begin(), values.end());
+    values.erase(std::unique(values.begin(), values.end()), values.end());
+    float smallest = 1.0f;
+    for (std::size_t index = 1; index < values.size(); ++index) {
+      smallest = std::min(smallest, values[index] - values[index - 1]);
+    }
+    return smallest;
+  };
+
+  // Everything a delivery format uses is exact.
+  for (const int bits : {16, 20, 24, 25}) {
+    CAPTURE(bits);
+    const float nominal = std::pow(2.0f, -static_cast<float>(bits - 1));
+    CHECK_THAT(smallest_step(bit_depth(audio, {bits, true})), WithinAbs(nominal, nominal * 1e-3f));
+  }
+  // Past that the step stops shrinking, and every higher setting produces the
+  // same grid rather than the nominal one.
+  const float ceiling_step = smallest_step(bit_depth(audio, {25, true}));
+  for (const int bits : {26, 28, 32}) {
+    CAPTURE(bits);
+    const float step = smallest_step(bit_depth(audio, {bits, true}));
+    CHECK(step == ceiling_step);
+    CHECK(step > std::pow(2.0f, -static_cast<float>(bits - 1)));
+  }
+
+  // The ceiling is the storage type, not the intermediate precision: quantizing
+  // in double and storing the result as float reproduces the same step.
+  for (const int bits : {26, 32}) {
+    CAPTURE(bits);
+    const double scale = std::pow(2.0, bits - 1);
+    std::vector<float> in_double(ramp.size());
+    for (std::size_t index = 0; index < ramp.size(); ++index) {
+      in_double[index] =
+          static_cast<float>(std::round(static_cast<double>(ramp[index]) * scale) / scale);
+    }
+    CHECK(smallest_step(make_audio(in_double)) == ceiling_step);
   }
 }
 

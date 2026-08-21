@@ -76,6 +76,28 @@ export function addonSources(): AddonSource[] {
 }
 
 /**
+ * Top-level config keys the streaming-chain addon skips before flattening.
+ *
+ * `StreamingMasteringChain`'s TypeScript constructor validates its config leaf
+ * types through the shared flattener and must skip the same keys, or it would
+ * reject a valid config. That list is a hand-copy of a C++ literal this package
+ * cannot import, so read the C++ back instead of trusting the copy. Regex-level
+ * like the rest of this module; the caller asserts the result is non-empty so a
+ * regex that stops matching fails loudly rather than comparing nothing.
+ */
+export function streamingSkippedConfigKeys(): string[] {
+  const source = addonSources().find(({ file }) => file === 'sonare_wrap_streaming.cpp');
+  if (!source) {
+    return [];
+  }
+  const guard = /prefix\.empty\(\)\s*&&\s*\(([^)]*)\)/.exec(source.text);
+  if (!guard) {
+    return [];
+  }
+  return [...guard[1].matchAll(/key\s*==\s*"([^"]+)"/g)].map((match) => match[1]).sort();
+}
+
+/**
  * Every `Has("key")` that is not paired with an `IsUndefined()` check on the
  * same key. The paired form already treats an explicit `undefined` like an
  * omitted field, so it is not what this check is hunting.
