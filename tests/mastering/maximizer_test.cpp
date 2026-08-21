@@ -394,9 +394,10 @@ TEST_CASE("TruePeakLimiter detect-only forces base samples down for inter-sample
 
 TEST_CASE("AdaptiveRelease limits peaks and adapts release", "[mastering][maximizer]") {
   AdaptiveRelease limiter({-6.0f, 0.0f, 10.0f, 120.0f});
-  // Prepare for the full 2048-sample blocks processed below; process() must
-  // never be handed more samples than the prepared maximum block size.
-  limiter.prepare(48000.0, 2048);
+  // Prepare for the largest block processed below; process() must never be
+  // handed more samples than the prepared maximum block size.
+  constexpr int kBurstSamples = 8192;
+  limiter.prepare(48000.0, kBurstSamples);
 
   // Sustained sine -> low crest factor -> release should approach max_release_ms.
   auto signal = generate_sine_samples(1000.0f, 48000, 2048, 1.0f);
@@ -405,15 +406,130 @@ TEST_CASE("AdaptiveRelease limits peaks and adapts release", "[mastering][maximi
   REQUIRE(limiter.current_crest_factor() < 2.0f);
   REQUIRE(limiter.current_release_ms() >= 100.0f);
 
-  // Transient burst -> high crest -> release should drop toward min.
-  std::vector<float> burst(2048, 0.0f);
-  burst[0] = 1.0f;
-  burst[512] = 1.0f;
-  burst[1024] = 1.0f;
-  burst[1536] = 1.0f;
+  // Transient burst -> high crest -> release should drop toward min. The crest
+  // detector is a sliding window (crest_window_ms), not a per-block statistic,
+  // so the burst has to outlast both that window and the release smoothing
+  // before the running RMS reflects the new material rather than the sine
+  // that came before it.
+  std::vector<float> burst(kBurstSamples, 0.0f);
+  for (int i = 0; i < kBurstSamples; i += 512) {
+    burst[static_cast<std::size_t>(i)] = 1.0f;
+  }
   process(limiter, burst);
   REQUIRE(limiter.current_crest_factor() > 5.0f);
   REQUIRE(limiter.current_release_ms() < 60.0f);
+}
+
+namespace {
+
+// Sustained low tone under periodic transients, driven hard enough that the
+// limiter under the adaptive release is working continuously.
+std::vector<float> adaptive_release_program(int samples, int sample_rate) {
+  std::vector<float> out(static_cast<std::size_t>(samples), 0.0f);
+  const int period = sample_rate / 8;
+  for (int i = 0; i < samples; ++i) {
+    const float t = static_cast<float>(i) / static_cast<float>(sample_rate);
+    float value = 0.35f * std::sin(2.0f * sonare::constants::kPi * 110.0f * t);
+    const int local = i % period;
+    if (local < 96) {
+      value += 1.2f * (1.0f - static_cast<float>(local) / 96.0f);
+    }
+    out[static_cast<std::size_t>(i)] = value;
+  }
+  return out;
+}
+
+// Renders @p input through one AdaptiveRelease instance, handing it @p blocks
+// samples at a time (cycling through the list; the last chunk is what is left).
+std::vector<float> run_adaptive_release(const std::vector<float>& input,
+                                        const AdaptiveReleaseConfig& config,
+                                        const std::vector<int>& blocks, int prepared_block,
+                                        int sample_rate) {
+  std::vector<float> output = input;
+  AdaptiveRelease processor(config);
+  processor.prepare(sample_rate, prepared_block);
+  const int total = static_cast<int>(output.size());
+  int offset = 0;
+  std::size_t index = 0;
+  while (offset < total) {
+    const int count = std::min(blocks[index % blocks.size()], total - offset);
+    float* channels[] = {output.data() + offset};
+    processor.process(channels, 1, count);
+    offset += count;
+    ++index;
+  }
+  return output;
+}
+
+float max_abs_difference(const std::vector<float>& a, const std::vector<float>& b) {
+  REQUIRE(a.size() == b.size());
+  float worst = 0.0f;
+  for (std::size_t i = 0; i < a.size(); ++i) {
+    worst = std::max(worst, std::abs(a[i] - b[i]));
+  }
+  return worst;
+}
+
+}  // namespace
+
+// A host's buffer size is an arbitrary choice: a 0.5 s preview rendered in
+// 512-sample callbacks and the same material rendered in one offline block must
+// come out identical. Every envelope AdaptiveRelease keeps (crest peak, running
+// RMS, release smoothing) advances per sample at a rate fixed by the sample
+// rate and the configured milliseconds, and the release it hands the inner
+// limiter is published on a grid anchored to the stream position, so nothing
+// here may be derived from num_samples.
+TEST_CASE("AdaptiveRelease output does not depend on the caller's block size",
+          "[mastering][maximizer][block_invariance]") {
+  using sonare::mastering::api::internal::kOfflineProcessorBlockSize;
+  constexpr int kSampleRate = 48000;
+  // One whole offline block plus a ragged tail, so the reference render also
+  // exercises a short final chunk.
+  const int total = kOfflineProcessorBlockSize + 1024;
+  const auto input = adaptive_release_program(total, kSampleRate);
+  const AdaptiveReleaseConfig config;  // defaults: 30 ms crest, 20 ms smoothing
+
+  const auto offline = run_adaptive_release(input, config, {kOfflineProcessorBlockSize},
+                                            kOfflineProcessorBlockSize, kSampleRate);
+
+  // A typical host callback, prepared at its own block size the way a live
+  // host would.
+  CHECK(max_abs_difference(run_adaptive_release(input, config, {512}, 512, kSampleRate), offline) ==
+        0.0f);
+  // A ragged split that lands mid-transient and inside the control grid.
+  CHECK(max_abs_difference(
+            run_adaptive_release(input, config, {17, 31, 64, 512, 3000}, 4096, kSampleRate),
+            offline) == 0.0f);
+}
+
+// crestWindowMs and releaseSmoothingMs are published, automatable parameters.
+// Both set the speed of a per-sample envelope, so both must still shape the
+// render when the whole signal arrives as one offline block. Deriving their
+// coefficients from num_samples instead made the exponent underflow (a 65536
+// sample block against a 30 ms window is exp(-45)), pinning both rates at
+// "instantaneous" and rendering the two knobs bit-for-bit inert.
+TEST_CASE("AdaptiveRelease crest window and release smoothing shape a single-block render",
+          "[mastering][maximizer][block_invariance]") {
+  constexpr int kSampleRate = 48000;
+  constexpr int kTotal = 32768;  // one block, far longer than either time constant
+  const auto input = adaptive_release_program(kTotal, kSampleRate);
+
+  auto render = [&](float crest_window_ms, float release_smoothing_ms) {
+    AdaptiveReleaseConfig config;
+    config.crest_window_ms = crest_window_ms;
+    config.release_smoothing_ms = release_smoothing_ms;
+    return run_adaptive_release(input, config, {kTotal}, kTotal, kSampleRate);
+  };
+
+  const AdaptiveReleaseConfig defaults;
+  const auto reference = render(defaults.crest_window_ms, defaults.release_smoothing_ms);
+  const float crest_delta =
+      max_abs_difference(render(1.0f, defaults.release_smoothing_ms), reference);
+  const float smoothing_delta =
+      max_abs_difference(render(defaults.crest_window_ms, 0.0f), reference);
+  CAPTURE(crest_delta, smoothing_delta);
+  CHECK(crest_delta > 1.0e-3f);
+  CHECK(smoothing_delta > 1.0e-3f);
 }
 
 TEST_CASE("AdaptiveRelease preserves lookahead state across release updates",

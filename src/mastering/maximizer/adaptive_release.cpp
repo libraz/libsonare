@@ -3,15 +3,23 @@
 #include <algorithm>
 #include <cmath>
 
+#include "mastering/dynamics/channel_limits.h"
 #include "rt/scoped_no_denormals.h"
+#include "util/dsp_primitives.h"
 #include "util/exception.h"
 
 namespace sonare::mastering::maximizer {
 namespace {
 
 // Smallest strictly-positive crest window / crest factor accepted by
-// validate_config; reused to clamp the matching automation parameters.
+// validate_config; reused to clamp the matching automation parameters and to
+// floor the crest_high - crest_low span, which set_parameter keeps at least
+// this wide.
 constexpr float kMinPositiveCrest = 1.0e-4f;
+
+// Smoothed RMS below which the crest factor is reported as zero rather than
+// dividing by (near) silence.
+constexpr float kRmsFloor = 1.0e-9f;
 
 }  // namespace
 
@@ -30,6 +38,13 @@ void AdaptiveRelease::prepare(double sample_rate, int max_block_size) {
   current_crest_factor_ = 0.0f;
   peak_envelope_ = 0.0f;
   rms_square_envelope_ = 0.0f;
+  control_phase_ = 0;
+  last_gain_reduction_db_ = 0.0f;
+  update_envelope_coefficients();
+  // The two-argument prepare() below leaves the inner limiter at the realtime
+  // channel capacity, so the chunk pointer array is sized to match it once here
+  // rather than on the audio thread.
+  chunk_channels_.assign(dynamics::kRealtimePreparedChannels, nullptr);
   configure_limiter();
   limiter_.prepare(sample_rate_, max_block_size_);
   prepared_ = true;
@@ -43,30 +58,37 @@ void AdaptiveRelease::process(float* const* channels, int num_channels, int num_
     return;
   }
   validate_channel_buffers(channels, num_channels);
+  if (num_samples > max_block_size_ || num_channels > static_cast<int>(chunk_channels_.size())) {
+    // A block the inner limiter was never prepared for must still be rejected:
+    // handing it over whole raises the established error, whereas splitting it
+    // into control chunks would let it through as a series of small ones.
+    limiter_.process(channels, num_channels, num_samples);
+    return;
+  }
 
-  current_crest_factor_ = compute_crest_factor(channels, num_channels, num_samples);
-
-  // Map crest factor onto [0, 1] then onto [max_release, min_release]:
-  // high crest (transient) -> short release, low crest (sustained) -> long release.
-  const float crest_span = std::max(0.0001f, config_.crest_high - config_.crest_low);
-  const float norm =
-      std::clamp((current_crest_factor_ - config_.crest_low) / crest_span, 0.0f, 1.0f);
-  const float target_release_ms =
-      config_.min_release_ms + (config_.max_release_ms - config_.min_release_ms) * (1.0f - norm);
-  const float smoothing_seconds = config_.release_smoothing_ms * 0.001f;
-  const float smoothing =
-      smoothing_seconds <= 0.0f
-          ? 1.0f
-          : 1.0f - std::exp(-static_cast<float>(num_samples) /
-                            static_cast<float>(sample_rate_ * smoothing_seconds));
-  current_release_ms_ += smoothing * (target_release_ms - current_release_ms_);
-
-  // Per-block release automation runs on the audio thread, so use the
-  // allocation-free in-place setter (set_release_ms() would publish a new
-  // config snapshot, allocating a shared_ptr every block). Same coefficient
-  // math, no malloc.
-  limiter_.set_release_ms_in_place(current_release_ms_);
-  limiter_.process(channels, num_channels, num_samples);
+  last_gain_reduction_db_ = 0.0f;
+  int offset = 0;
+  while (offset < num_samples) {
+    if (control_phase_ == 0) {
+      // Release automation runs on the audio thread, so use the allocation-free
+      // in-place setter (set_release_ms() would publish a new config snapshot,
+      // allocating a shared_ptr each time). Same coefficient math, no malloc.
+      // The grid this fires on is anchored to the stream position, not to the
+      // caller's block boundaries.
+      limiter_.set_release_ms_in_place(current_release_ms_);
+    }
+    const int count = std::min(num_samples - offset, kControlIntervalSamples - control_phase_);
+    // The envelopes read the input, so they must run before the limiter
+    // overwrites the buffer in place.
+    advance_envelopes(channels, num_channels, offset, count);
+    for (int ch = 0; ch < num_channels; ++ch) {
+      chunk_channels_[static_cast<std::size_t>(ch)] = channels[ch] + offset;
+    }
+    limiter_.process(chunk_channels_.data(), num_channels, count);
+    last_gain_reduction_db_ = std::min(last_gain_reduction_db_, limiter_.last_gain_reduction_db());
+    control_phase_ = (control_phase_ + count) % kControlIntervalSamples;
+    offset += count;
+  }
 }
 
 void AdaptiveRelease::reset() {
@@ -75,6 +97,8 @@ void AdaptiveRelease::reset() {
   current_crest_factor_ = 0.0f;
   peak_envelope_ = 0.0f;
   rms_square_envelope_ = 0.0f;
+  control_phase_ = 0;
+  last_gain_reduction_db_ = 0.0f;
 }
 
 void AdaptiveRelease::set_config(const AdaptiveReleaseConfig& config) {
@@ -92,7 +116,7 @@ bool AdaptiveRelease::set_parameter(unsigned int param_id, float value) {
       if (prepared_) limiter_.set_parameter(0, config_.ceiling_db);
       return true;
     case 1:
-      // Read directly by the per-block release mapping; no recompute needed.
+      // Read directly by the per-sample release mapping; no recompute needed.
       config_.min_release_ms = std::max(0.0f, value);
       config_.max_release_ms = std::max(config_.max_release_ms, config_.min_release_ms);
       return true;
@@ -101,6 +125,7 @@ bool AdaptiveRelease::set_parameter(unsigned int param_id, float value) {
       return true;
     case 3:
       config_.crest_window_ms = std::max(kMinPositiveCrest, value);
+      update_envelope_coefficients();
       return true;
     case 4:
       config_.crest_low = std::max(kMinPositiveCrest, value);
@@ -111,6 +136,7 @@ bool AdaptiveRelease::set_parameter(unsigned int param_id, float value) {
       return true;
     case 6:
       config_.release_smoothing_ms = std::max(0.0f, value);
+      update_envelope_coefficients();
       return true;
     default:
       return false;
@@ -135,35 +161,48 @@ void AdaptiveRelease::configure_limiter() {
   limiter_.set_config({config_.ceiling_db, config_.lookahead_ms, current_release_ms_, 4});
 }
 
-float AdaptiveRelease::compute_crest_factor(float* const* channels, int num_channels,
-                                            int num_samples) {
-  float peak = 0.0f;
-  double sum_sq = 0.0;
-  long count = 0;
-  for (int ch = 0; ch < num_channels; ++ch) {
-    if (channels[ch] == nullptr) continue;
-    for (int i = 0; i < num_samples; ++i) {
-      const float s = channels[ch][i];
-      peak = std::max(peak, std::abs(s));
-      sum_sq += static_cast<double>(s) * static_cast<double>(s);
-      ++count;
+void AdaptiveRelease::update_envelope_coefficients() noexcept {
+  // Both envelopes advance once per input sample, so their coefficients are the
+  // per-sample leaky-integrator rates for the configured milliseconds. Deriving
+  // them from num_samples instead — as a per-block update must — collapses the
+  // crest window onto the block for any block longer than a few window lengths
+  // (exp() underflows to a rate of exactly 1) and silently disables both knobs
+  // on an offline render.
+  crest_coeff_ = time_to_attack_release_rate_f(sample_rate_, config_.crest_window_ms);
+  release_smoothing_coeff_ =
+      time_to_attack_release_rate_f(sample_rate_, config_.release_smoothing_ms);
+}
+
+void AdaptiveRelease::advance_envelopes(float* const* channels, int num_channels, int offset,
+                                        int count) noexcept {
+  const float inv_channels = 1.0f / static_cast<float>(num_channels);
+  // Map crest factor onto [0, 1] then onto [max_release, min_release]:
+  // high crest (transient) -> short release, low crest (sustained) -> long release.
+  const float crest_span = std::max(kMinPositiveCrest, config_.crest_high - config_.crest_low);
+  const float release_span = config_.max_release_ms - config_.min_release_ms;
+  for (int i = 0; i < count; ++i) {
+    // Channel-linked detector: the peak is the widest channel at this sample,
+    // the mean square is averaged across them, matching the linked gain the
+    // inner limiter applies.
+    float linked_peak = 0.0f;
+    float mean_square = 0.0f;
+    for (int ch = 0; ch < num_channels; ++ch) {
+      const float s = channels[ch][offset + i];
+      linked_peak = std::max(linked_peak, std::abs(s));
+      mean_square += s * s;
     }
+    mean_square *= inv_channels;
+
+    peak_envelope_ = std::max(linked_peak, peak_envelope_ * (1.0f - crest_coeff_));
+    rms_square_envelope_ += crest_coeff_ * (mean_square - rms_square_envelope_);
+
+    const float running_rms = std::sqrt(std::max(rms_square_envelope_, 0.0f));
+    current_crest_factor_ = running_rms < kRmsFloor ? 0.0f : peak_envelope_ / running_rms;
+    const float norm =
+        std::clamp((current_crest_factor_ - config_.crest_low) / crest_span, 0.0f, 1.0f);
+    const float target_release_ms = config_.min_release_ms + release_span * (1.0f - norm);
+    current_release_ms_ += release_smoothing_coeff_ * (target_release_ms - current_release_ms_);
   }
-  if (count == 0) return 0.0f;
-  const float block_rms_square = static_cast<float>(sum_sq / static_cast<double>(count));
-
-  const float window_seconds = config_.crest_window_ms * 0.001f;
-  const float alpha =
-      1.0f - std::exp(-static_cast<float>(num_samples) /
-                      static_cast<float>(std::max(1.0, sample_rate_ * window_seconds)));
-  peak_envelope_ = std::max(peak, peak_envelope_ * (1.0f - alpha));
-  rms_square_envelope_ += alpha * (block_rms_square - rms_square_envelope_);
-
-  const float block_rms = std::sqrt(std::max(block_rms_square, 0.0f));
-  const float running_rms = std::sqrt(std::max(rms_square_envelope_, 0.0f));
-  const float block_crest = block_rms < 1.0e-9f ? 0.0f : peak / block_rms;
-  const float running_crest = running_rms < 1.0e-9f ? 0.0f : peak_envelope_ / running_rms;
-  return std::max(block_crest, running_crest);
 }
 
 }  // namespace sonare::mastering::maximizer
