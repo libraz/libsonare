@@ -194,6 +194,14 @@ constexpr float kMinAudibleCutDb = 0.5f;
 // octaves wide, and a Q near 1.2 spans about one octave: wide enough to address
 // the band, narrow enough that it does not reach into its neighbours and turn a
 // local correction into a tone change.
+//
+// Sitting on the narrow side is also what the practice supports. A survey of
+// mixing best practices tested the claim that cuts are made with a higher Q
+// than boosts and found it holds — P. Pestana and J. D. Reiss, "Intelligent
+// Audio Production Strategies Informed by Best Practices", AES 53rd
+// International Conference on Semantic Audio, London, 2014. Only cuts are
+// suggested here, so the survey bears on this number alone; it says nothing
+// about the value beyond placing it above the width a boost would take.
 constexpr float kCutQ = 1.2f;
 
 // The top analysis band runs to Nyquist, so it has no geometric centre that
