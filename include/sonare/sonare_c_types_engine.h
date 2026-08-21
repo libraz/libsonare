@@ -49,8 +49,20 @@ typedef struct {
   uint32_t value;
 } SonareEngineTelemetry;
 
+/* Telemetry tap target id, shared by the meter, wide-meter and scope records.
+   The full value range is:
+     0        master mix
+     1..32    track lane, encoded as lane_index + 1
+     33..40   bus, encoded as 33 + bus_index
+     0xFFFF   input-monitor capture tap
+   A host mapping records back to its own lane array must handle 0xFFFF: a naive
+   target_id - 1 index lookup runs past the end of a 32-entry lane array. */
+#define SONARE_TELEMETRY_TARGET_MASTER 0u
+#define SONARE_TELEMETRY_TARGET_INPUT_MONITOR 0xFFFFu
+
 /* Mirrors engine::MeterTelemetryRecord: a fixed-size meter snapshot published by
-   the engine's meter tap. Drained with sonare_engine_drain_meter_telemetry. */
+   the engine's meter tap. Drained with sonare_engine_drain_meter_telemetry.
+   See the target-id range above for how target_id encodes the mix target. */
 typedef struct {
   uint32_t target_id;
   int64_t render_frame;
@@ -86,7 +98,8 @@ typedef struct {
    exposed (planes [0, channel_count)). Drained with
    sonare_engine_drain_meter_telemetry_wide. The legacy stereo
    SonareMeterTelemetryRecord stays the byte-identical fast path for <=2ch
-   targets; hosts pick the drain matching their target's bus layout. */
+   targets; hosts pick the drain matching their target's bus layout.
+   See the target-id range above for how target_id encodes the mix target. */
 typedef struct {
   uint32_t target_id;
   int64_t render_frame;
@@ -135,7 +148,8 @@ typedef struct {
    (vectorscope) snapshot for one mix target, published by the engine's scope tap
    and drained with sonare_engine_drain_scope_telemetry. band_count entries of
    bands[] (FFT magnitude in dBFS, linear-spaced over [0, Nyquist]) and
-   point_count interleaved left/right pairs of points[] are valid. */
+   point_count interleaved left/right pairs of points[] are valid.
+   See the target-id range above for how target_id encodes the mix target. */
 typedef struct {
   uint32_t target_id;
   int64_t render_frame;

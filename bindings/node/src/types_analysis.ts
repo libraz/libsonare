@@ -429,6 +429,22 @@ export interface BpmAnalysisResult {
   tempogram: Float32Array;
 }
 
+/**
+ * Room acoustic parameters from a blind recording or a measured impulse
+ * response (`isBlind` distinguishes the two).
+ *
+ * Only `rt60` (and `rt60Bands`) is estimated in both modes. `c50`/`c80`/`d50`
+ * and `edt` require a known direct-sound arrival time, which only a measured
+ * impulse response provides, so they are NaN when `isBlind` is true -- `edt`
+ * measures the 0 to -10 dB decay and the blind estimator only fits the late
+ * decay `rt60` comes from.
+ *
+ * A band array that was not computed is EMPTY, never zero-filled: a zero-filled
+ * clarity array is indistinguishable from a genuine 0 dB measurement. So
+ * `c50Bands` and `c80Bands` have length 0 when `isBlind` is true. `edtBands` is
+ * the exception -- it keeps its full length and is all NaN, so it can be indexed
+ * by the same band index as `rt60Bands`.
+ */
 export interface AcousticResult {
   rt60: number;
   edt: number;

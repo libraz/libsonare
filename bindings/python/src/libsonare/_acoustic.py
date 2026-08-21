@@ -165,11 +165,23 @@ def synthesize_rir(
     try:
         detail = lib.sonare_last_error_message() if out.has_error else None
         error_message = detail.decode("utf-8") if detail else ""
+        # Read the warning channel unconditionally, exactly as the Node and WASM
+        # facades do. Non-fatal diagnostics are recorded on SUCCESS returns -- a
+        # max_seconds clamp that cut the tail, or a request degraded to early
+        # reflections only -- so gating this on has_error would leave a truncated
+        # RIR indistinguishable from a complete one. Read before any later C ABI
+        # call can overwrite the thread-local slot.
+        warning_message = ""
+        if hasattr(lib, "sonare_last_warning_message"):
+            raw_warning = lib.sonare_last_warning_message()
+            if raw_warning:
+                warning_message = raw_warning.decode("utf-8")
         return RirResult(
             rir=_float_array_result(out.rir, out.length),
             sample_rate=int(out.sample_rate),
             has_error=bool(out.has_error),
             error_message=error_message,
+            warning_message=warning_message,
         )
     finally:
         lib.sonare_free_rir_synth_result(ctypes.byref(out))

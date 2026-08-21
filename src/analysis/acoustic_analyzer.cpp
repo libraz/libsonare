@@ -122,9 +122,16 @@ void AcousticAnalyzer::analyze_blind(const Audio& audio) {
 
   if (global.confidence > 0.0f) {
     parameters_.rt60 = global.rt60;
-    parameters_.edt = global.rt60;
     parameters_.confidence = global.confidence;
   }
+  // edt is deliberately left at the NaN this function opened with. EDT is the
+  // 0 to -10 dB decay, which needs the direct-sound arrival the blind path does
+  // not have; the blind estimator only fits the late decay rt60 comes from.
+  // Publishing rt60 under the edt name (as this used to) makes edt / rt60
+  // exactly 1.0 for every blind analysis, so a host thresholding on EDT is
+  // deciding on a constant. Not measurable here, so it reports "not measurable"
+  // like the clarity family. The IR path derives the two from separate
+  // regressions (analysis/acoustic/ir.cpp) and they legitimately differ there.
 
   // Generate as many octave centres as requested (125 Hz, 250 Hz, ...) rather
   // than capping at a fixed 6-entry table; centres above Nyquist resolve to NaN
@@ -162,7 +169,11 @@ void AcousticAnalyzer::analyze_blind(const Audio& audio) {
                                             false);
     }
     parameters_.rt60_bands.push_back(band.rt60);
-    parameters_.edt_bands.push_back(band.confidence > 0.0f ? band.rt60 : nan_value());
+    // Same reason as the scalar above: the per-band blind estimate is an rt60,
+    // so publishing it as edt would make every band's edt / rt60 ratio exactly
+    // 1.0. The vector stays present (and band_count keeps indexing rt60_bands
+    // and edt_bands alike) but every entry reports "not measurable".
+    parameters_.edt_bands.push_back(nan_value());
   }
 }
 

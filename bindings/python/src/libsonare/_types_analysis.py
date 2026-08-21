@@ -679,7 +679,17 @@ class BpmAnalysisResult:
 
 @dataclass(frozen=True, slots=True)
 class AcousticResult:
-    """Room acoustic parameters from an impulse response."""
+    """Room acoustic parameters from a blind recording or a measured
+    impulse response (``is_blind`` distinguishes the two).
+
+    Only ``rt60`` (and ``rt60_bands``) is estimated in both modes.
+    ``c50``/``c80``/``d50`` and ``edt`` require a known direct-sound arrival
+    time, which only a measured impulse response provides, so they are NaN when
+    ``is_blind`` is true -- ``edt`` measures the 0 to -10 dB decay and the blind
+    estimator only fits the late decay ``rt60`` comes from. ``c50_bands`` and
+    ``c80_bands`` are then empty lists (not computed), while ``edt_bands`` stays
+    a full-length list of NaNs so it can be indexed by the same band index as
+    ``rt60_bands``."""
 
     rt60: float
     edt: float
@@ -720,16 +730,28 @@ class RirResult:
 
     ``error_message`` contains the stable acoustic diagnostic code and detail
     when geometry validation makes the result unusable.
+
+    ``warning_message`` carries non-fatal diagnostics, which appear on
+    SUCCESSFUL calls too and are otherwise invisible: a ``max_seconds`` clamp
+    that cut the reverb tail (``acoustic.rir_length_clamped``), or a request
+    reduced from "early reflections + diffuse tail" to early reflections only
+    (``acoustic.no_late_tail``). Neither sets ``has_error``, so a truncated RIR
+    is indistinguishable from a complete one without reading this field.
     """
 
     rir: list[float]
     sample_rate: int
     has_error: bool
     error_message: str = ""
+    warning_message: str = ""
 
     @property
     def sampleRate(self) -> int:  # noqa: N802
         return self.sample_rate
+
+    @property
+    def warningMessage(self) -> str:  # noqa: N802
+        return self.warning_message
 
     @property
     def hasError(self) -> bool:  # noqa: N802

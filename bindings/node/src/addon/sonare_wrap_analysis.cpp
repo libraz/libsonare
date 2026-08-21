@@ -491,6 +491,27 @@ Napi::Value SonareWrap::AnalyzeBpm(const Napi::CallbackInfo& info) {
   return result;
 }
 
+namespace {
+
+/// @brief Copies one acoustic band vector out of a SonareAcousticResult.
+/// @details A null band pointer means "not computed in this mode" -- the
+///          clarity family in blind mode, per sonare_c_types_analysis.h -- and
+///          absence has exactly one observable form across the bindings: an
+///          empty array. Allocating band_count entries and leaving them zeroed
+///          would publish a fabricated measurement (six bands of 0 dB clarity
+///          read as a real result), and it made the same TypeScript type mean
+///          different things on Node and on WASM for the same C result.
+Napi::Float32Array acoustic_band_array(Napi::Env env, const float* source, size_t band_count) {
+  const size_t length = source == nullptr ? 0 : band_count;
+  auto array = Napi::Float32Array::New(env, length);
+  if (length > 0) {
+    std::memcpy(array.Data(), source, length * sizeof(float));
+  }
+  return array;
+}
+
+}  // namespace
+
 Napi::Value SonareWrap::AnalyzeImpulseResponse(const Napi::CallbackInfo& info) {
   Napi::Env env = info.Env();
 
@@ -522,21 +543,10 @@ Napi::Value SonareWrap::AnalyzeImpulseResponse(const Napi::CallbackInfo& info) {
   result.Set("confidence", Napi::Number::New(env, acoustic.confidence));
   result.Set("isBlind", Napi::Boolean::New(env, acoustic.is_blind != 0));
 
-  auto rt60_bands = Napi::Float32Array::New(env, acoustic.band_count);
-  auto edt_bands = Napi::Float32Array::New(env, acoustic.band_count);
-  auto c50_bands = Napi::Float32Array::New(env, acoustic.band_count);
-  auto c80_bands = Napi::Float32Array::New(env, acoustic.band_count);
-  if (acoustic.band_count > 0) {
-    std::memcpy(rt60_bands.Data(), acoustic.rt60_bands, acoustic.band_count * sizeof(float));
-    std::memcpy(edt_bands.Data(), acoustic.edt_bands, acoustic.band_count * sizeof(float));
-    // Clarity bands may be null in blind mode (not computed); leave arrays zeroed.
-    if (acoustic.c50_bands != nullptr) {
-      std::memcpy(c50_bands.Data(), acoustic.c50_bands, acoustic.band_count * sizeof(float));
-    }
-    if (acoustic.c80_bands != nullptr) {
-      std::memcpy(c80_bands.Data(), acoustic.c80_bands, acoustic.band_count * sizeof(float));
-    }
-  }
+  auto rt60_bands = acoustic_band_array(env, acoustic.rt60_bands, acoustic.band_count);
+  auto edt_bands = acoustic_band_array(env, acoustic.edt_bands, acoustic.band_count);
+  auto c50_bands = acoustic_band_array(env, acoustic.c50_bands, acoustic.band_count);
+  auto c80_bands = acoustic_band_array(env, acoustic.c80_bands, acoustic.band_count);
   result.Set("rt60Bands", rt60_bands);
   result.Set("edtBands", edt_bands);
   result.Set("c50Bands", c50_bands);
@@ -580,21 +590,10 @@ Napi::Value SonareWrap::DetectAcoustic(const Napi::CallbackInfo& info) {
   result.Set("confidence", Napi::Number::New(env, acoustic.confidence));
   result.Set("isBlind", Napi::Boolean::New(env, acoustic.is_blind != 0));
 
-  auto rt60_bands = Napi::Float32Array::New(env, acoustic.band_count);
-  auto edt_bands = Napi::Float32Array::New(env, acoustic.band_count);
-  auto c50_bands = Napi::Float32Array::New(env, acoustic.band_count);
-  auto c80_bands = Napi::Float32Array::New(env, acoustic.band_count);
-  if (acoustic.band_count > 0) {
-    std::memcpy(rt60_bands.Data(), acoustic.rt60_bands, acoustic.band_count * sizeof(float));
-    std::memcpy(edt_bands.Data(), acoustic.edt_bands, acoustic.band_count * sizeof(float));
-    // Clarity bands may be null in blind mode (not computed); leave arrays zeroed.
-    if (acoustic.c50_bands != nullptr) {
-      std::memcpy(c50_bands.Data(), acoustic.c50_bands, acoustic.band_count * sizeof(float));
-    }
-    if (acoustic.c80_bands != nullptr) {
-      std::memcpy(c80_bands.Data(), acoustic.c80_bands, acoustic.band_count * sizeof(float));
-    }
-  }
+  auto rt60_bands = acoustic_band_array(env, acoustic.rt60_bands, acoustic.band_count);
+  auto edt_bands = acoustic_band_array(env, acoustic.edt_bands, acoustic.band_count);
+  auto c50_bands = acoustic_band_array(env, acoustic.c50_bands, acoustic.band_count);
+  auto c80_bands = acoustic_band_array(env, acoustic.c80_bands, acoustic.band_count);
   result.Set("rt60Bands", rt60_bands);
   result.Set("edtBands", edt_bands);
   result.Set("c50Bands", c50_bands);

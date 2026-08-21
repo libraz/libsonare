@@ -74,6 +74,24 @@ def test_synthesize_rir_flags_invalid_geometry() -> None:
 
 
 @acoustic
+def test_synthesize_rir_surfaces_non_fatal_diagnostics() -> None:
+    # Warnings accompany SUCCESSFUL calls, so gating the diagnostic read on
+    # has_error (which this facade used to do) leaves a truncated RIR
+    # indistinguishable from a complete one. Node and WASM already exposed them.
+    clamped = libsonare.synthesize_rir(12.0, 9.0, 5.0, absorption=0.05, max_seconds=0.3)
+    assert clamped.has_error is False
+    assert clamped.error_message == ""
+    assert "acoustic.rir_length_clamped" in clamped.warning_message
+    assert clamped.warningMessage == clamped.warning_message
+
+    # ... and a request that needed no clamping reports nothing, so the field is
+    # a real signal rather than always-populated noise.
+    clean = libsonare.synthesize_rir(5.0, 4.0, 3.0, absorption=0.3, max_seconds=3.0)
+    assert clean.has_error is False
+    assert clean.warning_message == ""
+
+
+@acoustic
 def test_estimate_room_round_trips_a_known_shoebox() -> None:
     rir = libsonare.synthesize_rir(
         7.0, 5.0, 3.0, source=(1.5, 1.0, 1.2), listener=(5.0, 4.0, 1.7), absorption=0.15

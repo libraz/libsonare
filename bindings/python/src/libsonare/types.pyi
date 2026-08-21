@@ -463,11 +463,16 @@ class BpmAnalysisResult:
 
 class AcousticResult:
     """Room acoustic parameters from a blind recording or a measured impulse
-    response (``is_blind`` distinguishes the two). ``rt60``/``edt`` (and their
-    per-band variants) are available in both modes. ``c50``/``c80``/``d50``
-    (and their per-band variants) require a known direct-sound arrival time,
-    which only a measured impulse response provides, so they are NaN when
-    ``is_blind`` is true."""
+    response (``is_blind`` distinguishes the two). Only ``rt60`` (and
+    ``rt60_bands``) is estimated in both modes.
+
+    ``c50``/``c80``/``d50`` and ``edt`` require a known direct-sound arrival
+    time, which only a measured impulse response provides, so they are NaN when
+    ``is_blind`` is true -- ``edt`` measures the 0 to -10 dB decay and the blind
+    estimator only fits the late decay ``rt60`` comes from. ``c50_bands`` and
+    ``c80_bands`` are then empty lists (not computed), while ``edt_bands`` stays
+    a full-length list of NaNs so it can be indexed by the same band index as
+    ``rt60_bands``."""
 
     rt60: float
     edt: float
@@ -510,13 +515,21 @@ class RirResult:
     sample_rate: int
     has_error: bool
     error_message: str
+    warning_message: str
     def __init__(
-        self, rir: list[float], sample_rate: int, has_error: bool, error_message: str = ""
+        self,
+        rir: list[float],
+        sample_rate: int,
+        has_error: bool,
+        error_message: str = "",
+        warning_message: str = "",
     ) -> None: ...
     @property
     def sampleRate(self) -> int: ...
     @property
     def hasError(self) -> bool: ...
+    @property
+    def warningMessage(self) -> str: ...
 
 class RoomEstimate:
     volume: float
@@ -1606,6 +1619,14 @@ class EngineGraphSpec:
     ) -> None: ...
 
 class MeterTelemetryRecord:
+    """Stereo meter snapshot drained from the engine meter tap.
+
+    ``target_id`` encodes the mix target: ``0`` master mix, ``lane_index + 1``
+    (1..32) for track lanes, ``33 + bus_index`` (33..40) for buses, and
+    ``0xFFFF`` for the input-monitor capture tap. Handle ``0xFFFF`` explicitly --
+    a naive ``target_id - 1`` index into a 32-entry lane array runs past its end.
+    """
+
     target_id: int
     render_frame: int
     seq: int
@@ -1645,6 +1666,14 @@ class MeterTelemetryRecord:
     ) -> None: ...
 
 class MeterTelemetryRecordWide:
+    """Per-plane meter snapshot for a surround mix target.
+
+    ``target_id`` encodes the mix target: ``0`` master mix, ``lane_index + 1``
+    (1..32) for track lanes, ``33 + bus_index`` (33..40) for buses, and
+    ``0xFFFF`` for the input-monitor capture tap. Handle ``0xFFFF`` explicitly --
+    a naive ``target_id - 1`` index into a 32-entry lane array runs past its end.
+    """
+
     target_id: int
     render_frame: int
     seq: int
@@ -1680,6 +1709,14 @@ class MeterTelemetryRecordWide:
     ) -> None: ...
 
 class ScopeTelemetryRecord:
+    """Spectrum + goniometer snapshot drained from the scope tap.
+
+    ``target_id`` encodes the mix target: ``0`` master mix, ``lane_index + 1``
+    (1..32) for track lanes, ``33 + bus_index`` (33..40) for buses, and
+    ``0xFFFF`` for the input-monitor capture tap. Handle ``0xFFFF`` explicitly --
+    a naive ``target_id - 1`` index into a 32-entry lane array runs past its end.
+    """
+
     target_id: int
     render_frame: int
     seq: int

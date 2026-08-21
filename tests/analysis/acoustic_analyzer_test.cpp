@@ -181,6 +181,38 @@ TEST_CASE("AcousticAnalyzer estimates IR-based RT60 and EDT", "[acoustic_analyze
   REQUIRE(params.confidence > 0.8f);
 }
 
+TEST_CASE("AcousticAnalyzer derives IR EDT independently of RT60", "[acoustic_analyzer]") {
+  // rt60 fits -5 to -5-N dB and edt fits 0 to -10 dB, so on a decay with two
+  // slopes they must disagree. A single exponential is not a usable probe here:
+  // its Schroeder curve is exactly straight, so both regressions land on the
+  // same float and inequality would prove nothing.
+  //
+  // This is the IR-side half of the contract the blind path used to break by
+  // publishing rt60 under the edt name.
+  const int sample_rate = 8000;
+  const float fast_rt60 = 0.20f;
+  const float slow_rt60 = 1.60f;
+  std::vector<float> samples(static_cast<size_t>(sample_rate) * 3);
+  const float fast_decay = std::log(1000.0f) / fast_rt60;
+  const float slow_decay = std::log(1000.0f) / slow_rt60;
+  for (size_t i = 0; i < samples.size(); ++i) {
+    const float t = static_cast<float>(i) / static_cast<float>(sample_rate);
+    // A loud fast component over a quiet slow one: the first 10 dB belongs to
+    // the fast slope, the late decay to the slow one.
+    samples[i] = std::exp(-fast_decay * t) + 0.02f * std::exp(-slow_decay * t);
+  }
+  const Audio ir = Audio::from_buffer(samples.data(), samples.size(), sample_rate);
+
+  const auto params = AcousticAnalyzer::from_impulse_response(ir).parameters();
+
+  REQUIRE_FALSE(params.is_blind);
+  REQUIRE(std::isfinite(params.rt60));
+  REQUIRE(std::isfinite(params.edt));
+  // The early decay is far faster than the late one, so edt must be well below
+  // rt60 rather than a copy of it.
+  REQUIRE(params.edt < params.rt60 * 0.75f);
+}
+
 TEST_CASE("AcousticAnalyzer auto mode routes impulse-like input to IR analysis",
           "[acoustic_analyzer]") {
   const float expected_rt60 = 1.0f;
@@ -371,13 +403,29 @@ TEST_CASE("AcousticAnalyzer estimates blind RT60 from synthetic free decay",
 
   REQUIRE(params.is_blind);
   REQUIRE(std::isfinite(params.rt60));
-  REQUIRE(std::isfinite(params.edt));
   REQUIRE_THAT(params.rt60, WithinRel(expected_rt60, 0.15f));
   REQUIRE(params.confidence >= 0.5f);
+  // Everything that needs a known direct-sound arrival is "not measurable", not
+  // a stand-in value. edt used to be a verbatim copy of rt60, which made
+  // edt / rt60 exactly 1.0 for every blind analysis; a host thresholding on EDT
+  // was deciding on a constant. isfinite() alone accepted that, so this asserts
+  // the contract instead of the shape.
+  REQUIRE(std::isnan(params.edt));
   REQUIRE(std::isnan(params.c50));
   REQUIRE(std::isnan(params.c80));
   REQUIRE(std::isnan(params.d50));
   REQUIRE(params.rt60_bands.size() == 6);
+  // edt_bands keeps its length so it stays index-parallel with rt60_bands, but
+  // every entry reports "not measurable".
+  REQUIRE(params.edt_bands.size() == params.rt60_bands.size());
+  for (size_t band = 0; band < params.edt_bands.size(); ++band) {
+    CAPTURE(band);
+    REQUIRE(std::isnan(params.edt_bands[band]));
+  }
+  // The clarity bands are absent entirely (the C ABI publishes a null pointer),
+  // which is the other half of the one "not computed" representation.
+  REQUIRE(params.c50_bands.empty());
+  REQUIRE(params.c80_bands.empty());
 
   int finite_bands = 0;
   for (float rt60 : params.rt60_bands) {
@@ -386,6 +434,43 @@ TEST_CASE("AcousticAnalyzer estimates blind RT60 from synthetic free decay",
     }
   }
   REQUIRE(finite_bands >= 3);
+}
+
+TEST_CASE("AcousticAnalyzer reports blind-mode unmeasurables as not computed",
+          "[acoustic_analyzer]") {
+  // "Not computed" has exactly two forms and this pins both, on the default
+  // (non-slow) path so it is checked on every run:
+  //   - a scalar reports NaN (edt, c50, c80, d50);
+  //   - a band vector that was never computed is EMPTY (c50_bands, c80_bands).
+  // edt_bands is the documented exception: it keeps its length so it stays
+  // index-parallel with rt60_bands, and every entry is NaN.
+  const Audio audio = create_exponential_ir(0.7f, 8000, 4.0f);
+
+  AcousticConfig config;
+  config.mode = AcousticConfig::Mode::Blind;
+  config.n_octave_bands = 4;
+  config.n_third_octave_subbands = 16;
+  AcousticAnalyzer analyzer(audio, config);
+  const auto& params = analyzer.parameters();
+
+  REQUIRE(params.is_blind);
+  REQUIRE(std::isnan(params.edt));
+  REQUIRE(std::isnan(params.c50));
+  REQUIRE(std::isnan(params.c80));
+  REQUIRE(std::isnan(params.d50));
+
+  REQUIRE(params.edt_bands.size() == params.rt60_bands.size());
+  for (size_t band = 0; band < params.edt_bands.size(); ++band) {
+    CAPTURE(band);
+    REQUIRE(std::isnan(params.edt_bands[band]));
+  }
+  REQUIRE(params.c50_bands.empty());
+  REQUIRE(params.c80_bands.empty());
+
+  // Guard against a vacuous check: rt60 IS estimated in blind mode, so the
+  // NaNs above are a deliberate contract and not a failed analysis.
+  REQUIRE(std::isfinite(params.rt60));
+  REQUIRE(params.confidence > 0.0f);
 }
 
 TEST_CASE("AcousticAnalyzer extrapolates blind low-frequency bands from high bands",

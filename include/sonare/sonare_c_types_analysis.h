@@ -96,11 +96,26 @@ typedef struct {
   float confidence;
 } SonareBpmCandidate;
 
-/* Room-acoustic measures. The clarity family (c50, c80, d50, c50_bands and
-   c80_bands) needs a known direct-sound arrival time, which only a measured
-   impulse response supplies, so those fields are NaN and those band pointers are
-   NULL whenever is_blind is nonzero. rt60 and edt carry no such requirement and
-   are estimated in both modes. */
+/* Room-acoustic measures.
+
+   Two fields need a known direct-sound arrival time, which only a measured
+   impulse response supplies, and are therefore not computed when is_blind is
+   nonzero:
+     - the clarity family (c50, c80, d50, c50_bands, c80_bands), and
+     - edt / edt_bands, which measure the 0 to -10 dB decay. The blind
+       estimator only fits the late decay that rt60 comes from, so it has
+       nothing independent to report here.
+   Only rt60 / rt60_bands are estimated in both modes.
+
+   "Not computed" has exactly two representations, and every binding maps them
+   to one observable form each:
+     - a scalar reports NaN (c50, c80, d50, edt);
+     - a band pointer is NULL (c50_bands, c80_bands), which every binding
+       surfaces as an EMPTY array, never as a zero-filled one -- a zero-filled
+       clarity array is indistinguishable from a genuine 0 dB measurement.
+   edt_bands is the one exception to the second rule: it stays a non-NULL array
+   of band_count NaNs so that rt60_bands and edt_bands can always be indexed by
+   the same band index. */
 typedef struct {
   float rt60;
   float edt;
