@@ -17,6 +17,7 @@ using sonare::mixing::kPanLawCount;
 using sonare::mixing::pan_law_from_index;
 using sonare::mixing::PanGains;
 using sonare::mixing::PanLaw;
+using sonare::mixing::PanMode;
 using sonare::mixing::PannerConfig;
 using sonare::mixing::PannerProcessor;
 using sonare::mixing::PanNormalization;
@@ -123,4 +124,66 @@ TEST_CASE("the wire encoding of a pan law is the enum's declaration order", "[mi
   REQUIRE(pan_law_from_index(-1) == PanLaw::Const3dB);
   REQUIRE(pan_law_from_index(kPanLawCount) == PanLaw::Const3dB);
   REQUIRE(pan_law_from_index(4) == PanLaw::Const3dB);
+}
+
+TEST_CASE("panner tolerates an unbound plane in every mode", "[mixing][pan]") {
+  // The mixing layer hands over partially-bound plane tables (the engine's
+  // monitor bus, a strip fed a single wired channel), and every sibling
+  // processor tolerates that. The mono short-circuit used to dereference
+  // channels[0] before reaching the stereo branch's null check, so a mono
+  // configuration with an unbound plane crashed inside the audio callback.
+  constexpr int kSamples = 8;
+  const std::array<PanMode, 3> kModes{PanMode::Balance, PanMode::StereoPan, PanMode::DualPan};
+
+  for (const PanMode mode : kModes) {
+    for (const float pan : {-0.75f, 0.0f, 0.75f}) {
+      CAPTURE(static_cast<int>(mode));
+      CAPTURE(pan);
+
+      std::vector<float> plane(kSamples, 0.5f);
+
+      // Mono with an unbound plane: the branch that used to crash.
+      {
+        PannerProcessor panner;
+        panner.prepare(48000.0, kSamples);
+        panner.set_pan_mode(mode);
+        panner.set_pan(pan);
+        float* channels[] = {nullptr};
+        panner.process(channels, 1, kSamples);
+      }
+
+      // Stereo with either plane unbound, and with the whole table unbound.
+      {
+        PannerProcessor panner;
+        panner.prepare(48000.0, kSamples);
+        panner.set_pan_mode(mode);
+        panner.set_pan(pan);
+        float* left_unbound[] = {nullptr, plane.data()};
+        float* right_unbound[] = {plane.data(), nullptr};
+        float* both_unbound[] = {nullptr, nullptr};
+        panner.process(left_unbound, 2, kSamples);
+        panner.process(right_unbound, 2, kSamples);
+        panner.process(both_unbound, 2, kSamples);
+      }
+
+      // The bound plane of a partially-bound stereo pair is left untouched, so
+      // the guard skips rather than writing through a half-valid table.
+      for (float sample : plane) {
+        REQUIRE_THAT(sample, WithinAbs(0.5f, 1e-6f));
+      }
+    }
+  }
+
+  // A fully bound mono buffer still gets its gain, so the guard did not turn
+  // the mono path into a no-op.
+  std::vector<float> mono(kSamples, 1.0f);
+  float* channels[] = {mono.data()};
+  PannerProcessor panner;
+  panner.prepare(48000.0, kSamples);
+  panner.set_pan(0.0f);
+  panner.process(channels, 1, kSamples);
+  for (float sample : mono) {
+    REQUIRE(std::isfinite(sample));
+    REQUIRE(sample > 0.0f);
+  }
 }

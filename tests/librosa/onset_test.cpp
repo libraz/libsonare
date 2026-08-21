@@ -1,12 +1,15 @@
 /// @file onset_test.cpp
 /// @brief Reference compatibility tests for onset strength.
 /// @details Reference values from: tests/librosa/reference/onset_strength.json
+///          and tests/librosa/reference/onset_backtrack.json
 
 #include "feature/onset.h"
 
 #include <catch2/catch_test_macros.hpp>
 #include <catch2/matchers/catch_matchers_floating_point.hpp>
 #include <cmath>
+#include <string>
+#include <vector>
 
 #include "core/audio.h"
 #include "util/constants.h"
@@ -106,6 +109,46 @@ TEST_CASE("onset strength reference compatibility", "[onset][reference]") {
         CAPTURE(i, peak_frames[i], ref_peaks[i].as_int());
         REQUIRE(std::abs(peak_frames[i] - ref_peaks[i].as_int()) <= 1);
       }
+    }
+  }
+}
+
+TEST_CASE("onset_backtrack reference compatibility", "[onset][onset_backtrack][reference]") {
+  // The oracle for the rule itself. onset_backtrack keeps the RIGHT edge of a
+  // non-increasing run -- an index is a local minimum only when
+  // energy[i] <= energy[i-1] AND energy[i] < energy[i+1] -- so a plateau stops
+  // the search at its last flat sample. A rule that merely walks left while the
+  // previous sample is not larger lands on the plateau's first sample instead,
+  // which agrees with librosa on strictly monotone curves and disagrees on
+  // every flat one. The fixture carries both families plus the degenerate
+  // shapes; regenerate it with tests/librosa/generate_librosa_reference.py.
+  auto json = JsonReader::parse_file("tests/librosa/reference/onset_backtrack.json");
+  const auto& data = json["data"].as_array();
+  REQUIRE_FALSE(data.empty());
+
+  for (const auto& item : data) {
+    const std::string name = item["name"].as_string();
+    CAPTURE(name);
+
+    std::vector<float> energy;
+    for (const auto& value : item["energy"].as_array()) {
+      energy.push_back(value.as_float());
+    }
+    std::vector<int> events;
+    for (const auto& value : item["events"].as_array()) {
+      events.push_back(value.as_int());
+    }
+    std::vector<int> expected;
+    for (const auto& value : item["backtracked"].as_array()) {
+      expected.push_back(value.as_int());
+    }
+
+    const std::vector<int> actual = onset_backtrack(events, energy);
+    REQUIRE(actual.size() == expected.size());
+    for (size_t i = 0; i < actual.size(); ++i) {
+      CAPTURE(i);
+      CAPTURE(events[i]);
+      REQUIRE(actual[i] == expected[i]);
     }
   }
 }

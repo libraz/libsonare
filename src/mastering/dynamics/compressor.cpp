@@ -114,7 +114,14 @@ void Compressor::process(float* const* channels, int num_channels, int num_sampl
   detector_mode_initialized_ = true;
 
   const int excluded_channel = detector_excluded_channel(num_channels);
-  const int detector_channels = num_channels - (excluded_channel >= 0 ? 1 : 0);
+  // Excluding the only channel of a mono buffer leaves no detector signal at
+  // all, and the public setter accepts that combination. Divide by one rather
+  // than by zero: both sums stay at zero, the detected level floors, and the
+  // block degrades to unity gain -- the same degeneration the max-based limiter
+  // shows for an empty detector. Dividing by zero instead would write NaN into
+  // rms_state_ / pdr_state_db_, which persist across blocks and which only
+  // reset() can clear, so one such block poisons the processor for good.
+  const int detector_channels = std::max(1, num_channels - (excluded_channel >= 0 ? 1 : 0));
   const float inv_channels = 1.0f / static_cast<float>(detector_channels);
   float max_reduction = 0.0f;
   for (int i = 0; i < num_samples; ++i) {

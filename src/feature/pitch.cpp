@@ -292,6 +292,15 @@ PitchResult yin_track(const Audio& audio, const PitchConfig& config) {
   SONARE_CHECK(config.frame_length > 0, ErrorCode::InvalidParameter);
   SONARE_CHECK(config.hop_length > 0, ErrorCode::InvalidParameter);
   SONARE_CHECK(config.threshold > 0.0f && config.threshold <= 1.0f, ErrorCode::InvalidParameter);
+  // The same domain the piptrack front-end already enforces on these two
+  // fields. Both engines are reachable from one public entry point (the pitch
+  // command's --algorithm switch), so a config either engine rejects has to be
+  // rejected by the other: yin_track used to accept fmin >= fmax and answer
+  // "0 Hz, 0 % voiced" for every frame, which reads as a valid analysis of an
+  // untuned signal rather than as the swapped-arguments mistake it is. Checked
+  // before the short-signal early returns so the verdict is a property of the
+  // arguments, not of the input length.
+  SONARE_CHECK(config.fmin > 0.0f && config.fmax > config.fmin, ErrorCode::InvalidParameter);
 
   int sr = audio.sample_rate();
   std::vector<float> padded;
@@ -347,6 +356,15 @@ PitchResult pyin(const Audio& audio, const PitchConfig& config) {
   SONARE_CHECK(config.frame_length > 0, ErrorCode::InvalidParameter);
   SONARE_CHECK(config.hop_length > 0, ErrorCode::InvalidParameter);
   SONARE_CHECK(config.threshold > 0.0f && config.threshold <= 1.0f, ErrorCode::InvalidParameter);
+  // The same domain the piptrack front-end already enforces on these two
+  // fields. Both engines are reachable from one public entry point (the pitch
+  // command's --algorithm switch), so a config either engine rejects has to be
+  // rejected by the other: yin_track used to accept fmin >= fmax and answer
+  // "0 Hz, 0 % voiced" for every frame, which reads as a valid analysis of an
+  // untuned signal rather than as the swapped-arguments mistake it is. Checked
+  // before the short-signal early returns so the verdict is a property of the
+  // arguments, not of the input length.
+  SONARE_CHECK(config.fmin > 0.0f && config.fmax > config.fmin, ErrorCode::InvalidParameter);
 
   int sr = audio.sample_rate();
   std::vector<float> padded;
@@ -369,8 +387,6 @@ PitchResult pyin(const Audio& audio, const PitchConfig& config) {
   if (n_frames <= 0) {
     return PitchResult();
   }
-
-  SONARE_CHECK(config.fmin < config.fmax, ErrorCode::InvalidParameter);
 
   // Convert frequency to period
   int min_period = static_cast<int>(std::floor(static_cast<float>(sr) / config.fmax));
@@ -725,14 +741,21 @@ float pitch_tuning(const std::vector<float>& frequencies, float resolution, int 
   residuals.reserve(frequencies.size());
   for (float f : frequencies) {
     if (f <= 0.0f || !std::isfinite(f)) continue;
-    float r = static_cast<float>(bins_per_octave) * std::log2(f / constants::kA4Hz);
-    float frac = r - std::floor(r);
-    if (frac >= 0.5f) frac -= 1.0f;
-    residuals.push_back(frac);
+    // In double, like librosa. The fold below turns on a >= 0.5 comparison, and
+    // a float log2 puts a pitch exactly half a bin flat on the wrong side of it:
+    // the residual comes out at 0.4999998 instead of 0.5000002, so it is not
+    // folded and the answer flips from -0.5 to the opposite end of the range
+    // (+0.49 at the default resolution) -- the largest possible error for an
+    // input one step away from the reference.
+    const double r = static_cast<double>(bins_per_octave) *
+                     std::log2(static_cast<double>(f) / static_cast<double>(constants::kA4Hz));
+    double frac = r - std::floor(r);
+    if (frac >= 0.5) frac -= 1.0;
+    residuals.push_back(static_cast<float>(frac));
   }
   if (residuals.empty()) return 0.0f;
 
-  // Histogram with resolution bin width spanning (-0.5, 0.5].
+  // Histogram with resolution bin width spanning [-0.5, 0.5).
   // librosa uses ceil() (np.ceil(1.0 / resolution)) so non-default resolutions
   // that don't divide 1.0 evenly (e.g. 0.03 -> 34, not round(33.33) == 33) match.
   int n_bins = static_cast<int>(std::ceil(1.0f / resolution));

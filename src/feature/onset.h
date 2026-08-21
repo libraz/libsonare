@@ -55,8 +55,14 @@ std::vector<float> onset_strength_multi(const MelSpectrogram& mel_spec, int n_ba
 /// @param events Indices of detected onsets (frame indices)
 /// @param energy Reference energy curve aligned with @p events (typically the
 ///        onset envelope or short-time energy)
-/// @return Adjusted onset indices, each shifted to the nearest preceding local
-///         minimum of @p energy. Returned values are clipped to [0, energy.size()).
+/// @return Adjusted onset indices, each shifted to the nearest local minimum at
+///         or before it. An index is a local minimum when the curve is
+///         non-increasing into it and strictly rising out of it
+///         (@c energy[i] <= @c energy[i-1] and @c energy[i] < @c energy[i+1]),
+///         which places it at the LAST sample of a flat run rather than the
+///         first; index 0 is always a candidate, so an event with no preceding
+///         minimum resolves to 0. Returned values are clipped to
+///         [0, energy.size()).
 std::vector<int> onset_backtrack(const std::vector<int>& events, const std::vector<float>& energy);
 
 /// @brief Computes spectral flux (unsigned L1 norm of spectral difference).

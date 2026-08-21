@@ -171,11 +171,19 @@ TEST_CASE("OnsetAnalyzer backtrack lands on the preceding local minimum", "[onse
   for (size_t i = 0; i < detected.size(); ++i) {
     // Backtracking only ever moves an onset earlier.
     REQUIRE(backtracked[i] <= detected[i]);
-    // And it stops at a local minimum: the frame before it is strictly higher,
-    // unless the search ran to the start of the envelope.
+    // And it stops at a local minimum, in librosa's sense: the curve is
+    // non-increasing INTO the landing frame and strictly rising OUT of it.
+    // The first half is not strict -- a plateau's last sample is a valid
+    // landing point, and requiring envelope[m-1] > envelope[m] would describe
+    // the plateau's FIRST sample instead, which is the rule this project used
+    // to implement and which disagrees with librosa on every flat run.
     const int frame = backtracked[i];
     if (frame > 0) {
-      REQUIRE(envelope[static_cast<size_t>(frame) - 1] > envelope[static_cast<size_t>(frame)]);
+      const size_t m = static_cast<size_t>(frame);
+      REQUIRE(envelope[m - 1] >= envelope[m]);
+      if (m + 1 < envelope.size()) {
+        REQUIRE(envelope[m] < envelope[m + 1]);
+      }
     }
   }
 }
@@ -201,23 +209,31 @@ TEST_CASE("OnsetAnalyzer backtrack agrees with the shared onset_backtrack", "[on
 
 TEST_CASE("OnsetAnalyzer backtrack_range bounds how far an onset travels", "[onset_analyzer]") {
   Audio audio = create_click_track(4);
-  constexpr int kRange = 5;
 
   OnsetDetectConfig config_no_bt;
-  OnsetDetectConfig config_bt;
-  config_bt.backtrack = true;
-  config_bt.backtrack_range = kRange;
-
   OnsetAnalyzer analyzer_no_bt(audio, config_no_bt);
-  OnsetAnalyzer analyzer_bt(audio, config_bt);
   REQUIRE(analyzer_no_bt.count() > 0);
 
   const std::vector<int> detected = analyzer_no_bt.onset_frames();
   const std::vector<int> unbounded = onset_backtrack(detected, analyzer_no_bt.onset_strength());
+
+  // Derive the bound from the material instead of hard-coding it, so the check
+  // cannot go vacuous when the backtracking rule changes how far an onset
+  // travels. One frame short of the longest unbounded travel guarantees the
+  // bound clamps at least one onset.
+  int longest_travel = 0;
+  for (size_t i = 0; i < detected.size(); ++i) {
+    longest_travel = std::max(longest_travel, detected[i] - unbounded[i]);
+  }
+  REQUIRE(longest_travel > 0);
+  const int kRange = longest_travel - 1;
+
+  OnsetDetectConfig config_bt;
+  config_bt.backtrack = true;
+  config_bt.backtrack_range = kRange;
+  OnsetAnalyzer analyzer_bt(audio, config_bt);
   const std::vector<int> bounded = analyzer_bt.onset_frames();
 
-  // Guard against a vacuous check: on this material the unbounded rule travels
-  // farther than kRange, so the bound has something to clamp.
   bool bound_binds = false;
   for (size_t i = 0; i < detected.size(); ++i) {
     if (unbounded[i] < detected[i] - kRange) bound_binds = true;

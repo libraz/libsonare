@@ -490,7 +490,9 @@ SonareError sonare_onset_backtrack(const int* events, size_t event_count, const 
 /// @param length Number of frequencies.
 /// @param resolution Tuning resolution in fractions of a bin (e.g. 0.01 = 1 cent).
 /// @param bins_per_octave Number of pitch bins per octave (e.g. 12).
-/// @param out_tuning Receives the tuning offset in fractions of a bin (-0.5, 0.5].
+/// @param out_tuning Receives the tuning offset in fractions of a bin
+///        [-0.5, 0.5). -0.5 is attainable (a pitch half a bin flat); +0.5 is
+///        not, because a residual of +0.5 wraps to -0.5.
 SonareError sonare_pitch_tuning(const float* frequencies, size_t length, float resolution,
                                 int bins_per_octave, float* out_tuning);
 
@@ -498,7 +500,9 @@ SonareError sonare_pitch_tuning(const float* frequencies, size_t length, float r
 /// @details Uses piptrack to find spectral peaks, then aggregates via pitch_tuning.
 /// @param resolution Tuning resolution in fractions of a bin (e.g. 0.01 = 1 cent).
 /// @param bins_per_octave Number of pitch bins per octave (e.g. 12).
-/// @param out_tuning Receives the tuning offset in fractions of a bin (-0.5, 0.5].
+/// @param out_tuning Receives the tuning offset in fractions of a bin
+///        [-0.5, 0.5). -0.5 is attainable (a pitch half a bin flat); +0.5 is
+///        not, because a residual of +0.5 wraps to -0.5.
 SonareError sonare_estimate_tuning(const float* samples, size_t length, int sample_rate, int n_fft,
                                    int hop_length, float resolution, int bins_per_octave,
                                    float* out_tuning);

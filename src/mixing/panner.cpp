@@ -37,6 +37,16 @@ void PannerProcessor::process(float* const* channels, int num_channels, int num_
   right_.set_target(gains.right);
   const PanMode mode = pan_mode_.load(std::memory_order_relaxed);
 
+  // Every branch below writes to channels[0]; the stereo branches also write to
+  // channels[1]. An unbound plane is a supported state in this layer -- the
+  // engine and the monitor runtime both hand over partially-bound plane tables,
+  // and every sibling processor (gain, alignment delay, stereo width, meter)
+  // tolerates it -- so the check belongs above the mono short-circuit rather
+  // than after it, where the mono path could never reach it.
+  if (channels[0] == nullptr) {
+    return;
+  }
+
   if (num_channels == 1) {
     // A mono channel has no L/R stereo image to balance, so — unlike the stereo
     // Balance path below, which normalizes the near channel to unity for every
@@ -57,7 +67,7 @@ void PannerProcessor::process(float* const* channels, int num_channels, int num_
     return;
   }
 
-  if (channels[0] == nullptr || channels[1] == nullptr) {
+  if (channels[1] == nullptr) {
     return;
   }
 

@@ -7,10 +7,12 @@
 #include <catch2/matchers/catch_matchers_floating_point.hpp>
 #include <cmath>
 #include <random>
+#include <utility>
 #include <vector>
 
 #include "support/audio_fixtures.h"
 #include "util/constants.h"
+#include "util/exception.h"
 
 using namespace sonare;
 using Catch::Matchers::WithinAbs;
@@ -611,4 +613,75 @@ TEST_CASE("piptrack never reports a peak in bin 0", "[pitch][piptrack][edge]") {
     CAPTURE(t);
     REQUIRE(result.pitches[0 * result.n_frames + t] == 0.0f);
   }
+}
+
+TEST_CASE("pitch_tuning spans [-0.5, 0.5) with -0.5 attainable", "[pitch][tuning]") {
+  // The documented interval. A residual is folded by `if (frac >= 0.5) frac -= 1`,
+  // so it lands in [-0.5, 0.5): exactly -0.5 is a legitimate answer and +0.5 can
+  // never be produced. A caller that took the old docs literally and asserted
+  // `-0.5 < tuning <= 0.5` would reject a correct result.
+  //
+  // A pitch half a bin flat is the case that produces it: 12 * log2(f / A4) is
+  // -0.5, whose fractional part folds to -0.5 and selects histogram bin 0, whose
+  // left edge is -0.5. librosa.pitch_tuning answers -0.5 here too.
+  const float half_bin_flat = sonare::constants::kA4Hz * std::pow(2.0f, -0.5f / 12.0f);
+  REQUIRE_THAT(pitch_tuning({half_bin_flat}, 0.01f, 12), WithinAbs(-0.5f, 1e-6f));
+
+  // A residual of exactly +0.5 folds to -0.5, so +0.5 is unattainable. The fold
+  // turns on a >= comparison, so a frequency a single float step below the half
+  // bin lands on the other side of it and answers +0.49 instead -- which is
+  // what librosa answers for that same value, so the knife edge is the shared
+  // definition rather than a divergence. The sweep below pins the interval; the
+  // exact boundary value is deliberately not asserted.
+
+  // An in-tune reference sits at 0, and nothing ever reaches +0.5.
+  REQUIRE_THAT(pitch_tuning({sonare::constants::kA4Hz}, 0.01f, 12), WithinAbs(0.0f, 1e-6f));
+  for (int cents = -49; cents <= 49; ++cents) {
+    const float freq =
+        sonare::constants::kA4Hz * std::pow(2.0f, static_cast<float>(cents) / 1200.0f);
+    const float tuning = pitch_tuning({freq}, 0.01f, 12);
+    CAPTURE(cents);
+    REQUIRE(tuning >= -0.5f);
+    REQUIRE(tuning < 0.5f);
+  }
+}
+
+TEST_CASE("yin_track and pyin reject the same PitchConfig domains", "[pitch][validation]") {
+  // Both engines are reachable from one public entry point (the pitch command's
+  // --algorithm switch), so a config one rejects must be rejected by the other.
+  // yin_track used to accept fmin >= fmax and answer "0 Hz, unvoiced" for every
+  // frame, which reads as a valid analysis rather than as swapped arguments.
+  const std::vector<float> tone = generate_sine(22050, 440.0f, 22050);
+  Audio audio = Audio::from_buffer(tone.data(), tone.size(), 22050);
+
+  const std::vector<std::pair<float, float>> invalid = {
+      {3000.0f, 500.0f},  // swapped
+      {500.0f, 500.0f},   // empty band
+      {-50.0f, 2093.0f},  // negative fmin: sr / fmin is meaningless
+      {0.0f, 2093.0f},    // zero fmin
+  };
+  for (const auto& [fmin, fmax] : invalid) {
+    CAPTURE(fmin);
+    CAPTURE(fmax);
+    PitchConfig config;
+    config.fmin = fmin;
+    config.fmax = fmax;
+    REQUIRE_THROWS_AS(yin_track(audio, config), SonareException);
+    REQUIRE_THROWS_AS(pyin(audio, config), SonareException);
+  }
+
+  // The default band is still accepted by both.
+  PitchConfig ok;
+  REQUIRE_NOTHROW(yin_track(audio, ok));
+  REQUIRE_NOTHROW(pyin(audio, ok));
+
+  // The verdict is a property of the arguments, not of the signal length: a
+  // buffer too short to yield a single frame must still reject a bad band.
+  const std::vector<float> short_tone = generate_sine(220, 440.0f, 22050);
+  Audio tiny = Audio::from_buffer(short_tone.data(), short_tone.size(), 22050);
+  PitchConfig swapped;
+  swapped.fmin = 3000.0f;
+  swapped.fmax = 500.0f;
+  REQUIRE_THROWS_AS(yin_track(tiny, swapped), SonareException);
+  REQUIRE_THROWS_AS(pyin(tiny, swapped), SonareException);
 }

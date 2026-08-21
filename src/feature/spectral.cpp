@@ -181,22 +181,35 @@ std::vector<float> spectral_flatness(const float* magnitude, int n_bins, int n_f
   Eigen::Map<const Eigen::Matrix<float, Eigen::Dynamic, Eigen::Dynamic, Eigen::RowMajor>> mag_map(
       magnitude, n_bins, n_frames);
 
+  // Sanitize before squaring, exactly as the sibling descriptors in this file
+  // do: a single non-finite magnitude otherwise drives both sums to Inf and
+  // their ratio to NaN, which escapes the documented [0, 1] range and then
+  // survives std::clamp downstream, because every comparison against NaN is
+  // false. Accumulate in double as well, so a finite but very large magnitude
+  // (FLT_MAX squares to +Inf in float) also stays representable and the ratio
+  // stays finite for every finite input. Finite ordinary magnitudes are
+  // unaffected beyond the added precision.
+  //
   // Floor the power at kAmin (librosa's amin) before the geometric/arithmetic
   // means. A fully-silent frame then floors to kAmin across every bin, so its
   // ratio is 1.0 (maximally flat) — matching librosa.feature.spectral_flatness,
   // which likewise applies the amin floor and does not special-case silence.
-  Eigen::ArrayXXf power = mag_map.array().square().max(kAmin);
-  Eigen::ArrayXf sum_log = power.log().colwise().sum().transpose();
-  Eigen::ArrayXf sum_linear = power.colwise().sum().transpose();
+  const auto sanitize = [](double magnitude) {
+    return std::isfinite(magnitude) ? std::max(magnitude, 0.0) : 0.0;
+  };
+  const Eigen::ArrayXXd power =
+      mag_map.array().cast<double>().unaryExpr(sanitize).square().max(static_cast<double>(kAmin));
+  const Eigen::ArrayXd sum_log = power.log().colwise().sum().transpose();
+  const Eigen::ArrayXd sum_linear = power.colwise().sum().transpose();
 
   std::vector<float> flatness(n_frames);
   Eigen::Map<Eigen::ArrayXf> result_map(flatness.data(), n_frames);
 
-  float n_bins_f = static_cast<float>(n_bins);
-  Eigen::ArrayXf geometric_mean = (sum_log / n_bins_f).exp();
-  Eigen::ArrayXf arithmetic_mean = sum_linear / n_bins_f;
+  const double n_bins_d = static_cast<double>(n_bins);
+  const Eigen::ArrayXd geometric_mean = (sum_log / n_bins_d).exp();
+  const Eigen::ArrayXd arithmetic_mean = sum_linear / n_bins_d;
 
-  result_map = geometric_mean / arithmetic_mean;
+  result_map = (geometric_mean / arithmetic_mean).cast<float>();
 
   return flatness;
 }

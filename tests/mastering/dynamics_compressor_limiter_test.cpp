@@ -274,3 +274,90 @@ TEST_CASE("BrickwallLimiter validates configuration", "[mastering][dynamics]") {
   REQUIRE_THROWS(BrickwallLimiter({-1.0f, 1.0f, -10.0f}));
   REQUIRE_THROWS(BrickwallLimiter({std::numeric_limits<float>::infinity(), 1.0f, 10.0f}));
 }
+
+TEST_CASE("Compressor stays finite when the detector excludes its only channel",
+          "[mastering][dynamics]") {
+  // set_detector_excluded_channel is a public per-context host setting and
+  // accepts channel 0 on a mono buffer, which leaves the linked detector with
+  // no channels at all. The RMS detector divided the (zero) power sum by that
+  // zero count, so power_lin was 0 * inf = NaN. That NaN reached the output
+  // through a soft knee, and it also landed in rms_state_ -- state that
+  // persists across blocks and that only reset() clears, so the detector never
+  // recovered even after the exclusion was lifted.
+
+  SECTION("a soft knee carries the detector NaN into the output") {
+    // With knee_db > 0 the knee branch arithmetic propagates the NaN; a hard
+    // knee happens to absorb it (every comparison against NaN is false), which
+    // is why the finiteness of this configuration is the one worth pinning.
+    Compressor compressor({-18.0f, 4.0f, 0.0f, 20.0f, 6.0f, 0.0f, false, DetectorMode::Rms});
+    compressor.prepare(48000.0, 512);
+    compressor.set_detector_excluded_channel(0);
+
+    for (int block = 0; block < 4; ++block) {
+      auto samples = generate_sine_samples(1000.0f, 512, 48000, 0.5f);
+      float* channels[] = {samples.data()};
+      compressor.process(channels, 1, 512);
+      CAPTURE(block);
+      for (float sample : samples) {
+        REQUIRE(std::isfinite(sample));
+      }
+    }
+  }
+
+  SECTION("an empty detector degrades to unity gain, not to an arbitrary one") {
+    Compressor compressor({-18.0f, 4.0f, 0.0f, 20.0f, 0.0f, 0.0f, false, DetectorMode::Rms});
+    compressor.prepare(48000.0, 512);
+    compressor.set_detector_excluded_channel(0);
+
+    auto reference = generate_sine_samples(1000.0f, 512, 48000, 0.5f);
+    auto measured = generate_sine_samples(1000.0f, 512, 48000, 0.5f);
+    float* channels[] = {measured.data()};
+    compressor.process(channels, 1, 512);
+    for (size_t i = 0; i < measured.size(); ++i) {
+      CAPTURE(i);
+      REQUIRE_THAT(measured[i], WithinAbs(reference[i], 1e-5f));
+    }
+  }
+
+  SECTION("the detector recovers once the exclusion is lifted") {
+    // The lasting damage: a single NaN in rms_state_ survives every later
+    // block, so the level reads as NaN, the knee comparisons all fail, and the
+    // compressor silently stops compressing until reset().
+    Compressor compressor({-18.0f, 4.0f, 0.0f, 20.0f, 0.0f, 0.0f, false, DetectorMode::Rms});
+    compressor.prepare(48000.0, 512);
+    compressor.set_detector_excluded_channel(0);
+
+    auto excluded = generate_sine_samples(1000.0f, 512, 48000, 0.5f);
+    float* excluded_channels[] = {excluded.data()};
+    compressor.process(excluded_channels, 1, 512);
+
+    compressor.set_detector_excluded_channel(-1);
+    for (int block = 0; block < 4; ++block) {
+      auto loud = generate_sine_samples(1000.0f, 512, 48000, 0.9f);
+      float* channels[] = {loud.data()};
+      compressor.process(channels, 1, 512);
+      for (float sample : loud) {
+        REQUIRE(std::isfinite(sample));
+      }
+    }
+    // Well above the -18 dB threshold at a 4:1 ratio, so a working detector
+    // must be reducing gain by now.
+    REQUIRE(compressor.last_gain_reduction_db() < -1.0f);
+  }
+
+  SECTION("every detector mode takes the same divisor") {
+    for (const DetectorMode detector :
+         {DetectorMode::Peak, DetectorMode::Rms, DetectorMode::LogRms}) {
+      Compressor compressor({-18.0f, 4.0f, 0.0f, 20.0f, 6.0f, 0.0f, false, detector});
+      compressor.prepare(48000.0, 512);
+      compressor.set_detector_excluded_channel(0);
+      auto samples = generate_sine_samples(1000.0f, 512, 48000, 0.5f);
+      float* channels[] = {samples.data()};
+      compressor.process(channels, 1, 512);
+      CAPTURE(static_cast<int>(detector));
+      for (float sample : samples) {
+        REQUIRE(std::isfinite(sample));
+      }
+    }
+  }
+}

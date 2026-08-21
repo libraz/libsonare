@@ -186,6 +186,107 @@ def generate_onset_strength_reference():
     return refs
 
 
+def generate_onset_backtrack_reference():
+    """librosa.onset.onset_backtrack oracle over shapes that separate the rules.
+
+    onset_backtrack keeps only the *right* edge of a non-increasing run: an
+    index is a local minimum when energy[i] <= energy[i-1] AND
+    energy[i] < energy[i+1]. A rule that merely walks back while the previous
+    sample is not larger lands on the *left* edge instead, which agrees with
+    librosa on strictly monotone curves and disagrees on every plateau. These
+    cases cover both, plus the boundary shapes (no interior minimum, an event
+    already on a minimum, arrays too short to have an interior).
+    """
+    cases = [
+        # A leading run of equal values: the rules differ here. librosa stops at
+        # the right edge of the flat run (3), a leftward walk reaches 0.
+        ("leading_plateau", [0.0, 0.0, 0.0, 0.0, 0.1, 0.5, 1.0], [0, 1, 2, 3, 4, 5, 6]),
+        # An interior plateau between two rises.
+        ("interior_plateau", [1.0, 0.4, 0.4, 0.4, 0.9, 1.5, 0.6, 1.1], [5, 7]),
+        # Strictly decreasing into a valley then rising: both rules agree.
+        ("strict_valley", [1.0, 0.8, 0.5, 0.2, 0.6, 0.9, 1.2, 0.7], [6]),
+        # Two events, one with no preceding interior minimum at all.
+        ("two_events", [0.0, 0.1, 0.2, 0.3, 0.1, 0.0, 0.5, 0.7], [3, 7]),
+        # Monotone ramp: no interior minimum, so every event falls back to 0.
+        ("monotonic_ramp", [0.0, 1.0, 2.0, 3.0, 4.0, 5.0, 6.0, 7.0], [0, 3, 7]),
+        # Events already sitting on minima stay put.
+        ("event_on_minimum", [1.0, 0.2, 0.9, 0.1, 0.8], [1, 3]),
+        # Entirely flat: no index satisfies the strict-rise half of the rule.
+        ("all_equal", [1.0, 1.0, 1.0, 1.0], [0, 3]),
+        # Arrays with no interior index at all.
+        ("single_sample", [1.0], [0]),
+        ("two_samples_falling", [1.0, 0.5], [0, 1]),
+        ("two_samples_rising", [0.5, 1.0], [0, 1]),
+    ]
+
+    refs = []
+    for name, energy, events in cases:
+        energy_array = np.asarray(energy, dtype=np.float32)
+        events_array = np.asarray(events, dtype=int)
+        backtracked = librosa.onset.onset_backtrack(events_array, energy_array)
+        refs.append(
+            {
+                "name": name,
+                "energy": energy_array.tolist(),
+                "events": events_array.tolist(),
+                "backtracked": [int(v) for v in backtracked],
+            }
+        )
+
+    return refs
+
+
+def generate_tempogram_center_reference():
+    """librosa tempogram / fourier_tempogram framing oracle for both center modes.
+
+    librosa frames the onset envelope at hop 1. With center=True the envelope is
+    padded and every input sample gets a frame; with center=False no padding
+    happens, frame t reads onset_envelope[t : t + win_length] verbatim, and the
+    result therefore has only n - win_length + 1 frames.
+
+    The frame COUNT is the part a reimplementation gets wrong silently: a matrix
+    of the wrong width still looks well-formed, and column k then refers to a
+    different instant than librosa's column k. This oracle records the shapes
+    plus a per-column fingerprint (each column's sum) so the column-to-time
+    correspondence can be checked and not just the width.
+    """
+    rng = np.random.default_rng(7)
+    win_length = 8
+    onset_envelope = np.abs(rng.standard_normal(40)).astype(np.float32)
+
+    refs = []
+    for center in (True, False):
+        tempo = librosa.feature.tempogram(
+            onset_envelope=onset_envelope,
+            sr=22050,
+            hop_length=512,
+            win_length=win_length,
+            center=center,
+        )
+        fourier = librosa.feature.fourier_tempogram(
+            onset_envelope=onset_envelope,
+            sr=22050,
+            hop_length=512,
+            win_length=win_length,
+            center=center,
+        )
+        refs.append(
+            {
+                "center": bool(center),
+                "sr": 22050,
+                "hop_length": 512,
+                "win_length": win_length,
+                "onset_envelope": onset_envelope.tolist(),
+                "tempogram_shape": list(tempo.shape),
+                "tempogram_column_sums": tempo.sum(axis=0).tolist(),
+                "fourier_tempogram_shape": list(fourier.shape),
+                "fourier_tempogram_column_sums": np.abs(fourier).sum(axis=0).tolist(),
+            }
+        )
+
+    return refs
+
+
 def generate_stft_reference():
     """STFT magnitude reference using synthetic signals."""
     sr = 22050
@@ -1961,6 +2062,8 @@ def main():
         "mfcc": generate_mfcc_reference(),
         "tempo": generate_tempo_reference(),
         "onset_strength": generate_onset_strength_reference(),
+        "onset_backtrack": generate_onset_backtrack_reference(),
+        "tempogram_center": generate_tempogram_center_reference(),
         "stft": generate_stft_reference(),
         "power_to_db": generate_power_to_db_reference(),
         "zcr_rms": generate_zcr_rms_reference(),

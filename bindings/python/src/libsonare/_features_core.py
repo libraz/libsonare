@@ -881,7 +881,9 @@ def pitch_tuning(
         bins_per_octave: Pitch bins per octave (default 12).
 
     Returns:
-        Tuning offset in fractions of a bin, in ``(-0.5, 0.5]``.
+        Tuning offset in fractions of a bin, in ``[-0.5, 0.5)``. Exactly
+        ``-0.5`` is a legitimate result (a pitch half a bin flat); ``+0.5``
+        is not attainable, because a residual of ``+0.5`` wraps to ``-0.5``.
     """
     lib = _get_lib()
     # Non-finite entries are dropped like non-positive ones, so an all-NaN track
@@ -921,7 +923,9 @@ def estimate_tuning(
         bins_per_octave: Pitch bins per octave (default 12).
 
     Returns:
-        Tuning offset in fractions of a bin, in ``(-0.5, 0.5]``.
+        Tuning offset in fractions of a bin, in ``[-0.5, 0.5)``. Exactly
+        ``-0.5`` is a legitimate result (a pitch half a bin flat); ``+0.5``
+        is not attainable, because a residual of ``+0.5`` wraps to ``-0.5``.
     """
     lib = _get_lib()
     c_array, length = _to_c_float_array(samples)

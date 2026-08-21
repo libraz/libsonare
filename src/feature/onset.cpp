@@ -166,20 +166,42 @@ std::vector<float> onset_strength_multi(const MelSpectrogram& mel_spec, int n_ba
 }
 
 std::vector<int> onset_backtrack(const std::vector<int>& events, const std::vector<float>& energy) {
-  // librosa.onset.onset_backtrack walks each event backwards in time while the
-  // energy curve is strictly decreasing, snapping to the nearest local minimum.
   std::vector<int> out;
   out.reserve(events.size());
   if (energy.empty()) {
     return out;
   }
   const int n = static_cast<int>(energy.size());
-  for (int e : events) {
-    int i = std::min(std::max(e, 0), n - 1);
-    while (i > 0 && energy[i - 1] <= energy[i]) {
-      --i;
+
+  // librosa.onset.onset_backtrack builds the set of local minima first and then
+  // matches each event to the nearest one at or before it. An interior index is
+  // a minimum when the curve is non-increasing into it AND strictly rising out
+  // of it; index 0 is always a candidate so an event with no preceding minimum
+  // still resolves.
+  //
+  // Both halves of that test matter. Walking backwards while the previous
+  // sample is merely not larger stops only where the curve rises to the left,
+  // which is the LEFT edge of a flat run rather than its right edge. The two
+  // rules agree on a strictly monotone curve and disagree on every plateau: for
+  // energy {0, 0, 0, 0, 0.1, 0.5, 1.0} and event 6, librosa answers 3 and the
+  // leftward walk answers 0. On a one-shot preceded by silence that is the
+  // difference between the real attack and t = 0.
+  std::vector<int> minima;
+  minima.reserve(static_cast<size_t>(n));
+  minima.push_back(0);
+  for (int i = 1; i + 1 < n; ++i) {
+    if (energy[static_cast<size_t>(i)] <= energy[static_cast<size_t>(i - 1)] &&
+        energy[static_cast<size_t>(i)] < energy[static_cast<size_t>(i + 1)]) {
+      minima.push_back(i);
     }
-    out.push_back(i);
+  }
+
+  for (int e : events) {
+    const int clamped = std::min(std::max(e, 0), n - 1);
+    // The last minimum at or before the event. minima is ascending and always
+    // starts at 0, so the search never comes back empty.
+    const auto after = std::upper_bound(minima.begin(), minima.end(), clamped);
+    out.push_back(*(after - 1));
   }
   return out;
 }

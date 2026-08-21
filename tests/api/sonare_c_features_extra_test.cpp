@@ -236,15 +236,28 @@ TEST_CASE("sonare_rms_energy follows empty-output C ABI contract", "[c_api][feat
 }
 
 TEST_CASE("sonare_pitch_tuning", "[c_api][features]") {
-  SECTION("returns a tuning offset in (-0.5, 0.5]") {
+  SECTION("returns a tuning offset in [-0.5, 0.5)") {
     // Frequencies exactly on equal-tempered pitches -> tuning near 0.
     std::vector<float> freqs = {440.0f, 880.0f, 220.0f};
     float tuning = -1.0f;
     REQUIRE(sonare_pitch_tuning(freqs.data(), freqs.size(), 0.01f, 12, &tuning) == SONARE_OK);
     REQUIRE(std::isfinite(tuning));
-    REQUIRE(tuning > -0.5f);
-    REQUIRE(tuning <= 0.5f);
+    // The interval is half-open at the TOP: a residual of +0.5 folds to -0.5,
+    // so -0.5 is attainable and +0.5 is not. Asserting the mirror image of that
+    // (> -0.5 and <= 0.5) is exactly the mistake the old docs invited -- it
+    // passes here only because these frequencies are in tune, and would reject
+    // the legitimate -0.5 a pitch half a bin flat produces.
+    REQUIRE(tuning >= -0.5f);
+    REQUIRE(tuning < 0.5f);
     REQUIRE(tuning == Catch::Approx(0.0f).margin(0.02f));
+  }
+
+  SECTION("accepts the -0.5 end of the interval") {
+    // A pitch half a bin flat is the input that produces the boundary value.
+    const float half_bin_flat = 440.0f * std::pow(2.0f, -0.5f / 12.0f);
+    float tuning = 0.0f;
+    REQUIRE(sonare_pitch_tuning(&half_bin_flat, 1, 0.01f, 12, &tuning) == SONARE_OK);
+    REQUIRE(tuning == Catch::Approx(-0.5f).margin(1e-6f));
   }
 
   SECTION("rejects null out and invalid params") {

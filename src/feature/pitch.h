@@ -119,7 +119,10 @@ PiptrackResult piptrack(const Audio& audio, int n_fft = 2048, int hop_length = 5
 /// @param frequencies Detected pitch frequencies (Hz). Non-positive values are ignored.
 /// @param resolution Tuning resolution in fractions of a bin (default 0.01 = 1 cent).
 /// @param bins_per_octave Number of pitch bins per octave (default 12).
-/// @return Tuning offset in fractions of a bin (range (-0.5, 0.5]).
+/// @return Tuning offset in fractions of a bin (range [-0.5, 0.5)). Exactly
+///         -0.5 is a legitimate result -- it is what a pitch half a bin flat
+///         produces -- while +0.5 is not attainable, because a residual of
+///         +0.5 wraps to -0.5.
 float pitch_tuning(const std::vector<float>& frequencies, float resolution = 0.01f,
                    int bins_per_octave = 12);
 

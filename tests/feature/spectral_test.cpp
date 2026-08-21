@@ -3,6 +3,7 @@
 
 #include "feature/spectral.h"
 
+#include <array>
 #include <catch2/catch_test_macros.hpp>
 #include <catch2/matchers/catch_matchers_floating_point.hpp>
 #include <cmath>
@@ -529,4 +530,60 @@ TEST_CASE("rms_energy silence vs loud", "[spectral]") {
   // Silent should be zero, loud should be positive
   REQUIRE(silent_mean < 0.001f);
   REQUIRE(loud_mean > 0.5f);
+}
+
+TEST_CASE("spectral_flatness sanitizes non-finite magnitudes", "[spectral]") {
+  // The four sibling descriptors in this file already route every magnitude
+  // through the shared sanitizer; flatness did not. One Inf bin drove both the
+  // geometric and the arithmetic mean to Inf and their ratio to NaN, which
+  // escapes the documented [0, 1] range and then survives std::clamp
+  // downstream, because every comparison against NaN is false.
+  const float inf = std::numeric_limits<float>::infinity();
+  const float nan = std::numeric_limits<float>::quiet_NaN();
+  const float huge = std::numeric_limits<float>::max();
+
+  // n_bins must be n_fft / 2 + 1, so eight bins for the n_fft = 14 used by the
+  // sibling cases above.
+  auto flatness_of = [](std::array<float, 8> magnitudes) {
+    std::vector<std::complex<float>> data;
+    data.reserve(magnitudes.size());
+    for (float magnitude : magnitudes) data.emplace_back(magnitude, 0.0f);
+    Spectrogram spec = Spectrogram::from_complex(data.data(), 8, 1, 14, 1, 14, WindowType::Hann);
+    return spectral_flatness(spec);
+  };
+
+  const std::vector<std::array<float, 8>> corrupted = {
+      {1.0f, inf, 3.0f, 4.0f, 5.0f, 6.0f, 7.0f, 8.0f},
+      {1.0f, nan, 3.0f, 4.0f, 5.0f, 6.0f, 7.0f, 8.0f},
+      {-inf, 2.0f, 3.0f, 4.0f, 5.0f, 6.0f, 7.0f, 8.0f},
+      {inf, inf, inf, inf, inf, inf, inf, inf},
+      {nan, nan, nan, nan, nan, nan, nan, nan},
+  };
+  for (const auto& magnitudes : corrupted) {
+    const std::vector<float> flatness = flatness_of(magnitudes);
+    REQUIRE(flatness.size() == 1);
+    CAPTURE(flatness[0]);
+    REQUIRE(std::isfinite(flatness[0]));
+    REQUIRE(flatness[0] >= 0.0f);
+    REQUIRE(flatness[0] <= 1.0f);
+  }
+
+  // Every bin non-finite reads as every bin zero, which the kAmin floor turns
+  // into a maximally flat frame -- the same answer a silent frame gets.
+  const std::vector<float> all_corrupt = flatness_of(corrupted[3]);
+  REQUIRE_THAT(all_corrupt[0], WithinAbs(1.0f, 1e-6f));
+
+  // A finite but extreme magnitude squares past the float range; the result
+  // must still land inside the documented interval.
+  const std::vector<float> extreme = flatness_of({huge, huge, huge, huge, huge, huge, huge, huge});
+  CAPTURE(extreme[0]);
+  REQUIRE(std::isfinite(extreme[0]));
+  REQUIRE(extreme[0] >= 0.0f);
+  REQUIRE(extreme[0] <= 1.0f);
+
+  // Ordinary finite magnitudes are untouched by the sanitizer.
+  const std::vector<float> clean = flatness_of({1.0f, 2.0f, 3.0f, 4.0f, 5.0f, 6.0f, 7.0f, 8.0f});
+  REQUIRE(std::isfinite(clean[0]));
+  REQUIRE(clean[0] > 0.0f);
+  REQUIRE(clean[0] < 1.0f);
 }
