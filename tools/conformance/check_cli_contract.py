@@ -49,6 +49,7 @@ _ARRAY_TYPES = {"array:string", "array:number:12"}
 _PAYLOAD_TYPES = _OPTION_TYPES | _ARRAY_TYPES | {"null", "any"}
 _SCHEMA_METADATA_KEYS = {"optional", "required"}
 _SECTION_TYPE_RE = re.compile(r"[a-z][a-z0-9]*(?:-[a-z0-9]+)*\Z")
+_PAYLOAD_PROPERTY_NAME_RE = re.compile(r"^[a-z0-9]+(_[a-z0-9]+)*$")
 _ANALYZE_TOP_LEVEL_KEYS = {
     "bpm",
     "bpm_confidence",
@@ -595,6 +596,44 @@ def _validate_closed_payload_schema(value: Any, label: str, errors: list[str]) -
             _validate_closed_payload_schema(value[key], f"{label}.{key}", errors)
 
 
+def _validate_payload_property_names(
+    value: Any, path: str, label: str, errors: list[str]
+) -> None:
+    """Require snake_case property names throughout one payload schema.
+
+    The CLI's JSON keys are a user-visible contract shared by the native and
+    Python surfaces, so a camelCase or PascalCase field is drift even when both
+    surfaces emit it.  Each offender is reported as ``path:property`` so a
+    rename can be traced back to the command that owns the key.
+    """
+
+    if isinstance(value, list):
+        for index, item in enumerate(value):
+            _validate_payload_property_names(item, path, f"{label}[{index}]", errors)
+        return
+    if not isinstance(value, dict):
+        return
+    for source in ("keys", "properties", "required", "optional"):
+        fields = value.get(source)
+        if not isinstance(fields, dict):
+            continue
+        for key, child in fields.items():
+            if isinstance(key, str) and not _PAYLOAD_PROPERTY_NAME_RE.match(key):
+                errors.append(
+                    f"{path}:{key}: payload property name is not snake_case (at {label}.{source})"
+                )
+            _validate_payload_property_names(
+                child, path, f"{label}.{source}.{key}", errors
+            )
+    if "items" in value:
+        _validate_payload_property_names(value["items"], path, f"{label}.items", errors)
+    for key in ("one_of", "any_of", "oneOf", "anyOf", "variants"):
+        if isinstance(value.get(key), list):
+            _validate_payload_property_names(value[key], path, f"{label}.{key}", errors)
+    if isinstance(value.get("type"), list):
+        _validate_payload_property_names(value["type"], path, f"{label}.type", errors)
+
+
 def _require_schema_keys(
     schema: Any, expected: set[str], label: str, errors: list[str]
 ) -> dict[str, Any] | None:
@@ -1010,6 +1049,12 @@ def validate_manifest(manifest: Any) -> list[str]:
                     )
                     _validate_closed_payload_schema(
                         payload, f"{label}.payloads.{payload_name}", errors
+                    )
+                    _validate_payload_property_names(
+                        payload,
+                        path if isinstance(path, str) else label,
+                        f"{label}.payloads.{payload_name}",
+                        errors,
                     )
                 if path in {
                     "analyze",
