@@ -10,6 +10,7 @@
 #include <vector>
 
 #include "engine/meter_telemetry.h"
+#include "mastering/eq/eq_band.h"
 #include "mixing/api/scene.h"
 #include "mixing/channel_strip.h"
 #include "mixing/pan_law.h"
@@ -1407,4 +1408,158 @@ TEST_CASE("Strip specs decode their pan law through the shared wire mapping",
   auto strip = sonare::engine::make_channel_strip_from_spec(out_of_range);
   REQUIRE(strip);
   REQUIRE(strip->pan_law() == sonare::mixing::PanLaw::Const3dB);
+}
+
+TEST_CASE("TrackMixerRuntime aligns a latent bus path against the dry mix",
+          "[engine][track_mixer][pdc]") {
+  // Lane 10 reaches the master directly; lane 20 reaches it through a bus whose
+  // insert chain carries lookahead. Both must land on the same sample: a
+  // parallel-compression bus that arrives late combs against the dry signal it
+  // is summed with.
+  //
+  // The insert is a limiter with a ceiling far above the signal, so it is a
+  // pure `lookaheadMs` delay (1 ms = 48 samples at 48 kHz) and the assertion is
+  // about timing alone, not about gain reduction.
+  constexpr int kFrames = 256;
+  constexpr int kBusLatency = 48;
+
+  std::array<float, kFrames> impulse{};
+  impulse[0] = 0.5f;
+  const float* channels[] = {impulse.data()};
+
+  sonare::engine::ClipPlayer player;
+  player.prepare(48000.0, kFrames);
+  player.set_clips(
+      {clip_for_track(1, 10, channels, 1, kFrames), clip_for_track(2, 20, channels, 1, kFrames)});
+
+  sonare::engine::TrackMixerRuntime mixer;
+  mixer.prepare(48000.0, kFrames);
+  REQUIRE(mixer.set_buses({{1, 0.0f}}));
+
+  sonare::engine::TrackLaneConfig dry_lane{10};
+  sonare::engine::TrackLaneConfig bus_lane{20};
+  bus_lane.output_bus_id = 1;
+  REQUIRE(mixer.set_track_lanes({dry_lane, bus_lane}));
+
+  sonare::mixing::api::Bus latent_bus;
+  latent_bus.id = "1";
+  latent_bus.inserts.push_back({sonare::mixing::api::InsertSlot::PreFader, "dynamics.limiter",
+                                R"({"thresholdDb":24,"lookaheadMs":1,"releaseMs":50})"});
+  REQUIRE(mixer.set_bus_strip(1, latent_bus));
+
+  // The runtime now advertises the real end-to-end maximum: no lane strip
+  // carries latency, so the whole figure is the bus insert chain.
+  // CHECK rather than REQUIRE so the rendered-alignment assertions below still
+  // run and report independently when the advertised figure is wrong.
+  CHECK(mixer.latency_samples_q8() == (kBusLatency << 8));
+  CHECK(mixer.latency_samples() == kBusLatency);
+
+  std::array<float, kFrames> out{};
+  float* out_channels[] = {out.data()};
+  REQUIRE(mixer.render_clips(player, out_channels, 1, kFrames, 0));
+
+  // Both contributions arrive coincidentally at the compensated position and
+  // sum there, rather than appearing as an early dry peak and a late bus peak.
+  REQUIRE(out[kBusLatency] == Catch::Approx(1.0f).margin(1.0e-3f));
+  double early_energy = 0.0;
+  for (int i = 0; i < kBusLatency; ++i) {
+    early_energy += static_cast<double>(out[static_cast<size_t>(i)]) * out[static_cast<size_t>(i)];
+  }
+  REQUIRE(early_energy < 1.0e-8);
+}
+
+TEST_CASE("TrackMixerRuntime keeps PDC delay history across an unrelated strip edit",
+          "[engine][track_mixer][pdc]") {
+  // Lane 20 carries a latent insert, so lane 10 is given a compensation delay.
+  // Editing lane 20 re-derives every alignment; the banks whose alignment did
+  // not change must keep the audio they are holding. Rebuilding one zero-fills
+  // it and punches a hole the length of the compensation delay into the mix.
+  constexpr int kFrames = 64;
+  constexpr int kLatency = 8;
+
+  std::array<float, kFrames> dc{};
+  dc.fill(0.5f);
+  const float* channels[] = {dc.data()};
+
+  sonare::engine::ClipPlayer player;
+  player.prepare(48000.0, kFrames);
+  player.set_clips(
+      {clip_for_track(1, 10, channels, 1, kFrames), clip_for_track(2, 20, channels, 1, kFrames)});
+
+  sonare::engine::TrackMixerRuntime mixer;
+  mixer.prepare(48000.0, kFrames);
+  REQUIRE(mixer.set_track_lanes({{10}, {20}}));
+
+  // 0.16666667 ms at 48 kHz rounds to exactly kLatency lookahead samples, and
+  // the ceiling sits far above the signal so the insert is a pure delay.
+  sonare::mixing::api::Strip latent;
+  latent.inserts.push_back({sonare::mixing::api::InsertSlot::PreFader, "dynamics.limiter",
+                            R"({"thresholdDb":24,"lookaheadMs":0.16666667,"releaseMs":50})"});
+  REQUIRE(mixer.set_track_strip(20, latent));
+  REQUIRE(mixer.set_track_strip(10, sonare::mixing::api::Strip{}));
+  REQUIRE(mixer.latency_samples() == kLatency);
+
+  std::array<float, kFrames> out{};
+  float* out_channels[] = {out.data()};
+
+  // Render past the compensation delay so lane 10's bank is full of audio.
+  for (int block = 0; block < 4; ++block) {
+    out.fill(0.0f);
+    REQUIRE(mixer.render_clips(player, out_channels, 1, kFrames, 0));
+  }
+  const float steady = out[kFrames - 1];
+  REQUIRE(steady > 0.1f);
+
+  // A scalar-only edit on the other lane: the insert topology is unchanged, so
+  // it takes the in-place fast path whose whole purpose is to preserve state.
+  const uint64_t generation_before = mixer.pdc_storage_generation();
+  sonare::mixing::api::Strip quieter = latent;
+  quieter.fader_db = -3.0f;
+  REQUIRE(mixer.set_track_strip(20, quieter));
+  REQUIRE(mixer.pdc_storage_generation() == generation_before);
+
+  // ... and the same through the EQ-band and channel-delay setters, the other
+  // two routes into recompute_lane_pdc.
+  REQUIRE(mixer.set_track_eq_band(10, 0, sonare::mastering::eq::EqBand{}));
+  REQUIRE(mixer.set_track_channel_delay_samples(10, 0));
+  REQUIRE(mixer.pdc_storage_generation() == generation_before);
+
+  // The next block opens where the previous one left off. A rebuilt bank would
+  // have opened with kLatency samples of silence instead.
+  out.fill(0.0f);
+  REQUIRE(mixer.render_clips(player, out_channels, 1, kFrames, 0));
+  for (int i = 0; i < kFrames; ++i) {
+    INFO("sample " << i);
+    REQUIRE(out[static_cast<size_t>(i)] > 0.1f);
+  }
+}
+
+TEST_CASE("TrackMixerRuntime rejects an out-of-range channel delay in the core",
+          "[engine][track_mixer]") {
+  // The bound lives here, not only at the C ABI, because the WASM facade calls
+  // this method directly. A samples/milliseconds mix-up must fail on every
+  // surface rather than succeeding at the four-second ceiling on one of them.
+  sonare::engine::TrackMixerRuntime mixer;
+  mixer.prepare(48000.0, 64);
+  REQUIRE(mixer.set_track_lanes({{10}}));
+  REQUIRE(mixer.set_track_strip(10, sonare::mixing::api::Strip{}));
+
+  constexpr int kMax = sonare::mixing::kMaxAlignmentDelaySamples;
+
+  // The largest usable value is applied exactly, so the bound rejects only what
+  // is genuinely out of range.
+  REQUIRE(mixer.set_track_channel_delay_samples(10, kMax));
+  REQUIRE(mixer.latency_samples() == kMax);
+
+  // Both ends of the acceptance condition.
+  CHECK_FALSE(mixer.set_track_channel_delay_samples(10, -1));
+  CHECK_FALSE(mixer.set_track_channel_delay_samples(10, 500000));
+  CHECK_FALSE(mixer.set_track_channel_delay_samples(10, kMax + 1));
+
+  // A rejected request leaves the previously applied delay alone: the failure
+  // is a rejection, not a silent substitution.
+  REQUIRE(mixer.latency_samples() == kMax);
+
+  REQUIRE(mixer.set_track_channel_delay_samples(10, 0));
+  REQUIRE(mixer.latency_samples() == 0);
 }

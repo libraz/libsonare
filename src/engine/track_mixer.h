@@ -200,6 +200,14 @@ class TrackMixerRuntime final : public rt::ProcessorBase {
   void process(float* const* channels, int num_channels, int num_samples) override;
   void reset() override;
   void flush_pdc_delays() noexcept;
+  /// @brief Total number of times any PDC alignment bank reallocated storage.
+  /// @details The observable form of the contract that a control-thread edit
+  ///          which does not change an alignment must not disturb the delay
+  ///          history that alignment is carrying: an unchanged value across an
+  ///          edit means no bank threw away audio in flight. Reallocating a
+  ///          bank zero-fills it, so a spurious bump is a dropout the length of
+  ///          the compensation delay.
+  uint64_t pdc_storage_generation() const noexcept;
   int latency_samples() const noexcept override { return latency_samples_q8() >> 8; }
   int latency_samples_q8() const noexcept override { return latency_samples_q8_; }
 
@@ -397,7 +405,12 @@ class TrackMixerRuntime final : public rt::ProcessorBase {
                          int num_samples) noexcept;
   bool any_lane_solo(const std::vector<TrackLaneConfig>& lanes) const noexcept;
   void prepare_lanes_from_snapshot(const std::vector<TrackLaneConfig>& lanes) noexcept;
-  void recompute_lane_pdc(const std::vector<TrackLaneConfig>& lanes);
+  /// Re-derives every PDC alignment bank (lane stage and bus stage) and the
+  /// runtime's advertised latency. Returns false when a bank could not grow its
+  /// storage, which is the only failure mode; `noexcept` so the `noexcept bool`
+  /// control-thread setters that call it can report that instead of letting an
+  /// allocation failure escape and terminate the process.
+  bool recompute_lane_pdc(const std::vector<TrackLaneConfig>& lanes) noexcept;
   void configure_lane_sends(const std::vector<TrackLaneConfig>& lanes);
   void process_lane_strip(size_t lane_index, int num_channels, int num_samples,
                           int64_t timeline_sample) noexcept;
@@ -445,6 +458,18 @@ class TrackMixerRuntime final : public rt::ProcessorBase {
   std::array<uint32_t, kMaxTrackLanes> active_track_ids_{};
   std::array<LaneState, kMaxTrackLanes> lane_states_{};
   std::array<mixing::AlignmentDelay, kMaxTrackLanes> lane_pdc_delays_;
+  // Bus-stage PDC. A lane can reach the master both directly and through a bus
+  // (its output bus, or any bus it sends to), so one per-lane delay cannot
+  // align both paths. lane_pdc_delays_ therefore aligns everything as it leaves
+  // the strips -- one common timebase for every bus input and for the direct
+  // master sum -- and this second stage aligns what happens after: each bus
+  // output carries (widest bus latency - its own), and the master mix
+  // accumulated from lanes that skipped the buses entirely carries the widest
+  // bus latency. Both rest at zero and short-circuit whenever no bus insert
+  // chain reports latency, so a project without a latent bus insert is
+  // untouched.
+  std::array<mixing::AlignmentDelay, kMaxBusLanes> bus_pdc_delays_;
+  mixing::AlignmentDelay master_pdc_delay_;
   std::array<bool, kMaxTrackLanes> source_mix_lane_active_{};
   std::array<BusState, kMaxBusLanes> bus_states_{};
   float* const* monitor_bus_ = nullptr;

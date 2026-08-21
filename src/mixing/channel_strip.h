@@ -101,6 +101,23 @@ class ChannelStrip : public rt::ProcessorBase {
   void set_channel_delay_samples(int delay_samples);
   int channel_delay_samples() const noexcept { return alignment_delay_.delay_samples(); }
 
+  /// @brief Widest channel count this strip will be asked to process.
+  /// @details Sizes every uniform alignment bank the strip owns -- the channel
+  ///          delay and both per-insert compensation banks -- so a wide layout
+  ///          is delayed on all of its planes rather than only the first
+  ///          kMaxStackChannels. Control thread, before prepare(); the default
+  ///          keeps the historical stack width, so a host that never widens is
+  ///          unaffected. A strip handed more planes than this delays only the
+  ///          prepared ones (the audio thread never allocates) and records the
+  ///          excess in alignment_channel_overflow().
+  void set_prepared_channels(int num_channels);
+  int prepared_channels() const noexcept { return prepared_channels_; }
+  /// @brief Widest excess plane count any of this strip's alignment banks saw.
+  /// @details Non-zero means the strip was handed a layout wider than it was
+  ///          prepared for while a uniform delay was engaged, so those upper
+  ///          planes ran un-delayed against the ones below them.
+  int alignment_channel_overflow() const noexcept;
+
   void set_width(float width) noexcept { width_.set_width(width); }
   float width() const noexcept { return width_.width(); }
   bool schedule_width_automation(int64_t sample_pos, float width,
@@ -315,6 +332,11 @@ class ChannelStrip : public rt::ProcessorBase {
   // Control-thread only, and re-derived in full rather than per new slot because
   // adding a pre-insert shifts every post-insert's combined index.
   void prepare_insert_alignment_delays();
+
+  // Widest layout the alignment banks are sized for. Defaults to the segmented
+  // stack width so an unwidened strip keeps its historical footprint; a host
+  // driving 7.1.4 or wider raises it through set_prepared_channels().
+  int prepared_channels_ = kMaxStackChannels;
 
   GainProcessor input_trim_;
   AlignmentDelay alignment_delay_;

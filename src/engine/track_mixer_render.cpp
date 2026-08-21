@@ -328,6 +328,18 @@ void TrackMixerRuntime::mix_lane_sends(size_t lane_index, int num_channels, int 
 void TrackMixerRuntime::process_buses(float* const* channels, int master_channels, int num_samples,
                                       MeterTelemetryTap* meter_tap, int64_t render_frame,
                                       ScopeTelemetryTap* scope_tap) noexcept {
+  // Bus-stage PDC, first half: everything already summed into the master mix
+  // (lane dry paths, and clips on tracks with no lane) reached it without
+  // passing through any bus insert chain, so it is delayed by the widest bus
+  // latency. The bank rests at zero -- and process() short-circuits -- whenever
+  // no bus carries latency, which leaves a project without a latent bus insert
+  // byte-identical.
+  if (master_pdc_delay_.delay_samples_q8() != 0) {
+    for (int ch = 0; ch < master_channels; ++ch) {
+      lane_channel_ptrs_[static_cast<size_t>(ch)] = channels[static_cast<size_t>(ch)];
+    }
+    master_pdc_delay_.process(lane_channel_ptrs_.data(), master_channels, num_samples);
+  }
   for (size_t bus_index = 0; bus_index < bus_configs_.size(); ++bus_index) {
     BusState& bus = bus_states_[bus_index];
     if (bus.bus == nullptr) continue;
@@ -391,6 +403,12 @@ void TrackMixerRuntime::process_buses(float* const* channels, int master_channel
       scope_tap->process(lane_channel_ptrs_.data(), std::min(bus_channels, kMaxLaneChannels),
                          num_samples, render_frame, bus_meter_target(bus_index));
     }
+    // Bus-stage PDC, second half: this bus carries (widest bus latency - its
+    // own), so its output lands on the master sum at the same instant as the
+    // delayed dry mix and as every other bus. Applied after metering so the bus
+    // meters keep reporting the bus's own output, and skipped entirely when the
+    // bank rests at zero.
+    bus_pdc_delays_[bus_index].process(lane_channel_ptrs_.data(), bus_channels, num_samples);
     // Sum the bus into the master plane-by-plane, up to the planes both share.
     const int sum_channels = std::min(bus_channels, master_channels);
     for (int ch = 0; ch < sum_channels; ++ch) {

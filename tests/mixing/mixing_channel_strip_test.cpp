@@ -332,6 +332,51 @@ TEST_CASE("ChannelStrip input trim is independent from fader", "[mixing]") {
   }
 }
 
+TEST_CASE("ChannelStrip channel delay reaches every plane of a wide layout", "[mixing]") {
+  // 7.1.4 is twelve planes, three more than the segmented stack path carries.
+  // A uniform channel delay has to land on all twelve: delaying only the bed
+  // and leaving the height layer early splits correlated material in time.
+  constexpr int kPlanes = 12;
+  constexpr int kDelay = 480;  // 10 ms at 48 kHz
+  constexpr size_t kFrames = 1024;
+
+  auto run = [](int prepared_channels) {
+    std::array<std::vector<float>, kPlanes> planes;
+    std::array<float*, kPlanes> pointers{};
+    for (size_t ch = 0; ch < kPlanes; ++ch) {
+      planes[ch].assign(kFrames, 0.0f);
+      planes[ch][0] = 1.0f;
+      pointers[ch] = planes[ch].data();
+    }
+    // Unity everywhere else so the only thing acting on the impulse is the
+    // channel delay: no pan, no width collapse, no fader ramp.
+    sonare::mixing::ChannelStrip strip({0.0f, 0.0f, sonare::mixing::PanLaw::Linear0dB, 0.0f});
+    strip.set_width(1.0f);
+    strip.set_channel_delay_samples(kDelay);
+    if (prepared_channels > 0) strip.set_prepared_channels(prepared_channels);
+    strip.prepare(48000.0, static_cast<int>(kFrames));
+    strip.settle();
+    strip.process(pointers.data(), kPlanes, static_cast<int>(kFrames));
+    return std::make_pair(std::move(planes), strip.alignment_channel_overflow());
+  };
+
+  auto [aligned, aligned_overflow] = run(kPlanes);
+  REQUIRE(aligned_overflow == 0);
+  for (size_t ch = 0; ch < kPlanes; ++ch) {
+    INFO("plane " << ch);
+    REQUIRE_THAT(aligned[ch][0], WithinAbs(0.0f, 0.0001f));
+    REQUIRE_THAT(aligned[ch][kDelay - 1], WithinAbs(0.0f, 0.0001f));
+    REQUIRE_THAT(aligned[ch][kDelay], WithinAbs(1.0f, 0.0001f));
+  }
+
+  // Left at the default width the upper planes run un-delayed -- which is the
+  // failure this guards -- and the bank now says so instead of staying silent.
+  auto [unprepared, unprepared_overflow] = run(0);
+  REQUIRE(unprepared_overflow == kPlanes - 8);
+  REQUIRE_THAT(unprepared[0][kDelay], WithinAbs(1.0f, 0.0001f));
+  REQUIRE_THAT(unprepared[kPlanes - 1][0], WithinAbs(1.0f, 0.0001f));
+}
+
 TEST_CASE("ChannelStrip applies polarity delay width and dual meter taps", "[mixing]") {
   std::array<float, 4> left{1.0f, 2.0f, 3.0f, 4.0f};
   std::array<float, 4> right{10.0f, 20.0f, 30.0f, 40.0f};

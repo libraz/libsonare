@@ -290,9 +290,10 @@ bool TrackMixerRuntime::set_track_eq_band(uint32_t track_id, size_t band_index,
   // alignment. recompute_lane_pdc reads the lane strips' latency through
   // lane_states_, which is why this setter keeps the control-thread contract
   // (not concurrent with process()); the strip resolution above is read-only
-  // regardless.
+  // regardless. It is noexcept and reports an allocation failure as false, so
+  // this setter's own noexcept bool contract holds on every exit path.
   if (const std::vector<TrackLaneConfig>* lanes = lanes_.control_current().get()) {
-    recompute_lane_pdc(*lanes);
+    if (!recompute_lane_pdc(*lanes)) return false;
   }
   return true;
 }
@@ -335,7 +336,15 @@ bool TrackMixerRuntime::set_track_dual_pan(uint32_t track_id, float left_pan,
 
 bool TrackMixerRuntime::set_track_channel_delay_samples(uint32_t track_id,
                                                         int delay_samples) noexcept {
-  if (delay_samples < 0) return false;
+  // Both bounds are enforced here rather than only at the C ABI. The WASM
+  // facade reaches this method directly instead of going through the C entry
+  // point, so an upper bound checked only there would leave one surface
+  // silently substituting kMaxAlignmentDelaySamples for the value the caller
+  // asked for -- a samples/milliseconds mix-up would "succeed" at four seconds
+  // -- while the other three report InvalidParameter for the same request.
+  // With the rejection in the core, all four surfaces either apply exactly the
+  // requested delay or report a failure.
+  if (delay_samples < 0 || delay_samples > mixing::kMaxAlignmentDelaySamples) return false;
   mixing::ChannelStrip* strip = lane_strip_for_track(track_id);
   if (!strip) return false;
   try {
@@ -346,9 +355,10 @@ bool TrackMixerRuntime::set_track_channel_delay_samples(uint32_t track_id,
   // Channel delay contributes to strip latency, so refresh PDC alignment. Use
   // the control-side snapshot: this is a control-thread structural change (not
   // concurrent with process()), and lanes_.current() belongs to the audio
-  // thread.
+  // thread. recompute_lane_pdc is noexcept and reports an allocation failure as
+  // false, so this setter's own noexcept bool contract holds on every exit path.
   if (const std::vector<TrackLaneConfig>* lanes = lanes_.control_current().get()) {
-    recompute_lane_pdc(*lanes);
+    if (!recompute_lane_pdc(*lanes)) return false;
   }
   return true;
 }

@@ -154,10 +154,12 @@ void ChannelStrip::prepare(double sample_rate, int max_block_size) {
   fader_.prepare(sample_rate, max_block_size);
   panner_.prepare(sample_rate, max_block_size);
   width_.prepare(sample_rate, max_block_size);
-  // process()/process_segment() pass up to kMaxStackChannels channels; the
-  // alignment delay must preallocate storage for all of them so the audio
-  // thread never allocates and never silently drops the upper channels.
-  alignment_delay_.set_prepared_channels(kMaxStackChannels);
+  // The alignment delay must preallocate storage for every plane this strip
+  // will be handed so the audio thread never allocates and never silently drops
+  // the upper channels. process()/process_segment() cap at kMaxStackChannels,
+  // but process_unsegmented() -- which every wider layout takes -- does not, so
+  // the bank is sized from the width the host declared, not from the stack cap.
+  alignment_delay_.set_prepared_channels(prepared_channels_);
   alignment_delay_.prepare(sample_rate, max_block_size);
   eq_.prepare(sample_rate, max_block_size);
   pre_meter_.reset();
@@ -524,13 +526,12 @@ void ChannelStrip::prepare_insert_alignment_delays() {
     const int latency_q8 = insert->latency_samples_q8();
 
     // The front pair is delayed by the insert itself, so this bank only ever
-    // covers the planes behind it; process_at/process_segment cap a strip at
-    // kMaxStackChannels planes and phase-1 layouts top out at 7.1.
-    configure_insert_alignment_delay(stereo_pair_alignment_delays_[index], kMaxStackChannels - 2,
+    // covers the planes behind it.
+    configure_insert_alignment_delay(stereo_pair_alignment_delays_[index], prepared_channels_ - 2,
                                      stereo_pair_only ? latency_q8 : 0);
     // The bypass substitute stands in for the whole insert, so it must cover
     // every plane the strip can hand it.
-    configure_insert_alignment_delay(bypass_alignment_delays_[index], kMaxStackChannels,
+    configure_insert_alignment_delay(bypass_alignment_delays_[index], prepared_channels_,
                                      latency_q8);
   }
 }
@@ -622,6 +623,28 @@ bool ChannelStrip::polarity_invert_right() const noexcept {
 
 void ChannelStrip::set_channel_delay_samples(int delay_samples) {
   alignment_delay_.set_delay_samples(delay_samples);
+}
+
+void ChannelStrip::set_prepared_channels(int num_channels) {
+  const int next = std::max(1, num_channels);
+  if (next == prepared_channels_) return;
+  prepared_channels_ = next;
+  // Resize the banks that already exist as well as the ones a later prepare()
+  // will build: a host that widens an already-prepared strip must not have to
+  // remember the ordering.
+  alignment_delay_.set_prepared_channels(prepared_channels_);
+  prepare_insert_alignment_delays();
+}
+
+int ChannelStrip::alignment_channel_overflow() const noexcept {
+  int widest = alignment_delay_.channel_overflow_high_water();
+  for (const AlignmentDelay& delay : stereo_pair_alignment_delays_) {
+    widest = std::max(widest, delay.channel_overflow_high_water());
+  }
+  for (const AlignmentDelay& delay : bypass_alignment_delays_) {
+    widest = std::max(widest, delay.channel_overflow_high_water());
+  }
+  return widest;
 }
 
 bool ChannelStrip::schedule_width_automation(int64_t sample_pos, float width,

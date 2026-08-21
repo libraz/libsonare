@@ -1,6 +1,8 @@
 /// @file mixing_bus_control_test.cpp
 /// @brief Mixing bus, VCA, controller, delay, width, and meter tests.
 
+#include <cstdint>
+
 #include "mixing/solo_mute.h"
 #include "mixing_test_helpers.h"
 
@@ -87,6 +89,134 @@ TEST_CASE("AlignmentDelay reports Q8 fractional latency and interpolates impulse
   }
   REQUIRE(abs_sum > 0.5f);
   REQUIRE(nonzero >= 2);
+}
+
+TEST_CASE("AlignmentDelay keeps its history when the alignment does not change", "[mixing]") {
+  // The bank owns this: re-applying the delay it already carries must not
+  // rebuild the delay lines, because rebuilding them zero-fills the audio in
+  // flight. The mixer re-derives every lane's alignment on any strip edit, so
+  // without this a fader move on one track drains every other track's
+  // compensation delay.
+  constexpr int kDelay = 4;
+  sonare::mixing::AlignmentDelay delay;
+  delay.set_prepared_channels(1);
+  delay.set_delay_samples_q8(kDelay << 8);
+  delay.prepare(48000.0, 8);
+  const uint64_t prepared_generation = delay.storage_generation();
+
+  // Push an impulse in and stop one sample short of it coming out, so the
+  // delay line is holding audio at the moment of the edit.
+  std::array<float, 2> feed{1.0f, 0.0f};
+  float* channels[] = {feed.data()};
+  delay.process(channels, 1, 2);
+  REQUIRE_THAT(feed[0], WithinAbs(0.0f, 1.0e-6f));
+
+  delay.set_delay_samples_q8(kDelay << 8);
+  REQUIRE(delay.storage_generation() == prepared_generation);
+
+  // The impulse still arrives at its original position: samples 2 and 3 are
+  // silent, sample 4 carries it. A rebuilt bank would have lost it entirely.
+  std::array<float, 4> tail{};
+  float* tail_channels[] = {tail.data()};
+  delay.process(tail_channels, 1, 4);
+  REQUIRE_THAT(tail[0], WithinAbs(0.0f, 1.0e-6f));
+  REQUIRE_THAT(tail[1], WithinAbs(0.0f, 1.0e-6f));
+  REQUIRE_THAT(tail[2], WithinAbs(1.0f, 1.0e-6f));
+
+  // A genuine change still rebuilds -- the guard is on the storage requirement,
+  // not on mutation as such.
+  delay.set_delay_samples_q8((kDelay + 1) << 8);
+  REQUIRE(delay.storage_generation() > prepared_generation);
+}
+
+TEST_CASE("AlignmentDelay widens an already-prepared bank instead of waiting", "[mixing]") {
+  // The hazard the no-op guard would otherwise create: declare a wider layout
+  // after prepare(), then re-apply the same delay. With the guard keyed on the
+  // storage requirement (which includes the channel count) rather than on the
+  // delay value, the widening lands immediately and every plane is delayed.
+  constexpr int kDelay = 3;
+  sonare::mixing::AlignmentDelay delay;
+  delay.set_prepared_channels(2);
+  delay.set_delay_samples_q8(kDelay << 8);
+  delay.prepare(48000.0, 8);
+  REQUIRE(delay.prepared_channels() == 2);
+
+  delay.set_prepared_channels(4);
+  delay.set_delay_samples_q8(kDelay << 8);
+  REQUIRE(delay.prepared_channels() == 4);
+
+  std::array<std::array<float, 8>, 4> planes{};
+  std::array<float*, 4> pointers{};
+  for (size_t ch = 0; ch < planes.size(); ++ch) {
+    planes[ch][0] = 1.0f;
+    pointers[ch] = planes[ch].data();
+  }
+  delay.process(pointers.data(), 4, 8);
+  for (const auto& plane : planes) {
+    REQUIRE_THAT(plane[0], WithinAbs(0.0f, 1.0e-6f));
+    REQUIRE_THAT(plane[static_cast<size_t>(kDelay)], WithinAbs(1.0f, 1.0e-6f));
+  }
+  REQUIRE(delay.channel_overflow_high_water() == 0);
+}
+
+TEST_CASE("AlignmentDelay records a call wider than the prepared bank", "[mixing]") {
+  // A caller that hands over more planes than the bank was prepared for still
+  // gets an allocation-free process(), but the excess is recorded rather than
+  // silently leaving those planes un-delayed and misaligned.
+  constexpr int kDelay = 2;
+  sonare::mixing::AlignmentDelay delay;
+  delay.set_prepared_channels(2);
+  delay.set_delay_samples_q8(kDelay << 8);
+  delay.prepare(48000.0, 8);
+
+  std::array<std::array<float, 8>, 5> planes{};
+  std::array<float*, 5> pointers{};
+  for (size_t ch = 0; ch < planes.size(); ++ch) {
+    planes[ch][0] = 1.0f;
+    pointers[ch] = planes[ch].data();
+  }
+  delay.process(pointers.data(), 5, 8);
+
+  REQUIRE(delay.channel_overflow_high_water() == 3);
+  REQUIRE_THAT(planes[0][static_cast<size_t>(kDelay)], WithinAbs(1.0f, 1.0e-6f));
+  REQUIRE_THAT(planes[4][0], WithinAbs(1.0f, 1.0e-6f));
+
+  // A bank resting at zero delay cannot misalign anything, so it does not
+  // report an overflow no matter how wide the call is.
+  sonare::mixing::AlignmentDelay passthrough;
+  passthrough.set_prepared_channels(2);
+  passthrough.prepare(48000.0, 8);
+  passthrough.process(pointers.data(), 5, 8);
+  REQUIRE(passthrough.channel_overflow_high_water() == 0);
+}
+
+TEST_CASE("AlignmentDelay exposes its reallocation as a noexcept operation", "[mixing]") {
+  // The noexcept half of the ownership contract. A control-thread setter that
+  // promises `noexcept bool` needs a way to grow this storage that cannot let a
+  // bad_alloc escape and terminate the process, and it has to be the same
+  // operation as the throwing one -- not a stub that quietly does less.
+  sonare::mixing::AlignmentDelay guarded;
+  static_assert(noexcept(guarded.try_set_delay_samples_q8(0)),
+                "try_set_delay_samples_q8 must be noexcept");
+
+  sonare::mixing::AlignmentDelay throwing;
+  guarded.set_prepared_channels(2);
+  throwing.set_prepared_channels(2);
+  guarded.prepare(48000.0, 8);
+  throwing.prepare(48000.0, 8);
+
+  REQUIRE(guarded.try_set_delay_samples_q8((3 << 8) + 64));
+  throwing.set_delay_samples_q8((3 << 8) + 64);
+  REQUIRE(guarded.delay_samples_q8() == throwing.delay_samples_q8());
+  REQUIRE(guarded.delay_samples() == throwing.delay_samples());
+  REQUIRE(guarded.fractional_mode() == throwing.fractional_mode());
+  REQUIRE(guarded.storage_generation() == throwing.storage_generation());
+
+  // Including the no-op guard: re-applying through the noexcept entry point
+  // must not rebuild the bank either.
+  const uint64_t generation = guarded.storage_generation();
+  REQUIRE(guarded.try_set_delay_samples_q8((3 << 8) + 64));
+  REQUIRE(guarded.storage_generation() == generation);
 }
 
 TEST_CASE("AlignmentDelay Lagrange3 magnitude droop is documented by fixture values", "[mixing]") {

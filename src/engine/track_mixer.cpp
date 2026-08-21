@@ -104,7 +104,7 @@ bool TrackMixerRuntime::set_track_lanes(std::vector<TrackLaneConfig> lanes) {
   } catch (...) {
     return false;
   }
-  recompute_lane_pdc(*snapshot);
+  if (!recompute_lane_pdc(*snapshot)) return false;
   return true;
 }
 
@@ -147,6 +147,9 @@ bool TrackMixerRuntime::set_buses(std::vector<TrackBusConfig> buses) {
     } catch (...) {
       return false;
     }
+    // Declaring or retiring a bus changes which bus latencies feed the master
+    // sum, so the bus-stage alignment has to follow the bus list.
+    if (!recompute_lane_pdc(*lanes)) return false;
   }
   return true;
 }
@@ -197,7 +200,7 @@ bool TrackMixerRuntime::bind_track_strip(uint32_t track_id, mixing::ChannelStrip
       } catch (...) {
         return false;
       }
-      recompute_lane_pdc(*lanes);
+      if (!recompute_lane_pdc(*lanes)) return false;
     }
     return true;
   }
@@ -217,7 +220,7 @@ bool TrackMixerRuntime::bind_track_strip(uint32_t track_id, mixing::ChannelStrip
       } catch (...) {
         return false;
       }
-      recompute_lane_pdc(*lanes);
+      if (!recompute_lane_pdc(*lanes)) return false;
     }
     return true;
   }
@@ -239,7 +242,7 @@ bool TrackMixerRuntime::set_track_strip(uint32_t track_id, const mixing::api::St
       apply_strip_scalars(*owned.strip, spec);
       owned.spec = spec;
       if (const std::vector<TrackLaneConfig>* lanes = lanes_.current()) {
-        recompute_lane_pdc(*lanes);
+        if (!recompute_lane_pdc(*lanes)) return false;
       }
       return true;
     }
@@ -308,6 +311,13 @@ bool TrackMixerRuntime::set_bus_strip(uint32_t bus_id, const mixing::api::Bus& b
     }
   }
   state->bus = std::move(fx);
+  // A bus insert chain's latency joins the mixer's end-to-end PDC, so
+  // installing one has to re-derive the alignment banks. Without this call
+  // FxBus::latency_samples_q8() has no reader in the engine at all and a
+  // latent bus insert silently offsets its whole parallel path.
+  if (const std::vector<TrackLaneConfig>* lanes = lanes_.control_current().get()) {
+    if (!recompute_lane_pdc(*lanes)) return false;
+  }
   return true;
 }
 
@@ -344,6 +354,14 @@ void TrackMixerRuntime::prepare(double sample_rate, int max_block_size) {
     delay.set_prepared_channels(kMaxLaneChannels);
     delay.prepare(sample_rate_, max_block_size_);
   }
+  // The bus stage runs on bus and master buffers, which are as wide as the
+  // widest layout the mixer renders, not the ≤2-wide lane buffers.
+  for (mixing::AlignmentDelay& delay : bus_pdc_delays_) {
+    delay.set_prepared_channels(kMaxBusChannels);
+    delay.prepare(sample_rate_, max_block_size_);
+  }
+  master_pdc_delay_.set_prepared_channels(kMaxBusChannels);
+  master_pdc_delay_.prepare(sample_rate_, max_block_size_);
   for (InsertAutoSlot& slot : insert_auto_slots_) {
     slot.smoother.prepare(sample_rate_, 5.0f);
     slot.smoother.reset(0.0f);
@@ -419,6 +437,21 @@ void TrackMixerRuntime::flush_pdc_delays() noexcept {
   for (mixing::AlignmentDelay& delay : lane_pdc_delays_) {
     delay.reset();
   }
+  for (mixing::AlignmentDelay& delay : bus_pdc_delays_) {
+    delay.reset();
+  }
+  master_pdc_delay_.reset();
+}
+
+uint64_t TrackMixerRuntime::pdc_storage_generation() const noexcept {
+  uint64_t total = master_pdc_delay_.storage_generation();
+  for (const mixing::AlignmentDelay& delay : lane_pdc_delays_) {
+    total += delay.storage_generation();
+  }
+  for (const mixing::AlignmentDelay& delay : bus_pdc_delays_) {
+    total += delay.storage_generation();
+  }
+  return total;
 }
 
 bool TrackMixerRuntime::lane_config_valid(
@@ -575,25 +608,56 @@ void TrackMixerRuntime::prepare_lanes_from_snapshot(
   applied_lane_snapshot_ = &lanes;
 }
 
-void TrackMixerRuntime::recompute_lane_pdc(const std::vector<TrackLaneConfig>& lanes) {
-  int max_latency_q8 = 0;
+bool TrackMixerRuntime::recompute_lane_pdc(const std::vector<TrackLaneConfig>& lanes) noexcept {
+  // Lane stage: the widest strip latency. Every lane leaves process_lane_strip
+  // at this offset, so the sends tapped from it, the output-bus routing and the
+  // direct master sum all see one lane timebase.
+  int max_strip_q8 = 0;
   for (size_t lane_index = 0; lane_index < lanes.size(); ++lane_index) {
     const mixing::ChannelStrip* strip = lane_states_[lane_index].strip;
     if (strip != nullptr) {
-      max_latency_q8 = std::max(max_latency_q8, strip->latency_samples_q8());
+      max_strip_q8 = std::max(max_strip_q8, strip->latency_samples_q8());
     }
   }
 
-  latency_samples_q8_ = max_latency_q8;
+  // Bus stage: the widest bus insert-chain latency. A bus insert with lookahead
+  // (a limiter, a multiband compressor) otherwise puts the whole parallel path
+  // that many samples behind the dry lanes it is summed with.
+  int max_bus_q8 = 0;
+  for (size_t bus_index = 0; bus_index < bus_configs_.size(); ++bus_index) {
+    const mixing::FxBus* bus = bus_states_[bus_index].bus.get();
+    if (bus != nullptr) {
+      max_bus_q8 = std::max(max_bus_q8, bus->latency_samples_q8());
+    }
+  }
+
+  bool ok = true;
   for (size_t lane_index = 0; lane_index < lane_pdc_delays_.size(); ++lane_index) {
     int delay_q8 = 0;
     if (lane_index < lanes.size()) {
       const mixing::ChannelStrip* strip = lane_states_[lane_index].strip;
       const int lane_latency_q8 = strip != nullptr ? strip->latency_samples_q8() : 0;
-      delay_q8 = max_latency_q8 - lane_latency_q8;
+      delay_q8 = max_strip_q8 - lane_latency_q8;
     }
-    lane_pdc_delays_[lane_index].set_delay_samples_q8(delay_q8);
+    ok = lane_pdc_delays_[lane_index].try_set_delay_samples_q8(delay_q8) && ok;
   }
+
+  for (size_t bus_index = 0; bus_index < bus_pdc_delays_.size(); ++bus_index) {
+    int delay_q8 = 0;
+    if (bus_index < bus_configs_.size()) {
+      const mixing::FxBus* bus = bus_states_[bus_index].bus.get();
+      const int bus_latency_q8 = bus != nullptr ? bus->latency_samples_q8() : 0;
+      delay_q8 = max_bus_q8 - bus_latency_q8;
+    }
+    ok = bus_pdc_delays_[bus_index].try_set_delay_samples_q8(delay_q8) && ok;
+  }
+  ok = master_pdc_delay_.try_set_delay_samples_q8(max_bus_q8) && ok;
+
+  // The end-to-end maximum, which is what the engine advertises to the host:
+  // a lane's strip and, for every path that reaches the master through a bus,
+  // that bus's chain on top of it.
+  latency_samples_q8_ = max_strip_q8 + max_bus_q8;
+  return ok;
 }
 
 void TrackMixerRuntime::configure_lane_sends(const std::vector<TrackLaneConfig>& lanes) {
