@@ -3,10 +3,6 @@
 #include "sonare_cli.h"
 
 int cmd_normalize(const CliArgs& args, const Audio& audio) {
-  if (args.output_file.empty()) {
-    std::cerr << color::red << "Error: normalize requires output file (-o)" << color::reset << "\n";
-    return 1;
-  }
   const std::string mode = args.get_string("mode", "peak");
   Audio result;
   float target_db = 0.0f;
@@ -39,10 +35,6 @@ int cmd_normalize(const CliArgs& args, const Audio& audio) {
 }
 
 int cmd_gain(const CliArgs& args, const Audio& audio) {
-  if (args.output_file.empty()) {
-    std::cerr << color::red << "Error: gain requires output file (-o)" << color::reset << "\n";
-    return 1;
-  }
   if (!args.has("gain-db")) {
     std::cerr << color::red << "Error: --gain-db required" << color::reset << "\n";
     return 1;
@@ -66,10 +58,6 @@ int cmd_gain(const CliArgs& args, const Audio& audio) {
 }
 
 int cmd_fade(const CliArgs& args, const Audio& audio) {
-  if (args.output_file.empty()) {
-    std::cerr << color::red << "Error: fade requires output file (-o)" << color::reset << "\n";
-    return 1;
-  }
   if (!args.has("fade-in") && !args.has("fade-out")) {
     std::cerr << color::red << "Error: --fade-in and/or --fade-out required" << color::reset
               << "\n";
@@ -99,10 +87,6 @@ int cmd_fade(const CliArgs& args, const Audio& audio) {
 }
 
 int cmd_filter(const CliArgs& args, const Audio& audio) {
-  if (args.output_file.empty()) {
-    std::cerr << color::red << "Error: filter requires output file (-o)" << color::reset << "\n";
-    return 1;
-  }
   const std::string type = args.get_string("type", "");
   const bool is_hp = (type == "hp" || type == "highpass");
   const bool is_lp = (type == "lp" || type == "lowpass");
@@ -180,10 +164,6 @@ int cmd_filter(const CliArgs& args, const Audio& audio) {
 }
 
 int cmd_resample(const CliArgs& args, const Audio& audio) {
-  if (args.output_file.empty()) {
-    std::cerr << color::red << "Error: resample requires output file (-o)" << color::reset << "\n";
-    return 1;
-  }
   if (!args.has("target-rate") && !args.has("target-sr")) {
     std::cerr << color::red << "Error: --target-rate required" << color::reset << "\n";
     return 1;
@@ -215,10 +195,6 @@ int cmd_resample(const CliArgs& args, const Audio& audio) {
 }
 
 int cmd_tone(const CliArgs& args, const Audio&) {
-  if (args.output_file.empty()) {
-    std::cerr << color::red << "Error: tone requires output file (-o)" << color::reset << "\n";
-    return 1;
-  }
   if (!args.has("frequency")) {
     std::cerr << color::red << "Error: --frequency required" << color::reset << "\n";
     return 1;
@@ -248,10 +224,6 @@ int cmd_tone(const CliArgs& args, const Audio&) {
 }
 
 int cmd_chirp(const CliArgs& args, const Audio&) {
-  if (args.output_file.empty()) {
-    std::cerr << color::red << "Error: chirp requires output file (-o)" << color::reset << "\n";
-    return 1;
-  }
   const float fmin = args.fmin;
   const float fmax = args.fmax;
   const bool linear = !args.has("exponential");
@@ -288,10 +260,6 @@ int cmd_chirp(const CliArgs& args, const Audio&) {
 }
 
 int cmd_clicks(const CliArgs& args, const Audio&) {
-  if (args.output_file.empty()) {
-    std::cerr << color::red << "Error: clicks requires output file (-o)" << color::reset << "\n";
-    return 1;
-  }
   if (!args.has("times")) {
     std::cerr << color::red << "Error: --times required" << color::reset << "\n";
     return 1;

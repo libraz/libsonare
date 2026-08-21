@@ -159,12 +159,49 @@ void emit_inventory_default(JsonBuilder& json, const CliOptionMetadata& option) 
   }
 }
 
+// The accepted value set an option declares, published so the cross-surface
+// checker compares it against the Python parser's own domain instead of
+// assuming the two agree. An option whose contract has not been narrowed emits
+// `null`, which is what makes "one surface narrowed it and the other did not"
+// a visible difference rather than an invisible one.
+//
+// `rejectExit` names the exit-code class the refusal carries, because both CLIs
+// report some domains at parse time (usage) and others from the handler
+// (invalid parameter), and a `shared` command has to agree on which.
+void emit_inventory_domain(JsonBuilder& json, const CliOptionMetadata& option) {
+  json.key("domain");
+  if (option.domain.empty()) {
+    json.null_value();
+    return;
+  }
+  json.begin_object().key("choices").begin_array();
+  for (const auto& choice : option.domain.choices) json.value(choice);
+  json.end_array().key("minimum");
+  if (option.domain.has_minimum) {
+    json.value(option.domain.minimum);
+  } else {
+    json.null_value();
+  }
+  json.kv("exclusiveMinimum", option.domain.exclusive_minimum).key("maximum");
+  if (option.domain.has_maximum) {
+    json.value(option.domain.maximum);
+  } else {
+    json.null_value();
+  }
+  json.kv("exclusiveMaximum", option.domain.exclusive_maximum)
+      .kv("rejectExit",
+          option.domain.stage == CliOptionDomainStage::Parameter ? "invalid_parameter" : "usage")
+      .end_object();
+}
+
 void emit_inventory_option(JsonBuilder& json, const CliOptionMetadata& option) {
   json.begin_object().kv("name", option.name).kv("type", option.type);
   emit_inventory_default(json, option);
   json.key("aliases").begin_array();
   for (const auto& alias : option.aliases) json.value(alias);
-  json.end_array().kv("repeatable", option.repeatable).kv("required", option.required).end_object();
+  json.end_array().kv("repeatable", option.repeatable).kv("required", option.required);
+  emit_inventory_domain(json, option);
+  json.end_object();
 }
 
 }  // namespace
@@ -242,7 +279,6 @@ namespace {
 constexpr int kExitUsage = 2;
 constexpr int kExitInvalidParameter = 3;
 constexpr int kExitInvalidFormat = 5;
-constexpr int kExitInvalidState = 9;
 constexpr int kExitError = 10;
 
 bool legacy_exit_codes() noexcept {
@@ -256,13 +292,17 @@ int finalize_exit(int status) noexcept {
 
 int normalize_handler_exit(const CommandInfo& command, int status) noexcept {
   if (status == 0) return 0;
-  // Handlers historically used `1` for argument/validation failures. Keep
-  // their implementation shape while publishing the same structured contract
-  // as the Python CLI. Project operations report a failed compilation/load as
-  // an invalid state rather than an invalid DSP parameter.
-  const int normalized =
-      status == 1 ? (command.name == "project" ? kExitInvalidState : kExitInvalidParameter)
-                  : status;
+  (void)command;
+  // Handlers historically used `1` for argument/validation failures. Keep that
+  // implementation shape while publishing the same structured contract as the
+  // Python CLI. There is no per-command exception: a family-wide rule that
+  // rewrote every `project` failure to the invalid-state code kept flattening
+  // each newly added failure path -- a missing -o, an unknown --synth preset, a
+  // file that does not exist -- into one code that described none of them. A
+  // project handler that knows its error class now returns that code itself,
+  // and anything still returning a plain 1 lands on the same invalid-parameter
+  // code as every other command.
+  const int normalized = status == 1 ? kExitInvalidParameter : status;
   return finalize_exit(normalized);
 }
 
@@ -324,16 +364,17 @@ int main(int argc, char* argv[]) {
       return 0;
     }
 
-    const std::string argument_error =
+    const CliValidationError argument_error =
         validate_cli_arguments(args, cmd ? cmd->requires_audio : false);
     if (!argument_error.empty()) {
-      std::cerr << color::red << "Error: " << argument_error << color::reset << "\n\n";
+      std::cerr << color::red << "Error: " << argument_error.message << color::reset << "\n\n";
+      // A rejected option value carries its own exit class from the registry:
+      // a parse-time domain (the Python parser's `type=` / `choices=`) is a
+      // usage failure, and a domain the Python CLI enforces in its handler is
+      // an invalid-parameter failure. The usage banner belongs to the first
+      // kind only -- the second is a value the caller spelled correctly.
+      if (argument_error.invalid_parameter) return finalize_exit(kExitInvalidParameter);
       print_usage(argv[0]);
-      // Every error returned by validate_cli_arguments is a parser/schema
-      // failure.  This includes an option such as -o/--output that is known
-      // globally but is absent from the selected command schema.  Handler
-      // and domain failures are reported after this validation step and keep
-      // their existing InvalidParameter/runtime exit codes.
       return finalize_exit(kExitUsage);
     }
 

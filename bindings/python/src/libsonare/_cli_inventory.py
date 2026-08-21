@@ -30,6 +30,65 @@ _PATH_OPTION_NAMES = frozenset(
 )
 
 
+# The published shape of one option's accepted value set. It has to match the
+# native CLI's record field for field, because the cross-surface checker
+# compares them directly: that comparison is what turns "one surface narrowed an
+# option and the other did not" from an invisible drift into a failure.
+#
+# ``rejectExit`` names the exit-code class the refusal carries. ``usage`` (2) is
+# an argparse-level rejection -- a ``type=`` callable or a ``choices=`` tuple --
+# and ``invalid_parameter`` (3) is a handler that rejects after parsing. Both
+# exist here, so the class is part of the declaration rather than something a
+# reader has to infer from where the check happens to live.
+_DOMAIN_ATTRIBUTE = "sonare_cli_domain"
+
+
+def _domain_record(
+    *,
+    choices: tuple[object, ...] | list[object] | None = None,
+    minimum: float | None = None,
+    exclusive_minimum: bool = False,
+    maximum: float | None = None,
+    exclusive_maximum: bool = False,
+    reject_exit: str = "usage",
+) -> dict[str, Any]:
+    """Build one published domain record."""
+    return {
+        "choices": [str(choice) for choice in (choices or ())],
+        "minimum": minimum,
+        "exclusiveMinimum": exclusive_minimum,
+        "maximum": maximum,
+        "exclusiveMaximum": exclusive_maximum,
+        "rejectExit": reject_exit,
+    }
+
+
+def _cli_domain(target: Any, **domain: Any) -> Any:
+    """Record the domain a type callable or a parser action enforces.
+
+    Returns @p target so a caller can wrap an ``add_argument`` result inline.
+    """
+    setattr(target, _DOMAIN_ATTRIBUTE, _domain_record(**domain))
+    return target
+
+
+def _action_domain(action: argparse.Action) -> dict[str, Any] | None:
+    """Return the published domain for one action, or None when unnarrowed.
+
+    A domain declared on the action itself wins: that is how an option the
+    parser accepts and the handler later refuses records its contract. Otherwise
+    an argparse ``choices=`` tuple and a domain recorded on the ``type=``
+    callable are both parser-level, so they publish the usage class.
+    """
+    declared = getattr(action, _DOMAIN_ATTRIBUTE, None)
+    if declared is not None:
+        return dict(declared)
+    if action.choices is not None and not isinstance(action.choices, dict):
+        return _domain_record(choices=list(action.choices))
+    type_domain = getattr(action.type, _DOMAIN_ATTRIBUTE, None)
+    return dict(type_domain) if type_domain is not None else None
+
+
 def _inventory_subparsers(parser: argparse.ArgumentParser) -> dict[str, argparse.ArgumentParser]:
     """Return named subparser choices from one argparse parser."""
     for action in parser._actions:
@@ -115,6 +174,7 @@ def _inventory_option(action: argparse.Action) -> dict[str, Any] | None:
         "aliases": aliases,
         "repeatable": repeatable,
         "required": required,
+        "domain": _action_domain(action),
     }
 
 

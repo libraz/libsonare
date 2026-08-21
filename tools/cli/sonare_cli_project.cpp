@@ -24,21 +24,19 @@
 // the same diagnostics to stderr.
 //
 // Usage exit code, mirroring kExitUsage in tools/sonare_cli.cpp. A missing or
-// blank `project` subcommand is a usage error; without this the handler's plain
-// `1` would be remapped to the project invalid-state code (9) by main().
+// blank `project` subcommand is a usage error, which is a different class from
+// the invalid-parameter code a plain `1` carries.
 constexpr int kExitUsage = 2;
 
 // Invalid-parameter exit code, mirroring kExitInvalidParameter in
-// tools/sonare_cli.cpp. main() remaps a plain `1` from any `project` handler to
-// the invalid-state code (9), on the assumption that a project-command failure
-// is a compile/load problem. A caller-supplied --sample-rate that disagrees
-// with the project's own rate is a parameter error, not a state one (and the
-// Python CLI reports it as its equivalent EXIT_INVALID_PARAMETER), so this
-// branch returns the code directly to bypass that remap.
+// tools/sonare_cli.cpp. This is what a plain `1` from any handler normalizes
+// to, so a branch only spells it out when it is returning the code alongside
+// others (see project_exit_code).
 constexpr int kExitInvalidParameter = 3;
 
 // Invalid-state exit code used when `project validate --strict` finds loader
-// diagnostics after still writing the canonical artifact and JSON payload.
+// diagnostics after still writing the canonical artifact and JSON payload, and
+// when the C ABI itself reports an invalid state.
 constexpr int kExitInvalidState = 9;
 
 // Upper bound on a project JSON / SMF / MIDI 2.0 file loaded into memory, mirrored
@@ -62,6 +60,38 @@ std::string project_error_string(SonareError err) {
 void project_report_error(const std::string& what, SonareError err) {
   std::cerr << color::red << "Error: " << what << ": " << project_error_string(err) << color::reset
             << "\n";
+}
+
+// Maps a C-ABI error onto the published exit-code contract. A project handler
+// that has the error in hand returns this instead of a plain 1: the failure
+// keeps the class it actually carries (a file that does not exist stays a
+// file-not-found, a rejected preset stays an invalid parameter) all the way out
+// to the caller, which is what makes the two CLIs agree per condition.
+int project_exit_code(SonareError err) {
+  switch (err) {
+    case SONARE_ERROR_FILE_NOT_FOUND:
+      return cli_exit_code_for_error(sonare::ErrorCode::FileNotFound, false);
+    case SONARE_ERROR_INVALID_FORMAT:
+      return cli_exit_code_for_error(sonare::ErrorCode::InvalidFormat, false);
+    case SONARE_ERROR_DECODE_FAILED:
+      return cli_exit_code_for_error(sonare::ErrorCode::DecodeFailed, false);
+    case SONARE_ERROR_INVALID_PARAMETER:
+      return cli_exit_code_for_error(sonare::ErrorCode::InvalidParameter, false);
+    case SONARE_ERROR_OUT_OF_MEMORY:
+      return cli_exit_code_for_error(sonare::ErrorCode::OutOfMemory, false);
+    case SONARE_ERROR_NOT_SUPPORTED:
+      return cli_exit_code_for_error(sonare::ErrorCode::NotImplemented, false);
+    case SONARE_ERROR_INVALID_STATE:
+      return kExitInvalidState;
+    case SONARE_ERROR_CANCELLED:
+      return cli_exit_code_for_error(sonare::ErrorCode::Cancelled, false);
+    case SONARE_ERROR_ENCODE_FAILED:
+      return cli_exit_code_for_error(sonare::ErrorCode::EncodeFailed, false);
+    case SONARE_OK:
+    case SONARE_ERROR_UNKNOWN:
+    default:
+      return kExitInvalidParameter;
+  }
 }
 
 // Reads an arbitrary file into a byte buffer (binary-safe). The CLI owns file
@@ -225,24 +255,21 @@ int cmd_project_synth_presets(const CliArgs& args) {
 }
 
 // `project new -o out.json` — create an empty project and serialize it to disk.
+// The registry declares `-o` required for this leaf, so the missing-output case
+// is refused before dispatch and is not re-checked here.
 int cmd_project_new(const CliArgs& args) {
-  if (args.output_file.empty()) {
-    std::cerr << color::red << "Error: project new requires output file (-o out.json)"
-              << color::reset << "\n";
-    return 1;
-  }
   ProjectHandle handle;
   SonareError err = sonare_project_create(&handle.ptr);
   if (err != SONARE_OK) {
     project_report_error("create project", err);
-    return 1;
+    return project_exit_code(err);
   }
   const double sample_rate = args.get_float("sample-rate", 0.0f);
   if (sample_rate > 0.0) {
     err = sonare_project_set_sample_rate(handle.ptr, sample_rate);
     if (err != SONARE_OK) {
       project_report_error("set sample rate", err);
-      return 1;
+      return project_exit_code(err);
     }
   }
   char* json = nullptr;
@@ -250,7 +277,7 @@ int cmd_project_new(const CliArgs& args) {
   err = sonare_project_serialize(handle.ptr, &json, &len);
   if (err != SONARE_OK) {
     project_report_error("serialize project", err);
-    return 1;
+    return project_exit_code(err);
   }
   const bool ok = write_binary_file(args.output_file, reinterpret_cast<const uint8_t*>(json), len);
   sonare_free_string(json);
@@ -286,7 +313,7 @@ int cmd_project_validate(const CliArgs& args) {
       throw sonare::SonareException(sonare::ErrorCode::InvalidFormat,
                                     "failed to parse project JSON");
     }
-    return 1;
+    return project_exit_code(load_error);
   }
   // A successful parse is valid even when the loader emitted repair/warning
   // diagnostics, and that is what the JSON payload reports. `--strict` promotes
@@ -301,7 +328,7 @@ int cmd_project_validate(const CliArgs& args) {
   SonareError err = sonare_project_serialize(handle.ptr, &json, &len);
   if (err != SONARE_OK) {
     project_report_error("serialize project", err);
-    return 1;
+    return project_exit_code(err);
   }
   if (!args.output_file.empty()) {
     const bool ok =
@@ -342,13 +369,15 @@ int cmd_project_validate(const CliArgs& args) {
 // timeline and surface diagnostics.
 int cmd_project_compile(const CliArgs& args) {
   ProjectHandle handle;
-  if (!load_project_from_args(args, &handle)) return 1;
+  SonareError load_error = SONARE_OK;
+  if (!load_project_from_args(args, &handle, nullptr, &load_error))
+    return project_exit_code(load_error);
   SonareProjectCompileResult result{};
   SonareError err = sonare_project_compile(handle.ptr, &result);
   if (err != SONARE_OK) {
     sonare_project_free_compile_result(&result);
     project_report_error("compile project", err);
-    return 1;
+    return project_exit_code(err);
   }
   const bool has_timeline = result.has_timeline != 0;
   if (args.json_output) {
@@ -388,11 +417,6 @@ int cmd_project_compile(const CliArgs& args) {
 // the bare flag follows GM bank/program changes and routes channel 10 through
 // the GM drum-kit map. Without --synth MIDI tracks render silently.
 int cmd_project_bounce(const CliArgs& args) {
-  if (args.output_file.empty()) {
-    std::cerr << color::red << "Error: project bounce requires output file (-o out.wav)"
-              << color::reset << "\n";
-    return 1;
-  }
   const bool use_synth = args.has("synth");
   SonareSynthInstrumentBinding synth_binding{};
   if (use_synth) {
@@ -403,20 +427,22 @@ int cmd_project_bounce(const CliArgs& args) {
     if (patch_error != SONARE_OK) {
       std::cerr << color::red << "Error: unknown synth preset '" << preset << "'" << color::reset
                 << "\n";
-      return 1;
+      return project_exit_code(patch_error);
     }
     synth_binding.destination_id = 0;
     synth_binding.use_gm_programs = auto_select_gm ? 1 : 0;
   }
 
   ProjectHandle handle;
-  if (!load_project_from_args(args, &handle)) return 1;
+  SonareError load_error = SONARE_OK;
+  if (!load_project_from_args(args, &handle, nullptr, &load_error))
+    return project_exit_code(load_error);
 
   double project_sample_rate = 0.0;
   SonareError sr_err = sonare_project_get_sample_rate(handle.ptr, &project_sample_rate);
   if (sr_err != SONARE_OK) {
     project_report_error("read project sample rate", sr_err);
-    return 1;
+    return project_exit_code(sr_err);
   }
 
   SonareProjectBounceOptions options{};
@@ -450,7 +476,7 @@ int cmd_project_bounce(const CliArgs& args) {
                               : sonare_project_bounce(handle.ptr, &options, &interleaved, &total);
   if (err != SONARE_OK) {
     project_report_error("bounce project", err);
-    return 1;
+    return project_exit_code(err);
   }
   const int channels = options.num_channels > 0 ? options.num_channels : 2;
   // The WAV header sample rate equals the render rate the engine used (see above).
@@ -482,20 +508,17 @@ int cmd_project_bounce(const CliArgs& args) {
 // `project export-smf --in in.json -o out.mid` — export the project's tempo map
 // + MIDI clips to a Standard MIDI File.
 int cmd_project_export_smf(const CliArgs& args) {
-  if (args.output_file.empty()) {
-    std::cerr << color::red << "Error: project export-smf requires output file (-o out.mid)"
-              << color::reset << "\n";
-    return 1;
-  }
   ProjectHandle handle;
-  if (!load_project_from_args(args, &handle)) return 1;
+  SonareError load_error = SONARE_OK;
+  if (!load_project_from_args(args, &handle, nullptr, &load_error))
+    return project_exit_code(load_error);
 
   uint8_t* bytes = nullptr;
   size_t len = 0;
   SonareError err = sonare_project_export_smf(handle.ptr, &bytes, &len);
   if (err != SONARE_OK) {
     project_report_error("export SMF", err);
-    return 1;
+    return project_exit_code(err);
   }
   const bool ok = write_binary_file(args.output_file, bytes, len);
   sonare_free_bytes(bytes);
@@ -520,20 +543,17 @@ int cmd_project_export_smf(const CliArgs& args) {
 // `project export-midi2 --in in.json -o out.midi2` — export the project's tempo
 // map + MIDI clips to a MIDI 2.0 Clip File.
 int cmd_project_export_midi2(const CliArgs& args) {
-  if (args.output_file.empty()) {
-    std::cerr << color::red << "Error: project export-midi2 requires output file (-o out.midi2)"
-              << color::reset << "\n";
-    return 1;
-  }
   ProjectHandle handle;
-  if (!load_project_from_args(args, &handle)) return 1;
+  SonareError load_error = SONARE_OK;
+  if (!load_project_from_args(args, &handle, nullptr, &load_error))
+    return project_exit_code(load_error);
 
   uint8_t* bytes = nullptr;
   size_t len = 0;
   SonareError err = sonare_project_export_clip_file(handle.ptr, &bytes, &len);
   if (err != SONARE_OK) {
     project_report_error("export MIDI2 Clip File", err);
-    return 1;
+    return project_exit_code(err);
   }
   const bool ok = write_binary_file(args.output_file, bytes, len);
   sonare_free_bytes(bytes);
@@ -558,11 +578,6 @@ int cmd_project_export_midi2(const CliArgs& args) {
 // `project import-smf --smf in.mid -o out.json` — import an SMF into a new
 // project and serialize it to JSON.
 int cmd_project_import_smf(const CliArgs& args) {
-  if (args.output_file.empty()) {
-    std::cerr << color::red << "Error: project import-smf requires output file (-o out.json)"
-              << color::reset << "\n";
-    return 1;
-  }
   const std::string smf_path = args.get_string("smf");
   if (smf_path.empty()) {
     std::cerr << color::red << "Error: missing SMF input (use --smf <file.mid>)" << color::reset
@@ -578,20 +593,20 @@ int cmd_project_import_smf(const CliArgs& args) {
   SonareError err = sonare_project_create(&handle.ptr);
   if (err != SONARE_OK) {
     project_report_error("create project", err);
-    return 1;
+    return project_exit_code(err);
   }
   uint32_t first_clip = 0;
   err = sonare_project_import_smf(handle.ptr, smf.data(), smf.size(), &first_clip);
   if (err != SONARE_OK) {
     project_report_error("import SMF", err);
-    return 1;
+    return project_exit_code(err);
   }
   char* json = nullptr;
   size_t len = 0;
   err = sonare_project_serialize(handle.ptr, &json, &len);
   if (err != SONARE_OK) {
     project_report_error("serialize project", err);
-    return 1;
+    return project_exit_code(err);
   }
   const bool ok = write_binary_file(args.output_file, reinterpret_cast<const uint8_t*>(json), len);
   sonare_free_string(json);
@@ -616,11 +631,6 @@ int cmd_project_import_smf(const CliArgs& args) {
 // `project import-midi2 --midi2 in.midi2 -o out.json` — import a MIDI 2.0 Clip
 // File into a new project and serialize it to JSON.
 int cmd_project_import_midi2(const CliArgs& args) {
-  if (args.output_file.empty()) {
-    std::cerr << color::red << "Error: project import-midi2 requires output file (-o out.json)"
-              << color::reset << "\n";
-    return 1;
-  }
   const std::string midi2_path = args.get_string("midi2");
   if (midi2_path.empty()) {
     std::cerr << color::red << "Error: missing MIDI2 input (use --midi2 <file.midi2>)"
@@ -637,20 +647,20 @@ int cmd_project_import_midi2(const CliArgs& args) {
   SonareError err = sonare_project_create(&handle.ptr);
   if (err != SONARE_OK) {
     project_report_error("create project", err);
-    return 1;
+    return project_exit_code(err);
   }
   uint32_t first_clip = 0;
   err = sonare_project_import_clip_file(handle.ptr, midi2.data(), midi2.size(), &first_clip);
   if (err != SONARE_OK) {
     project_report_error("import MIDI2 Clip File", err);
-    return 1;
+    return project_exit_code(err);
   }
   char* json = nullptr;
   size_t len = 0;
   err = sonare_project_serialize(handle.ptr, &json, &len);
   if (err != SONARE_OK) {
     project_report_error("serialize project", err);
-    return 1;
+    return project_exit_code(err);
   }
   const bool ok = write_binary_file(args.output_file, reinterpret_cast<const uint8_t*>(json), len);
   sonare_free_string(json);

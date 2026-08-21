@@ -139,6 +139,9 @@ from ._cli_common import (
 )
 from ._cli_effects import *  # noqa: F403
 from ._cli_inventory import (
+    _cli_domain as _cli_domain,
+)
+from ._cli_inventory import (
     _inventory_option as _inventory_option,
 )
 from ._cli_inventory import (
@@ -228,6 +231,31 @@ def _positive_int(value: str) -> int:
     if parsed <= 0:
         raise argparse.ArgumentTypeError("must be a positive integer")
     return parsed
+
+
+# The accepted value set each of the checkers above enforces, in the shape the
+# published inventory uses.  A ``type=`` callable is opaque to argparse, so the
+# domain it applies is recorded on the callable itself: the declaration then
+# lives next to the code that enforces it, and the cross-surface checker can
+# compare it with the native CLI's registry instead of assuming the two agree.
+_cli_domain(_nonnegative_finite_float, minimum=0.0)
+_cli_domain(_positive_pitch_frequency, minimum=0.0, exclusive_minimum=True)
+_cli_domain(_pitch_threshold, minimum=0.0, exclusive_minimum=True, maximum=1.0)
+_cli_domain(_positive_int, minimum=0.0, exclusive_minimum=True)
+
+
+def _add_wav_bits_argument(parser: argparse.ArgumentParser) -> argparse.Action:
+    """Add ``--bits`` with the accepted set ``_wav_bits`` enforces.
+
+    argparse accepts any integer here; the handler refuses anything but 16 or
+    24 after parsing, which is why the domain records the invalid-parameter
+    class rather than the usage one.
+    """
+    return _cli_domain(
+        parser.add_argument("--bits", type=int, default=16),
+        choices=(16, 24),
+        reject_exit="invalid_parameter",
+    )
 
 
 def _validate_pitch_namespace(args: argparse.Namespace, parser: argparse.ArgumentParser) -> None:
@@ -502,7 +530,13 @@ def _build_parser() -> _ContractArgumentParser:
     # Pitch is a stdout-only analysis command. Its frequency/threshold domains
     # mirror the PitchConfig checks in the core API.
     pitch_p = sub.add_parser("pitch", parents=[stdout_options], help="Track pitch")
-    pitch_p.add_argument("--algorithm", default="pyin")
+    # cmd_pitch raises for any other name, so the accepted set is declared here
+    # even though argparse itself does not enforce it.
+    _cli_domain(
+        pitch_p.add_argument("--algorithm", default="pyin"),
+        choices=("yin", "pyin"),
+        reject_exit="invalid_parameter",
+    )
     pitch_p.add_argument(
         "--threshold",
         type=_pitch_threshold,
@@ -795,7 +829,7 @@ def _build_parser() -> _ContractArgumentParser:
     mastering_p.add_argument("--target-lufs", type=float, default=-14.0)
     mastering_p.add_argument("--ceiling-db", type=float, default=-1.0)
     mastering_p.add_argument("--params", default="")
-    mastering_p.add_argument("--bits", type=int, default=16)
+    _add_wav_bits_argument(mastering_p)
     mastering_p.add_argument(
         "--true-peak-oversample", type=int, choices=(1, 2, 4, 8, 16), default=4
     )
@@ -808,7 +842,7 @@ def _build_parser() -> _ContractArgumentParser:
     )
     mproc_p.add_argument("--processor", required=True, help="Processor name")
     mproc_p.add_argument("--params", default="", help="Params as k=v,k=v (floats)")
-    mproc_p.add_argument("--bits", type=int, default=16)
+    _add_wav_bits_argument(mproc_p)
     mproc_p.add_argument("--stereo", action="store_true")
     eq_p = sub.add_parser("eq", parents=[common], help="Apply the unified equalizer")
     eq_p.add_argument("--params", default="", help="Params as k=v,k=v (overrides band shortcuts)")
@@ -858,7 +892,7 @@ def _build_parser() -> _ContractArgumentParser:
     )
     eq_p.add_argument("--sidechain-freq-hz", type=float, default=-1.0)
     eq_p.add_argument("--sidechain-q", type=float, default=1.0)
-    eq_p.add_argument("--bits", type=int, default=16)
+    _add_wav_bits_argument(eq_p)
     sub.add_parser(
         "mastering-processors", parents=[stdout_options], help="List mastering processor names"
     )

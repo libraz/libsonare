@@ -38,7 +38,49 @@ def test_dump_cli_contract_uses_argparse_actions_and_schema_v2(monkeypatch, caps
     assert _option(chroma_record, "n-fft")["default"] == 4096
     for command in payload["commands"]:
         for option in command["options"]:
-            assert set(option) == {"name", "type", "default", "aliases", "repeatable", "required"}
+            assert set(option) == {
+                "name",
+                "type",
+                "default",
+                "aliases",
+                "repeatable",
+                "required",
+                "domain",
+            }
+
+    # The accepted value set an option narrows, published so the cross-surface
+    # checker can compare it with the native registry. A parse-time domain (a
+    # `type=` callable or a `choices=` tuple) reports the usage class; one the
+    # handler enforces after parsing reports the invalid-parameter class.
+    pitch_record = next(command for command in payload["commands"] if command["path"] == "pitch")
+    assert _option(pitch_record, "fmin")["domain"] == {
+        "choices": [],
+        "minimum": 0.0,
+        "exclusiveMinimum": True,
+        "maximum": None,
+        "exclusiveMaximum": False,
+        "rejectExit": "usage",
+    }
+    assert _option(pitch_record, "algorithm")["domain"] == {
+        "choices": ["yin", "pyin"],
+        "minimum": None,
+        "exclusiveMinimum": False,
+        "maximum": None,
+        "exclusiveMaximum": False,
+        "rejectExit": "invalid_parameter",
+    }
+    mastering_record = next(
+        command for command in payload["commands"] if command["path"] == "mastering"
+    )
+    assert _option(mastering_record, "true-peak-oversample")["domain"]["choices"] == [
+        "1",
+        "2",
+        "4",
+        "8",
+        "16",
+    ]
+    # An option nobody narrowed says so explicitly rather than omitting the key.
+    assert _option(chroma_record, "n-fft")["domain"] is None
 
 
 def test_inventory_preserves_required_repeatable_and_none_defaults() -> None:

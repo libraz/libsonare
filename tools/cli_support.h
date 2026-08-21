@@ -103,14 +103,41 @@ struct CliArgs {
   std::vector<std::string> get_string_list(const std::string& k) const;
 };
 
-/// Validates command-specific option names, required option values, and
-/// positional arity. Returns an empty string when the invocation is valid.
-std::string validate_cli_arguments(const CliArgs& args, bool requires_audio);
+/// One rejected invocation. `message` is empty when the invocation is valid.
+///
+/// `invalid_parameter` selects between the two exit codes the CLI contract
+/// publishes for a refused argument: false is the usage code (2), true is the
+/// invalid-parameter code (3). Which one an option uses is part of that
+/// option's contract rather than a property of the checking code, because the
+/// two CLIs must agree per option -- see CliOptionDomainStage.
+struct CliValidationError {
+  std::string message;
+  bool invalid_parameter = false;
+
+  bool empty() const noexcept { return message.empty(); }
+};
+
+/// Validates command-specific option names, required option values, option
+/// value domains, and positional arity. Returns an empty error when the
+/// invocation is valid. Every option check the CLI performs before handler
+/// dispatch runs here, driven by the registry: a handler never repeats one.
+CliValidationError validate_cli_arguments(const CliArgs& args, bool requires_audio);
 std::vector<std::string> cli_options_for_command(const std::string& command);
 
 enum class CliOptionArity { Flag, RequiredValue, OptionalValue };
 enum class CliOptionScalarType { Boolean, Integer, Number, Path, String };
 enum class CliOptionDefaultKind { Null, Boolean, Integer, Number, String, StringArray };
+
+/// Where a refused option value or a missing required option is reported.
+///
+/// `Usage` is the parse-time class (exit 2) and mirrors an argparse-level
+/// rejection on the Python CLI -- a `type=` callable or a `choices=` tuple.
+/// `Parameter` is the semantic class (exit 3) and mirrors a Python handler that
+/// raises after parsing. Both CLIs publish one exit-code contract for a `shared`
+/// command, so the stage has to be declared per option next to the domain
+/// itself; deciding it inside the validator would make every option that needs
+/// the other class an exception written somewhere else.
+enum class CliOptionDomainStage { Usage, Parameter };
 
 /// A typed value in the immutable CLI registry.  `Null` means that the option
 /// has no static default; it is also how required values are represented.
@@ -123,10 +150,32 @@ struct CliOptionValue {
   std::vector<std::string> string_array_value;
 };
 
+/// The accepted value set for one option, beyond what its scalar type parses.
+///
+/// An empty domain accepts every value the type parses, which is the state of
+/// an option whose contract has not been narrowed. Bounds apply to Integer and
+/// Number options; `choices` is compared as a parsed number for those and as a
+/// literal for String and Path options. Exclusive bounds exist because the
+/// Python CLI expresses several domains that way (`> 0`, `> 0 and <= 1`).
+struct CliOptionDomain {
+  bool has_minimum = false;
+  double minimum = 0.0;
+  bool exclusive_minimum = false;
+  bool has_maximum = false;
+  double maximum = 0.0;
+  bool exclusive_maximum = false;
+  std::vector<std::string> choices;
+  CliOptionDomainStage stage = CliOptionDomainStage::Usage;
+
+  bool empty() const noexcept { return !has_minimum && !has_maximum && choices.empty(); }
+};
+
 /// One option contract.  `global_lexical` means the parser may recognize the
 /// spelling before the command/path is known; validation still gates it by the
 /// selected leaf's option list.  `implicit_optional_default` is used for a
-/// bare optional-value occurrence (for example `--synth`).
+/// bare optional-value occurrence (for example `--synth`).  `domain` and
+/// `required_stage` are the option's accepted-value and presence contracts;
+/// `validate_cli_arguments` is the only place either is enforced.
 struct CliOptionSpec {
   std::string name;
   std::vector<std::string> aliases;
@@ -135,10 +184,21 @@ struct CliOptionSpec {
   CliOptionValue default_value;
   CliOptionValue implicit_optional_default;
   bool required = false;
+  /// Which exit class a missing required option reports. A registry-required
+  /// option is a usage error by default; an option the Python CLI leaves
+  /// optional in its parser and rejects in its handler declares Parameter so
+  /// both CLIs refuse the same invocation with the same code.
+  CliOptionDomainStage required_stage = CliOptionDomainStage::Usage;
+  CliOptionDomain domain;
   bool repeatable = false;
   bool global_lexical = false;
   bool inventory = true;
 };
+
+/// A command-level check for a constraint that spans two options (for example
+/// `--fmin` against `--fmax`), which no per-option domain can express. Returns
+/// an empty error when the combination is accepted.
+using CliCommandValidator = CliValidationError (*)(const CliArgs&);
 
 /// A leaf command/path contract.  Project routes are represented as the ten
 /// `project.<subcommand>` leaves rather than one broad project schema.
@@ -148,6 +208,8 @@ struct CliCommandSpec {
   std::vector<CliOptionSpec> options;
   bool requires_audio = false;
   bool inventory = true;
+  /// Cross-option constraint, run after every per-option check passes.
+  CliCommandValidator validate = nullptr;
 };
 
 /// The single native CLI option/path registry. The returned vector and all of
@@ -179,6 +241,11 @@ struct CliOptionMetadata {
   bool inventory = true;
   bool has_implicit_optional_default = false;
   CliOptionValue implicit_optional_default;
+  /// Projected verbatim so the contract dump publishes the accepted value set,
+  /// which is what lets the cross-surface checker compare it with the Python
+  /// parser's `choices=` / `type=` domains instead of assuming they agree.
+  CliOptionDomain domain;
+  CliOptionDomainStage required_stage = CliOptionDomainStage::Usage;
 };
 
 std::vector<CliOptionMetadata> cli_option_metadata_for_command(const std::string& command);

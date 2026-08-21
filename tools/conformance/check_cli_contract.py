@@ -265,11 +265,13 @@ def _validate_text_expectations(case: Any, label: str, errors: list[str]) -> Non
 def _validate_option(option: Any, label: str, errors: list[str]) -> None:
     if not _exact(
         option,
-        {"name", "type", "default", "aliases", "repeatable", "required"},
+        {"name", "type", "default", "aliases", "repeatable", "required", "domain"},
         label,
         errors,
     ):
         return
+    if not _domain_is_well_formed(option["domain"]):
+        errors.append(f"{label}.domain: expected null or a domain record")
     if not isinstance(option["name"], str) or not option["name"]:
         errors.append(f"{label}.name: expected a non-empty string")
     type_is_valid = _type_token(option["type"], f"{label}.type", errors)
@@ -842,6 +844,7 @@ def validate_manifest(manifest: Any) -> list[str]:
             "aliases",
             "repeatable",
             "required",
+            "domain",
         ]:
             errors.append("manifest.inventory.option_fields: unexpected field order")
         expected_options = inventory["expected_options"]
@@ -1908,7 +1911,41 @@ _OPTION_RECORD_FIELDS = {
     "aliases",
     "repeatable",
     "required",
+    "domain",
 }
+
+# One option's accepted value set, published by both surfaces so the comparison
+# below can see a domain that only one of them declares.  ``rejectExit`` names
+# the exit-code class the refusal carries: ``usage`` (2) is a parse-time
+# rejection and ``invalid_parameter`` (3) is a handler that refuses after
+# parsing.  Both CLIs report some domains each way, so a shared command has to
+# agree on the class as well as on the values.
+_DOMAIN_RECORD_FIELDS = {
+    "choices",
+    "minimum",
+    "exclusiveMinimum",
+    "maximum",
+    "exclusiveMaximum",
+    "rejectExit",
+}
+_DOMAIN_REJECT_EXITS = {"usage", "invalid_parameter"}
+
+
+def _domain_is_well_formed(domain: Any) -> bool:
+    """Return whether one domain value is safe to compare."""
+    if domain is None:
+        return True
+    return (
+        isinstance(domain, dict)
+        and set(domain) == _DOMAIN_RECORD_FIELDS
+        and isinstance(domain["choices"], list)
+        and all(isinstance(choice, str) for choice in domain["choices"])
+        and (domain["minimum"] is None or isinstance(domain["minimum"], (int, float)))
+        and (domain["maximum"] is None or isinstance(domain["maximum"], (int, float)))
+        and isinstance(domain["exclusiveMinimum"], bool)
+        and isinstance(domain["exclusiveMaximum"], bool)
+        and domain["rejectExit"] in _DOMAIN_REJECT_EXITS
+    )
 
 
 def _option_inventory_is_well_formed(options: Any) -> bool:
@@ -1927,6 +1964,7 @@ def _option_inventory_is_well_formed(options: Any) -> bool:
         and all(isinstance(alias, str) for alias in option["aliases"])
         and isinstance(option.get("repeatable"), bool)
         and isinstance(option.get("required"), bool)
+        and _domain_is_well_formed(option.get("domain"))
         for option in options
     )
 
@@ -1952,6 +1990,7 @@ def _normalized_option_inventory(
             "aliases": sorted(option["aliases"]),
             "repeatable": option["repeatable"],
             "required": option["required"],
+            "domain": option["domain"],
         }
         for option in sorted(options, key=lambda item: item["name"])
     ]

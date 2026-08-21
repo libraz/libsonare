@@ -199,17 +199,18 @@ int cmd_spectral(const CliArgs& args, const Audio& audio) {
 }
 
 int cmd_pitch(const CliArgs& args, const Audio& audio) {
+  // Every domain this command has -- the frequency and threshold ranges, the
+  // algorithm name, and fmax > fmin -- is declared in the registry and enforced
+  // before dispatch. Reading the values here means reading values that already
+  // passed, so an out-of-range frequency is no longer substituted with the
+  // default it happens to sit next to.
   PitchConfig config;
-  config.fmin = args.fmin > 0.0f ? args.fmin : 65.0f;
-  config.fmax = args.fmax > 0.0f ? args.fmax : 2093.0f;
+  config.fmin = args.get_float("fmin", 65.0f);
+  config.fmax = args.get_float("fmax", 2093.0f);
   config.threshold = args.get_float("threshold", 0.1f);
-  config.hop_length = args.hop_length;
+  config.hop_length = args.get_int("hop-length", 512);
 
-  std::string algo = args.get_string("algorithm", "pyin");
-  if (algo != "yin" && algo != "pyin") {
-    std::cerr << color::red << "Error: --algorithm must be 'yin' or 'pyin'" << color::reset << "\n";
-    return 1;
-  }
+  const std::string algo = args.get_string("algorithm", "pyin");
   PitchResult result = (algo == "yin") ? yin_track(audio, config) : pyin(audio, config);
 
   int voiced = std::count(result.voiced_flag.begin(), result.voiced_flag.end(), true);
@@ -429,11 +430,6 @@ int cmd_vqt(const CliArgs& args, const Audio& audio) {
 }
 
 int cmd_mel_to_audio(const CliArgs& args, const Audio& audio) {
-  if (args.output_file.empty()) {
-    std::cerr << color::red << "Error: mel-to-audio requires output file (-o)" << color::reset
-              << "\n";
-    return 1;
-  }
   MelConfig config;
   config.n_mels = args.n_mels;
   config.n_fft = args.n_fft;
@@ -464,11 +460,6 @@ int cmd_mel_to_audio(const CliArgs& args, const Audio& audio) {
 }
 
 int cmd_mfcc_to_audio(const CliArgs& args, const Audio& audio) {
-  if (args.output_file.empty()) {
-    std::cerr << color::red << "Error: mfcc-to-audio requires output file (-o)" << color::reset
-              << "\n";
-    return 1;
-  }
   MelConfig config;
   config.n_mels = args.n_mels;
   config.n_fft = args.n_fft;
@@ -582,11 +573,6 @@ sonare::acoustic::SourceListener cli_placement(const CliArgs& args) {
 }  // namespace
 
 int cmd_synthesize_rir(const CliArgs& args, const Audio&) {
-  if (args.output_file.empty()) {
-    std::cerr << color::red << "Error: synthesize-rir requires output file (-o)" << color::reset
-              << "\n";
-    return 1;
-  }
   const int sample_rate = args.get_int("sample-rate", 48000);
   sonare::acoustic::RirSynthConfig cfg;
   cfg.ism_order = args.get_int("ism-order", cfg.ism_order);
@@ -671,11 +657,6 @@ int cmd_estimate_room(const CliArgs& args, const Audio& audio) {
 }
 
 int cmd_room_morph(const CliArgs& args, const Audio& audio) {
-  if (args.output_file.empty()) {
-    std::cerr << color::red << "Error: room-morph requires output file (-o)" << color::reset
-              << "\n";
-    return 1;
-  }
   sonare::effects::acoustic::RoomMorphConfig cfg;
   cfg.target = cli_room(args, 0.2f);
   cfg.placement = cli_placement(args);

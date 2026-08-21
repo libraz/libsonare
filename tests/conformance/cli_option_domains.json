@@ -1,0 +1,256 @@
+{
+  "schema_version": 1,
+  "contract": "native-cli-option-domains",
+  "comment": [
+    "The accepted value set of every native CLI option whose contract is narrower",
+    "than its scalar type, and every required option whose absence is reported as",
+    "an invalid parameter rather than a usage error.",
+    "",
+    "This is the declaration the two CLIs agree on. rejectExit names the exit-code",
+    "class the refusal carries: 'usage' (2) is what the Python parser reports for a",
+    "type=/choices= rejection, and 'invalid_parameter' (3) is what its handler",
+    "reports after parsing. tests/conformance/cli_contract_v2.json drives the same",
+    "values through both executables; this file is what the native registry is",
+    "pinned against, so a domain cannot be added, moved between classes, or dropped",
+    "without the change showing up here."
+  ],
+  "domains": [
+    {
+      "command": "analyze",
+      "option": "chroma-highpass",
+      "rejectExit": "usage",
+      "choices": [],
+      "minimum": 0.0,
+      "exclusiveMinimum": false,
+      "maximum": null,
+      "exclusiveMaximum": false
+    },
+    {
+      "command": "eq",
+      "option": "bits",
+      "rejectExit": "invalid_parameter",
+      "choices": [
+        "16",
+        "24"
+      ],
+      "minimum": null,
+      "exclusiveMinimum": false,
+      "maximum": null,
+      "exclusiveMaximum": false
+    },
+    {
+      "command": "mastering",
+      "option": "bits",
+      "rejectExit": "invalid_parameter",
+      "choices": [
+        "16",
+        "24"
+      ],
+      "minimum": null,
+      "exclusiveMinimum": false,
+      "maximum": null,
+      "exclusiveMaximum": false
+    },
+    {
+      "command": "mastering",
+      "option": "true-peak-oversample",
+      "rejectExit": "usage",
+      "choices": [
+        "1",
+        "2",
+        "4",
+        "8",
+        "16"
+      ],
+      "minimum": null,
+      "exclusiveMinimum": false,
+      "maximum": null,
+      "exclusiveMaximum": false
+    },
+    {
+      "command": "mastering-pair-processor",
+      "option": "bits",
+      "rejectExit": "invalid_parameter",
+      "choices": [
+        "16",
+        "24"
+      ],
+      "minimum": null,
+      "exclusiveMinimum": false,
+      "maximum": null,
+      "exclusiveMaximum": false
+    },
+    {
+      "command": "mastering-processor",
+      "option": "bits",
+      "rejectExit": "invalid_parameter",
+      "choices": [
+        "16",
+        "24"
+      ],
+      "minimum": null,
+      "exclusiveMinimum": false,
+      "maximum": null,
+      "exclusiveMaximum": false
+    },
+    {
+      "command": "pitch",
+      "option": "algorithm",
+      "rejectExit": "invalid_parameter",
+      "choices": [
+        "yin",
+        "pyin"
+      ],
+      "minimum": null,
+      "exclusiveMinimum": false,
+      "maximum": null,
+      "exclusiveMaximum": false
+    },
+    {
+      "command": "pitch",
+      "option": "fmax",
+      "rejectExit": "usage",
+      "choices": [],
+      "minimum": 0.0,
+      "exclusiveMinimum": true,
+      "maximum": null,
+      "exclusiveMaximum": false
+    },
+    {
+      "command": "pitch",
+      "option": "fmin",
+      "rejectExit": "usage",
+      "choices": [],
+      "minimum": 0.0,
+      "exclusiveMinimum": true,
+      "maximum": null,
+      "exclusiveMaximum": false
+    },
+    {
+      "command": "pitch",
+      "option": "hop-length",
+      "rejectExit": "usage",
+      "choices": [],
+      "minimum": 0.0,
+      "exclusiveMinimum": true,
+      "maximum": null,
+      "exclusiveMaximum": false
+    },
+    {
+      "command": "pitch",
+      "option": "threshold",
+      "rejectExit": "usage",
+      "choices": [],
+      "minimum": 0.0,
+      "exclusiveMinimum": true,
+      "maximum": 1.0,
+      "exclusiveMaximum": false
+    }
+  ],
+  "requiredInvalidParameter": [
+    {
+      "command": "chirp",
+      "option": "output"
+    },
+    {
+      "command": "clicks",
+      "option": "output"
+    },
+    {
+      "command": "deemphasis",
+      "option": "output"
+    },
+    {
+      "command": "fade",
+      "option": "output"
+    },
+    {
+      "command": "filter",
+      "option": "output"
+    },
+    {
+      "command": "gain",
+      "option": "output"
+    },
+    {
+      "command": "hpss",
+      "option": "output"
+    },
+    {
+      "command": "mel-to-audio",
+      "option": "output"
+    },
+    {
+      "command": "mfcc-to-audio",
+      "option": "output"
+    },
+    {
+      "command": "normalize",
+      "option": "output"
+    },
+    {
+      "command": "note-stretch",
+      "option": "output"
+    },
+    {
+      "command": "pitch-correct",
+      "option": "output"
+    },
+    {
+      "command": "pitch-shift",
+      "option": "output"
+    },
+    {
+      "command": "preemphasis",
+      "option": "output"
+    },
+    {
+      "command": "project.bounce",
+      "option": "output"
+    },
+    {
+      "command": "project.export-midi2",
+      "option": "output"
+    },
+    {
+      "command": "project.export-smf",
+      "option": "output"
+    },
+    {
+      "command": "project.import-midi2",
+      "option": "output"
+    },
+    {
+      "command": "project.import-smf",
+      "option": "output"
+    },
+    {
+      "command": "project.new",
+      "option": "output"
+    },
+    {
+      "command": "resample",
+      "option": "output"
+    },
+    {
+      "command": "room-morph",
+      "option": "output"
+    },
+    {
+      "command": "synthesize-rir",
+      "option": "output"
+    },
+    {
+      "command": "time-stretch",
+      "option": "output"
+    },
+    {
+      "command": "tone",
+      "option": "output"
+    },
+    {
+      "command": "voice-change",
+      "option": "output"
+    }
+  ]
+}

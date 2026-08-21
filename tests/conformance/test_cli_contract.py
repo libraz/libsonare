@@ -833,6 +833,7 @@ class CliContractSelfTest(unittest.TestCase):
             "aliases": [],
             "repeatable": False,
             "required": True,
+            "domain": None,
         }
         errors: list[str] = []
         CHECKER._validate_option(required, "required", errors)
@@ -852,6 +853,7 @@ class CliContractSelfTest(unittest.TestCase):
             "aliases": [],
             "repeatable": True,
             "required": False,
+            "domain": None,
         }
         errors.clear()
         CHECKER._validate_option(repeatable, "repeatable", errors)
@@ -874,6 +876,7 @@ class CliContractSelfTest(unittest.TestCase):
             "aliases": [],
             "repeatable": False,
             "required": False,
+            "domain": None,
         }
         errors.clear()
         CHECKER._validate_option(optional_number, "optional_number", errors)
@@ -902,6 +905,14 @@ class CliContractSelfTest(unittest.TestCase):
                 "aliases": ["z", "zz"],
                 "repeatable": False,
                 "required": False,
+                "domain": {
+                    "choices": ["one", "two"],
+                    "minimum": None,
+                    "exclusiveMinimum": False,
+                    "maximum": None,
+                    "exclusiveMaximum": False,
+                    "rejectExit": "usage",
+                },
             },
             {
                 "name": "alpha",
@@ -910,6 +921,7 @@ class CliContractSelfTest(unittest.TestCase):
                 "aliases": ["a"],
                 "repeatable": True,
                 "required": False,
+                "domain": None,
             },
         ]
         reordered = [copy.deepcopy(options[0]), copy.deepcopy(options[1])]
@@ -919,18 +931,47 @@ class CliContractSelfTest(unittest.TestCase):
             CHECKER._normalized_option_inventory(options),
             CHECKER._normalized_option_inventory(reordered),
         )
-        for field, value in (
-            ("type", "path"),
-            ("default", "drifted"),
-            ("aliases", ["different"]),
-            ("repeatable", False),
+        # `reordered` is reversed, so index 0 is the option without a domain and
+        # index 1 is the one that declares it. Drifting each in turn covers both
+        # directions of the case this field exists to surface: an option one
+        # surface narrows and the other does not.
+        for index, field, value in (
+            (0, "type", "path"),
+            (0, "default", "drifted"),
+            (0, "aliases", ["different"]),
+            (0, "repeatable", False),
+            (
+                0,
+                "domain",
+                {
+                    "choices": ["one", "two"],
+                    "minimum": None,
+                    "exclusiveMinimum": False,
+                    "maximum": None,
+                    "exclusiveMaximum": False,
+                    "rejectExit": "usage",
+                },
+            ),
+            (1, "domain", None),
+            (
+                1,
+                "domain",
+                {
+                    "choices": ["one", "two"],
+                    "minimum": None,
+                    "exclusiveMinimum": False,
+                    "maximum": None,
+                    "exclusiveMaximum": False,
+                    "rejectExit": "invalid_parameter",
+                },
+            ),
         ):
             drifted = copy.deepcopy(reordered)
-            drifted[0][field] = value
+            drifted[index][field] = value
             self.assertNotEqual(
                 CHECKER._normalized_option_inventory(options),
                 CHECKER._normalized_option_inventory(drifted),
-                field,
+                f"{field}[{index}]",
             )
 
 

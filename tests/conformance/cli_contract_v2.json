@@ -31,7 +31,8 @@
       "default",
       "aliases",
       "repeatable",
-      "required"
+      "required",
+      "domain"
     ],
     "expected_options": {
       "acoustic": [
@@ -41,7 +42,8 @@
           "default": false,
           "aliases": [],
           "repeatable": false,
-          "required": false
+          "required": false,
+          "domain": null
         },
         {
           "name": "json",
@@ -49,7 +51,8 @@
           "default": false,
           "aliases": [],
           "repeatable": false,
-          "required": false
+          "required": false,
+          "domain": null
         },
         {
           "name": "min-decay-db",
@@ -57,7 +60,8 @@
           "default": 30,
           "aliases": [],
           "repeatable": false,
-          "required": false
+          "required": false,
+          "domain": null
         },
         {
           "name": "n-bands",
@@ -65,7 +69,8 @@
           "default": 6,
           "aliases": [],
           "repeatable": false,
-          "required": false
+          "required": false,
+          "domain": null
         },
         {
           "name": "noise-floor-margin-db",
@@ -73,7 +78,8 @@
           "default": 10,
           "aliases": [],
           "repeatable": false,
-          "required": false
+          "required": false,
+          "domain": null
         }
       ],
       "analyze": [
@@ -83,7 +89,15 @@
           "default": 80,
           "aliases": [],
           "repeatable": false,
-          "required": false
+          "required": false,
+          "domain": {
+            "choices": [],
+            "minimum": 0,
+            "exclusiveMinimum": false,
+            "maximum": null,
+            "exclusiveMaximum": false,
+            "rejectExit": "usage"
+          }
         },
         {
           "name": "json",
@@ -91,7 +105,8 @@
           "default": false,
           "aliases": [],
           "repeatable": false,
-          "required": false
+          "required": false,
+          "domain": null
         },
         {
           "name": "no-hpss",
@@ -99,7 +114,8 @@
           "default": false,
           "aliases": [],
           "repeatable": false,
-          "required": false
+          "required": false,
+          "domain": null
         },
         {
           "name": "with-seventh",
@@ -107,7 +123,8 @@
           "default": false,
           "aliases": [],
           "repeatable": false,
-          "required": false
+          "required": false,
+          "domain": null
         }
       ],
       "beats": [
@@ -117,7 +134,8 @@
           "default": false,
           "aliases": [],
           "repeatable": false,
-          "required": false
+          "required": false,
+          "domain": null
         }
       ],
       "bpm": [
@@ -127,7 +145,8 @@
           "default": false,
           "aliases": [],
           "repeatable": false,
-          "required": false
+          "required": false,
+          "domain": null
         }
       ],
       "chords": [
@@ -137,7 +156,8 @@
           "default": false,
           "aliases": [],
           "repeatable": false,
-          "required": false
+          "required": false,
+          "domain": null
         },
         {
           "name": "hmm-beam-width",
@@ -145,7 +165,8 @@
           "default": 24,
           "aliases": [],
           "repeatable": false,
-          "required": false
+          "required": false,
+          "domain": null
         },
         {
           "name": "hop-length",
@@ -153,7 +174,8 @@
           "default": 512,
           "aliases": [],
           "repeatable": false,
-          "required": false
+          "required": false,
+          "domain": null
         },
         {
           "name": "json",
@@ -161,7 +183,8 @@
           "default": false,
           "aliases": [],
           "repeatable": false,
-          "required": false
+          "required": false,
+          "domain": null
         },
         {
           "name": "key-context",
@@ -169,7 +192,8 @@
           "default": false,
           "aliases": [],
           "repeatable": false,
-          "required": false
+          "required": false,
+          "domain": null
         },
         {
           "name": "key-mode",
@@ -177,7 +201,8 @@
           "default": "major",
           "aliases": [],
           "repeatable": false,
-          "required": false
+          "required": false,
+          "domain": null
         },
         {
           "name": "key-root",
@@ -185,7 +210,8 @@
           "default": "C",
           "aliases": [],
           "repeatable": false,
-          "required": false
+          "required": false,
+          "domain": null
         },
         {
           "name": "min-duration",
@@ -193,7 +219,8 @@
           "default": 0.3,
           "aliases": [],
           "repeatable": false,
-          "required": false
+          "required": false,
+          "domain": null
         },
         {
           "name": "n-fft",
@@ -201,7 +228,8 @@
           "default": 2048,
           "aliases": [],
           "repeatable": false,
-          "required": false
+          "required": false,
+          "domain": null
         },
         {
           "name": "nnls",
@@ -209,7 +237,8 @@
           "default": false,
           "aliases": [],
           "repeatable": false,
-          "required": false
+          "required": false,
+          "domain": null
         },
         {
           "name": "no-beat-sync",
@@ -217,7 +246,8 @@
           "default": false,
           "aliases": [],
           "repeatable": false,
-          "required": false
+          "required": false,
+          "domain": null
         },
         {
           "name": "smoothing-window",
@@ -225,7 +255,8 @@
           "default": 2,
           "aliases": [],
           "repeatable": false,
-          "required": false
+          "required": false,
+          "domain": null
         },
         {
           "name": "threshold",
@@ -233,7 +264,8 @@
           "default": 0.5,
           "aliases": [],
           "repeatable": false,
-          "required": false
+          "required": false,
+          "domain": null
         },
         {
           "name": "triads-only",
@@ -241,7 +273,8 @@
           "default": false,
           "aliases": [],
           "repeatable": false,
-          "required": false
+          "required": false,
+          "domain": null
         },
         {
           "name": "use-hmm",
@@ -249,7 +282,8 @@
           "default": false,
           "aliases": [],
           "repeatable": false,
-          "required": false
+          "required": false,
+          "domain": null
         }
       ],
       "chroma": [
@@ -259,7 +293,8 @@
           "default": 512,
           "aliases": [],
           "repeatable": false,
-          "required": false
+          "required": false,
+          "domain": null
         },
         {
           "name": "json",
@@ -267,7 +302,8 @@
           "default": false,
           "aliases": [],
           "repeatable": false,
-          "required": false
+          "required": false,
+          "domain": null
         },
         {
           "name": "n-fft",
@@ -275,7 +311,8 @@
           "default": 2048,
           "aliases": [],
           "repeatable": false,
-          "required": false
+          "required": false,
+          "domain": null
         }
       ],
       "doctor": [
@@ -285,7 +322,8 @@
           "default": false,
           "aliases": [],
           "repeatable": false,
-          "required": false
+          "required": false,
+          "domain": null
         }
       ],
       "downbeats": [
@@ -295,7 +333,8 @@
           "default": false,
           "aliases": [],
           "repeatable": false,
-          "required": false
+          "required": false,
+          "domain": null
         }
       ],
       "dynamics": [
@@ -305,7 +344,8 @@
           "default": 512,
           "aliases": [],
           "repeatable": false,
-          "required": false
+          "required": false,
+          "domain": null
         },
         {
           "name": "json",
@@ -313,7 +353,8 @@
           "default": false,
           "aliases": [],
           "repeatable": false,
-          "required": false
+          "required": false,
+          "domain": null
         },
         {
           "name": "window-sec",
@@ -321,7 +362,8 @@
           "default": 0.4,
           "aliases": [],
           "repeatable": false,
-          "required": false
+          "required": false,
+          "domain": null
         }
       ],
       "eq": [
@@ -331,7 +373,8 @@
           "default": 5,
           "aliases": [],
           "repeatable": false,
-          "required": false
+          "required": false,
+          "domain": null
         },
         {
           "name": "auto-gain",
@@ -339,7 +382,8 @@
           "default": false,
           "aliases": [],
           "repeatable": false,
-          "required": false
+          "required": false,
+          "domain": null
         },
         {
           "name": "auto-threshold",
@@ -347,7 +391,8 @@
           "default": false,
           "aliases": [],
           "repeatable": false,
-          "required": false
+          "required": false,
+          "domain": null
         },
         {
           "name": "bits",
@@ -355,7 +400,18 @@
           "default": 16,
           "aliases": [],
           "repeatable": false,
-          "required": false
+          "required": false,
+          "domain": {
+            "choices": [
+              "16",
+              "24"
+            ],
+            "minimum": null,
+            "exclusiveMinimum": false,
+            "maximum": null,
+            "exclusiveMaximum": false,
+            "rejectExit": "invalid_parameter"
+          }
         },
         {
           "name": "coeff-mode",
@@ -363,7 +419,8 @@
           "default": 0,
           "aliases": [],
           "repeatable": false,
-          "required": false
+          "required": false,
+          "domain": null
         },
         {
           "name": "detector-delay-ms",
@@ -373,7 +430,8 @@
             "lookahead-ms"
           ],
           "repeatable": false,
-          "required": false
+          "required": false,
+          "domain": null
         },
         {
           "name": "dynamic",
@@ -381,7 +439,8 @@
           "default": false,
           "aliases": [],
           "repeatable": false,
-          "required": false
+          "required": false,
+          "domain": null
         },
         {
           "name": "frequency-hz",
@@ -389,7 +448,8 @@
           "default": 1000,
           "aliases": [],
           "repeatable": false,
-          "required": false
+          "required": false,
+          "domain": null
         },
         {
           "name": "gain-db",
@@ -397,7 +457,8 @@
           "default": 0,
           "aliases": [],
           "repeatable": false,
-          "required": false
+          "required": false,
+          "domain": null
         },
         {
           "name": "gain-scale",
@@ -405,7 +466,8 @@
           "default": 1,
           "aliases": [],
           "repeatable": false,
-          "required": false
+          "required": false,
+          "domain": null
         },
         {
           "name": "json",
@@ -413,7 +475,8 @@
           "default": false,
           "aliases": [],
           "repeatable": false,
-          "required": false
+          "required": false,
+          "domain": null
         },
         {
           "name": "output",
@@ -423,7 +486,8 @@
             "o"
           ],
           "repeatable": false,
-          "required": false
+          "required": false,
+          "domain": null
         },
         {
           "name": "output-gain-db",
@@ -431,7 +495,8 @@
           "default": 0,
           "aliases": [],
           "repeatable": false,
-          "required": false
+          "required": false,
+          "domain": null
         },
         {
           "name": "output-pan",
@@ -439,7 +504,8 @@
           "default": 0,
           "aliases": [],
           "repeatable": false,
-          "required": false
+          "required": false,
+          "domain": null
         },
         {
           "name": "params",
@@ -447,7 +513,8 @@
           "default": "",
           "aliases": [],
           "repeatable": false,
-          "required": false
+          "required": false,
+          "domain": null
         },
         {
           "name": "phase-mode",
@@ -455,7 +522,8 @@
           "default": 1,
           "aliases": [],
           "repeatable": false,
-          "required": false
+          "required": false,
+          "domain": null
         },
         {
           "name": "placement",
@@ -463,7 +531,8 @@
           "default": 0,
           "aliases": [],
           "repeatable": false,
-          "required": false
+          "required": false,
+          "domain": null
         },
         {
           "name": "proportional-q",
@@ -471,7 +540,8 @@
           "default": false,
           "aliases": [],
           "repeatable": false,
-          "required": false
+          "required": false,
+          "domain": null
         },
         {
           "name": "q",
@@ -479,7 +549,8 @@
           "default": 1,
           "aliases": [],
           "repeatable": false,
-          "required": false
+          "required": false,
+          "domain": null
         },
         {
           "name": "range-db",
@@ -487,7 +558,8 @@
           "default": -6,
           "aliases": [],
           "repeatable": false,
-          "required": false
+          "required": false,
+          "domain": null
         },
         {
           "name": "ratio",
@@ -495,7 +567,8 @@
           "default": 2,
           "aliases": [],
           "repeatable": false,
-          "required": false
+          "required": false,
+          "domain": null
         },
         {
           "name": "release-ms",
@@ -503,7 +576,8 @@
           "default": 50,
           "aliases": [],
           "repeatable": false,
-          "required": false
+          "required": false,
+          "domain": null
         },
         {
           "name": "resolution",
@@ -511,7 +585,8 @@
           "default": 0,
           "aliases": [],
           "repeatable": false,
-          "required": false
+          "required": false,
+          "domain": null
         },
         {
           "name": "sidechain-freq-hz",
@@ -519,7 +594,8 @@
           "default": -1,
           "aliases": [],
           "repeatable": false,
-          "required": false
+          "required": false,
+          "domain": null
         },
         {
           "name": "sidechain-q",
@@ -527,7 +603,8 @@
           "default": 1,
           "aliases": [],
           "repeatable": false,
-          "required": false
+          "required": false,
+          "domain": null
         },
         {
           "name": "slope-db-oct",
@@ -535,7 +612,8 @@
           "default": 12,
           "aliases": [],
           "repeatable": false,
-          "required": false
+          "required": false,
+          "domain": null
         },
         {
           "name": "threshold-db",
@@ -543,7 +621,8 @@
           "default": -24,
           "aliases": [],
           "repeatable": false,
-          "required": false
+          "required": false,
+          "domain": null
         },
         {
           "name": "type",
@@ -551,7 +630,8 @@
           "default": 0,
           "aliases": [],
           "repeatable": false,
-          "required": false
+          "required": false,
+          "domain": null
         }
       ],
       "estimate-room": [
@@ -561,7 +641,8 @@
           "default": 1,
           "aliases": [],
           "repeatable": false,
-          "required": false
+          "required": false,
+          "domain": null
         },
         {
           "name": "aspect-lw",
@@ -569,7 +650,8 @@
           "default": 1,
           "aliases": [],
           "repeatable": false,
-          "required": false
+          "required": false,
+          "domain": null
         },
         {
           "name": "json",
@@ -577,7 +659,8 @@
           "default": false,
           "aliases": [],
           "repeatable": false,
-          "required": false
+          "required": false,
+          "domain": null
         },
         {
           "name": "n-octave-bands",
@@ -587,7 +670,8 @@
             "n-bands"
           ],
           "repeatable": false,
-          "required": false
+          "required": false,
+          "domain": null
         },
         {
           "name": "reference-absorption",
@@ -595,7 +679,8 @@
           "default": 0.15,
           "aliases": [],
           "repeatable": false,
-          "required": false
+          "required": false,
+          "domain": null
         },
         {
           "name": "sabine",
@@ -603,7 +688,8 @@
           "default": false,
           "aliases": [],
           "repeatable": false,
-          "required": false
+          "required": false,
+          "domain": null
         }
       ],
       "hpss": [
@@ -613,7 +699,8 @@
           "default": false,
           "aliases": [],
           "repeatable": false,
-          "required": false
+          "required": false,
+          "domain": null
         },
         {
           "name": "harmonic-only",
@@ -621,7 +708,8 @@
           "default": false,
           "aliases": [],
           "repeatable": false,
-          "required": false
+          "required": false,
+          "domain": null
         },
         {
           "name": "hop-length",
@@ -629,7 +717,8 @@
           "default": 512,
           "aliases": [],
           "repeatable": false,
-          "required": false
+          "required": false,
+          "domain": null
         },
         {
           "name": "json",
@@ -637,7 +726,8 @@
           "default": false,
           "aliases": [],
           "repeatable": false,
-          "required": false
+          "required": false,
+          "domain": null
         },
         {
           "name": "kernel-harmonic",
@@ -645,7 +735,8 @@
           "default": 31,
           "aliases": [],
           "repeatable": false,
-          "required": false
+          "required": false,
+          "domain": null
         },
         {
           "name": "kernel-percussive",
@@ -653,7 +744,8 @@
           "default": 31,
           "aliases": [],
           "repeatable": false,
-          "required": false
+          "required": false,
+          "domain": null
         },
         {
           "name": "n-fft",
@@ -661,7 +753,8 @@
           "default": 2048,
           "aliases": [],
           "repeatable": false,
-          "required": false
+          "required": false,
+          "domain": null
         },
         {
           "name": "output",
@@ -671,7 +764,8 @@
             "o"
           ],
           "repeatable": false,
-          "required": false
+          "required": false,
+          "domain": null
         },
         {
           "name": "percussive-only",
@@ -679,7 +773,8 @@
           "default": false,
           "aliases": [],
           "repeatable": false,
-          "required": false
+          "required": false,
+          "domain": null
         },
         {
           "name": "with-residual",
@@ -687,7 +782,8 @@
           "default": false,
           "aliases": [],
           "repeatable": false,
-          "required": false
+          "required": false,
+          "domain": null
         }
       ],
       "info": [
@@ -697,7 +793,8 @@
           "default": false,
           "aliases": [],
           "repeatable": false,
-          "required": false
+          "required": false,
+          "domain": null
         }
       ],
       "key": [
@@ -707,7 +804,8 @@
           "default": null,
           "aliases": [],
           "repeatable": false,
-          "required": false
+          "required": false,
+          "domain": null
         },
         {
           "name": "genre-hint",
@@ -715,7 +813,8 @@
           "default": "",
           "aliases": [],
           "repeatable": false,
-          "required": false
+          "required": false,
+          "domain": null
         },
         {
           "name": "high-pass-hz",
@@ -723,7 +822,8 @@
           "default": 0,
           "aliases": [],
           "repeatable": false,
-          "required": false
+          "required": false,
+          "domain": null
         },
         {
           "name": "hop-length",
@@ -731,7 +831,8 @@
           "default": 512,
           "aliases": [],
           "repeatable": false,
-          "required": false
+          "required": false,
+          "domain": null
         },
         {
           "name": "json",
@@ -739,7 +840,8 @@
           "default": false,
           "aliases": [],
           "repeatable": false,
-          "required": false
+          "required": false,
+          "domain": null
         },
         {
           "name": "loudness-weighted",
@@ -747,7 +849,8 @@
           "default": false,
           "aliases": [],
           "repeatable": false,
-          "required": false
+          "required": false,
+          "domain": null
         },
         {
           "name": "modes",
@@ -755,7 +858,8 @@
           "default": "",
           "aliases": [],
           "repeatable": false,
-          "required": false
+          "required": false,
+          "domain": null
         },
         {
           "name": "n-fft",
@@ -763,7 +867,8 @@
           "default": 4096,
           "aliases": [],
           "repeatable": false,
-          "required": false
+          "required": false,
+          "domain": null
         },
         {
           "name": "profile",
@@ -771,7 +876,8 @@
           "default": "",
           "aliases": [],
           "repeatable": false,
-          "required": false
+          "required": false,
+          "domain": null
         },
         {
           "name": "use-hpss",
@@ -781,7 +887,8 @@
             "hpss"
           ],
           "repeatable": false,
-          "required": false
+          "required": false,
+          "domain": null
         }
       ],
       "lufs": [
@@ -791,7 +898,8 @@
           "default": false,
           "aliases": [],
           "repeatable": false,
-          "required": false
+          "required": false,
+          "domain": null
         },
         {
           "name": "series",
@@ -799,7 +907,8 @@
           "default": false,
           "aliases": [],
           "repeatable": false,
-          "required": false
+          "required": false,
+          "domain": null
         }
       ],
       "mastering": [
@@ -809,7 +918,8 @@
           "default": false,
           "aliases": [],
           "repeatable": false,
-          "required": false
+          "required": false,
+          "domain": null
         },
         {
           "name": "bits",
@@ -817,7 +927,18 @@
           "default": 16,
           "aliases": [],
           "repeatable": false,
-          "required": false
+          "required": false,
+          "domain": {
+            "choices": [
+              "16",
+              "24"
+            ],
+            "minimum": null,
+            "exclusiveMinimum": false,
+            "maximum": null,
+            "exclusiveMaximum": false,
+            "rejectExit": "invalid_parameter"
+          }
         },
         {
           "name": "ceiling-db",
@@ -825,7 +946,8 @@
           "default": -1,
           "aliases": [],
           "repeatable": false,
-          "required": false
+          "required": false,
+          "domain": null
         },
         {
           "name": "config",
@@ -833,7 +955,8 @@
           "default": null,
           "aliases": [],
           "repeatable": false,
-          "required": false
+          "required": false,
+          "domain": null
         },
         {
           "name": "enable-repair",
@@ -841,7 +964,8 @@
           "default": false,
           "aliases": [],
           "repeatable": false,
-          "required": false
+          "required": false,
+          "domain": null
         },
         {
           "name": "explain",
@@ -849,7 +973,8 @@
           "default": false,
           "aliases": [],
           "repeatable": false,
-          "required": false
+          "required": false,
+          "domain": null
         },
         {
           "name": "json",
@@ -857,7 +982,8 @@
           "default": false,
           "aliases": [],
           "repeatable": false,
-          "required": false
+          "required": false,
+          "domain": null
         },
         {
           "name": "output",
@@ -867,7 +993,8 @@
             "o"
           ],
           "repeatable": false,
-          "required": false
+          "required": false,
+          "domain": null
         },
         {
           "name": "params",
@@ -875,7 +1002,8 @@
           "default": "",
           "aliases": [],
           "repeatable": false,
-          "required": false
+          "required": false,
+          "domain": null
         },
         {
           "name": "preset",
@@ -883,7 +1011,8 @@
           "default": "",
           "aliases": [],
           "repeatable": false,
-          "required": false
+          "required": false,
+          "domain": null
         },
         {
           "name": "report",
@@ -891,7 +1020,8 @@
           "default": null,
           "aliases": [],
           "repeatable": false,
-          "required": false
+          "required": false,
+          "domain": null
         },
         {
           "name": "target-lufs",
@@ -899,7 +1029,8 @@
           "default": -14,
           "aliases": [],
           "repeatable": false,
-          "required": false
+          "required": false,
+          "domain": null
         },
         {
           "name": "true-peak-oversample",
@@ -907,7 +1038,21 @@
           "default": 4,
           "aliases": [],
           "repeatable": false,
-          "required": false
+          "required": false,
+          "domain": {
+            "choices": [
+              "1",
+              "2",
+              "4",
+              "8",
+              "16"
+            ],
+            "minimum": null,
+            "exclusiveMinimum": false,
+            "maximum": null,
+            "exclusiveMaximum": false,
+            "rejectExit": "usage"
+          }
         }
       ],
       "mastering-pair-analyses": [
@@ -917,7 +1062,8 @@
           "default": false,
           "aliases": [],
           "repeatable": false,
-          "required": false
+          "required": false,
+          "domain": null
         }
       ],
       "mastering-pair-analyze": [
@@ -927,7 +1073,8 @@
           "default": null,
           "aliases": [],
           "repeatable": false,
-          "required": true
+          "required": true,
+          "domain": null
         },
         {
           "name": "json",
@@ -935,7 +1082,8 @@
           "default": false,
           "aliases": [],
           "repeatable": false,
-          "required": false
+          "required": false,
+          "domain": null
         },
         {
           "name": "params",
@@ -943,7 +1091,8 @@
           "default": "",
           "aliases": [],
           "repeatable": false,
-          "required": false
+          "required": false,
+          "domain": null
         },
         {
           "name": "reference",
@@ -951,7 +1100,8 @@
           "default": null,
           "aliases": [],
           "repeatable": false,
-          "required": true
+          "required": true,
+          "domain": null
         }
       ],
       "mastering-pair-processors": [
@@ -961,7 +1111,8 @@
           "default": false,
           "aliases": [],
           "repeatable": false,
-          "required": false
+          "required": false,
+          "domain": null
         }
       ],
       "mastering-processor": [
@@ -971,7 +1122,18 @@
           "default": 16,
           "aliases": [],
           "repeatable": false,
-          "required": false
+          "required": false,
+          "domain": {
+            "choices": [
+              "16",
+              "24"
+            ],
+            "minimum": null,
+            "exclusiveMinimum": false,
+            "maximum": null,
+            "exclusiveMaximum": false,
+            "rejectExit": "invalid_parameter"
+          }
         },
         {
           "name": "json",
@@ -979,7 +1141,8 @@
           "default": false,
           "aliases": [],
           "repeatable": false,
-          "required": false
+          "required": false,
+          "domain": null
         },
         {
           "name": "output",
@@ -989,7 +1152,8 @@
             "o"
           ],
           "repeatable": false,
-          "required": false
+          "required": false,
+          "domain": null
         },
         {
           "name": "params",
@@ -997,7 +1161,8 @@
           "default": "",
           "aliases": [],
           "repeatable": false,
-          "required": false
+          "required": false,
+          "domain": null
         },
         {
           "name": "processor",
@@ -1005,7 +1170,8 @@
           "default": null,
           "aliases": [],
           "repeatable": false,
-          "required": true
+          "required": true,
+          "domain": null
         },
         {
           "name": "stereo",
@@ -1013,7 +1179,8 @@
           "default": false,
           "aliases": [],
           "repeatable": false,
-          "required": false
+          "required": false,
+          "domain": null
         }
       ],
       "mastering-processors": [
@@ -1023,7 +1190,8 @@
           "default": false,
           "aliases": [],
           "repeatable": false,
-          "required": false
+          "required": false,
+          "domain": null
         }
       ],
       "mel": [
@@ -1033,7 +1201,8 @@
           "default": 0,
           "aliases": [],
           "repeatable": false,
-          "required": false
+          "required": false,
+          "domain": null
         },
         {
           "name": "fmin",
@@ -1041,7 +1210,8 @@
           "default": 0,
           "aliases": [],
           "repeatable": false,
-          "required": false
+          "required": false,
+          "domain": null
         },
         {
           "name": "hop-length",
@@ -1049,7 +1219,8 @@
           "default": 512,
           "aliases": [],
           "repeatable": false,
-          "required": false
+          "required": false,
+          "domain": null
         },
         {
           "name": "htk",
@@ -1057,7 +1228,8 @@
           "default": false,
           "aliases": [],
           "repeatable": false,
-          "required": false
+          "required": false,
+          "domain": null
         },
         {
           "name": "json",
@@ -1065,7 +1237,8 @@
           "default": false,
           "aliases": [],
           "repeatable": false,
-          "required": false
+          "required": false,
+          "domain": null
         },
         {
           "name": "n-fft",
@@ -1073,7 +1246,8 @@
           "default": 2048,
           "aliases": [],
           "repeatable": false,
-          "required": false
+          "required": false,
+          "domain": null
         },
         {
           "name": "n-mels",
@@ -1081,7 +1255,8 @@
           "default": 128,
           "aliases": [],
           "repeatable": false,
-          "required": false
+          "required": false,
+          "domain": null
         }
       ],
       "mixing-preset": [
@@ -1091,7 +1266,8 @@
           "default": false,
           "aliases": [],
           "repeatable": false,
-          "required": false
+          "required": false,
+          "domain": null
         },
         {
           "name": "preset",
@@ -1099,7 +1275,8 @@
           "default": "vocalReverbSend",
           "aliases": [],
           "repeatable": false,
-          "required": false
+          "required": false,
+          "domain": null
         }
       ],
       "mixing-presets": [
@@ -1109,7 +1286,8 @@
           "default": false,
           "aliases": [],
           "repeatable": false,
-          "required": false
+          "required": false,
+          "domain": null
         }
       ],
       "nnls-chroma": [
@@ -1119,7 +1297,8 @@
           "default": 512,
           "aliases": [],
           "repeatable": false,
-          "required": false
+          "required": false,
+          "domain": null
         },
         {
           "name": "json",
@@ -1127,7 +1306,8 @@
           "default": false,
           "aliases": [],
           "repeatable": false,
-          "required": false
+          "required": false,
+          "domain": null
         }
       ],
       "normalize": [
@@ -1137,7 +1317,8 @@
           "default": false,
           "aliases": [],
           "repeatable": false,
-          "required": false
+          "required": false,
+          "domain": null
         },
         {
           "name": "mode",
@@ -1145,7 +1326,8 @@
           "default": "peak",
           "aliases": [],
           "repeatable": false,
-          "required": false
+          "required": false,
+          "domain": null
         },
         {
           "name": "output",
@@ -1155,7 +1337,8 @@
             "o"
           ],
           "repeatable": false,
-          "required": false
+          "required": false,
+          "domain": null
         },
         {
           "name": "target-db",
@@ -1163,7 +1346,8 @@
           "default": null,
           "aliases": [],
           "repeatable": false,
-          "required": false
+          "required": false,
+          "domain": null
         }
       ],
       "note-stretch": [
@@ -1173,7 +1357,8 @@
           "default": false,
           "aliases": [],
           "repeatable": false,
-          "required": false
+          "required": false,
+          "domain": null
         },
         {
           "name": "offset",
@@ -1181,7 +1366,8 @@
           "default": 0,
           "aliases": [],
           "repeatable": false,
-          "required": false
+          "required": false,
+          "domain": null
         },
         {
           "name": "onset",
@@ -1189,7 +1375,8 @@
           "default": 0,
           "aliases": [],
           "repeatable": false,
-          "required": false
+          "required": false,
+          "domain": null
         },
         {
           "name": "output",
@@ -1199,7 +1386,8 @@
             "o"
           ],
           "repeatable": false,
-          "required": false
+          "required": false,
+          "domain": null
         },
         {
           "name": "ratio",
@@ -1207,7 +1395,8 @@
           "default": 1,
           "aliases": [],
           "repeatable": false,
-          "required": false
+          "required": false,
+          "domain": null
         }
       ],
       "onset-envelope": [
@@ -1217,7 +1406,8 @@
           "default": 512,
           "aliases": [],
           "repeatable": false,
-          "required": false
+          "required": false,
+          "domain": null
         },
         {
           "name": "json",
@@ -1225,7 +1415,8 @@
           "default": false,
           "aliases": [],
           "repeatable": false,
-          "required": false
+          "required": false,
+          "domain": null
         },
         {
           "name": "n-fft",
@@ -1233,7 +1424,8 @@
           "default": 2048,
           "aliases": [],
           "repeatable": false,
-          "required": false
+          "required": false,
+          "domain": null
         },
         {
           "name": "n-mels",
@@ -1241,7 +1433,8 @@
           "default": 128,
           "aliases": [],
           "repeatable": false,
-          "required": false
+          "required": false,
+          "domain": null
         }
       ],
       "onsets": [
@@ -1251,7 +1444,8 @@
           "default": false,
           "aliases": [],
           "repeatable": false,
-          "required": false
+          "required": false,
+          "domain": null
         }
       ],
       "pitch": [
@@ -1261,7 +1455,18 @@
           "default": "pyin",
           "aliases": [],
           "repeatable": false,
-          "required": false
+          "required": false,
+          "domain": {
+            "choices": [
+              "yin",
+              "pyin"
+            ],
+            "minimum": null,
+            "exclusiveMinimum": false,
+            "maximum": null,
+            "exclusiveMaximum": false,
+            "rejectExit": "invalid_parameter"
+          }
         },
         {
           "name": "fmax",
@@ -1269,7 +1474,15 @@
           "default": 2093,
           "aliases": [],
           "repeatable": false,
-          "required": false
+          "required": false,
+          "domain": {
+            "choices": [],
+            "minimum": 0,
+            "exclusiveMinimum": true,
+            "maximum": null,
+            "exclusiveMaximum": false,
+            "rejectExit": "usage"
+          }
         },
         {
           "name": "fmin",
@@ -1277,7 +1490,15 @@
           "default": 65,
           "aliases": [],
           "repeatable": false,
-          "required": false
+          "required": false,
+          "domain": {
+            "choices": [],
+            "minimum": 0,
+            "exclusiveMinimum": true,
+            "maximum": null,
+            "exclusiveMaximum": false,
+            "rejectExit": "usage"
+          }
         },
         {
           "name": "hop-length",
@@ -1285,7 +1506,15 @@
           "default": 512,
           "aliases": [],
           "repeatable": false,
-          "required": false
+          "required": false,
+          "domain": {
+            "choices": [],
+            "minimum": 0,
+            "exclusiveMinimum": true,
+            "maximum": null,
+            "exclusiveMaximum": false,
+            "rejectExit": "usage"
+          }
         },
         {
           "name": "json",
@@ -1293,7 +1522,8 @@
           "default": false,
           "aliases": [],
           "repeatable": false,
-          "required": false
+          "required": false,
+          "domain": null
         },
         {
           "name": "threshold",
@@ -1301,7 +1531,15 @@
           "default": 0.1,
           "aliases": [],
           "repeatable": false,
-          "required": false
+          "required": false,
+          "domain": {
+            "choices": [],
+            "minimum": 0,
+            "exclusiveMinimum": true,
+            "maximum": 1,
+            "exclusiveMaximum": false,
+            "rejectExit": "usage"
+          }
         }
       ],
       "pitch-correct": [
@@ -1311,7 +1549,8 @@
           "default": 69,
           "aliases": [],
           "repeatable": false,
-          "required": false
+          "required": false,
+          "domain": null
         },
         {
           "name": "json",
@@ -1319,7 +1558,8 @@
           "default": false,
           "aliases": [],
           "repeatable": false,
-          "required": false
+          "required": false,
+          "domain": null
         },
         {
           "name": "output",
@@ -1329,7 +1569,8 @@
             "o"
           ],
           "repeatable": false,
-          "required": false
+          "required": false,
+          "domain": null
         },
         {
           "name": "target-midi",
@@ -1337,7 +1578,8 @@
           "default": 69,
           "aliases": [],
           "repeatable": false,
-          "required": false
+          "required": false,
+          "domain": null
         }
       ],
       "pitch-shift": [
@@ -1347,7 +1589,8 @@
           "default": 512,
           "aliases": [],
           "repeatable": false,
-          "required": false
+          "required": false,
+          "domain": null
         },
         {
           "name": "json",
@@ -1355,7 +1598,8 @@
           "default": false,
           "aliases": [],
           "repeatable": false,
-          "required": false
+          "required": false,
+          "domain": null
         },
         {
           "name": "n-fft",
@@ -1363,7 +1607,8 @@
           "default": 2048,
           "aliases": [],
           "repeatable": false,
-          "required": false
+          "required": false,
+          "domain": null
         },
         {
           "name": "output",
@@ -1373,7 +1618,8 @@
             "o"
           ],
           "repeatable": false,
-          "required": false
+          "required": false,
+          "domain": null
         },
         {
           "name": "semitones",
@@ -1381,7 +1627,8 @@
           "default": null,
           "aliases": [],
           "repeatable": false,
-          "required": false
+          "required": false,
+          "domain": null
         }
       ],
       "plp": [
@@ -1391,7 +1638,8 @@
           "default": 512,
           "aliases": [],
           "repeatable": false,
-          "required": false
+          "required": false,
+          "domain": null
         },
         {
           "name": "json",
@@ -1399,7 +1647,8 @@
           "default": false,
           "aliases": [],
           "repeatable": false,
-          "required": false
+          "required": false,
+          "domain": null
         },
         {
           "name": "n-fft",
@@ -1407,7 +1656,8 @@
           "default": 2048,
           "aliases": [],
           "repeatable": false,
-          "required": false
+          "required": false,
+          "domain": null
         },
         {
           "name": "n-mels",
@@ -1415,7 +1665,8 @@
           "default": 128,
           "aliases": [],
           "repeatable": false,
-          "required": false
+          "required": false,
+          "domain": null
         },
         {
           "name": "tempo-max",
@@ -1423,7 +1674,8 @@
           "default": 300,
           "aliases": [],
           "repeatable": false,
-          "required": false
+          "required": false,
+          "domain": null
         },
         {
           "name": "tempo-min",
@@ -1431,7 +1683,8 @@
           "default": 30,
           "aliases": [],
           "repeatable": false,
-          "required": false
+          "required": false,
+          "domain": null
         },
         {
           "name": "win-length",
@@ -1439,7 +1692,8 @@
           "default": 384,
           "aliases": [],
           "repeatable": false,
-          "required": false
+          "required": false,
+          "domain": null
         }
       ],
       "project.abi": [
@@ -1449,7 +1703,8 @@
           "default": false,
           "aliases": [],
           "repeatable": false,
-          "required": false
+          "required": false,
+          "domain": null
         }
       ],
       "project.bounce": [
@@ -1459,7 +1714,8 @@
           "default": 0,
           "aliases": [],
           "repeatable": false,
-          "required": false
+          "required": false,
+          "domain": null
         },
         {
           "name": "channels",
@@ -1467,7 +1723,8 @@
           "default": 2,
           "aliases": [],
           "repeatable": false,
-          "required": false
+          "required": false,
+          "domain": null
         },
         {
           "name": "frames",
@@ -1475,7 +1732,8 @@
           "default": 0,
           "aliases": [],
           "repeatable": false,
-          "required": false
+          "required": false,
+          "domain": null
         },
         {
           "name": "in",
@@ -1483,7 +1741,8 @@
           "default": null,
           "aliases": [],
           "repeatable": false,
-          "required": true
+          "required": true,
+          "domain": null
         },
         {
           "name": "instrument-latency",
@@ -1491,7 +1750,8 @@
           "default": 0,
           "aliases": [],
           "repeatable": false,
-          "required": false
+          "required": false,
+          "domain": null
         },
         {
           "name": "json",
@@ -1499,7 +1759,8 @@
           "default": false,
           "aliases": [],
           "repeatable": false,
-          "required": false
+          "required": false,
+          "domain": null
         },
         {
           "name": "output",
@@ -1509,7 +1770,8 @@
             "o"
           ],
           "repeatable": false,
-          "required": false
+          "required": false,
+          "domain": null
         },
         {
           "name": "sample-rate",
@@ -1517,7 +1779,8 @@
           "default": null,
           "aliases": [],
           "repeatable": false,
-          "required": false
+          "required": false,
+          "domain": null
         },
         {
           "name": "synth",
@@ -1525,7 +1788,8 @@
           "default": null,
           "aliases": [],
           "repeatable": false,
-          "required": false
+          "required": false,
+          "domain": null
         }
       ],
       "project.compile": [
@@ -1535,7 +1799,8 @@
           "default": null,
           "aliases": [],
           "repeatable": false,
-          "required": true
+          "required": true,
+          "domain": null
         },
         {
           "name": "json",
@@ -1543,7 +1808,8 @@
           "default": false,
           "aliases": [],
           "repeatable": false,
-          "required": false
+          "required": false,
+          "domain": null
         }
       ],
       "project.export-midi2": [
@@ -1553,7 +1819,8 @@
           "default": null,
           "aliases": [],
           "repeatable": false,
-          "required": true
+          "required": true,
+          "domain": null
         },
         {
           "name": "json",
@@ -1561,7 +1828,8 @@
           "default": false,
           "aliases": [],
           "repeatable": false,
-          "required": false
+          "required": false,
+          "domain": null
         },
         {
           "name": "output",
@@ -1571,7 +1839,8 @@
             "o"
           ],
           "repeatable": false,
-          "required": false
+          "required": false,
+          "domain": null
         }
       ],
       "project.export-smf": [
@@ -1581,7 +1850,8 @@
           "default": null,
           "aliases": [],
           "repeatable": false,
-          "required": true
+          "required": true,
+          "domain": null
         },
         {
           "name": "json",
@@ -1589,7 +1859,8 @@
           "default": false,
           "aliases": [],
           "repeatable": false,
-          "required": false
+          "required": false,
+          "domain": null
         },
         {
           "name": "output",
@@ -1599,7 +1870,8 @@
             "o"
           ],
           "repeatable": false,
-          "required": false
+          "required": false,
+          "domain": null
         }
       ],
       "project.import-midi2": [
@@ -1609,7 +1881,8 @@
           "default": false,
           "aliases": [],
           "repeatable": false,
-          "required": false
+          "required": false,
+          "domain": null
         },
         {
           "name": "midi2",
@@ -1617,7 +1890,8 @@
           "default": null,
           "aliases": [],
           "repeatable": false,
-          "required": true
+          "required": true,
+          "domain": null
         },
         {
           "name": "output",
@@ -1627,7 +1901,8 @@
             "o"
           ],
           "repeatable": false,
-          "required": false
+          "required": false,
+          "domain": null
         }
       ],
       "project.import-smf": [
@@ -1637,7 +1912,8 @@
           "default": false,
           "aliases": [],
           "repeatable": false,
-          "required": false
+          "required": false,
+          "domain": null
         },
         {
           "name": "output",
@@ -1647,7 +1923,8 @@
             "o"
           ],
           "repeatable": false,
-          "required": false
+          "required": false,
+          "domain": null
         },
         {
           "name": "smf",
@@ -1655,7 +1932,8 @@
           "default": null,
           "aliases": [],
           "repeatable": false,
-          "required": true
+          "required": true,
+          "domain": null
         }
       ],
       "project.new": [
@@ -1665,7 +1943,8 @@
           "default": false,
           "aliases": [],
           "repeatable": false,
-          "required": false
+          "required": false,
+          "domain": null
         },
         {
           "name": "output",
@@ -1675,7 +1954,8 @@
             "o"
           ],
           "repeatable": false,
-          "required": false
+          "required": false,
+          "domain": null
         },
         {
           "name": "sample-rate",
@@ -1683,7 +1963,8 @@
           "default": 0,
           "aliases": [],
           "repeatable": false,
-          "required": false
+          "required": false,
+          "domain": null
         }
       ],
       "project.synth-presets": [
@@ -1693,7 +1974,8 @@
           "default": false,
           "aliases": [],
           "repeatable": false,
-          "required": false
+          "required": false,
+          "domain": null
         }
       ],
       "project.validate": [
@@ -1703,7 +1985,8 @@
           "default": null,
           "aliases": [],
           "repeatable": false,
-          "required": true
+          "required": true,
+          "domain": null
         },
         {
           "name": "json",
@@ -1711,7 +1994,8 @@
           "default": false,
           "aliases": [],
           "repeatable": false,
-          "required": false
+          "required": false,
+          "domain": null
         },
         {
           "name": "output",
@@ -1721,7 +2005,8 @@
             "o"
           ],
           "repeatable": false,
-          "required": false
+          "required": false,
+          "domain": null
         },
         {
           "name": "strict",
@@ -1729,7 +2014,8 @@
           "default": false,
           "aliases": [],
           "repeatable": false,
-          "required": false
+          "required": false,
+          "domain": null
         }
       ],
       "resample": [
@@ -1739,7 +2025,8 @@
           "default": false,
           "aliases": [],
           "repeatable": false,
-          "required": false
+          "required": false,
+          "domain": null
         },
         {
           "name": "output",
@@ -1749,7 +2036,8 @@
             "o"
           ],
           "repeatable": false,
-          "required": false
+          "required": false,
+          "domain": null
         },
         {
           "name": "target-rate",
@@ -1759,7 +2047,8 @@
             "target-sr"
           ],
           "repeatable": false,
-          "required": true
+          "required": true,
+          "domain": null
         }
       ],
       "rhythm": [
@@ -1769,7 +2058,8 @@
           "default": 200,
           "aliases": [],
           "repeatable": false,
-          "required": false
+          "required": false,
+          "domain": null
         },
         {
           "name": "bpm-min",
@@ -1777,7 +2067,8 @@
           "default": 60,
           "aliases": [],
           "repeatable": false,
-          "required": false
+          "required": false,
+          "domain": null
         },
         {
           "name": "hop-length",
@@ -1785,7 +2076,8 @@
           "default": 512,
           "aliases": [],
           "repeatable": false,
-          "required": false
+          "required": false,
+          "domain": null
         },
         {
           "name": "json",
@@ -1793,7 +2085,8 @@
           "default": false,
           "aliases": [],
           "repeatable": false,
-          "required": false
+          "required": false,
+          "domain": null
         },
         {
           "name": "n-fft",
@@ -1801,7 +2094,8 @@
           "default": 2048,
           "aliases": [],
           "repeatable": false,
-          "required": false
+          "required": false,
+          "domain": null
         },
         {
           "name": "start-bpm",
@@ -1809,7 +2103,8 @@
           "default": 120,
           "aliases": [],
           "repeatable": false,
-          "required": false
+          "required": false,
+          "domain": null
         }
       ],
       "room-morph": [
@@ -1819,7 +2114,8 @@
           "default": 0.2,
           "aliases": [],
           "repeatable": false,
-          "required": false
+          "required": false,
+          "domain": null
         },
         {
           "name": "height",
@@ -1827,7 +2123,8 @@
           "default": 3,
           "aliases": [],
           "repeatable": false,
-          "required": false
+          "required": false,
+          "domain": null
         },
         {
           "name": "ism-order",
@@ -1835,7 +2132,8 @@
           "default": 3,
           "aliases": [],
           "repeatable": false,
-          "required": false
+          "required": false,
+          "domain": null
         },
         {
           "name": "json",
@@ -1843,7 +2141,8 @@
           "default": false,
           "aliases": [],
           "repeatable": false,
-          "required": false
+          "required": false,
+          "domain": null
         },
         {
           "name": "length",
@@ -1851,7 +2150,8 @@
           "default": 7,
           "aliases": [],
           "repeatable": false,
-          "required": false
+          "required": false,
+          "domain": null
         },
         {
           "name": "listener-x",
@@ -1859,7 +2159,8 @@
           "default": 5,
           "aliases": [],
           "repeatable": false,
-          "required": false
+          "required": false,
+          "domain": null
         },
         {
           "name": "listener-y",
@@ -1867,7 +2168,8 @@
           "default": 4,
           "aliases": [],
           "repeatable": false,
-          "required": false
+          "required": false,
+          "domain": null
         },
         {
           "name": "listener-z",
@@ -1875,7 +2177,8 @@
           "default": 1.7,
           "aliases": [],
           "repeatable": false,
-          "required": false
+          "required": false,
+          "domain": null
         },
         {
           "name": "max-seconds",
@@ -1883,7 +2186,8 @@
           "default": 0,
           "aliases": [],
           "repeatable": false,
-          "required": false
+          "required": false,
+          "domain": null
         },
         {
           "name": "output",
@@ -1893,7 +2197,8 @@
             "o"
           ],
           "repeatable": false,
-          "required": false
+          "required": false,
+          "domain": null
         },
         {
           "name": "sabine",
@@ -1901,7 +2206,8 @@
           "default": false,
           "aliases": [],
           "repeatable": false,
-          "required": false
+          "required": false,
+          "domain": null
         },
         {
           "name": "seed",
@@ -1909,7 +2215,8 @@
           "default": 1,
           "aliases": [],
           "repeatable": false,
-          "required": false
+          "required": false,
+          "domain": null
         },
         {
           "name": "source-x",
@@ -1917,7 +2224,8 @@
           "default": 1,
           "aliases": [],
           "repeatable": false,
-          "required": false
+          "required": false,
+          "domain": null
         },
         {
           "name": "source-y",
@@ -1925,7 +2233,8 @@
           "default": 1,
           "aliases": [],
           "repeatable": false,
-          "required": false
+          "required": false,
+          "domain": null
         },
         {
           "name": "source-z",
@@ -1933,7 +2242,8 @@
           "default": 1.2,
           "aliases": [],
           "repeatable": false,
-          "required": false
+          "required": false,
+          "domain": null
         },
         {
           "name": "suppression",
@@ -1941,7 +2251,8 @@
           "default": 0.5,
           "aliases": [],
           "repeatable": false,
-          "required": false
+          "required": false,
+          "domain": null
         },
         {
           "name": "wet",
@@ -1949,7 +2260,8 @@
           "default": 0.5,
           "aliases": [],
           "repeatable": false,
-          "required": false
+          "required": false,
+          "domain": null
         },
         {
           "name": "width",
@@ -1957,7 +2269,8 @@
           "default": 5,
           "aliases": [],
           "repeatable": false,
-          "required": false
+          "required": false,
+          "domain": null
         }
       ],
       "spectral": [
@@ -1967,7 +2280,8 @@
           "default": 512,
           "aliases": [],
           "repeatable": false,
-          "required": false
+          "required": false,
+          "domain": null
         },
         {
           "name": "json",
@@ -1975,7 +2289,8 @@
           "default": false,
           "aliases": [],
           "repeatable": false,
-          "required": false
+          "required": false,
+          "domain": null
         },
         {
           "name": "n-fft",
@@ -1983,7 +2298,8 @@
           "default": 2048,
           "aliases": [],
           "repeatable": false,
-          "required": false
+          "required": false,
+          "domain": null
         }
       ],
       "synthesize-rir": [
@@ -1993,7 +2309,8 @@
           "default": 0.2,
           "aliases": [],
           "repeatable": false,
-          "required": false
+          "required": false,
+          "domain": null
         },
         {
           "name": "height",
@@ -2001,7 +2318,8 @@
           "default": 3,
           "aliases": [],
           "repeatable": false,
-          "required": false
+          "required": false,
+          "domain": null
         },
         {
           "name": "ism-order",
@@ -2009,7 +2327,8 @@
           "default": 3,
           "aliases": [],
           "repeatable": false,
-          "required": false
+          "required": false,
+          "domain": null
         },
         {
           "name": "json",
@@ -2017,7 +2336,8 @@
           "default": false,
           "aliases": [],
           "repeatable": false,
-          "required": false
+          "required": false,
+          "domain": null
         },
         {
           "name": "length",
@@ -2025,7 +2345,8 @@
           "default": 7,
           "aliases": [],
           "repeatable": false,
-          "required": false
+          "required": false,
+          "domain": null
         },
         {
           "name": "listener-x",
@@ -2033,7 +2354,8 @@
           "default": 5,
           "aliases": [],
           "repeatable": false,
-          "required": false
+          "required": false,
+          "domain": null
         },
         {
           "name": "listener-y",
@@ -2041,7 +2363,8 @@
           "default": 4,
           "aliases": [],
           "repeatable": false,
-          "required": false
+          "required": false,
+          "domain": null
         },
         {
           "name": "listener-z",
@@ -2049,7 +2372,8 @@
           "default": 1.7,
           "aliases": [],
           "repeatable": false,
-          "required": false
+          "required": false,
+          "domain": null
         },
         {
           "name": "max-seconds",
@@ -2057,7 +2381,8 @@
           "default": 0,
           "aliases": [],
           "repeatable": false,
-          "required": false
+          "required": false,
+          "domain": null
         },
         {
           "name": "output",
@@ -2067,7 +2392,8 @@
             "o"
           ],
           "repeatable": false,
-          "required": false
+          "required": false,
+          "domain": null
         },
         {
           "name": "sabine",
@@ -2075,7 +2401,8 @@
           "default": false,
           "aliases": [],
           "repeatable": false,
-          "required": false
+          "required": false,
+          "domain": null
         },
         {
           "name": "sample-rate",
@@ -2083,7 +2410,8 @@
           "default": 48000,
           "aliases": [],
           "repeatable": false,
-          "required": false
+          "required": false,
+          "domain": null
         },
         {
           "name": "seed",
@@ -2091,7 +2419,8 @@
           "default": 1,
           "aliases": [],
           "repeatable": false,
-          "required": false
+          "required": false,
+          "domain": null
         },
         {
           "name": "source-x",
@@ -2099,7 +2428,8 @@
           "default": 1,
           "aliases": [],
           "repeatable": false,
-          "required": false
+          "required": false,
+          "domain": null
         },
         {
           "name": "source-y",
@@ -2107,7 +2437,8 @@
           "default": 1,
           "aliases": [],
           "repeatable": false,
-          "required": false
+          "required": false,
+          "domain": null
         },
         {
           "name": "source-z",
@@ -2115,7 +2446,8 @@
           "default": 1.2,
           "aliases": [],
           "repeatable": false,
-          "required": false
+          "required": false,
+          "domain": null
         },
         {
           "name": "width",
@@ -2123,7 +2455,8 @@
           "default": 5,
           "aliases": [],
           "repeatable": false,
-          "required": false
+          "required": false,
+          "domain": null
         }
       ],
       "tempogram": [
@@ -2133,7 +2466,8 @@
           "default": 512,
           "aliases": [],
           "repeatable": false,
-          "required": false
+          "required": false,
+          "domain": null
         },
         {
           "name": "json",
@@ -2141,7 +2475,8 @@
           "default": false,
           "aliases": [],
           "repeatable": false,
-          "required": false
+          "required": false,
+          "domain": null
         },
         {
           "name": "n-fft",
@@ -2149,7 +2484,8 @@
           "default": 2048,
           "aliases": [],
           "repeatable": false,
-          "required": false
+          "required": false,
+          "domain": null
         },
         {
           "name": "n-mels",
@@ -2157,7 +2493,8 @@
           "default": 128,
           "aliases": [],
           "repeatable": false,
-          "required": false
+          "required": false,
+          "domain": null
         },
         {
           "name": "win-length",
@@ -2165,7 +2502,8 @@
           "default": 384,
           "aliases": [],
           "repeatable": false,
-          "required": false
+          "required": false,
+          "domain": null
         }
       ],
       "timbre": [
@@ -2175,7 +2513,8 @@
           "default": 512,
           "aliases": [],
           "repeatable": false,
-          "required": false
+          "required": false,
+          "domain": null
         },
         {
           "name": "json",
@@ -2183,7 +2522,8 @@
           "default": false,
           "aliases": [],
           "repeatable": false,
-          "required": false
+          "required": false,
+          "domain": null
         },
         {
           "name": "n-fft",
@@ -2191,7 +2531,8 @@
           "default": 2048,
           "aliases": [],
           "repeatable": false,
-          "required": false
+          "required": false,
+          "domain": null
         },
         {
           "name": "n-mels",
@@ -2199,7 +2540,8 @@
           "default": 128,
           "aliases": [],
           "repeatable": false,
-          "required": false
+          "required": false,
+          "domain": null
         }
       ],
       "time-stretch": [
@@ -2209,7 +2551,8 @@
           "default": 512,
           "aliases": [],
           "repeatable": false,
-          "required": false
+          "required": false,
+          "domain": null
         },
         {
           "name": "json",
@@ -2217,7 +2560,8 @@
           "default": false,
           "aliases": [],
           "repeatable": false,
-          "required": false
+          "required": false,
+          "domain": null
         },
         {
           "name": "n-fft",
@@ -2225,7 +2569,8 @@
           "default": 2048,
           "aliases": [],
           "repeatable": false,
-          "required": false
+          "required": false,
+          "domain": null
         },
         {
           "name": "output",
@@ -2235,7 +2580,8 @@
             "o"
           ],
           "repeatable": false,
-          "required": false
+          "required": false,
+          "domain": null
         },
         {
           "name": "rate",
@@ -2243,7 +2589,8 @@
           "default": null,
           "aliases": [],
           "repeatable": false,
-          "required": false
+          "required": false,
+          "domain": null
         }
       ],
       "trim-silence": [
@@ -2253,7 +2600,8 @@
           "default": 512,
           "aliases": [],
           "repeatable": false,
-          "required": false
+          "required": false,
+          "domain": null
         },
         {
           "name": "json",
@@ -2261,7 +2609,8 @@
           "default": false,
           "aliases": [],
           "repeatable": false,
-          "required": false
+          "required": false,
+          "domain": null
         },
         {
           "name": "n-fft",
@@ -2269,7 +2618,8 @@
           "default": 2048,
           "aliases": [],
           "repeatable": false,
-          "required": false
+          "required": false,
+          "domain": null
         },
         {
           "name": "output",
@@ -2279,7 +2629,8 @@
             "o"
           ],
           "repeatable": false,
-          "required": false
+          "required": false,
+          "domain": null
         },
         {
           "name": "threshold-db",
@@ -2287,7 +2638,8 @@
           "default": null,
           "aliases": [],
           "repeatable": false,
-          "required": false
+          "required": false,
+          "domain": null
         },
         {
           "name": "top-db",
@@ -2295,7 +2647,8 @@
           "default": null,
           "aliases": [],
           "repeatable": false,
-          "required": false
+          "required": false,
+          "domain": null
         }
       ],
       "version": [
@@ -2305,7 +2658,8 @@
           "default": false,
           "aliases": [],
           "repeatable": false,
-          "required": false
+          "required": false,
+          "domain": null
         }
       ],
       "voice-change": [
@@ -2315,7 +2669,8 @@
           "default": null,
           "aliases": [],
           "repeatable": false,
-          "required": false
+          "required": false,
+          "domain": null
         },
         {
           "name": "json",
@@ -2323,7 +2678,8 @@
           "default": false,
           "aliases": [],
           "repeatable": false,
-          "required": false
+          "required": false,
+          "domain": null
         },
         {
           "name": "output",
@@ -2333,7 +2689,8 @@
             "o"
           ],
           "repeatable": false,
-          "required": false
+          "required": false,
+          "domain": null
         },
         {
           "name": "pitch-semitones",
@@ -2341,7 +2698,8 @@
           "default": null,
           "aliases": [],
           "repeatable": false,
-          "required": false
+          "required": false,
+          "domain": null
         },
         {
           "name": "preset",
@@ -2349,7 +2707,8 @@
           "default": "",
           "aliases": [],
           "repeatable": false,
-          "required": false
+          "required": false,
+          "domain": null
         },
         {
           "name": "preset-json",
@@ -2357,7 +2716,8 @@
           "default": null,
           "aliases": [],
           "repeatable": false,
-          "required": false
+          "required": false,
+          "domain": null
         },
         {
           "name": "preset-pack",
@@ -2365,7 +2725,8 @@
           "default": null,
           "aliases": [],
           "repeatable": false,
-          "required": false
+          "required": false,
+          "domain": null
         },
         {
           "name": "set",
@@ -2373,7 +2734,8 @@
           "default": [],
           "aliases": [],
           "repeatable": true,
-          "required": false
+          "required": false,
+          "domain": null
         }
       ],
       "voice-preset": [
@@ -2383,7 +2745,8 @@
           "default": false,
           "aliases": [],
           "repeatable": false,
-          "required": false
+          "required": false,
+          "domain": null
         },
         {
           "name": "preset",
@@ -2391,7 +2754,8 @@
           "default": "neutral-monitor",
           "aliases": [],
           "repeatable": false,
-          "required": false
+          "required": false,
+          "domain": null
         }
       ],
       "voice-preset-validate": [
@@ -2401,7 +2765,8 @@
           "default": false,
           "aliases": [],
           "repeatable": false,
-          "required": false
+          "required": false,
+          "domain": null
         },
         {
           "name": "preset",
@@ -2409,7 +2774,8 @@
           "default": "",
           "aliases": [],
           "repeatable": false,
-          "required": false
+          "required": false,
+          "domain": null
         },
         {
           "name": "preset-json",
@@ -2417,7 +2783,8 @@
           "default": null,
           "aliases": [],
           "repeatable": false,
-          "required": false
+          "required": false,
+          "domain": null
         },
         {
           "name": "set",
@@ -2425,7 +2792,8 @@
           "default": [],
           "aliases": [],
           "repeatable": true,
-          "required": false
+          "required": false,
+          "domain": null
         }
       ],
       "voice-presets": [
@@ -2435,7 +2803,8 @@
           "default": false,
           "aliases": [],
           "repeatable": false,
-          "required": false
+          "required": false,
+          "domain": null
         }
       ]
     }
@@ -3012,7 +3381,8 @@
           "default": false,
           "aliases": [],
           "repeatable": false,
-          "required": false
+          "required": false,
+          "domain": null
         }
       ],
       "positionals": [],
@@ -3050,7 +3420,8 @@
           "default": 512,
           "aliases": [],
           "repeatable": false,
-          "required": false
+          "required": false,
+          "domain": null
         },
         {
           "name": "json",
@@ -3058,7 +3429,8 @@
           "default": false,
           "aliases": [],
           "repeatable": false,
-          "required": false
+          "required": false,
+          "domain": null
         },
         {
           "name": "n-fft",
@@ -3066,7 +3438,8 @@
           "default": 2048,
           "aliases": [],
           "repeatable": false,
-          "required": false
+          "required": false,
+          "domain": null
         }
       ],
       "positionals": [
@@ -3112,7 +3485,15 @@
           "default": 80,
           "aliases": [],
           "repeatable": false,
-          "required": false
+          "required": false,
+          "domain": {
+            "choices": [],
+            "minimum": 0,
+            "exclusiveMinimum": false,
+            "maximum": null,
+            "exclusiveMaximum": false,
+            "rejectExit": "usage"
+          }
         },
         {
           "name": "json",
@@ -3120,7 +3501,8 @@
           "default": false,
           "aliases": [],
           "repeatable": false,
-          "required": false
+          "required": false,
+          "domain": null
         },
         {
           "name": "no-hpss",
@@ -3128,7 +3510,8 @@
           "default": false,
           "aliases": [],
           "repeatable": false,
-          "required": false
+          "required": false,
+          "domain": null
         },
         {
           "name": "with-seventh",
@@ -3136,7 +3519,8 @@
           "default": false,
           "aliases": [],
           "repeatable": false,
-          "required": false
+          "required": false,
+          "domain": null
         }
       ],
       "positionals": [
@@ -3298,7 +3682,8 @@
           "default": 512,
           "aliases": [],
           "repeatable": false,
-          "required": false
+          "required": false,
+          "domain": null
         },
         {
           "name": "json",
@@ -3306,7 +3691,8 @@
           "default": false,
           "aliases": [],
           "repeatable": false,
-          "required": false
+          "required": false,
+          "domain": null
         },
         {
           "name": "n-fft",
@@ -3314,7 +3700,8 @@
           "default": 2048,
           "aliases": [],
           "repeatable": false,
-          "required": false
+          "required": false,
+          "domain": null
         }
       ],
       "positionals": [
@@ -3409,7 +3796,8 @@
           "default": null,
           "aliases": [],
           "repeatable": false,
-          "required": true
+          "required": true,
+          "domain": null
         },
         {
           "name": "json",
@@ -3417,7 +3805,8 @@
           "default": false,
           "aliases": [],
           "repeatable": false,
-          "required": false
+          "required": false,
+          "domain": null
         },
         {
           "name": "output",
@@ -3427,7 +3816,8 @@
             "o"
           ],
           "repeatable": false,
-          "required": false
+          "required": false,
+          "domain": null
         },
         {
           "name": "strict",
@@ -3435,7 +3825,8 @@
           "default": false,
           "aliases": [],
           "repeatable": false,
-          "required": false
+          "required": false,
+          "domain": null
         }
       ],
       "positionals": [],
@@ -3588,7 +3979,8 @@
           "default": false,
           "aliases": [],
           "repeatable": false,
-          "required": false
+          "required": false,
+          "domain": null
         },
         {
           "name": "preset",
@@ -3596,7 +3988,8 @@
           "default": "",
           "aliases": [],
           "repeatable": false,
-          "required": false
+          "required": false,
+          "domain": null
         },
         {
           "name": "preset-json",
@@ -3604,7 +3997,8 @@
           "default": null,
           "aliases": [],
           "repeatable": false,
-          "required": false
+          "required": false,
+          "domain": null
         },
         {
           "name": "set",
@@ -3612,7 +4006,8 @@
           "default": [],
           "aliases": [],
           "repeatable": true,
-          "required": false
+          "required": false,
+          "domain": null
         }
       ],
       "positionals": [
@@ -3758,7 +4153,8 @@
           "default": null,
           "aliases": [],
           "repeatable": false,
-          "required": false
+          "required": false,
+          "domain": null
         },
         {
           "name": "json",
@@ -3766,7 +4162,8 @@
           "default": false,
           "aliases": [],
           "repeatable": false,
-          "required": false
+          "required": false,
+          "domain": null
         },
         {
           "name": "output",
@@ -3776,7 +4173,8 @@
             "o"
           ],
           "repeatable": false,
-          "required": false
+          "required": false,
+          "domain": null
         },
         {
           "name": "pitch-semitones",
@@ -3784,7 +4182,8 @@
           "default": null,
           "aliases": [],
           "repeatable": false,
-          "required": false
+          "required": false,
+          "domain": null
         },
         {
           "name": "preset",
@@ -3792,7 +4191,8 @@
           "default": "",
           "aliases": [],
           "repeatable": false,
-          "required": false
+          "required": false,
+          "domain": null
         },
         {
           "name": "preset-json",
@@ -3800,7 +4200,8 @@
           "default": null,
           "aliases": [],
           "repeatable": false,
-          "required": false
+          "required": false,
+          "domain": null
         },
         {
           "name": "preset-pack",
@@ -3808,7 +4209,8 @@
           "default": null,
           "aliases": [],
           "repeatable": false,
-          "required": false
+          "required": false,
+          "domain": null
         },
         {
           "name": "set",
@@ -3816,7 +4218,8 @@
           "default": [],
           "aliases": [],
           "repeatable": true,
-          "required": false
+          "required": false,
+          "domain": null
         }
       ],
       "positionals": [
@@ -3924,7 +4327,8 @@
           "default": false,
           "aliases": [],
           "repeatable": false,
-          "required": false
+          "required": false,
+          "domain": null
         }
       ],
       "positionals": [],
@@ -3964,7 +4368,8 @@
           "default": null,
           "aliases": [],
           "repeatable": false,
-          "required": true
+          "required": true,
+          "domain": null
         },
         {
           "name": "json",
@@ -3972,7 +4377,8 @@
           "default": false,
           "aliases": [],
           "repeatable": false,
-          "required": false
+          "required": false,
+          "domain": null
         }
       ],
       "positionals": [],
@@ -4024,7 +4430,8 @@
           "default": false,
           "aliases": [],
           "repeatable": false,
-          "required": false
+          "required": false,
+          "domain": null
         },
         {
           "name": "bits",
@@ -4032,7 +4439,18 @@
           "default": 16,
           "aliases": [],
           "repeatable": false,
-          "required": false
+          "required": false,
+          "domain": {
+            "choices": [
+              "16",
+              "24"
+            ],
+            "minimum": null,
+            "exclusiveMinimum": false,
+            "maximum": null,
+            "exclusiveMaximum": false,
+            "rejectExit": "invalid_parameter"
+          }
         },
         {
           "name": "ceiling-db",
@@ -4040,7 +4458,8 @@
           "default": -1,
           "aliases": [],
           "repeatable": false,
-          "required": false
+          "required": false,
+          "domain": null
         },
         {
           "name": "config",
@@ -4048,7 +4467,8 @@
           "default": null,
           "aliases": [],
           "repeatable": false,
-          "required": false
+          "required": false,
+          "domain": null
         },
         {
           "name": "enable-repair",
@@ -4056,7 +4476,8 @@
           "default": false,
           "aliases": [],
           "repeatable": false,
-          "required": false
+          "required": false,
+          "domain": null
         },
         {
           "name": "explain",
@@ -4064,7 +4485,8 @@
           "default": false,
           "aliases": [],
           "repeatable": false,
-          "required": false
+          "required": false,
+          "domain": null
         },
         {
           "name": "json",
@@ -4072,7 +4494,8 @@
           "default": false,
           "aliases": [],
           "repeatable": false,
-          "required": false
+          "required": false,
+          "domain": null
         },
         {
           "name": "output",
@@ -4082,7 +4505,8 @@
             "o"
           ],
           "repeatable": false,
-          "required": false
+          "required": false,
+          "domain": null
         },
         {
           "name": "params",
@@ -4090,7 +4514,8 @@
           "default": "",
           "aliases": [],
           "repeatable": false,
-          "required": false
+          "required": false,
+          "domain": null
         },
         {
           "name": "preset",
@@ -4098,7 +4523,8 @@
           "default": "",
           "aliases": [],
           "repeatable": false,
-          "required": false
+          "required": false,
+          "domain": null
         },
         {
           "name": "report",
@@ -4106,7 +4532,8 @@
           "default": null,
           "aliases": [],
           "repeatable": false,
-          "required": false
+          "required": false,
+          "domain": null
         },
         {
           "name": "target-lufs",
@@ -4114,7 +4541,8 @@
           "default": -14,
           "aliases": [],
           "repeatable": false,
-          "required": false
+          "required": false,
+          "domain": null
         },
         {
           "name": "true-peak-oversample",
@@ -4122,7 +4550,21 @@
           "default": 4,
           "aliases": [],
           "repeatable": false,
-          "required": false
+          "required": false,
+          "domain": {
+            "choices": [
+              "1",
+              "2",
+              "4",
+              "8",
+              "16"
+            ],
+            "minimum": null,
+            "exclusiveMinimum": false,
+            "maximum": null,
+            "exclusiveMaximum": false,
+            "rejectExit": "usage"
+          }
         }
       ],
       "positionals": [
@@ -4212,7 +4654,8 @@
           "default": 0.2,
           "aliases": [],
           "repeatable": false,
-          "required": false
+          "required": false,
+          "domain": null
         },
         {
           "name": "height",
@@ -4220,7 +4663,8 @@
           "default": 3,
           "aliases": [],
           "repeatable": false,
-          "required": false
+          "required": false,
+          "domain": null
         },
         {
           "name": "ism-order",
@@ -4228,7 +4672,8 @@
           "default": 3,
           "aliases": [],
           "repeatable": false,
-          "required": false
+          "required": false,
+          "domain": null
         },
         {
           "name": "json",
@@ -4236,7 +4681,8 @@
           "default": false,
           "aliases": [],
           "repeatable": false,
-          "required": false
+          "required": false,
+          "domain": null
         },
         {
           "name": "length",
@@ -4244,7 +4690,8 @@
           "default": 7,
           "aliases": [],
           "repeatable": false,
-          "required": false
+          "required": false,
+          "domain": null
         },
         {
           "name": "listener-x",
@@ -4252,7 +4699,8 @@
           "default": 5,
           "aliases": [],
           "repeatable": false,
-          "required": false
+          "required": false,
+          "domain": null
         },
         {
           "name": "listener-y",
@@ -4260,7 +4708,8 @@
           "default": 4,
           "aliases": [],
           "repeatable": false,
-          "required": false
+          "required": false,
+          "domain": null
         },
         {
           "name": "listener-z",
@@ -4268,7 +4717,8 @@
           "default": 1.7,
           "aliases": [],
           "repeatable": false,
-          "required": false
+          "required": false,
+          "domain": null
         },
         {
           "name": "max-seconds",
@@ -4276,7 +4726,8 @@
           "default": 0,
           "aliases": [],
           "repeatable": false,
-          "required": false
+          "required": false,
+          "domain": null
         },
         {
           "name": "output",
@@ -4286,7 +4737,8 @@
             "o"
           ],
           "repeatable": false,
-          "required": false
+          "required": false,
+          "domain": null
         },
         {
           "name": "sabine",
@@ -4294,7 +4746,8 @@
           "default": false,
           "aliases": [],
           "repeatable": false,
-          "required": false
+          "required": false,
+          "domain": null
         },
         {
           "name": "sample-rate",
@@ -4302,7 +4755,8 @@
           "default": 48000,
           "aliases": [],
           "repeatable": false,
-          "required": false
+          "required": false,
+          "domain": null
         },
         {
           "name": "seed",
@@ -4310,7 +4764,8 @@
           "default": 1,
           "aliases": [],
           "repeatable": false,
-          "required": false
+          "required": false,
+          "domain": null
         },
         {
           "name": "source-x",
@@ -4318,7 +4773,8 @@
           "default": 1,
           "aliases": [],
           "repeatable": false,
-          "required": false
+          "required": false,
+          "domain": null
         },
         {
           "name": "source-y",
@@ -4326,7 +4782,8 @@
           "default": 1,
           "aliases": [],
           "repeatable": false,
-          "required": false
+          "required": false,
+          "domain": null
         },
         {
           "name": "source-z",
@@ -4334,7 +4791,8 @@
           "default": 1.2,
           "aliases": [],
           "repeatable": false,
-          "required": false
+          "required": false,
+          "domain": null
         },
         {
           "name": "width",
@@ -4342,7 +4800,8 @@
           "default": 5,
           "aliases": [],
           "repeatable": false,
-          "required": false
+          "required": false,
+          "domain": null
         }
       ],
       "positionals": [],
@@ -4403,7 +4862,8 @@
           "default": 200,
           "aliases": [],
           "repeatable": false,
-          "required": false
+          "required": false,
+          "domain": null
         },
         {
           "name": "bpm-min",
@@ -4411,7 +4871,8 @@
           "default": 60,
           "aliases": [],
           "repeatable": false,
-          "required": false
+          "required": false,
+          "domain": null
         },
         {
           "name": "hop-length",
@@ -4419,7 +4880,8 @@
           "default": 512,
           "aliases": [],
           "repeatable": false,
-          "required": false
+          "required": false,
+          "domain": null
         },
         {
           "name": "json",
@@ -4427,7 +4889,8 @@
           "default": false,
           "aliases": [],
           "repeatable": false,
-          "required": false
+          "required": false,
+          "domain": null
         },
         {
           "name": "n-fft",
@@ -4435,7 +4898,8 @@
           "default": 2048,
           "aliases": [],
           "repeatable": false,
-          "required": false
+          "required": false,
+          "domain": null
         },
         {
           "name": "start-bpm",
@@ -4443,7 +4907,8 @@
           "default": 120,
           "aliases": [],
           "repeatable": false,
-          "required": false
+          "required": false,
+          "domain": null
         }
       ],
       "positionals": [
@@ -4523,7 +4988,18 @@
           "default": "pyin",
           "aliases": [],
           "repeatable": false,
-          "required": false
+          "required": false,
+          "domain": {
+            "choices": [
+              "yin",
+              "pyin"
+            ],
+            "minimum": null,
+            "exclusiveMinimum": false,
+            "maximum": null,
+            "exclusiveMaximum": false,
+            "rejectExit": "invalid_parameter"
+          }
         },
         {
           "name": "fmax",
@@ -4531,7 +5007,15 @@
           "default": 2093,
           "aliases": [],
           "repeatable": false,
-          "required": false
+          "required": false,
+          "domain": {
+            "choices": [],
+            "minimum": 0,
+            "exclusiveMinimum": true,
+            "maximum": null,
+            "exclusiveMaximum": false,
+            "rejectExit": "usage"
+          }
         },
         {
           "name": "fmin",
@@ -4539,7 +5023,15 @@
           "default": 65,
           "aliases": [],
           "repeatable": false,
-          "required": false
+          "required": false,
+          "domain": {
+            "choices": [],
+            "minimum": 0,
+            "exclusiveMinimum": true,
+            "maximum": null,
+            "exclusiveMaximum": false,
+            "rejectExit": "usage"
+          }
         },
         {
           "name": "hop-length",
@@ -4547,7 +5039,15 @@
           "default": 512,
           "aliases": [],
           "repeatable": false,
-          "required": false
+          "required": false,
+          "domain": {
+            "choices": [],
+            "minimum": 0,
+            "exclusiveMinimum": true,
+            "maximum": null,
+            "exclusiveMaximum": false,
+            "rejectExit": "usage"
+          }
         },
         {
           "name": "json",
@@ -4555,7 +5055,8 @@
           "default": false,
           "aliases": [],
           "repeatable": false,
-          "required": false
+          "required": false,
+          "domain": null
         },
         {
           "name": "threshold",
@@ -4563,7 +5064,15 @@
           "default": 0.1,
           "aliases": [],
           "repeatable": false,
-          "required": false
+          "required": false,
+          "domain": {
+            "choices": [],
+            "minimum": 0,
+            "exclusiveMinimum": true,
+            "maximum": 1,
+            "exclusiveMaximum": false,
+            "rejectExit": "usage"
+          }
         }
       ],
       "positionals": [
@@ -4611,7 +5120,8 @@
           "default": 5,
           "aliases": [],
           "repeatable": false,
-          "required": false
+          "required": false,
+          "domain": null
         },
         {
           "name": "auto-gain",
@@ -4619,7 +5129,8 @@
           "default": false,
           "aliases": [],
           "repeatable": false,
-          "required": false
+          "required": false,
+          "domain": null
         },
         {
           "name": "auto-threshold",
@@ -4627,7 +5138,8 @@
           "default": false,
           "aliases": [],
           "repeatable": false,
-          "required": false
+          "required": false,
+          "domain": null
         },
         {
           "name": "bits",
@@ -4635,7 +5147,18 @@
           "default": 16,
           "aliases": [],
           "repeatable": false,
-          "required": false
+          "required": false,
+          "domain": {
+            "choices": [
+              "16",
+              "24"
+            ],
+            "minimum": null,
+            "exclusiveMinimum": false,
+            "maximum": null,
+            "exclusiveMaximum": false,
+            "rejectExit": "invalid_parameter"
+          }
         },
         {
           "name": "coeff-mode",
@@ -4643,7 +5166,8 @@
           "default": 0,
           "aliases": [],
           "repeatable": false,
-          "required": false
+          "required": false,
+          "domain": null
         },
         {
           "name": "detector-delay-ms",
@@ -4653,7 +5177,8 @@
             "lookahead-ms"
           ],
           "repeatable": false,
-          "required": false
+          "required": false,
+          "domain": null
         },
         {
           "name": "dynamic",
@@ -4661,7 +5186,8 @@
           "default": false,
           "aliases": [],
           "repeatable": false,
-          "required": false
+          "required": false,
+          "domain": null
         },
         {
           "name": "frequency-hz",
@@ -4669,7 +5195,8 @@
           "default": 1000,
           "aliases": [],
           "repeatable": false,
-          "required": false
+          "required": false,
+          "domain": null
         },
         {
           "name": "gain-db",
@@ -4677,7 +5204,8 @@
           "default": 0,
           "aliases": [],
           "repeatable": false,
-          "required": false
+          "required": false,
+          "domain": null
         },
         {
           "name": "gain-scale",
@@ -4685,7 +5213,8 @@
           "default": 1,
           "aliases": [],
           "repeatable": false,
-          "required": false
+          "required": false,
+          "domain": null
         },
         {
           "name": "json",
@@ -4693,7 +5222,8 @@
           "default": false,
           "aliases": [],
           "repeatable": false,
-          "required": false
+          "required": false,
+          "domain": null
         },
         {
           "name": "output",
@@ -4703,7 +5233,8 @@
             "o"
           ],
           "repeatable": false,
-          "required": false
+          "required": false,
+          "domain": null
         },
         {
           "name": "output-gain-db",
@@ -4711,7 +5242,8 @@
           "default": 0,
           "aliases": [],
           "repeatable": false,
-          "required": false
+          "required": false,
+          "domain": null
         },
         {
           "name": "output-pan",
@@ -4719,7 +5251,8 @@
           "default": 0,
           "aliases": [],
           "repeatable": false,
-          "required": false
+          "required": false,
+          "domain": null
         },
         {
           "name": "params",
@@ -4727,7 +5260,8 @@
           "default": "",
           "aliases": [],
           "repeatable": false,
-          "required": false
+          "required": false,
+          "domain": null
         },
         {
           "name": "phase-mode",
@@ -4735,7 +5269,8 @@
           "default": 1,
           "aliases": [],
           "repeatable": false,
-          "required": false
+          "required": false,
+          "domain": null
         },
         {
           "name": "placement",
@@ -4743,7 +5278,8 @@
           "default": 0,
           "aliases": [],
           "repeatable": false,
-          "required": false
+          "required": false,
+          "domain": null
         },
         {
           "name": "proportional-q",
@@ -4751,7 +5287,8 @@
           "default": false,
           "aliases": [],
           "repeatable": false,
-          "required": false
+          "required": false,
+          "domain": null
         },
         {
           "name": "q",
@@ -4759,7 +5296,8 @@
           "default": 1,
           "aliases": [],
           "repeatable": false,
-          "required": false
+          "required": false,
+          "domain": null
         },
         {
           "name": "range-db",
@@ -4767,7 +5305,8 @@
           "default": -6,
           "aliases": [],
           "repeatable": false,
-          "required": false
+          "required": false,
+          "domain": null
         },
         {
           "name": "ratio",
@@ -4775,7 +5314,8 @@
           "default": 2,
           "aliases": [],
           "repeatable": false,
-          "required": false
+          "required": false,
+          "domain": null
         },
         {
           "name": "release-ms",
@@ -4783,7 +5323,8 @@
           "default": 50,
           "aliases": [],
           "repeatable": false,
-          "required": false
+          "required": false,
+          "domain": null
         },
         {
           "name": "resolution",
@@ -4791,7 +5332,8 @@
           "default": 0,
           "aliases": [],
           "repeatable": false,
-          "required": false
+          "required": false,
+          "domain": null
         },
         {
           "name": "sidechain-freq-hz",
@@ -4799,7 +5341,8 @@
           "default": -1,
           "aliases": [],
           "repeatable": false,
-          "required": false
+          "required": false,
+          "domain": null
         },
         {
           "name": "sidechain-q",
@@ -4807,7 +5350,8 @@
           "default": 1,
           "aliases": [],
           "repeatable": false,
-          "required": false
+          "required": false,
+          "domain": null
         },
         {
           "name": "slope-db-oct",
@@ -4815,7 +5359,8 @@
           "default": 12,
           "aliases": [],
           "repeatable": false,
-          "required": false
+          "required": false,
+          "domain": null
         },
         {
           "name": "threshold-db",
@@ -4823,7 +5368,8 @@
           "default": -24,
           "aliases": [],
           "repeatable": false,
-          "required": false
+          "required": false,
+          "domain": null
         },
         {
           "name": "type",
@@ -4831,7 +5377,8 @@
           "default": 0,
           "aliases": [],
           "repeatable": false,
-          "required": false
+          "required": false,
+          "domain": null
         }
       ],
       "positionals": [
@@ -4895,7 +5442,18 @@
           "default": 16,
           "aliases": [],
           "repeatable": false,
-          "required": false
+          "required": false,
+          "domain": {
+            "choices": [
+              "16",
+              "24"
+            ],
+            "minimum": null,
+            "exclusiveMinimum": false,
+            "maximum": null,
+            "exclusiveMaximum": false,
+            "rejectExit": "invalid_parameter"
+          }
         },
         {
           "name": "json",
@@ -4903,7 +5461,8 @@
           "default": false,
           "aliases": [],
           "repeatable": false,
-          "required": false
+          "required": false,
+          "domain": null
         },
         {
           "name": "output",
@@ -4913,7 +5472,8 @@
             "o"
           ],
           "repeatable": false,
-          "required": false
+          "required": false,
+          "domain": null
         },
         {
           "name": "params",
@@ -4921,7 +5481,8 @@
           "default": "",
           "aliases": [],
           "repeatable": false,
-          "required": false
+          "required": false,
+          "domain": null
         },
         {
           "name": "processor",
@@ -4929,7 +5490,8 @@
           "default": null,
           "aliases": [],
           "repeatable": false,
-          "required": true
+          "required": true,
+          "domain": null
         },
         {
           "name": "stereo",
@@ -4937,7 +5499,8 @@
           "default": false,
           "aliases": [],
           "repeatable": false,
-          "required": false
+          "required": false,
+          "domain": null
         }
       ],
       "positionals": [
@@ -5109,6 +5672,180 @@
         "{audio}",
         "-o",
         "{output}"
+      ],
+      "exit": 2,
+      "legacy_exit": 1,
+      "stdout": "empty",
+      "payload": "none"
+    },
+    {
+      "id": "pitch_reject_negative_fmin",
+      "argv": [
+        "pitch",
+        "{audio}",
+        "--fmin",
+        "-50",
+        "--json"
+      ],
+      "exit": 2,
+      "legacy_exit": 1,
+      "stdout": "empty",
+      "payload": "none"
+    },
+    {
+      "id": "pitch_reject_zero_fmin",
+      "argv": [
+        "pitch",
+        "{audio}",
+        "--fmin",
+        "0",
+        "--json"
+      ],
+      "exit": 2,
+      "legacy_exit": 1,
+      "stdout": "empty",
+      "payload": "none"
+    },
+    {
+      "id": "pitch_reject_inverted_frequency_range",
+      "argv": [
+        "pitch",
+        "{audio}",
+        "--fmin",
+        "3000",
+        "--fmax",
+        "500",
+        "--json"
+      ],
+      "exit": 2,
+      "legacy_exit": 1,
+      "stdout": "empty",
+      "payload": "none"
+    },
+    {
+      "id": "pitch_reject_inverted_range_yin",
+      "argv": [
+        "pitch",
+        "{audio}",
+        "--fmin",
+        "3000",
+        "--fmax",
+        "500",
+        "--algorithm",
+        "yin",
+        "--json"
+      ],
+      "exit": 2,
+      "legacy_exit": 1,
+      "stdout": "empty",
+      "payload": "none"
+    },
+    {
+      "id": "pitch_reject_zero_threshold",
+      "argv": [
+        "pitch",
+        "{audio}",
+        "--threshold",
+        "0",
+        "--json"
+      ],
+      "exit": 2,
+      "legacy_exit": 1,
+      "stdout": "empty",
+      "payload": "none"
+    },
+    {
+      "id": "pitch_reject_threshold_above_one",
+      "argv": [
+        "pitch",
+        "{audio}",
+        "--threshold",
+        "1.5",
+        "--json"
+      ],
+      "exit": 2,
+      "legacy_exit": 1,
+      "stdout": "empty",
+      "payload": "none"
+    },
+    {
+      "id": "pitch_reject_zero_hop_length",
+      "argv": [
+        "pitch",
+        "{audio}",
+        "--hop-length",
+        "0",
+        "--json"
+      ],
+      "exit": 2,
+      "legacy_exit": 1,
+      "stdout": "empty",
+      "payload": "none"
+    },
+    {
+      "id": "pitch_reject_unknown_algorithm",
+      "argv": [
+        "pitch",
+        "{audio}",
+        "--algorithm",
+        "bogus",
+        "--json"
+      ],
+      "exit": 3,
+      "legacy_exit": 1,
+      "stdout": "empty",
+      "payload": "none"
+    },
+    {
+      "id": "mastering_reject_bit_depth",
+      "argv": [
+        "mastering",
+        "{audio}",
+        "--bits",
+        "8",
+        "--json"
+      ],
+      "exit": 3,
+      "legacy_exit": 1,
+      "stdout": "empty",
+      "payload": "none"
+    },
+    {
+      "id": "eq_reject_bit_depth_without_output",
+      "argv": [
+        "eq",
+        "{audio}",
+        "--bits",
+        "8",
+        "--json"
+      ],
+      "exit": 3,
+      "legacy_exit": 1,
+      "stdout": "empty",
+      "payload": "none"
+    },
+    {
+      "id": "mastering_reject_true_peak_oversample",
+      "argv": [
+        "mastering",
+        "{audio}",
+        "--true-peak-oversample",
+        "3",
+        "--json"
+      ],
+      "exit": 2,
+      "legacy_exit": 1,
+      "stdout": "empty",
+      "payload": "none"
+    },
+    {
+      "id": "analyze_reject_negative_chroma_highpass",
+      "argv": [
+        "analyze",
+        "{audio}",
+        "--chroma-highpass",
+        "-5",
+        "--json"
       ],
       "exit": 2,
       "legacy_exit": 1,

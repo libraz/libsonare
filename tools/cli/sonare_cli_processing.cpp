@@ -1,3 +1,5 @@
+#include <cctype>
+
 #include "sonare_cli.h"
 #include "util/constants.h"
 
@@ -7,13 +9,14 @@
 // a hard error mapped to the invalid-parameter exit code, not a silent no-op.
 // trim-silence is the deliberate exception: it doubles as an analysis command
 // (it reports the trimmed length), so its output stays optional.
+//
+// The requirement is declared once, in the CLI registry (required_output()),
+// and enforced by validate_cli_arguments before dispatch. A handler below
+// therefore never re-checks it: when one did, the same missing option produced
+// a different message and a different exit code depending on which command the
+// caller happened to run.
 
 int cmd_pitch_shift(const CliArgs& args, const Audio& audio) {
-  if (args.output_file.empty()) {
-    std::cerr << color::red << "Error: pitch-shift requires output file (-o)" << color::reset
-              << "\n";
-    return 1;
-  }
   if (!args.has("semitones")) {
     std::cerr << color::red << "Error: --semitones required" << color::reset << "\n";
     return 1;
@@ -47,11 +50,6 @@ int cmd_pitch_shift(const CliArgs& args, const Audio& audio) {
 }
 
 int cmd_time_stretch(const CliArgs& args, const Audio& audio) {
-  if (args.output_file.empty()) {
-    std::cerr << color::red << "Error: time-stretch requires output file (-o)" << color::reset
-              << "\n";
-    return 1;
-  }
   if (!args.has("rate")) {
     std::cerr << color::red << "Error: --rate required" << color::reset << "\n";
     return 1;
@@ -85,12 +83,6 @@ int cmd_time_stretch(const CliArgs& args, const Audio& audio) {
 }
 
 int cmd_pitch_correct(const CliArgs& args, const Audio& audio) {
-  if (args.output_file.empty()) {
-    std::cerr << color::red << "Error: pitch-correct requires output file (-o)" << color::reset
-              << "\n";
-    return 1;
-  }
-
   const float current_midi = args.get_float("current-midi", 69.0f);
   const float target_midi = args.get_float("target-midi", 69.0f);
   editing::pitch_editor::PitchCorrector corrector;
@@ -125,12 +117,6 @@ int cmd_pitch_correct(const CliArgs& args, const Audio& audio) {
 }
 
 int cmd_note_stretch(const CliArgs& args, const Audio& audio) {
-  if (args.output_file.empty()) {
-    std::cerr << color::red << "Error: note-stretch requires output file (-o)" << color::reset
-              << "\n";
-    return 1;
-  }
-
   editing::pitch_editor::NoteRegion region;
   region.onset_sample = args.get_int("onset", 0);
   region.offset_sample = args.get_int("offset", 0);
@@ -164,12 +150,6 @@ int cmd_note_stretch(const CliArgs& args, const Audio& audio) {
 #if defined(SONARE_WITH_VOICE_CHANGER)
 
 int cmd_voice_change(const CliArgs& args, const Audio& audio) {
-  if (args.output_file.empty()) {
-    std::cerr << color::red << "Error: voice-change requires output file (-o)" << color::reset
-              << "\n";
-    return 1;
-  }
-
   const bool has_preset = args.has("preset");
   const bool has_preset_json = args.has("preset-json");
   const bool has_preset_pack = args.has("preset-pack");
@@ -396,11 +376,6 @@ int cmd_voice_preset_validate(const CliArgs&, const Audio&) {
 #endif  // SONARE_WITH_VOICE_CHANGER
 
 int cmd_hpss(const CliArgs& args, const Audio& audio) {
-  if (args.output_file.empty()) {
-    std::cerr << color::red << "Error: hpss requires output prefix (-o)" << color::reset << "\n";
-    return 1;
-  }
-
   const int output_mode_count = static_cast<int>(args.has("harmonic-only")) +
                                 static_cast<int>(args.has("percussive-only")) +
                                 static_cast<int>(args.has("with-residual"));
@@ -422,9 +397,15 @@ int cmd_hpss(const CliArgs& args, const Audio& audio) {
               << "\n";
   }
 
+  // The suffix is stripped case-insensitively: a caller writing `-o out.WAV`
+  // means the same thing as `-o out.wav`, and the Python CLI already reads it
+  // that way, so a case-sensitive compare made the two CLIs write differently
+  // named artifacts from one command line.
   std::string base = args.output_file;
-  if (base.size() > 4 && base.substr(base.size() - 4) == ".wav") {
-    base = base.substr(0, base.size() - 4);
+  if (base.size() > 4) {
+    std::string suffix = base.substr(base.size() - 4);
+    for (char& c : suffix) c = static_cast<char>(std::tolower(static_cast<unsigned char>(c)));
+    if (suffix == ".wav") base = base.substr(0, base.size() - 4);
   }
 
   auto save_audio = [](const std::string& path, const Audio& a) {
@@ -479,11 +460,6 @@ int cmd_hpss(const CliArgs& args, const Audio& audio) {
 }
 
 int cmd_preemphasis(const CliArgs& args, const Audio& audio) {
-  if (args.output_file.empty()) {
-    std::cerr << color::red << "Error: preemphasis requires output file (-o)" << color::reset
-              << "\n";
-    return 1;
-  }
   const float coef = args.get_float("coef", 0.97f);
   std::vector<float> input(audio.begin(), audio.end());
   std::vector<float> result = preemphasis(input, coef);
@@ -504,11 +480,6 @@ int cmd_preemphasis(const CliArgs& args, const Audio& audio) {
 }
 
 int cmd_deemphasis(const CliArgs& args, const Audio& audio) {
-  if (args.output_file.empty()) {
-    std::cerr << color::red << "Error: deemphasis requires output file (-o)" << color::reset
-              << "\n";
-    return 1;
-  }
   const float coef = args.get_float("coef", 0.97f);
   std::vector<float> input(audio.begin(), audio.end());
   std::vector<float> result = deemphasis(input, coef);
