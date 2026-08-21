@@ -230,7 +230,8 @@ class RealtimeEngineWasm {
   emscripten::val getMonitorChannelBuffer(int channel, int num_frames);
   void processPreparedWithMonitor(int num_frames);
   emscripten::val processWithMonitor(emscripten::val channels_val);
-  emscripten::val renderOffline(emscripten::val channels_val, int block_size);
+  emscripten::val renderOffline(emscripten::val channels_val, int block_size, bool finalize);
+  void finishOfflineRender();
   emscripten::val bounceOffline(emscripten::val options_val);
   emscripten::val freezeOffline(emscripten::val options_val);
 

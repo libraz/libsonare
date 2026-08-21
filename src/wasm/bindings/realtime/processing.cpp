@@ -76,6 +76,8 @@ std::vector<float> RealtimeEngineWasm::interleave(const std::vector<std::vector<
 
 mastering::final::DitherType RealtimeEngineWasm::ditherTypeFromInt(int value) {
   switch (value) {
+    case 0:
+      return mastering::final::DitherType::None;
     case 1:
       return mastering::final::DitherType::Rpdf;
     case 2:
@@ -83,7 +85,10 @@ mastering::final::DitherType RealtimeEngineWasm::ditherTypeFromInt(int value) {
     case 3:
       return mastering::final::DitherType::NoiseShaped;
     default:
-      return mastering::final::DitherType::None;
+      // Callers validate the ordinal before rendering; falling through to None
+      // here would return undithered audio with no way to tell the request was
+      // ignored, which is what the C-ABI oracle rejects.
+      throw sonare::SonareException(sonare::ErrorCode::InvalidParameter, "unsupported dither type");
   }
 }
 
@@ -318,7 +323,7 @@ val RealtimeEngineWasm::processWithMonitor(val channels_val) {
   return out;
 }
 
-val RealtimeEngineWasm::renderOffline(val channels_val, int block_size) {
+val RealtimeEngineWasm::renderOffline(val channels_val, int block_size, bool finalize) {
   // Mirror the C-ABI oracle (sonare_engine_render_offline): a never-prepared
   // engine renders nothing and cannot signal through telemetry, so fail closed
   // instead of handing back a silent buffer that reads as a completed render.
@@ -334,8 +339,18 @@ val RealtimeEngineWasm::renderOffline(val channels_val, int block_size) {
   }
   ChannelBlock block = readChannels(channels_val);
   engine_.render_offline(block.pointers.data(), static_cast<int>(block.storage.size()),
-                         block.frames, block_size);
+                         block.frames, block_size, finalize);
   return channelsToJs(block);
+}
+
+void RealtimeEngineWasm::finishOfflineRender() {
+  // Mirror the C-ABI oracle (sonare_engine_finish_offline_render): a
+  // never-prepared engine has nothing to release and no way to report, so fail
+  // closed rather than returning as though a render had been finalized.
+  if (engine_.max_block_size() <= 0) {
+    throw sonare::SonareException(sonare::ErrorCode::InvalidState, "engine not prepared");
+  }
+  engine_.finish_offline_render();
 }
 
 val RealtimeEngineWasm::bounceOffline(val options_val) {
@@ -348,8 +363,12 @@ val RealtimeEngineWasm::bounceOffline(val options_val) {
   // C-ABI oracle does (sonare_engine_bounce_offline: dither_bits < 0 ->
   // SONARE_ERROR_INVALID_PARAMETER) instead of being silently clamped to 16.
   const int dither_bits = intProperty(options_val, "ditherBits", 16);
+  // Same for the dither type: the oracle rejects an out-of-range ordinal before
+  // it renders anything rather than silently mapping it to None, which would
+  // hand back undithered audio with no way to tell the request was ignored.
+  const int dither = intProperty(options_val, "dither", 0);
   if (total_frames <= 0 || block_size <= 0 || num_channels <= 0 || source_sample_rate <= 0 ||
-      target_sample_rate <= 0 || dither_bits < 0 ||
+      target_sample_rate <= 0 || dither_bits < 0 || dither < 0 || dither > 3 ||
       !sonare::resource::engine_bounce_shape_fits(total_frames, num_channels, source_sample_rate,
                                                   target_sample_rate)) {
     throw sonare::SonareException(sonare::ErrorCode::InvalidParameter, "invalid bounce options");
@@ -399,7 +418,6 @@ val RealtimeEngineWasm::bounceOffline(val options_val) {
                                             target_lufs);
   }
 
-  const int dither = intProperty(options_val, "dither", 0);
   if (dither != 0) {
     mastering::final::DitherConfig config{};
     config.type = ditherTypeFromInt(dither);
@@ -507,6 +525,7 @@ void registerRealtimeEngineProcessing(class_<RealtimeEngineWasm>& cls) {
       .function("processPreparedWithMonitor", &RealtimeEngineWasm::processPreparedWithMonitor)
       .function("processWithMonitor", &RealtimeEngineWasm::processWithMonitor)
       .function("renderOffline", &RealtimeEngineWasm::renderOffline)
+      .function("finishOfflineRender", &RealtimeEngineWasm::finishOfflineRender)
       .function("bounceOffline", &RealtimeEngineWasm::bounceOffline)
       .function("freezeOffline", &RealtimeEngineWasm::freezeOffline);
 }

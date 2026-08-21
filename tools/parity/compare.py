@@ -244,6 +244,12 @@ _ALIAS_COVERAGE = {
     "mastering_chain_stereo_with_progress_ex": ("mastering_chain_stereo",),
     "master_audio_with_progress_ex": ("master_audio",),
     "master_audio_stereo_with_progress_ex": ("master_audio_stereo",),
+    # The offline render's `finalize` flag is additive in the `_ex` variant;
+    # every facade folds it into the one render_offline / renderOffline member
+    # (a request field on Node and WASM, a keyword argument on Python) rather
+    # than exposing a second spelling. Anchored to the base member, so the
+    # credit lapses if that facade method ever disappears.
+    "engine_render_offline_ex": ("render_offline",),
     # Sidechain EQ -> the mono/stereo-specific setters the facades expose.
     "eq_set_sidechain": ("set_sidechain_mono", "set_sidechain_stereo"),
     # Plural builtin-instrument bounce -> singular facade method (one or many).

@@ -1209,6 +1209,68 @@ def test_realtime_engine_offline_render_matches_process() -> None:
     assert frozen_render[1][0] == pytest.approx(-0.25, abs=0.0001)
 
 
+def _pad_engine() -> RealtimeEngine:
+    """An engine holding a pad that outlives any render span.
+
+    Note-on at frame 0 and no note-off, so whether it is still sounding at the
+    end of a chunk is exactly the state a non-finalizing render must preserve.
+    """
+    engine = RealtimeEngine(sample_rate=48000.0, max_block_size=128)
+    engine.set_builtin_instrument(BuiltinSynthConfig(gain=0.5), 6)
+    engine.set_midi_clips(
+        [
+            EngineMidiClipSchedule(
+                id=1,
+                track_id=6,
+                destination_id=6,
+                length_samples=1 << 20,
+                events=[
+                    EngineMidiEvent(0, word0=_midi1_word(0x9, 0, 60, 100), word_count=1),
+                ],
+            )
+        ]
+    )
+    engine.play()
+    return engine
+
+
+def test_render_offline_chunks_concatenate_to_one_continuous_render() -> None:
+    chunk = 4096
+    chunks = 3
+    total = chunk * chunks
+
+    with _pad_engine() as continuous_engine:
+        continuous = np.asarray(
+            continuous_engine.render_offline([[0.0] * total, [0.0] * total], block_size=128)[0],
+            dtype=np.float32,
+        )
+    # Non-vacuity: comparing two silent renders would prove nothing.
+    assert float(np.max(np.abs(continuous))) > 0.0
+
+    def render_chunks(*, finalize: bool) -> np.ndarray:
+        joined: list[float] = []
+        with _pad_engine() as engine:
+            for _ in range(chunks):
+                rendered = engine.render_offline(
+                    [[0.0] * chunk, [0.0] * chunk], block_size=128, finalize=finalize
+                )
+                joined.extend(rendered[0])
+            engine.finish_offline_render()
+        return np.asarray(joined, dtype=np.float32)
+
+    assert float(np.max(np.abs(render_chunks(finalize=False) - continuous))) < 1e-6
+
+    # Non-vacuity: finalizing every chunk is the defect the flag exists to fix.
+    # The pad's note-off fires at the end of chunk 1 and no note-on is re-sent,
+    # so the tail decays away instead of holding and the join diverges.
+    finalized = render_chunks(finalize=True)
+    assert float(np.max(np.abs(finalized - continuous))) > 1e-3
+    tail = slice(total - chunk, total)
+    assert float(np.sqrt(np.mean(finalized[tail] ** 2))) < 0.5 * float(
+        np.sqrt(np.mean(continuous[tail] ** 2))
+    )
+
+
 # ---------------------------------------------------------------------------
 # Live-MIDI parity surface (built-in instrument bind, CC bindings, queued
 # input source, immediate note/CC injection) added for Node/WASM parity.

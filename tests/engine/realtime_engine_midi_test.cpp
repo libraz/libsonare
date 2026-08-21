@@ -245,6 +245,31 @@ void push_play(RealtimeEngine& engine) {
   REQUIRE(engine.push_command(c));
 }
 
+void seek_to_zero(RealtimeEngine& engine) {
+  sonare::rt::Command seek{};
+  seek.type = sonare::rt::CommandType::kTransportSeekSample;
+  seek.arg.i = 0;
+  seek.sample_time = -1;  // due immediately (clamped to block head)
+  REQUIRE(engine.push_command(seek));
+}
+
+// Renders a span in `chunks` equal calls and returns the concatenated left
+// channel. `finalize` is what each chunk passes; a chunked bounce wants false on
+// every chunk and one finish_offline_render() at the end.
+std::vector<float> render_in_chunks(RealtimeEngine& engine, int64_t chunk_frames, int chunks,
+                                    int block, bool finalize) {
+  std::vector<float> joined;
+  joined.reserve(static_cast<size_t>(chunk_frames) * static_cast<size_t>(chunks));
+  for (int chunk = 0; chunk < chunks; ++chunk) {
+    std::vector<float> l(static_cast<size_t>(chunk_frames), 0.0f);
+    std::vector<float> r(static_cast<size_t>(chunk_frames), 0.0f);
+    float* io[] = {l.data(), r.data()};
+    engine.render_offline(io, 2, chunk_frames, block, finalize);
+    joined.insert(joined.end(), l.begin(), l.end());
+  }
+  return joined;
+}
+
 }  // namespace
 
 TEST_CASE("RealtimeEngine emits MIDI clock and transport bytes while rolling", "[engine][midi]") {
@@ -1134,4 +1159,143 @@ TEST_CASE("render_offline rolls a stopped transport and restores it", "[engine][
   REQUIRE(out_l[0] == Catch::Approx(1.0f));
   REQUIRE(engine.transport().sample_position() == kFrames);
   REQUIRE_FALSE(engine.transport().playing());
+}
+
+TEST_CASE("render_offline re-renders a span identically after seeking back", "[engine][midi]") {
+  constexpr double kSr = 48000.0;
+  constexpr int kBlock = 128;
+  constexpr int64_t kFrames = 4096;
+  RealtimeEngine engine;
+  engine.prepare(kSr, kBlock);
+  CountingInstrument inst;
+  engine.set_midi_instrument(&inst);
+  // A note-on with no note-off in range: it is still sounding when the span
+  // ends, which is the state a non-finalizing render is required to preserve.
+  // The audio clip's impulse puts a transient in the span too, so the comparison
+  // is not over a constant.
+  engine.set_midi_clips(note_on_at_zero());
+  engine.set_clips({impulse_clip(kFrames)});
+
+  // Both passes are entered with the same command sequence (seek to 0, then
+  // play), so the only thing that can make them differ is state the previous
+  // render left behind -- which is what this pins.
+  seek_to_zero(engine);
+  push_play(engine);
+  std::vector<float> first_l(static_cast<size_t>(kFrames), 0.0f);
+  std::vector<float> first_r(static_cast<size_t>(kFrames), 0.0f);
+  float* first[] = {first_l.data(), first_r.data()};
+  engine.render_offline(first, 2, kFrames, kBlock, /*finalize=*/false);
+  REQUIRE(block_peak(first_l) > 0.0f);
+  REQUIRE(engine.midi_sequencer().active_note_count() == 1);
+
+  seek_to_zero(engine);
+  push_play(engine);
+  std::vector<float> second_l(static_cast<size_t>(kFrames), 0.0f);
+  std::vector<float> second_r(static_cast<size_t>(kFrames), 0.0f);
+  float* second[] = {second_l.data(), second_r.data()};
+  engine.render_offline(second, 2, kFrames, kBlock, /*finalize=*/false);
+
+  REQUIRE(second_l == first_l);
+  REQUIRE(second_r == first_r);
+
+  engine.finish_offline_render();
+  engine.set_midi_instrument(nullptr);
+}
+
+TEST_CASE("a chunked render_offline concatenates to one continuous render", "[engine][midi]") {
+  constexpr double kSr = 48000.0;
+  constexpr int kBlock = 128;
+  constexpr int64_t kChunk = 48000;  // one second
+  constexpr int kChunks = 3;
+  constexpr int64_t kTotal = kChunk * kChunks;
+
+  // Reference: the whole span in one call. The finalize this call does happens
+  // after its last sample, so it cannot affect the span it just rendered.
+  RealtimeEngine continuous;
+  continuous.prepare(kSr, kBlock);
+  CountingInstrument continuous_inst;
+  continuous.set_midi_instrument(&continuous_inst);
+  continuous.set_midi_clips(note_on_at_zero());
+  push_play(continuous);
+  std::vector<float> whole_l(static_cast<size_t>(kTotal), 0.0f);
+  std::vector<float> whole_r(static_cast<size_t>(kTotal), 0.0f);
+  float* whole[] = {whole_l.data(), whole_r.data()};
+  continuous.render_offline(whole, 2, kTotal, kBlock);
+  continuous.set_midi_instrument(nullptr);
+
+  // The pad has to be audible for the whole span, or "chunk 2 matches" would
+  // hold trivially between two silences.
+  REQUIRE(whole_l.front() > 0.0f);
+  REQUIRE(whole_l.back() > 0.0f);
+
+  RealtimeEngine chunked;
+  chunked.prepare(kSr, kBlock);
+  CountingInstrument chunked_inst;
+  chunked.set_midi_instrument(&chunked_inst);
+  chunked.set_midi_clips(note_on_at_zero());
+  push_play(chunked);
+  const std::vector<float> joined =
+      render_in_chunks(chunked, kChunk, kChunks, kBlock, /*finalize=*/false);
+  chunked.finish_offline_render();
+  chunked.set_midi_instrument(nullptr);
+
+  REQUIRE(joined.size() == whole_l.size());
+  REQUIRE(joined == whole_l);
+
+  // The boundary itself: no dropout and no amplitude step across it.
+  for (int chunk = 1; chunk < kChunks; ++chunk) {
+    const size_t boundary = static_cast<size_t>(kChunk) * static_cast<size_t>(chunk);
+    REQUIRE(joined[boundary] > 0.0f);
+    REQUIRE(joined[boundary] == Catch::Approx(joined[boundary - 1]));
+  }
+
+  // Non-vacuity: finalizing every chunk is the defect this flag exists to fix.
+  // The pad's note-off fires at the end of chunk 1 and no note-on is re-sent, so
+  // chunk 2 onwards is silent -- if this did NOT differ, the comparison above
+  // would prove nothing about the flag.
+  RealtimeEngine finalized;
+  finalized.prepare(kSr, kBlock);
+  CountingInstrument finalized_inst;
+  finalized.set_midi_instrument(&finalized_inst);
+  finalized.set_midi_clips(note_on_at_zero());
+  push_play(finalized);
+  const std::vector<float> per_chunk_finalized =
+      render_in_chunks(finalized, kChunk, kChunks, kBlock, /*finalize=*/true);
+  finalized.set_midi_instrument(nullptr);
+  REQUIRE(per_chunk_finalized[static_cast<size_t>(kChunk)] == Catch::Approx(0.0f));
+  REQUIRE(per_chunk_finalized != whole_l);
+}
+
+TEST_CASE("finish_offline_render releases what a chunked render left sounding", "[engine][midi]") {
+  constexpr double kSr = 48000.0;
+  constexpr int kBlock = 128;
+  constexpr int64_t kFrames = 512;
+  RealtimeEngine engine;
+  engine.prepare(kSr, kBlock);
+  CountingInstrument inst;
+  engine.set_midi_instrument(&inst);
+  engine.set_midi_clips(note_on_at_zero());
+  push_play(engine);
+
+  std::vector<float> out_l(static_cast<size_t>(kFrames), 0.0f);
+  std::vector<float> out_r(static_cast<size_t>(kFrames), 0.0f);
+  float* out[] = {out_l.data(), out_r.data()};
+  engine.render_offline(out, 2, kFrames, kBlock, /*finalize=*/false);
+
+  // Still held: that is the whole point of not finalizing.
+  REQUIRE(inst.note_on_count_ == 1);
+  REQUIRE(inst.note_off_count_ == 0);
+  REQUIRE(engine.midi_sequencer().active_note_count() == 1);
+
+  engine.finish_offline_render();
+  REQUIRE(inst.note_off_count_ >= 1);
+  REQUIRE(engine.midi_sequencer().active_note_count() == 0);
+
+  // Idempotent: a second call on a settled engine releases nothing further.
+  const int note_offs = inst.note_off_count_;
+  engine.finish_offline_render();
+  REQUIRE(inst.note_off_count_ == note_offs);
+  REQUIRE(engine.midi_sequencer().active_note_count() == 0);
+
+  engine.set_midi_instrument(nullptr);
 }

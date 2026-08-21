@@ -280,7 +280,7 @@ void RealtimeEngine::adopt_tempo_map_snapshot() noexcept {
 }
 
 void RealtimeEngine::render_offline(float* const* out, int num_channels, int64_t total_frames,
-                                    int block_size) {
+                                    int block_size, bool finalize) {
   if (out == nullptr || num_channels <= 0 || total_frames <= 0) {
     return;
   }
@@ -332,11 +332,25 @@ void RealtimeEngine::render_offline(float* const* out, int num_channels, int64_t
   if (metronome_config.enabled) {
     metronome_.set_config(metronome_config);
   }
+  // Only a render that ENDS the timeline releases what is still sounding. Doing
+  // it unconditionally is what made a chunked bounce lose every note held across
+  // a chunk boundary (the note-off fires at the end of chunk N and no note-on is
+  // re-sent in chunk N+1) and drop out at every boundary from the cleared delay
+  // lines.
+  if (finalize) {
+    finish_offline_render();
+  }
+}
+
+void RealtimeEngine::finish_offline_render() noexcept {
 #if defined(SONARE_WITH_ARRANGEMENT)
   midi_sequencer_.all_notes_off(transport_.render_frame());
   flush_pdc_delays();
 #endif
 #if defined(SONARE_WITH_MIXING)
+  // Reached on its own when arrangement is compiled out; flush_pdc_delays()
+  // above already covers the mixing lines when both features are present, and
+  // the reset is idempotent.
   track_mixer_runtime_.flush_pdc_delays();
 #endif
 }

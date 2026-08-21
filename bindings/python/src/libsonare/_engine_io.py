@@ -219,17 +219,46 @@ class _EngineIoMixin:
         return output, monitor
 
     def render_offline(
-        self, channels: Sequence[Sequence[float]], *, block_size: int = 128
+        self,
+        channels: Sequence[Sequence[float]],
+        *,
+        block_size: int = 128,
+        finalize: bool = True,
     ) -> list[list[float]]:
+        """Render one offline span from the current transport position.
+
+        ``finalize`` says whether this call ends the timeline. True (the
+        default, and what a one-shot bounce wants) releases every sounding note
+        and flushes the PDC / alignment delay lines before returning. False
+        renders one CHUNK of a longer timeline: a note held across the chunk
+        boundary keeps sounding into the next call and the delay lines carry
+        their history over, so consecutive chunks concatenate to exactly what
+        one continuous render of the same span produces. Call
+        ``finish_offline_render`` once after the last chunk.
+        """
         arrays, ptrs, frame_count = self._channel_arrays(channels)
         _check(
-            _get_lib().sonare_engine_render_offline(
-                self._require_handle(), ptrs, len(arrays), int(frame_count), int(block_size)
+            _get_lib().sonare_engine_render_offline_ex(
+                self._require_handle(),
+                ptrs,
+                len(arrays),
+                int(frame_count),
+                int(block_size),
+                1 if finalize else 0,
             )
         )
         return [
             np.frombuffer(array, dtype=np.float32, count=frame_count).tolist() for array in arrays
         ]
+
+    def finish_offline_render(self) -> None:
+        """End a chunked offline render.
+
+        Releases every note the sequencer still holds and flushes the PDC /
+        alignment delay lines. Only needed after ``render_offline(...,
+        finalize=False)``; the finalizing form does it itself.
+        """
+        _check(_get_lib().sonare_engine_finish_offline_render(self._require_handle()))
 
     def bounce_offline(self, options: EngineBounceOptions) -> EngineBounceResult:
         lib = _get_lib()

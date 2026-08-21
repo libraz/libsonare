@@ -226,13 +226,23 @@ Napi::Value RealtimeEngineWrap::RenderOffline(const Napi::CallbackInfo& info) {
   Napi::Env env = info.Env();
   ChannelBlock block = ReadChannels(info, 0);
   if (env.IsExceptionPending()) return env.Undefined();
-  const int block_size =
-      info.Length() > 1 && !info[1].IsUndefined() ? info[1].As<Napi::Number>().Int32Value() : 128;
-  ThrowIfError(env, sonare_engine_render_offline(engine_, block.pointers.data(),
-                                                 static_cast<int>(block.pointers.size()),
-                                                 block.frames, block_size));
+  int block_size = 128;
+  bool finalize = true;
+  if (!OptionalIntArg(env, info, 1, "blockSize", 128, &block_size) ||
+      !OptionalBoolArg(env, info, 2, "finalize", true, &finalize)) {
+    return env.Undefined();
+  }
+  ThrowIfError(env, sonare_engine_render_offline_ex(engine_, block.pointers.data(),
+                                                    static_cast<int>(block.pointers.size()),
+                                                    block.frames, block_size, finalize ? 1 : 0));
   if (env.IsExceptionPending()) return env.Undefined();
   return ChannelsToJs(env, block);
+}
+
+Napi::Value RealtimeEngineWrap::FinishOfflineRender(const Napi::CallbackInfo& info) {
+  Napi::Env env = info.Env();
+  ThrowIfError(env, sonare_engine_finish_offline_render(engine_));
+  return env.Undefined();
 }
 
 Napi::Value RealtimeEngineWrap::BounceOffline(const Napi::CallbackInfo& info) {

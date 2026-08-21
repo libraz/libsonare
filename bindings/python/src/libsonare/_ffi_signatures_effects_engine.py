@@ -787,6 +787,17 @@ def configure_effects_engine_signatures(lib: ctypes.CDLL) -> None:
         ctypes.c_int64,
         ctypes.c_int,
     ]
+    lib.sonare_engine_render_offline_ex.restype = ctypes.c_int32
+    lib.sonare_engine_render_offline_ex.argtypes = [
+        ctypes.c_void_p,
+        ctypes.POINTER(ctypes.POINTER(ctypes.c_float)),
+        ctypes.c_int,
+        ctypes.c_int64,
+        ctypes.c_int,
+        ctypes.c_int,
+    ]
+    lib.sonare_engine_finish_offline_render.restype = ctypes.c_int32
+    lib.sonare_engine_finish_offline_render.argtypes = [ctypes.c_void_p]
     lib.sonare_engine_bounce_options_default.restype = ctypes.c_int32
     lib.sonare_engine_bounce_options_default.argtypes = [
         ctypes.POINTER(SonareEngineBounceOptions),

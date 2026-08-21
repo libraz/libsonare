@@ -143,6 +143,43 @@ export interface MidiCcBindOptions {
   maxValue?: number;
 }
 
+/** Request form of {@link RealtimeEngine.renderOffline}. */
+export interface RenderOfflineRequest {
+  /** One buffer per output plane; their common length is the render span. */
+  channels: Float32Array[];
+  /** Render block size. Default `128`. */
+  blockSize?: number;
+  /**
+   * Whether this call ends the timeline. `true` (the default, and what a
+   * one-shot bounce wants) releases every sounding note and flushes the PDC /
+   * alignment delay lines before returning. `false` renders one CHUNK of a
+   * longer timeline: a note held across the chunk boundary keeps sounding into
+   * the next call and the delay lines carry their history over, so consecutive
+   * chunks concatenate to exactly what one continuous render of the same span
+   * produces. Call {@link RealtimeEngine.finishOfflineRender} once after the
+   * last chunk.
+   */
+  finalize?: boolean;
+}
+
+/**
+ * One normalizer for both call forms, so the request object and the positional
+ * overload cannot drift in their defaults.
+ */
+function normalizeRenderOfflineRequest(
+  channelsOrRequest: Float32Array[] | RenderOfflineRequest,
+  blockSize: number,
+): { channels: Float32Array[]; blockSize: number; finalize: boolean } {
+  const request = Array.isArray(channelsOrRequest)
+    ? { channels: channelsOrRequest, blockSize }
+    : channelsOrRequest;
+  return {
+    channels: request.channels,
+    blockSize: request.blockSize ?? 128,
+    finalize: request.finalize ?? true,
+  };
+}
+
 export interface EngineCapabilities {
   engineAbiVersion: number;
   expectedEngineAbiVersion: number;
@@ -1117,9 +1154,27 @@ export class RealtimeEngine {
    * Render `channels` offline from the current transport position. Requesting
    * more planes than `prepare` reserved throws an `InvalidParameter`
    * `SonareError` rather than returning silence that reads as a finished render.
+   *
+   * Set `finalize: false` to render one chunk of a longer timeline; see
+   * {@link RenderOfflineRequest.finalize} and {@link finishOfflineRender}.
    */
-  renderOffline(channels: Float32Array[], blockSize = 128): Float32Array[] {
-    return this.native.renderOffline(channels, blockSize);
+  renderOffline(request: RenderOfflineRequest): Float32Array[];
+  renderOffline(channels: Float32Array[], blockSize?: number): Float32Array[];
+  renderOffline(
+    channelsOrRequest: Float32Array[] | RenderOfflineRequest,
+    blockSize = 128,
+  ): Float32Array[] {
+    const request = normalizeRenderOfflineRequest(channelsOrRequest, blockSize);
+    return this.native.renderOffline(request.channels, request.blockSize, request.finalize);
+  }
+
+  /**
+   * End a chunked offline render: release every note the sequencer still holds
+   * and flush the PDC / alignment delay lines. Only needed after
+   * `renderOffline({ finalize: false })`; the finalizing form does it itself.
+   */
+  finishOfflineRender(): void {
+    this.native.finishOfflineRender();
   }
 
   /**

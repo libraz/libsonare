@@ -81,8 +81,9 @@ SonareError sonare_engine_process_with_monitor(SonareRealtimeEngine* engine, flo
   return SONARE_OK;
 }
 
-SonareError sonare_engine_render_offline(SonareRealtimeEngine* engine, float* const* out,
-                                         int num_channels, int64_t total_frames, int block_size) {
+SonareError sonare_engine_render_offline_ex(SonareRealtimeEngine* engine, float* const* out,
+                                            int num_channels, int64_t total_frames, int block_size,
+                                            int finalize) {
   SONARE_C_API_ENTRY;
   if (!engine || !out || num_channels <= 0 || total_frames < 0 || block_size <= 0) {
     return SONARE_ERROR_INVALID_PARAMETER;
@@ -102,9 +103,27 @@ SonareError sonare_engine_render_offline(SonareRealtimeEngine* engine, float* co
     return SONARE_ERROR_INVALID_PARAMETER;
   }
   SONARE_C_TRY
-  engine->engine.render_offline(out, num_channels, total_frames, block_size);
+  engine->engine.render_offline(out, num_channels, total_frames, block_size, finalize != 0);
   return SONARE_OK;
   SONARE_C_CATCH
+}
+
+SonareError sonare_engine_render_offline(SonareRealtimeEngine* engine, float* const* out,
+                                         int num_channels, int64_t total_frames, int block_size) {
+  return sonare_engine_render_offline_ex(engine, out, num_channels, total_frames, block_size, 1);
+}
+
+SonareError sonare_engine_finish_offline_render(SonareRealtimeEngine* engine) {
+  SONARE_C_API_ENTRY;
+  if (!engine) return SONARE_ERROR_INVALID_PARAMETER;
+  // Same never-prepared rule as the render entry points: with no reserved
+  // telemetry ring there is nothing to release and nothing that could report,
+  // so say so rather than returning OK for a no-op.
+  if (engine->engine.max_block_size() <= 0) {
+    return SONARE_ERROR_INVALID_STATE;
+  }
+  engine->engine.finish_offline_render();
+  return SONARE_OK;
 }
 
 SonareError sonare_engine_bounce_options_default(SonareEngineBounceOptions* options) {

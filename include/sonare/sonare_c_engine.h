@@ -442,8 +442,31 @@ SonareError sonare_engine_process(SonareRealtimeEngine* engine, float* const* ch
 SonareError sonare_engine_process_with_monitor(SonareRealtimeEngine* engine, float* const* channels,
                                                float* const* monitor_out, int num_channels,
                                                int num_frames);
+/// @brief Renders @p total_frames offline from the current transport position,
+///        ending the timeline: notes still sounding are released and the PDC /
+///        alignment delay lines are flushed before returning.
+/// @details Equivalent to sonare_engine_render_offline_ex with @c finalize 1.
 SonareError sonare_engine_render_offline(SonareRealtimeEngine* engine, float* const* out,
                                          int num_channels, int64_t total_frames, int block_size);
+/// @brief sonare_engine_render_offline with explicit control over whether this
+///        call ends the timeline.
+/// @details @p finalize 0 renders one CHUNK of a longer timeline: a note held
+///   across the chunk boundary keeps sounding into the next call and the delay
+///   lines carry their history over, so consecutive chunks concatenate to
+///   exactly what one continuous render of the same span produces. Non-zero
+///   ends the timeline, which is what a one-shot bounce wants and what
+///   sonare_engine_render_offline does. A chunked caller passes 0 for every
+///   chunk and calls sonare_engine_finish_offline_render once at the end.
+SonareError sonare_engine_render_offline_ex(SonareRealtimeEngine* engine, float* const* out,
+                                            int num_channels, int64_t total_frames, int block_size,
+                                            int finalize);
+/// @brief Ends an offline render: releases every note the sequencer still holds
+///        and flushes the PDC / alignment delay lines.
+/// @details Only needed after a chunked render (sonare_engine_render_offline_ex
+///   with @c finalize 0); the finalizing forms run it themselves. Idempotent.
+/// @return @c SONARE_ERROR_INVALID_PARAMETER when @p engine is NULL,
+///         @c SONARE_ERROR_INVALID_STATE when the engine was never prepared.
+SonareError sonare_engine_finish_offline_render(SonareRealtimeEngine* engine);
 SonareError sonare_engine_bounce_offline(SonareRealtimeEngine* engine,
                                          const SonareEngineBounceOptions* options,
                                          SonareEngineBounceResult* out);

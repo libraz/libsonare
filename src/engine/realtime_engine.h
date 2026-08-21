@@ -211,7 +211,28 @@ class RealtimeEngine : private ClipPageRequestSink {
   /// @throws SonareException(InvalidParameter) when @p num_channels exceeds
   ///         @c prepared_channels(); the render would otherwise produce silence
   ///         that reads as a successful result.
-  void render_offline(float* const* out, int num_channels, int64_t total_frames, int block_size);
+  /// @param finalize Whether this call ENDS the timeline. True (the default, and
+  ///        what a one-shot bounce or freeze wants) releases every sounding note
+  ///        and flushes the PDC / alignment delay lines through
+  ///        @c finish_offline_render before returning. False renders one CHUNK
+  ///        of a longer timeline: a note held across the chunk boundary keeps
+  ///        sounding into the next call, the sequencer's active-note table is
+  ///        left intact, and the delay lines carry their history over, so
+  ///        consecutive chunks concatenate to exactly what one continuous render
+  ///        of the same span produces. Call @c finish_offline_render once after
+  ///        the last chunk to release what is still held.
+  void render_offline(float* const* out, int num_channels, int64_t total_frames, int block_size,
+                      bool finalize = true);
+
+  /// @brief Ends an offline render: releases every note the sequencer still
+  /// holds and flushes the PDC / alignment delay lines.
+  ///
+  /// @c render_offline runs this itself unless it was asked not to finalize, so
+  /// a single-call bounce never needs it. A chunked render calls it once after
+  /// its last chunk; calling it between chunks is what breaks the chunking, and
+  /// that is exactly the difference the @c finalize flag controls. Idempotent
+  /// on an engine with nothing sounding and empty delay lines.
+  void finish_offline_render() noexcept;
 
   bool push_command(const rt::Command& command) noexcept;
   bool pop_telemetry(Telemetry& out) noexcept;

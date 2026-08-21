@@ -1199,7 +1199,8 @@ export interface WasmRealtimeEngine {
   getMonitorChannelBuffer: (channel: number, numFrames: number) => Float32Array;
   processPreparedWithMonitor: (numFrames: number) => void;
   processWithMonitor: (channels: Float32Array[]) => WasmEngineProcessWithMonitorResult;
-  renderOffline: (channels: Float32Array[], blockSize: number) => Float32Array[];
+  renderOffline: (channels: Float32Array[], blockSize: number, finalize: boolean) => Float32Array[];
+  finishOfflineRender: () => void;
   bounceOffline: (options: WasmEngineBounceOptions) => WasmEngineBounceResult;
   freezeOffline: (options: WasmEngineFreezeOptions) => WasmEngineFreezeResult;
   drainTelemetry: (maxRecords: number) => WasmEngineTelemetry[];
