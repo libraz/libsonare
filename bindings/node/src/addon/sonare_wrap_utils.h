@@ -76,7 +76,16 @@ bool IsInt32Array(const Napi::Value& value);
 /// @brief Throw a JS SonareError when @p err is not SONARE_OK; no-op otherwise.
 ///        Shared wrapper for the recurring
 ///        `if (err != SONARE_OK) ThrowSonareError(env, err);` guard.
+///
+/// The addon is built with NAPI_DISABLE_CPP_EXCEPTIONS, where a second N-API
+/// throw raised while an exception is already pending is a fatal abort
+/// (SIGABRT) rather than a JS-visible error. A caller that already left an
+/// exception pending therefore gets no second throw here: the first error is
+/// the one the caller can act on, and it stays the reported one. This is a
+/// backstop, not a licence to call the C ABI with unread arguments — a caller
+/// must still bail out before the native call.
 inline void ThrowIfError(Napi::Env env, SonareError err) {
+  if (env.IsExceptionPending()) return;
   if (err != SONARE_OK) {
     ThrowSonareError(env, err);
   }

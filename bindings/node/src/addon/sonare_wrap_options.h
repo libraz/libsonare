@@ -91,6 +91,13 @@ inline bool node_bool_option(const Napi::Object& object, const char* key, bool f
   return value.IsBoolean() ? value.As<Napi::Boolean>().Value() : fallback;
 }
 
+/// @brief Read a UTF-8 string option from a JS object, falling back if missing.
+inline std::string node_string_option(const Napi::Object& object, const char* key,
+                                      const char* fallback) {
+  Napi::Value value = object.Get(key);
+  return value.IsString() ? value.As<Napi::String>().Utf8Value() : std::string(fallback);
+}
+
 /// @brief Read an int property: undefined/null returns the fallback, otherwise a
 ///        typed read (a non-number raises a pending JS exception; see note above).
 inline int IntProperty(const Napi::Object& obj, const char* key, int fallback) {
@@ -115,6 +122,10 @@ inline uint32_t Uint32Property(const Napi::Object& obj, const char* key, uint32_
 ///          enforce, so this only closes the wrap.
 inline uint8_t MidiByteProperty(Napi::Env env, const Napi::Object& obj, const char* key,
                                 uint8_t fallback) {
+  // An earlier field of the same struct may have left an exception pending; a
+  // RangeError raised on top of it would abort the process instead of reaching
+  // JS. Report nothing and let the caller bail on the first error.
+  if (env.IsExceptionPending()) return fallback;
   Napi::Value value = obj.Get(key);
   if (value.IsUndefined() || value.IsNull()) return fallback;
   const double number = value.As<Napi::Number>().DoubleValue();
@@ -211,6 +222,26 @@ inline bool RequiredDoubleValue(Napi::Env env, const Napi::Value& value, const s
   return !env.IsExceptionPending();
 }
 
+/// @brief Read a required int64 value.
+inline bool RequiredInt64Value(Napi::Env env, const Napi::Value& value, const std::string& label,
+                               int64_t* out) {
+  if (!RequireNumberValue(env, value, label)) return false;
+  *out = static_cast<int64_t>(value.As<Napi::Number>().Int64Value());
+  return !env.IsExceptionPending();
+}
+
+/// @brief Read a required boolean value.
+inline bool RequiredBoolValue(Napi::Env env, const Napi::Value& value, const std::string& label,
+                              bool* out) {
+  if (env.IsExceptionPending()) return false;
+  if (!value.IsBoolean()) {
+    Napi::TypeError::New(env, label + " must be a boolean").ThrowAsJavaScriptException();
+    return false;
+  }
+  *out = value.As<Napi::Boolean>().Value();
+  return !env.IsExceptionPending();
+}
+
 /// @brief Read a required UTF-8 string value.
 inline bool RequiredStringValue(Napi::Env env, const Napi::Value& value, const std::string& label,
                                 std::string* out) {
@@ -221,6 +252,24 @@ inline bool RequiredStringValue(Napi::Env env, const Napi::Value& value, const s
   }
   *out = value.As<Napi::String>().Utf8Value();
   return !env.IsExceptionPending();
+}
+
+/// @brief Value-level counterpart of MidiByteProperty: read a required value
+///        destined for a uint8_t C-ABI field, rejecting anything the narrowing
+///        cast would wrap (256 -> 0). A non-number is a TypeError, a
+///        non-integer or out-of-[0,255] number a RangeError.
+inline bool RequiredMidiByteValue(Napi::Env env, const Napi::Value& value, const std::string& label,
+                                  uint8_t* out) {
+  if (!RequireNumberValue(env, value, label)) return false;
+  const double number = value.As<Napi::Number>().DoubleValue();
+  if (env.IsExceptionPending()) return false;
+  if (!(number >= 0.0) || number > 255.0 || std::floor(number) != number) {
+    Napi::RangeError::New(env, label + " must be an integer in [0, 255]")
+        .ThrowAsJavaScriptException();
+    return false;
+  }
+  *out = static_cast<uint8_t>(number);
+  return true;
 }
 
 /// @brief Read a required int property from a JS object.
@@ -252,12 +301,137 @@ inline bool RequiredStringProperty(Napi::Env env, const Napi::Object& obj, const
   return RequiredStringValue(env, obj.Get(key), key, out);
 }
 
+// Fourth family, the positional-argument counterpart of the Required*/*Property
+// readers, for entry points whose arguments arrive as info[i] rather than as
+// object keys:
+//   * Required*Arg — the argument must be present with the right type.
+//   * Optional*Arg — an absent, undefined, or null argument reads as @p
+//     fallback; a present argument of the wrong type is exactly ONE catchable
+//     TypeError.
+//
+// Both return false without touching @p out on rejection, so a caller can bail
+// out before its C-ABI call. That bail-out is the point: the inline
+// `info[i].As<Napi::Number>().Uint32Value()` form these replace yields a dummy
+// 0 alongside a pending exception, and the C-ABI call built from it then runs
+// with the dummy value, flipping engine state to the opposite of what the
+// caller asked for before the error is ever reported.
+
+/// @brief Read a required int positional argument.
+inline bool RequiredIntArg(Napi::Env env, const Napi::CallbackInfo& info, size_t index,
+                           const char* name, int* out) {
+  return RequiredIntValue(env, info[index], name, out);
+}
+
+/// @brief Read a required int64 positional argument.
+inline bool RequiredInt64Arg(Napi::Env env, const Napi::CallbackInfo& info, size_t index,
+                             const char* name, int64_t* out) {
+  return RequiredInt64Value(env, info[index], name, out);
+}
+
+/// @brief Read an optional int positional argument.
+inline bool OptionalIntArg(Napi::Env env, const Napi::CallbackInfo& info, size_t index,
+                           const char* name, int fallback, int* out) {
+  if (env.IsExceptionPending()) return false;
+  const Napi::Value value = info[index];
+  if (value.IsUndefined() || value.IsNull()) {
+    *out = fallback;
+    return true;
+  }
+  return RequiredIntValue(env, value, name, out);
+}
+
+/// @brief Read an optional uint32 positional argument.
+inline bool OptionalUint32Arg(Napi::Env env, const Napi::CallbackInfo& info, size_t index,
+                              const char* name, uint32_t fallback, uint32_t* out) {
+  if (env.IsExceptionPending()) return false;
+  const Napi::Value value = info[index];
+  if (value.IsUndefined() || value.IsNull()) {
+    *out = fallback;
+    return true;
+  }
+  return RequiredUint32Value(env, value, name, out);
+}
+
+/// @brief Read an optional int64 positional argument.
+inline bool OptionalInt64Arg(Napi::Env env, const Napi::CallbackInfo& info, size_t index,
+                             const char* name, int64_t fallback, int64_t* out) {
+  if (env.IsExceptionPending()) return false;
+  const Napi::Value value = info[index];
+  if (value.IsUndefined() || value.IsNull()) {
+    *out = fallback;
+    return true;
+  }
+  return RequiredInt64Value(env, value, name, out);
+}
+
+/// @brief Read an optional float positional argument.
+inline bool OptionalFloatArg(Napi::Env env, const Napi::CallbackInfo& info, size_t index,
+                             const char* name, float fallback, float* out) {
+  if (env.IsExceptionPending()) return false;
+  const Napi::Value value = info[index];
+  if (value.IsUndefined() || value.IsNull()) {
+    *out = fallback;
+    return true;
+  }
+  return RequiredFloatValue(env, value, name, out);
+}
+
+/// @brief Read an optional double positional argument.
+inline bool OptionalDoubleArg(Napi::Env env, const Napi::CallbackInfo& info, size_t index,
+                              const char* name, double fallback, double* out) {
+  if (env.IsExceptionPending()) return false;
+  const Napi::Value value = info[index];
+  if (value.IsUndefined() || value.IsNull()) {
+    *out = fallback;
+    return true;
+  }
+  return RequiredDoubleValue(env, value, name, out);
+}
+
+/// @brief Read an optional boolean positional argument.
+inline bool OptionalBoolArg(Napi::Env env, const Napi::CallbackInfo& info, size_t index,
+                            const char* name, bool fallback, bool* out) {
+  if (env.IsExceptionPending()) return false;
+  const Napi::Value value = info[index];
+  if (value.IsUndefined() || value.IsNull()) {
+    *out = fallback;
+    return true;
+  }
+  return RequiredBoolValue(env, value, name, out);
+}
+
+/// @brief Read an optional UTF-8 string positional argument.
+inline bool OptionalStringArg(Napi::Env env, const Napi::CallbackInfo& info, size_t index,
+                              const char* name, const char* fallback, std::string* out) {
+  if (env.IsExceptionPending()) return false;
+  const Napi::Value value = info[index];
+  if (value.IsUndefined() || value.IsNull()) {
+    *out = fallback;
+    return true;
+  }
+  return RequiredStringValue(env, value, name, out);
+}
+
+/// @brief Read an optional positional argument destined for a uint8_t C-ABI
+///        field, with the wrap rejection MidiByteProperty applies to keys.
+inline bool OptionalMidiByteArg(Napi::Env env, const Napi::CallbackInfo& info, size_t index,
+                                const char* name, uint8_t fallback, uint8_t* out) {
+  if (env.IsExceptionPending()) return false;
+  const Napi::Value value = info[index];
+  if (value.IsUndefined() || value.IsNull()) {
+    *out = fallback;
+    return true;
+  }
+  return RequiredMidiByteValue(env, value, name, out);
+}
+
 /// @brief Read a positional argument as a size_t, rejecting anything that is not
 ///        a finite non-negative integer representable as both a JS number and a
 ///        native size_t. A wrong type is a TypeError, an out-of-domain number a
 ///        RangeError; both leave @p out untouched and return false.
 inline bool NonNegativeSizeTArg(Napi::Env env, const Napi::CallbackInfo& info, size_t index,
                                 const char* name, size_t* out) {
+  if (env.IsExceptionPending()) return false;
   if (out == nullptr || info.Length() <= index || !info[index].IsNumber()) {
     Napi::TypeError::New(env, std::string(name) + " must be a number").ThrowAsJavaScriptException();
     return false;

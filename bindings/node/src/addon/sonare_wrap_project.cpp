@@ -319,7 +319,8 @@ Napi::Value ProjectWrap::SetMarkerEx(const Napi::CallbackInfo& info) {
 
 Napi::Value ProjectWrap::MarkerByIndex(const Napi::CallbackInfo& info) {
   Napi::Env env = info.Env();
-  const size_t index = static_cast<size_t>(NumberArg(info, 0, 0.0));
+  size_t index = 0;
+  if (!NonNegativeSizeTArg(env, info, 0, "index", &index)) return env.Undefined();
   SonareProjectMarker marker{};
   ThrowIfError(env, sonare_project_marker_by_index(project_, index, &marker));
   if (env.IsExceptionPending()) return env.Undefined();
@@ -339,9 +340,10 @@ Napi::Value ProjectWrap::MarkerByIndex(const Napi::CallbackInfo& info) {
 
 Napi::Value ProjectWrap::TrackByIndex(const Napi::CallbackInfo& info) {
   Napi::Env env = info.Env();
+  size_t index = 0;
+  if (!NonNegativeSizeTArg(env, info, 0, "index", &index)) return env.Undefined();
   SonareProjectTrack track{};
-  ThrowIfError(env, sonare_project_track_by_index(
-                        project_, static_cast<size_t>(NumberArg(info, 0, 0.0)), &track));
+  ThrowIfError(env, sonare_project_track_by_index(project_, index, &track));
   if (env.IsExceptionPending()) return env.Undefined();
   Napi::Object out = Napi::Object::New(env);
   out.Set("id", track.id);
@@ -357,9 +359,10 @@ Napi::Value ProjectWrap::TrackByIndex(const Napi::CallbackInfo& info) {
 
 Napi::Value ProjectWrap::ClipByIndex(const Napi::CallbackInfo& info) {
   Napi::Env env = info.Env();
+  size_t index = 0;
+  if (!NonNegativeSizeTArg(env, info, 0, "index", &index)) return env.Undefined();
   SonareProjectClip clip{};
-  ThrowIfError(env, sonare_project_clip_by_index(
-                        project_, static_cast<size_t>(NumberArg(info, 0, 0.0)), &clip));
+  ThrowIfError(env, sonare_project_clip_by_index(project_, index, &clip));
   if (env.IsExceptionPending()) return env.Undefined();
   Napi::Object out = Napi::Object::New(env);
   out.Set("id", clip.id);
@@ -377,9 +380,10 @@ Napi::Value ProjectWrap::ClipByIndex(const Napi::CallbackInfo& info) {
 
 Napi::Value ProjectWrap::SourceByIndex(const Napi::CallbackInfo& info) {
   Napi::Env env = info.Env();
+  size_t index = 0;
+  if (!NonNegativeSizeTArg(env, info, 0, "index", &index)) return env.Undefined();
   SonareProjectSource source{};
-  ThrowIfError(env, sonare_project_source_by_index(
-                        project_, static_cast<size_t>(NumberArg(info, 0, 0.0)), &source));
+  ThrowIfError(env, sonare_project_source_by_index(project_, index, &source));
   if (env.IsExceptionPending()) return env.Undefined();
 
   AudioSourceMetadataGuard metadata;
@@ -407,9 +411,10 @@ Napi::Value ProjectWrap::SourceByIndex(const Napi::CallbackInfo& info) {
 
 Napi::Value ProjectWrap::TempoSegmentByIndex(const Napi::CallbackInfo& info) {
   Napi::Env env = info.Env();
+  size_t index = 0;
+  if (!NonNegativeSizeTArg(env, info, 0, "index", &index)) return env.Undefined();
   SonareProjectTempoSegment seg{};
-  ThrowIfError(env, sonare_project_tempo_segment_by_index(
-                        project_, static_cast<size_t>(NumberArg(info, 0, 0.0)), &seg));
+  ThrowIfError(env, sonare_project_tempo_segment_by_index(project_, index, &seg));
   if (env.IsExceptionPending()) return env.Undefined();
   Napi::Object out = Napi::Object::New(env);
   // The same three fields setTempoSegments accepts, so a segment read back can
@@ -424,9 +429,10 @@ Napi::Value ProjectWrap::TempoSegmentByIndex(const Napi::CallbackInfo& info) {
 
 Napi::Value ProjectWrap::TimeSignatureByIndex(const Napi::CallbackInfo& info) {
   Napi::Env env = info.Env();
+  size_t index = 0;
+  if (!NonNegativeSizeTArg(env, info, 0, "index", &index)) return env.Undefined();
   SonareProjectTimeSignatureSegment seg{};
-  ThrowIfError(env, sonare_project_time_signature_by_index(
-                        project_, static_cast<size_t>(NumberArg(info, 0, 0.0)), &seg));
+  ThrowIfError(env, sonare_project_time_signature_by_index(project_, index, &seg));
   if (env.IsExceptionPending()) return env.Undefined();
   Napi::Object out = Napi::Object::New(env);
   out.Set("startPpq", Napi::Number::New(env, seg.start_ppq));

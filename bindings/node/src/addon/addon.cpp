@@ -94,11 +94,19 @@ Napi::Value MidiBankProgram(const Napi::CallbackInfo& info) {
       return env.Undefined();
     }
   }
+  // group/channel are uint8_t C-ABI fields; read them with the MidiByte reader
+  // so an out-of-range value is rejected instead of wrapping into a value the
+  // C ABI's own range check accepts.
+  uint8_t group = 0;
+  uint8_t channel = 0;
+  if (!sonare_node::RequiredMidiByteValue(env, info[1], "group", &group) ||
+      !sonare_node::RequiredMidiByteValue(env, info[2], "channel", &channel)) {
+    return env.Undefined();
+  }
   SonareMidiEventPod events[3]{};
   size_t count = 0;
   const SonareError err = sonare_midi_bank_program(
-      info[0].As<Napi::Number>(), static_cast<uint8_t>(info[1].As<Napi::Number>().Uint32Value()),
-      static_cast<uint8_t>(info[2].As<Napi::Number>().Uint32Value()), info[3].As<Napi::Number>(),
+      info[0].As<Napi::Number>(), group, channel, info[3].As<Napi::Number>(),
       info[4].As<Napi::Number>(), info[5].As<Napi::Number>(), events, 3, &count);
   if (err != SONARE_OK) {
     Napi::RangeError::New(env, "invalid MIDI bank/program arguments").ThrowAsJavaScriptException();
@@ -150,14 +158,20 @@ bool CcBindingFromObject(Napi::Env env, Napi::Object object, SonareMidiCcBinding
     return false;
   }
   *out = SonareMidiCcBinding{};
-  out->cc_number = cc_number.As<Napi::Number>().Uint32Value();
+  // Every byte-wide field goes through the MidiByte readers: the C-ABI struct
+  // stores them as uint8_t, so a plain Uint32Value() would let 256 arrive as 0
+  // and 271 as 15 — inside the range the C ABI's own check accepts.
+  if (!sonare_node::RequiredMidiByteValue(env, cc_number, "ccNumber", &out->cc_number)) {
+    return false;
+  }
   // `channel` keeps its "any channel" sentinel for an omitted, null, or
   // undefined value.
-  out->channel = sonare_node::Uint32Property(object, "channel", 0xffu);
-  out->kind = sonare_node::Uint32Property(object, "kind", 0u);
-  out->cc_lsb_number = sonare_node::Uint32Property(object, "ccLsbNumber", 0u);
-  out->selector_msb = sonare_node::Uint32Property(object, "selectorMsb", 0u);
-  out->selector_lsb = sonare_node::Uint32Property(object, "selectorLsb", 0u);
+  out->channel = sonare_node::MidiByteProperty(env, object, "channel", 0xffu);
+  out->kind = sonare_node::MidiByteProperty(env, object, "kind", 0u);
+  out->cc_lsb_number = sonare_node::MidiByteProperty(env, object, "ccLsbNumber", 0u);
+  out->selector_msb = sonare_node::MidiByteProperty(env, object, "selectorMsb", 0u);
+  out->selector_lsb = sonare_node::MidiByteProperty(env, object, "selectorLsb", 0u);
+  if (env.IsExceptionPending()) return false;
   out->param_id = param_id.As<Napi::Number>().Uint32Value();
   out->min_value = sonare_node::FloatProperty(object, "minValue", 0.0f);
   out->max_value = sonare_node::FloatProperty(object, "maxValue", 1.0f);
@@ -209,12 +223,17 @@ Napi::Value MidiCcLearn(const Napi::CallbackInfo& info) {
       return env.Undefined();
     }
   }
+  // min_movement is a uint8_t C-ABI argument; the MidiByte reader rejects the
+  // values a narrowing cast would wrap into an accepted range.
+  uint8_t min_movement = 0;
+  if (!sonare_node::OptionalMidiByteArg(env, info, 4, "minMovement", 0, &min_movement)) {
+    return env.Undefined();
+  }
   SonareMidiCcBinding learned{};
   const SonareError err = sonare_midi_cc_learn(
       events.empty() ? nullptr : events.data(), events.size(),
       info[1].As<Napi::Number>().Uint32Value(), sonare_node::node_arg_float(info, 2, 0.0f),
-      sonare_node::node_arg_float(info, 3, 1.0f),
-      static_cast<uint8_t>(sonare_node::node_arg_int(info, 4, 0)), &learned);
+      sonare_node::node_arg_float(info, 3, 1.0f), min_movement, &learned);
   if (err == SONARE_ERROR_INVALID_STATE) return env.Null();
   if (err != SONARE_OK) {
     Napi::RangeError::New(env, "invalid MIDI CC learn arguments").ThrowAsJavaScriptException();
@@ -259,11 +278,13 @@ Napi::Value MidiParamToCc(const Napi::CallbackInfo& info) {
   }
   std::vector<SonareMidiCcBinding> bindings;
   if (!CcBindingsFromArray(env, info[0].As<Napi::Array>(), &bindings)) return env.Undefined();
+  // The UMP group is a uint8_t C-ABI argument; reject rather than wrap.
+  uint8_t group = 0;
+  if (!sonare_node::RequiredMidiByteValue(env, info[3], "group", &group)) return env.Undefined();
   SonareMidiEventPod event{};
   const SonareError err = sonare_midi_param_to_cc(
       bindings.empty() ? nullptr : bindings.data(), bindings.size(),
-      info[1].As<Napi::Number>().Uint32Value(), info[2].As<Napi::Number>().FloatValue(),
-      static_cast<uint8_t>(info[3].As<Napi::Number>().Uint32Value()),
+      info[1].As<Napi::Number>().Uint32Value(), info[2].As<Napi::Number>().FloatValue(), group,
       sonare_node::node_arg_double(info, 4, 0.0), &event);
   if (err == SONARE_ERROR_INVALID_STATE) return env.Null();
   if (err != SONARE_OK) {

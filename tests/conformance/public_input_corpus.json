@@ -117,6 +117,87 @@
       }
     ]
   },
+  "midi_cc_binding": {
+    "cases": [
+      {
+        "id": "channel_wraps_to_zero",
+        "field": "channel",
+        "value": 256,
+        "accepted": false,
+        "c_representable": false
+      },
+      {
+        "id": "channel_wraps_into_valid_range",
+        "field": "channel",
+        "value": 271,
+        "accepted": false,
+        "c_representable": false
+      },
+      {
+        "id": "channel_negative",
+        "field": "channel",
+        "value": -1,
+        "accepted": false,
+        "c_representable": false
+      },
+      {
+        "id": "channel_fractional",
+        "field": "channel",
+        "value": 1.5,
+        "accepted": false,
+        "c_representable": false
+      },
+      {
+        "id": "channel_any_sentinel",
+        "field": "channel",
+        "value": 255,
+        "accepted": true,
+        "c_representable": true
+      },
+      {
+        "id": "channel_upper_valid",
+        "field": "channel",
+        "value": 15,
+        "accepted": true,
+        "c_representable": true
+      },
+      {
+        "id": "cc_number_wraps_to_zero",
+        "field": "ccNumber",
+        "value": 256,
+        "accepted": false,
+        "c_representable": false
+      },
+      {
+        "id": "cc_number_wraps_to_bank_select",
+        "field": "ccNumber",
+        "value": 263,
+        "accepted": false,
+        "c_representable": false
+      },
+      {
+        "id": "cc_number_negative",
+        "field": "ccNumber",
+        "value": -1,
+        "accepted": false,
+        "c_representable": false
+      },
+      {
+        "id": "cc_number_fractional",
+        "field": "ccNumber",
+        "value": 7.5,
+        "accepted": false,
+        "c_representable": false
+      },
+      {
+        "id": "cc_number_upper_valid",
+        "field": "ccNumber",
+        "value": 127,
+        "accepted": true,
+        "c_representable": true
+      }
+    ]
+  },
   "streaming_contract": {
     "feature_flags": { "mel": 1, "chroma": 2, "onset": 4, "spectral": 8 },
     "frame_fields": [

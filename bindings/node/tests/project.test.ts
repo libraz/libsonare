@@ -360,6 +360,56 @@ describe('Project native binding', () => {
     project.destroy();
   });
 
+  it('setMaxUndoDepth validates input and leaves the installed cap alone', () => {
+    const project = Project.create();
+    // Bound: an unbound method reference loses `this` and fails inside the
+    // facade before the addon is ever reached, which would make every rejection
+    // below pass for the wrong reason.
+    const setDepth = project.setMaxUndoDepth.bind(project) as unknown as (input?: unknown) => void;
+
+    // A cap of one keeps exactly one undoable edit, whatever comes after.
+    project.setMaxUndoDepth(1);
+    project.addTrack({ kind: 'midi', name: 'a' });
+    project.addTrack({ kind: 'midi', name: 'b' });
+    expect(project.trackCount()).toBe(2);
+
+    // A raw double -> size_t conversion made each of these SIZE_MAX, which
+    // disables the cap instead of rejecting the call.
+    const outOfDomain = [
+      -1,
+      Number.NaN,
+      Number.POSITIVE_INFINITY,
+      Number.NEGATIVE_INFINITY,
+      1.5,
+      Number.MAX_SAFE_INTEGER + 1,
+      Number.MAX_VALUE,
+    ];
+    for (const value of outOfDomain) {
+      expect(() => setDepth(value), `${value}`).toThrow(RangeError);
+    }
+    for (const value of [undefined, null, '5', {}]) {
+      expect(() => setDepth(value), `${String(value)}`).toThrow(TypeError);
+    }
+
+    // The depth-one cap installed before the rejections is still in force.
+    project.undo();
+    expect(project.trackCount()).toBe(1);
+    expect(() => project.undo()).toThrow();
+
+    // A valid depth is accepted and rewinds that many edits.
+    project.setMaxUndoDepth(5);
+    for (let i = 0; i < 3; i++) {
+      project.addTrack({ kind: 'midi', name: `t${i}` });
+    }
+    expect(project.trackCount()).toBe(4);
+    project.undo();
+    project.undo();
+    project.undo();
+    expect(project.trackCount()).toBe(1);
+
+    project.destroy();
+  });
+
   it('setMaxHistoryBytes validates input and supports zero retention', () => {
     const project = Project.create();
     project.addTrack({ kind: 'midi', name: 'before-validation' });

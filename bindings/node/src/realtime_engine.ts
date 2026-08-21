@@ -33,6 +33,7 @@ import type {
   ProjectMidiCcBinding,
   ProjectTempoSegment,
   ProjectTimeSignatureSegment,
+  RenderOfflineRequest,
   Sf2InstrumentConfig,
   SynthPatch,
 } from './types.js';
@@ -43,6 +44,24 @@ import {
   sendTimingValue,
   trackMonitorModeValue,
 } from './value_coercion.js';
+
+/**
+ * One normalizer for both {@link RealtimeEngine.renderOffline} call forms, so
+ * the request object and the positional overload cannot drift in their defaults.
+ */
+function normalizeRenderOfflineRequest(
+  channelsOrRequest: Float32Array[] | RenderOfflineRequest,
+  blockSize: number,
+): { channels: Float32Array[]; blockSize: number; finalize: boolean } {
+  const request = Array.isArray(channelsOrRequest)
+    ? { channels: channelsOrRequest, blockSize }
+    : channelsOrRequest;
+  return {
+    channels: request.channels,
+    blockSize: request.blockSize ?? 128,
+    finalize: request.finalize ?? true,
+  };
+}
 
 export class RealtimeEngine {
   private native: InstanceType<typeof addon.RealtimeEngine>;
@@ -659,8 +678,29 @@ export class RealtimeEngine {
     return this.native.processWithMonitor(channels);
   }
 
-  renderOffline(channels: Float32Array[], blockSize = 128): Float32Array[] {
-    return this.native.renderOffline(channels, blockSize);
+  /**
+   * Renders `channels` offline from the current transport position.
+   *
+   * Set `finalize: false` to render one chunk of a longer timeline; see
+   * {@link RenderOfflineRequest.finalize} and {@link finishOfflineRender}.
+   */
+  renderOffline(request: RenderOfflineRequest): Float32Array[];
+  renderOffline(channels: Float32Array[], blockSize?: number): Float32Array[];
+  renderOffline(
+    channelsOrRequest: Float32Array[] | RenderOfflineRequest,
+    blockSize = 128,
+  ): Float32Array[] {
+    const request = normalizeRenderOfflineRequest(channelsOrRequest, blockSize);
+    return this.native.renderOffline(request.channels, request.blockSize, request.finalize);
+  }
+
+  /**
+   * Ends a chunked offline render: releases every note the sequencer still
+   * holds and flushes the PDC / alignment delay lines. Only needed after
+   * `renderOffline({ finalize: false })`; the finalizing form does it itself.
+   */
+  finishOfflineRender(): void {
+    this.native.finishOfflineRender();
   }
 
   bounceOffline(options: EngineBounceOptions): EngineBounceResult {

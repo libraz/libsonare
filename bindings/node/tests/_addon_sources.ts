@@ -39,6 +39,18 @@ export interface AddonEntryPoint {
   readsOptionsBag: boolean;
 }
 
+/** A function DEFINITION whose parameter list has the shape of a key reader. */
+export interface ReaderShapedSite {
+  file: string;
+  name: string;
+  line: number;
+  /** `file:name` — stable across line moves, so allowlists do not rot. */
+  id: string;
+}
+
+/** The one file a key reader is allowed to live in. */
+export const SHARED_READER_FILE = 'sonare_wrap_options.h';
+
 function walk(dir: string, prefix = ''): string[] {
   const out: string[] = [];
   for (const entry of readdirSync(dir)) {
@@ -92,16 +104,67 @@ export function bareHasSites(): BareHasSite[] {
 }
 
 /**
- * The sanctioned readers. The two families from `sonare_wrap_options.h`, plus
- * `OptionAt` — mixing.cpp's per-strip scalar-or-array accessor, which the shared
- * families do not model and which type-checks at each call site.
+ * The sanctioned readers. The two families from `sonare_wrap_options.h`
+ * (including `MidiByteProperty`, the byte-width member of the `*Property`
+ * family), plus `OptionAt` — mixing.cpp's per-strip scalar-or-array accessor,
+ * which the shared families do not model and which type-checks at each call
+ * site.
+ *
+ * This is a list of NAMES, so on its own it can only see readers it already
+ * knows about — which is how a file-local copy under a fresh name once made a
+ * 25-key entry point read as taking no options at all. {@link
+ * readerShapedDefinitions} is the half that closes it: it finds reader
+ * DEFINITIONS by their parameter shape, so a copy cannot exist under any name,
+ * and the accompanying test also pins this list against the shared header so
+ * the two cannot drift.
  */
 const OPTION_READER =
-  /\b(?:node_(?:int|float|double|bool|int64)_option|(?:Int|Int64|Uint32|Float|Double|Bool)Property|OptionAt)\s*\(/;
+  /\b(?:node_(?:int|float|double|bool|int64|string)_option|(?:Int|Int64|Uint32|Float|Double|Bool|MidiByte)Property|OptionAt)\s*\(/;
 
 /** Matches a reader call and captures its literal key, for either arity. */
 const OPTION_READER_KEY =
-  /(?:node_(?:int|float|double|bool|int64)_option|(?:Int|Int64|Uint32|Float|Double|Bool)Property|OptionAt)\s*\(\s*(?:env\s*,\s*)?[\w.>-]+\s*,\s*"([A-Za-z0-9_]+)"/g;
+  /(?:node_(?:int|float|double|bool|int64|string)_option|(?:Int|Int64|Uint32|Float|Double|Bool|MidiByte)Property|OptionAt)\s*\(\s*(?:env\s*,\s*)?[\w.>-]+\s*,\s*"([A-Za-z0-9_]+)"/g;
+
+/**
+ * A definition that READS A KEY OFF A JS OBJECT, recognised by its parameter
+ * list rather than by its name: an optional leading `Napi::Env`, then a
+ * `Napi::Object`, then a string-ish key. That is what every member of both
+ * shared families looks like, and it is what a file-local copy of one has to
+ * look like too — which is the point. Deliberately loose about `const` /
+ * reference spelling and about `char*` vs `std::string` so a copy cannot slip
+ * through by writing its parameters differently.
+ */
+const READER_SHAPED_DEFINITION =
+  /^[A-Za-z_][\w:<>&*,\s]*?\b(\w+)\s*\(\s*(?:(?:const\s+)?Napi::Env\s*&?\s*\w+\s*,\s*)?(?:const\s+)?Napi::Object\s*&?\s*\w+\s*,\s*(?:const\s+)?(?:char\s*\*|std::string\s*&?|std::string_view\s*&?)\s*\w+\s*[,)]/gm;
+
+/**
+ * Every reader-shaped definition across the addon sources.
+ *
+ * The convention says a key reader lives in {@link SHARED_READER_FILE} and
+ * nowhere else. A name-based scan can never enforce that — it only recognises
+ * the names it was told about — so this recognises the *shape* instead, and the
+ * test requires every hit outside the shared header to carry a written reason.
+ */
+export function readerShapedDefinitions(): ReaderShapedSite[] {
+  const sites: ReaderShapedSite[] = [];
+  for (const { file, text } of addonSources()) {
+    for (const match of text.matchAll(READER_SHAPED_DEFINITION)) {
+      const start = match.index ?? 0;
+      sites.push({
+        file,
+        name: match[1],
+        line: text.slice(0, start).split('\n').length,
+        id: `${file}:${match[1]}`,
+      });
+    }
+  }
+  return sites;
+}
+
+/** Whether {@link OPTION_READER} recognises a call to @p name. */
+export function isSanctionedReaderName(name: string): boolean {
+  return new RegExp(OPTION_READER.source).test(`${name}(`);
+}
 
 /** Function definitions, as `name -> body`, across every addon translation unit. */
 function functionBodies(): Map<string, string> {

@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import type { ProjectFadeCurve } from '../src/index.js';
+import type { ProjectAutomationPoint, ProjectFadeCurve } from '../src/index.js';
 import {
   masteringInsertNames,
   PROJECT_AUTOMATION_TARGET_TRACK_FADER_DB,
@@ -407,6 +407,36 @@ describe('Project edit ops (new bindings)', () => {
     ).toThrow();
     expect(project.toJson()).toBe(before);
     project.destroy();
+  });
+
+  it('resolves every documented curve spelling and alias to one serialized ordinal', () => {
+    // A breakpoint the WASM Project facade accepts has to render the same shape
+    // here: the legacy 'scurve' spelling used to throw and a `curveToNext`-only
+    // point used to fall back to Linear on the other side of the boundary.
+    const spellings: ProjectAutomationPoint[] = [
+      { ppq: 0, value: 1, curve: 's-curve' },
+      { ppq: 0, value: 1, curve: 'scurve' },
+      { ppq: 0, value: 1, curve: 3 },
+      { ppq: 0, value: 1, curveToNext: 's-curve' },
+      { ppq: 0, value: 1, curveToNext: 'scurve' },
+    ];
+    const serialized = spellings.map((point) => {
+      const project = Project.create();
+      try {
+        const track = project.addTrack({ kind: 'audio' });
+        project.addAutomationLane(track, { targetParamId: 1, points: [point] });
+        return project.toJson();
+      } finally {
+        project.destroy();
+      }
+    });
+    const lane = JSON.parse(serialized[0]) as {
+      tracks: Array<{ automation_lanes: Array<{ points: Array<{ curve_to_next: number }> }> }>;
+    };
+    expect(lane.tracks[0].automation_lanes[0].points[0].curve_to_next).toBe(3);
+    for (const json of serialized) {
+      expect(json).toBe(serialized[0]);
+    }
   });
 
   it('legacy automation edits preserve a typed lane kind', () => {

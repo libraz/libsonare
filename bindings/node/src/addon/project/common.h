@@ -41,6 +41,7 @@ using sonare_node::FloatProperty;
 using sonare_node::Int64Property;
 using sonare_node::IntProperty;
 using sonare_node::NonNegativeSizeTArg;
+using sonare_node::OptionalMidiByteArg;
 using sonare_node::RequiredDoubleProperty;
 using sonare_node::RequiredDoubleValue;
 using sonare_node::RequiredFloatProperty;

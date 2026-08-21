@@ -703,8 +703,13 @@ Napi::Value ProjectWrap::ClearHistory(const Napi::CallbackInfo& info) {
 
 Napi::Value ProjectWrap::SetMaxUndoDepth(const Napi::CallbackInfo& info) {
   Napi::Env env = info.Env();
-  ThrowIfError(env, sonare_project_set_max_undo_depth(
-                        project_, static_cast<size_t>(NumberArg(info, 0, 0.0))));
+  // A raw double -> size_t cast is undefined for a negative or NaN depth and
+  // lands on SIZE_MAX in practice, which disables the very cap this call
+  // exists to install. The core only clamps the lower bound, so the domain
+  // check has to happen here, before any native state is touched.
+  size_t depth = 0;
+  if (!NonNegativeSizeTArg(env, info, 0, "depth", &depth)) return env.Undefined();
+  ThrowIfError(env, sonare_project_set_max_undo_depth(project_, depth));
   return env.Undefined();
 }
 

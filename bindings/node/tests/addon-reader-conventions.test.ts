@@ -3,15 +3,29 @@
  *
  * File-local copies of the readers in `sonare_wrap_options.h` are not allowed,
  * and they came back anyway, because nothing checked. These tests are that
- * check. Two properties are asserted:
+ * check. Four properties are asserted:
  *
- *  1. No bare `obj.Has("key")` read outside a small, reasoned allowlist. The
+ *  1. No key reader is DEFINED outside the shared header. This is decided by
+ *     the definition's parameter shape, not by its name, because the name-based
+ *     half below cannot see a copy it was never told about — a streaming TU
+ *     with its own `NumberKey` / `BoolKey` / `StringKey` made a 25-key entry
+ *     point read as taking no options at all, and every assertion here passed
+ *     while it did.
+ *  2. The name list the scanner recognises stays in step with the shared
+ *     header, so a new member of the shared family cannot be added without the
+ *     scanner learning it.
+ *  3. No bare `obj.Has("key")` read outside a small, reasoned allowlist. The
  *     bare form is what makes an explicit `undefined` diverge from an omitted
  *     field, which under NAPI_DISABLE_CPP_EXCEPTIONS aborts the process as soon
  *     as a second throw lands on a pending exception.
- *  2. Every options-accepting entry point is either exercised by the
+ *  4. Every options-accepting entry point is either exercised by the
  *     undefined-equivalence table below or explicitly listed as uncovered, so a
  *     NEW options-accepting function cannot be added unnoticed.
+ *
+ * (1) and (2) together are what make (4) meaningful: (1) closes the set of
+ * places a reader can be defined, (2) closes the gap between that set and the
+ * names the scanner matches, and only then does "every options-accepting entry
+ * point is accounted for" say something about all of them.
  */
 
 import { describe, expect, it } from 'vitest';
@@ -36,16 +50,73 @@ import {
   pitchCorrectTimevarying,
   RealtimeEngine,
   roomMorph,
+  StreamingEqualizer,
   spectralEdit,
   synthesizeRir,
 } from '../src/index.js';
-import { addonEntryPoints, bareHasSites, optionKeysFor } from './_addon_sources.js';
+import {
+  addonEntryPoints,
+  bareHasSites,
+  isSanctionedReaderName,
+  optionKeysFor,
+  readerShapedDefinitions,
+  SHARED_READER_FILE,
+} from './_addon_sources.js';
 
 /**
  * `file:key` reads that may stay in the bare form, each with the reason it is
  * already undefined-safe. Keyed by property name rather than line number so the
  * list does not rot when code moves.
  */
+/**
+ * Reader-shaped definitions that may live outside {@link SHARED_READER_FILE},
+ * each with the reason the shared families do not cover it. Keyed by
+ * `file:name`. A definition that is not here and not in the shared header is a
+ * file-local copy of a shared reader, which is the thing the convention forbids.
+ */
+const FILE_LOCAL_READER_ALLOWLIST: ReadonlyMap<string, string> = new Map([
+  [
+    'effects/mixing.cpp:OptionAt',
+    'Per-strip scalar-or-array accessor: reads either one value or the index-th element of an array-valued key, a shape the scalar families do not model. Type-checks at each call site and is already named in OPTION_READER.',
+  ],
+  [
+    'sonare_wrap_acoustic.cpp:NodeFloatArrayOption',
+    'Reads a float ARRAY option into a vector; the shared families are scalar-only, so there is nothing to delegate to.',
+  ],
+  [
+    'sonare_wrap_synth_patch.h:SynthEnumProperty',
+    "Resolves a patch enum from either its string spelling or its ordinal, which no scalar reader expresses; it lives in the synth patch feature header shared by that feature's TUs, not in one TU.",
+  ],
+  [
+    'sonare_wrap_synth_patch.h:SynthFieldPresent',
+    'Presence probe used to decide whether a patch field was supplied at all (distinct from reading it with a default); shared by the synth patch TUs from the same header.',
+  ],
+  [
+    'sonare_wrap_utils.h:ReadMeterCandidateNumerators',
+    'Reads a fixed-capacity list into a C array and reports the count, with its own overflow and non-numeric rejection. Shared from the other addon-wide header, not a per-file copy.',
+  ],
+  ['sonare_wrap_utils.cpp:ReadMeterCandidateNumerators', 'Definition of the declaration above.'],
+  [
+    'sonare_wrap_streaming.cpp:FlattenChainConfig',
+    'Not a key reader: its second parameter is the accumulated dot-path prefix for the recursion, not a key to look up. Matched only because the shape check is deliberately loose about the key parameter type.',
+  ],
+]);
+
+/**
+ * Readers in the shared header that are NOT options-bag readers, so
+ * OPTION_READER is right not to name them. The Required* family takes an
+ * out-pointer rather than a default: a missing or wrong-typed value is an error
+ * there, not an omission, so a call to one says nothing about whether the entry
+ * point accepts an options bag.
+ */
+const NON_OPTION_SHARED_READERS: ReadonlySet<string> = new Set([
+  'RequiredIntProperty',
+  'RequiredUint32Property',
+  'RequiredFloatProperty',
+  'RequiredDoubleProperty',
+  'RequiredStringProperty',
+]);
+
 const BARE_HAS_ALLOWLIST: ReadonlyMap<string, string> = new Map([
   [
     'sonare_wrap_engine.cpp:events',
@@ -367,6 +438,42 @@ const UNDEFINED_EQUIVALENCE: ReadonlyArray<{
         return p.clipCount();
       }),
   },
+  {
+    // Reads 25 band keys through EqBandFromObject. It was invisible to the
+    // scanner for as long as that helper used file-local readers, so it never
+    // appeared here or in the uncovered register.
+    jsName: 'setBand',
+    invoke: (o) => {
+      const eq = new StreamingEqualizer({ sampleRate: SR, maxBlockSize: 512 });
+      try {
+        eq.setBand(0, { ...o, type: 'Peak', frequencyHz: 1000, gainDb: 6, enabled: true });
+        // Filtered audio as well as the response curve: comparing the curve
+        // alone would hold between two silent EQs if it were ever unpopulated.
+        const block = sine(512, 1000);
+        const out = eq.processStereo(block, block);
+        // spectrum().seq counts snapshots, so compare the response alone.
+        return [Array.from(eq.spectrum().bandGainDb), Array.from(out.left)];
+      } finally {
+        eq.destroy();
+      }
+    },
+  },
+  {
+    // Same TU, same blind spot: its options were read with the file-local
+    // helpers too, so it was not counted either.
+    jsName: 'match',
+    invoke: (o) => {
+      const eq = new StreamingEqualizer({ sampleRate: SR, maxBlockSize: 512 });
+      try {
+        eq.match(sine(4096, 200), sine(4096, 4000), o);
+        const block = sine(512, 1000);
+        const out = eq.processStereo(block, block);
+        return [Array.from(eq.spectrum().bandGainDb), Array.from(out.left)];
+      } finally {
+        eq.destroy();
+      }
+    },
+  },
 ];
 
 function withEngine<T>(body: (engine: RealtimeEngine) => T): T {
@@ -437,6 +544,74 @@ const UNCOVERED_OPTION_READERS: ReadonlyMap<string, string> = new Map(
 );
 
 describe('addon JS-object readers stay on the shared helper families', () => {
+  it('self-checks the reader-shape scanner, so the checks below cannot pass by matching nothing', () => {
+    const shaped = readerShapedDefinitions();
+    expect(shaped.length).toBeGreaterThanOrEqual(20);
+    const inShared = shaped
+      .filter((site) => site.file === SHARED_READER_FILE)
+      .map((site) => site.name);
+    // Both shared families, and the two arities (with and without a leading
+    // Napi::Env), have to keep resolving or the shape check is blind.
+    for (const name of [
+      'node_int_option',
+      'node_string_option',
+      'BoolProperty',
+      'MidiByteProperty',
+      'RequiredStringProperty',
+    ]) {
+      expect(inShared, `${name} should be seen as reader-shaped`).toContain(name);
+    }
+  });
+
+  it('defines no key reader outside the shared header', () => {
+    // A name list can only recognise the readers it was told about, so it can
+    // never see the next file-local copy. This does: a copy of a shared reader
+    // has to take (object, key, ...) to be a copy at all, and that is what is
+    // matched here — under any name, in any translation unit.
+    const unlisted = readerShapedDefinitions().filter(
+      (site) => site.file !== SHARED_READER_FILE && !FILE_LOCAL_READER_ALLOWLIST.has(site.id),
+    );
+    expect(
+      unlisted.map((site) => `${site.file}:${site.line} ${site.name}(...)`),
+      `A reader that takes (Napi::Object, key, ...) belongs in ${SHARED_READER_FILE}. ` +
+        'Use the node_*_option / *Property / Required* family there, extend it if the shape ' +
+        'you need is missing, or add the site to FILE_LOCAL_READER_ALLOWLIST with the reason ' +
+        'the shared families cannot express it. A file-local copy is invisible to the ' +
+        'name-based scan, which is how a 25-key entry point once read as taking no options.',
+    ).toEqual([]);
+  });
+
+  it('keeps the file-local reader allowlist free of entries that no longer exist', () => {
+    const live = new Set(readerShapedDefinitions().map((site) => site.id));
+    expect([...FILE_LOCAL_READER_ALLOWLIST.keys()].filter((id) => !live.has(id))).toEqual([]);
+  });
+
+  it('recognises every options reader the shared header defines', () => {
+    // Closes the other half: the shape check above guarantees readers only live
+    // in the shared header, and this guarantees the scanner's name list covers
+    // that header. Adding a family member without teaching OPTION_READER fails
+    // here instead of silently un-counting whatever calls it.
+    const unrecognised = readerShapedDefinitions()
+      .filter((site) => site.file === SHARED_READER_FILE)
+      .map((site) => site.name)
+      .filter((name) => !isSanctionedReaderName(name) && !NON_OPTION_SHARED_READERS.has(name));
+    expect(
+      unrecognised,
+      'A new reader in the shared header must be added to OPTION_READER / OPTION_READER_KEY ' +
+        'in _addon_sources.ts, or listed in NON_OPTION_SHARED_READERS with the reason a call ' +
+        'to it does not make its caller an options-accepting entry point.',
+    ).toEqual([]);
+  });
+
+  it('keeps the non-option register free of stale names', () => {
+    const shared = new Set(
+      readerShapedDefinitions()
+        .filter((site) => site.file === SHARED_READER_FILE)
+        .map((site) => site.name),
+    );
+    expect([...NON_OPTION_SHARED_READERS].filter((name) => !shared.has(name))).toEqual([]);
+  });
+
   it('has no bare Has("key") read outside the reasoned allowlist', () => {
     const unlisted = bareHasSites().filter((site) => !BARE_HAS_ALLOWLIST.has(site.id));
     expect(

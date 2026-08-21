@@ -1,6 +1,8 @@
 import type { TimeSignature } from './types_analysis.js';
 import type { SendTiming } from './types_mastering.js';
 import type { ProjectWarpAnchor, WarpMode } from './types_project.js';
+// Type-only, so the erased import adds no runtime edge to the coercion module.
+import type { AUTOMATION_CURVE_VALUES } from './value_coercion.js';
 
 export type EngineTelemetryType = 0 | 1;
 
@@ -209,19 +211,14 @@ export interface EngineTransportState {
 }
 
 /**
- * Engine automation breakpoint curve as an integer code.
+ * Engine automation breakpoint curve as an integer code or a spelling.
  * Canonical ordinals (matches mixer `AutomationCurve`):
  *   0 = Linear (default), 1 = Exponential, 2 = Hold, 3 = SCurve.
+ *
+ * The spellings are derived from the resolver's own table, so this type and the
+ * set the runtime accepts cannot drift apart.
  */
-export type EngineAutomationPointCurve =
-  | 0
-  | 1
-  | 2
-  | 3
-  | 'linear'
-  | 'exponential'
-  | 'hold'
-  | 's-curve';
+export type EngineAutomationPointCurve = 0 | 1 | 2 | 3 | keyof typeof AUTOMATION_CURVE_VALUES;
 
 /**
  * Parameter descriptor accepted by {@link RealtimeEngine.addParameter}. The
@@ -506,4 +503,23 @@ export interface EngineMidiClipSchedule {
   loop?: boolean;
   loopLengthSamples?: number;
   events: EngineMidiEvent[];
+}
+
+/** Request form of {@link RealtimeEngine.renderOffline}. */
+export interface RenderOfflineRequest {
+  /** One buffer per output plane; their common length is the render span. */
+  channels: Float32Array[];
+  /** Render block size. Default `128`. */
+  blockSize?: number;
+  /**
+   * Whether this call ends the timeline. `true` (the default, and what a
+   * one-shot bounce wants) releases every sounding note and flushes the PDC /
+   * alignment delay lines before returning. `false` renders one CHUNK of a
+   * longer timeline: a note held across the chunk boundary keeps sounding into
+   * the next call and the delay lines carry their history over, so consecutive
+   * chunks concatenate to exactly what one continuous render of the same span
+   * produces. Call {@link RealtimeEngine.finishOfflineRender} once after the
+   * last chunk.
+   */
+  finalize?: boolean;
 }

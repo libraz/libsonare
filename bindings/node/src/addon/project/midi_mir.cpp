@@ -154,12 +154,18 @@ Napi::Value ProjectWrap::SetProgram(const Napi::CallbackInfo& info) {
 
 Napi::Value ProjectWrap::SetProgramOnChannel(const Napi::CallbackInfo& info) {
   Napi::Env env = info.Env();
-  ThrowIfError(env,
-               sonare_project_set_program_on_channel(project_, Uint32Arg(info, 0, 0),
-                                                     static_cast<uint8_t>(Uint32Arg(info, 1, 0)),
-                                                     static_cast<uint8_t>(Uint32Arg(info, 2, 0)),
-                                                     static_cast<int>(NumberArg(info, 3, 0.0)),
-                                                     static_cast<int>(NumberArg(info, 4, -1.0))));
+  // group/channel are uint8_t C-ABI arguments; the MidiByte reader rejects the
+  // values a narrowing cast would wrap into a range the C ABI accepts.
+  uint8_t group = 0;
+  uint8_t channel = 0;
+  if (!OptionalMidiByteArg(env, info, 1, "group", 0, &group) ||
+      !OptionalMidiByteArg(env, info, 2, "channel", 0, &channel)) {
+    return env.Undefined();
+  }
+  ThrowIfError(
+      env, sonare_project_set_program_on_channel(project_, Uint32Arg(info, 0, 0), group, channel,
+                                                 static_cast<int>(NumberArg(info, 3, 0.0)),
+                                                 static_cast<int>(NumberArg(info, 4, -1.0))));
   return env.Undefined();
 }
 

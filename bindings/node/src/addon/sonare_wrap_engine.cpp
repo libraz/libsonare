@@ -220,6 +220,7 @@ Napi::Object RealtimeEngineWrap::Init(Napi::Env env, Napi::Object exports) {
           InstanceMethod<&RealtimeEngineWrap::Process>("process"),
           InstanceMethod<&RealtimeEngineWrap::ProcessWithMonitor>("processWithMonitor"),
           InstanceMethod<&RealtimeEngineWrap::RenderOffline>("renderOffline"),
+          InstanceMethod<&RealtimeEngineWrap::FinishOfflineRender>("finishOfflineRender"),
           InstanceMethod<&RealtimeEngineWrap::BounceOffline>("bounceOffline"),
           InstanceMethod<&RealtimeEngineWrap::FreezeOffline>("freezeOffline"),
           InstanceMethod<&RealtimeEngineWrap::DrainTelemetry>("drainTelemetry"),
@@ -865,14 +866,20 @@ Napi::Value RealtimeEngineWrap::BindMidiCcBinding(const Napi::CallbackInfo& info
     return env.Undefined();
   }
   SonareMidiCcBinding binding{};
-  binding.cc_number = cc_number.As<Napi::Number>().Uint32Value();
+  // Every byte-wide field goes through the MidiByte readers: the C-ABI struct
+  // stores them as uint8_t, so a plain Uint32Value() would let 256 arrive as 0
+  // and 271 as 15 — inside the range the C ABI's own check accepts.
+  if (!RequiredMidiByteValue(env, cc_number, "ccNumber", &binding.cc_number)) {
+    return env.Undefined();
+  }
   // `channel` keeps its "any channel" sentinel for an omitted, null, or
   // undefined value.
-  binding.channel = Uint32Property(object, "channel", 0xffu);
-  binding.kind = Uint32Property(object, "kind", 0u);
-  binding.cc_lsb_number = Uint32Property(object, "ccLsbNumber", 0u);
-  binding.selector_msb = Uint32Property(object, "selectorMsb", 0u);
-  binding.selector_lsb = Uint32Property(object, "selectorLsb", 0u);
+  binding.channel = MidiByteProperty(env, object, "channel", 0xffu);
+  binding.kind = MidiByteProperty(env, object, "kind", 0u);
+  binding.cc_lsb_number = MidiByteProperty(env, object, "ccLsbNumber", 0u);
+  binding.selector_msb = MidiByteProperty(env, object, "selectorMsb", 0u);
+  binding.selector_lsb = MidiByteProperty(env, object, "selectorLsb", 0u);
+  if (env.IsExceptionPending()) return env.Undefined();
   binding.param_id = param_id.As<Napi::Number>().Uint32Value();
   binding.min_value = FloatProperty(object, "minValue", 0.0f);
   binding.max_value = FloatProperty(object, "maxValue", 1.0f);

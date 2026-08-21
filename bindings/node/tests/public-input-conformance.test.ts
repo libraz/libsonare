@@ -27,13 +27,23 @@ type MixOptionCase = {
   value: number | 'nan' | 'inf' | 'neg_inf' | 'unknown';
   accepted: false;
 };
+type MidiCcBindingCase = {
+  id: string;
+  field: 'channel' | 'ccNumber';
+  value: number;
+  accepted: boolean;
+};
 
 const corpus = JSON.parse(
   readFileSync(
     new URL('../../../tests/conformance/public_input_corpus.json', import.meta.url),
     'utf8',
   ),
-) as { marker_transaction: MarkerTransaction; mix_options: { cases: MixOptionCase[] } };
+) as {
+  marker_transaction: MarkerTransaction;
+  mix_options: { cases: MixOptionCase[] };
+  midi_cc_binding: { cases: MidiCcBindingCase[] };
+};
 
 const markerValue = (marker: CorpusMarker) => ({
   id: marker.id === 'uint32_max' ? 0xffffffff : marker.id,
@@ -121,6 +131,72 @@ describe('shared public-input conformance corpus', () => {
       expect(Array.from(request.right)).toEqual(Array.from(positional.right));
     });
   }
+
+  // `channel`, `ccNumber` and the selector fields are uint8_t in the C-ABI
+  // binding struct. A value beyond a byte must be rejected rather than reduced
+  // modulo 256: `channel: 271` arriving as 15 and `ccNumber: 263` arriving as 7
+  // both land INSIDE the range the C ABI's own check accepts, so the binding
+  // would be installed against a different control with no error at all.
+  it('carries the byte-field corpus, so the loop below is not vacuous', () => {
+    expect(corpus.midi_cc_binding.cases.length).toBeGreaterThanOrEqual(11);
+    expect(corpus.midi_cc_binding.cases.some((testCase) => testCase.accepted)).toBe(true);
+    expect(corpus.midi_cc_binding.cases.some((testCase) => !testCase.accepted)).toBe(true);
+  });
+
+  for (const testCase of corpus.midi_cc_binding.cases) {
+    const binding = () => ({ ccNumber: 7, paramId: 1, [testCase.field]: testCase.value });
+
+    it(`keeps RealtimeEngine.bindMidiCcBinding byte fields conformant: ${testCase.id}`, () => {
+      const engine = new RealtimeEngine(48000, 128);
+      try {
+        if (testCase.accepted) {
+          engine.bindMidiCcBinding(binding() as never);
+          expect(engine.midiCcBindingCount()).toBe(1);
+        } else {
+          expect(() => engine.bindMidiCcBinding(binding() as never)).toThrow(RangeError);
+          expect(engine.midiCcBindingCount()).toBe(0);
+        }
+      } finally {
+        engine.destroy();
+      }
+    });
+
+    it(`keeps Project.midiCcToBreakpoint byte fields conformant: ${testCase.id}`, () => {
+      const event = Project.midiCc(0, 0, 0, 7, 64);
+      if (testCase.accepted) {
+        expect(() => Project.midiCcToBreakpoint([binding() as never], event)).not.toThrow();
+      } else {
+        expect(() => Project.midiCcToBreakpoint([binding() as never], event)).toThrow(RangeError);
+      }
+    });
+  }
+
+  it('rejects an out-of-byte-range positional MIDI argument', () => {
+    const learnEvents = [0, 64, 127].map((value) => Project.midiCc(0, 0, 0, 7, value));
+
+    // The same hazard reached through positional arguments rather than an
+    // object key: each of these is a uint8_t C-ABI parameter.
+    expect(() => Project.midiParamToCc([], 1, 0, 256)).toThrow(RangeError);
+    expect(() => Project.midiParamToCc([], 1, 0, -1)).toThrow(RangeError);
+    expect(() => Project.midiBankProgram(0, 256, 0, 0, 0, 24)).toThrow(RangeError);
+    expect(() => Project.midiBankProgram(0, 0, 271, 0, 0, 24)).toThrow(RangeError);
+    expect(() => Project.midiCcLearn(learnEvents, 3, { minMovement: 256 })).toThrow(RangeError);
+
+    const project = Project.create();
+    try {
+      const { clipId } = project.addMidiClip(0, 4);
+      expect(() => project.setProgramOnChannel(clipId, 256, 0, 24)).toThrow(RangeError);
+      expect(() => project.setProgramOnChannel(clipId, 0, 271, 24)).toThrow(RangeError);
+      // In-range values on the same entry points still succeed.
+      expect(() => project.setProgramOnChannel(clipId, 0, 3, 24)).not.toThrow();
+    } finally {
+      project.destroy();
+    }
+
+    // In-range values on the pure helpers still succeed.
+    expect(Project.midiBankProgram(0, 0, 3, 0x79, 1, 24).length).toBeGreaterThan(0);
+    expect(Project.midiCcLearn(learnEvents, 3, { minMovement: 4 })).not.toBeNull();
+  });
 });
 
 // An optional field declared `k?: T` accepts an explicit `undefined` in

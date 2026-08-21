@@ -28,6 +28,16 @@ describe('RealtimeEngine native binding', () => {
   const midi1Word = (status: number, channel: number, data0: number, data1: number): number =>
     (0x2 << 28) | ((status & 0xf) << 20) | ((channel & 0xf) << 16) | (data0 << 8) | data1;
 
+  /** Largest per-sample deviation between two equal-length renders. */
+  const maxAbsDiff = (a: number[], b: number[]): number => {
+    expect(a.length).toBe(b.length);
+    let worst = 0;
+    for (let i = 0; i < a.length; i++) {
+      worst = Math.max(worst, Math.abs(a[i] - b[i]));
+    }
+    return worst;
+  };
+
   it('exposes engine ABI version', () => {
     expect(engineAbiVersion()).toBeGreaterThan(0);
   });
@@ -1532,6 +1542,91 @@ describe('RealtimeEngine native binding', () => {
       expect(Number.isFinite(record.integratedLufs)).toBe(true);
     }
     engine.destroy();
+  });
+
+  // A pad that outlives the render span: note-on at frame 0 and no note-off, so
+  // whether it is still sounding at the end of a chunk is exactly the state a
+  // non-finalizing render has to preserve.
+  const padEngine = (): RealtimeEngine => {
+    const engine = new RealtimeEngine(48000, 128);
+    engine.setBuiltinInstrument({ gain: 0.5 }, 5);
+    engine.setMidiClips([
+      {
+        id: 1,
+        trackId: 5,
+        destinationId: 5,
+        lengthSamples: 1 << 20,
+        events: [{ renderFrame: 0, word0: midi1Word(0x9, 0, 60, 100), wordCount: 1 }],
+      },
+    ]);
+    engine.play();
+    return engine;
+  };
+
+  it('renderOffline accepts a request object identically to the positional form', () => {
+    const frames = 2048;
+    const positionalEngine = padEngine();
+    const positional = positionalEngine.renderOffline(
+      [new Float32Array(frames), new Float32Array(frames)],
+      128,
+    );
+    positionalEngine.destroy();
+
+    const requestEngine = padEngine();
+    const request = requestEngine.renderOffline({
+      channels: [new Float32Array(frames), new Float32Array(frames)],
+      blockSize: 128,
+    });
+    requestEngine.destroy();
+
+    // Non-vacuity: comparing two silent buffers would prove nothing.
+    expect(rms(positional[0])).toBeGreaterThan(0);
+    expect(maxAbsDiff(Array.from(request[0]), Array.from(positional[0]))).toBeLessThan(1e-6);
+    expect(maxAbsDiff(Array.from(request[1]), Array.from(positional[1]))).toBeLessThan(1e-6);
+  });
+
+  it('renderOffline chunks concatenate to one continuous render', () => {
+    const chunk = 4096;
+    const chunks = 3;
+    const total = chunk * chunks;
+
+    const continuousEngine = padEngine();
+    const [continuous] = continuousEngine.renderOffline([
+      new Float32Array(total),
+      new Float32Array(total),
+    ]);
+    continuousEngine.destroy();
+    expect(rms(continuous)).toBeGreaterThan(0);
+
+    const renderChunks = (finalize: boolean): number[] => {
+      const engine = padEngine();
+      const joined: number[] = [];
+      for (let i = 0; i < chunks; i++) {
+        const [left] = engine.renderOffline({
+          channels: [new Float32Array(chunk), new Float32Array(chunk)],
+          blockSize: 128,
+          finalize,
+        });
+        joined.push(...left);
+      }
+      engine.finishOfflineRender();
+      engine.destroy();
+      return joined;
+    };
+
+    const reference = Array.from(continuous);
+    expect(maxAbsDiff(renderChunks(false), reference)).toBeLessThan(1e-6);
+
+    // Non-vacuity: finalizing every chunk is the defect the flag exists to fix.
+    // The pad's note-off fires at the end of chunk 1 and no note-on is re-sent,
+    // so the tail decays away instead of holding and the concatenation diverges.
+    const finalizedPerChunk = renderChunks(true);
+    const lastChunkRms = (samples: number[]): number => {
+      const tail = samples.slice(total - chunk);
+      return Math.sqrt(tail.reduce((sum, value) => sum + value * value, 0) / tail.length);
+    };
+    expect(maxAbsDiff(finalizedPerChunk, reference)).toBeGreaterThan(1e-3);
+    expect(lastChunkRms(finalizedPerChunk)).toBeLessThan(0.5 * lastChunkRms(reference));
   });
 
   it('renders scheduled MIDI clips through built-in instruments', () => {

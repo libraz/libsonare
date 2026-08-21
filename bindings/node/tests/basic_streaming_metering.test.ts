@@ -280,6 +280,129 @@ describe('StreamingEqualizer', () => {
     eq.clearSidechain();
   });
 
+  // The band reader used to be a file-local copy of the shared option helpers,
+  // which is why nothing counted setBand as options-accepting. Migrating it back
+  // to the shared family must not drop a key on the way, so pin the ones with an
+  // observable effect, and pin the four string-valued keys through the fact that
+  // an unknown spelling throws — a reader that silently fell back to the default
+  // could not throw at all.
+  it('applies every band field supplied to setBand', () => {
+    const sampleRate = 48000;
+    // `bandGainDb` is indexed BY BAND, not by frequency: entry i is the gain
+    // band i currently applies (`band.gain_db * gain_scale`), or the dynamic
+    // EQ's live movement when that band is dynamic. It is not a response curve,
+    // so every assertion below reads band 0 and treats the rest as unconfigured.
+    const staticBand = {
+      type: 'HighShelf',
+      coeffMode: 'Rbj',
+      frequencyHz: 6000,
+      gainDb: 9,
+      q: 0.9,
+      enabled: true,
+      slopeDbOct: 24,
+      placement: 'Stereo',
+      phase: 'Inherit',
+      soloed: false,
+      bypassed: false,
+      proportionalQ: true,
+      proportionalQStrength: 0.5,
+      dynamic: false,
+      thresholdDb: -30,
+      autoThreshold: false,
+      ratio: 3,
+      rangeDb: -8,
+      attackMs: 5,
+      releaseMs: 60,
+      detectorDelayMs: 2,
+      externalSidechain: false,
+      sidechainFreqHz: 900,
+      sidechainQ: 1.2,
+    } as const;
+
+    // The snapshot is republished from inside process(), so a band has to be
+    // driven with a block before its applied gain is readable.
+    const appliedGainDb = (band: Record<string, unknown>, gainScale?: number): number => {
+      const eq = new StreamingEqualizer({ sampleRate, maxBlockSize: 512 });
+      try {
+        eq.setBand(0, band as never);
+        if (gainScale !== undefined) {
+          eq.setGainScale(gainScale);
+        }
+        eq.processMono(generateSine(1000, sampleRate, 512 / sampleRate));
+        return eq.spectrum().bandGainDb[0];
+      } finally {
+        eq.destroy();
+      }
+    };
+
+    // gainDb reaches the band with its own value and its own sign.
+    expect(appliedGainDb(staticBand)).toBeCloseTo(9, 3);
+    expect(appliedGainDb({ ...staticBand, gainDb: -9 })).toBeCloseTo(-9, 3);
+
+    // enabled / bypassed each take the band out on their own.
+    expect(appliedGainDb({ ...staticBand, enabled: false })).toBe(0);
+    expect(appliedGainDb({ ...staticBand, bypassed: true })).toBe(0);
+
+    // `dynamic` switches what the band reports from its static gain to the
+    // movement the detector has applied, so it must no longer read as 9.
+    expect(appliedGainDb({ ...staticBand, dynamic: true })).not.toBeCloseTo(9, 1);
+
+    // The reported gain is the band's gain scaled, so the two multiply.
+    expect(appliedGainDb(staticBand, 0.5)).toBeCloseTo(4.5, 3);
+
+    // Only the band that was set is configured.
+    const eq = new StreamingEqualizer({ sampleRate, maxBlockSize: 512 });
+    eq.setBand(0, { ...staticBand });
+    eq.processMono(generateSine(1000, sampleRate, 512 / sampleRate));
+    expect(eq.spectrum().bandGainDb[1]).toBe(0);
+    eq.destroy();
+
+    // frequencyHz and type shape the audio rather than the reported gain: a
+    // +9 dB shelf at 6 kHz lifts an 8 kHz tone and leaves a 200 Hz tone alone,
+    // and a low shelf does the opposite.
+    const rms = (data: ArrayLike<number>): number => {
+      let sum = 0;
+      for (let i = 0; i < data.length; i++) {
+        sum += data[i] * data[i];
+      }
+      return Math.sqrt(sum / data.length);
+    };
+    const shelfGainDb = (band: Record<string, unknown>, toneHz: number): number => {
+      const shelf = new StreamingEqualizer({ sampleRate, maxBlockSize: 512 });
+      try {
+        shelf.setBand(0, band as never);
+        const tone = generateSine(toneHz, sampleRate, 512 / sampleRate);
+        let out: Float32Array = tone;
+        // Let the filter state settle before measuring.
+        for (let i = 0; i < 4; i++) {
+          out = shelf.processMono(tone);
+        }
+        return 20 * Math.log10(rms(out) / rms(tone));
+      } finally {
+        shelf.destroy();
+      }
+    };
+
+    // Stated as the difference between the two ends rather than as an absolute
+    // level at each, so the assertion tracks where the shelf sits instead of the
+    // exact skirt of whatever coeffMode / q / slope the band was given.
+    const lowShelf = { ...staticBand, type: 'LowShelf' };
+    expect(shelfGainDb(staticBand, 8000)).toBeGreaterThan(shelfGainDb(staticBand, 200) + 6);
+    expect(shelfGainDb(lowShelf, 200)).toBeGreaterThan(shelfGainDb(lowShelf, 8000) + 6);
+
+    // The four string-valued keys reach their parsers rather than silently
+    // falling back: an unknown spelling is rejected, which a reader that fell
+    // back to the default could not do.
+    const strings = new StreamingEqualizer({ sampleRate, maxBlockSize: 512 });
+    expect(() => strings.setBand(0, { ...staticBand, type: 'NotAType' as never })).toThrow();
+    expect(() => strings.setBand(0, { ...staticBand, coeffMode: 'NotAMode' as never })).toThrow();
+    expect(() =>
+      strings.setBand(0, { ...staticBand, placement: 'NotAPlacement' as never }),
+    ).toThrow();
+    expect(() => strings.setBand(0, { ...staticBand, phase: 'NotAPhase' as never })).toThrow();
+    strings.destroy();
+  });
+
   it('uses the prepared sample rate for match when options omit sampleRate', () => {
     const sampleRate = 44100;
     const source = generateSine(1000, sampleRate, 0.25);
