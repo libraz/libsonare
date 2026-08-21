@@ -219,6 +219,20 @@ class MixerWasm {
   // never been enabled.
   val meterSnapshot() const;
 
+  // Copies the latest meter reading into a member so meterScratchValue can read
+  // it back one primitive at a time, allocating no JS object. This is the form
+  // an audio render callback uses; meterSnapshot is the object-returning API for
+  // everyone else. Returns false (rather than throwing) when the meter has never
+  // been enabled, mirroring RealtimeEngineWasm::popMeterTelemetryToScratch --
+  // the caller is a render callback and has nothing to catch with.
+  bool latchMeterSnapshot();
+
+  // Reads one field of the latched snapshot. Field indices match the engine's
+  // meterScratchValue for the fields the two share: 0 peakDbL, 1 peakDbR,
+  // 2 rmsDbL, 3 rmsDbR, 4 correlation, 5 truePeakDbL, 6 truePeakDbR. Anything
+  // else reads 0.
+  float meterScratchValue(int field) const;
+
   // Reports the longest audible serial processor-tail path to the master
   // (samples). Lazily compiles if the topology is dirty.
   int tailSamples();
@@ -256,6 +270,8 @@ class MixerWasm {
   std::optional<sonare::mixing::MeterProcessor> meter_;
   bool meter_active_ = false;
   int meter_oversample_ = 0;
+  // Destination of latchMeterSnapshot(), read back field by field.
+  sonare::mixing::MeterSnapshot meter_scratch_{};
 };
 
 MixerWasm* createMixerFromSceneJson(std::string json, int sample_rate, int block_size);

@@ -2837,6 +2837,8 @@ export interface WasmMixer {
   processPreparedStereo: (numSamples: number) => void;
   configureMeter: (enabled: boolean, truePeakOversample: number) => void;
   meterSnapshot: () => WasmMixerMeterSnapshot;
+  latchMeterSnapshot: () => boolean;
+  meterScratchValue: (field: number) => number;
   stripCount: () => number;
   sceneWarnings: () => string[];
   scheduleInsertAutomation: (

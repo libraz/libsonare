@@ -241,6 +241,31 @@ export class Mixer {
     return this.mixer.meterSnapshot();
   }
 
+  /**
+   * Latch the latest meter reading into the mixer's internal scratch so
+   * {@link meterScratchValue} can read it back one number at a time.
+   *
+   * This is the allocation-free form of {@link meterSnapshot}, for an audio
+   * render callback that must not create a JS object per interval. It returns
+   * `false` instead of throwing when the meter has never been enabled.
+   *
+   * @returns Whether a reading was latched.
+   */
+  latchMeterSnapshot(): boolean {
+    return this.mixer.latchMeterSnapshot();
+  }
+
+  /**
+   * Read one field of the snapshot latched by {@link latchMeterSnapshot}.
+   *
+   * @param field - `0` peakDbL, `1` peakDbR, `2` rmsDbL, `3` rmsDbR,
+   *   `4` correlation, `5` truePeakDbL, `6` truePeakDbR. Any other index
+   *   reads `0`.
+   */
+  meterScratchValue(field: number): number {
+    return this.mixer.meterScratchValue(field);
+  }
+
   /** Number of strips in the mixer (e.g. strips loaded from the scene). */
   stripCount(): number {
     return this.mixer.stripCount();

@@ -217,39 +217,49 @@ export class SonareWorkletProcessor {
     }
     this.lastMeterFrame = this.processedFrames;
 
-    const measured = this.mixer.meterSnapshot();
+    // Latch the reading into the mixer's own scratch and read the seven fields
+    // back as numbers. `meterSnapshot()` returns a fresh embind object, so
+    // calling it here would allocate on the render thread once per interval —
+    // about 23 per second at the default — no matter what this file then does
+    // with the result. Scratch field order, shared with the engine's
+    // meterScratchValue: 0 peakDbL, 1 peakDbR, 2 rmsDbL, 3 rmsDbR,
+    // 4 correlation, 5 truePeakDbL, 6 truePeakDbR.
+    if (!this.mixer.latchMeterSnapshot()) {
+      // The meter has never been enabled, so there is no reading to publish.
+      return;
+    }
     if (this.meterRing) {
-      // Fill the reusable record and serialise it straight into the ring. The
-      // render callback used to build a fresh fourteen-field object every
-      // interval — about 23 per second at the default — and hand it to the SAB
-      // ring, which exists precisely so this thread allocates and posts
-      // nothing. The record never escapes, so reuse is safe here in a way it is
-      // not on the postMessage path below.
+      // Fill the reusable record and serialise it straight into the ring, which
+      // exists precisely so this thread allocates and posts nothing. The record
+      // never escapes, so reuse is safe here in a way it is not on the
+      // postMessage path below.
       const meter = this.meterScratch;
       meter.frame = this.processedFrames;
-      meter.peakDbL = measured.peakDbL;
-      meter.peakDbR = measured.peakDbR;
-      meter.rmsDbL = measured.rmsDbL;
-      meter.rmsDbR = measured.rmsDbR;
-      meter.correlation = measured.correlation;
-      meter.truePeakDbL = measured.truePeakDbL;
-      meter.truePeakDbR = measured.truePeakDbR;
+      meter.peakDbL = this.mixer.meterScratchValue(0);
+      meter.peakDbR = this.mixer.meterScratchValue(1);
+      meter.rmsDbL = this.mixer.meterScratchValue(2);
+      meter.rmsDbR = this.mixer.meterScratchValue(3);
+      meter.correlation = this.mixer.meterScratchValue(4);
+      meter.truePeakDbL = this.mixer.meterScratchValue(5);
+      meter.truePeakDbR = this.mixer.meterScratchValue(6);
       this.writeMeterRing(meter);
       return;
     }
     // No ring: this is the structured-clone fallback, already off the
-    // zero-allocation contract, and a listener may retain what it is handed.
+    // zero-allocation contract, and a listener may retain what it is handed. It
+    // still reads the latched scalars rather than `meterSnapshot()`, so the one
+    // object it does build is the one it posts.
     const meter: SonareWorkletMeterSnapshot = {
       type: 'meter',
       targetId: 0,
       frame: this.processedFrames,
-      peakDbL: measured.peakDbL,
-      peakDbR: measured.peakDbR,
-      rmsDbL: measured.rmsDbL,
-      rmsDbR: measured.rmsDbR,
-      correlation: measured.correlation,
-      truePeakDbL: measured.truePeakDbL,
-      truePeakDbR: measured.truePeakDbR,
+      peakDbL: this.mixer.meterScratchValue(0),
+      peakDbR: this.mixer.meterScratchValue(1),
+      rmsDbL: this.mixer.meterScratchValue(2),
+      rmsDbR: this.mixer.meterScratchValue(3),
+      correlation: this.mixer.meterScratchValue(4),
+      truePeakDbL: this.mixer.meterScratchValue(5),
+      truePeakDbR: this.mixer.meterScratchValue(6),
       // Declared unavailable rather than floored: the mixer worklet does not run
       // the K-weighting filters, and a floor value would read as silence.
       momentaryLufs: Number.NaN,

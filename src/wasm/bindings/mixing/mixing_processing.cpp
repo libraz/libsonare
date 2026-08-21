@@ -230,6 +230,35 @@ val MixerWasm::meterSnapshot() const {
   return out;
 }
 
+bool MixerWasm::latchMeterSnapshot() {
+  if (!meter_.has_value()) {
+    return false;
+  }
+  meter_scratch_ = meter_->snapshot();
+  return true;
+}
+
+float MixerWasm::meterScratchValue(int field) const {
+  switch (field) {
+    case 0:
+      return meter_scratch_.peak_db[0];
+    case 1:
+      return meter_scratch_.peak_db[1];
+    case 2:
+      return meter_scratch_.rms_db[0];
+    case 3:
+      return meter_scratch_.rms_db[1];
+    case 4:
+      return meter_scratch_.correlation;
+    case 5:
+      return meter_scratch_.true_peak_db[0];
+    case 6:
+      return meter_scratch_.true_peak_db[1];
+    default:
+      return 0.0f;
+  }
+}
+
 // Reports the longest audible serial processor-tail path to the master
 // (samples). Lazily compiles if the topology is dirty.
 int MixerWasm::tailSamples() {
@@ -292,6 +321,8 @@ void registerMixerProcessing(class_<MixerWasm>& cls) {
       .function("processPreparedStereo", &MixerWasm::processPreparedStereo)
       .function("configureMeter", &MixerWasm::configureMeter)
       .function("meterSnapshot", &MixerWasm::meterSnapshot)
+      .function("latchMeterSnapshot", &MixerWasm::latchMeterSnapshot)
+      .function("meterScratchValue", &MixerWasm::meterScratchValue)
       .function("tailSamples", &MixerWasm::tailSamples)
       .function("latencySamples", &MixerWasm::latencySamples)
       .function("drainTailStereo", &MixerWasm::drainTailStereo);
