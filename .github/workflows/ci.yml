@@ -350,6 +350,16 @@ jobs:
       - name: Test WASM binding
         working-directory: bindings/wasm
         run: yarn test && yarn test:types
+      # Reads the built compile_commands.json, so it has to follow the build. A
+      # catch compiled without -fexceptions is deleted silently: no compile
+      # error, no link error, no failing test, just a throw that walks past its
+      # handler. Both configurations run because a feature-off build compiles a
+      # different set of units.
+      - name: Check WASM exception scope
+        run: |
+          python3 tests/conformance/check_wasm_exception_scope.py
+          python3 tests/conformance/check_wasm_exception_scope.py \
+            --build-dir bindings/wasm/build-wasm-analysis
       # `yarn check:wasm-size` is deliberately not run as a gate. Its budget is
       # measured against a baseline that only moves when it is rebased by hand,
       # so any release that adds features trips it while saying nothing about
