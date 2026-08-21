@@ -468,11 +468,20 @@ class AuEffectProcessor final : public rt::ProcessorBase {
       auto* dst = static_cast<float*>(data->mBuffers[c].mData);
       const float* src = c < self->in_count_ ? self->in_channels_[c] : nullptr;
       if (dst == nullptr) continue;
-      const size_t writable = std::min(requested, data->mBuffers[c].mDataByteSize / sizeof(float));
-      if (src != nullptr) {
-        std::memcpy(dst, src, writable * sizeof(float));
-      } else {
-        std::memset(dst, 0, writable * sizeof(float));
+      const size_t capacity_frames = data->mBuffers[c].mDataByteSize / sizeof(float);
+      // The AU asked for `frames` and will read all of them back. Clamping the
+      // copy to the caller's block leaves [requested, frames) holding whatever
+      // was in the AU's own input buffer — most often the previous block, which
+      // the AU then processes as if it were current signal: a repeated tail that
+      // a reverb or delay smears across the session, and stale rather than
+      // silent is the difference between an audible artefact and a render tail.
+      // The tail is zeroed for the same reason finalize_au_output() zeroes the
+      // output side past render_samples, and the two must not drift apart.
+      const size_t fillable = std::min(static_cast<size_t>(frames), capacity_frames);
+      const size_t copied = src != nullptr ? std::min(requested, capacity_frames) : 0;
+      if (copied > 0) std::memcpy(dst, src, copied * sizeof(float));
+      if (fillable > copied) {
+        std::memset(dst + copied, 0, (fillable - copied) * sizeof(float));
       }
     }
     return noErr;
@@ -645,6 +654,44 @@ AudioUnit cached_param_unit(void** cache_unit, std::string* cache_id,
   return unit;
 }
 
+/// Translate the display/automation metadata an AU publishes for one parameter
+/// into the seam's SDK-free fields. Only units with an exact seam counterpart
+/// are mapped: an approximate one (AU Seconds onto kMilliseconds, LinearGain
+/// onto kDecibels) would rescale the number a UI prints next to the value, so
+/// anything else stays kGeneric — "no unit" understates, a wrong unit lies.
+///
+/// kAudioUnitParameterFlag_NonRealTime marks a parameter the AU cannot change
+/// mid-render without glitching; the seam's `realtime_safe` is the flag the
+/// automation engine already enforces (automation_engine.cpp rejects writes to
+/// a non-RT-safe target), so the two are the same statement and must agree.
+void apply_au_parameter_metadata(const AudioUnitParameterInfo& info,
+                                 PluginParameterDescriptor* out) noexcept {
+  switch (info.unit) {
+    case kAudioUnitParameterUnit_Decibels:
+      out->unit = PluginParameterUnit::kDecibels;
+      break;
+    case kAudioUnitParameterUnit_Hertz:
+      out->unit = PluginParameterUnit::kHertz;
+      break;
+    case kAudioUnitParameterUnit_Milliseconds:
+      out->unit = PluginParameterUnit::kMilliseconds;
+      break;
+    case kAudioUnitParameterUnit_Percent:
+      out->unit = PluginParameterUnit::kPercent;
+      break;
+    case kAudioUnitParameterUnit_Boolean:
+      out->unit = PluginParameterUnit::kBoolean;
+      break;
+    case kAudioUnitParameterUnit_RelativeSemiTones:
+      out->unit = PluginParameterUnit::kSemitones;
+      break;
+    default:
+      out->unit = PluginParameterUnit::kGeneric;
+      break;
+  }
+  out->realtime_safe = (info.flags & kAudioUnitParameterFlag_NonRealTime) == 0;
+}
+
 }  // namespace
 
 detail::AuProcessCallSpyResult detail::run_au_process_call_spy() {
@@ -694,6 +741,8 @@ detail::AuUndersizedBlockProbeResult detail::run_au_effect_undersized_block_prob
 
   constexpr int kPreparedMaxBlock = 512;
   constexpr int kActualBlock = 64;  // smaller than the prepared maximum
+  // Distinguishable from both the host planes' contents and from silence.
+  constexpr float kSentinel = -7.5f;
 
   detail::AuUndersizedBlockProbeResult result;
   {
@@ -705,6 +754,11 @@ detail::AuUndersizedBlockProbeResult detail::run_au_effect_undersized_block_prob
     // maximum, regardless of the block size the outer process() call below
     // uses, reproducing a third-party AU that internally buffers/looks ahead.
     state.probe_input_frames = static_cast<UInt32>(kPreparedMaxBlock);
+    // Stand in for the stale block a real AU's input buffer still holds when it
+    // pulls: a zeroed destination cannot tell "left untouched" apart from
+    // "deliberately silenced", so the tail check below would pass either way.
+    state.probe_dst_left.fill(kSentinel);
+    state.probe_dst_right.fill(kSentinel);
 
     // Heap-allocate the host planes at exactly kActualBlock samples: any read
     // past the end is a heap-buffer-overflow under ASan, since num_samples is
@@ -717,6 +771,23 @@ detail::AuUndersizedBlockProbeResult detail::run_au_effect_undersized_block_prob
     result.ran = true;
     result.block_samples = static_cast<size_t>(kActualBlock);
     result.probe_frames = static_cast<size_t>(kPreparedMaxBlock);
+
+    const auto region_all = [](const std::array<float, 1024>& buffer, size_t begin, size_t end,
+                               float expected) {
+      for (size_t i = begin; i < end && i < buffer.size(); ++i) {
+        if (buffer[i] != expected) return false;
+      }
+      return true;
+    };
+    const size_t block = result.block_samples;
+    const size_t requested = result.probe_frames;
+    result.input_head_copied = region_all(state.probe_dst_left, 0, block, 0.25f) &&
+                               region_all(state.probe_dst_right, 0, block, -0.25f);
+    result.input_tail_silent = region_all(state.probe_dst_left, block, requested, 0.0f) &&
+                               region_all(state.probe_dst_right, block, requested, 0.0f);
+    result.input_beyond_request_untouched =
+        region_all(state.probe_dst_left, requested, state.probe_dst_left.size(), kSentinel) &&
+        region_all(state.probe_dst_right, requested, state.probe_dst_right.size(), kSentinel);
   }
   g_au_call_spy = nullptr;
   return result;
@@ -802,6 +873,36 @@ detail::run_au_instrument_transport_placement_probe() {
     result.first_sample_time = state.render_sample_times[0];
     result.second_sample_time = state.render_sample_times[1];
   }
+  return result;
+}
+
+detail::AuParameterMetadataProbeResult detail::run_au_parameter_metadata_probe() {
+  // Exercises apply_au_parameter_metadata(), the same translation the provider's
+  // parameter_descriptor() applies to a live AU's AudioUnitParameterInfo.
+  const auto translate = [](AudioUnitParameterUnit unit, AudioUnitParameterOptions flags) {
+    AudioUnitParameterInfo info{};
+    info.unit = unit;
+    info.flags = flags;
+    PluginParameterDescriptor descriptor;
+    apply_au_parameter_metadata(info, &descriptor);
+    return descriptor;
+  };
+
+  detail::AuParameterMetadataProbeResult result;
+  result.hertz = translate(kAudioUnitParameterUnit_Hertz, 0).unit;
+  result.decibels = translate(kAudioUnitParameterUnit_Decibels, 0).unit;
+  result.milliseconds = translate(kAudioUnitParameterUnit_Milliseconds, 0).unit;
+  result.percent = translate(kAudioUnitParameterUnit_Percent, 0).unit;
+  result.boolean_flag = translate(kAudioUnitParameterUnit_Boolean, 0).unit;
+  result.relative_semitones = translate(kAudioUnitParameterUnit_RelativeSemiTones, 0).unit;
+  result.without_counterpart = translate(kAudioUnitParameterUnit_Beats, 0).unit;
+  result.realtime_safe_without_flag =
+      translate(kAudioUnitParameterUnit_Generic, kAudioUnitParameterFlag_IsWritable).realtime_safe;
+  result.realtime_safe_with_flag =
+      translate(kAudioUnitParameterUnit_Generic,
+                kAudioUnitParameterFlag_IsWritable | kAudioUnitParameterFlag_NonRealTime)
+          .realtime_safe;
+  result.ran = true;
   return result;
 }
 
@@ -915,6 +1016,7 @@ bool AuInstrumentProvider::parameter_descriptor(const PluginDescriptor& descript
             out->min_value = info.minValue;
             out->max_value = info.maxValue;
             out->default_value = info.defaultValue;
+            apply_au_parameter_metadata(info, out);
             // HasCFNameString signals a CF name is PRESENT; CFNameRelease
             // signals the caller must release it. Gating presence on
             // CFNameRelease (as before) dropped the CF name for AUs that

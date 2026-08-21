@@ -63,10 +63,23 @@ AuProcessCallSpyResult run_au_process_call_spy();
 /// input callback directly, requesting the prepared maximum frame count
 /// regardless of the block size the outer process() call used, mirroring a
 /// third-party AU's internal input buffering.
+/// The probe pre-fills the callback's destination buffers with a non-zero
+/// sentinel, standing in for the stale contents a real AU's input buffer holds
+/// from the previous block, so the three regions of the requested range can be
+/// told apart afterwards: the host block that must be copied, the tail past it
+/// that must be zeroed rather than left stale, and the space past what the AU
+/// asked for, which must keep the sentinel.
 struct AuUndersizedBlockProbeResult {
   bool ran = false;
   size_t block_samples = 0;
   size_t probe_frames = 0;
+  // [0, block_samples) carries the caller's plane contents.
+  bool input_head_copied = false;
+  // [block_samples, probe_frames) is zeroed, not left holding the sentinel.
+  bool input_tail_silent = false;
+  // [probe_frames, buffer capacity) still holds the sentinel: the callback
+  // writes what the AU asked for and never more.
+  bool input_beyond_request_untouched = false;
 };
 
 AuUndersizedBlockProbeResult run_au_effect_undersized_block_probe();
@@ -101,6 +114,29 @@ struct AuInstrumentTransportPlacementProbeResult {
 };
 
 AuInstrumentTransportPlacementProbeResult run_au_instrument_transport_placement_probe();
+
+/// Result from probing the translation of an AU's published parameter metadata
+/// into the seam's descriptor fields. The SDK unit ids and the flags word stay
+/// inside the provider (this header is SDK-free), so each field below names the
+/// AU unit whose translation it carries. No installed plugin is required — the
+/// provider's own descriptor path cannot be exercised without one.
+struct AuParameterMetadataProbeResult {
+  bool ran = false;
+  PluginParameterUnit hertz = PluginParameterUnit::kGeneric;
+  PluginParameterUnit decibels = PluginParameterUnit::kGeneric;
+  PluginParameterUnit milliseconds = PluginParameterUnit::kGeneric;
+  PluginParameterUnit percent = PluginParameterUnit::kGeneric;
+  PluginParameterUnit boolean_flag = PluginParameterUnit::kGeneric;
+  PluginParameterUnit relative_semitones = PluginParameterUnit::kGeneric;
+  // An AU unit with no exact seam counterpart (Beats): stays kGeneric rather
+  // than being forced onto a near-miss.
+  PluginParameterUnit without_counterpart = PluginParameterUnit::kNormalized;
+  // Translation of the NonRealTime flag, absent then present.
+  bool realtime_safe_without_flag = false;
+  bool realtime_safe_with_flag = true;
+};
+
+AuParameterMetadataProbeResult run_au_parameter_metadata_probe();
 
 }  // namespace detail
 

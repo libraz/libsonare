@@ -55,6 +55,13 @@ class CoreMidiInput final : public MidiInputSource {
   /// from both the live connection and manual injection. The store is owned by
   /// this input and is cleared on close(); consumers must resolve it off the
   /// audio thread before closing the input.
+  ///
+  /// Retention is bounded (midi::kLiveSysExRetentionBudgetBytes / Entries):
+  /// nothing tells the store when a consumer is finished with a payload, so
+  /// without a budget a device streaming SysEx would grow it for as long as it
+  /// stays open. Handles are evicted oldest-first, and one that has been
+  /// evicted no longer resolves — resolve promptly rather than holding handles
+  /// across a long stretch of incoming traffic.
   const midi::SysExStore* sysex_store() const noexcept;
 
   /// INJECTION thread: enqueue a UMP tagged with a monotonic host time in
@@ -69,7 +76,10 @@ class CoreMidiInput final : public MidiInputSource {
   /// on-screen keyboard therefore keeps working with a controller plugged in.
   /// The invariant this method does impose is the seam's own: at most one
   /// thread may drive push_event_at_host_time()/push_event() at a time.
-  /// drain() merges both buffers in render-frame order.
+  /// drain() merges both buffers in render-frame order, and takes no more from
+  /// them together than the caller's capacity, so a block that cannot carry
+  /// every queued event leaves the remainder queued for the next one rather
+  /// than dropping it.
   bool push_event_at_host_time(const midi::Ump& ump, uint64_t host_time_ns) noexcept;
 
   /// CONTROL thread: disconnect and tear down the port/client. Also discards
@@ -91,6 +101,19 @@ class CoreMidiInput final : public MidiInputSource {
   /// new Start that abandons an unfinished message in the same group.
   uint32_t sysex_overflow_count() const noexcept;
   uint32_t sysex_interleave_count() const noexcept;
+
+  /// TEST-ONLY seam: enqueue @p ump into the LIVE buffer at @p render_frame,
+  /// exactly as the CoreMIDI callback thread does once it has mapped a packet
+  /// timestamp. Returns false when the live buffer is full.
+  ///
+  /// The live buffer has no other producer: only the OS read callback writes to
+  /// it, and that callback cannot be driven without a connected endpoint. Every
+  /// test therefore reached drain() with one side empty and took the direct
+  /// path, so the two-buffer merge — the only place where the two rings'
+  /// capacities interact — was never executed by any tier of the suite. This
+  /// seam is what makes that path reachable; it is not part of the seam
+  /// contract and no production caller uses it.
+  bool push_live_event_for_test(const midi::Ump& ump, int64_t render_frame) noexcept;
 
  private:
   struct Impl;

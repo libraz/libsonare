@@ -218,6 +218,11 @@ bool CoreAudioDevice::open(const AudioStreamConfig& config, AudioDeviceCallback*
   impl_->config = config;
   impl_->callback = callback;
   mach_timebase_info(&impl_->timebase);
+  // AudioDevice::xrun_count() is contracted as the total since the device
+  // opened, so the epoch is here and not in start(): a stop()/start() cycle to
+  // change tempo or reconfigure a track must not silently zero the dropout
+  // history a caller is watching to decide the buffer size is too small.
+  impl_->xruns.store(0, std::memory_order_relaxed);
 
   // Instantiate the default-output AUHAL unit.
   AudioComponentDescription desc{};
@@ -375,7 +380,6 @@ bool CoreAudioDevice::start() {
   impl_->device_sample_origin = -1;
   impl_->expected_next_sample_time = -1;  // no baseline until the first callback
   impl_->midi_time_mapper.reset();
-  impl_->xruns.store(0, std::memory_order_relaxed);
   if (!ok(AudioOutputUnitStart(impl_->unit))) return false;
   impl_->running.store(true);
   return true;
@@ -412,5 +416,9 @@ int CoreAudioDevice::output_latency_samples() const noexcept {
 uint32_t CoreAudioDevice::xrun_count() const noexcept { return impl_->xruns.load(); }
 
 MidiHostTimeMapper& CoreAudioDevice::midi_time_mapper() noexcept { return impl_->midi_time_mapper; }
+
+void CoreAudioDevice::note_xrun_for_test() noexcept {
+  impl_->xruns.fetch_add(1, std::memory_order_relaxed);
+}
 
 }  // namespace sonare::host::backends

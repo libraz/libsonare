@@ -154,6 +154,12 @@ struct CoreMidiInput::Impl {
   Impl() {
     live_sysex.reserve();
     injected_sysex.reserve();
+    // This store is fed by a live device, so it holds a stream rather than a
+    // document: consumers copy the bytes out and never say so, and close() is
+    // the only other way it shrinks. Without the budget a control surface
+    // streaming display updates grows it for as long as the device stays open.
+    sysex_store.set_retention_budget(midi::kLiveSysExRetentionBudgetBytes,
+                                     midi::kLiveSysExRetentionBudgetEntries);
   }
 
   MIDIClientRef client = 0;
@@ -409,16 +415,30 @@ struct CoreMidiInput::Impl {
     if (out == nullptr || capacity == 0) return 0;
     std::array<midi::MidiEvent, kDrainScratch> live_scratch{};
     std::array<midi::MidiEvent, kInjectedDrainScratch> injected_scratch{};
-    const size_t live_cap = std::min(capacity, kDrainScratch);
+    // The two takes must not be able to total more than `capacity`: a drain
+    // REMOVES what it returns from the ring, so anything the merge below cannot
+    // fit into `out` is gone rather than requeued -- a dropped note-off there
+    // hangs the note for good, with no retry and no counter. Sizing the second
+    // take from what the first left over keeps n1 + n2 <= capacity, so the
+    // merge writes every event it took and the rest stays queued for the next
+    // block (drain_block clamps a now-past event to the new block start, so a
+    // leftover is delivered late, never discarded).
+    //
+    // Injection is taken first because kInjectedDrainScratch is itself its
+    // bounded share: at the engine's real capacity (256) injection can claim at
+    // most 64 slots and the live stream keeps the remaining 192, whereas taking
+    // the live ring first would let one hardware burst claim all 256 and starve
+    // an on-screen keyboard for as many blocks as the burst lasts.
     const size_t injected_cap = std::min(capacity, kInjectedDrainScratch);
-    const size_t n1 =
-        num_frames >= 0
-            ? buffer.drain_block(live_scratch.data(), live_cap, block_start_frame, num_frames)
-            : buffer.drain(live_scratch.data(), live_cap, block_start_frame);
     const size_t n2 =
         num_frames >= 0 ? injected.drain_block(injected_scratch.data(), injected_cap,
                                                block_start_frame, num_frames)
                         : injected.drain(injected_scratch.data(), injected_cap, block_start_frame);
+    const size_t live_cap = std::min(capacity - n2, kDrainScratch);
+    const size_t n1 =
+        num_frames >= 0
+            ? buffer.drain_block(live_scratch.data(), live_cap, block_start_frame, num_frames)
+            : buffer.drain(live_scratch.data(), live_cap, block_start_frame);
     // Both halves are individually sorted by render_frame already (each
     // FixedMidiInputSource::drain[_block] sorts its own output); a stable
     // two-pointer merge is enough, no re-sort needed.
@@ -576,6 +596,10 @@ uint32_t CoreMidiInput::sysex_overflow_count() const noexcept {
 
 uint32_t CoreMidiInput::sysex_interleave_count() const noexcept {
   return impl_->sysex_interleave_count.load(std::memory_order_relaxed);
+}
+
+bool CoreMidiInput::push_live_event_for_test(const midi::Ump& ump, int64_t render_frame) noexcept {
+  return impl_->buffer.push_event_at_render_frame(ump, render_frame);
 }
 
 // ===========================================================================

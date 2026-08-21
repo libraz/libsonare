@@ -218,6 +218,75 @@ TEST_CASE("CoreMIDI input orders injected events by their own timestamps", "[hos
   REQUIRE(input.pending_count() == 0);
 }
 
+TEST_CASE("CoreMIDI input merges the live and injected rings in render-frame order",
+          "[host][coremidi]") {
+  using sonare::host::backends::CoreMidiInput;
+  // The merge path only runs when BOTH rings have something pending; every
+  // other case takes a direct single-ring drain. Reaching it needs a producer
+  // for the live ring, which in production is the OS read callback and cannot
+  // be driven without a connected endpoint — hence push_live_event_for_test.
+  CoreMidiInput input;
+  REQUIRE(input.push_live_event_for_test(sonare::midi::make_midi1_note_on(0, 0, 70, 100), 1005));
+  REQUIRE(input.push_live_event_for_test(sonare::midi::make_midi1_note_on(0, 0, 71, 100), 1025));
+  REQUIRE(input.push_event(sonare::midi::make_midi1_note_on(0, 0, 60, 100), 10));
+  REQUIRE(input.push_event(sonare::midi::make_midi1_note_on(0, 0, 61, 100), 30));
+  REQUIRE(input.pending_count() == 4);
+
+  std::array<sonare::midi::MidiEvent, 8> out{};
+  REQUIRE(input.drain_block(out.data(), out.size(), /*block_start_frame=*/1000,
+                            /*num_frames=*/128) == 4);
+  // Interleaved by frame, not concatenated by ring: a per-ring block would put
+  // both live notes before both injected ones.
+  REQUIRE(out[0].render_frame == 1005);
+  REQUIRE(out[1].render_frame == 1010);
+  REQUIRE(out[2].render_frame == 1025);
+  REQUIRE(out[3].render_frame == 1030);
+  REQUIRE(out[0].ump.note_number() == 70);
+  REQUIRE(out[1].ump.note_number() == 60);
+  REQUIRE(out[2].ump.note_number() == 71);
+  REQUIRE(out[3].ump.note_number() == 61);
+  REQUIRE(input.pending_count() == 0);
+}
+
+TEST_CASE("CoreMIDI input requeues what a merged drain cannot fit", "[host][coremidi]") {
+  using sonare::host::backends::CoreMidiInput;
+  // A drain REMOVES what it returns from its ring, so the merge must not take
+  // more from the two rings together than the caller's buffer can hold: the
+  // excess would be neither delivered nor recoverable, and a lost note-off
+  // hangs its note for the rest of the session.
+  CoreMidiInput input;
+  constexpr size_t kEventsPerRing = 6;
+  for (size_t i = 0; i < kEventsPerRing; ++i) {
+    const int64_t live_frame = 1005 + static_cast<int64_t>(i) * 10;
+    const uint8_t live_note = static_cast<uint8_t>(70 + i);
+    const int64_t injected_offset = 10 + static_cast<int64_t>(i) * 10;
+    const uint8_t injected_note = static_cast<uint8_t>(60 + i);
+    REQUIRE(input.push_live_event_for_test(sonare::midi::make_midi1_note_on(0, 0, live_note, 100),
+                                           live_frame));
+    REQUIRE(input.push_event(sonare::midi::make_midi1_note_on(0, 0, injected_note, 100),
+                             injected_offset));
+  }
+  REQUIRE(input.pending_count() == 2 * kEventsPerRing);
+
+  std::array<sonare::midi::MidiEvent, 16> out{};
+  constexpr size_t kCapacity = 8;  // smaller than the 12 events queued
+  const size_t first = input.drain_block(out.data(), kCapacity, /*block_start_frame=*/1000,
+                                         /*num_frames=*/128);
+  REQUIRE(first == kCapacity);
+  REQUIRE(input.pending_count() == 2 * kEventsPerRing - kCapacity);
+  for (size_t i = 1; i < first; ++i) {
+    REQUIRE(out[i - 1].render_frame <= out[i].render_frame);
+  }
+
+  // The remainder is still queued, and the next block delivers it (drain_block
+  // clamps an event whose frame is now in the past up to the block start, so it
+  // arrives late rather than being discarded).
+  const size_t second = input.drain_block(out.data(), out.size(), /*block_start_frame=*/1128,
+                                          /*num_frames=*/128);
+  REQUIRE(second == 2 * kEventsPerRing - kCapacity);
+  REQUIRE(input.pending_count() == 0);
+}
+
 TEST_CASE("CoreMIDI input keeps manual injection available while a live source is connected",
           "[host][coremidi][.]") {
   using sonare::host::backends::CoreMidiInput;
@@ -297,6 +366,37 @@ TEST_CASE("AU effect input callback never reads past the current block's host pl
   REQUIRE(result.ran);
   REQUIRE(result.block_samples == 64);
   REQUIRE(result.probe_frames == 512);
+  // Not reading past the block is only half the contract: the AU reads back
+  // every frame it asked for, so the part beyond the block must be SILENCED
+  // rather than left holding whatever the AU's input buffer had before (in a
+  // steady stream, the previous block — a stale repeat the AU then processes as
+  // current signal). The probe pre-fills with a non-zero sentinel so "zeroed"
+  // and "untouched" are distinguishable.
+  REQUIRE(result.input_head_copied);
+  REQUIRE(result.input_tail_silent);
+  REQUIRE(result.input_beyond_request_untouched);
+}
+
+TEST_CASE("AU parameter metadata translation carries unit and non-realtime flags", "[host][au]") {
+  // parameter_descriptor() needs an installed AU, so the translation itself is
+  // probed directly. An untranslated unit renders a 20-20000 Hz cutoff and a
+  // -60-+12 dB gain identically, and an untranslated NonRealTime flag lets the
+  // automation engine bind a parameter the plugin says will glitch when it is
+  // written mid-render.
+  using sonare::host::PluginParameterUnit;
+  const auto result = sonare::host::backends::detail::run_au_parameter_metadata_probe();
+  REQUIRE(result.ran);
+  REQUIRE(result.hertz == PluginParameterUnit::kHertz);
+  REQUIRE(result.decibels == PluginParameterUnit::kDecibels);
+  REQUIRE(result.milliseconds == PluginParameterUnit::kMilliseconds);
+  REQUIRE(result.percent == PluginParameterUnit::kPercent);
+  REQUIRE(result.boolean_flag == PluginParameterUnit::kBoolean);
+  REQUIRE(result.relative_semitones == PluginParameterUnit::kSemitones);
+  // A unit with no exact counterpart stays generic: a near-miss mapping would
+  // rescale the number a UI prints beside the value.
+  REQUIRE(result.without_counterpart == PluginParameterUnit::kGeneric);
+  REQUIRE(result.realtime_safe_without_flag);
+  REQUIRE_FALSE(result.realtime_safe_with_flag);
 }
 
 TEST_CASE("AU MusicDevice instrument's dropped-event counter is reachable and counts overflow",
@@ -428,11 +528,41 @@ TEST_CASE("AU host parameter enumeration is consistent across the cached instanc
   REQUIRE(first.min_value == first_again.min_value);
   REQUIRE(first.max_value == first_again.max_value);
   REQUIRE(first.default_value == first_again.default_value);
+  REQUIRE(first.unit == first_again.unit);
+  REQUIRE(first.realtime_safe == first_again.realtime_safe);
 
   // An out-of-range index must fail cleanly (cache stays valid afterwards).
   sonare::host::PluginParameterDescriptor oob{};
   REQUIRE_FALSE(provider.parameter_descriptor(*with_params, count, &oob));
   REQUIRE(provider.parameter_count(*with_params) == count);
+}
+
+TEST_CASE("AU host descriptors carry the units the installed plugins publish", "[host][au][.]") {
+  // The unit/RT-safety translation itself is covered without hardware by the
+  // parameter-metadata probe; what needs a real plugin is the one thing the
+  // probe cannot see — that parameter_descriptor() actually applies it. Apple's
+  // own effect units publish Hertz cutoffs and Decibel gains, so an unwired
+  // call site leaves every parameter on this machine generic.
+  using sonare::host::backends::AuInstrumentProvider;
+  const auto effects = AuInstrumentProvider::enumerate(sonare::host::PluginKind::kEffect);
+  AuInstrumentProvider provider;
+
+  size_t parameters_seen = 0;
+  size_t non_generic_units = 0;
+  for (const auto& effect : effects) {
+    const size_t count = provider.parameter_count(effect);
+    for (size_t i = 0; i < count; ++i) {
+      sonare::host::PluginParameterDescriptor descriptor{};
+      if (!provider.parameter_descriptor(effect, i, &descriptor)) continue;
+      ++parameters_seen;
+      if (descriptor.unit != sonare::host::PluginParameterUnit::kGeneric) ++non_generic_units;
+    }
+  }
+  if (parameters_seen == 0) {
+    SUCCEED("no Audio Unit effect parameters installed; skipping unit translation check");
+    return;
+  }
+  REQUIRE(non_generic_units > 0);
 }
 #endif  // SONARE_HOST_TEST_AU
 
@@ -535,5 +665,48 @@ TEST_CASE("CoreAudio opens the default output device", "[host][coreaudio][.]") {
 
   device.close();
   REQUIRE(device.output_latency_samples() >= 0);
+}
+
+TEST_CASE("CoreAudio xrun telemetry spans the whole open, not one start", "[host][coreaudio][.]") {
+  using sonare::host::backends::CoreAudioDevice;
+  // AudioDevice::xrun_count() is documented as the total since the device
+  // opened. start()/stop() cycles within one open are ordinary (a transport
+  // stop, a tempo change), so a dropout-diagnostics UI watching this counter
+  // must not see the history reset under it and report 0 for a session that
+  // glitched repeatedly. Needs a real device because start() short-circuits
+  // without an instantiated unit, which is what makes the reset reachable.
+  sonare::host::AudioStreamConfig config;
+  config.sample_rate = 48000.0;
+  config.max_block_size = 512;
+  config.num_output_channels = 2;
+
+  CoreAudioDevice device;
+  SineCallback callback;
+  if (!device.open(config, &callback)) {
+    SUCCEED("no default output device available; skipping");
+    return;
+  }
+  // A real dropout cannot be provoked on demand, so the count is seeded through
+  // the test seam; it is the same counter the render callback increments.
+  REQUIRE(device.xrun_count() == 0);
+  device.note_xrun_for_test();
+  REQUIRE(device.start());
+  const uint32_t after_first_start = device.xrun_count();
+  device.stop();
+  device.note_xrun_for_test();
+  REQUIRE(device.start());
+  const uint32_t after_second_start = device.xrun_count();
+  device.stop();
+
+  REQUIRE(after_first_start >= 1u);
+  REQUIRE(after_second_start >= 2u);
+  REQUIRE(device.xrun_count() >= after_second_start);
+
+  // The epoch is the open: a fresh one starts the count over.
+  device.close();
+  if (device.open(config, &callback)) {
+    REQUIRE(device.xrun_count() == 0);
+    device.close();
+  }
 }
 #endif  // SONARE_HOST_TEST_COREAUDIO

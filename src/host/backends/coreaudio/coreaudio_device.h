@@ -49,6 +49,16 @@ class CoreAudioDevice final : public AudioDevice {
   /// callback refreshes it from CoreAudio's sample/host timestamps.
   MidiHostTimeMapper& midi_time_mapper() noexcept;
 
+  /// TEST-ONLY seam: record one xrun, exactly as the render callback does when
+  /// it detects a sample-clock discontinuity.
+  ///
+  /// The counter is otherwise driven only from the CoreAudio render thread on a
+  /// real dropout, which no test can provoke on demand, so the invariant that
+  /// the count spans a whole open() — surviving any number of start()/stop()
+  /// cycles — has nothing deterministic to assert against without this. Not
+  /// part of the AudioDevice seam and no production caller uses it.
+  void note_xrun_for_test() noexcept;
+
  private:
   struct Impl;
   std::unique_ptr<Impl> impl_;

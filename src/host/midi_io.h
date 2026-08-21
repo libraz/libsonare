@@ -172,7 +172,18 @@ class MidiHostTimeMapper {
       snapshot.host_time_ns = host_time_ns_.load(std::memory_order_relaxed);
       snapshot.render_frame = render_frame_.load(std::memory_order_relaxed);
       snapshot.sample_rate_millihz = sample_rate_millihz_.load(std::memory_order_relaxed);
-      const uint32_t end = sequence_.load(std::memory_order_acquire);
+      // The three loads above must complete BEFORE the closing sequence read,
+      // or the check below validates a counter that was read too early to cover
+      // them. An acquire on the load itself does not do this: acquire orders
+      // what follows it, not what precedes it, so on a weakly ordered target
+      // (arm64, which is the platform these backends exist for) a data load may
+      // still be issued after it and pick up the next anchor's value while the
+      // counters compare equal. The fence is the half that seqlock needs: it
+      // keeps the prior loads on this side of the comparison, which is what
+      // makes "all three fields came from one publish" true rather than merely
+      // plausible under sequential reasoning.
+      std::atomic_thread_fence(std::memory_order_acquire);
+      const uint32_t end = sequence_.load(std::memory_order_relaxed);
       if (begin == end && snapshot.host_time_ns != 0 && snapshot.sample_rate_millihz != 0) {
         *out = snapshot;
         return true;
