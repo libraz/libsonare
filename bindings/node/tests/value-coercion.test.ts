@@ -2,11 +2,17 @@ import { readFileSync } from 'node:fs';
 
 import { describe, expect, it } from 'vitest';
 
-import type { EngineTrackMonitorMode } from '../src/types_engine.js';
+import type { EngineAutomationPointCurve, EngineTrackMonitorMode } from '../src/types_engine.js';
 import type { PanLawInput } from '../src/types_mastering.js';
+import type { ProjectAutomationCurve } from '../src/types_project.js';
 import {
+  AUTOMATION_CURVE_VALUES,
+  engineAutomationCurveValue,
   meterTapValue,
+  PROJECT_AUTOMATION_CURVE_VALUES,
   panLawValue,
+  projectAutomationCurveValue,
+  projectAutomationPointValue,
   projectLoopModeValue,
   resolveEnumOrdinal,
   sendTimingValue,
@@ -22,9 +28,25 @@ interface PanLawCorpus {
   rejected: string[];
 }
 
+interface AutomationCurveCorpus {
+  accepted: Array<{ value: string; ordinal: number }>;
+  projectOnly: Array<{ value: string; ordinal: number }>;
+  numeric: number[];
+  rejected: string[];
+}
+
 const panLawCorpus = JSON.parse(
   readFileSync(new URL('../../../tests/conformance/pan_law_names.json', import.meta.url), 'utf8'),
 ) as PanLawCorpus;
+
+// The same corpus the WASM suite reads: the automation-curve vocabulary is one
+// declaration both packages resolve against, not a table per surface.
+const curveCorpus = JSON.parse(
+  readFileSync(
+    new URL('../../../tests/conformance/automation_curve_names.json', import.meta.url),
+    'utf8',
+  ),
+) as AutomationCurveCorpus;
 
 describe('enum ordinal coercion', () => {
   it('accepts only declared ordinals and spellings', () => {
@@ -86,5 +108,64 @@ describe('enum ordinal coercion', () => {
     for (const value of panLawCorpus.rejected) {
       expect(() => panLawValue(value as PanLawInput)).toThrow(RangeError);
     }
+  });
+
+  it('resolves every shared automation-curve spelling', () => {
+    // The tables the public types are derived from must hold exactly the shared
+    // corpus, so widening one without the other is caught here rather than
+    // surfacing as a curve one binding renders and the other rejects.
+    expect(AUTOMATION_CURVE_VALUES).toEqual(
+      Object.fromEntries(curveCorpus.accepted.map(({ value, ordinal }) => [value, ordinal])),
+    );
+    expect(PROJECT_AUTOMATION_CURVE_VALUES).toEqual(
+      Object.fromEntries(
+        [...curveCorpus.accepted, ...curveCorpus.projectOnly].map(({ value, ordinal }) => [
+          value,
+          ordinal,
+        ]),
+      ),
+    );
+    for (const { value, ordinal } of curveCorpus.accepted) {
+      expect(engineAutomationCurveValue(value as EngineAutomationPointCurve)).toBe(ordinal);
+      expect(projectAutomationCurveValue(value as ProjectAutomationCurve)).toBe(ordinal);
+    }
+    for (const value of curveCorpus.numeric) {
+      expect(projectAutomationCurveValue(value as ProjectAutomationCurve)).toBe(value);
+    }
+    for (const value of curveCorpus.rejected) {
+      expect(() => projectAutomationCurveValue(value as ProjectAutomationCurve)).toThrow(
+        RangeError,
+      );
+    }
+  });
+
+  it('accepts the legacy project curve spelling the WASM facade has always taken', () => {
+    for (const { value, ordinal } of curveCorpus.projectOnly) {
+      expect(projectAutomationCurveValue(value as ProjectAutomationCurve)).toBe(ordinal);
+      expect(
+        projectAutomationPointValue({ ppq: 0, value: 1, curve: value as ProjectAutomationCurve }),
+      ).toEqual({ ppq: 0, value: 1, curve: ordinal, curveToNext: ordinal });
+    }
+  });
+
+  it('folds the curveToNext alias onto curve, with curve winning', () => {
+    // A breakpoint that carries only `curveToNext` must not fall back to Linear:
+    // the type documents it as an alias and the Python marshaller reads it too.
+    expect(projectAutomationPointValue({ ppq: 1, value: 0.5, curveToNext: 's-curve' })).toEqual({
+      ppq: 1,
+      value: 0.5,
+      curve: 3,
+      curveToNext: 3,
+    });
+    expect(
+      projectAutomationPointValue({ ppq: 1, value: 0.5, curve: 'hold', curveToNext: 's-curve' }),
+    ).toEqual({ ppq: 1, value: 0.5, curve: 2, curveToNext: 2 });
+    // An omitted curve is Linear, matching the documented default.
+    expect(projectAutomationPointValue({ ppq: 1, value: 0.5 })).toEqual({
+      ppq: 1,
+      value: 0.5,
+      curve: 0,
+      curveToNext: 0,
+    });
   });
 });

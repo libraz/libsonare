@@ -4,6 +4,7 @@
 
 #ifdef __EMSCRIPTEN__
 
+#include <algorithm>
 #include <cmath>
 
 #include "project_wasm.h"
@@ -200,6 +201,39 @@ void ProjectWasm::setTrackRoute(uint32_t track_id, const std::string& channel_st
   }
 }
 
+namespace {
+
+/// Resolve one breakpoint curve spelling to its SonareAutomationCurve ordinal.
+///
+/// The TS facade normalizes `curve` to an ordinal before it reaches embind, so
+/// this only runs for a caller that drives the embind class directly. It still
+/// accepts the same spellings the facade documents — the canonical 's-curve'
+/// plus the legacy 'scurve' — because a spelling the facade takes must not
+/// become a different curve here. An unrecognised spelling is rejected rather
+/// than silently coerced to Linear, which had quietly changed the curve shape.
+int automationCurveFromVal(val curve) {
+  if (curve.typeOf().as<std::string>() != "string") {
+    return curve.as<int>();
+  }
+  const std::string s = curve.as<std::string>();
+  if (s == "linear") {
+    return SONARE_CURVE_LINEAR;
+  }
+  if (s == "exponential") {
+    return SONARE_CURVE_EXPONENTIAL;
+  }
+  if (s == "hold") {
+    return SONARE_CURVE_HOLD;
+  }
+  if (s == "s-curve" || s == "scurve") {
+    return SONARE_CURVE_SCURVE;
+  }
+  throw sonare::SonareException(sonare::ErrorCode::InvalidParameter,
+                                "unknown automation curve: " + s);
+}
+
+}  // namespace
+
 std::vector<SonareAutomationPoint> ProjectWasm::automationPointsFromVal(val points) {
   std::vector<SonareAutomationPoint> out;
   if (points.isUndefined() || points.isNull()) {
@@ -209,35 +243,23 @@ std::vector<SonareAutomationPoint> ProjectWasm::automationPointsFromVal(val poin
     throw sonare::SonareException(sonare::ErrorCode::InvalidParameter,
                                   "automation points must be an array");
   }
-  const size_t count = points["length"].as<size_t>();
-  out.reserve(count);
+  // The point count comes from an untrusted JS `.length`: validate it through
+  // the shared safe-integer + budget guard, and cap the pre-reserve so a
+  // fabricated length cannot allocate storage the array does not back.
+  const size_t count = wasmArrayLikeLength(points, "automation points");
+  out.reserve(std::min(count, kMaxWasmObjectArrayReserve));
   for (size_t i = 0; i < count; ++i) {
     val point = points[i];
     SonareAutomationPoint p{};
     p.ppq = hasProperty(point, "ppq") ? point["ppq"].as<double>() : 0.0;
     p.value = hasProperty(point, "value") ? point["value"].as<float>() : 0.0f;
+    // 'curveToNext' is the Node engine's spelling of the same field and the
+    // Project types document it as an alias, so reading only 'curve' turned a
+    // breakpoint Node renders as an S-curve into a silent Linear here.
     if (hasProperty(point, "curve")) {
-      val curve = point["curve"];
-      if (curve.typeOf().as<std::string>() == "string") {
-        const std::string s = curve.as<std::string>();
-        // Accept the canonical 's-curve' (used by Node and the WASM mixer) as well
-        // as the legacy 'scurve'. An unrecognised spelling is rejected rather than
-        // silently coerced to Linear, which had quietly changed the curve shape.
-        if (s == "linear") {
-          p.curve_to_next = SONARE_CURVE_LINEAR;
-        } else if (s == "exponential") {
-          p.curve_to_next = SONARE_CURVE_EXPONENTIAL;
-        } else if (s == "hold") {
-          p.curve_to_next = SONARE_CURVE_HOLD;
-        } else if (s == "s-curve" || s == "scurve") {
-          p.curve_to_next = SONARE_CURVE_SCURVE;
-        } else {
-          throw sonare::SonareException(sonare::ErrorCode::InvalidParameter,
-                                        "unknown automation curve: " + s);
-        }
-      } else {
-        p.curve_to_next = curve.as<int>();
-      }
+      p.curve_to_next = automationCurveFromVal(point["curve"]);
+    } else if (hasProperty(point, "curveToNext")) {
+      p.curve_to_next = automationCurveFromVal(point["curveToNext"]);
     } else {
       p.curve_to_next = SONARE_CURVE_LINEAR;
     }

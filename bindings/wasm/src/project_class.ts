@@ -1,5 +1,6 @@
 import {
   assertProjectMidiEvents,
+  projectAutomationPointValue,
   projectAutomationTargetKindValue,
   projectLoopModeValue,
   projectMidi1Event,
@@ -935,7 +936,10 @@ export class Project {
     if (desc.targetParamId === 0) {
       throw new RangeError('project automation lane targetParamId must be non-zero');
     }
-    const nativeDesc: ProjectAutomationLaneDesc = { ...desc };
+    const nativeDesc: ProjectAutomationLaneDesc = {
+      ...desc,
+      points: desc.points.map(projectAutomationPointValue),
+    };
     if (Object.keys(desc).includes('targetKind')) {
       nativeDesc.targetKind = projectAutomationTargetKindValue(
         desc.targetKind as ProjectAutomationTargetKind,
@@ -953,7 +957,10 @@ export class Project {
     if (desc.targetParamId === 0) {
       throw new RangeError('project automation lane targetParamId must be non-zero');
     }
-    const nativeDesc: ProjectAutomationLaneDesc = { ...desc };
+    const nativeDesc: ProjectAutomationLaneDesc = {
+      ...desc,
+      points: desc.points.map(projectAutomationPointValue),
+    };
     if (Object.keys(desc).includes('targetKind')) {
       nativeDesc.targetKind = projectAutomationTargetKindValue(
         desc.targetKind as ProjectAutomationTargetKind,

@@ -1,3 +1,4 @@
+import type { ProjectAutomationCurve } from './project_types';
 import type { AutomationCurve, MeterTap, PanLawInput, PanMode, SendTiming } from './public_types';
 
 /** Resolve a numeric ordinal in an inclusive range without coercion. */
@@ -41,11 +42,29 @@ export function resolveEnumOrdinal(
   throw new RangeError(`Invalid ${enumName}: ${String(value)}`);
 }
 
-const AUTOMATION_CURVE_VALUES = {
+/**
+ * Automation curve spellings and their `SonareAutomationCurve` ordinals.
+ *
+ * Single source of truth for the vocabulary: {@link AutomationCurve} and
+ * {@link ProjectAutomationCurve} are derived from these keys, so a spelling
+ * cannot be documented without resolving, or resolve without being documented.
+ */
+export const AUTOMATION_CURVE_VALUES = {
   linear: 0,
   exponential: 1,
   hold: 2,
   's-curve': 3,
+} as const;
+
+/**
+ * The Project facade additionally accepts the legacy `'scurve'` spelling for
+ * compatibility with project data written before `'s-curve'` was canonical.
+ * The Node package declares the same pair of tables, so a breakpoint accepted
+ * by one facade resolves to the same ordinal on the other.
+ */
+export const PROJECT_AUTOMATION_CURVE_VALUES = {
+  ...AUTOMATION_CURVE_VALUES,
+  scurve: 3,
 } as const;
 const PAN_LAW_VALUES: Readonly<Record<string, number>> = {
   const3db: 0,
@@ -76,6 +95,11 @@ const TRACK_MONITOR_MODE_VALUES = { off: 0, pfl: 1, afl: 2 } as const;
 
 export function automationCurveCode(curve: AutomationCurve): number {
   return resolveEnumOrdinal(curve, AUTOMATION_CURVE_VALUES, 'automation curve');
+}
+
+/** Resolve a Project automation breakpoint curve, legacy spellings included. */
+export function projectAutomationCurveCode(curve: ProjectAutomationCurve | undefined): number {
+  return resolveEnumOrdinal(curve ?? 'linear', PROJECT_AUTOMATION_CURVE_VALUES, 'automation curve');
 }
 
 export function panLawCode(panLaw: PanLawInput): number {

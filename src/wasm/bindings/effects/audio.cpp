@@ -666,9 +666,13 @@ val js_spectral_edit(val samples, int sample_rate, val ops, val options) {
 
   std::vector<SpectralRegionOp> region_ops;
   if (!ops.isUndefined() && !ops.isNull()) {
-    const uint32_t n = ops["length"].as<uint32_t>();
-    region_ops.reserve(n);
-    for (uint32_t i = 0; i < n; ++i) {
+    // The op count comes from an untrusted JS `.length`: validate it through the
+    // shared safe-integer + budget guard, and cap the pre-reserve so a
+    // fabricated length cannot allocate storage the array does not back. A
+    // longer genuine array still works — the vector grows as ops are read.
+    const std::size_t n = wasmArrayLikeLength(ops, "spectral edit ops");
+    region_ops.reserve(std::min(n, kMaxWasmObjectArrayReserve));
+    for (std::size_t i = 0; i < n; ++i) {
       val op = ops[i];
       SpectralRegionOp region;
       // An omitted endSample defaults to the whole signal (matches the Node

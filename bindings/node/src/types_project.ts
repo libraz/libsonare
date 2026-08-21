@@ -1,4 +1,15 @@
-import type { EngineAutomationPointCurve } from './types_engine.js';
+// Type-only, so the erased import adds no runtime edge to the coercion module.
+import type { PROJECT_AUTOMATION_CURVE_VALUES } from './value_coercion.js';
+
+/**
+ * Automation breakpoint interpolation for {@link ProjectAutomationPoint}.
+ *
+ * `'s-curve'` is the canonical spelling; the legacy `'scurve'` stays accepted
+ * for compatibility with project data written through the WASM facade. The
+ * spellings are derived from the resolver's own table, so the documented set
+ * and the accepted set cannot drift apart.
+ */
+export type ProjectAutomationCurve = 0 | 1 | 2 | 3 | keyof typeof PROJECT_AUTOMATION_CURVE_VALUES;
 
 /**
  * Expected project ABI version, mirroring `SONARE_PROJECT_ABI_VERSION`
@@ -699,8 +710,10 @@ export interface ProjectClipCompSegment {
 export interface ProjectAutomationPoint {
   ppq: number;
   value: number;
-  curve?: EngineAutomationPointCurve;
-  curveToNext?: EngineAutomationPointCurve;
+  /** Curve to the next breakpoint (default `'linear'`). */
+  curve?: ProjectAutomationCurve;
+  /** Alias of {@link ProjectAutomationPoint.curve}; `curve` wins when both are set. */
+  curveToNext?: ProjectAutomationCurve;
 }
 
 /**

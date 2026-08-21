@@ -1,8 +1,9 @@
-import { resolveEnumOrdinal } from './codes';
+import { projectAutomationCurveCode, resolveEnumOrdinal } from './codes';
 import { getSonareModule } from './module_state';
 import type {
   BuiltinSynthBinding,
   ProjectAssistSidecar,
+  ProjectAutomationCurve,
   ProjectAutomationLaneDesc,
   ProjectAutomationPoint,
   ProjectAutomationTargetKind,
@@ -336,6 +337,23 @@ export function assertProjectMidiEvents(
 
 export function projectTrackKindValue(kind: ProjectTrackKind | undefined): number {
   return resolveEnumOrdinal(kind ?? 'audio', { audio: 0, midi: 1, aux: 2 }, 'project track kind');
+}
+
+/**
+ * Resolve a breakpoint's curve spelling to its ordinal before it crosses into
+ * embind, and fold the `curveToNext` alias onto `curve`.
+ *
+ * Mirrors the Node facade's `projectAutomationPointValue`: resolving here means
+ * an unknown spelling is a `RangeError` from the same table both packages
+ * declare, rather than a curve one binding renders and the other rejects.
+ */
+export function projectAutomationPointValue(point: ProjectAutomationPoint): ProjectAutomationPoint {
+  const curve = projectAutomationCurveCode(point.curve ?? point.curveToNext);
+  return {
+    ...point,
+    curve: curve as ProjectAutomationCurve,
+    curveToNext: curve as ProjectAutomationCurve,
+  };
 }
 
 export function projectAutomationTargetKindValue(kind: ProjectAutomationTargetKind): number {

@@ -21,6 +21,8 @@ import {
   isSonareError,
   RealtimeEngine,
   type SonareError,
+  type SpectralRegionOp,
+  spectralEdit,
   waveformPeakPyramid,
 } from '../dist/index.js';
 
@@ -101,6 +103,27 @@ describe('offline render honours the prepared channel count', () => {
       }),
     );
     engine.destroy();
+  });
+
+  it('bounceOffline rejects an out-of-range dither ordinal', () => {
+    // An unknown ordinal used to fall through to None, so the bounce succeeded
+    // with undithered audio and no way to tell the request had been dropped.
+    // The C ABI rejects it, so Node and Python already do. The TS type narrows
+    // `dither` to 0..3, so this is the plain-JavaScript caller's path.
+    for (const dither of [-1, 4, 999] as unknown as Array<0 | 1 | 2 | 3>) {
+      const engine = new RealtimeEngine(48000, 128, 1024, 1024, preparedChannels);
+      expectInvalidParameter(() =>
+        engine.bounceOffline({
+          totalFrames: 256,
+          blockSize: 128,
+          numChannels: preparedChannels,
+          sourceSampleRate: 48000,
+          targetSampleRate: 48000,
+          dither,
+        }),
+      );
+      engine.destroy();
+    }
   });
 
   it('still renders at the prepared width', () => {
@@ -208,6 +231,21 @@ describe('caller-supplied JS lengths cannot drive an allocation', () => {
       },
     });
     expectInvalidParameter(() => fixFrames(lying, 0, -1, true));
+  });
+
+  it('spectralEdit rejects an over-budget op-list length before reserving', () => {
+    // `ops` is read straight from JS: an array-like whose `.length` the data
+    // does not back would otherwise pre-reserve that many SpectralRegionOps.
+    const samples = new Float32Array(2048);
+    for (const length of [2e9, -1, 1.5]) {
+      expectInvalidParameter(() =>
+        spectralEdit(samples, SR, { length } as unknown as SpectralRegionOp[]),
+      );
+    }
+    // A genuine op list of the same shape still resolves.
+    expect(
+      spectralEdit(samples, SR, [{ startSample: 0, lowHz: 100, highHz: 200, gainDb: -6 }]).length,
+    ).toBe(samples.length);
   });
 
   it('waveformPeakPyramid rejects a level count fabricated after the facade checks', () => {

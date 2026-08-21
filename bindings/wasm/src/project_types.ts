@@ -1,3 +1,5 @@
+// Type-only, so the erased import adds no runtime edge to the codes module.
+import type { PROJECT_AUTOMATION_CURVE_VALUES } from './codes';
 import type { Project } from './project_class';
 
 // ============================================================================
@@ -441,17 +443,10 @@ export type ProjectWarpMode = 'off' | 'repitch' | 'tempo-sync' | 'time-stretch' 
  *
  * `'s-curve'` is the canonical spelling, matching the Node engine and the mixer
  * automation types. The legacy `'scurve'` remains accepted for compatibility.
+ * The spellings are derived from the resolver's own table, so the documented
+ * set and the accepted set cannot drift apart.
  */
-export type ProjectAutomationCurve =
-  | 'linear'
-  | 'exponential'
-  | 'hold'
-  | 's-curve'
-  | 'scurve'
-  | 0
-  | 1
-  | 2
-  | 3;
+export type ProjectAutomationCurve = 0 | 1 | 2 | 3 | keyof typeof PROJECT_AUTOMATION_CURVE_VALUES;
 
 /** One automation breakpoint accepted by the automation-lane edit ops. */
 export interface ProjectAutomationPoint {
@@ -461,6 +456,8 @@ export interface ProjectAutomationPoint {
   value: number;
   /** Curve to the next breakpoint (default `'linear'`). */
   curve?: ProjectAutomationCurve;
+  /** Alias of {@link ProjectAutomationPoint.curve}; `curve` wins when both are set. */
+  curveToNext?: ProjectAutomationCurve;
 }
 
 /**

@@ -6,6 +6,7 @@ import type {
   MeterTap,
   PanLawInput,
   PanMode,
+  ProjectAutomationCurve,
   ProjectAutomationLaneDesc,
   ProjectAutomationPoint,
   ProjectAutomationTargetKind,
@@ -71,12 +72,38 @@ export function warpModeValue(mode: WarpMode | number | undefined): number {
   );
 }
 
+/**
+ * Automation curve spellings and their `SonareAutomationCurve` ordinals.
+ *
+ * Single source of truth for the vocabulary: `AutomationCurve` and
+ * `EngineAutomationPointCurve` are derived from these keys, so a spelling
+ * cannot be documented without resolving, or resolve without being documented.
+ */
+export const AUTOMATION_CURVE_VALUES = {
+  linear: 0,
+  exponential: 1,
+  hold: 2,
+  's-curve': 3,
+} as const;
+
+/**
+ * The Project facade additionally accepts the legacy `'scurve'` spelling, which
+ * the WASM Project facade has always taken. Rejecting it here meant the same
+ * breakpoint object loaded on one binding and threw on the other, so the
+ * accepted set is declared once and both packages derive their type from it.
+ */
+export const PROJECT_AUTOMATION_CURVE_VALUES = {
+  ...AUTOMATION_CURVE_VALUES,
+  scurve: 3,
+} as const;
+
 export function engineAutomationCurveValue(curve: EngineAutomationPointCurve | undefined): number {
-  return resolveEnumOrdinal(
-    curve ?? 'linear',
-    { linear: 0, exponential: 1, hold: 2, 's-curve': 3 },
-    'automation curve',
-  );
+  return resolveEnumOrdinal(curve ?? 'linear', AUTOMATION_CURVE_VALUES, 'automation curve');
+}
+
+/** Resolve a Project automation breakpoint curve, legacy spellings included. */
+export function projectAutomationCurveValue(curve: ProjectAutomationCurve | undefined): number {
+  return resolveEnumOrdinal(curve ?? 'linear', PROJECT_AUTOMATION_CURVE_VALUES, 'automation curve');
 }
 
 export function engineAutomationPointValue(point: EngineAutomationPoint): EngineAutomationPoint {
@@ -116,11 +143,11 @@ export function projectLoopModeValue(mode: ProjectLoopMode): number {
 }
 
 export function projectAutomationPointValue(point: ProjectAutomationPoint): ProjectAutomationPoint {
-  const curve = engineAutomationCurveValue(point.curve ?? point.curveToNext);
+  const curve = projectAutomationCurveValue(point.curve ?? point.curveToNext);
   return {
     ...point,
-    curve: curve as EngineAutomationPointCurve,
-    curveToNext: curve as EngineAutomationPointCurve,
+    curve: curve as ProjectAutomationCurve,
+    curveToNext: curve as ProjectAutomationCurve,
   };
 }
 
@@ -181,11 +208,7 @@ const SEND_TIMING_VALUES: Record<SendTiming, number> = {
 };
 
 export function automationCurveValue(curve: AutomationCurve): number {
-  return resolveEnumOrdinal(
-    curve,
-    { linear: 0, exponential: 1, hold: 2, 's-curve': 3 },
-    'automation curve',
-  );
+  return resolveEnumOrdinal(curve, AUTOMATION_CURVE_VALUES, 'automation curve');
 }
 
 export function panLawValue(panLaw: PanLawInput): number {

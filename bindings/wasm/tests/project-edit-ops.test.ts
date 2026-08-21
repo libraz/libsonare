@@ -5,7 +5,10 @@
  * C ABI / core through embind.
  */
 
+import { readFileSync } from 'node:fs';
+
 import { beforeAll, describe, expect, it } from 'vitest';
+import type { ProjectAutomationCurve, ProjectAutomationPoint } from '../dist/index.js';
 import {
   ErrorCode,
   init,
@@ -14,6 +17,27 @@ import {
   Project,
   RealtimeEngine,
 } from '../dist/index.js';
+import {
+  AUTOMATION_CURVE_VALUES,
+  PROJECT_AUTOMATION_CURVE_VALUES,
+  projectAutomationCurveCode,
+} from '../src/codes';
+
+interface AutomationCurveCorpus {
+  accepted: Array<{ value: string; ordinal: number }>;
+  projectOnly: Array<{ value: string; ordinal: number }>;
+  numeric: number[];
+  rejected: string[];
+}
+
+// The same corpus the Node suite reads: the automation-curve vocabulary is one
+// declaration both packages resolve against, not a table per surface.
+const curveCorpus = JSON.parse(
+  readFileSync(
+    new URL('../../../tests/conformance/automation_curve_names.json', import.meta.url),
+    'utf8',
+  ),
+) as AutomationCurveCorpus;
 
 describe('Sonare WASM Project edit ops', () => {
   beforeAll(async () => {
@@ -400,6 +424,56 @@ describe('Sonare WASM Project edit ops', () => {
       expect(() => project.removeAutomationLane(trackId, targetParamId)).not.toThrow();
     } finally {
       project.delete();
+    }
+  });
+
+  it('resolves every documented curve spelling and alias to one serialized ordinal', () => {
+    // The vocabulary comes from the shared corpus rather than being restated
+    // here, and the Node suite reads the same file: a spelling one facade takes
+    // must land on the same ordinal on the other, not throw or fall back to
+    // Linear at the boundary.
+    expect(AUTOMATION_CURVE_VALUES).toEqual(
+      Object.fromEntries(curveCorpus.accepted.map(({ value, ordinal }) => [value, ordinal])),
+    );
+    expect(PROJECT_AUTOMATION_CURVE_VALUES).toEqual(
+      Object.fromEntries(
+        [...curveCorpus.accepted, ...curveCorpus.projectOnly].map(({ value, ordinal }) => [
+          value,
+          ordinal,
+        ]),
+      ),
+    );
+    for (const { value, ordinal } of [...curveCorpus.accepted, ...curveCorpus.projectOnly]) {
+      expect(projectAutomationCurveCode(value as ProjectAutomationCurve)).toBe(ordinal);
+    }
+    for (const value of curveCorpus.rejected) {
+      expect(() => projectAutomationCurveCode(value as ProjectAutomationCurve)).toThrow(RangeError);
+    }
+
+    const spellings: ProjectAutomationPoint[] = [
+      { ppq: 0, value: 1, curve: 's-curve' },
+      { ppq: 0, value: 1, curve: 'scurve' },
+      { ppq: 0, value: 1, curve: 3 },
+      { ppq: 0, value: 1, curveToNext: 's-curve' },
+      { ppq: 0, value: 1, curveToNext: 'scurve' },
+    ];
+    const serialized = spellings.map((point) => {
+      const project = new Project();
+      try {
+        project.setSampleRate(48000);
+        const trackId = project.addTrack({ kind: 'audio' });
+        project.addAutomationLane(trackId, { targetParamId: 1, points: [point] });
+        return project.toJson();
+      } finally {
+        project.delete();
+      }
+    });
+    const lane = JSON.parse(serialized[0]) as {
+      tracks: Array<{ automation_lanes: Array<{ points: Array<{ curve_to_next: number }> }> }>;
+    };
+    expect(lane.tracks[0].automation_lanes[0].points[0].curve_to_next).toBe(3);
+    for (const json of serialized) {
+      expect(json).toBe(serialized[0]);
     }
   });
 

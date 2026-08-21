@@ -694,6 +694,7 @@ export type {
   EngineTransportState,
   ExternalMidiEvent,
   MidiCcBindOptions,
+  RenderOfflineRequest,
   TrackMonitorMode,
 } from './realtime_engine';
 export {
