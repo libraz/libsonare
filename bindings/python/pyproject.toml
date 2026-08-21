@@ -139,8 +139,10 @@ mypy_path = "src"
 
 # numpy's published stubs use PEP 695 `type` statements, which mypy rejects as a
 # syntax error when checking against our 3.11 target (requires-python >= 3.11).
-# Our public stubs expose only built-in container types, never numpy types, so
-# skip following numpy rather than dropping 3.11 coverage of our own code.
+# Skipping numpy keeps 3.11 coverage of our own code, at the cost of collapsing
+# the `np.ndarray` arm of FloatSamples/IntSamples to Any: mypy therefore cannot
+# hold those stubs to their intent, so test_int_apis_declare_int_samples does
+# instead, by comparing the stub against the runtime marshalling call sites.
 [[tool.mypy.overrides]]
 module = "numpy.*"
 follow_imports = "skip"

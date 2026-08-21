@@ -386,3 +386,79 @@ def test_no_module_marshals_a_float_buffer_through_varargs() -> None:
         "float sample buffers must be marshalled through _planar_channel_arrays / "
         f"_to_c_float_array, not per-element varargs: {offenders}"
     )
+
+
+def test_int_apis_declare_int_samples() -> None:
+    """Every public parameter marshalled through ``_to_c_int_array`` must be
+    declared ``IntSamples`` in the stub, and ``IntSamples`` must admit ndarray.
+
+    mypy cannot enforce this: numpy is configured with ``follow_imports = skip``
+    (its published stubs use PEP 695 syntax our 3.11 target rejects), so the
+    ``np.ndarray`` arm of the alias collapses to ``Any`` and a stub that omits
+    it type-checks exactly like one that has it. The understatement is only
+    visible to a downstream consumer with real numpy stubs, who cannot pass the
+    array the runtime has always accepted. Deriving the parameter list from the
+    marshalling call sites keeps this from being a list of the ones that were
+    fixed once.
+    """
+    import ast
+
+    package = pathlib.Path(libsonare.__file__).parent
+
+    # Parameters handed to _to_c_int_array from within the function that
+    # declares them, i.e. caller-supplied index arrays rather than internally
+    # built lists.
+    marshalled: set[tuple[str, str]] = set()
+    for path in sorted(package.glob("*.py")):
+        tree = ast.parse(path.read_text(encoding="utf-8"))
+        for func in ast.walk(tree):
+            if not isinstance(func, (ast.FunctionDef, ast.AsyncFunctionDef)):
+                continue
+            params = {arg.arg for arg in func.args.args + func.args.kwonlyargs}
+            for node in ast.walk(func):
+                if not isinstance(node, ast.Call):
+                    continue
+                if not (isinstance(node.func, ast.Name) and node.func.id == "_to_c_int_array"):
+                    continue
+                for arg in node.args:
+                    if isinstance(arg, ast.Name) and arg.id in params:
+                        marshalled.add((func.name, arg.id))
+
+    stub = ast.parse((package / "analyzer.pyi").read_text(encoding="utf-8"))
+
+    alias = next(
+        node
+        for node in stub.body
+        if isinstance(node, ast.AnnAssign)
+        and isinstance(node.target, ast.Name)
+        and node.target.id == "IntSamples"
+    )
+    assert "np.ndarray" in ast.unparse(alias.value), (
+        "IntSamples must admit numpy arrays: the runtime marshaller accepts them"
+    )
+
+    declarations: dict[str, dict[str, str]] = {}
+    for node in stub.body:
+        if isinstance(node, ast.FunctionDef):
+            declarations[node.name] = {
+                arg.arg: ast.unparse(arg.annotation) if arg.annotation else ""
+                for arg in node.args.args + node.args.kwonlyargs
+            }
+
+    offenders: list[str] = []
+    checked = 0
+    for name, param in sorted(marshalled):
+        declared = declarations.get(name)
+        if declared is None or param not in declared:
+            # Not on the public stub surface (internal helper); nothing to check.
+            continue
+        checked += 1
+        if "IntSamples" not in declared[param]:
+            offenders.append(f"{name}({param}: {declared[param]})")
+
+    # Guard the derivation itself: a parser change that matches nothing, or a
+    # rename that empties the set, would otherwise pass silently.
+    assert checked >= 5, f"only {checked} stub parameters cross-checked"
+    assert offenders == [], (
+        f"these parameters accept ndarray at runtime but understate it in the stub: {offenders}"
+    )

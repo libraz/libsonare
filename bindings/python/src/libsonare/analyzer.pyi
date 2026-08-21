@@ -75,7 +75,7 @@ def engine_abi_version() -> int: ...
 def voice_changer_abi_version() -> int: ...
 
 AutomationCurveArg: TypeAlias = AutomationCurve | str | int
-IntSamples: TypeAlias = Sequence[int] | list[int]
+IntSamples: TypeAlias = Sequence[int] | list[int] | np.ndarray[Any, Any]
 MasteringParamValue: TypeAlias = float | int | bool
 MasteringParams: TypeAlias = dict[str, MasteringParamValue]
 # The assistant additionally accepts targetPlatform, whose value is a
@@ -547,7 +547,7 @@ def pitch_correct_to_midi_timevarying(
     target_midi: float,
     sample_rate: int = 22050,
     hop_length: int = 512,
-    voiced: Sequence[int] | list[int] | None = None,
+    voiced: IntSamples | None = None,
     voiced_prob: FloatSamples | None = None,
 ) -> list[float]: ...
 def pitch_correct_timevarying(
@@ -565,7 +565,7 @@ def pitch_correct_timevarying(
     max_correction_semitones: float | None = None,
     retune_speed_ms: float | None = None,
     vibrato_threshold_cents: float | None = None,
-    voiced: Sequence[int] | list[int] | None = None,
+    voiced: IntSamples | None = None,
     voiced_prob: FloatSamples | None = None,
 ) -> list[float]: ...
 def note_stretch(
@@ -1220,7 +1220,7 @@ def subsegment(
     data: FloatSamples,
     rows: int,
     cols: int,
-    boundaries: Sequence[int],
+    boundaries: IntSamples,
     n_segments: int = 4,
 ) -> list[int]: ...
 def agglomerative(
@@ -1337,13 +1337,13 @@ def nn_filter(
 ) -> np.ndarray[Any, Any]: ...
 def remix(
     samples: FloatSamples,
-    intervals: Sequence[int] | list[int],
+    intervals: IntSamples,
     sample_rate: int = 22050,
     align_zeros: bool = False,
 ) -> np.ndarray[Any, Any]: ...
 def remix_aligned_intervals(
     samples: FloatSamples,
-    intervals: Sequence[int] | list[int],
+    intervals: IntSamples,
     sample_rate: int = 22050,
     align_zeros: bool = True,
 ) -> list[int]: ...
