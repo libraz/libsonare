@@ -14,6 +14,7 @@ from ._ffi_signatures_extra import configure_extra_signatures
 from ._ffi_signatures_features import configure_features_signatures
 from ._ffi_signatures_mastering import configure_mastering_signatures
 from ._ffi_signatures_mixing import configure_mixing_signatures
+from ._ffi_signatures_mixing_assistant import configure_mixing_assistant_signatures
 from ._ffi_signatures_project import configure_project_signatures
 from ._ffi_signatures_repair_dynamics import configure_repair_dynamics_signatures
 from ._ffi_types import *  # noqa: F403
@@ -111,6 +112,7 @@ def load_library(lib_path: str | None = None) -> ctypes.CDLL:
     configure_features_signatures(lib)
     configure_mastering_signatures(lib)
     configure_mixing_signatures(lib)
+    configure_mixing_assistant_signatures(lib)
     configure_extra_signatures(lib)
     configure_project_signatures(lib)
 

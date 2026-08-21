@@ -241,6 +241,13 @@ from .analyzer import (
 )
 from .audio import Audio
 from .engine import ClipPageProvider, FileClipPageProvider, RealtimeEngine
+from .mixing_assistant import (
+    MixTrackInput,
+    mix_source_class_from_name,
+    mix_source_class_names,
+    suggest_mix_scene,
+    suggest_mix_scene_json,
+)
 from .streaming import StreamAnalyzer
 from .types import (
     AcousticResult,
@@ -462,6 +469,7 @@ __all__ = [
     "MidiRouteResult",
     "MixMeterSnapshot",
     "MixResult",
+    "MixTrackInput",
     "MfccResult",
     "Mode",
     "NoteSegment",
@@ -649,9 +657,13 @@ __all__ = [
     "mfcc_to_mel",
     "Mixer",
     "MixerStereoResult",
+    "mix_source_class_from_name",
+    "mix_source_class_names",
     "mix_stereo",
     "mixing_scene_preset_json",
     "mixing_scene_preset_names",
+    "suggest_mix_scene",
+    "suggest_mix_scene_json",
     "midi_to_hz",
     "momentary_lufs",
     "nn_filter",

@@ -600,6 +600,11 @@ from .audio import Audio as Audio
 from .engine import ClipPageProvider as ClipPageProvider
 from .engine import FileClipPageProvider as FileClipPageProvider
 from .engine import RealtimeEngine as RealtimeEngine
+from .mixing_assistant import MixTrackInput as MixTrackInput
+from .mixing_assistant import mix_source_class_from_name as mix_source_class_from_name
+from .mixing_assistant import mix_source_class_names as mix_source_class_names
+from .mixing_assistant import suggest_mix_scene as suggest_mix_scene
+from .mixing_assistant import suggest_mix_scene_json as suggest_mix_scene_json
 from .streaming import StreamAnalyzer as StreamAnalyzer
 from .types import (
     AcousticResult as AcousticResult,
