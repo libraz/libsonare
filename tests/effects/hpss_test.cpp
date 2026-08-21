@@ -53,6 +53,65 @@ Audio create_percussive_audio(int sr = 22050, float duration = 0.5f, int n_click
   return Audio::from_vector(std::move(samples), sr);
 }
 
+/// @brief Creates mixed content: a decaying low kick, a sustained voiced tone
+/// with harmonics, and a REVERSED cymbal (broadband noise under a rising
+/// envelope).
+///
+/// The reversed cymbal is the part that matters here: a rising broadband swell
+/// is neither horizontally smooth like a sustained tone nor vertically sparse
+/// like an impulse, so a three-way split has to put it somewhere other than the
+/// harmonic and percussive components.
+Audio create_mixed_audio(int sr = 22050, float duration = 1.0f) {
+  const int n_samples = static_cast<int>(static_cast<float>(sr) * duration);
+  std::vector<float> samples(static_cast<size_t>(n_samples), 0.0f);
+  const auto sr_f = static_cast<float>(sr);
+
+  // Kick: 60 Hz with a fast exponential decay, one per half second.
+  const int kick_interval = sr / 2;
+  for (int start = 0; start < n_samples; start += kick_interval) {
+    for (int i = 0; i < sr / 8 && start + i < n_samples; ++i) {
+      const float t = static_cast<float>(i) / sr_f;
+      const float env = std::exp(-24.0f * t);
+      samples[static_cast<size_t>(start + i)] +=
+          0.8f * env * std::sin(2.0f * sonare::constants::kPi * 60.0f * t);
+    }
+  }
+
+  // Voice: a sustained fundamental plus two harmonics, slightly vibrato'd.
+  for (int i = 0; i < n_samples; ++i) {
+    const float t = static_cast<float>(i) / sr_f;
+    const float vibrato = 1.0f + 0.01f * std::sin(2.0f * sonare::constants::kPi * 5.0f * t);
+    const float f0 = 220.0f * vibrato;
+    samples[static_cast<size_t>(i)] +=
+        0.35f * std::sin(2.0f * sonare::constants::kPi * f0 * t) +
+        0.18f * std::sin(2.0f * sonare::constants::kPi * 2.0f * f0 * t) +
+        0.09f * std::sin(2.0f * sonare::constants::kPi * 3.0f * f0 * t);
+  }
+
+  // Reversed cymbal: deterministic broadband noise swelling into a cut-off.
+  uint32_t state = 0x9E3779B9u;
+  const int swell = std::min(n_samples, sr / 2);
+  const int swell_start = std::max(0, n_samples - swell);
+  for (int i = 0; i < swell; ++i) {
+    state = state * 1664525u + 1013904223u;
+    const float noise = static_cast<float>(state >> 8) / static_cast<float>(1u << 23) - 1.0f;
+    const float env = static_cast<float>(i) / static_cast<float>(swell);
+    samples[static_cast<size_t>(swell_start + i)] += 0.4f * env * env * noise;
+  }
+
+  return Audio::from_vector(std::move(samples), sr);
+}
+
+/// @brief Sum of squares of an audio buffer.
+double buffer_energy(const Audio& audio) {
+  double energy = 0.0;
+  for (size_t i = 0; i < audio.size(); ++i) {
+    const double value = audio[i];
+    energy += value * value;
+  }
+  return energy;
+}
+
 }  // namespace
 
 TEST_CASE("median_filter_horizontal basic", "[hpss]") {
@@ -457,6 +516,66 @@ TEST_CASE("hpss separates impulses into mostly percussive", "[hpss][separation]"
   REQUIRE(p_energy > 0.0);
   // Percussive energy should clearly exceed harmonic for sparse impulses.
   REQUIRE(p_energy > h_energy);
+}
+
+// The three hpss_with_residual tests above check that `residual` is non-empty
+// and correctly shaped, and the reconstruction loop cannot fail no matter what
+// the residual holds: hpss() renormalizes the three masks by their own sum, so
+// h + p + r == original by construction even when r is identically zero. A
+// component named in the API therefore had no test that could tell a working
+// output from a silent buffer. These two are that test.
+// EXPECTED TO FAIL under the default (soft-mask, margin 1.0) configuration, and
+// tagged so that the day it starts passing is reported as a failure rather than
+// passing unnoticed.
+//
+// With both margins at 1.0 the soft masks are h^p/(h^p + p^p + eps) and its
+// mirror, so their sum is 1 - eps/(h^p + p^p) and the residual mask is whatever
+// is left: about 1e-10 before renormalization. Measured on the mixed signal
+// below, the residual carries 2.2e-15 of the input energy -- six orders of
+// magnitude short of "audible" and thirteen short of the 0.01 asserted here.
+// Whether that is a defect in the split or the documented consequence of the
+// default margins is a DSP question this test deliberately does not answer; it
+// exists so the answer cannot keep being nobody's.
+TEST_CASE("hpss_with_residual carries audible residual energy (soft mask)", "[hpss][!shouldfail]") {
+  Audio audio = create_mixed_audio();
+
+  StftConfig stft_config;
+  stft_config.n_fft = 1024;
+  stft_config.hop_length = 256;
+
+  HpssConfig config;  // defaults: soft mask, margin 1.0
+
+  HpssAudioResultWithResidual result = hpss_with_residual(audio, config, stft_config);
+
+  const double signal_energy = buffer_energy(audio);
+  // Non-vacuity: a silent input would make every ratio below meaningless, and
+  // the harmonic / percussive ratios prove the split itself works on this
+  // signal, so the residual assertion is not failing for want of content.
+  REQUIRE(signal_energy > 0.0);
+  REQUIRE(buffer_energy(result.harmonic) / signal_energy > 0.01);
+  REQUIRE(buffer_energy(result.percussive) / signal_energy > 0.01);
+
+  REQUIRE(buffer_energy(result.residual) / signal_energy > 0.01);
+}
+
+TEST_CASE("hpss_with_residual carries audible residual energy (hard mask)", "[hpss]") {
+  Audio audio = create_mixed_audio();
+
+  StftConfig stft_config;
+  stft_config.n_fft = 1024;
+  stft_config.hop_length = 256;
+
+  HpssConfig config;
+  config.use_soft_mask = false;
+
+  HpssAudioResultWithResidual result = hpss_with_residual(audio, config, stft_config);
+
+  const double signal_energy = buffer_energy(audio);
+  REQUIRE(signal_energy > 0.0);
+  REQUIRE(buffer_energy(result.harmonic) / signal_energy > 0.01);
+  REQUIRE(buffer_energy(result.percussive) / signal_energy > 0.01);
+
+  REQUIRE(buffer_energy(result.residual) / signal_energy > 0.01);
 }
 
 TEST_CASE("hpss_with_residual hard mask", "[hpss]") {
