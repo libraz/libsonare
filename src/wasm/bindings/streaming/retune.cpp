@@ -18,17 +18,32 @@ editing::voice_changer::StreamingRetuneConfig streamingRetuneConfigFromVal(val c
   if (config.isNull() || config.isUndefined()) {
     return result;
   }
-  if (const auto semitones = optionalNumber(objectProperty(config, "semitones"));
-      semitones && std::isfinite(*semitones)) {
+  // A non-finite control is a caller error, not a request to clamp: silently
+  // dropping it here left a NaN request looking like an omitted key, and made
+  // this the one surface that answered differently from the C ABI. Finite
+  // out-of-range values stay clamped -- that is the documented contract.
+  if (const auto semitones = optionalNumber(objectProperty(config, "semitones")); semitones) {
+    if (!std::isfinite(*semitones)) {
+      throw sonare::SonareException(sonare::ErrorCode::InvalidParameter,
+                                    "StreamingRetune: semitones must be finite");
+    }
     result.semitones = std::clamp(*semitones, -24.0f, 24.0f);
   }
-  if (const auto mix = optionalNumber(objectProperty(config, "mix")); mix && std::isfinite(*mix)) {
+  if (const auto mix = optionalNumber(objectProperty(config, "mix")); mix) {
+    if (!std::isfinite(*mix)) {
+      throw sonare::SonareException(sonare::ErrorCode::InvalidParameter,
+                                    "StreamingRetune: mix must be finite");
+    }
     result.mix = std::clamp(*mix, 0.0f, 1.0f);
   }
   const auto grain_size = optionalNumber(objectProperty(config, "grainSize"));
   const auto snake_case_grain_size = optionalNumber(objectProperty(config, "grain_size"));
   const auto grain = snake_case_grain_size ? snake_case_grain_size : grain_size;
-  if (grain && std::isfinite(*grain)) {
+  if (grain) {
+    if (!std::isfinite(*grain)) {
+      throw sonare::SonareException(sonare::ErrorCode::InvalidParameter,
+                                    "StreamingRetune: grainSize must be finite");
+    }
     result.grain_size = static_cast<int>(std::lround(std::clamp(*grain, 0.0f, 8192.0f)));
   }
   return result;
@@ -60,16 +75,22 @@ class StreamingRetuneWrapper {
 
   int grainSize() const { return retune_.grain_size(); }
 
+  int latencySamples() const { return retune_.latency_samples(); }
+
   val processMono(val samples) {
     const std::size_t length = wasmFloat32ArrayLength(samples, "StreamingRetune process block");
     ensurePrepared();
     validateBlockLength(length);
     std::vector<float> block = float32ArrayToVector(samples);
-    // Sanitize non-finite input before it enters the overlap-add grain history,
-    // matching the synthesis realtime path: a NaN/Inf sample would otherwise
-    // persist in the ring and poison every subsequent block.
-    for (float& sample : block) {
-      if (!std::isfinite(sample)) sample = 0.0f;
+    // Refuse a non-finite sample rather than zeroing it. Zeroing kept the grain
+    // history clean but told the caller nothing, so a block silently became a
+    // different block; the C ABI reports it, and a surface that quietly repairs
+    // its input is the asymmetry that keeps regrowing here.
+    for (const float sample : block) {
+      if (!std::isfinite(sample)) {
+        throw sonare::SonareException(sonare::ErrorCode::InvalidParameter,
+                                      "StreamingRetune: input samples must be finite");
+      }
     }
     std::vector<float> out(block.size());
     retune_.process_block(block.data(), out.data(), static_cast<int>(block.size()));
@@ -107,6 +128,7 @@ void registerStreamingRetuneBindings() {
       .function("setConfig", &StreamingRetuneWrapper::setConfig)
       .function("config", &StreamingRetuneWrapper::config)
       .function("grainSize", &StreamingRetuneWrapper::grainSize)
+      .function("latencySamples", &StreamingRetuneWrapper::latencySamples)
       .function("processMono", &StreamingRetuneWrapper::processMono);
   function("createStreamingRetune", &createStreamingRetune, allow_raw_pointers());
 }

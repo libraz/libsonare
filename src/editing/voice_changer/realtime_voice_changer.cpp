@@ -26,6 +26,9 @@ float db_to_gain(float db) noexcept { return sonare::db_to_linear(db); }
 
 RealtimeVoiceChanger::RealtimeVoiceChanger(RealtimeVoiceChangerConfig config)
     : config_(normalize_realtime_voice_changer_config(config)) {
+  // The constructed config IS the first request; nothing has resolved a grain
+  // yet, so config_ still carries what the caller asked for.
+  requested_retune_grain_size_ = config_.retune.grain_size;
   // Derive sample-rate-independent gains/mixes so that config() observers see
   // consistent state even before prepare() is called. The sample-rate-dependent
   // branch inside update_derived() is guarded and will be re-run by prepare().
@@ -92,6 +95,9 @@ void RealtimeVoiceChanger::set_config(const RealtimeVoiceChangerConfig& config) 
   // is realtime-safe to call from the audio thread itself (see the class doc
   // comment on set_config for why WASM needs that).
   config_ = normalize_realtime_voice_changer_config(config);
+  // Record the request before the effective-value mirror below lands on the
+  // same field; prepare() seeds the retune stages from this, not from config_.
+  requested_retune_grain_size_ = config_.retune.grain_size;
   // Keep config() reporting the effective grain: grain size is structural and
   // cannot change after prepare(), so a newly-requested grain in `config` has
   // no effect until the next prepare(). Overwrite it with the resolved value so
@@ -134,7 +140,9 @@ void RealtimeVoiceChanger::allocate_channel(ChannelState& state) {
   // the post-prepare apply_channel_config() to deliver the grain, prepare()
   // would have already locked in the default (auto) grain and the request would
   // be silently ignored.
-  state.retune.set_config(config_.retune);
+  StreamingRetuneConfig retune_config = config_.retune;
+  retune_config.grain_size = requested_retune_grain_size_;
+  state.retune.set_config(retune_config);
   state.retune.prepare(sample_rate_, max_block_size_);
   state.dry_delay.assign(static_cast<std::size_t>(state.retune.latency_samples()), 0.0f);
   state.dry_delay_pos = 0;

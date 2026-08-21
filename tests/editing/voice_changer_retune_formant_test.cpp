@@ -535,3 +535,62 @@ TEST_CASE("StreamingFormant live updates are invariant to caller chunking",
   REQUIRE(one_block_output == ragged_output);
   REQUIRE(one_block_output != unchanged_output);
 }
+
+// The requested grain size and the effective one shared a field: set_config()
+// overwrote config_.grain_size with what the LAST prepare() resolved, and
+// prepare() then read that same field to resolve the next one. A new request
+// therefore never survived to the prepare() that was supposed to apply it, and
+// re-preparing at a different rate froze the first rate's answer instead of
+// re-deriving -- with latency_samples() reporting a delay that no longer
+// existed, so a host's PDC compensated for it.
+TEST_CASE("StreamingRetune applies a grain size requested after prepare", "[voice_changer]") {
+  StreamingRetune retune;
+  retune.prepare(48000.0, 256);
+  const int derived = retune.grain_size();
+  REQUIRE(derived == 2232);
+
+  // The request survives until the prepare() that applies it, and config()
+  // keeps reporting the EFFECTIVE grain in the meantime (both halves matter).
+  retune.set_config({0.0f, 1.0f, 512});
+  REQUIRE(retune.grain_size() == derived);
+  REQUIRE(retune.config().grain_size == derived);
+
+  retune.prepare(48000.0, 256);
+  REQUIRE(retune.grain_size() == 512);
+  REQUIRE(retune.latency_samples() == 512);
+}
+
+TEST_CASE("StreamingRetune re-derives an automatic grain at a new sample rate", "[voice_changer]") {
+  StreamingRetune retune;
+  retune.prepare(48000.0, 256);
+  const int at_48k = retune.grain_size();
+
+  // A 0 request means "derive": re-preparing at half the rate must halve the
+  // grain, not keep the first rate's resolved value.
+  retune.prepare(22050.0, 256);
+  const int at_22k = retune.grain_size();
+  REQUIRE(at_22k < at_48k);
+  REQUIRE(at_22k == 1024);
+
+  // Still true after a live set_config that does not ask for a new grain.
+  retune.set_config({2.0f, 0.5f, 0});
+  retune.prepare(48000.0, 256);
+  REQUIRE(retune.grain_size() == at_48k);
+}
+
+TEST_CASE("RealtimeVoiceChanger applies a retune grain requested after prepare",
+          "[voice_changer]") {
+  RealtimeVoiceChanger changer;
+  changer.prepare(48000.0, 256, 1);
+  const int derived = changer.config().retune.grain_size;
+  REQUIRE(derived > 0);
+
+  RealtimeVoiceChangerConfig config = changer.config();
+  config.retune.grain_size = 512;
+  changer.set_config(config);
+  // Still the effective one until the next prepare, as documented.
+  REQUIRE(changer.config().retune.grain_size == derived);
+
+  changer.prepare(48000.0, 256, 1);
+  REQUIRE(changer.config().retune.grain_size == 512);
+}

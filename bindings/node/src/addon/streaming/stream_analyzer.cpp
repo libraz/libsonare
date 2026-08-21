@@ -133,7 +133,7 @@ Napi::Object StreamAnalyzerWrap::Init(Napi::Env env, Napi::Object exports) {
       {
           InstanceMethod<&StreamAnalyzerWrap::Process>("process"),
           InstanceMethod<&StreamAnalyzerWrap::ProcessWithOffset>("processWithOffset"),
-          InstanceMethod<&StreamAnalyzerWrap::Finalize>("finalize"),
+          InstanceMethod<&StreamAnalyzerWrap::FinalizeStream>("finalize"),
           InstanceMethod<&StreamAnalyzerWrap::AvailableFrames>("availableFrames"),
           InstanceMethod<&StreamAnalyzerWrap::ReadFramesSoa>("readFramesSoa"),
           InstanceMethod<&StreamAnalyzerWrap::ReadFramesU8>("readFramesU8"),
@@ -276,7 +276,7 @@ Napi::Value StreamAnalyzerWrap::ProcessWithOffset(const Napi::CallbackInfo& info
   SONARE_NODE_CATCH(env)
 }
 
-Napi::Value StreamAnalyzerWrap::Finalize(const Napi::CallbackInfo& info) {
+Napi::Value StreamAnalyzerWrap::FinalizeStream(const Napi::CallbackInfo& info) {
   Napi::Env env = info.Env();
   if (!analyzer_) {
     Napi::Error::New(env, "StreamAnalyzer is not initialized").ThrowAsJavaScriptException();

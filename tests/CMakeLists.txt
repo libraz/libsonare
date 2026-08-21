@@ -392,6 +392,8 @@ if(BUILD_VOICE_CHANGER)
     editing/voice_changer_limiter_json_test.cpp
   )
   target_sources(sonare_tests PRIVATE ${PROJECT_SOURCE_DIR}/src/c_api/sonare_c_voice_changer.cpp)
+  target_sources(sonare_tests PRIVATE
+                 ${PROJECT_SOURCE_DIR}/src/c_api/sonare_c_streaming_retune.cpp)
   target_link_libraries(sonare_tests PRIVATE sonare_voice_changer)
   target_compile_definitions(sonare_tests PRIVATE
     SONARE_WITH_PITCH_EDITOR=1

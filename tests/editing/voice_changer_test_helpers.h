@@ -34,6 +34,7 @@
 #include "util/exception.h"
 #include "util/json.h"
 
+using Catch::Matchers::WithinAbs;
 using Catch::Matchers::WithinRel;
 using namespace sonare::editing::voice_changer;
 

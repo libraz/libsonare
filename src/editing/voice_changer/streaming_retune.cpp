@@ -28,8 +28,7 @@ StreamingRetuneConfig sanitize_config(StreamingRetuneConfig config) noexcept {
   return config;
 }
 
-int resolve_grain_size(const StreamingRetuneConfig& config, double sample_rate) noexcept {
-  const int requested = config.grain_size;
+int resolve_grain_size(int requested, double sample_rate) noexcept {
   const int derived =
       requested > 0 ? requested : static_cast<int>(std::lround(sample_rate * kDefaultGrainSeconds));
   const int grain = std::max(4, derived);
@@ -54,7 +53,7 @@ void StreamingRetune::prepare(double sample_rate, int max_block_size) {
   sample_rate_ = sample_rate;
   max_block_size_ = max_block_size;
 
-  grain_size_ = resolve_grain_size(config_, sample_rate_);
+  grain_size_ = resolve_grain_size(requested_grain_size_, sample_rate_);
   hop_a_ = grain_size_ / 4;
   ring_cap_ = static_cast<std::size_t>(4 * grain_size_);
   accum_cap_ = static_cast<std::size_t>(2 * grain_size_);
@@ -103,6 +102,9 @@ void StreamingRetune::reset() {
 
 void StreamingRetune::set_config(const StreamingRetuneConfig& config) {
   config_ = sanitize_config(config);
+  // Record the request BEFORE the effective-value overwrite below lands on the
+  // same field, so the next prepare() resolves what the caller asked for.
+  requested_grain_size_ = config_.grain_size;
   // grain_size is a structural parameter fixed at prepare() time: changing it
   // would reallocate the grain/ring buffers, which is forbidden here because
   // set_config runs on the audio thread via RealtimeVoiceChanger snapshot

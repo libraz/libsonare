@@ -62,6 +62,17 @@ class StreamingRetune {
   float read_ring_linear(double position) const noexcept;
 
   StreamingRetuneConfig config_{};
+  // The grain size the CALLER last asked for, kept apart from the effective one
+  // reported through config().grain_size.
+  //
+  // They cannot share a field. config().grain_size has to report what is really
+  // allocated, so set_config() overwrites it with the effective value once
+  // prepared -- and that overwrite lands on the very memory the next prepare()
+  // reads to resolve the grain, which is how a requested size stopped surviving
+  // until the prepare() that was supposed to apply it. prepare() resolves from
+  // here; 0 still means "derive from the sample rate", so re-preparing at a new
+  // rate re-derives instead of freezing the first rate's answer.
+  int requested_grain_size_ = 0;
   double sample_rate_ = 0.0;
   int max_block_size_ = 0;
 

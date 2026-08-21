@@ -221,3 +221,86 @@ export function realtimeVoiceChangerPresetConfig(
     resolveVoicePresetOrdinal(preset),
   ) as RealtimeVoiceChangerConfig;
 }
+
+/** Live controls for {@link StreamingRetune}. */
+export interface StreamingRetuneConfig {
+  /** Pitch shift in semitones. Applied value is clamped to +/- 24. Default 0. */
+  semitones?: number;
+  /** Dry/wet blend, clamped to [0, 1]. Default 1 (fully wet). */
+  mix?: number;
+  /**
+   * Grain length in samples, or 0 to derive roughly a 46 ms grain from the
+   * sample rate. Structural: a new value takes effect at the NEXT
+   * {@link StreamingRetune.prepare} call, and {@link StreamingRetune.config}
+   * keeps reporting the effective grain until then.
+   */
+  grainSize?: number;
+}
+
+/**
+ * Block-by-block mono pitch shifter (grain overlap-add), the streaming
+ * counterpart of the offline `pitchShift`.
+ *
+ * State persists across {@link processMono} calls. Call {@link prepare} before
+ * processing and {@link destroy} when finished. A non-finite `semitones` or
+ * `mix` is rejected rather than substituted, and a block containing a
+ * non-finite sample is rejected rather than zeroed: either would otherwise
+ * enter the grain history and persist into every later block.
+ */
+export class StreamingRetune {
+  private native: InstanceType<typeof addon.StreamingRetune>;
+  private disposed = false;
+
+  constructor(config: StreamingRetuneConfig = {}) {
+    this.native = new addon.StreamingRetune(config);
+  }
+
+  /** Allocate native state for `sampleRate` and resolve the grain size. */
+  prepare(sampleRate: number, maxBlockSize: number): void {
+    this.native.prepare(sampleRate, maxBlockSize);
+  }
+
+  /** Clear grain / overlap-add state without changing the config. */
+  reset(): void {
+    this.native.reset();
+  }
+
+  /** Update the live controls; omitted keys keep their current value. */
+  setConfig(config: StreamingRetuneConfig): void {
+    this.native.setConfig(config);
+  }
+
+  /** The currently applied controls, with `grainSize` as the effective one. */
+  config(): Required<StreamingRetuneConfig> {
+    return this.native.config() as Required<StreamingRetuneConfig>;
+  }
+
+  /** Resolved grain length in samples; 0 before {@link prepare}. */
+  grainSize(): number {
+    return this.native.grainSize();
+  }
+
+  /** Fixed overlap-add latency in samples (one grain); 0 before prepare. */
+  latencySamples(): number {
+    return this.native.latencySamples();
+  }
+
+  /** Process one mono block, returning the shifted samples (same length). */
+  processMono(samples: Float32Array): Float32Array {
+    return this.native.processMono(samples);
+  }
+
+  /** Release the native handle now instead of waiting for GC. Idempotent. */
+  destroy(): void {
+    if (this.disposed) {
+      return;
+    }
+    this.disposed = true;
+    this.native.destroy();
+  }
+
+  /** Releases native resources; lets `using` (Node 22+) free them automatically. */
+  [Symbol.dispose](): void {
+    this.destroy();
+  }
+}

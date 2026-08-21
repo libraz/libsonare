@@ -119,6 +119,7 @@ HANDLE_PREFIX_FREEFN_EXCEPTIONS = (
 # single-token shadows (``stream_analyzer_`` before ``stream_``-style tokens).
 _HANDLE_FULL_PREFIXES = (
     "streaming_mastering_chain_",
+    "streaming_retune_",
     "stream_analyzer_",
     "realtime_voice_changer_",
     "clip_page_provider_",

@@ -757,4 +757,151 @@ Napi::Value StreamingEqualizerWrap::Match(const Napi::CallbackInfo& info) {
   SONARE_NODE_CATCH(env)
 }
 
+// ===========================================================================
+// StreamingRetune
+// ===========================================================================
+
+namespace {
+
+// Reads the three scalar controls out of a JS options object using ONLY the
+// shared node_*_option family (type-checked fallback), so this file keeps no
+// reader of its own -- the reader-shape scan in the Node test suite rejects one.
+void ReadRetuneConfig(const Napi::Value& value, float* semitones, float* mix, int* grain_size) {
+  if (!value.IsObject()) return;
+  const Napi::Object object = value.As<Napi::Object>();
+  *semitones = node_float_option(object, "semitones", *semitones);
+  *mix = node_float_option(object, "mix", *mix);
+  // "grain_size" is the snake_case spelling the WASM surface also accepts; the
+  // camelCase key wins when both are present.
+  *grain_size =
+      node_int_option(object, "grainSize", node_int_option(object, "grain_size", *grain_size));
+}
+
+}  // namespace
+
+Napi::Object StreamingRetuneWrap::Init(Napi::Env env, Napi::Object exports) {
+  Napi::Function func =
+      DefineClass(env, "StreamingRetune",
+                  {
+                      InstanceMethod<&StreamingRetuneWrap::Prepare>("prepare"),
+                      InstanceMethod<&StreamingRetuneWrap::Reset>("reset"),
+                      InstanceMethod<&StreamingRetuneWrap::SetConfig>("setConfig"),
+                      InstanceMethod<&StreamingRetuneWrap::Config>("config"),
+                      InstanceMethod<&StreamingRetuneWrap::GrainSize>("grainSize"),
+                      InstanceMethod<&StreamingRetuneWrap::LatencySamples>("latencySamples"),
+                      InstanceMethod<&StreamingRetuneWrap::ProcessMono>("processMono"),
+                      InstanceMethod<&StreamingRetuneWrap::Destroy>("destroy"),
+                  });
+
+  exports.Set("StreamingRetune", func);
+  return exports;
+}
+
+StreamingRetuneWrap::StreamingRetuneWrap(const Napi::CallbackInfo& info)
+    : Napi::ObjectWrap<StreamingRetuneWrap>(info) {
+  Napi::Env env = info.Env();
+  float semitones = 0.0f;
+  float mix = 1.0f;
+  int grain_size = 0;
+  if (info.Length() >= 1) {
+    ReadRetuneConfig(info[0], &semitones, &mix, &grain_size);
+  }
+  retune_ = sonare_streaming_retune_create(semitones, mix, grain_size);
+  if (retune_ == nullptr) {
+    ThrowSonareError(env, SONARE_ERROR_INVALID_PARAMETER, "StreamingRetune: ");
+  }
+}
+
+StreamingRetuneWrap::~StreamingRetuneWrap() {
+  sonare_streaming_retune_destroy(retune_);
+  retune_ = nullptr;
+}
+
+// Releases the native handle now instead of at GC; every method below guards on
+// a null retune_, so a call after destroy() is a clean InvalidParameter.
+Napi::Value StreamingRetuneWrap::Destroy(const Napi::CallbackInfo& info) {
+  sonare_streaming_retune_destroy(retune_);
+  retune_ = nullptr;
+  return info.Env().Undefined();
+}
+
+Napi::Value StreamingRetuneWrap::Prepare(const Napi::CallbackInfo& info) {
+  Napi::Env env = info.Env();
+  double sample_rate = 0.0;
+  int max_block_size = 0;
+  if (!OptionalDoubleArg(env, info, 0, "sampleRate", 0.0, &sample_rate) ||
+      !OptionalIntArg(env, info, 1, "maxBlockSize", 0, &max_block_size)) {
+    return env.Undefined();
+  }
+  ThrowIfError(env, sonare_streaming_retune_prepare(retune_, sample_rate, max_block_size));
+  return env.Undefined();
+}
+
+Napi::Value StreamingRetuneWrap::Reset(const Napi::CallbackInfo& info) {
+  Napi::Env env = info.Env();
+  ThrowIfError(env, sonare_streaming_retune_reset(retune_));
+  return env.Undefined();
+}
+
+Napi::Value StreamingRetuneWrap::SetConfig(const Napi::CallbackInfo& info) {
+  Napi::Env env = info.Env();
+  // Seed from the currently applied values so an options bag carrying only one
+  // key leaves the others alone, matching every other setConfig on this surface.
+  float semitones = 0.0f;
+  float mix = 1.0f;
+  int grain_size = 0;
+  ThrowIfError(env, sonare_streaming_retune_config(retune_, &semitones, &mix, &grain_size));
+  if (env.IsExceptionPending()) return env.Undefined();
+  if (info.Length() >= 1) {
+    ReadRetuneConfig(info[0], &semitones, &mix, &grain_size);
+  }
+  ThrowIfError(env, sonare_streaming_retune_set_config(retune_, semitones, mix, grain_size));
+  return env.Undefined();
+}
+
+Napi::Value StreamingRetuneWrap::Config(const Napi::CallbackInfo& info) {
+  Napi::Env env = info.Env();
+  float semitones = 0.0f;
+  float mix = 0.0f;
+  int grain_size = 0;
+  ThrowIfError(env, sonare_streaming_retune_config(retune_, &semitones, &mix, &grain_size));
+  if (env.IsExceptionPending()) return env.Undefined();
+  Napi::Object out = Napi::Object::New(env);
+  out.Set("semitones", Napi::Number::New(env, semitones));
+  out.Set("mix", Napi::Number::New(env, mix));
+  out.Set("grainSize", Napi::Number::New(env, grain_size));
+  return out;
+}
+
+Napi::Value StreamingRetuneWrap::GrainSize(const Napi::CallbackInfo& info) {
+  Napi::Env env = info.Env();
+  int grain_size = 0;
+  ThrowIfError(env, sonare_streaming_retune_grain_size(retune_, &grain_size));
+  if (env.IsExceptionPending()) return env.Undefined();
+  return Napi::Number::New(env, grain_size);
+}
+
+Napi::Value StreamingRetuneWrap::LatencySamples(const Napi::CallbackInfo& info) {
+  Napi::Env env = info.Env();
+  int latency = 0;
+  ThrowIfError(env, sonare_streaming_retune_latency_samples(retune_, &latency));
+  if (env.IsExceptionPending()) return env.Undefined();
+  return Napi::Number::New(env, latency);
+}
+
+Napi::Value StreamingRetuneWrap::ProcessMono(const Napi::CallbackInfo& info) {
+  Napi::Env env = info.Env();
+  if (!RequireFloat32Array(info, 0, "StreamingRetune.processMono expects a Float32Array")) {
+    return env.Undefined();
+  }
+  Napi::Float32Array input = info[0].As<Napi::Float32Array>();
+  // The C entry point works in place, so copy the caller's samples into the
+  // result buffer first and never mutate the argument.
+  Napi::Float32Array out = Napi::Float32Array::New(env, input.ElementLength());
+  std::memcpy(out.Data(), input.Data(), input.ElementLength() * sizeof(float));
+  ThrowIfError(env, sonare_streaming_retune_process_mono(retune_, out.Data(), out.ElementLength()));
+  if (env.IsExceptionPending()) return env.Undefined();
+  return out;
+}
+
 }  // namespace sonare_node

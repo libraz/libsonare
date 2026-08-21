@@ -41,6 +41,9 @@ from .analyzer import (
     StreamingMasteringChain as StreamingMasteringChain,
 )
 from .analyzer import (
+    StreamingRetune as StreamingRetune,
+)
+from .analyzer import (
     abi_version as abi_version,
 )
 from .analyzer import (

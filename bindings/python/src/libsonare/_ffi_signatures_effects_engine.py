@@ -228,6 +228,53 @@ def configure_effects_engine_signatures(lib: ctypes.CDLL) -> None:
             ctypes.c_int,
             ctypes.POINTER(SonareRealtimeVoiceChangerConfig),
         ]
+    if hasattr(lib, "sonare_streaming_retune_create"):
+        lib.sonare_streaming_retune_create.restype = ctypes.c_void_p
+        lib.sonare_streaming_retune_create.argtypes = [
+            ctypes.c_float,
+            ctypes.c_float,
+            ctypes.c_int,
+        ]
+        lib.sonare_streaming_retune_destroy.restype = None
+        lib.sonare_streaming_retune_destroy.argtypes = [ctypes.c_void_p]
+        lib.sonare_streaming_retune_prepare.restype = ctypes.c_int32
+        lib.sonare_streaming_retune_prepare.argtypes = [
+            ctypes.c_void_p,
+            ctypes.c_double,
+            ctypes.c_int,
+        ]
+        lib.sonare_streaming_retune_reset.restype = ctypes.c_int32
+        lib.sonare_streaming_retune_reset.argtypes = [ctypes.c_void_p]
+        lib.sonare_streaming_retune_set_config.restype = ctypes.c_int32
+        lib.sonare_streaming_retune_set_config.argtypes = [
+            ctypes.c_void_p,
+            ctypes.c_float,
+            ctypes.c_float,
+            ctypes.c_int,
+        ]
+        lib.sonare_streaming_retune_config.restype = ctypes.c_int32
+        lib.sonare_streaming_retune_config.argtypes = [
+            ctypes.c_void_p,
+            ctypes.POINTER(ctypes.c_float),
+            ctypes.POINTER(ctypes.c_float),
+            ctypes.POINTER(ctypes.c_int),
+        ]
+        lib.sonare_streaming_retune_process_mono.restype = ctypes.c_int32
+        lib.sonare_streaming_retune_process_mono.argtypes = [
+            ctypes.c_void_p,
+            ctypes.POINTER(ctypes.c_float),
+            ctypes.c_size_t,
+        ]
+        lib.sonare_streaming_retune_grain_size.restype = ctypes.c_int32
+        lib.sonare_streaming_retune_grain_size.argtypes = [
+            ctypes.c_void_p,
+            ctypes.POINTER(ctypes.c_int),
+        ]
+        lib.sonare_streaming_retune_latency_samples.restype = ctypes.c_int32
+        lib.sonare_streaming_retune_latency_samples.argtypes = [
+            ctypes.c_void_p,
+            ctypes.POINTER(ctypes.c_int),
+        ]
     if hasattr(lib, "sonare_realtime_voice_changer_create"):
         lib.sonare_realtime_voice_changer_create.restype = ctypes.c_int32
         lib.sonare_realtime_voice_changer_create.argtypes = [

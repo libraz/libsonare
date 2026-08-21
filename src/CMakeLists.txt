@@ -914,6 +914,7 @@ if(BUILD_SHARED)
   list(APPEND SONARE_SHARED_SOURCES c_api/sonare_c_engine_capture.cpp)
   list(APPEND SONARE_SHARED_SOURCES c_api/sonare_c_engine_render.cpp)
   list(APPEND SONARE_SHARED_SOURCES c_api/sonare_c_voice_changer.cpp)
+  list(APPEND SONARE_SHARED_SOURCES c_api/sonare_c_streaming_retune.cpp)
   # The project (arrangement) C ABI sources are always compiled so their
   # public symbols exist in feature-off shared builds; it returns NOT_SUPPORTED
   # unless the arrangement subsystem is linked (see the BUILD_ARRANGEMENT block).
@@ -1070,6 +1071,7 @@ if(BUILD_WASM)
       wasm/bindings/common/common.cpp
       wasm/bindings/effects/audio.cpp
       c_api/sonare_c_voice_changer.cpp
+      c_api/sonare_c_streaming_retune.cpp
       wasm/bindings/features/core.cpp
       wasm/bindings/features/music.cpp
       wasm/bindings/features/pitch.cpp

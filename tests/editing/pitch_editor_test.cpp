@@ -314,6 +314,38 @@ TEST_CASE("PitchCorrector constant MIDI transpose reaches its target independent
   REQUIRE(corrector.correct_to_midi(audio, 57.0f, 60.0f).size() == audio.size());
 }
 
+// max_correction_semitones bounds how far a RETUNE may drag a MEASURED pitch.
+// A constant transpose states both endpoints, so the interval between them is
+// the request, not a distance to be pulled back toward: clamping it to the
+// default octave returned a two-octave move as a one-octave one and reported
+// success, with both MIDI numbers well inside the validated [0, 127].
+TEST_CASE("PitchCorrector applies a constant transpose wider than the correction limit",
+          "[pitch_editor]") {
+  constexpr int sample_rate = 22050;
+  constexpr float kFromMidi = 48.0f;  // C3
+  constexpr float kToMidi = 72.0f;    // C5, two octaves up
+  auto samples = sine(PitchCorrector::midi_to_hz(kFromMidi), sample_rate, sample_rate);
+  const sonare::Audio audio = sonare::Audio::from_vector(std::move(samples), sample_rate);
+
+  // The default correction limit is narrower than the interval asked for, which
+  // is what makes this a test of the bypass rather than of an already-legal move.
+  REQUIRE(PitchCorrectionConfig{}.max_correction_semitones < kToMidi - kFromMidi);
+
+  PitchCorrector corrector;
+  const sonare::Audio corrected = corrector.correct_to_midi(audio, kFromMidi, kToMidi);
+
+  sonare::PitchConfig config;
+  config.frame_length = 2048;
+  config.hop_length = 512;
+  config.fmin = 100.0f;
+  config.fmax = 1000.0f;
+  PyinF0Provider provider(config);
+  const float detected_hz = median_voiced_f0(provider.detect(corrected));
+  const float cents_error = 1200.0f * std::log2(detected_hz / PitchCorrector::midi_to_hz(kToMidi));
+  // A clamped result would land an octave low, 1200 cents away.
+  REQUIRE(std::abs(cents_error) < 20.0f);
+}
+
 TEST_CASE("PitchCorrector rejects out-of-range target and invalid F0 in the core",
           "[pitch_editor]") {
   // The validation lives in the core so every surface (C ABI, Node, Python,

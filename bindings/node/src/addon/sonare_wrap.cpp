@@ -478,6 +478,9 @@ Napi::Object SonareWrap::Init(Napi::Env env, Napi::Object exports) {
   // Streaming - StreamingEqualizer
   StreamingEqualizerWrap::Init(env, exports);
 
+  // Streaming - StreamingRetune
+  StreamingRetuneWrap::Init(env, exports);
+
   // Streaming - RealtimeVoiceChanger
   RealtimeVoiceChangerWrap::Init(env, exports);
   exports.Set("realtimeVoiceChangerPresetNames",

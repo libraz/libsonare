@@ -778,3 +778,141 @@ TEST_CASE("sonare_realtime_voice_changer_validate_preset_json round-trips preset
 // ===================================================================
 // DSP functional: compressor actually reduces RMS above threshold.
 // ===================================================================
+
+// ===========================================================================
+// Streaming retune C ABI
+// ===========================================================================
+
+TEST_CASE("sonare_streaming_retune lifecycle and validation", "[voice_changer][capi]") {
+  SECTION("a non-finite control is refused at create, not substituted") {
+    REQUIRE(sonare_streaming_retune_create(std::numeric_limits<float>::quiet_NaN(), 1.0f, 0) ==
+            nullptr);
+    REQUIRE(sonare_streaming_retune_create(0.0f, std::numeric_limits<float>::infinity(), 0) ==
+            nullptr);
+  }
+
+  SonareStreamingRetune* retune = sonare_streaming_retune_create(0.0f, 1.0f, 0);
+  REQUIRE(retune != nullptr);
+
+  SECTION("null handles are rejected rather than dereferenced") {
+    REQUIRE(sonare_streaming_retune_prepare(nullptr, 48000.0, 128) ==
+            SONARE_ERROR_INVALID_PARAMETER);
+    REQUIRE(sonare_streaming_retune_reset(nullptr) == SONARE_ERROR_INVALID_PARAMETER);
+    REQUIRE(sonare_streaming_retune_set_config(nullptr, 0.0f, 1.0f, 0) ==
+            SONARE_ERROR_INVALID_PARAMETER);
+    int scratch = 0;
+    REQUIRE(sonare_streaming_retune_grain_size(nullptr, &scratch) ==
+            SONARE_ERROR_INVALID_PARAMETER);
+    REQUIRE(sonare_streaming_retune_grain_size(retune, nullptr) == SONARE_ERROR_INVALID_PARAMETER);
+    sonare_streaming_retune_destroy(nullptr);  // no-op
+  }
+
+  SECTION("prepare validates its arguments") {
+    REQUIRE(sonare_streaming_retune_prepare(retune, 0.0, 128) == SONARE_ERROR_INVALID_PARAMETER);
+    REQUIRE(sonare_streaming_retune_prepare(retune, -1.0, 128) == SONARE_ERROR_INVALID_PARAMETER);
+    REQUIRE(sonare_streaming_retune_prepare(retune, 48000.0, -1) == SONARE_ERROR_INVALID_PARAMETER);
+    REQUIRE(sonare_streaming_retune_prepare(retune, 48000.0, 128) == SONARE_OK);
+  }
+
+  SECTION("processing before prepare is reported, not silently ignored") {
+    // The core's process_block is noexcept and answers a violated precondition
+    // with a no-op to stay audio-thread callable, so without this guard a C
+    // caller would see SONARE_OK and an unchanged buffer.
+    std::array<float, 8> block{};
+    REQUIRE(sonare_streaming_retune_process_mono(retune, block.data(), block.size()) ==
+            SONARE_ERROR_INVALID_STATE);
+  }
+
+  SECTION("a block past the prepared maximum is refused") {
+    REQUIRE(sonare_streaming_retune_prepare(retune, 48000.0, 64) == SONARE_OK);
+    std::array<float, 128> block{};
+    REQUIRE(sonare_streaming_retune_process_mono(retune, block.data(), block.size()) ==
+            SONARE_ERROR_INVALID_PARAMETER);
+    REQUIRE(sonare_streaming_retune_process_mono(retune, block.data(), 64) == SONARE_OK);
+  }
+
+  SECTION("a non-finite input sample is refused rather than zeroed") {
+    // Zeroing keeps the grain history clean but tells the caller nothing, so a
+    // block silently becomes a different block.
+    REQUIRE(sonare_streaming_retune_prepare(retune, 48000.0, 64) == SONARE_OK);
+    std::array<float, 64> block{};
+    block[7] = std::numeric_limits<float>::quiet_NaN();
+    REQUIRE(sonare_streaming_retune_process_mono(retune, block.data(), block.size()) ==
+            SONARE_ERROR_INVALID_PARAMETER);
+    // Refused means untouched: the caller's buffer is not partially rewritten.
+    REQUIRE(std::isnan(block[7]));
+  }
+
+  SECTION("a non-finite control is refused by set_config too") {
+    REQUIRE(sonare_streaming_retune_set_config(retune, std::numeric_limits<float>::quiet_NaN(),
+                                               1.0f, 0) == SONARE_ERROR_INVALID_PARAMETER);
+    REQUIRE(sonare_streaming_retune_set_config(retune, 0.0f,
+                                               -std::numeric_limits<float>::infinity(),
+                                               0) == SONARE_ERROR_INVALID_PARAMETER);
+  }
+
+  sonare_streaming_retune_destroy(retune);
+}
+
+TEST_CASE("sonare_streaming_retune reports and applies grain size", "[voice_changer][capi]") {
+  SonareStreamingRetune* retune = sonare_streaming_retune_create(0.0f, 1.0f, 0);
+  REQUIRE(retune != nullptr);
+
+  int grain = -1;
+  int latency = -1;
+  REQUIRE(sonare_streaming_retune_grain_size(retune, &grain) == SONARE_OK);
+  REQUIRE(grain == 0);  // Nothing resolved before prepare.
+
+  REQUIRE(sonare_streaming_retune_prepare(retune, 48000.0, 256) == SONARE_OK);
+  REQUIRE(sonare_streaming_retune_grain_size(retune, &grain) == SONARE_OK);
+  REQUIRE(sonare_streaming_retune_latency_samples(retune, &latency) == SONARE_OK);
+  REQUIRE(grain == 2232);
+  REQUIRE(latency == grain);
+
+  // The same M-1 contract the core carries, through the C surface: a grain
+  // requested after prepare survives until the prepare() that applies it, and
+  // config() keeps reporting the effective one in the meantime.
+  REQUIRE(sonare_streaming_retune_set_config(retune, 3.0f, 0.5f, 512) == SONARE_OK);
+  float semitones = 0.0f;
+  float mix = 0.0f;
+  int reported_grain = 0;
+  REQUIRE(sonare_streaming_retune_config(retune, &semitones, &mix, &reported_grain) == SONARE_OK);
+  REQUIRE_THAT(semitones, WithinAbs(3.0f, 1.0e-6f));
+  REQUIRE_THAT(mix, WithinAbs(0.5f, 1.0e-6f));
+  REQUIRE(reported_grain == 2232);
+
+  REQUIRE(sonare_streaming_retune_prepare(retune, 48000.0, 256) == SONARE_OK);
+  REQUIRE(sonare_streaming_retune_grain_size(retune, &grain) == SONARE_OK);
+  REQUIRE(grain == 512);
+
+  // Out pointers are individually optional.
+  REQUIRE(sonare_streaming_retune_config(retune, nullptr, nullptr, nullptr) == SONARE_OK);
+
+  sonare_streaming_retune_destroy(retune);
+}
+
+TEST_CASE("sonare_streaming_retune shifts pitch in place", "[voice_changer][capi]") {
+  constexpr int kSampleRate = 48000;
+  constexpr int kBlock = 512;
+  SonareStreamingRetune* retune = sonare_streaming_retune_create(12.0f, 1.0f, 512);
+  REQUIRE(retune != nullptr);
+  REQUIRE(sonare_streaming_retune_prepare(retune, kSampleRate, kBlock) == SONARE_OK);
+
+  // Drive enough blocks to clear the one-grain latency, then check the output
+  // carries energy rather than the silence a no-op would leave behind.
+  std::vector<float> block(kBlock);
+  double energy = 0.0;
+  for (int pass = 0; pass < 8; ++pass) {
+    for (int i = 0; i < kBlock; ++i) {
+      const double t = static_cast<double>(pass * kBlock + i) / kSampleRate;
+      block[static_cast<size_t>(i)] = static_cast<float>(std::sin(2.0 * M_PI * 220.0 * t));
+    }
+    REQUIRE(sonare_streaming_retune_process_mono(retune, block.data(), block.size()) == SONARE_OK);
+    if (pass >= 4) {
+      for (const float sample : block) energy += static_cast<double>(sample) * sample;
+    }
+  }
+  REQUIRE(energy > 1.0);
+
+  sonare_streaming_retune_destroy(retune);
+}

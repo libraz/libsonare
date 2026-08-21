@@ -288,6 +288,11 @@ class RealtimeVoiceChanger {
   /// @brief Mirrors the resolved retune grain size into @c config_ so config()
   ///        reports the effective (prepared) grain rather than the requested
   ///        one. No-op before prepare(). Control-thread only.
+  ///
+  /// The request it overwrites is preserved in @c requested_retune_grain_size_,
+  /// which is what prepare() seeds the per-channel retune stages from. Reading
+  /// the request back out of @c config_ after this ran would read the previous
+  /// prepare()'s answer instead.
   void sync_effective_grain_size() noexcept;
   /// @brief Publishes the latency-report atomic mirrors from @c config_.
   ///        Control-thread only (constructor / prepare / set_config).
@@ -304,6 +309,15 @@ class RealtimeVoiceChanger {
   const RealtimeVoiceChangerConfig& adopt_snapshot_for_block() noexcept;
 
   RealtimeVoiceChangerConfig config_{};
+  /// @brief The retune grain size the CALLER last asked for, kept apart from the
+  ///        effective one @c config_.retune.grain_size reports.
+  ///
+  /// @c sync_effective_grain_size() overwrites that field with what the last
+  /// prepare() resolved, so it cannot also carry the request forward: seeding
+  /// the retune stages from it made a prepare() after a set_config() re-apply
+  /// the PREVIOUS grain, and a re-prepare at a different sample rate keep the
+  /// first rate's answer instead of re-deriving. 0 keeps meaning "derive".
+  int requested_retune_grain_size_ = 0;
   /// @brief Realtime-safe single-writer/single-reader hand-off cell (see @c
   ///        rt::SeqlockCell). Unlike @c rt::RtPublisher's shared_ptr
   ///        snapshots, storing into this cell never allocates on the writer

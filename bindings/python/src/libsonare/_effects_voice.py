@@ -565,3 +565,129 @@ def realtime_voice_changer_preset_pod(preset: str | int) -> RealtimeVoiceChanger
     which matches the other language bindings.
     """
     return realtime_voice_changer_preset_config(preset)
+
+
+class StreamingRetune:
+    """Block-by-block mono pitch shifter (grain overlap-add).
+
+    The streaming counterpart of the offline ``pitch_shift``: state persists
+    across :meth:`process_mono` calls, so consecutive blocks of a live stream
+    join without a seam. Call :meth:`prepare` before processing.
+
+    A non-finite ``semitones`` / ``mix`` is rejected rather than substituted,
+    and a block holding a non-finite sample is rejected rather than zeroed:
+    either would otherwise enter the grain history and persist into every
+    later block with nothing to tell the caller its input had been altered.
+    """
+
+    def __init__(
+        self,
+        *,
+        semitones: float = 0.0,
+        mix: float = 1.0,
+        grain_size: int = 0,
+    ) -> None:
+        self._lib = _get_lib()
+        handle = self._lib.sonare_streaming_retune_create(
+            ctypes.c_float(semitones), ctypes.c_float(mix), ctypes.c_int(grain_size)
+        )
+        if not handle:
+            raise SonareValueError("streaming retune: semitones and mix must be finite")
+        self._handle = ctypes.c_void_p(handle)
+
+    def close(self) -> None:
+        if self._handle:
+            self._lib.sonare_streaming_retune_destroy(self._handle)
+            self._handle = ctypes.c_void_p()
+
+    def __enter__(self) -> StreamingRetune:
+        return self
+
+    def __exit__(self, exc_type: object, exc: object, tb: object) -> None:
+        self.close()
+
+    def __del__(self) -> None:
+        with contextlib.suppress(Exception):
+            self.close()
+
+    def prepare(self, sample_rate: float, max_block_size: int) -> None:
+        """Allocate native state for ``sample_rate`` and resolve the grain size."""
+        _check(
+            self._lib.sonare_streaming_retune_prepare(
+                self._handle, ctypes.c_double(sample_rate), ctypes.c_int(max_block_size)
+            )
+        )
+
+    def reset(self) -> None:
+        """Clear grain / overlap-add state without changing the config."""
+        _check(self._lib.sonare_streaming_retune_reset(self._handle))
+
+    def set_config(
+        self,
+        *,
+        semitones: float | None = None,
+        mix: float | None = None,
+        grain_size: int | None = None,
+    ) -> None:
+        """Update the live controls; omitted keywords keep their current value.
+
+        ``grain_size`` is structural: it is remembered and applied by the next
+        :meth:`prepare`, and :meth:`config` keeps reporting the effective grain
+        until then.
+        """
+        current = self.config()
+        _check(
+            self._lib.sonare_streaming_retune_set_config(
+                self._handle,
+                ctypes.c_float(current["semitones"] if semitones is None else semitones),
+                ctypes.c_float(current["mix"] if mix is None else mix),
+                ctypes.c_int(current["grain_size"] if grain_size is None else grain_size),
+            )
+        )
+
+    def config(self) -> dict[str, float | int]:
+        """The applied controls; ``grain_size`` is the effective one."""
+        semitones = ctypes.c_float()
+        mix = ctypes.c_float()
+        grain_size = ctypes.c_int()
+        _check(
+            self._lib.sonare_streaming_retune_config(
+                self._handle,
+                ctypes.byref(semitones),
+                ctypes.byref(mix),
+                ctypes.byref(grain_size),
+            )
+        )
+        return {
+            "semitones": float(semitones.value),
+            "mix": float(mix.value),
+            "grain_size": int(grain_size.value),
+        }
+
+    def grain_size(self) -> int:
+        """Resolved grain length in samples; 0 before :meth:`prepare`."""
+        out = ctypes.c_int()
+        _check(self._lib.sonare_streaming_retune_grain_size(self._handle, ctypes.byref(out)))
+        return int(out.value)
+
+    def latency_samples(self) -> int:
+        """Fixed overlap-add latency in samples (one grain); 0 before prepare."""
+        out = ctypes.c_int()
+        _check(self._lib.sonare_streaming_retune_latency_samples(self._handle, ctypes.byref(out)))
+        return int(out.value)
+
+    def process_mono(self, samples: Sequence[float]) -> list[float]:
+        """Process one mono block, returning the shifted samples (same length)."""
+        # The C entry point works in place and _as_float32_buffer is zero-copy
+        # for a contiguous float32 ndarray, so copy before handing it over: the
+        # Node and WASM surfaces leave the caller's samples untouched and this
+        # one would otherwise overwrite them.
+        buffer = np.array(_as_float32_buffer(samples), dtype=np.float32, copy=True, order="C")
+        _check(
+            self._lib.sonare_streaming_retune_process_mono(
+                self._handle,
+                buffer.ctypes.data_as(ctypes.POINTER(ctypes.c_float)),
+                ctypes.c_size_t(len(buffer)),
+            )
+        )
+        return buffer.tolist()

@@ -2,6 +2,7 @@
 #define SONARE_NODE_SONARE_WRAP_STREAMING_H_
 
 #include <napi.h>
+#include <sonare/sonare_c.h>
 
 #include <array>
 #include <memory>
@@ -101,6 +102,39 @@ class StreamingEqualizerWrap : public Napi::ObjectWrap<StreamingEqualizerWrap> {
   std::array<const float*, 2> sidechain_channels_{};
 };
 
+/// Block-by-block streaming pitch shifter. JS surface (mirrors the WASM class):
+///   const r = new sonare.StreamingRetune({ semitones, mix, grainSize });
+///   r.prepare(sampleRate, maxBlockSize);
+///   const out = r.processMono(samples);
+///   r.setConfig({ semitones: 3 });
+///   r.config(); r.grainSize(); r.latencySamples(); r.reset(); r.destroy();
+///
+/// Routed through the C ABI (sonare_streaming_retune_*) rather than the core
+/// class, so every validation this surface reports is the oracle's.
+class StreamingRetuneWrap : public Napi::ObjectWrap<StreamingRetuneWrap> {
+ public:
+  static Napi::Object Init(Napi::Env env, Napi::Object exports);
+  explicit StreamingRetuneWrap(const Napi::CallbackInfo& info);
+  ~StreamingRetuneWrap();
+
+  StreamingRetuneWrap(const StreamingRetuneWrap&) = delete;
+  StreamingRetuneWrap& operator=(const StreamingRetuneWrap&) = delete;
+  StreamingRetuneWrap(StreamingRetuneWrap&&) = delete;
+  StreamingRetuneWrap& operator=(StreamingRetuneWrap&&) = delete;
+
+ private:
+  Napi::Value Prepare(const Napi::CallbackInfo& info);
+  Napi::Value Reset(const Napi::CallbackInfo& info);
+  Napi::Value SetConfig(const Napi::CallbackInfo& info);
+  Napi::Value Config(const Napi::CallbackInfo& info);
+  Napi::Value GrainSize(const Napi::CallbackInfo& info);
+  Napi::Value LatencySamples(const Napi::CallbackInfo& info);
+  Napi::Value ProcessMono(const Napi::CallbackInfo& info);
+  Napi::Value Destroy(const Napi::CallbackInfo& info);
+
+  SonareStreamingRetune* retune_ = nullptr;
+};
+
 class RealtimeVoiceChangerWrap : public Napi::ObjectWrap<RealtimeVoiceChangerWrap> {
  public:
   static Napi::Object Init(Napi::Env env, Napi::Object exports);
@@ -175,7 +209,11 @@ class StreamAnalyzerWrap : public Napi::ObjectWrap<StreamAnalyzerWrap> {
  private:
   Napi::Value Process(const Napi::CallbackInfo& info);
   Napi::Value ProcessWithOffset(const Napi::CallbackInfo& info);
-  Napi::Value Finalize(const Napi::CallbackInfo& info);
+  // Named apart from the JS method it backs ("finalize"): Napi::ObjectWrap
+  // declares a virtual Finalize(Napi::Env) GC hook, and a same-named member
+  // here hides it, so a later attempt to override the hook would silently
+  // declare a new function instead.
+  Napi::Value FinalizeStream(const Napi::CallbackInfo& info);
   Napi::Value AvailableFrames(const Napi::CallbackInfo& info);
   Napi::Value ReadFramesSoa(const Napi::CallbackInfo& info);
   Napi::Value ReadFramesU8(const Napi::CallbackInfo& info);

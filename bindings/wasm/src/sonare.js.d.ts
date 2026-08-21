@@ -813,6 +813,12 @@ export interface WasmEngineTelemetry {
 }
 
 export interface WasmEngineMeterTelemetry {
+  /**
+   * Telemetry tap target id: `0` master mix, `laneIndex + 1` (1..32) for track
+   * lanes, `33 + busIndex` (33..40) for buses, and `0xFFFF` for the
+   * input-monitor capture tap. Handle `0xFFFF` explicitly -- a naive
+   * `targetId - 1` index into a 32-entry lane array runs past its end.
+   */
   targetId: number;
   renderFrame: number;
   seq: number;
@@ -843,6 +849,12 @@ export interface WasmEngineMeterTelemetry {
 }
 
 export interface WasmEngineMeterTelemetryWide {
+  /**
+   * Telemetry tap target id: `0` master mix, `laneIndex + 1` (1..32) for track
+   * lanes, `33 + busIndex` (33..40) for buses, and `0xFFFF` for the
+   * input-monitor capture tap. Handle `0xFFFF` explicitly -- a naive
+   * `targetId - 1` index into a 32-entry lane array runs past its end.
+   */
   targetId: number;
   renderFrame: number;
   seq: number;
@@ -871,6 +883,12 @@ export interface WasmEngineMeterTelemetryWide {
 }
 
 export interface WasmEngineScopeTelemetry {
+  /**
+   * Telemetry tap target id: `0` master mix, `laneIndex + 1` (1..32) for track
+   * lanes, `33 + busIndex` (33..40) for buses, and `0xFFFF` for the
+   * input-monitor capture tap. Handle `0xFFFF` explicitly -- a naive
+   * `targetId - 1` index into a 32-entry lane array runs past its end.
+   */
   targetId: number;
   renderFrame: number;
   seq: number;
@@ -2741,6 +2759,7 @@ export interface WasmStreamingRetune {
   setConfig: (config: Record<string, unknown>) => void;
   config: () => { semitones: number; mix: number; grainSize: number };
   grainSize: () => number;
+  latencySamples: () => number;
   processMono: (samples: Float32Array) => Float32Array;
   delete: () => void;
 }

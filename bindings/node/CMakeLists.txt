@@ -102,6 +102,7 @@ set(SONARE_NODE_C_API_SOURCES
   ${SONARE_ROOT}/src/c_api/sonare_c_engine_capture.cpp
   ${SONARE_ROOT}/src/c_api/sonare_c_engine_render.cpp
   ${SONARE_ROOT}/src/c_api/sonare_c_voice_changer.cpp
+  ${SONARE_ROOT}/src/c_api/sonare_c_streaming_retune.cpp
   ${SONARE_ROOT}/src/c_api/sonare_c_project.cpp
   ${SONARE_ROOT}/src/c_api/project_bounce.cpp
   ${SONARE_ROOT}/src/c_api/project_core.cpp

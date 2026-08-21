@@ -536,6 +536,10 @@ const UNCOVERED_OPTION_READERS: ReadonlyMap<string, string> = new Map(
       ['setClipCompSegments', 'Needs a project with comp takes.'],
       ['setClipFade', 'Needs a project with an existing clip.'],
       ['setClipTakes', 'Needs a project with an existing clip.'],
+      [
+        'setConfig',
+        'StreamingRetune instance method; its undefined-equivalence is asserted in streaming-retune.test.ts.',
+      ],
       ['setMarkerEx', 'Project-side marker writer; covered by project.test.ts.'],
       ['setSurroundPan', 'Needs a mixer strip handle.'],
       ['setSynthInstrument', 'Covered by synth-patch.test.ts and soundfont.test.ts.'],

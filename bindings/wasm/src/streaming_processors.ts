@@ -378,6 +378,11 @@ export class StreamingRetune {
     return this.retune.grainSize();
   }
 
+  /** Fixed overlap-add latency in samples (one grain); 0 before prepare. */
+  latencySamples(): number {
+    return this.retune.latencySamples();
+  }
+
   /** Process one mono block, returning the shifted samples (same length). */
   processMono(samples: Float32Array): Float32Array {
     return this.retune.processMono(samples);
