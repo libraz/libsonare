@@ -23,10 +23,13 @@ struct StreamingRetuneConfig {
 /// @details Uses fixed-size Hann-windowed grains, overlap-added at the analysis
 ///          hop. Each grain is resampled from a history ring buffer with a
 ///          fractional read increment equal to the pitch ratio, so positive
-///          semitones read source faster and raise pitch. All state (ring
-///          buffer, write head, OLA accumulators, drain/synthesis positions)
-///          persists across process_block calls. Allocation happens only in
-///          prepare().
+///          semitones read source faster and raise pitch. Because the window is
+///          applied once, the overlap-added sum is normalized by the sum of the
+///          contributing window values, which makes the output a weighted
+///          average of the overlapping grains and keeps the level unchanged.
+///          All state (ring buffer, write head, OLA accumulators,
+///          drain/synthesis positions) persists across process_block calls.
+///          Allocation happens only in prepare().
 class StreamingRetune {
  public:
   explicit StreamingRetune(StreamingRetuneConfig config = {});
@@ -36,7 +39,10 @@ class StreamingRetune {
   void set_config(const StreamingRetuneConfig& config);
   const StreamingRetuneConfig& config() const noexcept { return config_; }
   /// @brief Fixed OLA latency once prepared, independent of @ref config().mix.
-  int latency_samples() const noexcept { return grain_size_ - hop_a_; }
+  /// @details One full grain: the drain tap must trail the newest grain by the
+  ///          grain length so that every overlapping grain has contributed
+  ///          before a slot is read and normalized.
+  int latency_samples() const noexcept { return grain_size_; }
 
   /// @brief Process a block of samples. RT-safe and @c noexcept.
   /// @details Pre-condition violations (not prepared, oversize block, null
@@ -74,7 +80,7 @@ class StreamingRetune {
   std::vector<float> window_;     ///< Precomputed Hann window (grain_size).
   std::vector<float> ring_buf_;   ///< History ring buffer (ring_cap).
   std::vector<float> synth_acc_;  ///< Circular OLA signal accumulator.
-  std::vector<float> norm_acc_;   ///< Circular OLA window^2 accumulator.
+  std::vector<float> norm_acc_;   ///< Circular OLA window-sum accumulator.
   std::vector<float> dry_delay_;  ///< Dry path aligned to OLA output latency.
 
   std::uint64_t write_head_ = 0;  ///< Total samples written to ring.

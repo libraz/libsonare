@@ -517,8 +517,8 @@ TEST_CASE("RealtimeVoiceChanger config reports resolved retune grain size",
   const int effective = changer.config().retune.grain_size;
   REQUIRE(effective > 0);
   REQUIRE(effective % 4 == 0);  // resolve_grain_size rounds up to a multiple of 4
-  // Both dry and wet are aligned to the OLA's fixed three-hop delay.
-  REQUIRE(changer.latency_samples() == effective * 3 / 4);
+  // Both dry and wet are aligned to the OLA's fixed one-grain delay.
+  REQUIRE(changer.latency_samples() == effective);
 
   // set_config() with a *different* requested grain must not change the report:
   // grain is structural and only re-resolves at the next prepare().
@@ -556,7 +556,7 @@ TEST_CASE("RealtimeVoiceChanger latency is fixed when retune.mix is zero",
   // grain_size() is non-zero, and the dry path is deliberately delayed by the
   // same OLA amount even though the wet contribution is scaled out.
   REQUIRE(changer.config().retune.grain_size > 0);
-  REQUIRE(changer.latency_samples() == changer.config().retune.grain_size * 3 / 4);
+  REQUIRE(changer.latency_samples() == changer.config().retune.grain_size);
 
   // The impulse propagates at the reported fixed latency.
   constexpr int total = block * 20;

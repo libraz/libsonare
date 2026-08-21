@@ -722,7 +722,9 @@ TEST_CASE("RealtimeVoiceChanger gate gain transition is smooth", "[voice_changer
 TEST_CASE("RealtimeVoiceChanger limiter attack tapers across samples", "[voice_changer]") {
   constexpr int sample_rate = 48000;
   constexpr int block = 64;
-  constexpr int total = 4096;
+  // Long enough that the onset window measured below (quiet pre-roll plus the
+  // chain's aligned latency) still lies inside the rendered buffer.
+  constexpr int total = 8192;
   // Quiet pre-roll for ~10 ms so the limiter is in steady state, then a
   // loud sine to drive gain reduction. The limiter attack must NOT collapse
   // gain to its steady-state value in a single sample.
@@ -765,6 +767,7 @@ TEST_CASE("RealtimeVoiceChanger limiter attack tapers across samples", "[voice_c
   env.reserve(20);
   const std::size_t loud_onset =
       static_cast<std::size_t>(quiet_samples + changer.latency_samples());
+  REQUIRE(loud_onset + 20 <= output.size());
   for (std::size_t i = loud_onset; i < loud_onset + 20; ++i) {
     env.push_back(std::abs(output[i]));
   }

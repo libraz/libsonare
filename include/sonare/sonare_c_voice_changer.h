@@ -109,7 +109,7 @@ SonareError sonare_realtime_voice_changer_process_planar_stereo(SonareRealtimeVo
                                                                 float* left, float* right,
                                                                 size_t num_frames);
 /// @brief Reports the prepared chain's processing latency in samples. The dry
-///        and wet paths are aligned to the retune OLA's fixed three-hop delay,
+///        and wet paths are aligned to the retune OLA's fixed one-grain delay,
 ///        so the value is independent of `wet_mix` and `retune.mix`. When the
 ///        ISP limiter is enabled, it runs after that aligned mix and adds its
 ///        signal-path latency: a 6-sample FIR group delay plus

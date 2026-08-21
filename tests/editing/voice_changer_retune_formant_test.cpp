@@ -90,9 +90,101 @@ TEST_CASE("StreamingRetune aligns dry and wet impulse peaks across mix values", 
   const int dry_peak = peak_position(0.0f);
   const int halfway_peak = peak_position(0.5f);
   const int wet_peak = peak_position(1.0f);
-  REQUIRE(dry_peak == grain * 3 / 4);
+  REQUIRE(dry_peak == grain);
   REQUIRE(std::abs(halfway_peak - dry_peak) <= 1);
   REQUIRE(std::abs(wet_peak - dry_peak) <= 1);
+}
+
+namespace {
+
+constexpr int kRetuneRate = 48000;
+constexpr int kRetuneBlock = 128;
+constexpr int kRetuneGrain = 512;
+constexpr int kRetuneTotal = 12000;  // 0.25 s, several grains past the latency.
+
+// Streams `input` through a unity-pitch retune at the requested mix.
+std::vector<float> retune_render(const std::vector<float>& input, float mix) {
+  StreamingRetune retune({0.0f, mix, kRetuneGrain});
+  retune.prepare(kRetuneRate, kRetuneBlock);
+  std::vector<float> output(input.size(), 0.0f);
+  const int total = static_cast<int>(input.size());
+  for (int pos = 0; pos < total; pos += kRetuneBlock) {
+    const int n = std::min(kRetuneBlock, total - pos);
+    retune.process_block(input.data() + pos, output.data() + pos, n);
+  }
+  return output;
+}
+
+}  // namespace
+
+TEST_CASE("StreamingRetune at unity pitch reproduces its input after the latency",
+          "[voice_changer]") {
+  StreamingRetune probe({0.0f, 1.0f, kRetuneGrain});
+  probe.prepare(kRetuneRate, kRetuneBlock);
+  const std::size_t latency = static_cast<std::size_t>(probe.latency_samples());
+  // The drain tap trails the newest grain by a full grain so no output sample
+  // is ever normalized against a partial set of the grains overlapping it.
+  REQUIRE(latency == static_cast<std::size_t>(kRetuneGrain));
+
+  // A constant input isolates the OLA normalization: past the latency each
+  // output sample is the normalized sum of the overlapping grains, so a wrong
+  // divisor shows up as a level offset (dividing by sum(w*w) instead of sum(w)
+  // is a fixed 2/1.5 = +2.5 dB) and an early drain as a sawtooth at the hop
+  // rate (86 Hz for the default grain at 48 kHz).
+  const std::vector<float> dc(kRetuneTotal, 0.5f);
+  const std::vector<float> dc_out = retune_render(dc, 1.0f);
+  float dc_min = dc_out[latency];
+  float dc_max = dc_out[latency];
+  for (std::size_t i = latency; i < dc_out.size(); ++i) {
+    dc_min = std::min(dc_min, dc_out[i]);
+    dc_max = std::max(dc_max, dc_out[i]);
+  }
+  REQUIRE_THAT(dc_min, WithinRel(0.5f, 1.0e-4f));
+  REQUIRE_THAT(dc_max, WithinRel(0.5f, 1.0e-4f));
+  // No periodic amplitude variation: the level is flat, not swept per hop.
+  REQUIRE(20.0f * std::log10(dc_max / dc_min) < 0.01f);
+
+  // A tone additionally exercises the fractional ring read.
+  const std::vector<float> tone = sine(1000.0f, kRetuneRate, kRetuneTotal);
+  const std::vector<float> tone_out = retune_render(tone, 1.0f);
+  float max_error = 0.0f;
+  for (std::size_t i = latency; i < tone_out.size(); ++i) {
+    max_error = std::max(max_error, std::abs(tone_out[i] - tone[i - latency]));
+  }
+  INFO("max sample deviation from the delayed input: " << max_error);
+  REQUIRE(max_error < 1.0e-5f);
+  REQUIRE_THAT(block_rms(tone_out, latency, tone_out.size()),
+               WithinRel(block_rms(tone, 0, tone.size() - latency), 1.0e-3f));
+}
+
+TEST_CASE("StreamingRetune mix is a level blend at every mix value", "[voice_changer]") {
+  // At unity pitch the wet path carries the same signal as the delayed dry
+  // path, so an honest level blend leaves peak and RMS untouched for every
+  // mix value. A wet path with a gain error would make the mix control a
+  // level shift instead of a crossfade.
+  const std::vector<float> tone = sine(1000.0f, kRetuneRate, kRetuneTotal);
+  const std::size_t latency = static_cast<std::size_t>(kRetuneGrain);
+  const auto peak = [](const std::vector<float>& v, std::size_t start, std::size_t end) {
+    float best = 0.0f;
+    for (std::size_t i = start; i < end; ++i) best = std::max(best, std::abs(v[i]));
+    return best;
+  };
+  const float input_peak = peak(tone, 0, tone.size() - latency);
+  const float input_rms = block_rms(tone, 0, tone.size() - latency);
+  REQUIRE(input_peak > 0.0f);
+  REQUIRE(input_rms > 0.0f);
+
+  for (const float mix : {0.0f, 0.5f, 1.0f}) {
+    const std::vector<float> output = retune_render(tone, mix);
+    INFO("mix " << mix);
+    REQUIRE_THAT(peak(output, latency, output.size()), WithinRel(input_peak, 1.0e-3f));
+    REQUIRE_THAT(block_rms(output, latency, output.size()), WithinRel(input_rms, 1.0e-3f));
+    float max_error = 0.0f;
+    for (std::size_t i = latency; i < output.size(); ++i) {
+      max_error = std::max(max_error, std::abs(output[i] - tone[i - latency]));
+    }
+    REQUIRE(max_error < 1.0e-5f);
+  }
 }
 
 TEST_CASE("RealtimeVoiceChanger aligns whole-chain dry and wet impulse peaks", "[voice_changer]") {
@@ -129,7 +221,7 @@ TEST_CASE("RealtimeVoiceChanger aligns whole-chain dry and wet impulse peaks", "
   const int dry_peak = peak_position(0.0f);
   const int halfway_peak = peak_position(0.5f);
   const int wet_peak = peak_position(1.0f);
-  REQUIRE(dry_peak == grain * 3 / 4);
+  REQUIRE(dry_peak == grain);
   REQUIRE(std::abs(halfway_peak - dry_peak) <= 1);
   REQUIRE(std::abs(wet_peak - dry_peak) <= 1);
 }

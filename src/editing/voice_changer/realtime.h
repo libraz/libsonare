@@ -184,7 +184,7 @@ class RealtimeVoiceChanger {
   void process_block(float* const* channels, int num_channels, int num_samples) noexcept;
   /// @brief Reports the prepared chain's processing latency in samples.
   /// @details Dry and wet paths are both aligned to the retune OLA's fixed
-  ///          three-hop delay, so this value never changes when @c wet_mix or
+  ///          one-grain delay, so this value never changes when @c wet_mix or
   ///          @c retune.mix changes. When @ref LimiterConfig::enable_isp_limiter
   ///          is @c true, the final ISP limiter runs after the aligned mix and
   ///          adds @c IspLimiter::latency_samples: a 6-sample FIR group delay

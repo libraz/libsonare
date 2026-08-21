@@ -2768,20 +2768,20 @@ def _validate_voice_case_relationships(
                     f"got {preset.get('preset')!r}",
                 )
             )
-        if preset.get("latency_samples") != 786:
+        if preset.get("latency_samples") != 1042:
             report.append(
                 (
                     "fail",
-                    f"{surface}.voice-change.preset.latency_samples: expected 786, "
+                    f"{surface}.voice-change.preset.latency_samples: expected 1042, "
                     f"got {preset.get('latency_samples')!r}",
                 )
             )
     custom = payloads.get(("voice-change", "custom"))
-    if isinstance(custom, dict) and custom.get("latency_samples") != 66:
+    if isinstance(custom, dict) and custom.get("latency_samples") != 82:
         report.append(
             (
                 "fail",
-                f"{surface}.voice-change.custom.latency_samples: expected actual custom latency 66, "
+                f"{surface}.voice-change.custom.latency_samples: expected actual custom latency 82, "
                 f"got {custom.get('latency_samples')!r}",
             )
         )

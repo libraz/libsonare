@@ -86,7 +86,13 @@ void StreamingRetune::reset() {
   write_head_ = 0;
   input_phase_ = 0;
   drain_pos_ = 0;
-  synth_pos_ = 0;
+  // Place the first grain one hop ahead of the drain tap. A slot is written by
+  // every grain that overlaps it, and the last of those is only emitted one hop
+  // after the slot would otherwise be read; draining a slot early would divide
+  // a partial sum of grains by a partial window sum and modulate the output at
+  // the hop rate. The lag costs exactly one hop of latency, which is why
+  // latency_samples() reports a full grain.
+  synth_pos_ = static_cast<std::size_t>(hop_a_);
   std::fill(dry_delay_.begin(), dry_delay_.end(), 0.0f);
   dry_delay_pos_ = 0;
   // reset is an explicit state boundary, unlike a live set_config update.
@@ -152,7 +158,13 @@ void StreamingRetune::emit_grain() noexcept {
     const float sample = read_ring_linear(read_pos) * w;
     const std::size_t idx = (synth_pos_ + static_cast<std::size_t>(n)) % accum_cap_;
     synth_acc_[idx] += sample;
-    norm_acc_[idx] += w * w;
+    // The window is applied once (analysis only), so the drain divides by the
+    // sum of the window values that actually contributed, not their squares:
+    // sum(x*w)/sum(w) is a weighted average of the overlapping grains and is
+    // unity for identical grains. Accumulating w*w would be the correct
+    // normalization only for a doubly-windowed (analysis + synthesis) overlap
+    // add, and against a single windowing it is a fixed 2/1.5 = +2.5 dB gain.
+    norm_acc_[idx] += w;
   }
 
   synth_pos_ = (synth_pos_ + static_cast<std::size_t>(hop_a_)) % accum_cap_;
@@ -191,15 +203,19 @@ void StreamingRetune::process_block(const float* input, float* output, int num_s
     }
 
     // 3) Drain exactly one output sample from the front of the OLA accumulator.
+    // The drain tap trails the newest grain by a full grain length, so every
+    // grain overlapping this slot has already been accumulated (see reset()).
+    // The epsilon only guards the pre-roll slots, where no grain has landed
+    // yet and both sums are zero.
     const float norm = norm_acc_[drain_pos_] + kSpectrumEpsilon;
     const float out_sample = synth_acc_[drain_pos_] / norm;
     synth_acc_[drain_pos_] = 0.0f;
     norm_acc_[drain_pos_] = 0.0f;
     drain_pos_ = (drain_pos_ + 1) % accum_cap_;
 
-    // The OLA output trails the input by three analysis hops. Delay the dry
-    // path by that same fixed amount before blending so intermediate mix
-    // values are an actual level blend rather than a slapback echo.
+    // The OLA output trails the input by one grain. Delay the dry path by that
+    // same fixed amount before blending so intermediate mix values are an
+    // actual level blend rather than a slapback echo.
     float delayed_dry = input[i];
     if (!dry_delay_.empty()) {
       delayed_dry = dry_delay_[dry_delay_pos_];
