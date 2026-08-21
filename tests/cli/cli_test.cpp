@@ -11,8 +11,10 @@
 #include <cstdint>
 #include <cstdio>
 #include <cstdlib>
+#include <cstring>
 #include <fstream>
 #include <initializer_list>
+#include <limits>
 #include <memory>
 #include <set>
 #include <sstream>
@@ -1546,6 +1548,94 @@ TEST_CASE("CLI info command", "[cli]") {
     REQUIRE(code == 0);
     REQUIRE_THAT(output, ContainsSubstring("\"duration\""));
     REQUIRE_THAT(output, ContainsSubstring("\"sample_rate\""));
+  }
+}
+
+TEST_CASE("CLI applies the offline-input policy to the file it loads", "[cli]") {
+  // The CLI built its Audio with load_audio() plus Audio::from_vector, and
+  // from_vector checks only sample_rate > 0. That pairing was the one way into
+  // the library that skipped the policy every other surface applies, so a float
+  // WAV carrying a NaN analysed to quietly null fields and exited 0, and a rate
+  // outside [8000, 384000] was accepted here and refused everywhere else --
+  // including by this project's own Python CLI, which returned 6 and 5 for the
+  // same two files.
+  const auto write_float_wav = [](const std::string& path, const std::vector<float>& samples,
+                                  uint32_t sample_rate) {
+    std::vector<uint8_t> out;
+    const auto push_u16 = [&out](uint16_t value) {
+      out.push_back(static_cast<uint8_t>(value & 0xFFu));
+      out.push_back(static_cast<uint8_t>((value >> 8) & 0xFFu));
+    };
+    const auto push_u32 = [&out](uint32_t value) {
+      for (int shift = 0; shift < 32; shift += 8) {
+        out.push_back(static_cast<uint8_t>((value >> shift) & 0xFFu));
+      }
+    };
+    const auto push_tag = [&out](const char* tag) {
+      for (int i = 0; i < 4; ++i) out.push_back(static_cast<uint8_t>(tag[i]));
+    };
+    const auto data_bytes = static_cast<uint32_t>(samples.size() * sizeof(float));
+    push_tag("RIFF");
+    push_u32(36u + data_bytes);
+    push_tag("WAVE");
+    push_tag("fmt ");
+    push_u32(16u);
+    push_u16(3u);  // IEEE float, so a NaN survives the round trip
+    push_u16(1u);
+    push_u32(sample_rate);
+    push_u32(sample_rate * 4u);
+    push_u16(4u);
+    push_u16(32u);
+    push_tag("data");
+    push_u32(data_bytes);
+    for (const float sample : samples) {
+      uint32_t bits = 0;
+      std::memcpy(&bits, &sample, sizeof(bits));
+      push_u32(bits);
+    }
+    std::ofstream file(path, std::ios::binary);
+    file.write(reinterpret_cast<const char*>(out.data()), static_cast<std::streamsize>(out.size()));
+  };
+
+  std::vector<float> tone(4410);
+  for (size_t i = 0; i < tone.size(); ++i) {
+    tone[i] = 0.5f * std::sin(2.0f * static_cast<float>(sonare::constants::kPiD) * 220.0f *
+                              static_cast<float>(i) / 22050.0f);
+  }
+
+  SECTION("a non-finite sample is a decode failure, not a null analysis field") {
+    const std::string path = unique_temp_path("_policy_nan.wav");
+    std::vector<float> poisoned = tone;
+    poisoned[100] = std::numeric_limits<float>::quiet_NaN();
+    write_float_wav(path, poisoned, 22050);
+    auto [code, output] = exec_command(CLI + " bpm " + path + " --json -q");
+    std::remove(path.c_str());
+    CAPTURE(output);
+    REQUIRE(code == 6);  // DecodeFailed, matching the Python CLI
+  }
+
+  SECTION("a sample rate outside the supported range is an invalid format") {
+    const std::string path = unique_temp_path("_policy_rate.wav");
+    write_float_wav(path, tone, 4000);
+    // Not an analysis command: even a pure format conversion goes through the
+    // same handle, and the Python CLI refuses this file for resample too.
+    const std::string out_path = unique_temp_path("_policy_rate_out.wav");
+    auto [code, output] = exec_command(CLI + " resample " + path +
+                                       " --target-rate 44100 --output " + out_path + " -q");
+    std::remove(path.c_str());
+    std::remove(out_path.c_str());
+    CAPTURE(output);
+    REQUIRE(code == 5);  // InvalidFormat, matching the Python CLI
+  }
+
+  SECTION("a well-formed file in range still loads") {
+    const std::string path = unique_temp_path("_policy_ok.wav");
+    write_float_wav(path, tone, 22050);
+    auto [code, output] = exec_command(CLI + " info " + path + " --json -q");
+    std::remove(path.c_str());
+    CAPTURE(output);
+    REQUIRE(code == 0);
+    REQUIRE_THAT(output, ContainsSubstring("\"sample_rate\": 22050"));
   }
 }
 

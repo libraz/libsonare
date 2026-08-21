@@ -278,7 +278,6 @@ namespace {
 
 constexpr int kExitUsage = 2;
 constexpr int kExitInvalidParameter = 3;
-constexpr int kExitInvalidFormat = 5;
 constexpr int kExitError = 10;
 
 bool legacy_exit_codes() noexcept {
@@ -400,13 +399,16 @@ int main(int argc, char* argv[]) {
                 << std::flush;
     }
 
-    auto [samples, sample_rate] = load_audio(args.input_file);
-    if (samples.empty()) {
-      std::cerr << "\n" << color::red << "Error: Failed to load audio file" << color::reset << "\n";
-      return finalize_exit(kExitInvalidFormat);
-    }
-
-    Audio audio = Audio::from_vector(std::move(samples), sample_rate);
+    // Through Audio::from_file, not load_audio() plus Audio::from_vector.
+    // from_vector checks only sample_rate > 0, so that pairing was the one way
+    // into the library that skipped the offline-input policy every other surface
+    // applies: a float WAV carrying a NaN, or one declaring a rate outside
+    // [8000, 384000], produced a usable handle here and analysis fields that
+    // were quietly null, while the Python CLI refused the same two files with 6
+    // and 5. The empty-decode case is covered by the same validator (DecodeFailed),
+    // which is also what the Python CLI reports for it.
+    Audio audio = Audio::from_file(args.input_file);
+    const int sample_rate = audio.sample_rate();
 
     int source_channels = 0;
     try {
