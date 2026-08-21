@@ -56,6 +56,18 @@ namespace sonare::mixing::assistant {
 ///            share a priority the band goes to whichever of them is more
 ///            invested in it, measured as @ref TrackProfile::band_occupancy.
 ///
+///            **A collision is not on its own a reason to carve.** The cut is
+///            proposed only where the band is essential to the part being made
+///            room for and non-essential to the part giving way, both measured
+///            as the share of that track's own energy the band already carries.
+///            Without that test a part can be carved in the band it is built
+///            around, for a counterpart with almost nothing there. A band that
+///            is neither clearly essential nor clearly disposable to one of the
+///            two produces no cut: that is a real answer, and forcing it either
+///            way would spend an invented decision on somebody's material. Both
+///            shares are quoted in the @ref SceneDelta::reason, so the choice of
+///            band can be read back.
+///
 ///            Where inside the band the filter sits is a **second, narrower
 ///            measurement**, taken only for the band that already won and only
 ///            between the two tracks whose collision won it. A band runs up to

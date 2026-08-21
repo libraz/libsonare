@@ -197,6 +197,33 @@ void set_band_occupancy(TrackProfile& profile, int band, float share) {
   profile.band_occupancy[static_cast<std::size_t>(band)] = share;
 }
 
+// The same, for several bands at once.
+void set_band_occupancy(TrackProfile& profile, const std::vector<int>& bands, float share) {
+  const float rest = (1.0f - share * static_cast<float>(bands.size())) /
+                     static_cast<float>(kBandCount - static_cast<int>(bands.size()));
+  profile.band_occupancy.fill(rest);
+  for (int band : bands) profile.band_occupancy[static_cast<std::size_t>(band)] = share;
+}
+
+// Shares read against the module's essentiality thresholds. An even spread over
+// the seven bands is 0.143, and the module calls a band essential at 0.40 and
+// disposable at 0.07.
+//
+// Well past the essential threshold: the band is what the part is built around.
+constexpr float kEssentialShare = 0.45f;
+// Well under the disposable one: content is there, but the part does not need it.
+constexpr float kSpareShare = 0.02f;
+// Inside the module's deliberate gap, so the band is neither.
+constexpr float kAmbiguousShare = 0.20f;
+
+// Opens the essentiality gate for @p bands: the part being made room for is
+// built around them and the part giving way is not. A collision alone no longer
+// earns a cut, so every case that expects one has to arrange this.
+void gate_open(TrackProfile& needs_it, TrackProfile& can_spare_it, const std::vector<int>& bands) {
+  set_band_occupancy(needs_it, bands, kEssentialShare);
+  set_band_occupancy(can_spare_it, bands, kSpareShare);
+}
+
 MixProfile make_mix(int track_count) {
   MixProfile mix;
   mix.track_count = track_count;
@@ -309,6 +336,15 @@ std::vector<TrackProfile> two_tracks() {
   return {make_profile("vox", SourceClass::Vocal), make_profile("pad", SourceClass::Strings)};
 }
 
+// The arrangement most cases use: a vocal and a pad, with the vocal built around
+// @p bands and the pad able to give them up. The pad has the lower role priority,
+// so it is the one that gives way.
+std::vector<TrackProfile> two_tracks_contesting(const std::vector<int>& bands) {
+  std::vector<TrackProfile> profiles = two_tracks();
+  gate_open(profiles[0], profiles[1], bands);
+  return profiles;
+}
+
 // Frequency the two profiled tracks below actually share, well away from the mid
 // band's 1000 Hz centre so a stage that still used the grid cannot pass.
 constexpr float kSharedToneHz = 1800.0f;
@@ -317,13 +353,16 @@ constexpr float kSharedToneHz = 1800.0f;
 // band, each with its own material elsewhere. Profiled once for the whole file:
 // an STFT per case pays repeatedly to measure the same thing.
 //
+// The two are built so the measured occupancy opens the essentiality gate by
+// itself: the mid band is nearly all of the vocal, while the pad merely touches
+// it and lives up in the high mid. Overriding the occupancy afterwards would
+// have made the case prove less than it looks like it proves.
+//
 // Hand-built spectra prove what the stage does with a measurement; only a real
 // profile proves the stage reads the one the profiler actually produced.
 const std::vector<TrackProfile>& profiled_collision_pair() {
   static const std::vector<TrackProfile> profiles = [] {
     constexpr float kDurationSec = 0.6f;
-    constexpr float kSharedAmplitude = 0.3f;
-    constexpr float kOwnAmplitude = 0.2f;
     // Below the mid band for one track and above it for the other, so the only
     // thing they share inside the band is the tone.
     constexpr float kVoxOwnHz = 400.0f;
@@ -331,19 +370,19 @@ const std::vector<TrackProfile>& profiled_collision_pair() {
 
     constexpr std::size_t kFrames =
         static_cast<std::size_t>(kDurationSec * static_cast<float>(kSpectrumSampleRate));
-    const auto render = [](float own_hz) {
+    const auto render = [](float shared_amplitude, float own_hz, float own_amplitude) {
       std::vector<float> samples(kFrames, 0.0f);
       for (std::size_t index = 0; index < kFrames; ++index) {
         const float seconds = static_cast<float>(index) / static_cast<float>(kSpectrumSampleRate);
         samples[index] =
-            kSharedAmplitude * std::sin(sonare::constants::kTwoPi * kSharedToneHz * seconds) +
-            kOwnAmplitude * std::sin(sonare::constants::kTwoPi * own_hz * seconds);
+            shared_amplitude * std::sin(sonare::constants::kTwoPi * kSharedToneHz * seconds) +
+            own_amplitude * std::sin(sonare::constants::kTwoPi * own_hz * seconds);
       }
       return samples;
     };
 
-    const std::vector<float> vox_samples = render(kVoxOwnHz);
-    const std::vector<float> pad_samples = render(kPadOwnHz);
+    const std::vector<float> vox_samples = render(0.3f, kVoxOwnHz, 0.1f);
+    const std::vector<float> pad_samples = render(0.05f, kPadOwnHz, 0.4f);
 
     const auto profile_of = [](const std::string& id, const std::vector<float>& samples,
                                SourceClass source) {
@@ -368,8 +407,8 @@ const std::vector<TrackProfile>& profiled_collision_pair() {
 
 // The same pair, each carrying residue under its corner, for the cases that need
 // the high-pass to actually be proposed.
-std::vector<TrackProfile> two_tracks_with_residue() {
-  std::vector<TrackProfile> profiles = two_tracks();
+std::vector<TrackProfile> two_tracks_with_residue(const std::vector<int>& bands = {}) {
+  std::vector<TrackProfile> profiles = bands.empty() ? two_tracks() : two_tracks_contesting(bands);
   for (TrackProfile& profile : profiles) set_low_energy_share(profile, kResidueShare);
   return profiles;
 }
@@ -404,7 +443,7 @@ TEST_CASE("eq ignores a collision the two tracks barely shared", "[mixing][assis
 }
 
 TEST_CASE("eq carves the lower-priority track, not the quieter one", "[mixing][assistant]") {
-  const std::vector<TrackProfile> profiles = two_tracks();
+  const std::vector<TrackProfile> profiles = two_tracks_contesting({kMidBand});
   MixProfile mix = make_mix(2);
   // The pad is the one burying the vocal, so a rule that attenuated whichever
   // track lost the energy contest would carve the vocal here.
@@ -422,8 +461,10 @@ TEST_CASE("eq breaks a priority tie on band occupancy", "[mixing][assistant]") {
                                      make_profile("gtrR", SourceClass::Guitar)};
   // The dominant track is the one barely invested in the band, so the band
   // belongs to its neighbour and the dominant track is what gives way.
-  set_band_occupancy(profiles[0], kMidBand, 0.1f);
-  set_band_occupancy(profiles[1], kMidBand, 0.4f);
+  // gtrL is the one barely invested in the band, so it both loses the tie-break
+  // and is the one that can give the band up.
+  set_band_occupancy(profiles[0], kMidBand, kSpareShare);
+  set_band_occupancy(profiles[1], kMidBand, kEssentialShare);
 
   MixProfile mix = make_mix(2);
   set_dominance(mix, 0, 1, kMidBand, kContestedShare, kOverlapFrames);
@@ -435,7 +476,7 @@ TEST_CASE("eq breaks a priority tie on band occupancy", "[mixing][assistant]") {
 }
 
 TEST_CASE("eq never cuts deeper than the configured ceiling", "[mixing][assistant]") {
-  const std::vector<TrackProfile> profiles = two_tracks();
+  const std::vector<TrackProfile> profiles = two_tracks_contesting({kMidBand});
   MixProfile mix = make_mix(2);
   set_dominance(mix, 1, 0, kMidBand, kBuriedShare, kOverlapFrames);
 
@@ -455,7 +496,7 @@ TEST_CASE("eq never cuts deeper than the configured ceiling", "[mixing][assistan
 }
 
 TEST_CASE("eq reports the ceiling only when it actually bit", "[mixing][assistant]") {
-  const std::vector<TrackProfile> profiles = two_tracks();
+  const std::vector<TrackProfile> profiles = two_tracks_contesting({kMidBand});
   MixProfile mix = make_mix(2);
   set_dominance(mix, 1, 0, kMidBand, kContestedShare, kOverlapFrames);
 
@@ -477,7 +518,7 @@ TEST_CASE("eq reports the ceiling only when it actually bit", "[mixing][assistan
 }
 
 TEST_CASE("eq raises the cut as the collision worsens, up to the ceiling", "[mixing][assistant]") {
-  const std::vector<TrackProfile> profiles = two_tracks();
+  const std::vector<TrackProfile> profiles = two_tracks_contesting({kMidBand});
 
   const auto cut_for = [&profiles](float share) {
     MixProfile mix = make_mix(2);
@@ -494,7 +535,7 @@ TEST_CASE("eq raises the cut as the collision worsens, up to the ceiling", "[mix
 }
 
 TEST_CASE("eq writes params the parametric equalizer can read", "[mixing][assistant]") {
-  const std::vector<TrackProfile> profiles = two_tracks();
+  const std::vector<TrackProfile> profiles = two_tracks_contesting({kMidBand, kHighMidBand});
   MixProfile mix = make_mix(2);
   set_dominance(mix, 1, 0, kMidBand, kContestedShare, kOverlapFrames);
   set_dominance(mix, 1, 0, kHighMidBand, kContestedShare, kOverlapFrames);
@@ -524,7 +565,7 @@ TEST_CASE("eq writes params the parametric equalizer can read", "[mixing][assist
 }
 
 TEST_CASE("eq suggests only processors the insert factory can build", "[mixing][assistant]") {
-  const std::vector<TrackProfile> profiles = two_tracks_with_residue();
+  const std::vector<TrackProfile> profiles = two_tracks_with_residue({kMidBand});
   MixProfile mix = make_mix(2);
   set_dominance(mix, 1, 0, kMidBand, kContestedShare, kOverlapFrames);
 
@@ -547,7 +588,7 @@ TEST_CASE("eq suggests only processors the insert factory can build", "[mixing][
 }
 
 TEST_CASE("eq folds every contested band into one parametric insert", "[mixing][assistant]") {
-  const std::vector<TrackProfile> profiles = two_tracks();
+  const std::vector<TrackProfile> profiles = two_tracks_contesting({kMidBand, kHighMidBand});
   MixProfile mix = make_mix(2);
   set_dominance(mix, 1, 0, kMidBand, kContestedShare, kOverlapFrames);
   set_dominance(mix, 1, 0, kHighMidBand, kBuriedShare, kOverlapFrames);
@@ -635,6 +676,8 @@ TEST_CASE("eq high-passes each source class at its own corner when asked to",
 TEST_CASE("eq skips a band the high-pass has already removed", "[mixing][assistant]") {
   std::vector<TrackProfile> profiles{make_profile("hat", SourceClass::HiHat),
                                      make_profile("perc", SourceClass::Percussion)};
+  // The hi-hat has the lower role priority, so it is the one that gives way.
+  gate_open(profiles[1], profiles[0], {kSubBand});
   for (TrackProfile& profile : profiles) set_low_energy_share(profile, kResidueShare);
   MixProfile mix = make_mix(2);
   // The sub band tops out at 60 Hz, well under both classes' corners.
@@ -657,11 +700,78 @@ TEST_CASE("eq skips a band the high-pass has already removed", "[mixing][assista
   }
 }
 
+TEST_CASE("eq carves a band only when one part needs it and the other can spare it",
+          "[mixing][assistant]") {
+  MixProfile mix = make_mix(2);
+  set_dominance(mix, 1, 0, kMidBand, kContestedShare, kOverlapFrames);
+
+  // The same collision throughout: the pad is in the vocal's way in the mid band
+  // and the pad is the one that gives way. Only the two shares change.
+  const auto cuts_for = [&mix](float vox_share, float pad_share) {
+    std::vector<TrackProfile> profiles = two_tracks();
+    set_band_occupancy(profiles[0], kMidBand, vox_share);
+    set_band_occupancy(profiles[1], kMidBand, pad_share);
+    return count_inserts(decide_eq(profiles, mix, MixAssistantConfig{}), kParametric);
+  };
+
+  SECTION("essential to the part being made room for, disposable to the one giving way") {
+    CHECK(cuts_for(kEssentialShare, kSpareShare) == 1);
+  }
+
+  SECTION("essential to both: the part giving way needs the band too") {
+    CHECK(cuts_for(kEssentialShare, kEssentialShare) == 0);
+  }
+
+  SECTION("disposable to both: nothing is being made room for") {
+    CHECK(cuts_for(kSpareShare, kSpareShare) == 0);
+  }
+
+  SECTION("neither essential nor disposable, on the side being made room for") {
+    CHECK(cuts_for(kAmbiguousShare, kSpareShare) == 0);
+  }
+
+  SECTION("neither essential nor disposable, on the side giving way") {
+    CHECK(cuts_for(kEssentialShare, kAmbiguousShare) == 0);
+  }
+}
+
+TEST_CASE("eq emits no delta at all for a track whose only band is gated out",
+          "[mixing][assistant]") {
+  // The collision is real and the priority table names a victim, so before the
+  // gate this track earned a cut. An empty eq delta would read downstream as a
+  // decision to leave the strip flat, which is a different statement from having
+  // found nothing worth correcting.
+  std::vector<TrackProfile> profiles = two_tracks();
+  set_band_occupancy(profiles[0], kMidBand, kEssentialShare);
+  set_band_occupancy(profiles[1], kMidBand, kEssentialShare);
+
+  MixProfile mix = make_mix(2);
+  set_dominance(mix, 1, 0, kMidBand, kBuriedShare, kOverlapFrames);
+
+  const std::vector<SceneDelta> deltas = decide_eq(profiles, mix, MixAssistantConfig{});
+
+  CHECK(deltas.empty());
+  CHECK(find_delta(deltas, "pad", kParametric) == nullptr);
+}
+
+TEST_CASE("eq names both shares in the reason for a gated cut", "[mixing][assistant]") {
+  const std::vector<TrackProfile> profiles = two_tracks_contesting({kMidBand});
+  MixProfile mix = make_mix(2);
+  set_dominance(mix, 1, 0, kMidBand, kContestedShare, kOverlapFrames);
+
+  const std::string reason = pad_cut_reason(profiles, mix);
+  INFO(reason);
+  // Why this band and not another: the vocal is built around it and the pad is
+  // not. Both figures are the ones the gate was evaluated on.
+  CHECK(reason.find("which vox needs at 45.0% of its energy") != std::string::npos);
+  CHECK(reason.find("pad can spare at 2.0% of its own") != std::string::npos);
+}
+
 TEST_CASE("eq places the cut at the overlap, not at the band's centre", "[mixing][assistant]") {
   // The mid band runs two octaves, and everything the two tracks share sits in
   // its top third. A stage that still used the grid would put the filter an
   // octave below the collision it was justified by.
-  std::vector<TrackProfile> profiles = two_tracks();
+  std::vector<TrackProfile> profiles = two_tracks_contesting({kMidBand});
   const std::vector<SpectrumBin> shared{{75, 1.0f}, {76, 2.0f}, {77, 4.0f}, {78, 2.0f}, {79, 1.0f}};
   set_spectrum(profiles[0], shared);
   set_spectrum(profiles[1], shared);
@@ -693,7 +803,7 @@ TEST_CASE("eq places the cut where both tracks are, not where either one is",
   // it; they meet only in the middle, and the middle is much quieter than
   // either. A measure that summed the two would pick one of the loud shoulders,
   // which is the one place there is no collision at all.
-  std::vector<TrackProfile> profiles = two_tracks();
+  std::vector<TrackProfile> profiles = two_tracks_contesting({kMidBand});
   set_spectrum(profiles[0], flat_run(30, 34, 20.0f) + flat_run(55, 65, 1.0f));
   set_spectrum(profiles[1], flat_run(78, 82, 20.0f) + flat_run(55, 65, 1.0f));
 
@@ -710,7 +820,7 @@ TEST_CASE("eq smooths the overlap before choosing a frequency", "[mixing][assist
   // A single bin three times the height of a hump twenty bins wide. Raw, the
   // lone bin wins; that is noise rather than a resonance, and a filter placed on
   // it would move between renders for reasons nobody can hear.
-  std::vector<TrackProfile> profiles = two_tracks();
+  std::vector<TrackProfile> profiles = two_tracks_contesting({kMidBand});
   const std::vector<SpectrumBin> spiky =
       std::vector<SpectrumBin>{{30, 3.0f}} + flat_run(55, 75, 1.0f);
   set_spectrum(profiles[0], spiky);
@@ -731,7 +841,7 @@ TEST_CASE("eq keeps the cut inside the band that justified it", "[mixing][assist
   // smoothing window reaches it — that is deliberate, so a band edge is not
   // decided by how many neighbours happen to be in range — but it must not be
   // able to pull the filter out of the band the collision was found in.
-  std::vector<TrackProfile> profiles = two_tracks();
+  std::vector<TrackProfile> profiles = two_tracks_contesting({kMidBand});
   const std::vector<SpectrumBin> shared =
       std::vector<SpectrumBin>{{87, 100.0f}} + flat_run(40, 50, 1.0f);
   set_spectrum(profiles[0], shared);
@@ -751,7 +861,7 @@ TEST_CASE("eq keeps the cut inside the band that justified it", "[mixing][assist
 
 TEST_CASE("eq measures the air band, which has no finite upper edge", "[mixing][assistant]") {
   SECTION("the span runs to Nyquist") {
-    std::vector<TrackProfile> profiles = two_tracks();
+    std::vector<TrackProfile> profiles = two_tracks_contesting({kAirBand});
     const std::vector<SpectrumBin> shared = flat_run(795, 805, 1.0f);
     set_spectrum(profiles[0], shared);
     set_spectrum(profiles[1], shared);
@@ -769,7 +879,7 @@ TEST_CASE("eq measures the air band, which has no finite upper edge", "[mixing][
     // At 32 kHz the air band's usable span is 12 kHz to 16 kHz rather than the
     // nominal one, and the content sits inside what is left.
     constexpr int kLowRate = 32000;
-    std::vector<TrackProfile> profiles = two_tracks();
+    std::vector<TrackProfile> profiles = two_tracks_contesting({kAirBand});
     const std::vector<SpectrumBin> shared = flat_run(895, 905, 1.0f);
     set_spectrum(profiles[0], shared, kLowRate);
     set_spectrum(profiles[1], shared, kLowRate);
@@ -789,7 +899,7 @@ TEST_CASE("eq falls back to the band centre when nothing can be measured", "[mix
   set_dominance(mix, 1, 0, kMidBand, kContestedShare, kOverlapFrames);
 
   SECTION("no spectrum at all") {
-    const std::vector<TrackProfile> profiles = two_tracks();
+    const std::vector<TrackProfile> profiles = two_tracks_contesting({kMidBand});
     CHECK_THAT(pad_cut_center_hz(profiles, mix), WithinAbs(kMidBandCenterHz, kHzTolerance));
 
     // The wording has to change with the number, or a grid point reads as a
@@ -800,20 +910,20 @@ TEST_CASE("eq falls back to the band centre when nothing can be measured", "[mix
   }
 
   SECTION("only one of the two tracks was measured") {
-    std::vector<TrackProfile> profiles = two_tracks();
+    std::vector<TrackProfile> profiles = two_tracks_contesting({kMidBand});
     set_spectrum(profiles[0], flat_run(55, 65, 1.0f));
     CHECK_THAT(pad_cut_center_hz(profiles, mix), WithinAbs(kMidBandCenterHz, kHzTolerance));
   }
 
   SECTION("the two were measured with different geometries") {
-    std::vector<TrackProfile> profiles = two_tracks();
+    std::vector<TrackProfile> profiles = two_tracks_contesting({kMidBand});
     set_spectrum(profiles[0], flat_run(55, 65, 1.0f));
     set_spectrum(profiles[1], flat_run(55, 65, 1.0f), 44100);
     CHECK_THAT(pad_cut_center_hz(profiles, mix), WithinAbs(kMidBandCenterHz, kHzTolerance));
   }
 
   SECTION("neither track has anything inside the band") {
-    std::vector<TrackProfile> profiles = two_tracks();
+    std::vector<TrackProfile> profiles = two_tracks_contesting({kMidBand});
     const std::vector<SpectrumBin> outside{{5, 1.0f}};
     set_spectrum(profiles[0], outside);
     set_spectrum(profiles[1], outside);
@@ -821,7 +931,7 @@ TEST_CASE("eq falls back to the band centre when nothing can be measured", "[mix
   }
 
   SECTION("they share the band with each other but not the same bins") {
-    std::vector<TrackProfile> profiles = two_tracks();
+    std::vector<TrackProfile> profiles = two_tracks_contesting({kMidBand});
     set_spectrum(profiles[0], flat_run(30, 40, 1.0f));
     set_spectrum(profiles[1], flat_run(60, 70, 1.0f));
     CHECK_THAT(pad_cut_center_hz(profiles, mix), WithinAbs(kMidBandCenterHz, kHzTolerance));
@@ -829,7 +939,7 @@ TEST_CASE("eq falls back to the band centre when nothing can be measured", "[mix
 
   SECTION("the band lies entirely above Nyquist") {
     constexpr int kNarrowRate = 8000;
-    std::vector<TrackProfile> profiles = two_tracks();
+    std::vector<TrackProfile> profiles = two_tracks_contesting({kHighBand});
     const std::vector<SpectrumBin> shared = flat_run(55, 65, 1.0f);
     set_spectrum(profiles[0], shared, kNarrowRate);
     set_spectrum(profiles[1], shared, kNarrowRate);
@@ -934,7 +1044,7 @@ TEST_CASE("eq peaking cuts are the same with the high-pass switch either way",
           "[mixing][assistant]") {
   // The collision is in the mid band, well above every corner in the table, so
   // no high-pass can make it redundant and the switch must not touch it.
-  const std::vector<TrackProfile> profiles = two_tracks_with_residue();
+  const std::vector<TrackProfile> profiles = two_tracks_with_residue({kMidBand});
   MixProfile mix = make_mix(2);
   set_dominance(mix, 1, 0, kMidBand, kContestedShare, kOverlapFrames);
 

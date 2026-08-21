@@ -172,6 +172,37 @@ static_assert(high_passes_cover_every_source_class(), "every source class needs 
 // is most of a mix.
 constexpr float kInterferenceRatio = 0.65f;
 
+// How much of a band a part has to carry before the band is what the part is
+// built around, and how little before the part demonstrably does not depend on
+// it. Both are shares of the track's own energy, so both are read against the
+// 0.143 an even spread over the seven bands would put in each one.
+//
+// That a spectrum divides into regions essential and non-essential to a part is
+// ordinary recording practice rather than anything derived here; see Izhaki,
+// "Mixing Audio: Concepts, Practices and Tools", Focal Press, 2008; Senior,
+// "Mixing Secrets for the Small Studio", 2011; and Owsinski, "The Mixing
+// Engineer's Handbook". How it is measured is this module's own: the share of
+// its own energy the track already puts in the band.
+//
+// Essential is set at nearly three times an even share, and deliberately above
+// the 0.33 a part spread across three bands carries in each of them. Such a part
+// is exactly the one that can afford to give a band up, and a threshold that
+// called it essential everywhere would mean it never could.
+constexpr float kEssentialBandShare = 0.40f;
+
+// Non-essential is half an even share. There is content in the band, but a few
+// dB out of one carrying a fourteenth of the part cannot change what the part
+// is.
+constexpr float kNonEssentialBandShare = 0.07f;
+
+// The gap between the two is deliberate, not an oversight. A band that sits
+// between them is neither clearly needed nor clearly disposable, and that is a
+// real answer: pushing it to one side or the other would invent a decision the
+// measurement does not support, and the invention would be spent removing
+// somebody's material.
+static_assert(kNonEssentialBandShare < kEssentialBandShare,
+              "a band must be able to be neither essential nor disposable");
+
 // Frames where both tracks were actually sounding in the band. Below this the
 // pair coincided rather than conflicted, and a standing EQ cut is the wrong
 // answer to a passing overlap. At the default 512-sample hop and 48 kHz this
@@ -498,6 +529,12 @@ struct BandCut {
   /// @brief True when @ref center_hz is the measured overlap rather than the
   ///        band's geometric centre.
   bool center_measured = false;
+  /// @brief Strip id of the part the cut is making room for.
+  std::string counterpart_id;
+  /// @brief Share of its own energy the counterpart puts in this band.
+  float counterpart_share = 0.0f;
+  /// @brief Share of its own energy the track being carved puts in this band.
+  float victim_share = 0.0f;
 };
 
 /// @brief The deepest cut one track has been asked for in one band.
@@ -538,11 +575,13 @@ std::string high_pass_params_json(float frequency_hz) {
   return util::json::dump(util::json::Value(std::move(params)));
 }
 
-// The parenthesis says what kind of number the frequency is. A reader who sees
-// "1247 Hz (mid)" with no qualifier can take the figure for a label attached to
-// the band rather than for a place that was measured, and the two now mean
-// different things: only the fallback lands on the grid.
-std::string describe_cuts(const std::vector<BandCut>& cuts) {
+// The parenthesis says what kind of number the frequency is and why this band
+// rather than another. A reader who sees "1247 Hz (mid)" with no qualifier can
+// take the figure for a label attached to the band rather than for a place that
+// was measured, and the two now mean different things: only the fallback lands
+// on the grid. The two shares are what the band was chosen on, so a reader can
+// see that the other part is built around it and this one is not.
+std::string describe_cuts(const std::vector<BandCut>& cuts, const std::string& victim_id) {
   std::string text;
   for (std::size_t index = 0; index < cuts.size(); ++index) {
     if (index != 0) text += (index + 1 == cuts.size()) ? " and " : ", ";
@@ -551,7 +590,9 @@ std::string describe_cuts(const std::vector<BandCut>& cuts) {
     text += format_db(cut.depth_db) + " dB at " + format_hz(cut.center_hz) + " Hz (";
     text += cut.center_measured ? std::string("measured overlap in ") + band_name
                                 : std::string(band_name) + " band centre";
-    text += ")";
+    text += ", which " + cut.counterpart_id + " needs at " + format_percent(cut.counterpart_share) +
+            " of its energy and " + victim_id + " can spare at " +
+            format_percent(cut.victim_share) + " of its own)";
   }
   return text;
 }
@@ -618,6 +659,31 @@ std::vector<SceneDelta> decide_eq(const std::vector<TrackProfile>& profiles, con
         // "attenuate the dominant band" rule gets backwards.
         const int victim = track_that_gives_way(profiles, masker, maskee, band);
         if (victim < 0) continue;
+        // The victim is chosen by role priority, so it is *not* necessarily the
+        // maskee: the counterpart is whichever of the pair is not giving way.
+        // Reading these two the other way round would carve the opposite track
+        // in every collision, and nothing downstream could tell.
+        const int counterpart = victim == masker ? maskee : masker;
+
+        // Dominance says the two parts are in each other's way; it does not say
+        // the band is worth taking from this one and giving to that one. The cut
+        // is proposed only when the part being made room for is built around the
+        // band and the part giving way is not. Without this test a track can be
+        // carved in the band that is the whole point of the part, for a
+        // counterpart that has almost nothing there — measured on this repo's own
+        // fixtures, every cut the stage produced was of exactly that kind.
+        //
+        // Both tests are written the positive way and negated, so a band that is
+        // neither clearly essential nor clearly disposable falls out here rather
+        // than passing one of them by default.
+        if (!(occupancy_at(profiles[static_cast<std::size_t>(counterpart)], band) >=
+              kEssentialBandShare)) {
+          continue;
+        }
+        if (!(occupancy_at(profiles[static_cast<std::size_t>(victim)], band) <=
+              kNonEssentialBandShare)) {
+          continue;
+        }
 
         const float depth = (entry.ratio - kInterferenceRatio) * kCutDbPerRatioExcess * strength;
         BandRequest& slot =
@@ -628,7 +694,7 @@ std::vector<SceneDelta> decide_eq(const std::vector<TrackProfile>& profiles, con
         // broken by the iteration order, which is not a decision anyone wrote.
         if (depth > slot.depth_db) {
           slot.depth_db = depth;
-          slot.counterpart = victim == masker ? maskee : masker;
+          slot.counterpart = counterpart;
         }
       }
     }
@@ -678,20 +744,24 @@ std::vector<SceneDelta> decide_eq(const std::vector<TrackProfile>& profiles, con
       if (wanted <= 0.0f) continue;
       const float depth = std::min(wanted, max_cut_db);
       if (depth < kMinAudibleCutDb) continue;
+      // The counterpart is written into the slot together with the depth, so a
+      // positive depth always carries one. Tested rather than assumed, because
+      // everything below reads the counterpart's profile.
+      if (request.counterpart < 0) continue;
       BandCut cut;
       cut.band = band;
       cut.depth_db = depth;
       cut.ceiling_reached = wanted > max_cut_db;
+      const TrackProfile& counterpart = profiles[static_cast<std::size_t>(request.counterpart)];
+      cut.counterpart_id = counterpart.strip_id;
+      cut.counterpart_share = occupancy_at(counterpart, band);
+      cut.victim_share = occupancy_at(profile, band);
 
       // The band decided that there is a collision; where inside it the two
       // parts actually meet is a second, narrower question. A band is up to two
       // octaves wide, so its geometric centre can be an octave away from the
       // overlap the cut was justified by.
-      const float measured =
-          request.counterpart >= 0
-              ? interference_peak_hz(profile,
-                                     profiles[static_cast<std::size_t>(request.counterpart)], band)
-              : kNoMeasuredCenter;
+      const float measured = interference_peak_hz(profile, counterpart, band);
       cut.center_measured = measured > 0.0f;
       // Nothing measurable — no spectrum, no shared energy, a geometry that
       // cannot map a bin to a frequency — falls back to the band's centre, which
@@ -709,8 +779,8 @@ std::vector<SceneDelta> decide_eq(const std::vector<TrackProfile>& profiles, con
     delta.strip_id = profile.strip_id;
     delta.inserts.emplace_back(api::InsertSlot::PreFader, kParametricProcessorName,
                                parametric_params_json(cuts));
-    delta.reason = "carved " + describe_cuts(cuts) + " out of " + profile.strip_id +
-                   " to make room for the parts it shares those bands with" +
+    delta.reason = "carved " + describe_cuts(cuts, profile.strip_id) + " out of " +
+                   profile.strip_id + " to make room for the parts it shares those bands with" +
                    describe_ceiling(cuts, max_cut_db);
     deltas.push_back(std::move(delta));
   }
