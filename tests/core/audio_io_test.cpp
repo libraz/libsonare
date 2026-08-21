@@ -724,7 +724,16 @@ TEST_CASE("load_audio decodes m4a when built with FFmpeg", "[audio_io][ffmpeg]")
   cleanup();
 }
 
-TEST_CASE("load_audio adopts HE-AAC frame parameters", "[audio_io][ffmpeg][he-aac]") {
+// Covers HE-AAC decoding, NOT the implicit-SBR sample-rate adoption that
+// load_audio performs by preferring the first decoded frame's rate over the
+// stream-declared one. aac_at emits explicit SBR signalling, so the stream
+// already declares the doubled rate and both code paths agree: reverting that
+// adoption leaves this case green, which was verified by ablation. Exercising
+// it needs an encoder that can signal SBR implicitly (libfdk_aac's
+// `-signaling implicit`), which is in no ffmpeg build this repo has access to,
+// so the adoption is currently unguarded. Do not read a pass here as covering
+// it, and do not rename this back without a fixture that goes red.
+TEST_CASE("load_audio decodes an HE-AAC stream", "[audio_io][ffmpeg][he-aac]") {
   if (std::system("ffmpeg -hide_banner -h encoder=aac_at >/dev/null 2>&1") != 0) {
     SKIP("ffmpeg AudioToolbox HE-AAC encoder is unavailable");
   }
