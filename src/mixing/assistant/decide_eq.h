@@ -9,8 +9,8 @@
 ///          `process()`.
 ///
 /// @details **One static band set per track, decided once for the whole song.**
-///          The suggestion is a fixed set of peaking cuts plus one high-pass
-///          corner, and nothing in it follows the material over time. A
+///          The suggestion is a fixed set of peaking cuts, plus at most one
+///          high-pass corner, and nothing in it follows the material over time. A
 ///          correction that tracks the mix moment to moment is a different tool
 ///          with a different failure mode — it changes the part's tone whenever
 ///          another part happens to enter — and the assistant deliberately does
@@ -56,9 +56,17 @@ namespace sonare::mixing::assistant {
 ///            share a priority the band goes to whichever of them is more
 ///            invested in it, measured as @ref TrackProfile::band_occupancy.
 ///
-///          - **A high-pass corner.** Set per source class, from the lowest
-///            fundamental that class ordinarily produces. Kick and bass are
-///            left alone; they are what the low end is made of.
+///          - **A high-pass corner**, only when
+///            @ref MixAssistantConfig::enable_high_pass asks for one. Where to
+///            look is set per source class, from the lowest fundamental that
+///            class ordinarily produces; kick and bass have no corner at all,
+///            being what the low end is made of. Whether to act is measured, not
+///            assumed: the filter is proposed only when enough of the track's
+///            energy sits below its corner to be worth removing and little
+///            enough to read as residue rather than as the part's own material.
+///            A track playing under its class's usual register therefore keeps
+///            what it plays. The measured share is quoted in the
+///            @ref SceneDelta::reason.
 ///
 ///          Every peaking cut a track earns lands in **one** `eq.parametric`
 ///          insert with contiguously numbered bands. A strip cannot hold two
@@ -77,13 +85,15 @@ namespace sonare::mixing::assistant {
 ///          which would read downstream as a decision to leave it flat.
 ///
 /// @details Degenerate input never throws. No tracks, one track, a disabled EQ
-///          domain, an empty mix profile or a zero cut ceiling all yield either
-///          an empty vector or the high-pass suggestions alone.
+///          domain, an empty mix profile, a profile carrying no spectrum or a
+///          zero cut ceiling all yield either an empty vector or the high-pass
+///          suggestions alone.
 ///
 /// @param profiles Per-track profiles, in the caller's order.
+///        @ref TrackProfile::spectrum is read only for the high-pass decision.
 /// @param mix Cross-track measurements; only the band dominance matrix is read.
-/// @param config Assistant configuration; the cut ceiling, the strength and the
-///        EQ domain switch are read.
+/// @param config Assistant configuration; the cut ceiling, the strength, the EQ
+///        domain switch and the high-pass switch are read.
 /// @return Deltas in @ref DeltaDomain::Eq, grouped by track in input order,
 ///         with a track's high-pass preceding its peaking cuts.
 std::vector<SceneDelta> decide_eq(const std::vector<TrackProfile>& profiles, const MixProfile& mix,

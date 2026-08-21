@@ -141,6 +141,7 @@ describe('mixing assistant (WASM)', () => {
           enableEq: true,
           enableDynamics: true,
           enableImage: true,
+          enableHighPass: true,
           nFft: 1024,
           hopLength: 256,
         },

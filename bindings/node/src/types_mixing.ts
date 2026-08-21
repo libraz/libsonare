@@ -70,6 +70,17 @@ export interface MixAssistantOptions {
   enableDynamics?: boolean;
   /** Evaluate the stereo-image domain. */
   enableImage?: boolean;
+  /**
+   * Suggest a high-pass filter on tracks carrying residue below their register.
+   *
+   * Off by default: a survey of mixing best practices found the rule that every
+   * track without low-frequency content should be high-passed to be seldom used
+   * in studio mixing and unsupported by subjective testing. Switched on, the
+   * filter is proposed from the track's measured low-frequency content rather
+   * than from its source class, so a part playing below its class's usual
+   * register keeps what it plays.
+   */
+  enableHighPass?: boolean;
   /** Shared STFT size for every track. */
   nFft?: number;
   /** Shared STFT hop length for every track. */

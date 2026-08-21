@@ -8,26 +8,31 @@
 #include <catch2/catch_test_macros.hpp>
 #include <catch2/matchers/catch_matchers_floating_point.hpp>
 #include <cctype>
+#include <cmath>
 #include <cstddef>
 #include <set>
 #include <string>
 #include <vector>
 
 #include "mastering/api/insert_factory.h"
+#include "util/constants.h"
 #include "util/json.h"
 
 using Catch::Matchers::WithinAbs;
 using sonare::mastering::api::insert_factory_names;
 using sonare::mixing::api::Insert;
 using sonare::mixing::api::InsertSlot;
+using sonare::mixing::assistant::analyze_track_profile;
 using sonare::mixing::assistant::BandDominance;
 using sonare::mixing::assistant::decide_eq;
 using sonare::mixing::assistant::DeltaDomain;
 using sonare::mixing::assistant::kBandCount;
+using sonare::mixing::assistant::MeanPowerSpectrum;
 using sonare::mixing::assistant::MixAssistantConfig;
 using sonare::mixing::assistant::MixProfile;
 using sonare::mixing::assistant::SceneDelta;
 using sonare::mixing::assistant::SourceClass;
+using sonare::mixing::assistant::TrackInput;
 using sonare::mixing::assistant::TrackProfile;
 
 namespace {
@@ -86,6 +91,44 @@ TrackProfile make_profile(const std::string& id, SourceClass source) {
   profile.band_occupancy.fill(1.0f / static_cast<float>(kBandCount));
   profile.usable = true;
   return profile;
+}
+
+// Residue shares the high-pass decision is measured against: one comfortably
+// inside the window the filter is proposed in, and one on either side of it.
+constexpr float kResidueShare = 0.02f;
+constexpr float kOwnMaterialShare = 0.30f;
+constexpr float kNothingBelowShare = 0.0f;
+
+// STFT geometry the hand-built spectra are written against. Bins land every
+// 23.4375 Hz, so bin 1 spans 11.7 Hz to 35.2 Hz and bin 20 spans 457 Hz to
+// 480 Hz.
+constexpr int kSpectrumNFft = 2048;
+constexpr int kSpectrumSampleRate = 48000;
+constexpr std::size_t kLowResidueBin = 1;
+constexpr std::size_t kProgramBin = 20;
+
+// Gives @p profile a spectrum with @p share of its energy below every high-pass
+// corner in the module's table and the rest well above the highest of them. The
+// corners span 50 Hz to 400 Hz, and both bins used here sit clear of that range,
+// so the measured share is the one the test asked for whichever class the track
+// is classified as.
+void set_low_energy_share(TrackProfile& profile, float share) {
+  MeanPowerSpectrum spectrum;
+  spectrum.n_bins = kSpectrumNFft / 2 + 1;
+  spectrum.n_fft = kSpectrumNFft;
+  spectrum.sample_rate = kSpectrumSampleRate;
+  spectrum.power.assign(static_cast<std::size_t>(spectrum.n_bins), 0.0f);
+  spectrum.power[kLowResidueBin] = share;
+  spectrum.power[kProgramBin] = 1.0f - share;
+  profile.spectrum = spectrum;
+}
+
+// The high-pass switch is off by default, so a case about the filter has to ask
+// for it explicitly.
+MixAssistantConfig high_pass_on() {
+  MixAssistantConfig config;
+  config.enable_high_pass = true;
+  return config;
 }
 
 // Concentrates @p share of the track's energy in @p band and spreads the rest
@@ -188,6 +231,14 @@ sonare::util::json::Value parse_params(const Insert& insert) {
 
 std::vector<TrackProfile> two_tracks() {
   return {make_profile("vox", SourceClass::Vocal), make_profile("pad", SourceClass::Strings)};
+}
+
+// The same pair, each carrying residue under its corner, for the cases that need
+// the high-pass to actually be proposed.
+std::vector<TrackProfile> two_tracks_with_residue() {
+  std::vector<TrackProfile> profiles = two_tracks();
+  for (TrackProfile& profile : profiles) set_low_energy_share(profile, kResidueShare);
+  return profiles;
 }
 
 }  // namespace
@@ -340,11 +391,11 @@ TEST_CASE("eq writes params the parametric equalizer can read", "[mixing][assist
 }
 
 TEST_CASE("eq suggests only processors the insert factory can build", "[mixing][assistant]") {
-  const std::vector<TrackProfile> profiles = two_tracks();
+  const std::vector<TrackProfile> profiles = two_tracks_with_residue();
   MixProfile mix = make_mix(2);
   set_dominance(mix, 1, 0, kMidBand, kContestedShare, kOverlapFrames);
 
-  const std::vector<SceneDelta> deltas = decide_eq(profiles, mix, MixAssistantConfig{});
+  const std::vector<SceneDelta> deltas = decide_eq(profiles, mix, high_pass_on());
   REQUIRE_FALSE(deltas.empty());
 
   const std::vector<std::string> known = insert_factory_names();
@@ -391,7 +442,8 @@ TEST_CASE("eq folds every contested band into one parametric insert", "[mixing][
   CHECK(delta->reason.find("highMid") != std::string::npos);
 }
 
-TEST_CASE("eq high-passes each source class at its own corner", "[mixing][assistant]") {
+TEST_CASE("eq high-passes each source class at its own corner when asked to",
+          "[mixing][assistant]") {
   struct Expected {
     SourceClass source;
     std::string id;
@@ -413,10 +465,15 @@ TEST_CASE("eq high-passes each source class at its own corner", "[mixing][assist
 
   std::vector<TrackProfile> profiles;
   profiles.reserve(expected.size());
-  for (const Expected& row : expected) profiles.push_back(make_profile(row.id, row.source));
+  for (const Expected& row : expected) {
+    profiles.push_back(make_profile(row.id, row.source));
+    // Every track carries the same residue, so the only thing that can vary the
+    // corner between them is the class table.
+    set_low_energy_share(profiles.back(), kResidueShare);
+  }
 
   const MixProfile mix = make_mix(static_cast<int>(profiles.size()));
-  const std::vector<SceneDelta> deltas = decide_eq(profiles, mix, MixAssistantConfig{});
+  const std::vector<SceneDelta> deltas = decide_eq(profiles, mix, high_pass_on());
 
   for (const Expected& row : expected) {
     INFO("track " << row.id);
@@ -445,14 +502,169 @@ TEST_CASE("eq high-passes each source class at its own corner", "[mixing][assist
 TEST_CASE("eq skips a band the high-pass has already removed", "[mixing][assistant]") {
   std::vector<TrackProfile> profiles{make_profile("hat", SourceClass::HiHat),
                                      make_profile("perc", SourceClass::Percussion)};
+  for (TrackProfile& profile : profiles) set_low_energy_share(profile, kResidueShare);
   MixProfile mix = make_mix(2);
   // The sub band tops out at 60 Hz, well under both classes' corners.
   set_dominance(mix, 0, 1, kSubBand, kBuriedShare, kOverlapFrames);
 
+  SECTION("with the high-pass proposed") {
+    const std::vector<SceneDelta> deltas = decide_eq(profiles, mix, high_pass_on());
+
+    CHECK(count_inserts(deltas, kParametric) == 0);
+    CHECK(count_inserts(deltas, kCutFilter) == 2);
+  }
+
+  SECTION("with no high-pass proposed") {
+    // Nothing removed the sub band, so the collision in it still stands. The
+    // suppression is a consequence of the filter, not a rule of its own.
+    const std::vector<SceneDelta> deltas = decide_eq(profiles, mix, MixAssistantConfig{});
+
+    CHECK(count_inserts(deltas, kCutFilter) == 0);
+    CHECK(count_inserts(deltas, kParametric) == 1);
+  }
+}
+
+TEST_CASE("eq suggests no high-pass unless it is asked for", "[mixing][assistant]") {
+  // Every track carries residue under its corner, so the class-only rule would
+  // high-pass all of them. Nothing here asks for a filter.
+  const std::vector<TrackProfile> profiles = two_tracks_with_residue();
+  const MixProfile mix = make_mix(2);
+
   const std::vector<SceneDelta> deltas = decide_eq(profiles, mix, MixAssistantConfig{});
 
-  CHECK(count_inserts(deltas, kParametric) == 0);
-  CHECK(count_inserts(deltas, kCutFilter) == 2);
+  CHECK(count_inserts(deltas, kCutFilter) == 0);
+  CHECK(deltas.empty());
+}
+
+TEST_CASE("eq high-passes a track whose low end is residue", "[mixing][assistant]") {
+  std::vector<TrackProfile> profiles{make_profile("vox", SourceClass::Vocal)};
+  set_low_energy_share(profiles[0], kResidueShare);
+  const MixProfile mix = make_mix(1);
+
+  const std::vector<SceneDelta> deltas = decide_eq(profiles, mix, high_pass_on());
+
+  const Insert* insert = find_insert(deltas, "vox", kCutFilter);
+  REQUIRE(insert != nullptr);
+  CHECK(insert->slot == InsertSlot::PreFader);
+  const sonare::util::json::Value params = parse_params(*insert);
+  REQUIRE(params.contains("highPassFrequencyHz"));
+  CHECK_THAT(params["highPassFrequencyHz"].as_float(), WithinAbs(80.0f, kHzTolerance));
+
+  const SceneDelta* delta = find_delta(deltas, "vox", kCutFilter);
+  REQUIRE(delta != nullptr);
+  CHECK(delta->domain == DeltaDomain::Eq);
+  CHECK(delta->reason.find("80 Hz") != std::string::npos);
+  // The measurement the decision was made from, not just its verdict.
+  CHECK(delta->reason.find("2.0%") != std::string::npos);
+}
+
+TEST_CASE("eq leaves a track whose low end is its own material alone", "[mixing][assistant]") {
+  // A part written under its class's usual register still classifies as that
+  // class, so the class table hands it a corner that sits over notes it is
+  // actually playing. This is the case the class-only rule got wrong.
+  std::vector<TrackProfile> profiles{make_profile("vox", SourceClass::Vocal)};
+  set_low_energy_share(profiles[0], kOwnMaterialShare);
+  const MixProfile mix = make_mix(1);
+
+  const std::vector<SceneDelta> deltas = decide_eq(profiles, mix, high_pass_on());
+
+  CHECK(count_inserts(deltas, kCutFilter) == 0);
+  CHECK(deltas.empty());
+}
+
+TEST_CASE("eq leaves a track with nothing below its corner alone", "[mixing][assistant]") {
+  // Nothing down there to remove, so the filter would only make the suggestion
+  // look busier than it is.
+  std::vector<TrackProfile> profiles{make_profile("hat", SourceClass::HiHat)};
+  set_low_energy_share(profiles[0], kNothingBelowShare);
+  const MixProfile mix = make_mix(1);
+
+  const std::vector<SceneDelta> deltas = decide_eq(profiles, mix, high_pass_on());
+
+  CHECK(count_inserts(deltas, kCutFilter) == 0);
+
+  SECTION("and a profile that was never given a spectrum reads the same way") {
+    std::vector<TrackProfile> unmeasured{make_profile("hat", SourceClass::HiHat)};
+    CHECK(count_inserts(decide_eq(unmeasured, mix, high_pass_on()), kCutFilter) == 0);
+  }
+}
+
+TEST_CASE("eq peaking cuts are the same with the high-pass switch either way",
+          "[mixing][assistant]") {
+  // The collision is in the mid band, well above every corner in the table, so
+  // no high-pass can make it redundant and the switch must not touch it.
+  const std::vector<TrackProfile> profiles = two_tracks_with_residue();
+  MixProfile mix = make_mix(2);
+  set_dominance(mix, 1, 0, kMidBand, kContestedShare, kOverlapFrames);
+
+  const std::vector<SceneDelta> off = decide_eq(profiles, mix, MixAssistantConfig{});
+  const std::vector<SceneDelta> on = decide_eq(profiles, mix, high_pass_on());
+
+  const Insert* off_insert = find_insert(off, "pad", kParametric);
+  const Insert* on_insert = find_insert(on, "pad", kParametric);
+  REQUIRE(off_insert != nullptr);
+  REQUIRE(on_insert != nullptr);
+  CHECK(off_insert->params_json == on_insert->params_json);
+  CHECK(count_inserts(off, kParametric) == count_inserts(on, kParametric));
+
+  const SceneDelta* off_delta = find_delta(off, "pad", kParametric);
+  const SceneDelta* on_delta = find_delta(on, "pad", kParametric);
+  REQUIRE(off_delta != nullptr);
+  REQUIRE(on_delta != nullptr);
+  CHECK(off_delta->reason == on_delta->reason);
+
+  // Only the filter itself differs.
+  CHECK(count_inserts(off, kCutFilter) == 0);
+  CHECK(count_inserts(on, kCutFilter) == 2);
+}
+
+TEST_CASE("eq measures the high-pass from a real profiled track", "[mixing][assistant]") {
+  // The hand-built spectra above would pass just as well against a profiler that
+  // never filled TrackProfile::spectrum at all, so one case runs the real
+  // analysis: a part at 300 Hz with a little 40 Hz rumble under it.
+  constexpr int kSampleRate = 48000;
+  constexpr float kDurationSec = 0.6f;
+  constexpr float kProgramAmplitude = 0.3f;
+  constexpr float kRumbleAmplitude = 0.045f;
+
+  const std::size_t frames =
+      static_cast<std::size_t>(kDurationSec * static_cast<float>(kSampleRate));
+  std::vector<float> samples(frames, 0.0f);
+  for (std::size_t index = 0; index < frames; ++index) {
+    const float seconds = static_cast<float>(index) / static_cast<float>(kSampleRate);
+    samples[index] = kProgramAmplitude * std::sin(sonare::constants::kTwoPi * 300.0f * seconds) +
+                     kRumbleAmplitude * std::sin(sonare::constants::kTwoPi * 40.0f * seconds);
+  }
+
+  TrackInput input;
+  input.id = "vox";
+  input.left = samples.data();
+  input.frame_count = frames;
+  input.sample_rate = kSampleRate;
+
+  TrackProfile profile = analyze_track_profile(input);
+  REQUIRE(profile.usable);
+  // The classifier is not what this case is about; only the measured spectrum
+  // has to be real.
+  profile.source = SourceClass::Vocal;
+  profile.source_confidence = kHighConfidence;
+  REQUIRE(profile.spectrum.energy_share_below(80.0f) > 0.0f);
+
+  const std::vector<TrackProfile> profiles{profile};
+  const MixProfile mix = make_mix(1);
+
+  CHECK(count_inserts(decide_eq(profiles, mix, MixAssistantConfig{}), kCutFilter) == 0);
+
+  const std::vector<SceneDelta> deltas = decide_eq(profiles, mix, high_pass_on());
+  const Insert* insert = find_insert(deltas, "vox", kCutFilter);
+  REQUIRE(insert != nullptr);
+  const sonare::util::json::Value params = parse_params(*insert);
+  REQUIRE(params.contains("highPassFrequencyHz"));
+  CHECK_THAT(params["highPassFrequencyHz"].as_float(), WithinAbs(80.0f, kHzTolerance));
+
+  const SceneDelta* delta = find_delta(deltas, "vox", kCutFilter);
+  REQUIRE(delta != nullptr);
+  CHECK(delta->reason.find("high-passed vox at 80 Hz") != std::string::npos);
 }
 
 TEST_CASE("eq leaves unidentified, unusable and low-confidence tracks alone",
@@ -478,11 +690,11 @@ TEST_CASE("eq leaves unidentified, unusable and low-confidence tracks alone",
 }
 
 TEST_CASE("eq makes no peaking cut when the ceiling is zero", "[mixing][assistant]") {
-  const std::vector<TrackProfile> profiles = two_tracks();
+  const std::vector<TrackProfile> profiles = two_tracks_with_residue();
   MixProfile mix = make_mix(2);
   set_dominance(mix, 1, 0, kMidBand, kBuriedShare, kOverlapFrames);
 
-  MixAssistantConfig config;
+  MixAssistantConfig config = high_pass_on();
   config.eq_max_cut_db = 0.0f;
   const std::vector<SceneDelta> deltas = decide_eq(profiles, mix, config);
 
@@ -512,10 +724,11 @@ TEST_CASE("eq handles no tracks and a single track", "[mixing][assistant]") {
   }
 
   SECTION("one track") {
-    const std::vector<TrackProfile> profiles{make_profile("vox", SourceClass::Vocal)};
+    std::vector<TrackProfile> profiles{make_profile("vox", SourceClass::Vocal)};
+    set_low_energy_share(profiles[0], kResidueShare);
     const MixProfile mix = make_mix(1);
     std::vector<SceneDelta> deltas;
-    REQUIRE_NOTHROW(deltas = decide_eq(profiles, mix, MixAssistantConfig{}));
+    REQUIRE_NOTHROW(deltas = decide_eq(profiles, mix, high_pass_on()));
     // Nothing to collide with, so only the low-end tidy remains.
     CHECK(count_inserts(deltas, kParametric) == 0);
     CHECK(count_inserts(deltas, kCutFilter) == 1);

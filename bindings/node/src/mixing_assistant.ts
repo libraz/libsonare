@@ -23,6 +23,7 @@ const OPTION_KEYS = [
   'enableEq',
   'enableDynamics',
   'enableImage',
+  'enableHighPass',
   'nFft',
   'hopLength',
 ] as const satisfies ReadonlyArray<keyof MixAssistantOptions>;

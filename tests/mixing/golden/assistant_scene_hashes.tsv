@@ -1,11 +1,11 @@
 # scenario	field	fnv1a_text_hash
-default	scene	28a08ab9f893ce31
-default	explanation	89aef59360d534bf
-half-strength	scene	56ce6663f007b0fa
-half-strength	explanation	1845b266cce5ea84
+default	scene	ce511c1ba9e7d7a5
+default	explanation	facb8caa9afa4d70
+half-strength	scene	9db9aea38565818c
+half-strength	explanation	96960093211321d7
 no-eq	scene	446be9845267ce67
 no-eq	explanation	08e2a9b39588ae60
-no-image	scene	85e4b93d4aad73e8
-no-image	explanation	b7e435968fa4a9c3
-broadcast-target	scene	ee60e926e3e04725
-broadcast-target	explanation	52fd4b346897b80e
+no-image	scene	a1137af7a952c6c0
+no-image	explanation	97dc5a5c9e1efe36
+broadcast-target	scene	7f6ce5bdcbe86d35
+broadcast-target	explanation	72f3abded50957cd

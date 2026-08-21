@@ -1,8 +1,8 @@
 /// @file track_profile.cpp
 /// @brief Per-track profiling for the mixing assistant.
 /// @details Offline only. One STFT per track, folded straight into the band
-///          envelope the cross-track phase reads; the raw spectrogram is never
-///          retained.
+///          envelope the cross-track phase reads and into the time-averaged
+///          spectrum; the raw spectrogram is never retained.
 
 #include "mixing/assistant/track_profile.h"
 
@@ -108,6 +108,34 @@ BandEnergyEnvelope fold_bands(const Spectrogram& spec, int sample_rate) {
   return bands;
 }
 
+// Averages the power spectrum over frames. Bin-major like the fold above, for
+// the same reason: a bin's frames are contiguous.
+MeanPowerSpectrum mean_power_spectrum(const Spectrogram& spec, int sample_rate) {
+  MeanPowerSpectrum spectrum;
+  spectrum.n_fft = spec.n_fft();
+  spectrum.sample_rate = sample_rate;
+
+  const int n_frames = spec.n_frames();
+  const int n_bins = spec.n_bins();
+  if (n_frames <= 0 || n_bins <= 0) return spectrum;
+
+  spectrum.n_bins = n_bins;
+  spectrum.power.assign(static_cast<std::size_t>(n_bins), 0.0f);
+  const std::vector<float>& power = spec.power();
+  for (int bin = 0; bin < n_bins; ++bin) {
+    const std::size_t source = static_cast<std::size_t>(bin) * static_cast<std::size_t>(n_frames);
+    // Accumulated in double: a long track sums tens of thousands of frames, and
+    // a quiet bin's contribution would disappear under a loud running total.
+    double sum = 0.0;
+    for (int frame = 0; frame < n_frames; ++frame) {
+      sum += static_cast<double>(power[source + static_cast<std::size_t>(frame)]);
+    }
+    spectrum.power[static_cast<std::size_t>(bin)] =
+        static_cast<float>(sum / static_cast<double>(n_frames));
+  }
+  return spectrum;
+}
+
 BandTotals band_totals(const BandEnergyEnvelope& bands) {
   BandTotals totals;
   for (int band = 0; band < kBandCount; ++band) {
@@ -145,6 +173,45 @@ float peak_band_amplitude(const BandTotals& totals, int n_frames, int n_fft) {
 }
 
 }  // namespace
+
+float MeanPowerSpectrum::energy_share_below(float frequency_hz) const noexcept {
+  // n_bins is what the measurement declares; power.size() is what it actually
+  // holds. A hand-built spectrum can set one without the other, and reading past
+  // the vector on the strength of a field is not a measurement error.
+  const std::size_t bins = std::min(static_cast<std::size_t>(std::max(n_bins, 0)), power.size());
+  if (bins == 0 || n_fft <= 0 || sample_rate <= 0) return 0.0f;
+  // A corner that is not a positive real number is not a frequency. Infinity
+  // would otherwise sweep the whole spectrum in and answer 1, which reads
+  // downstream as a measurement rather than as the absence of one.
+  if (!std::isfinite(frequency_hz) || !(frequency_hz > 0.0f)) return 0.0f;
+
+  double total = 0.0;
+  for (std::size_t bin = 0; bin < bins; ++bin) {
+    total += static_cast<double>(power[bin]);
+  }
+  if (!(total > 0.0)) return 0.0f;
+
+  const double bin_hz = static_cast<double>(sample_rate) / static_cast<double>(n_fft);
+  const double cutoff = static_cast<double>(frequency_hz);
+  double below = 0.0;
+  for (std::size_t bin = 0; bin < bins; ++bin) {
+    // Bin 0 is centred at DC, so its span starts there rather than below zero.
+    const double low_hz = bin == 0 ? 0.0 : (static_cast<double>(bin) - 0.5) * bin_hz;
+    const double high_hz = (static_cast<double>(bin) + 0.5) * bin_hz;
+    if (low_hz >= cutoff) break;
+    const double value = static_cast<double>(power[bin]);
+    if (high_hz <= cutoff) {
+      below += value;
+      continue;
+    }
+    below += value * (cutoff - low_hz) / (high_hz - low_hz);
+    break;
+  }
+  // The ratio of two sums of the same non-negative values cannot leave [0, 1],
+  // but rounding can put it a hair outside, and a share above 1 would read
+  // downstream as a measurement rather than as float noise.
+  return static_cast<float>(std::clamp(below / total, 0.0, 1.0));
+}
 
 TrackProfile analyze_track_profile(const TrackInput& track, const TrackProfileConfig& config) {
   TrackProfile profile;
@@ -198,6 +265,7 @@ TrackProfile analyze_track_profile(const TrackInput& track, const TrackProfileCo
   const Spectrogram spec =
       Spectrogram::compute(audio, make_stft_config(config.n_fft, config.hop_length));
   profile.bands = fold_bands(spec, track.sample_rate);
+  profile.spectrum = mean_power_spectrum(spec, track.sample_rate);
 
   const BandTotals totals = band_totals(profile.bands);
   profile.band_occupancy = band_occupancy(totals);

@@ -176,6 +176,23 @@ describe('mixing assistant options', () => {
     }
   });
 
+  it('accepts the high-pass switch, which is off unless asked for', () => {
+    const off = suggestMixScene({ tracks: baseTracks(), sampleRate: SR });
+    const on = suggestMixScene({
+      tracks: baseTracks(),
+      sampleRate: SR,
+      options: { enableHighPass: true },
+    });
+
+    expect(on.scene.strips.map((strip) => strip.id)).toEqual(
+      off.scene.strips.map((strip) => strip.id),
+    );
+    // The switch only ever adds a filter. A track that gains one can lose the
+    // peaking cuts it made redundant, but never more lines than it gained, so
+    // the reasoning cannot get shorter.
+    expect(on.explanation.length).toBeGreaterThanOrEqual(off.explanation.length);
+  });
+
   it('an omitted option equals an explicit undefined', () => {
     const omitted = suggestMixScene({ tracks: baseTracks(), sampleRate: SR });
     const explicit = suggestMixScene({

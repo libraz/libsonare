@@ -45,6 +45,8 @@ inline MixAssistantConfig mix_assistant_config_from_params(const mastering::api:
       config.enable_dynamics = value != 0.0;
     } else if (key == "enableImage" || key == "enable_image") {
       config.enable_image = value != 0.0;
+    } else if (key == "enableHighPass" || key == "enable_high_pass") {
+      config.enable_high_pass = value != 0.0;
     } else if (key == "nFft" || key == "n_fft") {
       config.n_fft = static_cast<int>(value);
     } else if (key == "hopLength" || key == "hop_length") {

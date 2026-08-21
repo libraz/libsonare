@@ -379,7 +379,7 @@ void sonare_mixer_destroy(SonareMixer* mixer);
 //                     suggestionStrength, eqMaxCutDb, mixBusHeadroomDbtp,
 //                     enableStructure,
 //                     enableGain, enableBalance, enableEq, enableDynamics,
-//                     enableImage, nFft and hopLength.
+//                     enableImage, enableHighPass, nFft and hopLength.
 // @param param_count  Number of entries in @c params.
 // @param json_out     Receives the result JSON. Release with sonare_free_string().
 //

@@ -53,16 +53,22 @@ OPTION_KEYS = {
     "enableEq": "enable_eq",
     "enableDynamics": "enable_dynamics",
     "enableImage": "enable_image",
+    "enableHighPass": "enable_high_pass",
     "nFft": "n_fft",
     "hopLength": "hop_length",
 }
 
-# Two cases: the defaults, and one option moved off its default. The second case
-# is what proves the options actually reach the core on every surface -- four
-# surfaces that all ignore an option would agree perfectly and mean nothing.
+# The defaults, plus one case per option that has to be shown reaching the core.
+# Every case other than the defaults is checked below for producing a different
+# scene than the defaults do: four surfaces that all ignore an option would agree
+# perfectly and mean nothing.
+#
+# enableHighPass earns a case of its own because it is the one option that is off
+# by default, so the default case exercises only the path where it does nothing.
 CASES: dict[str, dict[str, float | bool]] = {
     "defaults": {},
     "suggestionStrength=0.5": {"suggestionStrength": 0.5},
+    "enableHighPass=true": {"enableHighPass": True},
 }
 
 SURFACES = ("c", "python", "node", "wasm")
@@ -149,6 +155,13 @@ def _make_tracks() -> list[Track]:
     for index, weight in enumerate(partials):
         vox += weight * np.sin(two_pi * 180.0 * (index + 1) * long_t)
     vox *= 0.045
+    # Stand rumble under the voice's lowest partial. Without it no track in the
+    # fixture carries anything below its class's high-pass corner, the measured
+    # high-pass declines to propose a filter for every one of them, and
+    # enableHighPass would change nothing on any surface -- a case that agrees
+    # four ways while proving nothing. The amplitude puts a couple of percent of
+    # the track's energy below 80 Hz, which is residue rather than material.
+    vox += 0.014 * np.sin(two_pi * 40.0 * long_t)
     # A small channel offset so the stereo image has a width to measure rather
     # than a duplicated mono signal.
     vox_right = np.roll(vox, 13)
@@ -432,9 +445,9 @@ def _validate_scene(surface: str, case: str, scene: str, tracks: list[Track]) ->
     if not isinstance(document, dict) or not document:
         raise HarnessFailure(f"{surface} {case}: scene is not a non-empty JSON object")
     strips = document.get("strips")
-    if not isinstance(strips, list) or len(strips) != len(tracks):
+    if not isinstance(strips, list) or len(strips) < len(tracks):
         raise HarnessFailure(
-            f"{surface} {case}: scene must carry one strip per fixture track "
+            f"{surface} {case}: scene must carry at least one strip per fixture track "
             f"(got {len(strips) if isinstance(strips, list) else 'none'} "
             f"for {len(tracks)} tracks)"
         )
@@ -444,6 +457,12 @@ def _validate_scene(surface: str, case: str, scene: str, tracks: list[Track]) ->
         raise HarnessFailure(
             f"{surface} {case}: scene omits strips for {', '.join(missing)}"
         )
+    # More strips than tracks is expected rather than suspicious: the effect
+    # returns the structure stage proposes are strips too, carrying the reverb
+    # and the delay. Counting them would pin the number of effect buses the
+    # assistant happens to suggest, which is a decision this harness has no
+    # business freezing -- what it checks is that every input track reached the
+    # scene on every surface.
 
 
 def _nested_document(value: str) -> Any:
@@ -585,14 +604,17 @@ def main() -> int:
             print(f"{case}: scene {len(oracle)} bytes, match {summary}")
 
         # Non-vacuity: an option that no surface honours would produce four
-        # identical scenes in both cases and read as a pass.
-        for surface in SURFACES:
-            if scenes["defaults"][surface] == scenes["suggestionStrength=0.5"][surface]:
-                raise HarnessFailure(
-                    f"{surface}: suggestionStrength=0.5 produced the default scene, "
-                    "so the option never reached the core"
-                )
-        print("suggestionStrength=0.5 changes the scene on every surface")
+        # identical scenes in every case and read as a pass.
+        for case in CASES:
+            if case == "defaults":
+                continue
+            for surface in SURFACES:
+                if scenes["defaults"][surface] == scenes[case][surface]:
+                    raise HarnessFailure(
+                        f"{surface}: {case} produced the default scene, "
+                        "so the option never reached the core"
+                    )
+            print(f"{case} changes the scene on every surface")
     except HarnessFailure as exc:
         print(f"mix assistant cross-surface: FAIL: {exc}", file=sys.stderr)
         return 1

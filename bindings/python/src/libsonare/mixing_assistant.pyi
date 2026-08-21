@@ -25,6 +25,7 @@ def suggest_mix_scene(
     enable_eq: bool | None = None,
     enable_dynamics: bool | None = None,
     enable_image: bool | None = None,
+    enable_high_pass: bool | None = None,
     n_fft: int | None = None,
     hop_length: int | None = None,
 ) -> dict[str, Any]: ...
@@ -42,6 +43,7 @@ def suggest_mix_scene_json(
     enable_eq: bool | None = None,
     enable_dynamics: bool | None = None,
     enable_image: bool | None = None,
+    enable_high_pass: bool | None = None,
     n_fft: int | None = None,
     hop_length: int | None = None,
 ) -> str: ...

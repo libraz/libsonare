@@ -144,6 +144,47 @@ struct BandEnergyEnvelope {
   }
 };
 
+/// @brief Time-averaged linear power spectrum for one track.
+/// @details Kept because the analysis bands are too coarse to answer a question
+///          asked at one frequency. Every high-pass corner a source class uses
+///          falls *inside* the sub or low band, so band occupancy cannot say how
+///          much of a track sits below one; this can.
+///
+///          **Not a second band grid and not a second envelope over time.** The
+///          standing constraint that there is one band grid — so that a masking
+///          figure and a spectral figure stay comparable — is untouched: this
+///          carries no bands and no time axis, and nothing in the masking or
+///          dominance path reads it. Those stay on @ref BandEnergyEnvelope, and
+///          could not use this even if they wanted to: a figure averaged over
+///          the whole track cannot tell a genuine collision apart from two parts
+///          that share a band but never sound at the same moment.
+///
+///          Values are **linear power** (the mean of `|X|^2` over frames), not
+///          dB and not amplitude. Bin `k` is centred at
+///          `k * sample_rate / n_fft`, and the bin's span is taken as half a bin
+///          either side of that centre.
+struct MeanPowerSpectrum {
+  /// @brief `n_fft / 2 + 1` for a measured track; zero when nothing was measured.
+  int n_bins = 0;
+  int n_fft = 0;
+  int sample_rate = 0;
+  /// @brief One entry per bin, linear power averaged over frames.
+  std::vector<float> power;
+
+  /// @brief Share of the track's total energy below @p frequency_hz, in `[0, 1]`.
+  /// @details A bin the frequency falls inside contributes the fraction of
+  ///          itself that lies below it, so the answer moves smoothly with the
+  ///          frequency rather than in bin-sized steps. Bins are around 23 Hz
+  ///          wide at the default geometry, which is coarse next to the corners
+  ///          this is asked about.
+  /// @param frequency_hz Frequency to measure below. Above Nyquist the whole
+  ///        spectrum is below it, so the answer is 1 for a track with energy.
+  /// @return 0 when there is no spectrum, no energy, or @p frequency_hz is not a
+  ///         positive finite number. Zero is also the honest answer for a track
+  ///         with nothing down there, and both readings mean "do not filter".
+  float energy_share_below(float frequency_hz) const noexcept;
+};
+
 /// @brief Everything the assistant measures about a single track.
 struct TrackProfile {
   /// @brief Mirrors @ref TrackInput::id.
@@ -162,6 +203,8 @@ struct TrackProfile {
   std::array<float, kBandCount> band_occupancy{};
   /// @brief Per-band energy over time; the cross-track phase reads only this.
   BandEnergyEnvelope bands;
+  /// @brief Time-averaged spectrum, for the questions a band is too wide to answer.
+  MeanPowerSpectrum spectrum;
   /// @brief 1 for mono, 2 for stereo.
   int channel_count = 1;
   float duration_sec = 0.0f;
@@ -186,12 +229,16 @@ struct TrackProfileConfig {
   float min_duration_sec = 0.4f;
 };
 
-/// @note No raw spectrogram is retained. Three minutes at 48 kHz with a 512 hop
-///       is roughly 70 MB of magnitude per track, so twenty tracks would be
-///       1.4 GB; the folded @ref BandEnergyEnvelope is roughly 0.5 MB for the
-///       same material. The one consumer that needs full-band detail is the
-///       time-alignment analysis, and it reads the caller's own @ref TrackInput
-///       buffers in the time domain rather than a frequency-domain copy.
+/// @note No raw spectrogram is retained — nothing keeps both full bin resolution
+///       and the time axis. Three minutes at 48 kHz with a 512 hop is roughly
+///       70 MB of magnitude per track, so twenty tracks would be 1.4 GB. What is
+///       kept is two folds of it, each cheap because each gives up one axis: the
+///       @ref BandEnergyEnvelope keeps time at 7 bands, roughly 0.5 MB for the
+///       same material, and the @ref MeanPowerSpectrum keeps every bin with no
+///       time at all, roughly 4 KB whatever the track's length. The one consumer
+///       that needs full-band detail over time is the time-alignment analysis,
+///       and it reads the caller's own @ref TrackInput buffers in the time domain
+///       rather than a frequency-domain copy.
 
 /// @brief Profiles every track with one shared STFT geometry.
 /// @details Degenerate input never throws: a null buffer, a zero frame count or

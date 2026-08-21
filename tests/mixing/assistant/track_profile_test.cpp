@@ -8,6 +8,7 @@
 #include <cmath>
 #include <cstddef>
 #include <iterator>
+#include <limits>
 #include <string>
 #include <vector>
 
@@ -86,6 +87,22 @@ int dominant_band(const assistant::TrackProfile& profile) {
 // The STFT is centre-padded, so a signal of n samples yields 1 + n / hop frames.
 int expected_frames(std::size_t frame_count, int hop_length) {
   return 1 + static_cast<int>(frame_count / static_cast<std::size_t>(hop_length));
+}
+
+// STFT geometry the hand-built spectra below are written against: bins land
+// every 23.4375 Hz, so bin 2 spans 35.15625 Hz to 58.59375 Hz.
+constexpr int kSpectrumNFft = 2048;
+constexpr float kBinHz = static_cast<float>(kSampleRate) / static_cast<float>(kSpectrumNFft);
+
+// A spectrum assembled by hand, so a degenerate case can be built directly
+// rather than searched for in some signal that happens to produce it.
+assistant::MeanPowerSpectrum hand_spectrum(const std::vector<float>& power) {
+  assistant::MeanPowerSpectrum spectrum;
+  spectrum.n_bins = static_cast<int>(power.size());
+  spectrum.n_fft = kSpectrumNFft;
+  spectrum.sample_rate = kSampleRate;
+  spectrum.power = power;
+  return spectrum;
 }
 
 }  // namespace
@@ -244,6 +261,106 @@ TEST_CASE("Track profile reports degenerate input without throwing", "[mixing][a
     CHECK_FALSE(profiles[0].usable);
     CHECK(profiles[1].usable);
   }
+}
+
+TEST_CASE("Track profile keeps a time-averaged spectrum finer than the bands",
+          "[mixing][assistant]") {
+  // 150 Hz sits inside the low band, which spans 60 Hz to 250 Hz. The bands
+  // cannot say whether the track has anything under 80 Hz; the spectrum can.
+  const std::vector<float> low = tone(0.5f, 150.0f);
+  assistant::TrackProfileConfig config;
+  const assistant::TrackProfile profile =
+      assistant::analyze_track_profile(mono_track("bass", low), config);
+
+  REQUIRE(profile.usable);
+  REQUIRE(profile.spectrum.n_bins == config.n_fft / 2 + 1);
+  CHECK(profile.spectrum.power.size() == static_cast<std::size_t>(profile.spectrum.n_bins));
+  CHECK(profile.spectrum.n_fft == config.n_fft);
+  CHECK(profile.spectrum.sample_rate == kSampleRate);
+
+  // The tone is above 80 Hz and below 250 Hz, so those two questions have
+  // opposite answers even though both corners fall inside one analysis band.
+  CHECK(profile.spectrum.energy_share_below(80.0f) < 0.05f);
+  CHECK(profile.spectrum.energy_share_below(250.0f) > 0.9f);
+  // Everything is below Nyquist.
+  CHECK(profile.spectrum.energy_share_below(0.5f * static_cast<float>(kSampleRate)) > 0.99f);
+}
+
+TEST_CASE("Energy share below a frequency splits the bin the frequency falls in",
+          "[mixing][assistant]") {
+  // All the energy in bin 2, which spans 1.5 to 2.5 bin widths.
+  const assistant::MeanPowerSpectrum spectrum = hand_spectrum({0.0f, 0.0f, 1.0f, 0.0f, 0.0f});
+
+  CHECK(spectrum.energy_share_below(1.5f * kBinHz) == 0.0f);
+  CHECK(spectrum.energy_share_below(2.5f * kBinHz) == 1.0f);
+  // The bin's own centre halves it, and the share moves smoothly rather than in
+  // bin-sized steps: every corner the assistant asks about falls inside a bin.
+  CHECK(std::abs(spectrum.energy_share_below(2.0f * kBinHz) - 0.5f) < 1e-5f);
+  CHECK(std::abs(spectrum.energy_share_below(1.75f * kBinHz) - 0.25f) < 1e-5f);
+  CHECK(spectrum.energy_share_below(1.9f * kBinHz) < spectrum.energy_share_below(2.1f * kBinHz));
+}
+
+TEST_CASE("Energy share below a frequency weighs the bins by their energy", "[mixing][assistant]") {
+  // Bin 1 carries a quarter of the energy and bin 4 the rest.
+  const assistant::MeanPowerSpectrum spectrum = hand_spectrum({0.0f, 1.0f, 0.0f, 0.0f, 3.0f});
+
+  CHECK(std::abs(spectrum.energy_share_below(3.0f * kBinHz) - 0.25f) < 1e-5f);
+  CHECK(spectrum.energy_share_below(10.0f * kBinHz) == 1.0f);
+}
+
+TEST_CASE("Energy share below a frequency reports the degenerate cases as zero",
+          "[mixing][assistant]") {
+  const assistant::MeanPowerSpectrum measured = hand_spectrum({1.0f, 1.0f, 1.0f});
+
+  SECTION("no spectrum at all") {
+    const assistant::MeanPowerSpectrum empty;
+    CHECK(empty.energy_share_below(80.0f) == 0.0f);
+  }
+
+  SECTION("a spectrum carrying no energy") {
+    CHECK(hand_spectrum({0.0f, 0.0f, 0.0f}).energy_share_below(80.0f) == 0.0f);
+  }
+
+  SECTION("a frequency that is not positive") {
+    CHECK(measured.energy_share_below(0.0f) == 0.0f);
+    CHECK(measured.energy_share_below(-80.0f) == 0.0f);
+  }
+
+  SECTION("a frequency that is not a real number") {
+    CHECK(measured.energy_share_below(std::numeric_limits<float>::quiet_NaN()) == 0.0f);
+    CHECK(measured.energy_share_below(std::numeric_limits<float>::infinity()) == 0.0f);
+    CHECK(measured.energy_share_below(-std::numeric_limits<float>::infinity()) == 0.0f);
+  }
+
+  SECTION("geometry that cannot map a bin to a frequency") {
+    assistant::MeanPowerSpectrum broken = measured;
+    broken.n_fft = 0;
+    CHECK(broken.energy_share_below(80.0f) == 0.0f);
+    broken = measured;
+    broken.sample_rate = 0;
+    CHECK(broken.energy_share_below(80.0f) == 0.0f);
+  }
+
+  SECTION("a declared bin count larger than the spectrum holds") {
+    assistant::MeanPowerSpectrum overclaimed = measured;
+    overclaimed.n_bins = 4096;
+    float share = 0.0f;
+    REQUIRE_NOTHROW(share = overclaimed.energy_share_below(3.0f * kBinHz));
+    CHECK(share == 1.0f);
+  }
+}
+
+TEST_CASE("Track profile leaves no spectrum on a track it could not measure",
+          "[mixing][assistant]") {
+  assistant::TrackInput track;
+  track.id = "null";
+  track.sample_rate = kSampleRate;
+
+  const assistant::TrackProfile profile = assistant::analyze_track_profile(track);
+  CHECK_FALSE(profile.usable);
+  CHECK(profile.spectrum.n_bins == 0);
+  CHECK(profile.spectrum.power.empty());
+  CHECK(profile.spectrum.energy_share_below(80.0f) == 0.0f);
 }
 
 TEST_CASE("Track profile measures stereo loudness with channel summing", "[mixing][assistant]") {

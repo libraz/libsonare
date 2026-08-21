@@ -253,6 +253,17 @@ def test_numeric_options_are_accepted(mono_tracks, option, value):
     _assert_document_shape(result, len(mono_tracks))
 
 
+def test_high_pass_switch_is_accepted(mono_tracks, mono_suggestion):
+    from libsonare import suggest_mix_scene
+
+    result = suggest_mix_scene(mono_tracks, sample_rate=SAMPLE_RATE, enable_high_pass=True)
+    _assert_document_shape(result, len(mono_tracks))
+    # The switch is off by default and only ever adds a filter. A track that
+    # gains one can lose the peaking cuts it made redundant, but never more
+    # lines than it gained, so the reasoning cannot get shorter.
+    assert len(result["explanation"]) >= len(mono_suggestion["explanation"])
+
+
 def test_target_track_lufs_moves_gain_staging(mono_tracks):
     from libsonare import suggest_mix_scene
 

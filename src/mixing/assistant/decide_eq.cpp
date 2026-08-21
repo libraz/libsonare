@@ -88,15 +88,19 @@ struct SourceHighPass {
 // optional so the table stays a plain aggregate; no real corner sits at 0 Hz.
 constexpr float kNoHighPass = 0.0f;
 
-// A source produces nothing below its lowest fundamental, so what remains down
-// there is stand rumble, handling noise, proximity boost and room. Each corner
-// is placed just under the lowest note the class ordinarily plays — the routine
-// setting, not a measured one — because the point is to remove what the source
-// cannot have produced rather than to reshape what it did.
+// Where to look for residue in each class, not a decision to filter it. Each
+// corner is placed just under the lowest note the class ordinarily plays, which
+// is the frequency below which stand rumble, handling noise, proximity boost and
+// room separate from the part itself.
 //
-// Kick and bass are the two classes whose fundamentals live inside the swept
-// range, and they are what the low end is made of, so they are left alone
-// entirely.
+// Whether anything worth removing is actually down there is a measurement, taken
+// against the share thresholds below. The corner describes the class, not the
+// take: a part written under its class's usual register is playing real material
+// there, and a rule that reads only the label removes it.
+//
+// Kick and bass have no corner at all. Their fundamentals live inside the swept
+// range and they are what the low end is made of, so there is nothing to look
+// under.
 constexpr std::array<SourceHighPass, kSourceClassCount> kSourceHighPasses = {{
     // Just under E2 (82 Hz), the bottom of an ordinary male range.
     {SourceClass::Vocal, 80.0f},
@@ -204,6 +208,19 @@ constexpr float kMinAudibleCutDb = 0.5f;
 // about the value beyond placing it above the width a boost would take.
 constexpr float kCutQ = 1.2f;
 
+// Share of a track's energy that has to sit below its corner before a high-pass
+// is proposed. Under this there is nothing down there to remove, and the insert
+// would do nothing but make the suggestion look busier than it is.
+constexpr float kMinLowEnergyShare = 0.005f;
+
+// Share above which the content under the corner is the part's own material
+// rather than residue, and filtering it would take real signal out. This is the
+// case a class-only rule gets wrong: an instrument played or written below its
+// class's usual register still reads as that class, and the corner it inherits
+// then sits over notes it is actually playing. A tenth of the track's energy is
+// far more than rumble and room can account for.
+constexpr float kMaxLowEnergyShare = 0.10f;
+
 // The top analysis band runs to Nyquist, so it has no geometric centre that
 // stays put across sample rates. 16 kHz sits inside the band at every rate the
 // library runs at and is where the air region is conventionally addressed.
@@ -238,6 +255,14 @@ std::string format_hz(float value) {
   out.imbue(std::locale::classic());
   out << std::fixed << std::setprecision(0) << value;
   return out.str();
+}
+
+// A share in [0, 1] read back as the percentage a mixer would say out loud.
+std::string format_percent(float share) {
+  std::ostringstream out;
+  out.imbue(std::locale::classic());
+  out << std::fixed << std::setprecision(kReasonDecimals) << share * 100.0f;
+  return out.str() + "%";
 }
 
 int source_priority(SourceClass source) {
@@ -421,16 +446,32 @@ std::vector<SceneDelta> decide_eq(const std::vector<TrackProfile>& profiles, con
     if (considered[static_cast<std::size_t>(track)] == 0) continue;
     const TrackProfile& profile = profiles[static_cast<std::size_t>(track)];
 
-    const float high_pass_hz = source_high_pass_hz(profile.source);
-    if (high_pass_hz > kNoHighPass) {
-      SceneDelta delta;
-      delta.domain = DeltaDomain::Eq;
-      delta.strip_id = profile.strip_id;
-      delta.inserts.emplace_back(api::InsertSlot::PreFader, kCutFilterProcessorName,
-                                 high_pass_params_json(high_pass_hz));
-      delta.reason = "high-passed " + profile.strip_id + " at " + format_hz(high_pass_hz) +
-                     " Hz to clear low-frequency content the source does not produce";
-      deltas.push_back(std::move(delta));
+    // The corner actually inserted, which is kNoHighPass whenever the filter was
+    // not proposed. The peaking-cut loop below reads this rather than the class
+    // table: a band is only redundant if something really did remove it.
+    float high_pass_hz = kNoHighPass;
+    // Switched off, the measurement is not taken at all rather than taken and
+    // thrown away.
+    if (config.enable_high_pass) {
+      const float corner = source_high_pass_hz(profile.source);
+      if (corner > kNoHighPass) {
+        const float share = profile.spectrum.energy_share_below(corner);
+        // Both bounds written as positive tests, so a share that is not a real
+        // number proposes nothing rather than passing one of them by default.
+        if (share >= kMinLowEnergyShare && share <= kMaxLowEnergyShare) {
+          high_pass_hz = corner;
+          SceneDelta delta;
+          delta.domain = DeltaDomain::Eq;
+          delta.strip_id = profile.strip_id;
+          delta.inserts.emplace_back(api::InsertSlot::PreFader, kCutFilterProcessorName,
+                                     high_pass_params_json(high_pass_hz));
+          delta.reason = "high-passed " + profile.strip_id + " at " + format_hz(high_pass_hz) +
+                         " Hz, where " + format_percent(share) +
+                         " of its energy sits below the corner and reads as residue rather than "
+                         "material the part is made of";
+          deltas.push_back(std::move(delta));
+        }
+      }
     }
 
     std::vector<BandCut> cuts;

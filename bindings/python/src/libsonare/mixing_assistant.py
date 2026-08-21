@@ -35,6 +35,7 @@ _PARAM_KEYS = {
     "enable_eq": "enableEq",
     "enable_dynamics": "enableDynamics",
     "enable_image": "enableImage",
+    "enable_high_pass": "enableHighPass",
     "n_fft": "nFft",
     "hop_length": "hopLength",
 }
@@ -226,6 +227,7 @@ def suggest_mix_scene(
     enable_eq: bool | None = None,
     enable_dynamics: bool | None = None,
     enable_image: bool | None = None,
+    enable_high_pass: bool | None = None,
     n_fft: int | None = None,
     hop_length: int | None = None,
 ) -> dict[str, Any]:
@@ -248,6 +250,14 @@ def suggest_mix_scene(
         enable_eq: Suggest corrective EQ.
         enable_dynamics: Suggest dynamics processing.
         enable_image: Suggest stereo placement and width.
+        enable_high_pass: Suggest a high-pass filter on tracks carrying residue
+            below their register. Off by default: a survey of mixing best
+            practices found the rule that every track without low-frequency
+            content should be high-passed to be seldom used in studio mixing and
+            unsupported by subjective testing. Switched on, the filter is
+            proposed from the track's measured low-frequency content rather than
+            from its source class, so a part playing below its class's usual
+            register keeps what it plays.
         n_fft: Analysis FFT size.
         hop_length: Analysis hop length in samples.
 
@@ -276,6 +286,7 @@ def suggest_mix_scene(
             "enable_eq": enable_eq,
             "enable_dynamics": enable_dynamics,
             "enable_image": enable_image,
+            "enable_high_pass": enable_high_pass,
             "n_fft": n_fft,
             "hop_length": hop_length,
         },
@@ -297,6 +308,7 @@ def suggest_mix_scene_json(
     enable_eq: bool | None = None,
     enable_dynamics: bool | None = None,
     enable_image: bool | None = None,
+    enable_high_pass: bool | None = None,
     n_fft: int | None = None,
     hop_length: int | None = None,
 ) -> str:
@@ -324,6 +336,7 @@ def suggest_mix_scene_json(
             "enable_eq": enable_eq,
             "enable_dynamics": enable_dynamics,
             "enable_image": enable_image,
+            "enable_high_pass": enable_high_pass,
             "n_fft": n_fft,
             "hop_length": hop_length,
         },

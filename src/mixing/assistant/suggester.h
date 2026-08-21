@@ -79,6 +79,28 @@ struct MixAssistantConfig {
   bool enable_image = true;
   /// @}
 
+  /// @brief Suggest a high-pass filter on tracks carrying residue below their
+  ///        register.
+  /// @details **Off by default.** A survey of mixing best practices tested the
+  ///          rule that every track without low-frequency content should be
+  ///          high-passed and found it seldom used in studio mixing and
+  ///          unsupported by subjective testing; the habit belongs to live
+  ///          sound, where the filter protects a system from stage rumble —
+  ///          P. Pestana and J. D. Reiss, "Intelligent Audio Production
+  ///          Strategies Informed by Best Practices", AES 53rd International
+  ///          Conference on Semantic Audio, London, 2014.
+  ///
+  ///          It is offered at all because the assistant only suggests: nothing
+  ///          is applied behind the user's back, so a user who wants the filter
+  ///          should be able to ask for it. Switched on, the filter is proposed
+  ///          from the track's measured low-frequency content rather than from
+  ///          its class, so a part that genuinely plays below its class's usual
+  ///          register keeps what it plays.
+  ///
+  ///          Off is not "computed and discarded": the measurement is not taken
+  ///          at all, the same way a disabled domain is not evaluated.
+  bool enable_high_pass = false;
+
   /// @brief Shared STFT geometry for every track.
   int n_fft = 2048;
   int hop_length = 512;
