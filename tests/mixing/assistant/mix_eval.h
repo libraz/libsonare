@@ -78,6 +78,16 @@ struct SyntheticTracks {
 ///          correct. One deliberately silent track is included: the exclusion
 ///          path is the thing most likely to break, and a fixture that never
 ///          exercises it would pass while broken.
+///
+///          The parts are also chosen so the set contains **both kinds of band
+///          collision**, because the corrective EQ stage treats them
+///          differently. Kick against bass in the low end is a collision in a
+///          band both parts are made of, and carving either would take the
+///          foundation out of the mix; the organ pedal against the voice in the
+///          mid is a collision in a band only one of them is built around. A
+///          fixture holding only the first kind measures the EQ stage declining
+///          to act, and would go on passing if the stage stopped acting
+///          altogether.
 /// @param sample_rate Shared sample rate.
 /// @param duration_sec Length of every non-silent part.
 inline SyntheticTracks make_demo_tracks(int sample_rate = 48000, float duration_sec = 1.2f) {
@@ -190,6 +200,25 @@ inline SyntheticTracks make_demo_tracks(int sample_rate = 48000, float duration_
     hats[frame] = 0.20f * envelope * twice;
   }
   add_mono("hats", "HiHat", hats);
+
+  // Organ pedal: a held low note sitting under the whole arrangement, in two
+  // ranks. The 16' rank carries the part and puts nearly all of its energy below
+  // 250 Hz, which is how it can be the loudest thing here without being in
+  // anyone's way. The 1' rank sounds four octaves above the pedal, and that thin
+  // overtone is the only place the part reaches the register the voice is built
+  // in — a few per cent of its own energy, against the voice's four fifths.
+  //
+  // That asymmetry is what the part is here for. Every other pair in this
+  // fixture collides in a band both parts are made of, which is a collision no
+  // corrective cut should touch; this is the one pair where the band matters to
+  // one of them and not to the other.
+  std::vector<float> organ(frames, 0.0f);
+  for (std::size_t frame = 0; frame < frames; ++frame) {
+    const float t = seconds(frame);
+    organ[frame] = 0.70f * std::sin(constants::kTwoPi * 65.0f * t) +
+                   0.155f * std::sin(constants::kTwoPi * 1040.0f * t);
+  }
+  add_mono("organ", "Organ Pedal", organ);
 
   // Digital silence. Must be excluded rather than driven to the loudness target.
   add_mono("silent", "Unused", std::vector<float>(frames, 0.0f));

@@ -55,8 +55,8 @@ TEST_CASE("a suggested scene instantiates, renders and round-trips", "[mixing][a
   // slow cases below rather than gated, because a threshold on "how much better
   // did the mix get" would encode one person's taste as a build failure.
   //
-  // Short material on purpose: the invariants do not need the EQ pass to fire,
-  // and this case has to stay cheap enough to run on every commit.
+  // Short material on purpose: this case has to stay cheap enough to run on
+  // every commit.
   const auto fixture = make_demo_tracks(48000, 0.5f);
   const auto tracks = fixture.inputs();
   const auto result = sonare::mixing::assistant::suggest_scene(tracks);
@@ -65,6 +65,44 @@ TEST_CASE("a suggested scene instantiates, renders and round-trips", "[mixing][a
   REQUIRE(evaluation.scene_round_trips);
   REQUIRE(evaluation.rendered);
   REQUIRE(evaluation.master_true_peak_dbtp <= kMasterCeilingDbtp);
+
+  // The EQ stage carves a band only where one part is built around it and the
+  // other can spare it. A fixture holding no such pair produces no cut at all,
+  // and then every golden row covering the EQ stage records the absence of a
+  // decision instead of the decision — a state this suite passed in happily
+  // before. Checked here rather than in a case of its own because the
+  // suggestion is already computed: the guard costs nothing, and a guard that
+  // costs nothing is one nobody is tempted to hide behind a tag.
+  int eq_cuts = 0;
+  for (const auto& strip : result.scene.strips) {
+    for (const auto& insert : strip.inserts) {
+      if (insert.processor_name == "eq.parametric") ++eq_cuts;
+    }
+  }
+  INFO("the suggested scene carries " << eq_cuts << " parametric EQ insert(s)");
+  REQUIRE(eq_cuts >= 1);
+}
+
+TEST_CASE("switching the EQ domain off changes the suggestion", "[mixing][assistant][.][slow]") {
+  // The companion to the guard in the case above, from the other side. If the
+  // EQ stage proposes nothing for this fixture then enabling and disabling it
+  // produce the same scene, and the `no-eq` golden scenario becomes a duplicate
+  // of the default one — two rows that agree because neither measures anything.
+  //
+  // Hidden because it pays for a second suggestion; the cheap guard above is
+  // what runs on every commit.
+  const auto fixture = make_demo_tracks(48000, 0.5f);
+  const auto tracks = fixture.inputs();
+
+  MixAssistantConfig without;
+  without.enable_eq = false;
+
+  const auto with_eq = sonare::mixing::assistant::suggest_scene(tracks);
+  const auto no_eq = sonare::mixing::assistant::suggest_scene(tracks, without);
+
+  REQUIRE(sonare::mixing::api::scene_to_json(with_eq.scene) !=
+          sonare::mixing::api::scene_to_json(no_eq.scene));
+  REQUIRE(with_eq.explanation != no_eq.explanation);
 }
 
 TEST_CASE("a suggested scene keeps the two channels in balance", "[mixing][assistant]") {
