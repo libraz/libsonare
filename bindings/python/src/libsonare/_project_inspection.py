@@ -55,7 +55,7 @@ class _ProjectInspectionMixin:
         Seeding rather than zeroing matters: a zeroed ``ramp_threshold`` folds
         the whole take into one tempo segment.
         """
-        options = _get_lib().sonare_project_tempo_options_default()
+        options: SonareProjectTempoOptions = _get_lib().sonare_project_tempo_options_default()
         if adaptive_tempo is not None:
             options.adaptive_tempo = 1 if adaptive_tempo else 0
         if tempo_update_interval_beats is not None:

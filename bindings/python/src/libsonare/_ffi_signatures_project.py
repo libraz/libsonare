@@ -887,6 +887,10 @@ def _configure_project_extra_signatures(lib: ctypes.CDLL) -> None:
             ctypes.POINTER(SonareProjectMarker),
         ]
 
+    # Bound once for both by-index registration loops below: without it the
+    # first loop pins _struct to its own two structs and the second one, which
+    # registers a different set through the identical signature, is rejected.
+    _struct: type[ctypes.Structure]
     for _name, _struct in (
         ("sonare_project_tempo_segment_by_index", SonareProjectTempoSegment),
         ("sonare_project_time_signature_by_index", SonareProjectTimeSignatureSegment),

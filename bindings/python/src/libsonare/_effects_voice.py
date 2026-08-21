@@ -641,7 +641,7 @@ class StreamingRetune:
                 self._handle,
                 ctypes.c_float(current["semitones"] if semitones is None else semitones),
                 ctypes.c_float(current["mix"] if mix is None else mix),
-                ctypes.c_int(current["grain_size"] if grain_size is None else grain_size),
+                ctypes.c_int(int(current["grain_size"]) if grain_size is None else grain_size),
             )
         )
 
@@ -690,4 +690,4 @@ class StreamingRetune:
                 ctypes.c_size_t(len(buffer)),
             )
         )
-        return buffer.tolist()
+        return cast(list[float], buffer.tolist())

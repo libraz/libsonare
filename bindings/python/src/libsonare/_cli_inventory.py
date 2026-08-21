@@ -4,9 +4,13 @@ from __future__ import annotations
 
 import argparse
 from collections.abc import Iterator
-from typing import Any
+from typing import Any, TypeVar
 
 from ._cli_common import _strict_json_dumps
+
+# The argument type _cli_domain hands straight back, so an inline wrap of an
+# add_argument() result stays an argparse.Action instead of decaying to Any.
+_TargetT = TypeVar("_TargetT")
 
 # ``argparse`` has no path type.  These names are the command contract's
 # semantic path values, and are intentionally kept independent of a parser
@@ -63,10 +67,12 @@ def _domain_record(
     }
 
 
-def _cli_domain(target: Any, **domain: Any) -> Any:
+def _cli_domain(target: _TargetT, **domain: Any) -> _TargetT:
     """Record the domain a type callable or a parser action enforces.
 
     Returns @p target so a caller can wrap an ``add_argument`` result inline.
+    The return type mirrors the argument so an inline wrap keeps the action or
+    callable type it started with rather than widening to ``Any``.
     """
     setattr(target, _DOMAIN_ATTRIBUTE, _domain_record(**domain))
     return target

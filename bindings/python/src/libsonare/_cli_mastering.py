@@ -248,7 +248,7 @@ def cmd_mastering(args: argparse.Namespace) -> int:
     elif assistant:
         from . import mastering_assistant_suggest, mastering_chain
 
-        suggestion_params: dict[str, float | int | bool] = {
+        suggestion_params: dict[str, float | int | bool | str] = {
             "targetLufs": float(getattr(args, "target_lufs", -14.0)),
             "ceilingDb": float(getattr(args, "ceiling_db", -1.0)),
             "enableRepair": enable_repair,
@@ -661,7 +661,9 @@ def cmd_mastering_suggest(args: argparse.Namespace) -> int:
     from . import mastering_assistant_suggest
 
     samples, sr = _load_audio(args.file)
-    params = _parse_kv_params(args.params) if args.params else {}
+    params: dict[str, float | int | bool | str] = (
+        dict(_parse_kv_params(args.params)) if args.params else {}
+    )
     print(mastering_assistant_suggest(samples, sample_rate=sr, params=params))
     return 0
 
