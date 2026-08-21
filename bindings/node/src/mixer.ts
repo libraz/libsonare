@@ -136,7 +136,14 @@ export class Mixer {
     this.native = native;
   }
 
-  /** Build a mixer from a scene JSON string (see {@link mixingScenePresetJson}). */
+  /**
+   * Build a mixer from a scene JSON string (see {@link mixingScenePresetJson}).
+   *
+   * A strip's meters are sized when the strip is built, so this is where their
+   * configuration is chosen: {@link MixSceneStrip.metering} selects it, and
+   * leaving it out keeps the full default (LUFS + true peak at 4x, about 1.4 MB
+   * per strip at 48 kHz).
+   */
   static fromSceneJson(json: string, sampleRate = 48000, blockSize = 512): Mixer {
     return new Mixer(new addon.Mixer(json, sampleRate, blockSize));
   }
@@ -353,7 +360,11 @@ export class Mixer {
 
   /**
    * Set a strip's surround pan position, used when the strip feeds a >2-channel
-   * bus. Stored on the scene; inert until the surround DSP path applies it.
+   * bus.
+   *
+   * Applied when the engine's track mixer renders this strip's lane into a
+   * destination with more than two channels. This stereo-only mixer's own block
+   * entry points ignore it.
    */
   setSurroundPan(strip: StripRef, pan: SurroundPan): void {
     this.native.setSurroundPan(strip, pan);

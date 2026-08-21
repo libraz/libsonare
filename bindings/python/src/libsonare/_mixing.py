@@ -98,7 +98,15 @@ class Mixer:
 
     @classmethod
     def from_scene_json(cls, json: str, sample_rate: int = 48000, block_size: int = 512) -> Mixer:
-        """Build a mixer from a scene JSON string."""
+        """Build a mixer from a scene JSON string.
+
+        A strip's meters are sized when the strip is built, so this is where
+        their configuration is chosen: an optional ``"metering"`` object on the
+        strip (``enabled`` / ``lufs`` / ``truePeak`` / ``truePeakOversample``)
+        selects it, and leaving it out keeps the full default (LUFS + true peak
+        at 4x, about 1.4 MB per strip at 48 kHz). ``{"enabled": false}`` drops
+        both meters for a strip whose snapshots are never read.
+        """
         lib = _get_lib()
         if not hasattr(lib, "sonare_mixer_from_scene_json"):
             raise RuntimeError("libsonare was built without mixing support")
@@ -367,8 +375,9 @@ class Mixer:
         Phase 1 honors ``azimuth`` (-180..180 deg, 0 = front-center),
         ``divergence`` (0 = point source, 1 = spread across the front) and
         ``lfe`` (0..1 send into the LFE plane); ``elevation``/``distance`` are
-        reserved. Stored on the scene and inert until the surround DSP path
-        applies it.
+        reserved. Applied when the engine's track mixer renders this strip's
+        lane into a destination with more than two channels; the stereo-only
+        :class:`Mixer` block entry points ignore it.
         """
         handle = self._strip_handle(strip)
         pan = SonareSurroundPan(

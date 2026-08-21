@@ -4,6 +4,9 @@
 #include "mixing/alignment_delay.h"
 #include "mixing/api/scene.h"
 #include "mixing/pan_law.h"
+#include "mixing/panner.h"
+#include "mixing/stereo_width.h"
+#include "mixing/surround_panner.h"
 #include "util/exception.h"
 #include "util/json.h"
 #include "util/numeric_validation.h"
@@ -205,8 +208,15 @@ Strip strip_from_value(const JsonValue& object) {
       number_or_legacy(object, "faderDb", "fader_db", strip.fader_db, "scene.strips[].faderDb");
   strip.vca_offset_db = number_or_legacy(object, "vcaOffsetDb", "vca_offset_db",
                                          strip.vca_offset_db, "scene.strips[].vcaOffsetDb");
-  strip.pan = number_or(object, "pan", strip.pan, "scene.strips[].pan");
-  strip.width = number_or(object, "width", strip.width, "scene.strips[].width");
+  // Continuous quantities are clamped to the range the runtime stores them in,
+  // through the same helper the processors use. The enums and counts below are
+  // rejected instead: a value that names one of a fixed set of choices has no
+  // nearest legal neighbour, while a position or a width does. Either way the
+  // scene that comes back out is the scene that is running - echoing a pan of
+  // 1.5 while the panner uses 1.0 made the round-trip a report of the request
+  // rather than of the mix.
+  strip.pan = clamp_pan(number_or(object, "pan", strip.pan, "scene.strips[].pan"));
+  strip.width = clamp_width(number_or(object, "width", strip.width, "scene.strips[].width"));
   strip.muted = bool_or(object, "muted", strip.muted);
   strip.soloed = bool_or(object, "soloed", strip.soloed);
   strip.solo_safe = bool_or_legacy(object, "soloSafe", "solo_safe", strip.solo_safe);
@@ -216,10 +226,11 @@ Strip strip_from_value(const JsonValue& object) {
   if (strip.pan_mode < 0 || strip.pan_mode > 2) {
     throw SonareException(ErrorCode::InvalidFormat, "panMode enum is out of range");
   }
-  strip.dual_pan_left = number_or_legacy(object, "dualPanLeft", "dual_pan_left",
-                                         strip.dual_pan_left, "scene.strips[].dualPanLeft");
-  strip.dual_pan_right = number_or_legacy(object, "dualPanRight", "dual_pan_right",
-                                          strip.dual_pan_right, "scene.strips[].dualPanRight");
+  strip.dual_pan_left = clamp_pan(number_or_legacy(
+      object, "dualPanLeft", "dual_pan_left", strip.dual_pan_left, "scene.strips[].dualPanLeft"));
+  strip.dual_pan_right =
+      clamp_pan(number_or_legacy(object, "dualPanRight", "dual_pan_right", strip.dual_pan_right,
+                                 "scene.strips[].dualPanRight"));
   strip.polarity_invert_left = bool_or_legacy(object, "polarityInvertLeft", "polarity_invert_left",
                                               strip.polarity_invert_left);
   strip.polarity_invert_right = bool_or_legacy(
@@ -235,16 +246,37 @@ Strip strip_from_value(const JsonValue& object) {
   }
   strip.source_layout = channel_layout_or(object, "sourceLayout", strip.source_layout);
   if (const auto* sp = object.find("surroundPan"); sp && sp->is_object()) {
-    strip.surround_pan.azimuth =
+    SurroundPanParams parsed;
+    parsed.azimuth =
         number_or(*sp, "azimuth", strip.surround_pan.azimuth, "scene.strips[].surroundPan.azimuth");
-    strip.surround_pan.elevation = number_or(*sp, "elevation", strip.surround_pan.elevation,
-                                             "scene.strips[].surroundPan.elevation");
-    strip.surround_pan.divergence = number_or(*sp, "divergence", strip.surround_pan.divergence,
-                                              "scene.strips[].surroundPan.divergence");
-    strip.surround_pan.lfe =
-        number_or(*sp, "lfe", strip.surround_pan.lfe, "scene.strips[].surroundPan.lfe");
-    strip.surround_pan.distance = number_or(*sp, "distance", strip.surround_pan.distance,
-                                            "scene.strips[].surroundPan.distance");
+    parsed.elevation = number_or(*sp, "elevation", strip.surround_pan.elevation,
+                                 "scene.strips[].surroundPan.elevation");
+    parsed.divergence = number_or(*sp, "divergence", strip.surround_pan.divergence,
+                                  "scene.strips[].surroundPan.divergence");
+    parsed.lfe = number_or(*sp, "lfe", strip.surround_pan.lfe, "scene.strips[].surroundPan.lfe");
+    parsed.distance = number_or(*sp, "distance", strip.surround_pan.distance,
+                                "scene.strips[].surroundPan.distance");
+    // Same rule as pan/width, through the panner's own clamp.
+    const SurroundPanParams stored = clamp_surround_pan_params(parsed);
+    strip.surround_pan.azimuth = stored.azimuth;
+    strip.surround_pan.elevation = stored.elevation;
+    strip.surround_pan.divergence = stored.divergence;
+    strip.surround_pan.lfe = stored.lfe;
+    strip.surround_pan.distance = stored.distance;
+  }
+  if (const auto* metering = object.find("metering"); metering && metering->is_object()) {
+    strip.metering.enabled = bool_or(*metering, "enabled", strip.metering.enabled);
+    strip.metering.lufs = bool_or(*metering, "lufs", strip.metering.lufs);
+    strip.metering.true_peak = bool_or(*metering, "truePeak", strip.metering.true_peak);
+    strip.metering.true_peak_oversample =
+        int_or(*metering, "truePeakOversample", strip.metering.true_peak_oversample);
+    // A count, so it is rejected rather than clamped, like panMode / panLaw /
+    // channelDelaySamples above. Values inside the range are resolved by the
+    // meter to the nearest factor it implements.
+    if (strip.metering.true_peak_oversample < 1 || strip.metering.true_peak_oversample > 16) {
+      throw SonareException(ErrorCode::InvalidFormat,
+                            "metering.truePeakOversample must be in [1, 16]");
+    }
   }
   if (const auto* inserts = object.find("inserts")) strip.inserts = inserts_from_value(*inserts);
   if (const auto* sends = object.find("sends")) strip.sends = sends_from_value(*sends);
@@ -410,6 +442,17 @@ JsonValue strip_to_value(const Strip& strip) {
     pan.emplace("lfe", JsonValue(sp.lfe));
     pan.emplace("distance", JsonValue(sp.distance));
     object.emplace("surroundPan", JsonValue(std::move(pan)));
+  }
+  // Omit at the full-metering default, for the same byte-identity reason: only
+  // a strip that has opted out of some of its metering carries the object.
+  const StripMetering& m = strip.metering;
+  if (!m.enabled || !m.lufs || !m.true_peak || m.true_peak_oversample != 4) {
+    sonare::util::json::Object metering;
+    metering.emplace("enabled", JsonValue(m.enabled));
+    metering.emplace("lufs", JsonValue(m.lufs));
+    metering.emplace("truePeak", JsonValue(m.true_peak));
+    metering.emplace("truePeakOversample", JsonValue(m.true_peak_oversample));
+    object.emplace("metering", JsonValue(std::move(metering)));
   }
   object.emplace("inserts", inserts_to_value(strip.inserts));
   object.emplace("sends", sends_to_value(strip.sends));

@@ -96,8 +96,10 @@ typedef struct {
 // Surround pan position for a strip feeding a >2-channel bus. Phase 1 honors
 // azimuth (-180..180 deg, 0 = front-center, + = right), divergence (0 = point
 // source, 1 = spread across the front) and lfe (0..1 scalar send into the LFE
-// plane); elevation and distance are reserved (0 / 1 in phase 1). Stored and
-// serialized but inert until the surround DSP path applies it.
+// plane); elevation and distance are reserved (0 / 1 in phase 1). Applied when
+// the engine's track mixer feeds the strip's lane into a destination with more
+// than two channels; ignored by sonare_mixer_process_stereo and
+// sonare_mixer_drain_tail_stereo, which are stereo-only.
 typedef struct {
   float azimuth;
   float elevation;
@@ -107,7 +109,30 @@ typedef struct {
 } SonareSurroundPan;
 
 SonareMixer* sonare_mixer_create(int sample_rate, int max_block_size);
+// Adds a strip carrying the full meter configuration (LUFS + true peak at 4x).
+// Equivalent to sonare_mixer_add_strip_ex(mixer, id, 1, 1, 1, 0).
 SonareStrip* sonare_mixer_add_strip(SonareMixer* mixer, const char* id);
+// Adds a strip whose pre/post meters are configured up front.
+//
+// A strip's meters size their buffers when the strip is built, so this is the
+// only place the configuration can be chosen: there is no setter, and changing
+// it later would have to rebuild the strip's storage. A full meter costs about
+// 646 KB at 48 kHz and a strip carries two of them; measure_lufs = 0 takes one
+// meter to about 83 KB, and enable_metering = 0 drops both (about 1.4 MB to
+// 145 KB for the strip) for strips whose snapshots are never read.
+//
+// enable_metering, measure_lufs and measure_true_peak are booleans (0 / non-0).
+// true_peak_oversample is the requested factor; 0 selects the default (4), and
+// the realtime meter resolves the value to the nearest factor it implements
+// (2x, 4x, 8x). Returns NULL with sonare_last_error_message() set for a NULL
+// handle or id, a duplicate id, or a factor outside [0, 16].
+//
+// The same configuration travels in scene JSON as the strip's optional
+// "metering" object, which is how a mixer built with
+// sonare_mixer_from_scene_json chooses it.
+SonareStrip* sonare_mixer_add_strip_ex(SonareMixer* mixer, const char* id, int enable_metering,
+                                       int measure_lufs, int measure_true_peak,
+                                       int true_peak_oversample);
 SonareError sonare_strip_set_input_trim_db(SonareStrip* strip, float db);
 SonareError sonare_strip_set_fader_db(SonareStrip* strip, float db);
 // Sets the strip's pan position. pan_mode < 0 (SONARE_PAN_MODE_KEEP) keeps the
@@ -117,8 +142,9 @@ SonareError sonare_strip_set_pan(SonareStrip* strip, float pan, int pan_mode);
 SonareError sonare_strip_set_dual_pan(SonareStrip* strip, float left_pan, float right_pan);
 // Sets the strip's surround pan position (used when the strip feeds a >2-channel
 // bus). Returns SONARE_ERROR_INVALID_PARAMETER if strip or pan is NULL. The
-// values are stored on the strip/scene and inert until the surround DSP path
-// applies them.
+// values are stored on the strip/scene and applied when the engine's track
+// mixer renders this strip's lane into a destination with more than two
+// channels; the stereo-only mixer block entry points ignore them.
 SonareError sonare_strip_set_surround_pan(SonareStrip* strip, const SonareSurroundPan* pan);
 SonareError sonare_strip_set_width(SonareStrip* strip, float width);
 SonareError sonare_strip_set_muted(SonareStrip* strip, int muted);

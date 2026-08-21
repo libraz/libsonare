@@ -3,12 +3,19 @@
 /// @file stereo_width.h
 /// @brief Mid/side stereo width processor.
 
+#include <algorithm>
 #include <atomic>
 
 #include "rt/param_smoother.h"
 #include "rt/processor_base.h"
 
 namespace sonare::mixing {
+
+/// @brief The width factor the processor will actually store for @p width.
+/// @details Shared with the C ABI setter and the scene walker for the same
+///          reason as @ref clamp_pan: a cached copy that is echoed back must be
+///          the value the processor is using.
+inline float clamp_width(float width) noexcept { return std::clamp(width, 0.0f, 2.0f); }
 
 /// @note The width factor is clamped to the range [0, 2] everywhere it is set
 ///       (constructor and @ref set_width): 0 collapses to mono, 1 preserves the

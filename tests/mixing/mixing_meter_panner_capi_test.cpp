@@ -294,6 +294,112 @@ TEST_CASE("Mixing C API rejects a non-finite process block without touching the 
   sonare_mixer_destroy(mixer);
 }
 
+// A NULL per-strip channel pointer is the one rejection this entry used to make
+// after zero-filling the caller's output. The other three return before writing,
+// and the non-finite case above asserts that a rejected block leaves the buffers
+// alone - a host that treats an error as "keep the previous block" got a hard
+// dropout from this path instead of a rejection.
+TEST_CASE("Mixing C API rejects a NULL strip input without touching the output", "[mixing][capi]") {
+  SonareMixer* mixer = sonare_mixer_create(48000, 8);
+  REQUIRE(mixer != nullptr);
+  REQUIRE(sonare_mixer_add_strip(mixer, "a") != nullptr);
+  REQUIRE(sonare_mixer_add_strip(mixer, "b") != nullptr);
+
+  std::array<float, 4> in_l{0.5f, 0.5f, 0.5f, 0.5f};
+  std::array<float, 4> in_r{0.5f, 0.5f, 0.5f, 0.5f};
+  std::array<float, 4> out_l{};
+  std::array<float, 4> out_r{};
+
+  // Positive control: two valid strips mix and the output is written.
+  const float* ok_l[] = {in_l.data(), in_l.data()};
+  const float* ok_r[] = {in_r.data(), in_r.data()};
+  REQUIRE(sonare_mixer_process_stereo(mixer, ok_l, ok_r, 2, out_l.data(), out_r.data(),
+                                      out_l.size()) == SONARE_OK);
+  REQUIRE(out_l[0] > 0.1f);
+
+  // Second strip's left channel missing: rejected, and the caller's buffers
+  // still hold what they held on entry.
+  const std::array<float, 4> sentinel{-7.0f, -7.0f, -7.0f, -7.0f};
+  out_l = sentinel;
+  out_r = sentinel;
+  const float* null_l[] = {in_l.data(), nullptr};
+  REQUIRE(sonare_mixer_process_stereo(mixer, null_l, ok_r, 2, out_l.data(), out_r.data(),
+                                      out_l.size()) == SONARE_ERROR_INVALID_PARAMETER);
+  REQUIRE(out_l == sentinel);
+  REQUIRE(out_r == sentinel);
+
+  // Same for the right channel.
+  const float* null_r[] = {in_r.data(), nullptr};
+  out_l = sentinel;
+  out_r = sentinel;
+  REQUIRE(sonare_mixer_process_stereo(mixer, ok_l, null_r, 2, out_l.data(), out_r.data(),
+                                      out_l.size()) == SONARE_ERROR_INVALID_PARAMETER);
+  REQUIRE(out_l == sentinel);
+  REQUIRE(out_r == sentinel);
+
+  // The mixer is still usable afterwards.
+  REQUIRE(sonare_mixer_process_stereo(mixer, ok_l, ok_r, 2, out_l.data(), out_r.data(),
+                                      out_l.size()) == SONARE_OK);
+  REQUIRE(out_l[0] > 0.1f);
+  sonare_mixer_destroy(mixer);
+}
+
+// ChannelStripConfig::enable_metering was announced as the escape hatch for the
+// strips whose snapshots are never read, but nothing that builds a strip could
+// set it. The configuration is fixed at construction, so it reaches a strip
+// either through the scene document or through the _ex entry point.
+TEST_CASE("Mixing C API builds strips with a configurable meter", "[mixing][capi]") {
+  SonareMixer* mixer = sonare_mixer_create(48000, 512);
+  REQUIRE(mixer != nullptr);
+  // enable_metering, measure_lufs, measure_true_peak, true_peak_oversample.
+  SonareStrip* full = sonare_mixer_add_strip_ex(mixer, "full", 1, 1, 1, 0);
+  SonareStrip* peak_only = sonare_mixer_add_strip_ex(mixer, "peakOnly", 1, 0, 0, 0);
+  SonareStrip* silent = sonare_mixer_add_strip_ex(mixer, "silent", 0, 0, 0, 0);
+  REQUIRE(full != nullptr);
+  REQUIRE(peak_only != nullptr);
+  REQUIRE(silent != nullptr);
+  // An out-of-range factor is refused rather than silently resolved.
+  REQUIRE(sonare_mixer_add_strip_ex(mixer, "bad", 1, 1, 1, 99) == nullptr);
+
+  std::array<float, 512> block{};
+  for (std::size_t i = 0; i < block.size(); ++i) {
+    block[i] = 0.5f * std::sin(2.0f * 3.14159265f * 220.0f * static_cast<float>(i) / 48000.0f);
+  }
+  const float* inputs[] = {block.data(), block.data(), block.data()};
+  std::array<float, 512> out_l{};
+  std::array<float, 512> out_r{};
+  // Long enough to fill the momentary LUFS window (400 ms = 19200 frames at
+  // 48 kHz), so the fully-metered control reports a real loudness rather than
+  // the floor it would still be at after a few blocks.
+  for (int pass = 0; pass < 48; ++pass) {
+    REQUIRE(sonare_mixer_process_stereo(mixer, inputs, inputs, 3, out_l.data(), out_r.data(),
+                                        block.size()) == SONARE_OK);
+  }
+
+  SonareMixMeterSnapshot full_snap{};
+  SonareMixMeterSnapshot peak_snap{};
+  SonareMixMeterSnapshot silent_snap{};
+  REQUIRE(sonare_strip_meter(full, &full_snap) == SONARE_OK);
+  REQUIRE(sonare_strip_meter(peak_only, &peak_snap) == SONARE_OK);
+  REQUIRE(sonare_strip_meter(silent, &silent_snap) == SONARE_OK);
+
+  // The fully-metered strip is the control: the same signal reaches all three.
+  CHECK(full_snap.peak_db_l > -40.0f);
+  CHECK(full_snap.momentary_lufs > -70.0f);
+  CHECK(full_snap.true_peak_db_l > -40.0f);
+
+  // Peak / RMS keep working with the loudness and true-peak work switched off,
+  // and those two fields stay at the floor.
+  CHECK(peak_snap.peak_db_l > -40.0f);
+  CHECK(peak_snap.momentary_lufs == sonare::constants::kFloorDb);
+  CHECK(peak_snap.true_peak_db_l == sonare::constants::kFloorDb);
+
+  // A strip with metering off publishes no snapshot at all.
+  CHECK(silent_snap.seq == 0);
+
+  sonare_mixer_destroy(mixer);
+}
+
 TEST_CASE("Mixing C API exposes scene preset JSON", "[mixing][capi]") {
   const char* names = sonare_mixing_scene_preset_names();
   REQUIRE(names != nullptr);

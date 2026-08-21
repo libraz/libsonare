@@ -85,6 +85,13 @@ export class Mixer {
   /**
    * Build a mixer from a scene JSON string.
    *
+   * A strip's meters are sized when the strip is built, so this is where their
+   * configuration is chosen: an optional `metering` object on the strip
+   * (`enabled` / `lufs` / `truePeak` / `truePeakOversample`) selects it, and
+   * leaving it out keeps the full default (LUFS + true peak at 4x, about 1.4 MB
+   * per strip at 48 kHz). `{"enabled": false}` drops both meters for a strip
+   * whose snapshots are never read.
+   *
    * @param json - Scene JSON (strips, buses, sends, connections, inserts)
    * @param sampleRate - Sample rate in Hz (default: 48000)
    * @param blockSize - Maximum block size per {@link processStereo} call (default: 512)
@@ -410,7 +417,10 @@ export class Mixer {
 
   /**
    * Set the strip's surround pan position, used when it feeds a >2-channel bus.
-   * Stored on the scene; inert until the surround DSP path applies it.
+   *
+   * Applied when the engine's track mixer renders this strip's lane into a
+   * destination with more than two channels. This stereo-only mixer's own
+   * block entry points ignore it.
    */
   setSurroundPan(stripIndex: number, pan: SurroundPan): void {
     this.mixer.setSurroundPan(stripIndex, pan);

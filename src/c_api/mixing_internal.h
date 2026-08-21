@@ -27,6 +27,13 @@
 struct SonareMixer;
 
 struct SonareStrip {
+  SonareStrip() = default;
+  // The meter configuration is fixed when the ChannelStrip is constructed (its
+  // meters size their buffers in prepare(), and there is deliberately no
+  // setter), so a strip that wants anything but the full default has to be
+  // built with it.
+  explicit SonareStrip(const sonare::mixing::ChannelStripConfig& config) : strip(config) {}
+
   std::string id;
   sonare::mixing::api::Strip scene_strip;
   sonare::mixing::ChannelStrip strip;

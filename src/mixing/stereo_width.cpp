@@ -45,7 +45,7 @@ void StereoWidthProcessor::reset() {
 
 void StereoWidthProcessor::set_width(float width) noexcept {
   if (!std::isfinite(width)) return;
-  width_target_.store(std::clamp(width, 0.0f, 2.0f), std::memory_order_relaxed);
+  width_target_.store(clamp_width(width), std::memory_order_relaxed);
 }
 
 }  // namespace sonare::mixing

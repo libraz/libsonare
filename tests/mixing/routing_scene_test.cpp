@@ -428,6 +428,93 @@ TEST_CASE("Scene surround pan round-trips and omits at the default", "[mixing][r
   REQUIRE(restored.strips[1].surround_pan.distance == 1.0f);
 }
 
+// The scene document is the read-back mechanism a host actually uses, so a
+// value that comes out of it has to be the value the mix is running. The enums
+// and counts above are rejected when out of range; the continuous quantities
+// are clamped instead, through the same helpers the processors clamp with, so
+// neither can echo a request the runtime silently overrode.
+TEST_CASE("Scene clamps out-of-range scalars to what the runtime uses", "[mixing][routing]") {
+  const auto scene = sonare::mixing::api::scene_from_json(
+      R"({"version":1,"strips":[{"id":"a","pan":1.5,"width":4.0,"dualPanLeft":-9.0,)"
+      R"("dualPanRight":9.0,"surroundPan":{"azimuth":5000.0,"divergence":9.0,"lfe":-3.0}}]})");
+  REQUIRE(scene.strips.size() == 1);
+  const auto& strip = scene.strips[0];
+  CHECK(strip.pan == 1.0f);
+  CHECK(strip.width == 2.0f);
+  CHECK(strip.dual_pan_left == -1.0f);
+  CHECK(strip.dual_pan_right == 1.0f);
+  CHECK(strip.surround_pan.azimuth == 180.0f);
+  CHECK(strip.surround_pan.divergence == 1.0f);
+  CHECK(strip.surround_pan.lfe == 0.0f);
+
+  // ...and those are exactly the values a strip stores for the same input, so
+  // the scene is reporting the mix rather than the request.
+  sonare::mixing::ChannelStrip live;
+  live.prepare(48000.0, 512);
+  live.set_pan(1.5f);
+  live.set_width(4.0f);
+  live.set_dual_pan(-9.0f, 9.0f);
+  live.set_surround_pan_params({5000.0f, 0.0f, 9.0f, -3.0f, 1.0f});
+  const auto params = live.surround_pan_params();
+  CHECK(strip.pan == live.pan());
+  CHECK(strip.width == live.width());
+  CHECK(strip.dual_pan_left == live.dual_pan_left());
+  CHECK(strip.dual_pan_right == live.dual_pan_right());
+  CHECK(strip.surround_pan.azimuth == params.azimuth);
+  CHECK(strip.surround_pan.divergence == params.divergence);
+  CHECK(strip.surround_pan.lfe == params.lfe);
+
+  // The clamped values survive a round-trip unchanged (they are already legal).
+  const auto restored =
+      sonare::mixing::api::scene_from_json(sonare::mixing::api::scene_to_json(scene));
+  CHECK(restored.strips[0].pan == 1.0f);
+  CHECK(restored.strips[0].width == 2.0f);
+  CHECK(restored.strips[0].surround_pan.azimuth == 180.0f);
+}
+
+// A strip's meters size their buffers when the strip is built, so the scene is
+// where the choice has to travel. Absent means the full historical default and
+// serializes nothing, so existing scenes are byte-identical.
+TEST_CASE("Scene metering round-trips and omits at the default", "[mixing][routing]") {
+  sonare::mixing::api::Scene scene;
+  sonare::mixing::api::Strip light;
+  light.id = "light";
+  light.metering.lufs = false;
+  light.metering.true_peak_oversample = 8;
+  scene.strips.push_back(light);
+  sonare::mixing::api::Strip standard;  // all defaults -> must not emit the object
+  standard.id = "standard";
+  scene.strips.push_back(standard);
+
+  const std::string json = sonare::mixing::api::scene_to_json(scene);
+  REQUIRE(json.find("metering") != std::string::npos);
+
+  const auto restored = sonare::mixing::api::scene_from_json(json);
+  REQUIRE(restored.strips.size() == 2);
+  CHECK(restored.strips[0].metering.enabled);
+  CHECK_FALSE(restored.strips[0].metering.lufs);
+  CHECK(restored.strips[0].metering.true_peak);
+  CHECK(restored.strips[0].metering.true_peak_oversample == 8);
+  CHECK(restored.strips[1].metering.enabled);
+  CHECK(restored.strips[1].metering.lufs);
+  CHECK(restored.strips[1].metering.true_peak);
+  CHECK(restored.strips[1].metering.true_peak_oversample == 4);
+
+  // A scene with only default metering carries no object at all.
+  sonare::mixing::api::Scene plain;
+  sonare::mixing::api::Strip only;
+  only.id = "only";
+  plain.strips.push_back(only);
+  CHECK(sonare::mixing::api::scene_to_json(plain).find("metering") == std::string::npos);
+
+  // The oversample factor is a count, so it is rejected like the enums.
+  using Catch::Matchers::ContainsSubstring;
+  REQUIRE_THROWS_WITH(
+      sonare::mixing::api::scene_from_json(
+          R"({"version":1,"strips":[{"id":"a","metering":{"truePeakOversample":0}}]})"),
+      ContainsSubstring("truePeakOversample"));
+}
+
 TEST_CASE("Scene bus trim/width/polarity round-trip and omit at defaults", "[mixing][routing]") {
   // A bus that engages its output trim, width, and polarity serializes those
   // fields and parses them back; a default bus emits none of them so an existing

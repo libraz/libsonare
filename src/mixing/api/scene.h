@@ -55,8 +55,10 @@ struct Send {
 };
 
 // Surround pan position for a strip feeding a >2-channel bus. Phase 1 honors
-// azimuth/divergence/lfe; elevation/distance are reserved. Stored but inert
-// until the surround DSP path applies it (see surround design). Mirrors
+// azimuth/divergence/lfe; elevation/distance are reserved. Applied when the
+// engine's track mixer feeds this strip's lane into a destination with more
+// than two channels; ignored by the stereo-only standalone mixer block entry
+// points, which sum through the stereo panner. Mirrors
 // mixing::SurroundPanParams without pulling the realtime DSP header into the
 // pure-data scene schema.
 struct SurroundPan {
@@ -65,6 +67,20 @@ struct SurroundPan {
   float divergence = 0.0f;
   float lfe = 0.0f;
   float distance = 1.0f;
+};
+
+// Meter configuration for a strip's pre/post taps. Fixed when the strip is
+// built (the meters size their buffers in prepare()), so it travels with the
+// scene rather than through a setter. Defaults reproduce the historical full
+// configuration; a scene that leaves it alone serializes no metering object at
+// all and stays byte-identical.
+struct StripMetering {
+  bool enabled = true;
+  bool lufs = true;
+  bool true_peak = true;
+  // Requested true-peak oversample factor. The realtime meter resolves it to
+  // the nearest factor it implements (2x, 4x, 8x).
+  int true_peak_oversample = 4;
 };
 
 struct Strip {
@@ -95,6 +111,9 @@ struct Strip {
   // only when non-default (see scene_json) so existing stereo scenes are
   // byte-identical.
   SurroundPan surround_pan;
+  // What this strip's meters measure. Serialized only when non-default so
+  // existing scenes are byte-identical.
+  StripMetering metering;
   std::vector<Insert> inserts;
   std::vector<Send> sends;
 };

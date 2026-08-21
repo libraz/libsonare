@@ -49,6 +49,21 @@ struct ChannelStripConfig {
   /// internal snapshots are never displayed. Engine-level telemetry remains
   /// available independently.
   bool enable_metering = true;
+  /// What the pre/post meters measure when @ref enable_metering is true.
+  ///
+  /// The meters are built in prepare() and their buffers are sized from this,
+  /// so it is a construction-time choice: there is no setter, because changing
+  /// it later would have to re-run prepare() and move the strip's storage
+  /// generation out from under the alignment-delay ownership contract.
+  ///
+  /// The default keeps the historical full configuration (LUFS + true peak at
+  /// 4x) rather than MeterConfig's own lighter default, so an existing host
+  /// reads the same snapshots it always has. The cost is worth knowing when
+  /// choosing: at 48 kHz a full meter is ~646 KB and a strip carries two, while
+  /// dropping LUFS takes one meter to ~83 KB and enable_metering = false takes
+  /// the whole strip from ~1.4 MB to ~145 KB.
+  MeterConfig meter{/*measure_lufs=*/true, /*measure_true_peak=*/true,
+                    /*true_peak_oversample=*/4};
 };
 
 enum class InsertAutomationScheduleResult {
@@ -168,13 +183,15 @@ class ChannelStrip : public rt::ProcessorBase {
   // control-thread setter updates it. Inert for stereo output.
   void set_surround_pan_params(const SurroundPanParams& p) noexcept {
     // Clamp on store so a read-back via surround_pan_params() reports the same
-    // effective values SurroundPannerProcessor::set_params would, and matches
-    // the clamping compute_surround_pan_gains applies at render time.
-    surround_azimuth_.store(std::clamp(p.azimuth, -180.0f, 180.0f), std::memory_order_relaxed);
-    surround_elevation_.store(p.elevation, std::memory_order_relaxed);
-    surround_divergence_.store(std::clamp(p.divergence, 0.0f, 1.0f), std::memory_order_relaxed);
-    surround_lfe_.store(std::clamp(p.lfe, 0.0f, 1.0f), std::memory_order_relaxed);
-    surround_distance_.store(p.distance, std::memory_order_relaxed);
+    // effective values the panner would, and matches the clamping
+    // compute_surround_pan_gains applies at render time. The bounds live in one
+    // place (clamp_surround_pan_params) so this copy cannot drift from it.
+    const SurroundPanParams stored = clamp_surround_pan_params(p);
+    surround_azimuth_.store(stored.azimuth, std::memory_order_relaxed);
+    surround_elevation_.store(stored.elevation, std::memory_order_relaxed);
+    surround_divergence_.store(stored.divergence, std::memory_order_relaxed);
+    surround_lfe_.store(stored.lfe, std::memory_order_relaxed);
+    surround_distance_.store(stored.distance, std::memory_order_relaxed);
   }
   SurroundPanParams surround_pan_params() const noexcept {
     SurroundPanParams p;
@@ -354,6 +371,10 @@ class ChannelStrip : public rt::ProcessorBase {
   // pre-fader tap. They remain disengaged for strips configured without
   // internal metering, avoiding their long LUFS rings and TP scratch.
   bool metering_enabled_ = true;
+  // Fixed at construction; see ChannelStripConfig::meter for why there is no
+  // setter.
+  MeterConfig meter_config_{/*measure_lufs=*/true, /*measure_true_peak=*/true,
+                            /*true_peak_oversample=*/4};
   std::optional<MeterProcessor> pre_meter_;
   std::optional<MeterProcessor> post_meter_;
   GoniometerBuffer<kGoniometerCapacity> goniometer_;

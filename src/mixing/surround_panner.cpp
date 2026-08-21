@@ -167,11 +167,12 @@ void SurroundPannerProcessor::reset() {
 }
 
 void SurroundPannerProcessor::set_params(const SurroundPanParams& params) noexcept {
-  azimuth_.store(std::clamp(params.azimuth, -180.0f, 180.0f), std::memory_order_relaxed);
-  elevation_.store(params.elevation, std::memory_order_relaxed);
-  divergence_.store(std::clamp(params.divergence, 0.0f, 1.0f), std::memory_order_relaxed);
-  lfe_.store(std::clamp(params.lfe, 0.0f, 1.0f), std::memory_order_relaxed);
-  distance_.store(params.distance, std::memory_order_relaxed);
+  const SurroundPanParams stored = clamp_surround_pan_params(params);
+  azimuth_.store(stored.azimuth, std::memory_order_relaxed);
+  elevation_.store(stored.elevation, std::memory_order_relaxed);
+  divergence_.store(stored.divergence, std::memory_order_relaxed);
+  lfe_.store(stored.lfe, std::memory_order_relaxed);
+  distance_.store(stored.distance, std::memory_order_relaxed);
 }
 
 SurroundPanParams SurroundPannerProcessor::params() const noexcept {

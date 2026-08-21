@@ -3,6 +3,7 @@
 /// @file panner.h
 /// @brief Stereo panner with selectable pan laws.
 
+#include <algorithm>
 #include <atomic>
 
 #include "mixing/pan_law.h"
@@ -10,6 +11,13 @@
 #include "rt/processor_base.h"
 
 namespace sonare::mixing {
+
+/// @brief The pan position the panner will actually store for @p pan.
+/// @details Every writer that also caches the value it passed - the C ABI
+///          setters and the scene walker, which both echo their cache back to
+///          the caller - resolves it through here, so a read-back can never
+///          report a position the processor is not using.
+inline float clamp_pan(float pan) noexcept { return std::clamp(pan, -1.0f, 1.0f); }
 
 enum class PanMode {
   Balance,

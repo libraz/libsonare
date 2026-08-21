@@ -310,7 +310,13 @@ SonareMixer* sonare_mixer_from_scene_json(const char* json, int sample_rate, int
       return nullptr;
     }
     for (const auto& scene_strip : scene.strips) {
-      SonareStrip* strip = sonare_mixer_add_strip(mixer.get(), scene_strip.id.c_str());
+      // Build with the scene's metering: the meters are sized when the strip is
+      // constructed, so this is the one point where a scene can opt out of the
+      // full LUFS + true-peak configuration.
+      SonareStrip* strip = sonare_mixer_add_strip_ex(
+          mixer.get(), scene_strip.id.c_str(), scene_strip.metering.enabled ? 1 : 0,
+          scene_strip.metering.lufs ? 1 : 0, scene_strip.metering.true_peak ? 1 : 0,
+          scene_strip.metering.true_peak_oversample);
       if (!strip) {
         return nullptr;
       }
@@ -535,6 +541,19 @@ SonareMixer* sonare_mixer_from_scene_json(const char* json, int sample_rate, int
       }
     }
 
+    // Per-strip channel pointers are checked here, with the other rejections,
+    // rather than inside the input loop below. Every other exit path returns
+    // before writing anything, and the shipped contract for a rejected block is
+    // that the caller's buffers are untouched (the non-finite case asserts
+    // exactly that). Validating after the zero-fill turned "this block was
+    // rejected, reuse the previous one" into a hard dropout.
+    const size_t count = std::min(input_count, mixer->strips.size());
+    for (size_t index = 0; index < count; ++index) {
+      if (!input_left[index] || !input_right[index]) {
+        return SONARE_ERROR_INVALID_PARAMETER;
+      }
+    }
+
     SONARE_C_TRY
     std::fill(output_left, output_left + num_samples, 0.0f);
     std::fill(output_right, output_right + num_samples, 0.0f);
@@ -547,11 +566,7 @@ SonareMixer* sonare_mixer_from_scene_json(const char* json, int sample_rate, int
 
     const int n = static_cast<int>(num_samples);
     mixer->graph.clear_inputs(n);
-    const size_t count = std::min(input_count, mixer->strips.size());
     for (size_t index = 0; index < count; ++index) {
-      if (!input_left[index] || !input_right[index]) {
-        return SONARE_ERROR_INVALID_PARAMETER;
-      }
       const std::string& id = mixer->strips[index]->id;
       mixer->graph.set_input(id, 0, input_left[index], n);
       mixer->graph.set_input(id, 1, input_right[index], n);

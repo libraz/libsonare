@@ -127,6 +127,7 @@ ChannelStrip::ChannelStrip(ChannelStripConfig config)
       panner_({config.pan, config.pan_law, config.smoothing_ms}),
       width_(1.0f, config.smoothing_ms),
       metering_enabled_(config.enable_metering),
+      meter_config_(config.meter),
       eq_position_(config.eq_position) {
   // Pre-reserve the vectors that the audio thread iterates while the control
   // thread may concurrently push_back into. The audio thread iterates
@@ -165,8 +166,8 @@ void ChannelStrip::prepare(double sample_rate, int max_block_size) {
   pre_meter_.reset();
   post_meter_.reset();
   if (metering_enabled_) {
-    pre_meter_.emplace(MeterConfig{true, true, 4});
-    post_meter_.emplace(MeterConfig{true, true, 4});
+    pre_meter_.emplace(meter_config_);
+    post_meter_.emplace(meter_config_);
     pre_meter_->prepare(sample_rate, max_block_size);
     post_meter_->prepare(sample_rate, max_block_size);
   }

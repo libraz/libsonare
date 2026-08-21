@@ -8,6 +8,7 @@
 /// destination layout has more than two planes (5.1 / 7.1). The two are chosen
 /// by dispatch, so "stereo pan-law behaviour is unchanged" holds by construction.
 
+#include <algorithm>
 #include <array>
 #include <atomic>
 
@@ -28,6 +29,20 @@ struct SurroundPanParams {
   float lfe = 0.0f;         ///< 0..1 scalar send into the LFE plane
   float distance = 1.0f;    ///< reserved (focus/spread), 1 in phase 1
 };
+
+/// @brief The parameters a surround writer will actually store for @p params.
+/// @details Placement is computed from the clamped values, so every writer that
+///          also caches what it was handed - ChannelStrip, the C ABI setter, the
+///          scene walker - resolves through here and a read-back reports what
+///          the panner is using. elevation and distance are reserved and pass
+///          through unclamped, matching the render path.
+inline SurroundPanParams clamp_surround_pan_params(const SurroundPanParams& params) noexcept {
+  SurroundPanParams out = params;
+  out.azimuth = std::clamp(params.azimuth, -180.0f, 180.0f);
+  out.divergence = std::clamp(params.divergence, 0.0f, 1.0f);
+  out.lfe = std::clamp(params.lfe, 0.0f, 1.0f);
+  return out;
+}
 
 /// Per-plane linear gain vector in canonical plane order. The non-LFE planes are
 /// unit-power normalized; the LFE plane carries the raw `lfe` scalar (it bypasses

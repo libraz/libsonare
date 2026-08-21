@@ -132,6 +132,24 @@ export interface MixSceneStrip {
     lfe: number;
     distance: number;
   };
+  /**
+   * Meter configuration for this strip's pre/post taps. Present only when the
+   * strip has opted out of some of its metering; absent means the full default
+   * (LUFS + true peak at 4x).
+   *
+   * Fixed when the mixer is built from the scene: a strip's meters size their
+   * buffers up front, so there is no setter for this. A full meter costs about
+   * 646 KB at 48 kHz and a strip carries two, so `lufs: false` (about 83 KB per
+   * meter) or `enabled: false` (about 145 KB for the whole strip instead of
+   * 1.4 MB) is worth setting for strips whose meters are never read.
+   */
+  metering?: {
+    enabled: boolean;
+    lufs: boolean;
+    truePeak: boolean;
+    /** Requested factor; the meter resolves it to the nearest of 2x / 4x / 8x. */
+    truePeakOversample: number;
+  };
   inserts: MixSceneInsert[];
   sends: MixSceneSend[];
 }

@@ -20,9 +20,20 @@ SonareMixer* sonare_mixer_create(int sample_rate, int max_block_size) {
   }
 
   SonareStrip* sonare_mixer_add_strip(SonareMixer * mixer, const char* id) {
+    // The historical full metering configuration: LUFS + true peak at 4x.
+    return sonare_mixer_add_strip_ex(mixer, id, 1, 1, 1, 0);
+  }
+
+  SonareStrip* sonare_mixer_add_strip_ex(SonareMixer * mixer, const char* id, int enable_metering,
+                                         int measure_lufs, int measure_true_peak,
+                                         int true_peak_oversample) {
     SONARE_C_API_ENTRY;
     if (!mixer || !id) {
       sonare_c_detail::set_last_error("mixer: handle and strip id are required");
+      return nullptr;
+    }
+    if (true_peak_oversample < 0 || true_peak_oversample > 16) {
+      sonare_c_detail::set_last_error("mixer: truePeakOversample must be in [0, 16]");
       return nullptr;
     }
     try {
@@ -33,9 +44,20 @@ SonareMixer* sonare_mixer_create(int sample_rate, int max_block_size) {
           return nullptr;
         }
       }
-      auto strip = std::make_unique<SonareStrip>();
+      sonare::mixing::ChannelStripConfig config;
+      config.enable_metering = enable_metering != 0;
+      config.meter.measure_lufs = measure_lufs != 0;
+      config.meter.measure_true_peak = measure_true_peak != 0;
+      // Zero is the "use the default" sentinel, matching the rest of the C ABI.
+      config.meter.true_peak_oversample =
+          true_peak_oversample > 0 ? true_peak_oversample : config.meter.true_peak_oversample;
+      auto strip = std::make_unique<SonareStrip>(config);
       strip->id = strip_id;
       strip->scene_strip.id = strip->id;
+      strip->scene_strip.metering.enabled = config.enable_metering;
+      strip->scene_strip.metering.lufs = config.meter.measure_lufs;
+      strip->scene_strip.metering.true_peak = config.meter.measure_true_peak;
+      strip->scene_strip.metering.true_peak_oversample = config.meter.true_peak_oversample;
       strip->owner = mixer;
       strip->strip.prepare(static_cast<double>(mixer->sample_rate), mixer->max_block_size);
       for (const auto& group : mixer->vca_groups) {
@@ -97,7 +119,7 @@ SonareMixer* sonare_mixer_create(int sample_rate, int max_block_size) {
       strip->strip.set_pan(pan);
       // Clamp the cached scene pan to the processor's valid range so save/reload is
       // faithful, matching set_dual_pan (which already clamps) and the live panner.
-      strip->scene_strip.pan = std::clamp(pan, -1.0f, 1.0f);
+      strip->scene_strip.pan = sonare::mixing::clamp_pan(pan);
       return SONARE_OK;
       SONARE_C_CATCH
     }
@@ -113,10 +135,10 @@ SonareMixer* sonare_mixer_create(int sample_rate, int max_block_size) {
       // Cache the nominal pan from the clamped L/R so the scene round-trips the same
       // value sonare_mixer_to_scene_json will export for a DualPan strip.
       strip->scene_strip.pan =
-          0.5f * (std::clamp(left_pan, -1.0f, 1.0f) + std::clamp(right_pan, -1.0f, 1.0f));
+          0.5f * (sonare::mixing::clamp_pan(left_pan) + sonare::mixing::clamp_pan(right_pan));
       strip->scene_strip.pan_mode = SONARE_PAN_MODE_DUAL_PAN;
-      strip->scene_strip.dual_pan_left = std::clamp(left_pan, -1.0f, 1.0f);
-      strip->scene_strip.dual_pan_right = std::clamp(right_pan, -1.0f, 1.0f);
+      strip->scene_strip.dual_pan_left = sonare::mixing::clamp_pan(left_pan);
+      strip->scene_strip.dual_pan_right = sonare::mixing::clamp_pan(right_pan);
       return SONARE_OK;
       SONARE_C_CATCH
     }
@@ -128,11 +150,15 @@ SonareMixer* sonare_mixer_create(int sample_rate, int max_block_size) {
         return SONARE_ERROR_INVALID_PARAMETER;
       }
       SONARE_C_TRY
-      // Stored on the scene strip; inert until the surround DSP path consumes it.
-      strip->scene_strip.surround_pan.azimuth = std::clamp(pan->azimuth, -180.0f, 180.0f);
-      strip->scene_strip.surround_pan.elevation = pan->elevation;
-      strip->scene_strip.surround_pan.divergence = std::clamp(pan->divergence, 0.0f, 1.0f);
-      strip->scene_strip.surround_pan.lfe = std::clamp(pan->lfe, 0.0f, 1.0f);
+      // Stored on the scene strip and mirrored onto the live strip below. The
+      // engine's track mixer reads it when the lane feeds a >2-channel
+      // destination; the stereo-only mixer block entry points do not.
+      const sonare::mixing::SurroundPanParams stored = sonare::mixing::clamp_surround_pan_params(
+          {pan->azimuth, pan->elevation, pan->divergence, pan->lfe, pan->distance});
+      strip->scene_strip.surround_pan.azimuth = stored.azimuth;
+      strip->scene_strip.surround_pan.elevation = stored.elevation;
+      strip->scene_strip.surround_pan.divergence = stored.divergence;
+      strip->scene_strip.surround_pan.lfe = stored.lfe;
       // distance is a positive scale with a core default of 1.0; SonareSurroundPan
       // has no C field initializers, so a zero-initialized struct (a C host that
       // only sets azimuth) arrives with distance == 0. Treat distance <= 0 as the
@@ -157,7 +183,9 @@ SonareMixer* sonare_mixer_create(int sample_rate, int max_block_size) {
       }
       SONARE_C_TRY
       strip->strip.set_width(width);
-      strip->scene_strip.width = width;
+      // Cache the clamped width so save/reload is faithful, matching set_pan
+      // and set_dual_pan (which already clamp) and the live width processor.
+      strip->scene_strip.width = sonare::mixing::clamp_width(width);
       return SONARE_OK;
       SONARE_C_CATCH
     }
