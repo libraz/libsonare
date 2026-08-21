@@ -407,18 +407,38 @@ describe('StreamingEqualizer', () => {
     const sampleRate = 44100;
     const source = generateSine(1000, sampleRate, 0.25);
     const reference = generateSine(2000, sampleRate, 0.25);
-    const omitted = new StreamingEqualizer({ sampleRate, maxBlockSize: 512 });
-    const explicit = new StreamingEqualizer({ sampleRate, maxBlockSize: 512 });
 
-    omitted.match(source, reference, { maxBands: 6 });
-    explicit.match(source, reference, { sampleRate, maxBands: 6 });
+    // spectrum() reports the snapshot process() publishes, so reading it with no
+    // block having gone through returns the untouched initial one -- identical
+    // for every instance whatever match() did to the bands.
+    const matchedGains = (options: { sampleRate?: number; maxBands?: number }): number[] => {
+      const eq = new StreamingEqualizer({ sampleRate, maxBlockSize: 512 });
+      try {
+        eq.match(source, reference, options);
+        eq.processMono(generateSine(1000, sampleRate, 512 / sampleRate));
+        return Array.from(eq.spectrum().bandGainDb);
+      } finally {
+        eq.destroy();
+      }
+    };
 
-    const omittedGain = Array.from(omitted.spectrum().bandGainDb);
-    const explicitGain = Array.from(explicit.spectrum().bandGainDb);
-    expect(omittedGain.length).toBe(explicitGain.length);
-    for (let i = 0; i < omittedGain.length; i += 1) {
-      expect(omittedGain[i]).toBeCloseTo(explicitGain[i], 6);
+    const omitted = matchedGains({ maxBands: 6 });
+    const atPrepared = matchedGains({ sampleRate, maxBands: 6 });
+    const atOther = matchedGains({ sampleRate: 22050, maxBands: 6 });
+
+    // match() has to have moved a band, or every comparison below holds between
+    // two default curves and proves nothing about the sample rate.
+    expect(omitted.some((gain) => Math.abs(gain) > 0.1)).toBe(true);
+
+    expect(omitted.length).toBe(atPrepared.length);
+    for (let i = 0; i < omitted.length; i += 1) {
+      expect(omitted[i]).toBeCloseTo(atPrepared[i], 6);
     }
+
+    // The default is the PREPARED rate specifically, not merely some fixed rate:
+    // reading the same buffers as if they were another rate maps the match bands
+    // onto other frequencies, so the curve has to differ.
+    expect(atOther.some((gain, i) => Math.abs(gain - atPrepared[i]) > 0.1)).toBe(true);
   });
 });
 

@@ -588,6 +588,94 @@ TEST_CASE("CcMap param_to_cc round-trips every binding kind", "[midi]") {
   REQUIRE_FALSE(map.param_to_cc(999, 0.5f, 0, &out));
 }
 
+// param_to_cc emits a selector-addressed binding as a one-word Registered /
+// Assignable Controller, and cc_to_breakpoint used to resolve a message by its
+// controller number alone. That closed the round trip for 7-bit and 14-bit
+// bindings only: an RPN / NRPN message carries no controller number, so it fell
+// out before any lookup ran, and the two NRPN bindings below were in any case
+// indistinguishable by cc_number -- Data Entry is the cc_number both carry.
+TEST_CASE("CcMap cc_to_breakpoint addresses selector bindings by selector", "[midi]") {
+  CcMap map;
+  CcBinding low;
+  low.kind = sonare::midi::CcBindingKind::kNrpn;
+  low.cc_number = 6;
+  low.channel = 3;
+  low.param_id = 700;
+  low.selector_msb = 1;
+  low.selector_lsb = 2;
+  low.min_value = 0.0f;
+  low.max_value = 1.0f;
+  REQUIRE(map.bind(low));
+
+  CcBinding high = low;
+  high.param_id = 701;
+  high.selector_msb = 1;
+  high.selector_lsb = 3;
+  high.min_value = 0.0f;
+  high.max_value = 10.0f;
+  REQUIRE(map.bind(high));
+  // Different selectors, so both coexist on the one channel.
+  REQUIRE(map.binding_count() == 2);
+
+  std::vector<sonare::automation::Breakpoint> points;
+  sonare::midi::Ump out;
+  REQUIRE(map.param_to_cc(701, 5.0f, 0, &out));
+  REQUIRE(map.cc_to_breakpoint(out, 8.0, &points));
+  REQUIRE(points.size() == 1);
+  REQUIRE(points[0].ppq == 8.0);
+  // 5.0 over [0,10] is the second binding's range, not the first's [0,1].
+  REQUIRE(std::fabs(points[0].value - 5.0f) < 1.0e-3f);
+
+  REQUIRE(map.param_to_cc(700, 0.25f, 0, &out));
+  REQUIRE(map.cc_to_breakpoint(out, 9.0, &points));
+  REQUIRE(points.size() == 2);
+  REQUIRE(std::fabs(points[1].value - 0.25f) < 1.0e-3f);
+
+  // An RPN with the same selector is a different address, so it stays unbound.
+  const auto rpn = sonare::midi::make_midi2_registered_controller(0, 3, 1, 3, 0xFFFFFFFFu);
+  REQUIRE_FALSE(map.cc_to_breakpoint(rpn, 10.0, &points));
+  REQUIRE(points.size() == 2);
+
+  // And a plain Data Entry control-change names no selector binding: matching it
+  // on cc_number would have handed CC#6 whichever NRPN sat first in the table.
+  const auto data_entry = make_midi1_control_change(0, 3, 6, 127);
+  REQUIRE_FALSE(map.cc_to_breakpoint(data_entry, 11.0, &points));
+  REQUIRE(points.size() == 2);
+}
+
+// The live decode path resolves the same addresses: a one-word RPN / NRPN is
+// full-resolution and needs none of the MIDI 1.0 selector accumulator, but it
+// used to be rejected before reaching any lookup for lack of a cc_number.
+TEST_CASE("CcMap observe_live_cc resolves one-word RPN and NRPN", "[midi]") {
+  CcMap map;
+  CcBinding nrpn;
+  nrpn.kind = sonare::midi::CcBindingKind::kNrpn;
+  nrpn.cc_number = 6;
+  nrpn.channel = 2;
+  nrpn.param_id = 810;
+  nrpn.selector_msb = 5;
+  nrpn.selector_lsb = 6;
+  nrpn.min_value = -1.0f;
+  nrpn.max_value = 1.0f;
+  REQUIRE(map.bind(nrpn));
+
+  uint32_t param = 0;
+  float unit = 0.0f;
+  const auto full = sonare::midi::make_midi2_assignable_controller(0, 2, 5, 6, 0xFFFFFFFFu);
+  REQUIRE(map.observe_live_cc(full, &param, &unit));
+  REQUIRE(param == 810);
+  REQUIRE(std::fabs(unit - 1.0f) < 1.0e-5f);
+
+  // A Registered Controller on the same (bank, index) is a different kind and so
+  // a different address.
+  const auto wrong_space = sonare::midi::make_midi2_registered_controller(0, 2, 5, 6, 0xFFFFFFFFu);
+  REQUIRE_FALSE(map.observe_live_cc(wrong_space, &param, &unit));
+
+  // As is the same selector on another channel.
+  const auto wrong_channel = sonare::midi::make_midi2_assignable_controller(0, 4, 5, 6, 0u);
+  REQUIRE_FALSE(map.observe_live_cc(wrong_channel, &param, &unit));
+}
+
 // A controller has no "unbent" center to preserve, so it scales by bit
 // replication. The min-center-max pitch-bend scaler this used to call buys that
 // center at the cost of precision across the rest of the range: it round-trips

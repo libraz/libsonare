@@ -194,9 +194,15 @@ class CcMap {
 
   // -- CONTROL thread: CC <-> automation conversion ------------------------
 
-  /// Append a Breakpoint at `ppq` for the parameter bound to this control-change
-  /// UMP. Returns false if `ump` is not a control-change or is unbound. MAY
+  /// Append a Breakpoint at `ppq` for the parameter bound to this controller
+  /// UMP. Returns false if `ump` is not a controller message or is unbound. MAY
   /// allocate (push_back). The breakpoint's value is the unit-mapped CC value.
+  ///
+  /// The binding is addressed by the same rule bind() uses, so every message
+  /// param_to_cc emits reads back here: a Registered / Assignable Controller
+  /// resolves through its (kind, selector) address, which is what keeps two
+  /// NRPN bindings on one channel apart -- addressing them by cc_number cannot,
+  /// because Data Entry is the cc_number all of them carry.
   bool cc_to_breakpoint(const Ump& ump, double ppq, std::vector<automation::Breakpoint>* out) const;
 
   /// Build a controller UMP from an automation unit value for `param_id`.
@@ -226,6 +232,10 @@ class CcMap {
   // Returns the index of an exact (cc, channel) binding, or kMaxBindings.
   size_t find_exact(uint8_t cc_number, uint8_t channel) const noexcept;
   size_t find_exact_binding(const CcBinding& binding) const noexcept;
+  // The binding an incoming controller message addresses, or kMaxBindings. The
+  // read side of same_binding_identity(): which field carries the address is
+  // decided by the message, exactly as bind() decides it by the kind.
+  size_t find_addressed_binding(const Ump& ump) const noexcept;
   bool commit_learned_binding(const CcBinding& binding, CcBinding* out_binding);
 
   std::array<CcBinding, kMaxBindings> bindings_{};

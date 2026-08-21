@@ -106,6 +106,33 @@ size_t CcMap::find_exact(uint8_t cc_number, uint8_t channel) const noexcept {
   return kMaxBindings;
 }
 
+size_t CcMap::find_addressed_binding(const Ump& ump) const noexcept {
+  const uint8_t channel = ump.channel();
+  if (is_registered_or_assignable_controller(ump)) {
+    // The selector travels as (bank, index) in word[0]'s two low bytes, the same
+    // pair param_to_cc writes from (selector_msb, selector_lsb).
+    const CcBindingKind kind =
+        ump.status_nibble() == static_cast<uint8_t>(UmpStatus::kRegisteredController)
+            ? CcBindingKind::kRpn
+            : CcBindingKind::kNrpn;
+    const uint8_t bank = static_cast<uint8_t>((ump.words[0] >> 8u) & 0x7Fu);
+    const uint8_t index = static_cast<uint8_t>(ump.words[0] & 0x7Fu);
+    return find_live_binding(channel, [&](const CcBinding& b) {
+      return b.kind == kind && b.selector_msb == bank && b.selector_lsb == index;
+    });
+  }
+  uint8_t cc = 0;
+  if (!cc_number_of(ump, &cc)) {
+    return kMaxBindings;
+  }
+  // A selector-addressed binding is deliberately unreachable from a plain
+  // control-change: its cc_number is the Data Entry controller every RPN/NRPN
+  // binding shares, so matching on it would hand an unrelated CC#6 the first
+  // NRPN binding in the table.
+  return find_live_binding(
+      channel, [&](const CcBinding& b) { return !is_selector_kind(b.kind) && b.cc_number == cc; });
+}
+
 size_t CcMap::find_exact_binding(const CcBinding& binding) const noexcept {
   for (size_t i = 0; i < count_; ++i) {
     if (same_binding_identity(bindings_[i], binding)) {
@@ -382,25 +409,30 @@ bool CcMap::observe_live_cc(const Ump& ump, uint32_t* out_param, float* out_unit
   if (out_param == nullptr || out_unit == nullptr) {
     return false;
   }
+  // Every MIDI 2.0 controller message already carries full resolution in
+  // word[1] and names its own binding, so it resolves without the MIDI 1.0
+  // accumulator (14-bit MSB/LSB reassembly and the selector + Data Entry
+  // gesture are both MIDI 1.0 constructs). This arm covers the one-word
+  // Registered / Assignable Controller forms too: they are what param_to_cc
+  // emits for a selector-addressed binding, and resolving them by cc_number is
+  // impossible because they carry no controller number at all.
+  if (ump.message_type() == UmpMessageType::kMidi2ChannelVoice) {
+    const size_t idx = find_addressed_binding(ump);
+    float norm = 0.0f;
+    if (idx == kMaxBindings || !cc_normalized_value(ump, &norm)) {
+      return false;
+    }
+    const CcBinding& b = bindings_[idx];
+    *out_param = b.param_id;
+    *out_unit = b.min_value + norm * (b.max_value - b.min_value);
+    return true;
+  }
+
   uint8_t cc = 0;
   if (!cc_number_of(ump, &cc)) {
     return false;
   }
   const uint8_t channel = ump.channel();
-
-  // MIDI 2.0 control-change already carries full resolution in word[1]; resolve
-  // directly (14-bit MSB/LSB reassembly is a MIDI 1.0 construct).
-  if (ump.message_type() == UmpMessageType::kMidi2ChannelVoice) {
-    float norm = 0.0f;
-    uint32_t param = 0;
-    if (!cc_normalized_value(ump, &norm) || !lookup_param(cc, channel, &param) ||
-        !value_to_unit(cc, channel, norm, out_unit)) {
-      return false;
-    }
-    *out_param = param;
-    return true;
-  }
-
   const uint8_t value7 = static_cast<uint8_t>(ump.words[0] & 0x7Fu);
   LiveChannelState& st = live_->channels[channel & 0x0Fu];
 
@@ -507,18 +539,18 @@ bool CcMap::cc_to_breakpoint(const Ump& ump, double ppq,
   if (out == nullptr) {
     return false;
   }
-  uint8_t cc = 0;
   float norm = 0.0f;
-  if (!cc_number_of(ump, &cc) || !cc_normalized_value(ump, &norm)) {
+  if (!cc_normalized_value(ump, &norm)) {
     return false;
   }
-  float unit = 0.0f;
-  if (!value_to_unit(cc, ump.channel(), norm, &unit)) {
+  const size_t idx = find_addressed_binding(ump);
+  if (idx == kMaxBindings) {
     return false;
   }
+  const CcBinding& b = bindings_[idx];
   automation::Breakpoint bp;
   bp.ppq = ppq;
-  bp.value = unit;
+  bp.value = b.min_value + norm * (b.max_value - b.min_value);
   bp.curve_to_next = automation::CurveType::Linear;
   out->push_back(bp);
   return true;

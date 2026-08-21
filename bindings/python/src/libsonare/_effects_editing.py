@@ -307,8 +307,11 @@ def pitch_correct_to_midi(
     """Pitch-correct audio from a current MIDI note to a target MIDI note.
 
     Applies one constant, immediate transpose with no retune glide and preserves
-    the input buffer length. Use :func:`pitch_correct_to_midi_timevarying` for a
-    caller-supplied pitch contour.
+    the input buffer length. The whole interval is applied however large it is:
+    both endpoints are validated to [0, 127], so a two-octave move such as
+    C3 -> C5 transposes by the full 24 semitones. Use
+    :func:`pitch_correct_to_midi_timevarying` for a caller-supplied pitch
+    contour.
 
     Args:
         samples: Audio samples.

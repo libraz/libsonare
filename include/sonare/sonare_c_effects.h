@@ -54,8 +54,10 @@ SonareError sonare_pitch_shift_ex(const float* samples, size_t length, int sampl
 /// Applies a single CONSTANT transposition: the whole buffer is treated as one
 /// note at @p current_midi and shifted by (target_midi - current_midi). This is
 /// an immediate transpose with no retune glide, and the returned buffer has
-/// exactly the input length. This is not pitch tracking — it does not follow a
-/// time-varying melody. For
+/// exactly the input length. The whole interval is applied however large it is:
+/// both endpoints are validated to [0, 127], so a two-octave move such as
+/// C3 -> C5 transposes by the full 24 semitones. This is not pitch tracking — it
+/// does not follow a time-varying melody. For
 /// contour-following correction use @ref sonare_pitch_correct_to_midi_timevarying
 /// with a caller-supplied per-frame F0 track.
 SonareError sonare_pitch_correct_to_midi(const float* samples, size_t length, int sample_rate,

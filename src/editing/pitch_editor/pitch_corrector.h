@@ -17,6 +17,10 @@ struct PitchCorrectionConfig {
   ScaleQuantizerConfig scale{};
   StretchBackend backend = StretchBackend::NativeSpectral;
   float retune_amount = 1.0f;
+  /// How far a RETUNE may drag a measured pitch toward its target. Bounds
+  /// correction_to_midi / correction_to_scale and the per-frame pipeline only;
+  /// a caller-stated interval (shift / correct_to_midi from an explicit
+  /// current_midi) is applied in full.
   float max_correction_semitones = constants::kSemitonesPerOctave;
   float retune_speed_ms = 50.0f;          ///< Retune IIR time constant (ms)
   float vibrato_threshold_cents = 20.0f;  ///< Below this, preserve natural pitch (vibrato bypass)
@@ -26,9 +30,19 @@ class PitchCorrector {
  public:
   explicit PitchCorrector(PitchCorrectionConfig config = {});
 
+  /// @brief Transposes the whole buffer by @p semitones.
+  /// @details The caller names the interval, so it is applied in full:
+  ///          @c max_correction_semitones does not bound this call. A
+  ///          non-finite @p semitones transposes by 0.
   Audio shift(const Audio& audio, float semitones) const;
 
   /// @brief Applies one constant transpose from current MIDI to target MIDI.
+  /// @details The whole (target_midi - current_midi) interval is applied. Both
+  ///          endpoints are caller-stated, so this is a transposition rather
+  ///          than a correction and @c max_correction_semitones does not bound
+  ///          it: C3 -> C5 transposes by the full 24 semitones.
+  /// @throws SonareException(InvalidParameter) when either MIDI number is
+  ///         non-finite or outside [0, 127].
   Audio correct_to_midi(const Audio& audio, float current_midi, float target_midi) const;
   /// @brief Corrects every voiced frame toward a fixed MIDI target (time-varying).
   Audio correct_to_midi(const Audio& audio, const F0Track& track, float target_midi) const;

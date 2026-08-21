@@ -48,9 +48,15 @@ PitchCorrector::PitchCorrector(PitchCorrectionConfig config) : config_(config) {
 }
 
 Audio PitchCorrector::shift(const Audio& audio, float semitones) const {
+  // NOT clamped by max_correction_semitones. That limit bounds how far the
+  // RETUNE paths may drag a MEASURED pitch toward a target the caller did not
+  // state; here the caller states the interval outright, so clamping it returns
+  // a different transposition than the one asked for and reports success. The
+  // clamp stays on correction_to_midi / correction_to_scale and the per-frame
+  // pipeline, which is what the config field is named for.
   PitchShiftConfig shift_config;
   shift_config.backend = config_.backend;
-  return pitch_shift(audio, apply_limits(semitones), shift_config);
+  return pitch_shift(audio, std::isfinite(semitones) ? semitones : 0.0f, shift_config);
 }
 
 Audio PitchCorrector::correct_to_midi(const Audio& audio, float current_midi,
