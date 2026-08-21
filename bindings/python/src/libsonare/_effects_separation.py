@@ -54,6 +54,7 @@ def _validate_hpss_kernel(fn_name: str, value: int, arg_name: str) -> int:
 # ============================================================================
 
 
+@_guard_buffer("s")
 def decompose(
     s: Sequence[float] | list[float],
     n_features: int,
@@ -104,6 +105,7 @@ def decompose(
         return (w, h)
 
 
+@_guard_buffer("s")
 def decompose_with_init(
     s: Sequence[float] | list[float],
     n_features: int,
@@ -260,6 +262,7 @@ def decompose_stems(
         }
 
 
+@_guard_buffer("s")
 def nn_filter(
     s: Sequence[float] | list[float],
     n_features: int,

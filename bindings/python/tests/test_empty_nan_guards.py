@@ -10,11 +10,15 @@ equally valid.
 
 from __future__ import annotations
 
+import array
+import ast
 import math
+import pathlib
 
 import numpy as np
 import pytest
 
+import libsonare
 from libsonare import (
     bass_chroma,
     chroma,
@@ -309,6 +313,63 @@ class TestSonareValueErrorCatchContract:
         assert exc_info.value.code == 4
         assert exc_info.value.code_name == "InvalidParameter"
 
+    def test_set_midi_clips_group_overflow_is_a_sonare_value_error(self):
+        """The one site the sweep below found, pinned by behaviour as well.
+
+        A group above 255 is caught in Python because ``c_uint8`` would wrap it
+        onto a value the C ABI's own [0, 15] check accepts. The existing engine
+        coverage passes ``group=16``, which the C ABI rejects, so this branch
+        had no test and its error class went unnoticed.
+        """
+        from libsonare import EngineMidiClipSchedule, EngineMidiEvent, RealtimeEngine
+
+        with (
+            RealtimeEngine(sample_rate=48000.0, max_block_size=128) as engine,
+            pytest.raises(SonareValueError) as exc_info,
+        ):
+            engine.set_midi_clips(
+                [
+                    EngineMidiClipSchedule(
+                        id=1,
+                        track_id=6,
+                        destination_id=6,
+                        events=[EngineMidiEvent(0, word0=0, word_count=1, group=256)],
+                    )
+                ]
+            )
+        assert isinstance(exc_info.value, SonareError)
+        assert exc_info.value.code == 4
+
+    def test_no_library_module_raises_a_bare_value_error(self):
+        """The contract is a property of the package, not of one probe function.
+
+        A bare ``ValueError`` satisfies ``except ValueError`` but escapes
+        ``except SonareError`` and carries no ``.code``, so it cannot be mapped
+        to an exit code. Probing a single entry point cannot see the one module
+        that still raises it, which is how ``set_midi_clips`` stayed a plain
+        ``ValueError`` after the hierarchy was introduced.
+
+        The CLI modules are out of scope: their raises are argparse-level
+        control flow that ``cli.main`` catches and turns into an exit code, not
+        rejections of a library argument.
+        """
+        package = pathlib.Path(libsonare.__file__).parent
+        offenders: list[str] = []
+        for path in sorted(package.glob("*.py")):
+            if path.name == "cli.py" or path.name.startswith("_cli_"):
+                continue
+            tree = ast.parse(path.read_text(encoding="utf-8"))
+            for node in ast.walk(tree):
+                if not isinstance(node, ast.Raise) or node.exc is None:
+                    continue
+                raised = node.exc.func if isinstance(node.exc, ast.Call) else node.exc
+                if isinstance(raised, ast.Name) and raised.id == "ValueError":
+                    offenders.append(f"{path.name}:{node.lineno}")
+        assert offenders == [], (
+            "library modules must raise SonareValueError so the rejection is "
+            f"catchable as both ValueError and SonareError: {offenders}"
+        )
+
 
 # Spectral transforms whose buffer used to reach the C ABI unchecked, so an
 # empty or non-finite input surfaced as a bare ``[4] Invalid parameter``.
@@ -392,3 +453,48 @@ class TestPositiveSmoke:
         out, latency = mastering_dynamics_compressor(sig, SR)
         assert len(out) == len(sig)
         assert isinstance(latency, int)
+
+
+class TestDocumentedBufferInputForms:
+    """Every input form `_as_float32_buffer` documents, thrown at a guarded entry.
+
+    The helper's comment used to list ``generator`` alongside the sequence
+    types. NumPy cannot convert one, so a generator escaped the facade as a bare
+    ``TypeError`` — the one shape of bad input that bypassed the guard's promise
+    to name the function and the argument. Tests only ever passed ndarrays, so
+    nothing noticed.
+    """
+
+    ACCEPTED = {
+        "list": lambda values: list(values),
+        "tuple": lambda values: tuple(values),
+        "array.array": lambda values: array.array("f", values),
+        "range": lambda _values: range(1, 65),
+        "memoryview": lambda values: memoryview(np.asarray(values, dtype=np.float32)),
+        "ndarray_float32": lambda values: np.asarray(values, dtype=np.float32),
+        "ndarray_float64": lambda values: np.asarray(values, dtype=np.float64),
+    }
+
+    @pytest.mark.parametrize("form", sorted(ACCEPTED))
+    def test_documented_form_converts(self, form):
+        samples = self.ACCEPTED[form](_sine(SR)[:1024].tolist())
+        assert math.isfinite(metering_rms_db(samples))
+
+    @pytest.mark.parametrize("form", sorted(ACCEPTED))
+    def test_documented_form_still_reports_an_empty_buffer(self, form):
+        empty = range(0) if form == "range" else self.ACCEPTED[form]([])
+        with pytest.raises(SonareValueError, match=r"metering_rms_db: samples must not be empty"):
+            metering_rms_db(empty)
+
+    def test_generator_is_rejected_by_the_guard_not_by_numpy(self):
+        # Not a documented form, but it must still fail the way the binding
+        # promises rather than leaking NumPy's own TypeError.
+        with pytest.raises(SonareValueError) as exc_info:
+            metering_rms_db(float(i) for i in range(1024))
+        assert "metering_rms_db: samples" in str(exc_info.value)
+        assert exc_info.value.code == 4
+
+    def test_uncoercible_object_is_rejected_by_the_guard(self):
+        with pytest.raises(SonareValueError) as exc_info:
+            metering_rms_db(["not", "numbers"])
+        assert "metering_rms_db: samples" in str(exc_info.value)

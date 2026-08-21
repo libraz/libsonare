@@ -577,7 +577,9 @@ class RealtimeEngine(_EngineMidiMixin, _EngineMixingMixin, _EngineIoMixin):
                 # finer [0, 15] MIDI range.
                 group = int(event.group)
                 if not 0 <= group <= 255:
-                    raise ValueError("EngineMidiEvent.group must be an integer in [0, 255]")
+                    raise SonareValueError(
+                        "set_midi_clips: EngineMidiEvent.group must be an integer in [0, 255]"
+                    )
                 # Same tolerance the C bridge documents: a word_count outside
                 # [1, 4] means "infer the word form", so narrow it by range
                 # rather than letting c_uint8 wrap 257 onto a spurious 1.

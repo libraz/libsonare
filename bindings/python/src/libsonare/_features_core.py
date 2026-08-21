@@ -332,6 +332,7 @@ def mfcc(
         lib.sonare_free_mfcc_result(ctypes.byref(out))
 
 
+@_guard_buffer("features")
 def mel_delta(
     features: Sequence[float] | list[float],
     n_features: int,
@@ -1345,6 +1346,7 @@ def pitch_pyin(
         lib.sonare_free_pitch_result(ctypes.byref(out))
 
 
+@_guard_buffer("f0_hz")
 def note_segments(
     f0_hz: Sequence[float] | list[float],
     voiced_prob: Sequence[float] | list[float],

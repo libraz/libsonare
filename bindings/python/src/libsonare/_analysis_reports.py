@@ -372,6 +372,7 @@ def analyze_with_progress(
     return _parse_analysis_json(data)
 
 
+@_guard_buffer("beat_times")
 def estimate_meter(
     beat_times: Sequence[float],
     beat_strengths: Sequence[float],

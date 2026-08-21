@@ -381,6 +381,7 @@ def pcen(
         return _float_array_result(out, out_length.value)
 
 
+@_guard_buffer("chromagram")
 def tonnetz(chromagram: Sequence[float] | list[float], n_chroma: int, n_frames: int) -> list[float]:
     """Compute Tonnetz from row-major chromagram data."""
     lib = _get_lib()

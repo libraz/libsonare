@@ -88,25 +88,26 @@ def _resolve(dotted: str) -> object:
     return target
 
 
-@pytest.mark.parametrize(
-    ("stub_name", "dotted", "node"),
-    [pytest.param(s, d, n, id=f"{s}:{d}") for s, d, n in STUB_CALLABLES],
-)
-def test_stub_signature_matches_runtime(stub_name: str, dotted: str, node: ast.FunctionDef) -> None:
-    """A shipped stub's parameter names, kinds and defaults must match runtime."""
-    runtime = _resolve(dotted)
-    assert runtime is not None, f"{dotted} is declared in {stub_name} but absent at runtime"
-    try:
-        runtime_parameters = list(inspect.signature(runtime).parameters.values())
-    except (TypeError, ValueError) as exc:  # pragma: no cover - defensive
-        pytest.fail(f"{dotted}: runtime object has no inspectable signature ({exc})")
+def _assert_signature_matches(
+    stub_name: str,
+    dotted: str,
+    node: ast.FunctionDef,
+    runtime_parameters: list[inspect.Parameter],
+    *,
+    drop_leading: int = 0,
+) -> None:
+    """Compare one stub declaration's parameter names, kinds and defaults.
 
-    decorators = {d.id for d in node.decorator_list if isinstance(d, ast.Name)}
+    ``drop_leading`` removes stub-only leading parameters the runtime signature
+    does not carry — ``cls`` on a classmethod, ``self`` on a ``__init__``
+    reached through the class rather than an instance.
+    """
     posonly, positional = list(node.args.posonlyargs), list(node.args.args)
-    # A classmethod's `cls` is not in the runtime signature; a method's `self`
-    # is already absent because the lookup goes through the class attribute.
-    if "classmethod" in decorators and positional:
-        positional = positional[1:]
+    if drop_leading:
+        if posonly:
+            posonly = posonly[drop_leading:]
+        else:
+            positional = positional[drop_leading:]
     stub_args = posonly + positional
 
     expected_names = [a.arg for a in stub_args] + [a.arg for a in node.args.kwonlyargs]
@@ -154,6 +155,192 @@ def test_stub_signature_matches_runtime(stub_name: str, dotted: str, node: ast.F
             assert parameter.default == expected, (
                 f"{dotted}.{parameter.name} default drifted: {parameter.default!r} != {expected!r}"
             )
+
+
+@pytest.mark.parametrize(
+    ("stub_name", "dotted", "node"),
+    [pytest.param(s, d, n, id=f"{s}:{d}") for s, d, n in STUB_CALLABLES],
+)
+def test_stub_signature_matches_runtime(stub_name: str, dotted: str, node: ast.FunctionDef) -> None:
+    """A shipped stub's parameter names, kinds and defaults must match runtime."""
+    runtime = _resolve(dotted)
+    assert runtime is not None, f"{dotted} is declared in {stub_name} but absent at runtime"
+    try:
+        runtime_parameters = list(inspect.signature(runtime).parameters.values())
+    except (TypeError, ValueError) as exc:  # pragma: no cover - defensive
+        pytest.fail(f"{dotted}: runtime object has no inspectable signature ({exc})")
+
+    decorators = {d.id for d in node.decorator_list if isinstance(d, ast.Name)}
+    # A classmethod's `cls` is not in the runtime signature; a method's `self`
+    # is already absent because the lookup goes through the class attribute.
+    _assert_signature_matches(
+        stub_name,
+        dotted,
+        node,
+        runtime_parameters,
+        drop_leading=1 if "classmethod" in decorators else 0,
+    )
+
+
+def _stub_type_aliases(tree: ast.Module) -> dict[str, str]:
+    """``Name: TypeAlias = ...`` declarations, so an alias can be expanded."""
+    return {
+        node.target.id: ast.unparse(node.value)
+        for node in tree.body
+        if isinstance(node, ast.AnnAssign)
+        and isinstance(node.target, ast.Name)
+        and node.value is not None
+    }
+
+
+def _expand_aliases(text: str, aliases: dict[str, str], depth: int = 0) -> str:
+    """Substitute stub-local type aliases into an annotation, recursively."""
+    if depth > 6:  # pragma: no cover - alias cycles are not expected
+        return text
+    try:
+        node = ast.parse(text, mode="eval").body
+    except SyntaxError:  # pragma: no cover - stubs parse as expressions
+        return text
+
+    class _Substitute(ast.NodeTransformer):
+        def visit_Name(self, name: ast.Name) -> ast.AST:
+            if name.id in aliases:
+                return ast.parse(
+                    _expand_aliases(aliases[name.id], aliases, depth + 1), mode="eval"
+                ).body
+            return name
+
+    return ast.unparse(_Substitute().visit(node))
+
+
+def _mentions_any(text: str) -> bool:
+    try:
+        node = ast.parse(text, mode="eval").body
+    except SyntaxError:  # pragma: no cover - annotations parse as expressions
+        return False
+    return any(isinstance(n, ast.Name) and n.id == "Any" for n in ast.walk(node))
+
+
+def _open_slot_parameters() -> list[tuple[str, str, str, str, str]]:
+    """(stub, dotted, arg, stub annotation, runtime annotation) for open runtime types."""
+    found: list[tuple[str, str, str, str, str]] = []
+    for stub_name in sorted(_STUB_FLOORS):
+        tree = ast.parse((STUB_DIR / stub_name).read_text(encoding="utf-8"))
+        aliases = _stub_type_aliases(tree)
+        for _stub, dotted, node in STUB_CALLABLES:
+            if _stub != stub_name:
+                continue
+            runtime = _resolve(dotted)
+            if runtime is None:
+                continue
+            try:
+                parameters = inspect.signature(runtime).parameters
+            except (TypeError, ValueError):  # pragma: no cover - defensive
+                continue
+            declared = list(node.args.posonlyargs) + list(node.args.args)
+            declared += list(node.args.kwonlyargs)
+            for argument in declared:
+                if argument.arg in ("self", "cls") or argument.annotation is None:
+                    continue
+                parameter = parameters.get(argument.arg)
+                if parameter is None or parameter.annotation is inspect.Parameter.empty:
+                    continue
+                runtime_annotation = str(parameter.annotation)
+                if not _mentions_any(runtime_annotation):
+                    continue
+                found.append(
+                    (
+                        stub_name,
+                        dotted,
+                        argument.arg,
+                        _expand_aliases(ast.unparse(argument.annotation), aliases),
+                        runtime_annotation,
+                    )
+                )
+    return found
+
+
+def test_stub_does_not_close_an_open_runtime_parameter() -> None:
+    """A stub may refine a runtime type, but not close one left deliberately open.
+
+    Comparing annotations in general needs a type checker: a stub narrowing
+    ``str`` to a ``Literal`` of the valid names, or widening a sequence to also
+    admit ``np.ndarray``, is the point of shipping stubs and differs from
+    runtime on purpose. What is decidable without one is the direction that is
+    never intentional — the runtime says ``Any`` inside a container because the
+    value shape is open (a nested config dict), and the stub declares a closed
+    value type, so the documented usage fails to type-check for anyone
+    consuming ``py.typed``.
+
+    The set this inspects is small; it is a check on one construct, not a
+    general stub/runtime type comparison, and the floor below records that.
+    """
+    open_slots = _open_slot_parameters()
+    assert len(open_slots) >= 4, (
+        "no open-typed parameters found; the alias expansion or the collector "
+        f"stopped matching: {open_slots}"
+    )
+    closed = [
+        f"{stub}:{dotted}.{arg} declares {stub_type} for a runtime {runtime_type}"
+        for stub, dotted, arg, stub_type, runtime_type in open_slots
+        if not _mentions_any(stub_type)
+    ]
+    assert closed == [], (
+        "shipped stubs must accept everything the runtime accepts, and these "
+        f"close a value type the runtime leaves open: {closed}"
+    )
+
+
+def _collect_types_stub_constructors() -> list[tuple[str, ast.FunctionDef]]:
+    """(class name, ``__init__`` node) for every constructor ``types.pyi`` declares."""
+    tree = ast.parse((STUB_DIR / "types.pyi").read_text(encoding="utf-8"))
+    return [
+        (cls.name, member)
+        for cls in tree.body
+        if isinstance(cls, ast.ClassDef)
+        for member in cls.body
+        if isinstance(member, ast.FunctionDef) and member.name == "__init__"
+    ]
+
+
+TYPES_CONSTRUCTORS = _collect_types_stub_constructors()
+
+
+@pytest.mark.parametrize(
+    ("class_name", "node"),
+    [pytest.param(c, n, id=f"types.pyi:{c}") for c, n in TYPES_CONSTRUCTORS],
+)
+def test_types_stub_constructor_matches_runtime(class_name: str, node: ast.FunctionDef) -> None:
+    """``types.pyi`` constructors must match the runtime dataclass constructors.
+
+    ``_is_checkable`` drops every dunder, which is right for the method
+    comparison above but excluded this whole category: the result and config
+    classes are dataclasses whose only declared callable IS ``__init__``, so
+    their field names and defaults — the part a caller actually writes — had
+    nothing comparing them to runtime. A stub that keeps a removed field, or
+    misses a default that was added, is invisible to mypy (which validates
+    consumers of the stub, not the stub) and to every other test here.
+    """
+    from libsonare import types as runtime_types
+
+    runtime = getattr(runtime_types, class_name, None)
+    assert runtime is not None, f"types.pyi declares {class_name}, which does not exist at runtime"
+    try:
+        runtime_parameters = list(inspect.signature(runtime).parameters.values())
+    except (TypeError, ValueError) as exc:  # pragma: no cover - defensive
+        pytest.fail(f"{class_name}: runtime class has no inspectable constructor ({exc})")
+
+    _assert_signature_matches(
+        "types.pyi", f"{class_name}.__init__", node, runtime_parameters, drop_leading=1
+    )
+
+
+def test_types_stub_constructor_floor() -> None:
+    """The constructor comparison must not collapse to nothing."""
+    # `types.pyi` declares roughly one hundred result / config classes; the floor
+    # only has to be high enough that a collector which stops matching, or a stub
+    # that loses its constructors, cannot pass by comparing an empty list.
+    assert len(TYPES_CONSTRUCTORS) >= 80, [name for name, _ in TYPES_CONSTRUCTORS]
 
 
 @pytest.mark.parametrize("stub_name", sorted(_STUB_FLOORS))

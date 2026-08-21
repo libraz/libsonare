@@ -145,6 +145,7 @@ def hybrid_cqt(
     )
 
 
+@_guard_buffer("magnitude")
 def cqt_to_audio(
     magnitude: Sequence[float] | list[float],
     n_bins: int,
@@ -186,6 +187,7 @@ def cqt_to_audio(
 # ============================================================================
 
 
+@_guard_buffer("mel")
 def mel_to_stft(
     mel: Sequence[float] | list[float],
     n_mels: int,
@@ -285,6 +287,7 @@ def _inverse_audio(
         return _float_array_result(out, out_length.value)
 
 
+@_guard_buffer("mel")
 def mel_to_audio(
     mel: Sequence[float] | list[float],
     n_mels: int,
@@ -339,6 +342,7 @@ def mel_to_audio(
     )
 
 
+@_guard_buffer("magnitude")
 def griffin_lim(
     magnitude: Sequence[float] | list[float],
     n_bins: int,
@@ -371,6 +375,7 @@ def griffin_lim(
         return _float_array_result(out, out_length.value)
 
 
+@_guard_buffer("mfcc_coeffs")
 def mfcc_to_mel(
     mfcc_coeffs: Sequence[float] | list[float],
     n_mfcc: int,
@@ -427,6 +432,7 @@ def mfcc_to_mel(
         lib.sonare_free_inverse_result(ctypes.byref(out))
 
 
+@_guard_buffer("mfcc_coeffs")
 def mfcc_to_audio(
     mfcc_coeffs: Sequence[float] | list[float],
     n_mfcc: int,
@@ -559,6 +565,7 @@ def vqt(
         lib.sonare_free_cqt_result(ctypes.byref(out))
 
 
+@_guard_buffer("magnitude")
 def vqt_to_audio(
     magnitude: Sequence[float] | list[float],
     n_bins: int,

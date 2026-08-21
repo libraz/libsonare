@@ -12,7 +12,7 @@ import math
 import pytest
 
 import libsonare
-from libsonare import ErrorCode, SonareError
+from libsonare import ErrorCode, SonareError, SonareValueError
 
 from ._helpers import LIB_AVAILABLE
 
@@ -111,19 +111,30 @@ def test_mismatched_beat_array_lengths_are_rejected() -> None:
         libsonare.estimate_meter(times, strengths[:-1])
 
 
-def test_empty_beat_series_is_rejected_by_the_core() -> None:
+def test_empty_beat_series_is_rejected_by_the_facade() -> None:
     """No beats is unanswerable, so it is an error rather than a fabricated 4/4.
 
-    The wording comes from the core, so it is matched as an unanchored
-    substring: the surrounding decoration differs per surface. It keeps the
-    field name, because a bare "must not be empty" also matches the empty
-    candidate-list guard and would let this pass for the wrong reason. The
-    exception is a plain :class:`SonareError` rather than the
-    :class:`SonareValueError` the Python-side length check raises, because this
-    rejection happens in the core.
+    The rejection now comes from the facade preflight rather than from the core:
+    ``beat_times`` is a buffer parameter like any other, and letting only this
+    one report through the core gave the same class of mistake two different
+    diagnostics — a :class:`SonareError` naming the C field ``beatTimes`` here,
+    a :class:`SonareValueError` naming the Python argument everywhere else. The
+    message keeps the argument name, because a bare "must not be empty" also
+    matches the empty candidate-list guard and would pass for the wrong reason.
     """
-    with pytest.raises(SonareError, match="beatTimes must not be empty") as excinfo:
+    with pytest.raises(SonareValueError, match="beat_times must not be empty") as excinfo:
         libsonare.estimate_meter([], [])
+    assert excinfo.value.code == int(ErrorCode.INVALID_PARAMETER)
+
+
+def test_negative_beat_times_still_reach_the_core_check() -> None:
+    """The facade preflight is a diagnostic layer, not a replacement.
+
+    It only rejects empty and non-finite input, so the core's own domain rule
+    stays reachable and keeps reporting under its own wording.
+    """
+    with pytest.raises(SonareError, match="beatTimes") as excinfo:
+        libsonare.estimate_meter([-1.0, 0.5], [1.0, 1.0])
     assert excinfo.value.code == int(ErrorCode.INVALID_PARAMETER)
 
 

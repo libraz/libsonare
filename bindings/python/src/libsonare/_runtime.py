@@ -145,7 +145,7 @@ def _validate_samples(
     per buffer. The non-finite scan is unaffected — it is a no-op on an empty
     buffer — so the NaN / Inf message stays defined in this one place.
     """
-    buf = _as_float32_buffer(samples)
+    buf = _as_float32_buffer(samples, fn_name=fn_name, arg_name=arg_name)
     if not allow_empty and int(buf.shape[0]) == 0:
         raise SonareValueError(f"{fn_name}: {arg_name} must not be empty")
     if validate:
@@ -215,12 +215,25 @@ def _validate_scalar(fn_name: str, value: float, arg_name: str) -> float:
     return v
 
 
-def _as_float32_buffer(samples: object) -> np.ndarray:
+def _as_float32_buffer(
+    samples: object, *, fn_name: str = "", arg_name: str = "samples"
+) -> np.ndarray:
     """Coerce ``samples`` to a contiguous ``float32`` 1-D numpy buffer.
 
     Zero-copy when the input is already a contiguous ``float32`` ndarray; one
     bulk C-level copy otherwise (``np.ascontiguousarray`` for non-contig
-    float32 input, ``np.asarray`` for lists/tuples/array.array).
+    float32 input, ``np.asarray`` for a sized sequence — list, tuple,
+    ``array.array``, ``range``, ``memoryview``).
+
+    An input NumPy cannot turn into a numeric buffer is rejected here with
+    :class:`SonareValueError`, so no caller sees a bare NumPy ``TypeError``
+    from inside the binding. A generator is the case worth naming: it is not a
+    sequence, ``np.asarray`` wraps it in a 0-d object array, and the float cast
+    then fails — it has never been convertible, whatever a reader might assume
+    from the iterable-sounding parameter name.
+
+    ``fn_name`` / ``arg_name`` only shape that message, so a rejection names the
+    facade the caller invoked exactly as :func:`_validate_samples` does.
     """
     if isinstance(samples, np.ndarray):
         if (
@@ -240,9 +253,16 @@ def _as_float32_buffer(samples: object) -> np.ndarray:
         if not buf.flags["WRITEABLE"]:
             buf = np.array(buf, dtype=np.float32, copy=True, order="C").reshape(-1)
         return buf
-    # list / tuple / array.array / generator → bulk-convert via NumPy's
+    # list / tuple / array.array / range / memoryview → bulk-convert via NumPy's
     # vectorised C path (orders of magnitude faster than `(c_float*N)(*seq)`).
-    return np.ascontiguousarray(np.asarray(samples, dtype=np.float32)).reshape(-1)
+    try:
+        return np.ascontiguousarray(np.asarray(samples, dtype=np.float32)).reshape(-1)
+    except (TypeError, ValueError) as exc:
+        prefix = f"{fn_name}: " if fn_name else ""
+        raise SonareValueError(
+            f"{prefix}{arg_name} must be a sequence of numbers or a numpy array, "
+            f"not {type(samples).__name__}"
+        ) from exc
 
 
 def _to_c_float_array(
