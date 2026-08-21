@@ -295,54 +295,54 @@ def _restore_parser_compat_defaults(args: argparse.Namespace) -> None:
         args.threshold_db = -60.0
 
 
-_STDOUT_ONLY_COMMANDS = frozenset(
+# The one place a command declares whether it writes an audio artifact.
+#
+# The complement -- the commands for which ``-o`` is a usage error -- is derived
+# from the parser below rather than restated. Both sets used to be written out
+# by hand, one of them inline inside ``main``, so a new command had to be added
+# to the right one of two lists that nothing compared; the two even rejected the
+# same mistake with different exit codes.
+_OUTPUT_CAPABLE_COMMANDS = frozenset(
     {
-        "version",
-        "doctor",
-        "info",
-        "bpm",
-        "key",
-        "beats",
-        "downbeats",
-        "onsets",
-        "chords",
-        "analyze",
-        "mel",
-        "chroma",
-        "spectral",
-        "pitch",
-        "scale-quantize",
-        "voice-presets",
-        "voice-preset",
-        "voice-preset-validate",
-        "acoustic",
-        "estimate-room",
-        "rhythm",
-        "dynamics",
-        "timbre",
-        "lufs",
-        "onset-envelope",
-        "nnls-chroma",
-        "tempogram",
-        "plp",
-        "mastering-processors",
-        "mastering-pair-processors",
-        "mastering-pair-analyses",
-        "mastering-presets",
-        "mastering-pair-analyze",
-        "mastering-streaming",
-        "mastering-suggest",
-        "mastering-profile",
-        "mixing-presets",
-        "mixing-preset",
+        "hpss",
+        "pitch-correct",
+        "pitch-correct-timevarying",
+        "note-move",
+        "note-stretch",
+        "pitch-shift",
+        "time-stretch",
+        "normalize",
+        "trim-silence",
+        "resample",
+        "voice-change",
+        "synthesize-rir",
+        "room-morph",
+        "mastering",
+        "eq",
+        "mastering-processor",
+        "mastering-chain",
+        "master",
+        "declip",
+        "midi-render",
+        "mix",
+        "project",
     }
 )
+
+
+def _stdout_only_commands(parser: argparse.ArgumentParser) -> frozenset[str]:
+    """Commands that produce no audio artifact, derived from the parser.
+
+    Every registered subcommand that is not output-capable belongs here, so a
+    new subcommand cannot end up missing from both sets.
+    """
+    return frozenset(_inventory_subparsers(parser)) - _OUTPUT_CAPABLE_COMMANDS
 
 
 def _reject_stdout_output(args: argparse.Namespace, parser: argparse.ArgumentParser) -> None:
     """Reject output destinations before a stdout-only handler can run."""
     command = getattr(args, "command", "")
-    if command in _STDOUT_ONLY_COMMANDS and getattr(args, "output", None) is not None:
+    if command in _stdout_only_commands(parser) and getattr(args, "output", None) is not None:
         parser.error(f"{command} does not produce an audio file; remove --output")
 
     # The project parser intentionally accepts project-wide flags before the
@@ -1256,35 +1256,9 @@ def main() -> None:
 
     try:
         # `common` supplies -o to every parser for a uniform CLI shape, but an
-        # analysis result has no audio artifact to write.  Rejecting it here
-        # prevents a successful-looking invocation from silently discarding a
-        # requested destination.
-        output_capable_commands = {
-            "hpss",
-            "pitch-correct",
-            "pitch-correct-timevarying",
-            "note-move",
-            "note-stretch",
-            "pitch-shift",
-            "time-stretch",
-            "normalize",
-            "trim-silence",
-            "resample",
-            "voice-change",
-            "synthesize-rir",
-            "room-morph",
-            "mastering",
-            "eq",
-            "mastering-processor",
-            "mastering-chain",
-            "master",
-            "declip",
-            "midi-render",
-            "mix",
-            "project",
-        }
-        if getattr(args, "output", "") and args.command not in output_capable_commands:
-            raise ValueError(f"{args.command} does not produce an audio file; remove --output")
+        # analysis result has no audio artifact to write. That rejection happens
+        # at the parser boundary (`_reject_stdout_output`), which sees every
+        # command and reports one exit code for all of them.
         sys.exit(handler(args))
     except Exception as e:
         print(f"Error: {e}", file=sys.stderr)

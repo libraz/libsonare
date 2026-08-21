@@ -42,6 +42,30 @@ export class SonareWorkletProcessor {
   private lastSpectrumFrame = 0;
   private transport?: WorkletTransport;
   private meterRing?: SharedMeterRingWriter;
+  /**
+   * Reused meter record, so a publish writes fields instead of allocating one.
+   *
+   * `targetId` is always the master and the four LUFS / gain-reduction fields
+   * are always unavailable here — the mixer worklet does not run the
+   * K-weighting filters, and a floor value would read as silence — so both are
+   * set once rather than per interval.
+   */
+  private readonly meterScratch: SonareWorkletMeterSnapshot = {
+    type: 'meter',
+    targetId: 0,
+    frame: 0,
+    peakDbL: 0,
+    peakDbR: 0,
+    rmsDbL: 0,
+    rmsDbR: 0,
+    correlation: 0,
+    truePeakDbL: 0,
+    truePeakDbR: 0,
+    momentaryLufs: Number.NaN,
+    shortTermLufs: Number.NaN,
+    integratedLufs: Number.NaN,
+    gainReductionDb: Number.NaN,
+  };
   private spectrumRing?: SharedSpectrumRingWriter;
   private spectrumBands: Float32Array;
 
@@ -183,7 +207,9 @@ export class SonareWorkletProcessor {
   }
 
   private publishMeter(): void {
-    if (!this.transport || this.meterIntervalFrames <= 0) {
+    // Symmetric with the engine processor: a ring-only configuration still has
+    // meters to publish, so the absence of a transport alone must not skip it.
+    if ((!this.transport && !this.meterRing) || this.meterIntervalFrames <= 0) {
       return;
     }
     if (this.processedFrames - this.lastMeterFrame < this.meterIntervalFrames) {
@@ -192,6 +218,27 @@ export class SonareWorkletProcessor {
     this.lastMeterFrame = this.processedFrames;
 
     const measured = this.mixer.meterSnapshot();
+    if (this.meterRing) {
+      // Fill the reusable record and serialise it straight into the ring. The
+      // render callback used to build a fresh fourteen-field object every
+      // interval — about 23 per second at the default — and hand it to the SAB
+      // ring, which exists precisely so this thread allocates and posts
+      // nothing. The record never escapes, so reuse is safe here in a way it is
+      // not on the postMessage path below.
+      const meter = this.meterScratch;
+      meter.frame = this.processedFrames;
+      meter.peakDbL = measured.peakDbL;
+      meter.peakDbR = measured.peakDbR;
+      meter.rmsDbL = measured.rmsDbL;
+      meter.rmsDbR = measured.rmsDbR;
+      meter.correlation = measured.correlation;
+      meter.truePeakDbL = measured.truePeakDbL;
+      meter.truePeakDbR = measured.truePeakDbR;
+      this.writeMeterRing(meter);
+      return;
+    }
+    // No ring: this is the structured-clone fallback, already off the
+    // zero-allocation contract, and a listener may retain what it is handed.
     const meter: SonareWorkletMeterSnapshot = {
       type: 'meter',
       targetId: 0,
@@ -210,12 +257,8 @@ export class SonareWorkletProcessor {
       integratedLufs: Number.NaN,
       gainReductionDb: Number.NaN,
     };
-    this.transport.onMeter?.(meter);
-    if (this.meterRing) {
-      this.writeMeterRing(meter);
-    } else {
-      this.transport.postMessage?.(meter);
-    }
+    this.transport?.onMeter?.(meter);
+    this.transport?.postMessage?.(meter);
   }
 
   private writeMeterRing(meter: SonareWorkletMeterSnapshot): void {

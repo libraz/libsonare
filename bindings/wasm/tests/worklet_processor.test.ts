@@ -123,6 +123,68 @@ describe('SonareWorkletProcessor', () => {
     }
   });
 
+  // The SAB meter ring exists so the audio render callback allocates and posts
+  // nothing. Wiring true-peak metering in brought back a fresh fourteen-field
+  // object per interval, built before the ring branch was even chosen, so the
+  // zero-allocation claim the engine processor's comment makes about this class
+  // stopped being true. Count the objects rather than trusting the shape of the
+  // code: `meterSnapshot()` is the one allocation left, and it belongs to the
+  // embind accessor rather than to this file.
+  it('allocates no meter record per publish when a ring is configured', () => {
+    const sampleRate = 48000;
+    const blockSize = 128;
+    const ring = createSonareMeterRingBuffer(64);
+    const posted: unknown[] = [];
+    const processor = new SonareWorkletProcessor(
+      {
+        sceneJson: mixingScenePresetJson('vocalReverbSend'),
+        sampleRate,
+        blockSize,
+        meterIntervalFrames: blockSize,
+        meterSharedBuffer: ring.sharedBuffer,
+      },
+      { postMessage: (meter) => posted.push(meter) },
+    );
+    try {
+      const silence = () => new Float32Array(blockSize);
+      const outL = new Float32Array(blockSize);
+      const outR = new Float32Array(blockSize);
+      // Observe what the ring writer is handed, not what the field holds: a
+      // per-publish copy would leave the field identical while still allocating.
+      const seen = new Set<object>();
+      const internals = processor as unknown as {
+        writeMeterRing: (meter: object) => void;
+      };
+      const realWrite = internals.writeMeterRing;
+      internals.writeMeterRing = function (meter: object) {
+        seen.add(meter);
+        return realWrite.call(this, meter);
+      };
+      const publishes = 8;
+      for (let block = 0; block < publishes; block++) {
+        processor.process(
+          [
+            [silence(), silence()],
+            [silence(), silence()],
+          ],
+          [[outL, outR]],
+        );
+      }
+      internals.writeMeterRing = realWrite;
+      expect(seen.size).toBe(1);
+      expect(posted).toHaveLength(0);
+      const read = readSonareMeterRingBuffer(ring);
+      expect(read.meters).toHaveLength(publishes);
+      // Reuse must not smear one publish over another: each record reached the
+      // ring with its own frame before the next overwrote the fields.
+      expect(read.meters.map((meter) => meter.frame)).toEqual(
+        Array.from({ length: publishes }, (_, i) => (i + 1) * blockSize),
+      );
+    } finally {
+      processor.destroy();
+    }
+  });
+
   it('can publish meters through a SharedArrayBuffer ring', () => {
     const sampleRate = 48000;
     const blockSize = 128;

@@ -9,7 +9,7 @@ import type {
   VoicedFlags,
 } from './public_types';
 import type { ValidateOptions } from './validation';
-import { assertSampleRate, assertSamples } from './validation';
+import { assertSampleRate, assertSamples, resolveFftOptions } from './validation';
 
 function requireModule() {
   return getSonareModule();
@@ -25,32 +25,6 @@ function toVoicedFloat32(voiced: VoicedFlags): Float32Array {
     out[index] = voiced[index] ? 1 : 0;
   }
   return out;
-}
-
-function resolveEffectFftOptions(
-  fnName: string,
-  nFft: unknown,
-  hopLength: unknown,
-): { nFft: number; hopLength: number } {
-  const resolvedNFft = nFft === undefined ? 2048 : nFft;
-  const resolvedHopLength = hopLength === undefined ? 512 : hopLength;
-  if (typeof resolvedNFft !== 'number' || !Number.isInteger(resolvedNFft)) {
-    throw new TypeError(`${fnName}: nFft must be an integer`);
-  }
-  // The core FFT is mixed-radix, so any even size transforms exactly; only the
-  // real one-sided spectrum's n_fft/2 + 1 bin layout needs the evenness. A
-  // power-of-two restriction here would reject sizes the C ABI and the native
-  // CLI accept.
-  if (resolvedNFft < 2 || resolvedNFft > 2 ** 30 || resolvedNFft % 2 !== 0) {
-    throw new RangeError(`${fnName}: nFft must be an even integer >= 2`);
-  }
-  if (typeof resolvedHopLength !== 'number' || !Number.isInteger(resolvedHopLength)) {
-    throw new TypeError(`${fnName}: hopLength must be an integer`);
-  }
-  if (resolvedHopLength <= 0 || resolvedHopLength > 2 ** 31 - 1) {
-    throw new RangeError(`${fnName}: hopLength must be a positive integer`);
-  }
-  return { nFft: resolvedNFft, hopLength: resolvedHopLength };
 }
 
 export type NormalizeMode = 'peak' | 'rms';
@@ -197,7 +171,7 @@ export function hpss(
     samples instanceof Float32Array
       ? { samples, sampleRate, kernelHarmonic, kernelPercussive, nFft, hopLength, hardMask }
       : samples;
-  const fftOptions = resolveEffectFftOptions('hpss', request.nFft, request.hopLength);
+  const fftOptions = resolveFftOptions('hpss', request.nFft, request.hopLength);
   const resolvedHardMask = resolveHardMask(request.hardMask, 'hpss');
   return requireModule().hpssEx(
     request.samples,
@@ -316,7 +290,7 @@ export function timeStretch(
         }
       : samples;
   assertSamples('timeStretch', request.samples, request.validate !== false);
-  const fftOptions = resolveEffectFftOptions('timeStretch', request.nFft, request.hopLength);
+  const fftOptions = resolveFftOptions('timeStretch', request.nFft, request.hopLength);
   return requireModule().timeStretchEx(
     request.samples,
     request.sampleRate ?? 22050,
@@ -386,7 +360,7 @@ export function pitchShift(
         }
       : samples;
   assertSamples('pitchShift', request.samples, request.validate !== false);
-  const fftOptions = resolveEffectFftOptions('pitchShift', request.nFft, request.hopLength);
+  const fftOptions = resolveFftOptions('pitchShift', request.nFft, request.hopLength);
   return requireModule().pitchShiftEx(
     request.samples,
     request.sampleRate ?? 22050,
@@ -400,8 +374,10 @@ export function pitchShift(
  * Pitch-correct audio from a current MIDI note to a target MIDI note.
  *
  * Applies one constant, immediate transpose with no retune glide and preserves
- * the input buffer length. Use {@link pitchCorrectToMidiTimevarying} for a
- * caller-supplied pitch contour.
+ * the input buffer length. The whole interval is applied however large it is:
+ * both endpoints are validated to [0, 127], so a two-octave move such as
+ * C3 -> C5 transposes by the full 24 semitones. Use
+ * {@link pitchCorrectToMidiTimevarying} for a caller-supplied pitch contour.
  *
  * @param samples - Audio samples (mono, float32)
  * @param sampleRate - Sample rate in Hz

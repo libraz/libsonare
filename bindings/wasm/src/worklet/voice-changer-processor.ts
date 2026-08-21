@@ -1,5 +1,5 @@
 import { RealtimeVoiceChanger } from '../index';
-import type { WorkletInput, WorkletOutput } from './audio_types';
+import { copyPlanesToOutput, type WorkletInput, type WorkletOutput } from './audio_types';
 import { isRealtimeVoiceChangerMessage } from './guards';
 import type {
   SonareRealtimeVoiceChangerMessage,
@@ -25,6 +25,8 @@ export class SonareRealtimeVoiceChangerWorkletProcessor {
   // Float32Arrays, so this avoids the per-sample interleave/deinterleave
   // passes that the older interleaved path needed.
   private planarChannels: Float32Array[];
+  // Reused so the mono fan-out never builds an array on the audio thread.
+  private readonly monoPlane: Float32Array[] = [new Float32Array(0)];
   private destroyed = false;
 
   constructor(options: SonareRealtimeVoiceChangerWorkletProcessorOptions = {}) {
@@ -100,7 +102,14 @@ export class SonareRealtimeVoiceChangerWorkletProcessor {
         this.monoInput.fill(0, 0, frames);
       }
       this.changer.processPreparedMono(frames);
-      output[0].set(this.monoOutput.subarray(0, frames));
+      // One plane fans out to every output channel and anything it does not
+      // fill is zeroed. Writing only output[0] left a stereo host hard-panned
+      // left -- the default `channelCount` here is 1 while AudioWorkletNode's
+      // default `channelCountMode: 'max'` gives a 2-channel output, so that was
+      // the ordinary configuration -- and left the previous block's samples in
+      // the channels it skipped.
+      this.monoPlane[0] = this.monoOutput;
+      copyPlanesToOutput(output, this.monoPlane, frames);
       return true;
     }
 
@@ -122,13 +131,10 @@ export class SonareRealtimeVoiceChangerWorkletProcessor {
       }
     }
     this.changer.processPreparedPlanar(frames);
-    for (let ch = 0; ch < channels; ch++) {
-      const src = this.planarChannels[ch];
-      if (src) {
-        output[ch].set(src.subarray(0, frames));
-      }
-      // No `for frame` inner loop needed; output[ch] is a Float32Array.
-    }
+    // Same rule as the mono branch: an output channel past the last processed
+    // plane is silence rather than a duplicate of plane 0, and the tail past
+    // `frames` is zeroed.
+    copyPlanesToOutput(output, this.planarChannels, frames);
     return true;
   }
 

@@ -63,7 +63,21 @@ export class RealtimeVoiceChanger {
     const module = getSonareModule();
     this.changer = module.createRealtimeVoiceChanger(config as Record<string, unknown> | string);
     if (sampleRate !== undefined) {
-      this.changer.prepare(sampleRate, maxBlockSize, channels);
+      // `prepare` rejects a non-positive sample rate, a negative block size and
+      // a channel count outside [1, 2]. The handle is already allocated by
+      // then, and a throwing constructor leaves `this` unreachable, so release
+      // it here — embind has no GC finalizer, and a device-change handler that
+      // retries on failure would otherwise leak one whole DSP chain per attempt
+      // (retune ring, ISP limiter, reverb, scratch).
+      let prepared = false;
+      try {
+        this.changer.prepare(sampleRate, maxBlockSize, channels);
+        prepared = true;
+      } finally {
+        if (!prepared) {
+          this.changer.delete();
+        }
+      }
     }
   }
 

@@ -7,6 +7,7 @@
 #include <cmath>
 #include <limits>
 
+#include "c_api/sonare_c_error_mapping.h"
 #include "util/constants.h"
 #include "wasm/bindings/common/common.h"
 
@@ -314,7 +315,13 @@ val js_voice_change_realtime(val samples, int sample_rate, std::string preset, i
       input.data(), input.size(), sample_rate, preset.c_str(), channels, &output, &output_length);
   if (err != SONARE_OK) {
     sonare_free_floats(output);
-    throw SonareException(ErrorCode::InvalidParameter,
+    // Map the C code back rather than collapsing every failure onto
+    // InvalidParameter: a host that branches on `err.code` (NotSupported ->
+    // hide the control, OutOfMemory -> retry smaller) mis-branched on WASM
+    // only, and an analysis-only build reported "feature not compiled in" as
+    // "invalid parameter". Same inverse table `throwCError` uses one directory
+    // over, so the two cannot drift.
+    throw SonareException(sonare_c_detail::error_code_from_c_error(err),
                           std::string("voiceChangeRealtime failed: ") + sonare_error_message(err));
   }
   std::vector<float> result(output, output + output_length);

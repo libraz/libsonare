@@ -187,6 +187,87 @@ def test_output_actions_are_scoped_to_artifact_commands() -> None:
         assert _option(commands[path], "output")["type"] == "path"
 
 
+def _has_option(record: dict, name: str) -> bool:
+    return any(option["name"] == name for option in record["options"])
+
+
+def test_output_capability_is_declared_once_and_partitions_every_command() -> None:
+    """One declaration decides whether a command writes an artifact.
+
+    The stdout-only set and the output-capable set are exact complements, and
+    both used to be written out by hand — one of them inline inside ``main`` —
+    so a new command had to be added to the right one of two lists that nothing
+    compared, and the two rejected the same mistake with different exit codes.
+    Only the output-capable set is declared now; the other is derived here.
+    """
+    from libsonare import cli
+
+    parser = _parser()
+    registered = frozenset(cli._inventory_subparsers(parser))
+    stdout_only = cli._stdout_only_commands(parser)
+
+    # Guard the derivation: an enumerator that stopped matching would make the
+    # partition assertions below vacuously true.
+    assert len(registered) > 50
+    assert registered >= cli._OUTPUT_CAPABLE_COMMANDS, sorted(
+        cli._OUTPUT_CAPABLE_COMMANDS - registered
+    )
+    assert stdout_only | cli._OUTPUT_CAPABLE_COMMANDS == registered
+    assert stdout_only & cli._OUTPUT_CAPABLE_COMMANDS == frozenset()
+
+    # A command added to the parser but to neither set lands in stdout-only,
+    # which rejects `-o` rather than silently discarding the destination.
+    assert "version" in stdout_only
+    assert "hpss" not in stdout_only
+
+
+def test_output_capable_set_matches_the_published_contract() -> None:
+    """The one declaration is pinned to what the parser actually publishes.
+
+    `common` gives every subparser an `-o` for a uniform CLI shape, so the raw
+    argparse actions cannot tell the two kinds apart — but the published
+    contract only lists `output` for a command that writes an artifact, and that
+    listing is derived from the parser. Comparing the two means the declaration
+    cannot quietly disagree with the CLI it describes.
+    """
+    from libsonare import cli
+    from libsonare._cli_inventory import build_cli_contract
+
+    records = build_cli_contract(_parser())["commands"]
+    publishes_output = {record["path"] for record in records if _has_option(record, "output")}
+    # A group (`project`) has no record of its own; it is output-capable when
+    # any of its leaves is, because `-o` is accepted at the parent boundary.
+    from_contract = {path.split(".", 1)[0] for path in publishes_output}
+
+    assert len(records) > 50
+    assert publishes_output, "the contract listed no output-capable command"
+    assert from_contract == set(cli._OUTPUT_CAPABLE_COMMANDS), {
+        "declared_only": sorted(set(cli._OUTPUT_CAPABLE_COMMANDS) - from_contract),
+        "contract_only": sorted(from_contract - set(cli._OUTPUT_CAPABLE_COMMANDS)),
+    }
+
+
+def test_output_rejection_uses_one_exit_code_for_every_command(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """`-o` on a command that writes nothing is a usage error, whichever it is.
+
+    The inline second check raised ``ValueError`` and exited 3 while the parser
+    boundary exited 2, so the same mistake reported differently depending on
+    which list the command happened to be in.
+    """
+    from libsonare import cli
+
+    monkeypatch.delenv("SONARE_LEGACY_EXIT", raising=False)
+    codes = set()
+    for command in ("version", "bpm", "mastering-presets", "mixing-preset"):
+        monkeypatch.setattr(cli.sys, "argv", ["sonare", command, "in.wav", "-o", "out.wav"])
+        with pytest.raises(SystemExit) as exc_info:
+            cli.main()
+        codes.add(exc_info.value.code)
+    assert codes == {cli.EXIT_USAGE}
+
+
 def test_trim_silence_selector_defaults_are_dynamic() -> None:
     from libsonare._cli_inventory import build_cli_contract
 

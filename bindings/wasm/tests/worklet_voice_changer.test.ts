@@ -160,6 +160,79 @@ describe('SonareRealtimeVoiceChangerWorkletProcessor', () => {
         // worklet takes Math.min(channelCount, output.length) so it just uses ch1.
         expect(() => processor.process([[ch1, ch2]], [[out1, out2]])).not.toThrow();
         expect(out1.every((s) => Number.isFinite(s))).toBe(true);
+        // The old assertion stopped here and never looked at out2, which is
+        // exactly where the defect lived.
+        expect(out2.every((s) => Number.isFinite(s))).toBe(true);
+      } finally {
+        processor.destroy();
+      }
+    });
+
+    // The processed voice used to reach only the left speaker: the mono branch
+    // wrote output[0] and left every other output channel holding whatever the
+    // previous block put there. The default channelCount here is 1 while
+    // AudioWorkletNode defaults to `channelCountMode: 'max'`, so a plain stereo
+    // graph hit it. The engine worklet already fanned a single plane out to
+    // every channel; the two now share one implementation.
+    it('fans a mono plane out to every output channel instead of hard-panning left', () => {
+      const blockSize = 128;
+      const processor = new SonareRealtimeVoiceChangerWorkletProcessor({
+        preset: 'neutral-monitor',
+        sampleRate: 48000,
+        blockSize,
+        channelCount: 1,
+      });
+      try {
+        const input = new Float32Array(blockSize);
+        for (let i = 0; i < blockSize; i++) {
+          input[i] = 0.4 * Math.sin((2 * Math.PI * 220 * i) / 48000);
+        }
+        // Seed the outputs with a value the processor must overwrite, so an
+        // untouched channel is distinguishable from a silent one.
+        const out1 = new Float32Array(blockSize);
+        const out2 = new Float32Array(blockSize);
+        // The chain reports a fixed latency (the retune OLA delays by a whole
+        // grain), so run past it before asserting the signal is audible.
+        let audible = false;
+        for (let block = 0; block < 40; block++) {
+          out1.fill(-9);
+          out2.fill(-9);
+          expect(processor.process([[input]], [[out1, out2]])).toBe(true);
+          // Both channels are written every block, latency or not.
+          expect(out1.every((s) => s !== -9)).toBe(true);
+          expect(Array.from(out2)).toEqual(Array.from(out1));
+          audible = audible || out1.some((s) => s !== 0);
+        }
+        expect(audible).toBe(true);
+      } finally {
+        processor.destroy();
+      }
+    });
+
+    it('zeroes output channels past the last processed plane', () => {
+      // Two planes drive two channels; a third output channel is silence rather
+      // than a duplicate of plane 0, which would put the left signal into a
+      // rear/centre channel and add energy the chain never produced.
+      const blockSize = 128;
+      const processor = new SonareRealtimeVoiceChangerWorkletProcessor({
+        preset: 'neutral-monitor',
+        sampleRate: 48000,
+        blockSize,
+        channelCount: 2,
+      });
+      try {
+        const left = new Float32Array(blockSize).fill(0.3);
+        const right = new Float32Array(blockSize).fill(-0.3);
+        const outputs = [
+          new Float32Array(blockSize).fill(-9),
+          new Float32Array(blockSize).fill(-9),
+          new Float32Array(blockSize).fill(-9),
+        ];
+        expect(processor.process([[left, right]], [outputs])).toBe(true);
+        for (const channel of outputs) {
+          expect(channel.every((s) => s !== -9)).toBe(true);
+        }
+        expect(Array.from(outputs[2])).toEqual(new Array(blockSize).fill(0));
       } finally {
         processor.destroy();
       }

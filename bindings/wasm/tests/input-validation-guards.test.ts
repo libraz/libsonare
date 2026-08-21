@@ -39,6 +39,20 @@ beforeAll(async () => {
   await init();
 });
 
+/** Asserts that @p action throws a SonareError carrying InvalidParameter. */
+const expectInvalidParameter = (action: () => void) => {
+  let caught: unknown;
+  try {
+    action();
+  } catch (error) {
+    caught = error;
+  }
+  expect(isSonareError(caught)).toBe(true);
+  if (isSonareError(caught)) {
+    expect(caught.code).toBe(ErrorCode.InvalidParameter);
+  }
+};
+
 describe('RealtimeEngine prepare/time-signature/loop guards', () => {
   it('rejects invalid sample rates or block sizes in the constructor', () => {
     expect(() => new RealtimeEngine(0, 128)).toThrow();
@@ -420,19 +434,6 @@ describe('RealtimeEngine.bindMidiCcBinding defaults omitted descriptor fields', 
   // partial literals below are cast; what is under test is the runtime reader.
   type CcBindingDescriptor = Parameters<RealtimeEngine['bindMidiCcBinding']>[0];
 
-  const expectInvalidParameter = (action: () => void) => {
-    let caught: unknown;
-    try {
-      action();
-    } catch (error) {
-      caught = error;
-    }
-    expect(isSonareError(caught)).toBe(true);
-    if (isSonareError(caught)) {
-      expect(caught.code).toBe(ErrorCode.InvalidParameter);
-    }
-  };
-
   it('accepts a descriptor carrying only ccNumber and paramId', () => {
     const engine = new RealtimeEngine(48000, 128);
     expect(() =>
@@ -519,7 +520,14 @@ describe('RealtimeEngine.bindMidiCcBinding defaults omitted descriptor fields', 
   });
 });
 
-describe('StreamingRetune sanitizes non-finite input', () => {
+// A non-finite control or sample is REFUSED here, not repaired. Substituting a
+// default for a NaN control made a caller error indistinguishable from an
+// omitted key, and zeroing a non-finite sample kept the grain history clean
+// while silently turning the block into a different block -- with nothing in the
+// return value to say so, and with the substituted sample persisting through the
+// overlap-add into every later block. Finite-but-out-of-range controls stay
+// clamped: that is the documented contract and it is unchanged.
+describe('StreamingRetune refuses non-finite input and clamps finite ranges', () => {
   it('requires prepare and rejects blocks above the prepared maximum', async () => {
     const { StreamingRetune } = await import('../dist/index.js');
     const retune = new StreamingRetune({ semitones: 2 });
@@ -533,31 +541,60 @@ describe('StreamingRetune sanitizes non-finite input', () => {
     }
   });
 
-  it('does not propagate NaN into the grain history', async () => {
+  it('rejects a non-finite input sample and leaves the caller buffer untouched', async () => {
     const { StreamingRetune } = await import('../dist/index.js');
     const retune = new StreamingRetune({ semitones: 2 });
-    retune.prepare(48000, 256);
-    const bad = new Float32Array(256).fill(0.1);
-    bad[10] = Number.NaN;
-    bad[20] = Number.POSITIVE_INFINITY;
-    const first = retune.processMono(bad);
-    expect(Array.from(first).every((v) => Number.isFinite(v))).toBe(true);
-    // A subsequent clean block must also stay finite (no poisoned ring state).
-    const clean = retune.processMono(new Float32Array(256).fill(0.1));
-    expect(Array.from(clean).every((v) => Number.isFinite(v))).toBe(true);
+    try {
+      retune.prepare(48000, 256);
+      const bad = new Float32Array(256).fill(0.1);
+      bad[10] = Number.NaN;
+      bad[20] = Number.POSITIVE_INFINITY;
+      expectInvalidParameter(() => retune.processMono(bad));
+
+      // Refused means untouched: the block the caller still holds is the block
+      // it passed, not a repaired one it never asked for.
+      expect(Number.isNaN(bad[10])).toBe(true);
+      expect(bad[20]).toBe(Number.POSITIVE_INFINITY);
+      expect(bad[0]).toBeCloseTo(0.1, 6);
+
+      // And the refusal happened before any of it reached the overlap-add, so a
+      // following clean block is still finite -- the property the old
+      // zero-substitution bought by rewriting the caller's audio.
+      const clean = retune.processMono(new Float32Array(256).fill(0.1));
+      expect(Array.from(clean).every((v) => Number.isFinite(v))).toBe(true);
+    } finally {
+      retune.delete();
+    }
   });
 
-  it('sanitizes non-finite and out-of-range configuration before it reaches DSP', async () => {
+  it('rejects a non-finite control and keeps the value it already had', async () => {
     const { StreamingRetune } = await import('../dist/index.js');
-    const retune = new StreamingRetune({
-      semitones: Number.NaN,
-      mix: Number.POSITIVE_INFINITY,
-      grainSize: 1_000_000,
-    });
+    // Construction refuses each of the three controls on its own.
+    expectInvalidParameter(() => new StreamingRetune({ semitones: Number.NaN }));
+    expectInvalidParameter(() => new StreamingRetune({ mix: Number.POSITIVE_INFINITY }));
+    expectInvalidParameter(() => new StreamingRetune({ grainSize: Number.NaN }));
+
+    const retune = new StreamingRetune({ semitones: 5, mix: 0.25, grainSize: 512 });
+    try {
+      retune.prepare(48000, 128);
+      const before = retune.config();
+      expectInvalidParameter(() => retune.setConfig({ semitones: Number.NaN }));
+      expectInvalidParameter(() => retune.setConfig({ mix: Number.NEGATIVE_INFINITY }));
+      // A rejected update leaves the whole config as it was: the refusal is not
+      // a partial write that applied the keys it read before the bad one.
+      expect(retune.config()).toEqual(before);
+    } finally {
+      retune.delete();
+    }
+  });
+
+  it('still clamps a finite out-of-range control', async () => {
+    const { StreamingRetune } = await import('../dist/index.js');
+    const retune = new StreamingRetune({ semitones: 500, mix: 4, grainSize: 1_000_000 });
     try {
       retune.prepare(48000, 128);
       const config = retune.config();
-      expect(config.semitones).toBe(0);
+      expect(config.semitones).toBe(24);
       expect(config.mix).toBe(1);
       expect(retune.grainSize()).toBeLessThanOrEqual(8192);
       expect(

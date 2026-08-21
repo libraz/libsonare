@@ -108,3 +108,29 @@ describe('additive effect and feature options', () => {
     expect(phaseVocoder({ samples, sampleRate, rate: 1.2, ...geometry }).length).toBeGreaterThan(0);
   });
 });
+
+// One FFT-size rule, not one per module. `hpss` accepted any even size (the
+// core FFT is mixed-radix) while `hpssWithResidual` went through a second copy
+// that demanded a power of two, so reaching for the third stem forced an
+// unrelated change of FFT size — and the message asserted a constraint this
+// project had already written down as untrue.
+describe('STFT entry points share one nFft rule', () => {
+  const stftEntryPoints = {
+    hpss: (nFft: number) => hpss({ samples, sampleRate, nFft, hopLength: 256 }),
+    hpssWithResidual: (nFft: number) =>
+      hpssWithResidual({ samples, sampleRate, nFft, hopLength: 256 }),
+    timeStretch: (nFft: number) => timeStretch({ samples, sampleRate, rate: 1.0, nFft }),
+    pitchShift: (nFft: number) => pitchShift({ samples, sampleRate, semitones: 0, nFft }),
+  };
+
+  it.each(Object.keys(stftEntryPoints))('%s accepts a non-power-of-two even nFft', (name) => {
+    expect(() => stftEntryPoints[name as keyof typeof stftEntryPoints](1536)).not.toThrow();
+  });
+
+  it.each(Object.keys(stftEntryPoints))('%s rejects an odd nFft the same way', (name) => {
+    expect(() => stftEntryPoints[name as keyof typeof stftEntryPoints](511)).toThrow(RangeError);
+    expect(() => stftEntryPoints[name as keyof typeof stftEntryPoints](511)).toThrow(
+      /nFft must be an even integer >= 2/,
+    );
+  });
+});

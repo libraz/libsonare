@@ -8,7 +8,7 @@ import type {
   SpectralRegionOp,
   VoicedFlags,
 } from './types.js';
-import { assertSampleRate } from './validation.js';
+import { assertSampleRate, resolveFftOptions } from './validation.js';
 
 // The addon reads the companion voicing array as an Int32Array and silently
 // ignores any other type, so normalize here rather than at the N-API boundary.
@@ -21,32 +21,6 @@ function toVoicedInt32(voiced: VoicedFlags): Int32Array {
     out[index] = voiced[index] ? 1 : 0;
   }
   return out;
-}
-
-function resolveEffectFftOptions(
-  fnName: string,
-  nFft: unknown,
-  hopLength: unknown,
-): { nFft: number; hopLength: number } {
-  const resolvedNFft = nFft === undefined ? 2048 : nFft;
-  const resolvedHopLength = hopLength === undefined ? 512 : hopLength;
-  if (typeof resolvedNFft !== 'number' || !Number.isInteger(resolvedNFft)) {
-    throw new TypeError(`${fnName}: nFft must be an integer`);
-  }
-  // The core FFT is mixed-radix, so any even size transforms exactly; only the
-  // real one-sided spectrum's n_fft/2 + 1 bin layout needs the evenness. A
-  // power-of-two restriction here would reject sizes the C ABI and the native
-  // CLI accept.
-  if (resolvedNFft < 2 || resolvedNFft > 2 ** 30 || resolvedNFft % 2 !== 0) {
-    throw new RangeError(`${fnName}: nFft must be an even integer >= 2`);
-  }
-  if (typeof resolvedHopLength !== 'number' || !Number.isInteger(resolvedHopLength)) {
-    throw new TypeError(`${fnName}: hopLength must be an integer`);
-  }
-  if (resolvedHopLength <= 0 || resolvedHopLength > 2 ** 31 - 1) {
-    throw new RangeError(`${fnName}: hopLength must be a positive integer`);
-  }
-  return { nFft: resolvedNFft, hopLength: resolvedHopLength };
 }
 
 function resolveHardMask(fnName: string, hardMask: unknown): boolean {
@@ -154,7 +128,7 @@ export function hpss(
     samples instanceof Float32Array
       ? { samples, sampleRate, kernelHarmonic, kernelPercussive, nFft, hopLength, hardMask }
       : samples;
-  const fftOptions = resolveEffectFftOptions('hpss', request.nFft, request.hopLength);
+  const fftOptions = resolveFftOptions('hpss', request.nFft, request.hopLength);
   const resolvedHardMask = resolveHardMask('hpss', request.hardMask);
   return addon.hpss(
     request.samples,
@@ -218,7 +192,7 @@ export function timeStretch(
   if (typeof request.rate !== 'number' || !Number.isFinite(request.rate)) {
     throw new TypeError('timeStretch: rate must be a finite number');
   }
-  const fftOptions = resolveEffectFftOptions('timeStretch', request.nFft, request.hopLength);
+  const fftOptions = resolveFftOptions('timeStretch', request.nFft, request.hopLength);
   return addon.timeStretch(
     request.samples,
     request.sampleRate ?? 22050,
@@ -302,7 +276,7 @@ export function pitchShift(
   if (typeof request.semitones !== 'number' || !Number.isFinite(request.semitones)) {
     throw new TypeError('pitchShift: semitones must be a finite number');
   }
-  const fftOptions = resolveEffectFftOptions('pitchShift', request.nFft, request.hopLength);
+  const fftOptions = resolveFftOptions('pitchShift', request.nFft, request.hopLength);
   return addon.pitchShift(
     request.samples,
     request.sampleRate ?? 22050,
@@ -315,8 +289,11 @@ export function pitchShift(
 /**
  * Apply one constant, immediate transpose from `currentMidi` to `targetMidi`.
  *
- * The result has exactly the input length. Use {@link pitchCorrectToMidiTimevarying}
- * for a caller-supplied pitch contour and retune glide.
+ * The result has exactly the input length. The whole interval is applied
+ * however large it is: both endpoints are validated to [0, 127], so a two-octave
+ * move such as C3 -> C5 transposes by the full 24 semitones. Use
+ * {@link pitchCorrectToMidiTimevarying} for a caller-supplied pitch contour and
+ * retune glide.
  */
 export function pitchCorrectToMidi(request: PitchCorrectToMidiRequest): Float32Array;
 export function pitchCorrectToMidi(

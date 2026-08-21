@@ -17,32 +17,7 @@ import type {
   TempogramMode,
 } from './types.js';
 import type { ValidateOptions } from './validation.js';
-import { assertSamples } from './validation.js';
-
-function resolveFeatureFftOptions(
-  fnName: string,
-  nFft: unknown,
-  hopLength: unknown,
-): { nFft: number; hopLength: number } {
-  const resolvedNFft = nFft === undefined ? 2048 : nFft;
-  const resolvedHopLength = hopLength === undefined ? 512 : hopLength;
-  if (typeof resolvedNFft !== 'number' || !Number.isInteger(resolvedNFft)) {
-    throw new TypeError(`${fnName}: nFft must be an integer`);
-  }
-  if (resolvedNFft < 2 || resolvedNFft > 2 ** 30) {
-    throw new RangeError(`${fnName}: nFft must be an even power of two >= 2`);
-  }
-  if ((resolvedNFft & (resolvedNFft - 1)) !== 0) {
-    throw new RangeError(`${fnName}: nFft must be an even power of two >= 2`);
-  }
-  if (typeof resolvedHopLength !== 'number' || !Number.isInteger(resolvedHopLength)) {
-    throw new TypeError(`${fnName}: hopLength must be an integer`);
-  }
-  if (resolvedHopLength <= 0 || resolvedHopLength > 2 ** 31 - 1) {
-    throw new RangeError(`${fnName}: hopLength must be a positive integer`);
-  }
-  return { nFft: resolvedNFft, hopLength: resolvedHopLength };
-}
+import { assertSamples, resolveFftOptions } from './validation.js';
 
 function resolvePositiveIntegerOption(
   fnName: string,
@@ -1768,7 +1743,7 @@ export function hpssWithResidual(
     samples instanceof Float32Array
       ? { samples, sampleRate, kernelHarmonic, kernelPercussive, nFft, hopLength, hardMask }
       : samples;
-  const fftOptions = resolveFeatureFftOptions('hpssWithResidual', request.nFft, request.hopLength);
+  const fftOptions = resolveFftOptions('hpssWithResidual', request.nFft, request.hopLength);
   const resolvedHardMask = resolveHardMaskOption('hpssWithResidual', request.hardMask);
   return addon.hpssWithResidual(
     request.samples,
