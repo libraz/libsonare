@@ -13,6 +13,7 @@
 #include <algorithm>
 #include <catch2/catch_test_macros.hpp>
 #include <catch2/matchers/catch_matchers_floating_point.hpp>
+#include <cmath>
 #include <string>
 #include <vector>
 
@@ -31,6 +32,18 @@ using sonare::mixing::assistant::test::MixEvaluation;
 // match the most permissive ceiling the mastering presets use, since the
 // assistant proposes a mix rather than a master and a limiter has not run yet.
 constexpr float kMasterCeilingDbtp = 0.0f;
+
+// Widest L/R RMS difference a finished record is observed to carry, in dB. Not a
+// preference and not a house rule: across the 928 UK/US number-one singles
+// surveyed in P. Pestana and J. D. Reiss, "Intelligent Audio Production
+// Strategies Informed by Best Practices" (AES 53rd International Conference on
+// Semantic Audio, London, 2014), Fig. 3, the ratio between the two channels'
+// RMS levels stays inside 0.8 dB, and stays there consistently across sixty
+// years of releases. Every one of those mixes places instruments across the
+// image, so the bound is a statement about the resulting energy balance rather
+// than about how narrow the placement is — a suggestion that exceeds it has put
+// more weight on one side than commercial practice ever does.
+constexpr float kMaxChannelImbalanceDb = 0.8f;
 
 }  // namespace
 
@@ -54,6 +67,52 @@ TEST_CASE("a suggested scene instantiates, renders and round-trips", "[mixing][a
   REQUIRE(evaluation.master_true_peak_dbtp <= kMasterCeilingDbtp);
 }
 
+TEST_CASE("a suggested scene keeps the two channels in balance", "[mixing][assistant]") {
+  // Gated rather than recorded, and in the default pass, because the bound is
+  // measured from commercial releases rather than chosen here. The fixture is
+  // deliberately asymmetric — the guitar pair is double-tracked at two different
+  // pitches and the rest is mono — so a panning decision that leans one way has
+  // material to lean with.
+  //
+  // Only the excess is asserted. The measured figure is reported rather than
+  // pinned, because any particular value inside the bound is one placement among
+  // many that all satisfy the same observation.
+  //
+  // The fixture length matches the invariant case above and is not shortened
+  // further: below roughly 0.4 s the material is inside a single loudness gating
+  // block, every track is excluded as unmeasurable, and the scene stops
+  // rendering at all — which would turn this into a case that cannot fail.
+  const auto fixture = make_demo_tracks(48000, 0.5f);
+  const auto tracks = fixture.inputs();
+  const auto result = sonare::mixing::assistant::suggest_scene(tracks);
+  const MixEvaluation evaluation = evaluate(tracks, result);
+
+  REQUIRE(evaluation.rendered);
+  CAPTURE(evaluation.master_lr_rms_difference_db);
+  REQUIRE(std::abs(evaluation.master_lr_rms_difference_db) <= kMaxChannelImbalanceDb);
+}
+
+TEST_CASE("the channel-balance measure reads a known imbalance", "[mixing][assistant]") {
+  // The positive control for the case above. A measure that returned zero for
+  // every input would satisfy the 0.8 dB bound on any mix whatsoever, including
+  // one panned hard to a single side, so the bound is only worth asserting once
+  // the measure is known to move.
+  const std::vector<float> left(1024, 0.5f);
+  const std::vector<float> right(left.size(), 0.25f);
+  // Half the amplitude is a quarter of the power, so the two channels sit
+  // 10*log10(4) dB apart.
+  const double expected_db =
+      static_cast<double>(sonare::constants::kPowerToDbScale) * std::log(4.0);
+
+  using sonare::mixing::assistant::test::channel_rms_difference_db;
+  // Positive when the left channel is the louder one, and antisymmetric in its
+  // arguments — a sign convention the invariant's absolute value would hide.
+  REQUIRE_THAT(channel_rms_difference_db(left, right),
+               Catch::Matchers::WithinAbs(expected_db, 0.001));
+  REQUIRE_THAT(channel_rms_difference_db(right, left),
+               Catch::Matchers::WithinAbs(-expected_db, 0.001));
+}
+
 TEST_CASE("objective mix metrics are recorded for regression tracking",
           "[mixing][assistant][.][slow]") {
   const auto fixture = make_demo_tracks();
@@ -70,6 +129,7 @@ TEST_CASE("objective mix metrics are recorded for regression tracking",
   WARN("total band dominance above parity: " << evaluation.total_dominance);
   WARN("mono risk count: " << evaluation.mono_risk_count);
   WARN("master true peak (dBTP): " << evaluation.master_true_peak_dbtp);
+  WARN("master L/R RMS difference (dB): " << evaluation.master_lr_rms_difference_db);
 }
 
 TEST_CASE("gain staging narrows the spread of per-track loudness", "[mixing][assistant][.][slow]") {

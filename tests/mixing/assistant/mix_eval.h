@@ -220,6 +220,19 @@ struct MixEvaluation {
   /// @brief True peak of the rendered master, in dBTP.
   float master_true_peak_dbtp = constants::kFloorDb;
 
+  /// @brief Difference between the rendered master's left and right channel RMS
+  ///        levels, in dB. Positive means the left channel is the louder one.
+  /// @details An externally measurable property of finished records rather than
+  ///          a preference: across the 928 UK/US number-one singles surveyed in
+  ///          P. Pestana and J. D. Reiss, "Intelligent Audio Production
+  ///          Strategies Informed by Best Practices" (AES 53rd International
+  ///          Conference on Semantic Audio, London, 2014), Fig. 3, the L/R RMS
+  ///          ratio stays inside 0.8 dB and does so consistently over sixty
+  ///          years of releases. A suggested mix that leaves the two channels
+  ///          further apart than that is lopsided by a standard nobody in the
+  ///          project chose.
+  float master_lr_rms_difference_db = 0.0f;
+
   /// @brief Whether the scene survives a JSON round trip unchanged.
   bool scene_round_trips = false;
 
@@ -315,6 +328,34 @@ inline float spread_db(const std::vector<float>& values) {
   return static_cast<float>(std::sqrt(variance));
 }
 
+/// @brief Difference between two channels' RMS levels, in dB.
+/// @details Accumulates in double because a long block of small squares loses
+///          the tail of the sum in float, and the whole measurement is a ratio
+///          of two such sums. Returns 0 when neither channel carries energy: a
+///          silent render has no balance to describe, and MixEvaluation::rendered
+///          plus the true-peak figure are what catch that case.
+inline float channel_rms_difference_db(const std::vector<float>& left,
+                                       const std::vector<float>& right) {
+  const std::size_t frames = std::min(left.size(), right.size());
+  if (frames == 0) return 0.0f;
+  double left_power = 0.0;
+  double right_power = 0.0;
+  for (std::size_t frame = 0; frame < frames; ++frame) {
+    left_power += static_cast<double>(left[frame]) * static_cast<double>(left[frame]);
+    right_power += static_cast<double>(right[frame]) * static_cast<double>(right[frame]);
+  }
+  left_power /= static_cast<double>(frames);
+  right_power /= static_cast<double>(frames);
+  if (left_power <= constants::kEpsilon && right_power <= constants::kEpsilon) return 0.0f;
+  // The floor keeps a one-sided render finite rather than infinite, and it sits
+  // far enough below any real programme level that it never moves a measurement
+  // that had energy on both sides.
+  left_power = std::max(left_power, static_cast<double>(constants::kEpsilon));
+  right_power = std::max(right_power, static_cast<double>(constants::kEpsilon));
+  return static_cast<float>(static_cast<double>(constants::kPowerToDbScale) *
+                            std::log(left_power / right_power));
+}
+
 /// @brief Total dominance above parity across every ordered pair and band.
 inline float total_dominance(const MixProfile& mix) {
   float total = 0.0f;
@@ -372,6 +413,7 @@ inline MixEvaluation evaluate(const std::vector<TrackInput>& tracks,
     const auto summary = mastering::common::measure_loudness_summary_interleaved(
         interleaved.data(), left.size(), 2, tracks.front().sample_rate);
     evaluation.master_true_peak_dbtp = summary.true_peak_dbtp;
+    evaluation.master_lr_rms_difference_db = channel_rms_difference_db(left, right);
   }
   return evaluation;
 }
