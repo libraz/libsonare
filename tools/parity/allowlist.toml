@@ -53,7 +53,6 @@ node = [
   # assert_non_empty_samples / assert_finite_samples are covered by the shared
   # `any` list above; the rest are Node-specific MIDI helpers.)
   "assert_sample_rate",     # Node facade sample-rate validation helper; no C counterpart by design
-  "resolve_fft_options",    # Single FFT-size/hop domain shared by the facade's transform entry points; validation only, no C counterpart
   "assert_u7",
   "assert_nibble",
   "assert_u32",
@@ -72,7 +71,6 @@ wasm = [
   "assert_non_negative_integer", # WASM test helper: mirrors TS facade argument validation
   "assert_positive_integer",     # WASM test helper: mirrors TS facade argument validation
   "assert_sample_rate",          # WASM test helper: centralizes sample-rate validation
-  "resolve_fft_options",         # Single FFT-size/hop domain shared by the facade's transform entry points; validation only, no C counterpart
   "validate_audio_buffer",       # Internal Audio constructor validator imported by audio.ts; not re-exported from the package entry
   "stream_analyzer_config_defaults", # WASM facade default snapshot, not a C API symbol
   "synth_enum_tables",      # facade-visible snapshot built from C enum names

@@ -1,3 +1,4 @@
+import { resolveFftOptions } from './_fft_options';
 import { getSonareModule } from './module_state';
 import type {
   HpssResult,
@@ -9,7 +10,7 @@ import type {
   VoicedFlags,
 } from './public_types';
 import type { ValidateOptions } from './validation';
-import { assertSampleRate, assertSamples, resolveFftOptions } from './validation';
+import { assertSampleRate, assertSamples } from './validation';
 
 function requireModule() {
   return getSonareModule();

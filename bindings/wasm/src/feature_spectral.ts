@@ -1,3 +1,4 @@
+import { resolveFftOptions } from './_fft_options';
 import { getSonareModule } from './module_state';
 import type { SegmentMatrix } from './public_types';
 import type {
@@ -13,7 +14,6 @@ import {
   assertPositiveInteger,
   assertSampleRate,
   assertSamples,
-  resolveFftOptions,
 } from './validation';
 
 function requireModule() {

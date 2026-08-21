@@ -1,3 +1,4 @@
+import { resolveFftOptions } from './_fft_options.js';
 import { addon } from './native.js';
 import type {
   HpssResult,
@@ -8,7 +9,7 @@ import type {
   SpectralRegionOp,
   VoicedFlags,
 } from './types.js';
-import { assertSampleRate, resolveFftOptions } from './validation.js';
+import { assertSampleRate } from './validation.js';
 
 // The addon reads the companion voicing array as an Int32Array and silently
 // ignores any other type, so normalize here rather than at the N-API boundary.

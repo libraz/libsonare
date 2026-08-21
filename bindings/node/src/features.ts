@@ -1,3 +1,4 @@
+import { resolveFftOptions } from './_fft_options.js';
 import { addon } from './native.js';
 import type {
   ChromaResult,
@@ -17,7 +18,7 @@ import type {
   TempogramMode,
 } from './types.js';
 import type { ValidateOptions } from './validation.js';
-import { assertSamples, resolveFftOptions } from './validation.js';
+import { assertSamples } from './validation.js';
 
 function resolvePositiveIntegerOption(
   fnName: string,
