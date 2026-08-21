@@ -2,6 +2,18 @@
 
 ## Unreleased
 
+### Mixing assistant
+
+**A new optional subsystem, and an addition rather than a change.** Nothing that existed before behaves differently because of it, and `-DBUILD_MIXING_ASSISTANT=OFF` removes the whole thing while leaving the mixer, the routing model and every existing scene exactly as they were. It is a separate target with a one-way dependency: it reads the mixing and mastering types and nothing in the runtime reaches back into it.
+
+Given a set of tracks it measures each one, measures what happens between them, and returns a mixer scene — input trims, faders, pans and widths, corrective EQ, dynamics, effect buses and sends — together with a written reason for every decision it made. `suggestMixScene` on Node and WASM, `suggest_mix_scene` on Python, `sonare_mixing_assistant_suggest_scene_json` on the C ABI.
+
+**It suggests; it does not apply.** No audio is processed and none is emitted. Handing the returned scene to the mixer is the caller's own explicit step, and there is deliberately no convenience entry point that collapses the two halves into one call — a mix has no single right answer, so nothing is applied on the user's behalf.
+
+Every decision is rule-based. There is no trained model, no statistical classifier and no learned parameter anywhere in it; source classification is a single-layer decision table over measured features. The numbers the rules start from are studio convention, and where a peer-reviewed survey of professional practice has measured the same quantity, the convention has been checked against it rather than left as folklore: the reverb return level, the reverb pre-delay, the lead vocal's position, the width of a wide pan, and the frequency ordering of the compression ratios all rest on that survey.
+
+`enableHighPass` is off by default, which is the one place the assistant declines to do something a mixing habit would suggest. The same survey found the blanket per-track high-pass seldom used in studio mixing and unsupported by subjective testing. Switched on, the filter is proposed from the track's measured energy below its register rather than from its class label, so a part written low keeps what it plays.
+
 ### Python
 
 `libsonare.SonareValueError` is new and is now what Python-side buffer and argument validation raises. It subclasses both `SonareError` and `ValueError`, so existing `except ValueError` and `except SonareError` handlers keep working unchanged; code that inspects `.code` gets `ErrorCode.INVALID_PARAMETER`. The message text is unchanged — the numeric prefix `SonareError` carries is deliberately not prepended. CLI usage errors still raise plain `ValueError`, because those report a command-line mistake rather than an API argument, and the CLI exit code for both is 3.
