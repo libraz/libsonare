@@ -131,6 +131,10 @@ class SonareWrap : public Napi::ObjectWrap<SonareWrap> {
   static Napi::Value MixingScenePresetNames(const Napi::CallbackInfo& info);
   static Napi::Value MixingScenePresetJson(const Napi::CallbackInfo& info);
   static Napi::Value MixStereo(const Napi::CallbackInfo& info);
+  static Napi::Value MixingAssistantSuggest(const Napi::CallbackInfo& info);
+  static Napi::Value MixingAssistantSuggestSceneJson(const Napi::CallbackInfo& info);
+  static Napi::Value MixingAssistantSourceClassNames(const Napi::CallbackInfo& info);
+  static Napi::Value MixingAssistantSourceClassFromName(const Napi::CallbackInfo& info);
   static Napi::Value MasterAudio(const Napi::CallbackInfo& info);
   static Napi::Value MasterAudioAsync(const Napi::CallbackInfo& info);
   static Napi::Value MasterAudioStereo(const Napi::CallbackInfo& info);

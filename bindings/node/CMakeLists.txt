@@ -66,6 +66,7 @@ set(ADDON_SOURCES
   src/addon/effects/extra.cpp
   src/addon/effects/mastering.cpp
   src/addon/effects/mixing.cpp
+  src/addon/effects/mixing_assistant.cpp
   src/addon/sonare_wrap_features.cpp
   src/addon/features/advanced.cpp
   src/addon/features/rhythm.cpp
@@ -89,6 +90,7 @@ set(SONARE_NODE_C_API_SOURCES
   ${SONARE_ROOT}/src/c_api/sonare_c_mastering_repair.cpp
   ${SONARE_ROOT}/src/c_api/sonare_c_mastering_streaming.cpp
   ${SONARE_ROOT}/src/c_api/sonare_c_mixing.cpp
+  ${SONARE_ROOT}/src/c_api/mixing_assistant.cpp
   ${SONARE_ROOT}/src/c_api/mixing_graph.cpp
   ${SONARE_ROOT}/src/c_api/mixing_mixer.cpp
   ${SONARE_ROOT}/src/c_api/mixing_strip.cpp
@@ -144,6 +146,7 @@ target_link_libraries(${PROJECT_NAME} PRIVATE
   sonare_serialize
   sonare_mir
   sonare_midi
+  sonare_mixing_assistant
   ${CMAKE_JS_LIB}
 )
 
@@ -152,6 +155,7 @@ target_compile_definitions(${PROJECT_NAME} PRIVATE
   SONARE_WITH_MASTERING=1
   SONARE_WITH_GRAPH=1
   SONARE_WITH_MIXING=1
+  SONARE_WITH_MIXING_ASSISTANT=1
   SONARE_WITH_PITCH_EDITOR=1
   SONARE_WITH_VOICE_CHANGER=1
   SONARE_WITH_ACOUSTIC_SIM=1

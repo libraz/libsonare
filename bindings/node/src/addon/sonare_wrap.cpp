@@ -236,6 +236,18 @@ Napi::Object SonareWrap::Init(Napi::Env env, Napi::Object exports) {
   exports.Set("mixingScenePresetJson", Napi::Function::New(env, &SonareWrap::MixingScenePresetJson,
                                                            "mixingScenePresetJson"));
   exports.Set("mixStereo", Napi::Function::New(env, &SonareWrap::MixStereo, "mixStereo"));
+  exports.Set(
+      "mixingAssistantSuggest",
+      Napi::Function::New(env, &SonareWrap::MixingAssistantSuggest, "mixingAssistantSuggest"));
+  exports.Set("mixingAssistantSuggestSceneJson",
+              Napi::Function::New(env, &SonareWrap::MixingAssistantSuggestSceneJson,
+                                  "mixingAssistantSuggestSceneJson"));
+  exports.Set("mixingAssistantSourceClassNames",
+              Napi::Function::New(env, &SonareWrap::MixingAssistantSourceClassNames,
+                                  "mixingAssistantSourceClassNames"));
+  exports.Set("mixingAssistantSourceClassFromName",
+              Napi::Function::New(env, &SonareWrap::MixingAssistantSourceClassFromName,
+                                  "mixingAssistantSourceClassFromName"));
   exports.Set("masterAudio", Napi::Function::New(env, &SonareWrap::MasterAudio, "masterAudio"));
   exports.Set("masterAudioAsync",
               Napi::Function::New(env, &SonareWrap::MasterAudioAsync, "masterAudioAsync"));

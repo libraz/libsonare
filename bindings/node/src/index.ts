@@ -5,6 +5,7 @@ export * from './errors.js';
 export * from './features.js';
 export * from './metering.js';
 export * from './mixer.js';
+export * from './mixing_assistant.js';
 export * from './project.js';
 export * from './realtime_engine.js';
 export type {
@@ -114,10 +115,29 @@ export type {
   MfccResult,
   MidiCcBindOptions,
   MidiCcLearnOptions,
+  MixAlignmentPair,
+  MixAssistantMixProfile,
+  MixAssistantOptions,
+  MixAssistantResult,
+  MixAssistantTrack,
+  MixAssistantTrackProfile,
+  MixBandDominance,
+  MixBandName,
+  MixBandOccupancy,
+  MixCrowdedBand,
   MixerProcessResult,
   MixMeterSnapshot,
+  MixMonoRisk,
   MixOptions,
   MixResult,
+  MixSceneBus,
+  MixSceneConnection,
+  MixSceneDocument,
+  MixSceneInsert,
+  MixSceneSend,
+  MixSceneStrip,
+  MixSceneVcaGroup,
+  MixSourceClass,
   NoteMoveOptions,
   NoteSegment,
   NoteStretchOptions,
@@ -209,6 +229,7 @@ export type {
   StreamProgressiveEstimate,
   StreamQuantizeConfig,
   StripRef,
+  SuggestMixSceneRequest,
   SurroundPan,
   SynthBodyType,
   SynthEngineMode,
