@@ -179,9 +179,14 @@ SonareError sonare_project_set_sample_rate(SonareProject* project, double sample
     return SONARE_ERROR_INVALID_PARAMETER;
   }
   SONARE_C_TRY
-  // Global property (not part of the command-driven invertible state); set
-  // directly on the owned Project.
-  project->history.project().set_sample_rate(sample_rate);
+  // Through the history like every other setter. Set directly on the Project it
+  // owns, this was the one piece of public project state undo could not reach:
+  // addTrack() then setSampleRate(96000) then undo() removed the track and left
+  // the rate at 96 kHz, and the wrong rate was then serialized into the saved
+  // document. The facades all promise that every mutation routes through the
+  // native EditHistory, so the sample rate has to be a command too.
+  auto command = std::make_unique<arr::SetSampleRate>(sample_rate);
+  if (!project->history.apply(std::move(command))) return SONARE_ERROR_INVALID_STATE;
   return SONARE_OK;
   SONARE_C_CATCH
 #else

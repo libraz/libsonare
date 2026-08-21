@@ -138,6 +138,9 @@ TEST_CASE("C ABI external stem import rejects source-id collisions without mutat
                                        stem.planes.data(), 4,       0};
   const SonareExternalStemImportRequest request{0, 48000, &desc, 1};
   SonareExternalStemImportResult result{};
+  // Depth before, not zero: every setter above is itself an undoable command.
+  // What this asserts is that the REJECTED import added nothing.
+  const size_t undo_depth_before = project->history.undo_depth();
   REQUIRE(sonare_project_import_external_stems(project, &request, &result) ==
           SONARE_ERROR_INVALID_STATE);
   REQUIRE(result.count == 0);
@@ -148,7 +151,7 @@ TEST_CASE("C ABI external stem import rejects source-id collisions without mutat
   REQUIRE(project->history.project().sources().empty());
   REQUIRE(project->audio.sources.size() == 1);
   REQUIRE(project->audio.sources.find(1) != project->audio.sources.end());
-  REQUIRE(project->history.undo_depth() == 0);
+  REQUIRE(project->history.undo_depth() == undo_depth_before);
 
   sonare_project_destroy(project);
 }

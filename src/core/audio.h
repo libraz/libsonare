@@ -33,7 +33,12 @@ class Audio {
   /// @return Audio object
   static Audio from_vector(std::vector<float> samples, int sample_rate);
 
-  /// @brief Loads Audio from a file (WAV or MP3).
+  /// @brief Loads Audio from a file.
+  /// @details The built-in decoders cover WAV (PCM, IEEE float, A-law, mu-law,
+  ///          MS/IMA ADPCM) and MP3. A build with FFmpeg enabled also accepts
+  ///          every container and codec FFmpeg handles, including a RIFF/WAVE
+  ///          carrying a codec the built-in WAV decoder does not implement;
+  ///          without FFmpeg those fail rather than falling back.
   /// @param path Path to audio file
   /// @return Audio object holding a buffer that satisfies the offline-analysis
   ///         policy below, so the decoded path accepts and rejects exactly what
@@ -45,6 +50,7 @@ class Audio {
   static Audio from_file(const std::string& path);
 
   /// @brief Loads Audio from memory buffer.
+  /// @details Accepts the same build-dependent format set as from_file.
   /// @param data Pointer to audio data
   /// @param size Size of data in bytes
   /// @return Audio object under the same decoded-buffer contract as from_file.

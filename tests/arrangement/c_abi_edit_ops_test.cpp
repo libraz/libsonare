@@ -460,6 +460,40 @@ TEST_CASE("C-ABI detached PCM edits become non-undoable at a byte boundary",
   }
 }
 
+TEST_CASE("C-ABI set_sample_rate is undoable like every other setter", "[project][c-abi-edit]") {
+  // Every facade documents that all mutation routes through the native
+  // EditHistory, so undo() must return the whole serialized project to what it
+  // was -- a setter that writes straight to the Project leaves its value behind
+  // after an undo that reported success, and that wrong rate is what gets
+  // saved and what later bounces and resampling read.
+  SonareProject* project = nullptr;
+  REQUIRE(sonare_project_create(&project) == SONARE_OK);
+  REQUIRE(sonare_project_set_sample_rate(project, 48000.0) == SONARE_OK);
+
+  const std::string before = serialize(project);
+  double rate = 0.0;
+  REQUIRE(sonare_project_get_sample_rate(project, &rate) == SONARE_OK);
+  REQUIRE(rate == 48000.0);
+
+  REQUIRE(sonare_project_set_sample_rate(project, 96000.0) == SONARE_OK);
+  REQUIRE(sonare_project_get_sample_rate(project, &rate) == SONARE_OK);
+  REQUIRE(rate == 96000.0);
+  REQUIRE(serialize(project) != before);
+
+  REQUIRE(sonare_project_undo(project) == SONARE_OK);
+  REQUIRE(sonare_project_get_sample_rate(project, &rate) == SONARE_OK);
+  CHECK(rate == 48000.0);
+  CHECK(serialize(project) == before);
+
+  // And redo puts it back, so the command is a full member of the stack rather
+  // than a one-way trip.
+  REQUIRE(sonare_project_redo(project) == SONARE_OK);
+  REQUIRE(sonare_project_get_sample_rate(project, &rate) == SONARE_OK);
+  CHECK(rate == 96000.0);
+
+  sonare_project_destroy(project);
+}
+
 TEST_CASE("C-ABI remove_clip removes and undo restores", "[project][c-abi-edit]") {
   SonareProject* project = nullptr;
   REQUIRE(sonare_project_create(&project) == SONARE_OK);

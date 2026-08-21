@@ -828,6 +828,60 @@ TEST_CASE("TrimClip shifts takes and keeps comp segments timeline-aligned", "[ar
   REQUIRE(project_equal(f.project, before));
 }
 
+TEST_CASE("Clip geometry commands leave no fade longer than the clip carrying it",
+          "[arrangement]") {
+  // Fades are stored as absolute PPQ lengths, so shortening a clip can strand
+  // one longer than the clip. The renderer re-clamps on its own, so nothing
+  // sounds wrong and the broken value survives all the way into the serialized
+  // document, where the next load reads it back as the clip's real fade.
+  const auto fades_fit = [](const EditClip& clip) {
+    return clip.fade_in.length_ppq >= 0.0 && clip.fade_in.length_ppq <= clip.length_ppq &&
+           clip.fade_out.length_ppq >= 0.0 && clip.fade_out.length_ppq <= clip.length_ppq;
+  };
+
+  SECTION("TrimClip") {
+    Fixture f;
+    MidiContentStore store;
+    EditClip* clip = f.project.find_clip_mutable(f.audio_clip);
+    REQUIRE(clip != nullptr);
+    clip->fade_in.length_ppq = 800.0;  // fits the original 1920 PPQ clip
+    clip->fade_out.length_ppq = 700.0;
+    REQUIRE(TrimClip(f.audio_clip, 0.0, 480.0).apply(f.project, store));
+
+    const EditClip* trimmed = f.project.find_clip(f.audio_clip);
+    REQUIRE(trimmed != nullptr);
+    CAPTURE(trimmed->length_ppq, trimmed->fade_in.length_ppq, trimmed->fade_out.length_ppq);
+    CHECK(fades_fit(*trimmed));
+  }
+
+  SECTION("SplitClip clamps the outer fade of both halves") {
+    Fixture f;
+    MidiContentStore store;
+    EditClip* clip = f.project.find_clip_mutable(f.audio_clip);
+    REQUIRE(clip != nullptr);
+    // Each fade fits the whole clip but not the half it will end up on. The
+    // inner edges are cleared by the split; the outer ones are the ones that
+    // need re-clamping, and they are on opposite halves.
+    clip->fade_in.length_ppq = 1000.0;   // longer than the 480 PPQ left half
+    clip->fade_out.length_ppq = 1500.0;  // longer than the 1440 PPQ right half
+    auto split = std::make_unique<SplitClip>(f.audio_clip, 480.0);
+    SplitClip* raw = split.get();
+    REQUIRE(raw->apply(f.project, store));
+
+    const EditClip* left = f.project.find_clip(f.audio_clip);
+    const EditClip* right = f.project.find_clip(raw->new_clip_id());
+    REQUIRE(left != nullptr);
+    REQUIRE(right != nullptr);
+    CAPTURE(left->length_ppq, left->fade_in.length_ppq);
+    CAPTURE(right->length_ppq, right->fade_out.length_ppq);
+    CHECK(fades_fit(*left));
+    CHECK(fades_fit(*right));
+    // The inner edges carry no fade at all.
+    CHECK(left->fade_out.length_ppq == 0.0);
+    CHECK(right->fade_in.length_ppq == 0.0);
+  }
+}
+
 TEST_CASE("SplitClip rejects loop clips until loop phase splitting is supported", "[arrangement]") {
   Fixture f;
   MidiContentStore store;
@@ -1507,6 +1561,39 @@ TEST_CASE("EditHistory leaves byte accounting unchanged on false and throw paths
                     std::bad_alloc);
   REQUIRE(h.retained_history_bytes() == before);
   REQUIRE(h.project().sample_rate() == f.project.sample_rate());
+}
+
+TEST_CASE("decoded audio is accounted through the shared retained-bytes helpers",
+          "[arrangement][history_bytes]") {
+  // Decoded PCM is the biggest thing history can retain, and it used to have no
+  // definition in retained_bytes.h at all: every caller wrote its own, and a
+  // caller that did not know to would have taken the generic fallback and
+  // reported 0 bytes for megabytes of audio -- with nothing to notice it,
+  // because 0 is a perfectly plausible answer. The fallback now refuses to
+  // compile for a type that owns storage, so the only way to get a number is
+  // through a definition that exists.
+  AudioSourceSamples samples;
+  samples.sample_rate = 48000.0;
+  samples.channels = {std::vector<float>(1024, 0.5f), std::vector<float>(1024, -0.5f)};
+  const size_t sample_bytes = retained::dynamic_bytes(samples);
+  REQUIRE(sample_bytes >= 2u * 1024u * sizeof(float));
+
+  // A map of them accounts every entry, not just the nodes.
+  std::map<SourceId, AudioSourceSamples> contents;
+  contents.emplace(1, samples);
+  contents.emplace(2, samples);
+  const size_t map_bytes = retained::dynamic_bytes(contents);
+  REQUIRE(map_bytes >= 2u * sample_bytes);
+
+  // Both of the store's maps count, including warped_sources, which the
+  // hand-written copies never reached.
+  AudioContentStore store;
+  store.sources.emplace(1, samples);
+  const size_t sources_only = retained::dynamic_bytes(store);
+  store.warped_sources.emplace(7, samples);
+  const size_t with_warped = retained::dynamic_bytes(store);
+  REQUIRE(sources_only >= sample_bytes);
+  REQUIRE(with_warped >= sources_only + sample_bytes);
 }
 
 TEST_CASE("retained-byte arithmetic saturates", "[arrangement][history_bytes]") {

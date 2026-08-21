@@ -9,6 +9,25 @@
 #include "arrangement/edit_command_internal.h"
 
 namespace sonare::arrangement {
+namespace {
+
+/// Re-clamps a clip's fades to its current length.
+///
+/// Fades are stored as absolute PPQ lengths, so any command that shortens a
+/// clip can leave one longer than the clip that carries it. The renderer
+/// re-clamps independently (edit_compiler), so the audio stays right and only
+/// the stored model is wrong — which is exactly why it survives: the serializer
+/// writes what the model holds, so an oversized fade is persisted into the
+/// project document and read back on the next load. Every command that assigns
+/// length_ppq calls this before returning, which is the whole of the invariant
+/// and the reason it lives in one function rather than at each assignment.
+void clamp_fades_to_length(EditClip* clip) {
+  const double max_fade_ppq = std::max(0.0, clip->length_ppq);
+  clip->fade_in.length_ppq = std::clamp(clip->fade_in.length_ppq, 0.0, max_fade_ppq);
+  clip->fade_out.length_ppq = std::clamp(clip->fade_out.length_ppq, 0.0, max_fade_ppq);
+}
+
+}  // namespace
 
 // ===========================================================================
 // Clip commands
@@ -94,7 +113,8 @@ bool SplitClip::apply(Project& project, MidiContentStore& store) {
   if (!detail::shift_take_offsets(&right.takes, left_len)) {
     return false;
   }
-  right.fade_in = ClipFade{};  // inner edge has no fade-in
+  right.fade_in = ClipFade{};     // inner edge has no fade-in
+  clamp_fades_to_length(&right);  // the outer fade-out now has a shorter clip
   if (project.overlap_policy() == OverlapPolicy::kDisallow &&
       project.clip_overlaps(right.track_id, right.start_ppq, right.length_ppq, id_)) {
     return false;
@@ -107,7 +127,8 @@ bool SplitClip::apply(Project& project, MidiContentStore& store) {
   const auto shorten_left = [&] {
     c->length_ppq = left_len;
     c->comp_segments = detail::shifted_clamped_comp_segments(c->comp_segments, 0.0, left_len);
-    c->fade_out = ClipFade{};
+    c->fade_out = ClipFade{};  // inner edge has no fade-out
+    clamp_fades_to_length(c);  // the outer fade-in now has a shorter clip
   };
   const bool allocate_new_id = new_clip_id_ == 0;
   if (allocate_new_id) shorten_left();
@@ -202,6 +223,7 @@ bool TrimClip::apply(Project& project, MidiContentStore& /*store*/) {
   c->length_ppq = new_length_ppq_;
   c->takes = std::move(shifted_takes);
   c->comp_segments = std::move(shifted_segments);
+  clamp_fades_to_length(c);
   return true;
 }
 
@@ -325,12 +347,10 @@ bool SetClipFade::apply(Project& project, MidiContentStore& /*store*/) {
   }
   c->fade_in = fade_in_;
   c->fade_out = fade_out_;
-  // Clamp each fade to the clip length so the compiled schedule cannot place the
-  // fade-out start before the clip start (an oversized fade would otherwise
-  // attenuate the whole clip). A negative stored length is treated as no fade.
-  const double max_fade_ppq = std::max(0.0, c->length_ppq);
-  c->fade_in.length_ppq = std::clamp(c->fade_in.length_ppq, 0.0, max_fade_ppq);
-  c->fade_out.length_ppq = std::clamp(c->fade_out.length_ppq, 0.0, max_fade_ppq);
+  // Clamped so the compiled schedule cannot place the fade-out start before the
+  // clip start (an oversized fade would otherwise attenuate the whole clip). A
+  // negative stored length is treated as no fade.
+  clamp_fades_to_length(c);
   return true;
 }
 

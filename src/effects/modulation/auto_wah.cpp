@@ -4,18 +4,9 @@
 #include <cmath>
 
 #include "rt/scoped_no_denormals.h"
+#include "util/dsp_primitives.h"
 
 namespace sonare::effects::modulation {
-
-namespace {
-
-/// One-pole smoothing coefficient for a given time constant in milliseconds.
-float time_coeff(float ms, double sample_rate) noexcept {
-  if (ms <= 0.0f) return 0.0f;
-  return static_cast<float>(std::exp(-1.0 / (static_cast<double>(ms) * 0.001 * sample_rate)));
-}
-
-}  // namespace
 
 AutoWah::AutoWah(AutoWahConfig config) : config_(config) {
   config_.resonance = std::max(0.5f, config_.resonance);
@@ -31,8 +22,8 @@ void AutoWah::prepare(double sample_rate, int) {
 }
 
 void AutoWah::update_coeffs() {
-  attack_coeff_ = time_coeff(config_.attack_ms, sample_rate_);
-  release_coeff_ = time_coeff(config_.release_ms, sample_rate_);
+  attack_coeff_ = time_to_coefficient(sample_rate_, config_.attack_ms);
+  release_coeff_ = time_to_coefficient(sample_rate_, config_.release_ms);
 }
 
 void AutoWah::process(float* const* channels, int num_channels, int num_samples) {

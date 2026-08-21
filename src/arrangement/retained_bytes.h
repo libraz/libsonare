@@ -10,12 +10,24 @@
 #include <cstddef>
 #include <map>
 #include <string>
+#include <type_traits>
 #include <variant>
 #include <vector>
 
 #include "arrangement/edit_model.h"
 #include "automation/automation_lane.h"
 #include "mixing/api/scene.h"
+
+namespace sonare::arrangement {
+
+// Defined in edit_compiler.h, which cannot be included here: it needs
+// MidiContentStore from edit_command.h, and edit_command.h includes this
+// header. The two overloads below are therefore declared against these
+// forward declarations and defined in retained_bytes.cpp, which sees both.
+struct AudioSourceSamples;
+struct AudioContentStore;
+
+}  // namespace sonare::arrangement
 
 namespace sonare::arrangement::retained {
 
@@ -24,8 +36,21 @@ namespace sonare::arrangement::retained {
 std::size_t saturating_add(std::size_t lhs, std::size_t rhs) noexcept;
 std::size_t saturating_multiply(std::size_t lhs, std::size_t rhs) noexcept;
 
+/// Fallback for types that own nothing beyond their own storage.
+///
+/// The static_assert is the point of this overload. Without it the fallback
+/// answers 0 for ANY type, including one that owns megabytes of decoded audio,
+/// and the caller gets a plausible number with no indication that nothing was
+/// counted -- EditHistory then never evicts what it cannot see and a byte
+/// budget silently becomes advisory. Trivially copyable is the exact line: such
+/// a type has no out-of-line storage to account, and anything else needs its
+/// own overload below. A new type that owns dynamic storage therefore fails to
+/// compile here rather than under-reporting at runtime.
 template <typename T>
 std::size_t dynamic_bytes(const T&) noexcept {
+  static_assert(std::is_trivially_copyable_v<T>,
+                "retained::dynamic_bytes has no overload for this type, and its fallback would "
+                "report 0 bytes for storage the type owns. Add an overload in retained_bytes.h.");
   return 0;
 }
 
@@ -97,6 +122,14 @@ inline std::size_t dynamic_bytes(const ProjectAnnotation& value) noexcept {
 inline std::size_t dynamic_bytes(const AssistSidecar& value) noexcept {
   return saturating_add(dynamic_bytes(value.module_id), dynamic_bytes(value.payload));
 }
+
+/// Decoded PCM: the largest thing an EditHistory entry can hold, and the reason
+/// the fallback above must not answer for it silently. Defined in the .cpp
+/// (see the forward declarations above).
+std::size_t dynamic_bytes(const AudioSourceSamples& value) noexcept;
+
+/// Both maps, including warped_sources, which no caller was accounting.
+std::size_t dynamic_bytes(const AudioContentStore& value) noexcept;
 
 inline std::size_t dynamic_bytes(const automation::Breakpoint&) noexcept { return 0; }
 

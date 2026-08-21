@@ -7,11 +7,13 @@
 #include <catch2/catch_test_macros.hpp>
 #include <catch2/matchers/catch_matchers_floating_point.hpp>
 #include <catch2/matchers/catch_matchers_string.hpp>
+#include <chrono>
 #include <cmath>
 #include <cstdint>
 #include <cstdio>
 #include <cstring>
 #include <fstream>
+#include <string>
 #include <vector>
 
 #include "core/audio.h"
@@ -54,6 +56,88 @@ std::vector<uint8_t> create_wav_buffer(const float* samples, size_t sample_count
   std::memcpy(buffer.data() + sizeof(WavHeader), samples, sample_count * 4);
 
   return buffer;
+}
+
+/// @brief Creates a mono 8-bit PCM WAV whose `data` chunk header declares
+///        @p declared_data_bytes while the file carries only @p actual_data_bytes.
+/// @details A chunk size is a header field with nothing behind it: dr_wav takes
+///          the declared size at face value and divides it into a PCM frame
+///          count, so one 8-bit sample per declared byte turns a few dozen bytes
+///          of file into a frame count of any size the attacker likes.
+std::vector<uint8_t> create_wav_buffer_overdeclared_data(uint32_t declared_data_bytes,
+                                                         size_t actual_data_bytes) {
+  std::vector<uint8_t> out;
+  const auto push_u16 = [&out](uint16_t value) {
+    out.push_back(static_cast<uint8_t>(value & 0xFFu));
+    out.push_back(static_cast<uint8_t>((value >> 8) & 0xFFu));
+  };
+  const auto push_u32 = [&out](uint32_t value) {
+    for (int shift = 0; shift < 32; shift += 8) {
+      out.push_back(static_cast<uint8_t>((value >> shift) & 0xFFu));
+    }
+  };
+  const auto push_tag = [&out](const char* tag) {
+    for (int i = 0; i < 4; ++i) out.push_back(static_cast<uint8_t>(tag[i]));
+  };
+
+  push_tag("RIFF");
+  push_u32(36u + declared_data_bytes);  // as over-declared as the data chunk
+  push_tag("WAVE");
+  push_tag("fmt ");
+  push_u32(16u);
+  push_u16(1u);  // WAVE_FORMAT_PCM
+  push_u16(1u);  // mono
+  push_u32(44100u);
+  push_u32(44100u);
+  push_u16(1u);  // block align
+  push_u16(8u);  // bits per sample: one frame per declared byte
+  push_tag("data");
+  push_u32(declared_data_bytes);
+  out.resize(out.size() + actual_data_bytes, 0x80u);  // 8-bit PCM silence
+  return out;
+}
+
+/// @brief Creates a mono 8-bit AIFF whose COMM chunk declares @p declared_frames
+///        while the SSND chunk carries only @p actual_data_bytes.
+/// @details dr_wav clamps a RIFF data chunk against the real stream length but
+///          takes an AIFF frame count verbatim, so this is the declaration a
+///          loader cannot lean on. Only load_wav / load_buffer_wav reach it:
+///          detect_format sees no RIFF/WAVE and routes the container elsewhere.
+std::vector<uint8_t> create_aiff_buffer_overdeclared_frames(uint32_t declared_frames,
+                                                            size_t actual_data_bytes) {
+  std::vector<uint8_t> out;
+  const auto push_be16 = [&out](uint16_t value) {
+    out.push_back(static_cast<uint8_t>((value >> 8) & 0xFFu));
+    out.push_back(static_cast<uint8_t>(value & 0xFFu));
+  };
+  const auto push_be32 = [&out](uint32_t value) {
+    for (int shift = 24; shift >= 0; shift -= 8) {
+      out.push_back(static_cast<uint8_t>((value >> shift) & 0xFFu));
+    }
+  };
+  const auto push_tag = [&out](const char* tag) {
+    for (int i = 0; i < 4; ++i) out.push_back(static_cast<uint8_t>(tag[i]));
+  };
+
+  push_tag("FORM");
+  push_be32(static_cast<uint32_t>(4u + 8u + 18u + 8u + 8u + actual_data_bytes));
+  push_tag("AIFF");
+  push_tag("COMM");
+  push_be32(18u);
+  push_be16(1u);               // channels
+  push_be32(declared_frames);  // numSampleFrames: unbacked by the SSND chunk
+  push_be16(8u);               // sample size in bits
+  // 44100 Hz as an 80-bit IEEE extended float.
+  for (const uint8_t byte :
+       {0x40u, 0x0Eu, 0xACu, 0x44u, 0x00u, 0x00u, 0x00u, 0x00u, 0x00u, 0x00u}) {
+    out.push_back(static_cast<uint8_t>(byte));
+  }
+  push_tag("SSND");
+  push_be32(static_cast<uint32_t>(8u + actual_data_bytes));
+  push_be32(0u);  // offset
+  push_be32(0u);  // block size
+  out.resize(out.size() + actual_data_bytes, 0u);
+  return out;
 }
 
 /// @brief Creates a mono 16-bit PCM WAV file in memory.
@@ -366,6 +450,133 @@ TEST_CASE("load_buffer_wav averages channel counts outside the speaker model",
   for (size_t i = 0; i < frames; ++i) {
     REQUIRE_THAT(quad_mono[i], Catch::Matchers::WithinAbs(tone[i], 1e-6f));
   }
+}
+
+TEST_CASE("WAV loaders size their buffer from data present, not a declared frame count",
+          "[audio_io]") {
+  // The declared count sits exactly at the offline decode limit, so it passes
+  // every bound the loaders check and still describes 500M frames of audio that
+  // are not in the file. Committing memory for it is a multi-second stall on a
+  // 2 GB zero-init, or an OOM kill, in place of a prompt result.
+  constexpr uint32_t kDeclaredDataBytes = 500'000'000u;
+  constexpr size_t kDataBytes = 64;
+  const std::vector<uint8_t> blob =
+      create_wav_buffer_overdeclared_data(kDeclaredDataBytes, kDataBytes);
+  // One 8-bit sample per byte present: the most this file can decode to.
+  constexpr size_t kMaxDecodableSamples = kDataBytes;
+  // Generous enough for a decode chunk's worth of growth, far below what the
+  // declaration asks for.
+  constexpr size_t kCapacityBudget = 64 * 1024;
+
+  const auto within_budget = [](const std::chrono::steady_clock::time_point& start) {
+    return std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::steady_clock::now() -
+                                                                 start)
+        .count();
+  };
+
+  SECTION("the mono loader") {
+    const auto start = std::chrono::steady_clock::now();
+    auto [samples, sample_rate] = load_buffer(blob.data(), blob.size());
+    const auto elapsed_ms = within_budget(start);
+    CAPTURE(elapsed_ms, samples.size(), samples.capacity());
+    REQUIRE(sample_rate == 44100);
+    REQUIRE(samples.size() <= kMaxDecodableSamples);
+    // Capacity, not just size: a buffer trimmed after the fact still carries
+    // whatever was committed for the declaration, for as long as the caller
+    // holds the audio.
+    REQUIRE(samples.capacity() <= kCapacityBudget);
+    REQUIRE(elapsed_ms < 100);
+  }
+
+  SECTION("an AIFF frame count with no data behind it") {
+    // The one declaration dr_wav passes through unclamped, and the only WAV
+    // loader that can be reached with this container: detect_format sees no
+    // RIFF/WAVE, so load_buffer routes it away and only the public
+    // load_wav / load_buffer_wav entry points arrive here.
+    const std::vector<uint8_t> aiff =
+        create_aiff_buffer_overdeclared_frames(kDeclaredDataBytes, kDataBytes);
+    auto [samples, sample_rate] = load_buffer_wav(aiff.data(), aiff.size());
+    CAPTURE(samples.size(), samples.capacity());
+    REQUIRE(sample_rate == 44100);
+    REQUIRE(samples.size() == kDataBytes);
+    REQUIRE(samples.capacity() <= kCapacityBudget);
+  }
+
+  SECTION("the interleaved loader") {
+    // Only reachable by path, so the blob goes through a file.
+    const std::string path = "test_wav_overdeclared_frames.wav";
+    std::ofstream out(path, std::ios::binary);
+    REQUIRE(out.is_open());
+    out.write(reinterpret_cast<const char*>(blob.data()),
+              static_cast<std::streamsize>(blob.size()));
+    out.close();
+
+    const auto start = std::chrono::steady_clock::now();
+    auto [interleaved, sample_rate, channels] = load_audio_interleaved(path);
+    const auto elapsed_ms = within_budget(start);
+    std::remove(path.c_str());
+    CAPTURE(elapsed_ms, interleaved.size(), interleaved.capacity());
+    REQUIRE(sample_rate == 44100);
+    REQUIRE(channels == 1);
+    REQUIRE(interleaved.size() <= kMaxDecodableSamples);
+    REQUIRE(interleaved.capacity() <= kCapacityBudget);
+    REQUIRE(elapsed_ms < 100);
+  }
+}
+
+TEST_CASE("a RIFF container carrying a codec the built-in decoder lacks reaches FFmpeg",
+          "[audio_io]") {
+  // Sniffing answers "which container", and a RIFF container can hold MPEG
+  // Layer-3 (WAVE_FORMAT_MPEGLAYER3, which real encoders emit). Dispatching on
+  // the container alone let the built-in sniffer's claim be final: dr_wav
+  // refused the file and the FFmpeg fallback, which decodes it, sat on a branch
+  // this file could never reach.
+  if (std::system("command -v ffmpeg >/dev/null 2>&1") != 0) {
+    SKIP("ffmpeg CLI not found on PATH");
+  }
+  const std::string mp3_path = "test_riff_mp3_source.mp3";
+  const std::string wav_path = "test_riff_mp3.wav";
+  const std::string encode =
+      "ffmpeg -loglevel error -f lavfi -i "
+      "sine=frequency=440:duration=0.25:sample_rate=22050 "
+      "-ac 1 -c:a libmp3lame -b:a 32k -y " +
+      mp3_path;
+  REQUIRE(std::system(encode.c_str()) == 0);
+  // Remux, not re-encode: the MP3 bitstream is copied into a RIFF/WAVE.
+  const std::string remux =
+      "ffmpeg -loglevel error -i " + mp3_path + " -c:a copy -f wav -y " + wav_path;
+  REQUIRE(std::system(remux.c_str()) == 0);
+  std::remove(mp3_path.c_str());
+
+  std::ifstream input(wav_path, std::ios::binary);
+  REQUIRE(input.is_open());
+  const std::vector<uint8_t> blob((std::istreambuf_iterator<char>(input)), {});
+  input.close();
+
+  // The container really is RIFF/WAVE, and its codec tag really is 0x0055.
+  REQUIRE(detect_format(blob.data(), blob.size()) == AudioFormat::WAV);
+  REQUIRE(blob.size() > 20);
+  REQUIRE(blob[20] == 0x55);
+  REQUIRE(blob[21] == 0x00);
+
+#ifdef SONARE_WITH_FFMPEG
+  auto [samples, sample_rate] = load_audio(wav_path);
+  REQUIRE(sample_rate == 22050);
+  REQUIRE(samples.size() > 1000);
+  for (const float sample : samples) REQUIRE(std::isfinite(sample));
+  // The buffer entry point agrees with the path entry point.
+  auto [buffer_samples, buffer_rate] = load_buffer(blob.data(), blob.size());
+  REQUIRE(buffer_rate == sample_rate);
+  REQUIRE(buffer_samples.size() == samples.size());
+  // A channel probe that disagreed with the loader would misconfigure the
+  // caller that asked it which fold to apply.
+  REQUIRE(audio_channel_count(wav_path) == 1);
+#else
+  // Without FFmpeg there is no decoder for this codec, and the failure must be
+  // the decode class rather than a silent empty result.
+  REQUIRE_THROWS_AS(load_audio(wav_path), sonare::SonareException);
+#endif
+  std::remove(wav_path.c_str());
 }
 
 TEST_CASE("load_buffer_mp3 rejects an oversized declared PCM stream before decode allocation",

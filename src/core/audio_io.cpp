@@ -155,6 +155,37 @@ struct Mp3DecoderGuard {
   }
 };
 
+/// Owns an initialized `drwav` so the decoders can allocate inside their decode
+/// loop. Every allocation there can throw, and dr_wav's own metadata block is
+/// freed by drwav_uninit(), not by unwinding.
+struct WavDecoderGuard {
+  drwav wav{};
+  bool opened = false;
+  ~WavDecoderGuard() {
+    if (opened) drwav_uninit(&wav);
+  }
+};
+
+/// Upper bound on the interleaved samples a WAV's data chunk can actually
+/// produce, derived from bytes that are really present.
+///
+/// A declared PCM frame count is a header field with nothing behind it: an
+/// MS-ADPCM `fact` chunk can claim 500M frames over a kilobyte of real data
+/// (dr_wav honours `fact` for that format tag), and the data chunk's own size
+/// field is equally unbacked, so both are capped against the buffer the caller
+/// actually handed us. Deliberately an over-estimate — 8 bits per byte over the
+/// bits one sample occupies ignores per-block ADPCM headers — because its job
+/// is to bound a reservation, not to predict the decode.
+size_t decodable_sample_ceiling(const drwav& wav, size_t buffer_size) {
+  if (wav.bitsPerSample == 0 || wav.channels == 0) return 0;
+  const uint64_t available_bytes =
+      std::min<uint64_t>(wav.dataChunkDataSize, static_cast<uint64_t>(buffer_size));
+  const uint64_t bits = static_cast<uint64_t>(wav.bitsPerSample);
+  const uint64_t samples = (available_bytes * 8u + bits - 1u) / bits;
+  return static_cast<size_t>(
+      std::min<uint64_t>(samples, static_cast<uint64_t>(resource::kMaxOfflineAudioSamples)));
+}
+
 #ifndef __EMSCRIPTEN__
 #ifdef _WIN32
 std::wstring utf8_to_wide_path(const std::string& path) {
@@ -225,10 +256,70 @@ AudioFormat detect_format(const uint8_t* data, size_t size) {
 
 namespace {
 
+#ifdef SONARE_WITH_FFMPEG
+/// Whether the built-in WAV decoder can handle the codec a RIFF/WAVE declares.
+///
+/// detect_format() answers a container question — "is this RIFF/WAVE?" — and a
+/// RIFF container can carry codecs dr_wav does not implement, MPEG Layer-3
+/// (0x0055) being the one that occurs in the wild. Dispatching on the container
+/// alone made the built-in sniffer's claim final: the file was handed to dr_wav,
+/// dr_wav refused it, and the FFmpeg fallback that could have decoded it was
+/// never reached because it only sat on the Unknown branch. So the codec tag,
+/// not the container, decides which decoder gets the buffer.
+///
+/// Returns true when the fmt chunk is absent or unreadable, leaving dr_wav to
+/// report its own error for a malformed file rather than routing it elsewhere.
+bool built_in_wav_decoder_supports(const uint8_t* data, size_t size) {
+  constexpr size_t kRiffHeaderBytes = 12;  // "RIFF" + size + "WAVE"
+  constexpr size_t kChunkHeaderBytes = 8;  // id + size
+  const auto read_u16 = [data](size_t offset) {
+    return static_cast<uint16_t>(static_cast<uint16_t>(data[offset]) |
+                                 static_cast<uint16_t>(data[offset + 1] << 8));
+  };
+  const auto read_u32 = [data](size_t offset) {
+    uint32_t value = 0;
+    for (size_t i = 0; i < 4; ++i) value |= static_cast<uint32_t>(data[offset + i]) << (8 * i);
+    return value;
+  };
+
+  size_t offset = kRiffHeaderBytes;
+  while (offset + kChunkHeaderBytes <= size) {
+    const uint32_t chunk_size = read_u32(offset + 4);
+    const size_t body = offset + kChunkHeaderBytes;
+    if (std::memcmp(data + offset, "fmt ", 4) == 0) {
+      if (chunk_size < 2 || body + 2 > size) return true;
+      uint16_t format_tag = read_u16(body);
+      if (format_tag == DR_WAVE_FORMAT_EXTENSIBLE) {
+        // The real codec lives in the SubFormat GUID's first two bytes.
+        if (chunk_size < 26 || body + 26 > size) return true;
+        format_tag = read_u16(body + 24);
+      }
+      switch (format_tag) {
+        case DR_WAVE_FORMAT_PCM:
+        case DR_WAVE_FORMAT_ADPCM:
+        case DR_WAVE_FORMAT_IEEE_FLOAT:
+        case DR_WAVE_FORMAT_ALAW:
+        case DR_WAVE_FORMAT_MULAW:
+        case DR_WAVE_FORMAT_DVI_ADPCM:
+          return true;
+        default:
+          return false;
+      }
+    }
+    // Chunk bodies are word-aligned, so an odd size carries a pad byte.
+    const size_t advance = kChunkHeaderBytes + chunk_size + (chunk_size & 1u);
+    if (advance <= kChunkHeaderBytes) return true;  // zero-sized chunk: stop walking
+    offset += advance;
+  }
+  return true;
+}
+#endif  // SONARE_WITH_FFMPEG
+
 InterleavedAudioLoadResult load_buffer_wav_interleaved(const uint8_t* data, size_t size) {
-  drwav wav;
-  const drwav_bool32 ok = drwav_init_memory(&wav, data, size, nullptr);
-  SONARE_CHECK_MSG(ok, ErrorCode::DecodeFailed, "Failed to parse WAV data");
+  WavDecoderGuard guard;
+  guard.opened = drwav_init_memory(&guard.wav, data, size, nullptr) != 0;
+  SONARE_CHECK_MSG(guard.opened, ErrorCode::DecodeFailed, "Failed to parse WAV data");
+  drwav& wav = guard.wav;
 
   const int sample_rate = static_cast<int>(wav.sampleRate);
   const int channels = static_cast<int>(wav.channels);
@@ -242,22 +333,36 @@ InterleavedAudioLoadResult load_buffer_wav_interleaved(const uint8_t* data, size
                                                  resource::kMaxOfflineAudioSamples, &total_samples),
                    ErrorCode::DecodeFailed,
                    "WAV declares more samples than the offline decode limit");
-  std::vector<float> interleaved(total_samples);
   constexpr size_t kDecodeChunkFrames = 16 * 1024;
+  size_t scratch_samples = 0;
+  SONARE_CHECK_MSG(
+      numeric::checked_size_product(kDecodeChunkFrames, static_cast<size_t>(channels),
+                                    resource::kMaxOfflineAudioSamples, &scratch_samples),
+      ErrorCode::DecodeFailed, "WAV channel layout exceeds the decode limit");
+  std::vector<float> scratch(scratch_samples);
+  // The reservation is capped by what the data chunk can back, so a header
+  // declaring 500M frames over a kilobyte of PCM buys a kilobyte of memory
+  // instead of a multi-GB zero-init that stalls or OOMs the process. The
+  // buffer then grows with the frames actually decoded, which is the property
+  // the sibling mono loader documents and this one did not have.
+  std::vector<float> interleaved;
+  interleaved.reserve(std::min(total_samples, decodable_sample_ceiling(wav, size)));
   drwav_uint64 total_frames_read = 0;
   while (total_frames_read < wav.totalPCMFrameCount) {
     const drwav_uint64 request =
         std::min<drwav_uint64>(kDecodeChunkFrames, wav.totalPCMFrameCount - total_frames_read);
-    const size_t offset = static_cast<size_t>(total_frames_read) * static_cast<size_t>(channels);
-    const drwav_uint64 frames_read =
-        drwav_read_pcm_frames_f32(&wav, request, interleaved.data() + offset);
+    const drwav_uint64 frames_read = drwav_read_pcm_frames_f32(&wav, request, scratch.data());
     if (frames_read == 0) break;
+    const size_t read_samples = static_cast<size_t>(frames_read) * static_cast<size_t>(channels);
+    SONARE_CHECK_MSG(interleaved.size() + read_samples <= resource::kMaxOfflineAudioSamples,
+                     ErrorCode::DecodeFailed,
+                     "WAV decoded more samples than the offline decode limit");
+    interleaved.insert(interleaved.end(), scratch.begin(),
+                       scratch.begin() + static_cast<std::ptrdiff_t>(read_samples));
     total_frames_read += frames_read;
   }
-  drwav_uninit(&wav);
 
   SONARE_CHECK_MSG(total_frames_read > 0, ErrorCode::DecodeFailed, "No audio frames in WAV data");
-  interleaved.resize(static_cast<size_t>(total_frames_read) * static_cast<size_t>(channels));
   return {std::move(interleaved), sample_rate, channels};
 }
 
@@ -308,6 +413,11 @@ InterleavedAudioLoadResult load_buffer_mp3_interleaved(const uint8_t* data, size
                        " bytes (max: " + std::to_string(resource::kMaxAudioFileBytes) + ")");
   switch (detect_format(data, size)) {
     case AudioFormat::WAV:
+#ifdef SONARE_WITH_FFMPEG
+      if (!built_in_wav_decoder_supports(data, size)) {
+        return load_buffer_ffmpeg_interleaved(data, size);
+      }
+#endif
       return load_buffer_wav_interleaved(data, size);
     case AudioFormat::MP3:
       return load_buffer_mp3_interleaved(data, size);
@@ -324,9 +434,10 @@ InterleavedAudioLoadResult load_buffer_mp3_interleaved(const uint8_t* data, size
 }  // namespace
 
 AudioLoadResult load_buffer_wav(const uint8_t* data, size_t size) {
-  drwav wav;
-  drwav_bool32 ok = drwav_init_memory(&wav, data, size, nullptr);
-  SONARE_CHECK_MSG(ok, ErrorCode::DecodeFailed, "Failed to parse WAV data");
+  WavDecoderGuard guard;
+  guard.opened = drwav_init_memory(&guard.wav, data, size, nullptr) != 0;
+  SONARE_CHECK_MSG(guard.opened, ErrorCode::DecodeFailed, "Failed to parse WAV data");
+  drwav& wav = guard.wav;
 
   int sample_rate = static_cast<int>(wav.sampleRate);
   int channels = static_cast<int>(wav.channels);
@@ -336,7 +447,7 @@ AudioLoadResult load_buffer_wav(const uint8_t* data, size_t size) {
 
   // A crafted WAV (e.g. an MS-ADPCM `fact` chunk) can declare a huge PCM frame
   // count before any real sample data is present. Reject over the offline decode
-  // limit — with an overflow-safe multiply — before the multi-GB zero-init.
+  // limit — with an overflow-safe multiply — before committing memory for it.
   size_t total_samples = 0;
   SONARE_CHECK_MSG(numeric::checked_size_product(static_cast<size_t>(wav.totalPCMFrameCount),
                                                  static_cast<size_t>(wav.channels),
@@ -346,7 +457,12 @@ AudioLoadResult load_buffer_wav(const uint8_t* data, size_t size) {
   constexpr size_t kDecodeChunkFrames = 16 * 1024;
   const size_t frame_capacity = static_cast<size_t>(wav.totalPCMFrameCount);
   std::vector<float> mono;
-  mono.reserve(frame_capacity);
+  // Passing the offline limit is not the same as being backed by real data: the
+  // limit still admits a declared 500M frames, which is a 2 GB reservation for
+  // whatever bytes the file actually carries. Cap it at what the data chunk can
+  // yield and let the fold below grow the buffer with the decode.
+  mono.reserve(std::min(frame_capacity,
+                        decodable_sample_ceiling(wav, size) / static_cast<size_t>(channels)));
   size_t scratch_samples = 0;
   SONARE_CHECK_MSG(numeric::checked_size_product(
                        std::min(kDecodeChunkFrames, frame_capacity), static_cast<size_t>(channels),
@@ -363,7 +479,6 @@ AudioLoadResult load_buffer_wav(const uint8_t* data, size_t size) {
     append_mono_fold(scratch.data(), static_cast<size_t>(frames_read), channels, planar, mono);
     total_frames_read += frames_read;
   }
-  drwav_uninit(&wav);
 
   SONARE_CHECK_MSG(total_frames_read > 0, ErrorCode::DecodeFailed, "No audio frames in WAV data");
   return {std::move(mono), sample_rate};
@@ -455,6 +570,13 @@ AudioLoadResult load_buffer(const uint8_t* data, size_t size) {
 
   switch (format) {
     case AudioFormat::WAV:
+#ifdef SONARE_WITH_FFMPEG
+      // A RIFF container is not a codec claim: hand a WAV carrying something
+      // dr_wav cannot decode to FFmpeg instead of failing on it.
+      if (!built_in_wav_decoder_supports(data, size)) {
+        return load_buffer_ffmpeg(data, size);
+      }
+#endif
       return load_buffer_wav(data, size);
     case AudioFormat::MP3:
       return load_buffer_mp3(data, size);
@@ -487,6 +609,13 @@ int audio_channel_count(const std::string& path, const AudioLoadOptions& options
   const std::vector<uint8_t> data = read_file(path, options.max_file_size);
   switch (detect_format(data.data(), data.size())) {
     case AudioFormat::WAV: {
+#ifdef SONARE_WITH_FFMPEG
+      // Same dispatch rule as load_buffer(): a codec dr_wav cannot open must not
+      // report a different channel count here than the loader will decode.
+      if (!built_in_wav_decoder_supports(data.data(), data.size())) {
+        return probe_channels_ffmpeg(data.data(), data.size());
+      }
+#endif
       drwav wav;
       SONARE_CHECK_MSG(drwav_init_memory(&wav, data.data(), data.size(), nullptr),
                        ErrorCode::DecodeFailed, "Failed to parse WAV data");

@@ -7,6 +7,7 @@
 
 #include "arrangement/edit_command.h"
 #include "arrangement/edit_command_internal.h"
+#include "arrangement/edit_compiler.h"
 
 namespace sonare::arrangement::retained {
 
@@ -22,6 +23,14 @@ std::size_t saturating_multiply(std::size_t lhs, std::size_t rhs) noexcept {
     return std::numeric_limits<std::size_t>::max();
   }
   return lhs * rhs;
+}
+
+std::size_t dynamic_bytes(const AudioSourceSamples& value) noexcept {
+  return dynamic_bytes(value.channels);
+}
+
+std::size_t dynamic_bytes(const AudioContentStore& value) noexcept {
+  return saturating_add(dynamic_bytes(value.sources), dynamic_bytes(value.warped_sources));
 }
 
 }  // namespace sonare::arrangement::retained

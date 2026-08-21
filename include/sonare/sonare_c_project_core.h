@@ -204,6 +204,8 @@ SonareError sonare_project_set_audio_source_metadata(SonareProject* project, uin
                                                      const char* external_stem_role);
 
 /// @brief Sets the project sample rate (Hz). Must be > 0.
+/// @details Applied through the edit history like every other setter, so it is
+///          undoable and takes its place in the undo stack.
 SonareError sonare_project_set_sample_rate(SonareProject* project, double sample_rate);
 
 /// @brief Sets the project's clip-overlap policy.

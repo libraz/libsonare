@@ -107,6 +107,9 @@ int audio_channel_count(const std::string& path,
                         const AudioLoadOptions& options = kDefaultLoadOptions);
 
 /// @brief Loads audio from memory buffer (auto-detect format).
+/// @details Dispatch is by codec, not container: a RIFF/WAVE declaring a codec
+///          the built-in decoder does not implement goes to FFmpeg where the
+///          build has it, and fails with DecodeFailed where it does not.
 /// @param data Pointer to audio data
 /// @param size Size of data in bytes
 /// @return Tuple of (mono samples normalized to [-1,1], sample rate)

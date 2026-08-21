@@ -67,27 +67,10 @@ struct AudioContentTransferState {
   std::map<arr::SourceId, arr::AudioSourceSamples> contents;
 };
 
-std::size_t retained_audio_samples_bytes(const arr::AudioSourceSamples& samples) noexcept {
-  return arr::retained::dynamic_bytes(samples.channels);
-}
-
-std::size_t retained_audio_map_bytes(
-    const std::map<arr::SourceId, arr::AudioSourceSamples>& contents) noexcept {
-  constexpr std::size_t kNodeOverhead = 4u * sizeof(void*);
-  const std::size_t node_bytes = arr::retained::saturating_add(
-      sizeof(typename std::map<arr::SourceId, arr::AudioSourceSamples>::value_type), kNodeOverhead);
-  std::size_t total = arr::retained::saturating_multiply(contents.size(), node_bytes);
-  for (const auto& [source_id, samples] : contents) {
-    (void)source_id;
-    total = arr::retained::saturating_add(total, retained_audio_samples_bytes(samples));
-  }
-  return total;
-}
-
 std::size_t retained_audio_transfer_state_bytes(const AudioContentTransferState& state) noexcept {
   std::size_t total = sizeof(state);
   total = arr::retained::saturating_add(total, arr::retained::dynamic_bytes(state.source_ids));
-  return arr::retained::saturating_add(total, retained_audio_map_bytes(state.contents));
+  return arr::retained::saturating_add(total, arr::retained::dynamic_bytes(state.contents));
 }
 
 class TransferAudioContent final : public arr::EditCommand, public arr::EditCommandRollback {
@@ -288,7 +271,7 @@ struct AudioContentReplaceState {
 };
 
 std::size_t retained_audio_replace_state_bytes(const AudioContentReplaceState& state) noexcept {
-  return arr::retained::saturating_add(sizeof(state), retained_audio_map_bytes(state.contents));
+  return arr::retained::saturating_add(sizeof(state), arr::retained::dynamic_bytes(state.contents));
 }
 
 class ReplaceAudioContent final : public arr::EditCommand, public arr::EditCommandRollback {
