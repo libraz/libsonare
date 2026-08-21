@@ -346,4 +346,17 @@ describe('Mixer tail draining (WASM)', () => {
       project.delete();
     }
   });
+
+  it('snaps a near-beat coordinate to the requested grid line', () => {
+    const project = new Project();
+    try {
+      project.setSampleRate(48000);
+      expect(project.snapToGrid(1.02, 1.0)).toBe(1.0);
+      expect(project.snapToGrid(0.27, 1.0, 4)).toBe(0.25);
+      expect(project.snapToGrid(4.02, 1.0, 0)).toBe(4.0);
+      expect(() => project.snapToGrid(1.0, 1.0, -1)).toThrow();
+    } finally {
+      project.delete();
+    }
+  });
 });
