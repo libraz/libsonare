@@ -48,9 +48,21 @@ float window_coherent_norm(const std::vector<float>& window) {
                           : 1.0f;
 }
 
-float one_sided_amplitude_scale(int bin, int n_fft) {
+// One-sided spectrum doubling for every bin except DC and (for an even n_fft)
+// Nyquist, which have no mirrored partner. The 1/n_fft that used to live here
+// is gone: the coherent normalization is now per frame, against the window
+// weights that actually multiplied samples.
+float one_sided_bin_scale(int bin, int n_fft) {
   const bool edge_bin = bin == 0 || (n_fft % 2 == 0 && bin == n_fft / 2);
-  return (edge_bin ? 1.0f : 2.0f) / static_cast<float>(n_fft);
+  return edge_bin ? 1.0f : 2.0f;
+}
+
+// The same doubling folded together with the 1/n_fft term, for spectrum_frame.
+// That entry point documents zero-padding as its contract (a caller asks for one
+// frame at an offset and gets what that frame contains), so it keeps the
+// whole-window coherent gain.
+float one_sided_amplitude_scale(int bin, int n_fft) {
+  return one_sided_bin_scale(bin, n_fft) / static_cast<float>(n_fft);
 }
 
 // Shared post-processing: derive power, optional fractional-octave smoothing, and
@@ -91,7 +103,6 @@ SpectrumResult spectrum(const Audio& audio, const SpectrumConfig& config) {
   const size_t n_fft = static_cast<size_t>(config.n_fft);
   const auto window_handle = get_window_cached(WindowType::Hann, config.n_fft, true);
   const std::vector<float>& window = *window_handle;
-  const float window_norm = window_coherent_norm(window);
 
   const size_t hop = std::max<size_t>(1, n_fft / 2);
 
@@ -109,10 +120,21 @@ SpectrumResult spectrum(const Audio& audio, const SpectrumConfig& config) {
     }
     for (size_t i = copy_count; i < n_fft; ++i) frame[i] = 0.0f;
 
+    // Coherent gain over the POPULATED span, not the whole window. A frame
+    // shorter than n_fft is zero-padded, so only window[0, copy_count) ever
+    // multiplied a sample; dividing by the full window sum then under-reports
+    // by exactly the ratio of the two sums. For a periodic Hann with n_fft=2048
+    // and a 512-sample buffer that ratio is about 0.09, i.e. roughly -21 dB --
+    // enough to make a short one-shot unusable against the peak/RMS meters
+    // measured on the same buffer.
+    double frame_window_sum = 0.0;
+    for (size_t i = 0; i < copy_count; ++i) frame_window_sum += static_cast<double>(window[i]);
+    const double frame_norm = frame_window_sum > 0.0 ? 1.0 / frame_window_sum : 0.0;
+
     fft.forward(frame.data(), bins.data());
     for (int i = 0; i < n_bins; ++i) {
-      const float mag = std::abs(bins[i]);
-      power_accum[static_cast<size_t>(i)] += static_cast<double>(mag) * static_cast<double>(mag);
+      const double mag = static_cast<double>(std::abs(bins[i])) * frame_norm;
+      power_accum[static_cast<size_t>(i)] += mag * mag;
     }
     ++num_frames;
 
@@ -124,8 +146,9 @@ SpectrumResult spectrum(const Audio& audio, const SpectrumConfig& config) {
   const float inv_frames = num_frames > 0 ? 1.0f / static_cast<float>(num_frames) : 1.0f;
   for (int i = 0; i < n_bins; ++i) {
     const float avg_power = static_cast<float>(power_accum[static_cast<size_t>(i)]) * inv_frames;
-    result.magnitude[i] =
-        std::sqrt(avg_power) * window_norm * one_sided_amplitude_scale(i, config.n_fft);
+    // The per-frame coherent normalization above already divided by the window
+    // sum, so only the one-sided doubling remains here.
+    result.magnitude[i] = std::sqrt(avg_power) * one_sided_bin_scale(i, config.n_fft);
   }
 
   finalize_spectrum(result, config);

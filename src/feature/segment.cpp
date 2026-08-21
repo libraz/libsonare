@@ -24,14 +24,30 @@ inline float column_norm(const float* X, int rows, int cols, int j) {
   return std::sqrt(s);
 }
 
-float cosine_sim(const float* X, int rows, int X_cols, const float* Y, int Y_cols, int i, int j) {
+/// @brief Every column norm of a [rows x cols] row-major matrix, in one pass.
+/// @details The pairwise loops below are O(X_cols * Y_cols) and each pair needs
+///          both operands' norms. Computing them inside the pair loop re-derives
+///          the same X_cols + Y_cols values once per pair, which triples the
+///          work of the dominant term: for a 3-minute track at hop 512 the
+///          optimal dot-product cost is ~0.72 G mult-add and the recomputation
+///          makes it ~2.16 G. Hoisting is exact, not an approximation -- the
+///          norms come from the same column_norm() over the same data, so every
+///          pairwise result is bit-identical.
+std::vector<float> column_norms(const float* X, int rows, int cols) {
+  std::vector<float> norms(static_cast<size_t>(cols));
+  for (int j = 0; j < cols; ++j) {
+    norms[static_cast<size_t>(j)] = column_norm(X, rows, cols, j);
+  }
+  return norms;
+}
+
+float cosine_sim(const float* X, int rows, int X_cols, const float* Y, int Y_cols, int i, int j,
+                 float nx, float ny) {
+  if (nx == 0.0f || ny == 0.0f) return 0.0f;
   float dot = 0.0f;
   for (int r = 0; r < rows; ++r) {
     dot += X[r * X_cols + i] * Y[r * Y_cols + j];
   }
-  float nx = column_norm(X, rows, X_cols, i);
-  float ny = column_norm(Y, rows, Y_cols, j);
-  if (nx == 0.0f || ny == 0.0f) return 0.0f;
   return dot / (nx * ny);
 }
 
@@ -55,10 +71,15 @@ std::vector<float> pairwise_distance(const float* X, int X_rows, int X_cols, con
                                      int Y_cols, const std::string& metric) {
   const bool use_cosine = (metric == "cosine");
   std::vector<float> D(static_cast<size_t>(X_cols) * Y_cols, 0.0f);
+  // One norm per column per call, not one per pair.
+  const std::vector<float> nx = use_cosine ? column_norms(X, X_rows, X_cols) : std::vector<float>();
+  const std::vector<float> ny = use_cosine ? column_norms(Y, X_rows, Y_cols) : std::vector<float>();
   for (int i = 0; i < X_cols; ++i) {
     for (int j = 0; j < Y_cols; ++j) {
       if (use_cosine) {
-        D[i * Y_cols + j] = 1.0f - cosine_sim(X, X_rows, X_cols, Y, Y_cols, i, j);
+        D[i * Y_cols + j] =
+            1.0f - cosine_sim(X, X_rows, X_cols, Y, Y_cols, i, j, nx[static_cast<size_t>(i)],
+                              ny[static_cast<size_t>(j)]);
       } else {
         D[i * Y_cols + j] = euclidean_dist(X, X_rows, X_cols, Y, Y_cols, i, j);
       }
@@ -162,9 +183,12 @@ std::vector<float> cross_similarity(const float* X, int X_rows, int X_cols, cons
   // mode == "connectivity": raw similarity (cosine sim or -euclidean), top-k trimmed.
   std::vector<float> out(static_cast<size_t>(X_cols) * Y_cols, 0.0f);
   const bool use_cosine = (metric == "cosine");
+  const std::vector<float> nx = use_cosine ? column_norms(X, X_rows, X_cols) : std::vector<float>();
+  const std::vector<float> ny = use_cosine ? column_norms(Y, X_rows, Y_cols) : std::vector<float>();
   for (int i = 0; i < X_cols; ++i) {
     for (int j = 0; j < Y_cols; ++j) {
-      float sim = use_cosine ? cosine_sim(X, X_rows, X_cols, Y, Y_cols, i, j)
+      float sim = use_cosine ? cosine_sim(X, X_rows, X_cols, Y, Y_cols, i, j,
+                                          nx[static_cast<size_t>(i)], ny[static_cast<size_t>(j)])
                              : -euclidean_dist(X, X_rows, X_cols, Y, Y_cols, i, j);
       out[i * Y_cols + j] = sim;
     }

@@ -183,6 +183,25 @@ void validate_config(const MusicAnalyzerConfig& config);
 /// @brief Unified music analysis facade.
 /// @details Provides lazy access to all analysis modules and a combined analysis result.
 /// Each analyzer is created on first access and cached for subsequent use.
+///
+/// @warning **One instance, one thread at a time.** The lazy accessors are not
+///          merely uninitialized-until-first-use; they form a dependency graph
+///          in which a later initializer revises what an earlier one already
+///          published. Specifically, chord_analyzer() calls
+///          BeatAnalyzer::refine_downbeats() a second time, with the chord
+///          changes it just derived, on the BeatAnalyzer that beat_analyzer()
+///          returned earlier. That call reassigns the analyzer's downbeat and
+///          observation vectors, so a caller holding a reference obtained from
+///          beat_analyzer() -- or iterating downbeat_indices() -- sees the
+///          storage reallocated underneath it. Calling the two accessors from
+///          different threads is a data race, not just a missed cache hit.
+///
+///          The revision itself is intended: chord-informed downbeats are
+///          better than onset-only ones. The consequence to be aware of is that
+///          results are call-order dependent. beat_analyzer().downbeats() read
+///          before chords() reflects the onset-only refine; read after chords()
+///          it reflects the chord-informed one. analyze() drives the modules in
+///          a fixed order, so a caller that uses it sees the settled values.
 class MusicAnalyzer {
  public:
   /// @brief Constructs music analyzer from audio.
@@ -325,8 +344,13 @@ class MusicAnalyzer {
   bool onset_strength_computed_ = false;
   std::vector<float> beat_low_frequency_energy_;
 
-  // One-shot flags guarding each lazy initialization so concurrent first-access
-  // from multiple threads cannot race on the unique_ptr writes above.
+  // One-shot flags guarding each lazy initialization. They make the unique_ptr
+  // writes above single-shot, but they do NOT make this class safe to use from
+  // several threads: chord_analyzer()'s initializer revises the BeatAnalyzer
+  // that beat_analyzer_once_ has already published (see the class contract
+  // above), so a reader holding a reference from beat_analyzer() can observe a
+  // vector being reallocated underneath it. Use one MusicAnalyzer from one
+  // thread at a time.
   std::once_flag bpm_analyzer_once_;
   std::once_flag key_analyzer_once_;
   std::once_flag beat_analyzer_once_;

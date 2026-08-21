@@ -789,6 +789,75 @@ TEST_CASE("ChannelStrip aggregates Q8 latency across delay and inserts", "[mixin
   REQUIRE(strip.latency_samples() == 10);
 }
 
+TEST_CASE("ChannelStrip pre-fader meter width is independent of automation",
+          "[mixing][surround][meter]") {
+  // An automation event routes the block through process_segment, which used to
+  // drive the pre-fader meter from a two-row send tap while the unsegmented
+  // path drove it from the full-width buffer. A 5.1 strip therefore dropped
+  // from 6 observed planes to 2 for exactly the blocks an event landed in.
+  //
+  // The per-plane readings were only half of it. The integrated-LUFS histogram
+  // is instance-lifetime state, so a block metered over 2 planes and a block
+  // metered over 6 fed one histogram with energies computed over different
+  // channel counts, permanently skewing integrated_lufs.
+  constexpr int kChannels = 6;
+  constexpr int kFrames = 1024;
+  // Long enough to fill the 400 ms momentary and 3 s short-term windows and to
+  // put several gated blocks into the integrated histogram; a shorter run
+  // leaves every loudness field at the floor in BOTH variants, which would make
+  // the comparison below vacuous.
+  constexpr int kBlocks = 200;
+
+  auto run = [](bool with_automation) {
+    sonare::mixing::ChannelStrip strip({0.0f, 0.0f, sonare::mixing::PanLaw::Linear0dB, 0.0f});
+    strip.set_prepared_channels(kChannels);
+    strip.prepare(48000.0, kFrames);
+    strip.settle();
+    for (int block = 0; block < kBlocks; ++block) {
+      std::array<std::vector<float>, kChannels> planes;
+      std::array<float*, kChannels> pointers{};
+      for (int ch = 0; ch < kChannels; ++ch) {
+        planes[static_cast<size_t>(ch)] = sonare::test::generate_sine_samples(
+            220.0f * static_cast<float>(ch + 1), 48000, kFrames, 0.5f);
+        pointers[static_cast<size_t>(ch)] = planes[static_cast<size_t>(ch)].data();
+      }
+      const int64_t block_start = static_cast<int64_t>(block) * kFrames;
+      if (with_automation) {
+        // Re-targets the fader at its current 0 dB, so the block splits without
+        // any gain change: the two runs process identical audio.
+        REQUIRE(strip.schedule_fader_automation(block_start + kFrames / 2, 0.0f,
+                                                sonare::AutomationCurve::Hold));
+      }
+      strip.process_at(pointers.data(), kChannels, kFrames, block_start);
+    }
+    return strip.meter_snapshot(sonare::mixing::TapPoint::PreFader);
+  };
+
+  const auto unsplit = run(false);
+  const auto split = run(true);
+
+  // The acceptance condition: identical input, identical loudness, whether or
+  // not an automation event happened to land in the block.
+  REQUIRE_THAT(split.momentary_lufs, WithinAbs(unsplit.momentary_lufs, 0.01f));
+  REQUIRE_THAT(split.short_term_lufs, WithinAbs(unsplit.short_term_lufs, 0.01f));
+  REQUIRE_THAT(split.integrated_lufs, WithinAbs(unsplit.integrated_lufs, 0.01f));
+
+  // Planes 2..N keep being updated rather than freezing at the meter floor.
+  for (int ch = 0; ch < kChannels; ++ch) {
+    CAPTURE(ch);
+    REQUIRE(split.peak_db[static_cast<size_t>(ch)] > sonare::constants::kFloorDb);
+    REQUIRE(split.rms_db[static_cast<size_t>(ch)] > sonare::constants::kFloorDb);
+    REQUIRE_THAT(split.peak_db[static_cast<size_t>(ch)],
+                 WithinAbs(unsplit.peak_db[static_cast<size_t>(ch)], 0.01f));
+    REQUIRE_THAT(split.rms_db[static_cast<size_t>(ch)],
+                 WithinAbs(unsplit.rms_db[static_cast<size_t>(ch)], 0.01f));
+  }
+
+  // Guard against a vacuous comparison: the upper planes carry different
+  // content from the front pair, so agreeing on them is a real check.
+  REQUIRE(split.rms_db[5] != split.rms_db[0]);
+}
+
 TEST_CASE("ChannelStrip applies fader automation at block sample offsets", "[mixing]") {
   std::array<float, 6> left{1.0f, 1.0f, 1.0f, 1.0f, 1.0f, 1.0f};
   std::array<float, 6> right = left;

@@ -175,41 +175,53 @@ std::vector<float> spectral_flatness(const float* magnitude, int n_bins, int n_f
   SONARE_CHECK(magnitude != nullptr, ErrorCode::InvalidParameter);
   SONARE_CHECK(n_bins > 0 && n_frames > 0, ErrorCode::InvalidParameter);
 
-  constexpr float kAmin = constants::kEpsilon;
+  constexpr double kAmin = static_cast<double>(constants::kEpsilon);
 
-  // Map magnitude to Eigen matrix [n_bins x n_frames] (row-major)
-  Eigen::Map<const Eigen::Matrix<float, Eigen::Dynamic, Eigen::Dynamic, Eigen::RowMajor>> mag_map(
-      magnitude, n_bins, n_frames);
-
-  // Sanitize before squaring, exactly as the sibling descriptors in this file
-  // do: a single non-finite magnitude otherwise drives both sums to Inf and
-  // their ratio to NaN, which escapes the documented [0, 1] range and then
-  // survives std::clamp downstream, because every comparison against NaN is
-  // false. Accumulate in double as well, so a finite but very large magnitude
-  // (FLT_MAX squares to +Inf in float) also stays representable and the ratio
-  // stays finite for every finite input. Finite ordinary magnitudes are
-  // unaffected beyond the added precision.
+  // Two per-frame double accumulators, walked bin-major. Two properties are
+  // being bought here and neither is free elsewhere:
+  //
+  //   1. Sanitize before squaring, exactly as the sibling descriptors in this
+  //      file do. A single non-finite magnitude otherwise drives both sums to
+  //      Inf and their ratio to NaN, which escapes the documented [0, 1] range
+  //      and then survives std::clamp downstream, because every comparison
+  //      against NaN is false.
+  //   2. Accumulate in double, so a finite but very large magnitude stays
+  //      representable -- FLT_MAX squares to +Inf in float -- and the ratio is
+  //      finite for every finite input.
+  //
+  // Accumulating per frame rather than materializing an [n_bins x n_frames]
+  // double array matters for memory, not for speed: the array form doubled a
+  // temporary that reaches ~32 MB for three minutes of audio at n_fft 2048,
+  // against an analyze() peak that already sits near the WASM heap ceiling.
+  // This form holds 2 * n_frames doubles instead. The loop is bin-major because
+  // `magnitude` is row-major [n_bins x n_frames], so each row is contiguous.
   //
   // Floor the power at kAmin (librosa's amin) before the geometric/arithmetic
   // means. A fully-silent frame then floors to kAmin across every bin, so its
   // ratio is 1.0 (maximally flat) — matching librosa.feature.spectral_flatness,
   // which likewise applies the amin floor and does not special-case silence.
-  const auto sanitize = [](double magnitude) {
-    return std::isfinite(magnitude) ? std::max(magnitude, 0.0) : 0.0;
-  };
-  const Eigen::ArrayXXd power =
-      mag_map.array().cast<double>().unaryExpr(sanitize).square().max(static_cast<double>(kAmin));
-  const Eigen::ArrayXd sum_log = power.log().colwise().sum().transpose();
-  const Eigen::ArrayXd sum_linear = power.colwise().sum().transpose();
+  std::vector<double> sum_log(static_cast<size_t>(n_frames), 0.0);
+  std::vector<double> sum_linear(static_cast<size_t>(n_frames), 0.0);
+  for (int bin = 0; bin < n_bins; ++bin) {
+    const float* row = magnitude + static_cast<size_t>(bin) * static_cast<size_t>(n_frames);
+    for (int frame = 0; frame < n_frames; ++frame) {
+      const double value = static_cast<double>(row[frame]);
+      const double sanitized = std::isfinite(value) ? std::max(value, 0.0) : 0.0;
+      const double power = std::max(sanitized * sanitized, kAmin);
+      sum_log[static_cast<size_t>(frame)] += std::log(power);
+      sum_linear[static_cast<size_t>(frame)] += power;
+    }
+  }
 
-  std::vector<float> flatness(n_frames);
-  Eigen::Map<Eigen::ArrayXf> result_map(flatness.data(), n_frames);
-
+  std::vector<float> flatness(static_cast<size_t>(n_frames));
   const double n_bins_d = static_cast<double>(n_bins);
-  const Eigen::ArrayXd geometric_mean = (sum_log / n_bins_d).exp();
-  const Eigen::ArrayXd arithmetic_mean = sum_linear / n_bins_d;
-
-  result_map = (geometric_mean / arithmetic_mean).cast<float>();
+  for (int frame = 0; frame < n_frames; ++frame) {
+    const size_t index = static_cast<size_t>(frame);
+    // sum_linear is bounded below by n_bins * kAmin, so the divisor is never 0.
+    const double geometric_mean = std::exp(sum_log[index] / n_bins_d);
+    const double arithmetic_mean = sum_linear[index] / n_bins_d;
+    flatness[index] = static_cast<float>(geometric_mean / arithmetic_mean);
+  }
 
   return flatness;
 }

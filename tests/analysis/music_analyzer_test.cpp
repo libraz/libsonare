@@ -223,16 +223,33 @@ TEST_CASE("MusicAnalyzer chords", "[.][slow][music_analyzer]") {
 }
 
 TEST_CASE("MusicAnalyzer refines downbeats after chord analysis", "[.][slow][music_analyzer]") {
+  // Pins the documented SEQUENTIAL contract (see the MusicAnalyzer class
+  // warning). chord_analyzer()'s lazy initializer calls refine_downbeats() a
+  // second time on the BeatAnalyzer that beat_analyzer() already published, so:
+  //
+  //   - used sequentially, this is supported and the reference stays valid;
+  //   - used concurrently, it is a data race, because the revision reassigns
+  //     the analyzer's vectors while another thread may be reading them.
+  //
+  // The pointer check below is not incidental: it IS the mechanism. If a future
+  // change makes the second refine a no-op, this test fails and the class
+  // warning has to be revisited rather than silently going stale.
   Audio audio = create_test_audio();
 
   MusicAnalyzer analyzer(audio);
   auto& beat = analyzer.beat_analyzer();
   const size_t initial_downbeats = beat.downbeat_indices().size();
+  REQUIRE(initial_downbeats > 0);
+  const int* initial_storage = beat.downbeat_indices().data();
 
   (void)analyzer.chord_analyzer().count();
 
+  // Still a valid, populated result when the two are used in sequence.
   REQUIRE(!beat.downbeat_indices().empty());
   REQUIRE(beat.downbeat_indices().size() == initial_downbeats);
+  // ... and the storage a concurrent reader would have been holding is gone:
+  // the second refine move-assigned a freshly built vector over it.
+  REQUIRE(beat.downbeat_indices().data() != initial_storage);
 }
 
 TEST_CASE("MusicAnalyzer form", "[music_analyzer]") {

@@ -4,6 +4,7 @@
 #include <algorithm>
 #include <climits>
 #include <cmath>
+#include <string>
 
 #include "core/resample.h"
 #include "core/spectrum.h"
@@ -121,6 +122,19 @@ BoundaryDetector::BoundaryDetector(const MelSpectrogram& mel, const Chroma& chro
   int chroma_frames = 0;
 
   if (config_.use_chroma) {
+    // The audio constructor enforces this structurally by computing the
+    // chromagram with config_.n_chroma bins; a precomputed chromagram has to be
+    // checked instead. Without it the flatten loop below reads
+    // config_.n_chroma bins per frame from whatever it was handed: fewer bins
+    // raise Chroma::at's bare SONARE_CHECK, which names neither number, and
+    // more bins are silently truncated to the leading config_.n_chroma. The bin
+    // count is directly queryable, so name both values.
+    // n_chroma == 0 is a documented degenerate configuration: the flatten loop
+    // reads nothing, so there is no bin count to agree on.
+    SONARE_CHECK_MSG(config_.n_chroma == 0 || chroma.n_chroma() == config_.n_chroma,
+                     ErrorCode::InvalidParameter,
+                     "BoundaryDetector: chromagram has " + std::to_string(chroma.n_chroma()) +
+                         " bins but the config expects " + std::to_string(config_.n_chroma));
     chroma_frames = chroma.n_frames();
 
     // Flatten chroma matrix

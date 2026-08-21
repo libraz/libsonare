@@ -6,6 +6,7 @@
 #include <algorithm>
 #include <catch2/catch_test_macros.hpp>
 #include <catch2/matchers/catch_matchers_floating_point.hpp>
+#include <catch2/matchers/catch_matchers_string.hpp>
 #include <cmath>
 #include <cstddef>
 #include <string>
@@ -15,6 +16,7 @@
 #include "feature/chroma.h"
 #include "feature/mel_spectrogram.h"
 #include "util/constants.h"
+#include "util/exception.h"
 
 using namespace sonare;
 using Catch::Matchers::WithinAbs;
@@ -478,6 +480,43 @@ TEST_CASE("BoundaryDetector honours a non-default chroma bin count", "[boundary_
     REQUIRE(times[i] <= duration);
     if (i > 0) REQUIRE(times[i] > times[i - 1]);
   }
+}
+
+TEST_CASE("BoundaryDetector rejects a chromagram whose bin count disagrees with the config",
+          "[boundary_detector]") {
+  // The audio constructor enforces this structurally by computing the
+  // chromagram with config.n_chroma bins. The precomputed constructor takes the
+  // chromagram as given, and the flatten loop reads config.n_chroma bins per
+  // frame regardless: fewer bins raised Chroma::at's bare SONARE_CHECK, which
+  // names neither number, and more bins were silently truncated to the leading
+  // config.n_chroma. The bin count is directly queryable, so both numbers are
+  // named.
+  Audio audio = create_two_sections();
+
+  ChromaConfig chroma_config;
+  chroma_config.n_chroma = 36;
+  Chroma chroma_36 = Chroma::compute(audio, chroma_config);
+  REQUIRE(chroma_36.n_chroma() == 36);
+
+  BoundaryConfig config;
+  config.use_mfcc = false;
+  config.use_chroma = true;
+  config.n_chroma = 12;
+
+  REQUIRE_THROWS_AS(BoundaryDetector(MelSpectrogram(), chroma_36, audio.sample_rate(), config),
+                    SonareException);
+  // Both numbers, so the caller can see which side to change.
+  REQUIRE_THROWS_WITH(
+      BoundaryDetector(MelSpectrogram(), chroma_36, audio.sample_rate(), config),
+      Catch::Matchers::ContainsSubstring("36") && Catch::Matchers::ContainsSubstring("12"));
+
+  // A matching chromagram is accepted, so the guard rejects the mismatch and
+  // not the constructor.
+  ChromaConfig matching_config;
+  matching_config.n_chroma = 12;
+  Chroma chroma_12 = Chroma::compute(audio, matching_config);
+  REQUIRE(chroma_12.n_chroma() == 12);
+  REQUIRE_NOTHROW(BoundaryDetector(MelSpectrogram(), chroma_12, audio.sample_rate(), config));
 }
 
 TEST_CASE("BoundaryDetector tolerates a configuration with no feature dimensions",

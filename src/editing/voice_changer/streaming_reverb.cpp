@@ -107,6 +107,14 @@ float StreamingReverb::process_sample(float input) noexcept {
   const float mix = mix_.process();
   const bool muted = mix <= 1.0e-6f;
 
+  // One tick per sample, read by every comb. damping_alpha_ is shared, so
+  // advancing it inside the comb loop stepped it kNumCombs times per sample:
+  // the configured smoothing time came out kNumCombs times shorter than asked
+  // for, and -- worse -- comb 0 and comb 1 applied DIFFERENT damping
+  // coefficients within one sample, which is not a filter the model describes.
+  // The per-comb smoothers below are per-comb state and correctly tick once.
+  const float damping_alpha = damping_alpha_.process();
+
   float comb_sum = 0.0f;
   for (std::size_t i = 0; i < kNumCombs; ++i) {
     const float delay = std::clamp(comb_delay_[i].process(), 16.0f, static_cast<float>(cap - 2));
@@ -115,7 +123,7 @@ float StreamingReverb::process_sample(float input) noexcept {
     const std::size_t read_a = (comb_pos_[i] + cap - delay_floor) % cap;
     const std::size_t read_b = (read_a + cap - 1) % cap;
     const float y = comb_buf_[i][read_a] + fraction * (comb_buf_[i][read_b] - comb_buf_[i][read_a]);
-    comb_lp_[i] += damping_alpha_.process() * (y - comb_lp_[i]);
+    comb_lp_[i] += damping_alpha * (y - comb_lp_[i]);
     comb_buf_[i][comb_pos_[i]] = input + comb_fb_[i].process() * comb_lp_[i];
     comb_pos_[i] = (comb_pos_[i] + 1) % cap;
     comb_sum += y;

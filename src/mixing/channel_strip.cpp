@@ -185,7 +185,15 @@ void ChannelStrip::prepare(double sample_rate, int max_block_size) {
 
   const auto rows = static_cast<size_t>(kPreparedChannels);
   const auto cols = static_cast<size_t>(max_block_size_);
-  pre_tap_.assign(rows, std::vector<float>(cols, 0.0f));
+  // pre_tap_ is wider than the other two on purpose. It feeds sends (which are
+  // stereo and clamp themselves to kPreparedChannels) AND the pre-fader meter,
+  // and the meter has to observe the same planes the strip processes. Sizing it
+  // at kPreparedChannels made the segmented path -- the one automation takes --
+  // meter only the front pair, so a 5.1 strip dropped from 6 planes to 2 for
+  // exactly the blocks an automation event landed in. post_tap_ stays narrow
+  // because the post-fader meter reads the full-width buffer directly.
+  const auto pre_tap_rows = static_cast<size_t>(std::max(kPreparedChannels, prepared_channels_));
+  pre_tap_.assign(pre_tap_rows, std::vector<float>(cols, 0.0f));
   post_tap_.assign(rows, std::vector<float>(cols, 0.0f));
   send_temp_.assign(rows, std::vector<float>(cols, 0.0f));
 
@@ -335,14 +343,22 @@ void ChannelStrip::process_at(float* const* channels, int num_channels, int num_
   // consistency, matching the unsegmented path.
   post_gain_reduction_db = std::min(pre_gain_reduction_db, post_gain_reduction_db);
 
-  float* pre_meter_channels[kPreparedChannels]{};
-  const int meter_rows = std::min<int>(num_channels, kPreparedChannels);
+  // Meter every plane the strip just processed, not just the front pair. The
+  // unsegmented path already drives the pre meter from the full-width buffer;
+  // this path has to agree, or the observed channel_count would depend on
+  // whether an automation event happened to land in the block. That mattered
+  // beyond the per-plane readings: the integrated-LUFS histogram is
+  // instance-lifetime state, so energies computed over two different channel
+  // counts mixed into one histogram and permanently skewed integrated_lufs.
+  std::array<float*, kMaxStackChannels> pre_meter_channels{};
+  const int meter_rows =
+      std::min<int>({num_channels, kMaxStackChannels, static_cast<int>(pre_tap_.size())});
   for (int ch = 0; ch < meter_rows; ++ch) {
-    pre_meter_channels[ch] = pre_tap_[static_cast<size_t>(ch)].data();
+    pre_meter_channels[static_cast<size_t>(ch)] = pre_tap_[static_cast<size_t>(ch)].data();
   }
   if (pre_meter_) {
     pre_meter_->set_gain_reduction_db(pre_gain_reduction_db);
-    pre_meter_->process(pre_meter_channels, meter_rows, clamped_samples);
+    pre_meter_->process(pre_meter_channels.data(), meter_rows, clamped_samples);
   }
   if (post_meter_) post_meter_->set_gain_reduction_db(post_gain_reduction_db);
   // Drive the post-fader meter over the SAME window length as the pre-fader
@@ -635,6 +651,13 @@ void ChannelStrip::set_prepared_channels(int num_channels) {
   // remember the ordering.
   alignment_delay_.set_prepared_channels(prepared_channels_);
   prepare_insert_alignment_delays();
+  // The pre-fader meter reads pre_tap_, so its width has to follow the declared
+  // layout too; otherwise a widened strip would meter only the planes the
+  // narrower prepare() happened to allocate.
+  const auto pre_tap_rows = static_cast<size_t>(std::max(kPreparedChannels, prepared_channels_));
+  if (!pre_tap_.empty() && pre_tap_.size() != pre_tap_rows) {
+    pre_tap_.resize(pre_tap_rows, std::vector<float>(pre_tap_[0].size(), 0.0f));
+  }
 }
 
 int ChannelStrip::alignment_channel_overflow() const noexcept {
