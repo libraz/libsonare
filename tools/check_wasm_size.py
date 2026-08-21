@@ -1,5 +1,13 @@
 #!/usr/bin/env python3
-"""Measure and enforce deterministic size budgets for shipped WASM files."""
+"""Measure and enforce deterministic size budgets for shipped WASM files.
+
+Only ``raw`` and ``gzip`` are compared against the baseline. ``code``, ``data``
+and ``sha256`` are recorded for provenance and printed, never asserted: the
+emscripten output is not byte-reproducible across machines or toolchain patch
+releases, so a hash comparison would fail on every runner that is not the one
+that wrote the baseline. Do not promote sha256 to a gate without first making
+the build reproducible.
+"""
 
 from __future__ import annotations
 
