@@ -407,6 +407,13 @@ export {
   waveformPeakPyramid,
   waveformPeaks,
 } from './metering';
+export type { SuggestMixSceneRequest } from './mixing_assistant';
+export {
+  mixSourceClassFromName,
+  mixSourceClassNames,
+  suggestMixScene,
+  suggestMixSceneJson,
+} from './mixing_assistant';
 export type {
   OpfsClipPageProviderBinding,
   OpfsClipPageProviderOptions,
@@ -545,10 +552,21 @@ export type {
   MelSpectrogramResult,
   MeterTap,
   MfccResult,
+  MixAnalysisBand,
+  MixAssistantMixProfile,
+  MixAssistantOptions,
+  MixAssistantResult,
+  MixAssistantTrack,
+  MixAssistantTrackProfile,
+  MixBandDominance,
+  MixBandOccupancy,
+  MixCrowdedBand,
   MixerProcessResult,
   MixMeterSnapshot,
+  MixMonoRisk,
   MixOptions,
   MixResult,
+  MixTrackAlignment,
   NoteSegment,
   NoteStretchOptions,
   PairAnalysis,

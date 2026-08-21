@@ -133,3 +133,148 @@ export interface GoniometerPoint {
   left: number;
   right: number;
 }
+
+/** One analysis band of the mixing assistant's shared 7-band split. */
+export type MixAnalysisBand = 'sub' | 'low' | 'lowMid' | 'mid' | 'highMid' | 'high' | 'air';
+
+/** Share of a track's energy in each analysis band; sums to 1, or to 0 when silent. */
+export type MixBandOccupancy = Record<MixAnalysisBand, number>;
+
+/**
+ * One track handed to {@link suggestMixScene}.
+ *
+ * Planar and per-track: tracks in one call may differ in length, and each is
+ * mono (`right` omitted) or stereo independently of the others. A stereo
+ * track's `right` must be the same length as its `left`.
+ */
+export interface MixAssistantTrack {
+  /** Strip id the suggestion is written against. Must be unique and non-empty. */
+  id: string;
+  /**
+   * Optional display name. Used only as a hint that adjusts classifier
+   * confidence; it can never select a source class on its own.
+   */
+  name?: string;
+  /** Left/mono plane. */
+  left: Float32Array;
+  /** Right plane; omit for a mono track. */
+  right?: Float32Array;
+}
+
+/**
+ * Tunables for {@link suggestMixScene}. Every field is optional and falls back
+ * to the core default noted on it; the same field names and defaults are used
+ * by the Node and Python surfaces.
+ */
+export interface MixAssistantOptions {
+  /** Absolute integrated-loudness target each track is staged towards, in LUFS. Defaults to -18. */
+  targetTrackLufs?: number;
+  /** Overall strength of the suggestion in `[0, 1]`; 0 suggests nothing. Defaults to 1. */
+  suggestionStrength?: number;
+  /** Largest cut a single suggested EQ band may apply, in dB. Defaults to 4. */
+  eqMaxCutDb?: number;
+  /** Headroom the summed mix is left with on the master bus, in dBTP. Defaults to -6. */
+  mixBusHeadroomDbtp?: number;
+  /** Evaluate the structure domain. Defaults to true. */
+  enableStructure?: boolean;
+  /** Evaluate the gain-staging domain. Defaults to true. */
+  enableGain?: boolean;
+  /** Evaluate the balance domain. Defaults to true. */
+  enableBalance?: boolean;
+  /** Evaluate the EQ domain. Defaults to true. */
+  enableEq?: boolean;
+  /** Evaluate the dynamics domain. Defaults to true. */
+  enableDynamics?: boolean;
+  /** Evaluate the stereo-image domain. Defaults to true. */
+  enableImage?: boolean;
+  /** Shared STFT size for every track. Defaults to 2048. */
+  nFft?: number;
+  /** Shared STFT hop for every track. Defaults to 512. */
+  hopLength?: number;
+}
+
+/** What the assistant measured about one input track. */
+export interface MixAssistantTrackProfile {
+  stripId: string;
+  name: string;
+  /** Source class identifier; one of {@link mixSourceClassNames}. */
+  source: string;
+  /** Classifier confidence in `[0, 1]`. */
+  sourceConfidence: number;
+  /** False when the track is silent, too short, or has no usable spectral content. */
+  usable: boolean;
+  /** Why the track was excluded; empty when {@link usable} is true. */
+  exclusionReason: string;
+  channelCount: number;
+  durationSec: number;
+  integratedLufs: number;
+  truePeakDb: number;
+  crestFactorDb: number;
+  spectralCentroidHz: number;
+  spectralFlatness: number;
+  attackDensity: number;
+  sustainRatio: number;
+  bandOccupancy: MixBandOccupancy;
+}
+
+/** One informative band-masking relationship between two tracks. */
+export interface MixBandDominance {
+  /** Strip id of the masking track. */
+  masker: string;
+  /** Strip id of the masked track. */
+  maskee: string;
+  band: MixAnalysisBand;
+  ratio: number;
+  validFrames: number;
+}
+
+/** A time/polarity relationship between two related tracks. */
+export interface MixTrackAlignment {
+  reference: string;
+  target: string;
+  lagSamples: number;
+  correlation: number;
+  polarityOpposed: boolean;
+}
+
+/** A band several tracks are competing for. */
+export interface MixCrowdedBand {
+  band: MixAnalysisBand;
+  crowding: number;
+}
+
+/** A track whose stereo treatment risks collapsing in mono. */
+export interface MixMonoRisk {
+  stripId: string;
+  correlation: number;
+  width: number;
+  wideLowEnd: boolean;
+}
+
+/** Cross-track measurements the suggestions were made from. */
+export interface MixAssistantMixProfile {
+  trackCount: number;
+  bandDominance: MixBandDominance[];
+  alignment: MixTrackAlignment[];
+  crowdedBands: MixCrowdedBand[];
+  monoRisks: MixMonoRisk[];
+}
+
+/**
+ * What {@link suggestMixScene} produces. Nothing has been applied: feeding
+ * `scene` to {@link Mixer.fromSceneJson} is the caller's separate step, and
+ * {@link suggestMixSceneJson} returns it already serialized for that.
+ */
+export interface MixAssistantResult {
+  /** The suggested scene, in the schema {@link Mixer.fromSceneJson} reads. */
+  scene: Record<string, unknown>;
+  /** One entry per input track, in input order. */
+  tracks: MixAssistantTrackProfile[];
+  mix: MixAssistantMixProfile;
+  /**
+   * Human-readable reasons in the order the changes were applied; reading it
+   * top to bottom retraces how the scene was built. Empty when nothing was
+   * suggested (no usable tracks, or every domain switched off).
+   */
+  explanation: string[];
+}
