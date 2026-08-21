@@ -1185,6 +1185,32 @@ if(BUILD_WASM)
     target_compile_definitions(sonare PRIVATE SONARE_WITH_ARRANGEMENT=1)
   endif()
   target_compile_options(sonare PRIVATE -msimd128)
+  # -fexceptions must be on the COMPILE line, not only the link line: emscripten
+  # defaults to DISABLE_EXCEPTION_CATCHING=1, which elides landing pads at
+  # compile time, so enabling runtime support at link time cannot restore a
+  # `catch` that was never emitted. Scope it to the translation units that
+  # actually catch: the C-ABI units rely on SONARE_C_TRY/SONARE_C_CATCH to turn
+  # a C++ throw into a SonareError, and these binding units catch to clean up or
+  # to convert. Whole-target -fexceptions emits landing pads everywhere and
+  # costs several times as much for no additional behaviour.
+  # Kept in step with the sources by tests/conformance/check_wasm_exception_scope.py,
+  # which fails when a unit compiled into this target catches without being listed.
+  set(SONARE_WASM_EXCEPTION_SOURCES
+    c_api/sonare_c_streaming_retune.cpp
+    c_api/sonare_c_voice_changer.cpp
+    wasm/bindings/effects/realtime_voice_changer.cpp
+    wasm/bindings/mixing/mixing.cpp
+    wasm/bindings/project/project_external_stems.cpp
+    wasm/bindings/realtime/mixer.cpp)
+  if(BUILD_MIXING AND NOT SONARE_WASM_ANALYSIS_ONLY AND BUILD_GRAPH)
+    list(APPEND SONARE_WASM_EXCEPTION_SOURCES ${SONARE_C_MIXING_SOURCES})
+  endif()
+  if(BUILD_ARRANGEMENT AND NOT SONARE_WASM_ANALYSIS_ONLY)
+    list(APPEND SONARE_WASM_EXCEPTION_SOURCES ${SONARE_C_PROJECT_SOURCES})
+  endif()
+  set_source_files_properties(${SONARE_WASM_EXCEPTION_SOURCES}
+    TARGET_DIRECTORY sonare
+    PROPERTIES COMPILE_OPTIONS -fexceptions)
   target_link_options(sonare PRIVATE
     -msimd128
     # Enable classic (JS-based) C++ exception support so a native throw
