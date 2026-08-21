@@ -41,10 +41,16 @@ const EQ_PHASE_MODES: Record<string, number> = {
  * Block-by-block streaming variant of {@link masteringChain}.
  *
  * Maintains processor state across {@link processMono}/{@link processStereo}
- * calls. Only ProcessorBase-backed stages are supported. Configurations that
- * enable `repair.denoise` throw at construction. An enabled `loudness` stage
- * also throws unless {@link StreamingMasteringChainConfig.loudnessStaticGainDb}
- * supplies a precomputed normalization gain.
+ * calls. Only ProcessorBase-backed stages are supported: `eq.tilt`,
+ * `dynamics.deesser`, `dynamics.transientShaper`, `dynamics.compressor`,
+ * `dynamics.multibandComp`, `saturation.tape`, `saturation.exciter`,
+ * `spectral.airBand`, `stereo.imager` (stereo only), `stereo.monoMaker`
+ * (stereo only), `maximizer.truePeakLimiter`. Configurations that enable ANY of
+ * the six whole-signal repair stages (`repair.declick`, `repair.declip`,
+ * `repair.decrackle`, `repair.dehum`, `repair.dereverb`, `repair.denoise`)
+ * throw at construction. An enabled `loudness` stage also throws unless
+ * {@link StreamingMasteringChainConfig.loudnessStaticGainDb} supplies a
+ * precomputed normalization gain.
  *
  * Call {@link delete} (or use a `try/finally`) to release the underlying WASM
  * object — the embind handle is not garbage-collected automatically.

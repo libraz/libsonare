@@ -18,20 +18,53 @@ export enum ErrorCode {
 }
 
 /**
- * Shape of the `Error` thrown by libsonare on a C-ABI failure. The runtime
- * value is a standard `Error` whose `name` is `'SonareError'`, augmented with a
- * numeric `code` (one of {@link ErrorCode}) and its canonical `codeName`. Use
- * {@link isSonareError} to narrow a caught value.
+ * Error raised by libsonare on a C-ABI failure. A standard `Error` whose `name`
+ * is `'SonareError'`, augmented with a numeric `code` (one of
+ * {@link ErrorCode}) and its canonical `codeName`.
+ *
+ * Narrow a caught value with {@link isSonareError} or with `instanceof`; both
+ * accept the same values. This class exists as a runtime value so the WASM
+ * package and this one export the same *kind* of thing under this name — a
+ * shared TypeScript module could previously import it from one package and
+ * find it `undefined` at runtime in the other.
+ *
+ * The native addon raises plain `Error` objects carrying this shape rather than
+ * instances of this class, so `instanceof` is brand-based (see
+ * {@link SonareError[Symbol.hasInstance]}) rather than prototype-based.
+ * Constructing one directly is supported for callers that re-raise a native
+ * failure across a boundary that does not preserve prototypes.
  */
-export interface SonareError extends Error {
-  name: 'SonareError';
+export class SonareError extends Error {
+  override readonly name = 'SonareError' as const;
   /** Numeric error code, equal to an {@link ErrorCode} value. */
-  code: number;
+  readonly code: number;
   /** Canonical name of `code`, e.g. `'InvalidParameter'`. */
-  codeName: string;
+  readonly codeName: string;
+
+  constructor(code: number, codeName: string, message: string) {
+    super(message);
+    this.code = code;
+    this.codeName = codeName;
+  }
+
+  /**
+   * Brand-based `instanceof`: an error that carries the shape narrows here even
+   * though the addon never constructs this class, and so does one that lost its
+   * prototype crossing a worker or `structuredClone` boundary. Delegates to
+   * {@link isSonareError} so the two never disagree.
+   */
+  static [Symbol.hasInstance](value: unknown): value is SonareError {
+    return isSonareError(value);
+  }
 }
 
-/** Type guard: whether a caught value is a libsonare {@link SonareError}. */
+/**
+ * Type guard: whether a caught value is a libsonare {@link SonareError}.
+ *
+ * Duck-typed on purpose. The addon raises plain `Error` objects carrying the
+ * shape, and a value that crossed a worker boundary has lost its prototype, so
+ * a prototype check would miss both.
+ */
 export function isSonareError(value: unknown): value is SonareError {
   return (
     value instanceof Error &&

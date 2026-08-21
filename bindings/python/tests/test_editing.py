@@ -1,6 +1,9 @@
 """Tests for the editing DSP wrappers (pitch correct, note stretch, voice change)."""
 
+import inspect
+import json
 import math
+from pathlib import Path
 
 import pytest
 
@@ -342,3 +345,36 @@ def test_realtime_voice_changer_close_then_process() -> None:
         changer.process_mono([0.0] * 128)
     # Idempotent close should be a no-op even after handle is already null.
     changer.close()
+
+
+def test_voice_change_realtime_default_preset_matches_every_entry_point() -> None:
+    """One named operation, one default, wherever it is exposed.
+
+    ``Audio.voice_change_realtime`` defaulted to ``"bright-idol"`` while the
+    module function, the CLI, the Node and WASM facades and ordinal 0 of the C
+    ABI's preset enum all defaulted to ``"neutral-monitor"``. The two Python
+    entry points therefore rendered the same buffer audibly differently, with
+    the handle form silently adding retune, a formant lift, EQ and reverb.
+    """
+    expected = json.loads(
+        (Path(__file__).resolve().parents[3] / "tests/conformance/binding_defaults.json").read_text(
+            encoding="utf-8"
+        )
+    )["defaults"]["voice_change_realtime.preset"]
+
+    module_default = inspect.signature(libsonare.voice_change_realtime).parameters["preset"].default
+    handle_default = (
+        inspect.signature(libsonare.Audio.voice_change_realtime).parameters["preset"].default
+    )
+    assert module_default == expected
+    assert handle_default == expected
+
+    # Behavioural, not just declarative: the handle default must render what the
+    # named default renders, so a future change to either cannot pass by editing
+    # only the signature.
+    sr = 22050
+    samples = _tone(sr, duration=0.05)
+    audio = libsonare.Audio.from_buffer(samples, sr)
+    assert list(audio.voice_change_realtime()) == list(
+        libsonare.voice_change_realtime(samples, sample_rate=sr, preset=expected)
+    )

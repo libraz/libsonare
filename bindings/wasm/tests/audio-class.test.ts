@@ -7,7 +7,7 @@
  */
 
 import { beforeAll, describe, expect, it, vi } from 'vitest';
-import { Audio, detectBpm, init, melSpectrogram, stft } from '../dist/index.js';
+import { Audio, analyze, detectBpm, init, melSpectrogram, stft } from '../dist/index.js';
 
 const SR = 22050;
 const DURATION = 2;
@@ -265,6 +265,24 @@ describe('Audio class', () => {
       expect(result.sections).toBeDefined();
       expect(result.timbre).toBeDefined();
       expect(result.dynamics).toBeDefined();
+    });
+
+    it('forwards analyze options the way the module function does', { timeout: 30000 }, () => {
+      // The method used to take no arguments, so the same call was tunable
+      // through the free function and through the Node facade's Audio.analyze
+      // but fixed at the defaults here. An option that changes the result is
+      // the only way to show it actually reaches the core rather than being
+      // accepted and dropped.
+      const samples = sineLong();
+      const audio = Audio.fromBuffer(samples, SR);
+      const options = { bpmMin: 150, bpmMax: 190 } as const;
+      const viaMethod = audio.analyze(options);
+      const viaFunction = analyze(samples, SR, options);
+      expect(viaMethod.bpm).toBe(viaFunction.bpm);
+      expect(viaMethod.bpm).toBeGreaterThanOrEqual(150);
+      expect(viaMethod.bpm).toBeLessThanOrEqual(190);
+      // ... and the defaults still apply when the bag is omitted.
+      expect(audio.analyze().bpm).toBe(analyze(samples, SR).bpm);
     });
 
     it('should analyze with progress callback', { timeout: 30000 }, () => {

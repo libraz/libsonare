@@ -1,0 +1,19 @@
+{
+  "schema_version": 1,
+  "types": {
+    "DynamicsResult": [
+      "crestFactor",
+      "dynamicRangeDb",
+      "isCompressed",
+      "loudnessRangeDb",
+      "loudnessRmsDb",
+      "loudnessTimes",
+      "peakDb",
+      "rmsDb"
+    ],
+    "DynamicsProcessorResult": ["latencySamples", "samples"]
+  },
+  "aliases": {
+    "DynamicsAnalysisResult": "DynamicsResult"
+  }
+}

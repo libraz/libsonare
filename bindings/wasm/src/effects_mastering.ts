@@ -73,7 +73,7 @@ export {
 export type {
   CompressorDetector,
   CompressorOptions,
-  DynamicsResult,
+  DynamicsProcessorResult,
   GateOptions,
   MasteringDynamicsCompressorRequest,
   MasteringDynamicsGateRequest,

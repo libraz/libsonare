@@ -72,8 +72,17 @@ export interface MasteringDynamicsTransientShaperRequest extends TransientShaper
   sampleRate: number;
 }
 
-/** Result envelope returned by offline mastering dynamics processors. */
-export interface DynamicsResult {
+/**
+ * Result envelope returned by offline mastering dynamics processors.
+ *
+ * Named for what it is rather than for the module it lives in. {@link
+ * DynamicsResult} is the *analysis* shape on every binding, so having that one
+ * identifier mean two disjoint field lists across the Node and WASM packages
+ * made a shared TypeScript module type-check against one and fail against the
+ * other — with the identifier resolving either way, so only the member list
+ * gave it away.
+ */
+export interface DynamicsProcessorResult {
   samples: Float32Array;
   latencySamples: number;
 }
@@ -87,17 +96,17 @@ const COMPRESSOR_DETECTOR_MAP: Record<CompressorDetector, number> = {
 /** Offline feed-forward compressor (soft knee, optional auto-makeup / sidechain HPF). */
 export function masteringDynamicsCompressor(
   request: MasteringDynamicsCompressorRequest,
-): DynamicsResult;
+): DynamicsProcessorResult;
 export function masteringDynamicsCompressor(
   samples: Float32Array,
   sampleRate: number,
   options?: CompressorOptions,
-): DynamicsResult;
+): DynamicsProcessorResult;
 export function masteringDynamicsCompressor(
   samples: Float32Array | MasteringDynamicsCompressorRequest,
   sampleRate?: number,
   options: CompressorOptions = {},
-): DynamicsResult {
+): DynamicsProcessorResult {
   const request =
     samples instanceof Float32Array
       ? { samples, sampleRate: sampleRate as number, ...options }
@@ -121,17 +130,19 @@ export function masteringDynamicsCompressor(
 }
 
 /** Offline noise gate (hysteresis, hold, optional key HPF). */
-export function masteringDynamicsGate(request: MasteringDynamicsGateRequest): DynamicsResult;
+export function masteringDynamicsGate(
+  request: MasteringDynamicsGateRequest,
+): DynamicsProcessorResult;
 export function masteringDynamicsGate(
   samples: Float32Array,
   sampleRate: number,
   options?: GateOptions,
-): DynamicsResult;
+): DynamicsProcessorResult;
 export function masteringDynamicsGate(
   samples: Float32Array | MasteringDynamicsGateRequest,
   sampleRate?: number,
   options: GateOptions = {},
-): DynamicsResult {
+): DynamicsProcessorResult {
   const request =
     samples instanceof Float32Array
       ? { samples, sampleRate: sampleRate as number, ...options }
@@ -143,17 +154,17 @@ export function masteringDynamicsGate(
 /** Offline transient shaper (envelope-difference attack/sustain control). */
 export function masteringDynamicsTransientShaper(
   request: MasteringDynamicsTransientShaperRequest,
-): DynamicsResult;
+): DynamicsProcessorResult;
 export function masteringDynamicsTransientShaper(
   samples: Float32Array,
   sampleRate: number,
   options?: TransientShaperOptions,
-): DynamicsResult;
+): DynamicsProcessorResult;
 export function masteringDynamicsTransientShaper(
   samples: Float32Array | MasteringDynamicsTransientShaperRequest,
   sampleRate?: number,
   options: TransientShaperOptions = {},
-): DynamicsResult {
+): DynamicsProcessorResult {
   const request =
     samples instanceof Float32Array
       ? { samples, sampleRate: sampleRate as number, ...options }

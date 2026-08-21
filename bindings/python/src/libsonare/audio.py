@@ -735,8 +735,15 @@ class Audio:
         """Apply a voice-change effect with independent pitch and formant control."""
         return _voice_change(self.data, self.sample_rate, pitch_semitones, formant_factor)
 
-    def voice_change_realtime(self, preset: str = "bright-idol") -> list[float]:
-        """Apply the integrated realtime voice changer chain offline."""
+    def voice_change_realtime(self, preset: str = "neutral-monitor") -> list[float]:
+        """Apply the integrated realtime voice changer chain offline.
+
+        The default matches every other entry point for this operation — the
+        module function, the CLI, the Node and WASM facades, and ordinal 0 of
+        the C ABI's ``SonareVoiceCharacterPreset``. It is the monitoring preset:
+        a named character preset such as ``"bright-idol"`` additionally applies
+        retune, a formant lift, EQ and reverb.
+        """
         return _voice_change_realtime(self.data, self.sample_rate, preset)
 
     def normalize(self, target_db: float = 0.0) -> list[float]:

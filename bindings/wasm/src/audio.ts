@@ -63,6 +63,7 @@ import type {
   SoloProcessor,
   StftResult,
 } from './public_types';
+import type { MusicAnalyzeOptions } from './quick_analysis';
 import {
   analyze,
   analyzeWithProgress,
@@ -146,7 +147,14 @@ async function closeCreatedContext(context: BrowserDecodeContext): Promise<void>
 }
 
 /**
- * Wrapper around audio data that exposes all analysis and feature functions as instance methods.
+ * Wrapper around audio data that exposes analysis and feature functions as
+ * instance methods.
+ *
+ * Not every module-level function has a method here — `analyzeBpm`,
+ * `analyzeRhythm`, `analyzeDynamics`, `analyzeTimbre`, `analyzeImpulseResponse`
+ * and `detectAcoustic` are reachable as free functions only, and the Node
+ * facade exposes them as methods as well. Where a method does exist on both, it
+ * takes the same arguments.
  *
  * @example
  * ```typescript
@@ -302,8 +310,15 @@ export class Audio {
     return chordFunctionalAnalysis(this._samples, keyRoot, keyMode, this._sampleRate, options);
   }
 
-  analyze(): AnalysisResult {
-    return analyze(this._samples, this._sampleRate);
+  /**
+   * Full music analysis of the held buffer.
+   *
+   * Takes the same option bag as the module-level {@link analyze} and as the
+   * Node facade's `Audio.analyze`; this method used to drop it, so the same
+   * call was tunable on one binding and fixed at the defaults on the other.
+   */
+  analyze(options: MusicAnalyzeOptions = {}): AnalysisResult {
+    return analyze(this._samples, this._sampleRate, options);
   }
 
   analyzeWithProgress(onProgress: ProgressCallback): AnalysisResult {

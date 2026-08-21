@@ -46,6 +46,7 @@ export type {
   ChromaResult,
   ClipPageRequest,
   CqtResult,
+  DynamicsAnalysisResult,
   DynamicsResult,
   EngineAutomationPoint,
   EngineAutomationPointCurve,

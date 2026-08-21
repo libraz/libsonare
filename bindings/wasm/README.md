@@ -360,7 +360,12 @@ Every area below has runnable examples and the full API in the
 - **Conversions** — Hz / mel / MIDI / note, frames / time, resample.
 
 Native failures throw a `SonareError` carrying a numeric `code` (an `ErrorCode`
-value) and its `codeName`; narrow with the `isSonareError` type guard.
+value) and its `codeName`. Narrow with the `isSonareError` type guard or with
+`instanceof SonareError`; both accept the same values. `SonareError` is exported
+as a runtime class here and in the Node binding, so a module shared between the
+two packages can use either form. Its `instanceof` is brand-based rather than
+prototype-based, so an error that arrives from the analysis worker as a
+structured clone — with its prototype gone — still narrows.
 
 ## Documentation
 

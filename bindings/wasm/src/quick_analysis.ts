@@ -731,7 +731,13 @@ export interface RhythmAnalysisResult {
   beatIntervals: Float32Array;
 }
 
-export interface DynamicsAnalysisResult {
+/**
+ * Dynamics metrics returned by {@link analyzeDynamics}.
+ *
+ * The Node package declares the same shape under the same name; the two are
+ * pinned to one field list by `tests/conformance/shared_type_shapes.json`.
+ */
+export interface DynamicsResult {
   dynamicRangeDb: number;
   peakDb: number;
   rmsDb: number;
@@ -743,6 +749,12 @@ export interface DynamicsAnalysisResult {
   /** Loudness curve RMS values (dB), parallel to {@link loudnessTimes}. */
   loudnessRmsDb: Float32Array;
 }
+
+/**
+ * @deprecated Use {@link DynamicsResult}. Retained so code written against the
+ * WASM-only spelling keeps compiling; the Node package exports the same alias.
+ */
+export type DynamicsAnalysisResult = DynamicsResult;
 
 /** Timbre metrics for one analysis window. Entries are ordered by time in `timbreOverTime`. */
 export interface TimbreFrame {
@@ -821,17 +833,17 @@ export function analyzeRhythm(
 /**
  * Dynamics analysis (RMS, peak, crest factor, LRA, loudness curve).
  */
-export function analyzeDynamics(request: AnalyzeDynamicsRequest): DynamicsAnalysisResult;
+export function analyzeDynamics(request: AnalyzeDynamicsRequest): DynamicsResult;
 export function analyzeDynamics(
   samples: Float32Array,
   sampleRate?: number,
   options?: AnalyzeDynamicsOptions,
-): DynamicsAnalysisResult;
+): DynamicsResult;
 export function analyzeDynamics(
   samples: Float32Array | AnalyzeDynamicsRequest,
   sampleRate = 22050,
   options: AnalyzeDynamicsOptions = {},
-): DynamicsAnalysisResult {
+): DynamicsResult {
   const request = samples instanceof Float32Array ? { samples, sampleRate, ...options } : samples;
   validateAnalysisInput('analyzeDynamics', request.samples, request.sampleRate ?? 22050, request);
   return requireModule().analyzeDynamics(

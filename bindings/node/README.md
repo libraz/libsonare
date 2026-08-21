@@ -218,8 +218,12 @@ Every area below has runnable examples and the full API in the
 - **Conversions** — Hz / mel / MIDI / note, frames / time, resample.
 
 C-ABI failures throw a `SonareError` (`name` `'SonareError'`) carrying a numeric
-`code` (an `ErrorCode` value) and its `codeName`; narrow with the `isSonareError`
-type guard.
+`code` (an `ErrorCode` value) and its `codeName`. Narrow with the `isSonareError`
+type guard or with `instanceof SonareError`; both accept the same values.
+`SonareError` is exported as a runtime class here and in `@libraz/libsonare`, so
+a module shared between the two packages can use either form. Its `instanceof`
+is brand-based rather than prototype-based, so an error that lost its prototype
+crossing a worker or `structuredClone` boundary still narrows.
 
 ## Documentation
 

@@ -26,7 +26,7 @@ import {
   projectTrackKindValue,
   projectWarpModeValue,
 } from '../src/project_internal';
-import type { PanLawInput } from '../src/public_types';
+import type { PanLawInput, VoicePresetId } from '../src/public_types';
 
 const sampleRate = 22050;
 
@@ -259,3 +259,34 @@ function captureThrow(fn: () => unknown): { threw: boolean; message: string } {
     return { threw: true, message: error instanceof Error ? error.message : String(error) };
   }
 }
+
+// One named operation, one default, wherever it is exposed. The Python handle
+// form defaulted to a character preset while every other entry point defaulted
+// to the monitoring preset, so the same buffer rendered audibly differently
+// depending on which spelling the caller reached for. The expected value comes
+// from the shared corpus the Python suite reads, so a change on one surface
+// alone fails on the others.
+describe('voiceChangeRealtime default preset', () => {
+  it('renders what the shared corpus names as the default', () => {
+    const expected = (
+      JSON.parse(
+        readFileSync(
+          new URL('../../../tests/conformance/binding_defaults.json', import.meta.url),
+          'utf8',
+        ),
+      ) as { defaults: Record<string, VoicePresetId> }
+    ).defaults['voice_change_realtime.preset'];
+    expect(expected).toBe('neutral-monitor');
+
+    const sampleRate = 22050;
+    const samples = new Float32Array(2048);
+    for (let i = 0; i < samples.length; i++) {
+      samples[i] = 0.25 * Math.sin((2 * Math.PI * 220 * i) / sampleRate);
+    }
+    // A TypeScript default parameter is not introspectable, so compare renders:
+    // omitting the preset must produce exactly what naming the default produces.
+    expect(voiceChangeRealtime(samples, sampleRate)).toEqual(
+      voiceChangeRealtime(samples, sampleRate, expected),
+    );
+  });
+});

@@ -1,0 +1,6 @@
+{
+  "schema_version": 1,
+  "defaults": {
+    "voice_change_realtime.preset": "neutral-monitor"
+  }
+}

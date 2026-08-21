@@ -616,6 +616,16 @@ export interface RhythmResult {
   beatIntervals: Float32Array;
 }
 
+/**
+ * Dynamics metrics returned by {@link analyzeDynamics}.
+ *
+ * The WASM package declares the same shape under the same name; the two are
+ * pinned to one field list by `tests/conformance/shared_type_shapes.json`. The
+ * processor envelope is `DynamicsProcessorResult`, which is a different shape —
+ * the WASM package used to spell that one `DynamicsResult`, so a shared module
+ * annotated with this name type-checked against one package and failed against
+ * the other.
+ */
 export interface DynamicsResult {
   dynamicRangeDb: number;
   peakDb: number;
@@ -626,6 +636,12 @@ export interface DynamicsResult {
   loudnessTimes: Float32Array;
   loudnessRmsDb: Float32Array;
 }
+
+/**
+ * @deprecated Use {@link DynamicsResult}. Exported so the spelling the WASM
+ * package used for this shape resolves in both packages.
+ */
+export type DynamicsAnalysisResult = DynamicsResult;
 
 /** Timbre metrics for one analysis window. Entries are ordered by time in {@link TimbreResult.timbreOverTime}. */
 export interface TimbreFrame {

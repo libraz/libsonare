@@ -33,6 +33,7 @@ export type {
   DetectChordsRequest,
   DetectKeyRequest,
   DynamicsAnalysisResult,
+  DynamicsResult,
   EstimateMeterRequest,
   MusicAnalyzeOptions,
   MusicAnalyzeRequest,
