@@ -169,6 +169,12 @@ def _guard_buffer(*arg_names: str) -> Callable[[_GuardedFn], _GuardedFn]:
     naming both the facade function and the offending argument instead of the
     bare ``[4] Invalid parameter`` the C ABI reports for the same input.
 
+    The validated buffer replaces the caller's argument before the body runs, so
+    the bytes the C ABI receives are the ones that were checked and each call
+    coerces at most once. It is a contiguous float32 1-D ndarray; every body
+    already funnels its buffer through the same helper, for which that is the
+    zero-copy case.
+
     Arguments are resolved through the wrapped function's signature, so both
     call styles keep working — the librosa mirrors and the realtime event
     packers are positional by design. A name the call never supplied (an
@@ -192,15 +198,26 @@ def _guard_buffer(*arg_names: str) -> Callable[[_GuardedFn], _GuardedFn]:
             validate = True
             if validate_param is not None:
                 validate = bool(bound.arguments.get("validate", validate_param.default))
+            coerced = False
             for arg_name in arg_names:
                 if arg_name in bound.arguments:
-                    _validate_samples(
+                    # Hand the body the buffer that was just validated, not the
+                    # caller's original. Discarding it made every non-contiguous
+                    # or non-float32 input pay for the full `np.asarray` walk and
+                    # the float32 allocation twice — once here and once in the
+                    # body's own `_to_c_float_array` — and left the bytes the C
+                    # ABI actually receives one conversion removed from the ones
+                    # that were checked.
+                    bound.arguments[arg_name] = _validate_samples(
                         fn.__name__,
                         bound.arguments[arg_name],
                         validate=validate,
                         arg_name=arg_name,
                     )
-            return fn(*args, **kwargs)
+                    coerced = True
+            if not coerced:
+                return fn(*args, **kwargs)
+            return fn(*bound.args, **bound.kwargs)
 
         return cast(_GuardedFn, guarded)
 
@@ -263,6 +280,44 @@ def _as_float32_buffer(
             f"{prefix}{arg_name} must be a sequence of numbers or a numpy array, "
             f"not {type(samples).__name__}"
         ) from exc
+
+
+def _planar_channel_arrays(
+    channels: Sequence[Sequence[float]],
+    *,
+    subject: str = "channels",
+) -> tuple[list[ctypes.Array[ctypes.c_float]], ctypes.Array[Any], int]:
+    """Marshal equal-length planar channels into ctypes arrays and a pointer table.
+
+    One shared implementation for every planar-channel entry point: the realtime
+    process path, clip-page supply, and clip marshalling each used to build
+    ``(c_float * frames)(*channel)``, which unpacks every sample through Python
+    varargs -- roughly 8192 conversions and a tuple build per 4096-frame stereo
+    page, against one bulk copy here. Two of the three kept doing that after the
+    third was fixed, which is why this lives in one place now.
+
+    Each channel gets a private writable buffer, so a C call that writes its
+    output back into these planes cannot reach the caller's array, and the numpy
+    backing is pinned to the ctypes object so it outlives the call.
+
+    ``subject`` names the argument in the rejection messages.
+    """
+    if not channels:
+        raise SonareValueError(f"{subject} must not be empty")
+    frame_count = len(channels[0])
+    if frame_count == 0:
+        raise SonareValueError(f"{subject} must not be empty")
+    arrays: list[ctypes.Array[ctypes.c_float]] = []
+    for channel in channels:
+        if len(channel) != frame_count:
+            raise SonareValueError(f"all {subject} must have the same length")
+        buf = np.array(_as_float32_buffer(channel), dtype=np.float32, copy=True, order="C")
+        c_array = (ctypes.c_float * frame_count).from_buffer(buf)
+        c_array._np_backing = buf  # type: ignore[attr-defined]
+        arrays.append(c_array)
+    ptr_type = ctypes.POINTER(ctypes.c_float) * len(arrays)
+    ptrs = ptr_type(*[ctypes.cast(array, ctypes.POINTER(ctypes.c_float)) for array in arrays])
+    return arrays, ptrs, frame_count
 
 
 def _to_c_float_array(

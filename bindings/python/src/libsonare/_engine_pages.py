@@ -15,6 +15,7 @@ from ._runtime import (
     SonareValueError,
     _check,
     _get_lib,
+    _planar_channel_arrays,
 )
 
 # Must match sonare::rt::kEngineAbiVersion (src/rt/command.h) and the WASM
@@ -61,27 +62,13 @@ class ClipPageProvider:
         return self._handle
 
     def supply(self, page_index: int, channels: Sequence[Sequence[float]]) -> None:
-        if not channels:
-            raise SonareValueError("channels must not be empty")
-        frames = len(channels[0])
-        if frames <= 0:
-            raise SonareValueError("channels must not be empty")
-        arrays: list[ctypes.Array[ctypes.c_float]] = []
-        ptr_values: list[ctypes._Pointer[ctypes.c_float]] = []
-        for channel in channels:
-            if len(channel) != frames:
-                raise SonareValueError("all channels must have the same length")
-            array = (ctypes.c_float * frames)(*channel)
-            arrays.append(array)
-            ptr_values.append(ctypes.cast(array, ctypes.POINTER(ctypes.c_float)))
-        ptr_type = ctypes.POINTER(ctypes.c_float) * len(ptr_values)
-        ptrs = ptr_type(*ptr_values)
+        arrays, ptrs, frames = _planar_channel_arrays(channels)
         _check(
             _get_lib().sonare_clip_page_provider_supply(
                 self._require_handle(),
                 int(page_index),
                 ctypes.cast(ptrs, ctypes.POINTER(ctypes.POINTER(ctypes.c_float))),
-                len(ptr_values),
+                len(arrays),
                 frames,
             )
         )

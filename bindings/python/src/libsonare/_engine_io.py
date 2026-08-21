@@ -50,10 +50,10 @@ from ._runtime import (
     MeterTelemetryRecordWide,
     ScopeTelemetryRecord,
     SonareValueError,
-    _as_float32_buffer,
     _check,
     _from_c_float_array,
     _get_lib,
+    _planar_channel_arrays,
 )
 
 
@@ -463,26 +463,4 @@ class _EngineIoMixin:
     def _channel_arrays(
         channels: Sequence[Sequence[float]],
     ) -> tuple[list[ctypes.Array[ctypes.c_float]], ctypes.Array[Any], int]:
-        if not channels:
-            raise SonareValueError("channels must not be empty")
-        frame_count = len(channels[0])
-        if frame_count == 0:
-            raise SonareValueError("channels must not be empty")
-        arrays: list[ctypes.Array[ctypes.c_float]] = []
-        for channel in channels:
-            if len(channel) != frame_count:
-                raise SonareValueError("all channels must have the same length")
-            # Zero-copy marshal each channel via NumPy's vectorised C path
-            # instead of `(c_float*N)(*channel)`, which unpacks every sample
-            # through Python varargs on this realtime path. The engine writes
-            # its output back into these buffers in-place, so always own a
-            # fresh writable copy (np.array(copy=True)) rather than aliasing the
-            # caller's array; pin the numpy backing to the ctypes object so it
-            # outlives the C call.
-            buf = np.array(_as_float32_buffer(channel), dtype=np.float32, copy=True, order="C")
-            c_array = (ctypes.c_float * frame_count).from_buffer(buf)
-            c_array._np_backing = buf  # type: ignore[attr-defined]
-            arrays.append(c_array)
-        ptr_type = ctypes.POINTER(ctypes.c_float) * len(arrays)
-        ptrs = ptr_type(*[ctypes.cast(array, ctypes.POINTER(ctypes.c_float)) for array in arrays])
-        return arrays, ptrs, frame_count
+        return _planar_channel_arrays(channels)

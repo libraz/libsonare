@@ -37,6 +37,50 @@ describe('Symbol.dispose / using', () => {
     expect(() => audio.detectBpm()).toThrow('Audio has been destroyed');
   });
 
+  // Facade methods now read the cached snapshot directly instead of taking a
+  // full copy per call: a five-minute mono file is 57.6 MB, and every
+  // `analyzeBpm()` / `masterAudio()` / `mfcc()` allocated and threw away that
+  // much. That is only safe while every native call treats samples as
+  // read-only, so assert it over the whole surface rather than per method: the
+  // method list is derived from the prototype, so one that starts mutating its
+  // input is caught without anyone remembering to extend a list.
+  it('no facade method mutates the shared decoded snapshot', () => {
+    const source = sine(440, 22050, 0.25);
+    const audio = Audio.fromBuffer(source, 22050);
+    try {
+      const before = Array.from(audio.getData());
+
+      const skip = new Set(['constructor', 'destroy', 'getData']);
+      const prototype = Object.getPrototypeOf(audio) as object;
+      const called: string[] = [];
+      for (const name of Object.getOwnPropertyNames(prototype)) {
+        if (skip.has(name)) {
+          continue;
+        }
+        const member = (audio as unknown as Record<string, unknown>)[name];
+        if (typeof member !== 'function' || member.length > 0) {
+          continue;
+        }
+        try {
+          (member as () => unknown).call(audio);
+          called.push(name);
+        } catch {
+          // A method that rejects this short buffer still cannot have mutated
+          // it before rejecting, so the assertion below covers it either way.
+        }
+      }
+      // Guard the derivation itself: a reflection change that finds nothing
+      // would make this pass by exercising nothing.
+      expect(called.length).toBeGreaterThan(10);
+
+      expect(Array.from(audio.getData())).toEqual(before);
+      // The public accessor still hands out a private copy, not the snapshot.
+      expect(audio.getData()).not.toBe(audio.getData());
+    } finally {
+      audio.destroy();
+    }
+  });
+
   it('Project supports `using`', () => {
     expect(() => {
       using project = Project.create();

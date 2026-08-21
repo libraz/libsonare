@@ -50,9 +50,12 @@ def _band_array_args(
     """
     if not bands:
         return None, 0, None
-    values = list(bands)
-    buf = (ctypes.c_float * len(values))(*values)
-    return ctypes.cast(buf, ctypes.POINTER(ctypes.c_float)), len(values), buf
+    # Bulk numpy marshalling like every other float buffer that crosses the C
+    # ABI. A band list is short enough that the per-element varargs form cost
+    # nothing measurable, but keeping one path means the rule holds without an
+    # exception list -- which is what let the two clip paths drift.
+    buf, count = _to_c_float_array(bands)
+    return ctypes.cast(buf, ctypes.POINTER(ctypes.c_float)), count, buf
 
 
 def synthesize_rir(

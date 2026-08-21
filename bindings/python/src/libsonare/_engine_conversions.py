@@ -37,6 +37,7 @@ from ._runtime import (
     SonareParameterInfo,
     SonareScopeTelemetryRecord,
     SonareValueError,
+    _planar_channel_arrays,
     _warp_mode_value,
 )
 from ._types_engine import EngineTrackMonitorMode
@@ -225,19 +226,7 @@ def _clips_to_c(
             continue
         if not clip.channels:
             raise SonareValueError("clip channels must not be empty")
-        num_samples = len(clip.channels[0])
-        if num_samples <= 0:
-            raise SonareValueError("clip channels must not be empty")
-        arrays: list[ctypes.Array[ctypes.c_float]] = []
-        ptr_values: list[ctypes._Pointer[ctypes.c_float]] = []
-        for channel in clip.channels:
-            if len(channel) != num_samples:
-                raise SonareValueError("all clip channels must have the same length")
-            array = (ctypes.c_float * num_samples)(*channel)
-            arrays.append(array)
-            ptr_values.append(ctypes.cast(array, ctypes.POINTER(ctypes.c_float)))
-        ptr_type = ctypes.POINTER(ctypes.c_float) * len(ptr_values)
-        ptrs = ptr_type(*ptr_values)
+        arrays, ptrs, num_samples = _planar_channel_arrays(clip.channels, subject="clip channels")
         raw = SonareEngineClip()
         raw.id = int(clip.id)
         raw.track_id = int(clip.track_id)

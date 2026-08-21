@@ -652,3 +652,44 @@ def test_types_stub_typed_dicts_match_runtime() -> None:
         )
         compared += 1
     assert compared == len(stub_fields)
+
+
+def test_estimate_meter_keyword_defaults_match_the_core() -> None:
+    """`estimate_meter`'s keyword defaults are the core's, not a hand-copy.
+
+    The five scoring knobs were restated as Python literals while the C ABI
+    already publishes them through ``sonare_meter_options_default()`` — which is
+    what the Node addon reads live. The existing meter-options test compares a
+    different struct (``sonare_music_analyze_options_default``), so these five
+    had nothing checking them; parity does not look at defaults either.
+    """
+    import ctypes
+
+    import libsonare
+    from libsonare._ffi_types_analysis import SonareMeterOptions
+    from libsonare._runtime import _get_lib
+
+    lib = _get_lib()
+    if not hasattr(lib, "sonare_meter_options_default"):
+        pytest.skip("libsonare was built without sonare_meter_options_default")
+    lib.sonare_meter_options_default.restype = SonareMeterOptions
+    lib.sonare_meter_options_default.argtypes = []
+    core = lib.sonare_meter_options_default()
+
+    parameters = inspect.signature(libsonare.estimate_meter).parameters
+    # int fields compare exactly; the float knobs are stored as C float, so
+    # compare at float32 precision rather than pinning a decimal literal.
+    assert parameters["denominator"].default == core.denominator
+    for name in (
+        "downbeat_weight",
+        "measure_weight",
+        "subdivision_weight",
+        "compound_subdivision_threshold",
+    ):
+        declared = parameters[name].default
+        assert declared == pytest.approx(getattr(core, name), rel=1e-6), name
+
+    # Guard the comparison itself: reading the struct wrong would compare zeros.
+    assert core.denominator > 0
+    assert core.candidate_numerator_count > 0
+    assert ctypes.sizeof(SonareMeterOptions) > 0

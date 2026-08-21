@@ -27,6 +27,7 @@ from __future__ import annotations
 
 import ctypes
 import math
+import pathlib
 import time
 
 import numpy as np
@@ -285,3 +286,103 @@ def test_large_buffer_processes_under_budget() -> None:
     assert out.shape == (n,)
     # Surface the actual timing in the failure message for diagnostics.
     assert elapsed < 2.0, f"processing 1M samples took {elapsed:.3f}s (budget 2.0s)"
+
+
+def _count_float32_coercions(call, *args, **kwargs) -> tuple[int, int]:
+    """(coercion calls, actual copies) made while ``call`` runs.
+
+    Patches the shared helper in every module that imported it by name, so a
+    body reaching it through `_to_c_float_array` is counted too.
+    """
+    import sys
+
+    from libsonare import _runtime
+
+    stats = {"calls": 0, "copies": 0}
+    real = _runtime._as_float32_buffer
+
+    def counting(samples, **kw):
+        out = real(samples, **kw)
+        stats["calls"] += 1
+        if not (isinstance(samples, np.ndarray) and samples is out):
+            stats["copies"] += 1
+        return out
+
+    patched = [
+        module
+        for module in sys.modules.values()
+        if getattr(module, "_as_float32_buffer", None) is real
+    ]
+    for module in patched:
+        module._as_float32_buffer = counting
+    try:
+        call(*args, **kwargs)
+    finally:
+        for module in patched:
+            module._as_float32_buffer = real
+    return stats["calls"], stats["copies"]
+
+
+@pytest.mark.parametrize(
+    "samples",
+    [
+        pytest.param([0.1, -0.2, 0.3, -0.4] * 64, id="list"),
+        pytest.param(tuple([0.1, -0.2, 0.3, -0.4] * 64), id="tuple"),
+        pytest.param(np.linspace(-0.5, 0.5, 256, dtype=np.float64), id="float64_ndarray"),
+        pytest.param(np.linspace(-0.5, 0.5, 512, dtype=np.float32)[::2], id="strided_float32"),
+    ],
+)
+def test_guarded_entry_point_coerces_the_buffer_exactly_once(samples) -> None:
+    """`@_guard_buffer` hands its validated buffer to the body, not the original.
+
+    The guard used to discard what it coerced and let the body coerce the
+    caller's value a second time, so every non-contiguous or non-float32 input
+    paid for the full walk and the float32 allocation twice — and the bytes the
+    C ABI received were one conversion removed from the ones that were checked.
+    """
+    _, copies = _count_float32_coercions(libsonare.trim_silence, samples)
+    assert copies == 1
+
+
+def test_guarded_entry_point_stays_zero_copy_for_a_ready_buffer() -> None:
+    """A contiguous float32 buffer must still reach the C ABI without a copy."""
+    ready = np.linspace(-0.5, 0.5, 256, dtype=np.float32)
+    calls, copies = _count_float32_coercions(libsonare.trim_silence, ready)
+    assert calls >= 2  # the guard and the body both consult the helper
+    assert copies == 0
+
+
+def test_no_module_marshals_a_float_buffer_through_varargs() -> None:
+    """Sample buffers reach the C ABI through the shared bulk numpy path.
+
+    ``(ctypes.c_float * frames)(*channel)`` unpacks every sample through Python
+    varargs. The realtime process path was moved off it; clip-page supply and
+    clip marshalling were not, and stayed that way for two releases because
+    nothing compared them. A rule over the source is what keeps the three from
+    drifting apart again, rather than a list of the files that were fixed.
+    """
+    import ast
+
+    package = pathlib.Path(libsonare.__file__).parent
+    offenders: list[str] = []
+    scanned = 0
+    for path in sorted(package.glob("*.py")):
+        scanned += 1
+        for node in ast.walk(ast.parse(path.read_text(encoding="utf-8"))):
+            if not isinstance(node, ast.Call):
+                continue
+            if not any(isinstance(arg, ast.Starred) for arg in node.args):
+                continue
+            # `(ctypes.c_float * n)(*seq)`: the callee is the array-type product.
+            func = node.func
+            if not isinstance(func, ast.BinOp) or not isinstance(func.op, ast.Mult):
+                continue
+            element = func.left
+            if isinstance(element, ast.Attribute) and element.attr == "c_float":
+                offenders.append(f"{path.name}:{node.lineno}")
+    # Guard the scan itself: a parser change that matches nothing would pass.
+    assert scanned > 20, f"only {scanned} modules scanned"
+    assert offenders == [], (
+        "float sample buffers must be marshalled through _planar_channel_arrays / "
+        f"_to_c_float_array, not per-element varargs: {offenders}"
+    )
