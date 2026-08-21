@@ -7,7 +7,9 @@
 #include <array>
 #include <catch2/catch_test_macros.hpp>
 #include <cctype>
+#include <cmath>
 #include <cstddef>
+#include <limits>
 #include <set>
 #include <string>
 #include <vector>
@@ -56,6 +58,11 @@ constexpr float kTransientSustain = 0.05f;
 constexpr float kSustainedSustain = 0.95f;
 // Onsets per second for a part that is being played rather than held.
 constexpr float kPlayedOnsetsPerSec = 4.0f;
+// A part played densely enough that the gap between hits is shorter than the
+// recovery its class's nominal release would take.
+constexpr float kDenseOnsetsPerSec = 8.0f;
+// And one played sparsely enough that the gap is never the binding constraint.
+constexpr float kSparseOnsetsPerSec = 1.0f;
 
 // An even spread across the analysis bands: it sums to 1 and puts enough energy
 // in the top two bands for a voice to read as sibilant.
@@ -124,6 +131,25 @@ float param_number(const Insert& insert, const std::string& key) {
   REQUIRE(field->is_number());
   return field->as_float();
 }
+
+/// @brief The compressor release the stage suggests for one profile on its own.
+float suggested_release_ms(const TrackProfile& profile) {
+  const std::vector<TrackProfile> profiles{profile};
+  const std::vector<SceneDelta> deltas =
+      decide_dynamics(profiles, make_mix(profiles.size()), MixAssistantConfig{});
+  const Insert* compressor = find_insert(deltas, profile.strip_id, "dynamics.compressor");
+  REQUIRE(compressor != nullptr);
+  return param_number(*compressor, "releaseMs");
+}
+
+/// @brief The longest release whose recovery fits between onsets at that rate.
+/// @details Restates the derivation rather than reaching for the stage's own
+///          constant: a third of the inter-onset interval, because the release
+///          parameter is a one-pole time constant and the gain needs about three
+///          of them to arrive. Written as the same sequence of float operations
+///          the stage performs, so a release that sits exactly on the bound
+///          compares equal rather than one ulp either side of it.
+float recovery_bound_ms(float onsets_per_sec) { return (1000.0f / onsets_per_sec) * (1.0f / 3.0f); }
 
 // One profile per class the stage can act on, plus the extremes of the dynamics
 // profile, so a single run exercises every branch that emits an insert.
@@ -253,6 +279,79 @@ TEST_CASE("a more sustained track gets a longer compressor release", "[mixing][a
   // A sustained part has no gaps for the gain to recover in, so the recovery
   // has to sit beyond the note rather than inside it.
   CHECK(param_number(*held, "releaseMs") > param_number(*plucked, "releaseMs"));
+}
+
+TEST_CASE("a densely played part's release fits between its measured onsets",
+          "[mixing][assistant]") {
+  // The bound comes from the track's own onset rate rather than from an assumed
+  // tempo, so the same class played twice as often gets a release that fits the
+  // shorter gap.
+  const float dense = suggested_release_ms(
+      make_profile("dense", SourceClass::Kick, 10.0f, kTransientSustain, kDenseOnsetsPerSec));
+  const float sparse = suggested_release_ms(
+      make_profile("sparse", SourceClass::Kick, 10.0f, kTransientSustain, kSparseOnsetsPerSec));
+
+  INFO("dense " << dense << " ms, sparse " << sparse << " ms");
+  CHECK(dense < sparse);
+  CHECK(dense <= recovery_bound_ms(kDenseOnsetsPerSec));
+  // The sparse part's gap is wide enough that nothing binds, so it keeps the
+  // release its class asked for. Without this the case above would also pass on
+  // a stage that shortened every release regardless of the measurement.
+  CHECK(sparse < recovery_bound_ms(kSparseOnsetsPerSec));
+}
+
+TEST_CASE("a track with no measurable onset rate keeps its class's release",
+          "[mixing][assistant]") {
+  // Zero and non-finite are the absence of a reading, not an infinitely slow
+  // part. Dividing by either would give a release of zero or of infinity, and
+  // both are worse than the value the cap was meant to refine.
+  const float reference = suggested_release_ms(
+      make_profile("reference", SourceClass::Kick, 10.0f, kTransientSustain, kSparseOnsetsPerSec));
+
+  const std::array<float, 3> unmeasurable = {0.0f, std::numeric_limits<float>::quiet_NaN(),
+                                             std::numeric_limits<float>::infinity()};
+  for (const float density : unmeasurable) {
+    INFO("attack density " << density);
+    const float release = suggested_release_ms(
+        make_profile("quiet", SourceClass::Kick, 10.0f, kTransientSustain, density));
+    CHECK(std::isfinite(release));
+    CHECK(release > 0.0f);
+    // Identical to the uncapped value: the sparse reference is already below its
+    // own bound, so both describe the untouched table release.
+    CHECK(release == reference);
+  }
+}
+
+TEST_CASE("the onset cap never stretches a sustained part's release", "[mixing][assistant]") {
+  // The cap is one-sided. A part held rather than struck still earns the sustain
+  // lengthening, and a wide gap between its few onsets must not be read as
+  // permission to lengthen it further.
+  const float transient = suggested_release_ms(make_profile(
+      "struck", SourceClass::Percussion, 10.0f, kTransientSustain, kSparseOnsetsPerSec));
+  const float sustained = suggested_release_ms(
+      make_profile("held", SourceClass::Percussion, 10.0f, kSustainedSustain, kSparseOnsetsPerSec));
+
+  INFO("transient " << transient << " ms, sustained " << sustained << " ms");
+  CHECK(sustained > transient);
+  // And it stays well inside the gap it was measured against, so the lengthening
+  // has not walked past the bound either.
+  CHECK(sustained <= recovery_bound_ms(kSparseOnsetsPerSec));
+}
+
+TEST_CASE("a class whose release outlasts one event is not capped", "[mixing][assistant]") {
+  // A tom's release exists to outlast a single hit's decay, not to fit between
+  // hits, so the onset rate has no say over it. Capping it would put the gain
+  // recovery inside the note the setting was chosen to protect.
+  const float dense = suggested_release_ms(
+      make_profile("fill", SourceClass::Tom, 10.0f, kTransientSustain, kDenseOnsetsPerSec));
+  const float sparse = suggested_release_ms(
+      make_profile("accent", SourceClass::Tom, 10.0f, kTransientSustain, kSparseOnsetsPerSec));
+
+  INFO("dense " << dense << " ms, sparse " << sparse << " ms");
+  CHECK(dense == sparse);
+  // And it is genuinely longer than the dense gap, so the case is not passing
+  // because the cap would have been slack anyway.
+  CHECK(dense > recovery_bound_ms(kDenseOnsetsPerSec));
 }
 
 TEST_CASE("a voice gets a rider or a de-esser", "[mixing][assistant]") {

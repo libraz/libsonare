@@ -128,6 +128,19 @@ constexpr float kThresholdPerCrestDb = 0.5f;
 // at sustain_ratio 1 puts the recovery beyond the note rather than inside it.
 constexpr float kReleaseSustainScale = 1.0f;
 
+// attack_density is onset peaks per second and every time in this file is in
+// milliseconds, so the two need a bridge to be compared at all.
+constexpr float kMsPerSecond = 1000.0f;
+// Largest share of the measured inter-onset interval a suggested release may
+// occupy. The reciprocal of attack_density is the real gap between the events
+// the compressor has to recover between, and a release longer than that gap is
+// still moving when the next event arrives. A third of the gap rather than the
+// whole of it because the release parameter is a one-pole time constant: the
+// gain is within a few percent of unity only after about three of them, so a
+// third is the figure that puts the *recovery* inside the gap instead of merely
+// starting it there.
+constexpr float kReleaseInterOnsetFraction = 1.0f / 3.0f;
+
 // Ratio bounds for anything this stage suggests. Below the lower bound the
 // compressor is doing nothing a fader could not do; above the upper one it is a
 // limiter, which is a different decision made with a different tool.
@@ -158,17 +171,47 @@ struct CompressionRow {
 
 // The per-class table. Every row is a starting point that the measured crest
 // factor and sustain ratio then move; the reason each row sits where it does is
-// on the row.
+// on the row. The four columns do not rest on the same kind of ground, and the
+// table is written to say so rather than to read uniformly authoritative.
+//
+// Selecting by identified instrument and reading a fixed table is deliberate.
+// P. Pestana and J. D. Reiss, "Intelligent Audio Production Strategies Informed
+// by Best Practices" (AES 53rd International Conference on Semantic Audio,
+// London, 2014) reports that of the strategies it examined this is the most
+// robust one available, which is why the stage looks a decision up rather than
+// computing it as a continuous function of the measurements.
+//
+// The ratio column's ordering across the frequency range is measured. The same
+// work's Fig. 6 gives the peak-to-RMS ratio of 928 commercially released UK/US
+// number-one singles rising monotonically with octave number, and concludes
+// from it that professionals apply more compression to low frequencies than to
+// high ones. The ratios below follow that ordering: the classes living lowest
+// carry the firmest ratios and the classes living at the top of the spectrum the
+// gentlest. A row that departs from the ordering says on the row why.
+//
+// The attack and release columns have no comparable backing, and none is
+// claimed for them. That same survey — some sixty interviews with working
+// engineers alongside a forty-nine-question questionnaire — found no expert
+// consensus on how either should be set. So these two columns are not
+// established practice written down; they are deliberately conservative starting
+// points, sized so that being wrong about a track leaves it slightly
+// under-controlled rather than audibly reshaped, and left to be moved by the
+// crest factor, the sustain ratio and the measured onset rate, which are
+// properties of the track in hand rather than of anybody's habits.
 constexpr std::array<CompressionRow, 14> kCompressionTable = {{
-    // A kick is one short event per beat. The late attack lets the beater click
-    // through untouched, and the release has recovered before the next hit at
-    // any ordinary tempo.
+    // The lowest class in the table, so it takes the firmest ratio. The late
+    // attack lets the beater click through untouched, and the release is paced
+    // by the gap between hits rather than by the length of one: the value here
+    // is the starting point, and the measured onset rate shortens it when the
+    // part is played densely enough for the gain not to have recovered.
     {SourceClass::Kick, 4.0f, -6.0f, 12.0f, 120.0f},
     // The same shape as the kick with a slower recovery: a snare's body and the
-    // room around it keep decaying long after the stick.
+    // room around it keep decaying long after the stick. Paced by the measured
+    // onset rate for the same reason the kick is.
     {SourceClass::Snare, 4.0f, -6.0f, 15.0f, 150.0f},
-    // Hats are already short and stand well above their own body. A fast, gentle
-    // setting evens out the playing without breathing on the decay.
+    // The top of the spectrum, so the ratio sits at the gentle end. Hats are
+    // already short and stand well above their own body, and a fast setting
+    // evens out the playing without breathing on the decay.
     {SourceClass::HiHat, 2.0f, -4.0f, 3.0f, 60.0f},
     // Toms have the longest decay on the kit, so the release has to outlast it
     // or the gain audibly pumps inside a single hit.
@@ -198,12 +241,21 @@ constexpr std::array<CompressionRow, 14> kCompressionTable = {{
     // and a quick attack hold it steady; the short release keeps it moving with
     // the phrase instead of sagging behind it.
     {SourceClass::Vocal, 3.0f, -8.0f, 8.0f, 100.0f},
-    // Backing vocals sit behind the lead, so they are compressed harder: the
-    // point is that they never step forward, not that they stay expressive.
+    // The one row that leaves the low-to-high ratio ordering on purpose: a
+    // backing vocal sits in the same register as the lead but carries the
+    // table's firmest ratio anyway. The reason is placement rather than
+    // spectrum — the part has to stay behind the lead and never step forward,
+    // which is a decision about where it sits in the mix and not about what
+    // frequencies it occupies, so the frequency trend has nothing to say about
+    // it.
     {SourceClass::Backing, 4.0f, -8.0f, 8.0f, 120.0f},
     // Hand percussion is short, dense and played quietly between the louder
-    // hits. A fast attack and release track the pattern rather than the bar.
-    {SourceClass::Percussion, 3.0f, -5.0f, 5.0f, 80.0f},
+    // hits. Its ratio sits between the mid-register classes and the top of the
+    // kit: a shaker is as high as a hi-hat, but the class also covers congas and
+    // frame drums with real low-mid body, so it does not belong at either end.
+    // The release tracks the measured onset rate, which is what "dense" means
+    // here in a figure rather than an assumption.
+    {SourceClass::Percussion, 2.5f, -5.0f, 5.0f, 80.0f},
     // An effect or texture is in the mix for its shape, so it gets the lightest
     // treatment in the table: enough to stop it jumping, not enough to reshape
     // it.
@@ -225,6 +277,15 @@ const CompressionRow* compression_row(SourceClass source) noexcept {
 // almost entirely decay changes its tone rather than its envelope.
 constexpr std::array<SourceClass, 4> kTransientShapedSources = {
     SourceClass::Kick, SourceClass::Snare, SourceClass::Tom, SourceClass::Percussion};
+
+// Classes whose release is sized by the gap between events rather than by the
+// length of one, and whose suggested release is therefore capped against the
+// measured onset rate. A class whose release exists to outlast a single event's
+// own decay is deliberately absent — a tom, a cymbal, a held chord — because
+// shortening the release there would put the recovery inside the very note the
+// row exists to protect.
+constexpr std::array<SourceClass, 3> kInterOnsetPacedSources = {
+    SourceClass::Kick, SourceClass::Snare, SourceClass::Percussion};
 
 // Classes carrying a sung line, which is what a level rider and a de-esser are
 // for. SourceClass::Lead is deliberately absent: the classifier's lead class
@@ -394,6 +455,29 @@ float sustain_ratio(const TrackProfile& profile) noexcept {
   return std::clamp(sustain, 0.0f, 1.0f);
 }
 
+/// @brief Caps a release so the gain has recovered before the next onset.
+/// @details Bounds the release against the track's own event rate instead of
+///          against an assumed tempo. attack_density is a measurement in onset
+///          peaks per second, so its reciprocal is the actual interval between
+///          the events the compressor must recover between, and
+///          kReleaseInterOnsetFraction of that interval is the longest release
+///          whose recovery fits inside it.
+///
+///          The cap only ever shortens. A part with few onsets has a long
+///          interval and keeps whatever its class and its sustain ratio asked
+///          for, so nothing here can stretch a sustained release outwards.
+///
+///          A zero or non-finite density is the absence of a reading rather
+///          than an extremely slow part — dividing by it would give an infinite
+///          or nonsensical interval — so the table value is returned untouched.
+float cap_release_to_onset_rate(const TrackProfile& profile, float release_ms) noexcept {
+  const float density = profile.base.dynamics.attack_density;
+  if (!std::isfinite(density) || density <= 0.0f) return release_ms;
+  const float inter_onset_ms = kMsPerSecond / density;
+  if (!std::isfinite(inter_onset_ms)) return release_ms;
+  return std::min(release_ms, inter_onset_ms * kReleaseInterOnsetFraction);
+}
+
 /// @brief True when the track can be treated at all.
 /// @details Each condition is tested here rather than deferred to
 ///          TrackProfile::usable. The profiler makes the same calls, but this
@@ -471,7 +555,14 @@ void decide_compressor(const TrackProfile& profile, float strength, InsertLedger
                              crest * kThresholdPerCrestDb;
   const float attack_ms =
       std::max(kMinAttackMs, row->attack_ms * (1.0f + crest * kAttackScalePerCrestDb));
-  const float release_ms = row->release_ms * (1.0f + sustain * kReleaseSustainScale);
+  // The sustain lengthening runs first and the measured cap last. The
+  // lengthening is a preference read off the material's character; the cap is a
+  // bound read off its event rate, and a bound applied before the lengthening
+  // would simply be undone by the multiplication that follows it.
+  float release_ms = row->release_ms * (1.0f + sustain * kReleaseSustainScale);
+  if (contains_source(kInterOnsetPacedSources, profile.source)) {
+    release_ms = cap_release_to_onset_rate(profile, release_ms);
+  }
 
   json::Object params;
   put_number(params, "thresholdDb", threshold_db);
