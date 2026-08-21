@@ -3,7 +3,7 @@
 /// @file stereo_metrics.h
 /// @brief Pure scalar stereo metrics shared between mastering and metering layers.
 /// @details These helpers compute layer-agnostic stereo statistics (correlation
-///          coefficient and side/mid energy ratio). They are placed in `util/`
+///          coefficient and side/mid amplitude ratio). They are placed in `util/`
 ///          so that both `metering/` (full meters) and `mastering/` (mono-compat
 ///          checks, stereo processors) can reuse them without crossing layer
 ///          boundaries.

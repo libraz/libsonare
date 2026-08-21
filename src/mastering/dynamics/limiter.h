@@ -42,8 +42,9 @@ class Limiter : public rt::ProcessorBase {
   ///          May allocate (the snapshot @c shared_ptr) and is therefore NOT
   ///          realtime-safe itself; call from the configuration thread only.
   ///          Two threads MUST NOT call @ref set_config concurrently with each
-  ///          other (single-producer hand-off). Throws @c std::invalid_argument
-  ///          with the same rules as the constructor; on throw the published
+  ///          other (single-producer hand-off). Throws @c SonareException
+  ///          (@c ErrorCode::InvalidParameter) with the same rules as the
+  ///          constructor; on throw the published
   ///          configuration is unchanged (validation happens before publish,
   ///          never partway).
   void set_config(const LimiterConfig& config);

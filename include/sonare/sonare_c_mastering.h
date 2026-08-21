@@ -120,9 +120,16 @@ typedef struct {
   float applied_gain_db;
   char** stages;  // newline-free stage identifiers, e.g. "dynamics.compressor"
   size_t stages_count;
-  // ITU-R BS.1770-4 true peak of the output (dBTP), measured with the chain's
-  // configured loudness true-peak oversample factor (default 4x). Lets callers
-  // verify a preset ceiling was met without a second oversampled scan.
+  // ITU-R BS.1770-4 true peak of the output (dBTP). Lets callers verify a
+  // preset ceiling was met without a second oversampled scan.
+  //
+  // The oversample factor follows the peak-limiting stage the chain actually
+  // applied, so it is not fixed: the loudness stage's true-peak oversample
+  // (default 4x) when loudness is enabled, and the maximizer true-peak
+  // limiter's own oversample factor when loudness is disabled but that stage
+  // ran. The two disagree by roughly 0.02 dB between 4x and 8x, so a caller
+  // comparing this against an independently measured peak must use the same
+  // factor the chain used.
   float output_true_peak_dbtp;
   // EBU Tech 3342 Loudness Range of the output (LU).
   float output_lra;

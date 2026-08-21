@@ -1336,8 +1336,12 @@ class MasteringChainResult:
     output_lufs: float
     applied_gain_db: float
     stages: list[str]
-    #: ITU-R BS.1770-4 true peak of the output (dBTP), measured with the chain's
-    #: configured loudness true-peak oversample factor (default 4x).
+    #: ITU-R BS.1770-4 true peak of the output (dBTP). The oversample factor
+    #: follows the peak-limiting stage the chain actually applied, so it is not
+    #: fixed: the loudness stage's true-peak oversample (default 4x) when
+    #: loudness is enabled, and the maximizer true-peak limiter's own factor
+    #: when loudness is disabled but that stage ran. The two disagree by
+    #: roughly 0.02 dB between 4x and 8x.
     output_true_peak_dbtp: float = 0.0
     #: EBU Tech 3342 Loudness Range of the output (LU).
     output_lra: float = 0.0

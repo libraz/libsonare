@@ -17,10 +17,21 @@ using sonare::constants::kEpsilon;
 namespace {
 
 /// @brief Peak amplitude of @p audio in dB; returns -inf for silence or empty input.
-/// @details Local helper to keep effects/ free of metering/ dependencies.
-///          Equivalent to sonare::metering::peak_db on the same input, but
-///          implemented in terms of core primitives so the effects layer
-///          stays at the `core/` dependency tier.
+/// @details Local helper to keep effects/ free of metering/ dependencies, built
+///          from core primitives so the effects layer stays at the `core/`
+///          dependency tier.
+///
+///          It agrees with sonare::metering::peak_db on every input that has
+///          signal in it, and deliberately DISAGREES on silence and on an empty
+///          buffer: this returns -infinity where the meter returns the shared
+///          finite floor (kFloorDb, -120 dB). Each needs its own answer. The
+///          meter's floor is JSON-safe (-inf serializes to null and the field
+///          silently disappears), while normalize() tests this value with
+///          std::isinf to short-circuit and return the input untouched -- given
+///          -120 dB instead, it would compute `target_db - (-120)` and apply a
+///          gain of that size to silence, amplifying denormals and dither by
+///          over a hundred dB. Substituting one for the other is therefore not
+///          a refactor.
 float audio_peak_db(const Audio& audio) {
   if (audio.empty()) return -std::numeric_limits<float>::infinity();
   const float peak = peak_abs(audio.data(), audio.size());

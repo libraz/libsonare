@@ -96,7 +96,8 @@ struct ProjectWasm {
 
   static val fromJsonWithDiagnostics(const std::string& json);
 
-  // Sets the project sample rate (Hz). Must be > 0.
+  // Sets the project sample rate in Hz. Must be in [8000, 384000]; anything
+  // outside that range throws (the C ABI rejects it).
   void setSampleRate(double sample_rate);
 
   uint32_t addTrack(val desc);

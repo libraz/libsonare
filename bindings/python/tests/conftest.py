@@ -1,4 +1,13 @@
-"""Test configuration for libsonare Python binding tests."""
+"""Test configuration for libsonare Python binding tests.
+
+This file resolves the shared library's location and nothing else. It installs
+no collection hook and skips nothing: a suite that needs the C layer declares
+its own ``pytestmark = pytest.mark.skipif(not LIB_AVAILABLE, ...)`` from
+``_helpers``. That is deliberate -- a conftest-level "skip everything when the
+library will not load" cannot tell an absent library from a broken one, so a
+genuine build or ABI break would report as a green run full of skips instead of
+a failure.
+"""
 
 import os
 import sys

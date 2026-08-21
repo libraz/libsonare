@@ -59,7 +59,8 @@ enum class Preset {
 /// @brief Returns string identifiers of all built-in presets, in display order.
 std::vector<std::string> preset_names();
 
-/// @brief Parses a preset string identifier. Throws std::invalid_argument if unknown.
+/// @brief Parses a preset string identifier.
+/// @throws SonareException (ErrorCode::InvalidParameter) if the name is unknown.
 Preset preset_from_string(const std::string& name);
 
 /// @brief Returns the canonical string identifier of a preset.

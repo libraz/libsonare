@@ -45,8 +45,8 @@ class BrickwallLimiter : public rt::ProcessorBase,
   ///          NOT realtime-safe itself; call from the configuration thread
   ///          only. Two threads MUST NOT call @ref set_config concurrently
   ///          with each other (single-producer hand-off). Throws
-  ///          @c std::invalid_argument with the same rules as the
-  ///          constructor; on throw the published configuration is unchanged
+  ///          @c SonareException (@c ErrorCode::InvalidParameter) with the same
+  ///          rules as the constructor; on throw the published configuration is unchanged
   ///          (validation happens before publish, never partway).
   void set_config(const BrickwallLimiterConfig& config);
   void set_release_ms(float release_ms);

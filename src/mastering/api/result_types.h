@@ -143,8 +143,11 @@ struct MasteringReport {
 /// mastering chain on top of the common @ref MonoAudioResult /
 /// @ref StereoAudioResult fields.
 struct ChainMetrics {
-  /// ITU-R BS.1770-4 true peak measured with the chain's configured loudness
-  /// true-peak oversample factor (default 4x).
+  /// ITU-R BS.1770-4 true peak of the output (dBTP), measured at the
+  /// oversample factor of the peak-limiting stage the chain actually applied:
+  /// the loudness stage's true-peak oversample (default 4x) when loudness is
+  /// enabled, otherwise the maximizer true-peak limiter's own factor when that
+  /// stage ran. See reported_true_peak_oversample() in chain.cpp.
   float output_true_peak_dbtp = 0.0f;
   /// EBU Tech 3342 Loudness Range (LU).
   float output_lra = 0.0f;

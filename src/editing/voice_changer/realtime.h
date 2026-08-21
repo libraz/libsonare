@@ -112,9 +112,10 @@ struct LimiterConfig {
 struct RealtimeVoiceChangerConfig {
   float input_gain_db = 0.0f;
   float output_gain_db = 0.0f;
-  /// @brief Dry/wet ratio in [0,1]. 1.0 = full processed signal. Capped to 0.45
-  ///        inside the reverb stage to keep speech intelligibility; this knob
-  ///        controls the overall dry/wet of the whole processing chain.
+  /// @brief Overall dry/wet ratio of the whole processing chain, clamped to
+  ///        [0, 1]. 1.0 = full processed signal.
+  /// @note The 0.45 cap that applies inside the reverb stage is @ref
+  ///       ReverbConfig::mix's, not this field's; see streaming_reverb.h.
   float wet_mix = 1.0f;
   StreamingRetuneConfig retune;
   StreamingFormantConfig formant;

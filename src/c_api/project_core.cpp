@@ -174,8 +174,18 @@ SonareError sonare_project_unresolved_audio_source_id_by_index(const SonareProje
 SonareError sonare_project_set_sample_rate(SonareProject* project, double sample_rate) {
   SONARE_C_API_ENTRY;
 #if defined(SONARE_WITH_ARRANGEMENT)
-  if (!project || !finite_positive(sample_rate) || sample_rate < kMinSampleRate ||
+  if (!project) return SONARE_ERROR_INVALID_PARAMETER;
+  if (!finite_positive(sample_rate) || sample_rate < kMinSampleRate ||
       sample_rate > kMaxSampleRate) {
+    // Name the range: the bare error code left every facade reporting a generic
+    // "invalid parameter" for a rate the caller had no way to know was out of
+    // bounds, which is the other half of documenting the range at all. The
+    // bounds are read from the same constants the check uses, so the message
+    // cannot drift from what is accepted.
+    const std::string message = "project sample rate must be in [" +
+                                std::to_string(kMinSampleRate) + ", " +
+                                std::to_string(kMaxSampleRate) + "] Hz";
+    set_last_error(message.c_str());
     return SONARE_ERROR_INVALID_PARAMETER;
   }
   SONARE_C_TRY

@@ -241,7 +241,7 @@ TEST_CASE("stereo correlation detects polarity relationships", "[meter]") {
                WithinAbs(0.0f, 0.001f));
 }
 
-TEST_CASE("stereo width follows mid side energy ratio", "[meter]") {
+TEST_CASE("stereo width follows the mid side amplitude ratio", "[meter]") {
   const std::vector<float> left = {0.5f, 0.5f, -0.5f, -0.5f};
   const std::vector<float> mono = left;
   const std::vector<float> opposite = {-0.5f, -0.5f, 0.5f, 0.5f};
@@ -254,6 +254,17 @@ TEST_CASE("stereo width follows mid side energy ratio", "[meter]") {
   REQUIRE_THAT(metering::stereo_width(mid_side_equal_left.data(), mid_side_equal_right.data(),
                                       mid_side_equal_left.size()),
                WithinAbs(1.0f, 0.001f));
+
+  // 0, +inf and 1 are all fixed points of x -> x^2, so the three cases above
+  // hold whether the result is an amplitude ratio or an energy ratio -- which
+  // is how "energy ratio" survived in four public docstrings describing a
+  // function that returns sqrt(side_energy / mid_energy). This case is off the
+  // fixed points: L=1, R=0.5 gives mid_energy 1.125 and side_energy 0.125, an
+  // energy ratio of 1/9 and an amplitude ratio of 1/3.
+  const std::vector<float> uneven_left = {1.0f, 1.0f};
+  const std::vector<float> uneven_right = {0.5f, 0.5f};
+  REQUIRE_THAT(metering::stereo_width(uneven_left.data(), uneven_right.data(), uneven_left.size()),
+               WithinAbs(1.0f / 3.0f, 0.001f));
 }
 
 TEST_CASE("vectorscope returns mid side samples", "[meter]") {
@@ -839,6 +850,46 @@ TEST_CASE("spectrum windows and averages across the whole signal", "[meter]") {
   const size_t peak_index = static_cast<size_t>(std::distance(result.magnitude.begin(), max_it));
   REQUIRE_THAT(result.frequencies[peak_index], WithinAbs(1000.0f, 25.0f));
   REQUIRE(std::isfinite(result.db[peak_index]));
+}
+
+TEST_CASE("spectrum reports the same level for a buffer shorter than n_fft", "[meter]") {
+  // A short one-shot (a drum hit, an "analyse the selection" UI action) metered
+  // at the default n_fft is zero-padded. The coherent-gain divisor used to be
+  // the WHOLE window sum even though only the populated span multiplied any
+  // samples, so the reported amplitude fell by the ratio of the two sums --
+  // about 21 dB for 512 samples at n_fft 2048. That made the result
+  // incomparable with meteringPeakDb / meteringRmsDb on the same buffer, with
+  // no error to signal it.
+  constexpr int sample_rate = 48000;
+  metering::SpectrumConfig config;
+  config.n_fft = 2048;
+  // Bin-centred so scalloping loss does not confound the level check.
+  const int bin = 64;
+  const float freq = static_cast<float>(bin * sample_rate) / static_cast<float>(config.n_fft);
+
+  auto peak_db_for = [&](int n_samples) {
+    std::vector<float> samples(static_cast<size_t>(n_samples), 0.0f);
+    for (int i = 0; i < n_samples; ++i) {
+      const float t = static_cast<float>(i) / static_cast<float>(sample_rate);
+      samples[static_cast<size_t>(i)] =
+          std::sin(2.0f * static_cast<float>(sonare::constants::kPiD) * freq * t);
+    }
+    const Audio audio = Audio::from_buffer(samples.data(), samples.size(), sample_rate);
+    const auto result = metering::spectrum(audio, config);
+    const auto max_it = std::max_element(result.magnitude.begin(), result.magnitude.end());
+    REQUIRE(max_it != result.magnitude.end());
+    return 20.0f * std::log10(std::max(*max_it, 1.0e-12f));
+  };
+
+  // The acceptance case: a quarter-length buffer must still read full scale.
+  REQUIRE_THAT(peak_db_for(512), WithinAbs(0.0f, 0.5f));
+  REQUIRE_THAT(peak_db_for(256), WithinAbs(0.0f, 0.5f));
+  REQUIRE_THAT(peak_db_for(1024), WithinAbs(0.0f, 0.5f));
+
+  // A fully populated frame is unaffected: the per-frame divisor equals the
+  // whole-window sum there, so nothing about the normal path moved.
+  REQUIRE_THAT(peak_db_for(config.n_fft), WithinAbs(0.0f, 0.5f));
+  REQUIRE_THAT(peak_db_for(4 * config.n_fft), WithinAbs(0.0f, 0.5f));
 }
 
 TEST_CASE("spectrum_frame uses Hann coherent-gain amplitude normalization", "[meter]") {

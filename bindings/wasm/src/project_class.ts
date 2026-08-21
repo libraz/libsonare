@@ -397,7 +397,11 @@ export class Project {
     return this.native.toJson();
   }
 
-  /** Set the project sample rate in Hz. Must be > 0. */
+  /**
+   * Set the project sample rate in Hz. Must be in `[8000, 384000]`; anything
+   * outside that range throws. Applied through the edit history, so it is
+   * undoable.
+   */
   setSampleRate(sampleRate: number): void {
     this.native.setSampleRate(sampleRate);
   }

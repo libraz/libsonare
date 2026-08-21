@@ -118,7 +118,14 @@ void sonare_free_dynamic_range_result(SonareDynamicRangeResult* result);
 SonareError sonare_metering_stereo_correlation(const float* left, const float* right, size_t length,
                                                int sample_rate, float* out_value);
 
-/// @brief Side / mid energy ratio in [0, ~]. 0 = pure mono, ~1 = wide stereo.
+/// @brief Stereo width as sqrt(side_energy / mid_energy): the side/mid RMS
+///        AMPLITUDE ratio, not the energy ratio. 0 = pure mono, ~1 = wide
+///        stereo, larger = increasingly decorrelated / out of phase.
+/// @details The range is [0, +Infinity): +Infinity is returned when mid is
+///          silent but side is not (a fully out-of-phase signal), and 0 when
+///          both are silent. Converting to dB is 20*log10(value), since the
+///          value is an amplitude; 10*log10 would understate the true energy
+///          ratio by half.
 SonareError sonare_metering_stereo_width(const float* left, const float* right, size_t length,
                                          int sample_rate, float* out_value);
 
@@ -293,7 +300,8 @@ void sonare_free_waveform_peak_pyramid_result(SonareWaveformPeakPyramidResult* r
 /// @param samples Interleaved input buffer (may be null only when @p frames is 0).
 /// @param frames Number of sample frames (per-channel length).
 /// @param channels Channel count (must be > 0).
-/// @param sample_rate Sample rate in Hz (must be > 0).
+/// @param sample_rate Sample rate in Hz; must be in [8000, 384000] (the shared
+///        offline-input policy), not merely positive.
 /// @param out Receives the integrated / momentary / short-term / loudness-range
 ///            fields. Must not be null. No heap pointers (no free required).
 SonareError sonare_lufs_interleaved(const float* samples, size_t frames, int channels,
@@ -304,7 +312,8 @@ SonareError sonare_lufs_interleaved(const float* samples, size_t frames, int cha
 ///          @ref sonare_lufs_interleaved for a multi-channel measurement.
 /// @param samples Mono input buffer (may be null only when @p length is 0).
 /// @param length Number of samples.
-/// @param sample_rate Sample rate in Hz (must be > 0).
+/// @param sample_rate Sample rate in Hz; must be in [8000, 384000] (the shared
+///        offline-input policy), not merely positive.
 /// @param out_lra Receives the loudness range in LU. Must not be null.
 SonareError sonare_ebur128_loudness_range(const float* samples, size_t length, int sample_rate,
                                           float* out_lra);

@@ -460,6 +460,31 @@ TEST_CASE("C-ABI detached PCM edits become non-undoable at a byte boundary",
   }
 }
 
+TEST_CASE("C-ABI set_sample_rate names its accepted range when it refuses one",
+          "[project][c-abi-edit]") {
+  // Documenting the range only helps a caller who reads the header. The one who
+  // hits it at runtime saw a bare "invalid parameter" for a rate nothing told
+  // them was out of bounds, on every facade, since the error code is all any of
+  // them has to report.
+  SonareProject* project = nullptr;
+  REQUIRE(sonare_project_create(&project) == SONARE_OK);
+
+  REQUIRE(sonare_project_set_sample_rate(project, 4000.0) == SONARE_ERROR_INVALID_PARAMETER);
+  const std::string too_low = sonare_last_error_message();
+  CAPTURE(too_low);
+  REQUIRE(too_low.find("8000") != std::string::npos);
+  REQUIRE(too_low.find("384000") != std::string::npos);
+
+  REQUIRE(sonare_project_set_sample_rate(project, 1'000'000.0) == SONARE_ERROR_INVALID_PARAMETER);
+  REQUIRE(std::string(sonare_last_error_message()).find("384000") != std::string::npos);
+
+  // A rate inside the range still succeeds and leaves no error behind it.
+  REQUIRE(sonare_project_set_sample_rate(project, 48000.0) == SONARE_OK);
+  REQUIRE(std::string(sonare_last_error_message()).empty());
+
+  sonare_project_destroy(project);
+}
+
 TEST_CASE("C-ABI set_sample_rate is undoable like every other setter", "[project][c-abi-edit]") {
   // Every facade documents that all mutation routes through the native
   // EditHistory, so undo() must return the whole serialized project to what it

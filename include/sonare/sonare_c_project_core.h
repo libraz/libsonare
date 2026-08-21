@@ -203,7 +203,8 @@ SonareError sonare_project_set_audio_source_metadata(SonareProject* project, uin
                                                      const char* content_hash,
                                                      const char* external_stem_role);
 
-/// @brief Sets the project sample rate (Hz). Must be > 0.
+/// @brief Sets the project sample rate in Hz. Must be in [8000, 384000];
+///        anything outside that range returns SONARE_ERROR_INVALID_PARAMETER.
 /// @details Applied through the edit history like every other setter, so it is
 ///          undoable and takes its place in the undo stack.
 SonareError sonare_project_set_sample_rate(SonareProject* project, double sample_rate);

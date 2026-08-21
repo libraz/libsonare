@@ -58,7 +58,11 @@ class _ProjectEditMixin:
         def _require_handle(self) -> ctypes.c_void_p: ...
 
     def set_sample_rate(self, sample_rate: float) -> None:
-        """Set the project sample rate in Hz (must be > 0)."""
+        """Set the project sample rate in Hz.
+
+        Must be in ``[8000, 384000]``; anything outside that range raises.
+        The change is applied through the edit history, so it is undoable.
+        """
         _check(
             _get_lib().sonare_project_set_sample_rate(self._require_handle(), float(sample_rate))
         )
@@ -164,6 +168,10 @@ class _ProjectEditMixin:
         renderable by :meth:`bounce`; omit it for a metadata-only source
         (optionally referenced by ``source_uri``). For a MIDI clip pass
         ``is_midi=True`` and set events later via :meth:`set_midi_events`.
+
+        ``audio_sample_rate`` is required whenever ``audio`` is supplied and
+        must be in ``[8000, 384000]``: its 0 default is not a "use the project
+        rate" sentinel, and leaving it at 0 alongside ``audio`` is rejected.
         """
         c_audio = None
         audio_frames = 0

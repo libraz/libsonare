@@ -377,7 +377,14 @@ class EngineGraphNodeType(IntEnum):
 
 
 class EngineGraphMix(IntEnum):
-    """Connection mix mode for realtime engine graphs."""
+    """Connection mix mode for realtime engine graphs.
+
+    NOTE: not currently honored -- the compiled graph always sums edges into a
+    shared destination port in an order-independent way (the first edge into a
+    port overwrites, every later edge adds), regardless of this value. Retained
+    for API compatibility and to express intent; multiple edges into one port
+    are always summed.
+    """
 
     REPLACE = 0
     ADD = 1

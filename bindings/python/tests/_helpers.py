@@ -19,11 +19,16 @@ def sine(freq: float, duration_sec: float, sr: int = 22050, amp: float = 0.5) ->
 def is_lib_available() -> bool:
     """Returns True if the libsonare shared library is loadable.
 
-    The pytest conftest already short-circuits collection via ``pytest.skip``
-    when the .dylib / .so cannot be found on disk, but loading can still fail
-    at runtime (e.g. missing symbols, ABI drift). Tests that rely on the C
-    layer use this as a final guard so a stale shared library degrades to
-    skipped tests instead of import errors.
+    This is the ONLY skip mechanism, not a final guard behind another one. The
+    conftest neither skips nor filters collection: it only points
+    ``SONARE_LIB_PATH`` at a development build when the checkout has one, and
+    leaves an installed wheel to find its own bundled library. Every module
+    that touches the C layer therefore has to declare its own::
+
+        pytestmark = pytest.mark.skipif(not LIB_AVAILABLE, reason=...)
+
+    A module that omits it fails at collection with an import error rather than
+    skipping, because nothing upstream is watching for it.
     """
     try:
         from libsonare._runtime import _get_lib

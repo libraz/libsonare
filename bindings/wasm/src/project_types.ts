@@ -643,6 +643,11 @@ export interface ProjectClipDesc {
   gain?: number;
   audio?: Float32Array;
   audioChannels?: number;
+  /**
+   * Sample rate of `audio` in Hz. Required whenever `audio` is supplied, and
+   * must be in `[8000, 384000]`: omitting it sends 0, which the native side
+   * rejects. Ignored for a metadata-only clip.
+   */
   audioSampleRate?: number;
   sourceUri?: string;
 }

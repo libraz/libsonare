@@ -421,7 +421,8 @@ class StreamingMasteringChain {
 // "<module>.enabled" is explicitly set to 0. The color stages (tape and
 // exciter) are the exception when applying overrides: a parameter-only
 // override preserves a preset's existing enabled state, and only an explicit
-// `enabled` override changes it. Unknown keys throw std::invalid_argument.
+// `enabled` override changes it. Unknown keys throw
+// SonareException(InvalidParameter).
 // ---------------------------------------------------------------------------
 
 MasteringChainConfig parse_chain_config_params(const Param* params, std::size_t count);
@@ -444,8 +445,8 @@ void apply_chain_config_overrides(MasteringChainConfig& config, const Param* par
 std::string chain_config_to_json(const MasteringChainConfig& config);
 
 /// @brief Parse a chain configuration serialized by chain_config_to_json.
-/// Throws std::invalid_argument for malformed JSON, unsupported versions, or
-/// unknown parameter keys.
+/// Throws SonareException(InvalidParameter) for malformed JSON, unsupported
+/// versions, or unknown parameter keys.
 MasteringChainConfig chain_config_from_json(const std::string& json);
 
 /// @brief Convenience: parse params, build chain, run mono once.

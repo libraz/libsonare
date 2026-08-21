@@ -440,7 +440,15 @@ def metering_stereo_width(
     *,
     validate: bool = True,
 ) -> float:
-    """Side / mid energy ratio: 0 = pure mono, ~1 = wide stereo."""
+    """Stereo width as ``sqrt(side_energy / mid_energy)``.
+
+    This is the side/mid RMS *amplitude* ratio, not the energy ratio: 0 = pure
+    mono, ~1 = wide stereo, larger = increasingly decorrelated / out of phase.
+    The range is ``[0, +Infinity)`` -- ``inf`` is returned when mid is silent
+    but side is not, and 0 when both are silent. Convert to dB with
+    ``20 * log10(value)``; ``10 * log10`` would understate the true energy ratio
+    by half.
+    """
     return _stereo_scalar(
         "sonare_metering_stereo_width",
         left,

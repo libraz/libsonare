@@ -128,7 +128,11 @@ export interface ProjectClipDesc {
   audio?: Float32Array;
   /** Channel count of `audio` (default 1). */
   audioChannels?: number;
-  /** Sample rate of `audio` in Hz (default 0 = the project's). */
+  /**
+   * Sample rate of `audio` in Hz. Required whenever `audio` is supplied, and
+   * must be in `[8000, 384000]`: omitting it sends 0, which the native side
+   * rejects. Ignored for a metadata-only clip.
+   */
   audioSampleRate?: number;
   /** Optional host-local source reference for a metadata-only audio source. */
   sourceUri?: string;

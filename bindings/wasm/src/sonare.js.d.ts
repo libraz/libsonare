@@ -785,6 +785,13 @@ export interface WasmEngineGraphConnection {
   sourcePort: number;
   destNode: string;
   destPort: number;
+  /**
+   * Mixing intent (`0` = replace, `1` = add).
+   *
+   * NOTE: not currently honored — the compiled graph always sums edges into a
+   * shared destination port in an order-independent way (the first edge into a
+   * port overwrites, every later edge adds), regardless of this value.
+   */
   mix?: number;
 }
 
