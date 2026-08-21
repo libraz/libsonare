@@ -87,6 +87,49 @@ def test_pitch_correct_to_midi_timevarying_function() -> None:
         )
 
 
+def test_pitch_correct_timevarying_voiced_accepts_any_int_sequence() -> None:
+    """The voiced flags marshal in bulk, so every int-like sequence agrees.
+
+    They used to go through ``(c_int32 * n)(*seq)``, which unpacks each frame
+    as a Python vararg -- the one per-element hop left on an otherwise
+    vectorised call. Bulk marshalling has to accept exactly what the
+    element-wise loop did, so a list, a NumPy int array and a NumPy bool array
+    describing the same frames must produce the same audio.
+    """
+    np = pytest.importorskip("numpy")
+    sr = 22050
+    samples = _tone(sr, freq=220.0)
+    hop = 512
+    n_frames = len(samples) // hop + 1
+    f0 = [220.0] * n_frames
+    pattern = [1, 0] * (n_frames // 2) + [1] * (n_frames % 2)
+
+    forms = [
+        pattern,
+        np.array(pattern, dtype=np.int32),
+        np.array(pattern, dtype=bool),
+        [bool(flag) for flag in pattern],
+    ]
+    results = [
+        libsonare.pitch_correct_to_midi_timevarying(
+            samples, f0, 60.0, sample_rate=sr, hop_length=hop, voiced=form
+        )
+        for form in forms
+    ]
+    for other in results[1:]:
+        assert other == results[0]
+
+    # The companion-length check still runs after the bulk conversion.
+    with pytest.raises(ValueError):
+        libsonare.pitch_correct_timevarying(
+            samples,
+            f0,
+            sample_rate=sr,
+            hop_length=hop,
+            voiced=np.ones(n_frames + 2, dtype=np.int32),
+        )
+
+
 def test_pitch_correct_timevarying_scale_and_knobs() -> None:
     sr = 22050
     samples = _tone(sr, freq=220.0)

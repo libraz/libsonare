@@ -33,6 +33,7 @@ from ._runtime import (
     _require_power_of_two,
     _resolve_enum,
     _to_c_float_array,
+    _to_c_int_array,
     _validate_effect_fft_options,
     _validate_samples,
 )
@@ -380,10 +381,12 @@ def pitch_correct_to_midi_timevarying(
             raise SonareValueError("voiced_prob must have the same length as f0_hz")
     voiced_array = None
     if voiced is not None:
-        voiced_seq = [int(v) for v in voiced]
-        if len(voiced_seq) != n_frames:
+        # Bulk-marshalled through NumPy like every other buffer on this path;
+        # `(c_int32 * n)(*seq)` unpacks each frame through Python varargs, which
+        # is the one per-element hop left in an otherwise vectorised call.
+        voiced_array, voiced_len = _to_c_int_array(voiced)
+        if voiced_len != n_frames:
             raise SonareValueError("voiced must have the same length as f0_hz")
-        voiced_array = (ctypes.c_int32 * n_frames)(*voiced_seq)
     with _out_float_array(lib) as (out, out_length):
         _check(
             lib.sonare_pitch_correct_to_midi_timevarying(
@@ -488,10 +491,12 @@ def pitch_correct_timevarying(
             raise SonareValueError("voiced_prob must have the same length as f0_hz")
     voiced_array = None
     if voiced is not None:
-        voiced_seq = [int(v) for v in voiced]
-        if len(voiced_seq) != n_frames:
+        # Bulk-marshalled through NumPy like every other buffer on this path;
+        # `(c_int32 * n)(*seq)` unpacks each frame through Python varargs, which
+        # is the one per-element hop left in an otherwise vectorised call.
+        voiced_array, voiced_len = _to_c_int_array(voiced)
+        if voiced_len != n_frames:
             raise SonareValueError("voiced must have the same length as f0_hz")
-        voiced_array = (ctypes.c_int32 * n_frames)(*voiced_seq)
     with _out_float_array(lib) as (out, out_length):
         _check(
             lib.sonare_pitch_correct_timevarying(
