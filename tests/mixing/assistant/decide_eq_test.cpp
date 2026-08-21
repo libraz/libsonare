@@ -48,6 +48,14 @@ const std::string kCutFilter = "eq.cutFilter";
 constexpr int kSubBand = 0;
 constexpr int kMidBand = 3;
 constexpr int kHighMidBand = 4;
+constexpr int kHighBand = 5;
+constexpr int kAirBand = 6;
+
+// The mid band's span and geometric centre, mirrored from kBands so a cut that
+// stops landing where the module says it should fails here.
+constexpr float kMidBandLowHz = 500.0f;
+constexpr float kMidBandHighHz = 2000.0f;
+constexpr float kMidBandCenterHz = 1000.0f;
 
 // Comfortably above the classifier's acceptance floor, so confidence is never
 // the reason a hand-built profile is skipped.
@@ -106,6 +114,56 @@ constexpr int kSpectrumNFft = 2048;
 constexpr int kSpectrumSampleRate = 48000;
 constexpr std::size_t kLowResidueBin = 1;
 constexpr std::size_t kProgramBin = 20;
+
+// One bin's worth of power, for a spectrum assembled bin by bin.
+struct SpectrumBin {
+  std::size_t bin = 0;
+  float power = 0.0f;
+};
+
+// Frequency at the centre of @p bin under the geometry above.
+float bin_hz(std::size_t bin) {
+  return static_cast<float>(bin) * static_cast<float>(kSpectrumSampleRate) /
+         static_cast<float>(kSpectrumNFft);
+}
+
+// Gives @p profile a spectrum holding exactly the listed bins and nothing
+// anywhere else, so the frequency a case expects is known by construction rather
+// than discovered by running the code under test.
+void set_spectrum(TrackProfile& profile, const std::vector<SpectrumBin>& bins,
+                  int sample_rate = kSpectrumSampleRate) {
+  MeanPowerSpectrum spectrum;
+  spectrum.n_bins = kSpectrumNFft / 2 + 1;
+  spectrum.n_fft = kSpectrumNFft;
+  spectrum.sample_rate = sample_rate;
+  spectrum.power.assign(static_cast<std::size_t>(spectrum.n_bins), 0.0f);
+  for (const SpectrumBin& entry : bins) {
+    REQUIRE(entry.bin < spectrum.power.size());
+    spectrum.power[entry.bin] = entry.power;
+  }
+  profile.spectrum = spectrum;
+}
+
+// A flat run of bins, for building a hump wide enough to survive smoothing.
+std::vector<SpectrumBin> flat_run(std::size_t first, std::size_t last, float power) {
+  std::vector<SpectrumBin> bins;
+  for (std::size_t bin = first; bin <= last; ++bin) bins.push_back({bin, power});
+  return bins;
+}
+
+std::vector<SpectrumBin> operator+(std::vector<SpectrumBin> left,
+                                   const std::vector<SpectrumBin>& right) {
+  left.insert(left.end(), right.begin(), right.end());
+  return left;
+}
+
+// Reads back the centre frequency of the only band in a parametric insert.
+float only_cut_center_hz(const Insert& insert) {
+  const sonare::util::json::Value params = sonare::util::json::parse(insert.params_json);
+  REQUIRE(params.contains("band0.frequencyHz"));
+  REQUIRE_FALSE(params.contains("band1.frequencyHz"));
+  return params["band0.frequencyHz"].as_float();
+}
 
 // Gives @p profile a spectrum with @p share of its energy below every high-pass
 // corner in the module's table and the rest well above the highest of them. The
@@ -205,6 +263,24 @@ int count_inserts(const std::vector<SceneDelta>& deltas, const std::string& proc
   return count;
 }
 
+// Centre frequency of the single peaking cut the stage put on "pad", and the
+// reason that carried it. Both hold the deltas in a named local: find_insert and
+// find_delta return pointers into the vector, so reading through one that came
+// straight out of a call expression would be reading a destroyed temporary.
+float pad_cut_center_hz(const std::vector<TrackProfile>& profiles, const MixProfile& mix) {
+  const std::vector<SceneDelta> deltas = decide_eq(profiles, mix, MixAssistantConfig{});
+  const Insert* insert = find_insert(deltas, "pad", kParametric);
+  REQUIRE(insert != nullptr);
+  return only_cut_center_hz(*insert);
+}
+
+std::string pad_cut_reason(const std::vector<TrackProfile>& profiles, const MixProfile& mix) {
+  const std::vector<SceneDelta> deltas = decide_eq(profiles, mix, MixAssistantConfig{});
+  const SceneDelta* delta = find_delta(deltas, "pad", kParametric);
+  REQUIRE(delta != nullptr);
+  return delta->reason;
+}
+
 // "band12.gainDb" splits into 12 and "gainDb"; anything else is not a key the
 // parametric EQ reads.
 bool split_band_key(const std::string& key, int* out_index, std::string* out_field) {
@@ -231,6 +307,63 @@ sonare::util::json::Value parse_params(const Insert& insert) {
 
 std::vector<TrackProfile> two_tracks() {
   return {make_profile("vox", SourceClass::Vocal), make_profile("pad", SourceClass::Strings)};
+}
+
+// Frequency the two profiled tracks below actually share, well away from the mid
+// band's 1000 Hz centre so a stage that still used the grid cannot pass.
+constexpr float kSharedToneHz = 1800.0f;
+
+// Two genuinely profiled tracks that collide at kSharedToneHz inside the mid
+// band, each with its own material elsewhere. Profiled once for the whole file:
+// an STFT per case pays repeatedly to measure the same thing.
+//
+// Hand-built spectra prove what the stage does with a measurement; only a real
+// profile proves the stage reads the one the profiler actually produced.
+const std::vector<TrackProfile>& profiled_collision_pair() {
+  static const std::vector<TrackProfile> profiles = [] {
+    constexpr float kDurationSec = 0.6f;
+    constexpr float kSharedAmplitude = 0.3f;
+    constexpr float kOwnAmplitude = 0.2f;
+    // Below the mid band for one track and above it for the other, so the only
+    // thing they share inside the band is the tone.
+    constexpr float kVoxOwnHz = 400.0f;
+    constexpr float kPadOwnHz = 5000.0f;
+
+    constexpr std::size_t kFrames =
+        static_cast<std::size_t>(kDurationSec * static_cast<float>(kSpectrumSampleRate));
+    const auto render = [](float own_hz) {
+      std::vector<float> samples(kFrames, 0.0f);
+      for (std::size_t index = 0; index < kFrames; ++index) {
+        const float seconds = static_cast<float>(index) / static_cast<float>(kSpectrumSampleRate);
+        samples[index] =
+            kSharedAmplitude * std::sin(sonare::constants::kTwoPi * kSharedToneHz * seconds) +
+            kOwnAmplitude * std::sin(sonare::constants::kTwoPi * own_hz * seconds);
+      }
+      return samples;
+    };
+
+    const std::vector<float> vox_samples = render(kVoxOwnHz);
+    const std::vector<float> pad_samples = render(kPadOwnHz);
+
+    const auto profile_of = [](const std::string& id, const std::vector<float>& samples,
+                               SourceClass source) {
+      TrackInput input;
+      input.id = id;
+      input.left = samples.data();
+      input.frame_count = samples.size();
+      input.sample_rate = kSpectrumSampleRate;
+      TrackProfile profile = analyze_track_profile(input);
+      // The classifier is not what these cases are about; only the spectrum has
+      // to be the profiler's own.
+      profile.source = source;
+      profile.source_confidence = kHighConfidence;
+      return profile;
+    };
+
+    return std::vector<TrackProfile>{profile_of("vox", vox_samples, SourceClass::Vocal),
+                                     profile_of("pad", pad_samples, SourceClass::Strings)};
+  }();
+  return profiles;
 }
 
 // The same pair, each carrying residue under its corner, for the cases that need
@@ -522,6 +655,214 @@ TEST_CASE("eq skips a band the high-pass has already removed", "[mixing][assista
     CHECK(count_inserts(deltas, kCutFilter) == 0);
     CHECK(count_inserts(deltas, kParametric) == 1);
   }
+}
+
+TEST_CASE("eq places the cut at the overlap, not at the band's centre", "[mixing][assistant]") {
+  // The mid band runs two octaves, and everything the two tracks share sits in
+  // its top third. A stage that still used the grid would put the filter an
+  // octave below the collision it was justified by.
+  std::vector<TrackProfile> profiles = two_tracks();
+  const std::vector<SpectrumBin> shared{{75, 1.0f}, {76, 2.0f}, {77, 4.0f}, {78, 2.0f}, {79, 1.0f}};
+  set_spectrum(profiles[0], shared);
+  set_spectrum(profiles[1], shared);
+
+  MixProfile mix = make_mix(2);
+  set_dominance(mix, 1, 0, kMidBand, kContestedShare, kOverlapFrames);
+
+  const std::vector<SceneDelta> deltas = decide_eq(profiles, mix, MixAssistantConfig{});
+
+  const Insert* insert = find_insert(deltas, "pad", kParametric);
+  REQUIRE(insert != nullptr);
+  const float center_hz = only_cut_center_hz(*insert);
+  INFO("centre " << center_hz << " Hz, hump spans " << bin_hz(75) << " to " << bin_hz(79));
+  CHECK(center_hz > bin_hz(70));
+  CHECK(center_hz < bin_hz(84));
+  CHECK(center_hz > kMidBandCenterHz);
+
+  const SceneDelta* delta = find_delta(deltas, "pad", kParametric);
+  REQUIRE(delta != nullptr);
+  // The reason has to say the figure was measured; a bare frequency next to a
+  // band name reads as a label for the band.
+  CHECK(delta->reason.find("measured overlap in mid") != std::string::npos);
+  CHECK(delta->reason.find("band centre") == std::string::npos);
+}
+
+TEST_CASE("eq places the cut where both tracks are, not where either one is",
+          "[mixing][assistant]") {
+  // The pad owns the bottom of the band outright and the vocal owns the top of
+  // it; they meet only in the middle, and the middle is much quieter than
+  // either. A measure that summed the two would pick one of the loud shoulders,
+  // which is the one place there is no collision at all.
+  std::vector<TrackProfile> profiles = two_tracks();
+  set_spectrum(profiles[0], flat_run(30, 34, 20.0f) + flat_run(55, 65, 1.0f));
+  set_spectrum(profiles[1], flat_run(78, 82, 20.0f) + flat_run(55, 65, 1.0f));
+
+  MixProfile mix = make_mix(2);
+  set_dominance(mix, 1, 0, kMidBand, kContestedShare, kOverlapFrames);
+
+  const float center_hz = pad_cut_center_hz(profiles, mix);
+  INFO("centre " << center_hz << " Hz, shared span " << bin_hz(55) << " to " << bin_hz(65));
+  CHECK(center_hz >= bin_hz(55));
+  CHECK(center_hz <= bin_hz(65));
+}
+
+TEST_CASE("eq smooths the overlap before choosing a frequency", "[mixing][assistant]") {
+  // A single bin three times the height of a hump twenty bins wide. Raw, the
+  // lone bin wins; that is noise rather than a resonance, and a filter placed on
+  // it would move between renders for reasons nobody can hear.
+  std::vector<TrackProfile> profiles = two_tracks();
+  const std::vector<SpectrumBin> spiky =
+      std::vector<SpectrumBin>{{30, 3.0f}} + flat_run(55, 75, 1.0f);
+  set_spectrum(profiles[0], spiky);
+  set_spectrum(profiles[1], spiky);
+
+  MixProfile mix = make_mix(2);
+  set_dominance(mix, 1, 0, kMidBand, kContestedShare, kOverlapFrames);
+
+  const float center_hz = pad_cut_center_hz(profiles, mix);
+  INFO("centre " << center_hz << " Hz, spike at " << bin_hz(30) << " Hz, hump " << bin_hz(55)
+                 << " to " << bin_hz(75));
+  CHECK(center_hz >= bin_hz(55));
+  CHECK(center_hz <= bin_hz(75));
+}
+
+TEST_CASE("eq keeps the cut inside the band that justified it", "[mixing][assistant]") {
+  // A shared peak just above the band, a hundred times anything inside it. The
+  // smoothing window reaches it — that is deliberate, so a band edge is not
+  // decided by how many neighbours happen to be in range — but it must not be
+  // able to pull the filter out of the band the collision was found in.
+  std::vector<TrackProfile> profiles = two_tracks();
+  const std::vector<SpectrumBin> shared =
+      std::vector<SpectrumBin>{{87, 100.0f}} + flat_run(40, 50, 1.0f);
+  set_spectrum(profiles[0], shared);
+  set_spectrum(profiles[1], shared);
+  // Just outside the band and well inside the smoothing kernel of the highest
+  // bin that is inside it.
+  REQUIRE(bin_hz(87) > kMidBandHighHz);
+
+  MixProfile mix = make_mix(2);
+  set_dominance(mix, 1, 0, kMidBand, kContestedShare, kOverlapFrames);
+
+  const float center_hz = pad_cut_center_hz(profiles, mix);
+  INFO("centre " << center_hz << " Hz, outside peak at " << bin_hz(87) << " Hz");
+  CHECK(center_hz >= kMidBandLowHz);
+  CHECK(center_hz <= kMidBandHighHz);
+}
+
+TEST_CASE("eq measures the air band, which has no finite upper edge", "[mixing][assistant]") {
+  SECTION("the span runs to Nyquist") {
+    std::vector<TrackProfile> profiles = two_tracks();
+    const std::vector<SpectrumBin> shared = flat_run(795, 805, 1.0f);
+    set_spectrum(profiles[0], shared);
+    set_spectrum(profiles[1], shared);
+
+    MixProfile mix = make_mix(2);
+    set_dominance(mix, 1, 0, kAirBand, kContestedShare, kOverlapFrames);
+
+    const float center_hz = pad_cut_center_hz(profiles, mix);
+    INFO("centre " << center_hz << " Hz, shared span " << bin_hz(795) << " to " << bin_hz(805));
+    CHECK(center_hz >= bin_hz(795));
+    CHECK(center_hz <= bin_hz(805));
+  }
+
+  SECTION("a band that reaches past Nyquist keeps the part below it") {
+    // At 32 kHz the air band's usable span is 12 kHz to 16 kHz rather than the
+    // nominal one, and the content sits inside what is left.
+    constexpr int kLowRate = 32000;
+    std::vector<TrackProfile> profiles = two_tracks();
+    const std::vector<SpectrumBin> shared = flat_run(895, 905, 1.0f);
+    set_spectrum(profiles[0], shared, kLowRate);
+    set_spectrum(profiles[1], shared, kLowRate);
+
+    MixProfile mix = make_mix(2);
+    set_dominance(mix, 1, 0, kAirBand, kContestedShare, kOverlapFrames);
+
+    const float center_hz = pad_cut_center_hz(profiles, mix);
+    INFO("centre " << center_hz << " Hz");
+    CHECK(center_hz > 12000.0f);
+    CHECK(center_hz <= 0.5f * static_cast<float>(kLowRate));
+  }
+}
+
+TEST_CASE("eq falls back to the band centre when nothing can be measured", "[mixing][assistant]") {
+  MixProfile mix = make_mix(2);
+  set_dominance(mix, 1, 0, kMidBand, kContestedShare, kOverlapFrames);
+
+  SECTION("no spectrum at all") {
+    const std::vector<TrackProfile> profiles = two_tracks();
+    CHECK_THAT(pad_cut_center_hz(profiles, mix), WithinAbs(kMidBandCenterHz, kHzTolerance));
+
+    // The wording has to change with the number, or a grid point reads as a
+    // measurement.
+    const std::string reason = pad_cut_reason(profiles, mix);
+    CHECK(reason.find("mid band centre") != std::string::npos);
+    CHECK(reason.find("measured overlap") == std::string::npos);
+  }
+
+  SECTION("only one of the two tracks was measured") {
+    std::vector<TrackProfile> profiles = two_tracks();
+    set_spectrum(profiles[0], flat_run(55, 65, 1.0f));
+    CHECK_THAT(pad_cut_center_hz(profiles, mix), WithinAbs(kMidBandCenterHz, kHzTolerance));
+  }
+
+  SECTION("the two were measured with different geometries") {
+    std::vector<TrackProfile> profiles = two_tracks();
+    set_spectrum(profiles[0], flat_run(55, 65, 1.0f));
+    set_spectrum(profiles[1], flat_run(55, 65, 1.0f), 44100);
+    CHECK_THAT(pad_cut_center_hz(profiles, mix), WithinAbs(kMidBandCenterHz, kHzTolerance));
+  }
+
+  SECTION("neither track has anything inside the band") {
+    std::vector<TrackProfile> profiles = two_tracks();
+    const std::vector<SpectrumBin> outside{{5, 1.0f}};
+    set_spectrum(profiles[0], outside);
+    set_spectrum(profiles[1], outside);
+    CHECK_THAT(pad_cut_center_hz(profiles, mix), WithinAbs(kMidBandCenterHz, kHzTolerance));
+  }
+
+  SECTION("they share the band with each other but not the same bins") {
+    std::vector<TrackProfile> profiles = two_tracks();
+    set_spectrum(profiles[0], flat_run(30, 40, 1.0f));
+    set_spectrum(profiles[1], flat_run(60, 70, 1.0f));
+    CHECK_THAT(pad_cut_center_hz(profiles, mix), WithinAbs(kMidBandCenterHz, kHzTolerance));
+  }
+
+  SECTION("the band lies entirely above Nyquist") {
+    constexpr int kNarrowRate = 8000;
+    std::vector<TrackProfile> profiles = two_tracks();
+    const std::vector<SpectrumBin> shared = flat_run(55, 65, 1.0f);
+    set_spectrum(profiles[0], shared, kNarrowRate);
+    set_spectrum(profiles[1], shared, kNarrowRate);
+
+    MixProfile high_mix = make_mix(2);
+    set_dominance(high_mix, 1, 0, kHighBand, kContestedShare, kOverlapFrames);
+    // The high band starts at 6 kHz and Nyquist is 4 kHz, so there is no span to
+    // measure in and the grid point is all that is left.
+    CHECK_THAT(pad_cut_center_hz(profiles, high_mix),
+               WithinAbs(std::sqrt(6000.0f * 12000.0f), 1.0f));
+  }
+}
+
+TEST_CASE("eq measures the cut centre from genuinely profiled tracks", "[mixing][assistant]") {
+  const std::vector<TrackProfile>& profiles = profiled_collision_pair();
+  REQUIRE(profiles.size() == 2);
+  REQUIRE(profiles[0].usable);
+  REQUIRE(profiles[1].usable);
+
+  MixProfile mix = make_mix(2);
+  set_dominance(mix, 1, 0, kMidBand, kContestedShare, kOverlapFrames);
+
+  const std::vector<SceneDelta> deltas = decide_eq(profiles, mix, MixAssistantConfig{});
+  const Insert* insert = find_insert(deltas, "pad", kParametric);
+  REQUIRE(insert != nullptr);
+  const float center_hz = only_cut_center_hz(*insert);
+  INFO("centre " << center_hz << " Hz, shared tone at " << kSharedToneHz << " Hz");
+  CHECK_THAT(center_hz, WithinAbs(kSharedToneHz, 200.0f));
+  CHECK(center_hz > kMidBandCenterHz);
+
+  const SceneDelta* delta = find_delta(deltas, "pad", kParametric);
+  REQUIRE(delta != nullptr);
+  CHECK(delta->reason.find("measured overlap in mid") != std::string::npos);
 }
 
 TEST_CASE("eq suggests no high-pass unless it is asked for", "[mixing][assistant]") {

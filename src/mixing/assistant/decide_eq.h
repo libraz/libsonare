@@ -56,6 +56,17 @@ namespace sonare::mixing::assistant {
 ///            share a priority the band goes to whichever of them is more
 ///            invested in it, measured as @ref TrackProfile::band_occupancy.
 ///
+///            Where inside the band the filter sits is a **second, narrower
+///            measurement**, taken only for the band that already won and only
+///            between the two tracks whose collision won it. A band runs up to
+///            two octaves, so its geometric centre can sit an octave away from
+///            the overlap the cut was justified by. The peak of the two tracks'
+///            shared spectrum inside that span is where the filter goes, and the
+///            band's centre remains the answer whenever nothing measurable is
+///            there. This is a targeted second stage, not a second band grid:
+///            it reads @ref TrackProfile::spectrum, keeps no state, and leaves
+///            the seven-band figures every other stage compares against alone.
+///
 ///          - **A high-pass corner**, only when
 ///            @ref MixAssistantConfig::enable_high_pass asks for one. Where to
 ///            look is set per source class, from the lowest fundamental that
@@ -85,12 +96,16 @@ namespace sonare::mixing::assistant {
 ///          which would read downstream as a decision to leave it flat.
 ///
 /// @details Degenerate input never throws. No tracks, one track, a disabled EQ
-///          domain, an empty mix profile, a profile carrying no spectrum or a
-///          zero cut ceiling all yield either an empty vector or the high-pass
-///          suggestions alone.
+///          domain, an empty mix profile or a zero cut ceiling all yield either
+///          an empty vector or the high-pass suggestions alone. A profile
+///          carrying no spectrum still earns its cuts; they land at the band
+///          centres, because the measurement that would have moved them off the
+///          grid is the part that is missing.
 ///
 /// @param profiles Per-track profiles, in the caller's order.
-///        @ref TrackProfile::spectrum is read only for the high-pass decision.
+///        @ref TrackProfile::spectrum is read for the high-pass decision and for
+///        each cut's centre frequency; neither reading is required for a
+///        suggestion to be made.
 /// @param mix Cross-track measurements; only the band dominance matrix is read.
 /// @param config Assistant configuration; the cut ceiling, the strength, the EQ
 ///        domain switch and the high-pass switch are read.

@@ -226,6 +226,28 @@ constexpr float kMaxLowEnergyShare = 0.10f;
 // library runs at and is where the air region is conventionally addressed.
 constexpr float kAirBandCenterHz = 16000.0f;
 
+// Returned when a cut's centre could not be measured. Negative rather than zero
+// so it cannot be mistaken for a frequency; every real answer is positive.
+constexpr float kNoMeasuredCenter = -1.0f;
+
+// Width the overlap curve is smoothed to before its peak is taken, in octaves.
+// A raw spectrum's single loudest bin is noise rather than a resonance, and a
+// filter placed on it would move between renders for reasons nobody can hear.
+//
+// Expressed in octaves rather than in bins because a fixed count means something
+// different in every band: at the default geometry the sub band holds barely two
+// bins while the air band holds five hundred. A sixth of an octave is the width
+// a spectrum is conventionally smoothed to when the question asked of it is
+// where a resonance sits — wide enough that a lone bin cannot carry the answer,
+// narrow enough to still separate two features inside one analysis band.
+//
+// The width is resolved once per band, from that band's own centre, and is the
+// same for every candidate inside it. A width that grew with the candidate would
+// not be a smoothing at all: the narrowest window that still covers a feature
+// gives the highest average, so the peak slides down to whichever candidate
+// first reaches the feature instead of sitting on it.
+constexpr float kSmoothingOctaves = 1.0f / 6.0f;
+
 // Carving a track acts on its classification, so the bar is set above the
 // classifier's own acceptance floor: labelling a track wrongly costs a wrong
 // word in a report, while cutting it on a wrong label removes real material.
@@ -287,6 +309,146 @@ float band_center_hz(int band) {
 
 float band_high_hz(int band) { return kBands[static_cast<std::size_t>(band)].high_hz; }
 
+/// @brief The band's span, clamped to what the sample rate can actually carry.
+struct BandSpan {
+  float low_hz = 0.0f;
+  float high_hz = 0.0f;
+  bool valid = false;
+};
+
+// The top band's nominal edge is infinite and the real one is Nyquist. A low
+// sample rate does the same thing to an ordinary band: at 8 kHz the high band
+// starts above Nyquist and does not exist at all, and a band that reaches past
+// Nyquist keeps only the part below it.
+BandSpan band_span(int band, int sample_rate) {
+  BandSpan span;
+  if (sample_rate <= 0) return span;
+  const BandEdge edge = kBands[static_cast<std::size_t>(band)];
+  span.low_hz = edge.low_hz;
+  span.high_hz = std::min(edge.high_hz, 0.5f * static_cast<float>(sample_rate));
+  span.valid = span.high_hz > span.low_hz;
+  return span;
+}
+
+// Frequency inside @p band where the two tracks genuinely share the spectrum, or
+// kNoMeasuredCenter when it could not be measured.
+//
+// The measure is the per-bin minimum of the two tracks' spectra, each normalized
+// by its own energy inside this band. That is the height of the overlap between
+// the two distributions — the part of the bin both of them really occupy — and
+// it is bounded above by the weaker contributor, so a bin only one track sits in
+// scores zero.
+//
+// Two alternatives were rejected. Their sum is the loudest place in the band
+// rather than the most contested one: one track alone can win it, which is
+// exactly not a collision. Their product does require both, but it multiplies
+// the two dynamic ranges together, so a bin where one track has a resonance and
+// the other has merely ordinary content outranks a bin where both are strong,
+// and the peak then follows the loudest single resonance instead of the overlap.
+//
+// Normalizing per band rather than per track is what makes the comparison about
+// shape: without it the louder track's level decides the minimum everywhere and
+// the measure collapses into the quieter track's own spectrum.
+float interference_peak_hz(const TrackProfile& victim, const TrackProfile& counterpart, int band) {
+  const MeanPowerSpectrum& mine = victim.spectrum;
+  const MeanPowerSpectrum& theirs = counterpart.spectrum;
+  // Every track in one call is analysed with the same geometry, so a pair that
+  // disagrees about it was not measured together and cannot be compared bin for
+  // bin. Resampling one onto the other would invent a measurement.
+  if (mine.n_fft <= 0 || mine.n_fft != theirs.n_fft || mine.sample_rate <= 0 ||
+      mine.sample_rate != theirs.sample_rate) {
+    return kNoMeasuredCenter;
+  }
+  const std::size_t bins =
+      std::min({static_cast<std::size_t>(std::max(mine.n_bins, 0)), mine.power.size(),
+                static_cast<std::size_t>(std::max(theirs.n_bins, 0)), theirs.power.size()});
+  if (bins == 0) return kNoMeasuredCenter;
+
+  const BandSpan span = band_span(band, mine.sample_rate);
+  if (!span.valid) return kNoMeasuredCenter;
+
+  const double bin_hz = static_cast<double>(mine.sample_rate) / static_cast<double>(mine.n_fft);
+  // Bins whose centre lies inside the span. Bin 0 is DC and falls out of every
+  // band on its own, since no band starts at zero.
+  const double first_exact = std::ceil(static_cast<double>(span.low_hz) / bin_hz);
+  const double last_exact = std::floor(static_cast<double>(span.high_hz) / bin_hz);
+  if (!(first_exact <= last_exact) || first_exact < 0.0) return kNoMeasuredCenter;
+  const std::size_t first = static_cast<std::size_t>(first_exact);
+  if (first >= bins) return kNoMeasuredCenter;
+  const std::size_t last = std::min(bins - 1, static_cast<std::size_t>(last_exact));
+
+  double mine_total = 0.0;
+  double theirs_total = 0.0;
+  for (std::size_t bin = first; bin <= last; ++bin) {
+    mine_total += static_cast<double>(mine.power[bin]);
+    theirs_total += static_cast<double>(theirs.power[bin]);
+  }
+  // A band one of them has nothing in is not a band they contest, whatever the
+  // dominance matrix said about the pair over the whole track.
+  if (!(mine_total > 0.0) || !(theirs_total > 0.0)) return kNoMeasuredCenter;
+
+  std::vector<double> overlap(bins, 0.0);
+  for (std::size_t bin = 0; bin < bins; ++bin) {
+    overlap[bin] = std::min(static_cast<double>(mine.power[bin]) / mine_total,
+                            static_cast<double>(theirs.power[bin]) / theirs_total);
+  }
+
+  // Half the smoothing window, in bins, for this band. Taken from the span's
+  // geometric centre, so it is one width for the whole band and scales with
+  // frequency between bands. At least one bin either side: low down there are
+  // not enough bins for a sixth of an octave to mean anything, and three bins is
+  // what the smoothing degenerates to there.
+  const double half_ratio = std::pow(2.0, 0.5 * static_cast<double>(kSmoothingOctaves)) - 1.0;
+  const double center_bin =
+      std::sqrt(static_cast<double>(span.low_hz) * static_cast<double>(span.high_hz)) / bin_hz;
+  const std::size_t half =
+      std::max<std::size_t>(1, static_cast<std::size_t>(std::lround(center_bin * half_ratio)));
+
+  // Triangular weights. A rectangular window scores every candidate that happens
+  // to contain the whole feature identically, and the tie then falls to
+  // iteration order, which is not a decision anybody wrote; weights that fall
+  // off with distance put the maximum on the feature itself.
+  //
+  // They are deliberately not normalized. Every candidate in this band is scored
+  // with the same kernel, so the divisor would be a constant and cannot change
+  // which one wins. What the shape does decide is how much taller a lone bin has
+  // to be than a broad feature to beat it: by a factor of the half width plus
+  // one, four times over at the default geometry in the mid band.
+  const double weight_step = 1.0 / static_cast<double>(half + 1);
+
+  // The kernel reads whatever the spectrum holds either side, including bins
+  // outside the band, while only in-band bins may win. Truncating it at the band
+  // edge instead would score a rim bin on fewer neighbours than an interior one
+  // and hand it the peak on nothing but arithmetic.
+  double best = 0.0;
+  std::size_t best_bin = first;
+  bool found = false;
+  for (std::size_t bin = first; bin <= last; ++bin) {
+    const std::size_t from = bin > half ? bin - half : 0;
+    const std::size_t to = std::min(bins - 1, bin + half);
+    double score = 0.0;
+    for (std::size_t index = from; index <= to; ++index) {
+      const std::size_t distance = index > bin ? index - bin : bin - index;
+      score += overlap[index] * (1.0 - static_cast<double>(distance) * weight_step);
+    }
+    if (!found || score > best) {
+      best = score;
+      best_bin = bin;
+      found = true;
+    }
+  }
+  // Every candidate scored zero, so the two tracks share no bin in this band and
+  // there is no overlap to point the filter at.
+  if (!(best > 0.0)) return kNoMeasuredCenter;
+
+  const float peak_hz = static_cast<float>(static_cast<double>(best_bin) * bin_hz);
+  // The candidates were taken from inside the span, so this cannot leave it. The
+  // clamp is what makes that a guarantee rather than a property of the loop:
+  // the band that justified the cut and the place the filter lands have to stay
+  // the same thing.
+  return std::clamp(peak_hz, span.low_hz, span.high_hz);
+}
+
 // A non-finite share is not a measurement; treating it as zero keeps it out of
 // the tie-break instead of letting it win or lose by accident.
 float occupancy_at(const TrackProfile& profile, int band) {
@@ -333,6 +495,20 @@ struct BandCut {
   float depth_db = 0.0f;
   /// @brief True when the configured ceiling, not the measurement, set the depth.
   bool ceiling_reached = false;
+  /// @brief True when @ref center_hz is the measured overlap rather than the
+  ///        band's geometric centre.
+  bool center_measured = false;
+};
+
+/// @brief The deepest cut one track has been asked for in one band.
+/// @details The counterpart travels with the depth because the centre frequency
+///          is a property of the pair, not of the band: it is the place where
+///          this victim and the part it is making room for actually share the
+///          spectrum. Keeping only the depth would leave the second stage
+///          guessing which of several collisions it is placing a filter for.
+struct BandRequest {
+  float depth_db = 0.0f;
+  int counterpart = -1;
 };
 
 std::string parametric_params_json(const std::vector<BandCut>& cuts) {
@@ -362,12 +538,20 @@ std::string high_pass_params_json(float frequency_hz) {
   return util::json::dump(util::json::Value(std::move(params)));
 }
 
+// The parenthesis says what kind of number the frequency is. A reader who sees
+// "1247 Hz (mid)" with no qualifier can take the figure for a label attached to
+// the band rather than for a place that was measured, and the two now mean
+// different things: only the fallback lands on the grid.
 std::string describe_cuts(const std::vector<BandCut>& cuts) {
   std::string text;
   for (std::size_t index = 0; index < cuts.size(); ++index) {
     if (index != 0) text += (index + 1 == cuts.size()) ? " and " : ", ";
-    text += format_db(cuts[index].depth_db) + " dB at " + format_hz(cuts[index].center_hz) +
-            " Hz (" + kBandNames[static_cast<std::size_t>(cuts[index].band)] + ")";
+    const BandCut& cut = cuts[index];
+    const char* band_name = kBandNames[static_cast<std::size_t>(cut.band)];
+    text += format_db(cut.depth_db) + " dB at " + format_hz(cut.center_hz) + " Hz (";
+    text += cut.center_measured ? std::string("measured overlap in ") + band_name
+                                : std::string(band_name) + " band centre";
+    text += ")";
   }
   return text;
 }
@@ -409,11 +593,13 @@ std::vector<SceneDelta> decide_eq(const std::vector<TrackProfile>& profiles, con
     considered[index] = is_considered(profiles[index]) ? 1 : 0;
   }
 
-  // Deepest cut each track has been asked for in each band, before the ceiling.
-  // A band contested by several tracks is carved once, to the depth the worst
-  // of those collisions justifies; stacking one cut per collision is how a
-  // track ends up hollowed out by a rule that looked conservative per pair.
-  std::vector<float> requested_db(profiles.size() * static_cast<std::size_t>(kBandCount), 0.0f);
+  // Deepest cut each track has been asked for in each band, before the ceiling,
+  // and the collision that asked for it. A band contested by several tracks is
+  // carved once, to the depth the worst of those collisions justifies; stacking
+  // one cut per collision is how a track ends up hollowed out by a rule that
+  // looked conservative per pair. The worst collision is also the one the cut is
+  // placed for, so it is the one whose counterpart is kept.
+  std::vector<BandRequest> requested(profiles.size() * static_cast<std::size_t>(kBandCount));
 
   for (int masker = 0; masker < track_count; ++masker) {
     if (considered[static_cast<std::size_t>(masker)] == 0) continue;
@@ -434,10 +620,16 @@ std::vector<SceneDelta> decide_eq(const std::vector<TrackProfile>& profiles, con
         if (victim < 0) continue;
 
         const float depth = (entry.ratio - kInterferenceRatio) * kCutDbPerRatioExcess * strength;
-        float& slot =
-            requested_db[static_cast<std::size_t>(victim) * static_cast<std::size_t>(kBandCount) +
-                         static_cast<std::size_t>(band)];
-        slot = std::max(slot, depth);
+        BandRequest& slot =
+            requested[static_cast<std::size_t>(victim) * static_cast<std::size_t>(kBandCount) +
+                      static_cast<std::size_t>(band)];
+        // Strictly greater, so an equally deep collision found later does not
+        // displace the counterpart already recorded. Ties would otherwise be
+        // broken by the iteration order, which is not a decision anyone wrote.
+        if (depth > slot.depth_db) {
+          slot.depth_db = depth;
+          slot.counterpart = victim == masker ? maskee : masker;
+        }
       }
     }
   }
@@ -479,17 +671,32 @@ std::vector<SceneDelta> decide_eq(const std::vector<TrackProfile>& profiles, con
       // A peaking cut inside a range the high-pass has already removed changes
       // nothing and only makes the suggestion look busier.
       if (band_high_hz(band) <= high_pass_hz) continue;
-      const float wanted =
-          requested_db[static_cast<std::size_t>(track) * static_cast<std::size_t>(kBandCount) +
-                       static_cast<std::size_t>(band)];
+      const BandRequest& request =
+          requested[static_cast<std::size_t>(track) * static_cast<std::size_t>(kBandCount) +
+                    static_cast<std::size_t>(band)];
+      const float wanted = request.depth_db;
       if (wanted <= 0.0f) continue;
       const float depth = std::min(wanted, max_cut_db);
       if (depth < kMinAudibleCutDb) continue;
       BandCut cut;
       cut.band = band;
-      cut.center_hz = band_center_hz(band);
       cut.depth_db = depth;
       cut.ceiling_reached = wanted > max_cut_db;
+
+      // The band decided that there is a collision; where inside it the two
+      // parts actually meet is a second, narrower question. A band is up to two
+      // octaves wide, so its geometric centre can be an octave away from the
+      // overlap the cut was justified by.
+      const float measured =
+          request.counterpart >= 0
+              ? interference_peak_hz(profile,
+                                     profiles[static_cast<std::size_t>(request.counterpart)], band)
+              : kNoMeasuredCenter;
+      cut.center_measured = measured > 0.0f;
+      // Nothing measurable — no spectrum, no shared energy, a geometry that
+      // cannot map a bin to a frequency — falls back to the band's centre, which
+      // is where every cut used to sit.
+      cut.center_hz = cut.center_measured ? measured : band_center_hz(band);
       cuts.push_back(cut);
     }
     if (cuts.empty()) continue;
