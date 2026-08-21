@@ -15,6 +15,7 @@
 #include <thread>
 #include <utility>
 
+#include "core/channel_layout.h"
 #include "util/exception.h"
 
 #if defined(_WIN32)
@@ -482,6 +483,28 @@ CliValidationError validate_pitch_frequency_order(const CliArgs& args) {
   return {"--fmax must be greater than --fmin", false};
 }
 
+#ifdef SONARE_WITH_ARRANGEMENT
+// The project bounce renders a stereo master and writes either that pair or its
+// mono downmix, so the C ABI accepts a channel count of 1 or 2 and refuses any
+// other width rather than emitting silent planes. Without this the refusal
+// arrives from the render as a bare invalid-parameter error, after the project
+// has been loaded, with nothing naming the option that caused it.
+//
+// This is a command validator rather than a per-option domain because a domain
+// is published in the shared option inventory both CLIs are pinned against, and
+// the Python CLI declares none for this option.
+CliValidationError validate_project_bounce_channels(const CliArgs& args) {
+  if (!args.has("channels")) return {};
+  const int channels = args.get_int("channels", 2);
+  const int mono = sonare::channel_count(sonare::ChannelLayout::Mono);
+  const int stereo = sonare::channel_count(sonare::ChannelLayout::Stereo);
+  if (channels == mono || channels == stereo) return {};
+  return {"invalid value for --channels: " + std::to_string(channels) + " (expected one of " +
+              std::to_string(mono) + ", " + std::to_string(stereo) + ")",
+          true};
+}
+#endif
+
 CliOptionSpec global_int(const char* name, int value) {
   return int_value(name, value, false, true);
 }
@@ -828,7 +851,8 @@ const std::vector<CliCommandSpec>& build_cli_registry() {
     add_command(commands, "project.bounce", false,
                 {required_path("in"), required_output(), int_value("sample-rate"),
                  int_value("frames", 0), int_value("block-size", 0), int_value("channels", 2),
-                 int_value("instrument-latency", 0), optional_string("synth")});
+                 int_value("instrument-latency", 0), optional_string("synth")},
+                {}, &validate_project_bounce_channels);
     add_command(commands, "project.export-smf", false, {required_path("in"), required_output()});
     add_command(commands, "project.import-smf", false, {required_path("smf"), required_output()});
     add_command(commands, "project.export-midi2", false, {required_path("in"), required_output()});

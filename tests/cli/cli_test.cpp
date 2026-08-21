@@ -2,6 +2,7 @@
 /// @brief Tests for the sonare CLI tool.
 
 #include <sonare/sonare_c_project.h>
+#include <sys/stat.h>
 #include <unistd.h>
 
 #include <array>
@@ -3190,6 +3191,76 @@ TEST_CASE("CLI project command group", "[cli]") {
 
     std::remove(proj.c_str());
     std::remove(wav.c_str());
+  }
+
+  SECTION("bounce writes a mono WAV header for the mono downmix") {
+    // The only other width the bounce renders, and the branch the layout is
+    // derived through. A layout that disagreed with the count would be refused
+    // by the WAV writer rather than producing this header.
+    const std::string proj = unique_temp_path("_proj.json");
+    const std::string wav = unique_temp_path("_bounce_mono.wav");
+    auto [nc, no] = exec_command(CLI + " project new -o " + proj);
+    REQUIRE(nc == 0);
+
+    auto [bc, bo] = exec_command(CLI + " project bounce --in " + proj + " -o " + wav +
+                                 " --frames 256 --channels 1 --json");
+    REQUIRE(bc == 0);
+    REQUIRE_THAT(bo, ContainsSubstring("\"channels\": 1"));
+    REQUIRE(wav_header_channel_count(wav) == 1);
+
+    std::remove(proj.c_str());
+    std::remove(wav.c_str());
+  }
+
+  SECTION("bounce refuses a width it does not render, naming the option") {
+    // The bounce renders a stereo master and writes that pair or its mono
+    // downmix. Any other width used to reach the C ABI and come back as a bare
+    // "bounce project: Invalid parameter" after the project had been loaded,
+    // with nothing pointing at the option that caused it.
+    const std::string proj = unique_temp_path("_proj.json");
+    const std::string wav = unique_temp_path("_bounce_bad_channels.wav");
+    auto [nc, no] = exec_command(CLI + " project new -o " + proj);
+    REQUIRE(nc == 0);
+
+    for (const char* count : {"3", "6"}) {
+      INFO(count);
+      auto [bc, bo] = exec_command(CLI + " project bounce --in " + proj + " -o " + wav +
+                                   " --frames 256 --channels " + count + " -q");
+      REQUIRE(bc == 3);
+      REQUIRE_THAT(bo, ContainsSubstring("--channels"));
+      REQUIRE_THAT(bo, ContainsSubstring(count));
+      std::ifstream out_file(wav);
+      REQUIRE_FALSE(out_file.good());
+    }
+
+    // Refused before the input is opened: an unreadable project would otherwise
+    // report the file failure first.
+    auto [missing_code, missing_output] =
+        exec_command(CLI + " project bounce --in no-such-project.json -o " + wav +
+                     " --frames 256 --channels 3 -q");
+    REQUIRE(missing_code == 3);
+    REQUIRE_THAT(missing_output, ContainsSubstring("--channels"));
+
+    std::remove(proj.c_str());
+  }
+
+  SECTION("an input that outgrows its size probe is refused instead of buffered") {
+    // The size cap used to be checked with a seek/tell probe and then ignored
+    // by a read-to-EOF, so any input the probe could not size -- one that grows
+    // after the check, or a stream with no size at all -- was loaded whole. A
+    // FIFO is the deterministic form of that: it reports no size and then
+    // delivers more bytes than the cap allows.
+    const std::string fifo = unique_temp_path("_project.fifo");
+    std::remove(fifo.c_str());
+    REQUIRE(mkfifo(fifo.c_str(), S_IRUSR | S_IWUSR) == 0);
+
+    const std::string over_cap = std::to_string(64ull * 1024ull * 1024ull + 1ull);
+    auto [code, output] = exec_command("head -c " + over_cap + " /dev/zero > " + fifo + " & " +
+                                       CLI + " project compile --in " + fifo + " -q");
+    REQUIRE(code == 3);
+    REQUIRE_THAT(output, ContainsSubstring("byte limit"));
+
+    std::remove(fifo.c_str());
   }
 
   SECTION("bounce honors an explicit --sample-rate in the WAV header") {

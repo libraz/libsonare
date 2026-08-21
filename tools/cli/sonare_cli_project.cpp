@@ -94,21 +94,51 @@ int project_exit_code(SonareError err) {
   }
 }
 
+// The one diagnostic an oversized input reports, raised both by the size probe
+// and by the read that enforces the same cap on the bytes actually delivered.
+// Sharing it keeps those two rejections indistinguishable to a caller.
+[[noreturn]] void reject_oversized_input(const std::string& path) {
+  throw std::invalid_argument("input file exceeds " + std::to_string(kMaxProjectOrMidiBytes) +
+                              " byte limit: " + path);
+}
+
 // Reads an arbitrary file into a byte buffer (binary-safe). The CLI owns file
 // I/O; the core / C ABI exchange in-memory buffers only. An input larger than
-// kMaxProjectOrMidiBytes is rejected before allocation with a clear diagnostic
-// (mapped to the invalid-parameter exit code by main()).
+// kMaxProjectOrMidiBytes is rejected with a clear diagnostic (mapped to the
+// invalid-parameter exit code by main()).
+//
+// The seek/tell probe only sizes the allocation: it is a snapshot the read
+// cannot rely on, because the file may grow between the two calls and a
+// non-regular input (a FIFO, a character device) has no size to report at all.
+// The cap is therefore enforced on the bytes as they arrive, so nothing past it
+// is ever buffered.
 bool read_binary_file(const std::string& path, std::vector<uint8_t>* out) {
   std::ifstream file(path, std::ios::binary);
   if (!file.is_open()) return false;
   file.seekg(0, std::ios::end);
   const std::streamoff size = file.tellg();
-  if (size > static_cast<std::streamoff>(kMaxProjectOrMidiBytes)) {
-    throw std::invalid_argument("input file exceeds " + std::to_string(kMaxProjectOrMidiBytes) +
-                                " byte limit: " + path);
-  }
+  if (size > static_cast<std::streamoff>(kMaxProjectOrMidiBytes)) reject_oversized_input(path);
+  // An input with no size to probe fails the seek rather than reporting one, and
+  // a failed stream reads nothing. Clearing on both sides of the rewind keeps
+  // such an input readable from where it was opened, which is also the case the
+  // bounded read below exists for.
+  file.clear();
   file.seekg(0, std::ios::beg);
-  out->assign(std::istreambuf_iterator<char>(file), std::istreambuf_iterator<char>());
+  file.clear();
+
+  constexpr size_t kReadChunkBytes = 64u * 1024u;
+  out->clear();
+  if (size > 0) out->reserve(static_cast<size_t>(size));
+  std::vector<char> chunk(kReadChunkBytes);
+  while (file) {
+    file.read(chunk.data(), static_cast<std::streamsize>(chunk.size()));
+    const auto read_bytes = static_cast<size_t>(file.gcount());
+    if (read_bytes == 0) break;
+    // Subtraction rather than addition: the sum of two size_t operands can wrap
+    // where the remaining budget cannot.
+    if (read_bytes > kMaxProjectOrMidiBytes - out->size()) reject_oversized_input(path);
+    out->insert(out->end(), chunk.data(), chunk.data() + read_bytes);
+  }
   return true;
 }
 
@@ -484,7 +514,12 @@ int cmd_project_bounce(const CliArgs& args) {
   const size_t frames = channels > 0 ? total / static_cast<size_t>(channels) : total;
   std::vector<float> rendered(interleaved, interleaved + total);
   sonare_free_floats(interleaved);
-  const auto layout = channels == 1 ? ChannelLayout::Mono : ChannelLayout::Stereo;
+  // The WAV writer requires the count and the layout to agree, so the layout is
+  // derived from the count through the shared mapping rather than by a local
+  // mono-or-stereo rule that would label any other width stereo. The count is
+  // restricted to what the bounce renders (mono or stereo) by
+  // validate_cli_arguments before this point.
+  const ChannelLayout layout = layout_from_channel_count(channels);
   save_wav_multichannel(args.output_file, rendered.data(), frames, channels, layout, sample_rate);
 
   if (args.json_output) {
@@ -711,7 +746,7 @@ void print_project_usage(std::ostream& out) {
       << "  --sample-rate <hz>   Sample rate (new / bounce; bounce defaults to the project's own "
          "rate)\n"
       << "  --frames <n>         Bounce length in frames\n"
-      << "  --channels <n>       Bounce channel count (default 2)\n"
+      << "  --channels <n>       Bounce channel count: 1 (mono downmix) or 2 (default 2)\n"
       << "  --strict             Treat project load diagnostics as validation failures\n"
       << "  --synth [preset]     Bare flag: GM program/channel routing + channel-10 drums\n"
       << "                       Value: fixed NativeSynth preset (see synth-presets)\n"
