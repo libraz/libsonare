@@ -507,6 +507,16 @@ if(BUILD_MIXING_ASSISTANT)
   )
   target_link_libraries(sonare_mixing_assistant PUBLIC sonare_mixing)
   target_compile_options(sonare_mixing_assistant PRIVATE ${SONARE_WARNING_FLAGS})
+  # decide_structure.cpp guards its effect-bus section on this. The definition
+  # does not travel with the sources — it is set per target — so without this
+  # block the guard reads as absent, the reverb and delay returns are compiled
+  # away, and every surface links a suggester that silently never proposes an
+  # effect bus. Nothing reports that: the section vanishes at preprocessing, so
+  # there is no warning, no link error and no failing case, only two tests that
+  # pass over an empty scene.
+  target_compile_definitions(sonare_mixing_assistant PRIVATE
+    SONARE_BUILD_FX=$<IF:$<BOOL:${BUILD_FX}>,1,0>
+  )
   set_target_properties(sonare_mixing_assistant PROPERTIES POSITION_INDEPENDENT_CODE ON)
 endif()
 
