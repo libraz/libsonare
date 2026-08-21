@@ -156,6 +156,7 @@ set(SONARE_SOURCES
 
 set(SONARE_C_MIXING_SOURCES
   c_api/sonare_c_mixing.cpp
+  c_api/mixing_assistant.cpp
   c_api/mixing_graph.cpp
   c_api/mixing_mixer.cpp
   c_api/mixing_strip.cpp
@@ -471,6 +472,42 @@ if(BUILD_MIXING)
   target_link_libraries(sonare_mixing PUBLIC sonare_rt sonare_mastering)
   target_compile_options(sonare_mixing PRIVATE ${SONARE_WARNING_FLAGS})
   set_target_properties(sonare_mixing PROPERTIES POSITION_INDEPENDENT_CODE ON)
+endif()
+
+# Offline mixing assistant. A separate target rather than more sources in
+# sonare_mixing, so the one-way dependency is structural: the assistant reads
+# the mixing and mastering types, and nothing in the runtime reaches back into
+# it. Dropping BUILD_MIXING_ASSISTANT therefore removes the whole subsystem
+# without leaving a dangling reference anywhere else.
+if(BUILD_MIXING_ASSISTANT)
+  add_library(sonare_mixing_assistant STATIC
+    mixing/assistant/decide_balance.cpp
+    mixing/assistant/decide_dynamics.cpp
+    mixing/assistant/decide_eq.cpp
+    mixing/assistant/decide_image.cpp
+    mixing/assistant/decide_structure.cpp
+    mixing/assistant/gain_staging.cpp
+    mixing/assistant/image_occupancy.cpp
+    mixing/assistant/masking.cpp
+    mixing/assistant/phase_alignment.cpp
+    mixing/assistant/scene_delta.cpp
+    mixing/assistant/source_class.cpp
+    mixing/assistant/source_classifier.cpp
+    mixing/assistant/suggester.cpp
+    mixing/assistant/track_profile.cpp
+  )
+  target_include_directories(sonare_mixing_assistant PUBLIC
+    ${CMAKE_CURRENT_SOURCE_DIR} ${PROJECT_SOURCE_DIR}/include
+  )
+  target_include_directories(sonare_mixing_assistant SYSTEM PUBLIC
+    ${PROJECT_SOURCE_DIR}/third_party/kissfft
+    ${PROJECT_SOURCE_DIR}/third_party/dr_libs
+    ${PROJECT_SOURCE_DIR}/third_party/minimp3
+    ${PROJECT_SOURCE_DIR}/third_party/r8brain
+  )
+  target_link_libraries(sonare_mixing_assistant PUBLIC sonare_mixing)
+  target_compile_options(sonare_mixing_assistant PRIVATE ${SONARE_WARNING_FLAGS})
+  set_target_properties(sonare_mixing_assistant PROPERTIES POSITION_INDEPENDENT_CODE ON)
 endif()
 
 if(BUILD_GRAPH)
@@ -915,6 +952,10 @@ if(BUILD_SHARED)
     target_link_libraries(sonare_shared PUBLIC sonare_voice_changer)
     target_compile_definitions(sonare_shared PUBLIC SONARE_WITH_VOICE_CHANGER=1)
   endif()
+  if(BUILD_MIXING_ASSISTANT)
+    target_link_libraries(sonare_shared PUBLIC sonare_mixing_assistant)
+    target_compile_definitions(sonare_shared PUBLIC SONARE_WITH_MIXING_ASSISTANT=1)
+  endif()
   if(BUILD_MIXING)
     target_compile_definitions(sonare_shared PUBLIC SONARE_WITH_MIXING=1)
     if(BUILD_GRAPH)
@@ -1036,6 +1077,7 @@ if(BUILD_WASM)
       wasm/bindings/features/spectrogram.cpp
       wasm/bindings/metering/metering.cpp
       wasm/bindings/mixing/mixing.cpp
+      wasm/bindings/mixing/mixing_assistant.cpp
       wasm/bindings/mixing/mixing_strip.cpp
       wasm/bindings/mixing/mixing_automation.cpp
       wasm/bindings/mixing/mixing_processing.cpp
@@ -1118,6 +1160,10 @@ if(BUILD_WASM)
       target_link_libraries(sonare PRIVATE sonare_graph)
       target_compile_definitions(sonare PRIVATE SONARE_WITH_GRAPH=1)
       target_sources(sonare PRIVATE ${SONARE_C_MIXING_SOURCES})
+    endif()
+    if(BUILD_MIXING_ASSISTANT)
+      target_link_libraries(sonare PRIVATE sonare_mixing_assistant)
+      target_compile_definitions(sonare PRIVATE SONARE_WITH_MIXING_ASSISTANT=1)
     endif()
   endif()
   if(BUILD_ACOUSTIC_SIM AND BUILD_FX AND NOT SONARE_WASM_ANALYSIS_ONLY)

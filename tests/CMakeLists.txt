@@ -273,11 +273,35 @@ if(BUILD_MIXING)
   )
   target_sources(sonare_tests PRIVATE
     ${PROJECT_SOURCE_DIR}/src/c_api/sonare_c_mixing.cpp
+    ${PROJECT_SOURCE_DIR}/src/c_api/mixing_assistant.cpp
     ${PROJECT_SOURCE_DIR}/src/c_api/mixing_graph.cpp
     ${PROJECT_SOURCE_DIR}/src/c_api/mixing_mixer.cpp
     ${PROJECT_SOURCE_DIR}/src/c_api/mixing_strip.cpp
   )
   target_compile_definitions(sonare_tests PRIVATE SONARE_WITH_MIXING=1)
+endif()
+
+if(BUILD_MIXING_ASSISTANT)
+  target_sources(sonare_tests PRIVATE
+    mixing/assistant/assistant_golden_test.cpp
+    mixing/assistant/decide_balance_test.cpp
+    mixing/assistant/decide_dynamics_test.cpp
+    mixing/assistant/decide_eq_test.cpp
+    mixing/assistant/decide_image_test.cpp
+    mixing/assistant/decide_structure_test.cpp
+    mixing/assistant/gain_staging_test.cpp
+    mixing/assistant/image_occupancy_test.cpp
+    mixing/assistant/masking_test.cpp
+    mixing/assistant/mix_eval_test.cpp
+    mixing/assistant/phase_alignment_test.cpp
+    mixing/assistant/rt_boundary_test.cpp
+    mixing/assistant/scene_delta_test.cpp
+    mixing/assistant/source_classifier_test.cpp
+    mixing/assistant/suggester_test.cpp
+    mixing/assistant/track_profile_test.cpp
+  )
+  target_link_libraries(sonare_tests PRIVATE sonare_mixing_assistant)
+  target_compile_definitions(sonare_tests PRIVATE SONARE_WITH_MIXING_ASSISTANT=1)
 endif()
 
 if(BUILD_GRAPH)

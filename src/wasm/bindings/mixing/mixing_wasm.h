@@ -18,6 +18,12 @@
 #include "mixing/meter.h"
 #include "wasm/bindings/common/common.h"
 
+// The offline mixing assistant is registered from its own TU. It needs neither
+// the routing graph nor the mixer facade, so it sits outside the
+// SONARE_WITH_MIXING / SONARE_WITH_GRAPH guard below; when the assistant itself
+// is compiled out its entry points report NotSupported rather than disappearing.
+void registerMixingAssistantBindings();
+
 #if defined(SONARE_WITH_MIXING) && defined(SONARE_WITH_GRAPH)
 
 // ---------------------------------------------------------------------------

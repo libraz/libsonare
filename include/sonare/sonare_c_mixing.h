@@ -3,6 +3,12 @@
 #include <stddef.h>
 #include <stdint.h>
 
+// Pulled in for SonareMasteringParam, which the mixing assistant reuses as its
+// flat key/value configuration carrier. The struct is a generic
+// {const char* key; double value;} pair with nothing mastering-specific in it,
+// and duplicating an identical type would mean a second mirror to keep in step
+// across four surfaces for no gain.
+#include "sonare_c_mastering.h"
 #include "sonare_c_types.h"
 
 #ifdef __cplusplus
@@ -309,6 +315,72 @@ SonareError sonare_mixer_drain_tail_stereo(SonareMixer* mixer, float* output_lef
 const char* sonare_mixing_scene_preset_names(void);
 SonareError sonare_mixing_scene_preset_json(const char* preset_name, char** json_out);
 void sonare_mixer_destroy(SonareMixer* mixer);
+
+// ============================================================================
+// Mixing assistant
+// ============================================================================
+//
+// Analyses a set of tracks and returns a suggested mixer scene. The assistant
+// only ever returns parameters: it does not process audio and it does not apply
+// anything. Feeding the suggestion to the mixer is the caller's separate,
+// explicit step through sonare_mixer_from_scene_json, and there is deliberately
+// no entry point that performs both halves at once.
+//
+// Everything here is offline / control-thread only. It allocates, runs an STFT
+// per track and evaluates every track pair.
+//
+// Multi-track input follows the same planar convention as
+// sonare_mixer_process_stereo: parallel arrays of per-track channel pointers,
+// with @c input_right entries NULL for a mono track. Unlike the block-processing
+// entry point, tracks may differ in length, so lengths arrive as a per-track
+// array rather than one shared count; truncating every track to the shortest
+// would delete a part that only enters late in the song.
+
+// Analyses @c input_count tracks and writes a suggested scene, the measurements
+// behind it and a human-readable explanation as a JSON object.
+//
+// @param input_left   Per-track left/mono channel pointers; @c input_count entries.
+// @param input_right  Per-track right channel pointers, or NULL for an all-mono
+//                     set. Individual entries may be NULL for a mono track.
+// @param track_ids    Per-track strip identifiers; @c input_count entries, each
+//                     non-NULL and unique.
+// @param track_names  Optional per-track display names used only as a
+//                     classification hint, or NULL. Individual entries may be NULL.
+// @param track_lengths Per-track frame counts; @c input_count entries.
+// @param input_count  Number of tracks. Zero yields an empty suggestion.
+// @param sample_rate  Shared sample rate for every track.
+// @param params       Flat configuration; accepts targetTrackLufs,
+//                     suggestionStrength, eqMaxCutDb, mixBusHeadroomDbtp,
+//                     enableStructure,
+//                     enableGain, enableBalance, enableEq, enableDynamics,
+//                     enableImage, nFft and hopLength.
+// @param param_count  Number of entries in @c params.
+// @param json_out     Receives the result JSON. Release with sonare_free_string().
+//
+// Returns @c SONARE_ERROR_NOT_SUPPORTED when the library was built without the
+// mixing assistant.
+SonareError sonare_mixing_assistant_suggest(
+    const float* const* input_left, const float* const* input_right, const char* const* track_ids,
+    const char* const* track_names, const size_t* track_lengths, size_t input_count,
+    int sample_rate, const SonareMasteringParam* params, size_t param_count, char** json_out);
+
+// As sonare_mixing_assistant_suggest, but writes only the suggested scene, in
+// the same schema sonare_mixer_from_scene_json reads. Provided so a caller that
+// wants to apply a suggestion does not have to dig the scene out of the fuller
+// result document and re-serialise it.
+SonareError sonare_mixing_assistant_suggest_scene_json(
+    const float* const* input_left, const float* const* input_right, const char* const* track_ids,
+    const char* const* track_names, const size_t* track_lengths, size_t input_count,
+    int sample_rate, const SonareMasteringParam* params, size_t param_count, char** json_out);
+
+// Returns the source-class identifiers the assistant can report, separated by
+// '\n'. Backed by thread-local storage filled on first use; the pointer stays
+// valid for the calling thread's lifetime. Do NOT cache it across threads or
+// free it.
+const char* sonare_mixing_assistant_source_class_names(void);
+
+// Resolves a source-class identifier to its enum value, or -1 when unknown.
+int sonare_mixing_assistant_source_class_from_name(const char* name);
 
 #ifdef __cplusplus
 }

@@ -31,6 +31,10 @@ option(BUILD_CLI "Build CLI tool" ON)
 option(BUILD_BENCH "Build C++ benchmark binary" OFF)
 option(BUILD_MASTERING "Build the mastering library" ON)
 option(BUILD_MIXING "Build the mixing library" ON)
+# Offline mixing assistant. Analyses tracks and returns a suggested scene; it
+# never processes audio and nothing in the mixing runtime depends on it, so it
+# can be dropped without touching the rest of the library.
+option(BUILD_MIXING_ASSISTANT "Build the offline mixing assistant" ON)
 option(BUILD_GRAPH "Build the routing graph library" ON)
 
 option(BUILD_FX "Build creative realtime FX processors" ON)
@@ -50,6 +54,21 @@ option(SONARE_ENABLE_OPTIONAL_FIXTURE_TESTS
 option(BUILD_COREAUDIO "macOS CoreAudio host backend (host::AudioDevice)" OFF)
 option(BUILD_COREMIDI  "macOS CoreMIDI host backend (host::MidiInputSource/Sink)" OFF)
 option(BUILD_AU_HOST   "macOS Audio Unit plugin host (host::InstrumentProvider)" OFF)
+
+# The analysis-only WebAssembly entry rejects BUILD_MASTERING / BUILD_MIXING, and
+# BUILD_MIXING_ASSISTANT pulls both of them back on below. Drop the dependent
+# rather than letting the raise fight the rejection: an option that defaults ON
+# must not make every caller of an unrelated configuration learn about it.
+if(SONARE_WASM_ANALYSIS_ONLY AND BUILD_MIXING_ASSISTANT)
+  message(STATUS "libsonare: SONARE_WASM_ANALYSIS_ONLY excludes the mixing assistant; "
+                 "disabling BUILD_MIXING_ASSISTANT")
+  set(BUILD_MIXING_ASSISTANT OFF CACHE BOOL "Build the offline mixing assistant" FORCE)
+endif()
+
+if(BUILD_MIXING_ASSISTANT AND NOT BUILD_MIXING)
+  message(STATUS "libsonare: BUILD_MIXING_ASSISTANT requires BUILD_MIXING; enabling BUILD_MIXING")
+  set(BUILD_MIXING ON CACHE BOOL "Build the mixing library" FORCE)
+endif()
 
 if(BUILD_MIXING AND NOT BUILD_MASTERING)
   message(STATUS "libsonare: BUILD_MIXING requires BUILD_MASTERING; enabling BUILD_MASTERING")

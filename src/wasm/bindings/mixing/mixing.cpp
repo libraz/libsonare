@@ -471,6 +471,7 @@ void registerMixingBindings() {
   function("mixingScenePresetNames", &js_mixing_scene_preset_names);
   function("mixingScenePresetJson", &js_mixing_scene_preset_json);
   function("mixStereo", &js_mix_stereo);
+  registerMixingAssistantBindings();
 #if defined(SONARE_WITH_MIXING) && defined(SONARE_WITH_GRAPH)
   class_<MixerWasm> cls("Mixer");
   cls.function("compile", &MixerWasm::compile)

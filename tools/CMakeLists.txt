@@ -60,12 +60,17 @@ if(BUILD_ARRANGEMENT)
     # them in (BUILD_MIXING implies BUILD_GRAPH, see the top-level CMakeLists).
     target_sources(sonare PRIVATE
       ${PROJECT_SOURCE_DIR}/src/c_api/sonare_c_mixing.cpp
+      ${PROJECT_SOURCE_DIR}/src/c_api/mixing_assistant.cpp
       ${PROJECT_SOURCE_DIR}/src/c_api/mixing_graph.cpp
       ${PROJECT_SOURCE_DIR}/src/c_api/mixing_mixer.cpp
       ${PROJECT_SOURCE_DIR}/src/c_api/mixing_strip.cpp
     )
     target_link_libraries(sonare PRIVATE sonare_graph)
     target_compile_definitions(sonare PRIVATE SONARE_WITH_GRAPH=1)
+    if(BUILD_MIXING_ASSISTANT)
+      target_link_libraries(sonare PRIVATE sonare_mixing_assistant)
+      target_compile_definitions(sonare PRIVATE SONARE_WITH_MIXING_ASSISTANT=1)
+    endif()
   endif()
 endif()
 target_compile_options(sonare PRIVATE ${SONARE_WARNING_FLAGS})
