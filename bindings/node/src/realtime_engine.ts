@@ -574,6 +574,9 @@ export class RealtimeEngine {
   /**
    * Allocate an addon-owned capture buffer with the requested channel count
    * and capacity in frames. This is the canonical cross-binding form.
+   *
+   * The addon sizes the planes itself, so a long capture costs exactly one
+   * allocation of `numChannels * capacityFrames` samples.
    */
   setCaptureBuffer(numChannels: number, capacityFrames: number): void;
   /**
@@ -599,13 +602,7 @@ export class RealtimeEngine {
     }
     // The runtime validation above proves this optional overload argument is a
     // positive safe integer; retain that fact for TypeScript's type system.
-    const validatedCapacityFrames = capacityFrames as number;
-    this.native.setCaptureBuffer(
-      Array.from(
-        { length: numChannelsOrChannels },
-        () => new Float32Array(validatedCapacityFrames),
-      ),
-    );
+    this.native.setCaptureBuffer(numChannelsOrChannels, capacityFrames as number);
   }
 
   armCapture(armed = true): void {
@@ -696,8 +693,15 @@ export class RealtimeEngine {
 
   /**
    * Ends a chunked offline render: releases every note the sequencer still
-   * holds and flushes the PDC / alignment delay lines. Only needed after
+   * holds and flushes the PDC / alignment delay lines. Required after
    * `renderOffline({ finalize: false })`; the finalizing form does it itself.
+   *
+   * Skipping it leaves every note still sounding at the last chunk held. On an
+   * engine-internal instrument the tail simply never releases; on a destination
+   * marked external ({@link RealtimeEngine.setMidiDestinationExternal}) the
+   * note-ons already left through the external MIDI queue, so the note-offs
+   * emitted here are the only ones the receiving device will get and the notes
+   * otherwise hang outside the engine.
    */
   finishOfflineRender(): void {
     this.native.finishOfflineRender();

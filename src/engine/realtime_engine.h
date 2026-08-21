@@ -221,6 +221,13 @@ class RealtimeEngine : private ClipPageRequestSink {
   ///        consecutive chunks concatenate to exactly what one continuous render
   ///        of the same span produces. Call @c finish_offline_render once after
   ///        the last chunk to release what is still held.
+  ///        Sample-exact concatenation requires every chunk to use the same
+  ///        @p block_size and a @p total_frames that is a whole number of
+  ///        blocks: each call restarts the block grid at its own frame 0 and
+  ///        renders a short final block for the remainder, and the clip /
+  ///        automation / MIDI-clip snapshots are frozen once per block, so a
+  ///        chunk that ends mid-block shifts every later block boundary. Audio
+  ///        stays continuous either way; only bit-identity is lost.
   void render_offline(float* const* out, int num_channels, int64_t total_frames, int block_size,
                       bool finalize = true);
 
@@ -232,6 +239,12 @@ class RealtimeEngine : private ClipPageRequestSink {
   /// its last chunk; calling it between chunks is what breaks the chunking, and
   /// that is exactly the difference the @c finalize flag controls. Idempotent
   /// on an engine with nothing sounding and empty delay lines.
+  ///
+  /// Skipping it after a chunked render leaves every note still sounding held.
+  /// On an engine-internal instrument the tail simply never releases; on a
+  /// destination marked external the note-ons already left through the external
+  /// MIDI queue, so the note-offs emitted here are the only ones the receiving
+  /// device will get and the notes otherwise hang outside the engine.
   void finish_offline_render() noexcept;
 
   bool push_command(const rt::Command& command) noexcept;

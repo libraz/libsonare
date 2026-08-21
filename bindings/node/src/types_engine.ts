@@ -43,7 +43,12 @@ export interface EngineTelemetry {
 
 /** Meter telemetry record drained from {@link RealtimeEngine.drainMeterTelemetry}. */
 export interface EngineMeterTelemetry {
-  /** Meter tap target id (e.g. master/bus identifier). */
+  /**
+   * Telemetry tap target id: `0` master mix, `laneIndex + 1` (1..32) for track
+   * lanes, `33 + busIndex` (33..40) for buses, and `0xFFFF` for the
+   * input-monitor capture tap. Handle `0xFFFF` explicitly -- a naive
+   * `targetId - 1` index into a 32-entry lane array runs past its end.
+   */
   targetId: number;
   /** Render-frame timestamp of the snapshot. */
   renderFrame: number;
@@ -116,7 +121,12 @@ export interface EngineExternalMidiEvent {
  * WAVE order (5.1 = L R C LFE Ls Rs, 7.1 = L R C LFE Ls Rs Lss Rss).
  */
 export interface EngineMeterTelemetryWide {
-  /** Meter tap target id (e.g. master/bus identifier). */
+  /**
+   * Telemetry tap target id: `0` master mix, `laneIndex + 1` (1..32) for track
+   * lanes, `33 + busIndex` (33..40) for buses, and `0xFFFF` for the
+   * input-monitor capture tap. Handle `0xFFFF` explicitly -- a naive
+   * `targetId - 1` index into a 32-entry lane array runs past its end.
+   */
   targetId: number;
   /** Render-frame timestamp of the snapshot. */
   renderFrame: number;
@@ -158,7 +168,12 @@ export interface EngineMeterTelemetryWide {
 
 /** Scope telemetry record drained from {@link RealtimeEngine.drainScopeTelemetry}. */
 export interface EngineScopeTelemetry {
-  /** Scope tap target id (0 = master, `laneIndex + 1` for lanes, `33 + busIndex` for buses). */
+  /**
+   * Telemetry tap target id: `0` master mix, `laneIndex + 1` (1..32) for track
+   * lanes, `33 + busIndex` (33..40) for buses, and `0xFFFF` for the
+   * input-monitor capture tap. Handle `0xFFFF` explicitly -- a naive
+   * `targetId - 1` index into a 32-entry lane array runs past its end.
+   */
   targetId: number;
   /** Render-frame timestamp of the snapshot. */
   renderFrame: number;
@@ -520,6 +535,13 @@ export interface RenderOfflineRequest {
    * chunks concatenate to exactly what one continuous render of the same span
    * produces. Call {@link RealtimeEngine.finishOfflineRender} once after the
    * last chunk.
+   *
+   * Sample-exact concatenation requires every chunk to use the same `blockSize`
+   * and a frame count that is a whole number of blocks: each call restarts the
+   * block grid at its own frame 0 and renders a short final block for the
+   * remainder, and the clip / automation / MIDI-clip snapshots are frozen once
+   * per block, so a chunk that ends mid-block shifts every later block
+   * boundary. Audio stays continuous either way; only bit-identity is lost.
    */
   finalize?: boolean;
 }

@@ -457,13 +457,31 @@ SonareError sonare_engine_render_offline(SonareRealtimeEngine* engine, float* co
 ///   ends the timeline, which is what a one-shot bounce wants and what
 ///   sonare_engine_render_offline does. A chunked caller passes 0 for every
 ///   chunk and calls sonare_engine_finish_offline_render once at the end.
+///
+///   Sample-exact concatenation requires every chunk to use the same
+///   @p block_size and a @p total_frames that is a whole number of blocks. Each
+///   call restarts the block grid at its own frame 0 and renders a short final
+///   block for the remainder, and the clip / automation / MIDI-clip snapshots
+///   are frozen once per block, so a chunk that ends mid-block shifts every
+///   later block boundary relative to a continuous render. Such a split still
+///   renders continuous audio -- no note is cut and no delay line is cleared --
+///   but it is not bit-identical to the one-call result.
 SonareError sonare_engine_render_offline_ex(SonareRealtimeEngine* engine, float* const* out,
                                             int num_channels, int64_t total_frames, int block_size,
                                             int finalize);
 /// @brief Ends an offline render: releases every note the sequencer still holds
 ///        and flushes the PDC / alignment delay lines.
-/// @details Only needed after a chunked render (sonare_engine_render_offline_ex
-///   with @c finalize 0); the finalizing forms run it themselves. Idempotent.
+/// @details Required after a chunked render (sonare_engine_render_offline_ex
+///   with @c finalize 0); the finalizing forms run it themselves, so a one-shot
+///   bounce never calls it. Idempotent.
+///
+///   Skipping it leaves the sequencer holding every note still sounding at the
+///   last chunk. For an engine-internal instrument that only means the tail is
+///   never released. For a destination marked external
+///   (sonare_engine_set_midi_destination_external) the note-ons have already
+///   left through the external MIDI queue, so the note-offs this call emits are
+///   the only ones the receiving device will ever get: without them the notes
+///   hang on hardware, outside the engine, where nothing later clears them.
 /// @return @c SONARE_ERROR_INVALID_PARAMETER when @p engine is NULL,
 ///         @c SONARE_ERROR_INVALID_STATE when the engine was never prepared.
 SonareError sonare_engine_finish_offline_render(SonareRealtimeEngine* engine);

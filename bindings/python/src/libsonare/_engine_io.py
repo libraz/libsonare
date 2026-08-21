@@ -235,6 +235,14 @@ class _EngineIoMixin:
         their history over, so consecutive chunks concatenate to exactly what
         one continuous render of the same span produces. Call
         ``finish_offline_render`` once after the last chunk.
+
+        Sample-exact concatenation requires every chunk to use the same
+        ``block_size`` and a frame count that is a whole number of blocks: each
+        call restarts the block grid at its own frame 0 and renders a short
+        final block for the remainder, and the clip / automation / MIDI-clip
+        snapshots are frozen once per block, so a chunk that ends mid-block
+        shifts every later block boundary. Audio stays continuous either way;
+        only bit-identity is lost.
         """
         arrays, ptrs, frame_count = self._channel_arrays(channels)
         _check(
@@ -255,8 +263,15 @@ class _EngineIoMixin:
         """End a chunked offline render.
 
         Releases every note the sequencer still holds and flushes the PDC /
-        alignment delay lines. Only needed after ``render_offline(...,
+        alignment delay lines. Required after ``render_offline(...,
         finalize=False)``; the finalizing form does it itself.
+
+        Skipping it leaves every note still sounding at the last chunk held. On
+        an engine-internal instrument the tail simply never releases; on a
+        destination marked external (``set_midi_destination_external``) the
+        note-ons already left through the external MIDI queue, so the note-offs
+        emitted here are the only ones the receiving device will get and the
+        notes otherwise hang outside the engine.
         """
         _check(_get_lib().sonare_engine_finish_offline_render(self._require_handle()))
 

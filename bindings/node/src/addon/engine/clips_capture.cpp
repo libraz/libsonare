@@ -755,13 +755,60 @@ Napi::Value RealtimeEngineWrap::ClipPagePrefetchFrames(const Napi::CallbackInfo&
   return Napi::Number::New(env, static_cast<double>(frames));
 }
 
-Napi::Value RealtimeEngineWrap::SetCaptureBuffer(const Napi::CallbackInfo& info) {
+void RealtimeEngineWrap::InstallCaptureBuffers(Napi::Env env,
+                                               std::vector<std::vector<float>>&& buffers,
+                                               int64_t frames) {
+  // Move storage into its final owner before sharing pointers with the C engine.
+  // A pointer into the local vector would become invalid if the move assignment
+  // cannot steal its allocation.
+  capture_buffers_ = std::move(buffers);
+  capture_ptrs_.clear();
+  capture_ptrs_.reserve(capture_buffers_.size());
+  for (auto& buffer : capture_buffers_) capture_ptrs_.push_back(buffer.data());
+
+  SonareEngineCaptureBuffer buffer{};
+  buffer.channels = capture_ptrs_.data();
+  buffer.num_channels = static_cast<int>(capture_ptrs_.size());
+  buffer.capacity_frames = frames;
+  ThrowIfError(env, sonare_engine_set_capture_buffer(engine_, &buffer));
+  if (env.IsExceptionPending()) return;
+  capture_capacity_frames_ = frames;
+}
+
+// Canonical form: the addon sizes the capture planes itself. Routing this
+// through the channel-array form would make the caller build a full-size JS
+// Float32Array per channel purely to be copied in and dropped, doubling the
+// peak footprint of a long capture.
+Napi::Value RealtimeEngineWrap::SetCaptureBufferExtent(const Napi::CallbackInfo& info) {
   Napi::Env env = info.Env();
-  if (info.Length() <= 0 || !info[0].IsArray()) {
-    Napi::TypeError::New(env, "expected an array of Float32Array channels")
+  int num_channels = 0;
+  int64_t capacity_frames = 0;
+  if (!RequiredIntArg(env, info, 0, "numChannels", &num_channels) ||
+      !RequiredInt64Arg(env, info, 1, "capacityFrames", &capacity_frames)) {
+    return env.Undefined();
+  }
+  if (num_channels <= 0 || capacity_frames <= 0) {
+    Napi::RangeError::New(env, "capture channel count and capacity must be positive")
         .ThrowAsJavaScriptException();
     return env.Undefined();
   }
+
+  std::vector<std::vector<float>> buffers(static_cast<size_t>(num_channels));
+  // Size each plane in place: constructing one sized plane and copying it per
+  // channel would hold a full extra plane live for the length of the loop.
+  for (std::vector<float>& plane : buffers) {
+    plane.assign(static_cast<size_t>(capacity_frames), 0.0f);
+  }
+  InstallCaptureBuffers(env, std::move(buffers), capacity_frames);
+  return env.Undefined();
+}
+
+Napi::Value RealtimeEngineWrap::SetCaptureBuffer(const Napi::CallbackInfo& info) {
+  Napi::Env env = info.Env();
+  // Two arities: an array of caller-owned planes, or the addon-owned extent.
+  // Anything else lands in the extent form and is reported against its named
+  // arguments rather than as a generic "expected an array".
+  if (!info[0].IsArray()) return SetCaptureBufferExtent(info);
 
   Napi::Array channels = info[0].As<Napi::Array>();
   if (channels.Length() == 0) {
@@ -800,21 +847,7 @@ Napi::Value RealtimeEngineWrap::SetCaptureBuffer(const Napi::CallbackInfo& info)
     buffers.emplace_back(channel.Data(), channel.Data() + channel.ElementLength());
   }
 
-  // Move storage into its final owner before sharing pointers with the C engine.
-  // A pointer into the local vector would become invalid if the move assignment
-  // cannot steal its allocation.
-  capture_buffers_ = std::move(buffers);
-  capture_ptrs_.clear();
-  capture_ptrs_.reserve(capture_buffers_.size());
-  for (auto& buffer : capture_buffers_) capture_ptrs_.push_back(buffer.data());
-
-  SonareEngineCaptureBuffer buffer{};
-  buffer.channels = capture_ptrs_.data();
-  buffer.num_channels = static_cast<int>(capture_ptrs_.size());
-  buffer.capacity_frames = frames;
-  ThrowIfError(env, sonare_engine_set_capture_buffer(engine_, &buffer));
-  if (env.IsExceptionPending()) return env.Undefined();
-  capture_capacity_frames_ = frames;
+  InstallCaptureBuffers(env, std::move(buffers), frames);
   return env.Undefined();
 }
 
@@ -906,8 +939,8 @@ Napi::Value RealtimeEngineWrap::CapturedAudio(const Napi::CallbackInfo& info) {
   ThrowIfError(env, sonare_engine_capture_status(engine_, &status));
   if (env.IsExceptionPending()) return env.Undefined();
 
-  // Clamp the captured frame count to the JS-supplied buffer capacity so that we
-  // never read past the Float32Arrays handed to setCaptureBuffer().
+  // Clamp the captured frame count to the installed capacity so that we never
+  // read past the planes setCaptureBuffer() allocated.
   int64_t frames = status.captured_frames;
   if (frames < 0) frames = 0;
   if (frames > capture_capacity_frames_) frames = capture_capacity_frames_;

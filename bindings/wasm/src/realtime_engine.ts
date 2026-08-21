@@ -158,6 +158,13 @@ export interface RenderOfflineRequest {
    * chunks concatenate to exactly what one continuous render of the same span
    * produces. Call {@link RealtimeEngine.finishOfflineRender} once after the
    * last chunk.
+   *
+   * Sample-exact concatenation requires every chunk to use the same `blockSize`
+   * and a frame count that is a whole number of blocks: each call restarts the
+   * block grid at its own frame 0 and renders a short final block for the
+   * remainder, and the clip / automation / MIDI-clip snapshots are frozen once
+   * per block, so a chunk that ends mid-block shifts every later block
+   * boundary. Audio stays continuous either way; only bit-identity is lost.
    */
   finalize?: boolean;
 }
@@ -1170,8 +1177,15 @@ export class RealtimeEngine {
 
   /**
    * End a chunked offline render: release every note the sequencer still holds
-   * and flush the PDC / alignment delay lines. Only needed after
+   * and flush the PDC / alignment delay lines. Required after
    * `renderOffline({ finalize: false })`; the finalizing form does it itself.
+   *
+   * Skipping it leaves every note still sounding at the last chunk held. On an
+   * engine-internal instrument the tail simply never releases; on a destination
+   * marked external ({@link RealtimeEngine.setMidiDestinationExternal}) the
+   * note-ons already left through the external MIDI queue, so the note-offs
+   * emitted here are the only ones the receiving device will get and the notes
+   * otherwise hang outside the engine.
    */
   finishOfflineRender(): void {
     this.native.finishOfflineRender();

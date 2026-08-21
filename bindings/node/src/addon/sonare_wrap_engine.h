@@ -74,6 +74,13 @@ class RealtimeEngineWrap : public Napi::ObjectWrap<RealtimeEngineWrap> {
   Napi::Value SetClipPagePrefetchFrames(const Napi::CallbackInfo& info);
   Napi::Value ClipPagePrefetchFrames(const Napi::CallbackInfo& info);
   Napi::Value SetCaptureBuffer(const Napi::CallbackInfo& info);
+  // The (numChannels, capacityFrames) arity of setCaptureBuffer().
+  Napi::Value SetCaptureBufferExtent(const Napi::CallbackInfo& info);
+  // Take ownership of freshly built capture planes and publish pointers into
+  // them to the engine. Shared by both setCaptureBuffer() arities so the
+  // pointer table can never be rebuilt from storage the addon does not own.
+  void InstallCaptureBuffers(Napi::Env env, std::vector<std::vector<float>>&& buffers,
+                             int64_t frames);
   Napi::Value ArmCapture(const Napi::CallbackInfo& info);
   Napi::Value SetCapturePunch(const Napi::CallbackInfo& info);
   Napi::Value SetCaptureSource(const Napi::CallbackInfo& info);

@@ -1134,4 +1134,13 @@ void RealtimeEngineWrap::Destroy(const Napi::CallbackInfo& info) {
     sonare_engine_destroy(engine_);
     engine_ = nullptr;
   }
+  // A capture buffer sized for a long session is the largest allocation the
+  // wrap owns, and once the engine is gone nothing can read it: capturedAudio()
+  // rejects a destroyed engine. Release it here rather than waiting for the JS
+  // object to be collected.
+  capture_buffers_.clear();
+  capture_buffers_.shrink_to_fit();
+  capture_ptrs_.clear();
+  capture_ptrs_.shrink_to_fit();
+  capture_capacity_frames_ = 0;
 }
