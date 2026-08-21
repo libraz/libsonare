@@ -48,9 +48,35 @@ Audio Audio::from_vector(std::vector<float> samples, int sample_rate) {
   return Audio(buffer, 0, size, sample_rate);
 }
 
+namespace {
+
+/// Applies the shared offline-analysis policy to a freshly decoded buffer.
+///
+/// A decoder hands back samples that never passed a public buffer entry point,
+/// so without this the same sample data was accepted from a file and rejected
+/// from a buffer: a float WAV carrying NaN, or one declaring a rate outside the
+/// supported range, produced a usable handle whose analyses returned NaN. The
+/// policy is `validate_offline_audio_input`'s, reported in decoder terms -- an
+/// unusable declared rate is a malformed container, samples that are not finite
+/// are a decode that produced garbage.
+Audio validated_decoded_audio(std::vector<float> samples, int sample_rate) {
+  SONARE_CHECK_MSG(!samples.empty(), ErrorCode::DecodeFailed, "decoded audio has no samples");
+  SONARE_CHECK_MSG(sample_rate >= kMinAudioSampleRate && sample_rate <= kMaxAudioSampleRate,
+                   ErrorCode::InvalidFormat, "decoded sample rate is outside the supported range");
+  SONARE_CHECK_MSG(samples.size() <= kMaxAudioBufferSize, ErrorCode::DecodeFailed,
+                   "decoded audio is too large");
+  for (const float sample : samples) {
+    SONARE_CHECK_MSG(std::isfinite(sample), ErrorCode::DecodeFailed,
+                     "decoded audio contains a non-finite sample");
+  }
+  return Audio::from_vector(std::move(samples), sample_rate);
+}
+
+}  // namespace
+
 Audio Audio::from_file(const std::string& path) {
   auto [samples, sample_rate] = load_audio(path);
-  return from_vector(std::move(samples), sample_rate);
+  return validated_decoded_audio(std::move(samples), sample_rate);
 }
 
 Audio Audio::from_memory(const uint8_t* data, size_t size) {
@@ -60,7 +86,7 @@ Audio Audio::from_memory(const uint8_t* data, size_t size) {
                    "Audio::from_memory: data is null");
   SONARE_CHECK_MSG(size > 0, ErrorCode::InvalidParameter, "Audio::from_memory: size is zero");
   auto [samples, sample_rate] = load_buffer(data, size);
-  return from_vector(std::move(samples), sample_rate);
+  return validated_decoded_audio(std::move(samples), sample_rate);
 }
 
 const float* Audio::data() const {

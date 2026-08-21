@@ -15,6 +15,14 @@ namespace sonare::automation {
 /// reasons (the engine PPQ-domain automation API was the first consumer).
 using CurveType = ::sonare::AutomationCurve;
 
+/// @brief The id the engine reserves as "invalid / none".
+///
+/// AutomationEngine::bind_target and GraphRuntime::bind_parameter both refuse
+/// it, and RealtimeEngine::start_smoothed_param routes it to the unbound-target
+/// counter, so a parameter registered under this id could be listed but never
+/// reached by set_parameter / bind_target.
+inline constexpr uint32_t kInvalidParameterId = 0;
+
 struct ParameterInfo {
   uint32_t id = 0;
   const char* name = "";
@@ -33,6 +41,9 @@ struct ParameterInfo {
 class ParameterRegistry {
  public:
   void clear();
+  /// @brief Registers @p info.
+  /// @return false when the id duplicates a registered one or is the reserved
+  ///         kInvalidParameterId; the registry is unchanged in both cases.
   bool add(ParameterInfo info);
   size_t parameter_count() const noexcept { return parameters_.size(); }
   bool parameter_info(uint32_t id, ParameterInfo* out) const noexcept;

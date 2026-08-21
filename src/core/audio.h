@@ -35,15 +35,20 @@ class Audio {
 
   /// @brief Loads Audio from a file (WAV or MP3).
   /// @param path Path to audio file
-  /// @return Audio object
-  /// @throws SonareException on file not found or decode error
+  /// @return Audio object holding a buffer that satisfies the offline-analysis
+  ///         policy below, so the decoded path accepts and rejects exactly what
+  ///         the raw-buffer entry points do.
+  /// @throws SonareException on file not found or decode error, including
+  ///         DecodeFailed for an empty or non-finite decode result and
+  ///         InvalidFormat for a declared sample rate outside
+  ///         [kMinAudioSampleRate, kMaxAudioSampleRate].
   static Audio from_file(const std::string& path);
 
   /// @brief Loads Audio from memory buffer.
   /// @param data Pointer to audio data
   /// @param size Size of data in bytes
-  /// @return Audio object
-  /// @throws SonareException on decode error
+  /// @return Audio object under the same decoded-buffer contract as from_file.
+  /// @throws SonareException on decode error (see from_file).
   static Audio from_memory(const uint8_t* data, size_t size);
 
   /// @brief Returns pointer to sample data.

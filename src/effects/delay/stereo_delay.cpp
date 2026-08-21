@@ -123,6 +123,9 @@ void StereoDelay::set_config(const StereoDelayConfig& config) noexcept {
 }
 
 bool StereoDelay::set_parameter(unsigned int param_id, float value) {
+  // Reject before the clamps below: std::clamp leaves NaN intact and the delay
+  // ids feed the fractional read index (see delay_param_acceptable).
+  if (!modulation::delay_param_acceptable(value)) return false;
   switch (param_id) {
     case 0:
       // process() smooths delay-time automation before it reaches the

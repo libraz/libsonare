@@ -8,6 +8,7 @@
 #include <catch2/catch_test_macros.hpp>
 #include <catch2/matchers/catch_matchers_floating_point.hpp>
 #include <cmath>
+#include <limits>
 #include <memory>
 #include <vector>
 
@@ -394,6 +395,54 @@ TEST_CASE("Master insert automation lowers master energy through the engine",
   engine.automation().set_lanes({step_lane(static_cast<uint32_t>(id), -48.0f)});
   const double automated = run_engine_energy(engine, kBlock, 16);
   REQUIRE(automated < 0.5 * baseline);
+}
+
+TEST_CASE("Insert parameter setters reject a non-finite value at the engine layer",
+          "[mixing][automation][numeric]") {
+  // The guard lives on RealtimeEngine rather than on one binding's wrapper: the
+  // WASM bindings call these three methods directly and never execute the C
+  // ABI's copy of the check, and a NaN that survives reaches a fractional delay
+  // read index in the modulation inserts.
+  constexpr int kBlock = 128;
+  constexpr double kSr = 48000.0;
+  using sonare::engine::InsertParamSetResult;
+
+  sonare::engine::RealtimeEngine engine;
+  engine.prepare(kSr, kBlock);
+  REQUIRE(engine.set_master_strip(compressor_strip("master")));
+  REQUIRE(engine.set_track_lanes({{10}}));
+  REQUIRE(engine.set_track_strip(10, compressor_strip("track")));
+  REQUIRE(engine.set_track_buses({{1, 0.0f}}));
+  sonare::mixing::api::Bus bus;
+  bus.id = "1";
+  bus.inserts.push_back({sonare::mixing::api::InsertSlot::PreFader, "dynamics.compressor",
+                         R"({"thresholdDb":-3.0,"ratio":8.0})"});
+  REQUIRE(engine.set_bus_strip(1, bus));
+
+  // Each setter accepts the same target with a finite value, so a rejection
+  // below is the value check and not an unresolved target.
+  REQUIRE(engine.set_master_insert_param_detailed(0, "thresholdDb", -12.0f) ==
+          InsertParamSetResult::kQueued);
+  REQUIRE(engine.set_track_insert_param_detailed(10, 0, "thresholdDb", -12.0f) ==
+          InsertParamSetResult::kQueued);
+  REQUIRE(engine.set_bus_insert_param_detailed(1, 0, "thresholdDb", -12.0f) ==
+          InsertParamSetResult::kQueued);
+
+  for (float invalid :
+       {std::numeric_limits<float>::quiet_NaN(), std::numeric_limits<float>::infinity(),
+        -std::numeric_limits<float>::infinity()}) {
+    CAPTURE(invalid);
+    REQUIRE(engine.set_master_insert_param_detailed(0, "thresholdDb", invalid) ==
+            InsertParamSetResult::kInvalidTarget);
+    REQUIRE(engine.set_track_insert_param_detailed(10, 0, "thresholdDb", invalid) ==
+            InsertParamSetResult::kInvalidTarget);
+    REQUIRE(engine.set_bus_insert_param_detailed(1, 0, "thresholdDb", invalid) ==
+            InsertParamSetResult::kInvalidTarget);
+    // The bool-returning wrappers report the same refusal.
+    REQUIRE_FALSE(engine.set_master_insert_param(0, "thresholdDb", invalid));
+    REQUIRE_FALSE(engine.set_track_insert_param(10, 0, "thresholdDb", invalid));
+    REQUIRE_FALSE(engine.set_bus_insert_param(1, 0, "thresholdDb", invalid));
+  }
 }
 
 TEST_CASE("Master insert automation slot-table overflow surfaces on the telemetry channel",

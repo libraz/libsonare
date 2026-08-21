@@ -3,6 +3,7 @@
 #include <algorithm>
 #include <cmath>
 
+#include "effects/modulation/mod_delay_line.h"
 #include "rt/scoped_no_denormals.h"
 #include "util/constants.h"
 
@@ -37,6 +38,9 @@ void PitchShifter::reset() {
 }
 
 float PitchShifter::read_tap(int channel, float delay) const noexcept {
+  // Same fractional-read hazard as ModDelayLine::process: a non-finite delay
+  // cannot produce an in-range index, so the tap contributes nothing.
+  if (!delay_param_acceptable(delay)) return 0.0f;
   const auto& buffer = buffers_[static_cast<size_t>(channel)];
   const float size = static_cast<float>(buffer.size());
   float read_pos = static_cast<float>(write_pos_[static_cast<size_t>(channel)]) - delay;
@@ -107,6 +111,9 @@ void PitchShifter::process(float* const* channels, int num_channels, int num_sam
 }
 
 bool PitchShifter::set_parameter(unsigned int param_id, float value) {
+  // Reject before the clamp below: std::clamp leaves NaN intact and `semitones`
+  // drives the read-tap phase (see delay_param_acceptable).
+  if (!delay_param_acceptable(value)) return false;
   switch (param_id) {
     case 0:
       config_.semitones = std::clamp(value, -24.0f, 24.0f);

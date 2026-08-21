@@ -467,6 +467,25 @@ TEST_CASE("ParameterRegistry enumerates stable metadata", "[automation]") {
   REQUIRE_FALSE(registry.parameter_is_realtime_safe(10));
 }
 
+TEST_CASE("ParameterRegistry refuses the reserved invalid parameter id", "[automation]") {
+  // 0 is the engine's "invalid / none" id: AutomationEngine::bind_target and
+  // GraphRuntime::bind_parameter both refuse it, so a registration under it
+  // would be enumerable but unreachable by bind or set. Refusing it here is what
+  // makes every surface agree, since they all register through this method.
+  sonare::automation::ParameterRegistry registry;
+  REQUIRE_FALSE(registry.add({sonare::automation::kInvalidParameterId, "gain", "dB", 0.0f, 1.0f,
+                              0.0f, true, sonare::automation::CurveType::Linear}));
+  REQUIRE(registry.parameter_count() == 0);
+
+  sonare::automation::ParameterInfo info{};
+  REQUIRE_FALSE(registry.parameter_info(sonare::automation::kInvalidParameterId, &info));
+
+  // The same descriptor under a usable id registers normally.
+  REQUIRE(registry.add(
+      {1, "gain", "dB", 0.0f, 1.0f, 0.0f, true, sonare::automation::CurveType::Linear}));
+  REQUIRE(registry.parameter_count() == 1);
+}
+
 TEST_CASE("ParameterRegistry duplicate add leaves existing metadata unchanged", "[automation]") {
   sonare::automation::ParameterRegistry registry;
   REQUIRE(registry.add(

@@ -7,6 +7,12 @@ namespace sonare::automation {
 void ParameterRegistry::clear() { parameters_.clear(); }
 
 bool ParameterRegistry::add(ParameterInfo info) {
+  // Refuse the reserved id here, where every surface's add path converges, so a
+  // registration that could never be bound or set fails at registration instead
+  // of succeeding and reporting the parameter as available.
+  if (info.id == kInvalidParameterId) {
+    return false;
+  }
   const auto found = std::find_if(parameters_.begin(), parameters_.end(),
                                   [&](const ParameterInfo& item) { return item.id == info.id; });
   if (found != parameters_.end()) {

@@ -3,15 +3,18 @@
 #include <catch2/catch_test_macros.hpp>
 #include <catch2/matchers/catch_matchers_floating_point.hpp>
 #include <cmath>
+#include <limits>
 #include <vector>
 
 #include "effects/common/dc_blocker.h"
 #include "effects/delay/stereo_delay.h"
 #include "effects/modulation/chorus.h"
+#include "effects/modulation/ensemble.h"
 #include "effects/modulation/flanger.h"
 #include "effects/modulation/lfo.h"
 #include "effects/modulation/mod_delay_line.h"
 #include "effects/modulation/phaser.h"
+#include "effects/modulation/pitch_shifter.h"
 #include "effects/reverb/convolution_reverb.h"
 #include "effects/reverb/dattorro_reverb.h"
 #include "effects/reverb/fdn_reverb.h"
@@ -65,6 +68,68 @@ TEST_CASE("ModDelayLine returns delayed samples with interpolation", "[fx]") {
   REQUIRE_THAT(delay.process(1.0f, 2.0f), WithinAbs(0.0f, 0.0001f));
   REQUIRE_THAT(delay.process(0.0f, 2.0f), WithinAbs(0.0f, 0.0001f));
   REQUIRE_THAT(delay.process(0.0f, 2.0f), WithinAbs(1.0f, 0.0001f));
+}
+
+TEST_CASE("Delay-based inserts refuse a non-finite parameter", "[fx][numeric]") {
+  // Last line of defence behind the engine's finiteness guard: std::clamp
+  // returns NaN unchanged (every comparison against it is false), so a clamp on
+  // a delay parameter is not a guard, and the value would reach the fractional
+  // read index where the float->int conversion is undefined.
+  using sonare::effects::modulation::Chorus;
+  using sonare::effects::modulation::Ensemble;
+  using sonare::effects::modulation::Flanger;
+  using sonare::effects::modulation::ModDelayLine;
+  using sonare::effects::modulation::PitchShifter;
+
+  const float nan_value = std::numeric_limits<float>::quiet_NaN();
+  const float inf_value = std::numeric_limits<float>::infinity();
+
+  SECTION("the setters leave the previous value in place") {
+    Chorus chorus;
+    Flanger flanger;
+    Ensemble ensemble;
+    PitchShifter shifter;
+    sonare::effects::delay::StereoDelay delay;
+    for (float invalid : {nan_value, inf_value, -inf_value}) {
+      CAPTURE(invalid);
+      REQUIRE_FALSE(chorus.set_parameter(1, invalid));   // depthMs
+      REQUIRE_FALSE(chorus.set_parameter(2, invalid));   // centerDelayMs
+      REQUIRE_FALSE(flanger.set_parameter(2, invalid));  // centerDelayMs
+      REQUIRE_FALSE(ensemble.set_parameter(4, invalid));
+      REQUIRE_FALSE(shifter.set_parameter(0, invalid));  // semitones
+      REQUIRE_FALSE(delay.set_parameter(0, invalid));    // delayTimeLMs
+    }
+    // A finite request on the same ids is still accepted.
+    REQUIRE(chorus.set_parameter(1, 3.0f));
+    REQUIRE(flanger.set_parameter(2, 3.0f));
+    REQUIRE(ensemble.set_parameter(4, 3.0f));
+    REQUIRE(shifter.set_parameter(0, 3.0f));
+    REQUIRE(delay.set_parameter(0, 3.0f));
+  }
+
+  SECTION("the delay tap skips a non-finite delay instead of indexing on it") {
+    ModDelayLine line;
+    line.prepare(8);
+    // Writes still advance, so the line stays coherent: after the skipped tap a
+    // finite delay reads the sample written two calls earlier.
+    REQUIRE_THAT(line.process(1.0f, nan_value), WithinAbs(0.0f, 0.0f));
+    REQUIRE_THAT(line.process(0.0f, inf_value), WithinAbs(0.0f, 0.0f));
+    REQUIRE_THAT(line.process(0.0f, 2.0f), WithinAbs(1.0f, 0.0001f));
+  }
+
+  SECTION("a chorus whose config was built with a non-finite delay stays finite") {
+    // The constructor clamp cannot reject it either, so process() must not
+    // produce NaN output from a directly-constructed config.
+    Chorus chorus({1.0f, nan_value, nan_value, 1.0f});
+    constexpr int kSamples = 64;
+    chorus.prepare(48000.0, kSamples);
+    std::vector<float> left(kSamples, 0.25f);
+    std::vector<float> right(kSamples, 0.25f);
+    float* channels[] = {left.data(), right.data()};
+    chorus.process(channels, 2, kSamples);
+    REQUIRE(all_finite(left));
+    REQUIRE(all_finite(right));
+  }
 }
 
 TEST_CASE("Lfo stays in bipolar range", "[fx]") {

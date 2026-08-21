@@ -19,6 +19,14 @@ namespace {
 constexpr uint32_t kEngineParamLaneMaster = 0xFFu;
 constexpr uint32_t kEngineParamLaneBusBase = 0xFEu;
 
+// A non-finite insert-parameter value has no meaning for any processor and is
+// actively dangerous for the delay-based ones: std::clamp propagates NaN (every
+// comparison is false, so it returns the value unchanged), and the result
+// reaches a fractional delay read index. The check lives here, in the engine
+// method every surface calls, rather than in one binding's wrapper -- the WASM
+// bindings call these methods directly and never see the C ABI's copy of it.
+bool insert_param_value_acceptable(float value) noexcept { return std::isfinite(value); }
+
 }  // namespace
 
 void RealtimeEngine::set_mixing_enabled(bool enabled) noexcept {
@@ -126,6 +134,9 @@ InsertParamSetResult RealtimeEngine::set_track_insert_param_detailed(uint32_t tr
                                                                      unsigned int insert_index,
                                                                      const std::string& key,
                                                                      float value) noexcept {
+  if (!insert_param_value_acceptable(value)) {
+    return InsertParamSetResult::kInvalidTarget;
+  }
   size_t lane_index = 0;
   unsigned int param_id = 0;
   if (!track_mixer_runtime_.resolve_track_insert_param(track_id, insert_index, key, &lane_index,
@@ -153,7 +164,7 @@ bool RealtimeEngine::set_track_insert_param(uint32_t track_id, unsigned int inse
 InsertParamSetResult RealtimeEngine::set_master_insert_param_detailed(unsigned int insert_index,
                                                                       const std::string& key,
                                                                       float value) noexcept {
-  if (owned_master_strip_ == nullptr) {
+  if (owned_master_strip_ == nullptr || !insert_param_value_acceptable(value)) {
     return InsertParamSetResult::kInvalidTarget;
   }
   const int id = owned_master_strip_->insert_parameter_id_for_key(insert_index, key);
@@ -182,6 +193,9 @@ InsertParamSetResult RealtimeEngine::set_bus_insert_param_detailed(uint32_t bus_
                                                                    unsigned int insert_index,
                                                                    const std::string& key,
                                                                    float value) noexcept {
+  if (!insert_param_value_acceptable(value)) {
+    return InsertParamSetResult::kInvalidTarget;
+  }
   size_t bus_index = 0;
   unsigned int param_id = 0;
   if (!track_mixer_runtime_.resolve_bus_insert_param(bus_id, insert_index, key, &bus_index,

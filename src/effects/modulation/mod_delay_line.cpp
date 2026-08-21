@@ -20,6 +20,14 @@ float ModDelayLine::process(float input, float delay_samples) {
   if (buffer_.empty()) {
     prepare(1);
   }
+  if (!delay_param_acceptable(delay_samples)) {
+    // No in-range read index exists for a non-finite delay, so the tap is
+    // skipped entirely rather than computing one. The write head still advances
+    // so the line stays time-coherent once a usable delay returns.
+    buffer_[static_cast<size_t>(write_index_)] = input;
+    write_index_ = (write_index_ + 1) % static_cast<int>(buffer_.size());
+    return 0.0f;
+  }
   const float clamped_delay =
       std::clamp(delay_samples, 0.0f, static_cast<float>(max_delay_samples_));
   buffer_[static_cast<size_t>(write_index_)] = input;

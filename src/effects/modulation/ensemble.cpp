@@ -101,6 +101,9 @@ void Ensemble::process(float* const* channels, int num_channels, int num_samples
 }
 
 bool Ensemble::set_parameter(unsigned int param_id, float value) {
+  // Reject before the clamps below: std::clamp leaves NaN intact and the delay
+  // ids feed the fractional read index (see delay_param_acceptable).
+  if (!delay_param_acceptable(value)) return false;
   switch (param_id) {
     case 0:
       config_.rate_slow_hz = std::max(0.0f, value);

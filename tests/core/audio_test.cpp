@@ -5,7 +5,9 @@
 
 #include <catch2/catch_test_macros.hpp>
 #include <catch2/matchers/catch_matchers_floating_point.hpp>
+#include <cstring>
 #include <iterator>
+#include <limits>
 #include <vector>
 
 #include "support/audio_fixtures.h"
@@ -112,6 +114,101 @@ TEST_CASE("Audio from_memory null safety", "[audio]") {
     } catch (const SonareException& e) {
       REQUIRE(e.code() == ErrorCode::InvalidParameter);
     }
+  }
+}
+
+namespace {
+
+// Minimal single-channel 32-bit-float RIFF/WAVE blob. IEEE-float samples are
+// passed through by the decoder untouched, which is how a NaN (or a rate no
+// analysis entry point would accept) reaches a decoded handle.
+std::vector<uint8_t> float_wav(const std::vector<float>& samples, uint32_t sample_rate) {
+  std::vector<uint8_t> out;
+  const auto push_u32 = [&out](uint32_t value) {
+    for (int shift = 0; shift < 32; shift += 8) {
+      out.push_back(static_cast<uint8_t>((value >> shift) & 0xFFu));
+    }
+  };
+  const auto push_u16 = [&out](uint16_t value) {
+    out.push_back(static_cast<uint8_t>(value & 0xFFu));
+    out.push_back(static_cast<uint8_t>((value >> 8) & 0xFFu));
+  };
+  const auto push_tag = [&out](const char* tag) {
+    for (int i = 0; i < 4; ++i) out.push_back(static_cast<uint8_t>(tag[i]));
+  };
+
+  const uint32_t data_bytes = static_cast<uint32_t>(samples.size() * sizeof(float));
+  push_tag("RIFF");
+  push_u32(36u + data_bytes);
+  push_tag("WAVE");
+  push_tag("fmt ");
+  push_u32(16u);
+  push_u16(3u);  // WAVE_FORMAT_IEEE_FLOAT
+  push_u16(1u);  // mono
+  push_u32(sample_rate);
+  push_u32(sample_rate * 4u);  // byte rate
+  push_u16(4u);                // block align
+  push_u16(32u);               // bits per sample
+  push_tag("data");
+  push_u32(data_bytes);
+  for (const float sample : samples) {
+    uint32_t bits = 0;
+    std::memcpy(&bits, &sample, sizeof(bits));
+    push_u32(bits);
+  }
+  return out;
+}
+
+ErrorCode from_memory_error(const std::vector<uint8_t>& blob) {
+  try {
+    const Audio audio = Audio::from_memory(blob.data(), blob.size());
+    CAPTURE(audio.size(), audio.sample_rate());
+    return ErrorCode::Ok;
+  } catch (const SonareException& error) {
+    return error.code();
+  }
+}
+
+}  // namespace
+
+TEST_CASE("Audio decoded from memory obeys the offline-analysis policy", "[audio][numeric]") {
+  // A decoded handle used to skip the checks every raw-buffer entry point runs,
+  // so the same samples were accepted from a blob and rejected from a buffer,
+  // and the analyses on that handle returned NaN.
+  const std::vector<float> clean = generate_sine(2205, 440.0f, 22050);
+
+  SECTION("a well-formed float WAV still decodes") {
+    const Audio audio =
+        Audio::from_memory(float_wav(clean, 22050).data(), float_wav(clean, 22050).size());
+    REQUIRE(audio.size() == clean.size());
+    REQUIRE(audio.sample_rate() == 22050);
+  }
+
+  SECTION("non-finite decoded samples are refused") {
+    std::vector<float> poisoned = clean;
+    poisoned[100] = std::numeric_limits<float>::quiet_NaN();
+    REQUIRE(from_memory_error(float_wav(poisoned, 22050)) == ErrorCode::DecodeFailed);
+    poisoned[100] = std::numeric_limits<float>::infinity();
+    REQUIRE(from_memory_error(float_wav(poisoned, 22050)) == ErrorCode::DecodeFailed);
+
+    // The buffer entry point refuses the same samples, which is the agreement
+    // that was missing: one rejected, the other returned a usable handle.
+    REQUIRE_THROWS_AS(validate_offline_audio_input(poisoned.data(), poisoned.size(), 22050),
+                      SonareException);
+  }
+
+  SECTION("a declared sample rate outside the supported range is refused") {
+    // Rates the decoder itself accepts: this guard is what refuses them, and it
+    // reports the container as malformed rather than blaming a caller argument.
+    for (uint32_t rate : {1u, static_cast<uint32_t>(kMinAudioSampleRate) - 1u}) {
+      CAPTURE(rate);
+      REQUIRE(from_memory_error(float_wav(clean, rate)) == ErrorCode::InvalidFormat);
+    }
+    // Above the supported ceiling the WAV parser refuses the header before the
+    // guard sees it, so only the rejection itself is asserted -- the error class
+    // there belongs to the decoder.
+    REQUIRE(from_memory_error(float_wav(clean, static_cast<uint32_t>(kMaxAudioSampleRate) + 1u)) !=
+            ErrorCode::Ok);
   }
 }
 

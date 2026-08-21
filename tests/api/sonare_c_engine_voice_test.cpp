@@ -388,6 +388,37 @@ TEST_CASE("sonare_engine rejects engine-reserved automation parameter ids", "[c_
   sonare_engine_destroy(engine);
 }
 
+TEST_CASE("sonare_engine rejects the reserved invalid parameter id 0", "[c_api][engine]") {
+  // The engine reserves 0 as "invalid / none": bind_target and the graph
+  // parameter binding both refuse it, so a registration under it would be listed
+  // and permanently inert. The refusal lives in ParameterRegistry::add, which
+  // every surface's add path goes through, so this matches the WASM binding
+  // instead of being the one surface that accepts it.
+  SonareRealtimeEngine* engine = nullptr;
+  REQUIRE(sonare_engine_create(&engine) == SONARE_OK);
+  REQUIRE(sonare_engine_prepare(engine, 48000.0, 128, 16, 16) == SONARE_OK);
+
+  SonareParameterInfo parameter{};
+  parameter.id = 0;
+  std::strncpy(parameter.name, "gain", sizeof(parameter.name) - 1);
+  parameter.min_value = 0.0f;
+  parameter.max_value = 1.0f;
+  parameter.rt_safe = 1;
+  REQUIRE(sonare_engine_add_parameter(engine, &parameter) == SONARE_ERROR_INVALID_PARAMETER);
+
+  size_t count = 1;
+  REQUIRE(sonare_engine_parameter_count(engine, &count) == SONARE_OK);
+  REQUIRE(count == 0u);
+
+  // The same descriptor under a usable id is still accepted.
+  parameter.id = 7;
+  REQUIRE(sonare_engine_add_parameter(engine, &parameter) == SONARE_OK);
+  REQUIRE(sonare_engine_parameter_count(engine, &count) == SONARE_OK);
+  REQUIRE(count == 1u);
+
+  sonare_engine_destroy(engine);
+}
+
 TEST_CASE("sonare_engine_bounce_offline validates the channel count against a layout",
           "[c_api][engine][surround]") {
   SonareRealtimeEngine* engine = nullptr;
