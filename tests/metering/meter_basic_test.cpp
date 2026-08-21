@@ -143,6 +143,40 @@ TEST_CASE("clipping detector returns regions and counts", "[meter]") {
   REQUIRE(clipping.regions[1].end_sample == 6);
 }
 
+TEST_CASE("clipping params resolve only the documented sentinel", "[meter][numeric]") {
+  using sonare::metering::clipping_params_from_public;
+  using sonare::metering::kDefaultClippingMinRegionSamples;
+  using sonare::metering::kDefaultClippingThreshold;
+
+  SECTION("zero selects the library default") {
+    const auto params = clipping_params_from_public(0.0f, 0);
+    REQUIRE(params.threshold == kDefaultClippingThreshold);
+    REQUIRE(params.min_region_samples == kDefaultClippingMinRegionSamples);
+  }
+
+  SECTION("an in-domain request is applied verbatim") {
+    const auto params = clipping_params_from_public(0.5f, 32);
+    REQUIRE_THAT(params.threshold, WithinAbs(0.5f, 0.0f));
+    REQUIRE(params.min_region_samples == 32);
+  }
+
+  SECTION("an out-of-domain threshold is rejected, not promoted to the default") {
+    // A negative threshold used to reach the same branch as the sentinel and
+    // come back as 0.999, while 1.5 -- equally outside [0,1] -- was refused.
+    for (float invalid : {-0.5f, -0.001f, 1.5f, std::numeric_limits<float>::quiet_NaN(),
+                          std::numeric_limits<float>::infinity()}) {
+      CAPTURE(invalid);
+      try {
+        const auto params = clipping_params_from_public(invalid, 0);
+        CAPTURE(params.threshold);
+        FAIL("an out-of-domain threshold was accepted");
+      } catch (const sonare::SonareException& error) {
+        REQUIRE(error.code() == sonare::ErrorCode::InvalidParameter);
+      }
+    }
+  }
+}
+
 TEST_CASE("meter silence ratio", "[meter]") {
   const std::vector<float> samples = {0.0f, 0.0f, 0.5f, 0.5f};
   const Audio audio = Audio::from_buffer(samples.data(), samples.size(), 48000);

@@ -62,8 +62,11 @@ struct RoomMorphConfig {
   sonare::acoustic::AirAbsorption air{};
 };
 
-/// Validates the target room, placement, morph controls, and RIR timing before
-/// source samples or processor state are changed.
+/// Validates the target room, placement, morph controls, and every RIR synthesis
+/// input (image-source order, timing, air absorption) before source samples or
+/// processor state are changed. Throws ErrorCode::InvalidParameter on any value
+/// RIR synthesis would refuse, since a refused synthesis yields an empty target
+/// RIR that the convolution path would render as dry passthrough.
 void validate_room_morph_config(const RoomMorphConfig& config);
 
 /// @brief Offline room-character morph.

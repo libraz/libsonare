@@ -598,6 +598,35 @@ TEST_CASE("sonare_metering_detect_clipping", "[c_api]") {
     REQUIRE(result.regions == nullptr);
     sonare_free_clipping_result(&result);
   }
+
+  SECTION("only the documented 0.0f sentinel selects the library default") {
+    std::vector<float> samples(8000, 0.1f);
+    for (size_t i = 1000; i < 1064; ++i) samples[i] = 1.0f;
+
+    // The sentinel reproduces the documented default threshold exactly.
+    SonareClippingResult sentinel = {};
+    SonareClippingResult explicit_default = {};
+    REQUIRE(sonare_metering_detect_clipping(samples.data(), samples.size(), 48000, 0.0f, 0,
+                                            &sentinel) == SONARE_OK);
+    REQUIRE(sonare_metering_detect_clipping(samples.data(), samples.size(), 48000, 0.999f, 0,
+                                            &explicit_default) == SONARE_OK);
+    REQUIRE(sentinel.clipped_samples == explicit_default.clipped_samples);
+    REQUIRE(sentinel.region_count == explicit_default.region_count);
+    sonare_free_clipping_result(&sentinel);
+    sonare_free_clipping_result(&explicit_default);
+
+    // Every other out-of-domain threshold is refused. A negative one used to
+    // take the sentinel branch and come back as the default, while 1.5 -- just
+    // as far outside [0,1] -- was correctly refused.
+    for (float invalid : {-0.5f, -0.001f, 1.5f, std::numeric_limits<float>::quiet_NaN()}) {
+      CAPTURE(invalid);
+      SonareClippingResult rejected = {};
+      REQUIRE(sonare_metering_detect_clipping(samples.data(), samples.size(), 48000, invalid, 0,
+                                              &rejected) == SONARE_ERROR_INVALID_PARAMETER);
+      REQUIRE(rejected.regions == nullptr);
+      REQUIRE(rejected.region_count == 0);
+    }
+  }
 }
 
 TEST_CASE("sonare_metering_dynamic_range", "[c_api]") {

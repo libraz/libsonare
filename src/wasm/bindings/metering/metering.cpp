@@ -123,11 +123,12 @@ val js_metering_detect_clipping(val samples, int sample_rate, float threshold,
   if (min_region_samples < 0) {
     throw SonareException(ErrorCode::InvalidParameter, "minRegionSamples must be non-negative");
   }
-  const float effective_threshold = threshold <= 0.0f ? 0.999f : threshold;
-  const size_t effective_min =
-      min_region_samples == 0 ? 1u : static_cast<size_t>(min_region_samples);
+  // Only the documented sentinel (0) selects the library default; any other
+  // out-of-domain threshold is rejected, matching the C ABI.
+  const metering::ClippingParams params =
+      metering::clipping_params_from_public(threshold, static_cast<size_t>(min_region_samples));
   metering::ClippingResult result =
-      metering::detect_clipping(audio, effective_threshold, effective_min);
+      metering::detect_clipping(audio, params.threshold, params.min_region_samples);
   val regions = val::array();
   for (size_t i = 0; i < result.regions.size(); ++i) {
     val region = val::object();

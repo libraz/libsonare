@@ -40,6 +40,7 @@ add_executable(sonare_tests
   util/decompose_test.cpp
   util/reassigned_test.cpp
   util/validated_config_test.cpp
+  util/zero_is_default_test.cpp
   core/convert_test.cpp
   core/window_test.cpp
   core/fft_test.cpp
@@ -339,8 +340,12 @@ if(BUILD_ACOUSTIC_SIM)
     acoustic/room_estimator_test.cpp
   )
   if(BUILD_FX)
-    # The room-character morph lives in sonare_fx but needs the acoustic module.
-    target_sources(sonare_tests PRIVATE effects/room_morph_test.cpp)
+    # The room-character morph and the geometry-driven room reverb live in
+    # sonare_fx but need the acoustic module.
+    target_sources(sonare_tests PRIVATE
+      effects/room_morph_test.cpp
+      effects/room_reverb_test.cpp
+    )
     target_sources(sonare_tests PRIVATE
       api/sonare_c_acoustic_test.cpp
       ${PROJECT_SOURCE_DIR}/src/c_api/sonare_c_acoustic.cpp

@@ -27,6 +27,21 @@ float one_pole_coef(float tau_seconds, int sample_rate) {
   const float tau = std::max(1e-4f, tau_seconds);
   return std::exp(-1.0f / (tau * static_cast<float>(sample_rate)));
 }
+
+/// The target-RIR synthesis configuration this processor derives from its own
+/// config. Built in one place so validation covers exactly what prepare() submits.
+sonare::acoustic::RirSynthConfig rir_config_from(const RoomMorphConfig& config) {
+  sonare::acoustic::RirSynthConfig rc;
+  rc.ism_order = config.ism_order;
+  rc.seed = config.seed;
+  rc.max_seconds = config.max_seconds;
+  rc.late_model = config.late_model;
+  rc.mixing_time_ms = config.mixing_time_ms;  // 0 = auto (~sqrt(V) ms)
+  rc.crossfade_ms = config.crossfade_ms;
+  rc.air_absorption_enabled = config.air_absorption_enabled;
+  rc.air = config.air;
+  return rc;
+}
 }  // namespace
 
 void validate_room_morph_config(const RoomMorphConfig& config) {
@@ -38,23 +53,13 @@ void validate_room_morph_config(const RoomMorphConfig& config) {
                        numeric::finite_in_closed_range(config.wet, 0.0f, 1.0f),
                    ErrorCode::InvalidParameter,
                    "room morph wet and source-tail suppression must be within [0,1]");
-  SONARE_CHECK_MSG(config.ism_order >= 0, ErrorCode::InvalidParameter,
-                   "room morph image-source order must be non-negative");
-  SONARE_CHECK_MSG(
-      numeric::finite_in_closed_range(config.max_seconds, 0.0f, sonare::acoustic::kMaxRirSeconds) &&
-          numeric::finite_in_closed_range(config.mixing_time_ms, 0.0f,
-                                          sonare::acoustic::kMaxRirMixingTimeMs) &&
-          numeric::finite_in_closed_range(config.crossfade_ms, 0.0f,
-                                          sonare::acoustic::kMaxRirCrossfadeMs),
-      ErrorCode::InvalidParameter, "room morph RIR timing values are invalid");
-  if (config.air_absorption_enabled) {
-    SONARE_CHECK_MSG(
-        numeric::finite(config.air.temperature_c) &&
-            config.air.temperature_c > sonare::acoustic::kAbsoluteZeroCelsius &&
-            numeric::finite_in_closed_range(config.air.humidity_percent, 0.0f, 100.0f),
-        ErrorCode::InvalidParameter,
-        "room morph air absorption temperature/humidity is outside the physical range");
-  }
+  // Everything synthesize_rir would refuse, refused here instead: a refused
+  // synthesis returns an empty target RIR, which the convolution path renders as
+  // dry passthrough rather than as an error.
+  const std::vector<Diagnostic> synthesis =
+      sonare::acoustic::validate_rir_synth_config(rir_config_from(config));
+  SONARE_CHECK_MSG(!has_error(synthesis), ErrorCode::InvalidParameter,
+                   "room morph image-source order, RIR timing, or air absorption is invalid");
 }
 
 RoomMorphProcessor::RoomMorphProcessor(RoomMorphConfig config) : config_(std::move(config)) {
@@ -66,15 +71,7 @@ void RoomMorphProcessor::prepare(double sample_rate, int max_block_size) {
 
   const int sr = sample_rate > 0.0 ? static_cast<int>(std::lround(sample_rate)) : 48000;
 
-  RirSynthConfig rc;
-  rc.ism_order = config_.ism_order;
-  rc.seed = config_.seed;
-  rc.max_seconds = config_.max_seconds;
-  rc.late_model = config_.late_model;
-  rc.mixing_time_ms = config_.mixing_time_ms;  // 0 = auto (~sqrt(V) ms)
-  rc.crossfade_ms = config_.crossfade_ms;
-  rc.air_absorption_enabled = config_.air_absorption_enabled;
-  rc.air = config_.air;
+  const RirSynthConfig rc = rir_config_from(config_);
   const RirSynthResult res = synthesize_rir(config_.target, config_.placement, sr, rc);
 
   // prepare() otherwise synthesizes a default noise IR which load_ir() below

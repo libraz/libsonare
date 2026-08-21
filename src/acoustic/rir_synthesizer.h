@@ -39,6 +39,20 @@ struct RirSynthConfig {
   AirAbsorption air{};
 };
 
+/// @brief Validate the non-geometry half of a RIR synthesis configuration.
+///
+/// Checks the image-source order, the timing values (`max_seconds`,
+/// `mixing_time_ms`, `crossfade_ms`) and — only when `air_absorption_enabled` —
+/// the atmospheric temperature/humidity, returning one Error Diagnostic per
+/// failing group and an empty vector when the configuration is usable. The
+/// sample rate is not part of the config and is checked by `synthesize_rir`.
+///
+/// `synthesize_rir` applies exactly these checks before it synthesizes anything,
+/// so an engine that stores a `RirSynthConfig` can call this at construction and
+/// reject the values up front rather than discovering the empty RIR at prepare()
+/// time, where an empty IR degrades silently into dry passthrough.
+std::vector<Diagnostic> validate_rir_synth_config(const RirSynthConfig& config);
+
 /// @brief A synthesized RIR plus the diagnostics gathered producing it.
 struct RirSynthResult {
   Audio rir;                            ///< mono synthesized room impulse response

@@ -13,6 +13,7 @@
 #include "sonare_wrap.h"
 #include "sonare_wrap_options.h"
 #include "sonare_wrap_utils.h"
+#include "util/zero_is_default.h"
 
 using namespace sonare_node;
 
@@ -293,9 +294,12 @@ Napi::Value SonareWrap::SynthesizeRir(const Napi::CallbackInfo& info) {
   cfg.mixing_time_ms = node_float_option(opts, "mixingTimeMs", cfg.mixing_time_ms);
   // crossfadeMs == 0 keeps the RirSynthConfig default (5 ms), matching the C ABI's
   // "crossfade_ms == 0 means keep the library default"; a literal zero crossfade
-  // shifts the splice by ~1 sample and clicks, so only a positive override applies.
-  if (const float crossfade_ms = node_float_option(opts, "crossfadeMs", 0.0f); crossfade_ms > 0.0f)
-    cfg.crossfade_ms = crossfade_ms;
+  // shifts the splice by ~1 sample and clicks. Every other value is the caller's
+  // request and is checked here, before the substitution, so a negative or
+  // non-finite crossfade is rejected instead of silently becoming the default.
+  cfg.crossfade_ms =
+      sonare::ZeroIsDefault(node_float_option(opts, "crossfadeMs", 0.0f))
+          .checked(cfg.crossfade_ms, 0.0f, sonare::acoustic::kMaxRirCrossfadeMs, "crossfadeMs");
   cfg.air_absorption_enabled =
       node_bool_option(opts, "airAbsorptionEnabled", cfg.air_absorption_enabled);
   // airTemperatureC / airHumidityPercent == 0 keep the ISO reference climate
@@ -303,12 +307,11 @@ Napi::Value SonareWrap::SynthesizeRir(const Napi::CallbackInfo& info) {
   // so the same options object yields the same RIR on every surface. An
   // implausible climate is reported through the diagnostics/hasError channel by
   // the core, the way the geometry errors already are.
-  if (const float air_temperature_c = node_float_option(opts, "airTemperatureC", 0.0f);
-      air_temperature_c != 0.0f)
-    cfg.air.temperature_c = air_temperature_c;
-  if (const float air_humidity_percent = node_float_option(opts, "airHumidityPercent", 0.0f);
-      air_humidity_percent != 0.0f)
-    cfg.air.humidity_percent = air_humidity_percent;
+  cfg.air.temperature_c = sonare::ZeroIsDefault(node_float_option(opts, "airTemperatureC", 0.0f))
+                              .or_default(cfg.air.temperature_c);
+  cfg.air.humidity_percent =
+      sonare::ZeroIsDefault(node_float_option(opts, "airHumidityPercent", 0.0f))
+          .or_default(cfg.air.humidity_percent);
 
   const auto placement = PlacementFromOptions(opts);
   ValidateRirShapeAndTiming(placement, cfg);
@@ -347,19 +350,20 @@ Napi::Value SonareWrap::EstimateRoom(const Napi::CallbackInfo& info) {
   // Match the C ABI: an explicit 0 aspect hint means "use the default 1.0", so
   // the same input is accepted identically on every surface (raw 0 would be
   // rejected by the core's finite-positive check).
-  cfg.aspect_hint_lw = node_float_option(opts, "aspectHintLw", cfg.aspect_hint_lw);
-  if (cfg.aspect_hint_lw == 0.0f) cfg.aspect_hint_lw = 1.0f;
-  cfg.aspect_hint_lh = node_float_option(opts, "aspectHintLh", cfg.aspect_hint_lh);
-  if (cfg.aspect_hint_lh == 0.0f) cfg.aspect_hint_lh = 1.0f;
+  cfg.aspect_hint_lw = sonare::ZeroIsDefault(node_float_option(opts, "aspectHintLw", 0.0f))
+                           .or_default(cfg.aspect_hint_lw);
+  cfg.aspect_hint_lh = sonare::ZeroIsDefault(node_float_option(opts, "aspectHintLh", 0.0f))
+                           .or_default(cfg.aspect_hint_lh);
   cfg.reference_absorption =
       node_float_option(opts, "referenceAbsorption", cfg.reference_absorption);
   cfg.prefer_eyring = node_bool_option(opts, "preferEyring", true);
   const int n_bands = node_int_option(opts, "nOctaveBands", 0);
   if (n_bands != 0) cfg.acoustic.n_octave_bands = n_bands;
-  const float min_decay_db = node_float_option(opts, "minDecayDb", 0.0f);
-  if (min_decay_db != 0.0f) cfg.acoustic.min_decay_db = min_decay_db;
-  const float noise_floor_margin_db = node_float_option(opts, "noiseFloorMarginDb", 0.0f);
-  if (noise_floor_margin_db != 0.0f) cfg.acoustic.noise_floor_margin_db = noise_floor_margin_db;
+  cfg.acoustic.min_decay_db = sonare::ZeroIsDefault(node_float_option(opts, "minDecayDb", 0.0f))
+                                  .or_default(cfg.acoustic.min_decay_db);
+  cfg.acoustic.noise_floor_margin_db =
+      sonare::ZeroIsDefault(node_float_option(opts, "noiseFloorMarginDb", 0.0f))
+          .or_default(cfg.acoustic.noise_floor_margin_db);
   switch (node_int_option(opts, "mode", 0)) {
     case 1:
       cfg.acoustic.mode = sonare::AcousticConfig::Mode::Blind;
@@ -432,22 +436,20 @@ Napi::Value SonareWrap::RoomMorph(const Napi::CallbackInfo& info) {
                        ? sonare::acoustic::ReverbModel::Eyring
                        : sonare::acoustic::ReverbModel::Sabine;
   cfg.mixing_time_ms = node_float_option(opts, "mixingTimeMs", cfg.mixing_time_ms);
-  // crossfadeMs == 0 keeps the RoomMorphConfig default (5 ms), matching the C ABI's
-  // "crossfade_ms == 0 means keep the library default"; a literal zero crossfade
-  // shifts the splice by ~1 sample and clicks, so only a positive override applies.
-  if (const float crossfade_ms = node_float_option(opts, "crossfadeMs", 0.0f); crossfade_ms != 0.0f)
-    cfg.crossfade_ms = crossfade_ms;
+  // Same crossfade sentinel rule as SynthesizeRir above.
+  cfg.crossfade_ms =
+      sonare::ZeroIsDefault(node_float_option(opts, "crossfadeMs", 0.0f))
+          .checked(cfg.crossfade_ms, 0.0f, sonare::acoustic::kMaxRirCrossfadeMs, "crossfadeMs");
   // Air absorption on the target room; the zero-means-ISO-reference rule is the
   // same as synthesizeRir above. An implausible climate throws here (the morph
   // core validates rather than diagnosing), matching the C ABI.
   cfg.air_absorption_enabled =
       node_bool_option(opts, "airAbsorptionEnabled", cfg.air_absorption_enabled);
-  if (const float air_temperature_c = node_float_option(opts, "airTemperatureC", 0.0f);
-      air_temperature_c != 0.0f)
-    cfg.air.temperature_c = air_temperature_c;
-  if (const float air_humidity_percent = node_float_option(opts, "airHumidityPercent", 0.0f);
-      air_humidity_percent != 0.0f)
-    cfg.air.humidity_percent = air_humidity_percent;
+  cfg.air.temperature_c = sonare::ZeroIsDefault(node_float_option(opts, "airTemperatureC", 0.0f))
+                              .or_default(cfg.air.temperature_c);
+  cfg.air.humidity_percent =
+      sonare::ZeroIsDefault(node_float_option(opts, "airHumidityPercent", 0.0f))
+          .or_default(cfg.air.humidity_percent);
 
   const sonare::Audio result = sonare::effects::acoustic::room_morph(audio, cfg);
   std::vector<float> out = AudioToVector(result);

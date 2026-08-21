@@ -4,8 +4,18 @@
 #include <cmath>
 
 #include "util/exception.h"
+#include "util/zero_is_default.h"
 
 namespace sonare::metering {
+
+ClippingParams clipping_params_from_public(float threshold, size_t min_region_samples) {
+  ClippingParams params;
+  params.threshold =
+      ZeroIsDefault(threshold).checked(kDefaultClippingThreshold, 0.0f, 1.0f, "threshold");
+  params.min_region_samples =
+      min_region_samples == 0 ? kDefaultClippingMinRegionSamples : min_region_samples;
+  return params;
+}
 
 ClippingResult detect_clipping(const Audio& audio, float threshold, size_t min_region_samples) {
   SONARE_CHECK(threshold >= 0.0f && threshold <= 1.0f, ErrorCode::InvalidParameter);

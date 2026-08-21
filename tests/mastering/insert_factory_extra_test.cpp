@@ -32,6 +32,12 @@
 #include "effects/reverb/convolution_reverb.h"
 #endif
 
+#ifdef SONARE_WITH_ACOUSTIC_SIM
+// AirAbsorption carries the ISO reference climate the acoustic ABI's zero
+// sentinel resolves to; the tests read it instead of restating the literals.
+#include "acoustic/late_reverb.h"
+#endif
+
 namespace {
 
 using Catch::Matchers::WithinAbs;
@@ -319,6 +325,56 @@ TEST_CASE("acoustic room inserts reject invalid geometry as InvalidParameter",
   }
 }
 
+TEST_CASE("acoustic room inserts reject an invalid RIR length cap and air climate",
+          "[mastering][insert_factory][effects][acoustic][numeric]") {
+  // The geometry is only half the synthesis configuration: an out-of-range
+  // maxSeconds or a non-physical air climate also makes RIR synthesis fail,
+  // which yields an empty IR and therefore a silently inert (dry passthrough)
+  // insert. Both inserts must refuse them at construction instead.
+  const char* room = R"({"lengthM":8,"widthM":6,"heightM":3.5,"dryWet":1,)";
+  for (const char* tail : {R"("maxSeconds":-1})", R"("maxSeconds":1000})",
+                           R"("airAbsorptionEnabled":true,"airTemperatureC":-500})",
+                           R"("airAbsorptionEnabled":true,"airHumidityPercent":150})"}) {
+    for (const char* name : {"effects.reverb.room", "effects.acoustic.roomMorph"}) {
+      const std::string params = std::string(room) + tail;
+      DYNAMIC_SECTION(name << " " << tail) {
+        try {
+          auto processor = make_insert(name, params);
+          (void)processor;
+          FAIL("an unsynthesizable RIR configuration was accepted");
+        } catch (const sonare::SonareException& error) {
+          REQUIRE(error.code() == sonare::ErrorCode::InvalidParameter);
+        }
+      }
+    }
+  }
+}
+
+TEST_CASE("an accepted effects.reverb.room insert is not a dry passthrough",
+          "[mastering][insert_factory][effects][acoustic]") {
+  // The counterpart of the rejection cases: a configuration the factory accepts
+  // must actually convolve. A dry passthrough (empty IR) would leave the impulse
+  // exactly where it was written.
+  auto processor =
+      make_insert("effects.reverb.room",
+                  R"({"lengthM":8,"widthM":6,"heightM":3.5,"maxSeconds":0.5,"dryWet":1})");
+  REQUIRE(processor != nullptr);
+
+  constexpr int block = 256;
+  processor->prepare(48000.0, block);
+  std::vector<float> buf(static_cast<size_t>(block) * 8, 0.0f);
+  buf[0] = 1.0f;
+  for (size_t off = 0; off < buf.size(); off += static_cast<size_t>(block)) {
+    float* blk = buf.data() + off;
+    processor->process(&blk, 1, block);
+  }
+
+  REQUIRE(buf[0] != 1.0f);
+  double energy = 0.0;
+  for (float sample : buf) energy += static_cast<double>(sample) * sample;
+  REQUIRE(energy > 0.0);
+}
+
 TEST_CASE("effects.acoustic.roomMorph insert reaches acoustic facade options",
           "[mastering][insert_factory][effects][acoustic]") {
   const auto names = insert_param_names("effects.acoustic.roomMorph");
@@ -387,6 +443,99 @@ TEST_CASE("effects.reverb.room and effects.acoustic.roomMorph reach air absorpti
     REQUIRE(ListContains(names, "airTemperatureC"));
     REQUIRE(ListContains(names, "airHumidityPercent"));
   }
+}
+
+TEST_CASE("acoustic inserts resolve a zero air climate to the ISO reference climate",
+          "[mastering][insert_factory][effects][acoustic][numeric]") {
+  // INVARIANT (a): airTemperatureC / airHumidityPercent follow the acoustic
+  // ABI's "0 selects the library value" rule on the streaming inserts too, so
+  // the same option bag describes the same room here as on the offline facade.
+  // The expected climate is read from the library default rather than written
+  // as a literal, which is exactly what the offline facade substitutes for 0.
+  const sonare::acoustic::AirAbsorption iso{};
+  constexpr int block = 256;
+  const auto render = [](const std::string& name, const std::string& params) {
+    auto processor = make_insert(name, params);
+    REQUIRE(processor != nullptr);
+    std::vector<float> buf(static_cast<size_t>(block) * 12, 0.0f);
+    buf[0] = 1.0f;
+    processor->prepare(48000.0, block);
+    for (size_t off = 0; off < buf.size(); off += static_cast<size_t>(block)) {
+      float* blk = buf.data() + off;
+      processor->process(&blk, 1, block);
+    }
+    return buf;
+  };
+  const auto same = [](const std::vector<float>& a, const std::vector<float>& b) {
+    if (a.size() != b.size()) return false;
+    for (size_t i = 0; i < a.size(); ++i) {
+      if (a[i] != b[i]) return false;
+    }
+    return true;
+  };
+
+  constexpr const char* geometry =
+      R"("lengthM":14,"widthM":10,"heightM":5,"absorption":0.15,"sourceX":2,"sourceY":2,)"
+      R"("sourceZ":1.5,"listenerX":9,"listenerY":7,"listenerZ":1.7,"maxSeconds":0.4,"seed":5,)"
+      R"("dryWet":1,"sourceTailSuppression":0,"airAbsorptionEnabled":1)";
+  const std::string zero_climate =
+      std::string("{") + geometry + R"(,"airTemperatureC":0,"airHumidityPercent":0})";
+  const std::string iso_climate = std::string("{") + geometry + R"(,"airTemperatureC":)" +
+                                  std::to_string(iso.temperature_c) + R"(,"airHumidityPercent":)" +
+                                  std::to_string(iso.humidity_percent) + "}";
+  // A humidity that is not the sentinel must reach the synthesizer, which keeps
+  // the equality above from passing for the trivial reason that the insert
+  // ignores the climate entirely.
+  const std::string other_climate =
+      std::string("{") + geometry + R"(,"airTemperatureC":0,"airHumidityPercent":1})";
+
+  for (const char* name : {"effects.reverb.room", "effects.acoustic.roomMorph"}) {
+    DYNAMIC_SECTION(name) {
+      REQUIRE(same(render(name, zero_climate), render(name, iso_climate)));
+      REQUIRE_FALSE(same(render(name, zero_climate), render(name, other_climate)));
+    }
+  }
+}
+
+TEST_CASE("effects.acoustic.roomMorph rejects a crossfade the caller cannot see ignored",
+          "[mastering][insert_factory][effects][acoustic][numeric]") {
+  // INVARIANT (b): a timing value is applied or rejected. Only the documented
+  // sentinel resolves to the library default, so a negative crossfade cannot
+  // reach the synthesizer as the default and report success.
+  constexpr const char* geometry =
+      R"("lengthM":12,"widthM":9,"heightM":5,"absorption":0.2,"dryWet":1,)"
+      R"("sourceTailSuppression":0,"maxSeconds":0.3,"seed":7)";
+  for (const char* crossfade :
+       {R"("crossfadeMs":-5)", R"("crossfadeMs":-0.001)", R"("crossfadeMs":100000)"}) {
+    DYNAMIC_SECTION(crossfade) {
+      const std::string params = std::string("{") + geometry + "," + crossfade + "}";
+      try {
+        auto processor = make_insert("effects.acoustic.roomMorph", params);
+        (void)processor;
+        FAIL("an out-of-range crossfade was accepted");
+      } catch (const sonare::SonareException& error) {
+        REQUIRE(error.code() == sonare::ErrorCode::InvalidParameter);
+      }
+    }
+  }
+
+  // The sentinel keeps its meaning: 0 is the library default, not a request for
+  // a zero-width crossfade, so it renders exactly like omitting the key.
+  const auto render = [](const std::string& params) {
+    auto processor = make_insert("effects.acoustic.roomMorph", params);
+    REQUIRE(processor != nullptr);
+    constexpr int block = 256;
+    std::vector<float> buf(static_cast<size_t>(block) * 12, 0.0f);
+    buf[0] = 1.0f;
+    processor->prepare(48000.0, block);
+    for (size_t off = 0; off < buf.size(); off += static_cast<size_t>(block)) {
+      float* blk = buf.data() + off;
+      processor->process(&blk, 1, block);
+    }
+    return buf;
+  };
+  REQUIRE(render(std::string("{") + geometry + "}") ==
+          render(std::string("{") + geometry + R"(,"crossfadeMs":0})"));
 }
 
 TEST_CASE("effects.reverb.room air absorption shortens the round-tripped high-band RT60",

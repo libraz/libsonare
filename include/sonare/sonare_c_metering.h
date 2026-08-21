@@ -68,8 +68,11 @@ typedef struct {
 } SonareClippingResult;
 
 /// @brief Detects clipped sample runs.
-/// @param threshold Linear absolute threshold (typical: 0.999f). Pass 0.0f for
-///                  the library default.
+/// @param threshold Linear absolute threshold in [0, 1] (typical: 0.999f). Pass
+///                  exactly 0.0f for the library default (0.999f); every other
+///                  value outside the domain, negative included, is rejected
+///                  with SONARE_ERROR_INVALID_PARAMETER rather than promoted to
+///                  the default.
 /// @param min_region_samples Minimum run length to report. Pass 0 for the
 ///                  library default (1).
 SonareError sonare_metering_detect_clipping(const float* samples, size_t length, int sample_rate,

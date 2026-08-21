@@ -42,8 +42,12 @@ struct RoomReverbConfig {
 /// (the convolution runs 1:1 with the IR samples), so the reverberation time is
 /// correct on any host rate. process()/reset()/set_parameter() are inherited
 /// from ConvolutionReverb and stay allocation-free on the audio thread. The
-/// constructor rejects invalid room dimensions or source/listener placement with
-/// ErrorCode::InvalidParameter.
+/// constructor rejects with ErrorCode::InvalidParameter every configuration RIR
+/// synthesis would refuse — invalid room dimensions or source/listener placement,
+/// a negative image-source order, a `max_seconds` outside
+/// [0, acoustic::kMaxRirSeconds], and non-physical air temperature/humidity while
+/// air absorption is enabled — because a refused synthesis returns an empty IR,
+/// which the convolution path renders as silent dry passthrough.
 class RoomReverb : public ConvolutionReverb {
  public:
   explicit RoomReverb(RoomReverbConfig config = {});

@@ -88,8 +88,10 @@
 #include "effects/reverb/velvet_reverb.h"
 #ifdef SONARE_HAVE_ACOUSTIC
 #include "acoustic/material.h"
+#include "acoustic/rir_synthesizer.h"
 #include "effects/acoustic/room_morph.h"
 #include "effects/reverb/room_reverb.h"
+#include "util/zero_is_default.h"
 #endif
 #endif
 
@@ -669,8 +671,13 @@ std::unique_ptr<Processor> build_effects(const std::string& name, const ParamMap
     config.dry_wet = f(params, "dryWet", config.dry_wet);
     config.air_absorption_enabled =
         b(params, "airAbsorptionEnabled", config.air_absorption_enabled);
-    config.air.temperature_c = f(params, "airTemperatureC", config.air.temperature_c);
-    config.air.humidity_percent = f(params, "airHumidityPercent", config.air.humidity_percent);
+    // The climate pair follows the acoustic ABI's "0 selects the library value"
+    // rule (the ISO reference climate), so the same option bag resolves to the
+    // same room here as on the offline facade.
+    config.air.temperature_c =
+        ZeroIsDefault(f(params, "airTemperatureC", 0.0f)).or_default(config.air.temperature_c);
+    config.air.humidity_percent = ZeroIsDefault(f(params, "airHumidityPercent", 0.0f))
+                                      .or_default(config.air.humidity_percent);
     return make<RoomReverb>(config);
   }
   if (name == "effects.acoustic.roomMorph") {
@@ -699,14 +706,16 @@ std::unique_ptr<Processor> build_effects(const std::string& name, const ParamMap
     config.mixing_time_ms = f(params, "mixingTimeMs", config.mixing_time_ms);
     // A zero crossfade means "use the library default" on the offline acoustic
     // facade; preserve that normalization for the streaming insert as well.
-    if (params.find("crossfadeMs") != params.end()) {
-      const float crossfade_ms = f(params, "crossfadeMs", 0.0f);
-      if (crossfade_ms != 0.0f) config.crossfade_ms = crossfade_ms;
-    }
+    config.crossfade_ms = ZeroIsDefault(f(params, "crossfadeMs", 0.0f))
+                              .checked(config.crossfade_ms, 0.0f,
+                                       sonare::acoustic::kMaxRirCrossfadeMs, "crossfadeMs");
     config.air_absorption_enabled =
         b(params, "airAbsorptionEnabled", config.air_absorption_enabled);
-    config.air.temperature_c = f(params, "airTemperatureC", config.air.temperature_c);
-    config.air.humidity_percent = f(params, "airHumidityPercent", config.air.humidity_percent);
+    // Same climate convention as effects.reverb.room above.
+    config.air.temperature_c =
+        ZeroIsDefault(f(params, "airTemperatureC", 0.0f)).or_default(config.air.temperature_c);
+    config.air.humidity_percent = ZeroIsDefault(f(params, "airHumidityPercent", 0.0f))
+                                      .or_default(config.air.humidity_percent);
     return make<effects::acoustic::RoomMorphProcessor>(config);
   }
 #endif

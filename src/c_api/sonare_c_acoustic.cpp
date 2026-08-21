@@ -12,6 +12,7 @@
 #include "analysis/room_estimator.h"
 #include "core/audio.h"
 #include "effects/acoustic/room_morph.h"
+#include "util/zero_is_default.h"
 #endif
 
 #include "sonare_c_internal.h"
@@ -188,7 +189,8 @@ SonareError sonare_synthesize_rir(const SonareRirSynthConfig* config, int sample
   rc.mixing_time_ms = config->mixing_time_ms;
   // crossfade_ms == 0 means "keep the library default"; a true zero crossfade is
   // not a useful synthesis setting, so a zeroed POD preserves the C++ default.
-  if (config->crossfade_ms > 0.0f) rc.crossfade_ms = config->crossfade_ms;
+  // The range check above ran on the caller's value, before this substitution.
+  rc.crossfade_ms = sonare::ZeroIsDefault(config->crossfade_ms).or_default(rc.crossfade_ms);
   rc.air_absorption_enabled = config->air_absorption_enabled != 0;
   // Zero climate values keep the ISO reference (20 degC / 50 % RH) on the same
   // "0 means the library default" rule as seed and crossfade_ms, so enabling
@@ -196,10 +198,10 @@ SonareError sonare_synthesize_rir(const SonareRirSynthConfig* config, int sample
   // rather than a silent 0 degC / 0 % one. An implausible value is left for the
   // core to diagnose (acoustic.invalid_air_absorption), which keeps the failure
   // in the same has_error channel as the geometry checks.
-  if (config->air_temperature_c != 0.0f) rc.air.temperature_c = config->air_temperature_c;
-  if (config->air_humidity_percent != 0.0f) {
-    rc.air.humidity_percent = config->air_humidity_percent;
-  }
+  rc.air.temperature_c =
+      sonare::ZeroIsDefault(config->air_temperature_c).or_default(rc.air.temperature_c);
+  rc.air.humidity_percent =
+      sonare::ZeroIsDefault(config->air_humidity_percent).or_default(rc.air.humidity_percent);
 
   const RirSynthResult res = synthesize_rir(room, placement, sample_rate, rc);
   out->has_error = has_error(res.diagnostics) ? 1 : 0;
@@ -234,15 +236,18 @@ SonareError sonare_estimate_room(const float* samples, size_t length, int sample
 
   return run_offline(samples, length, sample_rate, [&](const Audio& audio) -> SonareError {
     sonare::RoomEstimateConfig cfg;
-    cfg.aspect_hint_lw = config->aspect_hint_lw == 0.0f ? 1.0f : config->aspect_hint_lw;
-    cfg.aspect_hint_lh = config->aspect_hint_lh == 0.0f ? 1.0f : config->aspect_hint_lh;
+    // Same "0 selects the library value" rule as the RIR-synth config above.
+    cfg.aspect_hint_lw =
+        sonare::ZeroIsDefault(config->aspect_hint_lw).or_default(cfg.aspect_hint_lw);
+    cfg.aspect_hint_lh =
+        sonare::ZeroIsDefault(config->aspect_hint_lh).or_default(cfg.aspect_hint_lh);
     cfg.reference_absorption = config->reference_absorption;
     cfg.prefer_eyring = config->prefer_eyring != 0;
     if (config->n_octave_bands != 0) cfg.acoustic.n_octave_bands = config->n_octave_bands;
-    if (config->min_decay_db != 0.0f) cfg.acoustic.min_decay_db = config->min_decay_db;
-    if (config->noise_floor_margin_db != 0.0f) {
-      cfg.acoustic.noise_floor_margin_db = config->noise_floor_margin_db;
-    }
+    cfg.acoustic.min_decay_db =
+        sonare::ZeroIsDefault(config->min_decay_db).or_default(cfg.acoustic.min_decay_db);
+    cfg.acoustic.noise_floor_margin_db = sonare::ZeroIsDefault(config->noise_floor_margin_db)
+                                             .or_default(cfg.acoustic.noise_floor_margin_db);
     switch (config->mode) {
       case SONARE_ACOUSTIC_MODE_BLIND:
         cfg.acoustic.mode = sonare::AcousticConfig::Mode::Blind;
@@ -336,17 +341,18 @@ SonareError sonare_room_morph(const float* samples, size_t length, int sample_ra
         cfg.late_model = reverb_model_from_int(config->late_model);
         cfg.mixing_time_ms = config->mixing_time_ms;  // 0 = auto (~sqrt(V) ms)
         // crossfade_ms == 0 preserves the C++ default (a true zero crossfade is
-        // not a useful setting), matching the RIR-synth ABI convention.
-        if (config->crossfade_ms != 0.0f) cfg.crossfade_ms = config->crossfade_ms;
+        // not a useful setting), matching the RIR-synth ABI convention. Any
+        // other value reaches the morph core, which rejects it if out of range.
+        cfg.crossfade_ms = sonare::ZeroIsDefault(config->crossfade_ms).or_default(cfg.crossfade_ms);
         // Air absorption on the target room; zero climate values keep the ISO
         // reference, exactly as in synthesize_rir above. Here the core rejects an
         // implausible climate by throwing, which run_mono_offline maps to
         // SONARE_ERROR_INVALID_PARAMETER.
         cfg.air_absorption_enabled = config->air_absorption_enabled != 0;
-        if (config->air_temperature_c != 0.0f) cfg.air.temperature_c = config->air_temperature_c;
-        if (config->air_humidity_percent != 0.0f) {
-          cfg.air.humidity_percent = config->air_humidity_percent;
-        }
+        cfg.air.temperature_c =
+            sonare::ZeroIsDefault(config->air_temperature_c).or_default(cfg.air.temperature_c);
+        cfg.air.humidity_percent = sonare::ZeroIsDefault(config->air_humidity_percent)
+                                       .or_default(cfg.air.humidity_percent);
         return sonare::effects::acoustic::room_morph(audio, cfg);
       });
 #else

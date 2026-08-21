@@ -99,28 +99,35 @@ Audio color_early_ir(const std::vector<ImageSource>& images, int sample_rate,
 
 }  // namespace
 
-RirSynthResult synthesize_rir(const ShoeboxRoom& room, const SourceListener& placement,
-                              int sample_rate, const RirSynthConfig& config) {
-  RirSynthResult result;
-  result.diagnostics = validate_shoebox(room, placement);
+std::vector<Diagnostic> validate_rir_synth_config(const RirSynthConfig& config) {
+  std::vector<Diagnostic> diagnostics;
   if (config.ism_order < 0 ||
       !numeric::finite_in_closed_range(config.max_seconds, 0.0f, kMaxRirSeconds) ||
       !numeric::finite_in_closed_range(config.mixing_time_ms, 0.0f, kMaxRirMixingTimeMs) ||
       !numeric::finite_in_closed_range(config.crossfade_ms, 0.0f, kMaxRirCrossfadeMs)) {
-    result.diagnostics.push_back({Diagnostic::Severity::Error, "acoustic.invalid_rir_config",
-                                  "RIR timing values must be finite and within safe bounds"});
-  }
-  if (sample_rate < kMinAudioSampleRate || sample_rate > kMaxAudioSampleRate) {
-    result.diagnostics.push_back({Diagnostic::Severity::Error, "acoustic.invalid_sample_rate",
-                                  "sample rate is outside supported bounds"});
+    diagnostics.push_back({Diagnostic::Severity::Error, "acoustic.invalid_rir_config",
+                           "RIR timing values must be finite and within safe bounds"});
   }
   if (config.air_absorption_enabled &&
       (!numeric::finite(config.air.temperature_c) ||
        config.air.temperature_c <= kAbsoluteZeroCelsius ||
        !numeric::finite_in_closed_range(config.air.humidity_percent, 0.0f, 100.0f))) {
-    result.diagnostics.push_back(
-        {Diagnostic::Severity::Error, "acoustic.invalid_air_absorption",
-         "air absorption temperature/humidity is outside the physical range"});
+    diagnostics.push_back({Diagnostic::Severity::Error, "acoustic.invalid_air_absorption",
+                           "air absorption temperature/humidity is outside the physical range"});
+  }
+  return diagnostics;
+}
+
+RirSynthResult synthesize_rir(const ShoeboxRoom& room, const SourceListener& placement,
+                              int sample_rate, const RirSynthConfig& config) {
+  RirSynthResult result;
+  result.diagnostics = validate_shoebox(room, placement);
+  const std::vector<Diagnostic> config_diagnostics = validate_rir_synth_config(config);
+  result.diagnostics.insert(result.diagnostics.end(), config_diagnostics.begin(),
+                            config_diagnostics.end());
+  if (sample_rate < kMinAudioSampleRate || sample_rate > kMaxAudioSampleRate) {
+    result.diagnostics.push_back({Diagnostic::Severity::Error, "acoustic.invalid_sample_rate",
+                                  "sample rate is outside supported bounds"});
   }
   if (has_error(result.diagnostics)) {
     const int diagnostic_sample_rate =

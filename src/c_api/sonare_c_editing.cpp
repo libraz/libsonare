@@ -127,11 +127,15 @@ SonareError sonare_metering_detect_clipping(const float* samples, size_t length,
   SONARE_C_API_ENTRY;
   if (!out) return SONARE_ERROR_INVALID_PARAMETER;
   std::memset(out, 0, sizeof(*out));
-  float effective_threshold = threshold <= 0.0f ? 0.999f : threshold;
-  size_t effective_min = min_region_samples == 0 ? 1u : min_region_samples;
   return run_offline(samples, length, sample_rate, [&](const Audio& audio) -> SonareError {
+    // Only the documented sentinel (0) selects the library default; any other
+    // out-of-domain threshold throws here and run_offline maps it to
+    // SONARE_ERROR_INVALID_PARAMETER, so a negative request is refused exactly
+    // like the equally out-of-domain 1.5 always was.
+    const metering::ClippingParams params =
+        metering::clipping_params_from_public(threshold, min_region_samples);
     metering::ClippingResult result =
-        metering::detect_clipping(audio, effective_threshold, effective_min);
+        metering::detect_clipping(audio, params.threshold, params.min_region_samples);
     out->clipped_samples = result.clipped_samples;
     out->clipping_ratio = result.clipping_ratio;
     out->max_clipped_peak = result.max_clipped_peak;

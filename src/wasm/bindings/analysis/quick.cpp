@@ -13,6 +13,7 @@
 #include "analysis/music_analyzer.h"
 #include "analysis/onset_analyzer.h"
 #include "util/numeric_validation.h"
+#include "util/zero_is_default.h"
 #include "wasm/bindings/common/common.h"
 
 std::vector<Mode> modesFromVal(val modes) {
@@ -954,18 +955,24 @@ val js_synthesize_rir(val opts) {
     config.seed = static_cast<unsigned>(seed_in);
   config.max_seconds = floatProperty(opts, "maxSeconds", config.max_seconds);
   config.mixing_time_ms = floatProperty(opts, "mixingTimeMs", config.mixing_time_ms);
-  const float crossfade_ms = floatProperty(opts, "crossfadeMs", 0.0f);
-  if (crossfade_ms > 0.0f) config.crossfade_ms = crossfade_ms;
+  // crossfadeMs == 0 keeps the library default; every other value is the
+  // caller's request, checked here rather than after the substitution, so a
+  // negative or non-finite crossfade is rejected instead of silently becoming
+  // the default (the C ABI refuses the same values).
+  config.crossfade_ms =
+      sonare::ZeroIsDefault(floatProperty(opts, "crossfadeMs", 0.0f))
+          .checked(config.crossfade_ms, 0.0f, sonare::acoustic::kMaxRirCrossfadeMs, "crossfadeMs");
   config.air_absorption_enabled =
       boolProperty(opts, "airAbsorptionEnabled", config.air_absorption_enabled);
   // airTemperatureC / airHumidityPercent == 0 keep the ISO reference climate
   // (20 degC, 50 % RH), matching the C ABI's "0 means the library default" rule
   // so the same options object yields the same RIR on every surface. An
   // implausible climate is reported through diagnostics/hasError by the core.
-  const float air_temperature_c = floatProperty(opts, "airTemperatureC", 0.0f);
-  if (air_temperature_c != 0.0f) config.air.temperature_c = air_temperature_c;
-  const float air_humidity_percent = floatProperty(opts, "airHumidityPercent", 0.0f);
-  if (air_humidity_percent != 0.0f) config.air.humidity_percent = air_humidity_percent;
+  config.air.temperature_c = sonare::ZeroIsDefault(floatProperty(opts, "airTemperatureC", 0.0f))
+                                 .or_default(config.air.temperature_c);
+  config.air.humidity_percent =
+      sonare::ZeroIsDefault(floatProperty(opts, "airHumidityPercent", 0.0f))
+          .or_default(config.air.humidity_percent);
 
   const auto placement = placementFromVal(opts);
   validateRirShapeAndTiming(placement, config);
@@ -993,19 +1000,20 @@ val js_estimate_room(val samples, int sample_rate, val opts) {
   // Match the C ABI: an explicit 0 aspect hint means "use the default 1.0", so
   // the same input is accepted identically on every surface (raw 0 would be
   // rejected by the core's finite-positive check).
-  config.aspect_hint_lw = floatProperty(opts, "aspectHintLw", config.aspect_hint_lw);
-  if (config.aspect_hint_lw == 0.0f) config.aspect_hint_lw = 1.0f;
-  config.aspect_hint_lh = floatProperty(opts, "aspectHintLh", config.aspect_hint_lh);
-  if (config.aspect_hint_lh == 0.0f) config.aspect_hint_lh = 1.0f;
+  config.aspect_hint_lw = sonare::ZeroIsDefault(floatProperty(opts, "aspectHintLw", 0.0f))
+                              .or_default(config.aspect_hint_lw);
+  config.aspect_hint_lh = sonare::ZeroIsDefault(floatProperty(opts, "aspectHintLh", 0.0f))
+                              .or_default(config.aspect_hint_lh);
   config.reference_absorption =
       floatProperty(opts, "referenceAbsorption", config.reference_absorption);
   config.prefer_eyring = boolProperty(opts, "preferEyring", true);
   const int n_bands = intProperty(opts, "nOctaveBands", 0);
   if (n_bands != 0) config.acoustic.n_octave_bands = n_bands;
-  const float min_decay_db = floatProperty(opts, "minDecayDb", 0.0f);
-  if (min_decay_db != 0.0f) config.acoustic.min_decay_db = min_decay_db;
-  const float noise_floor_margin_db = floatProperty(opts, "noiseFloorMarginDb", 0.0f);
-  if (noise_floor_margin_db != 0.0f) config.acoustic.noise_floor_margin_db = noise_floor_margin_db;
+  config.acoustic.min_decay_db = sonare::ZeroIsDefault(floatProperty(opts, "minDecayDb", 0.0f))
+                                     .or_default(config.acoustic.min_decay_db);
+  config.acoustic.noise_floor_margin_db =
+      sonare::ZeroIsDefault(floatProperty(opts, "noiseFloorMarginDb", 0.0f))
+          .or_default(config.acoustic.noise_floor_margin_db);
   switch (intProperty(opts, "mode", 0)) {
     case 1:
       config.acoustic.mode = sonare::AcousticConfig::Mode::Blind;
@@ -1067,17 +1075,20 @@ val js_room_morph(val samples, int sample_rate, val opts) {
                           ? sonare::acoustic::ReverbModel::Eyring
                           : sonare::acoustic::ReverbModel::Sabine;
   config.mixing_time_ms = floatProperty(opts, "mixingTimeMs", config.mixing_time_ms);
-  const float crossfade_ms = floatProperty(opts, "crossfadeMs", 0.0f);
-  if (crossfade_ms != 0.0f) config.crossfade_ms = crossfade_ms;
+  // Same crossfade sentinel rule as synthesizeRir above.
+  config.crossfade_ms =
+      sonare::ZeroIsDefault(floatProperty(opts, "crossfadeMs", 0.0f))
+          .checked(config.crossfade_ms, 0.0f, sonare::acoustic::kMaxRirCrossfadeMs, "crossfadeMs");
   // Air absorption on the target room; the zero-means-ISO-reference rule is the
   // same as synthesizeRir above. An implausible climate throws here (the morph
   // core validates rather than diagnosing), matching the C ABI.
   config.air_absorption_enabled =
       boolProperty(opts, "airAbsorptionEnabled", config.air_absorption_enabled);
-  const float air_temperature_c = floatProperty(opts, "airTemperatureC", 0.0f);
-  if (air_temperature_c != 0.0f) config.air.temperature_c = air_temperature_c;
-  const float air_humidity_percent = floatProperty(opts, "airHumidityPercent", 0.0f);
-  if (air_humidity_percent != 0.0f) config.air.humidity_percent = air_humidity_percent;
+  config.air.temperature_c = sonare::ZeroIsDefault(floatProperty(opts, "airTemperatureC", 0.0f))
+                                 .or_default(config.air.temperature_c);
+  config.air.humidity_percent =
+      sonare::ZeroIsDefault(floatProperty(opts, "airHumidityPercent", 0.0f))
+          .or_default(config.air.humidity_percent);
 
   const Audio result = sonare::effects::acoustic::room_morph(audio, config);
   std::vector<float> out;
