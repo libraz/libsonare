@@ -57,6 +57,13 @@ inline constexpr float kButterworthQ =
 inline constexpr double kButterworthQD = 0.70710678118654752440;
 
 // ============================================================
+// Acoustics
+// ============================================================
+/// Speed of sound in air (m/s) at room temperature — the textbook value used
+/// wherever a distance is turned into a propagation delay or a reflection time.
+inline constexpr float kSoundSpeedMps = 343.0f;
+
+// ============================================================
 // librosa-compatible defaults (reference only, not enforced)
 // ============================================================
 inline constexpr int kDefaultSampleRate = 22050;

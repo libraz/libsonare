@@ -11,11 +11,12 @@
 #include "acoustic/geometry.h"
 #include "acoustic/room_model.h"
 #include "core/audio.h"
+#include "util/constants.h"
 
 namespace sonare::acoustic {
 
 /// @brief Speed of sound in air at ~20 °C (m/s).
-inline constexpr float kSoundSpeed = 343.0f;
+inline constexpr float kSoundSpeed = sonare::constants::kSoundSpeedMps;
 
 /// @brief Hard upper bound on the image-source reflection order.
 ///
