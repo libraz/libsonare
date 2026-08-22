@@ -34,6 +34,17 @@ struct StreamAnalyzerPublication {
   // Slot ownership is acquired by CAS, so producer and consumer can never
   // touch the same non-atomic snapshot storage. With three slots there is
   // always one free slot besides the current publication and one reader pin.
+  // Scalar totals mirrored out of the published snapshot. frame_count() and
+  // current_time() answer from these: reading them out of a slot would mean
+  // pinning it with a CAS spin and copying four progression vectors (up to
+  // max_progression_entries each) to return a single number, which a UI polling
+  // the position at frame rate turns into a stream of heap allocations against
+  // the audio thread. Each is a self-contained scalar written where the slot it
+  // mirrors is written, so relaxed ordering is enough: nothing else's
+  // visibility depends on it, and a reader sees some published snapshot's value.
+  std::atomic<int> published_total_frames{0};
+  std::atomic<float> published_duration_seconds{0.0f};
+
   std::array<StreamAnalyzerStatsSlot, kStatsSlotCount> stats_slots;
   std::array<std::atomic<StatsSlotState>, kStatsSlotCount> stats_slot_states{
       StatsSlotState::kPublished, StatsSlotState::kFree, StatsSlotState::kFree};

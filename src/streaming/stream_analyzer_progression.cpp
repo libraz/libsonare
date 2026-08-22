@@ -70,7 +70,12 @@ void StreamAnalyzer::flush_pending_chord() {
 void StreamAnalyzer::update_progressive_estimate(float current_time) {
   current_estimate_.accumulated_seconds = current_time;
   current_estimate_.used_frames = frame_count_;
-  current_estimate_.updated = false;
+  /// current_estimate_.updated is deliberately NOT cleared here. It reports
+  /// whether a key or BPM re-estimate happened in the interval the consumer is
+  /// about to read, and one process() call runs this for every frame in the
+  /// chunk, so clearing per frame would drop an update that happened on any but
+  /// the last frame and would leave a stale true when a chunk produced no frame
+  /// at all. publish_stats_snapshot() consumes and clears it instead.
 
   /// Update key estimate using Krumhansl-Schmuckler correlation
   if (config_.compute_chroma && chroma_frame_count_ > 0) {
@@ -200,7 +205,6 @@ void StreamAnalyzer::update_progressive_estimate(float current_time) {
   /// Update BPM estimate
   if (config_.compute_onset) {
     int n_onset = static_cast<int>(onset_accumulator_size_);
-    current_estimate_.bpm_candidate_count = n_onset;
 
     float time_since_bpm_update = current_time - last_bpm_update_time_;
     if (time_since_bpm_update >= config_.bpm_update_interval_sec && n_onset >= kMinOnsetFrames) {
@@ -221,15 +225,20 @@ void StreamAnalyzer::update_progressive_estimate(float current_time) {
                                           bpm_autocorr_scratch_);
 
         /// Find best tempo (use internal sample rate)
-        auto [bpm, rel_confidence] = find_best_tempo(bpm_autocorr_scratch_, internal_sample_rate_,
-                                                     config_.hop_length, kBpmMin, kBpmMax);
+        const TempoEstimate tempo = find_best_tempo(bpm_autocorr_scratch_, internal_sample_rate_,
+                                                    config_.hop_length, kBpmMin, kBpmMax);
 
-        current_estimate_.bpm = bpm;
+        current_estimate_.bpm = tempo.bpm;
+        /// The tempo candidates this estimate chose from — the quantity the
+        /// field is documented to carry on both this struct and the batch
+        /// analysis result. It used to be assigned the onset-frame count, which
+        /// saturates in the thousands and answers a different question.
+        current_estimate_.bpm_candidate_count = tempo.candidate_count;
 
         /// Combine relative confidence with time-based confidence
         /// Time factor: confidence increases as we get more data (up to the ramp)
         float time_factor = std::min(1.0f, current_time / kConfidenceRampSeconds);
-        current_estimate_.bpm_confidence = rel_confidence * time_factor;
+        current_estimate_.bpm_confidence = tempo.confidence * time_factor;
 
         last_bpm_update_time_ = current_time;
         current_estimate_.updated = true;
@@ -269,11 +278,17 @@ void StreamAnalyzer::update_bar_chord_tracking(float current_time) {
     return;
   }
 
-  /// Update bar duration if BPM changed significantly
-  float new_bar_duration = static_cast<float>(kBeatsPerBar) * 60.0f / current_estimate_.bpm;
-  if (std::abs(new_bar_duration - bar_duration_) > 0.1f) {
-    bar_duration_ = new_bar_duration;
-    current_estimate_.bar_duration = bar_duration_;
+  /// Update bar duration if BPM changed significantly. A later estimate can
+  /// report 0 BPM ("no usable tempo"), which is not a tempo to re-derive a bar
+  /// from: dividing by it would publish an infinite bar_duration and stall the
+  /// boundary test forever. Keep the last known bar length until a real tempo
+  /// comes back.
+  if (current_estimate_.bpm > 0.0f) {
+    float new_bar_duration = static_cast<float>(kBeatsPerBar) * 60.0f / current_estimate_.bpm;
+    if (std::abs(new_bar_duration - bar_duration_) > 0.1f) {
+      bar_duration_ = new_bar_duration;
+      current_estimate_.bar_duration = bar_duration_;
+    }
   }
 
   /// Vote for chord using current frame's smoothed chroma (from chroma_history_)
@@ -342,9 +357,16 @@ void StreamAnalyzer::update_bar_chord_tracking(float current_time) {
       }
     }
 
-    /// Move to next bar
+    /// Move to next bar by advancing the phase, not by re-anchoring to this
+    /// frame. current_time is on the hop grid, so it overshoots the true
+    /// boundary by up to one hop (11.6 ms at 44.1 kHz / hop 512) and the
+    /// overshoot is never negative — re-anchoring accumulated it into every
+    /// later bar, drifting the reported bar clock by roughly a third of a bar
+    /// over a four-minute track. Advancing keeps consecutive bar starts exactly
+    /// bar_duration_ apart, and a bar_duration_ that changed with the tempo
+    /// takes effect from the next boundary without breaking that spacing.
     ++current_bar_index_;
-    bar_start_time_ = current_time;
+    bar_start_time_ += bar_duration_;
     bar_chord_votes_.fill(0);
     bar_vote_count_ = 0;
 
@@ -366,11 +388,17 @@ void StreamAnalyzer::compute_retroactive_bar_chords() {
     return;
   }
 
-  /// Absolute time of full_chroma_history_.front(). Once the chroma history cap
-  /// is hit the surviving history no longer begins at t=0; without this offset
-  /// every retroactive bar start_time would be wrong by the dropped duration.
+  /// Stream time of full_chroma_history_.front(). Two corrections, both
+  /// required for these bar starts to land on the one timeline every other
+  /// published time field uses:
+  ///   * base_time_sec_ — the stream did not necessarily begin at t=0. An
+  ///     external-offset host anchors it at its own clock, and frame
+  ///     timestamps, chord_progression starts and StreamFrame::timestamp all
+  ///     carry that anchor. Without it the bar starts alone would restart at 0.
+  ///   * full_chroma_history_offset_ — once the chroma history cap is hit the
+  ///     surviving history no longer begins at the first frame.
   const float history_start_sec =
-      static_cast<float>(full_chroma_history_offset_) * seconds_per_frame;
+      base_time_sec_ + static_cast<float>(full_chroma_history_offset_) * seconds_per_frame;
 
   /// How many complete bars can we detect from full history?
   int retroactive_frames = static_cast<int>(full_chroma_history_size_);
@@ -472,9 +500,16 @@ void StreamAnalyzer::compute_voted_pattern(int pattern_length) {
     std::array<float, StreamAnalyzer::kBarVoteSlots> confidence_sum = {};
     std::array<int, StreamAnalyzer::kBarVoteSlots> vote_count = {};
 
-    /// Go through all bars at this pattern position
-    for (size_t bar_idx = pos; bar_idx < bars.size(); bar_idx += pattern_length) {
-      const auto& bar = bars[bar_idx];
+    /// Go through all bars at this pattern position. The bucket is keyed on
+    /// bar.bar_index, never on the position in this array: a bar whose frames
+    /// were all below the chord-confidence threshold (a drum break, a silent
+    /// bar) is not appended while the bar counter still advances, and the
+    /// drop-oldest at max_progression_entries shifts every remaining element.
+    /// Either one makes the array offset a different quantity from the bar
+    /// number, and keying on it rotates the whole reported progression.
+    for (const auto& bar : bars) {
+      if (bar.bar_index < 0) continue;
+      if (floor_mod(bar.bar_index, pattern_length) != pos) continue;
       int chord_idx = bar.root * kNumChordQualities + bar.quality;
       if (chord_idx >= 0 && chord_idx < StreamAnalyzer::kBarVoteSlots) {
         confidence_sum[chord_idx] += bar.confidence;
@@ -483,7 +518,9 @@ void StreamAnalyzer::compute_voted_pattern(int pattern_length) {
     }
 
     /// Find chord with highest weighted vote (confidence-weighted)
-    /// Apply diatonic chord bonus based on detected key.
+    /// Apply diatonic chord bonus based on detected key. With the key still
+    /// unknown there is no scale to be diatonic to, so the bonus is skipped
+    /// rather than applied around an arbitrary rotation of the -1 sentinel.
     int detected_key = current_estimate_.key;
     const auto diatonic_chords = diatonic_triads(current_estimate_.key_minor);
 
@@ -500,12 +537,14 @@ void StreamAnalyzer::compute_voted_pattern(int pattern_length) {
       /// Apply diatonic bonus: +15% if chord is diatonic to detected key
       int chord_root = i / kNumChordQualities;
       int chord_quality = i % kNumChordQualities;
-      int relative_root = (chord_root - detected_key + 12) % 12;
+      if (detected_key >= 0) {
+        int relative_root = floor_mod(chord_root - detected_key, 12);
 
-      for (const auto& [diatonic_degree, diatonic_quality] : diatonic_chords) {
-        if (relative_root == diatonic_degree && chord_quality == diatonic_quality) {
-          score *= 1.15f;  // 15% bonus for diatonic chords
-          break;
+        for (const auto& [diatonic_degree, diatonic_quality] : diatonic_chords) {
+          if (relative_root == diatonic_degree && chord_quality == diatonic_quality) {
+            score *= 1.15f;  // 15% bonus for diatonic chords
+            break;
+          }
         }
       }
 
@@ -543,6 +582,15 @@ void StreamAnalyzer::seed_bar_progression_for_test(const std::vector<BarChord>& 
 void StreamAnalyzer::correct_voted_pattern_by_known_patterns() {
   auto& voted = current_estimate_.voted_pattern;
   if (voted.size() < 4) return;
+
+  /// Every known pattern is a set of scale degrees, so without a key there is
+  /// nothing to resolve them against. The key is re-estimated on its own
+  /// interval (5 s by default) while pattern detection fires on the fourth
+  /// completed bar, which at a fast tempo comes first — so -1 reaches here on
+  /// real audio. Turning that sentinel into a root would publish a chord the
+  /// documented root range does not contain (degree 0 gives root -1, which
+  /// encodes to a negative chord index and decodes to a negative quality).
+  if (current_estimate_.key < 0) return;
 
   // Calculate minimum bars needed before locking
   // If expected duration is known, use 25% of expected total bars
@@ -596,7 +644,7 @@ void StreamAnalyzer::correct_voted_pattern_by_known_patterns() {
       // Expected chord from known pattern (relative to detected key)
       int expected_degree = pattern.chords[pos].first;
       int expected_quality = pattern.chords[pos].second;
-      int expected_root = (detected_key + expected_degree) % 12;
+      int expected_root = floor_mod(detected_key + expected_degree, 12);
 
       if (voted_root == expected_root && voted_quality == expected_quality) {
         ++exact_matches;
@@ -661,8 +709,16 @@ void StreamAnalyzer::detect_progression_pattern() {
     return;
   }
 
-  const auto& patterns = known_progression_patterns();
+  /// A pattern is a sequence of scale degrees, so it can only be scored once a
+  /// key exists to resolve them against. Scoring against the unknown-key
+  /// sentinel would compare every bar to a rotation nothing chose, and could
+  /// publish a detected_pattern_name derived from it.
   int detected_key = current_estimate_.key;
+  if (detected_key < 0) {
+    return;
+  }
+
+  const auto& patterns = known_progression_patterns();
 
   // Same audio-thread constraint as the correction pass above. all_pattern_scores
   // is not cleared: clear() destroys each entry's name buffer, so the next
@@ -683,16 +739,19 @@ void StreamAnalyzer::detect_progression_pattern() {
     float total_score = 0.0f;
     float max_possible = 0.0f;
 
-    for (size_t bar_idx = 0; bar_idx < bars.size(); ++bar_idx) {
-      int pos = bar_idx % pattern_len;
-      const auto& expected = pattern.chords[pos];
+    for (const auto& bar : bars) {
+      /// Position within the pattern comes from the bar number, not from this
+      /// array's index: skipped low-confidence bars and the drop-oldest at the
+      /// history cap both break the correspondence between the two, and a
+      /// pattern scored on array offsets rotates by one for every gap.
+      if (bar.bar_index < 0) continue;
+      int pos = floor_mod(bar.bar_index, pattern_len);
+      const auto& expected = pattern.chords[static_cast<size_t>(pos)];
 
       /// Expected chord (relative to detected key)
-      int expected_root = (detected_key + expected.first) % 12;
+      int expected_root = floor_mod(detected_key + expected.first, 12);
       int expected_quality = expected.second;
 
-      /// Get detected bar chord
-      const auto& bar = bars[bar_idx];
       float bar_conf = bar.confidence;
 
       const float similarity =

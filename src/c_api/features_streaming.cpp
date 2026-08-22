@@ -114,13 +114,16 @@ SonareError sonare_stream_analyzer_create(const SonareStreamConfig* config,
       config->output_format != SONARE_STREAM_OUTPUT_FLOAT32) {
     return SONARE_ERROR_INVALID_PARAMETER;
   }
-  // Magnitude readout is not surfaced by any SOA read path, so honestly reject
-  // compute_magnitude rather than silently accepting and ignoring it.
-  if (config->compute_magnitude != 0) return SONARE_ERROR_INVALID_PARAMETER;
   *out = nullptr;
 
   SONARE_C_TRY
   StreamConfig cfg;
+  // Magnitude readout is not surfaced by any SOA read path, so honestly reject
+  // compute_magnitude rather than silently accepting and ignoring it. The check
+  // is the shared one every facade calls, so the four surfaces cannot answer
+  // differently: it lives with the field, not in this wrapper.
+  cfg.compute_magnitude = config->compute_magnitude != 0;
+  validate_soa_stream_config(cfg);
   cfg.sample_rate = config->sample_rate;
   cfg.n_fft = config->n_fft;
   cfg.hop_length = config->hop_length;

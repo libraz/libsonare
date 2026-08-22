@@ -11,17 +11,26 @@ using sonare::constants::kEpsilon;
 
 namespace {
 
-/// @brief Creates a chord pattern from intervals.
-std::array<float, 12> create_pattern(PitchClass root, const std::vector<int>& intervals) {
+/// @brief Creates a chord pattern from a quality's interval spelling.
+std::array<float, 12> create_pattern(PitchClass root, const ChordIntervals& intervals) {
   std::array<float, 12> pattern = {};
   int root_idx = static_cast<int>(root);
 
-  for (int interval : intervals) {
-    int idx = (root_idx + interval) % 12;
+  for (size_t i = 0; i < intervals.count; ++i) {
+    int idx = (root_idx + intervals.semitones[i]) % 12;
     pattern[idx] = 1.0f;
   }
 
   return pattern;
+}
+
+/// @brief Builds the template for @p quality rooted at @p root.
+ChordTemplate make_template(PitchClass root, ChordQuality quality) {
+  ChordTemplate tmpl;
+  tmpl.root = root;
+  tmpl.quality = quality;
+  tmpl.pattern = create_pattern(root, chord_quality_intervals(quality));
+  return tmpl;
 }
 
 /// @brief Rotates a pattern by semitones.
@@ -199,132 +208,122 @@ float ChordTemplate::correlate(const std::array<float, 12>& chroma) const {
   return correlate(chroma.data());
 }
 
+ChordIntervals chord_quality_intervals(ChordQuality quality) {
+  switch (quality) {
+    case ChordQuality::Major:
+      return {{{0, 4, 7}}, 3};  // Root, major 3rd, perfect 5th
+    case ChordQuality::Minor:
+      return {{{0, 3, 7}}, 3};  // Root, minor 3rd, perfect 5th
+    case ChordQuality::Diminished:
+      return {{{0, 3, 6}}, 3};  // Root, minor 3rd, diminished 5th
+    case ChordQuality::Augmented:
+      return {{{0, 4, 8}}, 3};  // Root, major 3rd, augmented 5th
+    case ChordQuality::Dominant7:
+      return {{{0, 4, 7, 10}}, 4};  // Root, major 3rd, perfect 5th, minor 7th
+    case ChordQuality::Major7:
+      return {{{0, 4, 7, 11}}, 4};  // Root, major 3rd, perfect 5th, major 7th
+    case ChordQuality::Minor7:
+      return {{{0, 3, 7, 10}}, 4};  // Root, minor 3rd, perfect 5th, minor 7th
+    case ChordQuality::Sus2:
+      return {{{0, 2, 7}}, 3};  // Root, major 2nd, perfect 5th
+    case ChordQuality::Sus4:
+      return {{{0, 5, 7}}, 3};  // Root, perfect 4th, perfect 5th
+    case ChordQuality::Add9:
+      return {{{0, 4, 7, 14}}, 4};  // Root, major 3rd, 5th, 9th
+    case ChordQuality::MinorAdd9:
+      return {{{0, 3, 7, 14}}, 4};  // Root, minor 3rd, 5th, 9th
+    case ChordQuality::Dim7:
+      return {{{0, 3, 6, 9}}, 4};  // Root, minor 3rd, dim 5th, dim 7th
+    case ChordQuality::HalfDim7:
+      return {{{0, 3, 6, 10}}, 4};  // Root, minor 3rd, dim 5th, minor 7th
+    case ChordQuality::Major9:
+      return {{{0, 4, 7, 11, 14}}, 5};  // Root, 3rd, 5th, maj 7th, 9th
+    case ChordQuality::Dominant9:
+      return {{{0, 4, 7, 10, 14}}, 5};  // Root, 3rd, 5th, min 7th, 9th
+    case ChordQuality::Sus2Add4:
+      return {{{0, 2, 5, 7}}, 4};  // Root, 2nd, 4th, 5th
+    case ChordQuality::Unknown:
+      break;
+  }
+  /// Unknown has no spelling: an empty set shares no note with any chord, which
+  /// is the honest answer for "no chord was identified".
+  return {};
+}
+
+uint16_t chord_pitch_class_mask(int root, int quality) {
+  if (root < 0 || root > 11 || quality < 0 || quality > static_cast<int>(ChordQuality::Sus2Add4)) {
+    return 0;
+  }
+  const ChordIntervals intervals = chord_quality_intervals(static_cast<ChordQuality>(quality));
+  uint16_t mask = 0;
+  for (size_t i = 0; i < intervals.count; ++i) {
+    mask = static_cast<uint16_t>(mask | (1u << ((root + intervals.semitones[i]) % 12)));
+  }
+  return mask;
+}
+
 ChordTemplate create_major_template(PitchClass root) {
-  ChordTemplate tmpl;
-  tmpl.root = root;
-  tmpl.quality = ChordQuality::Major;
-  tmpl.pattern = create_pattern(root, {0, 4, 7});  // Root, major 3rd, perfect 5th
-  return tmpl;
+  return make_template(root, ChordQuality::Major);
 }
 
 ChordTemplate create_minor_template(PitchClass root) {
-  ChordTemplate tmpl;
-  tmpl.root = root;
-  tmpl.quality = ChordQuality::Minor;
-  tmpl.pattern = create_pattern(root, {0, 3, 7});  // Root, minor 3rd, perfect 5th
-  return tmpl;
+  return make_template(root, ChordQuality::Minor);
 }
 
 ChordTemplate create_diminished_template(PitchClass root) {
-  ChordTemplate tmpl;
-  tmpl.root = root;
-  tmpl.quality = ChordQuality::Diminished;
-  tmpl.pattern = create_pattern(root, {0, 3, 6});  // Root, minor 3rd, diminished 5th
-  return tmpl;
+  return make_template(root, ChordQuality::Diminished);
 }
 
 ChordTemplate create_augmented_template(PitchClass root) {
-  ChordTemplate tmpl;
-  tmpl.root = root;
-  tmpl.quality = ChordQuality::Augmented;
-  tmpl.pattern = create_pattern(root, {0, 4, 8});  // Root, major 3rd, augmented 5th
-  return tmpl;
+  return make_template(root, ChordQuality::Augmented);
 }
 
 ChordTemplate create_dominant7_template(PitchClass root) {
-  ChordTemplate tmpl;
-  tmpl.root = root;
-  tmpl.quality = ChordQuality::Dominant7;
-  tmpl.pattern = create_pattern(root, {0, 4, 7, 10});  // Root, major 3rd, perfect 5th, minor 7th
-  return tmpl;
+  return make_template(root, ChordQuality::Dominant7);
 }
 
 ChordTemplate create_major7_template(PitchClass root) {
-  ChordTemplate tmpl;
-  tmpl.root = root;
-  tmpl.quality = ChordQuality::Major7;
-  tmpl.pattern = create_pattern(root, {0, 4, 7, 11});  // Root, major 3rd, perfect 5th, major 7th
-  return tmpl;
+  return make_template(root, ChordQuality::Major7);
 }
 
 ChordTemplate create_minor7_template(PitchClass root) {
-  ChordTemplate tmpl;
-  tmpl.root = root;
-  tmpl.quality = ChordQuality::Minor7;
-  tmpl.pattern = create_pattern(root, {0, 3, 7, 10});  // Root, minor 3rd, perfect 5th, minor 7th
-  return tmpl;
+  return make_template(root, ChordQuality::Minor7);
 }
 
 ChordTemplate create_sus2_template(PitchClass root) {
-  ChordTemplate tmpl;
-  tmpl.root = root;
-  tmpl.quality = ChordQuality::Sus2;
-  tmpl.pattern = create_pattern(root, {0, 2, 7});  // Root, major 2nd, perfect 5th
-  return tmpl;
+  return make_template(root, ChordQuality::Sus2);
 }
 
 ChordTemplate create_sus4_template(PitchClass root) {
-  ChordTemplate tmpl;
-  tmpl.root = root;
-  tmpl.quality = ChordQuality::Sus4;
-  tmpl.pattern = create_pattern(root, {0, 5, 7});  // Root, perfect 4th, perfect 5th
-  return tmpl;
+  return make_template(root, ChordQuality::Sus4);
 }
 
 ChordTemplate create_add9_template(PitchClass root) {
-  ChordTemplate tmpl;
-  tmpl.root = root;
-  tmpl.quality = ChordQuality::Add9;
-  tmpl.pattern = create_pattern(root, {0, 4, 7, 14});  // Root, major 3rd, 5th, 9th
-  return tmpl;
+  return make_template(root, ChordQuality::Add9);
 }
 
 ChordTemplate create_minor_add9_template(PitchClass root) {
-  ChordTemplate tmpl;
-  tmpl.root = root;
-  tmpl.quality = ChordQuality::MinorAdd9;
-  tmpl.pattern = create_pattern(root, {0, 3, 7, 14});  // Root, minor 3rd, 5th, 9th
-  return tmpl;
+  return make_template(root, ChordQuality::MinorAdd9);
 }
 
 ChordTemplate create_dim7_template(PitchClass root) {
-  ChordTemplate tmpl;
-  tmpl.root = root;
-  tmpl.quality = ChordQuality::Dim7;
-  tmpl.pattern = create_pattern(root, {0, 3, 6, 9});  // Root, minor 3rd, dim 5th, dim 7th
-  return tmpl;
+  return make_template(root, ChordQuality::Dim7);
 }
 
 ChordTemplate create_half_dim7_template(PitchClass root) {
-  ChordTemplate tmpl;
-  tmpl.root = root;
-  tmpl.quality = ChordQuality::HalfDim7;
-  tmpl.pattern = create_pattern(root, {0, 3, 6, 10});  // Root, minor 3rd, dim 5th, minor 7th
-  return tmpl;
+  return make_template(root, ChordQuality::HalfDim7);
 }
 
 ChordTemplate create_major9_template(PitchClass root) {
-  ChordTemplate tmpl;
-  tmpl.root = root;
-  tmpl.quality = ChordQuality::Major9;
-  tmpl.pattern = create_pattern(root, {0, 4, 7, 11, 14});  // Root, 3rd, 5th, maj 7th, 9th
-  return tmpl;
+  return make_template(root, ChordQuality::Major9);
 }
 
 ChordTemplate create_dominant9_template(PitchClass root) {
-  ChordTemplate tmpl;
-  tmpl.root = root;
-  tmpl.quality = ChordQuality::Dominant9;
-  tmpl.pattern = create_pattern(root, {0, 4, 7, 10, 14});  // Root, 3rd, 5th, min 7th, 9th
-  return tmpl;
+  return make_template(root, ChordQuality::Dominant9);
 }
 
 ChordTemplate create_sus2_add4_template(PitchClass root) {
-  ChordTemplate tmpl;
-  tmpl.root = root;
-  tmpl.quality = ChordQuality::Sus2Add4;
-  tmpl.pattern = create_pattern(root, {0, 2, 5, 7});  // Root, 2nd, 4th, 5th
-  return tmpl;
+  return make_template(root, ChordQuality::Sus2Add4);
 }
 
 ChordTemplate transpose_template(const ChordTemplate& tmpl, int semitones) {

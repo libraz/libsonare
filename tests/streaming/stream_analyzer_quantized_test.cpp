@@ -61,14 +61,29 @@ TEST_CASE("StreamAnalyzer progressive BPM estimation", "[streaming]") {
     REQUIRE(stats.estimate.bpm_confidence > 0.0f);
   }
 
-  SECTION("candidate count tracks onset frames") {
-    // Process 5 seconds of audio
-    std::vector<float> audio = generate_sine(22050 * 5, 440.0f, 22050);
+  SECTION("candidate count counts tempo candidates, not onset frames") {
+    const int sr = 22050;
+    std::vector<float> audio = generate_click_train(sr * 15, 120.0f, sr);
     analyzer.process(audio.data(), audio.size());
 
     auto stats = analyzer.stats();
-    // bpm_candidate_count should reflect onset frames
+    REQUIRE(stats.estimate.bpm > 0.0f);
     REQUIRE(stats.estimate.bpm_candidate_count > 0);
+
+    // The field is documented as the number of BPM candidates the estimate
+    // chose from, the same quantity the batch analysis result reports. It used
+    // to be assigned the onset-frame count, which is the size of a history
+    // orders of magnitude larger and saturates at its cap.
+    const int onset_frames = static_cast<int>(analyzer.onset_accumulator_size_for_test());
+    CAPTURE(onset_frames, stats.estimate.bpm_candidate_count);
+    REQUIRE(onset_frames > 100);
+    REQUIRE(stats.estimate.bpm_candidate_count < onset_frames);
+
+    // A candidate is an autocorrelation peak inside the supported BPM range,
+    // so there can be no more of them than there are lags to inspect.
+    const int max_lag = sonare::streaming_detail::bpm_to_lag(sonare::streaming_detail::kBpmMin, sr,
+                                                             config.hop_length);
+    REQUIRE(stats.estimate.bpm_candidate_count <= max_lag);
   }
 }
 

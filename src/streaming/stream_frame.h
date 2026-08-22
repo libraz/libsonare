@@ -72,7 +72,13 @@ struct ProgressiveEstimate {
   // BPM estimation
   float bpm = 0.0f;             ///< Estimated BPM (0 if not yet estimated)
   float bpm_confidence = 0.0f;  ///< Confidence (0-1, increases over time)
-  int bpm_candidate_count = 0;  ///< Number of BPM candidates considered
+  /// @brief Tempo candidates the most recent BPM estimate chose from.
+  /// @details Autocorrelation peaks inside the supported BPM range; 0 until an
+  ///          estimate has run, and 0 for input too flat to peak at all. Same
+  ///          quantity as the identically named field on the batch analysis
+  ///          result, so a "only show a BPM once several candidates agreed"
+  ///          rule reads the same on both.
+  int bpm_candidate_count = 0;
 
   // Key estimation
   int key = -1;                 ///< Estimated key (0-11 for C-B, -1 = unknown)
@@ -105,7 +111,12 @@ struct ProgressiveEstimate {
   // Objective statistics (for UI display)
   float accumulated_seconds = 0.0f;  ///< Total audio processed
   int used_frames = 0;               ///< Number of frames used for estimation
-  bool updated = false;              ///< True if estimate was updated this frame
+  /// @brief True if the key or BPM was re-estimated since the previous snapshot.
+  /// @details Sticky across frames and cleared when a snapshot is published, so
+  ///          one change produces exactly one snapshot carrying it however the
+  ///          caller chunks its input, and a call that produced no frame does
+  ///          not repeat the previous snapshot's flag.
+  bool updated = false;
 };
 
 /// @brief Statistics and current state of the analyzer.

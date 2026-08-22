@@ -20,6 +20,11 @@ void StreamAnalyzer::process(const float* samples, size_t n_samples, size_t samp
     publish_stats_snapshot();
     return;
   }
+  if (finalized_) {
+    throw SonareException(
+        ErrorCode::InvalidState,
+        "StreamAnalyzer was finalized; call reset() before processing more audio");
+  }
   if (n_samples > std::numeric_limits<size_t>::max() - sample_offset) {
     throw SonareException(ErrorCode::InvalidParameter,
                           "StreamAnalyzer external sample offset overflows");
@@ -47,6 +52,11 @@ void StreamAnalyzer::process(const float* samples, size_t n_samples, size_t samp
   if (offset_tracking_mode_ == OffsetTrackingMode::Unset) {
     cumulative_samples_ = sample_offset;
     cumulative_samples_exact_ = static_cast<double>(sample_offset);
+    /// Anchor every published time field on the caller's timeline, not just the
+    /// ones derived from cumulative_samples_. The bar tracker measures its
+    /// retroactive starts in frames elapsed, which knows nothing about this
+    /// offset unless it is recorded here.
+    base_time_sec_ = static_cast<float>(sample_offset) / static_cast<float>(config_.sample_rate);
     offset_tracking_mode_ = OffsetTrackingMode::External;
   }
   process_internal(samples, n_samples);
@@ -55,7 +65,10 @@ void StreamAnalyzer::process(const float* samples, size_t n_samples, size_t samp
 }
 
 void StreamAnalyzer::process_internal(const float* samples, size_t n_samples) {
-  finalized_ = false;
+  /// finalized_ is cleared by reset() alone. Clearing it here made a
+  /// process()-after-finalize() silently resume on a buffer finalize() had
+  /// already drained, so the resume boundary lost up to n_fft-1 samples of
+  /// real overlap context with nothing reported.
   if (samples == nullptr || n_samples == 0) {
     return;
   }
@@ -158,7 +171,11 @@ void StreamAnalyzer::finalize() {
   if (finalized_) {
     return;
   }
-  finalized_ = true;
+  // finalized_ is set at the end, once every step that can throw has run. The
+  // resampler drain below, the tail frame and the progressive update all throw
+  // on failure and the C ABI turns that into an error code, so setting the flag
+  // first made the caller's retry return success while the tail frame and the
+  // final chord had never been emitted.
 
   // Advance the persistent high-rate resampler through its filter latency and
   // append exactly the analytic rounded output length. This happens only at
@@ -182,6 +199,7 @@ void StreamAnalyzer::finalize() {
 
   if (overlap_buffer_.empty()) {
     flush_pending_chord();
+    finalized_ = true;
     publish_stats_snapshot();
     return;
   }
@@ -203,6 +221,7 @@ void StreamAnalyzer::finalize() {
   // The live path only appends when the chord changes, so the last held chord
   // otherwise never reaches chord_progression.
   flush_pending_chord();
+  finalized_ = true;
   publish_stats_snapshot();
 }
 

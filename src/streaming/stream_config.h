@@ -6,6 +6,7 @@
 #include <cstddef>
 
 #include "util/constants.h"
+#include "util/exception.h"
 #include "util/types.h"
 
 namespace sonare {
@@ -31,6 +32,17 @@ inline constexpr size_t kMaxStreamProgressionEntries = 1u << 20;
 ///          would bin the chromagram differently depending on when it arrived.
 inline constexpr float kMinTuningRefHz = 220.0f;
 inline constexpr float kMaxTuningRefHz = 880.0f;
+
+/// @brief Accepted analysis normalization gain, as a linear factor (±40 dB).
+/// @details A value outside this range is rejected, not clamped, for the same
+///          reason as the tuning reference above: there is no getter, so a
+///          silently substituted gain leaves the analyzer running on input the
+///          caller never asked for with nothing to detect it by. The range
+///          assumes input in the conventional ±1 float domain — a buffer on a
+///          different scale (integer-valued samples, say) belongs converted
+///          before the analyzer, not corrected with an extreme gain.
+inline constexpr float kMinNormalizationGain = 0.01f;
+inline constexpr float kMaxNormalizationGain = 100.0f;
 
 /// @brief Configuration for StreamAnalyzer.
 struct StreamConfig {
@@ -70,7 +82,16 @@ struct StreamConfig {
   // Mel configuration
   int n_mels = 128;   ///< Number of mel bands
   float fmin = 0.0f;  ///< Minimum frequency for mel
-  float fmax = 0.0f;  ///< Maximum frequency (0 = sr/2)
+  /// @brief Maximum frequency for mel (0 = sr/2).
+  /// @details Above 44100 Hz the analyzer resamples to 44100 Hz internally, so
+  ///          the mel filterbank cannot reach past 22050 Hz however this is set
+  ///          — a higher request (including the 0 default, which asks for sr/2)
+  ///          is capped at the internal Nyquist rather than refused, because
+  ///          refusing it would reject the default config for every input above
+  ///          44100 Hz. This is the one place the analyzer narrows a requested
+  ///          value instead of rejecting it, and the ceiling is a property of
+  ///          the analysis rate, not a policy choice.
+  float fmax = 0.0f;
 
   // Tuning configuration
   float tuning_ref_hz = constants::kA4Hz;  ///< Reference frequency for A4
@@ -110,5 +131,44 @@ struct StreamConfig {
     return fmax > 0.0f ? fmax : static_cast<float>(sample_rate) / 2.0f;
   }
 };
+
+/// @brief Rejects a config that a caller limited to the SOA read paths could
+///        ask for but could never read back.
+///
+/// @warning **StreamAnalyzer's constructor deliberately does NOT call this, and
+///          must not be changed to.** The name says "SOA" because that is the
+///          whole scope of the rule: it belongs to the read paths a caller
+///          holds, not to the config and not to the analyzer. Wiring it into the
+///          constructor would look like finishing the job and would silently
+///          kill @c read_frames()'s magnitude output for every direct C++ host —
+///          losing a working feature instead of closing a gap. The one case that
+///          would catch that regression is
+///          @c tests/streaming/stream_analyzer_core_test.cpp asserting
+///          @c frames[0].magnitude.size() == config().n_bins(); the other
+///          constructions with @c compute_magnitude enabled never read the array
+///          back, so they would stay green.
+///
+/// @details One shared answer for the four language surfaces, because they do
+///          not share a call path: the C ABI validates before constructing,
+///          while the Node addon and the WASM wrapper construct StreamAnalyzer
+///          directly and inherit nothing from it. Node accepted
+///          @ref StreamConfig::compute_magnitude while the other three refused
+///          it, so the same options object was valid on one surface and an
+///          InvalidParameter on the rest — and on Node it bought a per-frame
+///          allocation and copy whose result no read method there can return.
+///
+///          Only @ref StreamConfig::compute_magnitude is in scope.
+///          @ref StreamConfig::magnitude_downsample stays untouched on purpose:
+///          with magnitude off it is simply unused, so a non-default value is
+///          harmless, and refusing it would reject a default config round trip.
+/// @throws SonareException(InvalidParameter) when the config asks for a result
+///         the caller's read paths could never return.
+inline void validate_soa_stream_config(const StreamConfig& config) {
+  if (config.compute_magnitude) {
+    throw SonareException(ErrorCode::InvalidParameter,
+                          "computeMagnitude is not supported because magnitude frames are not "
+                          "exposed by StreamAnalyzer read paths");
+  }
+}
 
 }  // namespace sonare

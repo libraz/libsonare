@@ -36,11 +36,13 @@ static_assert(static_cast<int>(ChordQuality::Sus2Add4) < kNumChordQualities,
               "bump it in stream_analyzer.h when adding a new quality");
 
 StreamAnalyzer::StreamAnalyzer(const StreamConfig& config) : config_(config) {
-  /// Reject malformed geometry that would silently yield *wrong* results (as
-  /// opposed to the degenerate-but-safe sizing params clamped below). The flat C
-  /// ABI rejects these before construction; mirror the same relationship and
-  /// positive-value contract here so direct C++/Node/WASM construction fails
-  /// identically instead of producing garbage spectra. Note compute_magnitude
+  /// Reject malformed geometry that would silently yield *wrong* results. Every
+  /// StreamConfig field is refused rather than substituted here, and so are the
+  /// sizing params below — nothing in this constructor clamps a request into
+  /// range. The flat C ABI rejects the same set before construction; mirror the
+  /// same relationship and positive-value contract here so direct
+  /// C++/Node/WASM construction fails identically instead of producing garbage
+  /// spectra. Note compute_magnitude
   /// is a real core feature (although SOA bindings do not surface it) and window
   /// is an enum, so those two are intentionally not re-checked here. The legacy
   /// output_format selector is checked separately below.
@@ -243,6 +245,15 @@ StreamAnalyzer& StreamAnalyzer::operator=(StreamAnalyzer&&) noexcept = default;
 
 void StreamAnalyzer::process(const float* samples, size_t n_samples) {
   if (samples != nullptr && n_samples > 0) {
+    /// Same class of misuse as a non-contiguous external offset, and rejected
+    /// the same way: finalize() has already drained the overlap buffer, so
+    /// resuming would analyze the next chunk without the preceding n_fft-1
+    /// samples of context.
+    if (finalized_) {
+      throw SonareException(
+          ErrorCode::InvalidState,
+          "StreamAnalyzer was finalized; call reset() before processing more audio");
+    }
     if (offset_tracking_mode_ == OffsetTrackingMode::External) {
       throw SonareException(ErrorCode::InvalidParameter,
                             "cannot switch StreamAnalyzer offset mode without reset()");

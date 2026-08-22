@@ -3,6 +3,7 @@
 #include <algorithm>
 #include <cmath>
 
+#include "analysis/chord_templates.h"
 #include "core/fft.h"
 #include "filters/mel.h"
 #include "util/constants.h"
@@ -121,8 +122,8 @@ void compute_autocorrelation_streaming(const float* signal, int signal_size, int
   }
 }
 
-std::pair<float, float> find_best_tempo(const std::vector<float>& autocorr, int sr, int hop_length,
-                                        float bpm_min, float bpm_max) {
+TempoEstimate find_best_tempo(const std::vector<float>& autocorr, int sr, int hop_length,
+                              float bpm_min, float bpm_max) {
   int lag_min = bpm_to_lag(bpm_max, sr, hop_length);
   int lag_max = bpm_to_lag(bpm_min, sr, hop_length);
 
@@ -134,7 +135,7 @@ std::pair<float, float> find_best_tempo(const std::vector<float>& autocorr, int 
   /// 120 BPM here (as the old code did) masked the failure: 120 and 0
   /// confidence are indistinguishable from a genuine low-confidence 120 BPM.
   if (lag_min >= lag_max) {
-    return {0.0f, 0.0f};
+    return {};
   }
 
   constexpr float kCommonBpmMin = 80.0f;
@@ -143,21 +144,27 @@ std::pair<float, float> find_best_tempo(const std::vector<float>& autocorr, int 
 
   // First pass: find the strongest valid peak and retain it as the fallback.
   // This replaces the old per-update candidates vector with constant storage.
+  // The candidates are still counted: that count is the only thing the removed
+  // vector was reported for, and it is a public field.
   float max_weight = 0.0f;
   float fallback_bpm = 0.0f;
+  int candidate_count = 0;
   for (int lag = lag_min + 1; lag <= lag_max - 1; ++lag) {
     const float weight = autocorr[lag];
     if (weight > autocorr[lag - 1] && weight > autocorr[lag + 1] && weight > 0.0f) {
       const float bpm = lag_to_bpm(lag, sr, hop_length);
-      if (bpm >= bpm_min && bpm <= bpm_max && weight > max_weight) {
-        max_weight = weight;
-        fallback_bpm = bpm;
+      if (bpm >= bpm_min && bpm <= bpm_max) {
+        ++candidate_count;
+        if (weight > max_weight) {
+          max_weight = weight;
+          fallback_bpm = bpm;
+        }
       }
     }
   }
 
   if (max_weight <= 0.0f) {
-    return {0.0f, 0.0f};
+    return {0.0f, 0.0f, candidate_count};
   }
 
   // Second pass: preserve the common-tempo preference without materializing
@@ -182,7 +189,7 @@ std::pair<float, float> find_best_tempo(const std::vector<float>& autocorr, int 
   }
 
   float confidence = (max_weight > 0.0f) ? best_weight / max_weight : 0.0f;
-  return {best_bpm, confidence};
+  return {best_bpm, confidence, candidate_count};
 }
 
 uint8_t quantize_to_u8(float value, float min_val, float max_val) {
@@ -217,22 +224,19 @@ float single_power_to_db(float power_val, float ref, float amin) {
 }
 
 int count_shared_notes(int root1, int quality1, int root2, int quality2) {
-  auto get_notes = [](int root, int quality) -> std::array<int, 3> {
-    int third = (quality == 1) ? 3 : 4;
-    return {{root % 12, (root + third) % 12, (root + 7) % 12}};
-  };
+  /// Both note sets come from the same interval table the chord templates are
+  /// generated from, so every quality the detector can report is spelled the way
+  /// it was matched. Deriving a triad here instead (minor third for quality 1, a
+  /// major third and a perfect fifth for everything else) made a diminished
+  /// chord read as its parallel major and share all three notes with it.
+  const uint16_t mask1 = chord_pitch_class_mask(root1, quality1);
+  const uint16_t mask2 = chord_pitch_class_mask(root2, quality2);
 
-  auto notes1 = get_notes(root1, quality1);
-  auto notes2 = get_notes(root2, quality2);
-
+  uint16_t shared_mask = static_cast<uint16_t>(mask1 & mask2);
   int shared = 0;
-  for (int n1 : notes1) {
-    for (int n2 : notes2) {
-      if (n1 == n2) {
-        ++shared;
-        break;
-      }
-    }
+  while (shared_mask != 0) {
+    shared_mask = static_cast<uint16_t>(shared_mask & (shared_mask - 1));
+    ++shared;
   }
   return shared;
 }

@@ -114,6 +114,8 @@ class StreamAnalyzer {
   /// @param samples Input samples
   /// @param n_samples Number of samples
   /// @details Internally tracks cumulative sample count for timestamp calculation.
+  /// @throws SonareException ErrorCode::InvalidState if the stream was already
+  ///         finalized; call reset() to start a new stream first.
   void process(const float* samples, size_t n_samples);
 
   /// @brief Processes audio chunk (external offset synchronization).
@@ -127,13 +129,20 @@ class StreamAnalyzer {
   ///          switch between offset-tracking overloads is rejected; call
   ///          reset() first to discard the buffered partial frame and start a
   ///          new timeline segment. Empty calls do not select a tracking mode.
+  /// @throws SonareException ErrorCode::InvalidState if the stream was already
+  ///         finalized; call reset() to start a new stream first.
   void process(const float* samples, size_t n_samples, size_t sample_offset);
 
   /// @brief Finalizes the current stream by analyzing the remaining partial frame.
   /// @details If the stream ends with fewer than @ref StreamConfig::n_fft
   ///          samples buffered, this zero-pads that tail and emits one final
-  ///          frame. Calling finalize() more than once is idempotent. Call
-  ///          reset() before reusing the analyzer for another stream.
+  ///          frame. Calling finalize() more than once is idempotent, and a
+  ///          call that throws leaves the stream un-finalized so a retry
+  ///          resumes from the same point instead of reporting success without
+  ///          the tail. Call reset() before reusing the analyzer for another
+  ///          stream: feeding more audio to a finalized analyzer is rejected
+  ///          with ErrorCode::InvalidState rather than silently dropping the
+  ///          overlap context the finalized tail already consumed.
   ///
   /// @note At sample rates above @ref kMaxDirectSampleRate, finalize() first
   ///       drains the persistent resampler to the exact rounded output length,
@@ -191,10 +200,20 @@ class StreamAnalyzer {
   void set_expected_duration(float duration_seconds);
 
   /// @brief Sets normalization gain for loud audio.
-  /// @param gain Gain factor to apply to input samples (e.g., 0.5 for -6dB)
+  /// @param gain Gain factor to apply to input samples (e.g., 0.5 for -6dB),
+  ///        within @ref kMinNormalizationGain .. @ref kMaxNormalizationGain
+  ///        (0.01 .. 100, i.e. ±40 dB)
   /// @details Use this to normalize loud/compressed audio before analysis.
-  ///          Typical usage: compute peak or RMS from AudioBuffer, then set
+  ///          Typical usage on input in the conventional ±1 float domain:
+  ///          compute peak or RMS from the buffer, then set
   ///          gain = target_level / measured_level.
+  /// @throws SonareException ErrorCode::InvalidParameter for a non-finite,
+  ///         non-positive or out-of-range gain. The request is refused rather
+  ///         than clamped into range, and the previous gain is kept: a recipe
+  ///         built on a measurement can easily land outside the range (an
+  ///         integer-scaled buffer asks for about 3e-4), and with no getter a
+  ///         substituted value would be undetectable. Convert such a buffer to
+  ///         the ±1 domain before it reaches the analyzer.
   void set_normalization_gain(float gain);
 
   /// @brief Sets tuning reference frequency and recreates chroma filterbank.
@@ -254,6 +273,20 @@ class StreamAnalyzer {
   ///        reads.
   void seed_bar_progression_for_test(const std::vector<BarChord>& bars);
 
+  /// @brief Test-only seeding of the detected key.
+  /// @details The key normally arrives from a periodic re-estimate, so a test
+  ///          that wants to exercise the key-dependent branches of the
+  ///          progression path (including the unknown-key sentinel) would
+  ///          otherwise have to shape audio until the estimator happens to
+  ///          agree. Not part of the public streaming API.
+  void seed_key_for_test(int key, bool minor = false) {
+    current_estimate_.key = key;
+    current_estimate_.key_minor = minor;
+  }
+
+  /// @brief Test-only entry point running the pattern voting pass.
+  void compute_voted_pattern_for_test(int pattern_length) { compute_voted_pattern(pattern_length); }
+
   /// @brief Test-only entry point running the known-pattern correction exactly
   ///        as the realtime path does, with nothing else in the call.
   void run_pattern_correction_for_test() { correct_voted_pattern_by_known_patterns(); }
@@ -293,6 +326,14 @@ class StreamAnalyzer {
   size_t next_external_sample_offset_ = 0;
   size_t cumulative_samples_ = 0;
   double cumulative_samples_exact_ = 0.0;
+  /// Stream time of this segment's first sample: 0 for the internally tracked
+  /// overload, base_sample_offset / sample_rate once reset(base) or the
+  /// external-offset overload anchors the timeline. Every published time field
+  /// is expressed on that one timeline; anything derived from a frame *count*
+  /// (retroactive bar starts, which come from the chroma history's eviction
+  /// counter) has to add this back or it silently restarts at zero while
+  /// StreamFrame::timestamp does not.
+  float base_time_sec_ = 0.0f;
   int frame_count_ = 0;
   int emitted_frame_count_ = 0;  // For emit_every_n_frames
   bool finalized_ = false;

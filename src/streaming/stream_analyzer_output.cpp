@@ -144,6 +144,8 @@ void StreamAnalyzer::reset_publication() noexcept {
   publication_->output_write_sequence.store(0, std::memory_order_relaxed);
   publication_->producer_write_sequence = 0;
   publication_->producer_dropped_frames = 0;
+  publication_->published_total_frames.store(0, std::memory_order_relaxed);
+  publication_->published_duration_seconds.store(0.0f, std::memory_order_relaxed);
   publication_->published_stats_slot.store(0, std::memory_order_relaxed);
   for (unsigned i = 0; i < StreamAnalyzerPublication::kStatsSlotCount; ++i) {
     publication_->stats_slot_states[i].store(
@@ -185,8 +187,20 @@ void StreamAnalyzer::publish_stats_snapshot() noexcept {
   snapshot.duration_seconds = static_cast<float>(cumulative_samples_) / config_.sample_rate;
   snapshot.pending_frames = available_frames();
   snapshot.dropped_output_frames = publication_->producer_dropped_frames;
+  /// Mirror of the two scalars frame_count() and current_time() answer with, so
+  /// neither has to pin and copy this whole snapshot for one number.
+  publication_->published_total_frames.store(snapshot.total_frames, std::memory_order_relaxed);
+  publication_->published_duration_seconds.store(snapshot.duration_seconds,
+                                                 std::memory_order_relaxed);
 
   copy_progressive_scalars(current_estimate_, snapshot.estimate);
+  /// Consume the sticky update flag. It is set by any frame that re-estimated
+  /// the key or the BPM and survives across frames, so this snapshot reports
+  /// "changed since the previous snapshot" rather than "changed on the last
+  /// frame of the chunk". Clearing it here — after it has been copied, and only
+  /// on the path that actually published — is what keeps exactly one snapshot
+  /// per change true regardless of how the caller chunks its input.
+  current_estimate_.updated = false;
   const size_t previous_chord_drops = snapshot.dropped_chord_progression_entries;
   const size_t previous_bar_drops = snapshot.dropped_bar_progression_entries;
   copy_append_only_history(current_estimate_.chord_progression, snapshot.estimate.chord_progression,
@@ -375,6 +389,9 @@ void StreamAnalyzer::reset(size_t base_sample_offset) {
   next_external_sample_offset_ = 0;
   cumulative_samples_ = base_sample_offset;
   cumulative_samples_exact_ = static_cast<double>(base_sample_offset);
+  /// The new segment's timeline origin. Frame timestamps get it through
+  /// cumulative_samples_; the frame-counted bar history has to add it back.
+  base_time_sec_ = static_cast<float>(base_sample_offset) / static_cast<float>(config_.sample_rate);
   frame_count_ = 0;
   emitted_frame_count_ = 0;
   finalized_ = false;
@@ -434,11 +451,18 @@ void StreamAnalyzer::set_expected_duration(float duration_seconds) {
 }
 
 void StreamAnalyzer::set_normalization_gain(float gain) {
-  if (!numeric::finite_positive(gain)) {
+  // Rejected, not clamped, for the same reason as set_tuning_ref_hz below, and
+  // with more at stake: there is no getter for this one. Clamping turned the
+  // gain a host derived from its own measurement (target / measured) into a
+  // different number, silently, so an integer-scaled buffer asking for 3e-4 was
+  // analyzed roughly 30 dB hot with no error, no warning and no way to read
+  // back what the analyzer actually used.
+  if (!numeric::finite_positive(gain) || gain < kMinNormalizationGain ||
+      gain > kMaxNormalizationGain) {
     throw SonareException(ErrorCode::InvalidParameter,
-                          "normalization gain must be finite and positive");
+                          "normalization gain must be finite and within 0.01..100");
   }
-  normalization_gain_ = std::clamp(gain, 0.01f, 100.0f);
+  normalization_gain_ = gain;
 }
 
 void StreamAnalyzer::set_tuning_ref_hz(float ref_hz) {
@@ -520,8 +544,12 @@ AnalyzerStats StreamAnalyzer::stats() const {
   return result;
 }
 
-int StreamAnalyzer::frame_count() const { return stats().total_frames; }
+int StreamAnalyzer::frame_count() const {
+  return publication_->published_total_frames.load(std::memory_order_relaxed);
+}
 
-float StreamAnalyzer::current_time() const { return stats().duration_seconds; }
+float StreamAnalyzer::current_time() const {
+  return publication_->published_duration_seconds.load(std::memory_order_relaxed);
+}
 
 }  // namespace sonare

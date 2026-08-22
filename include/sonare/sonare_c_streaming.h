@@ -75,6 +75,21 @@ typedef struct {
   float confidence;
 } SonareStreamChordChange;
 
+/* One bar of the beat-synchronized chord progression.
+
+   bar_index is the bar number, and it is NOT the index of this entry in the
+   array: a bar whose frames were all below the chord-detection threshold is not
+   recorded, and the oldest entries are dropped once max_progression_entries is
+   reached. Anything that groups bars by their position in a repeating pattern
+   must key on bar_index.
+
+   start_time is on the same timeline as SonareStreamFrames.timestamps, offset
+   included, and consecutive bars are spaced by bar_duration rather than snapped
+   to the analysis frame grid.
+
+   In voted_pattern, root is in [0,11] or -1 (unknown) and quality is a valid
+   chord-quality index; bar_index is the pattern position and start_time is
+   unused. */
 typedef struct {
   int bar_index;
   int root;
@@ -161,7 +176,9 @@ typedef struct {
   size_t dropped_output_frames; /* New output frames dropped at the configured cap */
   float bpm;                    /* Estimated BPM (0 if not yet estimated) */
   float bpm_confidence;         /* BPM confidence (0-1) */
-  int bpm_candidate_count;      /* Number of BPM candidates considered */
+  int bpm_candidate_count;      /* Tempo candidates the most recent BPM estimate
+                                   chose from; 0 until one has run. Same quantity
+                                   as SonareAnalysisResult.bpm_candidate_count */
   int key;                      /* Estimated key (0-11, -1 = unknown) */
   int key_minor;                /* Non-zero if minor mode */
   float key_confidence;         /* Key confidence (0-1) */
@@ -184,7 +201,10 @@ typedef struct {
   SonareStreamPatternScore* all_pattern_scores;
   float accumulated_seconds;                /* Total audio processed for estimation (s) */
   int used_frames;                          /* Number of frames used for estimation */
-  int updated;                              /* Non-zero if estimate was updated this read */
+  int updated;                              /* Non-zero if the key or BPM was
+                                               re-estimated since the previous
+                                               snapshot; one change sets it on
+                                               exactly one snapshot */
   size_t dropped_chord_progression_entries; /* Oldest chord changes dropped at cap */
   size_t dropped_bar_progression_entries;   /* Oldest bar chords dropped at cap */
 } SonareStreamStats;
@@ -213,6 +233,8 @@ SonareError sonare_stream_analyzer_create(const SonareStreamConfig* config,
 void sonare_stream_analyzer_destroy(SonareStreamAnalyzer* analyzer);
 
 /// @brief Feeds an audio chunk (internal cumulative offset tracking).
+/// @details Feeding a finalized analyzer returns SONARE_ERROR_INVALID_STATE;
+///   call sonare_stream_analyzer_reset first to begin a new stream.
 SonareError sonare_stream_analyzer_process(SonareStreamAnalyzer* analyzer, const float* samples,
                                            size_t n_samples);
 
@@ -221,12 +243,16 @@ SonareError sonare_stream_analyzer_process(SonareStreamAnalyzer* analyzer, const
 ///   switch from the internally tracked overload returns
 ///   SONARE_ERROR_INVALID_PARAMETER; call sonare_stream_analyzer_reset first to
 ///   discard the buffered partial frame and begin a new timeline segment.
+///   Feeding a finalized analyzer returns SONARE_ERROR_INVALID_STATE.
 SonareError sonare_stream_analyzer_process_with_offset(SonareStreamAnalyzer* analyzer,
                                                        const float* samples, size_t n_samples,
                                                        size_t sample_offset);
 
 /// @brief Drains any high-rate resampler tail, then flushes the final partial
 ///        analysis frame with zero-padding.
+/// @details Repeating a successful call is a no-op. A call that fails leaves
+///   the stream un-finalized, so retrying resumes from the same point instead
+///   of returning SONARE_OK with the tail frame never emitted.
 SonareError sonare_stream_analyzer_finalize(SonareStreamAnalyzer* analyzer);
 
 /// @brief Returns the number of frames available to read.
@@ -288,6 +314,15 @@ SonareError sonare_stream_analyzer_set_expected_duration(SonareStreamAnalyzer* a
                                                          float duration_seconds);
 
 /// @brief Sets a normalization gain applied to input samples.
+/// @details @p gain is a linear factor within 0.01..100 (±40 dB), assuming
+///   input in the conventional ±1 float domain. A non-finite, non-positive or
+///   out-of-range value returns SONARE_ERROR_INVALID_PARAMETER and leaves the
+///   previous gain in place; it is not clamped. The usual recipe
+///   (gain = target_level / measured_level) can land outside the range for a
+///   buffer on another scale — an integer-scaled one asks for about 3e-4 — and
+///   since no getter exposes the effective gain, a clamped request would leave
+///   the analysis running far off target with nothing to detect it by. Convert
+///   such a buffer before feeding it instead.
 SonareError sonare_stream_analyzer_set_normalization_gain(SonareStreamAnalyzer* analyzer,
                                                           float gain);
 

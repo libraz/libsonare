@@ -4,12 +4,38 @@
 /// @brief Chord templates for chord recognition.
 
 #include <array>
+#include <cstdint>
 #include <string>
 #include <vector>
 
 #include "util/types.h"
 
 namespace sonare {
+
+/// @brief Largest number of chord tones any ChordQuality is spelled with.
+inline constexpr size_t kMaxChordIntervals = 5;
+
+/// @brief The semitone intervals above the root that spell one chord quality.
+struct ChordIntervals {
+  std::array<int, kMaxChordIntervals> semitones{};  ///< Valid entries are [0, count)
+  size_t count = 0;                                 ///< Number of chord tones
+};
+
+/// @brief Returns the interval spelling every template of @p quality is built from.
+/// @param quality Chord quality
+/// @return Intervals above the root; @c count is 0 for ChordQuality::Unknown
+/// @details Single source of truth for what notes a quality contains. The
+///          template patterns are generated from this table, and consumers that
+///          need the pitch-class set of a chord (shared-note counting, chord
+///          confusability) derive it from the same entries instead of assuming
+///          every non-minor quality is a major triad.
+ChordIntervals chord_quality_intervals(ChordQuality quality);
+
+/// @brief Returns the pitch classes of a chord as a 12-bit mask.
+/// @param root Root pitch class (0-11); anything else yields 0
+/// @param quality ChordQuality enumerator value; anything else yields 0
+/// @return Bit @c i set when pitch class @c i is a chord tone
+uint16_t chord_pitch_class_mask(int root, int quality);
 
 /// @brief Template for a chord type.
 struct ChordTemplate {

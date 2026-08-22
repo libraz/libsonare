@@ -66,14 +66,16 @@ float chord_similarity_score(int root, int quality, int expected_root, int expec
     return 0.6f;
   }
 
+  /// Interval class: the fold leaves root_diff in [0, 6], so a fifth and a
+  /// fourth are the same distance (5) and 7 is not a value this can hold.
   int root_diff = std::abs(root - expected_root);
   if (root_diff > 6) {
     root_diff = 12 - root_diff;
   }
 
   float similarity = 0.0f;
-  if (root_diff == 7 || root_diff == 5) {
-    similarity = 0.3f;
+  if (root_diff == 5) {
+    similarity = 0.3f;  // Fifth or fourth apart
   } else if (root_diff == 3 || root_diff == 4) {
     similarity = 0.25f;
   } else if (root_diff == 2) {
