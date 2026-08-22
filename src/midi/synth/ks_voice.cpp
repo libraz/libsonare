@@ -8,6 +8,7 @@
 #include "rt/fractional_delay.h"
 #include "util/constants.h"
 #include "util/dsp_primitives.h"
+#include "util/tunable.h"
 
 namespace sonare::midi::synth {
 
@@ -17,20 +18,27 @@ using sonare::constants::kTwoPi;
 
 /// Tension modulation: the attack pitch rise at full velocity / full knob
 /// (cents), the explicit safety clamp on that rise, and its relaxation time.
-constexpr float kKsTensionCentsAtFull = 55.0f;
-constexpr float kKsTensionMaxCents = 65.0f;
-constexpr float kKsTensionRelaxMs = 45.0f;
+SONARE_TUNABLE(kKsTensionCentsAtFull, 55.0f);
+SONARE_TUNABLE(kKsTensionMaxCents, 65.0f);
+SONARE_TUNABLE(kKsTensionRelaxMs, 45.0f);
 
 /// Steel-string inharmonicity coefficient B(note): the plain/lightly-wound
 /// steel strings of an acoustic-steel or electric guitar are far less stiff
 /// than a piano wire, so B is roughly a fifth of the piano's, rising toward the
 /// treble. Scaled by the patch dispersion knob; nylon leaves dispersion at 0.
+SONARE_TUNABLE(kBAtA4, 1.2e-4f);
+SONARE_TUNABLE(kBetaPerSemitone, 0.0578f);  // ~2x per octave
+
 float ks_steel_inharmonicity_b(uint8_t note) noexcept {
   const float n = static_cast<float>(note & 0x7Fu);
-  constexpr float kBAtA4 = 1.2e-4f;
-  constexpr float kBetaPerSemitone = 0.0578f;  // ~2x per octave
   return std::max(1.0e-5f, kBAtA4 * std::exp(kBetaPerSemitone * (n - 69.0f)));
 }
+
+/// Second (horizontal) polarization detune, and the fret-gap reflection left
+/// after the slap/pop limiter clips the string against the fret.
+SONARE_TUNABLE(kPolDetuneCents, 11.0f);
+SONARE_TUNABLE(kReflect, 0.06f);  // near-hard clip at the fret gap
+
 /// KS noise draws live far above the voice-level draw indices (detune/phase/
 /// drift use 0..~103 on the same per-voice seed).
 constexpr uint64_t kNoiseIndexBase = 1ull << 16;
@@ -38,8 +46,8 @@ constexpr uint64_t kNoiseIndexBase = 1ull << 16;
 /// seeded streams never overlap.
 constexpr uint64_t kKeyoffNoiseIndexBase = 1ull << 20;
 /// Key-off damper thump: burst length and lowpass corner (a soft felt "thunk").
-constexpr float kKsKeyoffMs = 18.0f;
-constexpr float kKsKeyoffCutoffHz = 2200.0f;
+SONARE_TUNABLE(kKsKeyoffMs, 18.0f);
+SONARE_TUNABLE(kKsKeyoffCutoffHz, 2200.0f);
 
 /// Per-loop-traversal amplitude factor reaching -60 dB after @p t60_s.
 float loop_gain_for(float period_samples, double sample_rate, float t60_s) noexcept {
@@ -184,7 +192,6 @@ void KsVoiceCore::start(const KsPatchParams& params, double sample_rate, uint8_t
   pol_write_ = 0;
   pol_lp_state_ = 0.0f;
   if (polarization > 0.0f && pol_buffer_ != nullptr) {
-    constexpr float kPolDetuneCents = 11.0f;
     pol_period_ = base_period_ / std::exp2(kPolDetuneCents / 1200.0f);
     // A darker loop filter: the horizontal plane loses its highs faster.
     const float a2 = std::min(0.97f, a + 0.12f);
@@ -326,7 +333,6 @@ float KsVoiceCore::render(float pitch_ratio) noexcept {
     // Fret contact: the string cannot swing past the fret gap. Over-travel is
     // hard-limited with only a sliver of give, so the clipped tops generate the
     // odd-harmonic buzz of the slap/pop attack (a memoryless nonlinear limit).
-    constexpr float kReflect = 0.06f;  // near-hard clip at the fret gap
     const float th = slap_threshold_;
     if (loop_in > th) {
       loop_in = th + (loop_in - th) * kReflect;

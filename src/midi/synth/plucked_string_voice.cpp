@@ -7,6 +7,7 @@
 #include "rt/fractional_delay.h"
 #include "util/constants.h"
 #include "util/dsp_primitives.h"
+#include "util/tunable.h"
 
 namespace sonare::midi::synth {
 
@@ -21,11 +22,11 @@ constexpr uint64_t kNoiseIndexBase = 1ull << 16;
 /// Bridge-limiter travel above the threshold: the curved surface gives a little
 /// before the string is fully pinned, and a stronger jawari sits the string
 /// closer to the surface (less give -> harder knee -> more high partials).
-constexpr float kBuzzSpanBase = 0.35f;
+SONARE_TUNABLE(kBuzzSpanBase, 0.35f);
 
 /// Output trim bringing the raw string loop up to a musical voice level (a
 /// forte pluck lands roughly in [0.3, 0.8] peak).
-constexpr float kPluckedOutputScale = 0.85f;
+SONARE_TUNABLE(kPluckedOutputScale, 0.85f);
 
 /// Per-loop-traversal amplitude factor reaching -60 dB after @p t60_s.
 float loop_gain_for(float period_samples, double sample_rate, float t60_s) noexcept {

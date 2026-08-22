@@ -7,6 +7,7 @@
 #include "rt/fractional_delay.h"
 #include "util/constants.h"
 #include "util/dsp_primitives.h"
+#include "util/tunable.h"
 
 namespace sonare::midi::synth {
 
@@ -22,63 +23,63 @@ using sonare::constants::kTwoPi;
 // where the cubic's slope at the operating point makes the loop gain exceed one:
 // that is the high-pressure band (STK Flute blows at maxPressure ~1.1-1.3), not
 // the low-pressure near-zero-slope region.
-constexpr float kBreathBase = 0.80f;
-constexpr float kBreathSpan = 0.35f;
+SONARE_TUNABLE(kBreathBase, 0.80f);
+SONARE_TUNABLE(kBreathSpan, 0.35f);
 
 // Jet delay / bore ratio band: jet_ratio colours the register the jet drives.
 // The first register (the jet locking the fundamental) lives in ~[0.38, 0.62];
 // smaller ratios overblow to the octave and above.
-constexpr float kJetRatioMin = 0.38f;
-constexpr float kJetRatioMax = 0.62f;
+SONARE_TUNABLE(kJetRatioMin, 0.38f);
+SONARE_TUNABLE(kJetRatioMax, 0.62f);
 
 // Reflection coefficients (the two feedback taps). Clamped below the runaway
 // region; the STK-stable operating point is ~0.5 each.
-constexpr float kReflectMax = 0.62f;
+SONARE_TUNABLE(kReflectMax, 0.62f);
 
 // Open-end reflection lowpass: brightness maps to the one-pole pole a (the pole
 // coefficient of the reflection filter). A brighter open end reflects more upper
 // partials (a smaller pole). pole = base - span*brightness, so brightness 0.5
 // lands near the STK flute filter pole (~0.65 at 48 kHz).
-constexpr float kBellPoleBase = 0.80f;
-constexpr float kBellPoleSpan = 0.30f;
+SONARE_TUNABLE(kBellPoleBase, 0.80f);
+SONARE_TUNABLE(kBellPoleSpan, 0.30f);
 
 // Bore loss from damping: a mild reflection trim on top of the 0.5 reflections
 // (which already keep the loop bounded). High damping quiets the resonance so an
 // ocarina / blown bottle does not overblow.
-constexpr float kLossSpan = 0.18f;
+SONARE_TUNABLE(kLossSpan, 0.18f);
 
 // Pitch correction: the jet+bore lock lands a touch sharp of the naive full-
 // period loop, so the loop delay is lengthened to bring the sounding note onto
 // pitch (probe-calibrated across the keyboard; centres the residual to ~+-15c).
-constexpr float kPitchCorrect = 1.0104f;
+SONARE_TUNABLE(kPitchCorrect, 1.0104f);
 
 // Live-control smoothing time (ms).
-constexpr float kControlSmoothMs = 8.0f;
+SONARE_TUNABLE(kControlSmoothMs, 8.0f);
 
 // Jet turbulence depth (a light seeded multiplicative jitter on the breath).
-constexpr float kBreathNoiseDepth = 0.10f;
+SONARE_TUNABLE(kBreathNoiseDepth, 0.10f);
 
 // Onset chiff depth (the "speak" noise burst) and the level of the seeded burst
 // pre-filled into the bore so the jet locks onto an f0 seed promptly.
-constexpr float kChiffDepth = 0.5f;
-constexpr float kBorePrefill = 0.05f;
+SONARE_TUNABLE(kChiffDepth, 0.5f);
+SONARE_TUNABLE(kBorePrefill, 0.05f);
 
 // In-loop DC-blocker corner (~10 Hz): the jet's rectified DC does not radiate and
 // would charge the bore, so the jet output is DC-blocked before it enters.
-constexpr float kDcCornerHz = 10.0f;
+SONARE_TUNABLE(kDcCornerHz, 10.0f);
 
 // Vibrato depth mapping: full depth is a gentle ~30 cents of pitch and a touch
 // of level (a solo flute's own vibrato).
-constexpr float kVibPitchCents = 30.0f;
-constexpr float kVibAmp = 0.06f;
+SONARE_TUNABLE(kVibPitchCents, 30.0f);
+SONARE_TUNABLE(kVibAmp, 0.06f);
 
 // Output trim: the driven jet loop settles with a raw bore peak that grows a
 // little with pitch, so the output scale is frequency-compensated to keep a
 // forte note near a flat target peak. peak_raw ~= kPeakBase + kPeakTilt*log2(f0/kPeakRefHz).
-constexpr float kOutputTargetPeak = 0.5f;
-constexpr float kPeakBase = 4.0f;
-constexpr float kPeakTilt = -0.65f;    // the driven peak falls with pitch (rich bass)
-constexpr float kPeakRefHz = 261.63f;  // middle C, the flute's home register
+SONARE_TUNABLE(kOutputTargetPeak, 0.5f);
+SONARE_TUNABLE(kPeakBase, 4.0f);
+SONARE_TUNABLE(kPeakTilt, -0.65f);    // the driven peak falls with pitch (rich bass)
+SONARE_TUNABLE(kPeakRefHz, 261.63f);  // middle C, the flute's home register
 
 /// One-pole ramp coefficient reaching ~95% of the target in @p ms.
 float ramp_coeff(float ms, double sample_rate) noexcept {
@@ -92,16 +93,16 @@ float ramp_coeff(float ms, double sample_rate) noexcept {
 // odd cubic cannot produce. Modelled as an even (quadratic) term folded into the
 // jet transfer; its DC is removed downstream by the DC blocker, leaving the 2nd
 // (and higher even) harmonics.
-constexpr float kJetAsym = 0.5f;
+SONARE_TUNABLE(kJetAsym, 0.5f);
 
 // Even-harmonic pump gain: how hard the squared bore feedback (its 2f0 content)
 // is injected back into the bore to voice the octave-dominant open-flue-pipe
 // timbre. Calibrated so the octave sits below the fundamental but well above the
 // odd partials (a bright concert-flute spectrum), staying bounded.
-constexpr float kEvenPumpGain = 0.6f;
+SONARE_TUNABLE(kEvenPumpGain, 0.6f);
 // Even-pump DC follower corner (Hz): a slow lowpass that estimates the squared
 // signal's DC so subtracting it leaves the 2f0 (and higher even) content.
-constexpr float kEvenPumpDcHz = 30.0f;
+SONARE_TUNABLE(kEvenPumpDcHz, 30.0f);
 
 /// The jet function: the S-shaped saturating transfer of the air jet deflecting
 /// across the labium (Fabre-Hirschberg lumped model / STK JetTable), with an

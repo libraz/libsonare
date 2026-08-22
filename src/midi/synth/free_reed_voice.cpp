@@ -6,6 +6,7 @@
 #include "midi/synth/pitch.h"
 #include "util/constants.h"
 #include "util/dsp_primitives.h"
+#include "util/tunable.h"
 
 namespace sonare::midi::synth {
 
@@ -17,34 +18,34 @@ using sonare::constants::kTwoPi;
 // single tongue (the second oscillator is skipped entirely, bit-identical); the
 // knob then opens from a barely-wet couple of cents to a wide wet-tuned
 // accordion shimmer.
-constexpr float kDetuneMinCents = 3.0f;
-constexpr float kDetuneSpanCents = 12.0f;
+SONARE_TUNABLE(kDetuneMinCents, 3.0f);
+SONARE_TUNABLE(kDetuneSpanCents, 12.0f);
 
 // Tongue nonlinearity calibration. The tongue swinging INTO the slot chokes the
 // airflow harder than it releases it on the way out, so the saturator's gain is
 // biased per half-cycle: asymmetry from reed_stiffness skews the waveform (the
 // even-harmonic "free reed" bias), drive pushes the saturator toward its knee
 // for the buzzy odd-harmonic edge. Both spans keep tanh well inside float range.
-constexpr float kAsymBase = 0.15f;
-constexpr float kAsymSpan = 0.45f;
-constexpr float kDriveBase = 1.2f;
-constexpr float kDriveStiffSpan = 2.4f;
-constexpr float kDriveBreathSpan = 1.2f;
+SONARE_TUNABLE(kAsymBase, 0.15f);
+SONARE_TUNABLE(kAsymSpan, 0.45f);
+SONARE_TUNABLE(kDriveBase, 1.2f);
+SONARE_TUNABLE(kDriveStiffSpan, 2.4f);
+SONARE_TUNABLE(kDriveBreathSpan, 1.2f);
 
 // Body/radiation one-pole corner (Hz): brightness sweeps the reed-plate /
 // cavity roll-off log-linearly from a mellow reed organ to a bright buzzy
 // harmonica. Clamped below Nyquist at start().
-constexpr float kBodyMinHz = 600.0f;
-constexpr float kBodyMaxHz = 9000.0f;
+SONARE_TUNABLE(kBodyMinHz, 600.0f);
+SONARE_TUNABLE(kBodyMaxHz, 9000.0f);
 
 // Leakage air hiss depth at breath_noise = 1 (added before the body lowpass so
 // the hiss is coloured by the same radiation roll-off as the reed).
-constexpr float kBreathNoiseDepth = 0.12f;
+SONARE_TUNABLE(kBreathNoiseDepth, 0.12f);
 
 // Output trim: the saturated tongue sits near +/-1, so the bellows drive level
 // maps a forte note into the other engines' range and a soft note well below.
-constexpr float kOutputMin = 0.3f;
-constexpr float kOutputSpan = 0.5f;
+SONARE_TUNABLE(kOutputMin, 0.3f);
+SONARE_TUNABLE(kOutputSpan, 0.5f);
 
 /// One-pole ramp coefficient reaching ~95% of the target in @p ms.
 float ramp_coeff(float ms, double sample_rate) noexcept {

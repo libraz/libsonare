@@ -7,6 +7,7 @@
 #include "rt/fractional_delay.h"
 #include "util/constants.h"
 #include "util/dsp_primitives.h"
+#include "util/tunable.h"
 
 namespace sonare::midi::synth {
 
@@ -20,16 +21,16 @@ using sonare::constants::kTwoPi;
 // not gate it on and off; dynamic LOUDNESS rides the voice's amp VCA. The jet
 // self-oscillates where the cubic's slope makes the loop gain exceed one: the
 // high-pressure band, not the near-zero-slope low-pressure region.
-constexpr float kBreathBase = 0.80f;
-constexpr float kBreathSpan = 0.35f;
+SONARE_TUNABLE(kBreathBase, 0.80f);
+SONARE_TUNABLE(kBreathSpan, 0.35f);
 
 // Jet delay / bore-line ratio: ~0.5 drives an open pipe's fundamental (every
 // rank uses the open topology, so a single ratio serves the whole registration).
-constexpr float kJetRatioOpen = 0.5f;
+SONARE_TUNABLE(kJetRatioOpen, 0.5f);
 
 // Reflection coefficients (the two feedback taps). Clamped below the runaway
 // region; the STK-stable operating point is ~0.5 each.
-constexpr float kReflectMax = 0.62f;
+SONARE_TUNABLE(kReflectMax, 0.62f);
 
 // Open-end reflection lowpass corner as a MULTIPLE of the sounding f0 (not a
 // fixed absolute pole): the harmonic damping must scale with pitch or a low
@@ -37,36 +38,36 @@ constexpr float kReflectMax = 0.62f;
 // over the flute's octaves, not the organ's 16'-down range). brightness lifts
 // the corner so a bright principal reflects more upper partials. Below ~1.5*f0
 // the fundamental itself would be damped and the pipe would not speak.
-constexpr float kReflectCornerBase = 1.6f;
-constexpr float kReflectCornerSpan = 3.4f;
+SONARE_TUNABLE(kReflectCornerBase, 1.6f);
+SONARE_TUNABLE(kReflectCornerSpan, 3.4f);
 
 // Pitch correction: the jet+bore lock lands a touch off the naive loop, so the
 // loop delay is trimmed to bring the sounding note onto pitch (probe-calibrated
 // across the compass; the DC-blocker phase is compensated separately below).
-constexpr float kPitchCorrectOpen = 1.0012f;
+SONARE_TUNABLE(kPitchCorrectOpen, 1.0012f);
 
 // In-loop DC-blocker corner (~10 Hz): the jet's rectified DC does not radiate and
 // would charge the bore.
-constexpr float kDcCornerHz = 10.0f;
+SONARE_TUNABLE(kDcCornerHz, 10.0f);
 
 // Even-harmonic pump: the asymmetric offset jet voices the octave the way an
 // open flue pipe's spectrum is octave-rich. A stopped rank keeps only a trace
 // (the gedackt is fundamental-dominant, nearly free of the octave).
-constexpr float kEvenPumpGain = 0.62f;
-constexpr float kEvenPumpStopped = 0.08f;
-constexpr float kEvenPumpDcHz = 30.0f;
+SONARE_TUNABLE(kEvenPumpGain, 0.62f);
+SONARE_TUNABLE(kEvenPumpStopped, 0.08f);
+SONARE_TUNABLE(kEvenPumpDcHz, 30.0f);
 
 // Reed (lingual) voicing: a reed pipe drives the jet harder and more
 // asymmetrically than a smooth flue labium, so it buzzes with a bright, brassy,
 // harmonic-rich spectrum. Both self-limit through the cubic clamp.
-constexpr float kReedAsym = 0.55f;
-constexpr float kReedDrive = 0.5f;
+SONARE_TUNABLE(kReedAsym, 0.55f);
+SONARE_TUNABLE(kReedDrive, 0.5f);
 
 // Mouth/radiation high-shelf corner (Hz): the absolute frequency above which a
 // pipe radiates efficiently. Fixed in absolute terms (a room-coupling property,
 // not a per-note one).
-constexpr float kRadiationCornerHz = 800.0f;
-constexpr float kRadiationLift = 2.5f;
+SONARE_TUNABLE(kRadiationCornerHz, 800.0f);
+SONARE_TUNABLE(kRadiationLift, 2.5f);
 
 // Treble regulation (rank-level keytrack). The upperwork rolls off as the played
 // note rises above the reference, more steeply the higher the rank's footage:
@@ -74,69 +75,69 @@ constexpr float kRadiationLift = 2.5f;
 // reciprocal thinning that never inverts sign or unbounds. The reference note is
 // C4, so the bass and mid compass (footage <= 1 or notes at/below C4) are
 // untouched; only high notes drawing high-footage ranks thin.
-constexpr float kKeytrackRefNote = 60.0f;
-constexpr float kKeytrackSlope = 1.0f;
+SONARE_TUNABLE(kKeytrackRefNote, 60.0f);
+SONARE_TUNABLE(kKeytrackSlope, 1.0f);
 // Bass-side regulation of the high mutations (footage > 4): a tierce that is
 // welcome colour at the top of the compass reads as a wrong-note honk one
 // octave down. Scaled by the same keytrack knob (0 = bit-identical bypass).
-constexpr float kTierceBassSlope = 6.0f;
+SONARE_TUNABLE(kTierceBassSlope, 6.0f);
 
 // Chiff onset burst depth.
-constexpr float kChiffGain = 0.5f;
+SONARE_TUNABLE(kChiffGain, 0.5f);
 // Chiff band: one-pole corner at this multiple of the KEY's f0 (the edge
 // tone's transient overblow sits around the note's low speaking partials),
 // capped absolutely — keying it on each rank's own f0 leaves the treble
 // upperwork's chiff nearly white (a 6-8 kHz corner filters nothing audible)
 // and the summed burst reads as a broadband crack on every high note.
-constexpr float kChiffCornerMult = 3.0f;
-constexpr float kChiffCornerMaxHz = 3000.0f;
+SONARE_TUNABLE(kChiffCornerMult, 3.0f);
+SONARE_TUNABLE(kChiffCornerMaxHz, 3000.0f);
 // Bore pre-fill: an f0 sine seed so the jet locks promptly. A noise pre-fill
 // would circulate for seconds through the near-lossless bore (loss_gain ~0.995)
 // and put an audible hiss under the whole sustain. The seed is hot enough that
 // the bass pipes' oscillation grows from near the bore pitch instead of
 // wandering sharp for ~10 periods while building from nothing (audible as a
 // wheeze under a low onset); the output swell keeps the seed itself silent.
-constexpr float kBorePrefill = 0.3f;
+SONARE_TUNABLE(kBorePrefill, 0.3f);
 
 // Speech swell: a pipe settles its speech over ~this many fundamental periods,
 // so the upperwork enters promptly and the big bass pipes bloom in after it
 // (the plenum builds the way a real chorus speaks). Post-loop level swell —
 // the jet loop itself locks immediately off the pre-fill seed.
-constexpr float kSpeakPeriods = 40.0f;
+SONARE_TUNABLE(kSpeakPeriods, 40.0f);
 // Bass speech scaling: a big pipe needs MORE periods to speak, not just longer
 // ones (its mouth vortex and column both establish slowly), so the period
 // count grows per octave the pipe's own pitch sits below the reference. This
 // is the cathedral bloom — the upperwork sparkles at once while the
 // fundamental fills in over hundreds of ms underneath it.
-constexpr float kSpeakBassPerOct = 1.0f;
-constexpr float kSpeakRefHz = 261.63f;
+SONARE_TUNABLE(kSpeakBassPerOct, 1.0f);
+SONARE_TUNABLE(kSpeakRefHz, 261.63f);
 // Foot-pressure rise: the wind at the pipe foot builds with the same speech
 // swell instead of stepping to full on the first sample. A full-pressure jet
 // blowing into a still-quiet bore favours a detuned oscillation branch for
 // tens of periods (heard as a wheeze under the onset); easing the pressure in
 // keeps the growth on the bore's own pitch. The floor keeps the jet inside its
 // self-oscillating band from the first sample so speech is not delayed.
-constexpr float kFootPressureFloor = 0.55f;
+SONARE_TUNABLE(kFootPressureFloor, 0.55f);
 // Treble floor: 30 periods of a high note is only tens of ms, and a full
 // plenum slamming in that fast reads as a crack on every onset (a small flue
 // pipe still needs its mouth vortex to establish); keep even the top of the
 // compass blooming over ~160 ms.
-constexpr float kSpeakMinMs = 160.0f;
-constexpr float kSpeakMaxMs = 1300.0f;
+SONARE_TUNABLE(kSpeakMinMs, 160.0f);
+SONARE_TUNABLE(kSpeakMaxMs, 1300.0f);
 // Floor the upperwork's speak time at this fraction of the KEY's own swell so
 // the mutations never land as a bare click before the principal: the S-shaped
 // (squared) swell keeps even a prompt entry soft, and the upperwork RUNNING
 // AHEAD of the slow fundamental is the real plenum's speech order, so the
 // floor is loose.
-constexpr float kSpeakUpperworkFloor = 0.25f;
+SONARE_TUNABLE(kSpeakUpperworkFloor, 0.25f);
 
 // Output trim: the driven jet loop settles with a raw bore peak that falls with
 // pitch, so the per-pipe output is frequency-compensated toward a flat target
 // peak before the chorus sum. peak_raw ~= kPeakBase + kPeakTilt*log2(f0/kPeakRefHz).
-constexpr float kOutputTargetPeak = 0.32f;
-constexpr float kPeakBase = 4.0f;
-constexpr float kPeakTilt = -0.05f;
-constexpr float kPeakRefHz = 261.63f;
+SONARE_TUNABLE(kOutputTargetPeak, 0.32f);
+SONARE_TUNABLE(kPeakBase, 4.0f);
+SONARE_TUNABLE(kPeakTilt, -0.05f);
+SONARE_TUNABLE(kPeakRefHz, 261.63f);
 
 // Per-pipe tuning error (cents, peak): every (rank, note) pair is its own
 // physical pipe, hand-tuned within a few cents of true. The slow inter-rank
@@ -146,8 +147,8 @@ constexpr float kPeakRefHz = 261.63f;
 // rate grow with frequency, and the treble partials' 6-8 Hz near-total AM
 // reads as the note crackling — real tuners also land the small pipes much
 // closer to true because their beats are the most audible.
-constexpr float kPipeDetuneCents = 4.0f;
-constexpr float kDetuneTaperRefHz = 261.63f;
+SONARE_TUNABLE(kPipeDetuneCents, 4.0f);
+SONARE_TUNABLE(kDetuneTaperRefHz, 261.63f);
 
 // Jet turbulence: the air jet is turbulent, so the labium hisses continuously
 // under the pitched tone (the organ's "wind"). Injected into the jet drive
@@ -156,9 +157,9 @@ constexpr float kDetuneTaperRefHz = 261.63f;
 // synthetic top-octave hiss instead of wind. The corner is capped absolutely:
 // a treble mutation rank's 4*f0 lands above 10 kHz where the "wind" is just
 // white crackle.
-constexpr float kJetTurbulence = 0.035f;
-constexpr float kTurbCornerMult = 4.0f;
-constexpr float kTurbCornerMaxHz = 3000.0f;
+SONARE_TUNABLE(kJetTurbulence, 0.035f);
+SONARE_TUNABLE(kTurbCornerMult, 4.0f);
+SONARE_TUNABLE(kTurbCornerMaxHz, 3000.0f);
 
 // Post-loop tone corner as a multiple of the pipe's sounding f0 (two cascaded
 // one-poles). An individual flue pipe is fairly pure above its first several
@@ -167,10 +168,10 @@ constexpr float kTurbCornerMaxHz = 3000.0f;
 // ranks' job. Outside the loop, so tuning and speech are untouched. The rank's
 // radiation opens this corner (a pipe that radiates HF efficiently is heard
 // less pure in the room), on top of the radiation shelf.
-constexpr float kToneCornerMult = 7.3f;
-constexpr float kRadToneSpan = 1.0f;
+SONARE_TUNABLE(kToneCornerMult, 7.3f);
+SONARE_TUNABLE(kRadToneSpan, 1.0f);
 // Treble taper of the tone corner (per octave above C4).
-constexpr float kToneTrebleTaper = 0.35f;
+SONARE_TUNABLE(kToneTrebleTaper, 0.35f);
 
 // Determinism: chiff / turbulence draw bases; a per-rank offset in the high
 // bits separates the ranks (kRankNoiseShift).

@@ -5,6 +5,7 @@
 
 #include "midi/synth/pitch.h"
 #include "util/constants.h"
+#include "util/tunable.h"
 
 namespace sonare::midi::synth {
 
@@ -60,28 +61,28 @@ constexpr VowelFormant kVowelTable[kVocalVowels][kVocalFormants] = {
 // into the glottal flow's spectral roll-off. Brightness slides the corner up
 // (a forward, ringing voice keeps more source harmonics for the upper formants
 // to catch); the range spans a covered voice to a bright one.
-constexpr float kTiltCornerBaseHz = 350.0f;
-constexpr float kTiltCornerOctSpan = 3.0f;  // corner = base * 2^(span*brightness)
+SONARE_TUNABLE(kTiltCornerBaseHz, 350.0f);
+SONARE_TUNABLE(kTiltCornerOctSpan, 3.0f);  // corner = base * 2^(span*brightness)
 
 // Brightness also opens the upper formants: F5 moves by up to this much (dB)
 // around the table value, scaled linearly down to 0 at F1 so the vowel identity
 // (carried by F1/F2) is untouched.
-constexpr float kBrightFormantSpanDb = 12.0f;
+SONARE_TUNABLE(kBrightFormantSpanDb, 12.0f);
 
 // Aspiration depth at breath_noise == 1: the noise is mixed into the excitation
 // BEFORE the formant bank, so the breath is vowel-coloured like real
 // aspiration, not a flat hiss on top.
-constexpr float kBreathDepth = 0.25f;
+SONARE_TUNABLE(kBreathDepth, 0.25f);
 
 // Vibrato depth scale: depth 1 modulates the pitch by about +/-50 cents
 // (a wide operatic vibrato); typical patch depths sit far below.
-constexpr float kVibratoMaxFrac = 0.03f;
+SONARE_TUNABLE(kVibratoMaxFrac, 0.03f);
 
 // Output trim and velocity-to-level floor: the summed formant-bank response to
 // the tilted source lands well under unity, so the trim brings a forte note
 // into the other engines' [0.3, 0.8] range; a pianissimo strike keeps a body.
-constexpr float kOutputScale = 2.0f;
-constexpr float kVelFloor = 0.4f;
+SONARE_TUNABLE(kOutputScale, 2.0f);
+SONARE_TUNABLE(kVelFloor, 0.4f);
 
 /// One-pole ramp coefficient reaching ~95% of the target in @p ms.
 float ramp_coeff(float ms, double sample_rate) noexcept {

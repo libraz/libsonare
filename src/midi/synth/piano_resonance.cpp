@@ -4,12 +4,32 @@
 #include "midi/synth/piano_voice.h"
 #include "midi/synth/pitch.h"
 #include "util/constants.h"
+#include "util/tunable.h"
 
 namespace sonare::midi::synth {
 
 namespace {
 
 using sonare::constants::kTwoPi;
+
+/// Sympathetic-resonance gate floor with the dampers down: the dampers only
+/// rest on the speaking lengths, so the duplex/aliquot segments beyond the
+/// bridge and the undamped top octaves keep a faint shimmer ringing even with
+/// the pedal up. Without this floor the pedal-up sustain is a spectrally bare
+/// harmonic stack — it reads as a plucked string, not a whole instrument.
+SONARE_TUNABLE(kDuplexFloor, 0.3f);
+
+/// Soundboard radiating band: the modes are log-spread between these corners.
+SONARE_TUNABLE(kFLow, 92.0f);
+SONARE_TUNABLE(kFHigh, 5400.0f);
+
+/// Soundboard phase diffusion coefficient (both allpass stages).
+SONARE_TUNABLE(kDiffuserG, 0.55f);
+
+/// Soundboard air/sizzle noise gain, envelope-followed off the radiated
+/// signal. Reference renders measure 20-40 dB tone-to-noise; a clean partial
+/// stack reads dry and synthetic.
+SONARE_TUNABLE(kAirGain, 0.0f);
 
 }  // namespace
 
@@ -98,12 +118,6 @@ void PianoResonanceBank::reset() noexcept {
 }
 
 float PianoResonanceBank::process(float bridge_in, bool damper_open) noexcept {
-  // The dampers only rest on the speaking lengths: the duplex/aliquot
-  // segments beyond the bridge and the undamped top octaves keep a faint
-  // sympathetic shimmer ringing even with the pedal up. Without this floor
-  // the pedal-up sustain is a spectrally bare harmonic stack — it reads as a
-  // plucked string, not a whole instrument around the string.
-  constexpr float kDuplexFloor = 0.3f;
   const float target = damper_open ? 1.0f : kDuplexFloor;
   gate_ += (damper_open ? gate_open_coeff_ : gate_close_coeff_) * (target - gate_);
   const float x = gate_ * bridge_in;
@@ -142,8 +156,6 @@ void PianoSoundboard::prepare(double sample_rate, float mix) noexcept {
   // Modes log-spread across the soundboard's radiating band. A perfectly
   // geometric spacing would comb; a deterministic per-mode nudge breaks the
   // periodicity (no RNG — derived from the index so bounces stay bit-stable).
-  constexpr float kFLow = 92.0f;
-  constexpr float kFHigh = 5400.0f;
   for (int i = 0; i < kSoundboardModes; ++i) {
     Mode& m = modes_[static_cast<size_t>(i)];
     const float u = static_cast<float>(i) / static_cast<float>(kSoundboardModes - 1);
@@ -217,7 +229,6 @@ float PianoSoundboard::process(float in) noexcept {
   // is the (1 - kPianoDirectGain) complement of the host's direct share plus
   // the modal colour, so the overall level is preserved while most of the
   // note arrives phase-scattered.
-  constexpr float kDiffuserG = 0.55f;
   float d = in;
   for (int st = 0; st < 2; ++st) {
     if (diff_len_[st] == 0) break;
@@ -244,7 +255,6 @@ float PianoSoundboard::process(float in) noexcept {
   // fill the space between the partials (reference renders measure 20-40 dB
   // tone-to-noise; a clean stack reads dry and synthetic). Deterministic
   // seed, so bounces stay bit-stable.
-  constexpr float kAirGain = 0.0f;
   const float mag = d >= 0.0f ? d : -d;
   air_env_ += (mag > air_env_ ? air_attack_ : air_release_) * (mag - air_env_);
   air_rng_ = air_rng_ * 1664525u + 1013904223u;

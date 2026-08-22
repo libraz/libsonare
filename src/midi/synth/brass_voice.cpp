@@ -7,6 +7,7 @@
 #include "rt/fractional_delay.h"
 #include "util/constants.h"
 #include "util/dsp_primitives.h"
+#include "util/tunable.h"
 
 namespace sonare::midi::synth {
 
@@ -19,15 +20,15 @@ using sonare::constants::kTwoPi;
 // lips buzz only above a threshold loop gain, and mouth * lip_couple is the
 // active gain, so the mouth pressure must reach ~unity for the lips to speak —
 // this scale brings the calibrated breath band up to that buzzing pressure.
-constexpr float kMouthScale = 1.0f;
+SONARE_TUNABLE(kMouthScale, 1.0f);
 
 // Mouth-pressure calibration: the exposed breath range lands in the strong
 // buzzing band ([~0.72, ~1.0]) — the knobs colour the tone, they do not gate it
 // on and off. Dynamic LOUDNESS comes from the voice's velocity / amp VCA around
 // this core, not from pushing the breath, so breath varies only mildly with the
 // note. breath = base + span*level.
-constexpr float kBreathBase = 0.72f;
-constexpr float kBreathSpan = 0.28f;
+SONARE_TUNABLE(kBreathBase, 0.72f);
+SONARE_TUNABLE(kBreathSpan, 0.28f);
 
 // Lip valve calibration. The lip is a resonant reflection coefficient at the
 // mouthpiece: coeff = clamp(offset - couple*lip_displacement, -1, 1), and the
@@ -39,48 +40,48 @@ constexpr float kBreathSpan = 0.28f;
 // phase that reinforces the note), which locks the buzz onto the fundamental
 // rather than a mistuned mode between the comb teeth. The rest reflection is
 // biased a touch negative for a brighter operating point.
-constexpr float kLipOffset = -0.1f;
-constexpr float kLipCouple = 4.5f;
+SONARE_TUNABLE(kLipOffset, -0.1f);
+SONARE_TUNABLE(kLipCouple, 4.5f);
 // Lip resonator quality factor from lip_damping, held CONSTANT-Q (bandwidth
 // proportional to the note) so the lip stays selective at low notes — a
 // fixed-radius resonator is wider than the fundamental in the tuba range and
 // lets the octave win, jumping the register. A tight lip is a sharp, high-Q
 // resonance (a bright, brassy buzz); a loose lip is broader and lower-Q (a
 // mellow tone). Q = min + span*(1 - lip_damping).
-constexpr float kLipQMin = 8.0f;
-constexpr float kLipQSpan = 22.0f;
+SONARE_TUNABLE(kLipQMin, 8.0f);
+SONARE_TUNABLE(kLipQSpan, 22.0f);
 // Lip tension detunes the lip resonance a little above / below the note (the
 // embouchure centre). Small — a few percent.
-constexpr float kLipTuneSpan = 0.04f;  // f_lip = f0 * (1 + span*(tension - 0.5))
+SONARE_TUNABLE(kLipTuneSpan, 0.04f);  // f_lip = f0 * (1 + span*(tension - 0.5))
 // Pitch correction: an outward-striking lip oscillates just ABOVE its resonance
 // (Fletcher 1979), so the played note lands a touch sharp of the bore/lip lock;
 // the loop delay is lengthened to bring it back onto pitch. Co-calibrated with
 // the DC-blocker phase compensation below so the sounding pitch stays within a
 // few cents across the whole keyboard (probe-measured).
-constexpr float kPitchCorrect = 1.0063f;
+SONARE_TUNABLE(kPitchCorrect, 1.0063f);
 
 // Bell reflection loss from damping: < 1 so the loop is stable (the breath
 // replenishes it). Low damping = a purer, more sustained bore.
-constexpr float kLossBase = 0.995f;
-constexpr float kLossSpan = 0.08f;
-constexpr float kLossFloor = 0.85f;
-constexpr float kLossCeil = 0.999f;
+SONARE_TUNABLE(kLossBase, 0.995f);
+SONARE_TUNABLE(kLossSpan, 0.08f);
+SONARE_TUNABLE(kLossFloor, 0.85f);
+SONARE_TUNABLE(kLossCeil, 0.999f);
 
 // Bell loop-lowpass depth: brightness maps to the one-pole pole (a brighter bell
 // reflects more upper partials). The conical bias darkens a conical brass.
-constexpr float kBellPoleSpan = 0.7f;
-constexpr float kConicalDarken = 0.12f;  // extra pole for conical (horn / tuba)
+SONARE_TUNABLE(kBellPoleSpan, 0.7f);
+SONARE_TUNABLE(kConicalDarken, 0.12f);  // extra pole for conical (horn / tuba)
 
 // Live-control smoothing time (ms).
-constexpr float kControlSmoothMs = 8.0f;
+SONARE_TUNABLE(kControlSmoothMs, 8.0f);
 
 // Breath turbulence depth (a light seeded jitter on the mouth pressure).
-constexpr float kBreathNoiseDepth = 0.08f;
+SONARE_TUNABLE(kBreathNoiseDepth, 0.08f);
 
 // Onset chiff depth (the tonguing "speak" noise burst) and the level of the
 // seeded burst pre-filled into the bore so the note speaks promptly.
-constexpr float kChiffDepth = 0.5f;
-constexpr float kBorePrefill = 0.03f;
+SONARE_TUNABLE(kChiffDepth, 0.5f);
+SONARE_TUNABLE(kBorePrefill, 0.03f);
 
 // In-loop DC blocker: the positive-feedback comb has a sub-fundamental (DC) mode
 // the rectified lip drive can excite, so the injection is DC-blocked before it
@@ -90,21 +91,21 @@ constexpr float kBorePrefill = 0.03f;
 // and the residual lead is folded into the loop compensation — the same
 // pitch-tracked highpass the reed cone (a full-period positive-feedback comb of
 // the same topology) uses.
-constexpr float kDcCornerFracF0 = 0.06f;
-constexpr float kDcCornerFloorHz = 10.0f;
+SONARE_TUNABLE(kDcCornerFracF0, 0.06f);
+SONARE_TUNABLE(kDcCornerFloorHz, 10.0f);
 // Fraction of the analytic highpass phase lead folded into comp: the nonlinear
 // lip oscillation sits between the linear loop resonance and the free lip, so
 // only part of the lead detunes the sounding pitch (probe-calibrated).
-constexpr float kDcCompScale = 0.5f;
+SONARE_TUNABLE(kDcCompScale, 0.5f);
 
 // Output trim: the driven loop settles with a raw bore peak that grows with the
 // note (~2.3 at the bottom of the range to ~7 at the top), so the output scale is
 // frequency-compensated to keep a forte note near a flat target peak across the
 // keyboard. peak_raw ~= kPeakBase + kPeakTilt*log2(f0/kPeakRefHz).
-constexpr float kOutputTargetPeak = 0.6f;
-constexpr float kPeakBase = 2.33f;
-constexpr float kPeakTilt = 0.93f;
-constexpr float kPeakRefHz = 44.0f;
+SONARE_TUNABLE(kOutputTargetPeak, 0.6f);
+SONARE_TUNABLE(kPeakBase, 2.33f);
+SONARE_TUNABLE(kPeakTilt, 0.93f);
+SONARE_TUNABLE(kPeakRefHz, 44.0f);
 
 // Cuivré dynamics (only when params.cuivre_dynamics > 0): the shock steepening
 // tracks the played dynamic. The mouth pressure is normalised over the buzzing
@@ -112,47 +113,47 @@ constexpr float kPeakRefHz = 44.0f;
 // soft note stays round and the brassy bloom concentrates near ff. The gain lets
 // a hard note push the effective brassiness above its nominal value (a real ff
 // brass blares well past its mezzo colour).
-constexpr float kCuivreDynGain = 1.8f;
+SONARE_TUNABLE(kCuivreDynGain, 1.8f);
 
 // --- 4a cuivré (only when params.brassiness > 0) ---
 // Steepening drive and asymmetry: how hard the normalised bore output is pushed
 // through the shock shaper, and how asymmetric the shock front is (the |x| term
 // adds even harmonics so the spectrum is a full shock, not an odd-only clip).
 // tanh normalisation keeps the peak while the curvature blooms the harmonics.
-constexpr float kCuivreDrive = 9.0f;
-constexpr float kCuivreAsym = 0.5f;
+SONARE_TUNABLE(kCuivreDrive, 9.0f);
+SONARE_TUNABLE(kCuivreAsym, 0.5f);
 // Low-register drive compensation: the linear bore grows more sinusoidal toward
 // low f0 (its positive-feedback comb carries fewer partials there), so at a fixed
 // drive the shock shaper barely saturates and the brass formant never blooms in
 // the low register. The drive is boosted below the reference by (ref/f0)^2 (the
 // ratio capped so the boost saturates), leaving the calibrated mid/high brass
 // untouched (the factor is 1 at and above the reference).
-constexpr float kCuivreDriveRefHz = 175.0f;
-constexpr float kCuivreDriveRatioMax = 2.3f;
+SONARE_TUNABLE(kCuivreDriveRefHz, 175.0f);
+SONARE_TUNABLE(kCuivreDriveRatioMax, 2.3f);
 // Max wet mix of the shaped (brassy) signal at full brassiness.
-constexpr float kCuivreMixMax = 0.85f;
+SONARE_TUNABLE(kCuivreMixMax, 0.85f);
 
 // --- 4b mute (only when params.mute > 0) ---
 // Muted upper formant (Hz) and its resonance: the nasal honk of a straight/cup
 // mute. The formant peak is boosted and the direct low-mid scooped.
-constexpr float kMuteFormantHz = 1800.0f;
-constexpr float kMuteFormantR = 0.90f;
-constexpr float kMuteFormantGain = 3.5f;
-constexpr float kMuteScoop = 0.45f;  // how much direct signal the mute removes
-constexpr float kMuteMixMax = 0.9f;
+SONARE_TUNABLE(kMuteFormantHz, 1800.0f);
+SONARE_TUNABLE(kMuteFormantR, 0.90f);
+SONARE_TUNABLE(kMuteFormantGain, 3.5f);
+SONARE_TUNABLE(kMuteScoop, 0.45f);  // how much direct signal the mute removes
+SONARE_TUNABLE(kMuteMixMax, 0.9f);
 
 // --- 4c half-valve (only when params.half_valve > 0) ---
 // Extra in-loop loss (a stuffier, more damped bore) and a small loop detune (the
 // unstable, pitch-ambiguous half-valve wobble).
-constexpr float kHalfValveLossMax = 0.05f;
-constexpr float kHalfValveDetune = 0.006f;
+SONARE_TUNABLE(kHalfValveLossMax, 0.05f);
+SONARE_TUNABLE(kHalfValveDetune, 0.006f);
 
 // --- 4d dynamic (2-DOF) lip (only when params.dynamic_lip > 0) ---
 // The transverse second lip mode sits above the note; its coupling adds a
 // livelier buzz. Constant-Q like the primary lip.
-constexpr float kLip2Mult = 2.0f;
-constexpr float kLip2Q = 7.0f;
-constexpr float kLip2Couple = 1.5f;
+SONARE_TUNABLE(kLip2Mult, 2.0f);
+SONARE_TUNABLE(kLip2Q, 7.0f);
+SONARE_TUNABLE(kLip2Couple, 1.5f);
 
 /// One-pole ramp coefficient reaching ~95% of the target in @p ms.
 float ramp_coeff(float ms, double sample_rate) noexcept {

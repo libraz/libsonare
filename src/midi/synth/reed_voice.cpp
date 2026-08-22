@@ -7,6 +7,7 @@
 #include "rt/fractional_delay.h"
 #include "util/constants.h"
 #include "util/dsp_primitives.h"
+#include "util/tunable.h"
 
 namespace sonare::midi::synth {
 
@@ -26,42 +27,42 @@ using sonare::constants::kTwoPi;
 // usable pressure range is narrow); it comes from the voice's velocity / amp
 // VCA around this core, so breath varies only mildly with the note. breath =
 // base + span*level.
-constexpr float kBreathBase = 0.82f;
-constexpr float kBreathSpan = 0.08f;
+SONARE_TUNABLE(kBreathBase, 0.82f);
+SONARE_TUNABLE(kBreathSpan, 0.08f);
 
 // Reed table from the stiffness / opening knobs (STK Clarinet: offset ~0.7 rest
 // opening, slope ~-0.3 stiffness). A stiffer reed = a steeper (more negative)
 // slope = a brighter, buzzier tone; a smaller opening = a larger offset. The
 // spans are deliberately small so no knob combination pushes the operating point
 // past the clamp (silent) or far below the threshold (a whisper).
-constexpr float kReedOffsetMin = 0.68f;
-constexpr float kReedOffsetSpan = 0.04f;  // offset = min + span*(1 - opening)
-constexpr float kReedSlopeBase = 0.25f;
-constexpr float kReedSlopeSpan = 0.05f;  // slope = -(base + span*stiffness)
+SONARE_TUNABLE(kReedOffsetMin, 0.68f);
+SONARE_TUNABLE(kReedOffsetSpan, 0.04f);  // offset = min + span*(1 - opening)
+SONARE_TUNABLE(kReedSlopeBase, 0.25f);
+SONARE_TUNABLE(kReedSlopeSpan, 0.05f);  // slope = -(base + span*stiffness)
 
 // Bell reflection loss from damping: < 1 so the loop is stable (the breath
 // replenishes it). Low damping = a purer, more sustained bore.
-constexpr float kLossBase = 0.99f;
-constexpr float kLossSpan = 0.09f;
-constexpr float kLossFloor = 0.80f;
-constexpr float kLossCeil = 0.999f;
+SONARE_TUNABLE(kLossBase, 0.99f);
+SONARE_TUNABLE(kLossSpan, 0.09f);
+SONARE_TUNABLE(kLossFloor, 0.80f);
+SONARE_TUNABLE(kLossCeil, 0.999f);
 
 // Bell loop-lowpass depth: brightness maps to the one-pole pole (a brighter bell
 // reflects more upper partials).
-constexpr float kBellPoleSpan = 0.7f;
+SONARE_TUNABLE(kBellPoleSpan, 0.7f);
 
 // Live-control smoothing time (ms): the per-sample ramp of breath / brightness
 // toward their CC targets — fast enough to feel immediate, slow enough to never
 // zipper.
-constexpr float kControlSmoothMs = 8.0f;
+SONARE_TUNABLE(kControlSmoothMs, 8.0f);
 
 // Breath turbulence depth (a light seeded jitter on the mouth pressure).
-constexpr float kBreathNoiseDepth = 0.08f;
+SONARE_TUNABLE(kBreathNoiseDepth, 0.08f);
 
 // Onset chiff depth (the reed's initial "speak" noise burst) and the level of
 // the seeded burst pre-filled into the bore so the note speaks promptly.
-constexpr float kChiffDepth = 0.5f;
-constexpr float kBorePrefill = 0.02f;
+SONARE_TUNABLE(kChiffDepth, 0.5f);
+SONARE_TUNABLE(kBorePrefill, 0.02f);
 
 // In-loop sub-fundamental highpass: the conical (positive-feedback) comb has a
 // DC mode that does not radiate, and the breath DC drives the reed, so the loop
@@ -74,46 +75,46 @@ constexpr float kBorePrefill = 0.02f;
 // essentially untouched, while rising with the note so nothing below the
 // fundamental can resonate. A floor keeps the lowest reeds' fundamental clear of
 // the corner.
-constexpr float kHpCornerFracF0 = 0.06f;
-constexpr float kHpCornerFloorHz = 10.0f;
+SONARE_TUNABLE(kHpCornerFracF0, 0.06f);
+SONARE_TUNABLE(kHpCornerFloorHz, 10.0f);
 // Fraction of the highpass phase lead folded into the loop-delay compensation.
 // The resonance shift a filter causes follows its GROUP delay at the fundamental,
 // which for this pole placement is roughly this fraction of the phase delay used
 // to estimate it, so compensating that fraction re-centres the tuning (the full
 // phase delay over-corrects into flatness).
-constexpr float kHpCompScale = 0.5f;
+SONARE_TUNABLE(kHpCompScale, 0.5f);
 
 // Output trim: the raw bore pressure sits near unity already (the reed table is
 // bounded to [-1,1]), so only a gentle scale brings a forte note into the other
 // engines' range.
-constexpr float kOutputScale = 0.9f;
+SONARE_TUNABLE(kOutputScale, 0.9f);
 
 // --- 4a dynamic (mass-spring) reed (only when params.dynamic_reed) ---
 // Reed natural frequency (Hz) = base + span*reed_resonance: a cane reed's own
 // resonance sits well above the played fundamental (clarinet reeds ~2-3 kHz), so
 // it boosts the partials near it rather than the fundamental.
-constexpr float kReedResBaseHz = 1500.0f;
-constexpr float kReedResSpanHz = 2000.0f;
+SONARE_TUNABLE(kReedResBaseHz, 1500.0f);
+SONARE_TUNABLE(kReedResSpanHz, 2000.0f);
 // Reed resonator pole radius (Q) and how strongly its displacement biases the
 // (sharp) reed table's operating point. Kept small so the loop stays bounded —
 // the bias only nudges the already-clamped table, never adds unbounded gain.
-constexpr float kReedResR = 0.985f;
-constexpr float kReedCouple = 0.15f;
+SONARE_TUNABLE(kReedResR, 0.985f);
+SONARE_TUNABLE(kReedCouple, 0.15f);
 
 // --- 4b register vent (only when params.register_vent > 0) ---
 // Low-band follower corner (Hz): the follower tracks the loop's low content so
 // it can be subtracted out, damping the fundamental toward the register break.
-constexpr float kRegVentCornerHz = 700.0f;
+SONARE_TUNABLE(kRegVentCornerHz, 700.0f);
 // Maximum fraction of the low band subtracted from the reflection at full vent.
 // Capped below 1 so even a fully-open register stays audible (venting loses
 // energy, so a register note is quieter and thinner, but never silent).
-constexpr float kRegVentMax = 0.7f;
+SONARE_TUNABLE(kRegVentMax, 0.7f);
 
 // --- 4c growl (only when params.growl > 0) ---
 // Growl LFO rate (Hz): the sub-audio flutter/hum that sidebands the tone.
-constexpr float kGrowlRateHz = 28.0f;
+SONARE_TUNABLE(kGrowlRateHz, 28.0f);
 // Maximum breath modulation depth at full growl.
-constexpr float kGrowlDepthMax = 0.5f;
+SONARE_TUNABLE(kGrowlDepthMax, 0.5f);
 
 // --- 4d growth cone (only when params.conical && params.cone_growth > 0) ---
 // Throat integrator corner as a multiple of the fundamental: the apex's 1/r
@@ -123,12 +124,12 @@ constexpr float kGrowlDepthMax = 0.5f;
 // fixed-corner filter). The pole is < 1 so the integrator is unconditionally
 // bounded (the practical bounded form of the lossless pole-on-circle apex
 // integrator Smith's TIIR filters would otherwise be needed to tame).
-constexpr float kConeThroatMult = 1.6f;
+SONARE_TUNABLE(kConeThroatMult, 1.6f);
 // Radiation-side throat gain at full growth: how strongly the recovered
 // low-frequency pressure is added back at the output. Output-side (not in the
 // loop), so it colours the radiated tone without touching the resonance — the
 // tuning and stability are unchanged by construction.
-constexpr float kConeGrowthGain = 1.4f;
+SONARE_TUNABLE(kConeGrowthGain, 1.4f);
 
 // --- 4e tonehole scattering (only when params.tonehole > 0) ---
 // Hole position as a fraction of the one-way bore delay (the reed->hole
@@ -139,13 +140,13 @@ constexpr float kConeGrowthGain = 1.4f;
 // sub-loop coincides with the full-bore mode and the loop either quenches or
 // runs away — so the cone hole sits a quarter of the way down (sub-loop at
 // 2*f0), while the cylinder hole sits half-way.
-constexpr float kToneholeFracCylinder = 0.5f;
-constexpr float kToneholeFracCone = 0.25f;
+SONARE_TUNABLE(kToneholeFracCylinder, 0.5f);
+SONARE_TUNABLE(kToneholeFracCone, 0.25f);
 // Maximum scattering-reflection strength at a fully open hole (the pressure
 // release is partial — a real hole is a finite, radiating branch, not a perfect
 // short). Kept < 1 so the reed<->hole sub-loop stays bounded alongside the main
 // reed<->bell loop.
-constexpr float kToneholeGainMax = 0.5f;
+SONARE_TUNABLE(kToneholeGainMax, 0.5f);
 
 /// One-pole ramp coefficient reaching ~95% of the target in @p ms.
 float ramp_coeff(float ms, double sample_rate) noexcept {

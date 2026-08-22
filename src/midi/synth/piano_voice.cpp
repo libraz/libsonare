@@ -8,6 +8,7 @@
 #include "rt/fractional_delay.h"
 #include "util/constants.h"
 #include "util/dsp_primitives.h"
+#include "util/tunable.h"
 
 namespace sonare::midi::synth {
 
@@ -17,10 +18,13 @@ using sonare::constants::kPi;
 using sonare::constants::kTwoPi;
 
 /// Mezzo-forte reference velocity (0..1) the felt-hammer laws are anchored at.
-constexpr float kHammerMfVel = 0.6f;
+SONARE_TUNABLE(kHammerMfVel, 0.6f);
+/// Felt hysteresis coefficient: how much stiffer the hammer's loading curve is
+/// than its unloading curve (see the contact solver's `ham_mu_`).
+SONARE_TUNABLE(kHammerHysteresis, 0.229431f);
 /// Additional felt-stiffness cutoff octaves per unit velocity above mf, per
 /// unit hammer_dynamics: a compressed felt patch passes more of the pulse top.
-constexpr float kHammerDynBrightOct = 1.5f;
+SONARE_TUNABLE(kHammerDynBrightOct, 1.5f);
 /// Hammer-contact floor in fundamental PERIODS, anchored at C4 and graded
 /// per octave (signed: it shrinks into the bass, grows into the treble). A
 /// real grand's contact spans ~0.5 of the period at C4 and more than a full
@@ -28,14 +32,14 @@ constexpr float kHammerDynBrightOct = 1.5f;
 /// contact much shorter than half a period injects a spike-like pulse that
 /// reads as a fingernail pluck, and in the treble it additionally leaves the
 /// overtones louder than the fundamental (a plucked-string spectrum).
-constexpr float kContactPeriodsAtC4 = 0.503038f;
-constexpr float kContactPeriodsPerOct = 0.613525f;
-constexpr float kContactPeriodsMax = 2.0f;
+SONARE_TUNABLE(kContactPeriodsAtC4, 0.503038f);
+SONARE_TUNABLE(kContactPeriodsPerOct, 0.613525f);
+SONARE_TUNABLE(kContactPeriodsMax, 2.0f);
 /// Treble decay taper (halvings of the aftersound stage per octave above C4):
 /// the short, stiff, heavily-damped treble strings die far faster than the
 /// tenor. Applied to the slow stage only — the prompt-sound rate is set by the
 /// polarization/unison coupling, which has its own register profile below.
-constexpr float kTrebleDecayOct = 1.94164f;
+SONARE_TUNABLE(kTrebleDecayOct, 1.94164f);
 /// Register profile of the prompt-vs-aftersound contrast. The double decay is
 /// strongest in the trichord mid-range (vertical polarization + unison
 /// coupling drain the bridge fast, then the decohered residue rings): the
@@ -43,36 +47,36 @@ constexpr float kTrebleDecayOct = 1.94164f;
 /// aftersound rate, and the capped treble is so short-lived the two stages
 /// merge. Gaussian in octaves from C4; at the edges the effective prompt rate
 /// relaxes toward the aftersound rate.
-constexpr float kTwoStageWidthOct = 0.616718f;
+SONARE_TUNABLE(kTwoStageWidthOct, 0.616718f);
 /// Treble taper cap (octaves above C4): the decay/darkening keytracks stop
 /// steepening past here — an uncapped taper leaves the top octave with a
 /// sub-100 ms husk of a note.
-constexpr float kTrebleTaperOctCap = 1.5f;
+SONARE_TUNABLE(kTrebleTaperOctCap, 1.5f);
 /// Treble loop darkening (effective-brightness drop per octave above C4): the
 /// treble string's upper partials decay much faster than its fundamental, so
 /// the loop lowpass closes toward the top even for a bright patch voicing.
 /// Kept gentle: over-closing leaves a 3-4 partial flageolet instead of a
 /// piano treble.
-constexpr float kTrebleBrightPerOct = 0.06f;
+SONARE_TUNABLE(kTrebleBrightPerOct, 0.06f);
 /// Effective-brightness drop per octave BELOW C4 (wound-string mid-partial
 /// damping; see bright_eff). The h1 decay is unaffected — the loop-lowpass
 /// loss at the fundamental is compensated (lp_comp), so this only shortens
 /// the upper partials.
-constexpr float kBassDarkPerOct = 0.15f;
+SONARE_TUNABLE(kBassDarkPerOct, 0.15f);
 /// String-to-string inharmonicity spread inside a unison (fractional jitter
 /// on the dispersion allpass): real unison strings never share an exact B, so
 /// each partial's unison beat runs at its own rate. Identical coefficients
 /// make every partial null in lockstep — an audibly artificial hollow dip.
-constexpr float kUnisonStiffJitter = 0.05f;
+SONARE_TUNABLE(kUnisonStiffJitter, 0.05f);
 /// Under the soft pedal the action rides a softer, less-grooved felt patch that
 /// compresses far less under a hard blow, so the velocity dynamics is scaled
 /// down there (this also preserves the una-corda high-frequency softening).
-constexpr float kUnaCordaDynScale = 0.4f;
+SONARE_TUNABLE(kUnaCordaDynScale, 0.4f);
 /// Uneven unison strike: hammer crowning and string leveling never deliver
 /// equal energy to a bichord/trichord's strings. Equal amplitudes make the
 /// unison beats cancel to full-depth nulls (an audible slow chorus wobble);
 /// the uneven strike keeps them as shallow ripple and seeds the aftersound.
-constexpr float kUnisonStrikeUneven = 0.15f;
+SONARE_TUNABLE(kUnisonStrikeUneven, 0.15f);
 /// Uneven bridge coupling across the unison (Weinreich): each string meets
 /// the bridge at a slightly different impedance, so the antisymmetric normal
 /// mode — whose string motions cancel at an ideal bridge — still radiates,
@@ -81,25 +85,25 @@ constexpr float kUnisonStrikeUneven = 0.15f;
 /// with equal radiation the slow mode is silent, and compensating with deep
 /// detune buys the second stage at the cost of a chorus-like beating
 /// fundamental no tuned piano has.
-constexpr float kUnisonRadSpread = 0.6f;
+SONARE_TUNABLE(kUnisonRadSpread, 0.6f);
 /// Felt impact noise: level relative to the hammer amplitude, exponential
 /// decay time, and hard stop of the burst. The noise passes the same
 /// velocity-driven felt-stiffness lowpass as the pulse, so soft strikes thud
 /// and hard strikes click.
-constexpr float kStrikeNoiseGain = 0.6f;
-constexpr float kStrikeNoiseTauMs = 8.0f;
-constexpr float kStrikeNoiseMaxMs = 30.0f;
+SONARE_TUNABLE(kStrikeNoiseGain, 0.6f);
+SONARE_TUNABLE(kStrikeNoiseTauMs, 8.0f);
+SONARE_TUNABLE(kStrikeNoiseMaxMs, 30.0f);
 /// The impact noise radiates through a darker path than the string pulse: a
 /// felt hammer lands as a 0.5-2 kHz thud, not a pick click — the noise gets
 /// its own lowpass at this fraction of the felt-stiffness cutoff.
-constexpr float kStrikeNoiseCutoffScale = 0.487539f;
+SONARE_TUNABLE(kStrikeNoiseCutoffScale, 0.487539f);
 /// Halvings of the noise cutoff per octave below C4 (see noise_cutoff).
-constexpr float kNoiseCutoffBassOct = 0.5f;
+SONARE_TUNABLE(kNoiseCutoffBassOct, 0.5f);
 /// Third noise pole, placed this factor above the main cutoff: the felt
 /// noise keeps its passband but falls off a cliff past it — the reference
 /// attack holds energy to a few kHz then drops ~37 dB into the next octave,
 /// a shape two poles cannot make (their tail is what read as a jack click).
-constexpr float kNoiseSteepRatio = 4.0f;
+SONARE_TUNABLE(kNoiseSteepRatio, 4.0f);
 /// Finite hammer-head width: the felt contacts several percent of the string
 /// length, and that footprint lowpasses the injected force (partials whose
 /// half-wavelength fits inside the footprint cancel). Caps the pulse content
@@ -107,96 +111,96 @@ constexpr float kNoiseSteepRatio = 4.0f;
 /// overtones around h6-h12 come out plectrum-hard (a honky, dry midrange no
 /// felt hammer produces). The strike-noise path is NOT capped: the scrub
 /// noise is what carries the airy top sheen.
-constexpr float kHammerWidthHarmonics = 2.69125f;
+SONARE_TUNABLE(kHammerWidthHarmonics, 2.69125f);
 /// Share of the impact noise injected into the strings themselves: the felt
 /// scrub and the wave re-striking the hammer during contact excite the
 /// string broadband. This is what seeds the HIGH partials (h10+) — the
 /// smooth force pulse alone rolls off ~18 dB/oct past ~2/contact, leaving
 /// the mid/bass sustain with no top: a bright strike into a dull ring reads
 /// as a fingernail pluck. Random phase, so it does not re-cohere the loop.
-constexpr float kStrikeNoiseInject = 0.298027f;
+SONARE_TUNABLE(kStrikeNoiseInject, 0.298027f);
 /// The injection tapers above C4 (halvings per octave): the treble hammer
 /// rests on the string for around a full period, shorting high-frequency
 /// string motion at the contact point — broadband seeding there rings the
 /// overtones into a harpsichord jangle instead of a piano treble.
-constexpr float kInjectTrebleTaperOct = 0.654102f;
+SONARE_TUNABLE(kInjectTrebleTaperOct, 0.654102f);
 /// ...and grows below C4 (doublings per octave): the massive bass hammer's
 /// felt scrub and re-strike chatter seed the dense partial cloud a wound
 /// string radiates (absent it, the bass is a clean plucked stack).
-constexpr float kInjectBassBoostOct = 1.23607f;
+SONARE_TUNABLE(kInjectBassBoostOct, 1.23607f);
 /// The impact-noise LEVEL also tapers above C4: the treble hammer is a few
 /// grams of hard felt on a short string — its scrub is faint next to the
 /// tone, where the same level against a fast-dying treble note reads as a
 /// pick scratch riding every onset.
-constexpr float kNoiseTrebleTaperOct = 1.08754f;
+SONARE_TUNABLE(kNoiseTrebleTaperOct, 1.08754f);
 /// Hammer-knock radiation (through the soundboard) relative to the string
 /// injection, and its growth per octave BELOW C4: the wide wound bass
 /// strings take a massive hammer whose impact drives the board directly —
 /// on a reference grand the low-register attack peaks in the 60-250 Hz
 /// thump, not in the string partials. Without that boom the exposed bass
 /// harmonic stack reads as a harpsichord register.
-constexpr float kKnockGain = 2.6f;
+SONARE_TUNABLE(kKnockGain, 2.6f);
 /// The knock radiates only the impact THUD: the hammer/action/board contact
 /// pumps a fixed low band regardless of the note (a treble strike lands as a
 /// quiet thock, not a burst at the string's own pitch). Radiating the raw
 /// pulse instead puts note-frequency energy straight into the board and
 /// sympathetic modes, whose stretch-detuned ring then beats against the
 /// string fundamental — an audible onset notch in the treble.
-constexpr float kKnockThudHz = 350.0f;
+SONARE_TUNABLE(kKnockThudHz, 350.0f);
 /// Halvings of the thud frequency per octave below C4 (see thud_hz).
-constexpr float kKnockThudBassOct = 0.7f;
+SONARE_TUNABLE(kKnockThudBassOct, 0.7f);
 /// Radiation bloom: the string radiates only through the board, whose modes
 /// take time to ring up — the tone swells over tens of ms in the bass and a
 /// few ms in the treble, while a plucked string (or a harpsichord jack) is
 /// loudest at the very first cycle. One-pole rise time constant at C4 (ms)
 /// and its per-octave keytrack (bass slower, treble faster). The knock/thud
 /// path is NOT bloomed — the impact is the first thing heard.
-constexpr float kBloomTauMsC4 = 4.6604f;
-constexpr float kBloomTauOct = 0.9f;
+SONARE_TUNABLE(kBloomTauMsC4, 4.6604f);
+SONARE_TUNABLE(kBloomTauOct, 0.9f);
 /// String yield under the blow (fraction of the hammer's speed the strike
 /// point recedes at, at mf peak force). Keytracked DOWN toward the treble:
 /// the treble hammer outweighs its short string many times over, so the
 /// string barely loads the bounce (a clean full-period dwell); the wound
 /// bass strings are massive and swing away under the light-relative hammer,
 /// stretching the contact and softening the transfer.
-constexpr float kStringYield = 0.8f;
+SONARE_TUNABLE(kStringYield, 0.8f);
 /// Register level compensation on the injected force (dB per octave from C4,
 /// clamped at +/-1.25 oct): the bass chatter re-feeds its strings while the
 /// treble's near-period dwell couples weakly into the fundamental, tilting
 /// the raw physical levels bass-heavy by ~10 dB/oct against the reference.
-constexpr float kInjTiltDbOct = 3.5f;
-constexpr float kYieldTrebleOct = 2.0f;
-constexpr float kKnockBassBoostOct = 1.3f;
+SONARE_TUNABLE(kInjTiltDbOct, 3.5f);
+SONARE_TUNABLE(kYieldTrebleOct, 2.0f);
+SONARE_TUNABLE(kKnockBassBoostOct, 1.3f);
 /// ...and shrinks above C4: the treble hammer is a few grams — its thud is
 /// far below the tone (the reference treble attack has almost no 60-250 Hz).
-constexpr float kKnockTrebleTaperOct = 2.0f;
+SONARE_TUNABLE(kKnockTrebleTaperOct, 2.0f);
 /// The hammer-width harmonic cap keytracks from C4, signed doublings per
 /// octave on each side: in HARMONIC number the felt footprint's cap follows
 /// both the footprint's span of the string and how the contact dwell scales
 /// against the period, so neither side is forced brighter or darker a
 /// priori — the reference ladders decide the sign per register.
-constexpr float kWidthBassOct = -1.96668f;
-constexpr float kWidthTrebleOct = 0.81966f;
+SONARE_TUNABLE(kWidthBassOct, -1.96668f);
+SONARE_TUNABLE(kWidthTrebleOct, 0.81966f);
 /// Strike-point keytrack (doublings per octave below C4) applied to the
 /// patch's strike_position fraction.
-constexpr float kStrikePosBassOct = 0.556f;
+SONARE_TUNABLE(kStrikePosBassOct, 0.556f);
 /// Soundboard radiation highpass (2nd order). The board radiates poorly
 /// below its first body modes, so a piano's low fundamentals barely reach
 /// the air — the pitch is carried as virtual pitch by the upper partials.
 /// Passing the raw string fundamental instead makes the note read as a
 /// literally vibrating string (a guitar with its Helmholtz-supported lows),
 /// an octave darker than a piano radiates.
-constexpr float kRadiationHpHz = 95.0f;
-constexpr float kRadiationHpQ = 0.6f;
+SONARE_TUNABLE(kRadiationHpHz, 95.0f);
+SONARE_TUNABLE(kRadiationHpQ, 0.6f);
 /// Bridge-hill radiation emphasis (RBJ peaking biquad). The bridge/board
 /// mobility of a grand peaks broadly around 1-2 kHz (the "bridge hill"),
 /// lifting whichever partials land in that fixed band: the bass h9-h12
 /// partial crown, the mid-register presence, and the treble's h2-h3 body all
 /// radiate from this resonance, not from the strings. Without it every
 /// register reads mid-heavy and boxed-in regardless of the hammer spectrum.
-constexpr float kBridgeHillHz = 1485.15f;
-constexpr float kBridgeHillGainDb = 9.91486f;
-constexpr float kBridgeHillQ = 2.40983f;
+SONARE_TUNABLE(kBridgeHillHz, 1485.15f);
+SONARE_TUNABLE(kBridgeHillGainDb, 9.91486f);
+SONARE_TUNABLE(kBridgeHillQ, 2.40983f);
 
 /// Per-loop-traversal amplitude factor reaching -60 dB after @p t60_s.
 float loop_gain_for(float period_samples, double sample_rate, float t60_s) noexcept {
@@ -496,7 +500,7 @@ void PianoVoiceCore::start(const PianoPatchParams& params, double sample_rate, u
   ham_k_ = std::pow(c_p / tau_mf, p + 1.0f) * (una_corda ? 0.5f : 1.0f);
   // Felt hysteresis: loading is stiffer than unloading, which skews the force
   // pulse forward and bleeds energy so the hammer leaves the string cleanly.
-  ham_mu_ = 0.229431f;
+  ham_mu_ = kHammerHysteresis;
   ham_y_ = 0.0f;
   // Hammer speed normalized at the mezzo-forte reference; hammer_dynamics
   // widens the pp<->ff speed spread around that pivot.

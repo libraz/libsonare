@@ -7,6 +7,7 @@
 #include "rt/fractional_delay.h"
 #include "util/constants.h"
 #include "util/dsp_primitives.h"
+#include "util/tunable.h"
 
 namespace sonare::midi::synth {
 
@@ -18,41 +19,41 @@ using sonare::constants::kTwoPi;
 // Bow-velocity calibration: the differential-velocity input the bow table sees
 // is a small quantity (a real bow moves the contact point at ~0.05-0.2 in the
 // model's normalised velocity-wave units). maxVelocity = base + span*speed.
-constexpr float kBowVelocityBase = 0.03f;
-constexpr float kBowVelocitySpan = 0.14f;
+SONARE_TUNABLE(kBowVelocityBase, 0.03f);
+SONARE_TUNABLE(kBowVelocitySpan, 0.14f);
 
 // Rosin texture depth: a light seeded jitter on the bow velocity.
-constexpr float kRosinDepth = 0.15f;
+SONARE_TUNABLE(kRosinDepth, 0.15f);
 
 // Live-control smoothing time (ms): the per-sample ramp of bow speed / force /
 // position toward their CC targets — fast enough to feel immediate, slow enough
 // to never zipper.
-constexpr float kControlSmoothMs = 8.0f;
+SONARE_TUNABLE(kControlSmoothMs, 8.0f);
 
 // --- elasto-plastic friction calibration (only when params.elasto_plastic) ---
 // All dimensionless in the model's velocity-wave units (bow velocities ~0.03..
 // 0.17); tuned so the bristle loop stays bounded and still locks into Helmholtz.
 // Stribeck velocity (stick-hump half-width) = base + span*stribeck: the relative
 // velocity at which the bristles break away from full grip into slip.
-constexpr float kEpStribeckBase = 0.02f;
-constexpr float kEpStribeckSpan = 0.10f;
+SONARE_TUNABLE(kEpStribeckBase, 0.02f);
+SONARE_TUNABLE(kEpStribeckSpan, 0.10f);
 // Bristle deflection clamp (divergence guard rail) and the breakaway fraction of
 // it below which the contact is purely elastic (stuck, no plastic slip yet).
-constexpr float kEpZMax = 0.25f;
-constexpr float kEpBreakawayFrac = 0.15f;
+SONARE_TUNABLE(kEpZMax, 0.25f);
+SONARE_TUNABLE(kEpBreakawayFrac, 0.15f);
 // Bristle load time (ms): how quickly the stuck bristle charges toward its
 // steady deflection; folded into a per-sample rate against the sample rate. Kept
 // well under a fundamental period so the stick->slip corner stays sharp (a slow
 // bristle over-smooths the tone into a near-sine).
-constexpr float kEpLoadTimeMs = 0.15f;
+SONARE_TUNABLE(kEpLoadTimeMs, 0.15f);
 // Steady-state bristle floor (fraction of z_max the hump retains in full slip),
 // so the Stribeck curve decays to a small non-zero grip rather than to zero.
-constexpr float kEpZssFloor = 0.10f;
+SONARE_TUNABLE(kEpZssFloor, 0.10f);
 // Hysteresis bias: how strongly the bristle deflection offsets the (sharp) bow
 // table's operating point. This is the whole elasto-plastic effect — the table
 // stays sharp (Helmholtz preserved) but breaks away and re-grips along different
 // velocities, the hysteresis loop that warms the memoryless table's "dry" slip.
-constexpr float kEpHystOffset = 0.6f;
+SONARE_TUNABLE(kEpHystOffset, 0.6f);
 
 // --- sympathetic open-string resonance (only when params.sympathetic > 0) ---
 // Fixed open-string pitches (MIDI notes) the bank resonates at: a fifths-ish
@@ -61,30 +62,30 @@ constexpr float kEpHystOffset = 0.6f;
 constexpr int kSympatheticNotes[] = {28, 35, 42, 49, 55, 62, 69, 76};
 // Sympathetic ring time (t60, seconds): open strings ring longer than the
 // piano's damped bank but decay well within a phrase.
-constexpr float kSympatheticRingS = 1.2f;
+SONARE_TUNABLE(kSympatheticRingS, 1.2f);
 // Return level scale: weak coupling so the bank haloes the played note rather
 // than dominating (final mix = this * params.sympathetic).
-constexpr float kSympatheticOutGain = 0.10f;
+SONARE_TUNABLE(kSympatheticOutGain, 0.10f);
 
 // --- second (horizontal) polarization (only when params.polarization > 0) ---
 // Detune of the 2nd polarization from the bowed one (cents): the two planes ring
 // at slightly different pitches and beat, the source of the "thickness".
-constexpr float kPolDetuneCents = 7.0f;
+SONARE_TUNABLE(kPolDetuneCents, 7.0f);
 // Loop loss of the 2nd polarization: more damped than the primary (it is not
 // driven directly by the bow), so it colours the attack and body without ringing
 // on forever.
-constexpr float kPolLoss = 0.93f;
+SONARE_TUNABLE(kPolLoss, 0.93f);
 // Reflection-filter openness of the 2nd polarization loop (one-pole pole a).
-constexpr float kPolLpPole = 0.35f;
+SONARE_TUNABLE(kPolLpPole, 0.35f);
 // Bow injection into the 2nd polarization (weak — the bow grips the vertical
 // plane; the horizontal plane is dragged along).
-constexpr float kPolDrive = 0.35f;
+SONARE_TUNABLE(kPolDrive, 0.35f);
 // Cross-coupling of the 2nd polarization back into the bowed string velocity,
 // scaled by params.polarization. Kept small so the added feedback path stays
 // bounded (the bow table saturates and pol_loss < 1).
-constexpr float kPolCoupleMax = 0.20f;
+SONARE_TUNABLE(kPolCoupleMax, 0.20f);
 // Direct radiation of the 2nd polarization added to the output.
-constexpr float kPolRadiation = 0.25f;
+SONARE_TUNABLE(kPolRadiation, 0.25f);
 
 /// One-pole ramp coefficient reaching ~95% of the target in @p ms.
 float ramp_coeff(float ms, double sample_rate) noexcept {

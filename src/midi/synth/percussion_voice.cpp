@@ -6,6 +6,7 @@
 #include "midi/synth/bessel.h"
 #include "midi/synth/pitch.h"
 #include "util/constants.h"
+#include "util/tunable.h"
 
 namespace sonare::midi::synth {
 
@@ -25,7 +26,7 @@ constexpr uint64_t kShimmerIndexBase = 1ull << 28;
 constexpr uint64_t kPhisemProbIndexBase = 1ull << 30;
 constexpr uint64_t kPhisemNoiseIndexBase = 1ull << 31;
 /// Random bead collisions per bean per unit shake energy per second.
-constexpr float kPhisemCollisionRate = 100.0f;
+SONARE_TUNABLE(kPhisemCollisionRate, 100.0f);
 
 float radius_for(double sample_rate, float t60_s) noexcept {
   return std::exp(-6.907755279f / (static_cast<float>(sample_rate) * std::max(0.005f, t60_s)));
