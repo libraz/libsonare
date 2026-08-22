@@ -862,21 +862,71 @@ inline saturation::AmpModel amp_model(int value) {
   }
 }
 
-inline saturation::AmpSimConfig amp_sim_config(const ParamMap& params) {
-  saturation::AmpSimConfig config;
+inline saturation::AmpTopology amp_topology(int value) {
+  return value == 1 ? saturation::AmpTopology::kCircuit : saturation::AmpTopology::kVoiced;
+}
+
+inline saturation::PowerTube power_tube(int value) {
+  switch (value) {
+    case 1:
+      return saturation::PowerTube::kEL34;
+    case 2:
+      return saturation::PowerTube::kEL84;
+    case 3:
+      return saturation::PowerTube::k6V6;
+    default:
+      return saturation::PowerTube::k6L6;
+  }
+}
+
+inline saturation::MicModel mic_model(int value) {
+  switch (value) {
+    case 1:
+      return saturation::MicModel::kDynamic;
+    case 2:
+      return saturation::MicModel::kRibbon;
+    case 3:
+      return saturation::MicModel::kCondenser;
+    default:
+      return saturation::MicModel::kNone;
+  }
+}
+
+/// @param base Starting point every key rides on top of — a preset's config, or
+///        a default-constructed one. An unset key keeps the base's value, which
+///        is what lets `{"preset":"britStack","drive":0.5}` mean "that rig, but
+///        turned down" rather than "that rig, with every other control reset".
+inline saturation::AmpSimConfig amp_sim_config(const ParamMap& params,
+                                               saturation::AmpSimConfig base = {}) {
+  saturation::AmpSimConfig config = base;
   config.drive = f(params, "drive", config.drive);
   config.bass_db = f(params, "bassDb", config.bass_db);
   config.mid_db = f(params, "midDb", config.mid_db);
   config.treble_db = f(params, "trebleDb", config.treble_db);
   config.presence_db = f(params, "presenceDb", config.presence_db);
   config.cab = b(params, "cab", config.cab);
-  config.cab_model = cab_model(i(params, "cabModel", 0));
-  config.amp_model = amp_model(i(params, "ampModel", 0));
+  config.cab_model = cab_model(i(params, "cabModel", static_cast<int>(config.cab_model)));
+  config.amp_model = amp_model(i(params, "ampModel", static_cast<int>(config.amp_model)));
   config.level_db = f(params, "levelDb", config.level_db);
   config.power = f(params, "power", config.power);
   config.sag = f(params, "sag", config.sag);
   config.transformer = f(params, "transformer", config.transformer);
   config.nfb = f(params, "nfb", config.nfb);
+  config.mic_model = mic_model(i(params, "micModel", static_cast<int>(config.mic_model)));
+  config.mic_axis = f(params, "micAxis", config.mic_axis);
+  config.mic_distance_cm = f(params, "micDistanceCm", config.mic_distance_cm);
+  config.mic_blend = f(params, "micBlend", config.mic_blend);
+  config.mic_b_model = mic_model(i(params, "micBModel", static_cast<int>(config.mic_b_model)));
+  config.mic_b_axis = f(params, "micBAxis", config.mic_b_axis);
+  config.mic_b_distance_cm = f(params, "micBDistanceCm", config.mic_b_distance_cm);
+  config.mic_b_invert = b(params, "micBInvert", config.mic_b_invert);
+  config.cone = f(params, "cone", config.cone);
+  config.doppler = f(params, "doppler", config.doppler);
+  config.topology = amp_topology(i(params, "topology", static_cast<int>(config.topology)));
+  config.preamp_stages = i(params, "preampStages", config.preamp_stages);
+  config.bias_shift = f(params, "biasShift", config.bias_shift);
+  config.crossover = f(params, "crossover", config.crossover);
+  config.power_tube = power_tube(i(params, "powerTube", static_cast<int>(config.power_tube)));
   return config;
 }
 

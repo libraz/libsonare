@@ -44,6 +44,7 @@
 #include "mastering/multiband/multiband_imager.h"
 #include "mastering/multiband/multiband_limiter.h"
 #include "mastering/multiband/multiband_saturation.h"
+#include "mastering/saturation/amp_presets.h"
 #include "mastering/saturation/amp_sim.h"
 #include "mastering/saturation/bitcrusher.h"
 #include "mastering/saturation/exciter.h"
@@ -106,26 +107,29 @@ using detail::limiter_config;
 using detail::ParamKind;
 using detail::ParamMap;
 
-#ifdef SONARE_HAVE_FX
-std::vector<float> parse_ir_f32_base64_json(const std::string& json_params) {
+// Decodes a little-endian f32 array carried as base64 under @p key. Two inserts
+// take an IR this way (the convolution reverb and the amp sim's cabinet), so the
+// key is a parameter rather than being baked in. Not FX-gated: the amp sim ships
+// in every configuration.
+std::vector<float> parse_ir_f32_base64_json(const std::string& json_params, const char* key) {
   if (json_params.empty()) return {};
   const auto root = sonare::util::json::parse_strict(json_params);
   if (!root.is_object()) {
     throw SonareException(ErrorCode::InvalidParameter, "expected JSON object");
   }
-  const auto* value = root.find("irF32Base64");
+  const auto* value = root.find(key);
   if (value == nullptr) return {};
   if (!value->is_string()) {
-    throw SonareException(ErrorCode::InvalidParameter, "irF32Base64 must be a string");
+    throw SonareException(ErrorCode::InvalidParameter, std::string(key) + " must be a string");
   }
 
   std::vector<uint8_t> bytes;
   if (!base64_decode(value->as_string(), &bytes)) {
-    throw SonareException(ErrorCode::InvalidParameter, "irF32Base64 is malformed");
+    throw SonareException(ErrorCode::InvalidParameter, std::string(key) + " is malformed");
   }
   if (bytes.size() % sizeof(float) != 0) {
     throw SonareException(ErrorCode::InvalidParameter,
-                          "irF32Base64 byte length must be f32 aligned");
+                          std::string(key) + " byte length must be f32 aligned");
   }
 
   std::vector<float> ir(bytes.size() / sizeof(float), 0.0f);
@@ -138,13 +142,30 @@ std::vector<float> parse_ir_f32_base64_json(const std::string& json_params) {
     float sample = 0.0f;
     std::memcpy(&sample, &bits, sizeof(sample));
     if (!std::isfinite(sample)) {
-      throw SonareException(ErrorCode::InvalidParameter, "irF32Base64 contains non-finite samples");
+      throw SonareException(ErrorCode::InvalidParameter,
+                            std::string(key) + " contains non-finite samples");
     }
     ir[i] = sample;
   }
   return ir;
 }
-#endif
+
+// Reads a string-valued key straight from the original JSON. The flat ParamMap
+// holds doubles, so anything that is not a number has to be fetched this way.
+// Absent -> empty; present but not a string -> a caller error worth surfacing.
+std::string parse_string_json(const std::string& json_params, const char* key) {
+  if (json_params.empty()) return {};
+  const auto root = sonare::util::json::parse_strict(json_params);
+  if (!root.is_object()) {
+    throw SonareException(ErrorCode::InvalidParameter, "expected JSON object");
+  }
+  const auto* value = root.find(key);
+  if (value == nullptr) return {};
+  if (!value->is_string()) {
+    throw SonareException(ErrorCode::InvalidParameter, std::string(key) + " must be a string");
+  }
+  return value->as_string();
+}
 
 std::vector<Param> parse_insert_params_json(const std::string& json_params,
                                             bool allow_acoustic_material_arrays = false) {
@@ -170,7 +191,16 @@ std::vector<Param> parse_insert_params_json(const std::string& json_params,
         // accepting them here keeps the generic JSON validation layer from
         // rejecting an option that the acoustic facade already supports.
         continue;
-      } else if (key == "irF32Base64" && value.is_string()) {
+      } else if (key == "preset" && value.is_string()) {
+        // A named rig, selecting the discrete switches (topology, tube, cab,
+        // capsule) that no numeric param can reach. Read from the original JSON
+        // in build_saturation, since the flat ParamMap holds doubles only.
+        continue;
+      } else if ((key == "irF32Base64" || key == "cabIrF32Base64") && value.is_string()) {
+        // The flat ParamMap holds doubles, so a base64 impulse response cannot
+        // live in it. Both IR-taking inserts read theirs straight from the
+        // original JSON object instead; accepting the key here keeps the generic
+        // validation layer from rejecting a param the insert does support.
         continue;
       } else {
         throw SonareException(ErrorCode::InvalidParameter,
@@ -304,7 +334,8 @@ std::unique_ptr<Processor> build_eq(const std::string& name, const ParamMap& par
   return nullptr;
 }
 
-std::unique_ptr<Processor> build_saturation(const std::string& name, const ParamMap& params) {
+std::unique_ptr<Processor> build_saturation(const std::string& name, const ParamMap& params,
+                                            const std::string* json_params) {
   if (name == "saturation.tape") {
     return make<saturation::Tape>(detail::tape_config(params));
   }
@@ -335,7 +366,55 @@ std::unique_ptr<Processor> build_saturation(const std::string& name, const Param
   if (name == "saturation.ampSim") {
     // Guitar amp-sim: drive -> tone stack -> cab-EQ (the track-insert layer of
     // the electric-guitar sound; the string itself is the KS synth voice).
-    return make<saturation::AmpSim>(detail::amp_sim_config(params));
+    //
+    // A named rig, if given, is the BASE the numeric params ride on top of, so a
+    // caller can take a whole amp and turn one control. Without one the base is
+    // the processor's own defaults, exactly as before.
+    saturation::AmpSimConfig base;
+    if (json_params != nullptr) {
+      const std::string preset = parse_string_json(*json_params, "preset");
+      if (!preset.empty()) {
+        base = saturation::amp_preset_config(saturation::amp_preset_from_string(preset));
+      }
+    }
+    auto amp = make<saturation::AmpSim>(detail::amp_sim_config(params, base));
+    // A cabinet IR may ride in the param bag as base64 f32, so a scene or a
+    // preset can carry one without a separate binary channel. `cabIrSampleRate`
+    // declares the rate it was captured at; omitting it keeps the old contract
+    // ("already at the processor's rate") rather than guessing.
+    //
+    // Probed unconditionally, not inside the `if`: the catalog discovers a
+    // processor's params by building it against an empty bag, so a key only read
+    // when an IR happens to be present would never be published.
+    const double ir_rate = static_cast<double>(detail::f(params, "cabIrSampleRate", 0.0f));
+    // A cabinet can also be SYNTHESIZED rather than supplied, which is how a
+    // caller gets an IR cab without sourcing a recording. The spec follows the
+    // cabinet and mic already configured above, so there is no second set of
+    // controls to keep in step; `cabIrDrivers` is the one thing the analytic
+    // chain has no equivalent for — whether the cabinet's other drivers are
+    // summed, which is the whole difference between an IR and an EQ curve.
+    const bool generate_ir = detail::b(params, "cabIrGenerate", false);
+    const bool ir_drivers = detail::b(params, "cabIrDrivers", true);
+    if (generate_ir) {
+      auto* sim = static_cast<saturation::AmpSim*>(amp.get());
+      const saturation::AmpSimConfig& configured = sim->amp_config();
+      saturation::CabIrSpec spec;
+      spec.cab_model = configured.cab_model;
+      spec.mic_model = configured.mic_model;
+      spec.mic_axis = configured.mic_axis;
+      spec.mic_distance_cm = configured.mic_distance_cm;
+      spec.presence_db = configured.presence_db;
+      spec.multi_driver = ir_drivers;
+      sim->load_generated_cab_ir(spec);
+    }
+    if (json_params != nullptr) {
+      const std::vector<float> ir = parse_ir_f32_base64_json(*json_params, "cabIrF32Base64");
+      if (!ir.empty()) {
+        // A supplied capture wins over a generated cabinet.
+        static_cast<saturation::AmpSim*>(amp.get())->load_cab_ir(ir, ir_rate);
+      }
+    }
+    return amp;
   }
   return nullptr;
 }
@@ -646,7 +725,7 @@ std::unique_ptr<Processor> build_effects(const std::string& name, const ParamMap
     config.seed = static_cast<uint32_t>(std::max(0, detail::i(params, "seed", config.seed)));
     auto reverb = std::make_unique<ConvolutionReverb>(config);
     std::vector<float> ir =
-        json_params ? parse_ir_f32_base64_json(*json_params) : std::vector<float>{};
+        json_params ? parse_ir_f32_base64_json(*json_params, "irF32Base64") : std::vector<float>{};
     if (!ir.empty()) {
       reverb->load_ir(ir);
     }
@@ -817,14 +896,9 @@ namespace {
 
 std::unique_ptr<Processor> build_insert(const std::string& name, const ParamMap& params,
                                         const std::string* json_params = nullptr) {
-#ifndef SONARE_HAVE_FX
-  // The JSON form is consumed only by the optional convolution-reverb insert.
-  // Keep the feature-off build warning-free without changing its API shape.
-  (void)json_params;
-#endif
   if (auto p = build_dynamics(name, params)) return p;
   if (auto p = build_eq(name, params)) return p;
-  if (auto p = build_saturation(name, params)) return p;
+  if (auto p = build_saturation(name, params, json_params)) return p;
   if (auto p = build_spectral(name, params)) return p;
   if (auto p = build_stereo(name, params)) return p;
   if (auto p = build_maximizer(name, params)) return p;
@@ -882,6 +956,16 @@ std::unique_ptr<sonare::rt::ProcessorBase> make_insert_with_ir(const std::string
     return reverb;
   }
 #endif
+  if (name == "saturation.ampSim") {
+    // The amp sim's cabinet takes the same IR channel. load_cab_ir() stores it
+    // and is safe before prepare(), which sizes the history from whatever is
+    // loaded by then. An explicit IR wins over one carried in the param bag.
+    auto amp = make_insert(name, json_params);
+    if (amp != nullptr && ir_num_samples > 0) {
+      static_cast<saturation::AmpSim*>(amp.get())->load_cab_ir(impulse_response, ir_num_samples);
+    }
+    return amp;
+  }
   // Every other insert ignores the IR and falls back to the standard factory.
   return make_insert(name, json_params);
 }

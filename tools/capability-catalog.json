@@ -11642,6 +11642,66 @@
           "rtSafe": true,
           "type": "number",
           "unit": null
+        },
+        {
+          "default": null,
+          "id": 10,
+          "max": null,
+          "min": null,
+          "name": "micAxis",
+          "rtSafe": true,
+          "type": "number",
+          "unit": null
+        },
+        {
+          "default": null,
+          "id": 11,
+          "max": null,
+          "min": null,
+          "name": "micBAxis",
+          "rtSafe": true,
+          "type": "number",
+          "unit": null
+        },
+        {
+          "default": null,
+          "id": 12,
+          "max": null,
+          "min": null,
+          "name": "micBlend",
+          "rtSafe": true,
+          "type": "number",
+          "unit": null
+        },
+        {
+          "default": null,
+          "id": 13,
+          "max": null,
+          "min": null,
+          "name": "cone",
+          "rtSafe": true,
+          "type": "number",
+          "unit": null
+        },
+        {
+          "default": null,
+          "id": 14,
+          "max": null,
+          "min": null,
+          "name": "crossover",
+          "rtSafe": true,
+          "type": "number",
+          "unit": null
+        },
+        {
+          "default": null,
+          "id": 15,
+          "max": null,
+          "min": null,
+          "name": "biasShift",
+          "rtSafe": true,
+          "type": "number",
+          "unit": null
         }
       ],
       "realtimeCost": "high",

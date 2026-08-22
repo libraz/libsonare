@@ -24,6 +24,7 @@ set(SONARE_SOURCES
   util/peak.cpp
   util/sequence.cpp
   util/stereo_metrics.cpp
+  util/tunable.cpp
   util/vector_normalize.cpp
   core/convert.cpp
   core/window.cpp
@@ -377,13 +378,18 @@ if(BUILD_MASTERING)
     mastering/repair/denoise_classical.cpp
     mastering/repair/dereverb_classical.cpp
     mastering/repair/trim_silence.cpp
+    mastering/saturation/amp_physics.cpp
+    mastering/saturation/amp_presets.cpp
     mastering/saturation/amp_sim.cpp
+    mastering/saturation/cab_ir.cpp
+    mastering/saturation/cab_voicing.cpp
     mastering/saturation/bitcrusher.cpp
     mastering/saturation/exciter.cpp
     mastering/saturation/hard_clipper.cpp
     mastering/saturation/multiband_exciter.cpp
     mastering/saturation/soft_clipper.cpp
     mastering/saturation/tape.cpp
+    mastering/saturation/tone_stack.cpp
     mastering/saturation/transformer.cpp
     mastering/saturation/tube.cpp
     mastering/saturation/waveshaper.cpp
@@ -746,6 +752,7 @@ if(BUILD_ARRANGEMENT)
     midi/synth/oscillator.cpp
     midi/synth/filter_models.cpp
     midi/synth/mod_matrix.cpp
+    midi/synth/patch_tuning.cpp
     midi/synth/fm_voice.cpp
     midi/synth/ks_voice.cpp
     midi/synth/modal_voice.cpp
