@@ -47,19 +47,15 @@ void ConvolutionReverb::synthesize_default_ir(double sample_rate) {
   // the wet level is comparable to the algorithmic reverbs.
   const float decay_rate = std::log(kT60Drop) / rt60;
   std::uint32_t state = config_.seed != 0 ? config_.seed : 0x5151ABCDu;
-  double energy = 0.0;
   for (int i = 0; i < tail_samples; ++i) {
     // Uniform white noise in [-1, 1).
     const float noise = static_cast<float>(xorshift32(state)) / 2147483648.0f - 1.0f;
     const float envelope = std::exp(-decay_rate * static_cast<float>(i) / static_cast<float>(sr));
-    const float sample = noise * envelope;
-    ir_[static_cast<size_t>(pre_delay_samples + i)] = sample;
-    energy += static_cast<double>(sample) * static_cast<double>(sample);
+    ir_[static_cast<size_t>(pre_delay_samples + i)] = noise * envelope;
   }
-  if (energy > 0.0) {
-    const float norm = 1.0f / static_cast<float>(std::sqrt(energy));
-    for (float& sample : ir_) sample *= norm;
-  }
+  // The reference level every other IR is matched against; see
+  // load_ir_unit_energy for the dry/wet contract this establishes.
+  normalize_ir_unit_energy();
 }
 
 void ConvolutionReverb::prepare(double sample_rate, int) {
@@ -147,13 +143,26 @@ void ConvolutionReverb::reset() {
   std::fill(fill_count_.begin(), fill_count_.end(), 0);
 }
 
-void ConvolutionReverb::load_ir(const float* impulse_response, int num_samples) {
+void ConvolutionReverb::store_ir(const float* impulse_response, int num_samples) {
   if (num_samples < 0 || (num_samples > 0 && impulse_response == nullptr)) {
     throw SonareException(ErrorCode::InvalidParameter, "invalid impulse response");
   }
   ir_.assign(impulse_response, impulse_response + num_samples);
   // An explicit IR overrides the algorithmic default synthesis in prepare().
   explicit_ir_ = true;
+}
+
+bool ConvolutionReverb::normalize_ir_unit_energy() {
+  double energy = 0.0;
+  for (float sample : ir_) energy += static_cast<double>(sample) * static_cast<double>(sample);
+  if (!(energy > 0.0)) return false;
+  const float norm = 1.0f / static_cast<float>(std::sqrt(energy));
+  for (float& sample : ir_) sample *= norm;
+  return true;
+}
+
+void ConvolutionReverb::load_ir(const float* impulse_response, int num_samples) {
+  store_ir(impulse_response, num_samples);
   // Feeding the IR into the convolvers (re)allocates FFT partitions; this is a
   // non-RT operation, so it is safe to run here outside the audio thread.
   rebuild_convolvers();
@@ -161,6 +170,15 @@ void ConvolutionReverb::load_ir(const float* impulse_response, int num_samples) 
 
 void ConvolutionReverb::load_ir(const std::vector<float>& impulse_response) {
   load_ir(impulse_response.data(), static_cast<int>(impulse_response.size()));
+}
+
+void ConvolutionReverb::load_ir_unit_energy(const float* impulse_response, int num_samples) {
+  store_ir(impulse_response, num_samples);
+  if (!normalize_ir_unit_energy()) {
+    throw SonareException(ErrorCode::InvalidParameter,
+                          "impulse response carries no energy; nothing to normalize");
+  }
+  rebuild_convolvers();
 }
 
 bool ConvolutionReverb::set_parameter(unsigned int param_id, float value) {

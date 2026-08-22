@@ -42,6 +42,9 @@ struct RoomMorphConfig {
   /// suppression at all); 1 = the strongest (still partial) reduction.
   float source_tail_suppression = 0.5f;
   /// Target-room mix in [0, 1]. 0 = suppressed dry only; 1 = target room only.
+  /// The target RIR is convolved at unit energy rather than at its physical
+  /// 1/(4*pi*d) scale, so a given `wet` means the same mix depth as the same
+  /// dryWet on the plain convolution reverb.
   float wet = 0.5f;
 
   /// Target-RIR synthesis controls (see rir_synthesizer.h). Defaults preserve the
@@ -80,6 +83,10 @@ Audio room_morph(const Audio& recording, const RoomMorphConfig& config);
 ///
 /// `prepare()` synthesizes and partitions the target RIR and sizes the
 /// suppressor state; `process()` allocates nothing and is real-time safe.
+/// Everything synthesis would refuse is refused by the constructor except the
+/// host sample rate, which prepare() sees first and rejects with
+/// ErrorCode::InvalidParameter rather than discarding the diagnostics and
+/// preparing an inert insert.
 class RoomMorphProcessor : public rt::ProcessorBase {
  public:
   explicit RoomMorphProcessor(RoomMorphConfig config = {});

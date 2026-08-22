@@ -92,12 +92,6 @@ std::array<float, kMasteringReportBandCount> spectrum_delta(
   return delta;
 }
 
-std::array<float, kMasteringReportBandCount> mono_spectrum_delta(const Audio& before,
-                                                                 const Audio& after) {
-  return spectrum_delta(mastering::match::reference_spectrum(before),
-                        mastering::match::reference_spectrum(after), before.sample_rate());
-}
-
 float stereo_spectrum_db(const mastering::match::ReferenceSpectrum& left,
                          const mastering::match::ReferenceSpectrum& right, float frequency_hz) {
   const float left_power = std::pow(10.0f, interpolated_spectrum_db(left, frequency_hz) / 10.0f);
@@ -262,9 +256,18 @@ std::optional<MonoChainResult> MasteringChain::process_mono_impl(const float* sa
 
   std::vector<float> data(samples, samples + length);
   const int true_peak_oversample = reported_true_peak_oversample(config_);
-  const Audio before_audio = Audio::from_buffer(data.data(), data.size(), sample_rate);
-  result.report.before =
-      to_report_summary(common::measure_loudness_summary(before_audio, true_peak_oversample));
+  // Everything the report needs from the INPUT is reduced to its measurements
+  // before a single stage runs, the same shape as the stereo path below: the
+  // track-length Audio copy is scoped here and only the 1025-bin spectrum
+  // survives to the band-delta at the end. Holding that copy across the whole
+  // chain kept three track-length buffers alive at once.
+  mastering::match::ReferenceSpectrum before_spectrum;
+  {
+    const Audio before_audio = Audio::from_buffer(data.data(), data.size(), sample_rate);
+    result.report.before =
+        to_report_summary(common::measure_loudness_summary(before_audio, true_peak_oversample));
+    before_spectrum = mastering::match::reference_spectrum(before_audio);
+  }
   result.input_lufs = result.report.before.integrated_lufs;
   float applied_gain_db = 0.0f;
 
@@ -444,9 +447,15 @@ std::optional<MonoChainResult> MasteringChain::process_mono_impl(const float* sa
     if (!report("loudness.optimize")) return std::nullopt;
   }
 
-  const Audio after_audio = Audio::from_buffer(data.data(), data.size(), sample_rate);
-  result.report.after =
-      to_report_summary(common::measure_loudness_summary(after_audio, true_peak_oversample));
+  // Same shape on the output side: measure, then release, one track-length
+  // temporary at a time.
+  mastering::match::ReferenceSpectrum after_spectrum;
+  {
+    const Audio after_audio = Audio::from_buffer(data.data(), data.size(), sample_rate);
+    result.report.after =
+        to_report_summary(common::measure_loudness_summary(after_audio, true_peak_oversample));
+    after_spectrum = mastering::match::reference_spectrum(after_audio);
+  }
   result.output_lufs = result.report.after.integrated_lufs;
   // Loudness is the last stage, so the chain output measured just above is
   // exactly what it achieved; no second measurement is needed to tell a reached
@@ -462,7 +471,7 @@ std::optional<MonoChainResult> MasteringChain::process_mono_impl(const float* sa
   result.report.applied_gain_db = applied_gain_db;
   result.report.max_gain_reduction_db = max_gain_reduction_db(result.stage_gain_reductions);
   result.report.loudness_target_limited = result.loudness_target_limited;
-  result.report.band_energy_delta_db = mono_spectrum_delta(before_audio, after_audio);
+  result.report.band_energy_delta_db = spectrum_delta(before_spectrum, after_spectrum, sample_rate);
   result.samples = std::move(data);
   return result;
 }

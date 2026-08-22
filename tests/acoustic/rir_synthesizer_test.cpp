@@ -90,6 +90,49 @@ TEST_CASE("synthesize_rir clamps length to max_seconds with a diagnostic", "[aco
   REQUIRE_FALSE(has_code(full.diagnostics, "acoustic.rir_length_clamped"));
 }
 
+TEST_CASE("a max_seconds below the direct arrival still renders the direct sound",
+          "[acoustic][rir]") {
+  // A cap shorter than the source->listener flight time used to truncate every
+  // synthesized buffer before the first tap was written, so the RIR came back
+  // all zeros with no error: digital silence on a convolution insert, and worse
+  // than the dry passthrough an empty RIR would have given.
+  const int sr = 48000;
+  const ShoeboxRoom room = uniform_room(8.0f, 6.0f, 3.5f, 0.15f);
+  const SourceListener pl{{1.0f, 1.0f, 1.2f}, {5.0f, 4.0f, 1.7f}};
+  const float direct_dist = length(pl.listener - pl.source);
+  const int direct_sample = static_cast<int>(std::lround(direct_dist / kSoundSpeed * sr));
+
+  RirSynthConfig cfg;
+  cfg.max_seconds = 0.005f;  // ~5 ms, well inside the ~15 ms direct arrival
+  REQUIRE(static_cast<int>(std::ceil(cfg.max_seconds * sr)) < direct_sample);
+
+  const RirSynthResult res = synthesize_rir(room, pl, sr, cfg);
+  REQUIRE_FALSE(has_error(res.diagnostics));
+  // The request was widened rather than honoured, and the caller is told so.
+  REQUIRE(has_code(res.diagnostics, "acoustic.rir_length_floored"));
+  REQUIRE(static_cast<int>(res.rir.size()) > direct_sample);
+
+  // The direct sound is present, and it is the loudest sample in the RIR.
+  float peak = 0.0f;
+  int peak_index = 0;
+  for (size_t i = 0; i < res.rir.size(); ++i) {
+    if (std::fabs(res.rir[i]) > peak) {
+      peak = std::fabs(res.rir[i]);
+      peak_index = static_cast<int>(i);
+    }
+  }
+  REQUIRE(peak > 0.0f);
+  REQUIRE(peak_index == direct_sample);
+
+  // A cap comfortably past the direct arrival keeps its upper-bound meaning:
+  // no floor, no widening.
+  RirSynthConfig roomy = cfg;
+  roomy.max_seconds = 0.1f;
+  const RirSynthResult wide = synthesize_rir(room, pl, sr, roomy);
+  REQUIRE_FALSE(has_code(wide.diagnostics, "acoustic.rir_length_floored"));
+  REQUIRE(static_cast<int>(wide.rir.size()) <= static_cast<int>(std::ceil(0.1f * sr)));
+}
+
 TEST_CASE("synthesize_rir reports a late-tail resource clamp", "[acoustic][rir][resource_limit]") {
   const int sr = 384000;
   ShoeboxRoom room;

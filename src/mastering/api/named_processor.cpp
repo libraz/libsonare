@@ -3,7 +3,7 @@
 #include <cmath>
 #include <cstdint>
 #include <limits>
-#include <sstream>
+#include <utility>
 
 #include "core/audio.h"
 #include "mastering/api/audio_utils.h"
@@ -86,6 +86,7 @@
 #include "mastering/stereo/stereo_balance.h"
 #include "util/dsp_primitives.h"
 #include "util/exception.h"
+#include "util/json.h"
 
 namespace sonare::mastering::api {
 
@@ -928,13 +929,18 @@ std::string analyze_named_pair(const std::string& name, const float* source, con
   auto map = make_map(params);
   auto source_audio = Audio::from_buffer(source, source_length, sample_rate);
   auto reference_audio = Audio::from_buffer(reference, reference_length, sample_rate);
-  std::ostringstream json;
-  json << "{";
+  // Built as a util::json tree rather than a hand-rolled ostringstream: these
+  // analyses legitimately return non-finite values (reference_loudness yields
+  // -inf LUFS for a silent source), and only util::json::dump maps those to
+  // `null` and pins the decimal separator to the classic locale. A raw stream
+  // would emit "-inf" and a comma decimal mark, neither of which parses.
+  namespace json_ns = sonare::util::json;
+  json_ns::Object root;
   if (name == "match.referenceLoudness") {
     auto result = ::sonare::mastering::match::reference_loudness(source_audio, reference_audio);
-    json << "\"sourceLufs\":" << result.source_lufs
-         << ",\"referenceLufs\":" << result.reference_lufs
-         << ",\"gainToMatchDb\":" << result.gain_to_match_db;
+    root.emplace("sourceLufs", json_ns::Value(result.source_lufs));
+    root.emplace("referenceLufs", json_ns::Value(result.reference_lufs));
+    root.emplace("gainToMatchDb", json_ns::Value(result.gain_to_match_db));
   } else if (name == "match.tonalBalance" || name == "match.tonalBalanceLogBands") {
     auto source_spectrum = ::sonare::mastering::match::reference_spectrum(source_audio);
     auto reference_spectrum = ::sonare::mastering::match::reference_spectrum(reference_audio);
@@ -944,15 +950,18 @@ std::string analyze_named_pair(const std::string& name, const float* source, con
             : ::sonare::mastering::match::tonal_balance_log_bands(
                   source_spectrum, reference_spectrum, i(map, "bandsPerOctave", 3),
                   f(map, "lowHz", 20.0f), f(map, "highHz", 20000.0f));
-    json << "\"bands\":[";
-    for (size_t index = 0; index < bands.size(); ++index) {
-      if (index > 0) json << ",";
-      const auto& band = bands[index];
-      json << "{\"lowHz\":" << band.low_hz << ",\"highHz\":" << band.high_hz
-           << ",\"sourceDb\":" << band.source_db << ",\"referenceDb\":" << band.reference_db
-           << ",\"deviationDb\":" << band.deviation_db << "}";
+    json_ns::Array band_values;
+    band_values.reserve(bands.size());
+    for (const auto& band : bands) {
+      json_ns::Object entry;
+      entry.emplace("lowHz", json_ns::Value(band.low_hz));
+      entry.emplace("highHz", json_ns::Value(band.high_hz));
+      entry.emplace("sourceDb", json_ns::Value(band.source_db));
+      entry.emplace("referenceDb", json_ns::Value(band.reference_db));
+      entry.emplace("deviationDb", json_ns::Value(band.deviation_db));
+      band_values.emplace_back(json_ns::Value(std::move(entry)));
     }
-    json << "]";
+    root.emplace("bands", json_ns::Value(std::move(band_values)));
   } else if (name == "match.matchEqCurve") {
     ::sonare::mastering::match::MatchEqConfig config;
     config.max_bands = checked_nonnegative_size(
@@ -966,26 +975,22 @@ std::string analyze_named_pair(const std::string& name, const float* source, con
     auto curve = ::sonare::mastering::match::match_eq_curve(
         ::sonare::mastering::match::reference_spectrum(source_audio),
         ::sonare::mastering::match::reference_spectrum(reference_audio), config);
-    json << "\"frequencies\":[";
-    for (size_t index = 0; index < curve.frequencies.size(); ++index) {
-      if (index > 0) json << ",";
-      json << curve.frequencies[index];
-    }
-    json << "],\"gainDb\":[";
-    for (size_t index = 0; index < curve.gain_db.size(); ++index) {
-      if (index > 0) json << ",";
-      json << curve.gain_db[index];
-    }
-    json << "]";
+    json_ns::Array frequencies;
+    frequencies.reserve(curve.frequencies.size());
+    for (float frequency : curve.frequencies) frequencies.emplace_back(json_ns::Value(frequency));
+    json_ns::Array gain_db;
+    gain_db.reserve(curve.gain_db.size());
+    for (float gain : curve.gain_db) gain_db.emplace_back(json_ns::Value(gain));
+    root.emplace("frequencies", json_ns::Value(std::move(frequencies)));
+    root.emplace("gainDb", json_ns::Value(std::move(gain_db)));
   } else if (name == "match.estimateReferenceDelaySamples") {
     const float delay = ::sonare::mastering::match::estimate_reference_delay_samples(
         source_audio, reference_audio, i(map, "maxAbsDelay", 4096));
-    json << "\"delaySamples\":" << delay;
+    root.emplace("delaySamples", json_ns::Value(delay));
   } else {
     throw SonareException(ErrorCode::InvalidParameter, "unknown mastering pair analysis: " + name);
   }
-  json << "}";
-  return json.str();
+  return json_ns::dump(json_ns::Value(std::move(root)));
 }
 
 std::string analyze_named_pair(const std::string& name, const float* source, const float* reference,
@@ -1001,32 +1006,39 @@ std::string analyze_named_stereo(const std::string& name, const float* left, con
   validate_offline_audio_input(left, length, sample_rate);
   validate_offline_audio_input(right, length, sample_rate);
   auto map = make_map(params);
-  std::ostringstream json;
-  json << "{";
+  // See analyze_named_pair(): mono_compat_check reports +inf width for a fully
+  // out-of-phase pair (zero mid energy), so the serializer has to be the one in
+  // util/json.h, which turns that into `null` instead of an unparseable "inf".
+  namespace json_ns = sonare::util::json;
+  json_ns::Object root;
   if (name == "stereo.monoCompatCheck") {
     auto result = ::sonare::mastering::stereo::mono_compat_check(
         left, right, length, f(map, "correlationThreshold", 0.0f));
-    json << "\"correlation\":" << result.correlation << ",\"width\":" << result.width
-         << ",\"monoPeak\":" << result.mono_peak << ",\"sideRms\":" << result.side_rms
-         << ",\"likelyMonoCompatible\":" << (result.likely_mono_compatible ? "true" : "false");
+    root.emplace("correlation", json_ns::Value(result.correlation));
+    root.emplace("width", json_ns::Value(result.width));
+    root.emplace("monoPeak", json_ns::Value(result.mono_peak));
+    root.emplace("sideRms", json_ns::Value(result.side_rms));
+    root.emplace("likelyMonoCompatible", json_ns::Value(result.likely_mono_compatible));
   } else if (name == "stereo.monoCompatCheckLogBands") {
     auto bands = ::sonare::mastering::stereo::mono_compat_check_log_bands(
         left, right, length, sample_rate, i(map, "bandsPerOctave", 3), f(map, "lowHz", 20.0f),
         f(map, "highHz", 20000.0f));
-    json << "\"bands\":[";
-    for (size_t index = 0; index < bands.size(); ++index) {
-      if (index > 0) json << ",";
-      const auto& band = bands[index];
-      json << "{\"lowHz\":" << band.low_hz << ",\"highHz\":" << band.high_hz
-           << ",\"correlation\":" << band.correlation << ",\"sideRms\":" << band.side_rms << "}";
+    json_ns::Array band_values;
+    band_values.reserve(bands.size());
+    for (const auto& band : bands) {
+      json_ns::Object entry;
+      entry.emplace("lowHz", json_ns::Value(band.low_hz));
+      entry.emplace("highHz", json_ns::Value(band.high_hz));
+      entry.emplace("correlation", json_ns::Value(band.correlation));
+      entry.emplace("sideRms", json_ns::Value(band.side_rms));
+      band_values.emplace_back(json_ns::Value(std::move(entry)));
     }
-    json << "]";
+    root.emplace("bands", json_ns::Value(std::move(band_values)));
   } else {
     throw SonareException(ErrorCode::InvalidParameter,
                           "unknown mastering stereo analysis: " + name);
   }
-  json << "}";
-  return json.str();
+  return json_ns::dump(json_ns::Value(std::move(root)));
 }
 
 }  // namespace sonare::mastering::api

@@ -50,6 +50,54 @@ struct ShoeboxRoom {
 /// and the CLI so every entry point clamps and assigns walls identically.
 ShoeboxRoom uniform_shoebox(const RoomDimensions& dims, float absorption, float scattering = 0.0f);
 
+/// @brief One caller's wall-material request, in the precedence every public
+///        surface documents: preset > per-band absorption > scalar absorption.
+///
+/// This exists so the four facades that build a uniform room from host options
+/// (the C ABI, the Node addon, the WASM wrappers and the mastering insert
+/// factory) resolve that precedence, validate the coefficients and apply the
+/// scattering bands in ONE place. Each of them used to open-code it, and every
+/// copy dropped `scattering_bands` on the two paths that did not also carry
+/// `absorption_bands`.
+struct WallMaterialRequest {
+  /// Named preset. When set it wins over both absorption forms; the scattering
+  /// bands below still apply on top of it.
+  bool has_preset = false;
+  MaterialPreset preset = MaterialPreset::Concrete;
+  /// Per-octave-band absorption. Non-empty overrides `absorption`.
+  std::vector<float> absorption_bands;
+  /// Per-octave-band wall scattering. Applied on ALL THREE material paths, not
+  /// only alongside `absorption_bands`: a caller's array is either applied or
+  /// the request is rejected, never silently dropped. Bands past its length
+  /// read as 0, the documented padding rule.
+  std::vector<float> scattering_bands;
+  /// Uniform scalar absorption, used when neither form above is supplied.
+  float absorption = 0.2f;
+};
+
+/// @brief Rejects a caller-supplied absorption/scattering coefficient that is
+///        not a finite value in [0, 1].
+/// @param field Option name quoted in the error message.
+/// @throws SonareException(InvalidParameter)
+/// @details Facades reject rather than clamp so the same mistake surfaces the
+///          same error everywhere. `uniform_shoebox` still clamps, because its
+///          clamp bounds an already-validated value away from the rigid-wall
+///          singularity rather than papering over a caller's typo.
+void validate_material_coefficient(float value, const char* field);
+
+/// @brief `validate_material_coefficient` over an array, plus the band-count cap.
+/// @throws SonareException(InvalidParameter)
+void validate_material_bands(const std::vector<float>& values, const char* field);
+
+/// @brief Build a uniform shoebox from a validated material request.
+///
+/// Validates every coefficient the caller supplied (rejecting, not clamping),
+/// resolves the documented precedence and returns a room whose six walls carry
+/// the requested absorption AND the requested scattering.
+/// @throws SonareException(InvalidParameter) on any out-of-range coefficient or
+///         an over-long band array.
+ShoeboxRoom make_uniform_room(const RoomDimensions& dims, const WallMaterialRequest& request);
+
 /// @brief Interior volume (m^3) of a shoebox room.
 float shoebox_volume(const ShoeboxRoom& room) noexcept;
 

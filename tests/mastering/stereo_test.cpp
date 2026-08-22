@@ -609,3 +609,99 @@ TEST_CASE("MonoCompatCheck validates buffers", "[mastering][stereo]") {
   std::vector<float> right(4, 0.0f);
   REQUIRE_THROWS(mono_compat_check_log_bands(left.data(), right.data(), left.size(), 48000.0, 0));
 }
+
+TEST_CASE("MonoCompatCheck log bands measure the whole interval, not its centre",
+          "[mastering][stereo]") {
+  // The result documents an interval, so it has to be measured over one. Two
+  // partials of equal energy inside a single band, one in phase and one
+  // anti-phase, sum in mono to the in-phase one alone — the band is genuinely
+  // half-cancelling, and the readout has to say so. A single-frequency probe at
+  // the band's log centre sees whichever of the two happens to sit nearer it and
+  // reports the band as fully correlated or fully anti-correlated.
+  constexpr int kSampleRate = 48000;
+  constexpr int kSamples = 48000;  // 1 s: the main lobe of a full-length probe
+                                   // is ~1 Hz wide, which is what let the two
+                                   // partials hide from each other.
+  constexpr float kLowHz = 700.0f;
+  constexpr float kHighHz = 1400.0f;
+  // Two partials well inside the band and well away from its log centre (990 Hz)
+  // in opposite directions.
+  const auto in_phase = generate_sine_samples(780.0f, kSampleRate, kSamples, 0.5f);
+  const auto anti_phase = generate_sine_samples(1240.0f, kSampleRate, kSamples, 0.5f);
+
+  std::vector<float> left(static_cast<size_t>(kSamples));
+  std::vector<float> right(static_cast<size_t>(kSamples));
+  for (size_t i = 0; i < left.size(); ++i) {
+    left[i] = in_phase[i] + anti_phase[i];
+    right[i] = in_phase[i] - anti_phase[i];
+  }
+
+  const auto bands = mono_compat_check_log_bands(
+      left.data(), right.data(), left.size(), static_cast<double>(kSampleRate), 1, kLowHz, kHighHz);
+  REQUIRE(bands.size() == 1);
+  // Equal energy either side of the phase relationship cancels to roughly zero
+  // correlation; the old single-bin probe reported this band at +-1.
+  CHECK(std::abs(bands[0].correlation) < 0.2f);
+
+  // Non-vacuity: the same measurement still separates a fully correlated band
+  // from a fully anti-correlated one, so the near-zero above is a measurement
+  // rather than an inability to resolve anything.
+  std::vector<float> corr_right(left.size());
+  std::vector<float> anti_right(left.size());
+  for (size_t i = 0; i < left.size(); ++i) {
+    corr_right[i] = left[i];
+    anti_right[i] = -left[i];
+  }
+  const auto correlated =
+      mono_compat_check_log_bands(left.data(), corr_right.data(), left.size(),
+                                  static_cast<double>(kSampleRate), 1, kLowHz, kHighHz);
+  const auto opposed =
+      mono_compat_check_log_bands(left.data(), anti_right.data(), left.size(),
+                                  static_cast<double>(kSampleRate), 1, kLowHz, kHighHz);
+  CHECK(correlated[0].correlation > 0.99f);
+  CHECK(opposed[0].correlation < -0.99f);
+
+  // The band's side energy is the interval's, so it accounts for both partials:
+  // the side signal here is the 1240 Hz partial at amplitude 0.5, RMS 0.354.
+  CHECK(bands[0].side_rms > 0.3f);
+  CHECK(bands[0].side_rms < 0.4f);
+}
+
+TEST_CASE("MonoCompatCheck log bands hold up on a long buffer", "[mastering][stereo]") {
+  // The regression case that predates this ran on 0.25 s, where a full-length
+  // single-frequency probe has a main lobe wide enough to catch most of its
+  // band by accident. A long buffer narrows that lobe to about 1/duration Hz,
+  // which is where a per-band measurement and a per-centre-frequency one part
+  // company, so the long case is the one worth pinning.
+  constexpr int kSampleRate = 48000;
+  constexpr int kSamples = 48000 * 4;  // 4 s -> a ~0.25 Hz main lobe
+  constexpr float kLowHz = 250.0f;
+  constexpr float kHighHz = 8000.0f;
+
+  // A side component at 350 Hz, deliberately off every band's log centre.
+  const auto side = generate_sine_samples(350.0f, kSampleRate, kSamples, 0.5f);
+  std::vector<float> left(side.begin(), side.end());
+  std::vector<float> right(left.size());
+  for (size_t i = 0; i < left.size(); ++i) right[i] = -left[i];
+
+  const auto bands = mono_compat_check_log_bands(
+      left.data(), right.data(), left.size(), static_cast<double>(kSampleRate), 3, kLowHz, kHighHz);
+  REQUIRE(bands.size() > 3);
+
+  const auto containing =
+      std::find_if(bands.begin(), bands.end(), [](const MonoCompatBandResult& band) {
+        return 350.0f >= band.low_hz && 350.0f < band.high_hz;
+      });
+  REQUIRE(containing != bands.end());
+  // The band holding the tone reports it as fully anti-phase and carrying
+  // essentially all of the side energy (0.5 amplitude -> 0.354 RMS).
+  CHECK(containing->correlation < -0.99f);
+  CHECK(containing->side_rms > 0.3f);
+
+  // Every other band is effectively empty rather than smeared with leakage.
+  for (const auto& band : bands) {
+    if (&band == &*containing) continue;
+    CAPTURE(band.low_hz, band.high_hz);
+    CHECK(band.side_rms < 0.05f);
+  }
+}

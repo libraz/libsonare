@@ -3,6 +3,9 @@
 #include <algorithm>
 #include <cmath>
 #include <limits>
+#include <string>
+
+#include "util/exception.h"
 
 namespace sonare::acoustic {
 
@@ -69,6 +72,61 @@ ShoeboxRoom uniform_shoebox(const RoomDimensions& dims, float absorption, float 
   ShoeboxRoom room;
   room.dims = dims;
   const Material wall = uniform_material(std::clamp(absorption, 0.0f, 0.999f), scattering);
+  for (Material& w : room.walls) w = wall;
+  return room;
+}
+
+void validate_material_coefficient(float value, const char* field) {
+  if (!std::isfinite(value) || value < 0.0f || value > 1.0f) {
+    throw SonareException(ErrorCode::InvalidParameter,
+                          std::string(field) + " must be within [0, 1]");
+  }
+}
+
+void validate_material_bands(const std::vector<float>& values, const char* field) {
+  if (values.size() > kMaxMaterialBands) {
+    throw SonareException(ErrorCode::InvalidParameter,
+                          std::string(field) + " exceeds the maximum of 64 bands");
+  }
+  for (float value : values) validate_material_coefficient(value, field);
+}
+
+ShoeboxRoom make_uniform_room(const RoomDimensions& dims, const WallMaterialRequest& request) {
+  validate_material_bands(request.absorption_bands, "bandAbsorption");
+  validate_material_bands(request.scattering_bands, "bandScattering");
+
+  Material wall;
+  if (request.has_preset) {
+    wall = make_material(request.preset);
+  } else if (!request.absorption_bands.empty()) {
+    wall.absorption.reserve(request.absorption_bands.size());
+    // Clamp the validated per-band absorption away from the rigid-wall
+    // singularity, matching uniform_shoebox's scalar clamp so a band table and
+    // a scalar of the same value reflect the same energy.
+    for (float coefficient : request.absorption_bands) {
+      wall.absorption.push_back(std::clamp(coefficient, 0.0f, 0.999f));
+    }
+    wall.scattering.assign(wall.absorption.size(), 0.0f);
+  } else {
+    validate_material_coefficient(request.absorption, "absorption");
+    wall = uniform_material(std::clamp(request.absorption, 0.0f, 0.999f), 0.0f);
+  }
+
+  if (!request.scattering_bands.empty()) {
+    // The scattering array is applied whichever absorption form selected the
+    // material. Where it is longer than the material, the absorption extends by
+    // the shared repeat-last padding policy so the Material invariant
+    // absorption.size() == scattering.size() survives.
+    const size_t bands = std::max(wall.absorption.size(), request.scattering_bands.size());
+    wall.absorption.resize(bands, wall.absorption.empty() ? 0.0f : wall.absorption.back());
+    wall.scattering.assign(bands, 0.0f);
+    for (size_t i = 0; i < request.scattering_bands.size(); ++i) {
+      wall.scattering[i] = request.scattering_bands[i];
+    }
+  }
+
+  ShoeboxRoom room;
+  room.dims = dims;
   for (Material& w : room.walls) w = wall;
   return room;
 }

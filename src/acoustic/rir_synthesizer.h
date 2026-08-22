@@ -10,6 +10,7 @@
 /// (per-band Sabine/Eyring decay) afterward — producing one mono RIR that the
 /// convolution reverb path can apply. Offline / control-thread only.
 
+#include <string>
 #include <vector>
 
 #include "acoustic/late_reverb.h"
@@ -28,7 +29,11 @@ struct RirSynthConfig {
   int ism_order = 3;  ///< image-source reflection order (early reflections)
   ReverbModel late_model = ReverbModel::Eyring;  ///< statistical tail RT60 model
   unsigned seed = 1u;                            ///< deterministic late-tail noise seed
-  float max_seconds = 0.0f;     ///< RIR length cap (s); 0 = auto from the longest RT60
+  /// RIR length cap (s); 0 = auto from the longest RT60. An upper bound, with
+  /// one floor: a cap shorter than the direct sound's own arrival would end the
+  /// RIR before the first tap is rendered, so it is raised to fit the direct
+  /// sound (see `synthesize_rir`) rather than yielding an all-zero response.
+  float max_seconds = 0.0f;
   float mixing_time_ms = 0.0f;  ///< early/late crossover; 0 = auto (~sqrt(V) ms)
   float crossfade_ms = 5.0f;    ///< equal-power crossfade width around the mixing time
   /// Disabled by default so an existing caller's RIR is unchanged byte for
@@ -59,6 +64,15 @@ struct RirSynthResult {
   std::vector<Diagnostic> diagnostics;  ///< geometry validation + length-clamp telemetry
 };
 
+/// @brief The first Error diagnostic rendered as "code: message", empty when
+///        the list carries no Error.
+///
+/// `synthesize_rir` reports a refused synthesis as an Error diagnostic plus an
+/// empty RIR rather than by throwing, so a caller that cannot continue without a
+/// RIR (a convolution engine, whose empty IR is inaudible) needs the reason to
+/// put in its own exception instead of dropping the diagnostics on the floor.
+std::string first_error_text(const std::vector<Diagnostic>& diagnostics);
+
 /// @brief Synthesize a shoebox room impulse response (mono).
 ///
 /// The geometry is validated first (see `validate_shoebox`); on any Error the
@@ -68,11 +82,17 @@ struct RirSynthResult {
 /// the chosen model) at the mixing time. The late tail is level-matched to the
 /// early reflections across the crossover so there is no energy discontinuity.
 /// Output length follows the longest band RT60, clamped to @p config.max_seconds
-/// (a Warning diagnostic is emitted when the clamp truncates the tail). When the
-/// room is effectively rigid (every band RT60 ~ 0) there is no late tail, so the
-/// RIR is the early reflections alone (no crossfade-to-silence) and an
-/// `acoustic.no_late_tail` Warning is emitted. The auto mixing time is also
-/// pulled slightly earlier for rooms with high mean wall scattering.
+/// (a Warning diagnostic is emitted when the clamp truncates the tail), and
+/// floored so the direct sound always fits: a @p config.max_seconds shorter than
+/// the source->listener flight time would otherwise end every buffer before the
+/// first tap is rendered and return an all-zero RIR, which the convolution path
+/// plays as digital silence. Such a cap is raised to the direct arrival plus the
+/// fractional-delay kernel's half-width and an `acoustic.rir_length_floored`
+/// Warning is emitted, so an accepted configuration always carries its direct
+/// sound. When the room is effectively rigid (every band RT60 ~ 0) there is no
+/// late tail, so the RIR is the early reflections alone (no crossfade-to-silence)
+/// and an `acoustic.no_late_tail` Warning is emitted. The auto mixing time is
+/// also pulled slightly earlier for rooms with high mean wall scattering.
 RirSynthResult synthesize_rir(const ShoeboxRoom& room, const SourceListener& placement,
                               int sample_rate, const RirSynthConfig& config = {});
 

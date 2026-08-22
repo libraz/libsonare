@@ -3,7 +3,9 @@
 #include <algorithm>
 #include <catch2/catch_test_macros.hpp>
 #include <cmath>
+#include <cstdint>
 #include <limits>
+#include <string>
 #include <vector>
 
 #include "acoustic/material.h"
@@ -11,6 +13,8 @@
 #include "acoustic/room_model.h"
 #include "analysis/acoustic_analyzer.h"
 #include "core/audio.h"
+#include "effects/reverb/convolution_reverb.h"
+#include "metering/lufs.h"
 #include "util/exception.h"
 
 using namespace sonare;
@@ -34,6 +38,36 @@ double energy(const Audio& a) {
   double e = 0.0;
   for (size_t i = 0; i < a.size(); ++i) e += static_cast<double>(a[i]) * a[i];
   return e;
+}
+
+// Deterministic white noise: a full-band excitation, so a measured wet level
+// reflects the impulse response's own energy rather than the test signal's
+// spectral overlap with it.
+std::vector<float> noise(size_t count) {
+  std::vector<float> samples(count);
+  std::uint32_t state = 0x1234567u;
+  for (size_t i = 0; i < count; ++i) {
+    state ^= state << 13;
+    state ^= state >> 17;
+    state ^= state << 5;
+    samples[i] = (static_cast<float>(state) / 2147483648.0f - 1.0f) * 0.25f;
+  }
+  return samples;
+}
+
+template <typename Processor>
+std::vector<float> render(Processor& processor, std::vector<float> buffer, int block) {
+  for (size_t offset = 0; offset + static_cast<size_t>(block) <= buffer.size();
+       offset += static_cast<size_t>(block)) {
+    float* data = buffer.data() + offset;
+    processor.process(&data, 1, block);
+  }
+  return buffer;
+}
+
+float integrated_lufs(const std::vector<float>& samples, int sample_rate) {
+  return sonare::metering::lufs(Audio::from_vector(std::vector<float>(samples), sample_rate))
+      .integrated_lufs;
 }
 
 }  // namespace
@@ -193,6 +227,55 @@ TEST_CASE("room_morph rejects non-finite and out-of-range controls",
     enabled_air.air = invalid_air;
     REQUIRE_THROWS_AS(room_morph(rec, enabled_air), SonareException);
   }
+}
+
+TEST_CASE("RoomMorphProcessor::prepare reports a refused target synthesis",
+          "[effects][acoustic][room_morph][numeric]") {
+  // The host sample rate is the one synthesis input the constructor cannot see.
+  // A rate synthesis refuses returns an Error diagnostic plus an empty target
+  // RIR, which the processor used to load, preparing a silently inert insert.
+  RoomMorphConfig cfg;
+  cfg.target = uniform_room(8.0f, 6.0f, 3.5f, 0.15f);
+  cfg.placement = {{1.0f, 1.0f, 1.2f}, {5.0f, 4.0f, 1.7f}};
+
+  RoomMorphProcessor processor(cfg);
+  REQUIRE_THROWS_AS(processor.prepare(100.0, 256), SonareException);
+  try {
+    processor.prepare(100.0, 256);
+  } catch (const SonareException& error) {
+    REQUIRE(error.code() == ErrorCode::InvalidParameter);
+    REQUIRE(std::string(error.what()).find("acoustic.invalid_sample_rate") != std::string::npos);
+  }
+  REQUIRE_NOTHROW(processor.prepare(48000.0, 256));
+}
+
+TEST_CASE("room morph wet level matches the convolution reverb at the same mix",
+          "[effects][acoustic][room_morph]") {
+  // `wet` must mean the same audible mix depth as the convolution reverb's
+  // dryWet: the target RIR carries a physical 1/(4*pi*d) attenuation, so loading
+  // it unscaled left room-morph users needing an undocumented makeup gain.
+  const int sr = 48000;
+  constexpr int kBlock = 256;
+  const std::vector<float> input = noise(static_cast<size_t>(sr) * 2);
+
+  RoomMorphConfig cfg;
+  cfg.target = uniform_room(8.0f, 6.0f, 3.5f, 0.15f);
+  cfg.placement = {{1.0f, 1.0f, 1.2f}, {5.0f, 4.0f, 1.7f}};
+  cfg.wet = 1.0f;                      // target room only
+  cfg.source_tail_suppression = 0.0f;  // isolate the target-room level
+  cfg.max_seconds = 1.0f;
+  RoomMorphProcessor morph(cfg);
+  morph.prepare(static_cast<double>(sr), kBlock);
+  const std::vector<float> wet_morph = render(morph, input, kBlock);
+
+  sonare::effects::reverb::ConvolutionReverbConfig conv_config;
+  conv_config.decay_sec = 1.0f;
+  conv_config.dry_wet = 1.0f;
+  sonare::effects::reverb::ConvolutionReverb convolution(conv_config);
+  convolution.prepare(static_cast<double>(sr), kBlock);
+  const std::vector<float> wet_convolution = render(convolution, input, kBlock);
+
+  REQUIRE(std::fabs(integrated_lufs(wet_morph, sr) - integrated_lufs(wet_convolution, sr)) < 3.0f);
 }
 
 TEST_CASE("room_morph is deterministic", "[effects][acoustic][room_morph]") {

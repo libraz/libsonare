@@ -41,6 +41,17 @@ struct TanhNonlinearity {
 ///   TanhNonlinearity bit-exactly: @c 1.0f*(x+-0.0f) is exact, and
 ///   @c f(x)+f(x) scaled by @c 0.5f only moves a binary exponent. Class A is
 ///   therefore the same arithmetic as before, with no branch.
+///
+///   PITFALL for callers driving both fields from one control: the origin
+///   slope is @c knee*sech^2(knee*bias), and to second order in @c bias that
+///   is @c knee*(1-(knee*bias)^2). Ramping @c knee linearly in the control
+///   while @c bias starts at 0 makes the slope RISE at first — a sharper knee
+///   reads as gain before a wide-enough dead zone has caught up to cut it back
+///   down. A caller wanting the slope to fall monotonically as the dead zone
+///   opens needs @c knee's excess over 1 to scale with @c bias SQUARED (not
+///   with the control directly), which cancels the first-order term instead of
+///   fighting it — see @c saturation::AmpSim's @c crossover parameter for the
+///   worked derivation and its bound on the scaling coefficient.
 struct PushPullNonlinearity {
   float bias = 0.0f;
   float knee = 1.0f;

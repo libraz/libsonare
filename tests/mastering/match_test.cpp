@@ -3,6 +3,7 @@
 #include <catch2/generators/catch_generators.hpp>
 #include <catch2/matchers/catch_matchers_floating_point.hpp>
 #include <cmath>
+#include <complex>
 #include <vector>
 
 #include "mastering/eq/equalizer.h"
@@ -553,4 +554,51 @@ TEST_CASE("Match helpers validate inputs", "[mastering][match]") {
   MatchEqFirConfig invalid_phase;
   invalid_phase.phase = static_cast<MatchEqFirPhase>(2);
   REQUIRE_THROWS(match_eq_fir_kernel(curve, 48000, invalid_phase));
+}
+
+TEST_CASE("MatchEq FIR realizes unity outside the matched band", "[mastering][match]") {
+  // A match curve is only defined over [min_frequency_hz, max_frequency_hz].
+  // The parametric realization places no band outside it, so its response
+  // returns to 0 dB there; the FIR path sampled the curve at every bin from DC
+  // to Nyquist and the interpolator holds the endpoint value outside its range,
+  // so a low-heavy reference put the curve's edge gain on DC and on Nyquist —
+  // a DC offset and super-low energy eating the headroom of everything
+  // downstream.
+  constexpr int kSampleRate = 48000;
+  constexpr int kFftSize = 4096;
+  // A kernel long enough to resolve the 200 Hz band edge: the taper below it
+  // spans 100-200 Hz, and a kernel that cannot resolve 100 Hz cannot realize it.
+  constexpr int kKernelSize = 1025;
+  // A curve that is strongly boosted at both edges, so an untapered
+  // extrapolation is unmistakable at DC and Nyquist.
+  MatchEqCurve curve{{200.0f, 1000.0f, 12000.0f}, {12.0f, 0.0f, 12.0f}, kSampleRate};
+
+  const auto kernel = match_eq_fir_kernel(curve, kSampleRate, {kFftSize, kKernelSize});
+  REQUIRE(kernel.size() == static_cast<size_t>(kKernelSize));
+
+  // DC gain is the tap sum; the Nyquist gain is the alternating-sign sum.
+  double dc = 0.0;
+  double nyquist = 0.0;
+  for (size_t i = 0; i < kernel.size(); ++i) {
+    dc += kernel[i];
+    nyquist += (i % 2 == 0 ? 1.0 : -1.0) * kernel[i];
+  }
+  const double dc_db = 20.0 * std::log10(std::abs(dc));
+  const double nyquist_db = 20.0 * std::log10(std::abs(nyquist));
+  CHECK(std::abs(dc_db) < 0.5);
+  CHECK(std::abs(nyquist_db) < 0.5);
+
+  // Non-vacuity: the band the curve does describe still gets its gain, so the
+  // taper bounded the extrapolation rather than flattening the whole kernel.
+  const auto response_db = [&](double hz) {
+    std::complex<double> h{0.0, 0.0};
+    const double w = 2.0 * sonare::constants::kPiD * hz / kSampleRate;
+    for (size_t i = 0; i < kernel.size(); ++i) {
+      const double phase = w * static_cast<double>(i);
+      h += static_cast<double>(kernel[i]) * std::complex<double>(std::cos(phase), -std::sin(phase));
+    }
+    return 20.0 * std::log10(std::abs(h));
+  };
+  CHECK(response_db(200.0) > 6.0);
+  CHECK(response_db(12000.0) > 6.0);
 }

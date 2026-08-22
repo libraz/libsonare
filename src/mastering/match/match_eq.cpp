@@ -19,6 +19,7 @@ namespace sonare::mastering::match {
 namespace {
 
 using sonare::constants::kDefaultDawSampleRate;
+using sonare::constants::kPi;
 using sonare::constants::kPiD;
 using sonare::constants::kTwoPiD;
 
@@ -56,6 +57,54 @@ float interpolate_db(const ReferenceSpectrum& spectrum, float frequency_hz) {
 bool is_power_of_two(int value) { return value > 0 && (value & (value - 1)) == 0; }
 
 float db_to_gain(float db) { return db_to_linear(db); }
+
+/// Weight in [0, 1] applied to the curve's dB value at @p frequency_hz, so the
+/// realized FIR response returns to unity outside the matched band instead of
+/// extending the curve's endpoint gain to DC and Nyquist.
+///
+/// A match curve is defined only over [min_frequency_hz, max_frequency_hz].
+/// interpolate_db holds the endpoint value outside that range, which is right
+/// for reading a spectrum and wrong for realizing a filter: the parametric
+/// realization places no band outside the range, so its response returns to
+/// 0 dB, and a low-heavy reference otherwise had the FIR path building the
+/// curve's edge boost at DC.
+///
+/// The taper is one octave of raised cosine on each side, narrowed on the high
+/// side when Nyquist is closer than that so the weight reaches zero AT Nyquist
+/// rather than partway there — a 12 kHz band edge at 48 kHz has exactly one
+/// octave of room, and a wider taper left several dB of boost standing on the
+/// Nyquist bin. One octave rather than the whole remaining span because the
+/// boosted region has to end well above DC in absolute Hz: a kernel resolves
+/// about `sample_rate / kernel_size`, and gain surviving closer to DC than that
+/// is smeared straight onto the DC bin by the truncation window, which is the
+/// gain the taper exists to remove.
+///
+/// The limit this cannot beat: when the band edge itself is within a kernel
+/// resolution of DC (the default 40 Hz edge at 48 kHz with a 513-tap kernel is),
+/// no taper below it is realizable and the DC bin necessarily carries roughly
+/// the curve's value at the edge. A longer kernel is the only thing that moves
+/// it, and at that point DC and the band edge are genuinely the same frequency
+/// as far as the filter is concerned.
+constexpr float kOutOfBandTaperOctaves = 1.0f;
+
+float out_of_band_weight(const MatchEqCurve& curve, float frequency_hz, float nyquist_hz) {
+  const float low = curve.frequencies.front();
+  const float high = curve.frequencies.back();
+  if (!(low > 0.0f) || !(high >= low)) return 1.0f;
+  if (frequency_hz >= low && frequency_hz <= high) return 1.0f;
+  const auto raised_cosine = [](float octaves, float width) {
+    if (!(width > 0.0f) || octaves >= width) return 0.0f;
+    return 0.5f * (1.0f + std::cos(kPi * octaves / width));
+  };
+  if (frequency_hz < low) {
+    if (!(frequency_hz > 0.0f)) return 0.0f;
+    return raised_cosine(std::log2(low / frequency_hz), kOutOfBandTaperOctaves);
+  }
+  if (!(nyquist_hz > high)) return 1.0f;  // the band already reaches Nyquist
+  const float to_nyquist = std::log2(nyquist_hz / high);
+  return raised_cosine(std::log2(frequency_hz / high),
+                       std::min(kOutOfBandTaperOctaves, to_nyquist));
+}
 
 std::vector<float> smooth_log_frequency(const std::vector<float>& frequencies,
                                         const std::vector<float>& gain_db, int smoothing_bins) {
@@ -495,10 +544,13 @@ std::vector<float> match_eq_fir_kernel(const MatchEqCurve& curve, int sample_rat
   std::vector<std::complex<float>> spectrum(static_cast<size_t>(fft.n_bins()));
   std::vector<float> magnitude(static_cast<size_t>(fft.n_bins()), 1.0f);
   const ReferenceSpectrum curve_spectrum{curve.frequencies, curve.gain_db, sample_rate};
+  const float nyquist = static_cast<float>(sample_rate) * 0.5f;
   for (int bin = 0; bin < fft.n_bins(); ++bin) {
     const float frequency = static_cast<float>(bin) * static_cast<float>(sample_rate) /
                             static_cast<float>(config.fft_size);
-    magnitude[static_cast<size_t>(bin)] = db_to_gain(interpolate_db(curve_spectrum, frequency));
+    const float gain_db =
+        interpolate_db(curve_spectrum, frequency) * out_of_band_weight(curve, frequency, nyquist);
+    magnitude[static_cast<size_t>(bin)] = db_to_gain(gain_db);
     spectrum[static_cast<size_t>(bin)] = {magnitude[static_cast<size_t>(bin)], 0.0f};
   }
 

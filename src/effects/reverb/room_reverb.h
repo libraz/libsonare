@@ -47,7 +47,16 @@ struct RoomReverbConfig {
 /// a negative image-source order, a `max_seconds` outside
 /// [0, acoustic::kMaxRirSeconds], and non-physical air temperature/humidity while
 /// air absorption is enabled — because a refused synthesis returns an empty IR,
-/// which the convolution path renders as silent dry passthrough.
+/// which the convolution path renders as silent dry passthrough. The host sample
+/// rate is the one synthesis input the constructor cannot see; prepare() throws
+/// the same ErrorCode::InvalidParameter when synthesis refuses it, rather than
+/// discarding the diagnostics and preparing an inaudible insert.
+///
+/// The synthesized RIR is loaded at unit energy, not at its physical
+/// 1/(4*pi*d) scale, so `dryWet` means the same mix depth here as on the plain
+/// convolution reverb (see ConvolutionReverb::load_ir_unit_energy). Offline
+/// consumers that want the physical scale call acoustic::synthesize_rir
+/// directly, which is unchanged.
 class RoomReverb : public ConvolutionReverb {
  public:
   explicit RoomReverb(RoomReverbConfig config = {});

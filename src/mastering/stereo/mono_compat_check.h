@@ -16,6 +16,13 @@ struct MonoCompatResult {
   bool likely_mono_compatible = true;
 };
 
+/// @brief One log-spaced band's stereo readout.
+///
+/// `correlation` and `side_rms` are measured OVER the interval
+/// [low_hz, high_hz), not at a single representative frequency inside it, so two
+/// components sharing a band both contribute: an in-phase and an anti-phase
+/// partial of equal energy in one band read as an uncorrelated band, which is
+/// what they sum to in mono.
 struct MonoCompatBandResult {
   float low_hz = 0.0f;
   float high_hz = 0.0f;

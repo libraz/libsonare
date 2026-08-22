@@ -61,6 +61,22 @@ class ConvolutionReverb : public rt::ProcessorBase {
   void load_ir(const float* impulse_response, int num_samples);
   void load_ir(const std::vector<float>& impulse_response);
 
+  /// @brief Load an impulse response scaled to unit energy.
+  ///
+  /// The level contract of `dryWet`: one parameter value must mean the same
+  /// audible mix depth on every engine that mixes a convolution in. The
+  /// synthesized default IR is normalized to unit energy for exactly that
+  /// reason, so an IR whose amplitude carries a physical scale — a
+  /// geometry-derived RIR is attenuated by 1/(4*pi*d), around 20 dB down at a
+  /// few metres — must be normalized the same way before it is mixed,
+  /// or the same `dryWet` reads far quieter than on the sibling reverbs. Offline
+  /// RIR consumers that need the physical scale keep it by using load_ir().
+  ///
+  /// Throws ErrorCode::InvalidParameter on an invalid buffer (as load_ir does)
+  /// and on an IR with no energy at all, which has no unit-energy form and would
+  /// render as digital silence rather than as an audible room.
+  void load_ir_unit_energy(const float* impulse_response, int num_samples);
+
   // Automatable parameters (RT-safe, no allocation, no state reset):
   //   0 = dry_wet (clamped to [0, 1] in process())
   bool set_parameter(unsigned int param_id, float value) override;
@@ -89,6 +105,12 @@ class ConvolutionReverb : public rt::ProcessorBase {
   // Synthesize a decaying-noise IR from config_ at the prepared sample rate.
   // Used only when no explicit IR was supplied via load_ir().
   void synthesize_default_ir(double sample_rate);
+  // Validate the caller's buffer and copy it into ir_. Shared by both loaders so
+  // they reject the same inputs and the convolvers are rebuilt exactly once.
+  void store_ir(const float* impulse_response, int num_samples);
+  // Scale ir_ so its samples sum to unit energy. Returns false for an IR with no
+  // energy (nothing to normalize toward).
+  bool normalize_ir_unit_energy();
 
   ConvolutionReverbConfig config_{};
   // True once load_ir() supplies caller IR samples; suppresses default synthesis.

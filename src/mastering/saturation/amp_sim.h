@@ -37,6 +37,7 @@
 /// mic/Doppler delay lines, the cab-IR history and the tube or oversampler
 /// scratch; process()/set_parameter() are allocation-free.
 
+#include <algorithm>
 #include <vector>
 
 #include "mastering/saturation/cab_ir.h"
@@ -307,6 +308,14 @@ class AmpSim : public rt::ProcessorBase {
  public:
   explicit AmpSim(AmpSimConfig config = {});
   void prepare(double sample_rate, int max_block_size) override;
+  /// Channel-aware prepare: an offline mono or stereo caller pays for the
+  /// channels it will actually pass to process() instead of the realtime cap.
+  /// The per-channel state here is not scalar — each channel owns a cab-IR
+  /// ring, a Doppler line and two mic delay lines — so preparing 64 of them for
+  /// a mono render is the difference between megabytes and tens of megabytes.
+  /// process() still grows past @p max_channels if a caller hands over more,
+  /// exactly as the two-argument form does.
+  void prepare(double sample_rate, int max_block_size, int max_channels) override;
   void process(float* const* channels, int num_channels, int num_samples) override;
   void reset() override;
   /// The head's oversampling latency, plus the Doppler stage's base delay when
@@ -371,9 +380,22 @@ class AmpSim : public rt::ProcessorBase {
   /// Length of the IR actually convolved, after resampling and truncation to the
   /// duration budget. Zero until prepare() has run.
   int cab_ir_samples() const noexcept { return static_cast<int>(cab_ir_.size()); }
-  /// The only stage that outlives its input is the second mic's path-length
-  /// delay; everything else is IIR filtering with no discrete tail.
-  int tail_samples() const noexcept override { return mic_tail_samples_; }
+  /// Channels the last prepare() reserved per-channel state for. Each channel
+  /// costs a cab-IR ring, a Doppler line and two mic delay lines, so an offline
+  /// caller that prepared for one channel can confirm it is paying for one
+  /// rather than for the realtime cap. Grows if process() is later handed more
+  /// channels than prepare() was told about.
+  int prepared_channels() const noexcept { return static_cast<int>(chains_.size()); }
+  /// Two stages outlive their input: the second mic's path-length delay, and a
+  /// loaded or generated cab IR, whose direct FIR keeps emitting for its length
+  /// minus one after the last input sample. The two are mutually exclusive in
+  /// the signal path (an IR replaces the whole analytic cab-and-mic chain), so
+  /// the longer of them bounds the decay. Everything else is IIR filtering with
+  /// no discrete tail.
+  int tail_samples() const noexcept override {
+    const int ir_tail = cab_ir_.empty() ? 0 : static_cast<int>(cab_ir_.size()) - 1;
+    return std::max(mic_tail_samples_, ir_tail);
+  }
   const AmpSimConfig& amp_config() const { return config_; }
 
   // Automatable parameters (RT-safe scalar redesigns, no allocation):

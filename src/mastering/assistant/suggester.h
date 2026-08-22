@@ -19,6 +19,18 @@ struct AssistantConfig {
   bool enable_repair = false;
   bool prefer_streaming_safe = true;
   float speech_mono_amount = 1.0f;
+  /// @brief Whether the caller named @ref target_lufs / @ref ceiling_db at all.
+  /// @details A delivery target only fills in what the caller left alone, and
+  ///          "left alone" cannot be decided by comparing against the default:
+  ///          a host UI that always sends its slider position sends -14 when
+  ///          the slider sits at -14, and the platform target then silently won
+  ///          that one position. Callers that fill this struct field by field
+  ///          (the flat param parsers on every surface) set these; a direct C++
+  ///          caller that leaves them false keeps the historical
+  ///          compare-to-default behaviour, so setting a non-default value
+  ///          still suppresses the override without the flag.
+  bool target_lufs_explicit = false;
+  bool ceiling_db_explicit = false;
 };
 
 struct AssistantResult {

@@ -167,8 +167,21 @@ std::string parse_string_json(const std::string& json_params, const char* key) {
   return value->as_string();
 }
 
+// The keys whose value cannot live in the flat ParamMap, and the single insert
+// each one belongs to. They used to be skipped for EVERY insert, so a `preset`
+// or a base64 IR handed to an insert that has no such control was accepted,
+// dropped, and — because a skipped key never enters the map — absent from
+// unprobed_keys() as well, leaving no surface on which the caller could notice.
+bool insert_reads_json_string_key(const std::string& insert_name, const std::string& key) {
+  if (key == "preset") return insert_name == "saturation.ampSim";
+  if (key == "cabIrF32Base64") return insert_name == "saturation.ampSim";
+  if (key == "irF32Base64") return insert_name == "effects.reverb.convolution";
+  return false;
+}
+
 std::vector<Param> parse_insert_params_json(const std::string& json_params,
-                                            bool allow_acoustic_material_arrays = false) {
+                                            const std::string& insert_name) {
+  const bool allow_acoustic_material_arrays = insert_name == "effects.acoustic.roomMorph";
   try {
     if (json_params.empty()) return {};
     // Strict parse: insert params are a flat map of `{name: value}` and a
@@ -191,16 +204,14 @@ std::vector<Param> parse_insert_params_json(const std::string& json_params,
         // accepting them here keeps the generic JSON validation layer from
         // rejecting an option that the acoustic facade already supports.
         continue;
-      } else if (key == "preset" && value.is_string()) {
-        // A named rig, selecting the discrete switches (topology, tube, cab,
-        // capsule) that no numeric param can reach. Read from the original JSON
-        // in build_saturation, since the flat ParamMap holds doubles only.
-        continue;
-      } else if ((key == "irF32Base64" || key == "cabIrF32Base64") && value.is_string()) {
-        // The flat ParamMap holds doubles, so a base64 impulse response cannot
-        // live in it. Both IR-taking inserts read theirs straight from the
-        // original JSON object instead; accepting the key here keeps the generic
-        // validation layer from rejecting a param the insert does support.
+      } else if (value.is_string() && insert_reads_json_string_key(insert_name, key)) {
+        // A named rig (the discrete topology/tube/cab/capsule switches no
+        // numeric param can reach) or a base64 impulse response. The flat
+        // ParamMap holds doubles only, so the insert that owns the key reads it
+        // straight from the original JSON object; accepting it here keeps the
+        // generic validation layer from rejecting a param the insert supports.
+        // Every OTHER insert falls through to the rejection below, so a key
+        // aimed at the wrong processor is reported instead of dropped.
         continue;
       } else {
         throw SonareException(ErrorCode::InvalidParameter,
@@ -370,6 +381,13 @@ std::unique_ptr<Processor> build_saturation(const std::string& name, const Param
     // A named rig, if given, is the BASE the numeric params ride on top of, so a
     // caller can take a whole amp and turn one control. Without one the base is
     // the processor's own defaults, exactly as before.
+    //
+    // Both string-valued options are probed so insert_param_names() publishes
+    // them: they are read from the JSON side-channel below rather than from the
+    // flat map, and a construction option a caller cannot discover may as well
+    // not exist. Same reason the acoustic builder probes its band arrays.
+    (void)params.find("preset");
+    (void)params.find("cabIrF32Base64");
     saturation::AmpSimConfig base;
     if (json_params != nullptr) {
       const std::string preset = parse_string_json(*json_params, "preset");
@@ -546,15 +564,14 @@ bool acoustic_material_preset_from_int(int selector, sonare::acoustic::MaterialP
   }
 }
 
+// Reads one material-band array out of the insert's JSON side-channel. Only the
+// JSON shape is checked here; the coefficients themselves are validated by the
+// core builder, on the same rule as every other surface.
 std::vector<float> acoustic_material_bands(const sonare::util::json::Value* value,
                                            const char* key) {
   if (value == nullptr) return {};
   if (!value->is_array()) {
     throw SonareException(ErrorCode::InvalidParameter, std::string(key) + " must be an array");
-  }
-  if (value->size() > sonare::acoustic::kMaxMaterialBands) {
-    throw SonareException(ErrorCode::InvalidParameter,
-                          std::string(key) + " exceeds the maximum of 64 bands");
   }
 
   std::vector<float> bands;
@@ -564,12 +581,7 @@ std::vector<float> acoustic_material_bands(const sonare::util::json::Value* valu
       throw SonareException(ErrorCode::InvalidParameter,
                             std::string(key) + " values must be within [0, 1]");
     }
-    const float coefficient = band.as_float();
-    if (!std::isfinite(coefficient) || coefficient < 0.0f || coefficient > 1.0f) {
-      throw SonareException(ErrorCode::InvalidParameter,
-                            std::string(key) + " values must be within [0, 1]");
-    }
-    bands.push_back(coefficient);
+    bands.push_back(band.as_float());
   }
   return bands;
 }
@@ -580,47 +592,26 @@ sonare::acoustic::ShoeboxRoom acoustic_room_from_json(const detail::ParamMap& pa
 
   const RoomDimensions dims{f(params, "lengthM", 7.0f), f(params, "widthM", 5.0f),
                             f(params, "heightM", 3.0f)};
-  MaterialPreset preset{};
-  if (acoustic_material_preset_from_int(detail::i(params, "materialPreset", 0), &preset)) {
-    ShoeboxRoom room;
-    room.dims = dims;
-    const Material wall = make_material(preset);
-    for (Material& w : room.walls) w = wall;
-    return room;
-  }
-  if (json_params == nullptr || json_params->empty()) {
-    return uniform_shoebox(dims, f(params, "absorption", 0.2f));
-  }
-
-  const auto root = sonare::util::json::parse_strict(*json_params);
-  if (!root.is_object()) {
-    throw SonareException(ErrorCode::InvalidParameter, "expected JSON object");
-  }
-
-  const auto* absorption_value = root.find("bandAbsorption");
-  const auto* scattering_value = root.find("bandScattering");
-  const std::vector<float> absorption_bands =
-      acoustic_material_bands(absorption_value, "bandAbsorption");
-  const std::vector<float> scattering_bands =
-      acoustic_material_bands(scattering_value, "bandScattering");
-
-  if (!absorption_bands.empty()) {
-    ShoeboxRoom room;
-    room.dims = dims;
-    Material wall;
-    wall.absorption.reserve(absorption_bands.size());
-    for (const float coefficient : absorption_bands) {
-      wall.absorption.push_back(std::clamp(coefficient, 0.0f, 0.999f));
+  // The precedence, the [0, 1] coefficient rejection and the band-wise
+  // scattering come from the core builder the offline acoustic facade calls, so
+  // an insert and a synthesizeRir call resolve the same option bag identically
+  // — including rejecting an out-of-range scalar absorption rather than
+  // clamping it, which is the one place these two used to disagree.
+  WallMaterialRequest request;
+  request.has_preset =
+      acoustic_material_preset_from_int(detail::i(params, "materialPreset", 0), &request.preset);
+  request.absorption = f(params, "absorption", 0.2f);
+  if (json_params != nullptr && !json_params->empty()) {
+    const auto root = sonare::util::json::parse_strict(*json_params);
+    if (!root.is_object()) {
+      throw SonareException(ErrorCode::InvalidParameter, "expected JSON object");
     }
-    wall.scattering.reserve(absorption_bands.size());
-    for (size_t i = 0; i < absorption_bands.size(); ++i) {
-      wall.scattering.push_back(i < scattering_bands.size() ? scattering_bands[i] : 0.0f);
-    }
-    for (Material& w : room.walls) w = wall;
-    return room;
+    request.absorption_bands =
+        acoustic_material_bands(root.find("bandAbsorption"), "bandAbsorption");
+    request.scattering_bands =
+        acoustic_material_bands(root.find("bandScattering"), "bandScattering");
   }
-
-  return uniform_shoebox(dims, f(params, "absorption", 0.2f));
+  return make_uniform_room(dims, request);
 }
 #endif
 
@@ -712,6 +703,10 @@ std::unique_ptr<Processor> build_effects(const std::string& name, const ParamMap
     // so the insert produces an actual reverb tail just like its algorithmic
     // siblings. decaySec is the approximate RT60 tail length in seconds (matched
     // to effects.reverb.fdn, where decaySec maps directly to ~T60).
+    //
+    // Probed so insert_param_names() publishes it: the base64 IR is read from
+    // the JSON side-channel below, not from the flat map.
+    (void)params.find("irF32Base64");
     ConvolutionReverbConfig config;
     if (params.find("decaySec") != params.end()) {
       // Clamp to the synthesizer's ceiling at construction so an out-of-range
@@ -743,7 +738,11 @@ std::unique_ptr<Processor> build_effects(const std::string& name, const ParamMap
     config.listener = {f(params, "listenerX", config.listener.x),
                        f(params, "listenerY", config.listener.y),
                        f(params, "listenerZ", config.listener.z)};
+    // Rejected rather than clamped, matching sonare_synthesize_rir: the same
+    // out-of-range absorption has to surface the same error whether the room is
+    // built offline or as an insert.
     config.absorption = f(params, "absorption", config.absorption);
+    sonare::acoustic::validate_material_coefficient(config.absorption, "absorption");
     config.ism_order = std::max(0, detail::i(params, "ismOrder", config.ism_order));
     config.seed = static_cast<unsigned>(
         std::max(0, detail::i(params, "seed", static_cast<int>(config.seed))));
@@ -914,9 +913,7 @@ std::unique_ptr<Processor> build_insert(const std::string& name, const ParamMap&
 std::unique_ptr<sonare::rt::ProcessorBase> make_insert(const std::string& name,
                                                        const std::string& json_params,
                                                        std::vector<std::string>* out_unknown_keys) {
-  const bool allow_acoustic_material_arrays = name == "effects.acoustic.roomMorph";
-  const std::vector<Param> param_list =
-      parse_insert_params_json(json_params, allow_acoustic_material_arrays);
+  const std::vector<Param> param_list = parse_insert_params_json(json_params, name);
   const ParamMap params = detail::make_map(param_list);
   auto processor = build_insert(name, params, &json_params);
   // Only report ignored keys for a recognized processor: build_insert() probes
@@ -947,7 +944,7 @@ std::unique_ptr<sonare::rt::ProcessorBase> make_insert_with_ir(const std::string
     // Validate params for malformed JSON parity with make_insert(), then build a
     // real, IR-loaded convolution insert. load_ir() stores the IR and is safe to
     // call before prepare(); prepare() reapplies it to the FFT convolvers.
-    const std::vector<Param> param_list = parse_insert_params_json(json_params);
+    const std::vector<Param> param_list = parse_insert_params_json(json_params, name);
     const ParamMap params = detail::make_map(param_list);
     effects::reverb::ConvolutionReverbConfig config;
     config.dry_wet = f(params, "dryWet", config.dry_wet);

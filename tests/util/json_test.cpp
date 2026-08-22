@@ -3,7 +3,10 @@
 #include <catch2/catch_test_macros.hpp>
 #include <clocale>
 #include <limits>
+#include <locale>
+#include <stdexcept>
 #include <string>
+#include <utility>
 
 #include "util/base64.h"
 
@@ -102,24 +105,73 @@ TEST_CASE("util json round-trips small and large numbers", "[json]") {
   }
 }
 
-TEST_CASE("util json parse is locale-independent", "[json][locale]") {
-  // DAW plugin hosts sometimes set the process LC_NUMERIC to e.g. "de_DE",
-  // which interprets "," as the decimal separator and "." as a thousands
-  // separator. std::stod / istringstream without classic-locale imbue would
-  // misparse "1.5" under such locales. The parser must imbue classic locale
-  // internally so JSON parses identically regardless of the host locale.
-  const char* prev = std::setlocale(LC_NUMERIC, nullptr);
-  const std::string saved = prev ? prev : "C";
-  // Attempt to switch to a locale that uses "," as decimal. Both glibc and
-  // macOS ship de_DE.UTF-8; if neither is installed, fall back to "C" so the
-  // test still exercises the parser (just without a hostile locale).
-  bool switched = false;
-  for (const char* tag : {"de_DE.UTF-8", "de_DE.utf8", "de_DE"}) {
-    if (std::setlocale(LC_NUMERIC, tag) != nullptr) {
-      switched = true;
-      break;
+namespace {
+
+/// A comma-decimal numeric facet: "," as the decimal point, "." as the
+/// thousands separator, three-digit grouping.
+///
+/// Used instead of requiring a named locale to be generated on the host. The
+/// facet is what an iostream consults, so it reproduces the hostile-host
+/// behavior exactly -- an unimbued `istringstream("1.5") >> double` yields 15
+/// and leaves the stream in a failed state, and an unimbued `ostringstream <<
+/// 1.5` writes "1,5" -- on every platform, with nothing to install.
+class CommaDecimalPunct : public std::numpunct<char> {
+ protected:
+  char do_decimal_point() const override { return ','; }
+  char do_thousands_sep() const override { return '.'; }
+  std::string do_grouping() const override { return "\3"; }
+};
+
+/// Installs a comma-decimal locale for the lifetime of the object.
+///
+/// Both the global C++ locale and LC_NUMERIC are switched, and only the first
+/// of them reaches this header: `std::istringstream` / `std::ostringstream`
+/// carry the global C++ locale, not the C one, so a test that calls only
+/// `std::setlocale` cannot fail no matter how the number is formatted.
+/// LC_NUMERIC is switched alongside it so any C-library formatting a caller
+/// mixes in is covered too, and it only moves when a named locale is available.
+class CommaDecimalLocaleGuard {
+ public:
+  CommaDecimalLocaleGuard() : saved_global_(std::locale()) {
+    const char* previous = std::setlocale(LC_NUMERIC, nullptr);
+    saved_numeric_ = previous ? previous : "C";
+    // Prefer a real installed locale, which moves LC_NUMERIC as well. Both
+    // glibc and macOS ship de_DE.UTF-8, but a slim CI image may not have
+    // generated it, so fall back to the synthetic facet rather than skipping.
+    for (const char* tag : {"de_DE.UTF-8", "de_DE.utf8", "de_DE"}) {
+      try {
+        std::locale::global(std::locale(tag));
+        std::setlocale(LC_NUMERIC, tag);
+        return;
+      } catch (const std::runtime_error&) {
+        continue;
+      }
     }
+    std::locale::global(std::locale(std::locale::classic(), new CommaDecimalPunct));
   }
+
+  ~CommaDecimalLocaleGuard() {
+    std::locale::global(saved_global_);
+    std::setlocale(LC_NUMERIC, saved_numeric_.c_str());
+  }
+
+  CommaDecimalLocaleGuard(const CommaDecimalLocaleGuard&) = delete;
+  CommaDecimalLocaleGuard& operator=(const CommaDecimalLocaleGuard&) = delete;
+
+ private:
+  std::locale saved_global_;
+  std::string saved_numeric_;
+};
+
+}  // namespace
+
+TEST_CASE("util json parse and dump are locale-independent", "[json][locale]") {
+  // DAW plugin hosts sometimes run under a comma-decimal locale. Both the
+  // parser and dump() build a stream and imbue the classic locale so "." stays
+  // the decimal separator either way; the guard below makes that load-bearing.
+  // Without the imbue, parse reads {"a":1.5} as 15 and dump writes 1.5 as
+  // "1,5" -- which is not a parse error downstream, just a different document.
+  CommaDecimalLocaleGuard hostile_locale;
 
   const auto value = sonare::util::json::parse("{\"a\":1.5,\"b\":-3.25e-2,\"c\":[0.125,2.5]}");
   REQUIRE(value["a"].as_number() == 1.5);
@@ -127,12 +179,19 @@ TEST_CASE("util json parse is locale-independent", "[json][locale]") {
   REQUIRE(value["c"][0].as_number() == 0.125);
   REQUIRE(value["c"][1].as_number() == 2.5);
 
-  // Dump must also use "." as the decimal separator regardless of LC_NUMERIC.
-  const auto dumped = sonare::util::json::dump(sonare::util::json::Value(1.5));
-  REQUIRE(dumped.find('.') != std::string::npos);
-  REQUIRE(dumped.find(',') == std::string::npos);
+  // Exact text, not just "contains a dot": a comma decimal separator inside an
+  // object or array is swallowed by the member separator and would otherwise
+  // read as a well-formed document with different values.
+  REQUIRE(sonare::util::json::dump(sonare::util::json::Value(1.5)) == "1.5");
 
-  if (switched) std::setlocale(LC_NUMERIC, saved.c_str());
+  sonare::util::json::Object object;
+  object.emplace("a", sonare::util::json::Value(1.5));
+  object.emplace("b", sonare::util::json::Value(-0.0325));
+  const auto dumped = sonare::util::json::dump(sonare::util::json::Value(std::move(object)));
+  const auto reparsed = sonare::util::json::parse(dumped);
+  REQUIRE(reparsed.size() == 2);
+  REQUIRE(reparsed["a"].as_number() == 1.5);
+  REQUIRE(reparsed["b"].as_number() == -0.0325);
 }
 
 TEST_CASE("util json rejects malformed numeric tokens", "[json]") {

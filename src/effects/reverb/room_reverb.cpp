@@ -55,14 +55,23 @@ void RoomReverb::prepare(double sample_rate, int max_block_size) {
   const RirSynthResult res =
       synthesize_rir(room, SourceListener{config_.source, config_.listener}, sr, rc);
 
+  // Geometry, order, length cap and air absorption were all validated at
+  // construction; the host sample rate was not, and it is the one synthesis
+  // input this engine first sees here. Synthesis reports a refusal as an Error
+  // diagnostic plus an empty RIR, which the convolution path would render as an
+  // inaudible insert, so the diagnostics are read rather than dropped and the
+  // refusal is raised with the reason the synthesizer gave.
+  SONARE_CHECK_MSG(!has_error(res.diagnostics), ErrorCode::InvalidParameter,
+                   "room reverb RIR synthesis failed: " + first_error_text(res.diagnostics));
+
   // Establish partition size and per-channel buffers, then load the synthesized
-  // IR (rebuilds the convolvers). Geometry, order, length cap and air absorption
-  // were all validated at construction, so an empty IR here indicates a synthesis
-  // result with no usable tail rather than an invalid configuration silently
-  // degrading to dry passthrough.
+  // IR (rebuilds the convolvers). The RIR carries its physical 1/(4*pi*d)
+  // attenuation, so it is normalized to the same unit energy as the base class's
+  // default IR: dryWet must mean the same mix depth on this engine as on the
+  // sibling reverbs.
   suppress_default_ir_synthesis();
   ConvolutionReverb::prepare(sample_rate, max_block_size);
-  load_ir(res.rir.data(), static_cast<int>(res.rir.size()));
+  load_ir_unit_energy(res.rir.data(), static_cast<int>(res.rir.size()));
 }
 
 }  // namespace sonare::effects::reverb

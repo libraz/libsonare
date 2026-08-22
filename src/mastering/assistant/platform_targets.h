@@ -10,6 +10,15 @@
 ///          that cannot link C++ (see sonare_mastering_platform_names /
 ///          sonare_mastering_platform_from_name). A binding that hard-codes the
 ///          names or the indices is the drift this file exists to prevent.
+///
+///          One restatement exists and is deliberate: the Python CLI's argparse
+///          `--target-platform` needs its accepted set at parser-construction
+///          time, which is before any handler has loaded the shared library, so
+///          it lists the names literally. It is pinned to this table rather than
+///          trusted -- the native CLI builds the same option's domain from
+///          platform_names(), and the cross-surface option-domain comparison in
+///          tests/conformance/cli_contract_v2.json fails when the two disagree,
+///          so appending a row here fails that check until the parser follows.
 
 #include <array>
 #include <cstddef>

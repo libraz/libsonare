@@ -70,8 +70,15 @@ void resolve_platform_loudness(const AssistantConfig& config, float* target_lufs
   *ceiling_db = config.ceiling_db;
 
   const AssistantConfig defaults;
-  const bool loudness_is_default = config.target_lufs == defaults.target_lufs;
-  const bool ceiling_is_default = config.ceiling_db == defaults.ceiling_db;
+  // "The caller did not ask for one" is a presence question, not a value
+  // question: comparing against the default made an explicit -14 -- the very
+  // value the default happens to hold -- indistinguishable from silence, so a
+  // host UI parked at its default slider position lost that one position to the
+  // platform target while every other position won.
+  const bool loudness_is_default =
+      !config.target_lufs_explicit && config.target_lufs == defaults.target_lufs;
+  const bool ceiling_is_default =
+      !config.ceiling_db_explicit && config.ceiling_db == defaults.ceiling_db;
   if (!loudness_is_default && !ceiling_is_default) {
     return;
   }

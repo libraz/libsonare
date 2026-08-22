@@ -74,11 +74,22 @@ void RoomMorphProcessor::prepare(double sample_rate, int max_block_size) {
   const RirSynthConfig rc = rir_config_from(config_);
   const RirSynthResult res = synthesize_rir(config_.target, config_.placement, sr, rc);
 
-  // prepare() otherwise synthesizes a default noise IR which load_ir() below
-  // immediately discards. This processor always supplies its own target RIR.
+  // The target room, placement and timing were validated at construction; the
+  // host sample rate was not, and it is the one synthesis input this processor
+  // first sees here. A refused synthesis is an Error diagnostic plus an empty
+  // target RIR, which the convolution path would render as an inert insert, so
+  // the diagnostics are read rather than dropped.
+  SONARE_CHECK_MSG(!has_error(res.diagnostics), ErrorCode::InvalidParameter,
+                   "room morph target RIR synthesis failed: " + first_error_text(res.diagnostics));
+
+  // prepare() otherwise synthesizes a default noise IR which the load below
+  // immediately discards. This processor always supplies its own target RIR,
+  // normalized to the same unit energy as that default so `wet` means the same
+  // mix depth here as on the plain convolution reverb; the target RIR's own
+  // 1/(4*pi*d) physical scale would otherwise put it around 20 dB down.
   reverb_.suppress_default_ir_synthesis();
   reverb_.prepare(sample_rate, max_block_size);
-  reverb_.load_ir(res.rir.data(), static_cast<int>(res.rir.size()));
+  reverb_.load_ir_unit_energy(res.rir.data(), static_cast<int>(res.rir.size()));
   reverb_.set_parameter(0, config_.wet);  // dry/wet = target-room mix
 
   env_attack_ = one_pole_coef(0.005f, sr);

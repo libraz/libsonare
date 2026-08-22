@@ -325,6 +325,39 @@ TEST_CASE("acoustic room inserts reject invalid geometry as InvalidParameter",
   }
 }
 
+TEST_CASE("acoustic room inserts reject an out-of-range absorption, as the offline facade does",
+          "[mastering][insert_factory][effects][acoustic][numeric]") {
+  // sonare_synthesize_rir returns InvalidParameter for an absorption outside
+  // [0, 1]. The inserts used to hand it to uniform_shoebox, which clamps before
+  // validating, so the same value was rejected on one surface and silently
+  // turned into a different room on the other — while the addon's own doc
+  // promised "the same mistake surfaces the same error on every surface". The
+  // per-band array path in this same file already threw; only the scalar did
+  // not.
+  const char* geometry = R"({"lengthM":8,"widthM":6,"heightM":3.5,"dryWet":1,)";
+  for (const char* absorption : {R"("absorption":-0.2})", R"("absorption":1.5})"}) {
+    for (const char* name : {"effects.reverb.room", "effects.acoustic.roomMorph"}) {
+      const std::string params = std::string(geometry) + absorption;
+      DYNAMIC_SECTION(name << " " << absorption) {
+        try {
+          auto processor = make_insert(name, params);
+          (void)processor;
+          FAIL("an out-of-range absorption was accepted");
+        } catch (const sonare::SonareException& error) {
+          REQUIRE(error.code() == sonare::ErrorCode::InvalidParameter);
+        }
+      }
+    }
+  }
+
+  // Non-vacuity: an in-range absorption on the same geometry still builds.
+  for (const char* name : {"effects.reverb.room", "effects.acoustic.roomMorph"}) {
+    DYNAMIC_SECTION(name) {
+      REQUIRE(make_insert(name, std::string(geometry) + R"("absorption":0.25})") != nullptr);
+    }
+  }
+}
+
 TEST_CASE("acoustic room inserts reject an invalid RIR length cap and air climate",
           "[mastering][insert_factory][effects][acoustic][numeric]") {
   // The geometry is only half the synthesis configuration: an out-of-range
@@ -963,6 +996,38 @@ TEST_CASE("processor_catalog_json classifies every id consistently with the sour
         json.find("{\"id\":\"effects.reverb.room\",\"kind\":\"realtime\",\"realtimeInsertable\":"
                   "true") != std::string::npos);
   }
+}
+
+TEST_CASE("string-valued insert options reach only the insert that reads them",
+          "[mastering][insert_factory]") {
+  // `preset` and the base64 IRs cannot live in the flat ParamMap, so they are
+  // read from the JSON side-channel. The skip that let them past the generic
+  // validator did not know which insert was being built, so EVERY insert
+  // accepted them -- and because a skipped key never enters the map, it was
+  // absent from the ignored-keys report as well. There was no surface on which
+  // the caller could see that the option had been dropped.
+  const auto amp_names = insert_param_names("saturation.ampSim");
+  REQUIRE(ListContains(amp_names, "preset"));
+  REQUIRE(ListContains(amp_names, "cabIrF32Base64"));
+
+  // Accepted where it means something.
+  REQUIRE(make_insert("saturation.ampSim", R"({"preset":"tweedGrind"})") != nullptr);
+
+  // Refused where it means nothing, instead of being silently dropped.
+  REQUIRE_THROWS_AS(make_insert("dynamics.compressor", R"({"preset":"tweedGrind"})"),
+                    sonare::SonareException);
+  REQUIRE_THROWS_AS(make_insert("dynamics.compressor", R"({"cabIrF32Base64":"AAAAAA=="})"),
+                    sonare::SonareException);
+  REQUIRE_THROWS_AS(make_insert("saturation.tape", R"({"cabIrF32Base64":"AAAAAA=="})"),
+                    sonare::SonareException);
+#ifdef SONARE_WITH_FX
+  REQUIRE(ListContains(insert_param_names("effects.reverb.convolution"), "irF32Base64"));
+  // The two IR keys are not interchangeable: each names one insert.
+  REQUIRE_THROWS_AS(make_insert("effects.reverb.convolution", R"({"cabIrF32Base64":"AAAAAA=="})"),
+                    sonare::SonareException);
+  REQUIRE_THROWS_AS(make_insert("saturation.ampSim", R"({"irF32Base64":"AAAAAA=="})"),
+                    sonare::SonareException);
+#endif  // SONARE_WITH_FX
 }
 
 // stereo_processor_names() asserts a capability: "this id has no mono form".

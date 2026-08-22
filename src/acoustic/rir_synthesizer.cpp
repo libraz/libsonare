@@ -2,6 +2,7 @@
 
 #include <algorithm>
 #include <cmath>
+#include <string>
 #include <vector>
 
 #include "acoustic/image_source.h"
@@ -118,6 +119,15 @@ std::vector<Diagnostic> validate_rir_synth_config(const RirSynthConfig& config) 
   return diagnostics;
 }
 
+std::string first_error_text(const std::vector<Diagnostic>& diagnostics) {
+  for (const Diagnostic& diagnostic : diagnostics) {
+    if (diagnostic.severity == Diagnostic::Severity::Error) {
+      return diagnostic.code + ": " + diagnostic.message;
+    }
+  }
+  return {};
+}
+
 RirSynthResult synthesize_rir(const ShoeboxRoom& room, const SourceListener& placement,
                               int sample_rate, const RirSynthConfig& config) {
   RirSynthResult result;
@@ -148,6 +158,17 @@ RirSynthResult synthesize_rir(const ShoeboxRoom& room, const SourceListener& pla
                                   "ism_order exceeded the safe maximum and was clamped"});
   }
 
+  // Flight time of the direct sound. Needed twice: to floor the length cap below
+  // so the first tap is always inside the RIR, and to keep the crossover from
+  // fading the direct impulse further down.
+  const float direct_dist = length(placement.listener - placement.source);
+  const int direct_sample = static_cast<int>(std::lround(direct_dist / kSoundSpeed * sr));
+
+  EarlyIrConfig early_cfg;
+  // Half-width of the fractional-delay kernel each image is rendered through;
+  // synthesize_early_ir sizes itself to the last arrival plus this plus 2.
+  const int early_half = (early_cfg.fdl < 1 ? 1 : early_cfg.fdl | 1) / 2;
+
   // A max_seconds cap bounds every synthesized buffer. The shared acoustic
   // working-set cap also applies when max_seconds is omitted, so the early,
   // late, colouring, and final RIR buffers remain bounded together.
@@ -155,11 +176,19 @@ RirSynthResult synthesize_rir(const ShoeboxRoom& room, const SourceListener& pla
   const int requested_cap = config.max_seconds > 0.0f
                                 ? std::max(1, static_cast<int>(std::ceil(config.max_seconds * sr)))
                                 : kWorkingSetCap;
-  const int cap = std::min(requested_cap, kWorkingSetCap);
+  // A cap below the direct sound's arrival truncates every buffer before the
+  // first tap is rendered, so the RIR comes back all zeros -- digital silence on
+  // a convolution insert, with no error anywhere. max_seconds is an upper bound
+  // on the *tail*, not a licence to drop the direct sound, so floor it at the
+  // arrival plus the kernel half-width (the whole direct tap, sized exactly as
+  // synthesize_early_ir would) and tell the caller its request was widened. The
+  // working-set cap still wins: it is a memory bound, not a length preference.
+  const int direct_floor = std::min(direct_sample + early_half + 2, kWorkingSetCap);
+  const bool length_floored = requested_cap < direct_floor;
+  const int cap = std::min(std::max(requested_cap, direct_floor), kWorkingSetCap);
 
   // Early reflections (image-source) and the per-band reverberation time.
   const std::vector<ImageSource> images = shoebox_image_sources(room, placement, ism_order);
-  EarlyIrConfig early_cfg;
   early_cfg.max_samples = cap;  // upper bound only; a shorter natural IR is not padded to it
   Audio early_audio = synthesize_early_ir(images, sample_rate, early_cfg);
   // Frequency-dependent walls colour early reflections per octave band; a
@@ -181,7 +210,6 @@ RirSynthResult synthesize_rir(const ShoeboxRoom& room, const SourceListener& pla
       early_max_delay = std::max(early_max_delay, im.distance / kSoundSpeed * sr);
     }
   }
-  const int early_half = (early_cfg.fdl < 1 ? 1 : early_cfg.fdl | 1) / 2;
   const double early_raw =
       std::ceil(static_cast<double>(early_max_delay)) + static_cast<double>(early_half) + 2.0;
   const int early_natural_len =
@@ -238,8 +266,6 @@ RirSynthResult synthesize_rir(const ShoeboxRoom& room, const SourceListener& pla
   // crossover so its start t0 = t_mix - half_xfade lands at or after the direct
   // arrival. sqrt(V) alone ignores the source->listener delay and can otherwise
   // attenuate the direct impulse.
-  const float direct_dist = length(placement.listener - placement.source);
-  const int direct_sample = static_cast<int>(std::lround(direct_dist / kSoundSpeed * sr));
   int t_mix = static_cast<int>(std::lround(mixing_ms * 0.001f * sr));
   t_mix = std::max(t_mix, direct_sample + half_xfade);
 
@@ -277,16 +303,29 @@ RirSynthResult synthesize_rir(const ShoeboxRoom& room, const SourceListener& pla
   int length = std::max(early_n, late_n);
   const bool resource_clamped =
       late_resolution.resource_clamped || early_natural_len > kWorkingSetCap;
+  // Measured against the effective cap, not the raw request: when the request
+  // was floored to fit the direct sound the RIR is longer than max_seconds, and
+  // reporting that as "exceeded max_seconds and was clamped" would contradict
+  // the rir_length_floored warning standing next to it.
   const bool max_seconds_clamped =
-      config.max_seconds > 0.0f && requested_cap < kWorkingSetCap &&
-      (static_cast<std::size_t>(early_natural_len) > static_cast<std::size_t>(requested_cap) ||
-       natural_tail_samples > static_cast<std::size_t>(requested_cap));
+      config.max_seconds > 0.0f && cap < kWorkingSetCap &&
+      (static_cast<std::size_t>(early_natural_len) > static_cast<std::size_t>(cap) ||
+       natural_tail_samples > static_cast<std::size_t>(cap));
   if (natural_len > static_cast<std::size_t>(cap) || resource_clamped || max_seconds_clamped) {
     const char* clamp_message =
         max_seconds_clamped ? "synthesized RIR length exceeded max_seconds and was clamped"
                             : "synthesized RIR length exceeded its resource limit and was clamped";
     result.diagnostics.push_back(
         {Diagnostic::Severity::Warning, "acoustic.rir_length_clamped", clamp_message});
+  }
+  // Ordered after the clamp: a floored length is also a length the caller did
+  // not get, and surfaces that publish a single warning string (the C ABI's
+  // sonare_last_warning_message) should keep leading with the general one. The
+  // specific code travels in the full diagnostics list.
+  if (length_floored) {
+    result.diagnostics.push_back(
+        {Diagnostic::Severity::Warning, "acoustic.rir_length_floored",
+         "max_seconds was shorter than the direct-sound arrival and was extended to fit it"});
   }
   length = std::min(length, cap);
   if (length < 1) length = 1;

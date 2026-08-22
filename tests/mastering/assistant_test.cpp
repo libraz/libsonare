@@ -488,3 +488,44 @@ TEST_CASE("Assistant params carry the delivery target as its index", "[mastering
   REQUIRE(by_name.target_platform == "club");
   REQUIRE_THROWS_AS(assistant::set_target_platform(by_name, "vinyl"), sonare::SonareException);
 }
+
+TEST_CASE("Assistant delivery target yields to a named loudness, default-valued or not",
+          "[mastering][assistant]") {
+  namespace api = sonare::mastering::api;
+  assistant::AudioProfile profile;
+  profile.spectral.flatness = 0.6f;
+  profile.genre_candidates = {{"pop", 0.9f}};
+
+  const int broadcast = assistant::platform_index_from_name("broadcast");
+  REQUIRE(broadcast >= 0);
+  const int club = assistant::platform_index_from_name("club");
+  REQUIRE(club >= 0);
+
+  // Precedence used to be decided by comparing the requested value against the
+  // default, so the one slider position that equals the default -- where a host
+  // UI sits before the user touches anything -- silently lost to the delivery
+  // target while every other position won.
+  const api::Param default_valued[] = {{"targetPlatform", static_cast<double>(broadcast)},
+                                       {"targetLufs", -14.0},
+                                       {"ceilingDb", -1.0}};
+  const auto explicit_default =
+      assistant::suggest_chain(profile, assistant::assistant_config_from_params(default_valued, 3));
+  REQUIRE(explicit_default.config.loudness.target_lufs == -14.0f);
+  REQUIRE(explicit_default.config.loudness.ceiling_db == -1.0f);
+
+  // Presence, not value: naming one field must not suppress the target on the
+  // other.
+  const api::Param loudness_only[] = {{"targetPlatform", static_cast<double>(club)},
+                                      {"targetLufs", -14.0}};
+  const auto partial =
+      assistant::suggest_chain(profile, assistant::assistant_config_from_params(loudness_only, 2));
+  REQUIRE(partial.config.loudness.target_lufs == -14.0f);
+  REQUIRE(partial.config.loudness.ceiling_db == -0.3f);
+
+  // Naming nothing still takes the whole target.
+  const api::Param platform_only[] = {{"targetPlatform", static_cast<double>(club)}};
+  const auto full =
+      assistant::suggest_chain(profile, assistant::assistant_config_from_params(platform_only, 1));
+  REQUIRE(full.config.loudness.target_lufs == -9.0f);
+  REQUIRE(full.config.loudness.ceiling_db == -0.3f);
+}

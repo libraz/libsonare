@@ -232,8 +232,18 @@ struct StereoChainResult : public StereoAudioResult, public ChainMetrics {};
 
 class MasteringChain {
  public:
-  /// @brief Progress callback. `progress` is 0.0..1.0 across the whole chain;
-  /// `stage` is the stage identifier just completed (e.g. "dynamics.compressor").
+  /// @brief Progress callback. `stage` is the stage identifier just completed
+  /// (e.g. "dynamics.compressor").
+  ///
+  /// `progress` is the fraction of the ENABLED DSP STAGES that have run, not of
+  /// the call's wall time: it is `completed / enabled` and therefore reaches 1.0
+  /// as the last enabled stage returns. The input measurement that precedes the
+  /// first stage and the output measurement, spectrum and band-delta that follow
+  /// the last one are not stages and report no progress, so a host driving a
+  /// progress bar from this value sees it sit at 1.0 for the length of one
+  /// loudness-plus-spectrum pass over the track before the call returns. A
+  /// config with no enabled stage reports 1.0 with the stage name "complete" and
+  /// nothing else.
   using ProgressCallback = std::function<void(float progress, const char* stage)>;
   /// @brief Cooperative cancellation callback for offline processing.
   using CancelCallback = std::function<bool()>;

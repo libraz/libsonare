@@ -1,17 +1,31 @@
 #include "mastering/api/chain.h"
 
 #include <algorithm>
+#include <catch2/catch_approx.hpp>
 #include <catch2/catch_test_macros.hpp>
 #include <catch2/matchers/catch_matchers_floating_point.hpp>
+#include <clocale>
 #include <cmath>
+#include <cstdio>
 #include <limits>
+#include <locale>
+#include <stdexcept>
 #include <string>
+#include <utility>
 #include <vector>
 
+#if defined(__APPLE__)
+#include <mach/mach.h>
+#elif defined(__linux__)
+#include <unistd.h>
+#endif
+
+#include "core/audio.h"
 #include "mastering/api/audio_utils.h"
 #include "mastering/api/named_processor.h"
 #include "mastering/api/presets.h"
 #include "mastering/common/loudness_measure.h"
+#include "mastering/match/reference_loudness.h"
 #include "util/constants.h"
 #include "util/exception.h"
 #include "util/json.h"
@@ -146,6 +160,85 @@ TEST_CASE("MasteringChain stereo LRA uses channel summing, not a phase-cancellin
   MasteringChain chain(MasteringChainConfig{});
   auto result = chain.process_stereo(left.data(), right.data(), left.size(), sr);
   REQUIRE(result.output_lra > 1.0f);
+}
+
+// The progress callback re-enters caller code mid-render, and every binding
+// lends the chain a pointer it does not own across that boundary (a Node
+// TypedArray, a Python buffer, a WASM heap view). That is only safe because
+// process_mono_impl / process_stereo_impl copy the input into their own vector
+// before the first callback fires, so the callback observes a snapshot. Mutating
+// the caller's buffer from inside the callback is what makes the difference
+// observable: if the chain ever borrows instead of copying, the mutated run
+// diverges and this fails. Without it a binding could only close the hazard by
+// duplicating a whole recording a second time.
+TEST_CASE("MasteringChain copies its input before the first progress callback",
+          "[mastering][chain]") {
+  constexpr int kSampleRate = 22050;
+  constexpr std::size_t kLength = kSampleRate / 4;
+
+  MasteringChainConfig config;
+  config.eq.tilt.enabled = true;
+  config.eq.tilt.tilt_db = 1.5f;
+  config.dynamics.compressor.enabled = true;
+  config.dynamics.compressor.config.threshold_db = -24.0f;
+
+  auto tone = [](std::size_t length) {
+    std::vector<float> samples(length);
+    for (std::size_t i = 0; i < length; ++i) {
+      samples[i] = 0.5f * std::sin(constants::kTwoPi * 440.0 * static_cast<double>(i) /
+                                   static_cast<double>(kSampleRate));
+    }
+    return samples;
+  };
+
+  MasteringChain reference_chain(config);
+  int reference_calls = 0;
+  reference_chain.set_progress_callback([&](float, const char*) { ++reference_calls; });
+  std::vector<float> untouched = tone(kLength);
+  const auto reference =
+      reference_chain.process_mono(untouched.data(), untouched.size(), kSampleRate);
+  REQUIRE(reference_calls > 0);
+
+  MasteringChain mutated_chain(config);
+  std::vector<float> mutated = tone(kLength);
+  mutated_chain.set_progress_callback([&](float, const char*) {
+    // Overwrite the caller's buffer with a signal the chain would render very
+    // differently, on every callback.
+    std::fill(mutated.begin(), mutated.end(), -1.0f);
+  });
+  const auto observed = mutated_chain.process_mono(mutated.data(), mutated.size(), kSampleRate);
+
+  REQUIRE(observed.samples.size() == reference.samples.size());
+  CHECK(max_abs_difference(observed.samples, reference.samples) == 0.0f);
+  CHECK(observed.input_lufs == reference.input_lufs);
+
+  // Non-vacuity: the chain renders the overwritten signal to something else
+  // entirely, so a borrowed input could not have gone unnoticed above.
+  MasteringChain overwritten_chain(config);
+  std::vector<float> overwritten(kLength, -1.0f);
+  const auto overwritten_result =
+      overwritten_chain.process_mono(overwritten.data(), overwritten.size(), kSampleRate);
+  CHECK(max_abs_difference(overwritten_result.samples, reference.samples) > 0.0f);
+
+  // The same contract on the stereo path.
+  MasteringChain stereo_reference(config);
+  std::vector<float> stereo_left = tone(kLength);
+  std::vector<float> stereo_right = tone(kLength);
+  const auto stereo_expected = stereo_reference.process_stereo(
+      stereo_left.data(), stereo_right.data(), stereo_left.size(), kSampleRate);
+
+  MasteringChain stereo_chain(config);
+  std::vector<float> victim_left = tone(kLength);
+  std::vector<float> victim_right = tone(kLength);
+  stereo_chain.set_progress_callback([&](float, const char*) {
+    std::fill(victim_left.begin(), victim_left.end(), -1.0f);
+    std::fill(victim_right.begin(), victim_right.end(), -1.0f);
+  });
+  const auto stereo_observed = stereo_chain.process_stereo(victim_left.data(), victim_right.data(),
+                                                           victim_left.size(), kSampleRate);
+
+  CHECK(max_abs_difference(stereo_observed.left, stereo_expected.left) == 0.0f);
+  CHECK(max_abs_difference(stereo_observed.right, stereo_expected.right) == 0.0f);
 }
 
 // validate_mastering_chain_config() promises to reject anything a later stage
@@ -1138,5 +1231,248 @@ TEST_CASE("apply_chain_config_overrides toggles new stages independently", "[mas
   REQUIRE(config.dynamics.deesser.enabled);
   REQUIRE(config.eq.tilt.enabled);  // unaffected
 }
+
+namespace {
+
+constexpr int kAnalysisSampleRate = 44100;
+
+std::vector<float> analysis_sine(float frequency_hz, float amplitude, size_t length) {
+  std::vector<float> samples(length);
+  for (size_t index = 0; index < length; ++index) {
+    samples[index] = amplitude * std::sin(static_cast<float>(index) * frequency_hz *
+                                          sonare::constants::kTwoPi / kAnalysisSampleRate);
+  }
+  return samples;
+}
+
+}  // namespace
+
+TEST_CASE("analyze_named_stereo serializes an out-of-phase pair as valid JSON",
+          "[mastering][chain][json]") {
+  // A fully out-of-phase pair has zero mid energy, so stereo_width() returns
+  // +infinity -- exactly the signal this analysis exists to flag. RFC 8259 has
+  // no Infinity literal, so the field has to arrive as JSON null instead of an
+  // "inf" token that no parser accepts.
+  const auto left = analysis_sine(440.0f, 0.5f, static_cast<size_t>(kAnalysisSampleRate) / 4);
+  std::vector<float> right(left.size());
+  for (size_t index = 0; index < left.size(); ++index) right[index] = -left[index];
+
+  const std::string text = analyze_named_stereo("stereo.monoCompatCheck", left.data(), right.data(),
+                                                left.size(), kAnalysisSampleRate, {});
+  REQUIRE(text.find("inf") == std::string::npos);
+
+  const auto value = sonare::util::json::parse_strict(text);
+  REQUIRE_THAT(value["correlation"].as_number(), WithinAbs(-1.0, 1e-6));
+  REQUIRE(value["width"].is_null());
+  REQUIRE_THAT(value["monoPeak"].as_number(), WithinAbs(0.0, 1e-6));
+  REQUIRE(std::isfinite(value["sideRms"].as_number()));
+  REQUIRE(value["likelyMonoCompatible"].as_bool() == false);
+}
+
+TEST_CASE("analyze_named_pair serializes a silent source as valid JSON",
+          "[mastering][chain][json]") {
+  // EBU R128 reports -inf LUFS for a signal below the measurement floor, and
+  // metering/lufs.cpp keeps that sentinel deliberately. The serializer, not the
+  // meter, is what has to make it representable.
+  const std::vector<float> silence(static_cast<size_t>(kAnalysisSampleRate) / 4, 0.0f);
+  const auto reference = analysis_sine(440.0f, 0.5f, silence.size());
+
+  const std::string text =
+      analyze_named_pair("match.referenceLoudness", silence.data(), reference.data(),
+                         silence.size(), reference.size(), kAnalysisSampleRate, {});
+  REQUIRE(text.find("inf") == std::string::npos);
+
+  const auto value = sonare::util::json::parse_strict(text);
+  REQUIRE(value["sourceLufs"].is_null());
+  REQUIRE(std::isfinite(value["referenceLufs"].as_number()));
+  // reference_loudness() zeroes the match gain when either reading is
+  // non-finite, so this one stays a real number.
+  REQUIRE_THAT(value["gainToMatchDb"].as_number(), WithinAbs(0.0, 1e-6));
+}
+
+TEST_CASE("named analysis JSON is locale-independent", "[mastering][chain][json][locale]") {
+  // A DAW plugin host may run with a comma-decimal locale. Setting LC_NUMERIC
+  // alone is not enough to reproduce the failure: a std::ostringstream carries
+  // the global C++ locale, not the C one, and writes "-21,7539" only once
+  // std::locale::global has been moved. Both are switched here so the test
+  // covers the stream path and any C-library formatting alike -- what an
+  // unimbued writer produces is `{"sourceLufs":-21,7539}`, a document that
+  // parses into a different shape rather than failing outright.
+  struct LocaleSwitch {
+    std::locale saved_global;
+    std::string saved_numeric;
+    LocaleSwitch() : saved_global(std::locale()) {
+      const char* previous = std::setlocale(LC_NUMERIC, nullptr);
+      saved_numeric = previous ? previous : "C";
+      // Both glibc and macOS ship de_DE.UTF-8; if none of the spellings is
+      // installed the locale stays classic and the assertions still hold.
+      for (const char* tag : {"de_DE.UTF-8", "de_DE.utf8", "de_DE"}) {
+        try {
+          std::locale::global(std::locale(tag));
+          std::setlocale(LC_NUMERIC, tag);
+          break;
+        } catch (const std::runtime_error&) {
+          continue;
+        }
+      }
+    }
+    ~LocaleSwitch() {
+      std::locale::global(saved_global);
+      std::setlocale(LC_NUMERIC, saved_numeric.c_str());
+    }
+  } locale_switch;
+
+  const auto source = analysis_sine(440.0f, 0.5f, static_cast<size_t>(kAnalysisSampleRate) / 4);
+  const auto reference = analysis_sine(440.0f, 0.125f, source.size());
+  const std::string pair_text =
+      analyze_named_pair("match.referenceLoudness", source.data(), reference.data(), source.size(),
+                         reference.size(), kAnalysisSampleRate, {});
+  const std::string stereo_text =
+      analyze_named_stereo("stereo.monoCompatCheck", source.data(), reference.data(), source.size(),
+                           kAnalysisSampleRate, {});
+
+  const auto expected = ::sonare::mastering::match::reference_loudness(
+      Audio::from_buffer(source.data(), source.size(), kAnalysisSampleRate),
+      Audio::from_buffer(reference.data(), reference.size(), kAnalysisSampleRate));
+
+  const auto pair_value = sonare::util::json::parse_strict(pair_text);
+  // A comma decimal separator would land here as a truncated integer, so an
+  // exact-value check is what catches it rather than a "did it parse" check.
+  REQUIRE_THAT(pair_value["sourceLufs"].as_number(),
+               WithinAbs(static_cast<double>(expected.source_lufs), 1e-4));
+  REQUIRE_THAT(pair_value["gainToMatchDb"].as_number(),
+               WithinAbs(static_cast<double>(expected.gain_to_match_db), 1e-4));
+
+  const auto stereo_value = sonare::util::json::parse_strict(stereo_text);
+  REQUIRE_THAT(stereo_value["correlation"].as_number(), WithinAbs(1.0, 1e-6));
+  REQUIRE(stereo_value["width"].as_number() < 1.0);
+}
+
+TEST_CASE("chain progress covers the DSP stages and says so", "[mastering][chain]") {
+  // The callback's contract is per-stage, and the documentation now says which
+  // stages: `progress` is completed/enabled DSP stages, so it reaches 1.0 as the
+  // last enabled stage returns and the trailing output measurement, spectrum and
+  // band delta report nothing. A host reading it as a wall-clock fraction sees it
+  // sit at 1.0 for one loudness-plus-spectrum pass, which is what the doc has to
+  // state rather than imply otherwise.
+  constexpr int kSampleRate = 22050;
+  std::vector<float> samples(kSampleRate, 0.0f);
+  for (size_t i = 0; i < samples.size(); ++i) {
+    samples[i] = 0.2f * std::sin(2.0f * sonare::constants::kPi * 220.0f * static_cast<float>(i) /
+                                 kSampleRate);
+  }
+
+  MasteringChainConfig config;
+  config.eq.tilt.enabled = true;
+  config.eq.tilt.tilt_db = 1.0f;
+  config.dynamics.compressor.enabled = true;
+  config.dynamics.compressor.config.threshold_db = -24.0f;
+
+  MasteringChain chain(config);
+  std::vector<std::pair<float, std::string>> progress;
+  chain.set_progress_callback(
+      [&](float value, const char* stage) { progress.emplace_back(value, stage ? stage : ""); });
+  const auto result = chain.process_mono(samples.data(), samples.size(), kSampleRate);
+
+  // One callback per enabled stage, in order, and nothing after the last one.
+  REQUIRE(progress.size() == result.stages.size());
+  for (size_t i = 0; i < progress.size(); ++i) {
+    CHECK(progress[i].second == result.stages[i]);
+    CHECK(progress[i].first ==
+          Catch::Approx(static_cast<float>(i + 1) / static_cast<float>(progress.size())));
+  }
+  REQUIRE(!progress.empty());
+  CHECK(progress.back().first == Catch::Approx(1.0f));
+
+  // A config with no enabled stage is the documented special case: exactly one
+  // callback, 1.0, named "complete".
+  MasteringChain empty_chain{MasteringChainConfig{}};
+  std::vector<std::pair<float, std::string>> empty_progress;
+  empty_chain.set_progress_callback([&](float value, const char* stage) {
+    empty_progress.emplace_back(value, stage ? stage : "");
+  });
+  const auto empty_result = empty_chain.process_mono(samples.data(), samples.size(), kSampleRate);
+  CHECK(empty_result.stages.empty());
+  REQUIRE(empty_progress.size() == 1);
+  CHECK(empty_progress[0].first == Catch::Approx(1.0f));
+  CHECK(empty_progress[0].second == "complete");
+}
+
+#if defined(__APPLE__) || defined(__linux__)
+namespace {
+
+/// Resident set size of this process, in bytes. Used only by the working-set
+/// case below, which is opt-in.
+std::size_t resident_bytes();
+
+}  // namespace
+
+// Opt-in: it renders a minute of 96 kHz audio and reads process RSS, so it is
+// both slow and environment-sensitive.
+TEST_CASE("the mono chain holds the same working-set shape as the stereo chain",
+          "[mastering][chain][.][slow]") {
+  // The stereo path reduces each input measurement to a 1025-bin spectrum and
+  // releases the track-length copy it measured; the mono path used to keep its
+  // input Audio alive across every stage so that three track-length buffers were
+  // resident at the end. Measured on a 60 s 96 kHz mono track (22 MB per
+  // track-length copy): 132.6 MB resident growth before, 88.7 MB after — one
+  // whole extra copy of the track, and two by the time the intermediate the
+  // spectrum was taken from is counted.
+  constexpr int kSampleRate = 96000;
+  constexpr std::size_t kLength = 96000u * 60u;
+  const std::size_t track_bytes = kLength * sizeof(float);
+
+  std::vector<float> samples(kLength);
+  for (std::size_t i = 0; i < kLength; ++i) {
+    samples[i] = 0.2f * std::sin(0.01 * static_cast<double>(i));
+  }
+
+  const std::size_t before = resident_bytes();
+  MasteringChain chain{MasteringChainConfig{}};
+  const auto result = chain.process_mono(samples.data(), samples.size(), kSampleRate);
+  const std::size_t after = resident_bytes();
+  REQUIRE(result.samples.size() == kLength);
+
+  // Both readings are unsigned, and resident size can legitimately fall here:
+  // run after other cases, the allocator may return more pages than this chain
+  // takes. Subtracting in size_t then wraps to ~2^64 and the case fails with an
+  // astronomical "growth" that says nothing about the working set -- which is
+  // why it passes standalone and fails inside a full run. A shrinking resident
+  // size is trivially within the bound, so clamp at zero rather than measuring
+  // the wrap.
+  const double growth =
+      after > before ? static_cast<double>(after - before) / static_cast<double>(track_bytes) : 0.0;
+  CAPTURE(growth);
+  // The returned samples are one of these copies and belong to the caller. Four
+  // is what the released measurement copies leave behind; six is what holding
+  // the input across the chain cost.
+  CHECK(growth < 5.0);
+}
+
+namespace {
+
+std::size_t resident_bytes() {
+#if defined(__APPLE__)
+  mach_task_basic_info info{};
+  mach_msg_type_number_t count = MACH_TASK_BASIC_INFO_COUNT;
+  if (task_info(mach_task_self(), MACH_TASK_BASIC_INFO, reinterpret_cast<task_info_t>(&info),
+                &count) != KERN_SUCCESS) {
+    return 0;
+  }
+  return static_cast<std::size_t>(info.resident_size);
+#else
+  std::FILE* statm = std::fopen("/proc/self/statm", "r");
+  if (statm == nullptr) return 0;
+  long total = 0;
+  long resident = 0;
+  const int read = std::fscanf(statm, "%ld %ld", &total, &resident);
+  std::fclose(statm);
+  if (read != 2) return 0;
+  return static_cast<std::size_t>(resident) * static_cast<std::size_t>(::sysconf(_SC_PAGESIZE));
+#endif
+}
+
+}  // namespace
+#endif
 
 }  // namespace sonare::mastering::api

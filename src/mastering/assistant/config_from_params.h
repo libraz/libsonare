@@ -28,8 +28,12 @@ inline AssistantConfig assistant_config_from_params(const api::Param* params, st
     const double value = params[index].value;
     if (key == "targetLufs" || key == "target_lufs") {
       config.target_lufs = static_cast<float>(value);
+      // Record that the caller named it, so a delivery target cannot claim the
+      // one slider position that happens to equal the default.
+      config.target_lufs_explicit = true;
     } else if (key == "ceilingDb" || key == "ceiling_db") {
       config.ceiling_db = static_cast<float>(value);
+      config.ceiling_db_explicit = true;
     } else if (key == "enableRepair" || key == "enable_repair") {
       config.enable_repair = value != 0.0;
     } else if (key == "preferStreamingSafe" || key == "prefer_streaming_safe") {

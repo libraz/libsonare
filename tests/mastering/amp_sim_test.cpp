@@ -645,7 +645,8 @@ TEST_CASE("a second mic combs against the first through their path difference",
   flipped.mic_b_invert = true;
   REQUIRE(rms_of(render(flipped, kNullHz)) > 2.0 * rms_of(render(pair, kNullHz)));
 
-  // The pair's delay line is the only stage that outlives its input.
+  // With no cab IR loaded, the pair's delay line is the only stage that outlives
+  // its input (a loaded IR is the other one; see the cab-IR tail case below).
   AmpSim single_amp(single);
   AmpSim pair_amp(pair);
   single_amp.prepare(kRate, 512);
@@ -1014,8 +1015,10 @@ TEST_CASE("the class-AB crossover opens a dead zone and is off by default",
   // is an EXPANDER at low level -- gain rises as the signal grows enough to
   // cross the zone -- whereas a saturator's gain only ever falls. Asserting the
   // opposite sign of that slope is what makes this test specific to a crossover
-  // rather than to "something got quieter and dirtier".
-  const float kLevels[4] = {0.01f, 0.05f, 0.2f, 0.5f};
+  // rather than to "something got quieter and dirtier". The zone is wide at
+  // crossover == 1 (kMaxCrossoverBias in amp_sim.cpp), so these levels sit
+  // further apart than they would for a narrow one.
+  const float kLevels[4] = {0.01f, 0.1f, 0.3f, 0.7f};
   double class_a_gain[4] = {};
   double class_ab_gain[4] = {};
   for (int i = 0; i < 4; ++i) {
@@ -1040,8 +1043,8 @@ TEST_CASE("the class-AB crossover opens a dead zone and is off by default",
 
   // The harmonic penalty is a SMALL-signal one and largely vanishes when loud,
   // which is the other way a dead zone differs from a saturator. Measured on the
-  // default voicing: about 12x the odd-harmonic content at a quiet input against
-  // about 1.15x at a loud one.
+  // default voicing: about 5.4x the odd-harmonic content at a quiet input
+  // against about 0.6x at a loud one.
   const auto penalty = [&](float amplitude) {
     const std::vector<float> in = sine(220.0, amplitude, kNumSamples);
     AmpSim a{base};
@@ -1061,6 +1064,49 @@ TEST_CASE("the class-AB crossover opens a dead zone and is off by default",
   AmpSim reference{base};
   AmpSim again{base};
   CHECK(process_mono(again, input) == process_mono(reference, input));
+}
+
+TEST_CASE("the class-AB crossover's small-signal gain never exceeds class A",
+          "[mastering][saturation][amp]") {
+  // The composite's origin slope is knee*sech^2(knee*bias) (see
+  // rt/nonlinearities.h and the kMaxCrossoverBias/kCrossoverKneeSharpness
+  // comment in amp_sim.cpp). Coupling knee to bias linearly used to make that
+  // slope RISE over the first two thirds of the range before falling -- a
+  // quiet signal got louder and cleaner as crossover went up, not deader.
+  // Sweeping the whole control and comparing every point against the
+  // crossover == 0 (class A) reference catches that shape wherever it
+  // reappears, not just at the one crossover value a narrower test happens
+  // to probe.
+  AmpSimConfig base;
+  base.drive = 0.5f;
+  base.power = 1.0f;
+  base.cab = false;
+
+  // -40 dBFS: quiet enough to sit well inside the dead zone at every
+  // crossover setting, which is where the erroneous boost showed up.
+  const float kQuietLevel = 0.01f;
+  const std::vector<float> quiet_input = sine(220.0, kQuietLevel, kNumSamples);
+
+  AmpSimConfig class_a_config = base;
+  class_a_config.crossover = 0.0f;
+  AmpSim class_a{class_a_config};
+  const double class_a_gain = rms_of(process_mono(class_a, quiet_input)) / kQuietLevel;
+
+  // A couple of percent of slack absorbs the ADAA/RMS measurement noise a
+  // real render carries (confirmed below 1% end to end); the actual defect
+  // was a rise of several hundred percent, so this tolerance cannot mask it.
+  constexpr double kTolerance = 1.02;
+  double previous_gain = class_a_gain;
+  for (int step = 0; step <= 10; ++step) {
+    AmpSimConfig cfg = base;
+    cfg.crossover = static_cast<float>(step) / 10.0f;
+    AmpSim amp{cfg};
+    const double gain = rms_of(process_mono(amp, quiet_input)) / kQuietLevel;
+    CAPTURE(cfg.crossover, gain, class_a_gain);
+    CHECK(gain <= class_a_gain * kTolerance);
+    CHECK(gain <= previous_gain * kTolerance);
+    previous_gain = gain;
+  }
 }
 
 TEST_CASE("the output tube class scales the power stage and 6L6 is neutral",
@@ -1903,4 +1949,114 @@ TEST_CASE("saturation.ampSim generates a cabinet from the param bag",
       "saturation.ampSim", R"({"cabIrGenerate":true,"cabIrF32Base64":"AACAPwAAAAAAAAAAAAAAAA=="})");
   REQUIRE(captured != nullptr);
   CHECK(static_cast<AmpSim*>(captured.get())->has_cab_ir());
+}
+
+TEST_CASE("a loaded cab IR is reported as the processor's tail", "[mastering][saturation][amp]") {
+  // An offline bounce trusts tail_samples() to know how long to keep rendering
+  // after the input ends. The cab IR is a direct FIR, so it keeps emitting for
+  // its length minus one after the last input sample; reporting only the mic
+  // delay truncated the cabinet's decay and did it silently.
+  AmpSimConfig config;
+  config.drive = 0.2f;
+  config.mic_blend = 0.0f;  // no second mic, so the mic tail is zero
+
+  // A long IR with a large late tap: what a bounce cut off is audible energy,
+  // not a numerical residue.
+  constexpr int kIrLength = 1024;
+  std::vector<float> ir(static_cast<size_t>(kIrLength), 0.0f);
+  ir[0] = 1.0f;
+  ir[static_cast<size_t>(kIrLength) - 1] = 0.8f;
+
+  AmpSim analytic{config};
+  analytic.prepare(kRate, 512);
+  const int mic_only_tail = analytic.tail_samples();
+
+  AmpSim amp{config};
+  amp.load_cab_ir(ir);
+  amp.prepare(kRate, 512);
+  REQUIRE(amp.cab_ir_samples() == kIrLength);
+  CHECK(amp.tail_samples() == amp.cab_ir_samples() - 1);
+
+  // Non-vacuity: render an impulse followed by silence and find where the
+  // output actually stops. The last audible sample must land past the tail the
+  // processor reported before this, or the old value would have been adequate.
+  std::vector<float> signal(static_cast<size_t>(kIrLength) * 4, 0.0f);
+  signal[0] = 1.0f;
+  const std::vector<float> out = process_mono(amp, signal);
+  int last_audible = -1;
+  for (int i = 0; i < static_cast<int>(out.size()); ++i) {
+    if (std::abs(out[static_cast<size_t>(i)]) > 1.0e-4f) last_audible = i;
+  }
+  CHECK(last_audible >= kIrLength - 1);
+  CHECK(last_audible > mic_only_tail);
+}
+
+TEST_CASE("prepare reserves per-channel state for the channels it was told about",
+          "[mastering][saturation][amp]") {
+  // internal_processor_runner's channel-aware prepare exists so an offline mono
+  // render does not reserve realtime-only per-channel scratch. AmpSim's
+  // per-channel state is not scalar — each channel owns a cab-IR ring, a Doppler
+  // line and two mic delay lines — so ignoring the overload cost tens of
+  // megabytes on a mono bounce.
+  AmpSimConfig config;
+  config.drive = 0.4f;
+  config.mic_blend = 0.5f;
+  config.doppler = 0.5f;
+  std::vector<float> ir(4096, 0.0f);
+  ir[0] = 1.0f;
+  ir[4095] = 0.5f;
+
+  AmpSim realtime{config};
+  realtime.load_cab_ir(ir);
+  realtime.prepare(kRate, 1024);
+  CHECK(realtime.prepared_channels() ==
+        static_cast<int>(sonare::mastering::dynamics::kRealtimePreparedChannels));
+
+  AmpSim offline{config};
+  offline.load_cab_ir(ir);
+  offline.prepare(kRate, 1024, 1);
+  CHECK(offline.prepared_channels() == 1);
+
+  AmpSim stereo{config};
+  stereo.load_cab_ir(ir);
+  stereo.prepare(kRate, 1024, 2);
+  CHECK(stereo.prepared_channels() == 2);
+
+  // Preparing for fewer channels must not change what the render sounds like.
+  const std::vector<float> input = sine(440.0, 0.3f, 4096);
+  AmpSim wide{config};
+  wide.load_cab_ir(ir);
+  AmpSim narrow{config};
+  narrow.load_cab_ir(ir);
+  std::vector<float> wide_buf = input;
+  std::vector<float> narrow_buf = input;
+  wide.prepare(kRate, 1024);
+  narrow.prepare(kRate, 1024, 1);
+  for (size_t off = 0; off < input.size(); off += 1024) {
+    float* wide_block[1] = {wide_buf.data() + off};
+    float* narrow_block[1] = {narrow_buf.data() + off};
+    wide.process(wide_block, 1, 1024);
+    narrow.process(narrow_block, 1, 1024);
+  }
+  CHECK(wide_buf == narrow_buf);
+
+  // A caller that hands over more channels than it prepared for still works:
+  // process() grows, exactly as it does under the two-argument form.
+  std::vector<float> left = input;
+  std::vector<float> right = input;
+  AmpSim grown{config};
+  grown.load_cab_ir(ir);
+  grown.prepare(kRate, 1024, 1);
+  for (size_t off = 0; off < input.size(); off += 1024) {
+    float* block[2] = {left.data() + off, right.data() + off};
+    REQUIRE_NOTHROW(grown.process(block, 2, 1024));
+  }
+  CHECK(grown.prepared_channels() >= 2);
+
+  // The realtime cap is still the ceiling: asking past it is a caller error
+  // rather than a silent over-allocation.
+  AmpSim rejecting{config};
+  CHECK_THROWS(rejecting.prepare(kRate, 1024, 0));
+  CHECK_THROWS(rejecting.prepare(
+      kRate, 1024, static_cast<int>(sonare::mastering::dynamics::kRealtimePreparedChannels) + 1));
 }
