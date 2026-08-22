@@ -11,6 +11,7 @@
 #include <catch2/catch_test_macros.hpp>
 #include <cmath>
 #include <cstdint>
+#include <string_view>
 #include <vector>
 
 #include "midi/midi_event.h"
@@ -32,6 +33,7 @@ using sonare::midi::synth::kDrumBank;
 using sonare::midi::synth::kGsDrumKits;
 using sonare::midi::synth::NativeSynth;
 using sonare::midi::synth::NativeSynthConfig;
+using sonare::midi::synth::NativeSynthPatch;
 using sonare::midi::synth::Sf2Player;
 using sonare::midi::synth::Sf2PlayerConfig;
 
@@ -131,6 +133,257 @@ TEST_CASE("gs_effective_bank is the one bank-resolution rule", "[midi][synth][gm
   REQUIRE(gs_effective_bank(static_cast<uint8_t>(Gm2Bank::kPercussion), 5, false) == kDrumBank);
   REQUIRE(gs_effective_bank(0, 0, true) == kDrumBank);
   REQUIRE(gs_effective_bank(static_cast<uint8_t>(Gm2Bank::kMelodic), 2, true) == kDrumBank);
+}
+
+TEST_CASE("Bank Select LSB selects the GS tone map", "[midi][synth][gm]") {
+  using sonare::midi::synth::gs_tone_map_from_lsb;
+  using sonare::midi::synth::GsToneMap;
+  // The three maps an SC-88Pro-class module addresses through CC#32.
+  REQUIRE(gs_tone_map_from_lsb(1) == GsToneMap::kSc55);
+  REQUIRE(gs_tone_map_from_lsb(2) == GsToneMap::kSc88);
+  REQUIRE(gs_tone_map_from_lsb(3) == GsToneMap::kSc88Pro);
+  // Unset, and every value that names no map, read as the module's own default:
+  // a module that never saw the message is already playing that map, so an
+  // unrecognised one must sound it rather than nothing.
+  REQUIRE(gs_tone_map_from_lsb(0) == GsToneMap::kModuleDefault);
+  for (int lsb = 4; lsb < 128; ++lsb) {
+    INFO("bank LSB " << lsb);
+    REQUIRE(gs_tone_map_from_lsb(static_cast<uint8_t>(lsb)) == GsToneMap::kModuleDefault);
+  }
+}
+
+TEST_CASE("the tone map is read from CC#32 only for a GS part", "[midi][synth][gm]") {
+  using sonare::midi::Gm2Bank;
+  using sonare::midi::synth::gs_effective_tone_map;
+  using sonare::midi::synth::GsToneMap;
+  // A GS part: the LSB is the map select.
+  REQUIRE(gs_effective_tone_map(0, 1) == GsToneMap::kSc55);
+  REQUIRE(gs_effective_tone_map(8, 3) == GsToneMap::kSc88Pro);
+  // GM2 gives the same controller a different meaning under its own bank MSBs
+  // (a melodic variation number, a percussion set), so it must not be read as a
+  // map there — a GM2 file selecting variation 2 is not asking for the SC-88 map.
+  REQUIRE(gs_effective_tone_map(static_cast<uint8_t>(Gm2Bank::kMelodic), 2) ==
+          GsToneMap::kModuleDefault);
+  REQUIRE(gs_effective_tone_map(static_cast<uint8_t>(Gm2Bank::kPercussion), 1) ==
+          GsToneMap::kModuleDefault);
+}
+
+TEST_CASE("a drum kit resolves only in the tone maps that define it", "[midi][synth][gm]") {
+  using sonare::midi::synth::gs_map_reaches;
+  using sonare::midi::synth::GsToneMap;
+  constexpr GsToneMap kMaps[] = {GsToneMap::kModuleDefault, GsToneMap::kSc55, GsToneMap::kSc88,
+                                 GsToneMap::kSc88Pro};
+
+  // Every kit resolves in the map that introduced it and in every later one, and
+  // in none before it. The kits an older map has no entry for fall back to
+  // Standard, which is what a module plays for a kit it does not have.
+  for (const auto& kit : kGsDrumKits) {
+    for (const GsToneMap map : kMaps) {
+      INFO(kit.name << " in map " << static_cast<int>(map));
+      const bool reaches = gs_map_reaches(map, kit.since);
+      REQUIRE(gm_fallback_drum_kit(kit.program, map) == (reaches ? kit.index : uint8_t{0}));
+      REQUIRE(gs_drum_kit_name(kit.program, map).empty() == !reaches);
+    }
+  }
+
+  // The concrete cases the numbering turns on: the SC-88Pro map splits the
+  // SC-88 map's combined TR-808/909 set in two, so TR-909 exists only there,
+  // while TR-808 has been in every map since the SC-55.
+  REQUIRE(gs_drum_kit_name(30, GsToneMap::kSc88Pro) == "TR-909");
+  REQUIRE(gs_drum_kit_name(30, GsToneMap::kSc88).empty());
+  REQUIRE(gs_drum_kit_name(30, GsToneMap::kSc55).empty());
+  REQUIRE(gs_drum_kit_name(25, GsToneMap::kSc55) == "TR-808");
+  // Dance arrived with the SC-88 map.
+  REQUIRE(gs_drum_kit_name(26, GsToneMap::kSc88) == "Dance");
+  REQUIRE(gs_drum_kit_name(26, GsToneMap::kSc55).empty());
+  // The SC-55 map's CM-64/32L set sits alone at the top of the program range.
+  REQUIRE(gs_drum_kit_name(127, GsToneMap::kSc55) == "CM-64/32L");
+}
+
+TEST_CASE("GS drum kits past the SC-55 set are voiced apart from Standard",
+          "[midi][synth][sf2][gm]") {
+  // Kit indices are what the voicing switch reads, so a kit added to the table
+  // without a voicing would silently play Standard. Render the kick through each
+  // kit and require every set that claims its own kick to differ from Standard.
+  // The sets left out are the ones that deliberately keep the Standard voicing:
+  // SFX, Rhythm FX, Rhythm FX 2 and Cymbal & Claps replace pieces the kick is
+  // not among.
+  constexpr uint8_t kVoicedApart[] = {
+      1,    // Standard 2
+      2,    // Standard 3
+      9,    // Hip Hop
+      10,   // Jungle
+      11,   // Techno
+      26,   // Dance
+      27,   // CR-78
+      28,   // TR-606
+      29,   // TR-707
+      30,   // TR-909
+      49,   // Ethnic
+      50,   // Kick & Snare
+      52,   // Asia
+      127,  // CM-64/32L
+  };
+  Sf2Player standard_player = make_fallback_player();
+  const std::vector<float> standard = select_and_play(standard_player, kDrumChannel, 0, 0, 0, 36);
+  REQUIRE(peak(standard) > 0.0f);
+  for (const uint8_t program : kVoicedApart) {
+    INFO("rhythm program " << static_cast<int>(program) << " (" << gs_drum_kit_name(program)
+                           << ")");
+    Sf2Player player = make_fallback_player();
+    const std::vector<float> kit = select_and_play(player, kDrumChannel, 0, 0, program, 36);
+    REQUIRE(peak(kit) > 0.0f);
+    REQUIRE(kit != standard);
+  }
+
+  // The same program under a map that does not define its kit plays Standard,
+  // sample for sample.
+  Sf2Player sc55_909 = make_fallback_player();
+  REQUIRE(select_and_play(sc55_909, kDrumChannel, 0, 1, 30, 36) == standard);
+}
+
+TEST_CASE("a GS variation bank reaches its own patch and falls back to the capital",
+          "[midi][synth][gm]") {
+  using sonare::midi::synth::gm_fallback_patch;
+  // The GS variation tones the model floor voices apart from their capital,
+  // written out here as an independent statement of the contract. `gs` is the
+  // Bank Select MSB number a Roland module uses and `gm2` the bank LSB number
+  // GM2 gives the same tone (0 = GM2 gives that number to a DIFFERENT tone, so
+  // only the GS address may resolve). `voice` names the patch the tone must land
+  // on: two tones sharing a name must share one patch and two that differ must
+  // not, which is what catches a table row pointed at the wrong member.
+  struct Variation {
+    uint8_t program;
+    uint8_t gs;
+    uint8_t gm2;
+    const char* voice;
+    const char* what;
+  };
+  constexpr Variation kVariations[] = {
+      // The three grands above program 0 are one patch in this synth, so their
+      // wide voicings are one patch too.
+      {0, 8, 1, "piano_wide", "Piano 1w"},
+      {1, 8, 1, "piano_wide", "Piano 2w"},
+      {2, 8, 1, "piano_wide", "Piano 3w"},
+      {3, 8, 1, "piano_wide", "HonkyTonk w"},
+      {0, 16, 2, "piano_dark", "Piano 1d"},
+      {4, 8, 1, "ep_detuned_1", "Detuned EP1"},
+      {4, 16, 2, "ep_velocity_1", "E.Piano 1v"},
+      {4, 24, 3, "ep_sixties", "60's E.Piano"},
+      {5, 8, 1, "ep_detuned_2", "Detuned EP2"},
+      {5, 16, 2, "ep_velocity_2", "E.Piano 2v"},
+      {6, 8, 1, "hps_octave", "Coupled Hps."},
+      {6, 16, 2, "hps_wide", "Harpsi.w"},
+      {6, 24, 3, "hps_keyoff", "Harpsi.o"},
+      {11, 8, 1, "vibraphone_wide", "Vib.w"},
+      {12, 8, 1, "marimba_wide", "Marimba w"},
+      {14, 8, 1, "church_bell", "Church Bell"},
+      {14, 9, 2, "carillon", "Carillon"},
+      {16, 8, 1, "organ_detuned_1", "Detuned Or1"},
+      {16, 16, 2, "organ_sixties", "60's Organ1"},
+      {16, 32, 3, "organ_4", "Organ 4"},
+      {17, 8, 1, "organ_detuned_2", "Detuned Or2"},
+      {17, 32, 2, "organ_5", "Organ 5"},
+      {19, 8, 1, "church_organ_flutes", "Church Org.2"},
+      {19, 16, 2, "church_organ_full", "Church Org.3"},
+      {21, 8, 0, "accordion_italian", "Accordion It"},
+      {24, 8, 1, "ukulele", "Ukulele"},
+      {24, 16, 2, "nylon_keyoff", "Nylon Gt.o"},
+      {25, 8, 1, "twelve_string", "12-str.Gt"},
+      {25, 16, 2, "mandolin", "Mandolin"},
+      {40, 8, 1, "violin_slow", "Slow Violin"},
+  };
+
+  std::vector<const void*> voiced;
+  for (const Variation& v : kVariations) {
+    INFO(v.what);
+    const NativeSynthPatch& capital = gm_fallback_patch(0, v.program);
+    const NativeSynthPatch& tone = gm_fallback_patch(v.gs, v.program);
+    // The variation is a patch of its own, not the capital handed back.
+    REQUIRE(&tone != &capital);
+    // Both numbering schemes address one voice, so a file written for GS and one
+    // written for GM2 sound the same tone rather than two near neighbours.
+    if (v.gm2 != 0) REQUIRE(&gm_fallback_patch(v.gm2, v.program) == &tone);
+    voiced.push_back(&tone);
+  }
+  // Tones share a patch exactly when they are meant to: a row pointed at the
+  // wrong member would otherwise be silent, whichever way it went wrong.
+  for (size_t i = 0; i < voiced.size(); ++i) {
+    for (size_t j = i + 1; j < voiced.size(); ++j) {
+      INFO(kVariations[i].what << " vs " << kVariations[j].what);
+      const bool same_voice =
+          std::string_view(kVariations[i].voice) == std::string_view(kVariations[j].voice);
+      REQUIRE((voiced[i] == voiced[j]) == same_voice);
+    }
+  }
+
+  // GM2 assigns program 21 bank LSB 1 to the FRENCH accordion — the dry tuning
+  // the capital already voices — so that address must NOT reach the Italian
+  // musette the GS variation selects.
+  REQUIRE(&gm_fallback_patch(1, 21) == &gm_fallback_patch(0, 21));
+
+  // Every bank the table does not list resolves to the capital tone. That is the
+  // GS rule for a variation a module does not have, and it is what keeps a
+  // file written for a larger module audible on this one.
+  for (int program = 0; program < 128; ++program) {
+    const auto prog = static_cast<uint8_t>(program);
+    const NativeSynthPatch& capital = gm_fallback_patch(0, prog);
+    for (int bank = 1; bank < 128; ++bank) {
+      bool listed = false;
+      for (const Variation& v : kVariations) {
+        if (v.program != prog) continue;
+        if (bank == v.gs || (v.gm2 != 0 && bank == v.gm2)) listed = true;
+      }
+      if (listed) continue;
+      INFO("program " << program << " bank " << bank);
+      REQUIRE(&gm_fallback_patch(static_cast<uint16_t>(bank), prog) == &capital);
+    }
+  }
+}
+
+TEST_CASE("a GS variation bank sounds different from its capital tone", "[midi][synth][sf2][gm]") {
+  // The address checks above prove the routing; this proves the routing reaches
+  // audio, once per engine a variation is voiced on — a delta written into a
+  // section the engine never reads would pass every address check in silence.
+  struct Case {
+    uint8_t program;
+    uint8_t variation;
+    const char* what;
+  };
+  constexpr Case kCases[] = {
+      {4, 8, "Detuned EP1 (FM)"},
+      {6, 8, "Coupled Hps. (Karplus-Strong)"},
+      {14, 8, "Church Bell (modal)"},
+      {16, 8, "Detuned Or1 (drawbar)"},
+      {19, 8, "Church Org.2 (pipe)"},
+      {21, 8, "Accordion It (free reed)"},
+      {25, 8, "12-str.Gt (Karplus-Strong)"},
+      {40, 8, "Slow Violin (bowed string)"},
+      {0, 16, "Piano 1d (waveguide piano)"},
+  };
+  for (const Case& c : kCases) {
+    INFO(c.what);
+    Sf2Player capital_player = make_fallback_player();
+    Sf2Player variation_player = make_fallback_player();
+    const std::vector<float> capital = select_and_play(capital_player, 0, 0, 0, c.program);
+    const std::vector<float> variation =
+        select_and_play(variation_player, 0, c.variation, 0, c.program);
+    REQUIRE(peak(capital) > 0.0f);
+    REQUIRE(peak(variation) > 0.0f);
+    REQUIRE(capital != variation);
+  }
+
+  // The GM2 form of a tone is the same audio, not merely the same family.
+  Sf2Player gs_form = make_fallback_player();
+  Sf2Player gm2_form = make_fallback_player();
+  REQUIRE(select_and_play(gm2_form, 0, 0x79, 1, 25) == select_and_play(gs_form, 0, 8, 0, 25));
+
+  // A map that predates a tone plays the capital instead. Every tone voiced so
+  // far is an SC-55 one, so the SC-55 map must reach all of them — the gate
+  // must not be silently rejecting tones it should pass.
+  Sf2Player sc55_map = make_fallback_player();
+  Sf2Player default_map = make_fallback_player();
+  REQUIRE(select_and_play(sc55_map, 0, 8, 1, 25) == select_and_play(default_map, 0, 8, 0, 25));
 }
 
 TEST_CASE("NativeSynth and the SF2 fallback resolve bank-select forms alike",

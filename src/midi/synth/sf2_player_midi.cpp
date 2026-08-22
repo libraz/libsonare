@@ -111,9 +111,10 @@ void Sf2Player::fallback_note_on(uint8_t channel, uint8_t note, uint8_t velocity
                                  uint32_t source_track_id) noexcept {
   const ChannelState& ch = channels_[channel & 0x0Fu];
   const uint16_t bank = effective_bank(channel);
+  const GsToneMap tone_map = gs_effective_tone_map(ch.bank_msb, ch.bank_lsb);
   const bool is_drum = bank == kDrumBank;
   const NativeSynthPatch& patch =
-      is_drum ? gm_fallback_drum_patch(note) : gm_fallback_patch(bank, ch.program);
+      is_drum ? gm_fallback_drum_patch(note) : gm_fallback_patch(bank, ch.program, tone_map);
   // GM kit exclusive/mute groups (hi-hats etc.): choke the ringing group voice
   // on this channel before allocating the new strike.
   if (is_drum && patch.percussion.exclusive_class != 0) {
@@ -178,7 +179,7 @@ void Sf2Player::fallback_note_on(uint8_t channel, uint8_t note, uint8_t velocity
   }
   // GS drum-kit variation: the drum channel's program picks the kit (Room /
   // Power / TR-808 / ...); melodic fallback voices pass 0 (no kit).
-  const uint8_t drum_kit = is_drum ? gm_fallback_drum_kit(ch.program) : 0;
+  const uint8_t drum_kit = is_drum ? gm_fallback_drum_kit(ch.program, tone_map) : 0;
   // GS per-note drum NRPN edits (pitch coarse / TVA level / absolute pan),
   // mirroring apply_gs_drum_params for the model floor (reverb/chorus sends stay
   // on the SF2 path).

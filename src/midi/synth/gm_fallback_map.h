@@ -16,6 +16,7 @@
 #include <cstdint>
 
 #include "midi/program_map.h"
+#include "midi/synth/gs_layer.h"
 #include "midi/synth/native_synth.h"
 
 namespace sonare::midi::synth {
@@ -35,9 +36,23 @@ constexpr uint16_t gs_effective_bank(uint8_t bank_msb, uint8_t bank_lsb, bool dr
   return bank_msb;
 }
 
-/// Fallback patch for a melodic (bank, program). Never fails — unknown
-/// programs resolve through their GM family.
-const NativeSynthPatch& gm_fallback_patch(uint16_t bank, uint8_t program) noexcept;
+/// The GS tone map a channel's bank-select bytes select. GM2 addresses its
+/// melodic and percussion banks through the MSB and gives the LSB a different
+/// meaning there (a variation number, a percussion set), so the LSB is read as a
+/// map select only when the MSB is neither of GM2's two bank numbers.
+constexpr GsToneMap gs_effective_tone_map(uint8_t bank_msb, uint8_t bank_lsb) noexcept {
+  if (bank_msb == static_cast<uint8_t>(Gm2Bank::kMelodic) ||
+      bank_msb == static_cast<uint8_t>(Gm2Bank::kPercussion)) {
+    return GsToneMap::kModuleDefault;
+  }
+  return gs_tone_map_from_lsb(bank_lsb);
+}
+
+/// Fallback patch for a melodic (bank, program) within @p map. Never fails —
+/// a variation the map does not define, and an unknown program, both resolve
+/// through the capital tone and its GM family.
+const NativeSynthPatch& gm_fallback_patch(uint16_t bank, uint8_t program,
+                                          GsToneMap map = GsToneMap::kModuleDefault) noexcept;
 
 /// True when a synth engine is a dedicated physical / resonator model whose
 /// data-free voice matches or exceeds a general-purpose SoundFont sample for
@@ -65,10 +80,11 @@ bool gm_program_has_dedicated_model(uint16_t bank, uint8_t program) noexcept;
 /// Standard kit; GS kit variations are applied per voice by apply_gs_drum_kit.
 const NativeSynthPatch& gm_fallback_drum_patch(uint8_t note) noexcept;
 
-/// GS drum-kit index for a bank-128 program (SC-55/88 numbering, mirrors
-/// gs_drum_kit_name): 0 Standard, 1 Room, 2 Power, 3 Electronic, 4 TR-808,
-/// 5 Jazz, 6 Brush, 7 Orchestra, 8 SFX. Unknown programs map to Standard.
-uint8_t gm_fallback_drum_kit(uint8_t program) noexcept;
+/// GS drum-kit index for a rhythm-part program within @p map (mirrors
+/// gs_drum_kit_name; the numbering is kGsDrumKits, which is the single source of
+/// truth). A program the selected map defines no kit for maps to Standard,
+/// which is what a module plays for a kit it does not have.
+uint8_t gm_fallback_drum_kit(uint8_t program, GsToneMap map = GsToneMap::kModuleDefault) noexcept;
 
 /// Applies a GS kit variation to a resolved Standard drum patch's percussion +
 /// amp-envelope params (in place, note-aware — Power lowers the shells, TR-808

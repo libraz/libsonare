@@ -32,6 +32,41 @@
 
 namespace sonare::midi::synth {
 
+/// The GS tone map a part addresses, selected by Bank Select LSB (CC#32) on an
+/// SC-88Pro-class module. The map picks WHICH generation's tone set a variation
+/// number reaches; the variation number itself always lives in Bank Select MSB
+/// (CC#0), and the capital tone stays the Program Change. SC-55 and SC-88
+/// modules predate the map select and always sound their own map, which is why
+/// an unset CC#32 means "the map this module is configured for" rather than any
+/// particular generation.
+enum class GsToneMap : uint8_t {
+  kModuleDefault = 0,  ///< CC#32 = 0: whichever map the module is set to.
+  kSc55 = 1,           ///< CC#32 = 1: the SC-55 tone map.
+  kSc88 = 2,           ///< CC#32 = 2: the SC-88 tone map.
+  kSc88Pro = 3,        ///< CC#32 = 3: the SC-88Pro tone map.
+};
+
+/// The tone map a Bank Select LSB value selects. Values outside the defined
+/// maps read as kModuleDefault: a module that never saw the message is already
+/// playing its default map, so an unrecognised map must sound that rather than
+/// nothing.
+///
+/// This decodes CC#32 only for a GS part. GM2 puts its melodic variation number
+/// in CC#32 instead, and is distinguished by its bank MSB (0x79) before the LSB
+/// is ever read — see gs_effective_bank in gm_fallback_map.h.
+constexpr GsToneMap gs_tone_map_from_lsb(uint8_t bank_lsb) noexcept {
+  switch (bank_lsb & 0x7Fu) {
+    case 1:
+      return GsToneMap::kSc55;
+    case 2:
+      return GsToneMap::kSc88;
+    case 3:
+      return GsToneMap::kSc88Pro;
+    default:
+      return GsToneMap::kModuleDefault;
+  }
+}
+
 /// GS NRPN part parameters, stored as signed offsets from centre (data - 64).
 /// All-zero means "no edit" (the SoundFont patch plays unmodified).
 struct GsPartParams {
@@ -192,41 +227,85 @@ struct GsSysEx {
 /// malformed messages return kind == kNone (never crash).
 GsSysEx parse_gs_sysex(const uint8_t* data, size_t size) noexcept;
 
-/// One GS drum-kit variation: the bank-128 program that selects it, its
-/// zero-based kit index and its SC-55/88 name. This table is the single source
-/// of truth for the kit numbering — gs_drum_kit_name() and
-/// gm_fallback_drum_kit() both derive from it, so the name a host reports and
-/// the variation a voice plays cannot disagree.
+/// One GS drum-kit variation: the rhythm-part program that selects it, its
+/// zero-based kit index, its name, and the tone map that introduced it. This
+/// table is the single source of truth for the kit numbering —
+/// gs_drum_kit_name() and gm_fallback_drum_kit() both derive from it, so the
+/// name a host reports and the variation a voice plays cannot disagree.
+///
+/// The kit INDEX is what a voice is voiced by, and it is deliberately neither
+/// the program number nor in program order: the kits the SC-55 map defines keep
+/// indices 0-9, and every kit a later map added is appended after them. A kit
+/// inserted into the middle of the program range therefore cannot renumber the
+/// kits already voiced.
 struct GsDrumKit {
   uint8_t program;
   uint8_t index;
   std::string_view name;
+  GsToneMap since;  ///< Earliest map defining this kit (never kModuleDefault).
 };
 
-inline constexpr std::array<GsDrumKit, 9> kGsDrumKits = {{
-    {0, 0, "Standard"},
-    {8, 1, "Room"},
-    {16, 2, "Power"},
-    {24, 3, "Electronic"},
-    {25, 4, "TR-808"},
-    {32, 5, "Jazz"},
-    {40, 6, "Brush"},
-    {48, 7, "Orchestra"},
-    {56, 8, "SFX"},
+/// Every GS rhythm set, across all three tone maps. Program numbers are
+/// zero-based, so the owner's manual's one-based "PC 26 TR-808" appears here as
+/// program 25. Where the maps disagree about a name the newest one wins: the
+/// SC-55 map's "STANDARD" is the SC-88 map's "STANDARD 1", and the SC-88 map's
+/// combined "TR-808/909" is split into two sets by the SC-88Pro map.
+inline constexpr std::array<GsDrumKit, 26> kGsDrumKits = {{
+    // The SC-55 map's sets — the ones every GS module has, whichever map a file
+    // selects.
+    {0, 0, "Standard", GsToneMap::kSc55},
+    {8, 1, "Room", GsToneMap::kSc55},
+    {16, 2, "Power", GsToneMap::kSc55},
+    {24, 3, "Electronic", GsToneMap::kSc55},
+    {25, 4, "TR-808", GsToneMap::kSc55},
+    {32, 5, "Jazz", GsToneMap::kSc55},
+    {40, 6, "Brush", GsToneMap::kSc55},
+    {48, 7, "Orchestra", GsToneMap::kSc55},
+    {56, 8, "SFX", GsToneMap::kSc55},
+    {127, 9, "CM-64/32L", GsToneMap::kSc55},
+    // Added by the SC-88 map.
+    {1, 10, "Standard 2", GsToneMap::kSc88},
+    {26, 11, "Dance", GsToneMap::kSc88},
+    {49, 12, "Ethnic", GsToneMap::kSc88},
+    {50, 13, "Kick & Snare", GsToneMap::kSc88},
+    {57, 14, "Rhythm FX", GsToneMap::kSc88},
+    // Added by the SC-88Pro map — the drum-machine sets and the production kits.
+    {2, 15, "Standard 3", GsToneMap::kSc88Pro},
+    {9, 16, "Hip Hop", GsToneMap::kSc88Pro},
+    {10, 17, "Jungle", GsToneMap::kSc88Pro},
+    {11, 18, "Techno", GsToneMap::kSc88Pro},
+    {27, 19, "CR-78", GsToneMap::kSc88Pro},
+    {28, 20, "TR-606", GsToneMap::kSc88Pro},
+    {29, 21, "TR-707", GsToneMap::kSc88Pro},
+    {30, 22, "TR-909", GsToneMap::kSc88Pro},
+    {52, 23, "Asia", GsToneMap::kSc88Pro},
+    {53, 24, "Cymbal & Claps", GsToneMap::kSc88Pro},
+    {58, 25, "Rhythm FX 2", GsToneMap::kSc88Pro},
 }};
 
-/// Table entry for a bank-128 program, or nullptr when the program selects no
-/// kit variation. Callers decide what an unknown program means: a name query
-/// reports "not a kit", a voice query falls back to Standard.
-inline const GsDrumKit* gs_drum_kit_entry(uint8_t program) noexcept {
+/// True when @p map reaches a kit or tone introduced by @p since.
+/// kModuleDefault is the newest map: a module nobody sent a map select to is
+/// set to its own, and its own is the one it was built for.
+constexpr bool gs_map_reaches(GsToneMap map, GsToneMap since) noexcept {
+  if (map == GsToneMap::kModuleDefault) return true;
+  return static_cast<uint8_t>(since) <= static_cast<uint8_t>(map);
+}
+
+/// Table entry for a rhythm-part program within @p map, or nullptr when that map
+/// defines no kit at the program. Callers decide what that means: a name query
+/// reports "not a kit", a voice query falls back to Standard — which is what a
+/// module plays for a kit its selected map does not have.
+inline const GsDrumKit* gs_drum_kit_entry(uint8_t program,
+                                          GsToneMap map = GsToneMap::kModuleDefault) noexcept {
   for (const GsDrumKit& kit : kGsDrumKits) {
-    if (kit.program == program) return &kit;
+    if (kit.program == program) return gs_map_reaches(map, kit.since) ? &kit : nullptr;
   }
   return nullptr;
 }
 
-/// GS drum-kit name for a bank-128 program number (see kGsDrumKits). Unknown
-/// programs return an empty view.
-std::string_view gs_drum_kit_name(uint8_t program) noexcept;
+/// GS drum-kit name for a rhythm-part program within @p map (see kGsDrumKits).
+/// A program the map defines no kit for returns an empty view.
+std::string_view gs_drum_kit_name(uint8_t program,
+                                  GsToneMap map = GsToneMap::kModuleDefault) noexcept;
 
 }  // namespace sonare::midi::synth

@@ -9,10 +9,15 @@ ProgramOverrides build_program_overrides() noexcept {
   configure_keyed_programs(o);
   configure_percussion_programs(o);
   configure_physical_programs(o);
+  configure_variation_programs(o);
 
-#define SONARE_GM_CLAMP_ONE(name) o.name = clamp_synth_patch(o.name);
-  SONARE_GM_OVERRIDE_PATCHES(SONARE_GM_CLAMP_ONE)
-#undef SONARE_GM_CLAMP_ONE
+  // Clamp every patch through the contiguous view rather than member by member:
+  // a patch added to the table is clamped without touching this loop, and the
+  // clamp is emitted once instead of once per tone.
+  NativeSynthPatch* patches = program_override_patches(o);
+  for (std::size_t i = 0; i < kProgramOverrideCount; ++i) {
+    patches[i] = clamp_synth_patch(patches[i]);
+  }
 
   // Development-only per-patch voicing override, keyed by the member name
   // (`SONARE_TUNING_OVERRIDES=violin.bowed_string.bow_force=0.61`). Compiled

@@ -244,6 +244,7 @@ target_compile_options(sonare_core_objects PRIVATE ${SONARE_WARNING_FLAGS})
 target_compile_definitions(sonare_core_objects PRIVATE
   SONARE_BUILD_MASTERING=$<IF:$<BOOL:${BUILD_MASTERING}>,1,0>
   SONARE_BUILD_MIXING=$<IF:$<BOOL:${BUILD_MIXING}>,1,0>
+  SONARE_BUILD_MIXING_ASSISTANT=$<IF:$<BOOL:${BUILD_MIXING_ASSISTANT}>,1,0>
   SONARE_BUILD_FX=$<IF:$<BOOL:${BUILD_FX}>,1,0>
   # The capability descriptor lives here, so it needs the arrangement flag even
   # though this target does not link the arrangement/MIDI layer (that dependency
@@ -779,6 +780,7 @@ if(BUILD_ARRANGEMENT)
     midi/synth/gm_fallback_programs_keyed.cpp
     midi/synth/gm_fallback_programs_percussion.cpp
     midi/synth/gm_fallback_programs_physical.cpp
+    midi/synth/gm_fallback_programs_variations.cpp
     midi/synth/gm_fallback_drums.cpp
     midi/synth/synth_presets.cpp
     midi/synth/sf2_file.cpp
@@ -1143,6 +1145,7 @@ if(BUILD_WASM)
   target_compile_definitions(sonare PRIVATE
     SONARE_BUILD_MASTERING=$<IF:$<BOOL:${BUILD_MASTERING}>,1,0>
     SONARE_BUILD_MIXING=$<IF:$<BOOL:${BUILD_MIXING}>,1,0>
+    SONARE_BUILD_MIXING_ASSISTANT=$<IF:$<BOOL:${BUILD_MIXING_ASSISTANT}>,1,0>
     SONARE_BUILD_FX=$<IF:$<BOOL:${BUILD_FX}>,1,0>
     SONARE_BUILD_ARRANGEMENT=$<IF:$<BOOL:${BUILD_ARRANGEMENT}>,1,0>
     $<$<BOOL:${SONARE_WASM_ANALYSIS_ONLY}>:SONARE_WASM_ANALYSIS_ONLY=1>

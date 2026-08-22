@@ -98,6 +98,37 @@ struct ProgramOverrides {
   NativeSynthPatch shakuhachi;     // program 77
   NativeSynthPatch tin_whistle;    // program 78
   NativeSynthPatch ocarina;        // program 79
+
+  // GS variation tones (gm_fallback_map.cpp's kGsVariationPatches). A variation
+  // hangs under a capital tone at a Bank Select MSB (CC#0) number and differs in
+  // character, not family, so each of these derives from the capital's patch and
+  // re-voices it. Only variations the model floor can genuinely voice
+  // differently get an entry: everything else keeps falling back to its capital,
+  // which is the GS rule a real module follows for a variation it does not have.
+  NativeSynthPatch piano_wide;            // program 0 variation 8 (two-choir spread)
+  NativeSynthPatch piano_dark;            // program 0 variation 16 (mellow lid-down)
+  NativeSynthPatch vibraphone_wide;       // program 11 variation 8
+  NativeSynthPatch marimba_wide;          // program 12 variation 8
+  NativeSynthPatch church_bell;           // program 14 variation 8 (cast bell, not tube)
+  NativeSynthPatch carillon;              // program 14 variation 9 (small tuned bell)
+  NativeSynthPatch church_organ_flutes;   // program 19 variation 8 (flute registration)
+  NativeSynthPatch church_organ_full;     // program 19 variation 16 (full organ + reeds)
+  NativeSynthPatch accordion_italian;     // program 21 variation 8 (wider musette)
+  NativeSynthPatch ukulele;               // program 24 variation 8
+  NativeSynthPatch nylon_guitar_keyoff;   // program 24 variation 16 (with key off)
+  NativeSynthPatch twelve_string_guitar;  // program 25 variation 8
+  NativeSynthPatch mandolin;              // program 25 variation 16
+  NativeSynthPatch violin_slow;           // program 40 variation 8 (slow bow attack)
+  NativeSynthPatch e_piano_detuned_1;     // program 4 variation 8 (Detuned EP 1)
+  NativeSynthPatch e_piano_velocity_1;    // program 4 variation 16 (velocity mix)
+  NativeSynthPatch e_piano_sixties;       // program 4 variation 24 (60's reed EP)
+  NativeSynthPatch e_piano_detuned_2;     // program 5 variation 8 (Detuned EP 2)
+  NativeSynthPatch e_piano_velocity_2;    // program 5 variation 16 (velocity mix)
+  NativeSynthPatch organ_detuned_1;       // program 16 variation 8 (chorused tonewheel)
+  NativeSynthPatch organ_sixties;         // program 16 variation 16 (60's registration)
+  NativeSynthPatch organ_4;               // program 16 variation 32 (full drawbars)
+  NativeSynthPatch organ_detuned_2;       // program 17 variation 8 (chorused, darker)
+  NativeSynthPatch organ_5;               // program 17 variation 32 (bright upper drawbars)
 };
 
 /// Every ProgramOverrides member, in declaration order, as an X-macro list.
@@ -178,7 +209,31 @@ struct ProgramOverrides {
   X(blown_bottle)                     \
   X(shakuhachi)                       \
   X(tin_whistle)                      \
-  X(ocarina)
+  X(ocarina)                          \
+  X(piano_wide)                       \
+  X(piano_dark)                       \
+  X(vibraphone_wide)                  \
+  X(marimba_wide)                     \
+  X(church_bell)                      \
+  X(carillon)                         \
+  X(church_organ_flutes)              \
+  X(church_organ_full)                \
+  X(accordion_italian)                \
+  X(ukulele)                          \
+  X(nylon_guitar_keyoff)              \
+  X(twelve_string_guitar)             \
+  X(mandolin)                         \
+  X(violin_slow)                      \
+  X(e_piano_detuned_1)                \
+  X(e_piano_velocity_1)               \
+  X(e_piano_sixties)                  \
+  X(e_piano_detuned_2)                \
+  X(e_piano_velocity_2)               \
+  X(organ_detuned_1)                  \
+  X(organ_sixties)                    \
+  X(organ_4)                          \
+  X(organ_detuned_2)                  \
+  X(organ_5)
 
 /// Number of override patches in ProgramOverrides. The struct is a homogeneous
 /// aggregate of NativeSynthPatch members, so the count falls out of the sizes;
@@ -205,9 +260,27 @@ inline const NativeSynthPatch* program_override_patches(
   return reinterpret_cast<const NativeSynthPatch*>(&overrides);
 }
 
+/// Mutable view over the same range, for a whole-table pass that rewrites every
+/// patch (the post-configure clamp). Written as one loop over this view rather
+/// than as a per-member macro expansion: the clamp takes and returns a patch by
+/// value, so a per-member expansion emits the whole clamp once per member and
+/// the table's code size grows with the number of tones rather than staying
+/// flat. The WebAssembly module is under a size gate, which makes that
+/// difference the deciding one.
+inline NativeSynthPatch* program_override_patches(ProgramOverrides& overrides) noexcept {
+  return reinterpret_cast<NativeSynthPatch*>(&overrides);
+}
+
 void configure_keyed_programs(ProgramOverrides& overrides) noexcept;
 void configure_percussion_programs(ProgramOverrides& overrides) noexcept;
 void configure_physical_programs(ProgramOverrides& overrides) noexcept;
+
+/// Voices the GS variation tones. Runs LAST: every variation derives from a
+/// capital tone the three configure_* passes above have already built (or from a
+/// family patch, for a capital that has no override of its own), so the deltas
+/// here read as "this variation minus its capital" rather than restating a whole
+/// voice.
+void configure_variation_programs(ProgramOverrides& overrides) noexcept;
 
 const std::array<NativeSynthPatch, 16>& family_patches() noexcept;
 const ProgramOverrides& program_overrides() noexcept;

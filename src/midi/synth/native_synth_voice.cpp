@@ -13,6 +13,25 @@ namespace {
 /// Sf2Player so the fallback and SF2 voices respond alike).
 constexpr float kModWheelVibratoCents = 50.0f;
 
+/// Whether a mode still needs the SoundFont velocity-to-amplitude curve.
+///
+/// `sf2_velocity_gain` exists because a sampled note was recorded at one force
+/// and has to be scaled to the force actually played. A physical engine is
+/// handed the velocity as an input to the strike and already radiates the
+/// level difference that follows from it, so applying the curve on top spends
+/// the dynamic range twice. Measured against a concert-grand corpus, the piano
+/// covered 53 dB between velocity 24 and 120 where the reference covers 23 --
+/// which leaves a pianissimo some 30 dB below where it belongs, quiet enough
+/// to vanish under anything else in the mix.
+///
+/// Only the piano has been measured against a reference, so only the piano
+/// opts out. Every other physical engine was voiced with the curve in place
+/// and would shift underneath its own calibration if this changed for it too;
+/// each needs its own reference corpus first.
+bool needs_sampler_velocity_curve(SynthEngineMode mode) noexcept {
+  return mode != SynthEngineMode::kPiano;
+}
+
 }  // namespace
 
 // ---------------------------------------------------------------------------
@@ -108,7 +127,9 @@ void NativeSynthVoice::start(const NativeSynthPatch& p, double sample_rate, uint
                                        voice_seed(voice_index, note, age) ^ (k + 1));
   }
 
-  velocity_gain = sf2_velocity_gain(velocity) * kit_gain * drum_mod.level_gain;
+  const float sampler_vel =
+      needs_sampler_velocity_curve(p.mode) ? sf2_velocity_gain(velocity) : 1.0f;
+  velocity_gain = sampler_vel * kit_gain * drum_mod.level_gain;
   static_cutoff_cents =
       p.vel_to_cutoff_cents * (static_cast<float>(velocity & 0x7Fu) / 127.0f - 1.0f) +
       p.key_track * 100.0f * (static_cast<float>(note & 0x7Fu) - 60.0f);

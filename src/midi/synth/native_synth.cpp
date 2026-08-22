@@ -214,11 +214,12 @@ void NativeSynth::note_on(uint8_t channel, uint8_t note, uint8_t velocity,
   uint8_t drum_kit = 0;
   if (config_.use_gm_programs) {
     const uint16_t bank = gs_effective_bank(st.bank_msb, st.bank_lsb, st.drums);
+    const GsToneMap map = gs_effective_tone_map(st.bank_msb, st.bank_lsb);
     if (bank == kDrumBank) {
       patch = &gm_fallback_drum_patch(note);
-      drum_kit = gm_fallback_drum_kit(st.program);
+      drum_kit = gm_fallback_drum_kit(st.program, map);
     } else {
-      patch = &gm_fallback_patch(bank, st.program);
+      patch = &gm_fallback_patch(bank, st.program, map);
     }
   } else if (patch->mode == SynthEngineMode::kPercussion && patch->percussion.gm_kit) {
     patch = &gm_fallback_drum_patch(note);

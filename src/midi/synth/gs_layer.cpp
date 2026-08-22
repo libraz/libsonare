@@ -461,8 +461,8 @@ std::vector<GsEfxStage> gs_efx_insert_chain(const GsEfx& efx) {
   }
 }
 
-std::string_view gs_drum_kit_name(uint8_t program) noexcept {
-  const GsDrumKit* kit = gs_drum_kit_entry(program);
+std::string_view gs_drum_kit_name(uint8_t program, GsToneMap map) noexcept {
+  const GsDrumKit* kit = gs_drum_kit_entry(program, map);
   return kit != nullptr ? kit->name : std::string_view{};
 }
 

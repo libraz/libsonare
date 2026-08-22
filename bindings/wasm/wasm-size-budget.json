@@ -8,11 +8,11 @@
       "sha256": "e57a8d88a3b020b48a47327ae122a5b944ee1a1bffc1a5482cf754e5f2468f50"
     },
     "sonare.wasm": {
-      "code": 5036334,
-      "data": 218193,
-      "gzip": 1630960,
-      "raw": 5274574,
-      "sha256": "60b6a95eebf20278508220c448fa087d0bacd6636d3340ee3f83f719ced85d7f"
+      "code": 5141048,
+      "data": 220560,
+      "gzip": 1662465,
+      "raw": 5381700,
+      "sha256": "8cf2237d9cef284fa886a94fdedd83b6ff218b8249ed32ce2d8f4201c5b9a4a1"
     }
   },
   "format": 1,

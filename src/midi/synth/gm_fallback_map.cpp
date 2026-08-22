@@ -67,30 +67,145 @@ SONARE_TUNABLE(kSendsPercussiveCho, 1.0f);
 SONARE_TUNABLE(kSendsSfxRev, 1.4f);
 SONARE_TUNABLE(kSendsSfxCho, 1.0f);
 
+/// A GS variation tone the model floor voices with a patch of its own: the
+/// capital tone it hangs under, the bank number that selects it, and the patch.
+///
+/// `variation` is the bank gs_effective_bank resolved, which is one number space
+/// carrying two numbering schemes. GS puts the variation number in Bank Select
+/// MSB and numbers its variations 8 / 16 / 24 / …; GM2 puts it in Bank Select
+/// LSB and renumbers the variations it adopted 1 / 2 / 3 / …. Both addresses for
+/// the same tone are listed, so a file written for either standard sounds the
+/// same voice. Where the two standards disagree about WHICH tone a number
+/// selects, only the GS address is listed and the GM2 one falls back to the
+/// capital — a plausible neighbour is worse than the tone the file asked for.
+/// `since` is the earliest tone map defining the tone. A map older than that
+/// does not reach it, so a file that asks for the SC-55 map hears the capital
+/// tone for a variation the SC-55 map never had — the same fallback a module
+/// gives it. Every tone below is an SC-55 tone, so the field only bites once
+/// later maps' tones are voiced; it is carried now so the gate is exercised
+/// rather than added after the fact.
+struct GsVariationPatch {
+  uint8_t program;
+  uint8_t variation;
+  GsToneMap since;
+  NativeSynthPatch ProgramOverrides::*patch;
+};
+
+/// Deliberately a plain array with a deduced bound rather than a counted
+/// std::array: a count that falls behind the entries zero-fills the tail, and a
+/// zero-filled entry here is a null pointer-to-member that the lookup would
+/// dereference. There is no count to fall behind.
+constexpr GsVariationPatch kGsVariationPatches[] = {
+    // Piano 1w / Piano 1d (GM2: wide / dark).
+    {0, 8, GsToneMap::kSc55, &ProgramOverrides::piano_wide},
+    {0, 1, GsToneMap::kSc55, &ProgramOverrides::piano_wide},
+    {0, 16, GsToneMap::kSc55, &ProgramOverrides::piano_dark},
+    {0, 2, GsToneMap::kSc55, &ProgramOverrides::piano_dark},
+    // Piano 2w / Piano 3w / HonkyTonk w. Their capitals are the one family-0
+    // grand, so their wide voicings are the one wide grand too; listing them
+    // here is what makes the variation bank reach it at all.
+    {1, 8, GsToneMap::kSc55, &ProgramOverrides::piano_wide},
+    {1, 1, GsToneMap::kSc55, &ProgramOverrides::piano_wide},
+    {2, 8, GsToneMap::kSc55, &ProgramOverrides::piano_wide},
+    {2, 1, GsToneMap::kSc55, &ProgramOverrides::piano_wide},
+    {3, 8, GsToneMap::kSc55, &ProgramOverrides::piano_wide},
+    {3, 1, GsToneMap::kSc55, &ProgramOverrides::piano_wide},
+    // Detuned EP 1/2, E.Piano 1v/2v, 60's E.Piano.
+    {4, 8, GsToneMap::kSc55, &ProgramOverrides::e_piano_detuned_1},
+    {4, 1, GsToneMap::kSc55, &ProgramOverrides::e_piano_detuned_1},
+    {4, 16, GsToneMap::kSc55, &ProgramOverrides::e_piano_velocity_1},
+    {4, 2, GsToneMap::kSc55, &ProgramOverrides::e_piano_velocity_1},
+    {4, 24, GsToneMap::kSc55, &ProgramOverrides::e_piano_sixties},
+    {4, 3, GsToneMap::kSc55, &ProgramOverrides::e_piano_sixties},
+    {5, 8, GsToneMap::kSc55, &ProgramOverrides::e_piano_detuned_2},
+    {5, 1, GsToneMap::kSc55, &ProgramOverrides::e_piano_detuned_2},
+    {5, 16, GsToneMap::kSc55, &ProgramOverrides::e_piano_velocity_2},
+    {5, 2, GsToneMap::kSc55, &ProgramOverrides::e_piano_velocity_2},
+    // Coupled Hps. / Harpsi.w / Harpsi.o — the harpsichord's three registrations.
+    {6, 8, GsToneMap::kSc55, &ProgramOverrides::harpsichord_octave},
+    {6, 1, GsToneMap::kSc55, &ProgramOverrides::harpsichord_octave},
+    {6, 16, GsToneMap::kSc55, &ProgramOverrides::harpsichord_wide},
+    {6, 2, GsToneMap::kSc55, &ProgramOverrides::harpsichord_wide},
+    {6, 24, GsToneMap::kSc55, &ProgramOverrides::harpsichord_keyoff},
+    {6, 3, GsToneMap::kSc55, &ProgramOverrides::harpsichord_keyoff},
+    // Vib.w / Marimba w.
+    {11, 8, GsToneMap::kSc55, &ProgramOverrides::vibraphone_wide},
+    {11, 1, GsToneMap::kSc55, &ProgramOverrides::vibraphone_wide},
+    {12, 8, GsToneMap::kSc55, &ProgramOverrides::marimba_wide},
+    {12, 1, GsToneMap::kSc55, &ProgramOverrides::marimba_wide},
+    // Church Bell / Carillon — the two cast bells under the tubular bell.
+    {14, 8, GsToneMap::kSc55, &ProgramOverrides::church_bell},
+    {14, 1, GsToneMap::kSc55, &ProgramOverrides::church_bell},
+    {14, 9, GsToneMap::kSc55, &ProgramOverrides::carillon},
+    {14, 2, GsToneMap::kSc55, &ProgramOverrides::carillon},
+    // Detuned Or.1 / 60's Organ 1 / Organ 4, and Organ 2's own two. GM2 adopted
+    // only the first two of each, at its own numbers.
+    {16, 8, GsToneMap::kSc55, &ProgramOverrides::organ_detuned_1},
+    {16, 1, GsToneMap::kSc55, &ProgramOverrides::organ_detuned_1},
+    {16, 16, GsToneMap::kSc55, &ProgramOverrides::organ_sixties},
+    {16, 2, GsToneMap::kSc55, &ProgramOverrides::organ_sixties},
+    {16, 32, GsToneMap::kSc55, &ProgramOverrides::organ_4},
+    {16, 3, GsToneMap::kSc55, &ProgramOverrides::organ_4},
+    {17, 8, GsToneMap::kSc55, &ProgramOverrides::organ_detuned_2},
+    {17, 1, GsToneMap::kSc55, &ProgramOverrides::organ_detuned_2},
+    {17, 32, GsToneMap::kSc55, &ProgramOverrides::organ_5},
+    {17, 2, GsToneMap::kSc55, &ProgramOverrides::organ_5},
+    // Church Org.2 / Church Org.3 — the flute and full-organ registrations.
+    {19, 8, GsToneMap::kSc55, &ProgramOverrides::church_organ_flutes},
+    {19, 1, GsToneMap::kSc55, &ProgramOverrides::church_organ_flutes},
+    {19, 16, GsToneMap::kSc55, &ProgramOverrides::church_organ_full},
+    {19, 2, GsToneMap::kSc55, &ProgramOverrides::church_organ_full},
+    // Accordion It. GS only: GM2 gives its own bank LSB 1 to the FRENCH
+    // accordion, which is the dry tuning the capital already voices, so
+    // adopting the GM2 address here would make the two standards contradict.
+    {21, 8, GsToneMap::kSc55, &ProgramOverrides::accordion_italian},
+    // Ukulele / Nylon Gt.o.
+    {24, 8, GsToneMap::kSc55, &ProgramOverrides::ukulele},
+    {24, 1, GsToneMap::kSc55, &ProgramOverrides::ukulele},
+    {24, 16, GsToneMap::kSc55, &ProgramOverrides::nylon_guitar_keyoff},
+    {24, 2, GsToneMap::kSc55, &ProgramOverrides::nylon_guitar_keyoff},
+    // 12-str.Gt / Mandolin.
+    {25, 8, GsToneMap::kSc55, &ProgramOverrides::twelve_string_guitar},
+    {25, 1, GsToneMap::kSc55, &ProgramOverrides::twelve_string_guitar},
+    {25, 16, GsToneMap::kSc55, &ProgramOverrides::mandolin},
+    {25, 2, GsToneMap::kSc55, &ProgramOverrides::mandolin},
+    // Slow Violin.
+    {40, 8, GsToneMap::kSc55, &ProgramOverrides::violin_slow},
+    {40, 1, GsToneMap::kSc55, &ProgramOverrides::violin_slow},
+};
+
+/// The variation patch for a (bank, program), or nullptr when the bank selects
+/// no variation this table voices. A miss is not an error: GS resolves a
+/// variation a module does not have to the capital tone, so an unlisted bank
+/// falling through to the capital is the specified behaviour, not a gap.
+const NativeSynthPatch* gs_variation_patch(uint16_t bank, uint8_t program, GsToneMap map) noexcept {
+  if (bank == 0 || bank > 0x7Fu) return nullptr;  // capital tone, or the drum bank
+  const auto variation = static_cast<uint8_t>(bank);
+  for (const GsVariationPatch& v : kGsVariationPatches) {
+    if (v.program != program || v.variation != variation) continue;
+    if (!gs_map_reaches(map, v.since)) return nullptr;  // older map -> capital tone
+    return &(program_overrides().*(v.patch));
+  }
+  return nullptr;
+}
+
 }  // namespace
 
-const NativeSynthPatch& gm_fallback_patch(uint16_t bank, uint8_t program) noexcept {
-  // GS variation banks fall back to their capital tone's family (same rule as
-  // resolve_gs_preset: the variation differs in character, not family). The
-  // harpsichord is the exception: its GS/GM2 banks select genuine registrations
-  // (octave mix / wide / with key off), so program 6 consults the bank.
+const NativeSynthPatch& gm_fallback_patch(uint16_t bank, uint8_t program, GsToneMap map) noexcept {
+  // A GS variation tone is the same instrument voiced differently, so most
+  // variation banks resolve to their capital tone's patch — the same rule
+  // resolve_gs_preset applies to a SoundFont. The ones the model floor can
+  // genuinely voice apart have their own patch in kGsVariationPatches.
+  if (const NativeSynthPatch* variation =
+          gs_variation_patch(bank, static_cast<uint8_t>(program & 0x7Fu), map)) {
+    return *variation;
+  }
   switch (program & 0x7Fu) {
     case 4:  // Electric Piano 1
     case 5:  // Electric Piano 2
       return program_overrides().e_piano;
-    case 6: {  // Harpsichord (plucked string, KS physical) + registration banks
-      const ProgramOverrides& o = program_overrides();
-      switch (bank) {
-        case 1:  // Harpsichord (octave mix) — 8'+4'
-          return o.harpsichord_octave;
-        case 2:  // Harpsichord (wide)
-          return o.harpsichord_wide;
-        case 3:  // Harpsichord (with key off)
-          return o.harpsichord_keyoff;
-        default:  // bank 0 or unknown variation: the plain 8'
-          return o.harpsichord;
-      }
-    }
+    case 6:  // Harpsichord (plucked string, KS physical) — the plain 8'
+      return program_overrides().harpsichord;
     case 7:  // Clavi (struck string + pickup — FM stand-in for now)
       return program_overrides().clav;
     case 8:  // Celesta (soft mallet bar, modal)
@@ -385,9 +500,9 @@ GmFallbackSends gm_fallback_sends(uint16_t bank, uint8_t program) noexcept {
   }
 }
 
-uint8_t gm_fallback_drum_kit(uint8_t program) noexcept {
-  const GsDrumKit* kit = gs_drum_kit_entry(program & 0x7Fu);
-  return kit != nullptr ? kit->index : 0;  // unknown program -> Standard
+uint8_t gm_fallback_drum_kit(uint8_t program, GsToneMap map) noexcept {
+  const GsDrumKit* kit = gs_drum_kit_entry(program & 0x7Fu, map);
+  return kit != nullptr ? kit->index : 0;  // no kit in this map -> Standard
 }
 
 float apply_gs_drum_kit(PercussionPatchParams& perc, DahdsrConfig& amp, uint8_t kit,
@@ -397,6 +512,7 @@ float apply_gs_drum_kit(PercussionPatchParams& perc, DahdsrConfig& amp, uint8_t 
   const bool tom = note == 41 || note == 43 || note == 45 || note == 47 || note == 48 || note == 50;
   const bool cymbal = note == 49 || note == 51 || note == 52 || note == 53 || note == 55 ||
                       note == 57 || note == 59;
+  const bool hat = note == 42 || note == 44 || note == 46;
   const bool membrane = kick || snare || tom;
   float gain = 1.0f;
   switch (kit) {
@@ -474,7 +590,225 @@ float apply_gs_drum_kit(PercussionPatchParams& perc, DahdsrConfig& amp, uint8_t 
         amp.decay_ms *= 1.5f;
       }
       break;
+    case 9:  // CM-64/32L: the LA-synth era kit — short, thin, bright samples.
+      if (membrane) {
+        if (perc.num_modes > 2) perc.num_modes = 2;
+        perc.base_freq_hz *= 1.04f;
+        perc.mode_decay_s *= 0.55f;
+        amp.decay_ms *= 0.55f;
+        perc.noise_gain *= 0.8f;
+      } else if (cymbal || hat) {
+        perc.noise_decay_ms *= 0.7f;
+      }
+      gain = 0.95f;
+      break;
+    case 10:  // Standard 2: the alternate standard — a drier, tighter room.
+      if (membrane) {
+        perc.base_freq_hz *= 0.97f;
+        for (float& t60 : perc.shell_t60_s) t60 *= 0.9f;
+        perc.mode_decay_s *= 0.92f;
+      }
+      if (snare) perc.wire_buzz *= 1.1f;
+      break;
+    case 11:  // Dance: the drum-machine kit of a club record — sine kick, clap-lit
+              // snare, tight hats.
+      if (kick) {
+        perc.num_modes = 1;
+        perc.base_freq_hz *= 0.85f;
+        perc.pitch_drop = std::max(perc.pitch_drop, 0.8f);
+        perc.mode_decay_s *= 1.8f;
+        amp.decay_ms *= 1.8f;
+        perc.noise_gain *= 0.35f;
+        gain = 1.15f;
+      } else if (snare) {
+        perc.noise_gain *= 1.35f;
+        perc.noise_cutoff_hz = std::min(perc.noise_cutoff_hz * 1.15f, 18000.0f);
+        perc.mode_decay_s *= 0.7f;
+      } else if (tom) {
+        perc.num_modes = 1;
+        perc.pitch_drop = std::max(perc.pitch_drop, 0.5f);
+      } else if (hat) {
+        perc.noise_decay_ms *= 0.7f;
+      }
+      break;
+    case 12:  // Ethnic: hand drums. Struck near the rim rather than the centre, so
+              // the higher modes speak and the drum is pitched, over a thin shell
+              // that rings far less than a kit drum's.
+      if (membrane) {
+        perc.strike_r = std::max(perc.strike_r, 0.6f);
+        perc.base_freq_hz *= 1.1f;
+        perc.mode_decay_s *= 0.7f;
+        amp.decay_ms *= 0.7f;
+        perc.noise_gain *= 0.5f;
+        perc.shell_mix *= 0.5f;
+      }
+      gain = 0.95f;
+      break;
+    case 13:  // Kick & Snare: a bank of alternate kicks and snares over an
+              // otherwise Standard kit, so only those two move.
+      if (kick) {
+        perc.base_freq_hz *= 0.9f;
+        perc.mode_decay_s *= 1.25f;
+        amp.decay_ms *= 1.25f;
+        gain = 1.1f;
+      } else if (snare) {
+        perc.wire_buzz *= 1.25f;
+        perc.noise_cutoff_hz = std::min(perc.noise_cutoff_hz * 1.1f, 18000.0f);
+      }
+      break;
+    case 15:  // Standard 3: the set whose pieces vary strike to strike. The
+              // variation itself needs a per-strike seed this hook is not given
+              // (it runs once on the resolved patch, before the voice is seeded),
+              // so what is voiced here is the rest of the set's character: struck
+              // off-centre and left more open than Standard.
+      if (membrane) {
+        perc.strike_r = std::max(perc.strike_r, 0.45f);
+        perc.shell_mix = std::min(perc.shell_mix + 0.08f, 1.0f);
+      }
+      break;
+    case 16:  // Hip Hop: low, short and squashed — the sampled, heavily processed
+              // kit rather than a room.
+      if (kick) {
+        perc.base_freq_hz *= 0.8f;
+        perc.pitch_drop = std::max(perc.pitch_drop, 0.6f);
+        perc.mode_decay_s *= 1.5f;
+        amp.decay_ms *= 1.5f;
+        perc.noise_gain *= 0.5f;
+        gain = 1.25f;
+      } else if (snare) {
+        perc.noise_cutoff_hz *= 0.8f;
+        perc.noise_decay_ms *= 0.8f;
+        perc.wire_buzz *= 0.7f;
+        gain = 1.1f;
+      } else if (tom) {
+        perc.base_freq_hz *= 0.85f;
+      }
+      break;
+    case 17:  // Jungle: a breakbeat chopped short — everything cut off early and
+              // pushed bright.
+      if (membrane) {
+        perc.base_freq_hz *= 1.05f;
+        perc.mode_decay_s *= 0.5f;
+        amp.decay_ms *= 0.5f;
+      }
+      if (snare) {
+        perc.noise_cutoff_hz = std::min(perc.noise_cutoff_hz * 1.25f, 18000.0f);
+        perc.noise_decay_ms *= 0.6f;
+      } else if (cymbal || hat) {
+        perc.noise_decay_ms *= 0.5f;
+      }
+      break;
+    case 18:  // Techno: Electronic taken further — pure synthetic membranes and a
+              // hard, bright top end.
+      if (membrane) {
+        perc.num_modes = 1;
+        perc.base_freq_hz *= 0.9f;
+        perc.pitch_drop = std::max(perc.pitch_drop, 0.6f);
+        perc.noise_gain *= 0.35f;
+      } else if (cymbal || hat) {
+        perc.noise_cutoff_hz = std::min(perc.noise_cutoff_hz * 1.3f, 18000.0f);
+      }
+      gain = 1.1f;
+      break;
+    case 19:  // CR-78: the 1978 preset-rhythm box. Barely any tone at all — short
+              // filtered noise ticks over tiny sines, and a snare that is a noise
+              // burst with no wire under it.
+      if (kick) {
+        perc.num_modes = 1;
+        perc.base_freq_hz *= 0.95f;
+        perc.mode_decay_s *= 0.5f;
+        amp.decay_ms *= 0.5f;
+        perc.noise_gain *= 0.2f;
+      } else if (snare) {
+        perc.num_modes = 1;
+        perc.noise_decay_ms *= 0.35f;
+        perc.noise_cutoff_hz = std::min(perc.noise_cutoff_hz * 1.4f, 18000.0f);
+        perc.wire_buzz = 0.0f;
+      } else if (tom) {
+        perc.num_modes = 1;
+        perc.mode_decay_s *= 0.5f;
+        amp.decay_ms *= 0.5f;
+      } else if (cymbal || hat) {
+        perc.noise_decay_ms *= 0.3f;
+        perc.noise_cutoff_hz = std::min(perc.noise_cutoff_hz * 1.5f, 18000.0f);
+      }
+      gain = 0.85f;
+      break;
+    case 20:  // TR-606: thin and tinny — the smallest of the analog boxes.
+      if (kick) {
+        perc.num_modes = 1;
+        perc.base_freq_hz *= 0.9f;
+        perc.pitch_drop = std::max(perc.pitch_drop, 0.7f);
+        perc.mode_decay_s *= 1.1f;
+        perc.noise_gain *= 0.25f;
+      } else if (snare) {
+        perc.num_modes = 1;
+        perc.noise_gain *= 1.3f;
+        perc.noise_cutoff_hz = std::min(perc.noise_cutoff_hz * 1.3f, 18000.0f);
+        perc.noise_decay_ms *= 0.55f;
+        perc.wire_buzz *= 0.4f;
+      } else if (tom) {
+        perc.num_modes = 1;
+        perc.base_freq_hz *= 0.95f;
+        perc.mode_decay_s *= 0.7f;
+        amp.decay_ms *= 0.7f;
+      } else if (cymbal || hat) {
+        perc.noise_cutoff_hz = std::min(perc.noise_cutoff_hz * 1.45f, 18000.0f);
+        perc.noise_decay_ms *= 0.6f;
+      }
+      gain = 0.9f;
+      break;
+    case 21:  // TR-707: sampled, not analog — crisp, dry and short, with none of
+              // the analog boxes' decay tails and little room around it.
+      if (membrane) {
+        perc.mode_decay_s *= 0.65f;
+        amp.decay_ms *= 0.65f;
+        perc.noise_cutoff_hz = std::min(perc.noise_cutoff_hz * 1.15f, 18000.0f);
+        perc.shell_mix *= 0.6f;
+      }
+      gain = 1.05f;
+      break;
+    case 22:  // TR-909: the long decaying-sine kick with a click on top, a snare
+              // that is mostly noise, and bright metallic cymbals.
+      if (kick) {
+        perc.num_modes = 1;
+        perc.base_freq_hz *= 0.86f;
+        perc.pitch_drop = std::max(perc.pitch_drop, 0.9f);
+        perc.pitch_drop_ms = 45.0f;
+        perc.mode_decay_s *= 2.2f;
+        amp.decay_ms *= 2.2f;
+        perc.noise_gain *= 0.5f;  // the attack click, not a skin
+        gain = 1.2f;
+      } else if (snare) {
+        perc.noise_gain *= 1.45f;
+        perc.noise_cutoff_hz = std::min(perc.noise_cutoff_hz * 1.2f, 18000.0f);
+        perc.mode_decay_s *= 0.75f;
+      } else if (tom) {
+        perc.num_modes = 1;
+        perc.base_freq_hz *= 0.92f;
+        perc.pitch_drop = std::max(perc.pitch_drop, 0.55f);
+      } else if (cymbal || hat) {
+        perc.noise_cutoff_hz = std::min(perc.noise_cutoff_hz * 1.35f, 18000.0f);
+        perc.mode_decay_s *= 1.2f;
+      }
+      break;
+    case 23:  // Asia: gongs, taiko and temple blocks — big, low and long-ringing.
+      if (membrane) {
+        perc.base_freq_hz *= 0.82f;
+        perc.mode_decay_s *= 2.2f;
+        amp.decay_ms *= 2.2f;
+        for (float& t60 : perc.shell_t60_s) t60 *= 1.5f;
+      } else if (cymbal) {
+        perc.mode_decay_s *= 2.5f;
+        amp.decay_ms *= 2.5f;
+        perc.noise_decay_ms *= 1.6f;
+      }
+      gain = 1.05f;
+      break;
     case 8:   // SFX: a set of one-shots in real GS — leave the Standard voicing.
+    case 14:  // Rhythm FX: likewise one-shots.
+    case 24:  // Cymbal & Claps: a bank of metal and hands over an unchanged kit.
+    case 25:  // Rhythm FX 2: likewise one-shots.
     default:  // Standard.
       break;
   }
