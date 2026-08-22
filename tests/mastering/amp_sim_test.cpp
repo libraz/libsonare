@@ -2060,3 +2060,122 @@ TEST_CASE("prepare reserves per-channel state for the channels it was told about
   CHECK_THROWS(rejecting.prepare(
       kRate, 1024, static_cast<int>(sonare::mastering::dynamics::kRealtimePreparedChannels) + 1));
 }
+
+namespace {
+
+constexpr int kGateBlock = 64;
+constexpr int kGateSegmentBlocks = 225;  // 0.3 s at 48 kHz
+constexpr int kGateTotalBlocks = kGateSegmentBlocks * 4;
+
+/// Renders a decaying tone while `param_id` is switched to @p on_value, to zero
+/// and back at block boundaries, and reports the output plus the sample index
+/// the parameter came back on at. The tone decays smoothly, so the signal
+/// contributes no step of its own; the stage is charged by the loud opening,
+/// switched off, and by the time it comes back the signal is an order of
+/// magnitude quieter than whatever its tracker was left holding.
+struct GateCycle {
+  std::vector<float> output;
+  size_t on_at = 0;
+};
+
+GateCycle render_gate_cycle(AmpSimConfig config, unsigned int param_id, float on_value) {
+  constexpr int kTotal = kGateTotalBlocks * kGateBlock;
+  std::vector<float> signal(static_cast<size_t>(kTotal));
+  for (int i = 0; i < kTotal; ++i) {
+    const double t = static_cast<double>(i) / kRate;
+    const float amplitude = static_cast<float>(0.6 * std::exp(-t / 0.5));
+    signal[static_cast<size_t>(i)] =
+        amplitude * static_cast<float>(std::sin(2.0 * 3.14159265358979 * 82.0 * i / kRate));
+  }
+
+  AmpSim amp{config};
+  amp.prepare(kRate, kGateBlock);
+  REQUIRE(amp.set_parameter(param_id, on_value));
+  for (int block = 0; block < kGateTotalBlocks; ++block) {
+    if (block == kGateSegmentBlocks) REQUIRE(amp.set_parameter(param_id, 0.0f));
+    if (block == kGateSegmentBlocks * 3) REQUIRE(amp.set_parameter(param_id, on_value));
+    float* channel[1] = {signal.data() + static_cast<size_t>(block) * kGateBlock};
+    amp.process(channel, 1, kGateBlock);
+  }
+  return {signal, static_cast<size_t>(kGateSegmentBlocks * 3 * kGateBlock)};
+}
+
+/// Largest single-sample step in [begin, end).
+float max_step(const std::vector<float>& buf, size_t begin, size_t end) {
+  float peak = 0.0f;
+  for (size_t i = begin + 1; i < end; ++i) {
+    peak = std::max(peak, std::abs(buf[i] - buf[i - 1]));
+  }
+  return peak;
+}
+
+/// One gated depth control and the configuration that puts its stage in circuit.
+struct GatedStage {
+  const char* name;
+  unsigned int param_id;
+  float on_value;
+  bool circuit;      // the stage only exists in the circuit head
+  bool needs_power;  // the stage hangs off the power stage
+};
+
+const GatedStage kGatedStages[] = {
+    {"power", 6, 0.6f, false, false},       {"sag", 7, 0.8f, false, true},
+    {"transformer", 8, 0.8f, false, false}, {"nfb", 9, 0.8f, false, true},
+    {"cone", 13, 0.8f, false, false},       {"biasShift", 15, 0.8f, true, false},
+};
+
+AmpSimConfig gated_stage_config(const GatedStage& stage) {
+  AmpSimConfig config;
+  config.drive = 0.8f;
+  if (stage.circuit) config.topology = sonare::mastering::saturation::AmpTopology::kCircuit;
+  if (stage.needs_power) config.power = 0.6f;
+  return config;
+}
+
+}  // namespace
+
+TEST_CASE("a gated amp stage re-engages from the current signal, not a stale tracker",
+          "[mastering][saturation][amp]") {
+  // Every off-by-default stage here owns an envelope or a filter that only runs
+  // while its depth is non-zero. Automating the depth to zero froze that state,
+  // so raising it again applied whatever the last loud passage had put there —
+  // a full-scale jump in one sample, worst on the cone, whose rectified-offset
+  // tracker came back holding an offset the signal had long left behind.
+  for (const GatedStage& stage : kGatedStages) {
+    DYNAMIC_SECTION(stage.name) {
+      const GateCycle cycle =
+          render_gate_cycle(gated_stage_config(stage), stage.param_id, stage.on_value);
+      // The tone is a smooth decay, so the only step the output can carry at the
+      // switch is the stage's own. Compared against how fast the settled output
+      // is moving a few thousand samples later, which is the same signal.
+      const float click = max_step(cycle.output, cycle.on_at, cycle.on_at + 256);
+      const float steady = max_step(cycle.output, cycle.on_at + 4096, cycle.on_at + 8192);
+      CAPTURE(click, steady);
+      REQUIRE(steady > 0.0f);
+      CHECK(click <= 2.0f * steady);
+    }
+  }
+}
+
+TEST_CASE("a gated amp stage automated at zero renders as if it were not there",
+          "[mastering][saturation][amp]") {
+  // The state a disabled stage carries must stay invisible: resting it, and
+  // running the feedback tap with the loop disengaged, may not move a sample of
+  // a render where the depth is zero throughout. The control automates levelDb
+  // to its own default instead, so the two renders make the same set_parameter
+  // calls and only the resting can account for a difference.
+  for (const GatedStage& stage : kGatedStages) {
+    DYNAMIC_SECTION(stage.name) {
+      const GateCycle automated =
+          render_gate_cycle(gated_stage_config(stage), stage.param_id, 0.0f);
+      const GateCycle untouched =
+          render_gate_cycle(gated_stage_config(stage), 5 /* levelDb */, 0.0f);
+      REQUIRE(automated.output.size() == untouched.output.size());
+      bool identical = true;
+      for (size_t i = 0; i < automated.output.size() && identical; ++i) {
+        identical = automated.output[i] == untouched.output[i];
+      }
+      CHECK(identical);
+    }
+  }
+}

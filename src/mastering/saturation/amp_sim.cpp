@@ -716,21 +716,23 @@ float AmpSim::run_power_stage(float s, ChannelChain& chain, size_t channel) noex
   // Off when power == 0 -> the ADAA state is untouched and the path is
   // bit-identical to a preamp-only amp.
   if (config_.power <= 0.0f) return s;
-  if (config_.nfb > 0.0f) {
-    // Global negative feedback around the power stage: a one-sample-delayed
-    // copy of the output, shaped by the mid-band filter, is subtracted from
-    // the input. The mid is fed back hard (tightened); the extremes are not.
-    // beta stays < 1 (with the 0 dB-peak band-pass and the <=1 power-stage
-    // slope) so the loop is contractive and bounded. nfb == 0 skips this
-    // whole branch -> the open-loop path is bit-identical.
-    constexpr float kNfbBeta = 0.7f;
-    const float shaped = process_chain(chain.nfb_fb, chain.nfb_shape, nfb_shape_c_);
-    const float e = s - kNfbBeta * config_.nfb * shaped;
-    s = power_stage(e, config_.power, config_.crossover, power_drive_scale_, power_adaa_[channel]);
-    chain.nfb_fb = s;
-    return s;
-  }
-  return power_stage(s, config_.power, config_.crossover, power_drive_scale_, power_adaa_[channel]);
+  // Global negative feedback around the power stage: a one-sample-delayed copy
+  // of the output, shaped by the mid-band filter, is subtracted from the input.
+  // The mid is fed back hard (tightened); the extremes are not. beta stays < 1
+  // (with the 0 dB-peak band-pass and the <=1 power-stage slope) so the loop is
+  // contractive and bounded.
+  //
+  // The tap and its filter run whether or not the loop is engaged: with nfb at
+  // zero the shaped feedback is computed and discarded, so the open-loop path
+  // is bit-identical, but automating nfb back up re-engages on the feedback the
+  // current output implies instead of on whatever an earlier passage left in
+  // the filter. Engaging on a stale one is a click.
+  constexpr float kNfbBeta = 0.7f;
+  const float shaped = process_chain(chain.nfb_fb, chain.nfb_shape, nfb_shape_c_);
+  const float e = config_.nfb > 0.0f ? s - kNfbBeta * config_.nfb * shaped : s;
+  s = power_stage(e, config_.power, config_.crossover, power_drive_scale_, power_adaa_[channel]);
+  chain.nfb_fb = s;
+  return s;
 }
 
 void AmpSim::process_voiced_head(float* const* channels, int num_channels, int num_samples) {
@@ -930,6 +932,30 @@ void AmpSim::reset() {
   for (auto& state : oversampler_states_) oversampler_.reset_streaming(&state);
 }
 
+void AmpSim::rest_disabled_stages() noexcept {
+  const bool power_off = config_.power <= 0.0f;
+  for (ChannelChain& chain : chains_) {
+    // The feedback loop and the supply envelope both hang off the power stage,
+    // so a power knob automated to zero silences them too and freezes their
+    // state along the way.
+    if (power_off) {
+      chain.nfb_fb = 0.0f;
+      chain.nfb_shape.reset();
+    }
+    if (power_off || config_.sag <= 0.0f) chain.sag_env = 0.0f;
+    if (config_.transformer <= 0.0f) chain.xf_lp = 0.0f;
+    if (config_.cone <= 0.0f) {
+      chain.cone_dc = 0.0f;
+      // The Doppler stage reads the same excursion tracker and is not
+      // automatable, so the low-pass only rests when neither stage wants it.
+      if (config_.doppler <= 0.0f) chain.cone_lp = 0.0f;
+    }
+    if (config_.bias_shift <= 0.0f) {
+      for (PreampStage& stage : chain.stages) stage.grid_env = 0.0f;
+    }
+  }
+}
+
 bool AmpSim::set_parameter(unsigned int param_id, float value) {
   if (!std::isfinite(value)) return false;
   switch (param_id) {
@@ -986,6 +1012,18 @@ bool AmpSim::set_parameter(unsigned int param_id, float value) {
       break;
     default:
       return false;
+  }
+  switch (param_id) {
+    case 6:   // power
+    case 7:   // sag
+    case 8:   // transformer
+    case 9:   // nfb
+    case 13:  // cone
+    case 15:  // bias_shift
+      rest_disabled_stages();
+      break;
+    default:
+      break;
   }
   design_chain();
   return true;

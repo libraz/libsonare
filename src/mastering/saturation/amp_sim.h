@@ -517,6 +517,19 @@ class AmpSim : public rt::ProcessorBase {
   /// in common; only the rate it runs at differs.
   float run_power_stage(float s, ChannelChain& chain, size_t channel) noexcept;
 
+  /// @brief Returns to rest the envelopes and filters of every stage whose
+  ///        depth is currently zero.
+  /// @details A stage at depth zero contributes nothing, so its tracker stops
+  ///   following the signal. Left where it stood, it comes back holding
+  ///   whatever the passage that last drove it put there, and re-enabling the
+  ///   stage applies that value in a single sample — a click whose size grows
+  ///   with the gap between the two passages. From rest the stage instead
+  ///   fades in over its own time constant, which is continuous. The depth
+  ///   still gates the output, so a stage that is off for a whole render is
+  ///   bit-identical either way. Called from set_parameter(), never from the
+  ///   sample loop; allocation-free.
+  void rest_disabled_stages() noexcept;
+
   AmpSimConfig config_{};
   bool prepared_ = false;
   double sample_rate_ = 48000.0;
