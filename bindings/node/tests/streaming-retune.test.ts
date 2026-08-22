@@ -76,6 +76,29 @@ describe('StreamingRetune', () => {
     }
   });
 
+  it('re-derives the grain at a new sample rate after an unrelated setConfig', () => {
+    // setConfig seeded every key from config(), and config().grainSize is the
+    // EFFECTIVE grain once prepared -- so touching any other control froze the 0
+    // "derive from the sample rate" sentinel into a literal, and a host
+    // re-preparing at 22.05 kHz kept the 48 kHz grain: double the latency and
+    // double the transient smear, with no diagnostic saying why.
+    const retune = new StreamingRetune();
+    try {
+      retune.prepare(SR, BLOCK);
+      expect(retune.grainSize()).toBe(2232);
+      retune.setConfig({ semitones: 5 });
+      retune.prepare(22050, BLOCK);
+      expect(retune.grainSize()).toBe(1024);
+      // And an explicitly requested grain still survives an unrelated update.
+      retune.setConfig({ grainSize: 512 });
+      retune.setConfig({ mix: 0.5 });
+      retune.prepare(22050, BLOCK);
+      expect(retune.grainSize()).toBe(512);
+    } finally {
+      retune.destroy();
+    }
+  });
+
   it('reads an explicit undefined the same as an absent key', () => {
     // The shared-reader contract the addon convention scanner enforces: a key
     // set to undefined must fall back to the current value, never to a typed

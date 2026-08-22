@@ -2,7 +2,9 @@ import { readFileSync } from 'node:fs';
 import { describe, expect, it } from 'vitest';
 import {
   analyzeWithProgress,
+  masterAudio,
   masterAudioAsync,
+  masterAudioStereo,
   masterAudioStereoAsync,
   mixStereo,
   noteSegments,
@@ -426,6 +428,95 @@ describe('a throwing progress callback surfaces as a catchable JS exception', ()
         throw new Error('boom from onProgress');
       }),
     ).toThrow('boom from onProgress');
+  });
+});
+
+// The progress and cancel callbacks re-enter JS synchronously, so a callback
+// can transfer, detach or overwrite the very ArrayBuffer the run was handed.
+// These runs stay unaffected because the C ABI copies the samples before the
+// analyzer or chain that owns the callback exists.
+//
+// READ THE GREEN CAREFULLY: these three cases have no regression power over the
+// addon layer. The copy they depend on is one layer down, and it was verified
+// by measurement that they pass whether or not the addon takes a copy of its
+// own — so a green here is not evidence that this file copies anything. What
+// can actually fail if the copy is dropped is the C++ pair that pins it:
+// "MasteringChain copies its input before the first progress callback"
+// (tests/mastering/chain_test.cpp) and the "copies the input before the first
+// progress callback" section of tests/api/sonare_c_core_test.cpp. These cases
+// stay as an end-to-end statement that a sabotaging callback is survivable from
+// plain JS.
+describe('a progress callback cannot corrupt its own input', () => {
+  const sampleRate = 22050;
+  const tone = (freq: number): Float32Array =>
+    new Float32Array(sampleRate).map((_, i) => Math.sin((2 * Math.PI * freq * i) / sampleRate));
+
+  // Overwrites the samples on the first callback, then detaches the backing
+  // store on the second, so both corruption routes are exercised in one run.
+  function sabotage(view: Float32Array): () => void {
+    let step = 0;
+    return () => {
+      if (step === 0) view.fill(1);
+      if (step === 1 && view.byteLength > 0)
+        structuredClone(view, { transfer: [view.buffer as ArrayBuffer] });
+      step += 1;
+    };
+  }
+
+  it('analyzeWithProgress keeps its result identical under a sabotaging callback', () => {
+    const reference = analyzeWithProgress(tone(440), sampleRate, () => {});
+    const victim = tone(440);
+    const result = analyzeWithProgress(victim, sampleRate, sabotage(victim));
+    expect(victim.byteLength).toBe(0);
+    expect(result.bpm).toBe(reference.bpm);
+    expect(result.key.name).toBe(reference.key.name);
+    expect(result.bpmConfidence).toBe(reference.bpmConfidence);
+  });
+
+  it('masterAudio with onProgress keeps its result identical under a sabotaging callback', () => {
+    const reference = masterAudio({
+      samples: tone(440),
+      sampleRate,
+      preset: 'pop',
+      onProgress: () => {},
+    });
+    const victim = tone(440);
+    const result = masterAudio({
+      samples: victim,
+      sampleRate,
+      preset: 'pop',
+      onProgress: sabotage(victim),
+    });
+    expect(victim.byteLength).toBe(0);
+    expect(Array.from(result.samples)).toEqual(Array.from(reference.samples));
+  });
+
+  it('masterAudioStereo with onProgress keeps both channels intact', () => {
+    const reference = masterAudioStereo({
+      left: tone(440),
+      right: tone(660),
+      sampleRate,
+      preset: 'pop',
+      onProgress: () => {},
+    });
+    const left = tone(440);
+    const right = tone(660);
+    const sabotageLeft = sabotage(left);
+    const sabotageRight = sabotage(right);
+    const result = masterAudioStereo({
+      left,
+      right,
+      sampleRate,
+      preset: 'pop',
+      onProgress: () => {
+        sabotageLeft();
+        sabotageRight();
+      },
+    });
+    expect(left.byteLength).toBe(0);
+    expect(right.byteLength).toBe(0);
+    expect(Array.from(result.left)).toEqual(Array.from(reference.left));
+    expect(Array.from(result.right)).toEqual(Array.from(reference.right));
   });
 });
 

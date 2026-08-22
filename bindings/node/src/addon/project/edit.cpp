@@ -241,7 +241,11 @@ Napi::Value ProjectWrap::AddTrack(const Napi::CallbackInfo& info) {
       has_name = true;
     }
   } else {
-    desc.kind = static_cast<int>(Uint32Arg(info, 0, SONARE_TRACK_AUDIO));
+    uint32_t kind = SONARE_TRACK_AUDIO;
+    if (!OptionalUint32Arg(env, info, 0, "kind", SONARE_TRACK_AUDIO, &kind)) {
+      return env.Undefined();
+    }
+    desc.kind = static_cast<int>(kind);
   }
   desc.name = has_name ? name.c_str() : nullptr;
   uint32_t out_id = 0;
@@ -352,10 +356,16 @@ Napi::Value ProjectWrap::AddLoopRecordingTakes(const Napi::CallbackInfo& info) {
 
 Napi::Value ProjectWrap::AddMidiClip(const Napi::CallbackInfo& info) {
   Napi::Env env = info.Env();
+  double start_ppq = 0.0;
+  double length_ppq = 0.0;
+  if (!OptionalDoubleArg(env, info, 0, "startPpq", 0.0, &start_ppq) ||
+      !OptionalDoubleArg(env, info, 1, "lengthPpq", 0.0, &length_ppq)) {
+    return env.Undefined();
+  }
   uint32_t out_track = 0;
   uint32_t out_clip = 0;
-  ThrowIfError(env, sonare_project_add_midi_clip(project_, NumberArg(info, 0, 0.0),
-                                                 NumberArg(info, 1, 0.0), &out_track, &out_clip));
+  ThrowIfError(
+      env, sonare_project_add_midi_clip(project_, start_ppq, length_ppq, &out_track, &out_clip));
   if (env.IsExceptionPending()) return env.Undefined();
   Napi::Object out = Napi::Object::New(env);
   out.Set("trackId", Napi::Number::New(env, out_track));
@@ -365,46 +375,80 @@ Napi::Value ProjectWrap::AddMidiClip(const Napi::CallbackInfo& info) {
 
 Napi::Value ProjectWrap::SplitClip(const Napi::CallbackInfo& info) {
   Napi::Env env = info.Env();
+  uint32_t clip_id = 0;
+  double ppq = 0.0;
+  if (!OptionalUint32Arg(env, info, 0, "clipId", 0, &clip_id) ||
+      !OptionalDoubleArg(env, info, 1, "splitPpq", 0.0, &ppq)) {
+    return env.Undefined();
+  }
   uint32_t out_id = 0;
-  ThrowIfError(env, sonare_project_split_clip(project_, Uint32Arg(info, 0, 0),
-                                              NumberArg(info, 1, 0.0), &out_id));
+  ThrowIfError(env, sonare_project_split_clip(project_, clip_id, ppq, &out_id));
   if (env.IsExceptionPending()) return env.Undefined();
   return Napi::Number::New(env, out_id);
 }
 
 Napi::Value ProjectWrap::TrimClip(const Napi::CallbackInfo& info) {
   Napi::Env env = info.Env();
-  ThrowIfError(env, sonare_project_trim_clip(project_, Uint32Arg(info, 0, 0),
-                                             NumberArg(info, 1, 0.0), NumberArg(info, 2, 0.0)));
+  uint32_t clip_id = 0;
+  double start_ppq = 0.0;
+  double length_ppq = 0.0;
+  if (!OptionalUint32Arg(env, info, 0, "clipId", 0, &clip_id) ||
+      !OptionalDoubleArg(env, info, 1, "newStartPpq", 0.0, &start_ppq) ||
+      !OptionalDoubleArg(env, info, 2, "newLengthPpq", 0.0, &length_ppq)) {
+    return env.Undefined();
+  }
+  ThrowIfError(env, sonare_project_trim_clip(project_, clip_id, start_ppq, length_ppq));
   return env.Undefined();
 }
 
 Napi::Value ProjectWrap::MoveClip(const Napi::CallbackInfo& info) {
   Napi::Env env = info.Env();
-  ThrowIfError(env, sonare_project_move_clip(project_, Uint32Arg(info, 0, 0),
-                                             NumberArg(info, 1, 0.0), Uint32Arg(info, 2, 0)));
+  uint32_t clip_id = 0;
+  double start_ppq = 0.0;
+  uint32_t track_id = 0;
+  if (!OptionalUint32Arg(env, info, 0, "clipId", 0, &clip_id) ||
+      !OptionalDoubleArg(env, info, 1, "newStartPpq", 0.0, &start_ppq) ||
+      !OptionalUint32Arg(env, info, 2, "newTrackId", 0, &track_id)) {
+    return env.Undefined();
+  }
+  ThrowIfError(env, sonare_project_move_clip(project_, clip_id, start_ppq, track_id));
   return env.Undefined();
 }
 
 Napi::Value ProjectWrap::SetTrackKind(const Napi::CallbackInfo& info) {
   Napi::Env env = info.Env();
-  ThrowIfError(
-      env, sonare_project_set_track_kind(project_, Uint32Arg(info, 0, 0), Uint32Arg(info, 1, 0)));
+  uint32_t track_id = 0;
+  uint32_t kind = 0;
+  if (!OptionalUint32Arg(env, info, 0, "trackId", 0, &track_id) ||
+      !OptionalUint32Arg(env, info, 1, "kind", 0, &kind)) {
+    return env.Undefined();
+  }
+  ThrowIfError(env, sonare_project_set_track_kind(project_, track_id, kind));
   return env.Undefined();
 }
 
 Napi::Value ProjectWrap::SetClipWarpRef(const Napi::CallbackInfo& info) {
   Napi::Env env = info.Env();
-  ThrowIfError(env, sonare_project_set_clip_warp_ref(project_, Uint32Arg(info, 0, 0),
-                                                     Uint32Arg(info, 1, 0)));
+  uint32_t clip_id = 0;
+  uint32_t warp_ref_id = 0;
+  if (!OptionalUint32Arg(env, info, 0, "clipId", 0, &clip_id) ||
+      !OptionalUint32Arg(env, info, 1, "warpRefId", 0, &warp_ref_id)) {
+    return env.Undefined();
+  }
+  ThrowIfError(env, sonare_project_set_clip_warp_ref(project_, clip_id, warp_ref_id));
   return env.Undefined();
 }
 
 Napi::Value ProjectWrap::SetClipWarpMode(const Napi::CallbackInfo& info) {
   Napi::Env env = info.Env();
-  ThrowIfError(env, sonare_project_set_clip_warp_mode(
-                        project_, Uint32Arg(info, 0, 0),
-                        static_cast<SonareProjectWarpMode>(Uint32Arg(info, 1, 0))));
+  uint32_t clip_id = 0;
+  uint32_t mode = 0;
+  if (!OptionalUint32Arg(env, info, 0, "clipId", 0, &clip_id) ||
+      !OptionalUint32Arg(env, info, 1, "mode", 0, &mode)) {
+    return env.Undefined();
+  }
+  ThrowIfError(env, sonare_project_set_clip_warp_mode(project_, clip_id,
+                                                      static_cast<SonareProjectWarpMode>(mode)));
   return env.Undefined();
 }
 
@@ -428,61 +472,90 @@ Napi::Value ProjectWrap::SetWarpMap(const Napi::CallbackInfo& info) {
 
 Napi::Value ProjectWrap::RemoveWarpMap(const Napi::CallbackInfo& info) {
   Napi::Env env = info.Env();
-  ThrowIfError(env, sonare_project_remove_warp_map(project_, Uint32Arg(info, 0, 0)));
+  uint32_t warp_ref_id = 0;
+  if (!OptionalUint32Arg(env, info, 0, "warpRefId", 0, &warp_ref_id)) return env.Undefined();
+  ThrowIfError(env, sonare_project_remove_warp_map(project_, warp_ref_id));
   return env.Undefined();
 }
 
 Napi::Value ProjectWrap::SetTrackMidiDestination(const Napi::CallbackInfo& info) {
   Napi::Env env = info.Env();
-  ThrowIfError(env, sonare_project_set_track_midi_destination(project_, Uint32Arg(info, 0, 0),
-                                                              Uint32Arg(info, 1, 0)));
+  uint32_t track_id = 0;
+  uint32_t destination_id = 0;
+  if (!OptionalUint32Arg(env, info, 0, "trackId", 0, &track_id) ||
+      !OptionalUint32Arg(env, info, 1, "destinationId", 0, &destination_id)) {
+    return env.Undefined();
+  }
+  ThrowIfError(env, sonare_project_set_track_midi_destination(project_, track_id, destination_id));
   return env.Undefined();
 }
 
 Napi::Value ProjectWrap::SetTrackGain(const Napi::CallbackInfo& info) {
   Napi::Env env = info.Env();
-  ThrowIfError(env, sonare_project_set_track_gain(project_, Uint32Arg(info, 0, 0),
-                                                  static_cast<float>(NumberArg(info, 1, 1.0))));
+  uint32_t track_id = 0;
+  float gain = 1.0f;
+  if (!OptionalUint32Arg(env, info, 0, "trackId", 0, &track_id) ||
+      !OptionalFloatArg(env, info, 1, "gain", 1.0f, &gain)) {
+    return env.Undefined();
+  }
+  ThrowIfError(env, sonare_project_set_track_gain(project_, track_id, gain));
   return env.Undefined();
 }
 
 Napi::Value ProjectWrap::SetTrackMute(const Napi::CallbackInfo& info) {
   Napi::Env env = info.Env();
+  uint32_t track_id = 0;
+  if (!OptionalUint32Arg(env, info, 0, "trackId", 0, &track_id)) return env.Undefined();
   const int mute = info.Length() > 1 && info[1].ToBoolean().Value() ? 1 : 0;
-  ThrowIfError(env, sonare_project_set_track_mute(project_, Uint32Arg(info, 0, 0), mute));
+  ThrowIfError(env, sonare_project_set_track_mute(project_, track_id, mute));
   return env.Undefined();
 }
 
 Napi::Value ProjectWrap::SetTrackSolo(const Napi::CallbackInfo& info) {
   Napi::Env env = info.Env();
+  uint32_t track_id = 0;
+  if (!OptionalUint32Arg(env, info, 0, "trackId", 0, &track_id)) return env.Undefined();
   const int solo = info.Length() > 1 && info[1].ToBoolean().Value() ? 1 : 0;
-  ThrowIfError(env, sonare_project_set_track_solo(project_, Uint32Arg(info, 0, 0), solo));
+  ThrowIfError(env, sonare_project_set_track_solo(project_, track_id, solo));
   return env.Undefined();
 }
 
 Napi::Value ProjectWrap::SetTrackPan(const Napi::CallbackInfo& info) {
   Napi::Env env = info.Env();
-  ThrowIfError(env, sonare_project_set_track_pan(project_, Uint32Arg(info, 0, 0),
-                                                 static_cast<float>(NumberArg(info, 1, 0.0))));
+  uint32_t track_id = 0;
+  float pan = 0.0f;
+  if (!OptionalUint32Arg(env, info, 0, "trackId", 0, &track_id) ||
+      !OptionalFloatArg(env, info, 1, "pan", 0.0f, &pan)) {
+    return env.Undefined();
+  }
+  ThrowIfError(env, sonare_project_set_track_pan(project_, track_id, pan));
   return env.Undefined();
 }
 
 Napi::Value ProjectWrap::RemoveClip(const Napi::CallbackInfo& info) {
   Napi::Env env = info.Env();
-  ThrowIfError(env, sonare_project_remove_clip(project_, Uint32Arg(info, 0, 0)));
+  uint32_t clip_id = 0;
+  if (!OptionalUint32Arg(env, info, 0, "clipId", 0, &clip_id)) return env.Undefined();
+  ThrowIfError(env, sonare_project_remove_clip(project_, clip_id));
   return env.Undefined();
 }
 
 Napi::Value ProjectWrap::SetClipGain(const Napi::CallbackInfo& info) {
   Napi::Env env = info.Env();
-  ThrowIfError(env, sonare_project_set_clip_gain(project_, Uint32Arg(info, 0, 0),
-                                                 static_cast<float>(NumberArg(info, 1, 1.0))));
+  uint32_t clip_id = 0;
+  float gain = 1.0f;
+  if (!OptionalUint32Arg(env, info, 0, "clipId", 0, &clip_id) ||
+      !OptionalFloatArg(env, info, 1, "gain", 1.0f, &gain)) {
+    return env.Undefined();
+  }
+  ThrowIfError(env, sonare_project_set_clip_gain(project_, clip_id, gain));
   return env.Undefined();
 }
 
 Napi::Value ProjectWrap::SetClipFade(const Napi::CallbackInfo& info) {
   Napi::Env env = info.Env();
-  const uint32_t clip_id = Uint32Arg(info, 0, 0);
+  uint32_t clip_id = 0;
+  if (!OptionalUint32Arg(env, info, 0, "clipId", 0, &clip_id)) return env.Undefined();
   // fadeIn / fadeOut are optional {lengthPpq, curve} objects. Missing sides
   // map to a zero-length linear fade to match the WASM facade and the C API's
   // "both descriptors required" contract.
@@ -500,7 +573,12 @@ Napi::Value ProjectWrap::SetClipFade(const Napi::CallbackInfo& info) {
 
 Napi::Value ProjectWrap::SetClipTakes(const Napi::CallbackInfo& info) {
   Napi::Env env = info.Env();
-  const uint32_t clip_id = Uint32Arg(info, 0, 0);
+  uint32_t clip_id = 0;
+  uint32_t active_take_id = 0;
+  if (!OptionalUint32Arg(env, info, 0, "clipId", 0, &clip_id) ||
+      !OptionalUint32Arg(env, info, 2, "activeTakeId", 0, &active_take_id)) {
+    return env.Undefined();
+  }
   std::vector<SonareProjectClipTake> takes;
   std::vector<std::string> name_storage;
   if (!ParseClipTakes(env, info.Length() > 1 ? info[1] : env.Undefined(), &takes, &name_storage)) {
@@ -508,13 +586,14 @@ Napi::Value ProjectWrap::SetClipTakes(const Napi::CallbackInfo& info) {
   }
   ThrowIfError(
       env, sonare_project_set_clip_takes(project_, clip_id, takes.empty() ? nullptr : takes.data(),
-                                         takes.size(), Uint32Arg(info, 2, 0)));
+                                         takes.size(), active_take_id));
   return env.Undefined();
 }
 
 Napi::Value ProjectWrap::SetClipCompSegments(const Napi::CallbackInfo& info) {
   Napi::Env env = info.Env();
-  const uint32_t clip_id = Uint32Arg(info, 0, 0);
+  uint32_t clip_id = 0;
+  if (!OptionalUint32Arg(env, info, 0, "clipId", 0, &clip_id)) return env.Undefined();
   std::vector<SonareProjectClipCompSegment> segments;
   if (!ParseClipCompSegments(env, info.Length() > 1 ? info[1] : env.Undefined(), &segments)) {
     return env.Undefined();
@@ -527,16 +606,30 @@ Napi::Value ProjectWrap::SetClipCompSegments(const Napi::CallbackInfo& info) {
 
 Napi::Value ProjectWrap::SetClipLoop(const Napi::CallbackInfo& info) {
   Napi::Env env = info.Env();
-  ThrowIfError(env, sonare_project_set_clip_loop(project_, Uint32Arg(info, 0, 0),
-                                                 static_cast<int>(NumberArg(info, 1, 0.0)),
-                                                 NumberArg(info, 2, 0.0), NumberArg(info, 3, 0.0)));
+  uint32_t clip_id = 0;
+  int loop_mode = 0;
+  double loop_length_ppq = 0.0;
+  double loop_crossfade_ppq = 0.0;
+  if (!OptionalUint32Arg(env, info, 0, "clipId", 0, &clip_id) ||
+      !Int32Arg(env, info, 1, "loopMode", 0, &loop_mode) ||
+      !OptionalDoubleArg(env, info, 2, "loopLengthPpq", 0.0, &loop_length_ppq) ||
+      !OptionalDoubleArg(env, info, 3, "loopCrossfadePpq", 0.0, &loop_crossfade_ppq)) {
+    return env.Undefined();
+  }
+  ThrowIfError(env, sonare_project_set_clip_loop(project_, clip_id, loop_mode, loop_length_ppq,
+                                                 loop_crossfade_ppq));
   return env.Undefined();
 }
 
 Napi::Value ProjectWrap::SetClipSource(const Napi::CallbackInfo& info) {
   Napi::Env env = info.Env();
-  ThrowIfError(
-      env, sonare_project_set_clip_source(project_, Uint32Arg(info, 0, 0), Uint32Arg(info, 1, 0)));
+  uint32_t clip_id = 0;
+  uint32_t source_id = 0;
+  if (!OptionalUint32Arg(env, info, 0, "clipId", 0, &clip_id) ||
+      !OptionalUint32Arg(env, info, 1, "sourceId", 0, &source_id)) {
+    return env.Undefined();
+  }
+  ThrowIfError(env, sonare_project_set_clip_source(project_, clip_id, source_id));
   return env.Undefined();
 }
 
@@ -548,7 +641,8 @@ Napi::Value ProjectWrap::SetAudioSourceMetadata(const Napi::CallbackInfo& info) 
         .ThrowAsJavaScriptException();
     return env.Undefined();
   }
-  const uint32_t source_id = Uint32Arg(info, 0, 0);
+  uint32_t source_id = 0;
+  if (!OptionalUint32Arg(env, info, 0, "sourceId", 0, &source_id)) return env.Undefined();
   const std::string content_hash = info[1].As<Napi::String>().Utf8Value();
   const std::string external_stem_role = info[2].As<Napi::String>().Utf8Value();
   ThrowIfError(env, sonare_project_set_audio_source_metadata(
@@ -558,54 +652,65 @@ Napi::Value ProjectWrap::SetAudioSourceMetadata(const Napi::CallbackInfo& info) 
 
 Napi::Value ProjectWrap::DuplicateClip(const Napi::CallbackInfo& info) {
   Napi::Env env = info.Env();
+  uint32_t clip_id = 0;
+  double start_ppq = 0.0;
+  if (!OptionalUint32Arg(env, info, 0, "clipId", 0, &clip_id) ||
+      !OptionalDoubleArg(env, info, 1, "newStartPpq", 0.0, &start_ppq)) {
+    return env.Undefined();
+  }
   uint32_t out_id = 0;
-  ThrowIfError(env, sonare_project_duplicate_clip(project_, Uint32Arg(info, 0, 0),
-                                                  NumberArg(info, 1, 0.0), &out_id));
+  ThrowIfError(env, sonare_project_duplicate_clip(project_, clip_id, start_ppq, &out_id));
   if (env.IsExceptionPending()) return env.Undefined();
   return Napi::Number::New(env, out_id);
 }
 
 Napi::Value ProjectWrap::RemoveTrack(const Napi::CallbackInfo& info) {
   Napi::Env env = info.Env();
-  ThrowIfError(env, sonare_project_remove_track(project_, Uint32Arg(info, 0, 0)));
+  uint32_t track_id = 0;
+  if (!OptionalUint32Arg(env, info, 0, "trackId", 0, &track_id)) return env.Undefined();
+  ThrowIfError(env, sonare_project_remove_track(project_, track_id));
   return env.Undefined();
 }
 
 Napi::Value ProjectWrap::RenameTrack(const Napi::CallbackInfo& info) {
   Napi::Env env = info.Env();
-  const uint32_t track_id = Uint32Arg(info, 0, 0);
+  uint32_t track_id = 0;
+  if (!OptionalUint32Arg(env, info, 0, "trackId", 0, &track_id)) return env.Undefined();
+  // A supplied name and an omitted one are different requests, so presence is
+  // read separately from the value: nullptr keeps the existing name, an empty
+  // string clears it.
+  const bool has_name = info.Length() > 1 && !info[1].IsUndefined() && !info[1].IsNull();
   std::string name;
-  const char* name_ptr = nullptr;
-  if (info.Length() > 1 && !info[1].IsUndefined() && !info[1].IsNull()) {
-    name = info[1].As<Napi::String>().Utf8Value();
-    name_ptr = name.c_str();
-  }
+  if (has_name && !OptionalStringArg(env, info, 1, "name", "", &name)) return env.Undefined();
+  const char* name_ptr = has_name ? name.c_str() : nullptr;
   ThrowIfError(env, sonare_project_rename_track(project_, track_id, name_ptr));
   return env.Undefined();
 }
 
 Napi::Value ProjectWrap::SetTrackRoute(const Napi::CallbackInfo& info) {
   Napi::Env env = info.Env();
-  const uint32_t track_id = Uint32Arg(info, 0, 0);
+  uint32_t track_id = 0;
+  if (!OptionalUint32Arg(env, info, 0, "trackId", 0, &track_id)) return env.Undefined();
+  // As in RenameTrack, presence is read separately from the value: nullptr
+  // keeps the existing route, an empty string clears it.
+  const bool has_strip = info.Length() > 1 && !info[1].IsUndefined() && !info[1].IsNull();
+  const bool has_output = info.Length() > 2 && !info[2].IsUndefined() && !info[2].IsNull();
   std::string strip;
   std::string output;
-  const char* strip_ptr = nullptr;
-  const char* output_ptr = nullptr;
-  if (info.Length() > 1 && !info[1].IsUndefined() && !info[1].IsNull()) {
-    strip = info[1].As<Napi::String>().Utf8Value();
-    strip_ptr = strip.c_str();
+  if ((has_strip && !OptionalStringArg(env, info, 1, "channelStripRef", "", &strip)) ||
+      (has_output && !OptionalStringArg(env, info, 2, "outputTarget", "", &output))) {
+    return env.Undefined();
   }
-  if (info.Length() > 2 && !info[2].IsUndefined() && !info[2].IsNull()) {
-    output = info[2].As<Napi::String>().Utf8Value();
-    output_ptr = output.c_str();
-  }
+  const char* strip_ptr = has_strip ? strip.c_str() : nullptr;
+  const char* output_ptr = has_output ? output.c_str() : nullptr;
   ThrowIfError(env, sonare_project_set_track_route(project_, track_id, strip_ptr, output_ptr));
   return env.Undefined();
 }
 
 Napi::Value ProjectWrap::AddAutomationLane(const Napi::CallbackInfo& info) {
   Napi::Env env = info.Env();
-  const uint32_t track_id = Uint32Arg(info, 0, 0);
+  uint32_t track_id = 0;
+  if (!OptionalUint32Arg(env, info, 0, "trackId", 0, &track_id)) return env.Undefined();
   if (info.Length() < 2 || !info[1].IsObject()) {
     Napi::TypeError::New(env, "addAutomationLane expects a lane descriptor object")
         .ThrowAsJavaScriptException();
@@ -642,8 +747,12 @@ Napi::Value ProjectWrap::AddAutomationLane(const Napi::CallbackInfo& info) {
 
 Napi::Value ProjectWrap::EditAutomationLane(const Napi::CallbackInfo& info) {
   Napi::Env env = info.Env();
-  const uint32_t track_id = Uint32Arg(info, 0, 0);
-  const uint32_t target_param_id = Uint32Arg(info, 1, 0);
+  uint32_t track_id = 0;
+  uint32_t target_param_id = 0;
+  if (!OptionalUint32Arg(env, info, 0, "trackId", 0, &track_id) ||
+      !OptionalUint32Arg(env, info, 1, "targetParamId", 0, &target_param_id)) {
+    return env.Undefined();
+  }
   if (info.Length() < 3 || !info[2].IsObject()) {
     Napi::TypeError::New(env, "editAutomationLane expects a lane descriptor object")
         .ThrowAsJavaScriptException();
@@ -678,8 +787,13 @@ Napi::Value ProjectWrap::EditAutomationLane(const Napi::CallbackInfo& info) {
 
 Napi::Value ProjectWrap::RemoveAutomationLane(const Napi::CallbackInfo& info) {
   Napi::Env env = info.Env();
-  ThrowIfError(env, sonare_project_remove_automation_lane(project_, Uint32Arg(info, 0, 0),
-                                                          Uint32Arg(info, 1, 0)));
+  uint32_t track_id = 0;
+  uint32_t target_param_id = 0;
+  if (!OptionalUint32Arg(env, info, 0, "trackId", 0, &track_id) ||
+      !OptionalUint32Arg(env, info, 1, "targetParamId", 0, &target_param_id)) {
+    return env.Undefined();
+  }
+  ThrowIfError(env, sonare_project_remove_automation_lane(project_, track_id, target_param_id));
   return env.Undefined();
 }
 

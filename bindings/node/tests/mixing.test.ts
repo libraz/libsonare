@@ -27,6 +27,40 @@ describe('mixing native binding', () => {
     expect(Number.isFinite(result.meters[0].peakDbL)).toBe(true);
     expect(typeof result.meters[0].likelyMonoCompatible).toBe('boolean');
   });
+
+  it('applies pan and panMode independently of each other', () => {
+    // A left-only source: Balance leaves it there, stereoPan collapses the pair
+    // to a centered mono sum, so the right output tells the two modes apart.
+    const frames = 512;
+    const left = new Float32Array(frames).fill(1);
+    const right = new Float32Array(frames);
+
+    // panMode alone must reach the strip. It used to be read only when `pan`
+    // was also supplied, so a preset that changed the mode silently mixed in
+    // the default one.
+    const modeOnly = mixStereo([left], [right], 48000, { panMode: 'stereoPan' });
+    expect(modeOnly.right[frames - 1]).toBeGreaterThan(0.1);
+
+    const balance = mixStereo([left], [right], 48000, {});
+    expect(balance.right[frames - 1]).toBe(0);
+
+    // pan alone must not throw: an absent panMode keeps the strip's current
+    // mode rather than being rejected as an unknown one.
+    const panOnly = mixStereo([left], [right], 48000, { pan: 0.3 });
+    const panWithDefaultMode = mixStereo([left], [right], 48000, {
+      pan: 0.3,
+      panMode: 'balance',
+    });
+    expect(Array.from(panOnly.left)).toEqual(Array.from(panWithDefaultMode.left));
+    expect(Array.from(panOnly.right)).toEqual(Array.from(panWithDefaultMode.right));
+
+    // A per-strip array shorter than the strip list leaves the remaining strips
+    // on their current mode instead of failing on the undefined entry.
+    const twoStrips = mixStereo([left, left], [right, right], 48000, {
+      panMode: ['stereoPan'],
+    });
+    expect(twoStrips.right[frames - 1]).toBeGreaterThan(0.1);
+  });
 });
 
 describe('insert param validation', () => {

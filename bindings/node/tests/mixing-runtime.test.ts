@@ -217,6 +217,30 @@ describe('Mixer runtime methods', () => {
     }
   });
 
+  it('bounds the goniometer working buffer independently of maxPoints', () => {
+    const { left, right } = constantStrips([0.5, 0.25, 0.1]);
+    mixer.processStereo(left, right);
+
+    // maxPoints is a request, not an allocation size. A huge value used to size
+    // a std::vector directly, so a metering UI deriving it from a window size
+    // could take the whole process down with an uncatchable std::bad_alloc.
+    const huge = mixer.readGoniometerLatest('host', Number.MAX_SAFE_INTEGER);
+    expect(Array.isArray(huge)).toBe(true);
+    expect(huge.length).toBeGreaterThan(0);
+    expect(huge.length).toBeLessThanOrEqual(4096);
+    expect(huge.every((point) => Number.isFinite(point.left))).toBe(true);
+
+    // Anything that is not a finite non-negative integer is a catchable error,
+    // never a silent clamp to zero.
+    for (const invalid of [-1, -0.5, 1.5, Number.NaN, Number.POSITIVE_INFINITY, Number.MAX_VALUE]) {
+      expect(() => mixer.readGoniometerLatest('host', invalid)).toThrow(RangeError);
+    }
+    expect(() => mixer.readGoniometerLatest('host', '4' as unknown as number)).toThrow(TypeError);
+
+    // Zero stays a legal empty read.
+    expect(mixer.readGoniometerLatest('host', 0)).toEqual([]);
+  });
+
   it('accepts scheduled automation events with string-union curves', () => {
     expect(() => mixer.scheduleFaderAutomation('host', 0, -6, 'linear')).not.toThrow();
     expect(() => mixer.schedulePanAutomation('host', 0, 0.5, 'exponential')).not.toThrow();

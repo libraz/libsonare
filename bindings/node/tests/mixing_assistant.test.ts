@@ -313,6 +313,18 @@ describe('mixing assistant input validation', () => {
     ).toThrow(RangeError);
   });
 
+  it('reports a non-finite sample as its own exclusion, not as silence', () => {
+    // The guard is in the core, so every surface answers the same way. One NaN
+    // reaches the integrated loudness as -inf, and without it the track comes
+    // back excluded for being silent -- a statement about the material rather
+    // than about the buffer.
+    const left = sine(440, 0.4, { sampleRate: SR });
+    left[100] = Number.NaN;
+    const result = suggestMixScene({ tracks: [{ id: 'poisoned', left }], sampleRate: SR });
+    expect(result.tracks[0].usable).toBe(false);
+    expect(result.tracks[0].exclusionReason).toBe('track has non-finite samples');
+  });
+
   it('rejects a missing or empty track id', () => {
     const left = sine(440, 0.4, { sampleRate: SR });
     expect(() =>

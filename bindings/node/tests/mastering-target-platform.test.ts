@@ -97,4 +97,31 @@ describe('mastering assistant target platform', () => {
     expect(json).toContain('"loudness.targetLufs":-13');
     expect(json).toContain('"loudness.ceilingDb":-0.8');
   });
+
+  it('an explicit loudness wins even when it equals the default', () => {
+    // The precedence used to be decided by comparing the value against the
+    // default, so this one slider position -- the position a host UI sits at
+    // before the user touches it -- silently lost to the delivery target while
+    // every other position won. -1 is the default ceiling, which is the same
+    // collision on the other field.
+    const json = masteringAssistantSuggest({
+      samples,
+      sampleRate,
+      params: { targetPlatform: 'broadcast', targetLufs: -14, ceilingDb: -1 },
+    });
+    expect(json).toContain('"loudness.targetLufs":-14');
+    expect(json).toContain('"loudness.ceilingDb":-1');
+  });
+
+  it('a target still fills in the field the caller left out', () => {
+    // Presence, not value: naming one field must not suppress the target on the
+    // other.
+    const json = masteringAssistantSuggest({
+      samples,
+      sampleRate,
+      params: { targetPlatform: 'club', targetLufs: -14 },
+    });
+    expect(json).toContain('"loudness.targetLufs":-14');
+    expect(json).toContain('"loudness.ceilingDb":-0.3');
+  });
 });

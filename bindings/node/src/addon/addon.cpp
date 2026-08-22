@@ -34,8 +34,10 @@ Napi::Value MidiGmInstrumentName(const Napi::CallbackInfo& info) {
 }
 
 Napi::Value MidiGmProgramForName(const Napi::CallbackInfo& info) {
-  return Napi::Number::New(
-      info.Env(), sonare_midi_gm_program_for_name(info[0].As<Napi::String>().Utf8Value().c_str()));
+  Napi::Env env = info.Env();
+  std::string name;
+  if (!sonare_node::RequiredStringValue(env, info[0], "name", &name)) return env.Undefined();
+  return Napi::Number::New(env, sonare_midi_gm_program_for_name(name.c_str()));
 }
 
 Napi::Value MidiGmFamilyName(const Napi::CallbackInfo& info) {
@@ -57,8 +59,10 @@ Napi::Value MidiGmDrumName(const Napi::CallbackInfo& info) {
 }
 
 Napi::Value MidiGmDrumNoteForName(const Napi::CallbackInfo& info) {
-  return Napi::Number::New(info.Env(), sonare_midi_gm_drum_note_for_name(
-                                           info[0].As<Napi::String>().Utf8Value().c_str()));
+  Napi::Env env = info.Env();
+  std::string name;
+  if (!sonare_node::RequiredStringValue(env, info[0], "name", &name)) return env.Undefined();
+  return Napi::Number::New(env, sonare_midi_gm_drum_note_for_name(name.c_str()));
 }
 
 Napi::Value MidiGm2DrumSetName(const Napi::CallbackInfo& info) {
@@ -75,8 +79,10 @@ Napi::Value MidiCcName(const Napi::CallbackInfo& info) {
 }
 
 Napi::Value MidiCcIndexForName(const Napi::CallbackInfo& info) {
-  return Napi::Number::New(
-      info.Env(), sonare_midi_cc_index_for_name(info[0].As<Napi::String>().Utf8Value().c_str()));
+  Napi::Env env = info.Env();
+  std::string name;
+  if (!sonare_node::RequiredStringValue(env, info[0], "name", &name)) return env.Undefined();
+  return Napi::Number::New(env, sonare_midi_cc_index_for_name(name.c_str()));
 }
 
 Napi::Value MidiPerNoteControllerName(const Napi::CallbackInfo& info) {

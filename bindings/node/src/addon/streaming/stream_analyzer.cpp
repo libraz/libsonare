@@ -95,6 +95,19 @@ bool SafeSizeTFromValue(const Napi::Value& value, const char* name, size_t* out)
   return true;
 }
 
+// Narrows an already-read config value to a native int, rejecting anything the
+// target type cannot hold exactly. Takes the value rather than (object, key) so
+// the key stays visible at the call site on the shared node_double_option
+// reader, which is what the option scanner counts.
+int CheckedConfigInt(double value, const char* key) {
+  int narrowed = 0;
+  if (!sonare::numeric::checked_integral_cast(value, &narrowed)) {
+    throw sonare::SonareException(sonare::ErrorCode::InvalidParameter,
+                                  std::string(key) + " must be an integer within the int range");
+  }
+  return narrowed;
+}
+
 bool ParseWindowOption(const Napi::Object& options, Napi::Env env, sonare::WindowType* out) {
   const Napi::Value value = options.Get("window");
   if (value.IsUndefined()) return true;
@@ -161,12 +174,16 @@ StreamAnalyzerWrap::StreamAnalyzerWrap(const Napi::CallbackInfo& info)
     sonare::StreamConfig config;
     if (info.Length() >= 1 && info[0].IsObject()) {
       Napi::Object opts = info[0].As<Napi::Object>();
-      config.sample_rate =
-          static_cast<int>(node_double_option(opts, "sampleRate", config.sample_rate));
-      config.n_fft = static_cast<int>(node_double_option(opts, "nFft", config.n_fft));
+      // Every field narrowed to a native int goes through checked_integral_cast:
+      // an unchecked static_cast of an out-of-int-range double is undefined
+      // behaviour, and on ARM64 it saturates to INT_MAX, which slips past the
+      // core's positivity checks instead of being rejected here.
+      config.sample_rate = CheckedConfigInt(
+          node_double_option(opts, "sampleRate", config.sample_rate), "sampleRate");
+      config.n_fft = CheckedConfigInt(node_double_option(opts, "nFft", config.n_fft), "nFft");
       config.hop_length =
-          static_cast<int>(node_double_option(opts, "hopLength", config.hop_length));
-      config.n_mels = static_cast<int>(node_double_option(opts, "nMels", config.n_mels));
+          CheckedConfigInt(node_double_option(opts, "hopLength", config.hop_length), "hopLength");
+      config.n_mels = CheckedConfigInt(node_double_option(opts, "nMels", config.n_mels), "nMels");
       config.fmin = static_cast<float>(node_double_option(opts, "fmin", config.fmin));
       config.fmax = static_cast<float>(node_double_option(opts, "fmax", config.fmax));
       config.tuning_ref_hz =
@@ -177,10 +194,12 @@ StreamAnalyzerWrap::StreamAnalyzerWrap(const Napi::CallbackInfo& info)
       config.compute_chroma = node_bool_option(opts, "computeChroma", config.compute_chroma);
       config.compute_onset = node_bool_option(opts, "computeOnset", config.compute_onset);
       config.compute_spectral = node_bool_option(opts, "computeSpectral", config.compute_spectral);
-      config.emit_every_n_frames = static_cast<int>(
-          node_double_option(opts, "emitEveryNFrames", config.emit_every_n_frames));
-      config.magnitude_downsample = static_cast<int>(
-          node_double_option(opts, "magnitudeDownsample", config.magnitude_downsample));
+      config.emit_every_n_frames =
+          CheckedConfigInt(node_double_option(opts, "emitEveryNFrames", config.emit_every_n_frames),
+                           "emitEveryNFrames");
+      config.magnitude_downsample = CheckedConfigInt(
+          node_double_option(opts, "magnitudeDownsample", config.magnitude_downsample),
+          "magnitudeDownsample");
       const double max_pending_frames =
           node_double_option(opts, "maxPendingFrames", config.max_pending_frames);
       if (!sonare::numeric::checked_integral_cast(max_pending_frames, &config.max_pending_frames)) {
@@ -212,6 +231,12 @@ StreamAnalyzerWrap::StreamAnalyzerWrap(const Napi::CallbackInfo& info)
       config.output_format = sonare::OutputFormat::Float32;
     }
 
+    // The shared facade check, not a copy of one: this surface builds
+    // sonare::StreamAnalyzer directly, so it inherits nothing from the C ABI,
+    // and computeMagnitude was accepted here while the C ABI, WASM and Python
+    // all refused it -- the same options object valid on one surface and an
+    // InvalidParameter on the other three.
+    sonare::validate_soa_stream_config(config);
     config_ = config;
     analyzer_ = std::make_unique<sonare::StreamAnalyzer>(config_);
   } catch (const Napi::Error& e) {

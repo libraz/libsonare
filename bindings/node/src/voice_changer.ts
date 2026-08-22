@@ -265,7 +265,12 @@ export class StreamingRetune {
     this.native.reset();
   }
 
-  /** Update the live controls; omitted keys keep their current value. */
+  /**
+   * Update the live controls; omitted keys keep their current value. An omitted
+   * `grainSize` keeps the last requested one — including the `0` sentinel, so
+   * re-{@link prepare}ing at another sample rate re-derives the grain rather
+   * than freezing the first rate's answer.
+   */
   setConfig(config: StreamingRetuneConfig): void {
     this.native.setConfig(config);
   }

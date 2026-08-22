@@ -13,13 +13,6 @@ namespace sonare_node::engine {
 
 constexpr uint32_t kExpectedEngineAbiVersion = 3;
 
-inline int64_t OptionalInt64(const Napi::CallbackInfo& info, size_t index, int64_t fallback) {
-  if (info.Length() <= index || info[index].IsUndefined()) {
-    return fallback;
-  }
-  return static_cast<int64_t>(info[index].As<Napi::Number>().Int64Value());
-}
-
 inline void CopyString(char* dest, size_t capacity, const std::string& value) {
   if (capacity == 0) return;
   std::strncpy(dest, value.c_str(), capacity - 1);
@@ -265,7 +258,11 @@ inline Napi::Array ChannelsToJs(Napi::Env env, const ChannelBlock& block) {
 
 // The shared argument/property readers come from sonare_wrap_options.h
 // (namespace sonare_node); re-exported here so the engine TUs that
-// `using namespace sonare_node::engine` keep finding them.
+// `using namespace sonare_node::engine` keep finding them. Nothing in this
+// header may define a reader of its own: the bail-out contract (return false
+// without touching `out`, refuse to throw on a pending exception) is what keeps
+// a rejected argument from reaching the C ABI as a dummy value, and a file-local
+// copy is how that contract went missing.
 using sonare_node::BoolProperty;
 using sonare_node::DoubleProperty;
 using sonare_node::FloatProperty;
@@ -283,6 +280,7 @@ using sonare_node::OptionalDoubleArg;
 using sonare_node::OptionalFloatArg;
 using sonare_node::OptionalInt64Arg;
 using sonare_node::OptionalIntArg;
+using sonare_node::OptionalMidiByteArg;
 using sonare_node::OptionalStringArg;
 using sonare_node::OptionalUint32Arg;
 using sonare_node::RequiredDoubleProperty;
@@ -293,6 +291,7 @@ using sonare_node::RequiredMidiByteValue;
 using sonare_node::RequiredStringProperty;
 using sonare_node::RequiredUint32Property;
 using sonare_node::ThrowIfError;
+using sonare_node::ThrowIfRealtimeError;
 using sonare_node::Uint32Property;
 
 }  // namespace sonare_node::engine

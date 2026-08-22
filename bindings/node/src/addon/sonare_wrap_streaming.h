@@ -87,6 +87,7 @@ class StreamingEqualizerWrap : public Napi::ObjectWrap<StreamingEqualizerWrap> {
   Napi::Value SetSidechainMono(const Napi::CallbackInfo& info);
   Napi::Value SetSidechainStereo(const Napi::CallbackInfo& info);
   Napi::Value ClearSidechain(const Napi::CallbackInfo& info);
+  void ClearSidechainStorage();
   Napi::Value LastAutoGainDb(const Napi::CallbackInfo& info);
   Napi::Value LatencySamples(const Napi::CallbackInfo& info);
   Napi::Value ProcessMono(const Napi::CallbackInfo& info);
@@ -97,8 +98,11 @@ class StreamingEqualizerWrap : public Napi::ObjectWrap<StreamingEqualizerWrap> {
 
   std::unique_ptr<sonare::mastering::eq::EqualizerProcessor> eq_;
   double sample_rate_ = 48000.0;
-  Napi::Reference<Napi::Float32Array> sidechain_left_;
-  Napi::Reference<Napi::Float32Array> sidechain_right_;
+  // Addon-owned sidechain storage. The core keeps the pointer table alive across
+  // blocks, so the samples must not live in a JS ArrayBuffer the caller can
+  // detach or transfer after the setter returns.
+  std::vector<float> sidechain_left_;
+  std::vector<float> sidechain_right_;
   std::array<const float*, 2> sidechain_channels_{};
 };
 
@@ -133,6 +137,14 @@ class StreamingRetuneWrap : public Napi::ObjectWrap<StreamingRetuneWrap> {
   Napi::Value Destroy(const Napi::CallbackInfo& info);
 
   SonareStreamingRetune* retune_ = nullptr;
+  /// The grain size the caller last ASKED for, which is not what
+  /// sonare_streaming_retune_config reports once prepared: that reports the
+  /// EFFECTIVE grain. Seeding an omitted grainSize from the effective value
+  /// froze the 0 "derive from the sample rate" sentinel into a literal, so a
+  /// re-prepare at another rate kept the first rate's grain. The core keeps the
+  /// same distinction in StreamingRetune::requested_grain_size_, which has no
+  /// accessor across the C ABI.
+  int requested_grain_size_ = 0;
 };
 
 class RealtimeVoiceChangerWrap : public Napi::ObjectWrap<RealtimeVoiceChangerWrap> {

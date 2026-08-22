@@ -125,6 +125,30 @@ describe('Node async API', () => {
       expect(Array.isArray(result.stages)).toBe(true);
     });
 
+    it('rejects an unusable override instead of throwing synchronously', async () => {
+      // Both async entry points read their overrides bag with a reader that
+      // reports an unusable value by throwing into JS. They did not check for
+      // that pending exception, so the throw escaped synchronously -- past a
+      // caller's `.catch()` -- AND the AsyncWorker was queued anyway, running a
+      // full mastering render in the background for a deferred nobody could
+      // settle. The public wrappers try/catch, so the contract is asserted
+      // against the addon directly, where the defect lives.
+      const { addon } = await import('../src/native.js');
+      const samples = generateSine(220, 0.05);
+      const calls: [string, unknown[]][] = [
+        ['masterAudioAsync', ['pop', samples, SR, { 'compressor.ratio': 'loud' }]],
+        ['masterAudioStereoAsync', ['pop', samples, samples, SR, { 'compressor.ratio': 'loud' }]],
+      ];
+      for (const [name, args] of calls) {
+        let returned: unknown;
+        expect(() => {
+          returned = (addon as Record<string, (...a: unknown[]) => unknown>)[name](...args);
+        }, `${name} threw synchronously`).not.toThrow();
+        expect(returned).toBeInstanceOf(Promise);
+        await expect(returned).rejects.toThrow(/number or boolean/);
+      }
+    });
+
     it('shape matches the synchronous version on the same input', async () => {
       const samples = generateSine(220, 0.5);
       const [syncResult, asyncResult] = [

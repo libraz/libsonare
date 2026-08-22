@@ -35,7 +35,8 @@ Napi::Object AssistSidecarToObject(Napi::Env env, SonareProjectAssistSidecar* si
 
 Napi::Value ProjectWrap::SetMidiEvents(const Napi::CallbackInfo& info) {
   Napi::Env env = info.Env();
-  const uint32_t clip_id = Uint32Arg(info, 0, 0);
+  uint32_t clip_id = 0;
+  if (!OptionalUint32Arg(env, info, 0, "clipId", 0, &clip_id)) return env.Undefined();
   std::vector<SonareMidiEventPod> events;
   if (info.Length() > 1 && info[1].IsArray()) {
     Napi::Array input = info[1].As<Napi::Array>();
@@ -146,13 +147,15 @@ Napi::Value ProjectWrap::ExportClipFile(const Napi::CallbackInfo& info) {
 
 Napi::Value ProjectWrap::SetProgram(const Napi::CallbackInfo& info) {
   Napi::Env env = info.Env();
+  uint32_t clip_id = 0;
   int program = 0;
   int bank = 0;
-  if (!Int32Arg(env, info, 1, "program", 0, &program) ||
+  if (!OptionalUint32Arg(env, info, 0, "clipId", 0, &clip_id) ||
+      !Int32Arg(env, info, 1, "program", 0, &program) ||
       !Int32Arg(env, info, 2, "bank", 0, &bank)) {
     return env.Undefined();
   }
-  ThrowIfError(env, sonare_project_set_program(project_, Uint32Arg(info, 0, 0), program, bank));
+  ThrowIfError(env, sonare_project_set_program(project_, clip_id, program, bank));
   return env.Undefined();
 }
 
@@ -160,9 +163,11 @@ Napi::Value ProjectWrap::SetProgramOnChannel(const Napi::CallbackInfo& info) {
   Napi::Env env = info.Env();
   // group/channel are uint8_t C-ABI arguments; the MidiByte reader rejects the
   // values a narrowing cast would wrap into a range the C ABI accepts.
+  uint32_t clip_id = 0;
   uint8_t group = 0;
   uint8_t channel = 0;
-  if (!OptionalMidiByteArg(env, info, 1, "group", 0, &group) ||
+  if (!OptionalUint32Arg(env, info, 0, "clipId", 0, &clip_id) ||
+      !OptionalMidiByteArg(env, info, 1, "group", 0, &group) ||
       !OptionalMidiByteArg(env, info, 2, "channel", 0, &channel)) {
     return env.Undefined();
   }
@@ -172,14 +177,15 @@ Napi::Value ProjectWrap::SetProgramOnChannel(const Napi::CallbackInfo& info) {
       !Int32Arg(env, info, 4, "bank", -1, &bank)) {
     return env.Undefined();
   }
-  ThrowIfError(env, sonare_project_set_program_on_channel(project_, Uint32Arg(info, 0, 0), group,
-                                                          channel, program, bank));
+  ThrowIfError(
+      env, sonare_project_set_program_on_channel(project_, clip_id, group, channel, program, bank));
   return env.Undefined();
 }
 
 Napi::Value ProjectWrap::BakeMidiFx(const Napi::CallbackInfo& info) {
   Napi::Env env = info.Env();
-  const uint32_t clip_id = Uint32Arg(info, 0, 0);
+  uint32_t clip_id = 0;
+  if (!OptionalUint32Arg(env, info, 0, "clipId", 0, &clip_id)) return env.Undefined();
   std::string config = info.Length() > 1 && info[1].IsString()
                            ? info[1].As<Napi::String>().Utf8Value()
                            : std::string();
@@ -189,7 +195,8 @@ Napi::Value ProjectWrap::BakeMidiFx(const Napi::CallbackInfo& info) {
 
 Napi::Value ProjectWrap::BakeMidiFxWithSourceIndex(const Napi::CallbackInfo& info) {
   Napi::Env env = info.Env();
-  const uint32_t clip_id = Uint32Arg(info, 0, 0);
+  uint32_t clip_id = 0;
+  if (!OptionalUint32Arg(env, info, 0, "clipId", 0, &clip_id)) return env.Undefined();
   std::string config = info.Length() > 1 && info[1].IsString()
                            ? info[1].As<Napi::String>().Utf8Value()
                            : std::string();
@@ -213,7 +220,8 @@ Napi::Value ProjectWrap::BakeMidiFxWithSourceIndex(const Napi::CallbackInfo& inf
 
 Napi::Value ProjectWrap::PreviewMidiFxCount(const Napi::CallbackInfo& info) {
   Napi::Env env = info.Env();
-  const uint32_t clip_id = Uint32Arg(info, 0, 0);
+  uint32_t clip_id = 0;
+  if (!OptionalUint32Arg(env, info, 0, "clipId", 0, &clip_id)) return env.Undefined();
   std::string config = info.Length() > 1 && info[1].IsString()
                            ? info[1].As<Napi::String>().Utf8Value()
                            : std::string();
@@ -228,7 +236,8 @@ Napi::Value ProjectWrap::SetMidiFx(const Napi::CallbackInfo& info) { return Bake
 
 Napi::Value ProjectWrap::ValidateMidiNotes(const Napi::CallbackInfo& info) {
   Napi::Env env = info.Env();
-  const uint32_t clip_id = Uint32Arg(info, 0, 0);
+  uint32_t clip_id = 0;
+  if (!OptionalUint32Arg(env, info, 0, "clipId", 0, &clip_id)) return env.Undefined();
   SonareNotePairValidation out{};
   ThrowIfError(env, sonare_project_validate_midi_notes(project_, clip_id, &out));
   if (env.IsExceptionPending()) return env.Undefined();
@@ -333,11 +342,16 @@ Napi::Value ProjectWrap::AnalyzeTempo(const Napi::CallbackInfo& info) {
 
 Napi::Value ProjectWrap::SnapToGrid(const Napi::CallbackInfo& info) {
   Napi::Env env = info.Env();
+  double ppq = 0.0;
+  double strength = 1.0;
   int division = 1;
-  if (!Int32Arg(env, info, 2, "division", 1, &division)) return env.Undefined();
+  if (!OptionalDoubleArg(env, info, 0, "ppq", 0.0, &ppq) ||
+      !OptionalDoubleArg(env, info, 1, "strength", 1.0, &strength) ||
+      !Int32Arg(env, info, 2, "division", 1, &division)) {
+    return env.Undefined();
+  }
   double out_ppq = 0.0;
-  ThrowIfError(env, sonare_project_snap_to_grid_ex(project_, NumberArg(info, 0, 0.0),
-                                                   NumberArg(info, 1, 1.0), division, &out_ppq));
+  ThrowIfError(env, sonare_project_snap_to_grid_ex(project_, ppq, strength, division, &out_ppq));
   if (env.IsExceptionPending()) return env.Undefined();
   return Napi::Number::New(env, out_ppq);
 }

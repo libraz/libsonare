@@ -230,13 +230,26 @@ Napi::Value SonareWrap::PeakPick(const Napi::CallbackInfo& info) {
     return env.Undefined();
   }
   auto arr = info[0].As<Napi::Float32Array>();
+  // Six numeric arguments read back to back: the inline form left the first bad
+  // one pending and let the next one's throw land on top of it, which aborts.
+  int pre_max = 0;
+  int post_max = 0;
+  int pre_avg = 0;
+  int post_avg = 0;
+  float delta = 0.0f;
+  int wait = 0;
+  if (!RequiredIntArg(env, info, 1, "preMax", &pre_max) ||
+      !RequiredIntArg(env, info, 2, "postMax", &post_max) ||
+      !RequiredIntArg(env, info, 3, "preAvg", &pre_avg) ||
+      !RequiredIntArg(env, info, 4, "postAvg", &post_avg) ||
+      !RequiredFloatValue(env, info[5], "delta", &delta) ||
+      !RequiredIntArg(env, info, 6, "wait", &wait)) {
+    return env.Undefined();
+  }
   int* out = nullptr;
   size_t count = 0;
-  SonareError err = sonare_peak_pick(
-      arr.Data(), arr.ElementLength(), info[1].As<Napi::Number>().Int32Value(),
-      info[2].As<Napi::Number>().Int32Value(), info[3].As<Napi::Number>().Int32Value(),
-      info[4].As<Napi::Number>().Int32Value(), info[5].As<Napi::Number>().FloatValue(),
-      info[6].As<Napi::Number>().Int32Value(), &out, &count);
+  SonareError err = sonare_peak_pick(arr.Data(), arr.ElementLength(), pre_max, post_max, pre_avg,
+                                     post_avg, delta, wait, &out, &count);
   if (err != SONARE_OK) return CheckCResult(env, err);
   return IntResult(env, out, count);
 }

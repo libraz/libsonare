@@ -91,6 +91,26 @@ inline void ThrowIfError(Napi::Env env, SonareError err) {
   }
 }
 
+/// @brief ThrowIfError's audio-thread counterpart: reports @p err from the code
+///        alone, never from the thread-local detail message.
+///
+/// Audio-thread entry points — the ones carrying SONARE_C_RT_API_ENTRY, i.e. the
+/// engine block-render calls and the realtime voice changer's process / latency
+/// calls — neither clear nor record sonare_last_error_message, because
+/// first-touch TLS setup would break their no-allocation contract
+/// (sonare_c_types_functions.h states the slot must not be read as belonging to
+/// the failed call). Routing them through ThrowIfError therefore reports
+/// whatever an unrelated earlier control-thread call left behind: the message is
+/// both wrong and intermittent, since it follows the call history rather than
+/// the failure. Every addon call into that set must use this instead, which
+/// mirrors the Python binding's _check_realtime.
+inline void ThrowIfRealtimeError(Napi::Env env, SonareError err) {
+  if (env.IsExceptionPending()) return;
+  if (err != SONARE_OK) {
+    ThrowSonareErrorMessage(env, err, sonare_error_message(err));
+  }
+}
+
 /// @brief Throw a JS TypeError with @p message and return false when
 ///        info[index] is not a Float32Array; otherwise return true. The caller
 ///        passes its own detail message so existing error strings are preserved.

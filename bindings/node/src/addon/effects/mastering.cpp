@@ -603,6 +603,19 @@ class MasterAudioStereoAsyncWorker : public Napi::AsyncWorker {
   SonareError error_code_ = SONARE_ERROR_UNKNOWN;
 };
 
+/// @brief Turns a pending synchronous throw into a rejected Promise.
+/// @details A Promise-returning entry point must reject rather than throw: the
+///          caller's `.catch()` is the only handler it has. Leaving the
+///          exception pending also let the AsyncWorker below be queued, so a
+///          full mastering render ran in the background for a call that had
+///          already failed, resolving a deferred nobody could observe.
+Napi::Value RejectPendingException(Napi::Env env) {
+  const Napi::Error pending = env.GetAndClearPendingException();
+  auto deferred = Napi::Promise::Deferred::New(env);
+  deferred.Reject(pending.Value());
+  return deferred.Promise();
+}
+
 }  // namespace
 
 Napi::Value SonareWrap::MasterAudioAsync(const Napi::CallbackInfo& info) {
@@ -623,6 +636,7 @@ Napi::Value SonareWrap::MasterAudioAsync(const Napi::CallbackInfo& info) {
   std::vector<sonare::mastering::api::Param> overrides;
   if (info.Length() >= 4 && info[3].IsObject()) {
     overrides = ParamsFromObject(info[3].As<Napi::Object>());
+    if (env.IsExceptionPending()) return RejectPendingException(env);
   }
   auto* worker = new MasterAudioAsyncWorker(env, std::move(preset_name), std::move(samples),
                                             sample_rate, std::move(overrides));
@@ -657,6 +671,7 @@ Napi::Value SonareWrap::MasterAudioStereoAsync(const Napi::CallbackInfo& info) {
   std::vector<sonare::mastering::api::Param> overrides;
   if (info.Length() >= 5 && info[4].IsObject()) {
     overrides = ParamsFromObject(info[4].As<Napi::Object>());
+    if (env.IsExceptionPending()) return RejectPendingException(env);
   }
   auto* worker =
       new MasterAudioStereoAsyncWorker(env, std::move(preset_name), std::move(left),
@@ -721,6 +736,14 @@ Napi::Value SonareWrap::MasteringChainWithProgress(const Napi::CallbackInfo& inf
     return env.Undefined();
   }
   SONARE_NODE_TRY
+  // The TypedArray's pointer is lent across the progress/cancel callbacks on
+  // purpose. MasteringChain::process_mono_impl copies the whole input into its
+  // own vector (src/mastering/api/chain.cpp:263) before the first
+  // progress_callback_ invocation, so a callback that transfers or detaches the
+  // caller's ArrayBuffer cannot reach memory the chain is still reading. An
+  // addon-side copy would only duplicate a whole recording a second time; the
+  // core contract is pinned by "MasteringChain copies its input before the first
+  // progress callback" in tests/mastering/chain_test.cpp.
   auto typed = info[0].As<Napi::Float32Array>();
   auto params = ParamsFromObject(info[2].As<Napi::Object>());
   if (env.IsExceptionPending()) return env.Undefined();
@@ -768,6 +791,8 @@ Napi::Value SonareWrap::MasteringChainStereoWithProgress(const Napi::CallbackInf
     return env.Undefined();
   }
   const int sr = info[2].As<Napi::Number>().Int32Value();
+  // Pointers lent across the callbacks for the same reason as the mono variant:
+  // process_stereo_impl copies both channels before any progress callback runs.
   auto params = ParamsFromObject(info[3].As<Napi::Object>());
   if (env.IsExceptionPending()) return env.Undefined();
   const auto c_params = CParamsFromNode(params);
@@ -808,6 +833,8 @@ Napi::Value SonareWrap::MasterAudioWithProgress(const Napi::CallbackInfo& info) 
   }
   SONARE_NODE_TRY
   std::string preset_name = info[0].As<Napi::String>().Utf8Value();
+  // Pointer lent across the callbacks for the same reason as the chain variants:
+  // the preset path runs the same MasteringChain, which copies first.
   auto typed = info[1].As<Napi::Float32Array>();
   auto overrides = ParamsFromObject(info[3].As<Napi::Object>());
   if (env.IsExceptionPending()) return env.Undefined();
@@ -857,6 +884,7 @@ Napi::Value SonareWrap::MasterAudioStereoWithProgress(const Napi::CallbackInfo& 
     return env.Undefined();
   }
   const int sr = info[3].As<Napi::Number>().Int32Value();
+  // Pointers lent across the callbacks for the same reason as the chain variants.
   auto overrides = ParamsFromObject(info[4].As<Napi::Object>());
   if (env.IsExceptionPending()) return env.Undefined();
   const auto c_overrides = CParamsFromNode(overrides);

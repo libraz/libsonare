@@ -280,6 +280,103 @@ describe('StreamingEqualizer', () => {
     eq.clearSidechain();
   });
 
+  // The core keeps the sidechain pointers for every later block, so the samples
+  // have to live in addon-owned storage: a JS ArrayBuffer can be mutated or
+  // transferred the instant the setter returns, which would have the audio
+  // thread reading a caller's live (or freed) memory.
+  describe('external sidechain ownership', () => {
+    const SIDECHAIN_SR = 48000;
+    const BLOCK = 512;
+
+    function dynamicEq(): StreamingEqualizer {
+      const eq = new StreamingEqualizer({ sampleRate: SIDECHAIN_SR, maxBlockSize: BLOCK });
+      eq.setBand(0, {
+        type: 'Peak',
+        frequencyHz: 1000,
+        gainDb: 0,
+        q: 2,
+        enabled: true,
+        dynamic: true,
+        externalSidechain: true,
+        thresholdDb: -32,
+        ratio: 4,
+        rangeDb: -12,
+        attackMs: 0,
+        releaseMs: 20,
+      });
+      return eq;
+    }
+
+    const audioBlock = () => generateSine(1000, SIDECHAIN_SR, BLOCK / SIDECHAIN_SR);
+    const loudKey = () => {
+      const key = generateSine(1000, SIDECHAIN_SR, BLOCK / SIDECHAIN_SR);
+      for (let i = 0; i < key.length; i += 1) key[i] *= 0.9;
+      return key;
+    };
+
+    function processedWithKey(key: Float32Array, mutate?: (key: Float32Array) => void): number[] {
+      const eq = dynamicEq();
+      eq.setSidechainMono(key);
+      mutate?.(key);
+      return Array.from(eq.processMono(audioBlock()));
+    }
+
+    it('copies a mono key so later mutation or transfer cannot change the output', () => {
+      const expected = processedWithKey(loudKey());
+
+      // Non-vacuity: the key really does drive the band, so an output that
+      // followed a zeroed key would be visibly different.
+      const silent = processedWithKey(new Float32Array(BLOCK));
+      expect(silent).not.toEqual(expected);
+
+      const mutated = processedWithKey(loudKey(), (key) => key.fill(0));
+      expect(mutated).toEqual(expected);
+
+      const transferred = processedWithKey(loudKey(), (key) => {
+        structuredClone(key, { transfer: [key.buffer as ArrayBuffer] });
+        expect(key.byteLength).toBe(0);
+      });
+      expect(transferred).toEqual(expected);
+    });
+
+    it('copies both stereo key channels', () => {
+      const runStereo = (mutate?: (left: Float32Array, right: Float32Array) => void): number[] => {
+        const eq = dynamicEq();
+        const left = loudKey();
+        const right = loudKey();
+        eq.setSidechainStereo(left, right);
+        mutate?.(left, right);
+        const out = eq.processStereo(audioBlock(), audioBlock());
+        return [...Array.from(out.left), ...Array.from(out.right)];
+      };
+
+      const expected = runStereo();
+      expect(
+        runStereo((left, right) => {
+          left.fill(0);
+          right.fill(0);
+        }),
+      ).toEqual(expected);
+      expect(
+        runStereo((left, right) => {
+          structuredClone(left, { transfer: [left.buffer as ArrayBuffer] });
+          structuredClone(right, { transfer: [right.buffer as ArrayBuffer] });
+        }),
+      ).toEqual(expected);
+    });
+
+    it('rejects a non-finite key and clears on an empty one', () => {
+      const eq = dynamicEq();
+      const nan = loudKey();
+      nan[4] = Number.NaN;
+      expect(() => eq.setSidechainMono(nan)).toThrow();
+      const infinite = loudKey();
+      infinite[7] = Number.POSITIVE_INFINITY;
+      expect(() => eq.setSidechainStereo(infinite, loudKey())).toThrow();
+      expect(() => eq.setSidechainMono(new Float32Array(0))).not.toThrow();
+    });
+  });
+
   // The band reader used to be a file-local copy of the shared option helpers,
   // which is why nothing counted setBand as options-accepting. Migrating it back
   // to the shared family must not drop a key on the way, so pin the ones with an
@@ -648,6 +745,25 @@ describe('StreamAnalyzer quantize-config override', () => {
     }
   });
 
+  it('rejects computeMagnitude, the way the C ABI, WASM and Python do', () => {
+    // This surface builds sonare::StreamAnalyzer directly and inherits nothing
+    // from the C ABI, so it used to be the one facade that accepted the flag --
+    // and then burned realtime CPU per frame computing a magnitude spectrum no
+    // read path here can return. The guard now sits with the field, shared by
+    // every facade.
+    let caught: unknown;
+    try {
+      new StreamAnalyzer({ sampleRate: SR, computeMagnitude: true });
+    } catch (error) {
+      caught = error;
+    }
+    expect(caught).toBeDefined();
+    expect((caught as Error).message).toMatch(/computeMagnitude is not supported/);
+    // An explicit false is still the default and stays accepted.
+    const analyzer = new StreamAnalyzer({ sampleRate: SR, computeMagnitude: false });
+    analyzer.destroy();
+  });
+
   it('rejects legacy outputFormat selectors', () => {
     expect(() => new StreamAnalyzer({ outputFormat: 1 })).toThrow();
     expect(() => new StreamAnalyzer({ outputFormat: 2 })).toThrow();
@@ -691,6 +807,48 @@ describe('StreamAnalyzer quantize-config override', () => {
     expect(() => new StreamAnalyzer({ sampleRate: SR, nFft: 1024, hopLength: 2048 })).toThrow();
     expect(() => new StreamAnalyzer({ sampleRate: SR, fmin: 8000, fmax: 4000 })).toThrow();
     expect(() => new StreamAnalyzer({ sampleRate: SR, maxProgressionEntries: 0 })).toThrow();
+  });
+
+  it('rejects out-of-int-range numeric config instead of narrowing it', () => {
+    // static_cast<int> of a double outside the int range is undefined behaviour,
+    // and on ARM64 it saturates to INT_MAX — which passes the core's `> 0`
+    // checks and hands a nonsense geometry to the FFT. Every int-valued field
+    // must reject the value the way maxPendingFrames already does.
+    const intFields = [
+      'sampleRate',
+      'nFft',
+      'hopLength',
+      'nMels',
+      'emitEveryNFrames',
+      'magnitudeDownsample',
+    ] as const;
+    const outOfDomain = [
+      1e18,
+      -1e18,
+      Number.MAX_VALUE,
+      -Number.MAX_VALUE,
+      Number.NaN,
+      Number.POSITIVE_INFINITY,
+      Number.NEGATIVE_INFINITY,
+      2.5,
+    ];
+    for (const field of intFields) {
+      for (const value of outOfDomain) {
+        expect(() => new StreamAnalyzer({ sampleRate: SR, [field]: value })).toThrow();
+      }
+    }
+
+    // A valid config with the same fields still constructs.
+    const ok = new StreamAnalyzer({
+      sampleRate: 8000,
+      nFft: 32,
+      hopLength: 32,
+      nMels: 8,
+      emitEveryNFrames: 1,
+      magnitudeDownsample: 1,
+    });
+    expect(ok.sampleRate()).toBe(8000);
+    ok.destroy();
   });
 
   it('accepts only valid window ordinals at the native boundary', () => {

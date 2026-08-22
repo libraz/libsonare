@@ -652,6 +652,24 @@ export type MasteringChannelPolicy =
 /** Coarse algorithmic work estimate for a realtime insert; not a benchmark. */
 export type MasteringRealtimeCost = 'low' | 'moderate' | 'high';
 
+/**
+ * Catalog grouping for a processor picker, derived from the id's prefix
+ * (`eq.*` -> `eq`, `match.*` -> `reference`); anything unprefixed is `other`.
+ */
+export type MasteringProcessorCategory =
+  | 'dynamics'
+  | 'effects'
+  | 'eq'
+  | 'final'
+  | 'maximizer'
+  | 'multiband'
+  | 'other'
+  | 'reference'
+  | 'repair'
+  | 'saturation'
+  | 'spectral'
+  | 'stereo';
+
 /** One mastering processor's role in the catalog. */
 export interface MasteringProcessorCatalogEntry {
   /** Stable processor id (e.g. `dynamics.compressor`, `match.abCrossfade`). */
@@ -688,6 +706,14 @@ export interface MasteringProcessorCatalogEntry {
    * surround planes passed through dry).
    */
   channelPolicy: MasteringChannelPolicy;
+  /** Grouping for a processor picker; see {@link MasteringProcessorCategory}. */
+  category: MasteringProcessorCategory;
+  /**
+   * The processor's automatable parameters, the same list
+   * {@link masteringInsertParamInfo} returns. Empty for entries that are not
+   * realtime-insertable.
+   */
+  params: MasteringInsertParamInfo[];
 }
 
 /**

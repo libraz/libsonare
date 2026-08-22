@@ -707,6 +707,16 @@ export interface SurroundPan {
   distance?: number;
 }
 
+/**
+ * Per-strip options for {@link mixStereo}. Each field is either one value for
+ * every strip or an array with one entry per strip; an array shorter than the
+ * strip list leaves the remaining strips at their defaults.
+ *
+ * Every field applies independently of the others. In particular `pan` and
+ * `panMode` are separate requests: `panMode` alone selects the mode at the
+ * strip's centre position, and `pan` alone moves the position while keeping the
+ * strip's current mode, the same way `Mixer.setPan(strip, pan, panMode?)` does.
+ */
 export interface MixOptions {
   inputTrimDb?: number | number[];
   faderDb?: number | number[];

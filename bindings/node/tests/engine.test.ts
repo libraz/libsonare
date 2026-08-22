@@ -3,7 +3,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { Worker } from 'node:worker_threads';
 import { describe, expect, it } from 'vitest';
-import type { EngineBounceOptions } from '../src/index.js';
+import type { EngineBounceOptions, MasteringProcessorCatalogEntry } from '../src/index.js';
 import {
   Audio,
   ErrorCode,
@@ -1855,6 +1855,36 @@ describe('RealtimeEngine native binding', () => {
     expect(byId('stereo.phaseAlign')?.tailSamples).toBe(0);
     expect(byId('effects.reverb.velvet')?.realtimeCost).toBe('high');
     expect(byId('effects.reverb.fdn')?.realtimeCost).toBe('moderate');
+
+    // The registry emits `category` and `params` unconditionally, but the TS
+    // interface stopped at `channelPolicy`, so reading either was a TS2339 on a
+    // value that was already there. Compare the runtime key set against the
+    // declared one rather than spot-checking, so the next added field cannot go
+    // undeclared either.
+    const declared: Record<keyof MasteringProcessorCatalogEntry, true> = {
+      id: true,
+      kind: true,
+      realtimeInsertable: true,
+      stereoOnly: true,
+      latencySamples: true,
+      tailSamples: true,
+      realtimeCost: true,
+      channelPolicy: true,
+      category: true,
+      params: true,
+    };
+    for (const entry of catalog) {
+      expect(Object.keys(entry).sort()).toEqual(Object.keys(declared).sort());
+    }
+    expect(compressor?.category).toBe('dynamics');
+    expect(abCrossfade?.category).toBe('reference');
+    expect(compressor?.params.map((param) => param.name).sort()).toEqual(
+      masteringInsertParamInfo('dynamics.compressor')
+        .map((param) => param.name)
+        .sort(),
+    );
+    // Non-insertable entries carry an empty list, not a missing key.
+    expect(loudnessOptimize?.params).toEqual([]);
   });
 
   it('reports realtime insert param descriptors and changes them live', () => {

@@ -1,11 +1,21 @@
+#include <algorithm>
 #include <string>
 #include <vector>
 
 #include "sonare_wrap_mixer.h"
+#include "sonare_wrap_options.h"
 #include "sonare_wrap_utils.h"
 
 namespace sonare_node {
 namespace {
+
+/// Upper bound on the goniometer working buffer, mirroring the strip ring
+/// (sonare::mixing::ChannelStrip::kGoniometerCapacity, which is private). One
+/// read can never return more than the ring holds, so capping the buffer here
+/// drops no point: it only stops a caller-supplied maxPoints from reserving
+/// gigabytes up front, which under NAPI_DISABLE_CPP_EXCEPTIONS would surface as
+/// an uncatchable std::bad_alloc that terminates the process.
+constexpr size_t kGoniometerReadCap = 4096;
 
 Napi::Object MeterSnapshotToObject(Napi::Env env, const SonareMixMeterSnapshot& snapshot) {
   Napi::Object out = Napi::Object::New(env);
@@ -179,12 +189,16 @@ Napi::Value MixerWrap::ReadGoniometerLatest(const Napi::CallbackInfo& info) {
     Napi::TypeError::New(env, "Expected (strip, maxPoints: number)").ThrowAsJavaScriptException();
     return env.Undefined();
   }
+  // maxPoints is a request, not an allocation: reject anything that is not a
+  // finite non-negative integer first, then size the working buffer against the
+  // ring capacity rather than against the caller's number.
+  size_t requested = 0;
+  if (!NonNegativeSizeTArg(env, info, 1, "maxPoints", &requested)) return env.Undefined();
   SonareStrip* strip = ResolveStrip(info, info[0]);
   if (strip == nullptr) {
     return env.Undefined();
   }
-  const int64_t requested = info[1].As<Napi::Number>().Int64Value();
-  const size_t max_points = requested > 0 ? static_cast<size_t>(requested) : 0;
+  const size_t max_points = std::min(requested, kGoniometerReadCap);
   std::vector<SonareMixGoniometerPoint> points(max_points);
   const size_t count = sonare_strip_read_goniometer_latest(
       strip, max_points > 0 ? points.data() : nullptr, max_points);

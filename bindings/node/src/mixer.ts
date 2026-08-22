@@ -423,7 +423,14 @@ export class Mixer {
     return this.native.meterTap(strip, meterTapValue(tap));
   }
 
-  /** Read up to `maxPoints` of the latest goniometer samples for a strip. */
+  /**
+   * Read up to `maxPoints` of the latest goniometer samples for a strip.
+   *
+   * `maxPoints` must be a finite non-negative integer; anything else throws a
+   * `TypeError` or `RangeError`. It is a request rather than an allocation
+   * size — a value beyond the strip's goniometer ring simply returns every
+   * point the ring holds.
+   */
   readGoniometerLatest(strip: StripRef, maxPoints: number): GoniometerPoint[] {
     return this.native.readGoniometerLatest(strip, maxPoints);
   }

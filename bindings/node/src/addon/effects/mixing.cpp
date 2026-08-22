@@ -237,11 +237,19 @@ Napi::Value SonareWrap::MixStereo(const Napi::CallbackInfo& info) {
       if (err != SONARE_OK)
         throw sonare::SonareException(sonare_node::CodeFromCError(err), ErrorMessageForCode(err));
     }
+    // pan and panMode are independent fields: either one alone must apply. The
+    // C ABI takes them together, so the missing half comes from the strip the
+    // loop just created -- SONARE_PAN_MODE_KEEP for an absent mode, and centre
+    // (0.0f, a fresh strip's pan) for an absent position. Reading panMode only
+    // inside `pan.IsNumber()` used to drop a mode-only request silently, and
+    // PanModeValue rejects `undefined`, so a position-only request threw.
     Napi::Value pan = OptionAt(env, options, "pan", index);
-    if (pan.IsNumber()) {
-      Napi::Value mode = OptionAt(env, options, "panMode", index);
-      SonareError err =
-          sonare_strip_set_pan(strip, pan.As<Napi::Number>().FloatValue(), PanModeValue(mode));
+    Napi::Value mode = OptionAt(env, options, "panMode", index);
+    const bool has_mode = !mode.IsUndefined() && !mode.IsNull();
+    if (pan.IsNumber() || has_mode) {
+      const float pan_value = pan.IsNumber() ? pan.As<Napi::Number>().FloatValue() : 0.0f;
+      const int mode_value = has_mode ? PanModeValue(mode) : SONARE_PAN_MODE_KEEP;
+      SonareError err = sonare_strip_set_pan(strip, pan_value, mode_value);
       if (err != SONARE_OK)
         throw sonare::SonareException(sonare_node::CodeFromCError(err), ErrorMessageForCode(err));
     }

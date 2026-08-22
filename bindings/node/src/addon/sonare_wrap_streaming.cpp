@@ -417,8 +417,8 @@ StreamingEqualizerWrap::~StreamingEqualizerWrap() = default;
 // rather than at GC; every method already guards on a null eq_.
 Napi::Value StreamingEqualizerWrap::Destroy(const Napi::CallbackInfo& info) {
   eq_.reset();
-  sidechain_left_.Reset();
-  sidechain_right_.Reset();
+  sidechain_left_.clear();
+  sidechain_right_.clear();
   sidechain_channels_ = {};
   return info.Env().Undefined();
 }
@@ -542,13 +542,22 @@ Napi::Value StreamingEqualizerWrap::SetSidechainMono(const Napi::CallbackInfo& i
     return env.Undefined();
   }
   SONARE_NODE_TRY
-  sidechain_left_.Reset();
-  sidechain_right_.Reset();
+  // Copy before anything else: the core holds the sidechain pointers across
+  // every later process() call, and a JS ArrayBuffer can be detached or
+  // transferred the moment this setter returns.
   Napi::Float32Array key = info[0].As<Napi::Float32Array>();
-  sidechain_left_ = Napi::Persistent(key);
-  sidechain_channels_[0] = key.Data();
-  sidechain_channels_[1] = nullptr;
-  eq_->set_sidechain(sidechain_channels_.data(), 1, static_cast<int>(key.ElementLength()));
+  std::vector<float> staged(key.Data(), key.Data() + key.ElementLength());
+  if (staged.empty()) {
+    ClearSidechainStorage();
+    return env.Undefined();
+  }
+  sonare::validate_offline_audio_input(staged.data(), staged.size(),
+                                       static_cast<int>(std::lround(sample_rate_)));
+
+  sidechain_left_.swap(staged);
+  sidechain_right_.clear();
+  sidechain_channels_ = {sidechain_left_.data(), nullptr};
+  eq_->set_sidechain(sidechain_channels_.data(), 1, static_cast<int>(sidechain_left_.size()));
   return env.Undefined();
   SONARE_NODE_CATCH(env)
 }
@@ -572,15 +581,32 @@ Napi::Value StreamingEqualizerWrap::SetSidechainStereo(const Napi::CallbackInfo&
         .ThrowAsJavaScriptException();
     return env.Undefined();
   }
-  sidechain_left_.Reset();
-  sidechain_right_.Reset();
-  sidechain_left_ = Napi::Persistent(left);
-  sidechain_right_ = Napi::Persistent(right);
-  sidechain_channels_[0] = left.Data();
-  sidechain_channels_[1] = right.Data();
-  eq_->set_sidechain(sidechain_channels_.data(), 2, static_cast<int>(left.ElementLength()));
+  // Copy both channels before the core is given any pointer, for the same
+  // detach reason as the mono setter.
+  std::vector<float> staged_left(left.Data(), left.Data() + left.ElementLength());
+  std::vector<float> staged_right(right.Data(), right.Data() + right.ElementLength());
+  if (staged_left.empty()) {
+    ClearSidechainStorage();
+    return env.Undefined();
+  }
+  const int sr = static_cast<int>(std::lround(sample_rate_));
+  sonare::validate_offline_audio_input(staged_left.data(), staged_left.size(), sr);
+  sonare::validate_offline_audio_input(staged_right.data(), staged_right.size(), sr);
+
+  sidechain_left_.swap(staged_left);
+  sidechain_right_.swap(staged_right);
+  sidechain_channels_ = {sidechain_left_.data(), sidechain_right_.data()};
+  eq_->set_sidechain(sidechain_channels_.data(), 2, static_cast<int>(sidechain_left_.size()));
   return env.Undefined();
   SONARE_NODE_CATCH(env)
+}
+
+// Drops the core's borrowed pointers first, then the storage they pointed at.
+void StreamingEqualizerWrap::ClearSidechainStorage() {
+  if (eq_) eq_->clear_sidechain();
+  sidechain_left_.clear();
+  sidechain_right_.clear();
+  sidechain_channels_ = {};
 }
 
 Napi::Value StreamingEqualizerWrap::ClearSidechain(const Napi::CallbackInfo& info) {
@@ -589,10 +615,7 @@ Napi::Value StreamingEqualizerWrap::ClearSidechain(const Napi::CallbackInfo& inf
     Napi::Error::New(env, "StreamingEqualizer is not initialized").ThrowAsJavaScriptException();
     return env.Undefined();
   }
-  eq_->clear_sidechain();
-  sidechain_left_.Reset();
-  sidechain_right_.Reset();
-  sidechain_channels_ = {};
+  ClearSidechainStorage();
   return env.Undefined();
 }
 
@@ -806,6 +829,7 @@ StreamingRetuneWrap::StreamingRetuneWrap(const Napi::CallbackInfo& info)
   if (info.Length() >= 1) {
     ReadRetuneConfig(info[0], &semitones, &mix, &grain_size);
   }
+  requested_grain_size_ = grain_size;
   retune_ = sonare_streaming_retune_create(semitones, mix, grain_size);
   if (retune_ == nullptr) {
     ThrowSonareError(env, SONARE_ERROR_INVALID_PARAMETER, "StreamingRetune: ");
@@ -849,13 +873,20 @@ Napi::Value StreamingRetuneWrap::SetConfig(const Napi::CallbackInfo& info) {
   // key leaves the others alone, matching every other setConfig on this surface.
   float semitones = 0.0f;
   float mix = 1.0f;
-  int grain_size = 0;
-  ThrowIfError(env, sonare_streaming_retune_config(retune_, &semitones, &mix, &grain_size));
+  int effective_grain_size = 0;
+  ThrowIfError(env,
+               sonare_streaming_retune_config(retune_, &semitones, &mix, &effective_grain_size));
   if (env.IsExceptionPending()) return env.Undefined();
+  // grainSize is the exception: it is seeded from the last REQUESTED value, not
+  // from the effective one config() reports, so an omitted key preserves the 0
+  // sentinel and the next prepare re-derives the grain from its sample rate.
+  int grain_size = requested_grain_size_;
   if (info.Length() >= 1) {
     ReadRetuneConfig(info[0], &semitones, &mix, &grain_size);
   }
   ThrowIfError(env, sonare_streaming_retune_set_config(retune_, semitones, mix, grain_size));
+  if (env.IsExceptionPending()) return env.Undefined();
+  requested_grain_size_ = grain_size;
   return env.Undefined();
 }
 

@@ -36,16 +36,13 @@ bool ValidateAcousticSampleRate(const Napi::Env& env, int sample_rate) {
   return true;
 }
 
-// Mirrors the C ABI's per-material-band cap (sonare_c_acoustic.cpp) so a crafted
+// The per-material-band cap and the finite-[0, 1] coefficient rejection live in
+// the core's make_uniform_room, which RoomFromOptions below calls, so a crafted
 // bandAbsorption/bandScattering array cannot drive an unbounded per-wall
-// allocation. The C ABI is otherwise bypassed here (synthesize_rir is called
-// directly), so this binding must re-apply the same guard.
-constexpr size_t kMaxMaterialBands = 64;
-
-// Finite [0, 1] test matching the C ABI's `unit` predicate for absorption /
-// scattering coefficients. Out-of-range values are rejected (not silently
-// clamped) so the same mistake surfaces the same error on every surface.
-bool IsUnitCoefficient(float v) { return std::isfinite(v) && v >= 0.0f && v <= 1.0f; }
+// allocation and an out-of-range coefficient raises the same error it does on
+// the C ABI. The C ABI is otherwise bypassed here (synthesize_rir is called
+// directly), which is why the guard has to be reachable from the core rather
+// than sitting in the C-ABI translation unit.
 
 // Validates the RIR shape/timing config against the same bounds the C ABI checks
 // before building a room, so Node rejects (rather than silently accepts) the
@@ -152,63 +149,17 @@ sonare::acoustic::ShoeboxRoom RoomFromOptions(const Napi::Object& opts, float de
                                   "room dimensions must be finite");
   }
 
-  MaterialPreset preset{};
-  if (MaterialPresetFromInt(node_int_option(opts, "materialPreset", 0), &preset)) {
-    ShoeboxRoom room;
-    room.dims = dims;
-    const Material wall = make_material(preset);
-    for (Material& w : room.walls) w = wall;
-    return room;
-  }
-
-  const std::vector<float> bands = NodeFloatArrayOption(opts, "bandAbsorption");
-  if (!bands.empty()) {
-    const std::vector<float> scattering_bands = NodeFloatArrayOption(opts, "bandScattering");
-    if (bands.size() > kMaxMaterialBands || scattering_bands.size() > kMaxMaterialBands) {
-      throw sonare::SonareException(sonare::ErrorCode::InvalidParameter,
-                                    "material band count exceeds the maximum of 64");
-    }
-    // Reject any non-finite or out-of-[0, 1] per-band coefficient, matching the C
-    // ABI's `unit` predicate so the same invalid band table fails identically on
-    // every surface (rather than being silently clamped only here).
-    for (float a : bands) {
-      if (!IsUnitCoefficient(a)) {
-        throw sonare::SonareException(sonare::ErrorCode::InvalidParameter,
-                                      "bandAbsorption values must be within [0, 1]");
-      }
-    }
-    for (float s : scattering_bands) {
-      if (!IsUnitCoefficient(s)) {
-        throw sonare::SonareException(sonare::ErrorCode::InvalidParameter,
-                                      "bandScattering values must be within [0, 1]");
-      }
-    }
-    ShoeboxRoom room;
-    room.dims = dims;
-    Material wall;
-    wall.absorption.reserve(bands.size());
-    // Clamp the accepted in-range per-band absorption to [0, 0.999], matching the
-    // C-ABI oracle's make_room clamp so the same band table yields the same
-    // reflection energy on every surface (a raw 1.0 gives beta=0 here but 0.0316
-    // in the C ABI, diverging the RIR early reflections).
-    for (float a : bands) {
-      wall.absorption.push_back(std::clamp(a, 0.0f, 0.999f));
-    }
-    wall.scattering.reserve(bands.size());
-    for (size_t i = 0; i < bands.size(); ++i) {
-      const float scattering = i < scattering_bands.size() ? scattering_bands[i] : 0.0f;
-      wall.scattering.push_back(scattering);
-    }
-    for (Material& w : room.walls) w = wall;
-    return room;
-  }
-
-  const float scalar = node_float_option(opts, "absorption", def_absorption);
-  if (!IsUnitCoefficient(scalar)) {
-    throw sonare::SonareException(sonare::ErrorCode::InvalidParameter,
-                                  "absorption must be within [0, 1]");
-  }
-  return uniform_shoebox(dims, scalar);
+  // The precedence, the [0, 1] coefficient rejection and the band-wise
+  // scattering all come from the core builder the C ABI calls, so the same
+  // option bag builds the same room on every surface. Reading the options is
+  // the only part that is Node's.
+  WallMaterialRequest request;
+  request.has_preset =
+      MaterialPresetFromInt(node_int_option(opts, "materialPreset", 0), &request.preset);
+  request.absorption_bands = NodeFloatArrayOption(opts, "bandAbsorption");
+  request.scattering_bands = NodeFloatArrayOption(opts, "bandScattering");
+  request.absorption = node_float_option(opts, "absorption", def_absorption);
+  return make_uniform_room(dims, request);
 }
 
 sonare::acoustic::SourceListener PlacementFromOptions(const Napi::Object& opts) {

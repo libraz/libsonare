@@ -315,6 +315,11 @@ inline bool RequiredStringProperty(Napi::Env env, const Napi::Object& obj, const
 // 0 alongside a pending exception, and the C-ABI call built from it then runs
 // with the dummy value, flipping engine state to the opposite of what the
 // caller asked for before the error is ever reported.
+//
+// Both halves are enforced mechanically by tests/addon-abort-guards.test.ts,
+// which scans these sources: a reader of this shape defined outside this file
+// fails, and so does a call to one whose false return is not consumed as
+// `if (!Reader(...)) return ...;`.
 
 /// @brief Read a required int positional argument.
 inline bool RequiredIntArg(Napi::Env env, const Napi::CallbackInfo& info, size_t index,
@@ -338,6 +343,43 @@ inline bool OptionalIntArg(Napi::Env env, const Napi::CallbackInfo& info, size_t
     return true;
   }
   return RequiredIntValue(env, value, name, out);
+}
+
+/// @brief Read an optional positional argument as an int, rejecting anything a
+///        float-to-integer cast cannot represent. An absent, undefined or null
+///        argument reads as @p fallback; a non-number is a TypeError and a
+///        non-finite, fractional or out-of-int-range number a RangeError.
+///
+/// This is the strict sibling of OptionalIntArg: that one narrows through
+/// Int32Value(), whose result is undefined for NaN, an infinity, or a magnitude
+/// past INT_MAX, so an argument headed for an int C-ABI parameter that must not
+/// silently wrap is checked here instead.
+inline bool Int32Arg(Napi::Env env, const Napi::CallbackInfo& info, size_t index, const char* name,
+                     int fallback, int* out) {
+  if (env.IsExceptionPending() || out == nullptr) return false;
+  const Napi::Value value = info[index];
+  if (value.IsUndefined() || value.IsNull()) {
+    *out = fallback;
+    return true;
+  }
+  if (!value.IsNumber()) {
+    Napi::TypeError::New(env, std::string(name) + " must be a number").ThrowAsJavaScriptException();
+    return false;
+  }
+
+  const double number = value.As<Napi::Number>().DoubleValue();
+  constexpr double kMinInt = static_cast<double>(std::numeric_limits<int>::min());
+  constexpr double kMaxInt = static_cast<double>(std::numeric_limits<int>::max());
+  if (!std::isfinite(number) || std::trunc(number) != number || number < kMinInt ||
+      number > kMaxInt) {
+    Napi::RangeError::New(
+        env, std::string(name) + " must be a finite integer within the native int range")
+        .ThrowAsJavaScriptException();
+    return false;
+  }
+
+  *out = static_cast<int>(number);
+  return true;
 }
 
 /// @brief Read an optional uint32 positional argument.

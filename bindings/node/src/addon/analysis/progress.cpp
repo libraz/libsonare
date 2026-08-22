@@ -43,6 +43,18 @@ Napi::Value SonareWrap::AnalyzeWithProgress(const Napi::CallbackInfo& info) {
     return env.Undefined();
   }
 
+  // Lending the TypedArray's pointer across the progress/cancel callbacks is
+  // safe here, and deliberately not defended against a second time: the C ABI
+  // takes its own copy before a callback can ever fire. run_offline
+  // (src/c_api/sonare_c_internal.h:285) builds the Audio with
+  // Audio::from_buffer, which copies, and only the MusicAnalyzer constructed
+  // from that Audio receives the progress callback. Nothing dereferences this
+  // pointer after the call below returns, so a callback that transfers or
+  // detaches the caller's ArrayBuffer cannot reach freed memory. Duplicating
+  // the buffer here would cost a second full copy of a whole recording for a
+  // hazard that the layer underneath already closes. That copy is pinned by the
+  // "copies the input before the first progress callback" section of the
+  // sonare_analyze_json case in tests/api/sonare_c_core_test.cpp.
   auto typed = info[0].As<Napi::Float32Array>();
   const float* data = typed.Data();
   const size_t length = typed.ElementLength();

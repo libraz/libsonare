@@ -218,8 +218,9 @@ export class StreamAnalyzer {
 
   /**
    * Alias for {@link readFramesSoa}, provided for cross-binding naming
-   * consistency (WASM exposes both `readFrames` and `readFramesSoa`; Python
-   * uses `read_frames`).
+   * consistency: the WASM `StreamAnalyzer` class publishes this SOA read as
+   * `readFrames` (the embind-level `readFramesSoa` is not re-exported), and
+   * Python names it `read_frames`.
    */
   readFrames(maxFrames: number): StreamFramesSoa {
     return this.readFramesSoa(maxFrames);
@@ -273,12 +274,31 @@ export class StreamAnalyzer {
     this.native.setExpectedDuration(seconds);
   }
 
-  /** Set a normalization gain applied to incoming samples. */
+  /**
+   * Set a normalization gain applied to incoming samples.
+   *
+   * `gain` is a linear factor within 0.01..100, assuming input in the
+   * conventional ±1 float domain. A value outside that range — or a
+   * non-finite or non-positive one — throws `InvalidParameter` instead of
+   * being clamped, and the previous gain is kept. The usual recipe
+   * (`targetLevel / measuredLevel`) easily lands outside it for a buffer on
+   * another scale: an integer-scaled one asks for about 3e-4. Since no getter
+   * exposes the effective gain, a clamped request would analyse roughly 30 dB
+   * off target with nothing to detect it by. Convert such a buffer to the ±1
+   * domain before feeding it instead.
+   */
   setNormalizationGain(gain: number): void {
     this.native.setNormalizationGain(gain);
   }
 
-  /** Set the tuning reference frequency (Hz) for key/chroma analysis. */
+  /**
+   * Set the tuning reference frequency (Hz) for key/chroma analysis.
+   *
+   * `hz` must be within 220..880, the same range {@link StreamAnalyzerConfig}'s
+   * `tuningRefHz` accepts at construction. A value outside it throws rather
+   * than being clamped, so the chromagram cannot depend on which entry point
+   * supplied the reference.
+   */
   setTuningRefHz(hz: number): void {
     this.native.setTuningRefHz(hz);
   }
@@ -386,12 +406,23 @@ export class StreamingEqualizer {
     this.native.setOutputPan(pan);
   }
 
-  /** Set a mono external key for dynamic bands with `externalSidechain` enabled. */
+  /**
+   * Set a mono external key for dynamic bands with `externalSidechain` enabled.
+   *
+   * The samples are copied into an owned buffer, so the source ArrayBuffer may
+   * be mutated, transferred or detached after this call without affecting the
+   * key. Every sample must be finite; an empty array clears the key.
+   */
   setSidechainMono(samples: Float32Array): void {
     this.native.setSidechainMono(samples);
   }
 
-  /** Set a stereo external key for dynamic bands with `externalSidechain` enabled. */
+  /**
+   * Set a stereo external key for dynamic bands with `externalSidechain` enabled.
+   *
+   * Both channels are copied, with the same detach safety and finiteness
+   * requirement as {@link setSidechainMono}.
+   */
   setSidechainStereo(left: Float32Array, right: Float32Array): void {
     this.native.setSidechainStereo(left, right);
   }

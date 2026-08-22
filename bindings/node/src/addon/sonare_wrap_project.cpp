@@ -247,7 +247,9 @@ Napi::Value ProjectWrap::FromJsonWithDiagnostics(const Napi::CallbackInfo& info)
 
 Napi::Value ProjectWrap::SetSampleRate(const Napi::CallbackInfo& info) {
   Napi::Env env = info.Env();
-  ThrowIfError(env, sonare_project_set_sample_rate(project_, NumberArg(info, 0, 0.0)));
+  double sample_rate = 0.0;
+  if (!OptionalDoubleArg(env, info, 0, "sampleRate", 0.0, &sample_rate)) return env.Undefined();
+  ThrowIfError(env, sonare_project_set_sample_rate(project_, sample_rate));
   return env.Undefined();
 }
 
@@ -261,7 +263,9 @@ Napi::Value ProjectWrap::GetSampleRate(const Napi::CallbackInfo& info) {
 
 Napi::Value ProjectWrap::SetOverlapPolicy(const Napi::CallbackInfo& info) {
   Napi::Env env = info.Env();
-  ThrowIfError(env, sonare_project_set_overlap_policy(project_, Uint32Arg(info, 0, 0)));
+  uint32_t policy = 0;
+  if (!OptionalUint32Arg(env, info, 0, "policy", 0, &policy)) return env.Undefined();
+  ThrowIfError(env, sonare_project_set_overlap_policy(project_, policy));
   return env.Undefined();
 }
 
@@ -284,8 +288,12 @@ Napi::Value ProjectWrap::SetMixerSceneJson(const Napi::CallbackInfo& info) {
 
 Napi::Value ProjectWrap::SetMarker(const Napi::CallbackInfo& info) {
   Napi::Env env = info.Env();
-  const uint32_t marker_id = Uint32Arg(info, 0, 0);
-  const double ppq = NumberArg(info, 1, 0.0);
+  uint32_t marker_id = 0;
+  double ppq = 0.0;
+  if (!OptionalUint32Arg(env, info, 0, "markerId", 0, &marker_id) ||
+      !OptionalDoubleArg(env, info, 1, "ppq", 0.0, &ppq)) {
+    return env.Undefined();
+  }
   std::string name = info.Length() > 2 && info[2].IsString()
                          ? info[2].As<Napi::String>().Utf8Value()
                          : std::string();
@@ -546,10 +554,15 @@ Napi::Value ProjectWrap::SetSourceAudio(const Napi::CallbackInfo& info) {
         .ThrowAsJavaScriptException();
     return env.Undefined();
   }
-  const uint32_t source_id = static_cast<uint32_t>(NumberArg(info, 0, 0.0));
+  uint32_t source_id = 0;
+  int channels = 0;
+  int sample_rate = 0;
+  if (!OptionalUint32Arg(env, info, 0, "sourceId", 0, &source_id) ||
+      !Int32Arg(env, info, 2, "channels", 0, &channels) ||
+      !Int32Arg(env, info, 3, "sampleRate", 0, &sample_rate)) {
+    return env.Undefined();
+  }
   Napi::Float32Array audio = info[1].As<Napi::Float32Array>();
-  const int channels = static_cast<int>(NumberArg(info, 2, 0.0));
-  const int sample_rate = static_cast<int>(NumberArg(info, 3, 0.0));
   if (channels <= 0 || audio.ElementLength() % static_cast<size_t>(channels) != 0) {
     Napi::TypeError::New(env, "audio length must be a multiple of channels")
         .ThrowAsJavaScriptException();

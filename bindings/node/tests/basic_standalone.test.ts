@@ -96,6 +96,7 @@ describe('standalone functions', () => {
     expect(report.features).toEqual({
       mastering: expect.any(Boolean),
       mixing: expect.any(Boolean),
+      mixingAssistant: expect.any(Boolean),
       fx: expect.any(Boolean),
       ffmpeg: hasFfmpegSupport(),
       instrumentParamAutomation: expect.any(Boolean),

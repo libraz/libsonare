@@ -34,7 +34,15 @@ export interface InverseMelResult {
   power: Float32Array;
 }
 
-/** Construction options for {@link StreamAnalyzer}. Mirrors `sonare::StreamConfig`. */
+/**
+ * Construction options for {@link StreamAnalyzer}. Mirrors `sonare::StreamConfig`.
+ *
+ * Every count-valued field (`sampleRate`, `nFft`, `hopLength`, `nMels`,
+ * `emitEveryNFrames`, `magnitudeDownsample`, `maxPendingFrames`,
+ * `maxProgressionEntries`, `window`, `outputFormat`) must be an integer the
+ * native type can hold; a fractional or out-of-range value is rejected rather
+ * than truncated.
+ */
 export interface StreamAnalyzerConfig {
   sampleRate?: number;
   nFft?: number;
@@ -45,8 +53,10 @@ export interface StreamAnalyzerConfig {
   /** A4 tuning reference in Hz. Defaults to 440; must be within 220..880, the
    *  same range `setTuningRefHz` accepts live. */
   tuningRefHz?: number;
-  /** Compute the per-frame magnitude spectrum. Defaults to false: no read path
-   *  surfaces it, so enabling it only burns realtime CPU with no readable result. */
+  /** Compute the per-frame magnitude spectrum. Must be false (the default): no
+   *  read path on this surface returns magnitude frames, so enabling it would
+   *  only burn realtime CPU with no readable result. `true` is rejected, the
+   *  same way the C ABI, WASM and Python reject it. */
   computeMagnitude?: boolean;
   computeMel?: boolean;
   computeChroma?: boolean;
@@ -154,9 +164,21 @@ export interface StreamChordChange {
 
 /** A per-bar chord in a progressive estimate. */
 export interface StreamBarChord {
+  /**
+   * Bar number, not the index of this entry in the array: bars with no
+   * confident chord are not recorded and the oldest entries are dropped at the
+   * history cap. Group bars by pattern position with this, never with the array
+   * index. In `votedPattern` it is the pattern position instead.
+   */
   barIndex: number;
   root: number;
   quality: number;
+  /**
+   * Start of the bar, on the same timeline as `StreamFrame.timestamp`
+   * (including a `sampleOffset` anchor). Consecutive bars are `barDuration`
+   * apart rather than snapped to the analysis frame grid. Unused in
+   * `votedPattern`.
+   */
   startTime: number;
   confidence: number;
 }
@@ -171,6 +193,11 @@ export interface StreamPatternScore {
 export interface StreamProgressiveEstimate {
   bpm: number;
   bpmConfidence: number;
+  /**
+   * Tempo candidates the most recent BPM estimate chose from; 0 until an
+   * estimate has run. Same quantity as the batch analysis result's field of the
+   * same name.
+   */
   bpmCandidateCount: number;
   key: number;
   keyMinor: boolean;
@@ -190,6 +217,11 @@ export interface StreamProgressiveEstimate {
   allPatternScores: StreamPatternScore[];
   accumulatedSeconds: number;
   usedFrames: number;
+  /**
+   * True when the key or BPM was re-estimated since the previous stats
+   * snapshot. One change sets it on exactly one snapshot however the caller
+   * chunks its input, and a call that produced no frame does not repeat it.
+   */
   updated: boolean;
 }
 

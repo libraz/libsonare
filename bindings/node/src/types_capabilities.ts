@@ -13,6 +13,13 @@ export interface Capabilities {
   features: {
     mastering: boolean;
     mixing: boolean;
+    /**
+     * True when the offline mixing assistant is compiled in. Separate from
+     * `mixing` because it can be dropped on its own, and its entry points stay
+     * exported either way — they report unsupported rather than disappearing,
+     * so probing for the function tells a host nothing.
+     */
+    mixingAssistant: boolean;
     fx: boolean;
     ffmpeg: boolean;
     /**
