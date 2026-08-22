@@ -10,8 +10,11 @@ without the C-ABI parity checker seeing anything: parity compares signatures,
 not the document a facade produces.
 
 The JavaScript subprocesses use a deliberately small protocol: one
-base64-encoded request document on stdin (per-track samples as base64
-little-endian Float32 blocks) and the base64-encoded scene JSON on stdout.
+base64-encoded request document on stdin (the shared fixture, with per-track
+samples as base64 little-endian Float32 blocks, plus every option case) and a
+base64-encoded JSON array of scene documents on stdout, one per case in order.
+Every case travels in one process because instantiating the WASM module costs
+more than running the assistant over the fixture.
 """
 
 from __future__ import annotations
@@ -58,17 +61,36 @@ OPTION_KEYS = {
     "hopLength": "hop_length",
 }
 
-# The defaults, plus one case per option that has to be shown reaching the core.
-# Every case other than the defaults is checked below for producing a different
-# scene than the defaults do: four surfaces that all ignore an option would agree
-# perfectly and mean nothing.
+# The defaults, plus one case per option in OPTION_KEYS. Every case other than
+# the defaults is checked below for producing a different scene than the
+# defaults do: four surfaces that all ignore an option would agree perfectly and
+# mean nothing, so a case that reproduces the default scene fails the run.
 #
-# enableHighPass earns a case of its own because it is the one option that is off
-# by default, so the default case exercises only the path where it does nothing.
+# One case per option rather than a representative few, because an option is
+# reached by a different path on each surface -- a name table on one, a keyword
+# on another -- and the surface that drops one is not predictable from the
+# surface that keeps it.
+#
+# The values are chosen to move the scene on the fixture below rather than to be
+# interesting numbers: the boolean domains are switched off, the geometry is
+# halved, and the levels are moved far enough that rounding cannot hide them.
+# eqMaxCutDb is lowered rather than raised because the fixture's one corrective
+# cut is already held at the default ceiling, so both directions bind.
 CASES: dict[str, dict[str, float | bool]] = {
     "defaults": {},
+    "targetTrackLufs=-24": {"targetTrackLufs": -24.0},
     "suggestionStrength=0.5": {"suggestionStrength": 0.5},
+    "eqMaxCutDb=0.5": {"eqMaxCutDb": 0.5},
+    "mixBusHeadroomDbtp=-14": {"mixBusHeadroomDbtp": -14.0},
+    "enableStructure=false": {"enableStructure": False},
+    "enableGain=false": {"enableGain": False},
+    "enableBalance=false": {"enableBalance": False},
+    "enableEq=false": {"enableEq": False},
+    "enableDynamics=false": {"enableDynamics": False},
+    "enableImage=false": {"enableImage": False},
     "enableHighPass=true": {"enableHighPass": True},
+    "nFft=1024": {"nFft": 1024},
+    "hopLength=256": {"hopLength": 256},
 }
 
 SURFACES = ("c", "python", "node", "wasm")
@@ -127,6 +149,27 @@ def _make_tracks() -> list[Track]:
     The set deliberately mixes mono and stereo tracks and includes one track
     that is shorter than the others, because per-track lengths are the part of
     the multi-track convention a binding is most likely to get wrong.
+
+    It also has to give every option in OPTION_KEYS something to change. The
+    lead synth is there for the EQ pair: without a confidently classified track
+    that is being masked in a band it can spare, the assistant proposes no
+    corrective cut at all, and both enableEq and eqMaxCutDb agree four ways
+    while proving nothing.
+
+    What this fixture deliberately does *not* cover: every track here is named
+    after a class the classifier's decision table can measure (kick, bass, vocal,
+    guitar, lead). Four classes have no row -- keys, strings, backing, fx -- and
+    are supplied by a track's name instead, which means this fixture exercises
+    only the guard half of that rule, that a name must not select a class the
+    table can decide. The supply half, where a name is the only thing that can
+    produce the class, is covered by the C++ classifier tests and by the WASM
+    suite's `acts on a source class only a track name can supply`.
+
+    That distinction matters when reading a result from this harness. A scene
+    that is byte-identical to a previous generation's says the surfaces agree
+    and that nothing this fixture reaches has moved; it does not say the
+    assistant's behaviour is unchanged, because a change confined to the name
+    path leaves every track here exactly where it was.
     """
     full = int(SAMPLE_RATE * FULL_SECONDS)
     short = int(SAMPLE_RATE * SHORT_SECONDS)
@@ -179,6 +222,17 @@ def _make_tracks() -> list[Track]:
         return 0.07 * envelope * out
 
     hiss = 0.01 * _lcg_noise(short, 0x1357_2468)
+
+    # Lead synth: a sustained tonal line a register above the voice, so the
+    # classifier resolves it confidently, with a trace of energy inside the
+    # vocal's own register. That trace is what the corrective EQ acts on -- the
+    # voice owns the band and the synth can spare it -- and it is the only pair
+    # in the fixture for which a cut is the right answer at all.
+    pad = (
+        0.25 * np.sin(two_pi * 3200.0 * long_t)
+        + 0.18 * np.sin(two_pi * 4300.0 * long_t)
+        + 0.012 * np.sin(two_pi * 900.0 * long_t)
+    )
     return [
         Track("kick", "Kick In", kick.astype(np.float32), None),
         Track("bass", "Bass DI", bass.astype(np.float32), None),
@@ -189,6 +243,7 @@ def _make_tracks() -> list[Track]:
             (pluck(330.0, 0.0) + hiss).astype(np.float32),
             (pluck(331.5, 0.7) - hiss).astype(np.float32),
         ),
+        Track("pad", "Lead Synth", pad.astype(np.float32), None),
     ]
 
 
@@ -310,8 +365,15 @@ def _suggest_python(
     return str(facade(inputs, sample_rate=SAMPLE_RATE, **kwargs))
 
 
-def _encode_request(tracks: list[Track], options: dict[str, float | bool]) -> bytes:
-    """Serialize the shared fixture for a JavaScript subprocess."""
+def _encode_request(tracks: list[Track], cases: list[dict[str, float | bool]]) -> bytes:
+    """Serialize the shared fixture and every case for one JavaScript subprocess.
+
+    Every case travels in one payload rather than one payload per case: the
+    fixture is the same for all of them, and a WASM subprocess spends more time
+    instantiating the module than running the assistant over 0.6 s of audio, so
+    a process per case would make the option coverage cost several times what
+    the analysis does.
+    """
 
     def channel(samples: np.ndarray | None) -> str | None:
         if samples is None:
@@ -322,7 +384,7 @@ def _encode_request(tracks: list[Track], options: dict[str, float | bool]) -> by
 
     document = {
         "sampleRate": SAMPLE_RATE,
-        "options": options,
+        "cases": cases,
         "tracks": [
             {
                 "id": track.track_id,
@@ -367,19 +429,22 @@ const tracks = request.tracks.map((track) => {{
   return out;
 }});
 {init_line}
-const scene = suggestMixSceneJson({{
-  tracks,
-  sampleRate: request.sampleRate,
-  options: request.options,
+const scenes = request.cases.map((options) => {{
+  const scene = suggestMixSceneJson({{
+    tracks,
+    sampleRate: request.sampleRate,
+    options,
+  }});
+  if (typeof scene !== 'string') throw new Error('suggestMixSceneJson did not return a string');
+  return scene;
 }});
-if (typeof scene !== 'string') throw new Error('suggestMixSceneJson did not return a string');
-process.stdout.write(Buffer.from(scene, 'utf8').toString('base64'));
+process.stdout.write(Buffer.from(JSON.stringify(scenes), 'utf8').toString('base64'));
 """
 
 
 def _suggest_js(
     surface: str, request: bytes, node_executable: str, module_path: Path
-) -> str:
+) -> list[str]:
     if not module_path.is_file():
         raise HarnessFailure(f"{surface} public dist is missing: {module_path}")
     command = [
@@ -419,11 +484,14 @@ def _suggest_js(
             f"{surface} runner returned a malformed base64 scene payload"
         ) from exc
     try:
-        return raw.decode("utf-8")
-    except UnicodeError as exc:
+        scenes = json.loads(raw.decode("utf-8"))
+    except (UnicodeError, json.JSONDecodeError) as exc:
         raise HarnessFailure(
-            f"{surface} runner returned a non-UTF-8 scene payload"
+            f"{surface} runner returned a scene payload that is not a UTF-8 JSON array"
         ) from exc
+    if not isinstance(scenes, list) or not all(isinstance(item, str) for item in scenes):
+        raise HarnessFailure(f"{surface} runner returned something other than a scene list")
+    return scenes
 
 
 def _parse_scene(surface: str, case: str, scene: str) -> Any:
@@ -582,14 +650,24 @@ def main() -> int:
     try:
         tracks = _make_tracks()
         binding = _load_binding()
+        # One subprocess per JavaScript surface for the whole case list; the
+        # native surfaces are called in-process.
+        request = _encode_request(tracks, list(CASES.values()))
+        node_scenes = _suggest_js("node", request, args.node, args.node_dist)
+        wasm_scenes = _suggest_js("wasm", request, args.node, args.wasm_dist)
+        for label, produced in (("node", node_scenes), ("wasm", wasm_scenes)):
+            if len(produced) != len(CASES):
+                raise HarnessFailure(
+                    f"{label} runner returned {len(produced)} scenes for {len(CASES)} cases"
+                )
+
         scenes: dict[str, dict[str, str]] = {}
-        for case, options in CASES.items():
-            request = _encode_request(tracks, options)
+        for index, (case, options) in enumerate(CASES.items()):
             scenes[case] = {
                 "c": _suggest_c(tracks, options, binding),
                 "python": _suggest_python(tracks, options, binding),
-                "node": _suggest_js("node", request, args.node, args.node_dist),
-                "wasm": _suggest_js("wasm", request, args.node, args.wasm_dist),
+                "node": node_scenes[index],
+                "wasm": wasm_scenes[index],
             }
 
         for case, per_surface in scenes.items():
@@ -604,7 +682,17 @@ def main() -> int:
             print(f"{case}: scene {len(oracle)} bytes, match {summary}")
 
         # Non-vacuity: an option that no surface honours would produce four
-        # identical scenes in every case and read as a pass.
+        # identical scenes in every case and read as a pass. Every option in
+        # OPTION_KEYS has to be driven, so the coverage is checked rather than
+        # assumed -- a key added to the table without a case would otherwise be
+        # silently untested.
+        driven = {key for options in CASES.values() for key in options}
+        missing = sorted(set(OPTION_KEYS) - driven)
+        if missing:
+            raise HarnessFailure(
+                "no case drives " + ", ".join(missing) + "; every assistant option "
+                "needs one that produces a non-default scene"
+            )
         for case in CASES:
             if case == "defaults":
                 continue

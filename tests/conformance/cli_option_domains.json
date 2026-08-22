@@ -39,12 +39,112 @@
       "exclusiveMaximum": false
     },
     {
+      "command": "eq",
+      "option": "coeff-mode",
+      "rejectExit": "invalid_parameter",
+      "choices": [
+        "0",
+        "1"
+      ],
+      "minimum": null,
+      "exclusiveMinimum": false,
+      "maximum": null,
+      "exclusiveMaximum": false
+    },
+    {
+      "command": "eq",
+      "option": "phase-mode",
+      "rejectExit": "invalid_parameter",
+      "choices": [
+        "0",
+        "1",
+        "2",
+        "3"
+      ],
+      "minimum": null,
+      "exclusiveMinimum": false,
+      "maximum": null,
+      "exclusiveMaximum": false
+    },
+    {
+      "command": "eq",
+      "option": "placement",
+      "rejectExit": "invalid_parameter",
+      "choices": [
+        "0",
+        "1",
+        "2",
+        "3",
+        "4"
+      ],
+      "minimum": null,
+      "exclusiveMinimum": false,
+      "maximum": null,
+      "exclusiveMaximum": false
+    },
+    {
+      "command": "eq",
+      "option": "resolution",
+      "rejectExit": "invalid_parameter",
+      "choices": [
+        "0",
+        "1",
+        "2",
+        "3",
+        "4",
+        "5"
+      ],
+      "minimum": null,
+      "exclusiveMinimum": false,
+      "maximum": null,
+      "exclusiveMaximum": false
+    },
+    {
+      "command": "eq",
+      "option": "type",
+      "rejectExit": "invalid_parameter",
+      "choices": [
+        "0",
+        "1",
+        "2",
+        "3",
+        "4",
+        "5",
+        "6",
+        "7",
+        "8"
+      ],
+      "minimum": null,
+      "exclusiveMinimum": false,
+      "maximum": null,
+      "exclusiveMaximum": false
+    },
+    {
       "command": "mastering",
       "option": "bits",
       "rejectExit": "invalid_parameter",
       "choices": [
         "16",
         "24"
+      ],
+      "minimum": null,
+      "exclusiveMinimum": false,
+      "maximum": null,
+      "exclusiveMaximum": false
+    },
+    {
+      "command": "mastering",
+      "option": "target-platform",
+      "rejectExit": "usage",
+      "choices": [
+        "streaming",
+        "youtube",
+        "broadcast",
+        "podcast",
+        "audiobook",
+        "cinema",
+        "club",
+        "cd"
       ],
       "minimum": null,
       "exclusiveMinimum": false,
@@ -144,6 +244,21 @@
       "minimum": 0.0,
       "exclusiveMinimum": true,
       "maximum": 1.0,
+      "exclusiveMaximum": false
+    },
+    {
+      "command": "vector-normalize",
+      "option": "norm-type",
+      "rejectExit": "invalid_parameter",
+      "choices": [
+        "0",
+        "1",
+        "2",
+        "3"
+      ],
+      "minimum": null,
+      "exclusiveMinimum": false,
+      "maximum": null,
       "exclusiveMaximum": false
     }
   ],

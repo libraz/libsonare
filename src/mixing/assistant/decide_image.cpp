@@ -9,6 +9,7 @@
 #include <cstddef>
 #include <cstdlib>
 #include <iomanip>
+#include <locale>
 #include <sstream>
 #include <string>
 #include <utility>
@@ -154,6 +155,10 @@ constexpr int kReasonDecimals = 0;
 
 std::string format_rounded(float value) {
   std::ostringstream out;
+  // Classic locale, so the decimal point is a point wherever the host runs. A
+  // reason string is read by a person and parsed by nobody, but a comma in the
+  // middle of a number reads as a second number.
+  out.imbue(std::locale::classic());
   out << std::fixed << std::setprecision(kReasonDecimals) << value;
   return out.str();
 }

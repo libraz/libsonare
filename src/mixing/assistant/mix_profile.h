@@ -82,10 +82,19 @@ struct ImageOccupancy {
   ///        spreading.
   std::vector<bool> crowded;
 
+  /// @brief Histogram accessor. Returns 0 out of range or with no histogram.
+  /// @details The index test alone is not enough: a result built for a mix with
+  ///          no usable track leaves @ref histogram empty while the index is
+  ///          perfectly in range, so a bounds check written against the grid
+  ///          rather than against the storage would read past the vector. The
+  ///          sibling @ref MixProfile::dominance_at tests its own storage for
+  ///          the same reason.
   float at(int band, int bucket) const noexcept {
     if (band < 0 || band >= kBandCount || bucket < 0 || bucket >= kPanBucketCount) return 0.0f;
-    return histogram[static_cast<std::size_t>(band) * kPanBucketCount +
-                     static_cast<std::size_t>(bucket)];
+    const std::size_t index =
+        static_cast<std::size_t>(band) * kPanBucketCount + static_cast<std::size_t>(bucket);
+    if (index >= histogram.size()) return 0.0f;
+    return histogram[index];
   }
 };
 

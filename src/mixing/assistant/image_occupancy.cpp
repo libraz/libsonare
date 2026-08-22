@@ -61,18 +61,6 @@ constexpr double kLowEndPresenceShare = 0.10;
 // widened bass sits at.
 constexpr double kLowEndSideShare = 0.25;
 
-/// @brief Linear power per band for one track, split by channel and by mid/side.
-struct TrackBandEnergy {
-  std::array<double, kBandCount> left{};
-  std::array<double, kBandCount> right{};
-  std::array<double, kBandCount> mid{};
-  std::array<double, kBandCount> side{};
-  /// @brief False when the track could not be measured at all.
-  bool valid = false;
-  /// @brief True only when both channels were transformed.
-  bool stereo = false;
-};
-
 /// @brief Index of the @ref kBands band containing @p hz, or -1 when it falls
 ///        outside the grid.
 int band_of_frequency(float hz) noexcept {
@@ -93,12 +81,20 @@ sonare::StftConfig stft_config_for(const TrackProfile& profile) {
 }
 
 /// @brief Folds one track's channels into per-band linear power.
-/// @details @ref TrackProfile::bands is a single per-track envelope with no
-///          channel split, so it cannot answer where in the image a band sits;
-///          the transform is redone here per channel. Degenerate input returns
-///          an entry with @ref TrackBandEnergy::valid false rather than throwing.
-TrackBandEnergy measure_band_energy(const TrackInput& track, const TrackProfile& profile) {
-  TrackBandEnergy energy;
+/// @details The two channel transforms are the expensive part of both image
+///          passes, so this is called once per track by
+///          @ref measure_track_channel_energy and never from a pass directly.
+///          Degenerate input returns an entry with
+///          @ref TrackChannelEnergy::valid false rather than throwing.
+///
+///          Both spectrograms are alive at once, and nothing else in the
+///          assistant holds one: the mid/side pair follows from the two channel
+///          transforms bin by bin, so neither can be released before the other
+///          has been read. They are released together, before the next track,
+///          which is what keeps the working set to one track's worth rather
+///          than the session's.
+TrackChannelEnergy measure_band_energy(const TrackInput& track, const TrackProfile& profile) {
+  TrackChannelEnergy energy;
   if (track.left == nullptr || track.frame_count == 0 || track.sample_rate <= 0) return energy;
 
   const sonare::StftConfig config = stft_config_for(profile);
@@ -180,7 +176,7 @@ double crowded_threshold() noexcept {
 ///          without a transform, but it imposes its own fractional-octave grid,
 ///          and a threshold chosen for the sub/low span must not be re-derived
 ///          on a different grid.
-bool has_wide_low_end(const TrackBandEnergy& energy) noexcept {
+bool has_wide_low_end(const TrackChannelEnergy& energy) noexcept {
   if (!energy.valid || !energy.stereo) return false;
 
   double low_mid = 0.0;
@@ -204,8 +200,25 @@ bool has_wide_low_end(const TrackBandEnergy& energy) noexcept {
 
 }  // namespace
 
+std::vector<TrackChannelEnergy> measure_track_channel_energy(
+    const std::vector<TrackInput>& tracks, const std::vector<TrackProfile>& profiles) {
+  const std::size_t track_count = std::min(tracks.size(), profiles.size());
+  std::vector<TrackChannelEnergy> energies(track_count);
+  for (std::size_t index = 0; index < track_count; ++index) {
+    // An excluded track contributes to neither pass, so it is never measured;
+    // its entry stays invalid, which is what both passes already skip on.
+    if (!profiles[index].usable) continue;
+    energies[index] = measure_band_energy(tracks[index], profiles[index]);
+  }
+  return energies;
+}
+
 ImageOccupancy analyze_image_occupancy(const std::vector<TrackInput>& tracks,
                                        const std::vector<TrackProfile>& profiles) {
+  return analyze_image_occupancy(measure_track_channel_energy(tracks, profiles));
+}
+
+ImageOccupancy analyze_image_occupancy(const std::vector<TrackChannelEnergy>& energies) {
   ImageOccupancy image;
   const std::size_t slot_count =
       static_cast<std::size_t>(kBandCount) * static_cast<std::size_t>(kPanBucketCount);
@@ -216,11 +229,7 @@ ImageOccupancy analyze_image_occupancy(const std::vector<TrackInput>& tracks,
   // Accumulated in double: band energies from tracks of very different levels
   // are summed before they are ever normalized.
   std::vector<double> accumulator(slot_count, 0.0);
-  const std::size_t track_count = std::min(tracks.size(), profiles.size());
-  for (std::size_t index = 0; index < track_count; ++index) {
-    const TrackProfile& profile = profiles[index];
-    if (!profile.usable) continue;
-    const TrackBandEnergy energy = measure_band_energy(tracks[index], profile);
+  for (const TrackChannelEnergy& energy : energies) {
     if (!energy.valid) continue;
 
     for (int band = 0; band < kBandCount; ++band) {
@@ -269,6 +278,12 @@ ImageOccupancy analyze_image_occupancy(const std::vector<TrackInput>& tracks,
 
 std::vector<MonoRisk> analyze_mono_risks(const std::vector<TrackInput>& tracks,
                                          const std::vector<TrackProfile>& profiles) {
+  return analyze_mono_risks(tracks, profiles, measure_track_channel_energy(tracks, profiles));
+}
+
+std::vector<MonoRisk> analyze_mono_risks(const std::vector<TrackInput>& tracks,
+                                         const std::vector<TrackProfile>& profiles,
+                                         const std::vector<TrackChannelEnergy>& energies) {
   std::vector<MonoRisk> risks;
   const std::size_t track_count = std::min(tracks.size(), profiles.size());
   for (std::size_t index = 0; index < track_count; ++index) {
@@ -283,7 +298,7 @@ std::vector<MonoRisk> analyze_mono_risks(const std::vector<TrackInput>& tracks,
     // the correlation verdict, rather than the same comparison written twice.
     const mastering::stereo::MonoCompatResult compat = mastering::stereo::mono_compat_check(
         track.left, track.right, track.frame_count, kMonoRiskCorrelation);
-    const bool wide_low_end = has_wide_low_end(measure_band_energy(track, profile));
+    const bool wide_low_end = index < energies.size() && has_wide_low_end(energies[index]);
     const bool too_wide = compat.width > kMonoRiskWidth;
     if (compat.likely_mono_compatible && !too_wide && !wide_low_end) continue;
 

@@ -59,6 +59,12 @@ inline constexpr std::array<const char*, kBandCount> kBandNames = {
 ///          onset density, sustain ratio, voicing); it carries no trained model
 ///          and no statistical mapping layer, and refuses to guess rather than
 ///          returning a low-confidence label.
+///
+///          Every entry here is producible. Most come from the decision table;
+///          Keys, Strings, Backing and Fx have no row it could separate them
+///          with and are supplied by the track name instead. A class nothing
+///          can produce would tell a host about a label it will never see, so
+///          the classifier holds that as a compile-time invariant.
 enum class SourceClass {
   Unknown = 0,
   Kick,
@@ -99,8 +105,12 @@ struct TrackInput {
   /// @brief Strip id the suggestion is written against. Must be unique.
   std::string id;
   /// @brief Optional human-facing track name.
-  /// @details Used only as a *hint* that adjusts classifier confidence; it can
-  ///          never select a class on its own.
+  /// @details For a class the classifier's decision table can measure, this is
+  ///          only a *hint* that adjusts confidence; it cannot select one of
+  ///          those on its own. For the four classes the table has no rule for
+  ///          — @ref SourceClass::Keys, @ref SourceClass::Strings, @ref
+  ///          SourceClass::Backing and @ref SourceClass::Fx — it is the only
+  ///          thing that can supply the class at all.
   std::string name;
   const float* left = nullptr;
   const float* right = nullptr;
@@ -208,8 +218,8 @@ struct TrackProfile {
   /// @brief 1 for mono, 2 for stereo.
   int channel_count = 1;
   float duration_sec = 0.0f;
-  /// @brief False when the track is silent, too short to measure, or has no
-  ///        meaningful spectral content.
+  /// @brief False when the track is silent, too short to measure, carries a
+  ///        non-finite sample, or has no meaningful spectral content.
   /// @details An unusable track gets no suggestions at all — not a suggestion
   ///          of zero. A zero-valued delta would read downstream as "deliberately
   ///          decided to be zero".
@@ -241,16 +251,28 @@ struct TrackProfileConfig {
 ///       rather than a frequency-domain copy.
 
 /// @brief Profiles every track with one shared STFT geometry.
-/// @details Degenerate input never throws: a null buffer, a zero frame count or
-///          a non-positive sample rate yields a default-constructed profile with
-///          @ref TrackProfile::usable false, so callers need no error handling.
+/// @details Degenerate input never throws: a null buffer, a zero frame count, a
+///          non-positive sample rate or a non-finite sample yields a
+///          default-constructed profile with @ref TrackProfile::usable false and
+///          an @ref TrackProfile::exclusion_reason naming which, so callers need
+///          no error handling. A NaN is reported as its own reason rather than
+///          being allowed to reach the loudness measurement, where it would come
+///          back as "track is silent" — a statement about the material instead
+///          of about the buffer.
+/// @details A returned profile is complete, @ref TrackProfile::source and
+///          @ref TrackProfile::source_confidence included. Classification runs
+///          here rather than as a step the caller has to know to take: every
+///          decision stage skips a track it reads as
+///          @ref SourceClass::Unknown, so an unclassified profile does not
+///          fail — it quietly loses most of the suggestion.
 /// @param tracks Tracks to profile.
 /// @param config Shared analysis geometry.
 /// @return One profile per input track, in input order.
 std::vector<TrackProfile> analyze_track_profiles(const std::vector<TrackInput>& tracks,
                                                  const TrackProfileConfig& config = {});
 
-/// @brief Profiles a single track. Prefer the batch entry point.
+/// @brief Profiles a single track, classification included. Prefer the batch
+///        entry point.
 TrackProfile analyze_track_profile(const TrackInput& track, const TrackProfileConfig& config = {});
 
 }  // namespace sonare::mixing::assistant

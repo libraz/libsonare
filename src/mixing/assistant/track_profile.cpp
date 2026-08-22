@@ -15,6 +15,7 @@
 #include "core/audio.h"
 #include "core/spectrum.h"
 #include "mastering/assistant/audio_profile.h"
+#include "mixing/assistant/source_classifier.h"
 #include "util/constants.h"
 
 namespace sonare::mixing::assistant {
@@ -46,6 +47,19 @@ constexpr double kHannCoherentGain = 0.5;
 // worth suggesting against. Roughly 100 dB under full scale, i.e. far below the
 // least significant bit of 16-bit delivery, so nothing audible is excluded.
 constexpr float kMinBandAmplitude = 1.0e-5f;
+
+// True when either plane carries a sample that is not a real number.
+// Checked before anything is measured, because one NaN reaches the integrated
+// loudness as -inf and the track then reports itself excluded for being
+// "silent" -- a diagnosis of the material rather than of the buffer, which is
+// the one reading a caller cannot act on.
+bool has_non_finite_sample(const TrackInput& track) noexcept {
+  for (std::size_t frame = 0; frame < track.frame_count; ++frame) {
+    if (!std::isfinite(track.left[frame])) return true;
+    if (track.right != nullptr && !std::isfinite(track.right[frame])) return true;
+  }
+  return false;
+}
 
 /// @brief Per-band energy sums over the whole track.
 struct BandTotals {
@@ -228,6 +242,10 @@ TrackProfile analyze_track_profile(const TrackInput& track, const TrackProfileCo
     profile.exclusion_reason = "track sample rate is not positive";
     return profile;
   }
+  if (has_non_finite_sample(track)) {
+    profile.exclusion_reason = "track has non-finite samples";
+    return profile;
+  }
 
   const std::size_t frames = track.frame_count;
   const bool stereo = track.right != nullptr;
@@ -288,6 +306,15 @@ TrackProfile analyze_track_profile(const TrackInput& track, const TrackProfileCo
   }
 
   profile.usable = true;
+  // Classification is part of profiling rather than a step the caller has to
+  // know to take. Every decision stage skips a track it reads as Unknown, so a
+  // profile that leaves the class unset does not degrade the suggestion
+  // visibly -- it silently drops most of it, with no error and no diagnostic.
+  // The only exit path that reaches here is the one where the measurements the
+  // classifier reads are all present.
+  const SourceClassification classification = classify_source(profile);
+  profile.source = classification.source;
+  profile.source_confidence = classification.confidence;
   return profile;
 }
 

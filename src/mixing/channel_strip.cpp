@@ -1050,16 +1050,64 @@ void ChannelStrip::mix_send_at(size_t index, float* const* dest, int num_channel
     return;
   }
 
-  SendProcessor& send = *sends_[index];
-  auto& tap = (send.timing() == SendTiming::PreFader) ? pre_tap_ : post_tap_;
+  const auto& tap = (sends_[index]->timing() == SendTiming::PreFader) ? pre_tap_ : post_tap_;
 
   const int rows =
       std::min<int>(std::min(num_channels, kPreparedChannels), static_cast<int>(tap.size()));
   const int n = std::min(num_samples, max_block_size_);
 
-  float* temp[kPreparedChannels];
   for (int ch = 0; ch < rows; ++ch) {
     std::copy(tap[ch].begin(), tap[ch].begin() + n, send_temp_[ch].begin());
+  }
+  apply_send_from_temp(index, dest, rows, n, block_start);
+}
+
+void ChannelStrip::mix_send_from_at(size_t index, const float* const* source, float* const* dest,
+                                    int num_channels, int num_samples, int64_t block_start) {
+  if (index >= sends_.size() || source == nullptr || dest == nullptr || num_channels <= 0 ||
+      num_samples <= 0) {
+    return;
+  }
+
+  const int rows =
+      std::min<int>(std::min(num_channels, kPreparedChannels), static_cast<int>(send_temp_.size()));
+  const int n = std::min(num_samples, max_block_size_);
+
+  for (int ch = 0; ch < rows; ++ch) {
+    if (source[ch] == nullptr) {
+      std::fill(send_temp_[ch].begin(), send_temp_[ch].begin() + n, 0.0f);
+      continue;
+    }
+    std::copy(source[ch], source[ch] + n, send_temp_[ch].begin());
+  }
+  apply_send_from_temp(index, dest, rows, n, block_start);
+}
+
+int ChannelStrip::copy_pre_fader_tap(float* const* dest, int num_channels,
+                                     int num_samples) const noexcept {
+  if (dest == nullptr || num_channels <= 0 || num_samples <= 0) return 0;
+  const int rows =
+      std::min<int>(std::min(num_channels, kPreparedChannels), static_cast<int>(pre_tap_.size()));
+  const int n = std::min(num_samples, max_block_size_);
+  int written = 0;
+  for (int ch = 0; ch < rows; ++ch) {
+    if (dest[ch] == nullptr) break;
+    std::copy(pre_tap_[static_cast<size_t>(ch)].begin(),
+              pre_tap_[static_cast<size_t>(ch)].begin() + n, dest[ch]);
+    // The tap is only as long as the prepared block, so a caller asking for more
+    // gets silence rather than whatever its own scratch was holding.
+    std::fill(dest[ch] + n, dest[ch] + num_samples, 0.0f);
+    ++written;
+  }
+  return written;
+}
+
+void ChannelStrip::apply_send_from_temp(size_t index, float* const* dest, int rows, int n,
+                                        int64_t block_start) {
+  SendProcessor& send = *sends_[index];
+
+  float* temp[kPreparedChannels];
+  for (int ch = 0; ch < rows; ++ch) {
     temp[ch] = send_temp_[ch].data();
   }
 

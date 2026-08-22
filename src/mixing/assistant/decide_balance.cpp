@@ -8,6 +8,7 @@
 #include <cmath>
 #include <cstddef>
 #include <iomanip>
+#include <locale>
 #include <sstream>
 #include <string>
 #include <utility>
@@ -153,12 +154,17 @@ std::string format_signed_db(float value) {
   // Negative zero would print as "-0.0" and read as a real downward move.
   if (value == 0.0f) value = 0.0f;
   std::ostringstream out;
+  // Classic locale, so the decimal point is a point wherever the host runs. A
+  // reason string is read by a person and parsed by nobody, but a comma in the
+  // middle of a number reads as a second number.
+  out.imbue(std::locale::classic());
   out << std::fixed << std::showpos << std::setprecision(kReasonDecimals) << value;
   return out.str();
 }
 
 std::string format_confidence(float value) {
   std::ostringstream out;
+  out.imbue(std::locale::classic());
   out << std::fixed << std::setprecision(kConfidenceDecimals) << value;
   return out.str();
 }

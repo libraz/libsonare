@@ -369,7 +369,12 @@ void sonare_mixer_destroy(SonareMixer* mixer);
 // @param input_right  Per-track right channel pointers, or NULL for an all-mono
 //                     set. Individual entries may be NULL for a mono track.
 // @param track_ids    Per-track strip identifiers; @c input_count entries, each
-//                     non-NULL and unique.
+//                     non-NULL and unique. Both are enforced, not assumed: a
+//                     NULL or a repeated id returns
+//                     @c SONARE_ERROR_INVALID_PARAMETER. A repeated id would
+//                     otherwise produce a scene the mixer refuses to load, and
+//                     the refusal names the scene rather than the two tracks
+//                     that collided.
 // @param track_names  Optional per-track display names used only as a
 //                     classification hint, or NULL. Individual entries may be NULL.
 // @param track_lengths Per-track frame counts; @c input_count entries.
@@ -382,6 +387,10 @@ void sonare_mixer_destroy(SonareMixer* mixer);
 //                     enableImage, enableHighPass, nFft and hopLength.
 // @param param_count  Number of entries in @c params.
 // @param json_out     Receives the result JSON. Release with sonare_free_string().
+//
+// A track carrying a NaN or an infinity is not an error: it comes back in the
+// result document as unusable, with "track has non-finite samples" as its
+// exclusionReason, so the buffer is named rather than diagnosed as silence.
 //
 // Returns @c SONARE_ERROR_NOT_SUPPORTED when the library was built without the
 // mixing assistant.

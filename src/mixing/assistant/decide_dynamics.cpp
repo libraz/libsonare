@@ -8,11 +8,13 @@
 #include <cmath>
 #include <cstddef>
 #include <iomanip>
+#include <locale>
 #include <set>
 #include <sstream>
 #include <string>
 #include <utility>
 
+#include "mixing/assistant/source_classifier.h"
 #include "util/constants.h"
 #include "util/json.h"
 
@@ -61,6 +63,10 @@ std::string format_fixed(float value, int decimals) {
   // Negative zero would print as "-0.0" and read as a real downward move.
   if (value == 0.0f) value = 0.0f;
   std::ostringstream out;
+  // Classic locale, so the decimal point is a point wherever the host runs. A
+  // reason string is read by a person and parsed by nobody, but a comma in the
+  // middle of a number reads as a second number.
+  out.imbue(std::locale::classic());
   out << std::fixed << std::setprecision(decimals) << value;
   return out.str();
 }
@@ -358,10 +364,23 @@ constexpr float kSibilanceOccupancyThreshold = 0.03f;
 // listener hears a missing note rather than a wrong setting. Every constant
 // below is therefore drawn on the side of the gate doing nothing.
 
-// Only a class the classifier is nearly certain about is gated. This is well
-// above kMinClassConfidence, which governs the shaping decisions; a de-esser on
-// a misread track is a wrong tone, a gate on one is a missing part.
-constexpr float kGateMinConfidence = 0.85f;
+// Only a class the classifier is nearly certain about is gated: a de-esser on a
+// misread track is a wrong tone, a gate on one is a missing part.
+//
+// Expressed as a share of the class's own base confidence rather than as one
+// absolute number. Confidence is a per-class prior scaled by how well the track
+// matched, so an absolute threshold asks a different amount of certainty of each
+// class -- and one set above a class's prior removes that class from the
+// gateable list without saying so. That is what had happened to the tom, whose
+// prior of 0.60 could not reach an absolute 0.85 by any measurement. Read as a
+// match score, this asks that the track cleared its class's bounds almost
+// perfectly, which is reachable for every class by construction and is a far
+// stricter reading than kMinClassConfidence, which governs the shaping
+// decisions.
+constexpr float kGateMinMatchShare = 0.9f;
+static_assert(kGateMinMatchShare > 0.0f && kGateMinMatchShare < 1.0f,
+              "a share of 1 or more cannot be reached by any class, which is the failure this "
+              "constant replaced");
 // Gating needs gaps to close in. A sustained part has none, so a gate on it can
 // only ever close during the material itself.
 constexpr float kGateMaxSustainRatio = 0.25f;
@@ -669,7 +688,9 @@ void decide_deesser(const TrackProfile& profile, float strength, InsertLedger& l
 void decide_gate(const TrackProfile& profile, float strength, InsertLedger& ledger,
                  std::vector<SceneDelta>& deltas) {
   if (!contains_source(kGateableSources, profile.source)) return;
-  if (profile.source_confidence < kGateMinConfidence) return;
+  if (profile.source_confidence < kGateMinMatchShare * source_base_confidence(profile.source)) {
+    return;
+  }
   if (sustain_ratio(profile) > kGateMaxSustainRatio) return;
   const float crest = profile.base.loudness.crest_factor_db;
   if (!std::isfinite(crest) || crest < kGateMinCrestDb) return;

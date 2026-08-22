@@ -329,11 +329,87 @@ TEST_CASE("a contradicting track name lowers confidence without changing the cla
   REQUIRE(misnamed.confidence > 0.0f);
 }
 
-TEST_CASE("a track name alone cannot select a class", "[mixing][assistant]") {
+TEST_CASE("a track name alone cannot select a class the table decides", "[mixing][assistant]") {
+  // Kick has a rule row, so the measurement is the authority on it and a name
+  // saying otherwise is not evidence enough to override a table that declined.
   const auto named = assistant::classify_source(make_profile(unclassifiable_spec(), "Kick In"));
 
   REQUIRE(named.source == SourceClass::Unknown);
   REQUIRE(named.confidence == 0.0f);
+}
+
+TEST_CASE("a name supplies the classes the decision table has no row for", "[mixing][assistant]") {
+  // Keys, strings, a backing stack and an effect return are not separable by
+  // the measured features, so no measurement produces them. Without this path
+  // the taxonomy advertises four classes no shipped entry point can ever
+  // report.
+  struct NamedClass {
+    const char* name;
+    SourceClass source;
+  };
+  const NamedClass cases[] = {
+      {"Rhodes Comp", SourceClass::Keys},   {"Strings Pad", SourceClass::Strings},
+      {"BVox Stack", SourceClass::Backing}, {"Riser FX", SourceClass::Fx},
+      {"grand piano", SourceClass::Keys},   {"choir 2", SourceClass::Backing},
+  };
+  for (const NamedClass& entry : cases) {
+    INFO("track name: " << entry.name);
+    const auto classification =
+        assistant::classify_source(make_profile(unclassifiable_spec(), entry.name));
+    REQUIRE(classification.source == entry.source);
+    require_self_consistent(classification);
+  }
+}
+
+TEST_CASE("a measured class outranks a name that would supply another", "[mixing][assistant]") {
+  // The name path only fills a gap. A track the table did resolve keeps its
+  // measured answer even when its name also names a table-less class.
+  const auto classification = assistant::classify_source(make_profile(kick_spec(), "Kick Synth"));
+  REQUIRE(classification.source == SourceClass::Kick);
+}
+
+TEST_CASE("a name naming two table-less classes supplies neither", "[mixing][assistant]") {
+  // "Strings and keys" is a description of a stem, not a statement about one
+  // source, and guessing which half wins would be exactly the guess the
+  // classifier refuses to make.
+  const auto classification =
+      assistant::classify_source(make_profile(unclassifiable_spec(), "Strings and Keys Bed"));
+  REQUIRE(classification.source == SourceClass::Unknown);
+  REQUIRE(classification.confidence == 0.0f);
+}
+
+TEST_CASE("every advertised source class is producible", "[mixing][assistant]") {
+  // A class the name table advertises but nothing can put on a track tells a
+  // host about a label it will never see. Measured classes are covered by the
+  // rows exercised above; this is the whole list, checked against the two ways
+  // a class can be reached.
+  struct Producible {
+    const char* identifier;
+    const char* name_hint;
+  };
+  const Producible expected[] = {
+      {"kick", "kick"},        {"snare", "snare"}, {"hiHat", "hihat"}, {"tom", "tom"},
+      {"cymbal", "crash"},     {"bass", "bass"},   {"guitar", "gtr"},  {"keys", "rhodes"},
+      {"strings", "violin"},   {"lead", "lead"},   {"vocal", "vox"},   {"backing", "bgv"},
+      {"percussion", "conga"}, {"fx", "whoosh"},
+  };
+  const std::vector<std::string> names = assistant::source_class_names();
+  // Unknown is the absence of a class rather than one of them.
+  REQUIRE(names.size() == std::size(expected) + 1);
+  REQUIRE(names.front() == "unknown");
+
+  for (const Producible& entry : expected) {
+    INFO("class: " << entry.identifier);
+    REQUIRE(std::find(names.begin(), names.end(), entry.identifier) != names.end());
+    const SourceClass source = assistant::source_class_from_string(entry.identifier);
+    REQUIRE(source != SourceClass::Unknown);
+    // Either the decision table can reach it, or a name can.
+    const bool measurable = assistant::source_base_confidence(source) > 0.0f;
+    const bool nameable =
+        assistant::classify_source(make_profile(unclassifiable_spec(), entry.name_hint)).source ==
+        source;
+    REQUIRE((measurable || nameable));
+  }
 }
 
 TEST_CASE("name hints match case-insensitively on a substring", "[mixing][assistant]") {

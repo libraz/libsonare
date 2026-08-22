@@ -4,6 +4,8 @@
 #include "no_alloc_test_helpers.h"
 
 #ifdef SONARE_WITH_VOICE_CHANGER
+#include <sonare/sonare_c.h>
+
 #include "editing/voice_changer/realtime.h"
 
 TEST_CASE("RealtimeVoiceChanger process_block performs no heap allocation after prepare",
@@ -90,6 +92,39 @@ TEST_CASE("RealtimeVoiceChanger::set_config performs no heap allocation", "[voic
     changer.process_block(input.data(), output.data(), kBlock);
   }
   REQUIRE(guard.count() == 0);
+}
+
+TEST_CASE("sonare_streaming_retune_process_mono performs no heap allocation after prepare",
+          "[voice_changer][rt][c_api]") {
+  // The C entry point works in place, so it needs somewhere to read the input
+  // from while the core writes the output. It used to build that copy as a
+  // fresh std::vector per block -- 375 allocations a second at 128 samples /
+  // 48 kHz, on top of the copy each binding already makes -- against a core
+  // that documents "Allocation happens only in prepare()".
+  constexpr int kBlock = 128;
+  constexpr int kSampleRate = 48000;
+
+  SonareStreamingRetune* retune = sonare_streaming_retune_create(5.0f, 1.0f, 0);
+  REQUIRE(retune != nullptr);
+  REQUIRE(sonare_streaming_retune_prepare(retune, kSampleRate, kBlock) == SONARE_OK);
+
+  std::array<float, kBlock> block{};
+  block.fill(0.01f);
+
+  // Warm up: the entry point clears the thread-local error message, and the
+  // first touch of a thread_local can allocate its TLS storage. A real audio
+  // callback pays that once too; what must not repeat is the per-block copy.
+  REQUIRE(sonare_streaming_retune_process_mono(retune, block.data(), block.size()) == SONARE_OK);
+
+  {
+    AllocationGuard guard;
+    for (int i = 0; i < 8; ++i) {
+      sonare_streaming_retune_process_mono(retune, block.data(), block.size());
+    }
+    REQUIRE(guard.count() == 0);
+  }
+
+  sonare_streaming_retune_destroy(retune);
 }
 #endif  // SONARE_WITH_VOICE_CHANGER
 

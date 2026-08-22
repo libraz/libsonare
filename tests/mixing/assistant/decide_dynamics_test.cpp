@@ -15,6 +15,7 @@
 #include <vector>
 
 #include "mastering/api/insert_factory.h"
+#include "mixing/assistant/source_classifier.h"
 #include "util/constants.h"
 #include "util/json.h"
 
@@ -40,10 +41,12 @@ namespace {
 // reason a hand-built profile is excluded.
 constexpr float kMeasurableDurationSec = 2.0f;
 // Well above the confidence the stage needs before it acts on a class, and
-// above the higher bar the gate holds out for.
+// above the higher bar the gate holds out for on any class.
 constexpr float kConfidentClass = 0.9f;
-// Below the confidence the gate insists on, but above the one the shaping
-// decisions need, so a profile carrying it is treated but never gated.
+// Below the confidence the gate insists on for a kick, but above the one the
+// shaping decisions need, so a kick profile carrying it is treated but never
+// gated. The gate's bar is a share of the class's own prior rather than one
+// absolute number, so this value is read against the kick specifically.
 constexpr float kUncertainClass = 0.6f;
 // A program level in the region a tracked part lands in. Every threshold the
 // stage suggests is an offset from this, so its exact value never matters.
@@ -526,6 +529,24 @@ TEST_CASE("the gate is suggested only for confident, transient material", "[mixi
     const std::vector<SceneDelta> deltas =
         decide_dynamics(profiles, make_mix(profiles.size()), MixAssistantConfig{});
     CHECK_FALSE(has_insert(deltas, "kick", "dynamics.gate"));
+  }
+
+  SECTION("every gateable class can actually reach the gate") {
+    // The gate's confidence bar used to be one absolute number compared against
+    // a confidence that carries a per-class prior, which put it above the tom's
+    // ceiling: no tom could ever be gated and nothing said so. Each class here
+    // is given the highest confidence its own row can produce.
+    const SourceClass gateable[] = {SourceClass::Kick, SourceClass::Snare, SourceClass::Tom};
+    for (const SourceClass source : gateable) {
+      const float ceiling = sonare::mixing::assistant::source_base_confidence(source);
+      INFO("class ordinal " << static_cast<int>(source) << " ceiling " << ceiling);
+      REQUIRE(ceiling > 0.0f);
+      const std::vector<TrackProfile> profiles{make_profile(
+          "kit", source, kGateableCrestDb, kTransientSustain, kPlayedOnsetsPerSec, ceiling)};
+      const std::vector<SceneDelta> deltas =
+          decide_dynamics(profiles, make_mix(profiles.size()), MixAssistantConfig{});
+      REQUIRE(has_insert(deltas, "kit", "dynamics.gate"));
+    }
   }
 
   SECTION("a class outside the close-miked kit is not gated") {

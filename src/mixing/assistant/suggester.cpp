@@ -4,6 +4,7 @@
 #include "mixing/assistant/suggester.h"
 
 #include <algorithm>
+#include <set>
 #include <string>
 #include <utility>
 
@@ -16,7 +17,7 @@
 #include "mixing/assistant/image_occupancy.h"
 #include "mixing/assistant/masking.h"
 #include "mixing/assistant/phase_alignment.h"
-#include "mixing/assistant/source_classifier.h"
+#include "util/exception.h"
 #include "util/json.h"
 
 namespace sonare::mixing::assistant {
@@ -39,6 +40,20 @@ api::Scene empty_scene_for(const std::vector<TrackProfile>& profiles) {
 void append(std::vector<SceneDelta>& into, std::vector<SceneDelta> from) {
   into.insert(into.end(), std::make_move_iterator(from.begin()),
               std::make_move_iterator(from.end()));
+}
+
+// Two tracks sharing a strip id produce two strips with that id, of which
+// apply_deltas only ever reaches the first; the second ships as an empty stub
+// and the mixer rejects the whole scene at load time as a "duplicate or invalid
+// strip id". The complaint then names the scene rather than the input that
+// produced it, so it is raised here, where the caller can still see which of
+// their tracks collided.
+void require_unique_ids(const std::vector<TrackInput>& tracks) {
+  std::set<std::string> seen;
+  for (const TrackInput& track : tracks) {
+    SONARE_CHECK_MSG(seen.insert(track.id).second, ErrorCode::InvalidParameter,
+                     "duplicate mixing assistant track id '" + track.id + "'");
+  }
 }
 
 bool any_usable(const std::vector<TrackProfile>& profiles) {
@@ -149,26 +164,41 @@ util::json::Value mix_to_value(const MixProfile& mix, const std::vector<TrackPro
 MixProfile analyze_mix_profile(const std::vector<TrackInput>& tracks,
                                const std::vector<TrackProfile>& profiles,
                                const MixAssistantConfig& config) {
-  (void)config;
   MixProfile mix;
   mix.track_count = static_cast<int>(profiles.size());
   if (profiles.empty()) return mix;
 
-  mix.dominance = analyze_band_dominance(profiles);
-  mix.alignment = analyze_phase_alignment(tracks, profiles);
-  mix.image = analyze_image_occupancy(tracks, profiles);
-  mix.mono_risks = analyze_mono_risks(tracks, profiles);
+  // Each pass is run only for the domains that read its result, because
+  // switching a domain off is how a caller asks not to pay for it. Band
+  // dominance is the one measurement two domains share; everything else here
+  // exists for the image domain alone, and the pairwise alignment inside it is
+  // the most expensive thing the assistant does.
+  if (config.enable_eq || config.enable_dynamics) {
+    mix.dominance = analyze_band_dominance(profiles);
+  }
+  if (config.enable_image) {
+    mix.alignment = analyze_phase_alignment(tracks, profiles);
+    // Both image passes read the same per-channel band energies, so they are
+    // measured once and handed to each rather than transformed twice.
+    const std::vector<TrackChannelEnergy> energy = measure_track_channel_energy(tracks, profiles);
+    mix.image = analyze_image_occupancy(energy);
+    mix.mono_risks = analyze_mono_risks(tracks, profiles, energy);
+  }
   return mix;
 }
 
 MixAssistantResult suggest_scene(const std::vector<TrackInput>& tracks,
                                  const MixAssistantConfig& config) {
+  require_unique_ids(tracks);
+
   TrackProfileConfig profile_config;
   profile_config.n_fft = config.n_fft;
   profile_config.hop_length = config.hop_length;
 
+  // Profiling classifies as it measures, so the decomposed
+  // analyze_track_profiles -> analyze_mix_profile -> suggest_scene path reaches
+  // the same result as this one without a step the caller has to discover.
   std::vector<TrackProfile> profiles = analyze_track_profiles(tracks, profile_config);
-  classify_sources(profiles);
   if (!any_usable(profiles)) {
     MixAssistantResult result;
     result.tracks = std::move(profiles);

@@ -302,7 +302,34 @@ class ChannelStrip : public rt::ProcessorBase {
   void mix_send(size_t index, float* const* dest, int num_channels, int num_samples);
   void mix_send_at(size_t index, float* const* dest, int num_channels, int num_samples,
                    int64_t block_start);
+  /// @brief RT-safe: mix_send_at() reading @p source instead of this strip's tap.
+  /// @details A host that owns a stage the strip does not — the track mixer's
+  ///          cross-lane PDC alignment and its fader/mute/solo gate both sit
+  ///          downstream of the strip — has to feed the send the signal that
+  ///          stage produced, or the send bypasses it. The send gain, its
+  ///          automation and the additive accumulation into @p dest are identical
+  ///          to mix_send_at(); only where the audio comes from differs.
+  ///          @p source holds @p num_channels planar rows of at least
+  ///          @p num_samples; a null row is treated as silence.
+  void mix_send_from_at(size_t index, const float* const* source, float* const* dest,
+                        int num_channels, int num_samples, int64_t block_start);
+  /// @brief RT-safe: copies the pre-fader send tap of the most recent process()
+  ///        into @p dest, returning the number of planar rows written.
+  /// @details Exposed so a host that has to re-time that tap (PDC alignment)
+  ///          can do so before the send gain rather than after, which would
+  ///          shift the send automation along with the audio. Rows beyond the
+  ///          returned count are left untouched.
+  int copy_pre_fader_tap(float* const* dest, int num_channels, int num_samples) const noexcept;
   size_t read_goniometer_latest(GoniometerPoint* dest, size_t max_points) const noexcept;
+
+  /// @brief Points the goniometer ring holds, and therefore the most
+  ///        @ref read_goniometer_latest can ever return in one call.
+  /// @details Public because a binding layer has to bound its own working
+  ///          buffer against the ring rather than against the caller's
+  ///          requested count: `max_points` is a request, and sizing an
+  ///          allocation from it directly is how an untrusted JS number becomes
+  ///          a multi-gigabyte reserve. Capping at the ring drops no point.
+  static constexpr size_t kGoniometerCapacity = 4096;
 
   // Upper bound on the number of distinct (insert_index, param_id) automation
   // targets the strip may track. Reserved at construction so that
@@ -335,8 +362,12 @@ class ChannelStrip : public rt::ProcessorBase {
   static constexpr int kPreparedChannels = 2;
   static constexpr int kMaxStackChannels = 8;
   static constexpr size_t kMaxAutomationEventsPerBlock = 128;
-  static constexpr size_t kGoniometerCapacity = 4096;
 
+  // Runs the send's gain and send automation over the first @p rows x @p n of
+  // send_temp_ (already filled by the caller) and accumulates it into @p dest.
+  // The shared body of mix_send_at() and mix_send_from_at(), which differ only
+  // in how send_temp_ was filled.
+  void apply_send_from_temp(size_t index, float* const* dest, int rows, int n, int64_t block_start);
   void process_unsegmented(float* const* channels, int num_channels, int num_samples);
   void process_segment(float* const* channels, int num_channels, int start, int num_samples,
                        int tap_offset);

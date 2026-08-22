@@ -420,7 +420,17 @@
           "aliases": [],
           "repeatable": false,
           "required": false,
-          "domain": null
+          "domain": {
+            "choices": [
+              "0",
+              "1"
+            ],
+            "minimum": null,
+            "exclusiveMinimum": false,
+            "maximum": null,
+            "exclusiveMaximum": false,
+            "rejectExit": "invalid_parameter"
+          }
         },
         {
           "name": "detector-delay-ms",
@@ -523,7 +533,19 @@
           "aliases": [],
           "repeatable": false,
           "required": false,
-          "domain": null
+          "domain": {
+            "choices": [
+              "0",
+              "1",
+              "2",
+              "3"
+            ],
+            "minimum": null,
+            "exclusiveMinimum": false,
+            "maximum": null,
+            "exclusiveMaximum": false,
+            "rejectExit": "invalid_parameter"
+          }
         },
         {
           "name": "placement",
@@ -532,7 +554,20 @@
           "aliases": [],
           "repeatable": false,
           "required": false,
-          "domain": null
+          "domain": {
+            "choices": [
+              "0",
+              "1",
+              "2",
+              "3",
+              "4"
+            ],
+            "minimum": null,
+            "exclusiveMinimum": false,
+            "maximum": null,
+            "exclusiveMaximum": false,
+            "rejectExit": "invalid_parameter"
+          }
         },
         {
           "name": "proportional-q",
@@ -586,7 +621,21 @@
           "aliases": [],
           "repeatable": false,
           "required": false,
-          "domain": null
+          "domain": {
+            "choices": [
+              "0",
+              "1",
+              "2",
+              "3",
+              "4",
+              "5"
+            ],
+            "minimum": null,
+            "exclusiveMinimum": false,
+            "maximum": null,
+            "exclusiveMaximum": false,
+            "rejectExit": "invalid_parameter"
+          }
         },
         {
           "name": "sidechain-freq-hz",
@@ -631,7 +680,24 @@
           "aliases": [],
           "repeatable": false,
           "required": false,
-          "domain": null
+          "domain": {
+            "choices": [
+              "0",
+              "1",
+              "2",
+              "3",
+              "4",
+              "5",
+              "6",
+              "7",
+              "8"
+            ],
+            "minimum": null,
+            "exclusiveMinimum": false,
+            "maximum": null,
+            "exclusiveMaximum": false,
+            "rejectExit": "invalid_parameter"
+          }
         }
       ],
       "estimate-room": [
@@ -986,6 +1052,15 @@
           "domain": null
         },
         {
+          "name": "no-streaming-safe",
+          "type": "boolean",
+          "default": false,
+          "aliases": [],
+          "repeatable": false,
+          "required": false,
+          "domain": null
+        },
+        {
           "name": "output",
           "type": "path",
           "default": null,
@@ -1024,6 +1099,15 @@
           "domain": null
         },
         {
+          "name": "speech-mono-amount",
+          "type": "number",
+          "default": 1,
+          "aliases": [],
+          "repeatable": false,
+          "required": false,
+          "domain": null
+        },
+        {
           "name": "target-lufs",
           "type": "number",
           "default": -14,
@@ -1031,6 +1115,31 @@
           "repeatable": false,
           "required": false,
           "domain": null
+        },
+        {
+          "name": "target-platform",
+          "type": "string",
+          "default": "streaming",
+          "aliases": [],
+          "repeatable": false,
+          "required": false,
+          "domain": {
+            "choices": [
+              "streaming",
+              "youtube",
+              "broadcast",
+              "podcast",
+              "audiobook",
+              "cinema",
+              "club",
+              "cd"
+            ],
+            "minimum": null,
+            "exclusiveMinimum": false,
+            "maximum": null,
+            "exclusiveMaximum": false,
+            "rejectExit": "usage"
+          }
         },
         {
           "name": "true-peak-oversample",
@@ -4498,6 +4607,15 @@
           "domain": null
         },
         {
+          "name": "no-streaming-safe",
+          "type": "boolean",
+          "default": false,
+          "aliases": [],
+          "repeatable": false,
+          "required": false,
+          "domain": null
+        },
+        {
           "name": "output",
           "type": "path",
           "default": null,
@@ -4536,6 +4654,15 @@
           "domain": null
         },
         {
+          "name": "speech-mono-amount",
+          "type": "number",
+          "default": 1,
+          "aliases": [],
+          "repeatable": false,
+          "required": false,
+          "domain": null
+        },
+        {
           "name": "target-lufs",
           "type": "number",
           "default": -14,
@@ -4543,6 +4670,31 @@
           "repeatable": false,
           "required": false,
           "domain": null
+        },
+        {
+          "name": "target-platform",
+          "type": "string",
+          "default": "streaming",
+          "aliases": [],
+          "repeatable": false,
+          "required": false,
+          "domain": {
+            "choices": [
+              "streaming",
+              "youtube",
+              "broadcast",
+              "podcast",
+              "audiobook",
+              "cinema",
+              "club",
+              "cd"
+            ],
+            "minimum": null,
+            "exclusiveMinimum": false,
+            "maximum": null,
+            "exclusiveMaximum": false,
+            "rejectExit": "usage"
+          }
         },
         {
           "name": "true-peak-oversample",
@@ -4849,7 +5001,7 @@
           "placeholder": "rir_output",
           "kind": "wav",
           "sample_rate_key": "sample_rate",
-          "sha256": "133a68b245a5d16af53b54d380d7bb4d26a8809763e02c1d577c0b9c0e6b6b84"
+          "sha256": "3bcada738c953ba2b3ea2cf8453051f651e34678cbed3fc8c133d63dcd143239"
         }
       }
     },
@@ -5167,7 +5319,17 @@
           "aliases": [],
           "repeatable": false,
           "required": false,
-          "domain": null
+          "domain": {
+            "choices": [
+              "0",
+              "1"
+            ],
+            "minimum": null,
+            "exclusiveMinimum": false,
+            "maximum": null,
+            "exclusiveMaximum": false,
+            "rejectExit": "invalid_parameter"
+          }
         },
         {
           "name": "detector-delay-ms",
@@ -5270,7 +5432,19 @@
           "aliases": [],
           "repeatable": false,
           "required": false,
-          "domain": null
+          "domain": {
+            "choices": [
+              "0",
+              "1",
+              "2",
+              "3"
+            ],
+            "minimum": null,
+            "exclusiveMinimum": false,
+            "maximum": null,
+            "exclusiveMaximum": false,
+            "rejectExit": "invalid_parameter"
+          }
         },
         {
           "name": "placement",
@@ -5279,7 +5453,20 @@
           "aliases": [],
           "repeatable": false,
           "required": false,
-          "domain": null
+          "domain": {
+            "choices": [
+              "0",
+              "1",
+              "2",
+              "3",
+              "4"
+            ],
+            "minimum": null,
+            "exclusiveMinimum": false,
+            "maximum": null,
+            "exclusiveMaximum": false,
+            "rejectExit": "invalid_parameter"
+          }
         },
         {
           "name": "proportional-q",
@@ -5333,7 +5520,21 @@
           "aliases": [],
           "repeatable": false,
           "required": false,
-          "domain": null
+          "domain": {
+            "choices": [
+              "0",
+              "1",
+              "2",
+              "3",
+              "4",
+              "5"
+            ],
+            "minimum": null,
+            "exclusiveMinimum": false,
+            "maximum": null,
+            "exclusiveMaximum": false,
+            "rejectExit": "invalid_parameter"
+          }
         },
         {
           "name": "sidechain-freq-hz",
@@ -5378,7 +5579,24 @@
           "aliases": [],
           "repeatable": false,
           "required": false,
-          "domain": null
+          "domain": {
+            "choices": [
+              "0",
+              "1",
+              "2",
+              "3",
+              "4",
+              "5",
+              "6",
+              "7",
+              "8"
+            ],
+            "minimum": null,
+            "exclusiveMinimum": false,
+            "maximum": null,
+            "exclusiveMaximum": false,
+            "rejectExit": "invalid_parameter"
+          }
         }
       ],
       "positionals": [

@@ -226,11 +226,13 @@ constexpr std::array<Rule, 10> kRules = {{
        at_least(Feature::HighAirShare, 0.50f)}}},
 }};
 
-// Classes with no row -- Keys, Strings, Backing, Fx -- are never produced. No
-// combination of the measured features separates a piano from a plucked guitar,
-// or a backing stack from a lead vocal, without the kind of trained model this
-// module refuses to carry. They stay in the taxonomy because a caller may set
-// them by hand, and the table declines to guess at them.
+// Classes with no row -- Keys, Strings, Backing, Fx -- are never produced by
+// measurement. No combination of the measured features separates a piano from a
+// plucked guitar, or a backing stack from a lead vocal, without the kind of
+// trained model this module refuses to carry, and the table declines to guess
+// at them. They reach a profile through the track's name instead; see
+// table_less_class_from_name below for why that is a caller's statement rather
+// than a guess the table makes.
 
 // A track whose confidence lands below this is reported as Unknown. It sits
 // under every row's base confidence, so no rule is dead on arrival, but far
@@ -253,6 +255,14 @@ constexpr float kWeakestLinkWeight = 0.6f;
 constexpr float kNameAgreementBonus = 0.12f;
 constexpr float kNameConflictPenalty = -0.25f;
 
+// Confidence a class that has no rule row earns from its name alone. Equal to
+// the lowest base confidence any row carries, because a class the engineer
+// named is at least as well evidenced as the weakest signature the table is
+// willing to act on -- and no better, since a name is a label rather than a
+// measurement. It sits above every decision stage's own floor, so a named class
+// is acted on rather than reported and ignored.
+constexpr float kNamedClassConfidence = 0.55f;
+
 // Longest hint list any class carries.
 constexpr std::size_t kMaxHintWords = 6;
 
@@ -266,9 +276,10 @@ struct NameHint {
 // Matching is a lowercase substring test and nothing more -- no regular
 // expressions, no separator parsing, no language detection. "Kick In",
 // "KICK_01" and "kick" all have to read the same, and that is the entire
-// requirement. Classes with no rule row still appear here: they cannot be
-// selected, but they can contradict a measured class, which is worth knowing.
-constexpr std::array<NameHint, 11> kNameHints = {{
+// requirement. Every class carries an entry, including the four with no rule
+// row: for a class the table decides, the words adjust confidence, and for one
+// it cannot, they are the only thing that can supply it.
+constexpr std::array<NameHint, 13> kNameHints = {{
     {SourceClass::Kick, {{"kick", "bassdrum", "bass drum"}}},
     {SourceClass::Snare, {{"snare", "rimshot"}}},
     {SourceClass::HiHat, {{"hihat", "hi-hat", "hi hat", "hat", "hh"}}},
@@ -280,7 +291,37 @@ constexpr std::array<NameHint, 11> kNameHints = {{
     {SourceClass::Strings, {{"strings", "violin", "cello", "viola"}}},
     {SourceClass::Lead, {{"lead", "solo"}}},
     {SourceClass::Vocal, {{"vocal", "vox", "voice"}}},
+    // "harmon" covers both "harmony" and "harmonies"; neither contains the
+    // other, so one prefix is what a substring test needs.
+    {SourceClass::Backing, {{"backing", "bvox", "bgv", "harmon", "choir"}}},
+    {SourceClass::Fx, {{"fx", "riser", "impact", "whoosh", "sweep"}}},
 }};
+
+// Whether the decision table has a row that can produce @p source.
+constexpr bool table_produces(SourceClass source) {
+  for (const Rule& rule : kRules) {
+    if (rule.source == source) return true;
+  }
+  return false;
+}
+
+// Whether @p source carries at least one name hint word.
+constexpr bool hints_cover(SourceClass source) {
+  for (const NameHint& hint : kNameHints) {
+    if (hint.source == source && hint.words[0] != nullptr) return true;
+  }
+  return false;
+}
+
+constexpr bool every_class_is_producible() {
+  // Unknown is the absence of a class rather than one of them, so it is the one
+  // entry nothing has to be able to produce.
+  for (int index = 1; index < kSourceClassCount; ++index) {
+    const SourceClass source = static_cast<SourceClass>(index);
+    if (!table_produces(source) && !hints_cover(source)) return false;
+  }
+  return true;
+}
 
 constexpr bool every_rule_is_anchored_on_band_centroid() {
   for (const Rule& rule : kRules) {
@@ -310,6 +351,10 @@ static_assert(every_rule_can_clear_the_threshold(),
               "a row whose base confidence cannot exceed the acceptance threshold can never "
               "produce a label");
 static_assert(every_tolerance_is_positive(), "a zero tolerance cannot grade a condition");
+static_assert(every_class_is_producible(),
+              "a class the taxonomy advertises but nothing can produce tells a host about a "
+              "label it will never see; give it a rule row or a name hint, or take it out of "
+              "SourceClass");
 
 /// @brief Log-frequency centroid of the band occupancy, in Hz.
 /// @details Weighted in log frequency, so the result is the geometric centre of
@@ -437,7 +482,57 @@ float name_hint_adjustment(const std::string& name, SourceClass source) {
   return names_another_class ? kNameConflictPenalty : 0.0f;
 }
 
+/// @brief The class a track name names, when the table has no row for it.
+/// @details Keys, strings, a backing stack and an effect return are not
+///          separable from their neighbours by the measured features, so no row
+///          exists for them and no measurement can produce one. The track name
+///          is the one per-track statement a caller makes on every surface, so
+///          it is what supplies them — and only them.
+///
+///          This is not the name selecting a class. For a class the table
+///          decides, the measurement has an opinion for a name to agree or
+///          disagree with, and the name only moves the confidence. Here the
+///          measurement has no opinion at all, so there is nothing for a name to
+///          override: silence is not disagreement.
+/// @return The named class, or Unknown when the name names nothing, names only
+///         classes the table can decide, or names two table-less classes at
+///         once — two of them is not a statement either.
+SourceClass table_less_class_from_name(const std::string& name) {
+  if (name.empty()) return SourceClass::Unknown;
+  const std::string lowered = to_lower_ascii(name);
+
+  SourceClass named = SourceClass::Unknown;
+  for (const NameHint& hint : kNameHints) {
+    if (table_produces(hint.source)) continue;
+    for (const char* word : hint.words) {
+      if (word == nullptr) break;
+      if (lowered.find(word) == std::string::npos) continue;
+      if (named != SourceClass::Unknown && named != hint.source) return SourceClass::Unknown;
+      named = hint.source;
+      break;
+    }
+  }
+  return named;
+}
+
+/// @brief What the name alone says, once the table has had its turn.
+SourceClassification from_name_alone(const std::string& name) {
+  SourceClassification classification;
+  const SourceClass named = table_less_class_from_name(name);
+  if (named == SourceClass::Unknown) return classification;
+  classification.source = named;
+  classification.confidence = kNamedClassConfidence;
+  return classification;
+}
+
 }  // namespace
+
+float source_base_confidence(SourceClass source) noexcept {
+  for (const Rule& rule : kRules) {
+    if (rule.source == source) return rule.base_confidence;
+  }
+  return 0.0f;
+}
 
 SourceClassification classify_source(const TrackProfile& profile) {
   SourceClassification classification;
@@ -457,15 +552,17 @@ SourceClassification classify_source(const TrackProfile& profile) {
     const float confidence = std::clamp(
         rule.base_confidence * score + name_hint_adjustment(profile.name, rule.source), 0.0f, 1.0f);
     // The first matching row is the answer even when it is not confident enough
-    // to give. Falling through would hand the track to a weaker, broader row
-    // that the specific one already ruled on.
-    if (confidence < kMinConfidence) return classification;
+    // to give. Falling out of the loop rather than continuing is what keeps a
+    // weaker, broader row from claiming a track the specific one already ruled
+    // on; the name path below is reached either way, and it can only supply a
+    // class no row could have produced.
+    if (confidence < kMinConfidence) break;
 
     classification.source = rule.source;
     classification.confidence = confidence;
     return classification;
   }
-  return classification;
+  return from_name_alone(profile.name);
 }
 
 void classify_sources(std::vector<TrackProfile>& profiles) {

@@ -46,8 +46,21 @@ struct MixAssistantConfig {
   float target_track_lufs = -18.0f;
 
   /// @brief Overall strength of the suggestion, in `[0, 1]`.
-  /// @details Scales every level-like decision. 0 produces an empty
-  ///          suggestion, 1 the full one.
+  /// @details Scales every level-like decision — trims, fader offsets, effect
+  ///          send levels, EQ cut depths, compression ratios and gain ranges,
+  ///          and how far a track is spread from the centre. 1 applies them in
+  ///          full.
+  ///
+  ///          **0 is not an empty suggestion.** It is every level-like decision
+  ///          taken and set to zero, which is a decision, plus everything that
+  ///          is not a level and therefore does not scale: the bus topology and
+  ///          routing, and the physical corrections the image stage makes for a
+  ///          measured cancellation — a polarity inversion, an alignment delay
+  ///          and a low-end mono fold, none of which is half-wrong at half
+  ///          strength. Corrective EQ cuts and effect sends do reach zero and
+  ///          disappear with it. If the intent is to suggest nothing at all,
+  ///          switch the domains off rather than turning the strength down:
+  ///          that skips the work as well.
   float suggestion_strength = 1.0f;
 
   /// @brief Largest cut a single suggested EQ band may apply, in dB.
@@ -69,7 +82,16 @@ struct MixAssistantConfig {
   /// @brief A disabled domain is not evaluated at all.
   /// @details Skipping the work rather than discarding the result matters: the
   ///          reason to switch a domain off is usually that it is the expensive
-  ///          one.
+  ///          one. The cross-track measurement each domain reads is skipped
+  ///          with it, not only the decision — @ref analyze_mix_profile runs a
+  ///          pass only for the domains that read its result.
+  ///
+  ///          What does *not* scale with these is the per-track profiling: one
+  ///          STFT and one loudness measurement per track, which fill @ref
+  ///          MixAssistantResult::tracks and are therefore part of the return
+  ///          value rather than any one domain's private cost. Switching every
+  ///          domain off leaves that and nothing else, so it is the floor a
+  ///          caller budgets against.
   /// @{
   bool enable_structure = true;
   bool enable_gain = true;
@@ -126,20 +148,45 @@ struct MixAssistantResult {
 /// @details Split out so a caller can analyse once and then re-run the decision
 ///          stages under different configurations without paying for the STFT
 ///          and the pairwise passes again.
+///
+///          Each pass here runs only for the domains that read its result, so a
+///          @p config with a domain switched off is measured more cheaply as
+///          well as decided more cheaply — which is the point of the switch.
+///          Band dominance is shared by the EQ and dynamics domains; the
+///          alignment, image and mono-fold passes exist for the image domain
+///          alone, and the pairwise alignment among them is the most expensive
+///          thing the assistant does. A @ref MixProfile measured with a domain
+///          off therefore carries empty fields where that domain would have
+///          read, and must not be reused for a later call that switches the
+///          domain back on.
+///
+///          The analysis geometry is *not* read from here: each profile carries
+///          the geometry it was measured with, and using anything else would
+///          make a band energy computed here incomparable with the one the
+///          profile already caches.
 /// @param tracks The same tracks @p profiles was built from, in the same order.
 ///        The time-alignment pass reads their sample buffers directly.
 /// @param profiles Per-track profiles from @ref analyze_track_profiles.
-/// @param config Assistant configuration; only the analysis geometry is read.
+/// @param config Assistant configuration; the per-domain switches are read.
 MixProfile analyze_mix_profile(const std::vector<TrackInput>& tracks,
                                const std::vector<TrackProfile>& profiles,
                                const MixAssistantConfig& config = {});
 
 /// @brief Analyses the tracks and suggests a scene.
 /// @details Degenerate input never throws. No tracks, all-silent tracks, a null
-///          buffer or a non-positive sample rate all yield a result with an
-///          empty scene and an empty explanation.
-/// @param tracks Tracks to mix, planar, mono or stereo.
+///          buffer, a non-positive sample rate or a non-finite sample all yield
+///          a result with an empty scene and an empty explanation; each affected
+///          track carries its own @ref TrackProfile::exclusion_reason.
+///
+///          Two tracks sharing a @ref TrackInput::id is the one input that is
+///          rejected rather than absorbed, with
+///          @ref ErrorCode::InvalidParameter. Absorbing it means shipping a
+///          scene the mixer refuses to load, and the refusal names the scene
+///          rather than the pair of tracks that collided.
+/// @param tracks Tracks to mix, planar, mono or stereo. Ids must be unique.
 /// @param config Assistant configuration.
+/// @throws SonareException with @ref ErrorCode::InvalidParameter when two
+///         tracks share an id.
 MixAssistantResult suggest_scene(const std::vector<TrackInput>& tracks,
                                  const MixAssistantConfig& config = {});
 

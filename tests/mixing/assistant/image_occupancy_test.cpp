@@ -306,3 +306,57 @@ TEST_CASE("Degenerate track lists analyse to an empty result", "[mixing][assista
     REQUIRE(analyze_mono_risks(tracks, profiles).empty());
   }
 }
+
+TEST_CASE("the shared measurement reaches the same answer as measuring per pass",
+          "[mixing][assistant]") {
+  // The two passes read the same per-channel band energies, and the transform
+  // behind those is the expensive part of both. Sharing the measurement is only
+  // safe while it changes nothing, so the two forms are compared directly.
+  const std::vector<float> left = tone(kLowToneHz, 0.5f);
+  std::vector<float> right = tone(kLowToneHz, -0.5f);
+  add_tone(right, kHighMidToneHz, 0.4f);
+  const std::vector<float> mono = tone(kMidToneHz, 0.5f);
+
+  const std::vector<TrackInput> tracks = {make_track("wide", left, &right),
+                                          make_track("centre", mono, nullptr)};
+  const std::vector<TrackProfile> profiles = {usable_profile("wide", 2),
+                                              usable_profile("centre", 1)};
+
+  const std::vector<sonare::mixing::assistant::TrackChannelEnergy> energy =
+      sonare::mixing::assistant::measure_track_channel_energy(tracks, profiles);
+  REQUIRE(energy.size() == tracks.size());
+
+  const ImageOccupancy separate = analyze_image_occupancy(tracks, profiles);
+  const ImageOccupancy shared = analyze_image_occupancy(energy);
+  REQUIRE(shared.histogram.size() == separate.histogram.size());
+  for (std::size_t slot = 0; slot < separate.histogram.size(); ++slot) {
+    INFO("slot " << slot);
+    REQUIRE_THAT(shared.histogram[slot], WithinAbs(separate.histogram[slot], 0.0f));
+  }
+  REQUIRE(shared.crowding == separate.crowding);
+  REQUIRE(shared.crowded == separate.crowded);
+
+  const std::vector<MonoRisk> separate_risks = analyze_mono_risks(tracks, profiles);
+  const std::vector<MonoRisk> shared_risks = analyze_mono_risks(tracks, profiles, energy);
+  REQUIRE(shared_risks.size() == separate_risks.size());
+  for (std::size_t index = 0; index < separate_risks.size(); ++index) {
+    INFO("risk " << index);
+    REQUIRE(shared_risks[index].strip_id == separate_risks[index].strip_id);
+    REQUIRE(shared_risks[index].wide_low_end == separate_risks[index].wide_low_end);
+    REQUIRE_THAT(shared_risks[index].correlation,
+                 WithinAbs(separate_risks[index].correlation, 0.0f));
+    REQUIRE_THAT(shared_risks[index].width, WithinAbs(separate_risks[index].width, 0.0f));
+  }
+}
+
+TEST_CASE("the image histogram accessor answers without a histogram", "[mixing][assistant]") {
+  // A mix with no usable track leaves the histogram empty while every index is
+  // still in range, so a bounds check written against the band grid rather than
+  // against the storage would read past the vector.
+  const ImageOccupancy empty;
+  REQUIRE(empty.histogram.empty());
+  REQUIRE_THAT(empty.at(0, 0), WithinAbs(0.0f, 0.0f));
+  REQUIRE_THAT(empty.at(kBandCount - 1, kPanBucketCount - 1), WithinAbs(0.0f, 0.0f));
+  REQUIRE_THAT(empty.at(-1, 0), WithinAbs(0.0f, 0.0f));
+  REQUIRE_THAT(empty.at(0, kPanBucketCount), WithinAbs(0.0f, 0.0f));
+}

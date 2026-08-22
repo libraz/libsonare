@@ -45,14 +45,35 @@ struct SourceClassification {
 /// @details An unusable profile (@ref TrackProfile::usable false) is reported as
 ///          Unknown with zero confidence without being examined.
 ///
-///          @ref TrackProfile::name is consulted only as a confidence
-///          adjustment: a name agreeing with the measured class raises
-///          confidence, a name naming a different class lowers it. A name can
-///          never select a class, so a mislabelled track is still classified by
-///          what it sounds like — with less certainty attached.
+///          For every class the decision table has a row for, @ref
+///          TrackProfile::name is consulted only as a confidence adjustment: a
+///          name agreeing with the measured class raises confidence, a name
+///          naming a different class lowers it. A name cannot select one of
+///          those classes, so a mislabelled track is still classified by what it
+///          sounds like — with less certainty attached.
+///
+///          Four classes — @ref SourceClass::Keys, @ref SourceClass::Strings,
+///          @ref SourceClass::Backing and @ref SourceClass::Fx — have no row,
+///          because no combination of the measured features separates them from
+///          their neighbours without a trained model. Those, and only those, are
+///          supplied by the name, at a fixed modest confidence, and only when
+///          the table produced no answer of its own. That is not the name
+///          overriding a measurement: there is no measurement to override.
 /// @param profile Profile from @ref analyze_track_profile.
 /// @return The identified class and its confidence.
 SourceClassification classify_source(const TrackProfile& profile);
+
+/// @brief Confidence a perfectly-matching, unnamed track earns for @p source.
+/// @details The per-class prior a rule row carries, before the match score
+///          scales it and before any name adjustment. Exposed because a
+///          downstream stage that wants "the classifier is nearly certain about
+///          this class" cannot express it as one absolute number: confidence is
+///          scaled by a prior that differs per class, so an absolute threshold
+///          asks a different amount of certainty of each one — and a threshold
+///          above a class's prior silently removes that class from whatever the
+///          stage was gating.
+/// @return The row's base confidence, or 0 for a class with no row.
+float source_base_confidence(SourceClass source) noexcept;
 
 /// @brief Fills @ref TrackProfile::source and @ref TrackProfile::source_confidence
 ///        on every profile in place.
