@@ -188,17 +188,44 @@ TEST_CASE("the synthesized inharmonicity tracks the physical B(note) curve",
   REQUIRE(meas_c6 > meas_c4);
 }
 
+TEST_CASE("inharmonicity turns back up below the bass break", "[midi][synth][piano]") {
+  using sonare::midi::synth::piano_inharmonicity_b;
+  // A wound bass string is a heavy core on a scale that cannot be made long
+  // enough for it, so B stops falling around C2 and climbs again toward A0.
+  // A curve that keeps falling (or floors out) reads several times too
+  // flexible at the bottom of the keyboard and the bass loses its growl.
+  const float at_break = piano_inharmonicity_b(36);
+  REQUIRE(at_break < piano_inharmonicity_b(24));
+  REQUIRE(at_break < piano_inharmonicity_b(48));
+  REQUIRE(piano_inharmonicity_b(21) > 2.0f * at_break);
+  // Rising monotonically on each side of the break.
+  for (int n = 36; n < 96; ++n) REQUIRE(piano_inharmonicity_b(n + 1) > piano_inharmonicity_b(n));
+  for (int n = 21; n < 36; ++n) REQUIRE(piano_inharmonicity_b(n + 1) < piano_inharmonicity_b(n));
+  // The two branches meet without a step.
+  REQUIRE(piano_inharmonicity_b(35) / piano_inharmonicity_b(36) < 1.08f);
+  // Held at the top key rather than extrapolated.
+  REQUIRE(piano_inharmonicity_b(127) == piano_inharmonicity_b(108));
+}
+
 TEST_CASE("piano tuning follows a stretched (Railsback) octave curve", "[midi][synth][piano]") {
   using sonare::midi::synth::piano_stretch_cents;
   // A4 is the anchor; the curve is sharp in the treble, flat in the bass, and
-  // grows toward both extremes (clamped to a tasteful range).
+  // grows toward both extremes. The bounds are what a tuned concert grand
+  // measures rather than a round number: across three of them the top note
+  // runs +34 to +57 cents and the bottom note -10 to -15, so a curve that
+  // stayed inside a couple of tens of cents at the top would be the one out of
+  // range. They are here to catch a curve that has run away, not to pin a
+  // value -- an octave of detune at C8 is a bug, forty cents is a piano.
   REQUIRE(piano_stretch_cents(69) == 0.0f);                     // A4 anchor
   REQUIRE(piano_stretch_cents(96) > 1.0f);                      // C7 sharp
   REQUIRE(piano_stretch_cents(108) > piano_stretch_cents(96));  // grows up top
   REQUIRE(piano_stretch_cents(48) < 0.0f);                      // C3 flat
   REQUIRE(piano_stretch_cents(21) < piano_stretch_cents(48));   // flatter down low
-  REQUIRE(std::fabs(piano_stretch_cents(108)) <= 22.0f);
-  REQUIRE(std::fabs(piano_stretch_cents(21)) <= 22.0f);
+  REQUIRE(piano_stretch_cents(108) <= 80.0f);
+  REQUIRE(std::fabs(piano_stretch_cents(21)) <= 25.0f);
+  // Above the top key the curve is held rather than extrapolated: a fourth
+  // power run out to note 127 would ask for nearly three semitones.
+  REQUIRE(piano_stretch_cents(127) == piano_stretch_cents(108));
 
   // Spectrally: a treble fundamental lands measurably sharp of equal
   // temperament (the stretch is FFT-resolvable up high).
@@ -212,8 +239,12 @@ TEST_CASE("piano tuning follows a stretched (Railsback) octave curve", "[midi][s
   const double cents = 1200.0 * std::log2(f1 / et);
   INFO("C7 measured stretch = " << cents << " cents (intended " << piano_stretch_cents(note)
                                 << ")");
-  REQUIRE(cents > 1.5);   // clearly sharp of ET
-  REQUIRE(cents < 12.0);  // but within the tasteful range
+  // What the render has to agree with is the curve, not a fixed number: the
+  // point of the spectral check is that the tuning the voice was asked for is
+  // the tuning that comes out of it, so a fitted curve moving must not turn
+  // this red on its own.
+  REQUIRE(cents > 1.5);  // clearly sharp of ET
+  REQUIRE(std::fabs(cents - piano_stretch_cents(note)) < 2.0);
 }
 
 TEST_CASE("the unison string count is graded across the keyboard", "[midi][synth][piano]") {

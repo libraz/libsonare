@@ -66,11 +66,14 @@ inline int piano_slab_capacity(double sample_rate) noexcept {
   return kMaxPianoStrings * piano_string_capacity(sample_rate);
 }
 
-/// Physically-graded stiff-string inharmonicity coefficient B for a MIDI
-/// @p note, where partial n lands at f_n = n*f0*sqrt(1 + B*n^2). B rises
-/// roughly threefold per octave (Fletcher/Conklin), from ~2e-5 in the deep
-/// bass through ~7e-4 around A4 to a few percent at the top of the keyboard,
-/// with a small bass floor. Drives the per-note dispersion allpass design.
+/// Stiff-string inharmonicity coefficient B for a MIDI @p note, where partial
+/// n lands at f_n = n*f0*sqrt(1 + B*n^2). Fitted to a measured concert-grand
+/// corpus: ~8e-4 around A4, a couple of percent at the top of the keyboard,
+/// and a minimum near C2 (note 36) rather than at the bottom. Below that break
+/// B climbs back to ~1e-4 at A0, because a wound bass string is a heavy core
+/// on a scale too short to keep it flexible -- a monotonic curve reads seven
+/// times too stiff-free down there, and the bass loses its growl. Drives the
+/// per-note dispersion allpass design.
 float piano_inharmonicity_b(uint8_t note) noexcept;
 
 /// Number of coupled unison strings a real grand strings @p note with: a
@@ -85,6 +88,12 @@ int piano_unison_strings(uint8_t note) noexcept;
 /// sharp partials of the lower strings lock to the fundamentals above: sharp in
 /// the treble, flat in the bass, zero at the A4 anchor. The perceptual
 /// completion of the stiff-string inharmonicity (piano_inharmonicity_b).
+///
+/// Fitted to the same measured corpus and strongly asymmetric -- about ten
+/// cents flat at A0 against fifty sharp at C8 -- so it is two power-law
+/// branches rather than one odd function about the anchor. Note that this is
+/// stretch only: an instrument tuned a little off A440 carries a constant
+/// offset which is not part of the curve and must not be fitted into it.
 float piano_stretch_cents(uint8_t note) noexcept;
 
 /// Piano section of a NativeSynthPatch (used when mode == kPiano).
@@ -196,6 +205,7 @@ class PianoVoiceCore {
   float ham_exit_ = -1.0f;
   float ys_ = 0.0f;
   float ys_adm_ = 0.0f;
+  float ys_limit_ = 0.0f;
   float last_force_ = 0.0f;
   int comb_delay_ = 0;
   int comb_idx_ = 0;
@@ -216,15 +226,48 @@ class PianoVoiceCore {
   float exc_lp_ = 0.0f;
   float exc_lp2_ = 0.0f;
 
-  // Soundboard radiation highpass (biquad, b2 == b0).
-  float hp_b0_ = 1.0f;
-  float hp_b1_ = 0.0f;
-  float hp_a1_ = 0.0f;
-  float hp_a2_ = 0.0f;
-  float hp_x1_ = 0.0f;
-  float hp_x2_ = 0.0f;
-  float hp_y1_ = 0.0f;
-  float hp_y2_ = 0.0f;
+  // Longitudinal string modes ("phantom partials"). Transverse motion stretches
+  // the string, and the tension change it makes -- quadratic in the transverse
+  // displacement -- launches waves at the LONGITUDINAL speed, which in steel is
+  // tens of times the transverse one. They are inharmonic against the
+  // transverse series, strongest in the bass where the fundamental radiates
+  // almost nothing, and they are the metallic growl that tells the ear a low
+  // note came from a piano rather than from a string. The drive is the squared
+  // string sum, so the v^2 amplitude law and the doubled decay rate both come
+  // out of the mechanism rather than being prescribed.
+  static constexpr int kLongitudinalModes = 5;
+  struct LongMode {
+    float a1 = 0.0f;
+    float a2 = 0.0f;
+    float gain = 0.0f;
+    float y1 = 0.0f;
+    float y2 = 0.0f;
+  };
+  std::array<LongMode, kLongitudinalModes> long_modes_{};
+  float long_level_ = 0.0f;
+  float long_prev_ = 0.0f;
+  float long_hp_a_ = 1.0f;
+  float long_x1_ = 0.0f;
+  float long_x2_ = 0.0f;
+
+  // Soundboard radiation highpass: two biquad sections (b2 == b0 in each)
+  // forming a fourth-order Butterworth. The measured radiation transition of a
+  // grand is about 24 dB/octave -- a bass fundamental sits 25 dB under its own
+  // partial crown one octave below the break and 40-plus dB under it at A0 --
+  // which a single 12 dB/octave section cannot reach without also thinning the
+  // tenor, so the order is the thing that has to be right rather than the Q.
+  static constexpr int kRadiationHpSections = 2;
+  struct HpSection {
+    float b0 = 1.0f;
+    float b1 = 0.0f;
+    float a1 = 0.0f;
+    float a2 = 0.0f;
+    float x1 = 0.0f;
+    float x2 = 0.0f;
+    float y1 = 0.0f;
+    float y2 = 0.0f;
+  };
+  std::array<HpSection, kRadiationHpSections> hp_{};
 
   // Bridge-hill radiation emphasis (peaking biquad).
   float bh_b0_ = 1.0f;

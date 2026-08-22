@@ -14,7 +14,22 @@ SONARE_TUNABLE(kPianoDecayFastS, 1.35f);
 SONARE_TUNABLE(kPianoSoundboard, 0.35f);
 SONARE_TUNABLE(kPianoHammerContactMs, 1.1f);
 SONARE_TUNABLE(kPianoHammerDynamics, 0.5f);
-SONARE_TUNABLE(kPianoReleaseDampS, 0.85f);
+/// Damper t60 at note-off. Held well short of what the measured release alone
+/// asks for, because this value is also the far end of the half-pedal
+/// interpolation: a gentler full damp gives the pedal less to grade against,
+/// and past about 1.2 s a half pedal stops being distinguishable from a lifted
+/// one. Closing the remaining gap needs the two endpoints separated, not a
+/// larger number here.
+SONARE_TUNABLE(kPianoReleaseDampS, 1.0f);
+/// Amp-envelope release (ms) for the piano family. This is the ceiling on how
+/// long ANY released note may ring, so it bounds the damper ring-down as well
+/// as the treble's -- raising release_damp_s alone moves the measured release
+/// barely at all while this sits under it, which is why the two are fitted as
+/// a pair. Longer than the reference strictly wants: past here the measured
+/// release keeps improving, but only against a reference whose own numbers are
+/// running into the capture gate, and every millisecond costs clarity on
+/// repeated notes.
+SONARE_TUNABLE(kPianoAmpReleaseMs, 2500.0f);
 
 /// One GM family (programs family*8 .. family*8+7) -> one subtractive patch.
 /// Voiced for "honest sketch" quality (§E coverage tiers): leads/pads/basses
@@ -28,7 +43,7 @@ std::array<NativeSynthPatch, 16> build_family_patches() noexcept {
   // hammer, coupled unison strings, soundboard bank); the e-piano / clavi
   // programs override to FM.
   t[0].mode = SynthEngineMode::kPiano;
-  t[0].amp_env = fallback_env(6.0f, 0.0f, 1.0f, 800.0f);
+  t[0].amp_env = fallback_env(6.0f, 0.0f, 1.0f, kPianoAmpReleaseMs);
   t[0].cutoff_hz = 20000.0f;
   // A harder, shorter hammer contact keeps the upper partials a concert grand
   // actually has; the longer damp lets the damper fall be heard as a ring-down

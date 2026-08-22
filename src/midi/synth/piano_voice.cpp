@@ -25,6 +25,44 @@ SONARE_TUNABLE(kHammerHysteresis, 0.229431f);
 /// Additional felt-stiffness cutoff octaves per unit velocity above mf, per
 /// unit hammer_dynamics: a compressed felt patch passes more of the pulse top.
 SONARE_TUNABLE(kHammerDynBrightOct, 1.5f);
+/// Felt-stiffness lowpass on the injected force: its cutoff at zero velocity,
+/// and how many octaves that cutoff climbs across the velocity range as the
+/// compressed felt stiffens.
+///
+/// The climb measures as zero against a grand. Three octaves of it were laid on
+/// top of a contact solver that already derives its own velocity response from
+/// the Hertz laws, and the sum came out around four times the measured spread:
+/// the partial stack of a C4 ran from 15 dB below the reference at pianissimo
+/// to 8 dB above it at fortissimo, where the reference barely moves, and the
+/// spectral centroid swung from -37% to +234% of it across the same four
+/// velocities. Flat, with the cutoff left at what the climb used to reach near
+/// mezzo-forte, that spread closes to +4%..+102% and the partial stack gains
+/// two dB. The mechanism is real -- felt does stiffen as it compresses -- so
+/// the climb stays fittable and a patch can still reach it through
+/// hammer_dynamics; it is the magnitude that measured as voicing, not physics.
+///
+/// Note the pulse mostly does not see this filter: the hammer's finite
+/// footprint caps it lower through the middle of the keyboard, so what this
+/// cutoff really governs is the felt scrub-noise bandwidth below, which is what
+/// seeds the upper partials.
+SONARE_TUNABLE(kFeltCutoffBaseHz, 2400.0f);
+SONARE_TUNABLE(kFeltCutoffVelOct, 0.0f);
+/// Semitones the patch's reference contact time takes to DOUBLE as the note
+/// descends. A grand's contact spans a far narrower range than its periods do —
+/// well under a millisecond in the treble against a few in the bass — so this
+/// is measured in tens of semitones, not in one octave. At 13.12 it doubled
+/// every 1.09 octaves, which is very nearly holding the contact to a fixed
+/// fraction of the period, and it handed A0 a 13.9 ms contact: a force pulse
+/// whose first null falls at 72 Hz. The string was then driven only where the
+/// soundboard cannot radiate it, so the whole bass note had to be carried by
+/// the hammer knock and the scrub noise instead — silencing either one took an
+/// A0 attack apart, which is what a string with no excitation of its own looks
+/// like from the outside.
+///
+/// Only the bottom of the keyboard is governed by this: from C4 up the period
+/// floor below is the binding term, so the fitted mid and treble do not move
+/// with it at all (verified — notes 60 and above render identically).
+SONARE_TUNABLE(kContactKeytrackSemis, 36.0f);
 /// Hammer-contact floor in fundamental PERIODS, anchored at C4 and graded
 /// per octave (signed: it shrinks into the bass, grows into the treble). A
 /// real grand's contact spans ~0.5 of the period at C4 and more than a full
@@ -35,6 +73,50 @@ SONARE_TUNABLE(kHammerDynBrightOct, 1.5f);
 SONARE_TUNABLE(kContactPeriodsAtC4, 0.503038f);
 SONARE_TUNABLE(kContactPeriodsPerOct, 0.613525f);
 SONARE_TUNABLE(kContactPeriodsMax, 2.0f);
+/// Ceiling on ONE blow's contact, in fundamental periods, and never below the
+/// floor above: the two are the same physical statement — the string's own
+/// reflection returns while the felt is still loaded and decides when the
+/// hammer leaves — so in the treble, where the floor is the binding one, they
+/// meet.
+///
+/// The free bounce on its own has no ceiling: contact goes as v^-((p-1)/(p+1)),
+/// so a soft treble blow dwells for nearly four periods, which puts the force
+/// pulse's first null below the fundamental and all but erases the note. A
+/// pianissimo C7 rendered 34 dB under the reference where the same note at
+/// fortissimo sat 12 dB under it, and the pp->ff level swing came out at +48 dB
+/// against a measured +25 — the model's soft treble simply vanished, which is
+/// the register a melody is played in.
+///
+/// The ceiling is imposed by stiffening the felt for that blow, which is the
+/// same statement in the solver's terms. The mezzo-forte calibration the
+/// injection normalizes against is left at the unstiffened value, so the
+/// velocity level curve still comes out of the dynamics rather than out of the
+/// normalization. Through the middle of the keyboard the free bounce never
+/// reaches the ceiling and nothing changes: every note at or below C4 renders
+/// the same as it did without one.
+///
+/// The value is fitted, and one period is where the fit landed — which is the
+/// round trip the reflection makes, so the number reads as the mechanism rather
+/// than as a coincidence. Tightening it further starts shortening mid-register
+/// contacts, which is a different change wearing this one's clothes.
+SONARE_TUNABLE(kContactPeriodsPerBlowMax, 1.0f);
+/// What the voice puts out, scaling the injected force and the noise/knock
+/// paths together so the balance between them does not move with it.
+///
+/// This voice is built up from physical calibration — felt stiffness, contact
+/// duration, string admittance, radiation — and none of those steps knows what
+/// the result should measure. Left unnormalized it came out 16 dB under the
+/// rest of the GM bank: a C4 at velocity 100 peaked at -32 dBFS where the
+/// harpsichord and the nylon guitar, which are struck-and-decaying in the same
+/// way, both sat near -15.5, and the same 16 dB separated it from a concert
+/// grand recorded dry. The gap is flat across velocity, so it is a level, not
+/// a curve. A piano that quiet is buried by everything it plays with.
+///
+/// The bank-balance knob is the family's own `gain`, which stays where it is:
+/// the defect is here, in a voice whose output was never anchored to anything,
+/// and it is worth 16 dB more than the family gain can even express (that field
+/// clamps at 4).
+SONARE_TUNABLE(kOutputLevel, 5.7f);
 /// Treble decay taper (halvings of the aftersound stage per octave above C4):
 /// the short, stiff, heavily-damped treble strings die far faster than the
 /// tenor. Applied to the slow stage only — the prompt-sound rate is set by the
@@ -96,6 +178,14 @@ SONARE_TUNABLE(kStrikeNoiseMaxMs, 30.0f);
 /// The impact noise radiates through a darker path than the string pulse: a
 /// felt hammer lands as a 0.5-2 kHz thud, not a pick click — the noise gets
 /// its own lowpass at this fraction of the felt-stiffness cutoff.
+///
+/// Widening this to chase a thin partial stack is the trap on this path. It
+/// works, on paper: a broadband floor lifts the measured level at every partial
+/// frequency, so the partial-stack figure improves steadily as it opens. What
+/// the partial ladder cannot see is that none of that lift is tonal — carried
+/// far enough it takes the spectral centroid to more than three times the
+/// reference's, and the note is audibly hissy long before the ladder complains.
+/// Read the two together or this constant will fit itself into noise.
 SONARE_TUNABLE(kStrikeNoiseCutoffScale, 0.487539f);
 /// Halvings of the noise cutoff per octave below C4 (see noise_cutoff).
 SONARE_TUNABLE(kNoiseCutoffBassOct, 0.5f);
@@ -104,6 +194,16 @@ SONARE_TUNABLE(kNoiseCutoffBassOct, 0.5f);
 /// attack holds energy to a few kHz then drops ~37 dB into the next octave,
 /// a shape two poles cannot make (their tail is what read as a jack click).
 SONARE_TUNABLE(kNoiseSteepRatio, 4.0f);
+/// Lower bound on a one-pole smoothing coefficient. A coefficient of exactly
+/// zero never charges, so the pole needs a floor; the floor must sit far below
+/// any corner the voice can ask for, or it silently replaces the requested
+/// frequency with itself. At 48 kHz this one is 0.076 Hz. The previous 0.01
+/// was 76.8 Hz, which is inside the keyboard: it pinned every note from A0 to
+/// B2 to the same footprint corner regardless of pitch, so the keytrack below
+/// had no authority over the bottom two octaves and could not be fitted there
+/// -- the sweeps just saturated. A numeric guard that lands in the audio band
+/// stops being a guard and becomes an unfittable filter.
+constexpr float kOnePoleAlphaFloor = 1.0e-5f;
 /// Finite hammer-head width: the felt contacts several percent of the string
 /// length, and that footprint lowpasses the injected force (partials whose
 /// half-wavelength fits inside the footprint cancel). Caps the pulse content
@@ -119,6 +219,22 @@ SONARE_TUNABLE(kHammerWidthHarmonics, 2.69125f);
 /// the mid/bass sustain with no top: a bright strike into a dull ring reads
 /// as a fingernail pluck. Random phase, so it does not re-cohere the loop.
 SONARE_TUNABLE(kStrikeNoiseInject, 0.298027f);
+/// Share of the strike noise that reaches the air directly, alongside the
+/// share the board radiates through the knock's thud filter.
+///
+/// Sending all of it through the thud was a correction for raw noise leaving
+/// the 3-12 kHz attack octaves 20-45 dB hot, and it overshot: the thud corner
+/// keytracks to 72 Hz at A0, so in the bass the noise is lowpassed an octave
+/// below the fundamental and radiates nothing at all. Measured against the
+/// reference over the first 50 ms, the attack came out 10-18 dB short above
+/// 3 kHz at EVERY register and 20 dB short at 0.8-3 kHz in the bass — a piano
+/// whose hammers never land. The sustained partial ladder cannot see this;
+/// it is measured after the attack is over.
+///
+/// The noise is a 30 ms event with an 8 ms decay, so this path touches the
+/// attack only. What rings on is the scrub the strings are injected with,
+/// which is kStrikeNoiseInject and is not affected by this.
+SONARE_TUNABLE(kStrikeNoiseDirect, 0.6f);
 /// The injection tapers above C4 (halvings per octave): the treble hammer
 /// rests on the string for around a full period, shorting high-frequency
 /// string motion at the contact point — broadband seeding there rings the
@@ -164,13 +280,36 @@ SONARE_TUNABLE(kBloomTauOct, 0.9f);
 /// bass strings are massive and swing away under the light-relative hammer,
 /// stretching the contact and softening the transfer.
 SONARE_TUNABLE(kStringYield, 0.8f);
+/// How far the strike point may be driven aside, as a fraction of THIS blow's
+/// peak felt compression. Tension bounds the excursion — the strike point is a
+/// sprung wave port, not a free particle — and the bound scales with the blow
+/// because the compression does. A safety bound rather than a voicing control,
+/// so it stays a plain constant: the fitter has nothing to gain from a limit
+/// whose job is to stop the string outrunning the hammer.
+constexpr float kYieldExcursionCap = 0.7f;
 /// Register level compensation on the injected force (dB per octave from C4,
 /// clamped at +/-1.25 oct): the bass chatter re-feeds its strings while the
 /// treble's near-period dwell couples weakly into the fundamental, tilting
 /// the raw physical levels bass-heavy by ~10 dB/oct against the reference.
 SONARE_TUNABLE(kInjTiltDbOct, 3.5f);
 SONARE_TUNABLE(kYieldTrebleOct, 2.0f);
-SONARE_TUNABLE(kKnockBassBoostOct, 1.3f);
+/// How the knock grows into the bass (doublings per octave below C4). The
+/// heavy bass hammer really does rock the board harder, but the knock has no
+/// highpass of its own — only the soundboard radiation below it — so growth
+/// here lands mostly under 60 Hz, where nothing is heard and everything is
+/// displaced. At 1.3 an A0 attack measured 43 dB over the reference in
+/// 20-60 Hz while sitting 15-20 dB UNDER it everywhere above 200 Hz: a note
+/// that is felt and not heard. Backing it off is worth more than it costs
+/// right up to the point where 60-200 Hz starts thinning, which is where this
+/// sits.
+///
+/// How far it can back off is set by whether the STRING carries the bass. While
+/// the footprint cap was pinned by a numeric floor (see kOnePoleAlphaFloor) and
+/// the contact ran three times too long, it did not: silencing the knock cost an
+/// A0 attack every decibel it had below 200 Hz, because there was nothing else
+/// down there. With the pulse reaching the register it drives, half the knock
+/// comes out and the note keeps its weight.
+SONARE_TUNABLE(kKnockBassBoostOct, 0.3f);
 /// ...and shrinks above C4: the treble hammer is a few grams — its thud is
 /// far below the tone (the reference treble attack has almost no 60-250 Hz).
 SONARE_TUNABLE(kKnockTrebleTaperOct, 2.0f);
@@ -179,11 +318,94 @@ SONARE_TUNABLE(kKnockTrebleTaperOct, 2.0f);
 /// both the footprint's span of the string and how the contact dwell scales
 /// against the period, so neither side is forced brighter or darker a
 /// priori — the reference ladders decide the sign per register.
-SONARE_TUNABLE(kWidthBassOct, -1.96668f);
+///
+/// The bass branch is the one with a first-principles answer, because in HERTZ
+/// the footprint cap is c / 2w — the transverse wave speed over twice the
+/// contact width — and neither of those follows the pitch. On a grand's own
+/// scale the speed falls about 2.5x from C4 to A0 and the felt widens about 2x,
+/// so the corner drops ~0.7 doublings per octave while f0 drops a full one, and
+/// the cap in harmonic number therefore RISES into the bass. It had been fitted
+/// negative, taking A0's corner to 0.88 Hz, but only a numeric floor made that
+/// survivable and the fit could never see the register it was describing.
+SONARE_TUNABLE(kWidthBassOct, 0.3f);
 SONARE_TUNABLE(kWidthTrebleOct, 0.81966f);
+/// The footprint cap also rides the dynamics-gated felt compression, and the
+/// sign of that is not obvious: compressing felt stiffens it, which passes more
+/// of the pulse's top end, but it also flattens the crown and WIDENS the contact
+/// patch, and a wider patch cancels LOWER partials. Fitted as a free exponent on
+/// the compression factor, the reference declines to choose -- from +1 to -0.5
+/// it trades the h2-h7 velocity spread against the h8-h16 one and the level
+/// swing almost exactly one for one, with the total unchanged. It stays tied to
+/// the stiffness factor because nothing measured says otherwise.
 /// Strike-point keytrack (doublings per octave below C4) applied to the
-/// patch's strike_position fraction.
-SONARE_TUNABLE(kStrikePosBassOct, 0.556f);
+/// patch's strike_position fraction. A grand's strike ratio travels from about
+/// a twelfth of the speaking length in the middle to an eighth in the bass —
+/// half a doubling across the whole bottom of the keyboard, not per octave.
+/// Read per octave it carried A0's hammer out to a THIRD of the string, which
+/// parks the strike comb's first peak at 46 Hz and scatters its nulls through
+/// the register the note is heard in; the h8 notch it exists to place ended up
+/// at h3.
+SONARE_TUNABLE(kStrikePosBassOct, 0.18f);
+/// Longitudinal ("phantom partial") mode bank: the first mode's frequency at
+/// C4 and how it climbs per octave, the bank's level and its taper above C4,
+/// and the first mode's ring-down.
+///
+/// A string's longitudinal modes sit at c_L / 2L, so their frequency is set by
+/// the speaking length alone. Taking c_L in steel and a grand's own scale — two
+/// metres at A0 through about half a metre at C4 — that is 1.3 kHz at the
+/// bottom and near 4.9 kHz by the middle, a climb of 0.6 doublings per octave.
+/// It is well under one because a real scale foreshortens the bass instead of
+/// doubling the length every octave, which is also why the frequency has to be
+/// keytracked in its own right and cannot be a multiple of f0. Fitting the
+/// climb freely lands within a few per cent of the scale-length figure and
+/// measurably worse either side of it, so the scale is what it is set from.
+///
+/// The level tapers above C4 to nothing: the treble strings are short and stiff
+/// and their longitudinal modes are far above anything audible. In the bass it
+/// is the opposite — with the bank absent the model had NO energy at all
+/// between 200 Hz and 3 kHz in an A0 attack, 16 dB under the reference, and the
+/// only lever with any authority there was the hammer knock. Fitting that
+/// instead drove the same attack 43 dB OVER the reference below 60 Hz, because
+/// a lowpassed force is all the knock can radiate. A bass note that is felt and
+/// not heard is what a missing mode bank looks like from the fitter's side.
+SONARE_TUNABLE(kLongFirstHzC4, 4900.0f);
+SONARE_TUNABLE(kLongFirstOct, 0.6f);
+/// The level is what the bank contributes, and it is large because the drive is
+/// a squared slope: two derivatives' worth of scaling sit between the string
+/// signal and this number, so it carries no meaning as a ratio.
+///
+/// Fitting it is a two-window problem. Against the attack it wants to be large:
+/// A0 has no other source at all for 0.8-3 kHz, and every dB here is a dB of
+/// the growl that tells the ear a low note came from a piano. Against the
+/// sustain it wants to be small, because the bank keeps ringing and the
+/// sustained centroid is already 12% over the reference. Where it sits recovers
+/// 7.4 dB of A0's attack and 3.3 dB of the keyboard median for 3.9 points of
+/// centroid, and leaves tuning, decay, the partial stack and the level swing
+/// untouched. Pushed further the 3-12 kHz octaves overshoot and the centroid
+/// runs away, which is the scrub-noise trade over again.
+SONARE_TUNABLE(kLongLevel, 8000.0f);
+SONARE_TUNABLE(kLongTrebleTaperOct, 1.5f);
+SONARE_TUNABLE(kLongT60S, 0.35f);
+/// Band limit on the slope operator the drive passes through before it is
+/// squared.
+///
+/// The tension follows the string's SLOPE, and a transverse partial's slope
+/// grows in proportion to its order — the slope operator is a differentiator.
+/// A one-pole highpass IS that differentiator below its corner and flattens
+/// above it, so this is where the +6 dB/octave stops rather than a filter
+/// corner in the usual sense; it keeps the squaring from amplifying the top of
+/// the band into hiss.
+///
+/// It decides the envelope, not the spectrum. The slope is carried by the upper
+/// transverse partials, which die first, so a high limit concentrates the bank
+/// in the attack where a phantom partial belongs. Measured: at 300 Hz the bank
+/// costs 4.4 points of sustained centroid for 1.6 dB of attack; here it buys
+/// 3.3 dB for 3.9 points; above about 8 kHz there is too little drive left to
+/// reach at any level, which reads as an inert knob rather than as a small one.
+/// A plain sample difference is the far end of the same axis and is inert for
+/// the same reason: it is 38 dB down at 100 Hz, which takes the drive away in
+/// exactly the register the bank exists for.
+SONARE_TUNABLE(kLongDriveHpHz, 4000.0f);
 /// Soundboard radiation highpass (2nd order). The board radiates poorly
 /// below its first body modes, so a piano's low fundamentals barely reach
 /// the air — the pitch is carried as virtual pitch by the upper partials.
@@ -191,7 +413,12 @@ SONARE_TUNABLE(kStrikePosBassOct, 0.556f);
 /// literally vibrating string (a guitar with its Helmholtz-supported lows),
 /// an octave darker than a piano radiates.
 SONARE_TUNABLE(kRadiationHpHz, 95.0f);
-SONARE_TUNABLE(kRadiationHpQ, 0.6f);
+/// Section Qs of the fourth-order Butterworth radiation highpass. Fixed by the
+/// filter order rather than voiced: they are 1/(2 cos(pi/8)) and
+/// 1/(2 cos(3pi/8)), the pole pair that makes the cascade maximally flat. The
+/// corner above is what voices the radiation; changing these detunes the
+/// alignment instead.
+constexpr std::array<float, 2> kRadiationHpSectionQ = {0.54119610f, 1.30656296f};
 /// Bridge-hill radiation emphasis (RBJ peaking biquad). The bridge/board
 /// mobility of a grand peaks broadly around 1-2 kHz (the "bridge hill"),
 /// lifting whichever partials land in that fixed band: the bass h9-h12
@@ -201,6 +428,48 @@ SONARE_TUNABLE(kRadiationHpQ, 0.6f);
 SONARE_TUNABLE(kBridgeHillHz, 1485.15f);
 SONARE_TUNABLE(kBridgeHillGainDb, 9.91486f);
 SONARE_TUNABLE(kBridgeHillQ, 2.40983f);
+
+/// Traversal-rate normalization of the loop lowpass (see its use in start()).
+/// 0 leaves the raw per-traversal coefficient, where upper-partial damping
+/// grows with the fundamental and the top two octaves lose their partial stack
+/// entirely. 1 removes the register dependence completely, making the loop's
+/// high-frequency loss a function of absolute frequency alone, and is the
+/// default because the dependence is an artefact of the model's structure
+/// rather than a property of a string. Genuine register grading of the voicing
+/// belongs to kTrebleBrightPerOct / kBassDarkPerOct, which still apply. The
+/// reference frequency is the note left untouched, and sits at the bottom of
+/// the keyboard so the correction only ever opens the loop, never closes it.
+SONARE_TUNABLE(kLoopDampRateNorm, 1.0f);
+SONARE_TUNABLE(kLoopDampRefHz, 27.5f);
+
+/// Stiff-string inharmonicity B, fitted to a measured concert-grand corpus
+/// (see piano_inharmonicity_b). Two branches meeting at the bass break: above
+/// it a plain-wire scale grows B by ~2.8x per octave, and below it B turns
+/// around and climbs back into the deep bass, because a wound bass string is
+/// a heavy core the scale is too short for. The turnaround is the shape a
+/// single exponential cannot express, and it is worth ~7x at the bottom note.
+SONARE_TUNABLE(kInharmBreakNote, 36.0f);
+SONARE_TUNABLE(kInharmBAtA4, 7.718e-4f);
+SONARE_TUNABLE(kInharmTrebleBeta, 0.086636f);
+SONARE_TUNABLE(kInharmBassBeta, 0.064666f);
+
+/// Railsback stretch, fitted to the same corpus (see piano_stretch_cents).
+/// Two power-law branches about the A4 anchor: the treble rises as roughly
+/// the fourth power of the distance in octaves, the bass falls close to
+/// linearly. A tuner does not set these from the octave's second partial
+/// alone -- doing so predicts about a seventh of the measured bass stretch --
+/// so the curve is measured rather than derived from kInharm*.
+SONARE_TUNABLE(kStretchBassCents, 2.1333f);
+SONARE_TUNABLE(kStretchBassPower, 1.0756f);
+SONARE_TUNABLE(kStretchTrebleCents, 0.5010f);
+SONARE_TUNABLE(kStretchTreblePower, 4.0427f);
+
+/// Keyboard bounds the two curves are fitted over. A MIDI note outside them
+/// is held at the edge value: extrapolating a fourth-power stretch to note
+/// 127 asks for nearly three semitones of detune, and no piano has a string
+/// there to justify it.
+constexpr float kLowestPianoNote = 12.0f;
+constexpr float kHighestPianoNote = 108.0f;
 
 /// Per-loop-traversal amplitude factor reaching -60 dB after @p t60_s.
 float loop_gain_for(float period_samples, double sample_rate, float t60_s) noexcept {
@@ -303,13 +572,14 @@ float partial_damp_gain(float natural, float damped, float strength) noexcept {
 }  // namespace
 
 float piano_inharmonicity_b(uint8_t note) noexcept {
-  const float n = static_cast<float>(note & 0x7Fu);
-  // ~threefold growth per octave anchored near A4 (note 69), with a deep-bass
-  // floor so the lowest wrapped strings keep a touch of stiffness.
-  constexpr float kBAtA4 = 7.0e-4f;
-  constexpr float kBetaPerSemitone = 0.0915750f;  // ln(3) / 12
-  const float b = kBAtA4 * std::exp(kBetaPerSemitone * (n - 69.0f));
-  return std::max(b, 2.0e-5f);
+  const float n = std::clamp(static_cast<float>(note & 0x7Fu), kLowestPianoNote, kHighestPianoNote);
+  // Plain-wire branch: B grows steadily toward the top of the keyboard.
+  const float treble = kInharmBAtA4 * std::exp(kInharmTrebleBeta * (n - 69.0f));
+  if (n >= kInharmBreakNote) return treble;
+  // Wound-string branch below the bass break, anchored on the plain-wire value
+  // at the break so the two meet without a step.
+  const float at_break = kInharmBAtA4 * std::exp(kInharmTrebleBeta * (kInharmBreakNote - 69.0f));
+  return at_break * std::exp(kInharmBassBeta * (kInharmBreakNote - n));
 }
 
 int piano_unison_strings(uint8_t note) noexcept {
@@ -320,11 +590,14 @@ int piano_unison_strings(uint8_t note) noexcept {
 }
 
 float piano_stretch_cents(uint8_t note) noexcept {
-  // Gentle odd cubic through A4 (note 69), clamped to a tasteful range. Real
-  // Railsback curves steepen at the extremes; the clamp stands in for that
-  // without overshooting into an audibly detuned keyboard.
-  const float x = (static_cast<float>(note & 0x7Fu) - 69.0f) / 39.0f;
-  return std::clamp(14.0f * x * x * x, -22.0f, 22.0f);
+  // Two power-law branches meeting at zero on the A4 anchor. The curve is
+  // asymmetric -- a real keyboard runs about ten cents flat at the bottom and
+  // fifty sharp at the top -- so an odd function about A4 cannot fit it.
+  const float n = std::clamp(static_cast<float>(note & 0x7Fu), kLowestPianoNote, kHighestPianoNote);
+  const float octaves = (n - 69.0f) / 12.0f;
+  if (octaves > 0.0f) return kStretchTrebleCents * std::pow(octaves, kStretchTreblePower);
+  if (octaves < 0.0f) return -kStretchBassCents * std::pow(-octaves, kStretchBassPower);
+  return 0.0f;
 }
 
 void PianoVoiceCore::start(const PianoPatchParams& params, double sample_rate, uint8_t note,
@@ -350,7 +623,19 @@ void PianoVoiceCore::start(const PianoPatchParams& params, double sample_rate, u
       std::clamp(std::clamp(params.brightness, 0.0f, 1.0f) -
                      kTrebleBrightPerOct * octaves_above_c4 - kBassDarkPerOct * octaves_below_c4,
                  0.05f, 1.0f);
-  const float lp_a = (1.0f - bright_eff) * 0.6f;
+  // The loop lowpass runs once per round trip, so a fixed coefficient costs a
+  // given absolute frequency a fixed number of dB PER TRAVERSAL -- and a note
+  // an octave up makes twice as many traversals per second. The damping a
+  // listener actually hears is therefore proportional to f0, which is not how
+  // a string behaves: its losses belong to the wire and the air around it, not
+  // to how often the wave happens to come round. Uncorrected, C6's second
+  // partial falls 60 dB inside the first second and the treble renders as a
+  // sine. Scaling the coefficient back by the traversal rate removes the
+  // register dependence; the exponent sets how much of it is removed, and the
+  // reference frequency is the note left untouched.
+  const float rate_norm =
+      std::pow(kLoopDampRefHz / std::max(f0, 1.0f), std::clamp(kLoopDampRateNorm, 0.0f, 1.0f));
+  const float lp_a = std::clamp((1.0f - bright_eff) * 0.6f * rate_norm, 0.0f, 0.95f);
   loop_alpha_ = 1.0f - lp_a;
   const float tau_lp = onepole_phase_delay(lp_a, w0);
 
@@ -485,7 +770,8 @@ void PianoVoiceCore::start(const PianoPatchParams& params, double sample_rate, u
   // Reference contact time for the register (mf): the patch contact scaled by
   // register, floored in fundamental PERIODS (treble dwell ~ a full period).
   float contact_ms = std::clamp(params.hammer_contact_ms, 0.2f, 10.0f) *
-                     std::exp2(-(static_cast<float>(note & 0x7Fu) - 69.0f) / 13.1212f);
+                     std::exp2(-(static_cast<float>(note & 0x7Fu) - 69.0f) /
+                               std::max(1.0f, kContactKeytrackSemis));
   const float octaves_from_c4 = (static_cast<float>(note & 0x7Fu) - 60.0f) / 12.0f;
   const float contact_floor_periods = std::clamp(
       kContactPeriodsAtC4 + kContactPeriodsPerOct * octaves_from_c4, 0.0f, kContactPeriodsMax);
@@ -495,11 +781,9 @@ void PianoVoiceCore::start(const PianoPatchParams& params, double sample_rate, u
   // Free bounce of a unit mass on F = k * x^p from unit velocity lasts
   // c(p) * k^(-1/(p+1)) samples; c(p) fitted over p in [1.5, 4].
   const float c_p = 3.28f - 0.066f * p;
-  // The una-corda felt patch is softer (lower k -> longer, darker contact).
-  ham_p_ = p;
-  ham_k_ = std::pow(c_p / tau_mf, p + 1.0f) * (una_corda ? 0.5f : 1.0f);
   // Felt hysteresis: loading is stiffer than unloading, which skews the force
   // pulse forward and bleeds energy so the hammer leaves the string cleanly.
+  ham_p_ = p;
   ham_mu_ = kHammerHysteresis;
   ham_y_ = 0.0f;
   // Hammer speed normalized at the mezzo-forte reference; hammer_dynamics
@@ -507,17 +791,29 @@ void PianoVoiceCore::start(const PianoPatchParams& params, double sample_rate, u
   ham_v_ = std::pow(vel01 / kHammerMfVel, 1.0f + 0.6f * dyn);
   ham_on_ = true;
   ham_ttl_ = static_cast<int>(3.0f * tau_mf);  // shank check truncates a riding hammer
-  // Peak force of that mf bounce (unit mass): k * x_max^p with
-  // x_max = ((p+1)/2)^(1/(p+1)) * k^(-1/(p+1)); normalize the injection so
-  // the mf level matches the classic voicing, with the velocity level curve
-  // (~ v^(2p/(p+1))) emerging from the dynamics.
+  // Calibrated mezzo-forte felt stiffness and the bounce it makes (unit mass):
+  // peak compression x_max = ((p+1)/2k)^(1/(p+1)) and peak force k*x_max^p.
+  // Both are the reference the injection normalizes against, so the velocity
+  // LEVEL curve (~ v^(2p/(p+1))) comes out of the dynamics rather than out of
+  // the normalization -- anything blow-dependent folded into the stiffness has
+  // to stay out of these two or it divides that curve straight back out.
+  // The una-corda felt patch is softer (lower k -> longer, darker contact).
+  ham_k_ = std::pow(c_p / tau_mf, p + 1.0f) * (una_corda ? 0.5f : 1.0f);
   const float x_max_mf = std::pow(0.5f * (p + 1.0f) / ham_k_, 1.0f / (p + 1.0f));
   const float f_peak_mf = ham_k_ * std::pow(x_max_mf, p);
+  // This blow's free-bounce contact, and the ceiling the string's reflection
+  // puts on it (see kContactPeriodsPerBlowMax). Duration goes as k^(-1/(p+1)),
+  // so holding it to the ceiling costs that ratio raised to p+1 in stiffness.
+  // Only ham_k_ moves: the two mezzo-forte references above are the injection's
+  // normalization and have to stay where they are.
+  const float tau_blow = tau_mf * std::pow(std::max(ham_v_, 1.0e-4f), -(p - 1.0f) / (p + 1.0f));
+  const float dwell_cap = std::max(kContactPeriodsPerBlowMax, contact_floor_periods) * period;
+  ham_k_ *= std::pow(std::max(1.0f, tau_blow / std::max(dwell_cap, 1.0e-6f)), p + 1.0f);
   // Level reference: velocity-scaled for the noise/knock paths (as before);
   // the injection normalizes to the MF level so the velocity LEVEL curve
   // (~ v^(2p/(p+1))) comes out of the dynamics, not out of this constant.
-  hammer_amp_ = 0.9f * std::pow(vel01, amp_exp) * (una_corda ? 0.8f : 1.0f);
-  const float mf_level = 0.9f * std::pow(kHammerMfVel, amp_exp) * (una_corda ? 0.8f : 1.0f);
+  hammer_amp_ = kOutputLevel * std::pow(vel01, amp_exp) * (una_corda ? 0.8f : 1.0f);
+  const float mf_level = kOutputLevel * std::pow(kHammerMfVel, amp_exp) * (una_corda ? 0.8f : 1.0f);
   ham_force_norm_ = f_peak_mf > 1.0e-12f ? mf_level / f_peak_mf : 0.0f;
   ham_force_norm_ *=
       std::exp2(kInjTiltDbOct * std::clamp(octaves_from_c4, -1.25f, 1.25f) / 6.0206f);
@@ -529,10 +825,22 @@ void PianoVoiceCore::start(const PianoPatchParams& params, double sample_rate, u
   // curve (and the treble's full-period dwell) emerges.
   const float yield_kt =
       kStringYield * std::exp2(-kYieldTrebleOct * std::max(0.0f, octaves_from_c4));
+  // The admittance is the STRING's (force in, transverse velocity out), so it
+  // does not depend on the blow. The excursion the strike point can reach does:
+  // it follows this blow's peak felt compression, which is read off the
+  // stiffness the blow actually ran on rather than the mezzo-forte one, so a
+  // blow held to the dwell ceiling compresses the felt less and drives the
+  // string aside less in the same proportion. Pinning the excursion to the mf value
+  // instead makes the string effectively RIGID above mezzo-forte, so the felt
+  // absorbs the whole of a fortissimo blow and the contact shortens even
+  // further than the free-bounce law alone would give.
+  const float x_max_unit = std::pow(0.5f * (p + 1.0f) / ham_k_, 1.0f / (p + 1.0f));
+  const float x_max_v = x_max_unit * std::pow(std::max(ham_v_, 1.0e-4f), 2.0f / (p + 1.0f));
   ys_adm_ = 0.5f * yield_kt * x_max_mf;
+  ys_limit_ = kYieldExcursionCap * x_max_v;
   ys_ = 0.0f;
   last_force_ = 0.0f;
-  ham_exit_ = -x_max_mf;
+  ham_exit_ = -x_max_v;
   // The strike point moves out toward 1/8 of the speaking length on the bass
   // strings (mid/treble sits nearer 1/12): the 1/8 node notches h8 right
   // below the bridge-hill crown — the reference bass ladder's signature dip.
@@ -552,25 +860,25 @@ void PianoVoiceCore::start(const PianoPatchParams& params, double sample_rate, u
   // stiffness cutoff at normal velocities, swallows the whole pp<->ff
   // brightness spread).
   const float dyn_bright = std::exp2(kHammerDynBrightOct * dyn * (vel01 - kHammerMfVel));
-  const float exc_cutoff =
-      800.0f * std::exp2(3.0f * vel01) * dyn_bright * (una_corda ? 0.4f : 1.0f);
+  const float exc_cutoff = kFeltCutoffBaseHz * std::exp2(kFeltCutoffVelOct * vel01) * dyn_bright *
+                           (una_corda ? 0.4f : 1.0f);
   const float width_harm =
       kHammerWidthHarmonics * std::exp2(kWidthBassOct * std::max(0.0f, -octaves_from_c4) +
                                         kWidthTrebleOct * std::max(0.0f, octaves_from_c4));
   const float width_cutoff = std::min(exc_cutoff, width_harm * f0 * dyn_bright);
-  exc_alpha_ =
-      std::clamp(1.0f - std::exp(-kTwoPi * width_cutoff / static_cast<float>(sr)), 0.01f, 1.0f);
+  exc_alpha_ = std::clamp(1.0f - std::exp(-kTwoPi * width_cutoff / static_cast<float>(sr)),
+                          kOnePoleAlphaFloor, 1.0f);
   // The noise cutoff keytracks DOWN into the bass: the bass hammer is a
   // massive deep-felt head whose scrub spectrum is far darker than the small
   // hard treble hammer's — without this the bass attack carries the same
   // 2 kHz-wide burst as the treble and reads as a jack click.
   const float noise_cutoff = kStrikeNoiseCutoffScale * exc_cutoff *
                              std::exp2(-kNoiseCutoffBassOct * std::max(0.0f, -octaves_from_c4));
-  noise_alpha_ =
-      std::clamp(1.0f - std::exp(-kTwoPi * noise_cutoff / static_cast<float>(sr)), 0.01f, 1.0f);
+  noise_alpha_ = std::clamp(1.0f - std::exp(-kTwoPi * noise_cutoff / static_cast<float>(sr)),
+                            kOnePoleAlphaFloor, 1.0f);
   noise_alpha3_ = std::clamp(
-      1.0f - std::exp(-kTwoPi * kNoiseSteepRatio * noise_cutoff / static_cast<float>(sr)), 0.01f,
-      1.0f);
+      1.0f - std::exp(-kTwoPi * kNoiseSteepRatio * noise_cutoff / static_cast<float>(sr)),
+      kOnePoleAlphaFloor, 1.0f);
   exc_lp_ = 0.0f;
   exc_lp2_ = 0.0f;
 
@@ -600,6 +908,38 @@ void PianoVoiceCore::start(const PianoPatchParams& params, double sample_rate, u
   const float bloom_tau_s = kBloomTauMsC4 * 0.001f * std::exp2(-kBloomTauOct * octaves_from_c4);
   bloom_a_ =
       std::clamp(1.0f - std::exp(-1.0f / (bloom_tau_s * static_cast<float>(sr))), 1.0e-4f, 1.0f);
+  // Longitudinal mode bank. The input carries a DC/Nyquist zero (see render),
+  // so each mode is exactly peak-normalized off the bandpass residue the way
+  // the soundboard's are: two-pole modes taken raw pile their low-frequency
+  // skirts up in phase, which here would put the squared drive's DC straight
+  // back into the bass the bank exists to clear.
+  long_level_ = kLongLevel * std::exp2(-kLongTrebleTaperOct * std::max(0.0f, octaves_from_c4));
+  const float long_f1 = kLongFirstHzC4 * std::exp2(kLongFirstOct * octaves_from_c4);
+  long_prev_ = 0.0f;
+  long_hp_a_ =
+      std::clamp(1.0f - std::exp(-kTwoPi * kLongDriveHpHz / static_cast<float>(sr)), 0.0f, 1.0f);
+  long_x1_ = 0.0f;
+  long_x2_ = 0.0f;
+  for (int i = 0; i < kLongitudinalModes; ++i) {
+    LongMode& m = long_modes_[static_cast<size_t>(i)];
+    m = LongMode{};
+    const float f = long_f1 * static_cast<float>(i + 1);
+    if (long_level_ <= 0.0f || f >= 0.45f * static_cast<float>(sr)) continue;
+    const float w = kTwoPi * f / static_cast<float>(sr);
+    // The higher modes are lossier, as they are on the transverse side.
+    const float t60 = std::max(0.01f, kLongT60S / static_cast<float>(i + 1));
+    const float r = std::exp(-6.907755279f / (static_cast<float>(sr) * t60));
+    m.a1 = 2.0f * r * std::cos(w);
+    m.a2 = -r * r;
+    const float d_re = 1.0f - m.a1 * std::cos(w) - m.a2 * std::cos(2.0f * w);
+    const float d_im = m.a1 * std::sin(w) + m.a2 * std::sin(2.0f * w);
+    const float d_mag = std::sqrt(d_re * d_re + d_im * d_im);
+    // Peak-normalized, then rolled off along the series: the higher
+    // longitudinal modes are both less excited and lossier, and left at equal
+    // peaks the bank reads as a bright metallic ring rather than as the body
+    // of a low note.
+    m.gain = d_mag / std::max(2.0f * std::sin(w), 1.0e-6f) / static_cast<float>(i + 1);
+  }
   noise_decay_ = std::exp(-1000.0f / (kStrikeNoiseTauMs * static_cast<float>(sr)));
   noise_samples_ = static_cast<int>(kStrikeNoiseMaxMs * 0.001f * sr);
   noise_pos_ = 0;
@@ -621,17 +961,23 @@ void PianoVoiceCore::start(const PianoPatchParams& params, double sample_rate, u
       kStrikeNoiseInject * std::exp2(-kInjectTrebleTaperOct * std::max(0.0f, octaves_from_c4) +
                                      kInjectBassBoostOct * std::max(0.0f, -octaves_from_c4));
 
-  // Radiation highpass coefficients (RBJ biquad) and state.
+  // Radiation highpass coefficients (cascaded RBJ highpasses) and state. The
+  // section Qs are the fourth-order Butterworth pair, so the passband stays
+  // flat through the tenor while the stopband falls at the measured slope.
   {
     const float w = kTwoPi * kRadiationHpHz / static_cast<float>(sr);
     const float cw = std::cos(w);
-    const float alpha = std::sin(w) / (2.0f * kRadiationHpQ);
-    const float a0 = 1.0f + alpha;
-    hp_b0_ = (1.0f + cw) * 0.5f / a0;
-    hp_b1_ = -(1.0f + cw) / a0;
-    hp_a1_ = -2.0f * cw / a0;
-    hp_a2_ = (1.0f - alpha) / a0;
-    hp_x1_ = hp_x2_ = hp_y1_ = hp_y2_ = 0.0f;
+    const float sw = std::sin(w);
+    for (int i = 0; i < kRadiationHpSections; ++i) {
+      HpSection& s = hp_[static_cast<size_t>(i)];
+      const float alpha = sw / (2.0f * kRadiationHpSectionQ[static_cast<size_t>(i)]);
+      const float a0 = 1.0f + alpha;
+      s.b0 = (1.0f + cw) * 0.5f / a0;
+      s.b1 = -(1.0f + cw) / a0;
+      s.a1 = -2.0f * cw / a0;
+      s.a2 = (1.0f - alpha) / a0;
+      s.x1 = s.x2 = s.y1 = s.y2 = 0.0f;
+    }
   }
 
   // Bridge-hill emphasis coefficients (RBJ peaking) and state.
@@ -659,19 +1005,24 @@ float PianoVoiceCore::render(float pitch_ratio) noexcept {
   float exc = 0.0f;
   float knock = 0.0f;
   float thud_in = 0.0f;
+  float noise_direct = 0.0f;
   float force = 0.0f;
   if (ham_on_) {
     // String surface velocity at the strike point: the string recedes under
     // the net force through its wave admittance (the soft-string effect that
     // stretches the treble dwell and caps the energy transfer). The near-end
     // reflection is applied to the INJECTED wave by the strike-position comb
-    // below; feeding it back into the felt as well would add energy the loop
-    // never gave up (that needs a true bidirectional waveguide).
+    // below; coupling it back into the felt as well — so the returning wave
+    // pushes the string into the hammer and ends the contact on the string's
+    // timescale rather than the felt's — measures as no change at all, in the
+    // partial balance, in the pp<->ff spread, or in the treble dwell it would
+    // most be expected to reach, so the one-way form stands.
     const float ys_vel = ys_adm_ * last_force_;
     // Tension bounds the excursion: the strike point is a sprung wave port,
     // not a free particle — without the cap the string outruns the hammer
-    // and the bounce never completes (a glued, energyless contact).
-    ys_ = std::min(ys_ + ys_vel, ham_exit_ * -0.7f);
+    // and the bounce never completes (a glued, energyless contact). The bound
+    // scales with the blow, because this blow's peak felt compression does.
+    ys_ = std::min(ys_ + ys_vel, ys_limit_);
     const float x = ham_y_ - ys_;
     if (x > 0.0f) {
       const float xdot = ham_v_ - ys_vel;
@@ -717,6 +1068,12 @@ float PianoVoiceCore::render(float pitch_ratio) noexcept {
     const float noise = noise_env_ * noise_lp3_;
     noise_env_ *= noise_decay_;
     thud_in += noise;
+    // The direct path is tapped one pole in, not three: the three-pole shape is
+    // the contact footprint's, which is what the STRING is injected through, and
+    // the air does not hear the strike through the string's window. Tapped at
+    // the same point, the direct path carries nothing above a few hundred hertz
+    // and cannot fill the attack it exists to fill.
+    noise_direct = noise_env_ * noise_lp_;
     noise_low_ += noise_hp_a_ * (noise - noise_low_);
     // The scrub noise is generated AT the strike point, so it sees the same
     // near-end reflection as the force pulse: comb it by the strike position
@@ -737,7 +1094,7 @@ float PianoVoiceCore::render(float pitch_ratio) noexcept {
   knock_lp_ += knock_lp_a_ * (thud_in - knock_lp_);
   knock_lp2_ += knock_lp_a_ * (knock_lp_ - knock_lp2_);
   knock_lp3_ += knock_lp3_a_ * (knock_lp2_ - knock_lp3_);
-  knock += knock_gain_ * knock_lp3_;
+  knock += knock_gain_ * knock_lp3_ + kStrikeNoiseDirect * noise_direct;
 
   const float ratio = pitch_ratio > 0.01f ? pitch_ratio : 0.01f;
   float sum = 0.0f;
@@ -767,14 +1124,47 @@ float PianoVoiceCore::render(float pitch_ratio) noexcept {
   bridge_ = lp_sum / static_cast<float>(num_strings_);
   // Board ring-up: the tone swells while the impact thud leads.
   bloom_ += bloom_a_ * (1.0f - bloom_);
-  sum = sum * bloom_ + knock;
+  // Longitudinal modes, driven by the tension the transverse motion itself
+  // makes. Squaring the string sum IS the tension term, so the v^2 amplitude
+  // law and the doubled decay rate come out of it rather than being written
+  // down; the two-sample difference puts a zero at DC and at Nyquist, without
+  // which the squared drive's large DC component would be re-radiated as the
+  // very bass rumble this bank is here to replace.
+  float longitudinal = 0.0f;
+  if (long_level_ > 0.0f) {
+    // The tension follows the string's SLOPE, not its displacement, so the
+    // drive is differenced before it is squared. It matters for the envelope
+    // rather than the spectrum: the slope is carried by the upper transverse
+    // partials, which die first, so a differenced drive concentrates the bank
+    // in the attack the way a real phantom partial is. Squaring the radiated
+    // sum instead keeps the bank ringing for as long as the fundamental does,
+    // which measured 13 points brighter than the reference over the sustain
+    // at the level the attack needs.
+    long_prev_ += long_hp_a_ * (sum - long_prev_);
+    const float d = sum - long_prev_;
+    const float t = d * d;
+    const float bp = t - long_x2_;
+    long_x2_ = long_x1_;
+    long_x1_ = t;
+    for (LongMode& m : long_modes_) {
+      const float y = m.gain * bp + m.a1 * m.y1 + m.a2 * m.y2;
+      m.y2 = m.y1;
+      m.y1 = y;
+      longitudinal += y;
+    }
+    longitudinal *= long_level_;
+  }
+  sum = sum * bloom_ + knock + longitudinal;
   // Soundboard radiation: the board barely radiates the lowest partials.
-  const float y =
-      hp_b0_ * sum + hp_b1_ * hp_x1_ + hp_b0_ * hp_x2_ - hp_a1_ * hp_y1_ - hp_a2_ * hp_y2_;
-  hp_x2_ = hp_x1_;
-  hp_x1_ = sum;
-  hp_y2_ = hp_y1_;
-  hp_y1_ = y;
+  float y = sum;
+  for (HpSection& s : hp_) {
+    const float in = y;
+    y = s.b0 * in + s.b1 * s.x1 + s.b0 * s.x2 - s.a1 * s.y1 - s.a2 * s.y2;
+    s.x2 = s.x1;
+    s.x1 = in;
+    s.y2 = s.y1;
+    s.y1 = y;
+  }
   // Bridge hill: the fixed-band mobility peak lifts whatever partials land
   // near it (bass crown, mid presence, treble body).
   const float z =
@@ -819,6 +1209,11 @@ void PianoVoiceCore::kill() noexcept {
   noise_lp_ = 0.0f;
   noise_lp2_ = 0.0f;
   noise_lp3_ = 0.0f;
+  long_level_ = 0.0f;
+  long_prev_ = 0.0f;
+  long_x1_ = 0.0f;
+  long_x2_ = 0.0f;
+  for (LongMode& m : long_modes_) m = LongMode{};
 }
 
 }  // namespace sonare::midi::synth
