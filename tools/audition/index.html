@@ -1,0 +1,69 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>audition</title>
+<!-- An empty icon, so the browser stops asking for one the server does not have
+     and the console stays clear for problems that matter. -->
+<link rel="icon" href="data:,">
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+
+<header>
+  <div class="titles">
+    <h1 id="title">audition</h1>
+    <p id="notes"></p>
+  </div>
+  <div class="toggles">
+    <label><input type="checkbox" id="matchRms"> match loudness <kbd>M</kbd></label>
+    <label><input type="checkbox" id="restartOnSwitch" checked> switch restarts <kbd>S</kbd></label>
+    <label><input type="checkbox" id="blind"> blind <kbd>B</kbd></label>
+    <button id="exportBtn" type="button">export notes</button>
+  </div>
+</header>
+
+<main>
+  <nav id="takes" aria-label="takes"></nav>
+
+  <section id="stage">
+    <div id="versions" class="segmented" role="group" aria-label="versions"></div>
+
+    <figure class="pane">
+      <canvas id="wave" height="150"></canvas>
+      <figcaption>waveform — all versions overlaid, active one solid</figcaption>
+    </figure>
+
+    <figure class="pane">
+      <canvas id="spec" height="220"></canvas>
+      <figcaption id="specCaption">spectrogram — active version, log frequency</figcaption>
+    </figure>
+
+    <div id="transport">
+      <button id="playBtn" type="button" class="play">play</button>
+      <button id="loopBtn" type="button">loop</button>
+      <span id="clock" class="mono">0.00 / 0.00</span>
+      <span id="levels" class="mono"></span>
+      <span class="spacer"></span>
+      <span id="blindScore" class="mono"></span>
+    </div>
+
+    <textarea id="takeNotes" placeholder="Notes on this take — saved in this browser, and included in the export."></textarea>
+  </section>
+</main>
+
+<footer>
+  <span><kbd>space</kbd> play</span>
+  <span><kbd>1</kbd>…<kbd>9</kbd> / <kbd>←</kbd><kbd>→</kbd> version</span>
+  <span><kbd>↑</kbd><kbd>↓</kbd> take</span>
+  <span><kbd>L</kbd> loop</span>
+  <span><kbd>M</kbd> match loudness</span>
+  <span><kbd>B</kbd> blind</span>
+  <span><kbd>R</kbd> reveal / reshuffle</span>
+  <span>drag the waveform to set a loop region</span>
+</footer>
+
+<script src="app.js"></script>
+</body>
+</html>
