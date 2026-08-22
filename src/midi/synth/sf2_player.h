@@ -344,7 +344,10 @@ class Sf2Player final : public MidiInstrument {
   std::vector<float> fallback_flute_buffers_;
   int fallback_flute_capacity_ = 0;
   std::vector<float> fallback_plucked_string_buffers_;
+  std::vector<float> fallback_harpsichord_buffers_;
   int fallback_plucked_string_capacity_ = 0;
+  int fallback_harpsichord_capacity_ = 0;  // speaking-string span
+  int fallback_harpsichord_stride_ = 0;    // whole registration slab, per voice slot
   /// Shared organ wind (tremulant / wind sag) for the fallback voices, one
   /// chest per part: the NativeSynth host feeds its voices from a wind supply,
   /// and the fallback path must do the same or the pipe-organ patches' trem /

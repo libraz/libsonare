@@ -266,6 +266,28 @@ void apply_plucked_string(NativeSynthPatch& p, const Fields& f) {
   F(plucked_string.buzz);
 }
 
+void apply_harpsichord(NativeSynthPatch& p, const Fields& f) {
+  F(harpsichord.pluck_8a);
+  F(harpsichord.pluck_8b);
+  F(harpsichord.pluck_4);
+  F(harpsichord.plectrum_edge);
+  F(harpsichord.velocity_range_db);
+  F(harpsichord.velocity_droop_db);
+  F(harpsichord.decay_s);
+  F(harpsichord.decay_stretch);
+  F(harpsichord.hf_damping);
+  F(harpsichord.damping_ref_hz);
+  F(harpsichord.unison_detune_cents);
+  F(harpsichord.octave_detune_cents);
+  F(harpsichord.rear_segment_mm);
+  F(harpsichord.rear_coupling);
+  F(harpsichord.scale_c5_mm);
+  F(harpsichord.bass_foreshortening);
+  F(harpsichord.pluck_noise);
+  F(harpsichord.jack_noise);
+  F(harpsichord.damper_s);
+}
+
 void apply_free_reed(NativeSynthPatch& p, const Fields& f) {
   F(free_reed.brightness);
   F(free_reed.reed_stiffness);
@@ -400,6 +422,9 @@ void walk_fields(NativeSynthPatch& p, const Fields& f) {
       break;
     case SynthEngineMode::kFreeReed:
       apply_free_reed(p, f);
+      break;
+    case SynthEngineMode::kHarpsichord:
+      apply_harpsichord(p, f);
       break;
     case SynthEngineMode::kVocal:
       apply_vocal(p, f);

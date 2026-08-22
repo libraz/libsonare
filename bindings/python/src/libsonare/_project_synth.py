@@ -33,6 +33,7 @@ _SYNTH_ENGINE_MODES = {
     "plucked-string": 13,
     "vocal": 14,
     "free-reed": 15,
+    "harpsichord": 16,
 }
 _SYNTH_OSC_WAVEFORMS = {
     "default": 0,

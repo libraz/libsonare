@@ -146,6 +146,15 @@ void Sf2Player::prepare(double sample_rate, int /*max_block_size*/) {
           ? fallback_pool_.size() * static_cast<size_t>(plucked_string_slab_capacity(sample_rate_))
           : 0,
       0.0f);
+  // A harpsichord fallback voice needs its whole registration reserved, not one
+  // string: a stop drawn at note-on cannot allocate.
+  fallback_harpsichord_capacity_ = harpsichord_buffer_capacity(sample_rate_);
+  fallback_harpsichord_stride_ = harpsichord_slab_capacity(sample_rate_);
+  fallback_harpsichord_buffers_.assign(
+      config_.synth_fallback
+          ? fallback_pool_.size() * static_cast<size_t>(fallback_harpsichord_stride_)
+          : 0,
+      0.0f);
   // Power-on matches GS defaults (reverb send 40): a bare SMF that never
   // sends a reset SysEx should still land in the default room, as on
   // hardware, instead of rendering bone dry.

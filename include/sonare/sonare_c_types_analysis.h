@@ -312,9 +312,10 @@ typedef enum SONARE_ENUM_BASE {
   SONARE_SYNTH_ENGINE_FLUTE = 12,
   SONARE_SYNTH_ENGINE_PLUCKED_STRING = 13,
   SONARE_SYNTH_ENGINE_VOCAL = 14,
-  SONARE_SYNTH_ENGINE_FREE_REED = 15
+  SONARE_SYNTH_ENGINE_FREE_REED = 15,
+  SONARE_SYNTH_ENGINE_HARPSICHORD = 16
 } SonareSynthEngineMode;
-#define SONARE_SYNTH_ENGINE_MODE_COUNT 16
+#define SONARE_SYNTH_ENGINE_MODE_COUNT 17
 
 /* Oscillator waveform (subtractive mode). 0 keeps the base patch's value. */
 typedef enum SONARE_ENUM_BASE {
@@ -513,7 +514,7 @@ static_assert(offsetof(SonareAnalysisResult, bpm_candidates) ==
                   offsetof(SonareAnalysisResult, beat_count) + sizeof(size_t),
               "SonareAnalysisResult candidate layout changed");
 
-static_assert(SONARE_SYNTH_ENGINE_FREE_REED + 1 == SONARE_SYNTH_ENGINE_MODE_COUNT,
+static_assert(SONARE_SYNTH_ENGINE_HARPSICHORD + 1 == SONARE_SYNTH_ENGINE_MODE_COUNT,
               "SonareSynthEngineMode count changed");
 static_assert(SONARE_SYNTH_OSC_NOISE + 1 == SONARE_SYNTH_OSC_WAVEFORM_COUNT,
               "SonareSynthOscWaveform count changed");

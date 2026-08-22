@@ -442,6 +442,7 @@ export const SYNTH_ENGINE_MODES = [
   'plucked-string',
   'vocal',
   'free-reed',
+  'harpsichord',
 ] as const;
 
 export const SYNTH_OSC_WAVEFORMS = [

@@ -40,6 +40,7 @@
 #include "midi/synth/flute_voice.h"
 #include "midi/synth/fm_voice.h"
 #include "midi/synth/free_reed_voice.h"
+#include "midi/synth/harpsichord_voice.h"
 #include "midi/synth/ks_voice.h"
 #include "midi/synth/mod_matrix.h"
 #include "midi/synth/modal_voice.h"
@@ -73,6 +74,7 @@ enum class SynthEngineMode : int {
   kPluckedString = 12,  // buzzing-bridge plucked string (plucked_string_voice.h)
   kVocal = 13,          // source-filter glottal + formant voice (vocal_voice.h)
   kFreeReed = 14,       // driven free-reed accordion / harmonica (free_reed_voice.h)
+  kHarpsichord = 15,    // jack-and-plectrum string choirs (harpsichord_voice.h)
 };
 
 /// Maximum unison oscillators per voice (supersaw width).
@@ -193,6 +195,9 @@ struct NativeSynthPatch {
 
   /// Driven free-reed accordion / harmonica (used when mode == kFreeReed).
   FreeReedPatchParams free_reed;
+
+  /// Jack-and-plectrum string choirs (used when mode == kHarpsichord).
+  HarpsichordPatchParams harpsichord;
 };
 
 /// Per-note GS drum overrides applied to a fallback percussion voice at
@@ -255,6 +260,8 @@ struct NativeSynthVoice : VoiceState {
   VocalVoiceCore vocal;
   /// Free-reed core (no host slab; the driven tongue oscillator is feed-forward).
   FreeReedVoiceCore free_reed;
+  /// Harpsichord core; the host attach()es its registration slab before start().
+  HarpsichordVoiceCore harpsichord;
   BodyResonator body;
   Sf2Lfo vibrato_lfo;
   Sf2Lfo lfo2;
@@ -571,6 +578,14 @@ class NativeSynth final : public MidiInstrument {
   std::vector<float> plucked_string_buffers_;
   int plucked_string_capacity_ = 0;  // per-span capacity
   bool plucked_string_mode_ = false;
+  /// Harpsichord registration slab: the two 8' choirs, the 4' choir and the
+  /// behind-the-bridge segment per voice slot, allocated in prepare() only when
+  /// the patch is a harpsichord. The spans are not all the same length, so the
+  /// per-voice stride is carried separately from the speaking-string span.
+  std::vector<float> harpsichord_buffers_;
+  int harpsichord_capacity_ = 0;  // speaking-string span
+  int harpsichord_stride_ = 0;    // whole registration slab, per voice slot
+  bool harpsichord_mode_ = false;
   /// Shared organ wind chest (tremulant / wind sag); pipe-organ patches only.
   OrganWindSupply wind_;
   /// Swell box: a bus-level shutter lowpass driven by the expression pedal
@@ -964,6 +979,47 @@ constexpr NativeSynthPatch clamp_synth_patch(const NativeSynthPatch& patch) noex
       std::clamp(patch_clamp_detail::sanitize(p.free_reed.release_ms, 80.0f), 1.0f, 5000.0f);
   p.free_reed.breath_noise =
       std::clamp(patch_clamp_detail::sanitize(p.free_reed.breath_noise, 0.08f), 0.0f, 1.0f);
+  p.harpsichord.pluck_8a =
+      std::clamp(patch_clamp_detail::sanitize(p.harpsichord.pluck_8a, 0.14f), 0.0f, 0.5f);
+  p.harpsichord.pluck_8b =
+      std::clamp(patch_clamp_detail::sanitize(p.harpsichord.pluck_8b, 0.22f), 0.0f, 0.5f);
+  p.harpsichord.pluck_4 =
+      std::clamp(patch_clamp_detail::sanitize(p.harpsichord.pluck_4, 0.11f), 0.0f, 0.5f);
+  p.harpsichord.plectrum_edge =
+      std::clamp(patch_clamp_detail::sanitize(p.harpsichord.plectrum_edge, 0.8f), 0.0f, 1.0f);
+  // The instrument's own range is 3 to 6 dB; the ceiling leaves room to voice a
+  // stop that is deliberately more responsive without letting a patch turn the
+  // harpsichord into a piano.
+  p.harpsichord.velocity_range_db =
+      std::clamp(patch_clamp_detail::sanitize(p.harpsichord.velocity_range_db, 5.0f), 0.0f, 24.0f);
+  p.harpsichord.velocity_droop_db =
+      std::clamp(patch_clamp_detail::sanitize(p.harpsichord.velocity_droop_db, 0.0f), 0.0f, 12.0f);
+  p.harpsichord.decay_s =
+      std::clamp(patch_clamp_detail::sanitize(p.harpsichord.decay_s, 3.0f), 0.05f, 60.0f);
+  p.harpsichord.decay_stretch =
+      std::clamp(patch_clamp_detail::sanitize(p.harpsichord.decay_stretch, 0.7f), 0.0f, 2.0f);
+  p.harpsichord.hf_damping =
+      std::clamp(patch_clamp_detail::sanitize(p.harpsichord.hf_damping, 0.45f), 0.05f, 1.0f);
+  p.harpsichord.damping_ref_hz = std::clamp(
+      patch_clamp_detail::sanitize(p.harpsichord.damping_ref_hz, 2000.0f), 100.0f, 20000.0f);
+  p.harpsichord.unison_detune_cents = std::clamp(
+      patch_clamp_detail::sanitize(p.harpsichord.unison_detune_cents, 3.5f), -50.0f, 50.0f);
+  p.harpsichord.octave_detune_cents = std::clamp(
+      patch_clamp_detail::sanitize(p.harpsichord.octave_detune_cents, 2.0f), -50.0f, 50.0f);
+  p.harpsichord.rear_segment_mm =
+      std::clamp(patch_clamp_detail::sanitize(p.harpsichord.rear_segment_mm, 0.0f), 0.0f, 400.0f);
+  p.harpsichord.rear_coupling =
+      std::clamp(patch_clamp_detail::sanitize(p.harpsichord.rear_coupling, 0.35f), 0.0f, 1.0f);
+  p.harpsichord.scale_c5_mm =
+      std::clamp(patch_clamp_detail::sanitize(p.harpsichord.scale_c5_mm, 280.0f), 80.0f, 800.0f);
+  p.harpsichord.bass_foreshortening = std::clamp(
+      patch_clamp_detail::sanitize(p.harpsichord.bass_foreshortening, 0.35f), 0.0f, 0.9f);
+  p.harpsichord.pluck_noise =
+      std::clamp(patch_clamp_detail::sanitize(p.harpsichord.pluck_noise, 0.0f), 0.0f, 1.0f);
+  p.harpsichord.jack_noise =
+      std::clamp(patch_clamp_detail::sanitize(p.harpsichord.jack_noise, 0.0f), 0.0f, 1.0f);
+  p.harpsichord.damper_s =
+      std::clamp(patch_clamp_detail::sanitize(p.harpsichord.damper_s, 0.09f), 0.005f, 10.0f);
   if (static_cast<int>(p.body) < 0 || static_cast<int>(p.body) > 4) p.body = BodyType::kNone;
   p.body_mix = std::clamp(patch_clamp_detail::sanitize(p.body_mix, 0.0f), 0.0f, 1.0f);
   p.stereo_spread = std::clamp(patch_clamp_detail::sanitize(p.stereo_spread, 0.0f), 0.0f, 1.0f);

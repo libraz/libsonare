@@ -404,47 +404,56 @@ constexpr void configure_keyed_programs(ProgramOverrides& o) noexcept {
   o.koto.plucked_string.pick_position = 0.22f;
   o.koto.gain = 0.85f;
 
-  // Harpsichord (GM 6): a plucked string like the guitars, but a keyboard
-  // instrument voiced by a hard quill/Delrin plectrum near the nut. The defining
-  // trait is near velocity-insensitivity (only 3-6 dB across the range), so the
-  // velocity->brightness coupling is nearly disabled. The pluck is a sharp
-  // deterministic doublet (not a noisy strum), the near-nut pick position combs
-  // in bright nasal upper harmonics, and the thin brass/iron strings are barely
-  // inharmonic (no steel dispersion, no tension bend). The 8' unison choir beats
-  // via the second polarization; the undamped 4'-top / behind-bridge strings ring
-  // as the sympathetic halo (inherited from steel; sings in the standalone path).
-  o.harpsichord = steel;
-  o.harpsichord.amp_env.release_ms = 180.0f;
-  o.harpsichord.ks.brightness = 0.72f;
-  o.harpsichord.ks.decay_s = 2.4f;  // thin light strings ring shorter than a guitar
-  o.harpsichord.ks.decay_stretch = 0.55f;
-  o.harpsichord.ks.pick_position = 0.12f;      // near-nut pluck, high combed harmonics
-  o.harpsichord.ks.exc_brightness = 0.92f;     // hard plectrum, sharp attack
-  o.harpsichord.ks.vel_to_brightness = 0.12f;  // near velocity-insensitive
-  o.harpsichord.ks.release_damp_s = 0.05f;     // fast felt damper on note-off
-  o.harpsichord.ks.polarization = 0.28f;       // 8' unison beat
-  o.harpsichord.ks.body_coupling = 0.3f;
-  o.harpsichord.ks.pluck_style = 0.7f;  // deterministic quill doublet
-  o.harpsichord.ks.nail = 0.85f;        // hard sharp plectrum edge
-  o.harpsichord.ks.dispersion = 0.1f;   // low inharmonicity (thin brass/iron)
-  o.harpsichord.ks.tension_mod = 0.0f;  // constant plucking force, no bend
+  // Harpsichord (GM 6): the jack-and-plectrum engine, voiced as a single 8'
+  // choir — one string per key at written pitch, which is the registration the
+  // instrument always has available.
+  //
+  // The decay is not a taste setting. It is regressed on the SUSTAINED slope of
+  // the captured GM reference across eleven notes — the sustained one, because
+  // the first second of any plucked note is the upper partials dying and says
+  // more about the loop filter than about the string. Two numbers cover five
+  // octaves to within about half a dB per second, except at the very top, where
+  // the reference's decay stops steepening and this law keeps going.
+  //
+  // The damper is the one thing neither reference could settle: one cuts its
+  // samples dead at note-off, the other carries a room, so this is a plausible
+  // felt damper rather than a measured one.
+  o.harpsichord.mode = SynthEngineMode::kHarpsichord;
+  o.harpsichord.amp_env = fallback_env(1.0f, 0.0f, 1.0f, 250.0f);
+  o.harpsichord.cutoff_hz = 20000.0f;
+  o.harpsichord.harpsichord.eight_a = true;
+  o.harpsichord.harpsichord.decay_s = 11.6f;
+  o.harpsichord.harpsichord.decay_stretch = 0.40f;
+  o.harpsichord.harpsichord.hf_damping = 0.45f;
+  o.harpsichord.harpsichord.damping_ref_hz = 2000.0f;
+  o.harpsichord.harpsichord.pluck_8a = 0.14f;
+  o.harpsichord.harpsichord.plectrum_edge = 0.8f;  // quill, not a worn tongue
+  o.harpsichord.harpsichord.velocity_range_db = 5.0f;
+  o.harpsichord.harpsichord.rear_segment_mm = 90.0f;  // the undamped halo
+  o.harpsichord.harpsichord.rear_coupling = 0.3f;
+  o.harpsichord.harpsichord.pluck_noise = 0.15f;  // the plectrum leaving the string
+  o.harpsichord.harpsichord.damper_s = 0.12f;
+  o.harpsichord.body = BodyType::kGuitar;
   o.harpsichord.body_mix = 0.3f;
+  o.harpsichord.gain = 0.30f;
 
   // GS/GM2 harpsichord registration variations (program 6, bank select). Names
   // follow the GM2 melodic variation table (program_map.cpp): bank 1 octave mix,
-  // bank 2 wide, bank 3 with key off. Each derives from the bank-0 8' voice.
-  // Bank 1 — octave mix: engage the 4' companion string (the coupled 8'+4'
-  // register), the brightest, fullest harpsichord colour.
+  // bank 2 wide, bank 3 with key off. Each derives from the bank-0 8' voice, and
+  // each draws a stop rather than colouring one.
+  // Bank 1 — octave mix: the 4' choir joins the 8', the brightest and fullest
+  // registration. Its top octave carries no dampers on a real instrument.
   o.harpsichord_octave = o.harpsichord;
-  o.harpsichord_octave.ks.octave_mix = 0.6f;
-  // Bank 2 — wide: two 8' choirs spread across the stereo field with a touch
-  // more unison beat, no 4'.
+  o.harpsichord_octave.harpsichord.four = true;
+  o.harpsichord_octave.harpsichord.undamped_from_note = 84;
+  // Bank 2 — wide: both 8' choirs drawn and spread across the stereo field. Two
+  // unisons tuned by ear are what makes the chorus; one string cannot.
   o.harpsichord_wide = o.harpsichord;
+  o.harpsichord_wide.harpsichord.eight_b = true;
   o.harpsichord_wide.stereo_spread = 0.5f;
-  o.harpsichord_wide.ks.polarization = 0.4f;
-  // Bank 3 — with key off: the jack-drop / felt-damper thump on note release.
+  // Bank 3 — with key off: the jack dropping back and the damper landing.
   o.harpsichord_keyoff = o.harpsichord;
-  o.harpsichord_keyoff.ks.keyoff_noise = 0.5f;
+  o.harpsichord_keyoff.harpsichord.jack_noise = 0.5f;
 
   // Church organ: a principal chorus of self-oscillating jet flue pipes. Each
   // rank locks its pitch and holds a solid, endless tone while keyed (no decay,

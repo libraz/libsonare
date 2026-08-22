@@ -147,6 +147,16 @@ void NativeSynth::prepare(double sample_rate, int /*max_block_size*/) {
   } else {
     plucked_string_buffers_.clear();
   }
+  // Harpsichord: a registration slab per voice slot. The only allocation site;
+  // voices attach theirs at note-on.
+  harpsichord_capacity_ = harpsichord_buffer_capacity(sample_rate_);
+  harpsichord_stride_ = harpsichord_slab_capacity(sample_rate_);
+  harpsichord_mode_ = any_engine || config_.patch.mode == SynthEngineMode::kHarpsichord;
+  if (harpsichord_mode_) {
+    harpsichord_buffers_.assign(pool_.size() * static_cast<size_t>(harpsichord_stride_), 0.0f);
+  } else {
+    harpsichord_buffers_.clear();
+  }
   swell_lp_l_ = 0.0f;
   swell_lp_r_ = 0.0f;
   channels_ = {};
@@ -298,6 +308,11 @@ void NativeSynth::note_on(uint8_t channel, uint8_t note, uint8_t velocity,
     voice->plucked_string.attach(plucked_string_buffers_.data() +
                                      static_cast<size_t>(voice_index) * plucked_string_capacity_,
                                  plucked_string_capacity_);
+  }
+  if (!harpsichord_buffers_.empty()) {
+    voice->harpsichord.attach(
+        harpsichord_buffers_.data() + static_cast<size_t>(voice_index) * harpsichord_stride_,
+        harpsichord_capacity_);
   }
   // Portamento: glide from the channel's previous note when enabled.
   const float glide_from = patch->glide_ms > 0.0f ? st.last_freq_hz : 0.0f;

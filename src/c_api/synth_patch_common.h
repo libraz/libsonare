@@ -45,6 +45,8 @@ static_assert(static_cast<int>(sonare::midi::synth::SynthEngineMode::kVocal) + 1
               SONARE_SYNTH_ENGINE_VOCAL);
 static_assert(static_cast<int>(sonare::midi::synth::SynthEngineMode::kFreeReed) + 1 ==
               SONARE_SYNTH_ENGINE_FREE_REED);
+static_assert(static_cast<int>(sonare::midi::synth::SynthEngineMode::kHarpsichord) + 1 ==
+              SONARE_SYNTH_ENGINE_HARPSICHORD);
 
 static_assert(static_cast<int>(sonare::midi::synth::VaWaveform::kSine) + 1 ==
               SONARE_SYNTH_OSC_SINE);

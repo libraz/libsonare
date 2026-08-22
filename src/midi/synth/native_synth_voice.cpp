@@ -20,12 +20,18 @@ namespace {
 /// which leaves a pianissimo some 30 dB below where it belongs, quiet enough
 /// to vanish under anything else in the mix.
 ///
-/// Only the piano has been measured against a reference, so only the piano
-/// opts out. Every other physical engine was voiced with the curve in place
-/// and would shift underneath its own calibration if this changed for it too;
-/// each needs its own reference corpus first.
+/// The harpsichord opts out for the same reason and more sharply. Its mechanism
+/// gives the key almost no control over loudness at all — a captured reference
+/// covers 6 dB from the softest key to the hardest, and the literature puts the
+/// instrument between 3 and 6 — while the curve alone spans 28 dB between
+/// velocity 24 and 120. Applied on top of a plectrum model it does not merely
+/// double the dynamic, it replaces the one thing that identifies the instrument.
+///
+/// An engine opts out only once it has been measured against a reference corpus.
+/// Every other physical engine was voiced with the curve in place and would
+/// shift underneath its own calibration if this changed for it too.
 bool needs_sampler_velocity_curve(SynthEngineMode mode) noexcept {
-  return mode != SynthEngineMode::kPiano;
+  return mode != SynthEngineMode::kPiano && mode != SynthEngineMode::kHarpsichord;
 }
 
 }  // namespace
@@ -104,6 +110,10 @@ void NativeSynthVoice::start(const NativeSynthPatch& p, double sample_rate, uint
   }
   if (p.mode == SynthEngineMode::kFreeReed) {
     free_reed.start(p.free_reed, sample_rate, note, velocity, voice_seed(voice_index, note, age));
+  }
+  if (p.mode == SynthEngineMode::kHarpsichord) {
+    harpsichord.start(p.harpsichord, sample_rate, note, velocity,
+                      voice_seed(voice_index, note, age));
   }
   for (int k = 0; k < unison; ++k) {
     // Symmetric detune positions across [-1, 1] plus a small seeded jitter so
@@ -268,6 +278,8 @@ float NativeSynthVoice::render(const Sf2ChannelMod& mod, float wind_pitch,
     sample = vocal.render(common);
   } else if (patch->mode == SynthEngineMode::kFreeReed) {
     sample = free_reed.render(common);
+  } else if (patch->mode == SynthEngineMode::kHarpsichord) {
+    sample = harpsichord.render(common);
   } else {
     for (int k = 0; k < unison; ++k) {
       auto& osc = oscs[static_cast<size_t>(k)];
@@ -316,6 +328,7 @@ void NativeSynthVoice::release() noexcept {
   if (patch != nullptr && patch->mode == SynthEngineMode::kPluckedString) plucked_string.release();
   if (patch != nullptr && patch->mode == SynthEngineMode::kVocal) vocal.release();
   if (patch != nullptr && patch->mode == SynthEngineMode::kFreeReed) free_reed.release();
+  if (patch != nullptr && patch->mode == SynthEngineMode::kHarpsichord) harpsichord.release();
 }
 
 void NativeSynthVoice::kill() noexcept {
@@ -335,6 +348,7 @@ void NativeSynthVoice::kill() noexcept {
   plucked_string.kill();
   vocal.kill();
   free_reed.kill();
+  harpsichord.kill();
   active = false;
   releasing = false;
 }

@@ -36,6 +36,7 @@ EXPECTED_SYNTH_ENUM_TABLES = {
         "plucked-string",
         "vocal",
         "free-reed",
+        "harpsichord",
     ),
     "waveforms": ("default", "sine", "saw", "square", "triangle", "noise"),
     "builtin_waveforms": ("sine", "saw", "sawtooth", "square", "triangle"),

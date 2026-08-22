@@ -177,6 +177,11 @@ void Sf2Player::fallback_note_on(uint8_t channel, uint8_t note, uint8_t velocity
             static_cast<size_t>(voice_index) * fallback_plucked_string_capacity_,
         fallback_plucked_string_capacity_);
   }
+  if (!fallback_harpsichord_buffers_.empty()) {
+    voice->harpsichord.attach(fallback_harpsichord_buffers_.data() +
+                                  static_cast<size_t>(voice_index) * fallback_harpsichord_stride_,
+                              fallback_harpsichord_capacity_);
+  }
   // GS drum-kit variation: the drum channel's program picks the kit (Room /
   // Power / TR-808 / ...); melodic fallback voices pass 0 (no kit).
   const uint8_t drum_kit = is_drum ? gm_fallback_drum_kit(ch.program, tone_map) : 0;

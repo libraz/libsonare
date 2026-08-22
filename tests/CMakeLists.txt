@@ -417,6 +417,8 @@ if(BUILD_ARRANGEMENT)
     midi/mod_matrix_test.cpp
     midi/fm_voice_test.cpp
     midi/ks_voice_test.cpp
+    midi/harpsichord_voice_test.cpp
+    midi/string_loop_test.cpp
     midi/modal_voice_test.cpp
     midi/percussion_voice_test.cpp
     midi/piano_voice_test.cpp

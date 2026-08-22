@@ -11,7 +11,7 @@ namespace sonare::midi::synth {
 namespace {
 
 /// Catalog size (§E preset table).
-constexpr size_t kPresetCount = 69;
+constexpr size_t kPresetCount = 70;
 
 NativeSynthConfig from_patch(const NativeSynthPatch& patch) noexcept {
   NativeSynthConfig cfg;
@@ -101,6 +101,11 @@ std::array<SynthPreset, kPresetCount> build_presets() noexcept {
   alias("steel-guitar", 25);      // Karplus-Strong
   alias("electric-guitar", 26);   // Karplus-Strong
   alias("harp", 46);              // Karplus-Strong
+  // The harpsichord is not a bright guitar and does not share their engine: it
+  // is voiced by its own jack-and-plectrum model, whose parameters the synth
+  // patch ABI does not carry, so this alias is how a caller reaches the voiced
+  // instrument rather than the engine defaults.
+  alias("harpsichord", 6);  // harpsichord (jack and plectrum)
 
   // --- electric / acoustic bass (plucked-string waveguide) ---
   // The bass family (GM 32-35): the Karplus-Strong string voiced for the low

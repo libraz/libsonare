@@ -372,6 +372,7 @@ bool is_dedicated_model_engine(SynthEngineMode mode) noexcept {
     case SynthEngineMode::kFlute:
     case SynthEngineMode::kPluckedString:
     case SynthEngineMode::kFreeReed:
+    case SynthEngineMode::kHarpsichord:
       return true;
     case SynthEngineMode::kSubtractive:
     case SynthEngineMode::kFm:
