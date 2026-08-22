@@ -1,0 +1,43 @@
+#pragma once
+
+/// @file patch_tuning.h
+/// @brief Development-only per-program override of a GM fallback patch's
+///        fields, the voicing counterpart to `util/tunable.h`.
+/// @details `SONARE_TUNABLE` covers an engine's calibration constants — the
+/// physics shared by every program that engine serves. What differs between,
+/// say, a violin and a cello on the same bowed-string engine is the *patch*:
+/// bow force, brightness, body mix. Those live as literals in the GM fallback
+/// program tables, so fitting one costs a rebuild.
+///
+/// `apply_patch_tuning` closes that gap. In a `BUILD_TUNING=ON` build it is
+/// called once per patch as the fallback tables are built, and rewrites every
+/// float field whose key appears in `SONARE_TUNING_OVERRIDES`. In a normal
+/// build it does nothing (and the field table is not compiled at all).
+///
+/// Keys are `<prefix>.<field path>`, where the prefix identifies the patch:
+///
+///     p040.bowed_string.bow_force=0.61    # melodic program 40 (violin)
+///     p019.pipe_organ.ranks2.level=0.72   # melodic program 19 (church organ)
+///     p019.amp_env.release_ms=900         # the shared envelope section
+///     d038.percussion.tone_gain=0.4       # drum note 38 (acoustic snare)
+///
+/// The field path mirrors the C++ member names, so a key is greppable in the
+/// engine header it came from. Array members are indexed by appending the
+/// index to the member name (`ranks2`, `ops1`, `modes0`, `drawbars3`) because
+/// `[` and `]` would need quoting in a shell-set environment variable.
+///
+/// Only the section matching the patch's engine mode is offered, so a key
+/// naming the wrong engine for that program is simply never asked for — the
+/// fitter validates its knob names against the engine, as it does for
+/// `SONARE_TUNABLE`.
+
+namespace sonare::midi::synth {
+
+struct NativeSynthPatch;
+
+/// Apply `SONARE_TUNING_OVERRIDES` entries prefixed with @p prefix to @p patch.
+/// No-op in a normal build. Called while the fallback tables are built, never
+/// on the audio thread.
+void apply_patch_tuning(NativeSynthPatch& patch, const char* prefix) noexcept;
+
+}  // namespace sonare::midi::synth

@@ -100,6 +100,86 @@ struct ProgramOverrides {
   NativeSynthPatch ocarina;        // program 79
 };
 
+/// Every ProgramOverrides member, in declaration order, as an X-macro list.
+/// One list serves both the post-configure clamp sweep and the development-only
+/// per-patch tuning key (`patch_tuning.h`), so the member names are written
+/// once; the count assertion below fires if a member is added to the struct
+/// without being added here.
+#define SONARE_GM_OVERRIDE_PATCHES(X) \
+  X(e_piano)                          \
+  X(harpsichord)                      \
+  X(harpsichord_octave)               \
+  X(harpsichord_wide)                 \
+  X(harpsichord_keyoff)               \
+  X(clav)                             \
+  X(celesta)                          \
+  X(glockenspiel)                     \
+  X(music_box)                        \
+  X(vibraphone)                       \
+  X(marimba)                          \
+  X(xylophone)                        \
+  X(tubular_bells)                    \
+  X(dulcimer)                         \
+  X(nylon_guitar)                     \
+  X(electric_guitar)                  \
+  X(muted_guitar)                     \
+  X(overdriven)                       \
+  X(distortion)                       \
+  X(bass_acoustic)                    \
+  X(bass_fingered)                    \
+  X(bass_picked)                      \
+  X(bass_fretless)                    \
+  X(bass_slap)                        \
+  X(bass_pop)                         \
+  X(harp)                             \
+  X(sitar)                            \
+  X(shamisen)                         \
+  X(koto)                             \
+  X(church_organ)                     \
+  X(reed_organ)                       \
+  X(harmonica)                        \
+  X(bandoneon)                        \
+  X(orchestra_hit)                    \
+  X(tremolo_strings)                  \
+  X(pizzicato)                        \
+  X(timpani)                          \
+  X(choir_aahs)                       \
+  X(voice_oohs)                       \
+  X(synth_voice)                      \
+  X(tinkle_bell)                      \
+  X(agogo)                            \
+  X(steel_drums)                      \
+  X(woodblock)                        \
+  X(taiko)                            \
+  X(melodic_tom)                      \
+  X(synth_drum)                       \
+  X(reverse_cymbal)                   \
+  X(violin)                           \
+  X(viola)                            \
+  X(cello)                            \
+  X(contrabass)                       \
+  X(trumpet)                          \
+  X(trombone)                         \
+  X(tuba)                             \
+  X(muted_trumpet)                    \
+  X(french_horn)                      \
+  X(soprano_sax)                      \
+  X(alto_sax)                         \
+  X(tenor_sax)                        \
+  X(baritone_sax)                     \
+  X(oboe)                             \
+  X(english_horn)                     \
+  X(bassoon)                          \
+  X(clarinet)                         \
+  X(piccolo)                          \
+  X(concert_flute)                    \
+  X(recorder)                         \
+  X(pan_flute)                        \
+  X(blown_bottle)                     \
+  X(shakuhachi)                       \
+  X(tin_whistle)                      \
+  X(ocarina)
+
 /// Number of override patches in ProgramOverrides. The struct is a homogeneous
 /// aggregate of NativeSynthPatch members, so the count falls out of the sizes;
 /// the asserts below keep that assumption enforced.
@@ -108,6 +188,11 @@ inline constexpr std::size_t kProgramOverrideCount =
 
 static_assert(sizeof(ProgramOverrides) == kProgramOverrideCount * sizeof(NativeSynthPatch),
               "ProgramOverrides must contain only NativeSynthPatch members");
+#define SONARE_GM_OVERRIDE_COUNT_ONE(name) +1
+static_assert(0 SONARE_GM_OVERRIDE_PATCHES(SONARE_GM_OVERRIDE_COUNT_ONE) ==
+                  static_cast<int>(kProgramOverrideCount),
+              "SONARE_GM_OVERRIDE_PATCHES must list every ProgramOverrides member");
+#undef SONARE_GM_OVERRIDE_COUNT_ONE
 static_assert(alignof(ProgramOverrides) == alignof(NativeSynthPatch),
               "ProgramOverrides must contain only NativeSynthPatch members");
 

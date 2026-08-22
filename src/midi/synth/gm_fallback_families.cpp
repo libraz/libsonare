@@ -1,7 +1,20 @@
 #include "midi/synth/gm_fallback_data.h"
+#include "midi/synth/patch_tuning.h"
+#include "util/tunable.h"
 
 namespace sonare::midi::synth::detail {
 namespace {
+
+/// Grand-piano family patch voicing. Named rather than written inline because
+/// these are the knobs the voicematch fitter sweeps against a reference
+/// rendering; every other family's values stay inline until one needs fitting.
+SONARE_TUNABLE(kPianoBrightness, 0.81459f);
+SONARE_TUNABLE(kPianoDetuneCents, 1.0f);
+SONARE_TUNABLE(kPianoDecayFastS, 1.35f);
+SONARE_TUNABLE(kPianoSoundboard, 0.35f);
+SONARE_TUNABLE(kPianoHammerContactMs, 1.1f);
+SONARE_TUNABLE(kPianoHammerDynamics, 0.5f);
+SONARE_TUNABLE(kPianoReleaseDampS, 0.85f);
 
 /// One GM family (programs family*8 .. family*8+7) -> one subtractive patch.
 /// Voiced for "honest sketch" quality (§E coverage tiers): leads/pads/basses
@@ -23,13 +36,13 @@ std::array<NativeSynthPatch, 16> build_family_patches() noexcept {
   // soft strikes stay mellow and hard strikes brighten the way felt does. The
   // amp release sets the treble ring-down (the top strings, whose light dampers
   // barely load the string, are amp-release limited rather than damper limited).
-  t[0].piano.brightness = 0.81459f;
-  t[0].piano.detune_cents = 1.0f;
-  t[0].piano.decay_fast_s = 1.35f;
-  t[0].piano.soundboard = 0.35f;
-  t[0].piano.hammer_contact_ms = 1.1f;
-  t[0].piano.hammer_dynamics = 0.5f;
-  t[0].piano.release_damp_s = 0.85f;
+  t[0].piano.brightness = kPianoBrightness;
+  t[0].piano.detune_cents = kPianoDetuneCents;
+  t[0].piano.decay_fast_s = kPianoDecayFastS;
+  t[0].piano.soundboard = kPianoSoundboard;
+  t[0].piano.hammer_contact_ms = kPianoHammerContactMs;
+  t[0].piano.hammer_dynamics = kPianoHammerDynamics;
+  t[0].piano.release_damp_s = kPianoReleaseDampS;
   t[0].stereo_spread = 0.3f;
   t[0].gain = 0.8f;
 
@@ -222,6 +235,24 @@ std::array<NativeSynthPatch, 16> build_family_patches() noexcept {
   t[15].gain = 0.7f;
 
   for (NativeSynthPatch& p : t) p = clamp_synth_patch(p);
+
+    // Development-only per-family voicing override, keyed `fam0`..`fam15` by
+    // GM family (`SONARE_TUNING_OVERRIDES=fam0.piano.brightness=0.83`). A
+    // family patch serves the eight programs of its family that no program
+    // override displaces. See gm_fallback_programs.cpp for why this is
+    // compiled out rather than gated.
+#if defined(SONARE_TUNING) && SONARE_TUNING
+  for (int i = 0; i < 16; ++i) {
+    char key[8] = {'f', 'a', 'm', 0, 0, 0};
+    if (i < 10) {
+      key[3] = static_cast<char>('0' + i);
+    } else {
+      key[3] = '1';
+      key[4] = static_cast<char>('0' + i - 10);
+    }
+    apply_patch_tuning(t[static_cast<size_t>(i)], key);
+  }
+#endif
   return t;
 }
 

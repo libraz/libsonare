@@ -1,4 +1,5 @@
 #include "midi/synth/gm_fallback_data.h"
+#include "midi/synth/patch_tuning.h"
 
 namespace sonare::midi::synth::detail {
 namespace {
@@ -392,6 +393,17 @@ std::array<NativeSynthPatch, 128> build_drum_note_table() noexcept {
   t[79].percussion.exclusive_class = 2;
 
   for (auto& p : t) p = clamp_synth_patch(p);
+
+    // Development-only per-note voicing override, keyed `d000`..`d127` by drum
+    // note (`SONARE_TUNING_OVERRIDES=d038.percussion.wire_buzz=0.5`). See
+    // gm_fallback_programs.cpp for why this is compiled out rather than gated.
+#if defined(SONARE_TUNING) && SONARE_TUNING
+  for (int n = 0; n < 128; ++n) {
+    char key[8] = {'d', static_cast<char>('0' + n / 100), static_cast<char>('0' + (n / 10) % 10),
+                   static_cast<char>('0' + n % 10), '\0'};
+    apply_patch_tuning(t[static_cast<size_t>(n)], key);
+  }
+#endif
   return t;
 }
 

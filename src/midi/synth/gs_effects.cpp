@@ -4,14 +4,26 @@
 #include <cmath>
 #include <cstring>
 
+#include "util/tunable.h"
+
 namespace sonare::midi::synth {
 
 namespace {
 
+/// System-reverb tank scaling. These are 1.0 multipliers on whatever the host
+/// asked for, not values in their own right, so the shipped behaviour is the
+/// caller's config exactly. They exist so the voicematch harness can sweep the
+/// tank against a reference recording's measured decay: an instrument that is
+/// never heard dry (a church organ, an orchestral harp) is fitted against a
+/// wet reference, and the room has to be separable from the timbre for that
+/// fit to mean anything.
+SONARE_TUNABLE(kReverbDecayScale, 1.0f);
+SONARE_TUNABLE(kReverbDampingScale, 1.0f);
+
 effects::reverb::DattorroReverbConfig reverb_config(const GsEffectsConfig& cfg) {
   effects::reverb::DattorroReverbConfig rc;
-  rc.decay = std::clamp(cfg.reverb_decay, 0.0f, 0.98f);
-  rc.damping = std::clamp(cfg.reverb_damping, 0.0f, 1.0f);
+  rc.decay = std::clamp(cfg.reverb_decay * kReverbDecayScale, 0.0f, 0.98f);
+  rc.damping = std::clamp(cfg.reverb_damping * kReverbDampingScale, 0.0f, 1.0f);
   rc.dry_wet = 1.0f;  // send-return: wet only
   return rc;
 }

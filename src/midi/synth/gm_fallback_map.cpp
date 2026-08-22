@@ -1,10 +1,13 @@
 #include "midi/synth/gm_fallback_map.h"
 
 #include <algorithm>
+#include <array>
 #include <cstddef>
+#include <cstdio>
 
 #include "midi/synth/gm_fallback_data.h"
 #include "midi/synth/gs_layer.h"
+#include "util/tunable.h"
 
 namespace sonare::midi::synth {
 
@@ -12,6 +15,59 @@ using detail::drum_note_table;
 using detail::family_patches;
 using detail::program_overrides;
 using detail::ProgramOverrides;
+
+namespace {
+
+/// Per-program ambience weighting (see `gm_fallback_sends`). Named rather than
+/// written inline because this is the table that decides how much room each
+/// instrument carries by default, and it is fitted against reference
+/// recordings the same way a voice's calibration constants are — an instrument
+/// whose reference is always a wet one (a cathedral organ, a concert harp) is
+/// only faithful if its ambience is fitted alongside its timbre.
+SONARE_TUNABLE(kSendsDrumsRev, 0.6f);
+SONARE_TUNABLE(kSendsDrumsCho, 0.6f);
+SONARE_TUNABLE(kSendsChurchOrganRev, 2.2f);
+SONARE_TUNABLE(kSendsChurchOrganCho, 1.0f);
+SONARE_TUNABLE(kSendsHarpRev, 1.6f);
+SONARE_TUNABLE(kSendsHarpCho, 1.0f);
+SONARE_TUNABLE(kSendsStringEnsembleRev, 1.6f);
+SONARE_TUNABLE(kSendsStringEnsembleCho, 3.0f);
+SONARE_TUNABLE(kSendsChoirRev, 1.8f);
+SONARE_TUNABLE(kSendsChoirCho, 3.5f);
+SONARE_TUNABLE(kSendsPianoRev, 1.0f);
+SONARE_TUNABLE(kSendsPianoCho, 1.0f);
+SONARE_TUNABLE(kSendsChromPercRev, 1.3f);
+SONARE_TUNABLE(kSendsChromPercCho, 1.0f);
+SONARE_TUNABLE(kSendsOrganRev, 1.1f);
+SONARE_TUNABLE(kSendsOrganCho, 1.5f);
+SONARE_TUNABLE(kSendsGuitarRev, 0.8f);
+SONARE_TUNABLE(kSendsGuitarCho, 1.5f);
+SONARE_TUNABLE(kSendsBassRev, 0.4f);
+SONARE_TUNABLE(kSendsBassCho, 0.6f);
+SONARE_TUNABLE(kSendsSoloStringRev, 1.2f);
+SONARE_TUNABLE(kSendsSoloStringCho, 1.0f);
+SONARE_TUNABLE(kSendsEnsembleRev, 1.6f);
+SONARE_TUNABLE(kSendsEnsembleCho, 3.0f);
+SONARE_TUNABLE(kSendsBrassRev, 1.0f);
+SONARE_TUNABLE(kSendsBrassCho, 1.2f);
+SONARE_TUNABLE(kSendsReedRev, 0.9f);
+SONARE_TUNABLE(kSendsReedCho, 1.0f);
+SONARE_TUNABLE(kSendsFluteRev, 1.1f);
+SONARE_TUNABLE(kSendsFluteCho, 1.0f);
+SONARE_TUNABLE(kSendsSynthLeadRev, 0.7f);
+SONARE_TUNABLE(kSendsSynthLeadCho, 1.5f);
+SONARE_TUNABLE(kSendsSynthPadRev, 1.7f);
+SONARE_TUNABLE(kSendsSynthPadCho, 3.0f);
+SONARE_TUNABLE(kSendsSynthFxRev, 1.5f);
+SONARE_TUNABLE(kSendsSynthFxCho, 2.5f);
+SONARE_TUNABLE(kSendsEthnicRev, 0.9f);
+SONARE_TUNABLE(kSendsEthnicCho, 1.0f);
+SONARE_TUNABLE(kSendsPercussiveRev, 1.2f);
+SONARE_TUNABLE(kSendsPercussiveCho, 1.0f);
+SONARE_TUNABLE(kSendsSfxRev, 1.4f);
+SONARE_TUNABLE(kSendsSfxCho, 1.0f);
+
+}  // namespace
 
 const NativeSynthPatch& gm_fallback_patch(uint16_t bank, uint8_t program) noexcept {
   // GS variation banks fall back to their capital tone's family (same rule as
@@ -219,58 +275,113 @@ const NativeSynthPatch& gm_fallback_drum_patch(uint8_t note) noexcept {
   return drum_note_table()[note & 0x7Fu];
 }
 
+#if defined(SONARE_TUNING) && SONARE_TUNING
+namespace {
+
+/// Which patch key voices each melodic program, resolved by comparing the
+/// address `gm_fallback_patch` hands back against the two tables it draws
+/// from. Recorded for the `SONARE_TUNING_DUMP` catalogue so a fitter can list
+/// a program's knobs without re-implementing the switch above — that switch is
+/// the one place the mapping exists, and a parse of it would go stale.
+///
+/// Deliberately not run from the table builders: they are what
+/// `gm_fallback_patch` initialises, so calling it from inside one would
+/// re-enter a static initialisation already in progress.
+struct ProgramKeyRecorder {
+  ProgramKeyRecorder() {
+    static const char* const kNames[] = {
+#define SONARE_GM_NAME_ONE(name) #name,
+        SONARE_GM_OVERRIDE_PATCHES(SONARE_GM_NAME_ONE)
+#undef SONARE_GM_NAME_ONE
+    };
+    const NativeSynthPatch* base = detail::program_override_patches(program_overrides());
+    const std::array<NativeSynthPatch, 16>& fams = family_patches();
+    for (int p = 0; p < 128; ++p) {
+      const NativeSynthPatch* got = &gm_fallback_patch(0, static_cast<uint8_t>(p));
+      const char* key = nullptr;
+      for (std::size_t i = 0; i < detail::kProgramOverrideCount; ++i) {
+        if (got == base + i) {
+          key = kNames[i];
+          break;
+        }
+      }
+      static char fam_key[8];
+      if (key == nullptr) {
+        for (std::size_t i = 0; i < fams.size(); ++i) {
+          if (got == &fams[i]) {
+            std::snprintf(fam_key, sizeof(fam_key), "fam%zu", i);
+            key = fam_key;
+            break;
+          }
+        }
+      }
+      ::sonare::tuning::note_program_key(p, key);
+    }
+  }
+};
+
+}  // namespace
+#endif
+
 GmFallbackSends gm_fallback_sends(uint16_t bank, uint8_t program) noexcept {
-  if (bank == 128) return {0.6f, 0.6f};  // drums: tighter than the melodics
+#if defined(SONARE_TUNING) && SONARE_TUNING
+  // Any render reaches here through refresh_channel_mod, and by then both
+  // fallback tables are fully built, which is what the address comparison
+  // needs. Runs once per process.
+  static const ProgramKeyRecorder kRecorder;
+  (void)kRecorder;
+#endif
+  if (bank == 128) return {kSendsDrumsRev, kSendsDrumsCho};  // tighter than the melodics
   switch (program & 0x7Fu) {
     case 19:  // Church Organ lives in a cathedral, not a booth
-      return {2.2f, 1.0f};
+      return {kSendsChurchOrganRev, kSendsChurchOrganCho};
     case 46:  // Orchestral Harp: concert-hall halo
-      return {1.6f, 1.0f};
+      return {kSendsHarpRev, kSendsHarpCho};
     case 48:  // String Ensembles: hall + section shimmer
     case 49:
     case 50:
     case 51:
-      return {1.6f, 3.0f};
+      return {kSendsStringEnsembleRev, kSendsStringEnsembleCho};
     case 52:  // Choir Aahs / Voice Oohs / Synth Voice
     case 53:
     case 54:
-      return {1.8f, 3.5f};
+      return {kSendsChoirRev, kSendsChoirCho};
     default:
       break;
   }
   switch ((program & 0x7Fu) >> 3) {
     case 0:
-      return {1.0f, 1.0f};  // pianos: lid-open room
+      return {kSendsPianoRev, kSendsPianoCho};  // pianos: lid-open room
     case 1:
-      return {1.3f, 1.0f};  // chromatic percussion rings in air
+      return {kSendsChromPercRev, kSendsChromPercCho};  // chromatic percussion rings in air
     case 2:
-      return {1.1f, 1.5f};  // organs
+      return {kSendsOrganRev, kSendsOrganCho};  // organs
     case 3:
-      return {0.8f, 1.5f};  // guitars
+      return {kSendsGuitarRev, kSendsGuitarCho};  // guitars
     case 4:
-      return {0.4f, 0.6f};  // basses stay tight
+      return {kSendsBassRev, kSendsBassCho};  // basses stay tight
     case 5:
-      return {1.2f, 1.0f};  // solo strings
+      return {kSendsSoloStringRev, kSendsSoloStringCho};  // solo strings
     case 6:
-      return {1.6f, 3.0f};  // ensembles (non-override programs)
+      return {kSendsEnsembleRev, kSendsEnsembleCho};  // ensembles (non-override programs)
     case 7:
-      return {1.0f, 1.2f};  // brass
+      return {kSendsBrassRev, kSendsBrassCho};  // brass
     case 8:
-      return {0.9f, 1.0f};  // reeds
+      return {kSendsReedRev, kSendsReedCho};  // reeds
     case 9:
-      return {1.1f, 1.0f};  // flutes
+      return {kSendsFluteRev, kSendsFluteCho};  // flutes
     case 10:
-      return {0.7f, 1.5f};  // synth leads
+      return {kSendsSynthLeadRev, kSendsSynthLeadCho};  // synth leads
     case 11:
-      return {1.7f, 3.0f};  // synth pads bathe in the wash
+      return {kSendsSynthPadRev, kSendsSynthPadCho};  // synth pads bathe in the wash
     case 12:
-      return {1.5f, 2.5f};  // synth FX
+      return {kSendsSynthFxRev, kSendsSynthFxCho};  // synth FX
     case 13:
-      return {0.9f, 1.0f};  // ethnic plucked
+      return {kSendsEthnicRev, kSendsEthnicCho};  // ethnic plucked
     case 14:
-      return {1.2f, 1.0f};  // percussive
+      return {kSendsPercussiveRev, kSendsPercussiveCho};  // percussive
     default:
-      return {1.4f, 1.0f};  // SFX
+      return {kSendsSfxRev, kSendsSfxCho};  // SFX
   }
 }
 
