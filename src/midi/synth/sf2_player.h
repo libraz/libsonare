@@ -129,6 +129,15 @@ struct Sf2PlayerConfig {
   /// thread — realise_gs_efx() allocates. The live engine leaves it false and
   /// pumps EFX from the control thread instead.
   bool realize_efx_inline = false;
+  /// ~8 Hz first-order DC blocker on the summed mix bus. What motivates it is
+  /// the synth-fallback floor, which renders the same physical-model voices as
+  /// the NativeSynth host: a sustained wind or reed part leaves a DC offset on
+  /// the bus that eats headroom and skews the peak level a downstream mastering
+  /// chain measures. It runs on the summed bus unconditionally, though, so a
+  /// render of nothing but sampled presets passes through it too — the bus is
+  /// the thing being kept DC-free, not one class of voice on it, which is the
+  /// same scope NativeSynthConfig::dc_block has. Same default, same pole.
+  bool dc_block = true;
 #if defined(SONARE_MIDI_WITH_FX)
   /// System effect units (reverb / chorus / delay send-returns).
   GsEffectsConfig effects;
@@ -271,6 +280,10 @@ class Sf2Player final : public MidiInstrument {
   int64_t tail_samples_ = 0;
   /// Longest release timecents found in the soundfont (set_soundfont scan).
   int32_t max_release_timecents_ = -12000;
+  /// Mix-bus DC blocker state (config_.dc_block): pole and per-leg histories.
+  float dc_r_ = 0.0f;
+  std::array<float, 2> dc_x1_{};
+  std::array<float, 2> dc_y1_{};
 
   /// Renders one chunk (n <= kChunkFrames) of the 16-part bus graph into the
   /// internal mix scratch. In source-track mode, attributable dry voice audio

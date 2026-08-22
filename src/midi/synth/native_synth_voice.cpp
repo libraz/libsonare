@@ -9,10 +9,6 @@ namespace sonare::midi::synth {
 
 namespace {
 
-/// Default modulator: full CC1 adds 50 cents of vibrato depth (matches
-/// Sf2Player so the fallback and SF2 voices respond alike).
-constexpr float kModWheelVibratoCents = 50.0f;
-
 /// Whether a mode still needs the SoundFont velocity-to-amplitude curve.
 ///
 /// `sf2_velocity_gain` exists because a sampled note was recorded at one force
@@ -133,10 +129,6 @@ void NativeSynthVoice::start(const NativeSynthPatch& p, double sample_rate, uint
   static_cutoff_cents =
       p.vel_to_cutoff_cents * (static_cast<float>(velocity & 0x7Fu) / 127.0f - 1.0f) +
       p.key_track * 100.0f * (static_cast<float>(note & 0x7Fu) - 60.0f);
-  filter_bypass = p.filter_model == SynthFilterModel::kSvf &&
-                  p.filter_output == SynthFilterOutput::kLowpass && p.cutoff_hz >= 18000.0f &&
-                  p.env_to_cutoff_cents == 0.0f && static_cutoff_cents >= 0.0f &&
-                  p.resonance_q <= 0.71f;
   if (p.drive > 0.0f) {
     // Gain-compensated tanh drive (same law as the Sf2 part insert).
     drive_gain = 1.0f + 9.0f * p.drive;
@@ -292,7 +284,7 @@ float NativeSynthVoice::render(const Sf2ChannelMod& mod, float wind_pitch,
   if (drive_gain > 0.0f) sample = std::tanh(drive_gain * sample) * drive_makeup;
 
   // --- filter: cutoff = patch Fc * 2^((env + velocity + keytrack)/1200) ---
-  if (!filter_bypass || offsets.cutoff_cents != 0.0f) {
+  if (!filter_inaudible() || offsets.cutoff_cents != 0.0f) {
     const float fc_cents =
         fenv * patch->env_to_cutoff_cents + static_cutoff_cents + offsets.cutoff_cents;
     const float fc = patch->cutoff_hz * std::exp2(fc_cents * (1.0f / 1200.0f));

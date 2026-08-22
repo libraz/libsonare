@@ -217,7 +217,6 @@ struct NativeSynthVoice : VoiceState {
   float velocity_gain = 1.0f;
   /// Static cutoff offset precomputed at start (velocity + key tracking).
   float static_cutoff_cents = 0.0f;
-  bool filter_bypass = false;
   /// Pre-filter drive gain / makeup (precomputed from patch->drive; 0 = off).
   float drive_gain = 0.0f;
   float drive_makeup = 1.0f;
@@ -297,6 +296,18 @@ struct NativeSynthVoice : VoiceState {
   void start(const NativeSynthPatch& p, double sample_rate, uint8_t velocity, uint32_t voice_index,
              float glide_from_hz = 0.0f, bool una_corda = false, uint8_t drum_kit = 0,
              DrumVoiceMod drum_mod = {}) noexcept;
+  /// True when the patch's filter stage cannot colour this voice: a wide-open
+  /// static SVF lowpass, no resonance, no envelope depth and no negative
+  /// static offset. Read from the LIVE patch on every sample rather than
+  /// latched at start(): `cutoff_hz` and `resonance_q` are automation targets
+  /// that apply to already-sounding voices, so a sweep on a held note has to
+  /// engage the stage on the block it starts, not on the next note-on.
+  bool filter_inaudible() const noexcept {
+    return patch->filter_model == SynthFilterModel::kSvf &&
+           patch->filter_output == SynthFilterOutput::kLowpass && patch->cutoff_hz >= 18000.0f &&
+           patch->env_to_cutoff_cents == 0.0f && static_cutoff_cents >= 0.0f &&
+           patch->resonance_q <= 0.71f;
+  }
   /// Renders one mono sample. Deactivates when the amp envelope ends.
   /// @p wind_pitch / @p wind_gain carry the shared organ wind modulation
   /// (tremulant / wind sag); 1.0 leaves the voice unmodulated.
@@ -512,7 +523,20 @@ class NativeSynth final : public MidiInstrument {
   PianoResonanceBank resonance_;
   /// Shared modal soundboard body (piano patches only).
   PianoSoundboard soundboard_;
+  /// The configured patch is a piano, so the bus body is tuned in prepare().
   bool piano_mode_ = false;
+  /// A piano patch is currently voiced, so the render loop routes its voices
+  /// through the bus body (direct-share attenuation, modal soundboard,
+  /// pedal-gated sympathetic bank). Decided per note-on rather than from the
+  /// construction-time patch, because GM mode resolves the engine per program:
+  /// program 0 reaches the piano patch there too, and gating on the configured
+  /// mode would render it as a bare string. Mirrors Sf2Player's per-part
+  /// fallback_body_, bus-scoped because NativeSynth has one mix bus.
+  bool piano_body_active_ = false;
+  /// Soundboard mix the bus body is currently tuned for (-1 = never tuned), so
+  /// a note-on re-prepares only when the resolved patch asks for a different
+  /// board — the bank keeps its state across notes otherwise.
+  float piano_body_soundboard_ = -1.0f;
   /// A Karplus-Strong patch has opted into the shared sympathetic bank
   /// (patch.ks.sympathetic). false leaves every existing KS voicing on its
   /// original render path (the resonance branch is skipped entirely).

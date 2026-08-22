@@ -13,6 +13,7 @@
 #include <cmath>
 #include <map>
 #include <string>
+#include <vector>
 
 namespace sonare::midi::synth {
 
@@ -20,9 +21,10 @@ namespace {
 
 /// What a walk over the field table does with each field it visits.
 enum class FieldPass {
-  kApply,  ///< normal: replace the value with its override, if one is set
-  kFill,   ///< write a probe value into every field, to be clamped afterwards
-  kRead,   ///< read each field back out (the clamped probe = one of its bounds)
+  kApply,   ///< normal: replace the value with its override, if one is set
+  kFill,    ///< write a probe value into every field, to be clamped afterwards
+  kRead,    ///< read each field back out (the clamped probe = one of its bounds)
+  kReport,  ///< collect each field's path, leaving the value alone
 };
 
 /// Collects the two ends of each field's admissible range across two kRead
@@ -46,11 +48,16 @@ struct Fields {
   FieldPass pass = FieldPass::kApply;
   float fill = 0.0f;
   BoundsCollector* bounds = nullptr;
+  std::vector<std::string>* paths = nullptr;
 
   float operator()(const char* path, float current) const {
     if (pass == FieldPass::kFill) return fill;
     if (pass == FieldPass::kRead) {
       read_bound(path, current);
+      return current;
+    }
+    if (pass == FieldPass::kReport) {
+      if (paths != nullptr) paths->emplace_back(path);
       return current;
     }
     return ::sonare::tuning::tunable_keyed((prefix + '.' + path).c_str(), current);
@@ -304,6 +311,13 @@ void apply_additive(NativeSynthPatch& p, const Fields& f) {
 }
 
 void apply_percussion(NativeSynthPatch& p, const Fields& f) {
+  for (int i = 0; i < kMaxPercussionModes; ++i) {
+    const std::string index = std::to_string(i);
+    float& ratio = p.percussion.mode_ratios[static_cast<size_t>(i)];
+    ratio = f(("percussion.mode_ratios" + index).c_str(), ratio);
+    float& alpha = p.percussion.mode_alpha[static_cast<size_t>(i)];
+    alpha = f(("percussion.mode_alpha" + index).c_str(), alpha);
+  }
   F(percussion.mode_decay_s);
   F(percussion.tone_gain);
   F(percussion.base_freq_hz);
@@ -316,6 +330,15 @@ void apply_percussion(NativeSynthPatch& p, const Fields& f) {
   F(percussion.noise_cutoff_hz);
   F(percussion.noise_q);
   F(percussion.shell_mix);
+  for (int i = 0; i < kMaxShellModes; ++i) {
+    const std::string index = std::to_string(i);
+    float& freq = p.percussion.shell_freq_hz[static_cast<size_t>(i)];
+    freq = f(("percussion.shell_freq_hz" + index).c_str(), freq);
+    float& t60 = p.percussion.shell_t60_s[static_cast<size_t>(i)];
+    t60 = f(("percussion.shell_t60_s" + index).c_str(), t60);
+    float& weight = p.percussion.shell_weight[static_cast<size_t>(i)];
+    weight = f(("percussion.shell_weight" + index).c_str(), weight);
+  }
   F(percussion.wire_buzz);
   F(percussion.wire_threshold);
   F(percussion.wire_cutoff_hz);
@@ -434,6 +457,21 @@ void apply_patch_tuning(NativeSynthPatch& patch, const char* prefix) noexcept {
   if (owned.empty()) return;
   record_engine_bounds(patch);
   walk_fields(patch, Fields{owned});
+  // The override map is arbitrary text: it can name a non-finite value or one
+  // outside the field's admissible range, and the callers clamp BEFORE calling
+  // in. Re-clamp so a fitted value is evaluated exactly as the shipped build
+  // would render it — otherwise a fit converges on a value the writeback path
+  // truncates, and the result does not transfer.
+  patch = clamp_synth_patch(patch);
+}
+
+std::vector<std::string> patch_tuning_field_paths(const NativeSynthPatch& patch) {
+  const std::string unused;
+  std::vector<std::string> paths;
+  NativeSynthPatch copy = patch;
+  Fields report{unused, FieldPass::kReport, 0.0f, nullptr, &paths};
+  walk_fields(copy, report);
+  return paths;
 }
 
 }  // namespace sonare::midi::synth

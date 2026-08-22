@@ -8,14 +8,17 @@
 
 #include "midi/synth/native_synth.h"
 
+#include <algorithm>
 #include <array>
 #include <catch2/catch_test_macros.hpp>
 #include <cmath>
 #include <complex>
 #include <cstddef>
 #include <cstdint>
+#include <limits>
 #include <memory>
 #include <set>
+#include <string>
 #include <vector>
 
 #include "core/fft.h"
@@ -23,6 +26,7 @@
 #include "midi/synth/gm_fallback_data.h"
 #include "midi/synth/gm_fallback_map.h"
 #include "midi/synth/oscillator.h"
+#include "midi/synth/patch_tuning.h"
 #include "midi/synth/sf2_player.h"
 #include "midi/ump.h"
 #include "support/alloc_guard.h"
@@ -647,6 +651,289 @@ TEST_CASE("Sf2Player fallback tail covers the slowest fallback release", "[midi]
   REQUIRE(peak(out.left, out.left.size() - 256) < 1.0e-3f);
 }
 
+TEST_CASE("Sf2Player keeps a sustained wind render DC-free", "[midi][sf2][synth]") {
+  // The fallback floor voices the same physical models as the NativeSynth
+  // host, and a sustained wind part leaves a DC offset on the mix bus: it eats
+  // headroom and skews the peak level a downstream mastering chain measures.
+  // A null `block` leaves the config default alone, so the shipped behaviour is
+  // measured rather than an explicitly-enabled one.
+  auto mean_offset = [](const bool* block) {
+    Sf2PlayerConfig cfg;
+    cfg.gain = 1.0f;
+    if (block != nullptr) cfg.dc_block = *block;
+    Sf2Player player(cfg);  // no set_soundfont -> fallback floor
+    player.prepare(kOutRate, 256);
+    // Four sustained wind parts (flute / clarinet / trumpet / oboe).
+    const uint8_t programs[4] = {73, 71, 56, 68};
+    for (uint8_t part = 0; part < 4; ++part) {
+      player.on_event(0, event(sonare::midi::make_midi1_program_change(0, part, programs[part])));
+      player.on_event(0, event(sonare::midi::make_midi1_note_on(
+                             0, part, static_cast<uint8_t>(60 + part * 4), 100)));
+    }
+    const StereoRender out = render(player, 96000);
+    double sum = 0.0;
+    for (size_t i = 48000; i < out.left.size(); ++i) sum += static_cast<double>(out.left[i]);
+    return std::fabs(sum / static_cast<double>(out.left.size() - 48000));
+  };
+
+  const bool off = false;
+  const bool on = true;
+  const double unblocked = mean_offset(&off);
+  const double blocked = mean_offset(&on);
+  const double by_default = mean_offset(nullptr);
+  INFO("dc offset unblocked " << unblocked << " blocked " << blocked << " default " << by_default);
+  REQUIRE(unblocked > 1.0e-3);  // the offset the blocker exists to remove
+  REQUIRE(blocked < 1.0e-3);
+  REQUIRE(blocked < 0.01 * unblocked);
+  REQUIRE(by_default == blocked);  // the blocker is on unless a host opts out
+}
+
+TEST_CASE("a filter sweep is audible on a held note", "[midi][synth]") {
+  // cutoffHz / resonanceQ are documented as applying to sounding voices from
+  // the next block. A wide-open patch skips the filter stage as a fast path,
+  // and deciding that once at note-on froze the sweep out of every note that
+  // was already down — the single most common synth automation gesture.
+  NativeSynthConfig cfg;
+  cfg.patch.waveform = VaWaveform::kSaw;
+  cfg.patch.cutoff_hz = 20000.0f;
+  cfg.patch.gain = 0.8f;
+  cfg.patch.amp_env.attack_ms = 1.0f;
+  cfg.patch.amp_env.sustain = 1.0f;
+  NativeSynth synth(cfg);
+  synth.prepare(kOutRate, 256);
+  synth.on_event(0, event(sonare::midi::make_midi1_note_on(0, 0, 69, 110)));
+
+  const StereoRender open = render(synth, 8192);
+  const float open_rms = rms(open.left, 4096);
+  REQUIRE(open_rms > 0.01f);
+
+  // Same held note, cutoff swept two octaves below its fundamental: the saw
+  // has to lose the fundamental with the harmonics.
+  REQUIRE(synth.apply_parameter(
+      static_cast<unsigned int>(sonare::midi::synth::NativeSynthParamId::kCutoffHz), 110.0f));
+  const StereoRender swept = render(synth, 8192);
+  REQUIRE(rms(swept.left, 4096) < 0.5f * open_rms);
+  REQUIRE(synth.active_voice_count() == 1);  // the same voice, never retriggered
+
+  // And back up: the fast path returns rather than latching the filter in.
+  REQUIRE(synth.apply_parameter(
+      static_cast<unsigned int>(sonare::midi::synth::NativeSynthParamId::kCutoffHz), 20000.0f));
+  const StereoRender reopened = render(synth, 8192);
+  REQUIRE(rms(reopened.left, 4096) > 0.8f * open_rms);
+}
+
+TEST_CASE("All Sound Off silences the piano bus resonators too", "[midi][synth][sf2]") {
+  // "Silence NOW" has to include the resonators the instrument owns: the piano
+  // soundboard and the pedal-gated sympathetic bank ring for over a second, so
+  // killing only the voices leaks an audible wash past a DAW panic.
+  SECTION("NativeSynth") {
+    NativeSynthConfig cfg;
+    cfg.patch.mode = SynthEngineMode::kPiano;
+    cfg.gain = 1.0f;
+    NativeSynth synth(cfg);
+    synth.prepare(kOutRate, 256);
+    synth.on_event(0, event(sonare::midi::make_midi1_control_change(0, 0, 64, 127)));
+    for (uint8_t note = 48; note < 60; note += 4) {
+      synth.on_event(0, event(sonare::midi::make_midi1_note_on(0, 0, note, 110)));
+    }
+    REQUIRE(peak(render(synth, 4800).left) > 0.01f);
+    synth.on_event(0, event(sonare::midi::make_midi1_control_change(0, 0, 120, 0)));
+    REQUIRE(synth.active_voice_count() == 0);
+    REQUIRE(peak(render(synth, 256).left) < 3.2e-8f);  // -150 dBFS
+  }
+
+  SECTION("Sf2Player fallback") {
+    // The GS system reverb is a send bus addressed on its own, not something
+    // the instrument owns, so it is switched off to leave only the part's
+    // body resonators in the measurement.
+    Sf2PlayerConfig cfg;
+    cfg.gain = 1.0f;
+#if defined(SONARE_MIDI_WITH_FX)
+    cfg.effects.enable_reverb = false;
+    cfg.effects.enable_chorus = false;
+    cfg.effects.enable_delay = false;
+#endif
+    Sf2Player player(cfg);  // no set_soundfont -> fallback floor
+    player.prepare(kOutRate, 256);
+    player.on_event(0, event(sonare::midi::make_midi1_program_change(0, 0, 0)));
+    player.on_event(0, event(sonare::midi::make_midi1_control_change(0, 0, 64, 127)));
+    for (uint8_t note = 48; note < 60; note += 4) {
+      player.on_event(0, event(sonare::midi::make_midi1_note_on(0, 0, note, 110)));
+    }
+    REQUIRE(peak(render(player, 4800).left) > 0.01f);
+    player.on_event(0, event(sonare::midi::make_midi1_control_change(0, 0, 120, 0)));
+    REQUIRE(player.active_voice_count() == 0);
+    REQUIRE(peak(render(player, 256).left) < 3.2e-8f);
+  }
+}
+
+TEST_CASE("tail_samples covers the stage that actually ends the voice", "[midi][synth]") {
+  // A zero-sustain envelope dies at the decay floor and never reaches Release,
+  // so for a percussive patch the decay is the terminating stage. Reporting
+  // only the release cuts the hit off at a bounce boundary.
+  NativeSynthConfig cfg;
+  cfg.patch.one_shot = true;  // a strike rings out; note-off never chokes it
+  cfg.patch.amp_env.sustain = 0.0f;
+  cfg.patch.amp_env.decay_ms = 2000.0f;
+  cfg.patch.amp_env.release_ms = 5.0f;
+  NativeSynth synth(cfg);
+  synth.prepare(kOutRate, 256);
+  const int64_t decay_tail =
+      sonare::midi::synth::DahdsrEnvelope::release_tail_samples(kOutRate, 2000.0f);
+  REQUIRE(synth.tail_samples() >= decay_tail);
+
+  // Behaviourally: the strike has to fade inside the reported tail.
+  synth.on_event(0, event(sonare::midi::make_midi1_note_on(0, 0, 60, 110)));
+  synth.on_event(0, event(sonare::midi::make_midi1_note_off(0, 0, 60, 0)));
+  const StereoRender out = render(synth, static_cast<int>(synth.tail_samples()) + 256);
+  REQUIRE(peak(out.left) > 0.01f);
+  REQUIRE(peak(out.left, out.left.size() - 256) < 1.0e-3f);
+}
+
+TEST_CASE("both hosts report a tail that covers the piano body", "[midi][synth][sf2]") {
+  // The piano body rings far past the ~120 ms voice release; a tail that
+  // covers only the release cuts the bloom off the last chord of a bounce.
+  const int64_t body = static_cast<int64_t>(kOutRate * 0.6);  // 2x the bank t60
+
+  NativeSynthConfig cfg;
+  cfg.patch.mode = SynthEngineMode::kPiano;
+  NativeSynth synth(cfg);
+  synth.prepare(kOutRate, 256);
+  const int64_t release_only = sonare::midi::synth::DahdsrEnvelope::release_tail_samples(
+      kOutRate, cfg.patch.amp_env.release_ms);
+  REQUIRE(synth.tail_samples() >= release_only + body);
+
+  Sf2Player player = make_fallback_player();
+  REQUIRE(player.tail_samples() >= body);
+}
+
+TEST_CASE("GM mode voices a piano program through the piano body", "[midi][synth][sf2]") {
+  // The bus body (direct-share attenuation, modal soundboard, pedal-gated
+  // sympathetic bank) used to be decided from the construction-time patch. GM
+  // mode resolves the engine per program instead, so program 0 resolved to the
+  // piano patch and then rendered as a bare string: a different instrument
+  // from the same patch played directly, and from the SF2 fallback floor.
+  const sonare::midi::synth::NativeSynthPatch& gm_piano =
+      sonare::midi::synth::gm_fallback_patch(0, 0);
+  REQUIRE(gm_piano.mode == SynthEngineMode::kPiano);
+
+  auto play = [&](bool gm) {
+    NativeSynthConfig cfg;
+    cfg.gain = 1.0f;
+    cfg.use_gm_programs = gm;
+    if (!gm) cfg.patch = gm_piano;
+    NativeSynth synth(cfg);
+    synth.prepare(kOutRate, 256);
+    if (gm) synth.on_event(0, event(sonare::midi::make_midi1_program_change(0, 0, 0)));
+    synth.on_event(0, event(sonare::midi::make_midi1_note_on(0, 0, 48, 100)));
+    return render(synth, 16384);
+  };
+
+  // One patch, one engine, one bus coupling: reaching it through a GM program
+  // change has to sound like configuring it directly.
+  const StereoRender through_gm = play(true);
+  const StereoRender configured = play(false);
+  REQUIRE(peak(configured.left) > 0.01f);
+  double diff = 0.0;
+  double ref = 0.0;
+  for (size_t i = 0; i < configured.left.size(); ++i) {
+    diff += std::fabs(static_cast<double>(through_gm.left[i]) - configured.left[i]);
+    diff += std::fabs(static_cast<double>(through_gm.right[i]) - configured.right[i]);
+    ref += std::fabs(static_cast<double>(configured.left[i]));
+    ref += std::fabs(static_cast<double>(configured.right[i]));
+  }
+  INFO("relative L1 difference " << (diff / ref));
+  REQUIRE(diff <= 1.0e-4 * ref);
+
+  // A non-piano GM program sharing the bus must not be pulled through the
+  // soundboard just because a piano is sounding next to it.
+  NativeSynthConfig cfg;
+  cfg.use_gm_programs = true;
+  cfg.gain = 1.0f;
+  NativeSynth flute_only(cfg);
+  flute_only.prepare(kOutRate, 256);
+  flute_only.on_event(0, event(sonare::midi::make_midi1_program_change(0, 0, 73)));
+  flute_only.on_event(0, event(sonare::midi::make_midi1_note_on(0, 0, 72, 100)));
+  const StereoRender flute_alone = render(flute_only, 16384);
+
+  NativeSynth mixed(cfg);
+  mixed.prepare(kOutRate, 256);
+  mixed.on_event(0, event(sonare::midi::make_midi1_program_change(0, 1, 0)));
+  mixed.on_event(0, event(sonare::midi::make_midi1_note_on(0, 1, 36, 100)));
+  mixed.on_event(0, event(sonare::midi::make_midi1_program_change(0, 0, 73)));
+  mixed.on_event(0, event(sonare::midi::make_midi1_note_on(0, 0, 72, 100)));
+  const StereoRender with_piano = render(mixed, 16384);
+  REQUIRE(peak(with_piano.left) >= peak(flute_alone.left) * 0.99f);
+}
+
+#if defined(SONARE_TUNING) && SONARE_TUNING
+
+TEST_CASE("patch tuning hands back a clamped patch", "[midi][synth][tuning]") {
+  // The override map is arbitrary text — a key can name a non-finite value or
+  // one outside the field's range — and the table builders clamp BEFORE
+  // applying it. A value that survives unclamped is evaluated during the fit
+  // and then truncated when it is written back into the source, so the fitted
+  // voice does not reproduce in a shipped build.
+  using sonare::midi::synth::apply_patch_tuning;
+  using sonare::midi::synth::clamp_synth_patch;
+  using sonare::midi::synth::NativeSynthPatch;
+
+  NativeSynthPatch p;
+  p.mode = SynthEngineMode::kPiano;
+  p = clamp_synth_patch(p);
+  p.piano.decay_stretch = 1.2f;  // above the clamp's upper bound of 1
+  p.piano.brightness = -5.0f;    // below its lower bound of 0
+  p.gain = std::numeric_limits<float>::quiet_NaN();
+  apply_patch_tuning(p, "fam0");
+
+  REQUIRE(p.piano.decay_stretch == 1.0f);
+  REQUIRE(p.piano.brightness == 0.0f);
+  REQUIRE(std::isfinite(p.gain));
+
+  // Nothing else moved: clamping an already-clamped patch is the identity, so
+  // this cannot perturb a fit that stayed inside the ranges.
+  const NativeSynthPatch again = clamp_synth_patch(p);
+  REQUIRE(again.piano.decay_stretch == p.piano.decay_stretch);
+  REQUIRE(again.piano.brightness == p.piano.brightness);
+  REQUIRE(again.gain == p.gain);
+}
+
+TEST_CASE("the tuning field table reaches every percussion field", "[midi][synth][tuning]") {
+  // A drum fit that cannot address the shell resonance or the mode ratios
+  // converges on the best point of a restricted subspace and reports nothing
+  // about the restriction.
+  using sonare::midi::synth::kMaxPercussionModes;
+  using sonare::midi::synth::kMaxShellModes;
+  using sonare::midi::synth::NativeSynthPatch;
+  using sonare::midi::synth::patch_tuning_field_paths;
+
+  NativeSynthPatch p;
+  p.mode = SynthEngineMode::kPercussion;
+  const std::vector<std::string> paths = patch_tuning_field_paths(p);
+  const auto has = [&paths](const std::string& path) {
+    return std::find(paths.begin(), paths.end(), path) != paths.end();
+  };
+  for (int i = 0; i < kMaxPercussionModes; ++i) {
+    const std::string index = std::to_string(i);
+    INFO("mode " << i);
+    REQUIRE(has("percussion.mode_ratios" + index));
+    REQUIRE(has("percussion.mode_alpha" + index));
+  }
+  for (int i = 0; i < kMaxShellModes; ++i) {
+    const std::string index = std::to_string(i);
+    INFO("shell mode " << i);
+    REQUIRE(has("percussion.shell_freq_hz" + index));
+    REQUIRE(has("percussion.shell_t60_s" + index));
+    REQUIRE(has("percussion.shell_weight" + index));
+  }
+  // Exactly one key per field: a duplicated path would make two knobs fight
+  // over the same value, with the later walk step silently winning.
+  const std::set<std::string> unique(paths.begin(), paths.end());
+  REQUIRE(unique.size() == paths.size());
+}
+
+#endif  // SONARE_TUNING
+
 TEST_CASE("gm_fallback_max_release_ms bounds every fallback patch table", "[midi][synth]") {
   const float bound = sonare::midi::synth::gm_fallback_max_release_ms();
   const auto covered = [bound](const sonare::midi::synth::NativeSynthPatch& p) {
@@ -685,6 +972,22 @@ TEST_CASE("NativeSynth audio path is allocation-free", "[midi][synth]") {
     synth.process(chans, 2, 256);
     synth.on_event(0, event(sonare::midi::make_midi1_note_off(0, 0, 60, 0)));
     synth.process(chans, 2, 256);
+    REQUIRE(guard.count() == 0);
+  }
+
+  // GM mode tunes the bus piano body at the first piano note-on, on the audio
+  // thread; the banks own no heap, so that stays allocation-free too.
+  NativeSynthConfig gm;
+  gm.use_gm_programs = true;
+  NativeSynth gm_synth(gm);
+  gm_synth.prepare(kOutRate, 256);
+  {
+    AllocationGuard guard;
+    gm_synth.on_event(0, event(sonare::midi::make_midi1_program_change(0, 0, 0)));
+    gm_synth.on_event(0, event(sonare::midi::make_midi1_note_on(0, 0, 48, 100)));
+    gm_synth.process(chans, 2, 256);
+    gm_synth.on_event(0, event(sonare::midi::make_midi1_note_off(0, 0, 48, 0)));
+    gm_synth.process(chans, 2, 256);
     REQUIRE(guard.count() == 0);
   }
 }

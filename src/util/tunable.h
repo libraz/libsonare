@@ -56,12 +56,24 @@ void note_program_key(int program, const char* key);
 /// `SONARE_TUNING_DUMP` catalogue.
 ///
 /// A fitter needs a search range per knob, and the library already owns one:
-/// `clamp_synth_patch` clamps every patch field to the interval the engine
-/// accepts. Reporting it is what lets the fitter search the real space instead
-/// of guessing a range from the default's magnitude — a guess that is both too
-/// wide (wasting the budget outside the space, where the clamp makes the loss
-/// flat) and too narrow (a knob whose best value is 5x its default is
-/// unreachable). No-op unless a dump was requested.
+/// `clamp_synth_patch` clamps nearly every patch field to the interval the
+/// engine accepts. Reporting it is what lets the fitter search the real space
+/// instead of guessing a range from the default's magnitude — a guess that is
+/// both too wide (wasting the budget outside the space, where the clamp makes
+/// the loss flat) and too narrow (a knob whose best value is 5x its default is
+/// unreachable).
+///
+/// Thirteen of the fields the override layer walks have no bound to report,
+/// because `clamp_synth_patch` does not bound them: the eight Karplus-Strong
+/// extensions (`ks.body_coupling`, `pluck_style`, `nail`, `pickup_pos`,
+/// `dispersion`, `tension_mod`, `octave_mix`, `keyoff_noise`),
+/// `bowed_string.stribeck`, `bowed_string.sympathetic`,
+/// `bowed_string.polarization` and `pipe_organ.keytrack` — each clamped instead
+/// by its own voice at `start()`, where it is read — and
+/// `percussion.strike_theta`, an angle that reaches a cosine and so only has to
+/// be finite. The audio is safe either way; the consequence is confined to the
+/// catalogue, where such a field is reported as unbounded and a fitter's
+/// auto-range falls back to its heuristic. No-op unless a dump was requested.
 void note_bound(const char* path, float lo, float hi);
 
 /// True when this build reads the override table at all (i.e. `BUILD_TUNING=ON`).
@@ -85,7 +97,14 @@ bool tuning_enabled();
 /// table built from one cannot be constant-initialised in a tuning build, and a
 /// `constexpr` that can never fold is ill-formed. Values are unaffected either
 /// way: the same builder runs over the same inputs, only later.
-#define SONARE_TUNED_CONSTEXPR
+///
+/// `inline` rather than nothing, because `constexpr` on a function carries it:
+/// dropping the qualifier outright gives a builder defined in a header external
+/// linkage, and the link fails on a duplicate symbol as soon as a second
+/// translation unit includes it. Nothing announces which build that will be --
+/// a shipped build links either way, and the tuning build is the one nobody
+/// runs in CI.
+#define SONARE_TUNED_CONSTEXPR inline
 #else
 /// Qualify a builder whose result is a compile-time constant (normal build).
 #define SONARE_TUNED_CONSTEXPR constexpr

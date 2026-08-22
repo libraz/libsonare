@@ -9,6 +9,7 @@
 #include <catch2/catch_test_macros.hpp>
 #include <cmath>
 #include <cstdint>
+#include <limits>
 #include <memory>
 #include <string>
 #include <string_view>
@@ -20,6 +21,7 @@
 #include "midi/synth/sf2_file.h"
 #include "midi/synth/sf2_player.h"
 #include "midi/ump.h"
+#include "rt/processor_base.h"
 #include "support/alloc_guard.h"
 #include "support/sf2_builder.h"
 
@@ -35,6 +37,13 @@ using sonare::test::Sf2Builder;
 
 constexpr double kOutRate = 48000.0;
 constexpr double kTwoPi = 6.28318530717958647692;
+
+/// "No wet return here" floor. The mix bus carries a DC blocker, and a
+/// first-order highpass answers the dry burst with an exponentially decaying
+/// residual instead of snapping to zero, so an empty measurement window reads
+/// as a level below audibility rather than a bit-exact zero. The wet returns
+/// these cases look for are orders of magnitude above it.
+constexpr float kSilenceFloor = 1.0e-6f;
 
 MidiEvent event(const sonare::midi::Ump& ump) {
   MidiEvent e;
@@ -155,9 +164,43 @@ TEST_CASE("GS reverb send is monotonic in CC91", "[midi][sf2][gsfx]") {
   const float dry = reverb_tail_rms(0);
   const float mid = reverb_tail_rms(64);
   const float full = reverb_tail_rms(127);
-  REQUIRE(dry == 0.0f);  // no send -> no wet tail
+  REQUIRE(dry < kSilenceFloor);  // no send -> no wet tail
   REQUIRE(mid > 0.0f);
   REQUIRE(full > mid * 1.5f);
+}
+
+TEST_CASE("the fallback ambience weighting scales the channel send", "[midi][sf2][gsfx]") {
+  // No SoundFont, so every note takes the synth-fallback floor where
+  // gm_fallback_sends applies. The weighting is multiplicative on the CC, so
+  // CC91 = 0 is dry whatever the program asks for, and a cathedral program is
+  // wetter than a close-miked one at the same controller value.
+  auto wet_tail = [](uint8_t program, uint8_t cc91) {
+    Sf2PlayerConfig cfg;
+    cfg.gain = 1.0f;
+    Sf2Player player(cfg);  // no set_soundfont -> fallback floor
+    player.prepare(kOutRate, 256);
+    player.on_event(0, event(sonare::midi::make_midi1_control_change(0, 0, 91, cc91)));
+    // GS power-on leaves a chorus send standing; clear it so the measured tail
+    // is the reverb return alone.
+    player.on_event(0, event(sonare::midi::make_midi1_control_change(0, 0, 93, 0)));
+    player.on_event(0, event(sonare::midi::make_midi1_control_change(0, 0, 94, 0)));
+    player.on_event(0, event(sonare::midi::make_midi1_program_change(0, 0, program)));
+    player.on_event(0, event(sonare::midi::make_midi1_note_on(0, 0, 60, 100)));
+    render(player, 4800);
+    player.on_event(0, event(sonare::midi::make_midi1_note_off(0, 0, 60, 0)));
+    // Kill the voices, leaving only what the effect bus is still returning.
+    player.on_event(0, event(sonare::midi::make_midi1_control_change(0, 0, 120, 0)));
+    const StereoRender out = render(player, 24000);
+    return rms(out.left, 240, 24000) + rms(out.right, 240, 24000);
+  };
+
+  REQUIRE(wet_tail(19, 0) < kSilenceFloor);  // church organ, no send -> dry
+  REQUIRE(wet_tail(33, 0) < kSilenceFloor);  // electric bass, no send -> dry
+  const float organ = wet_tail(19, 64);
+  const float bass = wet_tail(33, 64);
+  REQUIRE(organ > 0.0f);
+  REQUIRE(bass > 0.0f);
+  REQUIRE(organ > bass);
 }
 
 TEST_CASE("SF2 zone reverb send generator feeds the bus without CC", "[midi][sf2][gsfx]") {
@@ -181,7 +224,7 @@ TEST_CASE("GS delay send produces an echo at the delay time", "[midi][sf2][gsfx]
     // Default delay time 340 ms = 16320 samples; the dry burst is ~256.
     return peak(out.left, 15800, 17500);
   };
-  REQUIRE(echo_peak(0) == 0.0f);
+  REQUIRE(echo_peak(0) < kSilenceFloor);
   REQUIRE(echo_peak(127) > 0.001f);
 }
 
@@ -311,6 +354,46 @@ TEST_CASE("per-part processor insert runs an injected factory-built effect", "[m
   inert.on_event(0, event(sonare::midi::make_midi1_note_on(0, 0, 60, 127)));
   const StereoRender ino = render(inert, 9600);
   REQUIRE(h3(ino.left) < 10.0 * h3(cln.left));
+}
+
+TEST_CASE("a non-finite insert sample never reaches the mix-bus state", "[midi][sf2][gsfx]") {
+  // A part insert is a host-injected processor: whatever it writes lands on the
+  // shared mix bus, where the DC blocker holds it in an IIR state forever. One
+  // NaN there makes every remaining sample of the render NaN too, so the bus is
+  // scrubbed before the blocker sees it.
+  struct NanInsert : sonare::rt::ProcessorBase {
+    void prepare(double, int) override {}
+    void reset() override {}
+    void process(float* const* channels, int num_channels, int num_samples) override {
+      if (fired) return;
+      fired = true;
+      for (int ch = 0; ch < num_channels; ++ch) {
+        if (channels[ch] != nullptr && num_samples > 0) {
+          channels[ch][0] = std::numeric_limits<float>::quiet_NaN();
+        }
+      }
+    }
+    bool fired = false;
+  };
+
+  Sf2PlayerConfig cfg;
+  cfg.gain = 1.0f;
+  cfg.part_inserts[0].type = Sf2InsertType::kProcessor;
+  cfg.part_inserts[0].insert_name = "test.nan";
+  cfg.insert_factory = [](std::string_view, std::string_view) {
+    return std::unique_ptr<sonare::rt::ProcessorBase>(new NanInsert());
+  };
+  Sf2Player player = make_player(cfg);
+  player.on_event(0, event(sonare::midi::make_midi1_note_on(0, 0, 60, 127)));
+  const StereoRender out = render(player, 9600);
+  for (size_t i = 0; i < out.left.size(); ++i) {
+    INFO("sample " << i);
+    REQUIRE(std::isfinite(out.left[i]));
+    REQUIRE(std::isfinite(out.right[i]));
+  }
+  // The bus recovered rather than being clamped to silence for the rest of the
+  // render: the note after the poisoned sample still sounds.
+  REQUIRE(peak(out.left, 480, 9600) > 0.01f);
 }
 
 TEST_CASE("GS EFX SysEx routes a part through a realised insert", "[midi][sf2][gsfx]") {

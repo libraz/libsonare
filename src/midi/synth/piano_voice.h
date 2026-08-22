@@ -51,6 +51,13 @@ inline constexpr int kMaxPianoStrings = 3;
 /// directly, a phase-coherent string loop reads as a literally vibrating
 /// string (a guitar), not as an instrument radiating through a board.
 inline constexpr float kPianoDirectGain = 0.3f;
+
+/// How long the shared piano body keeps radiating after the last string is
+/// released (seconds). The modal soundboard and the pedal-gated sympathetic
+/// bank ring well past the ~120 ms voice release, so both hosts fold this into
+/// their tail estimate — and the SF2 host uses it to decide how long a part's
+/// body still costs CPU — or a bounce cuts the bloom off the last chord.
+inline constexpr float kPianoBodyRingS = 2.0f;
 inline constexpr int kPianoDispersionStages = 4;
 /// Lowest fundamental the piano string loops are sized for (A0 = 27.5 Hz).
 inline constexpr float kPianoMinFundamentalHz = 26.0f;
@@ -128,7 +135,10 @@ struct PianoPatchParams {
   float hammer_dynamics = 0.0f;
   /// Soundboard resonator mix in [0,1].
   float soundboard = 0.25f;
-  /// Damped t60 in seconds applied at note-off (the damper falling back).
+  /// Damped t60 in seconds applied at note-off (the damper falling back), for
+  /// a note struck at the loud end of the velocity range. The strike velocity
+  /// and the register both stretch it: felt damps a quiet string weakly, and
+  /// the heavy wound bass strings hold on where the treble stops at once.
   float release_damp_s = 0.1f;
 };
 
@@ -148,7 +158,8 @@ class PianoVoiceCore {
              uint64_t seed, bool una_corda = false) noexcept;
   /// Renders one sample; @p pitch_ratio is the common per-sample pitch factor.
   float render(float pitch_ratio) noexcept;
-  /// Note-off: the damper caps both decay stages at release_damp_s.
+  /// Note-off: the damper caps both decay stages at the t60 start() derived
+  /// from release_damp_s for this note and strike velocity.
   void release() noexcept;
   /// Half-pedal: a damper resting partially on the string. @p strength in
   /// [0,1] sets the contact — 0 leaves the natural ring untouched, 1 reaches
@@ -181,7 +192,8 @@ class PianoVoiceCore {
   int num_strings_ = 0;
   float loop_alpha_ = 1.0f;
   float bridge_ = 0.0f;
-  /// Damper radius cap installed by release().
+  /// Damper radius cap, derived in start() from the note and the strike
+  /// velocity and applied by release() / damp().
   float release_gain_ = 0.0f;
 
   /// Ring capacity for the strike-position comb on the hammer force (covers

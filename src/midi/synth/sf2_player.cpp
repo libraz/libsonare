@@ -12,6 +12,7 @@
 #include "midi/builtin_synth.h"
 #include "midi/synth/gm_fallback_map.h"
 #include "midi/ump.h"
+#include "util/constants.h"
 
 namespace sonare::midi::synth {
 
@@ -77,7 +78,7 @@ void Sf2Player::recompute_tail() noexcept {
                                                 sample_rate_, gm_fallback_max_release_ms()));
     // The shared body resonators (piano soundboard / sympathetic banks) ring
     // past the last voice; bound their tail like the NativeSynth host does.
-    tail_samples_ += static_cast<int64_t>(2.0 * sample_rate_);
+    tail_samples_ += static_cast<int64_t>(kPianoBodyRingS * sample_rate_);
   }
 #if defined(SONARE_MIDI_WITH_FX)
   // The note tail rings first, the effect tail decays after it.
@@ -151,6 +152,10 @@ void Sf2Player::prepare(double sample_rate, int /*max_block_size*/) {
   reset_all_state(/*reverb_send_default=*/40, /*chorus_send_default=*/8);
   mix_l_.assign(kChunkFrames, 0.0f);
   mix_r_.assign(kChunkFrames, 0.0f);
+  // Mix-bus polish: the same ~8 Hz DC blocker pole the NativeSynth host uses.
+  dc_r_ = 1.0f - static_cast<float>(constants::kTwoPiD * 8.0 / sample_rate_);
+  dc_x1_ = {};
+  dc_y1_ = {};
   part_bus_.assign(any_insert_ ? 16 * 2 * static_cast<size_t>(kChunkFrames) : 0, 0.0f);
 #if defined(SONARE_MIDI_WITH_FX)
   if (effects_ != nullptr) effects_->prepare(sample_rate_);
@@ -167,6 +172,10 @@ void Sf2Player::prepare(double sample_rate, int /*max_block_size*/) {
 void Sf2Player::reset() {
   pool_.reset();
   fallback_pool_.reset();
+  // The mix-bus DC blocker holds an IIR tail from whatever was sounding; a
+  // reset means the next block starts from silence, so it goes with the voices.
+  dc_x1_ = {};
+  dc_y1_ = {};
   reset_all_state(/*reverb_send_default=*/40, /*chorus_send_default=*/8);
   // Republish a fresh realised-EFX snapshot: rebuilding the inserts gives them
   // clean DSP state (the discontinuity's equivalent of resetting them), and the

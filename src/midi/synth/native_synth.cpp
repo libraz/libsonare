@@ -13,10 +13,6 @@ namespace sonare::midi::synth {
 
 namespace {
 
-/// Default modulator: full CC1 adds 50 cents of vibrato depth (matches
-/// Sf2Player so the fallback and SF2 voices respond alike).
-constexpr float kModWheelVibratoCents = 50.0f;
-
 /// Sympathetic-string bank t60 (seconds): how long the plucked-string sound
 /// halo rings. Shared by the bank tuning (prepare_custom) and the tail estimate.
 constexpr float kKsSympatheticRingS = 1.5f;
@@ -72,11 +68,16 @@ void NativeSynth::prepare(double sample_rate, int /*max_block_size*/) {
   } else {
     piano_buffers_.clear();
   }
-  // The modal soundboard and the pedal-gated sympathetic bank are bus-level, so
-  // they stay tied to the configured patch (see the halo note above).
+  // The modal soundboard and the pedal-gated sympathetic bank are bus-level.
+  // A configured piano tunes them here; in GM mode the program that voices a
+  // piano is not known until note-on, so the bank is tuned there instead (the
+  // same lazy rule Sf2Player uses for its per-part bodies).
+  piano_body_active_ = piano_mode_;
+  piano_body_soundboard_ = -1.0f;
   if (piano_mode_) {
     resonance_.prepare(sample_rate_);
     soundboard_.prepare(sample_rate_, config_.patch.piano.soundboard);
+    piano_body_soundboard_ = config_.patch.piano.soundboard;
   }
   // Pipe organ: one delay slab per voice slot (kMaxPipeRanks bore+jet span pairs,
   // so a registration's ranks all have their own self-oscillating jet pipe). The
@@ -158,12 +159,27 @@ void NativeSynth::prepare(double sample_rate, int /*max_block_size*/) {
   const bool gm_tables =
       config_.use_gm_programs ||
       (config_.patch.mode == SynthEngineMode::kPercussion && config_.patch.percussion.gm_kit);
+  // A zero-sustain (percussive) envelope never reaches Release — it ends at the
+  // decay floor — so for those the decay is the stage that actually terminates
+  // the voice. The GM tables already bound both stages; the configured patch
+  // has to as well, or a one-shot voice is cut mid-decay at a bounce boundary.
+  const DahdsrConfig& amp = config_.patch.amp_env;
+  const float patch_tail_ms = amp.sustain <= DahdsrEnvelope::kSilenceLevel
+                                  ? std::max(amp.release_ms, amp.decay_ms)
+                                  : amp.release_ms;
   tail_samples_ = DahdsrEnvelope::release_tail_samples(
-      sample_rate_, gm_tables ? gm_fallback_max_release_ms() : config_.patch.amp_env.release_ms);
+      sample_rate_, gm_tables ? gm_fallback_max_release_ms() : patch_tail_ms);
   if (sympathetic_active_) {
     // The shared sympathetic bank keeps ringing after the last voice releases;
     // fold its halo t60 into the tail so a bounce does not clip the sound halo.
     tail_samples_ += static_cast<int64_t>(sample_rate_ * kKsSympatheticRingS);
+  }
+  if (piano_mode_ || gm_tables) {
+    // Same story for the piano bus body: the soundboard and the sympathetic
+    // bank ring far past the ~120 ms voice release, so a bounce would cut the
+    // bloom off the last chord. GM mode is included because program 0 resolves
+    // to the piano patch there and tunes the body at note-on.
+    tail_samples_ += static_cast<int64_t>(sample_rate_ * kPianoBodyRingS);
   }
   // Mix-bus polish: ~8 Hz DC blocker pole and the gain-neutral drive factor.
   dc_r_ = 1.0f - static_cast<float>(constants::kTwoPiD * 8.0 / sample_rate_);
@@ -179,6 +195,10 @@ void NativeSynth::reset() {
   dc_y1_ = {};
   resonance_.reset();
   soundboard_.reset();
+  // A GM-mode body was tuned by a note-on, so it goes back to untuned; a
+  // configured piano keeps the tuning prepare() gave it.
+  piano_body_active_ = piano_mode_;
+  if (!piano_mode_) piano_body_soundboard_ = -1.0f;
   wind_.reset();
   swell_lp_l_ = 0.0f;
   swell_lp_r_ = 0.0f;
@@ -329,6 +349,22 @@ void NativeSynth::note_on(uint8_t channel, uint8_t note, uint8_t velocity,
     }
     voice->flute.snap_flute_control();
   }
+  // Bus-level piano body (the direct-share attenuation, the modal soundboard
+  // and the pedal-gated sympathetic bank). In GM mode the engine is resolved
+  // per program, so the body is tuned at the first piano note-on rather than in
+  // prepare(); re-tuned only when the resolved patch asks for a different board
+  // so the bank keeps its state across notes. Allocation-free, like the lazy
+  // per-part prepare on the Sf2Player fallback path.
+  // Skipped when a KS patch already owns the shared bank as its open-string
+  // halo: one bank cannot be both, and the halo was configured explicitly.
+  if (patch->mode == SynthEngineMode::kPiano && !sympathetic_active_) {
+    if (piano_body_soundboard_ != patch->piano.soundboard) {
+      piano_body_soundboard_ = patch->piano.soundboard;
+      soundboard_.prepare(sample_rate_, patch->piano.soundboard);
+      resonance_.prepare(sample_rate_);
+    }
+    piano_body_active_ = true;
+  }
   channels_[ch].last_freq_hz = voice->base_freq_hz;
 }
 
@@ -425,8 +461,16 @@ void NativeSynth::all_sound_off(uint8_t channel) noexcept {
     if (v.active && v.channel == ch) v.kill();
   }
   if (pool_.active_count() == 0) {
-    // All Sound Off means silence NOW: flush the bus DC blocker so its IIR
-    // tail cannot keep a residual trickling out.
+    // All Sound Off means silence NOW, and the instrument's bus resonators are
+    // part of its output: the piano soundboard and sympathetic bank ring for
+    // ~1.5 s and the swell one-pole holds a residual, so killing the voices
+    // alone would leak an audible wash past the stop. They are bus-level (all
+    // 16 channels feed one), so they are cleared only once nothing is sounding
+    // on any channel. The DC blocker goes with them for the same reason.
+    resonance_.reset();
+    soundboard_.reset();
+    swell_lp_l_ = 0.0f;
+    swell_lp_r_ = 0.0f;
     dc_x1_ = {};
     dc_y1_ = {};
   }
@@ -660,7 +704,7 @@ void NativeSynth::process_impl(float* const* channels,
   // (sustain pedal down). Sustain state is fixed for the block (events are
   // applied before process()).
   bool damper_open = false;
-  if (piano_mode_) {
+  if (piano_body_active_) {
     for (const ChannelState& ch : channels_) {
       if (ch.sustain) {
         damper_open = true;
@@ -698,14 +742,26 @@ void NativeSynth::process_impl(float* const* channels,
       for (const NativeSynthVoice& v : pool_) demand += v.active ? 1 : 0;
       wind = wind_.process(demand);
     }
+    // Piano voices are summed apart from the rest: the body below attenuates
+    // and re-radiates only them, so in GM mode — where one bus carries many
+    // programs — the flute sharing the render must not be pulled through the
+    // soundboard. With a single-patch configuration one of the two legs stays
+    // at zero, so the sum is unchanged.
+    float piano_l = 0.0f;
+    float piano_r = 0.0f;
     for (NativeSynthVoice& v : pool_) {
       if (!v.active) continue;
       const Sf2ChannelMod& mod = channel_mods_[v.channel & 0x0Fu];
       const float s = v.render(mod, wind.pitch_ratio, wind.gain);
       const float voice_l = s * v.gain_left;
       const float voice_r = s * v.gain_right;
-      mix_l += voice_l;
-      mix_r += voice_r;
+      if (piano_body_active_ && v.patch != nullptr && v.patch->mode == SynthEngineMode::kPiano) {
+        piano_l += voice_l;
+        piano_r += voice_r;
+      } else {
+        mix_l += voice_l;
+        mix_r += voice_r;
+      }
       if (source_render) {
         add_output(target_for(v.source_track_id), i, voice_l * config_.gain,
                    voice_r * config_.gain);
@@ -713,8 +769,10 @@ void NativeSynth::process_impl(float* const* channels,
     }
     mix_l *= config_.gain;
     mix_r *= config_.gain;
-    const float dry_l = mix_l;
-    const float dry_r = mix_r;
+    piano_l *= config_.gain;
+    piano_r *= config_.gain;
+    const float dry_l = mix_l + piano_l;
+    const float dry_r = mix_r + piano_r;
     // Swell box shutter: a one-pole lowpass on the bus as the louvres close.
     if (swell_active) {
       swell_lp_l_ += swell_coeff_ * (mix_l - swell_lp_l_);
@@ -723,16 +781,17 @@ void NativeSynth::process_impl(float* const* channels,
       mix_r = swell_lp_r_;
     }
     // Shared modal soundboard plus pedal-gated sympathetic resonance, both
-    // driven by the summed dry mix and folded back into both legs (centre).
-    if (piano_mode_) {
+    // driven by the summed dry piano mix and folded back into both legs
+    // (centre).
+    if (piano_body_active_) {
       // Radiation split: the board returns the phase-diffused complement of
       // the direct share (plus the modal colour), so most of the note reaches
       // the mix through the board rather than as the raw string waveform.
-      const float dry_mono = 0.5f * (mix_l + mix_r);
+      const float dry_mono = 0.5f * (piano_l + piano_r);
       const float body = soundboard_.process(dry_mono);
       const float symp = resonance_.process(soundboard_.last_diffused(), damper_open);
-      mix_l = kPianoDirectGain * mix_l + body + symp;
-      mix_r = kPianoDirectGain * mix_r + body + symp;
+      mix_l += kPianoDirectGain * piano_l + body + symp;
+      mix_r += kPianoDirectGain * piano_r + body + symp;
     } else if (sympathetic_active_) {
       // Plucked-string sound halo: the open strings ring behind the note. Held
       // open (no dampers). Skipped entirely for KS patches that did not opt in,

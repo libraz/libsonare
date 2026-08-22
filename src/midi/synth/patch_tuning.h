@@ -31,6 +31,11 @@
 /// fitter validates its knob names against the engine, as it does for
 /// `SONARE_TUNABLE`.
 
+#if defined(SONARE_TUNING) && SONARE_TUNING
+#include <string>
+#include <vector>
+#endif
+
 namespace sonare::midi::synth {
 
 struct NativeSynthPatch;
@@ -39,5 +44,14 @@ struct NativeSynthPatch;
 /// No-op in a normal build. Called while the fallback tables are built, never
 /// on the audio thread.
 void apply_patch_tuning(NativeSynthPatch& patch, const char* prefix) noexcept;
+
+#if defined(SONARE_TUNING) && SONARE_TUNING
+/// Every field path `apply_patch_tuning` offers for @p patch's engine (the
+/// `<prefix>.` omitted), in walk order. Reads the same field table the override
+/// layer walks, so a section that forgets a field reports one here too — which
+/// is what makes "every clamped field of the engine is reachable by exactly one
+/// key" checkable instead of a claim. Not compiled into a normal build.
+std::vector<std::string> patch_tuning_field_paths(const NativeSynthPatch& patch);
+#endif
 
 }  // namespace sonare::midi::synth

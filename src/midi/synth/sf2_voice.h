@@ -81,6 +81,19 @@ float centibels_to_gain(float centibels) noexcept;
 /// SF2 absolute cents -> Hz (8.176 Hz * 2^(cents/1200)).
 float abs_cents_to_hz(float cents) noexcept;
 
+/// Effect-send depth at a full-scale (127) controller. One definition for every
+/// path that turns a 0..127 send amount into a linear send: the CC91/93/94
+/// channel sends, the GS EFX unit's own send amounts, and the GS per-note drum
+/// reverb/chorus block — a 0..127 send has to mean the same depth whichever
+/// message carried it, so a GS drum kit is not drier than the melodic parts.
+inline constexpr float kCcSendDepth = 0.35f;
+
+/// CC1 mod wheel depth at full scale, in cents of extra vibrato. Shared by both
+/// hosts so the fallback and SF2 voices respond alike; the mod matrix divides
+/// by it to recover the controller from `Sf2ChannelMod::extra_vibrato_cents`,
+/// so a second definition drifting from this one silently rescales that source.
+inline constexpr float kModWheelVibratoCents = 50.0f;
+
 /// Per-channel modulation snapshot the player passes into voice rendering
 /// (recomputed when the channel's CC/bend state changes).
 struct Sf2ChannelMod {

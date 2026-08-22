@@ -5,4 +5,4 @@ src-lufs-tpdf	tone	01509a16d28951b4	24000	2	24000
 src-lufs-tpdf	transient	401e220d2741ee62	24000	2	24000
 src-lufs-noiseshaped	tone	16b840dbe0179069	24000	2	24000
 src-lufs-noiseshaped	transient	639518ca00ed095a	24000	2	24000
-sf2-gs-effects	reverb-chorus-delay	aed3dc43d28bd8c1	24000	2	48000
+sf2-gs-effects	reverb-chorus-delay	9028af4a1b9a0c62	24000	2	48000

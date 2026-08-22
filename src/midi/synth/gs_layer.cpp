@@ -7,9 +7,6 @@ namespace sonare::midi::synth {
 
 namespace {
 
-/// CC send default-modulator depth (matches the player's CC91/93 scaling).
-constexpr float kSendDepth = 0.2f;
-
 int8_t clamp_offset(int8_t v) noexcept { return static_cast<int8_t>(std::clamp<int>(v, -64, 63)); }
 
 /// GS part-parameter block nibble -> zero-based channel: block 0 = part 10
@@ -98,11 +95,11 @@ void apply_gs_drum_params(Sf2VoiceParams& params, const GsDrumNoteParams& drum) 
   }
   if ((drum.flags & GsDrumNoteParams::kReverb) != 0) {
     params.reverb_send = std::min(
-        1.0f, params.reverb_send + kSendDepth * static_cast<float>(drum.reverb & 0x7Fu) / 127.0f);
+        1.0f, params.reverb_send + kCcSendDepth * static_cast<float>(drum.reverb & 0x7Fu) / 127.0f);
   }
   if ((drum.flags & GsDrumNoteParams::kChorus) != 0) {
     params.chorus_send = std::min(
-        1.0f, params.chorus_send + kSendDepth * static_cast<float>(drum.chorus & 0x7Fu) / 127.0f);
+        1.0f, params.chorus_send + kCcSendDepth * static_cast<float>(drum.chorus & 0x7Fu) / 127.0f);
   }
 }
 

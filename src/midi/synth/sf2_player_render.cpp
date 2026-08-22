@@ -19,10 +19,6 @@ namespace {
 
 using sonare::constants::kInvSqrt2;
 
-#if defined(SONARE_MIDI_WITH_FX)
-constexpr float kCcSendDepth = 0.35f;
-#endif
-
 }  // namespace
 
 void Sf2Player::render_chunk(int n, const MidiInstrumentSourceOutput* source_outputs,
@@ -124,7 +120,7 @@ void Sf2Player::render_chunk(int n, const MidiInstrumentSourceOutput* source_out
     FallbackBodyState& body = fallback_body_[static_cast<size_t>(part)];
     if (body.kind == FallbackBodyKind::kNone) continue;
     if (body_has_voice[part]) {
-      body.ringout = static_cast<int64_t>(2.0 * sample_rate_);
+      body.ringout = static_cast<int64_t>(kPianoBodyRingS * sample_rate_);
     } else if (body.ringout > 0) {
       body.ringout = std::max<int64_t>(0, body.ringout - n);
     }
@@ -145,7 +141,10 @@ void Sf2Player::render_chunk(int n, const MidiInstrumentSourceOutput* source_out
       if (!v.active) continue;
       const uint8_t part = v.channel & 0x0Fu;
       const Sf2ChannelMod& mod = channel_mods_[part];
-      const float s = v.render(mod);
+      // Same non-finite scrub as the fallback loop below: this leg feeds the
+      // insert bus and the system effect sends, which are persistent IIR state.
+      const float rendered = v.render(mod);
+      const float s = std::isfinite(rendered) ? rendered : 0.0f;
       const float l = s * v.gain_left;
       const float r = s * v.gain_right;
       if (part_bussed[part]) {
@@ -190,7 +189,13 @@ void Sf2Player::render_chunk(int n, const MidiInstrumentSourceOutput* source_out
       const uint8_t part = v.channel & 0x0Fu;
       const Sf2ChannelMod& mod = channel_mods_[part];
       const OrganWindSupply::State& wind = wind_state[part];
-      const float s = v.render(mod, wind.pitch_ratio, wind.gain);
+      // Scrub any non-finite voice sample before it reaches a shared IIR state:
+      // a single NaN/Inf would persist in the part's body resonators, the
+      // insert bus and the reverb/chorus tanks and poison every later sample
+      // for the whole render. Bit-identical for finite input. The same guard
+      // the NativeSynth host applies to its own physical-model mix bus.
+      const float rendered = v.render(mod, wind.pitch_ratio, wind.gain);
+      const float s = std::isfinite(rendered) ? rendered : 0.0f;
       float l = s * v.gain_left;
       float r = s * v.gain_right;
       if (body_active[part]) body_dry[part] += 0.5f * (l + r);
@@ -334,6 +339,34 @@ void Sf2Player::render_chunk(int n, const MidiInstrumentSourceOutput* source_out
 #if defined(SONARE_MIDI_WITH_FX)
   if (effects_ != nullptr) effects_->render_returns(mix_l_.data(), mix_r_.data(), n);
 #endif
+  // Scrub the summed bus before the DC blocker: the part inserts are
+  // host-injected processors and the effect returns are their own IIR state, so
+  // whatever they produced has already been added by this point. A single
+  // NaN/Inf reaching dc_x1_/dc_y1_ would persist there and poison every
+  // remaining sample of the render. Bit-identical for finite input; the same
+  // guard the NativeSynth host applies ahead of its blocker.
+  for (int i = 0; i < n; ++i) {
+    if (!std::isfinite(mix_l_[static_cast<size_t>(i)])) mix_l_[static_cast<size_t>(i)] = 0.0f;
+    if (!std::isfinite(mix_r_[static_cast<size_t>(i)])) mix_r_[static_cast<size_t>(i)] = 0.0f;
+  }
+  if (config_.dc_block) {
+    // The fallback floor renders physical-model voices, which can carry a small
+    // DC component; block it here rather than in process_impl so a source-track
+    // render sees the same bus (the filtered delta lands in the target-zero
+    // residual below, like the part inserts and the effect returns).
+    for (int i = 0; i < n; ++i) {
+      const float in_l = mix_l_[static_cast<size_t>(i)];
+      const float l = in_l - dc_x1_[0] + dc_r_ * dc_y1_[0];
+      dc_x1_[0] = in_l;
+      dc_y1_[0] = l;
+      mix_l_[static_cast<size_t>(i)] = l;
+      const float in_r = mix_r_[static_cast<size_t>(i)];
+      const float r = in_r - dc_x1_[1] + dc_r_ * dc_y1_[1];
+      dc_x1_[1] = in_r;
+      dc_y1_[1] = r;
+      mix_r_[static_cast<size_t>(i)] = r;
+    }
+  }
   if (source_render) {
     // Part inserts, body resonators and system effect returns are
     // destination-scoped. Attribute their residual to target zero while keeping

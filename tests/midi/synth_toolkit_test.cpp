@@ -12,6 +12,7 @@
 #include <vector>
 
 #include "midi/synth/envelope.h"
+#include "midi/synth/gm_fallback_map.h"
 #include "midi/synth/interpolation.h"
 #include "midi/synth/native_synth.h"
 #include "midi/synth/sf2_voice.h"
@@ -370,6 +371,43 @@ TEST_CASE("voice_random is deterministic and decorrelated across voices", "[midi
   VoiceRandomSequence b;
   b.reseed(2, 64, 7);
   REQUIRE(b.unipolar_at(0) == first);
+}
+
+TEST_CASE("gm_fallback_sends weights ambience per program", "[midi][synth]") {
+  using sonare::midi::synth::gm_fallback_sends;
+  using sonare::midi::synth::GmFallbackSends;
+
+  // The weights are fitted constants, so what is asserted here is the shape
+  // they have to keep: a scale is a finite non-negative multiplier of the
+  // channel send (that is what makes CC 0 stay dry whatever the program), and
+  // the room a program carries is ordered the way the instruments are.
+  for (int program = 0; program < 128; ++program) {
+    const GmFallbackSends s = gm_fallback_sends(0, static_cast<uint8_t>(program));
+    INFO("program " << program);
+    REQUIRE(std::isfinite(s.reverb_scale));
+    REQUIRE(std::isfinite(s.chorus_scale));
+    REQUIRE(s.reverb_scale >= 0.0f);
+    REQUIRE(s.chorus_scale >= 0.0f);
+  }
+
+  const GmFallbackSends drums = gm_fallback_sends(128, 0);
+  const GmFallbackSends piano = gm_fallback_sends(0, 0);
+  REQUIRE(std::isfinite(drums.reverb_scale));
+  REQUIRE(drums.reverb_scale < piano.reverb_scale);  // a kit is tighter than a melodic part
+  REQUIRE(drums.chorus_scale < piano.chorus_scale);
+
+  // Church Organ (19) lives in a cathedral: no melodic program carries more
+  // room, and an electric bass (33) carries markedly less.
+  const GmFallbackSends organ = gm_fallback_sends(0, 19);
+  for (int program = 0; program < 128; ++program) {
+    INFO("program " << program);
+    REQUIRE(gm_fallback_sends(0, static_cast<uint8_t>(program)).reverb_scale <= organ.reverb_scale);
+  }
+  REQUIRE(gm_fallback_sends(0, 33).reverb_scale < 0.5f * organ.reverb_scale);
+
+  // A GS variation bank resolves through the same program, so its weighting
+  // follows the capital tone rather than dropping to the neutral default.
+  REQUIRE(gm_fallback_sends(8, 19).reverb_scale == organ.reverb_scale);
 }
 
 TEST_CASE("synth toolkit audio path performs no heap allocation", "[midi][synth][rt]") {

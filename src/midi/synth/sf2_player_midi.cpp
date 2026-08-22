@@ -368,6 +368,22 @@ void Sf2Player::all_sound_off(uint8_t channel) noexcept {
   for (NativeSynthVoice& v : fallback_pool_) {
     if (v.active && v.channel == ch) v.kill();
   }
+  // All Sound Off means silence NOW, and the part's bus resonators are part of
+  // its output: the piano soundboard and sympathetic bank ring for ~1.5 s and
+  // the wind chest holds its tremulant/sag state, so killing the voices alone
+  // would leak an audible wash past the stop. These are per-part, so clearing
+  // them touches no other channel; the body's kind/tuning is kept so the next
+  // note-on does not re-prepare.
+  const size_t part = ch;
+  fallback_board_[part].reset();
+  fallback_reso_[part].reset();
+  fallback_wind_[part].reset();
+  fallback_body_[part].ringout = 0;
+  if (pool_.active_count() == 0 && fallback_pool_.active_count() == 0) {
+    // Bus-wide (every part feeds one mix), so only once nothing is sounding.
+    dc_x1_ = {};
+    dc_y1_ = {};
+  }
 }
 
 void Sf2Player::apply_nrpn(uint8_t channel, uint8_t value) noexcept {

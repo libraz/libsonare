@@ -14,12 +14,6 @@
 
 namespace sonare::midi::synth {
 
-namespace {
-
-constexpr float kModWheelVibratoCents = 50.0f;
-constexpr float kCcSendDepth = 0.35f;
-}  // namespace
-
 bool Sf2Player::handle_sysex(const uint8_t* data, size_t size) noexcept {
   const GsSysEx msg = parse_gs_sysex(data, size);
   switch (msg.kind) {

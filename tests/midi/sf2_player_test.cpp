@@ -35,6 +35,13 @@ using sonare::test::Sf2Builder;
 
 constexpr double kOutRate = 48000.0;
 
+/// "Nothing is sounding" floor, -80 dBFS. The mix bus carries a DC blocker,
+/// and a first-order highpass answers the end of a note by discharging over
+/// its ~20 ms time constant rather than snapping to zero, so silence here is a
+/// level below audibility instead of a bit-exact zero. Every note these cases
+/// play sounds at least two orders of magnitude above it.
+constexpr float kSilenceFloor = 1.0e-4f;
+
 MidiEvent event(const sonare::midi::Ump& ump) {
   MidiEvent e;
   e.ump = ump;
@@ -112,7 +119,7 @@ Sf2Player make_player(std::shared_ptr<Sf2File> sf2, int polyphony = 48,
   cfg.gain = 1.0f;
   cfg.polyphony = polyphony;
   cfg.prefer_model_for_modeled_families = prefer_model_for_modeled_families;
-  // These cases assert voice routing invariants (exact silence after tails,
+  // These cases assert voice routing invariants (silence after tails,
   // hard-pan isolation) that the always-on default room would smear; the GS
   // effect bus has its own coverage in sf2_effects_test.cpp. The config
   // member itself is FX-gated, so there is nothing to disable without it.
@@ -286,7 +293,7 @@ TEST_CASE("Sf2Player one-shot samples end and release tail is bounded", "[midi][
   const StereoRender head = render(player, 256);
   REQUIRE(peak(head.left) > 0.01f);
   const StereoRender tail = render(player, 256);
-  REQUIRE(peak(tail.left) == 0.0f);
+  REQUIRE(peak(tail.left) < kSilenceFloor);
   REQUIRE(player.active_voice_count() == 0);
 }
 
@@ -300,7 +307,7 @@ TEST_CASE("Sf2Player note-off releases through tail_samples", "[midi][sf2]") {
   // After the tail the player must be silent (no truncated/never-ending release).
   render(player, player.tail_samples() + 256);
   const StereoRender after = render(player, 256);
-  REQUIRE(peak(after.left) == 0.0f);
+  REQUIRE(peak(after.left) < kSilenceFloor);
   REQUIRE(player.active_voice_count() == 0);
 }
 
@@ -343,7 +350,7 @@ TEST_CASE("Sf2Player drum channel resolves bank 128", "[midi][sf2]") {
   const StereoRender out = render(player, 256);
   REQUIRE(peak(out.left) > 0.01f);
   const StereoRender after = render(player, 512);
-  REQUIRE(peak(after.left) == 0.0f);  // one-shot kit sample ended
+  REQUIRE(peak(after.left) < kSilenceFloor);  // one-shot kit sample ended
 }
 
 TEST_CASE("Sf2Player GM2 percussion bank uses drum fallback semantics", "[midi][sf2][synth]") {
@@ -391,14 +398,14 @@ TEST_CASE("Sf2Player channel-mode CCs match BuiltinSynth semantics", "[midi][sf2
     REQUIRE(peak(render(player, 256).left) > 0.0f);  // still sounding
     player.on_event(0, event(sonare::midi::make_midi1_control_change(0, 0, 64, 0)));
     render(player, player.tail_samples() + 4800);
-    REQUIRE(peak(render(player, 256).left) == 0.0f);
+    REQUIRE(peak(render(player, 256).left) < kSilenceFloor);
   }
 
   SECTION("CC120 silences immediately") {
     player.on_event(0, event(sonare::midi::make_midi1_note_on(0, 0, 60, 127)));
     render(player, 2400);
     player.on_event(0, event(sonare::midi::make_midi1_control_change(0, 0, 120, 0)));
-    REQUIRE(peak(render(player, 256).left) == 0.0f);
+    REQUIRE(peak(render(player, 256).left) < kSilenceFloor);
   }
 
   SECTION("CC123 releases gracefully") {
@@ -406,7 +413,7 @@ TEST_CASE("Sf2Player channel-mode CCs match BuiltinSynth semantics", "[midi][sf2
     render(player, 2400);
     player.on_event(0, event(sonare::midi::make_midi1_control_change(0, 0, 123, 0)));
     render(player, player.tail_samples() + 4800);
-    REQUIRE(peak(render(player, 256).left) == 0.0f);
+    REQUIRE(peak(render(player, 256).left) < kSilenceFloor);
   }
 
   SECTION("CC121 lifts the sustain pedal") {
@@ -415,7 +422,7 @@ TEST_CASE("Sf2Player channel-mode CCs match BuiltinSynth semantics", "[midi][sf2
     player.on_event(0, event(sonare::midi::make_midi1_note_off(0, 0, 60, 0)));
     player.on_event(0, event(sonare::midi::make_midi1_control_change(0, 0, 121, 0)));
     render(player, player.tail_samples() + 4800);
-    REQUIRE(peak(render(player, 256).left) == 0.0f);
+    REQUIRE(peak(render(player, 256).left) < kSilenceFloor);
   }
 
   SECTION("channel isolation") {
@@ -446,7 +453,7 @@ TEST_CASE("Sf2Player clears a stale sostenuto capture when a voice slot is reuse
   player.on_event(0, event(sonare::midi::make_midi1_note_off(0, 0, 62, 0)));
   render(player, 9600);  // the fixture's release is far shorter than tail_samples()
   REQUIRE(player.active_voice_count() == 0);
-  REQUIRE(peak(render(player, 256).left) == 0.0f);
+  REQUIRE(peak(render(player, 256).left) < kSilenceFloor);
 }
 
 TEST_CASE("Sf2Player exclusive class spares the layers of the same note-on", "[midi][sf2]") {
