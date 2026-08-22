@@ -251,6 +251,28 @@ static_assert(0 SONARE_GM_OVERRIDE_PATCHES(SONARE_GM_OVERRIDE_COUNT_ONE) ==
 static_assert(alignof(ProgramOverrides) == alignof(NativeSynthPatch),
               "ProgramOverrides must contain only NativeSynthPatch members");
 
+#define SONARE_GM_OVERRIDE_OFFSET_ONE(name) offsetof(ProgramOverrides, name),
+/// True when SONARE_GM_OVERRIDE_PATCHES lists the members in declaration order.
+///
+/// The count assertion above is blind to a reordering, and the list has a
+/// positional consumer: the tuning-build program-key recorder pairs the i-th
+/// listed name with the i-th patch of the contiguous `program_override_patches`
+/// view. A swapped pair there would mislabel two patches in the knob catalogue,
+/// and a fitter would write a value back into the wrong voice. Each member's
+/// offset must therefore be its list position times the patch size — a
+/// constant expression, so a reordering is a compile error and a shipped build
+/// carries nothing.
+constexpr bool program_override_list_in_declaration_order() noexcept {
+  constexpr std::size_t kOffsets[] = {SONARE_GM_OVERRIDE_PATCHES(SONARE_GM_OVERRIDE_OFFSET_ONE)};
+  for (std::size_t i = 0; i < kProgramOverrideCount; ++i) {
+    if (kOffsets[i] != i * sizeof(NativeSynthPatch)) return false;
+  }
+  return true;
+}
+#undef SONARE_GM_OVERRIDE_OFFSET_ONE
+static_assert(program_override_list_in_declaration_order(),
+              "SONARE_GM_OVERRIDE_PATCHES must list ProgramOverrides members in declaration order");
+
 /// Contiguous view over every patch in a ProgramOverrides table. Whole-table
 /// sweeps (e.g. the maximum release/decay bound in gm_fallback_max_release_ms)
 /// iterate this view so a newly added override member is picked up
