@@ -26,6 +26,16 @@ std::array<SynthPreset, kPresetCount> build_presets() noexcept {
   std::array<SynthPreset, kPresetCount> t{};
   size_t i = 0;
 
+  // Rows that are nothing but an alias of a GM fallback program: gm_fallback_map
+  // picks the engine, so the catalogue carries only the name and the program.
+  // Written through one owner rather than repeated per row — each row otherwise
+  // expands its own copy of a whole patch.
+  auto alias = [&](const char* name, uint8_t program) {
+    SynthPreset& v = t[i++];
+    v.name = name;
+    v.config = from_patch(gm_fallback_patch(0, program));
+  };
+
   // --- subtractive ---
   NativeSynthPatch sine{};
   sine.waveform = VaWaveform::kSine;
@@ -49,7 +59,7 @@ std::array<SynthPreset, kPresetCount> build_presets() noexcept {
     t[i++] = {preset_name, from_patch(clamp_synth_patch(bare))};
   }
 
-  t[i++] = {"saw-lead", from_patch(gm_fallback_patch(0, 80))};
+  alias("saw-lead", 80);
 
   NativeSynthPatch square = gm_fallback_patch(0, 80);
   square.waveform = VaWaveform::kSquare;
@@ -78,19 +88,19 @@ std::array<SynthPreset, kPresetCount> build_presets() noexcept {
   // picks the engine — not the grouping here. The trailing comment names the
   // engine each row actually resolves to; a heading naming one engine for the
   // whole group would be wrong for most of it.
-  t[i++] = {"e-piano", from_patch(gm_fallback_patch(0, 4))};  // FM
-  t[i++] = {"bell", from_patch(gm_fallback_patch(0, 14))};    // modal (struck bar)
-  t[i++] = {"brass", from_patch(gm_fallback_patch(0, 56))};   // brass (lip reed)
+  alias("e-piano", 4);  // FM
+  alias("bell", 14);    // modal (struck bar)
+  alias("brass", 56);   // brass (lip reed)
 
   // --- plucked strings (GM fallback aliases) ---
-  t[i++] = {"pluck", from_patch(gm_fallback_patch(0, 104))};  // plucked string (jawari bridge)
+  alias("pluck", 104);  // plucked string (jawari bridge)
   // Classical (nylon) and steel acoustic guitars driven as standalone
   // instruments engage the shared sympathetic open-string bank (the "sound
   // halo") that the per-note GM fallback path cannot host.
-  t[i++] = {"classical-guitar", from_patch(gm_fallback_patch(0, 24))};  // Karplus-Strong
-  t[i++] = {"steel-guitar", from_patch(gm_fallback_patch(0, 25))};      // Karplus-Strong
-  t[i++] = {"electric-guitar", from_patch(gm_fallback_patch(0, 26))};   // Karplus-Strong
-  t[i++] = {"harp", from_patch(gm_fallback_patch(0, 46))};              // Karplus-Strong
+  alias("classical-guitar", 24);  // Karplus-Strong
+  alias("steel-guitar", 25);      // Karplus-Strong
+  alias("electric-guitar", 26);   // Karplus-Strong
+  alias("harp", 46);              // Karplus-Strong
 
   // --- electric / acoustic bass (plucked-string waveguide) ---
   // The bass family (GM 32-35): the Karplus-Strong string voiced for the low
@@ -98,16 +108,16 @@ std::array<SynthPreset, kPresetCount> build_presets() noexcept {
   // One data table, two address spaces — the voicings live in the GM fallback
   // map. Slap/pop and the two-polarization beat need the dedicated bass
   // excitation core and are voiced separately once that lands.
-  t[i++] = {"bass-acoustic", from_patch(gm_fallback_patch(0, 32))};
-  t[i++] = {"bass-fingered", from_patch(gm_fallback_patch(0, 33))};
-  t[i++] = {"bass-picked", from_patch(gm_fallback_patch(0, 34))};
-  t[i++] = {"bass-fretless", from_patch(gm_fallback_patch(0, 35))};
-  t[i++] = {"bass-slap", from_patch(gm_fallback_patch(0, 36))};
+  alias("bass-acoustic", 32);
+  alias("bass-fingered", 33);
+  alias("bass-picked", 34);
+  alias("bass-fretless", 35);
+  alias("bass-slap", 36);
 
   // --- modal / additive ---
-  t[i++] = {"marimba", from_patch(gm_fallback_patch(0, 12))};
-  t[i++] = {"glass", from_patch(gm_fallback_patch(0, 9))};
-  t[i++] = {"organ", from_patch(gm_fallback_patch(0, 16))};
+  alias("marimba", 12);
+  alias("glass", 9);
+  alias("organ", 16);
 
   // --- percussion / piano ---
   {
@@ -122,7 +132,7 @@ std::array<SynthPreset, kPresetCount> build_presets() noexcept {
     kit.config.polyphony = 24;  // a kit stacks pieces, not melodic lines
   }
 
-  t[i++] = {"acoustic-piano", from_patch(gm_fallback_patch(0, 0))};
+  alias("acoustic-piano", 0);
 
   // --- pipe organ (flue pipe waveguide) ---
   // The full principal chorus (plenum) voiced under the GM Church Organ
