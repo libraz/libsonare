@@ -166,9 +166,21 @@ def _cma_run(evaluator, knobs: list[Knob], args, x0, lam: int, rng) -> None:
             break
         xs = [np.clip(xmean + sigma * (bd @ rng.standard_normal(n)), 0.0, 1.0)
               for _ in range(take)]
+        before = len(evaluator.trajectory)
         losses = evaluator.evaluate_batch(
             [[_unit_to_value(k, xi) for k, xi in zip(knobs, x)] for x in xs]
         )
+        if len(evaluator.trajectory) == before:
+            # Every candidate was already in the cache, so the budget — which
+            # counts renders — did not move and the loop has nothing to
+            # terminate on. It happens where the distribution has collapsed onto
+            # points already visited: the samples round to visited keys, the
+            # mean is the weighted mean of those same points and does not move,
+            # and sigma shrinks from here rather than recovering. That is
+            # convergence, so the run ends and hands what is left to a restart.
+            print(f"  gen {generation + 1}: every candidate already evaluated — "
+                  f"the search has converged", file=sys.stderr)
+            return
 
         # A generation where nothing scored is a generation with no ranking, and
         # feeding an arbitrary order into the covariance update would teach the
@@ -229,6 +241,7 @@ def optimize(evaluator, knobs: list[Knob], args) -> list[float]:
     current = [k.start_value for k in knobs]
     evaluator(current)  # baseline
     while len(evaluator.trajectory) < args.max_evals:
+        before = len(evaluator.trajectory)
         improved = False
         for i, knob in enumerate(knobs):
             if len(evaluator.trajectory) >= args.max_evals:
@@ -251,6 +264,9 @@ def optimize(evaluator, knobs: list[Knob], args) -> list[float]:
                     improved = True
                 current[i] = best_val
         current = list(evaluator.best_values or current)
-        if not improved:
+        # A pass that rendered nothing probed only points already in the cache,
+        # so it cannot have learned anything the next pass would not repeat —
+        # and it did not consume the budget the loop terminates on.
+        if not improved or len(evaluator.trajectory) == before:
             break
     return list(evaluator.best_values or current)
