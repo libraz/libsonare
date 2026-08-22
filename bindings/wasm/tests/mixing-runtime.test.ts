@@ -5,7 +5,7 @@
  */
 
 import { beforeAll, describe, expect, it } from 'vitest';
-import { init, Mixer, mixingScenePresetJson } from '../dist/index.js';
+import { init, Mixer, mixingScenePresetJson, mixStereo } from '../dist/index.js';
 import { assertStripIndex } from './_helpers';
 
 const SR = 48000;
@@ -347,6 +347,52 @@ describe('Mixer runtime controls (WASM)', () => {
 
       expect(soloedEnergy).toBeGreaterThan(1e-6);
       expect(mutedEnergy).toBeLessThan(soloedEnergy * 1e-3);
+    });
+  });
+
+  describe('one-shot mixStereo pan options', () => {
+    // A left-only source tells the two modes apart: Balance leaves it on the
+    // left, stereoPan collapses the pair to a centred mono sum that reaches the
+    // right. So the right channel alone reports which mode the strip ran in.
+    const leftOnly = () => new Float32Array(BLOCK).fill(1);
+    const silence = () => new Float32Array(BLOCK);
+
+    it('applies pan and panMode independently of each other', () => {
+      // panMode used to be read only when pan was supplied too, so a caller who
+      // changed nothing but the mode was mixed in the default one with nothing
+      // to show for it. Either option alone has to reach the strip.
+      const modeOnly = mixStereo([leftOnly()], [silence()], SR, { panMode: 'stereoPan' });
+      expect(modeOnly.right[BLOCK - 1]).toBeGreaterThan(0.1);
+
+      const balance = mixStereo([leftOnly()], [silence()], SR);
+      expect(balance.right[BLOCK - 1]).toBe(0);
+
+      // A position-only call is unchanged by the mode now being read outside
+      // it: an absent mode keeps what the strip already carries, and a fresh
+      // strip already carries Balance.
+      const panOnly = mixStereo([leftOnly()], [silence()], SR, { pan: 0.3 });
+      const panWithExplicitMode = mixStereo([leftOnly()], [silence()], SR, {
+        pan: 0.3,
+        panMode: 'balance',
+      });
+      expect(Array.from(panOnly.left)).toEqual(Array.from(panWithExplicitMode.left));
+      expect(Array.from(panOnly.right)).toEqual(Array.from(panWithExplicitMode.right));
+    });
+
+    it('applies a mode-only request per strip', () => {
+      const perStrip = mixStereo([leftOnly(), leftOnly()], [silence(), silence()], SR, {
+        panMode: ['stereoPan', 'stereoPan'],
+      });
+      expect(perStrip.right[BLOCK - 1]).toBeGreaterThan(0.1);
+    });
+
+    it('still rejects an unknown mode supplied without a position', () => {
+      // Reading the mode outside the pan guard must not turn a bad value into a
+      // silently ignored one.
+      expect(() =>
+        mixStereo([leftOnly()], [silence()], SR, { panMode: 'unknown' as never }),
+      ).toThrow();
+      expect(() => mixStereo([leftOnly()], [silence()], SR, { panMode: 99 })).toThrow();
     });
   });
 });

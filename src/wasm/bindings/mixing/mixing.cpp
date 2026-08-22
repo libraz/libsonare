@@ -19,6 +19,24 @@ std::string js_mixing_scene_preset_json(std::string preset_name) {
       mixing::api::scene_preset(mixing::api::scene_preset_from_string(preset_name)));
 }
 
+// Both meter converters below share this, and one of them is compiled in every
+// configuration, so the definition has to sit outside the mixing/graph gate.
+void setPerPlaneMeters(val& out, const float* peak_db, const float* rms_db,
+                       const float* true_peak_db, int channel_count) {
+  out.set("channelCount", channel_count);
+  val peak = val::array();
+  val rms = val::array();
+  val true_peak = val::array();
+  for (int ch = 0; ch < channel_count; ++ch) {
+    peak.call<void>("push", peak_db[ch]);
+    rms.call<void>("push", rms_db[ch]);
+    true_peak.call<void>("push", true_peak_db[ch]);
+  }
+  out.set("peakDb", peak);
+  out.set("rmsDb", rms);
+  out.set("truePeakDb", true_peak);
+}
+
 #if defined(SONARE_WITH_MIXING) && defined(SONARE_WITH_GRAPH)
 MixerWasm::MixerWasm(SonareMixer* mixer, int sample_rate, int block_size)
     : mixer_(mixer), sample_rate_(sample_rate), block_size_(block_size) {
@@ -142,22 +160,6 @@ void MixerWasm::checkStripError(SonareError err, const char* what) {
   }
 }
 
-void setPerPlaneMeters(val& out, const float* peak_db, const float* rms_db,
-                       const float* true_peak_db, int channel_count) {
-  out.set("channelCount", channel_count);
-  val peak = val::array();
-  val rms = val::array();
-  val true_peak = val::array();
-  for (int ch = 0; ch < channel_count; ++ch) {
-    peak.call<void>("push", peak_db[ch]);
-    rms.call<void>("push", rms_db[ch]);
-    true_peak.call<void>("push", true_peak_db[ch]);
-  }
-  out.set("peakDb", peak);
-  out.set("rmsDb", rms);
-  out.set("truePeakDb", true_peak);
-}
-
 val MixerWasm::mixMeterSnapshotToVal(const SonareMixMeterSnapshot& snapshot) {
   val out = val::object();
   out.set("peakDbL", snapshot.peak_db_l);
@@ -259,9 +261,14 @@ val meterSnapshotToVal(const mixing::MeterSnapshot& snapshot) {
 
 #if defined(SONARE_WITH_MIXING) && defined(SONARE_WITH_GRAPH)
 // Resolves a JS pan-mode value (number / string) to the SONARE_PAN_MODE_*
-// ordinal accepted by sonare_strip_set_pan. Mirrors Node's PanModeValue so the
-// real-graph mixStereo path behaves identically. Omitted / null defaults to
-// Balance (mixStereo builds fresh strips, so there is no prior mode to keep).
+// ordinal accepted by sonare_strip_set_pan, accepting the same spellings and
+// rejecting the same unknown values as the Node and Python facades. Deciding
+// what an absent mode means is the caller's job, not this function's: mixStereo
+// tests for one and passes SONARE_PAN_MODE_KEEP instead of calling here, so a
+// position-only request leaves the strip on the mode it already carries. The
+// absent case is still answered rather than rejected so that the resolver stays
+// total for a caller building a strip from scratch, where Balance is what a
+// fresh strip already holds.
 int panModeOrdinalFromVal(val value) {
   if (value.isUndefined() || value.isNull()) {
     return SONARE_PAN_MODE_BALANCE;
@@ -379,11 +386,18 @@ val js_mix_stereo(val left_channels, val right_channels, int sample_rate, val op
       if (auto v = optionalNumber(optionAt(options, "faderDb", index))) {
         checkOneShotSetter(sonare_strip_set_fader_db(strip, *v), "failed to set fader");
       }
-      if (auto v = optionalNumber(optionAt(options, "pan", index))) {
-        checkOneShotSetter(
-            sonare_strip_set_pan(strip, *v,
-                                 panModeOrdinalFromVal(optionAt(options, "panMode", index))),
-            "failed to set pan");
+      // pan and panMode are independent fields: either one alone must apply.
+      // The C ABI takes them together, so the missing half comes from the strip
+      // this loop just created -- SONARE_PAN_MODE_KEEP for an absent mode, and
+      // centre (0.0f, a fresh strip's pan) for an absent position.
+      const val pan_mode = optionAt(options, "panMode", index);
+      const bool has_pan_mode = !pan_mode.isUndefined() && !pan_mode.isNull();
+      const auto pan = optionalNumber(optionAt(options, "pan", index));
+      if (pan || has_pan_mode) {
+        checkOneShotSetter(sonare_strip_set_pan(strip, pan.value_or(0.0f),
+                                                has_pan_mode ? panModeOrdinalFromVal(pan_mode)
+                                                             : SONARE_PAN_MODE_KEEP),
+                           "failed to set pan");
       }
       if (auto v = optionalNumber(optionAt(options, "width", index))) {
         checkOneShotSetter(sonare_strip_set_width(strip, *v), "failed to set width");
@@ -437,8 +451,14 @@ val js_mix_stereo(val left_channels, val right_channels, int sample_rate, val op
     if (auto v = optionalNumber(optionAt(options, "faderDb", index))) {
       strip.set_fader_db(*v);
     }
+    // Independent of each other, as on the graph path above. Here "keep the
+    // strip's current mode" is expressed by not calling set_pan_mode at all,
+    // and an absent position leaves the fresh strip at centre.
+    const val pan_mode = optionAt(options, "panMode", index);
+    if (!pan_mode.isUndefined() && !pan_mode.isNull()) {
+      strip.set_pan_mode(panModeFromVal(pan_mode));
+    }
     if (auto v = optionalNumber(optionAt(options, "pan", index))) {
-      strip.set_pan_mode(panModeFromVal(optionAt(options, "panMode", index)));
       strip.set_pan(*v);
     }
     if (auto v = optionalNumber(optionAt(options, "width", index))) {

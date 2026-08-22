@@ -826,7 +826,8 @@ def mix_stereo(
         fader_db: Optional per-strip fader values in dB.
         pan: Optional per-strip pan values in ``[-1, 1]``.
         pan_mode: Either one mode for all strips or per-strip modes:
-            ``"balance"``, ``"stereoPan"``, or ``"dualPan"``.
+            ``"balance"``, ``"stereoPan"``, or ``"dualPan"``. Applied whether or
+            not ``pan`` is given; a mode-only call pans from centre.
         width: Optional per-strip stereo width values.
         muted: Optional per-strip mute flags.
         input_trim_db: Optional per-strip input trim values in dB.
@@ -928,19 +929,24 @@ def mix_stereo(
                         strip_handles[-1], ctypes.c_float(fader_db[index])
                     )
                 )
-            if pan is not None:
-                mode = (
-                    pan_mode[index]
-                    if isinstance(pan_mode, Sequence) and not isinstance(pan_mode, str)
-                    else pan_mode
+            # pan and pan_mode are independent options: either one alone has to
+            # reach the strip. Reading pan_mode only inside `if pan is not None`
+            # dropped a mode-only request silently. The C ABI takes the pair
+            # together, so the missing half is the value the strip this loop
+            # just created already carries -- centre (0.0) for an absent
+            # position, and Balance for the default mode.
+            mode = (
+                pan_mode[index]
+                if isinstance(pan_mode, Sequence) and not isinstance(pan_mode, str)
+                else pan_mode
+            )
+            _check(
+                lib.sonare_strip_set_pan(
+                    strip_handles[-1],
+                    ctypes.c_float(pan[index] if pan is not None else 0.0),
+                    ctypes.c_int(_pan_mode_value(mode)),
                 )
-                _check(
-                    lib.sonare_strip_set_pan(
-                        strip_handles[-1],
-                        ctypes.c_float(pan[index]),
-                        ctypes.c_int(_pan_mode_value(mode)),
-                    )
-                )
+            )
             if width is not None:
                 _check(lib.sonare_strip_set_width(strip_handles[-1], ctypes.c_float(width[index])))
             if muted is not None:

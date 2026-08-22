@@ -488,6 +488,44 @@ def test_mix_stereo_rejects_a_scene_with_no_audio() -> None:
     assert max(abs(v) for v in result.right) > 0.25
 
 
+def test_mix_stereo_applies_pan_and_pan_mode_independently() -> None:
+    """A mode-only call reaches the strip instead of being dropped.
+
+    `pan_mode` used to be read only when `pan` was supplied too, so a caller
+    that changed nothing but the mode was mixed in the default one with nothing
+    to show for it. The two are independent options and either alone applies.
+    """
+    from libsonare import mix_stereo
+
+    # A left-only source tells the modes apart: Balance leaves it on the left,
+    # stereoPan collapses the pair to a centred mono sum that reaches the right.
+    frames = 512
+    left = [1.0] * frames
+    right = [0.0] * frames
+
+    mode_only = mix_stereo([(left, right)], sample_rate=48000, pan_mode="stereoPan")
+    assert mode_only.right[-1] > 0.1
+
+    balance = mix_stereo([(left, right)], sample_rate=48000)
+    assert balance.right[-1] == 0.0
+
+    # The per-strip sequence form applies without a pan either.
+    per_strip = mix_stereo(
+        [(left, right), (left, right)],
+        sample_rate=48000,
+        pan_mode=["stereoPan", "stereoPan"],
+    )
+    assert per_strip.right[-1] > 0.1
+
+    # A position-only call is unchanged by the mode now being read outside it.
+    pan_only = mix_stereo([(left, right)], sample_rate=48000, pan=[0.3])
+    pan_with_default_mode = mix_stereo(
+        [(left, right)], sample_rate=48000, pan=[0.3], pan_mode="balance"
+    )
+    assert list(pan_only.left) == list(pan_with_default_mode.left)
+    assert list(pan_only.right) == list(pan_with_default_mode.right)
+
+
 def test_mix_stereo_rejects_non_finite_strip_samples() -> None:
     """NaN reads as silence on the peak meter, so it must never reach the mix."""
     from libsonare import SonareValueError, mix_stereo
