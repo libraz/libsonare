@@ -140,6 +140,38 @@ TEST_CASE("NoteSegmenter saturates long-track sample offsets instead of overflow
   REQUIRE(regions[1].offset_sample == std::numeric_limits<int>::max());
 }
 
+TEST_CASE("one F0Track converts frames at a single cadence everywhere", "[pitch_editor]") {
+  // A host-supplied frame_rate_hz replaces the sample_rate / hop_length
+  // derivation, and it has to replace it for BOTH halves of the conversion.
+  // Reading the cadence for the note-length threshold while deriving the sample
+  // offsets from hop_length puts the note boundaries at positions the frame
+  // indices never described.
+  F0Track track;
+  track.sample_rate = 1000;
+  track.hop_length = 10;        // would derive 100 frames/s
+  track.frame_rate_hz = 50.0f;  // the track's real cadence: 20 samples per frame
+  track.f0_hz = {440.0f, 440.0f, 440.0f, 0.0f, 550.0f, 550.0f, 550.0f};
+  track.voiced = {true, true, true, false, true, true, true};
+  track.voiced_prob.assign(track.f0_hz.size(), 1.0f);
+
+  REQUIRE_THAT(track.frame_rate(), WithinAbs(50.0f, 1e-6f));
+  REQUIRE_THAT(static_cast<float>(track.samples_per_frame()), WithinAbs(20.0f, 1e-6f));
+
+  NoteSegmenter segmenter({50.0f, 20.0f, 440.0f});
+  const auto regions = segmenter.segment(track);
+
+  REQUIRE(regions.size() == 2);
+  REQUIRE(regions[0].frame_start == 0);
+  REQUIRE(regions[0].frame_end == 3);
+  REQUIRE(regions[1].frame_start == 4);
+  REQUIRE(regions[1].frame_end == 7);
+  // 20 samples per frame, not the 10 that hop_length alone would give.
+  REQUIRE(regions[0].onset_sample == 0);
+  REQUIRE(regions[0].offset_sample == 60);
+  REQUIRE(regions[1].onset_sample == 80);
+  REQUIRE(regions[1].offset_sample == 140);
+}
+
 TEST_CASE("ScaleQuantizer maps all chroma to enabled scale degrees", "[pitch_editor]") {
   const ScaleQuantizer quantizer({0, 0b101010110101, 69.0f});
 

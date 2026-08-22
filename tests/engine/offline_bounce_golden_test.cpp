@@ -2,6 +2,7 @@
 
 #include <algorithm>
 #include <array>
+#include <catch2/catch_approx.hpp>
 #include <catch2/catch_test_macros.hpp>
 #include <cmath>
 #include <cstdint>
@@ -257,7 +258,127 @@ void write_manifest(const std::filesystem::path& path) {
   }
 }
 
+#if defined(SONARE_WITH_MIXING)
+// Automation target id for a lane parameter, the packing
+// engine::make_track_lane_param_id applies (1 = fader dB).
+constexpr uint32_t engine_lane_param_target(uint32_t lane_index, uint32_t param_kind) {
+  return 0x4D580000u | (lane_index << 8u) | param_kind;
+}
+
+// Engine with one unity clip on a lane whose fader has been driven to -12 dB
+// but never rendered, so the fader smoother still holds its reset value. Any
+// offline entry point has to open at the target, not ramp down into it.
+struct AttenuatedLaneEngine {
+  static constexpr int kBlock = 128;
+  static constexpr int kRate = 48000;
+  static constexpr int kLength = kBlock * 8;
+  static constexpr float kFaderDb = -12.0f;
+
+  std::vector<float> left = std::vector<float>(kLength, 1.0f);
+  std::vector<float> right = std::vector<float>(kLength, 1.0f);
+  SonareRealtimeEngine* engine = nullptr;
+
+  AttenuatedLaneEngine() {
+    REQUIRE(sonare_engine_create(&engine) == SONARE_OK);
+    REQUIRE(sonare_engine_prepare(engine, kRate, kBlock, 256, 256) == SONARE_OK);
+
+    const float* clip_channels[] = {left.data(), right.data()};
+    SonareEngineClip clip{};
+    clip.id = 1;
+    clip.track_id = 10;
+    clip.channels = clip_channels;
+    clip.num_channels = 2;
+    clip.num_samples = kLength;
+    clip.length_samples = kLength;
+    clip.gain = 1.0f;
+    REQUIRE(sonare_engine_set_clips(engine, &clip, 1) == SONARE_OK);
+
+    SonareEngineTrackLane lane[] = {{10, nullptr, 0, 0, SONARE_CHANNEL_LAYOUT_STEREO}};
+    REQUIRE(sonare_engine_set_track_lanes(engine, lane, 1) == SONARE_OK);
+    REQUIRE(sonare_engine_set_parameter(engine, engine_lane_param_target(0, 1), kFaderDb, -1) ==
+            SONARE_OK);
+    REQUIRE(sonare_engine_play(engine, -1) == SONARE_OK);
+    REQUIRE(sonare_engine_seek_sample(engine, 0, -1) == SONARE_OK);
+  }
+  ~AttenuatedLaneEngine() { sonare_engine_destroy(engine); }
+};
+#endif  // defined(SONARE_WITH_MIXING)
+
 }  // namespace
+
+#if defined(SONARE_WITH_MIXING)
+TEST_CASE("every offline entry point opens at settled parameter values",
+          "[engine][offline][bounce]") {
+  // A bounce and a freeze are one-shot renders, so there is no earlier audio for
+  // a fader to ramp in from: the caller asked for the lane as configured. Both
+  // entry points therefore pre-roll the engine (drain the queued commands,
+  // render one discarded block with the transport held, snap the smoothers) the
+  // way the project bounce path does. Without it the opening milliseconds come
+  // out up to the full fader travel too loud, which is inaudible as a defect in
+  // a long bounce and obvious when a freeze is used as a clip.
+  using Engine = AttenuatedLaneEngine;
+  const auto steady_state = [](const SonareEngineBounceResult& result) {
+    return result.interleaved[result.sample_count - 2];
+  };
+
+  SECTION("bounce_offline") {
+    Engine fixture;
+    SonareEngineBounceOptions options{};
+    options.total_frames = Engine::kLength;
+    options.block_size = Engine::kBlock;
+    options.num_channels = 2;
+    options.source_sample_rate = Engine::kRate;
+    options.target_sample_rate = Engine::kRate;
+    SonareEngineBounceResult result{};
+    REQUIRE(sonare_engine_bounce_offline(fixture.engine, &options, &result) == SONARE_OK);
+    REQUIRE(result.interleaved != nullptr);
+    REQUIRE(result.sample_count == static_cast<size_t>(Engine::kLength) * 2u);
+
+    const float settled = steady_state(result);
+    CAPTURE(result.interleaved[0], settled);
+    // The fader really is attenuating, so "the first sample equals the settled
+    // one" is not satisfied by a bounce that ignored the fader entirely.
+    REQUIRE(settled > 0.05f);
+    REQUIRE(settled < 0.5f);
+    REQUIRE(result.interleaved[0] == Catch::Approx(settled).epsilon(0.01));
+    sonare_free_floats(result.interleaved);
+  }
+
+  SECTION("freeze_offline") {
+    Engine fixture;
+    SonareEngineFreezeOptions freeze{};
+    freeze.total_frames = Engine::kLength;
+    freeze.block_size = Engine::kBlock;
+    freeze.num_channels = 2;
+    freeze.clip_id = 7;
+    freeze.gain = 1.0f;
+    SonareEngineFreezeResult frozen{};
+    REQUIRE(sonare_engine_freeze_offline(fixture.engine, &freeze, &frozen) == SONARE_OK);
+    REQUIRE(frozen.clip_id == 7u);
+
+    // The freeze replaced the engine's clips with the captured audio, and the
+    // frozen clip carries no track id, so bouncing it reads the capture back
+    // without passing it through the lane a second time.
+    REQUIRE(sonare_engine_seek_sample(fixture.engine, 0, -1) == SONARE_OK);
+    SonareEngineBounceOptions options{};
+    options.total_frames = Engine::kLength;
+    options.block_size = Engine::kBlock;
+    options.num_channels = 2;
+    options.source_sample_rate = Engine::kRate;
+    options.target_sample_rate = Engine::kRate;
+    SonareEngineBounceResult result{};
+    REQUIRE(sonare_engine_bounce_offline(fixture.engine, &options, &result) == SONARE_OK);
+    REQUIRE(result.interleaved != nullptr);
+
+    const float settled = steady_state(result);
+    CAPTURE(result.interleaved[0], settled);
+    REQUIRE(settled > 0.05f);
+    REQUIRE(settled < 0.5f);
+    REQUIRE(result.interleaved[0] == Catch::Approx(settled).epsilon(0.01));
+    sonare_free_floats(result.interleaved);
+  }
+}
+#endif  // defined(SONARE_WITH_MIXING)
 
 TEST_CASE("realtime engine offline bounce golden hashes stay stable",
           "[.][engine][offline][bounce][golden]") {

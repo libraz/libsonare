@@ -27,6 +27,24 @@ using namespace sonare;
 
 namespace {
 
+/// @brief A freshly created empty directory outside the working tree.
+/// @details For the write cases that deliberately drive a writer up to a
+///          rejection: a guard that ever moved below the temp-file creation
+///          would strand the scratch file, and the working tree is the one
+///          place that must not collect it. create_directories() answers false
+///          for a directory that already exists, so stepping the suffix claims
+///          a directory no concurrently running test binary is using and no
+///          crashed earlier one left behind.
+std::filesystem::path scratch_dir() {
+  const std::filesystem::path base = std::filesystem::temp_directory_path();
+  for (int suffix = 0; suffix < 1024; ++suffix) {
+    const std::filesystem::path dir = base / ("sonare_audio_io_test_" + std::to_string(suffix));
+    if (std::filesystem::create_directories(dir)) return dir;
+  }
+  FAIL("no free scratch directory under the system temp path");
+  return {};
+}
+
 /// @brief Creates a simple mono WAV file in memory.
 std::vector<uint8_t> create_wav_buffer(const float* samples, size_t sample_count, int sample_rate) {
   // WAV header for mono float32
@@ -1201,14 +1219,29 @@ TEST_CASE("save_wav_multichannel writes the 7.1 mask and validates arguments", "
   // Same bound on the mono/stereo writers, which the header documents as
   // producing bit-identical output: past it dr_wav saturates the size fields, so
   // the file is written and only a reader notices the tail is gone.
-  const std::string mono_path = "test_riff_overflow.wav";
-  REQUIRE_THROWS_AS(save_wav(mono_path, &sentinel, static_cast<size_t>(1) << 31, 48000, 24),
-                    sonare::SonareException);
-  REQUIRE_THROWS_AS(save_wav_multichannel(mono_path, &sentinel, static_cast<size_t>(1) << 31, 1,
-                                          ChannelLayout::Mono, 48000, 24),
-                    sonare::SonareException);
+  //
+  // Outside the working tree, unlike the sibling cases: this is the one case
+  // that deliberately walks a writer up to its guard, so if the guard ever moved
+  // below the temp-file creation the scratch would be stranded wherever this
+  // points -- and a stranded file in the repo root is one `git add .` from being
+  // committed.
+  const std::filesystem::path mono_path = scratch_dir() / "riff_overflow.wav";
+  REQUIRE_THROWS_AS(
+      save_wav(mono_path.string(), &sentinel, static_cast<size_t>(1) << 31, 48000, 24),
+      sonare::SonareException);
+  REQUIRE_THROWS_AS(
+      save_wav_multichannel(mono_path.string(), &sentinel, static_cast<size_t>(1) << 31, 1,
+                            ChannelLayout::Mono, 48000, 24),
+      sonare::SonareException);
   // Neither call reached the writer, so no file (not even a temporary) was left.
   REQUIRE_FALSE(std::filesystem::exists(mono_path));
+  size_t stray_count = 0;
+  for (const auto& entry : std::filesystem::directory_iterator(mono_path.parent_path())) {
+    CAPTURE(entry.path().string());
+    ++stray_count;
+  }
+  REQUIRE(stray_count == 0);
+  std::filesystem::remove_all(mono_path.parent_path());
 }
 
 TEST_CASE("save_wav quantizes 16-bit PCM by rounding to nearest, not truncating", "[audio_io]") {
@@ -1337,6 +1370,34 @@ TEST_CASE("a failed write reports an encode error, not a decode error", "[audio_
             save_wav_multichannel(unwritable, samples.data(), samples.size() / 2, 2,
                                   ChannelLayout::Stereo, 48000);
           }) == ErrorCode::EncodeFailed);
+
+  // A destination that resolves to a directory is the one failure that happens
+  // in the atomic rename rather than when the writer opens its temp file: the
+  // temp is a perfectly writable sibling, everything is packed and flushed, and
+  // only the commit fails. That last stage is a stage of writing the output, so
+  // it must carry the same code as the earlier ones -- a `-o` pointing at a
+  // directory is a shell slip, not an undecodable input.
+  // The enclosing scratch directory holds nothing but the destination, so the
+  // sweep for a leftover temp sibling below sees only what these two calls made.
+  const std::filesystem::path scratch = scratch_dir();
+  const std::filesystem::path as_directory = scratch / "out.wav";
+  REQUIRE(std::filesystem::create_directories(as_directory));
+  REQUIRE(code_of([&] { save_wav(as_directory.string(), samples, 48000); }) ==
+          ErrorCode::EncodeFailed);
+  REQUIRE(code_of([&] {
+            save_wav_multichannel(as_directory.string(), samples.data(), samples.size() / 2, 2,
+                                  ChannelLayout::Stereo, 48000);
+          }) == ErrorCode::EncodeFailed);
+  // The rejected writes left neither the directory replaced nor a temp sibling.
+  REQUIRE(std::filesystem::is_directory(as_directory));
+  size_t scratch_entries = 0;
+  for (const auto& entry : std::filesystem::directory_iterator(scratch)) {
+    CAPTURE(entry.path().string());
+    REQUIRE(entry.path().filename() == as_directory.filename());
+    ++scratch_entries;
+  }
+  REQUIRE(scratch_entries == 1);
+  std::filesystem::remove_all(scratch);
 
   // The read side keeps its own code: the two must not have been merged in the
   // other direction either.
