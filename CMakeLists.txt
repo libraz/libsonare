@@ -47,6 +47,19 @@ option(ENABLE_COVERAGE "Enable code coverage" OFF)
 option(SONARE_ENABLE_OPTIONAL_FIXTURE_TESTS
        "Build optional external fixture tests that require local datasets" OFF)
 
+# Development-only: expose the synth voices' `SONARE_TUNABLE` calibration
+# constants as runtime-overridable knobs (see src/util/tunable.h), so a fitter
+# can sweep one without a rebuild per candidate value. The macro changes what a
+# declaration means, so the definition must reach every target uniformly or two
+# translation units would disagree on the same constant's storage.
+option(BUILD_TUNING
+       "Read voice calibration constants from SONARE_TUNING_OVERRIDES (development only)" OFF)
+if(BUILD_TUNING)
+  message(STATUS "libsonare: BUILD_TUNING on — calibration constants are runtime-overridable; "
+                 "do not ship this configuration")
+  add_compile_definitions(SONARE_TUNING=1)
+endif()
+
 # macOS host backends — concrete implementations of the sonare::host seams that
 # drive a real device/plugin. They include OS/SDK headers, so they are kept out
 # of core (invariant 6), default OFF, and excluded from the default distribution
