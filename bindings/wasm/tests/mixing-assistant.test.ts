@@ -3,6 +3,7 @@
  *  - planar mono / stereo / ragged-length track sets;
  *  - degenerate input (no tracks, silent tracks) yielding an empty suggestion;
  *  - every decision domain switched off leaving no explanation;
+ *  - the high-pass switch, off by default, reaching the scene when asked for;
  *  - the source-class name table and its reverse lookup;
  *  - the input validation the WASM wrappers carry themselves, since the C-ABI
  *    guards are not linked into this surface.
@@ -39,6 +40,55 @@ function musicalTracks(): MixAssistantTrack[] {
     { id: 'hat', name: 'Hi-Hat', left: pulsedTone(7000, DURATION, 8) },
   ];
 }
+
+/** Partial weights of the voice-like series below; index 0 is the fundamental. */
+const VOICE_PARTIALS = [0.3, 0.7, 0.9, 0.85, 0.8, 0.7, 0.6, 0.55, 0.5, 0.45, 0.4, 0.35];
+
+/**
+ * A sustained voice-like harmonic series over 180 Hz with stand rumble under it.
+ *
+ * The rumble is the point of the fixture. The assistant proposes a high-pass
+ * only where the share of a track's energy below its class corner reads as
+ * residue -- between 0.5% and 10% -- and `musicalTracks` carries nothing at all
+ * under its corners, so on that material `enableHighPass` changes nothing, the
+ * two documents come back identical, and the case would be satisfied by a
+ * binding that dropped the option. The 40 Hz tone puts about 2% of this track's
+ * energy below the 80 Hz vocal corner, which is inside the window.
+ */
+function voiceWithRumble(durationSec = DURATION): Float32Array {
+  const out = new Float32Array(Math.floor(SR * durationSec));
+  for (let i = 0; i < out.length; i++) {
+    const t = i / SR;
+    let voice = 0;
+    for (let partial = 0; partial < VOICE_PARTIALS.length; partial++) {
+      voice += VOICE_PARTIALS[partial] * Math.sin(2 * Math.PI * 180 * (partial + 1) * t);
+    }
+    out[i] = 0.045 * voice + 0.014 * Math.sin(2 * Math.PI * 40 * t);
+  }
+  return out;
+}
+
+/** The high-pass case owns its input rather than sharing `musicalTracks`. */
+function rumblingVoiceTracks(): MixAssistantTrack[] {
+  return [{ id: 'vox', name: 'Lead Vox', left: voiceWithRumble() }];
+}
+
+/** Just enough of the scene document to find an insert; it arrives untyped here. */
+interface SceneView {
+  strips: { id: string; inserts: { processor: string }[] }[];
+  buses: { id: string; inserts: { processor: string }[] }[];
+}
+
+/** Ids of the strips and buses carrying a high-pass insert, in scene order. */
+function highPassOwners(scene: Record<string, unknown>): string[] {
+  const view = scene as unknown as SceneView;
+  return [...view.strips, ...view.buses]
+    .filter((node) => node.inserts.some((insert) => insert.processor === 'eq.cutFilter'))
+    .map((node) => node.id);
+}
+
+/** The reasoning line a proposed high-pass writes, matched on its opening. */
+const HIGH_PASS_REASON = /^high-passed vox at 80 Hz, where /;
 
 describe('mixing assistant (WASM)', () => {
   beforeAll(async () => {
@@ -150,6 +200,24 @@ describe('mixing assistant (WASM)', () => {
       expect(result.tracks.map((track) => track.stripId)).toEqual(['bass', 'keys', 'hat']);
       expect(result.mix.trackCount).toBe(3);
       expect(Array.isArray(result.explanation)).toBe(true);
+    });
+
+    it('proposes a high-pass only once the switch is on', () => {
+      const off = suggestMixScene({ tracks: rumblingVoiceTracks(), sampleRate: SR });
+      const on = suggestMixScene({
+        tracks: rumblingVoiceTracks(),
+        sampleRate: SR,
+        options: { enableHighPass: true },
+      });
+
+      // Off by default: the measurement is not taken at all, so no filter and
+      // no line about one.
+      expect(highPassOwners(off.scene)).toEqual([]);
+      expect(off.explanation.filter((line) => HIGH_PASS_REASON.test(line))).toEqual([]);
+
+      // On: the vocal track's 80 Hz corner earns a pre-fader filter of its own.
+      expect(highPassOwners(on.scene)).toEqual(['vox']);
+      expect(on.explanation.filter((line) => HIGH_PASS_REASON.test(line))).toHaveLength(1);
     });
   });
 

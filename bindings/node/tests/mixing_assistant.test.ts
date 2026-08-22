@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import {
   type MixAssistantTrack,
   Mixer,
+  type MixSceneDocument,
   mixSourceClassFromName,
   mixSourceClassNames,
   suggestMixScene,
@@ -31,6 +32,48 @@ function baseTracks(): MixAssistantTrack[] {
     { id: 'lead', name: 'Lead', left: sine(880, 1.0, { sampleRate: SR, amp: 0.2 }) },
   ];
 }
+
+/** Partial weights of the voice-like series below; index 0 is the fundamental. */
+const VOICE_PARTIALS = [0.3, 0.7, 0.9, 0.85, 0.8, 0.7, 0.6, 0.55, 0.5, 0.45, 0.4, 0.35];
+
+/**
+ * A sustained voice-like harmonic series over 180 Hz with stand rumble under it.
+ *
+ * The rumble is the point of the fixture. The assistant proposes a high-pass
+ * only where the share of a track's energy below its class corner reads as
+ * residue -- between 0.5% and 10% -- and `baseTracks` carries nothing at all
+ * under its corners, so on that material `enableHighPass` changes nothing, the
+ * two documents come back identical, and the case would be satisfied by a
+ * binding that dropped the option. The 40 Hz tone puts about 2% of this track's
+ * energy below the 80 Hz vocal corner, which is inside the window.
+ */
+function voiceWithRumble(durationSec = 0.6, sampleRate = SR): Float32Array {
+  const out = new Float32Array(Math.floor(sampleRate * durationSec));
+  for (let i = 0; i < out.length; i++) {
+    const t = i / sampleRate;
+    let voice = 0;
+    for (let partial = 0; partial < VOICE_PARTIALS.length; partial++) {
+      voice += VOICE_PARTIALS[partial] * Math.sin(2 * Math.PI * 180 * (partial + 1) * t);
+    }
+    out[i] = 0.045 * voice + 0.014 * Math.sin(2 * Math.PI * 40 * t);
+  }
+  return out;
+}
+
+/** The high-pass case owns its input rather than sharing `baseTracks`. */
+function rumblingVoiceTracks(): MixAssistantTrack[] {
+  return [{ id: 'vox', name: 'Lead Vox', left: voiceWithRumble() }];
+}
+
+/** Ids of the strips and buses carrying a high-pass insert, in scene order. */
+function highPassOwners(scene: MixSceneDocument): string[] {
+  return [...scene.strips, ...scene.buses]
+    .filter((node) => node.inserts.some((insert) => insert.processor === 'eq.cutFilter'))
+    .map((node) => node.id);
+}
+
+/** The reasoning line a proposed high-pass writes, matched on its opening. */
+const HIGH_PASS_REASON = /^high-passed vox at 80 Hz, where /;
 
 describe('mixing assistant native binding', () => {
   it('suggests a scene from mono tracks', () => {
@@ -176,21 +219,22 @@ describe('mixing assistant options', () => {
     }
   });
 
-  it('accepts the high-pass switch, which is off unless asked for', () => {
-    const off = suggestMixScene({ tracks: baseTracks(), sampleRate: SR });
+  it('proposes a high-pass only once the switch is on', () => {
+    const off = suggestMixScene({ tracks: rumblingVoiceTracks(), sampleRate: SR });
     const on = suggestMixScene({
-      tracks: baseTracks(),
+      tracks: rumblingVoiceTracks(),
       sampleRate: SR,
       options: { enableHighPass: true },
     });
 
-    expect(on.scene.strips.map((strip) => strip.id)).toEqual(
-      off.scene.strips.map((strip) => strip.id),
-    );
-    // The switch only ever adds a filter. A track that gains one can lose the
-    // peaking cuts it made redundant, but never more lines than it gained, so
-    // the reasoning cannot get shorter.
-    expect(on.explanation.length).toBeGreaterThanOrEqual(off.explanation.length);
+    // Off by default: the measurement is not taken at all, so no filter and no
+    // line about one.
+    expect(highPassOwners(off.scene)).toEqual([]);
+    expect(off.explanation.filter((line) => HIGH_PASS_REASON.test(line))).toEqual([]);
+
+    // On: the vocal track's 80 Hz corner earns a pre-fader filter of its own.
+    expect(highPassOwners(on.scene)).toEqual(['vox']);
+    expect(on.explanation.filter((line) => HIGH_PASS_REASON.test(line))).toHaveLength(1);
   });
 
   it('an omitted option equals an explicit undefined', () => {

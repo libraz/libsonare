@@ -85,6 +85,47 @@ def mono_suggestion(mono_tracks):
     return suggest_mix_scene(mono_tracks, sample_rate=SAMPLE_RATE)
 
 
+# Partial weights of the voice-like series below; index 0 is the fundamental.
+_VOICE_PARTIALS = (0.30, 0.70, 0.90, 0.85, 0.80, 0.70, 0.60, 0.55, 0.50, 0.45, 0.40, 0.35)
+_HIGH_PASS_PROCESSOR = "eq.cutFilter"
+# The reasoning line a proposed high-pass writes, matched on its opening rather
+# than on the measured share it goes on to quote.
+_HIGH_PASS_REASON = "high-passed vox at 80 Hz, where "
+
+
+def _voice_with_rumble(duration_sec: float = DURATION_SEC) -> np.ndarray:
+    """A sustained voice-like harmonic series over 180 Hz with stand rumble under it.
+
+    The rumble is the point of the fixture. The assistant proposes a high-pass only
+    where the share of a track's energy below its class corner reads as residue --
+    between 0.5% and 10% -- and the shared fixtures carry nothing at all under their
+    corners, so on that material ``enable_high_pass`` changes nothing, the two
+    documents come back identical, and the case would be satisfied by a binding that
+    dropped the option. The 40 Hz tone puts about 2% of this track's energy below the
+    80 Hz vocal corner, which is inside the window.
+    """
+    n = int(SAMPLE_RATE * duration_sec)
+    t = np.arange(n, dtype=np.float64) / SAMPLE_RATE
+    voice = np.zeros(n, dtype=np.float64)
+    for index, weight in enumerate(_VOICE_PARTIALS):
+        voice += weight * np.sin(2.0 * np.pi * 180.0 * (index + 1) * t)
+    return (0.045 * voice + 0.014 * np.sin(2.0 * np.pi * 40.0 * t)).astype(np.float32)
+
+
+def _high_pass_owners(scene) -> list[str]:
+    """Ids of the strips and buses carrying a high-pass insert, in scene order."""
+    return [
+        node["id"]
+        for node in [*scene["strips"], *scene["buses"]]
+        if any(insert["processor"] == _HIGH_PASS_PROCESSOR for insert in node["inserts"])
+    ]
+
+
+def _high_pass_lines(result) -> list[str]:
+    """The explanation lines attributable to a proposed high-pass."""
+    return [line for line in result["explanation"] if line.startswith(_HIGH_PASS_REASON)]
+
+
 def _assert_document_shape(result, track_count: int) -> None:
     """Assert the result document's structure for ``track_count`` inputs."""
     assert set(result) == {"scene", "tracks", "mix", "explanation"}
@@ -253,15 +294,24 @@ def test_numeric_options_are_accepted(mono_tracks, option, value):
     _assert_document_shape(result, len(mono_tracks))
 
 
-def test_high_pass_switch_is_accepted(mono_tracks, mono_suggestion):
-    from libsonare import suggest_mix_scene
+def test_high_pass_is_proposed_only_once_the_switch_is_on():
+    from libsonare import MixTrackInput, suggest_mix_scene
 
-    result = suggest_mix_scene(mono_tracks, sample_rate=SAMPLE_RATE, enable_high_pass=True)
-    _assert_document_shape(result, len(mono_tracks))
-    # The switch is off by default and only ever adds a filter. A track that
-    # gains one can lose the peaking cuts it made redundant, but never more
-    # lines than it gained, so the reasoning cannot get shorter.
-    assert len(result["explanation"]) >= len(mono_suggestion["explanation"])
+    # A local fixture rather than the shared one: this case needs low-frequency
+    # residue that would move unrelated assertions elsewhere.
+    tracks = [MixTrackInput("vox", _voice_with_rumble(), None, "Lead Vox")]
+    off = suggest_mix_scene(tracks, sample_rate=SAMPLE_RATE)
+    on = suggest_mix_scene(tracks, sample_rate=SAMPLE_RATE, enable_high_pass=True)
+
+    _assert_document_shape(off, len(tracks))
+    _assert_document_shape(on, len(tracks))
+    # Off by default: the measurement is not taken at all, so no filter and no
+    # line about one.
+    assert _high_pass_owners(off["scene"]) == []
+    assert _high_pass_lines(off) == []
+    # On: the vocal track's 80 Hz corner earns a pre-fader filter of its own.
+    assert _high_pass_owners(on["scene"]) == ["vox"]
+    assert len(_high_pass_lines(on)) == 1
 
 
 def test_target_track_lufs_moves_gain_staging(mono_tracks):
