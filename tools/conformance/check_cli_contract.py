@@ -1903,6 +1903,24 @@ def _expected_paths(commands: dict[str, Any], surface: str) -> set[str]:
     }
 
 
+def _accepted_names(commands: dict[str, dict[str, Any]]) -> set[str]:
+    """Every command name a surface answers to, canonical spelling or alias.
+
+    A deprecated spelling is one registry row's alias rather than a row of its
+    own, so it never appears as a ``path``.  Presence is what the classified-path
+    check is about, and a name the CLI accepts is present however it resolves;
+    comparing paths alone would demand a duplicate row per alias, which is the
+    shape that lets two spellings of one command drift apart.
+    """
+
+    names = set(commands)
+    for command in commands.values():
+        aliases = command.get("aliases")
+        if isinstance(aliases, list):
+            names.update(alias for alias in aliases if isinstance(alias, str))
+    return names
+
+
 def _validate_inventory(
     value: Any, surface: str
 ) -> tuple[list[str], dict[str, dict[str, Any]]]:
@@ -2055,7 +2073,7 @@ def _snapshot_inventory_validation(
     errors, commands = _validate_inventory(value, surface)
     expected = _expected_paths(manifest["commands"], surface)
     actual = set(commands)
-    for path in sorted(expected - actual):
+    for path in sorted(expected - _accepted_names(commands)):
         errors.append(f"inventory.{surface}: missing classified path {path}")
     for path in sorted(actual - expected):
         errors.append(f"inventory.{surface}: unclassified path {path}")
@@ -2179,7 +2197,7 @@ def _inventory_checks(
         report.append(("fail", error))
     expected = _expected_paths(manifest["commands"], surface)
     actual = set(commands)
-    for path in sorted(expected - actual):
+    for path in sorted(expected - _accepted_names(commands)):
         report.append(("fail", f"inventory.{surface}: missing classified path {path}"))
     for path in sorted(actual - expected):
         report.append(("fail", f"inventory.{surface}: unclassified path {path}"))

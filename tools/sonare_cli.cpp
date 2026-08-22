@@ -256,13 +256,23 @@ void print_usage(const char* prog) {
             << "  " << prog << " pitch-shift --semitones 3 input.wav -o output.wav\n";
 }
 
+// Renders a registry path as the invocation that selects it: `project.bounce`
+// is typed as `project bounce`. The usage line has to name the leaf whose
+// options it goes on to list, or a reader who copies the printed invocation
+// gets a usage error and an option list belonging to something else.
+std::string invocation_for_path(const std::string& path) {
+  std::string invocation = path;
+  std::replace(invocation.begin(), invocation.end(), '.', ' ');
+  return invocation;
+}
+
 void print_command_usage(const char* prog, const CommandInfo& command,
                          const std::string& option_command = {}) {
-  std::cerr << "Usage: " << prog << " " << command.name << " [options]";
+  const std::string path = option_command.empty() ? command.name : option_command;
+  std::cerr << "Usage: " << prog << " " << invocation_for_path(path) << " [options]";
   if (command.requires_audio) std::cerr << " <audio_file>";
   std::cerr << "\n\n" << command.description << "\n";
-  const auto options =
-      cli_options_for_command(option_command.empty() ? command.name : option_command);
+  const auto options = cli_options_for_command(path);
   if (!options.empty()) {
     std::cerr << "\nOPTIONS:\n";
     for (const auto& option : options) std::cerr << "  " << option << "\n";
@@ -356,6 +366,17 @@ int main(int argc, char* argv[]) {
         const std::string option_command = args.command == "project" && !args.input_file.empty()
                                                ? "project." + args.input_file
                                                : args.command;
+        // A command whose contract lives in its leaves rather than in a record
+        // of its own -- `project`, whose registry entries are the ten
+        // `project.<subcommand>` paths -- resolves to no spec here, so the
+        // generic help would print an empty option list and name none of its
+        // subcommands. Such a handler owns a full usage text for exactly this
+        // request, so the help is dispatched to it instead of answered here.
+        // The dispatch is safe for any command in that state because a command
+        // that needs audio has none loaded at this point and is excluded.
+        if (!cmd->requires_audio && cli_command_spec_for_path(option_command) == nullptr) {
+          return normalize_handler_exit(*cmd, cmd->handler(args, Audio{}));
+        }
         print_command_usage(argv[0], *cmd, option_command);
       } else {
         print_usage(argv[0]);
