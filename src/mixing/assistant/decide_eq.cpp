@@ -767,6 +767,13 @@ std::vector<SceneDelta> decide_eq(const std::vector<TrackProfile>& profiles, con
       // cannot map a bin to a frequency — falls back to the band's centre, which
       // is where every cut used to sit.
       cut.center_hz = cut.center_measured ? measured : band_center_hz(band);
+      // The band test above only drops a band lying entirely under the corner.
+      // Most corners fall *inside* a band — 80 Hz sits in the 60-250 Hz low
+      // band — so the band survives and the cut can still land below the filter
+      // that was just inserted. There it would change nothing while the
+      // explanation announced a correction, which is worse than the busier
+      // suggestion the band test exists to avoid.
+      if (cut.center_hz <= high_pass_hz) continue;
       cuts.push_back(cut);
     }
     if (cuts.empty()) continue;

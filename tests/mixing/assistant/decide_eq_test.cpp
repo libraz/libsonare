@@ -416,7 +416,13 @@ std::vector<TrackProfile> two_tracks_with_residue(const std::vector<int>& bands 
 }  // namespace
 
 TEST_CASE("eq suggests no cut when no band is contested", "[mixing][assistant]") {
-  const std::vector<TrackProfile> profiles = two_tracks();
+  // The essentiality gate is held open in the mid band, so there the dominance
+  // ratio is the only thing left that can decline the cut. Left closed, this
+  // case would pass with the interference threshold deleted. The gate cannot be
+  // opened in every band at once: a share of 0.45 in seven bands does not exist
+  // in a distribution that sums to one, which is itself why one open band is
+  // the strongest arrangement available here.
+  const std::vector<TrackProfile> profiles = two_tracks_contesting({kMidBand});
   MixProfile mix = make_mix(2);
   for (int band = 0; band < kBandCount; ++band) {
     set_dominance(mix, 0, 1, band, kEvenShare, kOverlapFrames);
@@ -431,7 +437,10 @@ TEST_CASE("eq suggests no cut when no band is contested", "[mixing][assistant]")
 }
 
 TEST_CASE("eq ignores a collision the two tracks barely shared", "[mixing][assistant]") {
-  const std::vector<TrackProfile> profiles = two_tracks();
+  // Gate open, so the frame count is the only thing standing between this
+  // collision and a cut. With the gate closed the case would pass whether or
+  // not the overlap floor existed.
+  const std::vector<TrackProfile> profiles = two_tracks_contesting({kMidBand});
   MixProfile mix = make_mix(2);
   // One track owns the band outright, but only for a handful of frames, which
   // is a coincidence rather than a standing conflict.
@@ -697,6 +706,54 @@ TEST_CASE("eq skips a band the high-pass has already removed", "[mixing][assista
 
     CHECK(count_inserts(deltas, kCutFilter) == 0);
     CHECK(count_inserts(deltas, kParametric) == 1);
+  }
+}
+
+TEST_CASE("eq skips a cut that would land under the corner inside a surviving band",
+          "[mixing][assistant]") {
+  // Most corners fall *inside* a band rather than above one, so the whole-band
+  // test leaves the band standing and where the cut lands has to be judged on
+  // its own. The hi-hat's corner is 400 Hz, inside the 250-500 Hz lowMid band.
+  //
+  // The shared content is placed at bin 13, about 305 Hz: inside lowMid and
+  // under the corner, which is exactly the arrangement that puts a cut in a
+  // range the filter has already emptied. The residue under the corner is the
+  // sum of that bin and the one below every corner, and it has to stay inside
+  // the window the filter is proposed in, or there would be no filter to make
+  // the cut redundant.
+  constexpr int kLowMidBand = 2;
+  constexpr std::size_t kUnderCornerBin = 13;
+  constexpr std::size_t kAboveCornerBin = 40;
+  std::vector<TrackProfile> profiles{make_profile("hat", SourceClass::HiHat),
+                                     make_profile("perc", SourceClass::Percussion)};
+  gate_open(profiles[1], profiles[0], {kLowMidBand});
+  for (TrackProfile& profile : profiles) {
+    set_spectrum(profile,
+                 {{kLowResidueBin, 0.01f}, {kUnderCornerBin, 0.03f}, {kAboveCornerBin, 0.96f}});
+  }
+  MixProfile mix = make_mix(2);
+  set_dominance(mix, 0, 1, kLowMidBand, kBuriedShare, kOverlapFrames);
+
+  SECTION("with the high-pass proposed") {
+    const std::vector<SceneDelta> deltas = decide_eq(profiles, mix, high_pass_on());
+
+    CHECK(count_inserts(deltas, kCutFilter) == 2);
+    // The overlap sits at roughly 305 Hz, in a range the 400 Hz filter has
+    // already emptied. The cut would do nothing while the explanation announced
+    // a correction, which is worse than not proposing it.
+    CHECK(count_inserts(deltas, kParametric) == 0);
+  }
+
+  SECTION("with no high-pass proposed") {
+    // Nothing emptied the range, so the same collision earns its cut at the same
+    // place. The skip is a consequence of the filter, not a rule about the band.
+    const std::vector<SceneDelta> deltas = decide_eq(profiles, mix, MixAssistantConfig{});
+
+    CHECK(count_inserts(deltas, kCutFilter) == 0);
+    REQUIRE(count_inserts(deltas, kParametric) == 1);
+    const Insert* cut = find_insert(deltas, "hat", kParametric);
+    REQUIRE(cut != nullptr);
+    CHECK(only_cut_center_hz(*cut) < 400.0f);
   }
 }
 
@@ -1125,6 +1182,15 @@ TEST_CASE("eq leaves unidentified, unusable and low-confidence tracks alone",
                                      make_profile("maybeLead", SourceClass::Lead)};
   profiles[1].usable = false;
   profiles[2].source_confidence = kLowConfidence;
+  // The essentiality gate is open on the pairs the priority table would carve,
+  // so identification is the only thing left holding the stage back. The
+  // unidentified track is the one that gives way to either of the others, so it
+  // is the one that has to be able to spare the band; with the default even
+  // occupancy the gate refused every pair on its own and the case passed
+  // against a stage that had stopped checking identification at all.
+  set_band_occupancy(profiles[0], kMidBand, kSpareShare);
+  set_band_occupancy(profiles[1], kMidBand, kEssentialShare);
+  set_band_occupancy(profiles[2], kMidBand, kEssentialShare);
 
   MixProfile mix = make_mix(3);
   for (int masker = 0; masker < 3; ++masker) {
@@ -1141,7 +1207,9 @@ TEST_CASE("eq leaves unidentified, unusable and low-confidence tracks alone",
 }
 
 TEST_CASE("eq makes no peaking cut when the ceiling is zero", "[mixing][assistant]") {
-  const std::vector<TrackProfile> profiles = two_tracks_with_residue();
+  // Gate open, so the ceiling is what stops the cut. Without it the collision
+  // never became a candidate and the case measured nothing about the ceiling.
+  const std::vector<TrackProfile> profiles = two_tracks_with_residue({kMidBand});
   MixProfile mix = make_mix(2);
   set_dominance(mix, 1, 0, kMidBand, kBuriedShare, kOverlapFrames);
 
@@ -1155,7 +1223,10 @@ TEST_CASE("eq makes no peaking cut when the ceiling is zero", "[mixing][assistan
 }
 
 TEST_CASE("eq returns nothing when the domain is switched off", "[mixing][assistant]") {
-  const std::vector<TrackProfile> profiles = two_tracks();
+  // Gate open, so the switch is the only reason the result is empty. With it
+  // closed the stage had nothing to return either way and the case would pass
+  // against a stage that ignored the switch entirely.
+  const std::vector<TrackProfile> profiles = two_tracks_contesting({kMidBand});
   MixProfile mix = make_mix(2);
   set_dominance(mix, 1, 0, kMidBand, kBuriedShare, kOverlapFrames);
 
