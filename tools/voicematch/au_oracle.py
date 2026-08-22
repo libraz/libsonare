@@ -149,6 +149,7 @@ class AuSource:
     state: str = ""
     params: tuple[str, ...] = ()
     program: int | None = None
+    channel: int = 1
     settle_ms: int = 4000
     realtime: bool = True
     #: Strike the probe's first note once and discard it before recording.
@@ -175,7 +176,7 @@ class AuSource:
         path would hand back the old recording of it.
         """
         preset = resolve_preset(self.preset) if self.preset else None
-        return {
+        identity = {
             "plugin": self.plugin,
             "preset": str(preset) if preset else "",
             "preset_sha256": _sha256_file(preset) if preset and preset.is_file() else "",
@@ -190,6 +191,13 @@ class AuSource:
             "sample_rate": self.sample_rate,
             "extra": list(self.extra),
         }
+        # Recorded only when it is not the default. The channel is a later
+        # addition, and putting it in unconditionally would change the digest
+        # of every recording made before it existed — a cache miss and a
+        # re-render for captures whose sound did not move.
+        if self.channel != 1:
+            identity["channel"] = self.channel
+        return identity
 
     def argv(self, out_wav: Path, *, midi: Path | None = None) -> list[str]:
         """The aubounce command line for one render."""
@@ -202,6 +210,11 @@ class AuSource:
             argv += ["--param", spec]
         if self.program is not None:
             argv += ["--program", str(self.program)]
+        # A multitimbral rack saved as one file answers to a different sound on
+        # each of its channels, so there the channel is what selects a timbre,
+        # where a single-timbre plugin is selected with a preset.
+        if self.channel != 1:
+            argv += ["--channel", str(self.channel)]
         if midi is not None:
             argv += ["--midi", str(midi)]
         argv += [

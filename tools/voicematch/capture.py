@@ -102,6 +102,9 @@ def source_for(cfg: dict, timbre: dict, **overrides) -> AuSource:
     src = AuSource(
         plugin=cfg["plugin"],
         preset=timbre.get("preset", ""),
+        # A rack selects its timbres by channel rather than by preset: one file
+        # is loaded and each channel plays a different slot of it.
+        channel=int(timbre.get("channel", 1)),
         params=config_params(cfg),
         settle_ms=int(cfg["settle_ms"]),
         realtime=bool(cfg["realtime"]),
