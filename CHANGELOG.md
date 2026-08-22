@@ -188,6 +188,7 @@ This release completes the option coverage of the analysis and effects entry poi
 - Pan-law spellings are accepted case-insensitively with underscores read as hyphens, exported as the `PanLawName` and `PanLawInput` types.
 - Web MIDI hotplug fires the inputs-changed callback once per port change, and a MIDI 2.0 note-on stays a note-on regardless of its downsampled 7-bit velocity, since note-off has its own status nibble. MIDI ring polling stops once the last listener unsubscribes.
 - The size gate is split: the baseline file records the measured build while a separate budget file holds the enforced ceiling, so the gate fails on real growth rather than on every byte of drift.
+- The GM fallback voicing tables and the preset catalogue's fallback aliases no longer compile to start-up code that fills them field by field: the module's code section is 12% smaller and the compressed download nearly 5% smaller, and a voicing edit now costs the bytes of the values it changes rather than the instructions that would have written them.
 - The offline worker smoke harness drives Chrome through the DevTools protocol, waiting for the page result and always stopping the browser.
 
 ### Node
