@@ -31,6 +31,8 @@ class CapabilitiesAbi(TypedDict):
 class CapabilitiesFeatures(TypedDict):
     mastering: bool
     mixing: bool
+    # Key stays camelCase: capabilities() returns the C ABI JSON verbatim.
+    mixingAssistant: bool
     fx: bool
     ffmpeg: bool
     # Key stays camelCase: capabilities() returns the C ABI JSON verbatim.
@@ -1993,6 +1995,14 @@ class StreamChordChange:
     def __init__(self, root: int, quality: int, start_time: float, confidence: float) -> None: ...
 
 class StreamBarChord:
+    """``bar_index`` is the bar number, not this entry's position in the list:
+    bars with no confident chord are not recorded and the oldest entries are
+    dropped at the history cap, so group bars by pattern position with
+    ``bar_index``. ``start_time`` is on the same timeline as
+    ``StreamFrame.timestamp`` and consecutive bars are ``bar_duration`` apart.
+    In ``voted_pattern``, ``bar_index`` is the pattern position and
+    ``start_time`` is unused."""
+
     bar_index: int
     root: int
     quality: int
@@ -2008,6 +2018,12 @@ class StreamPatternScore:
     def __init__(self, name: str, score: float) -> None: ...
 
 class StreamStats:
+    """``bpm_candidate_count`` is the number of tempo candidates the most recent
+    BPM estimate chose from, 0 until one has run — the same quantity as
+    ``AnalysisResult``'s field of the same name. ``updated`` is true when the
+    key or BPM was re-estimated since the previous snapshot: one change sets it
+    on exactly one snapshot however the caller chunks its input."""
+
     total_frames: int
     total_samples: int
     duration_seconds: float

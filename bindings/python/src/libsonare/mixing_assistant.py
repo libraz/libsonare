@@ -50,9 +50,13 @@ class MixTrackInput(NamedTuple):
         left: Left channel, or the whole signal for a mono track.
         right: Right channel, or ``None`` for a mono track. Tracks may mix mono
             and stereo freely within one call.
-        name: Optional display name used only as a classification hint (a track
-            called ``"kick"`` is more readily read as a kick drum). The
-            suggestion never depends on it alone.
+        name: Optional display name used as a classification hint (a track
+            called ``"kick"`` is more readily read as a kick drum). For a class
+            the classifier can measure it only adjusts confidence and never
+            selects the class on its own. For the four it cannot separate by
+            measurement — ``keys``, ``strings``, ``backing`` and ``fx`` — the
+            name is the only thing that can supply the class at all, and only
+            when the measurement produced no answer.
 
     Tracks may differ in length: truncating every track to the shortest would
     delete a part that only enters late in the song.
@@ -185,9 +189,11 @@ def _suggest(
     options: dict[str, float | int | bool | None],
 ) -> str:
     """Run one of the two suggest entry points and return its JSON string."""
+    # The symbol is exported unconditionally -- a build without the assistant
+    # keeps it and answers SONARE_ERROR_NOT_SUPPORTED -- so there is nothing to
+    # probe for here. _check turns that answer into the same error class every
+    # other unsupported call raises.
     lib = _get_lib()
-    if not hasattr(lib, symbol):
-        raise RuntimeError("libsonare was built without mixing assistant support")
     if int(sample_rate) <= 0:
         raise SonareValueError(f"{fn_name}: sample_rate must be positive")
     arrays = _build_track_arrays(fn_name, tracks)
@@ -240,7 +246,14 @@ def suggest_mix_scene(
         target_track_lufs: Absolute integrated-loudness target each track is
             staged towards, in LUFS.
         suggestion_strength: Overall strength in ``[0, 1]``, scaling every
-            level-like decision. ``0`` produces an empty suggestion.
+            level-like decision: trims, fader offsets, send levels, EQ cut
+            depths, compression ratios and ranges, and how far a track is
+            spread from the centre. ``0`` is not an empty suggestion — it is
+            every one of those taken and set to zero, plus the decisions that
+            are not levels and so do not scale: the bus topology and routing,
+            and the physical corrections for a measured cancellation (polarity,
+            alignment delay, low-end mono fold). To suggest nothing, switch the
+            domains off instead; that also skips the work.
         eq_max_cut_db: Largest cut a single suggested EQ band may apply, in dB.
         mix_bus_headroom_dbtp: Headroom the summed mix is left with on the
             master bus, in dBTP.
@@ -262,7 +275,10 @@ def suggest_mix_scene(
         hop_length: Analysis hop length in samples.
 
     Every option left at ``None`` keeps the library's own default; a disabled
-    domain is not evaluated at all rather than evaluated and discarded.
+    domain is not evaluated at all rather than evaluated and discarded, and the
+    cross-track measurement it reads is skipped with it. The per-track profiling
+    behind ``tracks`` is not a domain's cost and runs either way, so it is the
+    floor that switching every domain off leaves.
 
     Returns:
         The parsed result document: ``scene`` (in the schema
@@ -344,17 +360,26 @@ def suggest_mix_scene_json(
 
 
 def mix_source_class_names() -> list[str]:
-    """Return the source-class identifiers the assistant can report."""
+    """Return the source-class identifiers the assistant can report.
+
+    Every name returned is a class some shipped entry point can actually put on
+    a track: most come from the classifier's measured decision table, and
+    ``keys``, ``strings``, ``backing`` and ``fx`` from a track's ``name``.
+
+    Raises:
+        RuntimeError: If the library was built without the mixing assistant.
+            The entry point exists in such a build and answers with an empty
+            list, which is the one answer that cannot be a real taxonomy.
+    """
     lib = _get_lib()
-    if not hasattr(lib, "sonare_mixing_assistant_source_class_names"):
-        raise RuntimeError("libsonare was built without mixing assistant support")
     raw = lib.sonare_mixing_assistant_source_class_names()
-    return raw.decode("utf-8").splitlines() if raw else []
+    names = raw.decode("utf-8").splitlines() if raw else []
+    if not names:
+        raise RuntimeError("libsonare was built without mixing assistant support")
+    return names
 
 
 def mix_source_class_from_name(name: str) -> int:
     """Resolve a source-class identifier to its enum value, or ``-1`` if unknown."""
     lib = _get_lib()
-    if not hasattr(lib, "sonare_mixing_assistant_source_class_from_name"):
-        raise RuntimeError("libsonare was built without mixing assistant support")
     return int(lib.sonare_mixing_assistant_source_class_from_name(name.encode("utf-8")))

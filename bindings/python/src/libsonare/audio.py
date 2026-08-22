@@ -8,8 +8,8 @@ from typing import TYPE_CHECKING
 
 import numpy as np
 
-from ._ffi import SONARE_OK, load_library
-from ._runtime import SonareError, _out_float_array, _to_c_float_array
+from ._ffi import load_library
+from ._runtime import _check, _out_float_array, _to_c_float_array
 from .analyzer import (
     analyze_bpm as _analyze_bpm,
 )
@@ -174,23 +174,6 @@ def _get_lib() -> ctypes.CDLL:
     if _lib is None:
         _lib = load_library()
     return _lib
-
-
-def _check(rc: int) -> None:
-    """Check a SonareError return code and raise on failure.
-
-    When the C layer recorded a detailed thread-local message
-    (``sonare_last_error_message``), it is preferred over the generic
-    ``sonare_error_message(rc)`` fallback so users see the underlying cause.
-    """
-    if rc != SONARE_OK:
-        lib = _get_lib()
-        detail = lib.sonare_last_error_message()
-        detail_str = detail.decode("utf-8") if detail else ""
-        if detail_str:
-            raise SonareError(rc, detail_str)
-        msg = lib.sonare_error_message(rc)
-        raise SonareError(rc, msg.decode("utf-8") if msg else f"sonare error {rc}")
 
 
 class Audio:

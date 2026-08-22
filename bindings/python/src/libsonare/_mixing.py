@@ -33,6 +33,12 @@ from .types import GoniometerPoint
 # string id (as declared in the scene JSON).
 StripRef = int | str
 
+# Upper bound on the goniometer working buffer, mirroring the strip ring
+# (``sonare::mixing::ChannelStrip::kGoniometerCapacity``). One read can never
+# return more than the ring holds, so capping here drops no point; it only stops
+# a caller-supplied ``max_points`` from sizing a multi-gigabyte ctypes array.
+_GONIOMETER_READ_CAP = 4096
+
 
 class MixerStereoResult(typing.NamedTuple):
     """Stereo master output of :meth:`Mixer.process_stereo`.
@@ -516,15 +522,30 @@ class Mixer:
         return _mix_meter_from_c(snapshot)
 
     def read_goniometer_latest(self, strip: StripRef, max_points: int) -> list[GoniometerPoint]:
-        """Read up to ``max_points`` of the latest goniometer (vectorscope) data."""
-        if max_points <= 0:
+        """Read up to ``max_points`` of the latest goniometer (vectorscope) data.
+
+        ``max_points`` is a request rather than an allocation size: a value
+        beyond the strip's goniometer ring simply returns every point the ring
+        holds. A non-integer or negative value raises
+        :class:`SonareValueError`.
+        """
+        if isinstance(max_points, bool) or not isinstance(max_points, int):
+            raise SonareValueError("max_points must be a non-negative integer")
+        if max_points < 0:
+            raise SonareValueError("max_points must be a non-negative integer")
+        # Bound the working buffer by the ring, not by the caller's number: a
+        # ctypes array sized straight from an arbitrary count is how a request
+        # for 10**12 points becomes a multi-gigabyte allocation. Same shape as
+        # the Node and WASM facades.
+        capped = min(max_points, _GONIOMETER_READ_CAP)
+        if capped == 0:
             return []
         handle = self._strip_handle(strip)
-        buffer = (SonareMixGoniometerPoint * max_points)()
+        buffer = (SonareMixGoniometerPoint * capped)()
         count = _get_lib().sonare_strip_read_goniometer_latest(
             handle,
             ctypes.cast(buffer, ctypes.POINTER(SonareMixGoniometerPoint)),
-            ctypes.c_size_t(max_points),
+            ctypes.c_size_t(capped),
         )
         return [
             GoniometerPoint(left=float(buffer[i].left), right=float(buffer[i].right))

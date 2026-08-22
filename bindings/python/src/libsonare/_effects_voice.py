@@ -26,6 +26,7 @@ from ._runtime import (
     SonareValueError,
     _as_float32_buffer,
     _check,
+    _check_realtime,
     _float_array_result,
     _from_c_float_array,
     _get_lib,
@@ -130,7 +131,7 @@ class RealtimeVoiceChanger:
         rc = self._lib.sonare_realtime_voice_changer_latency_samples(
             self._handle, ctypes.byref(out)
         )
-        _check(rc)
+        _check_realtime(rc)
         return int(out.value)
 
     def config_json(self) -> str:
@@ -212,7 +213,7 @@ class RealtimeVoiceChanger:
             rc = self._lib.sonare_realtime_voice_changer_process_mono(
                 self._handle, c_in, c_out, ctypes.c_size_t(length)
             )
-            _check(rc)
+            _check_realtime(rc)
         return out_buf
 
     def process_interleaved(
@@ -248,7 +249,7 @@ class RealtimeVoiceChanger:
                 ctypes.c_size_t(block_frames),
                 ctypes.c_int(ch),
             )
-            _check(rc)
+            _check_realtime(rc)
         return out_buf
 
     def process_planar_stereo(
@@ -281,7 +282,7 @@ class RealtimeVoiceChanger:
             rc = self._lib.sonare_realtime_voice_changer_process_planar_stereo(
                 self._handle, c_left, c_right, ctypes.c_size_t(length)
             )
-            _check(rc)
+            _check_realtime(rc)
         return out_left, out_right
 
 
@@ -594,6 +595,13 @@ class StreamingRetune:
         if not handle:
             raise SonareValueError("streaming retune: semitones and mix must be finite")
         self._handle = ctypes.c_void_p(handle)
+        # The grain size the caller last ASKED for. ``config()`` reports the
+        # EFFECTIVE grain once prepared, so seeding an omitted ``grain_size``
+        # from it froze the 0 "derive from the sample rate" sentinel into a
+        # literal and a re-``prepare`` at another rate kept the first rate's
+        # grain. The core draws the same distinction internally, but it is not
+        # readable across the C ABI.
+        self._requested_grain_size = grain_size
 
     def close(self) -> None:
         if self._handle:
@@ -633,17 +641,21 @@ class StreamingRetune:
 
         ``grain_size`` is structural: it is remembered and applied by the next
         :meth:`prepare`, and :meth:`config` keeps reporting the effective grain
-        until then.
+        until then. An omitted ``grain_size`` keeps the last REQUESTED value,
+        including the ``0`` sentinel, so re-preparing at another sample rate
+        re-derives the grain instead of freezing the first rate's answer.
         """
         current = self.config()
+        requested_grain_size = self._requested_grain_size if grain_size is None else int(grain_size)
         _check(
             self._lib.sonare_streaming_retune_set_config(
                 self._handle,
                 ctypes.c_float(current["semitones"] if semitones is None else semitones),
                 ctypes.c_float(current["mix"] if mix is None else mix),
-                ctypes.c_int(int(current["grain_size"]) if grain_size is None else grain_size),
+                ctypes.c_int(requested_grain_size),
             )
         )
+        self._requested_grain_size = requested_grain_size
 
     def config(self) -> dict[str, float | int]:
         """The applied controls; ``grain_size`` is the effective one."""

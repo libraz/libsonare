@@ -34,6 +34,11 @@ class CapabilitiesFeatures(TypedDict):
 
     mastering: bool
     mixing: bool
+    # Separate from ``mixing``: the assistant can be dropped on its own, and its
+    # entry points stay exported either way -- they answer NOT_SUPPORTED rather
+    # than disappearing, so probing the library for a symbol tells a host
+    # nothing. Key stays camelCase for the same reason as the one below.
+    mixingAssistant: bool
     fx: bool
     ffmpeg: bool
     # Key stays camelCase: capabilities() returns the C ABI JSON verbatim.
@@ -733,10 +738,14 @@ class RirResult:
 
     ``warning_message`` carries non-fatal diagnostics, which appear on
     SUCCESSFUL calls too and are otherwise invisible: a ``max_seconds`` clamp
-    that cut the reverb tail (``acoustic.rir_length_clamped``), or a request
-    reduced from "early reflections + diffuse tail" to early reflections only
-    (``acoustic.no_late_tail``). Neither sets ``has_error``, so a truncated RIR
-    is indistinguishable from a complete one without reading this field.
+    that cut the reverb tail (``acoustic.rir_length_clamped``), a ``max_seconds``
+    shorter than the direct sound's own arrival, which is raised to fit it
+    (``acoustic.rir_length_floored``), or a request reduced from "early
+    reflections + diffuse tail" to early reflections only
+    (``acoustic.no_late_tail``). None of them sets ``has_error``, so a truncated
+    RIR is indistinguishable from a complete one without reading this field. A
+    call can raise several; they arrive joined with ``"; "``, in the order the
+    synthesizer reported them.
     """
 
     rir: list[float]

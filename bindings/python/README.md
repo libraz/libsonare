@@ -156,7 +156,7 @@ rather than being sent as an explicit value.
 | Option                   | Default | Meaning                                                    |
 |--------------------------|---------|------------------------------------------------------------|
 | `target_track_lufs`      | `-18.0` | Absolute integrated-loudness target each track is staged towards, in LUFS |
-| `suggestion_strength`    | `1.0`   | Overall strength in `[0, 1]`, scaling every level-like decision; `0` suggests nothing |
+| `suggestion_strength`    | `1.0`   | Overall strength in `[0, 1]`, scaling every level-like decision; `0` sets them all to zero but keeps routing and the physical image corrections |
 | `eq_max_cut_db`          | `4.0`   | Largest cut a single suggested EQ band may apply, in dB      |
 | `mix_bus_headroom_dbtp`  | `-6.0`  | Headroom the summed mix is left with on the master bus, in dBTP |
 | `enable_structure`       | `True`  | Evaluate bus structure, routing and sends                    |
@@ -169,7 +169,10 @@ rather than being sent as an explicit value.
 | `n_fft`                  | `2048`  | Shared analysis FFT size for every track                     |
 | `hop_length`             | `512`   | Shared analysis hop length, in samples                       |
 
-A disabled domain is not evaluated at all rather than evaluated and discarded.
+A disabled domain is not evaluated at all rather than evaluated and discarded,
+and the cross-track measurement it reads is skipped with it. The per-track
+profiling behind `tracks` is not a domain's cost and runs either way, so it is
+the floor that switching every domain off leaves.
 
 The assistant is an optional addition on top of the mixer, not a required part
 of it: `-DBUILD_MIXING_ASSISTANT=OFF` (default `ON`) removes the subsystem

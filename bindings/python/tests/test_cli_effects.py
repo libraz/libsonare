@@ -575,6 +575,8 @@ def test_atomic_byte_writer_preserves_old_output_and_cleans_temp(monkeypatch, tm
 def test_atomic_wav_writer_preserves_old_output_and_cleans_temp(monkeypatch, tmp_path) -> None:
     """WAV finalization failure cannot truncate an earlier render."""
     from libsonare import cli
+    from libsonare._cli_common import EXIT_ENCODE_FAILED
+    from libsonare._runtime import SonareError
 
     output = tmp_path / "result.wav"
     output.write_bytes(b"old")
@@ -583,8 +585,15 @@ def test_atomic_wav_writer_preserves_old_output_and_cleans_temp(monkeypatch, tmp
         raise OSError("injected replace failure")
 
     monkeypatch.setattr(os, "replace", fail_replace)
-    with pytest.raises(OSError, match="injected"):
+    # Creating, writing and finalizing the output are all stages of producing
+    # the file, so a failure in any of them reports the encode class. The
+    # commonest instance is a `-o` that resolves to a directory, which nothing
+    # rejects until the atomic replace; escaping as a bare OSError it landed on
+    # the generic error code while the native CLI reported exit 12 for the same
+    # condition.
+    with pytest.raises(SonareError, match="injected") as raised:
         cli._write_wav(str(output), [0.25] * 10, 48000)
+    assert cli._exit_code_for(raised.value) == EXIT_ENCODE_FAILED
 
     assert output.read_bytes() == b"old"
     assert list(tmp_path.iterdir()) == [output]
@@ -874,3 +883,64 @@ def test_voice_preset_validate_rejects_an_invalid_preset_file() -> None:
         assert result.returncode == 3, result.stderr
         payload = json.loads(result.stdout)
         assert payload["ok"] is False
+
+
+def test_synthesize_rir_reports_every_warning_and_keeps_the_tail_headroom() -> None:
+    """A max_seconds below the direct-sound arrival raises three warnings at once.
+
+    None of them sets ``has_error``, so discarding them made a truncated RIR
+    indistinguishable from a complete one under a green exit. All three have to
+    reach the caller, which also means the C ABI cannot publish only the first.
+    """
+    with tempfile.TemporaryDirectory() as tmpdir:
+        out_path = os.path.join(tmpdir, "rir.wav")
+        result = _run_cli(
+            [
+                "synthesize-rir",
+                "--output",
+                out_path,
+                "--max-seconds",
+                "0.005",
+                "--sample-rate",
+                "22050",
+                "--json",
+            ]
+        )
+        assert result.returncode == 0, result.stderr
+        for code in (
+            "acoustic.rir_length_clamped",
+            "acoustic.rir_length_floored",
+            "acoustic.no_late_tail",
+        ):
+            assert code in result.stderr
+
+        # The diagnostics go to stderr, so the JSON document on stdout stays
+        # exactly the payload both CLIs publish.
+        payload = json.loads(result.stdout)
+        assert set(payload) == {"output", "samples", "sample_rate"}
+
+        # A RIR carries its physical 1/(4*pi*d) attenuation, so its peak sits far
+        # below full scale; 16-bit PCM spends roughly 36 dB of the headroom the
+        # tail needs, and half the reported samples came back exactly zero.
+        with wave.open(out_path, "rb") as handle:
+            assert handle.getsampwidth() == 3
+
+        # A request the synthesizer can satisfy in full stays silent, so a
+        # warning line is evidence about that run rather than boilerplate.
+        complete_path = os.path.join(tmpdir, "complete.wav")
+        complete = _run_cli(
+            [
+                "synthesize-rir",
+                "--output",
+                complete_path,
+                "--max-seconds",
+                "2",
+                "--sample-rate",
+                "22050",
+                "--json",
+            ]
+        )
+        assert complete.returncode == 0, complete.stderr
+        assert "warning:" not in complete.stderr
+        with wave.open(complete_path, "rb") as handle:
+            assert handle.getsampwidth() == 3

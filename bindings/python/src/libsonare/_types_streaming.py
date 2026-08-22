@@ -164,6 +164,21 @@ class StreamChordChange:
 
 @dataclass(frozen=True, slots=True)
 class StreamBarChord:
+    """One bar of the beat-synchronized chord progression.
+
+    ``bar_index`` is the bar number, not this entry's position in the list: bars
+    with no confident chord are not recorded and the oldest entries are dropped
+    at the history cap. Group bars by pattern position with ``bar_index``, never
+    with the list index.
+
+    ``start_time`` is on the same timeline as ``StreamFrame.timestamp``
+    (including a ``sample_offset`` anchor), and consecutive bars are
+    ``bar_duration`` apart rather than snapped to the analysis frame grid.
+
+    In ``voted_pattern`` the fields shift meaning: ``bar_index`` is the pattern
+    position and ``start_time`` is unused.
+    """
+
     bar_index: int
     root: int
     quality: int
@@ -179,7 +194,16 @@ class StreamPatternScore:
 
 @dataclass(frozen=True, slots=True)
 class StreamStats:
-    """Progressive estimate and counters snapshot from :class:`StreamAnalyzer`."""
+    """Progressive estimate and counters snapshot from :class:`StreamAnalyzer`.
+
+    ``bpm_candidate_count`` is the number of tempo candidates the most recent
+    BPM estimate chose from, 0 until one has run — the same quantity as the
+    batch analysis result's field of the same name.
+
+    ``updated`` is true when the key or BPM was re-estimated since the previous
+    snapshot. One change sets it on exactly one snapshot however the caller
+    chunks its input, and a call that produced no frame does not repeat it.
+    """
 
     total_frames: int
     total_samples: int

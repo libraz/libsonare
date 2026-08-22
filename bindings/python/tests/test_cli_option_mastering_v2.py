@@ -147,10 +147,18 @@ def test_mastering_assistant_enable_repair_explain_reaches_suggestion_and_chain(
     )
 
     assert _cli_mastering.cmd_mastering(args) == 0
+    # targetLufs / ceilingDb are absent because neither was named on the command
+    # line: supplying a key marks the field explicit for the assistant, and a
+    # delivery target only fills in what the caller left alone, so passing the
+    # default through unconditionally suppressed every platform target's
+    # loudness. The remaining three carry the assistant controls the CLI now
+    # reaches -- delivery target, streaming-safe repair, speech mono amount --
+    # at their defaults.
     assert calls["assistant_params"] == {
-        "targetLufs": -14.0,
-        "ceilingDb": -1.0,
         "enableRepair": True,
+        "targetPlatform": "streaming",
+        "preferStreamingSafe": True,
+        "speechMonoAmount": 1.0,
     }
     assert calls["config"] == {
         "loudness.targetLufs": -14.0,
@@ -422,3 +430,150 @@ def test_mastering_cli_reports_a_blocked_loudness_target(capsys, monkeypatch) ->
         params={"targetLufs": -6.0, "ceilingDb": -3.0},
     )
     assert processed.loudness_target_limited is True
+
+
+def test_target_platform_moves_the_loudness_the_assistant_masters_to(capsys, monkeypatch) -> None:
+    """The delivery target decides the loudness, and it is reachable from the CLI.
+
+    Read from the rendered output loudness rather than from a flag round-trip:
+    with the target unreachable, someone mastering for EBU R128 broadcast
+    silently got the -14 LUFS streaming convention -- a 9 dB error under exit 0.
+    """
+    import math
+
+    from libsonare import _cli_mastering, cli
+
+    sample_rate = 22_050
+    samples = [
+        0.5 * math.sin(2.0 * math.pi * 440.0 * index / sample_rate) for index in range(sample_rate)
+    ]
+    monkeypatch.setattr(_cli_mastering, "_load_audio", lambda path: (samples, sample_rate))
+
+    def master_to(platform: str | None) -> float:
+        argv = ["mastering", "input.wav", "--assistant", "--json"]
+        if platform is not None:
+            argv += ["--target-platform", platform]
+        args = cli._build_parser().parse_args(argv)
+        assert _cli_mastering.cmd_mastering(args) == 0
+        return json.loads(capsys.readouterr().out)["output_lufs"]
+
+    streaming = master_to(None)
+    assert -14.5 < streaming < -13.5
+    # Named explicitly, the default target lands in the same place as the
+    # omitted one.
+    assert master_to("streaming") == pytest.approx(streaming)
+    assert -23.5 < master_to("broadcast") < -22.5
+    assert -16.5 < master_to("podcast") < -15.5
+    assert -9.5 < master_to("club") < -8.5
+
+
+def test_assistant_controls_are_refused_without_assistant(monkeypatch) -> None:
+    """Options that only reach an AssistantConfig field are refused, not dropped."""
+    from libsonare import _cli_mastering, cli
+
+    monkeypatch.setattr(_cli_mastering, "_load_audio", lambda path: ([0.0], 48_000))
+    for option in (
+        ["--target-platform", "broadcast"],
+        ["--no-streaming-safe"],
+        ["--speech-mono-amount", "0.5"],
+    ):
+        args = cli._build_parser().parse_args(["mastering", "input.wav", *option])
+        with pytest.raises(ValueError, match="requires --assistant"):
+            _cli_mastering.cmd_mastering(args)
+
+
+def test_unknown_target_platform_is_rejected_against_the_delivery_table() -> None:
+    """The accepted names are the delivery-target table's rows, not a free string."""
+    from libsonare import cli
+
+    with pytest.raises(SystemExit) as raised:
+        cli._build_parser().parse_args(
+            ["mastering", "input.wav", "--assistant", "--target-platform", "bogus"]
+        )
+    assert raised.value.code == 2
+
+
+def test_no_streaming_safe_reaches_the_suggester(capsys, monkeypatch) -> None:
+    """prefer_streaming_safe defaults to true, so the reachable control turns it off."""
+    import math
+
+    from libsonare import _cli_mastering, cli
+
+    sample_rate = 22_050
+    samples = [
+        0.5 * math.sin(2.0 * math.pi * 440.0 * index / sample_rate) for index in range(sample_rate)
+    ]
+    monkeypatch.setattr(_cli_mastering, "_load_audio", lambda path: (samples, sample_rate))
+
+    def explanation(*extra: str) -> list[str]:
+        args = cli._build_parser().parse_args(
+            [
+                "mastering",
+                "input.wav",
+                "--assistant",
+                "--enable-repair",
+                "--explain",
+                "--json",
+                *extra,
+            ]
+        )
+        assert _cli_mastering.cmd_mastering(args) == 0
+        return json.loads(capsys.readouterr().out)["explanation"]
+
+    assert any("streaming-safe repair enabled" in line for line in explanation())
+    open_lines = explanation("--no-streaming-safe")
+    assert not any("streaming-safe repair enabled" in line for line in open_lines)
+    assert any("repair stages enabled" in line for line in open_lines)
+
+
+@pytest.mark.parametrize(
+    ("option", "first_rejected", "last_accepted"),
+    [
+        ("type", 9, 8),
+        ("coeff-mode", 2, 1),
+        ("placement", 5, 4),
+        ("phase-mode", 4, 3),
+        ("resolution", 6, 5),
+    ],
+)
+def test_eq_refuses_an_enumerator_index_outside_its_enumeration(
+    monkeypatch, option, first_rejected, last_accepted
+) -> None:
+    """An index past the enumeration maps to the first enumerator without this.
+
+    The switches behind these options answer an unrecognized index with their
+    first enumerator, so a mistyped `--type 999` applied a peak filter and exited
+    0 with a normal JSON payload.
+    """
+    from libsonare import _cli_mastering, cli
+
+    monkeypatch.setattr(_cli_mastering, "_load_audio", lambda path: ([0.0] * 2048, 48_000))
+    for value in (first_rejected, -1):
+        args = cli._build_parser().parse_args(["eq", "input.wav", f"--{option}={value}", "--json"])
+        with pytest.raises(ValueError, match=f"invalid value for --{option}"):
+            _cli_mastering.cmd_eq(args)
+
+    # The last enumerator is inside the domain, so it must get past validation
+    # rather than be refused by an off-by-one bound.
+    args = cli._build_parser().parse_args(
+        ["eq", "input.wav", f"--{option}", str(last_accepted), "--json"]
+    )
+    _cli_mastering._check_eq_enum_options(args)
+
+
+def test_eq_names_and_refuses_a_params_key_the_processor_does_not_read(monkeypatch) -> None:
+    """A supplied key no config builder probes took no effect at all."""
+    from libsonare import _cli_mastering, cli
+
+    monkeypatch.setattr(_cli_mastering, "_load_audio", lambda path: ([0.0] * 2048, 48_000))
+    args = cli._build_parser().parse_args(
+        ["eq", "input.wav", "--params", "band0.bogusKey=42", "--json"]
+    )
+    with pytest.raises(ValueError, match="unknown --params key for eq.equalizer"):
+        _cli_mastering.cmd_eq(args)
+
+    # A key the processor does read still runs.
+    good = cli._build_parser().parse_args(
+        ["eq", "input.wav", "--params", "band0.gainDb=3", "--json"]
+    )
+    assert _cli_mastering.cmd_eq(good) == 0

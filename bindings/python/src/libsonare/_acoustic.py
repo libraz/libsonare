@@ -90,8 +90,10 @@ def synthesize_rir(
         absorption_bands: Optional per-octave-band wall absorption
             (125/250/500/1k/2k/4k.. Hz). When given it overrides ``absorption``
             (unless ``material_preset`` selects a named preset).
-        scattering_bands: Optional per-octave-band wall scattering. Applied only
-            with ``absorption_bands`` and ignored when ``material_preset`` wins.
+        scattering_bands: Optional per-octave-band wall scattering; missing
+            bands read as 0. Independent of ``absorption_bands`` and
+            ``material_preset`` -- it applies to whichever material the
+            absorption precedence selected.
         material_preset: Named wall-material preset (0 = none; 1 concrete,
             2 wood, 3 curtain, 4 carpet, 5 glass). A non-zero preset wins over
             ``absorption_bands`` and ``absorption``.
@@ -288,9 +290,10 @@ def room_morph(
     Args:
         absorption_bands: Optional per-octave-band target-wall absorption; when
             given it overrides ``absorption`` unless ``material_preset`` is set.
-        scattering_bands: Optional per-octave-band target-wall scattering.
-            Applied only with ``absorption_bands`` and ignored when
-            ``material_preset`` wins.
+        scattering_bands: Optional per-octave-band target-wall scattering;
+            missing bands read as 0. Independent of ``absorption_bands`` and
+            ``material_preset`` -- it applies to whichever material the
+            absorption precedence selected.
         material_preset: Named target-wall material preset (0 = none; see
             :func:`synthesize_rir`). A non-zero preset wins over the bands/scalar.
         prefer_eyring: Use the Eyring statistical late-tail model for the target

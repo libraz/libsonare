@@ -20,6 +20,7 @@ import pytest
 
 import libsonare
 from libsonare import (
+    RealtimeVoiceChanger,
     bass_chroma,
     chroma,
     chroma_cens,
@@ -498,3 +499,157 @@ class TestDocumentedBufferInputForms:
         with pytest.raises(SonareValueError) as exc_info:
             metering_rms_db(["not", "numbers"])
         assert "metering_rms_db: samples" in str(exc_info.value)
+
+
+def _stereo_2d(n: int = 1024) -> np.ndarray:
+    """A ``(frames, channels)`` buffer, the shape ``soundfile`` returns."""
+    mono = _sine(n)
+    return np.stack([mono, mono], axis=1)
+
+
+class TestBufferRankGuards:
+    """A buffer that is not 1-D is named, never flattened into a longer one.
+
+    Flattening a ``(frames, 2)`` read produces an interleaved mono buffer of
+    twice the frame count that every analysis accepts and none can tell from
+    real audio: the pitch comes back an octave low, the tempo halved, the
+    loudness doubled. The rejection has to name the rank, because the caller's
+    mistake is a missing downmix and nothing about the samples themselves.
+    """
+
+    def test_stereo_read_is_rejected_naming_ndim_and_shape(self):
+        with pytest.raises(SonareValueError) as exc_info:
+            lufs(_stereo_2d(), SR)
+        message = str(exc_info.value)
+        assert message.startswith("lufs: samples must be a 1-D buffer")
+        assert "ndim=2" in message
+        assert "shape=(1024, 2)" in message
+        assert "axis 1" in message
+        assert exc_info.value.code == 4
+
+    def test_stereo_read_is_refused_rather_than_read_an_octave_low(self):
+        # The harm, stated as behaviour: interleaving two copies of a 220 Hz
+        # tone reads as 110 Hz, a plausible answer no caller could question.
+        mono = _sine(SR, freq=220.0)
+        assert pitch_yin(mono, SR).f0[10] == pytest.approx(220.0, rel=0.05)
+        with pytest.raises(SonareValueError, match=r"pitch_yin: samples must be a 1-D buffer"):
+            pitch_yin(np.stack([mono, mono], axis=1), SR)
+
+    @pytest.mark.parametrize("name", sorted(_SAMPLE_WRAPPERS))
+    def test_every_guarded_wrapper_rejects_a_2d_buffer(self, name):
+        arg = _buffer_arg(name)
+        with pytest.raises(SonareValueError, match=rf"{name}: {arg} must be a 1-D buffer"):
+            _SAMPLE_WRAPPERS[name](_stereo_2d())
+
+    def test_nested_sequence_is_rejected_like_a_2d_array(self):
+        with pytest.raises(SonareValueError) as exc_info:
+            metering_rms_db([[0.1, 0.2], [0.3, 0.4]])
+        assert "metering_rms_db: samples must be a 1-D buffer" in str(exc_info.value)
+        assert "shape=(2, 2)" in str(exc_info.value)
+
+    def test_zero_dimensional_array_is_rejected(self):
+        with pytest.raises(SonareValueError) as exc_info:
+            metering_rms_db(np.array(0.5, dtype=np.float32))
+        assert "ndim=0" in str(exc_info.value)
+
+    def test_a_flattened_matrix_argument_rejects_the_unflattened_form(self):
+        # The matrix entry points document a flattened row-major buffer and
+        # check its length against their own shape arguments. A transposed 2-D
+        # array passes that length check while flattening in the wrong order,
+        # so the rank has to be refused rather than repaired here too.
+        from libsonare import mel_to_stft
+
+        mel = np.linspace(0.0, 1.0, 16 * 4, dtype=np.float32).reshape(16, 4)
+        with pytest.raises(SonareValueError, match=r"mel_to_stft: mel must be a 1-D buffer"):
+            mel_to_stft(mel, 16, 4)
+        assert mel_to_stft(mel.reshape(-1), 16, 4).n_frames == 4
+
+    def test_audio_from_buffer_rejects_a_stereo_read(self):
+        # Reached through `_to_c_float_array`, not through the decorator, so it
+        # is a second entry path into the same helper.
+        with pytest.raises(SonareValueError, match=r"samples must be a 1-D buffer"):
+            libsonare.Audio.from_buffer(_stereo_2d(), sample_rate=SR)
+
+    def test_realtime_voice_changer_rejects_a_stereo_read(self):
+        # A third entry path: the realtime block loop calls the helper directly.
+        from libsonare import RealtimeVoiceChanger
+
+        with (
+            RealtimeVoiceChanger(sample_rate=48000, channels=1, max_block_size=128) as changer,
+            pytest.raises(SonareValueError, match=r"samples must be a 1-D buffer"),
+        ):
+            changer.process_mono(_stereo_2d(256))
+
+
+class TestNoneIsReportedAsATypeNotAsANanSample:
+    """``None`` names its own type instead of pointing at the audio data.
+
+    NumPy turns ``None`` into ``array(nan)``, so a rank check that did not run
+    ahead of the non-finite scan let it come back as "samples contains NaN or
+    Inf at index 0" — a message that sends the caller to inspect a buffer that
+    was never produced, instead of at whatever returned ``None``.
+    """
+
+    def test_none_names_the_nonetype(self):
+        with pytest.raises(SonareValueError) as exc_info:
+            lufs(None, SR)
+        message = str(exc_info.value)
+        assert message == (
+            "lufs: samples must be a sequence of numbers or a numpy array, not NoneType"
+        )
+        assert "NaN" not in message
+
+    @pytest.mark.parametrize("name", sorted(_SAMPLE_WRAPPERS))
+    def test_every_guarded_wrapper_names_the_nonetype(self, name):
+        arg = _buffer_arg(name)
+        with pytest.raises(SonareValueError) as exc_info:
+            _SAMPLE_WRAPPERS[name](None)
+        assert str(exc_info.value) == (
+            f"{name}: {arg} must be a sequence of numbers or a numpy array, not NoneType"
+        )
+
+    def test_a_bare_scalar_is_reported_by_type_too(self):
+        with pytest.raises(SonareValueError, match=r"not float$"):
+            metering_rms_db(0.5)
+
+
+class TestRealtimeFailuresDoNotBorrowAnEarlierMessage:
+    """Audio-thread entry points report their code, not the thread-local slot.
+
+    ``sonare_c_types_functions.h`` states that these entry points neither clear
+    nor record the detailed message, so after one fails the slot still holds
+    whatever an earlier control-thread call left there — and must not be read
+    as belonging to the failed call.
+    """
+
+    def test_voice_changer_reports_its_own_code_not_the_previous_failure(self):
+        from libsonare._runtime import _get_lib
+
+        with RealtimeVoiceChanger(sample_rate=48000, channels=1, max_block_size=128) as changer:
+            with pytest.raises(SonareError):
+                stft(_sine(1024), SR, n_fft=3)
+            stale = _get_lib().sonare_last_error_message().decode("utf-8")
+            assert "FFT size" in stale, "the control-thread call must leave a detail behind"
+
+            block = np.zeros(128, dtype=np.float32)
+            with pytest.raises(SonareError) as exc_info:
+                # A mono handle cannot serve the planar-stereo entry point.
+                changer.process_planar_stereo(block, block.copy())
+        assert exc_info.value.code == 4
+        assert str(exc_info.value) == "[4] Invalid parameter"
+        assert "FFT size" not in str(exc_info.value)
+
+    def test_the_return_code_mapping_has_a_single_definition(self):
+        # Two byte-identical copies of `_check` used to exist, so a fix to the
+        # message policy had to be applied twice with nothing checking that it
+        # was.
+        package = pathlib.Path(libsonare.__file__).parent
+        definitions: list[str] = []
+        for path in sorted(package.glob("*.py")):
+            tree = ast.parse(path.read_text(encoding="utf-8"))
+            for node in ast.walk(tree):
+                if isinstance(node, ast.FunctionDef) and node.name == "_check":
+                    definitions.append(f"{path.name}:{node.lineno}")
+        assert [entry.split(":")[0] for entry in definitions] == ["_runtime.py"], (
+            f"_check must be defined once and imported everywhere else: {definitions}"
+        )

@@ -635,7 +635,20 @@ def cmd_synthesize_rir(args: argparse.Namespace) -> int:
         detail = getattr(result, "error_message", "")
         print(f"Error: {detail or 'invalid room geometry'}", file=sys.stderr)
         return 1 if _legacy_exit_codes() else EXIT_INVALID_PARAMETER
-    _write_wav(args.output, result.rir, result.sample_rate)
+    # Warnings survive a successful synthesis and describe a RIR the caller did
+    # not ask for -- a tail cut against max_seconds, a cap raised to fit the
+    # direct sound, a request reduced to early reflections alone. Dropping them
+    # made a truncated RIR indistinguishable from a complete one. They go to
+    # stderr in every mode so the JSON document on stdout stays exactly the
+    # payload both CLIs publish.
+    warning = getattr(result, "warning_message", "")
+    if warning:
+        print(f"warning: {warning}", file=sys.stderr)
+    # 24-bit, not the 16-bit default. A synthesized RIR carries its physical
+    # 1/(4*pi*d) attenuation, so its peak sits far below full scale and 16-bit
+    # quantization would cost the tail roughly 36 dB of the headroom it needs;
+    # half the reported samples came back exactly zero.
+    _write_wav(args.output, result.rir, result.sample_rate, 24)
     if args.json:
         print(
             _strict_json_dumps(

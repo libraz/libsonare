@@ -108,12 +108,22 @@ def _get_lib() -> ctypes.CDLL:
     return _lib
 
 
+def _generic_error(rc: int) -> SonareError:
+    """Build a :class:`SonareError` from the code's own generic string."""
+    msg = _get_lib().sonare_error_message(rc)
+    return SonareError(rc, msg.decode("utf-8") if msg else f"sonare error {rc}")
+
+
 def _check(rc: int) -> None:
     """Check a SonareError return code and raise on failure.
 
     When the C layer recorded a detailed thread-local message
     (``sonare_last_error_message``), it is preferred over the generic
     ``sonare_error_message(rc)`` fallback so users see the underlying cause.
+
+    This is the single definition of the return-code-to-exception mapping for
+    the whole binding; every submodule imports it from here. Audio-thread entry
+    points are the one exception and use :func:`_check_realtime` instead.
     """
     if rc != SONARE_OK:
         lib = _get_lib()
@@ -121,8 +131,28 @@ def _check(rc: int) -> None:
         detail_str = detail.decode("utf-8") if detail else ""
         if detail_str:
             raise SonareError(rc, detail_str)
-        msg = lib.sonare_error_message(rc)
-        raise SonareError(rc, msg.decode("utf-8") if msg else f"sonare error {rc}")
+        raise _generic_error(rc)
+
+
+def _check_realtime(rc: int) -> None:
+    """Check a return code from an audio-thread C entry point.
+
+    Audio-thread entry points -- the engine block-render calls and the realtime
+    voice changer's process / latency calls -- neither clear nor record the
+    thread-local detail message, because first-touch TLS setup would break
+    their no-allocation contract. After one of them fails, that slot still
+    holds whatever an earlier control-thread call left behind, which
+    ``sonare_c_types_functions.h`` states must not be read as belonging to the
+    failed call.
+
+    So this maps the code through ``sonare_error_message`` only. Reporting the
+    stale detail instead described an unrelated call: a channel-count mismatch
+    in the voice changer surfaced as a previous STFT's error text, which is
+    both wrong and intermittent, since it depends on the call history rather
+    than on the failure.
+    """
+    if rc != SONARE_OK:
+        raise _generic_error(rc)
 
 
 def _validate_samples(
@@ -139,6 +169,11 @@ def _validate_samples(
     True (the default), additionally scans for NaN / Inf and raises
     :class:`SonareValueError` on the first offending index. Hot paths may pass
     ``validate=False`` to skip the O(n) scan.
+
+    The coercion runs first, so a bad type or a rank other than 1 is named as
+    such by :func:`_as_float32_buffer` and never reaches the scan. That
+    ordering is what keeps the NaN / Inf message true: it is only ever raised
+    for a buffer that really holds a non-finite sample.
 
     ``allow_empty`` skips only the emptiness check, for a caller that inspects
     several buffers together and reports "nothing to work on" once rather than
@@ -232,6 +267,25 @@ def _validate_scalar(fn_name: str, value: float, arg_name: str) -> float:
     return v
 
 
+def _not_a_buffer(samples: object, fn_name: str, arg_name: str) -> SonareValueError:
+    """Build the rejection for an input that is not a numeric buffer at all."""
+    prefix = f"{fn_name}: " if fn_name else ""
+    return SonareValueError(
+        f"{prefix}{arg_name} must be a sequence of numbers or a numpy array, "
+        f"not {type(samples).__name__}"
+    )
+
+
+def _not_one_dimensional(array: np.ndarray, fn_name: str, arg_name: str) -> SonareValueError:
+    """Build the rejection for a buffer of the wrong rank, naming its shape."""
+    prefix = f"{fn_name}: " if fn_name else ""
+    return SonareValueError(
+        f"{prefix}{arg_name} must be a 1-D buffer, not ndim={array.ndim} "
+        f"shape={tuple(array.shape)}: downmix a (frames, channels) read along axis 1, "
+        f"or flatten a row-major matrix argument, before passing it"
+    )
+
+
 def _as_float32_buffer(
     samples: object, *, fn_name: str = "", arg_name: str = "samples"
 ) -> np.ndarray:
@@ -249,8 +303,23 @@ def _as_float32_buffer(
     then fails — it has never been convertible, whatever a reader might assume
     from the iterable-sounding parameter name.
 
-    ``fn_name`` / ``arg_name`` only shape that message, so a rejection names the
-    facade the caller invoked exactly as :func:`_validate_samples` does.
+    Anything that does not coerce to rank 1 is rejected here too, and this is
+    the only place in the binding that decides it. Flattening instead is silent
+    and wrong in both directions: a ``(frames, 2)`` stereo read — what
+    ``soundfile`` hands back — becomes an interleaved mono buffer of twice the
+    frame count, which analyses as an octave-low pitch, a halved tempo and a
+    doubled loudness with nothing to indicate it; and a matrix argument
+    supplied as a transposed 2-D array flattens in the wrong order while still
+    passing the entry point's ``rows * columns`` length check. A rank the
+    caller did not intend must therefore be named, not repaired.
+
+    A rank-0 result is the ``None`` case: NumPy turns ``None`` into
+    ``array(nan)``, so without this it reached the non-finite scan and was
+    reported as a NaN sample at index 0 — sending the caller to look at audio
+    data for a bug in whatever produced the ``None``.
+
+    ``fn_name`` / ``arg_name`` only shape those messages, so a rejection names
+    the facade the caller invoked exactly as :func:`_validate_samples` does.
     """
     if isinstance(samples, np.ndarray):
         if (
@@ -260,26 +329,31 @@ def _as_float32_buffer(
             and samples.ndim == 1
         ):
             return samples
+        if samples.ndim != 1:
+            raise _not_one_dimensional(samples, fn_name, arg_name)
         # Read-only float32 arrays (e.g. from ``np.frombuffer``, mmap, or
         # ``setflags(write=False)``) are harmless to the C library (samples are
         # taken as ``const``) but ``ctypes.from_buffer`` requires a *writable*
         # buffer. ``np.ascontiguousarray`` returns a read-only array unchanged,
         # so force a fresh writable copy in that case; otherwise take the cheap
-        # single-pass cast/flatten path.
-        buf = np.ascontiguousarray(samples, dtype=np.float32).reshape(-1)
+        # single-pass cast path.
+        buf = np.ascontiguousarray(samples, dtype=np.float32)
         if not buf.flags["WRITEABLE"]:
-            buf = np.array(buf, dtype=np.float32, copy=True, order="C").reshape(-1)
+            buf = np.array(buf, dtype=np.float32, copy=True, order="C")
         return buf
     # list / tuple / array.array / range / memoryview → bulk-convert via NumPy's
     # vectorised C path (orders of magnitude faster than `(c_float*N)(*seq)`).
     try:
-        return np.ascontiguousarray(np.asarray(samples, dtype=np.float32)).reshape(-1)
+        converted = np.asarray(samples, dtype=np.float32)
     except (TypeError, ValueError) as exc:
-        prefix = f"{fn_name}: " if fn_name else ""
-        raise SonareValueError(
-            f"{prefix}{arg_name} must be a sequence of numbers or a numpy array, "
-            f"not {type(samples).__name__}"
-        ) from exc
+        raise _not_a_buffer(samples, fn_name, arg_name) from exc
+    if converted.ndim == 0:
+        # ``None`` and bare scalars land here; report the type that was passed
+        # rather than the rank, which says nothing about what to fix.
+        raise _not_a_buffer(samples, fn_name, arg_name)
+    if converted.ndim != 1:
+        raise _not_one_dimensional(converted, fn_name, arg_name)
+    return np.ascontiguousarray(converted)
 
 
 def _planar_channel_arrays(
@@ -359,7 +433,7 @@ def _to_c_float_array_owned(
     cannot overwrite the input. The single bulk copy is negligible next to the
     DSP work these offline/streaming calls perform.
     """
-    buf = np.array(_as_float32_buffer(samples), dtype=np.float32, copy=True, order="C").reshape(-1)
+    buf = np.array(_as_float32_buffer(samples), dtype=np.float32, copy=True, order="C")
     length = int(buf.shape[0])
     if length == 0:  # noqa: SIM108
         c_array = (ctypes.c_float * 0)()

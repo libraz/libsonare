@@ -159,6 +159,30 @@ def test_read_goniometer_latest_returns_points(mixer) -> None:
         assert isinstance(point.right, float)
 
 
+def test_read_goniometer_latest_bounds_the_buffer_independently_of_max_points(mixer) -> None:
+    """max_points is a request, not an allocation size.
+
+    A ctypes array sized straight from the caller's number turned a metering UI
+    deriving the count from a window size into a multi-gigabyte allocation. The
+    working buffer is bounded by the strip's goniometer ring instead. Matches
+    the Node and WASM facades.
+    """
+    _process_one_block(mixer)
+
+    huge = mixer.read_goniometer_latest("vocal", 2**40)
+    assert isinstance(huge, list)
+    assert 0 < len(huge) <= 4096
+
+    # Not a finite non-negative integer -> a catchable error, never a silent
+    # clamp to zero, matching what Node and WASM do with the same value.
+    for invalid in (-1, -4096, 1.5, True):
+        with pytest.raises(ValueError):
+            mixer.read_goniometer_latest("vocal", invalid)
+
+    # Zero stays a legal empty read.
+    assert mixer.read_goniometer_latest("vocal", 0) == []
+
+
 def test_set_pan_law_accepts_enum_int_and_name(mixer) -> None:
     """set_pan_law accepts a PanLaw enum, a raw int, and a name; invalid raises."""
     from libsonare import PanLaw

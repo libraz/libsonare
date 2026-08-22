@@ -55,6 +55,25 @@ def test_streaming_retune_applies_grain_requested_after_prepare() -> None:
         assert retune.grain_size() == 512
 
 
+def test_streaming_retune_rederives_grain_after_an_unrelated_set_config() -> None:
+    # set_config seeded every field from config(), and config()["grain_size"] is
+    # the EFFECTIVE grain once prepared -- so touching any other control froze
+    # the 0 "derive from the sample rate" sentinel into a literal, and a host
+    # re-preparing at 22.05 kHz kept the 48 kHz grain: double the latency and
+    # double the transient smear, with no diagnostic saying why.
+    with StreamingRetune() as retune:
+        retune.prepare(SR, BLOCK)
+        assert retune.grain_size() == 2232
+        retune.set_config(semitones=5.0)
+        retune.prepare(22050, BLOCK)
+        assert retune.grain_size() == 1024
+        # An explicitly requested grain still survives an unrelated update.
+        retune.set_config(grain_size=512)
+        retune.set_config(mix=0.5)
+        retune.prepare(22050, BLOCK)
+        assert retune.grain_size() == 512
+
+
 def test_streaming_retune_set_config_keeps_unmentioned_keywords() -> None:
     with StreamingRetune(semitones=5.0, mix=0.25) as retune:
         retune.prepare(SR, BLOCK)

@@ -114,6 +114,8 @@ def test_atomic_wav_writer_preserves_old_output_at_every_failure_stage(
 ) -> None:
     import libsonare._cli_common as implementation
     from libsonare import cli
+    from libsonare._cli_common import EXIT_ENCODE_FAILED
+    from libsonare._runtime import SonareError
 
     output = tmp_path / "result.wav"
     output.write_bytes(b"old artifact")
@@ -138,8 +140,13 @@ def test_atomic_wav_writer_preserves_old_output_at_every_failure_stage(
             lambda _source, _target: (_ for _ in ()).throw(OSError("injected replace failure")),
         )
 
-    with pytest.raises(OSError, match=f"injected {stage} failure"):
+    # Every stage here is a stage of producing the output file, so all three
+    # report the encode class rather than the generic error code the bare OSError
+    # used to land on. The native CLI reports the same class for the same
+    # condition, which is what lets a script branch on it whichever CLI it calls.
+    with pytest.raises(SonareError, match=f"injected {stage} failure") as raised:
         cli._write_wav(str(output), [0.25] * 10, 48000)
+    assert cli._exit_code_for(raised.value) == EXIT_ENCODE_FAILED
 
     _assert_only_old_output(tmp_path, output)
 

@@ -151,6 +151,9 @@ from ._cli_inventory import (
     dump_cli_contract as _dump_cli_contract_for_parser,
 )
 from ._cli_mastering import *  # noqa: F403
+from ._cli_mastering import (
+    _EQ_ENUM_BOUNDS as _EQ_ENUM_BOUNDS,
+)
 from ._cli_project import *  # noqa: F403
 from ._cli_project import (
     _load_project as _load_project,
@@ -262,7 +265,11 @@ def _validate_pitch_namespace(args: argparse.Namespace, parser: argparse.Argumen
     fmin = getattr(args, "fmin", None)
     fmax = getattr(args, "fmax", None)
     if fmin is not None and fmax is not None and fmax <= fmin:
-        parser.error("--fmax must be greater than --fmin")
+        # The effective values, not just the rule: the offending half is
+        # commonly the option the caller never typed, and `--fmin 3000` against
+        # the 2093 Hz default `--fmax` reads as an unexplained refusal without
+        # them.
+        parser.error(f"--fmax must be greater than --fmin (--fmin {fmin:g}, --fmax {fmax:g})")
 
 
 def _restore_parser_compat_defaults(args: argparse.Namespace) -> None:
@@ -837,6 +844,39 @@ def _build_parser() -> _ContractArgumentParser:
     mastering_p.add_argument("--assistant", action="store_true")
     mastering_p.add_argument("--enable-repair", action="store_true")
     mastering_p.add_argument("--explain", action="store_true")
+    # The remaining assistant controls. The accepted delivery-target names are
+    # the rows of the table in src/mastering/assistant/platform_targets.h, which
+    # the native CLI reads directly; the cross-surface option-domain comparison
+    # is what keeps this restatement pinned to it. ``prefer_streaming_safe``
+    # defaults to true in the library, so the reachable control is the one that
+    # turns it off. ``--speech-mono-amount`` declares no domain because the
+    # suggester clamps it to [0, 1] rather than refusing an outside value.
+    mastering_p.add_argument(
+        "--target-platform",
+        default="streaming",
+        choices=(
+            "streaming",
+            "youtube",
+            "broadcast",
+            "podcast",
+            "audiobook",
+            "cinema",
+            "club",
+            "cd",
+        ),
+        help="Delivery target the assistant masters for (default: streaming)",
+    )
+    mastering_p.add_argument(
+        "--no-streaming-safe",
+        action="store_true",
+        help="Let the assistant suggest treatments it withholds for streaming delivery",
+    )
+    mastering_p.add_argument(
+        "--speech-mono-amount",
+        type=_finite_float,
+        default=1.0,
+        help="How far speech-like material is collapsed toward mono (0-1; default: 1)",
+    )
     mproc_p = sub.add_parser(
         "mastering-processor", parents=[common], help="Apply a named mastering processor"
     )
@@ -846,31 +886,59 @@ def _build_parser() -> _ContractArgumentParser:
     mproc_p.add_argument("--stereo", action="store_true")
     eq_p = sub.add_parser("eq", parents=[common], help="Apply the unified equalizer")
     eq_p.add_argument("--params", default="", help="Params as k=v,k=v (overrides band shortcuts)")
-    eq_p.add_argument(
-        "--type",
-        type=int,
-        default=0,
-        help=(
-            "Band type enum: 0 peak, 1 low shelf, 2 high shelf, 3 low pass, "
-            "4 high pass, 5 band pass, 6 notch, 7 tilt"
+    # Each of these selects an enumerator by index. cmd_eq refuses an index
+    # outside the enumeration after parsing, which is why the published domain
+    # records the invalid-parameter class rather than the usage one; without the
+    # refusal the underlying switch answers an unknown index with its first
+    # enumerator, so a typo applies a different filter and exits 0.
+    _cli_domain(
+        eq_p.add_argument(
+            "--type",
+            type=int,
+            default=0,
+            help=(
+                "Band type enum: 0 peak, 1 low shelf, 2 high shelf, 3 low pass, "
+                "4 high pass, 5 band pass, 6 notch, 7 tilt, 8 flat tilt"
+            ),
         ),
+        choices=range(_EQ_ENUM_BOUNDS["type"] + 1),
+        reject_exit="invalid_parameter",
     )
     eq_p.add_argument("--frequency-hz", type=float, default=1000.0)
     eq_p.add_argument("--gain-db", type=float, default=0.0)
     eq_p.add_argument("--q", type=float, default=1.0)
-    eq_p.add_argument("--coeff-mode", type=int, default=0, help="0 RBJ, 1 Vicanek")
+    _cli_domain(
+        eq_p.add_argument("--coeff-mode", type=int, default=0, help="0 RBJ, 1 Vicanek"),
+        choices=range(_EQ_ENUM_BOUNDS["coeff_mode"] + 1),
+        reject_exit="invalid_parameter",
+    )
     eq_p.add_argument("--slope-db-oct", type=int, default=12)
-    eq_p.add_argument(
-        "--placement", type=int, default=0, help="0 stereo, 1 left, 2 right, 3 mid, 4 side"
+    _cli_domain(
+        eq_p.add_argument(
+            "--placement", type=int, default=0, help="0 stereo, 1 left, 2 right, 3 mid, 4 side"
+        ),
+        choices=range(_EQ_ENUM_BOUNDS["placement"] + 1),
+        reject_exit="invalid_parameter",
     )
-    eq_p.add_argument(
-        "--phase-mode", type=int, default=1, help="1 zero latency, 2 natural, 3 linear"
+    _cli_domain(
+        eq_p.add_argument(
+            "--phase-mode",
+            type=int,
+            default=1,
+            help="0 inherit, 1 zero latency, 2 natural, 3 linear",
+        ),
+        choices=range(_EQ_ENUM_BOUNDS["phase_mode"] + 1),
+        reject_exit="invalid_parameter",
     )
-    eq_p.add_argument(
-        "--resolution",
-        type=int,
-        default=0,
-        help="0 custom/default, 1 low, 2 medium, 3 high, 4 very high, 5 maximum",
+    _cli_domain(
+        eq_p.add_argument(
+            "--resolution",
+            type=int,
+            default=0,
+            help="0 custom/default, 1 low, 2 medium, 3 high, 4 very high, 5 maximum",
+        ),
+        choices=range(_EQ_ENUM_BOUNDS["resolution"] + 1),
+        reject_exit="invalid_parameter",
     )
     eq_p.add_argument("--auto-gain", action="store_true")
     eq_p.add_argument("--gain-scale", type=float, default=1.0)

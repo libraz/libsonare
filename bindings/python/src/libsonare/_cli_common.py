@@ -279,26 +279,41 @@ def _atomic_wav_writer(
         raise ValueError("WAV bits must be 16 or 24")
     target = os.path.abspath(path)
     directory = os.path.dirname(target)
-    raw = tempfile.NamedTemporaryFile(  # noqa: SIM115 - lifetime spans the yielded writer
-        mode="w+b",
-        prefix=f".{os.path.basename(target)}.",
-        suffix=".tmp",
-        dir=directory,
-        delete=False,
-    )
+    # Creating the scratch file, writing it, and replacing the destination with
+    # it are all stages of producing the output, so an OSError from any of them
+    # carries one class. The commonest instance is a `-o` that resolves to a
+    # directory, which nothing rejects until the atomic replace; escaping as a
+    # bare OSError it landed on the generic error code, while the native CLI
+    # reports the same condition as ErrorCode::EncodeFailed. The yielded block is
+    # covered too: the only file it touches is this one, so an OSError raised
+    # there is a failed write to the output rather than an unrelated caller
+    # error, which is why the conversion is by exception type and not by scope.
+    try:
+        raw = tempfile.NamedTemporaryFile(  # noqa: SIM115 - lifetime spans the yielded writer
+            mode="w+b",
+            prefix=f".{os.path.basename(target)}.",
+            suffix=".tmp",
+            dir=directory,
+            delete=False,
+        )
+    except OSError as exc:
+        raise SonareError(SONARE_ERROR_ENCODE_FAILED, f"cannot write {path}: {exc}") from exc
     temporary = raw.name
     wav = None
     try:
-        wav = wave.open(raw, "wb")  # noqa: SIM115 - closed before the atomic replace
-        wav.setnchannels(channels)
-        wav.setsampwidth(bits_per_sample // 8)
-        wav.setframerate(int(sample_rate))
-        yield wav
-        wav.close()
-        raw.flush()
-        os.fsync(raw.fileno())
-        raw.close()
-        os.replace(temporary, target)
+        try:
+            wav = wave.open(raw, "wb")  # noqa: SIM115 - closed before the atomic replace
+            wav.setnchannels(channels)
+            wav.setsampwidth(bits_per_sample // 8)
+            wav.setframerate(int(sample_rate))
+            yield wav
+            wav.close()
+            raw.flush()
+            os.fsync(raw.fileno())
+            raw.close()
+            os.replace(temporary, target)
+        except OSError as exc:
+            raise SonareError(SONARE_ERROR_ENCODE_FAILED, f"cannot write {path}: {exc}") from exc
     except BaseException:
         if wav is not None:
             with suppress(Exception):

@@ -51,6 +51,7 @@ from ._runtime import (
     ScopeTelemetryRecord,
     SonareValueError,
     _check,
+    _check_realtime,
     _from_c_float_array,
     _get_lib,
     _planar_channel_arrays,
@@ -185,7 +186,7 @@ class _EngineIoMixin:
         Pass zero-filled planes when the engine is the only audio source.
         """
         arrays, ptrs, frame_count = self._channel_arrays(channels)
-        _check(
+        _check_realtime(
             _get_lib().sonare_engine_process(
                 self._require_handle(), ptrs, len(arrays), int(frame_count)
             )
@@ -204,7 +205,7 @@ class _EngineIoMixin:
         monitor_ptrs = (ctypes.POINTER(ctypes.c_float) * len(monitor_arrays))(
             *[ctypes.cast(array, ctypes.POINTER(ctypes.c_float)) for array in monitor_arrays]
         )
-        _check(
+        _check_realtime(
             _get_lib().sonare_engine_process_with_monitor(
                 self._require_handle(), ptrs, monitor_ptrs, len(arrays), int(frame_count)
             )

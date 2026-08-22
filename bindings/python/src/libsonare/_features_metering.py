@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import ctypes
 from collections.abc import Sequence
+from typing import Any
 
 import numpy as np
 
@@ -458,6 +459,33 @@ def metering_stereo_width(
     )
 
 
+def _scope_point_columns(
+    points: Any, count: int, point_type: type[ctypes.Structure]
+) -> dict[str, np.ndarray]:
+    """Split a C array of scope points into one float32 column per field.
+
+    One shared implementation for every scope read-out, for the same reason the
+    planar-channel and clip marshalling paths were each collapsed into one: the
+    four entry points here were separate per-point attribute walks, and at the
+    ``max_points=0`` default that is one Python-level attribute access per input
+    sample per field. Every field of a scope point is a ``c_float`` and the
+    struct carries no padding, so the array is a ``(count, len(fields))``
+    float32 matrix and one buffer read replaces the walk.
+
+    The column names come from ``point_type._fields_``, so a field added to the
+    ctypes mirror flows through here without a second edit. The returned arrays
+    are copies -- the caller frees the C result immediately after.
+    """
+    names = [name for name, _ in point_type._fields_]
+    if ctypes.sizeof(point_type) != 4 * len(names):
+        raise RuntimeError(f"{point_type.__name__} is not a packed float32 record")
+    if count == 0:
+        return {name: np.empty(0, dtype=np.float32) for name in names}
+    block = ctypes.cast(points, ctypes.POINTER(ctypes.c_float * (count * len(names))))
+    table = np.frombuffer(block.contents, dtype=np.float32).reshape(count, len(names))
+    return {name: np.ascontiguousarray(table[:, index]) for index, name in enumerate(names)}
+
+
 def metering_vectorscope(
     left: Sequence[float] | list[float],
     right: Sequence[float] | list[float],
@@ -498,19 +526,8 @@ def metering_vectorscope(
     )
     _check(rc)
     try:
-        count = int(out.point_count)
-        if count == 0:
-            mid = np.empty(0, dtype=np.float32)
-            side = np.empty(0, dtype=np.float32)
-        else:
-            arr_type = SonareVectorscopePoint * count
-            view = arr_type.from_address(ctypes.addressof(out.points.contents))
-            mid = np.empty(count, dtype=np.float32)
-            side = np.empty(count, dtype=np.float32)
-            for i in range(count):
-                mid[i] = view[i].mid
-                side[i] = view[i].side
-        return VectorscopeReport(mid=mid, side=side)
+        columns = _scope_point_columns(out.points, int(out.point_count), SonareVectorscopePoint)
+        return VectorscopeReport(mid=columns["mid"], side=columns["side"])
     finally:
         lib.sonare_free_vectorscope_result(ctypes.byref(out))
 
@@ -556,19 +573,8 @@ def metering_vectorscope_decimated(
     )
     _check(rc)
     try:
-        count = int(out.point_count)
-        if count == 0:
-            mid = np.empty(0, dtype=np.float32)
-            side = np.empty(0, dtype=np.float32)
-        else:
-            arr_type = SonareVectorscopePoint * count
-            view = arr_type.from_address(ctypes.addressof(out.points.contents))
-            mid = np.empty(count, dtype=np.float32)
-            side = np.empty(count, dtype=np.float32)
-            for i in range(count):
-                mid[i] = view[i].mid
-                side[i] = view[i].side
-        return VectorscopeReport(mid=mid, side=side)
+        columns = _scope_point_columns(out.points, int(out.point_count), SonareVectorscopePoint)
+        return VectorscopeReport(mid=columns["mid"], side=columns["side"])
     finally:
         lib.sonare_free_vectorscope_result(ctypes.byref(out))
 
@@ -614,29 +620,12 @@ def metering_phase_scope(
     )
     _check(rc)
     try:
-        count = int(out.point_count)
-        if count == 0:
-            mid = np.empty(0, dtype=np.float32)
-            side = np.empty(0, dtype=np.float32)
-            radius = np.empty(0, dtype=np.float32)
-            angle = np.empty(0, dtype=np.float32)
-        else:
-            arr_type = SonarePhaseScopePoint * count
-            view = arr_type.from_address(ctypes.addressof(out.points.contents))
-            mid = np.empty(count, dtype=np.float32)
-            side = np.empty(count, dtype=np.float32)
-            radius = np.empty(count, dtype=np.float32)
-            angle = np.empty(count, dtype=np.float32)
-            for i in range(count):
-                mid[i] = view[i].mid
-                side[i] = view[i].side
-                radius[i] = view[i].radius
-                angle[i] = view[i].angle_rad
+        columns = _scope_point_columns(out.points, int(out.point_count), SonarePhaseScopePoint)
         return PhaseScopeReport(
-            mid=mid,
-            side=side,
-            radius=radius,
-            angle_rad=angle,
+            mid=columns["mid"],
+            side=columns["side"],
+            radius=columns["radius"],
+            angle_rad=columns["angle_rad"],
             correlation=float(out.correlation),
             average_abs_angle_rad=float(out.average_abs_angle_rad),
             max_radius=float(out.max_radius),
@@ -686,29 +675,12 @@ def metering_phase_scope_decimated(
     )
     _check(rc)
     try:
-        count = int(out.point_count)
-        if count == 0:
-            mid = np.empty(0, dtype=np.float32)
-            side = np.empty(0, dtype=np.float32)
-            radius = np.empty(0, dtype=np.float32)
-            angle = np.empty(0, dtype=np.float32)
-        else:
-            arr_type = SonarePhaseScopePoint * count
-            view = arr_type.from_address(ctypes.addressof(out.points.contents))
-            mid = np.empty(count, dtype=np.float32)
-            side = np.empty(count, dtype=np.float32)
-            radius = np.empty(count, dtype=np.float32)
-            angle = np.empty(count, dtype=np.float32)
-            for i in range(count):
-                mid[i] = view[i].mid
-                side[i] = view[i].side
-                radius[i] = view[i].radius
-                angle[i] = view[i].angle_rad
+        columns = _scope_point_columns(out.points, int(out.point_count), SonarePhaseScopePoint)
         return PhaseScopeReport(
-            mid=mid,
-            side=side,
-            radius=radius,
-            angle_rad=angle,
+            mid=columns["mid"],
+            side=columns["side"],
+            radius=columns["radius"],
+            angle_rad=columns["angle_rad"],
             correlation=float(out.correlation),
             average_abs_angle_rad=float(out.average_abs_angle_rad),
             max_radius=float(out.max_radius),

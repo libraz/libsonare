@@ -27,6 +27,28 @@ if TYPE_CHECKING:
     from .analyzer import MasteringPreset, SoloProcessor
 
 
+def _json_key_to_snake_case(key: str) -> str:
+    """Rewrite one camelCase JSON key as snake_case ("gainToMatchDb" -> "gain_to_match_db")."""
+    out: list[str] = []
+    for char in key:
+        if char.isupper():
+            if out:
+                out.append("_")
+            out.append(char.lower())
+        else:
+            out.append(char)
+    return "".join(out)
+
+
+def _json_keys_to_snake_case(value: Any) -> Any:
+    """Recursively re-key a parsed JSON payload from camelCase to snake_case."""
+    if isinstance(value, dict):
+        return {_json_key_to_snake_case(k): _json_keys_to_snake_case(v) for k, v in value.items()}
+    if isinstance(value, list):
+        return [_json_keys_to_snake_case(item) for item in value]
+    return value
+
+
 def _mastering_report_payload(report: Any) -> dict[str, object]:
     """Serialize the shared chain report without depending on dataclass internals."""
 
@@ -178,6 +200,59 @@ def _eq_shortcut_names(args: argparse.Namespace) -> list[str]:
     return [name for name, default in defaults.items() if _option_supplied(args, name, default)]
 
 
+# Highest accepted index of every ``eq`` option that selects an enumerator, keyed
+# by its argparse destination. The enumerations are EqBandType, BiquadCoeffMode,
+# StereoPlacement and PhaseMode in mastering/eq/eq_band.h plus
+# LinearPhaseEqConfig::Resolution; the switches that map an index answer an
+# unknown one with their first enumerator, so an unchecked `--type 999` would
+# apply a peak filter and exit 0. The native CLI declares the same bounds in its
+# registry and the cross-surface option-domain comparison pins the two together.
+_EQ_ENUM_BOUNDS = {
+    "type": 8,
+    "coeff_mode": 1,
+    "placement": 4,
+    "phase_mode": 3,
+    "resolution": 5,
+}
+
+
+def _reject_unknown_processor_params(processor: str, params: dict[str, float]) -> None:
+    """Reject a supplied ``--params`` key the named processor does not read.
+
+    ``mastering_insert_param_names`` builds the processor against an empty param
+    map and reports every key its config builder probed, so a supplied key
+    outside that set took no effect at all: ``band0.bogusKey=42`` used to ship a
+    chain containing none of the edit the caller asked for, under exit 0 and a
+    normal JSON payload.
+
+    A name with no published key set is left alone rather than rejected
+    wholesale: only a realtime insert can be probed this way, so an empty list
+    means "not an insert" (an offline-only processor, or one whose build feature
+    is off), not "reads nothing". Those ids keep the old silent-ignore
+    behaviour, which is the remaining half of this gap.
+    """
+    from . import mastering_insert_param_names
+
+    known = set(mastering_insert_param_names(processor))
+    if not known:
+        return
+    unknown = [key for key in params if key not in known]
+    if unknown:
+        joined = ", ".join(unknown)
+        raise ValueError(f"unknown --params key for {processor}: {joined}")
+
+
+def _check_eq_enum_options(args: argparse.Namespace) -> None:
+    """Reject an ``eq`` enumerator index outside its enumeration."""
+    for dest, highest in _EQ_ENUM_BOUNDS.items():
+        value = getattr(args, dest, 0)
+        if not isinstance(value, int) or 0 <= value <= highest:
+            continue
+        option = "--" + dest.replace("_", "-")
+        accepted = ", ".join(str(index) for index in range(highest + 1))
+        raise ValueError(f"invalid value for {option}: {value} (expected one of {accepted})")
+
+
 def cmd_mastering(args: argparse.Namespace) -> int:
     samples, sr = _load_audio(args.file)
     report_path = getattr(args, "report", "") or ""
@@ -202,10 +277,25 @@ def cmd_mastering(args: argparse.Namespace) -> int:
         raise ValueError("--preset, --config, and --assistant are mutually exclusive")
     if params_raw and not selectors:
         raise ValueError("--params requires --preset, --config, or --assistant")
+    target_platform = getattr(args, "target_platform", "streaming") or "streaming"
+    no_streaming_safe = bool(getattr(args, "no_streaming_safe", False))
+    speech_mono_amount = float(getattr(args, "speech_mono_amount", 1.0))
     if enable_repair and not assistant:
         raise ValueError("--enable-repair requires --assistant")
     if explain and not assistant:
         raise ValueError("--explain requires --assistant")
+    # Every remaining option that only reaches an AssistantConfig field. argparse
+    # cannot report whether a default-valued option was supplied, so a
+    # non-default value is what makes the request explicit -- the same rule the
+    # ignored-loudness check below applies.
+    if not assistant:
+        for name, supplied in (
+            ("target-platform", target_platform != "streaming"),
+            ("no-streaming-safe", no_streaming_safe),
+            ("speech-mono-amount", speech_mono_amount != 1.0),
+        ):
+            if supplied:
+                raise ValueError(f"--{name} requires --assistant")
 
     # Native CliArgs can distinguish an explicitly supplied default-valued
     # option.  Python argparse cannot yet do so; non-default values are still
@@ -249,10 +339,22 @@ def cmd_mastering(args: argparse.Namespace) -> int:
         from . import mastering_assistant_suggest, mastering_chain
 
         suggestion_params: dict[str, float | int | bool | str] = {
-            "targetLufs": float(getattr(args, "target_lufs", -14.0)),
-            "ceilingDb": float(getattr(args, "ceiling_db", -1.0)),
             "enableRepair": enable_repair,
+            # Resolved to its table index inside mastering_assistant_suggest, by
+            # the library rather than by a mapping restated here.
+            "targetPlatform": target_platform,
+            "preferStreamingSafe": not no_streaming_safe,
+            "speechMonoAmount": speech_mono_amount,
         }
+        # Sent only when the caller named them. Supplying a key marks the field
+        # as explicit for the assistant, and a delivery target only fills in what
+        # the caller left alone -- so passing the default through unconditionally
+        # suppressed every platform target's loudness. The native CLI reports the
+        # same distinction from CliArgs::has().
+        if _option_supplied(args, "target-lufs", -14.0):
+            suggestion_params["targetLufs"] = float(getattr(args, "target_lufs", -14.0))
+        if _option_supplied(args, "ceiling-db", -1.0):
+            suggestion_params["ceilingDb"] = float(getattr(args, "ceiling_db", -1.0))
         suggestion = json.loads(
             mastering_assistant_suggest(samples, sample_rate=sr, params=suggestion_params)
         )
@@ -350,6 +452,7 @@ def cmd_mastering_processor(args: argparse.Namespace) -> int:
     params = _parse_kv_params(params_raw) if params_raw else {}
     bits = _wav_bits(args)
     processor = getattr(args, "processor", None) or ""
+    _reject_unknown_processor_params(processor, params)
     processor_name = cast("SoloProcessor", processor)
     stereo_only = {
         entry["id"] for entry in mastering_processor_catalog() if entry.get("stereoOnly", False)
@@ -409,6 +512,10 @@ def cmd_mastering_processor(args: argparse.Namespace) -> int:
 def cmd_eq(args: argparse.Namespace) -> int:
     from . import mastering_process
 
+    # Ahead of the audio load and the --params conflict check, matching the
+    # native CLI, which enforces every declared option domain from its registry
+    # before dispatching the handler.
+    _check_eq_enum_options(args)
     samples, sr = _load_audio(args.file)
     params_raw = getattr(args, "params", "") or ""
     bits = _wav_bits(args)
@@ -418,6 +525,7 @@ def cmd_eq(args: argparse.Namespace) -> int:
             joined = ", ".join(f"--{name}" for name in conflicts)
             raise ValueError(f"{joined} cannot be combined with --params")
         params = _parse_kv_params(params_raw)
+        _reject_unknown_processor_params("eq.equalizer", params)
     else:
         params = {
             "band0.enabled": 1.0,
@@ -524,8 +632,10 @@ def cmd_mastering_pair_analyze(args: argparse.Namespace) -> int:
     result_json = mastering_pair_analyze(
         args.analysis, source, reference, sample_rate=sr, params=params or None
     )
-    # The library returns a JSON string regardless of --json; print it as-is.
-    print(result_json)
+    # The library returns a JSON string regardless of --json, keyed in camelCase
+    # like every other core JSON producer. CLI stdout is snake_case throughout,
+    # so re-key the payload rather than printing the core spelling verbatim.
+    print(_strict_json_dumps(_json_keys_to_snake_case(json.loads(result_json))))
     return 0
 
 

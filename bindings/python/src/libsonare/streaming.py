@@ -150,7 +150,11 @@ class StreamAnalyzer:
         return self._handle
 
     def process(self, samples: Sequence[float] | list[float]) -> None:
-        """Feed an audio chunk (cumulative offset tracked internally)."""
+        """Feed an audio chunk (cumulative offset tracked internally).
+
+        Feeding a finalized analyzer raises an invalid-state error; call
+        :meth:`reset` first to start a new stream.
+        """
         c_array, length = _to_c_float_array(samples)
         _check(
             _get_lib().sonare_stream_analyzer_process(
@@ -163,9 +167,9 @@ class StreamAnalyzer:
     ) -> None:
         """Feed a chunk with a contiguous external sample offset.
 
-        A gap, seek, or switch from :meth:`process` is rejected. Call
-        :meth:`reset` first to discard the buffered partial frame and anchor a
-        new timeline segment.
+        A gap, seek, a switch from :meth:`process`, or a chunk fed after
+        :meth:`finalize` is rejected. Call :meth:`reset` first to discard the
+        buffered partial frame and anchor a new timeline segment.
         """
         offset = _checked_size_t(sample_offset, "sample_offset")
         c_array, length = _to_c_float_array(samples)
@@ -179,7 +183,14 @@ class StreamAnalyzer:
         )
 
     def finalize(self) -> None:
-        """Drain any high-rate resampler tail, then zero-pad the final frame."""
+        """Drain any high-rate resampler tail, then zero-pad the final frame.
+
+        Repeating a successful call is a no-op, and a call that fails leaves the
+        stream un-finalized so a retry resumes from the same point. Call
+        :meth:`reset` before reusing the analyzer for another stream: more audio
+        fed to a finalized analyzer is rejected rather than silently analyzed
+        without the overlap context the finalized tail consumed.
+        """
         lib = _get_lib()
         if not hasattr(lib, "sonare_stream_analyzer_finalize"):
             raise RuntimeError("libsonare was built without StreamAnalyzer.finalize support")
@@ -311,7 +322,16 @@ class StreamAnalyzer:
         )
 
     def set_normalization_gain(self, gain: float) -> None:
-        """Set a normalization gain applied to input samples."""
+        """Set a normalization gain applied to input samples.
+
+        ``gain`` is a linear factor within 0.01..100, assuming input in the
+        conventional ±1 float domain. A value outside it raises instead of being
+        clamped into range: the usual recipe (``target_level / measured_level``)
+        can land outside for a buffer on another scale — an integer-scaled one
+        asks for about 3e-4 — and no getter exposes the effective gain, so a
+        clamped request would leave the analysis far off target with nothing to
+        detect it by. Convert such a buffer before feeding it instead.
+        """
         _check(
             _get_lib().sonare_stream_analyzer_set_normalization_gain(
                 self._require_handle(), ctypes.c_float(float(gain))

@@ -7,6 +7,7 @@ without leaking the underlying C buffer.
 
 from __future__ import annotations
 
+import ctypes
 import math
 
 import numpy as np
@@ -93,6 +94,58 @@ def test_metering_phase_scope_populates_summary_stats() -> None:
     assert report.angle_rad.shape == left.shape
     assert report.correlation == pytest.approx(1.0, abs=1e-3)
     assert report.max_radius > 0
+
+
+def test_metering_scope_columns_come_from_one_shared_bulk_copy() -> None:
+    """All four scope read-outs marshal through the same packed-record helper.
+
+    The per-point attribute walk they each used to carry is one Python-level
+    access per input sample per field at the ``max_points=0`` default. The
+    replacement reads the C array as a float32 matrix, which is only valid while
+    every field is a ``c_float`` and the record has no padding -- so that
+    property is asserted here rather than assumed, and the column names are
+    taken from the ctypes mirror so a new field needs no second edit there.
+    """
+    from libsonare._features_metering import _scope_point_columns
+    from libsonare._ffi import SonarePhaseScopePoint, SonareVectorscopePoint
+
+    for point_type, expected in (
+        (SonareVectorscopePoint, ["mid", "side"]),
+        (SonarePhaseScopePoint, ["mid", "side", "radius", "angle_rad"]),
+    ):
+        names = [name for name, _ in point_type._fields_]
+        assert names == expected
+        assert ctypes.sizeof(point_type) == 4 * len(names)
+        assert set(_scope_point_columns(None, 0, point_type)) == set(expected)
+
+    # A record the helper cannot read as a matrix is refused rather than
+    # silently mis-split.
+    class _Padded(ctypes.Structure):
+        _fields_ = [("mid", ctypes.c_float), ("flag", ctypes.c_double)]
+
+    with pytest.raises(RuntimeError):
+        _scope_point_columns(None, 1, _Padded)
+
+    # Every entry point returns the helper's columns.
+    left = _sine(440.0, 0.05)
+    right = _sine(660.0, 0.05)
+    vector = libsonare.metering_vectorscope(left, right, SR)
+    phase = libsonare.metering_phase_scope(left, right, SR)
+
+    assert vector.mid.dtype == np.float32
+    assert phase.angle_rad.dtype == np.float32
+    assert vector.mid.shape == phase.mid.shape
+    # Mid/side are the same quantity on both read-outs, so the shared helper has
+    # to split both records into the same columns.
+    assert np.allclose(vector.mid, phase.mid)
+    assert np.allclose(vector.side, phase.side)
+    # The phase-scope columns are the polar form of those two, which pins the
+    # column ORDER rather than only the names.
+    assert np.allclose(phase.radius, np.hypot(phase.mid, phase.side), atol=1e-5)
+    assert np.allclose(phase.angle_rad, np.arctan2(phase.side, phase.mid), atol=1e-5)
+
+    # The arrays outlive the C result, which is freed inside the call.
+    assert float(np.max(np.abs(vector.mid))) > 0.0
 
 
 def test_metering_stereo_rejects_mismatched_lengths() -> None:
