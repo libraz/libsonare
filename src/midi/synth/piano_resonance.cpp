@@ -255,13 +255,25 @@ float PianoSoundboard::process(float in) noexcept {
   // fill the space between the partials (reference renders measure 20-40 dB
   // tone-to-noise; a clean stack reads dry and synthetic). Deterministic
   // seed, so bounces stay bit-stable.
-  const float mag = d >= 0.0f ? d : -d;
-  air_env_ += (mag > air_env_ ? air_attack_ : air_release_) * (mag - air_env_);
-  air_rng_ = air_rng_ * 1664525u + 1013904223u;
-  const float white = static_cast<float>(air_rng_ >> 8) * (1.0f / 8388608.0f) - 1.0f;
-  air_lp_ += air_lp_a_ * (white - air_lp_);
-  air_hp_ += air_hp_a_ * (air_lp_ - air_hp_);
-  const float air = kAirGain * air_env_ * (air_lp_ - air_hp_);
+  //
+  // The gain has never been fitted away from zero, and `0.0f * x` is not a
+  // constant the optimizer may fold (a NaN or an infinity in x would have to
+  // survive), so without this test the follower, the generator and both
+  // one-poles would run per sample to produce a zero. The layer's state feeds
+  // nothing but `air`, so skipping it cannot reach any other output. In a
+  // shipped build kAirGain is a constexpr zero and the whole block folds out;
+  // in a tuning build the test is what lets a fit switch the layer back on
+  // without a rebuild.
+  float air = 0.0f;
+  if (kAirGain != 0.0f) {
+    const float mag = d >= 0.0f ? d : -d;
+    air_env_ += (mag > air_env_ ? air_attack_ : air_release_) * (mag - air_env_);
+    air_rng_ = air_rng_ * 1664525u + 1013904223u;
+    const float white = static_cast<float>(air_rng_ >> 8) * (1.0f / 8388608.0f) - 1.0f;
+    air_lp_ += air_lp_a_ * (white - air_lp_);
+    air_hp_ += air_hp_a_ * (air_lp_ - air_hp_);
+    air = kAirGain * air_env_ * (air_lp_ - air_hp_);
+  }
   return (1.0f - kPianoDirectGain) * d + out_gain_ * sum + air;
 }
 
