@@ -25,27 +25,29 @@ SONARE_TUNABLE(kHammerHysteresis, 0.229431f);
 /// Additional felt-stiffness cutoff octaves per unit velocity above mf, per
 /// unit hammer_dynamics: a compressed felt patch passes more of the pulse top.
 SONARE_TUNABLE(kHammerDynBrightOct, 1.5f);
-/// Felt-stiffness lowpass on the injected force: its cutoff at zero velocity,
-/// and how many octaves that cutoff climbs across the velocity range as the
-/// compressed felt stiffens.
+/// Felt-stiffness lowpass on the injected force, expressed as cycles of its
+/// corner per hammer contact -- the corner is this over the reference contact
+/// time, not a frequency. What a lossy contact passes is set by how long it
+/// lasts, and the contact solver above already knows that for every note, so
+/// the register grading comes out of it instead of being written down twice.
 ///
-/// The climb measures as zero against a grand. Three octaves of it were laid on
-/// top of a contact solver that already derives its own velocity response from
-/// the Hertz laws, and the sum came out around four times the measured spread:
-/// the partial stack of a C4 ran from 15 dB below the reference at pianissimo
-/// to 8 dB above it at fortissimo, where the reference barely moves, and the
-/// spectral centroid swung from -37% to +234% of it across the same four
-/// velocities. Flat, with the cutoff left at what the climb used to reach near
-/// mezzo-forte, that spread closes to +4%..+102% and the partial stack gains
-/// two dB. The mechanism is real -- felt does stiffen as it compresses -- so
-/// the climb stays fittable and a patch can still reach it through
+/// It had been a flat 2400 Hz. In the middle of the keyboard that is the ninth
+/// harmonic and the filter is barely in the way; at C7 it is the fundamental
+/// times 1.15, so the excitation carried nothing above the note itself and the
+/// top of the keyboard rendered as a sine. Held to the contact instead, the
+/// same value anchors C4 exactly where it was fitted and reaches 7 kHz at C7,
+/// which is most of what the measurement asks for there -- and it darkens the
+/// deep bass, where a big soft hammer dwells on the string for milliseconds,
+/// rather than handing A0 the same 2.4 kHz burst as the treble.
+///
+/// The velocity term stays at zero: three octaves of climb had been laid on a
+/// contact solver that already derives its own velocity response from the Hertz
+/// laws, and the sum came out around four times the measured spread -- a C4's
+/// partial stack ran from 15 dB below the reference at pianissimo to 8 dB above
+/// it at fortissimo, where the reference barely moves. The mechanism is real,
+/// so the climb stays fittable and a patch can still reach it through
 /// hammer_dynamics; it is the magnitude that measured as voicing, not physics.
-///
-/// Note the pulse mostly does not see this filter: the hammer's finite
-/// footprint caps it lower through the middle of the keyboard, so what this
-/// cutoff really governs is the felt scrub-noise bandwidth below, which is what
-/// seeds the upper partials.
-SONARE_TUNABLE(kFeltCutoffBaseHz, 2400.0f);
+SONARE_TUNABLE(kFeltCutoffContactCycles, 4.615f);
 SONARE_TUNABLE(kFeltCutoffVelOct, 0.0f);
 /// Semitones the patch's reference contact time takes to DOUBLE as the note
 /// descends. A grand's contact spans a far narrower range than its periods do —
@@ -64,12 +66,31 @@ SONARE_TUNABLE(kFeltCutoffVelOct, 0.0f);
 /// with it at all (verified — notes 60 and above render identically).
 SONARE_TUNABLE(kContactKeytrackSemis, 36.0f);
 /// Hammer-contact floor in fundamental PERIODS, anchored at C4 and graded
-/// per octave (signed: it shrinks into the bass, grows into the treble). A
-/// real grand's contact spans ~0.5 of the period at C4 and more than a full
-/// period in the treble; the contact duration is THE felt-vs-nail cue — a
-/// contact much shorter than half a period injects a spike-like pulse that
-/// reads as a fingernail pluck, and in the treble it additionally leaves the
-/// overtones louder than the fundamental (a plucked-string spectrum).
+/// per octave (signed: it shrinks into the bass, grows into the treble). The
+/// contact duration is THE felt-vs-nail cue — a contact much shorter than half
+/// a period injects a spike-like pulse that reads as a fingernail pluck, and in
+/// the treble it additionally leaves the overtones louder than the fundamental
+/// (a plucked-string spectrum).
+///
+/// This grading is what starves the top of the keyboard, and it is left alone
+/// anyway. At 0.61 it hands C6 1.7 periods and everything above it the 2.0
+/// ceiling below, and a contact lasting two periods is a force pulse whose
+/// first spectral null falls at HALF the fundamental -- the string is driven
+/// almost nowhere but at f0 and the top of the keyboard renders very nearly as
+/// a sine, h2 measuring 14 dB under the reference at C6 and 24 under it at C7.
+/// Measured contact spans about half a period at C4 against about one at C7,
+/// which is 0.17 per octave, and at 0.17 the h2/h1 ladder recovers 17 dB.
+///
+/// It also makes the treble 4 to 9 dB louder in RMS -- C7 goes from 11 dB over
+/// the reference to 16 -- and that is not a sharper transient being read by a
+/// peak meter, because it is the same in RMS over the first second. The ladder
+/// score cannot see it: it normalises each note by its own median, so a voice
+/// that gets its partials by getting louder scores as one that got its partials.
+/// Shortening the contact raises the radiated level because the injection is
+/// normalised on the mezzo-forte PEAK FORCE rather than on the blow's impulse,
+/// so a shorter, taller pulse arrives with the same peak and more of its energy
+/// inside the string's band. Fixing that normalisation is the way in; regrading
+/// the contact on top of it just moves the error from the ladder to the level.
 SONARE_TUNABLE(kContactPeriodsAtC4, 0.503038f);
 SONARE_TUNABLE(kContactPeriodsPerOct, 0.613525f);
 SONARE_TUNABLE(kContactPeriodsMax, 2.0f);
@@ -117,11 +138,24 @@ SONARE_TUNABLE(kContactPeriodsPerBlowMax, 1.0f);
 /// and it is worth 16 dB more than the family gain can even express (that field
 /// clamps at 4).
 SONARE_TUNABLE(kOutputLevel, 5.7f);
-/// Treble decay taper (halvings of the aftersound stage per octave above C4):
-/// the short, stiff, heavily-damped treble strings die far faster than the
-/// tenor. Applied to the slow stage only — the prompt-sound rate is set by the
-/// polarization/unison coupling, which has its own register profile below.
-SONARE_TUNABLE(kTrebleDecayOct, 1.94164f);
+/// Where the aftersound taper starts, in octaves above C4. The taper is not a
+/// slope running up from the middle of the keyboard: measured on three concert
+/// grands the aftersound t60 has no trend at all from A0 to note 90, sitting
+/// between 9 and 50 s across that whole span, and then falls off a cliff — 2.2 s
+/// by C7 on two of the three captures and by C8 on all of them. Starting the
+/// taper at C4 gave C6 a t60 of 1.6 s against a measured 11, which is a note
+/// that dies while the key is still down.
+SONARE_TUNABLE(kTrebleDecayKneeOct, 2.5f);
+/// Halvings of the aftersound stage per octave past that knee, applied to the
+/// slow stage only — the prompt-sound rate is set by the polarization/unison
+/// coupling, which has its own register profile below. Steep, because what it
+/// describes is a cliff rather than a slope: the measured t60 drops by a factor
+/// of six inside the half-octave from note 90 to C7.
+SONARE_TUNABLE(kTrebleDecayOct, 5.0f);
+/// Where that cliff bottoms out, in octaves above C4. The measurement is flat
+/// again past C7 (2.2 s there against 2.3 s at C8), so the taper stops instead
+/// of running on and leaving the top octave a click.
+SONARE_TUNABLE(kTrebleDecayFloorOct, 3.0f);
 /// Register profile of the prompt-vs-aftersound contrast. The double decay is
 /// strongest in the trichord mid-range (vertical polarization + unison
 /// coupling drain the bridge fast, then the decohered residue rings): the
@@ -129,6 +163,28 @@ SONARE_TUNABLE(kTrebleDecayOct, 1.94164f);
 /// aftersound rate, and the capped treble is so short-lived the two stages
 /// merge. Gaussian in octaves from C4; at the edges the effective prompt rate
 /// relaxes toward the aftersound rate.
+///
+/// This is narrower than the instrument and is left alone anyway, because the
+/// mechanism under it drains the wrong thing. The reference's contrast is
+/// weakest at C4 (-7.2 dB/s prompt against -5.1 aftersound) and sharpest at F#4
+/// and C5 (-31 and -41 against -1.9 and -2.9), so a profile centred on C4 peaks
+/// where the instrument is flattest and gives the model one decay rate almost
+/// everywhere the instrument has two. No per-note shape metric can see that —
+/// they are all normalised per note — and it is plain in the level: held RMS
+/// runs 8.7 dB over the reference at a peak only 3.9 over, a crest factor 4.8 dB
+/// too low, which is the sound of an envelope that never drops after its attack.
+///
+/// Widening it to 3 octaves does fix the level, to 3.9 dB over at the same peak.
+/// It also brightens the 0.12-1.62 s window by 35 to 60 points of centroid on
+/// every note between F#2 and F#5, and the patch brightness knob cannot take it
+/// back: swept from 0.81 down to 0.20 it moves the centroid error by 3 points
+/// and costs 1.4 dB of partial ladder. The reason is the prompt stage itself —
+/// it is applied by subtracting a share of the summed bridge signal, which is a
+/// low-partial-weighted quantity, so more prompt decay necessarily drains the
+/// bottom of the spectrum and leaves a brighter residue. A real string's fast
+/// polarization does not do that. Until that subtraction is frequency-weighted
+/// the way the bridge admittance actually is, widening the profile buys the
+/// level by spending brightness, and both are audible.
 SONARE_TUNABLE(kTwoStageWidthOct, 0.616718f);
 /// Treble taper cap (octaves above C4): the decay/darkening keytracks stop
 /// steepening past here — an uncapped taper leaves the top octave with a
@@ -346,6 +402,14 @@ SONARE_TUNABLE(kWidthTrebleOct, 0.81966f);
 /// the register the note is heard in; the h8 notch it exists to place ended up
 /// at h3.
 SONARE_TUNABLE(kStrikePosBassOct, 0.18f);
+/// The comb below is a full `1 - z^-D`, so its nulls are infinitely deep, which
+/// no string has: the agraffe does not reflect perfectly, the round trip costs
+/// the string's own losses, and the hammer is a patch rather than a point.
+/// Attenuating the returning tap to bottom the nulls out at a finite depth was
+/// measured and kept 0.6 dB of A0's ladder at a reflection of 0.5 -- a real
+/// mechanism with almost no authority here, because what actually flattens the
+/// reference's bass ladder is not the comb. Left as a plain difference rather
+/// than as a knob that would cost a multiply per sample to do nothing.
 /// Longitudinal ("phantom partial") mode bank: the first mode's frequency at
 /// C4 and how it climbs per octave, the bank's level and its taper above C4,
 /// and the first mode's ring-down.
@@ -442,12 +506,59 @@ SONARE_TUNABLE(kBridgeHillQ, 2.40983f);
 SONARE_TUNABLE(kLoopDampRateNorm, 1.0f);
 SONARE_TUNABLE(kLoopDampRefHz, 27.5f);
 
+/// How much longer the damper takes on a quiet string, per unit of MIDI
+/// velocity below the anchor. Damper felt is the same viscoelastic material as
+/// hammer felt and loses energy the same way: the loss rises with how far the
+/// string drives it, so a string the felt meets gently is damped gently. The
+/// measured corpus carries this plainly and in one direction on all three
+/// instruments in it -- a note struck at 24 takes between two and three times
+/// as long to fall 40 dB after note-off as the same note struck at 120, where a
+/// linear damper would take exactly as long. Fitted on the concert grand
+/// (-0.0083 per velocity unit); the other two sit either side of it.
+///
+/// The anchor is the corpus's loudest point rather than the middle of the
+/// range, because that is where the damper t60 below was fitted: at velocity
+/// 120 this factor is exactly one and the voice renders as it did before.
+///
+/// It is the string's amplitude when the damper lands that the felt actually
+/// responds to, and velocity is standing in for it. The two part company for a
+/// note released long after it was struck, which by then is far quieter than
+/// its velocity says -- a staccato and a note held through its whole decay get
+/// the same damper here, where the real instrument damps the staccato harder.
+/// The corpus cannot separate them: every note in it is held for the same eight
+/// seconds, so the amplitude-at-release axis is unmeasured and a term for it
+/// would be fitted to nothing.
+SONARE_TUNABLE(kDamperVelSlope, 0.0083f);
+SONARE_TUNABLE(kDamperVelAnchor, 120.0f);
+/// Ceiling on that factor, so a pianissimo note still stops. With the fitted
+/// slope the softest playable note reaches 2.7, so this never binds; it is here
+/// to keep a hand-edited or swept slope from removing the damper altogether.
+SONARE_TUNABLE(kDamperVelScaleMax, 4.0f);
+
 /// Stiff-string inharmonicity B, fitted to a measured concert-grand corpus
 /// (see piano_inharmonicity_b). Two branches meeting at the bass break: above
 /// it a plain-wire scale grows B by ~2.8x per octave, and below it B turns
 /// around and climbs back into the deep bass, because a wound bass string is
 /// a heavy core the scale is too short for. The turnaround is the shape a
 /// single exponential cannot express, and it is worth ~7x at the bottom note.
+/// Where the dispersion cascade stops fitting the waveguide loop, and where it
+/// is gone. The stiff-string law is realized by four allpass stages sitting
+/// INSIDE the loop, so their phase delay comes out of the same round trip the
+/// string's period has to fit in — and the period runs out first: at C8 it is
+/// 11.5 samples against roughly 6.4 the cascade wants. Past that point the
+/// cascade no longer realizes the law and only costs the loop, and the cost is
+/// the whole note. Measured note by note it is invisible up to C7 and then
+/// takes over: the ring to -40 dB at the top note is 0.75 s with the cascade
+/// off and 0.30 s with it on, against about 1.5 s on the reference, while C6
+/// and below are bit-identical either way.
+///
+/// Nothing is given up by fading it out. Inharmonicity is only audible through
+/// the partials it displaces, and across the top octave the reference's own
+/// partials sit 54 to 58 dB under the fundamental — there is no ladder up there
+/// for a stretch to stretch, and the fundamental it is being paid for with is
+/// the entire note.
+SONARE_TUNABLE(kDispersionFadeNoteLo, 98.0f);
+SONARE_TUNABLE(kDispersionFadeNoteHi, 108.0f);
 SONARE_TUNABLE(kInharmBreakNote, 36.0f);
 SONARE_TUNABLE(kInharmBAtA4, 7.718e-4f);
 SONARE_TUNABLE(kInharmTrebleBeta, 0.086636f);
@@ -643,7 +754,15 @@ void PianoVoiceCore::start(const PianoPatchParams& params, double sample_rate, u
   // first-order allpass cascade that stretches the partials sharp to
   // f_n = n*f0*sqrt(1 + B*n^2). The patch dispersion knob scales B
   // (0 = harmonic string).
-  const float dispersion = std::clamp(params.dispersion, 0.0f, 1.0f);
+  // Faded out where the cascade no longer fits the loop (see
+  // kDispersionFadeNoteLo). Smoothstepped, so the top octave loses its stretch
+  // gradually rather than at one note boundary.
+  const float fade_lo = kDispersionFadeNoteLo;
+  const float fade_hi = std::max(fade_lo + 1.0f, kDispersionFadeNoteHi);
+  const float fade_x =
+      std::clamp((static_cast<float>(note & 0x7Fu) - fade_lo) / (fade_hi - fade_lo), 0.0f, 1.0f);
+  const float dispersion =
+      std::clamp(params.dispersion, 0.0f, 1.0f) * (1.0f - fade_x * fade_x * (3.0f - 2.0f * fade_x));
   const float b_coeff = piano_inharmonicity_b(note) * dispersion;
   const float phase_budget = period - 4.0f - tau_lp;
   const float ap_a = dispersion_allpass_a(b_coeff, w0, lp_a, kPianoDispersionStages, phase_budget);
@@ -652,9 +771,26 @@ void PianoVoiceCore::start(const PianoPatchParams& params, double sample_rate, u
   // shortens only the aftersound; the prompt stage instead blends toward the
   // aftersound rate away from the mid-range (see kTwoStageWidthOct).
   const float stretch = std::clamp(params.decay_stretch, 0.0f, 1.0f);
-  const float octaves_below_a4 = (69.0f - static_cast<float>(note & 0x7Fu)) / 12.0f;
+  // The stretch lengthens the bass and does NOTHING above A4. Read as a signed
+  // exponent it also compressed the treble, and that half of it is not in the
+  // instrument: measured on three concert grands the aftersound t60 has no
+  // trend from A0 to note 90, so there is nothing above A4 for a compression to
+  // describe. It stacked with the taper below and the two together left C8 at
+  // 0.44 s against a measured 2.3 — the top of the keyboard arriving as a
+  // click. Held at unity the taper alone sets the treble, and it lands 12.0 s
+  // at C6 against 11.1 measured and 2.1 s at C8 against 2.3.
+  const float octaves_below_a4 = std::max(0.0f, (69.0f - static_cast<float>(note & 0x7Fu)) / 12.0f);
   const float bass_scale = std::exp2(stretch * octaves_below_a4);
-  const float slow_scale = bass_scale * std::exp2(-kTrebleDecayOct * octaves_above_c4);
+  // The aftersound taper rides its own octave axis, not the shared
+  // `octaves_above_c4`: that one is capped where the loop DARKENING stops
+  // steepening, and the decay cliff sits an octave above it. Ordered through
+  // std::max so a swept knee above the floor cannot invert the clamp.
+  const float decay_knee_oct = kTrebleDecayKneeOct;
+  const float decay_floor_oct = std::max(decay_knee_oct, kTrebleDecayFloorOct);
+  const float decay_taper_oct = std::clamp((static_cast<float>(note & 0x7Fu) - 60.0f) / 12.0f,
+                                           decay_knee_oct, decay_floor_oct) -
+                                decay_knee_oct;
+  const float slow_scale = bass_scale * std::exp2(-kTrebleDecayOct * decay_taper_oct);
   const float t60_slow =
       std::max(0.05f, std::max(params.decay_fast_s, params.decay_slow_s) * slow_scale);
   const float oct_from_c4_signed = (static_cast<float>(note & 0x7Fu) - 60.0f) / 12.0f;
@@ -753,8 +889,13 @@ void PianoVoiceCore::start(const PianoPatchParams& params, double sample_rate, u
     const float x = std::clamp((note_f - kAnchorHighNote) / kTrebleSpan, 0.0f, 1.0f);
     damper_keytrack += kTrebleGain * x * x * (3.0f - 2.0f * x);
   }
-  release_gain_ =
-      loop_gain_for(period, sr, std::max(0.01f, params.release_damp_s * damper_keytrack));
+  // Felt loss falls off with how hard the string drives it, so a soft note is
+  // damped softly (see kDamperVelSlope).
+  const float damper_vel_scale = std::min(
+      kDamperVelScaleMax,
+      std::exp(kDamperVelSlope * (kDamperVelAnchor - static_cast<float>(velocity & 0x7Fu))));
+  release_gain_ = loop_gain_for(
+      period, sr, std::max(0.01f, params.release_damp_s * damper_keytrack * damper_vel_scale));
 
   // Dynamic felt hammer (F = k * x^p with hysteretic loss), integrated per
   // sample against the string at the strike point. The felt stiffness k is
@@ -860,7 +1001,8 @@ void PianoVoiceCore::start(const PianoPatchParams& params, double sample_rate, u
   // stiffness cutoff at normal velocities, swallows the whole pp<->ff
   // brightness spread).
   const float dyn_bright = std::exp2(kHammerDynBrightOct * dyn * (vel01 - kHammerMfVel));
-  const float exc_cutoff = kFeltCutoffBaseHz * std::exp2(kFeltCutoffVelOct * vel01) * dyn_bright *
+  const float exc_cutoff = kFeltCutoffContactCycles / std::max(1.0e-4f, contact_ms * 0.001f) *
+                           std::exp2(kFeltCutoffVelOct * vel01) * dyn_bright *
                            (una_corda ? 0.4f : 1.0f);
   const float width_harm =
       kHammerWidthHarmonics * std::exp2(kWidthBassOct * std::max(0.0f, -octaves_from_c4) +
@@ -1068,12 +1210,22 @@ float PianoVoiceCore::render(float pitch_ratio) noexcept {
     const float noise = noise_env_ * noise_lp3_;
     noise_env_ *= noise_decay_;
     thud_in += noise;
-    // The direct path is tapped one pole in, not three: the three-pole shape is
-    // the contact footprint's, which is what the STRING is injected through, and
-    // the air does not hear the strike through the string's window. Tapped at
-    // the same point, the direct path carries nothing above a few hundred hertz
-    // and cannot fill the attack it exists to fill.
-    noise_direct = noise_env_ * noise_lp_;
+    // The direct path is tapped two poles in, not three: the third pole belongs
+    // to the contact footprint, which is what the STRING is injected through,
+    // and the air does not hear the strike through the string's window. Tapped
+    // at the same point the direct path carries nothing above a few hundred
+    // hertz and cannot fill the attack it exists to fill.
+    //
+    // Two, not one. A single pole falls at 6 dB/octave, which no radiating
+    // mechanism does and which leaves the burst still 23 dB up at 16 kHz —
+    // exactly the plectrum click the cascade above was widened to two poles to
+    // remove, arriving by the other route. Measured against the dry concert
+    // grand a one-pole tap ran +32 dB at 12-20 kHz and +53 dB at 20-24 kHz over
+    // the first 43 ms of every note, on top of a midband that already matched
+    // inside half a dB; the ear reads that as a tick on the note, not as
+    // brightness. Two poles put the same corner 45 dB down at 16 kHz against a
+    // measured 44, and cost nothing — the tap already exists for the cascade.
+    noise_direct = noise_env_ * noise_lp2_;
     noise_low_ += noise_hp_a_ * (noise - noise_low_);
     // The scrub noise is generated AT the strike point, so it sees the same
     // near-end reflection as the force pulse: comb it by the strike position

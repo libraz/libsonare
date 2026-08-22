@@ -15,21 +15,22 @@ SONARE_TUNABLE(kPianoDecayFastS, 1.35f);
 SONARE_TUNABLE(kPianoSoundboard, 0.35f);
 SONARE_TUNABLE(kPianoHammerContactMs, 1.1f);
 SONARE_TUNABLE(kPianoHammerDynamics, 0.5f);
-/// Damper t60 at note-off. Held well short of what the measured release alone
-/// asks for, because this value is also the far end of the half-pedal
-/// interpolation: a gentler full damp gives the pedal less to grade against,
-/// and past about 1.2 s a half pedal stops being distinguishable from a lifted
-/// one. Closing the remaining gap needs the two endpoints separated, not a
-/// larger number here.
+/// Damper t60 at note-off, at the loud end of the velocity range; the voice
+/// lengthens it for a softer blow, because felt damps a quiet string weakly
+/// (see kDamperVelSlope in piano_voice.cpp). Fitted here against the reference
+/// with that scaling in place, so the two move together and this one alone is
+/// not the whole damper.
+///
+/// It also sets the far end of the half-pedal interpolation, which is what
+/// stops it growing without limit: the pedal grades between the free string and
+/// this, and a gentle enough full damp leaves nothing to grade against.
 SONARE_TUNABLE(kPianoReleaseDampS, 1.0f);
 /// Amp-envelope release (ms) for the piano family. This is the ceiling on how
 /// long ANY released note may ring, so it bounds the damper ring-down as well
-/// as the treble's -- raising release_damp_s alone moves the measured release
-/// barely at all while this sits under it, which is why the two are fitted as
-/// a pair. Longer than the reference strictly wants: past here the measured
-/// release keeps improving, but only against a reference whose own numbers are
-/// running into the capture gate, and every millisecond costs clarity on
-/// repeated notes.
+/// as the treble's, and the bound is close enough to bind: dropping it to 1500
+/// shortens the measured release by 148 ms with every other knob held. It is
+/// what carries the top of the keyboard, whose light dampers barely load the
+/// string, so the two are fitted as a pair rather than independently.
 SONARE_TUNABLE(kPianoAmpReleaseMs, 2500.0f);
 
 /// One GM family (programs family*8 .. family*8+7) -> one subtractive patch.

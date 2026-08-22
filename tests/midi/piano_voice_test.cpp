@@ -280,6 +280,49 @@ TEST_CASE("coupled unison strings produce a two-stage decay", "[midi][synth][pia
   REQUIRE(late < 0.6 * early);
 }
 
+TEST_CASE("the treble rings on while the key is held", "[midi][synth][piano]") {
+  // The aftersound of a concert grand has no register trend worth speaking of
+  // from the bottom of the keyboard to note 90: measured on three of them it
+  // sits between 9 and 50 s of t60 across that whole span, and only then falls
+  // off. A taper that starts from the middle instead gave C6 a t60 near 1.5 s,
+  // which is a note gone before the key comes up — and no per-note shape metric
+  // could see it, because they are all normalised by the note's own level.
+  //
+  // Scored against C4 rather than against an absolute rate, so the patch's own
+  // decay time can be retuned without rewriting the bound.
+  const NativeSynthPatch& piano = gm_fallback_patch(0, 0);
+  auto survives_two_seconds = [&](uint8_t note) {
+    const std::vector<float> tone = render_patch(piano, note, 96, 120000);  // 2.5 s held
+    const float early = rms(tone, 4800, 14400);                             // 0.10 - 0.30 s
+    const float late = rms(tone, 105600, 115200);                           // 2.20 - 2.40 s
+    REQUIRE(early > 0.0f);
+    return 20.0 * std::log10(static_cast<double>(late) / early);
+  };
+  const double c4 = survives_two_seconds(60);
+  const double c6 = survives_two_seconds(84);
+  // C6 may fall away faster than C4, but not by another 20 dB over two seconds.
+  REQUIRE(c6 > c4 - 20.0);
+  // And it must still be there at all — a voice freed mid-note reads as silence.
+  REQUIRE(c6 > -60.0);
+}
+
+TEST_CASE("the top octave is not consumed by its own dispersion", "[midi][synth][piano]") {
+  // The stiff-string allpass cascade sits inside the waveguide loop, so its
+  // phase delay competes with the string's period for the same round trip. At
+  // the top of the keyboard the period runs out first and the cascade stops
+  // buying anything, while still costing the loop the note. Dispersion is faded
+  // out over the top octave for that reason, and the property that matters is
+  // that the top note outlasts the strike rather than that any one knob is set
+  // a particular way.
+  const NativeSynthPatch& piano = gm_fallback_patch(0, 0);
+  const std::vector<float> top = render_patch(piano, 108, 96, 48000);  // 1 s held
+  const float attack = rms(top, 0, 4800);                              // 0 - 0.10 s
+  const float held = rms(top, 24000, 33600);                           // 0.50 - 0.70 s
+  REQUIRE(attack > 0.0f);
+  REQUIRE(held > 0.0f);
+  REQUIRE(20.0 * std::log10(static_cast<double>(held) / attack) > -40.0);
+}
+
 TEST_CASE("the felt hammer maps velocity to brightness", "[midi][synth][piano]") {
   const NativeSynthPatch& piano = gm_fallback_patch(0, 0);
   // The attack window only (the steady state is dominated by the slowly
@@ -408,6 +451,38 @@ TEST_CASE("the damper kills the string at note-off", "[midi][synth][piano]") {
   const float damped_late = rms(tail, 52800, 72000);  // same absolute window
   REQUIRE(held_late > 0.0f);
   REQUIRE(damped_late < 0.1f * held_late);
+}
+
+TEST_CASE("a softly struck string rings on longer under the damper", "[midi][synth][piano]") {
+  // Damper felt loses energy in proportion to how far the string drives it, so
+  // the same note released from a soft blow takes measurably longer to stop
+  // than from a hard one. Measured on a concert grand it is a factor of two to
+  // three across the velocity range; a linear damper would take exactly as
+  // long. Scored as the ratio of what survives a fixed window after note-off to
+  // what was there when the key came up, which removes the strike level the two
+  // renders do not share.
+  const NativeSynthPatch& piano = gm_fallback_patch(0, 0);
+  auto survives = [&](uint8_t velocity) {
+    NativeSynthConfig cfg;
+    cfg.patch = piano;
+    NativeSynth synth(cfg);
+    synth.prepare(kRate, 256);
+    synth.on_event(0, event(sonare::midi::make_midi1_note_on(0, 0, 48, velocity)));
+    std::vector<float> head(48000, 0.0f);
+    std::vector<float> head_r(48000, 0.0f);
+    float* chans[2] = {head.data(), head_r.data()};
+    synth.process(chans, 2, 48000);  // 1 s held
+    const float at_release = rms(head, 43200, 48000);
+    synth.on_event(0, event(sonare::midi::make_midi1_note_off(0, 0, 48, 0)));
+    const std::vector<float> tail = render_left(synth, 48000);
+    REQUIRE(at_release > 0.0f);
+    return rms(tail, 33600, 38400) / at_release;  // 0.70 - 0.80 s after note-off
+  };
+
+  const float soft = survives(24);
+  const float hard = survives(120);
+  REQUIRE(hard > 0.0f);
+  REQUIRE(soft > 2.0f * hard);
 }
 
 TEST_CASE("the sustain pedal adds sympathetic resonance", "[midi][synth][piano]") {
