@@ -56,11 +56,15 @@
 
 namespace {
 
+using sonare::test::allocation_should_fail;
 using sonare::test::AllocationGuard;
 using sonare::test::note_allocation;
 
 [[maybe_unused]] void* allocate_bytes(std::size_t size) {
   note_allocation();
+  if (allocation_should_fail(size)) {
+    throw std::bad_alloc();
+  }
   if (void* ptr = std::malloc(size == 0 ? 1 : size)) {
     return ptr;
   }
@@ -69,6 +73,9 @@ using sonare::test::note_allocation;
 
 [[maybe_unused]] void* allocate_aligned_bytes(std::size_t size, std::size_t alignment) {
   note_allocation();
+  if (allocation_should_fail(size)) {
+    throw std::bad_alloc();
+  }
   void* ptr = nullptr;
   const std::size_t actual_size = size == 0 ? 1 : size;
 #if defined(_WIN32)

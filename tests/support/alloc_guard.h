@@ -24,6 +24,35 @@ inline void note_allocation() noexcept {
   }
 }
 
+// Failure injection for the paths that can only be reached through a heap
+// failure. Thresholded rather than blanket: the interesting allocation is a
+// delay line or a scratch bank, and failing every allocation while armed would
+// take Catch2's own bookkeeping down with it and report a crash instead of the
+// return value under test. Zero means armed for nothing.
+inline std::atomic<std::size_t> g_fail_allocations_from_bytes{0};
+
+/// Whether an allocation of @p size must fail. Called from the global
+/// `operator new` overrides before any memory is taken.
+inline bool allocation_should_fail(std::size_t size) noexcept {
+  const std::size_t threshold = g_fail_allocations_from_bytes.load(std::memory_order_relaxed);
+  return threshold != 0 && size >= threshold;
+}
+
+/// Scoped guard: makes every allocation of @p from_bytes or larger throw
+/// `std::bad_alloc` while it is alive. Use the smallest threshold that still
+/// clears whatever the surrounding test framework allocates, so the failure
+/// lands on the buffer under test and nowhere else.
+class AllocationFailureGuard {
+ public:
+  explicit AllocationFailureGuard(std::size_t from_bytes) {
+    g_fail_allocations_from_bytes.store(from_bytes, std::memory_order_relaxed);
+  }
+  ~AllocationFailureGuard() { g_fail_allocations_from_bytes.store(0, std::memory_order_relaxed); }
+
+  AllocationFailureGuard(const AllocationFailureGuard&) = delete;
+  AllocationFailureGuard& operator=(const AllocationFailureGuard&) = delete;
+};
+
 /// Scoped guard: zeroes and arms the global allocation counter on construction,
 /// disarms on destruction. count() reports allocations observed while armed.
 class AllocationGuard {

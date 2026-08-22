@@ -21,6 +21,7 @@
 #include "midi/synth/sf2_player.h"
 #include "midi/ump.h"
 #include "rt/command.h"
+#include "support/alloc_guard.h"
 
 namespace {
 
@@ -1490,4 +1491,40 @@ TEST_CASE("finish_offline_render releases what a chunked render left sounding", 
   REQUIRE(engine.midi_sequencer().active_note_count() == 0);
 
   engine.set_midi_instrument(nullptr);
+}
+
+TEST_CASE("a bind whose compensation cannot be allocated is refused, not left half-done",
+          "[engine][midi][pdc]") {
+  // Reallocating the PDC banks is the one part of a bind that can fail, and it
+  // fails only on a heap failure -- the delay is an int, so no length_error is
+  // reachable and a latency large enough to exhaust memory honestly would take
+  // gigabytes. The failure is therefore injected, thresholded so that it lands
+  // on the delay line and not on the test framework's own bookkeeping.
+  //
+  // What must hold is that the refusal is total. Answering false while leaving
+  // the instrument in the rack would strand a raw pointer that the C-ABI and
+  // WASM wrappers free the moment they see the false, so a partial bind is a
+  // use-after-free rather than a missing feature.
+  constexpr int kLatency = 300000;  // ~1.2 MB per lane at 4 bytes a sample
+  constexpr std::size_t kFailFromBytes = 1u << 20;
+
+  RealtimeEngine engine;
+  engine.prepare(48000.0, 512);
+  LatencyImpulseInstrument instrument(kLatency);
+
+  bool bound = true;
+  {
+    sonare::test::AllocationFailureGuard fail_large_allocations(kFailFromBytes);
+    bound = engine.set_midi_instrument(7, &instrument);
+  }
+
+  REQUIRE_FALSE(bound);
+  REQUIRE(engine.midi_instrument_count() == 0);
+
+  // The engine is still usable afterwards: the same bind succeeds once the
+  // allocation can be served, which is what distinguishes falling back cleanly
+  // from being wedged by the failure.
+  REQUIRE(engine.set_midi_instrument(7, &instrument));
+  REQUIRE(engine.midi_instrument_count() == 1);
+  engine.set_midi_instrument(7, nullptr);
 }
