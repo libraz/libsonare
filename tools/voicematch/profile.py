@@ -210,6 +210,31 @@ def partial_decay(seg: np.ndarray, sr: int, partials_hz: list[float],
     return out
 
 
+def _above_fundamental(seg: np.ndarray, sr: int, f0_hz: float) -> np.ndarray:
+    """Drop everything below the note, so a release measures the string.
+
+    A close-miked grand keeps ringing after every note-off at frequencies that
+    have nothing to do with what was played: the same 21, 35 and 82 Hz appear in
+    the tail of A0, C3 and C4 alike, at 25 to 40 dB below the held level. Those
+    are the case and the soundboard, not the string the damper just landed on,
+    and they sit above a broadband envelope's threshold for a long time —
+    measured that way a C4 damper reads as taking over two seconds, which is the
+    box ringing, not the felt.
+
+    Cutting below the fundamental leaves the note and removes the box. It cannot
+    do so at the bottom of the keyboard, where those modes are the note's own
+    first partials; a bass row is contaminated whatever this does, and the
+    velocities where it matters are also the ones the capture tail truncates.
+    """
+    n = len(seg)
+    if n < 16:
+        return seg.astype(np.float64)
+    fc = max(20.0, 0.6 * f0_hz)
+    spec = np.fft.rfft(seg.astype(np.float64))
+    spec[np.fft.rfftfreq(n, 1.0 / sr) < fc] = 0.0
+    return np.fft.irfft(spec, n)
+
+
 def measure_note(audio: np.ndarray, sr: int, note: int, *,
                  preroll_s: float, gate_s: float) -> dict:
     """Every measurement this profile carries, for one captured note."""
@@ -256,7 +281,7 @@ def measure_note(audio: np.ndarray, sr: int, note: int, *,
     row["decayed_before_note_off"] = bool(off_db < held_peak_db - 45.0)
     rel = mono[off:]
     if rel.size > sr // 20 and not row["decayed_before_note_off"]:
-        t_rel, env_rel = _rms_envelope(rel, sr)
+        t_rel, env_rel = _rms_envelope(_above_fundamental(rel, sr, row["f0_hz"]), sr)
         start_db = float(_db(env_rel[0]))
         under = np.where(_db(env_rel) < start_db - 40.0)[0]
         row["damper_release_ms"] = round(float(t_rel[under[0]] * 1000.0), 1) if under.size \
@@ -562,6 +587,7 @@ def compare(cfg: dict, profile_path: Path, *, timbre: str, notes_filter: set[int
     print("-" * 104)
 
     deltas: dict[str, list[float]] = {}
+    damper_censored: list[tuple[int, int]] = []
     for note, vel in pairs:
         smf = write_smf([Note(note, vel, preroll_s, gate_s)],
                         program=0, end_pad=tail_s)
@@ -578,10 +604,18 @@ def compare(cfg: dict, profile_path: Path, *, timbre: str, notes_filter: set[int
             return (m[key] - r[key]) * scale
 
         stretch = d("cents_vs_et")
+        # A capped release never reached -40 dB inside the capture's tail, so
+        # the number recorded for it is the length of the window and not a
+        # measurement. Differencing two of those, or one against a real one,
+        # yields a delta that moves when the tail length changes and never when
+        # the voice does; the row is shown and left out of the median instead.
+        damper_capped = bool(m.get("damper_capped") or r.get("damper_capped"))
+        if damper_capped:
+            damper_censored.append((note, vel))
         row = {
             "stretch": None if stretch is None else stretch + a4_off,
             "decay": d("decay_db_s"),
-            "damper": d("damper_release_ms"),
+            "damper": None if damper_capped else d("damper_release_ms"),
         }
         centroid_pct = None
         if "centroid_hz" in m and r.get("centroid_hz"):
@@ -596,11 +630,16 @@ def compare(cfg: dict, profile_path: Path, *, timbre: str, notes_filter: set[int
         def fmt(v, spec):
             return format(v, spec) if v is not None and np.isfinite(v) else "n/a".rjust(len(format(0, spec)))
 
+        damper_col = fmt(d("damper_release_ms"), '+10.1f') + ("*" if damper_capped else " ")
         print(f"{note:5d} {vel:4d} | {fmt(row['stretch'], '+10.1f')} "
               f"{m.get('inharmonicity_b', float('nan')):10.3e} {r.get('inharmonicity_b', float('nan')):10.3e} "
               f"{fmt(row['decay'], '+12.2f')} {fmt(bal_m, '+10.1f')} {fmt(bal_r, '+9.1f')} "
-              f"{fmt(centroid_pct, '+12.1f')} {fmt(row['damper'], '+11.1f')}")
+              f"{fmt(centroid_pct, '+12.1f')} {damper_col}")
 
+    if damper_censored:
+        print(f"\n* {len(damper_censored)} of {len(pairs)} rows never fell 40 dB inside the "
+              f"{tail_s:.0f} s tail on one side or the other; shown, not counted:")
+        print("  " + ", ".join(f"n{n}v{v}" for n, v in damper_censored))
     print("\nmedian delta:")
     labels = {"stretch": "tuning vs the reference (cents)",
               "decay": "held-note decay (dB/s)",
