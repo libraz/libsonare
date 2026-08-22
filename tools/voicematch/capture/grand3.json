@@ -1,0 +1,44 @@
+{
+  "id": "grand3",
+  "label": "Steinberg The Grand 3, close mics, dry",
+  "plugin": "aumu:tgd3:Stbg",
+
+  "_dry": "Every effect section the plugin advertises is switched off, so the capture is the instrument and not a room. What is left in the tail after note-off is the damper, which is what a piano model has to reproduce.",
+  "dry": true,
+  "params": [],
+
+  "_host": "Measured by `capture.py calibrate`, not chosen. Without realtime this plugin drops 1544 ms out of the middle of a 2 s note; at settle 1000 it renders a peak of 0.0011 and at 2000 the real 0.158. The recommendation is twice the measured minimum.",
+  "realtime": true,
+  "settle_ms": 4000,
+  "preroll_ms": 100,
+  "sample_rate": 48000,
+
+  "_stimulus": "A long gate and a short tail, because on a piano note-off is the damper: the free decay a model has to match happens while the key is still down, and everything after it is the damping. Eight seconds covers the double-decay knee, which arrives one to three seconds in.",
+  "gate_ms": 8000,
+  "tail": "2s",
+
+  "_timbres": "One preset per instrument, chosen from that instrument's Close folder. The folder picks the piano and the mic position; the preset within it sets effects and velocity response, and the two Velocity Compressed / Velocity Expanded presets are avoided because they reshape the velocity curve this corpus is measuring.",
+  "timbres": [
+    {
+      "id": "c7-close",
+      "label": "Yamaha C7, close",
+      "preset": "01 Yamaha C7/Close/Natural Ambience"
+    },
+    {
+      "id": "modeld-close",
+      "label": "Steinway Model D, close",
+      "preset": "02 Model D/Close/NY Piano and Studio"
+    },
+    {
+      "id": "bosen290-close",
+      "label": "Bosendorfer 290, close",
+      "preset": "03 Bösendorfer 290/Close/Scenes from Childhood"
+    }
+  ],
+
+  "_notes": "The two extremes of the keyboard plus every sixth semitone between C1 and C7. The extremes are in because they are where a physical model diverges most: A0 is three wound strings with a wildly inharmonic partial series, C8 is a single short string with almost no sustain.",
+  "notes": [21, 24, 30, 36, 42, 48, 54, 60, 66, 72, 78, 84, 90, 96, 108],
+
+  "_velocities": "Four points, wide apart. A piano's timbre changes more with velocity than with pitch, so this axis carries most of the information a brightness-versus-loudness model needs.",
+  "velocities": [24, 56, 88, 120]
+}

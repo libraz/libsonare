@@ -54,6 +54,7 @@ def write_smf(
     channel: int = 0,
     end_pad: float = 0.0,
     sends: tuple[int | None, int | None, int | None] = (0, 0, 0),
+    cc_events: tuple[tuple[float, int, int], ...] = (),
 ) -> bytes:
     """Serialize `notes` to a type-0 SMF byte string.
 
@@ -72,6 +73,13 @@ def write_smf(
     render has none — and every release / tone-to-noise metric would read that
     room as timbre. Pass a non-zero reverb when the reference itself is wet
     (see `room.py`).
+
+    `cc_events` are (second, controller, value) triples placed in the timeline
+    alongside the notes. What needs them is the sustain pedal: on a piano CC64
+    is not an effect but part of the instrument — it lifts the dampers off
+    every string, so the notes ring past their note-offs and the strings nobody
+    played ring in sympathy. A piano reference compared without it is compared
+    on half of its behaviour.
     """
     # (absolute_tick, status, data1, data2) event tuples, then delta-encoded.
     events: list[tuple[int, int, int, int]] = []
@@ -80,6 +88,8 @@ def write_smf(
         off = _sec_to_ticks(n.start + n.dur)
         events.append((on, 0x90 | channel, n.note, n.velocity))
         events.append((off, 0x80 | channel, n.note, 0))
+    for at, cc, value in cc_events:
+        events.append((_sec_to_ticks(at), 0xB0 | channel, cc & 0x7F, max(0, min(127, int(value)))))
     # Stable sort by tick keeps note-off before a same-tick note-on of the next
     # event only if ordered; ties are fine for distinct notes here.
     events.sort(key=lambda e: e[0])

@@ -40,6 +40,7 @@ import shutil
 import subprocess
 import sys
 import tempfile
+import unicodedata
 from dataclasses import dataclass, field
 from pathlib import Path
 
@@ -108,13 +109,16 @@ def resolve_preset(spec: str) -> Path:
     direct = Path(spec).expanduser()
     if direct.exists():
         return direct
-    needle = spec.lower()
+    # macOS stores a filename decomposed, so a preset written "Bosendorfer" with
+    # a combining diaeresis on disk does not contain the composed character this
+    # spec was typed with. Both sides are normalised or the two never meet.
+    needle = unicodedata.normalize("NFC", spec).lower()
     hits = [
         p
         for root in PRESET_ROOTS
         if root.is_dir()
         for p in root.rglob("*.vstpreset")
-        if needle in str(p).lower()
+        if needle in unicodedata.normalize("NFC", str(p)).lower()
     ]
     if not hits:
         raise FileNotFoundError(f"no preset matches {spec!r} under {', '.join(map(str, PRESET_ROOTS))}")
@@ -148,12 +152,17 @@ class AuSource:
     extra: tuple[str, ...] = field(default=())
 
     def identity(self) -> dict:
-        """The dict that goes into the cache key and the capture manifest."""
-        preset = resolve_preset(self.preset) if self.preset else Path()
+        """The dict that goes into the cache key and the capture manifest.
+
+        The preset's digest is in here rather than its path: a preset edited in
+        place is a different sound at the same path, and a cache keyed on the
+        path would hand back the old recording of it.
+        """
+        preset = resolve_preset(self.preset) if self.preset else None
         return {
             "plugin": self.plugin,
-            "preset": str(preset),
-            "preset_sha256": _sha256_file(preset) if preset and preset.exists() else "",
+            "preset": str(preset) if preset else "",
+            "preset_sha256": _sha256_file(preset) if preset and preset.is_file() else "",
             "state": self.state,
             "params": list(self.params),
             "program": self.program,
@@ -223,13 +232,38 @@ def bounce(
     *,
     midi: Path | None = None,
     verbose: bool = False,
+    attempts: int = 4,
 ) -> dict:
-    """Render once through aubounce and return its JSON summary, guarded.
+    """Render through aubounce and return its JSON summary, guarded and retried.
 
     Raises `AuRenderError` on the two failures that leave a plausible file
     behind (a dropout, and a render too quiet to be the instrument).
+
+    Retried because on The Grand 3 the quiet one is a race inside the plugin
+    rather than a setting: the same render succeeds, then comes back near
+    silent, then succeeds again, at roughly one failure in three, and a longer
+    settle does not reduce it. What is not retried away is the detection — a
+    render that never loads raises rather than being fitted against.
     """
     out_wav.parent.mkdir(parents=True, exist_ok=True)
+    last: AuRenderError | None = None
+    for attempt in range(attempts):
+        try:
+            return _bounce_once(source, out_wav, midi=midi, verbose=verbose)
+        except AuRenderError as exc:
+            last = exc
+            if verbose or attempt:
+                print(f"  retrying ({attempt + 1}/{attempts}): {exc}", file=sys.stderr)
+    raise last if last else AuRenderError("no attempts were made")
+
+
+def _bounce_once(
+    source: AuSource,
+    out_wav: Path,
+    *,
+    midi: Path | None = None,
+    verbose: bool = False,
+) -> dict:
     argv = source.argv(out_wav, midi=midi)
     if verbose:
         print("  " + " ".join(repr(a) if " " in a else a for a in argv), file=sys.stderr)
@@ -253,9 +287,12 @@ def bounce(
     if peak < source.min_peak:
         raise AuRenderError(
             f"{out_wav.name}: peak {peak:.5f} is below {source.min_peak}. The render has the right "
-            f"length and no error and contains no instrument: the plugin had not finished loading "
-            f"when the first note played. Raise settle_ms (currently {source.settle_ms}); measured "
-            f"on The Grand 3, 1000 ms gives 0.0011 and 2000 ms gives the real 0.158."
+            f"length and no error and contains no instrument: the plugin's samples had not arrived "
+            f"when the first note played. Below the plugin's minimum settle time this happens every "
+            f"render and settle_ms (currently {source.settle_ms}) is the fix — run "
+            f"`capture.py calibrate` to measure that minimum. Above it, it is a race that a retry "
+            f"clears and more settling does not: on The Grand 3, 4000 ms and 16000 ms both gave the "
+            f"real 0.0122 while 8000 ms in between gave 0.0010."
         )
     if float(summary.get("preroll_peak", 0.0)) > 1e-4:
         print(

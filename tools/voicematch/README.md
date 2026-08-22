@@ -329,15 +329,77 @@ Use `cmaes` once the spec is runtime knobs only — that is the case where the e
 
 **Safety** — the pristine text of every target file is snapshotted at startup and restored in a `finally` block, so an exception or Ctrl-C never leaves the tree perturbed. On a normal run the best values are then written back and a unified diff plus the loss trajectory are printed; `--dry-run` restores pristine, skips the write, and reports the diff it would have applied.
 
-## Route B: plugin-hosted oracle (optional, not wired)
+## Oracle from a plugin on this machine (`--au`)
 
-`probe_grand.py` is a standalone go/no-go probe for hosting real VST3 instruments (Steinberg The Grand 3 / HALion 7 on this machine) headlessly via DawDreamer as a higher-quality oracle. It needs `pip install dawdreamer` in some environment and a real-time warm-up sleep for disk-streaming instruments. If route B is adopted, implement it behind the same interface as `render_oracle_fluidsynth` (SMF bytes in, `(frames, 2)` float32 out).
+An AudioUnit instrument installed here can be the oracle directly, with no manual render step in between. [aubounce](https://github.com/libraz/aubounce) hosts it; `au_oracle.py` puts the result behind the same interface as `render_oracle_fluidsynth`, so `compare`, `autofit` and `room-match` all take `--au` without knowing anything changed.
+
+```sh
+voicematch.py compare --programs 0 \
+    --au "aumu:tgd3:Stbg" \
+    --au-preset "01 Yamaha C7/Close/Natural Ambience" \
+    --au-dry
+```
+
+- `--au` takes a plugin name or a `type:subtype:manufacturer` triple; `aubounce list` prints both.
+- `--au-preset` takes a `.vstpreset` path or a unique fragment of one, resolved under the macOS preset roots. An ambiguous fragment lists the candidates rather than picking one, because which piano was captured is the whole point.
+- `--au-dry` switches off every effect section the plugin advertises. Worth preferring over a preset that merely sounds dry: it is the difference between measuring the instrument and measuring the instrument plus a room, and `room.py` then has nothing to correct.
+- `--au-param "Name=value"` sets anything else, repeatable.
+- Renders are cached under `out/au_cache/` keyed by the probe, the preset's digest and every host setting, so re-running a comparison costs nothing and a changed preset is a different recording rather than a stale hit.
+
+The binary is found via `AUBOUNCE`, then `PATH`, then a sibling `../aubounce` checkout.
+
+**Three ways a disk-streaming sampler produces a plausible file rather than an error**, all of them guarded here because none of them announces itself:
+
+| what happens | what you get | the guard |
+|---|---|---|
+| rendered faster than real time | the note starts correctly and goes silent in the middle | aubounce reports `dropout_ms`; a non-zero value is refused |
+| not given long enough to load | the right length, the right shape, a peak three orders of magnitude too small | a peak below the floor is refused |
+| leaking on load | energy before the first note | reported, not refused — a plugin is allowed a tail |
+
+Measured on The Grand 3, and the numbers are why the defaults are what they are: rendered at full speed a 2 s C4 loses 1544 ms out of its middle; at `--au-settle-ms 1000` it renders a peak of 0.0011 where the real one is 0.158. Two seconds of settling is enough and the default is twice that. `capture.py calibrate` measures all of this for a given plugin rather than assuming it.
+
+## Capturing a reference corpus (`capture.py`, `profile.py`)
+
+The oracle route above compares one probe at a time. A corpus is the other half: the whole note-by-velocity grid of a real instrument, measured once, so a voice is fitted to properties rather than to three notes.
+
+```sh
+capture.py calibrate                 # what this plugin needs from the host
+capture.py corpus                    # render the grid
+capture.py verify                    # what a plausible file can still be wrong about
+profile.py measure                   # corpus -> reference/<id>.json
+profile.py compare --notes 36,48,60  # libsonare against it, dimension by dimension
+```
+
+`capture/grand3.json` is the definition: the plugin, its timbres, the notes and the velocities. It holds a long gate and a short tail because on a piano note-off is the damper — the free decay a model has to match happens while the key is still down.
+
+**The captured audio never enters the repository.** A sample library's licence covers what is rendered from it, so the WAVs land in a local untracked directory and it is the measurements that are committed, in `reference/`. They are also the right thing to commit: what a physical model has to reproduce is a handful of measured properties, not one particular piano's four hundred megabytes.
+
+`profile.py` measures four things `metrics.py` does not, all of which its harmonic-series assumption cannot express:
+
+- **Inharmonicity** — a stiff string puts partial *n* at `n·f0·√(1+Bn²)`. Fitted, not assumed, by iterating the search window down as the estimate improves. On the captured C7, B is smallest around C2 (7.6e-5) and rises toward both ends — the shape a real piano has. Above roughly C6 there are too few partials left under the Nyquist frequency to fit two parameters, and those notes are reported as unfitted rather than as a number; the summary curve names the notes it stopped at, because a curve that quietly stops short reads afterwards as one that covered the keyboard.
+- **Stretch tuning** — the Railsback curve, measured as cents from equal temperament. The same capture reads −14.5 c at A0 rising to −2.7 c at C4. A model tuned to exact equal temperament beats against the reference, and the beating is the first thing anyone hears.
+- **Double decay** — the knee where the fast initial fall gives way to the aftersound, found by searching the breakpoint rather than assuming one. Where it falls is set by how fast the strings of a unison drift apart, so a model with one string cannot have it.
+- **Damper release** — note-off as a felt damper landing on a moving string.
+
+`capture.py`'s own finding is worth keeping: The Grand 3 fails to load its samples on roughly one render in three, and *more* settling time does not help — 4 s and 16 s both produced the real peak while 8 s in between produced silence. So the capture retries, and decides "too quiet" from the loudest velocity already recorded for that same note rather than from an absolute floor, since a real note at the top of the keyboard at velocity 24 is quiet enough that any fixed threshold either lets a failure through or rejects real notes.
+
+## Listening to the result
+
+```sh
+make_audition.py                                    # render the phrases
+python tools/audition/serve.py <audition-dir>       # the directory it wrote
+```
+
+`make_audition.py` renders the same piano phrases through libsonare and through each captured timbre, at one shared gain per take so the level difference between them survives, and writes the manifest [`tools/audition`](../audition/README.md) reads. The phrases are chosen for what a metric will not report: a chord that exposes inharmonicity as beating, an arpeggio, a note struck again while it is still ringing, and a passage under the sustain pedal — couplings between strings rather than properties of one, which the per-note analysis in `metrics.py` never sees.
 
 ## Files
 
 - `voicematch.py` — CLI driver (`compare`, `export-probe`, `room-match`)
 - `patterns.py` — note patterns + per-GM-program register table
-- `render_model.py` / `render_oracle.py` — the model renderer, and the oracle (fluidsynth or an external WAV, with score alignment)
+- `render_model.py` / `render_oracle.py` — the model renderer, and the oracle (fluidsynth, an external WAV with score alignment, or a plugin)
+- `au_oracle.py` — an AudioUnit instrument as the oracle, hosted by aubounce, with the guards a disk-streaming sampler needs and an on-disk render cache
+- `capture.py` / `profile.py` / `capture/` / `reference/` — capturing a reference corpus from a plugin and reducing it to committed measurements; the audio itself stays untracked
+- `make_audition.py` — the listening set for `tools/audition`
 - `metrics.py` — per-note analysis and deltas
 - `smf.py` — minimal type-0 SMF writer (single source of truth for both sides)
 - `gm_names.py` — GM program labels
