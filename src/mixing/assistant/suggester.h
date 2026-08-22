@@ -148,6 +148,16 @@ MixAssistantResult suggest_scene(const std::vector<TrackInput>& tracks,
 ///          that @ref suggest_scene would have computed, this returns the same
 ///          scene without re-analysing anything.
 ///
+///          "That @ref suggest_scene would have computed" is load-bearing.
+///          Profiles assembled by hand carry only what the caller filled in, and
+///          two decisions read fields a hand-built profile is easy to leave
+///          empty: without @ref TrackProfile::spectrum the corrective cuts fall
+///          back to the band centres and **the high-pass is never proposed at
+///          all**, whatever @ref MixAssistantConfig::enable_high_pass says. No
+///          error is raised, because an unmeasured track has no measurement to
+///          contradict. Pass profiles from @ref analyze_track_profiles to get the
+///          documented behaviour.
+///
 ///          There is no interleaved counterpart and no `Audio` overload the way
 ///          the mastering assistant has: @ref TrackInput is already planar and
 ///          already carries the channel count, so a stereo track reaches the

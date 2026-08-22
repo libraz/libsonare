@@ -109,15 +109,23 @@ namespace sonare::mixing::assistant {
 ///
 /// @details Degenerate input never throws. No tracks, one track, a disabled EQ
 ///          domain, an empty mix profile or a zero cut ceiling all yield either
-///          an empty vector or the high-pass suggestions alone. A profile
-///          carrying no spectrum still earns its cuts; they land at the band
-///          centres, because the measurement that would have moved them off the
-///          grid is the part that is missing.
+///          an empty vector or the high-pass suggestions alone.
+///
+/// @details **A profile carrying no spectrum degrades in two different ways.**
+///          Its cuts still appear, landing at the band centres, because the
+///          measurement that would have moved them off the grid is the only part
+///          that is missing. Its high-pass does not appear at all: with no
+///          spectrum the measured share below the corner reads as zero, which is
+///          under the floor, and a filter is proposed only inside the window. So
+///          a caller who assembles @ref TrackProfile by hand rather than through
+///          @ref analyze_track_profiles gets coarser cuts and **no high-pass
+///          whatever the switch says**. Nothing reports this; it is the honest
+///          answer to "how much sits below the corner" when nothing was measured.
 ///
 /// @param profiles Per-track profiles, in the caller's order.
 ///        @ref TrackProfile::spectrum is read for the high-pass decision and for
-///        each cut's centre frequency; neither reading is required for a
-///        suggestion to be made.
+///        each cut's centre frequency. The cuts survive its absence; the
+///        high-pass does not.
 /// @param mix Cross-track measurements; only the band dominance matrix is read.
 /// @param config Assistant configuration; the cut ceiling, the strength, the EQ
 ///        domain switch and the high-pass switch are read.
