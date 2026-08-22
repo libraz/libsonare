@@ -8,6 +8,7 @@ measured difference comes from the synth, not the score.
 
 from __future__ import annotations
 
+import inspect
 from dataclasses import dataclass, field
 
 from smf import Note
@@ -276,16 +277,77 @@ PATTERN_BUILDERS = {
 }
 
 
+# A plural CLI override and the singular parameter it feeds when a builder
+# takes only one. `--notes 62` on the velocity pattern names the pitch it sweeps
+# velocity at; `--velocities 90` on a sustain pattern names the one it holds.
+_SINGULAR_FOR = {"notes": ("note", "root"), "velocities": ("velocity",)}
+
+# Every parameter name either half of that mapping can appear as, for the error
+# message a pattern with neither axis has to produce.
+_AXIS_PARAMS = frozenset(_SINGULAR_FOR) | {p for ps in _SINGULAR_FOR.values() for p in ps}
+
+
+def _adapt_kwargs(name: str, builder, kwargs: dict) -> dict:
+    """Fit the CLI's plural overrides to one builder's parameters.
+
+    `--pattern` offers all seven builders and `--notes` / `--velocities` are
+    written for the ones that sweep that axis, so half the combinations reach a
+    builder with no such parameter. A builder that varies the other axis still
+    has a singular version of this one — `velocity_pattern(note=...)`,
+    `scale_pattern(root=...)` — so a single value is passed there, and anything
+    else is refused by name rather than reaching the builder as a `TypeError`
+    naming a parameter the flag does not mention.
+    """
+    params = inspect.signature(builder).parameters
+    out: dict = {}
+    for key, value in kwargs.items():
+        if key in params:
+            out[key] = value
+            continue
+        singular = next((p for p in _SINGULAR_FOR.get(key, ()) if p in params), None)
+        if singular is None:
+            axes = [p for p in params if p in _AXIS_PARAMS]
+            raise ValueError(
+                f"pattern '{name}' has no {key} axis; it takes "
+                f"{', '.join(axes) if axes else 'neither notes nor velocities'}"
+            )
+        if len(value) != 1:
+            raise ValueError(
+                f"pattern '{name}' sounds one {singular}, so {key} takes a single value "
+                f"(got {len(value)}: {','.join(str(v) for v in value)})"
+            )
+        out[singular] = value[0]
+    return out
+
+
 def build_pattern(name: str, program: int, **kwargs) -> Pattern:
     """Build a named pattern for `program`; kwargs pass through to the builder."""
     try:
         builder = PATTERN_BUILDERS[name]
     except KeyError:
         raise ValueError(f"unknown pattern '{name}' (choose from {sorted(PATTERN_BUILDERS)})") from None
-    return builder(program, **kwargs)
+    return builder(program, **_adapt_kwargs(name, builder, kwargs))
 
 
 def pattern_length(pattern: Pattern) -> float:
     """Total render length in seconds (last note-off plus the tail)."""
     end = max((n.start + n.dur) for n in pattern.notes)
     return end + pattern.tail
+
+
+def analysis_window_end(pattern: Pattern, note: Note) -> float:
+    """Where one note's analysis window ends, in seconds.
+
+    Whichever comes first: the end of the note's own release tail, or the next
+    note's onset. The percussion path has always clamped a hit's window where
+    the next one begins, and a sustained note needs the same clamp for the same
+    reason — the default probe holds each note for 2.0 s and adds a 1.5 s tail
+    against a 3.0 s onset spacing, so without it every note but the last
+    measured half a second of the next note's attack as its own release, which
+    is the headline number of the compare report and part of `--w-env`.
+
+    `analyze_note` and `analyze_hit` both cap the window they are handed, so a
+    gap longer than the sound costs nothing.
+    """
+    end = min(note.start + note.dur + pattern.tail, pattern_length(pattern))
+    return min([end] + [n.start for n in pattern.notes if n.start > note.start])

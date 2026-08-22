@@ -21,7 +21,7 @@ from dataclasses import dataclass
 import numpy as np
 
 from metrics import analyze_hit, analyze_note
-from patterns import pattern_length
+from patterns import analysis_window_end
 
 SKELETON_MAX_S = 2.0  # analysis window per note (matches the sustain pattern)
 MSS_FFT_SIZES = (512, 1024, 2048, 4096)
@@ -117,19 +117,18 @@ def probe_rows(mono: np.ndarray, pattern, sr: int) -> list[dict]:
     downstream of this point can score them the same way: one has a harmonic
     ladder and an intonation error, the other has neither. The pattern decides,
     once, and the rows carry the shape the loss then reads.
+
+    Both metric sets read the same window — up to the next onset, never past it
+    (`analysis_window_end`), so no note's release is measured through the next
+    note's attack.
     """
     rows = []
     if pattern.percussive:
-        # A hit's window ends where the next one begins; the last one gets the
-        # tail. `analyze_hit` caps it, so a long gap costs nothing.
-        starts = [n.start for n in pattern.notes]
-        end_of_render = pattern_length(pattern)
         for note in pattern.analysis_notes:
-            nxt = next((s for s in starts if s > note.start), end_of_render)
-            rows.append(analyze_hit(mono, sr, note, nxt).to_dict())
+            rows.append(analyze_hit(mono, sr, note, analysis_window_end(pattern, note)).to_dict())
         return rows
     for note in pattern.analysis_notes:
-        row = analyze_note(mono, sr, note, note.start + note.dur + pattern.tail).to_dict()
+        row = analyze_note(mono, sr, note, analysis_window_end(pattern, note)).to_dict()
         row["skeleton"] = skeleton_note(mono, sr, note)
         rows.append(row)
     return rows
