@@ -244,11 +244,15 @@ def main() -> int:
         end = max(n.start + n.dur for n in notes)
         seconds = end + 2.0  # room for release tails
         channel = 9 if is_drums else 0
-        # dry=False: the corpus measures the out-of-the-box playback state
-        # (GS power-on sends), unlike the voicematch timbre loop which zeroes
-        # the sends against its dry oracle.
+        # Sends left untouched: the corpus measures the out-of-the-box playback
+        # state (GS power-on CC91, weighted per program by gm_fallback_sends),
+        # unlike the voicematch timbre loop which zeroes the sends against its
+        # dry oracle.
         smf_bytes = write_smf(
-            notes, program=max(program, 0) if not is_drums else -1, channel=channel, dry=False
+            notes,
+            program=max(program, 0) if not is_drums else -1,
+            channel=channel,
+            sends=(None, None, None),
         )
 
         audio = render_model(smf_bytes, seconds)

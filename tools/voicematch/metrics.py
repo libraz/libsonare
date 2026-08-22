@@ -15,6 +15,20 @@ Metric set (per note):
   sustain_slope_db_s     linear dB/s fit over the sustain window
   release_ms             time after note-off for the envelope to fall 40 dB
   sustain_rms_db         sustain-window RMS (post global normalization)
+
+Percussion metric set (per hit, `analyze_hit`):
+  bands_db               1/3-octave levels, dB relative to the loudest band
+  band_decay_db_s        per-octave-band decay slope after the peak
+  attack_ms              onset to envelope peak
+  decay_ms               peak to 20 dB below it
+  crest_db               peak-to-RMS ratio over the hit
+  centroid_hz            broadband spectral centroid of the hit
+  level_db               hit RMS (post global normalization)
+A drum note has no fundamental, so every metric above that is anchored on one —
+the harmonic ladder, the intonation error, the tonal-to-noise ratio — measures a
+frequency the sound does not contain. What is left of a percussion hit is its
+level *profile* and how fast each part of that profile dies, which is what these
+measure instead.
 """
 
 from __future__ import annotations
@@ -27,6 +41,35 @@ from smf import Note
 
 MIN_SUSTAIN_SEC = 0.15
 N_HARMONICS = 12
+
+# ISO 1/3-octave centres, 50 Hz to 12.5 kHz: the resolution a percussion hit's
+# spectrum is worth reporting at. Finer would resolve individual modes, which
+# move with every knob and are not what a fit should chase; coarser would merge
+# a snare's shell into its wires.
+THIRD_OCTAVE_CENTERS = (
+    50.0, 63.0, 80.0, 100.0, 125.0, 160.0, 200.0, 250.0, 315.0, 400.0, 500.0, 630.0,
+    800.0, 1000.0, 1250.0, 1600.0, 2000.0, 2500.0, 3150.0, 4000.0, 5000.0, 6300.0,
+    8000.0, 10000.0, 12500.0,
+)
+THIRD_OCTAVE_RATIO = 2.0 ** (1.0 / 6.0)
+
+# Decay is fit per octave band rather than per third-octave: a third-octave
+# band of a noisy hit carries too few modes for a slope fit to be stable.
+OCTAVE_CENTERS = (63.0, 125.0, 250.0, 500.0, 1000.0, 2000.0, 4000.0, 8000.0)
+OCTAVE_RATIO = 2.0 ** 0.5
+
+# Longest stretch of one hit that is analyzed, and how far below the loudest
+# band a band still counts as present. The floor keeps bands with no content in
+# either render from reading as a large difference between two noise floors.
+HIT_MAX_SEC = 1.8
+BAND_FLOOR_DB = -60.0
+
+# A hit's envelope is read on a far finer grid than a sustained note's. Time to
+# peak is single-digit milliseconds for most of the kit, so the 5 ms hop that
+# resolves a bowed attack quantises a snare's to 5, 10 or 15 and reports the
+# quantisation rather than the attack.
+HIT_ENVELOPE_HOP_MS = 0.5
+HIT_ENVELOPE_WIN_MS = 2.0
 
 
 def midi_to_hz(note: int) -> float:
@@ -225,6 +268,163 @@ def analyze_note(mono: np.ndarray, sr: int, note: Note, render_end: float) -> No
         release_capped=capped,
         sustain_rms_db=round(sustain_rms_db, 2),
     )
+
+
+# --------------------------------------------------------------------------- #
+# Percussion
+# --------------------------------------------------------------------------- #
+def _band_power(freqs: np.ndarray, power: np.ndarray, centers, ratio: float) -> np.ndarray:
+    """Power summed into each band around `centers`, half-band width `ratio`."""
+    out = np.empty(len(centers))
+    for i, c in enumerate(centers):
+        mask = (freqs >= c / ratio) & (freqs < c * ratio)
+        out[i] = float(power[mask].sum())
+    return out
+
+
+def _band_decay(
+    seg: np.ndarray, sr: int, centers, ratio: float,
+    *, n_fft: int = 1024, hop: int = 256, drop_db: float = 25.0,
+) -> list[float | None]:
+    """Post-peak decay slope in dB/s for each band, or None where unfittable.
+
+    A percussion hit is a decay from the first sample, so each band is fit from
+    its own peak frame downward — bands do not peak together, and a wire buzz
+    that arrives after the shell would read as a rising slope if they were all
+    anchored on the broadband onset.
+
+    The fit stops `drop_db` below the peak so it measures the decay rather than
+    where the band reaches the render's noise floor and flattens out.
+    """
+    if len(seg) < n_fft:
+        return [None] * len(centers)
+    n_frames = (len(seg) - n_fft) // hop + 1
+    frames = np.lib.stride_tricks.sliding_window_view(seg, n_fft)[::hop][:n_frames]
+    power = np.abs(np.fft.rfft(frames * np.hanning(n_fft), axis=1)) ** 2
+    freqs = np.fft.rfftfreq(n_fft, 1.0 / sr)
+    times = (np.arange(n_frames) * hop + n_fft / 2) / sr
+
+    out: list[float | None] = []
+    for c in centers:
+        mask = (freqs >= c / ratio) & (freqs < c * ratio)
+        if not mask.any():
+            out.append(None)
+            continue
+        series = np.asarray(_db(np.sqrt(power[:, mask].sum(axis=1))), dtype=np.float64)
+        peak = int(np.argmax(series))
+        top = series[peak]
+        window = np.arange(len(series)) >= peak
+        window &= series >= top - drop_db
+        # Stop at the first frame that falls through the floor, so a band that
+        # rings, dies and is then re-excited by the next hit is not fit across
+        # the gap.
+        below = np.where((np.arange(len(series)) > peak) & (series < top - drop_db))[0]
+        if below.size:
+            window &= np.arange(len(series)) < below[0]
+        if np.count_nonzero(window) < 4:
+            out.append(None)
+            continue
+        out.append(float(np.polyfit(times[window], series[window], 1)[0]))
+    return out
+
+
+@dataclass
+class HitMetrics:
+    """One percussion hit, measured without reference to a fundamental."""
+
+    note: int
+    velocity: int
+    bands_db: list[float]                # 1/3-octave, dB relative to the loudest band
+    peak_band_hz: float
+    band_decay_db_s: list[float | None]  # per octave band
+    centroid_hz: float
+    attack_ms: float
+    decay_ms: float
+    decay_capped: bool
+    crest_db: float
+    level_db: float
+
+    def to_dict(self) -> dict:
+        return asdict(self)
+
+
+def analyze_hit(mono: np.ndarray, sr: int, note: Note, window_end: float) -> HitMetrics:
+    """Compute the percussion metric set for one hit.
+
+    The window runs from the onset to `window_end` (the next hit, or the end of
+    the render), capped at `HIT_MAX_SEC`. The note's own duration is ignored:
+    a drum is a one-shot and its note-off carries no information.
+    """
+    on = int(note.start * sr)
+    end = int(min(window_end, note.start + HIT_MAX_SEC) * sr)
+    seg = np.asarray(mono[on:min(end, len(mono))], dtype=np.float64)
+    if len(seg) < 256:
+        seg = np.asarray(mono[on : on + 256], dtype=np.float64)
+
+    freqs, mag = _spectrum(seg, sr)
+    power = mag**2
+    bands = _band_power(freqs, power, THIRD_OCTAVE_CENTERS, THIRD_OCTAVE_RATIO)
+    bands_db = np.asarray(_db(np.sqrt(bands)), dtype=np.float64)
+    top = float(bands_db.max())
+    bands_db = np.maximum(bands_db - top, BAND_FLOOR_DB)
+    peak_band = THIRD_OCTAVE_CENTERS[int(np.argmax(bands))]
+
+    in_range = freqs <= 16000.0
+    centroid = float(
+        np.sum(freqs[in_range] * mag[in_range]) / max(np.sum(mag[in_range]), 1e-12)
+    )
+
+    times, env = _rms_envelope(
+        seg, sr, hop_ms=HIT_ENVELOPE_HOP_MS, win_ms=HIT_ENVELOPE_WIN_MS
+    )
+    peak_i = int(np.argmax(env))
+    peak = float(env[peak_i])
+    attack_ms = float(times[peak_i] * 1000.0)
+
+    fallen = (np.arange(len(env)) > peak_i) & (env <= peak * 10.0 ** (-20.0 / 20.0))
+    capped = not bool(np.any(fallen))
+    decay_ms = float(
+        ((times[-1] if capped else times[int(np.argmax(fallen))]) - times[peak_i]) * 1000.0
+    )
+
+    rms = float(np.sqrt(np.mean(seg**2)))
+    crest_db = float(_db(np.max(np.abs(seg))) - _db(rms))
+
+    return HitMetrics(
+        note=note.note,
+        velocity=note.velocity,
+        bands_db=[round(float(v), 2) for v in bands_db],
+        peak_band_hz=peak_band,
+        band_decay_db_s=[None if v is None else round(v, 2)
+                         for v in _band_decay(seg, sr, OCTAVE_CENTERS, OCTAVE_RATIO)],
+        centroid_hz=round(centroid, 1),
+        attack_ms=round(attack_ms, 2),
+        decay_ms=round(decay_ms, 1),
+        decay_capped=capped,
+        crest_db=round(crest_db, 2),
+        level_db=round(float(_db(rms)), 2),
+    )
+
+
+def compare_hit(model: HitMetrics, oracle: HitMetrics) -> dict:
+    """Model-minus-oracle deltas for one percussion hit."""
+    band_delta = [round(m - o, 2) for m, o in zip(model.bands_db, oracle.bands_db)]
+    decay_delta = [
+        round(m - o, 2) if m is not None and o is not None else None
+        for m, o in zip(model.band_decay_db_s, oracle.band_decay_db_s)
+    ]
+    return {
+        "note": model.note,
+        "velocity": model.velocity,
+        "bands_delta_db": band_delta,
+        "band_decay_delta_db_s": decay_delta,
+        "peak_band_ratio": round(model.peak_band_hz / max(oracle.peak_band_hz, 1e-9), 3),
+        "centroid_delta_hz": round(model.centroid_hz - oracle.centroid_hz, 1),
+        "attack_delta_ms": round(model.attack_ms - oracle.attack_ms, 2),
+        "decay_delta_ms": round(model.decay_ms - oracle.decay_ms, 1),
+        "crest_delta_db": round(model.crest_db - oracle.crest_db, 2),
+        "level_delta_db": round(model.level_db - oracle.level_db, 2),
+    }
 
 
 def compare_note(model: NoteMetrics, oracle: NoteMetrics) -> dict:

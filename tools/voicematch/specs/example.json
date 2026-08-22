@@ -1,9 +1,21 @@
 [
   {
-    "file": "src/midi/synth/brass_voice.cpp",
-    "pattern": "kLipCouple = ([0-9.]+)f",
+    "tunable": "brass_voice.kLipCouple",
     "min": 2.0,
     "max": 8.0,
     "scale": "linear"
+  },
+  {
+    "tunable": "trumpet.brass.brassiness",
+    "min": 0.0,
+    "max": 1.0,
+    "scale": "linear"
+  },
+  {
+    "file": "src/midi/synth/piano_resonance.cpp",
+    "pattern": "kDiffuserMs\\[2\\] = \\{([0-9.]+)f",
+    "min": 2.0,
+    "max": 8.0,
+    "scale": "log"
   }
 ]

@@ -76,6 +76,16 @@ class Pattern:
     notes: list[Note]
     analysis_notes: list[Note] = field(default_factory=list)
     tail: float = 1.5  # seconds of silence rendered after the last note-off
+    # MIDI channel the probe is written on. 9 (channel 10 in one-based
+    # numbering) is the GM drum channel, on which a note number selects a
+    # percussion instrument rather than a pitch — libsonare routes it through
+    # `drum_note_table()` and a GM reference synth through its drum bank.
+    channel: int = 0
+    # Score with the percussion metric set (band levels, per-band decay, attack
+    # sharpness) instead of the harmonic one. A drum hit has no fundamental to
+    # anchor a harmonic ladder on, so every pitch-derived metric would be
+    # measuring a frequency the sound does not contain.
+    percussive: bool = False
 
 
 def sustain_pattern(
@@ -137,6 +147,110 @@ def staccato_pattern(
     return Pattern("staccato", seq, analysis_notes=[])
 
 
+def room_probe_pattern(
+    program: int,
+    *,
+    notes: tuple[int, ...] | None = None,
+    velocity: int = 110,
+    dur: float = 0.25,
+    gap: float = 4.0,
+) -> Pattern:
+    """Short notes with long silences — the pattern to measure a room from.
+
+    Reverberation is measured from what is left after the player stops, so the
+    measurement is only as good as the silence it has to work with. The
+    `sustain` pattern leaves one second, which is shorter than the decay of any
+    space worth correcting for: the tail is cut off before it has fallen far
+    enough to fit a slope to, and what little there is arrives mixed with the
+    instrument's own ring from a two-second note.
+
+    Short notes and four-second gaps invert both. The excitation stops long
+    before the room does, so the tail is the room; and the notes are too short
+    to be worth analysing for timbre, which is why nothing here is an analysis
+    note.
+    """
+    pitches = notes if notes is not None else registers_for_program(program)
+    seq = []
+    t = 0.1
+    for p in pitches:
+        seq.append(Note(p, velocity, t, dur))
+        t += dur + gap
+    return Pattern("room-probe", seq, analysis_notes=[], tail=4.0)
+
+
+# Which drum note a drum probe defaults to, and the velocities it strikes at.
+# Velocity is the axis a drum voice varies along — a melodic voice is probed
+# across its register, but a drum note has only one — so the probe sweeps it and
+# the held-out set is a second sweep the fit never sees.
+DEFAULT_DRUM_NOTE = 38  # Acoustic Snare
+DRUM_VELOCITIES = (64, 100, 127)
+DRUM_HOLDOUT_VELOCITIES = (48, 88, 112)
+
+
+def _drum_pattern(
+    name: str,
+    *,
+    notes: tuple[int, ...] | None,
+    velocities: tuple[int, ...],
+    dur: float,
+    gap: float,
+    tail: float,
+) -> Pattern:
+    pitches = notes if notes is not None else (DEFAULT_DRUM_NOTE,)
+    seq = []
+    t = 0.1
+    for p in pitches:
+        for v in velocities:
+            seq.append(Note(p, v, t, dur))
+            t += gap
+    return Pattern(name, seq, analysis_notes=list(seq), tail=tail, channel=9, percussive=True)
+
+
+def drum_pattern(
+    program: int,
+    *,
+    notes: tuple[int, ...] | None = None,
+    velocities: tuple[int, ...] = DRUM_VELOCITIES,
+    dur: float = 0.05,
+    gap: float = 2.0,
+) -> Pattern:
+    """Isolated one-shot hits of one drum note at increasing velocities.
+
+    Written on the drum channel, so `notes` selects percussion instruments
+    rather than pitches: 38 is the acoustic snare, 36 the kick, 46 the open
+    hi-hat. `program` selects the drum kit (0 is the standard kit) rather than a
+    melodic instrument.
+
+    A drum is a one-shot: the note-off carries no information, so the note is as
+    short as the score can make it and the two seconds between hits are what the
+    analysis actually reads. That gap is what the longest instrument in the kit
+    needs — an open cymbal or a gong rings for most of it — and it also keeps
+    each hit's window clear of the next one's onset.
+    """
+    return _drum_pattern(
+        "drum", notes=notes, velocities=velocities, dur=dur, gap=gap, tail=2.0
+    )
+
+
+def drum_holdout_pattern(
+    program: int,
+    *,
+    notes: tuple[int, ...] | None = None,
+    velocities: tuple[int, ...] = DRUM_HOLDOUT_VELOCITIES,
+    dur: float = 0.05,
+    gap: float = 2.0,
+) -> Pattern:
+    """`drum` at velocities the fit never saw — the generalisation check.
+
+    A drum fit has no register to hold notes out of, so the held-out axis is
+    velocity: values fitted at 64/100/127 that are wrong at 48/88/112 are
+    overfitted to the probe exactly as a violin fitted on three pitches can be.
+    """
+    return _drum_pattern(
+        "drum-holdout", notes=notes, velocities=velocities, dur=dur, gap=gap, tail=2.0
+    )
+
+
 def scale_pattern(
     program: int,
     *,
@@ -155,6 +269,9 @@ PATTERN_BUILDERS = {
     "sustain": sustain_pattern,
     "velocity": velocity_pattern,
     "staccato": staccato_pattern,
+    "room-probe": room_probe_pattern,
+    "drum": drum_pattern,
+    "drum-holdout": drum_holdout_pattern,
     "scale": scale_pattern,
 }
 

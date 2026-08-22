@@ -1,47 +1,74 @@
 [
   {
-    "file": "src/midi/synth/gm_fallback_map.cpp",
-    "pattern": "ranks\\[0\\] = \\{0.5f, /\\*stopped=\\*/true, [0-9.]+f, ([0-9.]+)f",
-    "min": 0.02, "max": 0.5, "scale": "linear"
+    "tunable": "church_organ.pipe_organ.ranks0.level",
+    "min": 0.02,
+    "max": 0.9,
+    "scale": "linear"
   },
   {
-    "file": "src/midi/synth/gm_fallback_map.cpp",
-    "pattern": "ranks\\[2\\] = \\{2.0f, false, [0-9.]+f, ([0-9.]+)f",
-    "min": 0.4, "max": 1.2, "scale": "linear"
+    "tunable": "church_organ.pipe_organ.ranks1.brightness",
+    "min": 0.5,
+    "max": 0.95,
+    "scale": "linear"
   },
   {
-    "file": "src/midi/synth/gm_fallback_map.cpp",
-    "pattern": "ranks\\[3\\] = \\{3.0f, false, [0-9.]+f, ([0-9.]+)f",
-    "min": 0.05, "max": 0.6, "scale": "linear"
+    "tunable": "church_organ.pipe_organ.ranks2.brightness",
+    "min": 0.4,
+    "max": 0.9,
+    "scale": "linear"
   },
   {
-    "file": "src/midi/synth/gm_fallback_map.cpp",
-    "pattern": "ranks\\[4\\] = \\{4.0f, false, [0-9.]+f, ([0-9.]+)f",
-    "min": 0.1, "max": 0.8, "scale": "linear"
+    "tunable": "church_organ.pipe_organ.ranks2.level",
+    "min": 0.3,
+    "max": 1.0,
+    "scale": "linear"
   },
   {
-    "file": "src/midi/synth/gm_fallback_map.cpp",
-    "pattern": "ranks\\[5\\] = \\{5.0f, false, [0-9.]+f, ([0-9.]+)f",
-    "min": 0.0, "max": 0.15, "scale": "linear"
+    "tunable": "church_organ.pipe_organ.ranks3.level",
+    "min": 0.05,
+    "max": 0.9,
+    "scale": "linear"
   },
   {
-    "file": "src/midi/synth/gm_fallback_map.cpp",
-    "pattern": "ranks\\[1\\] = \\{1.0f, false, ([0-9.]+)f",
-    "min": 0.5, "max": 0.9, "scale": "linear"
+    "tunable": "church_organ.pipe_organ.ranks4.level",
+    "min": 0.1,
+    "max": 0.9,
+    "scale": "linear"
   },
   {
-    "file": "src/midi/synth/gm_fallback_map.cpp",
-    "pattern": "ranks\\[2\\] = \\{2.0f, false, ([0-9.]+)f",
-    "min": 0.5, "max": 0.9, "scale": "linear"
+    "tunable": "church_organ.pipe_organ.ranks5.level",
+    "min": 0.0,
+    "max": 0.5,
+    "scale": "linear"
   },
   {
-    "file": "src/midi/synth/pipe_organ_voice.cpp",
-    "pattern": "kToneCornerMult = ([0-9.]+)f",
-    "min": 3.5, "max": 14.0, "scale": "log"
+    "tunable": "church_organ.pipe_organ.breath",
+    "min": 0.1,
+    "max": 0.6,
+    "scale": "linear"
   },
   {
-    "file": "src/midi/synth/pipe_organ_voice.cpp",
-    "pattern": "kEvenPumpGain = ([0-9.]+)f",
-    "min": 0.25, "max": 0.85, "scale": "linear"
+    "tunable": "church_organ.pipe_organ.chiff",
+    "min": 0.0,
+    "max": 0.9,
+    "scale": "linear"
+  },
+  {
+    "tunable": "church_organ.pipe_organ.keytrack",
+    "min": 0.0,
+    "max": 1.0,
+    "scale": "linear"
+  },
+  {
+    "tunable": "pipe_organ_voice.kToneCornerMult",
+    "min": 3.5,
+    "max": 14.0,
+    "scale": "log"
+  },
+  {
+    "tunable": "pipe_organ_voice.kEvenPumpGain",
+    "min": 0.25,
+    "max": 0.85,
+    "scale": "linear"
   }
 ]

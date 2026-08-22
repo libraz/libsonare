@@ -1,93 +1,17 @@
 [
-  {
-    "file": "src/midi/synth/piano_voice.cpp",
-    "pattern": "kHammerWidthHarmonics = ([0-9.]+)f",
-    "min": 2.5,
-    "max": 9.0,
-    "scale": "log"
-  },
-  {
-    "file": "src/midi/synth/piano_voice.cpp",
-    "pattern": "kWidthBassOct = ([0-9.]+)f",
-    "min": 0.1,
-    "max": 1.2,
-    "scale": "linear"
-  },
-  {
-    "file": "src/midi/synth/piano_voice.cpp",
-    "pattern": "kStrikeNoiseInject = ([0-9.]+)f",
-    "min": 0.2,
-    "max": 0.8,
-    "scale": "linear"
-  },
-  {
-    "file": "src/midi/synth/piano_voice.cpp",
-    "pattern": "kStrikeNoiseCutoffScale = ([0-9.]+)f",
-    "min": 0.4,
-    "max": 1.0,
-    "scale": "linear"
-  },
-  {
-    "file": "src/midi/synth/piano_voice.cpp",
-    "pattern": "kInjectTrebleTaperOct = ([0-9.]+)f",
-    "min": 0.6,
-    "max": 1.8,
-    "scale": "linear"
-  },
-  {
-    "file": "src/midi/synth/piano_voice.cpp",
-    "pattern": "kNoiseTrebleTaperOct = ([0-9.]+)f",
-    "min": 0.8,
-    "max": 2.0,
-    "scale": "linear"
-  },
-  {
-    "file": "src/midi/synth/piano_voice.cpp",
-    "pattern": "kBloomTauMsC4 = ([0-9.]+)f",
-    "min": 2.0,
-    "max": 12.0,
-    "scale": "log"
-  },
-  {
-    "file": "src/midi/synth/piano_voice.cpp",
-    "pattern": "kKnockGain = ([0-9.]+)f",
-    "min": 0.8,
-    "max": 3.0,
-    "scale": "log"
-  },
-  {
-    "file": "src/midi/synth/piano_voice.cpp",
-    "pattern": "kContactPeriodsAtC4 = ([0-9.]+)f",
-    "min": 0.25,
-    "max": 0.7,
-    "scale": "linear"
-  },
-  {
-    "file": "src/midi/synth/piano_voice.cpp",
-    "pattern": "kContactPeriodsPerOct = ([0-9.]+)f",
-    "min": 0.3,
-    "max": 0.9,
-    "scale": "linear"
-  },
-  {
-    "file": "src/midi/synth/piano_voice.cpp",
-    "pattern": "kStringYield = ([0-9.]+)f",
-    "min": 0.1,
-    "max": 1.5,
-    "scale": "linear"
-  },
-  {
-    "file": "src/midi/synth/piano_voice.cpp",
-    "pattern": "ham_mu_ = ([0-9.]+)f",
-    "min": 0.05,
-    "max": 0.6,
-    "scale": "linear"
-  },
-  {
-    "file": "src/midi/synth/gm_fallback_map.cpp",
-    "pattern": "t\\[0\\].piano.brightness = ([0-9.]+)f",
-    "min": 0.7,
-    "max": 1.0,
-    "scale": "linear"
-  }
+  { "tunable": "kHammerWidthHarmonics", "min": 2.5, "max": 9.0, "scale": "log" },
+  { "tunable": "kWidthBassOct", "min": -3.0, "max": 1.2, "scale": "linear" },
+  { "tunable": "kWidthTrebleOct", "min": -1.0, "max": 2.5, "scale": "linear" },
+  { "tunable": "kStrikeNoiseInject", "min": 0.05, "max": 0.8, "scale": "linear" },
+  { "tunable": "kStrikeNoiseCutoffScale", "min": 0.2, "max": 1.0, "scale": "linear" },
+  { "tunable": "kInjectTrebleTaperOct", "min": 0.2, "max": 1.8, "scale": "linear" },
+  { "tunable": "kInjectBassBoostOct", "min": 0.3, "max": 2.2, "scale": "linear" },
+  { "tunable": "kNoiseTrebleTaperOct", "min": 0.4, "max": 2.0, "scale": "linear" },
+  { "tunable": "kBloomTauMsC4", "min": 1.5, "max": 14.0, "scale": "log" },
+  { "tunable": "kKnockGain", "min": 0.5, "max": 4.0, "scale": "log" },
+  { "tunable": "kContactPeriodsAtC4", "min": 0.2, "max": 0.9, "scale": "linear" },
+  { "tunable": "kContactPeriodsPerOct", "min": 0.2, "max": 1.0, "scale": "linear" },
+  { "tunable": "kStringYield", "min": 0.1, "max": 1.5, "scale": "linear" },
+  { "tunable": "kHammerHysteresis", "min": 0.05, "max": 0.6, "scale": "linear" },
+  { "tunable": "kPianoBrightness", "min": 0.5, "max": 1.0, "scale": "linear" }
 ]

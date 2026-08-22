@@ -3,7 +3,7 @@
 Renders the same MIDI through two synths and reports per-note timbre deltas, so physical-model voicing can be tuned against a reference ("oracle") instead of by ear alone.
 
 - **Model side** — libsonare's GM fallback bank: `Project.import_smf` → `bounce_with_sf2_instrument` with **no SoundFont loaded**, which forces every program through `gm_fallback_map` → NativeSynth physical voices. This is exactly the code path under tuning. The dylib is loaded via `SONARE_LIB_PATH` (defaults to `build-python-shared/lib/libsonare.dylib`), so it always tests the working tree.
-- **Oracle side** — fluidsynth fast-render with a GM SoundFont (`assets/MuseScore_General.sf3`, downloaded from the OSUOSL MuseScore mirror; override with `--sf2` or `VOICEMATCH_SF2`). Rendered **dry** (`-R 0 -C 0`) — reverb tails would contaminate release and noise metrics.
+- **Oracle side** — either fluidsynth fast-rendering a GM SoundFont (`assets/MuseScore_General.sf3`, downloaded from the OSUOSL MuseScore mirror; override with `--sf2` or `VOICEMATCH_SF2`), rendered **dry** (`-R 0 -C 0`) since reverb tails would contaminate release and noise metrics — or **your own WAV** of the probe (`--oracle-wav`), rendered by a VST, a plugin host, or a real instrument. See [Oracle from a WAV](#oracle-from-a-wav).
 
 ## The tuning loop
 
@@ -29,6 +29,10 @@ voicematch.py compare --programs 40,42,71      # a list
 voicematch.py compare --programs 71 --pattern velocity
 voicematch.py compare --programs 40 --notes 55,67,79   # override probe pitches
 voicematch.py compare --programs 40 --render-only      # WAVs only, no analysis
+voicematch.py compare --programs 0 --drum-note 38      # a percussion instrument, not a pitch
+voicematch.py export-probe --programs 0                # write the probe SMF for an external synth
+voicematch.py compare --programs 0 --oracle-wav ref.wav  # score against that rendering
+voicematch.py room-match --programs 19 --oracle-wav ref.wav  # what sends reproduce its room
 ```
 
 Patterns (`patterns.py`):
@@ -38,6 +42,9 @@ Patterns (`patterns.py`):
 | `sustain` | steady-state timbre at low/mid/high register (per-program ranges) | yes |
 | `velocity` | dynamics curve at one pitch (vel 40/70/100/127) | yes |
 | `staccato` | attack transients and release | no (too short for spectra) |
+| `drum` | one percussion instrument struck at vel 64/100/127, on the drum channel | yes (percussion metrics) |
+| `drum-holdout` | the same at vel 48/88/112 — the generalisation check for a drum fit | yes (percussion metrics) |
+| `room-probe` | short notes, 4 s gaps — measures a reference's reverberation | no |
 | `scale` | legato musicality, listening check | no |
 
 ## Metrics (`metrics.py`)
@@ -60,41 +67,265 @@ Deltas are model − oracle. Interpretation caveats:
 - MuseScore General quality varies per program; for a suspect program, cross-check with another SoundFont (`--sf2`) before trusting a delta.
 - Harmonic deltas are h1-normalized on both sides, so they are immune to level differences but *not* to which harmonic dominates — check `harmonics_db` absolutes in `report.json` when a delta looks extreme.
 
+## Drums
+
+A drum note has no fundamental, so every metric above that is anchored on one measures a frequency the sound does not contain: MIDI note 38 is the acoustic snare, and reading its "expected f0" as 87 Hz would build a harmonic ladder out of a noise burst. `--drum-note N` therefore switches two things at once — the probe and the metric set.
+
+```sh
+voicematch.py compare  --programs 0 --drum-note 38          # snare, model vs oracle
+voicematch.py export-probe --programs 0 --drum-note 38      # the same probe for an external kit
+autofit.py --spec auto --program 0 --drum-note 38 \
+    --optimizer cmaes --max-evals 200 --workers 8 \
+    --validate-velocities 48,88,112
+```
+
+**The probe moves to MIDI channel 10.** That is what makes a note number select an instrument rather than a pitch; `--programs` / `--program` then selects the *kit* (0 is the standard kit), not a melodic instrument. libsonare routes the channel through `drum_note_table()` and a GM reference synth through its drum bank, so both sides play the same instrument from the same file.
+
+**Velocity is the axis, because a drum note has no register.** The probe strikes one instrument at three velocities and the held-out set is three more (`--validate-velocities`) — the drum equivalent of fitting a violin on three pitches and checking it on three others. `--validate-notes` does nothing for a drum fit; a different drum note is voiced by a different patch, whose knobs this fit never touched.
+
+Per hit, in place of the harmonic set:
+
+- `bands_db` — 1/3-octave levels from 50 Hz to 12.5 kHz, dB relative to the loudest band. The percussion analogue of the h1-normalized harmonic ladder: level-blind, so it measures the shape of the spectrum rather than how hard the hit was. Bands more than 60 dB down are floored, so two noise floors do not read as a difference.
+- `band_decay_db_s` — decay slope per octave band, each fit from **its own** peak frame. Bands do not peak together; a snare's wire buzz arrives after its shell, and anchoring every band on the broadband onset would read that as a rising slope. A snare and a rimshot can share an onset spectrum and differ entirely in how fast the top of it dies.
+- `attack_ms` — onset to envelope peak (not 10→90%: a hit's peak *is* its attack).
+- `decay_ms` — peak to −20 dB (`+` suffix = still above it when the window ended).
+- `crest_db` — peak-to-RMS over the hit.
+- `centroid_hz` — broadband centroid. Unlike for a pitched voice, this is worth reading: the register is fixed, so nothing confounds it.
+- `level_db` — hit RMS after global RMS alignment.
+
+The fit weights these as `--w-band` / `--w-bdecay` / `--w-env`, and `--w-mss` works unchanged. `--w-env` defaults to **1** for a drum and 0 for a pitched voice: the gesture is most of what tells two drums apart and only a refinement for a sustained note. A run prints the weights it resolved, so the difference is never silent.
+
+`--spec auto --drum-note N` offers that note's own patch fields (`d038.percussion.wire_buzz`, `d038.amp_env.decay_ms`, …) with the same clamp-derived ranges as a program patch — a bound belongs to the field, so `percussion.wire_buzz 0..4` covers every drum note that has one. `--stages` splits them the same way, with the noise burst, the strike position and the pitch drop as excitation and the mode decay, the wire buzz and the shimmer as decay. A fitted value is written back into the drum table as `t[38].percussion.wire_buzz = ...f;`, the idiom that table already uses for its own per-note corrections.
+
+What is **not** covered: a drum fit moves one note's patch. Mute groups (the hi-hats share an exclusive class), the kit assignment, and anything structural stay where the table put them.
+
+## Oracle from a WAV
+
+The reference does not have to be fluidsynth. Export the probe, render it wherever the sound you are chasing actually lives, and hand the file back:
+
+```sh
+# 1. Write the probe SMF (plus probe.json describing its timeline).
+voicematch.py export-probe --programs 0 --pattern sustain
+#    -> out/p000_sustain/probe.mid
+
+# 2. Render probe.mid at 48 kHz with the reference instrument — a VST in a DAW,
+#    a plugin host, a hardware synth, or a player recorded against the same score.
+
+# 3. Score, or fit, against it.
+voicematch.py compare --programs 0 --oracle-wav /path/to/rendered.wav
+autofit.py --spec specs/piano.json --program 0 --oracle-wav /path/to/rendered.wav
+```
+
+What the harness handles for you:
+
+- **Bit depth and channel count** — PCM 8/16/24/32 and IEEE float 32/64, mono or stereo, including `WAVE_FORMAT_EXTENSIBLE`. A DAW bounce rarely comes out 16-bit.
+- **Lead-in silence** — the WAV does not have to start on the first sample. The render's onset-strength function is correlated against an impulse train at the score's note onsets, and the measured offset is removed (reported as `lead-in removed: +NNN ms`). Pin it with `--oracle-offset` or switch it off with `--oracle-no-align`.
+- **Length** — trimmed or zero-padded to the probe's timeline.
+
+Sample rate is **not** silently converted: a rate converter's passband error lands in every harmonic the fit reads, so a mismatch is an error telling you to re-render at 48 kHz. `--oracle-resample` overrides that when re-rendering is not an option.
+
+One thing the harness cannot fix, and which will quietly bias a fit:
+
+- **A different note set.** Render the probe SMF as exported. Transposing it, or playing "roughly the same notes" by hand, breaks the per-note analysis windows.
+
+Render the reference dry where you can. Where you cannot — see below.
+
+## Ambience: references that come with a room
+
+Some instruments are never heard dry. A church organ is voiced *for* its building; a sampled or VST cathedral organ has that space baked into the samples and no switch turns it off. Comparing a dry model against such a reference makes every metric lie in the same direction, and the effect is not subtle: on a 2 s hall, the organ's release reads **1220 ms short**, and a fitter handed that loss will spend every envelope knob chasing the building.
+
+So the room is treated as a nuisance parameter (`room.py`). When the oracle is an external WAV, the harness measures the reverberation from the tails between its notes and convolves the *model* with a response fitted to reproduce that same measurement, before any metric is taken. On the same 2 s hall the release delta goes to **0 ms**, and what is left in the loss is timbre. It is on by default and `--room none` switches it off.
+
+What it measures, and what it refuses to:
+
+- **Reverberation time** per octave band, from the −5…−25 dB slope of a Schroeder backward integration. Recovered to within ~25 % on a synthetic round trip.
+- **High-frequency ratio** (4 kHz RT60 over 500 Hz). Every real absorber damps highs faster than lows, so a ratio near or above 1 is the *instrument's* ring, not a room — a dry reference organ measures 0.98 — and the measurement is discarded.
+- Decays under 0.35 s are reported as no room at all: at that length an instrument's own release is indistinguishable from a small studio, and inventing a room is far more damaging than missing one.
+
+Only an external WAV is measured. The fluidsynth route renders with its effect units off, so anything measured there is the instrument.
+
+**Use `--pattern room-probe` when the reference is wet.** A T20 fit needs the tail to fall 25 dB, which takes `RT60 × 25/60` seconds of silence — 1.0 s for a 2.4 s hall, 1.7 s for a 4 s cathedral. The `sustain` pattern leaves one second after a two-second note, so anything past a small hall is measured on a decay that gets cut off before it has fallen far enough, and what little tail there is arrives mixed with the instrument's own ring. `room-probe` inverts both: 0.25 s notes with 4 s gaps, so the excitation stops long before the room does and the tail is the room. Nothing in it is an analysis note, so it is a probe to measure the space with, not to fit timbre on.
+
+`estimate_room` records the shortest silence it actually had (`Room.tail_window_s`), and `autofit.py` prints a warning naming both numbers when the probe was too short for the decay it measured — the RT60 is then biased low, since what fits in the window is the steepest early part of the decay.
+
+### Writing the room back into libsonare
+
+libsonare already gives each program a default ambience: the GS power-on CC91 of 40, weighted per program by `gm_fallback_sends` (a church organ is scaled 2.2×, a bass 0.4×). `room-match` measures a reference's space and searches libsonare's own controls for the settings that land closest:
+
+```sh
+voicematch.py room-match --programs 19 --oracle-wav /path/to/cathedral-organ.wav
+```
+
+```
+oracle room: RT60 1.95s  tail level +13.3dB  HF ratio 0.72
+closest match: CC91 10, reverb_decay 0.28 (gs_effects.kReverbDecayScale=0.4)
+  reached RT60 2.07s  tail +15.0dB   residual 0.648
+  -> gm_fallback_sends reverb_scale for program 19: 0.25
+```
+
+It searches rather than inverting a formula because the two controls are coupled and neither maps to RT60 linearly — measured on program 19, the tank decay gives 1.12 s at 0.28 and 6.45 s at 0.98, while the send moves the measured RT60 too because the instrument's own release sits inside the window. Around 26 renders, one per grid point.
+
+The ambience weights are themselves fittable (`gm_fallback_map.kSendsChurchOrganRev` and friends), so a program whose reference is always a wet one can have its room fitted alongside its timbre.
+
+`--model-sends R,C,D` controls what the model render is given (default `0,0,0`, fully dry; `gs` leaves libsonare's power-on ambience in place).
+
 ## Automatic fitting (`autofit.py`)
 
-`autofit.py` closes the tuning loop mechanically: it perturbs one or more numeric calibration literals in the C++ voice sources, rebuilds the shared library, re-renders the model, and minimises the model-vs-oracle timbre mismatch with a pure-Python coordinate descent (golden-section per knob; no scipy).
+`autofit.py` closes the tuning loop mechanically: it sets a voice's calibration constants, re-renders the model, and minimises the model-vs-oracle mismatch. Pure Python + numpy; no scipy.
 
 ```sh
 rye run --pyproject bindings/python/pyproject.toml \
     python tools/voicematch/autofit.py \
-        --spec tools/voicematch/specs/example.json \
-        --program 56 --pattern sustain --notes 48,60,72 --max-evals 30
+        --spec auto --program 40 --notes 55,67 \
+        --optimizer cmaes --max-evals 400 --workers 6 \
+        --screen --stages --w-env 1.0 --w-init 1.0 --w-slope 1.0 \
+        --validate-notes 48,60
 ```
 
-The knobs are described by a spec JSON — an array of entries, each locating one literal:
+```
+screening: 39/49 knobs move the loss by at least 0.002 over their range
+== stage 'excitation': 6 knobs, 25 evaluations, weights {'init': 1.0, 'harm': 1.0} ==
+== stage 'decay': 29 knobs, 125 evaluations, weights {'slope': 1.0, 'env': 1.0, 'harm': 0.5} ==
+== stage 'all': 39 knobs, 153 evaluations, CLI weights ==
+
+  initial 1.0000  ->  best 0.6996  over 400 evaluations
+== held-out notes 48,60 ==
+  start 1.0000  ->  best 0.7636   generalises
+```
+
+### Every instrument is already addressable
+
+Ask the library what it has, rather than reading the source for knob names:
+
+```sh
+autofit.py --spec auto --program 40 --dump-knobs --program-only   # this program's voicing
+autofit.py --spec auto --program 40 --dump-knobs                  # all ~11k knobs
+```
+
+A tuning build reports every key it consulted during a render, with its compiled-in default, so the list is produced by the code rather than by a parse that can go stale. Two kinds appear:
+
+| key shape | what it is | scope |
+|---|---|---|
+| `violin.bowed_string.bow_force` | one **patch field** of the patch that voices a program | that program (and any that shares the patch) |
+| `bowed_string_voice.kRosinDepth` | one **engine calibration constant** | every program on that engine |
+| `fam0.piano.brightness` | a **family patch** field, for programs with no override of their own | the eight programs of that GM family |
+| `d038.percussion.wire_buzz` | a **drum note's** patch field | that note |
+| `gm_fallback_map.kSendsChurchOrganRev` | the program's default **ambience weighting** | that program group |
+
+The patch prefix is the patch's own name, not the program number, because one patch often voices several programs — the dump's `# program NN is voiced by patch 'X'` header line resolves which is which.
+
+`--spec auto` builds the knob list for a program from that catalogue: its patch fields plus its engine's constants. Good enough to start a fit on any of the 128 programs without writing a spec first.
+
+### Where a knob's search range comes from
+
+A patch field's range is **not** a guess. `clamp_synth_patch()` bounds every one of them, and the dump reports those bounds (`--dump-knobs` prints them as the `min`/`max` columns), so `--spec auto` searches the interval the engine actually accepts:
+
+| clamp bound | what `--spec auto` searches | why |
+|---|---|---|
+| `0 .. 1` (and any span ≤ 4) | the whole interval, linear | 0 and 1 are both meaningful settings; a window around the default would hide them |
+| `1 .. 20000` ms | `default/8 .. default*8`, log, capped by the bound | four decades put the default in the first percent of a linear cube; the clamp still stops the window leaving the space |
+| wide, default `0` | *not fitted* | the field is switched off and there is no magnitude to anchor a window on — picking one is the guess the bounds replace |
+| none (an engine constant, or a field the clamp leaves open) | `default/2 .. default*2`, or `0 .. 1` for a normalized-sounding name | the old heuristic, now the fallback rather than the rule |
+
+Write a hand spec when a knob needs something else — a zero-default field you want switched on, or a range wider than eight times the default.
+
+### Knobs: runtime or source
+
+A **runtime knob** names any catalogue key — a `SONARE_TUNABLE` constant (`src/util/tunable.h`) or a per-program patch field:
 
 ```json
-[
-  {
-    "file": "src/midi/synth/brass_voice.cpp",
-    "pattern": "kLipCouple = ([0-9.]+)f",
-    "min": 2.0, "max": 8.0, "scale": "linear"
-  }
-]
+[{ "tunable": "piano_voice.kHammerWidthHarmonics", "min": 2.5, "max": 9.0, "scale": "log" },
+ { "tunable": "trumpet.brass.brassiness", "min": 0.0, "max": 1.0, "scale": "linear" }]
 ```
 
-- `pattern` is a Python regex with **exactly one capturing group** selecting the numeric literal (the surrounding text, including any `f` suffix, is untouched). It must match the file exactly once — zero or multiple matches abort before anything is written.
+The default is read from the catalogue (or from the source, for a `SONARE_TUNABLE`), and the fit sets it through the `SONARE_TUNING_OVERRIDES` environment variable — so **the library is built once for the whole run** and an evaluation costs a render instead of a rebuild. That is the difference between a fit that affords tens of evaluations and one that affords hundreds, which in turn is the difference between fitting one knob and fitting fifty. Use this form.
+
+A bare constant name (`kHammerWidthHarmonics`) is accepted when it is unambiguous; the scoped form is required when several voices declare it, which they often do — `kBreathBase` exists in four.
+
+A **source knob** points a regex at a numeric literal, for a value that cannot be a named constant at all (an array element, say):
+
+```json
+[{ "file": "src/midi/synth/piano_resonance.cpp",
+   "pattern": "kDiffuserMs\\[2\\] = \\{([0-9.]+)f", "min": 2.0, "max": 8.0 }]
+```
+
+- `pattern` needs **exactly one capturing group** selecting the literal (the `f` suffix stays outside it), and must match the file exactly once — zero or multiple matches abort before anything is written.
 - `scale` is `linear` or `log` (log optimises in log-space; needs `min > 0`).
+- **Any source knob in the spec puts every evaluation back behind a rebuild.**
 
-**Loss** (mean over the analyzed notes, from the same fields `report.json` carries):
+Both kinds can be mixed in one spec.
 
-- harmonic profile — L1 distance of the h1-normalized `harmonics_db` over the first `--n-harm` (default 10) harmonics, the most directly actionable timbre signal;
-- intonation — absolute f0 cents difference from the oracle;
-- noise floor — TNR shortfall, penalised **only when the model is noisier** than the oracle (a model cleaner than the sampled oracle, which carries natural vibrato/breath, is not penalised).
+### Write-back
 
-`centroid_hz` is deliberately **excluded** — it depends on the probe note set (register weighting) and has been an unreliable signal in this harness. Term weights are tunable via `--w-harm` / `--w-cents` / `--w-tnr`.
+Everything a fit moves is written back to the source, in the form that value takes there:
 
-**Build isolation** — a dedicated build dir (`--build-dir`, default `build-autofit`) is configured once with `-DBUILD_SHARED=ON` and rebuilt (`--target sonare_shared`) per evaluation. Each model render runs in a fresh subprocess with `SONARE_LIB_PATH` pointed at that dir's dylib, so every evaluation loads the just-built code (a dylib already mapped into the process would otherwise stay stale across rebuilds). `build-python-shared` is refused as a build dir.
+| knob | where it lands |
+|---|---|
+| `SONARE_TUNABLE` | its declaration's literal, so it becomes the new compiled-in default |
+| source knob | the literal the regex captured |
+| patch field of a named patch | a new `o.violin.bowed_string.bow_force = 0.646063f;` line in the program table |
+| `fam3.` / `d038.` patch field | *reported, not written* — those patches are built by a loop with no per-patch site |
+
+The patch-field case needs the extra line because the table builds most patches through helper lambdas taking positional arguments (`o.violin = bowed(0.12f, 0.55f, …)`), so no literal in it belongs to a named field. An explicit assignment after the call is the idiom that table already uses for its own exceptions, and a field that already has one is rewritten rather than duplicated.
+
+A knob the fit left where it started is not rewritten at all: the two spellings of a value are not always the same text (`0.10f` against a formatted `0.1`), and a fifty-knob spec would otherwise bury the handful of real changes in a diff of lines that change nothing.
+
+`--out result.json` records the whole thing — every knob's start and best, the losses, the held-out score, and a paste-ready `SONARE_TUNING_OVERRIDES` string for auditioning the result without rebuilding.
+
+### Making a constant tunable
+
+Replace the declaration:
+
+```cpp
+constexpr float kStrikeNoiseInject = 0.298027f;   // before
+SONARE_TUNABLE(kStrikeNoiseInject, 0.298027f);    // after (+ #include "util/tunable.h")
+```
+
+In a normal build the macro expands to exactly the `constexpr float` it replaced — same storage, same codegen, no lookup. Only `-DBUILD_TUNING=ON` turns it into a runtime-overridable value, and `autofit.py` sets that flag itself when the spec needs it. A value written mid-expression (`ham_mu_ = 0.229431f;`) has to be lifted to a named constant first; that is a readability improvement anyway. Prefer file scope over function scope: a function-scope declaration is re-resolved on every call, which in a render loop means a table lookup per sample.
+
+Two rules:
+
+- **Never branch on `SONARE_TUNING`.** The two configurations must render identical audio for identical values, or a fitted value transfers nothing back to the shipped build. (Compiling a tuning-only override layer out of a normal build is not a branch on behaviour: with no override set the layer is the identity.)
+- **Keys are scoped by file, values are not namespaced within one.** The scope comes from `__FILE__`, so `brass_voice.kBreathBase` and `flute_voice.kBreathBase` are separate knobs, but two declarations of one name in the same file would collide — `autofit.py` refuses to run when it finds that.
+
+### Loss
+
+Per analyzed note, from the same fields `report.json` carries:
+
+- **harmonic profile** (`--w-harm`) — L1 distance of the h1-normalized `harmonics_db` over the first `--n-harm` (default 10) harmonics, the most directly actionable timbre signal;
+- **intonation** (`--w-cents`) — absolute f0 cents difference from the oracle;
+- **noise floor** (`--w-tnr`) — TNR shortfall, penalised **only when the model is noisier** than the oracle (a model cleaner than the sampled oracle, which carries natural vibrato/breath, is not penalised);
+- **temporal envelope** (`--w-env`) — sustain slope, release and attack differences: the ring-down signature a purely spectral match is blind to;
+- **skeleton** (`--w-init` / `--w-slope`) — per-harmonic onset ladder and decay slopes, which separate the *excitation* spectrum from the *loop* decay that the time-averaged harmonic term conflates.
+
+Plus one whole-render term:
+
+- **multi-scale STFT** (`--w-mss`) — magnitude distance at four FFT sizes (512/1024/2048/4096), log and linear. This is what sees everything the metric set does not model: inharmonicity, structure between the harmonics, attack detail, the tail past the sustain window. Phase is ignored, since two renders of the same note are never phase-aligned.
+
+`centroid_hz` is deliberately **excluded** — it depends on the probe note set (register weighting) and has been an unreliable signal in this harness.
+
+The metric terms are h1-normalized and therefore **level-blind**: check each note's `level_delta_db` after a fit, or the model can end up matched in shape and wrong in register balance.
+
+**Each term is normalised to its value at the start point**, so the start scores exactly `1.0` and a reported `0.70` is 30 % better than the compiled-in values. Without that the weights would not mean what they say: the harmonic term is an L1 sum over ten harmonics in dB and runs to tens, the intonation term is a handful of cents, the multi-scale term is a fraction, so weighting them in their own units hands whichever is numerically largest an influence nobody chose. `--raw-loss` restores unit weighting.
+
+### Optimiser
+
+- `--optimizer coord` (default) — coordinate descent, golden-section per knob. Readable, and fine when a knob has an obvious optimum, but it stalls on knobs that trade against each other: a level and the taper that undoes it send it back and forth without either step being wrong on its own. Inherently serial — each probe is chosen from the previous one's result — so `--workers` does not help it.
+- `--optimizer cmaes` — covariance-matrix adaptation. It learns that correlation and steps along it. Tune with `--population`, `--sigma0`, `--seed`; samples are clipped into each knob's range rather than penalised, so an optimum pinned to a bound is reported as such (widen the range, or accept that the model cannot go further in that direction). `--restarts N` restarts from a fresh random point with a doubled population when a run stalls, sharing `--max-evals` rather than multiplying it.
+
+Use `cmaes` once the spec is runtime knobs only — that is the case where the evaluation budget is large enough for it to pay off.
+
+**`--workers N`** renders a CMA-ES generation's whole population concurrently. The candidates are independent subprocesses, so the only thing serialising them was the loop that launched them; scoring stays on the main thread in submission order, so the trajectory and the log are byte-identical to a serial run at the same `--seed`. Measured on this machine, a 120-evaluation organ fit: **71 s at `--workers 1`, 30 s at `--workers 8`**, with identical losses. The speedup is well under 8× because a fixed ~12 s of build, catalogue dump and oracle resolution is not parallelised and the render itself is not single-threaded. A spec containing a source knob is forced back to one worker, since a rebuild rewrites the tree every render reads.
+
+### Cutting the problem down
+
+49 knobs for a violin, 21–114 across the 128 programs. CMA-ES learns a covariance whose cost grows with the square of the dimension, so a budget that would comfortably fit ten knobs does nothing at fifty. Three levers, all optional:
+
+- **`--screen`** probes each knob at both ends of its range with everything else at its default, and fits only the ones that move the loss by at least `--screen-threshold` (default 0.002 — 0.2 % of the start). The dropped knobs are always listed with their measured effect; a silently narrowed search reads afterwards as a search that covered everything. It costs `2n+1` evaluations, so it pays for itself only when the budget is several times the knob count — the tool says so when it is not.
+- **`--stages`** fits the excitation knobs against the onset evidence (`--w-init`), then the decay knobs against the decay evidence (`--w-slope` / `--w-env`), then everything under the weights given on the command line. A brighter excitation with a faster decay and a duller one with a slower decay produce nearly the same average spectrum, so asking one search to set both at once sends it wandering along that ridge; `skeleton_note` already separates the evidence, and this is what uses the separation. Classification is by field name, and the final stage takes every knob, so a misclassification costs efficiency and never reach.
+- **`--validate-notes 48,60`** scores the result on notes the fit never saw and reports both. It is the only thing in the run that can say whether the values generalise — the fit's own objective is the number it minimised. Three probe notes are enough to pin a physical voice into a configuration that is right at those three and wrong a fifth above.
+
+**Build isolation** — a dedicated build dir (`--build-dir`, default `build-autofit`) is configured with `-DBUILD_SHARED=ON`, plus `-DBUILD_TUNING=ON` when the spec has runtime knobs (a cache left at the other setting is reconfigured, since a library that ignores every override would fit a perfectly flat loss for no visible reason). Each model render runs in a fresh subprocess with `SONARE_LIB_PATH` pointed at that dir's dylib, so a rebuilding run never reads a dylib already mapped into the process, and a runtime-knob run gets its overrides into the environment before the library's static initialisers read them. `build-python-shared` is refused as a build dir.
 
 **Safety** — the pristine text of every target file is snapshotted at startup and restored in a `finally` block, so an exception or Ctrl-C never leaves the tree perturbed. On a normal run the best values are then written back and a unified diff plus the loss trajectory are printed; `--dry-run` restores pristine, skips the write, and reports the diff it would have applied.
 
@@ -104,13 +335,29 @@ The knobs are described by a spec JSON — an array of entries, each locating on
 
 ## Files
 
-- `voicematch.py` — CLI driver (`compare`)
-- `autofit.py` — automatic calibration-constant fitter (perturb → rebuild → render → minimise)
-- `specs/` — knob spec JSONs for `autofit.py` (`example.json` is a runnable single-knob template)
+- `voicematch.py` — CLI driver (`compare`, `export-probe`, `room-match`)
 - `patterns.py` — note patterns + per-GM-program register table
-- `render_model.py` / `render_oracle.py` — the two renderers
+- `render_model.py` / `render_oracle.py` — the model renderer, and the oracle (fluidsynth or an external WAV, with score alignment)
 - `metrics.py` — per-note analysis and deltas
 - `smf.py` — minimal type-0 SMF writer (single source of truth for both sides)
 - `gm_names.py` — GM program labels
-- `wavio.py` — stdlib 16-bit WAV I/O
+- `room.py` — ambience: measure a reference's space, put the model in it, translate it back into libsonare's sends
+- `wavio.py` — stdlib WAV I/O: 16-bit PCM out, any common format in
 - `assets/`, `out/` — gitignored (soundfont download, render artifacts)
+
+The fitter is `autofit.py` plus the modules it drives, one per stage of a fit:
+
+- `autofit.py` — the CLI and the loop: probe resolution, the oracle, the `Evaluator` the optimisers minimise, the held-out check, and the `_render_metrics` subprocess each evaluation runs in
+- `catalogue.py` — what the library reports about its own knob space under `SONARE_TUNING_DUMP` (defaults, program→patch map, clamp bounds), plus the `SONARE_TUNABLE` declaration scan the write-back needs
+- `knobs.py` — what a fit may move and over what range: the spec forms, the clamp-derived search ranges, and `--spec auto`
+- `loss.py` — from a render to the number being minimised: `probe_rows`, `skeleton_note`, the harmonic and percussion term sets, and the start-point normalisation
+- `optimizers.py` — coordinate descent with a golden-section line search, and CMA-ES with IPOP restarts
+- `staging.py` — cutting the problem down: knob screening and the excitation/decay/all staged fit
+- `writeback.py` — putting a fitted value back: literal splicing, the program table, the drum table
+- `report.py` — the end-of-run report and the diff it applies
+- `specs/` — knob spec JSONs; `example.json` shows all three knob forms, the rest are hand-tuned per-instrument sets. `--spec auto` needs none of them.
+- `test_wavio.py` / `test_room.py` / `test_autofit.py` — tests (`python -m pytest tools/voicematch/`); `test_autofit.py` covers the range rules, loss normalisation, stage classification and write-back path translation without rendering anything
+
+The knob machinery itself lives in the library, all of it behind the `BUILD_TUNING` CMake option: `src/util/tunable.h` (the `SONARE_TUNABLE` macro, the override table, and the `SONARE_TUNING_DUMP` catalogue) and `src/midi/synth/patch_tuning.h` (the per-program patch field layer).
+
+The clamp bounds in the catalogue are measured rather than mirrored: `patch_tuning.cpp` fills every field with a value far outside any interval, runs `clamp_synth_patch`, and reads back what survived. It walks the same field list the override layer already has, so a field added there is bounded for free and no table can drift out of step with `native_synth_patch.cpp`. A field the clamp leaves open comes back at the probe value and is reported as unbounded rather than as a range of ±1e30.

@@ -1,59 +1,149 @@
 #!/usr/bin/env python3
-"""Auto-fit physical-model voice calibration constants against the oracle synth.
+"""Auto-fit physical-model voice calibration constants against an oracle.
 
-Closes the voicematch tuning loop mechanically: perturb one or more numeric
-literals in the C++ voice sources, rebuild the shared library, render the model
-and the reference ("oracle") synth from the same MIDI, score the timbre
-mismatch, and minimise it with a pure-Python coordinate descent.
+Closes the voicematch tuning loop mechanically: set one or more of a voice's
+calibration constants, render the model and the reference ("oracle") from the
+same MIDI, score the timbre mismatch, and minimise it.
 
 Run from the repo root through the bindings' rye environment:
 
     rye run --pyproject bindings/python/pyproject.toml \\
-        python tools/voicematch/autofit.py --spec tools/voicematch/specs/example.json \\
-            --program 56 --pattern sustain --notes 48,60,72 --max-evals 30
+        python tools/voicematch/autofit.py --spec tools/voicematch/specs/piano.json \\
+            --program 0 --pattern sustain --notes 48,60,72 --max-evals 200
 
-The tunable knobs are described by a spec JSON (see specs/example.json):
+This module is the loop and the CLI; the pieces it drives live beside it —
+`knobs` (what a fit may move and over what range), `catalogue` (what the library
+reports about its own knob space), `loss` (from a render to the number being
+minimised), `optimizers`, `staging` (screening and staged fitting), `writeback`
+and `report`.
 
-    [
-      {
-        "file": "src/midi/synth/brass_voice.cpp",
-        "pattern": "kLipCouple = ([0-9.]+)f",
-        "min": 2.0, "max": 8.0, "scale": "linear"
-      }
-    ]
+Knobs — two kinds, freely mixed in one spec
+-------------------------------------------
+A *runtime* knob names a `SONARE_TUNABLE` constant (see src/util/tunable.h):
 
-Each knob's `pattern` is a Python regex with exactly one capturing group that
-selects the numeric literal to tune (the surrounding text, including any `f`
-suffix, is left untouched). The pattern must match its file exactly once; zero
-or multiple matches abort before anything is touched.
+    [{ "tunable": "kHammerWidthHarmonics", "min": 2.5, "max": 9.0, "scale": "log" }]
 
-Safety: the pristine text of every target file is snapshotted at startup and
-restored in a `finally` block, so an exception or Ctrl-C never leaves the tree
-perturbed. On a normal run the best values are then written back and a unified
-diff plus the loss trajectory are printed. `--dry-run` restores pristine and
-skips the write, reporting the diff it would have applied.
+Its default is read straight from the source, and the fit sets it through the
+`SONARE_TUNING_OVERRIDES` environment variable — so the library is built ONCE
+for the whole run and an evaluation costs a render, not a rebuild. This is the
+form to use; a spec made only of runtime knobs affords hundreds of evaluations
+where a rebuilding one affords tens.
+
+A *source* knob points a regex at a numeric literal instead, for a constant
+that has not been made tunable:
+
+    [{ "file": "src/midi/synth/brass_voice.cpp",
+       "pattern": "kLipCouple = ([0-9.]+)f", "min": 2.0, "max": 8.0 }]
+
+The regex needs exactly one capturing group selecting the literal (the `f`
+suffix stays out of the group), and must match its file exactly once. Any
+source knob in the spec forces a rebuild per evaluation.
+
+Oracle — fluidsynth or your own WAV
+-----------------------------------
+By default the oracle is rendered live with fluidsynth + a GM SoundFont. To fit
+against something else — a VST, a plugin host, a recording of a real instrument
+— export the probe and hand back the rendering:
+
+    voicematch.py export-probe --programs 0 --pattern sustain
+    autofit.py --spec ... --program 0 --oracle-wav /path/to/rendered.wav
+
+The WAV is aligned to the score automatically (any lead-in silence is measured
+and removed), so it does not have to start on the first sample.
+
+Drums
+-----
+`--drum-note N` fits a percussion instrument rather than a GM program:
+
+    autofit.py --spec auto --program 0 --drum-note 38 \
+        --optimizer cmaes --max-evals 200 --validate-velocities 48,88,112
+
+The probe moves to the drum channel, where the note number selects the
+instrument and `--program` selects the kit, and it strikes that one instrument
+at three velocities — velocity being the only axis a drum note varies along.
+Scoring moves with it: a hit has no fundamental, so the harmonic ladder, the
+intonation error and the tone-to-noise ratio all measure a frequency the sound
+does not contain, and the percussion set (`--w-band`, `--w-bdecay`) measures the
+1/3-octave level profile and how fast each octave of it dies instead. See
+`loss.percussion_terms`. `--validate-velocities` is the held-out check, since
+there is no register to hold notes out of.
+
+Loss
+----
+`--w-harm` / `--w-cents` / `--w-tnr` / `--w-env` / `--w-init` / `--w-slope`
+weight the interpretable per-note metrics — `--w-band` / `--w-bdecay` / `--w-env`
+for a drum probe — and `--w-mss` adds a multi-scale STFT distance over the whole
+render, which sees everything the metric set does not model. See
+`loss.loss_terms` and `loss.percussion_terms`.
+
+Each term is normalised to its value at the start point, so the start scores
+exactly 1.0 and a reported 0.85 means 15 % better than the compiled-in values.
+Without that the weights would be dominated by whichever term happens to be
+numerically largest — the harmonic term is an L1 sum in dB and runs to tens
+while the multi-scale term is a fraction. `--raw-loss` restores unit weighting.
+
+Optimiser
+---------
+`--optimizer coord` (default) is coordinate descent with a golden-section line
+search per knob — cheap, and readable when a knob has an obvious optimum, but
+it stalls on interacting knobs and cannot be parallelised (each probe is chosen
+from the previous one's result). `--optimizer cmaes` handles interaction, is the
+better choice once runtime knobs make evaluations cheap, and renders its whole
+population concurrently under `--workers N`. `--restarts N` spends a bigger
+budget on escaping a local optimum rather than on refining one.
+
+Cutting the problem down
+------------------------
+`--spec auto` offers every knob the program's patch and engine expose, which for
+most programs is more than a fit can use well:
+
+    --screen        probe each knob at both ends, fit only the ones that move
+                    the loss, and name the ones dropped
+    --stages        fit the excitation knobs against the onset evidence, then
+                    the decay knobs against the decay evidence, then everything
+                    together — instead of asking one search to separate two
+                    things that trade against each other
+    --validate-notes  score the result on notes the fit never saw. Nothing else
+                    in the run can tell whether the values generalise or whether
+                    they are right on three probe notes and wrong elsewhere.
+
+Write-back
+----------
+A `SONARE_TUNABLE` knob is written back as its new compiled-in default, and a
+source knob as its new literal. A per-program patch field has neither — the
+program table builds most patches through helper lambdas taking positional
+arguments, so no literal in it belongs to a named field — and is written as an
+explicit `o.<patch>.<field> = <value>f;` in the table source, which is the idiom
+that table already uses for its own exceptions. A drum note is written the same
+way into the drum table (`t[38].percussion.wire_buzz = ...f;`), which names every
+note directly. Family patches (`fam3.`) are built by a loop with no per-patch
+site, so their values are reported rather than written. See `writeback`.
+
+Safety: the pristine text of every source-knob file is snapshotted at startup
+and restored in a `finally` block, so an exception or Ctrl-C never leaves the
+tree perturbed. On a normal run the best values are then written back and a
+unified diff plus the loss trajectory are printed; `--dry-run` reports the diff
+it would have applied without writing it. `--out` additionally records the whole
+result as JSON.
 
 Build isolation: a dedicated build dir (default `build-autofit`) is configured
-once with `-DBUILD_SHARED=ON` and rebuilt (`--target sonare_shared`) per
-evaluation. Each model render runs in a fresh subprocess with SONARE_LIB_PATH
-pointed at that dir's dylib, so every evaluation loads the freshly built code
-(a dylib already mapped into this process would otherwise stay stale across
-rebuilds). Do not point this at build-python-shared — that dir is shared with
-other tooling.
+with `-DBUILD_SHARED=ON`, plus `-DBUILD_TUNING=ON` when the spec has runtime
+knobs. Each model render runs in a fresh subprocess with SONARE_LIB_PATH
+pointed at that dir's dylib, so a rebuilding run never reads a dylib already
+mapped into this process. Do not point this at build-python-shared — that dir
+is shared with other tooling.
 """
 
 from __future__ import annotations
 
 import argparse
-import difflib
 import json
 import math
 import os
-import re
-import shutil
 import subprocess
 import sys
-from dataclasses import dataclass
+import tempfile
+from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 
 import numpy as np
@@ -62,510 +152,404 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1]))  # tools/ for _repo
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 
 from _repo import REPO_ROOT  # noqa: E402
-from metrics import analyze_note, normalize_rms, to_mono
-from patterns import build_pattern, pattern_length
-from render_model import render_model
-from render_oracle import render_oracle_fluidsynth
-from smf import write_smf
+from build_lib import build_shared, configure_build, dylib_path  # noqa: E402
+from catalogue import Catalogue, drum_patch_key, dump_catalogue  # noqa: E402
+from knobs import (  # noqa: E402
+    auto_spec,
+    build_knobs,
+    format_value,
+    load_spec,
+    tunable_overrides,
+)
+from loss import LossWeights, cli_weights, mss_distance, probe_rows, score_terms  # noqa: E402
+from metrics import normalize_rms, to_mono  # noqa: E402
+from optimizers import cma_es, optimize  # noqa: E402
+from patterns import build_pattern, pattern_length  # noqa: E402
+from render_model import render_model  # noqa: E402
+from render_oracle import add_oracle_args, obtain_oracle  # noqa: E402
+from report import report_result  # noqa: E402
+from room import apply_room, estimate_room, fit_room_ir  # noqa: E402
+from smf import write_smf  # noqa: E402
+from staging import SubEvaluator, run_stages, screen_knobs  # noqa: E402
+from writeback import materialize, restore  # noqa: E402
 
 SR = 48000
-SKELETON_MAX_S = 2.0  # analysis window per note (matches the sustain pattern)
-
-
-def skeleton_note(mono: np.ndarray, sr: int, note, n_harm: int = 12) -> dict:
-    """Per-harmonic envelope skeleton of one note.
-
-    Separates the two things the time-averaged spectrum conflates:
-      - init_db: per-harmonic level extrapolated to the onset (dB rel h1) —
-        the EXCITATION spectrum evidence;
-      - early_db_s / late_db_s: per-harmonic decay slopes (0.08-0.40 s and
-        0.8-1.8 s linear fits) — the LOOP decay evidence.
-    Harmonics above Nyquist are None.
-    """
-    f0_nominal = 440.0 * 2.0 ** ((note.note - 69) / 12.0)
-    start = int(note.start * sr)
-    seg = np.asarray(
-        mono[start : start + int(min(note.dur, SKELETON_MAX_S) * sr)], dtype=np.float64
-    )
-    win_n = int(0.05 * sr)
-    hop = int(0.01 * sr)
-    if len(seg) < win_n + hop:
-        return {"init_db": [None] * n_harm, "early_db_s": [None] * n_harm,
-                "late_db_s": [None] * n_harm}
-
-    # Refine each partial's frequency (inharmonicity-aware) with a zoomed DFT
-    # over the early sustain.
-    ref = seg[int(0.05 * sr) : int(0.55 * sr)]
-    ref_w = ref * np.hanning(len(ref))
-    t_ref = np.arange(len(ref)) / sr
-    freqs: list[float | None] = []
-    for h in range(1, n_harm + 1):
-        guess = f0_nominal * h
-        if guess > sr / 2 - 500.0:
-            freqs.append(None)
-            continue
-        cand = np.linspace(guess * 0.985, guess * 1.015, 41)
-        amps = np.abs(np.exp(-2j * np.pi * np.outer(cand, t_ref)) @ ref_w)
-        freqs.append(float(cand[int(np.argmax(amps))]))
-
-    n_frames = (len(seg) - win_n) // hop
-    frames = np.lib.stride_tricks.sliding_window_view(seg, win_n)[:: hop][:n_frames]
-    frames = frames * np.hanning(win_n)
-    t_win = np.arange(win_n) / sr
-    active = [f for f in freqs if f is not None]
-    basis = np.exp(-2j * np.pi * np.outer(t_win, np.array(active)))
-    env = np.abs(frames @ basis)  # (n_frames, n_active)
-    env_db = 20.0 * np.log10(env + 1e-12)
-    t_frame = (np.arange(n_frames) * hop + win_n / 2) / sr
-
-    def fit(lo: float, hi: float, col: np.ndarray) -> tuple[float, float] | None:
-        mask = (t_frame >= lo) & (t_frame <= hi)
-        if mask.sum() < 4:
-            return None
-        m, b = np.polyfit(t_frame[mask], col[mask], 1)
-        return float(m), float(b)
-
-    init_db: list[float | None] = []
-    early: list[float | None] = []
-    late: list[float | None] = []
-    col_i = 0
-    for f in freqs:
-        if f is None:
-            init_db.append(None)
-            early.append(None)
-            late.append(None)
-            continue
-        col = env_db[:, col_i]
-        col_i += 1
-        fe = fit(0.08, 0.40, col)
-        fl = fit(0.80, 1.80, col)
-        init_db.append(fe[1] if fe else None)
-        early.append(fe[0] if fe else None)
-        late.append(fl[0] if fl else None)
-    if init_db[0] is None:
-        return {"init_db": [None] * n_harm, "early_db_s": [None] * n_harm,
-                "late_db_s": [None] * n_harm}
-    ref_db = init_db[0]
-    init_db = [None if v is None else v - ref_db for v in init_db]
-    return {"init_db": init_db, "early_db_s": early, "late_db_s": late}
-
-# The spectral centroid is deliberately excluded from the loss: it depends on
-# the probe note set (register weighting) and has been an unreliable, noisy
-# signal in this harness. Match harmonic profile, intonation, and noise floor
-# instead.
 
 
 # --------------------------------------------------------------------------- #
-# Spec + knob model
+# The probe: what is rendered, and what comes back measured
 # --------------------------------------------------------------------------- #
-@dataclass
-class Knob:
-    """One tunable numeric literal located by a single-group regex."""
-
-    file: Path
-    pattern: str
-    lo: float
-    hi: float
-    log: bool
-    span_start: int  # group(1) start offset in the pristine file text
-    span_end: int
-    start_value: float
-
-
-def _load_spec(spec_path: Path) -> list[dict]:
-    data = json.loads(spec_path.read_text())
-    if not isinstance(data, list) or not data:
-        raise ValueError(f"spec {spec_path} must be a non-empty JSON array of knobs")
-    return data
-
-
-def build_knobs(spec: list[dict], pristine: dict[Path, str]) -> list[Knob]:
-    """Validate every knob's regex (exactly one match) and capture its span.
-
-    Populates `pristine` with each unique file's original text as a side effect.
-    """
-    knobs: list[Knob] = []
-    for i, entry in enumerate(spec):
-        try:
-            rel = entry["file"]
-            pattern = entry["pattern"]
-            lo = float(entry["min"])
-            hi = float(entry["max"])
-        except KeyError as exc:
-            raise ValueError(f"knob #{i}: missing required field {exc}") from None
-        scale = entry.get("scale", "linear")
-        if scale not in ("linear", "log"):
-            raise ValueError(f"knob #{i}: scale must be 'linear' or 'log', got {scale!r}")
-        if lo >= hi:
-            raise ValueError(f"knob #{i}: min ({lo}) must be < max ({hi})")
-        if scale == "log" and lo <= 0.0:
-            raise ValueError(f"knob #{i}: log scale needs min > 0, got {lo}")
-
-        path = (REPO_ROOT / rel).resolve()
-        if not path.exists():
-            raise FileNotFoundError(f"knob #{i}: file not found: {rel}")
-        if path not in pristine:
-            pristine[path] = path.read_text()
-        text = pristine[path]
-
-        compiled = re.compile(pattern)
-        matches = list(compiled.finditer(text))
-        if len(matches) != 1:
-            raise ValueError(
-                f"knob #{i}: pattern {pattern!r} matched {len(matches)} times in {rel} "
-                f"(need exactly 1)"
-            )
-        m = matches[0]
-        if m.lastindex is None or m.lastindex < 1:
-            raise ValueError(f"knob #{i}: pattern {pattern!r} has no capturing group")
-        try:
-            start_value = float(m.group(1))
-        except (TypeError, ValueError):
-            raise ValueError(
-                f"knob #{i}: captured text {m.group(1)!r} is not a number"
-            ) from None
-        clamped = min(max(start_value, lo), hi)
-        if clamped != start_value:
-            print(
-                f"note: knob #{i} start value {start_value} outside [{lo}, {hi}], "
-                f"clamped to {clamped}",
-                file=sys.stderr,
-            )
-        knobs.append(
-            Knob(
-                file=path,
-                pattern=pattern,
-                lo=lo,
-                hi=hi,
-                log=(scale == "log"),
-                span_start=m.start(1),
-                span_end=m.end(1),
-                start_value=clamped,
-            )
-        )
-    return knobs
-
-
-def format_value(v: float) -> str:
-    """Render a float as a C++ literal fragment that always carries a decimal.
-
-    The captured group excludes any `f` suffix, so the substituted text must be
-    a valid float literal on its own (e.g. `22` would become an invalid `22f`).
-    """
-    s = f"{v:.6g}"
-    if "e" not in s and "E" not in s and "." not in s:
-        s += ".0"
-    return s
-
-
-def materialize(knobs: list[Knob], values: list[float], pristine: dict[Path, str]) -> dict[Path, str]:
-    """Produce each file's text with all its knob values spliced in.
-
-    Splicing is computed against the pristine text (never re-matched on an
-    already-edited buffer) so multiple knobs in one file cannot interfere.
-    """
-    by_file: dict[Path, list[tuple[Knob, float]]] = {}
-    for knob, value in zip(knobs, values):
-        by_file.setdefault(knob.file, []).append((knob, value))
-    result: dict[Path, str] = {}
-    for path, items in by_file.items():
-        text = pristine[path]
-        # Splice from the end so earlier offsets stay valid.
-        for knob, value in sorted(items, key=lambda kv: kv[0].span_start, reverse=True):
-            text = text[: knob.span_start] + format_value(value) + text[knob.span_end :]
-        result[path] = text
-    return result
-
-
-def restore(pristine: dict[Path, str]) -> None:
-    """Write every snapshotted file back to its pristine text."""
-    for path, text in pristine.items():
-        path.write_text(text)
-
-
-# --------------------------------------------------------------------------- #
-# Build + render + loss
-# --------------------------------------------------------------------------- #
-def configure_build(build_dir: Path, cmake: str) -> None:
-    """Configure the isolated build dir once (idempotent)."""
-    if (build_dir / "CMakeCache.txt").exists():
-        return
-    print(f"configuring {build_dir} (Release, BUILD_SHARED=ON)...", file=sys.stderr)
-    subprocess.run(
-        [cmake, "-S", str(REPO_ROOT), "-B", str(build_dir),
-         "-DCMAKE_BUILD_TYPE=Release", "-DBUILD_SHARED=ON"],
-        check=True,
-    )
-
-
-def build_shared(build_dir: Path, cmake: str, jobs: int) -> None:
-    """Rebuild the shared library target in the isolated build dir."""
-    proc = subprocess.run(
-        [cmake, "--build", str(build_dir), "--target", "sonare_shared", f"-j{jobs}"],
-        capture_output=True, text=True,
-    )
-    if proc.returncode != 0:
-        raise RuntimeError(
-            f"build failed (rc={proc.returncode}):\n{proc.stdout[-2000:]}\n{proc.stderr[-2000:]}"
-        )
-    # Ensure the freshly built dylib is loadable by ctypes on macOS.
-    dylib = dylib_path(build_dir)
-    if sys.platform == "darwin" and dylib is not None and shutil.which("install_name_tool"):
-        subprocess.run(
-            ["install_name_tool", "-id", "@loader_path/libsonare.dylib", str(dylib)],
-            capture_output=True, text=True,
-        )
-
-
-def dylib_path(build_dir: Path) -> Path | None:
-    """Locate the built libsonare shared library in the isolated build dir."""
-    direct = build_dir / "lib" / "libsonare.dylib"
-    if direct.exists():
-        return direct
-    for cand in build_dir.rglob("libsonare.dylib"):
-        return cand
-    for cand in build_dir.rglob("libsonare.so"):
-        return cand
-    return None
-
-
-def oracle_rows(program: int, pattern_name: str, notes_csv: str, sf2: str) -> list[dict]:
-    """Render the oracle once and return its per-note metrics (as report rows)."""
-    pattern, total, analysis_notes = _score(program, pattern_name, notes_csv)
-    smf_bytes = write_smf(pattern.notes, program=program, end_pad=pattern.tail)
-    audio = render_oracle_fluidsynth(
-        smf_bytes, total, SR, soundfont=Path(sf2) if sf2 else None,
-    )
-    mono = normalize_rms(to_mono(audio))
-    rows = []
-    for note in analysis_notes:
-        row = analyze_note(mono, SR, note, note.start + note.dur + pattern.tail).to_dict()
-        row["skeleton"] = skeleton_note(mono, SR, note)
-        rows.append(row)
-    return rows
-
-
-def _score(program: int, pattern_name: str, notes_csv: str):
+def _score(program: int, pattern_name: str, notes_csv: str, velocities_csv: str = ""):
     kwargs = {}
     if notes_csv:
         kwargs["notes"] = tuple(int(n) for n in notes_csv.split(","))
+    if velocities_csv:
+        kwargs["velocities"] = tuple(int(v) for v in velocities_csv.split(","))
     pattern = build_pattern(pattern_name, program, **kwargs)
     return pattern, pattern_length(pattern), pattern.analysis_notes
 
 
-def compute_loss(
-    model_rows: list[dict],
-    oracle_rows_: list[dict],
-    *,
-    n_harm: int,
-    w_harm: float,
-    w_cents: float,
-    w_tnr: float,
-    w_env: float = 0.0,
-    w_init: float = 0.0,
-    w_slope: float = 0.0,
-) -> float:
-    """Mean per-note weighted mismatch between the model and the oracle.
+def resolve_probe(args) -> None:
+    """Settle the probe the whole run scores against, and what it can measure.
 
-    Per note, from the same fields report.json carries:
-      - harmonic profile: L1 distance of h1-normalized harmonics_db over the
-        first `n_harm` harmonics (the most directly actionable timbre signal);
-      - intonation: absolute f0 cents difference from the oracle;
-      - noise floor: TNR shortfall, penalised only when the model is noisier
-        than the oracle (a model cleaner than the oracle is not penalised, since
-        the sampled oracle carries natural vibrato/breath noise);
-      - temporal envelope (w_env > 0): sustain-slope (dB/s), release (per
-        100 ms) and attack (per 10 ms) differences — the double-decay /
-        ring-down signature a purely spectral match is blind to;
-      - skeleton (w_init / w_slope > 0): per-harmonic ONSET ladder and decay
-        slopes from `skeleton_note`, which separate the excitation spectrum
-        from the loop decay (the time-averaged harmonic term conflates them).
-        Per-bin deltas are capped (12 dB / 30 dB/s) so single-sample oracle
-        quirks cannot dominate the objective.
-    The spectral centroid is intentionally not part of the loss.
+    `--drum-note` is the one flag that changes the shape of a run rather than a
+    value in it: it moves the probe onto the drum channel, where a note number
+    selects an instrument rather than a pitch, and swaps the harmonic metric set
+    for the percussion one. Everything downstream reads `args.percussive` rather
+    than re-deriving it, so the decision is made once and in one place.
     """
-    if not model_rows or len(model_rows) != len(oracle_rows_):
-        return math.inf
-    total = 0.0
-    for m, o in zip(model_rows, oracle_rows_):
-        harm_l1 = 0.0
-        for mh, oh in zip(m["harmonics_db"][:n_harm], o["harmonics_db"][:n_harm]):
-            if mh > -120.0 and oh > -120.0:
-                harm_l1 += abs(mh - oh)
-        cents = abs(m["f0_cents_err"] - o["f0_cents_err"])
-        tnr_delta = m["tnr_db"] - o["tnr_db"]  # model - oracle
-        tnr_pen = max(0.0, -tnr_delta)  # only when the model is noisier
-        env_pen = 0.0
-        if w_env > 0.0:
-            env_pen += abs(m["sustain_slope_db_s"] - o["sustain_slope_db_s"])
-            env_pen += abs(m["release_ms"] - o["release_ms"]) / 100.0
-            env_pen += abs(m["attack_ms"] - o["attack_ms"]) / 10.0
-        init_pen = 0.0
-        slope_pen = 0.0
-        if (w_init > 0.0 or w_slope > 0.0) and "skeleton" in m and "skeleton" in o:
-            sm, so = m["skeleton"], o["skeleton"]
-            for a, b in zip(sm["init_db"], so["init_db"]):
-                if a is not None and b is not None:
-                    init_pen += min(abs(a - b), 12.0)
-            for key in ("early_db_s", "late_db_s"):
-                for a, b in zip(sm[key][:6], so[key][:6]):
-                    if a is not None and b is not None:
-                        slope_pen += min(abs(a - b), 30.0) / 10.0
-        note_loss = (w_harm * harm_l1 + w_cents * cents + w_tnr * tnr_pen + w_env * env_pen
-                     + w_init * init_pen + w_slope * slope_pen)
-        if not math.isfinite(note_loss):
-            return math.inf
-        total += note_loss
-    return total / len(model_rows)
+    if args.drum_note is not None:
+        if not 0 <= args.drum_note < 128:
+            raise ValueError(f"--drum-note must be 0..127, got {args.drum_note}")
+        if args.pattern == "sustain":  # the melodic default; an explicit one wins
+            args.pattern = "drum"
+        if not args.notes:
+            args.notes = str(args.drum_note)
+    pattern, _, analysis_notes = _score(
+        args.program, args.pattern, args.notes, args.velocities
+    )
+    args.percussive = pattern.percussive
+    if args.percussive and args.drum_note is None:
+        raise ValueError(
+            f"pattern {args.pattern!r} probes the drum channel; pass --drum-note N so the "
+            f"fit knows which drum note's knobs to move"
+        )
+    if args.drum_note is not None and not args.percussive:
+        raise ValueError(
+            f"--drum-note needs a drum-channel pattern; {args.pattern!r} is written on "
+            f"channel 1 and would sound a pitch rather than the kit"
+        )
+    if not analysis_notes:
+        per_note = {t: w for t, w in cli_weights(args).items() if t != "mss" and w > 0.0}
+        if per_note:
+            raise ValueError(
+                f"pattern {args.pattern!r} has no analyzable notes, so the per-note terms "
+                f"{sorted(per_note)} have nothing to measure. Weight only --w-mss, or "
+                f"pick a pattern with analysis notes."
+            )
+
+
+def oracle_reference(args) -> tuple[list[dict], np.ndarray, np.ndarray | None]:
+    """Resolve the oracle once: per-note metrics, mono render, and its room.
+
+    The mono render is what the multi-scale STFT term compares against; it is
+    kept in the parent process so an evaluation only has to ship the model's
+    audio back.
+
+    The third return value is the space the oracle was recorded in, or None when
+    it is dry or the caller asked for no room correction. Every model render is
+    convolved with a response matching it before any metric is taken. Without
+    that, an oracle rendered by an external host in a hall — which is the only
+    way most reference recordings of an organ, a harp or a string section exist
+    — makes the release read as far too long, the tone-to-noise as far too low
+    and the sustain slope as far too flat, and the fit spends its knobs
+    reproducing the building instead of the instrument.
+    """
+    pattern, total, _ = _score(
+        args.program, args.pattern, args.notes, getattr(args, "velocities", "")
+    )
+    smf_bytes = write_smf(
+        pattern.notes, program=args.program, channel=pattern.channel, end_pad=pattern.tail
+    )
+    audio = obtain_oracle(args, smf_bytes, total, SR, [n.start for n in pattern.notes])
+
+    # Only an externally supplied WAV can carry a room. The built-in fluidsynth
+    # oracle is rendered with its reverb and chorus units switched off, so any
+    # decay measured there is the instrument's own — estimating a room from it
+    # would invent one and then convolve the model with it.
+    room = None
+    if getattr(args, "room", "auto") != "none" and getattr(args, "oracle_wav", ""):
+        measured = estimate_room(
+            audio, SR, [(n.start, n.start + n.dur) for n in pattern.notes]
+        )
+        if measured.is_dry():
+            print(f"oracle room: dry (RT60 {measured.rt60_s:.2f}s) — no room correction",
+                  file=sys.stderr)
+        else:
+            print(f"oracle room: RT60 {measured.rt60_s:.2f}s, "
+                  f"tail level {measured.tail_db:+.1f}dB, HF ratio {measured.hf_ratio:.2f} — "
+                  f"the model is placed in a matching space before every measurement",
+                  file=sys.stderr)
+            if measured.truncated():
+                print(f"  note: the probe's shortest silence is {measured.tail_window_s:.1f}s, "
+                      f"less than the {measured.rt60_s * 25.0 / 60.0:.1f}s this decay needs to "
+                      f"fall 25 dB — the RT60 is likely underestimated. Re-export the probe "
+                      f"with --pattern room-probe to measure it properly.", file=sys.stderr)
+            room = measured
+
+    mono = normalize_rms(to_mono(audio))
+    return probe_rows(mono, pattern, SR), mono, room
 
 
 def render_model_rows_subprocess(
     build_dir: Path, program: int, pattern_name: str, notes_csv: str,
-) -> list[dict]:
-    """Render the model in a fresh subprocess and return its per-note metrics.
+    *, velocities_csv: str = "", overrides: str = "", want_audio: bool = False,
+    room_ir: Path | None = None,
+) -> tuple[list[dict], np.ndarray | None]:
+    """Render the model in a fresh subprocess; return per-note metrics (+ audio).
 
-    A subprocess is required so each evaluation loads the just-rebuilt dylib;
-    the same process would keep the first-loaded image mapped across rebuilds.
+    A subprocess is required for two reasons: a rebuilding run must load the
+    just-rebuilt dylib (the same process would keep the first-loaded image
+    mapped), and a runtime-knob run must have `SONARE_TUNING_OVERRIDES` in the
+    environment before the library's static initialisers read it.
+
+    The mono render comes back through a temporary `.npy` rather than stdout —
+    a ten-second probe is millions of samples, which JSON would spend more time
+    encoding than the render itself takes.
     """
     dylib = dylib_path(build_dir)
     if dylib is None:
         raise RuntimeError(f"no libsonare dylib found under {build_dir}")
     env = dict(os.environ)
     env["SONARE_LIB_PATH"] = str(dylib)
-    proc = subprocess.run(
-        [sys.executable, str(Path(__file__).resolve()), "_render_metrics",
-         "--program", str(program), "--pattern", pattern_name, "--notes", notes_csv],
-        capture_output=True, text=True, env=env,
-    )
-    if proc.returncode != 0:
-        raise RuntimeError(
-            f"model render failed (rc={proc.returncode}):\n{proc.stderr.strip()[-2000:]}"
-        )
-    return json.loads(proc.stdout)
+    if overrides:
+        env["SONARE_TUNING_OVERRIDES"] = overrides
+    else:
+        env.pop("SONARE_TUNING_OVERRIDES", None)
+
+    cmd = [sys.executable, str(Path(__file__).resolve()), "_render_metrics",
+           "--program", str(program), "--pattern", pattern_name, "--notes", notes_csv,
+           "--velocities", velocities_csv]
+    if room_ir is not None:
+        cmd += ["--room-ir", str(room_ir)]
+    with tempfile.TemporaryDirectory(prefix="autofit_") as tmp:
+        audio_path = Path(tmp) / "model.npy"
+        if want_audio:
+            cmd += ["--dump-audio", str(audio_path)]
+        proc = subprocess.run(cmd, capture_output=True, text=True, env=env)
+        if proc.returncode != 0:
+            raise RuntimeError(
+                f"model render failed (rc={proc.returncode}):\n{proc.stderr.strip()[-2000:]}"
+            )
+        audio = np.load(audio_path) if want_audio and audio_path.exists() else None
+    return json.loads(proc.stdout), audio
 
 
 # --------------------------------------------------------------------------- #
-# Optimiser (pure-Python coordinate descent + golden-section)
+# The objective the optimisers are handed
 # --------------------------------------------------------------------------- #
 class Evaluator:
-    """Builds, renders, and scores a knob-value vector, with caching."""
+    """Builds (when it must), renders, and scores a knob-value vector.
 
-    def __init__(self, knobs, pristine, oracle, args, build_dir):
+    A spec of runtime knobs only builds once for the whole run and pushes each
+    candidate through the environment; one source knob anywhere in the spec
+    puts every evaluation back behind a rebuild.
+
+    The cache holds the raw per-term mismatch rather than the combined loss, so
+    a staged fit that changes the weights between stages can re-score a point it
+    has already rendered for free instead of re-rendering it under weights the
+    cached number no longer reflects.
+    """
+
+    def __init__(self, knobs, pristine, oracle, oracle_audio, args, build_dir, room_ir=None):
         self.knobs = knobs
         self.pristine = pristine
         self.oracle = oracle
+        self.oracle_audio = oracle_audio
         self.args = args
         self.build_dir = build_dir
-        self.cache: dict[tuple[str, ...], float] = {}
+        self.room_ir = room_ir
+        self.percussive = bool(getattr(args, "percussive", False))
+        self.needs_rebuild = any(k.tunable is None for k in knobs)
+        self.built = False
+        self.cache: dict[tuple[str, ...], dict[str, float] | None] = {}
         self.n_builds = 0
-        self.trajectory: list[tuple[float, float]] = []  # (best_so_far, this_loss)
+        self.stage = "fit"
+        # (best_so_far, this_loss, stage). The stage matters because a staged
+        # fit changes the weights between stages, so two losses are only
+        # comparable within one of them.
+        self.trajectory: list[tuple[float, float, str]] = []
         self.best_loss = math.inf
         self.best_values: list[float] | None = None
+        self.loss = LossWeights(cli_weights(args))
+        self.normalize = not args.raw_loss
+        self.baseline_terms: dict[str, float] | None = None
+        # A rebuild rewrites the shared tree, so its evaluations can only ever
+        # run one at a time however many workers were asked for.
+        self.workers = 1 if self.needs_rebuild else max(1, args.workers)
+        self.quiet = False
 
     def key(self, values: list[float]) -> tuple[str, ...]:
         return tuple(format_value(v) for v in values)
 
-    def __call__(self, values: list[float]) -> float:
-        key = self.key(values)
-        if key in self.cache:
-            return self.cache[key]
-        edited = materialize(self.knobs, values, self.pristine)
-        for path, text in edited.items():
-            path.write_text(text)
-        build_shared(self.build_dir, self.args.cmake, self.args.jobs)
-        self.n_builds += 1
-        model_rows = render_model_rows_subprocess(
+    def restage(self, weights: dict[str, float], name: str = "fit") -> None:
+        """Switch to a new set of term weights and forget the previous best.
+
+        The cached renders survive — only the way they are scored changes — but
+        a best-so-far measured under the previous weights is not comparable and
+        would otherwise be carried into a stage that never chose it.
+        """
+        self.stage = name
+        self.loss = LossWeights(weights)
+        if self.baseline_terms is not None:
+            # Same reference point, re-scored: the per-term scales do not depend
+            # on the weights, but what the start point scores does, and that is
+            # what every stage's loss is a ratio of.
+            self.loss.calibrate(self.baseline_terms)
+        self.best_loss = math.inf
+        self.best_values = None
+
+    def _ensure_built(self) -> None:
+        if not self.built and not self.needs_rebuild:
+            build_shared(self.build_dir, self.args.cmake, self.args.jobs)
+            self.n_builds += 1
+            self.built = True
+
+    def _render_terms(self, values: list[float]) -> dict[str, float] | None:
+        """Render one candidate and reduce it to raw loss terms. Thread-safe."""
+        want_audio = self.args.w_mss > 0.0
+        model_rows, model_audio = render_model_rows_subprocess(
             self.build_dir, self.args.program, self.args.pattern, self.args.notes,
+            velocities_csv=self.args.velocities,
+            overrides=tunable_overrides(self.knobs, values),
+            want_audio=want_audio, room_ir=self.room_ir,
         )
-        loss = compute_loss(
-            model_rows, self.oracle,
-            n_harm=self.args.n_harm,
-            w_harm=self.args.w_harm, w_cents=self.args.w_cents, w_tnr=self.args.w_tnr,
-            w_env=self.args.w_env, w_init=self.args.w_init, w_slope=self.args.w_slope,
-        )
-        self.cache[key] = loss
+        mss = 0.0
+        if want_audio and model_audio is not None:
+            mss = mss_distance(model_audio, self.oracle_audio)
+        return score_terms(model_rows, self.oracle, n_harm=self.args.n_harm, mss=mss,
+                           percussive=self.percussive)
+
+    def _record(self, values: list[float], terms: dict[str, float] | None) -> float:
+        """Score a rendered candidate, update the best, and log it."""
+        if self.normalize and self.loss.scales is None and terms is not None:
+            self.baseline_terms = dict(terms)
+            self.loss.calibrate(terms)
+        loss = self.loss.combine(terms)
         if loss < self.best_loss:
             self.best_loss = loss
             self.best_values = list(values)
-        self.trajectory.append((self.best_loss, loss))
-        print(
-            f"  eval #{len(self.trajectory)} builds={self.n_builds} "
-            f"values={[round(v, 5) for v in values]} loss={loss:.4f} "
-            f"(best {self.best_loss:.4f})",
-            file=sys.stderr,
-        )
+        self.trajectory.append((self.best_loss, loss, self.stage))
+        if not self.quiet:
+            # float() before the format: a numpy scalar's repr would drown the
+            # line. Past a handful of knobs the vector is unreadable anyway, so
+            # only the terms that moved the loss are worth the width.
+            if len(values) <= 8:
+                shown = "values=[" + ", ".join(f"{float(v):.5g}" for v in values) + "] "
+            else:
+                shown = self._term_summary(terms)
+            print(
+                f"  eval #{len(self.trajectory)} builds={self.n_builds} "
+                f"{shown}loss={loss:.4f} (best {self.best_loss:.4f})",
+                file=sys.stderr,
+            )
         return loss
 
+    def _term_summary(self, terms: dict[str, float] | None) -> str:
+        """The active terms as ratios of their value at the start point."""
+        if terms is None:
+            return "unscorable "
+        scales = self.loss.scales
+        parts = []
+        for name in self.loss.active():
+            value = terms.get(name, 0.0)
+            parts.append(f"{name}={value / scales[name]:.2f}" if scales else
+                         f"{name}={value:.3g}")
+        return " ".join(parts) + " "
 
-def _to_opt(knob: Knob, value: float) -> float:
-    return math.log(value) if knob.log else value
-
-
-def _from_opt(knob: Knob, t: float) -> float:
-    return math.exp(t) if knob.log else t
-
-
-def golden_section(objective, a: float, b: float, max_evals: int, tol: float):
-    """Minimise a unimodal 1-D objective on [a, b] within an eval budget.
-
-    Returns (best_t, best_loss). `objective` is assumed cached, so re-probing a
-    point is cheap.
-    """
-    inv_phi = (math.sqrt(5.0) - 1.0) / 2.0
-    c = b - inv_phi * (b - a)
-    d = a + inv_phi * (b - a)
-    fc = objective(c)
-    fd = objective(d)
-    evals = 2
-    best_t, best_f = (c, fc) if fc <= fd else (d, fd)
-    while evals < max_evals and (b - a) > tol:
-        if fc < fd:
-            b, d, fd = d, c, fc
-            c = b - inv_phi * (b - a)
-            fc = objective(c)
-            evals += 1
-            if fc < best_f:
-                best_t, best_f = c, fc
+    def __call__(self, values: list[float]) -> float:
+        key = self.key(values)
+        if key in self.cache:
+            return self.loss.combine(self.cache[key])
+        if self.needs_rebuild:
+            edited = materialize(self.knobs, values, self.pristine)
+            for path, text in edited.items():
+                path.write_text(text)
+            build_shared(self.build_dir, self.args.cmake, self.args.jobs)
+            self.n_builds += 1
         else:
-            a, c, fc = c, d, fd
-            d = a + inv_phi * (b - a)
-            fd = objective(d)
-            evals += 1
-            if fd < best_f:
-                best_t, best_f = d, fd
-    return best_t, best_f
+            self._ensure_built()
+        terms = self._render_terms(values)
+        self.cache[key] = terms
+        return self._record(values, terms)
+
+    def evaluate_batch(self, batch: list[list[float]]) -> list[float]:
+        """Score several candidates at once, rendering them concurrently.
+
+        Each render is an independent subprocess, so the only thing serialising
+        them was the loop that launched them. Threads are the right tool despite
+        the GIL for exactly that reason: the work happens in child processes and
+        `subprocess.run` releases the interpreter while it waits.
+
+        Scoring stays on this thread and in submission order, so the trajectory,
+        the log and the best-so-far read identically to a serial run — only the
+        wall clock differs. A batch containing a rebuilding knob falls back to
+        the serial path, since a rebuild rewrites the tree every render reads.
+        """
+        if self.workers <= 1 or self.needs_rebuild or len(batch) <= 1:
+            return [self(values) for values in batch]
+        self._ensure_built()
+
+        pending = {}
+        with ThreadPoolExecutor(max_workers=self.workers) as pool:
+            for values in batch:
+                key = self.key(values)
+                if key not in self.cache and key not in pending:
+                    pending[key] = pool.submit(self._render_terms, values)
+            results: list[float] = []
+            for values in batch:
+                key = self.key(values)
+                if key in pending:
+                    self.cache[key] = pending.pop(key).result()
+                    results.append(self._record(values, self.cache[key]))
+                else:
+                    results.append(self.loss.combine(self.cache[key]))
+        return results
 
 
-def optimize(evaluator: Evaluator, knobs: list[Knob], args) -> list[float]:
-    """Coordinate descent over knobs; each pass golden-sections one knob."""
-    current = [k.start_value for k in knobs]
-    evaluator(current)  # baseline
-    while len(evaluator.trajectory) < args.max_evals:
-        improved = False
-        for i, knob in enumerate(knobs):
-            if len(evaluator.trajectory) >= args.max_evals:
-                break
-            budget = min(args.per_knob_evals, args.max_evals - len(evaluator.trajectory))
-            if budget < 2:
-                break
-            a, b = _to_opt(knob, knob.lo), _to_opt(knob, knob.hi)
-            tol = (b - a) * 1e-3
+def validate(args, build_dir, knobs, start_values, best_values, room_ir) -> dict | None:
+    """Score the start and the best values on a probe the fit never saw.
 
-            def objective(t: float, _i=i, _knob=knob) -> float:
-                trial = list(evaluator.best_values or current)
-                trial[_i] = min(max(_from_opt(_knob, t), _knob.lo), _knob.hi)
-                return evaluator(trial)
+    A fit reports its own objective, which it minimised — the one number that
+    cannot tell anyone whether the values generalise. Three probe notes are
+    enough to pin a physical voice into a configuration that is right at those
+    three and wrong a fifth above, and nothing in the fit itself would show it.
 
-            best_t, best_f = golden_section(objective, a, b, budget, tol)
-            if best_f < evaluator.best_loss + 1e-9 and evaluator.best_values is not None:
-                best_val = min(max(_from_opt(knob, best_t), knob.lo), knob.hi)
-                if abs(current[i] - best_val) > 0:
-                    improved = True
-                current[i] = best_val
-        current = list(evaluator.best_values or current)
-        if not improved:
-            break
-    return list(evaluator.best_values or current)
+    A drum probe has no register to hold notes out of, so the held-out axis is
+    velocity instead (`--validate-velocities`): the same instrument struck
+    harder and softer than anything the fit scored.
+
+    Costs one oracle resolution plus two model renders, once, at the end.
+    """
+    percussive = getattr(args, "percussive", False)
+    holdout = argparse.Namespace(**vars(args))
+    if percussive:
+        if not args.validate_velocities:
+            return None
+        holdout.velocities = args.validate_velocities
+        axis, held = "velocities", args.validate_velocities
+    else:
+        if not args.validate_notes:
+            return None
+        holdout.notes = args.validate_notes
+        axis, held = "notes", args.validate_notes
+    print(f"validating on held-out {axis} {held}...", file=sys.stderr)
+    oracle_rows, oracle_audio, _ = oracle_reference(holdout)
+    if not oracle_rows:
+        print(f"  the held-out {axis} produced no analyzable oracle rows — skipped",
+              file=sys.stderr)
+        return None
+
+    want_audio = args.w_mss > 0.0
+    weights = LossWeights(cli_weights(args))
+
+    def score(values: list[float]) -> float:
+        rows, audio = render_model_rows_subprocess(
+            build_dir, args.program, args.pattern, holdout.notes,
+            velocities_csv=holdout.velocities,
+            overrides=tunable_overrides(knobs, values),
+            want_audio=want_audio, room_ir=room_ir,
+        )
+        mss = mss_distance(audio, oracle_audio) if want_audio and audio is not None else 0.0
+        terms = score_terms(rows, oracle_rows, n_harm=args.n_harm, mss=mss,
+                            percussive=percussive)
+        if weights.scales is None and terms is not None:
+            weights.calibrate(terms)
+        return weights.combine(terms)
+
+    at_start = score(start_values)  # calibrates, so it scores exactly 1.0
+    at_best = score(best_values)
+    return {"axis": axis, "held_out": held, "start": at_start, "best": at_best}
 
 
 # --------------------------------------------------------------------------- #
@@ -574,24 +558,33 @@ def optimize(evaluator: Evaluator, knobs: list[Knob], args) -> list[float]:
 def render_metrics_main(argv: list[str]) -> int:
     """Render the model for one score and print its per-note metrics as JSON.
 
-    Invoked as a subprocess by the optimiser with SONARE_LIB_PATH already set
-    to the isolated build dir's dylib.
+    Invoked as a subprocess by the optimiser with SONARE_LIB_PATH (and, for a
+    runtime-knob fit, SONARE_TUNING_OVERRIDES) already set in the environment.
     """
     p = argparse.ArgumentParser(prog="autofit.py _render_metrics")
     p.add_argument("--program", type=int, required=True)
     p.add_argument("--pattern", required=True)
     p.add_argument("--notes", default="")
+    p.add_argument("--velocities", default="")
+    p.add_argument("--dump-audio", default="", dest="dump_audio",
+                   help="also write the normalized mono render to this .npy path")
+    p.add_argument("--room-ir", default="", dest="room_ir",
+                   help="convolve the render with this .npy impulse response first")
     a = p.parse_args(argv)
 
-    pattern, total, analysis_notes = _score(a.program, a.pattern, a.notes)
-    smf_bytes = write_smf(pattern.notes, program=a.program, end_pad=pattern.tail)
-    audio = render_model(smf_bytes, total, SR)
-    mono = normalize_rms(to_mono(np.asarray(audio, dtype=np.float32)))
-    rows = []
-    for note in analysis_notes:
-        row = analyze_note(mono, SR, note, note.start + note.dur + pattern.tail).to_dict()
-        row["skeleton"] = skeleton_note(mono, SR, note)
-        rows.append(row)
+    pattern, total, _ = _score(a.program, a.pattern, a.notes, a.velocities)
+    smf_bytes = write_smf(
+        pattern.notes, program=a.program, channel=pattern.channel, end_pad=pattern.tail
+    )
+    audio = np.asarray(render_model(smf_bytes, total, SR), dtype=np.float32)
+    if a.room_ir:
+        # Applied here rather than in the parent so the per-note metrics and the
+        # multi-scale term both see the same roomed signal.
+        audio = apply_room(audio, np.load(a.room_ir))
+    mono = normalize_rms(to_mono(audio))
+    rows = probe_rows(mono, pattern, SR)
+    if a.dump_audio:
+        np.save(a.dump_audio, mono.astype(np.float32))
     print(json.dumps(rows))
     return 0
 
@@ -599,78 +592,146 @@ def render_metrics_main(argv: list[str]) -> int:
 # --------------------------------------------------------------------------- #
 # CLI
 # --------------------------------------------------------------------------- #
-def report_result(knobs, pristine, best_values, evaluator, dry_run: bool) -> None:
-    """Print the loss trajectory, per-knob deltas, and the source diff."""
-    print("\n== loss trajectory (best-so-far) ==")
-    if evaluator.trajectory:
-        best_curve = [round(b, 4) for b, _ in evaluator.trajectory]
-        print("  " + " -> ".join(str(x) for x in best_curve))
-        print(f"  initial {evaluator.trajectory[0][1]:.4f}  ->  best {evaluator.best_loss:.4f}")
-    else:
-        print("  (no evaluations)")
-
-    print("\n== knob values (start -> best) ==")
-    for knob, start, best in zip(knobs, (k.start_value for k in knobs), best_values):
-        rel = knob.file.relative_to(REPO_ROOT)
-        print(f"  {rel}  {knob.pattern!r}:  {format_value(start)} -> {format_value(best)}")
-
-    edited = materialize(knobs, best_values, pristine)
-    print("\n== source diff (pristine -> best) ==")
-    any_diff = False
-    for path, new_text in edited.items():
-        rel = str(path.relative_to(REPO_ROOT))
-        diff = difflib.unified_diff(
-            pristine[path].splitlines(keepends=True),
-            new_text.splitlines(keepends=True),
-            fromfile=f"a/{rel}", tofile=f"b/{rel}",
-        )
-        chunk = "".join(diff)
-        if chunk:
-            any_diff = True
-            print(chunk, end="")
-    if not any_diff:
-        print("  (no change from pristine)")
-    if dry_run:
-        print("\n--dry-run: source left pristine, best values NOT written.")
-    else:
-        print("\nBest values written to source.")
-
-
 def run(args) -> int:
-    spec_path = Path(args.spec).resolve()
-    spec = _load_spec(spec_path)
-    pristine: dict[Path, str] = {}
-    knobs = build_knobs(spec, pristine)
-
     build_dir = (REPO_ROOT / args.build_dir).resolve()
     if build_dir.name == "build-python-shared":
         raise ValueError("refusing to use build-python-shared; pick a private build dir")
-    configure_build(build_dir, args.cmake)
 
-    print("rendering oracle (once)...", file=sys.stderr)
-    oracle = oracle_rows(args.program, args.pattern, args.notes, args.sf2)
-    if not oracle:
-        raise RuntimeError(
-            f"pattern '{args.pattern}' has no analyzable notes for program {args.program}"
+    resolve_probe(args)
+    weights = cli_weights(args)
+    print(f"probe: pattern {args.pattern!r} on MIDI channel "
+          f"{10 if args.percussive else 1}, scored with the "
+          f"{'percussion' if args.percussive else 'harmonic'} metric set; weights "
+          + " ".join(f"{t}={w:g}" for t, w in weights.items() if w > 0.0),
+          file=sys.stderr)
+
+    # A catalogue is needed whenever a spec might name a per-program patch field
+    # (which has no declaration in src/ to validate against) and always for
+    # --spec auto. Producing it needs a tuning build, so it configures and
+    # builds first — the same build the run then uses.
+    auto = args.spec == "auto"
+    catalogue: Catalogue | None = None
+    if auto or args.dump_knobs:
+        configure_build(build_dir, args.cmake, tuning=True)
+        build_shared(build_dir, args.cmake, args.jobs)
+        dylib = dylib_path(build_dir)
+        catalogue = dump_catalogue(
+            args.program, args.pattern, str(dylib) if dylib else None,
+            sr=SR, notes=args.notes,
         )
+        print(f"catalogue: {len(catalogue.defaults)} knobs across "
+              f"{len(catalogue.programs)} programs, {len(catalogue.bounds)} clamp bounds",
+              file=sys.stderr)
 
-    evaluator = Evaluator(knobs, pristine, oracle, args, build_dir)
+    if args.dump_knobs:
+        key = (drum_patch_key(args.drum_note) if args.drum_note is not None
+               else catalogue.programs.get(args.program, ""))
+        rows = sorted(
+            (k, v) for k, v in catalogue.defaults.items()
+            if not args.program_only or (key and k.startswith(key + "."))
+        )
+        if args.drum_note is not None:
+            print(f"# drum note {args.drum_note} is voiced by patch {key!r}")
+        else:
+            print(f"# program {args.program} is voiced by patch {key!r}")
+        print("# key\tdefault\tmin\tmax")
+        for k, v in rows:
+            bound = catalogue.bound_for(k)
+            span = f"\t{bound[0]:g}\t{bound[1]:g}" if bound else "\t-\t-"
+            print(f"{k}\t{v:g}{span}")
+        return 0
+
+    if auto:
+        spec = auto_spec(args.program, catalogue, drum_note=args.drum_note)
+        subject = (f"drum note {args.drum_note}" if args.drum_note is not None
+                   else f"program {args.program}")
+        patch = (drum_patch_key(args.drum_note) if args.drum_note is not None
+                 else catalogue.programs.get(args.program))
+        print(f"--spec auto: {len(spec)} knobs for {subject} "
+              f"(patch {patch!r} + its engine)", file=sys.stderr)
+    else:
+        spec = load_spec(Path(args.spec).resolve())
+        if any("." in e.get("tunable", "") for e in spec):
+            configure_build(build_dir, args.cmake, tuning=True)
+            build_shared(build_dir, args.cmake, args.jobs)
+            dylib = dylib_path(build_dir)
+            catalogue = dump_catalogue(
+                args.program, args.pattern, str(dylib) if dylib else None,
+                sr=SR, notes=args.notes,
+            )
+
+    pristine: dict[Path, str] = {}
+    knobs = build_knobs(spec, pristine, catalogue)
+
+    n_runtime = sum(1 for k in knobs if k.tunable is not None)
+    n_source = len(knobs) - n_runtime
+    if n_source:
+        print(f"{len(knobs)} knobs ({n_runtime} runtime, {n_source} source) — "
+              f"a source knob rebuilds the library every evaluation; converting it to "
+              f"SONARE_TUNABLE would make this run far cheaper", file=sys.stderr)
+    else:
+        print(f"{len(knobs)} runtime knobs — building once, then rendering per evaluation",
+              file=sys.stderr)
+
+    configure_build(build_dir, args.cmake, tuning=n_runtime > 0)
+
+    print("resolving oracle (once)...", file=sys.stderr)
+    oracle, oracle_audio, room = oracle_reference(args)
+
     best_values: list[float] = [k.start_value for k in knobs]
-    try:
-        best_values = optimize(evaluator, knobs, args)
-    finally:
-        # Always return the tree to pristine, whatever happened above.
-        restore(pristine)
+    with tempfile.TemporaryDirectory(prefix="autofit_room_") as tmp:
+        ir_path: Path | None = None
+        if room is not None:
+            # Fit the response against a dry model render at the start values,
+            # so the roomed model *measures* the oracle's space rather than
+            # merely being convolved with a room of the same nominal size. One
+            # extra render, once.
+            build_shared(build_dir, args.cmake, args.jobs)
+            _, dry_model = render_model_rows_subprocess(
+                build_dir, args.program, args.pattern, args.notes,
+                velocities_csv=args.velocities, want_audio=True,
+            )
+            if dry_model is None:
+                raise RuntimeError("room correction needs the model render, which came back empty")
+            pattern, _, _ = _score(args.program, args.pattern, args.notes, args.velocities)
+            spans = [(n.start, n.start + n.dur) for n in pattern.notes]
+            ir = fit_room_ir(dry_model[:, None], SR, spans, room)
+            ir_path = Path(tmp) / "room.npy"
+            np.save(ir_path, ir)
+        evaluator = Evaluator(
+            knobs, pristine, oracle, oracle_audio, args, build_dir, room_ir=ir_path
+        )
+        if evaluator.workers > 1:
+            print(f"rendering up to {evaluator.workers} candidates concurrently",
+                  file=sys.stderr)
+        try:
+            optimizer = cma_es if args.optimizer == "cmaes" else optimize
+            fit_knobs, problem = knobs, evaluator
+            if args.screen:
+                kept = screen_knobs(evaluator, knobs, args)
+                if len(kept) < len(knobs):
+                    # The dropped knobs stay in `knobs` at their start values, so
+                    # the report and the write-back still cover the whole spec.
+                    fit_knobs = [knobs[i] for i in kept]
+                    problem = SubEvaluator(evaluator, kept, [k.start_value for k in knobs])
+            if args.stages:
+                run_stages(problem, fit_knobs, args, optimizer)
+            else:
+                optimizer(problem, fit_knobs, args)
+        finally:
+            # Always return the tree to pristine, whatever happened above.
+            restore(pristine)
 
-    if evaluator.best_values is not None:
-        best_values = evaluator.best_values
+        if evaluator.best_values is not None:
+            best_values = evaluator.best_values
 
-    if not args.dry_run:
-        edited = materialize(knobs, best_values, pristine)
-        for path, text in edited.items():
-            path.write_text(text)
-
-    report_result(knobs, pristine, best_values, evaluator, args.dry_run)
+        extra = {
+            "room": room.to_dict() if room is not None else None,
+            "validation": validate(
+                args, build_dir, knobs, [k.start_value for k in knobs], best_values, ir_path
+            ),
+        }
+    report_result(knobs, pristine, best_values, evaluator, args, extra)
     return 0
 
 
@@ -681,15 +742,80 @@ def main() -> int:
     parser = argparse.ArgumentParser(
         description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter,
     )
-    parser.add_argument("--spec", required=True, help="knob spec JSON path")
-    parser.add_argument("--program", type=int, required=True, help="GM program to score")
-    parser.add_argument("--pattern", default="sustain", help="probe pattern (default: sustain)")
+    parser.add_argument("--spec", required=True,
+                        help="knob spec JSON path, or 'auto' to derive the knob list for "
+                             "--program from the library's own catalogue")
+    parser.add_argument("--program", type=int, required=True,
+                        help="GM program to score, or the drum kit with --drum-note")
+    parser.add_argument("--drum-note", type=int, default=None, dest="drum_note",
+                        help="fit a percussion instrument instead of a GM program: the "
+                             "probe moves to the drum channel, where this note number "
+                             "selects the instrument (38 acoustic snare, 36 kick, 46 open "
+                             "hi-hat) and --program selects the kit. Scored with the "
+                             "percussion metric set, and --spec auto offers that note's "
+                             "own patch fields")
+    parser.add_argument("--pattern", default="sustain", help="probe pattern (default: sustain, "
+                                                             "or 'drum' with --drum-note)")
     parser.add_argument("--notes", default="", help="override probe notes, e.g. '48,60,72'")
-    parser.add_argument("--sf2", default="", help="oracle SoundFont path override")
+    parser.add_argument("--velocities", default="",
+                        help="override probe velocities, e.g. '64,100,127' (the 'drum' and "
+                             "'velocity' patterns)")
+    parser.add_argument("--dump-knobs", action="store_true", dest="dump_knobs",
+                        help="list every knob the library reports, with its default, and exit")
+    parser.add_argument("--program-only", action="store_true", dest="program_only",
+                        help="with --dump-knobs, list only this program's patch fields")
+    parser.add_argument("--room", default="auto", choices=("auto", "none"),
+                        help="auto (default): measure the oracle's reverberation and place "
+                             "every model render in a matching space before scoring, so a "
+                             "reference recorded in a hall does not read as timbre; "
+                             "none: score as rendered")
+    add_oracle_args(parser)
     parser.add_argument("--max-evals", type=int, default=30, dest="max_evals",
-                        help="total build+render evaluations (default: 30)")
+                        help="total evaluations (default: 30; raise it well past this "
+                             "when the spec is runtime knobs only)")
+    parser.add_argument("--optimizer", default="coord", choices=("coord", "cmaes"),
+                        help="coord: golden-section coordinate descent (default). "
+                             "cmaes: covariance-matrix adaptation, which handles knobs "
+                             "that trade against each other and renders its population "
+                             "concurrently")
     parser.add_argument("--per-knob-evals", type=int, default=6, dest="per_knob_evals",
-                        help="golden-section budget per knob per pass (default: 6)")
+                        help="golden-section budget per knob per pass (coord only, default: 6)")
+    parser.add_argument("--population", type=int, default=0,
+                        help="CMA-ES population size (default: 4 + 3*ln(n))")
+    parser.add_argument("--sigma0", type=float, default=0.25,
+                        help="CMA-ES initial step, as a fraction of each knob's range")
+    parser.add_argument("--seed", type=int, default=0, help="CMA-ES sampling seed")
+    parser.add_argument("--restarts", type=int, default=0,
+                        help="CMA-ES restarts from a fresh random point with a doubled "
+                             "population when a run stalls (default: 0). They share "
+                             "--max-evals rather than each getting their own")
+    parser.add_argument("--workers", type=int, default=1,
+                        help="model renders to run concurrently (default: 1). Only helps "
+                             "--optimizer cmaes, whose population is independent; a "
+                             "rebuilding spec is forced back to 1")
+    parser.add_argument("--screen", action="store_true",
+                        help="probe each knob at both ends first and drop the ones that do "
+                             "not move the loss, then fit only the rest. Costs 2 evaluations "
+                             "per knob out of --max-evals; the dropped knobs are named")
+    parser.add_argument("--screen-threshold", type=float, default=0.002,
+                        dest="screen_threshold",
+                        help="smallest loss change over a knob's whole range that counts as "
+                             "an effect (default: 0.002, i.e. 0.2%% of the start loss)")
+    parser.add_argument("--stages", action="store_true",
+                        help="fit the excitation knobs against the onset evidence, then the "
+                             "decay knobs against the decay evidence, then everything under "
+                             "the weights given here — instead of all of it at once")
+    parser.add_argument("--validate-notes", default="", dest="validate_notes",
+                        help="score the result on these notes as well (e.g. '43,55,67'). "
+                             "They must be disjoint from --notes to mean anything: this is "
+                             "the only check that the fit did not overfit the probe")
+    parser.add_argument("--validate-velocities", default="", dest="validate_velocities",
+                        help="the same check for a drum fit, which has no register to hold "
+                             "notes out of: score the result at these velocities as well "
+                             "(e.g. '48,88,112'), disjoint from the probe's")
+    parser.add_argument("--out", default="",
+                        help="write the result (knob values, losses, overrides, validation) "
+                             "to this JSON path")
     parser.add_argument("--n-harm", type=int, default=10, dest="n_harm",
                         help="harmonics counted in the L1 timbre term (default: 10)")
     parser.add_argument("--w-harm", type=float, default=1.0, dest="w_harm",
@@ -698,12 +824,26 @@ def main() -> int:
                         help="weight on the intonation (cents) term")
     parser.add_argument("--w-tnr", type=float, default=1.0, dest="w_tnr",
                         help="weight on the noise-floor (TNR shortfall) term")
-    parser.add_argument("--w-env", type=float, default=0.0, dest="w_env",
-                        help="weight on the temporal-envelope term (sustain slope / release / attack)")
+    parser.add_argument("--w-env", type=float, default=None, dest="w_env",
+                        help="weight on the temporal-envelope term (sustain slope / release / "
+                             "attack; attack / decay / crest for a drum). Defaults to 0 for a "
+                             "pitched voice and 1 for a drum, where it is most of the identity")
+    parser.add_argument("--w-band", type=float, default=1.0, dest="w_band",
+                        help="drum fits: weight on the 1/3-octave level-profile term, the "
+                             "percussion analogue of the harmonic ladder")
+    parser.add_argument("--w-bdecay", type=float, default=1.0, dest="w_bdecay",
+                        help="drum fits: weight on the per-octave-band decay-slope term")
     parser.add_argument("--w-init", type=float, default=0.0, dest="w_init",
                         help="weight on the per-harmonic ONSET-ladder term (excitation evidence)")
     parser.add_argument("--w-slope", type=float, default=0.0, dest="w_slope",
                         help="weight on the per-harmonic decay-slope term (loop evidence)")
+    parser.add_argument("--w-mss", type=float, default=0.0, dest="w_mss",
+                        help="weight on the multi-scale STFT distance over the whole render "
+                             "(sees what the per-note metric set does not model)")
+    parser.add_argument("--raw-loss", action="store_true", dest="raw_loss",
+                        help="weight the terms in their own units instead of normalising "
+                             "each to its value at the start point. The weights then mean "
+                             "whatever the units make them mean")
     parser.add_argument("--build-dir", default="build-autofit", dest="build_dir",
                         help="isolated build dir (default: build-autofit)")
     parser.add_argument("--jobs", type=int, default=8, help="parallel build jobs")

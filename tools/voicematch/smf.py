@@ -4,6 +4,12 @@ Only what the harness needs: one channel, an optional program change, and a
 list of timed note on/off events. Both the reference renderer (fluidsynth) and
 the model renderer are driven from the same note list, so the .mid this writes
 is the single source of truth for the reference side.
+
+The channel matters for one thing: 9 (channel 10 in one-based numbering) is the
+GM drum channel, where a note number selects a percussion instrument rather than
+a pitch and the program change selects a kit. libsonare and a GM reference synth
+both honour that convention, so a drum probe is the same file with a different
+channel nibble.
 """
 
 from __future__ import annotations
@@ -42,7 +48,12 @@ def _sec_to_ticks(sec: float) -> int:
 
 
 def write_smf(
-    notes: list[Note], *, program: int = 0, channel: int = 0, end_pad: float = 0.0, dry: bool = True
+    notes: list[Note],
+    *,
+    program: int = 0,
+    channel: int = 0,
+    end_pad: float = 0.0,
+    sends: tuple[int | None, int | None, int | None] = (0, 0, 0),
 ) -> bytes:
     """Serialize `notes` to a type-0 SMF byte string.
 
@@ -50,9 +61,17 @@ def write_smf(
     emitted first so a GM reference synth selects the intended instrument.
     `end_pad` delays the end-of-track marker past the last event, which keeps a
     fast-render reference synth (fluidsynth -F) running long enough to capture
-    the release tail. `dry` (default) zeroes the effect sends (CC91/93/94) at
-    tick 0: the model side powers on with GS-style default reverb, which would
-    otherwise contaminate release/TNR metrics against the dry oracle.
+    the release tail.
+
+    `sends` is the (reverb, chorus, delay) controller values written at tick 0
+    as CC91 / CC93 / CC94; `None` for one of them leaves that controller alone,
+    so the module keeps its power-on value. The default zeroes all three, which
+    is what a dry-versus-dry comparison needs: libsonare powers on at the GS
+    default CC91 of 40, weighted per program by `gm_fallback_sends`, so a
+    church organ would arrive with a cathedral on it while the dry reference
+    render has none — and every release / tone-to-noise metric would read that
+    room as timbre. Pass a non-zero reverb when the reference itself is wet
+    (see `room.py`).
     """
     # (absolute_tick, status, data1, data2) event tuples, then delta-encoded.
     events: list[tuple[int, int, int, int]] = []
@@ -70,9 +89,9 @@ def write_smf(
     track += _vlq(0) + bytes([0xFF, 0x51, 0x03]) + TEMPO_US.to_bytes(3, "big")
     if program >= 0:
         track += _vlq(0) + bytes([0xC0 | channel, program & 0x7F])
-    if dry:
-        for cc in (91, 93, 94):
-            track += _vlq(0) + bytes([0xB0 | channel, cc, 0])
+    for cc, value in zip((91, 93, 94), sends):
+        if value is not None:
+            track += _vlq(0) + bytes([0xB0 | channel, cc, max(0, min(127, int(value)))])
 
     prev = 0
     for tick, status, d1, d2 in events:
