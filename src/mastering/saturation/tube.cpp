@@ -4,6 +4,7 @@
 #include <cmath>
 
 #include "mastering/dynamics/channel_limits.h"
+#include "mastering/saturation/triode.h"
 #include "rt/biquad_design.h"
 #include "rt/scoped_no_denormals.h"
 #include "util/db.h"
@@ -13,12 +14,9 @@ namespace sonare::mastering::saturation {
 
 namespace {
 
-// Operating-point and gain-staging constants for the triode model. These are
-// circuit/voltage quantities specific to this processor (not universal math
-// constants), so they live here rather than in util/constants.h.
-// Fixed plate (anode) supply voltage, in volts, used as the operating point for
-// the Dempwolf 12AX7 current law.
-constexpr float kPlateVoltageV = 250.0f;
+// Gain-staging constants for this processor's use of the shared triode law.
+// These are circuit/voltage quantities specific to this processor (not universal
+// math constants), so they live here rather than in util/constants.h.
 // Maps the normalized input sample (after drive) into the grid-voltage swing
 // the triode model expects.
 constexpr float kGridDriveScaleV = 1.2f;
@@ -26,42 +24,8 @@ constexpr float kGridDriveScaleV = 1.2f;
 // sets how quickly the harmonic stage saturates.
 constexpr float kPlateClipShaping = 2.5f;
 
-struct Dempwolf12Ax7 {
-  // Dempwolf & Zoelzer, "A Physically-motivated Triode Model for Circuit
-  // Simulations", DAFx-11, equations (10)-(12), Table 1 first fitted 12AX7
-  // system. Voltages are Vg/Va relative to cathode; fitted currents are used
-  // in the same milliampere scale as the paper's figures.
-  static constexpr float G = 2.242e-3f;
-  static constexpr float mu = 103.2f;
-  static constexpr float gamma = 1.26f;
-  static constexpr float C = 3.40f;
-  static constexpr float Gg = 6.177e-4f;
-  static constexpr float xi = 1.314f;
-  static constexpr float Cg = 9.901f;
-  static constexpr float Ig0 = 8.025e-8f;
-};
-
-float smooth_positive(float c, float x) {
-  const float z = c * x;
-  if (z > 30.0f) return x;
-  if (z < -30.0f) return std::exp(z) / c;
-  return std::log1p(std::exp(z)) / c;
-}
-
-float cathode_current_ma(float vg, float va) {
-  const float effective = va / Dempwolf12Ax7::mu + vg;
-  return Dempwolf12Ax7::G *
-         std::pow(smooth_positive(Dempwolf12Ax7::C, effective), Dempwolf12Ax7::gamma);
-}
-
-float grid_current_ma(float vg) {
-  return Dempwolf12Ax7::Gg * std::pow(smooth_positive(Dempwolf12Ax7::Cg, vg), Dempwolf12Ax7::xi) +
-         Dempwolf12Ax7::Ig0;
-}
-
-float plate_current_ma(float vg, float va) {
-  return cathode_current_ma(vg, va) - grid_current_ma(vg);
-}
+using triode::kPlateVoltageV;
+using triode::plate_current_ma;
 
 }  // namespace
 
