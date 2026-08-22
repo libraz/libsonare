@@ -233,38 +233,73 @@ bool RealtimeEngine::set_midi_instrument(uint32_t destination_id,
   // The bound set (and thus the maximum instrument latency) changed: refresh the
   // PDC delays so clip + instrument audio stays phase-aligned. Control-thread
   // only, matching the delay lines' reallocation contract.
-  recompute_pdc();
+  if (!recompute_pdc()) {
+    // Compensation could not be reallocated, so the engine has fallen back to
+    // none at all and this binding would render misaligned against the clip bus.
+    // Undo it and report: leaving it bound while answering false would strand a
+    // raw pointer in the rack, which the C-ABI and WASM wrappers free as soon as
+    // they see the false.
+    instrument_rack_.set(destination_id, nullptr);
+    release_instrument_automations(destination_id);
+    (void)recompute_pdc();
+    return false;
+  }
   return true;
 }
 
-void RealtimeEngine::recompute_pdc() {
+bool RealtimeEngine::recompute_pdc() {
   // The whole project's reported latency is the slowest bound instrument: every
   // source must be delayed to meet it. Clip audio (zero latency) is delayed by
   // the full total; an instrument that already self-delays by L_i needs only the
   // remaining (total - L_i). After both, all sources coincide at +total. Tracked
   // in Q8.8 so an instrument's sub-sample latency is compensated too.
   const int next_total_q8 = instrument_rack_.max_latency_samples_q8();
-  // Build the complete replacement off to the side. In particular, do not
-  // configure the live clip bank before an instrument bank has succeeded: an
-  // allocation failure must leave the old delay/count pair internally
-  // consistent and still usable.
-  ChannelDelay<kMaxAudioChannels> next_clip_pdc_delay;
-  std::array<ChannelDelay<kMaxAudioChannels>, InstrumentRack::kMaxInstruments>
-      next_instrument_pdc_delays{};
-  std::array<uint32_t, InstrumentRack::kMaxInstruments> next_instrument_pdc_dest{};
-  bool configured = next_clip_pdc_delay.configure(prepared_channels_, next_total_q8);
+  constexpr size_t kSlots = InstrumentRack::kMaxInstruments;
+  // Derive the target arrangement first, without touching a single bank: one
+  // slot per bound instrument, in rack order, each carrying (total - its own).
+  std::array<uint32_t, kSlots> next_instrument_pdc_dest{};
+  std::array<int, kSlots> next_delay_q8{};
   size_t next_count = 0;
   instrument_rack_.for_each([&](uint32_t destination_id, midi::MidiInstrument* instrument) {
-    if (!configured || next_count >= instrument_pdc_delays_.size()) return;
-    const size_t slot = next_count;
-    const int delay_q8 = next_total_q8 - instrument->latency_samples_q8();
-    if (!next_instrument_pdc_delays[slot].configure(prepared_channels_, delay_q8)) {
-      configured = false;
-      return;
-    }
-    next_instrument_pdc_dest[slot] = destination_id;
+    if (next_count >= kSlots) return;
+    next_instrument_pdc_dest[next_count] = destination_id;
+    next_delay_q8[next_count] = next_total_q8 - instrument->latency_samples_q8();
     ++next_count;
   });
+
+  // Carry a bank over whenever the destination it already serves still needs the
+  // very same storage shape. A bind names one destination, but every source's
+  // compensation is derived from the same maximum, so most binds leave the other
+  // banks' shapes untouched -- and rebuilding one zero-fills it, which is a
+  // dropout the length of that compensation on an instrument the bind never
+  // mentioned. Matching by destination id rather than by slot keeps that true
+  // when an unbind packs the remaining instruments down into lower slots.
+  constexpr size_t kNoReuse = kSlots;
+  std::array<size_t, kSlots> reuse_from{};
+  reuse_from.fill(kNoReuse);
+  for (size_t slot = 0; slot < next_count; ++slot) {
+    for (size_t live = 0; live < pdc_instrument_count_ && live < kSlots; ++live) {
+      if (instrument_pdc_dest_[live] != next_instrument_pdc_dest[slot]) continue;
+      if (instrument_pdc_delays_[live].matches_storage(prepared_channels_, next_delay_q8[slot])) {
+        reuse_from[slot] = live;
+      }
+      break;
+    }
+  }
+
+  // Build the replacements the shape changes genuinely require off to the side.
+  // In particular, do not configure the live clip bank before an instrument bank
+  // has succeeded: an allocation failure must leave the old delay/count pair
+  // internally consistent and still usable.
+  const bool reuse_clip = clip_pdc_delay_.matches_storage(prepared_channels_, next_total_q8);
+  ChannelDelay<kMaxAudioChannels> next_clip_pdc_delay;
+  std::array<ChannelDelay<kMaxAudioChannels>, kSlots> next_instrument_pdc_delays{};
+  bool configured = reuse_clip || next_clip_pdc_delay.configure(prepared_channels_, next_total_q8);
+  for (size_t slot = 0; slot < next_count && configured; ++slot) {
+    if (reuse_from[slot] != kNoReuse) continue;
+    configured =
+        next_instrument_pdc_delays[slot].configure(prepared_channels_, next_delay_q8[slot]);
+  }
   if (!configured) {
     // Fail closed if any replacement allocation failed. configure(0, 0) only
     // swaps empty vectors, so this reclamation path remains non-allocating even
@@ -277,11 +312,28 @@ void RealtimeEngine::recompute_pdc() {
     pdc_instrument_count_ = 0;
     instrument_pdc_dest_.fill(0);
     update_reported_graph_latency();
-    return;
+    return false;
   }
-  next_clip_pdc_delay.swap(clip_pdc_delay_);
+  // Commit. Allocation-free from here: a carried bank is moved by swap and then
+  // only has its scalars republished (configure() takes its no-op path for a
+  // shape it already holds), so its delay history survives the recompute.
+  if (reuse_clip) {
+    clip_pdc_delay_.configure(prepared_channels_, next_total_q8);
+  } else {
+    next_clip_pdc_delay.swap(clip_pdc_delay_);
+  }
+  // Lift every carried bank out of the live array before anything is written
+  // back into it, so a slot reshuffle cannot overwrite one that has not moved.
+  for (size_t slot = 0; slot < next_count; ++slot) {
+    if (reuse_from[slot] == kNoReuse) continue;
+    next_instrument_pdc_delays[slot].swap(instrument_pdc_delays_[reuse_from[slot]]);
+  }
   for (size_t slot = 0; slot < instrument_pdc_delays_.size(); ++slot) {
     next_instrument_pdc_delays[slot].swap(instrument_pdc_delays_[slot]);
+  }
+  for (size_t slot = 0; slot < next_count; ++slot) {
+    if (reuse_from[slot] == kNoReuse) continue;
+    instrument_pdc_delays_[slot].configure(prepared_channels_, next_delay_q8[slot]);
   }
   instrument_pdc_dest_ = next_instrument_pdc_dest;
   pdc_total_q8_ = next_total_q8;
@@ -289,6 +341,7 @@ void RealtimeEngine::recompute_pdc() {
   // Surface the applied compensation as the engine's graph latency so transport
   // telemetry (audible_timeline_sample) reflects the real output delay.
   update_reported_graph_latency();
+  return true;
 }
 
 void RealtimeEngine::flush_pdc_delays() noexcept {

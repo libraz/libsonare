@@ -4,6 +4,7 @@
 #include <catch2/catch_approx.hpp>
 #include <catch2/catch_test_macros.hpp>
 #include <cstddef>
+#include <cstdint>
 
 #include "rt/delay_line.h"
 
@@ -86,6 +87,54 @@ TEST_CASE("ChannelDelay releases inactive lanes and reset stays usable", "[engin
   REQUIRE(delay.configure(1, 2 << 8));
   REQUIRE(delay.capacity() == 2);
   delay.reset();
+}
+
+TEST_CASE("ChannelDelay keeps its history when the storage shape is unchanged",
+          "[engine][delay][pdc]") {
+  sonare::engine::ChannelDelay<4> delay;
+  REQUIRE(delay.configure(2, 4 << 8));
+  const uint64_t built = delay.storage_generation();
+  REQUIRE(built > 0);
+
+  // Four samples in, none out yet: the whole ramp is in flight inside the bank.
+  std::array<float, 4> left{1.0f, 2.0f, 3.0f, 4.0f};
+  std::array<float, 4> right{-1.0f, -2.0f, -3.0f, -4.0f};
+  float* channels[] = {left.data(), right.data()};
+  delay.process(channels, 2, 4);
+  REQUIRE(left[3] == 0.0f);
+  REQUIRE(right[3] == 0.0f);
+
+  // Re-applying the compensation the bank already carries must leave that audio
+  // alone. The engine does exactly this on every instrument bind, for every
+  // destination the bind did not name.
+  REQUIRE(delay.matches_storage(2, 4 << 8));
+  REQUIRE(delay.configure(2, 4 << 8));
+  REQUIRE(delay.storage_generation() == built);
+
+  std::array<float, 4> tail_left{};
+  std::array<float, 4> tail_right{};
+  float* tail[] = {tail_left.data(), tail_right.data()};
+  delay.process(tail, 2, 4);
+  REQUIRE(tail_left[0] == Catch::Approx(1.0f));
+  REQUIRE(tail_left[3] == Catch::Approx(4.0f));
+  REQUIRE(tail_right[0] == Catch::Approx(-1.0f));
+  REQUIRE(tail_right[3] == Catch::Approx(-4.0f));
+
+  // Two fractional delays sharing an integer part share their storage, so moving
+  // only the sub-sample part is a read-position change, not a rebuild.
+  REQUIRE(delay.configure(2, (4 << 8) + 64));
+  const uint64_t fractional = delay.storage_generation();
+  REQUIRE(fractional == built + 1);
+  REQUIRE(delay.matches_storage(2, (4 << 8) + 192));
+  REQUIRE(delay.configure(2, (4 << 8) + 192));
+  REQUIRE(delay.storage_generation() == fractional);
+  REQUIRE(delay.delay_q8() == (4 << 8) + 192);
+
+  // A genuine shape change still discards the history, which is what a changed
+  // compensation means.
+  REQUIRE_FALSE(delay.matches_storage(2, 5 << 8));
+  REQUIRE(delay.configure(2, 5 << 8));
+  REQUIRE(delay.storage_generation() == fractional + 1);
 }
 
 TEST_CASE("ChannelDelay re-expands a reclaimed bank safely", "[engine][delay]") {

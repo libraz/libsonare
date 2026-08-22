@@ -144,8 +144,12 @@ void RealtimeEngine::prepare_impl(double sample_rate, int max_block_size, size_t
     instrument->prepare(sample_rate_, max_block_size_);
   });
   // Size the PDC delays from whatever instruments are already bound (their
-  // latency is known now that they have been prepared).
-  recompute_pdc();
+  // latency is known now that they have been prepared). A failure here is an
+  // allocation failure like any other in prepare(): report it the same way, so
+  // the caller does not get a prepared engine that silently renders its
+  // instruments out of phase with the clip bus.
+  SONARE_CHECK_MSG(recompute_pdc(), ErrorCode::OutOfMemory,
+                   "prepare: could not allocate the latency compensation delays");
 #endif
   metronome_.prepare(sample_rate, active_tempo_map_);
 #if defined(SONARE_WITH_MIXING)
@@ -277,6 +281,38 @@ void RealtimeEngine::adopt_tempo_map_snapshot() noexcept {
 #if defined(SONARE_WITH_ARRANGEMENT)
   midi_clock_.prepare(active_tempo_map_);
 #endif
+}
+
+void RealtimeEngine::prime_offline_parameters(int num_channels, int block_size) {
+  // An unprepared engine has no scratch to render into and nothing to settle;
+  // the offline entry points reject it separately.
+  if (max_block_size_ <= 0 || num_channels <= 0) return;
+  const int channels = std::min(num_channels, prepared_channels_);
+  const int frames = std::max(1, std::min(block_size, max_block_size_));
+
+  // Apply the queued commands first. They set the smoother targets this call
+  // exists to snap, and draining them here rather than inside the throwaway
+  // block below is what lets the transport be held stopped for the whole block:
+  // a queued kTransportPlay drained mid-block would start the playhead rolling
+  // and the discarded audio would consume the first frames of the render.
+  flush_control_commands();
+
+  const bool was_playing = transport_.playing();
+  transport_.stop();
+  {
+    // Lane fader/pan/gate smoothers only advance while the lanes render, so one
+    // process() pass is what applies automation at the start position and gives
+    // settle_parameters() the targets to snap to. The transport is stopped, so
+    // clips and sequenced MIDI contribute nothing and the playhead stays put.
+    std::vector<std::vector<float>> scratch(static_cast<size_t>(channels),
+                                            std::vector<float>(static_cast<size_t>(frames), 0.0f));
+    std::vector<float*> pointers;
+    pointers.reserve(scratch.size());
+    for (auto& channel : scratch) pointers.push_back(channel.data());
+    process(pointers.data(), channels, frames);
+  }
+  settle_parameters();
+  if (was_playing) transport_.play();
 }
 
 void RealtimeEngine::render_offline(float* const* out, int num_channels, int64_t total_frames,

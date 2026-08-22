@@ -423,6 +423,22 @@ class TrackMixerRuntime final : public rt::ProcessorBase {
   // while rendering). Returns nullptr if the track has no bound lane strip.
   mixing::ChannelStrip* lane_strip_for_track(uint32_t track_id) noexcept;
   float* key_channel(size_t lane_index, int channel) noexcept;
+  // This block's per-sample lane fader x gate ramp, materialized once by
+  // advance_lane_gain() because two stages consume it: the lane's sends and the
+  // lane's own pan/sum into the mix. The smoothers can only be advanced once per
+  // block, and reading the ramp back is what keeps the sends and the direct path
+  // on the same gain.
+  float* lane_gain(size_t lane_index) noexcept;
+  // Scratch the lane's send sources are built in: the post-fader source (the
+  // aligned lane buffer scaled by the gain ramp) and the pre-fader source (the
+  // strip's pre-fader tap, aligned). One lane's sends are mixed at a time, so a
+  // single pair of banks serves every lane.
+  float* send_source_channel(int channel) noexcept;
+  float* pre_send_source_channel(int channel) noexcept;
+  // Advances this lane's fader and gate smoothers once for the block and stores
+  // the product, after refreshing the gate target from the lane's own mute and
+  // the block's solo state. Must run before mix_lane_sends()/apply_lane_to_mix().
+  void advance_lane_gain(size_t lane_index, int num_samples, bool any_solo) noexcept;
   void mix_lane_sends(size_t lane_index, int num_channels, int num_samples,
                       int64_t timeline_sample) noexcept;
   // Processes every configured bus at its own declared width (FxBus insert
@@ -433,9 +449,8 @@ class TrackMixerRuntime final : public rt::ProcessorBase {
                      MeterTelemetryTap* meter_tap, int64_t render_frame,
                      ScopeTelemetryTap* scope_tap) noexcept;
   void apply_lane_to_mix(size_t lane_index, float* const* channels, int num_channels,
-                         int num_samples, bool any_solo, MeterTelemetryTap* meter_tap,
-                         int64_t render_frame, ScopeTelemetryTap* scope_tap,
-                         int master_channels) noexcept;
+                         int num_samples, MeterTelemetryTap* meter_tap, int64_t render_frame,
+                         ScopeTelemetryTap* scope_tap, int master_channels) noexcept;
   // Scatters a lane's (mono/stereo-summed) post-fader signal across a >2-channel
   // destination (the master mix or a surround group bus) using the strip's
   // surround pan. @p dest holds dest_channels plane pointers; @p lane_channels
@@ -451,6 +466,11 @@ class TrackMixerRuntime final : public rt::ProcessorBase {
   // Post-strip, pre-fader snapshots of sidechain SOURCE lanes (the lane
   // buffers themselves are mutated in place by the fader/gate/pan stage).
   std::vector<float> key_scratch_;
+  // One mono plane per lane holding this block's fader x gate ramp.
+  std::vector<float> lane_gain_scratch_;
+  // Two lane-wide banks (post-fader source, then pre-fader source) reused by
+  // whichever lane's sends are being mixed.
+  std::vector<float> send_source_scratch_;
   // Sized to the widest buffer it ever addresses (a surround group bus), not the
   // ≤2-wide lane buffers, so it can carry up to kMaxBusChannels plane pointers
   // for bus processing. Lane code fills only the first ≤2 slots.
@@ -458,6 +478,15 @@ class TrackMixerRuntime final : public rt::ProcessorBase {
   std::array<uint32_t, kMaxTrackLanes> active_track_ids_{};
   std::array<LaneState, kMaxTrackLanes> lane_states_{};
   std::array<mixing::AlignmentDelay, kMaxTrackLanes> lane_pdc_delays_;
+  // Pre-fader send alignment, one bank per lane. A pre-fader send taps the strip
+  // upstream of its post-insert chain, so it leaves the strip earlier than the
+  // lane's output does and lane_pdc_delays_ (which compensates the strip's full
+  // latency) is the wrong amount for it. This bank carries the widest strip
+  // latency minus the lane's own PRE-fader latency instead, which puts a
+  // pre-fader send on the same lane timebase as the post-fader sends, the
+  // output-bus routing and the direct master sum. It rests at zero -- and
+  // process() short-circuits -- whenever no strip carries latency.
+  std::array<mixing::AlignmentDelay, kMaxTrackLanes> lane_pre_send_pdc_delays_;
   // Bus-stage PDC. A lane can reach the master both directly and through a bus
   // (its output bus, or any bus it sends to), so one per-lane delay cannot
   // align both paths. lane_pdc_delays_ therefore aligns everything as it leaves

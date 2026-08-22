@@ -1534,6 +1534,135 @@ TEST_CASE("TrackMixerRuntime keeps PDC delay history across an unrelated strip e
   }
 }
 
+TEST_CASE("TrackMixerRuntime delivers a lane's send on the lane's own timebase",
+          "[engine][track_mixer][pdc]") {
+  // Lane 20 carries a look-ahead insert, so lane 10 -- which has none -- is
+  // delayed by kLatency to meet it. Lane 10 also feeds a bus through a
+  // post-fader send, and that copy has to arrive at the same instant as its
+  // direct contribution. A send tapped upstream of the alignment arrives early
+  // instead, which combs the bus return against the dry path -- and the comb
+  // moves whenever an unrelated lane's insert latency changes.
+  constexpr int kFrames = 64;
+  constexpr int kLatency = 8;
+
+  std::array<float, kFrames> impulse{};
+  impulse[0] = 1.0f;
+  std::array<float, kFrames> silence{};
+  const float* impulse_channels[] = {impulse.data()};
+  const float* silent_channels[] = {silence.data()};
+
+  sonare::engine::ClipPlayer player;
+  player.prepare(48000.0, kFrames);
+  player.set_clips({clip_for_track(1, 10, impulse_channels, 1, kFrames),
+                    clip_for_track(2, 20, silent_channels, 1, kFrames)});
+
+  sonare::engine::TrackMixerRuntime mixer;
+  mixer.prepare(48000.0, kFrames);
+  REQUIRE(mixer.set_buses({{1, 0.0f}}));
+
+  sonare::engine::TrackLaneConfig sending{10};
+  sending.sends.push_back({1, 0.0f, true, sonare::mixing::SendTiming::PostFader});
+  REQUIRE(mixer.set_track_lanes({sending, {20}}));
+
+  // 0.16666667 ms at 48 kHz rounds to exactly kLatency lookahead samples, and
+  // the ceiling sits far above the signal so the insert is a pure delay.
+  sonare::mixing::api::Strip latent;
+  latent.inserts.push_back({sonare::mixing::api::InsertSlot::PreFader, "dynamics.limiter",
+                            R"({"thresholdDb":24,"lookaheadMs":0.16666667,"releaseMs":50})"});
+  REQUIRE(mixer.set_track_strip(20, latent));
+  REQUIRE(mixer.latency_samples() == kLatency);
+
+  std::array<float, kFrames> out{};
+  float* out_channels[] = {out.data()};
+  REQUIRE(mixer.render_clips(player, out_channels, 1, kFrames, 0));
+
+  // One impulse in, one impulse out, at the compensated position. An unaligned
+  // send would show as a second nonzero sample at frame 0 -- the pre-echo.
+  for (int i = 0; i < kFrames; ++i) {
+    if (i == kLatency) continue;
+    INFO("sample " << i);
+    REQUIRE(out[static_cast<size_t>(i)] == 0.0f);
+  }
+  // Direct and send coincide there, so the sample carries both contributions
+  // (the same figure a lane with a unity send produces with no PDC in play).
+  REQUIRE(out[kLatency] > 2.82f);
+  REQUIRE(out[kLatency] < 2.84f);
+}
+
+TEST_CASE("TrackMixerRuntime gates a post-fader send with the lane's fader and mute",
+          "[engine][track_mixer]") {
+  // A post-fader send is declared as a tap on the lane's audible signal, so
+  // whatever silences the lane silences the send. Leaving the send at full level
+  // through a mute (or another lane's solo) keeps the track audible through the
+  // bus return, which is not what any of the three controls means.
+  constexpr int kFrames = 64;
+
+  std::array<float, kFrames> source{};
+  source.fill(0.5f);
+  std::array<float, kFrames> silence{};
+  const float* source_channels[] = {source.data()};
+  const float* silent_channels[] = {silence.data()};
+
+  sonare::engine::ClipPlayer player;
+  player.prepare(48000.0, kFrames);
+  player.set_clips({clip_for_track(1, 10, source_channels, 1, kFrames),
+                    clip_for_track(2, 20, silent_channels, 1, kFrames)});
+
+  sonare::engine::TrackMixerRuntime mixer;
+  mixer.prepare(48000.0, kFrames);
+  REQUIRE(mixer.set_buses({{1, 0.0f}}));
+  sonare::engine::TrackLaneConfig sending{10};
+  sending.sends.push_back({1, 0.0f, true, sonare::mixing::SendTiming::PostFader});
+  REQUIRE(mixer.set_track_lanes({sending, {20}}));
+
+  std::array<float, kFrames> out{};
+  float* out_channels[] = {out.data()};
+  const auto render = [&]() {
+    out.fill(0.0f);
+    REQUIRE(mixer.render_clips(player, out_channels, 1, kFrames, 0));
+  };
+  // The bus return is the only thing that can keep the lane audible once the
+  // direct path is gated, so the whole master sum is the assertion.
+  const auto require_silent = [&](const char* what) {
+    // One block to publish the gate target, then settle it so the assertion is
+    // an exact zero rather than a point on the anti-click ramp.
+    render();
+    mixer.settle_smoothers();
+    render();
+    for (int i = 0; i < kFrames; ++i) {
+      INFO(what << ", sample " << i);
+      REQUIRE(out[static_cast<size_t>(i)] == 0.0f);
+    }
+  };
+
+  render();
+  const float audible = out[kFrames - 1];
+  REQUIRE(audible > 1.4f);
+
+  REQUIRE(mixer.set_lane_solo_mute(0, false, true));
+  require_silent("muted");
+  REQUIRE(mixer.set_lane_solo_mute(0, false, false));
+
+  REQUIRE(mixer.set_lane_solo_mute(1, true, false));
+  require_silent("another lane soloed");
+  REQUIRE(mixer.set_lane_solo_mute(1, false, false));
+
+  REQUIRE(mixer.set_lane_parameter(0, sonare::engine::TrackMixerRuntime::kFaderDb, -120.0f));
+  render();
+  mixer.settle_smoothers();
+  render();
+  for (int i = 0; i < kFrames; ++i) {
+    INFO("fader floored, sample " << i);
+    REQUIRE(std::abs(out[static_cast<size_t>(i)]) < 1.0e-4f);
+  }
+
+  // Restoring the controls brings both paths back, together.
+  REQUIRE(mixer.set_lane_parameter(0, sonare::engine::TrackMixerRuntime::kFaderDb, 0.0f));
+  mixer.settle_smoothers();
+  render();
+  REQUIRE(out[kFrames - 1] == Catch::Approx(audible));
+}
+
 TEST_CASE("TrackMixerRuntime rejects an out-of-range channel delay in the core",
           "[engine][track_mixer]") {
   // The bound lives here, not only at the C ABI, because the WASM facade calls

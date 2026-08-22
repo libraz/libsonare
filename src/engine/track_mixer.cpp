@@ -141,7 +141,9 @@ bool TrackMixerRuntime::set_buses(std::vector<TrackBusConfig> buses) {
       state.bus.reset();
     }
   }
-  if (const std::vector<TrackLaneConfig>* lanes = lanes_.current()) {
+  // Control-side snapshot: this is a control-thread structural change, and
+  // current() is the audio thread's view (see set_track_channel_delay_samples).
+  if (const std::vector<TrackLaneConfig>* lanes = lanes_.control_current().get()) {
     try {
       configure_lane_sends(*lanes);
     } catch (...) {
@@ -182,7 +184,9 @@ size_t TrackMixerRuntime::copy_lane_track_ids(uint32_t* out, size_t capacity) co
 bool TrackMixerRuntime::bind_track_strip(uint32_t track_id, mixing::ChannelStrip* strip) {
   if (track_id == 0) return false;
   acquire_lanes();
-  if (const std::vector<TrackLaneConfig>* lanes = lanes_.current()) {
+  // Control-side snapshot throughout: binding a strip is a control-thread
+  // structural change, and current() is the audio thread's view.
+  if (const std::vector<TrackLaneConfig>* lanes = lanes_.control_current().get()) {
     prepare_lanes_from_snapshot(*lanes);
   }
   for (LaneState& lane : lane_states_) {
@@ -194,7 +198,7 @@ bool TrackMixerRuntime::bind_track_strip(uint32_t track_id, mixing::ChannelStrip
     if (strip && max_block_size_ > 0) {
       strip->prepare(sample_rate_, max_block_size_);
     }
-    if (const std::vector<TrackLaneConfig>* lanes = lanes_.current()) {
+    if (const std::vector<TrackLaneConfig>* lanes = lanes_.control_current().get()) {
       try {
         configure_lane_sends(*lanes);
       } catch (...) {
@@ -214,7 +218,7 @@ bool TrackMixerRuntime::bind_track_strip(uint32_t track_id, mixing::ChannelStrip
     if (strip && max_block_size_ > 0) {
       strip->prepare(sample_rate_, max_block_size_);
     }
-    if (const std::vector<TrackLaneConfig>* lanes = lanes_.current()) {
+    if (const std::vector<TrackLaneConfig>* lanes = lanes_.control_current().get()) {
       try {
         configure_lane_sends(*lanes);
       } catch (...) {
@@ -241,7 +245,7 @@ bool TrackMixerRuntime::set_track_strip(uint32_t track_id, const mixing::api::St
     if (owned.track_id == track_id && owned.strip && strip_inserts_equal(owned.spec, spec)) {
       apply_strip_scalars(*owned.strip, spec);
       owned.spec = spec;
-      if (const std::vector<TrackLaneConfig>* lanes = lanes_.current()) {
+      if (const std::vector<TrackLaneConfig>* lanes = lanes_.control_current().get()) {
         if (!recompute_lane_pdc(*lanes)) return false;
       }
       return true;
@@ -328,6 +332,11 @@ void TrackMixerRuntime::prepare(double sample_rate, int max_block_size) {
   bus_scratch_.assign(kMaxBusLanes * kMaxBusChannels * static_cast<size_t>(max_block_size_), 0.0f);
   key_scratch_.assign(kMaxTrackLanes * kMaxLaneChannels * static_cast<size_t>(max_block_size_),
                       0.0f);
+  // Rests at unity so a lane whose gain ramp has not been advanced yet (a strip
+  // rendered outside the finish_block sequence) contributes its dry signal
+  // rather than silence.
+  lane_gain_scratch_.assign(kMaxTrackLanes * static_cast<size_t>(max_block_size_), 1.0f);
+  send_source_scratch_.assign(2u * kMaxLaneChannels * static_cast<size_t>(max_block_size_), 0.0f);
   for (LaneState& lane : lane_states_) {
     lane.fader_gain.prepare(sample_rate_, 5.0f);
     lane.pan.prepare(sample_rate_, 5.0f);
@@ -354,6 +363,10 @@ void TrackMixerRuntime::prepare(double sample_rate, int max_block_size) {
     delay.set_prepared_channels(kMaxLaneChannels);
     delay.prepare(sample_rate_, max_block_size_);
   }
+  for (mixing::AlignmentDelay& delay : lane_pre_send_pdc_delays_) {
+    delay.set_prepared_channels(kMaxLaneChannels);
+    delay.prepare(sample_rate_, max_block_size_);
+  }
   // The bus stage runs on bus and master buffers, which are as wide as the
   // widest layout the mixer renders, not the ≤2-wide lane buffers.
   for (mixing::AlignmentDelay& delay : bus_pdc_delays_) {
@@ -373,7 +386,9 @@ void TrackMixerRuntime::prepare(double sample_rate, int max_block_size) {
     slot.param_id = 0;
   }
   insert_automation_overflow_count_ = 0;
-  if (const std::vector<TrackLaneConfig>* lanes = lanes_.current()) {
+  // Control-side snapshot: prepare() is control-thread only, and current() is
+  // the audio thread's view.
+  if (const std::vector<TrackLaneConfig>* lanes = lanes_.control_current().get()) {
     prepare_lanes_from_snapshot(*lanes);
     try {
       configure_lane_sends(*lanes);
@@ -437,6 +452,9 @@ void TrackMixerRuntime::flush_pdc_delays() noexcept {
   for (mixing::AlignmentDelay& delay : lane_pdc_delays_) {
     delay.reset();
   }
+  for (mixing::AlignmentDelay& delay : lane_pre_send_pdc_delays_) {
+    delay.reset();
+  }
   for (mixing::AlignmentDelay& delay : bus_pdc_delays_) {
     delay.reset();
   }
@@ -446,6 +464,9 @@ void TrackMixerRuntime::flush_pdc_delays() noexcept {
 uint64_t TrackMixerRuntime::pdc_storage_generation() const noexcept {
   uint64_t total = master_pdc_delay_.storage_generation();
   for (const mixing::AlignmentDelay& delay : lane_pdc_delays_) {
+    total += delay.storage_generation();
+  }
+  for (const mixing::AlignmentDelay& delay : lane_pre_send_pdc_delays_) {
     total += delay.storage_generation();
   }
   for (const mixing::AlignmentDelay& delay : bus_pdc_delays_) {
@@ -610,8 +631,11 @@ void TrackMixerRuntime::prepare_lanes_from_snapshot(
 
 bool TrackMixerRuntime::recompute_lane_pdc(const std::vector<TrackLaneConfig>& lanes) noexcept {
   // Lane stage: the widest strip latency. Every lane leaves process_lane_strip
-  // at this offset, so the sends tapped from it, the output-bus routing and the
-  // direct master sum all see one lane timebase.
+  // at this offset, and every path the lane's audio then takes is tapped from
+  // there -- the direct master sum, the output-bus routing and the post-fader
+  // sends all read the aligned lane buffer, while a pre-fader send reads the
+  // strip's earlier tap through lane_pre_send_pdc_delays_ below. One lane
+  // timebase, three exits.
   int max_strip_q8 = 0;
   for (size_t lane_index = 0; lane_index < lanes.size(); ++lane_index) {
     const mixing::ChannelStrip* strip = lane_states_[lane_index].strip;
@@ -640,6 +664,21 @@ bool TrackMixerRuntime::recompute_lane_pdc(const std::vector<TrackLaneConfig>& l
       delay_q8 = max_strip_q8 - lane_latency_q8;
     }
     ok = lane_pdc_delays_[lane_index].try_set_delay_samples_q8(delay_q8) && ok;
+  }
+
+  // Pre-fader send stage: the same target offset, measured from the earlier tap.
+  // A strip's pre-fader latency is what it has accrued by the time the pre tap
+  // is taken (channel delay + pre inserts), so this bank carries the rest of the
+  // widest strip latency -- including the strip's own post-insert chain, which
+  // the lane's output passes through and the pre tap does not.
+  for (size_t lane_index = 0; lane_index < lane_pre_send_pdc_delays_.size(); ++lane_index) {
+    int delay_q8 = 0;
+    if (lane_index < lanes.size()) {
+      const mixing::ChannelStrip* strip = lane_states_[lane_index].strip;
+      const int tap_latency_q8 = strip != nullptr ? strip->pre_fader_latency_samples_q8() : 0;
+      delay_q8 = max_strip_q8 - tap_latency_q8;
+    }
+    ok = lane_pre_send_pdc_delays_[lane_index].try_set_delay_samples_q8(delay_q8) && ok;
   }
 
   for (size_t bus_index = 0; bus_index < bus_pdc_delays_.size(); ++bus_index) {

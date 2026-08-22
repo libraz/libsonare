@@ -48,6 +48,12 @@ bool TrackMixerRuntime::set_lane_solo_mute(size_t lane_index, bool solo, bool mu
     if (lanes != applied_lane_snapshot_) prepare_lanes_from_snapshot(*lanes);
   }
   if (lane_index >= lane_count()) return false;
+  // Deliberately lane state rather than the strip's own muted_/soloed_ flags:
+  // the lane gate is what carries audibility, it is smoothed (so a mute does not
+  // click), and every path the lane's audio takes -- the direct master sum, the
+  // output-bus routing and each of its sends -- is scaled by that one gate. The
+  // strip's flags are a hard zero at the strip output and would additionally
+  // silence the PFL cue tap, which is taken ahead of the gate on purpose.
   LaneState& lane = lane_states_[lane_index];
   lane.solo = solo;
   lane.mute = mute;

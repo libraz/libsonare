@@ -218,6 +218,25 @@ sonare::engine::ClipSchedule impulse_clip(int64_t length) {
   return clip;
 }
 
+// A stereo clip carrying steady DC, so a hole punched into a delay bank shows up
+// as a run of samples that are not @p value.
+sonare::engine::ClipSchedule constant_clip(int64_t length, float value) {
+  auto storage = std::make_shared<sonare::engine::ClipAudioStorage>();
+  storage->channels = {std::vector<float>(static_cast<size_t>(length), value),
+                       std::vector<float>(static_cast<size_t>(length), value)};
+  storage->channel_ptrs = {storage->channels[0].data(), storage->channels[1].data()};
+  sonare::engine::ClipSchedule clip;
+  clip.id = 3;
+  clip.buffer.channels = storage->channel_ptrs.data();
+  clip.buffer.num_channels = 2;
+  clip.buffer.num_samples = length;
+  clip.start_sample = 0;
+  clip.length_samples = length;
+  clip.gain = 1.0f;
+  clip.storage = std::move(storage);
+  return clip;
+}
+
 #if defined(SONARE_WITH_MIXING)
 sonare::engine::ClipSchedule constant_track_clip(uint32_t track_id, int64_t length, float value) {
   auto storage = std::make_shared<sonare::engine::ClipAudioStorage>();
@@ -985,6 +1004,70 @@ TEST_CASE("binding a latency instrument reports and applies graph latency (PDC)"
   REQUIRE(out_l[static_cast<size_t>(kLatency)] == Catch::Approx(1.0f));
 
   engine.set_midi_instrument(nullptr);
+}
+
+TEST_CASE("an instrument bind leaves every unchanged PDC bank's history alone",
+          "[engine][midi][pdc]") {
+  constexpr double kSr = 48000.0;
+  constexpr int kBlock = 128;
+  constexpr int kLatency = 64;
+  constexpr int64_t kFrames = kBlock * 16;
+  RealtimeEngine engine;
+  engine.prepare(kSr, kBlock);
+
+  // One latent instrument fixes the whole project's compensation: the clip bus
+  // is delayed by kLatency to meet it, and that delay bank fills with audio.
+  LatencyImpulseInstrument slow(kLatency);
+  REQUIRE(engine.set_midi_instrument(1, &slow));
+  engine.set_clips({constant_clip(kFrames, 0.5f)});
+  push_play(engine);
+
+  std::vector<float> out_l(static_cast<size_t>(kBlock), 0.0f);
+  std::vector<float> out_r(static_cast<size_t>(kBlock), 0.0f);
+  float* io[] = {out_l.data(), out_r.data()};
+  const auto render_block = [&]() {
+    std::fill(out_l.begin(), out_l.end(), 0.0f);
+    std::fill(out_r.begin(), out_r.end(), 0.0f);
+    engine.process(io, 2, kBlock);
+  };
+  const auto require_steady = [&](const char* what) {
+    for (size_t i = 0; i < out_l.size(); ++i) {
+      INFO(what << ", sample " << i);
+      REQUIRE(out_l[i] == Catch::Approx(0.5f));
+    }
+  };
+  for (int block = 0; block < 4; ++block) render_block();
+  require_steady("warm-up");
+
+  const uint64_t generation = engine.pdc_storage_generation();
+  REQUIRE(generation > 0);
+
+  // A second instrument reporting the SAME latency: the maximum does not move,
+  // so no source's compensation changes and no bank may be rebuilt. Rebuilding
+  // one zero-fills it, and the hole lands on every MIDI track and on the clip
+  // bus -- not just on the destination the bind named.
+  LatencyImpulseInstrument same(kLatency);
+  REQUIRE(engine.set_midi_instrument(2, &same));
+  REQUIRE(engine.pdc_storage_generation() == generation);
+  render_block();
+  require_steady("after bind");
+
+  // Unbinding it again is the same non-event from the other direction, and it
+  // repacks the surviving instrument's slot, which must move its bank rather
+  // than rebuild it.
+  REQUIRE(engine.set_midi_instrument(2, nullptr));
+  REQUIRE(engine.pdc_storage_generation() == generation);
+  render_block();
+  require_steady("after unbind");
+
+  // A bind that genuinely changes the compensation still rebuilds what it must:
+  // the guard is a shape comparison, not a blanket refusal to reallocate.
+  LatencyImpulseInstrument slower(kLatency * 2);
+  REQUIRE(engine.set_midi_instrument(3, &slower));
+  REQUIRE(engine.pdc_storage_generation() > generation);
+
+  engine.set_midi_instrument(1, nullptr);
+  engine.set_midi_instrument(3, nullptr);
 }
 
 TEST_CASE("render_offline releases held MIDI notes at the end", "[engine][midi]") {

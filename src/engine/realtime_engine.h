@@ -198,6 +198,24 @@ class RealtimeEngine : private ClipPageRequestSink {
     return samples * sizeof(float);
   }
 
+#if defined(SONARE_WITH_ARRANGEMENT)
+  /// @brief Total number of times any PDC delay bank reallocated its storage.
+  /// @details The observable form of the contract that an instrument bind which
+  ///          does not change a source's compensation must not disturb the delay
+  ///          history that compensation is carrying: an unchanged value across a
+  ///          bind/unbind/swap means no bank threw away audio in flight.
+  ///          Reallocating a bank zero-fills it, so a spurious bump is a dropout
+  ///          the length of the compensation delay -- on every MIDI track, not
+  ///          just the one the bind named.
+  uint64_t pdc_storage_generation() const noexcept {
+    uint64_t total = clip_pdc_delay_.storage_generation();
+    for (const ChannelDelay<kMaxAudioChannels>& delay : instrument_pdc_delays_) {
+      total += delay.storage_generation();
+    }
+    return total;
+  }
+#endif
+
   void process(float* const* io, int num_channels, int num_frames) noexcept;
   void process_with_monitor(float* const* io, float* const* monitor_out, int num_channels,
                             int num_frames) noexcept;
@@ -404,11 +422,14 @@ class RealtimeEngine : private ClipPageRequestSink {
   // instrument that renders MIDI routed to `destination_id` (the compiler stamps
   // each MidiClipSchedule with its track's Track.midi_destination_id). The
   // single-argument overload above binds the default destination 0, preserving
-  // the prior single-instrument behavior. Returns false only when a new binding
-  // cannot be added because the rack is full (kMaxInstruments). Control-thread
-  // only; swapping/clearing first releases notes sounding on that destination so
-  // the outgoing instrument does not hang. May prepare() the instrument
-  // (allocates) when the engine is already prepared.
+  // the prior single-instrument behavior. Returns false when the binding did not
+  // take: either the rack is full (kMaxInstruments), or the latency compensation
+  // could not be reallocated for the new instrument set. Either way @p instrument
+  // is NOT bound to @p destination_id when this returns false, so a caller that
+  // owns it is free to destroy it. Control-thread only; swapping/clearing first
+  // releases notes sounding on that destination so the outgoing instrument does
+  // not hang. May prepare() the instrument (allocates) when the engine is
+  // already prepared.
   bool set_midi_instrument(uint32_t destination_id, midi::MidiInstrument* instrument);
   midi::MidiInstrument* midi_instrument() const noexcept { return instrument_rack_.get(0); }
   midi::MidiInstrument* midi_instrument(uint32_t destination_id) const noexcept {
@@ -587,6 +608,19 @@ class RealtimeEngine : private ClipPageRequestSink {
   /// audible block renders at the settled values instead of ramping in from
   /// defaults. Not safe concurrently with a running audio thread.
   void settle_parameters() noexcept;
+  /// Runs the offline pre-roll a one-shot render needs before its first audible
+  /// block: applies every queued command, renders one throwaway block so lane
+  /// automation resolves at the start position, then calls
+  /// @ref settle_parameters. The transport is held stopped across the throwaway
+  /// block and restored afterwards, so the playhead does not move and no clip or
+  /// sequenced MIDI renders into the discarded audio.
+  ///
+  /// Every offline entry point that renders a whole span in one call (the
+  /// engine's bounce and freeze) runs this; @ref render_offline does not, because
+  /// a chunked render would re-prime on every chunk. A host driving
+  /// @ref render_offline itself calls this once before its first chunk.
+  /// Control-thread only, and it allocates the throwaway block.
+  void prime_offline_parameters(int num_channels, int block_size);
   /// Applies commands queued on an offline/control-only engine immediately.
   /// @warning Not safe concurrently with @ref process. This exists for hosts
   ///          that maintain a non-audio-thread mirror and must not let its
@@ -675,8 +709,12 @@ class RealtimeEngine : private ClipPageRequestSink {
 #if defined(SONARE_WITH_ARRANGEMENT)
   // CONTROL thread: refresh the PDC delays from the current instrument rack and
   // report the resulting graph latency. Called from prepare() and whenever an
-  // instrument binding changes.
-  void recompute_pdc();
+  // instrument binding changes. Returns false when a replacement bank could not
+  // be allocated: the engine then falls back to no compensation at all rather
+  // than to a half-updated set, and the caller has to say so -- silently
+  // rendering a misaligned mix is the one outcome this must not have. Mirrors
+  // TrackMixerRuntime::recompute_lane_pdc, whose callers all propagate.
+  [[nodiscard]] bool recompute_pdc();
   // AUDIO thread: flush the PDC delay lines on a transport discontinuity so no
   // stale clip/instrument audio rings out across a stop/seek/loop.
   void flush_pdc_delays() noexcept;
