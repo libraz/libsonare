@@ -213,12 +213,12 @@ def _auto_range(
 ) -> tuple[float, float, bool] | None:
     """Pick a search range for one catalogue knob from its bound, name and default.
 
-    A patch field's range is not a guess: `clamp_synth_patch` bounds every one
-    of them, and the library reports those bounds in the knob dump, so `bound`
-    is the interval the engine actually accepts. Searching it directly beats any
-    heuristic in both directions — a heuristic range is too wide where the clamp
-    flattens the loss outside the space, and too narrow whenever the best value
-    is several times the default.
+    A patch field's range is mostly not a guess: `clamp_synth_patch` bounds all
+    but thirteen of them, and the library reports those bounds in the knob dump,
+    so `bound` is the interval the engine actually accepts. Searching it
+    directly beats any heuristic in both directions — a heuristic range is too
+    wide where the clamp flattens the loss outside the space, and too narrow
+    whenever the best value is several times the default.
 
     Only the two ends are widened from the raw bound: a knob whose interval
     spans orders of magnitude (`release_ms` at 1..5000) is searched
@@ -227,9 +227,12 @@ def _auto_range(
 
     The name-and-default heuristics below are the fallback for the knobs with no
     reported bound — every engine calibration constant (a `SONARE_TUNABLE` is a
-    bare float with no clamp anywhere) and the handful of patch fields
-    `clamp_synth_patch` leaves open. Deliberately narrow, since a hand-written
-    spec is always available when a knob needs a different range.
+    bare float with no clamp anywhere) and the thirteen patch fields
+    `clamp_synth_patch` leaves open (the eight Karplus-Strong extensions, three
+    bowed-string ones and `pipe_organ.keytrack`, all clamped by their own voice
+    at start() instead, plus the free angle `percussion.strike_theta`).
+    Deliberately narrow, since a hand-written spec is always available when a
+    knob needs a different range.
 
     Returns None for a knob that should not be fitted automatically.
     """

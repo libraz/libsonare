@@ -218,14 +218,16 @@ The patch prefix is the patch's own name, not the program number, because one pa
 
 ### Where a knob's search range comes from
 
-A patch field's range is **not** a guess. `clamp_synth_patch()` bounds every one of them, and the dump reports those bounds (`--dump-knobs` prints them as the `min`/`max` columns), so `--spec auto` searches the interval the engine actually accepts:
+A patch field's range is **mostly not** a guess. `clamp_synth_patch()` bounds all but thirteen of them, and the dump reports those bounds (`--dump-knobs` prints them as the `min`/`max` columns), so `--spec auto` searches the interval the engine actually accepts:
 
 | clamp bound | what `--spec auto` searches | why |
 |---|---|---|
 | `0 .. 1` (and any span ≤ 4) | the whole interval, linear | 0 and 1 are both meaningful settings; a window around the default would hide them |
 | `1 .. 20000` ms | `default/8 .. default*8`, log, capped by the bound | four decades put the default in the first percent of a linear cube; the clamp still stops the window leaving the space |
 | wide, default `0` | *not fitted* | the field is switched off and there is no magnitude to anchor a window on — picking one is the guess the bounds replace |
-| none (an engine constant, or a field the clamp leaves open) | `default/2 .. default*2`, or `0 .. 1` for a normalized-sounding name | the old heuristic, now the fallback rather than the rule |
+| none (an engine constant, or one of the thirteen fields the clamp leaves open) | `default/2 .. default*2`, or `0 .. 1` for a normalized-sounding name | the old heuristic, now the fallback rather than the rule |
+
+The thirteen unbounded fields are the eight Karplus-Strong extensions (`ks.body_coupling`, `pluck_style`, `nail`, `pickup_pos`, `dispersion`, `tension_mod`, `octave_mix`, `keyoff_noise`), `bowed_string.stribeck` / `sympathetic` / `polarization`, `pipe_organ.keytrack` — each clamped by its own voice at `start()` rather than in the patch clamp, so the audio is safe and only the reported range is missing — and `percussion.strike_theta`, an angle that reaches a cosine and so only has to be finite.
 
 Write a hand spec when a knob needs something else — a zero-default field you want switched on, or a range wider than eight times the default.
 
@@ -264,7 +266,8 @@ Everything a fit moves is written back to the source, in the form that value tak
 | `SONARE_TUNABLE` | its declaration's literal, so it becomes the new compiled-in default |
 | source knob | the literal the regex captured |
 | patch field of a named patch | a new `o.violin.bowed_string.bow_force = 0.646063f;` line in the program table |
-| `fam3.` / `d038.` patch field | *reported, not written* — those patches are built by a loop with no per-patch site |
+| `d038.` patch field | a new `t[38].percussion.wire_buzz = 0.646063f;` line in the drum table |
+| `fam3.` patch field | *reported, not written* — the family patches are built by a loop with no per-patch site |
 
 The patch-field case needs the extra line because the table builds most patches through helper lambdas taking positional arguments (`o.violin = bowed(0.12f, 0.55f, …)`), so no literal in it belongs to a named field. An explicit assignment after the call is the idiom that table already uses for its own exceptions, and a field that already has one is rewritten rather than duplicated.
 

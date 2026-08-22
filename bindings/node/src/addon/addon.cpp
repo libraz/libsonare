@@ -278,7 +278,7 @@ Napi::Value MidiParamToCc(const Napi::CallbackInfo& info) {
   Napi::Env env = info.Env();
   if (info.Length() < 4 || !info[0].IsArray() || !info[1].IsNumber() || !info[2].IsNumber() ||
       !info[3].IsNumber()) {
-    Napi::TypeError::New(env, "Expected (bindings: object[], paramId, value, channel, ppq?)")
+    Napi::TypeError::New(env, "Expected (bindings: object[], paramId, value, group, ppq?)")
         .ThrowAsJavaScriptException();
     return env.Undefined();
   }

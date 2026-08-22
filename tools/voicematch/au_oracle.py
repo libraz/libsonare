@@ -1,6 +1,6 @@
 """Oracle audio from a real AudioUnit instrument, rendered offline by aubounce.
 
-This is route B of `render_oracle`, wired: instead of fluidsynth playing a
+This is route C of `render_oracle`, wired: instead of fluidsynth playing a
 SoundFont, an AudioUnit plugin installed on this machine plays the probe and
 the render comes back over the same interface — SMF bytes in, a (frames, 2)
 float32 array covering exactly the probe's timeline out. Everything downstream

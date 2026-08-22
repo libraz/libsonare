@@ -93,9 +93,17 @@ const std::unordered_map<std::string, float>& overrides() {
 /// the run rather than from a parse of the source.
 ///
 /// Written on exit when `SONARE_TUNING_DUMP` names a path, as
-/// `key<TAB>default` lines sorted by key. Only the keys reached by the render
-/// appear, which is the useful set: a knob belonging to an engine the program
-/// does not use cannot affect it.
+/// `key<TAB>default` lines sorted by key.
+///
+/// The two streams that feed it have different scopes, which matters when
+/// reading a dump by hand. A patch field is recorded as a GM fallback table is
+/// built, so the patch keys are those of the tables the run actually reached.
+/// An engine constant is not: in a tuning build `SONARE_TUNABLE` declares a
+/// namespace-scope `const float` whose initialiser runs before `main`, so every
+/// linked translation unit's constants are recorded whether the render used
+/// that engine or not. The engine half of a dump is the whole library rather
+/// than a trace of the run; a consumer that wants one engine's constants
+/// narrows by the declaring file's stem (`autofit.py` does).
 ///
 /// Two kinds of header line precede the knobs: `#program<TAB>NNN<TAB>key` maps
 /// a GM program to the patch that voices it, and `#bound<TAB>path<TAB>lo<TAB>hi`

@@ -134,12 +134,18 @@ struct AmpSimConfig {
   /// Tone stack gains (dB).
   ///
   /// Under `kCircuit` these three are read as POT POSITIONS on the passive
-  /// ladder rather than as filter gains, mapped `position = 0.5 + dB/24`
-  /// clamped to [0, 1] — so 0 dB is every control centred and +-12 dB are the
-  /// extremes. Reusing the same three fields keeps the param bag and the
-  /// automation ids identical across topologies; a passive stack has no notion
-  /// of "gain in dB" to map onto, so some reinterpretation is unavoidable and
-  /// this is the one that costs no new parameters.
+  /// ladder rather than as filter gains: the wiper fraction is
+  /// `0.5 + dB/24` clamped to [0, 1], so 0 dB is the wiper at half travel and
+  /// +-12 dB are the extremes. The bass wiper then goes through the pot's own
+  /// taper before it reaches the ladder — that pot is logarithmic on the real
+  /// circuit, approximated by squaring — so 0 dB puts the bass branch at 0.25
+  /// of its range while mid and treble sit at 0.5. Reusing the same three
+  /// fields keeps the param bag and the automation ids identical across
+  /// topologies; a passive stack has no notion of "gain in dB" to map onto, so
+  /// some reinterpretation is unavoidable and this is the one that costs no new
+  /// parameters.
+  ///
+  /// Under `kVoiced` all three are what they say: shelf and peak gains in dB.
   float bass_db = 0.0f;
   float mid_db = 0.0f;
   float treble_db = 0.0f;

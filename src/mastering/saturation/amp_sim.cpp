@@ -218,8 +218,9 @@ static_assert(kCrossoverKneeSharpness <= 1.0f,
 /// upstream is out of range.
 constexpr float kMaxRailDroop = 0.6f;
 
-/// Maps the tone-knob dB fields onto pot positions under kCircuit: 0 dB centres
-/// every control and +-12 dB reaches the extremes.
+/// Maps the tone-knob dB fields onto pot wiper fractions under kCircuit: 0 dB
+/// is half travel and +-12 dB reaches the extremes. The bass pot's taper is
+/// applied on top of this, at the call site.
 constexpr float kToneStackDbSpan = 24.0f;
 
 float tone_position(float db) noexcept {

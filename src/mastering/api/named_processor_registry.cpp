@@ -199,10 +199,11 @@ InsertTiming insert_timing(const std::string& id) {
 // host avoid treating a bounded, multi-tap Velvet reverb as equivalent to a
 // lightweight zero-latency insert when assembling a live strip.
 const char* realtime_cost(const std::string& id) noexcept {
-  // Oversampled triode stages. "saturation.ampSim" runs the same 4x oversampled
-  // Dempwolf triode as "saturation.tube" (it owns a Tube instance and processes
-  // it unconditionally) and adds a tone stack plus a cab EQ on top, so it can
-  // never be cheaper than the stage it embeds.
+  // Oversampled triode stages. "saturation.ampSim" runs a 4x oversampled
+  // Dempwolf triode whichever head its topology selects — the embedded
+  // "saturation.tube" instance under kVoiced, its own multi-stage cascade under
+  // kCircuit, which is if anything the dearer of the two — and adds a tone stack
+  // plus a cab EQ on top, so it can never be cheaper than a bare triode stage.
   if (id == "saturation.tube" || id == "saturation.ampSim") return "high";
   if (id == "effects.reverb.velvet") return "high";
   // Default-on 4x polyphase oversampling. "spectral.airBand" resamples its
