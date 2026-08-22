@@ -1,7 +1,6 @@
 #include <cctype>
 
 #include "sonare_cli.h"
-#include "util/constants.h"
 
 // Offline-effect output contract: a command that renders an audio buffer
 // requires -o/--output. Running it without a destination has no useful result
@@ -86,19 +85,15 @@ int cmd_pitch_correct(const CliArgs& args, const Audio& audio) {
   const float current_midi = args.get_float("current-midi", 69.0f);
   const float target_midi = args.get_float("target-midi", 69.0f);
   editing::pitch_editor::PitchCorrector corrector;
-  editing::pitch_editor::F0Track track;
-  track.sample_rate = audio.sample_rate();
-  // The command corrects to one constant pitch, so the track it builds is a
-  // single frame and carries a fixed hop purely to satisfy the F0Track
-  // contract. Reading the global --hop-length here would consume an option the
-  // command's schema does not accept, and no facade exposes a hop control for
-  // constant-pitch correction on any surface.
-  track.hop_length = sonare::constants::kDefaultHopLength;
-  track.f0_hz = {editing::pitch_editor::PitchCorrector::midi_to_hz(current_midi)};
-  track.voiced = {true};
-  track.voiced_prob = {1.0f};
-
-  Audio result = corrector.correct_to_midi(audio, track, target_midi);
+  // The constant-pitch overload, not the time-varying one. Feeding a synthetic
+  // single-frame F0Track to the time-varying path runs the retune IIR, whose
+  // per-hop coefficient depends on retune_speed_ms, the hop, and the sample
+  // rate: one frame of it applies only a fraction of the requested interval
+  // (about 20% at 44.1 kHz with the defaults) and a different fraction at every
+  // other sample rate. This command states the interval outright, so the whole
+  // (target_midi - current_midi) must be applied, unsmoothed and unclamped --
+  // the same facade the Python CLI selects for the same command.
+  Audio result = corrector.correct_to_midi(audio, current_midi, target_midi);
   save_wav(args.output_file, result.data(), result.size(), result.sample_rate());
 
   if (args.json_output) {

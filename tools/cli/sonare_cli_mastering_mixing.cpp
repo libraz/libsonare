@@ -1,8 +1,63 @@
 #include <algorithm>
+#include <cctype>
+#include <utility>
 
 #include "sonare_cli.h"
+#include "util/json.h"
 
 #ifdef SONARE_WITH_MASTERING
+namespace {
+
+/// Rewrite one camelCase JSON key as snake_case ("gainToMatchDb" ->
+/// "gain_to_match_db"). The analysis keys carry no acronym runs, so a plain
+/// "uppercase starts a new word" rule is exact for them.
+std::string json_key_to_snake_case(const std::string& key) {
+  std::string out;
+  out.reserve(key.size() + 4);
+  for (char c : key) {
+    const auto byte = static_cast<unsigned char>(c);
+    if (std::isupper(byte)) {
+      if (!out.empty()) out.push_back('_');
+      out.push_back(static_cast<char>(std::tolower(byte)));
+    } else {
+      out.push_back(c);
+    }
+  }
+  return out;
+}
+
+sonare::util::json::Value json_keys_to_snake_case(const sonare::util::json::Value& value) {
+  namespace json = sonare::util::json;
+  if (value.is_object()) {
+    json::Object out;
+    for (const auto& [key, child] : value.as_object()) {
+      out.emplace(json_key_to_snake_case(key), json_keys_to_snake_case(child));
+    }
+    return json::Value(std::move(out));
+  }
+  if (value.is_array()) {
+    json::Array out;
+    out.reserve(value.as_array().size());
+    for (const auto& element : value.as_array()) {
+      out.emplace_back(json_keys_to_snake_case(element));
+    }
+    return json::Value(std::move(out));
+  }
+  return value;
+}
+
+/// The mastering analyses are core APIs, and every core JSON producer keys its
+/// output in camelCase to match the Node / WASM object surfaces. CLI stdout is
+/// snake_case throughout, so the pass-through commands re-key the payload here
+/// instead of the core changing convention for one pair of callers. Re-dumping
+/// through util::json also keeps the CLI's copy locale-independent.
+std::string analysis_json_for_cli(const std::string& core_json) {
+  namespace json = sonare::util::json;
+  return json::dump(json_keys_to_snake_case(json::parse(core_json)));
+}
+
+}  // namespace
+
 std::vector<mastering::api::Param> parse_mastering_params(const std::string& text) {
   std::vector<mastering::api::Param> params;
   std::stringstream stream(text);
@@ -29,6 +84,37 @@ std::vector<mastering::api::Param> parse_mastering_params(const std::string& tex
   }
   return params;
 }
+
+namespace {
+
+// Refuses a supplied --params key the named processor does not read.
+//
+// insert_param_names() builds the processor against an empty map and reports
+// every key its config builder probed, so a supplied key outside that set took
+// no effect at all: `band0.bogusKey=42` used to ship a chain containing none of
+// the edit the caller asked for, under exit 0 and a normal --json payload. The
+// list is sorted, which is what makes the membership test a binary search.
+//
+// A name with no published key set is left alone rather than rejected wholesale:
+// only a realtime insert can be probed this way, so an empty list means "not an
+// insert" (an offline-only processor, or one whose build feature is off), not
+// "reads nothing". Those ids keep the old silent-ignore behaviour, which is the
+// remaining half of this gap.
+void reject_unknown_processor_params(const std::string& processor,
+                                     const std::vector<mastering::api::Param>& params) {
+  const std::vector<std::string> known = mastering::api::insert_param_names(processor);
+  if (known.empty()) return;
+  std::string unknown;
+  for (const auto& param : params) {
+    if (std::binary_search(known.begin(), known.end(), param.key)) continue;
+    if (!unknown.empty()) unknown += ", ";
+    unknown += param.key;
+  }
+  if (unknown.empty()) return;
+  throw std::invalid_argument("unknown --params key for " + processor + ": " + unknown);
+}
+
+}  // namespace
 
 std::string read_text_file(const std::string& path) {
   std::ifstream file(path);
@@ -117,8 +203,14 @@ int cmd_mastering(const CliArgs& args, const Audio& audio) {
   if (!selector_count && has_params) {
     throw std::invalid_argument("--params requires --preset, --config, or --assistant");
   }
-  if ((args.has("enable-repair") || args.has("explain")) && !has_assistant) {
-    throw std::invalid_argument("--enable-repair and --explain require --assistant");
+  // Every option that only reaches an AssistantConfig field. Refusing them
+  // without --assistant rather than accepting and dropping them is the same rule
+  // the preset/config chain applies to the standalone loudness flags below.
+  for (const char* assistant_option :
+       {"enable-repair", "explain", "target-platform", "no-streaming-safe", "speech-mono-amount"}) {
+    if (args.has(assistant_option) && !has_assistant) {
+      throw std::invalid_argument(std::string("--") + assistant_option + " requires --assistant");
+    }
   }
 
   const bool use_chain = selector_count != 0;
@@ -132,7 +224,22 @@ int cmd_mastering(const CliArgs& args, const Audio& audio) {
       mastering::assistant::AssistantConfig assistant_config;
       assistant_config.target_lufs = args.get_float("target-lufs", -14.0f);
       assistant_config.ceiling_db = args.get_float("ceiling-db", -1.0f);
+      // get_float cannot distinguish an omitted option from one that carries the
+      // default value, and a delivery target only fills in what the caller left
+      // alone -- so the presence answer has to come from the parser, not from
+      // comparing the resulting number against the default.
+      assistant_config.target_lufs_explicit = args.has("target-lufs");
+      assistant_config.ceiling_db_explicit = args.has("ceiling-db");
       assistant_config.enable_repair = args.has("enable-repair");
+      // Assigned through the shared setter rather than by writing the field, so
+      // the name is validated against the same table every other surface uses.
+      // The registry has already refused an unknown name (it derives its choices
+      // from that table too), which makes this the assignment path rather than
+      // a second, differently-worded rejection.
+      mastering::assistant::set_target_platform(assistant_config,
+                                                args.get_string("target-platform", "streaming"));
+      assistant_config.prefer_streaming_safe = !args.has("no-streaming-safe");
+      assistant_config.speech_mono_amount = args.get_float("speech-mono-amount", 1.0f);
       auto suggestion = mastering::assistant::suggest_chain(audio, assistant_config);
       chain_config = std::move(suggestion.config);
       explanation = std::move(suggestion.explanation);
@@ -356,6 +463,7 @@ int cmd_mastering_processor(const CliArgs& args, const Audio& audio) {
     return 1;
   }
   const auto params = parse_mastering_params(args.get_string("params"));
+  reject_unknown_processor_params(processor, params);
   // Route stereo-only processors (and an explicit --stereo request) through the
   // true-stereo entry point; otherwise they would fail with an opaque mono
   // INVALID_PARAMETER. The mono path stays the default for everything else.
@@ -414,6 +522,7 @@ int cmd_eq(const CliArgs& args, const Audio& audio) {
                                     " cannot be combined with --params");
       }
     }
+    reject_unknown_processor_params("eq.equalizer", params);
   }
   if (params_text.empty()) {
     params.push_back({"band0.enabled", 1.0});
@@ -579,9 +688,9 @@ int cmd_mastering_pair_analyze(const CliArgs& args, const Audio& audio) {
   }
   const Audio reference = load_reference_audio_any_length(args, audio.sample_rate());
   const auto params = parse_mastering_params(args.get_string("params"));
-  std::cout << mastering::api::analyze_named_pair(analysis, audio.data(), reference.data(),
-                                                  audio.size(), reference.size(),
-                                                  audio.sample_rate(), params)
+  std::cout << analysis_json_for_cli(mastering::api::analyze_named_pair(
+                   analysis, audio.data(), reference.data(), audio.size(), reference.size(),
+                   audio.sample_rate(), params))
             << "\n";
   return 0;
 }
@@ -594,8 +703,8 @@ int cmd_mastering_stereo_analyze(const CliArgs& args, const Audio& audio) {
   }
   const Audio right = load_reference_audio(args, audio.sample_rate(), audio.size());
   const auto params = parse_mastering_params(args.get_string("params"));
-  std::cout << mastering::api::analyze_named_stereo(analysis, audio.data(), right.data(),
-                                                    audio.size(), audio.sample_rate(), params)
+  std::cout << analysis_json_for_cli(mastering::api::analyze_named_stereo(
+                   analysis, audio.data(), right.data(), audio.size(), audio.sample_rate(), params))
             << "\n";
   return 0;
 }

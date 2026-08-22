@@ -69,8 +69,10 @@
 #endif
 #ifdef SONARE_WITH_MASTERING
 #include "mastering/api/chain.h"
+#include "mastering/api/insert_factory.h"
 #include "mastering/api/named_processor.h"
 #include "mastering/api/presets.h"
+#include "mastering/assistant/platform_targets.h"
 #include "mastering/assistant/suggester.h"
 #include "mastering/maximizer/loudness_optimize.h"
 #endif

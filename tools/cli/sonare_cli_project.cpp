@@ -622,7 +622,11 @@ int cmd_project_import_smf(const CliArgs& args) {
   std::vector<uint8_t> smf;
   if (!read_binary_file(smf_path, &smf)) {
     std::cerr << color::red << "Error: cannot open SMF file: " << smf_path << color::reset << "\n";
-    return 1;
+    // A user-named input file that cannot be opened keeps the file-not-found
+    // class here for the same reason load_project_from_args does: a caller that
+    // branches on "fetch the input again" versus "the arguments are wrong" must
+    // get the same answer from whichever subcommand read the file.
+    return project_exit_code(SONARE_ERROR_FILE_NOT_FOUND);
   }
   ProjectHandle handle;
   SonareError err = sonare_project_create(&handle.ptr);
@@ -676,7 +680,7 @@ int cmd_project_import_midi2(const CliArgs& args) {
   if (!read_binary_file(midi2_path, &midi2)) {
     std::cerr << color::red << "Error: cannot open MIDI2 file: " << midi2_path << color::reset
               << "\n";
-    return 1;
+    return project_exit_code(SONARE_ERROR_FILE_NOT_FOUND);
   }
   ProjectHandle handle;
   SonareError err = sonare_project_create(&handle.ptr);

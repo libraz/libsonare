@@ -9,6 +9,7 @@
 #include <iomanip>
 #include <iostream>
 #include <limits>
+#include <locale>
 #include <numeric>
 #include <set>
 #include <stdexcept>
@@ -17,6 +18,10 @@
 
 #include "core/channel_layout.h"
 #include "util/exception.h"
+
+#ifdef SONARE_WITH_MASTERING
+#include "mastering/assistant/platform_targets.h"
+#endif
 
 #if defined(_WIN32)
 #include <io.h>
@@ -54,6 +59,15 @@ int cli_exit_code_for_error(sonare::ErrorCode error, bool legacy_mode) noexcept 
     default:
       return 10;
   }
+}
+
+JsonBuilder::JsonBuilder() {
+  // A std::ostringstream formats through the global C++ locale, not through
+  // LC_NUMERIC, so a host that has run std::locale::global with a de_DE-style
+  // locale makes every `--json` command emit `"lufs": -14,5` -- syntactically
+  // invalid JSON that no parser accepts, from a CLI that reports success. The
+  // matching policy for the core serializer is in util/json.h.
+  ss_.imbue(std::locale::classic());
 }
 
 JsonBuilder& JsonBuilder::begin_object() {
@@ -428,6 +442,26 @@ CliOptionDomain choices_of(std::vector<std::string> values, CliOptionDomainStage
   return domain;
 }
 
+// The accepted value set of an option that selects an enumerator by index.
+//
+// An index outside the enumeration is not a value the DSP can act on. The
+// switches that map one (mastering::api::eq_band_type and its siblings) answer
+// every unrecognized index with their first enumerator, so a typo'd `--type 999`
+// applies a peak filter, prints a normal JSON result and exits 0. Declaring the
+// range makes the refusal happen here, once, alongside every other domain --
+// rather than each handler re-deriving an enumerator count the registry cannot
+// see. `[lowest, highest]` is inclusive, and the refusal takes the
+// invalid-parameter class because the caller spelled a number correctly and
+// named a target that does not exist, which is what
+// mastering::api::checked_enum already reports for the same mistake arriving
+// through --params.
+CliOptionDomain enum_index(int lowest, int highest, CliOptionDomainStage stage) {
+  std::vector<std::string> values;
+  values.reserve(static_cast<size_t>(highest - lowest + 1));
+  for (int value = lowest; value <= highest; ++value) values.push_back(std::to_string(value));
+  return choices_of(std::move(values), stage);
+}
+
 CliOptionSpec with_domain(CliOptionSpec spec, CliOptionDomain domain) {
   spec.domain = std::move(domain);
   return spec;
@@ -470,17 +504,39 @@ CliOptionSpec true_peak_oversample_value() {
   return with_domain(int_value("true-peak-oversample", 4),
                      choices_of({"1", "2", "4", "8", "16"}, CliOptionDomainStage::Usage));
 }
+
+// Delivery target for the mastering assistant. The accepted names come from
+// mastering::assistant::platform_names() rather than a list restated here, which
+// is the derivation platform_targets.h describes: appending a row to that table
+// extends this option with no edit, and no spelling can drift from it. The
+// default matches AssistantConfig::target_platform, so an invocation without the
+// option keeps the streaming convention it had before the option existed.
+CliOptionSpec target_platform_value() {
+  return with_domain(
+      string_value("target-platform", "streaming"),
+      choices_of(sonare::mastering::assistant::platform_names(), CliOptionDomainStage::Usage));
+}
 #endif
 
 // `--fmax` must stay above `--fmin`; neither option's own domain can express
 // that, and the two pitch engines disagreed about it (pyin checked, yin did
 // not), so the CLI settles it before either is reached.
+//
+// The comparison is between the values the command will actually run with, not
+// between two supplied options: `--fmin 3000` on its own inverts the range just
+// as surely against the 2093 Hz default `--fmax`, and gating the check on both
+// being present let that invocation through to a `SONARE_CHECK` that names
+// neither option. The effective values are in the message because the offending
+// half is commonly the one the caller never typed.
 CliValidationError validate_pitch_frequency_order(const CliArgs& args) {
-  if (!args.has("fmin") || !args.has("fmax")) return {};
+  if (!args.has("fmin") && !args.has("fmax")) return {};
   const float minimum = args.get_float("fmin", 0.0f);
   const float maximum = args.get_float("fmax", 0.0f);
   if (maximum > minimum) return {};
-  return {"--fmax must be greater than --fmin", false};
+  std::ostringstream message;
+  message << "--fmax must be greater than --fmin (--fmin " << minimum << ", --fmax " << maximum
+          << ")";
+  return {message.str(), false};
 }
 
 #ifdef SONARE_WITH_ARRANGEMENT
@@ -649,15 +705,31 @@ const std::vector<CliCommandSpec>& build_cli_registry() {
                 {string_value("preset"), path_value("config"), number_value("target-lufs", -14.0),
                  number_value("ceiling-db", -1.0), string_value("params"), bits_value(),
                  true_peak_oversample_value(), path_value("report"), output_value(),
-                 flag("assistant"), flag("enable-repair"), flag("explain")});
+                 flag("assistant"), flag("enable-repair"), flag("explain"),
+                 // The remaining AssistantConfig fields. `prefer_streaming_safe`
+                 // defaults to true, so the reachable control is the one that
+                 // turns it off -- a `--prefer-streaming-safe` flag would only
+                 // ever restate the default. `--speech-mono-amount` carries no
+                 // domain because the suggester clamps it to [0, 1] rather than
+                 // refusing an outside value.
+                 target_platform_value(), flag("no-streaming-safe"),
+                 number_value("speech-mono-amount", 1.0)});
     add_command(commands, "mastering-processor", true,
                 {required_string("processor"), string_value("params"), bits_value(), output_value(),
                  flag("stereo")});
     add_command(
         commands, "eq", true,
-        {string_value("params"), int_value("type", 0), number_value("frequency-hz", 1000.0),
-         number_value("gain-db", 0.0), number_value("q", 1.0), int_value("coeff-mode", 0),
-         int_value("slope-db-oct", 12), int_value("placement", 0),
+        {string_value("params"),
+         // Each of these indexes a closed enumeration in mastering/eq/eq_band.h
+         // (EqBandType, BiquadCoeffMode, StereoPlacement, PhaseMode) or in
+         // LinearPhaseEqConfig::Resolution. The bound is the enumerator count,
+         // so an index past the end is refused instead of mapping to the first
+         // enumerator.
+         with_domain(int_value("type", 0), enum_index(0, 8, CliOptionDomainStage::Parameter)),
+         number_value("frequency-hz", 1000.0), number_value("gain-db", 0.0), number_value("q", 1.0),
+         with_domain(int_value("coeff-mode", 0), enum_index(0, 1, CliOptionDomainStage::Parameter)),
+         int_value("slope-db-oct", 12),
+         with_domain(int_value("placement", 0), enum_index(0, 4, CliOptionDomainStage::Parameter)),
          number_value("threshold-db", -24.0), number_value("ratio", 2.0),
          number_value("range-db", -6.0), number_value("attack-ms", 5.0),
          number_value("release-ms", 50.0),
@@ -666,10 +738,11 @@ const std::vector<CliCommandSpec>& build_cli_registry() {
          // "detector-delay-ms" storage key (see canonical_option_name()).
          number_value("detector-delay-ms", 0.0, false, false, true, {"lookahead-ms"}),
          number_value("sidechain-freq-hz", -1.0), number_value("sidechain-q", 1.0),
-         int_value("phase-mode", 1), int_value("resolution", 0), number_value("gain-scale", 1.0),
-         number_value("output-gain-db", 0.0), number_value("output-pan", 0.0), bits_value(),
-         output_value(), flag("proportional-q"), flag("dynamic"), flag("auto-threshold"),
-         flag("auto-gain")});
+         with_domain(int_value("phase-mode", 1), enum_index(0, 3, CliOptionDomainStage::Parameter)),
+         with_domain(int_value("resolution", 0), enum_index(0, 5, CliOptionDomainStage::Parameter)),
+         number_value("gain-scale", 1.0), number_value("output-gain-db", 0.0),
+         number_value("output-pan", 0.0), bits_value(), output_value(), flag("proportional-q"),
+         flag("dynamic"), flag("auto-threshold"), flag("auto-gain")});
     add_command(commands, "mastering-pair-processor", true,
                 {required_string("processor"), required_path("reference"), string_value("params"),
                  bits_value(), output_value()});
@@ -683,16 +756,16 @@ const std::vector<CliCommandSpec>& build_cli_registry() {
     add_command(commands, "mastering-stereo-analyses", false, {});
 #endif
 #ifdef SONARE_WITH_MIXING
+    // `mix` is the deprecated spelling of `mix-strip` and resolves through the
+    // alias path, which is why there is one row rather than two. Two rows that
+    // each named the other as an alias never used that path -- path lookup wins
+    // -- so each name was validated against its own copy of the option list, and
+    // an option added to one became an unknown option under the other.
     add_command(commands, "mix-strip", true,
                 {number_value("input-trim-db", 0.0), number_value("fader-db", 0.0),
                  number_value("pan", 0.0), string_value("pan-mode", "balance"),
                  number_value("width", 1.0), output_value()},
                 {"mix"});
-    add_command(commands, "mix", true,
-                {number_value("input-trim-db", 0.0), number_value("fader-db", 0.0),
-                 number_value("pan", 0.0), string_value("pan-mode", "balance"),
-                 number_value("width", 1.0), output_value()},
-                {"mix-strip"});
     add_command(commands, "mixing-presets", false, {});
     // The advertised default has to be one the command can actually run: an
     // empty string reaches the preset lookup and fails, and the handler's own
@@ -827,7 +900,11 @@ const std::vector<CliCommandSpec>& build_cli_registry() {
                  int_value("wait", 0)});
     add_command(
         commands, "vector-normalize", false,
-        {string_value("values"), int_value("norm-type", 0), number_value("threshold", 1e-12)});
+        {string_value("values"),
+         // Indexes NormType (inf, L1, L2, power); an index past the end used to
+         // fall through to the inf norm and report success.
+         with_domain(int_value("norm-type", 0), enum_index(0, 3, CliOptionDomainStage::Parameter)),
+         number_value("threshold", 1e-12)});
     add_command(commands, "pcen", false,
                 {string_value("values"), int_value("sample-rate", 22050),
                  number_value("time-constant", 0.4), number_value("gain", 0.98),
@@ -939,12 +1016,48 @@ bool is_false_flag_literal(const std::string& value) {
   return lowered == "false" || lowered == "0" || lowered == "no" || lowered == "off";
 }
 
-void assign_option_value(CliArgs& args, const std::string& key, const std::string& value) {
+void record_option(CliArgs& args, const std::string& spelling, const std::string& value,
+                   CliOptionOccurrence::Kind kind) {
+  args.option_occurrences.push_back({spelling, value, kind});
+}
+
+/// Projects the recorded occurrences onto `options` and `repeated_options`.
+///
+/// Run once, after the command token and the `project` subcommand are known, so
+/// that every occurrence is classified against the same registry entry no
+/// matter where on the command line it appeared. Handlers read only the two
+/// derived containers, so this is the single point where an occurrence acquires
+/// a canonical name and a repeatable option acquires its value list.
+void resolve_option_occurrences(CliArgs& args) {
   const CliCommandSpec* command = cli_command_spec_for_path(command_path_for_args(args));
-  const std::string canonical = canonical_option_name(command, key);
-  const CliOptionSpec* spec = option_for_spec(command, canonical);
-  if (spec != nullptr && spec->repeatable) args.repeated_options[canonical].push_back(value);
-  args.options[canonical] = value;
+  args.options.clear();
+  args.repeated_options.clear();
+  for (const auto& occurrence : args.option_occurrences) {
+    const std::string canonical = canonical_option_name(command, occurrence.spelling);
+    const CliOptionSpec* spec = option_for_spec(command, canonical);
+    switch (occurrence.kind) {
+      case CliOptionOccurrence::Kind::FlagOff:
+        args.options.erase(canonical);
+        break;
+      case CliOptionOccurrence::Kind::Flag:
+        args.options[canonical] = occurrence.value;
+        break;
+      case CliOptionOccurrence::Kind::ImplicitValue:
+        args.options[canonical] =
+            spec != nullptr && spec->implicit_optional_default.kind == CliOptionDefaultKind::String
+                ? spec->implicit_optional_default.string_value
+                : occurrence.value;
+        break;
+      case CliOptionOccurrence::Kind::MissingValue:
+        args.options[canonical] = "";
+        break;
+      case CliOptionOccurrence::Kind::Value:
+        if (spec != nullptr && spec->repeatable)
+          args.repeated_options[canonical].push_back(occurrence.value);
+        args.options[canonical] = occurrence.value;
+        break;
+    }
+  }
 }
 
 CliOptionValue static_default_for(const CliArgs& args, const std::string& key) {
@@ -1091,7 +1204,7 @@ CliArgs ArgParser::parse(int argc, char* argv[]) {
           parse_option(args, key, argv, i, argc, &value);
         }
       } else if (!end_of_options && arg.size() > 1 && arg[0] == '-') {
-        args.options[arg] = "true";
+        record_option(args, arg, "true", CliOptionOccurrence::Kind::Flag);
       } else if (args.command.empty()) {
         args.command = arg;
       } else {
@@ -1106,6 +1219,7 @@ CliArgs ArgParser::parse(int argc, char* argv[]) {
   } catch (const std::out_of_range& error) {
     throw CliUsageError(error.what());
   }
+  resolve_option_occurrences(args);
   return args;
 }
 
@@ -1183,7 +1297,7 @@ bool ArgParser::try_parse_global_option(CliArgs& args, const std::string& arg, c
   // then get_int("hop-length", ...) missed it, fell through to the registry
   // default, and silently computed with 512; the same hole hid every domain
   // this layer declares for a global option.
-  args.options[spec->name] = value;
+  record_option(args, spec->name, value, CliOptionOccurrence::Kind::Value);
   if (spec->name != "output") args.global_options.push_back(spec->name);
   return true;
 }
@@ -1192,22 +1306,21 @@ void ArgParser::parse_option(CliArgs& args, const std::string& key, char* argv[]
                              const std::string* inline_value) {
   const CliCommandSpec* command = cli_command_spec_for_path(command_path_for_args(args));
   const CliOptionSpec* spec = option_for_spec(command, key);
-  const std::string canonical = spec == nullptr ? key : spec->name;
   const CliOptionArity arity = spec == nullptr ? CliOptionArity::RequiredValue : spec->arity;
 
   if (arity == CliOptionArity::Flag) {
-    if (inline_value != nullptr && is_false_flag_literal(*inline_value))
-      args.options.erase(canonical);
-    else
-      args.options[canonical] = "true";
+    record_option(args, key, "true",
+                  inline_value != nullptr && is_false_flag_literal(*inline_value)
+                      ? CliOptionOccurrence::Kind::FlagOff
+                      : CliOptionOccurrence::Kind::Flag);
     return;
   }
   if (inline_value != nullptr) {
     if (inline_value->empty() && arity == CliOptionArity::RequiredValue) {
-      args.options[canonical] = "";
+      record_option(args, key, "", CliOptionOccurrence::Kind::MissingValue);
       args.missing_value_options.push_back("--" + key);
     } else {
-      assign_option_value(args, canonical, *inline_value);
+      record_option(args, key, *inline_value, CliOptionOccurrence::Kind::Value);
     }
     return;
   }
@@ -1215,17 +1328,14 @@ void ArgParser::parse_option(CliArgs& args, const std::string& key, char* argv[]
     const std::string next = argv[i + 1];
     const bool is_option = next.size() > 1 && next[0] == '-' && !is_negative_number(next);
     if (!is_option) {
-      assign_option_value(args, canonical, argv[++i]);
+      record_option(args, key, argv[++i], CliOptionOccurrence::Kind::Value);
       return;
     }
   }
   if (arity == CliOptionArity::OptionalValue) {
-    args.options[canonical] =
-        spec != nullptr && spec->implicit_optional_default.kind == CliOptionDefaultKind::String
-            ? spec->implicit_optional_default.string_value
-            : "true";
+    record_option(args, key, "true", CliOptionOccurrence::Kind::ImplicitValue);
   } else {
-    args.options[canonical] = "";
+    record_option(args, key, "", CliOptionOccurrence::Kind::MissingValue);
     args.missing_value_options.push_back("--" + key);
   }
 }

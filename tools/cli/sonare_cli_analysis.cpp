@@ -254,7 +254,12 @@ int cmd_sections(const CliArgs& args, const Audio& audio) {
         .begin_array();
     for (const auto& s : sections) {
       json.begin_object()
-          .kv("type", s.type_string())
+          // The same canonical spelling `analyze` serializes. A consumer that
+          // matches on `type == "chorus"` must not have to know which of the two
+          // commands produced the document, so the enum has one JSON spelling
+          // and Section::type_string() stays the human-facing rendering used by
+          // the text branch below.
+          .kv("type", canonical_section_type(s.type))
           .kv("start", s.start)
           .kv("end", s.end)
           .kv("energy", s.energy_level)

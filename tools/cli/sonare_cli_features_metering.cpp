@@ -596,7 +596,22 @@ int cmd_synthesize_rir(const CliArgs& args, const Audio&) {
     }
     return 1;
   }
-  save_wav(args.output_file, result.rir.data(), result.rir.size(), result.rir.sample_rate());
+  // Warnings survive a successful synthesis and describe a RIR the caller did
+  // not ask for -- a tail cut against max_seconds, a cap raised to fit the
+  // direct sound, a request reduced to early reflections alone. Dropping them
+  // made a truncated RIR indistinguishable from a complete one. They go to
+  // stderr in every mode so the --json document on stdout stays exactly the
+  // payload both CLIs publish.
+  for (const sonare::Diagnostic& diagnostic : result.diagnostics) {
+    if (diagnostic.severity != sonare::Diagnostic::Severity::Warning) continue;
+    std::cerr << color::yellow << "warning: " << diagnostic.code << ": " << diagnostic.message
+              << color::reset << "\n";
+  }
+  // 24-bit, not the save_wav default. A synthesized RIR carries its physical
+  // 1/(4*pi*d) attenuation, so its peak sits far below full scale and 16-bit
+  // quantization would cost the tail roughly 36 dB of the headroom it needs;
+  // half the reported samples came back exactly zero.
+  save_wav(args.output_file, result.rir.data(), result.rir.size(), result.rir.sample_rate(), 24);
   if (args.json_output) {
     JsonBuilder()
         .begin_object()

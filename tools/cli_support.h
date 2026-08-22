@@ -12,6 +12,10 @@
 
 class JsonBuilder {
  public:
+  /// Pins the output stream to the classic locale, so that a real number is
+  /// written with a `.` decimal separator regardless of the host's locale.
+  JsonBuilder();
+
   JsonBuilder& begin_object();
   JsonBuilder& end_object();
   JsonBuilder& begin_array();
@@ -44,6 +48,40 @@ class JsonBuilder {
   std::vector<bool> needs_comma_;
 };
 
+/// One option occurrence the parser accepted, in command-line order, recorded
+/// as it was written rather than as it will be interpreted.
+///
+/// What an occurrence means -- its canonical name, whether it is repeatable,
+/// the value a bare optional-value occurrence stands for -- comes from the
+/// selected command's registry entry, and that entry is only resolvable once
+/// the command token (and, for `project`, its subcommand) has been read. An
+/// occurrence written before the command token has no spec to consult at the
+/// moment it is parsed, so classifying it there makes an option's meaning
+/// depend on its position: a pre-command `--set` was landing in `options` as a
+/// last-one-wins scalar and never reaching `repeated_options`, leaving the
+/// handler with zero assignments and an exit code of 0. The parser records what
+/// it consumed; ArgParser::parse resolves the whole list once, at the end,
+/// against the command it now knows.
+struct CliOptionOccurrence {
+  enum class Kind {
+    Value,          ///< An explicit value was consumed from the command line.
+    ImplicitValue,  ///< A bare optional-value occurrence; the spec supplies the value.
+    Flag,           ///< A flag occurrence, or a bare short option.
+    FlagOff,        ///< `--flag=false`, which cancels any earlier occurrence.
+    MissingValue,   ///< A required value was absent; recorded so the key still exists.
+  };
+
+  /// The option name the parser read, without its leading dashes. A global
+  /// option is recorded under its registry name, because the lexical scan has
+  /// already resolved it against a command-independent list; every other
+  /// occurrence keeps the spelling it was given, so resolution is the one place
+  /// an alias is mapped onto its canonical name. A bare short option matching
+  /// no spec keeps its dash and stays verbatim.
+  std::string spelling;
+  std::string value;
+  Kind kind = Kind::Value;
+};
+
 struct CliArgs {
   std::string command;
   std::string input_file;
@@ -63,6 +101,10 @@ struct CliArgs {
   float fmin = 0.0f;
   float fmax = 0.0f;
 
+  // Every option occurrence the parser accepted, in command-line order. This is
+  // the parser's own record; `options` and `repeated_options` below are derived
+  // from it once the command is known and are what handlers read.
+  std::vector<CliOptionOccurrence> option_occurrences;
   std::map<std::string, std::string> options;
   // Every occurrence of a repeatable option, in command-line order. A
   // repeatable option also lands in `options` (last occurrence wins) so that

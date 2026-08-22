@@ -8,6 +8,7 @@
 #include <array>
 #include <catch2/catch_test_macros.hpp>
 #include <catch2/matchers/catch_matchers_string.hpp>
+#include <cctype>
 #include <cmath>
 #include <cstdint>
 #include <cstdio>
@@ -16,6 +17,7 @@
 #include <fstream>
 #include <initializer_list>
 #include <limits>
+#include <locale>
 #include <memory>
 #include <set>
 #include <sstream>
@@ -123,12 +125,36 @@ unsigned int wav_header_sample_rate(const std::string& path) {
 }
 #endif  // SONARE_WITH_ARRANGEMENT
 
+#if defined(SONARE_WITH_ACOUSTIC_SIM)
+/// @brief Reads the PCM WAV bits-per-sample field from a RIFF header.
+///
+/// load_wav() returns floats, so the only way to observe the width a command
+/// chose to write is to read the header field itself.
+unsigned int wav_header_bits_per_sample(const std::string& path) {
+  std::ifstream file(path, std::ios::binary);
+  std::array<unsigned char, 36> header{};
+  if (!file.read(reinterpret_cast<char*>(header.data()), header.size())) return 0;
+  return static_cast<unsigned int>(header[34]) | (static_cast<unsigned int>(header[35]) << 8U);
+}
+#endif  // SONARE_WITH_ACOUSTIC_SIM
+
 /// @brief Custom deleter for FILE* using pclose.
 struct PipeDeleter {
   void operator()(FILE* fp) const {
     if (fp) pclose(fp);
   }
 };
+
+/// @brief ASCII-lowercases a string, for comparing a serialized enum spelling
+///        against its own canonical form.
+std::string to_lowercase(const std::string& value) {
+  std::string out;
+  out.reserve(value.size());
+  for (char c : value) {
+    out.push_back(static_cast<char>(std::tolower(static_cast<unsigned char>(c))));
+  }
+  return out;
+}
 
 /// @brief Executes a shell command and returns output.
 /// @param cmd Command to execute
@@ -231,11 +257,68 @@ void create_clipped_wav(const std::string& path, int sample_rate = 22050) {
   save_wav(path, samples, sample_rate);
 }
 
+/// @brief Measures the amplitude of one frequency in a buffer.
+/// @param samples Signal to probe
+/// @param sample_rate Sample rate of @p samples
+/// @param frequency Probe frequency in Hz
+///
+/// A single-bin correlation rather than an FFT, so the probe frequency does not
+/// have to fall on a bin center: a transposition test compares magnitudes at
+/// frequencies chosen by the interval under test, not by the transform size.
+float tone_magnitude(const std::vector<float>& samples, int sample_rate, float frequency) {
+  if (samples.empty()) return 0.0f;
+  const double omega = 2.0 * sonare::constants::kPiD * frequency / sample_rate;
+  double real = 0.0;
+  double imag = 0.0;
+  for (size_t i = 0; i < samples.size(); ++i) {
+    const double phase = omega * static_cast<double>(i);
+    real += samples[i] * std::cos(phase);
+    imag += samples[i] * std::sin(phase);
+  }
+  return static_cast<float>(2.0 * std::sqrt(real * real + imag * imag) /
+                            static_cast<double>(samples.size()));
+}
+
 const std::string CLI = get_cli_path();
 const std::string TEST_WAV = unique_temp_path(".wav");
 const std::string TEST_OUT = unique_temp_path("_out.wav");
 
+/// Restores the global C++ locale, so that a locale a test installs cannot
+/// change how a later case formats numbers.
+struct GlobalLocaleGuard {
+  std::locale previous = std::locale();
+
+  ~GlobalLocaleGuard() { std::locale::global(previous); }
+};
+
 }  // namespace
+
+TEST_CASE("CLI JSON numbers keep a dot decimal separator under any host locale", "[cli][json]") {
+  // std::ostringstream formats through the global C++ locale rather than
+  // through LC_NUMERIC, so std::setlocale does not reproduce this and only
+  // std::locale::global does. On a host whose global locale marks decimals with
+  // a comma, an un-imbued builder emits `"lufs": -14,5` -- a payload no JSON
+  // parser accepts, from a command that still exits 0.
+  std::locale comma_locale;
+  try {
+    comma_locale = std::locale("de_DE.UTF-8");
+  } catch (const std::runtime_error&) {
+    SKIP("de_DE.UTF-8 is not installed on this host");
+  }
+
+  GlobalLocaleGuard guard;
+  std::locale::global(comma_locale);
+
+  const std::string from_double =
+      JsonBuilder().begin_object().kv("lufs", -14.5).end_object().build();
+  REQUIRE_THAT(from_double, ContainsSubstring("\"lufs\": -14.5"));
+  REQUIRE(from_double.find(',') == std::string::npos);
+
+  const std::string from_float =
+      JsonBuilder().begin_object().kv("peak", -1.25f).end_object().build();
+  REQUIRE_THAT(from_float, ContainsSubstring("\"peak\": -1.25"));
+  REQUIRE(from_float.find(',') == std::string::npos);
+}
 
 // Native-only commands have no cross-surface contract, so the conformance
 // harness (which runs every case on both surfaces) has no place for them by
@@ -1310,6 +1393,72 @@ TEST_CASE("CLI applies every repeated --set assignment, not just the last",
   REQUIRE_THAT(output, ContainsSubstring("1.5"));
 }
 
+TEST_CASE("CLI option values do not depend on the option's side of the command word",
+          "[cli][argument-contract]") {
+  const auto parse = [](std::initializer_list<const char*> words) {
+    std::vector<std::string> storage(words.begin(), words.end());
+    std::vector<char*> argv;
+    argv.reserve(storage.size());
+    for (auto& word : storage) argv.push_back(word.data());
+    return ArgParser::parse(static_cast<int>(argv.size()), argv.data());
+  };
+
+  SECTION("a repeatable option written before the command keeps every occurrence") {
+    // The parser used to classify an occurrence the moment it read it, so one
+    // written before the command token had no registry entry to consult: --set
+    // reached `options` as a last-one-wins scalar and never reached
+    // `repeated_options`. get_string_list() then reported zero assignments and
+    // the handler returned success on an unedited config.
+    const CliArgs leading = parse({"sonare-cli", "--set", "dsp.retune.semitones=-9.375", "--set",
+                                   "dsp.formant.factor=1.5", "voice-preset-validate", "p.json"});
+    const CliArgs trailing =
+        parse({"sonare-cli", "voice-preset-validate", "p.json", "--set",
+               "dsp.retune.semitones=-9.375", "--set", "dsp.formant.factor=1.5"});
+    const std::vector<std::string> expected = {"dsp.retune.semitones=-9.375",
+                                               "dsp.formant.factor=1.5"};
+    REQUIRE(leading.get_string_list("set") == expected);
+    REQUIRE(trailing.get_string_list("set") == expected);
+    REQUIRE(leading.options == trailing.options);
+    REQUIRE(leading.repeated_options == trailing.repeated_options);
+    REQUIRE(validate_cli_arguments(leading, false).empty());
+  }
+
+  SECTION("a leading alias lands under the same canonical key as a trailing one") {
+    // Reading through an alias always worked, but the key the alias was stored
+    // under depended on whether the command was known yet, which is the same
+    // position dependence seen from the other end.
+    const CliArgs leading =
+        parse({"sonare-cli", "--target-sr", "8000", "resample", "in.wav", "-o", "out.wav"});
+    const CliArgs trailing =
+        parse({"sonare-cli", "resample", "in.wav", "--target-sr", "8000", "-o", "out.wav"});
+    REQUIRE(leading.get_int("target-rate", -1) == 8000);
+    REQUIRE(leading.options == trailing.options);
+    REQUIRE(validate_cli_arguments(leading, true).empty());
+  }
+}
+
+TEST_CASE("CLI --set applies identically on either side of the command word",
+          "[cli][argument-contract]") {
+  const std::string preset_path = unique_temp_path("_leading_set_preset.json");
+  auto [gen_code, gen_output] = exec_command(CLI + " voice-preset > " + preset_path);
+  REQUIRE(gen_code == 0);
+
+  const std::string assignments = " --set dsp.retune.semitones=-9.375 --set dsp.formant.factor=1.5";
+  auto [trailing_code, trailing_output] =
+      exec_command(CLI + " voice-preset-validate " + preset_path + assignments + " --json");
+  auto [leading_code, leading_output] =
+      exec_command(CLI + assignments + " voice-preset-validate " + preset_path + " --json");
+  std::remove(preset_path.c_str());
+
+  REQUIRE(trailing_code == 0);
+  REQUIRE(leading_code == trailing_code);
+  // Byte-identical, not merely both successful: the leading form used to exit 0
+  // with "ok": true and every assignment dropped, so an unedited render shipped
+  // as a success and only the value told the two apart.
+  REQUIRE(leading_output == trailing_output);
+  REQUIRE_THAT(leading_output, ContainsSubstring("-9.375"));
+}
+
 TEST_CASE("CLI --set delivers a JSON value that contains commas intact",
           "[cli][argument-contract]") {
   // Repeated --set was folded into one comma-joined string and split back
@@ -1427,6 +1576,141 @@ TEST_CASE("CLI rejects -o for commands that produce no file output", "[cli][argu
   }
 }
 
+TEST_CASE("CLI refuses an enumerator index outside its enumeration", "[cli][argument-contract]") {
+  // The switches that map one of these indices answer every unrecognized value
+  // with their first enumerator, so an unchecked `--type 999` applied a peak
+  // filter, wrote a normal --json payload and exited 0 -- a caller who mistyped
+  // a high-pass got a bell curve with nothing to say so. The refusal is declared
+  // in the registry, next to the option, and enforced once before dispatch, so
+  // it needs no audio file to happen.
+  create_test_wav(TEST_WAV);
+  const std::string eq_output = unique_temp_path("_enum_eq.wav");
+
+  struct EnumOption {
+    const char* command;
+    const char* option;
+    const char* first_rejected;
+    const char* last_accepted;
+    // False when the last enumerator is inside the domain but unreachable
+    // through this command for an unrelated reason, so only the domain verdict
+    // can be asserted. `--placement` is the one case: mid and side ask for a
+    // stereo backend, and the CLI loads every input as mono.
+    bool last_accepted_runs;
+    std::string rest;
+  };
+  const std::vector<EnumOption> options = {
+#ifdef SONARE_WITH_MASTERING
+      {"eq", "type", "9", "8", true, TEST_WAV + " -o " + eq_output + " -q"},
+      {"eq", "coeff-mode", "2", "1", true, TEST_WAV + " -o " + eq_output + " -q"},
+      {"eq", "placement", "5", "4", false, TEST_WAV + " -o " + eq_output + " -q"},
+      {"eq", "phase-mode", "4", "3", true, TEST_WAV + " -o " + eq_output + " -q"},
+      {"eq", "resolution", "6", "5", true, TEST_WAV + " -o " + eq_output + " -q"},
+#endif
+      {"vector-normalize", "norm-type", "4", "3", true, "--values 1,2,3"},
+  };
+
+  for (const EnumOption& option : options) {
+    CAPTURE(option.command, option.option);
+    const std::string flag = std::string(" --") + option.option + " ";
+    const std::string expected = std::string("invalid value for --") + option.option;
+
+    auto [rejected_code, rejected_output] =
+        exec_command(CLI + " " + option.command + flag + option.first_rejected + " " + option.rest);
+    REQUIRE(rejected_code == 3);
+    REQUIRE_THAT(rejected_output, ContainsSubstring(expected));
+
+    auto [negative_code, negative_output] =
+        exec_command(CLI + " " + option.command + flag + "-1 " + option.rest);
+    REQUIRE(negative_code == 3);
+    REQUIRE_THAT(negative_output, ContainsSubstring(expected));
+
+    // The last enumerator is inside the domain, so it must get past validation
+    // rather than be refused by an off-by-one bound.
+    auto [accepted_code, accepted_output] =
+        exec_command(CLI + " " + option.command + flag + option.last_accepted + " " + option.rest);
+    REQUIRE_THAT(accepted_output, !ContainsSubstring(expected));
+    if (option.last_accepted_runs) REQUIRE(accepted_code == 0);
+  }
+  std::remove(eq_output.c_str());
+}
+
+TEST_CASE("CLI checks --fmin against the effective --fmax, not only a supplied one",
+          "[cli][argument-contract]") {
+  // `--fmin 3000` inverts the range against the 2093 Hz default `--fmax` just as
+  // surely as an explicit pair does. Gating the cross-option check on both being
+  // present let this invocation reach a core SONARE_CHECK that names neither
+  // option and reports the invalid-parameter class, so the same mistake had two
+  // exit codes and two messages depending on how it was typed.
+  create_test_wav(TEST_WAV);
+
+  auto [code, output] = exec_command(CLI + " pitch " + TEST_WAV + " --fmin 3000 -q");
+  REQUIRE(code == 2);
+  REQUIRE_THAT(output, ContainsSubstring("--fmax must be greater than --fmin"));
+  // The effective value of the half the caller never typed is what explains the
+  // refusal.
+  REQUIRE_THAT(output, ContainsSubstring("2093"));
+
+  // The symmetric case: a lone --fmax below the 65 Hz default --fmin.
+  auto [reverse_code, reverse_output] = exec_command(CLI + " pitch " + TEST_WAV + " --fmax 40 -q");
+  REQUIRE(reverse_code == 2);
+  REQUIRE_THAT(reverse_output, ContainsSubstring("--fmax must be greater than --fmin"));
+
+  // A valid lone --fmin still runs.
+  auto [ok_code, ok_output] = exec_command(CLI + " pitch " + TEST_WAV + " --fmin 100 --json -q");
+  REQUIRE(ok_code == 0);
+  REQUIRE_THAT(ok_output, !ContainsSubstring("--fmax must be greater"));
+}
+
+#ifdef SONARE_WITH_MIXING
+TEST_CASE("CLI resolves the deprecated mix spelling through the alias path",
+          "[cli][registry][argument-contract]") {
+  // One registry row, reached under both names. Two rows that each named the
+  // other as an alias never used the alias path -- path lookup wins -- so each
+  // name was validated against its own copy of the option list and an option
+  // added to one became an unknown option under the other.
+  const CliCommandSpec* canonical = cli_command_spec_for_path("mix-strip");
+  const CliCommandSpec* alias = cli_command_spec_for_path("mix");
+  REQUIRE(canonical != nullptr);
+  REQUIRE(alias == canonical);
+  REQUIRE(std::find(canonical->aliases.begin(), canonical->aliases.end(), "mix") !=
+          canonical->aliases.end());
+
+  size_t rows = 0;
+  for (const auto& command : cli_command_registry()) {
+    if (command.path == "mix" || command.path == "mix-strip") ++rows;
+  }
+  REQUIRE(rows == 1);
+
+  // Both spellings therefore accept the same options and reject the same ones.
+  for (const std::string name : {"mix", "mix-strip"}) {
+    CAPTURE(name);
+    auto [code, output] = exec_command(CLI + " " + name + " --definitely-unknown-option");
+    REQUIRE(code != 0);
+    REQUIRE_THAT(output, ContainsSubstring("Unknown option"));
+
+    auto [width_code, width_output] = exec_command(CLI + " " + name + " --width 1.5");
+    REQUIRE_THAT(width_output, !ContainsSubstring("Unknown option"));
+    (void)width_code;
+  }
+}
+#endif  // SONARE_WITH_MIXING
+
+TEST_CASE("CLI reports a failed output write as an encode failure", "[cli][argument-contract]") {
+  // A `-o` that resolves to a directory is an ordinary shell mistake, and it
+  // fails at the atomic rename and nowhere else. Reporting it as a decode
+  // failure told the caller their *input* could not be read; every other stage
+  // of the same write already reported the encode class.
+  create_test_wav(TEST_WAV);
+  const std::string directory = unique_temp_path("_outdir");
+  REQUIRE(::mkdir(directory.c_str(), 0700) == 0);
+
+  auto [code, output] = exec_command(CLI + " normalize " + TEST_WAV + " -o " + directory + " -q");
+  REQUIRE(code == 12);
+  REQUIRE_THAT(output, ContainsSubstring("finalize"));
+
+  ::rmdir(directory.c_str());
+}
+
 TEST_CASE("CLI effect commands require an output destination", "[cli]") {
   // Offline-effect output contract: commands that render audio require -o and
   // report the same invalid-parameter exit code when it is missing.
@@ -1530,6 +1814,47 @@ TEST_CASE("CLI acoustic commands preserve the default seed for non-positive valu
   REQUIRE(morph_default == morph_one);
   REQUIRE(morph_default != morph_other);
   std::remove(input.c_str());
+}
+
+TEST_CASE("CLI synthesize-rir reports its warning diagnostics and keeps the tail's headroom",
+          "[cli][acoustic]") {
+  // A max_seconds below the direct sound's own arrival raises three warnings at
+  // once, none of which sets has_error: the length was clamped, the cap was
+  // raised to fit the direct sound, and the request came back as early
+  // reflections with no diffuse tail. Discarding them made a truncated RIR
+  // indistinguishable from a complete one under a green exit.
+  const std::string truncated = unique_temp_path("_rir_truncated.wav");
+  auto [code, output] = exec_command(CLI + " synthesize-rir --max-seconds 0.005 -o " + truncated +
+                                     " --sample-rate 22050 --json");
+  REQUIRE(code == 0);
+  for (const char* diagnostic :
+       {"acoustic.rir_length_clamped", "acoustic.rir_length_floored", "acoustic.no_late_tail"}) {
+    CAPTURE(diagnostic);
+    REQUIRE_THAT(output, ContainsSubstring(diagnostic));
+  }
+
+  // The diagnostics go to stderr, so the JSON document on stdout stays exactly
+  // the payload both CLIs publish.
+  const std::string stdout_only = output.substr(output.find('{'));
+  const auto payload = sonare::util::json::parse_strict(stdout_only);
+  REQUIRE(payload.size() == 3);
+  for (const char* key : {"output", "samples", "sample_rate"}) REQUIRE(payload.contains(key));
+
+  // A RIR carries its physical 1/(4*pi*d) attenuation, so its peak sits far
+  // below full scale; 16-bit PCM spends roughly 36 dB of the headroom the tail
+  // needs, and half the reported samples came back exactly zero.
+  REQUIRE(wav_header_bits_per_sample(truncated) == 24);
+  std::remove(truncated.c_str());
+
+  // A request the synthesizer can satisfy in full stays silent, so a warning
+  // line is evidence about that run rather than boilerplate.
+  const std::string complete = unique_temp_path("_rir_complete.wav");
+  auto [full_code, full_output] = exec_command(CLI + " synthesize-rir --max-seconds 2 -o " +
+                                               complete + " --sample-rate 22050 --json");
+  REQUIRE(full_code == 0);
+  REQUIRE_THAT(full_output, !ContainsSubstring("warning:"));
+  REQUIRE(wav_header_bits_per_sample(complete) == 24);
+  std::remove(complete.c_str());
 }
 #endif
 
@@ -1814,6 +2139,29 @@ TEST_CASE("CLI sections command", "[cli]") {
     REQUIRE(code == 0);
     REQUIRE_THAT(output, ContainsSubstring("\"form\""));
     REQUIRE_THAT(output, ContainsSubstring("\"sections\""));
+  }
+
+  SECTION("section type uses the same canonical spelling analyze does") {
+    // Both commands serialize the same enum from the same translation unit, so a
+    // consumer matching on `type == "chorus"` must not have to know which one
+    // produced the document. `sections` used the human-facing Title-Case
+    // rendering, which matched nothing a script written against `analyze` looks
+    // for and produced no error to explain it.
+    auto [sections_code, sections_output] =
+        exec_command(CLI + " sections " + TEST_WAV + " --json -q");
+    REQUIRE(sections_code == 0);
+    const auto sections_json = sonare::util::json::parse_strict(sections_output);
+    REQUIRE_FALSE(sections_json["sections"].as_array().empty());
+
+    std::set<std::string> spellings;
+    for (const auto& section : sections_json["sections"].as_array()) {
+      spellings.insert(section["type"].as_string());
+    }
+    for (const std::string& spelling : spellings) {
+      CAPTURE(spelling);
+      REQUIRE(spelling == to_lowercase(spelling));
+      REQUIRE(spelling.find(' ') == std::string::npos);
+    }
   }
 }
 
@@ -2341,6 +2689,48 @@ TEST_CASE("CLI pitch-shift command", "[cli]") {
   }
 }
 
+TEST_CASE("CLI pitch-correct transposes by the whole requested interval", "[cli]") {
+  // The handler fed a synthetic single-frame F0Track to the time-varying
+  // correction path, so one hop of the retune IIR applied a fraction of the
+  // interval -- about a fifth of it at 44.1 kHz with the default retune speed,
+  // and a different fraction at every other sample rate. The command names the
+  // interval outright, so the whole of it has to reach the output.
+  const std::string input = unique_temp_path("_pitch_correct_in.wav");
+  const std::string output_path = unique_temp_path("_pitch_correct_out.wav");
+  const int sample_rate = 22050;
+  const float source_hz = 220.0f;
+  create_test_wav(input, 1.0f, source_hz, sample_rate);
+
+  auto [code, output] =
+      exec_command(CLI + " pitch-correct " + input + " --current-midi 60 --target-midi 72 -o " +
+                   output_path + " -q");
+  REQUIRE(code == 0);
+
+  const auto [samples, rendered_rate] = load_wav(output_path);
+  std::remove(input.c_str());
+  std::remove(output_path.c_str());
+  REQUIRE(rendered_rate == sample_rate);
+  REQUIRE_FALSE(samples.empty());
+
+  // Twelve semitones up doubles the frequency. The whole band between the
+  // source and the octave is swept rather than the octave alone, because the
+  // fraction the defect applied moves with the sample rate -- 297 Hz here, a
+  // different tone at 44.1 kHz -- so an assertion naming one wrong frequency
+  // would pass on the next rate.
+  const float octave = tone_magnitude(samples, rendered_rate, 2.0f * source_hz);
+  float strongest_partial = 0.0f;
+  float strongest_partial_hz = 0.0f;
+  for (float probe = source_hz; probe < 2.0f * source_hz - 20.0f; probe += 2.0f) {
+    const float magnitude = tone_magnitude(samples, rendered_rate, probe);
+    if (magnitude > strongest_partial) {
+      strongest_partial = magnitude;
+      strongest_partial_hz = probe;
+    }
+  }
+  INFO("strongest partially corrected tone: " << strongest_partial_hz << " Hz");
+  REQUIRE(octave > 4.0f * strongest_partial);
+}
+
 TEST_CASE("CLI time-stretch command", "[cli]") {
   create_test_wav(TEST_WAV);
   std::remove(TEST_OUT.c_str());
@@ -2793,8 +3183,8 @@ TEST_CASE("CLI mastering command", "[cli][mastering]") {
         exec_command(CLI + " mastering-pair-analyze " + TEST_WAV + " --reference " + ref +
                      " --analysis match.referenceLoudness -q");
     REQUIRE(analysis_code == 0);
-    REQUIRE_THAT(analysis_output, ContainsSubstring("\"sourceLufs\""));
-    REQUIRE_THAT(analysis_output, ContainsSubstring("\"referenceLufs\""));
+    REQUIRE_THAT(analysis_output, ContainsSubstring("\"source_lufs\""));
+    REQUIRE_THAT(analysis_output, ContainsSubstring("\"reference_lufs\""));
   }
 
   SECTION("pair analysis accepts independent source and reference lengths") {
@@ -2804,8 +3194,8 @@ TEST_CASE("CLI mastering command", "[cli][mastering]") {
         exec_command(CLI + " mastering-pair-analyze " + TEST_WAV + " --reference " + short_ref +
                      " --analysis match.referenceLoudness -q");
     REQUIRE(analysis_code == 0);
-    REQUIRE_THAT(analysis_output, ContainsSubstring("\"sourceLufs\""));
-    REQUIRE_THAT(analysis_output, ContainsSubstring("\"referenceLufs\""));
+    REQUIRE_THAT(analysis_output, ContainsSubstring("\"source_lufs\""));
+    REQUIRE_THAT(analysis_output, ContainsSubstring("\"reference_lufs\""));
   }
 
   SECTION("runs stereo analysis") {
@@ -2814,6 +3204,102 @@ TEST_CASE("CLI mastering command", "[cli][mastering]") {
                      " --analysis stereo.monoCompatCheck -q");
     REQUIRE(code == 0);
     REQUIRE_THAT(output, ContainsSubstring("\"correlation\""));
+  }
+
+  SECTION("--target-platform moves the loudness the assistant masters to") {
+    // The delivery target is the whole point of the option, so this reads the
+    // rendered output loudness rather than a flag round-trip: with the target
+    // unreachable from the CLI, someone mastering for EBU R128 broadcast
+    // silently got the -14 LUFS streaming convention, a 9 dB error under exit 0.
+    const auto master_to = [&](const std::string& platform) {
+      const std::string out_path = unique_temp_path("_platform.wav");
+      const std::string option = platform.empty() ? "" : " --target-platform " + platform;
+      auto [code, output] = exec_command(CLI + " mastering " + TEST_WAV + " --assistant" + option +
+                                         " -o " + out_path + " --json -q");
+      REQUIRE(code == 0);
+      const auto payload = sonare::util::json::parse_strict(output);
+      std::remove(out_path.c_str());
+      return payload["output_lufs"].as_number();
+    };
+
+    const double streaming = master_to("");
+    CHECK(streaming < -13.5);
+    CHECK(streaming > -14.5);
+    // Named explicitly, the default target must land in the same place as the
+    // omitted one.
+    CHECK(master_to("streaming") == streaming);
+
+    const double broadcast = master_to("broadcast");
+    CHECK(broadcast < -22.5);
+    CHECK(broadcast > -23.5);
+
+    const double club = master_to("club");
+    CHECK(club < -8.5);
+    CHECK(club > -9.5);
+  }
+
+  SECTION(
+      "the assistant controls are refused without --assistant and validated against the table") {
+    // Every accepted name comes from the delivery-target table, so an unknown
+    // one is a usage error naming the set rather than a silently kept default.
+    auto [unknown_code, unknown_output] = exec_command(
+        CLI + " mastering " + TEST_WAV + " --assistant --target-platform bogus --json -q");
+    REQUIRE(unknown_code == 2);
+    REQUIRE_THAT(unknown_output, ContainsSubstring("invalid value for --target-platform"));
+    REQUIRE_THAT(unknown_output, ContainsSubstring("broadcast"));
+
+    // These reach an AssistantConfig field and nothing else, so supplying one
+    // without --assistant is refused instead of accepted and dropped.
+    for (const std::string option :
+         {"--target-platform broadcast", "--no-streaming-safe", "--speech-mono-amount 0.5"}) {
+      CAPTURE(option);
+      auto [code, output] = exec_command(CLI + " mastering " + TEST_WAV + " " + option + " -q");
+      REQUIRE(code == 3);
+      REQUIRE_THAT(output, ContainsSubstring("requires --assistant"));
+    }
+  }
+
+  SECTION("--no-streaming-safe reaches the suggester") {
+    // prefer_streaming_safe defaults to true, so the reachable control is the
+    // one that turns it off, and the repair explanation is where the suggester
+    // reports which of the two it applied.
+    auto [safe_code, safe_output] = exec_command(
+        CLI + " mastering " + TEST_WAV + " --assistant --enable-repair --explain --json -q");
+    REQUIRE(safe_code == 0);
+    REQUIRE_THAT(safe_output, ContainsSubstring("streaming-safe repair enabled"));
+
+    auto [open_code, open_output] =
+        exec_command(CLI + " mastering " + TEST_WAV +
+                     " --assistant --enable-repair --no-streaming-safe --explain --json -q");
+    REQUIRE(open_code == 0);
+    REQUIRE_THAT(open_output, !ContainsSubstring("streaming-safe repair enabled"));
+    REQUIRE_THAT(open_output, ContainsSubstring("repair stages enabled"));
+  }
+
+  SECTION("a --params key the processor does not read is named and refused") {
+    // insert_param_names() reports every key the processor's config builder
+    // probes, so a key outside that set took no effect at all: a typo used to
+    // ship a chain containing none of the edit the caller asked for, under exit
+    // 0 and a normal --json payload.
+    const std::string eq_out = unique_temp_path("_eq_params.wav");
+    auto [code, output] =
+        exec_command(CLI + " eq " + TEST_WAV + " --params band0.bogusKey=42 -o " + eq_out + " -q");
+    REQUIRE(code == 3);
+    REQUIRE_THAT(output, ContainsSubstring("unknown --params key for eq.equalizer"));
+    REQUIRE_THAT(output, ContainsSubstring("band0.bogusKey"));
+
+    // A key the processor does read still runs.
+    auto [ok_code, ok_output] =
+        exec_command(CLI + " eq " + TEST_WAV + " --params band0.gainDb=3 -o " + eq_out + " -q");
+    REQUIRE(ok_code == 0);
+
+    // The same check applies to the named-processor entry point.
+    auto [processor_code, processor_output] =
+        exec_command(CLI + " mastering-processor " + TEST_WAV +
+                     " --processor dynamics.compressor --params bogusKey=1 -q");
+    REQUIRE(processor_code == 3);
+    REQUIRE_THAT(processor_output, ContainsSubstring("unknown --params key"));
+    std::remove(eq_out.c_str());
   }
 }
 #endif
@@ -3350,6 +3836,54 @@ TEST_CASE("CLI project command group", "[cli]") {
     auto [code, output] = exec_command(CLI + " project");
     REQUIRE(code == 2);
     REQUIRE_THAT(output, ContainsSubstring("PROJECT SUBCOMMANDS"));
+  }
+
+  SECTION("--help lists every subcommand instead of an empty option banner") {
+    // `project` has no registry record of its own -- its contract lives in the
+    // ten `project.<subcommand>` leaves -- so the generic per-command help
+    // resolved to an empty option list and named none of them. The request goes
+    // to the handler, which owns the full usage text, and the ten subcommands
+    // and the four input options are what makes that observable.
+    auto [code, output] = exec_command(CLI + " project --help");
+    REQUIRE(code == 0);
+    for (const char* subcommand : {"abi", "synth-presets", "new", "validate", "compile", "bounce",
+                                   "export-smf", "import-smf", "export-midi2", "import-midi2"}) {
+      CAPTURE(subcommand);
+      REQUIRE_THAT(output, ContainsSubstring(std::string("  ") + subcommand));
+    }
+    REQUIRE_THAT(output, ContainsSubstring("--in"));
+    REQUIRE_THAT(output, ContainsSubstring("--smf"));
+    REQUIRE_THAT(output, ContainsSubstring("--midi2"));
+    REQUIRE_THAT(output, ContainsSubstring("--synth"));
+  }
+
+  SECTION("a subcommand's --help names the subcommand in its usage line") {
+    // The usage line has to name the leaf whose options it goes on to list:
+    // printing `project [options]` above the bounce option list gives a reader
+    // an invocation that exits 2 and an option list belonging to nothing.
+    auto [code, output] = exec_command(CLI + " project bounce --help");
+    REQUIRE(code == 0);
+    REQUIRE_THAT(output, ContainsSubstring("project bounce [options]"));
+    REQUIRE_THAT(output, ContainsSubstring("--frames"));
+  }
+
+  SECTION("a missing import input is a file-not-found exit, not an invalid parameter") {
+    // `--smf` / `--midi2` name a user-supplied input file, so failing to open
+    // one keeps the class it carries -- the same code `project validate --in`
+    // reports for the same condition, and the same one the Python CLI reports.
+    // A script that branches on "fetch the input again" versus "the arguments
+    // are wrong" must not get a different answer per subcommand.
+    const std::string missing = unique_temp_path("_absent.mid");
+    const std::string out = unique_temp_path("_import.json");
+    auto [smf_code, smf_output] =
+        exec_command(CLI + " project import-smf --smf " + missing + " -o " + out);
+    REQUIRE(smf_code == 4);
+    REQUIRE_THAT(smf_output, ContainsSubstring("cannot open SMF file"));
+
+    auto [midi2_code, midi2_output] =
+        exec_command(CLI + " project import-midi2 --midi2 " + missing + " -o " + out);
+    REQUIRE(midi2_code == 4);
+    REQUIRE_THAT(midi2_output, ContainsSubstring("cannot open MIDI2 file"));
   }
 
   SECTION("oversized import is rejected before allocation") {
