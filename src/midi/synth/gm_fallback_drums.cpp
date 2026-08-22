@@ -1,5 +1,6 @@
 #include "midi/synth/gm_fallback_data.h"
 #include "midi/synth/patch_tuning.h"
+#include "util/tunable.h"
 
 namespace sonare::midi::synth::detail {
 namespace {
@@ -17,7 +18,7 @@ struct DrumPatches {
   NativeSynthPatch percussion;
 };
 
-DrumPatches build_drum_patches() noexcept {
+constexpr DrumPatches build_drum_patches() noexcept {
   DrumPatches d{};
 
   // Common kit-piece scaffolding: membrane-modal + noise voices (method
@@ -156,11 +157,6 @@ DrumPatches build_drum_patches() noexcept {
   return d;
 }
 
-const DrumPatches& drum_patches() noexcept {
-  static const DrumPatches kTable = build_drum_patches();
-  return kTable;
-}
-
 // Per-note GM/GS drum map (keys 27..87): each key is a distinct instrument
 // built from a mechanism archetype (fixed-pitch membrane / struck wood / struck
 // metal / whistle / noise) plus a fixed tuning, on top of the shared kit
@@ -169,8 +165,8 @@ const DrumPatches& drum_patches() noexcept {
 // (maracas, cabasa, guiro, cuica, tambourine, vibraslap) are a separate
 // archetype not yet built — they resolve to the generic burst here until it
 // lands.
-std::array<NativeSynthPatch, 128> build_drum_note_table() noexcept {
-  const DrumPatches& d = drum_patches();
+SONARE_TUNED_CONSTEXPR std::array<NativeSynthPatch, 128> build_drum_note_table() noexcept {
+  const DrumPatches d = build_drum_patches();
   std::array<NativeSynthPatch, 128> t{};
 
   NativeSynthPatch piece{};
@@ -410,7 +406,13 @@ std::array<NativeSynthPatch, 128> build_drum_note_table() noexcept {
 }  // namespace
 
 const std::array<NativeSynthPatch, 128>& drum_note_table() noexcept {
+#if defined(SONARE_TUNING) && SONARE_TUNING
+  // The tuning build reads overrides from the environment, so the table can
+  // only be built once the process is running.
   static const std::array<NativeSynthPatch, 128> kTable = build_drum_note_table();
+#else
+  static constexpr std::array<NativeSynthPatch, 128> kTable = build_drum_note_table();
+#endif
   return kTable;
 }
 

@@ -1,8 +1,10 @@
+#pragma once
+
 #include "midi/synth/gm_fallback_data.h"
 
 namespace sonare::midi::synth::detail {
 
-void configure_percussion_programs(ProgramOverrides& o) noexcept {
+constexpr void configure_percussion_programs(ProgramOverrides& o) noexcept {
   // Pitched percussion (GM 112-119): the membrane / struck-idiophone cores
   // voiced as melodic programs. Unlike the kit drum map these track the played
   // key (base_freq_hz = 0), are NOT one-shot (so note-off can cut a held note),

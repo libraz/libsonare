@@ -7,9 +7,9 @@
 
 namespace sonare::midi::synth::detail {
 
-inline DahdsrConfig fallback_env(float attack_ms, float decay_ms, float sustain,
-                                 float release_ms) noexcept {
-  DahdsrConfig config;
+constexpr DahdsrConfig fallback_env(float attack_ms, float decay_ms, float sustain,
+                                    float release_ms) noexcept {
+  DahdsrConfig config{};
   config.attack_ms = attack_ms;
   config.decay_ms = decay_ms;
   config.sustain = sustain;
@@ -259,28 +259,6 @@ inline const NativeSynthPatch* program_override_patches(
     const ProgramOverrides& overrides) noexcept {
   return reinterpret_cast<const NativeSynthPatch*>(&overrides);
 }
-
-/// Mutable view over the same range, for a whole-table pass that rewrites every
-/// patch (the post-configure clamp). Written as one loop over this view rather
-/// than as a per-member macro expansion: the clamp takes and returns a patch by
-/// value, so a per-member expansion emits the whole clamp once per member and
-/// the table's code size grows with the number of tones rather than staying
-/// flat. The WebAssembly module is under a size gate, which makes that
-/// difference the deciding one.
-inline NativeSynthPatch* program_override_patches(ProgramOverrides& overrides) noexcept {
-  return reinterpret_cast<NativeSynthPatch*>(&overrides);
-}
-
-void configure_keyed_programs(ProgramOverrides& overrides) noexcept;
-void configure_percussion_programs(ProgramOverrides& overrides) noexcept;
-void configure_physical_programs(ProgramOverrides& overrides) noexcept;
-
-/// Voices the GS variation tones. Runs LAST: every variation derives from a
-/// capital tone the three configure_* passes above have already built (or from a
-/// family patch, for a capital that has no override of its own), so the deltas
-/// here read as "this variation minus its capital" rather than restating a whole
-/// voice.
-void configure_variation_programs(ProgramOverrides& overrides) noexcept;
 
 const std::array<NativeSynthPatch, 16>& family_patches() noexcept;
 const ProgramOverrides& program_overrides() noexcept;

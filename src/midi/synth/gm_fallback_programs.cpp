@@ -1,23 +1,29 @@
 #include "midi/synth/gm_fallback_data.h"
+#include "midi/synth/gm_fallback_programs_keyed.h"
+#include "midi/synth/gm_fallback_programs_percussion.h"
+#include "midi/synth/gm_fallback_programs_physical.h"
+#include "midi/synth/gm_fallback_programs_variations.h"
 #include "midi/synth/patch_tuning.h"
 
 namespace sonare::midi::synth::detail {
 namespace {
 
-ProgramOverrides build_program_overrides() noexcept {
+SONARE_TUNED_CONSTEXPR ProgramOverrides build_program_overrides() noexcept {
   ProgramOverrides o{};
   configure_keyed_programs(o);
   configure_percussion_programs(o);
   configure_physical_programs(o);
   configure_variation_programs(o);
 
-  // Clamp every patch through the contiguous view rather than member by member:
-  // a patch added to the table is clamped without touching this loop, and the
-  // clamp is emitted once instead of once per tone.
-  NativeSynthPatch* patches = program_override_patches(o);
-  for (std::size_t i = 0; i < kProgramOverrideCount; ++i) {
-    patches[i] = clamp_synth_patch(patches[i]);
-  }
+  // Clamp member by member off the same X-macro list the struct is declared
+  // from, so a patch added to the table is clamped without touching this line.
+  // The contiguous `program_override_patches` view would express the same sweep
+  // as a loop, but it reaches the members through a cast that a constant
+  // expression may not perform; a macro expansion stays foldable, and once the
+  // whole table folds, neither form emits an instruction to be counted.
+#define SONARE_GM_CLAMP_ONE(name) o.name = clamp_synth_patch(o.name);
+  SONARE_GM_OVERRIDE_PATCHES(SONARE_GM_CLAMP_ONE)
+#undef SONARE_GM_CLAMP_ONE
 
   // Development-only per-patch voicing override, keyed by the member name
   // (`SONARE_TUNING_OVERRIDES=violin.bowed_string.bow_force=0.61`). Compiled
@@ -37,7 +43,13 @@ ProgramOverrides build_program_overrides() noexcept {
 }  // namespace
 
 const ProgramOverrides& program_overrides() noexcept {
+#if defined(SONARE_TUNING) && SONARE_TUNING
+  // The tuning build reads overrides from the environment, so the table can
+  // only be built once the process is running.
   static const ProgramOverrides kTable = build_program_overrides();
+#else
+  static constexpr ProgramOverrides kTable = build_program_overrides();
+#endif
   return kTable;
 }
 

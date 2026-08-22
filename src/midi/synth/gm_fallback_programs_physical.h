@@ -1,8 +1,10 @@
+#pragma once
+
 #include "midi/synth/gm_fallback_data.h"
 
 namespace sonare::midi::synth::detail {
 
-void configure_physical_programs(ProgramOverrides& o) noexcept {
+constexpr void configure_physical_programs(ProgramOverrides& o) noexcept {
   // Bowed string (GM 40-43): one friction-excited waveguide voiced across the
   // violin family. The engine tunes to the played note, so the members differ
   // by timbre (larger = darker, slower-speaking, more corpus) — mirrors the

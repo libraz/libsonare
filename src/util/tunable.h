@@ -78,3 +78,15 @@ bool tuning_enabled();
 /// Declare a calibration constant (normal build: a plain `constexpr float`).
 #define SONARE_TUNABLE(name, value) constexpr float name = (value)
 #endif
+
+#if defined(SONARE_TUNING) && SONARE_TUNING
+/// Qualify a builder whose result is a compile-time constant only in a shipped
+/// build. A tunable resolves from the environment while the process runs, so a
+/// table built from one cannot be constant-initialised in a tuning build, and a
+/// `constexpr` that can never fold is ill-formed. Values are unaffected either
+/// way: the same builder runs over the same inputs, only later.
+#define SONARE_TUNED_CONSTEXPR
+#else
+/// Qualify a builder whose result is a compile-time constant (normal build).
+#define SONARE_TUNED_CONSTEXPR constexpr
+#endif

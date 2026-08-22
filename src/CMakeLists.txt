@@ -777,10 +777,6 @@ if(BUILD_ARRANGEMENT)
     midi/synth/gm_fallback_map.cpp
     midi/synth/gm_fallback_families.cpp
     midi/synth/gm_fallback_programs.cpp
-    midi/synth/gm_fallback_programs_keyed.cpp
-    midi/synth/gm_fallback_programs_percussion.cpp
-    midi/synth/gm_fallback_programs_physical.cpp
-    midi/synth/gm_fallback_programs_variations.cpp
     midi/synth/gm_fallback_drums.cpp
     midi/synth/synth_presets.cpp
     midi/synth/sf2_file.cpp
@@ -793,6 +789,26 @@ if(BUILD_ARRANGEMENT)
   )
   target_include_directories(sonare_midi PUBLIC ${CMAKE_CURRENT_SOURCE_DIR} ${PROJECT_SOURCE_DIR}/include)
   target_link_libraries(sonare_midi PUBLIC sonare_rt sonare_core sonare_automation)
+  # The GM fallback tables are constant-initialised so they land in the data
+  # section instead of being assembled by start-up code. Clamping a couple of
+  # hundred patches field by field runs past the default constant-evaluation
+  # budget, which is a front-end resource ceiling rather than a language limit:
+  # raising it changes only how long the compiler is allowed to fold.
+  set(SONARE_CONSTEXPR_TABLE_SOURCES
+    midi/synth/gm_fallback_families.cpp
+    midi/synth/gm_fallback_programs.cpp
+    midi/synth/gm_fallback_drums.cpp
+  )
+  if(CMAKE_CXX_COMPILER_ID MATCHES "Clang")
+    set_source_files_properties(${SONARE_CONSTEXPR_TABLE_SOURCES}
+      PROPERTIES COMPILE_OPTIONS "-fconstexpr-steps=100000000")
+  elseif(CMAKE_CXX_COMPILER_ID STREQUAL "GNU")
+    set_source_files_properties(${SONARE_CONSTEXPR_TABLE_SOURCES}
+      PROPERTIES COMPILE_OPTIONS "-fconstexpr-ops-limit=1000000000")
+  elseif(MSVC)
+    set_source_files_properties(${SONARE_CONSTEXPR_TABLE_SOURCES}
+      PROPERTIES COMPILE_OPTIONS "/constexpr:steps100000000")
+  endif()
   if(BUILD_FX)
     # GS system effects (reverb/chorus/delay send-returns) reuse the FX suite;
     # without BUILD_FX the SF2 player renders dry (sends become no-ops).

@@ -1,4 +1,6 @@
-#include "midi/synth/gm_fallback_data.h"
+#pragma once
+
+#include "midi/synth/gm_fallback_families.h"
 
 namespace sonare::midi::synth::detail {
 
@@ -13,8 +15,16 @@ namespace sonare::midi::synth::detail {
 /// `d` a detuned/darkened one, `o` the key-off release noise, `v` a
 /// velocity-switched mix. The suffix, not a guess at the sample, is what each
 /// delta below implements.
-void configure_variation_programs(ProgramOverrides& o) noexcept {
-  const std::array<NativeSynthPatch, 16>& fam = family_patches();
+///
+/// Runs LAST of the configure_* passes: every variation derives from a capital
+/// tone the earlier passes have already built (or from a family patch, for a
+/// capital that has no override of its own), so the deltas here read as "this
+/// variation minus its capital" rather than restating a whole voice.
+SONARE_TUNED_CONSTEXPR void configure_variation_programs(ProgramOverrides& o) noexcept {
+  // The table this builds is constant-initialised, so the family patches have
+  // to come from the builder rather than from the `family_patches()` accessor,
+  // whose function-local static exists only once the process is running.
+  const std::array<NativeSynthPatch, 16> fam = build_family_patches();
 
   // --- Piano (capital: program 0, the family-0 waveguide grand) -------------
   // Piano 1w: the same grand miked wide — the bass/treble halves pulled further

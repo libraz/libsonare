@@ -74,9 +74,10 @@ def restore(pristine: dict[Path, str]) -> None:
 # The files that build the per-program override table, in the order they are
 # searched for a patch's configuration block.
 PROGRAM_TABLE_FILES = (
-    "src/midi/synth/gm_fallback_programs_physical.cpp",
-    "src/midi/synth/gm_fallback_programs_keyed.cpp",
-    "src/midi/synth/gm_fallback_programs_percussion.cpp",
+    "src/midi/synth/gm_fallback_programs_physical.h",
+    "src/midi/synth/gm_fallback_programs_keyed.h",
+    "src/midi/synth/gm_fallback_programs_percussion.h",
+    "src/midi/synth/gm_fallback_programs_variations.h",
 )
 
 # Where the per-drum-note voicing table is built.

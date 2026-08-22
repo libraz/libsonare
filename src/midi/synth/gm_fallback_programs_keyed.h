@@ -1,8 +1,10 @@
+#pragma once
+
 #include "midi/synth/gm_fallback_data.h"
 
 namespace sonare::midi::synth::detail {
 
-void configure_keyed_programs(ProgramOverrides& o) noexcept {
+constexpr void configure_keyed_programs(ProgramOverrides& o) noexcept {
   // FM e-piano (Rhodes/Wurli sketch): body pair at 1:1 with a velocity-driven
   // index plus a fast-decaying 14:1 "tine" pair — the exponential index
   // fall-off is what reads as an electric piano.
