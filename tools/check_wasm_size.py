@@ -7,6 +7,12 @@ emscripten output is not byte-reproducible across machines or toolchain patch
 releases, so a hash comparison would fail on every runner that is not the one
 that wrote the baseline. Do not promote sha256 to a gate without first making
 the build reproducible.
+
+The package keeps two files in this format and they are not interchangeable.
+``wasm-size-budget.json`` is the enforced ceiling ``check:wasm-size`` compares
+against; ``wasm-size-baseline.json`` records what the build actually measured,
+refreshed by ``check:wasm-size:record``. Both are written by ``--write-baseline``
+against whichever path ``--baseline`` names, so pass the one being updated.
 """
 
 from __future__ import annotations

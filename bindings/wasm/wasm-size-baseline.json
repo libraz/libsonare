@@ -1,18 +1,18 @@
 {
   "artifacts": {
     "sonare-analysis.wasm": {
-      "code": 884122,
-      "data": 67360,
-      "gzip": 376859,
-      "raw": 956778,
-      "sha256": "33aeea4aae719940539e86ed7a657462d43c7c6c12be8d203f9af3ebe44b6dff"
+      "code": 1039776,
+      "data": 72366,
+      "gzip": 404832,
+      "raw": 1119119,
+      "sha256": "a341448f9cd6fb13d9d8dcb2a3b133b3180a28301f93bf10191eac7e31b3905c"
     },
     "sonare.wasm": {
-      "code": 3857706,
-      "data": 193602,
-      "gzip": 1371244,
-      "raw": 4065446,
-      "sha256": "21f0b71c70bcdec13d26551c39b195adb582571af8d1aa0416d291a7dffa393a"
+      "code": 4538209,
+      "data": 509716,
+      "gzip": 1590532,
+      "raw": 5068010,
+      "sha256": "0dde03c76dea13000989af63bf663fb83cda067b5b3c6839a66983b39ba63f67"
     }
   },
   "format": 1,
