@@ -95,10 +95,12 @@ def report_result(knobs, pristine, best_values, evaluator, args, extra=None) -> 
     edited = materialize(knobs, best_values, pristine, source_only=False)
     baseline = dict(pristine)
     written: dict[Path, str] = {}
+    # Each write-back starts from what the previous one produced, so two kinds
+    # of edit landing in one file compose instead of overwriting each other.
     if per_patch:
-        written.update(write_patch_fields(per_patch))
+        written.update(write_patch_fields(per_patch, edited))
     if per_drum:
-        written.update(write_drum_fields(per_drum))
+        written.update(write_drum_fields(per_drum, {**edited, **written}))
     for path, text in written.items():
         baseline.setdefault(path, path.read_text())
         edited[path] = text
@@ -146,5 +148,12 @@ def report_result(knobs, pristine, best_values, evaluator, args, extra=None) -> 
         print("\n--dry-run: source left pristine, best values NOT written.")
     else:
         for path, text in edited.items():
+            # The write-back is computed from the text snapshotted when the fit
+            # started, so a file edited meanwhile loses that edit. Say so rather
+            # than let it happen silently: the values are in the diff and the
+            # overrides string above either way.
+            if path in baseline and path.exists() and path.read_text() != baseline[path]:
+                print(f"warning: {path} changed since the fit started; the write-back "
+                      f"below replaces that change with the fitted values")
             path.write_text(text)
         print("\nBest values written to source.")

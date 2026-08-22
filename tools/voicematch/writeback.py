@@ -11,7 +11,8 @@ every note directly.
 
 `restore` is the safety net: the pristine text of every touched file is
 snapshotted before a fit starts and written back in a `finally`, so an exception
-or a Ctrl-C never leaves the tree perturbed.
+or a Ctrl-C never leaves the tree perturbed. It undoes this process's own writes
+and nothing else — see `write_edits`, which is what records them.
 """
 
 from __future__ import annotations
@@ -27,7 +28,7 @@ from knobs import Knob, format_value
 
 def materialize(
     knobs: list[Knob], values: list[float], pristine: dict[Path, str],
-    *, source_only: bool = True,
+    *, source_only: bool = True, full: bool = False,
 ) -> dict[Path, str]:
     """Produce each touched file's text with its knob values spliced in.
 
@@ -40,11 +41,21 @@ def materialize(
     source as its new `SONARE_TUNABLE` default rather than in a shell variable
     someone has to remember.
 
-    A knob the fit left where it started is skipped entirely rather than
-    rewritten with the same number: the two spellings of a value are not always
-    the same text (`0.10f` in the source against a formatted `0.1`), and a
-    hundred-knob spec would otherwise produce a diff full of lines that change
-    nothing, hiding the handful that do.
+    Two modes, because the two callers want opposite things from a knob that
+    has not moved:
+
+    - The report wants the smallest diff, so by default a knob the fit left
+      where it started is skipped rather than rewritten with the same number:
+      the two spellings of a value are not always the same text (`0.10f` in the
+      source against a formatted `0.1`), and a hundred-knob spec would otherwise
+      produce a diff full of lines that change nothing, hiding the handful that
+      do. A file left with no surviving knob does not appear in the result.
+    - `full` is what the render path needs: every file the spec's source knobs
+      target, spliced with every one of them. Dropping a file because this
+      candidate happens to format back to its start value would leave the
+      *previous* candidate's text on disk, and the render would then score a
+      vector that was never assembled — silently, and only for the knobs whose
+      optimum sits near the compiled-in default, which is most of them.
     """
     by_file: dict[Path, list[tuple[Knob, float]]] = {}
     for knob, value in zip(knobs, values):
@@ -52,7 +63,7 @@ def materialize(
             continue
         if source_only and knob.tunable is not None:
             continue
-        if format_value(value) == format_value(knob.start_value):
+        if not full and format_value(value) == format_value(knob.start_value):
             continue
         by_file.setdefault(knob.file, []).append((knob, value))
     result: dict[Path, str] = {}
@@ -65,10 +76,35 @@ def materialize(
     return result
 
 
-def restore(pristine: dict[Path, str]) -> None:
-    """Write every snapshotted file back to its pristine text."""
-    for path, text in pristine.items():
+def write_edits(edited: dict[Path, str], written: dict[Path, str]) -> None:
+    """Write each file and record what was put there, for `restore` to check."""
+    for path, text in edited.items():
         path.write_text(text)
+        written[path] = text
+
+
+def restore(pristine: dict[Path, str], written: dict[Path, str]) -> None:
+    """Undo this process's own edits, and only those.
+
+    A fit runs for hours in the tree its user is working in, so restoring every
+    snapshotted file would roll back whatever else was edited meanwhile. Most of
+    those files were never written at all: a runtime knob's declaration file is
+    snapshotted only so the final report can diff it, and the render path writes
+    source-knob files exclusively.
+
+    A file is put back only while it still holds exactly what this process wrote
+    to it. Anything else means it was edited after the fit touched it, and that
+    edit is worth more than a clean tree — so it is reported and left alone.
+    """
+    for path, text in sorted(written.items()):
+        if path not in pristine:
+            continue
+        if path.exists() and path.read_text() != text:
+            print(f"note: {path} was edited after the fit wrote it — left as it is; "
+                  f"its pristine text was NOT restored", file=sys.stderr)
+            continue
+        path.write_text(pristine[path])
+    written.clear()
 
 
 # The files that build the per-program override table, in the order they are
@@ -176,7 +212,48 @@ def _splice_field_lines(
     return text
 
 
-def write_patch_fields(per_patch: dict[str, list[tuple[str, float]]]) -> dict[Path, str]:
+def _current_text(path: Path, base: dict[Path, str] | None) -> str:
+    """The text to edit: what this run last produced for the file, else the disk."""
+    for key in (path, path.resolve()) if base else ():
+        if key in base:
+            return base[key]
+    return path.read_text()
+
+
+def _patch_site(text: str, patch: str) -> tuple[re.Pattern, str, int, int] | None:
+    """Locate the block that builds one patch: anchor, member prefix and extent.
+
+    Two spellings build a patch, and only one of them mentions its name where a
+    fitted value can be appended. Most tables address it directly (`o.violin =
+    bowed(...)` followed by `o.violin.cutoff_hz = ...`), and the anchor is
+    `o.<patch>` anywhere in the file. The keyed and percussion tables bind a
+    reference first (`NativeSynthPatch& vb = o.vibraphone;`) and set every field
+    through it, so nothing else in the block spells the patch name at all — a
+    third of the melodic bank is built this way. There the alias is the anchor,
+    and the block is bounded by the next reference binding, so a two-letter
+    alias cannot match a line that belongs to the next patch.
+
+    Returns None when the file does not build this patch.
+    """
+    direct = re.compile(rf"^[ \t]*o\.{re.escape(patch)}\b.*$", re.M)
+    if direct.search(text):
+        return direct, f"o.{patch}.", 0, len(text)
+    decl = re.compile(
+        rf"^[ \t]*NativeSynthPatch&\s*(\w+)\s*=\s*o\.{re.escape(patch)}\s*;[ \t]*$", re.M
+    ).search(text)
+    if decl is None:
+        return None
+    alias = decl.group(1)
+    following = re.compile(r"^[ \t]*NativeSynthPatch&\s*\w+\s*=", re.M).search(
+        text, decl.end()
+    )
+    end = following.start() if following is not None else len(text)
+    return re.compile(rf"^[ \t]*{re.escape(alias)}\b.*$", re.M), f"{alias}.", decl.start(), end
+
+
+def write_patch_fields(
+    per_patch: dict[str, list[tuple[str, float]]], base: dict[Path, str] | None = None
+) -> dict[Path, str]:
     """Splice fitted patch-field values into the program table sources.
 
     A patch field has no `SONARE_TUNABLE` declaration to rewrite — the table
@@ -187,20 +264,31 @@ def write_patch_fields(per_patch: dict[str, list[tuple[str, float]]]) -> dict[Pa
     call. A fitted field is written as one of those, replacing the line if it is
     already there and appending it to the end of the patch's block if it is not.
 
+    `base` supplies the current text of a file the same run has already edited,
+    which is how a `SONARE_TUNABLE` splice and a patch-field line landing in one
+    file both survive: read from disk instead and the second write would be
+    computed from text that no longer reflects the first.
+
     Returns the new text of each file touched; the caller writes and diffs them.
     """
     edited: dict[Path, str] = {}
     unplaced: list[str] = []
-    sources = {name: (REPO_ROOT / name) for name in PROGRAM_TABLE_FILES}
-    texts = {path: path.read_text() for path in sources.values() if path.exists()}
+    sources = [(REPO_ROOT / name) for name in PROGRAM_TABLE_FILES]
+    texts = {path: _current_text(path, base) for path in sources if path.exists()}
 
     for patch, fields in sorted(per_patch.items()):
-        anchor = re.compile(rf"^[ \t]*o\.{re.escape(patch)}\b.*$", re.M)
-        target = next((p for p, t in texts.items() if anchor.search(t)), None)
-        if target is None:
+        site = next(
+            ((p, s) for p, t in texts.items() if (s := _patch_site(t, patch)) is not None),
+            None,
+        )
+        if site is None:
             unplaced.extend(f"{patch}.{path}" for path, _ in fields)
             continue
-        texts[target] = _splice_field_lines(texts[target], anchor, f"o.{patch}.", fields)
+        target, (anchor, prefix, lo, hi) = site
+        text = texts[target]
+        texts[target] = (
+            text[:lo] + _splice_field_lines(text[lo:hi], anchor, prefix, fields) + text[hi:]
+        )
         edited[target] = texts[target]
 
     if unplaced:
@@ -209,7 +297,9 @@ def write_patch_fields(per_patch: dict[str, list[tuple[str, float]]]) -> dict[Pa
     return edited
 
 
-def write_drum_fields(per_note: dict[int, list[tuple[str, float]]]) -> dict[Path, str]:
+def write_drum_fields(
+    per_note: dict[int, list[tuple[str, float]]], base: dict[Path, str] | None = None
+) -> dict[Path, str]:
     """Splice fitted drum-note values into the drum table.
 
     The drum table addresses each note directly (`t[38] = d.snare;`) and already
@@ -223,13 +313,16 @@ def write_drum_fields(per_note: dict[int, list[tuple[str, float]]]) -> dict[Path
     is correct for any of the notes in it. Everything the table builds this way
     lands ahead of the clamp pass at the end, so a written value is clamped
     exactly as a hand-written one would be.
+
+    `base` carries an edit this run has already made to the same file, as in
+    `write_patch_fields`.
     """
     path = (REPO_ROOT / DRUM_TABLE_FILE).resolve()
     if not path.exists():
         print(f"note: {DRUM_TABLE_FILE} not found; drum-note values reported only",
               file=sys.stderr)
         return {}
-    text = path.read_text()
+    text = _current_text(path, base)
     original = text
     unplaced: list[str] = []
     for note, fields in sorted(per_note.items()):

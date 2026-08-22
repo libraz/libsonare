@@ -19,11 +19,15 @@ from __future__ import annotations
 
 import argparse
 import json
+import os
+import subprocess
 import sys
 from pathlib import Path
 
+sys.path.insert(0, str(Path(__file__).resolve().parents[1]))  # tools/ for _repo
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 
+from catalogue import dump_catalogue
 from gm_names import gm_name
 from metrics import (
     OCTAVE_CENTERS,
@@ -35,9 +39,9 @@ from metrics import (
     normalize_rms,
     to_mono,
 )
-from patterns import PATTERN_BUILDERS, build_pattern, pattern_length
+from patterns import PATTERN_BUILDERS, analysis_window_end, build_pattern, pattern_length
 from render_model import ensure_lib_path, render_model
-from render_oracle import add_oracle_args, obtain_oracle
+from render_oracle import add_oracle_args, obtain_oracle, oracle_may_carry_room
 from room import apply_room, estimate_room, fit_room_ir, match_sends
 from smf import write_smf
 from wavio import write_wav
@@ -63,9 +67,10 @@ def match_model_room(model, oracle, sr, notes, mode: str, external: bool):
     its room baked in; without this the comparison reads that room as the
     instrument's release, noise floor and sustain slope.
 
-    Skipped unless the oracle came from a WAV: the built-in fluidsynth oracle is
-    rendered with its effect units off, so anything measured there is the
-    instrument's own decay and correcting for it would invent a room.
+    Skipped unless the oracle came from outside libsonare's dry path
+    (`oracle_may_carry_room`): the built-in fluidsynth oracle is rendered with
+    its effect units off, so anything measured there is the instrument's own
+    decay and correcting for it would invent a room.
     """
     if mode == "none" or not external:
         return model, None
@@ -269,7 +274,7 @@ def run_compare(args: argparse.Namespace) -> int:
         )
         model, room = match_model_room(
             model, oracle, SR, [(n.start, n.start + n.dur) for n in pattern.notes], args.room,
-            external=bool(getattr(args, "oracle_wav", "")),
+            external=oracle_may_carry_room(args),
         )
         write_wav(out / "model.wav", model, SR)
         write_wav(out / "oracle.wav", oracle, SR)
@@ -283,11 +288,8 @@ def run_compare(args: argparse.Namespace) -> int:
 
         rows = []
         if pattern.percussive:
-            # A hit's window ends where the next one begins; the last one gets
-            # the tail. `analyze_hit` caps it, so a long gap costs nothing.
-            starts = [n.start for n in pattern.notes]
             for note in pattern.analysis_notes:
-                end = next((s for s in starts if s > note.start), total)
+                end = analysis_window_end(pattern, note)
                 hm = analyze_hit(model_mono, SR, note, end)
                 ho = analyze_hit(oracle_mono, SR, note, end)
                 rows.append({
@@ -297,7 +299,9 @@ def run_compare(args: argparse.Namespace) -> int:
                 })
         else:
             for note in pattern.analysis_notes:
-                end = note.start + note.dur + pattern.tail
+                # Never past the next onset, or the release below is that note's
+                # attack rather than this note's tail.
+                end = analysis_window_end(pattern, note)
                 nm = analyze_note(model_mono, SR, note, end)
                 no = analyze_note(oracle_mono, SR, note, end)
                 rows.append({
@@ -378,6 +382,40 @@ def run_export_probe(args: argparse.Namespace) -> int:
     return 0
 
 
+# The tank decay the ambience search sweeps, and the only axis in it that
+# reaches the library through the override table rather than through the score.
+DECAY_SCALE_KEY = "gs_effects.kReverbDecayScale"
+
+
+def require_live_tunable(program: int, pattern: str, key: str) -> None:
+    """Refuse to sweep an override key the loaded library does not read.
+
+    `SONARE_TUNING_OVERRIDES` is consulted only by a `-DBUILD_TUNING=ON` build;
+    in a normal one a `SONARE_TUNABLE` is a plain `constexpr` and the variable is
+    ignored without a word. A sweep of an ignored key is not an error anywhere —
+    every point renders, every point measures the same, and the search reports
+    whichever candidate it tried first as the winner. So the library is asked
+    what it reads before the sweep starts, which is one render against the
+    twenty-odd the search would otherwise spend producing a fiction.
+    """
+    lib = os.environ.get("SONARE_LIB_PATH") or None
+    try:
+        catalogue = dump_catalogue(program, pattern, lib, sr=SR)
+    except RuntimeError as exc:
+        raise SystemExit(
+            f"{exc}\n"
+            f"room-match sweeps {key} through that table, so every render would come "
+            f"back identical. Build with -DBUILD_TUNING=ON and point SONARE_LIB_PATH at "
+            f"that dylib."
+        ) from None
+    if key not in catalogue.defaults:
+        raise SystemExit(
+            f"the library reported {len(catalogue.defaults)} tuning keys but not {key}, "
+            f"so sweeping it would leave the decay axis inert and the search would "
+            f"return its first candidate. Check the key against --dump-knobs."
+        )
+
+
 def run_room_match(args: argparse.Namespace) -> int:
     """Measure the oracle's space and report the libsonare settings that match it.
 
@@ -387,10 +425,8 @@ def run_room_match(args: argparse.Namespace) -> int:
     would libsonare have to do to be in that room by itself, at the GS power-on
     controller values a plain GM file arrives with.
     """
-    import os
-    import subprocess
-
     program = parse_programs(args.programs)[0]
+    require_live_tunable(program, args.pattern, DECAY_SCALE_KEY)
     pattern = build_pattern(args.pattern, program)
     total = pattern_length(pattern)
     probe = write_smf(pattern.notes, program=program, channel=pattern.channel,
@@ -423,7 +459,7 @@ def run_room_match(args: argparse.Namespace) -> int:
     def measure(cc91: int, decay_scale: float):
         from room import Room
         env = dict(os.environ)
-        env["SONARE_TUNING_OVERRIDES"] = f"gs_effects.kReverbDecayScale={decay_scale}"
+        env["SONARE_TUNING_OVERRIDES"] = f"{DECAY_SCALE_KEY}={decay_scale}"
         proc = subprocess.run(
             [sys.executable, "-c", child, str(program), str(cc91)],
             env=env, capture_output=True, text=True,
@@ -437,7 +473,7 @@ def run_room_match(args: argparse.Namespace) -> int:
     result = match_sends(target, measure, log=print if args.verbose else None)
     print()
     print(f"closest match: CC91 {result['cc91']}, reverb_decay {result['reverb_decay']} "
-          f"(gs_effects.kReverbDecayScale={result['decay_scale']})")
+          f"({DECAY_SCALE_KEY}={result['decay_scale']})")
     print(f"  reached RT60 {result['measured']['rt60_s']:.2f}s  "
           f"tail {result['measured']['tail_db']:+.1f}dB   residual {result['residual']}")
     print(f"  -> gm_fallback_sends reverb_scale for program {program}: "

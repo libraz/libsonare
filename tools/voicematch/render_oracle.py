@@ -151,6 +151,23 @@ def add_oracle_args(parser) -> None:
     add_au_args(parser)
 
 
+def oracle_may_carry_room(args) -> bool:
+    """Whether this oracle route can arrive with a room baked into it.
+
+    A WAV rendered elsewhere always can, and an AudioUnit does unless every
+    effect section was switched off with `--au-dry` — the plugins most worth
+    fitting against ship with a hall on by default, which is exactly the case
+    the room correction exists for. Only the built-in fluidsynth route is dry by
+    construction (`-R 0 -C 0`), and estimating a room from it would invent one.
+
+    A false positive costs nothing: `estimate_room` reports a dry measurement as
+    dry and the caller then skips the correction.
+    """
+    if getattr(args, "oracle_wav", ""):
+        return True
+    return bool(getattr(args, "au", "")) and not getattr(args, "au_dry", False)
+
+
 def obtain_oracle(args, smf_bytes: bytes, total_seconds: float, sr: int, onsets_s) -> np.ndarray:
     """Resolve the oracle audio from whichever route the flags select.
 

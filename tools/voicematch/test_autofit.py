@@ -13,15 +13,26 @@ exercise incidentally, slowly, and through several other layers.
 from __future__ import annotations
 
 import argparse
+import functools
+import os
+import subprocess
 import sys
 from pathlib import Path
 
+import numpy as np
 import pytest
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 
-from autofit import resolve_probe  # noqa: E402
+import autofit  # noqa: E402
+import build_lib  # noqa: E402
+import loss as loss_module  # noqa: E402
+import report as report_module  # noqa: E402
+import voicematch  # noqa: E402
+from _repo import REPO_ROOT  # noqa: E402
+from autofit import Evaluator, check_holdout_oracle, resolve_probe, validate  # noqa: E402
+from build_lib import configure_build  # noqa: E402
 from catalogue import Catalogue  # noqa: E402
 from knobs import (  # noqa: E402
     Knob,
@@ -36,14 +47,28 @@ from loss import (  # noqa: E402
     cli_weights,
     loss_terms,
     percussion_terms,
+    probe_rows,
 )
-from patterns import PATTERN_BUILDERS, build_pattern  # noqa: E402
+from optimizers import cma_es, optimize  # noqa: E402
+from patterns import (  # noqa: E402
+    PATTERN_BUILDERS,
+    analysis_window_end,
+    build_pattern,
+    pattern_length,
+)
+from render_model import DEFAULT_DYLIB, check_gm_fallback  # noqa: E402
+from render_oracle import oracle_may_carry_room  # noqa: E402
+from report import report_result  # noqa: E402
+from room import DRY  # noqa: E402
 from staging import stage_of, staged_indices  # noqa: E402
 from writeback import (  # noqa: E402
     key_to_member_path,
+    materialize,
     override_patch_names,
     patch_field_assignments,
+    restore,
     write_drum_fields,
+    write_edits,
     write_patch_fields,
 )
 
@@ -276,11 +301,13 @@ def test_a_written_literal_always_carries_a_decimal_point():
 # Drums
 # --------------------------------------------------------------------------- #
 def _probe_args(**kwargs) -> argparse.Namespace:
-    """A Namespace carrying only what `resolve_probe` and `cli_weights` read."""
+    """A Namespace carrying what the probe, the weights and the oracle routes read."""
     base = dict(
         program=0, drum_note=None, pattern="sustain", notes="", velocities="",
         w_harm=1.0, w_cents=0.5, w_tnr=1.0, w_env=None, w_init=0.0, w_slope=0.0,
-        w_mss=0.0, w_band=1.0, w_bdecay=1.0,
+        w_mss=0.0, w_band=1.0, w_bdecay=1.0, n_harm=10,
+        oracle_wav="", au="", au_dry=False, room="auto",
+        validate_notes="", validate_velocities="", validate_oracle_wav="",
     )
     base.update(kwargs)
     return argparse.Namespace(**base)
@@ -461,3 +488,595 @@ def test_the_room_probe_leaves_more_silence_than_it_makes_sound():
     gaps = [b.start - (a.start + a.dur) for a, b in zip(probe.notes, probe.notes[1:])]
     assert gaps and min(gaps) >= 3.0
     assert max(n.dur for n in probe.notes) <= 0.5
+
+
+# --------------------------------------------------------------------------- #
+# What the probe overrides may be combined with
+# --------------------------------------------------------------------------- #
+def test_every_pattern_accepts_both_probe_overrides():
+    """`--pattern` offers all seven, so all seven have to take both flags."""
+    for name in PATTERN_BUILDERS:
+        assert build_pattern(name, 0, notes=(62,)).notes
+        assert build_pattern(name, 0, velocities=(90,)).notes
+
+
+def test_a_single_pitch_pattern_takes_the_override_as_its_pitch():
+    assert {n.note for n in build_pattern("velocity", 0, notes=(62,)).notes} == {62}
+    assert {n.velocity for n in build_pattern("sustain", 0, velocities=(90,)).notes} == {90}
+
+
+def test_a_list_handed_to_a_single_pitch_pattern_is_refused_by_name():
+    """It cannot mean anything, and it must not mean the first value silently."""
+    with pytest.raises(ValueError, match="single value"):
+        build_pattern("velocity", 0, notes=(60, 62))
+    with pytest.raises(ValueError, match="single value"):
+        build_pattern("scale", 0, velocities=(60, 90))
+
+
+def test_a_pattern_with_neither_axis_names_what_it_takes(monkeypatch):
+    def fixed(program: int, *, dur: float = 1.0):
+        return build_pattern("sustain", program)
+
+    monkeypatch.setitem(PATTERN_BUILDERS, "fixed", fixed)
+    with pytest.raises(ValueError, match="neither notes nor velocities"):
+        build_pattern("fixed", 0, notes=(60,))
+
+
+# --------------------------------------------------------------------------- #
+# The per-note analysis window
+# --------------------------------------------------------------------------- #
+class _FakeMetrics:
+    """Stands in for a measurement so a window test costs no spectra."""
+
+    def to_dict(self) -> dict:
+        return {}
+
+
+def _window_ends(pattern, monkeypatch) -> list[tuple[float, float]]:
+    """(onset, window end) for every analysis note `probe_rows` measures."""
+    seen: list[tuple[float, float]] = []
+
+    def spy(mono, sr, note, end):
+        seen.append((note.start, end))
+        return _FakeMetrics()
+
+    monkeypatch.setattr(loss_module, "analyze_note", spy)
+    monkeypatch.setattr(loss_module, "analyze_hit", spy)
+    monkeypatch.setattr(loss_module, "skeleton_note", lambda *a, **k: {})
+    probe_rows(np.zeros(int(pattern_length(pattern) * 48000), dtype=np.float32),
+               pattern, 48000)
+    return seen
+
+
+def test_the_default_probe_would_overrun_its_own_gap():
+    """The clamp is not hypothetical: the tail outlasts the space before the next note."""
+    probe = build_pattern("sustain", 0)
+    first, second = probe.notes[0], probe.notes[1]
+    assert first.start + first.dur + probe.tail > second.start
+    assert analysis_window_end(probe, first) == second.start
+
+
+def test_a_sustained_note_is_never_measured_into_the_next_one(monkeypatch):
+    """Its release would otherwise be the next note's attack."""
+    probe = build_pattern("sustain", 0)
+    onsets = [n.start for n in probe.notes]
+    measured = _window_ends(probe, monkeypatch)
+    assert len(measured) == len(probe.analysis_notes)
+    for start, end in measured:
+        later = [s for s in onsets if s > start]
+        assert not later or end <= min(later)
+
+
+def test_a_drum_hit_keeps_the_window_it_always_had(monkeypatch):
+    probe = build_pattern("drum", 0)
+    onsets = [n.start for n in probe.notes]
+    for start, end in _window_ends(probe, monkeypatch):
+        later = [s for s in onsets if s > start]
+        assert end == (min(later) if later else pattern_length(probe))
+
+
+# --------------------------------------------------------------------------- #
+# Which oracle carries a room
+# --------------------------------------------------------------------------- #
+def _oracle_args(**kwargs) -> argparse.Namespace:
+    base = dict(oracle_wav="", au="", au_dry=False, room="auto")
+    base.update(kwargs)
+    return argparse.Namespace(**base)
+
+
+def test_an_au_oracle_is_treated_as_wet_unless_it_was_asked_to_be_dry():
+    """The AU route is the most likely of the three to arrive in a hall."""
+    assert oracle_may_carry_room(_oracle_args(au="Pianoteq"))
+    assert not oracle_may_carry_room(_oracle_args(au="Pianoteq", au_dry=True))
+
+
+def test_the_fluidsynth_oracle_is_dry_by_construction():
+    assert not oracle_may_carry_room(_oracle_args())
+    assert oracle_may_carry_room(_oracle_args(oracle_wav="rendered.wav"))
+
+
+def test_an_au_oracle_has_its_room_measured(monkeypatch):
+    """The measurement is what the model is then convolved to match."""
+    measured = []
+    monkeypatch.setattr(autofit, "obtain_oracle",
+                        lambda *a, **k: np.zeros((48000, 1), dtype=np.float32))
+    monkeypatch.setattr(autofit, "probe_rows", lambda *a, **k: [])
+    monkeypatch.setattr(autofit, "estimate_room",
+                        lambda *a, **k: measured.append(1) or DRY)
+    args = _probe_args(au="Pianoteq", au_dry=False, oracle_wav="", room="auto")
+    resolve_probe(args)
+    autofit.oracle_reference(args)
+    assert measured == [1]
+
+
+# --------------------------------------------------------------------------- #
+# The hold-out check
+# --------------------------------------------------------------------------- #
+def test_a_hold_out_against_a_fixed_wav_is_refused_before_the_fit_starts():
+    """The WAV holds the fitted notes; scoring the held-out ones against it is fiction."""
+    with pytest.raises(ValueError, match="needs its own reference"):
+        resolve_probe(_probe_args(oracle_wav="probe.wav", validate_notes="43,55,67"))
+
+
+def test_a_hold_out_reference_satisfies_the_check():
+    resolve_probe(_probe_args(oracle_wav="probe.wav", validate_notes="43,55,67",
+                              validate_oracle_wav="holdout.wav"))
+
+
+def test_a_re_rendering_oracle_route_needs_no_hold_out_reference():
+    """fluidsynth and the AU host both render whatever score they are handed."""
+    resolve_probe(_probe_args(validate_notes="43,55,67"))
+    resolve_probe(_probe_args(au="Pianoteq", validate_notes="43,55,67"))
+
+
+def test_a_hold_out_reference_without_a_fit_reference_is_refused():
+    with pytest.raises(ValueError, match="belongs with --oracle-wav"):
+        check_holdout_oracle(_probe_args(validate_oracle_wav="holdout.wav"))
+
+
+def test_the_hold_out_is_scored_against_its_own_reference(monkeypatch):
+    seen: dict[str, str] = {}
+
+    def fake_oracle(holdout):
+        seen["wav"] = holdout.oracle_wav
+        seen["notes"] = holdout.notes
+        return [], None, None
+
+    monkeypatch.setattr(autofit, "oracle_reference", fake_oracle)
+    args = _probe_args(oracle_wav="probe.wav", validate_notes="43,55,67",
+                       validate_oracle_wav="holdout.wav")
+    resolve_probe(args)
+    assert validate(args, Path("."), [], [], [], None) is None
+    assert seen == {"wav": "holdout.wav", "notes": "43,55,67"}
+
+
+# --------------------------------------------------------------------------- #
+# Sweeping a knob the library reads
+# --------------------------------------------------------------------------- #
+def test_room_match_refuses_a_library_that_ignores_the_override(monkeypatch):
+    """Without BUILD_TUNING the decay axis is inert and every render is identical."""
+    monkeypatch.setattr(voicematch, "dump_catalogue",
+                        lambda *a, **k: Catalogue({"gs_effects.kOther": 1.0}, {}, {}))
+
+    def refuse(*args, **kwargs):
+        raise AssertionError("run_room_match rendered before checking the override table")
+
+    monkeypatch.setattr(voicematch, "obtain_oracle", refuse)
+    with pytest.raises(SystemExit, match="kReverbDecayScale"):
+        voicematch.run_room_match(
+            argparse.Namespace(programs="19", pattern="sustain", verbose=False)
+        )
+
+
+def test_room_match_reports_a_library_built_without_the_table(monkeypatch):
+    def no_dump(*args, **kwargs):
+        raise RuntimeError("the render produced no knob dump")
+
+    monkeypatch.setattr(voicematch, "dump_catalogue", no_dump)
+    with pytest.raises(SystemExit, match="BUILD_TUNING=ON"):
+        voicematch.require_live_tunable(19, "sustain", voicematch.DECAY_SCALE_KEY)
+
+
+def test_room_match_proceeds_when_the_library_reports_the_key(monkeypatch):
+    monkeypatch.setattr(
+        voicematch, "dump_catalogue",
+        lambda *a, **k: Catalogue({voicematch.DECAY_SCALE_KEY: 1.0}, {}, {}),
+    )
+    voicematch.require_live_tunable(19, "sustain", voicematch.DECAY_SCALE_KEY)
+
+
+# --------------------------------------------------------------------------- #
+# The build dir a fit renders through
+# --------------------------------------------------------------------------- #
+def _cache(build_dir: Path, **options) -> Path:
+    build_dir.mkdir(parents=True, exist_ok=True)
+    lines = [f"CMAKE_HOME_DIRECTORY:INTERNAL={REPO_ROOT}"]
+    lines += [f"{name}:STRING={value}" for name, value in options.items()]
+    (build_dir / "CMakeCache.txt").write_text("\n".join(lines) + "\n")
+    return build_dir
+
+
+def test_a_dir_configured_without_the_shared_target_is_reconfigured(tmp_path, monkeypatch):
+    """`sonare_shared` would not exist, and the build error names no option."""
+    build_dir = _cache(tmp_path / "build", BUILD_TUNING="ON", BUILD_SHARED="OFF",
+                       CMAKE_BUILD_TYPE="Release")
+    ran: list[list[str]] = []
+    monkeypatch.setattr(build_lib.subprocess, "run", lambda cmd, **k: ran.append(cmd))
+    configure_build(build_dir, "cmake", tuning=True)
+    assert ran and "-DBUILD_SHARED=ON" in ran[0]
+
+
+def test_a_debug_dir_is_reconfigured_to_release(tmp_path, monkeypatch):
+    build_dir = _cache(tmp_path / "build", BUILD_TUNING="OFF", BUILD_SHARED="ON",
+                       CMAKE_BUILD_TYPE="Debug")
+    ran: list[list[str]] = []
+    monkeypatch.setattr(build_lib.subprocess, "run", lambda cmd, **k: ran.append(cmd))
+    configure_build(build_dir, "cmake", tuning=False)
+    assert ran and "-DCMAKE_BUILD_TYPE=Release" in ran[0]
+
+
+def test_a_matching_dir_is_left_alone(tmp_path, monkeypatch):
+    build_dir = _cache(tmp_path / "build", BUILD_TUNING="ON", BUILD_SHARED="ON",
+                       CMAKE_BUILD_TYPE="Release")
+    monkeypatch.setattr(build_lib.subprocess, "run",
+                        lambda *a, **k: pytest.fail("reconfigured a compatible dir"))
+    configure_build(build_dir, "cmake", tuning=True)
+
+
+def test_a_dir_belonging_to_another_checkout_is_refused(tmp_path):
+    build_dir = tmp_path / "build"
+    build_dir.mkdir()
+    (build_dir / "CMakeCache.txt").write_text(
+        "CMAKE_HOME_DIRECTORY:INTERNAL=/somewhere/else\nBUILD_SHARED:STRING=ON\n"
+    )
+    with pytest.raises(RuntimeError, match="/somewhere/else"):
+        configure_build(build_dir, "cmake", tuning=True)
+
+
+# --------------------------------------------------------------------------- #
+# What a render is allowed to have come from
+# --------------------------------------------------------------------------- #
+class _ManifestEntry:
+    def __init__(self, program: int, backend: int):
+        self.program, self.backend = program, backend
+
+
+def test_a_soundfont_render_is_not_reported_as_the_native_bank():
+    check_gm_fallback([_ManifestEntry(0, 0), _ManifestEntry(40, 0)])
+    with pytest.raises(RuntimeError, match="expected GM fallback"):
+        check_gm_fallback([_ManifestEntry(0, 0), _ManifestEntry(40, 1)])
+
+
+def test_the_corpus_renderer_checks_the_backend_too():
+    """Read from the source: importing `render_corpus` loads the dylib at module scope."""
+    source = (Path(__file__).resolve().parent / "render_corpus.py").read_text()
+    assert "check_gm_fallback(manifest)" in source
+
+
+# --------------------------------------------------------------------------- #
+# Keeping the tree consistent with the candidate being scored
+# --------------------------------------------------------------------------- #
+def _source_knob(tmp_path: Path, name: str, literal: str) -> tuple[Path, Knob]:
+    """A file holding one numeric literal, and the source knob that points at it."""
+    path = tmp_path / name
+    head, tail = "constexpr float kValue = ", "f;\n"
+    path.write_text(head + literal + tail)
+    return path, Knob(
+        label=name, lo=0.0, hi=10.0, log=False, start_value=float(literal),
+        file=path, pattern=r"kValue = ([0-9.]+)f",
+        span_start=len(head), span_end=len(head) + len(literal),
+    )
+
+
+def test_a_file_whose_knob_is_back_at_its_default_is_still_written(tmp_path):
+    """Left out, it would keep the previous candidate's value through this render."""
+    a_path, a = _source_knob(tmp_path, "a.cpp", "1.0")
+    b_path, b = _source_knob(tmp_path, "b.cpp", "2.0")
+    pristine = {a_path: a_path.read_text(), b_path: b_path.read_text()}
+    full = materialize([a, b], [9.0, 2.0], pristine, full=True)
+    assert set(full) == {a_path, b_path}
+    assert full[b_path] == pristine[b_path]
+    # The report keeps the minimal diff: nothing to say about a knob that stayed.
+    assert set(materialize([a, b], [9.0, 2.0], pristine)) == {a_path}
+
+
+def _fit_args(**kwargs) -> argparse.Namespace:
+    base = dict(raw_loss=False, workers=1, cmake="cmake", jobs=1, n_harm=10,
+                percussive=False)
+    base.update(kwargs)
+    return _probe_args(**base)
+
+
+def test_every_source_file_matches_the_candidate_being_rendered(tmp_path, monkeypatch):
+    """A stale file would score a knob vector that was never assembled."""
+    a_path, a = _source_knob(tmp_path, "a.cpp", "1.0")
+    b_path, b = _source_knob(tmp_path, "b.cpp", "2.0")
+    pristine = {a_path: a_path.read_text(), b_path: b_path.read_text()}
+    monkeypatch.setattr(autofit, "build_shared", lambda *a, **k: None)
+    evaluator = Evaluator([a, b], pristine, [], None, _fit_args(), tmp_path / "build")
+
+    on_disk: list[tuple[str, str]] = []
+
+    def capture(values):
+        on_disk.append((a_path.read_text(), b_path.read_text()))
+        return _terms(harm=1.0)
+
+    evaluator._render_terms = capture
+    evaluator([1.0, 5.0])   # b moves away from its default
+    evaluator([9.0, 2.0])   # ...and back to it, while a moves
+    assert on_disk[1] == (materialize([a], [9.0], pristine, full=True)[a_path],
+                          pristine[b_path])
+
+
+def test_a_cached_point_still_decides_the_best(tmp_path, monkeypatch):
+    """Each stage re-scores the point it inherited, which is always a cache hit."""
+    knob = Knob(label="x.k", lo=0.0, hi=1.0, log=False, start_value=0.5, tunable="x.k")
+    evaluator = Evaluator([knob], {}, [], None, _fit_args(), tmp_path / "build")
+    monkeypatch.setattr(autofit, "build_shared", lambda *a, **k: None)
+    scores = {"0.5": 10.0, "0.9": 40.0}
+    evaluator._render_terms = lambda values: _terms(harm=scores[format_value(values[0])])
+
+    evaluator([0.5])
+    evaluator.restage({"harm": 1.0}, "decay")
+    evaluator([0.5])  # cached, and better than anything this stage renders
+    evaluator([0.9])
+    assert evaluator.best_values == [0.5]
+
+
+# --------------------------------------------------------------------------- #
+# Undoing a fit's edits without undoing anyone else's
+# --------------------------------------------------------------------------- #
+def test_restore_puts_back_what_the_fit_wrote(tmp_path):
+    path, _ = _source_knob(tmp_path, "a.cpp", "1.0")
+    pristine = {path: path.read_text()}
+    written: dict[Path, str] = {}
+    write_edits({path: "spliced\n"}, written)
+    restore(pristine, written)
+    assert path.read_text() == pristine[path]
+
+
+def test_restore_leaves_a_file_the_fit_never_wrote(tmp_path):
+    """A runtime knob's declaration file is snapshotted for the diff, never written."""
+    path, _ = _source_knob(tmp_path, "declaration.cpp", "1.0")
+    pristine = {path: path.read_text()}
+    path.write_text("edited by hand while the fit ran\n")
+    restore(pristine, {})
+    assert path.read_text() == "edited by hand while the fit ran\n"
+
+
+def test_restore_does_not_roll_back_an_edit_made_after_its_own(tmp_path, capsys):
+    """Hours of fitting must not cost someone the file they were editing meanwhile."""
+    path, _ = _source_knob(tmp_path, "a.cpp", "1.0")
+    pristine = {path: path.read_text()}
+    written: dict[Path, str] = {}
+    write_edits({path: "spliced\n"}, written)
+    path.write_text("edited by hand while the fit ran\n")
+    restore(pristine, written)
+    assert path.read_text() == "edited by hand while the fit ran\n"
+    assert "was edited after the fit wrote it" in capsys.readouterr().err
+
+
+# --------------------------------------------------------------------------- #
+# Every named patch has somewhere to write to
+# --------------------------------------------------------------------------- #
+def _table_texts() -> dict[Path, str]:
+    from writeback import PROGRAM_TABLE_FILES
+
+    return {REPO_ROOT / name: (REPO_ROOT / name).read_text()
+            for name in PROGRAM_TABLE_FILES if (REPO_ROOT / name).exists()}
+
+
+def test_every_named_patch_has_a_write_back_site():
+    """A patch with none falls silently into `unplaced` and the fit loop never closes."""
+    tables = _table_texts()
+    unplaced = [patch for patch in override_patch_names()
+                if not write_patch_fields({patch: [("amp_env.release_ms", 123.0)]}, tables)]
+    assert unplaced == []
+
+
+def test_a_patch_built_through_a_reference_is_written_through_it():
+    """A third of the melodic bank never spells `o.<patch>` after the binding line."""
+    edited = write_patch_fields({"vibraphone": [("body_mix", 0.33)]})
+    text = next(iter(edited.values()))
+    lines = text.splitlines()
+    written = next(i for i, ln in enumerate(lines) if "vb.body_mix = 0.33f;" in ln)
+    bound = next(i for i, ln in enumerate(lines)
+                 if "NativeSynthPatch& vb = o.vibraphone;" in ln)
+    following = next(i for i, ln in enumerate(lines)
+                     if i > bound and "NativeSynthPatch&" in ln)
+    assert bound < written < following
+
+
+def test_a_reference_built_patch_replaces_its_own_line_rather_than_adding_one():
+    edited = write_patch_fields({"vibraphone": [("modal.decay_s", 4.2)]})
+    text = next(iter(edited.values()))
+    assert text.count("vb.modal.decay_s =") == 1
+    assert "vb.modal.decay_s = 4.2f;" in text
+
+
+def test_two_write_backs_into_one_file_both_survive(tmp_path, monkeypatch, capsys):
+    """A `SONARE_TUNABLE` splice and a patch-field line can land in the same file."""
+    path, knob = _source_knob(tmp_path, "shared.h", "1.0")
+    knob = Knob(**{**vars(knob), "tunable": "violin.kValue"})
+    patch_knob = Knob(label="violin.cutoff_hz", lo=0.0, hi=1.0, log=False,
+                      start_value=0.5, tunable="violin.cutoff_hz")
+
+    def fake_write(per_patch, base=None):
+        return {path: (base or {})[path] + "// patch field\n"}
+
+    monkeypatch.setattr(report_module, "write_patch_fields", fake_write)
+    monkeypatch.setattr(report_module, "REPO_ROOT", tmp_path)  # the knob file lives here
+    evaluator = argparse.Namespace(trajectory=[], best_loss=0.5, normalize=True)
+    args = _probe_args(out="", dry_run=True)
+    report_result([knob, patch_knob], {path: path.read_text()}, [7.0, 0.9],
+                  evaluator, args)
+    printed = capsys.readouterr().out
+    assert "kValue = 7.0f" in printed and "// patch field" in printed
+
+
+# --------------------------------------------------------------------------- #
+# Termination
+# --------------------------------------------------------------------------- #
+class _CacheOnlyEvaluator:
+    """Every point it is asked about has already been rendered.
+
+    Which is a state a converged search reaches: the budget counts renders, so
+    a generation of cache hits advances nothing the loop can terminate on.
+    """
+
+    def __init__(self, start: list[float], limit: int = 400):
+        self.trajectory: list[tuple[float, float, str]] = []
+        self.best_loss = 1.0
+        self.best_values = list(start)
+        self.workers = 1
+        self.quiet = False
+        self.calls = 0
+        self.limit = limit
+
+    def __call__(self, values) -> float:
+        self.calls += 1
+        if self.calls > self.limit:
+            raise AssertionError(
+                f"the search did not terminate: {self.calls} evaluations, all cached, "
+                f"trajectory still empty"
+            )
+        return 1.0
+
+    def evaluate_batch(self, batch) -> list[float]:
+        return [self(values) for values in batch]
+
+
+def _optimizer_args(**kwargs) -> argparse.Namespace:
+    base = dict(max_evals=30, per_knob_evals=6, population=6, sigma0=0.25, seed=0,
+                restarts=0)
+    base.update(kwargs)
+    return argparse.Namespace(**base)
+
+
+def test_cma_es_terminates_when_every_candidate_is_a_cache_hit():
+    knobs = [_knob("a.b"), _knob("c.d")]
+    evaluator = _CacheOnlyEvaluator([k.start_value for k in knobs])
+    assert cma_es(evaluator, knobs, _optimizer_args()) == [0.5, 0.5]
+
+
+def test_coordinate_descent_terminates_when_every_candidate_is_a_cache_hit():
+    knobs = [_knob("a.b"), _knob("c.d")]
+    evaluator = _CacheOnlyEvaluator([k.start_value for k in knobs])
+    assert optimize(evaluator, knobs, _optimizer_args()) == [0.5, 0.5]
+
+
+# --------------------------------------------------------------------------- #
+# Starting up the way a user starts it
+# --------------------------------------------------------------------------- #
+HERE = Path(__file__).resolve().parent
+
+def _is_entry_point(path: Path) -> bool:
+    """Whether a file has a `__main__` block — the line itself, not a mention of it.
+
+    Anchored on the whole line because this file quotes that source line, and a
+    substring search over the directory therefore matches the test module too.
+    """
+    if path.name.startswith("test_"):
+        return False
+    return any(
+        line.rstrip() == 'if __name__ == "__main__":'
+        for line in path.read_text().splitlines()
+    )
+
+
+# Every script here with a `__main__`, discovered rather than listed: the next
+# module to grow one is covered without anyone remembering to add it.
+CLI_SCRIPTS = sorted(path.name for path in HERE.glob("*.py") if _is_entry_point(path))
+
+# Run the file's module scope in a child, with the path a direct `python
+# <script>` produces and nothing else. `run_name` keeps `main()` out of it —
+# what is under test is what happens before the first line of a command runs.
+_IMPORT_SMOKE = (
+    "import runpy, sys\n"
+    "sys.path[0] = sys.argv[1]\n"
+    "runpy.run_path(sys.argv[2], run_name='__voicematch_import_smoke__')\n"
+)
+
+
+def _needs_native_library(path: Path) -> bool:
+    """Whether a script loads the C library while it imports rather than when it runs.
+
+    Column zero only: `render_model` imports `libsonare` inside a function, on
+    purpose, so that `SONARE_LIB_PATH` is set before the dylib is mapped.
+    """
+    return any(
+        line.startswith(("import libsonare", "from libsonare import"))
+        for line in path.read_text().splitlines()
+    )
+
+
+# What `render_model.ensure_lib_path` would resolve to, replayed in a child with
+# no repo imports of its own, so the only thing that can fail in it is the load.
+_NATIVE_PROBE = (
+    "import os, sys\n"
+    "if 'SONARE_LIB_PATH' not in os.environ and os.path.exists(sys.argv[1]):\n"
+    "    os.environ['SONARE_LIB_PATH'] = sys.argv[1]\n"
+    "import libsonare\n"
+)
+
+
+@functools.lru_cache(maxsize=1)
+def _native_library_loads() -> bool:
+    """Whether a libsonare dylib is available to load at all."""
+    proc = subprocess.run(
+        [sys.executable, "-c", _NATIVE_PROBE, str(DEFAULT_DYLIB)],
+        capture_output=True, text=True,
+    )
+    return proc.returncode == 0
+
+
+def test_every_entry_point_is_covered_by_the_import_smoke():
+    """The discovery is the test's reach; an empty or shrunken list is a silent pass."""
+    assert len(CLI_SCRIPTS) >= 7
+    assert {"voicematch.py", "autofit.py"} <= set(CLI_SCRIPTS)
+    # Covered even where the case below can only skip: a script that cannot run
+    # here still has to be one the suite knows about.
+    assert "render_corpus.py" in CLI_SCRIPTS
+    assert not [s for s in CLI_SCRIPTS if s.startswith("test_")]  # not entry points
+
+
+@pytest.mark.parametrize("script", CLI_SCRIPTS)
+def test_a_cli_entry_point_imports_as_shipped(script, tmp_path):
+    """Each CLI must resolve its own imports without this test file's help.
+
+    `python tools/voicematch/<script>.py` puts `tools/voicematch/` on the path
+    and nothing else, so a module-scope import of anything living in `tools/`
+    — `_repo`, reached through `catalogue`, `knobs` or `writeback` — needs the
+    script to insert that directory itself. No in-process test can see the
+    difference: this file puts `tools/` on the path when pytest imports it, so
+    every module resolves either way and a CLI that dies on the user's first
+    keystroke passes anyway. Hence a child process, started the way the
+    docstrings say to start it.
+
+    `render_corpus.py` imports libsonare at module scope, so its case needs the
+    built dylib as well as a resolvable path. That one is skipped when the
+    library is absent rather than failed: this suite is otherwise pure Python
+    and runs from a bare checkout, and a developer who reads one environmental
+    red tends to stop trusting every other case with it. The skip is keyed on
+    whether the library loads at all, so an ImportError from inside
+    `render_corpus.py` is still red, it stays a hard failure wherever a dylib is
+    present, and the coverage test above still requires the script to be
+    discovered.
+    """
+    if _needs_native_library(HERE / script) and not _native_library_loads():
+        pytest.skip(
+            f"{script} imports libsonare at module scope and no shared library is "
+            f"available: set SONARE_LIB_PATH, or build one with "
+            f"`cmake --build build-python-shared --target sonare_shared` "
+            f"(expected at {DEFAULT_DYLIB})"
+        )
+    env = os.environ.copy()
+    env.pop("PYTHONPATH", None)  # never let an ambient path answer the question
+    proc = subprocess.run(
+        [sys.executable, "-c", _IMPORT_SMOKE, str(HERE), str(HERE / script)],
+        capture_output=True, text=True, cwd=tmp_path, env=env,
+    )
+    assert proc.returncode == 0, (
+        f"{script} does not import on a clean interpreter "
+        f"(exit {proc.returncode}):\n{proc.stderr.strip()[-1200:]}"
+    )

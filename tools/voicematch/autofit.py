@@ -121,10 +121,12 @@ site, so their values are reported rather than written. See `writeback`.
 
 Safety: the pristine text of every source-knob file is snapshotted at startup
 and restored in a `finally` block, so an exception or Ctrl-C never leaves the
-tree perturbed. On a normal run the best values are then written back and a
-unified diff plus the loss trajectory are printed; `--dry-run` reports the diff
-it would have applied without writing it. `--out` additionally records the whole
-result as JSON.
+tree perturbed. The restore covers the files this run wrote and only while they
+still hold what it wrote, so a fit left running for hours cannot roll back
+whatever else was edited in the tree meanwhile. On a normal run the best values
+are then written back and a unified diff plus the loss trajectory are printed;
+`--dry-run` reports the diff it would have applied without writing it. `--out`
+additionally records the whole result as JSON.
 
 Build isolation: a dedicated build dir (default `build-autofit`) is configured
 with `-DBUILD_SHARED=ON`, plus `-DBUILD_TUNING=ON` when the spec has runtime
@@ -166,12 +168,16 @@ from metrics import normalize_rms, to_mono  # noqa: E402
 from optimizers import cma_es, optimize  # noqa: E402
 from patterns import build_pattern, pattern_length  # noqa: E402
 from render_model import render_model  # noqa: E402
-from render_oracle import add_oracle_args, obtain_oracle  # noqa: E402
+from render_oracle import (  # noqa: E402
+    add_oracle_args,
+    obtain_oracle,
+    oracle_may_carry_room,
+)
 from report import report_result  # noqa: E402
 from room import apply_room, estimate_room, fit_room_ir  # noqa: E402
 from smf import write_smf  # noqa: E402
 from staging import SubEvaluator, run_stages, screen_knobs  # noqa: E402
-from writeback import materialize, restore  # noqa: E402
+from writeback import materialize, restore, write_edits  # noqa: E402
 
 SR = 48000
 
@@ -187,6 +193,46 @@ def _score(program: int, pattern_name: str, notes_csv: str, velocities_csv: str 
         kwargs["velocities"] = tuple(int(v) for v in velocities_csv.split(","))
     pattern = build_pattern(pattern_name, program, **kwargs)
     return pattern, pattern_length(pattern), pattern.analysis_notes
+
+
+def check_holdout_oracle(args) -> None:
+    """Refuse a hold-out check that would be scored against the wrong audio.
+
+    `--oracle-wav` is one fixed rendering of one probe: it ignores the score
+    entirely, so a hold-out run asking for different notes gets the *fitted*
+    notes' audio back and compares the model's held-out register against it.
+    The comparison still produces a number, and the sustain pattern's timeline
+    does not depend on pitch, so nothing downstream looks wrong — the report
+    then states that the values do or do not generalise on the strength of a
+    measurement taken against other notes.
+
+    The fix is a second rendering, `--validate-oracle-wav`, of the probe
+    exported for the held-out set. Every other oracle route re-renders from the
+    score and needs nothing. Checked before the fit rather than after it,
+    because the alternative is discovering it hours later.
+    """
+    if not getattr(args, "oracle_wav", ""):
+        if getattr(args, "validate_oracle_wav", ""):
+            raise ValueError(
+                "--validate-oracle-wav belongs with --oracle-wav: the fit and its "
+                "hold-out have to be scored against the same reference, and this run's "
+                "fit oracle is rendered here rather than supplied"
+            )
+        return
+    percussive = getattr(args, "percussive", False)
+    held = (getattr(args, "validate_velocities", "") if percussive
+            else getattr(args, "validate_notes", ""))
+    if not held or getattr(args, "validate_oracle_wav", ""):
+        return
+    axis = "--validate-velocities" if percussive else "--validate-notes"
+    flag = "--velocities" if percussive else "--notes"
+    raise ValueError(
+        f"{axis} with --oracle-wav needs its own reference: the WAV is a fixed "
+        f"rendering of the fitted probe, so the hold-out would be scored against the "
+        f"audio of the notes the fit already saw. Export the hold-out probe "
+        f"(`voicematch.py export-probe --pattern {args.pattern} {flag} {held}`), render "
+        f"it the same way, and pass it as --validate-oracle-wav; or drop {axis}."
+    )
 
 
 def resolve_probe(args) -> None:
@@ -219,6 +265,7 @@ def resolve_probe(args) -> None:
             f"--drum-note needs a drum-channel pattern; {args.pattern!r} is written on "
             f"channel 1 and would sound a pitch rather than the kit"
         )
+    check_holdout_oracle(args)
     if not analysis_notes:
         per_note = {t: w for t, w in cli_weights(args).items() if t != "mss" and w > 0.0}
         if per_note:
@@ -253,12 +300,14 @@ def oracle_reference(args) -> tuple[list[dict], np.ndarray, np.ndarray | None]:
     )
     audio = obtain_oracle(args, smf_bytes, total, SR, [n.start for n in pattern.notes])
 
-    # Only an externally supplied WAV can carry a room. The built-in fluidsynth
-    # oracle is rendered with its reverb and chorus units switched off, so any
-    # decay measured there is the instrument's own — estimating a room from it
-    # would invent one and then convolve the model with it.
+    # Only an oracle rendered outside libsonare's dry path can carry a room —
+    # a supplied WAV, or an AudioUnit that was not asked to switch its effects
+    # off. The built-in fluidsynth oracle is rendered with its reverb and chorus
+    # units switched off, so any decay measured there is the instrument's own,
+    # and estimating a room from it would invent one and then convolve the model
+    # with it.
     room = None
-    if getattr(args, "room", "auto") != "none" and getattr(args, "oracle_wav", ""):
+    if getattr(args, "room", "auto") != "none" and oracle_may_carry_room(args):
         measured = estimate_room(
             audio, SR, [(n.start, n.start + n.dur) for n in pattern.notes]
         )
@@ -352,6 +401,11 @@ class Evaluator:
         self.percussive = bool(getattr(args, "percussive", False))
         self.needs_rebuild = any(k.tunable is None for k in knobs)
         self.built = False
+        # What this process has actually written to the tree, and what it wrote,
+        # so the restore in the `finally` puts back its own edits and nothing
+        # else. `pristine` is wider than this on purpose: it also snapshots the
+        # declaration file of every runtime knob, which the fit never writes.
+        self.written: dict[Path, str] = {}
         self.cache: dict[tuple[str, ...], dict[str, float] | None] = {}
         self.n_builds = 0
         self.stage = "fit"
@@ -410,6 +464,22 @@ class Evaluator:
         return score_terms(model_rows, self.oracle, n_harm=self.args.n_harm, mss=mss,
                            percussive=self.percussive)
 
+    def _score_cached(self, values: list[float], terms: dict[str, float] | None) -> float:
+        """Score an already-rendered candidate under the current weights.
+
+        A cache hit still decides things. Every stage begins by re-scoring the
+        point it inherited, which is by construction already rendered, so a
+        stage whose samples never beat its own start point would otherwise end
+        with `best_loss` still at infinity and hand back the first finite loss
+        it happened to see — a candidate worse than the one it was given, on its
+        way into the source.
+        """
+        loss = self.loss.combine(terms)
+        if loss < self.best_loss:
+            self.best_loss = loss
+            self.best_values = list(values)
+        return loss
+
     def _record(self, values: list[float], terms: dict[str, float] | None) -> float:
         """Score a rendered candidate, update the best, and log it."""
         if self.normalize and self.loss.scales is None and terms is not None:
@@ -450,11 +520,15 @@ class Evaluator:
     def __call__(self, values: list[float]) -> float:
         key = self.key(values)
         if key in self.cache:
-            return self.loss.combine(self.cache[key])
+            return self._score_cached(values, self.cache[key])
         if self.needs_rebuild:
-            edited = materialize(self.knobs, values, self.pristine)
-            for path, text in edited.items():
-                path.write_text(text)
+            # `full`: every source-knob file, every knob, whether or not this
+            # candidate moved it. A file left out because its knob formats back
+            # to its start value would still hold the previous candidate's text,
+            # and this render would score a vector nothing ever assembled.
+            write_edits(
+                materialize(self.knobs, values, self.pristine, full=True), self.written
+            )
             build_shared(self.build_dir, self.args.cmake, self.args.jobs)
             self.n_builds += 1
         else:
@@ -493,7 +567,7 @@ class Evaluator:
                     self.cache[key] = pending.pop(key).result()
                     results.append(self._record(values, self.cache[key]))
                 else:
-                    results.append(self.loss.combine(self.cache[key]))
+                    results.append(self._score_cached(values, self.cache[key]))
         return results
 
 
@@ -513,6 +587,9 @@ def validate(args, build_dir, knobs, start_values, best_values, room_ir) -> dict
     """
     percussive = getattr(args, "percussive", False)
     holdout = argparse.Namespace(**vars(args))
+    # A fixed WAV is one rendering of one probe, so the hold-out gets its own.
+    # `check_holdout_oracle` has already refused the combination without it.
+    holdout.oracle_wav = getattr(args, "validate_oracle_wav", "")
     if percussive:
         if not args.validate_velocities:
             return None
@@ -719,8 +796,9 @@ def run(args) -> int:
             else:
                 optimizer(problem, fit_knobs, args)
         finally:
-            # Always return the tree to pristine, whatever happened above.
-            restore(pristine)
+            # Always undo this run's own edits, whatever happened above — and
+            # only those, so a file someone else changed meanwhile survives.
+            restore(pristine, evaluator.written)
 
         if evaluator.best_values is not None:
             best_values = evaluator.best_values
@@ -813,6 +891,10 @@ def main() -> int:
                         help="the same check for a drum fit, which has no register to hold "
                              "notes out of: score the result at these velocities as well "
                              "(e.g. '48,88,112'), disjoint from the probe's")
+    parser.add_argument("--validate-oracle-wav", default="", dest="validate_oracle_wav",
+                        help="the reference for the held-out probe, rendered the same way "
+                             "as --oracle-wav. Required with it, because a fixed WAV is one "
+                             "rendering of one probe and cannot supply the held-out notes")
     parser.add_argument("--out", default="",
                         help="write the result (knob values, losses, overrides, validation) "
                              "to this JSON path")
