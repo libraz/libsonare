@@ -213,15 +213,20 @@ SonareError sonare_project_load_soundfont(SonareProject* project, const uint8_t*
 #if defined(SONARE_WITH_ARRANGEMENT)
   if (!project || !data || size == 0) return SONARE_ERROR_INVALID_PARAMETER;
   SONARE_C_TRY
+  // Both rejections are statements about the supplied data rather than about the
+  // call's arguments, so they carry INVALID_FORMAT and leave INVALID_PARAMETER
+  // to the null/empty check above. That is the rule the project MIDI import
+  // documents for its own budget rejection, and the code the engine's soundfont
+  // loader already returns for these two conditions.
   if (!sonare::resource::sf2_file_fits(size)) {
     sonare_c_detail::set_last_error("sf2: file resource limit exceeded");
-    return SONARE_ERROR_INVALID_PARAMETER;
+    return SONARE_ERROR_INVALID_FORMAT;
   }
   auto soundfont = std::make_shared<synth::Sf2File>();
   std::string error;
   if (!soundfont->parse(data, size, &error)) {
     sonare_c_detail::set_last_error(error.c_str());
-    return SONARE_ERROR_INVALID_PARAMETER;
+    return SONARE_ERROR_INVALID_FORMAT;
   }
   project->soundfont = std::move(soundfont);
   return SONARE_OK;

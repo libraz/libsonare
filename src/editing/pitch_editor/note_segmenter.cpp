@@ -10,10 +10,12 @@
 namespace sonare::editing::pitch_editor {
 namespace {
 
-int saturated_sample_offset(int frame, int hop_length) noexcept {
-  if (frame <= 0 || hop_length <= 0) return 0;
-  const int64_t samples = static_cast<int64_t>(frame) * static_cast<int64_t>(hop_length);
-  if (samples > std::numeric_limits<int>::max()) return std::numeric_limits<int>::max();
+int saturated_sample_offset(int frame, double samples_per_frame) noexcept {
+  if (frame <= 0 || !(samples_per_frame > 0.0)) return 0;
+  const double samples = static_cast<double>(frame) * samples_per_frame;
+  if (samples > static_cast<double>(std::numeric_limits<int>::max())) {
+    return std::numeric_limits<int>::max();
+  }
   return static_cast<int>(samples);
 }
 
@@ -34,9 +36,10 @@ std::vector<NoteRegion> NoteSegmenter::segment(const F0Track& track) const {
     return regions;
   }
 
-  const float frame_rate = track.frame_rate_hz > 0.0f ? track.frame_rate_hz
-                                                      : static_cast<float>(track.sample_rate) /
-                                                            static_cast<float>(track.hop_length);
+  // One cadence rule per track (F0Track::frame_rate): the sample offsets below
+  // are derived from the same one, so a host-supplied frame_rate_hz cannot be
+  // honoured for the duration threshold and ignored for the region bounds.
+  const float frame_rate = track.frame_rate();
   const int min_frames =
       std::max(1, static_cast<int>(std::ceil(config_.min_note_ms * 0.001f * frame_rate)));
 
@@ -106,8 +109,9 @@ NoteRegion NoteSegmenter::make_region(const F0Track& track, int start, int end) 
   }
   const float median = sonare::median(cents.data(), cents.size());
 
-  return {saturated_sample_offset(start, track.hop_length),
-          saturated_sample_offset(end, track.hop_length), median, start, end};
+  const double samples_per_frame = track.samples_per_frame();
+  return {saturated_sample_offset(start, samples_per_frame),
+          saturated_sample_offset(end, samples_per_frame), median, start, end};
 }
 
 }  // namespace sonare::editing::pitch_editor

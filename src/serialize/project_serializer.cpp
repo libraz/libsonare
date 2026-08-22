@@ -715,7 +715,8 @@ DeserializeResult project_from_json(const std::string& json_text) {
     // Last gate before the model escapes: bring it into the state space the C
     // ABI edit API can produce, so no decoder above can hand back a project the
     // setters could neither have built nor can now address.
-    if (const auto violation = enforce_edit_api_invariants(&project, &decode_diagnostics)) {
+    if (const auto violation =
+            enforce_edit_api_invariants(&project, &result.midi, &decode_diagnostics)) {
       result.diagnostics.push_back(
           {DiagnosticSeverity::kError, violation->code, violation->message});
       return result;

@@ -235,10 +235,15 @@ SonareError sonare_project_bounce_with_synth_instruments(
 ///        Replaces any previously loaded SoundFont. CONTROL thread; the bytes
 ///        are copied/decoded, so @p data may be freed after the call. On a
 ///        malformed file the project's SoundFont is left unchanged and
-///        SONARE_ERROR_INVALID_PARAMETER is returned (sonare_last_error_message
-///        carries the parser detail). Resource limits are 268,435,456 input
-///        bytes, 67,108,864 sample points, 536,870,912 peak input-plus-decoded
-///        bytes, and 65,536 records per pdta table.
+///        SONARE_ERROR_INVALID_FORMAT is returned (sonare_last_error_message
+///        carries the parser detail); a file rejected against the resource
+///        limits below returns the same code, because that too is a statement
+///        about the supplied data. SONARE_ERROR_INVALID_PARAMETER is reserved
+///        for a NULL project/@p data or a zero @p size, so a caller can tell a
+///        broken file from a broken call — the same split
+///        @ref sonare_engine_load_soundfont makes. Resource limits are
+///        268,435,456 input bytes, 67,108,864 sample points, 536,870,912 peak
+///        input-plus-decoded bytes, and 65,536 records per pdta table.
 SonareError sonare_project_load_soundfont(SonareProject* project, const uint8_t* data, size_t size);
 
 /// @brief Releases the project's loaded SoundFont (no-op when none is loaded).

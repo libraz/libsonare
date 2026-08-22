@@ -41,6 +41,13 @@ using InterleavedAudioLoadResult = std::tuple<std::vector<float>, int, int>;
 struct AudioLoadOptions {
   /// @brief Maximum file size in bytes (0 = no limit).
   /// @details Default is 500MB. Set to 0 to disable size checking.
+  ///
+  /// This is the ONLY size ceiling the path loaders (@ref load_audio,
+  /// @ref load_audio_interleaved, @ref audio_channel_count) apply, and it is
+  /// applied before the file is read, so raising it (or clearing it with 0)
+  /// admits the file rather than failing after it has been materialized in
+  /// memory. The options-free buffer entry point @ref load_buffer keeps the
+  /// library ceiling @c resource::kMaxAudioFileBytes for its direct callers.
   size_t max_file_size = resource::kMaxAudioFileBytes;
 };
 
@@ -110,6 +117,9 @@ int audio_channel_count(const std::string& path,
 /// @details Dispatch is by codec, not container: a RIFF/WAVE declaring a codec
 ///          the built-in decoder does not implement goes to FFmpeg where the
 ///          build has it, and fails with DecodeFailed where it does not.
+///          This entry takes no options, so it caps its input at
+///          @c resource::kMaxAudioFileBytes; a caller that needs a different
+///          ceiling uses a path loader with @ref AudioLoadOptions.
 /// @param data Pointer to audio data
 /// @param size Size of data in bytes
 /// @return Tuple of (mono samples normalized to [-1,1], sample rate)
@@ -121,7 +131,10 @@ AudioLoadResult load_buffer(const uint8_t* data, size_t size);
 /// @param samples Audio samples (mono, normalized to [-1,1])
 /// @param sample_rate Sample rate in Hz
 /// @param bits_per_sample Bit depth (16 or 24, default 16)
-/// @throws SonareException on write error
+/// @throws SonareException on write error, or InvalidParameter when the sample
+///         count would overflow the uint32 RIFF size fields (the same bound
+///         @ref save_wav_multichannel applies, checked before anything is packed
+///         or written)
 void save_wav(const std::string& path, const float* samples, size_t n_samples, int sample_rate,
               int bits_per_sample = 16);
 

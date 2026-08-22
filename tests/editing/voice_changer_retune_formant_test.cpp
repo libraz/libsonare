@@ -423,6 +423,39 @@ TEST_CASE("VoiceChanger combines pitch and formant controls", "[voice_changer]")
   REQUIRE_THAT(changed.duration(), WithinRel(audio.duration(), 0.05f));
 }
 
+TEST_CASE("VoiceChanger rejects a non-finite pitch instead of reporting a no-op success",
+          "[voice_changer]") {
+  // The pitch branch is taken only when |semitones| exceeds an epsilon, and NaN
+  // compares false against everything -- so a NaN used to skip the shift, skip
+  // the formant epsilon too, and return the input as a successful render. A UI
+  // computing log2(target / detected) with a detected pitch of 0 hands over
+  // exactly that NaN.
+  constexpr int sample_rate = 22050;
+  const std::vector<float> samples = sine(220.0f, sample_rate, sample_rate / 8);
+  const sonare::Audio audio = sonare::Audio::from_vector(samples, sample_rate);
+  const float nan_value = std::numeric_limits<float>::quiet_NaN();
+
+  VoiceChangerConfig config;
+  config.pitch_semitones = nan_value;
+  REQUIRE_THROWS_AS(VoiceChanger(config).process(audio), sonare::SonareException);
+
+  // The guard lives in the core, so the C ABI inherits it rather than carrying
+  // its own copy -- and so do the three bindings that construct VoiceChanger
+  // directly.
+  float* out = nullptr;
+  size_t out_length = 0;
+  REQUIRE(sonare_voice_change(samples.data(), samples.size(), sample_rate, nan_value, 1.0f, &out,
+                              &out_length) == SONARE_ERROR_INVALID_PARAMETER);
+  REQUIRE(out == nullptr);
+  REQUIRE(out_length == 0);
+
+  // +/-Inf was never silently bypassed: it enters the branch and pitch_shift
+  // refuses it. Pin that so the two cases cannot diverge.
+  REQUIRE(sonare_voice_change(samples.data(), samples.size(), sample_rate,
+                              std::numeric_limits<float>::infinity(), 1.0f, &out,
+                              &out_length) == SONARE_ERROR_INVALID_PARAMETER);
+}
+
 TEST_CASE("StreamingFormant changes spectral color without changing duration", "[voice_changer]") {
   constexpr int sample_rate = 48000;
   constexpr int block = 128;

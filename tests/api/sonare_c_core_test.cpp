@@ -1037,6 +1037,58 @@ TEST_CASE("sonare_analyze_json", "[.][slow][c_api]") {
     sonare_free_string(json2);
   }
 
+  // Every binding hands this entry point a pointer it does not own (a Node
+  // TypedArray, a Python buffer, a WASM heap view) and then lets the progress
+  // callback re-enter caller code, where that memory can be rewritten or freed.
+  // run_offline copies the buffer into an Audio before the analyzer — and
+  // therefore the callback — exists, which is what makes the borrow safe;
+  // mutating the caller's buffer from inside the callback is how that stays
+  // checkable. A copy dropped here would make every binding pay for its own.
+  SECTION("copies the input before the first progress callback") {
+    struct MutateState {
+      std::vector<float>* buffer = nullptr;
+      int calls = 0;
+    };
+
+    char* reference_json = nullptr;
+    MutateState quiet{nullptr, 0};
+    auto count_only = [](float, const char*, void* user_data) {
+      ++static_cast<MutateState*>(user_data)->calls;
+    };
+    REQUIRE(sonare_analyze_json_with_progress(samples.data(), samples.size(), 22050, count_only,
+                                              &quiet, &reference_json) == SONARE_OK);
+    REQUIRE(reference_json != nullptr);
+    REQUIRE(quiet.calls > 0);
+    const std::string reference(reference_json);
+    sonare_free_string(reference_json);
+
+    auto victim = samples;
+    MutateState state{&victim, 0};
+    auto mutate = [](float, const char*, void* user_data) {
+      auto* s = static_cast<MutateState*>(user_data);
+      ++s->calls;
+      std::fill(s->buffer->begin(), s->buffer->end(), -1.0f);
+    };
+    char* mutated_json = nullptr;
+    REQUIRE(sonare_analyze_json_with_progress(victim.data(), victim.size(), 22050, mutate, &state,
+                                              &mutated_json) == SONARE_OK);
+    REQUIRE(mutated_json != nullptr);
+    const std::string mutated(mutated_json);
+    sonare_free_string(mutated_json);
+    REQUIRE(state.calls > 0);
+    CHECK(mutated == reference);
+
+    // Non-vacuity: analysing the overwritten signal really does produce a
+    // different result, so equality above is evidence rather than a tautology.
+    std::vector<float> overwritten(samples.size(), -1.0f);
+    char* overwritten_json = nullptr;
+    REQUIRE(sonare_analyze_json(overwritten.data(), overwritten.size(), 22050, &overwritten_json) ==
+            SONARE_OK);
+    const std::string different(overwritten_json);
+    sonare_free_string(overwritten_json);
+    CHECK(different != reference);
+  }
+
   SECTION("cancels after a reported progress boundary without producing JSON") {
     struct CancelState {
       int progress_calls = 0;

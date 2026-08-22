@@ -1044,6 +1044,18 @@ SonareError bounce_through_mixer(const arr::CompiledTimeline& timeline,
 }
 #endif  // SONARE_WITH_MIXING
 
+// Resets the recorded compile result to the empty state a project starts in.
+// Every bounce entry point runs this before it can return, because the recorded
+// result describes the LAST bounce: a call rejected for invalid arguments before
+// it compiles has no result of its own, and leaving the previous one in place
+// makes a query after the rejection report diagnostics from a bounce the caller
+// never issued (sonare_c_project_core.h documents the empty state explicitly).
+void clear_last_bounce_result(SonareProject* project) noexcept {
+  if (project == nullptr) return;
+  project->last_bounce_diagnostics.clear();
+  project->last_bounce_has_timeline = false;
+}
+
 // Shared bounce core: validates options, compiles, registers any hosted
 // instruments per destination, renders offline, and writes the interleaved
 // result. `instruments` may be empty for a silent MIDI bounce. When
@@ -1060,8 +1072,7 @@ SonareError do_project_bounce(SonareProject* project, const SonareProjectBounceO
   if (out_interleaved) *out_interleaved = nullptr;
   if (out_len) *out_len = 0;
   if (!project || !out_interleaved || !out_len) return SONARE_ERROR_INVALID_PARAMETER;
-  project->last_bounce_diagnostics.clear();
-  project->last_bounce_has_timeline = false;
+  clear_last_bounce_result(project);
 
   SonareProjectBounceOptions opts{};
   if (options) opts = *options;
@@ -1323,6 +1334,9 @@ SonareError sonare_project_bounce_with_instruments(SonareProject* project,
   SONARE_C_TRY
   if (out_interleaved) *out_interleaved = nullptr;
   if (out_len) *out_len = 0;
+  // Before the first argument rejection below, so an early return leaves the
+  // recorded compile result empty rather than describing the previous bounce.
+  clear_last_bounce_result(project);
   if (instrument_count > 0 && instruments == nullptr) return SONARE_ERROR_INVALID_PARAMETER;
   // Every callback instrument must supply a render function (the audio source).
   for (size_t i = 0; i < instrument_count; ++i) {
@@ -1353,6 +1367,9 @@ SonareError sonare_project_bounce_with_builtin_instruments(
   SONARE_C_TRY
   if (out_interleaved) *out_interleaved = nullptr;
   if (out_len) *out_len = 0;
+  // Before the first argument rejection below, so an early return leaves the
+  // recorded compile result empty rather than describing the previous bounce.
+  clear_last_bounce_result(project);
   if (instrument_count > 0 && instruments == nullptr) return SONARE_ERROR_INVALID_PARAMETER;
   std::vector<std::unique_ptr<sonare::midi::BuiltinSynth>> owned;
   std::vector<HostedInstrument> hosted;
@@ -1467,6 +1484,9 @@ SonareError sonare_project_bounce_with_synth_instruments(
   SONARE_C_TRY
   if (out_interleaved) *out_interleaved = nullptr;
   if (out_len) *out_len = 0;
+  // Before the first argument rejection below, so an early return leaves the
+  // recorded compile result empty rather than describing the previous bounce.
+  clear_last_bounce_result(project);
   if (instrument_count > 0 && instruments == nullptr) return SONARE_ERROR_INVALID_PARAMETER;
   if (!project || !out_interleaved || !out_len) return SONARE_ERROR_INVALID_PARAMETER;
   std::vector<std::unique_ptr<sonare::midi::synth::NativeSynth>> owned;
@@ -1501,6 +1521,9 @@ SonareError sonare_project_bounce_with_sf2_instruments(
   SONARE_C_TRY
   if (out_interleaved) *out_interleaved = nullptr;
   if (out_len) *out_len = 0;
+  // Before the first argument rejection below, so an early return leaves the
+  // recorded compile result empty rather than describing the previous bounce.
+  clear_last_bounce_result(project);
   if (instrument_count > 0 && instruments == nullptr) return SONARE_ERROR_INVALID_PARAMETER;
   if (!project) return SONARE_ERROR_INVALID_PARAMETER;
   // No loaded SoundFont is allowed: the player's NativeSynth GM fallback is

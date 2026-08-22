@@ -102,6 +102,22 @@ if(BUILD_VOICE_CHANGER AND NOT BUILD_MASTERING)
   message(STATUS "libsonare: BUILD_VOICE_CHANGER requires BUILD_MASTERING; disabling BUILD_VOICE_CHANGER")
   set(BUILD_VOICE_CHANGER OFF CACHE BOOL "Build realtime voice changer primitives" FORCE)
 endif()
+# The capability descriptor reports which subsystems this build contains, so its
+# flags have to mean the same thing in every translation unit that can compile
+# it -- sonare_c_memory.cpp alone is pulled into the core objects, the CLI and
+# the WASM entry, each of which used to carry its own copy of this table. A copy
+# that omits a flag does not fail to build; it answers false, and the descriptor
+# then advertises a subsystem the build actually has as missing. Deriving them
+# once from the resolved options, after every dependency rule above has run, is
+# what keeps the per-target copies from disagreeing.
+add_compile_definitions(
+  SONARE_BUILD_MASTERING=$<IF:$<BOOL:${BUILD_MASTERING}>,1,0>
+  SONARE_BUILD_MIXING=$<IF:$<BOOL:${BUILD_MIXING}>,1,0>
+  SONARE_BUILD_MIXING_ASSISTANT=$<IF:$<BOOL:${BUILD_MIXING_ASSISTANT}>,1,0>
+  SONARE_BUILD_FX=$<IF:$<BOOL:${BUILD_FX}>,1,0>
+  SONARE_BUILD_ARRANGEMENT=$<IF:$<BOOL:${BUILD_ARRANGEMENT}>,1,0>
+)
+
 set(SONARE_WITH_FFMPEG "AUTO" CACHE STRING
     "FFmpeg-based decoding for M4A/AAC/FLAC/OGG: ON (require), OFF (disable), AUTO (detect via pkg-config, default)")
 set_property(CACHE SONARE_WITH_FFMPEG PROPERTY STRINGS ON OFF AUTO)

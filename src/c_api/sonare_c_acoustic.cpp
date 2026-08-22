@@ -64,43 +64,25 @@ sonare::acoustic::ReverbModel reverb_model_from_int(int selector) {
 // Build a uniform shoebox whose single wall material is chosen by precedence:
 //   material_preset (non-zero) > per-band absorption array > scalar absorption.
 // All six walls share the resulting material (this ABI exposes only uniform
-// rooms; per-wall mesh materials are not reachable here yet).
+// rooms; per-wall mesh materials are not reachable here yet). The precedence,
+// the coefficient validation and the scattering-band application all live in
+// the core builder, which every other surface calls as well.
 sonare::acoustic::ShoeboxRoom make_room(float length, float width, float height, float absorption,
                                         const float* absorption_bands, size_t absorption_band_count,
                                         const float* scattering_bands, size_t scattering_band_count,
                                         int material_preset) {
   using namespace sonare::acoustic;
-  const sonare::RoomDimensions dims{length, width, height};
 
-  MaterialPreset preset{};
-  if (preset_from_int(material_preset, &preset)) {
-    ShoeboxRoom room;
-    room.dims = dims;
-    const Material wall = make_material(preset);
-    for (Material& w : room.walls) w = wall;
-    return room;
-  }
-
+  WallMaterialRequest request;
+  request.has_preset = preset_from_int(material_preset, &request.preset);
   if (absorption_bands != nullptr && absorption_band_count > 0) {
-    ShoeboxRoom room;
-    room.dims = dims;
-    Material wall;
-    wall.absorption.reserve(absorption_band_count);
-    for (size_t i = 0; i < absorption_band_count; ++i) {
-      wall.absorption.push_back(std::clamp(absorption_bands[i], 0.0f, 0.999f));
-    }
-    wall.scattering.reserve(absorption_band_count);
-    for (size_t i = 0; i < absorption_band_count; ++i) {
-      const float scattering =
-          scattering_bands != nullptr && i < scattering_band_count ? scattering_bands[i] : 0.0f;
-      wall.scattering.push_back(std::clamp(scattering, 0.0f, 1.0f));
-    }
-    for (Material& w : room.walls) w = wall;
-    return room;
+    request.absorption_bands.assign(absorption_bands, absorption_bands + absorption_band_count);
   }
-
-  // Back-compat scalar path (unchanged behaviour for zeroed optional fields).
-  return uniform_shoebox(dims, absorption);
+  if (scattering_bands != nullptr && scattering_band_count > 0) {
+    request.scattering_bands.assign(scattering_bands, scattering_bands + scattering_band_count);
+  }
+  request.absorption = absorption;
+  return make_uniform_room(sonare::RoomDimensions{length, width, height}, request);
 }
 
 // Heap-copies a float vector into a caller-owned array (NULL when empty).
@@ -110,10 +92,17 @@ float* copy_bands(const std::vector<float>& values, size_t* count) {
 }
 
 // RIR synthesis reports geometry and synthesis limits as non-fatal core
-// diagnostics so a caller can inspect the result. Preserve their first Error
-// and Warning in the matching C-ABI channels as well: a C caller (and the
+// diagnostics so a caller can inspect the result. Preserve their Error and
+// Warning content in the matching C-ABI channels as well: a C caller (and the
 // high-level CLIs) otherwise only sees `has_error` and has no truthful
 // explanation of a failed or clamped request.
+//
+// Every Warning is published, joined with "; ", not just the first. Node and
+// WASM return the whole diagnostics array, so publishing one warning here made
+// the C and Python surfaces structurally unable to report the same set: a
+// request that is both floored to fit the direct sound and clamped against its
+// length cap raises two, and the second was unreachable. The order is the
+// synthesizer's own, so the leading warning is unchanged.
 void publish_rir_diagnostics(const std::vector<sonare::Diagnostic>& diagnostics) {
   for (const sonare::Diagnostic& diagnostic : diagnostics) {
     if (diagnostic.severity != sonare::Diagnostic::Severity::Error) continue;
@@ -121,12 +110,13 @@ void publish_rir_diagnostics(const std::vector<sonare::Diagnostic>& diagnostics)
     sonare_c_detail::set_last_error(detail.c_str());
     break;
   }
+  std::string warnings;
   for (const sonare::Diagnostic& diagnostic : diagnostics) {
     if (diagnostic.severity != sonare::Diagnostic::Severity::Warning) continue;
-    const std::string detail = diagnostic.code + ": " + diagnostic.message;
-    sonare_c_detail::set_last_warning(detail.c_str());
-    break;
+    if (!warnings.empty()) warnings += "; ";
+    warnings += diagnostic.code + ": " + diagnostic.message;
   }
+  if (!warnings.empty()) sonare_c_detail::set_last_warning(warnings.c_str());
 }
 #endif
 
@@ -236,12 +226,17 @@ SonareError sonare_estimate_room(const float* samples, size_t length, int sample
 
   return run_offline(samples, length, sample_rate, [&](const Audio& audio) -> SonareError {
     sonare::RoomEstimateConfig cfg;
-    // Same "0 selects the library value" rule as the RIR-synth config above.
+    // Same "0 selects the library value" rule as the RIR-synth config above,
+    // applied to EVERY float in the struct rather than field by field. An
+    // exception here is not a small one: the Eyring volume scales with the cube
+    // of the absorption prior, so a literal 0 clamped to the analyzer's 0.01
+    // floor reports a 36.7 m^3 room as 0.0087 m^3.
     cfg.aspect_hint_lw =
         sonare::ZeroIsDefault(config->aspect_hint_lw).or_default(cfg.aspect_hint_lw);
     cfg.aspect_hint_lh =
         sonare::ZeroIsDefault(config->aspect_hint_lh).or_default(cfg.aspect_hint_lh);
-    cfg.reference_absorption = config->reference_absorption;
+    cfg.reference_absorption =
+        sonare::ZeroIsDefault(config->reference_absorption).or_default(cfg.reference_absorption);
     cfg.prefer_eyring = config->prefer_eyring != 0;
     if (config->n_octave_bands != 0) cfg.acoustic.n_octave_bands = config->n_octave_bands;
     cfg.acoustic.min_decay_db =

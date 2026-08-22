@@ -849,3 +849,102 @@ TEST_CASE("sonare acoustic C API routes air absorption into the morph target roo
   // The same zero-means-ISO-reference rule the synthesis path follows.
   REQUIRE(implicit_iso == on);
 }
+
+TEST_CASE("sonare acoustic C API zero-init estimate config matches the binding defaults",
+          "[c_api][acoustic]") {
+  // The documented C idiom is `SonareRoomEstimateConfig cfg = {};`. Every float
+  // in that struct follows the "0 selects the library value" rule, so a zeroed
+  // config must estimate the same room the bindings' default arguments do.
+  // reference_absorption was the exception: a literal 0 fell to the analyzer's
+  // 0.01 floor, and the Eyring volume goes as the cube of the prior, so the room
+  // came back three orders of magnitude too small with full confidence.
+  SonareRirSynthConfig synth_cfg = valid_rir_config();
+  synth_cfg.max_seconds = 0.0f;
+  SonareRirSynthResult rir{};
+  REQUIRE(sonare_synthesize_rir(&synth_cfg, 48000, &rir) == SONARE_OK);
+  REQUIRE(rir.length > 0);
+
+  SonareRoomEstimateConfig zeroed{};
+  SonareRoomEstimate zero_init{};
+  REQUIRE(sonare_estimate_room(rir.rir, rir.length, 48000, &zeroed, &zero_init) == SONARE_OK);
+
+  SonareRoomEstimateConfig explicit_cfg{};
+  explicit_cfg.reference_absorption = 0.15f;  // the library default, stated
+  SonareRoomEstimate explicit_estimate{};
+  REQUIRE(sonare_estimate_room(rir.rir, rir.length, 48000, &explicit_cfg, &explicit_estimate) ==
+          SONARE_OK);
+
+  REQUIRE(explicit_estimate.volume > 0.0f);
+  CHECK(zero_init.volume == explicit_estimate.volume);
+  CHECK(zero_init.length_m == explicit_estimate.length_m);
+  CHECK(zero_init.width_m == explicit_estimate.width_m);
+  CHECK(zero_init.height_m == explicit_estimate.height_m);
+
+  // Non-vacuity: the value the zeroed field used to resolve to reports a room
+  // three orders of magnitude smaller, so the equality above is a real check
+  // rather than an insensitive one.
+  SonareRoomEstimateConfig floored = explicit_cfg;
+  floored.reference_absorption = 0.01f;
+  SonareRoomEstimate floored_estimate{};
+  REQUIRE(sonare_estimate_room(rir.rir, rir.length, 48000, &floored, &floored_estimate) ==
+          SONARE_OK);
+  CHECK(floored_estimate.volume < explicit_estimate.volume / 1000.0f);
+
+  sonare_free_room_estimate(&zero_init);
+  sonare_free_room_estimate(&explicit_estimate);
+  sonare_free_room_estimate(&floored_estimate);
+  sonare_free_rir_synth_result(&rir);
+}
+
+TEST_CASE("sonare acoustic C API applies wall scattering without per-band absorption",
+          "[c_api][acoustic]") {
+  // `scattering_bands` is documented as optional and applied band-wise when
+  // present, with no dependency on `absorption_bands`. It used to reach the
+  // material only alongside a per-band absorption array, so a caller asking for
+  // rough walls on a scalar-absorption or preset room got a perfectly specular
+  // one with no error and no diagnostic.
+  const float rough[6] = {0.75f, 0.75f, 0.75f, 0.75f, 0.75f, 0.75f};
+
+  SonareRirSynthConfig smooth = valid_rir_config();
+  smooth.max_seconds = 0.3f;
+  smooth.mixing_time_ms = 0.0f;
+  SonareRirSynthConfig scattered = smooth;
+  scattered.scattering_bands = rough;
+  scattered.scattering_band_count = 6;
+
+  auto synthesize = [](const SonareRirSynthConfig& cfg) {
+    SonareRirSynthResult out{};
+    REQUIRE(sonare_synthesize_rir(&cfg, 48000, &out) == SONARE_OK);
+    REQUIRE(out.has_error == 0);
+    REQUIRE(out.length > 0);
+    return out;
+  };
+  auto differs = [](const SonareRirSynthResult& a, const SonareRirSynthResult& b) {
+    if (a.length != b.length) return true;
+    for (size_t i = 0; i < a.length; ++i) {
+      if (std::abs(a.rir[i] - b.rir[i]) > 1e-6f) return true;
+    }
+    return false;
+  };
+
+  // Scalar absorption path.
+  SonareRirSynthResult scalar_smooth = synthesize(smooth);
+  SonareRirSynthResult scalar_rough = synthesize(scattered);
+  CHECK(differs(scalar_smooth, scalar_rough));
+
+  // Preset path: a preset carries its own material, and the caller's scattering
+  // array still applies on top of it.
+  SonareRirSynthConfig preset_smooth = smooth;
+  preset_smooth.material_preset = SONARE_MATERIAL_PRESET_WOOD;
+  SonareRirSynthConfig preset_rough = preset_smooth;
+  preset_rough.scattering_bands = rough;
+  preset_rough.scattering_band_count = 6;
+  SonareRirSynthResult preset_smooth_rir = synthesize(preset_smooth);
+  SonareRirSynthResult preset_rough_rir = synthesize(preset_rough);
+  CHECK(differs(preset_smooth_rir, preset_rough_rir));
+
+  sonare_free_rir_synth_result(&scalar_smooth);
+  sonare_free_rir_synth_result(&scalar_rough);
+  sonare_free_rir_synth_result(&preset_smooth_rir);
+  sonare_free_rir_synth_result(&preset_rough_rir);
+}

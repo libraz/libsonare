@@ -1,6 +1,7 @@
 /// @file sonare_c_engine_voice_test.cpp
 /// @brief Engine and voice C API tests.
 
+#include <algorithm>
 #include <array>
 #include <atomic>
 #include <cmath>
@@ -84,6 +85,15 @@ TEST_CASE("sonare_capabilities_json", "[c_api]") {
   REQUIRE(capabilities["abi"]["project"].as_number() == SONARE_PROJECT_ABI_VERSION);
   REQUIRE(capabilities["abi"]["engine"].as_number() == sonare_engine_abi_version());
   REQUIRE(capabilities["features"]["ffmpeg"].as_bool() == (sonare_has_ffmpeg_support() != 0));
+  // The assistant's entry points exist in every build and answer NOT_SUPPORTED
+  // when it was compiled out, so this flag is the only way a caller can tell
+  // the configurations apart. Compared against the build macro rather than
+  // asserted true, so the check means something in either configuration.
+#if defined(SONARE_WITH_MIXING_ASSISTANT) && SONARE_WITH_MIXING_ASSISTANT
+  REQUIRE(capabilities["features"]["mixingAssistant"].as_bool());
+#else
+  REQUIRE_FALSE(capabilities["features"]["mixingAssistant"].as_bool());
+#endif
   REQUIRE(capabilities["decode"]["builtin"][static_cast<std::size_t>(0)].as_string() == "wav");
   REQUIRE(capabilities["decode"]["builtin"][static_cast<std::size_t>(1)].as_string() == "mp3");
   REQUIRE(capabilities["hardwareConcurrency"].as_number() >= 1);
@@ -720,6 +730,131 @@ TEST_CASE("sonare_engine bounce scatters a strip's surround pan into a 5.1 maste
 
   sonare_free_bounce_result(&result);
   sonare_engine_destroy(engine);
+}
+
+namespace {
+
+constexpr int kPreRollBlock = 128;
+constexpr int kPreRollFrames = kPreRollBlock * 48;
+
+// Builds a one-lane engine playing a DC clip, parks the lane fader at
+// @p fader_db through the smoothed lane parameter, and hands the engine over
+// ready to render. The caller destroys it.
+SonareRealtimeEngine* make_pre_roll_engine(const float* const* clip_channels, float fader_db) {
+  SonareRealtimeEngine* engine = nullptr;
+  REQUIRE(sonare_engine_create(&engine) == SONARE_OK);
+  REQUIRE(engine != nullptr);
+  REQUIRE(sonare_engine_prepare(engine, 48000.0, kPreRollBlock, 64, 16) == SONARE_OK);
+
+  SonareEngineClip clip{};
+  clip.id = 1;
+  clip.track_id = 10;
+  clip.channels = clip_channels;
+  clip.num_channels = 2;
+  clip.num_samples = kPreRollFrames;
+  clip.length_samples = kPreRollFrames;
+  clip.gain = 1.0f;
+  REQUIRE(sonare_engine_set_clips(engine, &clip, 1) == SONARE_OK);
+
+  SonareEngineTrackLane lane[] = {{10, nullptr, 0, 0, 1}};
+  REQUIRE(sonare_engine_set_track_lanes(engine, lane, 1) == SONARE_OK);
+  REQUIRE(sonare_engine_set_parameter_smoothed(engine, engine_lane_param_target(0, 1), fader_db,
+                                               -1) == SONARE_OK);
+  return engine;
+}
+
+}  // namespace
+
+TEST_CASE("an engine offline render opens at the lane's settled fader", "[c_api][engine][bounce]") {
+  // A one-shot offline render has to start from the steady state. Without the
+  // offline pre-roll the fader command is only drained once the first audible
+  // block is already rendering, so the lane's 5 ms smoother glides down from
+  // unity and the head of a lane parked at -12 dB comes out up to 12 dB loud.
+  // The project bounce path has always pre-rolled; these two engine-level entry
+  // points are the same contract.
+  constexpr float kFaderDb = -12.0f;
+  std::array<float, kPreRollFrames> clip_l{};
+  std::array<float, kPreRollFrames> clip_r{};
+  clip_l.fill(1.0f);
+  clip_r.fill(1.0f);
+  const float* clip_channels[] = {clip_l.data(), clip_r.data()};
+
+  SonareEngineBounceOptions options{};
+  REQUIRE(sonare_engine_bounce_options_default(&options) == SONARE_OK);
+  options.total_frames = kPreRollFrames;
+  options.block_size = kPreRollBlock;
+  options.num_channels = 2;
+  options.source_sample_rate = 48000;
+  options.target_sample_rate = 48000;
+  options.normalize_lufs = 0;
+  options.dither = 0;
+
+  // Reference bounce at unity: the same signal path with no fader offset, so the
+  // level assertion below needs no build-dependent absolute value.
+  SonareRealtimeEngine* reference_engine = make_pre_roll_engine(clip_channels, 0.0f);
+  SonareEngineBounceResult reference{};
+  REQUIRE(sonare_engine_bounce_offline(reference_engine, &options, &reference) == SONARE_OK);
+  REQUIRE(reference.interleaved != nullptr);
+  const float unity = reference.interleaved[(kPreRollFrames - 1) * 2];
+  REQUIRE(unity > 0.0f);
+  sonare_free_bounce_result(&reference);
+  sonare_engine_destroy(reference_engine);
+
+  SonareRealtimeEngine* engine = make_pre_roll_engine(clip_channels, kFaderDb);
+  SonareEngineBounceResult result{};
+  REQUIRE(sonare_engine_bounce_offline(engine, &options, &result) == SONARE_OK);
+  REQUIRE(result.interleaved != nullptr);
+  REQUIRE(result.frames == kPreRollFrames);
+
+  // The fader is static for the whole render, so every sample of the first block
+  // already sits at the steady-state level. A ramp-in shows up here as a louder
+  // head.
+  const float steady = result.interleaved[(kPreRollFrames - 1) * 2];
+  float head_peak = 0.0f;
+  for (int frame = 0; frame < kPreRollBlock; ++frame) {
+    head_peak = std::max(head_peak, std::abs(result.interleaved[frame * 2]));
+    head_peak = std::max(head_peak, std::abs(result.interleaved[frame * 2 + 1]));
+  }
+  REQUIRE(head_peak == Catch::Approx(steady).epsilon(0.01));
+  // ... and that steady level is the requested -12 dB, so the assertion above is
+  // not satisfied by a fader that never took effect.
+  REQUIRE(steady == Catch::Approx(unity * std::pow(10.0f, kFaderDb / 20.0f)).epsilon(0.02));
+  sonare_free_bounce_result(&result);
+  sonare_engine_destroy(engine);
+
+  // The freeze path captures the same settled lane.
+  SonareRealtimeEngine* freeze_engine = make_pre_roll_engine(clip_channels, kFaderDb);
+  SonareEngineFreezeOptions freeze{};
+  freeze.total_frames = kPreRollFrames;
+  freeze.block_size = kPreRollBlock;
+  freeze.num_channels = 2;
+  freeze.clip_id = 99;
+  freeze.start_ppq = 0.0;
+  freeze.gain = 1.0f;
+  SonareEngineFreezeResult frozen{};
+  REQUIRE(sonare_engine_freeze_offline(freeze_engine, &freeze, &frozen) == SONARE_OK);
+  REQUIRE(frozen.clip_id == 99u);
+
+  // Drop the lane so the frozen clip (which carries no track id) reaches the
+  // master mix directly, and rewind: the freeze render left the playhead at the
+  // end of the timeline.
+  REQUIRE(sonare_engine_set_track_lanes(freeze_engine, nullptr, 0) == SONARE_OK);
+  REQUIRE(sonare_engine_seek_sample(freeze_engine, 0, -1) == SONARE_OK);
+  std::array<float, kPreRollFrames> left{};
+  std::array<float, kPreRollFrames> right{};
+  float* channels[] = {left.data(), right.data()};
+  REQUIRE(sonare_engine_render_offline(freeze_engine, channels, 2, kPreRollFrames, kPreRollBlock) ==
+          SONARE_OK);
+  const float frozen_steady = left[kPreRollFrames - 1];
+  REQUIRE(frozen_steady > 0.0f);
+  float frozen_head_peak = 0.0f;
+  for (int frame = 0; frame < kPreRollBlock; ++frame) {
+    frozen_head_peak = std::max(frozen_head_peak, std::abs(left[static_cast<size_t>(frame)]));
+    frozen_head_peak = std::max(frozen_head_peak, std::abs(right[static_cast<size_t>(frame)]));
+  }
+  REQUIRE(frozen_head_peak == Catch::Approx(frozen_steady).epsilon(0.01));
+
+  sonare_engine_destroy(freeze_engine);
 }
 #endif  // SONARE_WITH_MIXING
 

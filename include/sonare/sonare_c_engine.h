@@ -485,6 +485,17 @@ SonareError sonare_engine_render_offline_ex(SonareRealtimeEngine* engine, float*
 /// @return @c SONARE_ERROR_INVALID_PARAMETER when @p engine is NULL,
 ///         @c SONARE_ERROR_INVALID_STATE when the engine was never prepared.
 SonareError sonare_engine_finish_offline_render(SonareRealtimeEngine* engine);
+/// @brief Renders the whole span in one call and returns the interleaved mix.
+/// @details Runs the offline pre-roll before the first audible block: queued
+///   commands are applied, one throwaway block resolves lane automation at the
+///   start position with the transport held stopped (so the playhead does not
+///   move), and every smoother is then snapped to its target. A lane sitting at
+///   a static -12 dB therefore bounces at -12 dB from sample 0 instead of ramping
+///   in over the first block, which is what live playback would do and what a
+///   render is not allowed to do. sonare_engine_render_offline does NOT pre-roll,
+///   because a chunked render would re-prime on every chunk; a host driving it
+///   directly primes once itself (a process() block plus
+///   sonare_engine_settle_parameters).
 SonareError sonare_engine_bounce_offline(SonareRealtimeEngine* engine,
                                          const SonareEngineBounceOptions* options,
                                          SonareEngineBounceResult* out);
@@ -501,6 +512,10 @@ SonareError sonare_engine_bounce_options_default(SonareEngineBounceOptions* opti
 /// @brief Free the heap-allocated buffer held by a bounce result.
 /// @param result Result whose @c interleaved buffer is deleted and nulled.
 void sonare_free_bounce_result(SonareEngineBounceResult* result);
+/// @brief Renders the whole span in one call and registers it as a clip.
+/// @details Runs the same offline pre-roll as sonare_engine_bounce_offline, so
+///   the frozen clip captures the lane at its settled values instead of carrying
+///   a fade-in the live lane never had.
 SonareError sonare_engine_freeze_offline(SonareRealtimeEngine* engine,
                                          const SonareEngineFreezeOptions* options,
                                          SonareEngineFreezeResult* out);

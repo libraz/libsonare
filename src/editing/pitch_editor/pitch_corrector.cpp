@@ -206,10 +206,12 @@ std::vector<float> PitchCorrector::compute_smooth_deltas(const F0Track& track, T
     raw[static_cast<size_t>(f)] = target_midi - current_midi;  // semitones
   }
 
-  // Phase 2: retune IIR. alpha derived from time constant in frames.
-  const float sr = static_cast<float>(track.sample_rate);
-  const float hop = static_cast<float>(std::max(1, track.hop_length));
-  const float tau_frames = std::max(1e-6f, config_.retune_speed_ms * 0.001f * sr / hop);
+  // Phase 2: retune IIR. alpha derived from time constant in frames. The
+  // frames-per-second factor is the track's own cadence (F0Track::frame_rate),
+  // not a second sample_rate / hop_length derivation: a host-supplied
+  // frame_rate_hz would otherwise set the retune time constant by a cadence the
+  // track does not actually have.
+  const float tau_frames = std::max(1e-6f, config_.retune_speed_ms * 0.001f * track.frame_rate());
   const float alpha = std::exp(-1.0f / tau_frames);
 
   const float max_corr = std::max(0.0f, config_.max_correction_semitones);
@@ -247,7 +249,8 @@ Audio PitchCorrector::resynthesize(const Audio& audio, const F0Track& track,
   const int n_samples = static_cast<int>(audio.size());
   const int sr = audio.sample_rate();
   const float sr_f = static_cast<float>(sr);
-  const float hop = static_cast<float>(std::max(1, track.hop_length));
+  // Same cadence rule as every other frame<->sample conversion on this track.
+  const float hop = std::max(1.0f, static_cast<float>(track.samples_per_frame()));
   const int n_frames = track.n_frames();
 
   const float* input = audio.data();

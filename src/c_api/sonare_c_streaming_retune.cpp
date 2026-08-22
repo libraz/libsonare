@@ -1,5 +1,6 @@
 #include <sonare/sonare_c.h>
 
+#include <algorithm>
 #include <cmath>
 #include <memory>
 #include <vector>
@@ -19,6 +20,13 @@ struct SonareStreamingRetune {
   // num_samples the core would have refused. Zero until prepare() succeeds.
   // Same reason as SonareStreamingMasteringChain.
   int max_block_size = 0;
+  // process_block reads the input and writes the output through separate
+  // pointers, so an in-place C call needs somewhere to read from. Sized once by
+  // prepare() rather than allocated per block: the core promises "Allocation
+  // happens only in prepare()", and a per-block vector broke that promise 375
+  // times a second at 128 samples / 48 kHz. Same persistent-scratch shape as
+  // sonare_c_voice_changer.cpp.
+  std::vector<float> scratch;
 };
 
 namespace {
@@ -85,6 +93,13 @@ SonareError sonare_streaming_retune_prepare(SonareStreamingRetune* retune, doubl
   if (!(sample_rate > 0.0) || max_block_size < 0) return SONARE_ERROR_INVALID_PARAMETER;
   SONARE_C_TRY
   retune->retune->prepare(sample_rate, max_block_size);
+  // Size the block scratch here, where allocation is allowed, so process_mono
+  // never has to. assign() also zeroes it, which keeps a stale tail from a
+  // larger previous prepare out of the buffer a debugger would show. It runs
+  // BEFORE max_block_size is published: that field is what admits a block into
+  // process_mono, so a throwing reallocation must not leave it authorizing a
+  // block the scratch cannot hold.
+  retune->scratch.assign(static_cast<size_t>(max_block_size), 0.0f);
   retune->max_block_size = max_block_size;
   return SONARE_OK;
   SONARE_C_CATCH
@@ -136,13 +151,13 @@ SonareError sonare_streaming_retune_process_mono(SonareStreamingRetune* retune, 
     return bounds;
   }
   if (!all_finite(samples, num_samples)) return SONARE_ERROR_INVALID_PARAMETER;
-  // process_block reads the input and writes the output through separate
-  // pointers, so an in-place call needs a copy of the input to read from.
-  SONARE_C_TRY
-  std::vector<float> input(samples, samples + num_samples);
-  retune->retune->process_block(input.data(), samples, static_cast<int>(num_samples));
+  // The bounds check above already refused anything longer than the prepared
+  // maximum, which is exactly what the scratch was sized for, so this copy
+  // cannot grow it. process_block is noexcept and the copy allocates nothing,
+  // so there is no exception path left to guard here.
+  std::copy_n(samples, num_samples, retune->scratch.begin());
+  retune->retune->process_block(retune->scratch.data(), samples, static_cast<int>(num_samples));
   return SONARE_OK;
-  SONARE_C_CATCH
 }
 
 SonareError sonare_streaming_retune_grain_size(SonareStreamingRetune* retune, int* out_grain_size) {

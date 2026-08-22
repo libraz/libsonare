@@ -165,10 +165,15 @@ SonareError sonare_project_serialize(const SonareProject* project, char** out_js
 /// @param json Project JSON (need not be NUL-terminated; @p len bytes are read).
 /// @param len  Byte length of @p json.
 /// @param out  Receives the new handle on success.
-/// @param out_diag Optional; on failure receives a heap C string with the joined
-///        diagnostic messages (free with @ref sonare_free_string). On success it
-///        is set to NULL. Pass NULL to ignore. Malformed input returns an error
-///        WITHOUT crashing.
+/// @param out_diag Optional; receives a heap C string with the joined diagnostic
+///        messages, or NULL when the load produced none. A SUCCESSFUL load can
+///        set it: a document with a dropped warp map, a duplicate automation
+///        lane or an unparsable MIDI content key loads with warnings, and those
+///        warnings are what this reports. So a non-NULL string does NOT mean
+///        failure -- the return code alone does -- and the caller owns the string
+///        on every return code and must release it with @ref sonare_free_string.
+///        Pass NULL to ignore the diagnostics entirely. Malformed input returns
+///        an error WITHOUT crashing.
 SonareError sonare_project_deserialize(const char* json, size_t len, SonareProject** out,
                                        char** out_diag);
 
@@ -213,11 +218,24 @@ SonareError sonare_project_set_sample_rate(SonareProject* project, double sample
 SonareError sonare_project_set_overlap_policy(SonareProject* project, uint32_t overlap_policy);
 
 /// @brief Replaces the project tempo segment list.
+/// @details Takes the same segments as its engine counterpart
+///          (@ref sonare_engine_set_tempo_segments): @c start_ppq in
+///          [0, 1e12] and strictly increasing across the list, @c bpm finite and
+///          in (0, 100000], @c end_bpm either 0 (no ramp) or in the same tempo
+///          range. Anything else returns SONARE_ERROR_INVALID_PARAMETER; the
+///          segments a project stores are the segments its own MIR and loop
+///          helpers build a tempo map from, so an unbounded one computes
+///          meaningless sample positions rather than failing.
 SonareError sonare_project_set_tempo_segments(SonareProject* project,
                                               const SonareProjectTempoSegment* segments,
                                               size_t segment_count);
 
 /// @brief Replaces the project time-signature segment list.
+/// @details Same shape rules as the tempo setter above: @c start_ppq in
+///          [0, 1e12] and strictly increasing across the list, with a positive
+///          numerator and denominator. Segments are stored verbatim and read
+///          back in stored order, so an out-of-order list would survive a save
+///          and reload with only the compiler's internal sort hiding it.
 SonareError sonare_project_set_time_signatures(SonareProject* project,
                                                const SonareProjectTimeSignatureSegment* segments,
                                                size_t segment_count);

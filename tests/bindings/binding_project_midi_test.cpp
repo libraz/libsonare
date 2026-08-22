@@ -1090,8 +1090,11 @@ TEST_CASE("project C surface set_midi_fx transforms stored MIDI events", "[proje
   REQUIRE(sonare_midi_note_off(1.10, 0, 0, 60, 0, &events[1]) == SONARE_OK);
   REQUIRE(sonare_project_set_midi_events(project, clip, events, 2) == SONARE_OK);
 
-  // Deserialized MIDI content bypasses the event-constructor helpers. Baking
-  // must still reject a PPQ value that cannot be converted to a MIDI-FX frame.
+  // Deserialized MIDI content bypasses the event-constructor helpers, so the
+  // load path is where a PPQ outside the range the setters accept has to be
+  // caught: it never reaches a handle, and baking never sees it. (The bake path
+  // keeps its own check for the same range as defence in depth, since a host
+  // can also build events through paths that do not deserialize.)
   std::string huge_ppq_json = serialize(project);
   const size_t data_pos = huge_ppq_json.find("\"data0\":");
   REQUIRE(data_pos != std::string::npos);
@@ -1103,10 +1106,8 @@ TEST_CASE("project C surface set_midi_fx transforms stored MIDI events", "[proje
   huge_ppq_json.replace(ppq_value_pos, ppq_value_end - ppq_value_pos, "1e300");
   SonareProject* huge_ppq_project = nullptr;
   REQUIRE(sonare_project_deserialize(huge_ppq_json.data(), huge_ppq_json.size(), &huge_ppq_project,
-                                     nullptr) == SONARE_OK);
-  REQUIRE(sonare_project_bake_midi_fx(huge_ppq_project, clip, "{}") ==
-          SONARE_ERROR_INVALID_PARAMETER);
-  sonare_project_destroy(huge_ppq_project);
+                                     nullptr) == SONARE_ERROR_INVALID_FORMAT);
+  REQUIRE(huge_ppq_project == nullptr);
 
   const char* config =
       "{\"transpose_semitones\":12,\"quantize_ppq\":0.25,\"quantize_strength\":1.0,"

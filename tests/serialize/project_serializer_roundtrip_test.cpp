@@ -1521,6 +1521,23 @@ TEST_CASE("a loaded position is never one the C ABI setters would reject", "[ser
        R"({"version":1,"time_signatures":[{"start_ppq":-1.0,"numerator":4,"denominator":4}]})",
        "invalid_time_signature_start_ppq"},
       {"marker", R"({"version":1,"markers":[{"id":1,"ppq":-1.0}]})", "invalid_marker_ppq"},
+      // Breakpoint positions reach the model through AutomationLane::set_points,
+      // which enforces finiteness but not the sign; a negative one is silently
+      // pulled to sample 0 by the bounce scheduler rather than reported.
+      {"automation breakpoint",
+       R"({"version":1,"tracks":[{"id":1,"automation_lanes":[)"
+       R"({"target_param_id":7,"points":[{"ppq":-1.0,"value":0.5}]}]}]})",
+       "invalid_automation_breakpoint_ppq"},
+      // MIDI clip events live in the content store beside the project, so they
+      // are reached only because the invariant pass is handed that store too.
+      {"MIDI event position",
+       R"({"version":1,"midi_content":{"1":[{"ppq":-1.0,"data0":546323556,"data1":0}]}})",
+       "invalid_midi_event_ppq"},
+      // The same setter caps the position at kMaxPublicPpq (1e12); a finite
+      // value past it loads and then computes nonsense sample positions.
+      {"MIDI event beyond the public ppq ceiling",
+       R"({"version":1,"midi_content":{"1":[{"ppq":1e30,"data0":546323556,"data1":0}]}})",
+       "invalid_midi_event_ppq"},
   };
   for (const Case& c : cases) {
     INFO(c.what);
@@ -1534,9 +1551,13 @@ TEST_CASE("a loaded position is never one the C ABI setters would reject", "[ser
   // Zero is a legal position; only negatives are rejected.
   const auto ok =
       project_from_json(R"({"version":1,"tempo_segments":[{"start_ppq":0.0,"bpm":120.0}],)"
-                        R"("markers":[{"id":1,"ppq":0.0}]})");
+                        R"("markers":[{"id":1,"ppq":0.0}],)"
+                        R"("tracks":[{"id":1,"automation_lanes":[)"
+                        R"({"target_param_id":7,"points":[{"ppq":0.0,"value":0.5}]}]}],)"
+                        R"("midi_content":{"1":[{"ppq":0.0,"data0":546323556,"data1":0}]}})");
   REQUIRE(ok.ok());
   REQUIRE_FALSE(ok.has_error());
+  REQUIRE(ok.midi.events.at(1).size() == 1);
 }
 
 TEST_CASE("a loaded assist sidecar set has one entry per identity", "[serialize]") {

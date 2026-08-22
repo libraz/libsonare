@@ -10,6 +10,35 @@ TEST_CASE("project ABI version is positive and matches the macro", "[project]") 
   REQUIRE(sonare_project_abi_version() > 0u);
 }
 
+TEST_CASE("a successful project load hands back the warnings it collected", "[project]") {
+  // out_diag is owned by the caller on EVERY return code, not only on failure.
+  // A document that loads with warnings answers SONARE_OK with a non-NULL
+  // string, so a C embedder that frees it only on failure leaks one per warned
+  // load, and one that reads "non-NULL means failure" reports a good load as a
+  // bad one.
+  const std::string warned = R"({"version":1,"midi_content":{"not-a-clip-id":[]}})";
+  SonareProject* project = nullptr;
+  char* diagnostics = nullptr;
+  REQUIRE(sonare_project_deserialize(warned.data(), warned.size(), &project, &diagnostics) ==
+          SONARE_OK);
+  REQUIRE(project != nullptr);
+  REQUIRE(diagnostics != nullptr);
+  CHECK(std::string(diagnostics).find("invalid_midi_content_key") != std::string::npos);
+  sonare_free_string(diagnostics);
+  sonare_project_destroy(project);
+
+  // A clean document leaves it NULL, so "loaded with warnings" stays
+  // distinguishable from "loaded clean".
+  const std::string clean = R"({"version":1})";
+  project = nullptr;
+  diagnostics = nullptr;
+  REQUIRE(sonare_project_deserialize(clean.data(), clean.size(), &project, &diagnostics) ==
+          SONARE_OK);
+  REQUIRE(project != nullptr);
+  CHECK(diagnostics == nullptr);
+  sonare_project_destroy(project);
+}
+
 TEST_CASE("project C surface exposes read-only project state without JSON", "[project]") {
   SonareProject* project = nullptr;
   REQUIRE(sonare_project_create(&project) == SONARE_OK);
@@ -133,6 +162,27 @@ TEST_CASE("project C surface exposes read-only project state without JSON", "[pr
   CHECK(sonare_project_set_time_signatures(project, nullptr, 1) == SONARE_ERROR_INVALID_PARAMETER);
   sig.denominator = 0;
   CHECK(sonare_project_set_time_signatures(project, &sig, 1) == SONARE_ERROR_INVALID_PARAMETER);
+  // The project setters admit exactly what their engine counterparts do: a
+  // tempo or a position past the public bound is rejected here too, because the
+  // project's own MIR and loop helpers build a raw tempo map from what is
+  // stored and would otherwise compute clamped, meaningless sample positions.
+  const SonareProjectTempoSegment over_range_bpm[] = {{0.0, 1.0e9, 0.0, 0.0}};
+  CHECK(sonare_project_set_tempo_segments(project, over_range_bpm, 1) ==
+        SONARE_ERROR_INVALID_PARAMETER);
+  const SonareProjectTempoSegment over_range_ppq[] = {{1.0e30, 120.0, 0.0, 0.0}};
+  CHECK(sonare_project_set_tempo_segments(project, over_range_ppq, 1) ==
+        SONARE_ERROR_INVALID_PARAMETER);
+  // ... and the time-signature setter rejects the same malformed shapes its
+  // sibling does, rather than storing an order that reads back verbatim.
+  const SonareProjectTimeSignatureSegment unordered[] = {{8.0, 4, 4}, {4.0, 3, 4}};
+  CHECK(sonare_project_set_time_signatures(project, unordered, 2) ==
+        SONARE_ERROR_INVALID_PARAMETER);
+  const SonareProjectTimeSignatureSegment duplicate_start[] = {{4.0, 4, 4}, {4.0, 3, 4}};
+  CHECK(sonare_project_set_time_signatures(project, duplicate_start, 2) ==
+        SONARE_ERROR_INVALID_PARAMETER);
+  const SonareProjectTimeSignatureSegment over_range_sig[] = {{1.0e30, 4, 4}};
+  CHECK(sonare_project_set_time_signatures(project, over_range_sig, 1) ==
+        SONARE_ERROR_INVALID_PARAMETER);
   CHECK(sonare_project_set_marker(project, 0, -1.0, "bad", &marker_id) ==
         SONARE_ERROR_INVALID_PARAMETER);
 

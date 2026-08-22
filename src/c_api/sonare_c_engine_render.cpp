@@ -187,6 +187,12 @@ SonareError sonare_engine_bounce_offline(SonareRealtimeEngine* engine,
     return SONARE_ERROR_INVALID_PARAMETER;
   }
   SONARE_C_TRY
+  // Offline pre-roll: a bounce is a one-shot render, so the first audible block
+  // must open at the settled fader/pan/gate values instead of ramping in from
+  // the defaults the way a live stream legitimately does (see
+  // RealtimeEngine::prime_offline_parameters, and the same pre-roll in the
+  // project bounce path).
+  engine->engine.prime_offline_parameters(options->num_channels, options->block_size);
   std::vector<std::vector<float>> channels(
       static_cast<size_t>(options->num_channels),
       std::vector<float>(static_cast<size_t>(options->total_frames), 0.0f));
@@ -271,6 +277,10 @@ SonareError sonare_engine_freeze_offline(SonareRealtimeEngine* engine,
     return SONARE_ERROR_INVALID_PARAMETER;
   }
   SONARE_C_TRY
+  // Offline pre-roll, as in sonare_engine_bounce_offline: a freeze captures the
+  // lane at its settled values, so the frozen clip does not carry a fade-in that
+  // the live lane never had.
+  engine->engine.prime_offline_parameters(options->num_channels, options->block_size);
   auto owned = std::make_shared<engine::ClipAudioStorage>();
   owned->channels.assign(static_cast<size_t>(options->num_channels),
                          std::vector<float>(static_cast<size_t>(options->total_frames), 0.0f));

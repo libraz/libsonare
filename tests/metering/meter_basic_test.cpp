@@ -184,6 +184,28 @@ TEST_CASE("meter silence ratio", "[meter]") {
   REQUIRE_THAT(metering::silence_ratio(audio, -45.0f, 2, 2), WithinAbs(0.5f, 0.001f));
 }
 
+TEST_CASE("meter silence ratio rejects a non-finite threshold", "[meter]") {
+  // Every frame comparison is false against a NaN threshold, so the meter used
+  // to answer "0 % silence" for a question it never evaluated. The guard lives
+  // in the core, not in the C-ABI wrapper, so the surfaces that construct
+  // against the core directly inherit it -- which is why the WASM binding used
+  // to be the one surface that accepted this.
+  const std::vector<float> samples = {0.0f, 0.0f, 0.5f, 0.5f};
+  const Audio audio = Audio::from_buffer(samples.data(), samples.size(), 48000);
+
+  for (const float invalid :
+       {std::numeric_limits<float>::quiet_NaN(), std::numeric_limits<float>::infinity(),
+        -std::numeric_limits<float>::infinity()}) {
+    try {
+      const float ratio = metering::silence_ratio(audio, invalid, 2, 2);
+      CAPTURE(ratio);
+      FAIL("a non-finite silence threshold was accepted");
+    } catch (const sonare::SonareException& error) {
+      REQUIRE(error.code() == sonare::ErrorCode::InvalidParameter);
+    }
+  }
+}
+
 TEST_CASE("meter dc offset", "[meter]") {
   const std::vector<float> samples = {0.25f, 0.25f, -0.25f, 0.75f};
   const Audio audio = Audio::from_buffer(samples.data(), samples.size(), 48000);

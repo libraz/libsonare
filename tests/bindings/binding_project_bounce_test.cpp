@@ -1061,6 +1061,62 @@ TEST_CASE("a never-bounced project reports a fully empty last-bounce compile res
   sonare_project_destroy(loaded);
 }
 
+TEST_CASE("a bounce rejected for bad arguments clears the recorded compile result", "[project]") {
+  // The recorded result describes the last bounce. An argument rejection happens
+  // before anything compiles, so it has no result of its own -- and the header
+  // says the query then reads as the empty state. Reporting the previous
+  // bounce's diagnostics instead would show a host errors for a render that
+  // never ran, on a call it already knows failed.
+  const std::string json =
+      R"({"version":1,"sample_rate":48000,"tracks":[{"id":1,"name":"audio","kind":0,)"
+      R"("channel_strip_ref":"","output_target":"","midi_destination_id":0,)"
+      R"("automation_lanes":[]}],"clips":[{"id":1,"track_id":1,"source_id":99,)"
+      R"("start_ppq":0,"length_ppq":1,"source_offset_ppq":0,"gain":1,)"
+      R"("fade_in":{"length_ppq":0,"curve":0},"fade_out":{"length_ppq":0,"curve":0},)"
+      R"("loop_mode":0,"loop_length_ppq":0,"warp_ref_id":0}]})";
+  SonareProject* project = nullptr;
+  REQUIRE(sonare_project_deserialize(json.c_str(), json.size(), &project, nullptr) == SONARE_OK);
+
+  SonareProjectBounceOptions options{};
+  options.total_frames = 128;
+  options.num_channels = 2;
+  options.sample_rate = 48000;
+  float* out = nullptr;
+  size_t out_len = 0;
+  // A dangling clip source makes this bounce fail with diagnostics recorded.
+  REQUIRE(sonare_project_bounce(project, &options, &out, &out_len) == SONARE_ERROR_INVALID_STATE);
+  SonareProjectCompileResult recorded{};
+  REQUIRE(sonare_project_last_bounce_compile_result(project, &recorded) == SONARE_OK);
+  REQUIRE(recorded.diagnostic_count > 0);
+  sonare_project_free_compile_result(&recorded);
+
+  // Each of these is rejected on its arguments before the project is compiled.
+  SonareInstrumentBinding callback_binding{};
+  callback_binding.destination_id = 1u;
+  callback_binding.callbacks.render = nullptr;  // required
+  REQUIRE(sonare_project_bounce_with_instruments(project, &options, &callback_binding, 1, &out,
+                                                 &out_len) == SONARE_ERROR_INVALID_PARAMETER);
+  SonareProjectCompileResult after_callback{};
+  REQUIRE(sonare_project_last_bounce_compile_result(project, &after_callback) == SONARE_OK);
+  CHECK(after_callback.diagnostic_count == 0);
+  CHECK(after_callback.has_timeline == 0);
+  sonare_project_free_compile_result(&after_callback);
+
+  REQUIRE(sonare_project_bounce(project, &options, &out, &out_len) == SONARE_ERROR_INVALID_STATE);
+  SonareSf2InstrumentBinding sf2_binding{};
+  sf2_binding.destination_id = 1u;
+  sf2_binding.config.struct_version = 99;  // unsupported
+  REQUIRE(sonare_project_bounce_with_sf2_instruments(project, &options, &sf2_binding, 1, &out,
+                                                     &out_len) == SONARE_ERROR_INVALID_PARAMETER);
+  SonareProjectCompileResult after_sf2{};
+  REQUIRE(sonare_project_last_bounce_compile_result(project, &after_sf2) == SONARE_OK);
+  CHECK(after_sf2.diagnostic_count == 0);
+  CHECK(after_sf2.has_timeline == 0);
+  sonare_project_free_compile_result(&after_sf2);
+
+  sonare_project_destroy(project);
+}
+
 TEST_CASE("project bounce exposes unrouted opaque automation diagnostics", "[project]") {
   SonareProject* project = nullptr;
   REQUIRE(sonare_project_create(&project) == SONARE_OK);

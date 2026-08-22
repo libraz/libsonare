@@ -329,9 +329,11 @@ mixing::api::Scene scene_from_value(const Value& v) {
 // reach. Loading one produces a project the edit API can then neither address
 // nor repair -- an undeletable automation lane, a marker at a negative PPQ that
 // every setter would have rejected. The invariants the setters enforce are
-// therefore enumerated ONCE here and applied to the finished model, so the value
-// set the load path accepts stays a subset of the value set the edit path
-// accepts no matter which decoder produced a field.
+// therefore enumerated ONCE here and applied to the finished model -- and to the
+// MIDI content store decoded beside it, which holds clip event positions the
+// project itself does not carry -- so the value set the load path accepts stays a
+// subset of the value set the edit path accepts no matter which decoder produced
+// a field.
 //
 // Two outcomes. A violation with a well-defined normalization (a duplicate that
 // the setter would have overwritten in place) is repaired last-writer-wins and
@@ -368,8 +370,9 @@ SidecarKey sidecar_key(const arrangement::AssistSidecar& s) {
 
 }  // namespace
 
-std::optional<InvariantViolation> enforce_edit_api_invariants(arrangement::Project* project,
-                                                              BoundedDiagnostics* diagnostics) {
+std::optional<InvariantViolation> enforce_edit_api_invariants(
+    arrangement::Project* project, const arrangement::MidiContentStore* midi,
+    BoundedDiagnostics* diagnostics) {
   if (project == nullptr) return std::nullopt;
 
   // ---- Positions are non-negative ------------------------------------------
@@ -442,6 +445,50 @@ std::optional<InvariantViolation> enforce_edit_api_invariants(arrangement::Proje
         return InvariantViolation{
             "invalid_clip_comp_segment_ppq",
             label + "comp segment bounds must be finite with 0 <= start_ppq < end_ppq"};
+      }
+    }
+  }
+
+  // ---- Automation breakpoint positions -------------------------------------
+  // AutomationLane::set_points already rejects a non-finite position, so what a
+  // document can still smuggle past it is a negative one; the C ABI breakpoint
+  // setter requires finite_non_negative like every other position. A negative
+  // breakpoint is not dropped downstream but silently pulled to sample 0 by the
+  // bounce scheduler, which is a quieter corruption than a diagnostic. Validate
+  // before the identity pass below, so a malformed lane cannot vanish behind a
+  // last-writer-wins survivor.
+  for (const arrangement::Track& track : project->tracks()) {
+    for (const automation::AutomationLane& lane : track.automation_lanes) {
+      for (const automation::Breakpoint& point : lane.points()) {
+        if (!valid_position_ppq(point.ppq)) {
+          return InvariantViolation{
+              "invalid_automation_breakpoint_ppq",
+              "track " + std::to_string(track.id) + " automation lane " +
+                  std::to_string(lane.target_param_id()) +
+                  " carries a breakpoint whose ppq is not finite and non-negative"};
+        }
+      }
+    }
+  }
+
+  // ---- MIDI clip event positions -------------------------------------------
+  // Clip events live in the MIDI content store rather than on the project, so
+  // they are the one position set this pass has to be handed explicitly. The
+  // setter (sonare_project_set_midi_events) admits 0 <= ppq <= kMaxPublicPpq;
+  // an event below the clip's source offset is dropped without a diagnostic at
+  // compile time, and the encoder writes the value back verbatim, so a bad
+  // position survives every save/load round trip that follows.
+  if (midi != nullptr) {
+    for (const auto& [clip_id, events] : midi->events) {
+      for (const arrangement::MidiClipEvent& event : events) {
+        // valid_public_ppq is a two-sided comparison, so NaN and both infinities
+        // fail it without a separate finiteness test.
+        if (!transport::valid_public_ppq(event.ppq)) {
+          return InvariantViolation{
+              "invalid_midi_event_ppq",
+              "MIDI clip " + std::to_string(clip_id) +
+                  " carries an event whose ppq is outside the range the edit API accepts"};
+        }
       }
     }
   }

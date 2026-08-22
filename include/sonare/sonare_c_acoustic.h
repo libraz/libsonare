@@ -86,7 +86,10 @@ typedef struct {
    * Hz). When absorption_bands != NULL and absorption_band_count > 0 it
    * overrides the scalar `absorption` (unless material_preset selects a preset).
    * scattering_bands is optional and applied band-wise when present; missing
-   * scattering bands default to 0. */
+   * scattering bands default to 0. It is INDEPENDENT of absorption_bands and of
+   * material_preset: a scattering array supplied on its own is applied to
+   * whichever material the absorption precedence selected, so a preset or a
+   * scalar-absorption room can still be given rough walls. */
   const float* absorption_bands;
   size_t absorption_band_count;
   const float* scattering_bands;
@@ -129,10 +132,20 @@ typedef struct {
 } SonareRirSynthResult;
 
 /// @brief Priors + analysis settings for blind room estimation.
+///
+/// EVERY float field below follows this ABI's "0 selects the library value"
+/// rule, without exception, so `SonareRoomEstimateConfig cfg = {};` estimates
+/// the same room as a default-argument call on any binding. The rule is
+/// struct-wide rather than per-field on purpose: a lone literal-zero field is
+/// indistinguishable from an unset one at the call site, and a zero absorption
+/// prior in particular is not a physical request — it scales the reported volume
+/// by the cube of the prior, so a 0 that meant "unset" would report a room three
+/// orders of magnitude too small with full confidence.
 typedef struct {
-  float aspect_hint_lw;        /* length/width shape prior */
-  float aspect_hint_lh;        /* length/height shape prior */
-  float reference_absorption;  /* absorption prior anchoring the volume scale */
+  float aspect_hint_lw;        /* length/width shape prior; 0 = library default */
+  float aspect_hint_lh;        /* length/height shape prior; 0 = library default */
+  float reference_absorption;  /* absorption prior anchoring the volume scale;
+                                * 0 = library default (0.15) */
   float min_decay_db;          /* analyzer decay-fit span (dB); 0 = library default */
   float noise_floor_margin_db; /* analyzer noise-floor margin (dB); 0 = library default */
   int prefer_eyring;           /* 1 = Eyring model, 0 = Sabine */

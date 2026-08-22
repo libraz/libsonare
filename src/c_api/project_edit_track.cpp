@@ -157,8 +157,15 @@ SonareError sonare_project_set_tempo_segments(SonareProject* project,
   double previous_start_ppq = -1.0;
   for (size_t i = 0; i < segment_count; ++i) {
     const SonareProjectTempoSegment& in = segments[i];
-    if (!finite_non_negative(in.start_ppq) || !finite_positive(in.bpm) ||
-        !std::isfinite(in.end_bpm) || in.end_bpm < 0.0 || in.start_ppq <= previous_start_ppq) {
+    // Same admissible set as the engine's setter (sonare_engine_set_tempo_segments):
+    // both positions and tempi are bounded, not merely finite. The project side
+    // used to take any finite positive BPM, and the two consumers that build a
+    // raw TempoMap from the stored segments (sonare_project_set_loop_from_audio,
+    // sonare_project_snap_to_grid_ex) then computed silently clamped, meaningless
+    // sample positions from it.
+    const sonare::transport::TempoSegment candidate{in.start_ppq, in.bpm, 0.0, in.end_bpm};
+    if (!sonare::transport::valid_public_tempo_segment(candidate) ||
+        in.start_ppq <= previous_start_ppq) {
       return SONARE_ERROR_INVALID_PARAMETER;
     }
     sonare::transport::TempoSegment seg;
@@ -189,16 +196,24 @@ SonareError sonare_project_set_time_signatures(SonareProject* project,
   }
   std::vector<sonare::transport::TimeSignatureSegment> out;
   out.reserve(segment_count);
+  double previous_start_ppq = -1.0;
   for (size_t i = 0; i < segment_count; ++i) {
     const SonareProjectTimeSignatureSegment& in = segments[i];
-    if (!finite_non_negative(in.start_ppq) || in.numerator <= 0 || in.denominator <= 0) {
-      return SONARE_ERROR_INVALID_PARAMETER;
-    }
+    // The two setters are documented as a pair, so they take the same shape of
+    // input: bounded positions, and strictly increasing starts. Segments are
+    // stored verbatim and read back "in stored order", so an out-of-order list
+    // survives a round trip and only the compiler's own sort hides it at
+    // playback time.
     sonare::transport::TimeSignatureSegment seg;
     seg.start_ppq = in.start_ppq;
     seg.time_sig.numerator = in.numerator;
     seg.time_sig.denominator = in.denominator;
+    if (!sonare::transport::valid_public_time_signature_segment(seg) ||
+        in.start_ppq <= previous_start_ppq) {
+      return SONARE_ERROR_INVALID_PARAMETER;
+    }
     out.push_back(seg);
+    previous_start_ppq = in.start_ppq;
   }
   SONARE_C_TRY
   auto command = std::make_unique<arr::SetTimeSignatureSegment>(std::move(out));

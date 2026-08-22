@@ -406,11 +406,14 @@ InterleavedAudioLoadResult load_buffer_mp3_interleaved(const uint8_t* data, size
   return {std::move(interleaved), sample_rate, channels};
 }
 
+// @p max_bytes is the ceiling the caller is under, with 0 meaning no limit, so
+// the path loader hands its own AudioLoadOptions::max_file_size down rather than
+// meeting a second fixed one it cannot raise.
 [[maybe_unused]] InterleavedAudioLoadResult load_buffer_interleaved(const uint8_t* data,
-                                                                    size_t size) {
-  SONARE_CHECK_MSG(size <= resource::kMaxAudioFileBytes, ErrorCode::InvalidParameter,
+                                                                    size_t size, size_t max_bytes) {
+  SONARE_CHECK_MSG(max_bytes == 0 || size <= max_bytes, ErrorCode::InvalidParameter,
                    "Audio buffer too large: " + std::to_string(size) +
-                       " bytes (max: " + std::to_string(resource::kMaxAudioFileBytes) + ")");
+                       " bytes (max: " + std::to_string(max_bytes) + ")");
   switch (detect_format(data, size)) {
     case AudioFormat::WAV:
 #ifdef SONARE_WITH_FFMPEG
@@ -544,7 +547,7 @@ AudioLoadResult load_buffer_mp3(const uint8_t* data, size_t size) {
 InterleavedAudioLoadResult load_audio_interleaved(const std::string& path,
                                                   const AudioLoadOptions& options) {
   const std::vector<uint8_t> data = read_file(path, options.max_file_size);
-  return load_buffer_interleaved(data.data(), data.size());
+  return load_buffer_interleaved(data.data(), data.size(), options.max_file_size);
 }
 
 AudioLoadResult load_wav(const std::string& path) {
@@ -558,14 +561,16 @@ AudioLoadResult load_mp3(const std::string& path) {
 }
 #endif  // !__EMSCRIPTEN__
 
-AudioLoadResult load_buffer(const uint8_t* data, size_t size) {
-  // The file-path loaders cap their input at kMaxAudioFileBytes before decoding
-  // (read_file). The buffer/memory path is the entry most exposed to untrusted
-  // input, so apply the same ceiling here to reject an oversized blob before any
-  // decoder can start expanding it. Match read_file's error class.
-  SONARE_CHECK_MSG(size <= resource::kMaxAudioFileBytes, ErrorCode::InvalidParameter,
+namespace {
+
+// Shared body of load_buffer(). @p max_bytes is the ceiling the caller is under,
+// with 0 meaning no limit, so a path loader can hand its own
+// AudioLoadOptions::max_file_size down instead of hitting a second, fixed one it
+// cannot raise.
+AudioLoadResult load_buffer_bounded(const uint8_t* data, size_t size, size_t max_bytes) {
+  SONARE_CHECK_MSG(max_bytes == 0 || size <= max_bytes, ErrorCode::InvalidParameter,
                    "Audio buffer too large: " + std::to_string(size) +
-                       " bytes (max: " + std::to_string(resource::kMaxAudioFileBytes) + " bytes)");
+                       " bytes (max: " + std::to_string(max_bytes) + " bytes)");
   AudioFormat format = detect_format(data, size);
 
   switch (format) {
@@ -589,6 +594,16 @@ AudioLoadResult load_buffer(const uint8_t* data, size_t size) {
   }
 }
 
+}  // namespace
+
+AudioLoadResult load_buffer(const uint8_t* data, size_t size) {
+  // The buffer/memory path takes no options and is the entry most exposed to
+  // untrusted input, so it keeps the library ceiling: reject an oversized blob
+  // before any decoder can start expanding it. A caller that needs a different
+  // ceiling goes through the path loaders, which carry AudioLoadOptions.
+  return load_buffer_bounded(data, size, resource::kMaxAudioFileBytes);
+}
+
 #ifndef __EMSCRIPTEN__
 AudioLoadResult load_audio(const std::string& path, const AudioLoadOptions& options) {
   std::vector<uint8_t> data = read_file(path, options.max_file_size);
@@ -602,7 +617,12 @@ AudioLoadResult load_audio(const std::string& path, const AudioLoadOptions& opti
     SONARE_CHECK_MSG(false, ErrorCode::InvalidFormat, unsupported_file_message(path));
 #endif
   }
-  return load_buffer(data.data(), data.size());
+  // read_file already applied options.max_file_size, which is the only ceiling
+  // this path has: passing it down instead of the library default is what makes
+  // max_file_size = 0 mean "no limit" all the way through, as it is documented
+  // to, rather than failing at the fixed buffer ceiling after the whole file has
+  // been read into memory.
+  return load_buffer_bounded(data.data(), data.size(), options.max_file_size);
 }
 
 int audio_channel_count(const std::string& path, const AudioLoadOptions& options) {
@@ -701,8 +721,31 @@ void finalize_atomic(const std::string& tmp, const std::string& path) {
     ::close(fd);
   }
 #endif
-  SONARE_CHECK_MSG(std::rename(tmp.c_str(), path.c_str()) == 0, ErrorCode::DecodeFailed,
+  // The rename is the last stage of writing the output, so it carries the same
+  // error class as every earlier one. A destination that resolves to a
+  // directory fails here and nowhere else, and reporting it as a decode failure
+  // told the caller their input could not be read.
+  SONARE_CHECK_MSG(std::rename(tmp.c_str(), path.c_str()) == 0, ErrorCode::EncodeFailed,
                    "Failed to finalize file: " + path);
+}
+
+// RIFF stores both the data chunk and the enclosing file size in uint32. Every
+// WAV writer applies this before it packs or allocates anything: past the bound
+// the header is truncated to a value that reads as a corrupt short file, and
+// there is no error at write time to notice it by. The bound is the EXTENSIBLE
+// header's, the larger of the two the writers emit, so the mono/stereo path
+// enforces the same effective length whichever entry point produced it -- the
+// two are documented as bit-identical, and a limit that differed between them
+// would make that true of the bytes and false of the acceptable inputs.
+void check_riff_size_fits(size_t n_frames, int channel_count, int bits_per_sample) {
+  const size_t bytes_per_frame =
+      static_cast<size_t>(channel_count) * static_cast<size_t>(bits_per_sample / 8);
+  constexpr size_t kExtensibleHeaderBytes = 68;
+  const size_t max_data_bytes =
+      static_cast<size_t>(std::numeric_limits<uint32_t>::max()) - (kExtensibleHeaderBytes - 8);
+  SONARE_CHECK_MSG(bytes_per_frame > 0 && n_frames <= max_data_bytes / bytes_per_frame,
+                   ErrorCode::InvalidParameter,
+                   "WAV data exceeds RIFF 32-bit size limit; use a chunked container");
 }
 #endif  // !__EMSCRIPTEN__
 
@@ -715,6 +758,7 @@ void save_wav(const std::string& path, const float* samples, size_t n_samples, i
   SONARE_CHECK_MSG(sample_rate > 0, ErrorCode::InvalidParameter, "Invalid sample rate");
   SONARE_CHECK_MSG(bits_per_sample == 16 || bits_per_sample == 24, ErrorCode::InvalidParameter,
                    "bits_per_sample must be 16 or 24");
+  check_riff_size_fits(n_samples, 1, bits_per_sample);
 
   drwav_data_format format;
   format.container = drwav_container_riff;
@@ -866,17 +910,7 @@ void save_wav_multichannel(const std::string& path, const float* interleaved, si
   SONARE_CHECK_MSG(channel_count == sonare::channel_count(layout), ErrorCode::InvalidParameter,
                    "channel_count does not match the layout");
 
-  // RIFF stores both the data chunk and the enclosing file size in uint32.
-  // Reject before packing/allocating: otherwise a >4 GiB surround render writes
-  // a truncated header that many readers interpret as a corrupt short file.
-  const size_t bytes_per_frame =
-      static_cast<size_t>(channel_count) * static_cast<size_t>(bits_per_sample / 8);
-  constexpr size_t kExtensibleHeaderBytes = 68;
-  const size_t max_data_bytes =
-      static_cast<size_t>(std::numeric_limits<uint32_t>::max()) - (kExtensibleHeaderBytes - 8);
-  SONARE_CHECK_MSG(bytes_per_frame > 0 && n_frames <= max_data_bytes / bytes_per_frame,
-                   ErrorCode::InvalidParameter,
-                   "WAV data exceeds RIFF 32-bit size limit; use a chunked container");
+  check_riff_size_fits(n_frames, channel_count, bits_per_sample);
 
   if (channel_count <= 2) {
     // Plain WAVE_FORMAT_PCM for mono/stereo (maximum compatibility, and

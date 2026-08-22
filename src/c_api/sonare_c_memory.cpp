@@ -65,6 +65,25 @@ constexpr bool capability_fx_enabled() {
 #endif
 }
 
+// True when the offline mixing assistant is compiled in. Reported separately
+// from `mixing` because BUILD_MIXING_ASSISTANT can be dropped on its own, and
+// its entry points stay exported either way: they answer NOT_SUPPORTED rather
+// than disappearing, so a host cannot detect a stripped build by probing for a
+// symbol.
+//
+// The SONARE_BUILD_ spelling is load-bearing here, as it is for the neighbours
+// above. SONARE_WITH_MIXING_ASSISTANT is scoped to the targets that link the
+// subsystem, and this translation unit is compiled into sonare_core_objects,
+// which is not one of them -- reading it here compiles cleanly and always
+// answers false in a statically linked host.
+constexpr bool capability_mixing_assistant_enabled() {
+#if defined(SONARE_BUILD_MIXING_ASSISTANT) && SONARE_BUILD_MIXING_ASSISTANT
+  return true;
+#else
+  return false;
+#endif
+}
+
 // True when hosted instruments expose continuously automatable parameters
 // (@ref sonare_engine_resolve_instrument_automation_id). Tied to the
 // arrangement/MIDI subsystem, which owns the instrument rack.
@@ -148,6 +167,7 @@ const char* sonare_capabilities_json(void) {
                  "},\"platform\":\"" + capability_platform() +
                  "\",\"features\":{\"mastering\":" + json_bool(capability_mastering_enabled()) +
                  ",\"mixing\":" + json_bool(capability_mixing_enabled()) +
+                 ",\"mixingAssistant\":" + json_bool(capability_mixing_assistant_enabled()) +
                  ",\"fx\":" + json_bool(capability_fx_enabled()) +
                  ",\"ffmpeg\":" + json_bool(sonare_has_ffmpeg_support() != 0) +
                  ",\"instrumentParamAutomation\":" +

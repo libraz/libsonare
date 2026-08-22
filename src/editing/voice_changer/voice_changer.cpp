@@ -11,6 +11,14 @@ VoiceChanger::VoiceChanger(VoiceChangerConfig config) : config_(config) {}
 
 Audio VoiceChanger::process(const Audio& audio) const {
   SONARE_CHECK(!audio.empty(), ErrorCode::InvalidParameter);
+  // The epsilon test below answers "is this near zero", and a NaN answers false
+  // to every comparison -- so an unguarded NaN skipped the pitch branch
+  // entirely and returned the input unchanged while reporting success. The
+  // formant sibling is already checked inside FormantWarp; check this one here,
+  // in the core, so all four surfaces and both CLIs inherit it rather than each
+  // growing its own copy. +/-Inf needs no case here: it enters the branch and
+  // pitch_shift rejects it.
+  SONARE_CHECK(std::isfinite(config_.pitch_semitones), ErrorCode::InvalidParameter);
 
   PitchShiftConfig pitch_config;
   pitch_config.backend = config_.backend;

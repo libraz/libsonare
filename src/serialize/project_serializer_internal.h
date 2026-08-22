@@ -164,8 +164,14 @@ struct InvariantViolation {
 /// through @p diagnostics; an unrepairable one is returned for the caller to
 /// turn into an error diagnostic. Call once, on the assembled model, before
 /// returning it.
-std::optional<InvariantViolation> enforce_edit_api_invariants(arrangement::Project* project,
-                                                              BoundedDiagnostics* diagnostics);
+///
+/// @param midi The MIDI content store decoded alongside @p project, or NULL when
+///        there is none. Clip events live there rather than on the project, so
+///        passing it is what keeps their positions inside the same accepted
+///        value set as everything the project itself carries.
+std::optional<InvariantViolation> enforce_edit_api_invariants(
+    arrangement::Project* project, const arrangement::MidiContentStore* midi,
+    BoundedDiagnostics* diagnostics);
 arrangement::ClipFade fade_from_json(const Value& v);
 arrangement::ClipTake take_from_json(const Value& v);
 arrangement::ClipCompSegment comp_segment_from_json(const Value& v);

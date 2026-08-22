@@ -12,6 +12,7 @@
 #include <cstdint>
 #include <cstdio>
 #include <cstring>
+#include <filesystem>
 #include <fstream>
 #include <string>
 #include <vector>
@@ -689,6 +690,63 @@ TEST_CASE("load_audio with max_file_size rejects large files before allocating",
   std::remove(tmp_path.c_str());
 }
 
+TEST_CASE("a path load is bounded by its own max_file_size and nothing else",
+          "[.][audio_io][slow]") {
+  // The difference only shows above the buffer entry's fixed ceiling: that
+  // ceiling used to apply on top of the option, so a caller that raised or
+  // cleared max_file_size still lost the file -- and lost it after the whole
+  // thing had been read into memory, which is exactly what the option exists to
+  // avoid. The file carries a real (tiny) WAV header so format detection routes
+  // it through the built-in decoder rather than short-circuiting somewhere the
+  // ceiling never applied; the sparse tail past the declared data chunk is only
+  // there to make the file large.
+  const std::string oversize = "test_oversize_blob.wav";
+  {
+    const std::vector<float> one_sample(1, 0.25f);
+    const std::vector<uint8_t> header =
+        create_wav_buffer(one_sample.data(), one_sample.size(), 44100);
+    std::ofstream out(oversize, std::ios::binary);
+    REQUIRE(out.is_open());
+    out.write(reinterpret_cast<const char*>(header.data()),
+              static_cast<std::streamsize>(header.size()));
+  }
+  std::error_code ec;
+  std::filesystem::resize_file(oversize, resource::kMaxAudioFileBytes + 1, ec);
+  if (ec) {
+    std::remove(oversize.c_str());
+    SUCCEED("filesystem cannot hold a sparse 500 MB file");
+    return;
+  }
+
+  const auto code_of = [](auto&& fn) {
+    try {
+      fn();
+    } catch (const SonareException& e) {
+      return e.code();
+    }
+    return ErrorCode::Ok;
+  };
+
+  AudioLoadOptions unlimited;
+  unlimited.max_file_size = 0;
+  // The load either succeeds on the declared (tiny) data chunk or fails on the
+  // content; what it must not be is the "too large" rejection, which is the one
+  // the caller cleared.
+  CHECK(code_of([&] { load_audio(oversize, unlimited); }) != ErrorCode::InvalidParameter);
+  CHECK(code_of([&] { load_audio_interleaved(oversize, unlimited); }) !=
+        ErrorCode::InvalidParameter);
+  CHECK(code_of([&] { audio_channel_count(oversize, unlimited); }) != ErrorCode::InvalidParameter);
+
+  // A ceiling the caller did set still applies, and still applies before the
+  // bytes are read.
+  AudioLoadOptions bounded;
+  bounded.max_file_size = 1024;
+  CHECK(code_of([&] { load_audio(oversize, bounded); }) == ErrorCode::InvalidParameter);
+  CHECK(code_of([&] { load_audio_interleaved(oversize, bounded); }) == ErrorCode::InvalidParameter);
+
+  std::remove(oversize.c_str());
+}
+
 #ifdef SONARE_WITH_FFMPEG
 TEST_CASE("load_audio decodes m4a when built with FFmpeg", "[audio_io][ffmpeg]") {
   // The test relies on the ffmpeg CLI to synthesize an m4a fixture at runtime
@@ -1139,6 +1197,18 @@ TEST_CASE("save_wav_multichannel writes the 7.1 mask and validates arguments", "
   REQUIRE_THROWS_AS(save_wav_multichannel(path, &sentinel, static_cast<size_t>(1) << 30, 8,
                                           ChannelLayout::SevenPointOne, 48000, 24),
                     sonare::SonareException);
+
+  // Same bound on the mono/stereo writers, which the header documents as
+  // producing bit-identical output: past it dr_wav saturates the size fields, so
+  // the file is written and only a reader notices the tail is gone.
+  const std::string mono_path = "test_riff_overflow.wav";
+  REQUIRE_THROWS_AS(save_wav(mono_path, &sentinel, static_cast<size_t>(1) << 31, 48000, 24),
+                    sonare::SonareException);
+  REQUIRE_THROWS_AS(save_wav_multichannel(mono_path, &sentinel, static_cast<size_t>(1) << 31, 1,
+                                          ChannelLayout::Mono, 48000, 24),
+                    sonare::SonareException);
+  // Neither call reached the writer, so no file (not even a temporary) was left.
+  REQUIRE_FALSE(std::filesystem::exists(mono_path));
 }
 
 TEST_CASE("save_wav quantizes 16-bit PCM by rounding to nearest, not truncating", "[audio_io]") {

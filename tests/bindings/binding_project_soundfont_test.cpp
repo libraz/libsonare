@@ -131,9 +131,14 @@ TEST_CASE("sonare_project_load_soundfont parses, replaces and clears", "[project
           SONARE_ERROR_INVALID_PARAMETER);
   REQUIRE(sonare_project_load_soundfont(project, nullptr, 16) == SONARE_ERROR_INVALID_PARAMETER);
   REQUIRE(sonare_project_load_soundfont(project, sf2.data(), 0) == SONARE_ERROR_INVALID_PARAMETER);
+  // A broken file is INVALID_FORMAT, not INVALID_PARAMETER: the call itself was
+  // well formed and the statement is about the data. INVALID_PARAMETER above is
+  // reserved for the NULL/zero-length argument cases, so a caller can tell the
+  // two apart -- and it is the same split sonare_engine_load_soundfont makes for
+  // the same two conditions.
   const uint8_t garbage[8] = {'n', 'o', 't', ' ', 'a', 's', 'f', '2'};
   REQUIRE(sonare_project_load_soundfont(project, garbage, sizeof(garbage)) ==
-          SONARE_ERROR_INVALID_PARAMETER);
+          SONARE_ERROR_INVALID_FORMAT);
   REQUIRE(sonare_last_error_message() != nullptr);
   REQUIRE(std::strlen(sonare_last_error_message()) > 0);
   // A failed load leaves the previous state untouched (still no soundfont).
@@ -149,13 +154,13 @@ TEST_CASE("sonare_project_load_soundfont parses, replaces and clears", "[project
   const uint8_t sentinel = 0;
   REQUIRE(sonare_project_load_soundfont(
               project, &sentinel, sonare::resource::kDefaultSf2ResourceLimits.max_file_bytes + 1) ==
-          SONARE_ERROR_INVALID_PARAMETER);
+          SONARE_ERROR_INVALID_FORMAT);
   REQUIRE(sonare_project_soundfont_preset_count(project, &count) == SONARE_OK);
   REQUIRE(count == 5);
 
   // A malformed re-load keeps the loaded soundfont.
   REQUIRE(sonare_project_load_soundfont(project, garbage, sizeof(garbage)) ==
-          SONARE_ERROR_INVALID_PARAMETER);
+          SONARE_ERROR_INVALID_FORMAT);
   REQUIRE(sonare_project_soundfont_preset_count(project, &count) == SONARE_OK);
   REQUIRE(count == 5);
 
@@ -517,4 +522,37 @@ TEST_CASE("sonare_engine SF2 instrument renders live MIDI input", "[c_api][sf2]"
 #endif
 
   sonare_engine_destroy(engine);
+}
+
+TEST_CASE("the project and engine SF2 loaders agree on their error codes", "[project][sf2]") {
+  // The same failure reached through the two entry points has to carry the same
+  // code: a Python caller branches its CLI exit status on SonareError.code, so a
+  // corrupt SF2 was distinguishable from a NULL pointer through the engine and
+  // not through the project. Both headers document INVALID_FORMAT as "a
+  // statement about the imported data".
+  SonareProject* project = nullptr;
+  REQUIRE(sonare_project_create(&project) == SONARE_OK);
+  SonareRealtimeEngine* engine = nullptr;
+  REQUIRE(sonare_engine_create(&engine) == SONARE_OK);
+
+  const uint8_t garbage[8] = {'n', 'o', 't', ' ', 'a', 's', 'f', '2'};
+  const size_t over_budget = sonare::resource::kDefaultSf2ResourceLimits.max_file_bytes + 1;
+  const uint8_t sentinel = 0;
+
+  // Malformed bytes.
+  CHECK(sonare_project_load_soundfont(project, garbage, sizeof(garbage)) ==
+        sonare_engine_load_soundfont(engine, garbage, sizeof(garbage)));
+  // Over the resource budget.
+  CHECK(sonare_project_load_soundfont(project, &sentinel, over_budget) ==
+        sonare_engine_load_soundfont(engine, &sentinel, over_budget));
+  // A NULL/empty argument stays a caller error on both, and is a DIFFERENT code
+  // from the two above — which is the whole point of the split.
+  CHECK(sonare_project_load_soundfont(project, nullptr, 16) ==
+        sonare_engine_load_soundfont(engine, nullptr, 16));
+  CHECK(sonare_project_load_soundfont(project, nullptr, 16) == SONARE_ERROR_INVALID_PARAMETER);
+  CHECK(sonare_project_load_soundfont(project, garbage, sizeof(garbage)) ==
+        SONARE_ERROR_INVALID_FORMAT);
+
+  sonare_engine_destroy(engine);
+  sonare_project_destroy(project);
 }
