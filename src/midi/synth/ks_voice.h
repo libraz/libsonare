@@ -36,6 +36,7 @@
 #include <cstddef>
 #include <cstdint>
 
+#include "midi/synth/string_loop.h"
 #include "midi/synth/voice_random.h"
 
 namespace sonare::midi::synth {
@@ -179,12 +180,10 @@ class KsVoiceCore {
   /// CONTROL-thread wiring (or audio-thread pointer assignment before start()):
   /// hands the core its delay slab (three spans of @p per_line_capacity — the
   /// primary string, the second-polarization line, and the octave-up 4'
-  /// companion line). The slab outlives the voice.
+  /// companion line). The slab outlives the voice; start() carves the spans.
   void attach(float* slab, int per_line_capacity) noexcept {
-    buffer_ = slab;
+    slab_ = slab;
     capacity_ = per_line_capacity;
-    pol_buffer_ = slab != nullptr ? slab + per_line_capacity : nullptr;
-    oct_buffer_ = slab != nullptr ? slab + 2 * per_line_capacity : nullptr;
   }
 
   /// Configures the string for @p note / @p velocity and injects the seeded
@@ -201,50 +200,32 @@ class KsVoiceCore {
   void kill() noexcept;
 
  private:
-  float* buffer_ = nullptr;
+  /// The delay slab attach() handed over, and the span length each loop takes
+  /// out of it. start() carves the three spans.
+  float* slab_ = nullptr;
   int capacity_ = 0;
-  /// Circular span actually used for this note (covers bend-down headroom).
-  int size_ = 0;
-  size_t write_index_ = 0;
 
-  /// Ideal loop period (samples) at pitch_ratio == 1.
-  float base_period_ = 0.0f;
-  /// Samples of loop delay NOT in the delay line: the one-sample feedback
-  /// path plus the loop filter's phase delay at the fundamental.
-  float loop_comp_ = 1.0f;
-  /// One-pole loop lowpass y += alpha * (x - y) and its state.
-  float loop_alpha_ = 1.0f;
-  float lp_state_ = 0.0f;
-  /// In-loop dispersion allpass cascade (steel-string inharmonicity). disp_a_
-  /// == 0 -> the cascade is skipped, render bit-identical.
-  float disp_a_ = 0.0f;
-  float disp_state_[kKsDispersionStages] = {};
-  /// Per-loop amplitude factor for the current t60 target.
-  float loop_gain_ = 0.0f;
-  /// Per-loop gain for the note-off damped t60 (precomputed at start).
-  float release_gain_ = 0.0f;
-  /// Fret-slap displacement limit (0 = off -> render path bit-identical).
-  /// When > 0, loop content past +/- this bound is softly reflected.
-  float slap_threshold_ = 0.0f;
-
-  // Second (horizontal) polarization: a detuned string loop sharing the pluck.
-  // Off unless params.polarization > 0 (pol_couple_ == 0 -> render skips it, so
-  // the primary path is bit-identical). The slab's second span (attach()).
-  float* pol_buffer_ = nullptr;
-  int pol_size_ = 0;
-  size_t pol_write_ = 0;
-  float pol_period_ = 0.0f;  // detuned from base_period_
-  float pol_loop_comp_ = 1.0f;
-  float pol_loop_alpha_ = 1.0f;
-  float pol_lp_state_ = 0.0f;
-  float pol_loop_gain_ = 0.0f;
-  float pol_release_gain_ = 0.0f;
+  /// The played string (the vertical plane the pluck grips).
+  StringLoop string_;
+  /// Second (horizontal) polarization: a detuned loop sharing the pluck. Off
+  /// unless params.polarization > 0 (pol_couple_ == 0 -> render skips it, so
+  /// the primary path is bit-identical). The slab's second span.
+  StringLoop pol_;
   float pol_couple_ = 0.0f;  // 0 = off; horizontal-plane mix into the output
   float pol_exc_ = 0.0f;     // pluck injection into the 2nd polarization
   // Symmetric bridge admittance between the two planes (0 = off -> the loops
   // stay independent, bit-identical to plain polarization). Scaled at start()
   // so the coupled 2x2 loop's eigenvalues stay inside the unit circle.
   float couple_gain_ = 0.0f;
+
+  /// In-loop dispersion allpass cascade (steel-string inharmonicity), applied
+  /// between the string's delay read and its loss filter. disp_a_ == 0 -> the
+  /// cascade is skipped, render bit-identical.
+  float disp_a_ = 0.0f;
+  float disp_state_[kKsDispersionStages] = {};
+  /// Fret-slap displacement limit (0 = off -> render path bit-identical).
+  /// When > 0, loop content past +/- this bound is softly reflected.
+  float slap_threshold_ = 0.0f;
 
   // Excitation burst (one period of combed, lowpassed seeded noise; the
   // dynamic-level lowpass is two cascaded one-poles).
@@ -279,16 +260,8 @@ class KsVoiceCore {
   // Octave-up 4' companion line (the harpsichord 4' register). Off unless
   // params.octave_mix > 0 (oct_couple_ == 0 -> render skips it, bit-identical).
   // A third loop at half the primary period, sharing the pluck; the slab's third
-  // span (attach()).
-  float* oct_buffer_ = nullptr;
-  int oct_size_ = 0;
-  size_t oct_write_ = 0;
-  float oct_period_ = 0.0f;  // half of base_period_ (an octave up)
-  float oct_loop_comp_ = 1.0f;
-  float oct_loop_alpha_ = 1.0f;
-  float oct_lp_state_ = 0.0f;
-  float oct_loop_gain_ = 0.0f;
-  float oct_release_gain_ = 0.0f;
+  // span.
+  StringLoop oct_;
   float oct_couple_ = 0.0f;  // 0 = off; 4' line mix into the output
   float oct_exc_ = 0.0f;     // pluck injection into the 4' line
 
