@@ -29,6 +29,23 @@ def ensure_lib_path() -> str:
     return os.environ.get("SONARE_LIB_PATH", "")
 
 
+def check_gm_fallback(manifest) -> None:
+    """Fail unless every program in a render went through the built-in GM bank.
+
+    Backend 0 is that bank; anything else means a SoundFont was loaded, and the
+    render then measures sampled audio while reporting on physical models. The
+    harness never loads one, so this is a guard against the day something else
+    does — and it belongs to every renderer here, not just the one that grew it
+    first.
+    """
+    for entry in manifest:
+        if entry.backend != 0:
+            raise RuntimeError(
+                f"program {entry.program} rendered via backend {entry.backend}, "
+                f"expected GM fallback"
+            )
+
+
 def render_model(smf_bytes: bytes, total_seconds: float, sr: int = 48000) -> np.ndarray:
     """Render SMF bytes to a (frames, 2) float32 array via the GM fallback bank."""
     ensure_lib_path()
@@ -44,8 +61,5 @@ def render_model(smf_bytes: bytes, total_seconds: float, sr: int = 48000) -> np.
         manifest = project.soundfont_manifest()
     finally:
         project.close()
-    # backend 0 == builtin GM fallback; anything else means an SF2 sneaked in.
-    for entry in manifest:
-        if entry.backend != 0:
-            raise RuntimeError(f"program {entry.program} rendered via backend {entry.backend}, expected GM fallback")
+    check_gm_fallback(manifest)
     return np.asarray(audio, dtype=np.float32)

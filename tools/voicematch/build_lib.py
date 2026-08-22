@@ -28,22 +28,40 @@ def _cached_option(build_dir: Path, name: str) -> str | None:
 
 
 def configure_build(build_dir: Path, cmake: str, *, tuning: bool) -> None:
-    """Configure the isolated build dir (idempotent unless BUILD_TUNING flips).
+    """Configure the isolated build dir (idempotent while its cache still fits).
 
-    Reconfiguring on a flip matters: `BUILD_TUNING` changes what a
-    `SONARE_TUNABLE` declaration means, so a cache left at the other setting
-    would build a library that ignores every override — a fit that reports a
-    perfectly flat loss and no obvious reason why.
+    Every option the fit depends on is compared, not just the one that changes
+    within a run. `BUILD_TUNING` decides what a `SONARE_TUNABLE` declaration
+    means, so a cache left at the other setting builds a library that ignores
+    every override — a fit that reports a perfectly flat loss and no obvious
+    reason why. `BUILD_SHARED` decides whether the `sonare_shared` target exists
+    at all, and a directory configured without it fails the build with a message
+    (`No rule to make target`) that names neither the option nor this function.
+    `CMAKE_BUILD_TYPE` decides how long every render takes.
+
+    A cache belonging to a different source tree is refused rather than
+    reconfigured: reconfiguring it would point somebody else's build directory
+    at this checkout.
     """
-    want = "ON" if tuning else "OFF"
-    cached = _cached_option(build_dir, "BUILD_TUNING")
-    if cached is not None and cached == want:
+    want = {
+        "BUILD_TUNING": "ON" if tuning else "OFF",
+        "BUILD_SHARED": "ON",
+        "CMAKE_BUILD_TYPE": "Release",
+    }
+    home = _cached_option(build_dir, "CMAKE_HOME_DIRECTORY")
+    if home is not None and Path(home) != REPO_ROOT:
+        raise RuntimeError(
+            f"{build_dir} was configured for {home}, not {REPO_ROOT}; "
+            f"pick a build dir belonging to this checkout"
+        )
+    stale = {n: v for n, v in want.items() if _cached_option(build_dir, n) != v}
+    if not stale:
         return
-    print(f"configuring {build_dir} (Release, BUILD_SHARED=ON, BUILD_TUNING={want})...",
-          file=sys.stderr)
+    print(f"configuring {build_dir} ("
+          + ", ".join(f"{n}={v}" for n, v in want.items()) + ")...", file=sys.stderr)
     subprocess.run(
-        [cmake, "-S", str(REPO_ROOT), "-B", str(build_dir),
-         "-DCMAKE_BUILD_TYPE=Release", "-DBUILD_SHARED=ON", f"-DBUILD_TUNING={want}"],
+        [cmake, "-S", str(REPO_ROOT), "-B", str(build_dir)]
+        + [f"-D{n}={v}" for n, v in want.items()],
         check=True,
     )
 

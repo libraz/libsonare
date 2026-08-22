@@ -32,7 +32,7 @@ import numpy as np
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 
-from render_model import ensure_lib_path  # noqa: E402
+from render_model import check_gm_fallback, ensure_lib_path  # noqa: E402
 from smf import Note, write_smf  # noqa: E402
 from wavio import write_wav  # noqa: E402
 
@@ -206,14 +206,22 @@ def metrics(audio: np.ndarray, sr: int) -> dict:
 
 
 def render_model(smf_bytes: bytes, seconds: float) -> np.ndarray:
+    """Render one phrase through the SF2-less GM fallback path.
+
+    The claim this corpus rests on — that what is measured is the native
+    fallback bank — is checked rather than assumed, through the same guard the
+    voicematch renderer uses.
+    """
     proj = libsonare.Project()
     try:
         proj.import_smf(smf_bytes)
         audio = proj.bounce_with_sf2_instrument(
             total_frames=int(seconds * SR), sample_rate=SR, num_channels=2
         )
+        manifest = proj.soundfont_manifest()
     finally:
         proj.close()
+    check_gm_fallback(manifest)
     return audio
 
 
