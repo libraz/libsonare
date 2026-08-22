@@ -14,12 +14,20 @@
 /// float field whose key appears in `SONARE_TUNING_OVERRIDES`. In a normal
 /// build it does nothing (and the field table is not compiled at all).
 ///
-/// Keys are `<prefix>.<field path>`, where the prefix identifies the patch:
+/// Keys are `<prefix>.<field path>`, where the prefix identifies the PATCH, not
+/// the program. One patch commonly voices several GM programs, so a program
+/// number would not name it. The three prefix forms are the `ProgramOverrides`
+/// member name for a named melodic patch, `famN` for a family patch, and `dNNN`
+/// for a drum note:
 ///
-///     p040.bowed_string.bow_force=0.61    # melodic program 40 (violin)
-///     p019.pipe_organ.ranks2.level=0.72   # melodic program 19 (church organ)
-///     p019.amp_env.release_ms=900         # the shared envelope section
-///     d038.percussion.tone_gain=0.4       # drum note 38 (acoustic snare)
+///     violin.bowed_string.bow_force=0.61       # the violin patch (program 40)
+///     church_organ.pipe_organ.ranks2.level=0.72
+///     church_organ.amp_env.release_ms=900      # the shared envelope section
+///     fam0.piano.brightness=0.55               # GM family 0 (programs 0-7)
+///     d038.percussion.tone_gain=0.4            # drum note 38 (acoustic snare)
+///
+/// The match is exact, and a key absent from the table keeps its compiled-in
+/// default without a diagnostic, so a misspelled prefix is a silent no-op.
 ///
 /// The field path mirrors the C++ member names, so a key is greppable in the
 /// engine header it came from. Array members are indexed by appending the
