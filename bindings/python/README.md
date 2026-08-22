@@ -165,6 +165,7 @@ rather than being sent as an explicit value.
 | `enable_eq`              | `True`  | Evaluate corrective EQ                                       |
 | `enable_dynamics`        | `True`  | Evaluate dynamics processing                                 |
 | `enable_image`           | `True`  | Evaluate stereo placement and width                          |
+| `enable_high_pass`       | `False` | Suggest a high-pass on tracks measured to carry residue below their register |
 | `n_fft`                  | `2048`  | Shared analysis FFT size for every track                     |
 | `hop_length`             | `512`   | Shared analysis hop length, in samples                       |
 

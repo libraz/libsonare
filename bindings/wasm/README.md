@@ -332,6 +332,7 @@ being sent as an explicit value. `sampleRate` itself defaults to `48000`.
 | `enableEq`           | `true`  | Evaluate corrective EQ                                           |
 | `enableDynamics`     | `true`  | Evaluate dynamics processing                                     |
 | `enableImage`        | `true`  | Evaluate stereo placement and width                              |
+| `enableHighPass`     | `false` | Suggest a high-pass on tracks measured to carry residue below their register |
 | `nFft`               | `2048`  | Shared analysis FFT size for every track                         |
 | `hopLength`          | `512`   | Shared analysis hop length, in samples                           |
 
