@@ -17,6 +17,53 @@ struct TanhNonlinearity {
   }
 };
 
+/// @brief Push-pull output pair: two one-sided devices driven in antiphase and
+///        summed by the output transformer.
+/// @details Each half sees the signal offset by @c bias, so the composite
+///   @c tanh(knee*(x+bias)) + tanh(knee*(x-bias)) is odd by construction —
+///   which is why a push-pull stage cancels even harmonics here rather than
+///   being asserted to.
+///
+///   @c bias is how far into class B the pair is biased: it is the half-width
+///   of the region around the zero crossing where neither half is conducting
+///   properly, i.e. the crossover dead zone. @c knee is how abruptly each half
+///   turns on relative to the signal; a wide dead zone with a soft knee is only
+///   a gentle expander, and it takes both to get the kink at the handover that
+///   makes crossover distortion sound the way it does.
+///
+///   The composite is normalized by its own SATURATED output, not by its slope
+///   at the origin: the supply rails do not move when an amp's bias is
+///   readjusted, so the ceiling is what has to stay fixed, and the small-signal
+///   slope is what falls. Normalizing the other way round would make a colder
+///   bias louder and cleaner, which is backwards on both counts.
+///
+///   At @c bias == 0 and @c knee == 1 the whole function collapses onto
+///   TanhNonlinearity bit-exactly: @c 1.0f*(x+-0.0f) is exact, and
+///   @c f(x)+f(x) scaled by @c 0.5f only moves a binary exponent. Class A is
+///   therefore the same arithmetic as before, with no branch.
+struct PushPullNonlinearity {
+  float bias = 0.0f;
+  float knee = 1.0f;
+
+  /// The 0.5f is the SATURATED-output normalizer and must not carry @c knee:
+  /// each half tops out at 1, so the pair tops out at 2 whatever the knee is.
+  /// Folding the knee in here would shrink the ceiling as the turn-on sharpens,
+  /// which reads as "a colder bias compresses harder" instead of "a colder bias
+  /// has a dead zone" — the two are easy to confuse in a level measurement and
+  /// they are not the same effect.
+  float apply(float x) const noexcept {
+    const TanhNonlinearity half;
+    return (half.apply(knee * (x + bias)) + half.apply(knee * (x - bias))) * 0.5f;
+  }
+
+  /// The antiderivative DOES carry it, from the chain rule on @c knee*x.
+  float antiderivative(float x) const noexcept {
+    const TanhNonlinearity half;
+    return (half.antiderivative(knee * (x + bias)) + half.antiderivative(knee * (x - bias))) *
+           (0.5f / knee);
+  }
+};
+
 struct ArctanNonlinearity {
   float apply(float x) const noexcept { return std::atan(x); }
 

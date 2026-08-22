@@ -39,6 +39,15 @@ class Adaa1 {
     prev_f1_ = nonlinearity_.antiderivative(x);
   }
 
+  /// @brief The wrapped nonlinearity, for shape parameters that move at runtime.
+  /// @details Mutating it does not resync @c prev_f1_, which was taken with the
+  ///   previous shape, so one divided difference straddles the change. That is
+  ///   the same one-sample transient any parameter change through this processor
+  ///   causes, and it is why callers should keep such a parameter smoothed or
+  ///   slow rather than stepping it per block.
+  Nonlinearity& nonlinearity() noexcept { return nonlinearity_; }
+  const Nonlinearity& nonlinearity() const noexcept { return nonlinearity_; }
+
   // ADAA1 introduces a half-sample group delay (the first divided difference is
   // centered between x[n-1] and x[n]). 128 in Q8 is exactly 0.5 sample; the
   // integer accessor is derived from it (128 >> 8 == 0) so the two views stay
