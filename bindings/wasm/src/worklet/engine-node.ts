@@ -172,6 +172,12 @@ export class SonareRealtimeEngineNode {
       this.resolveReady();
     }
     this.node.port.onmessage = (event: MessageEvent<unknown>) => {
+      // A host that kept its own reference to this handler (or a port
+      // implementation that ignores the detach in destroy()) must not be able
+      // to reach listeners of a node the host already disposed.
+      if (this.destroyed) {
+        return;
+      }
       const captureRequestId = engineCaptureResponseRequestId(event.data);
       if (captureRequestId !== undefined) {
         const pending = this.captureRequests.get(captureRequestId);
@@ -600,6 +606,12 @@ export class SonareRealtimeEngineNode {
     this.scopeListeners.clear();
     this.midiOutListeners.clear();
     this.clipPageRequestListeners.clear();
+    this.syncErrorListeners.clear();
+    // The port outlives destroy(): the worklet tears itself down asynchronously
+    // after the 'destroy' message above, so a syncError already in flight would
+    // still be dispatched here. Detaching the handler is what makes the
+    // listener sets stay empty rather than being refilled by a late message.
+    this.node.port.onmessage = null;
   }
 
   private emitTelemetry(telemetry: SonareEngineTelemetryRecord): void {

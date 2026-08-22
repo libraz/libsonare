@@ -48,6 +48,18 @@ describe('StreamAnalyzer', () => {
       analyzer.delete();
     });
 
+    it('publishes exactly one SOA read name, which the Node alias doc cites', () => {
+      // `mastering_streaming.ts` documents its `readFrames` alias by naming what
+      // this class exposes. It claimed both `readFrames` and `readFramesSoa`;
+      // only the embind class carries the latter, and the wrapper does not
+      // re-export it. Assert the published set so the sentence cannot drift
+      // again without something turning red.
+      const analyzer = new StreamAnalyzer({ sampleRate: 22050 });
+      expect(typeof analyzer.readFrames).toBe('function');
+      expect((analyzer as unknown as Record<string, unknown>).readFramesSoa).toBeUndefined();
+      analyzer.delete();
+    });
+
     it('rejects computeMagnitude because there is no magnitude read path', () => {
       expect(() => new StreamAnalyzer({ sampleRate: 22050, computeMagnitude: true })).toThrow(
         /computeMagnitude is not supported/,

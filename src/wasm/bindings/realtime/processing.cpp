@@ -388,6 +388,10 @@ val RealtimeEngineWasm::bounceOffline(val options_val) {
     throw sonare::SonareException(sonare::ErrorCode::InvalidState, "engine not prepared");
   }
 
+  // Offline pre-roll, as in the C-ABI oracle (sonare_engine_bounce_offline): a
+  // bounce is a one-shot render, so the first audible block must open at the
+  // settled fader/pan/gate values instead of ramping in from the defaults.
+  engine_.prime_offline_parameters(num_channels, block_size);
   std::vector<std::vector<float>> channels(static_cast<size_t>(num_channels),
                                            std::vector<float>(static_cast<size_t>(total_frames)));
   std::vector<float*> pointers;
@@ -458,6 +462,10 @@ val RealtimeEngineWasm::freezeOffline(val options_val) {
     throw sonare::SonareException(sonare::ErrorCode::InvalidState, "engine not prepared");
   }
 
+  // Offline pre-roll, as in the C-ABI oracle (sonare_engine_freeze_offline): the
+  // frozen clip captures the lane at its settled values rather than a fade-in
+  // the live lane never had.
+  engine_.prime_offline_parameters(num_channels, block_size);
   std::vector<std::vector<float>> frozen(static_cast<size_t>(num_channels),
                                          std::vector<float>(static_cast<size_t>(total_frames)));
   std::vector<float*> render_pointers;

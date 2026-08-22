@@ -11,6 +11,10 @@ describe('analysis-only WASM entry', () => {
     expect(analysis.capabilities().features).toMatchObject({
       mastering: false,
       mixing: false,
+      // The analysis-only configuration forces BUILD_MIXING_ASSISTANT off, and
+      // the assistant's entry points stay registered in a build without it, so
+      // this flag is the only way a host can tell the two bundles apart.
+      mixingAssistant: false,
       fx: false,
     });
     expect(analysis.meteringPeakDb(new Float32Array([0, 0.5, -0.25]))).toBeCloseTo(-6.0206, 3);

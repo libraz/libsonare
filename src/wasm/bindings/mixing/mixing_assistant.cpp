@@ -9,6 +9,12 @@
 ///          read past its end, because the core carries a single frame count per
 ///          track.
 ///
+/// @details Two preconditions are deliberately *not* restated: unique track ids
+///          and finite samples are checked inside the core, so both surfaces
+///          inherit one implementation of each rather than keeping two that can
+///          drift. Anything the C layer checks before reaching the core has to
+///          be here; anything the core checks itself must not be.
+///
 /// @details Argument order mirrors the C entry point
 ///          (left / right / ids / names / sample rate / params). The per-track
 ///          frame counts and the track count that entry point takes as separate

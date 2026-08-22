@@ -3,6 +3,9 @@
 
 #ifdef __EMSCRIPTEN__
 
+#include <algorithm>
+
+#include "mixing/channel_strip.h"
 #include "mixing_wasm.h"
 
 #if defined(SONARE_WITH_MIXING) && defined(SONARE_WITH_GRAPH)
@@ -90,14 +93,26 @@ void MixerWasm::scheduleSendAutomation(unsigned int strip_index, size_t send_ind
 
 // Reads up to max_points of the strip's most recent goniometer samples.
 // Returns an array of { left, right } points (oldest to newest).
-val MixerWasm::readGoniometerLatest(unsigned int strip_index, size_t max_points) {
+//
+// max_points is a REQUEST, not an allocation size. It arrives as a double
+// rather than a size_t because embind converts a JS number to size_t with a
+// plain cast: a `-1` would already have wrapped to SIZE_MAX and a NaN would
+// already be undefined behaviour by the time a size_t parameter is in hand.
+// Validated first, then the working buffer is bounded by the strip's ring
+// instead of by the caller's number -- one read can never return more than the
+// ring holds, so the cap drops no point. Without both steps a large or negative
+// count reached `std::vector(n)` directly, and in WASM that is not an
+// exception a caller can see: it is an out-of-memory abort of the whole module.
+val MixerWasm::readGoniometerLatest(unsigned int strip_index, double max_points) {
+  const size_t requested = wasmCountArg(max_points, "maxPoints");
   SonareStrip* strip = stripAt(strip_index);
   val out = val::array();
-  if (max_points == 0) {
+  const size_t capped = std::min(requested, sonare::mixing::ChannelStrip::kGoniometerCapacity);
+  if (capped == 0) {
     return out;
   }
-  std::vector<SonareMixGoniometerPoint> points(max_points);
-  const size_t count = sonare_strip_read_goniometer_latest(strip, points.data(), max_points);
+  std::vector<SonareMixGoniometerPoint> points(capped);
+  const size_t count = sonare_strip_read_goniometer_latest(strip, points.data(), capped);
   for (size_t index = 0; index < count; ++index) {
     val point = val::object();
     point.set("left", points[index].left);

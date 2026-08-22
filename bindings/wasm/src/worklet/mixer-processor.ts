@@ -267,8 +267,15 @@ export class SonareWorkletProcessor {
       integratedLufs: Number.NaN,
       gainReductionDb: Number.NaN,
     };
-    this.transport?.onMeter?.(meter);
-    this.transport?.postMessage?.(meter);
+    // Alternative channels for one record, not a broadcast pair: a transport
+    // that supplies both (the engine registration resolves both to
+    // `port.postMessage`) would otherwise deliver every record twice and double
+    // the host's peak-hold decay rate.
+    if (this.transport?.onMeter) {
+      this.transport.onMeter(meter);
+    } else {
+      this.transport?.postMessage?.(meter);
+    }
   }
 
   private writeMeterRing(meter: SonareWorkletMeterSnapshot): void {
@@ -318,8 +325,12 @@ export class SonareWorkletProcessor {
       frame: this.processedFrames,
       bands: new Float32Array(this.spectrumBands),
     };
-    this.transport?.onSpectrum?.(spectrum);
-    this.transport?.postMessage?.(spectrum);
+    // One record, one delivery -- see publishMeter above.
+    if (this.transport?.onSpectrum) {
+      this.transport.onSpectrum(spectrum);
+    } else {
+      this.transport?.postMessage?.(spectrum);
+    }
   }
 
   private computeSpectrum(left: Float32Array, right: Float32Array): void {

@@ -16,6 +16,14 @@ export interface SonareCapabilities {
   features: {
     mastering: boolean;
     mixing: boolean;
+    /**
+     * True when the offline mixing assistant is compiled in. Separate from
+     * `mixing` because it can be dropped on its own — the analysis-only bundle
+     * has it off — and its entry points stay registered either way, throwing
+     * rather than disappearing, so probing for the function tells a host
+     * nothing.
+     */
+    mixingAssistant: boolean;
     fx: boolean;
     ffmpeg: boolean;
     /**

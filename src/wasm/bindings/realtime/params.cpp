@@ -187,6 +187,7 @@ void RealtimeEngineWasm::setParamSmoothingMs(float smoothing_ms) {
 
 void RealtimeEngineWasm::setSoloMute(uint32_t lane_index, bool solo, bool mute,
                                      int64_t render_frame) {
+#if defined(SONARE_WITH_MIXING)
   sonare::rt::Command command{};
   command.type = sonare::rt::CommandType::kSetSoloMute;
   command.target_id = lane_index;
@@ -196,6 +197,19 @@ void RealtimeEngineWasm::setSoloMute(uint32_t lane_index, bool solo, bool mute,
     throw sonare::SonareException(sonare::ErrorCode::InvalidState,
                                   "failed to queue solo/mute command");
   }
+#else
+  // Same answer as the C ABI (sonare_engine_set_solo_mute returns
+  // NOT_SUPPORTED) and as setTrackMonitorMode below. Without the gate the
+  // analysis-only bundle -- a shipped configuration -- accepted the command,
+  // reported success, and let it land on the engine's unknown-target telemetry,
+  // where a browser host never looks.
+  (void)lane_index;
+  (void)solo;
+  (void)mute;
+  (void)render_frame;
+  throw sonare::SonareException(sonare::ErrorCode::NotImplemented,
+                                "mixing support is not compiled in");
+#endif
 }
 
 void RealtimeEngineWasm::setTrackMonitorMode(uint32_t lane_index, int mode, int64_t render_frame) {

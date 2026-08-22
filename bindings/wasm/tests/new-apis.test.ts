@@ -1445,6 +1445,14 @@ describe('v1.2 feature additions (WASM)', () => {
     const samples = new Float32Array(2048);
     samples.fill(1, 1024);
     expect(meteringSilenceRatio(samples, SR, -45, 1024, 1024)).toBeCloseTo(0.5, 6);
+    // A non-finite threshold is a question the meter cannot evaluate: every
+    // frame comparison is false against NaN, so it used to answer "0 % silence"
+    // here while the C ABI and Python refused. The `?? -45` default cannot
+    // catch it (NaN is not nullish); the guard is in the core meter, which this
+    // surface calls directly.
+    for (const invalid of [Number.NaN, Number.POSITIVE_INFINITY, Number.NEGATIVE_INFINITY]) {
+      expect(() => meteringSilenceRatio(samples, SR, invalid, 1024, 1024)).toThrow();
+    }
     const chroma = nnlsChroma(generateSine(440, SR, 0.5), SR, {
       enableStftBlend: false,
       stftBlendWeight: 0,

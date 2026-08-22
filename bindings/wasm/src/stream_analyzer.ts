@@ -107,6 +107,9 @@ export class StreamAnalyzer {
   /**
    * Process audio samples.
    *
+   * Feeding a finalized analyzer is an invalid-state error; call `reset()`
+   * first to start a new stream.
+   *
    * @param samples - Audio samples (mono, float32)
    */
   process(samples: Float32Array): void {
@@ -115,7 +118,8 @@ export class StreamAnalyzer {
 
   /**
    * Process audio samples with a contiguous explicit sample offset. A gap,
-   * seek, or switch from `process()` requires `reset()` first.
+   * seek, or switch from `process()` requires `reset()` first, as does feeding
+   * a finalized analyzer.
    *
    * @param samples - Audio samples (mono, float32)
    * @param sampleOffset - Cumulative sample count at start of this chunk
@@ -126,6 +130,12 @@ export class StreamAnalyzer {
 
   /**
    * Drain any high-rate resampler tail, then zero-pad the final partial frame.
+   *
+   * Repeating a successful call is a no-op, and a call that fails leaves the
+   * stream un-finalized so a retry resumes from the same point. Call `reset()`
+   * before reusing the analyzer for another stream: more audio fed to a
+   * finalized analyzer is rejected rather than silently analyzed without the
+   * overlap context the finalized tail consumed.
    */
   finalize(): void {
     this.analyzer.finalize();
@@ -274,7 +284,15 @@ export class StreamAnalyzer {
   /**
    * Set normalization gain for loud/compressed audio.
    *
-   * @param gain - Gain factor to apply (e.g., 0.5 for -6dB reduction)
+   * Throws for a value outside 0.01..100 rather than clamping into it. The
+   * usual recipe (`gain = targetLevel / measuredLevel`) can land outside that
+   * range for a buffer that is not in the conventional ±1 float domain — an
+   * integer-scaled one asks for about 3e-4 — and no getter exposes the
+   * effective gain, so a clamped request would leave the analysis far off
+   * target undetectably. Convert such a buffer before feeding it instead.
+   *
+   * @param gain - Gain factor to apply (e.g., 0.5 for -6dB reduction, range
+   *   0.01..100)
    */
   setNormalizationGain(gain: number): void {
     this.analyzer.setNormalizationGain(gain);

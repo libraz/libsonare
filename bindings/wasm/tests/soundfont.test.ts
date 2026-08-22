@@ -68,9 +68,13 @@ describe('Sonare WASM SoundFont (SF2)', () => {
     if (!isSonareError(caught)) {
       throw new Error('expected SonareError');
     }
-    // Project C oracle classifies parse rejection as InvalidParameter (the
-    // realtime-engine SoundFont API uses InvalidFormat); preserve that surface.
-    expect(caught.code).toBe(ErrorCode.InvalidParameter);
+    // A rejection here is a statement about the supplied bytes, not about the
+    // call's arguments, so it carries InvalidFormat on every surface that loads
+    // a SoundFont -- the project loader and the realtime engine alike.
+    // InvalidParameter stays reserved for the null/empty check ahead of the
+    // parse. The two used to disagree, which meant the same failure reached a
+    // caller under two different codes depending on which door it came through.
+    expect(caught.code).toBe(ErrorCode.InvalidFormat);
     expect(project.soundFontPresetCount()).toBe(3);
     project.delete();
   });

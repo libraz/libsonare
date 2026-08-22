@@ -603,6 +603,11 @@ export class Mixer {
   /**
    * Read up to `maxPoints` of a strip's most recent goniometer samples
    * (oldest to newest).
+   *
+   * `maxPoints` must be a finite non-negative integer; anything else throws an
+   * `InvalidParameter` error. It is a request rather than an allocation size —
+   * a value beyond the strip's goniometer ring simply returns every point the
+   * ring holds.
    */
   readGoniometerLatest(stripIndex: number, maxPoints: number): GoniometerPoint[] {
     return this.mixer.readGoniometerLatest(stripIndex, maxPoints);

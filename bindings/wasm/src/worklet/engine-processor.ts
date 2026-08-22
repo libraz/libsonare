@@ -39,7 +39,6 @@ import {
   type SonareEngineTelemetryRecord,
   type SonareEngineTelemetryRingBuffer,
   SonareEngineTelemetryType,
-  type SonareWorkletMeterSnapshot,
   scopeRingFromSharedBuffer,
   telemetryFromEngine,
   writeInt64Words,
@@ -503,6 +502,14 @@ export class SonareRealtimeEngineWorkletProcessor {
           message.value,
         );
         break;
+      case 'syncBusStripInsertBypassed':
+        this.engine.setBusStripInsertBypassed(
+          message.busId,
+          message.insertIndex,
+          message.bypassed,
+          message.resetOnBypass,
+        );
+        break;
       case 'syncTrackStripPan':
         this.engine.setTrackStripPan(message.trackId, message.pan);
         break;
@@ -927,14 +934,15 @@ export class SonareRealtimeEngineWorkletProcessor {
       if (meter.frame !== this.lastMeterFrame) {
         this.lastMeterFrame = meter.frame;
       }
-      // Prefer the lock-free SAB meter ring (matching the telemetry path and
-      // SonareWorkletProcessor); only fall back to structured-clone postMessage
-      // when no ring was provided, so we do not allocate/post from the audio
-      // render callback in SAB mode.
-      if (this.meterRing) {
-        this.writeMeterRing(meter);
+      // The ring branch returned above, so this is the structured-clone
+      // fallback. `onMeter` and `postMessage` are alternative channels for the
+      // same record, not a broadcast pair: the AudioWorklet registration
+      // resolves BOTH to `port.postMessage`, so calling them in turn delivered
+      // every record twice and doubled the host's peak-hold decay rate. Take
+      // the first channel the transport offers.
+      if (this.transport?.onMeter) {
+        this.transport.onMeter(meter);
       } else {
-        this.transport?.onMeter?.(meter);
         this.transport?.postMessage?.(meter);
       }
     }
@@ -953,34 +961,18 @@ export class SonareRealtimeEngineWorkletProcessor {
     Atomics.store(ring.header, 0, writeIndex + 1);
   }
 
-  private writeMeterRing(meter: SonareWorkletMeterSnapshot): void {
-    const ring = this.meterRing;
-    if (!ring) {
-      return;
-    }
-    const writeIndex = Atomics.load(ring.header, 0);
-    const offset = (writeIndex % ring.capacity) * SONARE_METER_RING_RECORD_FLOATS;
-    ring.records[offset] = encodeFrameLo(meter.frame);
-    ring.records[offset + 1] = encodeFrameHi(meter.frame);
-    ring.records[offset + 2] = meter.targetId;
-    ring.records[offset + 3] = meter.peakDbL;
-    ring.records[offset + 4] = meter.peakDbR;
-    ring.records[offset + 5] = meter.rmsDbL;
-    ring.records[offset + 6] = meter.rmsDbR;
-    ring.records[offset + 7] = meter.correlation;
-    ring.records[offset + 8] = meter.truePeakDbL;
-    ring.records[offset + 9] = meter.truePeakDbR;
-    ring.records[offset + 10] = meter.momentaryLufs;
-    ring.records[offset + 11] = meter.shortTermLufs;
-    ring.records[offset + 12] = meter.integratedLufs;
-    ring.records[offset + 13] = meter.gainReductionDb;
-    Atomics.store(ring.header, 0, writeIndex + 1);
-    // writeIndex is a free-running monotonic counter, so an overflow guard here
-    // would fire on essentially every write past the first `capacity` records
-    // and store an ever-growing value, not a dropped-record count. Readers
-    // already detect silent overrun via firstReadable = max(readIndex,
-    // writeIndex - capacity), so header slot 3 is left at its initial 0.
-  }
+  // A snapshot-object ring writer used to live here as well. It was
+  // unreachable: publishMeters returns after the writeMeterScratch loop
+  // whenever a ring exists, so the ring is never fed from a materialised
+  // snapshot. writeMeterScratch above is the only ring writer, and it keeps the
+  // render callback allocation-free by reading the engine's scratch registers
+  // directly.
+  //
+  // writeIndex is a free-running monotonic counter, so an overflow guard would
+  // fire on essentially every write past the first `capacity` records and store
+  // an ever-growing value, not a dropped-record count. Readers already detect
+  // silent overrun via firstReadable = max(readIndex, writeIndex - capacity),
+  // so header slot 3 is left at its initial 0.
 
   // Drains the engine's scope producer (FFT spectrum + goniometer points) into
   // the lock-free SAB scope ring. No allocation on the render path: records are

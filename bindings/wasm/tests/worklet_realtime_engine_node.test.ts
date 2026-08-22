@@ -225,6 +225,29 @@ describe('SonareRealtimeEngineNode', () => {
       ]);
     });
 
+    it('stops delivering sync rejections after destroy', async () => {
+      const port = {
+        postMessage: () => undefined,
+        onmessage: undefined as ((event: MessageEvent<unknown>) => void) | null | undefined,
+      };
+      const node = await SonareRealtimeEngineNode.create(fakeContext(), {
+        mode: 'postMessage',
+        nodeFactory: () => ({ port, disconnect: () => undefined }) as unknown as AudioWorkletNode,
+      });
+      const seen: unknown[] = [];
+      node.onSyncError((message) => seen.push(message));
+      // The worklet tears down asynchronously, so a syncError can still be in
+      // flight when the host disposes the node. Keep a reference to the handler
+      // to prove the guard holds even for a caller that kept its own.
+      const retained = port.onmessage;
+      node.destroy();
+      expect(port.onmessage).toBeNull();
+      retained?.({
+        data: { type: 'syncError', syncType: 'syncTempo', message: 'invalid tempo' },
+      } as MessageEvent<unknown>);
+      expect(seen).toEqual([]);
+    });
+
     it('propagates a pre-registered worklet initialization error', async () => {
       const port = {
         postMessage: () => undefined,
@@ -968,6 +991,69 @@ describe('SonareRealtimeEngineNode', () => {
         expect(() => engine.setTrackLanes([2, 5])).toThrow(/append-only/);
         expect(() => engine.setTrackLanes([2, 5, 9, 9])).toThrow(/Duplicate track id/);
         expect(() => engine.setTrackLanes([2, 5, 9, 0])).toThrow(/Invalid track id/);
+      } finally {
+        engine.destroy();
+      }
+    });
+
+    it('bypasses a bus insert live, like a track or master one', async () => {
+      // Insert control has to be the same set for every strip class the facade
+      // exposes. A bus could have its insert parameters automated but not
+      // bypassed, and the only workaround -- re-posting the bus scene JSON --
+      // rebuilds the chain, so a reverb tail or compressor envelope disappears
+      // and the result is audibly not a bypass.
+      const posted: unknown[] = [];
+      const offline = new (await import('../dist/index.js')).RealtimeEngine(
+        48000,
+        128,
+      ) as unknown as OfflineEngineOption;
+      const engine = await SonareEngine.create(fakeContext(), {
+        mode: 'postMessage',
+        offlineEngine: offline,
+        offlineChannelCount: 2,
+        nodeFactory: () =>
+          readyWorkletNode({
+            postMessage: (message: unknown) => posted.push(message),
+            onmessage: undefined,
+          }),
+      });
+      try {
+        engine.setBusStripJson(
+          100,
+          '{"version":1,"strips":[],"buses":[{"id":"100","inserts":[{"slot":"pre","processor":"eq.parametric","params":"{\\"band0.type\\":1,\\"band0.frequencyHz\\":1000,\\"band0.gainDb\\":6,\\"band0.enabled\\":1}"}]}],"connections":[]}',
+        );
+        engine.setBusStripInsertBypassed(100, 0, true, true);
+        engine.setBusStripInsertBypassed(100, 0, false);
+        expect(posted).toEqual(
+          expect.arrayContaining([
+            expect.objectContaining({
+              type: 'syncBusStripInsertBypassed',
+              busId: 100,
+              insertIndex: 0,
+              bypassed: true,
+              resetOnBypass: true,
+            }),
+            expect.objectContaining({
+              type: 'syncBusStripInsertBypassed',
+              busId: 100,
+              insertIndex: 0,
+              bypassed: false,
+              resetOnBypass: false,
+            }),
+          ]),
+        );
+        // Every strip class the live facade addresses carries both live insert
+        // operations; a class with only one of them is the gap this covers.
+        for (const method of [
+          'setTrackStripInsertParamByName',
+          'setTrackStripInsertBypassed',
+          'setMasterStripInsertParamByName',
+          'setMasterStripInsertBypassed',
+          'setBusStripInsertParamByName',
+          'setBusStripInsertBypassed',
+        ]) {
+          expect(typeof (engine as unknown as Record<string, unknown>)[method]).toBe('function');
+        }
       } finally {
         engine.destroy();
       }

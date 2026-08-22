@@ -27,6 +27,7 @@
  * it only stops the count from growing unnoticed.
  */
 
+import { readFileSync } from 'node:fs';
 import { describe, expect, it } from 'vitest';
 import {
   bareArrayLengthReadSites,
@@ -146,6 +147,110 @@ describe('every WASM offline render reaches the core entry point that validates 
         'prepared_channels(), and a copy here is what drifts away from it. If a new ' +
         'wrapper genuinely cannot use it, push the precondition down into the core ' +
         'alongside the existing one rather than adding a fourth per-site guard.',
+    ).toEqual([]);
+  });
+});
+
+describe('every int64 scratch scalar is normalized before it is declared a number', () => {
+  // `protocol.ts` states the convention: embind can hand an int64 scalar to JS
+  // as a BigInt, so a facade accessor declaring `: number` has to coerce. The
+  // failure is invisible until a second consumer does arithmetic on the value
+  // and the AudioWorklet dies with "Cannot mix BigInt", which is why this is a
+  // source register rather than a behavioural test — the shipped build's one
+  // consumer happens to re-normalize downstream.
+  function scratchScalarAccessors(): { name: string; body: string }[] {
+    const source = readFileSync(
+      new URL('../src/realtime_engine.ts', import.meta.url).pathname,
+      'utf8',
+    );
+    const pattern =
+      /^ {2}(\w*(?:RenderFrame|TimelineSample))\(\): number \{\n(?:[^\n]*\/\/[^\n]*\n)*\s*return ([^\n]*);/gm;
+    return [...source.matchAll(pattern)].map((match) => ({
+      name: match[1],
+      body: match[2].trim(),
+    }));
+  }
+
+  it('self-checks the scanner against the known scratch accessors', () => {
+    expect(scratchScalarAccessors().map((accessor) => accessor.name)).toEqual(
+      expect.arrayContaining([
+        'externalMidiScratchRenderFrame',
+        'meterScratchRenderFrame',
+        'scopeScratchRenderFrame',
+        'telemetryScratchRenderFrame',
+      ]),
+    );
+  });
+
+  it('no accessor returns the raw native int64 scalar', () => {
+    const unnormalized = scratchScalarAccessors()
+      .filter((accessor) => !accessor.body.startsWith('Number('))
+      .map((accessor) => `realtime_engine.ts ${accessor.name} -> ${accessor.body}`);
+    expect(
+      unnormalized,
+      'These accessors declare `: number` but hand back whatever embind produced. ' +
+        'Wrap the native call in Number(...), the way the sibling scratch accessors do.',
+    ).toEqual([]);
+  });
+});
+
+describe('WASM inherits the C ABI feature gate on mixing-only engine commands', () => {
+  /**
+   * Every `CommandType::k...` push site in `text`, with whether it sits inside
+   * a `SONARE_WITH_MIXING` conditional (either polarity — the C ABI writes
+   * `#if !defined(...)` with the real work in the `#else`).
+   */
+  function commandPushSites(text: string): { type: string; gated: boolean }[] {
+    const sites: { type: string; gated: boolean }[] = [];
+    const stack: boolean[] = [];
+    for (const line of text.split('\n')) {
+      if (/^\s*#\s*(if|ifdef|ifndef)\b/.test(line)) {
+        stack.push(line.includes('SONARE_WITH_MIXING'));
+      } else if (/^\s*#\s*endif\b/.test(line)) {
+        stack.pop();
+      }
+      const match = line.match(/CommandType::(k\w+)/);
+      if (match) {
+        sites.push({ type: match[1], gated: stack.some(Boolean) });
+      }
+    }
+    return sites;
+  }
+
+  const cAbi = readFileSync(
+    new URL('../../../src/c_api/sonare_c_engine.cpp', import.meta.url).pathname,
+    'utf8',
+  );
+  // The oracle decides which commands are mixing-only; this list is read out of
+  // it rather than restated here, so a command that gains or loses the gate on
+  // the C side changes what WASM is held to without anyone editing this file.
+  const mixingOnly = new Set(
+    commandPushSites(cAbi)
+      .filter((site) => site.gated)
+      .map((site) => site.type),
+  );
+
+  it('self-checks that the C ABI still gates at least one engine command', () => {
+    // Without this the assertion below passes vacuously as soon as the scan
+    // stops recognizing the C ABI's conditionals.
+    expect([...mixingOnly].sort()).toEqual(['kSetSoloMute', 'kSetTrackMonitorMode']);
+  });
+
+  it('no WASM wrapper queues a mixing-only command in an analysis-only build', () => {
+    const ungated: string[] = [];
+    for (const source of wasmBindingSources()) {
+      for (const site of commandPushSites(source.text)) {
+        if (mixingOnly.has(site.type) && !site.gated) {
+          ungated.push(`${source.file} ${site.type}`);
+        }
+      }
+    }
+    expect(
+      ungated,
+      'These push a command the C ABI answers with NOT_SUPPORTED when mixing is ' +
+        'compiled out. Ungated, the analysis-only bundle accepts the call, reports ' +
+        "success, and drops it on the engine's unknown-target telemetry. Wrap the " +
+        'body in #if defined(SONARE_WITH_MIXING) and throw NotImplemented in the #else.',
     ).toEqual([]);
   });
 });

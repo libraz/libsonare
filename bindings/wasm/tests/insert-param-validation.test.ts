@@ -5,6 +5,7 @@
  */
 
 import { beforeAll, describe, expect, it } from 'vitest';
+import type { MasteringProcessorCatalogEntry } from '../dist/index.js';
 import {
   init,
   Mixer,
@@ -80,6 +81,42 @@ describe('insert param validation (WASM)', () => {
     const insertable = catalog.filter((entry) => entry.realtimeInsertable).map((entry) => entry.id);
     expect(insertable).toContain('dynamics.compressor');
     expect(insertable).not.toContain('maximizer.loudnessOptimize');
+  });
+
+  it('declares every field the catalog payload carries', () => {
+    // The registry emits `category` and `params` unconditionally, but the TS
+    // interface stopped at `channelPolicy`, so reading either was a TS2339 on a
+    // value that was already there. Compare the runtime key set against the
+    // declared one rather than spot-checking, so the next added field cannot
+    // go undeclared either.
+    const catalog = masteringProcessorCatalog();
+    const declared: Record<keyof MasteringProcessorCatalogEntry, true> = {
+      id: true,
+      kind: true,
+      realtimeInsertable: true,
+      stereoOnly: true,
+      latencySamples: true,
+      tailSamples: true,
+      realtimeCost: true,
+      channelPolicy: true,
+      category: true,
+      params: true,
+    };
+    for (const entry of catalog) {
+      expect(Object.keys(entry).sort()).toEqual(Object.keys(declared).sort());
+    }
+    const compressor = catalog.find((entry) => entry.id === 'dynamics.compressor');
+    expect(compressor?.category).toBe('dynamics');
+    expect(catalog.find((entry) => entry.id === 'match.abCrossfade')?.category).toBe('reference');
+    // The catalog's params for an insertable id are the same list the
+    // per-processor query returns.
+    expect(compressor?.params.map((param) => param.name).sort()).toEqual(
+      masteringInsertParamInfo('dynamics.compressor')
+        .map((param) => param.name)
+        .sort(),
+    );
+    // Non-insertable entries carry an empty list, not a missing key.
+    expect(catalog.find((entry) => entry.id === 'maximizer.loudnessOptimize')?.params).toEqual([]);
   });
 
   it('surfaces silently-ignored insert params as scene warnings', () => {

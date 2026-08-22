@@ -1053,6 +1053,16 @@ describe('SonareRealtimeEngineWorkletProcessor', () => {
           paramName: 'band0.gainDb',
           value: 3,
         });
+        // A bus insert is bypassable live, exactly like a track or master one.
+        // Re-posting the bus scene JSON is not a substitute: it rebuilds the
+        // chain and drops the insert's internal state.
+        processor.receiveSync({
+          type: 'syncBusStripInsertBypassed',
+          busId: 200,
+          insertIndex: 0,
+          bypassed: true,
+          resetOnBypass: false,
+        });
         processor.receiveSync({
           type: 'syncClips',
           clips: [{ id: 1, trackId: 10, channels: [source], startPpq: 0 }],
@@ -1246,15 +1256,20 @@ describe('SonareRealtimeEngineWorkletProcessor', () => {
       }
     });
 
-    it('publishes real output meters from the realtime engine', () => {
-      const meters: unknown[] = [];
-      const posted: unknown[] = [];
+    it('publishes real output meters from the realtime engine exactly once per interval', () => {
+      // Both sinks feed ONE recorder, the way the AudioWorklet registration
+      // wires them (onMeter and postMessage both resolve to port.postMessage).
+      // Separate arrays would count a duplicated record as one delivery each
+      // and read as success.
+      const delivered: unknown[] = [];
+      const record = (message: unknown) => {
+        if ((message as { type?: string }).type === 'meter') {
+          delivered.push(message);
+        }
+      };
       const processor = new SonareRealtimeEngineWorkletProcessor(
         { sampleRate: 48000, blockSize: 128, channelCount: 2, meterIntervalFrames: 128 },
-        {
-          onMeter: (meter) => meters.push(meter),
-          postMessage: (message) => posted.push(message),
-        },
+        { onMeter: record, postMessage: record },
       );
       try {
         const inL = new Float32Array(128).fill(0.5);
@@ -1262,18 +1277,35 @@ describe('SonareRealtimeEngineWorkletProcessor', () => {
         const outL = new Float32Array(128);
         const outR = new Float32Array(128);
         expect(processor.process([[inL, inR]], [[outL, outR]])).toBe(true);
-        expect(meters).toHaveLength(1);
-        const meter = meters[0] as { targetId: number; peakDbL: number; peakDbR: number };
-        expect(meters[0]).toMatchObject({
+        expect(delivered).toHaveLength(1);
+        const meter = delivered[0] as { targetId: number; peakDbL: number; peakDbR: number };
+        expect(delivered[0]).toMatchObject({
           type: 'meter',
           targetId: 0,
           frame: 0,
         });
         expect(meter.peakDbL).toBeCloseTo(-6.0206, 2);
         expect(meter.peakDbR).toBeCloseTo(-6.0206, 2);
-        expect(posted).toEqual(
-          expect.arrayContaining([expect.objectContaining({ type: 'meter' })]),
-        );
+      } finally {
+        processor.destroy();
+      }
+    });
+
+    it('delivers meters over postMessage when the transport has no onMeter sink', () => {
+      const posted: unknown[] = [];
+      const processor = new SonareRealtimeEngineWorkletProcessor(
+        { sampleRate: 48000, blockSize: 128, channelCount: 2, meterIntervalFrames: 128 },
+        { postMessage: (message) => posted.push(message) },
+      );
+      try {
+        const inL = new Float32Array(128).fill(0.5);
+        const inR = new Float32Array(128).fill(-0.5);
+        const outL = new Float32Array(128);
+        const outR = new Float32Array(128);
+        expect(processor.process([[inL, inR]], [[outL, outR]])).toBe(true);
+        expect(
+          posted.filter((message) => (message as { type?: string }).type === 'meter'),
+        ).toHaveLength(1);
       } finally {
         processor.destroy();
       }
@@ -1347,6 +1379,13 @@ describe('SonareRealtimeEngineWorkletProcessor', () => {
         type: 'syncBuiltinInstrument',
         destinationId: 4,
         config: { gain: 0.5 },
+      },
+      syncBusStripInsertBypassed: {
+        type: 'syncBusStripInsertBypassed',
+        busId: 200,
+        insertIndex: 0,
+        bypassed: true,
+        resetOnBypass: false,
       },
       syncBusStripInsertParamByName: {
         type: 'syncBusStripInsertParamByName',

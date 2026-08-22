@@ -153,7 +153,10 @@ class MixerWasm {
 
   // Reads up to max_points of the strip's most recent goniometer samples.
   // Returns an array of { left, right } points (oldest to newest).
-  val readGoniometerLatest(unsigned int strip_index, size_t max_points);
+  /// @param max_points Requested point count. A @c double, not a @c size_t, so
+  ///        the guard can still see a negative or non-finite JS number — see
+  ///        the definition.
+  val readGoniometerLatest(unsigned int strip_index, double max_points);
 
   // Resolves a strip's index from its id. Returns -1 when the id is not found;
   // the TS wrapper maps -1 to null for cross-binding consistency (Node returns

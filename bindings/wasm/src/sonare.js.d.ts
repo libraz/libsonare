@@ -3029,8 +3029,11 @@ export interface WasmStreamFramesI16 {
 }
 
 export interface WasmStreamAnalyzer {
+  /** Throws (invalid state) when the stream was already finalized; reset first. */
   process: (samples: Float32Array) => void;
+  /** Rejects a gap, a seek, a mode switch, and a chunk fed after finalize. */
   processWithOffset: (samples: Float32Array, sampleOffset: number) => void;
+  /** Idempotent on success; a failed call leaves the stream un-finalized. */
   finalize: () => void;
   availableFrames: () => number;
   readFramesSoa: (maxFrames: number) => WasmFrameBuffer;
@@ -3042,7 +3045,9 @@ export interface WasmStreamAnalyzer {
   currentTime: () => number;
   sampleRate: () => number;
   setExpectedDuration: (durationSeconds: number) => void;
+  /** Throws outside 0.01..100; the request is refused, never clamped. */
   setNormalizationGain: (gain: number) => void;
+  /** Throws outside 220..880 Hz; the request is refused, never clamped. */
   setTuningRefHz: (refHz: number) => void;
   delete: () => void;
 }

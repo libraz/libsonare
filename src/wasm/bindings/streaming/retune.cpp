@@ -13,8 +13,16 @@
 // Construct via createStreamingRetune(config) factory.
 // ---------------------------------------------------------------------------
 
-editing::voice_changer::StreamingRetuneConfig streamingRetuneConfigFromVal(val config) {
-  editing::voice_changer::StreamingRetuneConfig result;
+/// @brief Applies the keys present in @p config on top of @p seed.
+/// @details The seed is what makes a partial object a MERGE rather than a
+///          replacement: `setConfig({mix: 0.5})` after `setConfig({semitones:
+///          7})` used to start from a default-constructed config and silently
+///          reset the pitch shift to 0. Node and Python seed from the current
+///          values; the construction path passes no seed, so it still starts
+///          from the documented defaults.
+editing::voice_changer::StreamingRetuneConfig streamingRetuneConfigFromVal(
+    val config, editing::voice_changer::StreamingRetuneConfig seed = {}) {
+  editing::voice_changer::StreamingRetuneConfig result = seed;
   if (config.isNull() || config.isUndefined()) {
     return result;
   }
@@ -59,7 +67,8 @@ val streamingRetuneConfigToVal(const editing::voice_changer::StreamingRetuneConf
 
 class StreamingRetuneWrapper {
  public:
-  explicit StreamingRetuneWrapper(val config) : retune_(streamingRetuneConfigFromVal(config)) {}
+  explicit StreamingRetuneWrapper(val config)
+      : StreamingRetuneWrapper(streamingRetuneConfigFromVal(config)) {}
 
   void prepare(double sample_rate, int max_block_size) {
     retune_.prepare(sample_rate, max_block_size);
@@ -69,7 +78,20 @@ class StreamingRetuneWrapper {
 
   void reset() { retune_.reset(); }
 
-  void setConfig(val config) { retune_.set_config(streamingRetuneConfigFromVal(config)); }
+  void setConfig(val config) {
+    // Seed from the applied controls so an object carrying one key leaves the
+    // others alone, matching Node and Python. grainSize is seeded from the last
+    // REQUESTED value rather than from config(): once prepared, config()
+    // reports the effective grain, and seeding with that would freeze the 0
+    // "derive from the sample rate" sentinel into a literal, so re-preparing at
+    // a new rate would keep the first rate's grain.
+    editing::voice_changer::StreamingRetuneConfig seed = retune_.config();
+    seed.grain_size = requested_grain_size_;
+    const editing::voice_changer::StreamingRetuneConfig merged =
+        streamingRetuneConfigFromVal(config, seed);
+    requested_grain_size_ = merged.grain_size;
+    retune_.set_config(merged);
+  }
 
   val config() const { return streamingRetuneConfigToVal(retune_.config()); }
 
@@ -98,6 +120,9 @@ class StreamingRetuneWrapper {
   }
 
  private:
+  explicit StreamingRetuneWrapper(const editing::voice_changer::StreamingRetuneConfig& config)
+      : retune_(config), requested_grain_size_(config.grain_size) {}
+
   void ensurePrepared() const {
     if (!prepared_) {
       throw sonare::SonareException(sonare::ErrorCode::InvalidState,
@@ -113,6 +138,10 @@ class StreamingRetuneWrapper {
   }
 
   editing::voice_changer::StreamingRetune retune_;
+  // The grain size the caller last ASKED for, kept apart from the effective one
+  // config() reports. Mirrors StreamingRetune::requested_grain_size_, which is
+  // private to the core.
+  int requested_grain_size_ = 0;
   int max_block_size_ = 0;
   bool prepared_ = false;
 };

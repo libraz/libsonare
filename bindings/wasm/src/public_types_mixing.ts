@@ -151,8 +151,13 @@ export interface MixAssistantTrack {
   /** Strip id the suggestion is written against. Must be unique and non-empty. */
   id: string;
   /**
-   * Optional display name. Used only as a hint that adjusts classifier
-   * confidence; it can never select a source class on its own.
+   * Optional display name.
+   *
+   * For a class the classifier can measure, this is only a hint that adjusts
+   * its confidence and cannot select the class on its own. For the four it
+   * cannot separate by measurement — `keys`, `strings`, `backing` and `fx` —
+   * the name is the only thing that can supply the class at all, and it does so
+   * only when the measurement produced no answer.
    */
   name?: string;
   /** Left/mono plane. */
@@ -169,7 +174,18 @@ export interface MixAssistantTrack {
 export interface MixAssistantOptions {
   /** Absolute integrated-loudness target each track is staged towards, in LUFS. Defaults to -18. */
   targetTrackLufs?: number;
-  /** Overall strength of the suggestion in `[0, 1]`; 0 suggests nothing. Defaults to 1. */
+  /**
+   * Overall strength of the suggestion in `[0, 1]`, scaling every level-like
+   * decision: trims, fader offsets, send levels, EQ cut depths, compression
+   * ratios and ranges, and how far a track is spread from the centre. Defaults
+   * to 1.
+   *
+   * `0` is not an empty suggestion. It is every one of those taken and set to
+   * zero, plus the decisions that are not levels and so do not scale: the bus
+   * topology and routing, and the physical corrections for a measured
+   * cancellation (polarity, alignment delay, low-end mono fold). To suggest
+   * nothing, switch the domains off instead — that also skips the work.
+   */
   suggestionStrength?: number;
   /** Largest cut a single suggested EQ band may apply, in dB. Defaults to 4. */
   eqMaxCutDb?: number;
@@ -219,7 +235,14 @@ export interface MixAssistantTrackProfile {
   exclusionReason: string;
   channelCount: number;
   durationSec: number;
-  integratedLufs: number;
+  /**
+   * BS.1770 integrated loudness in LUFS, or `null` for a track with no gated
+   * block to measure — a silent stem, or one muted before it was handed over.
+   * The measurement is `-Infinity` there, which JSON has no number for, so the
+   * document carries `null` rather than a finite value that would read as a
+   * real level. Such a track always carries an `exclusionReason` as well.
+   */
+  integratedLufs: number | null;
   truePeakDb: number;
   crestFactorDb: number;
   spectralCentroidHz: number;

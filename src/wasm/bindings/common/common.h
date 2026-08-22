@@ -144,6 +144,19 @@ inline constexpr std::size_t kMaxWasmFloat32Elements = 64u * 1024u * 1024u;
 /// as elements are read and validated — so a fabricated `.length` cannot turn
 /// into an allocation the actual data does not back.
 inline constexpr std::size_t kMaxWasmObjectArrayReserve = 1u * 1024u * 1024u;
+/// Validates a caller-supplied COUNT that arrived as a bare JS number, before
+/// it is allowed anywhere near an allocation.
+/// @details The array-like readers below cannot help here: there is no object
+///   to read a `.length` from, just a scalar argument. Take it as a @c double
+///   rather than a @c size_t — embind converts a JS number to @c size_t by a
+///   plain cast, so by the time a @c size_t parameter is in hand a negative
+///   value has already wrapped to a huge one and a NaN is undefined behaviour,
+///   with nothing left to detect. The count must still be bounded by the
+///   caller against whatever it indexes; this only guarantees it is a real,
+///   non-negative, exactly representable integer.
+/// @throws SonareException(InvalidParameter) for a non-finite, negative,
+///   fractional, or unsafe value.
+std::size_t wasmCountArg(double value, const char* subject);
 /// Reads an array-like object's element count after rejecting null, undefined,
 /// non-numeric, fractional, unsafe, and over-budget values. Use this before
 /// indexing arbitrary JS arrays so embind never leaks a raw JS TypeError.

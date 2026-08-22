@@ -192,6 +192,39 @@ describe('Mixer runtime controls (WASM)', () => {
           expect(Number.isFinite(point.left)).toBe(true);
           expect(Number.isFinite(point.right)).toBe(true);
         }
+
+        // maxPoints is a request, not an allocation size. Sizing the working
+        // vector from it directly meant a metering UI deriving the count from a
+        // window size could take the module down -- and in WASM that is not a
+        // catchable error, it is an out-of-memory abort of the whole instance,
+        // so there would be nothing left to assert against. The buffer is
+        // bounded by the strip's goniometer ring instead. Matches Node
+        // (mixing-runtime.test.ts) and Python (test_mixing.py).
+        //
+        // These run against the built module: they fail against a `dist/` older
+        // than the fix in src/wasm/bindings/mixing/mixing_automation.cpp --
+        // most likely by aborting rather than by a clean assertion failure.
+        const huge = mixer.readGoniometerLatest(vocal, Number.MAX_SAFE_INTEGER);
+        expect(Array.isArray(huge)).toBe(true);
+        expect(huge.length).toBeGreaterThan(0);
+        expect(huge.length).toBeLessThanOrEqual(4096);
+        expect(huge.every((point) => Number.isFinite(point.left))).toBe(true);
+
+        // Anything that is not a finite non-negative integer is a catchable
+        // error, never a silent clamp to zero and never an abort.
+        for (const invalid of [
+          -1,
+          -0.5,
+          1.5,
+          Number.NaN,
+          Number.POSITIVE_INFINITY,
+          Number.MAX_VALUE,
+        ]) {
+          expect(() => mixer.readGoniometerLatest(vocal, invalid)).toThrow();
+        }
+
+        // Zero stays a legal empty read.
+        expect(mixer.readGoniometerLatest(vocal, 0)).toEqual([]);
       } finally {
         mixer.delete();
       }

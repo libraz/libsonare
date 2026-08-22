@@ -105,11 +105,11 @@ class StreamAnalyzerWrapper {
                         double max_pending_frames, double max_progression_entries,
                         float key_update_interval_sec, float bpm_update_interval_sec, int window,
                         int output_format) {
-    if (compute_magnitude) {
-      throw SonareException(ErrorCode::InvalidParameter,
-                            "computeMagnitude is not supported because magnitude frames are not "
-                            "exposed by the StreamAnalyzer read paths");
-    }
+    // The shared facade check rather than a message of this file's own, so the
+    // four surfaces answer an unsupported config identically.
+    StreamConfig requested;
+    requested.compute_magnitude = compute_magnitude;
+    validate_soa_stream_config(requested);
     // Rejects an out-of-range window ordinal, mirroring the C ABI's
     // valid_window (features_streaming.cpp), which rejects it at
     // sonare_stream_analyzer_create rather than silently defaulting to Hann.

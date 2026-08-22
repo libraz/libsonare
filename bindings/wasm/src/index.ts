@@ -68,6 +68,7 @@ export type {
   MasteringPairAnalyzeRequest,
   MasteringPairProcessRequest,
   MasteringProcessorCatalogEntry,
+  MasteringProcessorCategory,
   MasteringProcessRequest,
   MasteringProcessStereoRequest,
   MasteringRealtimeCost,

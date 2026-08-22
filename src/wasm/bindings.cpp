@@ -56,6 +56,19 @@ constexpr bool capability_ffmpeg_enabled() {
 #endif
 }
 
+// True when the offline mixing assistant is compiled in. Reported separately
+// from `mixing` because BUILD_MIXING_ASSISTANT can be dropped on its own -- the
+// analysis-only bundle forces it off -- and its entry points stay registered
+// either way, throwing NotImplemented rather than disappearing, so a host
+// cannot detect a stripped build by probing for a function.
+constexpr bool capability_mixing_assistant_enabled() {
+#if defined(SONARE_WITH_MIXING_ASSISTANT) && SONARE_WITH_MIXING_ASSISTANT
+  return true;
+#else
+  return false;
+#endif
+}
+
 // True when hosted instruments expose continuously automatable parameters
 // (resolveInstrumentAutomationId). Tied to the arrangement/MIDI subsystem,
 // which owns the instrument rack.
@@ -110,6 +123,7 @@ val js_capabilities() {
   val features = val::object();
   features.set("mastering", capability_mastering_enabled());
   features.set("mixing", capability_mixing_enabled());
+  features.set("mixingAssistant", capability_mixing_assistant_enabled());
   features.set("fx", capability_fx_enabled());
   features.set("ffmpeg", capability_ffmpeg_enabled());
   features.set("instrumentParamAutomation", capability_instrument_param_automation_enabled());

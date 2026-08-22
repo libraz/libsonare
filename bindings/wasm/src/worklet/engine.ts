@@ -586,6 +586,31 @@ export class SonareEngine {
     strips.setBusStripInsertParamByName(this.stripContext, busId, insertIndex, paramName, value);
   }
 
+  /**
+   * Bus-strip counterpart of {@link setStripInsertBypassed}. A bus is addressed
+   * by its numeric id, which the `target` of the track/master form cannot
+   * express, so it is its own method exactly like
+   * {@link setBusStripInsertParamByName}. Bypassing keeps the insert's internal
+   * state (reverb tail, compressor envelope) unless `resetOnBypass` is set;
+   * re-posting the bus scene JSON, the only workaround before this existed,
+   * rebuilds the chain and loses it.
+   */
+  setBusStripInsertBypassed(
+    busId: number,
+    insertIndex: number,
+    bypassed: boolean,
+    resetOnBypass = false,
+  ): void {
+    this.ensureBus(busId);
+    strips.setBusStripInsertBypassed(
+      this.stripContext,
+      busId,
+      insertIndex,
+      bypassed,
+      resetOnBypass,
+    );
+  }
+
   setStripInsertParamByName(
     target: string | number,
     insertIndex: number,

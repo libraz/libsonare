@@ -323,7 +323,7 @@ being sent as an explicit value. `sampleRate` itself defaults to `48000`.
 | Option               | Default | Meaning                                                        |
 | -------------------- | ------- | -------------------------------------------------------------- |
 | `targetTrackLufs`    | `-18`   | Absolute integrated-loudness target each track is staged towards, in LUFS |
-| `suggestionStrength` | `1`     | Overall strength in `[0, 1]`, scaling every level-like decision; `0` suggests nothing |
+| `suggestionStrength` | `1`     | Overall strength in `[0, 1]`, scaling every level-like decision; `0` sets them all to zero but keeps routing and the physical image corrections |
 | `eqMaxCutDb`         | `4`     | Largest cut a single suggested EQ band may apply, in dB          |
 | `mixBusHeadroomDbtp` | `-6`    | Headroom the summed mix is left with on the master bus, in dBTP  |
 | `enableStructure`    | `true`  | Evaluate bus structure, routing and sends                        |

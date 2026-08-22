@@ -1,5 +1,6 @@
 import { getSonareModule } from './module_state';
 import type { MixAssistantOptions, MixAssistantResult, MixAssistantTrack } from './public_types';
+import { assertSampleRate } from './validation';
 
 function requireModule() {
   return getSonareModule();
@@ -9,8 +10,13 @@ function requireModule() {
 export interface SuggestMixSceneRequest {
   /** Tracks to mix, in the order their profiles are reported. */
   tracks: MixAssistantTrack[];
-  /** Shared sample rate in Hz for every track. Defaults to 48000. */
-  sampleRate?: number;
+  /**
+   * Shared sample rate in Hz for every track. Required: every band edge,
+   * high-pass corner, sibilance band and alignment lag is derived from it, so a
+   * guessed rate would silently misread 44.1 kHz material by 8.8% and report
+   * `channelDelaySamples` and `durationSec` wrong with it.
+   */
+  sampleRate: number;
   /** Assistant tunables; every field falls back to the core default. */
   options?: MixAssistantOptions;
 }
@@ -58,9 +64,14 @@ function planarTracks(tracks: MixAssistantTrack[]): PlanarTracks {
   return { left, right, ids, names };
 }
 
-function suggestJson(request: SuggestMixSceneRequest, sceneOnly: boolean): string {
+function suggestJson(fnName: string, request: SuggestMixSceneRequest, sceneOnly: boolean): string {
+  // Required, not defaulted: this surface used to invent 48000, which read
+  // 44.1 kHz material 8.8% off across every band edge and every lag without
+  // saying so. Node and Python both demand it, and a request ported from either
+  // must not change behaviour by arriving here.
+  assertSampleRate(fnName, request.sampleRate);
   const { left, right, ids, names } = planarTracks(request.tracks);
-  const sampleRate = request.sampleRate ?? 48000;
+  const sampleRate = request.sampleRate;
   const params = (request.options ?? {}) as Record<string, number | boolean>;
   const module = requireModule();
   return sceneOnly
@@ -88,7 +99,7 @@ function suggestJson(request: SuggestMixSceneRequest, sceneOnly: boolean): strin
  *   and the explanation behind each change
  */
 export function suggestMixScene(request: SuggestMixSceneRequest): MixAssistantResult {
-  return JSON.parse(suggestJson(request, false)) as MixAssistantResult;
+  return JSON.parse(suggestJson('suggestMixScene', request, false)) as MixAssistantResult;
 }
 
 /**
@@ -103,7 +114,7 @@ export function suggestMixScene(request: SuggestMixSceneRequest): MixAssistantRe
  * @returns Scene JSON string
  */
 export function suggestMixSceneJson(request: SuggestMixSceneRequest): string {
-  return suggestJson(request, true);
+  return suggestJson('suggestMixSceneJson', request, true);
 }
 
 /**

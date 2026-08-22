@@ -14,9 +14,21 @@ export interface ChordChange {
  * A chord detected at bar boundary (beat-synchronized)
  */
 export interface BarChord {
+  /**
+   * Bar number, not the index of this entry in the array: bars with no
+   * confident chord are not recorded and the oldest entries are dropped at the
+   * history cap. Group bars by pattern position with this, never with the array
+   * index. In `votedPattern` it is the pattern position instead.
+   */
   barIndex: number;
   root: PitchClass;
   quality: ChordQuality;
+  /**
+   * Start of the bar, on the same timeline as `StreamFrame.timestamp`
+   * (including a `sampleOffset` anchor). Consecutive bars are `barDuration`
+   * apart rather than snapped to the analysis frame grid. Unused in
+   * `votedPattern`.
+   */
   startTime: number;
   confidence: number;
 }
@@ -35,6 +47,11 @@ export interface PatternScore {
 export interface ProgressiveEstimate {
   bpm: number;
   bpmConfidence: number;
+  /**
+   * Tempo candidates the most recent BPM estimate chose from; 0 until an
+   * estimate has run. Same quantity as the batch analysis result's field of the
+   * same name.
+   */
   bpmCandidateCount: number;
   key: PitchClass;
   keyMinor: boolean;
@@ -54,6 +71,11 @@ export interface ProgressiveEstimate {
   allPatternScores: PatternScore[];
   accumulatedSeconds: number;
   usedFrames: number;
+  /**
+   * True when the key or BPM was re-estimated since the previous stats
+   * snapshot. One change sets it on exactly one snapshot however the caller
+   * chunks its input, and a call that produced no frame does not repeat it.
+   */
   updated: boolean;
 }
 

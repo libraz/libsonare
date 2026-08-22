@@ -361,14 +361,16 @@ export class StreamingRetune {
   }
 
   /**
-   * Update retune settings. Changing `grainSize` takes effect after the next
-   * {@link prepare} call.
+   * Update the live controls; omitted keys keep their current value. Changing
+   * `grainSize` takes effect after the next {@link prepare} call, and an
+   * omitted `grainSize` keeps whatever was last requested — including the `0`
+   * sentinel, so a re-{@link prepare} at another sample rate re-derives it.
    */
   setConfig(config: StreamingRetuneConfig): void {
     this.retune.setConfig(config as Record<string, unknown>);
   }
 
-  /** Current native config. */
+  /** The currently applied controls, with `grainSize` as the effective one. */
   config(): Required<StreamingRetuneConfig> {
     return this.retune.config();
   }

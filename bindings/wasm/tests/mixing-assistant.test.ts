@@ -224,10 +224,60 @@ describe('mixing assistant (WASM)', () => {
   describe('suggestMixSceneJson', () => {
     it('returns only the scene, carrying one strip per track', () => {
       const json = suggestMixSceneJson({ tracks: musicalTracks(), sampleRate: SR });
-      const scene = JSON.parse(json) as { strips: { id: string }[] };
+      const scene = JSON.parse(json) as {
+        strips: { id: string }[];
+        buses: { id: string }[];
+        connections: { source: string; destination: string }[];
+      };
 
-      expect(scene.strips.map((strip) => strip.id)).toEqual(['bass', 'keys', 'hat']);
+      // A scene carries one strip per track, and one more for each effect bus
+      // the structure stage proposes: an effect return is a strip too. Those are
+      // told apart structurally — a return strip is the one a bus feeds — rather
+      // than by counting or by name, because how many effect buses the assistant
+      // suggests is a decision this test has no stake in, and pinning it here
+      // would freeze it. What is asserted is the part the name promises: every
+      // track reaches the scene, once, in input order.
+      const busIds = new Set(scene.buses.map((bus) => bus.id));
+      const returnStrips = new Set(
+        scene.connections
+          .filter((connection) => busIds.has(connection.source))
+          .map((connection) => connection.destination),
+      );
+      const trackStrips = scene.strips
+        .map((strip) => strip.id)
+        .filter((id) => !returnStrips.has(id));
+
+      expect(trackStrips).toEqual(['bass', 'keys', 'hat']);
       expect(scene).not.toHaveProperty('explanation');
+    });
+
+    it('acts on a source class only a track name can supply', () => {
+      // `keys` is one of the four classes no measurement separates from its
+      // neighbours, so the classifier takes it from the track's name and only
+      // when the decision table resolved nothing. Before that path existed the
+      // class was advertised by mixSourceClassNames() and reachable from no
+      // entry point, and this track came back unclassified — which every
+      // decision stage skips, so it was routed to master and left alone.
+      const result = suggestMixScene({ tracks: musicalTracks(), sampleRate: SR });
+      const keys = result.tracks.find((track) => track.stripId === 'keys');
+
+      expect(keys?.source).toBe('keys');
+      expect(keys?.sourceConfidence).toBeGreaterThan(0);
+
+      // Classified means acted on, so the class has to reach the scene and not
+      // only the report. Inserts and sends are the evidence because every stage
+      // that emits one reads the class first: an unclassified track carries a
+      // staging trim and nothing else, which is what this track used to get.
+      //
+      // Do not simplify this to a string match on `explanation`. Searching the
+      // lines for the track's name looks equivalent and is not: an unclassified
+      // track is named there too, by the line saying it was routed straight to
+      // master *because* it was never classified. That assertion passes whether
+      // or not the class was resolved, which is the one outcome this case
+      // exists to tell apart.
+      const strip = result.scene.strips.find((candidate) => candidate.id === 'keys');
+      expect(strip?.inserts.length ?? 0).toBeGreaterThan(0);
+      expect(strip?.sends.length ?? 0).toBeGreaterThan(0);
     });
 
     it('agrees with the scene nested in the full result', () => {
@@ -264,6 +314,46 @@ describe('mixing assistant (WASM)', () => {
     it('rejects a non-positive sample rate', () => {
       expect(() => suggestMixScene({ tracks: musicalTracks(), sampleRate: 0 })).toThrow();
       expect(() => suggestMixScene({ tracks: musicalTracks(), sampleRate: -48000 })).toThrow();
+    });
+
+    it('requires a sample rate rather than inventing one', () => {
+      // This surface used to default to 48000, which read 44.1 kHz material
+      // 8.8% off across every band edge, every filter corner and every
+      // alignment lag without saying so. Node and Python both demand it.
+      const request = { tracks: musicalTracks() } as unknown as SuggestMixSceneRequest;
+      expect(() => suggestMixScene(request)).toThrow();
+      expect(() => suggestMixSceneJson(request)).toThrow();
+    });
+
+    it('rejects two tracks sharing an id', () => {
+      // The guard lives in the core rather than in this file, so all four
+      // surfaces reject the same input. Absorbed instead, the duplicate ships a
+      // scene the mixer refuses to load, and the refusal names the scene rather
+      // than the two tracks that collided.
+      const left = pulsedTone(440, DURATION, 2);
+      expect(() =>
+        suggestMixScene({
+          tracks: [
+            { id: 'same', left },
+            { id: 'same', left },
+          ],
+          sampleRate: SR,
+        }),
+      ).toThrow();
+    });
+
+    it('reports a non-finite sample as its own exclusion, not as silence', () => {
+      // One NaN reaches the integrated loudness as -inf, so without the core
+      // guard the track comes back excluded for being silent -- a statement
+      // about the material rather than about the buffer.
+      const left = pulsedTone(440, DURATION, 2);
+      left[100] = Number.NaN;
+      const result = suggestMixScene({
+        tracks: [{ id: 'poisoned', left }],
+        sampleRate: SR,
+      });
+      expect(result.tracks[0].usable).toBe(false);
+      expect(result.tracks[0].exclusionReason).toBe('track has non-finite samples');
     });
 
     it('rejects a missing or empty track id', () => {

@@ -467,7 +467,11 @@ export class RealtimeEngine {
   }
 
   externalMidiScratchRenderFrame(): number {
-    return this.native.externalMidiScratchRenderFrame();
+    // embind marshals the int64 render frame as a BigInt; the declared `number`
+    // has to be a real number or the first consumer that does arithmetic on it
+    // dies with "Cannot mix BigInt". Same normalization as the telemetry, meter
+    // and scope scratch frames.
+    return Number(this.native.externalMidiScratchRenderFrame());
   }
 
   externalMidiScratchByteWord(): number {

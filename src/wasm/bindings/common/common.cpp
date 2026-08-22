@@ -6,6 +6,7 @@
 #include "common.h"
 
 #include <algorithm>
+#include <cmath>
 
 #include "util/numeric_validation.h"
 
@@ -64,6 +65,16 @@ val vectorToUint8Array(const std::vector<uint8_t>& vec) {
 // a freshly-allocated std::vector<float>. The single boundary crossing is
 // `view.set(arr)` inside JS land; the typed_memory_view wraps the destination
 // vector's storage so no intermediate buffer is allocated.
+std::size_t wasmCountArg(double value, const char* subject) {
+  constexpr double kMaxSafeInteger = 9007199254740991.0;
+  if (!std::isfinite(value) || value < 0.0 || std::floor(value) != value ||
+      value > kMaxSafeInteger) {
+    throw SonareException(ErrorCode::InvalidParameter,
+                          std::string(subject) + " must be a non-negative safe integer");
+  }
+  return static_cast<std::size_t>(value);
+}
+
 std::size_t wasmArrayLikeLength(const val& arr, const char* subject, const char* length_key) {
   if (arr.isNull() || arr.isUndefined()) {
     throw SonareException(ErrorCode::InvalidParameter,
