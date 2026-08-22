@@ -203,8 +203,6 @@ void note_bound(const char* path, float lo, float hi) {
   if (recording() && path != nullptr) Recorder::instance().note_bound(std::string(path), lo, hi);
 }
 
-bool tuning_enabled() { return true; }
-
 }  // namespace tuning
 }  // namespace sonare
 
@@ -222,8 +220,6 @@ float tunable_keyed(const char*, float default_value) { return default_value; }
 void note_program_key(int, const char*) {}
 
 void note_bound(const char*, float, float) {}
-
-bool tuning_enabled() { return false; }
 
 }  // namespace tuning
 }  // namespace sonare

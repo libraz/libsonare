@@ -76,9 +76,6 @@ void note_program_key(int program, const char* key);
 /// auto-range falls back to its heuristic. No-op unless a dump was requested.
 void note_bound(const char* path, float lo, float hi);
 
-/// True when this build reads the override table at all (i.e. `BUILD_TUNING=ON`).
-bool tuning_enabled();
-
 }  // namespace tuning
 }  // namespace sonare
 
