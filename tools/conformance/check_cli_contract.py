@@ -2450,24 +2450,30 @@ def _validate_case_payload(
             )
         if isinstance(payload.get("n_frames"), int) and payload["n_frames"] < 0:
             report.append(("fail", f"{label}.n_frames: expected non-negative integer"))
-    if path == "analyze":
-        sections = payload.get("sections")
-        if isinstance(sections, list):
-            for index, section in enumerate(sections):
-                if not isinstance(section, dict):
-                    continue
-                section_type = section.get("type")
-                if (
-                    not isinstance(section_type, str)
-                    or _SECTION_TYPE_RE.fullmatch(section_type) is None
-                ):
-                    report.append(
-                        (
-                            "fail",
-                            f"{label}.sections[{index}].type: expected lowercase-kebab section type, "
-                            f"got {section_type!r}",
-                        )
+    # Section-type spelling is keyed on the payload carrying a ``sections`` list,
+    # not on the command that produced it.  ``analyze`` and ``sections``
+    # serialize the same enum, and pinning the rule to one command name let the
+    # other publish a Title-Case spelling that matched nothing a script written
+    # against the first looks for.  Any path promoted into the manifest inherits
+    # the check with no edit here.
+    sections = payload.get("sections")
+    if isinstance(sections, list):
+        for index, section in enumerate(sections):
+            if not isinstance(section, dict):
+                continue
+            section_type = section.get("type")
+            if (
+                not isinstance(section_type, str)
+                or _SECTION_TYPE_RE.fullmatch(section_type) is None
+            ):
+                report.append(
+                    (
+                        "fail",
+                        f"{label}.sections[{index}].type: expected lowercase-kebab section type, "
+                        f"got {section_type!r}",
                     )
+                )
+    if path == "analyze":
         if case_id == "with_seventh":
             chords = payload.get("chords")
             has_seventh = isinstance(chords, list) and any(

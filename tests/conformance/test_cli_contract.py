@@ -253,6 +253,51 @@ class CliContractSelfTest(unittest.TestCase):
             report,
         )
 
+    def test_section_type_spelling_is_checked_for_any_path_publishing_sections(
+        self,
+    ) -> None:
+        """The rule follows the payload, not the command that produced it.
+
+        ``analyze`` and ``sections`` serialize the same enum, so keying the
+        check on one command name lets the other publish a spelling that
+        matches nothing a script written against the first looks for. A path
+        that is promoted into the manifest later has to inherit the check
+        without anyone remembering to add it, which is what this pins.
+        """
+        contract = {"payloads": {"p": {"keys": {"sections": "any"}}}}
+        case = {"id": "success", "payload": "p"}
+        title_case: list[tuple[str, str]] = []
+        CHECKER._validate_case_payload(
+            "sections",
+            case,
+            {"sections": [{"type": "Chorus", "start": 0.0, "end": 1.0}]},
+            contract,
+            "native",
+            "native.sections.success",
+            title_case,
+        )
+        self.assertTrue(
+            any(
+                "expected lowercase-kebab section type" in message
+                for _, message in title_case
+            ),
+            title_case,
+        )
+
+        # Non-vacuity: the same path with a canonical spelling stays clean, so
+        # the assertion above cannot be satisfied by a blanket failure.
+        canonical: list[tuple[str, str]] = []
+        CHECKER._validate_case_payload(
+            "sections",
+            case,
+            {"sections": [{"type": "chorus", "start": 0.0, "end": 1.0}]},
+            contract,
+            "native",
+            "native.sections.success",
+            canonical,
+        )
+        self.assertEqual(canonical, [])
+
     def test_spectral_contract_is_closed_for_every_feature_statistic(self) -> None:
         spectral = self.manifest["commands"]["spectral"]
         self.assertEqual(spectral["status"], "active")
