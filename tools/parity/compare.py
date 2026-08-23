@@ -342,6 +342,10 @@ class Report:
     # Records extracted per surface (the record unit's vacuity metric: a checker
     # that reports nothing because it parsed nothing is the failure mode to see).
     record_counts: dict[str, int] = field(default_factory=dict)
+    # The allowlist this report was built against, carrying the record of which
+    # of its entries actually suppressed something. Kept on the report so a
+    # caller can audit the allowlist without rebuilding the comparison.
+    allowlist: Allowlist | None = None
 
     def active(self) -> list[Finding]:
         """Findings that count toward failure (non-allowlisted, non-informational)."""
@@ -426,7 +430,7 @@ def build_report(
     core_configs: dict[str, CoreConfig] | None = None,
     wasm_internal: WasmInternal | None = None,
 ) -> Report:
-    rep = Report(surfaces=selected)
+    rep = Report(surfaces=selected, allowlist=allow)
     indexed = {s: _index(ex) for s, ex in extractions.items()}
     for s, ex in extractions.items():
         rep.unparsed[s] = ex.unparsed

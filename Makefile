@@ -2,6 +2,7 @@
        coverage-build coverage-clean build-shared build-node build-wasm-binding \
        test-python test-python-slow test-node test-wasm parity conformance test-gm-cross-surface test-mix-assistant-cross-surface abi-layout abi-layout-check check-abi-version \
        capability-catalog capability-catalog-check processor-types processor-types-check ci-local \
+       surface-coverage surface-coverage-check \
        test-hardening test-hardening-asan test-hardening-tsan test-hardening-host test-hardening-wasm \
        build-feature-matrix
 
@@ -251,6 +252,15 @@ build-feature-matrix:
 parity: conformance
 	python3 tools/parity/check_parity.py
 
+# Tracked per-runtime capability matrix, derived from the same reachability
+# decision the parity checker makes. The check variant leaves the worktree
+# untouched and fails when the table no longer matches the surfaces.
+surface-coverage:
+	python3 tools/parity/surface_coverage.py
+
+surface-coverage-check:
+	python3 tools/parity/surface_coverage.py --check
+
 # Shared public-input schema plus public streaming field/flag/default snapshot.
 # Also gates request-object coverage: every one-shot facade export keeps a
 # *Request overload, and every *Request a public function accepts stays exported
@@ -261,6 +271,13 @@ conformance:
 	python3 tools/conformance/check_cli_contract.py --schema
 	python3 -m unittest tests/conformance/test_cli_contract.py
 	python3 -m unittest tests/conformance/test_wasm_exception_scope.py
+	python3 tools/parity/test_handle_gating.py
+	python3 tools/parity/test_record_shape.py
+	python3 tools/parity/test_ts_reexport.py
+	python3 tools/parity/test_surface_coverage.py
+	python3 tools/parity/test_allowlist_audit.py
+	python3 tools/parity/surface_coverage.py --check
+	python3 tools/parity/check_parity.py --audit-allowlist
 	@if test -x "$(BUILD_DIR)/bin/sonare-cli" && test -x "bindings/python/.venv/bin/python"; then \
 		python3 tools/conformance/check_cli_contract.py \
 			--native "$(BUILD_DIR)/bin/sonare-cli" \

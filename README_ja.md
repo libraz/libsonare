@@ -208,8 +208,10 @@ with libsonare.Project() as project:
     audio = project.bounce_with_synth_instrument("e-piano", num_channels=2)  # → float32 音声
 ```
 
-同じ `Project` ／バウンス API はどのランタイムでも使えます。ホスト供給の
-SoundFont を読み込めば、GS 互換の SF2 プレーヤー経由でも鳴らせます。
+同じ `Project` ／バウンス API は Python・Node・WASM から使えます（CLI は
+意図的に絞ったサブセットです。[ランタイム別カバレッジ表](tools/parity/surface-coverage.md)
+を参照）。ホスト供給の SoundFont を読み込めば、GS 互換の SF2 プレーヤー経由でも
+鳴らせます。
 
 → [Python API](https://libsonare.libraz.net/ja/docs/python-api) · [ドキュメント](https://libsonare.libraz.net/ja/)
 
@@ -259,6 +261,15 @@ make release               # 最適化ビルド
 - **ランタイム別 API** — [ブラウザ / WASM](https://libsonare.libraz.net/ja/docs/wasm) · [JavaScript](https://libsonare.libraz.net/ja/docs/js-api) · [Python](https://libsonare.libraz.net/ja/docs/python-api) · [Node.js ネイティブ](https://libsonare.libraz.net/ja/docs/native-bindings) · [C++](https://libsonare.libraz.net/ja/docs/cpp-api) · [CLI](https://libsonare.libraz.net/ja/docs/cli)
 - **目的別** — [マスタリングプロセッサ](https://libsonare.libraz.net/ja/docs/mastering-processors) · [ミキシング](https://libsonare.libraz.net/ja/docs/mixing) · [編集 DSP](https://libsonare.libraz.net/ja/docs/editing-dsp) · [リアルタイムとストリーミング](https://libsonare.libraz.net/ja/docs/realtime-streaming) · [ルーム音響](https://libsonare.libraz.net/ja/docs/acoustic-analysis)
 - **詳細** — [アーキテクチャ](https://libsonare.libraz.net/ja/docs/architecture) · [librosa 互換性](https://libsonare.libraz.net/ja/docs/librosa-compatibility) · [ベンチマーク](https://libsonare.libraz.net/ja/docs/benchmarks) · [用語集](https://libsonare.libraz.net/ja/docs/glossary)
+
+### 各ランタイムがエンジンのどこまで届くか
+
+DSP コアは C++17 の単一実装で、どのランタイムもそこを呼びます。ブラウザで出た結果は
+ネイティブで出る結果と同じものです。その周りの **API サーフェス** はランタイムごとの
+手書きで、同一ではありません。Python・Node・WASM はいずれも C ABI のエントリポイントの
+9 割強に届き、CLI は意図的に絞ったサブセットです。ドメイン別の数値は生成表
+[ランタイム別カバレッジ表](tools/parity/surface-coverage.md) として公開しており、
+`make surface-coverage` で再生成、CI でゲートしているのでコードから乖離しません。
 
 ## 含まないもの（Non-goals）
 

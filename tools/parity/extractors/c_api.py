@@ -115,9 +115,9 @@ def _parse_param(decl: str) -> Param:
     )
 
 
-# Local public-API includes: ``#include <sonare/sonare_c_effects.h>`` etc. The monolith
-# ``sonare_c.h`` was split into domain headers (commit 38aa15c), so the canonical
-# C surface is now spread across the headers it pulls in. We follow those local
+# Local public-API includes: ``#include <sonare/sonare_c_effects.h>`` etc.
+# ``sonare_c.h`` is an umbrella over per-domain headers, so the canonical C
+# surface is spread across the headers it pulls in. We follow those local
 # includes transitively to reconstruct the full surface. Internal / helper
 # headers are excluded -- they hold private plumbing, not the public ABI.
 _LOCAL_INCLUDE_RE = re.compile(r'#include\s+"(sonare_c[A-Za-z0-9_]*\.h)"')

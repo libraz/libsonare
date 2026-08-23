@@ -76,9 +76,48 @@ def run(
     return compare.build_report(extractions, allow, selected, core_configs, wasm_int)
 
 
+def _audit_allowlist(rep, selected: list[str], path: Path) -> int:
+    """Name every allowlist entry that suppressed nothing on this run.
+
+    A stale entry is not inert. It keeps asserting that a divergence under that
+    name was reviewed and accepted, so the next symbol to take the name inherits
+    the blessing without anyone looking at it -- which is how an allowlist stops
+    being a record of decisions and becomes a hole. Removing an entry the moment
+    its divergence is fixed is what keeps the file readable as decisions.
+
+    Only a full-surface run can answer this: a comparison limited to two surfaces
+    never consults the other two's entries, and every one of them would look
+    stale.
+    """
+    if list(selected) != list(SURFACES):
+        print(
+            "--audit-allowlist needs every surface; rerun without --surface",
+            file=sys.stderr,
+        )
+        return 2
+    unused = rep.allowlist.unused_entries() if rep.allowlist else []
+    if not unused:
+        print(f"allowlist has no stale entries: {path}")
+        return 0
+    print(f"{len(unused)} allowlist entr(ies) suppressed nothing: {path}", file=sys.stderr)
+    for scope, pattern in unused:
+        print(f"  [{scope}] {pattern}", file=sys.stderr)
+    print(
+        "Remove each one, or say in its reason why it must outlive the "
+        "divergence it excuses.",
+        file=sys.stderr,
+    )
+    return 1
+
+
 def main(argv: list[str] | None = None) -> int:
     ap = argparse.ArgumentParser(description=__doc__)
     ap.add_argument("--json", action="store_true", help="Emit machine-readable JSON")
+    ap.add_argument(
+        "--audit-allowlist",
+        action="store_true",
+        help="Report allowlist entries that suppressed nothing, and exit 1 if any",
+    )
     ap.add_argument(
         "--surface",
         default=",".join(SURFACES),
@@ -116,6 +155,9 @@ def main(argv: list[str] | None = None) -> int:
     selected = [s for s in SURFACES if s in selected]
 
     rep = run(args.root, args.allowlist, args.core_map, selected)
+
+    if args.audit_allowlist:
+        return _audit_allowlist(rep, selected, args.allowlist)
 
     if args.json:
         print(report_mod.to_json(rep))

@@ -6,6 +6,7 @@ import json
 from dataclasses import asdict
 
 from compare import Report
+from model import SURFACES
 
 _CATEGORIES = (
     "coverage",
@@ -102,6 +103,27 @@ def to_markdown(rep: Report) -> str:
         for s in rep.surfaces:
             if s in rep.record_counts:
                 out.append(f"| {s} | {rep.record_counts[s]} |")
+        out.append("")
+
+    # Allowlist hygiene. An entry that suppressed nothing is not inert: it keeps
+    # asserting a reviewed decision about a name, so whatever takes that name next
+    # inherits the blessing unexamined. Reported here for a full-surface run only,
+    # because a partial run never consults the surfaces it left out.
+    if rep.allowlist is not None and list(rep.surfaces) == list(SURFACES):
+        stale = rep.allowlist.unused_entries()
+        out.append("## Allowlist entries that suppressed nothing\n")
+        if stale:
+            out.append(
+                f"**{len(stale)}** — remove each one, or say in its reason why it "
+                "must outlive the divergence it excuses "
+                "(`check_parity.py --audit-allowlist` gates this).\n"
+            )
+            out.append("| section | entry |")
+            out.append("|---|---|")
+            for scope, pattern in stale:
+                out.append(f"| `{scope}` | `{pattern}` |")
+        else:
+            out.append("None — every entry still excuses a live divergence.")
         out.append("")
 
     # Self-confidence: unparsed counts.

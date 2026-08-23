@@ -20,15 +20,12 @@
 #   mastering                <- high-level convenience wrapper (apply_processor)
 #   mix_stereo               <- stereo mix convenience
 #   onset_envelope           <- facade name for C onset_strength
-#   validate_realtime_voice_changer_preset_json <- facade-side JSON validator
-#                                                   (no C free function)
 any = [
   "init",                  # WASM async module init
   "assert_samples",        # exported input validators (Node + WASM)
   "assert_finite_samples",
   "assert_finite_scalar",
   "assert_non_empty_samples",
-  "capabilities",          # parsed facade form of C sonare_capabilities_json
   "mastering",
   "mastering_pair_analyze",
   "mastering_pair_process",
@@ -36,13 +33,10 @@ any = [
   "mastering_stereo_analyze",
   "mix_stereo",
   "onset_envelope",
-  "validate_realtime_voice_changer_preset_json",
 ]
 
 node = [
   "analyze_async",          # libuv async variant, JS-only
-  "analyze_with_progress",  # progress-callback variant, JS-only
-  "*with_progress",
   "master_audio_async",         # libuv async variant, JS-only
   "master_audio_stereo_async",  # libuv async variant, JS-only
   # Node-only INTERNAL input/MIDI validation helpers exported from
@@ -63,7 +57,6 @@ node = [
 ]
 
 wasm = [
-  "require_module",         # WASM module-handle accessor
   "is_sonare_error",        # TS type guard for the SonareError shape; no C symbol
   "is_initialized",         # WASM init-state probe
   "engine_capabilities",    # WASM build capability descriptor
@@ -75,8 +68,6 @@ wasm = [
   "stream_analyzer_config_defaults", # WASM facade default snapshot, not a C API symbol
   "synth_enum_tables",      # facade-visible snapshot built from C enum names
   "synth_patch_round_trip_for_test", # WASM-only regression hook for embind patch shape
-  "*with_progress",                  # WASM progress callbacks are facade-only async ergonomics
-  "analyze_with_progress",           # WASM progress callback wrapper, no C ABI equivalent
   "bind_web_midi",                   # Browser Web MIDI listener glue; routes to existing realtime-engine MIDI input APIs
   "is_web_midi_available",           # Browser capability probe for Web MIDI; platform-only facade helper
   "bind_microphone_input",           # Browser getUserMedia -> AudioWorkletNode glue; platform-only realtime input helper
@@ -91,10 +82,6 @@ python = [
   # backward compatibility, no C counterpart of its own. See
   # bindings/python/src/libsonare/_effects.py:1040.
   "realtime_voice_changer_preset_pod",
-  # Progress-callback variant of analyze(), named without the C `_json_` infix
-  # (it wraps C sonare_analyze_json_with_progress). Node/WASM expose the same
-  # ergonomic name (see their surface_only blocks above).
-  "analyze_with_progress",
   "synth_enum_tables",      # facade-visible snapshot built from C enum names
 ]
 
@@ -135,9 +122,6 @@ python = [
 #     optional options bag on Node/WASM and keyword arguments on Python, and both
 #     wrappers now call the with-options entry points; passing nothing reproduces
 #     the fixed-signature calls exactly.
-#   project_tempo_options_default: the default seeder the facades call to fill
-#     the options bag before applying whichever fields the caller gave, so it
-#     never reaches a facade signature of its own.
 #   project_bake_midi_fx_ex: folded into each Project facade's bake-MIDI-FX
 #     method. The provenance buffer becomes a `withSourceIndex` request field on
 #     Node/WASM and a `with_source_index` keyword on Python, and the wrapper
@@ -148,13 +132,6 @@ python = [
 #     error/warning-string helpers consumed internally by each facade (errors map
 #     to native exceptions; the scene-load warning surfaces as Mixer.sceneWarnings
 #     / scene_warnings), not standalone public facade functions.
-#   mixer_add_strip_ex: folded into the scene. A strip's meter configuration is
-#     fixed when the strip is built, so it travels as the scene strip's optional
-#     `metering` object, which every facade already passes through
-#     mixer_from_scene_json. The `_ex` entry point is the C-level spelling of the
-#     same choice for a host that builds strips one at a time; neither it nor the
-#     base mixer_add_strip is a facade function (no facade exposes add_strip).
-#
 # --- mastering ops exposed under ERGONOMIC facade names (see [surface_only]) ---
 #   mastering_analyze_pair / mastering_analyze_stereo / mastering_apply_processor
 #   / mastering_apply_pair_processor / mastering_apply_processor_stereo: these C
@@ -163,7 +140,6 @@ python = [
 #   mastering_process_stereo (listed in [surface_only] below). Same op, facade
 #   spelling.
 node = [
-  "mixer_add_strip_ex",
   "detect_chords_ex",
   "detect_key_with_options",
   "detect_key_with_options_and_modes",
@@ -175,7 +151,6 @@ node = [
   "project_auto_tempo_ex",
   "project_analyze_tempo_with_options",
   "project_auto_tempo_with_options",
-  "project_tempo_options_default",
   "project_snap_to_grid_ex",
   "project_bake_midi_fx_ex",
   "error_message",
@@ -259,7 +234,6 @@ node = [
   "mastering_platform_from_name",
 ]
 wasm = [
-  "mixer_add_strip_ex",
   "detect_chords_ex",
   "detect_key_with_options",
   "detect_key_with_options_and_modes",
@@ -271,7 +245,6 @@ wasm = [
   "project_auto_tempo_ex",
   "project_analyze_tempo_with_options",
   "project_auto_tempo_with_options",
-  "project_tempo_options_default",
   "project_snap_to_grid_ex",
   "project_bake_midi_fx_ex",
   "error_message",
@@ -320,7 +293,6 @@ wasm = [
   # Source-file channel probing also requires host filesystem access and the
   # native decoder stack; WASM intentionally has no Audio.fileChannelCount.
   "audio_file_channel_count",
-  "audio_from_memory",
   # External-instrument bounce is Python-only by design (see node note); WASM is
   # additionally single-threaded and cannot host a synchronous render callback.
   "project_bounce_with_instruments",
@@ -335,7 +307,6 @@ wasm = [
   "mastering_platform_from_name",
 ]
 python = [
-  "mixer_add_strip_ex",
   "detect_chords_ex",
   "detect_key_with_options",
   "detect_key_with_options_and_modes",
@@ -347,7 +318,6 @@ python = [
   "project_auto_tempo_ex",
   "project_analyze_tempo_with_options",
   "project_auto_tempo_with_options",
-  "project_tempo_options_default",
   "project_snap_to_grid_ex",
   "project_bake_midi_fx_ex",
   "error_message",
