@@ -87,7 +87,33 @@ Headers land in two places, matching how they are already written. The C ABI kee
 
 Two link interfaces were incomplete and are now declared. The core archive calls the note segmenter, which lives in the pitch-editor archive that links core in turn; the voice changer uses the realtime oversampler and smoothers directly rather than through either of the archives it named. Neither was visible from inside this repository, where every target links the whole set — they surface the moment a consumer links one installed archive on its own, which is what the new consumer gate does for every exported target.
 
-The vendored KissFFT archive is installed as `libsonare_kissfft.a` rather than claiming the generic name in the user's library directory. Its target name is unchanged.
+The vendored KissFFT archive is installed as `libsonare_kissfft.a` rather than claiming the generic name in the user's library directory. Its target name is unchanged. The vendored PFFFT archive is installed the same way, as `libsonare_pffft.a`.
+
+### Capability catalog
+
+**Every parameter in the catalog now carries its type, its default and its accepted range.** All 1,130-odd parameters across the 88 named processors reported `null` for `default`, `min` and `max`, which is the one thing a host needs to build a control surface from the catalog. `sonare_mastering_insert_param_info` and `sonare_capability_catalog_json` now answer with real values, as do `masteringInsertParamInfo` / `capabilityCatalog` on Node and WASM and `mastering_insert_param_info` / `capability_catalog` on Python. The Node and WASM `MasteringInsertParamInfo` types declared only `name` / `id` / `rtSafe` / `unit?`; they now declare the whole descriptor, and `unit` is `string | null` rather than optional.
+
+Both values are derived from the code rather than written down. The default is the config struct's own field initializer, recorded as each builder falls back to it, so a field whose initializer changes cannot leave a stale number in the catalog. The range is *measured*: candidate values go through the same construction path a caller uses and the catalog reports the interval validation accepted. A parameter with no validation reports `null` on both bounds, which states that the catalog knows of no limit rather than that the limit is unknown.
+
+Three properties of a measured bound are worth planning for, and are documented on every surface. It is measured with the other parameters at their defaults, so two controls that constrain each other each report the other's default — `maximizer.adaptiveRelease` reports `minReleaseMs <= 250` and `maxReleaseMs >= 20` for that reason. A bound derived from the sample rate reflects the un-prepared processor, so the EQ band frequency ceiling reads as 24 kHz and rises once the insert is prepared higher. And an exclusive bound is reported as the limit it excludes: a control requiring `> 0` reports `min` 0 and still rejects 0. Bounds are a hard constraint on what may be sent, not a recommended UI range.
+
+The per-band EQ surface — the bulk of the flat parameter set — was the part that published nothing, because a band the caller never supplies is never read. The band readers now declare their keys without reading the caller's values, so `eq.parametric`, `eq.midSide`, `multiband.dynamicEq` and their siblings publish a type and a default per band field. Which keys count as *read* is unchanged, so a key the processor still ignores is still reported as ignored.
+
+### Verification
+
+The repository publishes a generated **runtime capability matrix** (`tools/parity/surface-coverage.md`), linked from the README: per feature domain, how many of the C ABI's entry points each runtime reaches. The DSP core is one implementation and every runtime calls into it, but the hand-written API surface around it is not identical, and the table is what makes the difference reviewable instead of inferred. `make surface-coverage` regenerates it and CI fails on a stale copy. An allowlisted gap counts as a gap: an allowlist entry records that an absence was reviewed, not that it was filled.
+
+The parity checker gained `--audit-allowlist`, which fails on any `allowlist.toml` entry that suppressed nothing. A stale entry is not inert — it keeps asserting a reviewed decision about a name, so the next symbol to take that name inherits the blessing unexamined. Fifteen such entries were found and removed. The checker's own unit tests, which nothing ran before, are now part of `make conformance` and CI.
+
+`NOTICE` carries the attribution for the FFT implementations bundled inside `third_party/r8brain/fft/`. The vendored r8brain licence covers its own author only; the bundled Ooura FFT (the implementation this project actually compiles), PFFFT and PFFFT DOUBLE, their FFTPACK/NCAR ancestry, and the Apache-2.0 AVX-to-NEON layer each keep their own copyright notice, and the BSD-family terms require those to be reproduced.
+
+### Performance
+
+**The FFT runs on SIMD kernels.** PFFFT serves every transform length it can factor and KissFFT keeps the rest, so nothing about the accepted `n_fft` range changes. A 2048-point STFT over 73 s of 22.05 kHz audio drops from 13.7 ms to 6.3 ms on Apple silicon, and everything built on the STFT — mel, MFCC, chroma, onset strength, spectral features, the phase vocoder, the convolution and match-EQ paths — inherits it. Results move by floating-point rounding only. `-DSONARE_USE_PFFFT=OFF` selects the previous KissFFT-only build; the WebAssembly configuration uses it by default, because PFFFT has no wasm-simd128 path and would compile to its scalar fallback.
+
+**Offline LUFS no longer scales its working set with the clip length.** The K-weighted signal was materialized whole, one `double` per sample per channel — 1.4 GB of scratch for an hour of 48 kHz audio. It is now filtered in chunks into a sliding window holding only what the earliest unfinished gating block still needs, which is bounded by the 3 s short-term window regardless of how long the input is. Measured over an hour of 48 kHz mono, peak resident memory falls from 2.09 GB to 706 MB — the remainder is the caller's own input buffer. The filter state carries across chunks and every block is still summed in one pass over its own window, so the reported loudness is bit-for-bit what it was.
+
+**True peak interpolates only where a higher peak is still reachable.** Each polyphase phase bounds its output by the largest input magnitude its stencil can reach, so a group of output samples whose bound cannot exceed the peak found so far is skipped without being computed. The measurement is exact — only interpolations that provably cannot win are dropped. Material with a transient above its own body, which is most of it, gets the whole benefit: a 10 s 48 kHz signal measured at 4x goes from 6.1 ms to 0.6 ms. A signal sitting at full scale throughout has nothing to prune and stays where it was.
 
 ### Fixes
 
