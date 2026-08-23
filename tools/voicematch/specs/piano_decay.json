@@ -1,14 +1,22 @@
 [
   {
+    "_": "Halvings of the aftersound stage per octave past the knee. Steep, because what it describes is a cliff and not a slope, so the range has to reach well past anything a gradual taper would want.",
     "tunable": "piano_voice.kTrebleDecayOct",
-    "min": 0.5,
-    "max": 3.0,
+    "min": 1.0,
+    "max": 10.0,
+    "scale": "log"
+  },
+  {
+    "tunable": "piano_voice.kTrebleDecayKneeOct",
+    "min": 1.0,
+    "max": 3.5,
     "scale": "linear"
   },
   {
+    "_": "Trades against brightness rather than having an optimum of its own; searched wide because the level it fixes and the centroid it costs are minimised at different ends of this range.",
     "tunable": "piano_voice.kTwoStageWidthOct",
     "min": 0.3,
-    "max": 1.5,
+    "max": 3.5,
     "scale": "linear"
   },
   {

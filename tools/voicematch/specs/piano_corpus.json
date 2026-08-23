@@ -1,0 +1,35 @@
+{
+  "_": "The piano fit against a captured single-note corpus. Run it with --corpus pointed at the capture directory; the probe, its velocities and its eight-second gate then come from the manifest, so this fit and the reference profile score the same stimulus.",
+
+  "_weights": "Every term here except the first three defaults to zero, which is why a fit run without them scores only a time-averaged harmonic ladder, an intonation error and a noise floor. tail and crest carry most of what a piano is: crest sees a note whose envelope never falls after its attack, and tail is the aftersound, which no probe shorter than the capture's gate can reach at all. level scores how the loudness is distributed across the grid with the grid's own offset removed, and hf watches the first 120 ms above 4 kHz, where a strike-noise path announces itself as a tick.",
+  "weights": {
+    "harm": 1.0,
+    "cents": 0.5,
+    "tnr": 1.0,
+    "slope": 1.0,
+    "tail": 2.0,
+    "crest": 2.0,
+    "level": 2.0,
+    "hf": 1.0
+  },
+
+  "_ranges": "Wide enough to contain the answer, which is the one property a range has to have: a search reports the best point it was allowed to visit, and a bound that excludes the optimum produces a result indistinguishable from one that does not. Every range here contains its compiled-in default with room on both sides, and the run names any knob that still ends up pinned.",
+  "knobs": [
+    {
+      "_": "How much of the bridge signal is drained into the prompt stage, over how many octaves. Measured, this is the knob the level and crest defect answers to and it trades against brightness, which is exactly the correlation a covariance search exists to handle.",
+      "tunable": "piano_voice.kTwoStageWidthOct", "min": 0.3, "max": 3.5, "scale": "linear"
+    },
+    {
+      "_": "The aftersound cliff: halvings per octave past the knee, where it starts, and where it stops. Steep and late, because the measurement is a cliff at the top of the keyboard rather than a slope from the middle of it.",
+      "tunable": "piano_voice.kTrebleDecayOct", "min": 1.0, "max": 10.0, "scale": "log"
+    },
+    { "tunable": "piano_voice.kTrebleDecayKneeOct", "min": 1.0, "max": 3.5, "scale": "linear" },
+    { "tunable": "piano_voice.kTrebleDecayFloorOct", "min": 2.0, "max": 4.0, "scale": "linear" },
+    { "tunable": "fam0.piano.decay_fast_s", "min": 0.4, "max": 4.0, "scale": "log" },
+    { "tunable": "fam0.piano.decay_slow_s", "min": 4.0, "max": 30.0, "scale": "log" },
+    { "tunable": "fam0.piano.decay_stretch", "min": 0.0, "max": 1.0, "scale": "linear" },
+    { "tunable": "fam0.piano.release_damp_s", "min": 0.3, "max": 3.0, "scale": "log" },
+    { "tunable": "fam0.piano.brightness", "min": 0.4, "max": 1.0, "scale": "linear" },
+    { "tunable": "fam0.piano.soundboard", "min": 0.0, "max": 1.0, "scale": "linear" }
+  ]
+}

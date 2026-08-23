@@ -45,12 +45,52 @@ class Knob:
     span_end: int = 0
 
 
+def _spec_document(spec_path: Path) -> dict:
+    """Read a spec in either of its two forms and return the object one.
+
+    A spec was originally a bare array of knobs, and most still are. The object
+    form adds a `weights` block beside them:
+
+        { "weights": {"harm": 1, "tail": 2, "crest": 2}, "knobs": [ ... ] }
+
+    That block is the difference between a fit that anyone can run and one that
+    only works if you already know which of eleven `--w-*` flags this voice
+    needs off their default of zero. A spec knows what evidence its knobs are
+    supposed to be answering to; the command line should not have to carry it.
+    """
+    data = json.loads(spec_path.read_text())
+    if isinstance(data, list):
+        return {"knobs": data}
+    if isinstance(data, dict) and isinstance(data.get("knobs"), list):
+        return data
+    raise ValueError(
+        f"spec {spec_path} must be a JSON array of knobs, or an object with a 'knobs' array "
+        f"(and optionally a 'weights' object)"
+    )
+
+
 def load_spec(spec_path: Path) -> list[dict]:
     """Read and shape-check a hand-written knob spec."""
-    data = json.loads(spec_path.read_text())
-    if not isinstance(data, list) or not data:
-        raise ValueError(f"spec {spec_path} must be a non-empty JSON array of knobs")
-    return data
+    knobs = _spec_document(spec_path)["knobs"]
+    if not knobs:
+        raise ValueError(f"spec {spec_path} lists no knobs")
+    return knobs
+
+
+def load_spec_weights(spec_path: Path) -> dict[str, float]:
+    """The term weights a spec carries, or an empty dict when it carries none."""
+    weights = _spec_document(spec_path).get("weights", {})
+    if not isinstance(weights, dict):
+        raise ValueError(f"spec {spec_path}: 'weights' must be an object of term -> number")
+    out = {}
+    for term, value in weights.items():
+        try:
+            out[term] = float(value)
+        except (TypeError, ValueError):
+            raise ValueError(
+                f"spec {spec_path}: weight for {term!r} is {value!r}, not a number"
+            ) from None
+    return out
 
 
 def _range_of(entry: dict, i: int) -> tuple[float, float, bool]:
@@ -334,6 +374,27 @@ def auto_spec(
             "scale": "log" if log else "linear", "start": defaults[k],
         })
     return spec
+
+
+def at_bound(knob: Knob, value: float) -> str | None:
+    """"minimum" or "maximum" when a value sits on an end of its range, else None.
+
+    One rule, used both by the warning a run ends with and by the per-knob
+    annotation in its report, so the two cannot disagree about what counts.
+
+    The tolerance is a fraction of the span rather than an absolute epsilon: a
+    knob searched over [900, 2600] that comes back at 2599.9 is pinned in every
+    sense that matters, and testing exact equality would say it is not.
+    """
+    span = knob.hi - knob.lo
+    if span <= 0.0:
+        return None
+    tol = span * 1e-3
+    if value <= knob.lo + tol:
+        return "minimum"
+    if value >= knob.hi - tol:
+        return "maximum"
+    return None
 
 
 def format_value(v: float) -> str:

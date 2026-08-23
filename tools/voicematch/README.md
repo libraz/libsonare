@@ -99,6 +99,29 @@ The fit weights these as `--w-band` / `--w-bdecay` / `--w-env`, and `--w-mss` wo
 
 What is **not** covered: a drum fit moves one note's patch. Mute groups (the hi-hats share an exclusive class), the kit assignment, and anything structural stay where the table put them.
 
+## Oracle from a captured corpus (`--corpus`)
+
+When a capture exists, this is the route to use. `--corpus` points at the directory `capture.py corpus` wrote and the probe *becomes* the capture: its notes, its velocities and its eight-second gate come from the manifest, and the oracle is the captured audio assembled onto that same timeline, one slot per recording.
+
+```sh
+autofit.py --spec tools/voicematch/specs/piano_corpus.json --program 0 \
+    --corpus <capture dir> --corpus-timbre c7-close \
+    --notes 36,60,84 --velocities 56,120 \
+    --optimizer cmaes --max-evals 200 --workers 4
+```
+
+It matters more than a convenience flag sounds, because until it existed this harness ran **two pipelines over the same instrument with different stimuli**. `profile.py compare` reported against the captured grid — fifteen notes, four velocities, held eight seconds — and had no search in it. `autofit.py` had the search and scored a stimulus of its own: three notes at one velocity, held two. A value fitted on the second cannot be read off the first, and neither table can say so.
+
+Three properties, all of which the rest of the harness depends on:
+
+- **Slot spacing is the capture's own length**, not a chosen gap, so a note's analysis window is precisely the audio recorded for it and never reaches into its neighbour.
+- **The capture's preroll is dropped on assembly**, so a captured onset lands exactly where the model's does. Keeping it would place every reference onset a preroll late and read as an attack that arrives slow on every note of the grid.
+- **The oracle is silence wherever the corpus has no recording**, so a grid cut down with `--notes` / `--velocities` stays on the same timeline as the full one — a fit and its hold-out are laid out by the same rule.
+
+The grid is not free: sixty slots of ten seconds is ten minutes of audio per render, so the run prints what it is about to cost before it starts. Cut it with `--notes` / `--velocities`; a six-slot grid is one minute per render and enough to move the decay and level terms.
+
+The capture's dryness is read from the config it names. A dry capture is not given a room; a wet one is measured and the model is placed in a matching space before any metric is taken, exactly as for a supplied WAV.
+
 ## Oracle from a WAV
 
 The reference does not have to be fluidsynth. Export the probe, render it wherever the sound you are chasing actually lives, and hand the file back:
@@ -231,6 +254,8 @@ The thirteen unbounded fields are the eight Karplus-Strong extensions (`ks.body_
 
 Write a hand spec when a knob needs something else — a zero-default field you want switched on, or a range wider than eight times the default.
 
+**A range that does not contain the answer is the most expensive failure this tool has**, because nothing about the result looks wrong: the search reports the best point it was allowed to visit, so the value pins to the bound, the loss goes down, the diff is small and the report is clean. `piano_voice.kTrebleDecayOct` was searched over `[0.5, 3.0]` while the value it wanted was 5.0, and 3.0 is what such a run reports. So every run ends by naming any knob sitting on an end of its range, **including one that started there** — a spec whose range no longer covers a constant's default has that default clamped in on load, and the knob then reads as unchanged for the rest of the run because by a start-to-best measure nothing happened. A pinned knob is not automatically wrong; a clamp bound is a real end of the space. What is never safe is reading it as an interior optimum.
+
 ### Knobs: runtime or source
 
 A **runtime knob** names any catalogue key — a `SONARE_TUNABLE` constant (`src/util/tunable.h`) or a per-program patch field:
@@ -307,7 +332,21 @@ Plus one whole-render term:
 
 `centroid_hz` is deliberately **excluded** — it depends on the probe note set (register weighting) and has been an unreliable signal in this harness.
 
-The metric terms are h1-normalized and therefore **level-blind**: check each note's `level_delta_db` after a fit, or the model can end up matched in shape and wrong in register balance.
+And four terms that exist because everything above is a *shape*, normalised past the very things a listener notices first:
+
+- **aftersound** (`--w-tail`) — the per-harmonic decay slope 2–6 s in. It has frames to fit only when the probe holds a note that long, which is why it belongs with `--corpus`: on a piano the aftersound is most of the note, and a model whose C6 fell to nothing in 1.6 s of an 8 s hold used to score identically to one that held for eleven, because both were measured over the same first two seconds.
+- **crest** (`--w-crest`) — peak minus held RMS, per note. A difference of two levels from one render, so any gain common to both cancels and it needs no calibration at all. It is the only term that can fail on a note whose envelope never falls after its attack: a model 3.9 dB over the reference at the peak and 8.7 dB over in held RMS is not loud, it is not decaying, and every normalised term says it is correct.
+- **level balance** (`--w-level`) — how loud each note is relative to the others, with the grid's own median offset removed first. Absolute dBFS is not comparable between a model rendered here and a reference captured through somebody else's output stage, and a term that treated it as comparable would spend the fit's budget on an output gain. The removed offset is printed once per run, since a model uniformly 9 dB over its reference is worth knowing about even though no voicing knob should be the one to fix it.
+- **attack tilt** (`--w-hf`) — the high-band balance in 20 ms slices over the first 120 ms, each band relative to that slice's own broadband level. Level-blind by construction, and it catches what a whole-timeline distance averages away: a 43 ms excess of +53 dB at 20–24 kHz on a note whose midband matches within half a decibel is a tick, and the ear finds it instantly.
+
+**Every weight except `harm`, `cents` and `tnr` defaults to zero.** A run left on the defaults scores a time-averaged harmonic ladder, an intonation error and a noise floor and nothing else — no envelope, no decay, no level, no attack. Rather than carrying that in your head, put the weights in the spec, which then makes a fit reproducible from one file:
+
+```json
+{ "weights": { "harm": 1, "slope": 1, "tail": 2, "crest": 2, "level": 2, "hf": 1 },
+  "knobs": [ { "tunable": "piano_voice.kTwoStageWidthOct", "min": 0.3, "max": 3.5 } ] }
+```
+
+An explicit `--w-*` on the command line still wins; the bare-array spec form is unchanged. `specs/piano_corpus.json` is the worked example.
 
 **Each term is normalised to its value at the start point**, so the start scores exactly `1.0` and a reported `0.70` is 30 % better than the compiled-in values. Without that the weights would not mean what they say: the harmonic term is an L1 sum over ten harmonics in dB and runs to tens, the intonation term is a handful of cents, the multi-scale term is a fraction, so weighting them in their own units hands whichever is numerically largest an influence nobody chose. `--raw-loss` restores unit weighting.
 
@@ -384,6 +423,26 @@ profile.py compare --notes 36,48,60  # libsonare against it, dimension by dimens
 - **Double decay** — the knee where the fast initial fall gives way to the aftersound, found by searching the breakpoint rather than assuming one. Where it falls is set by how fast the strings of a unison drift apart, so a model with one string cannot have it.
 - **Damper release** — note-off as a felt damper landing on a moving string.
 
+### Holding the comparison to what it measured (`--gate`)
+
+`profile.py compare` ends with a per-dimension summary, and it reports **two** numbers per dimension rather than one:
+
+```
+                                                  median  |median|  rows
+  tuning vs the reference (cents)                    -0.15      0.91    12
+  partial stack h2-h6 vs h1 (dB)                     +4.04     13.58    12
+  brightness (% of the reference centroid)           -3.50     37.27    12
+```
+
+The second column exists because the first cannot fail on a defect that is symmetric across the keyboard. The brightness row once read +0.16 % while individual notes were between 26 and 660 % out — the bass dark by as much as the treble was bright — and the median of the signed errors said the voice was correct to a sixth of a percent.
+
+```sh
+profile.py compare --notes 36,60,84 --write-gate reference/grand3_gate.json
+profile.py compare --notes 36,60,84 --gate reference/grand3_gate.json   # exit 1 on a regression
+```
+
+Both statistics are bounded, and the gate exits 1 when either is exceeded. What it exists to catch is not a bad voice but **a change that improves one dimension by breaking another**, which is the shape most of this work takes: widening the prompt-decay profile fixes the level on every note between F#2 and F#5 and brightens the same notes by 35 to 60 points of centroid. Both are real, and whoever makes that trade should decide it rather than discover it in a later listening test. Bounds are written at `--margin` (1.25× by default) with a floor under each, deliberately loose — a gate that fails on measurement noise gets switched off, and a switched-off gate catches nothing. Re-record only in the same change as the behaviour that justifies the new numbers.
+
 `capture.py`'s own finding is worth keeping: The Grand 3 fails to load its samples on roughly one render in three, and *more* settling time does not help — 4 s and 16 s both produced the real peak while 8 s in between produced silence. So the capture retries, and decides "too quiet" from the loudest velocity already recorded for that same note rather than from an absolute floor, since a real note at the top of the keyboard at velocity 24 is quiet enough that any fixed threshold either lets a failure through or rejects real notes.
 
 ## Listening to the result
@@ -414,8 +473,9 @@ The fitter is `autofit.py` plus the modules it drives, one per stage of a fit:
 
 - `autofit.py` — the CLI and the loop: probe resolution, the oracle, the `Evaluator` the optimisers minimise, the held-out check, and the `_render_metrics` subprocess each evaluation runs in
 - `catalogue.py` — what the library reports about its own knob space under `SONARE_TUNING_DUMP` (defaults, program→patch map, clamp bounds), plus the `SONARE_TUNABLE` declaration scan the write-back needs
-- `knobs.py` — what a fit may move and over what range: the spec forms, the clamp-derived search ranges, and `--spec auto`
-- `loss.py` — from a render to the number being minimised: `probe_rows`, `skeleton_note`, the harmonic and percussion term sets, and the start-point normalisation
+- `corpus.py` — the captured single-note grid as a probe timeline and as the oracle for one: the bridge between the capture `profile.py` reports against and the search `autofit.py` runs
+- `knobs.py` — what a fit may move and over what range: the spec forms, the clamp-derived search ranges, `--spec auto`, and the one rule for what counts as sitting on a bound
+- `loss.py` — from a render to the number being minimised: `probe_rows`, `skeleton_note`, the harmonic and percussion term sets, the level terms, and the start-point normalisation
 - `optimizers.py` — coordinate descent with a golden-section line search, and CMA-ES with IPOP restarts
 - `staging.py` — cutting the problem down: knob screening and the excitation/decay/all staged fit
 - `writeback.py` — putting a fitted value back: literal splicing, the program table, the drum table

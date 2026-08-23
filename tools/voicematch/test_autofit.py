@@ -49,7 +49,15 @@ from loss import (  # noqa: E402
     percussion_terms,
     probe_rows,
 )
+import json  # noqa: E402
+import profile as profile_module  # noqa: E402
+from corpus import corpus_oracle, corpus_pattern, load_corpus  # noqa: E402
+from knobs import at_bound, load_spec, load_spec_weights  # noqa: E402
+from loss import skeleton_note  # noqa: E402
+from metrics import attack_bands, level_of  # noqa: E402
 from optimizers import cma_es, optimize  # noqa: E402
+from smf import Note  # noqa: E402
+from wavio import write_wav  # noqa: E402
 from patterns import (  # noqa: E402
     PATTERN_BUILDERS,
     analysis_window_end,
@@ -306,6 +314,8 @@ def _probe_args(**kwargs) -> argparse.Namespace:
         program=0, drum_note=None, pattern="sustain", notes="", velocities="",
         w_harm=1.0, w_cents=0.5, w_tnr=1.0, w_env=None, w_init=0.0, w_slope=0.0,
         w_mss=0.0, w_band=1.0, w_bdecay=1.0, n_harm=10,
+        w_tail=0.0, w_hf=0.0, w_level=0.0, w_crest=0.0,
+        corpus="", corpus_timbre="", spec="auto",
         oracle_wav="", au="", au_dry=False, room="auto",
         validate_notes="", validate_velocities="", validate_oracle_wav="",
     )
@@ -372,7 +382,11 @@ def test_a_drum_fit_weights_the_percussion_terms_not_the_harmonic_ones():
     args = _probe_args(drum_note=38)
     resolve_probe(args)
     weights = cli_weights(args)
-    assert set(weights) == {"band", "bdecay", "env", "mss"}
+    # The percussion pair plus the terms both metric sets carry. None of the
+    # harmonic ones: a hit has no fundamental, so a ladder or an intonation
+    # error would be measuring a frequency the sound does not contain.
+    assert set(weights) == {"band", "bdecay", "env", "mss", "level", "crest"}
+    assert not {"harm", "cents", "tnr", "init", "slope", "tail", "hf"} & set(weights)
     # The envelope is most of what tells two drums apart, so it is on by default
     # here and off for a sustained voice.
     assert weights["env"] == 1.0
@@ -1080,3 +1094,314 @@ def test_a_cli_entry_point_imports_as_shipped(script, tmp_path):
         f"{script} does not import on a clean interpreter "
         f"(exit {proc.returncode}):\n{proc.stderr.strip()[-1200:]}"
     )
+
+
+# --------------------------------------------------------------------------- #
+# The captured corpus as a probe
+# --------------------------------------------------------------------------- #
+def _write_corpus(root: Path, *, notes=(60, 72), velocities=(56, 120),
+                  gate_ms=8000, seconds=10.1, preroll_ms=100, dry=True) -> Path:
+    """A miniature capture: one short tone per slot, plus the manifest beside it."""
+    sr = 48000
+    root.mkdir(parents=True, exist_ok=True)
+    renders = []
+    for note in notes:
+        for vel in velocities:
+            rel = f"t/n{note:03d}_v{vel:03d}.wav"
+            path = root / rel
+            path.parent.mkdir(parents=True, exist_ok=True)
+            n = int(seconds * sr)
+            t = np.arange(n) / sr
+            # Silence through the preroll, then a decaying tone at the note's own
+            # pitch, so a misplaced onset shows up as a measurable shift.
+            body = np.sin(2 * np.pi * 440.0 * 2 ** ((note - 69) / 12.0) * t)
+            body *= np.exp(-t * 1.5) * (vel / 127.0)
+            body[: int(preroll_ms / 1000.0 * sr)] = 0.0
+            write_wav(path, np.stack([body, body], axis=1).astype(np.float32), sr)
+            renders.append({"id": rel, "timbre": "t", "note": note, "velocity": vel,
+                            "path": rel, "seconds": seconds})
+    (root / "manifest.json").write_text(json.dumps({
+        "id": "mini", "sample_rate": sr, "gate_ms": gate_ms, "tail": "2s",
+        "preroll_ms": preroll_ms, "dry": dry,
+        "timbres": [{"id": "t", "label": "mini timbre"}],
+        "notes": list(notes), "velocities": list(velocities), "renders": renders,
+    }))
+    return root
+
+
+def test_a_corpus_probe_is_laid_out_by_the_capture_not_by_a_builder(tmp_path):
+    """Its notes, its velocities and its gate all come from the manifest."""
+    corpus = load_corpus(_write_corpus(tmp_path / "c"))
+    probe = corpus_pattern(corpus)
+    assert [(n.note, n.velocity) for n in probe.notes] == [
+        (60, 56), (60, 120), (72, 56), (72, 120)
+    ]
+    assert {n.dur for n in probe.notes} == {8.0}
+    assert probe.analysis_notes == probe.notes
+
+
+def test_corpus_slots_are_spaced_by_the_capture_s_own_length(tmp_path):
+    """So a note's analysis window is exactly the audio recorded for it.
+
+    A gap chosen independently of the capture would either cut the reference's
+    tail off or leave the model ringing into the next slot, and either one is a
+    decay metric measuring the layout rather than the voice.
+    """
+    corpus = load_corpus(_write_corpus(tmp_path / "c"))
+    probe = corpus_pattern(corpus)
+    starts = [n.start for n in probe.notes]
+    assert all(b - a == pytest.approx(corpus.slot_s) for a, b in zip(starts, starts[1:]))
+    # 10.1 s captured minus the 0.1 s preroll that is dropped on assembly.
+    assert corpus.slot_s == pytest.approx(10.0)
+    for note in probe.notes:
+        assert analysis_window_end(probe, note) == pytest.approx(note.start + corpus.slot_s)
+
+
+def test_the_corpus_oracle_places_each_capture_at_its_own_onset(tmp_path):
+    """The preroll is dropped, so a captured onset lands where the model's does."""
+    corpus = load_corpus(_write_corpus(tmp_path / "c"))
+    probe = corpus_pattern(corpus, notes=(60,), velocities=(120,))
+    audio = corpus_oracle(corpus, probe, 48000)
+    mono = np.abs(audio).mean(axis=1)
+    onset = int(np.argmax(mono > 0.01)) / 48000.0
+    assert onset == pytest.approx(probe.notes[0].start, abs=0.005)
+
+
+def test_a_corpus_run_refuses_a_grid_it_has_no_captures_for(tmp_path):
+    corpus = load_corpus(_write_corpus(tmp_path / "c"))
+    with pytest.raises(ValueError, match="no capture"):
+        corpus_pattern(corpus, notes=(60, 61), velocities=(56,))
+
+
+def test_a_corpus_run_refuses_the_oracle_routes_that_would_contradict_it(tmp_path):
+    args = _probe_args(corpus=str(_write_corpus(tmp_path / "c")), oracle_wav="/tmp/x.wav")
+    with pytest.raises(ValueError, match="both name the reference"):
+        resolve_probe(args)
+    args = _probe_args(corpus=str(tmp_path / "c"), drum_note=38)
+    with pytest.raises(ValueError, match="alternatives"):
+        resolve_probe(args)
+
+
+def test_a_corpus_probe_reports_its_dryness_from_the_capture_config(tmp_path):
+    """A wet capture has to be measured; a dry one must not have a room invented for it."""
+    assert load_corpus(_write_corpus(tmp_path / "dry", dry=True)).dry is True
+    assert load_corpus(_write_corpus(tmp_path / "wet", dry=False)).dry is False
+
+
+# --------------------------------------------------------------------------- #
+# Level, crest, the aftersound band and the attack's high end
+# --------------------------------------------------------------------------- #
+def _level_row(held, crest, peak=-10.0) -> dict:
+    return {"peak_dbfs": peak, "held_rms_dbfs": held, "held_crest_db": crest}
+
+
+def test_the_level_term_scores_the_spread_and_not_the_output_gain():
+    """A model uniformly louder than its reference is a gain, not a voicing error.
+
+    Fitting it would spend the voice's knobs on a number no knob here is for,
+    so the grid's own median offset comes out first and what is scored is what
+    is left.
+    """
+    model = [_level_row(h, 10.0) for h in (-20.0, -22.0, -24.0)]
+    oracle = [_level_row(h, 10.0) for h in (-29.0, -31.0, -33.0)]
+    balance, crest, offset = loss_module._level_terms(model, oracle)
+    assert offset == pytest.approx(9.0)
+    assert balance == pytest.approx(0.0)
+    assert crest == pytest.approx(0.0)
+
+
+def test_the_level_term_does_see_a_register_that_is_the_wrong_loudness():
+    model = [_level_row(-20.0, 10.0), _level_row(-20.0, 10.0), _level_row(-14.0, 10.0)]
+    oracle = [_level_row(-30.0, 10.0)] * 3
+    balance, _, offset = loss_module._level_terms(model, oracle)
+    assert offset == pytest.approx(10.0)
+    assert balance > 1.0
+
+
+def test_crest_survives_a_gain_difference_because_it_is_a_ratio():
+    """The defect it exists for — a note that never falls after its attack."""
+    model = [_level_row(-20.0, 8.0)]
+    oracle = [_level_row(-40.0, 26.0)]
+    _, crest, _ = loss_module._level_terms(model, oracle)
+    assert crest == pytest.approx(18.0)
+
+
+def test_a_held_window_with_no_note_left_in_it_reports_no_level():
+    """Two renders that have both decayed to nothing otherwise score a perfect match."""
+    sr = 48000
+    note = Note(84, 96, 0.0, 8.0)
+    t = np.arange(int(8.5 * sr)) / sr
+    dead = np.sin(2 * np.pi * 1000.0 * t) * np.exp(-t * 200.0)
+    row = level_of(dead, sr, note, 8.5)
+    assert row["held_rms_dbfs"] is None
+    assert row["held_crest_db"] is None
+    assert row["peak_dbfs"] is not None
+    alive = np.sin(2 * np.pi * 1000.0 * t) * np.exp(-t * 0.5)
+    assert level_of(alive, sr, note, 8.5)["held_rms_dbfs"] is not None
+
+
+def test_the_held_window_does_not_move_with_the_probe_s_gate():
+    """A fraction of the note would read the top octave entirely after it has stopped."""
+    sr = 48000
+    t = np.arange(int(9.0 * sr)) / sr
+    tone = np.sin(2 * np.pi * 1000.0 * t) * np.exp(-t * 0.8)
+    short = level_of(tone, sr, Note(60, 96, 0.0, 2.0), 3.5)
+    long = level_of(tone, sr, Note(60, 96, 0.0, 8.0), 9.0)
+    assert short["held_rms_dbfs"] == pytest.approx(long["held_rms_dbfs"], abs=0.01)
+
+
+def test_the_aftersound_band_only_exists_when_the_probe_holds_the_note_that_long():
+    sr = 48000
+    t = np.arange(int(8.0 * sr)) / sr
+    tone = np.sin(2 * np.pi * 440.0 * t) * np.exp(-t * 0.4)
+    held = skeleton_note(tone, sr, Note(69, 96, 0.0, 8.0))
+    brief = skeleton_note(tone, sr, Note(69, 96, 0.0, 2.0))
+    assert held["tail_db_s"][0] is not None
+    assert brief["tail_db_s"][0] is None
+    # The bands the two-second probe could always reach are unaffected.
+    assert brief["early_db_s"][0] is not None
+    assert brief["late_db_s"][0] is not None
+
+
+def test_the_attack_band_measure_is_blind_to_how_loud_the_attack_was():
+    """It is a tilt, which is what makes it usable on an RMS-normalised render."""
+    sr = 48000
+    t = np.arange(int(0.5 * sr)) / sr
+    burst = np.sin(2 * np.pi * 10000.0 * t) * np.exp(-t * 40.0)
+    quiet = attack_bands(burst * 0.01, sr, Note(60, 96, 0.0, 0.4))
+    loud = attack_bands(burst, sr, Note(60, 96, 0.0, 0.4))
+    pairs = [(a, b) for a, b in zip(quiet, loud) if a is not None and b is not None]
+    assert pairs
+    assert all(a == pytest.approx(b, abs=0.05) for a, b in pairs)
+
+
+def test_the_attack_band_measure_sees_a_top_end_that_is_too_hot():
+    sr = 48000
+    t = np.arange(int(0.5 * sr)) / sr
+    dull = np.sin(2 * np.pi * 500.0 * t)
+    ticky = dull + 0.5 * np.sin(2 * np.pi * 18000.0 * t) * np.exp(-t * 60.0)
+    a = attack_bands(dull, sr, Note(60, 96, 0.0, 0.4))
+    b = attack_bands(ticky, sr, Note(60, 96, 0.0, 0.4))
+    # Band index 3 is 16-20 kHz, first 20 ms slice.
+    assert b[3] - a[3] > 20.0
+
+
+def test_a_render_too_short_for_the_attack_window_contributes_nothing():
+    sr = 48000
+    rows = attack_bands(np.zeros(int(0.05 * sr)), sr, Note(60, 96, 0.0, 0.4))
+    assert rows[-1] is None
+
+
+# --------------------------------------------------------------------------- #
+# The range a search was allowed to visit
+# --------------------------------------------------------------------------- #
+def _bounded_knob(label, lo, hi, start) -> Knob:
+    return Knob(label=label, lo=lo, hi=hi, log=False, start_value=start, tunable=label)
+
+
+def test_a_result_on_a_range_bound_is_named_rather_than_reported_as_an_optimum():
+    """The most expensive failure this tool has, because nothing else looks wrong."""
+    knobs = [_bounded_knob("kTrebleDecayOct", 0.5, 3.0, 1.9),
+             _bounded_knob("kOther", 0.0, 1.0, 0.5)]
+    pinned = autofit.report_pinned(knobs, [3.0, 0.5])
+    assert len(pinned) == 1
+    assert "kTrebleDecayOct" in pinned[0] and "maximum" in pinned[0]
+    assert autofit.report_pinned(knobs, [1.9, 0.0])[0].endswith("at its minimum (0)")
+    assert autofit.report_pinned(knobs, [1.9, 0.5]) == []
+
+
+# --------------------------------------------------------------------------- #
+# A spec that carries the weights its knobs answer to
+# --------------------------------------------------------------------------- #
+def _spec_file(tmp_path: Path, body) -> Path:
+    path = tmp_path / "spec.json"
+    path.write_text(json.dumps(body))
+    return path
+
+
+def test_a_bare_array_spec_still_loads(tmp_path):
+    entry = {"tunable": "kX", "min": 0.0, "max": 1.0}
+    path = _spec_file(tmp_path, [entry])
+    assert load_spec(path) == [entry]
+    assert load_spec_weights(path) == {}
+
+
+def test_a_spec_can_carry_the_weights_its_knobs_answer_to(tmp_path):
+    entry = {"tunable": "kX", "min": 0.0, "max": 1.0}
+    path = _spec_file(tmp_path, {"weights": {"tail": 2.0, "crest": 2.0}, "knobs": [entry]})
+    assert load_spec(path) == [entry]
+    assert load_spec_weights(path) == {"tail": 2.0, "crest": 2.0}
+
+
+def test_spec_weights_apply_but_never_over_an_explicit_flag(tmp_path):
+    path = _spec_file(tmp_path, {"weights": {"tail": 2.0, "crest": 3.0}, "knobs": [
+        {"tunable": "kX", "min": 0.0, "max": 1.0}]})
+    # argparse has already put the flag's value on the namespace by this point;
+    # what apply_spec_weights decides is whether the spec is allowed to replace it.
+    args = _probe_args(spec=str(path), w_crest=0.5)
+    autofit.apply_spec_weights(args, ["--w-crest", "0.5"])
+    assert args.w_tail == 2.0
+    assert args.w_crest == 0.5
+
+
+def test_a_spec_naming_a_term_that_does_not_exist_is_refused(tmp_path):
+    path = _spec_file(tmp_path, {"weights": {"loudness": 1.0}, "knobs": [
+        {"tunable": "kX", "min": 0.0, "max": 1.0}]})
+    with pytest.raises(ValueError, match="not a loss term"):
+        autofit.apply_spec_weights(_probe_args(spec=str(path)), [])
+
+
+# --------------------------------------------------------------------------- #
+# The compare-table gate
+# --------------------------------------------------------------------------- #
+def test_the_summary_carries_the_absolute_median_the_signed_one_cannot_fail_on():
+    """Errors of opposite sign in different registers cancel in the signed median."""
+    summary = profile_module.summarize_deltas({"centroid_pct": [-40.0, -35.0, 35.0, 40.0]})
+    assert summary["centroid_pct"]["median"] == pytest.approx(0.0)
+    assert summary["centroid_pct"]["abs_median"] == pytest.approx(37.5)
+
+
+def test_a_gate_fails_on_the_dimension_a_change_broke(tmp_path):
+    gate = tmp_path / "gate.json"
+    summary = profile_module.summarize_deltas({"centroid_pct": [1.0, 1.0], "decay": [0.2, 0.2]})
+    assert profile_module.write_gate_file(summary, gate, "c7-close", 1.25) == 0
+    assert profile_module.check_gate(summary, gate, "c7-close") == 0
+
+    broke = profile_module.summarize_deltas({"centroid_pct": [60.0, 60.0], "decay": [0.2, 0.2]})
+    assert profile_module.check_gate(broke, gate, "c7-close") == 1
+
+
+def test_a_gate_recorded_against_another_reference_is_refused(tmp_path):
+    gate = tmp_path / "gate.json"
+    summary = profile_module.summarize_deltas({"decay": [0.2, 0.2]})
+    profile_module.write_gate_file(summary, gate, "c7-close", 1.25)
+    assert profile_module.check_gate(summary, gate, "modeld-close") == 2
+
+
+def test_a_gate_bound_has_a_floor_so_a_near_zero_dimension_stays_gateable(tmp_path):
+    """Otherwise a dimension that happens to read zero today can never be met again."""
+    gate = tmp_path / "gate.json"
+    profile_module.write_gate_file(
+        profile_module.summarize_deltas({"decay": [0.0, 0.0]}), gate, "c7-close", 1.25
+    )
+    assert json.loads(gate.read_text())["bounds"]["decay"]["median"] > 0.0
+
+
+def test_a_knob_that_started_pinned_is_still_named_even_though_it_never_moved():
+    """The case a start-to-best diff cannot show, and the one that has cost most.
+
+    A spec whose range no longer contains the constant's default has that
+    default clamped into range on load. The fit then reports it unchanged —
+    because by the only measure the report had, nothing happened — while the
+    value it actually searched around was never the compiled-in one.
+    """
+    knob = _bounded_knob("kTrebleDecayOct", 0.5, 3.0, 3.0)  # start clamped down from 5.0
+    pinned = autofit.report_pinned([knob], [3.0])
+    assert pinned and "maximum" in pinned[0]
+
+
+def test_the_bound_test_is_proportional_to_the_range_not_an_absolute_epsilon():
+    """A cutoff searched over [900, 2600] that lands on 2599.9 is pinned."""
+    knob = _bounded_knob("kBridgeHillHz", 900.0, 2600.0, 1500.0)
+    assert at_bound(knob, 2599.9) == "maximum"
+    assert at_bound(knob, 2000.0) is None

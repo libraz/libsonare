@@ -14,7 +14,7 @@ import json
 from pathlib import Path
 
 from _repo import REPO_ROOT
-from knobs import format_value, tunable_overrides
+from knobs import at_bound, format_value, tunable_overrides
 from writeback import (
     materialize,
     patch_field_assignments,
@@ -73,11 +73,11 @@ def report_result(knobs, pristine, best_values, evaluator, args, extra=None) -> 
         moved += 1
         rel = knob.file.relative_to(REPO_ROOT) if knob.file else Path("(program table)")
         kind = "runtime" if knob.tunable else "source"
-        at_bound = ""
-        if abs(best - knob.lo) < 1e-9 or abs(best - knob.hi) < 1e-9:
-            at_bound = "  <- at range bound; widen it or accept the model cannot go further"
+        end = at_bound(knob, best)
+        note = (f"  <- at its {end}; widen the range or accept that the model cannot go "
+                f"further this way" if end else "")
         print(f"  [{kind}] {rel}  {knob.label}:  "
-              f"{format_value(knob.start_value)} -> {format_value(best)}{at_bound}")
+              f"{format_value(knob.start_value)} -> {format_value(best)}{note}")
     print(f"  ({moved} of {len(knobs)} knobs moved; the rest stayed at their defaults)")
 
     print("\n== overrides (paste-ready, for an ad-hoc render) ==")
