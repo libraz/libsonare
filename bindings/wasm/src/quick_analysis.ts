@@ -509,8 +509,13 @@ export interface EstimateMeterRequest {
   candidateNumerators?: number[];
   /**
    * Beat unit reported for the detected meter (default: 4). Must be a power of
-   * two in `[1, 32]`. The estimator still reports 8 on its own when it resolves
-   * a compound meter, so this is the unit for everything else.
+   * two in `[1, 32]`.
+   *
+   * @remarks
+   * Reported as requested: whether a beat divides into three is measured from
+   * energy *between* the beats, which per-beat accents do not carry, so a
+   * compound meter is not resolvable here. A six accented 3+3 comes back with
+   * this denominator and `grouping === [3, 3]`.
    */
   denominator?: number;
   /** Weight of the downbeat accent term (default: 1). */
@@ -519,7 +524,13 @@ export interface EstimateMeterRequest {
   measureWeight?: number;
   /** Weight of the subdivision term (default: 0.15). */
   subdivisionWeight?: number;
-  /** Score ratio above which a compound meter is preferred (default: 0.85). */
+  /**
+   * Score ratio above which a compound meter is preferred (default: 0.85).
+   *
+   * @remarks
+   * Only consulted when there is a subdivision to measure, so it has no effect
+   * here — this entry point scores per-beat accents alone.
+   */
   compoundSubdivisionThreshold?: number;
 }
 
@@ -539,6 +550,11 @@ export interface EstimateMeterRequest {
  * The result carries `grouping` alongside the numerator: how the bar divides
  * into accent groups of two and three beats, so a seven comes back as `[3, 2,
  * 2]` or `[2, 2, 3]` rather than as a bare seven.
+ *
+ * Check `searched` before reading anything as a detection: a series too short
+ * to score any candidate reports a fixed fallback instead, and `candidateScores`
+ * grows with the square root of how many beats were scored, so scores from
+ * spans of different lengths are not directly comparable.
  */
 export function estimateMeter(request: EstimateMeterRequest): MeterEstimate {
   return requireModule().estimateMeter(request.beatTimes, request.beatStrengths, request);

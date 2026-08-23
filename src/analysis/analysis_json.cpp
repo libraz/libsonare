@@ -304,6 +304,7 @@ const std::vector<std::string>& meter_result_schema_paths() {
       "timeSignature.denominator",
       "timeSignature.confidence",
       "downbeatPhase",
+      "searched",
       "grouping",
       "candidateScores",
       "candidates",
@@ -318,6 +319,7 @@ std::string meter_result_to_json(const MeterResult& result) {
   Object root;
   root["timeSignature"] = time_signature_to_value(result.time_signature);
   root["downbeatPhase"] = Value(result.downbeat_phase);
+  root["searched"] = Value(result.searched);
 
   Array grouping;
   grouping.reserve(result.grouping.size());

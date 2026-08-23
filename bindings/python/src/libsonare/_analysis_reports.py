@@ -406,8 +406,14 @@ def estimate_meter(
             ``[2, 32]``. Widening the set does not force a wider meter — the
             default reproduces the historical result.
         denominator: Beat unit reported for the detected meter; a power of two
-            in ``[1, 32]``. The estimator still reports 8 on its own when it
-            resolves a compound meter.
+            in ``[1, 32]``. It is reported as requested on this path: whether a
+            beat divides into three is measured from energy *between* the
+            beats, which per-beat accents do not carry, so a compound meter is
+            not resolvable here. A six whose beats accent 3+3 comes back with
+            this denominator and ``grouping == [3, 3]`` — read the grouping,
+            not the denominator, to tell a compound bar from a simple one.
+            (:func:`libsonare.analyze`, which has the audio, does resolve it and
+            reports 8 on its own.)
         downbeat_weight: Weight of the downbeat term in the multi-comb score.
         measure_weight: Weight of the measure-level term.
         subdivision_weight: Weight of the subdivision term.
@@ -420,9 +426,14 @@ def estimate_meter(
         by descending support — the two do not index alike. A score is
         standardized and signed, with zero the level a numerator reaches on
         beats carrying no meter, so only the ordering and the gaps between
-        entries carry meaning. ``grouping`` reports how the bar divides into
-        accent groups of two and three beats — ``[3, 2, 2]`` for a 7/8 notated
-        3+2+2 — and always sums to the reported numerator.
+        entries carry meaning; scores also grow with the square root of the
+        number of beats scored, so scores from spans of different lengths are
+        not comparable without normalizing for length. ``grouping`` reports how
+        the bar divides into accent groups of two and three beats —
+        ``[3, 2, 2]`` for a 7/8 notated 3+2+2 — and always sums to the reported
+        numerator. ``searched`` is False when the series was too short to score
+        any candidate, in which case every other field is the fixed fallback
+        rather than a measurement.
 
     Raises:
         SonareValueError: If ``beat_times`` and ``beat_strengths`` differ in
@@ -496,6 +507,9 @@ def estimate_meter(
             confidence=float(ts_d.get("confidence", 0.0)),
         ),
         downbeat_phase=int(data.get("downbeatPhase", 0)),
+        # Absent only if the payload predates the field; the conservative
+        # reading of a missing flag is that nothing was searched.
+        searched=bool(data.get("searched", False)),
         grouping=[int(part) for part in data.get("grouping", [])],
         candidate_scores=[float(score) for score in data.get("candidateScores", [])],
         candidates=[

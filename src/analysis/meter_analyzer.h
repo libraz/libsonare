@@ -48,6 +48,16 @@ struct MeterConfig {
 struct MeterResult {
   TimeSignature time_signature{4, 4, 0.0f};
   int downbeat_phase = 0;
+  /// @brief Whether a search ran, as opposed to the fixed default being reported.
+  /// @details False means no candidate was scored at all — the beat series was
+  ///          shorter than the estimator can search over — and every other field
+  ///          then carries the fixed fallback rather than a measurement:
+  ///          time_signature is 4 over the requested denominator, downbeat_phase
+  ///          is 0, grouping is undivided and candidate_scores are all zero.
+  ///          Read this before treating any field as a detection; the
+  ///          confidence a false result reports is the estimator's fixed
+  ///          fallback value and is not a measurement either.
+  bool searched = false;
   /// @brief Beat counts of the accent groups inside one bar, summing to the numerator.
   /// @details How the bar divides, in beats per group: {3, 2, 2} is the 7/8 an
   ///          aksak meter notates as 3+2+2, and {2, 2} is an ordinary 4. Every
@@ -58,8 +68,8 @@ struct MeterResult {
   ///          which happens for three different reasons: the numerator has none
   ///          to find (2 and 3 divide only one way), it is wider than
   ///          kMaxGroupedMeterNumerator and was not searched, or no search ran
-  ///          at all because the span was too short. TimeSignature::confidence
-  ///          is what separates the last case from the first two.
+  ///          at all because the span was too short. `searched` is what
+  ///          separates the last case from the first two.
   std::vector<int> grouping;
   /// @brief Support per requested candidate numerator, in the requested order.
   /// @details Standardized and signed: zero is the level a numerator reaches on
@@ -67,6 +77,15 @@ struct MeterResult {
   ///          than noise would produce and only the ordering and the gaps
   ///          between entries carry meaning. Reading one entry on its own says
   ///          nothing.
+  ///
+  ///          Comparable only within one result. A score grows with the square
+  ///          root of how many beats were scored, because that is how the
+  ///          evidence for a repeating accent accumulates, so the same meter
+  ///          over twice the beats scores about 1.41 times as high. Scores from
+  ///          two calls over spans of different lengths therefore rank the
+  ///          spans by length as much as by meter, and a segmentation search
+  ///          that compares them across candidate span boundaries has to
+  ///          normalize for length first.
   std::vector<float> candidate_scores;
   /// @brief Candidate signatures in descending existing multi-comb score order.
   std::vector<TimeSignature> candidates;
@@ -113,9 +132,15 @@ void validate_meter_config(const MeterConfig& config);
 ///          An empty beat series is rejected: there is nothing to score, and
 ///          answering it with the fixed default would read as a detection.
 ///          One to seven beats is accepted but is not a search either — it
-///          reports that same low-confidence default, so read
-///          TimeSignature::confidence before treating a short span's answer as
-///          a detection.
+///          reports that same fixed default with MeterResult::searched false,
+///          which is what to read before treating a short span's answer as a
+///          detection.
+///
+///          Per-beat accents cannot say how a beat subdivides, so a compound
+///          meter is not resolvable on this path: a six whose beats accent
+///          3+3 keeps the requested denominator and reports the grouping
+///          {3, 3}, rather than being promoted to the 6/8 that the audio path
+///          reaches by measuring energy between the beats.
 MeterResult estimate_meter_from_beats(const std::vector<float>& beat_times,
                                       const std::vector<float>& beat_strengths,
                                       const MeterConfig& config = MeterConfig());

@@ -37,6 +37,25 @@ std::vector<Beat> make_beats(int numerator, int measures) {
   return beats;
 }
 
+/// @brief An onset envelope carrying each beat plus energy between the beats.
+/// @details The compound reading is resolved from how much energy sits at the
+///          beat midpoints relative to the beats themselves, so @p
+///          subdivision_ratio is what that score comes out as. A test that
+///          wants a compound meter resolved has to supply one: without an
+///          envelope there is no subdivision to measure and the estimator
+///          reports the numerator with its grouping instead of promoting it.
+std::vector<float> make_envelope(const std::vector<Beat>& beats, float subdivision_ratio) {
+  std::vector<float> onsets(static_cast<size_t>(beats.back().frame) + 20, 0.0f);
+  for (size_t i = 0; i < beats.size(); ++i) {
+    onsets[static_cast<size_t>(beats[i].frame)] = beats[i].strength;
+    if (i + 1 < beats.size()) {
+      const int midpoint = (beats[i].frame + beats[i + 1].frame) / 2;
+      onsets[static_cast<size_t>(midpoint)] = beats[i].strength * subdivision_ratio;
+    }
+  }
+  return onsets;
+}
+
 /// @brief A beat series in the two parallel arrays estimate_meter_from_beats takes.
 struct BeatSeries {
   std::vector<float> times;
@@ -122,12 +141,20 @@ TEST_CASE("MeterAnalyzer detects 3/4 from accented beats", "[meter_analyzer]") {
 }
 
 TEST_CASE("MeterAnalyzer detects 6/8-style compound meter", "[meter_analyzer]") {
+  // The promotion to eighths is a claim about how a beat divides, so it needs
+  // an envelope carrying that subdivision. The same beats without one report
+  // the six with its 3+3 grouping and the requested unit.
   const auto beats = make_beats(6, 8);
-  MeterAnalyzer analyzer({}, beats);
+  MeterAnalyzer analyzer(make_envelope(beats, 1.0f), beats);
 
   REQUIRE(analyzer.time_signature().numerator == 6);
   REQUIRE(analyzer.time_signature().denominator == 8);
   REQUIRE(analyzer.time_signature().confidence > 0.5f);
+
+  MeterAnalyzer unmeasured({}, beats);
+  REQUIRE(unmeasured.time_signature().numerator == 6);
+  REQUIRE(unmeasured.time_signature().denominator == 4);
+  REQUIRE(unmeasured.result().grouping == std::vector<int>{3, 3});
 }
 
 TEST_CASE("MeterAnalyzer numerator is stable under candidate ordering", "[meter_analyzer]") {
@@ -230,9 +257,11 @@ TEST_CASE("MeterAnalyzer reports the requested beat unit", "[meter_analyzer]") {
     REQUIRE(candidate.denominator == 2);
   }
 
-  // The same candidate on beats that do divide into two threes takes the
-  // eighth, which is what keeps the loop above from passing vacuously.
-  MeterAnalyzer compound_analyzer({}, make_beats(6, 8), half);
+  // The same candidate on beats that do divide into two threes, with the
+  // subdivision there to measure, takes the eighth -- which is what keeps the
+  // loop above from passing vacuously.
+  const auto six_beats = make_beats(6, 8);
+  MeterAnalyzer compound_analyzer(make_envelope(six_beats, 1.0f), six_beats, half);
   const auto& compound_candidates = compound_analyzer.result().candidates;
   const auto six = std::find_if(compound_candidates.begin(), compound_candidates.end(),
                                 [](const TimeSignature& c) { return c.numerator == 6; });
@@ -241,16 +270,24 @@ TEST_CASE("MeterAnalyzer reports the requested beat unit", "[meter_analyzer]") {
 }
 
 TEST_CASE("MeterAnalyzer keeps the compound beat unit over the requested one", "[meter_analyzer]") {
-  // Documented exception to the requested-unit rule: a resolved compound meter
-  // is reported in eighths whatever the config asked for.
+  // Documented exception to the requested-unit rule: a compound meter that was
+  // actually resolved is reported in eighths whatever the config asked for.
+  // "Resolved" is the operative word -- it takes a measured subdivision, not
+  // just a 3+3 accent pattern.
   const auto beats = make_beats(6, 8);
 
   MeterConfig config;
   config.denominator = 2;
-  MeterAnalyzer analyzer({}, beats, config);
+  MeterAnalyzer analyzer(make_envelope(beats, 1.0f), beats, config);
 
   REQUIRE(analyzer.time_signature().numerator == 6);
   REQUIRE(analyzer.time_signature().denominator == 8);
+
+  // Without the subdivision the exception does not apply and the requested
+  // unit stands.
+  MeterAnalyzer unmeasured({}, beats, config);
+  REQUIRE(unmeasured.time_signature().numerator == 6);
+  REQUIRE(unmeasured.time_signature().denominator == 2);
 }
 
 TEST_CASE("MeterAnalyzer reports an odd meter in the requested unit", "[meter_analyzer]") {
@@ -458,9 +495,11 @@ TEST_CASE("estimate_meter_from_beats reports the default for a series below the 
           "[meter_analyzer]") {
   // Fewer than eight beats gives the comb nothing to score, so the answer is
   // the documented default rather than a detection. What separates the two is
-  // the confidence, which is why that value is the contract here.
+  // the searched flag, which says so outright instead of leaving a caller to
+  // recognize the fallback by its confidence.
   const BeatSeries full = make_beat_series(4, 8);
   const MeterResult searched = estimate_meter_from_beats(full.times, full.strengths);
+  REQUIRE(searched.searched);
   REQUIRE(searched.time_signature.confidence > 0.5f);
 
   for (int count = 1; count < 8; ++count) {
@@ -470,14 +509,92 @@ TEST_CASE("estimate_meter_from_beats reports the default for a series below the 
     const MeterResult result = estimate_meter_from_beats(times, strengths);
 
     CAPTURE(count, result.time_signature.numerator, result.time_signature.confidence);
+    REQUIRE_FALSE(result.searched);
     REQUIRE(result.time_signature.numerator == 4);
     REQUIRE(result.time_signature.denominator == 4);
     REQUIRE(result.downbeat_phase == 0);
     REQUIRE(result.candidates.size() == 1);
+    // Every score belongs to the fallback rather than to a candidate, so none
+    // of them ranks anything.
+    REQUIRE(std::all_of(result.candidate_scores.begin(), result.candidate_scores.end(),
+                        [](float score) { return score == 0.0f; }));
     // The short-span answer has to be distinguishable from a real detection.
     REQUIRE(result.time_signature.confidence < searched.time_signature.confidence);
     REQUIRE(result.time_signature.confidence <= 0.5f);
   }
+}
+
+TEST_CASE("estimate_meter_from_beats cannot resolve a compound meter from accents alone",
+          "[meter_analyzer]") {
+  // Whether a beat divides into three is answered from energy between the
+  // beats, which a per-beat accent series does not carry. A six accented 3+3
+  // therefore keeps the beat unit the caller asked for and says how its bar
+  // divides through the grouping, rather than being promoted to a 6/8 that
+  // nothing measured.
+  std::vector<float> times;
+  std::vector<float> strengths;
+  for (int bar = 0; bar < 16; ++bar) {
+    for (int position = 0; position < 6; ++position) {
+      times.push_back(0.5f * static_cast<float>(bar * 6 + position));
+      strengths.push_back(position == 0 ? 1.0f : (position == 3 ? 0.7f : 0.3f));
+    }
+  }
+
+  MeterConfig config;
+  config.candidate_numerators = {3, 4, 6};
+  const MeterResult result = estimate_meter_from_beats(times, strengths, config);
+
+  REQUIRE(result.searched);
+  REQUIRE(result.time_signature.numerator == 6);
+  REQUIRE(result.time_signature.denominator == 4);
+  REQUIRE(result.grouping == std::vector<int>{3, 3});
+  // Every listed six agrees with the primary result about the beat unit.
+  for (const TimeSignature& candidate : result.candidates) {
+    CAPTURE(candidate.numerator, candidate.denominator);
+    if (candidate.numerator == 6) REQUIRE(candidate.denominator == 4);
+  }
+
+  // A caller who asks for eighths gets eighths, and still gets the grouping
+  // rather than an inferred compound reading.
+  MeterConfig eighths = config;
+  eighths.denominator = 8;
+  const MeterResult in_eighths = estimate_meter_from_beats(times, strengths, eighths);
+  REQUIRE(in_eighths.time_signature.numerator == 6);
+  REQUIRE(in_eighths.time_signature.denominator == 8);
+  REQUIRE(in_eighths.grouping == std::vector<int>{3, 3});
+
+  // A threshold of zero would make an unmeasured subdivision compare as
+  // satisfied against a score that is zero because nothing was measured.
+  MeterConfig permissive = config;
+  permissive.compound_subdivision_threshold = 0.0f;
+  const MeterResult permissive_result = estimate_meter_from_beats(times, strengths, permissive);
+  REQUIRE(permissive_result.time_signature.denominator == 4);
+}
+
+TEST_CASE("estimate_meter_from_beats scores are not comparable across span lengths",
+          "[meter_analyzer]") {
+  // The documented reason a segmentation search cannot rank spans by raw score:
+  // evidence for a repeating accent accumulates with the number of beats
+  // carrying it, so the same meter over more beats scores higher. Pinning the
+  // growth keeps the docs honest about what the number is.
+  MeterConfig config;
+  config.candidate_numerators = {3, 4, 6};
+
+  const auto top_score = [&config](int bars) {
+    const BeatSeries series = make_beat_series(4, bars);
+    const MeterResult result = estimate_meter_from_beats(series.times, series.strengths, config);
+    REQUIRE(result.searched);
+    REQUIRE(result.time_signature.numerator == 4);
+    return *std::max_element(result.candidate_scores.begin(), result.candidate_scores.end());
+  };
+
+  const float short_span = top_score(4);
+  const float long_span = top_score(16);
+  CAPTURE(short_span, long_span);
+  // Four times the beats, so about twice the score: same meter, same accents,
+  // a score that ranks by length as much as by meter.
+  REQUIRE(long_span > short_span * 1.5f);
+  REQUIRE(long_span < short_span * 2.5f);
 }
 
 TEST_CASE("estimate_meter_from_beats detects 4/4 from a caller-supplied series",
@@ -754,10 +871,11 @@ TEST_CASE("estimate_meter_from_beats divides only the numerators it can search",
 
 TEST_CASE("estimate_meter_from_beats leaves a six undivided until its beats divide it",
           "[meter_analyzer]") {
-  // A six that groups into two threes is the compound meter, and takes the
-  // eighth. A six that groups into three twos is a simple meter and keeps the
-  // requested unit -- it used to be pushed through the compound branch and come
-  // back out as a three or a four.
+  // A six that groups into two threes reports that grouping; a six that groups
+  // into three twos reports its own -- it used to be pushed through the
+  // compound branch and come back out as a three or a four. Neither changes the
+  // beat unit here: this entry point has no subdivision to measure, so the
+  // grouping is the whole of what separates the two readings.
   MeterConfig config;
   config.candidate_numerators = {3, 4, 6};
 
@@ -765,7 +883,7 @@ TEST_CASE("estimate_meter_from_beats leaves a six undivided until its beats divi
   const MeterResult compound_result =
       estimate_meter_from_beats(compound.times, compound.strengths, config);
   REQUIRE(compound_result.time_signature.numerator == 6);
-  REQUIRE(compound_result.time_signature.denominator == 8);
+  REQUIRE(compound_result.time_signature.denominator == config.denominator);
   REQUIRE(compound_result.grouping == std::vector<int>{3, 3});
 
   const BeatSeries simple = make_grouped_series({2, 2, 2}, 12);

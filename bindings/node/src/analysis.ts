@@ -130,9 +130,11 @@ export interface EstimateMeterRequest {
    */
   candidateNumerators?: number[];
   /**
-   * Beat unit reported for the detected meter; a power of two in `[1, 32]`. The
-   * estimator still reports 8 on its own when it resolves a compound meter.
-   * Default 4.
+   * Beat unit reported for the detected meter; a power of two in `[1, 32]`.
+   * Reported as requested: whether a beat divides into three is measured from
+   * energy *between* the beats, which per-beat accents do not carry, so a
+   * compound meter is not resolvable here — a six accented 3+3 comes back with
+   * this denominator and `grouping === [3, 3]`. Default 4.
    */
   denominator?: number;
   /** Weight on the accent at each measure's first beat. Default 1. */
@@ -141,7 +143,11 @@ export interface EstimateMeterRequest {
   measureWeight?: number;
   /** Weight on the subdivision accent pattern. Default 0.15. */
   subdivisionWeight?: number;
-  /** Subdivision score at which a 6 candidate is reported as compound (x/8). Default 0.85. */
+  /**
+   * Subdivision score at which a 6 candidate is reported as compound (x/8).
+   * Only consulted when there is a subdivision to measure, so it has no effect
+   * on {@link estimateMeter}, which scores per-beat accents alone. Default 0.85.
+   */
   compoundSubdivisionThreshold?: number;
 }
 

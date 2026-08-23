@@ -621,6 +621,7 @@ val js_estimate_meter(val beat_times, val beat_strengths, val options) {
   val out = val::object();
   out.set("timeSignature", timeSignatureToVal(result.time_signature));
   out.set("downbeatPhase", result.downbeat_phase);
+  out.set("searched", result.searched);
   out.set("grouping", numberArrayFromVector(result.grouping));
   out.set("candidateScores", numberArrayFromVector(result.candidate_scores));
   val candidates = val::array();

@@ -146,6 +146,45 @@ def test_single_beat_series_still_returns_the_low_confidence_default() -> None:
     assert result.time_signature.denominator == 4
     assert result.time_signature.confidence == pytest.approx(0.5)
     assert result.downbeat_phase == 0
+    assert result.searched is False
+
+
+def test_searched_separates_the_fallback_from_a_detection() -> None:
+    """Below the eight-beat search floor nothing is scored, and it says so.
+
+    A caller scoring many spans — a meter map over a beat series, say — needs
+    the fallback to be recognizable as one. The confidence alone does not do
+    that: 0.5 reads as a middling detection rather than as "no search ran".
+    """
+    times, strengths = _beat_series(4, bars=8)
+    detected = libsonare.estimate_meter(times, strengths)
+    assert detected.searched is True
+
+    for count in range(1, 8):
+        result = libsonare.estimate_meter(times[:count], strengths[:count])
+        assert result.searched is False, count
+        # Every field belongs to the fallback rather than to a candidate.
+        assert result.time_signature.numerator == 4
+        assert result.grouping == [4]
+        assert all(score == 0.0 for score in result.candidate_scores)
+
+    # Eight beats is the first span that is actually searched.
+    assert libsonare.estimate_meter(times[:8], strengths[:8]).searched is True
+
+
+def test_scores_grow_with_the_span_and_so_do_not_rank_spans() -> None:
+    """The documented reason a segmentation search must normalize for length."""
+    short_times, short_strengths = _beat_series(4, bars=4)
+    long_times, long_strengths = _beat_series(4, bars=16)
+
+    short = libsonare.estimate_meter(short_times, short_strengths)
+    long = libsonare.estimate_meter(long_times, long_strengths)
+
+    assert short.time_signature.numerator == long.time_signature.numerator == 4
+    # Same meter, same accent contrast, four times the beats: about twice the
+    # score, because the evidence accumulates with the square root of the count.
+    ratio = max(long.candidate_scores) / max(short.candidate_scores)
+    assert 1.5 < ratio < 2.5
 
 
 def test_empty_candidate_numerators_is_rejected_by_the_core() -> None:
@@ -434,14 +473,19 @@ def test_grouping_is_a_single_group_below_the_search_floor() -> None:
     assert result.grouping == [result.time_signature.numerator]
 
 
-def test_a_six_is_compound_only_when_its_beats_divide_into_threes() -> None:
-    """3+3 takes the eighth; 2+2+2 is a simple six and keeps the requested unit."""
+def test_how_a_six_divides_is_reported_as_a_grouping_not_a_beat_unit() -> None:
+    """3+3 and 2+2+2 differ in the grouping; neither changes the requested unit.
+
+    Whether a beat divides into three is measured between the beats, which this
+    entry point never sees, so the compound reading is not one it can reach.
+    """
     compound_times, compound_strengths = _grouped_series((3, 3))
     compound = libsonare.estimate_meter(compound_times, compound_strengths)
 
     assert compound.time_signature.numerator == 6
-    assert compound.time_signature.denominator == 8
+    assert compound.time_signature.denominator == 4
     assert compound.grouping == [3, 3]
+    assert all(candidate.denominator == 4 for candidate in compound.candidates)
 
     simple_times, simple_strengths = _grouped_series((2, 2, 2))
     simple = libsonare.estimate_meter(simple_times, simple_strengths)
@@ -449,6 +493,11 @@ def test_a_six_is_compound_only_when_its_beats_divide_into_threes() -> None:
     assert simple.time_signature.numerator == 6
     assert simple.time_signature.denominator == 4
     assert simple.grouping == [2, 2, 2]
+
+    # The unit follows the request even for the bar that divides into threes.
+    in_eighths = libsonare.estimate_meter(compound_times, compound_strengths, denominator=8)
+    assert in_eighths.time_signature.denominator == 8
+    assert in_eighths.grouping == [3, 3]
 
 
 def test_observations_feed_the_grouping(analyzed: libsonare.AnalysisResult) -> None:

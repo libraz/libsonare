@@ -380,17 +380,52 @@ describe('estimateMeter() grouping', () => {
     expect(result.grouping).toEqual([result.timeSignature.numerator]);
   });
 
-  it('makes a six compound only when its beats divide into threes', () => {
+  it('reports how a six divides as a grouping, not as a beat unit', () => {
+    // Whether a beat divides into three is measured between the beats, which
+    // this entry point never sees, so the compound reading is not one it can
+    // reach: both sixes keep the requested unit and differ in the grouping.
     const compound = estimateMeter(groupedSeries([3, 3]));
     expect(compound.timeSignature.numerator).toBe(6);
-    expect(compound.timeSignature.denominator).toBe(8);
+    expect(compound.timeSignature.denominator).toBe(4);
     expect(compound.grouping).toEqual([3, 3]);
+    for (const candidate of compound.candidates) {
+      if (candidate.numerator === 6) {
+        expect(candidate.denominator).toBe(4);
+      }
+    }
 
-    // A six grouped into three twos is a simple meter and keeps the requested
-    // unit, which is what keeps the assertions above from being about 6 alone.
+    // A six grouped into three twos is a simple meter, which is what keeps the
+    // assertions above from being about 6 alone.
     const simple = estimateMeter(groupedSeries([2, 2, 2]));
     expect(simple.timeSignature.numerator).toBe(6);
     expect(simple.timeSignature.denominator).toBe(4);
     expect(simple.grouping).toEqual([2, 2, 2]);
+
+    // The unit follows the request even for the bar that divides into threes.
+    const inEighths = estimateMeter({ ...groupedSeries([3, 3]), denominator: 8 });
+    expect(inEighths.timeSignature.denominator).toBe(8);
+    expect(inEighths.grouping).toEqual([3, 3]);
+  });
+
+  it('says whether a search ran, so a fallback is not read as a detection', () => {
+    const { beatTimes, beatStrengths } = groupedSeries([2, 2]);
+    expect(estimateMeter({ beatTimes, beatStrengths }).searched).toBe(true);
+
+    for (let count = 1; count < 8; count += 1) {
+      const short = estimateMeter({
+        beatTimes: beatTimes.slice(0, count),
+        beatStrengths: beatStrengths.slice(0, count),
+      });
+      expect(short.searched).toBe(false);
+      expect(short.timeSignature.numerator).toBe(4);
+      expect(short.candidateScores.every((score) => score === 0)).toBe(true);
+    }
+
+    expect(
+      estimateMeter({
+        beatTimes: beatTimes.slice(0, 8),
+        beatStrengths: beatStrengths.slice(0, 8),
+      }).searched,
+    ).toBe(true);
   });
 });

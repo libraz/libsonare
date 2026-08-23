@@ -200,12 +200,18 @@ typedef struct {
      one. */
   int candidate_numerators[SONARE_MAX_METER_CANDIDATE_NUMERATORS];
   int candidate_numerator_count;
-  /* Beat unit reported for the detected meter; a power of two in [1, 32]. The
-     estimator still reports 8 on its own when it resolves a compound meter. */
+  /* Beat unit reported for the detected meter; a power of two in [1, 32].
+     Reported as requested: whether a beat divides into three is measured from
+     energy between the beats, which per-beat accents do not carry, so a
+     compound meter is not resolvable on this path. A six whose beats accent
+     3+3 comes back with this denominator and the grouping {3, 3}. */
   int denominator;
   float downbeat_weight;
   float measure_weight;
   float subdivision_weight;
+  /* Subdivision support at which a meter is resolved as compound. Consulted
+     only where there is a subdivision to measure, so it has no effect on
+     sonare_estimate_meter_json. */
   float compound_subdivision_threshold;
 } SonareMeterOptions;
 
@@ -222,6 +228,9 @@ SonareMeterOptions sonare_meter_options_default(void);
    The result carries a grouping alongside the numerator: how the bar divides
    into accent groups of two and three beats, so a seven comes back as 3+2+2 or
    2+2+3 rather than as a bare seven.
+   Read "searched" before treating any field as a detection: a beat series too
+   short to score any candidate reports a fixed fallback instead, and the
+   confidence it carries is that fallback's own value.
    Emits the schema documented on meter_result_to_json. *out_json is
    heap-allocated and MUST be released with sonare_free_string; on any error it
    is set to NULL, so a caller may check it instead of the return code. */

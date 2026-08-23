@@ -418,13 +418,18 @@ class MeterEstimate:
     while ``candidates`` is ordered by descending support — the two do not
     index alike. A score is standardized and signed: zero is the level a
     numerator reaches on beats carrying no meter, so only the ordering and the
-    gaps between entries carry meaning. ``grouping`` is how the bar divides, in
-    beats per accent group — ``[3, 2, 2]`` for a 7/8 notated 3+2+2 — and always
-    sums to the reported numerator; a single entry means no internal division
-    was resolved."""
+    gaps between entries carry meaning, and a score grows with the square root
+    of how many beats were scored, so scores from spans of different lengths
+    are not comparable without normalizing for length. ``grouping`` is how the
+    bar divides, in beats per accent group — ``[3, 2, 2]`` for a 7/8 notated
+    3+2+2 — and always sums to the reported numerator; a single entry means no
+    internal division was resolved. ``searched`` is False when the series was
+    too short to score any candidate, in which case every other field is the
+    fixed fallback rather than a measurement."""
 
     time_signature: TimeSignature
     downbeat_phase: int
+    searched: bool
     grouping: list[int]
     candidate_scores: list[float]
     candidates: list[TimeSignature]
@@ -432,6 +437,7 @@ class MeterEstimate:
         self,
         time_signature: TimeSignature,
         downbeat_phase: int,
+        searched: bool,
         grouping: list[int] = ...,
         candidate_scores: list[float] = ...,
         candidates: list[TimeSignature] = ...,

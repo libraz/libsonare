@@ -637,15 +637,29 @@ class MeterEstimate:
     support than noise would produce. Only the ordering and the gaps between
     entries carry meaning — one entry read on its own says nothing.
 
+    Scores are comparable only within one result. A score grows with the square
+    root of how many beats were scored, so the same meter over twice the beats
+    scores about 1.41 times as high. Scores taken from two calls over spans of
+    different lengths rank the spans by length as much as by meter; a
+    segmentation search that compares them across candidate span boundaries has
+    to normalize for length first.
+
     ``grouping`` is how the bar divides, in beats per accent group: ``[3, 2, 2]``
     is the 7/8 an aksak meter notates as 3+2+2, and ``[2, 2]`` an ordinary four.
     It always sums to ``time_signature.numerator``. A single entry means no
     internal division was resolved — the numerator has none to find, it was too
     wide to search, or the span was too short to search at all.
+
+    ``searched`` separates a measurement from the fixed fallback: it is False
+    when the beat series was too short to score any candidate, and then every
+    other field carries that fallback rather than a result. Read it before
+    treating a short span's answer as a detection — the confidence reported
+    alongside it is the fallback's fixed value, not a measurement.
     """
 
     time_signature: TimeSignature
     downbeat_phase: int
+    searched: bool
     grouping: list[int] = dataclasses.field(default_factory=list)
     candidate_scores: list[float] = dataclasses.field(default_factory=list)
     candidates: list[TimeSignature] = dataclasses.field(default_factory=list)

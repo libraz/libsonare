@@ -97,6 +97,7 @@ export interface WasmBeatObservationsResult {
 export interface WasmMeterEstimateResult {
   timeSignature: WasmTimeSignatureResult;
   downbeatPhase: number;
+  searched: boolean;
   grouping: number[];
   candidateScores: number[];
   candidates: WasmTimeSignatureResult[];

@@ -241,6 +241,15 @@ export interface MeterEstimate {
   /** Beat index the first measure starts on; always in `[0, timeSignature.numerator)`. */
   downbeatPhase: number;
   /**
+   * Whether a search ran, as opposed to the fixed fallback being reported.
+   *
+   * `false` means the beat series was too short to score any candidate, and
+   * every other field then carries that fallback rather than a measurement —
+   * including `timeSignature.confidence`, which is the fallback's own fixed
+   * value. Read this before treating a short span's answer as a detection.
+   */
+  searched: boolean;
+  /**
    * How the bar divides, in beats per accent group: `[3, 2, 2]` is the 7/8 an
    * aksak meter notates as 3+2+2, and `[2, 2]` an ordinary four. Always sums to
    * `timeSignature.numerator`.
@@ -248,6 +257,10 @@ export interface MeterEstimate {
    * A single entry means no internal division was resolved — the numerator has
    * none to find, it was too wide to search, or the span was too short to
    * search at all.
+   *
+   * This is also what tells a compound bar from a simple one: per-beat accents
+   * cannot say how a beat subdivides, so a six accented 3+3 keeps the requested
+   * denominator and reports `[3, 3]` rather than being promoted to 6/8.
    */
   grouping: number[];
   /**
@@ -258,6 +271,11 @@ export interface MeterEstimate {
    * carrying no meter, so a negative entry means less support than noise would
    * produce. Only the ordering and the gaps between entries carry meaning —
    * one entry read on its own says nothing.
+   *
+   * Comparable only within one result. A score grows with the square root of
+   * how many beats were scored, so the same meter over twice the beats scores
+   * about 1.41 times as high; a segmentation search comparing spans of
+   * different lengths has to normalize for length first.
    */
   candidateScores: number[];
   /**

@@ -50,6 +50,7 @@ const std::vector<std::string>& analysis_result_schema_paths();
 ///   {
 ///     "timeSignature": {numerator, denominator, confidence},
 ///     "downbeatPhase": number,
+///     "searched": bool,
 ///     "grouping": [number],
 ///     "candidateScores": [number],
 ///     "candidates": [{numerator, denominator, confidence}]
@@ -57,10 +58,15 @@ const std::vector<std::string>& analysis_result_schema_paths();
 /// candidateScores is parallel to the requested candidate numerators, while
 /// candidates is ordered by descending support, so the two do not index alike.
 /// A candidateScores entry is standardized and may be negative: zero is the
-/// level a numerator reaches on beats carrying no meter.
+/// level a numerator reaches on beats carrying no meter, and a score grows with
+/// the square root of how many beats were scored, so scores from calls over
+/// spans of different lengths are not comparable without normalizing for length.
 /// grouping holds the beats per accent group within one bar and always sums to
 /// timeSignature.numerator; a single entry means no internal division was
 /// resolved.
+/// searched is false when the beat series was too short to score any candidate,
+/// in which case every other field carries the fixed fallback rather than a
+/// measurement.
 std::string meter_result_to_json(const MeterResult& result);
 
 /// @brief Canonical field paths for the standalone meter estimate schema.

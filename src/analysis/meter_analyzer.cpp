@@ -205,11 +205,14 @@ void MeterAnalyzer::analyze(const std::vector<float>& onset_strength,
   if (beats.size() < 8 || config_.candidate_numerators.empty()) {
     result_.time_signature.confidence = 0.5f;
     // No search ran, so the bar is reported undivided rather than carrying the
-    // 2+2 that a four would have been given had anything been scored.
+    // 2+2 that a four would have been given had anything been scored, and
+    // searched stays false so a caller can tell this fixed answer from a
+    // measured one instead of having to recognize the fallback by its values.
     result_.grouping = {result_.time_signature.numerator};
     result_.candidates = {result_.time_signature};
     return;
   }
+  result_.searched = true;
 
   // Compute the global onset-strength maximum once and reuse it for every
   // normalization rather than rescanning the envelope on each lookup.
@@ -369,12 +372,24 @@ void MeterAnalyzer::analyze(const std::vector<float>& onset_strength,
 
   int denominator = config_.denominator;
   const float compound_score = compound_subdivision_score(onset_strength, beats, onset_max);
+  // Whether the question "does a beat divide into three?" can be asked at all.
+  // It is answered from energy between the beats, so without an envelope there
+  // is no evidence either way -- neither for the promotion to a compound
+  // denominator nor for the demotion that the absence of subdivision would
+  // otherwise justify.
+  const bool subdivision_measurable = !onset_strength.empty();
   // A six only reaches the compound question if that is how its own beats
   // divide. Six grouped as 2+2+2 is a simple meter, and used to be forced
   // through this branch and out the other side as a three or a four; it now
   // keeps the numerator its accents support.
   if (best_numerator == 6 && is_compound_pair(best_grouping)) {
-    if (onset_strength.empty() || compound_score >= config_.compound_subdivision_threshold) {
+    if (!subdivision_measurable) {
+      // Nothing to decide on: report the six the accents support, with the
+      // denominator the caller asked for and the grouping {3, 3} that says how
+      // its bar divides. Promoting it to 6/8 here would put a beat unit nothing
+      // measured into a field callers read as a measurement, and demoting it to
+      // a three or a four would discard a numerator the accents did support.
+    } else if (compound_score >= config_.compound_subdivision_threshold) {
       denominator = 8;
     } else if (config_.candidate_numerators.size() >= 2) {
       // Resolve the 6-vs-(3|4) ambiguity by score, looking candidates up by
@@ -417,7 +432,8 @@ void MeterAnalyzer::analyze(const std::vector<float>& onset_strength,
       // rather than emitting it as if it were well-supported.
       confidence = std::max(0.0f, confidence - 0.15f);
     }
-  } else if (best_numerator == 3 && compound_score >= config_.compound_subdivision_threshold) {
+  } else if (best_numerator == 3 && subdivision_measurable &&
+             compound_score >= config_.compound_subdivision_threshold) {
     // Promoting a three to a compound six pairs its bars, so the grouping is
     // the pair of threes that promotion is defined as; the scored grouping
     // belonged to a numerator that no longer describes the result.
@@ -442,11 +458,12 @@ void MeterAnalyzer::analyze(const std::vector<float>& onset_strength,
     if (numerator <= 1) continue;
     const float score = std::max(0.0f, result_.candidate_scores[i]);
     // A six is listed as a compound one on the same terms the primary result
-    // reaches that reading, its own grouping included, so the two cannot
-    // disagree about the beat unit of the same numerator.
+    // reaches that reading, its own grouping and the measurability of the
+    // subdivision included, so the two cannot disagree about the beat unit of
+    // the same numerator.
     const int candidate_denominator =
-        numerator == 6 && is_compound_pair(candidate_groupings[i]) &&
-                (onset_strength.empty() || compound_score >= config_.compound_subdivision_threshold)
+        numerator == 6 && is_compound_pair(candidate_groupings[i]) && subdivision_measurable &&
+                compound_score >= config_.compound_subdivision_threshold
             ? 8
             : config_.denominator;
     result_.candidates.push_back(
