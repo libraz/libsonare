@@ -22,6 +22,7 @@ using sonare::midi::synth::NativeSynth;
 using sonare::midi::synth::NativeSynthConfig;
 using sonare::midi::synth::NativeSynthPatch;
 using sonare::midi::synth::SynthEngineMode;
+using sonare::midi::synth::SynthFilterOutput;
 
 constexpr double kRate = 48000.0;
 
@@ -342,6 +343,99 @@ TEST_CASE("the cymbal shimmer swells after the strike and rides the ring",
   float peak = 0.0f;
   for (float v : s) peak = std::max(peak, std::fabs(v));
   REQUIRE(peak < 4.0f);
+}
+
+// ---------------------------------------------------------------------------
+// Radiated upper bound (noise_air_hz) over the burst / wire / shimmer streams.
+// ---------------------------------------------------------------------------
+
+namespace {
+
+/// A cymbal that actually runs all the bounded streams: a high-passed burst
+/// under a shimmer wash, plus enough wire buzz to put the third stream in the
+/// sum.
+NativeSynthPatch washing_cymbal_patch() {
+  NativeSynthPatch p = cymbal_patch();
+  p.percussion.noise_gain = 1.0f;
+  p.percussion.noise_decay_ms = 900.0f;
+  p.percussion.noise_cutoff_hz = 5500.0f;
+  p.percussion.noise_output = SynthFilterOutput::kHighpass;
+  p.percussion.shimmer = 6.0f;
+  p.percussion.shimmer_cutoff_hz = 9000.0f;
+  p.percussion.wire_buzz = 0.5f;
+  p.percussion.wire_cutoff_hz = 4000.0f;
+  return p;
+}
+
+}  // namespace
+
+TEST_CASE("noise_air_hz == 0 reproduces the legacy percussion output bit-for-bit",
+          "[midi][synth][percussion]") {
+  NativeSynthPatch unbounded = washing_cymbal_patch();  // noise_air_hz defaults to 0
+  NativeSynthPatch explicit_off = washing_cymbal_patch();
+  explicit_off.percussion.noise_air_hz = 0.0f;
+
+  const std::vector<float> a = render_patch(unbounded, 49, 110, 8192);
+  const std::vector<float> b = render_patch(explicit_off, 49, 110, 8192);
+  REQUIRE(a.size() == b.size());
+  double energy = 0.0;
+  for (size_t i = 0; i < a.size(); ++i) {
+    REQUIRE(a[i] == b[i]);
+    energy += static_cast<double>(a[i]) * a[i];
+  }
+  // Two silences also match sample for sample; the streams have to be sounding
+  // for the match to be evidence of anything.
+  REQUIRE(energy > 0.0);
+}
+
+TEST_CASE("the radiated bound removes the wash's tail without moving its corner",
+          "[midi][synth][percussion]") {
+  NativeSynthPatch open = washing_cymbal_patch();
+  NativeSynthPatch bounded = washing_cymbal_patch();
+  bounded.percussion.noise_air_hz = 9000.0f;  // well above the 5500 Hz corner
+
+  const std::vector<float> o = render_patch(open, 49, 110, 8192);
+  const std::vector<float> b = render_patch(bounded, 49, 110, 8192);
+
+  // A high-pass has no top, so the unbounded wash is still white an octave
+  // above anything the patch names. That is the tail the bound is for.
+  REQUIRE(goertzel(b, 16000.0) < 0.35 * goertzel(o, 16000.0));
+
+  // Placed above the corner, the bound is a ceiling and not a re-voicing: what
+  // the corner passes just below it survives.
+  REQUIRE(goertzel(b, 6000.0) > 0.6 * goertzel(o, 6000.0));
+
+  // ...and it is a bound, not a switch: raising it puts the tail back.
+  NativeSynthPatch higher = washing_cymbal_patch();
+  higher.percussion.noise_air_hz = 16000.0f;
+  const std::vector<float> h = render_patch(higher, 49, 110, 8192);
+  REQUIRE(goertzel(h, 16000.0) > goertzel(b, 16000.0));
+}
+
+TEST_CASE("the radiated bound leaves the particle layer alone", "[midi][synth][percussion]") {
+  // PhISEM is a separate excitation model with its own resonance stage, so the
+  // bound deliberately does not reach it. A shaker with no burst of its own
+  // must render bit-identically whatever the bound says.
+  NativeSynthPatch shaker;
+  shaker.mode = SynthEngineMode::kPercussion;
+  shaker.one_shot = true;
+  shaker.percussion.num_modes = 0;
+  shaker.percussion.noise_gain = 0.0f;
+  shaker.percussion.phisem_beans = 24.0f;
+  shaker.percussion.phisem_res_hz = 6000.0f;
+
+  NativeSynthPatch bounded = shaker;
+  bounded.percussion.noise_air_hz = 2000.0f;
+
+  const std::vector<float> a = render_patch(shaker, 82, 110, 8192);
+  const std::vector<float> b = render_patch(bounded, 82, 110, 8192);
+  REQUIRE(a.size() == b.size());
+  double energy = 0.0;
+  for (size_t i = 0; i < a.size(); ++i) {
+    REQUIRE(a[i] == b[i]);
+    energy += static_cast<double>(a[i]) * a[i];
+  }
+  REQUIRE(energy > 0.0);  // the layer really is sounding, so the match means something
 }
 
 // ---------------------------------------------------------------------------

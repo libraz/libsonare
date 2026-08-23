@@ -747,6 +747,13 @@ constexpr NativeSynthPatch clamp_synth_patch(const NativeSynthPatch& patch) noex
   for (float& weight : p.percussion.shell_weight) {
     weight = std::clamp(patch_clamp_detail::sanitize(weight, 0.0f), 0.0f, 4.0f);
   }
+  // 0 stays 0 — the unbounded voicing, not a cutoff pinned to the low end.
+  // That makes the accepted interval two regions rather than one: off, and a
+  // real ceiling. A sweep that treats [0, 20000] as continuous spends its low
+  // end bounding a cymbal below its own corner, which is not a darker cymbal
+  // but a quiet one — search from a musical floor, not from zero.
+  p.percussion.noise_air_hz =
+      std::clamp(patch_clamp_detail::sanitize(p.percussion.noise_air_hz, 0.0f), 0.0f, 20000.0f);
   p.percussion.wire_buzz =
       std::clamp(patch_clamp_detail::sanitize(p.percussion.wire_buzz, 0.0f), 0.0f, 4.0f);
   p.percussion.wire_threshold =

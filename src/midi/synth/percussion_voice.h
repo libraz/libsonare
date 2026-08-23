@@ -91,6 +91,42 @@ struct PercussionPatchParams {
   float noise_q = 1.0f;
   SynthFilterOutput noise_output = SynthFilterOutput::kBandpass;
 
+  // --- radiated upper bound ---
+  /// Upper bound (Hz) on every noise stream the struck head or plate radiates
+  /// — the burst, the wire rattle and the shimmer wash. 0 = unbounded, the
+  /// voicing that predates this field.
+  ///
+  /// It exists because a high-pass has no top. The SVF's high-pass output is
+  /// flat above its corner, so white noise driven through it stays white all
+  /// the way to Nyquist, and third-octave bands get wider in proportion to
+  /// their centre frequency — which puts the most energy in the highest band
+  /// there is, whatever the corner was set to. Every open-topped piece
+  /// therefore measures its spectral peak at the top of the analysis range
+  /// rather than where the plate actually speaks: against a sampled kit, a
+  /// closed hat peaked at 12.5 kHz where the reference peaked between 315 Hz
+  /// and 4 kHz, and a crash at 12.5 kHz against 2.5 kHz. No corner setting can
+  /// correct that, because the corner is a floor and the defect is the missing
+  /// ceiling.
+  ///
+  /// This is a bound rather than a band, and it is a bound only while it sits
+  /// above the corner it is bounding. A two-pole low-pass above the corner
+  /// removes the tail past it and leaves the corner's own voicing alone, and
+  /// the measured peak follows the bound down. Taken *below* the corner the two
+  /// stop composing and start squeezing: a wash high-passed at 5.5 kHz and
+  /// bounded at 2 kHz stalls with its peak near 4 kHz and cannot be pushed
+  /// lower, because what remains is the overlap of two slopes rather than a
+  /// band anyone chose. A piece that has to speak below its corner needs the
+  /// corner moved, not the bound.
+  ///
+  /// Removing that tail also removes its level — the energy above the corner
+  /// was most of what a flat-topped wash had. A crash measured 13.6 dB quieter
+  /// at a 4 kHz bound, so enabling this on a calibrated piece means re-gaining
+  /// it in the same change.
+  ///
+  /// The particle layer is excluded — it is a separate excitation model with a
+  /// resonance stage of its own (`phisem_res_hz`) that already bounds it.
+  float noise_air_hz = 0.0f;
+
   // --- shell resonance ---
   /// Mix of the drum-shell resonance over the summed tone+noise hit (0 =
   /// bypass, the legacy dry voice). The shell is a small fixed bandpass bank
@@ -187,6 +223,17 @@ class PercussionVoiceCore {
   float noise_coeff_ = 0.0f;
   TptSvf noise_filter_;
   SynthFilterOutput noise_output_ = SynthFilterOutput::kBandpass;
+
+  // Radiated upper bound (noise_air_hz). One low-pass per stream rather than
+  // one over their sum: the filter is linear, so the two are the same signal,
+  // but bounding each stream where it is summed leaves the accumulation order
+  // untouched and makes the disabled state bit-identical to the voicing that
+  // predates the field — which is what lets a calibration done before it was
+  // added be trusted afterwards.
+  float noise_air_hz_ = 0.0f;
+  TptSvf noise_air_;
+  TptSvf wire_air_;
+  TptSvf shimmer_air_;
 
   BodyResonator shell_;
 

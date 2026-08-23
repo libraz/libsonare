@@ -2,6 +2,7 @@
 
 #include <algorithm>
 #include <cmath>
+#include <initializer_list>
 
 #include "midi/synth/bessel.h"
 #include "midi/synth/pitch.h"
@@ -12,6 +13,7 @@ namespace sonare::midi::synth {
 
 namespace {
 
+using sonare::constants::kInvSqrt2;
 using sonare::constants::kPi;
 using sonare::constants::kTwoPi;
 /// Noise draws live far above any other per-voice index range.
@@ -90,6 +92,19 @@ void PercussionVoiceCore::start(const PercussionPatchParams& params, double samp
   noise_filter_.prepare(sr);
   noise_filter_.set(params.noise_cutoff_hz, std::max(0.5f, params.noise_q));
   noise_filter_.reset();
+
+  // Radiated upper bound over every noise stream. Butterworth Q, because this
+  // is a ceiling and a resonant one would put back a peak of its own.
+  noise_air_hz_ = params.noise_air_hz > 0.0f
+                      ? std::min(params.noise_air_hz, 0.45f * static_cast<float>(sr))
+                      : 0.0f;
+  if (noise_air_hz_ > 0.0f) {
+    for (TptSvf* air : {&noise_air_, &wire_air_, &shimmer_air_}) {
+      air->prepare(sr);
+      air->set(noise_air_hz_, kInvSqrt2);
+      air->reset();
+    }
+  }
 
   // Shell resonance: the summed hit rings through the drum body. A note-tracked
   // 0 Hz spec is taken to mean "track the struck key" so one tom patch voices
@@ -203,7 +218,8 @@ float PercussionVoiceCore::render(float pitch_ratio) noexcept {
       const float gate = contact > 0.0f ? std::min(contact * 8.0f, 1.0f) : 0.0f;
       const float n =
           noise_.bipolar_at(kWireIndexBase + wire_index_++) * gate * wire_vel01_ * wire_buzz_;
-      mix += wire_filter_.process(n).hp;
+      const float wire = wire_filter_.process(n).hp;
+      mix += noise_air_hz_ > 0.0f ? wire_air_.process(wire).lp : wire;
     }
 
     // Nonlinear shimmer: the quadratic membrane energy (tone^2) drives a high
@@ -212,7 +228,8 @@ float PercussionVoiceCore::render(float pitch_ratio) noexcept {
     if (shimmer_ > 0.0f) {
       shimmer_env_ += (tone * tone - shimmer_env_) * shimmer_attack_coeff_;
       const float n = noise_.bipolar_at(kShimmerIndexBase + shimmer_index_++);
-      mix += shimmer_filter_.process(n * shimmer_env_ * shimmer_).hp;
+      const float wash = shimmer_filter_.process(n * shimmer_env_ * shimmer_).hp;
+      mix += noise_air_hz_ > 0.0f ? shimmer_air_.process(wash).lp : wash;
     }
   }
 
@@ -220,17 +237,19 @@ float PercussionVoiceCore::render(float pitch_ratio) noexcept {
     const float burst = noise_.bipolar_at(kNoiseIndexBase + noise_index_++) * noise_level_;
     noise_level_ *= noise_coeff_;
     const TptSvf::Outputs out = noise_filter_.process(burst);
+    float voiced = 0.0f;
     switch (noise_output_) {
       case SynthFilterOutput::kHighpass:
-        mix += out.hp;
+        voiced = out.hp;
         break;
       case SynthFilterOutput::kBandpass:
-        mix += out.bp;
+        voiced = out.bp;
         break;
       case SynthFilterOutput::kLowpass:
-        mix += out.lp;
+        voiced = out.lp;
         break;
     }
+    mix += noise_air_hz_ > 0.0f ? noise_air_.process(voiced).lp : voiced;
   }
 
   // Stochastic particle excitation (PhISEM). The shake energy decays over the
@@ -283,6 +302,10 @@ void PercussionVoiceCore::kill() noexcept {
   num_modes_ = 0;
   noise_level_ = 0.0f;
   excite_ = false;
+  noise_air_hz_ = 0.0f;
+  noise_air_.reset();
+  wire_air_.reset();
+  shimmer_air_.reset();
   shell_.reset();
   wire_buzz_ = 0.0f;
   wire_filter_.reset();

@@ -361,6 +361,7 @@ void apply_percussion(NativeSynthPatch& p, const Fields& f) {
     float& weight = p.percussion.shell_weight[static_cast<size_t>(i)];
     weight = f(("percussion.shell_weight" + index).c_str(), weight);
   }
+  F(percussion.noise_air_hz);
   F(percussion.wire_buzz);
   F(percussion.wire_threshold);
   F(percussion.wire_cutoff_hz);
