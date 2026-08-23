@@ -559,7 +559,8 @@ def dynamics(cfg: dict, profile_path: Path, *, timbre: str, notes_filter: set[in
     return 0
 
 
-def compare(cfg: dict, profile_path: Path, *, timbre: str, notes_filter: set[int]) -> int:
+def compare(cfg: dict, profile_path: Path, *, timbre: str, notes_filter: set[int],
+            gate_path: str = "", write_gate: str = "", margin: float = 1.25) -> int:
     """Measure libsonare the same way and print the difference, dimension by dimension."""
     if not profile_path.exists():
         print(f"no profile at {profile_path} — run `profile.py measure` first")
@@ -640,14 +641,125 @@ def compare(cfg: dict, profile_path: Path, *, timbre: str, notes_filter: set[int
         print(f"\n* {len(damper_censored)} of {len(pairs)} rows never fell 40 dB inside the "
               f"{tail_s:.0f} s tail on one side or the other; shown, not counted:")
         print("  " + ", ".join(f"n{n}v{v}" for n, v in damper_censored))
-    print("\nmedian delta:")
-    labels = {"stretch": "tuning vs the reference (cents)",
-              "decay": "held-note decay (dB/s)",
-              "damper": "damper release (ms)",
-              "balance": "partial stack h2-h6 vs h1 (dB)",
-              "centroid_pct": "brightness (% of the reference centroid)"}
-    for k, vals in deltas.items():
-        print(f"  {labels.get(k, k):46s} {np.median(vals):+9.2f}")
+    summary = summarize_deltas(deltas)
+    print("\n" + f"{'':46s} {'median':>9} {'|median|':>9} {'rows':>5}")
+    for k, row in summary.items():
+        print(f"  {DELTA_LABELS.get(k, k):46s} {row['median']:+9.2f} "
+              f"{row['abs_median']:9.2f} {row['n']:5d}")
+    print("\n  The signed median is what the voice is doing on average and the absolute one "
+          "is\n  how far any given note is from the reference. They part company exactly where "
+          "a\n  summary is least trustworthy: errors of opposite sign in different registers "
+          "cancel\n  in the first column and do not in the second.")
+
+    if gate_path:
+        return check_gate(summary, Path(gate_path), timbre)
+    if write_gate:
+        return write_gate_file(summary, Path(write_gate), timbre, margin)
+    return 0
+
+
+DELTA_LABELS = {"stretch": "tuning vs the reference (cents)",
+                "decay": "held-note decay (dB/s)",
+                "damper": "damper release (ms)",
+                "balance": "partial stack h2-h6 vs h1 (dB)",
+                "centroid_pct": "brightness (% of the reference centroid)"}
+
+
+def summarize_deltas(deltas: dict[str, list[float]]) -> dict[str, dict]:
+    """Reduce each dimension's per-row deltas to the pair of numbers a gate reads.
+
+    Two numbers rather than one, because the signed median alone cannot fail on
+    a defect that is symmetric across the keyboard. The brightness column once
+    read +0.16 % of the reference centroid while individual notes were between
+    26 and 660 % out — the bass was dark by as much as the treble was bright,
+    and the median of the signed errors said the voice was correct to a sixth of
+    a percent. The absolute median is what that summary was missing.
+    """
+    return {
+        k: {"median": float(np.median(v)), "abs_median": float(np.median(np.abs(v))),
+            "n": len(v)}
+        for k, v in deltas.items()
+    }
+
+
+def check_gate(summary: dict[str, dict], gate_path: Path, timbre: str) -> int:
+    """Fail the run when a dimension has moved outside its recorded bound.
+
+    What this exists to catch is not a bad voice — it is a change that improves
+    one dimension by breaking another, which is the shape most of this work
+    takes. Widening the prompt-decay profile fixes the level on every note
+    between F#2 and F#5 and brightens the same notes by 35 to 60 points of
+    centroid; both are real, and whoever makes that trade should be the one to
+    decide it rather than discovering it later in a listening test.
+    """
+    if not gate_path.exists():
+        print(f"\nno gate at {gate_path} — write one with --write-gate once the current "
+              f"numbers are ones worth holding", file=sys.stderr)
+        return 2
+    gate = json.loads(gate_path.read_text())
+    if gate.get("timbre") and gate["timbre"] != timbre:
+        print(f"\ngate was recorded against timbre {gate['timbre']!r}, not {timbre!r}; "
+              f"a bound is only meaningful against the reference it was measured from",
+              file=sys.stderr)
+        return 2
+    bounds = gate.get("bounds", {})
+    failures = []
+    for key, bound in bounds.items():
+        row = summary.get(key)
+        if row is None:
+            failures.append(f"{DELTA_LABELS.get(key, key)}: not measured in this run")
+            continue
+        for stat in ("median", "abs_median"):
+            limit = bound.get(stat)
+            if limit is None:
+                continue
+            value = abs(row[stat]) if stat == "median" else row[stat]
+            if value > limit:
+                failures.append(
+                    f"{DELTA_LABELS.get(key, key)}: {stat} {value:.2f} over its bound {limit:.2f}"
+                )
+    print(f"\ngate: {gate_path.name}, {len(bounds)} dimensions")
+    if failures:
+        for line in failures:
+            print(f"  FAIL  {line}")
+        print(f"  {len(failures)} of the recorded bounds were exceeded. If the change is "
+              f"deliberate, re-record with --write-gate in the same commit as the change "
+              f"that justifies it.")
+        return 1
+    print("  every recorded bound held")
+    return 0
+
+
+def write_gate_file(summary: dict[str, dict], gate_path: Path, timbre: str,
+                    margin: float) -> int:
+    """Record the current numbers as the bounds a later run is held to.
+
+    The margin is multiplicative and deliberately not tight: a bound that fails
+    on measurement noise gets switched off, and a switched-off gate catches
+    nothing. There is also a floor under each bound, since a dimension that
+    happens to be near zero today would otherwise be held to a tolerance no
+    change could stay inside.
+    """
+    floors = {"stretch": 1.0, "decay": 0.5, "damper": 5.0, "balance": 0.5,
+              "centroid_pct": 1.0}
+    bounds = {}
+    for key, row in summary.items():
+        floor = floors.get(key, 1.0)
+        bounds[key] = {
+            "median": round(max(abs(row["median"]) * margin, floor), 3),
+            "abs_median": round(max(row["abs_median"] * margin, floor), 3),
+        }
+    gate_path.parent.mkdir(parents=True, exist_ok=True)
+    gate_path.write_text(json.dumps({
+        "_": "Bounds the compare table is held to. Both are absolute limits: 'median' caps "
+             "the magnitude of the signed median and 'abs_median' caps the median absolute "
+             "error, which is the one that can fail when errors of opposite sign cancel. "
+             "Re-record only in the same change as the behaviour that justifies it.",
+        "timbre": timbre,
+        "margin": margin,
+        "bounds": bounds,
+    }, indent=2) + "\n")
+    print(f"\nwrote {gate_path} — {len(bounds)} bounds at {margin:g}x the measured values")
     return 0
 
 
@@ -668,6 +780,20 @@ def main() -> int:
         p = sub.choices[name]
         p.add_argument("--timbre", default="", help="which captured timbre to compare against")
         p.add_argument("--notes", default="", help="restrict to these MIDI notes, comma-separated")
+    gate_group = sub.choices["compare"]
+    gate_group.add_argument(
+        "--gate", default="",
+        help="hold the summary to the bounds in this JSON and exit 1 when one is exceeded. "
+             "Catches the change that improves one dimension by breaking another, which is "
+             "the shape most voice work takes and the one a listening test finds last")
+    gate_group.add_argument(
+        "--write-gate", default="", dest="write_gate",
+        help="record the current summary as bounds at --margin times its values. Do this in "
+             "the same change as the behaviour that justifies the new numbers")
+    gate_group.add_argument(
+        "--margin", type=float, default=1.25,
+        help="slack in a written bound (default: 1.25x). Loose on purpose — a bound that "
+             "fails on measurement noise gets switched off, and then it catches nothing")
 
     args = ap.parse_args()
     cfg = load_config(Path(args.config))
@@ -680,7 +806,12 @@ def main() -> int:
     notes_filter = {int(x) for x in args.notes.split(",") if x.strip()}
     if args.cmd == "dynamics":
         return dynamics(cfg, profile_path, timbre=timbre, notes_filter=notes_filter)
-    return compare(cfg, profile_path, timbre=timbre, notes_filter=notes_filter)
+    if args.gate and args.write_gate:
+        print("--gate and --write-gate are alternatives: one checks the bounds and the "
+              "other replaces them", file=sys.stderr)
+        return 2
+    return compare(cfg, profile_path, timbre=timbre, notes_filter=notes_filter,
+                   gate_path=args.gate, write_gate=args.write_gate, margin=args.margin)
 
 
 if __name__ == "__main__":
