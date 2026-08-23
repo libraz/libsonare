@@ -4,6 +4,10 @@
 #include <cmath>
 
 #include "midi/synth/pitch.h"
+// Only for solve_string_loop_filter(): this voice keeps its own loop (it has an
+// in-loop dispersion cascade and a two-stage feedback the shared one does not
+// model), but the loss filter it needs is the same one, solved the same way.
+#include "midi/synth/string_loop.h"
 #include "midi/synth/voice_random.h"
 #include "rt/fractional_delay.h"
 #include "util/constants.h"
@@ -64,7 +68,7 @@ SONARE_TUNABLE(kFeltCutoffVelOct, 0.0f);
 /// Only the bottom of the keyboard is governed by this: from C4 up the period
 /// floor below is the binding term, so the fitted mid and treble do not move
 /// with it at all (verified — notes 60 and above render identically).
-SONARE_TUNABLE(kContactKeytrackSemis, 36.0f);
+SONARE_TUNABLE(kContactKeytrackSemis, 42.0f);
 /// Hammer-contact floor in fundamental PERIODS, anchored at C4 and graded
 /// per octave (signed: it shrinks into the bass, grows into the treble). The
 /// contact duration is THE felt-vs-nail cue — a contact much shorter than half
@@ -89,11 +93,49 @@ SONARE_TUNABLE(kContactKeytrackSemis, 36.0f);
 /// Shortening the contact raises the radiated level because the injection is
 /// normalised on the mezzo-forte PEAK FORCE rather than on the blow's impulse,
 /// so a shorter, taller pulse arrives with the same peak and more of its energy
-/// inside the string's band. Fixing that normalisation is the way in; regrading
-/// the contact on top of it just moves the error from the ladder to the level.
-SONARE_TUNABLE(kContactPeriodsAtC4, 0.503038f);
-SONARE_TUNABLE(kContactPeriodsPerOct, 0.613525f);
+/// inside the string's band.
+///
+/// Fixing that normalisation had looked like the way in and measures as not
+/// being one. Scored across the keyboard on level, envelope and sustained
+/// colour together, the momentum anchor (kInjImpulseNorm = 1) is worse than
+/// the peak-force anchor at every contact grading tried, and the literature
+/// grading itself — half a period at C4, 0.17 per octave — is worse than both
+/// values here whichever anchor carries it. What the fit wants is a contact
+/// half the length at C4 and graded three times as steeply, and it wants it
+/// for the partials: the ladder and the body improve while the crest factor
+/// gives back about a decibel. The register profile of hammer-string contact
+/// is not the only thing these two numbers are carrying, and until whatever
+/// else they stand in for is named, they are calibration and not measurement.
+SONARE_TUNABLE(kContactPeriodsAtC4, 0.18f);
+SONARE_TUNABLE(kContactPeriodsPerOct, 0.5f);
 SONARE_TUNABLE(kContactPeriodsMax, 2.0f);
+/// What the injection's calibration is anchored on: the mezzo-forte blow's PEAK
+/// force (0) or the momentum it delivers (1).
+///
+/// The peak anchor is not a free choice of units, it is a register tilt nobody
+/// asked for. The mezzo-forte stiffness is solved so the blow lasts the
+/// register's reference contact, `k = (c_p/tau)^(p+1)`, and the peak force of
+/// that bounce works out at `f_peak = (c_p/tau) * (0.5(p+1))^(p/(p+1))` — it
+/// goes as 1/tau exactly. Dividing by it therefore multiplies the injection by
+/// tau. Meanwhile the pulse itself carries a FIXED impulse whatever the felt
+/// does: a free bounce reverses a unit mass's unit velocity, so the integral of
+/// the force is 2 regardless of stiffness or duration. The normalization is the
+/// only thing that breaks that invariance, and it breaks it by a factor of two
+/// across the keyboard — C4's mezzo-forte contact is 92 samples against C7's 46.
+///
+/// The cost is not the tilt itself but that the tilt is welded to the contact
+/// GRADING, which is the one control the partial ladder answers to. Regrading
+/// the contact to what the instrument measures moves the level by an amount
+/// nothing chose, so the ladder can only be bought by spending level and the
+/// register compensation that exists for the job (kInjTiltDbOct) never gets to
+/// own it. Anchored on the impulse instead, contact duration sets the spectrum
+/// and only the spectrum: a shorter contact still radiates more, because more
+/// of the same momentum lands inside the string's band rather than below its
+/// fundamental, and that part is real and is supposed to be there.
+///
+/// The anchor is C4, so the middle of the keyboard is unmoved at either setting
+/// and only the ends are re-levelled.
+SONARE_TUNABLE(kInjImpulseNorm, 0.0f);
 /// Ceiling on ONE blow's contact, in fundamental periods, and never below the
 /// floor above: the two are the same physical statement — the string's own
 /// reflection returns while the felt is still loaded and decides when the
@@ -164,28 +206,49 @@ SONARE_TUNABLE(kTrebleDecayFloorOct, 3.0f);
 /// merge. Gaussian in octaves from C4; at the edges the effective prompt rate
 /// relaxes toward the aftersound rate.
 ///
-/// This is narrower than the instrument and is left alone anyway, because the
-/// mechanism under it drains the wrong thing. The reference's contrast is
-/// weakest at C4 (-7.2 dB/s prompt against -5.1 aftersound) and sharpest at F#4
-/// and C5 (-31 and -41 against -1.9 and -2.9), so a profile centred on C4 peaks
-/// where the instrument is flattest and gives the model one decay rate almost
-/// everywhere the instrument has two. No per-note shape metric can see that —
-/// they are all normalised per note — and it is plain in the level: held RMS
-/// runs 8.7 dB over the reference at a peak only 3.9 over, a crest factor 4.8 dB
-/// too low, which is the sound of an envelope that never drops after its attack.
+/// It had been six-tenths of an octave wide, against a whole keyboard, and
+/// pinned to a centre it never earned (see kTwoStageCenterOct). Together those
+/// two put a deep narrow trough of prompt decay on C4 and left the notes a
+/// fifth either side with almost none: measured on the model, the level lost by
+/// 1.2 s ran 2.2 dB at C3, 22.8 at C4 and 11.9 at C5 — a twenty-decibel swing
+/// inside one octave, which the instrument does not have. No per-note shape
+/// metric can see it, because they are all normalised per note; it shows up as
+/// a keyboard level profile with a hole in it, and in the crest factor, which
+/// ran 9.6 dB off across the keyboard.
 ///
-/// Widening it to 3 octaves does fix the level, to 3.9 dB over at the same peak.
-/// It also brightens the 0.12-1.62 s window by 35 to 60 points of centroid on
-/// every note between F#2 and F#5, and the patch brightness knob cannot take it
-/// back: swept from 0.81 down to 0.20 it moves the centroid error by 3 points
-/// and costs 1.4 dB of partial ladder. The reason is the prompt stage itself —
+/// Widening had been rejected before, and for a real reason: it bought the
+/// level by spending brightness. The reason is the prompt stage itself —
 /// it is applied by subtracting a share of the summed bridge signal, which is a
 /// low-partial-weighted quantity, so more prompt decay necessarily drains the
 /// bottom of the spectrum and leaves a brighter residue. A real string's fast
-/// polarization does not do that. Until that subtraction is frequency-weighted
-/// the way the bridge admittance actually is, widening the profile buys the
-/// level by spending brightness, and both are audible.
-SONARE_TUNABLE(kTwoStageWidthOct, 0.616718f);
+/// polarization does not do that.
+///
+/// That objection was a statement about the drain's bandwidth, not about the
+/// width, and kTwoStageDrainPartials is what answers it: band-limit the
+/// subtraction to the register the mechanism was derived for and the trade
+/// disappears. With the drain limited and the centre free, the profile widens
+/// to something the size of the instrument and the keyboard's crest error falls
+/// from 9.6 dB to 6.0 while the sustained band profile improves alongside it
+/// instead of paying for it.
+SONARE_TUNABLE(kTwoStageWidthOct, 2.5f);
+/// Where that profile peaks, in octaves from C4. Zero is the identity and is
+/// where it had always been, but only because C4 is the pivot every other
+/// keytrack in this file measures from — the contrast was given the same origin
+/// rather than its own, and a shared origin is not a measurement. The reference
+/// puts the peak somewhere else entirely: the prompt-vs-aftersound gap is
+/// weakest at C4 (-7.2 dB/s against -5.1) and sharpest at F#4 and C5 (-31 and
+/// -41 against -1.9 and -2.9), so the Gaussian's crest was sitting on the one
+/// note where the instrument has almost no double decay at all.
+///
+/// Fitted across the keyboard it lands an octave and a half up, around F#5,
+/// which is further than the per-note rates alone suggest and is not a
+/// contradiction of them: the profile also has to carry the treble's own short
+/// decay, so with the width now the size of the instrument the peak sits where
+/// the fast stage is needed most rather than where the contrast is sharpest.
+/// It is the second largest single term in the voice — removing it costs 2.0 dB
+/// of total error, against 11.8 for the uncombed blow and under 0.6 for
+/// everything else.
+SONARE_TUNABLE(kTwoStageCenterOct, 1.5f);
 /// Treble taper cap (octaves above C4): the decay/darkening keytracks stop
 /// steepening past here — an uncapped taper leaves the top octave with a
 /// sub-100 ms husk of a note.
@@ -343,11 +406,19 @@ SONARE_TUNABLE(kStringYield, 0.8f);
 /// so it stays a plain constant: the fitter has nothing to gain from a limit
 /// whose job is to stop the string outrunning the hammer.
 constexpr float kYieldExcursionCap = 0.7f;
-/// Register level compensation on the injected force (dB per octave from C4,
-/// clamped at +/-1.25 oct): the bass chatter re-feeds its strings while the
-/// treble's near-period dwell couples weakly into the fundamental, tilting
-/// the raw physical levels bass-heavy by ~10 dB/oct against the reference.
-SONARE_TUNABLE(kInjTiltDbOct, 3.5f);
+/// Register level compensation on the injected force (dB per octave from C4):
+/// the bass chatter re-feeds its strings while the treble's near-period dwell
+/// couples weakly into the fundamental, tilting the raw physical levels
+/// bass-heavy by ~10 dB/oct against the reference.
+SONARE_TUNABLE(kInjTiltDbOct, 1.5f);
+/// How far from C4 that compensation keeps acting, in octaves, before it holds
+/// flat. Both mechanisms it answers to are strongest at the ENDS of the
+/// keyboard, so a span this narrow stops the correction exactly where its
+/// subject is worst: past C5.25 every remaining octave gets the same fixed
+/// 4.4 dB however far the raw level has drifted by then. Measured against the
+/// reference the model runs 8 dB quiet at D1 and 10 dB loud at F#6 with this
+/// pinned, and no lever inside the injection can reach either end.
+SONARE_TUNABLE(kInjTiltOctSpan, 1.25f);
 SONARE_TUNABLE(kYieldTrebleOct, 2.0f);
 /// How the knock grows into the bass (doublings per octave below C4). The
 /// heavy bass hammer really does rock the board harder, but the knock has no
@@ -366,9 +437,76 @@ SONARE_TUNABLE(kYieldTrebleOct, 2.0f);
 /// down there. With the pulse reaching the register it drives, half the knock
 /// comes out and the note keeps its weight.
 SONARE_TUNABLE(kKnockBassBoostOct, 0.3f);
-/// ...and shrinks above C4: the treble hammer is a few grams — its thud is
-/// far below the tone (the reference treble attack has almost no 60-250 Hz).
-SONARE_TUNABLE(kKnockTrebleTaperOct, 2.0f);
+/// ...and does NOT shrink above C4, though it reads as if it should: the treble
+/// hammer is a few grams, so its own thud must be small, and measured against
+/// the tone the reference's treble attack does sit 23-26 dB under broadband
+/// where a C4 sits 16 under. That comparison is the trap. What is radiating
+/// down there is not the hammer, it is the instrument -- the same body, struck
+/// through the bridge, at a level the string's pitch has little say in -- so
+/// the ratio moves because the tone above it changes and not because the body
+/// does.
+///
+/// The register profile that claim rests on is the SUSTAIN, not the attack.
+/// Measured on the reference over 0.4-1.4 s, where the note's own fundamental
+/// has left the band, the 60-250 Hz level runs -39.6 dB at C4, -37.8 at C5,
+/// -38.7 at C6, -37.7 at C7: flat to two decibels across three octaves, which
+/// is what a fixed mass struck by a fixed blow gives. The first fifty
+/// milliseconds are NOT flat -- the same measurement reads -9.6, -19.2, -25.0
+/// and -23.1 there -- because the attack window still holds the strike
+/// transient, whose spectrum the contact time and the felt do shape with pitch.
+/// An earlier revision of this comment quoted an attack profile flat to five
+/// decibels; no window reproduces that, and the sustain is where the constant
+/// the argument needs actually lives.
+///
+/// Zero survives the correction anyway. Graded at 2.0 the model fell 31 dB
+/// across that span and the top two octaves arrived with no body at all; held
+/// flat it is what the whole-keyboard fit settles on with every other body knob
+/// free to disagree. The knob stays because a real taper is not zero -- it is
+/// just far smaller than a fitted-on-ratios reading makes it look, and what
+/// remains of the gap is the board's, not the hammer's.
+SONARE_TUNABLE(kKnockTrebleTaperOct, 0.0f);
+/// How much of the knock is taken from the blow itself rather than from the
+/// wave injected into the string. 0 keeps the injected copy, 1 takes the blow.
+///
+/// The knock is a STRUCTURE-BORNE path: the hammer landing shakes the action,
+/// the frame and the rim, and that reaches the board without passing through
+/// the string at all. It was nonetheless being tapped off the injected
+/// excitation, which carries the strike-position comb — the near-end reflection
+/// arriving back at the strike point, a property of the string the rim has no
+/// way of knowing about.
+///
+/// The comb delay is a fixed FRACTION of the period, so what it does depends
+/// entirely on the register. At C4 it is fifteen samples and its first null
+/// sits at 1.6 kHz, well above the thud, which passes untouched. At C8 it is
+/// ONE sample, which is a first difference: the comb becomes a differentiator
+/// and takes 47 dB out at 100 Hz. That is why the model's low-band attack fell
+/// 25 dB from A2 to C8 while the reference's is flat to within 5 -- the top of
+/// the keyboard was not radiating a quieter body, it was radiating the
+/// derivative of one.
+///
+/// It had been left off on a one-knob sweep, and that sweep was answering the
+/// wrong question twice over.
+///
+/// The first error was the metric. Levels were compared with no gain alignment
+/// at all, while the model's own held level ran a note-dependent 3 to 22 dB
+/// over the reference, so a body level read as "too loud" that was in fact
+/// deficient. Align exactly one scalar -- the mean held-level offset over the
+/// keyboard, which is what a master gain can move and nothing else is -- and
+/// the sign flips: switching the blow on and touching nothing else takes the
+/// keyboard's low-band error from 65.3 dB to 39.8.
+///
+/// The second was the sweep itself. The comb's low-frequency loss goes as its
+/// delay, a fixed fraction of the period, so it had been acting as an unnamed
+/// register taper with the fitted gain sitting on top of it; moving the blow
+/// alone measures that compensation and not the mechanism. Solved jointly with
+/// the body, the envelope and the excitation it is the largest single term in
+/// the voice: taking it back out costs 11.8 dB of total error against the
+/// reference where the next knob costs 2.0.
+///
+/// The shape generalises past this knob. A mechanism the model lacks gets
+/// stood in for by whatever knob is nearest, and the stand-in is then what a
+/// one-at-a-time sweep is measuring.
+SONARE_TUNABLE(kKnockUncombed, 1.0f);
 /// The hammer-width harmonic cap keytracks from C4, signed doublings per
 /// octave on each side: in HARMONIC number the felt footprint's cap follows
 /// both the footprint's span of the string and how the contact dwell scales
@@ -493,6 +631,100 @@ SONARE_TUNABLE(kBridgeHillHz, 1485.15f);
 SONARE_TUNABLE(kBridgeHillGainDb, 9.91486f);
 SONARE_TUNABLE(kBridgeHillQ, 2.40983f);
 
+/// How far up the partial series the prompt-decay drain is allowed to reach,
+/// in multiples of the fundamental. 0 leaves it broadband, which is where it
+/// has always been.
+///
+/// The drain is the model of one physical thing: the vertical polarization
+/// couples into the bridge and loses its energy there while the horizontal one
+/// barely couples and rings on. That coupling is a property of the bridge
+/// admittance around the fundamental and the first few partials. Applied
+/// broadband it also drains everything above them, and what that costs grows
+/// with the note, because the drain acts once per round trip and a high note
+/// makes thousands of those a second. Measured at C8 the second partial falls
+/// 103 dB/s faster than the fundamental where the reference holds the two
+/// within a few decibels of each other for the whole note, and 56 of those
+/// 103 are this: switching the drain off halves the excess on its own.
+///
+/// Band-limiting it does not switch the double decay off — the fundamental and
+/// the low partials, which is where it was measured and where a listener hears
+/// it, keep exactly the drain they had. It stops the mechanism reaching a part
+/// of the spectrum it was never derived for.
+///
+/// Four partials is where the whole-keyboard fit puts it. Its own contribution
+/// is modest, but it is what unblocks kTwoStageWidthOct: while the drain ran
+/// broadband, every decibel of prompt decay came out of the bottom of the
+/// spectrum, so the profile could not be widened without brightening the
+/// sustain. Limited, the two move together.
+SONARE_TUNABLE(kTwoStageDrainPartials, 4.0f);
+/// Design the loop's loss filter from the decay it has to produce rather than
+/// from the patch's tone knob. 0 keeps the tone-derived coefficient.
+///
+/// The upper partials' decay is the one thing about this loop that nothing
+/// states: the pole is picked for brightness, its loss at the partials is
+/// whatever falls out, and that loss is charged once per traversal. What a
+/// listener hears is therefore proportional to the note's own frequency, and by
+/// the top of the keyboard it has run away — C8's second partial dies 103 dB/s
+/// faster than its fundamental against a reference that holds the two together
+/// for the whole note. The excitation is not the problem there: measured in the
+/// first 20 ms that partial arrives within 4 dB of the reference and is then
+/// taken apart by the loop.
+SONARE_TUNABLE(kLoopSolveHf, 0.0f);
+/// Where the upper-partial decay target is quoted, in Hz, and how many times
+/// faster than the fundamental the partial sitting there decays.
+///
+/// Quoted at a fixed frequency because that is how string damping is measured,
+/// and because the alternative does not work: a target quoted at the octave
+/// asks a one-pole to tell apart two frequencies a third of a percent of the
+/// sample rate apart in the bass, which it cannot, and the pole that finally
+/// does is a brick wall four octaves up.
+SONARE_TUNABLE(kLoopHfQuoteHz, 4000.0f);
+SONARE_TUNABLE(kLoopHfDecayRatio, 3.0f);
+/// Where the modal bank takes over from the waveguide (see the bank's own
+/// commentary in the header for why there is a second synthesis path at all).
+/// Two MIDI notes: below the first the loop runs alone, above the second the
+/// loop is skipped entirely, and between them the two are smoothstep-blended.
+///
+/// The default band is where the loop stops being able to hold its own
+/// filters, which is a structural fact about the delay length rather than a
+/// preference: the Lagrange-3 interpolator's magnitude droop, charged once per
+/// traversal, costs the second partial 0.5 dB/s at C6, 8 dB/s at C7 and 331
+/// dB/s at C8, and the dispersion cascade has already been faded out by note 98
+/// for want of loop to sit in. Measured against a dry concert grand the bank
+/// takes C8's mean partial-ladder error from 17.0 dB to 8.9 and C7's from 15.7
+/// to 12.6, at an unchanged held level.
+///
+/// The PARTIAL-LADDER metric prefers the bank a long way further down -- it
+/// wins at every note from 72 up, by 2 to 6 dB, at a held-level cost under 1.5.
+/// Do not follow it. The ladder is read on h2..h5 and is blind to what the bank
+/// does above them: with no loop lowpass, and a per-partial damping that is
+/// gentle by design, the modal sustain runs hot wherever a note has enough
+/// partials to notice -- at F#5 the 8-16 kHz band goes from 29 dB under the
+/// reference to 44 OVER it the moment the bank takes the note. In the top
+/// octave there are four or five partials in total and the effect does not
+/// arise; that is the whole reason the two metrics disagree.
+///
+/// So the crossover is left where the argument is structural rather than where
+/// either metric points, and kModalDampPow measures best at its default over
+/// exactly this band. The loop's per-traversal loss running away below note 92
+/// is a real defect, but it is a different one with its own lever
+/// (kLoopSolveHf), and it is not this bank's to fix.
+SONARE_TUNABLE(kModalCrossNoteLo, 92.0f);
+SONARE_TUNABLE(kModalCrossNoteHi, 98.0f);
+/// How the modal bank grades a partial's decay: t60(f) = t60_slow * (f/f0)^-p.
+///
+/// This is the quantity the waveguide could not state. A power law in the
+/// partial's own frequency ratio, because that is the shape string damping
+/// measures as -- 0 gives every partial the fundamental's decay, 0.5 is the
+/// air-loss-dominated t60 ~ 1/sqrt(f), 1 is t60 ~ 1/f. It replaces the loop
+/// filter rather than joining it: above the crossover there is no loop and no
+/// per-traversal loss to correct, so kLoopSolveHf and the brightness taper do
+/// not reach these notes.
+SONARE_TUNABLE(kModalDampPow, 0.25f);
+/// Trim on the modal bank's output. The mode amplitudes are derived so the two
+/// paths agree by construction (header), which makes 1 the meaningful default
+/// and any departure from it a measurement of how well that derivation holds.
+SONARE_TUNABLE(kModalLevel, 0.2f);
 /// Traversal-rate normalization of the loop lowpass (see its use in start()).
 /// 0 leaves the raw per-traversal coefficient, where upper-partial damping
 /// grows with the fundamental and the top two octaves lose their partial stack
@@ -721,52 +953,6 @@ void PianoVoiceCore::start(const PianoPatchParams& params, double sample_rate, u
   const float w0 = kTwoPi / period;
   VoiceRandomSequence jitter(seed);
 
-  // Loop lowpass (frequency-dependent damping), closing toward the treble.
-  const float octaves_above_c4 = std::min(
-      std::max(0.0f, (static_cast<float>(note & 0x7Fu) - 60.0f) / 12.0f), kTrebleTaperOctCap);
-  // ...and closes into the bass as well: the wound strings' winding friction
-  // damps the mid partials far faster than the plain-wire loop loss suggests.
-  // Left open, the bass h4-h6 ring 3-4x longer than the reference — a bright
-  // partial stack singing over the fundamental is a harpsichord register.
-  const float octaves_below_c4 =
-      std::max(0.0f, -(static_cast<float>(note & 0x7Fu) - 60.0f) / 12.0f);
-  const float bright_eff =
-      std::clamp(std::clamp(params.brightness, 0.0f, 1.0f) -
-                     kTrebleBrightPerOct * octaves_above_c4 - kBassDarkPerOct * octaves_below_c4,
-                 0.05f, 1.0f);
-  // The loop lowpass runs once per round trip, so a fixed coefficient costs a
-  // given absolute frequency a fixed number of dB PER TRAVERSAL -- and a note
-  // an octave up makes twice as many traversals per second. The damping a
-  // listener actually hears is therefore proportional to f0, which is not how
-  // a string behaves: its losses belong to the wire and the air around it, not
-  // to how often the wave happens to come round. Uncorrected, C6's second
-  // partial falls 60 dB inside the first second and the treble renders as a
-  // sine. Scaling the coefficient back by the traversal rate removes the
-  // register dependence; the exponent sets how much of it is removed, and the
-  // reference frequency is the note left untouched.
-  const float rate_norm =
-      std::pow(kLoopDampRefHz / std::max(f0, 1.0f), std::clamp(kLoopDampRateNorm, 0.0f, 1.0f));
-  const float lp_a = std::clamp((1.0f - bright_eff) * 0.6f * rate_norm, 0.0f, 0.95f);
-  loop_alpha_ = 1.0f - lp_a;
-  const float tau_lp = onepole_phase_delay(lp_a, w0);
-
-  // Stiffness dispersion: the per-note inharmonicity coefficient B drives a
-  // first-order allpass cascade that stretches the partials sharp to
-  // f_n = n*f0*sqrt(1 + B*n^2). The patch dispersion knob scales B
-  // (0 = harmonic string).
-  // Faded out where the cascade no longer fits the loop (see
-  // kDispersionFadeNoteLo). Smoothstepped, so the top octave loses its stretch
-  // gradually rather than at one note boundary.
-  const float fade_lo = kDispersionFadeNoteLo;
-  const float fade_hi = std::max(fade_lo + 1.0f, kDispersionFadeNoteHi);
-  const float fade_x =
-      std::clamp((static_cast<float>(note & 0x7Fu) - fade_lo) / (fade_hi - fade_lo), 0.0f, 1.0f);
-  const float dispersion =
-      std::clamp(params.dispersion, 0.0f, 1.0f) * (1.0f - fade_x * fade_x * (3.0f - 2.0f * fade_x));
-  const float b_coeff = piano_inharmonicity_b(note) * dispersion;
-  const float phase_budget = period - 4.0f - tau_lp;
-  const float ap_a = dispersion_allpass_a(b_coeff, w0, lp_a, kPianoDispersionStages, phase_budget);
-
   // Two-stage decay rates (stretched down the keyboard). The treble taper
   // shortens only the aftersound; the prompt stage instead blends toward the
   // aftersound rate away from the mid-range (see kTwoStageWidthOct).
@@ -793,9 +979,90 @@ void PianoVoiceCore::start(const PianoPatchParams& params, double sample_rate, u
   const float slow_scale = bass_scale * std::exp2(-kTrebleDecayOct * decay_taper_oct);
   const float t60_slow =
       std::max(0.05f, std::max(params.decay_fast_s, params.decay_slow_s) * slow_scale);
+
+  // Loop lowpass (frequency-dependent damping), closing toward the treble.
+  const float octaves_above_c4 = std::min(
+      std::max(0.0f, (static_cast<float>(note & 0x7Fu) - 60.0f) / 12.0f), kTrebleTaperOctCap);
+  // ...and closes into the bass as well: the wound strings' winding friction
+  // damps the mid partials far faster than the plain-wire loop loss suggests.
+  // Left open, the bass h4-h6 ring 3-4x longer than the reference — a bright
+  // partial stack singing over the fundamental is a harpsichord register.
+  const float octaves_below_c4 =
+      std::max(0.0f, -(static_cast<float>(note & 0x7Fu) - 60.0f) / 12.0f);
+  const float bright_eff =
+      std::clamp(std::clamp(params.brightness, 0.0f, 1.0f) -
+                     kTrebleBrightPerOct * octaves_above_c4 - kBassDarkPerOct * octaves_below_c4,
+                 0.05f, 1.0f);
+  // The loop lowpass runs once per round trip, so a fixed coefficient costs a
+  // given absolute frequency a fixed number of dB PER TRAVERSAL -- and a note
+  // an octave up makes twice as many traversals per second. The damping a
+  // listener actually hears is therefore proportional to f0, which is not how
+  // a string behaves: its losses belong to the wire and the air around it, not
+  // to how often the wave happens to come round. Uncorrected, C6's second
+  // partial falls 60 dB inside the first second and the treble renders as a
+  // sine. Scaling the coefficient back by the traversal rate removes the
+  // register dependence; the exponent sets how much of it is removed, and the
+  // reference frequency is the note left untouched.
+  const float rate_norm =
+      std::pow(kLoopDampRefHz / std::max(f0, 1.0f), std::clamp(kLoopDampRateNorm, 0.0f, 1.0f));
+  float lp_a = std::clamp((1.0f - bright_eff) * 0.6f * rate_norm, 0.0f, 0.95f);
+  // Solve the pole from what the string has to DO instead of from a tone knob.
+  //
+  // The rate normalization above takes the register dependence out of the
+  // coefficient, but the coefficient is still chosen for tone and its loss at
+  // the upper partials is then whatever it happens to be — and it is applied
+  // once per traversal, so a note making four thousand of them a second pays it
+  // four thousand times. Measured at C8 the second partial falls 103 dB/s
+  // faster than the fundamental where the reference holds the two within a few
+  // decibels of each other for the whole note, and every voicing knob in the
+  // engine moves that by under twenty. It is not a setting that is wrong, it is
+  // a quantity nothing states.
+  //
+  // Stating it is a two-point filter design: the fundamental keeps the gain its
+  // t60 asks for, and the partial at a FIXED quoted frequency keeps the smaller
+  // one its own target asks for. Fixed rather than at some multiple of f0,
+  // because string damping is measured against frequency and because a target
+  // quoted at the octave is two points a fraction of a percent apart in the
+  // bass — indistinguishable to one pole — while being a brick wall four
+  // octaves up. Same solver the plucked cores use (string_loop.h), which found
+  // the identical defect from the other end.
+  if (kLoopSolveHf > 0.0f) {
+    const float quote_w = kTwoPi *
+                          std::clamp(kLoopHfQuoteHz, 200.0f, 0.45f * static_cast<float>(sr)) /
+                          static_cast<float>(sr);
+    // Above the quote frequency there is no tilt left to ask for: the note's
+    // own fundamental is already past the point the target describes.
+    if (quote_w > w0 * 1.5f) {
+      const float ratio = std::max(1.0f, kLoopHfDecayRatio);
+      const float g0 = loop_gain_for(period, sr, t60_slow);
+      const float g_ref = loop_gain_for(period, sr, t60_slow / ratio);
+      lp_a = std::clamp(solve_string_loop_filter(w0, quote_w, g0, g_ref).a, 0.0f, 0.95f);
+    }
+  }
+  loop_alpha_ = 1.0f - lp_a;
+  const float tau_lp = onepole_phase_delay(lp_a, w0);
+
+  // Stiffness dispersion: the per-note inharmonicity coefficient B drives a
+  // first-order allpass cascade that stretches the partials sharp to
+  // f_n = n*f0*sqrt(1 + B*n^2). The patch dispersion knob scales B
+  // (0 = harmonic string).
+  // Faded out where the cascade no longer fits the loop (see
+  // kDispersionFadeNoteLo). Smoothstepped, so the top octave loses its stretch
+  // gradually rather than at one note boundary.
+  const float fade_lo = kDispersionFadeNoteLo;
+  const float fade_hi = std::max(fade_lo + 1.0f, kDispersionFadeNoteHi);
+  const float fade_x =
+      std::clamp((static_cast<float>(note & 0x7Fu) - fade_lo) / (fade_hi - fade_lo), 0.0f, 1.0f);
+  const float dispersion =
+      std::clamp(params.dispersion, 0.0f, 1.0f) * (1.0f - fade_x * fade_x * (3.0f - 2.0f * fade_x));
+  const float b_coeff = piano_inharmonicity_b(note) * dispersion;
+  const float phase_budget = period - 4.0f - tau_lp;
+  const float ap_a = dispersion_allpass_a(b_coeff, w0, lp_a, kPianoDispersionStages, phase_budget);
+
   const float oct_from_c4_signed = (static_cast<float>(note & 0x7Fu) - 60.0f) / 12.0f;
-  const float contrast = std::exp(-(oct_from_c4_signed * oct_from_c4_signed) /
-                                  (kTwoStageWidthOct * kTwoStageWidthOct));
+  const float contrast_x = oct_from_c4_signed - kTwoStageCenterOct;
+  const float contrast =
+      std::exp(-(contrast_x * contrast_x) / (kTwoStageWidthOct * kTwoStageWidthOct));
   const float inv_fast_full = 1.0f / std::max(0.05f, params.decay_fast_s * bass_scale);
   const float inv_slow = 1.0f / t60_slow;
   const float t60_fast =
@@ -867,6 +1134,16 @@ void PianoVoiceCore::start(const PianoPatchParams& params, double sample_rate, u
   }
   for (int i = num_strings_; i < kMaxPianoStrings; ++i) strings_[static_cast<size_t>(i)] = String{};
   bridge_ = 0.0f;
+  bridge_drain_ = 0.0f;
+  // Corner of the drain's band limit, as a multiple of this note's own
+  // fundamental so the mechanism keeps the same reach in partials at every
+  // pitch. Zero, or a corner at or above Nyquist, leaves the coefficient at 1,
+  // where the filter is the identity and the drain is exactly what it was.
+  const float drain_partials = std::max(0.0f, kTwoStageDrainPartials);
+  const float drain_corner = drain_partials * f0;
+  drain_lp_a_ = (drain_partials <= 0.0f || drain_corner >= 0.5f * static_cast<float>(sr))
+                    ? 1.0f
+                    : 1.0f - std::exp(-kTwoPi * drain_corner / static_cast<float>(sr));
   // Damper keytrack: slightly heavier felt on the wound bass strings, and a
   // SHORTER stop toward the treble — the treble string carries so little
   // energy that even its light damper chokes it almost immediately (reference
@@ -894,8 +1171,62 @@ void PianoVoiceCore::start(const PianoPatchParams& params, double sample_rate, u
   const float damper_vel_scale = std::min(
       kDamperVelScaleMax,
       std::exp(kDamperVelSlope * (kDamperVelAnchor - static_cast<float>(velocity & 0x7Fu))));
-  release_gain_ = loop_gain_for(
-      period, sr, std::max(0.01f, params.release_damp_s * damper_keytrack * damper_vel_scale));
+  const float release_t60 =
+      std::max(0.01f, params.release_damp_s * damper_keytrack * damper_vel_scale);
+  release_gain_ = loop_gain_for(period, sr, release_t60);
+
+  // Modal top-octave bank (see piano_voice.h). Built from the string set the
+  // loop above already derived -- same periods, same detune, same strike and
+  // radiation weights -- so the two paths describe one instrument and the
+  // crossover has nothing to reconcile but the synthesis method.
+  const float cross_lo = kModalCrossNoteLo;
+  const float cross_hi = std::max(cross_lo, kModalCrossNoteHi);
+  const float cross_x = cross_hi > cross_lo
+                            ? std::clamp((note_f - cross_lo) / (cross_hi - cross_lo), 0.0f, 1.0f)
+                            : (note_f >= cross_lo ? 1.0f : 0.0f);
+  modal_mix_ = cross_x * cross_x * (3.0f - 2.0f * cross_x);
+  modal_env_ = 1.0f;
+  modal_damp_ = 1.0f;
+  modal_release_ = std::exp(-6.907755279f / (static_cast<float>(sr) * release_t60));
+  num_modal_ = 0;
+  if (modal_mix_ > 0.0f) {
+    // Full stiffness here, not the faded `dispersion` the loop uses: that fade
+    // exists because the allpass cascade runs out of loop to sit in, and this
+    // path has no loop. The top octave is where B is largest, so it is also
+    // where the fade cost the most.
+    const float modal_b = piano_inharmonicity_b(note) * std::clamp(params.dispersion, 0.0f, 1.0f);
+    const float damp_pow = std::max(0.0f, kModalDampPow);
+    const float nyq = 0.45f * static_cast<float>(sr);
+    // The stiff-string law is quoted against the IDEAL string's f0, so its own
+    // first partial already sits sqrt(1+B) sharp -- seven cents at C7. The loop
+    // does not carry that offset: its delay compensation is taken at w0, which
+    // pins the fundamental to the tuned pitch and lets the stretch accumulate
+    // upward from there. Same convention here, or the top octave would arrive
+    // sharp of the tuning the Railsback curve just placed it at.
+    const float modal_f1 = std::sqrt(1.0f + modal_b);
+    for (int i = 0; i < num_strings_ && num_modal_ < kModalModes; ++i) {
+      const String& s = strings_[static_cast<size_t>(i)];
+      if (s.base_period <= 1.0f) continue;
+      const float sf0 = static_cast<float>(sr) / s.base_period;
+      const float weight = kModalLevel * s.strike_weight * s.radiate_weight;
+      for (int n = 1; n <= kModalPartials && num_modal_ < kModalModes; ++n) {
+        const float fn = static_cast<float>(n) * sf0 *
+                         std::sqrt(1.0f + modal_b * static_cast<float>(n) * static_cast<float>(n)) /
+                         modal_f1;
+        if (fn >= nyq) break;
+        const float w = kTwoPi * fn / static_cast<float>(sr);
+        const float t60_n =
+            std::max(0.01f, t60_slow * std::pow(fn / std::max(sf0, 1.0f), -damp_pow));
+        const float r = std::exp(-6.907755279f / (static_cast<float>(sr) * t60_n));
+        ModalMode& m = modal_[static_cast<size_t>(num_modal_++)];
+        m.a1 = 2.0f * r * std::cos(w);
+        m.a2 = -r * r;
+        m.gain = weight * 2.0f * std::sin(w) / s.base_period;
+        m.y1 = 0.0f;
+        m.y2 = 0.0f;
+      }
+    }
+  }
 
   // Dynamic felt hammer (F = k * x^p with hysteretic loss), integrated per
   // sample against the string at the strike point. The felt stiffness k is
@@ -956,8 +1287,26 @@ void PianoVoiceCore::start(const PianoPatchParams& params, double sample_rate, u
   hammer_amp_ = kOutputLevel * std::pow(vel01, amp_exp) * (una_corda ? 0.8f : 1.0f);
   const float mf_level = kOutputLevel * std::pow(kHammerMfVel, amp_exp) * (una_corda ? 0.8f : 1.0f);
   ham_force_norm_ = f_peak_mf > 1.0e-12f ? mf_level / f_peak_mf : 0.0f;
+  // Re-anchor from the peak onto the delivered momentum (see kInjImpulseNorm).
+  // The peak-anchored norm goes as tau_mf, so dividing it by this note's contact
+  // measured against C4's takes that dependence out and leaves the injection
+  // carrying the same impulse in every register. Computed from the same two
+  // rules the contact above uses rather than remembered, so a change to either
+  // moves the anchor with it.
+  const float impulse_norm = std::clamp(kInjImpulseNorm, 0.0f, 1.0f);
+  if (impulse_norm > 0.0f) {
+    const float period_c4 = static_cast<float>(sr) / note_to_hz(60.0f);
+    const float contact_c4_ms =
+        std::max(std::clamp(params.hammer_contact_ms, 0.2f, 10.0f) *
+                     std::exp2(9.0f / std::max(1.0f, kContactKeytrackSemis)),
+                 std::clamp(kContactPeriodsAtC4, 0.0f, kContactPeriodsMax) * 1000.0f * period_c4 /
+                     static_cast<float>(sr));
+    const float tau_c4 = std::max(8.0f, contact_c4_ms * 0.001f * static_cast<float>(sr));
+    ham_force_norm_ *= std::pow(tau_c4 / tau_mf, impulse_norm);
+  }
+  const float tilt_span = std::max(0.0f, kInjTiltOctSpan);
   ham_force_norm_ *=
-      std::exp2(kInjTiltDbOct * std::clamp(octaves_from_c4, -1.25f, 1.25f) / 6.0206f);
+      std::exp2(kInjTiltDbOct * std::clamp(octaves_from_c4, -tilt_span, tilt_span) / 6.0206f);
   // String yield under the blow: the strike point recedes with a velocity
   // proportional to the net force through the string's wave admittance, and
   // the inverted reflection from the NEAR end (agraffe side, back after
@@ -1023,6 +1372,8 @@ void PianoVoiceCore::start(const PianoPatchParams& params, double sample_rate, u
       kOnePoleAlphaFloor, 1.0f);
   exc_lp_ = 0.0f;
   exc_lp2_ = 0.0f;
+  body_lp_ = 0.0f;
+  body_lp2_ = 0.0f;
 
   // Felt impact noise: a short broadband burst radiated with the knock (the
   // soft una-corda felt lands with far less impact noise than the grooved
@@ -1191,7 +1542,13 @@ float PianoVoiceCore::render(float pitch_ratio) noexcept {
     exc_lp_ += exc_alpha_ * (combed - exc_lp_);
     exc_lp2_ += exc_alpha_ * (exc_lp_ - exc_lp2_);
     exc = exc_lp2_ / static_cast<float>(num_strings_);
-    thud_in = exc_lp2_;
+    // The body's copy of the same blow, softened by the same felt but never
+    // combed (see kKnockUncombed). Written as a lerp off the combed path so
+    // the transparent coefficient is exactly the value that path already had.
+    const float raw = ham_force_norm_ * force;
+    body_lp_ += exc_alpha_ * (raw - body_lp_);
+    body_lp2_ += exc_alpha_ * (body_lp_ - body_lp2_);
+    thud_in = exc_lp2_ + kKnockUncombed * (body_lp2_ - exc_lp2_);
     last_force_ = force;
   }
   if (noise_pos_ < noise_samples_) {
@@ -1251,12 +1608,18 @@ float PianoVoiceCore::render(float pitch_ratio) noexcept {
   const float ratio = pitch_ratio > 0.01f ? pitch_ratio : 0.01f;
   float sum = 0.0f;
   float lp_sum = 0.0f;
-  for (int i = 0; i < num_strings_; ++i) {
+  // Fully past the crossover the loop contributes nothing, so it is not run:
+  // the modal bank is meant to be the cheaper path up there, and leaving four
+  // allpasses and an interpolator per string spinning behind a zero weight
+  // would spend the saving it exists to make. `bridge_` then falls to zero on
+  // its own, which is what a voice with no loop should hand the drain.
+  const int loop_strings = modal_mix_ < 1.0f ? num_strings_ : 0;
+  for (int i = 0; i < loop_strings; ++i) {
     String& s = strings_[static_cast<size_t>(i)];
     if (s.buffer == nullptr || s.size < 8) continue;
     // Coupled two-stage decay: the coherent (bridge) component recirculates
     // at the fast prompt rate, the residual at the slow aftersound rate.
-    const float fb = s.g_slow * s.lp_state - (s.g_slow - s.g_fast) * bridge_;
+    const float fb = s.g_slow * s.lp_state - (s.g_slow - s.g_fast) * bridge_drain_;
     const float delay =
         std::clamp(s.base_period / ratio - s.comp, 1.0f, static_cast<float>(s.size - 4));
     const float out = rt::lagrange3_fractional_delay(
@@ -1274,6 +1637,31 @@ float PianoVoiceCore::render(float pitch_ratio) noexcept {
     sum += out * s.radiate_weight;
   }
   bridge_ = lp_sum / static_cast<float>(num_strings_);
+  // Band-limited copy for the drain only. `bridge_` itself stays broadband:
+  // it is the coherent bridge signal and other things read it as such.
+  //
+  // Written as a lag off the input rather than as the usual `y += a * (x - y)`,
+  // which at a == 1 is `y + (x - y)` and is NOT x in floating point. The two
+  // differ in the last bit, and one last bit inside a feedback loop running
+  // four thousand times a second is not a rounding difference for long. This
+  // form is exactly `bridge_` at the transparent coefficient.
+  bridge_drain_ = bridge_ - (1.0f - drain_lp_a_) * (bridge_ - bridge_drain_);
+  // Modal top-octave bank: the same hammer excitation, resolved into partials.
+  // It stands in for the string's radiated wave and nothing else -- knock,
+  // scrub noise, longitudinal bank, board and bridge hill all read the blended
+  // `sum` exactly as they read the loop's.
+  if (num_modal_ > 0) {
+    float modal_sum = 0.0f;
+    for (int i = 0; i < num_modal_; ++i) {
+      ModalMode& m = modal_[static_cast<size_t>(i)];
+      const float y = m.gain * exc + m.a1 * m.y1 + m.a2 * m.y2;
+      m.y2 = m.y1;
+      m.y1 = y;
+      modal_sum += y;
+    }
+    modal_env_ *= modal_damp_;
+    sum += (modal_sum * modal_env_ - sum) * modal_mix_;
+  }
   // Board ring-up: the tone swells while the impact thud leads.
   bloom_ += bloom_a_ * (1.0f - bloom_);
   // Longitudinal modes, driven by the tension the transverse motion itself
@@ -1334,6 +1722,11 @@ void PianoVoiceCore::release() noexcept {
     s.g_slow = std::min(s.g_slow, release_gain_);
     s.g_fast = std::min(s.g_fast, release_gain_);
   }
+  // The modal bank's damper multiplies the modes' own decay instead of
+  // capping it. Decay RATES add when a second loss mechanism is introduced,
+  // which is what a damper is; the loop's min() is a cap only because a
+  // per-traversal gain has no term to add to.
+  modal_damp_ = std::min(modal_damp_, modal_release_);
 }
 
 void PianoVoiceCore::damp(float strength) noexcept {
@@ -1348,6 +1741,13 @@ void PianoVoiceCore::damp(float strength) noexcept {
     s.g_slow = std::min(s.g_slow, partial_damp_gain(s.g_slow, release_gain_, strength));
     s.g_fast = std::min(s.g_fast, partial_damp_gain(s.g_fast, release_gain_, strength));
   }
+  // Partial contact scales the ADDED rate, so a half-resting damper removes
+  // half the energy per second the full one does. partial_damp_gain's
+  // geometric rule cannot be reused here: it interpolates between two finite
+  // t60s, and the modal bank's undamped end is an infinite one.
+  // Ratcheted like the loop's gains: a damper that has touched the string is
+  // not lifted off it by a later, lighter call.
+  modal_damp_ = std::min(modal_damp_, std::pow(modal_release_, strength));
 }
 
 void PianoVoiceCore::kill() noexcept {
@@ -1361,11 +1761,17 @@ void PianoVoiceCore::kill() noexcept {
   noise_lp_ = 0.0f;
   noise_lp2_ = 0.0f;
   noise_lp3_ = 0.0f;
+  body_lp_ = 0.0f;
+  body_lp2_ = 0.0f;
   long_level_ = 0.0f;
   long_prev_ = 0.0f;
   long_x1_ = 0.0f;
   long_x2_ = 0.0f;
   for (LongMode& m : long_modes_) m = LongMode{};
+  num_modal_ = 0;
+  modal_mix_ = 0.0f;
+  modal_env_ = 1.0f;
+  modal_damp_ = 1.0f;
 }
 
 }  // namespace sonare::midi::synth

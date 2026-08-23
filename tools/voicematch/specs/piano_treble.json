@@ -1,0 +1,44 @@
+{
+  "_": "The partial ladder and the register level, together. Measured against the C7 capture the shipped voice runs its low mid 7 to 16 dB bright, its top two octaves 36 and 83 dB dark, and its level 8 dB quiet at D1 against 10 dB loud at F#6 — and those are one problem, not two: the contact duration is the only strong control the ladder has, and moving it moves the level by an amount nothing chooses. Fit them jointly or each half spends the other.",
+
+  "_weights": "harm carries the ladder, which is the defect. level and crest hold the register balance so the ladder cannot be bought by getting louder — the single failure mode this fit has, since every ladder metric normalises each note by its own fundamental. slope and tail keep the decay from being spent, and cents/tnr are along at their defaults to notice if something breaks.",
+  "weights": {
+    "harm": 3.0,
+    "cents": 0.5,
+    "tnr": 1.0,
+    "slope": 1.0,
+    "tail": 1.0,
+    "level": 2.0,
+    "crest": 1.5,
+    "hf": 0.5
+  },
+
+  "knobs": [
+    {
+      "_": "The contact-in-periods curve. This is what starves the top: at 0.61 per octave C6 gets 1.7 periods and everything above the 2.0 ceiling, and a force pulse two periods long drives the string almost nowhere but at its fundamental. The instrument measures about 0.5 periods at C4 against about 1 at C7, which is 0.17 per octave, and at 0.17 C6's ladder lands within 2 dB of the reference. It is in the fit rather than simply set there because a uniform 0.17 over-brightens F#5 by 15 dB — the model's contact-to-brightness sensitivity is steeper than the instrument's, and the three parameters of this curve have to absorb that between them.",
+      "tunable": "piano_voice.kContactPeriodsAtC4", "min": 0.2, "max": 1.0, "scale": "linear"
+    },
+    { "tunable": "piano_voice.kContactPeriodsPerOct", "min": 0.05, "max": 0.9, "scale": "linear" },
+    { "tunable": "piano_voice.kContactPeriodsMax", "min": 0.8, "max": 3.0, "scale": "linear" },
+    {
+      "_": "Where the patch's own contact time goes per register, which takes over from the curve above wherever it is the longer of the two — at C7 it is, which is why the top octave does not respond to the grading at all.",
+      "tunable": "piano_voice.kContactKeytrackSemis", "min": 12.0, "max": 60.0, "scale": "log"
+    },
+    {
+      "_": "The register level compensation and how far from C4 it keeps acting. The span was pinned at 1.25 octaves, which stopped the correction exactly where its subject is worst; opening it is what lets the contact curve be set by the ladder instead of by the level it drags along.",
+      "tunable": "piano_voice.kInjTiltDbOct", "min": 0.0, "max": 10.0, "scale": "linear"
+    },
+    { "tunable": "piano_voice.kInjTiltOctSpan", "min": 0.5, "max": 4.0, "scale": "linear" },
+    {
+      "_": "Peak-force versus impulse anchoring. On its own it re-levels the ends by up to 6 dB and touches no ladder; it is here because whether that re-levelling helps depends entirely on what the contact curve ends up being, which is the other half of this fit.",
+      "tunable": "piano_voice.kInjImpulseNorm", "min": 0.0, "max": 1.0, "scale": "linear"
+    },
+    {
+      "_": "The felt lowpass, in cycles of the contact. The second-strongest control on the treble ladder after the contact itself.",
+      "tunable": "piano_voice.kFeltCutoffContactCycles", "min": 1.5, "max": 20.0, "scale": "log"
+    },
+    { "tunable": "piano_voice.kTrebleBrightPerOct", "min": 0.0, "max": 0.4, "scale": "linear" },
+    { "tunable": "piano_voice.kTrebleTaperOctCap", "min": 0.5, "max": 4.0, "scale": "linear" },
+    { "tunable": "fam0.piano.brightness", "min": 0.4, "max": 1.0, "scale": "linear" }
+  ]
+}

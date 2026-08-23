@@ -57,7 +57,17 @@ inline constexpr float kPianoDirectGain = 0.3f;
 /// bank ring well past the ~120 ms voice release, so both hosts fold this into
 /// their tail estimate — and the SF2 host uses it to decide how long a part's
 /// body still costs CPU — or a bounce cuts the bloom off the last chord.
-inline constexpr float kPianoBodyRingS = 2.0f;
+///
+/// The longest-ringing member is the frame bank (kFrameT60S in
+/// piano_resonance.cpp) and not the soundboard, and this covers it with room
+/// to spare. What matters at the cut is the LEVEL, not the t60: measured on a
+/// released note the render sits at -85 dBFS six seconds after note-off, -98 at
+/// nine and -110 at twelve, so six seconds truncates below fourteen bits. A
+/// body ringing past the estimate is a body whose last chord is clipped in the
+/// rendered file and nowhere else, so nothing fails except that file — which is
+/// also why raising this buys inaudibility that is already bought, at the cost
+/// of lengthening every bounce.
+inline constexpr float kPianoBodyRingS = 6.0f;
 inline constexpr int kPianoDispersionStages = 4;
 /// Lowest fundamental the piano string loops are sized for (A0 = 27.5 Hz).
 inline constexpr float kPianoMinFundamentalHz = 26.0f;
@@ -192,9 +202,68 @@ class PianoVoiceCore {
   int num_strings_ = 0;
   float loop_alpha_ = 1.0f;
   float bridge_ = 0.0f;
+  /// The bridge signal the prompt-decay drain actually subtracts, and the
+  /// one-pole that band-limits it (see kTwoStageDrainPartials). At the
+  /// coefficient's transparent value of 1 this tracks `bridge_` exactly.
+  float bridge_drain_ = 0.0f;
+  float drain_lp_a_ = 1.0f;
   /// Damper radius cap, derived in start() from the note and the strike
   /// velocity and applied by release() / damp().
   float release_gain_ = 0.0f;
+
+  // Modal top-octave bank: the same string, stated as its partials instead of
+  // as a travelling wave.
+  //
+  // A waveguide loop is a delay line whose length IS the period, and every
+  // element the loop needs -- the loss filter, the dispersion cascade, the
+  // fractional-delay interpolator -- costs phase delay out of that length.
+  // At C8 the whole loop is six samples. Four allpass stages and a one-pole
+  // do not fit, the third-order fractional interpolator's magnitude droop is
+  // paid four thousand times a second, and the result is a string that leaks
+  // roughly seventy times the loss its t60 prescribes: measured, C8's second
+  // partial falls 103 dB/s faster than its first where the reference holds
+  // the two within a few decibels for the whole note. The failure is
+  // structural rather than a setting -- no voicing knob in the engine moves
+  // it by more than twenty -- and it is the documented limit of the method
+  // (Smith, *Physical Audio Signal Processing*), whose stated remedy at very
+  // high pitches is to leave the delay line for a small bank of second-order
+  // resonators (Bank, Zambon & Fontana 2010 take a whole piano that way).
+  //
+  // So above the crossover each unison string is realized as its partials,
+  // one two-pole resonator per (string, partial), driven by the SAME hammer
+  // excitation and radiated through the same board. Three things follow:
+  // every partial's decay becomes a declared quantity rather than a
+  // by-product of loop arithmetic; the stiff-string stretch is exact instead
+  // of faded out where the allpass cascade stopped fitting; and the top of
+  // the keyboard gets cheaper, since a C8 needs about five partials against a
+  // loop that still costs its interpolator and four allpasses per string.
+  //
+  // The mode amplitude is derived, not fitted. A unit impulse injected into a
+  // loop of period P leaves an impulse train whose harmonic components each
+  // have amplitude 2/P and decay at the loop gain, while a two-pole resonator
+  // driven by the same impulse rings at gain/sin(w) -- so gain = 2*sin(w)/P
+  // makes the two paths agree partial for partial, and the crossover is a
+  // level match by construction.
+  static constexpr int kModalPartials = 16;
+  static constexpr int kModalModes = kMaxPianoStrings * kModalPartials;
+  struct ModalMode {
+    float a1 = 0.0f;
+    float a2 = 0.0f;
+    float gain = 0.0f;  // 2*sin(w)/P, times the strike and radiation weights
+    float y1 = 0.0f;
+    float y2 = 0.0f;
+  };
+  std::array<ModalMode, kModalModes> modal_{};
+  int num_modal_ = 0;
+  /// Crossover weight in [0,1]: 0 leaves the waveguide alone, 1 skips it.
+  float modal_mix_ = 0.0f;
+  /// Damper on the modal bank. Applied as an output envelope rather than by
+  /// retuning the poles: with the hammer long gone the bank's input is zero,
+  /// so an exponential on the sum is exactly extra damping on every mode, and
+  /// it costs one multiply instead of a trig sweep on the audio thread.
+  float modal_env_ = 1.0f;
+  float modal_damp_ = 1.0f;
+  float modal_release_ = 1.0f;
 
   /// Ring capacity for the strike-position comb on the hammer force (covers
   /// a 0.5 * period tap up to ~32 Hz at 96 kHz; longer taps clamp).
@@ -237,6 +306,10 @@ class PianoVoiceCore {
   float exc_alpha_ = 1.0f;
   float exc_lp_ = 0.0f;
   float exc_lp2_ = 0.0f;
+  /// The blow as the BODY feels it: the same felt-softened force pulse, but
+  /// without the string's strike-position comb (see kKnockUncombed).
+  float body_lp_ = 0.0f;
+  float body_lp2_ = 0.0f;
 
   // Longitudinal string modes ("phantom partials"). Transverse motion stretches
   // the string, and the tension change it makes -- quadratic in the transverse
@@ -347,7 +420,12 @@ class PianoResonanceBank {
   float process(float bridge_in, bool damper_open) noexcept;
 
  private:
-  static constexpr int kResonanceModes = 16;
+  /// Two populations share this bank, and only one of them answers to the
+  /// pedal. A grand's dampers stop partway up the treble; every string above
+  /// that point is free at all times, so its ring is not a pedal effect and
+  /// must not be gated by one. The modes below `ungated_count_` are that top,
+  /// the rest are the damped register the pedal lifts.
+  static constexpr int kResonanceModes = 44;
   struct Mode {
     float a1 = 0.0f;
     float a2 = 0.0f;
@@ -356,6 +434,7 @@ class PianoResonanceBank {
     float y2 = 0.0f;
   };
   std::array<Mode, kResonanceModes> modes_{};
+  int ungated_count_ = 0;
   float gate_ = 0.0f;
   float gate_open_coeff_ = 1.0f;
   float gate_close_coeff_ = 1.0f;
@@ -401,6 +480,37 @@ class PianoSoundboard {
     float y2 = 0.0f;
   };
   std::array<Mode, kSoundboardModes> modes_{};
+  // Frame: the plate and the rim, which the board above is not.
+  //
+  // Every member of the instrument that the model has is made of wood, and
+  // wood cannot hold a note for seconds. A resonator's decay is set by its
+  // loss factor, t60 ~ 2.2 / (f * eta), and spruce's eta of one to three
+  // percent puts a 100 Hz soundboard mode at about a second. A grand also
+  // carries a 150 kg cast-iron plate and a laminated rim, and iron's eta is
+  // one to three PER MILLE -- an order of magnitude lower, which is seconds
+  // to tens of seconds at the same frequency. Nothing else in the instrument
+  // has that number.
+  //
+  // It matters because the reference has exactly that signature and the model
+  // had none of it: struck anywhere on the keyboard, a dry concert grand goes
+  // on radiating 60-250 Hz at a level its pitch barely moves -- over 0.4-1.4 s,
+  // where the note's own fundamental is out of the band, -39.6 dB at C4 against
+  // -37.7 at C7, flat to two decibels across three octaves -- and holds
+  // 125-1000 Hz for seconds after the string is gone. That constant is a
+  // property of the SUSTAIN; the attack window is not flat and never was, since
+  // it still carries a strike transient the contact time shapes with pitch.
+  // Nor does the bank's own decay follow the material figure quoted above --
+  // see kFrameT60S, where the number that does land on iron measures wrong once
+  // the damper is in the metric. What the material argument establishes is that
+  // the member is there, not how long the bank should ring.
+  // A pitch-independent level is what a fixed mass
+  // struck by a fixed blow gives; it is not something the strings can produce,
+  // and it is not something a room can produce either, since a linear space
+  // cannot make 125 Hz out of a 4 kHz C8. Measured across three different
+  // concert grands the attack level agrees to within 0.6 dB, which is what a
+  // structure common to all of them looks like.
+  static constexpr int kFrameModes = 8;
+  std::array<Mode, kFrameModes> frame_{};
   // Schroeder allpass diffusers (fixed capacity, no allocation: the lazy
   // fallback prepare runs on the audio thread; prepare() sets the active
   // lengths, clamped to the capacity at very high sample rates).
