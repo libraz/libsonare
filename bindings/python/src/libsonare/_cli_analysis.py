@@ -16,6 +16,7 @@ from ._cli_common import (
     _color_enabled,
     _format_time,
     _parse_key_profile,
+    _parse_meter_candidates,
     _parse_mode,
     _parse_modes,
     _parse_pitch_class,
@@ -291,12 +292,17 @@ def cmd_analyze(args: argparse.Namespace) -> int:
     from . import analyze
 
     samples, sr = _load_audio(args.file)
+    candidates = _parse_meter_candidates(args.meter_candidates)
     r = analyze(
         samples,
         sample_rate=sr,
         use_triads_only=not args.with_seventh,
         use_hpss=not args.no_hpss,
         chroma_highpass_hz=args.chroma_highpass,
+        # An empty list means the option was not given: pass None so the core
+        # seeds its own default rather than being handed a set it rejects.
+        meter_candidate_numerators=candidates or None,
+        meter_denominator=args.meter_denominator,
     )
     key_name = f"{PITCH_NAMES[r.key.root.value]} {MODE_NAMES[r.key.mode.value]}"
 

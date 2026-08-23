@@ -499,6 +499,34 @@ int cmd_analyze(const CliArgs& args, const Audio& audio) {
   config.use_triads_only = !args.has("with-seventh");
   config.use_hpss = !args.has("no-hpss");
   config.chroma_highpass_hz = args.get_float("chroma-highpass", config.chroma_highpass_hz);
+  // Only the shape is parsed here; which numerators are acceptable and how many
+  // is validated by the core, so a CLI list is rejected for the same reason a
+  // facade list is. An option that was not given leaves the core default in
+  // place rather than replacing it with an empty set, which the core rejects.
+  const std::string meter_candidates = args.get_string("meter-candidates");
+  if (!meter_candidates.empty()) {
+    std::vector<int> numerators;
+    std::stringstream stream(meter_candidates);
+    std::string item;
+    while (std::getline(stream, item, ',')) {
+      const size_t begin = item.find_first_not_of(" \t");
+      if (begin == std::string::npos) continue;
+      const size_t end = item.find_last_not_of(" \t");
+      const std::string trimmed = item.substr(begin, end - begin + 1);
+      try {
+        size_t consumed = 0;
+        const int numerator = std::stoi(trimmed, &consumed);
+        if (consumed != trimmed.size()) throw std::invalid_argument(trimmed);
+        numerators.push_back(numerator);
+      } catch (const std::exception&) {
+        std::cerr << color::red << "Error: invalid meter numerator: " << trimmed << color::reset
+                  << "\n";
+        return 3;
+      }
+    }
+    config.meter_candidate_numerators = std::move(numerators);
+  }
+  config.meter_denominator = args.get_int("meter-denominator", config.meter_denominator);
 
   if (!args.quiet && !args.json_output) {
     int workers = system_info::parallel_workers();

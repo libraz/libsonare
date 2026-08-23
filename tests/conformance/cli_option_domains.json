@@ -26,6 +26,16 @@
       "exclusiveMaximum": false
     },
     {
+      "command": "analyze",
+      "option": "meter-denominator",
+      "rejectExit": "usage",
+      "choices": [],
+      "minimum": 0.0,
+      "exclusiveMinimum": true,
+      "maximum": null,
+      "exclusiveMaximum": false
+    },
+    {
       "command": "eq",
       "option": "bits",
       "rejectExit": "invalid_parameter",

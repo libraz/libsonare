@@ -524,6 +524,20 @@ def _build_parser() -> _ContractArgumentParser:
         default=80.0,
         help="High-pass cutoff for chroma analysis in Hz (default: 80.0)",
     )
+    # An odd meter is only ever reported if its numerator was asked for, so
+    # without this option the CLI could not reach one at all.
+    analyze_p.add_argument(
+        "--meter-candidates",
+        type=str,
+        default="",
+        help="Comma-separated meter numerators to score, e.g. 3,4,5,7 (default: 3,4,6)",
+    )
+    analyze_p.add_argument(
+        "--meter-denominator",
+        type=_positive_int,
+        default=4,
+        help="Beat unit reported for the detected meter (default: 4)",
+    )
     mel_p = sub.add_parser("mel", parents=[mel_options], help="Compute mel spectrogram")
     mel_p.add_argument("--fmin", type=float, default=0.0, help="Lowest mel band frequency in Hz")
     mel_p.add_argument(

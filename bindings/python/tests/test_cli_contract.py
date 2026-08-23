@@ -564,6 +564,8 @@ def test_analyze_flags_are_accepted_and_forwarded(monkeypatch, capsys) -> None:
     assert defaults.with_seventh is False
     assert defaults.no_hpss is False
     assert defaults.chroma_highpass == 80.0
+    assert defaults.meter_candidates == ""
+    assert defaults.meter_denominator == 4
 
     captured: dict[str, object] = {}
 
@@ -592,6 +594,10 @@ def test_analyze_flags_are_accepted_and_forwarded(monkeypatch, capsys) -> None:
         "use_triads_only": False,
         "use_hpss": False,
         "chroma_highpass_hz": 123.5,
+        # Omitted on the command line, so the core keeps its own default set
+        # rather than receiving an empty one, which it rejects.
+        "meter_candidate_numerators": None,
+        "meter_denominator": 4,
     }
 
 

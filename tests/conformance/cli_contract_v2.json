@@ -109,6 +109,31 @@
           "domain": null
         },
         {
+          "name": "meter-candidates",
+          "type": "string",
+          "default": "",
+          "aliases": [],
+          "repeatable": false,
+          "required": false,
+          "domain": null
+        },
+        {
+          "name": "meter-denominator",
+          "type": "integer",
+          "default": 4,
+          "aliases": [],
+          "repeatable": false,
+          "required": false,
+          "domain": {
+            "choices": [],
+            "minimum": 0,
+            "exclusiveMinimum": true,
+            "maximum": null,
+            "exclusiveMaximum": false,
+            "rejectExit": "usage"
+          }
+        },
+        {
           "name": "no-hpss",
           "type": "boolean",
           "default": false,
@@ -3614,6 +3639,31 @@
           "domain": null
         },
         {
+          "name": "meter-candidates",
+          "type": "string",
+          "default": "",
+          "aliases": [],
+          "repeatable": false,
+          "required": false,
+          "domain": null
+        },
+        {
+          "name": "meter-denominator",
+          "type": "integer",
+          "default": 4,
+          "aliases": [],
+          "repeatable": false,
+          "required": false,
+          "domain": {
+            "choices": [],
+            "minimum": 0,
+            "exclusiveMinimum": true,
+            "maximum": null,
+            "exclusiveMaximum": false,
+            "rejectExit": "usage"
+          }
+        },
+        {
           "name": "no-hpss",
           "type": "boolean",
           "default": false,
@@ -3778,6 +3828,68 @@
           "payload": "success",
           "artifact": "none",
           "stdout": "json"
+        },
+        {
+          "id": "meter_candidates_widened",
+          "argv": [
+            "analyze",
+            "{audio}",
+            "--meter-candidates",
+            "3,4,5,7",
+            "--json"
+          ],
+          "exit": 0,
+          "legacy_exit": 0,
+          "payload": "success",
+          "artifact": "none",
+          "stdout": "json"
+        },
+        {
+          "id": "meter_denominator_explicit",
+          "argv": [
+            "analyze",
+            "{audio}",
+            "--meter-denominator",
+            "8",
+            "--json"
+          ],
+          "exit": 0,
+          "legacy_exit": 0,
+          "payload": "success",
+          "artifact": "none",
+          "stdout": "json"
+        },
+        {
+          "id": "meter_candidates_not_a_number",
+          "argv": [
+            "analyze",
+            "{audio}",
+            "--meter-candidates",
+            "3,x",
+            "--json"
+          ],
+          "exit": 3,
+          "legacy_exit": 1,
+          "payload": "none",
+          "artifact": "none",
+          "stdout": "empty",
+          "stderr": "nonempty"
+        },
+        {
+          "id": "meter_candidates_out_of_range",
+          "argv": [
+            "analyze",
+            "{audio}",
+            "--meter-candidates",
+            "1",
+            "--json"
+          ],
+          "exit": 3,
+          "legacy_exit": 1,
+          "payload": "none",
+          "artifact": "none",
+          "stdout": "empty",
+          "stderr": "nonempty"
         }
       ],
       "artifacts": {}

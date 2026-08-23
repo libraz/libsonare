@@ -608,7 +608,16 @@ const std::vector<CliCommandSpec>& build_cli_registry() {
                  // checker, so the native contract declares the same domain and
                  // the same (parse-time) class.
                  with_domain(number_value("chroma-highpass", 80.0),
-                             at_least(0.0, CliOptionDomainStage::Usage))});
+                             at_least(0.0, CliOptionDomainStage::Usage)),
+                 // An odd meter is only ever reported if its numerator was
+                 // asked for, so without these the CLI cannot reach one. The
+                 // list is a string here and validated by the core, which is
+                 // what already holds the count and range rules.
+                 string_value("meter-candidates"),
+                 // The Python CLI parses this through its positive-integer
+                 // checker, so the domain and the (parse-time) class match it.
+                 with_domain(int_value("meter-denominator", 4),
+                             greater_than(0.0, CliOptionDomainStage::Usage))});
     for (const char* path : {"bpm", "beats", "downbeats", "onsets"})
       add_command(commands, path, true, {});
     add_command(

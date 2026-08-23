@@ -697,6 +697,24 @@ def _parse_modes(value: str) -> list[Mode]:
     return [_parse_mode(item.strip()) for item in value.split(",") if item.strip()]
 
 
+def _parse_meter_candidates(value: str) -> list[int]:
+    """Parse a comma-separated meter numerator list.
+
+    Only the shape is checked here — an entry that is not an integer never
+    reaches a range rule. Which numerators are acceptable, and how many, is the
+    core's to enforce, so the same list is rejected for the same reason whether
+    it came from a CLI or from a facade call.
+    """
+    parts = [item.strip() for item in value.split(",") if item.strip()]
+    numerators: list[int] = []
+    for part in parts:
+        try:
+            numerators.append(int(part))
+        except ValueError as exc:
+            raise ValueError(f"invalid meter numerator: {part}") from exc
+    return numerators
+
+
 def _parse_key_profile(value: str) -> KeyProfile:
     names = {
         "ks": KeyProfile.KRUMHANSL_SCHMUCKLER,

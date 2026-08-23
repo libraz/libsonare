@@ -406,7 +406,28 @@ def test_analyze_options_forward_existing_api_keywords(monkeypatch, capsys) -> N
         "use_triads_only": False,
         "use_hpss": False,
         "chroma_highpass_hz": 123.5,
+        # Not given, so the core seeds its own candidate set rather than being
+        # handed an empty one.
+        "meter_candidate_numerators": None,
+        "meter_denominator": 4,
     }
+
+    captured.clear()
+    widened = parser.parse_args(
+        [
+            "analyze",
+            "--meter-candidates",
+            "3, 4 ,5,7",
+            "--meter-denominator",
+            "8",
+            "--json",
+            "input.wav",
+        ]
+    )
+    assert cli.cmd_analyze(widened) == 0
+    json.loads(capsys.readouterr().out)
+    assert captured["meter_candidate_numerators"] == [3, 4, 5, 7]
+    assert captured["meter_denominator"] == 8
 
 
 def test_missing_command_is_usage_error_with_empty_stdout(monkeypatch, capsys) -> None:
