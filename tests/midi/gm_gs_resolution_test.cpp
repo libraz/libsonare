@@ -8,6 +8,7 @@
 ///        must select the same timbre and articulate the same way on both
 ///        instruments.
 
+#include <algorithm>
 #include <catch2/catch_test_macros.hpp>
 #include <cmath>
 #include <cstdint>
@@ -100,6 +101,42 @@ std::vector<float> select_and_play(Instrument& instrument, uint8_t channel, uint
   std::vector<float> out = render(instrument, 2048);
   instrument.on_event(0, event(sonare::midi::make_midi1_control_change(0, channel, 120, 0)));
   return out;
+}
+
+/// Do two drum keys carry the same voicing?
+///
+/// Compared field by field rather than by rendering them. A render tells two
+/// keys apart only through a threshold on some spectral distance, and the
+/// pieces of one kit are not separable that way: a closed hi-hat and a splash
+/// really are two short bright noise bursts, so any threshold that calls them
+/// distinct also passes a collapse, and any threshold that catches a collapse
+/// demands the voicings be distorted to satisfy it. `memcmp` is out for its own
+/// reason - the struct mixes `bool`, `uint8_t` and `float`, so it has padding.
+///
+/// An omission here can only produce a false alarm, never a false pass: a field
+/// left out makes two patches that differ solely in it read as the same.
+bool same_voicing(const NativeSynthPatch& a, const NativeSynthPatch& b) {
+  const auto& x = a.percussion;
+  const auto& y = b.percussion;
+  return a.gain == b.gain && a.amp_env.attack_ms == b.amp_env.attack_ms &&
+         a.amp_env.decay_ms == b.amp_env.decay_ms && a.amp_env.release_ms == b.amp_env.release_ms &&
+         x.num_modes == y.num_modes && x.mode_ratios == y.mode_ratios &&
+         x.mode_decay_s == y.mode_decay_s && x.tone_gain == y.tone_gain &&
+         x.base_freq_hz == y.base_freq_hz && x.pitch_drop == y.pitch_drop &&
+         x.pitch_drop_ms == y.pitch_drop_ms && x.strike_r == y.strike_r &&
+         x.strike_theta == y.strike_theta && x.mode_m == y.mode_m && x.mode_alpha == y.mode_alpha &&
+         x.noise_gain == y.noise_gain && x.noise_decay_ms == y.noise_decay_ms &&
+         x.noise_cutoff_hz == y.noise_cutoff_hz && x.noise_q == y.noise_q &&
+         x.noise_output == y.noise_output && x.noise_air_hz == y.noise_air_hz &&
+         x.shell_mix == y.shell_mix && x.shell_num_modes == y.shell_num_modes &&
+         x.shell_freq_hz == y.shell_freq_hz && x.shell_t60_s == y.shell_t60_s &&
+         x.shell_weight == y.shell_weight && x.wire_buzz == y.wire_buzz &&
+         x.wire_threshold == y.wire_threshold && x.wire_cutoff_hz == y.wire_cutoff_hz &&
+         x.shimmer == y.shimmer && x.shimmer_attack_ms == y.shimmer_attack_ms &&
+         x.shimmer_cutoff_hz == y.shimmer_cutoff_hz && x.phisem_beans == y.phisem_beans &&
+         x.phisem_energy_ms == y.phisem_energy_ms && x.phisem_sound_ms == y.phisem_sound_ms &&
+         x.phisem_res_hz == y.phisem_res_hz && x.phisem_res_q == y.phisem_res_q &&
+         x.phisem_scrape_hz == y.phisem_scrape_hz && x.phisem_pitch_glide == y.phisem_pitch_glide;
 }
 
 /// One bank-select form and the plain GS bank it must resolve to. Rendering
@@ -240,6 +277,91 @@ TEST_CASE("GS drum kits past the SC-55 set are voiced apart from Standard",
   // sample for sample.
   Sf2Player sc55_909 = make_fallback_player();
   REQUIRE(select_and_play(sc55_909, kDrumChannel, 0, 1, 30, 36) == standard);
+}
+
+TEST_CASE("no two GM kit keys are the same piece unless the key sets the pitch",
+          "[midi][synth][sf2][gm]") {
+  // Six cymbal keys once shared one patch, and a cymbal patch pins its own base
+  // frequency, so all six rendered the same plate at the same pitch. Only the
+  // noise seed told them apart, which means an inequality check on the render
+  // passes while the collapse is in place.
+  //
+  // Sharing a voicing is legitimate exactly when the key supplies the pitch:
+  // the six toms share one patch because `base_freq_hz` is 0 there and the
+  // struck key sets the head frequency, so six keys really are six drums. A
+  // patch that pins its frequency has no such out, and two keys on one is two
+  // names for one sound.
+  using sonare::midi::synth::gm_fallback_drum_patch;
+  struct Piece {
+    uint8_t note;
+    const char* what;
+  };
+  // The General MIDI standard kit, key 35 to key 81.
+  constexpr Piece kPieces[] = {
+      {35, "Acoustic Bass Drum"},
+      {36, "Bass Drum 1"},
+      {37, "Side Stick"},
+      {38, "Acoustic Snare"},
+      {39, "Hand Clap"},
+      {40, "Electric Snare"},
+      {41, "Low Floor Tom"},
+      {42, "Closed Hi-Hat"},
+      {43, "High Floor Tom"},
+      {44, "Pedal Hi-Hat"},
+      {45, "Low Tom"},
+      {46, "Open Hi-Hat"},
+      {47, "Low-Mid Tom"},
+      {48, "Hi-Mid Tom"},
+      {49, "Crash Cymbal 1"},
+      {50, "High Tom"},
+      {51, "Ride Cymbal 1"},
+      {52, "Chinese Cymbal"},
+      {53, "Ride Bell"},
+      {54, "Tambourine"},
+      {55, "Splash Cymbal"},
+      {56, "Cowbell"},
+      {57, "Crash Cymbal 2"},
+      {58, "Vibraslap"},
+      {59, "Ride Cymbal 2"},
+      {60, "Hi Bongo"},
+      {61, "Low Bongo"},
+      {62, "Mute Hi Conga"},
+      {63, "Open Hi Conga"},
+      {64, "Low Conga"},
+      {65, "High Timbale"},
+      {66, "Low Timbale"},
+      {67, "High Agogo"},
+      {68, "Low Agogo"},
+      {69, "Cabasa"},
+      {70, "Maracas"},
+      {71, "Short Whistle"},
+      {72, "Long Whistle"},
+      {73, "Short Guiro"},
+      {74, "Long Guiro"},
+      {75, "Claves"},
+      {76, "Hi Wood Block"},
+      {77, "Low Wood Block"},
+      {78, "Mute Cuica"},
+      {79, "Open Cuica"},
+      {80, "Mute Triangle"},
+      {81, "Open Triangle"},
+  };
+
+  for (size_t a = 0; a < std::size(kPieces); ++a) {
+    const NativeSynthPatch& first = gm_fallback_drum_patch(kPieces[a].note);
+    for (size_t b = a + 1; b < std::size(kPieces); ++b) {
+      const NativeSynthPatch& second = gm_fallback_drum_patch(kPieces[b].note);
+      if (first.percussion.base_freq_hz == 0.0f && second.percussion.base_freq_hz == 0.0f) {
+        continue;  // Key-tracked: the two keys are two pitches of one drum.
+      }
+      // CHECK, not REQUIRE: a collapse is usually a family rather than a pair,
+      // and stopping at the first one hides the rest of it.
+      INFO(kPieces[a].what << " (key " << static_cast<int>(kPieces[a].note) << ") vs "
+                           << kPieces[b].what << " (key " << static_cast<int>(kPieces[b].note)
+                           << ")");
+      CHECK_FALSE(same_voicing(first, second));
+    }
+  }
 }
 
 TEST_CASE("a GS variation bank reaches its own patch and falls back to the capital",
