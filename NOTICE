@@ -42,6 +42,44 @@ r8brain-free-src
 
   Vendored in: third_party/r8brain/
 
+  r8brain-free-src bundles FFT implementations by other authors under
+  third_party/r8brain/fft/. The MIT notice above covers Aleksey Vaneev's work
+  only; each bundled implementation keeps its own copyright and terms:
+
+    Ooura FFT (fft4g.h) — the implementation this project actually compiles,
+    since neither R8B_PFFFT nor R8B_IPP is defined.
+
+      Copyright (C) 1996-2001 Takuya OOURA
+
+      Used with permission granted by the author's license.
+
+      http://www.kurims.kyoto-u.ac.jp/~ooura/fft.html
+
+    PFFFT and PFFFT DOUBLE (pffft*.c, pffft*.h, simd/pf_*.h)
+
+      Copyright (c) 2013 Julien Pommier
+      Copyright (c) 2020 Hayati Ayguen
+      Copyright (c) 2020 Dario Mambro
+
+      Derived from FFTPACK v4, authored by Dr Paul Swarztrauber of NCAR, and
+      distributed under the FFTPACK v5 license (SPDX: BSD-3-Clause):
+
+        Copyright (c) 2004 the University Corporation for Atmospheric
+        Research ("UCAR"). All rights reserved. Developed by NCAR's
+        Computational and Information Systems Laboratory, UCAR,
+        www.cisl.ucar.edu.
+
+      https://bitbucket.org/jpommier/pffft
+      https://github.com/marton78/pffft
+
+    AVX-to-NEON translation layer (simd/pf_neon_double_from_avx.h)
+
+      Copyright (C) 2020 Huawei Technologies Co., Ltd. All rights reserved.
+
+      Licensed under the Apache License, Version 2.0 (SPDX: Apache-2.0).
+
+      https://github.com/kunpengcompute/AvxToNeon
+
 ================================================================================
 dr_libs (dr_wav)
 ================================================================================
