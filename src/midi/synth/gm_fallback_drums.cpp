@@ -287,6 +287,35 @@ SONARE_TUNED_CONSTEXPR std::array<NativeSynthPatch, 128> build_drum_note_table()
     return p;
   };
 
+  // Struck cymbal: the shared wash-plus-ring-mode archetype, told apart by the
+  // four things that separate one cymbal from another. `tone_gain` sets how
+  // defined the stick attack is against the wash, `noise_decay_ms` how long
+  // the wash lasts, `mode_decay_s` how long the plate rings under it, and
+  // `shimmer` how much the nonlinear bloom swells after the strike. In those
+  // terms a ride is a crash with the attack brought forward and the bloom taken
+  // away, a splash is a crash that stops, and a china is a crash whose ring
+  // modes are detuned until none of them is a pitch.
+  //
+  // The plate lengths are the physical ones - a splash is 8 to 10 inches and a
+  // ride 20 to 22 - so these are starting points a calibration can reach, not
+  // fitted values. They exist because a shared patch cannot be calibrated at
+  // all: every knob moved for the ride moved the crash by the same amount.
+  auto make_cymbal = [&](float base_hz, float mode_decay_s, float tone_gain, float noise_decay_ms,
+                         float noise_cutoff_hz, float shimmer, float length_ms, float gain) {
+    NativeSynthPatch p = d.cymbal;
+    // Release is unused by a one-shot voice in normal play; `length_ms` is what
+    // decides how long the piece sounds.
+    p.amp_env = fallback_env(0.5f, length_ms, 0.0f, length_ms * 0.29f);
+    p.percussion.base_freq_hz = base_hz;
+    p.percussion.mode_decay_s = mode_decay_s;
+    p.percussion.tone_gain = tone_gain;
+    p.percussion.noise_decay_ms = noise_decay_ms;
+    p.percussion.noise_cutoff_hz = noise_cutoff_hz;
+    p.percussion.shimmer = shimmer;
+    p.gain = gain;
+    return p;
+  };
+
   // Hand clap: a dense band-passed noise burst.
   NativeSynthPatch clap = piece;
   clap.amp_env = fallback_env(0.5f, 120.0f, 0.0f, 40.0f);
@@ -301,17 +330,72 @@ SONARE_TUNED_CONSTEXPR std::array<NativeSynthPatch, 128> build_drum_note_table()
   // also the current home of the not-yet-built stochastic shakers/scrapers).
   for (auto& p : t) p = d.percussion;
 
-  // --- existing kit archetypes (unchanged voicings) ---
+  // --- kit archetypes ---
   t[35] = d.kick;
   t[36] = d.kick;
-  t[38] = d.snare;
-  t[40] = d.snare;
-  t[42] = d.closed_hat;  // closed
-  t[44] = d.closed_hat;  // pedal
   t[46] = d.open_hat;
+  // One tom patch voices every tom size because the toms are key-tracked: the
+  // struck key sets the head frequency, so six keys are six drums.
   t[41] = t[43] = t[45] = t[47] = t[48] = t[50] = d.tom;
-  t[49] = t[52] = t[55] = t[57] = d.cymbal;  // crash 1 / china / splash / crash 2
-  t[51] = t[59] = d.cymbal;                  // ride 1 / ride 2
+
+  // --- cymbals ---
+  //
+  // Six keys, six plates. They cannot share one patch the way the toms do: a
+  // cymbal patch pins `base_freq_hz`, so a shared one renders the same plate at
+  // the same pitch on every key and only the noise seed tells them apart.
+  //
+  // The wash is high-passed, so its corner is what makes a plate dark or
+  // bright: a lower corner lets more of the low-mid body through. The two
+  // members of each pair are the two sizes a kit actually carries - a 16 inch
+  // crash against an 18, a 20 inch ride against a 22 - so the larger of each is
+  // darker, slower and longer.
+  //                       base   ring  tone   wash  cutoff shimm   len   gain
+  t[49] = make_cymbal(3600.0f, 1.10f, 0.25f, 900.0f, 5500.0f, 6.0f, 1400.0f, 0.50f);   // Crash 1
+  t[57] = make_cymbal(2500.0f, 1.55f, 0.28f, 1250.0f, 3600.0f, 5.0f, 1900.0f, 0.52f);  // Crash 2
+  // A ride is played on its shoulder with the tip of the stick, so what carries
+  // is a defined ping over a wash kept short enough to stay out of its way; a
+  // ride that blooms like a crash is a ride nobody can play time on.
+  t[51] = make_cymbal(2800.0f, 2.20f, 0.75f, 260.0f, 6500.0f, 1.0f, 2600.0f, 0.50f);  // Ride 1
+  t[59] = make_cymbal(1900.0f, 2.80f, 0.90f, 170.0f, 4000.0f, 0.6f, 3200.0f, 0.48f);  // Ride 2
+  t[55] = make_cymbal(5200.0f, 0.30f, 0.35f, 240.0f, 9000.0f, 2.5f, 420.0f, 0.45f);   // Splash
+  t[52] = make_cymbal(2600.0f, 0.35f, 0.85f, 420.0f, 4200.0f, 3.0f, 700.0f, 0.55f);   // China
+  // The china's upturned flange is what makes it trashy, and trashy is neither
+  // dark nor bright: it concentrates the wash into one harsh band instead of
+  // spreading it up the spectrum the way a flat plate does. That is a different
+  // filter rather than a different corner - every other cymbal here high-passes
+  // its wash, and moving the corner alone only ever slides the china between
+  // the two crashes. Its partials are pulled off the plate ratios the others
+  // share until nothing in the sound reads as a pitch, and it is those partials
+  // rather than the wash that carry it, hence the high tone gain and the short,
+  // abrupt ring.
+  t[52].percussion.noise_output = SynthFilterOutput::kBandpass;
+  t[52].percussion.noise_q = 1.4f;
+  t[52].percussion.mode_ratios = {1.0f, 1.19f, 1.51f, 1.83f, 0.0f, 0.0f};
+
+  // --- snares ---
+  t[38] = d.snare;  // Acoustic Snare, the archetype
+  // Electric Snare: tuned higher and gated shorter, with the shell body and the
+  // wire rattle mostly gone - what a drum machine has instead of a snare is a
+  // tight noise crack over a short pitched click.
+  t[40] = d.snare;
+  t[40].amp_env = fallback_env(0.5f, 170.0f, 0.0f, 60.0f);
+  t[40].percussion.base_freq_hz = 220.0f;
+  t[40].percussion.mode_decay_s = 0.07f;
+  t[40].percussion.noise_decay_ms = 110.0f;
+  t[40].percussion.noise_cutoff_hz = 2600.0f;
+  t[40].percussion.shell_mix = 0.08f;
+  t[40].percussion.wire_buzz = 0.35f;
+
+  // --- hi-hats (mute group 1) ---
+  t[42] = d.closed_hat;  // Closed Hi-Hat, the archetype
+  // Pedal Hi-Hat: the foot closes the cymbals against each other rather than a
+  // stick striking them, so the "chick" is duller, softer and slightly longer
+  // than a stick-closed hat - and, sharing a patch with one, was neither.
+  t[44] = d.closed_hat;
+  t[44].amp_env = fallback_env(0.5f, 120.0f, 0.0f, 40.0f);
+  t[44].percussion.noise_decay_ms = 55.0f;
+  t[44].percussion.noise_cutoff_hz = 5200.0f;
+  t[44].gain = 0.40f;
 
   // Hi-hats share mute group 1; the open hat gets a snappy choke fade (release
   // is unused by one-shot voices in normal play, so this stays bit-identical
