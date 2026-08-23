@@ -33,7 +33,10 @@ json::Array param_info(const std::string& name) {
   return parsed.as_array();
 }
 
-const json::Value& field(const json::Value& parameter, const std::string& key) {
+// The key is taken as a pointer rather than as const std::string&: every caller
+// passes a literal, and a reference parameter would bind to a temporary string
+// that GCC then reports as the possible referent of the returned reference.
+const json::Value& field(const json::Value& parameter, const char* key) {
   const json::Value* value = parameter.find(key);
   REQUIRE(value != nullptr);
   return *value;
