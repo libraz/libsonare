@@ -47,7 +47,7 @@ notes, its velocities and its gate come from the manifest, and the oracle is the
 captured audio assembled onto that timeline.
 
     autofit.py --spec tools/voicematch/specs/piano_corpus.json --program 0 \
-        --corpus <capture dir> --corpus-timbre c7-close \
+        --corpus <capture dir> --corpus-timbre grand-227 \
         --notes 36,60,84 --velocities 56,120 --optimizer cmaes --max-evals 200
 
 That matters more than it sounds. Without it a fit scores a stimulus of its own
@@ -226,9 +226,10 @@ from loss import (  # noqa: E402
     probe_rows,
     score_terms,
 )
+from diagnose import run_diagnosis  # noqa: E402
 from metrics import normalize_rms, to_mono  # noqa: E402
 from optimizers import cma_es, optimize  # noqa: E402
-from patterns import build_pattern, pattern_length  # noqa: E402
+from patterns import DRUM_GATE_HELP, build_pattern, pattern_length  # noqa: E402
 from render_model import render_model  # noqa: E402
 from render_oracle import (  # noqa: E402
     add_oracle_args,
@@ -248,12 +249,14 @@ SR = 48000
 # The probe: what is rendered, and what comes back measured
 # --------------------------------------------------------------------------- #
 def _score(program: int, pattern_name: str, notes_csv: str, velocities_csv: str = "",
-           corpus: Corpus | None = None):
+           corpus: Corpus | None = None, gate_ms: int = 0):
     kwargs = {}
     if notes_csv:
         kwargs["notes"] = tuple(int(n) for n in notes_csv.split(","))
     if velocities_csv:
         kwargs["velocities"] = tuple(int(v) for v in velocities_csv.split(","))
+    if gate_ms:
+        kwargs["dur"] = gate_ms / 1000.0
     # A corpus probe is laid out by the capture rather than by a builder: its
     # note list, its gate and its slot spacing all come from the manifest, so
     # the model renders the same stimulus the reference was recorded under.
@@ -352,7 +355,8 @@ def resolve_probe(args) -> None:
             )
         args.pattern = "corpus"
     pattern, _, analysis_notes = _score(
-        args.program, args.pattern, args.notes, args.velocities, corpus=corpus
+        args.program, args.pattern, args.notes, args.velocities, corpus=corpus,
+        gate_ms=getattr(args, "drum_gate_ms", 0),
     )
     if corpus is not None:
         print(describe(corpus, pattern), file=sys.stderr)
@@ -396,7 +400,8 @@ def oracle_reference(args) -> tuple[list[dict], np.ndarray, np.ndarray | None]:
     """
     corpus = resolve_corpus(args)
     pattern, total, _ = _score(
-        args.program, args.pattern, args.notes, getattr(args, "velocities", ""), corpus=corpus
+        args.program, args.pattern, args.notes, getattr(args, "velocities", ""), corpus=corpus,
+        gate_ms=getattr(args, "drum_gate_ms", 0),
     )
     if corpus is not None:
         # Assembled from the capture rather than played: the reference for a
@@ -444,7 +449,7 @@ def oracle_reference(args) -> tuple[list[dict], np.ndarray, np.ndarray | None]:
 def render_model_rows_subprocess(
     build_dir: Path, program: int, pattern_name: str, notes_csv: str,
     *, velocities_csv: str = "", overrides: str = "", want_audio: bool = False,
-    room_ir: Path | None = None, corpus: Corpus | None = None,
+    room_ir: Path | None = None, corpus: Corpus | None = None, gate_ms: int = 0,
 ) -> tuple[list[dict], np.ndarray | None]:
     """Render the model in a fresh subprocess; return per-note metrics (+ audio).
 
@@ -470,6 +475,8 @@ def render_model_rows_subprocess(
     cmd = [sys.executable, str(Path(__file__).resolve()), "_render_metrics",
            "--program", str(program), "--pattern", pattern_name, "--notes", notes_csv,
            "--velocities", velocities_csv]
+    if gate_ms:
+        cmd += ["--drum-gate-ms", str(gate_ms)]
     if room_ir is not None:
         cmd += ["--room-ir", str(room_ir)]
     if corpus is not None:
@@ -576,6 +583,7 @@ class Evaluator:
             velocities_csv=self.args.velocities,
             overrides=tunable_overrides(self.knobs, values),
             want_audio=want_audio, room_ir=self.room_ir, corpus=self.corpus,
+            gate_ms=getattr(self.args, "drum_gate_ms", 0),
         )
         mss = 0.0
         if want_audio and model_audio is not None:
@@ -791,6 +799,7 @@ def validate(args, build_dir, knobs, start_values, best_values, room_ir) -> dict
             velocities_csv=holdout.velocities,
             overrides=tunable_overrides(knobs, values),
             want_audio=want_audio, room_ir=room_ir, corpus=corpus,
+            gate_ms=getattr(holdout, "drum_gate_ms", 0),
         )
         mss = mss_distance(audio, oracle_audio) if want_audio and audio is not None else 0.0
         terms = score_terms(rows, oracle_rows, n_harm=args.n_harm, mss=mss,
@@ -824,10 +833,12 @@ def render_metrics_main(argv: list[str]) -> int:
                    help="convolve the render with this .npy impulse response first")
     p.add_argument("--corpus", default="", help="capture manifest laying out the probe")
     p.add_argument("--corpus-timbre", default="", dest="corpus_timbre")
+    p.add_argument("--drum-gate-ms", type=int, default=0, dest="drum_gate_ms")
     a = p.parse_args(argv)
 
     corpus = load_corpus(a.corpus, a.corpus_timbre) if a.corpus else None
-    pattern, total, _ = _score(a.program, a.pattern, a.notes, a.velocities, corpus=corpus)
+    pattern, total, _ = _score(a.program, a.pattern, a.notes, a.velocities, corpus=corpus,
+                               gate_ms=a.drum_gate_ms)
     smf_bytes = write_smf(
         pattern.notes, program=a.program, channel=pattern.channel, end_pad=pattern.tail
     )
@@ -984,11 +995,12 @@ def run(args, argv: list[str] | None = None) -> int:
             _, dry_model = render_model_rows_subprocess(
                 build_dir, args.program, args.pattern, args.notes,
                 velocities_csv=args.velocities, want_audio=True, corpus=corpus,
+                gate_ms=getattr(args, "drum_gate_ms", 0),
             )
             if dry_model is None:
                 raise RuntimeError("room correction needs the model render, which came back empty")
             pattern, _, _ = _score(args.program, args.pattern, args.notes, args.velocities,
-                                   corpus=corpus)
+                                   corpus=corpus, gate_ms=getattr(args, "drum_gate_ms", 0))
             spans = [(n.start, n.start + n.dur) for n in pattern.notes]
             ir = fit_room_ir(dry_model[:, None], SR, spans, room)
             ir_path = Path(tmp) / "room.npy"
@@ -1000,6 +1012,15 @@ def run(args, argv: list[str] | None = None) -> int:
         if evaluator.workers > 1:
             print(f"rendering up to {evaluator.workers} candidates concurrently",
                   file=sys.stderr)
+        if args.diagnose:
+            # Diagnosis replaces the fit rather than following it: what it
+            # describes is the state of the tree, so the way to diagnose fitted
+            # values is to let a fit write them back and run this next.
+            try:
+                run_diagnosis(evaluator, knobs, args, catalogue, out_path=args.out or "")
+            finally:
+                restore(pristine, evaluator.written)
+            return 0
         try:
             optimizer = cma_es if args.optimizer == "cmaes" else optimize
             fit_knobs, problem = knobs, evaluator
@@ -1062,6 +1083,8 @@ def main() -> int:
                              "hi-hat) and --program selects the kit. Scored with the "
                              "percussion metric set, and --spec auto offers that note's "
                              "own patch fields")
+    parser.add_argument("--drum-gate-ms", type=int, default=0, dest="drum_gate_ms",
+                        help=DRUM_GATE_HELP)
     parser.add_argument("--pattern", default="sustain", help="probe pattern (default: sustain, "
                                                              "or 'drum' with --drum-note)")
     parser.add_argument("--notes", default="", help="override probe notes, e.g. '48,60,72'")
@@ -1111,6 +1134,13 @@ def main() -> int:
                         help="model renders to run concurrently (default: 1). Only helps "
                              "--optimizer cmaes, whose population is independent; a "
                              "rebuilding spec is forced back to 1")
+    parser.add_argument("--diagnose", action="store_true",
+                        help="instead of fitting, report what the residual is made of and "
+                             "which parts of it no knob reaches — the difference between "
+                             "constants still slightly off and a mechanism the voice does "
+                             "not have. Costs 2 renders per knob and writes nothing; run it "
+                             "after a fit has written back, since it describes the tree as "
+                             "it stands. --out records the verdict as JSON")
     parser.add_argument("--screen", action="store_true",
                         help="probe each knob at both ends first and drop the ones that do "
                              "not move the loss, then fit only the rest. Costs 2 evaluations "
