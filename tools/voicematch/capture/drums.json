@@ -1,0 +1,44 @@
+{
+  "id": "drums",
+  "label": "General MIDI standard drum kit, close mics, dry",
+  "program": 0,
+  "audition_title": "libsonare drum kit vs the sampled reference",
+  "_channel": "Channel 10 (9 zero-based) is what makes a note number select an instrument instead of a pitch, on the reference as much as in libsonare. A drum sampler that answers on any channel will still record correctly here; a GM-conformant reference will record a piano if this is left off, and the corpus would look like a successful capture of the wrong instrument.",
+  "_dry": "Close mics with the plugin's room and bus sections off. A kit is the one percussion case where dry is both achievable and wanted: the ambience is a mix decision rather than part of the instrument, and libsonare's own send weighting is fitted separately. If the reference cannot be dried - some kits bake the overheads into every sample - clear `dry` and let the room correction handle it, the same way the organ capture does.",
+  "dry": true,
+  "params": [],
+  "realtime": true,
+  "settle_ms": 4000,
+  "preroll_ms": 100,
+  "sample_rate": 48000,
+  "_stimulus": "50 ms, because on a drum channel the note-off carries no information: a kit's percussion is voiced as a one-shot and renders identically at any gate. The exceptions are the notes a kit voices as held instruments - typically the whistles and the record scratches - whose length is whatever the gate was on the reference side and a constant on the model side. Fitting one of those means re-capturing it at a longer gate, not reading its envelope from this grid.",
+  "gate_ms": 50,
+  "tail": "2s",
+  "_round_robin": "A sampled kit commonly alternates between several recordings of the same strike, which makes the reference non-deterministic in a way that reads as measurement noise in every metric. `capture.py calibrate` renders the same note twice and reports whether the two agree; check that before trusting a corpus, because a round robin left on puts a floor under the loss that no knob can go below.",
+  "_timbres": "One kit per timbre, on its own channel slot if the plugin is a rack.",
+  "timbres": [
+    {
+      "id": "kit-a",
+      "label": "Studio kit, close mics",
+      "channel": 10
+    }
+  ],
+  "_notes": "The General MIDI standard kit, note 35 to note 81, every instrument in it. A drum fit is per-note - each instrument is its own patch, or shares one with its neighbours - so there is no register to interpolate across and no note that another note stands in for.",
+  "notes": [
+    35, 36, 37, 38, 39, 40, 41, 42, 43, 44, 45, 46, 47, 48, 49, 50, 51, 52, 53,
+    54, 55, 56, 57, 58, 59, 60, 61, 62, 63, 64, 65, 66, 67, 68, 69, 70, 71, 72,
+    73, 74, 75, 76, 77, 78, 79, 80, 81
+  ],
+  "_velocities": "Velocity is the only axis a drum note has, so the grid carries both the set a fit is scored on (64, 100, 127) and the set it is validated against (48, 88, 112) from the same capture. Rendering the holdout now is what makes the generalisation check free later; capturing only the fit set makes it impossible.",
+  "velocities": [
+    48,
+    64,
+    88,
+    100,
+    112,
+    127
+  ],
+  "_dimensions": "Left empty deliberately, and it will stay unread: the profile summary and its gate are built on a fundamental - the harmonic ladder, the intonation error, the tone-to-noise ratio - and a drum hit does not have one. The percussion metric set that does apply (band levels, per-band decay, crest) lives in `metrics.analyze_hit` and reaches the fit and the comparison, not the gate. Scoring a candidate works today; recording a committed bound for a drum does not.",
+  "dimensions": [],
+  "_identity": "Which product this is captured from lives in the untracked sibling `drums.local.json`: the plugin's component triple and each timbre's preset. Everything here is the method. Re-capturing needs the overlay; scoring and fitting read the rendered corpus and need nothing."
+}
