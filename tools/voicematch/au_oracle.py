@@ -24,6 +24,12 @@ one produces a *plausible* file rather than an error:
   explains. That is reported rather than refused, since a plugin is allowed a
   tail from whatever it was doing.
 
+A fourth is prevented rather than detected, because there is nothing in the
+file to detect it by: a large sampler plays the **first note it is asked for**
+differently from every later one, at the right length, with a clean preroll and
+a peak that comes out higher rather than lower. `warmup` strikes one note and
+throws it away before recording, which is aubounce's `--warmup`.
+
 Measured on Steinberg The Grand 3 (see `capture.py` for the recipe): without
 `--realtime` a 2 s C4 drops out for 1544 ms; at `--settle-ms 1000` it renders
 a peak of 0.0011 — a file that looks entirely reasonable and contains no note.
@@ -145,6 +151,16 @@ class AuSource:
     program: int | None = None
     settle_ms: int = 4000
     realtime: bool = True
+    #: Strike the probe's first note once and discard it before recording.
+    #:
+    #: On by default because the failure it prevents is silent and lands on the
+    #: measurement: a large sampler plays the first note it is asked for
+    #: differently from every later one, and a probe sweeps velocity upwards, so
+    #: what gets corrupted is the softest hit — the axis a drum fit is validated
+    #: along. Measured on HALion 7, one drum note struck at 64/100/127: without
+    #: it the first strike reads peak 0.939 and RMS 0.081 where the same
+    #: velocity reads 0.610 and 0.117 once the plugin has been struck.
+    warmup: bool = True
     preroll_ms: int = 100
     tail: str = ""
     sample_rate: int = 48000
@@ -168,6 +184,7 @@ class AuSource:
             "program": self.program,
             "settle_ms": self.settle_ms,
             "realtime": self.realtime,
+            "warmup": self.warmup,
             "preroll_ms": self.preroll_ms,
             "tail": self.tail,
             "sample_rate": self.sample_rate,
@@ -196,6 +213,8 @@ class AuSource:
             argv += ["--tail", self.tail]
         if self.realtime:
             argv.append("--realtime")
+        if self.warmup:
+            argv.append("--warmup")
         argv += list(self.extra)
         argv += ["--json", "-o", str(out_wav)]
         return argv
@@ -394,6 +413,10 @@ def add_au_args(parser) -> None:
     parser.add_argument("--au-no-realtime", action="store_true", dest="au_no_realtime",
                         help="drive the plugin as fast as it will go (a disk-streaming "
                              "sampler drops the middle of a note when you do)")
+    parser.add_argument("--au-no-warmup", action="store_true", dest="au_no_warmup",
+                        help="record the plugin's first note instead of discarding one first "
+                             "(a large sampler plays it differently from every later one, and "
+                             "the probe's first note is its softest)")
     parser.add_argument("--au-no-cache", action="store_true", dest="au_no_cache",
                         help="re-render instead of reusing an identical earlier render")
 
@@ -412,4 +435,5 @@ def source_from_args(args) -> AuSource | None:
         params=params,
         settle_ms=getattr(args, "au_settle_ms", 4000),
         realtime=not getattr(args, "au_no_realtime", False),
+        warmup=not getattr(args, "au_no_warmup", False),
     )
