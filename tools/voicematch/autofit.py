@@ -410,7 +410,8 @@ def oracle_reference(args) -> tuple[list[dict], np.ndarray, np.ndarray | None]:
         audio = corpus_oracle(corpus, pattern, SR)
     else:
         smf_bytes = write_smf(
-            pattern.notes, program=args.program, channel=pattern.channel, end_pad=pattern.tail
+            pattern.notes, program=args.program, bank=getattr(args, "bank", 0), channel=pattern.channel,
+            end_pad=pattern.tail
         )
         audio = obtain_oracle(args, smf_bytes, total, SR, [n.start for n in pattern.notes])
 
@@ -429,6 +430,13 @@ def oracle_reference(args) -> tuple[list[dict], np.ndarray, np.ndarray | None]:
         if measured.is_dry():
             print(f"oracle room: dry (RT60 {measured.rt60_s:.2f}s) — no room correction",
                   file=sys.stderr)
+        elif measured.gated():
+            print(f"oracle room: RT60 {measured.rt60_s:.2f}s, "
+                  f"tail level {measured.tail_db:+.1f}dB — NOT corrected. The probe holds each "
+                  f"note for {measured.note_window_s * 1000:.0f} ms against that decay, so the "
+                  f"tail level measures the gate rather than the room and a correction fitted to "
+                  f"it invents one. The reference's space stays in every decay term of the "
+                  f"objective; do not read a fitted decay as the instrument's.", file=sys.stderr)
         else:
             print(f"oracle room: RT60 {measured.rt60_s:.2f}s, "
                   f"tail level {measured.tail_db:+.1f}dB, HF ratio {measured.hf_ratio:.2f} — "
@@ -450,6 +458,7 @@ def render_model_rows_subprocess(
     build_dir: Path, program: int, pattern_name: str, notes_csv: str,
     *, velocities_csv: str = "", overrides: str = "", want_audio: bool = False,
     room_ir: Path | None = None, corpus: Corpus | None = None, gate_ms: int = 0,
+    bank: int = 0,
 ) -> tuple[list[dict], np.ndarray | None]:
     """Render the model in a fresh subprocess; return per-note metrics (+ audio).
 
@@ -475,6 +484,8 @@ def render_model_rows_subprocess(
     cmd = [sys.executable, str(Path(__file__).resolve()), "_render_metrics",
            "--program", str(program), "--pattern", pattern_name, "--notes", notes_csv,
            "--velocities", velocities_csv]
+    if bank:
+        cmd += ["--bank", str(bank)]
     if gate_ms:
         cmd += ["--drum-gate-ms", str(gate_ms)]
     if room_ir is not None:
@@ -583,7 +594,7 @@ class Evaluator:
             velocities_csv=self.args.velocities,
             overrides=tunable_overrides(self.knobs, values),
             want_audio=want_audio, room_ir=self.room_ir, corpus=self.corpus,
-            gate_ms=getattr(self.args, "drum_gate_ms", 0),
+            gate_ms=getattr(self.args, "drum_gate_ms", 0), bank=getattr(self.args, "bank", 0),
         )
         mss = 0.0
         if want_audio and model_audio is not None:
@@ -799,7 +810,7 @@ def validate(args, build_dir, knobs, start_values, best_values, room_ir) -> dict
             velocities_csv=holdout.velocities,
             overrides=tunable_overrides(knobs, values),
             want_audio=want_audio, room_ir=room_ir, corpus=corpus,
-            gate_ms=getattr(holdout, "drum_gate_ms", 0),
+            gate_ms=getattr(holdout, "drum_gate_ms", 0), bank=getattr(args, "bank", 0),
         )
         mss = mss_distance(audio, oracle_audio) if want_audio and audio is not None else 0.0
         terms = score_terms(rows, oracle_rows, n_harm=args.n_harm, mss=mss,
@@ -824,6 +835,7 @@ def render_metrics_main(argv: list[str]) -> int:
     """
     p = argparse.ArgumentParser(prog="autofit.py _render_metrics")
     p.add_argument("--program", type=int, required=True)
+    p.add_argument("--bank", type=int, default=0)
     p.add_argument("--pattern", required=True)
     p.add_argument("--notes", default="")
     p.add_argument("--velocities", default="")
@@ -840,7 +852,8 @@ def render_metrics_main(argv: list[str]) -> int:
     pattern, total, _ = _score(a.program, a.pattern, a.notes, a.velocities, corpus=corpus,
                                gate_ms=a.drum_gate_ms)
     smf_bytes = write_smf(
-        pattern.notes, program=a.program, channel=pattern.channel, end_pad=pattern.tail
+        pattern.notes, program=a.program, bank=a.bank, channel=pattern.channel,
+        end_pad=pattern.tail
     )
     audio = np.asarray(render_model(smf_bytes, total, SR), dtype=np.float32)
     if a.room_ir:
@@ -921,15 +934,17 @@ def run(args, argv: list[str] | None = None) -> int:
         dylib = dylib_path(build_dir)
         catalogue = dump_catalogue(
             args.program, catalogue_pattern(args), str(dylib) if dylib else None,
-            sr=SR, notes=args.notes,
+            sr=SR, notes=args.notes, bank=args.bank,
         )
         print(f"catalogue: {len(catalogue.defaults)} knobs across "
-              f"{len(catalogue.programs)} programs, {len(catalogue.bounds)} clamp bounds",
+              f"{len({p for p, _ in catalogue.programs})} programs "
+              f"({len(catalogue.programs)} with their variation banks), "
+              f"{len(catalogue.bounds)} clamp bounds",
               file=sys.stderr)
 
     if args.dump_knobs:
         key = (drum_patch_key(args.drum_note) if args.drum_note is not None
-               else catalogue.programs.get(args.program, ""))
+               else catalogue.patch_for(args.program, args.bank) or "")
         rows = sorted(
             (k, v) for k, v in catalogue.defaults.items()
             if not args.program_only or (key and k.startswith(key + "."))
@@ -937,7 +952,9 @@ def run(args, argv: list[str] | None = None) -> int:
         if args.drum_note is not None:
             print(f"# drum note {args.drum_note} is voiced by patch {key!r}")
         else:
-            print(f"# program {args.program} is voiced by patch {key!r}")
+            print(f"# program {args.program} bank {args.bank} is voiced by patch {key!r}")
+            print(f"# program {args.program} has variation banks "
+                  f"{catalogue.banks_for(args.program)}")
         print("# key\tdefault\tmin\tmax")
         for k, v in rows:
             bound = catalogue.bound_for(k)
@@ -946,11 +963,11 @@ def run(args, argv: list[str] | None = None) -> int:
         return 0
 
     if auto:
-        spec = auto_spec(args.program, catalogue, drum_note=args.drum_note)
+        spec = auto_spec(args.program, catalogue, drum_note=args.drum_note, bank=args.bank)
         subject = (f"drum note {args.drum_note}" if args.drum_note is not None
-                   else f"program {args.program}")
+                   else f"program {args.program} bank {args.bank}")
         patch = (drum_patch_key(args.drum_note) if args.drum_note is not None
-                 else catalogue.programs.get(args.program))
+                 else catalogue.patch_for(args.program, args.bank))
         print(f"--spec auto: {len(spec)} knobs for {subject} "
               f"(patch {patch!r} + its engine)", file=sys.stderr)
     else:
@@ -995,7 +1012,7 @@ def run(args, argv: list[str] | None = None) -> int:
             _, dry_model = render_model_rows_subprocess(
                 build_dir, args.program, args.pattern, args.notes,
                 velocities_csv=args.velocities, want_audio=True, corpus=corpus,
-                gate_ms=getattr(args, "drum_gate_ms", 0),
+                gate_ms=getattr(args, "drum_gate_ms", 0), bank=getattr(args, "bank", 0),
             )
             if dry_model is None:
                 raise RuntimeError("room correction needs the model render, which came back empty")
@@ -1076,6 +1093,13 @@ def main() -> int:
                              "--program from the library's own catalogue")
     parser.add_argument("--program", type=int, required=True,
                         help="GM program to score, or the drum kit with --drum-note")
+    parser.add_argument("--bank", type=int, default=0,
+                        help="GS variation bank of --program (default 0, the capital tone). "
+                             "A variation is its own patch with its own knobs, so this "
+                             "selects both what is rendered and what --spec auto offers: "
+                             "program 19 is a six-rank principal chorus at 0, three flute "
+                             "ranks at 8 and a full organ with reeds at 16. "
+                             "--dump-knobs lists the banks a program has")
     parser.add_argument("--drum-note", type=int, default=None, dest="drum_note",
                         help="fit a percussion instrument instead of a GM program: the "
                              "probe moves to the drum channel, where this note number "

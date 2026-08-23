@@ -320,7 +320,7 @@ def _auto_range(
 
 
 def auto_spec(
-    program: int, catalogue: Catalogue, *, drum_note: int | None = None
+    program: int, catalogue: Catalogue, *, drum_note: int | None = None, bank: int = 0
 ) -> list[dict]:
     """Build a knob spec for `program` from the library's own catalogue.
 
@@ -334,6 +334,10 @@ def auto_spec(
     program — the program selects the kit and the note selects the instrument —
     so its patch is addressed directly by note number rather than looked up in
     the program map, which has no entry for it.
+
+    `bank` is the GS variation. It has to be here rather than only on the render
+    side: a variation is its own patch, so offering the capital tone's knobs
+    against a render of bank 8 fits a patch nothing played.
     """
     defaults = catalogue.defaults
     if drum_note is not None:
@@ -344,7 +348,12 @@ def auto_spec(
                 f"({key!r}); the note may be outside the kit"
             )
     else:
-        key = catalogue.programs.get(program)
+        key = catalogue.programs.get((program, bank))
+        if key is None and bank:
+            raise ValueError(
+                f"the library voices no variation of program {program} at bank {bank}; "
+                f"it has {catalogue.banks_for(program) or [0]}"
+            )
         if key is None:
             raise ValueError(
                 f"the library did not report a patch for program {program}; "

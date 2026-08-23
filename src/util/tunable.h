@@ -49,7 +49,13 @@ float tunable_keyed(const char* key, float default_value);
 /// resolves to is a switch statement's business and not something an external
 /// fitter should have to re-derive by parsing it. No-op unless a dump was
 /// requested.
-void note_program_key(int program, const char* key);
+///
+/// @p bank is the GS variation number. A program's variations are separate
+/// patches with separate knobs - program 19 is a six-rank principal chorus at
+/// bank 0, three flute ranks at bank 8 and a full organ with reeds at bank 16 -
+/// so a catalogue keyed by program alone can only ever offer the capital tone's
+/// knobs, whatever bank the render selected.
+void note_program_key(int program, int bank, const char* key);
 
 /// Record the admissible range of the patch field addressed as @p path (the
 /// key without its patch prefix, e.g. `bowed_string.bow_force`), for the

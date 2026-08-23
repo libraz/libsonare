@@ -90,14 +90,28 @@ class Catalogue:
     """What the library reports about its own knob space.
 
     `defaults` maps every key it consulted to the value it would have used;
-    `programs` maps a GM program to the patch that voices it; `bounds` maps a
-    patch field *path* (no patch prefix — a bound belongs to the field) to the
-    interval `clamp_synth_patch` accepts.
+    `programs` maps a (GM program, GS variation bank) pair to the patch that
+    voices it; `bounds` maps a patch field *path* (no patch prefix — a bound
+    belongs to the field) to the interval `clamp_synth_patch` accepts.
+
+    Keyed by bank as well as program because a variation is a separate patch
+    with separate knobs — program 19 is a six-rank principal chorus at bank 0, a
+    three-rank flute registration at bank 8 and a full organ with reeds at bank
+    16. Only banks that resolve to something other than the capital tone appear,
+    so the map lists exactly what can be addressed.
     """
 
     defaults: dict[str, float]
-    programs: dict[int, str]
+    programs: dict[tuple[int, int], str]
     bounds: dict[str, tuple[float, float]]
+
+    def patch_for(self, program: int, bank: int = 0) -> str | None:
+        """The patch voicing a (program, bank), falling back to the capital tone."""
+        return self.programs.get((program, bank)) or self.programs.get((program, 0))
+
+    def banks_for(self, program: int) -> list[int]:
+        """Every variation bank of @p program the library voices apart, in order."""
+        return sorted(bank for prog, bank in self.programs if prog == program)
 
     def bound_for(self, key: str) -> tuple[float, float] | None:
         """The admissible range of the field a patch key addresses, if bounded."""
@@ -106,7 +120,8 @@ class Catalogue:
 
 
 def dump_catalogue(
-    program: int, pattern: str, lib_path: str | None, *, sr: int, notes: str = ""
+    program: int, pattern: str, lib_path: str | None, *, sr: int, notes: str = "",
+    bank: int = 0,
 ) -> Catalogue:
     """Render once with `SONARE_TUNING_DUMP` and read back the whole knob space.
 
@@ -130,12 +145,12 @@ def dump_catalogue(
             "kw = {'notes': %r} if %r else {}\n"
             "pat = build_pattern(%r, %d, **kw)\n"
             "render_model.render_model(write_smf("
-            "pat.notes, program=%d, channel=pat.channel, end_pad=pat.tail), "
+            "pat.notes, program=%d, bank=%d, channel=pat.channel, end_pad=pat.tail), "
             "pattern_length(pat), %d)\n"
         ) % (
             str(HERE),
             tuple(int(n) for n in notes.split(",")) if notes else (),
-            notes, pattern, program, program, sr,
+            notes, pattern, program, program, bank, sr,
         )
         proc = subprocess.run([sys.executable, "-c", child], env=env,
                               capture_output=True, text=True)
@@ -147,12 +162,12 @@ def dump_catalogue(
                 "BUILD_TUNING, so SONARE_TUNING_DUMP was ignored"
             )
         defaults: dict[str, float] = {}
-        programs: dict[int, str] = {}
+        programs: dict[tuple[int, int], str] = {}
         bounds: dict[str, tuple[float, float]] = {}
         for line in dump.read_text().splitlines():
             parts = line.split("\t")
-            if parts[0] == "#program" and len(parts) == 3:
-                programs[int(parts[1])] = parts[2]
+            if parts[0] == "#program" and len(parts) == 4:
+                programs[(int(parts[1]), int(parts[2]))] = parts[3]
             elif parts[0] == "#bound" and len(parts) == 4:
                 bounds[parts[1]] = (float(parts[2]), float(parts[3]))
             elif len(parts) == 2:

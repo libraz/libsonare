@@ -51,6 +51,7 @@ def write_smf(
     notes: list[Note],
     *,
     program: int = 0,
+    bank: int = 0,
     channel: int = 0,
     end_pad: float = 0.0,
     sends: tuple[int | None, int | None, int | None] = (0, 0, 0),
@@ -63,6 +64,14 @@ def write_smf(
     `end_pad` delays the end-of-track marker past the last event, which keeps a
     fast-render reference synth (fluidsynth -F) running long enough to capture
     the release tail.
+
+    `bank` is the GS variation number, written as Bank Select MSB (CC0) with the
+    LSB zeroed, ahead of the program change. It is what reaches a capital tone's
+    variations at all: libsonare voices program 19 as a six-rank principal
+    chorus at bank 0, a three-rank flute registration at bank 8 and a full organ
+    with reeds at bank 16, and a harness that emits no bank select can render
+    only the first of the three. Zero is the capital tone and emits nothing, so
+    a caller that does not care is unaffected.
 
     `sends` is the (reverb, chorus, delay) controller values written at tick 0
     as CC91 / CC93 / CC94; `None` for one of them leaves that controller alone,
@@ -98,6 +107,12 @@ def write_smf(
     # Tempo meta-event at tick 0.
     track += _vlq(0) + bytes([0xFF, 0x51, 0x03]) + TEMPO_US.to_bytes(3, "big")
     if program >= 0:
+        # Bank select precedes the program change: a module latches the bank and
+        # applies it when the program arrives, so the other order selects the
+        # capital tone and leaves the bank for whatever program comes next.
+        if bank:
+            track += _vlq(0) + bytes([0xB0 | channel, 0, bank & 0x7F])
+            track += _vlq(0) + bytes([0xB0 | channel, 32, 0])
         track += _vlq(0) + bytes([0xC0 | channel, program & 0x7F])
     for cc, value in zip((91, 93, 94), sends):
         if value is not None:

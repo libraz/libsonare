@@ -413,25 +413,35 @@ struct ProgramKeyRecorder {
     const NativeSynthPatch* base = detail::program_override_patches(program_overrides());
     const std::array<NativeSynthPatch, 16>& fams = family_patches();
     for (int p = 0; p < 128; ++p) {
-      const NativeSynthPatch* got = &gm_fallback_patch(0, static_cast<uint8_t>(p));
-      const char* key = nullptr;
-      for (std::size_t i = 0; i < detail::kProgramOverrideCount; ++i) {
-        if (got == base + i) {
-          key = kNames[i];
-          break;
-        }
-      }
-      static char fam_key[8];
-      if (key == nullptr) {
-        for (std::size_t i = 0; i < fams.size(); ++i) {
-          if (got == &fams[i]) {
-            std::snprintf(fam_key, sizeof(fam_key), "fam%zu", i);
-            key = fam_key;
+      const NativeSynthPatch* const capital = &gm_fallback_patch(0, static_cast<uint8_t>(p));
+      // Every GS variation bank, not only the capital tone: a variation is its
+      // own patch with its own knobs, and a fitter handed the capital's knob
+      // list cannot address the one the render actually selected. A bank whose
+      // variation is undefined resolves back to the capital and is skipped, so
+      // what the catalogue lists is exactly the set that can be addressed.
+      for (int bank = 0; bank < 128; ++bank) {
+        const NativeSynthPatch* got =
+            &gm_fallback_patch(static_cast<uint16_t>(bank), static_cast<uint8_t>(p));
+        if (bank != 0 && got == capital) continue;
+        const char* key = nullptr;
+        for (std::size_t i = 0; i < detail::kProgramOverrideCount; ++i) {
+          if (got == base + i) {
+            key = kNames[i];
             break;
           }
         }
+        static char fam_key[8];
+        if (key == nullptr) {
+          for (std::size_t i = 0; i < fams.size(); ++i) {
+            if (got == &fams[i]) {
+              std::snprintf(fam_key, sizeof(fam_key), "fam%zu", i);
+              key = fam_key;
+              break;
+            }
+          }
+        }
+        ::sonare::tuning::note_program_key(p, bank, key);
       }
-      ::sonare::tuning::note_program_key(p, key);
     }
   }
 };

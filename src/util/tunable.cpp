@@ -118,9 +118,13 @@ class Recorder {
     if (seen_.empty() && programs_.empty()) return;
     std::ofstream out(path);
     if (!out) return;
-    std::vector<std::pair<int, std::string>> progs(programs_.begin(), programs_.end());
-    std::sort(progs.begin(), progs.end());
-    for (const auto& row : progs) out << "#program\t" << row.first << '\t' << row.second << '\n';
+    // `#program <program> <bank> <patch>`: the bank is the GS variation
+    // number, and a variation that falls back to the capital tone is not
+    // written, so what appears is exactly the set a fitter can address.
+    for (const auto& row : programs_) {
+      out << "#program\t" << row.first.first << '\t' << row.first.second << '\t' << row.second
+          << '\n';
+    }
     std::vector<std::pair<std::string, std::pair<float, float>>> bounds(bounds_.begin(),
                                                                         bounds_.end());
     std::sort(bounds.begin(), bounds.end(),
@@ -137,7 +141,7 @@ class Recorder {
 
   void note(const std::string& key, float default_value) { seen_.emplace(key, default_value); }
 
-  void note_program(int program, const char* key) { programs_[program] = key; }
+  void note_program(int program, int bank, const char* key) { programs_[{program, bank}] = key; }
 
   void note_bound(const std::string& path, float lo, float hi) {
     bounds_.emplace(path, std::make_pair(lo, hi));
@@ -151,7 +155,7 @@ class Recorder {
  private:
   std::unordered_map<std::string, float> seen_;
   std::unordered_map<std::string, std::pair<float, float>> bounds_;
-  std::map<int, std::string> programs_;
+  std::map<std::pair<int, int>, std::string> programs_;
 };
 
 /// True when a dump was requested; checked once so the recording path costs
@@ -195,8 +199,8 @@ float tunable_value(const char* file, const char* name, float default_value) {
   return it == table.end() ? default_value : it->second;
 }
 
-void note_program_key(int program, const char* key) {
-  if (recording() && key != nullptr) Recorder::instance().note_program(program, key);
+void note_program_key(int program, int bank, const char* key) {
+  if (recording() && key != nullptr) Recorder::instance().note_program(program, bank, key);
 }
 
 void note_bound(const char* path, float lo, float hi) {
@@ -217,7 +221,7 @@ float tunable_value(const char*, const char*, float default_value) { return defa
 
 float tunable_keyed(const char*, float default_value) { return default_value; }
 
-void note_program_key(int, const char*) {}
+void note_program_key(int, int, const char*) {}
 
 void note_bound(const char*, float, float) {}
 
