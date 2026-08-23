@@ -112,3 +112,76 @@ def write_smf(
     header = b"MThd" + (6).to_bytes(4, "big") + (0).to_bytes(2, "big") + (1).to_bytes(2, "big") + TPQ.to_bytes(2, "big")
     track_chunk = b"MTrk" + len(track).to_bytes(4, "big") + bytes(track)
     return header + track_chunk
+
+
+def _read_vlq(data: bytes, pos: int) -> tuple[int, int]:
+    """Decode the variable-length quantity at `pos`; returns (value, next position)."""
+    value = 0
+    while True:
+        byte = data[pos]
+        pos += 1
+        value = (value << 7) | (byte & 0x7F)
+        if not byte & 0x80:
+            return value, pos
+
+
+def strip_program_changes(data: bytes) -> bytes:
+    """Return the same file with every program change removed, timing intact.
+
+    A program change is an instruction to a General MIDI synth and a question to
+    anything else. A plugin selected by a preset already holds the sound the
+    probe is meant to record, and what it does with a program number on top of
+    that is its own business: a multitimbral rack loads a different program into
+    the slot, so the file that comes back is the right length, the right shape,
+    free of dropouts and playing an instrument nobody asked for.
+
+    Measured on a a multitimbral rack: a snare struck at 0.1 s renders identically
+    with and without a leading program change, and the same snare struck at 1.0 s
+    or later renders at 0.365 peak instead of 0.898, because the program loads
+    asynchronously and the first note beats it. So a one-note probe agrees with
+    itself and a real probe does not, which is why this is stripped rather than
+    left to be noticed.
+
+    The event's delta time is carried onto the next event rather than dropped, so
+    nothing after it moves.
+    """
+    if not data.startswith(b"MThd"):
+        raise ValueError("not a Standard MIDI File")
+    out = bytearray(data[: 8 + int.from_bytes(data[4:8], "big")])
+    pos = len(out)
+    while pos < len(data):
+        if data[pos : pos + 4] != b"MTrk":
+            raise ValueError(f"expected a track chunk at byte {pos}")
+        length = int.from_bytes(data[pos + 4 : pos + 8], "big")
+        body, pos = data[pos + 8 : pos + 8 + length], pos + 8 + length
+        kept = _strip_track(body)
+        out += b"MTrk" + len(kept).to_bytes(4, "big") + kept
+    return bytes(out)
+
+
+def _strip_track(body: bytes) -> bytearray:
+    """One track's events, minus the program changes, with their deltas carried on."""
+    kept = bytearray()
+    pos, status, carry = 0, 0, 0
+    while pos < len(body):
+        delta, pos = _read_vlq(body, pos)
+        delta += carry
+        start = pos
+        if body[pos] & 0x80:
+            status = body[pos]
+            pos += 1
+        if status in (0xFF, 0xF0, 0xF7):
+            if status == 0xFF:
+                pos += 1  # meta type
+            size, pos = _read_vlq(body, pos)
+            pos += size
+        elif 0xC0 <= status < 0xE0:  # program change and channel pressure carry one byte
+            pos += 1
+        else:
+            pos += 2
+        if 0xC0 <= status < 0xD0:
+            carry = delta
+            continue
+        carry = 0
+        kept += _vlq(delta) + body[start:pos]
+    return kept

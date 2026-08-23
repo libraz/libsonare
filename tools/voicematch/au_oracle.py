@@ -24,13 +24,20 @@ one produces a *plausible* file rather than an error:
   explains. That is reported rather than refused, since a plugin is allowed a
   tail from whatever it was doing.
 
-A fourth is prevented rather than detected, because there is nothing in the
-file to detect it by: a large sampler plays the **first note it is asked for**
-differently from every later one, at the right length, with a clean preroll and
-a peak that comes out higher rather than lower. `warmup` strikes one note and
-throws it away before recording, which is aubounce's `--warmup`.
+Two more are prevented rather than detected, because there is nothing in the
+file to detect them by:
 
-Measured on Steinberg The Grand 3 (see `capture.py` for the recipe): without
+- A large sampler plays the **first note it is asked for** differently from
+  every later one, at the right length, with a clean preroll and a peak that
+  comes out higher rather than lower. `warmup` strikes one note and throws it
+  away before recording, which is aubounce's `--warmup`.
+- The probe carries a **program change**, because the reference route it was
+  written for is a GM synth and that is how a GM synth is told which instrument
+  to be. A plugin here has already been told, by its preset, and a multitimbral
+  rack answers a program number by loading a different program into the slot.
+  `gm` is off by default and the program change is stripped.
+
+Measured on a large disk-streaming piano sampler (see `capture.py` for the recipe): without
 `--realtime` a 2 s C4 drops out for 1544 ms; at `--settle-ms 1000` it renders
 a peak of 0.0011 — a file that looks entirely reasonable and contains no note.
 At 2000 ms and above the renders are identical to each other. The defaults
@@ -52,6 +59,7 @@ from pathlib import Path
 
 import numpy as np
 
+from smf import strip_program_changes
 from wavio import read_wav
 
 HERE = Path(__file__).resolve().parent
@@ -115,9 +123,11 @@ def resolve_preset(spec: str) -> Path:
     direct = Path(spec).expanduser()
     if direct.exists():
         return direct
-    # macOS stores a filename decomposed, so a preset written "Bosendorfer" with
-    # a combining diaeresis on disk does not contain the composed character this
-    # spec was typed with. Both sides are normalised or the two never meet.
+    # macOS stores a filename decomposed, so a preset whose name carries an
+    # umlaut holds a combining diaeresis on disk and does not contain the
+    # composed character this spec was typed with. Instrument names reach for
+    # those often enough that it is not an edge case. Both sides are normalised
+    # or the two never meet.
     needle = unicodedata.normalize("NFC", spec).lower()
     hits = [
         p
@@ -158,10 +168,19 @@ class AuSource:
     #: measurement: a large sampler plays the first note it is asked for
     #: differently from every later one, and a probe sweeps velocity upwards, so
     #: what gets corrupted is the softest hit — the axis a drum fit is validated
-    #: along. Measured on HALion 7, one drum note struck at 64/100/127: without
+    #: along. Measured on a multitimbral rack, one drum note struck at 64/100/127: without
     #: it the first strike reads peak 0.939 and RMS 0.081 where the same
     #: velocity reads 0.610 and 0.117 once the plugin has been struck.
     warmup: bool = True
+    #: The plugin answers to General MIDI program changes, so the probe keeps its
+    #: own.
+    #:
+    #: Off by default because a program change is addressed to a GM synth and
+    #: almost no AudioUnit is one: an instrument here is chosen by its preset,
+    #: and what a plugin does with a program number on top of that preset is its
+    #: own convention. Turn it on for a GM-compatible plugin, where the program
+    #: change is the only thing that selects the instrument.
+    gm: bool = False
     preroll_ms: int = 100
     tail: str = ""
     sample_rate: int = 48000
@@ -271,7 +290,7 @@ def bounce(
     Raises `AuRenderError` on the two failures that leave a plausible file
     behind (a dropout, and a render too quiet to be the instrument).
 
-    Retried because on The Grand 3 the quiet one is a race inside the plugin
+    Retried because on the piano sampler the quiet one is a race inside the plugin
     rather than a setting: the same render succeeds, then comes back near
     silent, then succeeds again, at roughly one failure in three, and a longer
     settle does not reduce it. What is not retried away is the detection — a
@@ -323,7 +342,7 @@ def _bounce_once(
             f"when the first note played. Below the plugin's minimum settle time this happens every "
             f"render and settle_ms (currently {source.settle_ms}) is the fix — run "
             f"`capture.py calibrate` to measure that minimum. Above it, it is a race that a retry "
-            f"clears and more settling does not: on The Grand 3, 4000 ms and 16000 ms both gave the "
+            f"clears and more settling does not: on the piano sampler, 4000 ms and 16000 ms both gave the "
             f"real 0.0122 while 8000 ms in between gave 0.0010."
         )
     if float(summary.get("preroll_peak", 0.0)) > 1e-4:
@@ -361,6 +380,11 @@ def render_oracle_au(
 
     if source.sample_rate != sr:
         source = AuSource(**{**source.__dict__, "sample_rate": sr})
+
+    # Before the cache key, so a key describes the file that was rendered rather
+    # than the one the caller handed over.
+    if not source.gm:
+        smf_bytes = strip_program_changes(smf_bytes)
 
     key = hashlib.sha256(
         json.dumps(
@@ -415,7 +439,7 @@ def add_au_args(parser) -> None:
                              "(name or type:subtype:manufacturer triple) via aubounce")
     parser.add_argument("--au-preset", default="", dest="au_preset",
                         help="a .vstpreset path, or a unique fragment of one "
-                             "(e.g. 'Yamaha C7/Close/Natural Ambience')")
+                             "(e.g. 'Close/Natural Ambience')")
     parser.add_argument("--au-param", action="append", default=[], dest="au_param",
                         help="plugin parameter as 'name=value'; repeatable")
     parser.add_argument("--au-dry", action="store_true", dest="au_dry",
@@ -430,6 +454,11 @@ def add_au_args(parser) -> None:
                         help="record the plugin's first note instead of discarding one first "
                              "(a large sampler plays it differently from every later one, and "
                              "the probe's first note is its softest)")
+    parser.add_argument("--au-gm", action="store_true", dest="au_gm",
+                        help="the plugin is a General MIDI synth, so keep the probe's program "
+                             "change (by default it is stripped: an instrument selected by a "
+                             "preset does not need one, and a multitimbral rack answers it by "
+                             "loading a different program into the slot)")
     parser.add_argument("--au-no-cache", action="store_true", dest="au_no_cache",
                         help="re-render instead of reusing an identical earlier render")
 
@@ -449,4 +478,5 @@ def source_from_args(args) -> AuSource | None:
         settle_ms=getattr(args, "au_settle_ms", 4000),
         realtime=not getattr(args, "au_no_realtime", False),
         warmup=not getattr(args, "au_no_warmup", False),
+        gm=getattr(args, "au_gm", False),
     )
