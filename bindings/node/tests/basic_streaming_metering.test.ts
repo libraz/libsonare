@@ -310,7 +310,9 @@ describe('StreamingEqualizer', () => {
     const audioBlock = () => generateSine(1000, SIDECHAIN_SR, BLOCK / SIDECHAIN_SR);
     const loudKey = () => {
       const key = generateSine(1000, SIDECHAIN_SR, BLOCK / SIDECHAIN_SR);
-      for (let i = 0; i < key.length; i += 1) key[i] *= 0.9;
+      for (let i = 0; i < key.length; i += 1) {
+        key[i] *= 0.9;
+      }
       return key;
     };
 

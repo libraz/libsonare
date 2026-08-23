@@ -27,7 +27,9 @@ function withoutLineComments(text: string): string {
 function realtimeEntryPoints(): string[] {
   const names = new Set<string>();
   for (const file of readdirSync(C_API_ROOT)) {
-    if (!file.endsWith('.cpp')) continue;
+    if (!file.endsWith('.cpp')) {
+      continue;
+    }
     const text = withoutLineComments(readFileSync(join(C_API_ROOT, file), 'utf8'));
     for (const match of text.matchAll(/SONARE_C_RT_API_ENTRY/g)) {
       // The enclosing definition is the last C-ABI name introduced before the
@@ -36,7 +38,9 @@ function realtimeEntryPoints(): string[] {
         ...text.slice(0, match.index ?? 0).matchAll(/\b(sonare_[a-z0-9_]+)\s*\(/g),
       ];
       const owner = preceding[preceding.length - 1];
-      if (owner) names.add(owner[1]);
+      if (owner) {
+        names.add(owner[1]);
+      }
     }
   }
   return [...names].sort();

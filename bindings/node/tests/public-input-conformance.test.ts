@@ -456,9 +456,12 @@ describe('a progress callback cannot corrupt its own input', () => {
   function sabotage(view: Float32Array): () => void {
     let step = 0;
     return () => {
-      if (step === 0) view.fill(1);
-      if (step === 1 && view.byteLength > 0)
+      if (step === 0) {
+        view.fill(1);
+      }
+      if (step === 1 && view.byteLength > 0) {
         structuredClone(view, { transfer: [view.buffer as ArrayBuffer] });
+      }
       step += 1;
     };
   }
