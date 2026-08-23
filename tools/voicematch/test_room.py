@@ -156,3 +156,52 @@ def test_room_distance_grows_with_error():
     near = Room(1.9, 0.5, -4.5, 15.0)
     far = Room(4.0, 0.5, -12.0, 15.0)
     assert room_distance(near, target) < room_distance(far, target)
+
+
+def _hits(sr: int, gate: float, ring: float, notes: int = 3, gap: float = 2.0):
+    """Percussive hits and their (start, end) spans, held for `gate` seconds.
+
+    The span is the gate, exactly as a drum probe writes it: on a drum channel
+    the note-off carries no information, so the key is released long before the
+    instrument has finished ringing.
+    """
+    total = int((notes * gap + 3.0) * sr)
+    audio = np.zeros((total, 2), dtype=np.float32)
+    spans: list[tuple[float, float]] = []
+    rng = np.random.default_rng(0xD5)
+    for i in range(notes):
+        on = 0.1 + i * gap
+        t = np.arange(int(ring * sr)) / sr
+        hit = (rng.standard_normal(len(t)) * np.exp(-t / (ring / 6.0))).astype(np.float32)
+        audio[int(on * sr) : int(on * sr) + len(hit), 0] += hit
+        audio[int(on * sr) : int(on * sr) + len(hit), 1] += hit
+        spans.append((on, on + gate))
+    return audio, spans
+
+
+def test_a_gated_probe_is_refused_rather_than_fitted():
+    """A 50 ms gate cannot measure a room, and says so instead of inventing one.
+
+    The instrument outlasts its own note window by a factor of ten, so the split
+    `tail_db` makes at note-off puts almost all of the drum on the tail side and
+    reports how briefly the key was held.
+    """
+    audio, spans = _hits(SR, gate=0.05, ring=0.35)
+    wet = apply_room(audio, synth_room_ir(Room(1.2, 0.6, 6.0, 15.0), SR))
+    room = estimate_room(wet, SR, spans)
+    assert not room.is_dry(), "the test needs a room to be found before it can be refused"
+    assert room.gated(), f"a 50 ms gate against RT60 {room.rt60_s:.2f}s was accepted: {room}"
+
+
+def test_a_probe_that_holds_its_notes_is_not_refused():
+    """The pitched patterns must keep their correction: they hold notes for seconds."""
+    audio, spans = _score(SR)
+    wet = apply_room(audio, synth_room_ir(Room(1.2, 0.6, 6.0, 15.0), SR))
+    room = estimate_room(wet, SR, spans)
+    assert not room.is_dry() and not room.gated(), f"a 1 s note against {room.rt60_s:.2f}s: {room}"
+
+
+def test_a_constructed_room_is_never_reported_as_gated():
+    """`gated` is a property of a measurement; a hand-built Room has no windows."""
+    assert not Room(1.2, 0.6, 6.0, 15.0).gated()
+    assert not DRY.gated()

@@ -77,11 +77,17 @@ def match_model_room(model, oracle, sr, notes, mode: str, external: bool):
     (`oracle_may_carry_room`): the built-in fluidsynth oracle is rendered with
     its effect units off, so anything measured there is the instrument's own
     decay and correcting for it would invent a room.
+
+    Also skipped when the measurement cannot support the correction — a dry
+    reference (`Room.is_dry`), and a probe whose note windows are gates rather
+    than notes (`Room.gated`). Both are reported rather than silently applied:
+    the room is still measured and still returned, because the reference having
+    a space is worth knowing even where the model cannot be moved into it.
     """
     if mode == "none" or not external:
         return model, None
     room = estimate_room(oracle, sr, notes)
-    if room.is_dry():
+    if room.is_dry() or room.gated():
         return model, room
     return apply_room(model, fit_room_ir(model, sr, notes, room)), room
 
@@ -321,12 +327,25 @@ def run_compare(args: argparse.Namespace) -> int:
         report = (format_drum_report(pattern.name, rows) if pattern.percussive
                   else format_report(program, pattern.name, rows))
         if room is not None and not room.is_dry():
-            report = (
+            measured = (
                 f"oracle room: RT60 {room.rt60_s:.2f}s, tail level {room.tail_db:+.1f}dB, "
-                f"HF ratio {room.hf_ratio:.2f} — the model was convolved with a matching\n"
-                f"             space before analysis, so the deltas below are timbre, not room.\n"
-                f"             `room-match` converts this into libsonare's own send settings.\n\n"
-            ) + report
+                f"HF ratio {room.hf_ratio:.2f}"
+            )
+            if room.gated():
+                report = (
+                    f"{measured} — NOT corrected: the probe holds each note for\n"
+                    f"             {room.note_window_s * 1000:.0f} ms against a {room.rt60_s:.2f}s "
+                    f"decay, so that tail level measures the gate rather than\n"
+                    f"             the room, and a correction fitted to it invents one. "
+                    f"The reference carries its\n"
+                    f"             space into every decay and tail figure below; the model is dry.\n\n"
+                ) + report
+            else:
+                report = (
+                    f"{measured} — the model was convolved with a matching\n"
+                    f"             space before analysis, so the deltas below are timbre, not room.\n"
+                    f"             `room-match` converts this into libsonare's own send settings.\n\n"
+                ) + report
         (out / "report.txt").write_text(report + "\n")
         (out / "report.json").write_text(json.dumps({
             "program": program,
@@ -448,6 +467,11 @@ def run_room_match(args: argparse.Namespace) -> int:
     if target.is_dry():
         print("-> the reference is dry; no ambience to reproduce.")
         return 0
+    if target.gated():
+        print(f"-> refusing: the probe holds each note for {target.note_window_s * 1000:.0f} ms "
+              f"against a {target.rt60_s:.2f}s decay, so that tail level is the gate rather than "
+              f"the room, and the send search would reproduce the gate.")
+        return 1
 
     child = (
         "import sys; sys.path.insert(0, %r)\n"

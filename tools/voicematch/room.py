@@ -67,6 +67,12 @@ class Room:
     Zero on a room that was constructed rather than measured. See `truncated`.
     """
 
+    note_window_s: float = 0.0
+    """Shortest note window the estimate had to measure note energy in, seconds.
+
+    Zero on a room that was constructed rather than measured. See `gated`.
+    """
+
     def to_dict(self) -> dict:
         return asdict(self)
 
@@ -81,7 +87,36 @@ class Room:
         choose its probe should choose a longer silence instead (the
         `room-probe` pattern exists for this).
         """
-        return self.rt60_s > 0.0 and self.tail_window_s < self.rt60_s * 25.0 / 60.0
+        return (self.rt60_s > 0.0 and self.tail_window_s > 0.0
+                and self.tail_window_s < self.rt60_s * 25.0 / 60.0)
+
+    def gated(self) -> bool:
+        """True when the note windows were too short to hold the notes.
+
+        `tail_db` splits energy at note-off, and that split says what it claims
+        only while the note window holds the note. A percussive probe's window
+        is the *gate* — fifty milliseconds of a hit that rings for a third of a
+        second — so almost the whole instrument lands on the tail side of the
+        split, and the number that comes back describes how briefly the key was
+        held rather than how live the room is.
+
+        Fitting to it does not put the model in the oracle's space. `fit_room_ir`
+        searches for the reverberation that makes the *model* collapse the same
+        way, and a model whose own decay is shorter than the reference's needs an
+        enormous one to get there: measured on a snare against a sampled kit, a
+        field carrying 469 times the direct sound's energy, whose onset moves the
+        model's attack from 3 ms to 42 ms while the reference's stays at 4. Every
+        percussion metric then reads that invention — and the model's real
+        three-to-fivefold decay deficit is hidden, because the fake room fills it
+        in.
+
+        The bound is half the reverberation time because that is where the two
+        readings separate cleanly rather than because half means anything: the
+        pitched patterns hold their notes for seconds against rooms of well under
+        one second, and a drum's gate is under a tenth of one.
+        """
+        return (self.rt60_s > 0.0 and self.note_window_s > 0.0
+                and self.note_window_s < self.rt60_s * 0.5)
 
     def is_dry(self) -> bool:
         """True when the space is too small or too quiet to be worth modelling.
@@ -220,6 +255,7 @@ def estimate_room(audio: np.ndarray, sr: int, notes: list[tuple[float, float]]) 
     return Room(
         rt60_s=rt60, hf_ratio=hf_ratio, tail_db=float(tail_db), predelay_ms=15.0,
         tail_window_s=min(len(t) for t in tails) / sr,
+        note_window_s=min(off - on for on, off in spans),
     )
 
 
