@@ -40,6 +40,12 @@ import numpy as np
 from smf import Note
 
 MIN_SUSTAIN_SEC = 0.15
+# Furthest the sustain window may sit from the onset, in seconds. These are
+# exactly where the 0.3/0.9 fractions land on the two-second probe patterns, so
+# every existing probe measures the identical window; the cap only bites on a
+# gate longer than that, where the fraction would otherwise walk off the end of
+# the note. See `analyze_note`.
+SUSTAIN_WINDOW_S = (0.6, 1.8)
 N_HARMONICS = 12
 
 # ISO 1/3-octave centres, 50 Hz to 12.5 kHz: the resolution a percussion hit's
@@ -165,8 +171,18 @@ def analyze_note(mono: np.ndarray, sr: int, note: Note, render_end: float) -> No
 
     # Sustain window: the settled middle of the note (falls back to the whole
     # note when it is too short for a stable window).
-    sus_a = int((note.start + 0.3 * note.dur) * sr)
-    sus_b = int((note.start + 0.9 * note.dur) * sr)
+    #
+    # Capped in seconds as well as taken as a fraction, because the gate is a
+    # property of the probe and not of the instrument. On the two-second probes
+    # the cap is exactly where the fraction already lands, so nothing moves. On
+    # a corpus probe holding eight seconds the fraction alone would read 2.4 to
+    # 7.2 s in, which on the top two octaves is entirely after the note has
+    # stopped — a real grand's C8 is 40 dB down by 2.2 s. The harmonic ladder
+    # then compares one render's noise floor with another's and reports the
+    # model 120 dB dark, unmoved by every knob, which is what silence looks like
+    # when it is mistaken for a measurement.
+    sus_a = int((note.start + min(0.3 * note.dur, SUSTAIN_WINDOW_S[0])) * sr)
+    sus_b = int((note.start + min(0.9 * note.dur, SUSTAIN_WINDOW_S[1])) * sr)
     if sus_b - sus_a < int(MIN_SUSTAIN_SEC * sr):
         sus_a, sus_b = on, off
     sustain = mono[sus_a:sus_b]

@@ -41,6 +41,11 @@ MSS_FFT_SIZES = (512, 1024, 2048, 4096)
 SKELETON_BANDS = {"early_db_s": (0.08, 0.40), "late_db_s": (0.80, 1.80),
                   "tail_db_s": (2.00, 6.00)}
 
+# How far under the note's loudest frame a band may sit and still be treated as
+# a measurement rather than as the floor. Generous, since a high partial 70 dB
+# down is still a partial; what it excludes is a band with nothing in it at all.
+SKELETON_FLOOR_DB = 90.0
+
 
 def skeleton_note(mono: np.ndarray, sr: int, note, n_harm: int = 12) -> dict:
     """Per-harmonic envelope skeleton of one note.
@@ -89,9 +94,17 @@ def skeleton_note(mono: np.ndarray, sr: int, note, n_harm: int = 12) -> dict:
     env_db = 20.0 * np.log10(env + 1e-12)
     t_frame = (np.arange(n_frames) * hop + win_n / 2) / sr
 
+    # Where a partial has stopped being a partial. A band whose frames all sit
+    # this far under the loudest thing in the note is measuring the render's
+    # floor, and a slope fitted to that is noise with a direction: the top two
+    # octaves are gone well before the 2-6 s band on any real grand, so without
+    # this the aftersound term compares one silence with another and reports a
+    # confident number that no knob can move.
+    floor_db = float(np.max(env_db)) - SKELETON_FLOOR_DB
+
     def fit(lo: float, hi: float, col: np.ndarray) -> tuple[float, float] | None:
         mask = (t_frame >= lo) & (t_frame <= hi)
-        if mask.sum() < 4:
+        if mask.sum() < 4 or float(np.max(col[mask])) < floor_db:
             return None
         m, b = np.polyfit(t_frame[mask], col[mask], 1)
         return float(m), float(b)
@@ -223,6 +236,21 @@ TAIL_DELTA_CAP_DB_S = 20.0
 HF_DELTA_CAP_DB = 24.0
 LEVEL_DELTA_CAP_DB = 18.0
 
+# Which terms a metric set actually produces. Both reducers fill every entry of
+# LOSS_TERMS so the dict has one shape, which means a term belonging to the
+# other set reads as exactly 0.0 — indistinguishable, in the dict alone, from a
+# term the model matched perfectly. Anything that reasons about a residual
+# rather than about the combined loss has to know the difference.
+_SHARED_TERMS = ("env", "mss", "level", "crest")
+PITCHED_TERMS = ("harm", "cents", "tnr", "init", "slope", "tail", "hf") + _SHARED_TERMS
+PERCUSSION_TERMS = ("band", "bdecay") + _SHARED_TERMS
+
+
+def measured_terms(percussive: bool) -> tuple[str, ...]:
+    """The terms the probe's metric set produces, in LOSS_TERMS order."""
+    group = PERCUSSION_TERMS if percussive else PITCHED_TERMS
+    return tuple(t for t in LOSS_TERMS if t in group)
+
 
 def _level_terms(model_rows: list[dict], oracle_rows_: list[dict]) -> tuple[float, float, float]:
     """The two level terms, plus the whole-grid offset they are measured against.
@@ -309,12 +337,26 @@ def loss_terms(
     if comparable is None:
         return None
     if not comparable:
-        return {**{name: 0.0 for name in LOSS_TERMS}, "mss": mss}
+        # Flagged, not just zeroed. A dict of zeros is the best score there is,
+        # and "there was nothing to compare" reaching a caller as a perfect
+        # match is how a render that fell silent gets read as the render that
+        # fixed everything.
+        return {**{name: 0.0 for name in LOSS_TERMS}, "mss": mss, "comparable": 0.0}
     totals = {name: 0.0 for name in LOSS_TERMS}
+    # How many partials above the fundamental were present on both sides
+    # anywhere in the probe. Zero is not a good score, it is no measurement: a
+    # render that fell silent reports every harmonic at the -120 dB floor and
+    # h1 at 0 by definition, so the guard below skips all of them, h1 matches h1
+    # exactly, and the harmonic term comes out at 0.0 — the best value it has.
+    # Left unguarded, silencing any gain is the cheapest way to win this term.
+    compared = available = 0
     for m, o in zip(model_rows, oracle_rows_):
-        for mh, oh in zip(m["harmonics_db"][:n_harm], o["harmonics_db"][:n_harm]):
+        pairs = list(zip(m["harmonics_db"][:n_harm], o["harmonics_db"][:n_harm]))
+        available += max(0, len(pairs) - 1)
+        for i, (mh, oh) in enumerate(pairs):
             if mh > -120.0 and oh > -120.0:
                 totals["harm"] += abs(mh - oh)
+                compared += i > 0
         totals["cents"] += abs(m["f0_cents_err"] - o["f0_cents_err"])
         totals["tnr"] += max(0.0, o["tnr_db"] - m["tnr_db"])  # only when the model is noisier
         totals["env"] += abs(m["sustain_slope_db_s"] - o["sustain_slope_db_s"])
@@ -335,6 +377,13 @@ def loss_terms(
         for a, b in zip(m.get("attack_hf_db", []), o.get("attack_hf_db", [])):
             if a is not None and b is not None:
                 totals["hf"] += min(abs(a - b), HF_DELTA_CAP_DB)
+    if available and not compared:
+        # The rows carry partials above the fundamental and not one of them
+        # survived on both sides anywhere in the probe. There is no timbre here
+        # to be right or wrong about, so the candidate is unscorable rather than
+        # perfect. Gated on `available` so a caller that asked for the
+        # fundamental alone (`n_harm=1`) still gets its other terms.
+        return None
     n = len(model_rows)
     out = {name: totals[name] / n for name in LOSS_TERMS}
     out["mss"] = mss
@@ -342,6 +391,7 @@ def loss_terms(
     if any(not math.isfinite(v) for v in out.values()):
         return None
     out["level_offset_db"] = offset
+    out["comparable"] = 1.0
     return out
 
 
@@ -377,7 +427,11 @@ def percussion_terms(
     if comparable is None:
         return None
     if not comparable:
-        return {**{name: 0.0 for name in LOSS_TERMS}, "mss": mss}
+        # Flagged, not just zeroed. A dict of zeros is the best score there is,
+        # and "there was nothing to compare" reaching a caller as a perfect
+        # match is how a render that fell silent gets read as the render that
+        # fixed everything.
+        return {**{name: 0.0 for name in LOSS_TERMS}, "mss": mss, "comparable": 0.0}
     totals = {name: 0.0 for name in LOSS_TERMS}
     for m, o in zip(model_rows, oracle_rows_):
         for a, b in zip(m["bands_db"], o["bands_db"]):
@@ -395,6 +449,7 @@ def percussion_terms(
     if any(not math.isfinite(v) for v in out.values()):
         return None
     out["level_offset_db"] = offset
+    out["comparable"] = 1.0
     return out
 
 

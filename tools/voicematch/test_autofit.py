@@ -54,7 +54,8 @@ import profile as profile_module  # noqa: E402
 from corpus import corpus_oracle, corpus_pattern, load_corpus  # noqa: E402
 from knobs import at_bound, load_spec, load_spec_weights  # noqa: E402
 from loss import skeleton_note  # noqa: E402
-from metrics import attack_bands, level_of  # noqa: E402
+import metrics as metrics_module  # noqa: E402
+from metrics import analyze_note, attack_bands, level_of  # noqa: E402
 from optimizers import cma_es, optimize  # noqa: E402
 from smf import Note  # noqa: E402
 from wavio import write_wav  # noqa: E402
@@ -205,6 +206,41 @@ def test_a_model_cleaner_than_its_oracle_is_not_penalised():
     noisier = loss_terms([row(10.0)], [row(20.0)], n_harm=1)
     assert cleaner["tnr"] == 0.0
     assert noisier["tnr"] == pytest.approx(10.0)
+
+
+def test_a_silent_render_does_not_win_the_harmonic_term():
+    """Silencing a gain was the cheapest way to score a perfect harmonic ladder.
+
+    A render with no signal reports h1 at 0 dB by definition and every partial
+    above it at the -120 dB floor. The floor guard then skips all of them, h1
+    matches h1 exactly, and the term sums to 0.0 — its best possible value. It
+    is not a match, it is the absence of anything to match, and the candidate
+    has to be unscorable rather than optimal.
+    """
+    silent = {"harmonics_db": [0.0] + [-120.0] * 11, "f0_cents_err": 0.0,
+              "tnr_db": 0.0, "sustain_slope_db_s": 0.0, "release_ms": 0.0,
+              "attack_ms": 0.0}
+    sounding = {"harmonics_db": [0.0, -6.0, -12.0] + [-20.0] * 9,
+                "f0_cents_err": 0.0, "tnr_db": 30.0, "sustain_slope_db_s": -3.0,
+                "release_ms": 80.0, "attack_ms": 5.0}
+    assert loss_terms([silent], [sounding], n_harm=12) is None
+    assert loss_terms([sounding], [sounding], n_harm=12) is not None
+
+
+def test_a_render_that_lost_only_its_top_partials_is_still_scored():
+    """The guard is about having no partials at all, not about having few.
+
+    A dark note is a defect the harmonic term exists to report, so rejecting it
+    as unscorable would hide exactly what the fit is for.
+    """
+    dark = {"harmonics_db": [0.0, -8.0] + [-120.0] * 10, "f0_cents_err": 0.0,
+            "tnr_db": 20.0, "sustain_slope_db_s": -3.0, "release_ms": 80.0,
+            "attack_ms": 5.0}
+    bright = {"harmonics_db": [0.0, -3.0, -6.0] + [-9.0] * 9, "f0_cents_err": 0.0,
+              "tnr_db": 30.0, "sustain_slope_db_s": -3.0, "release_ms": 80.0,
+              "attack_ms": 5.0}
+    terms = loss_terms([dark], [bright], n_harm=12)
+    assert terms is not None and terms["harm"] == pytest.approx(5.0)
 
 
 # --------------------------------------------------------------------------- #
@@ -1364,25 +1400,25 @@ def test_the_summary_carries_the_absolute_median_the_signed_one_cannot_fail_on()
 def test_a_gate_fails_on_the_dimension_a_change_broke(tmp_path):
     gate = tmp_path / "gate.json"
     summary = profile_module.summarize_deltas({"centroid_pct": [1.0, 1.0], "decay": [0.2, 0.2]})
-    assert profile_module.write_gate_file(summary, gate, "c7-close", 1.25) == 0
-    assert profile_module.check_gate(summary, gate, "c7-close") == 0
+    assert profile_module.write_gate_file(summary, gate, "grand-227", 1.25) == 0
+    assert profile_module.check_gate(summary, gate, "grand-227") == 0
 
     broke = profile_module.summarize_deltas({"centroid_pct": [60.0, 60.0], "decay": [0.2, 0.2]})
-    assert profile_module.check_gate(broke, gate, "c7-close") == 1
+    assert profile_module.check_gate(broke, gate, "grand-227") == 1
 
 
 def test_a_gate_recorded_against_another_reference_is_refused(tmp_path):
     gate = tmp_path / "gate.json"
     summary = profile_module.summarize_deltas({"decay": [0.2, 0.2]})
-    profile_module.write_gate_file(summary, gate, "c7-close", 1.25)
-    assert profile_module.check_gate(summary, gate, "modeld-close") == 2
+    profile_module.write_gate_file(summary, gate, "grand-227", 1.25)
+    assert profile_module.check_gate(summary, gate, "grand-274") == 2
 
 
 def test_a_gate_bound_has_a_floor_so_a_near_zero_dimension_stays_gateable(tmp_path):
     """Otherwise a dimension that happens to read zero today can never be met again."""
     gate = tmp_path / "gate.json"
     profile_module.write_gate_file(
-        profile_module.summarize_deltas({"decay": [0.0, 0.0]}), gate, "c7-close", 1.25
+        profile_module.summarize_deltas({"decay": [0.0, 0.0]}), gate, "grand-227", 1.25
     )
     assert json.loads(gate.read_text())["bounds"]["decay"]["median"] > 0.0
 
@@ -1405,3 +1441,43 @@ def test_the_bound_test_is_proportional_to_the_range_not_an_absolute_epsilon():
     knob = _bounded_knob("kBridgeHillHz", 900.0, 2600.0, 1500.0)
     assert at_bound(knob, 2599.9) == "maximum"
     assert at_bound(knob, 2000.0) is None
+
+
+def test_the_sustain_window_is_unchanged_on_every_existing_probe():
+    """The cap sits exactly where the two-second probes' fractions already land."""
+    sr = 48000
+    t = np.arange(int(4.0 * sr)) / sr
+    tone = np.sin(2 * np.pi * 440.0 * t) * np.exp(-t * 0.5)
+    for dur in (2.0, 1.5, 0.12):
+        note = Note(69, 96, 0.0, dur)
+        a = int(min(0.3 * dur, metrics_module.SUSTAIN_WINDOW_S[0]) * sr)
+        b = int(min(0.9 * dur, metrics_module.SUSTAIN_WINDOW_S[1]) * sr)
+        assert (a, b) == (int(0.3 * dur * sr), int(0.9 * dur * sr))
+        assert analyze_note(tone, sr, note, dur + 1.0).f0_hz > 0.0
+
+
+def test_a_long_gate_does_not_put_the_sustain_window_after_the_note():
+    """The defect an eight-second corpus probe introduced on the top two octaves.
+
+    A fraction of the gate reads 2.4-7.2 s in, where a treble note has already
+    stopped; the ladder then compares one render's floor with another's and
+    reports a confident number no knob can move.
+    """
+    sr = 48000
+    t = np.arange(int(10.0 * sr)) / sr
+    # A treble note that is over well before the old window began.
+    dead = (np.sin(2 * np.pi * 2093.0 * t) + 0.3 * np.sin(2 * np.pi * 4186.0 * t)) * np.exp(-t * 4.0)
+    note = Note(96, 88, 0.0, 8.0)
+    got = analyze_note(dead, sr, note, 10.0)
+    # h2 is 10 dB under h1 in the signal; measured after the note it would be
+    # the floor difference of two silences instead.
+    assert got.harmonics_db[1] > -30.0
+
+
+def test_an_aftersound_band_with_nothing_in_it_is_not_fitted():
+    sr = 48000
+    t = np.arange(int(8.0 * sr)) / sr
+    over_by_one_second = np.sin(2 * np.pi * 2093.0 * t) * np.exp(-t * 12.0)
+    sk = skeleton_note(over_by_one_second, sr, Note(96, 88, 0.0, 8.0))
+    assert sk["tail_db_s"][0] is None
+    assert sk["early_db_s"][0] is not None
