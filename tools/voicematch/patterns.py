@@ -20,6 +20,15 @@ from smf import Note
 _DEFAULT_REGISTERS = (48, 60, 72)
 
 _PROGRAM_REGISTERS: dict[int, tuple[int, int, int]] = {
+    # 16-23 organs & free reeds. An organ's compass is the whole point of the
+    # probe rather than a convenience: the ranks are pitch multipliers, so the
+    # top note is where the mixture lands in the audible band and the bottom
+    # note is where the sub-octave rank does. C3/C4/C5 would probe none of it.
+    **{p: (36, 60, 84) for p in range(16, 20)},  # drawbar / percussive / rock / church
+    20: (41, 60, 79),   # reed organ
+    21: (53, 69, 84),   # accordion (right-hand manual)
+    22: (60, 72, 84),   # harmonica
+    23: (53, 69, 84),   # tango accordion
     # 32-39 basses
     **{p: (28, 40, 52) for p in range(32, 40)},
     # 40-47 strings & orchestral

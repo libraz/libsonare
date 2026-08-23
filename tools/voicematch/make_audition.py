@@ -299,12 +299,15 @@ def main() -> int:
     # which already names the reference plugin it is being compared against.
     program = args.program if args.program is not None else int(cfg.get("program", 0))
     # `or` rather than a get() default at each step: `load_config` declares
-    # `takes` and fills it with an empty string, so a key-missing default never
-    # fires and a capture that does not name a phrase set would fail here rather
-    # than fall back.
-    set_name = args.takes or cfg.get("takes") or "piano"
+    # `takes` and fills it with an empty string, so a key-missing default would
+    # never fire anyway. There is deliberately no fallback set — an instrument
+    # with no phrases of its own would otherwise be auditioned on the piano's,
+    # which renders and plays and looks like a successful comparison of the
+    # wrong music.
+    set_name = args.takes or cfg.get("takes")
     if set_name not in TAKE_SETS:
-        print(f"unknown phrase set {set_name!r}; have {', '.join(TAKE_SETS)}", file=sys.stderr)
+        named = f"{set_name!r}" if set_name else "no phrase set"
+        print(f"the capture names {named}; have {', '.join(TAKE_SETS)}", file=sys.stderr)
         return 2
 
     selected = [t for t in TAKE_SETS[set_name]() if not only or t.id in only]

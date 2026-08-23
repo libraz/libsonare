@@ -24,6 +24,44 @@ from metrics import _spectrum  # noqa: E402
 SR = 48000
 
 
+CAPTURE_DIR = Path(__file__).resolve().parent / "capture"
+REFERENCE_DIR = Path(__file__).resolve().parent / "reference"
+
+
+def shipped_captures(root: Path | None = None) -> list[str]:
+    """Every committed capture definition, by id.
+
+    Globbed rather than listed. A hand-kept list of instrument names is the
+    mirror table these tests exist to make unnecessary: the failure worth
+    catching is a capture added without being added to the list, which a list
+    cannot catch by construction. The `.local.json` overlays are the untracked
+    identity half and are excluded by suffix.
+    """
+    here = root or CAPTURE_DIR
+    return sorted(p.stem for p in here.glob("*.json") if not p.name.endswith(".local.json"))
+
+
+def assert_names_no_product(name: str, *, capture_dir: Path, reference_dir: Path) -> None:
+    """Neither half of one instrument's committed record identifies a product.
+
+    Keys rather than the words: the prose in these files explains that the
+    plugin triple and the presets live in the untracked overlay, and it should.
+    What must not appear is a value - `profile.py measure` copies the capture
+    block into the reference, so a field added on one side reaches the other.
+
+    Taking its directories as arguments is what lets the test below point it at
+    a file that does name a product, and so show that it fails.
+    """
+    docs = [(json.loads((capture_dir / f"{name}.json").read_text()), "capture")]
+    reference = reference_dir / f"{name}.json"
+    if reference.exists():
+        docs.append((json.loads(reference.read_text()).get("capture", {}), "reference"))
+    for doc, where in docs:
+        assert "plugin" not in doc, f"{name} {where} names its plugin"
+        for timbre in doc.get("timbres", []):
+            assert "preset" not in timbre, f"{name} {where} names a preset"
+
+
 def harmonic(f0: float, n_harm: int = 8, seconds: float = 1.0,
              noise: float = 0.0) -> np.ndarray:
     t = np.arange(int(SR * seconds)) / SR
@@ -201,25 +239,48 @@ def test_a_capture_without_its_overlay_loads_and_carries_no_product(tmp_path):
 
 
 def test_the_shipped_captures_carry_no_plugin_identity():
-    """The committed half must not say which commercial product was captured.
+    """The committed half must not say which commercial product was captured."""
+    shipped = shipped_captures()
+    assert shipped, "no capture definitions found to check"
+    for name in shipped:
+        assert_names_no_product(name, capture_dir=CAPTURE_DIR, reference_dir=REFERENCE_DIR)
 
-    Keys rather than the words: the prose in these files explains that the
-    plugin triple and the presets live in the untracked overlay, and it should.
-    What must not appear is a value — `profile.py measure` copies the capture
-    block into the reference, so a field added on one side reaches the other.
+
+def test_the_identity_guard_fails_on_a_capture_that_does_name_a_product(tmp_path):
+    """Without this the guard above passes whether or not it can see anything.
+
+    Both halves are checked, because the reference is written from the capture
+    and a scrub that only cleaned the capture would leave the copy behind.
     """
-    here = Path(__file__).resolve().parent
-    for name in ("piano", "harpsichord"):
-        cfg = json.loads((here / "capture" / f"{name}.json").read_text())
-        profile = json.loads((here / "reference" / f"{name}.json").read_text())
-        for doc, where in ((cfg, "capture"), (profile.get("capture", {}), "reference")):
-            assert "plugin" not in doc, f"{name} {where} names its plugin"
-            for timbre in doc.get("timbres", []):
-                assert "preset" not in timbre, f"{name} {where} names a preset"
+    capture, reference = tmp_path / "capture", tmp_path / "reference"
+    capture.mkdir()
+    reference.mkdir()
+    (capture / "x.json").write_text(json.dumps({
+        "id": "x", "program": 0, "plugin": "aumu:xxxx:Yyyy", "timbres": [{"id": "t"}],
+    }))
+    assert shipped_captures(capture) == ["x"]
+    with pytest.raises(AssertionError, match="names its plugin"):
+        assert_names_no_product("x", capture_dir=capture, reference_dir=reference)
+
+    (capture / "x.json").write_text(json.dumps({
+        "id": "x", "program": 0, "timbres": [{"id": "t", "preset": "Grand/Close.fxp"}],
+    }))
+    with pytest.raises(AssertionError, match="names a preset"):
+        assert_names_no_product("x", capture_dir=capture, reference_dir=reference)
+
+    (capture / "x.json").write_text(json.dumps({"id": "x", "program": 0, "timbres": [{"id": "t"}]}))
+    (reference / "x.json").write_text(json.dumps({"capture": {"plugin": "aumu:xxxx:Yyyy"}}))
+    with pytest.raises(AssertionError, match="reference names its plugin"):
+        assert_names_no_product("x", capture_dir=capture, reference_dir=reference)
 
 
-def test_the_shipped_captures_name_their_program_and_phrase_set():
-    """These two fields are what stop an instrument being measured as another."""
+def test_the_two_captures_with_references_name_their_program_and_phrase_set():
+    """These two fields are what stop an instrument being measured as another.
+
+    Named rather than globbed, because the regression is a specific pairing:
+    the harpsichord was measured against program 0 for as long as the program
+    was a literal in `profile.py`.
+    """
     from capture import load_config
 
     here = Path(__file__).resolve().parent
@@ -227,6 +288,51 @@ def test_the_shipped_captures_name_their_program_and_phrase_set():
         cfg = load_config(here / "capture" / f"{name}.json")
         assert cfg["program"] == program
         assert cfg["takes"] == takes
+
+
+def test_every_shipped_capture_names_the_program_it_answers_with():
+    """Read from the file, not from `load_config`, which defaults it to 0.
+
+    A capture that leaves the program out is not measured against nothing, it
+    is measured against the piano — which is a plausible profile of the wrong
+    instrument rather than a failure anyone would notice.
+    """
+    here = Path(__file__).resolve().parent / "capture"
+    for name in shipped_captures():
+        raw = json.loads((here / f"{name}.json").read_text())
+        assert isinstance(raw.get("program"), int), f"{name} does not name its GM program"
+
+
+def test_a_capture_naming_a_phrase_set_names_one_that_exists():
+    """A typo here is otherwise found by rendering the whole audition first."""
+    from make_audition import TAKE_SETS
+
+    here = Path(__file__).resolve().parent / "capture"
+    for name in shipped_captures():
+        takes = json.loads((here / f"{name}.json").read_text()).get("takes")
+        if takes:
+            assert takes in TAKE_SETS, f"{name} names phrase set {takes!r}, which does not exist"
+
+
+def test_an_audition_of_a_capture_with_no_phrase_set_is_refused(capsys):
+    """Not rendered on the piano's phrases, which would look like it worked.
+
+    The message is asserted, not just the exit code: `main` has other ways to
+    return 2, and a test that accepts any of them would keep passing after the
+    fallback came back.
+    """
+    import make_audition
+
+    assert "drums" in shipped_captures()
+    argv = ["make_audition.py", "--config", str(Path(make_audition.__file__).resolve().parent
+                                                / "capture" / "drums.json")]
+    old = sys.argv
+    sys.argv = argv
+    try:
+        assert make_audition.main() == 2
+    finally:
+        sys.argv = old
+    assert "no phrase set" in capsys.readouterr().err
 
 
 # --------------------------------------------------------------------------
