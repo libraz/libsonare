@@ -521,14 +521,28 @@ TEST_CASE("Named stereo fallback processes mono processors per channel", "[maste
 
 TEST_CASE("Named stereo classical repair applies a shared stereo transfer",
           "[mastering][chain][repair]") {
-  std::vector<float> left = {0.2f, 0.05f, 0.05f, 0.0f, -0.05f, -0.05f, 0.05f, 0.05f};
+  // A burst followed by a decaying tail, and long enough for the late-reverb
+  // estimate to have a frame to look back at: the spectral subtraction only
+  // engages past `lateDelayMs` (50 ms, nine 256-sample hops at 48 kHz), so a
+  // handful of samples produces a bit-for-bit passthrough and the attenuation
+  // check below would be measuring nothing but STFT round-trip rounding.
+  constexpr size_t kLength = 8192;
+  constexpr int kSr = 48000;
+  std::vector<float> left(kLength);
+  for (size_t i = 0; i < kLength; ++i) {
+    const float t = static_cast<float>(i) / static_cast<float>(kSr);
+    const float excitation = i < 64 ? 0.8f : 0.0f;
+    const float tail =
+        0.35f * std::sin(sonare::constants::kTwoPi * 640.0f * t) * std::exp(-t / 0.12f);
+    left[i] = excitation + tail;
+  }
   std::vector<float> right(left.size());
   for (size_t i = 0; i < left.size(); ++i) {
     right[i] = 0.2f * left[i];
   }
 
   const auto result = apply_named_processor_stereo(
-      "repair.dereverbClassical", left.data(), right.data(), left.size(), 48000,
+      "repair.dereverbClassical", left.data(), right.data(), left.size(), kSr,
       {{"threshold", 0.04}, {"attenuation", 0.5}, {"nFft", 1024.0}, {"hopLength", 256.0}});
 
   REQUIRE(result.left.size() == left.size());
@@ -538,7 +552,9 @@ TEST_CASE("Named stereo classical repair applies a shared stereo transfer",
     if (std::abs(left[i]) > 1.0e-6f) {
       REQUIRE_THAT(result.right[i], WithinAbs(0.2f * result.left[i], 1.0e-6f));
     }
-    if (std::abs(result.left[i]) < std::abs(left[i])) {
+    // A margin, not `<`: the transfer has to actually take level out, rather
+    // than land a rounding step below the input.
+    if (std::abs(result.left[i]) < 0.99f * std::abs(left[i])) {
       attenuated = true;
     }
   }

@@ -1,7 +1,7 @@
 #pragma once
 
 /// @file fft.h
-/// @brief FFT wrapper using KissFFT.
+/// @brief FFT wrapper over the PFFFT and KissFFT backends.
 
 #include <complex>
 #include <memory>
@@ -9,13 +9,22 @@
 
 namespace sonare {
 
-/// @brief Real-valued FFT processor using KissFFT.
+/// @brief Real-valued FFT processor.
 /// @details Provides forward and inverse real FFT operations.
+///
+/// Backend: the SIMD PFFFT kernels are used for every transform length they can
+/// factor, and the scalar KissFFT serves the rest, so an unusual @c n_fft still
+/// transforms rather than failing. Which backend runs is an implementation
+/// detail with no effect beyond floating-point rounding; it is chosen per
+/// transform kind at construction. Builds configured with
+/// `-DSONARE_USE_PFFFT=OFF`, which is the WebAssembly default, use KissFFT
+/// throughout.
 ///
 /// Thread Safety:
 /// - Different instances can be used concurrently from different threads.
 /// - A single instance must NOT be shared between threads without external
-///   synchronization, as KissFFT state is modified during computation.
+///   synchronization, as the backend's scratch buffers are written during
+///   computation.
 /// - For multi-threaded processing, create one FFT instance per thread.
 class FFT {
  public:

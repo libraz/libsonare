@@ -41,6 +41,26 @@ else()
   target_compile_options(kissfft PRIVATE -w)
 endif()
 
+# PFFFT (third-party, warnings disabled). The sources are the copy r8brain
+# vendors; r8brain itself is configured to use its own FFT, so this target is
+# the only consumer and nothing here changes the resampler.
+if(SONARE_USE_PFFFT)
+  add_library(pffft STATIC
+    ${PROJECT_SOURCE_DIR}/third_party/r8brain/fft/pffft.c
+  )
+  set_target_properties(pffft PROPERTIES POSITION_INDEPENDENT_CODE ON)
+  # Same reasoning as kissfft: the archive is installed next to libsonare's own,
+  # so it carries a prefixed file name rather than a generic `libpffft.a`.
+  set_target_properties(pffft PROPERTIES OUTPUT_NAME sonare_pffft)
+  target_include_directories(pffft SYSTEM PUBLIC
+    $<BUILD_INTERFACE:${PROJECT_SOURCE_DIR}/third_party/r8brain/fft>)
+  if(MSVC)
+    target_compile_options(pffft PRIVATE /W0)
+  else()
+    target_compile_options(pffft PRIVATE -w)
+  endif()
+endif()
+
 # Source files
 set(SONARE_SOURCES
   util/math_utils.cpp
@@ -261,6 +281,10 @@ set_target_properties(sonare_core_objects PROPERTIES POSITION_INDEPENDENT_CODE O
 target_include_directories(sonare_core_objects PUBLIC ${SONARE_PUBLIC_INCLUDE_DIRS})
 target_include_directories(sonare_core_objects SYSTEM PUBLIC ${SONARE_THIRD_PARTY_INCLUDE_DIRS})
 target_link_libraries(sonare_core_objects PUBLIC Eigen3::Eigen)
+if(SONARE_USE_PFFFT)
+  target_link_libraries(sonare_core_objects PUBLIC pffft)
+  target_compile_definitions(sonare_core_objects PUBLIC SONARE_HAVE_PFFFT=1)
+endif()
 target_compile_options(sonare_core_objects PRIVATE ${SONARE_WARNING_FLAGS})
 target_compile_definitions(sonare_core_objects PRIVATE
   SONARE_BUILD_MASTERING=$<IF:$<BOOL:${BUILD_MASTERING}>,1,0>
@@ -285,6 +309,10 @@ target_include_directories(sonare_core SYSTEM PUBLIC ${SONARE_THIRD_PARTY_INCLUD
 # invents when the host has no system Eigen. kissfft, by contrast, contributes
 # real symbols to the archive, so it is exported and installed.
 target_link_libraries(sonare_core PUBLIC $<BUILD_INTERFACE:Eigen3::Eigen> kissfft)
+if(SONARE_USE_PFFFT)
+  target_link_libraries(sonare_core PUBLIC pffft)
+  target_compile_definitions(sonare_core PUBLIC SONARE_HAVE_PFFFT=1)
+endif()
 
 # Threading support for parallel analysis on native builds
 if(NOT BUILD_WASM)
@@ -1385,6 +1413,7 @@ set(SONARE_EXPORT_TARGETS "")
 # reads in dependency order is easier to check against the target definitions.
 foreach(_sonare_target IN ITEMS
     kissfft
+    pffft
     sonare_core
     sonare_rt
     sonare_automation

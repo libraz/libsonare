@@ -66,6 +66,24 @@ option(SONARE_INSTALL "Generate install and find_package() export rules" ${SONAR
 option(SONARE_ENABLE_OPTIONAL_FIXTURE_TESTS
        "Build optional external fixture tests that require local datasets" OFF)
 
+# FFT backend. PFFFT is a SIMD FFT and is 2-4x faster than the scalar KissFFT
+# for the power-of-two sizes the STFT uses; KissFFT stays linked and serves every
+# transform length PFFFT cannot factor.
+#
+# The WebAssembly configuration is off by default. The vendored PFFFT does carry
+# a wasm-simd128 path, so this is a size decision rather than a capability one:
+# the module would carry both FFTs, and the shipped budget in
+# bindings/wasm/wasm-size-budget.json allows 2% -- roughly 8 kB gzip on the
+# analysis-only entry. Turning it on for WebAssembly means measuring the built
+# module and rebasing that budget in the same change.
+if(BUILD_WASM)
+  set(SONARE_PFFFT_DEFAULT OFF)
+else()
+  set(SONARE_PFFFT_DEFAULT ON)
+endif()
+option(SONARE_USE_PFFFT "Use the SIMD PFFFT backend where the transform length allows"
+       ${SONARE_PFFFT_DEFAULT})
+
 # Development-only: expose the synth voices' `SONARE_TUNABLE` calibration
 # constants as runtime-overridable knobs (see src/util/tunable.h), so a fitter
 # can sweep one without a rebuild per candidate value. The macro changes what a
