@@ -20,11 +20,26 @@ from dataclasses import dataclass
 
 import numpy as np
 
-from metrics import analyze_hit, analyze_note
+from metrics import analyze_hit, analyze_note, attack_bands, level_of
 from patterns import analysis_window_end
 
-SKELETON_MAX_S = 2.0  # analysis window per note (matches the sustain pattern)
+# Longest analysis window per note. The probe patterns hold a note for two
+# seconds and this used to match them, which made the cap invisible — and made
+# the harness structurally unable to see a decay that goes wrong later than
+# that. A grand's aftersound runs 9 to 50 seconds from A0 to the top of the
+# fitted range, and a model whose C6 fell to nothing in 1.6 s of an 8 s hold
+# scored exactly the same as one that held for eleven, because both were
+# measured over the same first two seconds. The cap now sits past the capture's
+# own eight-second gate; a shorter note still measures only as far as it lasts.
+SKELETON_MAX_S = 8.0
 MSS_FFT_SIZES = (512, 1024, 2048, 4096)
+
+# Where the three decay bands are fitted, in seconds from the onset. The first
+# two are the prompt sound and the start of the aftersound; the third only has
+# frames to fit when the probe holds the note that long, and is what a
+# two-second window could never reach.
+SKELETON_BANDS = {"early_db_s": (0.08, 0.40), "late_db_s": (0.80, 1.80),
+                  "tail_db_s": (2.00, 6.00)}
 
 
 def skeleton_note(mono: np.ndarray, sr: int, note, n_harm: int = 12) -> dict:
@@ -33,9 +48,10 @@ def skeleton_note(mono: np.ndarray, sr: int, note, n_harm: int = 12) -> dict:
     Separates the two things the time-averaged spectrum conflates:
       - init_db: per-harmonic level extrapolated to the onset (dB rel h1) —
         the EXCITATION spectrum evidence;
-      - early_db_s / late_db_s: per-harmonic decay slopes (0.08-0.40 s and
-        0.8-1.8 s linear fits) — the LOOP decay evidence.
-    Harmonics above Nyquist are None.
+      - early_db_s / late_db_s / tail_db_s: per-harmonic decay slopes over the
+        three bands in `SKELETON_BANDS` — the LOOP decay evidence.
+    Harmonics above Nyquist are None, and so is a band the note is too short to
+    reach.
     """
     f0_nominal = 440.0 * 2.0 ** ((note.note - 69) / 12.0)
     start = int(note.start * sr)
@@ -44,9 +60,9 @@ def skeleton_note(mono: np.ndarray, sr: int, note, n_harm: int = 12) -> dict:
     )
     win_n = int(0.05 * sr)
     hop = int(0.01 * sr)
+    empty = {"init_db": [None] * n_harm, **{b: [None] * n_harm for b in SKELETON_BANDS}}
     if len(seg) < win_n + hop:
-        return {"init_db": [None] * n_harm, "early_db_s": [None] * n_harm,
-                "late_db_s": [None] * n_harm}
+        return empty
 
     # Refine each partial's frequency (inharmonicity-aware) with a zoomed DFT
     # over the early sustain.
@@ -81,28 +97,26 @@ def skeleton_note(mono: np.ndarray, sr: int, note, n_harm: int = 12) -> dict:
         return float(m), float(b)
 
     init_db: list[float | None] = []
-    early: list[float | None] = []
-    late: list[float | None] = []
+    slopes: dict[str, list[float | None]] = {band: [] for band in SKELETON_BANDS}
     col_i = 0
     for f in freqs:
         if f is None:
             init_db.append(None)
-            early.append(None)
-            late.append(None)
+            for band in SKELETON_BANDS:
+                slopes[band].append(None)
             continue
         col = env_db[:, col_i]
         col_i += 1
-        fe = fit(0.08, 0.40, col)
-        fl = fit(0.80, 1.80, col)
-        init_db.append(fe[1] if fe else None)
-        early.append(fe[0] if fe else None)
-        late.append(fl[0] if fl else None)
+        fits = {band: fit(lo, hi, col) for band, (lo, hi) in SKELETON_BANDS.items()}
+        early = fits["early_db_s"]
+        init_db.append(early[1] if early else None)
+        for band, got in fits.items():
+            slopes[band].append(got[0] if got else None)
     if init_db[0] is None:
-        return {"init_db": [None] * n_harm, "early_db_s": [None] * n_harm,
-                "late_db_s": [None] * n_harm}
+        return empty
     ref_db = init_db[0]
     init_db = [None if v is None else v - ref_db for v in init_db]
-    return {"init_db": init_db, "early_db_s": early, "late_db_s": late}
+    return {"init_db": init_db, **slopes}
 
 # The spectral centroid is deliberately excluded from the loss: it depends on
 # the probe note set (register weighting) and has been an unreliable, noisy
@@ -110,7 +124,7 @@ def skeleton_note(mono: np.ndarray, sr: int, note, n_harm: int = 12) -> dict:
 # instead.
 
 
-def probe_rows(mono: np.ndarray, pattern, sr: int) -> list[dict]:
+def probe_rows(mono: np.ndarray, pattern, sr: int, raw: np.ndarray | None = None) -> list[dict]:
     """Measure every analysis note of `pattern` with the metric set it calls for.
 
     A drum hit and a bowed note are both "one note of the probe", but nothing
@@ -121,16 +135,27 @@ def probe_rows(mono: np.ndarray, pattern, sr: int) -> list[dict]:
     Both metric sets read the same window — up to the next onset, never past it
     (`analysis_window_end`), so no note's release is measured through the next
     note's attack.
+
+    `raw` is the same render before RMS normalisation. Everything measured from
+    `mono` is a shape, and shapes are what normalisation is for; the level
+    fields are the one thing that cannot survive it, so they are measured from
+    the untouched signal instead. Omitting `raw` leaves those fields off the
+    rows, and the level terms then have nothing to score — which is what a
+    caller that has only a normalised render should get.
     """
     rows = []
     if pattern.percussive:
         for note in pattern.analysis_notes:
             rows.append(analyze_hit(mono, sr, note, analysis_window_end(pattern, note)).to_dict())
-        return rows
-    for note in pattern.analysis_notes:
-        row = analyze_note(mono, sr, note, analysis_window_end(pattern, note)).to_dict()
-        row["skeleton"] = skeleton_note(mono, sr, note)
-        rows.append(row)
+    else:
+        for note in pattern.analysis_notes:
+            row = analyze_note(mono, sr, note, analysis_window_end(pattern, note)).to_dict()
+            row["skeleton"] = skeleton_note(mono, sr, note)
+            row["attack_hf_db"] = attack_bands(mono, sr, note)
+            rows.append(row)
+    if raw is not None:
+        for row, note in zip(rows, pattern.analysis_notes):
+            row.update(level_of(raw, sr, note, analysis_window_end(pattern, note)))
     return rows
 
 
@@ -172,11 +197,12 @@ def mss_distance(model: np.ndarray, oracle: np.ndarray) -> float:
 
 
 # The terms the loss is built from, in report order. `harm`/`cents`/`tnr`/`init`/
-# `slope` come from the harmonic metric set and `band`/`bdecay` from the
-# percussion one; `env` and `mss` are computed for both. A run uses one group or
-# the other — which one the probe pattern decides — and the unused terms stay at
-# zero weight.
-LOSS_TERMS = ("harm", "cents", "tnr", "env", "init", "slope", "mss", "band", "bdecay")
+# `slope`/`tail`/`hf` come from the harmonic metric set and `band`/`bdecay` from
+# the percussion one; `env`, `mss`, `level` and `crest` are computed for both. A
+# run uses one group or the other — which one the probe pattern decides — and
+# the unused terms stay at zero weight.
+LOSS_TERMS = ("harm", "cents", "tnr", "env", "init", "slope", "tail", "hf",
+              "level", "crest", "mss", "band", "bdecay")
 
 # Smallest value a term is normalised against, in that term's own units: 1 dB of
 # harmonic-profile error, 1 cent, 1 dB of excess noise, and so on. Without a
@@ -185,8 +211,56 @@ LOSS_TERMS = ("harm", "cents", "tnr", "env", "init", "slope", "mss", "band", "bd
 # swamp every other term the moment it moved at all.
 TERM_FLOORS = {
     "harm": 1.0, "cents": 1.0, "tnr": 1.0, "env": 0.1, "init": 1.0, "slope": 0.1,
+    "tail": 0.1, "hf": 1.0, "level": 0.5, "crest": 0.5,
     "mss": 0.01, "band": 1.0, "bdecay": 0.1,
 }
+
+# Per-note caps, in each term's own units. A reference row can be measuring
+# almost nothing — a partial 58 dB under the fundamental, a band the capture has
+# no energy in — and an uncapped delta against one of those decides the whole
+# objective on its own.
+TAIL_DELTA_CAP_DB_S = 20.0
+HF_DELTA_CAP_DB = 24.0
+LEVEL_DELTA_CAP_DB = 18.0
+
+
+def _level_terms(model_rows: list[dict], oracle_rows_: list[dict]) -> tuple[float, float, float]:
+    """The two level terms, plus the whole-grid offset they are measured against.
+
+    Absolute dBFS is not comparable between a model rendered here and a
+    reference captured through somebody else's output stage, and a term that
+    treated it as comparable would spend the fit's budget on an output gain. So
+    the grid's own median offset is removed first and what is scored is the
+    residual — how the level is distributed across register and velocity, which
+    is a property of the instrument — while the offset itself is returned for
+    the report, since a fit that silently corrects a 9 dB calibration error is
+    not something to discover later.
+
+    Crest needs no such treatment: it is a difference of two levels from the
+    same render, so any gain common to both cancels. It is also the sharper of
+    the two here, because the defect it catches — a note whose envelope never
+    falls after its attack — is invisible to every shape metric and to the level
+    residual alike.
+
+    Returns zeros when the rows carry no level fields, which is what a probe
+    measured from a normalised render should score: nothing, rather than a
+    match.
+    """
+    offsets: list[float] = []
+    crests: list[float] = []
+    for m, o in zip(model_rows, oracle_rows_):
+        mo, oo = m.get("held_rms_dbfs"), o.get("held_rms_dbfs")
+        if mo is not None and oo is not None:
+            offsets.append(mo - oo)
+        mc, oc = m.get("held_crest_db"), o.get("held_crest_db")
+        if mc is not None and oc is not None:
+            crests.append(min(abs(mc - oc), LEVEL_DELTA_CAP_DB))
+    if not offsets:
+        return 0.0, (sum(crests) / len(crests) if crests else 0.0), 0.0
+    median = sorted(offsets)[len(offsets) // 2]
+    balance = sum(min(abs(d - median), LEVEL_DELTA_CAP_DB) for d in offsets) / len(offsets)
+    crest = sum(crests) / len(crests) if crests else 0.0
+    return balance, crest, median
 
 
 def _rows_comparable(model_rows: list[dict], oracle_rows_: list[dict]) -> bool | None:
@@ -255,11 +329,19 @@ def loss_terms(
                 for a, b in zip(sm[key][:6], so[key][:6]):
                     if a is not None and b is not None:
                         totals["slope"] += min(abs(a - b), 30.0) / 10.0
+            for a, b in zip(sm.get("tail_db_s", [])[:6], so.get("tail_db_s", [])[:6]):
+                if a is not None and b is not None:
+                    totals["tail"] += min(abs(a - b), TAIL_DELTA_CAP_DB_S) / 10.0
+        for a, b in zip(m.get("attack_hf_db", []), o.get("attack_hf_db", [])):
+            if a is not None and b is not None:
+                totals["hf"] += min(abs(a - b), HF_DELTA_CAP_DB)
     n = len(model_rows)
     out = {name: totals[name] / n for name in LOSS_TERMS}
     out["mss"] = mss
+    out["level"], out["crest"], offset = _level_terms(model_rows, oracle_rows_)
     if any(not math.isfinite(v) for v in out.values()):
         return None
+    out["level_offset_db"] = offset
     return out
 
 
@@ -309,8 +391,10 @@ def percussion_terms(
     n = len(model_rows)
     out = {name: totals[name] / n for name in LOSS_TERMS}
     out["mss"] = mss
+    out["level"], out["crest"], offset = _level_terms(model_rows, oracle_rows_)
     if any(not math.isfinite(v) for v in out.values()):
         return None
+    out["level_offset_db"] = offset
     return out
 
 
@@ -337,11 +421,17 @@ def cli_weights(args) -> dict[str, float]:
     """
     percussive = getattr(args, "percussive", False)
     env = args.w_env if args.w_env is not None else (1.0 if percussive else 0.0)
+    shared = {
+        "env": env, "mss": args.w_mss,
+        "level": getattr(args, "w_level", 0.0), "crest": getattr(args, "w_crest", 0.0),
+    }
     if percussive:
-        return {"band": args.w_band, "bdecay": args.w_bdecay, "env": env, "mss": args.w_mss}
+        return {"band": args.w_band, "bdecay": args.w_bdecay, **shared}
     return {
         "harm": args.w_harm, "cents": args.w_cents, "tnr": args.w_tnr,
-        "env": env, "init": args.w_init, "slope": args.w_slope, "mss": args.w_mss,
+        "init": args.w_init, "slope": args.w_slope,
+        "tail": getattr(args, "w_tail", 0.0), "hf": getattr(args, "w_hf", 0.0),
+        **shared,
     }
 
 

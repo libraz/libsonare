@@ -271,6 +271,127 @@ def analyze_note(mono: np.ndarray, sr: int, note: Note, render_end: float) -> No
 
 
 # --------------------------------------------------------------------------- #
+# Level, and the attack's high end
+# --------------------------------------------------------------------------- #
+# Where the held level is read, in seconds from the onset. Fixed rather than a
+# fraction of the note, because the gate is a property of the probe and not of
+# the instrument: on a corpus probe holding eight seconds, a 0.3-0.9 fraction
+# reads 2.4 to 7.2 s in, which on the top octave is entirely after the note has
+# stopped — the reference's own C8 is down 40 dB by 2.2 s. Both sides then
+# measure silence and agree perfectly about it.
+HELD_WINDOW_S = (0.20, 1.20)
+# Below this much under the note's own peak there is no note left in the window,
+# so its level carries no information and is reported as absent rather than as a
+# number near the arithmetic floor. Two renders whose held windows are both
+# empty otherwise score as a perfect level match.
+HELD_FLOOR_DB = 80.0
+
+
+def level_of(raw: np.ndarray, sr: int, note: Note, window_end: float) -> dict:
+    """Absolute level of one note, measured on audio no normalisation has touched.
+
+    Every other metric here is deliberately level-blind — the harmonic ladder is
+    h1-normalised, the band profile is normalised to its own loudest band, and
+    both renders are scaled to a common RMS before any of it — because a timbre
+    match is a question about shape. The consequence is that a voice can satisfy
+    all of them and still be the wrong loudness in a register, or hold a note far
+    too long after an attack of the right height, with nothing in the objective
+    able to say so.
+
+    Three numbers, deliberately including a difference that survives an unknown
+    output-gain offset: peak, the RMS of the held part of the note, and the crest
+    between them. Crest is the one that needs no calibration at all — a model
+    whose peak is 3.9 dB over a reference while its held RMS is 8.7 dB over is
+    not loud, it is a note that never falls after its attack, and that reads
+    identically whatever gain either side was captured at.
+    """
+    on = int(note.start * sr)
+    end = min(int(window_end * sr), len(raw))
+    seg = raw[on:end]
+    if len(seg) < 256:
+        return {"peak_dbfs": None, "held_rms_dbfs": None, "held_crest_db": None}
+    peak = float(np.max(np.abs(seg)))
+    lo, hi = HELD_WINDOW_S
+    held_a = int((note.start + lo) * sr)
+    held_b = min(int((note.start + min(hi, note.dur)) * sr), end)
+    if held_b - held_a < 256:
+        # Too short to hold: fall back to the settled middle of whatever there
+        # is, which is what the sustain metrics read on a staccato probe.
+        held_a = int((note.start + 0.3 * note.dur) * sr)
+        held_b = min(int((note.start + 0.9 * note.dur) * sr), end)
+    held = raw[held_a:held_b] if held_b - held_a >= 256 else seg
+    held_rms = float(np.sqrt(np.mean(held**2)))
+    peak_db = float(_db(peak))
+    held_db = float(_db(held_rms))
+    if peak_db - held_db > HELD_FLOOR_DB:
+        return {"peak_dbfs": round(peak_db, 2), "held_rms_dbfs": None,
+                "held_crest_db": None}
+    return {
+        "peak_dbfs": round(peak_db, 2),
+        "held_rms_dbfs": round(held_db, 2),
+        # Named apart from the percussion set's own `crest_db`, which is a
+        # different measurement of a different window on a normalised signal —
+        # and which these fields are merged alongside on a drum probe.
+        "held_crest_db": round(peak_db - held_db, 2),
+    }
+
+
+# The attack window, and how it is cut up. Six 20 ms slices covering the first
+# 120 ms: long enough to reach past the hammer contact and the bloom, short
+# enough that a burst confined to the first frame is not averaged away. A
+# whole-timeline spectral distance cannot see one of these — a 43 ms excess of
+# +53 dB at 20-24 kHz on a note that matches within half a dB everywhere else
+# dilutes into the multi-scale term's average and never moves it.
+ATTACK_WINDOW_MS = 20.0
+ATTACK_WINDOWS = 6
+# Bands above the last harmonic anyone models. This is where a strike-noise
+# path with the wrong filter order announces itself: a single pole falls at
+# 6 dB/octave, which no radiating mechanism does, and leaves a burst still
+# 23 dB up at 16 kHz that the ear reads as a tick rather than as brightness.
+ATTACK_BANDS_HZ = ((4000.0, 8000.0), (8000.0, 12000.0), (12000.0, 16000.0),
+                   (16000.0, 20000.0), (20000.0, 24000.0))
+
+
+def attack_bands(mono: np.ndarray, sr: int, note: Note) -> list[float | None]:
+    """High-band balance through the attack: one value per band per time slice.
+
+    Each value is the band's level relative to that slice's own broadband level,
+    so the measure says nothing about how loud the attack was and everything
+    about its spectral tilt. That is what makes it usable on the RMS-normalised
+    signal the rest of the metric set reads, and what makes it comparable
+    between a model and a reference captured at different gains.
+
+    Bands above Nyquist and slices past the end of the render come back None
+    rather than as a floor value, so a shorter render contributes nothing to the
+    term instead of contributing a fabricated match.
+    """
+    win = int(sr * ATTACK_WINDOW_MS / 1000.0)
+    on = int(note.start * sr)
+    out: list[float | None] = []
+    freqs = np.fft.rfftfreq(win, 1.0 / sr)
+    window = np.hanning(win)
+    for i in range(ATTACK_WINDOWS):
+        a = on + i * win
+        seg = mono[a : a + win]
+        if len(seg) < win:
+            out.extend([None] * len(ATTACK_BANDS_HZ))
+            continue
+        power = np.abs(np.fft.rfft(seg * window)) ** 2
+        total = float(power.sum())
+        if total <= 0.0:
+            out.extend([None] * len(ATTACK_BANDS_HZ))
+            continue
+        for lo, hi in ATTACK_BANDS_HZ:
+            if lo >= sr / 2:
+                out.append(None)
+                continue
+            mask = (freqs >= lo) & (freqs < min(hi, sr / 2))
+            share = float(power[mask].sum()) / total
+            out.append(round(float(10.0 * np.log10(max(share, 1e-12))), 2))
+    return out
+
+
+# --------------------------------------------------------------------------- #
 # Percussion
 # --------------------------------------------------------------------------- #
 def _band_power(freqs: np.ndarray, power: np.ndarray, centers, ratio: float) -> np.ndarray:
