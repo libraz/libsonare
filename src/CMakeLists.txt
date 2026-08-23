@@ -1,10 +1,38 @@
+# Include directories every libsonare target publishes. Two roots: src/, which
+# is what the C++ headers include each other through (`#include "core/fft.h"`),
+# and include/, which carries the namespaced C ABI (`<sonare/sonare_c.h>`). An
+# installed tree relocates both under the prefix, so the same spellings resolve
+# whether the consumer used add_subdirectory() or find_package(sonare).
+# Everything here has to be wrapped in a build/install genex: install(EXPORT)
+# refuses to write an absolute source-tree path into an exported target.
+set(SONARE_PUBLIC_INCLUDE_DIRS
+  $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}>
+  $<BUILD_INTERFACE:${PROJECT_SOURCE_DIR}/include>
+  $<INSTALL_INTERFACE:${CMAKE_INSTALL_INCLUDEDIR}>
+  $<INSTALL_INTERFACE:${CMAKE_INSTALL_INCLUDEDIR}/sonare/cpp>
+)
+
+# Vendored third-party headers. No installed header includes one of these, so
+# they are build-tree only and no third-party header is distributed.
+set(SONARE_THIRD_PARTY_INCLUDE_DIRS
+  $<BUILD_INTERFACE:${PROJECT_SOURCE_DIR}/third_party/kissfft>
+  $<BUILD_INTERFACE:${PROJECT_SOURCE_DIR}/third_party/dr_libs>
+  $<BUILD_INTERFACE:${PROJECT_SOURCE_DIR}/third_party/minimp3>
+  $<BUILD_INTERFACE:${PROJECT_SOURCE_DIR}/third_party/r8brain>
+)
+
 # KissFFT library (third-party, warnings disabled)
 add_library(kissfft STATIC
   ${PROJECT_SOURCE_DIR}/third_party/kissfft/kiss_fft.c
   ${PROJECT_SOURCE_DIR}/third_party/kissfft/kiss_fftr.c
 )
 set_target_properties(kissfft PROPERTIES POSITION_INDEPENDENT_CODE ON)
-target_include_directories(kissfft SYSTEM PUBLIC ${PROJECT_SOURCE_DIR}/third_party/kissfft)
+# The archive is installed alongside libsonare's own, so it carries a prefixed
+# file name rather than claiming the generic `libkissfft.a` in the user's
+# library directory. Only the file name changes; the target name does not.
+set_target_properties(kissfft PROPERTIES OUTPUT_NAME sonare_kissfft)
+target_include_directories(kissfft SYSTEM PUBLIC
+  $<BUILD_INTERFACE:${PROJECT_SOURCE_DIR}/third_party/kissfft>)
 target_compile_definitions(kissfft PRIVATE KISS_FFT_FIXED=0)
 # Disable warnings for third-party code
 if(MSVC)
@@ -230,15 +258,8 @@ endif()
 add_library(sonare_core_objects OBJECT ${SONARE_SOURCES})
 set_target_properties(sonare_core_objects PROPERTIES POSITION_INDEPENDENT_CODE ON)
 
-target_include_directories(sonare_core_objects PUBLIC
-  ${CMAKE_CURRENT_SOURCE_DIR} ${PROJECT_SOURCE_DIR}/include
-)
-target_include_directories(sonare_core_objects SYSTEM PUBLIC
-  ${PROJECT_SOURCE_DIR}/third_party/kissfft
-  ${PROJECT_SOURCE_DIR}/third_party/dr_libs
-  ${PROJECT_SOURCE_DIR}/third_party/minimp3
-  ${PROJECT_SOURCE_DIR}/third_party/r8brain
-)
+target_include_directories(sonare_core_objects PUBLIC ${SONARE_PUBLIC_INCLUDE_DIRS})
+target_include_directories(sonare_core_objects SYSTEM PUBLIC ${SONARE_THIRD_PARTY_INCLUDE_DIRS})
 target_link_libraries(sonare_core_objects PUBLIC Eigen3::Eigen)
 target_compile_options(sonare_core_objects PRIVATE ${SONARE_WARNING_FLAGS})
 target_compile_definitions(sonare_core_objects PRIVATE
@@ -254,17 +275,16 @@ target_compile_definitions(sonare_core_objects PRIVATE
 
 add_library(sonare_core STATIC $<TARGET_OBJECTS:sonare_core_objects>)
 
-target_include_directories(sonare_core PUBLIC
-  ${CMAKE_CURRENT_SOURCE_DIR} ${PROJECT_SOURCE_DIR}/include
-)
-target_include_directories(sonare_core SYSTEM PUBLIC
-  ${PROJECT_SOURCE_DIR}/third_party/kissfft
-  ${PROJECT_SOURCE_DIR}/third_party/dr_libs
-  ${PROJECT_SOURCE_DIR}/third_party/minimp3
-  ${PROJECT_SOURCE_DIR}/third_party/r8brain
-)
+target_include_directories(sonare_core PUBLIC ${SONARE_PUBLIC_INCLUDE_DIRS})
+target_include_directories(sonare_core SYSTEM PUBLIC ${SONARE_THIRD_PARTY_INCLUDE_DIRS})
 
-target_link_libraries(sonare_core PUBLIC Eigen3::Eigen kissfft)
+# Eigen is header-only and no installed header includes it, so it is a build
+# requirement rather than a usage requirement: keeping it out of the install
+# interface means a consumer needs no Eigen at all, and an exported target
+# cannot end up naming the imported target that the FetchContent fallback
+# invents when the host has no system Eigen. kissfft, by contrast, contributes
+# real symbols to the archive, so it is exported and installed.
+target_link_libraries(sonare_core PUBLIC $<BUILD_INTERFACE:Eigen3::Eigen> kissfft)
 
 # Threading support for parallel analysis on native builds
 if(NOT BUILD_WASM)
@@ -292,15 +312,8 @@ add_library(sonare_rt STATIC
   transport/tempo_map.cpp
   transport/transport.cpp
 )
-target_include_directories(sonare_rt PUBLIC
-  ${CMAKE_CURRENT_SOURCE_DIR} ${PROJECT_SOURCE_DIR}/include
-)
-target_include_directories(sonare_rt SYSTEM PUBLIC
-  ${PROJECT_SOURCE_DIR}/third_party/kissfft
-  ${PROJECT_SOURCE_DIR}/third_party/dr_libs
-  ${PROJECT_SOURCE_DIR}/third_party/minimp3
-  ${PROJECT_SOURCE_DIR}/third_party/r8brain
-)
+target_include_directories(sonare_rt PUBLIC ${SONARE_PUBLIC_INCLUDE_DIRS})
+target_include_directories(sonare_rt SYSTEM PUBLIC ${SONARE_THIRD_PARTY_INCLUDE_DIRS})
 target_link_libraries(sonare_rt PUBLIC sonare_core)
 target_compile_options(sonare_rt PRIVATE ${SONARE_WARNING_FLAGS})
 set_target_properties(sonare_rt PROPERTIES POSITION_INDEPENDENT_CODE ON)
@@ -310,15 +323,8 @@ add_library(sonare_automation STATIC
   automation/automation_lane.cpp
   automation/parameter.cpp
 )
-target_include_directories(sonare_automation PUBLIC
-  ${CMAKE_CURRENT_SOURCE_DIR} ${PROJECT_SOURCE_DIR}/include
-)
-target_include_directories(sonare_automation SYSTEM PUBLIC
-  ${PROJECT_SOURCE_DIR}/third_party/kissfft
-  ${PROJECT_SOURCE_DIR}/third_party/dr_libs
-  ${PROJECT_SOURCE_DIR}/third_party/minimp3
-  ${PROJECT_SOURCE_DIR}/third_party/r8brain
-)
+target_include_directories(sonare_automation PUBLIC ${SONARE_PUBLIC_INCLUDE_DIRS})
+target_include_directories(sonare_automation SYSTEM PUBLIC ${SONARE_THIRD_PARTY_INCLUDE_DIRS})
 target_link_libraries(sonare_automation PUBLIC sonare_rt)
 target_compile_options(sonare_automation PRIVATE ${SONARE_WARNING_FLAGS})
 set_target_properties(sonare_automation PROPERTIES POSITION_INDEPENDENT_CODE ON)
@@ -427,15 +433,8 @@ if(BUILD_MASTERING)
     mastering/eq/shelving.cpp
     mastering/eq/tilt.cpp
   )
-  target_include_directories(sonare_mastering PUBLIC
-    ${CMAKE_CURRENT_SOURCE_DIR} ${PROJECT_SOURCE_DIR}/include
-  )
-  target_include_directories(sonare_mastering SYSTEM PUBLIC
-    ${PROJECT_SOURCE_DIR}/third_party/kissfft
-    ${PROJECT_SOURCE_DIR}/third_party/dr_libs
-    ${PROJECT_SOURCE_DIR}/third_party/minimp3
-    ${PROJECT_SOURCE_DIR}/third_party/r8brain
-  )
+  target_include_directories(sonare_mastering PUBLIC ${SONARE_PUBLIC_INCLUDE_DIRS})
+  target_include_directories(sonare_mastering SYSTEM PUBLIC ${SONARE_THIRD_PARTY_INCLUDE_DIRS})
   target_link_libraries(sonare_mastering PUBLIC sonare_rt)
   if(BUILD_FX)
     # Streaming insert factory can build effects.reverb.* processors from sonare_fx.
@@ -467,15 +466,8 @@ if(BUILD_MIXING)
     mixing/stereo_width.cpp
     mixing/surround_panner.cpp
   )
-  target_include_directories(sonare_mixing PUBLIC
-    ${CMAKE_CURRENT_SOURCE_DIR} ${PROJECT_SOURCE_DIR}/include
-  )
-  target_include_directories(sonare_mixing SYSTEM PUBLIC
-    ${PROJECT_SOURCE_DIR}/third_party/kissfft
-    ${PROJECT_SOURCE_DIR}/third_party/dr_libs
-    ${PROJECT_SOURCE_DIR}/third_party/minimp3
-    ${PROJECT_SOURCE_DIR}/third_party/r8brain
-  )
+  target_include_directories(sonare_mixing PUBLIC ${SONARE_PUBLIC_INCLUDE_DIRS})
+  target_include_directories(sonare_mixing SYSTEM PUBLIC ${SONARE_THIRD_PARTY_INCLUDE_DIRS})
   target_link_libraries(sonare_mixing PUBLIC sonare_rt sonare_mastering)
   target_compile_options(sonare_mixing PRIVATE ${SONARE_WARNING_FLAGS})
   set_target_properties(sonare_mixing PROPERTIES POSITION_INDEPENDENT_CODE ON)
@@ -503,15 +495,8 @@ if(BUILD_MIXING_ASSISTANT)
     mixing/assistant/suggester.cpp
     mixing/assistant/track_profile.cpp
   )
-  target_include_directories(sonare_mixing_assistant PUBLIC
-    ${CMAKE_CURRENT_SOURCE_DIR} ${PROJECT_SOURCE_DIR}/include
-  )
-  target_include_directories(sonare_mixing_assistant SYSTEM PUBLIC
-    ${PROJECT_SOURCE_DIR}/third_party/kissfft
-    ${PROJECT_SOURCE_DIR}/third_party/dr_libs
-    ${PROJECT_SOURCE_DIR}/third_party/minimp3
-    ${PROJECT_SOURCE_DIR}/third_party/r8brain
-  )
+  target_include_directories(sonare_mixing_assistant PUBLIC ${SONARE_PUBLIC_INCLUDE_DIRS})
+  target_include_directories(sonare_mixing_assistant SYSTEM PUBLIC ${SONARE_THIRD_PARTY_INCLUDE_DIRS})
   target_link_libraries(sonare_mixing_assistant PUBLIC sonare_mixing)
   target_compile_options(sonare_mixing_assistant PRIVATE ${SONARE_WARNING_FLAGS})
   # decide_structure.cpp guards its effect-bus section on this. The definition
@@ -532,15 +517,8 @@ if(BUILD_GRAPH)
     graph/graph.cpp
     graph/node.cpp
   )
-  target_include_directories(sonare_graph PUBLIC
-    ${CMAKE_CURRENT_SOURCE_DIR} ${PROJECT_SOURCE_DIR}/include
-  )
-  target_include_directories(sonare_graph SYSTEM PUBLIC
-    ${PROJECT_SOURCE_DIR}/third_party/kissfft
-    ${PROJECT_SOURCE_DIR}/third_party/dr_libs
-    ${PROJECT_SOURCE_DIR}/third_party/minimp3
-    ${PROJECT_SOURCE_DIR}/third_party/r8brain
-  )
+  target_include_directories(sonare_graph PUBLIC ${SONARE_PUBLIC_INCLUDE_DIRS})
+  target_include_directories(sonare_graph SYSTEM PUBLIC ${SONARE_THIRD_PARTY_INCLUDE_DIRS})
   target_link_libraries(sonare_graph PUBLIC sonare_rt)
   target_compile_options(sonare_graph PRIVATE ${SONARE_WARNING_FLAGS})
   set_target_properties(sonare_graph PROPERTIES POSITION_INDEPENDENT_CODE ON)
@@ -576,15 +554,8 @@ if(BUILD_MIXING)
   )
 endif()
 add_library(sonare_engine STATIC ${SONARE_ENGINE_SOURCES})
-target_include_directories(sonare_engine PUBLIC
-  ${CMAKE_CURRENT_SOURCE_DIR} ${PROJECT_SOURCE_DIR}/include
-)
-target_include_directories(sonare_engine SYSTEM PUBLIC
-  ${PROJECT_SOURCE_DIR}/third_party/kissfft
-  ${PROJECT_SOURCE_DIR}/third_party/dr_libs
-  ${PROJECT_SOURCE_DIR}/third_party/minimp3
-  ${PROJECT_SOURCE_DIR}/third_party/r8brain
-)
+target_include_directories(sonare_engine PUBLIC ${SONARE_PUBLIC_INCLUDE_DIRS})
+target_include_directories(sonare_engine SYSTEM PUBLIC ${SONARE_THIRD_PARTY_INCLUDE_DIRS})
 target_link_libraries(sonare_engine PUBLIC sonare_core sonare_rt sonare_automation)
 if(BUILD_GRAPH)
   target_link_libraries(sonare_engine PUBLIC sonare_graph)
@@ -616,15 +587,8 @@ if(BUILD_FX)
     effects/reverb/fdn_reverb.cpp
     effects/reverb/velvet_reverb.cpp
   )
-  target_include_directories(sonare_fx PUBLIC
-    ${CMAKE_CURRENT_SOURCE_DIR} ${PROJECT_SOURCE_DIR}/include
-  )
-  target_include_directories(sonare_fx SYSTEM PUBLIC
-    ${PROJECT_SOURCE_DIR}/third_party/kissfft
-    ${PROJECT_SOURCE_DIR}/third_party/dr_libs
-    ${PROJECT_SOURCE_DIR}/third_party/minimp3
-    ${PROJECT_SOURCE_DIR}/third_party/r8brain
-  )
+  target_include_directories(sonare_fx PUBLIC ${SONARE_PUBLIC_INCLUDE_DIRS})
+  target_include_directories(sonare_fx SYSTEM PUBLIC ${SONARE_THIRD_PARTY_INCLUDE_DIRS})
   target_link_libraries(sonare_fx PUBLIC sonare_rt)
   if(BUILD_ACOUSTIC_SIM)
     # The geometry-driven RoomReverb synthesizes its RIR via the acoustic module
@@ -655,15 +619,8 @@ if(BUILD_ACOUSTIC_SIM)
     acoustic/rir_synthesizer.cpp
     analysis/room_estimator.cpp
   )
-  target_include_directories(sonare_acoustic PUBLIC
-    ${CMAKE_CURRENT_SOURCE_DIR} ${PROJECT_SOURCE_DIR}/include
-  )
-  target_include_directories(sonare_acoustic SYSTEM PUBLIC
-    ${PROJECT_SOURCE_DIR}/third_party/kissfft
-    ${PROJECT_SOURCE_DIR}/third_party/dr_libs
-    ${PROJECT_SOURCE_DIR}/third_party/minimp3
-    ${PROJECT_SOURCE_DIR}/third_party/r8brain
-  )
+  target_include_directories(sonare_acoustic PUBLIC ${SONARE_PUBLIC_INCLUDE_DIRS})
+  target_include_directories(sonare_acoustic SYSTEM PUBLIC ${SONARE_THIRD_PARTY_INCLUDE_DIRS})
   target_link_libraries(sonare_acoustic PUBLIC sonare_rt)
   target_compile_options(sonare_acoustic PRIVATE ${SONARE_WARNING_FLAGS})
   set_target_properties(sonare_acoustic PROPERTIES POSITION_INDEPENDENT_CODE ON)
@@ -677,18 +634,19 @@ if(BUILD_PITCH_EDITOR)
     editing/pitch_editor/pitch_corrector.cpp
     editing/pitch_editor/scale_quantizer.cpp
   )
-  target_include_directories(sonare_pitch_editor PUBLIC
-    ${CMAKE_CURRENT_SOURCE_DIR} ${PROJECT_SOURCE_DIR}/include
-  )
-  target_include_directories(sonare_pitch_editor SYSTEM PUBLIC
-    ${PROJECT_SOURCE_DIR}/third_party/kissfft
-    ${PROJECT_SOURCE_DIR}/third_party/dr_libs
-    ${PROJECT_SOURCE_DIR}/third_party/minimp3
-    ${PROJECT_SOURCE_DIR}/third_party/r8brain
-  )
+  target_include_directories(sonare_pitch_editor PUBLIC ${SONARE_PUBLIC_INCLUDE_DIRS})
+  target_include_directories(sonare_pitch_editor SYSTEM PUBLIC ${SONARE_THIRD_PARTY_INCLUDE_DIRS})
   target_link_libraries(sonare_pitch_editor PUBLIC sonare_core)
   target_compile_options(sonare_pitch_editor PRIVATE ${SONARE_WARNING_FLAGS})
   set_target_properties(sonare_pitch_editor PROPERTIES POSITION_INDEPENDENT_CODE ON)
+
+  # The dependency runs both ways: c_api/features_spectral_pitch.cpp is compiled
+  # into the core archive and calls the note segmenter, which lives here. CMake
+  # allows a cycle between static libraries and repeats the archives on the link
+  # line, so declaring it is enough. Left undeclared, every target in this tree
+  # still links -- they all pull in the whole set -- and only a consumer that
+  # links an installed sonare::core on its own gets undefined symbols.
+  target_link_libraries(sonare_core INTERFACE sonare_pitch_editor)
 endif()
 
 if(BUILD_VOICE_CHANGER AND NOT BUILD_PITCH_EDITOR)
@@ -707,16 +665,12 @@ if(BUILD_VOICE_CHANGER)
     editing/voice_changer/streaming_reverb.cpp
     editing/voice_changer/voice_changer.cpp
   )
-  target_include_directories(sonare_voice_changer PUBLIC
-    ${CMAKE_CURRENT_SOURCE_DIR} ${PROJECT_SOURCE_DIR}/include
-  )
-  target_include_directories(sonare_voice_changer SYSTEM PUBLIC
-    ${PROJECT_SOURCE_DIR}/third_party/kissfft
-    ${PROJECT_SOURCE_DIR}/third_party/dr_libs
-    ${PROJECT_SOURCE_DIR}/third_party/minimp3
-    ${PROJECT_SOURCE_DIR}/third_party/r8brain
-  )
-  target_link_libraries(sonare_voice_changer PUBLIC sonare_core sonare_pitch_editor)
+  target_include_directories(sonare_voice_changer PUBLIC ${SONARE_PUBLIC_INCLUDE_DIRS})
+  target_include_directories(sonare_voice_changer SYSTEM PUBLIC ${SONARE_THIRD_PARTY_INCLUDE_DIRS})
+  # sonare_rt is a direct requirement, not one inherited through pitch_editor:
+  # the realtime voice changer uses the rt oversampler, delay line and param
+  # smoother, and neither sonare_core nor sonare_pitch_editor links rt.
+  target_link_libraries(sonare_voice_changer PUBLIC sonare_core sonare_rt sonare_pitch_editor)
   target_compile_options(sonare_voice_changer PRIVATE ${SONARE_WARNING_FLAGS})
   set_target_properties(sonare_voice_changer PROPERTIES POSITION_INDEPENDENT_CODE ON)
 endif()
@@ -788,7 +742,7 @@ if(BUILD_ARRANGEMENT)
     midi/synth/sf2_player_render.cpp
     midi/synth/gs_layer.cpp
   )
-  target_include_directories(sonare_midi PUBLIC ${CMAKE_CURRENT_SOURCE_DIR} ${PROJECT_SOURCE_DIR}/include)
+  target_include_directories(sonare_midi PUBLIC ${SONARE_PUBLIC_INCLUDE_DIRS})
   target_link_libraries(sonare_midi PUBLIC sonare_rt sonare_core sonare_automation)
   # The GM fallback tables are constant-initialised so they land in the data
   # section instead of being assembled by start-up code. Clamping a couple of
@@ -839,15 +793,8 @@ if(BUILD_ARRANGEMENT)
     arrangement/edit_history.cpp
     arrangement/edit_compiler.cpp
   )
-  target_include_directories(sonare_arrangement PUBLIC
-    ${CMAKE_CURRENT_SOURCE_DIR} ${PROJECT_SOURCE_DIR}/include
-  )
-  target_include_directories(sonare_arrangement SYSTEM PUBLIC
-    ${PROJECT_SOURCE_DIR}/third_party/kissfft
-    ${PROJECT_SOURCE_DIR}/third_party/dr_libs
-    ${PROJECT_SOURCE_DIR}/third_party/minimp3
-    ${PROJECT_SOURCE_DIR}/third_party/r8brain
-  )
+  target_include_directories(sonare_arrangement PUBLIC ${SONARE_PUBLIC_INCLUDE_DIRS})
+  target_include_directories(sonare_arrangement SYSTEM PUBLIC ${SONARE_THIRD_PARTY_INCLUDE_DIRS})
   # compiler links engine (engine::ClipSchedule / RealtimeEngine target
   # types) and core (the fixed sonare::resample for source sample-rate
   # conversion). engine PUBLIC-propagates SONARE_WITH_GRAPH / SONARE_WITH_MIXING,
@@ -870,7 +817,7 @@ if(BUILD_ARRANGEMENT)
     mir/warp.cpp
     mir/key_context.cpp
   )
-  target_include_directories(sonare_mir PUBLIC ${CMAKE_CURRENT_SOURCE_DIR} ${PROJECT_SOURCE_DIR}/include)
+  target_include_directories(sonare_mir PUBLIC ${SONARE_PUBLIC_INCLUDE_DIRS})
   target_link_libraries(sonare_mir PUBLIC sonare_core sonare_rt sonare_arrangement)
   target_compile_options(sonare_mir PRIVATE ${SONARE_WARNING_FLAGS})
   set_target_properties(sonare_mir PROPERTIES POSITION_INDEPENDENT_CODE ON)
@@ -889,7 +836,7 @@ if(BUILD_ARRANGEMENT)
     serialize/project_serializer_decode.cpp
     serialize/project_serializer_helpers.cpp
   )
-  target_include_directories(sonare_serialize PUBLIC ${CMAKE_CURRENT_SOURCE_DIR} ${PROJECT_SOURCE_DIR}/include)
+  target_include_directories(sonare_serialize PUBLIC ${SONARE_PUBLIC_INCLUDE_DIRS})
   target_link_libraries(sonare_serialize PUBLIC
     sonare_arrangement sonare_midi sonare_mir sonare_core)
   if(BUILD_MIXING)
@@ -914,7 +861,7 @@ if(BUILD_ARRANGEMENT)
       midi/assist/assist_registry.cpp
       midi/assist/composition_assist.cpp
     )
-    target_include_directories(sonare_assist PUBLIC ${CMAKE_CURRENT_SOURCE_DIR} ${PROJECT_SOURCE_DIR}/include)
+    target_include_directories(sonare_assist PUBLIC ${SONARE_PUBLIC_INCLUDE_DIRS})
     target_link_libraries(sonare_assist PUBLIC sonare_arrangement sonare_midi sonare_mir)
     target_compile_options(sonare_assist PRIVATE ${SONARE_WARNING_FLAGS})
     set_target_properties(sonare_assist PROPERTIES POSITION_INDEPENDENT_CODE ON)
@@ -962,16 +909,9 @@ if(BUILD_SHARED)
     SOVERSION 1
     POSITION_INDEPENDENT_CODE ON
   )
-  target_include_directories(sonare_shared PUBLIC
-    ${CMAKE_CURRENT_SOURCE_DIR} ${PROJECT_SOURCE_DIR}/include
-  )
-  target_include_directories(sonare_shared SYSTEM PUBLIC
-    ${PROJECT_SOURCE_DIR}/third_party/kissfft
-    ${PROJECT_SOURCE_DIR}/third_party/dr_libs
-    ${PROJECT_SOURCE_DIR}/third_party/minimp3
-    ${PROJECT_SOURCE_DIR}/third_party/r8brain
-  )
-  target_link_libraries(sonare_shared PUBLIC Eigen3::Eigen)
+  target_include_directories(sonare_shared PUBLIC ${SONARE_PUBLIC_INCLUDE_DIRS})
+  target_include_directories(sonare_shared SYSTEM PUBLIC ${SONARE_THIRD_PARTY_INCLUDE_DIRS})
+  target_link_libraries(sonare_shared PUBLIC $<BUILD_INTERFACE:Eigen3::Eigen>)
   if(BUILD_MASTERING AND NOT BUILD_MIXING)
     target_link_libraries(sonare_shared PUBLIC sonare_mastering)
   endif()
@@ -1425,3 +1365,66 @@ if(BUILD_WASM)
   )
 
 endif()
+
+# ---------------------------------------------------------------------------
+# Distribution surface
+#
+# The library is built as a set of feature-scoped archives, and which of them
+# exist depends on the BUILD_* options. Rather than making a consumer pick
+# archives out of that set, every target that survived its option gate is given
+# a namespaced alias (`sonare::core`) and collected into `sonare::sonare`, an
+# aggregate that links whatever this build actually produced. The alias names
+# are the same in an add_subdirectory() build and in an installed one, so a
+# consumer's link line does not encode how libsonare was obtained.
+# ---------------------------------------------------------------------------
+
+set(SONARE_EXPORT_TARGETS "")
+
+# Order is bottom-up so the aggregate's link line is already topological; CMake
+# resolves static archive order from the dependency graph, but a list that
+# reads in dependency order is easier to check against the target definitions.
+foreach(_sonare_target IN ITEMS
+    kissfft
+    sonare_core
+    sonare_rt
+    sonare_automation
+    sonare_acoustic
+    sonare_fx
+    sonare_mastering
+    sonare_mixing
+    sonare_mixing_assistant
+    sonare_graph
+    sonare_pitch_editor
+    sonare_voice_changer
+    sonare_midi
+    sonare_engine
+    sonare_arrangement
+    sonare_mir
+    sonare_serialize
+    sonare_assist
+    sonare_shared)
+  if(NOT TARGET ${_sonare_target})
+    continue()
+  endif()
+  string(REGEX REPLACE "^sonare_" "" _sonare_export_name "${_sonare_target}")
+  set_target_properties(${_sonare_target} PROPERTIES EXPORT_NAME ${_sonare_export_name})
+  add_library(sonare::${_sonare_export_name} ALIAS ${_sonare_target})
+  list(APPEND SONARE_EXPORT_TARGETS ${_sonare_target})
+endforeach()
+
+# The aggregate covers the static C++ library only. sonare_shared is the C-ABI
+# artifact the FFI bindings dlopen; it already links every static archive
+# itself, so pulling both into one link line would define each symbol twice.
+set(SONARE_AGGREGATE_TARGETS ${SONARE_EXPORT_TARGETS})
+list(REMOVE_ITEM SONARE_AGGREGATE_TARGETS sonare_shared)
+
+add_library(sonare_all INTERFACE)
+target_link_libraries(sonare_all INTERFACE ${SONARE_AGGREGATE_TARGETS})
+# `sonare` is already taken in this build tree -- by the CLI executable and, in
+# a WASM configuration, by the embind module -- so the aggregate carries the
+# plain name only as its exported one.
+set_target_properties(sonare_all PROPERTIES EXPORT_NAME sonare)
+add_library(sonare::sonare ALIAS sonare_all)
+list(APPEND SONARE_EXPORT_TARGETS sonare_all)
+
+set(SONARE_EXPORT_TARGETS ${SONARE_EXPORT_TARGETS} PARENT_SCOPE)

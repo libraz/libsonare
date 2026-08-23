@@ -1,0 +1,13 @@
+prefix=@CMAKE_INSTALL_PREFIX@
+exec_prefix=${prefix}
+libdir=@SONARE_PC_LIBDIR@
+includedir=@SONARE_PC_INCLUDEDIR@
+
+Name: libsonare
+Description: Audio analysis, mastering, mixing and headless-DAW engine (C ABI)
+URL: https://libsonare.libraz.net
+Version: @PROJECT_VERSION@
+Cflags: -I${includedir}
+Libs: -L${libdir} -lsonare
+Libs.private: @SONARE_PC_LIBS_PRIVATE@
+Requires.private: @SONARE_PC_REQUIRES_PRIVATE@

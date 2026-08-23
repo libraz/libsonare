@@ -1,4 +1,4 @@
-.PHONY: all build fixtures release test test-slow test-golden test-optional-fixtures test-librosa-live clean rebuild format format-check lint wasm coverage \
+.PHONY: all build fixtures release install test-install test test-slow test-golden test-optional-fixtures test-librosa-live clean rebuild format format-check lint wasm coverage \
        coverage-build coverage-clean build-shared build-node build-wasm-binding \
        test-python test-python-slow test-node test-wasm parity conformance test-gm-cross-surface test-mix-assistant-cross-surface abi-layout abi-layout-check check-abi-version \
        capability-catalog capability-catalog-check processor-types processor-types-check ci-local \
@@ -7,6 +7,7 @@
 
 BUILD_DIR := build
 OPTIONAL_FIXTURE_BUILD_DIR := build-optional-fixtures
+INSTALL_PREFIX_DIR := $(CURDIR)/build-install-prefix
 RYE ?= rye
 CMAKE ?= cmake
 HARDENING_JOBS ?= 2
@@ -32,6 +33,32 @@ build:
 release:
 	$(CMAKE) -B $(BUILD_DIR) -DCMAKE_BUILD_TYPE=Release
 	$(CMAKE) --build $(BUILD_DIR) -j
+
+# Install the C++ library, its headers, the CMake package files and the native
+# CLI under CMAKE_INSTALL_PREFIX (/usr/local by default; override with
+# `make install CMAKE_INSTALL_PREFIX=~/.local`). Retargets build/ to Release,
+# same as `make release`.
+install: release
+	$(CMAKE) --install $(BUILD_DIR)
+
+# Gate for the installed package. Installs into a scratch prefix, then
+# configures a consumer project that knows nothing but find_package(sonare) and
+# builds it. This is the only check that can see the defects an in-tree build
+# hides: a source-tree path leaking into an exported target, a header the
+# install rules miss, an archive whose declared link interface is incomplete.
+# BUILD_SHARED is on so the run also covers the shared artifact and sonare.pc.
+# The build tree is reused between runs; the prefix and the consumer tree are
+# rebuilt from scratch so a removed file cannot survive as a stale copy.
+test-install:
+	rm -rf $(INSTALL_PREFIX_DIR) build-install-consumer
+	$(CMAKE) -B build-install -DCMAKE_BUILD_TYPE=Release -DBUILD_TESTING=OFF \
+	  -DBUILD_SHARED=ON -DCMAKE_INSTALL_PREFIX=$(INSTALL_PREFIX_DIR)
+	$(CMAKE) --build build-install -j
+	$(CMAKE) --install build-install
+	$(CMAKE) -S tests/cmake/consumer -B build-install-consumer \
+	  -DCMAKE_PREFIX_PATH=$(INSTALL_PREFIX_DIR)
+	$(CMAKE) --build build-install-consumer -j
+	ctest --test-dir build-install-consumer --output-on-failure --no-tests=error
 
 wasm:
 	emcmake $(CMAKE) -B build-wasm -DBUILD_WASM=ON -DCMAKE_BUILD_TYPE=Release

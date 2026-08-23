@@ -199,6 +199,40 @@ jobs:
           cmake --build build-examples-cpp --parallel 2
           build-examples-cpp/analyze example-input.wav
 
+  install-package:
+    # The C++ distribution path, checked the way a consumer meets it: install
+    # into a scratch prefix, then configure a project that knows nothing but
+    # find_package(sonare). In-tree builds link every target together, so an
+    # incomplete link interface or a missing installed header cannot show up
+    # anywhere else. The macOS half of this runs on the main-branch workflow.
+    name: Installed package (find_package)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - name: Install Linux dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y cmake build-essential libeigen3-dev pkg-config
+      - name: Build and install into a scratch prefix
+        run: |
+          cmake -B build-install -DCMAKE_BUILD_TYPE=Release -DBUILD_TESTING=OFF \
+                -DBUILD_SHARED=ON -DSONARE_WITH_FFMPEG=OFF \
+                -DCMAKE_INSTALL_PREFIX="$PWD/install-prefix"
+          cmake --build build-install --parallel 2
+          cmake --install build-install
+      - name: Consume it from a project that only knows find_package
+        run: |
+          cmake -S tests/cmake/consumer -B build-install-consumer \
+                -DCMAKE_PREFIX_PATH="$PWD/install-prefix"
+          cmake --build build-install-consumer --parallel 2
+          ctest --test-dir build-install-consumer --output-on-failure --no-tests=error
+      - name: Check the pkg-config file
+        run: |
+          PC_DIR="$(dirname "$(find "$PWD/install-prefix" -name sonare.pc | head -1)")"
+          PKG_CONFIG_PATH="$PC_DIR" pkg-config --validate sonare
+          PKG_CONFIG_PATH="$PC_DIR" pkg-config --modversion sonare
+          PKG_CONFIG_PATH="$PC_DIR" pkg-config --cflags --libs sonare
+
   python-wheel:
     name: Python wheel (manylinux x86_64)
     runs-on: ubuntu-latest

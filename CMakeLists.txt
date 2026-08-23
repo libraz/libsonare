@@ -11,6 +11,12 @@ set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_CXX_EXTENSIONS OFF)
 
+# Needed before add_subdirectory(src): the exported targets' install-interface
+# include paths are written against CMAKE_INSTALL_INCLUDEDIR as the targets are
+# created.
+include(GNUInstallDirs)
+list(APPEND CMAKE_MODULE_PATH ${CMAKE_CURRENT_SOURCE_DIR}/cmake)
+
 # Prevent <windows.h> (pulled in transitively by dr_libs on MSVC) from defining
 # the min/max function-like macros that clobber std::min/std::max. Also silence
 # MSVC's C4996 deprecation of standard C functions (e.g. strncpy in the C API),
@@ -44,6 +50,19 @@ option(BUILD_VOICE_CHANGER "Build realtime voice changer primitives" ON)
 option(BUILD_ARRANGEMENT "Build headless arrangement / DAW project subsystem" ON)
 option(BUILD_ASSIST "Build composition-assist injection seam (control/offline only)" ON)
 option(ENABLE_COVERAGE "Enable code coverage" OFF)
+
+# Install/export rules describe a standalone build of this project. When
+# libsonare is pulled into someone else's build with add_subdirectory() -- the
+# Node addon, the C++ example, a downstream application -- the parent decides
+# what its `install` step contains, so the default follows whether this is the
+# top-level project. The WebAssembly configuration produces an embind module,
+# not a distributable C++ library, so it never generates install rules.
+if(CMAKE_SOURCE_DIR STREQUAL CMAKE_CURRENT_SOURCE_DIR AND NOT BUILD_WASM)
+  set(SONARE_INSTALL_DEFAULT ON)
+else()
+  set(SONARE_INSTALL_DEFAULT OFF)
+endif()
+option(SONARE_INSTALL "Generate install and find_package() export rules" ${SONARE_INSTALL_DEFAULT})
 option(SONARE_ENABLE_OPTIONAL_FIXTURE_TESTS
        "Build optional external fixture tests that require local datasets" OFF)
 
@@ -226,6 +245,11 @@ endif()
 
 if(BUILD_BENCH)
   add_subdirectory(benchmarks)
+endif()
+
+# Runs last: it installs the targets every subdirectory above contributed.
+if(SONARE_INSTALL)
+  include(SonareInstall)
 endif()
 
 # Coverage target

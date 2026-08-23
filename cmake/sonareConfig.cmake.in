@@ -1,0 +1,66 @@
+@PACKAGE_INIT@
+
+# libsonare package configuration.
+#
+#   find_package(sonare REQUIRED)
+#   target_link_libraries(app PRIVATE sonare::sonare)
+#
+# sonare::sonare is the aggregate: it links every subsystem this installation
+# was built with. The individual archives are also exported (sonare::core,
+# sonare::rt, sonare::mastering, ...) for a consumer that wants a narrower link
+# line; which of them exist depends on how the installation was configured, so
+# check the SONARE_WITH_* variables below or `if(TARGET sonare::mixing)` first.
+
+include(CMakeFindDependencyMacro)
+
+# Subsystems present in this installation.
+set(SONARE_WITH_MASTERING @SONARE_CONFIG_BUILD_MASTERING@)
+set(SONARE_WITH_MIXING @SONARE_CONFIG_BUILD_MIXING@)
+set(SONARE_WITH_MIXING_ASSISTANT @SONARE_CONFIG_BUILD_MIXING_ASSISTANT@)
+set(SONARE_WITH_GRAPH @SONARE_CONFIG_BUILD_GRAPH@)
+set(SONARE_WITH_FX @SONARE_CONFIG_BUILD_FX@)
+set(SONARE_WITH_ACOUSTIC_SIM @SONARE_CONFIG_BUILD_ACOUSTIC_SIM@)
+set(SONARE_WITH_PITCH_EDITOR @SONARE_CONFIG_BUILD_PITCH_EDITOR@)
+set(SONARE_WITH_VOICE_CHANGER @SONARE_CONFIG_BUILD_VOICE_CHANGER@)
+set(SONARE_WITH_ARRANGEMENT @SONARE_CONFIG_BUILD_ARRANGEMENT@)
+set(SONARE_WITH_ASSIST @SONARE_CONFIG_BUILD_ASSIST@)
+set(SONARE_WITH_SHARED_LIBRARY @SONARE_CONFIG_BUILD_SHARED@)
+
+# Whether FFmpeg-backed decoding (M4A/AAC/FLAC/OGG/...) is linked in. Without
+# it the library decodes WAV and MP3 only and reports a clear error otherwise.
+set(SONARE_WITH_FFMPEG @SONARE_CONFIG_WITH_FFMPEG@)
+
+# The archives were built against these; a static link needs them resolvable at
+# the consumer's link step. Eigen is deliberately absent: it is header-only, no
+# installed header includes it, and it is not a usage requirement.
+find_dependency(Threads)
+
+if(SONARE_WITH_FFMPEG)
+  find_dependency(PkgConfig)
+  pkg_check_modules(FFMPEG REQUIRED IMPORTED_TARGET
+    libavformat
+    libavcodec
+    libavutil
+    libswresample
+  )
+endif()
+
+include("${CMAKE_CURRENT_LIST_DIR}/sonareTargets.cmake")
+
+# COMPONENTS map one-to-one onto the exported target names, so
+# `find_package(sonare REQUIRED COMPONENTS mastering)` fails at configure time
+# on an installation built with -DBUILD_MASTERING=OFF rather than at link time.
+foreach(_sonare_component IN LISTS sonare_FIND_COMPONENTS)
+  if(TARGET sonare::${_sonare_component})
+    set(sonare_${_sonare_component}_FOUND TRUE)
+  else()
+    set(sonare_${_sonare_component}_FOUND FALSE)
+    if(sonare_FIND_REQUIRED_${_sonare_component})
+      set(sonare_FOUND FALSE)
+      set(sonare_NOT_FOUND_MESSAGE
+          "libsonare was installed without the '${_sonare_component}' component")
+    endif()
+  endif()
+endforeach()
+
+check_required_components(sonare)

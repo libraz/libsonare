@@ -99,4 +99,4 @@ if(ENABLE_PROFILER)
 endif()
 
 # Install
-install(TARGETS sonare RUNTIME DESTINATION bin)
+install(TARGETS sonare RUNTIME DESTINATION ${CMAKE_INSTALL_BINDIR})

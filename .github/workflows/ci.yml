@@ -130,6 +130,44 @@ jobs:
           python3 -m pip install --disable-pip-version-check librosa==0.11.0
           python3 tests/librosa/run_live_reference_check.py --build-dir build
 
+  install-package:
+    # The one gate that sees the library the way a C++ consumer does. Everything
+    # else builds in tree, where every target links the whole set and an
+    # exported target's incomplete link interface, a missing header, or a
+    # source-tree path written into the export file all stay invisible.
+    name: Installed package (${{ matrix.os }})
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-latest]
+    steps:
+      - uses: actions/checkout@v7
+      - name: Install Linux dependencies
+        if: runner.os == 'Linux'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y cmake build-essential libeigen3-dev pkg-config
+      - name: Build and install into a scratch prefix
+        run: |
+          cmake -B build-install -DCMAKE_BUILD_TYPE=Release -DBUILD_TESTING=OFF \
+                -DBUILD_SHARED=ON -DSONARE_WITH_FFMPEG=OFF \
+                -DCMAKE_INSTALL_PREFIX="$PWD/install-prefix"
+          cmake --build build-install --parallel 2
+          cmake --install build-install
+      - name: Consume it from a project that only knows find_package
+        run: |
+          cmake -S tests/cmake/consumer -B build-install-consumer \
+                -DCMAKE_PREFIX_PATH="$PWD/install-prefix"
+          cmake --build build-install-consumer --parallel 2
+          ctest --test-dir build-install-consumer --output-on-failure --no-tests=error
+      - name: Check the pkg-config file
+        run: |
+          PC_DIR="$(dirname "$(find "$PWD/install-prefix" -name sonare.pc | head -1)")"
+          PKG_CONFIG_PATH="$PC_DIR" pkg-config --validate sonare
+          PKG_CONFIG_PATH="$PC_DIR" pkg-config --modversion sonare
+          PKG_CONFIG_PATH="$PC_DIR" pkg-config --cflags --libs sonare
+
   sanitizer:
     name: ASan/UBSan (ubuntu-latest)
     runs-on: ubuntu-latest
