@@ -59,6 +59,41 @@ def require_keys(value: dict[str, Any], path: str, keys: set[str]) -> None:
         )
 
 
+def optional_number(value: Any) -> bool:
+    """A JSON number or null. ``bool`` is excluded: it is an ``int`` in Python."""
+    return value is None or (isinstance(value, (int, float)) and not isinstance(value, bool))
+
+
+def validate_parameter(parameter: dict[str, Any], path: str) -> None:
+    """Guard the host-facing shape of one parameter descriptor.
+
+    Coverage — that a construction key actually carries a default, and that a
+    published bound is the bound validation enforces — is checked in the C++
+    suite, where the config structs and the construction path are both visible.
+    What can only be checked here is that the JSON says what the `.pyi` / `.d.ts`
+    mirrors promise a host it says.
+    """
+    if parameter["type"] not in {"number", "boolean"}:
+        raise ValueError(f"{path}.type must be number or boolean")
+    for bound in ("min", "max"):
+        if not optional_number(parameter[bound]):
+            raise ValueError(f"{path}.{bound} must be a number or null")
+    if parameter["min"] is not None and parameter["max"] is not None:
+        if parameter["min"] > parameter["max"]:
+            raise ValueError(f"{path} publishes a min above its max")
+    if parameter["type"] == "boolean":
+        # A boolean carries a JSON boolean default and no range: it cannot be out
+        # of range, and 0/1 would read as a number to every typed facade.
+        if parameter["default"] is not None and not isinstance(parameter["default"], bool):
+            raise ValueError(f"{path}.default must be a JSON boolean for a boolean param")
+        if parameter["min"] is not None or parameter["max"] is not None:
+            raise ValueError(f"{path} is boolean and must publish no bounds")
+    elif not optional_number(parameter["default"]):
+        raise ValueError(f"{path}.default must be a number or null for a number param")
+    if parameter["unit"] is not None and not isinstance(parameter["unit"], str):
+        raise ValueError(f"{path}.unit must be a string or null")
+
+
 def validate_catalog(catalog: Any) -> dict[str, Any]:
     """Guard the generated artifact's stable schema without a third-party dependency."""
     root = require_object(catalog, "catalog")
@@ -101,15 +136,14 @@ def validate_catalog(catalog: Any) -> dict[str, Any]:
                 f"catalog.processors[{index}].realtimeCost must be non-null exactly for realtime inserts"
             )
         for parameter_index, parameter_value in enumerate(processor["params"]):
-            parameter = require_object(
-                parameter_value,
-                f"catalog.processors[{index}].params[{parameter_index}]",
-            )
+            path = f"catalog.processors[{index}].params[{parameter_index}]"
+            parameter = require_object(parameter_value, path)
             require_keys(
                 parameter,
-                f"catalog.processors[{index}].params[{parameter_index}]",
+                path,
                 {"name", "id", "rtSafe", "type", "min", "max", "default", "unit"},
             )
+            validate_parameter(parameter, path)
     presets = require_object(root["presets"], "catalog.presets")
     require_keys(
         presets,

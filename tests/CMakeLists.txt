@@ -210,6 +210,7 @@ if(BUILD_MASTERING)
     mastering/amp_sim_test.cpp
     mastering/insert_factory_extra_test.cpp
     mastering/insert_latency_alignment_test.cpp
+    mastering/insert_param_metadata_test.cpp
     mastering/loudness_ceiling_test.cpp
     mastering/match_test.cpp
     mastering/maximizer_test.cpp

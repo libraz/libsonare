@@ -1,11 +1,17 @@
 #include "mastering/api/insert_factory.h"
 
 #include <algorithm>
+#include <cmath>
 #include <cstdint>
 #include <cstring>
+#include <iomanip>
+#include <limits>
+#include <locale>
 #include <memory>
+#include <sstream>
 #include <stdexcept>
 #include <string>
+#include <unordered_map>
 #include <vector>
 
 #include "mastering/api/named_processor.h"
@@ -1067,26 +1073,262 @@ std::vector<std::string> insert_param_names(const std::string& name) {
   return names;
 }
 
-std::string insert_param_info_json(const std::string& name) {
+namespace {
+
+// ---------------------------------------------------------------------------
+// Parameter bound measurement
+//
+// The processor registry publishes no declared bounds interface: validation is
+// hand-written per processor, as a throw out of the config constructor. The
+// catalog therefore MEASURES the bounds instead of mirroring them, the same way
+// the synth's patch bounds are measured through its clamp rather than copied
+// from it — a parameter whose validation changes cannot fall out of step with
+// what is published, and a newly validated parameter is bounded for free.
+//
+// A candidate value is handed to the same construction path a host would use
+// (`build_insert`, which is what `make_insert` runs) with every OTHER parameter
+// left at its default; whether the config constructor throws is the answer.
+// What is published is therefore the interval construction accepts at the
+// default configuration. It is a hard constraint — a value outside it is an
+// error, not a clipped value — and it is NOT a recommended UI range: an
+// unvalidated gain that a host should draw as -60..0 dB honestly reports as
+// unbounded.
+//
+// Two consequences of measuring at the DEFAULT configuration. Both are the same
+// caveat the catalog's latency and tail figures already carry, and both make a
+// bound conservative rather than wrong:
+//   - A validator that couples two parameters yields the interval one of them
+//     accepts while the other sits at its default. `maximizer.adaptiveRelease`
+//     reports minReleaseMs <= 250 and maxReleaseMs >= 20 for exactly that
+//     reason: each is bounded by the other's default, and moving one moves the
+//     other's limit.
+//   - A bound the processor derives from its sample rate is measured before
+//     prepare(), so it reflects the processor's own pre-prepare rate — the EQ
+//     band frequency ceiling reads as 24 kHz, and rises once the insert is
+//     prepared at a higher rate.
+//
+// Three consequences of measuring rather than declaring:
+//   - The probe visits |value| <= kBoundProbeLimit only. A bound beyond that
+//     window reports null, which reads the same as "no validation" — both mean
+//     "the catalog states no limit here".
+//   - A boundary is bisected to kBoundRelativeTolerance and then rounded to
+//     kBoundSignificantDigits, with a residue below kBoundZeroSnap reported as
+//     zero. An EXCLUSIVE bound therefore publishes its limit value: a validator
+//     requiring `> 0` reports `min: 0`, and 0 itself is still rejected.
+//   - A parameter the config builder never reads cannot be constrained by
+//     construction, and a boolean cannot be out of range at all; neither is
+//     probed, and both report null.
+// ---------------------------------------------------------------------------
+
+constexpr double kBoundProbeLimit = 1.0e6;
+constexpr double kBoundZeroSnap = 1.0e-9;
+constexpr double kBoundAbsoluteTolerance = 1.0e-12;
+constexpr double kBoundRelativeTolerance = 1.0e-9;
+constexpr int kBoundSignificantDigits = 6;
+constexpr int kBoundMaxBisections = 64;
+
+// Probe points, ascending. Decade-spaced so a boundary anywhere in the window is
+// bracketed by two neighbours, with the sub-unit decades filled in because most
+// audio parameters that ARE bounded are bounded at 0, 1 or 2.
+const std::vector<double>& bound_probe_points() {
+  static const std::vector<double> points = [] {
+    static constexpr double kMagnitudes[] = {
+        1.0e-6, 1.0e-3, 1.0e-2, 1.0e-1, 1.0, 10.0, 100.0, 1.0e3, 1.0e4, 1.0e5, kBoundProbeLimit};
+    std::vector<double> values;
+    values.reserve(2 * std::size(kMagnitudes) + 1);
+    for (size_t index = std::size(kMagnitudes); index > 0; --index) {
+      values.push_back(-kMagnitudes[index - 1]);
+    }
+    values.push_back(0.0);
+    for (const double magnitude : kMagnitudes) values.push_back(magnitude);
+    return values;
+  }();
+  return points;
+}
+
+// Whether construction accepts @p value for @p key with every other parameter
+// at its default. An unknown name yields no processor and so accepts nothing,
+// which keeps a caller from measuring bounds against a processor that does not
+// exist in this build configuration.
+bool insert_accepts(const std::string& name, const std::string& key, double value) {
+  try {
+    ParamMap probe;
+    probe.stop_recording_declarations();
+    probe[key] = value;
+    return build_insert(name, probe) != nullptr;
+  } catch (...) {
+    return false;
+  }
+}
+
+// Narrows a bracket whose ends disagree down to the extreme value construction
+// still accepts. Integer-valued parameters bisect over integers: the flat
+// surface rounds the value before it reaches the field, so a real-valued
+// midpoint would report a bound halfway between two accepted settings.
+double bisect_accepted_boundary(const std::string& name, const std::string& key, double rejected,
+                                double accepted, bool integer_valued) {
+  if (integer_valued) {
+    long long accepted_step = std::llround(accepted);
+    long long rejected_step = std::llround(rejected);
+    while (std::llabs(rejected_step - accepted_step) > 1) {
+      const long long middle = accepted_step + (rejected_step - accepted_step) / 2;
+      if (insert_accepts(name, key, static_cast<double>(middle))) {
+        accepted_step = middle;
+      } else {
+        rejected_step = middle;
+      }
+    }
+    return static_cast<double>(accepted_step);
+  }
+  for (int step = 0; step < kBoundMaxBisections; ++step) {
+    const double tolerance =
+        std::max(kBoundAbsoluteTolerance, kBoundRelativeTolerance * std::fabs(accepted));
+    if (std::fabs(accepted - rejected) <= tolerance) break;
+    const double middle = 0.5 * (rejected + accepted);
+    if (middle == rejected || middle == accepted) break;
+    if (insert_accepts(name, key, middle)) {
+      accepted = middle;
+    } else {
+      rejected = middle;
+    }
+  }
+  return accepted;
+}
+
+double round_to_significant_digits(double value, int digits) {
+  if (!std::isfinite(value) || value == 0.0) return value;
+  const double exponent = std::ceil(std::log10(std::fabs(value)));
+  const double scale = std::pow(10.0, static_cast<double>(digits) - exponent);
+  if (!std::isfinite(scale) || scale == 0.0) return value;
+  return std::round(value * scale) / scale;
+}
+
+double settle_measured_bound(double value) {
+  const double rounded = round_to_significant_digits(value, kBoundSignificantDigits);
+  return std::fabs(rounded) < kBoundZeroSnap ? 0.0 : rounded;
+}
+
+struct MeasuredBounds {
+  bool has_min = false;
+  double min = 0.0;
+  bool has_max = false;
+  double max = 0.0;
+};
+
+MeasuredBounds measure_bounds(const std::string& name, const std::string& key,
+                              bool integer_valued) {
+  const std::vector<double>& points = bound_probe_points();
+  // Each side stops at the first probe point it accepts, so an unconstrained
+  // parameter — the majority — costs exactly two builds: the window's two ends
+  // both build and there is nothing to narrow. Walking inward is also what makes
+  // the answer independent of any assumption about the accepted set's shape:
+  // the extreme probe alone decides whether a bound is reported at all.
+  size_t lowest_accepted = points.size();
+  for (size_t index = 0; index < points.size(); ++index) {
+    if (insert_accepts(name, key, points[index])) {
+      lowest_accepted = index;
+      break;
+    }
+  }
+  // Nothing in the window builds. That is not a bound, it is a processor this
+  // key cannot configure at all, so the catalog states no limit rather than an
+  // empty interval no host could satisfy.
+  if (lowest_accepted == points.size()) return {};
+  size_t highest_accepted = lowest_accepted;
+  for (size_t index = points.size(); index > lowest_accepted; --index) {
+    if (insert_accepts(name, key, points[index - 1])) {
+      highest_accepted = index - 1;
+      break;
+    }
+  }
+
+  MeasuredBounds bounds;
+  if (lowest_accepted > 0) {
+    bounds.has_min = true;
+    bounds.min = settle_measured_bound(bisect_accepted_boundary(
+        name, key, points[lowest_accepted - 1], points[lowest_accepted], integer_valued));
+  }
+  if (highest_accepted + 1 < points.size()) {
+    bounds.has_max = true;
+    bounds.max = settle_measured_bound(bisect_accepted_boundary(
+        name, key, points[highest_accepted + 1], points[highest_accepted], integer_valued));
+  }
+  return bounds;
+}
+
+// Renders a catalog number as JSON text. The precision is the shortest that
+// round-trips through `float` — the storage nearly every mastering config field
+// uses — widened so a value with an integer part never comes out in exponent
+// form. Formatting goes through the classic locale because a host that switched
+// LC_NUMERIC would otherwise emit a decimal comma into a JSON document.
+std::string format_catalog_number(double value) {
+  if (!std::isfinite(value)) return "null";
+  int integer_digits = 1;
+  const double magnitude = std::fabs(value);
+  if (magnitude >= 1.0) {
+    integer_digits = static_cast<int>(std::floor(std::log10(magnitude))) + 1;
+  }
+  std::string widest;
+  for (int precision = 1; precision <= std::numeric_limits<double>::max_digits10; ++precision) {
+    std::ostringstream rendered;
+    rendered.imbue(std::locale::classic());
+    rendered << std::defaultfloat << std::setprecision(std::max(precision, integer_digits))
+             << value;
+    widest = rendered.str();
+    std::istringstream parsed(widest);
+    parsed.imbue(std::locale::classic());
+    double round_trip = 0.0;
+    parsed >> round_trip;
+    if (static_cast<float>(round_trip) == static_cast<float>(value)) return widest;
+  }
+  return widest;
+}
+
+// The unit a parameter's value carries, derived from the key's own suffix
+// convention. Unlike `type` and the bounds this cannot be measured: the suffix
+// IS the declaration.
+std::string catalog_unit(const std::string& name, const std::string& key) {
+  const auto ends_with = [&key](const char* suffix) {
+    const size_t length = std::strlen(suffix);
+    return key.size() >= length && key.compare(key.size() - length, length, suffix) == 0;
+  };
+  if ((name == "effects.reverb.plate" || name == "effects.reverb.dattorro") &&
+      key == "modDepthSamples") {
+    return "\"referenceSamples@29761Hz\"";
+  }
+  if (ends_with("Db")) return "\"dB\"";
+  if (ends_with("Hz")) return "\"Hz\"";
+  if (ends_with("Ms")) return "\"ms\"";
+  if (ends_with("Samples")) return "\"samples\"";
+  return "null";
+}
+
+std::string build_insert_param_info_json(const std::string& name) {
   // Build a throwaway processor (like insert_param_names) and read its published
   // JSON-key -> param_id descriptor table. rtSafe is derived per id so hosts can
   // tell which params accept realtime changes from the audio thread.
   ParamMap params;
   auto processor = build_insert(name, params);
   // The same build recorded, per key, the C++ type the config builder read it
-  // as (ParamMap::note_kind, driven by the `b()` accessor and by the declared
-  // type of the SONARE_FIELDS_* destination field). Reporting from that instead
-  // of from the key's spelling is what keeps `type` honest: a boolean config
-  // field whose key does not end in "Enabled" - CompressorConfig::auto_makeup
-  // is the standing example - was published as a number by the old suffix test.
+  // as (ParamMap::note_kind, driven by the `b()` / `i()` accessors and by the
+  // declared type of the SONARE_FIELDS_* destination field) and the fallback it
+  // used for the key (ParamMap::note_default, which against this empty map is
+  // the config struct's own field initializer). Reporting from those instead of
+  // from the key's spelling is what keeps `type` honest — a boolean config field
+  // whose key does not end in "Enabled", CompressorConfig::auto_makeup being the
+  // standing example, was published as a number by the old suffix test — and is
+  // what lets `default` be published at all without a second hand-written table.
   const auto& kinds = params.probed_kinds();
+  const auto& defaults = params.probed_defaults();
+  const auto& probed = params.probed_keys();
   std::string out = "[";
   if (processor != nullptr) {
     const auto descriptors = processor->parameter_descriptors();
     for (size_t index = 0; index < descriptors.size(); ++index) {
+      const std::string& key = descriptors[index].key;
       if (index > 0) out += ',';
       out += "{\"name\":\"";
-      out += descriptors[index].key;
+      out += key;
       out += "\",\"id\":";
       out += std::to_string(descriptors[index].id);
       out += ",\"rtSafe\":";
@@ -1095,37 +1337,52 @@ std::string insert_param_info_json(const std::string& name) {
       // A descriptor key the builder never probed has no declared field to read
       // a type from; those are numeric automation targets, which is also the
       // catalog's neutral value.
-      const auto kind = kinds.find(descriptors[index].key);
-      const bool is_boolean = kind != kinds.end() && kind->second == ParamKind::Boolean;
-      out += is_boolean ? "boolean" : "number";
-      // The registry currently publishes no generic bounds/default interface.
-      // Preserve that distinction rather than inventing values by heuristic;
-      // null is an explicit part of the catalog contract for unavailable data.
-      out += "\",\"min\":null,\"max\":null,\"default\":null,\"unit\":";
-      if ((name == "effects.reverb.plate" || name == "effects.reverb.dattorro") &&
-          descriptors[index].key == "modDepthSamples") {
-        out += "\"referenceSamples@29761Hz\"";
-      } else if (descriptors[index].key.size() >= 2 &&
-                 descriptors[index].key.compare(descriptors[index].key.size() - 2, 2, "Db") == 0) {
-        out += "\"dB\"";
-      } else if (descriptors[index].key.size() >= 2 &&
-                 descriptors[index].key.compare(descriptors[index].key.size() - 2, 2, "Hz") == 0) {
-        out += "\"Hz\"";
-      } else if (descriptors[index].key.size() >= 2 &&
-                 descriptors[index].key.compare(descriptors[index].key.size() - 2, 2, "Ms") == 0) {
-        out += "\"ms\"";
-      } else if (descriptors[index].key.size() >= 7 &&
-                 descriptors[index].key.compare(descriptors[index].key.size() - 7, 7, "Samples") ==
-                     0) {
-        out += "\"samples\"";
-      } else {
+      const auto kind = kinds.find(key);
+      const ParamKind param_kind = kind != kinds.end() ? kind->second : ParamKind::Number;
+      out += param_kind == ParamKind::Boolean ? "boolean" : "number";
+      out += "\",";
+
+      const bool construction_reads_key = probed.find(key) != probed.end();
+      const MeasuredBounds bounds =
+          construction_reads_key && param_kind != ParamKind::Boolean
+              ? measure_bounds(name, key, param_kind == ParamKind::Integer)
+              : MeasuredBounds{};
+      out += "\"min\":";
+      out += bounds.has_min ? format_catalog_number(bounds.min) : "null";
+      out += ",\"max\":";
+      out += bounds.has_max ? format_catalog_number(bounds.max) : "null";
+
+      out += ",\"default\":";
+      const auto fallback = defaults.find(key);
+      if (fallback == defaults.end() || fallback->second.ambiguous) {
         out += "null";
+      } else if (param_kind == ParamKind::Boolean) {
+        out += fallback->second.value != 0.0 ? "true" : "false";
+      } else {
+        out += format_catalog_number(fallback->second.value);
       }
+
+      out += ",\"unit\":";
+      out += catalog_unit(name, key);
       out += '}';
     }
   }
   out += ']';
   return out;
+}
+
+}  // namespace
+
+std::string insert_param_info_json(const std::string& name) {
+  // Measuring the bounds costs one processor construction per probe point, so a
+  // repeat query — and the capability catalog, which asks for every insert —
+  // reads a memo instead of probing again. Thread-local because the C ABI's own
+  // catalog buffers already are, and because the memo is pure derived data that
+  // is cheaper to recompute per thread than to guard.
+  static thread_local std::unordered_map<std::string, std::string> memo;
+  const auto cached = memo.find(name);
+  if (cached != memo.end()) return cached->second;
+  return memo.emplace(name, build_insert_param_info_json(name)).first->second;
 }
 
 }  // namespace sonare::mastering::api

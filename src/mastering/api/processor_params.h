@@ -82,12 +82,29 @@
 
 namespace sonare::mastering::api::detail {
 
-/// @brief Public type of a flat mastering parameter, as reported by the
-/// processor catalog.
-/// @details Derived from how a config builder reads the key, never from the
-///          key's spelling: `b()` and a `bool` config field mean @c Boolean,
-///          every other accessor means @c Number.
-enum class ParamKind : std::uint8_t { Number, Boolean };
+/// @brief How a config builder reads a flat mastering parameter.
+/// @details Derived from the accessor and the destination field's declared
+///          type, never from the key's spelling: `b()` and a `bool` config
+///          field mean @c Boolean, `i()` and an integral/enum field mean
+///          @c Integer, every other accessor means @c Number.
+///
+/// The catalog publishes only two of the three — @c Integer reports as
+/// `"number"`, because the flat param surface carries every value as a
+/// `double` and a host may send `2.0` for an integral field. The distinction is
+/// kept internally because it is what lets a measured bound be reported as the
+/// integer it actually is instead of as the midpoint between two integers.
+enum class ParamKind : std::uint8_t { Boolean, Integer, Number };
+
+/// @brief The fallback a config builder used for a key it probed.
+/// @details A builder run against an empty map falls back to the config field's
+///          own initializer for every key it reads, so probing records the
+///          design default for free. @c ambiguous marks a key two builders
+///          probed with different fallbacks; the catalog then publishes no
+///          default rather than picking one of two answers.
+struct ParamDefault {
+  double value = 0.0;
+  bool ambiguous = false;
+};
 
 /// @brief Flat (key -> value) param store that records which keys a config
 /// builder probes, and what C++ type it read each one as.
@@ -125,17 +142,54 @@ class ParamMap {
   /// @brief Records the C++ type a builder read @p key as.
   /// @details Called by the accessors below, so the recorded kind is the
   ///          declared type of the destination field (or of the accessor the
-  ///          builder chose), not an inference from the key name. A key read
-  ///          as a number by any builder stays @c Number: a numeric read is
-  ///          evidence that the value is not a two-state toggle, while a
-  ///          boolean read of the same key would only be an aliasing bug.
+  ///          builder chose), not an inference from the key name. The widest
+  ///          kind any builder used wins (@c Boolean < @c Integer < @c Number):
+  ///          a wider read is evidence that the value is not a toggle or a
+  ///          whole number, while a narrower read of the same key would only be
+  ///          an aliasing bug.
   void note_kind(const std::string& key, ParamKind kind) const {
     auto [it, inserted] = kinds_.emplace(key, kind);
-    if (!inserted && kind == ParamKind::Number) it->second = ParamKind::Number;
+    if (!inserted && kind > it->second) it->second = kind;
   }
 
   /// @brief Public type of every key probed while building, keyed by name.
   const std::unordered_map<std::string, ParamKind>& probed_kinds() const { return kinds_; }
+
+  /// @brief Records the fallback a builder used for @p key.
+  /// @details Recorded on every probe, present or absent, so building against
+  ///          an empty map yields the design default of every key a processor
+  ///          consumes. Two probes that disagree mark the key ambiguous.
+  void note_default(const std::string& key, double value) const {
+    auto [it, inserted] = defaults_.emplace(key, ParamDefault{value, false});
+    if (!inserted && !(it->second.value == value)) it->second.ambiguous = true;
+  }
+
+  /// @brief Design default of every key probed while building, keyed by name.
+  const std::unordered_map<std::string, ParamDefault>& probed_defaults() const { return defaults_; }
+
+  /// @brief Turns off the declaration-only work the catalog needs.
+  /// @details A bounds probe builds the same processor thousands of times and
+  ///          asks one question of each build — did construction throw. It has
+  ///          already read the declarations off the first build, so replaying
+  ///          them per probe is pure waste; the band declarations below skip
+  ///          themselves for a map in this state.
+  void stop_recording_declarations() { records_declarations_ = false; }
+  bool records_declarations() const noexcept { return records_declarations_; }
+
+  /// @brief Merges another map's recorded kinds and defaults into this one.
+  /// @details The band readers below run against a throwaway EMPTY map to
+  ///          declare a band's keys — an empty map reads nothing and throws
+  ///          nothing, so what the run leaves behind is the key list with each
+  ///          key's type and its config initializer, and nothing else. Adopting
+  ///          that here publishes the band without probing the caller's values,
+  ///          which keeps @ref unprobed_keys and every value-dependent throw
+  ///          exactly as they were.
+  void adopt_declarations(const ParamMap& other) const {
+    for (const auto& [key, kind] : other.kinds_) note_kind(key, kind);
+    for (const auto& [key, fallback] : other.defaults_) {
+      if (!fallback.ambiguous) note_default(key, fallback.value);
+    }
+  }
 
   /// @brief Keys this processor read (probed) when built; reflects an empty map
   /// as the names consumed for a default configuration.
@@ -157,6 +211,8 @@ class ParamMap {
   Map map_;
   mutable std::unordered_set<std::string> probed_;
   mutable std::unordered_map<std::string, ParamKind> kinds_;
+  mutable std::unordered_map<std::string, ParamDefault> defaults_;
+  bool records_declarations_ = true;
 };
 
 inline ParamMap make_map(const std::vector<Param>& params) {
@@ -170,12 +226,14 @@ inline ParamMap make_map(const std::vector<Param>& params) {
 
 inline float f(const ParamMap& params, const char* key, float default_value) {
   params.note_kind(key, ParamKind::Number);
+  params.note_default(key, static_cast<double>(default_value));
   auto it = params.find(key);
   return it == params.end() ? default_value : static_cast<float>(it->second);
 }
 
 inline int i(const ParamMap& params, const char* key, int default_value) {
-  params.note_kind(key, ParamKind::Number);
+  params.note_kind(key, ParamKind::Integer);
+  params.note_default(key, static_cast<double>(default_value));
   auto it = params.find(key);
   if (it == params.end()) return default_value;
   int converted = 0;
@@ -187,8 +245,25 @@ inline int i(const ParamMap& params, const char* key, int default_value) {
 
 inline bool b(const ParamMap& params, const char* key, bool default_value) {
   params.note_kind(key, ParamKind::Boolean);
+  params.note_default(key, default_value ? 1.0 : 0.0);
   auto it = params.find(key);
   return it == params.end() ? default_value : it->second != 0.0;
+}
+
+/// @brief Parameter kind implied by a config member's declared type.
+/// @details The single place the field-type -> @ref ParamKind mapping lives, so
+/// no consumer of the SONARE_FIELDS_* tables has to keep a list of which keys
+/// are toggles and which are whole numbers.
+template <typename T>
+inline constexpr ParamKind field_param_kind() {
+  using Field = std::remove_cv_t<T>;
+  if constexpr (std::is_same_v<Field, bool>) {
+    return ParamKind::Boolean;
+  } else if constexpr (std::is_integral_v<Field> || std::is_enum_v<Field>) {
+    return ParamKind::Integer;
+  } else {
+    return ParamKind::Number;
+  }
 }
 
 /// @brief Overlays a flat param onto a config field, leaving it untouched when
@@ -197,11 +272,14 @@ inline bool b(const ParamMap& params, const char* key, bool default_value) {
 /// @details The destination's declared type is what decides the parameter's
 ///          public kind, so a config field that is a C++ `bool` is published as
 ///          a boolean without anyone maintaining a second list of which keys
-///          those are.
+///          those are — and its initializer is what the catalog publishes as the
+///          parameter's default.
 template <typename T>
 inline void read_field(const ParamMap& params, const char* key, T& dst) {
-  params.note_kind(
-      key, std::is_same_v<std::remove_cv_t<T>, bool> ? ParamKind::Boolean : ParamKind::Number);
+  params.note_kind(key, field_param_kind<T>());
+  // Read before the overlay: `dst` still holds the config struct's own field
+  // initializer here, which is exactly the default this key falls back to.
+  params.note_default(key, field_as_double(dst));
   auto it = params.find(key);
   if (it != params.end()) assign_field(dst, it->second);
 }
@@ -347,10 +425,59 @@ inline eq::EqBand eq_band(const ParamMap& params, const std::string& prefix) {
   return band;
 }
 
+/// @brief Publishes one EQ band's keys, types and defaults to the catalog.
+/// @details A band the caller supplied no key for is never read, so without
+/// this the whole per-band surface — the bulk of the flat parameter set —
+/// would carry no declared type and no default. @ref eq_band stays the single
+/// source of that list: it is replayed against an empty map, which cannot read
+/// or reject anything, and only the recording is kept.
+inline void declare_eq_band_params(const ParamMap& params, const std::string& prefix) {
+  if (!params.records_declarations()) return;
+  ParamMap declaration;
+  (void)eq_band(declaration, prefix);
+  params.adopt_declarations(declaration);
+}
+
+/// @brief Reads one dynamic-EQ band from `<prefix><field>` keys.
+/// @details Shared by the single-band DynamicEq insert and the multiband
+/// dynamic EQ's per-crossover-band sub-bands, which read the identical field
+/// set; the only difference is how the prefix is built.
+inline eq::DynamicEqBand dynamic_eq_band(const ParamMap& params, const std::string& prefix) {
+  eq::DynamicEqBand band;
+  band.type = eq_band_type(i(params, (prefix + "type").c_str(), 0));
+  band.frequency_hz = f(params, (prefix + "frequencyHz").c_str(), band.frequency_hz);
+  band.static_gain_db = f(params, (prefix + "staticGainDb").c_str(), band.static_gain_db);
+  band.q = f(params, (prefix + "q").c_str(), band.q);
+  band.threshold_db = f(params, (prefix + "thresholdDb").c_str(), band.threshold_db);
+  band.ratio = f(params, (prefix + "ratio").c_str(), band.ratio);
+  band.range_db = f(params, (prefix + "rangeDb").c_str(), band.range_db);
+  band.enabled = b(params, (prefix + "enabled").c_str(), true);
+  band.sidechain_q = f(params, (prefix + "sidechainQ").c_str(), band.sidechain_q);
+  band.sidechain_freq_hz = f(params, (prefix + "sidechainFreqHz").c_str(), band.sidechain_freq_hz);
+  band.attack_ms = f(params, (prefix + "attackMs").c_str(), band.attack_ms);
+  band.release_ms = f(params, (prefix + "releaseMs").c_str(), band.release_ms);
+  // "lookaheadMs" is the field's former (misleading) spelling; still accepted
+  // so a stored config using it keeps working, but "detectorDelayMs" wins if
+  // both are present.
+  band.detector_delay_ms = f(params, (prefix + "lookaheadMs").c_str(), band.detector_delay_ms);
+  band.detector_delay_ms = f(params, (prefix + "detectorDelayMs").c_str(), band.detector_delay_ms);
+  return band;
+}
+
+/// @brief Publishes one dynamic-EQ band's keys, types and defaults. Declaration
+/// counterpart of @ref dynamic_eq_band; see @ref declare_eq_band_params.
+inline void declare_dynamic_eq_band_params(const ParamMap& params, const std::string& prefix) {
+  if (!params.records_declarations()) return;
+  ParamMap declaration;
+  (void)dynamic_eq_band(declaration, prefix);
+  params.adopt_declarations(declaration);
+}
+
 inline void configure_parametric(eq::ParametricEq& processor, const ParamMap& params,
                                  const std::string& prefix = "band") {
   for (size_t index = 0; index < eq::ParametricEq::kMaxBands; ++index) {
     const std::string band_prefix = prefix + std::to_string(index) + ".";
+    declare_eq_band_params(params, band_prefix);
     if (has_eq_band_params(params, band_prefix)) {
       processor.set_band(index, eq_band(params, band_prefix));
     }
@@ -367,6 +494,7 @@ inline void configure_equalizer(eq::EqualizerProcessor& processor, const ParamMa
       phase_mode(i(params, "phaseMode", static_cast<int>(processor.phase_mode()))));
   for (size_t index = 0; index < eq::EqualizerProcessor::kMaxBands; ++index) {
     const std::string band_prefix = prefix + std::to_string(index) + ".";
+    declare_eq_band_params(params, band_prefix);
     if (has_eq_band_params(params, band_prefix)) {
       processor.set_band(index, eq_band(params, band_prefix));
     }
@@ -530,29 +658,11 @@ inline void populate_dynamic_eq_bands(multiband::MultibandDynamicEqConfig& confi
     for (size_t sub = 0; sub < eq::DynamicEq::kMaxBands; ++sub) {
       const std::string prefix =
           "band" + std::to_string(index) + ".dyn" + std::to_string(sub) + ".";
+      declare_dynamic_eq_band_params(params, prefix);
       if (params.find(prefix + "frequencyHz") == params.end()) {
         continue;
       }
-      eq::DynamicEqBand band;
-      band.type = eq_band_type(i(params, (prefix + "type").c_str(), 0));
-      band.frequency_hz = f(params, (prefix + "frequencyHz").c_str(), band.frequency_hz);
-      band.static_gain_db = f(params, (prefix + "staticGainDb").c_str(), band.static_gain_db);
-      band.q = f(params, (prefix + "q").c_str(), band.q);
-      band.threshold_db = f(params, (prefix + "thresholdDb").c_str(), band.threshold_db);
-      band.ratio = f(params, (prefix + "ratio").c_str(), band.ratio);
-      band.range_db = f(params, (prefix + "rangeDb").c_str(), band.range_db);
-      band.enabled = b(params, (prefix + "enabled").c_str(), true);
-      band.sidechain_q = f(params, (prefix + "sidechainQ").c_str(), band.sidechain_q);
-      band.sidechain_freq_hz =
-          f(params, (prefix + "sidechainFreqHz").c_str(), band.sidechain_freq_hz);
-      band.attack_ms = f(params, (prefix + "attackMs").c_str(), band.attack_ms);
-      band.release_ms = f(params, (prefix + "releaseMs").c_str(), band.release_ms);
-      // "lookaheadMs" is the field's former (misleading) spelling; still
-      // accepted, but "detectorDelayMs" wins if both are present.
-      band.detector_delay_ms = f(params, (prefix + "lookaheadMs").c_str(), band.detector_delay_ms);
-      band.detector_delay_ms =
-          f(params, (prefix + "detectorDelayMs").c_str(), band.detector_delay_ms);
-      dyn_bands.push_back(band);
+      dyn_bands.push_back(dynamic_eq_band(params, prefix));
     }
   }
 }
@@ -650,6 +760,7 @@ inline void configure_api_style(eq::ApiStyleEq& p, const ParamMap& params) {
 inline void configure_minimum_phase(eq::MinimumPhaseEq& p, const ParamMap& params) {
   for (size_t index = 0; index < eq::MinimumPhaseEq::kMaxBands; ++index) {
     const std::string prefix = "band" + std::to_string(index) + ".";
+    declare_eq_band_params(params, prefix);
     if (params.find(prefix + "frequencyHz") != params.end() ||
         params.find(prefix + "gainDb") != params.end()) {
       p.set_band(index, eq_band(params, prefix));
@@ -678,6 +789,7 @@ inline eq::EqualizerProcessorConfig equalizer_config(const ParamMap& params, int
 inline void configure_linear_phase_bands(eq::LinearPhaseEq& p, const ParamMap& params) {
   for (size_t index = 0; index < eq::LinearPhaseEq::kMaxBands; ++index) {
     const std::string prefix = "band" + std::to_string(index) + ".";
+    declare_eq_band_params(params, prefix);
     if (params.find(prefix + "frequencyHz") != params.end() ||
         params.find(prefix + "gainDb") != params.end()) {
       p.set_band(index, eq_band(params, prefix));
@@ -688,27 +800,9 @@ inline void configure_linear_phase_bands(eq::LinearPhaseEq& p, const ParamMap& p
 inline void configure_dynamic_eq_bands(eq::DynamicEq& p, const ParamMap& params) {
   for (size_t index = 0; index < eq::DynamicEq::kMaxBands; ++index) {
     const std::string prefix = "band" + std::to_string(index) + ".";
+    declare_dynamic_eq_band_params(params, prefix);
     if (params.find(prefix + "frequencyHz") != params.end()) {
-      eq::DynamicEqBand band;
-      band.type = eq_band_type(i(params, (prefix + "type").c_str(), 0));
-      band.frequency_hz = f(params, (prefix + "frequencyHz").c_str(), band.frequency_hz);
-      band.static_gain_db = f(params, (prefix + "staticGainDb").c_str(), band.static_gain_db);
-      band.q = f(params, (prefix + "q").c_str(), band.q);
-      band.threshold_db = f(params, (prefix + "thresholdDb").c_str(), band.threshold_db);
-      band.ratio = f(params, (prefix + "ratio").c_str(), band.ratio);
-      band.range_db = f(params, (prefix + "rangeDb").c_str(), band.range_db);
-      band.enabled = b(params, (prefix + "enabled").c_str(), true);
-      band.sidechain_q = f(params, (prefix + "sidechainQ").c_str(), band.sidechain_q);
-      band.sidechain_freq_hz =
-          f(params, (prefix + "sidechainFreqHz").c_str(), band.sidechain_freq_hz);
-      band.attack_ms = f(params, (prefix + "attackMs").c_str(), band.attack_ms);
-      band.release_ms = f(params, (prefix + "releaseMs").c_str(), band.release_ms);
-      // "lookaheadMs" is the field's former (misleading) spelling; still
-      // accepted, but "detectorDelayMs" wins if both are present.
-      band.detector_delay_ms = f(params, (prefix + "lookaheadMs").c_str(), band.detector_delay_ms);
-      band.detector_delay_ms =
-          f(params, (prefix + "detectorDelayMs").c_str(), band.detector_delay_ms);
-      p.set_band(index, band);
+      p.set_band(index, dynamic_eq_band(params, prefix));
     }
   }
 }
@@ -753,7 +847,12 @@ inline void configure_shelving(eq::ShelvingEq& p, const ParamMap& params) {
 inline void configure_graphic(eq::GraphicEq& p, const ParamMap& params) {
   for (size_t index = 0; index < eq::GraphicEq::kNumBands; ++index) {
     const std::string key = "band" + std::to_string(index) + "GainDb";
-    if (params.find(key) != params.end()) p.set_gain_db(index, f(params, key.c_str(), 0.0f));
+    // Read unconditionally so every slider's type and flat default reach the
+    // catalog; only applying it is conditional, so an unsupplied band keeps the
+    // processor's own gain. The read cannot throw and probes the key the
+    // presence test probes anyway, so nothing else changes.
+    const float gain_db = f(params, key.c_str(), 0.0f);
+    if (params.find(key) != params.end()) p.set_gain_db(index, gain_db);
   }
 }
 
@@ -761,6 +860,8 @@ inline void configure_mid_side(eq::MidSideEq& p, const ParamMap& params) {
   for (size_t index = 0; index < eq::MidSideEq::kMaxBands; ++index) {
     const std::string mid = "midBand" + std::to_string(index) + ".";
     const std::string side = "sideBand" + std::to_string(index) + ".";
+    declare_eq_band_params(params, mid);
+    declare_eq_band_params(params, side);
     if (params.find(mid + "frequencyHz") != params.end() ||
         params.find(mid + "gainDb") != params.end()) {
       p.set_mid_band(index, eq_band(params, mid));

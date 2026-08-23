@@ -617,8 +617,24 @@ export interface MasteringInsertParamInfo {
   id: number;
   /** Whether the param can be changed live from the audio thread. */
   rtSafe: boolean;
-  /** Physical unit when the parameter is not unitless. */
-  unit?: string;
+  /** The C++ type the processor's config builder reads the key as. */
+  type: 'boolean' | 'number';
+  /**
+   * Smallest value construction accepts, or null when the catalog states no
+   * limit. Measured, so it is a hard constraint rather than a UI range; see
+   * {@link CapabilityCatalogParameter} for what a measured bound does and does
+   * not promise.
+   */
+  min: number | null;
+  /** Largest value construction accepts, or null when the catalog states no limit. */
+  max: number | null;
+  /**
+   * Value the processor uses when the key is absent — the config struct's own
+   * field initializer. Null only for a param id with no construction key.
+   */
+  default: boolean | number | null;
+  /** Physical unit, or null when the parameter is unitless. */
+  unit: string | null;
 }
 
 /**

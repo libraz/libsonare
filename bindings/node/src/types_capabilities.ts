@@ -39,7 +39,25 @@ export interface Capabilities {
   hardwareConcurrency: number;
 }
 
-/** One parameter descriptor in the cross-surface capability catalog. */
+/**
+ * One parameter descriptor in the cross-surface capability catalog.
+ *
+ * `default` is the value the processor uses when the key is absent, read from
+ * the config struct's own field initializer; it is null only for a param id
+ * with no construction key.
+ *
+ * `min` and `max` are the range construction ACCEPTS, measured by handing
+ * candidate values to the same code path a caller would use. They are a hard
+ * constraint, not a recommended UI range — a value outside them is an error,
+ * while an unvalidated control (most gains) reports null on both, meaning
+ * "this catalog states no limit" rather than "unknown". Three properties to
+ * plan for: a bound is measured with every other parameter at its default, so
+ * two parameters that constrain each other each report the other's default; a
+ * sample-rate-derived bound reflects the un-prepared processor and rises once
+ * the insert is prepared at a higher rate; and an exclusive bound is reported
+ * as its limit value, so a control requiring `> 0` reports `min` 0 and still
+ * rejects 0.
+ */
 export interface CapabilityCatalogParameter {
   name: string;
   id: number;

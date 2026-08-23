@@ -322,9 +322,8 @@ const char* sonare_mastering_processor_catalog(void);
 /// @details Aggregates the processor catalog (including existing parameter
 ///   descriptors) with the built-in mastering, synth, mixing-scene, and
 ///   realtime voice-changer preset name lists. `version` and `abi` use the same
-///   values as @ref sonare_capabilities_json. A parameter's `min`, `max`, or
-///   `default` is JSON null when the underlying descriptor does not publish that
-///   fact; callers must not infer a range. Backed by thread-local storage and
+///   values as @ref sonare_capabilities_json. Parameter metadata follows @ref
+///   sonare_mastering_insert_param_info. Backed by thread-local storage and
 ///   valid until the next call on the same thread. Do NOT free the pointer.
 const char* sonare_capability_catalog_json(void);
 
@@ -355,16 +354,35 @@ const char* sonare_mastering_insert_names(void);
 const char* sonare_mastering_insert_param_names(const char* name);
 
 /// @brief Realtime-automatable parameter descriptors for an insert processor.
-/// @return A JSON array string `[{"name","id","rtSafe"}, ...]` (UTF-8). Each
-///   entry maps a processor JSON-key parameter name to the integer `id` used by
-///   @ref sonare_engine_set_track_strip_insert_param_by_name (and the master
-///   variant), with `rtSafe` reporting whether the param can be changed live
-///   from the audio thread. Returns `"[]"` for an unknown @p name or a processor
-///   with no automatable parameters. Unlike @ref
+/// @return A JSON array string
+///   `[{"name","id","rtSafe","type","min","max","default","unit"}, ...]`
+///   (UTF-8). Each entry maps a processor JSON-key parameter name to the integer
+///   `id` used by @ref sonare_engine_set_track_strip_insert_param_by_name (and
+///   the master variant), with `rtSafe` reporting whether the param can be
+///   changed live from the audio thread. Returns `"[]"` for an unknown @p name
+///   or a processor with no automatable parameters. Unlike @ref
 ///   sonare_mastering_insert_param_names (every construction key), this lists
 ///   only the realtime-controllable subset. The returned pointer is a
 ///   thread-local valid only until the next API call on the same thread; the
 ///   caller must NOT free it.
+/// @details `type` is `"number"` or `"boolean"`, taken from the C++ type the
+///   processor's config builder reads the key as. `default` is the value the
+///   processor uses when the key is absent — the config struct's own field
+///   initializer — and is JSON null only for a parameter whose id has no
+///   construction key at all.
+///
+///   `min` and `max` are the range construction ACCEPTS, measured by handing
+///   candidate values to the same code path a caller would use. They are a hard
+///   constraint, not a recommended UI range: a value outside them is an error,
+///   while an unvalidated control (most gains) reports null on both, meaning
+///   "this catalog states no limit" rather than "unknown". Three properties a
+///   host should plan for:
+///     - a bound is measured with every OTHER parameter at its default, so two
+///       parameters that constrain each other each report the other's default;
+///     - a sample-rate-derived bound reflects the un-prepared processor and
+///       rises once the insert is prepared at a higher rate;
+///     - an exclusive bound is reported as its limit value, so a control
+///       requiring `> 0` reports `min` 0 and still rejects 0.
 /// @param name Insert processor name (see @ref sonare_mastering_insert_names).
 const char* sonare_mastering_insert_param_info(const char* name);
 

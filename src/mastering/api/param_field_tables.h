@@ -140,6 +140,28 @@ inline void assign_field(Enum& dst, double value) {
   dst = candidate;
 }
 
+/// @brief Reads a typed config member back as the flat surface's @c double.
+/// @details The inverse of @ref assign_field, and overloaded on the same storage
+///          kinds so a table row still needs no type tag. Used to publish a
+///          config field's own initializer as the parameter's catalog default:
+///          a builder run against an empty param map falls back to exactly that
+///          value, so recording it costs nothing and cannot drift from the
+///          struct.
+inline double field_as_double(float value) { return static_cast<double>(value); }
+inline double field_as_double(double value) { return value; }
+inline double field_as_double(bool value) { return value ? 1.0 : 0.0; }
+
+template <typename Int,
+          std::enable_if_t<std::is_integral_v<Int> && !std::is_same_v<Int, bool>, int> = 0>
+inline double field_as_double(Int value) {
+  return static_cast<double>(value);
+}
+
+template <typename Enum, std::enable_if_t<std::is_enum_v<Enum>, int> = 0>
+inline double field_as_double(Enum value) {
+  return static_cast<double>(static_cast<int>(value));
+}
+
 }  // namespace sonare::mastering::api::detail
 
 // ---------------------------------------------------------------------------

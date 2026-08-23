@@ -178,6 +178,46 @@ def test_capability_catalog_aggregates_processors_and_presets() -> None:
     assert {"name", "type", "min", "max", "default", "unit"} <= set(compressor["params"][0])
 
 
+def test_insert_param_metadata_reaches_the_python_facade() -> None:
+    """Type, design default and measured range survive the C-ABI JSON hop.
+
+    The values themselves are pinned in the C++ suite against the config structs
+    and the construction path; what this covers is that the facade hands a host
+    the whole descriptor rather than the name/id pair it used to carry.
+    """
+    import libsonare
+
+    params = {
+        param["name"]: param
+        for param in libsonare.mastering_insert_param_info("dynamics.compressor")
+    }
+    # A validated control publishes its accepted range; an open one publishes
+    # null on both, which is the catalog stating no limit rather than "unknown".
+    assert params["ratio"]["min"] == 1.0
+    assert params["ratio"]["max"] is None
+    assert params["thresholdDb"]["min"] is None
+    # The default is the config struct's own field initializer.
+    assert params["ratio"]["default"] == 2.0
+    assert params["thresholdDb"]["default"] == -18.0
+    assert params["thresholdDb"]["unit"] == "dB"
+    # A boolean config field arrives as a JSON boolean, with no range.
+    assert params["autoMakeup"]["type"] == "boolean"
+    assert params["autoMakeup"]["default"] is False
+    assert params["autoMakeup"]["min"] is None
+
+    # A two-sided range, and the per-band EQ surface, which is only declared
+    # because the band readers publish their keys without being handed one.
+    imager = {
+        param["name"]: param for param in libsonare.mastering_insert_param_info("stereo.imager")
+    }
+    assert (imager["width"]["min"], imager["width"]["max"]) == (0.0, 2.0)
+    parametric = {
+        param["name"]: param for param in libsonare.mastering_insert_param_info("eq.parametric")
+    }
+    assert parametric["band0.frequencyHz"]["default"] == 1000.0
+    assert parametric["band0.gainDb"]["unit"] == "dB"
+
+
 def test_mastering_pair_accepts_differing_reference_length() -> None:
     """Pair process/analyze accept a reference that differs in length from source."""
     import libsonare
@@ -439,7 +479,7 @@ def test_mastering_chain_validates_offline_input() -> None:
 
 def test_mastering_chain_reports_output_metrics() -> None:
     """The chain result exposes output true-peak (dBTP), LRA, and per-stage gain
-    reductions computed by the core (M-1). The gain-reduction stages are a subset
+    reductions computed by the core. The gain-reduction stages are a subset
     of the reported stages, in the same order."""
     import math
 

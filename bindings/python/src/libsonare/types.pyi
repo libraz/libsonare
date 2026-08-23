@@ -58,6 +58,25 @@ class CapabilityCatalogPresets(TypedDict):
     voiceChanger: list[str]
 
 class MasteringInsertParamInfo(TypedDict):
+    """One realtime-automatable parameter of an insert processor.
+
+    ``default`` is the value the processor uses when the key is absent, read
+    from the config struct's own field initializer; it is ``None`` only for a
+    param id with no construction key.
+
+    ``min`` and ``max`` are the range construction *accepts*, measured by
+    handing candidate values to the same code path a caller would use. They are
+    a hard constraint, not a recommended UI range -- a value outside them is an
+    error, while an unvalidated control (most gains) reports ``None`` on both,
+    meaning "this catalog states no limit" rather than "unknown". Three
+    properties to plan for: a bound is measured with every other parameter at
+    its default, so two parameters that constrain each other each report the
+    other's default; a sample-rate-derived bound reflects the un-prepared
+    processor and rises once the insert is prepared at a higher rate; and an
+    exclusive bound is reported as its limit value, so a control requiring
+    ``> 0`` reports ``min`` 0 and still rejects 0.
+    """
+
     name: str
     id: int
     rtSafe: bool
@@ -147,8 +166,11 @@ class SendTiming(IntEnum):
 
 class SectionType(IntEnum):
     """``PRE_CHORUS`` is never produced by the analyzer; every other value is
-    reachable. ``UNKNOWN`` marks a segment the analyzer did not identify and
-    carries ``confidence`` 0."""
+    reachable. ``UNKNOWN`` marks a segment the analyzer did not name: no
+    boundary was detected, the segment matched none of the positive branches,
+    or the evidence for a musical function was too weak to assert one. The
+    first case carries ``confidence`` 0; the last keeps the sub-threshold
+    score, so a caller can see how close the segment came to a label."""
 
     INTRO = 0
     VERSE = 1
@@ -187,6 +209,19 @@ class EngineTelemetryError(IntEnum):
     MAX_CHANNELS_EXCEEDED = 20
 
 class Key:
+    """Detected musical key.
+
+    ``confidence`` is the share of the model's belief that this key is the
+    answer, in ``[0, 1)``: a softmax over the profile correlations of every
+    candidate that was scored, so it falls as the runner-up closes in and two
+    keys that split the evidence -- a relative major and minor, typically --
+    each report about half.
+
+    It is the model's own belief, **not** a measured accuracy. A confident wrong
+    answer is entirely possible, so a pipeline that branches on it must choose
+    its own threshold against its own material.
+    """
+
     root: PitchClass
     mode: Mode
     confidence: float
