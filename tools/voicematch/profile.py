@@ -8,31 +8,44 @@
 The audio a capture produces cannot be committed — a sample library's licence
 covers what is rendered from it — and would be the wrong thing to commit even
 if it could: what a physical model has to reproduce is a handful of measured
-properties, not four hundred megabytes of one particular piano. `measure`
-extracts those properties and they are what lives in the repository.
+properties, not four hundred megabytes of one particular instrument. `measure`
+extracts those properties and they are what lives in the repository, under
+`reference/<capture id>.json`.
 
-Four of them are piano-specific and none are in `metrics.py`, whose per-note
-analysis assumes a harmonic series:
+What it measures is everything a stiff, plucked or struck string can be wrong
+about. None of it is in `metrics.py`, whose per-note analysis assumes an exact
+harmonic series and a probe rendered by both sides:
 
-- **Inharmonicity.** A piano string is stiff, so its nth partial sits at
-  `n*f0*sqrt(1 + B*n^2)` rather than at `n*f0`. B runs from about 1e-4 in the
-  middle to over 1e-2 at the top, and it is most of what separates a piano
-  from a harp. Measured by fitting that law to the partials that are actually
-  there, not assumed.
-- **Stretch tuning.** Because of inharmonicity a piano is deliberately tuned
-  away from equal temperament — flat in the bass, sharp in the treble, by tens
-  of cents at the extremes. A model tuned to exact equal temperament beats
-  against a real recording, and the beating is the first thing anyone hears.
-- **Double decay.** A struck string does not decay along one line: the two or
-  three strings of a unison fall out of phase, and the fast initial decay gives
-  way to a slower aftersound at a knee a second or two in. A model with one
-  decay rate is either too short or too dull.
-- **Damper release.** Note-off on a piano is a felt damper landing on a moving
-  string, which is neither instant nor an exponential release.
+- **Inharmonicity.** A stiff string puts its nth partial at
+  `n*f0*sqrt(1 + B*n^2)` rather than at `n*f0`. B is measured by fitting that
+  law to the partials that are actually there, not assumed — which is what
+  makes the same measurement carry a piano (1e-4 in the middle to over 1e-2 at
+  the top, and most of what separates a piano from a harp) and a harpsichord
+  (near zero on the speaking length, and non-zero only through the segment
+  behind the bridge).
+- **Stretch tuning.** An instrument with inharmonic strings is deliberately
+  tuned away from equal temperament, and by how much is a property of the
+  instrument. A model tuned to exact equal temperament beats against the
+  recording, and the beating is the first thing anyone hears.
+- **Double decay.** A string does not decay along one line: the strings of a
+  unison fall out of phase, and the fast initial decay gives way to a slower
+  aftersound at a knee the fit locates rather than assumes. Where that knee
+  falls is itself the evidence for how many strings are sounding.
+- **Damper release.** Note-off is a damper landing on a moving string, which is
+  neither instant nor an exponential release — and on some instruments part of
+  the compass has no damper at all, which this reports rather than averages in.
+- **Tone-to-noise.** The mechanism against the string. A model with the partial
+  stack right and no action noise reads cleaner than any recording, which every
+  spectral metric scores as an improvement.
+- **Velocity response.** How far the level moves from the softest blow to the
+  hardest, and whether it moves monotonically. On a plucked instrument this is
+  most of the instrument's identity and no timbre metric can see it.
 
 `compare` renders the same note-and-velocity grid through libsonare's GM
-fallback, measures it the same way, and prints the differences. That is the
-part which says what to change.
+fallback — on the program the capture names, not a fixed one — measures it the
+same way, and prints the differences. That is the part which says what to
+change. `--gate` holds those differences to bounds recorded earlier, which is
+what catches the change that improves one dimension by breaking another.
 """
 
 from __future__ import annotations
@@ -52,7 +65,7 @@ from capture import DEFAULT_CONFIG, load_config, out_root  # noqa: E402
 from metrics import _db, _peak_near, _rms_envelope, _spectrum, midi_to_hz, to_mono  # noqa: E402
 from render_model import render_model  # noqa: E402
 from smf import Note, write_smf  # noqa: E402
-from wavio import read_wav  # noqa: E402
+from wavio import read_wav, write_wav  # noqa: E402
 
 REFERENCE_DIR = Path(__file__).resolve().parent / "reference"
 MAX_PARTIALS = 20
@@ -235,6 +248,39 @@ def _above_fundamental(seg: np.ndarray, sr: int, f0_hz: float) -> np.ndarray:
     return np.fft.irfft(spec, n)
 
 
+def tone_to_noise_db(freqs: np.ndarray, mag: np.ndarray, f0_hz: float,
+                     n_partials: int = 16) -> float:
+    """Energy in the partials against everything else in the audible band.
+
+    What it separates is the string from the mechanism: a plucked or struck
+    instrument's noise floor is its own action — a plectrum scraping, a hammer's
+    felt, a jack falling back — and a model that has the partial stack right and
+    no mechanism noise reads far cleaner than any recording of the real thing.
+    That reads as an improvement on every spectral metric and is the single most
+    audible thing still missing.
+
+    The partial window is the wider of ±2 % and three FFT bins. A relative-only
+    window collapses below one bin at a low fundamental — at 44 Hz it asks for
+    ±0.9 Hz out of a 1.7 Hz grid — so a bass note would score as pure noise for
+    a reason that is entirely the analysis window's.
+    """
+    if freqs.size < 2 or f0_hz <= 0.0:
+        return float("nan")
+    power = mag.astype(np.float64) ** 2
+    bin_hz = float(freqs[1] - freqs[0])
+    tonal = np.zeros(freqs.shape, dtype=bool)
+    for n in range(1, n_partials + 1):
+        target = n * f0_hz
+        if target > freqs[-1]:
+            break
+        half = max(0.02 * target, 3.0 * bin_hz)
+        tonal |= (freqs >= target - half) & (freqs <= target + half)
+    band = (freqs >= 40.0) & (freqs <= 12000.0)
+    tone = float(power[tonal & band].sum())
+    noise = float(power[~tonal & band].sum())
+    return float(10.0 * np.log10((tone + 1e-30) / (noise + 1e-30)))
+
+
 def measure_note(audio: np.ndarray, sr: int, note: int, *,
                  preroll_s: float, gate_s: float) -> dict:
     """Every measurement this profile carries, for one captured note."""
@@ -291,6 +337,9 @@ def measure_note(audio: np.ndarray, sr: int, note: int, *,
     freqs, mag = _spectrum(held[a:b], sr)
     p = mag ** 2
     row["centroid_hz"] = round(float((freqs * p).sum() / max(p.sum(), 1e-20)), 1)
+    tnr = tone_to_noise_db(freqs, mag, row["f0_hz"])
+    if np.isfinite(tnr):
+        row["tnr_db"] = round(tnr, 2)
     if audio.ndim > 1 and audio.shape[1] == 2:
         left, right = audio[on:off, 0], audio[on:off, 1]
         denom = float(np.std(left) * np.std(right))
@@ -333,6 +382,10 @@ def measure(cfg: dict, corpus_dir: Path, out_path: Path) -> int:
         "measured_utc": datetime.now(timezone.utc).isoformat(timespec="seconds"),
         "capture": {
             "plugin": manifest["plugin"],
+            # The GM program the model answers this reference with. Recorded here
+            # rather than taken from whichever config a later `compare` is handed,
+            # so a profile cannot be diffed against a different instrument.
+            "program": int(cfg.get("program", 0)),
             "params": manifest["params"],
             "sample_rate": manifest["sample_rate"],
             "gate_ms": manifest["gate_ms"],
@@ -352,13 +405,110 @@ def measure(cfg: dict, corpus_dir: Path, out_path: Path) -> int:
     return 0
 
 
+def velocity_response(rows: list[dict]) -> dict:
+    """Per note, how far the level moves from the softest blow to the hardest.
+
+    A dimension in its own right rather than a slice of the level table, because
+    on some instruments it IS the instrument. A harpsichord's plectrum releases
+    at nearly the same displacement however fast the key is pressed, so the
+    literature puts its whole dynamic range within 3 to 6 dB and its amplitude
+    is not reliably monotonic in key speed; a piano's runs to 30 dB and is
+    monotonic by construction. A model given the sampler velocity curve of the
+    wrong one of those is wrong by 20 dB in a way no timbre metric reports,
+    since every one of them normalises the note by its own fundamental.
+
+    `monotonic` is reported rather than assumed for the same reason: on an
+    instrument that genuinely is not, a model that is reads as correct on the
+    range alone.
+    """
+    by_note: dict[str, dict[int, float]] = {}
+    for row in rows:
+        if "peak_dbfs" in row:
+            by_note.setdefault(str(row["note"]), {})[int(row["velocity"])] = row["peak_dbfs"]
+    out: dict = {}
+    for note, peaks in sorted(by_note.items(), key=lambda kv: int(kv[0])):
+        if len(peaks) < 2:
+            continue
+        ordered = [peaks[v] for v in sorted(peaks)]
+        out[note] = {
+            "range_db": round(max(ordered) - min(ordered), 2),
+            "monotonic": ordered == sorted(ordered),
+        }
+    return out
+
+
+def render_grid(cfg: dict, corpus_dir: Path, *, timbre: str, program: int) -> int:
+    """Render the model over the capture's own grid, as one more timbre of it.
+
+    The oracle corpus is one WAV per (note, velocity), and the model has to be
+    measured the same way before a difference between them means anything.
+    Writing it into the same directory under the same names, and registering it
+    in the same manifest, means every tool that reads a corpus reads the model
+    with no special case: `measure` turns it into a profile the reference can be
+    diffed against, and `load_corpus` will serve it as a timbre.
+
+    The grid comes from the capture definition, not from constants matched to it
+    by hand. A hand-copied grid drifts the first time a note is added to the
+    capture, and what it produces then is a model measured on notes the
+    reference does not have — which reads as a reference that is missing rows.
+    """
+    manifest_path = corpus_dir / "manifest.json"
+    manifest = json.loads(manifest_path.read_text()) if manifest_path.exists() else {}
+    preroll_s = manifest.get("preroll_ms", cfg["preroll_ms"]) / 1000.0
+    gate_s = manifest.get("gate_ms", cfg["gate_ms"]) / 1000.0
+    sr = int(manifest.get("sample_rate", cfg["sample_rate"]))
+    notes = manifest.get("notes") or cfg["notes"]
+    velocities = manifest.get("velocities") or cfg["velocities"]
+    tail_s = 2.0
+
+    out_dir = corpus_dir / timbre
+    out_dir.mkdir(parents=True, exist_ok=True)
+    rows = []
+    total = len(notes) * len(velocities)
+    for i, (note, vel) in enumerate(
+        ((n, v) for n in notes for v in velocities), start=1
+    ):
+        smf = write_smf([Note(note, vel, preroll_s, gate_s)], program=program,
+                        end_pad=tail_s)
+        audio = render_model(smf, preroll_s + gate_s + tail_s, sr)
+        rel = Path(timbre) / f"n{note:03d}_v{vel:03d}.wav"
+        write_wav(corpus_dir / rel, np.asarray(audio), sr)
+        peak = float(np.abs(audio).max())
+        rows.append({"id": f"{timbre}/n{note:03d}_v{vel:03d}", "timbre": timbre,
+                     "note": note, "velocity": vel, "path": str(rel),
+                     "peak": peak, "seconds": round(preroll_s + gate_s + tail_s, 2)})
+        print(f"[{i}/{total}] {rel} peak {peak:.4f}", file=sys.stderr)
+
+    header = manifest or {
+        "id": cfg["id"], "config": cfg.get("_path", ""), "plugin": "libsonare",
+        "sample_rate": sr, "gate_ms": cfg["gate_ms"], "tail": cfg["tail"],
+        "preroll_ms": cfg["preroll_ms"], "settle_ms": cfg.get("settle_ms", 0),
+        "realtime": False, "params": [], "timbres": [], "notes": notes,
+        "velocities": velocities,
+    }
+    # Replace this timbre's rows rather than appending to them, so re-rendering
+    # after a voice edit leaves one grid behind and not two generations of one.
+    kept = [r for r in header.get("renders", []) if r.get("timbre") != timbre]
+    timbres = [t for t in header.get("timbres", []) if t.get("id") != timbre]
+    timbres.append({"id": timbre, "label": f"libsonare, GM program {program}",
+                    "model": True})
+    header["timbres"] = timbres
+    header["renders"] = sorted(kept + rows, key=lambda r: r["id"])
+    manifest_path.parent.mkdir(parents=True, exist_ok=True)
+    manifest_path.write_text(json.dumps(header, indent=1) + "\n")
+    print(f"\n{len(rows)} renders in {out_dir}, registered as timbre {timbre!r}",
+          file=sys.stderr)
+    return 0
+
+
 def summarize(rows: list[dict]) -> dict:
     """The per-timbre curves: what a voice is fitted to rather than a table of takes."""
     out: dict = {}
     for row in rows:
         t = out.setdefault(row["timbre"], {"stretch_cents": {}, "inharmonicity_b": {},
                                            "level_dbfs": {}, "centroid_hz": {},
-                                           "decay_db_s": {}, "damper_release_ms": {}})
+                                           "decay_db_s": {}, "damper_release_ms": {},
+                                           "tnr_db": {}})
         n = str(row["note"])
         v = str(row["velocity"])
         # The tuning and the stiffness belong to the string, not to how hard it
@@ -368,13 +518,17 @@ def summarize(rows: list[dict]) -> dict:
         if "inharmonicity_b" in row and row.get("inharmonicity_reliable"):
             t["inharmonicity_b"].setdefault(n, []).append(row["inharmonicity_b"])
         for key, dest in (("rms_dbfs", "level_dbfs"), ("centroid_hz", "centroid_hz"),
-                          ("decay_db_s", "decay_db_s"), ("damper_release_ms", "damper_release_ms")):
+                          ("decay_db_s", "decay_db_s"), ("damper_release_ms", "damper_release_ms"),
+                          ("tnr_db", "tnr_db")):
             if key in row:
                 t[dest].setdefault(n, {})[v] = row[key]
-    for t in out.values():
+    for timbre, t in out.items():
         for key in ("stretch_cents", "inharmonicity_b"):
             t[key] = {n: round(float(np.median(vals)), 4 if key == "stretch_cents" else 8)
                       for n, vals in sorted(t[key].items(), key=lambda kv: int(kv[0]))}
+        t["velocity_response"] = velocity_response(
+            [r for r in rows if r["timbre"] == timbre]
+        )
     return out
 
 
@@ -397,21 +551,49 @@ def print_summary(summary: dict) -> None:
             # short reads afterwards as a curve that covered the keyboard.
             print(f"  (stiffness not fitted at {dropped} — too few partials under "
                   f"the Nyquist frequency to fit two parameters)", file=sys.stderr)
+        vel = s.get("velocity_response") or {}
+        if vel:
+            ranges = [row["range_db"] for row in vel.values()]
+            non_mono = [int(n) for n, row in vel.items() if not row["monotonic"]]
+            print(f"  velocity range {min(ranges):.1f} to {max(ranges):.1f} dB "
+                  f"across {len(vel)} notes", file=sys.stderr)
+            if non_mono:
+                print(f"  (level is not monotonic in velocity at {non_mono} — a property "
+                      f"of the instrument, not a fault, on anything plucked)", file=sys.stderr)
 
 
 # --------------------------------------------------------------------------
 # compare
 
 
+def profile_program(profile: dict, cfg: dict) -> int:
+    """The GM program the model answers this profile with.
+
+    From the profile first: it records what the capture was a reference FOR, and
+    that is the only place the two are tied together. A profile measured before
+    the field existed falls back to the config, which is the same value for
+    every capture in the tree; the fallback is here so an old profile still
+    compares rather than silently comparing against program 0.
+
+    `cfg["program"]` wins when the command line set it, since asking to compare
+    this reference against a different program is a real thing to want — the
+    same harpsichord capture judges programs 6 and 7.
+    """
+    if cfg.get("_program_override"):
+        return int(cfg["program"])
+    recorded = profile.get("capture", {}).get("program")
+    return int(recorded if recorded is not None else cfg.get("program", 0))
+
+
 def partial_balance_db(partials_db: list[float] | None) -> float | None:
     """Mean level of partials 2-6 relative to the fundamental.
 
-    The one number that says whether a note has a piano's partial stack at all.
-    Centroid does not: broadband strike noise carries a centroid perfectly well
-    while the tonal spectrum underneath has collapsed to a sine, which is what
-    an over-long hammer contact does to the treble. Inharmonicity does not
-    either — it needs six partials before it reports anything, so a note this
-    broken reads as "unmeasurable" rather than as wrong.
+    The one number that says whether a note has a partial stack at all. Centroid
+    does not: broadband excitation noise carries a centroid perfectly well while
+    the tonal spectrum underneath has collapsed to a sine, which is what an
+    over-long hammer contact or an over-soft plectrum does to the treble.
+    Inharmonicity does not either — it needs six partials before it reports
+    anything, so a note this broken reads as "unmeasurable" rather than as wrong.
     """
     if not partials_db or len(partials_db) < 6:
         return None
@@ -453,11 +635,11 @@ def a4_offset_cents(rows: list[dict], timbre: str) -> float:
 def band_db(partials_db: list[float] | None, lo: int, hi: int) -> float | None:
     """Mean level of partials [lo, hi] (1-based) relative to the fundamental.
 
-    Wider than partial_balance_db and parameterized, because the way a piano
-    responds to velocity is not one number: a real hammer moves the partials
-    ABOVE the felt's cutoff and leaves the ones below it alone, so the h2-h7 and
-    the h8-h16 bands answer different questions and averaging them together
-    hides which of the two the model gets wrong.
+    Wider than partial_balance_db and parameterized, because the way an
+    instrument responds to velocity is not one number: a real hammer moves the
+    partials ABOVE the felt's cutoff and leaves the ones below it alone, so the
+    h2-h7 and the h8-h16 bands answer different questions and averaging them
+    together hides which of the two the model gets wrong.
     """
     if not partials_db or len(partials_db) < lo:
         return None
@@ -476,8 +658,9 @@ def dynamics(cfg: dict, profile_path: Path, *, timbre: str, notes_filter: set[in
     pianist actually plays. This tabulates the pp->ff swing instead of the
     absolute value: level in dB, and the two partial bands relative to the
     fundamental so a swing that is merely "louder" is separated from one that is
-    "brighter". A physical hammer model gets this from its contact solver, so a
-    mismatch here is structural and no amount of per-note voicing reaches it.
+    "brighter". A physical model gets this out of its excitation solver rather
+    than out of a curve, so a mismatch here is structural: no amount of per-note
+    voicing reaches it, and `diagnose.py` is where to take it.
     """
     if not profile_path.exists():
         print(f"no profile at {profile_path} — run `profile.py measure` first")
@@ -488,6 +671,7 @@ def dynamics(cfg: dict, profile_path: Path, *, timbre: str, notes_filter: set[in
     gate_s = cap["gate_ms"] / 1000.0
     tail_s = 2.0
 
+    program = profile_program(profile, cfg)
     ref = {(r["note"], r["velocity"]): r for r in profile["rows"] if r["timbre"] == timbre}
     if not ref:
         print(f"profile has no timbre {timbre!r}")
@@ -511,7 +695,8 @@ def dynamics(cfg: dict, profile_path: Path, *, timbre: str, notes_filter: set[in
         for v in (lo_v, hi_v):
             if (note, v) not in ref:
                 break
-            smf = write_smf([Note(note, v, preroll_s, gate_s)], program=0, end_pad=tail_s)
+            smf = write_smf([Note(note, v, preroll_s, gate_s)], program=program,
+                            end_pad=tail_s)
             audio = render_model(smf, preroll_s + gate_s + tail_s, cap["sample_rate"])
             m = measure_note(audio, cap["sample_rate"], note, preroll_s=preroll_s, gate_s=gate_s)
             if not m:
@@ -577,21 +762,26 @@ def compare(cfg: dict, profile_path: Path, *, timbre: str, notes_filter: set[int
               f"{sorted({r['timbre'] for r in profile['rows']})}")
         return 2
 
+    program = profile_program(profile, cfg)
     pairs = sorted({k for k in ref if not notes_filter or k[0] in notes_filter})
     a4_off = a4_offset_cents(profile["rows"], timbre)
-    print(f"model vs {timbre}: {len(pairs)} notes")
+    print(f"model vs {timbre}: {len(pairs)} notes, model on GM program {program}")
     print(f"reference A4 sits {a4_off:+.2f} c from 440 Hz; "
           f"that offset is removed from the stretch column\n")
     print(f"{'note':>5} {'vel':>4} | {'stretch Δc':>10} {'B model':>10} {'B ref':>10} "
           f"{'decay Δdb/s':>12} {'h2-6 model':>10} {'h2-6 ref':>9} "
-          f"{'centroid Δ%':>12} {'damper Δms':>11}")
-    print("-" * 104)
+          f"{'centroid Δ%':>12} {'TNR Δdb':>9} {'damper Δms':>11}")
+    print("-" * 114)
 
     deltas: dict[str, list[float]] = {}
     damper_censored: list[tuple[int, int]] = []
+    # Peak level per side, per note, per velocity. The dynamic range is the one
+    # dimension no single (note, velocity) row can carry: it is the difference
+    # between two of them, so it is accumulated here and reduced after the loop.
+    peaks: dict[str, dict[int, dict[int, float]]] = {}
     for note, vel in pairs:
         smf = write_smf([Note(note, vel, preroll_s, gate_s)],
-                        program=0, end_pad=tail_s)
+                        program=program, end_pad=tail_s)
         audio = render_model(smf, preroll_s + gate_s + tail_s, cap["sample_rate"])
         m = measure_note(audio, cap["sample_rate"], note, preroll_s=preroll_s, gate_s=gate_s)
         r = ref[(note, vel)]
@@ -616,6 +806,11 @@ def compare(cfg: dict, profile_path: Path, *, timbre: str, notes_filter: set[int
         row = {
             "stretch": None if stretch is None else stretch + a4_off,
             "decay": d("decay_db_s"),
+            # Positive means the model is the cleaner of the two, which is the
+            # direction this almost always fails in: the mechanism noise a real
+            # action makes is the part a physical model most often has no
+            # mechanism for at all.
+            "tnr": d("tnr_db"),
             "damper": None if damper_capped else d("damper_release_ms"),
         }
         centroid_pct = None
@@ -627,6 +822,9 @@ def compare(cfg: dict, profile_path: Path, *, timbre: str, notes_filter: set[int
         for k, v in list(row.items()) + [("centroid_pct", centroid_pct)]:
             if v is not None and np.isfinite(v):
                 deltas.setdefault(k, []).append(float(v))
+        for side, src in (("m", m), ("r", r)):
+            if "peak_dbfs" in src:
+                peaks.setdefault(side, {}).setdefault(note, {})[vel] = src["peak_dbfs"]
 
         def fmt(v, spec):
             return format(v, spec) if v is not None and np.isfinite(v) else "n/a".rjust(len(format(0, spec)))
@@ -635,13 +833,22 @@ def compare(cfg: dict, profile_path: Path, *, timbre: str, notes_filter: set[int
         print(f"{note:5d} {vel:4d} | {fmt(row['stretch'], '+10.1f')} "
               f"{m.get('inharmonicity_b', float('nan')):10.3e} {r.get('inharmonicity_b', float('nan')):10.3e} "
               f"{fmt(row['decay'], '+12.2f')} {fmt(bal_m, '+10.1f')} {fmt(bal_r, '+9.1f')} "
-              f"{fmt(centroid_pct, '+12.1f')} {damper_col}")
+              f"{fmt(centroid_pct, '+12.1f')} {fmt(row['tnr'], '+9.1f')} {damper_col}")
 
     if damper_censored:
         print(f"\n* {len(damper_censored)} of {len(pairs)} rows never fell 40 dB inside the "
               f"{tail_s:.0f} s tail on one side or the other; shown, not counted:")
         print("  " + ", ".join(f"n{n}v{v}" for n, v in damper_censored))
-    summary = summarize_deltas(deltas)
+    for note, model_peaks in sorted(peaks.get("m", {}).items()):
+        ref_peaks = peaks.get("r", {}).get(note, {})
+        shared = sorted(set(model_peaks) & set(ref_peaks))
+        if len(shared) < 2:
+            continue
+        span = ([model_peaks[v] for v in shared], [ref_peaks[v] for v in shared])
+        deltas.setdefault("vel_range", []).append(
+            (max(span[0]) - min(span[0])) - (max(span[1]) - min(span[1]))
+        )
+    summary = select_dimensions(summarize_deltas(deltas), cfg.get("dimensions") or [])
     print("\n" + f"{'':46s} {'median':>9} {'|median|':>9} {'rows':>5}")
     for k, row in summary.items():
         print(f"  {DELTA_LABELS.get(k, k):46s} {row['median']:+9.2f} "
@@ -662,7 +869,32 @@ DELTA_LABELS = {"stretch": "tuning vs the reference (cents)",
                 "decay": "held-note decay (dB/s)",
                 "damper": "damper release (ms)",
                 "balance": "partial stack h2-h6 vs h1 (dB)",
-                "centroid_pct": "brightness (% of the reference centroid)"}
+                "centroid_pct": "brightness (% of the reference centroid)",
+                "tnr": "tone-to-noise, + = model is cleaner (dB)",
+                "vel_range": "softest-to-hardest level range (dB)"}
+
+
+def select_dimensions(summary: dict[str, dict], wanted: list[str]) -> dict[str, dict]:
+    """Narrow the summary to the dimensions this instrument is judged on.
+
+    Every dimension is measured for every instrument, because measuring is
+    cheap and a number nobody looks at costs nothing. What is not free is
+    GATING on one that does not apply: a harpsichord's top octave has no
+    dampers at all, so its damper column compares one arbitrary tail against
+    another and a bound recorded from it fails on whichever way the noise fell.
+    A capture that lists no dimensions is judged on all of them, which is the
+    right default — an instrument earns an exclusion by having a reason.
+
+    A named dimension that was not measured is reported rather than dropped:
+    silence there reads as "that dimension was fine".
+    """
+    if not wanted:
+        return summary
+    missing = [d for d in wanted if d not in summary]
+    if missing:
+        print(f"\nthese dimensions are named by the capture and were not measured in this "
+              f"run: {', '.join(missing)}", file=sys.stderr)
+    return {k: v for k, v in summary.items() if k in wanted}
 
 
 def summarize_deltas(deltas: dict[str, list[float]]) -> dict[str, dict]:
@@ -741,7 +973,7 @@ def write_gate_file(summary: dict[str, dict], gate_path: Path, timbre: str,
     change could stay inside.
     """
     floors = {"stretch": 1.0, "decay": 0.5, "damper": 5.0, "balance": 0.5,
-              "centroid_pct": 1.0}
+              "centroid_pct": 1.0, "tnr": 1.0, "vel_range": 1.0}
     bounds = {}
     for key, row in summary.items():
         floor = floors.get(key, 1.0)
@@ -770,16 +1002,24 @@ def main() -> int:
     ap = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     sub = ap.add_subparsers(dest="cmd", required=True)
     for name, help_text in (("measure", "corpus WAVs -> reference profile JSON"),
+                            ("render-grid", "render the model over the capture's own grid, "
+                                            "as one more timbre of the corpus"),
                             ("compare", "render the same grid through libsonare and diff it"),
                             ("dynamics", "diff the pp->ff swing rather than one velocity at a time")):
         p = sub.add_parser(name, help=help_text)
         p.add_argument("--config", default=str(DEFAULT_CONFIG))
         p.add_argument("--corpus", default="", help="corpus directory (default: the capture output)")
         p.add_argument("--profile", default="", help="profile JSON (default: reference/<id>.json)")
+        p.add_argument("--program", type=int, default=None,
+                       help="GM program the model answers with (default: the one the "
+                            "capture definition names, or the one the profile recorded)")
     for name in ("compare", "dynamics"):
         p = sub.choices[name]
         p.add_argument("--timbre", default="", help="which captured timbre to compare against")
         p.add_argument("--notes", default="", help="restrict to these MIDI notes, comma-separated")
+    sub.choices["render-grid"].add_argument(
+        "--timbre", default="model",
+        help="name the model's grid takes in the corpus (default: model)")
     gate_group = sub.choices["compare"]
     gate_group.add_argument(
         "--gate", default="",
@@ -797,11 +1037,17 @@ def main() -> int:
 
     args = ap.parse_args()
     cfg = load_config(Path(args.config))
+    if args.program is not None:
+        cfg["program"] = args.program
+        cfg["_program_override"] = True
     corpus_dir = Path(args.corpus).resolve() if args.corpus else out_root(cfg, "")
     profile_path = Path(args.profile) if args.profile else REFERENCE_DIR / f"{cfg['id']}.json"
 
     if args.cmd == "measure":
         return measure(cfg, corpus_dir, profile_path)
+    if args.cmd == "render-grid":
+        return render_grid(cfg, corpus_dir, timbre=args.timbre,
+                           program=int(cfg.get("program", 0)))
     timbre = args.timbre or cfg["timbres"][0]["id"]
     notes_filter = {int(x) for x in args.notes.split(",") if x.strip()}
     if args.cmd == "dynamics":

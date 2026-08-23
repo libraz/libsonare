@@ -1,7 +1,10 @@
 {
   "id": "harpsichord",
-  "label": "Steinberg HALion 7, harpsichord rack",
-  "plugin": "aumu:hal4:Stbg",
+  "label": "Double-manual harpsichord, sampled rack",
+  "_instrument": "What the model has to answer with, and which phrase set the audition page plays. A phrase set belongs to the instrument: this one has no pedal to lift, so the piano set would spend half its takes on a control the harpsichord does not have.",
+  "program": 6,
+  "takes": "harpsichord",
+  "audition_title": "libsonare harpsichord vs the sampled reference",
   "_dry": "Left off, because it cannot be trusted here. The rack carries send effects of its own, and how wet a slot is has nothing to do with what its name says: the slot called Digi decays over 36 seconds while the one called Ambient decays in 3. Every timbre below is measured for its room instead, and the ones with one are used knowing they have one.",
   "dry": false,
   "params": [],
@@ -13,39 +16,53 @@
   "_stimulus": "Shorter than a piano's, because a harpsichord's jack drops the moment the key is released and the damper is felt. The free decay to match is under the held key; what follows note-off is a fast damping plus the jack noise, and both are short.",
   "gate_ms": 4000,
   "tail": "2s",
-  "_timbres": "One slot of one rack each, selected by MIDI channel rather than by preset: the preset is the whole rack and is the same file every time. The slot-to-channel mapping was read with `aubounce info --probe-slots`, which raises one solo control at a time; the names came from the plugin's own window. Digi (5), Neo Harpsi (8) and Ambient (2) are processed sounds rather than instruments and are left out.",
+  "_timbres": "One slot of one rack each, selected by MIDI channel rather than by preset: the preset is the whole rack and is the same file every time. The slot-to-channel mapping was read with `aubounce info --probe-slots`, which raises one solo control at a time. Three further slots are processed sounds rather than instruments and are left out.",
   "timbres": [
     {
       "id": "gm007",
-      "label": "[GM 007] Harpsichord, slot 1",
-      "preset": "HALion 7/Multi/harpsichord.vstpreset",
+      "label": "GM harpsichord, slot 1",
       "channel": 1,
       "_note": "The dry anchor. Mono, and silent to the numerical floor two and a half seconds after note-off, so nothing here is a room. Modest as an instrument, decisive as a reference: every level and every decay measured against it is the instrument alone."
     },
     {
       "id": "baroque",
-      "label": "Baroque Harpsichord, slot 3",
-      "preset": "HALion 7/Multi/harpsichord.vstpreset",
+      "label": "Baroque registration, slot 3",
       "channel": 3,
       "_note": "The main reference. A plain 8' registration in the baroque style, and the shortest decay of the eight slots."
     },
     {
       "id": "concert-8-4",
-      "label": "Concert Harpsi 8ft A + 4ft, slot 4",
-      "preset": "HALion 7/Multi/harpsichord.vstpreset",
+      "label": "8ft + 4ft registration, slot 4",
       "channel": 4,
       "_note": "The 8'+4' registration, and the evidence for it: this is the only slot whose second harmonic outweighs its first, which is the octave rank sounding as a rank rather than as a brighter tone."
     },
     {
       "id": "room",
-      "label": "Harpsichord Room, slot 7",
-      "preset": "HALion 7/Multi/harpsichord.vstpreset",
+      "label": "The same instrument in a space, slot 7",
       "channel": 7,
       "_note": "The same instrument in a space, kept as the check on the room correction rather than as a timbre target."
     }
   ],
   "_notes": "The compass of a double-manual harpsichord, FF to f''', sampled about every fifth. The bass end matters more than a piano's does: the strings are thin and the bass is where a plucked model is most likely to sound like a guitar.",
-  "notes": [29, 36, 41, 48, 53, 60, 65, 72, 77, 84, 89],
+  "notes": [
+    29,
+    36,
+    41,
+    48,
+    53,
+    60,
+    65,
+    72,
+    77,
+    84,
+    89
+  ],
   "_velocities": "The whole point of the axis, on this instrument. A harpsichord is close to velocity-insensitive — the literature puts the whole range within 3 to 6 dB, and the amplitude is not even monotonic in key speed. Four velocities are captured to find out whether a sampled reference reproduces that at all, because if it does not, the model has to be calibrated against the physics rather than against this.",
-  "velocities": [24, 56, 88, 120]
+  "velocities": [
+    24,
+    56,
+    88,
+    120
+  ],
+  "_identity": "Which product this was captured from lives in the untracked sibling `harpsichord.local.json`: the plugin's component triple and each timbre's preset. Everything here is the method, which is the part worth keeping. Re-capturing needs the overlay; scoring, fitting and diagnosing read `reference/harpsichord.json` and need nothing."
 }

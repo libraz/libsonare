@@ -83,6 +83,8 @@ autofit.py --spec auto --program 0 --drum-note 38 \
 
 **Velocity is the axis, because a drum note has no register.** The probe strikes one instrument at three velocities and the held-out set is three more (`--validate-velocities`) — the drum equivalent of fitting a violin on three pitches and checking it on three others. `--validate-notes` does nothing for a drum fit; a different drum note is voiced by a different patch, whose knobs this fit never touched.
 
+**The hits are 50 ms long, and for a few notes that is the measurement rather than the instrument.** A drum is a one-shot, so the note-off carries nothing and the gate can be as short as the score allows — true of 58 of the 61 notes on a a sampled GM kit, which render bit for bit identically at every gate from 50 ms to 1600 ms. The exceptions are the record scratch and the two whistles, which that kit voices as held instruments whose length *is* the gate; libsonare voices all three as fixed one-shots, so their envelopes are being compared against a number the probe chose. `--drum-gate-ms` moves it. Nothing else in the kit hears the difference.
+
 Per hit, in place of the harmonic set:
 
 - `bands_db` — 1/3-octave levels from 50 Hz to 12.5 kHz, dB relative to the loudest band. The percussion analogue of the h1-normalized harmonic ladder: level-blind, so it measures the shape of the spectrum rather than how hard the hit was. Bands more than 60 dB down are floored, so two noise floors do not read as a difference.
@@ -105,7 +107,7 @@ When a capture exists, this is the route to use. `--corpus` points at the direct
 
 ```sh
 autofit.py --spec tools/voicematch/specs/piano_corpus.json --program 0 \
-    --corpus <capture dir> --corpus-timbre c7-close \
+    --corpus <capture dir> --corpus-timbre grand-227 \
     --notes 36,60,84 --velocities 56,120 \
     --optimizer cmaes --max-evals 200 --workers 4
 ```
@@ -371,14 +373,46 @@ Use `cmaes` once the spec is runtime knobs only — that is the case where the e
 
 **Safety** — the pristine text of every target file is snapshotted at startup and restored in a `finally` block, so an exception or Ctrl-C never leaves the tree perturbed. On a normal run the best values are then written back and a unified diff plus the loss trajectory are printed; `--dry-run` restores pristine, skips the write, and reports the diff it would have applied.
 
+### What calibration cannot reach (`--diagnose`)
+
+A fit reports one number and that number cannot answer the question it raises. A loss of 0.62 says the values improved; it does not say whether the remaining 0.62 is constants still slightly off or a mechanism the voice does not have — and those call for opposite work.
+
+```sh
+autofit.py --spec auto --program 6 --diagnose --workers 8 --out diag.json
+```
+
+It runs the same `2n+1` probe `--screen` does and keeps the **per-term** mismatch instead of collapsing each render to one number. From that it reads two independent things per measurement, and the difference between them is the whole point:
+
+- **Connectivity** — the largest change any single knob makes to the term, *in either direction*. Near zero means nothing this program exposes is wired to that measurement, and no budget reaches it.
+- **Improvement** — the largest reduction any single knob makes. A term that moves but does not improve is a term the fit has already spent, or one whose improvement costs another term.
+
+Reading improvement alone is the way this measurement lies. Once a fit has written back, every knob sits at its own optimum and nothing improves anything, so a perfectly well-modelled voice reports every measurement as structurally missing.
+
+| verdict | what it means | what to do |
+|---|---|---|
+| `unreachable` | no knob moves it at all | the model is missing a mechanism — the finding this exists for |
+| `spent` | knobs move it, none reduces it | a trade-off to price, or a converged fit |
+| `partial` / `reachable` | one knob buys a tenth / half of the gap alone | keep fitting; the named knob is where to start |
+| `unscored` | the term carries no weight | no fit has ever tried; weight it before calling it anything |
+| `matched` | inside the smallest difference the term resolves | nothing |
+| `not computed` | `mss` without `--w-mss` | it is an absence, not a match |
+
+Three things it reports about itself, because each one turns a null result into a wrong conclusion:
+
+- **A knob is only as live as the probe's axes.** The `sustain` pattern holds velocity fixed, so every dynamics control reads dead against it — and on a harpsichord, whose identity is what happens across velocity, that is the axis worth probing. The report names what the probe varied next to the knobs it called inert.
+- **A null is only as strong as the range it was searched over.** No effect across the whole interval `clamp_synth_patch` accepts is strong evidence; no effect across a heuristic window around the default is almost none. The two are reported separately rather than averaged.
+- **A one-at-a-time probe cannot see a knob that is inert alone and effective in combination.** `unreachable` is a hypothesis to test by adding the mechanism and watching the term move — and if it does not move, the mechanism was not the missing one either.
+
+Probes whose render had nothing to measure are excluded and counted, since one end of any gain is silence and a silent render matches nothing. That case used to score as a perfect harmonic ladder: a render with no signal reports h1 at 0 dB by definition and every partial above it at the floor, the floor guard skips all of them, h1 matches h1, and the term sums to its best possible value. `loss_terms` now returns unscorable when not one partial above the fundamental survived on both sides anywhere in the probe.
+
 ## Oracle from a plugin on this machine (`--au`)
 
 An AudioUnit instrument installed here can be the oracle directly, with no manual render step in between. [aubounce](https://github.com/libraz/aubounce) hosts it; `au_oracle.py` puts the result behind the same interface as `render_oracle_fluidsynth`, so `compare`, `autofit` and `room-match` all take `--au` without knowing anything changed.
 
 ```sh
 voicematch.py compare --programs 0 \
-    --au "aumu:tgd3:Stbg" \
-    --au-preset "01 Yamaha C7/Close/Natural Ambience" \
+    --au "<piano plugin triple>" \
+    --au-preset "<close-mic preset>" \
     --au-dry
 ```
 
@@ -390,7 +424,7 @@ voicematch.py compare --programs 0 \
 
 The binary is found via `AUBOUNCE`, then `PATH`, then a sibling `../aubounce` checkout.
 
-**Three ways a disk-streaming sampler produces a plausible file rather than an error**, all of them guarded here because none of them announces itself:
+**Five ways a plugin produces a plausible file rather than an error**, none of which announces itself. Three are detected:
 
 | what happens | what you get | the guard |
 |---|---|---|
@@ -398,30 +432,145 @@ The binary is found via `AUBOUNCE`, then `PATH`, then a sibling `../aubounce` ch
 | not given long enough to load | the right length, the right shape, a peak three orders of magnitude too small | a peak below the floor is refused |
 | leaking on load | energy before the first note | reported, not refused — a plugin is allowed a tail |
 
-Measured on The Grand 3, and the numbers are why the defaults are what they are: rendered at full speed a 2 s C4 loses 1544 ms out of its middle; at `--au-settle-ms 1000` it renders a peak of 0.0011 where the real one is 0.158. Two seconds of settling is enough and the default is twice that. `capture.py calibrate` measures all of this for a given plugin rather than assuming it.
+Two cannot be, because nothing in the file distinguishes them from a good render, so they are prevented instead:
+
+| what happens | what you get | how it is avoided |
+|---|---|---|
+| the plugin's first note is not its steady one | a probe whose softest hit — the one a drum fit is validated on — is louder and thinner than the same velocity struck again | aubounce's `--warmup` strikes one note and discards it before recording. On by default; `--au-no-warmup` opts out |
+| the probe's program change is obeyed | the wrong instrument, at the right length, with a clean preroll and a healthy peak | the program change is stripped. `--au-gm` keeps it, for a plugin that really is a GM synth |
+
+Measured on the piano sampler, and the numbers are why the defaults are what they are: rendered at full speed a 2 s C4 loses 1544 ms out of its middle; at `--au-settle-ms 1000` it renders a peak of 0.0011 where the real one is 0.158. Two seconds of settling is enough and the default is twice that. `capture.py calibrate` measures all of this for a given plugin rather than assuming it.
+
+The program change is the one to know about before capturing a drum kit, because it is loud and it looks fine. A probe is written for a GM synth, where the program number selects the kit; a multitimbral rack reads it as an instruction to load a different program into that slot, and loads it asynchronously — so the first note of the probe beats the load and every later one does not. Measured on a a sampled GM kit, one snare struck at 64 / 100 / 127 with the program change left in: peaks 0.610, 0.171, 0.365 and a probe that says the snare gets quieter as you hit it harder. Stripped: 0.610, 0.927, 0.898, with RMS ascending. No guard fires on either.
+
+## Where the audio lives
+
+Four places, and which one a file belongs in follows from whether it can be committed and whether it can be regenerated.
+
+| | what is there | committed |
+|---|---|---|
+| `tools/voicematch/capture/<id>.json` | the capture definition: plugin, timbres, grid, and the GM program the model answers it with | **yes** |
+| `tools/voicematch/reference/<id>.json` | the measurements taken from that capture — the actual calibration target | **yes** |
+| `.cache/voicematch/capture/<id>/` | the captured WAVs, one per (timbre, note, velocity), plus their manifest | no, and cannot be |
+| `.cache/voicematch/audition/<name>/` | the listening sets rendered from a capture | no |
+
+The captured audio **cannot** enter the repository: a sample library's licence covers what is rendered from it. It also should not, even where a licence would allow it — what a physical model has to reproduce is a handful of measured properties, not four hundred megabytes of one particular instrument. `reference/<id>.json` is those properties, and it is what a fit and a gate are held against.
+
+`SONARE_VOICEMATCH_ROOT` moves that whole scratch root off the checkout, which is worth doing: a capture is expensive — several seconds per note, in real time, with retries — so one worth re-measuring is kept rather than re-rendered, and `profile.py --corpus <path>` reads a corpus from wherever it was kept.
+
+Renders that are cheap to reproduce stay in `out/` and `out/au_cache/`, both gitignored: probe WAVs, comparison output, and the plugin render cache keyed on everything that defines a sound.
+
+## Calibrating a voice, start to finish
+
+The order matters, and each step exists because the one before it cannot answer the question the next one asks.
+
+Steps 1 and 2 are the only ones that need the reference plugin, and they are the only ones already done for a captured instrument: `reference/<id>.json` is committed, so **a voice can be measured, fitted and diagnosed against the grand or the harpsichord from a plain clone**, on any platform, with nothing installed. Skip to step 4.
+
+```sh
+# 1. What the plugin needs from its host. Measured, not guessed: a sampler that
+#    streams from disk drops notes at a settle time that looks generous.
+#    macOS + the plugin + aubounce; see "Writing a capture definition".
+capture.py calibrate --config capture/harpsichord.json
+
+# 2. The grid, one note per process, resumable.
+capture.py corpus  --config capture/harpsichord.json
+capture.py verify  --config capture/harpsichord.json   # what a plausible file can still be wrong about
+
+# 3. The reference: WAVs -> the numbers a voice is fitted to. Committed, so
+#    this is the last step that needs the plugin, and the last one already done.
+profile.py measure --config capture/harpsichord.json
+
+# 4. The model over the same grid, as one more timbre of the corpus, so every
+#    tool that reads a corpus reads the model with no special case.
+profile.py render-grid --config capture/harpsichord.json
+
+# 5. Where the voice stands, dimension by dimension.
+profile.py compare --config capture/harpsichord.json --timbre baroque
+
+# 6. Values. --spec auto derives the knobs from the library's own catalogue.
+autofit.py --spec auto --program 6 --optimizer cmaes --workers 8 --validate-notes 41,65,84
+
+# 7. What the fit could not reach, and whether anything could.
+autofit.py --spec auto --program 6 --diagnose --workers 8
+
+# 8. Record what is now worth holding, in the same change as the behaviour.
+profile.py compare --config capture/harpsichord.json --timbre baroque \
+    --write-gate reference/harpsichord_gate.json
+```
+
+Steps 6 and 7 alternate with physics work rather than repeating: a fit converges to the best point reachable from where it started, and a mechanism added to the model moves the anchor, so the next fit starts somewhere new.
+
+**The capture definition names the instrument, and everything downstream reads it from there.** `program` is the GM program the model answers with, `takes` is the phrase set the audition page plays, and `dimensions` narrows what `compare` gates on. Splitting those across a config, a command line and a constant in the source is how a harpsichord ends up measured against program 0 without a word of complaint.
+
+**`profile.py compare` renders the model dry and does not correct for the reference's room.** That correction exists, and it lives in `autofit.py --oracle-wav` (see [Ambience](#ambience-references-that-come-with-a-room)). So a comparison against a timbre recorded in a space reads the space: the model comes back short in decay and fast in damper release by an amount that is the room, not the voice. Compare against a slot known to be dry, and treat a wet one as a listening reference rather than a numeric one.
 
 ## Capturing a reference corpus (`capture.py`, `profile.py`)
 
 The oracle route above compares one probe at a time. A corpus is the other half: the whole note-by-velocity grid of a real instrument, measured once, so a voice is fitted to properties rather than to three notes.
 
+**This route needs macOS, the commercial plugin being captured, and `aubounce`, and a fresh clone has none of the three.** It is how the committed references in `reference/` were produced and it is not how they are consumed: `profile.py compare`, `autofit.py` and `--diagnose` all read `reference/<id>.json`, which is committed, so a voice can be scored, fitted and diagnosed against a captured instrument with no plugin present. What needs the plugin is re-capturing — measuring an instrument nobody has measured yet, or re-measuring one after a plugin update.
+
+Without it, the reference comes from somewhere else and everything downstream is unchanged: `--sf2` plays a SoundFont through fluidsynth on any platform, and `--oracle-wav` takes a WAV of the probe rendered by anything at all — a VST in a DAW, a hardware synth, a recorded player. `export-probe` writes the score to render. The audition page has the same shape: `make_audition.py --model-only` needs no plugin and produces a set that plays rather than compares.
+
+`capture/piano.json` and `capture/harpsichord.json` are the definitions: the plugin, its timbres, the notes and the velocities. The grand's holds a long gate and a short tail because on a piano note-off is the damper — the free decay a model has to match happens while the key is still down. The harpsichord's is shorter, because its jack drops the moment the key is released and what follows is a fast damping plus the jack's own noise.
+
+### Writing a capture definition for a new plugin
+
+Every field is discoverable, and none of them should be guessed. `aubounce` answers the first four questions and `capture.py calibrate` answers the fifth.
+
 ```sh
-capture.py calibrate                 # what this plugin needs from the host
-capture.py corpus                    # render the grid
-capture.py verify                    # what a plausible file can still be wrong about
-profile.py measure                   # corpus -> reference/<id>.json
-profile.py compare --notes 36,48,60  # libsonare against it, dimension by dimension
+cargo install --git https://github.com/libraz/aubounce   # once
+
+# 1. What is installed, and its component triple.
+aubounce list
+
+# 2. What is inside it. A rack keeps its contents in a chunk only it can parse;
+#    --strings decompresses what is compressed and reports what is readable, so
+#    it says what a rack contains without knowing the format. Unlabelled: it
+#    does not say which slot holds what.
+aubounce info "<rack plugin triple>" --settle-ms 4000 --strings harpsi
+
+# 3. Which MIDI channel plays which slot. This is the one that cannot be
+#    guessed and the one a multitimbral rack never publishes: --probe-slots
+#    raises one solo control at a time and plays the channels that sound.
+#    --probe-channels is the fallback when a plugin has no solo per slot.
+aubounce info "<rack plugin triple>" --settle-ms 4000 --probe-slots
+
+# 4. What it advertises as an effect section, which is what `dry` switches off.
+aubounce info "<rack plugin triple>" --params reverb
+
+# 5. What the host has to give it. Measured, and reported rather than asserted.
+capture.py calibrate --config capture/<id>.json
 ```
 
-`capture/grand3.json` is the definition: the plugin, its timbres, the notes and the velocities. It holds a long gate and a short tail because on a piano note-off is the damper — the free decay a model has to match happens while the key is still down.
+| field | what it is |
+|---|---|
+| `id` | names `.cache/voicematch/capture/<id>/` and `reference/<id>.json` |
+| `plugin` | the triple from `aubounce list` |
+| `program` | the GM program the model answers this reference with |
+| `takes` | the audition phrase set (`piano`, `harpsichord`) |
+| `dimensions` | which `compare` columns the gate holds; empty means all of them |
+| `timbres[]` | `id`, `label`, `preset`, and `channel` — the slot, from `--probe-slots` |
+| `notes` / `velocities` | the grid. Velocity is an axis in its own right on anything plucked |
+| `settle_ms` / `realtime` | from `calibrate`, at twice the measured minimum |
+| `gate_ms` / `tail` | how long the key is held and how long is recorded after it lifts |
+| `dry` | switch off every effect section the plugin advertises |
+| `params` | anything else, as `Name=value` |
+
+**A rack's slot names are not a description of what the slot does.** On the the harpsichord rack the slot called `Digi` decays over 36 seconds and the one called `Ambient` decays in 3. That is why that capture sets `dry: false` and measures each timbre's room instead: the switch cannot be trusted where the effects are per-slot sends rather than a section the plugin advertises. Measure before believing a name, and record which slots came out dry — that decision is what a later `compare` depends on, since it does not correct for a room.
+
+**A `_`-prefixed key is a note to the next reader and is ignored by the loader.** Both shipped definitions use them to record why a value is what it is — which slots were left out and why, what the velocity axis is there to settle, why the gate is the length it is. That is the right place for it: the reasoning belongs next to the number, not in a commit message.
 
 **The captured audio never enters the repository.** A sample library's licence covers what is rendered from it, so the WAVs land in a local untracked directory and it is the measurements that are committed, in `reference/`. They are also the right thing to commit: what a physical model has to reproduce is a handful of measured properties, not one particular piano's four hundred megabytes.
 
-`profile.py` measures four things `metrics.py` does not, all of which its harmonic-series assumption cannot express:
+`profile.py` measures six things `metrics.py` does not, none of which its harmonic-series assumption can express. All six are measured for every instrument, and what varies between instruments is which of them is the headline rather than which are taken:
 
-- **Inharmonicity** — a stiff string puts partial *n* at `n·f0·√(1+Bn²)`. Fitted, not assumed, by iterating the search window down as the estimate improves. On the captured C7, B is smallest around C2 (7.6e-5) and rises toward both ends — the shape a real piano has. Above roughly C6 there are too few partials left under the Nyquist frequency to fit two parameters, and those notes are reported as unfitted rather than as a number; the summary curve names the notes it stopped at, because a curve that quietly stops short reads afterwards as one that covered the keyboard.
-- **Stretch tuning** — the Railsback curve, measured as cents from equal temperament. The same capture reads −14.5 c at A0 rising to −2.7 c at C4. A model tuned to exact equal temperament beats against the reference, and the beating is the first thing anyone hears.
+- **Inharmonicity** — a stiff string puts partial *n* at `n·f0·√(1+Bn²)`. Fitted, not assumed, by iterating the search window down as the estimate improves. On the captured C7, B is smallest around C2 (7.6e-5) and rises toward both ends — the shape a real piano has. The harpsichord capture reads 1.5e-6 to 5.7e-6, three orders of magnitude lower, which is the measurement saying its strings are essentially harmonic. Above roughly C6 there are too few partials left under the Nyquist frequency to fit two parameters, and those notes are reported as unfitted rather than as a number; the summary curve names the notes it stopped at, because a curve that quietly stops short reads afterwards as one that covered the keyboard.
+- **Stretch tuning** — cents from equal temperament. The grand capture reads the Railsback curve, −14.5 c at A0 rising to −2.7 c at C4; the harpsichord reads inside ±1.6 c everywhere, which is the same measurement reporting a plain equal temperament. A model tuned to exact equal temperament beats against a reference that is not, and the beating is the first thing anyone hears.
 - **Double decay** — the knee where the fast initial fall gives way to the aftersound, found by searching the breakpoint rather than assuming one. Where it falls is set by how fast the strings of a unison drift apart, so a model with one string cannot have it.
-- **Damper release** — note-off as a felt damper landing on a moving string.
+- **Damper release** — note-off as a damper landing on a moving string. A row that never fell 40 dB inside the capture's tail is shown and left out of the median, since the number recorded for it is the length of the window.
+- **Tone-to-noise** — the mechanism against the string. A model with the partial stack right and no action noise reads cleaner than any recording, and every spectral metric scores that as an improvement. The partial window is the wider of ±2 % and three FFT bins, because a relative-only window collapses below one bin in the bass and reports a clean low note as a noise burst.
+- **Velocity response** — the level range from the softest blow to the hardest, and whether it is monotonic. On a plucked instrument this is most of the identity: the harpsichord capture reads 5.9–6.6 dB on three of its four slots against a piano's thirty, and a model given the wrong one of those is wrong by 20 dB in a way no timbre metric reports, since every one of them normalises each note by its own fundamental.
 
 ### Holding the comparison to what it measured (`--gate`)
 
@@ -437,13 +586,13 @@ profile.py compare --notes 36,48,60  # libsonare against it, dimension by dimens
 The second column exists because the first cannot fail on a defect that is symmetric across the keyboard. The brightness row once read +0.16 % while individual notes were between 26 and 660 % out — the bass dark by as much as the treble was bright — and the median of the signed errors said the voice was correct to a sixth of a percent.
 
 ```sh
-profile.py compare --notes 36,60,84 --write-gate reference/grand3_gate.json
-profile.py compare --notes 36,60,84 --gate reference/grand3_gate.json   # exit 1 on a regression
+profile.py compare --notes 36,60,84 --write-gate reference/piano_gate.json
+profile.py compare --notes 36,60,84 --gate reference/piano_gate.json   # exit 1 on a regression
 ```
 
 Both statistics are bounded, and the gate exits 1 when either is exceeded. What it exists to catch is not a bad voice but **a change that improves one dimension by breaking another**, which is the shape most of this work takes: widening the prompt-decay profile fixes the level on every note between F#2 and F#5 and brightens the same notes by 35 to 60 points of centroid. Both are real, and whoever makes that trade should decide it rather than discover it in a later listening test. Bounds are written at `--margin` (1.25× by default) with a floor under each, deliberately loose — a gate that fails on measurement noise gets switched off, and a switched-off gate catches nothing. Re-record only in the same change as the behaviour that justifies the new numbers.
 
-`capture.py`'s own finding is worth keeping: The Grand 3 fails to load its samples on roughly one render in three, and *more* settling time does not help — 4 s and 16 s both produced the real peak while 8 s in between produced silence. So the capture retries, and decides "too quiet" from the loudest velocity already recorded for that same note rather than from an absolute floor, since a real note at the top of the keyboard at velocity 24 is quiet enough that any fixed threshold either lets a failure through or rejects real notes.
+`capture.py`'s own finding is worth keeping: the piano sampler fails to load its samples on roughly one render in three, and *more* settling time does not help — 4 s and 16 s both produced the real peak while 8 s in between produced silence. So the capture retries, and decides "too quiet" from the loudest velocity already recorded for that same note rather than from an absolute floor, since a real note at the top of the keyboard at velocity 24 is quiet enough that any fixed threshold either lets a failure through or rejects real notes.
 
 ## Listening to the result
 
@@ -460,7 +609,7 @@ python tools/audition/serve.py <audition-dir>       # the directory it wrote
 - `patterns.py` — note patterns + per-GM-program register table
 - `render_model.py` / `render_oracle.py` — the model renderer, and the oracle (fluidsynth, an external WAV with score alignment, or a plugin)
 - `au_oracle.py` — an AudioUnit instrument as the oracle, hosted by aubounce, with the guards a disk-streaming sampler needs and an on-disk render cache
-- `capture.py` / `profile.py` / `capture/` / `reference/` — capturing a reference corpus from a plugin and reducing it to committed measurements; the audio itself stays untracked
+- `capture.py` / `profile.py` / `capture/` / `reference/` — capturing a reference corpus from a plugin and reducing it to committed measurements; the audio itself stays untracked. `profile.py render-grid` puts the model into the same corpus as one more timbre, so nothing downstream needs a special case for it
 - `make_audition.py` — the listening set for `tools/audition`
 - `metrics.py` — per-note analysis and deltas
 - `smf.py` — minimal type-0 SMF writer (single source of truth for both sides)
@@ -478,10 +627,11 @@ The fitter is `autofit.py` plus the modules it drives, one per stage of a fit:
 - `loss.py` — from a render to the number being minimised: `probe_rows`, `skeleton_note`, the harmonic and percussion term sets, the level terms, and the start-point normalisation
 - `optimizers.py` — coordinate descent with a golden-section line search, and CMA-ES with IPOP restarts
 - `staging.py` — cutting the problem down: knob screening and the excitation/decay/all staged fit
+- `diagnose.py` — the same probe read per term instead of per loss: what the residual is made of, and which of it no knob reaches
 - `writeback.py` — putting a fitted value back: literal splicing, the program table, the drum table
 - `report.py` — the end-of-run report and the diff it applies
 - `specs/` — knob spec JSONs; `example.json` shows all three knob forms, the rest are hand-tuned per-instrument sets. `--spec auto` needs none of them.
-- `test_wavio.py` / `test_room.py` / `test_autofit.py` — tests (`python -m pytest tools/voicematch/`); `test_autofit.py` covers the range rules, loss normalisation, stage classification and write-back path translation without rendering anything
+- `test_*.py` — tests (`python -m pytest tools/voicematch/`), one file per module and none of them rendering anything. `test_autofit.py` covers the range rules, loss normalisation, stage classification and write-back path translation; `test_diagnose.py` gives every verdict a case, including the two that look identical when only improvement is measured; `test_profile.py` covers the measurements that are not tied to one instrument
 
 The knob machinery itself lives in the library, all of it behind the `BUILD_TUNING` CMake option: `src/util/tunable.h` (the `SONARE_TUNABLE` macro, the override table, and the `SONARE_TUNING_DUMP` catalogue) and `src/midi/synth/patch_tuning.h` (the per-program patch field layer).
 

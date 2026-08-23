@@ -1,9 +1,8 @@
 {
- "id": "grand3",
- "label": "Steinberg The Grand 3, close mics, dry",
+ "id": "piano",
+ "label": "Concert grand pianos, close mics, dry",
  "measured_utc": "2026-08-22T16:03:09+00:00",
  "capture": {
-  "plugin": "aumu:tgd3:Stbg",
   "params": [
    "Reverb On/Off=0",
    "Equalizer On/Off=0",
@@ -16,19 +15,16 @@
   "preroll_ms": 100,
   "timbres": [
    {
-    "id": "c7-close",
-    "label": "Yamaha C7, close",
-    "preset": "01 Yamaha C7/Close/Natural Ambience"
+    "id": "grand-227",
+    "label": "227 cm concert grand, close"
    },
    {
-    "id": "modeld-close",
-    "label": "Steinway Model D, close",
-    "preset": "02 Model D/Close/NY Piano and Studio"
+    "id": "grand-274",
+    "label": "274 cm concert grand, close"
    },
    {
-    "id": "bosen290-close",
-    "label": "Bosendorfer 290, close",
-    "preset": "03 Bösendorfer 290/Close/Scenes from Childhood"
+    "id": "grand-290",
+    "label": "290 cm concert grand, close"
    }
   ],
   "notes": [
@@ -53,11 +49,12 @@
    56,
    88,
    120
-  ]
+  ],
+  "program": 0
  },
  "rows": [
   {
-   "timbre": "bosen290-close",
+   "timbre": "grand-290",
    "note": 21,
    "velocity": 24,
    "f0_hz": 27.339,
@@ -133,7 +130,7 @@
    "stereo_width": 0.284
   },
   {
-   "timbre": "bosen290-close",
+   "timbre": "grand-290",
    "note": 21,
    "velocity": 56,
    "f0_hz": 27.345,
@@ -209,7 +206,7 @@
    "stereo_width": 0.292
   },
   {
-   "timbre": "bosen290-close",
+   "timbre": "grand-290",
    "note": 21,
    "velocity": 88,
    "f0_hz": 27.346,
@@ -285,7 +282,7 @@
    "stereo_width": 0.289
   },
   {
-   "timbre": "bosen290-close",
+   "timbre": "grand-290",
    "note": 21,
    "velocity": 120,
    "f0_hz": 27.354,
@@ -361,7 +358,7 @@
    "stereo_width": 0.285
   },
   {
-   "timbre": "bosen290-close",
+   "timbre": "grand-290",
    "note": 24,
    "velocity": 24,
    "f0_hz": 32.435,
@@ -437,7 +434,7 @@
    "stereo_width": 0.25
   },
   {
-   "timbre": "bosen290-close",
+   "timbre": "grand-290",
    "note": 24,
    "velocity": 56,
    "f0_hz": 32.434,
@@ -513,7 +510,7 @@
    "stereo_width": 0.285
   },
   {
-   "timbre": "bosen290-close",
+   "timbre": "grand-290",
    "note": 24,
    "velocity": 88,
    "f0_hz": 32.435,
@@ -589,7 +586,7 @@
    "stereo_width": 0.285
   },
   {
-   "timbre": "bosen290-close",
+   "timbre": "grand-290",
    "note": 24,
    "velocity": 120,
    "f0_hz": 32.441,
@@ -665,7 +662,7 @@
    "stereo_width": 0.293
   },
   {
-   "timbre": "bosen290-close",
+   "timbre": "grand-290",
    "note": 30,
    "velocity": 24,
    "f0_hz": 46.061,
@@ -741,7 +738,7 @@
    "stereo_width": 0.464
   },
   {
-   "timbre": "bosen290-close",
+   "timbre": "grand-290",
    "note": 30,
    "velocity": 56,
    "f0_hz": 46.067,
@@ -817,7 +814,7 @@
    "stereo_width": 0.488
   },
   {
-   "timbre": "bosen290-close",
+   "timbre": "grand-290",
    "note": 30,
    "velocity": 88,
    "f0_hz": 46.065,
@@ -893,7 +890,7 @@
    "stereo_width": 0.483
   },
   {
-   "timbre": "bosen290-close",
+   "timbre": "grand-290",
    "note": 30,
    "velocity": 120,
    "f0_hz": 46.066,
@@ -969,7 +966,7 @@
    "stereo_width": 0.466
   },
   {
-   "timbre": "bosen290-close",
+   "timbre": "grand-290",
    "note": 36,
    "velocity": 24,
    "f0_hz": 65.162,
@@ -1045,7 +1042,7 @@
    "stereo_width": 0.419
   },
   {
-   "timbre": "bosen290-close",
+   "timbre": "grand-290",
    "note": 36,
    "velocity": 56,
    "f0_hz": 65.165,
@@ -1121,7 +1118,7 @@
    "stereo_width": 0.484
   },
   {
-   "timbre": "bosen290-close",
+   "timbre": "grand-290",
    "note": 36,
    "velocity": 88,
    "f0_hz": 65.159,
@@ -1197,7 +1194,7 @@
    "stereo_width": 0.494
   },
   {
-   "timbre": "bosen290-close",
+   "timbre": "grand-290",
    "note": 36,
    "velocity": 120,
    "f0_hz": 65.161,
@@ -1273,7 +1270,7 @@
    "stereo_width": 0.488
   },
   {
-   "timbre": "bosen290-close",
+   "timbre": "grand-290",
    "note": 42,
    "velocity": 24,
    "f0_hz": 92.127,
@@ -1349,7 +1346,7 @@
    "stereo_width": 0.292
   },
   {
-   "timbre": "bosen290-close",
+   "timbre": "grand-290",
    "note": 42,
    "velocity": 56,
    "f0_hz": 92.141,
@@ -1425,7 +1422,7 @@
    "stereo_width": 0.346
   },
   {
-   "timbre": "bosen290-close",
+   "timbre": "grand-290",
    "note": 42,
    "velocity": 88,
    "f0_hz": 92.141,
@@ -1501,7 +1498,7 @@
    "stereo_width": 0.391
   },
   {
-   "timbre": "bosen290-close",
+   "timbre": "grand-290",
    "note": 42,
    "velocity": 120,
    "f0_hz": 92.141,
@@ -1577,7 +1574,7 @@
    "stereo_width": 0.402
   },
   {
-   "timbre": "bosen290-close",
+   "timbre": "grand-290",
    "note": 48,
    "velocity": 24,
    "f0_hz": 130.497,
@@ -1653,7 +1650,7 @@
    "stereo_width": 0.103
   },
   {
-   "timbre": "bosen290-close",
+   "timbre": "grand-290",
    "note": 48,
    "velocity": 56,
    "f0_hz": 130.476,
@@ -1729,7 +1726,7 @@
    "stereo_width": 0.127
   },
   {
-   "timbre": "bosen290-close",
+   "timbre": "grand-290",
    "note": 48,
    "velocity": 88,
    "f0_hz": 130.479,
@@ -1805,7 +1802,7 @@
    "stereo_width": 0.147
   },
   {
-   "timbre": "bosen290-close",
+   "timbre": "grand-290",
    "note": 48,
    "velocity": 120,
    "f0_hz": 130.49,
@@ -1881,7 +1878,7 @@
    "stereo_width": 0.144
   },
   {
-   "timbre": "bosen290-close",
+   "timbre": "grand-290",
    "note": 54,
    "velocity": 24,
    "f0_hz": 184.766,
@@ -1957,7 +1954,7 @@
    "stereo_width": 0.24
   },
   {
-   "timbre": "bosen290-close",
+   "timbre": "grand-290",
    "note": 54,
    "velocity": 56,
    "f0_hz": 184.769,
@@ -2033,7 +2030,7 @@
    "stereo_width": 0.26
   },
   {
-   "timbre": "bosen290-close",
+   "timbre": "grand-290",
    "note": 54,
    "velocity": 88,
    "f0_hz": 184.799,
@@ -2109,7 +2106,7 @@
    "stereo_width": 0.301
   },
   {
-   "timbre": "bosen290-close",
+   "timbre": "grand-290",
    "note": 54,
    "velocity": 120,
    "f0_hz": 184.819,
@@ -2185,7 +2182,7 @@
    "stereo_width": 0.338
   },
   {
-   "timbre": "bosen290-close",
+   "timbre": "grand-290",
    "note": 60,
    "velocity": 24,
    "f0_hz": 261.528,
@@ -2261,7 +2258,7 @@
    "stereo_width": 0.591
   },
   {
-   "timbre": "bosen290-close",
+   "timbre": "grand-290",
    "note": 60,
    "velocity": 56,
    "f0_hz": 261.579,
@@ -2337,7 +2334,7 @@
    "stereo_width": 0.541
   },
   {
-   "timbre": "bosen290-close",
+   "timbre": "grand-290",
    "note": 60,
    "velocity": 88,
    "f0_hz": 261.572,
@@ -2413,7 +2410,7 @@
    "stereo_width": 0.524
   },
   {
-   "timbre": "bosen290-close",
+   "timbre": "grand-290",
    "note": 60,
    "velocity": 120,
    "f0_hz": 261.58,
@@ -2489,7 +2486,7 @@
    "stereo_width": 0.518
   },
   {
-   "timbre": "bosen290-close",
+   "timbre": "grand-290",
    "note": 66,
    "velocity": 24,
    "f0_hz": 369.839,
@@ -2565,7 +2562,7 @@
    "stereo_width": 0.065
   },
   {
-   "timbre": "bosen290-close",
+   "timbre": "grand-290",
    "note": 66,
    "velocity": 56,
    "f0_hz": 369.824,
@@ -2639,7 +2636,7 @@
    "stereo_width": 0.08
   },
   {
-   "timbre": "bosen290-close",
+   "timbre": "grand-290",
    "note": 66,
    "velocity": 88,
    "f0_hz": 369.825,
@@ -2713,7 +2710,7 @@
    "stereo_width": 0.089
   },
   {
-   "timbre": "bosen290-close",
+   "timbre": "grand-290",
    "note": 66,
    "velocity": 120,
    "f0_hz": 369.835,
@@ -2787,7 +2784,7 @@
    "stereo_width": 0.089
   },
   {
-   "timbre": "bosen290-close",
+   "timbre": "grand-290",
    "note": 72,
    "velocity": 24,
    "f0_hz": 523.715,
@@ -2861,7 +2858,7 @@
    "stereo_width": 0.031
   },
   {
-   "timbre": "bosen290-close",
+   "timbre": "grand-290",
    "note": 72,
    "velocity": 56,
    "f0_hz": 523.684,
@@ -2935,7 +2932,7 @@
    "stereo_width": 0.04
   },
   {
-   "timbre": "bosen290-close",
+   "timbre": "grand-290",
    "note": 72,
    "velocity": 88,
    "f0_hz": 523.609,
@@ -3009,7 +3006,7 @@
    "stereo_width": 0.05
   },
   {
-   "timbre": "bosen290-close",
+   "timbre": "grand-290",
    "note": 72,
    "velocity": 120,
    "f0_hz": 523.627,
@@ -3083,7 +3080,7 @@
    "stereo_width": 0.065
   },
   {
-   "timbre": "bosen290-close",
+   "timbre": "grand-290",
    "note": 78,
    "velocity": 24,
    "f0_hz": 739.897,
@@ -3159,7 +3156,7 @@
    "stereo_width": 0.454
   },
   {
-   "timbre": "bosen290-close",
+   "timbre": "grand-290",
    "note": 78,
    "velocity": 56,
    "f0_hz": 739.908,
@@ -3233,7 +3230,7 @@
    "stereo_width": 0.502
   },
   {
-   "timbre": "bosen290-close",
+   "timbre": "grand-290",
    "note": 78,
    "velocity": 88,
    "f0_hz": 739.947,
@@ -3307,7 +3304,7 @@
    "stereo_width": 0.499
   },
   {
-   "timbre": "bosen290-close",
+   "timbre": "grand-290",
    "note": 78,
    "velocity": 120,
    "f0_hz": 739.978,
@@ -3381,7 +3378,7 @@
    "stereo_width": 0.521
   },
   {
-   "timbre": "bosen290-close",
+   "timbre": "grand-290",
    "note": 84,
    "velocity": 24,
    "f0_hz": 1047.909,
@@ -3447,7 +3444,7 @@
    "stereo_width": 0.184
   },
   {
-   "timbre": "bosen290-close",
+   "timbre": "grand-290",
    "note": 84,
    "velocity": 56,
    "f0_hz": 1047.845,
@@ -3513,7 +3510,7 @@
    "stereo_width": 0.184
   },
   {
-   "timbre": "bosen290-close",
+   "timbre": "grand-290",
    "note": 84,
    "velocity": 88,
    "f0_hz": 1047.881,
@@ -3579,7 +3576,7 @@
    "stereo_width": 0.193
   },
   {
-   "timbre": "bosen290-close",
+   "timbre": "grand-290",
    "note": 84,
    "velocity": 120,
    "f0_hz": 1048.042,
@@ -3645,7 +3642,7 @@
    "stereo_width": 0.207
   },
   {
-   "timbre": "bosen290-close",
+   "timbre": "grand-290",
    "note": 90,
    "velocity": 24,
    "f0_hz": 1479.211,
@@ -3701,7 +3698,7 @@
    "stereo_width": 0.637
   },
   {
-   "timbre": "bosen290-close",
+   "timbre": "grand-290",
    "note": 90,
    "velocity": 56,
    "f0_hz": 1479.905,
@@ -3757,7 +3754,7 @@
    "stereo_width": 0.77
   },
   {
-   "timbre": "bosen290-close",
+   "timbre": "grand-290",
    "note": 90,
    "velocity": 88,
    "f0_hz": 1480.018,
@@ -3813,7 +3810,7 @@
    "stereo_width": 0.762
   },
   {
-   "timbre": "bosen290-close",
+   "timbre": "grand-290",
    "note": 90,
    "velocity": 120,
    "f0_hz": 1480.671,
@@ -3869,7 +3866,7 @@
    "stereo_width": 0.729
   },
   {
-   "timbre": "bosen290-close",
+   "timbre": "grand-290",
    "note": 96,
    "velocity": 24,
    "f0_hz": 2102.543,
@@ -3919,7 +3916,7 @@
    "stereo_width": 0.887
   },
   {
-   "timbre": "bosen290-close",
+   "timbre": "grand-290",
    "note": 96,
    "velocity": 56,
    "f0_hz": 2107.95,
@@ -3973,7 +3970,7 @@
    "stereo_width": 0.816
   },
   {
-   "timbre": "bosen290-close",
+   "timbre": "grand-290",
    "note": 96,
    "velocity": 88,
    "f0_hz": 2097.252,
@@ -4023,7 +4020,7 @@
    "stereo_width": 0.924
   },
   {
-   "timbre": "bosen290-close",
+   "timbre": "grand-290",
    "note": 96,
    "velocity": 120,
    "f0_hz": 2096.916,
@@ -4073,7 +4070,7 @@
    "stereo_width": 0.886
   },
   {
-   "timbre": "bosen290-close",
+   "timbre": "grand-290",
    "note": 108,
    "velocity": 24,
    "f0_hz": 4260.825,
@@ -4111,7 +4108,7 @@
    "stereo_width": 0.862
   },
   {
-   "timbre": "bosen290-close",
+   "timbre": "grand-290",
    "note": 108,
    "velocity": 56,
    "f0_hz": 4266.393,
@@ -4149,7 +4146,7 @@
    "stereo_width": 0.714
   },
   {
-   "timbre": "bosen290-close",
+   "timbre": "grand-290",
    "note": 108,
    "velocity": 88,
    "f0_hz": 4271.536,
@@ -4190,7 +4187,7 @@
    "stereo_width": 0.692
   },
   {
-   "timbre": "bosen290-close",
+   "timbre": "grand-290",
    "note": 108,
    "velocity": 120,
    "f0_hz": 4270.627,
@@ -4231,7 +4228,7 @@
    "stereo_width": 0.677
   },
   {
-   "timbre": "c7-close",
+   "timbre": "grand-227",
    "note": 21,
    "velocity": 24,
    "f0_hz": 27.266,
@@ -4307,7 +4304,7 @@
    "stereo_width": 0.125
   },
   {
-   "timbre": "c7-close",
+   "timbre": "grand-227",
    "note": 21,
    "velocity": 56,
    "f0_hz": 27.269,
@@ -4383,7 +4380,7 @@
    "stereo_width": 0.172
   },
   {
-   "timbre": "c7-close",
+   "timbre": "grand-227",
    "note": 21,
    "velocity": 88,
    "f0_hz": 27.272,
@@ -4459,7 +4456,7 @@
    "stereo_width": 0.203
   },
   {
-   "timbre": "c7-close",
+   "timbre": "grand-227",
    "note": 21,
    "velocity": 120,
    "f0_hz": 27.289,
@@ -4535,7 +4532,7 @@
    "stereo_width": 0.264
   },
   {
-   "timbre": "c7-close",
+   "timbre": "grand-227",
    "note": 24,
    "velocity": 24,
    "f0_hz": 32.465,
@@ -4611,7 +4608,7 @@
    "stereo_width": 0.229
   },
   {
-   "timbre": "c7-close",
+   "timbre": "grand-227",
    "note": 24,
    "velocity": 56,
    "f0_hz": 32.465,
@@ -4687,7 +4684,7 @@
    "stereo_width": 0.276
   },
   {
-   "timbre": "c7-close",
+   "timbre": "grand-227",
    "note": 24,
    "velocity": 88,
    "f0_hz": 32.468,
@@ -4763,7 +4760,7 @@
    "stereo_width": 0.282
   },
   {
-   "timbre": "c7-close",
+   "timbre": "grand-227",
    "note": 24,
    "velocity": 120,
    "f0_hz": 32.48,
@@ -4839,7 +4836,7 @@
    "stereo_width": 0.293
   },
   {
-   "timbre": "c7-close",
+   "timbre": "grand-227",
    "note": 30,
    "velocity": 24,
    "f0_hz": 45.999,
@@ -4915,7 +4912,7 @@
    "stereo_width": 0.199
   },
   {
-   "timbre": "c7-close",
+   "timbre": "grand-227",
    "note": 30,
    "velocity": 56,
    "f0_hz": 46.006,
@@ -4991,7 +4988,7 @@
    "stereo_width": 0.205
   },
   {
-   "timbre": "c7-close",
+   "timbre": "grand-227",
    "note": 30,
    "velocity": 88,
    "f0_hz": 46.013,
@@ -5067,7 +5064,7 @@
    "stereo_width": 0.209
   },
   {
-   "timbre": "c7-close",
+   "timbre": "grand-227",
    "note": 30,
    "velocity": 120,
    "f0_hz": 46.045,
@@ -5143,7 +5140,7 @@
    "stereo_width": 0.213
   },
   {
-   "timbre": "c7-close",
+   "timbre": "grand-227",
    "note": 36,
    "velocity": 24,
    "f0_hz": 65.084,
@@ -5219,7 +5216,7 @@
    "stereo_width": 0.571
   },
   {
-   "timbre": "c7-close",
+   "timbre": "grand-227",
    "note": 36,
    "velocity": 56,
    "f0_hz": 65.088,
@@ -5295,7 +5292,7 @@
    "stereo_width": 0.555
   },
   {
-   "timbre": "c7-close",
+   "timbre": "grand-227",
    "note": 36,
    "velocity": 88,
    "f0_hz": 65.089,
@@ -5371,7 +5368,7 @@
    "stereo_width": 0.535
   },
   {
-   "timbre": "c7-close",
+   "timbre": "grand-227",
    "note": 36,
    "velocity": 120,
    "f0_hz": 65.11,
@@ -5447,7 +5444,7 @@
    "stereo_width": 0.529
   },
   {
-   "timbre": "c7-close",
+   "timbre": "grand-227",
    "note": 42,
    "velocity": 24,
    "f0_hz": 92.077,
@@ -5523,7 +5520,7 @@
    "stereo_width": 0.174
   },
   {
-   "timbre": "c7-close",
+   "timbre": "grand-227",
    "note": 42,
    "velocity": 56,
    "f0_hz": 92.08,
@@ -5599,7 +5596,7 @@
    "stereo_width": 0.186
   },
   {
-   "timbre": "c7-close",
+   "timbre": "grand-227",
    "note": 42,
    "velocity": 88,
    "f0_hz": 92.085,
@@ -5675,7 +5672,7 @@
    "stereo_width": 0.199
   },
   {
-   "timbre": "c7-close",
+   "timbre": "grand-227",
    "note": 42,
    "velocity": 120,
    "f0_hz": 92.13,
@@ -5751,7 +5748,7 @@
    "stereo_width": 0.23
   },
   {
-   "timbre": "c7-close",
+   "timbre": "grand-227",
    "note": 48,
    "velocity": 24,
    "f0_hz": 130.439,
@@ -5827,7 +5824,7 @@
    "stereo_width": 0.646
   },
   {
-   "timbre": "c7-close",
+   "timbre": "grand-227",
    "note": 48,
    "velocity": 56,
    "f0_hz": 130.438,
@@ -5903,7 +5900,7 @@
    "stereo_width": 0.668
   },
   {
-   "timbre": "c7-close",
+   "timbre": "grand-227",
    "note": 48,
    "velocity": 88,
    "f0_hz": 130.439,
@@ -5979,7 +5976,7 @@
    "stereo_width": 0.694
   },
   {
-   "timbre": "c7-close",
+   "timbre": "grand-227",
    "note": 48,
    "velocity": 120,
    "f0_hz": 130.47,
@@ -6055,7 +6052,7 @@
    "stereo_width": 0.691
   },
   {
-   "timbre": "c7-close",
+   "timbre": "grand-227",
    "note": 54,
    "velocity": 24,
    "f0_hz": 184.62,
@@ -6131,7 +6128,7 @@
    "stereo_width": 0.528
   },
   {
-   "timbre": "c7-close",
+   "timbre": "grand-227",
    "note": 54,
    "velocity": 56,
    "f0_hz": 184.625,
@@ -6207,7 +6204,7 @@
    "stereo_width": 0.436
   },
   {
-   "timbre": "c7-close",
+   "timbre": "grand-227",
    "note": 54,
    "velocity": 88,
    "f0_hz": 184.632,
@@ -6283,7 +6280,7 @@
    "stereo_width": 0.417
   },
   {
-   "timbre": "c7-close",
+   "timbre": "grand-227",
    "note": 54,
    "velocity": 120,
    "f0_hz": 184.677,
@@ -6359,7 +6356,7 @@
    "stereo_width": 0.398
   },
   {
-   "timbre": "c7-close",
+   "timbre": "grand-227",
    "note": 60,
    "velocity": 24,
    "f0_hz": 261.224,
@@ -6435,7 +6432,7 @@
    "stereo_width": 0.272
   },
   {
-   "timbre": "c7-close",
+   "timbre": "grand-227",
    "note": 60,
    "velocity": 56,
    "f0_hz": 261.216,
@@ -6511,7 +6508,7 @@
    "stereo_width": 0.304
   },
   {
-   "timbre": "c7-close",
+   "timbre": "grand-227",
    "note": 60,
    "velocity": 88,
    "f0_hz": 261.224,
@@ -6587,7 +6584,7 @@
    "stereo_width": 0.343
   },
   {
-   "timbre": "c7-close",
+   "timbre": "grand-227",
    "note": 60,
    "velocity": 120,
    "f0_hz": 261.278,
@@ -6663,7 +6660,7 @@
    "stereo_width": 0.408
   },
   {
-   "timbre": "c7-close",
+   "timbre": "grand-227",
    "note": 66,
    "velocity": 24,
    "f0_hz": 369.422,
@@ -6739,7 +6736,7 @@
    "stereo_width": 0.548
   },
   {
-   "timbre": "c7-close",
+   "timbre": "grand-227",
    "note": 66,
    "velocity": 56,
    "f0_hz": 369.4,
@@ -6813,7 +6810,7 @@
    "stereo_width": 0.525
   },
   {
-   "timbre": "c7-close",
+   "timbre": "grand-227",
    "note": 66,
    "velocity": 88,
    "f0_hz": 369.391,
@@ -6887,7 +6884,7 @@
    "stereo_width": 0.559
   },
   {
-   "timbre": "c7-close",
+   "timbre": "grand-227",
    "note": 66,
    "velocity": 120,
    "f0_hz": 369.599,
@@ -6961,7 +6958,7 @@
    "stereo_width": 0.615
   },
   {
-   "timbre": "c7-close",
+   "timbre": "grand-227",
    "note": 72,
    "velocity": 24,
    "f0_hz": 522.611,
@@ -7037,7 +7034,7 @@
    "stereo_width": 0.461
   },
   {
-   "timbre": "c7-close",
+   "timbre": "grand-227",
    "note": 72,
    "velocity": 56,
    "f0_hz": 522.58,
@@ -7113,7 +7110,7 @@
    "stereo_width": 0.48
   },
   {
-   "timbre": "c7-close",
+   "timbre": "grand-227",
    "note": 72,
    "velocity": 88,
    "f0_hz": 522.52,
@@ -7187,7 +7184,7 @@
    "stereo_width": 0.484
   },
   {
-   "timbre": "c7-close",
+   "timbre": "grand-227",
    "note": 72,
    "velocity": 120,
    "f0_hz": 522.652,
@@ -7261,7 +7258,7 @@
    "stereo_width": 0.457
   },
   {
-   "timbre": "c7-close",
+   "timbre": "grand-227",
    "note": 78,
    "velocity": 24,
    "f0_hz": 737.816,
@@ -7337,7 +7334,7 @@
    "stereo_width": 0.408
   },
   {
-   "timbre": "c7-close",
+   "timbre": "grand-227",
    "note": 78,
    "velocity": 56,
    "f0_hz": 738.107,
@@ -7413,7 +7410,7 @@
    "stereo_width": 0.355
   },
   {
-   "timbre": "c7-close",
+   "timbre": "grand-227",
    "note": 78,
    "velocity": 88,
    "f0_hz": 738.178,
@@ -7487,7 +7484,7 @@
    "stereo_width": 0.306
   },
   {
-   "timbre": "c7-close",
+   "timbre": "grand-227",
    "note": 78,
    "velocity": 120,
    "f0_hz": 738.309,
@@ -7561,7 +7558,7 @@
    "stereo_width": 0.376
   },
   {
-   "timbre": "c7-close",
+   "timbre": "grand-227",
    "note": 84,
    "velocity": 24,
    "f0_hz": 1048.172,
@@ -7627,7 +7624,7 @@
    "stereo_width": 0.285
   },
   {
-   "timbre": "c7-close",
+   "timbre": "grand-227",
    "note": 84,
    "velocity": 56,
    "f0_hz": 1048.049,
@@ -7693,7 +7690,7 @@
    "stereo_width": 0.29
   },
   {
-   "timbre": "c7-close",
+   "timbre": "grand-227",
    "note": 84,
    "velocity": 88,
    "f0_hz": 1047.956,
@@ -7759,7 +7756,7 @@
    "stereo_width": 0.283
   },
   {
-   "timbre": "c7-close",
+   "timbre": "grand-227",
    "note": 84,
    "velocity": 120,
    "f0_hz": 1047.824,
@@ -7825,7 +7822,7 @@
    "stereo_width": 0.292
   },
   {
-   "timbre": "c7-close",
+   "timbre": "grand-227",
    "note": 90,
    "velocity": 24,
    "f0_hz": 1483.493,
@@ -7887,7 +7884,7 @@
    "stereo_width": 0.12
   },
   {
-   "timbre": "c7-close",
+   "timbre": "grand-227",
    "note": 90,
    "velocity": 56,
    "f0_hz": 1483.656,
@@ -7949,7 +7946,7 @@
    "stereo_width": 0.121
   },
   {
-   "timbre": "c7-close",
+   "timbre": "grand-227",
    "note": 90,
    "velocity": 88,
    "f0_hz": 1480.22,
@@ -8005,7 +8002,7 @@
    "stereo_width": 0.136
   },
   {
-   "timbre": "c7-close",
+   "timbre": "grand-227",
    "note": 90,
    "velocity": 120,
    "f0_hz": 1480.177,
@@ -8061,7 +8058,7 @@
    "stereo_width": 0.195
   },
   {
-   "timbre": "c7-close",
+   "timbre": "grand-227",
    "note": 96,
    "velocity": 24,
    "f0_hz": 2103.449,
@@ -8111,7 +8108,7 @@
    "stereo_width": 0.646
   },
   {
-   "timbre": "c7-close",
+   "timbre": "grand-227",
    "note": 96,
    "velocity": 56,
    "f0_hz": 2102.763,
@@ -8161,7 +8158,7 @@
    "stereo_width": 0.556
   },
   {
-   "timbre": "c7-close",
+   "timbre": "grand-227",
    "note": 96,
    "velocity": 88,
    "f0_hz": 2106.866,
@@ -8215,7 +8212,7 @@
    "stereo_width": 0.553
   },
   {
-   "timbre": "c7-close",
+   "timbre": "grand-227",
    "note": 96,
    "velocity": 120,
    "f0_hz": 2106.981,
@@ -8269,7 +8266,7 @@
    "stereo_width": 0.533
   },
   {
-   "timbre": "c7-close",
+   "timbre": "grand-227",
    "note": 108,
    "velocity": 24,
    "f0_hz": 4297.911,
@@ -8307,7 +8304,7 @@
    "stereo_width": 0.651
   },
   {
-   "timbre": "c7-close",
+   "timbre": "grand-227",
    "note": 108,
    "velocity": 56,
    "f0_hz": 4292.223,
@@ -8345,7 +8342,7 @@
    "stereo_width": 0.974
   },
   {
-   "timbre": "c7-close",
+   "timbre": "grand-227",
    "note": 108,
    "velocity": 88,
    "f0_hz": 4293.433,
@@ -8383,7 +8380,7 @@
    "stereo_width": 0.985
   },
   {
-   "timbre": "c7-close",
+   "timbre": "grand-227",
    "note": 108,
    "velocity": 120,
    "f0_hz": 4260.302,
@@ -8424,7 +8421,7 @@
    "stereo_width": 0.806
   },
   {
-   "timbre": "modeld-close",
+   "timbre": "grand-274",
    "note": 21,
    "velocity": 24,
    "f0_hz": 27.292,
@@ -8500,7 +8497,7 @@
    "stereo_width": 0.519
   },
   {
-   "timbre": "modeld-close",
+   "timbre": "grand-274",
    "note": 21,
    "velocity": 56,
    "f0_hz": 27.291,
@@ -8576,7 +8573,7 @@
    "stereo_width": 0.524
   },
   {
-   "timbre": "modeld-close",
+   "timbre": "grand-274",
    "note": 21,
    "velocity": 88,
    "f0_hz": 27.297,
@@ -8652,7 +8649,7 @@
    "stereo_width": 0.525
   },
   {
-   "timbre": "modeld-close",
+   "timbre": "grand-274",
    "note": 21,
    "velocity": 120,
    "f0_hz": 27.318,
@@ -8728,7 +8725,7 @@
    "stereo_width": 0.554
   },
   {
-   "timbre": "modeld-close",
+   "timbre": "grand-274",
    "note": 24,
    "velocity": 24,
    "f0_hz": 32.486,
@@ -8804,7 +8801,7 @@
    "stereo_width": 0.487
   },
   {
-   "timbre": "modeld-close",
+   "timbre": "grand-274",
    "note": 24,
    "velocity": 56,
    "f0_hz": 32.485,
@@ -8880,7 +8877,7 @@
    "stereo_width": 0.5
   },
   {
-   "timbre": "modeld-close",
+   "timbre": "grand-274",
    "note": 24,
    "velocity": 88,
    "f0_hz": 32.488,
@@ -8956,7 +8953,7 @@
    "stereo_width": 0.502
   },
   {
-   "timbre": "modeld-close",
+   "timbre": "grand-274",
    "note": 24,
    "velocity": 120,
    "f0_hz": 32.5,
@@ -9032,7 +9029,7 @@
    "stereo_width": 0.5
   },
   {
-   "timbre": "modeld-close",
+   "timbre": "grand-274",
    "note": 30,
    "velocity": 24,
    "f0_hz": 46.056,
@@ -9108,7 +9105,7 @@
    "stereo_width": 0.871
   },
   {
-   "timbre": "modeld-close",
+   "timbre": "grand-274",
    "note": 30,
    "velocity": 56,
    "f0_hz": 46.058,
@@ -9184,7 +9181,7 @@
    "stereo_width": 0.895
   },
   {
-   "timbre": "modeld-close",
+   "timbre": "grand-274",
    "note": 30,
    "velocity": 88,
    "f0_hz": 46.059,
@@ -9260,7 +9257,7 @@
    "stereo_width": 0.924
   },
   {
-   "timbre": "modeld-close",
+   "timbre": "grand-274",
    "note": 30,
    "velocity": 120,
    "f0_hz": 46.065,
@@ -9336,7 +9333,7 @@
    "stereo_width": 0.946
   },
   {
-   "timbre": "modeld-close",
+   "timbre": "grand-274",
    "note": 36,
    "velocity": 24,
    "f0_hz": 65.104,
@@ -9412,7 +9409,7 @@
    "stereo_width": 0.471
   },
   {
-   "timbre": "modeld-close",
+   "timbre": "grand-274",
    "note": 36,
    "velocity": 56,
    "f0_hz": 65.111,
@@ -9488,7 +9485,7 @@
    "stereo_width": 0.477
   },
   {
-   "timbre": "modeld-close",
+   "timbre": "grand-274",
    "note": 36,
    "velocity": 88,
    "f0_hz": 65.132,
@@ -9564,7 +9561,7 @@
    "stereo_width": 0.499
   },
   {
-   "timbre": "modeld-close",
+   "timbre": "grand-274",
    "note": 36,
    "velocity": 120,
    "f0_hz": 65.15,
@@ -9640,7 +9637,7 @@
    "stereo_width": 0.5
   },
   {
-   "timbre": "modeld-close",
+   "timbre": "grand-274",
    "note": 42,
    "velocity": 24,
    "f0_hz": 92.017,
@@ -9716,7 +9713,7 @@
    "stereo_width": 0.849
   },
   {
-   "timbre": "modeld-close",
+   "timbre": "grand-274",
    "note": 42,
    "velocity": 56,
    "f0_hz": 92.023,
@@ -9792,7 +9789,7 @@
    "stereo_width": 0.867
   },
   {
-   "timbre": "modeld-close",
+   "timbre": "grand-274",
    "note": 42,
    "velocity": 88,
    "f0_hz": 92.032,
@@ -9868,7 +9865,7 @@
    "stereo_width": 0.901
   },
   {
-   "timbre": "modeld-close",
+   "timbre": "grand-274",
    "note": 42,
    "velocity": 120,
    "f0_hz": 92.047,
@@ -9944,7 +9941,7 @@
    "stereo_width": 0.896
   },
   {
-   "timbre": "modeld-close",
+   "timbre": "grand-274",
    "note": 48,
    "velocity": 24,
    "f0_hz": 130.323,
@@ -10020,7 +10017,7 @@
    "stereo_width": 0.418
   },
   {
-   "timbre": "modeld-close",
+   "timbre": "grand-274",
    "note": 48,
    "velocity": 56,
    "f0_hz": 130.331,
@@ -10096,7 +10093,7 @@
    "stereo_width": 0.428
   },
   {
-   "timbre": "modeld-close",
+   "timbre": "grand-274",
    "note": 48,
    "velocity": 88,
    "f0_hz": 130.347,
@@ -10172,7 +10169,7 @@
    "stereo_width": 0.445
   },
   {
-   "timbre": "modeld-close",
+   "timbre": "grand-274",
    "note": 48,
    "velocity": 120,
    "f0_hz": 130.367,
@@ -10248,7 +10245,7 @@
    "stereo_width": 0.456
   },
   {
-   "timbre": "modeld-close",
+   "timbre": "grand-274",
    "note": 54,
    "velocity": 24,
    "f0_hz": 184.388,
@@ -10324,7 +10321,7 @@
    "stereo_width": 0.866
   },
   {
-   "timbre": "modeld-close",
+   "timbre": "grand-274",
    "note": 54,
    "velocity": 56,
    "f0_hz": 184.393,
@@ -10400,7 +10397,7 @@
    "stereo_width": 0.897
   },
   {
-   "timbre": "modeld-close",
+   "timbre": "grand-274",
    "note": 54,
    "velocity": 88,
    "f0_hz": 184.412,
@@ -10476,7 +10473,7 @@
    "stereo_width": 0.867
   },
   {
-   "timbre": "modeld-close",
+   "timbre": "grand-274",
    "note": 54,
    "velocity": 120,
    "f0_hz": 184.462,
@@ -10552,7 +10549,7 @@
    "stereo_width": 0.882
   },
   {
-   "timbre": "modeld-close",
+   "timbre": "grand-274",
    "note": 60,
    "velocity": 24,
    "f0_hz": 261.069,
@@ -10628,7 +10625,7 @@
    "stereo_width": 0.449
   },
   {
-   "timbre": "modeld-close",
+   "timbre": "grand-274",
    "note": 60,
    "velocity": 56,
    "f0_hz": 261.072,
@@ -10704,7 +10701,7 @@
    "stereo_width": 0.463
   },
   {
-   "timbre": "modeld-close",
+   "timbre": "grand-274",
    "note": 60,
    "velocity": 88,
    "f0_hz": 261.091,
@@ -10778,7 +10775,7 @@
    "stereo_width": 0.5
   },
   {
-   "timbre": "modeld-close",
+   "timbre": "grand-274",
    "note": 60,
    "velocity": 120,
    "f0_hz": 261.196,
@@ -10852,7 +10849,7 @@
    "stereo_width": 0.486
   },
   {
-   "timbre": "modeld-close",
+   "timbre": "grand-274",
    "note": 66,
    "velocity": 24,
    "f0_hz": 369.523,
@@ -10926,7 +10923,7 @@
    "stereo_width": 0.162
   },
   {
-   "timbre": "modeld-close",
+   "timbre": "grand-274",
    "note": 66,
    "velocity": 56,
    "f0_hz": 369.518,
@@ -11000,7 +10997,7 @@
    "stereo_width": 0.169
   },
   {
-   "timbre": "modeld-close",
+   "timbre": "grand-274",
    "note": 66,
    "velocity": 88,
    "f0_hz": 369.505,
@@ -11074,7 +11071,7 @@
    "stereo_width": 0.168
   },
   {
-   "timbre": "modeld-close",
+   "timbre": "grand-274",
    "note": 66,
    "velocity": 120,
    "f0_hz": 369.661,
@@ -11148,7 +11145,7 @@
    "stereo_width": 0.165
   },
   {
-   "timbre": "modeld-close",
+   "timbre": "grand-274",
    "note": 72,
    "velocity": 24,
    "f0_hz": 522.542,
@@ -11222,7 +11219,7 @@
    "stereo_width": 0.158
   },
   {
-   "timbre": "modeld-close",
+   "timbre": "grand-274",
    "note": 72,
    "velocity": 56,
    "f0_hz": 522.534,
@@ -11296,7 +11293,7 @@
    "stereo_width": 0.167
   },
   {
-   "timbre": "modeld-close",
+   "timbre": "grand-274",
    "note": 72,
    "velocity": 88,
    "f0_hz": 522.65,
@@ -11370,7 +11367,7 @@
    "stereo_width": 0.184
   },
   {
-   "timbre": "modeld-close",
+   "timbre": "grand-274",
    "note": 72,
    "velocity": 120,
    "f0_hz": 522.661,
@@ -11444,7 +11441,7 @@
    "stereo_width": 0.226
   },
   {
-   "timbre": "modeld-close",
+   "timbre": "grand-274",
    "note": 78,
    "velocity": 24,
    "f0_hz": 738.408,
@@ -11520,7 +11517,7 @@
    "stereo_width": 0.411
   },
   {
-   "timbre": "modeld-close",
+   "timbre": "grand-274",
    "note": 78,
    "velocity": 56,
    "f0_hz": 738.351,
@@ -11594,7 +11591,7 @@
    "stereo_width": 0.403
   },
   {
-   "timbre": "modeld-close",
+   "timbre": "grand-274",
    "note": 78,
    "velocity": 88,
    "f0_hz": 739.022,
@@ -11668,7 +11665,7 @@
    "stereo_width": 0.396
   },
   {
-   "timbre": "modeld-close",
+   "timbre": "grand-274",
    "note": 78,
    "velocity": 120,
    "f0_hz": 739.13,
@@ -11742,7 +11739,7 @@
    "stereo_width": 0.413
   },
   {
-   "timbre": "modeld-close",
+   "timbre": "grand-274",
    "note": 84,
    "velocity": 24,
    "f0_hz": 1046.161,
@@ -11806,7 +11803,7 @@
    "stereo_width": 0.317
   },
   {
-   "timbre": "modeld-close",
+   "timbre": "grand-274",
    "note": 84,
    "velocity": 56,
    "f0_hz": 1046.131,
@@ -11870,7 +11867,7 @@
    "stereo_width": 0.316
   },
   {
-   "timbre": "modeld-close",
+   "timbre": "grand-274",
    "note": 84,
    "velocity": 88,
    "f0_hz": 1046.035,
@@ -11934,7 +11931,7 @@
    "stereo_width": 0.323
   },
   {
-   "timbre": "modeld-close",
+   "timbre": "grand-274",
    "note": 84,
    "velocity": 120,
    "f0_hz": 1045.953,
@@ -11998,7 +11995,7 @@
    "stereo_width": 0.333
   },
   {
-   "timbre": "modeld-close",
+   "timbre": "grand-274",
    "note": 90,
    "velocity": 24,
    "f0_hz": 1484.488,
@@ -12060,7 +12057,7 @@
    "stereo_width": 0.943
   },
   {
-   "timbre": "modeld-close",
+   "timbre": "grand-274",
    "note": 90,
    "velocity": 56,
    "f0_hz": 1479.855,
@@ -12114,7 +12111,7 @@
    "stereo_width": 0.971
   },
   {
-   "timbre": "modeld-close",
+   "timbre": "grand-274",
    "note": 90,
    "velocity": 88,
    "f0_hz": 1481.138,
@@ -12170,7 +12167,7 @@
    "stereo_width": 0.781
   },
   {
-   "timbre": "modeld-close",
+   "timbre": "grand-274",
    "note": 90,
    "velocity": 120,
    "f0_hz": 1480.495,
@@ -12226,7 +12223,7 @@
    "stereo_width": 0.7
   },
   {
-   "timbre": "modeld-close",
+   "timbre": "grand-274",
    "note": 96,
    "velocity": 24,
    "f0_hz": 2108.809,
@@ -12280,7 +12277,7 @@
    "stereo_width": 0.876
   },
   {
-   "timbre": "modeld-close",
+   "timbre": "grand-274",
    "note": 96,
    "velocity": 56,
    "f0_hz": 2107.712,
@@ -12334,7 +12331,7 @@
    "stereo_width": 0.955
   },
   {
-   "timbre": "modeld-close",
+   "timbre": "grand-274",
    "note": 96,
    "velocity": 88,
    "f0_hz": 2107.574,
@@ -12388,7 +12385,7 @@
    "stereo_width": 0.956
   },
   {
-   "timbre": "modeld-close",
+   "timbre": "grand-274",
    "note": 96,
    "velocity": 120,
    "f0_hz": 2107.284,
@@ -12442,7 +12439,7 @@
    "stereo_width": 0.941
   },
   {
-   "timbre": "modeld-close",
+   "timbre": "grand-274",
    "note": 108,
    "velocity": 24,
    "f0_hz": 4321.236,
@@ -12480,7 +12477,7 @@
    "stereo_width": 0.797
   },
   {
-   "timbre": "modeld-close",
+   "timbre": "grand-274",
    "note": 108,
    "velocity": 56,
    "f0_hz": 4323.443,
@@ -12518,7 +12515,7 @@
    "stereo_width": 0.944
   },
   {
-   "timbre": "modeld-close",
+   "timbre": "grand-274",
    "note": 108,
    "velocity": 88,
    "f0_hz": 4326.245,
@@ -12556,7 +12553,7 @@
    "stereo_width": 0.993
   },
   {
-   "timbre": "modeld-close",
+   "timbre": "grand-274",
    "note": 108,
    "velocity": 120,
    "f0_hz": 4327.983,
@@ -12595,7 +12592,7 @@
   }
  ],
  "summary": {
-  "bosen290-close": {
+  "grand-290": {
    "stretch_cents": {
     "21": -9.785,
     "24": -14.26,
@@ -12960,7 +12957,7 @@
     }
    }
   },
-  "c7-close": {
+  "grand-227": {
    "stretch_cents": {
     "21": -14.53,
     "24": -12.575,
@@ -13329,7 +13326,7 @@
     }
    }
   },
-  "modeld-close": {
+  "grand-274": {
    "stretch_cents": {
     "21": -12.965,
     "24": -11.485,

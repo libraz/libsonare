@@ -124,6 +124,11 @@ uv.lock
 tools/voicematch/assets/
 tools/voicematch/out/
 
+# Which commercial plugin a capture definition was taken from. The tracked
+# definition describes the instrument by category and holds the measurement
+# method; the identity lives here and is needed only to re-capture.
+tools/voicematch/capture/*.local.json
+
 # Local agent notes
 AGENT.md
 

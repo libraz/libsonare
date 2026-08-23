@@ -3,9 +3,9 @@
 
 Three commands, in the order they are used:
 
-    capture.py calibrate --config capture/grand3.json
-    capture.py corpus    --config capture/grand3.json
-    capture.py verify    --config capture/grand3.json
+    capture.py calibrate --config capture/piano.json
+    capture.py corpus    --config capture/piano.json
+    capture.py verify    --config capture/piano.json
 
 `calibrate` measures what the *host* has to do to record this plugin
 faithfully, and refuses to guess. A disk-streaming sampler has two settings
@@ -58,7 +58,7 @@ from au_oracle import (  # noqa: E402
 from wavio import read_wav  # noqa: E402
 
 HERE = Path(__file__).resolve().parent
-DEFAULT_CONFIG = HERE / "capture" / "grand3.json"
+DEFAULT_CONFIG = HERE / "capture" / "piano.json"
 # Captured audio is licensed by whoever made the instrument, so it never enters
 # the tree. SONARE_VOICEMATCH_ROOT names where a corpus lives; without it the
 # renders go to an untracked scratch directory inside the checkout, so a fresh
@@ -74,9 +74,43 @@ DEFAULT_OUT_ROOT = CORPUS_ROOT / "capture"
 # config
 
 
+def local_overlay(path: Path) -> dict:
+    """The untracked half of a capture definition: which product it was.
+
+    A capture definition answers two questions at once — *how* an instrument was
+    measured, and *which product* was measured. The first is the method and
+    belongs in the repository: the grid, the gate length, the GM program the
+    model answers with, and why each is what it is. The second names a
+    commercial sample library, and a public repository that carries it is a
+    public statement about where the reference data came from.
+
+    So the tracked file describes the instrument by category and the sibling
+    `<id>.local.json` supplies the identity: the plugin's component triple and
+    each timbre's preset. It is gitignored, it is only needed to *re-capture*,
+    and its absence is not an error — everything downstream reads the committed
+    `reference/<id>.json`, so scoring, fitting and diagnosing work without it.
+    """
+    local = path.with_suffix(".local.json")
+    if not local.exists():
+        return {}
+    return json.loads(local.read_text())
+
+
+def merge_overlay(cfg: dict, overlay: dict) -> dict:
+    """Fold the identity overlay into a capture definition, matching timbres by id."""
+    if not overlay:
+        return cfg
+    timbres = {t["id"]: dict(t) for t in overlay.get("timbres", [])}
+    merged = {**cfg, **{k: v for k, v in overlay.items() if k != "timbres"}}
+    merged["timbres"] = [
+        {**t, **timbres.get(t["id"], {})} for t in cfg.get("timbres", [])
+    ]
+    return merged
+
+
 def load_config(path: Path) -> dict:
     """Read a capture definition and fill in the defaults it left out."""
-    cfg = json.loads(path.read_text())
+    cfg = merge_overlay(json.loads(path.read_text()), local_overlay(path))
     cfg.setdefault("sample_rate", 48000)
     cfg.setdefault("settle_ms", 4000)
     cfg.setdefault("realtime", True)
@@ -85,6 +119,14 @@ def load_config(path: Path) -> dict:
     cfg.setdefault("preroll_ms", 100)
     cfg.setdefault("dry", True)
     cfg.setdefault("params", [])
+    # Which instrument this capture is a reference for. The capture is the only
+    # place that knows: the plugin, the phrase set, the GM program the model
+    # answers with and the dimensions worth scoring are one decision, and
+    # splitting them across a config, a command line and a hardcoded constant is
+    # how a harpsichord ends up measured against program 0.
+    cfg.setdefault("program", 0)
+    cfg.setdefault("takes", "")
+    cfg.setdefault("dimensions", [])
     cfg["_path"] = str(path)
     return cfg
 
@@ -366,7 +408,7 @@ def _job_id(timbre: dict, note: int, vel: int) -> str:
 
 
 # A render that loaded is never this far below the loudest velocity of its own
-# note. Measured on The Grand 3: the real ratio from velocity 24 to 120 is
+# note. Measured on the piano sampler: the real ratio from velocity 24 to 120 is
 # around -24 dB, and a render whose samples did not arrive sits at -42 dB.
 QUIET_RATIO = 1.0 / 40.0  # -32 dB
 
