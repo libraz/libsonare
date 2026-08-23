@@ -49,6 +49,22 @@ _ARRAY_TYPES = {"array:string", "array:number:12"}
 _PAYLOAD_TYPES = _OPTION_TYPES | _ARRAY_TYPES | {"null", "any"}
 _SCHEMA_METADATA_KEYS = {"optional", "required"}
 _SECTION_TYPE_RE = re.compile(r"[a-z][a-z0-9]*(?:-[a-z0-9]+)*\Z")
+
+# A chord symbol as the core spells it: a root, a quality suffix, and an
+# optional slash bass. The four triads are the only qualities a triads-only
+# analysis can produce, so anything else in the suffix means the full template
+# set was searched.
+_CHORD_NAME_RE = re.compile(r"\A(?P<root>[A-G][#b]?)(?P<suffix>[^/]*)(?:/[A-G][#b]?)?\Z")
+_TRIAD_SUFFIXES = frozenset({"", "m", "dim", "aug"})
+
+
+def _chord_name_is_extended(name: str) -> bool:
+    """True when a chord symbol names a quality outside the four triads."""
+    match = _CHORD_NAME_RE.match(name)
+    if match is None:
+        # "N.C." and anything else unparseable is not evidence either way.
+        return False
+    return match.group("suffix") not in _TRIAD_SUFFIXES
 _PAYLOAD_PROPERTY_NAME_RE = re.compile(r"^[a-z0-9]+(_[a-z0-9]+)*$")
 _ANALYZE_TOP_LEVEL_KEYS = {
     "bpm",
@@ -2475,18 +2491,26 @@ def _validate_case_payload(
                 )
     if path == "analyze":
         if case_id == "with_seventh":
+            # What the flag promises is that the template set is not restricted
+            # to the four triads, so that is what this asserts. It used to look
+            # for a name ending in "7", which was a proxy rather than the
+            # contract: the fixture is a single sine with one pitch class, so
+            # whichever non-triad wins is arbitrary, and pinning one spelling
+            # made the check fail whenever the vocabulary changed even though
+            # the flag went on working.
             chords = payload.get("chords")
-            has_seventh = isinstance(chords, list) and any(
+            has_extended = isinstance(chords, list) and any(
                 isinstance(chord, dict)
                 and isinstance(chord.get("name"), str)
-                and chord["name"].endswith("7")
+                and _chord_name_is_extended(chord["name"])
                 for chord in chords
             )
-            if not has_seventh:
+            if not has_extended:
                 report.append(
                     (
                         "fail",
-                        f"{label}.chords: --with-seventh fixture must contain a seventh chord",
+                        f"{label}.chords: --with-seventh must widen the vocabulary past the "
+                        f"four triads; got {chords!r}",
                     )
                 )
     if path == "mastering" and case_id == "target_within_ceiling":

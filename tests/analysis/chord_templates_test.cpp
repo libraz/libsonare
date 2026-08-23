@@ -3,9 +3,12 @@
 
 #include "analysis/chord_templates.h"
 
+#include <algorithm>
+#include <array>
 #include <catch2/catch_test_macros.hpp>
 #include <catch2/matchers/catch_matchers_floating_point.hpp>
 #include <cmath>
+#include <vector>
 
 using namespace sonare;
 using Catch::Matchers::WithinAbs;
@@ -133,8 +136,9 @@ TEST_CASE("transpose_template negative", "[chord_templates]") {
 TEST_CASE("generate_all_chord_templates", "[chord_templates]") {
   auto templates = generate_all_chord_templates();
 
-  // 12 roots × 16 qualities = 192 templates
-  REQUIRE(templates.size() == 192);
+  // 16 base qualities plus the extended vocabulary, at each of the 12 roots.
+  const size_t qualities_per_root = 16 + extended_chord_qualities().size();
+  REQUIRE(templates.size() == 12 * qualities_per_root);
 
   // Check that all roots are represented
   int root_counts[12] = {};
@@ -143,7 +147,7 @@ TEST_CASE("generate_all_chord_templates", "[chord_templates]") {
   }
 
   for (int i = 0; i < 12; ++i) {
-    REQUIRE(root_counts[i] == 16);
+    REQUIRE(root_counts[i] == static_cast<int>(qualities_per_root));
   }
 }
 
@@ -237,4 +241,104 @@ TEST_CASE("chord_quality_to_string", "[chord_templates]") {
   REQUIRE(chord_quality_to_string(ChordQuality::Add9) == "add9");
   REQUIRE(chord_quality_to_string(ChordQuality::HalfDim7) == "m7b5");
   REQUIRE(chord_quality_to_string(ChordQuality::Dominant9) == "9");
+}
+
+TEST_CASE("extended chord qualities spell their conventional voicings", "[chord_templates]") {
+  auto pitch_classes = [](ChordQuality quality) {
+    const ChordIntervals intervals = chord_quality_intervals(quality);
+    std::vector<int> degrees;
+    for (size_t i = 0; i < intervals.count; ++i) {
+      degrees.push_back(intervals.semitones[i] % 12);
+    }
+    std::sort(degrees.begin(), degrees.end());
+    return degrees;
+  };
+
+  REQUIRE(pitch_classes(ChordQuality::Major6) == std::vector<int>{0, 4, 7, 9});
+  REQUIRE(pitch_classes(ChordQuality::Minor6) == std::vector<int>{0, 3, 7, 9});
+  REQUIRE(pitch_classes(ChordQuality::MinorMajor7) == std::vector<int>{0, 3, 7, 11});
+  REQUIRE(pitch_classes(ChordQuality::Dominant7Sus4) == std::vector<int>{0, 5, 7, 10});
+  // The eleventh omits the third, which would clash a semitone below it; the
+  // thirteenth omits the fifth, which is what a five-voice 13th drops first.
+  REQUIRE(pitch_classes(ChordQuality::Dominant11) == std::vector<int>{0, 2, 5, 7, 10});
+  REQUIRE(pitch_classes(ChordQuality::Dominant13) == std::vector<int>{0, 2, 4, 9, 10});
+  REQUIRE(pitch_classes(ChordQuality::Dominant7b9) == std::vector<int>{0, 1, 4, 7, 10});
+  REQUIRE(pitch_classes(ChordQuality::Dominant7s9) == std::vector<int>{0, 3, 4, 7, 10});
+}
+
+TEST_CASE("three extended qualities are anagrams of a commoner one", "[chord_templates]") {
+  // The pairs the recogniser cannot separate on chroma alone. Pinning them here
+  // records which ambiguities are structural, so a later change that "fixes" one
+  // of them has to explain what new evidence it found.
+  struct Anagram {
+    PitchClass extended_root;
+    ChordQuality extended;
+    PitchClass common_root;
+    ChordQuality common;
+  };
+  const Anagram pairs[] = {
+      {PitchClass::C, ChordQuality::Major6, PitchClass::A, ChordQuality::Minor7},
+      {PitchClass::D, ChordQuality::Minor6, PitchClass::B, ChordQuality::HalfDim7},
+      {PitchClass::G, ChordQuality::Dominant7Sus4, PitchClass::C, ChordQuality::Sus2Add4},
+  };
+  for (const Anagram& pair : pairs) {
+    CAPTURE(chord_quality_to_string(pair.extended));
+    REQUIRE(
+        chord_pitch_class_mask(static_cast<int>(pair.extended_root),
+                               static_cast<int>(pair.extended)) ==
+        chord_pitch_class_mask(static_cast<int>(pair.common_root), static_cast<int>(pair.common)));
+  }
+}
+
+TEST_CASE("chord_quality_triad_base reads the third out of the interval table",
+          "[chord_templates]") {
+  REQUIRE(chord_quality_triad_base(ChordQuality::Major6) == ChordQuality::Major);
+  REQUIRE(chord_quality_triad_base(ChordQuality::Dominant13) == ChordQuality::Major);
+  REQUIRE(chord_quality_triad_base(ChordQuality::Minor6) == ChordQuality::Minor);
+  REQUIRE(chord_quality_triad_base(ChordQuality::MinorMajor7) == ChordQuality::Minor);
+  REQUIRE(chord_quality_triad_base(ChordQuality::Minor7) == ChordQuality::Minor);
+  REQUIRE(chord_quality_triad_base(ChordQuality::HalfDim7) == ChordQuality::Diminished);
+  REQUIRE(chord_quality_triad_base(ChordQuality::Dim7) == ChordQuality::Diminished);
+  REQUIRE(chord_quality_triad_base(ChordQuality::Augmented) == ChordQuality::Augmented);
+
+  // A sharp ninth is enharmonically a minor third but sits above the seventh;
+  // the chord it decorates is a dominant, so the major third wins.
+  REQUIRE(chord_quality_triad_base(ChordQuality::Dominant7s9) == ChordQuality::Major);
+
+  // Qualities with no third of their own report themselves rather than
+  // inventing a colour they do not have.
+  REQUIRE(chord_quality_triad_base(ChordQuality::Sus4) == ChordQuality::Sus4);
+  REQUIRE(chord_quality_triad_base(ChordQuality::Dominant7Sus4) == ChordQuality::Dominant7Sus4);
+  REQUIRE(chord_quality_triad_base(ChordQuality::Dominant11) == ChordQuality::Dominant11);
+  REQUIRE(chord_quality_triad_base(ChordQuality::Unknown) == ChordQuality::Unknown);
+}
+
+TEST_CASE("chord_quality_is_dominant_seventh requires the tritone", "[chord_templates]") {
+  REQUIRE(chord_quality_is_dominant_seventh(ChordQuality::Dominant7));
+  REQUIRE(chord_quality_is_dominant_seventh(ChordQuality::Dominant9));
+  REQUIRE(chord_quality_is_dominant_seventh(ChordQuality::Dominant13));
+  REQUIRE(chord_quality_is_dominant_seventh(ChordQuality::Dominant7b9));
+  REQUIRE(chord_quality_is_dominant_seventh(ChordQuality::Dominant7s9));
+
+  // A minor seventh without a major third has no tritone and does not pull.
+  REQUIRE_FALSE(chord_quality_is_dominant_seventh(ChordQuality::Minor7));
+  REQUIRE_FALSE(chord_quality_is_dominant_seventh(ChordQuality::HalfDim7));
+  // Both of these omit the third, so neither is a dominant despite the flat seventh.
+  REQUIRE_FALSE(chord_quality_is_dominant_seventh(ChordQuality::Dominant7Sus4));
+  REQUIRE_FALSE(chord_quality_is_dominant_seventh(ChordQuality::Dominant11));
+  REQUIRE_FALSE(chord_quality_is_dominant_seventh(ChordQuality::Major7));
+  REQUIRE_FALSE(chord_quality_is_dominant_seventh(ChordQuality::Major));
+}
+
+TEST_CASE("the fifth bonus follows the chord's own fifth", "[chord_templates]") {
+  // A half-diminished chord's fifth is diminished. Looking for a perfect fifth
+  // meant a correctly spelled m7b5 could never collect the bonus that confirms
+  // it, which is how the min6 spelling the same four notes came to beat it.
+  const auto b_half_dim = create_half_dim7_template(PitchClass::B);
+  std::array<float, 12> b_half_dim_chroma = {0.0f, 0.0f, 1.0f, 0.0f, 0.0f, 1.0f,
+                                             0.0f, 0.0f, 0.0f, 1.0f, 0.0f, 1.0f};
+  std::array<float, 12> without_fifth = b_half_dim_chroma;
+  without_fifth[5] = 0.0f;  // remove F, the diminished fifth above B
+
+  REQUIRE(b_half_dim.correlate(b_half_dim_chroma) > b_half_dim.correlate(without_fifth));
 }

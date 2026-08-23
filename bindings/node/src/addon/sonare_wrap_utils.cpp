@@ -267,6 +267,22 @@ const char* ChordQualityName(SonareChordQuality quality) {
       return "dominant9";
     case SONARE_CHORD_SUS2_ADD4:
       return "sus2Add4";
+    case SONARE_CHORD_MAJOR6:
+      return "major6";
+    case SONARE_CHORD_MINOR6:
+      return "minor6";
+    case SONARE_CHORD_MINOR_MAJOR7:
+      return "minorMajor7";
+    case SONARE_CHORD_DOMINANT7_SUS4:
+      return "dominant7Sus4";
+    case SONARE_CHORD_DOMINANT11:
+      return "dominant11";
+    case SONARE_CHORD_DOMINANT13:
+      return "dominant13";
+    case SONARE_CHORD_DOMINANT7_FLAT9:
+      return "dominant7Flat9";
+    case SONARE_CHORD_DOMINANT7_SHARP9:
+      return "dominant7Sharp9";
   }
   return "unknown";
 }

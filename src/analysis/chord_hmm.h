@@ -21,7 +21,19 @@ struct ChordHmmConfig {
   int beam_width = 24;                  ///< Maximum candidates retained per frame
   float emission_weight = 6.0f;         ///< Correlation-to-log likelihood scale
   float self_transition_logp = -0.05f;  ///< Bias for remaining on same chord
+  /// @brief Bias for a cadence whose dominant carries the tritone (V7 -> I, V7 -> i).
+  /// @details The strongest harmonic cue there is, and the one a root-motion-only
+  /// test cannot see: it scores a natural-minor v -> i identically to the
+  /// harmonic-minor V7 -> i that actually resolves.
+  float dominant_cadential_transition_logp = -0.9f;
+  /// @brief Bias for a cadence spelled with the expected chord qualities.
   float cadential_transition_logp = -1.2f;
+  /// @brief Bias for cadential root motion carrying an unexpected quality.
+  /// @details A minor v resolving to i in a minor key, or a minor chord standing
+  /// where the dominant should be in a major key: the motion is cadential but
+  /// the chord does not pull, so it sits between a spelled cadence and an
+  /// ordinary related transition.
+  float weak_cadential_transition_logp = -1.7f;
   float related_transition_logp = -2.1f;
   float remote_transition_logp = -4.6f;
   bool use_key_context = false;

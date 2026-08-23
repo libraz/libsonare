@@ -130,6 +130,15 @@ enum class Mode {
 };
 
 /// @brief Chord quality types.
+/// @note Enumerator values are part of every binding's ABI (the C enum, the
+///       Node addon's static_asserts, the WASM embind enum and the Python
+///       mapping all key off the integer). New qualities are appended; an
+///       existing value never moves.
+///
+///       The qualities from @c Major6 onward are the extended-vocabulary
+///       additions. They are only ever produced when the chord analyzer runs
+///       with its full template set (@c ChordConfig::use_triads_only false);
+///       a triads-only analysis still emits the four triad qualities.
 enum class ChordQuality {
   Major,
   Minor,
@@ -148,14 +157,31 @@ enum class ChordQuality {
   Major9,
   Dominant9,
   Sus2Add4,
+  Major6,         ///< maj6 — shares its pitch-class set with the relative m7
+  Minor6,         ///< min6 — shares its pitch-class set with the relative m7b5
+  MinorMajor7,    ///< mM7
+  Dominant7Sus4,  ///< 7sus4
+  Dominant11,     ///< 11 — third omitted, the conventional voicing
+  Dominant13,     ///< 13 — fifth omitted, the conventional voicing
+  Dominant7b9,    ///< 7b9
+  Dominant7s9,    ///< 7#9
 };
+
+/// @brief Number of enumerators in @ref ChordQuality.
+/// @details Every fixed-size table indexed by a chord quality derives its
+///          extent from this, so appending a quality widens them all rather
+///          than silently truncating the new value.
+inline constexpr int kChordQualityCount = 25;
 
 /// @brief Song section types.
 /// @note @c PreChorus is never produced by @ref SectionAnalyzer: it has no
 ///       detection branch, so filtering sections on it always yields an empty
-///       result. Every other value is reachable. @c Unknown carries a specific
-///       meaning — the segmenter found no structure, or a segment matched none
-///       of the positive branches — and is reported with @c confidence 0.
+///       result. Every other value is reachable. @c Unknown means the segment
+///       was not named: the segmenter found no structure at all, the segment
+///       matched none of the positive branches, or the evidence for a musical
+///       function was too weak to assert one. The first case is reported with
+///       @c confidence 0; the last keeps the sub-threshold score, so a caller
+///       can see how close the segment came to a label.
 enum class SectionType {
   Intro,
   Verse,

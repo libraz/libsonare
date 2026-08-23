@@ -107,6 +107,14 @@ def detect_chords(
         14: "major9",
         15: "dominant9",
         16: "sus2Add4",
+        17: "major6",
+        18: "minor6",
+        19: "minorMajor7",
+        20: "dominant7Sus4",
+        21: "dominant11",
+        22: "dominant13",
+        23: "dominant7Flat9",
+        24: "dominant7Sharp9",
     }
     try:
         return ChordAnalysisResult(

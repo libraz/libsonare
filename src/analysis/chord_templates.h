@@ -31,6 +31,24 @@ struct ChordIntervals {
 ///          every non-minor quality is a major triad.
 ChordIntervals chord_quality_intervals(ChordQuality quality);
 
+/// @brief Returns the triad @p quality is built on, or @p quality itself when it has none.
+/// @param quality Chord quality
+/// @return @c Major, @c Minor, @c Diminished or @c Augmented for a quality that
+///         spells a third; @p quality unchanged for every suspended spelling,
+///         the eleventh (whose third is omitted) and @c Unknown.
+/// @details Derived from @ref chord_quality_intervals rather than from a list,
+///          so a quality added to the interval table is classified without a
+///          second table having to be kept in step. Consumers that reason about
+///          major-vs-minor function (diatonic scoring, cadence detection, the
+///          template matcher's third emphasis) share this one answer.
+ChordQuality chord_quality_triad_base(ChordQuality quality);
+
+/// @brief True when @p quality spells both a major third and a minor seventh.
+/// @details Those two tones are the tritone that gives a dominant its pull, so
+///          this is what separates a real V7 from a 7sus4 or an eleventh, both
+///          of which omit the third. Also derived from the interval table.
+bool chord_quality_is_dominant_seventh(ChordQuality quality);
+
 /// @brief Returns the pitch classes of a chord as a 12-bit mask.
 /// @param root Root pitch class (0-11); anything else yields 0
 /// @param quality ChordQuality enumerator value; anything else yields 0
@@ -107,6 +125,21 @@ ChordTemplate create_dominant9_template(PitchClass root);
 /// @brief Creates a sus2 add4 chord template for a given root.
 ChordTemplate create_sus2_add4_template(PitchClass root);
 
+/// @brief Creates the template for any quality at a given root.
+/// @details The generic form of the per-quality factories above; the extended
+///          vocabulary is built through this rather than through eight more
+///          one-line functions.
+ChordTemplate create_chord_template(PitchClass root, ChordQuality quality);
+
+/// @brief The qualities @ref generate_all_chord_templates adds beyond the base set.
+/// @details Sixth chords, the minor-major seventh, 7sus4 and the dominant
+///          extensions (11th, 13th, altered ninths). Several of them are
+///          pitch-class-identical to a base quality rooted elsewhere — a maj6
+///          and the m7 a minor third below spell the same four notes — so
+///          telling them apart needs the bass evidence the analyzer folds into
+///          its root scoring, not the chroma alone.
+const std::vector<ChordQuality>& extended_chord_qualities();
+
 /// @brief Transposes a chord template by a given number of semitones.
 /// @param tmpl Original template
 /// @param semitones Semitones to transpose (positive = up)
@@ -114,7 +147,8 @@ ChordTemplate create_sus2_add4_template(PitchClass root);
 ChordTemplate transpose_template(const ChordTemplate& tmpl, int semitones);
 
 /// @brief Generates all chord templates (triads, 7ths, suspended, and extensions).
-/// @return Vector of all chord templates (12 roots × 16 qualities = 192 templates)
+/// @return Vector of all chord templates: 12 roots × (16 base qualities +
+///         @ref extended_chord_qualities)
 std::vector<ChordTemplate> generate_all_chord_templates();
 
 /// @brief Generates only triad templates (major, minor, diminished, augmented).

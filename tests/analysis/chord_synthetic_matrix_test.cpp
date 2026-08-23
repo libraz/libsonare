@@ -1,6 +1,7 @@
 /// @file chord_synthetic_matrix_test.cpp
 /// @brief Synthetic matrix tests for chord detection.
 
+#include <array>
 #include <catch2/catch_test_macros.hpp>
 #include <string>
 #include <vector>
@@ -251,7 +252,7 @@ TEST_CASE("ChordAnalyzer synthetic chroma matrix detects every generated templat
   config.use_beat_sync = false;
 
   const auto chord_templates = generate_all_chord_templates();
-  REQUIRE(chord_templates.size() == 192);
+  REQUIRE(chord_templates.size() == 12 * (16 + extended_chord_qualities().size()));
 
   for (const auto& chord_template : chord_templates) {
     CAPTURE(chord_template.to_string());
@@ -260,8 +261,250 @@ TEST_CASE("ChordAnalyzer synthetic chroma matrix detects every generated templat
     REQUIRE(analyzer.count() == 1);
 
     const Chord detected = analyzer.chords().front();
-    REQUIRE(detected.root == chord_template.root);
-    REQUIRE(detected.quality == chord_template.quality);
+    // Three of the extended qualities spell the same four pitch classes as a
+    // commoner quality rooted elsewhere -- a maj6 and the m7 a minor third
+    // below are the same notes. A chromagram cannot distinguish them, and this
+    // case feeds nothing else, so what has to hold is that the detected chord
+    // spells the generated one. Which of the two names comes back is settled by
+    // the bass evidence, which the case below supplies.
+    const bool anagram = chord_template.quality == ChordQuality::Major6 ||
+                         chord_template.quality == ChordQuality::Minor6 ||
+                         chord_template.quality == ChordQuality::Dominant7Sus4;
+    if (anagram) {
+      REQUIRE(chord_pitch_class_mask(static_cast<int>(detected.root),
+                                     static_cast<int>(detected.quality)) ==
+              chord_pitch_class_mask(static_cast<int>(chord_template.root),
+                                     static_cast<int>(chord_template.quality)));
+    } else {
+      REQUIRE(detected.root == chord_template.root);
+      REQUIRE(detected.quality == chord_template.quality);
+    }
     REQUIRE(detected.confidence > 0.9f);
   }
+}
+
+TEST_CASE("ChordAnalyzer bass evidence separates a sixth chord from its seventh anagram",
+          "[chord_analyzer][synthetic_matrix]") {
+  // C6 and Am7 are the same four pitch classes. With no bass the analyzer must
+  // fall back on the commoner reading; told that the low register sounds C, it
+  // has to name the chord C6, and told that it sounds A, Am7. Nothing in the
+  // harmonic chroma differs between the two runs -- only the bass does.
+  ChordConfig config;
+  config.min_duration = 0.0f;
+  config.smoothing_window = 0.0f;
+  config.threshold = 0.0f;
+  config.use_triads_only = false;
+  config.use_beat_sync = false;
+
+  const ChordTemplate c6 = create_chord_template(PitchClass::C, ChordQuality::Major6);
+  const Chroma harmonic = repeated_chroma(c6);
+
+  auto detect_with_bass = [&](PitchClass bass_pitch) {
+    std::vector<float> features(12 * harmonic.n_frames(), 0.02f);
+    for (int frame = 0; frame < harmonic.n_frames(); ++frame) {
+      features[static_cast<int>(bass_pitch) * harmonic.n_frames() + frame] = 1.0f;
+    }
+    Chroma bass(std::move(features), 12, harmonic.n_frames(), harmonic.sample_rate(),
+                harmonic.hop_length());
+    ChordAnalyzer analyzer(harmonic, /*beat_times=*/{}, bass, config);
+    REQUIRE(analyzer.count() == 1);
+    return analyzer.chords().front();
+  };
+
+  const Chord over_c = detect_with_bass(PitchClass::C);
+  CAPTURE(over_c.to_string());
+  REQUIRE(over_c.root == PitchClass::C);
+  REQUIRE(over_c.quality == ChordQuality::Major6);
+
+  const Chord over_a = detect_with_bass(PitchClass::A);
+  CAPTURE(over_a.to_string());
+  REQUIRE(over_a.root == PitchClass::A);
+  REQUIRE(over_a.quality == ChordQuality::Minor7);
+}
+
+namespace {
+
+/// @brief Index of one quality at one root in a template set.
+int template_index(const std::vector<ChordTemplate>& templates, PitchClass root,
+                   ChordQuality quality) {
+  for (size_t i = 0; i < templates.size(); ++i) {
+    if (templates[i].root == root && templates[i].quality == quality) {
+      return static_cast<int>(i);
+    }
+  }
+  return -1;
+}
+
+}  // namespace
+
+TEST_CASE("Chord HMM prefers the dominant that resolves over the one that does not",
+          "[chord_analyzer][hmm]") {
+  // Root motion alone cannot tell a cadence from a modal shuffle: V7 -> i and
+  // v -> i are the same two scale degrees. Each case below offers the decoder
+  // two chords on the fifth degree with *identical* emission scores, so the
+  // only thing that can separate them is whether the transition model reads the
+  // quality standing on that degree.
+  const auto templates = generate_all_chord_templates();
+
+  SECTION("minor key: the harmonic-minor V7 beats the natural-minor v") {
+    const int e_dom7 = template_index(templates, PitchClass::E, ChordQuality::Dominant7);
+    const int e_minor = template_index(templates, PitchClass::E, ChordQuality::Minor);
+    const int a_minor = template_index(templates, PitchClass::A, ChordQuality::Minor);
+    REQUIRE(e_dom7 >= 0);
+    REQUIRE(e_minor >= 0);
+    REQUIRE(a_minor >= 0);
+
+    std::vector<ChordHmmObservation> observations(2);
+    observations[0].candidates = {{e_minor, 0.9f}, {e_dom7, 0.9f}};
+    observations[1].candidates = {{a_minor, 0.95f}};
+
+    ChordHmmConfig config;
+    config.beam_width = 4;
+    config.use_key_context = true;
+    config.key_root = PitchClass::A;
+    config.key_mode = Mode::Minor;
+
+    const auto sequence = viterbi_chord_sequence(observations, templates, config);
+    REQUIRE(sequence.size() == 2);
+    REQUIRE(sequence[0] == e_dom7);
+    REQUIRE(sequence[1] == a_minor);
+  }
+
+  SECTION("major key: a minor chord on the fifth degree is not the dominant") {
+    const int g_major = template_index(templates, PitchClass::G, ChordQuality::Major);
+    const int g_minor = template_index(templates, PitchClass::G, ChordQuality::Minor);
+    const int c_major = template_index(templates, PitchClass::C, ChordQuality::Major);
+    REQUIRE(g_major >= 0);
+    REQUIRE(g_minor >= 0);
+    REQUIRE(c_major >= 0);
+
+    std::vector<ChordHmmObservation> observations(2);
+    observations[0].candidates = {{g_minor, 0.9f}, {g_major, 0.9f}};
+    observations[1].candidates = {{c_major, 0.95f}};
+
+    ChordHmmConfig config;
+    config.beam_width = 4;
+    config.use_key_context = true;
+    config.key_root = PitchClass::C;
+    config.key_mode = Mode::Major;
+
+    const auto sequence = viterbi_chord_sequence(observations, templates, config);
+    REQUIRE(sequence.size() == 2);
+    REQUIRE(sequence[0] == g_major);
+  }
+}
+
+TEST_CASE("Chord HMM does not penalise a cadence for its quality", "[chord_analyzer][hmm]") {
+  // Grading a cadence by quality may withdraw the bonus a spelled cadence earns;
+  // it must not turn the motion into a penalty. A minor v -> i is still a
+  // transition progressions make, so it has to stay at least as attractive as an
+  // ordinary related move -- here, the same v chord going somewhere unrelated.
+  const auto templates = generate_all_chord_templates();
+  const int e_minor = template_index(templates, PitchClass::E, ChordQuality::Minor);
+  const int a_minor = template_index(templates, PitchClass::A, ChordQuality::Minor);
+  const int b_flat_major = template_index(templates, PitchClass::As, ChordQuality::Major);
+  REQUIRE(e_minor >= 0);
+  REQUIRE(a_minor >= 0);
+  REQUIRE(b_flat_major >= 0);
+
+  std::vector<ChordHmmObservation> observations(2);
+  observations[0].candidates = {{e_minor, 0.9f}};
+  observations[1].candidates = {{b_flat_major, 0.9f}, {a_minor, 0.9f}};
+
+  ChordHmmConfig config;
+  config.beam_width = 4;
+  config.use_key_context = true;
+  config.key_root = PitchClass::A;
+  config.key_mode = Mode::Minor;
+
+  const auto sequence = viterbi_chord_sequence(observations, templates, config);
+  REQUIRE(sequence.size() == 2);
+  REQUIRE(sequence[1] == a_minor);
+}
+
+TEST_CASE("Bass evidence separates a chord from its relative",
+          "[chord_analyzer][synthetic_matrix]") {
+  // A major and the minor a third below share two of three tones, so a folded
+  // chromagram carrying both -- which is what a real mix of either sounds like
+  // once the sixth leaks in -- has almost nothing left to say which note is the
+  // root. The low register does. Both runs below see the identical harmonic
+  // chroma; only the bass differs.
+  ChordConfig config;
+  config.min_duration = 0.0f;
+  config.smoothing_window = 0.0f;
+  config.threshold = 0.0f;
+  config.use_triads_only = true;
+  config.use_beat_sync = false;
+
+  constexpr int kFrames = 8;
+  constexpr int kSampleRate = 8000;
+  constexpr int kHopLength = 1000;
+
+  // A(9), C#(1), E(4) with a leaked F#(6): reads as A major or F# minor.
+  std::array<float, 12> mixture = {};
+  mixture[9] = 1.0f;
+  mixture[1] = 1.0f;
+  mixture[4] = 0.9f;
+  mixture[6] = 0.9f;
+
+  std::vector<float> harmonic_features(12 * kFrames, 0.0f);
+  for (int chroma = 0; chroma < 12; ++chroma) {
+    for (int frame = 0; frame < kFrames; ++frame) {
+      harmonic_features[chroma * kFrames + frame] = mixture[static_cast<size_t>(chroma)];
+    }
+  }
+  const Chroma harmonic(std::move(harmonic_features), 12, kFrames, kSampleRate, kHopLength);
+
+  auto detect_with_bass = [&](PitchClass bass_pitch) {
+    std::vector<float> features(12 * kFrames, 0.02f);
+    for (int frame = 0; frame < kFrames; ++frame) {
+      features[static_cast<int>(bass_pitch) * kFrames + frame] = 1.0f;
+    }
+    Chroma bass(std::move(features), 12, kFrames, kSampleRate, kHopLength);
+    ChordAnalyzer analyzer(harmonic, /*beat_times=*/{}, bass, config);
+    REQUIRE(analyzer.count() == 1);
+    return analyzer.chords().front();
+  };
+
+  const Chord over_a = detect_with_bass(PitchClass::A);
+  CAPTURE(over_a.to_string());
+  REQUIRE(over_a.root == PitchClass::A);
+  REQUIRE(over_a.quality == ChordQuality::Major);
+
+  const Chord over_f_sharp = detect_with_bass(PitchClass::Fs);
+  CAPTURE(over_f_sharp.to_string());
+  REQUIRE(over_f_sharp.root == PitchClass::Fs);
+  REQUIRE(over_f_sharp.quality == ChordQuality::Minor);
+}
+
+TEST_CASE("The bass cue is inert when the low register only mirrors the chroma",
+          "[chord_analyzer][synthetic_matrix]") {
+  // On material with no bass part the low-register chromagram is a scaled copy
+  // of the harmonic one. That is a measurement of nothing, and it must decide
+  // nothing: a cue read from it would nominate whichever pitch class the
+  // leakage happened to favour and drag chord boundaries with it.
+  ChordConfig config;
+  config.min_duration = 0.0f;
+  config.smoothing_window = 0.0f;
+  config.threshold = 0.0f;
+  config.use_triads_only = true;
+  config.use_beat_sync = false;
+
+  const ChordTemplate a_major = create_chord_template(PitchClass::A, ChordQuality::Major);
+  const Chroma harmonic = repeated_chroma(a_major);
+
+  std::vector<float> mirrored(12 * harmonic.n_frames(), 0.0f);
+  for (int chroma = 0; chroma < 12; ++chroma) {
+    for (int frame = 0; frame < harmonic.n_frames(); ++frame) {
+      mirrored[chroma * harmonic.n_frames() + frame] = 0.05f * harmonic.at(chroma, frame);
+    }
+  }
+  Chroma leakage(std::move(mirrored), 12, harmonic.n_frames(), harmonic.sample_rate(),
+                 harmonic.hop_length());
+
+  const ChordAnalyzer with_leakage(harmonic, /*beat_times=*/{}, leakage, config);
+  const ChordAnalyzer without_bass(harmonic, /*beat_times=*/{}, Chroma(), config);
+  REQUIRE(with_leakage.count() == without_bass.count());
+  REQUIRE(with_leakage.chords().front().root == without_bass.chords().front().root);
+  REQUIRE(with_leakage.chords().front().quality == without_bass.chords().front().quality);
 }

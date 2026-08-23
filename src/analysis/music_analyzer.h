@@ -339,6 +339,13 @@ class MusicAnalyzer {
   std::unique_ptr<Spectrogram> spectrogram_;
   std::unique_ptr<Chroma> chroma_;
   std::unique_ptr<Chroma> harmonic_chroma_;  ///< Chroma from harmonic-only audio (HPSS)
+  /// @brief Low-register chromagram, in harmonic_chroma_'s frame space.
+  /// @details A by-product of @ref harmonic_chroma: with
+  ///          MusicAnalyzerConfig::use_bass_weighted set, the bass-band CQT is
+  ///          computed there anyway and was previously blended in and thrown
+  ///          away. Keeping it lets chord recognition weigh which pitch class
+  ///          the bass names at no extra cost. Empty when the option is off.
+  std::unique_ptr<Chroma> bass_chroma_;
   std::unique_ptr<MelSpectrogram> mel_spectrogram_;
   std::vector<float> onset_strength_;
   bool onset_strength_computed_ = false;

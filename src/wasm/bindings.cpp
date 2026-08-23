@@ -372,7 +372,15 @@ EMSCRIPTEN_BINDINGS(sonare) {
       .value("HalfDim7", ChordQuality::HalfDim7)
       .value("Major9", ChordQuality::Major9)
       .value("Dominant9", ChordQuality::Dominant9)
-      .value("Sus2Add4", ChordQuality::Sus2Add4);
+      .value("Sus2Add4", ChordQuality::Sus2Add4)
+      .value("Major6", ChordQuality::Major6)
+      .value("Minor6", ChordQuality::Minor6)
+      .value("MinorMajor7", ChordQuality::MinorMajor7)
+      .value("Dominant7Sus4", ChordQuality::Dominant7Sus4)
+      .value("Dominant11", ChordQuality::Dominant11)
+      .value("Dominant13", ChordQuality::Dominant13)
+      .value("Dominant7Flat9", ChordQuality::Dominant7b9)
+      .value("Dominant7Sharp9", ChordQuality::Dominant7s9);
 
   enum_<SectionType>("SectionType")
       .value("Intro", SectionType::Intro)

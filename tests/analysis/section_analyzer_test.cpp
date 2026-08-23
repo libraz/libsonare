@@ -8,6 +8,7 @@
 #include <catch2/catch_test_macros.hpp>
 #include <catch2/matchers/catch_matchers_floating_point.hpp>
 #include <cmath>
+#include <string>
 #include <utility>
 #include <vector>
 
@@ -412,4 +413,40 @@ TEST_CASE("an unclassified edge segment is not labelled as a verse", "[section_a
     REQUIRE(last.type == SectionType::Unknown);
     REQUIRE(last.confidence == 0.0f);
   }
+}
+
+TEST_CASE("SectionAnalyzer does not invent structure in uniform material", "[section_analyzer]") {
+  // Twenty seconds of one unchanging chord, cut at four-second boundaries the
+  // caller supplies. Nothing in the audio changes at those cuts, so nothing in
+  // the audio is a section: the segments are indistinguishable from each other,
+  // which also makes every one of them a "repetition" of every other. Before
+  // the indistinct-merge and the uniform-repetition guard, that pair of facts
+  // was enough to produce a full verse/chorus alternation out of material that
+  // never moved.
+  constexpr int sr = 22050;
+  constexpr float kDuration = 20.0f;
+  const int n_samples = static_cast<int>(static_cast<float>(sr) * kDuration);
+  std::vector<float> samples(static_cast<size_t>(n_samples), 0.0f);
+  for (int i = 0; i < n_samples; ++i) {
+    const float t = static_cast<float>(i) / static_cast<float>(sr);
+    for (float frequency : {261.63f, 329.63f, 392.00f}) {
+      samples[static_cast<size_t>(i)] +=
+          0.28f * std::sin(sonare::constants::kTwoPi * frequency * t);
+    }
+  }
+  const Audio audio = Audio::from_vector(std::move(samples), sr);
+
+  const std::vector<float> boundaries = {4.0f, 8.0f, 12.0f, 16.0f};
+  SectionAnalyzer analyzer(audio, boundaries);
+
+  // The supplied boundaries separate nothing, so they are not kept.
+  REQUIRE(analyzer.count() == 1);
+  REQUIRE(analyzer.sections().front().start == 0.0f);
+  REQUIRE_THAT(analyzer.sections().front().end, WithinAbs(kDuration, 0.05f));
+
+  // And the one span left is not named. Uniform material supports no reading of
+  // musical function, so asserting one would be a claim the audio cannot back.
+  const std::string form = analyzer.form();
+  REQUIRE(form.find('A') == std::string::npos);
+  REQUIRE(form.find('B') == std::string::npos);
 }

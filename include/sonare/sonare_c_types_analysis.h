@@ -32,8 +32,21 @@ typedef enum SONARE_ENUM_BASE {
   SONARE_CHORD_HALF_DIM7 = 13,
   SONARE_CHORD_MAJOR9 = 14,
   SONARE_CHORD_DOMINANT9 = 15,
-  SONARE_CHORD_SUS2_ADD4 = 16
+  SONARE_CHORD_SUS2_ADD4 = 16,
+  /* Extended vocabulary. Only produced when the analyzer runs with its full
+     template set (use_triads_only = 0). Values are appended, never reordered. */
+  SONARE_CHORD_MAJOR6 = 17,
+  SONARE_CHORD_MINOR6 = 18,
+  SONARE_CHORD_MINOR_MAJOR7 = 19,
+  SONARE_CHORD_DOMINANT7_SUS4 = 20,
+  SONARE_CHORD_DOMINANT11 = 21,
+  SONARE_CHORD_DOMINANT13 = 22,
+  SONARE_CHORD_DOMINANT7_FLAT9 = 23,
+  SONARE_CHORD_DOMINANT7_SHARP9 = 24
 } SonareChordQuality;
+/* Number of SonareChordQuality enumerators. A table indexed by chord quality
+   sizes itself from this rather than from a literal. */
+#define SONARE_CHORD_QUALITY_COUNT 25
 
 // STFT result
 typedef struct {
@@ -229,9 +242,11 @@ typedef struct {
  * SONARE_SECTION_PRE_CHORUS is never produced by sonare_analyze_sections: it
  * has no detection branch, so filtering sections on it always yields an empty
  * result. Every other value is reachable. SONARE_SECTION_UNKNOWN means the
- * analyzer did not identify the segment -- either no boundary was detected at
- * all, or the segment matched none of the positive branches -- and is reported
- * with confidence 0. */
+ * analyzer did not name the segment: no boundary was detected at all, the
+ * segment matched none of the positive branches, or the evidence for a musical
+ * function was too weak to assert one. The first case is reported with
+ * confidence 0; the last keeps the sub-threshold score, so a caller can see how
+ * close the segment came to a label. */
 typedef enum SONARE_ENUM_BASE {
   SONARE_SECTION_INTRO = 0,
   SONARE_SECTION_VERSE = 1,

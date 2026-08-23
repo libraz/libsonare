@@ -25,26 +25,96 @@ bool is_diatonic_root(PitchClass root, PitchClass key_root, Mode mode) {
   return false;
 }
 
-bool cadential_transition(const ChordTemplate& from, const ChordTemplate& to,
-                          const ChordHmmConfig& config) {
+/// @brief How strongly a transition behaves as a cadence.
+/// @details Root motion alone cannot tell a resolving cadence from a modal
+/// shuffle: V7 -> I and v -> i are the same two scale degrees. Grading the
+/// motion by the qualities that actually carry it keeps the strongest harmonic
+/// cue in the model instead of discarding it after the template already
+/// measured it.
+enum class CadenceStrength {
+  None,
+  /// Cadential root motion, but the chord standing on it is not the one the
+  /// cadence is built from (a minor v where the dominant belongs, say).
+  Weak,
+  /// The cadence spelled as expected.
+  Full,
+  /// A dominant seventh resolving: the tritone is present and it pulls.
+  Dominant,
+};
+
+CadenceStrength grade(bool quality_matches) {
+  return quality_matches ? CadenceStrength::Full : CadenceStrength::Weak;
+}
+
+CadenceStrength cadence_strength(const ChordTemplate& from, const ChordTemplate& to,
+                                 const ChordHmmConfig& config) {
   if (!config.use_key_context) {
-    return false;
+    return CadenceStrength::None;
   }
 
   const int from_degree = interval(config.key_root, from.root);
   const int to_degree = interval(config.key_root, to.root);
+  const ChordQuality from_base = chord_quality_triad_base(from.quality);
+  const ChordQuality to_base = chord_quality_triad_base(to.quality);
+  const bool from_is_dominant7 = chord_quality_is_dominant_seventh(from.quality);
 
   if (config.key_mode == Mode::Minor) {
-    return (from_degree == 7 && to_degree == 0) ||  // v/V -> i
-           (from_degree == 5 && to_degree == 0) ||  // iv -> i
-           (from_degree == 2 && to_degree == 7) ||  // ii -> v/V
-           (from_degree == 10 && to_degree == 0);   // VII -> i
+    if (from_degree == 7 && to_degree == 0) {  // V/v -> i
+      if (to_base != ChordQuality::Minor) {
+        return CadenceStrength::Weak;
+      }
+      // The raised leading tone is what makes the fifth degree a dominant in a
+      // minor key; the natural-minor v has no leading tone and no pull.
+      if (from_is_dominant7) {
+        return CadenceStrength::Dominant;
+      }
+      return grade(from_base == ChordQuality::Major);
+    }
+    if (from_degree == 5 && to_degree == 0) {  // iv -> i
+      return grade(from_base == ChordQuality::Minor && to_base == ChordQuality::Minor);
+    }
+    if (from_degree == 2 && to_degree == 7) {  // ii(dim) -> v/V
+      return grade(from_base == ChordQuality::Diminished || from_base == ChordQuality::Minor);
+    }
+    if (from_degree == 10 && to_degree == 0) {  // VII -> i
+      return grade(from_base == ChordQuality::Major && to_base == ChordQuality::Minor);
+    }
+    return CadenceStrength::None;
   }
 
-  return (from_degree == 7 && to_degree == 0) ||  // V -> I
-         (from_degree == 5 && to_degree == 0) ||  // IV -> I
-         (from_degree == 2 && to_degree == 7) ||  // ii -> V
-         (from_degree == 9 && to_degree == 2);    // vi -> ii
+  if (from_degree == 7 && to_degree == 0) {  // V -> I
+    if (to_base != ChordQuality::Major) {
+      return CadenceStrength::Weak;
+    }
+    if (from_is_dominant7) {
+      return CadenceStrength::Dominant;
+    }
+    return grade(from_base == ChordQuality::Major);
+  }
+  if (from_degree == 5 && to_degree == 0) {  // IV -> I
+    return grade(from_base == ChordQuality::Major && to_base == ChordQuality::Major);
+  }
+  if (from_degree == 2 && to_degree == 7) {  // ii -> V
+    return grade(from_base == ChordQuality::Minor);
+  }
+  if (from_degree == 9 && to_degree == 2) {  // vi -> ii
+    return grade(from_base == ChordQuality::Minor && to_base == ChordQuality::Minor);
+  }
+  return CadenceStrength::None;
+}
+
+float cadence_logp(CadenceStrength strength, const ChordHmmConfig& config) {
+  switch (strength) {
+    case CadenceStrength::Dominant:
+      return config.dominant_cadential_transition_logp;
+    case CadenceStrength::Full:
+      return config.cadential_transition_logp;
+    case CadenceStrength::Weak:
+      return config.weak_cadential_transition_logp;
+    case CadenceStrength::None:
+      break;
+  }
+  return config.remote_transition_logp;
 }
 
 bool related_transition(const ChordTemplate& from, const ChordTemplate& to,
@@ -79,8 +149,16 @@ float transition_score(int from_idx, int to_idx, const std::vector<ChordTemplate
       to_idx >= static_cast<int>(templates.size())) {
     return config.remote_transition_logp;
   }
-  if (cadential_transition(templates[from_idx], templates[to_idx], config)) {
-    return config.cadential_transition_logp;
+  const CadenceStrength strength = cadence_strength(templates[from_idx], templates[to_idx], config);
+  if (strength != CadenceStrength::None) {
+    // A weak cadence must never score below an ordinary related transition:
+    // the motion is still one a progression makes, so grading its quality may
+    // withdraw the cadence bonus but must not turn it into a penalty.
+    const float logp = cadence_logp(strength, config);
+    if (strength == CadenceStrength::Weak) {
+      return std::max(logp, config.related_transition_logp);
+    }
+    return logp;
   }
   return related_transition(templates[from_idx], templates[to_idx], config)
              ? config.related_transition_logp

@@ -154,6 +154,57 @@ TEST_CASE("estimate_key_from_chords does not bias zero-score progressions to C m
   REQUIRE(key.confidence == 0.0f);
 }
 
+TEST_CASE("Modal profiles identify a mode from a scale histogram they were not built from",
+          "[key_analyzer][key_profiles][synthetic_matrix]") {
+  // The matrix case below feeds each profile back to itself, which proves the
+  // profiles are distinguishable but says nothing about whether they describe
+  // the mode they claim to. This one builds the chroma from the *scale* instead:
+  // flat weight on every scale degree, a tonic and fifth emphasis that says
+  // which note the scale is heard from, and nothing outside the scale. The
+  // weights are chosen here and share no value with the profile construction,
+  // so a profile that merely encodes its own shape cannot pass.
+  //
+  // The emphasis is what the case turns on. Every mode shares its pitch-class
+  // set with six others, so a histogram with no tonic emphasis identifies the
+  // set and not the mode; the profiles have to read the emphasis.
+  struct ModeScale {
+    Mode mode;
+    std::array<int, 7> degrees;
+  };
+  const ModeScale scales[] = {
+      {Mode::Dorian, {0, 2, 3, 5, 7, 9, 10}},  {Mode::Phrygian, {0, 1, 3, 5, 7, 8, 10}},
+      {Mode::Lydian, {0, 2, 4, 6, 7, 9, 11}},  {Mode::Mixolydian, {0, 2, 4, 5, 7, 9, 10}},
+      {Mode::Locrian, {0, 1, 3, 5, 6, 8, 10}},
+  };
+
+  KeyConfig config;
+  config.modes = {Mode::Major,  Mode::Minor,      Mode::Dorian, Mode::Phrygian,
+                  Mode::Lydian, Mode::Mixolydian, Mode::Locrian};
+
+  for (const ModeScale& entry : scales) {
+    for (int root_idx = 0; root_idx < 12; ++root_idx) {
+      const auto root = static_cast<PitchClass>(root_idx);
+      CAPTURE(root_idx, static_cast<int>(entry.mode));
+
+      std::array<float, 12> chroma{};
+      chroma.fill(0.05f);
+      for (int degree : entry.degrees) {
+        chroma[(root_idx + degree) % 12] = 1.0f;
+      }
+      chroma[root_idx] = 2.0f;
+      // Locrian is the one mode whose fifth is diminished; emphasising the
+      // perfect fifth there would describe a scale it does not have.
+      const int fifth = entry.mode == Mode::Locrian ? 6 : 7;
+      chroma[(root_idx + fifth) % 12] = 1.4f;
+
+      KeyAnalyzer analyzer(chroma, config);
+      CAPTURE(analyzer.key().to_string());
+      REQUIRE(analyzer.key().root == root);
+      REQUIRE(analyzer.key().mode == entry.mode);
+    }
+  }
+}
+
 TEST_CASE("KeyAnalyzer modal synthetic matrix is opt-in", "[key_analyzer][synthetic_matrix]") {
   const Mode modes[] = {Mode::Dorian, Mode::Phrygian, Mode::Lydian, Mode::Mixolydian,
                         Mode::Locrian};

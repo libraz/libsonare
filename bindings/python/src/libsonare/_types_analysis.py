@@ -315,7 +315,24 @@ class KeyProfile(IntEnum):
 
 @dataclass(frozen=True, slots=True)
 class Key:
-    """Detected musical key."""
+    """Detected musical key.
+
+    Attributes:
+        root: Tonic pitch class.
+        mode: Major, minor or one of the five modes.
+        confidence: Share of the model's belief that this key is the answer, in
+            ``[0, 1)``. A softmax over the profile correlations of every
+            candidate that was scored, so it falls as the runner-up closes in
+            and two keys that split the evidence -- a relative major and minor,
+            typically -- each report about half.
+
+            This is the model's own belief, **not** a measured accuracy. It says
+            how decisively the chroma picked this key out of the candidate set;
+            it does not say how often that pick is right, and nothing here has
+            been fitted against annotated recordings. A confident wrong answer
+            is entirely possible, so a pipeline that branches on it must choose
+            its own threshold against its own material.
+    """
 
     root: PitchClass
     mode: Mode
@@ -1151,6 +1168,14 @@ class Chord:
             "major9": "maj9",
             "dominant9": "9",
             "sus2Add4": "sus2add4",
+            "major6": "6",
+            "minor6": "m6",
+            "minorMajor7": "mM7",
+            "dominant7Sus4": "7sus4",
+            "dominant11": "11",
+            "dominant13": "13",
+            "dominant7Flat9": "7b9",
+            "dominant7Sharp9": "7#9",
         }
         bass = self.root if self.bass is None else self.bass
         slash = "" if bass == self.root else f"/{bass}"

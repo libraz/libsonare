@@ -20,6 +20,24 @@ namespace {
 
 /// @brief Cosine similarity above which two sections are considered repetitions.
 constexpr float kRepetitionSimilarity = 0.80f;
+/// @brief Similarity above which two adjacent sections are the same material.
+/// @details Deliberately far above @ref kRepetitionSimilarity: a verse and the
+/// chorus after it repeat elsewhere in the track and still differ from each
+/// other, whereas two neighbours this alike are one stretch of music that the
+/// novelty curve happened to split. A boundary between two segments nothing can
+/// tell apart is not a boundary.
+constexpr float kIndistinctSimilarity = 0.97f;
+/// @brief Repetition rate at which the similarity matrix stops separating anything.
+/// @details When almost every pair of sections counts as a repetition of every
+/// other, "is repeated" is true of the whole track and carries no information,
+/// so the labels it drives are not evidence. Uniform material is the case: it
+/// produced a full Verse/Chorus form out of eight identical bars.
+constexpr float kUniformRepetitionFraction = 0.85f;
+/// @brief Confidence below which a semantic label is not asserted.
+/// @details Verse, Chorus, Bridge and Instrumental are claims about musical
+/// function. Below this the classifier reports the segment without naming it
+/// rather than committing to a reading it cannot support.
+constexpr float kMinLabelConfidence = 0.55f;
 /// @brief Energy below which a section is treated as low-energy (Intro/Outro/Instrumental).
 constexpr float kLowEnergyThreshold = 0.35f;
 /// @brief How far below the loudest repeated section a repeated section may sit and still
@@ -154,6 +172,7 @@ SectionAnalyzer::SectionAnalyzer(const Audio& audio, const std::vector<float>& b
   }
 
   merge_short_sections();
+  merge_indistinct_sections();
   add_fallback_section(sections_, audio_duration);
 
   // Classify sections
@@ -200,6 +219,7 @@ void SectionAnalyzer::analyze() {
   }
 
   merge_short_sections();
+  merge_indistinct_sections();
   add_fallback_section(sections_, audio_duration);
 
   // Classify sections
@@ -224,6 +244,72 @@ void SectionAnalyzer::merge_short_sections() {
       --index;
     }
   }
+  for (Section& section : sections_) {
+    section.energy_level = compute_section_energy(section.start, section.end);
+  }
+}
+
+std::vector<std::array<float, 12>> SectionAnalyzer::section_mean_chromas() const {
+  std::vector<std::array<float, 12>> chromas(sections_.size());
+  if (sections_.empty()) {
+    return chromas;
+  }
+
+  ChromaConfig chroma_config;
+  chroma_config.n_fft = config_.n_fft;
+  chroma_config.hop_length = config_.hop_length;
+  const Chroma chroma = Chroma::compute(audio_, chroma_config);
+  const float hop_duration = static_cast<float>(hop_length_) / static_cast<float>(sr_);
+
+  for (size_t s = 0; s < sections_.size(); ++s) {
+    const int start =
+        std::clamp(static_cast<int>(sections_[s].start / hop_duration), 0, chroma.n_frames());
+    const int end =
+        std::clamp(static_cast<int>(sections_[s].end / hop_duration), start, chroma.n_frames());
+    for (int f = start; f < end; ++f) {
+      for (int c = 0; c < chroma.n_chroma() && c < 12; ++c) {
+        chromas[s][static_cast<size_t>(c)] += chroma.at(c, f);
+      }
+    }
+    normalize_l2(chromas[s].data(), chromas[s].size());
+  }
+  return chromas;
+}
+
+void SectionAnalyzer::merge_indistinct_sections() {
+  if (sections_.size() < 2) return;
+
+  // Chroma only, not the full descriptor set: the comparison needs the harmonic
+  // content and nothing else, and build_descriptors also computes a spectrogram
+  // and a per-frame flatness curve that classify_sections will compute again a
+  // moment later anyway.
+  //
+  // The descriptors are taken over the original segmentation and not re-derived
+  // as pairs merge. What matters is whether the two stretches of music the
+  // segmenter found are distinguishable; recomputing a chromagram per merge
+  // would cost an analysis pass per boundary for a decision these already settle.
+  const std::vector<std::array<float, 12>> chromas = section_mean_chromas();
+  if (chromas.size() != sections_.size()) return;
+
+  std::vector<Section> merged;
+  merged.reserve(sections_.size());
+  merged.push_back(sections_.front());
+  size_t previous_index = 0;
+  for (size_t i = 1; i < sections_.size(); ++i) {
+    float similarity = 0.0f;
+    for (size_t c = 0; c < 12; ++c) {
+      similarity += chromas[previous_index][c] * chromas[i][c];
+    }
+    if (similarity >= kIndistinctSimilarity) {
+      merged.back().end = sections_[i].end;
+      continue;
+    }
+    merged.push_back(sections_[i]);
+    previous_index = i;
+  }
+
+  if (merged.size() == sections_.size()) return;
+  sections_ = std::move(merged);
   for (Section& section : sections_) {
     section.energy_level = compute_section_energy(section.start, section.end);
   }
@@ -384,6 +470,7 @@ void SectionAnalyzer::classify_sections() {
   // and track its mean similarity to its repetitions (used for confidence).
   std::vector<int> repeat_count(n_sections, 0);
   std::vector<float> repeat_mean_sim(n_sections, 0.0f);
+  int repeating_pairs = 0;
   for (int i = 0; i < n_sections; ++i) {
     float sim_sum = 0.0f;
     for (int j = 0; j < n_sections; ++j) {
@@ -391,11 +478,22 @@ void SectionAnalyzer::classify_sections() {
       const float s = sim[static_cast<size_t>(i) * n_sections + j];
       if (s >= kRepetitionSimilarity) {
         ++repeat_count[i];
+        ++repeating_pairs;
         sim_sum += s;
       }
     }
     repeat_mean_sim[i] = repeat_count[i] > 0 ? sim_sum / static_cast<float>(repeat_count[i]) : 0.0f;
   }
+
+  // Repetition is only evidence when some pairs repeat and others do not. On
+  // material where nearly every pair matches, "is repeated" says nothing about
+  // any individual section, and the Verse/Chorus split it drives is an artifact
+  // of where the boundaries happened to fall.
+  const int off_diagonal_pairs = n_sections * (n_sections - 1);
+  const bool repetition_is_informative =
+      off_diagonal_pairs > 0 &&
+      static_cast<float>(repeating_pairs) / static_cast<float>(off_diagonal_pairs) <
+          kUniformRepetitionFraction;
 
   // The repeating group with the highest mean energy is the Chorus; other
   // repeating groups are Verses. Determine the energy of the most-repeated group.
@@ -416,7 +514,7 @@ void SectionAnalyzer::classify_sections() {
     const SectionDescriptor& desc = descriptors[i];
     const bool is_first = (i == 0);
     const bool is_last = (i == n_sections - 1);
-    const bool is_repeated = repeat_count[i] >= 1;
+    const bool is_repeated = repetition_is_informative && repeat_count[i] >= 1;
     const bool is_low_energy = desc.energy < kLowEnergyThreshold;
     const bool low_vocal = desc.vocal_likelihood < kInstrumentalVocalThreshold;
 
@@ -457,6 +555,17 @@ void SectionAnalyzer::classify_sections() {
       // identify. Unknown is the value that exists to say exactly this.
       type = SectionType::Unknown;
       confidence = 0.0f;
+    }
+
+    // Intro and Outro rest on energy and position, which stay meaningful even
+    // when the chroma tells sections apart poorly. The four musical-function
+    // labels do not: below the floor the classifier reports the segment without
+    // naming it, and keeps the score that failed so a caller can see how close
+    // it came.
+    const bool semantic = type == SectionType::Verse || type == SectionType::Chorus ||
+                          type == SectionType::Bridge || type == SectionType::Instrumental;
+    if (semantic && confidence < kMinLabelConfidence) {
+      type = SectionType::Unknown;
     }
 
     sections_[i].type = type;

@@ -118,6 +118,17 @@ constexpr float kMinorThirdBoost = 1.3f;
 constexpr float kMinorFifthBoost = 1.2f;
 /// @brief Minor profile: minor seventh boost factor.
 constexpr float kMinorSeventhBoost = 1.2f;
+
+/// @brief Correlation margin over the runner-up that saturates the evidence score.
+constexpr float kFullDistinctivenessGap = 0.2f;
+
+/// @brief Softmax temperature turning candidate correlations into confidences.
+/// @details Sets how fast belief concentrates on the winner as its correlation
+/// margin grows: at this margin the winner is roughly e times as likely as the
+/// runner-up. It is a fixed, documented softness, not a value fitted against
+/// annotated recordings — see @ref Key::confidence for what that does and does
+/// not license a caller to conclude.
+constexpr float kConfidenceTemperature = 0.08f;
 }  // namespace key_constants
 
 /// @brief Multiplicative boosts for customizing key profiles.
@@ -157,8 +168,19 @@ std::array<float, 12> get_minor_profile(
 /// @brief Gets a modal key profile for a given root.
 /// @param root Root pitch class
 /// @param mode Musical mode
-/// @param profile_type Base major/minor profile family for Major/Minor modes
+/// @param profile_type Base major/minor profile family for Major/Minor modes.
+///        Ignored for the five modes: they have only one profile each.
 /// @return Rotated mode profile
+/// @warning The major and minor profiles are the published ones — Krumhansl-
+///          Kessler, Temperley, Sha'ath, Faraldo, Bellman-Budge — each derived
+///          from listening data or from a corpus. The five modal profiles are
+///          not: they are a construction in the same shape, weighting the
+///          tonic, its fifth, the third and the degree that names the mode
+///          above the rest of the scale, with everything outside the scale
+///          suppressed. No probe-tone study or annotated corpus stands behind
+///          the numbers, so modal detection is a plausible heuristic rather
+///          than a method with measured accuracy, and it should not be read as
+///          carrying the same standing as the major/minor result.
 std::array<float, 12> get_mode_profile(
     PitchClass root, Mode mode, KeyProfileType profile_type = KeyProfileType::KrumhanslSchmuckler);
 

@@ -3,6 +3,7 @@
 /// @file chord_analyzer.h
 /// @brief Chord detection and progression analysis.
 
+#include <array>
 #include <string>
 #include <vector>
 
@@ -28,6 +29,28 @@ constexpr float kMinDurationSec = 0.3f;
 
 /// @brief Default correlation threshold for chord detection.
 constexpr float kCorrelationThreshold = 0.5f;
+
+/// @brief Extra correlation an extended-vocabulary quality must beat the triad by.
+/// @details Wider than @ref kTetradThreshold because the extended qualities are
+/// the confusable ones: a sixth chord spells the same pitch classes as a
+/// seventh rooted a third away, and an altered dominant adds one tone to a
+/// chord a plain seventh already explains.
+constexpr float kExtendedQualityThreshold = 0.09f;
+
+/// @brief Weight of the bass-register root evidence in template selection.
+/// @details Scales a [-1, 1] salience term — the candidate root's share of the
+/// low-register energy, centred on the share an evenly spread bass would give
+/// it — added to the template correlation when choosing between candidates.
+/// Folding 12 pitch classes into one vector leaves a chord
+/// and its relative — A and F#m share two of three tones — with almost the same
+/// chroma evidence and no cue for which note is the root; the bass register
+/// carries that cue.
+///
+/// Deliberately a tie-breaker rather than an override. The bass names the root
+/// only in root position, so a weight large enough to overturn a clear chroma
+/// decision would relabel every inversion after its own bass note. Zero
+/// disables the term.
+constexpr float kBassRootWeight = 0.15f;
 }  // namespace chord_constants
 
 /// @brief Chroma front-end used for chord recognition.
@@ -69,6 +92,18 @@ struct ChordConfig {
   PitchClass key_root = PitchClass::C;
   Mode key_mode = Mode::Major;
   bool detect_inversions = false;  ///< Estimate bass pitch class and emit slash chords
+  /// @brief Weight of the bass-register root cue in template selection.
+  /// @details Applied only when a bass chromagram is available — either
+  /// supplied through the four-argument constructor or computed by the audio
+  /// constructor when @ref use_bass_chroma is set. Set to 0 to select purely on
+  /// the harmonic chroma. The term biases *which* template is selected; the
+  /// reported @ref Chord::confidence stays the selected template's plain chroma
+  /// correlation, so the threshold keeps comparing like with like.
+  float bass_root_weight = chord_constants::kBassRootWeight;
+  /// @brief Compute a low-register chromagram in the audio constructor.
+  /// @details Costs one extra bass-band CQT. The constructor also computes one
+  /// when @ref detect_inversions is set, and the two share it.
+  bool use_bass_chroma = true;
 };
 
 /// @brief Chord analyzer for detecting chords from audio.
@@ -144,8 +179,27 @@ class ChordAnalyzer {
   void analyze_chords_beat_sync(const std::vector<float>& beat_times);
   void merge_short_segments();
   int find_best_chord(const float* chroma) const;
-  ChordMatch find_best_chord_with_confidence(const float* chroma) const;
-  ChordHmmObservation chord_observation(const float* chroma) const;
+  ChordMatch find_best_chord_with_confidence(const float* chroma,
+                                             const std::array<float, 12>* bass = nullptr) const;
+  ChordHmmObservation chord_observation(const float* chroma,
+                                        const std::array<float, 12>* bass = nullptr) const;
+
+  /// @brief Mean bass-chromagram energy over a span of @c chroma_ frame indices.
+  /// @param start_frame First frame, in @c chroma_'s frame space
+  /// @param end_frame One past the last frame, in @c chroma_'s frame space
+  /// @param out Receives the mean bass chroma
+  /// @return @c false when no bass chromagram is available or the span is empty,
+  ///         in which case @p out is left untouched.
+  bool bass_energy(int start_frame, int end_frame, std::array<float, 12>& out) const;
+
+  /// @brief Salience of @p root in a bass chroma vector, in [-1, 1].
+  /// @details 1 when the root is the strongest bass pitch class, 0 for a flat
+  /// bass that names no root, negative when the root is weaker than average.
+  float bass_root_salience(const std::array<float, 12>& bass, PitchClass root) const;
+
+  /// @brief Selection score for one template: chroma correlation plus the bass cue.
+  float template_score(const ChordTemplate& chord_template, const float* chroma,
+                       const std::array<float, 12>* bass) const;
   ChordHmmConfig hmm_config() const;
   PitchClass estimate_bass_pitch_class(int start_frame, int end_frame,
                                        const ChordTemplate& chord) const;

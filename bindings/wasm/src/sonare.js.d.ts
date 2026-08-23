@@ -2634,6 +2634,14 @@ export interface SonareModule {
     Major9: { value: 14 };
     Dominant9: { value: 15 };
     Sus2Add4: { value: 16 };
+    Major6: { value: 17 };
+    Minor6: { value: 18 };
+    MinorMajor7: { value: 19 };
+    Dominant7Sus4: { value: 20 };
+    Dominant11: { value: 21 };
+    Dominant13: { value: 22 };
+    Dominant7Flat9: { value: 23 };
+    Dominant7Sharp9: { value: 24 };
   };
   SectionType: {
     Intro: { value: 0 };

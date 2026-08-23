@@ -55,6 +55,14 @@ struct SectionConfig {
 /// as hints, not ground truth. For downstream algorithms prefer the raw signals
 /// — @ref boundary_times (segment boundaries) and @ref section_self_similarity
 /// (the chroma cosine self-similarity matrix) — and apply your own thresholds.
+///
+/// Two guards keep it from inventing structure. Adjacent segments whose chroma
+/// is indistinguishable are merged before anything is labelled, so a novelty
+/// peak inside one continuous stretch of music does not split it. And when
+/// nearly every pair of sections counts as a repetition of every other — which
+/// is what uniform material looks like — repetition is treated as carrying no
+/// information rather than as evidence for a verse/chorus alternation. Both
+/// make the analyzer report Unknown where it previously named a section.
 class SectionAnalyzer {
  public:
   /// @brief Constructs section analyzer from audio.
@@ -102,6 +110,21 @@ class SectionAnalyzer {
  private:
   void analyze();
   void merge_short_sections();
+
+  /// @brief Merges adjacent sections whose chroma content is indistinguishable.
+  /// @details A novelty peak inside one continuous stretch of music splits it
+  /// into segments that no descriptor can tell apart, which then read as
+  /// repetitions of each other and drive a full song form out of material that
+  /// never changed. Collapsing them first means the labeller sees the structure
+  /// the audio has rather than the structure the peak picker found.
+  void merge_indistinct_sections();
+
+  /// @brief L2-normalized mean chroma of each current section.
+  /// @details The harmonic half of @ref build_descriptors, computed on its own
+  /// so the merge pass does not also pay for a spectrogram and a flatness curve
+  /// that classification recomputes moments later.
+  std::vector<std::array<float, 12>> section_mean_chromas() const;
+
   void classify_sections();
   float compute_section_energy(float start, float end) const;
 

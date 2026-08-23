@@ -181,20 +181,23 @@ ChordAnalyzer& MusicAnalyzer::chord_analyzer() {
 
     // Use beat-synchronized chord detection with harmonic chroma for better accuracy
     auto beat_times = beat_analyzer().beat_times();
+    // harmonic_chroma() caches the bass-band CQT chroma as a by-product when
+    // use_bass_weighted is on, so ask for the harmonic chroma first and the
+    // bass chroma comes with it.
+    const Chroma& harmonic = harmonic_chroma();
     if (chord_config.detect_inversions) {
-      // Supply the dedicated low-register bass chromagram so inversion detection
-      // uses the bass-band CQT front-end rather than falling back to the
-      // harmonic chroma (which lacks the low-frequency emphasis).
+      // Inversion detection wants the dedicated bass front-end: three bins per
+      // semitone from E1, against the by-product's one bin per semitone.
       BassChromaConfig bass_config;
       // Match harmonic_chroma()'s hop so both chromagrams share one frame
       // space: the chord segments are expressed in harmonic-chroma frames and
       // are used directly to slice the bass chromagram.
       bass_config.cqt.hop_length = config_->hop_length * config_->chroma_hop_multiplier;
       chord_analyzer_ = std::make_unique<ChordAnalyzer>(
-          harmonic_chroma(), beat_times, bass_chroma(analysis_audio_, bass_config), chord_config);
+          harmonic, beat_times, bass_chroma(analysis_audio_, bass_config), chord_config);
     } else {
-      chord_analyzer_ =
-          std::make_unique<ChordAnalyzer>(harmonic_chroma(), beat_times, chord_config);
+      chord_analyzer_ = std::make_unique<ChordAnalyzer>(
+          harmonic, beat_times, bass_chroma_ ? *bass_chroma_ : Chroma(), chord_config);
     }
     const auto chord_changes =
         chord_change_observations(beat_analyzer_->beats(), chord_analyzer_->chords());
@@ -379,6 +382,33 @@ const Chroma& MusicAnalyzer::harmonic_chroma() {
           chroma_features[idx] = 0.5f * chroma_features[idx] + 0.5f * bass_chroma[bass_idx];
         }
       }
+
+      // Keep a bass chroma for chord recognition, which needs to know which
+      // pitch class the bass names -- a chord and its relative differ by little
+      // else once 12 pitch classes are folded together. This is the same CQT it
+      // would otherwise have to run a second time.
+      //
+      // Only the bottom two octaves are folded in, not all four the blend above
+      // uses. The point of the cue is what the bass instrument is playing, and
+      // C3 upward is where the chord voicing lives: including it turns the cue
+      // into a second copy of the harmonic chroma, which on a mix with no real
+      // bass part answers with whichever chord tone happens to be lowest and
+      // drags a chord change late.
+      constexpr int kRootCueOctaves = 2;  // C1 - B2
+      const int cue_bins = std::min(bass_cqt.n_bins(), 12 * kRootCueOctaves);
+      std::vector<float> root_cue(12 * static_cast<size_t>(bass_frames), 0.0f);
+      const std::vector<float>& bass_mag = bass_cqt.magnitude();
+      for (int bin = 0; bin < cue_bins; ++bin) {
+        // fmin is C1 and there are 12 bins per octave, so bin index modulo 12
+        // is the pitch class directly.
+        float* row = root_cue.data() + static_cast<size_t>(bin % 12) * bass_frames;
+        const float* source = bass_mag.data() + static_cast<size_t>(bin) * bass_frames;
+        for (int t = 0; t < bass_frames; ++t) {
+          row[t] += source[t];
+        }
+      }
+      bass_chroma_ = std::make_unique<Chroma>(
+          Chroma(std::move(root_cue), 12, bass_frames, analysis_sr, chroma_hop));
     }
 
     harmonic_chroma_ = std::make_unique<Chroma>(

@@ -3,6 +3,7 @@
 
 #include "analysis/key_analyzer.h"
 
+#include <array>
 #include <catch2/catch_test_macros.hpp>
 #include <catch2/matchers/catch_matchers_floating_point.hpp>
 #include <cmath>
@@ -334,4 +335,130 @@ TEST_CASE("detect_key quick function", "[key_analyzer]") {
   // Should return a valid key
   REQUIRE(static_cast<int>(key.root) >= 0);
   REQUIRE(static_cast<int>(key.root) < 12);
+}
+
+TEST_CASE("Key confidence is a distribution over the candidates it scored", "[key_analyzer]") {
+  // The old confidence blended a rescaled correlation with a distinctiveness
+  // term that clipped at a fixed gap, so decisive material saturated at 1.0 and
+  // stayed there however close the runner-up was. Reporting a share of the
+  // model's belief instead makes the number move with the evidence.
+  std::array<float, 12> c_major_chroma = {};
+  const std::array<int, 7> c_major_scale = {0, 2, 4, 5, 7, 9, 11};
+  for (int degree : c_major_scale) {
+    c_major_chroma[static_cast<size_t>(degree)] = 1.0f;
+  }
+  c_major_chroma[0] = 2.2f;
+  c_major_chroma[7] = 1.6f;
+  c_major_chroma[4] = 1.4f;
+
+  KeyConfig config;
+  config.genre_hint = "";
+  KeyAnalyzer analyzer(c_major_chroma, config);
+
+  const auto& candidates = analyzer.all_candidates();
+  REQUIRE(candidates.size() == 24);
+
+  float total = 0.0f;
+  for (const auto& candidate : candidates) {
+    REQUIRE(candidate.key.confidence >= 0.0f);
+    REQUIRE(candidate.key.confidence <= 1.0f);
+    total += candidate.key.confidence;
+  }
+  REQUIRE_THAT(total, WithinAbs(1.0f, 1e-4f));
+
+  // Every candidate is on one scale now, so the ranking by confidence has to
+  // agree with the ranking by correlation the list is already sorted on. The
+  // old field meant one thing at index 0 and another everywhere else.
+  for (size_t i = 1; i < candidates.size(); ++i) {
+    REQUIRE(candidates[i - 1].key.confidence >= candidates[i].key.confidence);
+  }
+  REQUIRE(analyzer.key().confidence == candidates[0].key.confidence);
+
+  // A share of a distribution over 24 candidates cannot reach 1: something is
+  // always left over for the rest, which is the property that stops a decisive
+  // reading from being reported as certainty.
+  REQUIRE(analyzer.key().confidence < 1.0f);
+}
+
+TEST_CASE("Key confidence falls when a runner-up is close", "[key_analyzer]") {
+  // Two readings that split the same evidence must not both report high. This
+  // is the case the previous formula could not express: a bare C-major scale is
+  // equally A minor, and it used to come back near 100% regardless.
+  std::array<float, 12> ambiguous = {};
+  for (int degree : {0, 2, 4, 5, 7, 9, 11}) {
+    ambiguous[static_cast<size_t>(degree)] = 1.0f;
+  }
+
+  std::array<float, 12> decisive = ambiguous;
+  decisive[0] = 3.0f;
+  decisive[7] = 2.0f;
+  decisive[4] = 1.8f;
+
+  KeyConfig config;
+  config.genre_hint = "";
+  const KeyAnalyzer ambiguous_analyzer(ambiguous, config);
+  const KeyAnalyzer decisive_analyzer(decisive, config);
+
+  CAPTURE(ambiguous_analyzer.key().to_string(), ambiguous_analyzer.key().confidence);
+  CAPTURE(decisive_analyzer.key().to_string(), decisive_analyzer.key().confidence);
+  REQUIRE(decisive_analyzer.key().confidence > ambiguous_analyzer.key().confidence);
+
+  // The evidence score is a different quantity and must not be confused with
+  // the posterior: it is what the analyzer compares when choosing between
+  // chroma front-ends, and unlike a share of a distribution it does not shrink
+  // just because more candidates were scored.
+  REQUIRE(decisive_analyzer.evidence_score() >= ambiguous_analyzer.evidence_score());
+}
+
+TEST_CASE("Widening the candidate set divides the same belief", "[key_analyzer]") {
+  // A share of a distribution is only meaningful relative to what was scored.
+  // Opening the search to the modes splits the same evidence across 84
+  // candidates instead of 24, so the reported confidence falls even though the
+  // audio and the answer did not change. That is correct for a posterior and
+  // exactly why a confidence from one analysis must not be compared against a
+  // confidence from another that searched a different set -- and why the
+  // analyzer's own front-end selection compares the evidence score instead.
+  std::array<float, 12> chroma = {};
+  for (int degree : {0, 2, 4, 5, 7, 9, 11}) {
+    chroma[static_cast<size_t>(degree)] = 1.0f;
+  }
+  chroma[0] = 2.4f;
+  chroma[7] = 1.7f;
+
+  KeyConfig diatonic;
+  diatonic.genre_hint = "";
+  diatonic.modes = {Mode::Major, Mode::Minor};
+
+  KeyConfig modal = diatonic;
+  modal.modes = {Mode::Major,  Mode::Minor,      Mode::Dorian, Mode::Phrygian,
+                 Mode::Lydian, Mode::Mixolydian, Mode::Locrian};
+
+  const KeyAnalyzer narrow(chroma, diatonic);
+  const KeyAnalyzer wide(chroma, modal);
+  REQUIRE(narrow.all_candidates().size() == 24);
+  REQUIRE(wide.all_candidates().size() == 84);
+  REQUIRE(wide.key().root == narrow.key().root);
+  REQUIRE(wide.key().confidence < narrow.key().confidence);
+
+  float wide_total = 0.0f;
+  for (const auto& candidate : wide.all_candidates()) {
+    wide_total += candidate.key.confidence;
+  }
+  REQUIRE_THAT(wide_total, WithinAbs(1.0f, 1e-4f));
+}
+
+TEST_CASE("Silence spreads key confidence evenly instead of scoring mid-range", "[key_analyzer]") {
+  // Every candidate correlates to 0, so no key stands out. A uniform share is
+  // the honest reading of that; the old formula reported a fixed mid-range
+  // score, which reads as a weak detection rather than as no detection.
+  const std::array<float, 12> silence = {};
+  KeyConfig config;
+  config.genre_hint = "";
+  KeyAnalyzer analyzer(silence, config);
+
+  const auto& candidates = analyzer.all_candidates();
+  REQUIRE(candidates.size() == 24);
+  for (const auto& candidate : candidates) {
+    REQUIRE_THAT(candidate.key.confidence, WithinAbs(1.0f / 24.0f, 1e-5f));
+  }
 }

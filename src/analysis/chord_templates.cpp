@@ -11,6 +11,32 @@ using sonare::constants::kEpsilon;
 
 namespace {
 
+/// @brief Correlation deducted from a quality whose pitch-class set duplicates a
+///        commoner quality rooted elsewhere.
+/// @details Wide enough to clear the 0.05 already carried by the diminished
+///          family, so a m7b5 keeps its reading against the min6 that spells the
+///          same four notes, and narrow enough that the bass-root term the
+///          analyzer adds on top can still overturn it.
+constexpr float kAnagramQualityPenalty = 0.07f;
+
+/// @brief Semitones to the chord's own fifth, or -1 when it spells none.
+int chord_quality_fifth(ChordQuality quality) {
+  const ChordIntervals intervals = chord_quality_intervals(quality);
+  int fifth = -1;
+  for (size_t i = 0; i < intervals.count; ++i) {
+    const int degree = intervals.semitones[i] % 12;
+    // A perfect fifth wins outright; otherwise the altered fifth the chord does
+    // spell is the one that confirms it.
+    if (degree == 7) {
+      return 7;
+    }
+    if (degree == 6 || degree == 8) {
+      fifth = degree;
+    }
+  }
+  return fifth;
+}
+
 /// @brief Creates a chord pattern from a quality's interval spelling.
 std::array<float, 12> create_pattern(PitchClass root, const ChordIntervals& intervals) {
   std::array<float, 12> pattern = {};
@@ -88,6 +114,22 @@ std::string chord_quality_to_string(ChordQuality quality) {
       return "9";
     case ChordQuality::Sus2Add4:
       return "sus2add4";
+    case ChordQuality::Major6:
+      return "6";
+    case ChordQuality::Minor6:
+      return "m6";
+    case ChordQuality::MinorMajor7:
+      return "mM7";
+    case ChordQuality::Dominant7Sus4:
+      return "7sus4";
+    case ChordQuality::Dominant11:
+      return "11";
+    case ChordQuality::Dominant13:
+      return "13";
+    case ChordQuality::Dominant7b9:
+      return "7b9";
+    case ChordQuality::Dominant7s9:
+      return "7#9";
     default:
       return "";
   }
@@ -145,44 +187,52 @@ float ChordTemplate::correlate(const float* chroma) const {
   // Major third is at +4 semitones, minor third is at +3 semitones
   // The third is the most important note for chord quality discrimination
   float third_bonus = 0.0f;
-  if (quality == ChordQuality::Major || quality == ChordQuality::Dominant7 ||
-      quality == ChordQuality::Major7 || quality == ChordQuality::Augmented ||
-      quality == ChordQuality::Add9 || quality == ChordQuality::Major9 ||
-      quality == ChordQuality::Dominant9) {
+  // Which third the quality is spelled with comes from the interval table via
+  // chord_quality_triad_base, so a newly added quality is classified by what it
+  // actually contains instead of by a hand-maintained list here.
+  const ChordQuality triad_base = chord_quality_triad_base(quality);
+  if (triad_base == ChordQuality::Major || triad_base == ChordQuality::Augmented) {
     // Major third at +4
     int third_idx = (root_idx + 4) % 12;
     float third_ratio = chroma[third_idx] / max_chroma;
     if (third_ratio >= 0.3f) {
       third_bonus = 0.08f * third_ratio;
     }
-    // Penalize if minor third is stronger than major third
+    // Penalize if minor third is stronger than major third. Skipped when the
+    // quality spells that tone itself (a 7#9's sharp ninth is enharmonically the
+    // minor third), where its presence is evidence for the chord, not against.
     int minor_third_idx = (root_idx + 3) % 12;
-    if (chroma[minor_third_idx] > chroma[third_idx] * 1.2f) {
+    if (pattern[minor_third_idx] < 0.5f && chroma[minor_third_idx] > chroma[third_idx] * 1.2f) {
       third_bonus -= 0.05f;
     }
-  } else if (quality == ChordQuality::Minor || quality == ChordQuality::Minor7 ||
-             quality == ChordQuality::Diminished || quality == ChordQuality::MinorAdd9 ||
-             quality == ChordQuality::Dim7 || quality == ChordQuality::HalfDim7) {
+  } else if (triad_base == ChordQuality::Minor || triad_base == ChordQuality::Diminished) {
     // Minor third at +3
     int third_idx = (root_idx + 3) % 12;
     float third_ratio = chroma[third_idx] / max_chroma;
     if (third_ratio >= 0.3f) {
       third_bonus = 0.08f * third_ratio;
     }
-    // Penalize if major third is stronger than minor third
+    // Penalize if major third is stronger than minor third, unless the quality
+    // spells that tone itself.
     int major_third_idx = (root_idx + 4) % 12;
-    if (chroma[major_third_idx] > chroma[third_idx] * 1.2f) {
+    if (pattern[major_third_idx] < 0.5f && chroma[major_third_idx] > chroma[third_idx] * 1.2f) {
       third_bonus -= 0.05f;
     }
   }
 
-  // Fifth note check - perfect fifth at +7 semitones
-  // If fifth is present, it confirms the chord
+  // Fifth note check. The chord's own fifth, not always the perfect one: a
+  // half-diminished or diminished chord has a diminished fifth and an augmented
+  // chord an augmented one, and looking for +7 in those meant a correctly
+  // spelled chord could never collect the bonus that confirms it — which showed
+  // up as a m7b5 losing to the min6 spelling the same four notes.
   float fifth_bonus = 0.0f;
-  int fifth_idx = (root_idx + 7) % 12;
-  float fifth_ratio = chroma[fifth_idx] / max_chroma;
-  if (fifth_ratio >= 0.25f) {
-    fifth_bonus = 0.03f * fifth_ratio;
+  const int fifth_semitones = chord_quality_fifth(quality);
+  if (fifth_semitones >= 0) {
+    int fifth_idx = (root_idx + fifth_semitones) % 12;
+    float fifth_ratio = chroma[fifth_idx] / max_chroma;
+    if (fifth_ratio >= 0.25f) {
+      fifth_bonus = 0.03f * fifth_ratio;
+    }
   }
 
   // Penalize notes that shouldn't be in the chord
@@ -199,6 +249,18 @@ float ChordTemplate::correlate(const float* chroma) const {
   if (quality == ChordQuality::Diminished || quality == ChordQuality::Augmented ||
       quality == ChordQuality::Dim7 || quality == ChordQuality::HalfDim7) {
     quality_penalty = 0.05f;
+  }
+  // Three of the extended qualities are anagrams of a commoner one rooted
+  // elsewhere: a maj6 spells the m7 a minor third below, a min6 spells the m7b5
+  // a minor third below, and a 7sus4 spells the sus2add4 a fourth below. Their
+  // chroma vectors are identical, so nothing in this function can separate
+  // them — only which pitch class the bass sounds can, and that evidence
+  // reaches the decision outside the template. Leaving them level here would
+  // let template ordering pick the winner on a coin toss; the penalty makes the
+  // established reading the default and the bass cue the thing that overturns it.
+  if (quality == ChordQuality::Major6 || quality == ChordQuality::Minor6 ||
+      quality == ChordQuality::Dominant7Sus4) {
+    quality_penalty += kAnagramQualityPenalty;
   }
 
   return cosine_sim + root_bonus + third_bonus + fifth_bonus - penalty - quality_penalty;
@@ -242,6 +304,25 @@ ChordIntervals chord_quality_intervals(ChordQuality quality) {
       return {{{0, 4, 7, 10, 14}}, 5};  // Root, 3rd, 5th, min 7th, 9th
     case ChordQuality::Sus2Add4:
       return {{{0, 2, 5, 7}}, 4};  // Root, 2nd, 4th, 5th
+    case ChordQuality::Major6:
+      return {{{0, 4, 7, 9}}, 4};  // Root, major 3rd, 5th, 6th
+    case ChordQuality::Minor6:
+      return {{{0, 3, 7, 9}}, 4};  // Root, minor 3rd, 5th, major 6th
+    case ChordQuality::MinorMajor7:
+      return {{{0, 3, 7, 11}}, 4};  // Root, minor 3rd, 5th, major 7th
+    case ChordQuality::Dominant7Sus4:
+      return {{{0, 5, 7, 10}}, 4};  // Root, 4th, 5th, minor 7th
+    case ChordQuality::Dominant11:
+      // The third is omitted: it clashes a semitone below the eleventh, and the
+      // voicing that keeps both is spelled 7(#11) rather than 11.
+      return {{{0, 7, 10, 14, 17}}, 5};  // Root, 5th, min 7th, 9th, 11th
+    case ChordQuality::Dominant13:
+      // The fifth is omitted, which is what a five-voice 13th drops first.
+      return {{{0, 4, 10, 14, 21}}, 5};  // Root, 3rd, min 7th, 9th, 13th
+    case ChordQuality::Dominant7b9:
+      return {{{0, 4, 7, 10, 13}}, 5};  // Root, 3rd, 5th, min 7th, b9
+    case ChordQuality::Dominant7s9:
+      return {{{0, 4, 7, 10, 15}}, 5};  // Root, 3rd, 5th, min 7th, #9
     case ChordQuality::Unknown:
       break;
   }
@@ -250,8 +331,64 @@ ChordIntervals chord_quality_intervals(ChordQuality quality) {
   return {};
 }
 
+ChordQuality chord_quality_triad_base(ChordQuality quality) {
+  const ChordIntervals intervals = chord_quality_intervals(quality);
+  bool major_third = false;
+  bool minor_third = false;
+  bool perfect_fifth = false;
+  bool diminished_fifth = false;
+  bool augmented_fifth = false;
+  for (size_t i = 0; i < intervals.count; ++i) {
+    switch (intervals.semitones[i] % 12) {
+      case 3:
+        minor_third = true;
+        break;
+      case 4:
+        major_third = true;
+        break;
+      case 6:
+        diminished_fifth = true;
+        break;
+      case 7:
+        perfect_fifth = true;
+        break;
+      case 8:
+        augmented_fifth = true;
+        break;
+      default:
+        break;
+    }
+  }
+
+  // A quality with no third of its own (every sus spelling, the eleventh, and
+  // Unknown) has no triad base; report it unchanged rather than inventing one.
+  if (!major_third && !minor_third) {
+    return quality;
+  }
+  // The major third wins when both are spelled: a #9 is enharmonically a minor
+  // third but sits above the seventh, and the chord it decorates is a dominant.
+  if (major_third) {
+    return augmented_fifth && !perfect_fifth ? ChordQuality::Augmented : ChordQuality::Major;
+  }
+  return diminished_fifth && !perfect_fifth ? ChordQuality::Diminished : ChordQuality::Minor;
+}
+
+bool chord_quality_is_dominant_seventh(ChordQuality quality) {
+  const ChordIntervals intervals = chord_quality_intervals(quality);
+  bool major_third = false;
+  bool minor_seventh = false;
+  for (size_t i = 0; i < intervals.count; ++i) {
+    const int degree = intervals.semitones[i] % 12;
+    major_third = major_third || degree == 4;
+    minor_seventh = minor_seventh || degree == 10;
+  }
+  // Both tones are required: the third and the seventh form the tritone that
+  // gives a dominant its pull, so a 7sus4 or an eleventh (no third) is not one.
+  return major_third && minor_seventh;
+}
+
 uint16_t chord_pitch_class_mask(int root, int quality) {
-  if (root < 0 || root > 11 || quality < 0 || quality > static_cast<int>(ChordQuality::Sus2Add4)) {
+  if (root < 0 || root > 11 || quality < 0 || quality >= kChordQualityCount) {
     return 0;
   }
   const ChordIntervals intervals = chord_quality_intervals(static_cast<ChordQuality>(quality));
@@ -326,6 +463,19 @@ ChordTemplate create_sus2_add4_template(PitchClass root) {
   return make_template(root, ChordQuality::Sus2Add4);
 }
 
+ChordTemplate create_chord_template(PitchClass root, ChordQuality quality) {
+  return make_template(root, quality);
+}
+
+const std::vector<ChordQuality>& extended_chord_qualities() {
+  static const std::vector<ChordQuality> qualities = {
+      ChordQuality::Major6,        ChordQuality::Minor6,      ChordQuality::MinorMajor7,
+      ChordQuality::Dominant7Sus4, ChordQuality::Dominant11,  ChordQuality::Dominant13,
+      ChordQuality::Dominant7b9,   ChordQuality::Dominant7s9,
+  };
+  return qualities;
+}
+
 ChordTemplate transpose_template(const ChordTemplate& tmpl, int semitones) {
   ChordTemplate transposed;
   transposed.root = static_cast<PitchClass>((static_cast<int>(tmpl.root) + semitones + 12) % 12);
@@ -336,7 +486,7 @@ ChordTemplate transpose_template(const ChordTemplate& tmpl, int semitones) {
 
 std::vector<ChordTemplate> generate_all_chord_templates() {
   std::vector<ChordTemplate> templates;
-  templates.reserve(12 * 16);
+  templates.reserve(12 * (16 + extended_chord_qualities().size()));
 
   for (int root = 0; root < 12; ++root) {
     PitchClass pc = static_cast<PitchClass>(root);
@@ -357,6 +507,9 @@ std::vector<ChordTemplate> generate_all_chord_templates() {
     templates.push_back(create_major9_template(pc));
     templates.push_back(create_dominant9_template(pc));
     templates.push_back(create_sus2_add4_template(pc));
+    for (ChordQuality quality : extended_chord_qualities()) {
+      templates.push_back(create_chord_template(pc, quality));
+    }
   }
 
   return templates;

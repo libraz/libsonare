@@ -101,6 +101,22 @@ SonareChordQuality to_c_chord_quality(ChordQuality quality) {
       return SONARE_CHORD_DOMINANT9;
     case ChordQuality::Sus2Add4:
       return SONARE_CHORD_SUS2_ADD4;
+    case ChordQuality::Major6:
+      return SONARE_CHORD_MAJOR6;
+    case ChordQuality::Minor6:
+      return SONARE_CHORD_MINOR6;
+    case ChordQuality::MinorMajor7:
+      return SONARE_CHORD_MINOR_MAJOR7;
+    case ChordQuality::Dominant7Sus4:
+      return SONARE_CHORD_DOMINANT7_SUS4;
+    case ChordQuality::Dominant11:
+      return SONARE_CHORD_DOMINANT11;
+    case ChordQuality::Dominant13:
+      return SONARE_CHORD_DOMINANT13;
+    case ChordQuality::Dominant7b9:
+      return SONARE_CHORD_DOMINANT7_FLAT9;
+    case ChordQuality::Dominant7s9:
+      return SONARE_CHORD_DOMINANT7_SHARP9;
   }
   return SONARE_CHORD_UNKNOWN;
 }

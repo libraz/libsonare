@@ -85,6 +85,14 @@ export const ChordQuality = {
   Major9: 14,
   Dominant9: 15,
   Sus2Add4: 16,
+  Major6: 17,
+  Minor6: 18,
+  MinorMajor7: 19,
+  Dominant7Sus4: 20,
+  Dominant11: 21,
+  Dominant13: 22,
+  Dominant7Flat9: 23,
+  Dominant7Sharp9: 24,
 } as const;
 
 export type ChordQuality = (typeof ChordQuality)[keyof typeof ChordQuality];
@@ -94,9 +102,11 @@ export type ChordQuality = (typeof ChordQuality)[keyof typeof ChordQuality];
  *
  * `PreChorus` is never produced by `analyze()`: it has no detection branch, so
  * filtering sections on it always yields an empty result. Every other value is
- * reachable. `Unknown` means the analyzer did not identify the segment -- no
- * boundary was detected, or the segment matched none of the positive branches
- * -- and comes with `confidence` 0.
+ * reachable. `Unknown` means the analyzer did not name the segment: no
+ * boundary was detected, the segment matched none of the positive branches, or
+ * the evidence for a musical function was too weak to assert one. The first
+ * case comes with `confidence` 0; the last keeps the sub-threshold score, so a
+ * caller can see how close the segment came to a label.
  */
 export const SectionType = {
   Intro: 0,
@@ -117,6 +127,20 @@ export type SectionType = (typeof SectionType)[keyof typeof SectionType];
 export interface Key {
   root: PitchClass;
   mode: Mode;
+  /**
+   * Share of the model's belief that this key is the answer, in `[0, 1)`.
+   *
+   * A softmax over the profile correlations of every candidate that was scored,
+   * so it falls as the runner-up closes in and two keys that split the evidence
+   * -- a relative major and minor, typically -- each report about half.
+   *
+   * This is the model's own belief, **not** a measured accuracy. It says how
+   * decisively the chroma picked this key out of the candidate set; it does not
+   * say how often that pick is right, and nothing here has been fitted against
+   * annotated recordings. A confident wrong answer is entirely possible, so a
+   * pipeline that branches on it must choose its own threshold against its own
+   * material.
+   */
   confidence: number;
   name: string;
   shortName: string;

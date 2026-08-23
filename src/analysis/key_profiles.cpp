@@ -1,7 +1,8 @@
 #include "analysis/key_profiles.h"
 
+#include <algorithm>
+#include <array>
 #include <cmath>
-#include <initializer_list>
 #include <numeric>
 
 #include "util/constants.h"
@@ -63,54 +64,92 @@ const std::array<float, 12>& minor_base_profile(KeyProfileType profile_type) {
   }
 }
 
-std::array<float, 12> modal_base_profile(Mode mode) {
-  std::array<float, 12> profile = {0.55f, 0.35f, 0.35f, 0.35f, 0.35f, 0.35f,
-                                   0.35f, 0.35f, 0.35f, 0.35f, 0.35f, 0.35f};
+/// @brief The four weights a modal profile is built from, in the order a listener
+///        uses them to place a tonic.
+/// @details These are a stated construction, not a measured hierarchy. Nothing
+/// like the Krumhansl-Kessler probe-tone experiment exists here for the five
+/// modes: the values were chosen so that the tonic dominates, its fifth and
+/// third confirm it, the degree that separates the mode from its major or minor
+/// neighbour stands above the remaining scale tones, and everything outside the
+/// scale is suppressed. The *ordering* is what carries the meaning; the exact
+/// numbers place each weight between its neighbours and are otherwise arbitrary.
+/// See the note on @ref get_mode_profile for what that does and does not
+/// license a caller to conclude.
+namespace modal_weights {
+/// The tonic. Highest, because a mode is a scale heard from a particular note,
+/// and the tonic is the only thing separating a mode from its relative major.
+constexpr float kTonic = 6.30f;
+/// The fifth above the tonic, which is what confirms it as a tonic.
+constexpr float kFifth = 5.20f;
+/// The third, which fixes the mode's major or minor colour.
+constexpr float kThird = 4.70f;
+/// The characteristic degree: the one note that separates this mode from the
+/// major or minor scale it otherwise shares. Weighted above the ordinary scale
+/// tones because it is the whole evidence for the mode.
+constexpr float kCharacteristic = 3.90f;
+/// The remaining scale degrees.
+constexpr float kScaleTone = 2.80f;
+/// Anything outside the scale.
+constexpr float kNonScaleTone = 0.35f;
+}  // namespace modal_weights
 
-  auto set_scale = [&profile](std::initializer_list<int> intervals) {
-    for (int interval : intervals) {
-      profile[interval] = 2.80f;
-    }
-  };
+/// @brief The scale and the three weighted degrees of one mode.
+/// @details The scale is a fixed-size array rather than an initializer_list so
+/// the spec owns its degrees; an initializer_list returned by value would leave
+/// the caller reading a destroyed backing array.
+struct ModalSpec {
+  std::array<int, 7> scale{};
+  bool defined = false;    ///< False for Major and Minor, which use published profiles
+  int third = 0;           ///< Semitones to the third
+  int fifth = 0;           ///< Semitones to the fifth; 6 for Locrian, which has none perfect
+  int characteristic = 0;  ///< Semitones to the degree that names the mode
+};
 
+ModalSpec modal_spec(Mode mode) {
   switch (mode) {
     case Mode::Dorian:
-      set_scale({0, 2, 3, 5, 7, 9, 10});
-      profile[3] = 4.70f;
-      profile[9] = 3.70f;
-      break;
+      // Minor scale with a natural sixth; the sixth is what makes it not Aeolian.
+      return {{0, 2, 3, 5, 7, 9, 10}, true, 3, 7, 9};
     case Mode::Phrygian:
-      set_scale({0, 1, 3, 5, 7, 8, 10});
-      profile[1] = 3.90f;
-      profile[3] = 4.70f;
-      break;
+      // Minor scale with a flat second.
+      return {{0, 1, 3, 5, 7, 8, 10}, true, 3, 7, 1};
     case Mode::Lydian:
-      set_scale({0, 2, 4, 6, 7, 9, 11});
-      profile[4] = 4.70f;
-      profile[6] = 3.90f;
-      break;
+      // Major scale with a raised fourth.
+      return {{0, 2, 4, 6, 7, 9, 11}, true, 4, 7, 6};
     case Mode::Mixolydian:
-      set_scale({0, 2, 4, 5, 7, 9, 10});
-      profile[4] = 4.70f;
-      profile[10] = 3.90f;
-      break;
+      // Major scale with a flat seventh.
+      return {{0, 2, 4, 5, 7, 9, 10}, true, 4, 7, 10};
     case Mode::Locrian:
-      set_scale({0, 1, 3, 5, 6, 8, 10});
-      profile[3] = 4.40f;
-      profile[6] = 4.90f;
-      break;
+      // The only mode without a perfect fifth, which is also what names it, so
+      // the diminished fifth takes both roles and gets the higher of the two.
+      return {{0, 1, 3, 5, 6, 8, 10}, true, 3, 6, 6};
     case Mode::Major:
     case Mode::Minor:
     default:
-      return profile;
+      return {};
+  }
+}
+
+std::array<float, 12> modal_base_profile(Mode mode) {
+  std::array<float, 12> profile;
+  profile.fill(modal_weights::kNonScaleTone);
+
+  const ModalSpec spec = modal_spec(mode);
+  if (!spec.defined) {
+    // Major and minor are covered by the published profiles and never reach here.
+    return profile;
   }
 
-  profile[0] = 6.30f;
-  if (mode == Mode::Locrian) {
-    profile[7] = 1.10f;
-  } else {
-    profile[7] = 5.20f;
+  for (int interval : spec.scale) {
+    profile[interval] = modal_weights::kScaleTone;
   }
+  profile[spec.characteristic] = modal_weights::kCharacteristic;
+  profile[spec.third] = modal_weights::kThird;
+  // The fifth is written after the third and the characteristic degree so that
+  // Locrian, where all three can name the same degree, ends on the fifth's
+  // weight rather than on whichever assignment happened to run last.
+  profile[spec.fifth] = std::max(profile[spec.fifth], modal_weights::kFifth);
+  profile[0] = modal_weights::kTonic;
 
   return profile;
 }

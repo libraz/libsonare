@@ -796,6 +796,17 @@ static_assert(static_cast<int>(sonare::ChordQuality::HalfDim7) == SONARE_CHORD_H
 static_assert(static_cast<int>(sonare::ChordQuality::Major9) == SONARE_CHORD_MAJOR9, "");
 static_assert(static_cast<int>(sonare::ChordQuality::Dominant9) == SONARE_CHORD_DOMINANT9, "");
 static_assert(static_cast<int>(sonare::ChordQuality::Sus2Add4) == SONARE_CHORD_SUS2_ADD4, "");
+static_assert(static_cast<int>(sonare::ChordQuality::Major6) == SONARE_CHORD_MAJOR6, "");
+static_assert(static_cast<int>(sonare::ChordQuality::Minor6) == SONARE_CHORD_MINOR6, "");
+static_assert(static_cast<int>(sonare::ChordQuality::MinorMajor7) == SONARE_CHORD_MINOR_MAJOR7, "");
+static_assert(static_cast<int>(sonare::ChordQuality::Dominant7Sus4) == SONARE_CHORD_DOMINANT7_SUS4,
+              "");
+static_assert(static_cast<int>(sonare::ChordQuality::Dominant11) == SONARE_CHORD_DOMINANT11, "");
+static_assert(static_cast<int>(sonare::ChordQuality::Dominant13) == SONARE_CHORD_DOMINANT13, "");
+static_assert(static_cast<int>(sonare::ChordQuality::Dominant7b9) == SONARE_CHORD_DOMINANT7_FLAT9,
+              "");
+static_assert(static_cast<int>(sonare::ChordQuality::Dominant7s9) == SONARE_CHORD_DOMINANT7_SHARP9,
+              "");
 
 /// @brief Returns the core's canonical symbol for one C chord record.
 std::string ChordSymbol(const SonareChord& chord) {

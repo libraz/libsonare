@@ -165,23 +165,24 @@ TEST_CASE("StreamAnalyzer kBarVoteSlots constant pins kNumChordQualities cardina
   //   root * 4 + quality  (wrong)
   // that could alias into a neighbour's slot or exceed the array bounds.
   //
-  // After the fix, kBarVoteSlots = 12 * kNumChordQualities = 204, and vote
-  // indices use `root * kNumChordQualities + quality`.  We pin the expected
-  // value so that a future reduction of kNumChordQualities (which would
-  // reintroduce the bug) fails the build.
-  static_assert(sonare::kNumChordQualities == 17,
-                "kNumChordQualities changed — update kBarVoteSlots and this test");
-  static_assert(sonare::StreamAnalyzer::kBarVoteSlots == 12 * 17,
+  // After the fix, vote indices use `root * kNumChordQualities + quality` and
+  // the table is sized to match. The assertions below pin the *relationship*
+  // rather than a literal count, so appending a quality widens the table
+  // instead of failing here, while shrinking the cardinality below what the
+  // enum needs (which is what would reintroduce the bug) still fails the build.
+  static_assert(sonare::kNumChordQualities == sonare::kChordQualityCount,
+                "the streaming alias must track the ChordQuality cardinality in util/types.h");
+  static_assert(sonare::StreamAnalyzer::kBarVoteSlots == 12 * sonare::kNumChordQualities,
                 "kBarVoteSlots must equal 12 * kNumChordQualities");
 
-  // The Sus2Add4 enumerator (index 16) is the highest-numbered quality; its
-  // vote-table index for root=11 (B) would be 11 * 17 + 16 = 203, which is
-  // exactly kBarVoteSlots - 1. Verify it is strictly less than kBarVoteSlots
-  // (i.e., in-bounds).
-  constexpr int kLastQualityIdx = static_cast<int>(sonare::ChordQuality::Sus2Add4);
+  // The highest-numbered quality at root=11 (B) produces the largest vote-table
+  // index there is. Verify it is strictly in-bounds.
+  constexpr int kLastQualityIdx = sonare::kChordQualityCount - 1;
   constexpr int kHighestVoteIdx = 11 * sonare::kNumChordQualities + kLastQualityIdx;
   static_assert(kHighestVoteIdx < sonare::StreamAnalyzer::kBarVoteSlots,
-                "Vote index for Sus2Add4 with root=B exceeds kBarVoteSlots — array OOB");
+                "Vote index for the last quality with root=B exceeds kBarVoteSlots — array OOB");
+  static_assert(static_cast<int>(sonare::ChordQuality::Dominant7s9) < sonare::kChordQualityCount,
+                "kChordQualityCount must cover every ChordQuality enumerator");
 
   // Runtime check: a StreamAnalyzer driven through enough audio to emit chord
   // frames must not crash, and the per-frame chord_quality values must be

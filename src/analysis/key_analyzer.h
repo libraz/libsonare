@@ -18,9 +18,28 @@ struct Chord;
 
 /// @brief Detected musical key.
 struct Key {
-  PitchClass root;   ///< Root pitch class
-  Mode mode;         ///< Major or Minor
-  float confidence;  ///< Confidence score [0, 1]
+  PitchClass root;  ///< Root pitch class
+  Mode mode;        ///< Major or Minor
+  /// @brief Share of the model's belief that this key is the answer, in [0, 1).
+  /// @details A softmax over the profile correlations of every candidate the
+  ///          analyzer scored, so the value falls as the runner-up closes in and
+  ///          two keys that split the evidence — a relative major and minor,
+  ///          typically — each report about half. The candidate confidences of
+  ///          one analysis sum to 1.
+  ///
+  /// @warning This is the model's own belief, not a measured accuracy. It says
+  ///          how decisively the chroma picked this key out of the candidate
+  ///          set; it does not say how often that pick is right, and nothing
+  ///          here has been fitted against annotated recordings. A confident
+  ///          wrong answer is entirely possible, so a pipeline that branches on
+  ///          this must choose its own threshold against its own material.
+  ///          `tests/fixtures/music_eval/README.md` describes how to measure
+  ///          accuracy on a corpus you hold.
+  ///
+  ///          @ref estimate_key_from_chords and @ref refine_key_with_chords
+  ///          report a different quantity in this field — the diatonic share of
+  ///          the progression — which is documented at each of them.
+  float confidence;
 
   /// @brief Returns key name (e.g., "C major", "A minor").
   std::string to_string() const;
@@ -31,7 +50,7 @@ struct Key {
 
 /// @brief Key candidate with correlation score.
 struct KeyCandidate {
-  Key key;            ///< Key information
+  Key key;            ///< Key information, including its posterior confidence
   float correlation;  ///< Correlation with profile [-1, 1]
 };
 
@@ -74,8 +93,20 @@ class KeyAnalyzer {
   /// @brief Returns the mode (Major/Minor).
   Mode mode() const { return key_.mode; }
 
-  /// @brief Returns confidence of the key estimate [0, 1].
+  /// @brief Returns the detected key's posterior confidence; see @ref Key::confidence.
   float confidence() const { return key_.confidence; }
+
+  /// @brief Returns how strong the chroma evidence for the winning key is.
+  /// @details Blends the winner's raw correlation with its margin over the
+  ///          runner-up. Unlike @ref confidence it is not a share of a
+  ///          distribution, so it stays on one scale across analyses that
+  ///          scored different numbers of candidates — a posterior mechanically
+  ///          shrinks when the search widens, whether or not the evidence
+  ///          changed. That is what makes this, not the confidence, the
+  ///          quantity the analyzer compares when choosing between chroma
+  ///          front-ends. Still not a probability, and not calibrated against
+  ///          annotated material.
+  float evidence_score() const { return evidence_score_; }
 
   /// @brief Returns top key candidates.
   /// @param top_n Number of candidates to return
@@ -91,7 +122,11 @@ class KeyAnalyzer {
  private:
   void analyze();
 
+  /// @brief Turns the candidate correlations into a softmax distribution.
+  void assign_posterior_confidences();
+
   Key key_;
+  float evidence_score_ = 0.0f;
   std::array<float, 12> mean_chroma_;
   std::vector<KeyCandidate> candidates_;
   KeyConfig config_;
@@ -107,14 +142,21 @@ Key detect_key(const Audio& audio, const KeyConfig& config = KeyConfig());
 /// @details Uses diatonic chord analysis to determine the most likely key.
 /// For progressions like C-G-Am-F, this correctly identifies C major.
 /// @param chords Detected chord sequence
-/// @return Estimated key with confidence
+/// @return Estimated key. Its @ref Key::confidence is the winning key's share of
+///         the progression's total duration once cadence and bookend bonuses are
+///         counted — a coverage figure, not the posterior @ref KeyAnalyzer
+///         reports and not comparable with it.
 Key estimate_key_from_chords(const std::vector<struct Chord>& chords);
 
 /// @brief Refines key estimate using chord progression.
 /// @details Combines chroma-based key detection with chord progression analysis.
-/// @param chroma_key Key from chroma analysis
+/// @param chroma_key Key from chroma analysis, carrying the posterior confidence
 /// @param chords Detected chords
-/// @return Refined key estimate
+/// @return Refined key estimate. The confidence it carries is whichever of the
+///         two inputs won, so it is on that input's scale.
+/// @warning The two inputs measure different things — a posterior over key
+///          candidates against a diatonic-coverage share — and this arbitrates
+///          between them with fixed thresholds rather than a common scale.
 Key refine_key_with_chords(const Key& chroma_key, const std::vector<struct Chord>& chords);
 
 }  // namespace sonare

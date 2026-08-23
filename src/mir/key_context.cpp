@@ -190,6 +190,43 @@ MappedQuality map_chord_quality(ChordQuality quality) {
       m.quality = arrangement::ChordQuality::kSuspended;
       m.extensions = {2, 4};
       break;
+    case ChordQuality::Major6:
+      m.quality = arrangement::ChordQuality::kMajor;
+      m.extensions = {6};
+      break;
+    case ChordQuality::Minor6:
+      m.quality = arrangement::ChordQuality::kMinor;
+      m.extensions = {6};
+      break;
+    case ChordQuality::MinorMajor7:
+      // A minor triad under a *major* seventh. Degree 7 takes its quality from
+      // the triad it sits on, which over a minor triad is the minor seventh --
+      // a semitone below the tone this chord actually has. Recording the triad
+      // alone under-specifies the chord; recording degree 7 would name a wrong
+      // note, and a pitch-correction target built from it would pull the
+      // leading tone down.
+      m.quality = arrangement::ChordQuality::kMinor;
+      break;
+    case ChordQuality::Dominant7Sus4:
+      m.quality = arrangement::ChordQuality::kSuspended;
+      m.extensions = {4, 7};
+      break;
+    case ChordQuality::Dominant11:
+      m.quality = arrangement::ChordQuality::kSuspended;
+      m.extensions = {4, 7, 9};
+      break;
+    case ChordQuality::Dominant13:
+      m.quality = arrangement::ChordQuality::kDominant;
+      m.extensions = {7, 9, 13};
+      break;
+    case ChordQuality::Dominant7b9:
+    case ChordQuality::Dominant7s9:
+      // The altered ninth has no degree of its own in this representation; the
+      // dominant seventh is what a downstream voicing needs, and spelling the
+      // plain ninth would name a tone the chord does not contain.
+      m.quality = arrangement::ChordQuality::kDominant;
+      m.extensions = {7};
+      break;
     case ChordQuality::Unknown:
     default:
       m.quality = arrangement::ChordQuality::kUnknown;

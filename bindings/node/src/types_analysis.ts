@@ -1,6 +1,20 @@
 export interface Key {
   root: string;
   mode: string;
+  /**
+   * Share of the model's belief that this key is the answer, in `[0, 1)`.
+   *
+   * A softmax over the profile correlations of every candidate that was scored,
+   * so it falls as the runner-up closes in and two keys that split the evidence
+   * -- a relative major and minor, typically -- each report about half.
+   *
+   * This is the model's own belief, **not** a measured accuracy. It says how
+   * decisively the chroma picked this key out of the candidate set; it does not
+   * say how often that pick is right, and nothing here has been fitted against
+   * annotated recordings. A confident wrong answer is entirely possible, so a
+   * pipeline that branches on it must choose its own threshold against its own
+   * material.
+   */
   confidence: number;
   name: string;
   shortName: string;
@@ -396,9 +410,11 @@ export interface AnalyzeSectionsOptions {
  *
  * Ordinal 2 (PreChorus) is never produced by the analyzer: it has no detection
  * branch, so filtering sections on it always yields an empty result. Every
- * other ordinal is reachable. 7 (Unknown) means the analyzer did not identify
- * the segment -- no boundary was detected, or the segment matched none of the
- * positive branches -- and comes with `confidence` 0.
+ * other ordinal is reachable. 7 (Unknown) means the analyzer did not name the
+ * segment: no boundary was detected, the segment matched none of the positive
+ * branches, or the evidence for a musical function was too weak to assert one.
+ * The first case comes with `confidence` 0; the last keeps the sub-threshold
+ * score, so a caller can see how close the segment came to a label.
  */
 export type SectionTypeOrdinal = 0 | 1 | 2 | 3 | 4 | 5 | 6 | 7;
 
@@ -728,6 +744,14 @@ export interface Chord {
     | 'major9'
     | 'dominant9'
     | 'sus2Add4'
+    | 'major6'
+    | 'minor6'
+    | 'minorMajor7'
+    | 'dominant7Sus4'
+    | 'dominant11'
+    | 'dominant13'
+    | 'dominant7Flat9'
+    | 'dominant7Sharp9'
     | 'unknown';
   /** Canonical core chord symbol (e.g. `'Cmaj7'`, `'Am/C'`, `'N.C.'`). */
   name: string;

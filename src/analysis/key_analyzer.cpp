@@ -202,7 +202,12 @@ std::array<float, 12> compute_mean_chroma_for_audio(const Audio& audio, const Ke
   return mean_chroma_of(analysis_audio, config, loudness_weighted);
 }
 
-float candidate_selection_score(const KeyAnalyzer& analyzer) { return analyzer.confidence(); }
+// Front-end selection and the high-pass fallback compare the evidence score,
+// not the reported confidence. The confidence is a distribution over whatever
+// candidate set was scored, so it shrinks when a modal search widens that set
+// even though the audio did not change; the thresholds below are about how
+// strong the chroma evidence is and have to be independent of that.
+float candidate_selection_score(const KeyAnalyzer& analyzer) { return analyzer.evidence_score(); }
 
 bool should_use_harmonic_highpass_fallback(const KeyAnalyzer& current,
                                            const KeyAnalyzer& fallback) {
@@ -210,8 +215,8 @@ bool should_use_harmonic_highpass_fallback(const KeyAnalyzer& current,
     return false;
   }
 
-  return current.confidence() <= kHighpassFallbackCurrentConfidenceMax &&
-         fallback.confidence() >= kHighpassFallbackConfidenceMin;
+  return current.evidence_score() <= kHighpassFallbackCurrentConfidenceMax &&
+         fallback.evidence_score() >= kHighpassFallbackConfidenceMin;
 }
 
 }  // namespace
@@ -287,7 +292,7 @@ KeyAnalyzer::KeyAnalyzer(const Audio& audio, const KeyConfig& config) : config_(
       }
     }
 
-    if (best_analyzer.confidence() <= kHighpassFallbackCurrentConfidenceMax) {
+    if (best_analyzer.evidence_score() <= kHighpassFallbackCurrentConfidenceMax) {
       KeyConfig fallback_config = config;
       fallback_config.genre_hint = "";
       fallback_config.use_hpss = true;
@@ -305,6 +310,7 @@ KeyAnalyzer::KeyAnalyzer(const Audio& audio, const KeyConfig& config) : config_(
     mean_chroma_ = best_analyzer.mean_chroma_;
     candidates_ = best_analyzer.candidates_;
     key_ = best_analyzer.key_;
+    evidence_score_ = best_analyzer.evidence_score_;
     return;
   }
 
@@ -340,40 +346,63 @@ void KeyAnalyzer::analyze() {
   // Compute correlation with all requested key/mode candidates using boosted profiles.
   candidates_ = build_key_candidates(mean_chroma_, candidate_modes, profile_type);
 
-  // Compute confidence scores
-  // Confidence based on how much the best correlation stands out
-  if (!candidates_.empty()) {
-    float best_corr = candidates_[0].correlation;
-    float second_corr = candidates_.size() > 1 ? candidates_[1].correlation : 0.0f;
-
-    // Confidence is based on the gap between best and second-best
-    float gap = best_corr - second_corr;
-
-    // Normalize correlation to [0, 1] range
-    // Correlation is in [-1, 1], so shift and scale
-    float normalized_corr = (best_corr + 1.0f) / 2.0f;
-
-    // Combine correlation strength and distinctiveness
-    float distinctiveness = std::min(gap / 0.2f, 1.0f);  // Gap of 0.2 = full confidence
-    float confidence = normalized_corr * 0.5f + distinctiveness * 0.5f;
-
-    // Runner-up candidates report a raw-correlation confidence rescaled to [0, 1].
-    for (auto& candidate : candidates_) {
-      float rel_corr = (candidate.correlation + 1.0f) / 2.0f;
-      candidate.key.confidence = rel_corr;
-    }
-
-    // Only the best candidate (== key()) carries the gap-based confidence that
-    // blends correlation strength with distinctiveness from the runner-up. This is
-    // intentionally on a different scale than the runner-up confidences above, so
-    // consumers should not compare candidates_[0].confidence against the rest as a
-    // ranking metric (candidates are already ordered by raw correlation).
-    candidates_[0].key.confidence = std::min(confidence, 1.0f);
-    key_ = candidates_[0].key;
-  } else {
+  if (candidates_.empty()) {
     key_.root = PitchClass::C;
     key_.mode = Mode::Major;
     key_.confidence = 0.0f;
+    evidence_score_ = 0.0f;
+    return;
+  }
+
+  // Evidence score: how strong the winning correlation is, blended with its
+  // margin over the runner-up. This is the quantity the analyzer's own
+  // front-end selection compares, so it must not depend on how many candidates
+  // were scored — a modal search over 84 candidates would otherwise look less
+  // certain than a major/minor one over 24 on the very same audio.
+  const float best_corr = candidates_[0].correlation;
+  const float second_corr = candidates_.size() > 1 ? candidates_[1].correlation : 0.0f;
+  const float gap = best_corr - second_corr;
+  const float normalized_corr = (best_corr + 1.0f) / 2.0f;
+  const float distinctiveness = std::min(gap / key_constants::kFullDistinctivenessGap, 1.0f);
+  evidence_score_ = std::min(normalized_corr * 0.5f + distinctiveness * 0.5f, 1.0f);
+
+  assign_posterior_confidences();
+  key_ = candidates_[0].key;
+}
+
+void KeyAnalyzer::assign_posterior_confidences() {
+  // A softmax over the candidate correlations. The reported confidence is then
+  // a share of one analysis's total belief rather than an unbounded score, so
+  // the number falls when a runner-up is close instead of saturating at 1.0 --
+  // which is what a relative major and minor splitting the same chroma should
+  // look like, and what the old formula could not express because its
+  // distinctiveness term clipped at a fixed gap.
+  //
+  // Correlations are subtracted from the maximum before exponentiating, which
+  // leaves the distribution unchanged and keeps exp() away from overflow.
+  const float best_corr = candidates_[0].correlation;
+  double total = 0.0;
+  std::vector<double> weights(candidates_.size());
+  for (size_t i = 0; i < candidates_.size(); ++i) {
+    const double scaled = (static_cast<double>(candidates_[i].correlation) - best_corr) /
+                          key_constants::kConfidenceTemperature;
+    weights[i] = std::exp(scaled);
+    total += weights[i];
+  }
+  // The best candidate always contributes exp(0), so the total is at least 1;
+  // the guard is here only so a non-finite correlation cannot produce a NaN
+  // confidence rather than because the branch is expected to run.
+  if (!(total > 0.0) || !std::isfinite(total)) {
+    for (auto& candidate : candidates_) {
+      candidate.key.confidence = 0.0f;
+    }
+    return;
+  }
+  // On silence every candidate correlates to 0 and the distribution comes out
+  // uniform: with 24 candidates each reports about 4%, which is the honest
+  // reading of "no key stands out" rather than a mid-range score.
+  for (size_t i = 0; i < candidates_.size(); ++i) {
+    candidates_[i].key.confidence = static_cast<float>(weights[i] / total);
   }
 }
 

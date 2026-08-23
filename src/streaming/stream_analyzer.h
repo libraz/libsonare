@@ -22,15 +22,14 @@ class FFT;
 struct StreamAnalyzerPublication;
 
 /// @brief Number of enumerators in ChordQuality.
-/// @details Companion constant for the ChordQuality enum in util/types.h. The
-///          enum itself lives in util/ (out of streaming/'s edit scope for the
-///          current change), so the cardinality is mirrored here next to the
-///          only consumer that needs a fixed-size table indexed by quality
-///          (the streaming bar-synchronized chord vote table). A static_assert
-///          in stream_analyzer.cpp validates that the value still fits every
-///          ChordQuality::Sus2Add4-or-earlier enumerator. When a new quality
-///          is added to ChordQuality, bump this constant in lockstep.
-inline constexpr int kNumChordQualities = 17;
+/// @details Alias of @ref sonare::kChordQualityCount, which lives next to the
+///          enum in util/types.h and is the one place the cardinality is
+///          written. Kept as a name here because the streaming bar-synchronized
+///          chord vote table is sized from it and reads better spelled this
+///          way; a static_assert in stream_analyzer.cpp still checks that the
+///          vote table matches, so appending a quality widens the table instead
+///          of silently dropping the new value.
+inline constexpr int kNumChordQualities = kChordQualityCount;
 
 /// @brief Streaming audio analyzer for real-time visualization.
 /// @details Processes audio in chunks, maintaining overlap state between calls.

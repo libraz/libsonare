@@ -223,7 +223,6 @@ TEST_CASE("ChordAnalyzer inversion bass is not C-biased for a high pitch-class b
 
   ChordAnalyzer analyzer(audio, config);
   REQUIRE(analyzer.count() >= 1);
-
   const Chord most_common = analyzer.most_common_chord();
   REQUIRE(most_common.root == PitchClass::G);
   REQUIRE(most_common.quality == ChordQuality::Major);
@@ -517,8 +516,8 @@ TEST_CASE("ChordAnalyzer templates", "[chord_analyzer]") {
   config.use_triads_only = false;
   ChordAnalyzer analyzer1(audio, config);
 
-  // Full templates: 192 (12 roots × 16 qualities)
-  REQUIRE(analyzer1.templates().size() == 192);
+  // Full templates: 12 roots × (16 base qualities + the extended vocabulary)
+  REQUIRE(analyzer1.templates().size() == 12 * (16 + extended_chord_qualities().size()));
 
   config.use_triads_only = true;
   ChordAnalyzer analyzer2(audio, config);

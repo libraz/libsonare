@@ -23,17 +23,17 @@ using namespace streaming_detail;
 /// @details The bar-vote table is indexed as
 ///          @c root * kNumChordQualities + quality , so every enumerator added
 ///          to ChordQuality must be accompanied by a bump of
-///          kNumChordQualities. Without this assertion an enum expansion
+///          kChordQualityCount. Without this assertion an enum expansion
 ///          would silently truncate qualities whose index exceeds the old
 ///          fixed array size and quietly drop those chords from the bar
 ///          progression — exactly the P0 bug this whole module is designed
-///          to prevent. If this fires, raise kNumChordQualities in
-///          stream_analyzer.h to match the enum in util/types.h.
+///          to prevent. If this fires, raise kChordQualityCount in
+///          util/types.h to match the enum beside it, and kBarVoteSlots here.
 static_assert(StreamAnalyzer::kBarVoteSlots == 12 * kNumChordQualities,
               "StreamAnalyzer::kBarVoteSlots must equal 12 * kNumChordQualities");
-static_assert(static_cast<int>(ChordQuality::Sus2Add4) < kNumChordQualities,
-              "kNumChordQualities must cover every ChordQuality enumerator; "
-              "bump it in stream_analyzer.h when adding a new quality");
+static_assert(static_cast<int>(ChordQuality::Dominant7s9) < kNumChordQualities,
+              "kChordQualityCount must cover every ChordQuality enumerator; "
+              "bump it in util/types.h when adding a new quality");
 
 StreamAnalyzer::StreamAnalyzer(const StreamConfig& config) : config_(config) {
   /// Reject malformed geometry that would silently yield *wrong* results. Every

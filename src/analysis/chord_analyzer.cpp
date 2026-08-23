@@ -4,11 +4,13 @@
 #include <array>
 #include <climits>
 #include <cmath>
+#include <limits>
 #include <map>
 #include <sstream>
 
 #include "core/convert.h"
 #include "feature/nnls_chroma.h"
+#include "util/constants.h"
 #include "util/exception.h"
 
 namespace sonare {
@@ -69,6 +71,30 @@ std::string Chord::to_string() const {
     case ChordQuality::Sus2Add4:
       name += "sus2add4";
       break;
+    case ChordQuality::Major6:
+      name += "6";
+      break;
+    case ChordQuality::Minor6:
+      name += "m6";
+      break;
+    case ChordQuality::MinorMajor7:
+      name += "mM7";
+      break;
+    case ChordQuality::Dominant7Sus4:
+      name += "7sus4";
+      break;
+    case ChordQuality::Dominant11:
+      name += "11";
+      break;
+    case ChordQuality::Dominant13:
+      name += "13";
+      break;
+    case ChordQuality::Dominant7b9:
+      name += "7b9";
+      break;
+    case ChordQuality::Dominant7s9:
+      name += "7#9";
+      break;
   }
   if (bass != root) {
     name += "/";
@@ -107,7 +133,9 @@ ChordAnalyzer::ChordAnalyzer(const Audio& audio, const ChordConfig& config) : co
     chroma_ = Chroma::compute(audio, chroma_config);
   }
 
-  if (config.detect_inversions) {
+  // One bass chromagram serves both consumers: inversion detection reads which
+  // chord tone is lowest, root scoring reads which pitch class the bass names.
+  if (config.detect_inversions || (config.use_bass_chroma && config.bass_root_weight != 0.0f)) {
     BassChromaConfig bass_config;
     bass_config.cqt.hop_length = config.hop_length;
     bass_chroma_ = bass_chroma(audio, bass_config);
@@ -174,16 +202,23 @@ bool is_triad(ChordQuality quality) {
          quality == ChordQuality::Diminished || quality == ChordQuality::Augmented;
 }
 
+/// @brief How much a non-triad template must beat the best triad by.
+/// @details The three anagram qualities are deliberately not listed: they take
+/// the ordinary tetrad margin, because the guard that keeps them honest is the
+/// correlation penalty their template already carries against the quality they
+/// spell the same notes as. Stacking a wider triad margin on top of that would
+/// put them out of reach of any evidence at all.
 float extension_threshold(ChordQuality quality) {
   switch (quality) {
-    case ChordQuality::Add9:
-    case ChordQuality::MinorAdd9:
-    case ChordQuality::Major9:
-    case ChordQuality::Dominant9:
-    case ChordQuality::Sus2Add4:
-    case ChordQuality::Dim7:
-    case ChordQuality::HalfDim7:
-      return 0.05f;
+    // The extended dominants and the minor-major seventh add a tension a
+    // plainer chord already explains, so they only earn their extra name on
+    // clearly stronger evidence than an ordinary tetrad needs.
+    case ChordQuality::MinorMajor7:
+    case ChordQuality::Dominant11:
+    case ChordQuality::Dominant13:
+    case ChordQuality::Dominant7b9:
+    case ChordQuality::Dominant7s9:
+      return chord_constants::kExtendedQualityThreshold;
     default:
       return chord_constants::kTetradThreshold;
   }
@@ -203,6 +238,23 @@ int rescale_frame(int frame, double from_frame_rate, double to_frame_rate, int m
   return static_cast<int>(std::clamp(scaled, 0.0, static_cast<double>(max_frame)));
 }
 
+/// @brief A pitch class's share of a 12-vector's energy, centred on "no claim".
+/// @details 0 when the energy is spread evenly over all twelve classes, which
+/// names nothing; 1 when this class carries all of it; slightly negative when
+/// the class is absent while others sound.
+float pitch_class_share(const float* values, PitchClass pitch) {
+  constexpr float kUniformShare = 1.0f / 12.0f;
+  float sum = 0.0f;
+  for (int c = 0; c < 12; ++c) {
+    sum += std::max(0.0f, values[c]);
+  }
+  if (!(sum > constants::kEpsilon)) {
+    return 0.0f;
+  }
+  const float share = std::max(0.0f, values[static_cast<int>(pitch)]) / sum;
+  return std::clamp((share - kUniformShare) / (1.0f - kUniformShare), -1.0f, 1.0f);
+}
+
 /// @brief Checks whether @p chord's pattern contains @p pitch.
 /// @details Uses the already-selected template directly instead of regenerating
 /// the full 192-entry template set per call, which also avoids a template-set
@@ -213,40 +265,108 @@ bool chord_contains_pitch_class(const ChordTemplate& chord, PitchClass pitch) {
 
 }  // namespace
 
+bool ChordAnalyzer::bass_energy(int start_frame, int end_frame, std::array<float, 12>& out) const {
+  if (bass_chroma_.empty() || bass_chroma_.n_chroma() < 12) {
+    return false;
+  }
+
+  // start_frame/end_frame index chroma_'s frame space. A bass chromagram may run
+  // at a different hop length or sample rate, so the span is mapped through
+  // absolute time first; indexing it with harmonic frame numbers would read a
+  // different part of the song.
+  const double chroma_rate = chroma_frame_rate(chroma_);
+  const double bass_rate = chroma_frame_rate(bass_chroma_);
+  if (chroma_rate > 0.0 && bass_rate > 0.0 && chroma_rate != bass_rate) {
+    const int last = bass_chroma_.n_frames();
+    const int mapped_start = rescale_frame(start_frame, chroma_rate, bass_rate, last);
+    const int mapped_end = rescale_frame(end_frame, chroma_rate, bass_rate, last);
+    start_frame = mapped_start;
+    end_frame = std::max(mapped_end, mapped_start + 1);
+  }
+
+  start_frame = std::max(0, start_frame);
+  end_frame = std::min(bass_chroma_.n_frames(), end_frame);
+  if (start_frame >= end_frame) {
+    return false;
+  }
+
+  out.fill(0.0f);
+  for (int f = start_frame; f < end_frame; ++f) {
+    for (int c = 0; c < 12; ++c) {
+      out[static_cast<size_t>(c)] += bass_chroma_.at(c, f);
+    }
+  }
+  const float inv_count = 1.0f / static_cast<float>(end_frame - start_frame);
+  for (float& value : out) {
+    value *= inv_count;
+  }
+  return true;
+}
+
+float ChordAnalyzer::bass_root_salience(const std::array<float, 12>& bass, PitchClass root) const {
+  // Share, not ratio to the loudest pitch class: in a first inversion the root
+  // still carries a large slice of the bass even though another chord tone is
+  // louder, and a measure that reads it as "not the bass" would relabel every
+  // inversion after its own bass note.
+  return pitch_class_share(bass.data(), root);
+}
+
+float ChordAnalyzer::template_score(const ChordTemplate& chord_template, const float* chroma,
+                                    const std::array<float, 12>* bass) const {
+  const float correlation = chord_template.correlate(chroma);
+  if (bass == nullptr || config_.bass_root_weight == 0.0f) {
+    return correlation;
+  }
+  // What the low register adds, not what it says on its own. Subtracting the
+  // same share taken over the harmonic chroma leaves only the part of the bass
+  // evidence the chroma did not already carry, which is exactly the cue that
+  // separates a chord from its relative. It also makes the term self-limiting
+  // on material with no bass part: there the low-register chromagram is a
+  // leakage-scaled copy of the harmonic one, the two shares cancel, and a
+  // measurement of nothing decides nothing instead of nominating whichever
+  // pitch class the leakage happened to favour.
+  const float cue = bass_root_salience(*bass, chord_template.root) -
+                    pitch_class_share(chroma, chord_template.root);
+  return correlation + config_.bass_root_weight * std::clamp(cue, -1.0f, 1.0f);
+}
+
 ChordAnalyzer::ChordMatch ChordAnalyzer::find_best_chord_with_confidence(
-    const float* chroma) const {
+    const float* chroma, const std::array<float, 12>* bass) const {
   // Find best triad and best tetrad separately
-  float best_triad_corr = -1.0f;
+  float best_triad_score = -std::numeric_limits<float>::infinity();
   int best_triad_idx = 0;
-  float best_tetrad_corr = -1.0f;
+  float best_tetrad_score = -std::numeric_limits<float>::infinity();
   int best_tetrad_idx = 0;
 
   for (size_t i = 0; i < templates_.size(); ++i) {
-    float corr = templates_[i].correlate(chroma);
+    float score = template_score(templates_[i], chroma, bass);
 
     if (is_triad(templates_[i].quality)) {
-      if (corr > best_triad_corr) {
-        best_triad_corr = corr;
+      if (score > best_triad_score) {
+        best_triad_score = score;
         best_triad_idx = static_cast<int>(i);
       }
     } else {
-      if (corr > best_tetrad_corr) {
-        best_tetrad_corr = corr;
+      if (score > best_tetrad_score) {
+        best_tetrad_score = score;
         best_tetrad_idx = static_cast<int>(i);
       }
     }
   }
 
   // Prefer triad unless the richer template has enough additional evidence.
+  // The reported confidence is the selected template's plain chroma
+  // correlation, not the bass-augmented selection score: the bass term decides
+  // between candidates, and letting it inflate the number that config_.threshold
+  // compares against would move the N.C. boundary as a side effect.
   ChordMatch result;
-  if (best_tetrad_corr >
-      best_triad_corr + extension_threshold(templates_[best_tetrad_idx].quality)) {
+  if (best_tetrad_score >
+      best_triad_score + extension_threshold(templates_[best_tetrad_idx].quality)) {
     result.index = best_tetrad_idx;
-    result.confidence = std::min(1.0f, std::max(0.0f, best_tetrad_corr));
   } else {
     result.index = best_triad_idx;
-    result.confidence = std::min(1.0f, std::max(0.0f, best_triad_corr));
   }
+  result.confidence = std::min(1.0f, std::max(0.0f, templates_[result.index].correlate(chroma)));
   return result;
 }
 
@@ -254,11 +374,13 @@ int ChordAnalyzer::find_best_chord(const float* chroma) const {
   return find_best_chord_with_confidence(chroma).index;
 }
 
-ChordHmmObservation ChordAnalyzer::chord_observation(const float* chroma) const {
+ChordHmmObservation ChordAnalyzer::chord_observation(const float* chroma,
+                                                     const std::array<float, 12>* bass) const {
   ChordHmmObservation observation;
   observation.candidates.reserve(templates_.size());
   for (size_t i = 0; i < templates_.size(); ++i) {
-    observation.candidates.emplace_back(static_cast<int>(i), templates_[i].correlate(chroma));
+    observation.candidates.emplace_back(static_cast<int>(i),
+                                        template_score(templates_[i], chroma, bass));
   }
   return observation;
 }
@@ -339,13 +461,10 @@ PitchClass ChordAnalyzer::estimate_bass_pitch_class(int start_frame, int end_fra
       best = best_non_root;
     }
   }
-  const int major_or_minor_third =
-      chord.quality == ChordQuality::Major || chord.quality == ChordQuality::Dominant7 ||
-              chord.quality == ChordQuality::Major7 || chord.quality == ChordQuality::Augmented ||
-              chord.quality == ChordQuality::Add9 || chord.quality == ChordQuality::Major9 ||
-              chord.quality == ChordQuality::Dominant9
-          ? (static_cast<int>(chord.root) + 4) % 12
-          : (static_cast<int>(chord.root) + 3) % 12;
+  const ChordQuality triad_base = chord_quality_triad_base(chord.quality);
+  const bool has_major_third =
+      triad_base == ChordQuality::Major || triad_base == ChordQuality::Augmented;
+  const int major_or_minor_third = (static_cast<int>(chord.root) + (has_major_third ? 4 : 3)) % 12;
   if (has_bass_source && best != static_cast<int>(chord.root) &&
       chord.pattern[major_or_minor_third] > 0.0f) {
     const float third_score = energy[major_or_minor_third];
@@ -405,13 +524,18 @@ void ChordAnalyzer::analyze_chords() {
       smoothed[c] /= static_cast<float>(count);
     }
 
+    // Bass-register evidence over the same span the harmonic chroma was
+    // smoothed across, so the two describe the same moment.
+    std::array<float, 12> bass = {};
+    const std::array<float, 12>* bass_ptr = bass_energy(start, end, bass) ? &bass : nullptr;
+
     // Find best chord using shared logic
-    ChordMatch match = find_best_chord_with_confidence(smoothed.data());
+    ChordMatch match = find_best_chord_with_confidence(smoothed.data(), bass_ptr);
     frame_chords_[f] = match.index;
     confidences[f] = match.confidence;
     frame_chromas[f] = smoothed;
     if (config_.use_hmm) {
-      observations.push_back(chord_observation(smoothed.data()));
+      observations.push_back(chord_observation(smoothed.data(), bass_ptr));
     }
   }
 
@@ -535,13 +659,18 @@ void ChordAnalyzer::analyze_chords_beat_sync(const std::vector<float>& beat_time
       beat_chroma[c] /= static_cast<float>(count);
     }
 
+    // Bass-register evidence over the same beat window.
+    std::array<float, 12> bass = {};
+    const std::array<float, 12>* bass_ptr =
+        bass_energy(start_frame, end_frame, bass) ? &bass : nullptr;
+
     // Find best chord using shared logic
-    ChordMatch match = find_best_chord_with_confidence(beat_chroma.data());
+    ChordMatch match = find_best_chord_with_confidence(beat_chroma.data(), bass_ptr);
     beat_chords.push_back(match.index);
     beat_confidences.push_back(match.confidence);
     beat_chromas.push_back(beat_chroma);
     if (config_.use_hmm) {
-      observations.push_back(chord_observation(beat_chroma.data()));
+      observations.push_back(chord_observation(beat_chroma.data(), bass_ptr));
     }
   }
 
@@ -789,11 +918,12 @@ std::string ChordAnalyzer::chord_to_roman_numeral(const Chord& chord, PitchClass
     numeral = "?";
   }
 
-  // Adjust case based on chord quality
+  // Adjust case based on chord quality. The triad base comes from the interval
+  // table, so a minor-third quality added later is lower-cased without this
+  // list having to be extended.
+  const ChordQuality roman_triad_base = chord_quality_triad_base(chord.quality);
   bool is_minor_chord =
-      (chord.quality == ChordQuality::Minor || chord.quality == ChordQuality::Minor7 ||
-       chord.quality == ChordQuality::Diminished || chord.quality == ChordQuality::MinorAdd9 ||
-       chord.quality == ChordQuality::Dim7 || chord.quality == ChordQuality::HalfDim7);
+      (roman_triad_base == ChordQuality::Minor || roman_triad_base == ChordQuality::Diminished);
 
   if (is_minor_chord) {
     // Convert to lowercase
@@ -839,6 +969,28 @@ std::string ChordAnalyzer::chord_to_roman_numeral(const Chord& chord, PitchClass
       break;
     case ChordQuality::Sus2Add4:
       numeral += "sus2add4";
+      break;
+    case ChordQuality::Major6:
+    case ChordQuality::Minor6:
+      numeral += "6";
+      break;
+    case ChordQuality::MinorMajor7:
+      numeral += "M7";
+      break;
+    case ChordQuality::Dominant7Sus4:
+      numeral += "7sus4";
+      break;
+    case ChordQuality::Dominant11:
+      numeral += "11";
+      break;
+    case ChordQuality::Dominant13:
+      numeral += "13";
+      break;
+    case ChordQuality::Dominant7b9:
+      numeral += "7b9";
+      break;
+    case ChordQuality::Dominant7s9:
+      numeral += "7#9";
       break;
     default:
       break;
